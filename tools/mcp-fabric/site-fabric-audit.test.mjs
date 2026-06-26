@@ -245,4 +245,3 @@ assert.equal(launcherAudit.mutation_performed, false);
 assert.deepEqual(parseLaunchRegistryText('@{ Agents = @() }'), []);
 
 rmSync(workspace, { recursive: true, force: true });
-console.log('site-fabric-audit tests PASSED.');

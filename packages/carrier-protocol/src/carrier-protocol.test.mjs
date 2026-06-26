@@ -1252,4 +1252,3 @@ assert.match(thrownMessage(() => createSessionEvent({ ...sessionBase, event_kind
 assert.equal(isTerminalTurnState('completed'), true);
 assert.equal(isTerminalTurnState('active'), false);
 
-console.log('carrier protocol tests PASSED.');

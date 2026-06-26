@@ -364,7 +364,28 @@ async function runConversationLoop(messages, tools, mcpServers, options) {
   }
 }
 
-async function executeMcpTool(toolCall, mcpServers, options = {}) {
+export async function runConversationTurn(messages, tools, mcpServers, _readlineInterface = null, options = {}) {
+  try {
+    return await runConversationLoop(messages, tools, mcpServers, {
+      ...options,
+      appendSessionRecord: options.appendSessionRecord ?? (() => {}),
+      providerSettings: options.carrierSessionSettings ?? options.providerSettings ?? {},
+      identity: options.identity ?? options.agentId,
+      session: options.session ?? options.carrierSessionId,
+    });
+  } catch (error) {
+    if (options.turn?.interruptRequested || isAbortError(error)) {
+      options.emit?.('turn_interrupted', { turn_id: options.turn?.turnId ?? null, terminal_state: 'interrupted' });
+      return { terminal_state: 'interrupted' };
+    }
+    return { terminal_state: 'failed', reason: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+export async function executeMcpTool(toolCall, mcpServers, _readlineInterface = null, options = {}) {
+  if (_readlineInterface && typeof _readlineInterface === 'object' && !('write' in _readlineInterface)) {
+    options = _readlineInterface;
+  }
   const name = toolCall.function?.name ?? '';
   const args = parseJson(toolCall.function?.arguments ?? '{}');
   const binding = findToolBinding(name, mcpServers);
@@ -394,8 +415,8 @@ async function executeMcpTool(toolCall, mcpServers, options = {}) {
   })));
   if (!server || !admitted) {
     const admissionRecord = createAndWriteCarrierActionAdmission({
-      agentId: options.identity,
-      carrierSessionId: options.session,
+      agentId: options.identity ?? options.agentId,
+      carrierSessionId: options.session ?? options.carrierSessionId,
       turnId: options.turnId,
       toolCallId: toolCall.id,
       toolName: name,
@@ -405,25 +426,44 @@ async function executeMcpTool(toolCall, mcpServers, options = {}) {
       toolMetadata,
       delegatedAuthorityHandoff: options.delegatedAuthorityHandoff ?? null,
     });
-    options.emit?.('tool_result', { turn_id: options.turnId, tool: name, status: 'admission_required', request_id: admissionRecord.decision.request_id, decision: admissionRecord.decision.decision, reason: admissionRecord.decision.reason, authority_owner: admissionRecord.decision.authority_owner, evidence_path: admissionRecord.path });
-    return { role: 'tool', tool_call_id: toolCall.id, content: JSON.stringify({ error: 'action_admission_required', tool: name, evidence_path: admissionRecord.path }) };
+    options.emit?.('tool_result', { turn_id: options.turnId, tool: name, status: 'admission_required', request_id: admissionRecord.decision.request_id, decision: admissionRecord.decision.decision, reason: admissionRecord.decision.reason, authority_owner: admissionRecord.decision.authority_owner, evidence_path: admissionRecord.path, candidate_ref: admissionRecord.decision.candidate_ref, carrier_mutation_admitted: admissionRecord.decision.carrier_mutation_admitted });
+    return { role: 'tool', tool_call_id: toolCall.id, content: JSON.stringify({ error: 'action_admission_required', request_id: admissionRecord.decision.request_id, tool: name, decision: admissionRecord.decision.decision, reason: admissionRecord.decision.reason, authority_owner: admissionRecord.decision.authority_owner, evidence_path: admissionRecord.path, candidate_ref: admissionRecord.decision.candidate_ref, carrier_mutation_admitted: admissionRecord.decision.carrier_mutation_admitted }) };
   }
+  const delegatedAdmission = admission.carrier_mutation_admitted === true
+    ? createAndWriteCarrierActionAdmission({
+      agentId: options.identity ?? options.agentId,
+      carrierSessionId: options.session ?? options.carrierSessionId,
+      turnId: options.turnId,
+      toolCallId: toolCall.id,
+      toolName: name,
+      args,
+      siteRoot: options.siteRoot,
+      toolAvailable: true,
+      toolMetadata,
+      delegatedAuthorityHandoff: options.delegatedAuthorityHandoff ?? null,
+    })
+    : null;
   const startedAt = Date.now();
   try {
     const result = await sendMcpRequest(server, { jsonrpc: '2.0', id: randomId(), method: 'tools/call', params: { name: binding.tool.name, arguments: args } }, options.turn?.abortSignal ?? null);
-    const content = JSON.stringify(result);
-    options.emit?.('tool_result', { turn_id: options.turnId, tool: name, status: 'ok', duration_ms: Date.now() - startedAt });
+    const content = result.content?.[0]?.text ?? JSON.stringify(result);
+    options.emit?.('tool_result', { turn_id: options.turnId, tool: name, status: 'ok', duration_ms: Date.now() - startedAt, decision: admission.decision, output_ref: extractOutputRef(content), request_id: delegatedAdmission?.decision?.request_id, authority_owner: delegatedAdmission?.decision?.authority_owner, evidence_path: delegatedAdmission?.path, carrier_mutation_admitted: admission.carrier_mutation_admitted === true });
     options.appendSessionRecord?.(carrierSessionEventEntry('tool_result_received', createToolResultPayload({
       tool_name: name || '<missing>',
       status: 'ok',
       duration_ms: Date.now() - startedAt,
       result_summary: summarizeToolResult(content),
       ...mcpToolEffectAdmissionEvidence({ serverMode: true, admissionClassification: admission, status: 'ok', category: 'auto' }),
+      ...(delegatedAdmission ? { evidence_path: delegatedAdmission.path } : {}),
     })));
     return { role: 'tool', tool_call_id: toolCall.id, content };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    rememberMcpRuntimeDiagnostic(mcpServers, { server_name: binding?.server?.name ?? null, tool_name: name, error: message, occurred_at: new Date().toISOString() });
+    const diagnostic = { server_name: binding?.server?.name ?? null, tool_name: name, error: message, error_code: error && typeof error === 'object' ? error.code ?? null : null, occurred_at: new Date().toISOString() };
+    if (!isAbortError(error) && !options.turn?.interruptRequested) {
+      rememberMcpRuntimeDiagnostic(mcpServers, diagnostic);
+      options.emit?.('carrier_diagnostic_recorded', { diagnostic_code: 'mcp_runtime_fault', ...diagnostic });
+    }
     options.emit?.('tool_result', { turn_id: options.turnId, tool: name, status: 'error', error: message, recovery: toolFailureRecovery(message) });
     return { role: 'tool', tool_call_id: toolCall.id, content: JSON.stringify({ error: message, recovery: toolFailureRecovery(message) }) };
   }
@@ -816,7 +856,7 @@ function handleCodexExecMcpToolEvent(event, settings = {}) {
   }
 }
 
-function serverStatus({ requestId, state, allTools, mcpServers, mcpPreflightArtifact, context = {} }) {
+export function serverStatus({ requestId, state, allTools, mcpServers, mcpPreflightArtifact, context = {} }) {
   const carrierSessionSettings = state?.sessionSettings ?? {};
   const goal = normalizeCarrierGoalState(carrierSessionSettings.goal);
   const mcpStatus = createMcpStatusSnapshot(mcpServers);
@@ -936,7 +976,7 @@ function recordMcpStartupFailures(mcpServers, { emit = null, appendSessionRecord
   }
 }
 
-function recordMcpPreflightArtifactLinkage({ emit, preflightArtifact, appendSessionRecord = null } = {}) {
+export function recordMcpPreflightArtifactLinkage({ emit, preflightArtifact, appendSessionRecord = null, sessionPath = null } = {}) {
   if (!preflightArtifact) return null;
   const payload = {
     artifact_path: preflightArtifact.artifact_path ?? preflightArtifact.path ?? null,
@@ -951,7 +991,9 @@ function recordMcpPreflightArtifactLinkage({ emit, preflightArtifact, appendSess
     handoffs: preflightArtifact.handoffs ?? null,
   };
   emit?.('mcp_preflight_artifact_linked', payload);
-  appendSessionRecord?.({ event: 'mcp_preflight_artifact_linked', ...payload, timestamp: new Date().toISOString() });
+  const record = { event: 'mcp_preflight_artifact_linked', ...payload, timestamp: new Date().toISOString() };
+  appendSessionRecord?.(record);
+  appendJsonlRecord(sessionPath, record);
   return payload;
 }
 
@@ -1183,12 +1225,20 @@ function appendJsonlRecord(path, entry) {
   appendFileSync(path, `${JSON.stringify(entry)}\n`, 'utf8');
 }
 
-function messagesWithCarrierGoal(messages, goal = null) {
+export function messagesWithCarrierGoal(messages, goal = null) {
   const normalized = normalizeCarrierGoalState(goal);
   if (!normalized.value || normalized.status !== 'active') return messages;
   const goalMessage = { role: 'system', content: `Active carrier session goal: ${normalized.value}\nUse this as the persistent task target and completion criterion while it remains active.` };
   const insertAt = messages.findIndex((message) => message.role !== 'system');
   return insertAt === -1 ? [...messages, goalMessage] : [...messages.slice(0, insertAt), goalMessage, ...messages.slice(insertAt)];
+}
+
+export function assertApiKeyConfigured(provider, apiKey, providerMetadata = PROVIDER_METADATA) {
+  if (provider === 'codex-subscription') return;
+  if (apiKey) return;
+  const credentialEnvNames = providerMetadata[provider]?.credential_env_names ?? [];
+  const credentialHint = credentialEnvNames.length > 0 ? credentialEnvNames.join(' or ') : 'the provider-specific API key environment variable';
+  throw new Error(`Missing API key for ${provider}. Set ${credentialHint}.`);
 }
 
 function normalizeCarrierGoalState(goal) {
@@ -1212,12 +1262,26 @@ function summarizeToolResult(value, limit = 500) {
   return text.length > limit ? `${text.slice(0, limit - 3)}...` : text;
 }
 
+function extractOutputRef(content) {
+  try {
+    const parsed = JSON.parse(content);
+    return parsed.output_ref ?? null;
+  } catch {
+    return null;
+  }
+}
+
 function stringifySummary(value) {
   try { return JSON.stringify(value); } catch { return String(value); }
 }
 
 function parseJson(text) {
   try { return JSON.parse(text); } catch { return {}; }
+}
+
+function isAbortError(error) {
+  const message = error instanceof Error ? error.message : String(error ?? '');
+  return message.includes('abort') || message.includes('interrupt_requested');
 }
 
 function randomId() {

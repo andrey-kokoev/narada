@@ -80,6 +80,7 @@ function inferredToolContract(serverName) {
         'agent_context_startup_sequence',
         'agent_context_rehydrate',
         'agent_context_list_sessions',
+        'mcp_output_show',
       ],
       mutating_tools: [
         'agent_context_start_session',
@@ -91,7 +92,6 @@ function inferredToolContract(serverName) {
   if (lowerName.includes('task-lifecycle')) {
     return {
       read_only_tools: [
-        'mcp_output_show',
         'task_lifecycle_audit',
         'task_lifecycle_inspect',
         'task_lifecycle_list',

@@ -27,6 +27,7 @@ const FALLBACK_READ_ONLY_TOOLS = new Set([
   'agent_context_doctor',
   'agent_context_show_event',
   'agent_context_show_bootstrap',
+  'agent_context_startup_sequence',
   'inbox_doctor',
   'site_task_lifecycle.list_tasks',
   'site_task_lifecycle.get_task',

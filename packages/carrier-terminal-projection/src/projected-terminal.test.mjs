@@ -54,6 +54,16 @@ test('operator event rendering consumes shared NARS client event projection', ()
   assert.deepEqual(wrapped, ['WebSocket error: connection dropped']);
 });
 
+test('operator event rendering accepts terminalColumns alias for wrapping', () => {
+  const rendered = renderOperatorEvent({
+    event: 'assistant_message',
+    agent_id: 'narada.test',
+    content: 'one two three four five six seven eight nine ten eleven twelve thirteen fourteen',
+  }, { timestamps: false, terminalColumns: 48 });
+  assert.equal(rendered.length > 1, true);
+  assert.equal(rendered.slice(1).every((line) => line.startsWith('  ')), true);
+});
+
 test('projected terminal markdown renders bold outside inline code', () => {
   const style = createOperatorStyle({ enabled: true });
   const rendered = renderMarkdownForProjectedTerminal('Use **bold** and `**code**`.', style);

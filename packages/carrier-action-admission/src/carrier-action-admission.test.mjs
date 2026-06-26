@@ -353,4 +353,3 @@ assert.equal(invalidShow.status, 'invalid_request_id');
 
 rmSync(workspaceRoot, { recursive: true, force: true });
 
-console.log('carrier-action-admission tests PASSED.');

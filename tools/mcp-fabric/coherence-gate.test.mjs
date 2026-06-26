@@ -14,6 +14,7 @@ writeFileSync(join(siteRoot, '.ai', 'mcp', 'fixture-mcp.json'), `${JSON.stringif
       command: 'node',
       args: ['agent-context.mjs'],
       surface_id: 'fixture-agent-context.local',
+      tools: ['agent_context_startup_sequence', 'mcp_output_show'],
     },
     'fixture-task-lifecycle': {
       command: 'node',
@@ -74,4 +75,3 @@ assert.equal(advisory.status, 'ok');
 assert.deepEqual(advisory.failures, []);
 
 rmSync(workspace, { recursive: true, force: true });
-console.log('coherence-gate tests PASSED.');

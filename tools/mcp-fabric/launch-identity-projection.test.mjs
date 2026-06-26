@@ -71,4 +71,3 @@ assert.equal(drift.status, 'fail');
 assert.equal(drift.failures.some((failure) => failure.code === 'launch_agent_role_mismatch'), true);
 
 rmSync(workspace, { recursive: true, force: true });
-console.log('launch-identity-projection tests PASSED.');

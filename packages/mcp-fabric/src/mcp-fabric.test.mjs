@@ -496,4 +496,3 @@ assert.equal(failingReport.rows[0].initialize_status, 'timeout');
 assert.match(failingReport.rows[0].first_diagnostic, /initialize_timeout/);
 rmSync(failingDoctorSite, { recursive: true, force: true });
 
-console.log('mcp-fabric tests PASSED.');

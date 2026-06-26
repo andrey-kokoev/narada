@@ -217,6 +217,7 @@ async function discoverAndStartMcpServers(siteRoot) {
   try {
     fabric = loadSiteMcpFabric(siteRoot, { required: fabricRequired });
   } catch (error) {
+    if (isMcpStartupDiagnosticError(error)) throw error;
     throw createMcpStartupError('mcp_fabric_load_failed', `MCP fabric load failed: ${error.message}`, {
       phase: 'fabric_load',
       site_root: siteRoot,
@@ -473,6 +474,10 @@ function createMcpStartupError(code, message, details = {}) {
     message,
   };
   return error;
+}
+
+function isMcpStartupDiagnosticError(error) {
+  return Boolean(error?.diagnostic && typeof error.diagnostic === 'object');
 }
 
 function mcpStartupDiagnostic(error, defaultFields = {}) {

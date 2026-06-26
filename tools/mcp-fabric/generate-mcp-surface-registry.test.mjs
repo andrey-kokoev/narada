@@ -46,6 +46,7 @@ assert.deepEqual(inferredToolContract('fixture-agent-context').read_only_tools, 
   'agent_context_startup_sequence',
   'agent_context_rehydrate',
   'agent_context_list_sessions',
+  'mcp_output_show',
 ]);
 assert.equal(inferredToolContract('fixture-task-lifecycle').read_only_tools.includes('task_lifecycle_next'), true);
 assert.equal(inferredToolContract('fixture-task-lifecycle').mutating_tools.includes('task_lifecycle_claim'), true);
@@ -66,4 +67,3 @@ assert.equal(audit.authoritative_server_count, 2);
 assert.equal(audit.recommendation, 'ok');
 
 rmSync(workspace, { recursive: true, force: true });
-console.log('generate-mcp-surface-registry tests PASSED.');

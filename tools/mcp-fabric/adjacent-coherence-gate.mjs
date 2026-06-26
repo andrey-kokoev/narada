@@ -10,9 +10,8 @@ import { auditLauncherKnownSites } from './site-fabric-audit.mjs';
 const DEFAULT_LAUNCH_REGISTRY = 'C:/Users/Andrey/Narada/config/launch/agents.psd1';
 
 const REQUIRED_STARTUP_TOOLS = [
-  'agent_context_hydrate_current',
+  'agent_context_startup_sequence',
   'mcp_output_show',
-  'startup_sequence',
 ];
 
 function runAdjacentCoherenceGate({ launchRegistryPath = DEFAULT_LAUNCH_REGISTRY, repoRoot = process.cwd() } = {}) {

@@ -99,4 +99,3 @@ assert.throws(
 );
 rmSync(legacyRegistrySite, { recursive: true, force: true });
 
-console.log('mcp-fabric tests PASSED.');

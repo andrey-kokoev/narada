@@ -19,8 +19,8 @@ export function clampTerminalColumns(value, { min = 50, max = 120, fallback = 88
   return Math.max(min, Math.min(max, Math.floor(numeric)));
 }
 
-export function terminalColumns({ columns = process.stdout.columns, min = 50, max = 120, fallback = 88 } = {}) {
-  return clampTerminalColumns(columns, { min, max, fallback });
+export function terminalColumns({ columns = undefined, terminalColumns: projectedColumns = undefined, min = 50, max = 120, fallback = 88 } = {}) {
+  return clampTerminalColumns(columns ?? projectedColumns ?? process.stdout.columns, { min, max, fallback });
 }
 
 export function clearPreviousTerminalRows(rows) {

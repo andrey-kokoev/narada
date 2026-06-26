@@ -16,8 +16,15 @@ writeFileSync(join(siteRoot, '.ai', 'mcp', 'site-agent-context-mcp.json'), `${JS
       command: 'node',
       args: ['server.mjs'],
       surface_id: 'agent-context-mcp.local',
+      tools: ['agent_context_startup_sequence', 'mcp_output_show'],
     },
   },
+  surfaces: [{
+    surface_id: 'agent-context-mcp.local',
+    tool_contract: {
+      read_only_tools: ['agent_context_startup_sequence', 'mcp_output_show'],
+    },
+  }],
 }, null, 2)}\n`, 'utf8');
 writeFileSync(join(siteRoot, '.ai', 'mcp', 'site-inbox-mcp.json'), `${JSON.stringify({
   mcpServers: {
@@ -73,4 +80,3 @@ assert.deepEqual(secretMarkers('api_key = "sk-live-value"'), ['api_key: <redacte
 assert.deepEqual(secretMarkers('credential_ref: env:GRAPH_CLIENT_SECRET'), []);
 
 rmSync(workspace, { recursive: true, force: true });
-console.log('adjacent-coherence-gate tests PASSED.');

@@ -100,7 +100,7 @@ test('packaged agent-start emits modern Narada proper agent-cli launch evidence'
 });
 
 test('packaged agent-start refuses MCP fabric that does not match registry', () => {
-  const siteRoot = createTemporarySiteWithMcpServer('sonar-sop');
+  const siteRoot = createTemporarySiteWithMcpServer('narada-sonar-sop');
   try {
     mkdirSync(join(siteRoot, '.narada', 'capabilities'), { recursive: true });
     writeJson(join(siteRoot, '.narada', 'capabilities', 'mcp-surfaces.json'), {
