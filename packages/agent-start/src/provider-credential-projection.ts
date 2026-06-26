@@ -214,13 +214,13 @@ export function intelligenceProviderEnvironment(providerResolution, options = {}
 }
 
 export function mcpProviderCredentialEnvironment({
-  runtime,
-  agentTuiRuntime,
+  carrier,
+  agentTuiCarrier,
   metadataByProvider,
   processEnv = process.env,
   codexSubscriptionPreflight,
 }) {
-  if (runtime !== 'agent-cli' && runtime !== agentTuiRuntime && runtime !== 'claude-code') return {};
+  if (carrier !== 'agent-cli' && carrier !== agentTuiCarrier && carrier !== 'claude-code') return {};
   const env = {};
   for (const [provider, metadata] of Object.entries(metadataByProvider)) {
     const requirement = providerCredentialRequirement(provider, metadata);

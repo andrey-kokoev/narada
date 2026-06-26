@@ -87,17 +87,29 @@ describe('direct command runner', () => {
     expect(exitCode).toBe(1);
   });
 
-  it('rethrows unexpected invocation errors', async () => {
+  it('emits unexpected invocation errors as structured command errors', async () => {
+    const emitted: unknown[] = [];
+    let exitCode: number | null = null;
+
     await expect(runDirectCommand({
       command: 'task test',
       invocation: async () => {
         throw new Error('boom');
       },
-      emit: () => undefined,
+      emit: (result) => emitted.push(result),
       exit: (code): never => {
-        throw new Error(`unexpected exit ${code}`);
+        exitCode = code;
+        throw new Error('exit');
       },
-    })).rejects.toThrow('boom');
+    })).rejects.toThrow('exit');
+
+    expect(emitted).toEqual([{
+      status: 'error',
+      command: 'task test',
+      error: 'boom',
+      retryable: false,
+    }]);
+    expect(exitCode).toBe(1);
   });
 });
 
@@ -229,8 +241,10 @@ describe('resource-scoped direct command runner', () => {
     expect(events).toEqual(['invoke', 'close:store']);
   });
 
-  it('closes the resource after unexpected invocation errors', async () => {
+  it('closes the resource after structured unexpected invocation error exits', async () => {
     const events: string[] = [];
+    const emitted: unknown[] = [];
+    let exitCode: number | null = null;
 
     await expect(runDirectCommandWithResource({
       command: 'task resource',
@@ -242,13 +256,21 @@ describe('resource-scoped direct command runner', () => {
         events.push('invoke');
         throw new Error('boom');
       },
-      emit: () => undefined,
+      emit: (result) => emitted.push(result),
       exit: (code): never => {
-        throw new Error(`unexpected exit ${code}`);
+        exitCode = code;
+        throw new Error('exit');
       },
-    })).rejects.toThrow('boom');
+    })).rejects.toThrow('exit');
 
     expect(events).toEqual(['invoke', 'close:store']);
+    expect(emitted).toEqual([{
+      status: 'error',
+      command: 'task resource',
+      error: 'boom',
+      retryable: false,
+    }]);
+    expect(exitCode).toBe(1);
   });
 });
 

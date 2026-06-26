@@ -1,5 +1,4 @@
 export const NARS_COMMAND_METHOD = 'carrier.command.execute';
-export const NARS_COMMAND_COMPATIBILITY_METHODS = Object.freeze(['agent-cli.command']);
 
 export const AGENT_WEB_UI_NARS_METHOD_LIST = Object.freeze([
   'session.events.subscribe',
@@ -34,6 +33,42 @@ export const AGENT_WEB_UI_HELP_LINES = Object.freeze([
   '/help, /clear, /status, /health, /events, /recovery, /ops, /interrupt, /tools, /queue, /goal, /model, /thinking, /exit',
   'Ordinary text is submitted as conversation.send; during active turns it is submitted as conversation.steer.',
 ]);
+
+export const NARS_CLIENT_EVENT_TONES = Object.freeze({
+  assistant: 'assistant',
+  operator: 'operator',
+  tool: 'tool',
+  session: 'session',
+  status: 'status',
+  error: 'error',
+  local: 'local',
+  unknown: 'unknown',
+});
+
+export const NARS_CLIENT_EVENT_LABELS = Object.freeze({
+  assistant_message: 'Agent',
+  user_message: 'Operator',
+  tool_call: 'Tool call',
+  tool_result: 'Tool result',
+  session_started: 'Session started',
+  session_closed: 'Session closed',
+  turn_started: 'Turn started',
+  turn_complete: 'Turn complete',
+  turn_failed: 'Turn failed',
+  session_events_subscription_started: 'Replay attached',
+  session_health: 'Health',
+  session_status: 'Status',
+  session_recovery: 'Recovery',
+  session_operations: 'Operations',
+  observers_status: 'Observers',
+  error: 'Error',
+  websocket_error: 'WebSocket error',
+  web_ui_decode_error: 'Decode error',
+  web_ui_input_not_sent: 'Input not sent',
+  agent_web_ui_help: 'Help',
+  agent_web_ui_message: 'Message',
+  operator_input_submitted: 'Operator input',
+});
 
 export const AGENT_WEB_UI_NARS_METHODS = new Set(AGENT_WEB_UI_NARS_METHOD_LIST);
 
@@ -144,6 +179,53 @@ export function buildAgentWebUiOperatorInputAction(text, options = {}) {
   return { kind: 'message', message: `Unknown command: ${command}. Type /help.` };
 }
 
+export function unwrapNarsClientEvent(message) {
+  if (message?.event === 'session_event' && message.payload && typeof message.payload === 'object') {
+    return message.payload;
+  }
+  return message;
+}
+
+function eventTone(kind) {
+  if (kind === 'assistant_message') return NARS_CLIENT_EVENT_TONES.assistant;
+  if (kind === 'user_message') return NARS_CLIENT_EVENT_TONES.operator;
+  if (kind === 'tool_call' || kind === 'tool_result') return NARS_CLIENT_EVENT_TONES.tool;
+  if (kind === 'error' || kind === 'websocket_error' || kind === 'web_ui_decode_error' || kind === 'turn_failed') return NARS_CLIENT_EVENT_TONES.error;
+  if (kind?.startsWith?.('agent_web_ui_') || kind === 'operator_input_submitted' || kind === 'web_ui_input_not_sent') return NARS_CLIENT_EVENT_TONES.local;
+  if (kind?.startsWith?.('session_') || kind?.startsWith?.('turn_')) return NARS_CLIENT_EVENT_TONES.session;
+  return NARS_CLIENT_EVENT_TONES.unknown;
+}
+
+function eventSummary(event, kind) {
+  if (kind === 'assistant_message') return event.content ?? event.message ?? 'assistant message';
+  if (kind === 'user_message') return event.content ?? event.message ?? 'operator message';
+  if (kind === 'tool_call') return event.tool_name ?? event.name ?? 'tool call';
+  if (kind === 'tool_result') return `${event.tool_name ?? event.name ?? 'tool result'}${event.status ? ` ${event.status}` : ''}`;
+  if (kind === 'session_started') return `${event.agent_id ?? 'agent'} / ${event.session_id ?? 'session'}`;
+  if (kind === 'session_events_subscription_started') return `${event.replay_count ?? 0} replayed event(s)`;
+  if (kind === 'session_health') return `${event.status ?? 'health'} · ${event.agent_id ?? 'agent'} · ${event.session_id ?? 'session'}`;
+  if (kind === 'turn_complete') return event.terminal_state ?? 'turn complete';
+  if (kind === 'turn_started') return event.turn_id ?? 'turn started';
+  if (kind === 'error' || kind === 'websocket_error' || kind === 'web_ui_decode_error') return event.message ?? event.code ?? 'error';
+  if (typeof event?.message === 'string') return event.message;
+  if (typeof event?.content === 'string') return event.content;
+  return '';
+}
+
+export function projectNarsClientEvent(message) {
+  const event = unwrapNarsClientEvent(message);
+  const kind = event?.event ?? 'unknown';
+  const label = NARS_CLIENT_EVENT_LABELS[kind] ?? kind;
+  const summary = eventSummary(event, kind);
+  return {
+    kind,
+    label,
+    tone: eventTone(kind),
+    summary,
+    event,
+  };
+}
+
 export const NARS_CLIENT_PROJECTION_REGISTRY = Object.freeze({
   schema: 'narada.nars.client_projection_registry.v1',
   clients: Object.freeze({
@@ -152,6 +234,13 @@ export const NARS_CLIENT_PROJECTION_REGISTRY = Object.freeze({
       package: '@narada2/agent-cli',
       bin: 'narada-agent-cli',
       attach_template: 'narada-agent-cli --attach <event_endpoint>',
+      required_endpoints: Object.freeze(['event_endpoint']),
+    }),
+    agent_tui: Object.freeze({
+      id: 'agent_tui',
+      package: 'agent-tui',
+      bin: 'agent-tui',
+      attach_template: 'agent-tui --attach <event_endpoint>',
       required_endpoints: Object.freeze(['event_endpoint']),
     }),
     agent_web_ui: Object.freeze({
@@ -172,10 +261,10 @@ export function buildNarsAttachCommands({ eventEndpoint = '<session_started.even
   return {
     registry_schema: NARS_CLIENT_PROJECTION_REGISTRY.schema,
     agent_cli: `narada-agent-cli --attach ${event}`,
+    agent_tui: `agent-tui --attach ${event}`,
     agent_web_ui: `narada-agent-web-ui --event-endpoint ${event}${agentWebUiHealth}`,
     protocol: '{"id":"events-1","method":"session.events.subscribe","params":{"include_replay":true,"max_replay":20}}',
     operator_input_protocol: '{"id":"input-1","method":"conversation.send","params":{"message":"<operator message>","source":"agent-web-ui"}}',
     slash_command_protocol: `{"id":"command-1","method":"${NARS_COMMAND_METHOD}","params":{"command":"/status","value":""}}`,
-    compatibility_methods: [...NARS_COMMAND_COMPATIBILITY_METHODS],
   };
 }

@@ -17,7 +17,8 @@ function runJson(entrypoint, extraArgs = [], siteRoot = naradaRoot, identity = '
     identity,
     '--site-root', siteRoot,
     '--target-site-root', siteRoot,
-    '--runtime', 'agent-cli',
+    '--carrier', 'agent-cli',
+    '--runtime', 'narada-agent-runtime-server',
     '--dry-run',
     '--json',
     ...extraArgs,
@@ -64,25 +65,24 @@ function createTemporarySiteWithMcpServer(serverName) {
 
 function assertModernAgentCliLaunch(result) {
   assert.equal(result.schema, 'narada.agent_start.result.v0');
-  assert.equal(result.runtime, 'agent-cli');
-  assert.equal(result.runtime_substrate_kind, 'agent-cli');
+  assert.equal(result.carrier_kind, 'agent-cli');
+  assert.equal(result.runtime, 'narada-agent-runtime-server');
+  assert.equal(result.runtime_substrate_kind, 'narada-agent-runtime-server');
   assert.equal(result.tool_fabric_adapter_kind, 'narada-agent-runtime-server-mcp-client');
   assert.equal(result.nars_launch.schema, 'narada.agent_start.nars_launch.v1');
   assert.equal(result.nars_launch.carrier_runtime_kind, 'narada-agent-runtime-server');
   assert.equal(result.nars_launch.operator_surface_kind, 'agent-cli');
-  assert.equal(result.nars_launch.compatibility_runtime_alias, 'agent-cli');
   assert.equal(result.nars_launch.control_transport, 'jsonl_sideband_file');
   assert.equal(result.nars_launch.carrier_relation, 'narada_agent_runtime_server');
   assert.equal(result.nars_launch.runtime_server.package, '@narada2/agent-runtime-server');
   assert.equal(result.nars_launch.runtime_server.entrypoint, 'narada-agent-runtime-server');
   assert.equal(Object.hasOwn(result.nars_launch, 'private_carrier_substrate'), false);
   assert.equal(result.nars_launch.command, process.execPath);
-  assert.equal(result.agent_cli_launch.compatibility_alias_for, 'nars_launch');
   assert.equal(result.nars_events.attach_commands.registry_schema, 'narada.nars.client_projection_registry.v1');
+  assert.equal(result.nars_events.attach_commands.agent_tui, 'agent-tui --attach <session_started.event_endpoint>');
   assert.equal(result.nars_events.attach_commands.agent_web_ui, 'narada-agent-web-ui --event-endpoint <session_started.event_endpoint> --health-endpoint <session_started.health_endpoint>');
   assert.match(result.nars_events.attach_commands.operator_input_protocol, /conversation\.send/);
   assert.match(result.nars_events.attach_commands.slash_command_protocol, /carrier\.command\.execute/);
-  assert.deepEqual(result.nars_events.attach_commands.compatibility_methods, ['agent-cli.command']);
   assert.equal(result.runtime_args[0].endsWith('agent-runtime-server.mjs'), true);
   assert.equal(result.runtime_args.includes('--session'), true);
   assert.equal(result.runtime_args.includes(result.carrier_session.carrier_session_id), true);
@@ -99,9 +99,22 @@ test('packaged agent-start emits modern Narada proper agent-cli launch evidence'
   }
 });
 
-test('packaged agent-start temporary MCP prefix gate refuses short server names', () => {
+test('packaged agent-start refuses MCP fabric that does not match registry', () => {
   const siteRoot = createTemporarySiteWithMcpServer('sonar-sop');
   try {
+    mkdirSync(join(siteRoot, '.narada', 'capabilities'), { recursive: true });
+    writeJson(join(siteRoot, '.narada', 'capabilities', 'mcp-surfaces.json'), {
+      schema: 'narada.site.capabilities.mcp_surfaces.v1',
+      surfaces: [{
+        surface_id: 'expected.surface',
+        client_config: { generated_path: '.ai/mcp/expected-mcp.json' },
+        tool_contract: {
+          read_only_tools: ['agent_context_startup_sequence'],
+          mutating_tools: [],
+          refused_tools: [],
+        },
+      }],
+    });
     const result = spawnSync(process.execPath, [
       '--import',
       'tsx',
@@ -109,7 +122,8 @@ test('packaged agent-start temporary MCP prefix gate refuses short server names'
       'sonar.resident',
       '--site-root', siteRoot,
       '--target-site-root', siteRoot,
-      '--runtime', 'agent-cli',
+      '--carrier', 'agent-cli',
+      '--runtime', 'narada-agent-runtime-server',
       '--dry-run',
       '--json',
     ], {
@@ -123,10 +137,11 @@ test('packaged agent-start temporary MCP prefix gate refuses short server names'
     assert.equal(result.status, 1, result.stderr || result.stdout);
     const refusal = JSON.parse(result.stdout);
     assert.equal(refusal.status, 'refused');
-    assert.equal(refusal.reason_code, 'temporary_mcp_server_name_missing_narada_prefix');
-    assert.equal(refusal.details.temporary_leak_identification_tool, true);
-    assert.deepEqual(refusal.details.offending_server_names, ['sonar-sop']);
-    assert.equal(refusal.required_next_step.includes('temporary gate exists to identify MCP authority leaks'), true);
+    assert.equal(refusal.reason_code, 'mcp_fabric_registry_mismatch');
+    assert.equal(refusal.details.repair_plan.kind, 'registry_generated_file_mismatch');
+    assert.equal(refusal.details.missing[0].surface_id, 'expected.surface');
+    assert.equal(refusal.details.missing[0].generated_file, 'expected-mcp.json');
+    assert.equal(refusal.required_next_step.includes('matches the Site surface registry'), true);
   } finally {
     rmSync(siteRoot, { recursive: true, force: true });
   }
@@ -136,8 +151,9 @@ test('packaged agent-start defaults Narada proper startup to agent-cli', () => {
   const siteRoot = createTemporarySiteWithMcpServer('narada-sonar-sop');
   try {
     const launch = runJson(packagedAgentStart, [], siteRoot, 'sonar.resident');
-    assert.equal(launch.runtime, 'agent-cli');
-    assert.equal(launch.runtime_substrate_kind, 'agent-cli');
+    assert.equal(launch.carrier_kind, 'agent-cli');
+    assert.equal(launch.runtime, 'narada-agent-runtime-server');
+    assert.equal(launch.runtime_substrate_kind, 'narada-agent-runtime-server');
   } finally {
     rmSync(siteRoot, { recursive: true, force: true });
   }

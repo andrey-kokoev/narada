@@ -7,6 +7,10 @@ import {
   loadRuntimeSubstrateKindsContract,
   loadTerminalRuntimeContract,
 } from './carrier-runtime-contract.mjs';
+import {
+  defaultRuntimeForCarrier,
+  resolveCarrierRuntimeSelection,
+} from './carrier-runtime-selection.mjs';
 
 test('launch slice contract identifies the admitted carrier runtime', () => {
   const contract = loadLaunchSliceContract();
@@ -34,7 +38,8 @@ test('runtime substrate contract admits carrier substrates and codex isolation b
   const contract = loadRuntimeSubstrateKindsContract();
   assert.equal(contract.schema, 'narada.runtime_substrate_kind.v1');
   assert.equal(contract.admitted_runtime_substrate_kinds.includes('codex'), true);
-  assert.equal(contract.admitted_runtime_substrate_kinds.includes('agent-cli'), true);
+  assert.equal(contract.admitted_runtime_substrate_kinds.includes('agent-cli'), false);
+  assert.equal(contract.admitted_runtime_substrate_kinds.includes('narada-agent-runtime-server'), true);
   assert.equal(contract.admitted_runtime_substrate_kinds.includes('agent-tui'), true);
   assert.equal(contract.admitted_runtime_substrate_kinds.includes('kimi'), true);
   assert.equal(contract.admitted_runtime_substrate_kinds.includes('pi'), true);
@@ -42,6 +47,30 @@ test('runtime substrate contract admits carrier substrates and codex isolation b
   assert.equal(contract.admitted_runtime_substrate_kinds.includes('opencode'), true);
   assert.equal(contract.codex_context_isolation.runtime_substrate_kind, 'codex');
   assert.equal(contract.codex_context_isolation.forbidden_resume_modes.includes('codex resume --last'), true);
+});
+
+test('carrier runtime selection keeps agent-cli carrier separate from runtime server', () => {
+  const contract = loadRuntimeSubstrateKindsContract();
+  assert.equal(defaultRuntimeForCarrier('agent-cli'), 'narada-agent-runtime-server');
+  assert.equal(defaultRuntimeForCarrier('codex'), 'codex');
+
+  const accepted = resolveCarrierRuntimeSelection({
+    carrierValue: 'agent-cli',
+    runtimeValue: 'narada-agent-runtime-server',
+    admittedRuntimeSubstrateKinds: contract.admitted_runtime_substrate_kinds,
+    runtimeContractSchema: contract.schema,
+  });
+  assert.equal(accepted.status, 'accepted');
+  assert.equal(accepted.carrier_kind, 'agent-cli');
+  assert.equal(accepted.runtime_substrate_kind, 'narada-agent-runtime-server');
+
+  const refused = resolveCarrierRuntimeSelection({
+    runtimeValue: 'agent-cli',
+    admittedRuntimeSubstrateKinds: contract.admitted_runtime_substrate_kinds,
+    runtimeContractSchema: contract.schema,
+  });
+  assert.equal(refused.status, 'refused');
+  assert.equal(refused.reason_code, 'runtime_carrier_conflation_refused');
 });
 
 test('runtime boolean values contract defines shared env flag vocabulary', () => {

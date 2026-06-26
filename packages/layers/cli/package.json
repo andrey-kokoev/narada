@@ -40,7 +40,9 @@
   "scripts": {
     "build": "tsc && node scripts/write-build-manifest.mjs",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
+    "test": "node scripts/run-vitest-quiet.mjs run --silent && pnpm run test:realfs",
+    "test:launcher": "node scripts/run-vitest-quiet.mjs run --silent test/commands/carrier-launcher.test.ts test/commands/launcher-workspace-plan.test.ts && pnpm run test:realfs",
+    "test:realfs": "node --import tsx --test test/integration/*.test.mjs",
     "coverage": "vitest run --coverage"
   },
   "dependencies": {
@@ -52,6 +54,7 @@
     "@narada2/intent-zones": "workspace:*",
     "@narada2/task-governance-core": "workspace:*",
     "@narada2/agent-context-memory": "workspace:*",
+    "@narada2/carrier-runtime-contract": "workspace:*",
     "@narada2/charters": "workspace:*",
     "@narada2/ops-kit": "workspace:*",
     "@narada2/search": "workspace:*",

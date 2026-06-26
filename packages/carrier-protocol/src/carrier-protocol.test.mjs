@@ -69,7 +69,6 @@ import {
   normalizeNarsRuntimeEventKind,
   normalizeControlInputRecord,
   normalizeInputEvent,
-  normalizeLegacyInputRecord,
   observerPayload,
   startupCommandFromLaunchPacket,
   validateControlInputRecord,
@@ -305,19 +304,8 @@ assert.deepEqual(classifyCarrierControlRequest({ id: 'command-1', method: 'carri
   observer_action: null,
   error: null,
   method_kind: 'carrier_command_execute',
-  compatibility_alias: null,
 });
-assert.deepEqual(classifyCarrierControlRequest({ id: 'legacy-command-1', method: 'agent-cli.command' }), {
-  request_id: 'legacy-command-1',
-  method: 'agent-cli.command',
-  concurrent_allowed: false,
-  allowed_when_closed: false,
-  native_control_input: false,
-  observer_action: null,
-  error: null,
-  method_kind: 'carrier_command_execute',
-  compatibility_alias: 'agent-cli.command',
-});
+assert.equal(classifyCarrierControlRequest({ id: 'old-command-1', method: 'agent-cli.command' }).error?.code, 'unsupported_method');
 assert.deepEqual(classifyCarrierControlRequest({ id: 'observer-mute-1', method: 'observer.mute' }), {
   request_id: 'observer-mute-1',
   method: 'observer.mute',
@@ -656,7 +644,7 @@ assert.equal(isStartupNudge('run startup sequence'), true);
 assert.equal(isStartupNudge('please start up'), true);
 assert.equal(isStartupNudge('inspect startup files'), false);
 assert.deepEqual(startupCommandFromLaunchPacket({}), { name: 'agent_context_startup_sequence', arguments: {} });
-assert.deepEqual(startupCommandFromLaunchPacket({ startup_command: { name: 'startup_sequence', arguments: {} } }), { name: 'agent_context_startup_sequence', arguments: {} });
+assert.deepEqual(startupCommandFromLaunchPacket({ startup_command: { name: 'startup_sequence', arguments: {} } }), { name: 'startup_sequence', arguments: {} });
 assert.deepEqual(classifyCarrierInputIntent(input, {
   startup_command: { name: 'agent_context_startup_sequence', arguments: {} },
 }), {
@@ -675,8 +663,7 @@ assert.match(thrownMessage(() => createInputEvent({ ...baseInput, metadata: [] }
 assert.match(thrownMessage(() => createInputEvent({ ...baseInput, authority_ref: 1 })), /invalid_authority_ref/);
 assert.match(thrownMessage(() => createInputEvent({ ...baseInput, hold_condition: 'wait' })), /invalid_hold_condition/);
 
-const legacyTransport = normalizeInputEvent({ ...input, event_id: 'input_test_legacy', transport: 'agent_cli_server_api' });
-assert.equal(legacyTransport.transport, 'carrier_server_api');
+assert.match(thrownMessage(() => normalizeInputEvent({ ...input, event_id: 'input_test_legacy', transport: 'agent_cli_server_api' })), /invalid_transport/);
 
 assert.deepEqual(
   classifyInputAdmission(input, { activeTurn: false, composerHasDraft: false }),
@@ -1010,11 +997,6 @@ assert.match(thrownMessage(() => createInputEvent({
 assert.match(thrownMessage(() => createInputEvent({ ...baseInput, event_id: 'input_external_bad', source_kind: 'external', source_id: 'mailbox:x' })), /external_source_requires_admitted_by_metadata/);
 assert.doesNotThrow(() => createInputEvent({ ...baseInput, event_id: 'input_external_ok', source_kind: 'external', source_id: 'mailbox:x', metadata: { admitted_by: 'narada-proper.system.mailbox_adapter' } }));
 
-const legacyInput = normalizeLegacyInputRecord({ content: 'steer', source: 'operator_steering' }, { transport: 'control_jsonl' });
-assert.equal(legacyInput.delivery_mode, 'admit_after_active_turn');
-assert.equal(legacyInput.transport, 'control_jsonl');
-assert.equal(legacyInput.metadata.legacy_source, 'operator_steering');
-
 const control = createControlInputRecord({
   control_event_id: 'control_test_1',
   written_at: '2026-05-30T00:00:01.000Z',
@@ -1025,9 +1007,7 @@ assert.equal(control.input_event_id, heldSystem.event_id);
 assert.doesNotThrow(() => assertValidControlInputRecord(control));
 assert.match(thrownMessage(() => assertValidControlInputRecord({ ...control, input_event_id: 'wrong' })), /invalid_input_event_id/);
 assert.match(thrownMessage(() => assertValidControlInputRecord({ ...control, input_event_id: 'input_wrong' })), /input_event_id_mismatch/);
-const normalizedLegacyControl = normalizeControlInputRecord({ content: 'legacy', source: 'manual_operator', transport: 'control_jsonl' });
-assert.equal(normalizedLegacyControl.schema, CONTROL_INPUT_EVENT_SCHEMA);
-assert.equal(normalizedLegacyControl.input.content, 'legacy');
+assert.match(thrownMessage(() => normalizeControlInputRecord({ content: 'legacy', source: 'manual_operator', transport: 'control_jsonl' })), /unsupported_shape/);
 const normalizedProtocolControl = normalizeControlInputRecord(agentVisibleDirectiveInput, { transport: 'control_jsonl' });
 assert.equal(normalizedProtocolControl.schema, CONTROL_INPUT_EVENT_SCHEMA);
 assert.equal(normalizedProtocolControl.input.source_kind, 'system');

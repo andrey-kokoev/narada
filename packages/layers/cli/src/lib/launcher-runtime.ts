@@ -1,4 +1,4 @@
-import { accessSync, existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { accessSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { basename, dirname, join, parse, resolve } from 'node:path';
 import { createRequire } from 'node:module';
@@ -13,6 +13,7 @@ export interface LaunchResultSummary {
   status?: string;
   agent_start_event?: string;
   identity?: string;
+  carrier_kind?: string;
   runtime?: string;
   runtime_substrate_kind?: string;
   site_root?: string;
@@ -30,6 +31,15 @@ export interface LaunchResultSummary {
   expires_at?: string;
 }
 
+function tryReadJsonFile(path: string): unknown {
+  try {
+    if (!existsSync(path)) return null;
+    return JSON.parse(readFileSync(path, 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
 function tsxImportPath(): string {
   return pathToFileURL(requireFromLauncherRuntime.resolve('tsx')).href;
 }
@@ -37,6 +47,7 @@ function tsxImportPath(): string {
 export interface CarrierStatusOptions {
   siteRoot: string;
   agent?: string;
+  carrier?: string;
   runtime?: string;
   now?: Date;
 }
@@ -45,6 +56,7 @@ export interface AgentStartOptions {
   siteRoot: string;
   workspaceRoot?: string;
   agent: string;
+  carrier?: string;
   runtime: string;
   intelligenceProvider?: string;
   dryRun?: boolean;
@@ -60,10 +72,13 @@ export interface AgentStartCommandResult {
   mutation_performed: boolean;
   site_root: string;
   agent: string;
+  carrier?: string;
   runtime: string;
   command: string[];
   execution?: CommandExecutionResult;
-  parsed_stdout?: unknown;
+  result_handoff?: 'json_output_file';
+  result_file?: string;
+  parsed_result?: unknown;
   error?: string;
 }
 
@@ -73,6 +88,7 @@ export interface CarrierStatusResult {
   mutation_performed: false;
   site_root: string;
   agent?: string;
+  carrier?: string;
   runtime?: string;
   latest?: LaunchResultSummary;
   launch_results_dir: string;
@@ -148,16 +164,13 @@ interface LaunchResultRecord {
   status?: unknown;
   agent_start_event?: unknown;
   identity?: unknown;
+  carrier_kind?: unknown;
   runtime?: unknown;
   runtime_substrate_kind?: unknown;
   target_site_root?: unknown;
   session_site_root?: unknown;
   launch_source?: unknown;
   expires_at?: unknown;
-  agent_cli_launch?: {
-    control_path?: unknown;
-    session_path?: unknown;
-  };
   nars_launch?: {
     control_path?: unknown;
     session_path?: unknown;
@@ -198,6 +211,7 @@ export function getCarrierStatus(options: CarrierStatusOptions): CarrierStatusRe
   const allSummaries = readLaunchResults(launchResultsDir);
   const summaries = allSummaries
     .filter((summary) => !options.agent || summary.identity === options.agent)
+    .filter((summary) => !options.carrier || summary.carrier_kind === options.carrier)
     .filter((summary) => {
       if (!options.runtime) return true;
       return summary.runtime === options.runtime || summary.runtime_substrate_kind === options.runtime;
@@ -211,6 +225,7 @@ export function getCarrierStatus(options: CarrierStatusOptions): CarrierStatusRe
     mutation_performed: false,
     site_root: siteRoot,
     agent: options.agent,
+    carrier: options.carrier,
     runtime: options.runtime,
     latest,
     launch_results_dir: launchResultsDir,
@@ -226,8 +241,14 @@ export function getCarrierControlPath(options: CarrierStatusOptions): CarrierSta
 export function runAgentStartCommand(options: AgentStartOptions): AgentStartCommandResult {
   const siteRoot = resolve(options.siteRoot);
   const workspaceRoot = options.workspaceRoot ? resolve(options.workspaceRoot) : naradaProperRoot();
-  const naradaRoot = explicitNaradaProperRoot(workspaceRoot) ?? naradaProperRoot();
-  const agentStart = join(naradaRoot, 'packages', 'agent-start', 'src', 'narada-agent-start.ts');
+  const resolvedAgentStart = resolveAgentStartEntrypoint(workspaceRoot);
+  const siteRootAgentStart = join(siteRoot, 'packages', 'agent-start', 'src', 'narada-agent-start.ts');
+  const agentStart = existsSync(resolvedAgentStart) || !existsSync(siteRootAgentStart)
+    ? resolvedAgentStart
+    : siteRootAgentStart;
+  const resultDir = join(workspaceRoot, '.ai', 'runtime', 'agent-start-command-results', `${Date.now()}-${Math.random().toString(16).slice(2)}`);
+  mkdirSync(resultDir, { recursive: true });
+  const resultPath = join(resultDir, 'result.json');
   const args = [
     '--import',
     tsxImportPath(),
@@ -237,10 +258,14 @@ export function runAgentStartCommand(options: AgentStartOptions): AgentStartComm
     siteRoot,
     '--site-root',
     siteRoot,
+    '--carrier',
+    options.carrier ?? options.runtime,
     '--runtime',
     options.runtime,
     '--launch-source',
     options.launchSource ?? 'narada carrier start',
+    '--json-output-file',
+    resultPath,
     '--json',
   ];
   if (options.intelligenceProvider) args.push('--intelligence-provider', options.intelligenceProvider);
@@ -256,8 +281,11 @@ export function runAgentStartCommand(options: AgentStartOptions): AgentStartComm
       mutation_performed: false,
       site_root: siteRoot,
       agent: options.agent,
+      carrier: options.carrier,
       runtime: options.runtime,
       command: [process.execPath, ...args],
+      result_handoff: 'json_output_file',
+      result_file: resultPath,
       error: `agent-start entrypoint not found: ${agentStart}`,
     };
   }
@@ -269,21 +297,24 @@ export function runAgentStartCommand(options: AgentStartOptions): AgentStartComm
     NARADA_AGENT_ID: options.agent,
     ...(options.intelligenceProvider ? { NARADA_INTELLIGENCE_PROVIDER: options.intelligenceProvider } : {}),
   });
-  const parsed = tryParseJson(execution.stdout) ?? tryParseFirstJsonObject(execution.stdout);
+  const parsed = tryReadJsonFile(resultPath);
   return {
     schema: 'narada.agent_start.command_result.v0',
     status: execution.status,
     mutation_performed: execution.status === 'success' && options.dryRun !== true,
     site_root: siteRoot,
     agent: options.agent,
+    carrier: options.carrier,
     runtime: options.runtime,
     command: [process.execPath, ...args],
+    result_handoff: 'json_output_file',
+    result_file: resultPath,
     execution: {
       ...execution,
       stdout: parsed ? '' : truncateText(execution.stdout, 1000),
       stderr: truncateText(execution.stderr, 1000),
     },
-    parsed_stdout: parsed,
+    parsed_result: parsed,
     error: execution.status === 'success' ? undefined : execution.stderr || execution.error,
   };
 }
@@ -592,7 +623,6 @@ function readLaunchResult(path: string): LaunchResultSummary | null {
     );
     const controlPath = stringValue(
       record.nars_launch?.control_path
-        ?? record.agent_cli_launch?.control_path
         ?? controlPathFromRuntimeArgs(record.runtime_args)
         ?? (carrierSessionId
           ? join(
@@ -606,8 +636,7 @@ function readLaunchResult(path: string): LaunchResultSummary | null {
           : undefined),
     );
     const sessionPath = stringValue(
-      record.nars_launch?.session_path
-        ?? record.agent_cli_launch?.session_path,
+      record.nars_launch?.session_path,
     );
     const parentPid = numberValue(
       record.carrier_session?.record?.parent_process?.pid
@@ -620,6 +649,7 @@ function readLaunchResult(path: string): LaunchResultSummary | null {
       status: stringValue(record.status),
       agent_start_event: stringValue(record.agent_start_event),
       identity: stringValue(record.identity ?? record.required_environment?.NARADA_AGENT_ID),
+      carrier_kind: stringValue(record.carrier_kind),
       runtime: stringValue(record.runtime),
       runtime_substrate_kind: stringValue(record.runtime_substrate_kind),
       site_root: stringValue(record.required_environment?.NARADA_SITE_ROOT),
@@ -694,6 +724,20 @@ function naradaProperRoot(): string {
     ?? findNaradaProperRoot(moduleDir)
     ?? findNaradaProperRoot(process.cwd())
     ?? resolve(process.cwd());
+}
+
+function resolveAgentStartEntrypoint(workspaceRoot: string): string {
+  const naradaRoot = explicitNaradaProperRoot(process.env.NARADA_PROPER_ROOT ?? '')
+    ?? explicitNaradaProperRoot(workspaceRoot)
+    ?? findNaradaProperRoot(workspaceRoot)
+    ?? naradaProperRoot();
+  const workspaceEntrypoint = join(naradaRoot, 'packages', 'agent-start', 'src', 'narada-agent-start.ts');
+  if (existsSync(workspaceEntrypoint)) return workspaceEntrypoint;
+  try {
+    return requireFromLauncherRuntime.resolve('@narada2/agent-start/narada-agent-start');
+  } catch {
+    return workspaceEntrypoint;
+  }
 }
 
 function explicitNaradaProperRoot(candidate: string): string | null {
@@ -777,36 +821,6 @@ function tryParseJson(value: string): unknown {
   } catch {
     return null;
   }
-}
-
-function tryParseFirstJsonObject(value: string): unknown {
-  const start = value.indexOf('{');
-  if (start < 0) return null;
-  let depth = 0;
-  let inString = false;
-  let escaped = false;
-  for (let index = start; index < value.length; index++) {
-    const char = value[index];
-    if (inString) {
-      if (escaped) {
-        escaped = false;
-      } else if (char === '\\') {
-        escaped = true;
-      } else if (char === '"') {
-        inString = false;
-      }
-      continue;
-    }
-    if (char === '"') {
-      inString = true;
-    } else if (char === '{') {
-      depth++;
-    } else if (char === '}') {
-      depth--;
-      if (depth === 0) return tryParseJson(value.slice(start, index + 1));
-    }
-  }
-  return null;
 }
 
 function appendNodeOption(existing: string | undefined, option: string): string {

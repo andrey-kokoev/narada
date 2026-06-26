@@ -168,7 +168,7 @@ $result = [ordered]@{
     renderer = [ordered]@{
         architecture = "companion_webview_process"
         supported_kinds = @("webm", "mp4", "threejs")
-        fallback_native_kinds = @("gif", "still")
+        native_projection_kinds = @("gif", "still")
     }
     entries = @($entries.ToArray())
     diagnostics = @($diagnostics.ToArray())

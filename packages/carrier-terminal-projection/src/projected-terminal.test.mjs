@@ -43,6 +43,17 @@ test('startup event renders operator-facing runtime summary rows', () => {
   assert.equal(rendered.some((line) => line.includes('narada-test-agent-context')), true);
 });
 
+test('operator event rendering consumes shared NARS client event projection', () => {
+  const wrapped = renderOperatorEvent({
+    event: 'session_event',
+    payload: {
+      event: 'websocket_error',
+      message: 'connection dropped',
+    },
+  }, { timestamps: false });
+  assert.deepEqual(wrapped, ['WebSocket error: connection dropped']);
+});
+
 test('projected terminal markdown renders bold outside inline code', () => {
   const style = createOperatorStyle({ enabled: true });
   const rendered = renderMarkdownForProjectedTerminal('Use **bold** and `**code**`.', style);

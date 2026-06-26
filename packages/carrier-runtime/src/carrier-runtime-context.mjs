@@ -74,7 +74,7 @@ export function createCarrierRuntimeContext({
     eventsPath: paths.eventsPath,
     intelligenceProvider,
     providerSettings: Object.freeze({
-      model: providerSettings.model ?? process.env.CODEX_MODEL ?? 'gpt-5',
+      model: providerSettings.model ?? process.env.CODEX_MODEL ?? process.env.NARADA_CODEX_MODEL ?? null,
       thinking: providerSettings.thinking ?? process.env.NARADA_AI_THINKING ?? 'medium',
       stream: providerSettings.stream ?? true,
       goal: providerSettings.goal ?? null,
@@ -92,55 +92,3 @@ export function createCarrierRuntimeContext({
   });
 }
 
-/**
- * Normalize a partial or legacy config object into a full carrier runtime context.
- * Keeps backward compatibility with the flat config shape used by runCarrierServerMode.
- *
- * @param {object} input
- * @returns {CarrierRuntimeContext}
- */
-export function normalizeCarrierRuntimeContext(input = {}) {
-  if (
-    input
-    && typeof input === 'object'
-    && input.identity
-    && input.session
-    && !Object.prototype.hasOwnProperty.call(input, 'sessionSettings')
-    && !Object.prototype.hasOwnProperty.call(input, 'transcriptDisplaySettings')
-  ) {
-    return createCarrierRuntimeContext(input);
-  }
-  // Legacy flat config support
-  const {
-    identity,
-    session,
-    siteRoot,
-    sessionPath,
-    eventsPath,
-    intelligenceProvider,
-    narsDelegatedAuthorityHandoff,
-    transcriptDisplaySettings,
-    sessionSettings,
-    operationHeartbeatDirectiveEnabled,
-    operationHeartbeatDirectiveIntervalMs,
-    operationHeartbeatDirectiveInitialDelayMs,
-    healthUrl,
-    eventStreamUrl,
-  } = input;
-  return createCarrierRuntimeContext({
-    identity,
-    session,
-    siteRoot,
-    sessionPath,
-    eventsPath,
-    intelligenceProvider,
-    narsDelegatedAuthorityHandoff,
-    providerSettings: sessionSettings,
-    displaySettings: transcriptDisplaySettings,
-    operationHeartbeatDirectiveEnabled,
-    operationHeartbeatDirectiveIntervalMs,
-    operationHeartbeatDirectiveInitialDelayMs,
-    healthUrl,
-    eventStreamUrl,
-  });
-}

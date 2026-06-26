@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { siteControlRoot } from '../../site-common-tools/src/site-layout.mjs';
 
-const FALLBACK_READ_ONLY_TOOLS = new Set([
+const NAME_PATTERN_READ_ONLY_TOOLS = new Set([
   'fs_read_file',
   'fs_read_file_range',
   'fs_stat',
@@ -52,7 +52,7 @@ const FALLBACK_READ_ONLY_TOOLS = new Set([
   'site_ops_doctor',
 ]);
 
-const FALLBACK_MUTATING_TOOLS = new Set([
+const NAME_PATTERN_MUTATING_TOOLS = new Set([
   'site_task_lifecycle.admit_task',
   'site_task_lifecycle.materialize_task',
   'narada_task_claim',
@@ -174,14 +174,14 @@ function projectSurfaceTools(surface) {
   }
   for (const tool of stringArray(surface.registered_live_tools)) {
     if (declaredTools.has(tool)) continue;
-    const fallback = buildFallbackToolMetadata(tool) ?? registeredLiveToolDefaultMetadata(tool);
+    const inferred = buildNamePatternToolMetadata(tool) ?? registeredLiveToolDefaultMetadata(tool);
     tools[tool] = {
-      ...fallback,
+      ...inferred,
       source: 'surface_registry',
       surface_id: surfaceId,
       server_name: serverName,
       generated_file: generatedFile,
-      reason: `surface_registry_registered_live_tool_${fallback.read_only ? 'read_only' : 'mutating'}`,
+      reason: `surface_registry_registered_live_tool_${inferred.read_only ? 'read_only' : 'mutating'}`,
     };
   }
   return tools;
@@ -193,30 +193,30 @@ function registeredLiveToolDefaultMetadata(toolName) {
     read_only: false,
     family: inferFamily(toolName),
     authority_owner: inferAuthorityOwner(toolName),
-    source: 'closed_name_fallback',
+    source: 'closed_name_pattern',
     reason: 'registered_live_tool_without_tool_contract_requires_admission',
   };
 }
 
-function buildFallbackToolMetadata(toolName) {
-  if (FALLBACK_READ_ONLY_TOOLS.has(toolName)) {
+function buildNamePatternToolMetadata(toolName) {
+  if (NAME_PATTERN_READ_ONLY_TOOLS.has(toolName)) {
     return {
       name: toolName,
       read_only: true,
       family: 'read_only_context',
       authority_owner: 'target_site_read_policy',
-      source: 'closed_name_fallback',
-      reason: 'closed_name_fallback_read_only_tool',
+      source: 'closed_name_pattern',
+      reason: 'closed_name_pattern_read_only_tool',
     };
   }
-  if (FALLBACK_MUTATING_TOOLS.has(toolName)) {
+  if (NAME_PATTERN_MUTATING_TOOLS.has(toolName)) {
     return {
       name: toolName,
       read_only: false,
       family: inferFamily(toolName),
       authority_owner: inferAuthorityOwner(toolName),
-      source: 'closed_name_fallback',
-      reason: 'closed_name_fallback_mutating_tool',
+      source: 'closed_name_pattern',
+      reason: 'closed_name_pattern_mutating_tool',
     };
   }
   return null;
@@ -252,10 +252,10 @@ function resolveToolMetadata({ toolName, server = null, tool = null }) {
       reason: 'surface_registry_tool_not_declared',
     };
   }
-  const fallback = buildFallbackToolMetadata(toolName);
-  if (fallback) {
+  const inferred = buildNamePatternToolMetadata(toolName);
+  if (inferred) {
     return {
-      ...fallback,
+      ...inferred,
       available: !!tool,
       server_name: server?.name ?? null,
       live_tool_catalog_seen: !!tool,
@@ -334,9 +334,9 @@ function stringArray(value) {
 }
 
 export {
-  FALLBACK_MUTATING_TOOLS,
-  FALLBACK_READ_ONLY_TOOLS,
-  buildFallbackToolMetadata,
+  NAME_PATTERN_MUTATING_TOOLS,
+  NAME_PATTERN_READ_ONLY_TOOLS,
+  buildNamePatternToolMetadata,
   inferAuthorityOwner,
   inferFamily,
   loadMcpSurfaceRegistry,

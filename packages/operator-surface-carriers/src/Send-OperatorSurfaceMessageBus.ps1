@@ -149,7 +149,7 @@ function Get-DeliveryStateForBridgeResult {
         return [ordered]@{ state = "delivered"; reason = $status }
     }
     if ($status -eq "typed_only") {
-        return [ordered]@{ state = "fallback_notified"; reason = "typed_only_not_submitted" }
+        return [ordered]@{ state = "sender_notified"; reason = "typed_only_not_submitted" }
     }
     if ($status -eq "dry_run") {
         return [ordered]@{ state = "delivered"; reason = "dry_run_planned" }
@@ -167,7 +167,7 @@ function Get-DeliveryStateForBridgeResult {
         return [ordered]@{ state = "refused"; reason = if ($failure) { $failure } else { $text.Trim() } }
     }
     if ($text -match "target_window_not_visible|no_live_binding_for_identity") {
-        return [ordered]@{ state = "fallback_notified"; reason = "target_not_visible_or_no_live_binding" }
+        return [ordered]@{ state = "sender_notified"; reason = "target_not_visible_or_no_live_binding" }
     }
     if ($status -eq "refused" -or $text -match "refused|unavailable|unsupported|unknown") {
         return [ordered]@{ state = "refused"; reason = if ($failure) { $failure } else { $error } }
@@ -198,7 +198,7 @@ function Invoke-BridgeAttempt {
         ActiveInputPolicy = "queue_waiting_for_idle"
         RequiredIdleMs = 750
         IdleWaitTimeoutMs = [Math]::Max(250, [Math]::Min($ExpiresAfterMs, 5000))
-        FallbackPolicy = "sender_notification"
+        TimeoutOutcomePolicy = "sender_notification"
         PassThru = $true
     }
     if ($Hwnd -ne 0) { $args.Hwnd = $Hwnd }
@@ -523,7 +523,7 @@ if (-not $NoDedupe -and (Test-Path -LiteralPath $dedupePath)) {
     $existingPointer = [System.IO.File]::ReadAllText($dedupePath) | ConvertFrom-NaradaJson
     if ($existingPointer.event_path -and (Test-Path -LiteralPath ([string]$existingPointer.event_path))) {
         $existing = [System.IO.File]::ReadAllText([string]$existingPointer.event_path) | ConvertFrom-NaradaJson
-        $terminalStates = @("delivered", "expired", "refused", "fallback_notified")
+        $terminalStates = @("delivered", "expired", "refused", "sender_notified")
         if ($existing.delivery_state -in $terminalStates) {
             $existing | Add-Member -NotePropertyName deduped -NotePropertyValue $true -Force
             if ($PassThru) { $existing | ConvertTo-Json -Depth 50 } else { Write-Host ("{0}: deduped existing OSM bus event {1}" -f $existing.delivery_state, $existing.bus_event_id) }
@@ -566,7 +566,7 @@ $event = [ordered]@{
     submit_strategy = $SubmitStrategy
     dedupe_key = $DedupeKey
     delivery_state = "queued_waiting_for_idle"
-    delivery_states_allowed = @("delivered", "queued_waiting_for_idle", "expired", "refused", "fallback_notified")
+    delivery_states_allowed = @("delivered", "queued_waiting_for_idle", "expired", "refused", "sender_notified")
     policy = [ordered]@{
         max_attempts = $MaxAttempts
         backoff_ms = $BackoffMs
@@ -682,7 +682,7 @@ for ($attemptNumber = 1; $attemptNumber -le $MaxAttempts; $attemptNumber++) {
     $event.attempts = @($attempts.ToArray())
     $event.updated_at = Get-Date -Format "o"
 
-    if ($classified.state -eq "delivered" -or $classified.state -eq "fallback_notified" -or $classified.state -eq "refused") {
+    if ($classified.state -eq "delivered" -or $classified.state -eq "sender_notified" -or $classified.state -eq "refused") {
         $event.delivery_state = $classified.state
         $event.final_reason = $classified.reason
         Write-JsonFile -Path $eventPath -Value $event

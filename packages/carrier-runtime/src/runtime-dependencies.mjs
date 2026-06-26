@@ -1,6 +1,5 @@
 import { request as httpRequest } from 'node:http';
 import { request as httpsRequest } from 'node:https';
-import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, appendFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import {
@@ -20,6 +19,7 @@ import {
 } from '@narada2/carrier-protocol';
 import {
   REQUEST_ADAPTERS,
+  accumulateCodexExecText,
   buildCodexExecArgs,
   buildCodexSubprocessEnv,
   codexExecEventText,
@@ -40,6 +40,7 @@ import {
 } from './provider-resolution.mjs';
 import {
   aggregateTools,
+  applyWorkerMcpProjection,
   createMcpStatusSnapshot,
   discoverAndStartMcpServers,
   findToolBinding,
@@ -57,6 +58,7 @@ import {
   normalizeInputRecord,
   observerMetadata,
 } from './input-queue.mjs';
+import { spawnOwnedProcess } from './process-supervisor.mjs';
 
 const PROVIDER_METADATA = loadProviderMetadata();
 
@@ -88,6 +90,7 @@ export function createCarrierRuntimeDependencies({ runtimeContext = {}, env = pr
 
   const dependencies = {
     discoverAndStartMcpServers,
+    applyWorkerMcpProjection: (mcpServers) => applyWorkerMcpProjection(mcpServers),
     aggregateTools,
     createMcpStatusSnapshot,
     readMcpPreflightArtifact: () => readMcpPreflightArtifact({ siteRoot, session, identity }),
@@ -626,7 +629,7 @@ async function handleServerRequest(request, context) {
             delivery_semantics: 'interrupt_active_turn_then_admit_next_turn',
           },
         },
-      }, { transport: 'jsonl_stdio' }), { drain: true, state });
+      }, { transport: 'control_jsonl' }), { drain: true, state });
       return;
     }
     if (controlRequest.method_kind === 'session_close') {
@@ -645,7 +648,7 @@ async function handleServerRequest(request, context) {
       const directive = request?.params?.directive ?? null;
       const message = String(request?.params?.message ?? directive?.content?.text ?? '');
       const directiveId = directive?.directive_id ?? request?.params?.directive_id ?? null;
-      await state.inputQueue.enqueue(normalizeInputEvent({ content: message, source: 'system_directive', authority_ref: request?.params?.authority_ref ?? directiveId, directive_id: directiveId, request_id: requestId }, { transport: 'jsonl_stdio' }), { drain: true, state });
+      await state.inputQueue.enqueue(normalizeInputEvent({ content: message, source: 'system_directive', authority_ref: request?.params?.authority_ref ?? directiveId, directive_id: directiveId, request_id: requestId }, { transport: 'control_jsonl' }), { drain: true, state });
       return;
     }
     const message = String(request?.params?.message ?? '');
@@ -653,7 +656,7 @@ async function handleServerRequest(request, context) {
       emit('error', { request_id: requestId, code: 'message_required', message: 'conversation.send requires params.message' });
       return;
     }
-    await state.inputQueue.enqueue(normalizeInputEvent({ content: message, source: request?.params?.source ?? 'automation_jsonl', source_id: request?.params?.source_id ?? null, authority_ref: request?.params?.authority_ref ?? null, request_id: requestId }, { transport: 'jsonl_stdio' }), { drain: true, state });
+    await state.inputQueue.enqueue(normalizeInputEvent({ content: message, source: request?.params?.source ?? 'automation_jsonl', source_id: request?.params?.source_id ?? null, authority_ref: request?.params?.authority_ref ?? null, request_id: requestId }, { transport: 'control_jsonl' }), { drain: true, state });
   } catch (error) {
     emit('error', { request_id: requestId, code: 'request_failed', message: error instanceof Error ? error.message : String(error) });
   }
@@ -716,14 +719,15 @@ function sendCodexExecJsonRequest(request, settings = {}) {
     const args = buildCodexExecArgs(request, settings);
     const prompt = codexExecPrompt(request);
     const mcpServers = codexRequestMcpServers(request, settings);
-    const child = spawn(command.command, [...command.prefixArgs, ...args], { cwd: request.arguments?.cwd ?? settings.siteRoot ?? process.cwd(), windowsHide: true, env: buildCodexSubprocessEnv(mcpServers, settings), stdio: ['pipe', 'pipe', 'pipe'] });
+    const processOwner = spawnOwnedProcess(command.command, [...command.prefixArgs, ...args], { cwd: request.arguments?.cwd ?? settings.siteRoot ?? process.cwd(), windowsHide: true, env: buildCodexSubprocessEnv(mcpServers, settings), stdio: ['pipe', 'pipe', 'pipe'] });
+    const child = processOwner.child;
     child.stdin.end(prompt);
     let stdoutBuffer = '';
     let stderr = '';
     let threadId = request.arguments?.threadId ?? null;
     let content = '';
     let streamed = false;
-    const abortChild = () => terminateChildProcess(child);
+    const abortChild = () => processOwner.terminateTree('codex_subscription_abort');
     settings.abortSignal?.addEventListener?.('abort', abortChild, { once: true });
     child.stdout.setEncoding('utf8');
     child.stderr.setEncoding('utf8');
@@ -739,9 +743,10 @@ function sendCodexExecJsonRequest(request, settings = {}) {
         handleCodexExecMcpToolEvent(event, settings);
         if (event.type === 'thread.started' && typeof event.thread_id === 'string') threadId = event.thread_id;
         const text = codexExecEventText(event);
-        const appendText = content && text.startsWith(content) ? text.slice(content.length) : text;
-        if (appendText && !(isPotentialNaradaToolCallText(content + appendText) || parseNaradaToolCall(content + appendText))) {
-          content += appendText;
+        const accumulated = accumulateCodexExecText(content, text);
+        const { appendText, suppressStreaming } = accumulated;
+        content = accumulated.content;
+        if (appendText && !suppressStreaming) {
           streamed = true;
           settings.emit?.('assistant_message_stream', { turn_id: settings.turn?.turnId ?? null, content: appendText });
         }
@@ -756,32 +761,36 @@ function sendCodexExecJsonRequest(request, settings = {}) {
         const event = parseCodexExecJsonLine(stdoutBuffer.trim());
         if (event?.type === 'thread.started' && typeof event.thread_id === 'string') threadId = event.thread_id;
         const text = event ? codexExecEventText(event) : '';
-        content += content && text.startsWith(content) ? text.slice(content.length) : text;
+        content = accumulateCodexExecText(content, text).content;
       }
       if (code !== 0) return rejectRequest(new Error(`codex exec --json failed with exit ${code}${stderr.trim() ? `; ${stderr.trim().slice(0, 1000)}` : ''}`));
       resolveRequest({ threadId, content, streaming_rendered: streamed });
     });
   });
 }
-
 function sendCodexExecJsonBufferedRequest(request, settings = {}) {
   return new Promise((resolveRequest, rejectRequest) => {
     const command = codexCommand();
     const args = buildCodexExecArgs(request, settings);
     const prompt = codexExecPrompt(request);
     const mcpServers = codexRequestMcpServers(request, settings);
-    const child = spawn(command.command, [...command.prefixArgs, ...args], { cwd: request.arguments?.cwd ?? settings.siteRoot ?? process.cwd(), windowsHide: true, env: buildCodexSubprocessEnv(mcpServers, settings), stdio: ['pipe', 'pipe', 'pipe'] });
+    const processOwner = spawnOwnedProcess(command.command, [...command.prefixArgs, ...args], { cwd: request.arguments?.cwd ?? settings.siteRoot ?? process.cwd(), windowsHide: true, env: buildCodexSubprocessEnv(mcpServers, settings), stdio: ['pipe', 'pipe', 'pipe'] });
+    const child = processOwner.child;
     child.stdin.end(prompt);
     let stdout = '';
     let stderr = '';
     let threadId = request.arguments?.threadId ?? null;
     let content = '';
+    const abortChild = () => processOwner.terminateTree('codex_subscription_abort');
+    settings.abortSignal?.addEventListener?.('abort', abortChild, { once: true });
     child.stdout.setEncoding('utf8');
     child.stderr.setEncoding('utf8');
     child.stdout.on('data', (chunk) => { stdout += chunk; });
     child.stderr.on('data', (chunk) => { stderr += chunk; });
     child.on('error', (error) => rejectRequest(codexCliSpawnError(error, command)));
     child.on('exit', (code) => {
+      settings.abortSignal?.removeEventListener?.('abort', abortChild);
+      if (settings.abortSignal?.aborted) return rejectRequest(new Error('agent_cli_interrupt_requested'));
       if (code !== 0) return rejectRequest(new Error(`codex exec --json failed with exit ${code}${stderr.trim() ? `; ${stderr.trim().slice(0, 1000)}` : ''}`));
       for (const line of stdout.split(/\r?\n/)) {
         if (!line.trim()) continue;
@@ -857,7 +866,10 @@ function serverHealth({ requestId, state, allTools, mcpServers, mcpPreflightArti
     session_id: context.session,
     site_root: context.siteRoot,
     runtime: 'narada-agent-runtime-server',
-    runtime_substrate: 'agent-cli',
+    runtime_substrate: 'narada-agent-runtime-server',
+    runtime_substrate_kind: 'narada-agent-runtime-server',
+    carrier_kind: 'agent-cli',
+    operator_surface_kind: 'agent-cli',
     delegated_authority_handoff: status.delegated_authority_handoff,
     delegated_authority_ref: status.delegated_authority_ref,
     provider: status.provider,

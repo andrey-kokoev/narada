@@ -82,13 +82,14 @@ export function registerCarrierCommands(program: Command): void {
     }));
 
   carrier
-    .command('start [runtime]')
+    .command('start [carrier]')
     .description('Start or plan a carrier through the canonical agent-start runtime adapter')
     .option('--site-root <path>', 'Target Site root')
     .option('--site <path>', 'Alias for --site-root')
     .option('--workspace-root <path>', 'Workspace root for the launched carrier')
     .option('--agent <id>', 'Agent identity')
-    .option('--runtime <runtime>', 'Runtime substrate')
+    .option('--carrier <carrier>', 'Carrier/operator surface')
+    .option('--runtime <runtime>', 'Runtime substrate for the selected carrier')
     .option('--intelligence-provider <provider>', 'agent-cli intelligence provider')
     .option('--dry-run', 'Plan the runtime launch without writing launch artifacts or spawning', false)
     .option('--materialize-only', 'Write launch artifacts without spawning the runtime', false)
@@ -99,13 +100,14 @@ export function registerCarrierCommands(program: Command): void {
     .action(directCommandAction<[string | undefined, Record<string, unknown>]>({
       command: 'carrier start',
       emit: emitCommandResult,
-      format: (_runtime: string | undefined, opts: Record<string, unknown>) => opts.format,
-      invocation: (runtime, opts) => carrierStartCommand({
+      format: (_carrier: string | undefined, opts: Record<string, unknown>) => opts.format,
+      invocation: (carrier, opts) => carrierStartCommand({
         siteRoot: opts.siteRoot as string | undefined,
         site: opts.site as string | undefined,
         workspaceRoot: opts.workspaceRoot as string | undefined,
         agent: opts.agent as string | undefined,
-        runtime: (opts.runtime as string | undefined) ?? runtime,
+        carrier: (opts.carrier as string | undefined) ?? carrier,
+        runtime: opts.runtime as string | undefined,
         intelligenceProvider: opts.intelligenceProvider as string | undefined,
         dryRun: opts.dryRun as boolean | undefined,
         materializeOnly: opts.materializeOnly as boolean | undefined,
@@ -117,64 +119,64 @@ export function registerCarrierCommands(program: Command): void {
     }));
 
   carrier
-    .command('restart [runtime]')
+    .command('restart [carrier]')
     .description('Reserved canonical carrier restart command; reports plan until live mutation is wired')
     .option('--site-root <path>', 'Target Site root')
     .option('--site <path>', 'Alias for --site-root')
     .option('--agent <id>', 'Agent identity')
-    .option('--runtime <runtime>', 'Runtime substrate')
+    .option('--carrier <carrier>', 'Carrier/operator surface')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
     .action(directCommandAction<[string | undefined, Record<string, unknown>]>({
       command: 'carrier restart',
       emit: emitCommandResult,
-      format: (_runtime: string | undefined, opts: Record<string, unknown>) => opts.format,
-      invocation: (runtime, opts) => carrierRestartCommand({
+      format: (_carrier: string | undefined, opts: Record<string, unknown>) => opts.format,
+      invocation: (carrier, opts) => carrierRestartCommand({
         siteRoot: opts.siteRoot as string | undefined,
         site: opts.site as string | undefined,
         agent: opts.agent as string | undefined,
-        runtime: (opts.runtime as string | undefined) ?? runtime,
+        carrier: (opts.carrier as string | undefined) ?? carrier,
         format: resolveCommandFormat(opts.format, 'auto'),
       }, silentCommandContext()),
     }));
 
   carrier
-    .command('reload [runtime]')
+    .command('reload [carrier]')
     .description('Report runtime reload capability and refusal evidence when unavailable')
     .option('--site-root <path>', 'Target Site root')
     .option('--site <path>', 'Alias for --site-root')
     .option('--agent <id>', 'Agent identity')
-    .option('--runtime <runtime>', 'Runtime substrate')
+    .option('--carrier <carrier>', 'Carrier/operator surface')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
     .action(directCommandAction<[string | undefined, Record<string, unknown>]>({
       command: 'carrier reload',
       emit: emitCommandResult,
-      format: (_runtime: string | undefined, opts: Record<string, unknown>) => opts.format,
-      invocation: (runtime, opts) => carrierReloadCommand({
+      format: (_carrier: string | undefined, opts: Record<string, unknown>) => opts.format,
+      invocation: (carrier, opts) => carrierReloadCommand({
         siteRoot: opts.siteRoot as string | undefined,
         site: opts.site as string | undefined,
         agent: opts.agent as string | undefined,
-        runtime: (opts.runtime as string | undefined) ?? runtime,
+        carrier: (opts.carrier as string | undefined) ?? carrier,
         format: resolveCommandFormat(opts.format, 'auto'),
       }, silentCommandContext()),
     }));
 
   carrier
-    .command('drain [runtime]')
+    .command('drain [carrier]')
     .description('Run a bounded drain of Site resident work before lifecycle changes')
     .option('--site-root <path>', 'Target Site root')
     .option('--site <path>', 'Alias for --site-root')
     .option('--agent <id>', 'Agent identity')
-    .option('--runtime <runtime>', 'Runtime substrate')
+    .option('--carrier <carrier>', 'Carrier/operator surface')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
     .action(directCommandAction<[string | undefined, Record<string, unknown>]>({
       command: 'carrier drain',
       emit: emitCommandResult,
-      format: (_runtime: string | undefined, opts: Record<string, unknown>) => opts.format,
-      invocation: (runtime, opts) => carrierDrainCommand({
+      format: (_carrier: string | undefined, opts: Record<string, unknown>) => opts.format,
+      invocation: (carrier, opts) => carrierDrainCommand({
         siteRoot: opts.siteRoot as string | undefined,
         site: opts.site as string | undefined,
         agent: opts.agent as string | undefined,
-        runtime: (opts.runtime as string | undefined) ?? runtime,
+        carrier: (opts.carrier as string | undefined) ?? carrier,
         format: resolveCommandFormat(opts.format, 'auto'),
       }, silentCommandContext()),
     }));

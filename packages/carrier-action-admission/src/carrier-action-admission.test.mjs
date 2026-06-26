@@ -48,7 +48,7 @@ assert.deepEqual(classifyCarrierActionRequest('task_lifecycle_claim', { task_num
   decision: 'routed',
   reason: 'task_lifecycle_mutation_requires_canonical_task_authority',
   secret_findings: [],
-  classifier_source: 'closed_name_fallback',
+  classifier_source: 'closed_name_pattern',
 });
 assert.equal(classifyCarrierActionRequest('agent_context_startup_sequence', {}).decision, 'read_only_admitted');
 const taskShowReadOnlyMetadata = classifyCarrierActionRequest('task_lifecycle_show', { task_number: 1318 }, {
@@ -62,7 +62,7 @@ assert.equal(classifyCarrierActionRequest('fs_glob_search', {}).decision, 'read_
 assert.equal(classifyCarrierActionRequest('fs_grep_search', {}).decision, 'read_only_admitted');
 const sourcePathRead = classifyCarrierActionRequest('fs_read_file', { path: 'packages/task-lifecycle-mcp/src/mcp-freshness-service.ts' });
 assert.equal(sourcePathRead.decision, 'read_only_admitted');
-assert.equal(sourcePathRead.reason, 'closed_name_fallback_read_only_tool');
+assert.equal(sourcePathRead.reason, 'closed_name_pattern_read_only_tool');
 assert.equal(classifyCarrierActionRequest('read_file', {}).decision, 'refused');
 assert.equal(classifyCarrierActionRequest('glob_search', {}).decision, 'refused');
 assert.equal(classifyCarrierActionRequest('grep_search', {}).decision, 'refused');
@@ -224,7 +224,7 @@ assert.equal(request.request_id, 'car_act_carrier_1_turn_1_call_1_1146f7c42f5da5
 assert.equal(request.classifier_version, 'carrier_action_admission.metadata_aware_policy.v1');
 assert.equal(request.requested_action.argument_summary.shape, 'object');
 assert.equal(request.requested_action.classification_reason, 'task_lifecycle_mutation_requires_canonical_task_authority');
-assert.equal(request.requested_action.classifier_source, 'closed_name_fallback');
+assert.equal(request.requested_action.classifier_source, 'closed_name_pattern');
 assert.deepEqual(request.requested_action.argument_summary.keys, ['body', 'task_number']);
 assert.equal('args' in request.requested_action, false);
 
@@ -337,7 +337,7 @@ const oldRecord = {
   request_id: 'old_v0_record',
   created_at: '2026-05-26T00:00:00.000Z',
   decision: 'deferred',
-  reason: 'legacy',
+  reason: 'archived_fixture',
   carrier_mutation_admitted: false,
 };
 mkdirSync(actionAdmissionDir(workspaceRoot), { recursive: true });
@@ -347,7 +347,7 @@ assert.equal(listed.status, 'success');
 assert.equal(listed.decisions.some((entry) => entry.request_id === 'old_v0_record' && entry.decision === 'deferred'), true);
 const shown = showCarrierActionDecision(workspaceRoot, 'old_v0_record');
 assert.equal(shown.status, 'ok');
-assert.equal(shown.record.reason, 'legacy');
+assert.equal(shown.record.reason, 'archived_fixture');
 const invalidShow = showCarrierActionDecision(workspaceRoot, '..\\outside');
 assert.equal(invalidShow.status, 'invalid_request_id');
 

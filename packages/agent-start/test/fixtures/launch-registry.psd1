@@ -8,7 +8,8 @@
       WorkspaceRoot = "D:\code\narada"
       SiteRoot = "D:\code\narada"
       Launcher = "narada.ps1"
-      Runtime = "agent-cli"
+      Carrier = "agent-cli"
+      Runtime = "narada-agent-runtime-server"
       EnableNativeShell = $false
     }
     @{
@@ -19,7 +20,8 @@
       WorkspaceRoot = "D:\code\narada"
       SiteRoot = "D:\code\narada"
       Launcher = "narada.ps1"
-      Runtime = "agent-cli"
+      Carrier = "agent-cli"
+      Runtime = "narada-agent-runtime-server"
       EnableNativeShell = $false
     }
     @{
@@ -30,7 +32,8 @@
       WorkspaceRoot = "D:\code\narada"
       SiteRoot = "D:\code\narada"
       Launcher = "narada.ps1"
-      Runtime = "agent-cli"
+      Carrier = "agent-cli"
+      Runtime = "narada-agent-runtime-server"
       EnableNativeShell = $false
     }
     @{
@@ -40,7 +43,8 @@
       WorkspaceRoot = "C:\Users\Andrey\Narada"
       SiteRoot = "C:\Users\Andrey\Narada"
       Launcher = "narada-andrey.ps1"
-      Runtime = "agent-cli"
+      Carrier = "agent-cli"
+      Runtime = "narada-agent-runtime-server"
       EnableNativeShell = $false
     }
     @{
@@ -50,7 +54,8 @@
       WorkspaceRoot = "C:\Users\Andrey\Narada"
       SiteRoot = "C:\Users\Andrey\Narada"
       Launcher = "narada-andrey.ps1"
-      Runtime = "agent-cli"
+      Carrier = "agent-cli"
+      Runtime = "narada-agent-runtime-server"
       EnableNativeShell = $false
     }
     @{
@@ -60,7 +65,8 @@
       WorkspaceRoot = "C:\Users\Andrey\Narada"
       SiteRoot = "C:\Users\Andrey\Narada"
       Launcher = "narada-andrey.ps1"
-      Runtime = "agent-cli"
+      Carrier = "agent-cli"
+      Runtime = "narada-agent-runtime-server"
       EnableNativeShell = $false
     }
     @{
@@ -70,7 +76,8 @@
       WorkspaceRoot = "C:\Users\Andrey\Narada"
       SiteRoot = "C:\Users\Andrey\Narada"
       Launcher = "narada-andrey.ps1"
-      Runtime = "agent-cli"
+      Carrier = "agent-cli"
+      Runtime = "narada-agent-runtime-server"
       EnableNativeShell = $false
     }
     @{
@@ -80,7 +87,8 @@
       WorkspaceRoot = "D:\code\narada.staccato"
       SiteRoot = "D:\code\narada.staccato\.narada"
       Launcher = "narada-staccato.ps1"
-      Runtime = "agent-cli"
+      Carrier = "agent-cli"
+      Runtime = "narada-agent-runtime-server"
       EnableNativeShell = $false
     }
     @{
@@ -90,7 +98,8 @@
       WorkspaceRoot = "D:\code\narada.staccato"
       SiteRoot = "D:\code\narada.staccato\.narada"
       Launcher = "narada-staccato.ps1"
-      Runtime = "agent-cli"
+      Carrier = "agent-cli"
+      Runtime = "narada-agent-runtime-server"
       EnableNativeShell = $false
     }
     @{
@@ -100,7 +109,8 @@
       WorkspaceRoot = "D:\code\narada.staccato"
       SiteRoot = "D:\code\narada.staccato\.narada"
       Launcher = "narada-staccato.ps1"
-      Runtime = "agent-cli"
+      Carrier = "agent-cli"
+      Runtime = "narada-agent-runtime-server"
       EnableNativeShell = $false
     }
     @{
@@ -110,7 +120,8 @@
       WorkspaceRoot = "D:\code\narada.revolution"
       SiteRoot = "D:\code\narada.revolution"
       Launcher = ".narada\narada-revolution.ps1"
-      Runtime = "agent-cli"
+      Carrier = "agent-cli"
+      Runtime = "narada-agent-runtime-server"
       EnableNativeShell = $false
     }
     @{
@@ -120,7 +131,8 @@
       WorkspaceRoot = "D:\code\narada.revolution"
       SiteRoot = "D:\code\narada.revolution"
       Launcher = ".narada\narada-revolution.ps1"
-      Runtime = "agent-cli"
+      Carrier = "agent-cli"
+      Runtime = "narada-agent-runtime-server"
       EnableNativeShell = $false
     }
     @{
@@ -130,7 +142,8 @@
       WorkspaceRoot = "D:\code\narada.revolution"
       SiteRoot = "D:\code\narada.revolution"
       Launcher = ".narada\narada-revolution.ps1"
-      Runtime = "agent-cli"
+      Carrier = "agent-cli"
+      Runtime = "narada-agent-runtime-server"
       EnableNativeShell = $false
     }
     @{
@@ -140,7 +153,8 @@
       WorkspaceRoot = "D:\code\narada.revolution"
       SiteRoot = "D:\code\narada.revolution"
       Launcher = ".narada\narada-revolution.ps1"
-      Runtime = "agent-cli"
+      Carrier = "agent-cli"
+      Runtime = "narada-agent-runtime-server"
       EnableNativeShell = $false
     }
     @{
@@ -150,7 +164,8 @@
       WorkspaceRoot = "D:\code\narada.timour-marketing-agent"
       SiteRoot = "D:\code\narada.timour-marketing-agent\.narada"
       Launcher = "narada-timour-marketing-agent.ps1"
-      Runtime = "agent-cli"
+      Carrier = "agent-cli"
+      Runtime = "narada-agent-runtime-server"
       EnableNativeShell = $false
     }
     @{
@@ -160,7 +175,8 @@
       WorkspaceRoot = "D:\code\narada.timour-marketing-agent"
       SiteRoot = "D:\code\narada.timour-marketing-agent\.narada"
       Launcher = "narada-timour-marketing-agent.ps1"
-      Runtime = "agent-cli"
+      Carrier = "agent-cli"
+      Runtime = "narada-agent-runtime-server"
       EnableNativeShell = $false
     }
     @{
@@ -170,7 +186,8 @@
       WorkspaceRoot = "D:\code\narada.timour-marketing-agent"
       SiteRoot = "D:\code\narada.timour-marketing-agent\.narada"
       Launcher = "narada-timour-marketing-agent.ps1"
-      Runtime = "agent-cli"
+      Carrier = "agent-cli"
+      Runtime = "narada-agent-runtime-server"
       EnableNativeShell = $false
     }
     @{
@@ -180,7 +197,8 @@
       WorkspaceRoot = "D:\code\narada.timour-marketing-agent"
       SiteRoot = "D:\code\narada.timour-marketing-agent\.narada"
       Launcher = "narada-timour-marketing-agent.ps1"
-      Runtime = "agent-cli"
+      Carrier = "agent-cli"
+      Runtime = "narada-agent-runtime-server"
       EnableNativeShell = $false
     }
     @{
@@ -190,7 +208,8 @@
       WorkspaceRoot = "D:\code\narada.utz"
       SiteRoot = "D:\code\narada.utz\.narada"
       Launcher = "narada-utz.ps1"
-      Runtime = "agent-cli"
+      Carrier = "agent-cli"
+      Runtime = "narada-agent-runtime-server"
       EnableNativeShell = $false
     }
     @{
@@ -200,7 +219,8 @@
       WorkspaceRoot = "D:\code\narada.utz"
       SiteRoot = "D:\code\narada.utz\.narada"
       Launcher = "narada-utz.ps1"
-      Runtime = "agent-cli"
+      Carrier = "agent-cli"
+      Runtime = "narada-agent-runtime-server"
       EnableNativeShell = $false
     }
     @{
@@ -210,7 +230,8 @@
       WorkspaceRoot = "D:\code\narada.utz"
       SiteRoot = "D:\code\narada.utz\.narada"
       Launcher = "narada-utz.ps1"
-      Runtime = "agent-cli"
+      Carrier = "agent-cli"
+      Runtime = "narada-agent-runtime-server"
       EnableNativeShell = $false
     }
     @{
@@ -220,7 +241,8 @@
       WorkspaceRoot = "D:\code\narada.sonar"
       SiteRoot = "D:\code\narada.sonar"
       Launcher = "narada-sonar.ps1"
-      Runtime = "agent-cli"
+      Carrier = "agent-cli"
+      Runtime = "narada-agent-runtime-server"
       EnableNativeShell = $false
     }
     @{
@@ -230,7 +252,8 @@
       WorkspaceRoot = "D:\code\narada.sonar"
       SiteRoot = "D:\code\narada.sonar"
       Launcher = "narada-sonar.ps1"
-      Runtime = "agent-cli"
+      Carrier = "agent-cli"
+      Runtime = "narada-agent-runtime-server"
       EnableNativeShell = $false
     }
     @{
@@ -240,7 +263,8 @@
       WorkspaceRoot = "D:\code\narada.sonar"
       SiteRoot = "D:\code\narada.sonar"
       Launcher = "narada-sonar.ps1"
-      Runtime = "agent-cli"
+      Carrier = "agent-cli"
+      Runtime = "narada-agent-runtime-server"
       EnableNativeShell = $false
     }
     @{
@@ -250,7 +274,8 @@
       WorkspaceRoot = "D:\code\smart-scheduling"
       SiteRoot = "D:\code\smart-scheduling\.narada"
       Launcher = "narada-smart-scheduling.ps1"
-      Runtime = "agent-cli"
+      Carrier = "agent-cli"
+      Runtime = "narada-agent-runtime-server"
       EnableNativeShell = $false
     }
     @{
@@ -260,7 +285,8 @@
       WorkspaceRoot = "D:\code\smart-scheduling"
       SiteRoot = "D:\code\smart-scheduling\.narada"
       Launcher = "narada-smart-scheduling.ps1"
-      Runtime = "agent-cli"
+      Carrier = "agent-cli"
+      Runtime = "narada-agent-runtime-server"
       EnableNativeShell = $false
     }
     @{
@@ -270,7 +296,8 @@
       WorkspaceRoot = "D:\code\smart-scheduling"
       SiteRoot = "D:\code\smart-scheduling\.narada"
       Launcher = "narada-smart-scheduling.ps1"
-      Runtime = "agent-cli"
+      Carrier = "agent-cli"
+      Runtime = "narada-agent-runtime-server"
       EnableNativeShell = $false
     }
     @{
@@ -280,7 +307,8 @@
       WorkspaceRoot = "D:\code\thoughts"
       SiteRoot = "D:\code\thoughts\.narada"
       Launcher = "narada-thoughts.ps1"
-      Runtime = "agent-cli"
+      Carrier = "agent-cli"
+      Runtime = "narada-agent-runtime-server"
       EnableNativeShell = $false
     }
     @{
@@ -290,7 +318,8 @@
       WorkspaceRoot = "D:\code\thoughts"
       SiteRoot = "D:\code\thoughts\.narada"
       Launcher = "narada-thoughts.ps1"
-      Runtime = "agent-cli"
+      Carrier = "agent-cli"
+      Runtime = "narada-agent-runtime-server"
       EnableNativeShell = $false
     }
     @{
@@ -300,7 +329,8 @@
       WorkspaceRoot = "D:\code\thoughts"
       SiteRoot = "D:\code\thoughts\.narada"
       Launcher = "narada-thoughts.ps1"
-      Runtime = "agent-cli"
+      Carrier = "agent-cli"
+      Runtime = "narada-agent-runtime-server"
       EnableNativeShell = $false
     }
   )

@@ -155,6 +155,9 @@ importers:
       '@narada2/carrier-provider-support':
         specifier: workspace:*
         version: link:../carrier-provider-support
+      '@narada2/carrier-runtime-contract':
+        specifier: workspace:*
+        version: link:../carrier-runtime-contract
       '@narada2/nars-client-projection-contract':
         specifier: workspace:*
         version: link:../nars-client-projection-contract
@@ -212,7 +215,11 @@ importers:
 
   packages/carrier-runtime-contract: {}
 
-  packages/carrier-terminal-projection: {}
+  packages/carrier-terminal-projection:
+    dependencies:
+      '@narada2/nars-client-projection-contract':
+        specifier: workspace:*
+        version: link:../nars-client-projection-contract
 
   packages/cloudflare-carrier:
     dependencies:
@@ -282,6 +289,9 @@ importers:
       '@narada2/agent-context-memory':
         specifier: workspace:*
         version: link:../../agent-context-memory
+      '@narada2/carrier-runtime-contract':
+        specifier: workspace:*
+        version: link:../../carrier-runtime-contract
       '@narada2/charters':
         specifier: workspace:*
         version: link:../../domains/charters

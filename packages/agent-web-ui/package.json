@@ -24,12 +24,13 @@
   },
   "exports": {
     ".": "./src/agent-web-ui.js",
+    "./server": "./src/server.js",
     "./package.json": "./package.json"
   },
   "scripts": {
     "start": "node ./bin/narada-agent-web-ui.mjs",
     "test": "node --test test/*.test.mjs",
-    "typecheck": "tsc --noEmit --allowJs --checkJs false bin/narada-agent-web-ui.mjs src/agent-web-ui.js"
+    "typecheck": "tsc --noEmit --allowJs --checkJs false bin/narada-agent-web-ui.mjs src/agent-web-ui.js src/config.js src/event-stream.js src/health.js src/input.js src/render.js src/runtime-events.js src/server.js"
   },
   "dependencies": {
     "@narada2/nars-client-projection-contract": "workspace:*"

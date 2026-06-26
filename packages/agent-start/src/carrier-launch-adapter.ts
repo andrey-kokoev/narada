@@ -1,8 +1,8 @@
 import { dirname, join } from 'node:path';
 
-export function resolveToolFabricAdapter(runtimeName, { schema, agentTuiRuntime }) {
+export function resolveToolFabricAdapter(carrierName, { schema, agentTuiCarrier, runtimeName = carrierName }) {
   const source = '.ai/mcp';
-  if (runtimeName === 'codex') {
+  if (carrierName === 'codex') {
     return {
       schema,
       tool_fabric_adapter_kind: 'codex-native-mcp',
@@ -13,7 +13,7 @@ export function resolveToolFabricAdapter(runtimeName, { schema, agentTuiRuntime 
       states: ['runtime_known', 'adapter_selected', 'source_declared', 'launch_ready'],
     };
   }
-  if (runtimeName === 'agent-cli') {
+  if (carrierName === 'agent-cli') {
     return {
       schema,
       tool_fabric_adapter_kind: 'narada-agent-runtime-server-mcp-client',
@@ -24,7 +24,7 @@ export function resolveToolFabricAdapter(runtimeName, { schema, agentTuiRuntime 
       states: ['runtime_known', 'adapter_selected', 'source_declared', 'launch_ready'],
     };
   }
-  if (runtimeName === agentTuiRuntime) {
+  if (carrierName === agentTuiCarrier) {
     return {
       schema,
       tool_fabric_adapter_kind: 'narada-agent-tui-terminal-interactive-loop',
@@ -35,7 +35,7 @@ export function resolveToolFabricAdapter(runtimeName, { schema, agentTuiRuntime 
       states: ['runtime_known', 'adapter_selected', 'terminal_loop_carrier', 'launch_ready'],
     };
   }
-  if (runtimeName === 'pi') {
+  if (carrierName === 'pi') {
     return {
       schema,
       tool_fabric_adapter_kind: 'pi-extension-mcp-bridge',
@@ -47,7 +47,7 @@ export function resolveToolFabricAdapter(runtimeName, { schema, agentTuiRuntime 
       admission_basis: 'Narada-owned Pi extension bridges Site-local .ai/mcp tools into Pi; MCP servers remain Site-local authority surfaces.',
     };
   }
-  if (runtimeName === 'claude-code') {
+  if (carrierName === 'claude-code') {
     return {
       schema,
       tool_fabric_adapter_kind: 'claude-code-native-mcp',
@@ -58,7 +58,7 @@ export function resolveToolFabricAdapter(runtimeName, { schema, agentTuiRuntime 
       states: ['runtime_known', 'adapter_selected', 'source_declared', 'native_mcp_config_required', 'launch_ready'],
     };
   }
-  if (runtimeName === 'opencode') {
+  if (carrierName === 'opencode') {
     return {
       schema,
       tool_fabric_adapter_kind: 'opencode-native-mcp',
@@ -107,8 +107,8 @@ function startupAffordancePrompt(identity, carrierDescription) {
   return `You are ${identity}. The human is Operator. This session was launched by Narada agent-start. ${carrierDescription} Use agent_context_startup_sequence first. Treat operator startup nudges as this MCP startup affordance, not shell or file discovery. If the startup MCP tool is unavailable, report the missing MCP capability. When a Narada tool returns reader_tool=mcp_output_show, call mcp_output_show with the returned output_ref before deciding next work.`;
 }
 
-export function buildCarrierSpawnArgs(runtimeName, {
-  agentTuiRuntime,
+export function buildCarrierSpawnArgs(carrierName, {
+  agentTuiCarrier,
   identity,
   yoloFlag,
   enableNativeShellFlag,
@@ -132,7 +132,7 @@ export function buildCarrierSpawnArgs(runtimeName, {
   claudeCodeMcpConfig,
   claudeCodeModel,
 }) {
-  if (runtimeName === 'codex') {
+  if (carrierName === 'codex') {
     const args = [
       '--ask-for-approval',
       'never',
@@ -148,7 +148,7 @@ export function buildCarrierSpawnArgs(runtimeName, {
     return args;
   }
 
-  if (runtimeName === 'agent-cli') {
+  if (carrierName === 'agent-cli') {
     const sessionId = carrierSessionRegistration?.carrier_session_id ?? agentCliSessionName(identity);
     return [
       agentRuntimeServerScriptPath(),
@@ -161,7 +161,7 @@ export function buildCarrierSpawnArgs(runtimeName, {
     ];
   }
 
-  if (runtimeName === agentTuiRuntime) {
+  if (carrierName === agentTuiCarrier) {
     const sessionId = carrierSessionRegistration?.carrier_session_id ?? agentCliSessionName(identity);
     return [
       'run',
@@ -186,7 +186,7 @@ export function buildCarrierSpawnArgs(runtimeName, {
     ];
   }
 
-  if (runtimeName === 'pi') {
+  if (carrierName === 'pi') {
     return [
       piCliScriptPath(),
       '--provider',
@@ -202,7 +202,7 @@ export function buildCarrierSpawnArgs(runtimeName, {
     ];
   }
 
-  if (runtimeName === 'claude-code') {
+  if (carrierName === 'claude-code') {
     return [
       '--model',
       claudeCodeModel,
@@ -224,7 +224,7 @@ export function buildCarrierSpawnArgs(runtimeName, {
     ];
   }
 
-  if (runtimeName === 'opencode') {
+  if (carrierName === 'opencode') {
     return [
       '--prompt',
       startupAffordancePrompt(identity, 'Narada tools are attached through the Site MCP fabric declared in .ai/mcp.'),
@@ -238,8 +238,8 @@ export function buildCarrierSpawnArgs(runtimeName, {
   return spawnArgs;
 }
 
-export function resolveRuntimeCommand(runtimeName, {
-  agentTuiRuntime,
+export function resolveCarrierCommand(carrierName, {
+  agentTuiCarrier,
   processPlatform,
   processExecPath,
   stableNodeCommand,
@@ -247,41 +247,41 @@ export function resolveRuntimeCommand(runtimeName, {
   claudeCodeCommand,
   opencodeCommand,
 }) {
-  if (runtimeName === agentTuiRuntime) return 'cargo';
-  if (processPlatform === 'win32' && runtimeName === 'codex') return processExecPath;
-  if (runtimeName === 'agent-cli') return processExecPath;
-  if (runtimeName === 'pi') return stableNodeCommand();
-  if (runtimeName === 'claude-code') return claudeCodeCommand ?? defaultClaudeCodeCommand;
-  if (runtimeName === 'opencode') return opencodeCommand ?? 'opencode';
-  return runtimeName;
+  if (carrierName === agentTuiCarrier) return 'cargo';
+  if (processPlatform === 'win32' && carrierName === 'codex') return processExecPath;
+  if (carrierName === 'agent-cli') return processExecPath;
+  if (carrierName === 'pi') return stableNodeCommand();
+  if (carrierName === 'claude-code') return claudeCodeCommand ?? defaultClaudeCodeCommand;
+  if (carrierName === 'opencode') return opencodeCommand ?? 'opencode';
+  return carrierName;
 }
 
-export function runtimeSpawnOptions(runtimeName) {
-  if (runtimeName === 'opencode') return { shell: false };
+export function carrierSpawnOptions(carrierName) {
+  if (carrierName === 'opencode') return { shell: false };
   return {};
 }
 
-export function runtimeSpecificEnvironment(runtimeName, {
+export function carrierSpecificEnvironment(carrierName, {
   processEnv = {},
   defaultPiProvider,
   defaultPiModel,
   defaultClaudeCodeCommand,
   defaultClaudeCodeModel,
 } = {}) {
-  if (runtimeName === 'pi') {
+  if (carrierName === 'pi') {
     return {
       NARADA_PI_COMMAND: processEnv.NARADA_PI_COMMAND ?? 'pi',
       NARADA_PI_PROVIDER: processEnv.NARADA_PI_PROVIDER ?? defaultPiProvider,
       NARADA_PI_MODEL: processEnv.NARADA_PI_MODEL ?? defaultPiModel,
     };
   }
-  if (runtimeName === 'claude-code') {
+  if (carrierName === 'claude-code') {
     return {
       NARADA_CLAUDE_CODE_COMMAND: processEnv.NARADA_CLAUDE_CODE_COMMAND ?? defaultClaudeCodeCommand,
       NARADA_CLAUDE_CODE_MODEL: processEnv.NARADA_CLAUDE_CODE_MODEL ?? defaultClaudeCodeModel,
     };
   }
-  if (runtimeName === 'opencode') {
+  if (carrierName === 'opencode') {
     return {
       NARADA_OPENCODE_COMMAND: processEnv.NARADA_OPENCODE_COMMAND ?? 'opencode',
     };
@@ -302,7 +302,7 @@ function shouldRedactEnvironmentValue(key, value) {
 }
 
 export function buildCarrierEnvironmentProjection({
-  runtimeName,
+  carrierName,
   startResult,
   carrierEnvironment = {},
   intelligenceProviderEnv = {},
@@ -339,30 +339,29 @@ export function buildCarrierEnvironmentProjection({
       })
       : startResult.would_set_environment,
     runtimeEnvironment,
-    runtimeName,
+    carrierName,
   };
 }
 
-export function buildNarsLaunchPacket(runtimeName, {
+export function buildNarsLaunchPacket(carrierName, {
   processExecPath,
   carrierSessionRegistration,
   sessionSiteRoot,
   siteCarrierControlPath,
   siteCarrierSessionPath,
 }) {
-  if (runtimeName !== 'agent-cli') return null;
+  if (carrierName !== 'agent-cli') return null;
   const sessionId = carrierSessionRegistration.carrier_session_id;
   return {
     schema: 'narada.agent_start.nars_launch.v1',
     carrier_runtime_kind: 'narada-agent-runtime-server',
     operator_surface_kind: 'agent-cli',
-    compatibility_runtime_alias: 'agent-cli',
     control_transport: 'jsonl_sideband_file',
     carrier_relation: 'narada_agent_runtime_server',
     runtime_server: {
       package: '@narada2/agent-runtime-server',
       entrypoint: 'narada-agent-runtime-server',
-      compatibility_alias: 'agent-runtime-server',
+      runtime_kind: 'narada-agent-runtime-server',
     },
     command: processExecPath,
     session_dir: dirname(siteCarrierControlPath(sessionId)),
@@ -374,8 +373,6 @@ export function buildNarsLaunchPacket(runtimeName, {
     native_shell_authority_admitted: false,
   };
 }
-
-export const buildAgentCliLaunchPacket = buildNarsLaunchPacket;
 
 export function shellQuote(arg) {
   const text = String(arg);

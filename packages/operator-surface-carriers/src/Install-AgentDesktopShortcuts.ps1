@@ -17,7 +17,7 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $RuntimeContractSchema = 'narada.runtime_substrate_kind.v1'
-$AdmittedRuntimeSubstrateKinds = @('kimi', 'codex', 'agent-cli', 'agent-tui', 'pi', 'claude-code', 'opencode')
+$AdmittedRuntimeSubstrateKinds = @('kimi', 'codex', 'narada-agent-runtime-server', 'agent-tui', 'pi', 'claude-code', 'opencode')
 
 function Get-RuntimeKindRefusal {
     param(
@@ -33,6 +33,21 @@ function Get-RuntimeKindRefusal {
         reason = 'runtime_substrate_kind is not admitted by narada.runtime_substrate_kind.v1'
         required_next_step = 'Use one of the admitted runtime_substrate_kind values or update the versioned runtime contract first.'
     }
+}
+
+function Resolve-CarrierKind {
+    param(
+        [string] $RuntimeSubstrateKind,
+        [string] $CarrierCandidate
+    )
+
+    if (-not [string]::IsNullOrWhiteSpace($CarrierCandidate) -and $CarrierCandidate -eq 'agent-cli') {
+        return 'agent-cli'
+    }
+    if ($RuntimeSubstrateKind -eq 'narada-agent-runtime-server') {
+        return 'agent-cli'
+    }
+    return $RuntimeSubstrateKind
 }
 
 function Assert-RuntimeSubstrateKind {
@@ -106,7 +121,7 @@ function New-ShortcutPlanEntry {
         [Parameter(Mandatory = $true)]
         [string] $RuntimeSubstrateKind,
         [Parameter(Mandatory = $true)]
-        [string] $CarrierRuntime
+        [string] $CarrierKind
     )
 
     [pscustomobject]@{
@@ -119,8 +134,8 @@ function New-ShortcutPlanEntry {
         Description = $Description
         RuntimeContractSchema = $RuntimeContractSchema
         RuntimeSubstrateKind = $RuntimeSubstrateKind
-        CarrierRuntime = $CarrierRuntime
-        Runtime = $CarrierRuntime
+        CarrierKind = $CarrierKind
+        Runtime = $RuntimeSubstrateKind
     }
 }
 
@@ -135,7 +150,7 @@ function Write-MaterializationTrace {
         [Parameter(Mandatory = $true)]
         [string] $RuntimeSubstrateKind,
         [Parameter(Mandatory = $true)]
-        [string] $CarrierRuntime,
+        [string] $CarrierKind,
         [Parameter(Mandatory = $true)]
         [string] $ShortcutDirectory,
         [Parameter(Mandatory = $true)]
@@ -157,8 +172,8 @@ function Write-MaterializationTrace {
         shortcut_directory = $ShortcutDirectory
         runtime_contract_schema = $RuntimeContractSchema
         runtime_substrate_kind = $RuntimeSubstrateKind
-        carrier_runtime = $CarrierRuntime
-        runtime = $CarrierRuntime
+        carrier_kind = $CarrierKind
+        runtime = $RuntimeSubstrateKind
         authority = $Authority
         materialized_shortcuts = @($Shortcuts)
         note = 'Executable .lnk files are PC-locus/local projections. User Site launch affordance JSON remains portable authority.'
@@ -174,9 +189,6 @@ if (-not (Test-Path -LiteralPath $AffordancePath)) {
 $projection = Get-Content -LiteralPath $AffordancePath -Raw | ConvertFrom-Json
 if (-not $Runtime) {
     $Runtime = [string] $projection.default_runtime_substrate_kind
-}
-if (-not $Runtime) {
-    $Runtime = [string] $projection.default_runtime
 }
 $Runtime = Assert-RuntimeSubstrateKind -Candidate $Runtime
 
@@ -202,7 +214,7 @@ if ($DesktopPath) {
 $planned = @()
 $created = @()
 $aggregateCount = 0
-$aggregateCarrierRuntimes = @{}
+$aggregateCarrierKinds = @{}
 
 foreach ($affordance in $projection.affordances) {
     $enabled = [bool] $affordance.enabled
@@ -215,42 +227,38 @@ foreach ($affordance in $projection.affordances) {
     $identityName = [string] $affordance.identity_name
     $shortcutRuntimeSubstrateKind = [string] $affordance.runtime_substrate_kind
     if (-not $shortcutRuntimeSubstrateKind) {
-        $shortcutRuntimeSubstrateKind = [string] $affordance.runtime
-    }
-    if (-not $shortcutRuntimeSubstrateKind) {
-        $shortcutRuntimeSubstrateKind = $Runtime
+        throw "agent_launch_affordance_runtime_substrate_kind_required: $identityName"
     }
     $shortcutRuntimeSubstrateKind = Assert-RuntimeSubstrateKind -Candidate $shortcutRuntimeSubstrateKind
     if ($shortcutRuntimeSubstrateKind -ne $Runtime) {
         continue
     }
-    $carrierRuntime = [string] $affordance.runtime
-    if (-not $carrierRuntime) {
-        $carrierRuntime = $shortcutRuntimeSubstrateKind
+    $carrierKind = Resolve-CarrierKind -RuntimeSubstrateKind $shortcutRuntimeSubstrateKind -CarrierCandidate ([string] $affordance.carrier_kind)
+    if (-not $carrierKind) {
+        $carrierKind = Resolve-CarrierKind -RuntimeSubstrateKind $shortcutRuntimeSubstrateKind -CarrierCandidate ([string] $affordance.runtime)
     }
-    $carrierRuntime = Assert-RuntimeSubstrateKind -Candidate $carrierRuntime
     if (-not $label -or -not $identityName) {
         throw 'Agent launch affordance entries require label and identity_name.'
     }
     $aggregateCount += 1
-    $aggregateCarrierRuntimes[$carrierRuntime] = $true
+    $aggregateCarrierKinds[$carrierKind] = $true
 
     $shortcutFilePath = Join-Path $ShortcutDirectory ("Narada Agent - $label ($shortcutRuntimeSubstrateKind).lnk")
-    $description = "Start $identityName through the operator-surface carrier launcher using runtime_substrate_kind $shortcutRuntimeSubstrateKind and carrier runtime $carrierRuntime"
-    $arguments = '-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "{0}" -UserSiteRoot "{1}" -IdentityResumePair "{2}={2}" -Runtime {3} -EnsurePresent -ShowSummary' -f $launcher, $SiteRoot, $identityName, $carrierRuntime
-    $planned += New-ShortcutPlanEntry -ShortcutFilePath $shortcutFilePath -Description $description -Arguments $arguments -TargetPath $powerShellExe -WorkingDirectory $SiteRoot -RuntimeSubstrateKind $shortcutRuntimeSubstrateKind -CarrierRuntime $carrierRuntime
+    $description = "Start $identityName through the operator-surface carrier launcher using runtime_substrate_kind $shortcutRuntimeSubstrateKind and carrier $carrierKind"
+    $arguments = '-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "{0}" -UserSiteRoot "{1}" -IdentityResumePair "{2}={2}" -Runtime {3} -Carrier {4} -EnsurePresent -ShowSummary' -f $launcher, $SiteRoot, $identityName, $shortcutRuntimeSubstrateKind, $carrierKind
+    $planned += New-ShortcutPlanEntry -ShortcutFilePath $shortcutFilePath -Description $description -Arguments $arguments -TargetPath $powerShellExe -WorkingDirectory $SiteRoot -RuntimeSubstrateKind $shortcutRuntimeSubstrateKind -CarrierKind $carrierKind
 }
 
 if ($aggregateCount -gt 0) {
-    $aggregateCarrierRuntimeValues = @($aggregateCarrierRuntimes.Keys)
-    if ($aggregateCarrierRuntimeValues.Count -ne 1) {
-        throw "aggregate_shortcut_requires_single_carrier_runtime: runtime_substrate_kind '$Runtime' maps to multiple carrier runtimes: $($aggregateCarrierRuntimeValues -join ', ')"
+    $aggregateCarrierKindValues = @($aggregateCarrierKinds.Keys)
+    if ($aggregateCarrierKindValues.Count -ne 1) {
+        throw "aggregate_shortcut_requires_single_carrier: runtime_substrate_kind '$Runtime' maps to multiple carriers: $($aggregateCarrierKindValues -join ', ')"
     }
-    $aggregateCarrierRuntime = [string] $aggregateCarrierRuntimeValues[0]
+    $aggregateCarrierKind = [string] $aggregateCarrierKindValues[0]
     $allShortcutFilePath = Join-Path $ShortcutDirectory ("Narada Agents - All ($Runtime).lnk")
-    $description = "Start all enabled Narada agents through the operator-surface carrier launcher using runtime_substrate_kind $Runtime and carrier runtime $aggregateCarrierRuntime"
-    $arguments = '-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "{0}" -UserSiteRoot "{1}" -Runtime {2} -EnsurePresent -ShowSummary' -f $launcher, $SiteRoot, $aggregateCarrierRuntime
-    $planned += New-ShortcutPlanEntry -ShortcutFilePath $allShortcutFilePath -Description $description -Arguments $arguments -TargetPath $powerShellExe -WorkingDirectory $SiteRoot -RuntimeSubstrateKind $Runtime -CarrierRuntime $aggregateCarrierRuntime
+    $description = "Start all enabled Narada agents through the operator-surface carrier launcher using runtime_substrate_kind $Runtime and carrier $aggregateCarrierKind"
+    $arguments = '-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "{0}" -UserSiteRoot "{1}" -Runtime {2} -Carrier {3} -EnsurePresent -ShowSummary' -f $launcher, $SiteRoot, $Runtime, $aggregateCarrierKind
+    $planned += New-ShortcutPlanEntry -ShortcutFilePath $allShortcutFilePath -Description $description -Arguments $arguments -TargetPath $powerShellExe -WorkingDirectory $SiteRoot -RuntimeSubstrateKind $Runtime -CarrierKind $aggregateCarrierKind
 }
 
 if ($Mode -eq 'Plan') {
@@ -288,16 +296,16 @@ foreach ($entry in $planned) {
     }
 }
 
-$createdCarrierRuntimes = @($planned | Select-Object -ExpandProperty CarrierRuntime -Unique)
-$createdCarrierRuntime = if ($createdCarrierRuntimes.Count -eq 1) { [string] $createdCarrierRuntimes[0] } else { 'multiple' }
-$tracePath = Write-MaterializationTrace -Directory $TraceDirectory -Authority $pcAuthority -Shortcuts $created -RuntimeSubstrateKind $Runtime -CarrierRuntime $createdCarrierRuntime -ShortcutDirectory $ShortcutDirectory -AffordancePath $AffordancePath
+$createdCarrierKinds = @($planned | Select-Object -ExpandProperty CarrierKind -Unique)
+$createdCarrierKind = if ($createdCarrierKinds.Count -eq 1) { [string] $createdCarrierKinds[0] } else { 'multiple' }
+$tracePath = Write-MaterializationTrace -Directory $TraceDirectory -Authority $pcAuthority -Shortcuts $created -RuntimeSubstrateKind $Runtime -CarrierKind $createdCarrierKind -ShortcutDirectory $ShortcutDirectory -AffordancePath $AffordancePath
 
 [pscustomobject]@{
     Status = 'created'
     RuntimeContractSchema = $RuntimeContractSchema
     RuntimeSubstrateKind = $Runtime
     Runtime = $Runtime
-    CarrierRuntime = $createdCarrierRuntime
+    CarrierKind = $createdCarrierKind
     ShortcutDirectory = $ShortcutDirectory
     AffordancePath = $AffordancePath
     AuthorityPath = $PCLocusAuthorityPath

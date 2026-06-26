@@ -98,6 +98,22 @@ export function loadSiteMcpFabric(siteRoot, options = {}) {
     throw new McpFabricError('mcp_fabric_empty', `No stdio MCP servers found in ${mcpDir}`, { siteRoot, mcpDir, files });
   }
 
+  const nonCanonicalServerNames = Object.keys(servers)
+    .filter((serverName) => !serverName.startsWith('narada-'))
+    .sort((a, b) => a.localeCompare(b));
+  if (required && nonCanonicalServerNames.length > 0) {
+    throw new McpFabricError(
+      'temporary_mcp_server_name_missing_narada_prefix',
+      `Temporary MCP leak identification gate refused non-canonical server names: ${nonCanonicalServerNames.join(', ')}`,
+      {
+        siteRoot,
+        mcpDir,
+        non_canonical_server_names: nonCanonicalServerNames,
+        remediation: 'Temporary MCP leak identification gate: Site-local MCP server names must start with narada- while launcher fabric leakage is being identified.',
+      },
+    );
+  }
+
   const registryValidation = validateFabricAgainstRegistry(siteRoot, mcpDir, files, servers);
   if (validateRegistry === true && registryValidation.status === 'mismatch') {
     const details = {

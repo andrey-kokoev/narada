@@ -97,6 +97,8 @@ body {
 }
 
 .event-heading {
+  display: grid;
+  gap: 3px;
   padding: 11px 12px;
   border-right: 1px solid #e2e7ee;
   color: #314256;
@@ -105,20 +107,56 @@ body {
   font-weight: 700;
 }
 
+.event-label {
+  color: #1d252f;
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.event-kind {
+  color: #6a7888;
+  font-size: 12px;
+  font-weight: 500;
+}
+
 .event-detail {
-  margin: 0;
   min-width: 0;
   padding: 11px 12px;
   overflow: hidden;
-  white-space: pre-wrap;
+}
+
+.event-summary {
   overflow-wrap: anywhere;
+  white-space: pre-wrap;
   font: 13px/1.45 ui-monospace, "Cascadia Code", Consolas, monospace;
 }
 
+.event-tone-assistant {
+  border-left: 4px solid #4b7bec;
+}
+
+.event-tone-operator {
+  border-left: 4px solid #2b9f78;
+}
+
+.event-tone-tool {
+  border-left: 4px solid #8f63c7;
+}
+
+.event-tone-session,
+.event-tone-status {
+  border-left: 4px solid #6a7888;
+}
+
+.event-tone-local {
+  border-left: 4px solid #c5912c;
+}
+
+.event-tone-error,
 .event-error,
 .event-websocket_error,
 .event-web_ui_decode_error {
   border-color: #d17b7b;
+  border-left-color: #c84545;
 }
 
 @media (max-width: 760px) {
@@ -165,8 +203,13 @@ body {
     border-color: #2f3a47;
   }
 
-  .event-heading {
+  .event-heading,
+  .event-kind {
     color: #c4d0de;
+  }
+
+  .event-label {
+    color: #e7edf5;
   }
 
   .composer {

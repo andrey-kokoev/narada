@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { delimiter, join } from 'node:path';
+import { delimiter, dirname, join } from 'node:path';
 
 function envValue(processEnv, name) {
   const value = processEnv?.[name];
@@ -34,10 +34,16 @@ function findCommandOnPath(names, { processEnv = process.env, exists = existsSyn
   return null;
 }
 
-function windowsCommand(commandPath) {
+function windowsCommand(commandPath, { exists = existsSync } = {}) {
   const normalized = String(commandPath ?? '');
   if (normalized.toLowerCase().endsWith('.ps1')) {
-    return { command: 'pwsh', prefixArgs: ['-NoProfile', '-File', normalized], source: 'path_ps1' };
+    const basedir = dirname(normalized);
+    const nodeCommand = join(basedir, 'node.exe');
+    const codexScript = join(basedir, 'node_modules', '@openai', 'codex', 'bin', 'codex.js');
+    if (exists(nodeCommand) && exists(codexScript)) {
+      return { command: nodeCommand, prefixArgs: [codexScript], source: 'path_ps1_node_shim' };
+    }
+    return { command: 'pwsh', prefixArgs: ['-NoProfile', '-NonInteractive', '-File', normalized], source: 'path_ps1' };
   }
   return { command: normalized, prefixArgs: [], source: 'path_executable' };
 }
@@ -57,7 +63,7 @@ function codexCommand({ processEnv = process.env, platform = process.platform, e
 
   if (platform === 'win32') {
     const found = findCommandOnPath(['codex.ps1', 'codex.cmd', 'codex.exe'], { processEnv, exists });
-    if (found) return windowsCommand(found);
+    if (found) return windowsCommand(found, { exists });
   }
 
   return { command: 'codex', prefixArgs: [], source: 'default' };

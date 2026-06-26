@@ -123,14 +123,14 @@ function Resolve-Target {
     $value = [string](Get-PropertyValue $target @("value"))
 
     if ([string]::IsNullOrWhiteSpace($kind)) {
-        $legacyIdentity = Get-PropertyValue $Obligation @("target_identity", "target_identity_name", "target_agent_id", "to_identity", "reviewer_identity", "reviewer")
-        $legacyRole = Get-PropertyValue $Obligation @("target_role", "role")
-        if ($legacyIdentity) {
+        $targetIdentityCandidate = Get-PropertyValue $Obligation @("target_identity", "target_identity_name", "target_agent_id", "to_identity", "reviewer_identity", "reviewer")
+        $targetRoleCandidate = Get-PropertyValue $Obligation @("target_role", "role")
+        if ($targetIdentityCandidate) {
             $kind = "identity"
-            $value = [string]$legacyIdentity
-        } elseif ($legacyRole) {
+            $value = [string]$targetIdentityCandidate
+        } elseif ($targetRoleCandidate) {
             $kind = "role"
-            $value = [string]$legacyRole
+            $value = [string]$targetRoleCandidate
         }
     }
 

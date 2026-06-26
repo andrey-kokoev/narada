@@ -56,6 +56,14 @@
       "posture": "agent_context_mcp_tools_runtime"
     },
     {
+      "package": "@narada2/agent-runtime-server",
+      "path": "packages/agent-runtime-server",
+      "roles": [
+        "runtime_authority"
+      ],
+      "posture": "nars_runtime_server_session_and_carrier_handoff"
+    },
+    {
       "package": "@narada2/agent-start",
       "path": "packages/agent-start",
       "roles": [
@@ -80,6 +88,15 @@
         "descriptor_contract"
       ],
       "posture": "agent_start_renderer_templates"
+    },
+    {
+      "package": "@narada2/agent-web-ui",
+      "path": "packages/agent-web-ui",
+      "roles": [
+        "cli_exposure",
+        "descriptor_contract"
+      ],
+      "posture": "nars_web_client_projection_no_runtime_execution"
     },
     {
       "package": "@narada2/carrier-action-admission",
@@ -124,6 +141,15 @@
       "posture": "carrier_provider_contracts"
     },
     {
+      "package": "@narada2/carrier-provider-support",
+      "path": "packages/carrier-provider-support",
+      "roles": [
+        "runtime_authority",
+        "descriptor_contract"
+      ],
+      "posture": "provider_command_resolution_support"
+    },
+    {
       "package": "@narada2/carrier-rendering-contract",
       "path": "packages/carrier-rendering-contract",
       "roles": [
@@ -140,12 +166,30 @@
       "posture": "carrier_routing_contracts"
     },
     {
+      "package": "@narada2/carrier-runtime",
+      "path": "packages/carrier-runtime",
+      "roles": [
+        "runtime_authority",
+        "mcp_boundary"
+      ],
+      "posture": "nars_carrier_runtime_substrate"
+    },
+    {
       "package": "@narada2/carrier-runtime-contract",
       "path": "packages/carrier-runtime-contract",
       "roles": [
         "descriptor_contract"
       ],
       "posture": "carrier_runtime_contracts"
+    },
+    {
+      "package": "@narada2/carrier-terminal-projection",
+      "path": "packages/carrier-terminal-projection",
+      "roles": [
+        "cli_exposure",
+        "descriptor_contract"
+      ],
+      "posture": "runtime_neutral_terminal_projection_no_session_execution"
     },
     {
       "package": "@narada2/charters",
@@ -309,6 +353,14 @@
         "runtime_authority"
       ],
       "posture": "target_local_agent_facing_mcp_surface"
+    },
+    {
+      "package": "@narada2/nars-client-projection-contract",
+      "path": "packages/nars-client-projection-contract",
+      "roles": [
+        "descriptor_contract"
+      ],
+      "posture": "nars_client_projection_capability_contracts"
     },
     {
       "package": "@narada2/operator-surface-carriers",

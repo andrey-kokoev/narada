@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * start-agent.mjs
+ * narada-agent-start
  *
  * Thin carrier for agent-context session start.
  *
@@ -14,7 +14,7 @@
  * with NARADA_AGENT_ID and NARADA_AGENT_START_EVENT_ID in the environment.
  *
  * Usage:
- *   node tools/agent-start/start-agent.mjs <identity> [--runtime <runtime>] [--db <path>] [--json] [--dry-run] [--exec] [--wait] [--yolo] [--enable-native-shell] [--target-site-id <site-id>] [--target-site-root <path>]
+ *   narada-agent-start <identity> [--carrier <carrier>] [--runtime <runtime>] [--db <path>] [--json] [--dry-run] [--exec] [--wait] [--yolo] [--enable-native-shell] [--target-site-id <site-id>] [--target-site-root <path>]
  */
 
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -22,10 +22,13 @@ import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
-import { spawn, spawnSync } from 'node:child_process';
 import { homedir } from 'node:os';
-import { createInterface } from 'node:readline/promises';
 import { buildNarsAttachCommands } from '@narada2/nars-client-projection-contract';
+import {
+  ADMITTED_CARRIER_KINDS,
+  AGENT_CLI_CARRIER_KIND,
+  resolveCarrierRuntimeSelection,
+} from '@narada2/carrier-runtime-contract/carrier-runtime-selection';
 import {
   carrierControlPath,
   carrierSessionPath,
@@ -35,13 +38,13 @@ import {
   writeLaunchResultFile,
 } from './carrier-launch-artifacts.ts';
 import {
-  buildAgentCliLaunchPacket,
+  buildNarsLaunchPacket,
   buildCarrierEnvironmentProjection,
   buildCarrierSpawnArgs,
-  runtimeSpecificEnvironment,
-  resolveRuntimeCommand as resolveCarrierRuntimeCommand,
+  carrierSpecificEnvironment,
+  resolveCarrierCommand,
   resolveToolFabricAdapter as resolveCarrierToolFabricAdapter,
-  runtimeSpawnOptions,
+  carrierSpawnOptions,
   shellQuote,
 } from './carrier-launch-adapter.ts';
 import { createNaradaPackageResolver } from './narada-package-resolver.ts';
@@ -64,60 +67,11 @@ import {
   mcpProviderCredentialEnvironment as projectMcpProviderCredentialEnvironment,
   providerCredentialRefusal as buildProviderCredentialRefusal,
 } from './provider-credential-projection.ts';
+import { spawnCarrierProcessAndExit, waitForEnterBeforeCarrier } from './carrier-process-launch.ts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const packageRootDir = join(__dirname, '..');
 const naradaProperRoot = join(packageRootDir, '..', '..');
-
-function runNaradaProperLegacyLauncherIfNeeded(argv, rootDir, naradaProperRoot) {
-  if (normalizePath(rootDir) !== normalizePath(naradaProperRoot)) return;
-  const legacyLauncher = join(naradaProperRoot, 'tools', 'agent-start', 'start-agent.mjs');
-  if (!existsSync(legacyLauncher)) return;
-  const passThrough = [];
-  let i = 0;
-  if (argv.length > 0 && !argv[0].startsWith('--')) {
-    passThrough.push(argv[0]);
-    i = 1;
-  }
-  const admittedFlagsWithValues = new Set([
-    '--runtime',
-    '--startup-task-number',
-    '--agent-tui-max-steps',
-    '--starting-carrier-input',
-    '--starting-carrier-input-file',
-    '--agent-tui-starting-directive',
-    '--agent-tui-starting-directive-file',
-  ]);
-  const admittedSwitches = new Set([
-    '--json',
-    '--dry-run',
-    '--exec',
-    '--enable-native-shell',
-    '--agent-tui-interactive-loop',
-    '--agent-tui-provider-execution',
-    '--agent-tui-mcp-fabric',
-  ]);
-  for (; i < argv.length; i += 1) {
-    const arg = argv[i];
-    if (admittedFlagsWithValues.has(arg)) {
-      passThrough.push(arg, argv[++i]);
-    } else if (admittedSwitches.has(arg)) {
-      passThrough.push(arg);
-    } else if (arg.startsWith('--') && i + 1 < argv.length && !argv[i + 1].startsWith('--')) {
-      i += 1;
-    }
-  }
-  const result = spawnSync(process.execPath, [legacyLauncher, ...passThrough], {
-    cwd: naradaProperRoot,
-    stdio: 'inherit',
-    env: { ...process.env, NARADA_PROPER_ROOT: naradaProperRoot },
-  });
-  process.exit(result.status ?? 1);
-}
-
-function normalizePath(value) {
-  return resolve(String(value ?? '')).replace(/[\\/]+$/, '').toLowerCase();
-}
 
 const SITE_ENV_BINDINGS = new Map();
 
@@ -151,9 +105,6 @@ const args = parseArgs(process.argv.slice(2));
 const identity = args.identity;
 const rootDir = args.site_root ?? args.target_site_root ?? process.env.NARADA_LAUNCH_REGISTRY_SITE_ROOT ?? process.env.NARADA_TARGET_SITE_ROOT ?? process.cwd();
 const NARADA_PROPER_ROOT = process.env.NARADA_PROPER_ROOT ?? naradaProperRoot;
-if ((args.runtime ?? 'kimi') !== 'agent-tui') {
-  runNaradaProperLegacyLauncherIfNeeded(process.argv.slice(2), rootDir, NARADA_PROPER_ROOT);
-}
 const candidateSiteToolsRoot = args.site_tools_root ?? join(rootDir, 'tools');
 const siteLocalToolsRoot = join(siteNaradaRoot(rootDir), 'tools');
 const packagedCommonToolsRoot = join(NARADA_PROPER_ROOT, 'packages', 'site-common-tools', 'src');
@@ -177,8 +128,10 @@ const agentContextSessionStartPath = explicitAgentContextSessionStartPath && exi
 const { writeJsonFile } = await import(pathToFileURL(join(commonToolsRoot, 'incubation', 'write-file-utf8.mjs')));
 const { beginCodexSessionAdmission, getCodexSessionAdmission, materializeAgentSessionStart } = await import(pathToFileURL(agentContextSessionStartPath));
 const { McpFabricError, loadSiteMcpFabric, mcpServerNames, projectFabricForAgentTui, projectFabricForClaudeCode, projectFabricForCodex } = await import(pathToFileURL(join(NARADA_PROPER_ROOT, 'packages', 'mcp-fabric', 'src', 'mcp-fabric.mjs')));
-const runtimeInput = args.runtime ?? 'agent-cli';
+const carrierInput = args.carrier ?? null;
+const runtimeInput = args.runtime ?? null;
 const jsonOutput = !!args.json;
+const jsonOutputFile = args.json_output_file ? resolve(String(args.json_output_file)) : null;
 const execFlag = !!args.exec;
 const dryRun = !!args.dry_run;
 const waitFlag = !!args.wait || process.env.NARADA_AGENT_START_WAIT === '1';
@@ -192,13 +145,6 @@ const targetSiteId = args.target_site_id ?? process.env.NARADA_TARGET_SITE_ID ??
 const targetSiteRoot = args.target_site_root ?? process.env.NARADA_TARGET_SITE_ROOT ?? null;
 const sessionSiteRoot = targetSiteRoot ?? rootDir;
 loadSiteEnvFiles(sessionSiteRoot, { siteNaradaRoot, processEnv: process.env, siteEnvBindings: SITE_ENV_BINDINGS });
-const intelligenceProviderArgInput = args.intelligence_provider ?? null;
-const intelligenceProviderEnvInput = runtimeInput === 'agent-cli' ? process.env.NARADA_INTELLIGENCE_PROVIDER : null;
-const intelligenceProviderInput = intelligenceProviderArgInput ?? intelligenceProviderEnvInput ?? null;
-const intelligenceProviderInputSource = resolveIntelligenceProviderInputSource(intelligenceProviderArgInput, intelligenceProviderEnvInput, runtimeInput, {
-  processEnv: process.env,
-  siteEnvBindings: SITE_ENV_BINDINGS,
-});
 const dbPath = args.db ?? join(sessionSiteRoot, '.ai', 'state', 'agent-context.sqlite');
 const require = createRequire(import.meta.url);
 const naradaPackages = createNaradaPackageResolver({
@@ -207,7 +153,7 @@ const naradaPackages = createNaradaPackageResolver({
 });
 const RUNTIME_SUBSTRATE_KINDS_PACKET = Object.freeze(JSON.parse(readFileSync(resolveNaradaPackageExport('@narada2/carrier-runtime-contract', './runtime-substrate-kinds'), 'utf8')));
 const RUNTIME_CONTRACT_SCHEMA = RUNTIME_SUBSTRATE_KINDS_PACKET.schema;
-const AGENT_TUI_RUNTIME = 'agent-tui';
+const AGENT_TUI_CARRIER = 'agent-tui';
 const AGENT_TUI_TERMINAL_RENDERING_ENV = 'NARADA_AGENT_TUI_ENABLE_TERMINAL_RENDERING';
 const AGENT_TUI_TERMINAL_MODE_ENV = 'NARADA_AGENT_TUI_TERMINAL_MODE';
 const AGENT_TUI_TERMINAL_MODE = 'interactive_loop';
@@ -245,23 +191,11 @@ const DEFAULT_CLAUDE_CODE_COMMAND = 'claude';
 const DEFAULT_CLAUDE_CODE_MODEL = 'sonnet';
 let mcpFabric = null;
 let agentStartRenderer = null;
-function runtimeRefusal(candidate) {
-  const candidateRuntime = String(candidate ?? '');
-  return {
-    schema: RUNTIME_CONTRACT_SCHEMA,
-    status: 'refused',
-    reason_code: 'runtime_substrate_kind_unsupported',
-    candidate_runtime_substrate_kind: candidateRuntime,
-    admitted_runtime_substrate_kinds: [...ADMITTED_RUNTIME_SUBSTRATE_KINDS],
-    reason: 'runtime_substrate_kind is not admitted by narada.runtime_substrate_kind.v1',
-    required_next_step: 'Admit the new runtime in a later contract version before startup or materialization accepts it.',
-  };
-}
-
-function resolveToolFabricAdapter(runtimeName) {
-  return resolveCarrierToolFabricAdapter(runtimeName, {
+function resolveToolFabricAdapter(carrierName, runtimeName) {
+  return resolveCarrierToolFabricAdapter(carrierName, {
     schema: TOOL_FABRIC_ADAPTER_CONTRACT_SCHEMA,
-    agentTuiRuntime: AGENT_TUI_RUNTIME,
+    agentTuiCarrier: AGENT_TUI_CARRIER,
+    runtimeName,
   });
 }
 
@@ -269,7 +203,7 @@ async function failRuntimeRefusal(refusal) {
   if (jsonOutput) {
     await writeStdout(`${JSON.stringify(refusal, null, 2)}\n`);
   } else {
-    console.error(`[FAIL] ${refusal.reason_code}: ${refusal.candidate_runtime_substrate_kind}`);
+    console.error(`[FAIL] ${refusal.reason_code}: ${refusal.candidate_runtime_substrate_kind ?? refusal.candidate_carrier_kind}`);
   }
   process.exit(1);
 }
@@ -285,9 +219,7 @@ async function failToolFabricRefusal(error) {
     site_root: sessionSiteRoot,
     reason: error instanceof Error ? error.message : String(error),
     details: error instanceof McpFabricError ? error.details : {},
-    required_next_step: error instanceof McpFabricError && error.details?.temporary_leak_identification_tool === true
-      ? 'Rename or remove non-canonical MCP server entries so every launched server name starts with narada-. This temporary gate exists to identify MCP authority leaks.'
-      : 'Materialize a valid Site-local .ai/mcp fabric before launching this runtime.',
+    required_next_step: 'Materialize a valid Site-local .ai/mcp fabric that matches the Site surface registry before launching this runtime.',
   };
   if (jsonOutput) {
     await writeStdout(`${JSON.stringify(refusal, null, 2)}\n`);
@@ -295,24 +227,6 @@ async function failToolFabricRefusal(error) {
     console.error(`[FAIL] ${reasonCode}: ${refusal.reason}`);
   }
   process.exit(1);
-}
-
-function assertTemporaryNaradaPrefixedMcpServerNameGate(fabric) {
-  const serverNames = mcpServerNames(fabric);
-  const offendingServerNames = serverNames.filter((serverName) => !serverName.startsWith('narada-'));
-  if (offendingServerNames.length === 0) return;
-  throw new McpFabricError(
-    'temporary_mcp_server_name_missing_narada_prefix',
-    `Temporary MCP leak identification gate refused non-canonical server names: ${offendingServerNames.join(', ')}`,
-    {
-      temporary_leak_identification_tool: true,
-      lifecycle_decision: 'retain_until_registry_authority_gate_replaces_prefix_heuristic',
-      replacement_path: 'Replace this temporary prefix gate with registry-backed authority validation that proves every launchable MCP server is generated from or matched to the target Site surface registry.',
-      expected_server_name_prefix: 'narada-',
-      offending_server_names: offendingServerNames,
-      admitted_server_names: serverNames,
-    },
-  );
 }
 
 async function failIntelligenceProviderRefusal(refusal) {
@@ -325,8 +239,8 @@ async function failIntelligenceProviderRefusal(refusal) {
   process.exit(1);
 }
 
-function normalizeIntelligenceProvider(value, runtimeName, inputSource = { source_field: null }) {
-  return resolveIntelligenceProviderLaunch(value, runtimeName, inputSource, {
+function normalizeIntelligenceProvider(value, carrierName, inputSource = { source_field: null }) {
+  return resolveIntelligenceProviderLaunch(value, carrierName, inputSource, {
     metadataByProvider: INTELLIGENCE_PROVIDER_METADATA,
     admittedProviders: ADMITTED_INTELLIGENCE_PROVIDERS,
     defaultProvider: DEFAULT_AGENT_CLI_INTELLIGENCE_PROVIDER,
@@ -362,8 +276,8 @@ function intelligenceProviderEnvironmentProjection(providerResolution) {
 function mcpProviderCredentialEnvironment() {
   return {
     ...projectMcpProviderCredentialEnvironment({
-      runtime,
-      agentTuiRuntime: AGENT_TUI_RUNTIME,
+      carrier,
+      agentTuiCarrier: AGENT_TUI_CARRIER,
       metadataByProvider: INTELLIGENCE_PROVIDER_METADATA,
       processEnv: process.env,
       codexSubscriptionPreflight,
@@ -391,7 +305,7 @@ function materializeAgentTuiMcpConfig() {
 }
 
 function agentTuiTerminalEnvironment() {
-  if (runtime !== AGENT_TUI_RUNTIME) return {};
+  if (carrier !== AGENT_TUI_CARRIER) return {};
   const mcpConfigPath = materializeAgentTuiMcpConfig();
   const providerEnv = intelligenceProviderEnvironment({ intelligence_provider: DEFAULT_AGENT_CLI_INTELLIGENCE_PROVIDER });
   return {
@@ -427,31 +341,31 @@ async function loadAgentStartRenderer() {
   return agentStartRenderer;
 }
 
-function normalizeRuntimeSubstrateKind(value) {
-  const runtimeName = String(value ?? '').trim();
-  if (ADMITTED_RUNTIME_SUBSTRATE_KINDS.includes(runtimeName)) {
-    return {
-      runtime_substrate_kind: runtimeName,
-      runtime_contract_schema: RUNTIME_CONTRACT_SCHEMA,
-      source_field: 'runtime',
-      legacy_runtime: runtimeName,
-    };
-  }
-  return runtimeRefusal(runtimeName);
-}
-
-const runtimeResolution = normalizeRuntimeSubstrateKind(runtimeInput);
+const runtimeResolution = resolveCarrierRuntimeSelection({
+  carrierValue: carrierInput,
+  runtimeValue: runtimeInput,
+  admittedRuntimeSubstrateKinds: ADMITTED_RUNTIME_SUBSTRATE_KINDS,
+  runtimeContractSchema: RUNTIME_CONTRACT_SCHEMA,
+});
 if (runtimeResolution.status === 'refused') {
   await failRuntimeRefusal(runtimeResolution);
 }
 const runtime = runtimeResolution.runtime_substrate_kind;
-const intelligenceProviderResolution = normalizeIntelligenceProvider(intelligenceProviderInput, runtime, intelligenceProviderInputSource);
+const carrier = runtimeResolution.carrier_kind;
+const intelligenceProviderArgInput = args.intelligence_provider ?? null;
+const intelligenceProviderEnvInput = carrier === AGENT_CLI_CARRIER_KIND ? process.env.NARADA_INTELLIGENCE_PROVIDER : null;
+const intelligenceProviderInput = intelligenceProviderArgInput ?? intelligenceProviderEnvInput ?? null;
+const intelligenceProviderInputSource = resolveIntelligenceProviderInputSource(intelligenceProviderArgInput, intelligenceProviderEnvInput, carrier, {
+  processEnv: process.env,
+  siteEnvBindings: SITE_ENV_BINDINGS,
+});
+const intelligenceProviderResolution = normalizeIntelligenceProvider(intelligenceProviderInput, carrier, intelligenceProviderInputSource);
 if (intelligenceProviderResolution?.status === 'refused') {
   await failIntelligenceProviderRefusal(intelligenceProviderResolution);
 }
 
 if (!identity) {
-  console.error('Usage: node start-agent.mjs <identity> [--runtime <runtime>] [--db <path>] [--json] [--dry-run] [--exec] [--wait] [--yolo] [--enable-native-shell] [--target-site-id <site-id>] [--target-site-root <path>]');
+  console.error('Usage: node start-agent.mjs <identity> [--carrier <carrier>] [--runtime <runtime>] [--db <path>] [--json] [--dry-run] [--exec] [--wait] [--yolo] [--enable-native-shell] [--target-site-id <site-id>] [--target-site-root <path>]');
   process.exit(1);
 }
 
@@ -479,14 +393,6 @@ function stableNodeCommand() {
 
 function piCliScriptPath() {
   return join(stableNodeInstallDir(), 'node_modules', '@earendil-works', 'pi-coding-agent', 'dist', 'cli.js');
-}
-
-function agentCliLauncherScriptPath() {
-  return join(rootDir, 'tools', 'operator-surface-carriers', 'Start-AgentCliSession.ps1');
-}
-
-function agentCliScriptPath() {
-  return resolveNaradaPackageBin('@narada2/agent-cli', 'narada-agent-cli');
 }
 
 function agentRuntimeServerScriptPath() {
@@ -519,33 +425,23 @@ function resolveStartingCarrierInput() {
   const sources = [
     args.starting_carrier_input !== undefined ? 'starting_carrier_input' : null,
     args.starting_carrier_input_file !== undefined ? 'starting_carrier_input_file' : null,
-    args.agent_tui_starting_directive !== undefined ? 'agent_tui_starting_directive' : null,
-    args.agent_tui_starting_directive_file !== undefined ? 'agent_tui_starting_directive_file' : null,
   ].filter(Boolean);
   if (sources.length === 0) return null;
-  const legacyOnly = sources.every((source) => String(source).startsWith('agent_tui_'));
   if (sources.length > 1) {
-    if (legacyOnly) throw new Error('agent_tui_starting_directive_source_ambiguous');
     throw new Error('starting_carrier_input_source_ambiguous');
   }
   const source = sources[0];
   const file = source.endsWith('_file')
-    ? source === 'starting_carrier_input_file'
-      ? args.starting_carrier_input_file
-      : args.agent_tui_starting_directive_file
+    ? args.starting_carrier_input_file
     : undefined;
   const inline = source === 'starting_carrier_input'
     ? args.starting_carrier_input
-    : source === 'agent_tui_starting_directive'
-      ? args.agent_tui_starting_directive
-      : undefined;
+    : undefined;
   if (file !== undefined && !existsSync(file)) {
-    if (source === 'agent_tui_starting_directive_file') throw new Error(`agent_tui_starting_directive_file_missing: ${file}`);
     throw new Error(`starting_carrier_input_file_missing: ${file}`);
   }
   const text = file !== undefined ? readFileSync(file, 'utf8') : String(inline ?? '');
   if (text.trim().length === 0) {
-    if (source.startsWith('agent_tui_')) throw new Error('agent_tui_starting_directive_empty');
     throw new Error('starting_carrier_input_empty');
   }
   return {
@@ -568,9 +464,9 @@ function startingCarrierInputOutput(startingCarrierInput) {
   };
 }
 
-function resolveRuntimeCommand(runtimeName) {
-  return resolveCarrierRuntimeCommand(runtimeName, {
-    agentTuiRuntime: AGENT_TUI_RUNTIME,
+function resolveCarrierExecutableCommand(carrierName) {
+  return resolveCarrierCommand(carrierName, {
+    agentTuiCarrier: AGENT_TUI_CARRIER,
     processPlatform: process.platform,
     processExecPath: process.execPath,
     stableNodeCommand,
@@ -580,9 +476,10 @@ function resolveRuntimeCommand(runtimeName) {
   });
 }
 
-function materializeCarrierSessionRecord({ identity, runtime, startResult, dryRun = false } = {}) {
+function materializeCarrierSessionRecord({ identity, carrier, runtime, startResult, dryRun = false } = {}) {
   return materializeCarrierSessionRecordArtifact({
     identity,
+    carrier,
     runtime,
     startResult,
     dryRun,
@@ -596,19 +493,8 @@ function materializeCarrierSessionRecord({ identity, runtime, startResult, dryRu
   });
 }
 
-function carrierSessionLegacyUnbound(error) {
-  return {
-    schema: 'narada.pc_runtime.carrier_session.registration.v0',
-    status: 'legacy_unbound_carrier_session',
-    reason: error instanceof Error ? error.message : String(error),
-    carrier_session_id: null,
-    environment: {},
-    fail_closed: true,
-  };
-}
-
 function nativeShellExceptionStatus() {
-  if (runtime !== 'codex') return null;
+  if (carrier !== 'codex') return null;
   if (!enableNativeShellFlag) {
     return {
       status: 'disabled',
@@ -656,7 +542,7 @@ function buildCodexAdmissionCeremony(admission) {
 }
 
 function clearKimiSession(identity) {
-  if (runtime !== 'kimi' || dryRun) return null;
+  if (carrier !== 'kimi' || dryRun) return null;
 
   const sessionDir = kimiSessionDir(identity);
   if (!existsSync(sessionDir)) {
@@ -668,7 +554,7 @@ function clearKimiSession(identity) {
 }
 
 function setKimiSessionTitle(identity, role) {
-  if (runtime !== 'kimi' || dryRun) return null;
+  if (carrier !== 'kimi' || dryRun) return null;
 
   const sessionDir = kimiSessionDir(identity);
   if (!existsSync(sessionDir)) {
@@ -732,16 +618,16 @@ function mcpToolApprovalPacket({ approved, note }) {
 }
 
 function mcpToolApprovalStatus() {
-  if (runtime !== 'codex') return null;
+  if (carrier !== 'codex') return null;
   return mcpToolApprovalPacket({
     approved: codexMcpServerNames(),
     note: 'Approves configured Narada MCP tool calls at the Codex carrier layer. Native Codex shell_tool remains disabled by default; shell execution still goes through the policy-aware Narada shell MCP.',
   });
 }
 
-function buildSpawnArgs(runtime, identity, carrierSessionRegistration = null) {
-  return buildCarrierSpawnArgs(runtime, {
-    agentTuiRuntime: AGENT_TUI_RUNTIME,
+function buildSpawnArgs(carrierName, identity, carrierSessionRegistration = null) {
+  return buildCarrierSpawnArgs(carrierName, {
+    agentTuiCarrier: AGENT_TUI_CARRIER,
     identity,
     yoloFlag,
     enableNativeShellFlag,
@@ -768,7 +654,7 @@ function buildSpawnArgs(runtime, identity, carrierSessionRegistration = null) {
 }
 
 function codexMcpRegistrationStatus(identity, eventId) {
-  if (runtime !== 'codex') return null;
+  if (carrier !== 'codex') return null;
   return {
     status: 'not_mutated',
     scope: 'codex_stable_global_mcp_registry',
@@ -804,6 +690,10 @@ function writeStdout(payload) {
 }
 
 async function printResult(result) {
+  if (jsonOutputFile) {
+    mkdirSync(dirname(jsonOutputFile), { recursive: true });
+    writeFileSync(jsonOutputFile, `${JSON.stringify(result, null, 2)}\n`, 'utf8');
+  }
   if (jsonOutput) {
     const sentinel = result.exec && !dryRun && result.agent_start_event
       ? `\nagent_start_result_end: ${result.agent_start_event}\n\n\n`
@@ -886,9 +776,15 @@ try {
 const carrierSessionPlanOnly = dryRun || !execFlag;
 let carrierSessionRegistration;
 try {
-  carrierSessionRegistration = materializeCarrierSessionRecord({ identity, runtime, startResult, dryRun: carrierSessionPlanOnly });
+  carrierSessionRegistration = materializeCarrierSessionRecord({ identity, carrier, runtime, startResult, dryRun: carrierSessionPlanOnly });
 } catch (error) {
-  carrierSessionRegistration = carrierSessionLegacyUnbound(error);
+  console.error(JSON.stringify({
+    schema: 'narada.pc_runtime.carrier_session.registration.v0',
+    status: 'refused',
+    reason_code: 'carrier_session_registration_failed',
+    reason: error instanceof Error ? error.message : String(error),
+  }, null, 2));
+  process.exit(1);
 }
 
 const carrierActions = {
@@ -898,25 +794,24 @@ const carrierActions = {
   codex_mcp_registration: codexMcpRegistrationStatus(identity, startResult.agent_start_event),
 };
 
-if (runtime !== 'kimi' && runtime !== 'opencode') {
+if (carrier !== 'kimi' && carrier !== 'opencode') {
   try {
     mcpFabric = loadSiteMcpFabric(sessionSiteRoot, { required: true, validateRegistry: true });
-    assertTemporaryNaradaPrefixedMcpServerNameGate(mcpFabric);
   } catch (error) {
     await failToolFabricRefusal(error);
   }
 }
 
-const spawnArgs = buildSpawnArgs(runtime, identity, carrierSessionRegistration);
-const toolFabricAdapter = resolveToolFabricAdapter(runtime);
-const execCommand = [resolveRuntimeCommand(runtime), ...spawnArgs.map(shellQuote)].join(' ');
+const spawnArgs = buildSpawnArgs(carrier, identity, carrierSessionRegistration);
+const toolFabricAdapter = resolveToolFabricAdapter(carrier, runtime);
+const execCommand = [resolveCarrierExecutableCommand(carrier), ...spawnArgs.map(shellQuote)].join(' ');
 const carrierEnvironment = carrierSessionRegistration.environment ?? {};
 const agentTuiEnvironment = agentTuiTerminalEnvironment();
 const mcpProviderCredentialEnv = mcpProviderCredentialEnvironment();
 const startingCarrierInput = resolveStartingCarrierInput();
 const environmentSiteRoot = sessionSiteRoot;
 const workspaceRoot = process.cwd();
-const runtimeEnvironment = runtimeSpecificEnvironment(runtime, {
+const runtimeEnvironment = carrierSpecificEnvironment(carrier, {
   processEnv: process.env,
   defaultPiProvider: DEFAULT_PI_PROVIDER,
   defaultPiModel: DEFAULT_PI_MODEL,
@@ -924,7 +819,7 @@ const runtimeEnvironment = runtimeSpecificEnvironment(runtime, {
   defaultClaudeCodeModel: DEFAULT_CLAUDE_CODE_MODEL,
 });
 const { requiredEnvironment, wouldSetEnvironment } = buildCarrierEnvironmentProjection({
-  runtimeName: runtime,
+  carrierName: carrier,
   startResult,
   carrierEnvironment,
   intelligenceProviderEnv,
@@ -937,7 +832,7 @@ const { requiredEnvironment, wouldSetEnvironment } = buildCarrierEnvironmentProj
   workspaceRoot,
   dbPath,
 });
-const agentCliLaunch = buildAgentCliLaunchPacket(runtime, {
+const narsLaunch = buildNarsLaunchPacket(carrier, {
   processExecPath: process.execPath,
   carrierSessionRegistration,
   sessionSiteRoot,
@@ -949,6 +844,7 @@ const output = {
   ...startResult,
   schema: 'narada.agent_start.result.v0',
   runtime_contract_schema: RUNTIME_CONTRACT_SCHEMA,
+  carrier_kind: carrier,
   runtime_substrate_kind: runtime,
   target_site_id: targetSiteId,
   target_site_root: targetSiteRoot,
@@ -963,8 +859,7 @@ const output = {
   admitted_tool_fabric_adapter_kinds: [...ADMITTED_TOOL_FABRIC_ADAPTER_KINDS],
   tool_fabric_adapter: toolFabricAdapter,
   tool_fabric_adapter_kind: toolFabricAdapter.tool_fabric_adapter_kind,
-  nars_launch: agentCliLaunch,
-  agent_cli_launch: agentCliLaunch ? { ...agentCliLaunch, compatibility_alias_for: 'nars_launch' } : null,
+  nars_launch: narsLaunch,
   mcp_fabric: mcpFabric ? {
     source: mcpFabric.source,
     site_root: mcpFabric.site_root,
@@ -985,8 +880,8 @@ const output = {
   mcp_tool_approval: mcpToolApprovalStatus(),
   runtime_args: spawnArgs,
   exec_command: execFlag ? execCommand : null,
-  context_isolation: runtime === 'codex' ? codexContextIsolationStatus({ exec: execFlag, dryRun }) : { status: 'isolated', runtime },
-  nars_health: runtime === 'agent-cli' ? {
+  context_isolation: carrier === 'codex' ? codexContextIsolationStatus({ exec: execFlag, dryRun }) : { status: 'isolated', carrier, runtime },
+  nars_health: carrier === 'agent-cli' ? {
     schema: 'narada.agent_start.nars_health_discovery.v1',
     owner: '@narada2/agent-runtime-server',
     method: 'session.health',
@@ -996,7 +891,7 @@ const output = {
     discovery_field: 'session_started.health_endpoint',
     note: 'The loopback HTTP endpoint is bound by the runtime server after process start; inspect session_started.health_endpoint or session.health for the live URL.',
   } : null,
-  nars_events: runtime === 'agent-cli' ? {
+  nars_events: carrier === 'agent-cli' ? {
     schema: 'narada.agent_start.nars_event_stream_discovery.v1',
     owner: '@narada2/agent-runtime-server',
     method: 'session.events.subscribe',
@@ -1027,7 +922,12 @@ if (!execFlag || dryRun) {
 }
 
 if (waitFlag) {
-  await waitForEnterBeforeRuntime(identity, runtime);
+  await waitForEnterBeforeCarrier({
+    agentId: identity,
+    carrierName: carrier,
+    writeStdout,
+    loadAgentStartRenderer,
+  });
 }
 
 if (carrierSessionRegistration.status !== 'registered') {
@@ -1035,22 +935,23 @@ if (carrierSessionRegistration.status !== 'registered') {
   process.exit(1);
 }
 
-if (runtime === 'agent-cli' || runtime === AGENT_TUI_RUNTIME) {
+if (carrier === 'agent-cli' || carrier === AGENT_TUI_CARRIER) {
   materializeCarrierLaunchFiles(carrierSessionRegistration.carrier_session_id, startingCarrierInput);
 }
 
-const isOpencodeWin32 = runtime === 'opencode' && process.platform === 'win32';
-const spawnCommand = isOpencodeWin32 ? 'cmd.exe' : resolveRuntimeCommand(runtime);
-const spawnCommandArgs = isOpencodeWin32 ? ['/c', resolveRuntimeCommand(runtime), ...spawnArgs] : spawnArgs;
+const isOpencodeWin32 = carrier === 'opencode' && process.platform === 'win32';
+const spawnCommand = isOpencodeWin32 ? 'cmd.exe' : resolveCarrierExecutableCommand(carrier);
+const spawnCommandArgs = isOpencodeWin32 ? ['/c', resolveCarrierExecutableCommand(carrier), ...spawnArgs] : spawnArgs;
 
-const child = spawn(spawnCommand, spawnCommandArgs, {
-  stdio: 'inherit',
+spawnCarrierProcessAndExit({
+  command: spawnCommand,
+  args: spawnCommandArgs,
   cwd: process.cwd(),
   env: {
     ...process.env,
     ...intelligenceProviderEnv,
     ...mcpProviderCredentialEnv,
-    ...(runtime === 'pi' ? {} : runtimeEnvironment),
+    ...(carrier === 'pi' ? {} : runtimeEnvironment),
     NARADA_AGENT_ID: identity,
     NARADA_AGENT_START_EVENT_ID: startResult.agent_start_event,
     NARADA_CARRIER_SESSION_ID: carrierSessionRegistration.carrier_session_id,
@@ -1059,28 +960,5 @@ const child = spawn(spawnCommand, spawnCommandArgs, {
     NARADA_AGENT_CONTEXT_DB: dbPath,
     ...agentTuiEnvironment,
   },
-  ...runtimeSpawnOptions(runtime),
+  spawnOptions: carrierSpawnOptions(carrier),
 });
-
-child.on('error', (err) => {
-  console.error(`[FAIL] Failed to spawn runtime: ${err.message}`);
-  process.exit(1);
-});
-
-child.on('exit', (code) => {
-  process.exit(code ?? 0);
-});
-
-async function waitForEnterBeforeRuntime(agentId, runtimeName) {
-  if (!process.stdin.isTTY) {
-    await writeStdout(`agent_start_wait_skipped: stdin is not a terminal; starting ${runtimeName}\n`);
-    return;
-  }
-  const rl = createInterface({ input: process.stdin, output: process.stdout });
-  try {
-    const { formatAgentStartWaitPrompt } = await loadAgentStartRenderer();
-    await rl.question(formatAgentStartWaitPrompt(agentId, runtimeName));
-  } finally {
-    rl.close();
-  }
-}

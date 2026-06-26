@@ -2,10 +2,14 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 import { join, resolve } from 'node:path';
-import type { CommandContext } from '../lib/command-wrapper.js';
+import { commandResultError, type CommandContext } from '../lib/command-wrapper.js';
 import { formattedResult, type CliFormat } from '../lib/cli-output.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { carrierStartCommand } from './carrier.js';
+import {
+  defaultRuntimeForCarrier,
+  resolveCarrierRuntimeSelection,
+} from '@narada2/carrier-runtime-contract/carrier-runtime-selection';
 
 export interface WorkspaceLaunchPlanOptions {
   agent?: string[];
@@ -14,6 +18,7 @@ export interface WorkspaceLaunchPlanOptions {
   site?: string[];
   configPath?: string[];
   registryPath?: string;
+  carrier?: string;
   runtime?: string;
   intelligenceProvider?: string;
   enableNativeShell?: boolean;
@@ -21,6 +26,28 @@ export interface WorkspaceLaunchPlanOptions {
   smoke?: boolean;
   dryRun?: boolean;
   format?: CliFormat;
+}
+
+function validateCarrierRuntimeSelection(carrier: string, runtime: string): void {
+  const selection = resolveCarrierRuntimeSelection({
+    carrierValue: carrier,
+    runtimeValue: runtime,
+    admittedRuntimeSubstrateKinds: ['kimi', 'codex', 'narada-agent-runtime-server', 'pi', 'claude-code', 'opencode'],
+    runtimeContractSchema: 'narada.runtime_substrate_kind.v1',
+  });
+  if (selection.status === 'refused') {
+    throw commandResultError({
+      status: 'error',
+      command: 'launcher workspace-plan',
+      error: selection.reason,
+      _formatted: `[FAIL] ${selection.reason_code}: ${selection.reason}`,
+      reason_code: selection.reason_code,
+      reason: selection.reason,
+      candidate_carrier_kind: selection.candidate_carrier_kind,
+      candidate_runtime_substrate_kind: selection.candidate_runtime_substrate_kind,
+      retryable: false,
+    }, selection.reason_code);
+  }
 }
 
 async function resolveExplainSiteRoot(options: ExplainMcpOptions): Promise<Record<string, unknown> & { site_root: string }> {
@@ -262,6 +289,7 @@ interface RawLaunchRegistry {
   WorkspaceRoot?: string;
   Launcher?: string;
   LauncherPath?: string;
+  Carrier?: string;
   Runtime?: string;
   Agents?: RawAgentRecord[] | RawAgentRecord;
 }
@@ -276,6 +304,7 @@ interface RawAgentRecord {
   WorkspaceRoot?: string;
   Launcher?: string;
   LauncherPath?: string;
+  Carrier?: string;
   Runtime?: string;
   EnableNativeShell?: boolean;
 }
@@ -289,12 +318,14 @@ export interface WorkspaceLaunchRecord {
   site_root: string;
   workspace_root: string | null;
   launcher_path: string;
+  carrier: string;
   runtime: string;
   enable_native_shell: boolean;
   config_path: string;
 }
 
 export interface WorkspaceLaunchAgentPlan extends WorkspaceLaunchRecord {
+  launch_carrier: string;
   launch_runtime: string;
   intelligence_provider: string | null;
   wait_for_enter_before_exec: boolean;
@@ -321,7 +352,7 @@ export async function workspaceLaunchPlanCommand(
         siteRoot: plan.site_root,
         workspaceRoot: plan.workspace_root ?? undefined,
         agent: plan.agent,
-        runtime: plan.launch_runtime,
+        carrier: plan.launch_carrier,
         intelligenceProvider: plan.intelligence_provider ?? undefined,
         dryRun: true,
         enableNativeShell: plan.enable_native_shell,
@@ -330,6 +361,7 @@ export async function workspaceLaunchPlanCommand(
       agents.push({
         agent: plan.agent,
         site: plan.site,
+        carrier: plan.launch_carrier,
         runtime: plan.launch_runtime,
         status: smoke.exitCode === ExitCode.SUCCESS ? 'passed' : 'failed',
         plan,
@@ -435,7 +467,8 @@ function normalizeAgentRecord(registry: RawLaunchRegistry, agent: RawAgentRecord
   const launcher = nonEmpty(agent.Launcher) ?? nonEmpty(registry.Launcher);
   const launcherPath = nonEmpty(agent.LauncherPath) ?? nonEmpty(registry.LauncherPath)
     ?? (launcher ? join(naradaRoot, launcher) : join(naradaRoot, 'narada-andrey.ps1'));
-  const runtime = nonEmpty(agent.Runtime) ?? nonEmpty(registry.Runtime) ?? 'codex';
+  const carrier = nonEmpty(agent.Carrier) ?? nonEmpty(registry.Carrier) ?? 'codex';
+  const runtime = nonEmpty(agent.Runtime) ?? nonEmpty(registry.Runtime) ?? defaultRuntimeForCarrier(carrier);
   return {
     agent: agentId,
     title: nonEmpty(agent.Title) ?? agentId.split('.').at(-1) ?? agentId,
@@ -445,6 +478,7 @@ function normalizeAgentRecord(registry: RawLaunchRegistry, agent: RawAgentRecord
     site_root: siteRoot,
     workspace_root: workspaceRoot,
     launcher_path: launcherPath,
+    carrier,
     runtime,
     enable_native_shell: agent.EnableNativeShell === true,
     config_path: configPath,
@@ -490,31 +524,39 @@ function selectLaunchRecords(records: WorkspaceLaunchRecord[], options: Workspac
 }
 
 function buildAgentPlan(record: WorkspaceLaunchRecord, options: WorkspaceLaunchPlanOptions): WorkspaceLaunchAgentPlan {
+  const launchCarrier = options.carrier ?? record.carrier;
   const launchRuntime = options.runtime ?? record.runtime;
+  validateCarrierRuntimeSelection(launchCarrier, launchRuntime);
   const enableNativeShell = options.enableNativeShell === true || record.enable_native_shell;
   const waitForEnter = options.noWaitForEnterBeforeExec !== true;
+  const naradaProper = resolve(process.env.NARADA_PROPER_ROOT ?? 'D:/code/narada');
   const base = [
     'new-tab',
     '--title', record.title,
-    '-d', record.narada_root,
+    '-d', record.workspace_root ?? record.narada_root,
     'pwsh',
     '-NoExit',
-    '-File', join(defaultUserSiteRoot(), 'Start-NaradaAgent.ps1'),
-    '-NaradaRoot', record.narada_root,
-    '-SiteRoot', record.site_root,
-    '-Agent', record.agent,
-    '-Runtime', launchRuntime,
-    '-LauncherPath', record.launcher_path,
-  ];
-  if (record.workspace_root) base.push('-WorkspaceRoot', record.workspace_root);
-  if (enableNativeShell) base.push('-EnableNativeShell');
-  if (options.intelligenceProvider) base.push('-IntelligenceProvider', options.intelligenceProvider);
-  if (waitForEnter) base.push('-WaitForEnterBeforeExec');
-
-  const smokeCommand = [
-    'narada', 'carrier', 'start', launchRuntime,
+    'pnpm',
+    '--dir', naradaProper,
+    'exec',
+    'narada',
+    'carrier',
+    'start', launchCarrier,
     '--site-root', record.site_root,
     '--agent', record.agent,
+    '--runtime', launchRuntime,
+    '--exec',
+  ];
+  if (record.workspace_root) base.push('--workspace-root', record.workspace_root);
+  if (enableNativeShell) base.push('--enable-native-shell');
+  if (options.intelligenceProvider) base.push('--intelligence-provider', options.intelligenceProvider);
+  if (waitForEnter) base.push('--wait');
+
+  const smokeCommand = [
+    'narada', 'carrier', 'start', launchCarrier,
+    '--site-root', record.site_root,
+    '--agent', record.agent,
+    '--runtime', launchRuntime,
     '--dry-run',
     '--format', 'json',
   ];
@@ -524,6 +566,7 @@ function buildAgentPlan(record: WorkspaceLaunchRecord, options: WorkspaceLaunchP
 
   return {
     ...record,
+    launch_carrier: launchCarrier,
     launch_runtime: launchRuntime,
     intelligence_provider: options.intelligenceProvider ?? null,
     wait_for_enter_before_exec: waitForEnter,
@@ -531,10 +574,6 @@ function buildAgentPlan(record: WorkspaceLaunchRecord, options: WorkspaceLaunchP
     wt_args: base,
     smoke_command: smokeCommand,
   };
-}
-
-function defaultUserSiteRoot(): string {
-  return process.env.NARADA_USER_SITE_ROOT ?? 'C:/Users/Andrey/Narada';
 }
 
 function nonEmpty(value: unknown): string | null {

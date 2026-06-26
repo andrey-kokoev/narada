@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { openAgentContextDb } from './session-start.mjs';
+import { materializeAgentSessionStart, openAgentContextDb, validateIdentityAgainstRoster } from './session-start.mjs';
 import { enforceAgentPathPolicy, resolveAgentPathPolicy } from './path-policy.mjs';
 
 const root = dirname(fileURLToPath(import.meta.url));
@@ -77,6 +77,42 @@ test('agent path policy roster membership is site opt-in', async () => {
       }),
       /path_policy_denied/
     );
+  } finally {
+    await rm(siteRoot, { recursive: true, force: true });
+  }
+});
+
+test('agent session roster membership is site opt-in', async () => {
+  const siteRoot = await mkdtemp(join(tmpdir(), 'narada-agent-session-roster-'));
+  try {
+    await mkdir(join(siteRoot, '.ai', 'agents'), { recursive: true });
+    const rosterPath = join(siteRoot, '.ai', 'agents', 'roster.json');
+
+    const missingRoster = validateIdentityAgainstRoster(siteRoot, 'sonar.resident');
+    assert.equal(missingRoster.valid, true);
+    assert.equal(missingRoster.role, 'resident');
+    assert.equal(missingRoster.roster_enforcement, 'disabled');
+    assert.equal(missingRoster.role_binding.binding_authority, 'identity_inference_non_authoritative');
+
+    await writeFile(rosterPath, JSON.stringify({ agents: [] }), 'utf8');
+    const defaultResult = validateIdentityAgainstRoster(siteRoot, 'sonar.resident');
+    assert.equal(defaultResult.valid, true);
+    assert.equal(defaultResult.reason, 'identity_not_in_roster_but_site_session_roster_enforcement_not_enabled');
+    assert.equal(defaultResult.role, 'resident');
+
+    const dryRun = materializeAgentSessionStart({
+      siteRoot,
+      identity: 'sonar.resident',
+      runtime: 'narada-agent-runtime-server',
+      dryRun: true,
+    });
+    assert.equal(dryRun.status, 'dry_run');
+    assert.equal(dryRun.role, 'resident');
+
+    await writeFile(rosterPath, JSON.stringify({ enforce_session_roster: true, agents: [] }), 'utf8');
+    const strictResult = validateIdentityAgainstRoster(siteRoot, 'sonar.resident');
+    assert.equal(strictResult.valid, false);
+    assert.equal(strictResult.error, 'identity_not_in_roster: sonar.resident');
   } finally {
     await rm(siteRoot, { recursive: true, force: true });
   }

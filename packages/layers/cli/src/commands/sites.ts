@@ -3955,12 +3955,12 @@ async function addSiteToolSurfaceChecks(checks: SiteDoctorCheck[], siteRoot: str
       'agent_cli_package_wrapper',
       wrapper.current ? 'pass' : 'fail',
       wrapper.current
-        ? `agent-cli wrapper matches @narada2/agent-cli template hash ${wrapper.templateHash}`
-        : `agent-cli wrapper is stale or lacks package template evidence; existing_hash=${wrapper.existingHash ?? 'missing'} expected_hash=${wrapper.templateHash}`,
+        ? `agent-cli client/projection wrapper matches @narada2/agent-cli template hash ${wrapper.templateHash}`
+        : `agent-cli client/projection wrapper is stale or lacks package template evidence; existing_hash=${wrapper.existingHash ?? 'missing'} expected_hash=${wrapper.templateHash}`,
       'Run narada sites reconcile agent-cli-wrapper --root <site-root-or-workspace> --apply.',
     );
   } else if (generatedWrappers.some((entry) => entry.surface === 'agent-cli')) {
-    addCheck(checks, 'agent_cli_package_wrapper', 'fail', 'Manifest declares an agent-cli generated wrapper, but Start-AgentCliSession.ps1 is missing');
+    addCheck(checks, 'agent_cli_package_wrapper', 'fail', 'Manifest declares an agent-cli generated client/projection wrapper, but Start-AgentCliSession.ps1 is missing');
   }
 
   const siteOwned = entries.filter((entry) => entry.class === 'site_owned');

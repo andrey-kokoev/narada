@@ -5,8 +5,11 @@ param(
     [string]$UserSiteRoot = $(if ($env:NARADA_USER_SITE_ROOT) { $env:NARADA_USER_SITE_ROOT } else { Join-Path $HOME 'Narada' }),
     [Parameter(Mandatory = $true)]
     [string]$IdentityName,
-    [ValidateSet("codex", "kimi", "agent-cli")]
+    [ValidateSet("codex", "kimi", "narada-agent-runtime-server")]
     [string]$Runtime = "codex",
+    [Parameter(Mandatory = $true)]
+    [ValidateSet("codex", "kimi", "agent-cli")]
+    [string]$Carrier,
     [Parameter(Mandatory = $true)]
     [string]$CarrierId,
     [Parameter(Mandatory = $true)]
@@ -35,6 +38,8 @@ $claim = [ordered]@{
     wt_session = $env:WT_SESSION
     identity_name = $IdentityName
     runtime = $Runtime
+    runtime_substrate_kind = $Runtime
+    carrier_kind = $Carrier
     claimed_at = (Get-Date -Format "o")
     single_tab_invariant_asserted = $true
     title_used_as_identity_proof = $false
@@ -46,5 +51,5 @@ if (-not (Test-Path -LiteralPath $launcher)) {
     throw "narada_andrey_launcher_missing: $launcher"
 }
 
-& $launcher agent-start -Agent $IdentityName -Runtime $Runtime -Exec
+& $launcher agent-start -Agent $IdentityName -Carrier $Carrier -Runtime $Runtime -Exec
 exit $LASTEXITCODE

@@ -3,7 +3,6 @@ import test from 'node:test';
 import {
   AGENT_WEB_UI_NARS_METHOD_LIST,
   NARS_CLIENT_PROJECTION_REGISTRY,
-  NARS_COMMAND_COMPATIBILITY_METHODS,
   NARS_COMMAND_METHOD,
   buildAgentWebUiConversationSendFrame,
   buildAgentWebUiConversationSteerFrame,
@@ -13,24 +12,25 @@ import {
   buildNarsAttachCommands,
   isAgentWebUiNarsMethod,
   isAgentWebUiProtocolFrame,
+  projectNarsClientEvent,
 } from './nars-client-projection-contract.mjs';
 
 test('NARS client projection contract owns attach commands and web UI capabilities', () => {
   assert.equal(NARS_COMMAND_METHOD, 'carrier.command.execute');
-  assert.deepEqual(NARS_COMMAND_COMPATIBILITY_METHODS, ['agent-cli.command']);
   assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('conversation.send'), true);
   assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('conversation.interrupt'), true);
   assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('conversation.steer'), true);
   assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('command.execute'), false);
   assert.equal(NARS_CLIENT_PROJECTION_REGISTRY.clients.agent_web_ui.admitted_methods, AGENT_WEB_UI_NARS_METHOD_LIST);
+  assert.equal(NARS_CLIENT_PROJECTION_REGISTRY.clients.agent_tui.attach_template, 'agent-tui --attach <event_endpoint>');
   assert.deepEqual(buildNarsAttachCommands({ eventEndpoint: 'ws://127.0.0.1/events', healthEndpoint: 'http://127.0.0.1/health' }), {
     registry_schema: 'narada.nars.client_projection_registry.v1',
     agent_cli: 'narada-agent-cli --attach ws://127.0.0.1/events',
+    agent_tui: 'agent-tui --attach ws://127.0.0.1/events',
     agent_web_ui: 'narada-agent-web-ui --event-endpoint ws://127.0.0.1/events --health-endpoint http://127.0.0.1/health',
     protocol: '{"id":"events-1","method":"session.events.subscribe","params":{"include_replay":true,"max_replay":20}}',
     operator_input_protocol: '{"id":"input-1","method":"conversation.send","params":{"message":"<operator message>","source":"agent-web-ui"}}',
     slash_command_protocol: '{"id":"command-1","method":"carrier.command.execute","params":{"command":"/status","value":""}}',
-    compatibility_methods: ['agent-cli.command'],
   });
 });
 
@@ -72,4 +72,23 @@ test('NARS client projection contract owns web UI operator input projection', ()
   assert.equal(isAgentWebUiNarsMethod('command.execute'), false);
   assert.equal(isAgentWebUiProtocolFrame({ id: 'ok', method: 'conversation.send', params: {} }), true);
   assert.equal(isAgentWebUiProtocolFrame({ id: 'blocked', method: 'session.sync', params: {} }), false);
+});
+
+test('NARS client projection contract owns shared event rendering vocabulary', () => {
+  assert.deepEqual(projectNarsClientEvent({ event: 'session_event', payload: { event: 'assistant_message', content: 'hello' } }), {
+    kind: 'assistant_message',
+    label: 'Agent',
+    tone: 'assistant',
+    summary: 'hello',
+    event: { event: 'assistant_message', content: 'hello' },
+  });
+  assert.deepEqual(projectNarsClientEvent({ event: 'tool_result', tool_name: 'narada-site.whoami', status: 'ok' }), {
+    kind: 'tool_result',
+    label: 'Tool result',
+    tone: 'tool',
+    summary: 'narada-site.whoami ok',
+    event: { event: 'tool_result', tool_name: 'narada-site.whoami', status: 'ok' },
+  });
+  assert.equal(projectNarsClientEvent({ event: 'error', message: 'bad' }).tone, 'error');
+  assert.equal(projectNarsClientEvent({ event: 'session_health', status: 'healthy', agent_id: 'narada.test', session_id: 'carrier_test' }).summary, 'healthy · narada.test · carrier_test');
 });

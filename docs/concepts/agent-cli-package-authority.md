@@ -24,11 +24,11 @@ Agent Runtime Server entrypoint:
 ```text
 package: @narada2/agent-runtime-server
 bin:     narada-agent-runtime-server
-alias:   agent-runtime-server
 ```
 
-The alias is compatibility-only. New launch/materialization code should resolve
-`narada-agent-runtime-server` from `@narada2/agent-runtime-server`.
+Launch/materialization code must resolve `narada-agent-runtime-server` from
+`@narada2/agent-runtime-server`. The unqualified `agent-runtime-server` alias is
+not an admitted package bin.
 
 Provider metadata:
 
@@ -46,15 +46,20 @@ semantics.
 
 Site-local `start-agent.mjs` files are no longer admitted compatibility shims. Agent startup authority is the packaged `@narada2/agent-start` TypeScript entrypoint, reached through the site PowerShell surface or package bin metadata.
 
-## Wrapper Contract
+## Client Wrapper Boundary
 
-`Start-AgentCliSession.ps1` is the standard Windows interactive wrapper. It may:
+`Start-AgentCliSession.ps1` is a generated Windows client utility wrapper for
+agent-cli inspection/projection commands. It is not the carrier launch path for
+`Carrier=agent-cli`; machine-addressable carrier execution goes through
+packaged `narada-agent-runtime-server` directly.
+
+The wrapper may:
 
 - resolve the target Site root and workspace root;
 - pass launch identity, session, model, provider, and control JSONL path;
 - render operator-facing launch status;
-- choose the packaged `narada-agent-runtime-server` binary for machine-addressable carrier execution;
-- attach `narada-agent-cli` only as a client/projection when the operator requests terminal interaction with an existing NARS session.
+- attach `narada-agent-cli` as a client/projection when the operator requests terminal interaction with an existing NARS session;
+- read existing NARS session state and recovery summaries through packaged agent-cli commands.
 
 It must not:
 
@@ -62,6 +67,7 @@ It must not:
 - require an API key for `codex-subscription`;
 - fork provider metadata or provider resolution;
 - bypass the package-owned carrier queue, directive sideband, or MCP fabric loading.
+- start or substitute the `Carrier=agent-cli` runtime server path;
 - resolve the runtime server from `@narada2/agent-cli` or any agent-cli compatibility shim.
 
 ## Dry-Run Invariant
@@ -74,11 +80,19 @@ sessions, or wait for operator input. Its result must include
 
 ## Verification
 
-Run the package and cutover checks after changing carrier launch code:
+Run the package and cutover checks after changing carrier launch code. For the
+registered fleet verifier, use record shards so each command remains bounded;
+increase `--record-offset` by the chosen `--record-limit` until the prior shard
+reports no more selected records. The verifier also bounds each launch dry-run
+with `--launch-timeout-ms`, defaulting to 8500 ms.
 
 ```powershell
+pnpm --filter @narada2/agent-start test
+pnpm --filter @narada2/cli run test:launcher
+pnpm --filter @narada2/cli build
 pnpm --filter @narada2/agent-cli test
 pnpm --filter @narada2/agent-cli typecheck
 pnpm --filter @narada2/agent-runtime-server test
-pwsh -NoProfile -File C:\Users\Andrey\Narada\tools\agent-start\Test-AgentCliPackageCutover.ps1
+node packages/agent-start/bin/verify-registered-site-launchers.mjs --registry C:/Users/Andrey/Narada/config/launch/agents.psd1 --start-agent C:/Users/Andrey/Narada/Start-NaradaAgent.ps1 --runtime-policy default-only --record-offset 0 --record-limit 1
+node packages/agent-start/bin/verify-registered-site-launchers.mjs --registry C:/Users/Andrey/Narada/config/launch/agents.psd1 --start-agent C:/Users/Andrey/Narada/Start-NaradaAgent.ps1 --runtime-policy agent-tui-only --record-offset 0 --record-limit 1
 ```

@@ -6,7 +6,6 @@ import { join } from 'node:path';
 import {
   buildCarrierRuntimePaths,
   createCarrierRuntimeContext,
-  normalizeCarrierRuntimeContext,
 } from '../src/carrier-runtime-context.mjs';
 
 function makeTempSiteRoot() {
@@ -28,6 +27,25 @@ test('buildCarrierRuntimePaths computes canonical paths from siteRoot and sessio
     assert.equal(paths.eventsPath, join(siteRoot, '.narada', 'crew', 'nars-sessions', 'test-session', 'events.jsonl'));
   } finally {
     cleanupTempSiteRoot(siteRoot);
+  }
+});
+
+test('createCarrierRuntimeContext leaves codex model unset without explicit model env', () => {
+  const originalCodeModel = process.env.CODEX_MODEL;
+  const originalNaradaModel = process.env.NARADA_CODEX_MODEL;
+  delete process.env.CODEX_MODEL;
+  delete process.env.NARADA_CODEX_MODEL;
+  try {
+    const ctx = createCarrierRuntimeContext({
+      identity: 'narada.test',
+      session: 'test-session',
+    });
+    assert.equal(ctx.providerSettings.model, null);
+  } finally {
+    if (originalCodeModel !== undefined) process.env.CODEX_MODEL = originalCodeModel;
+    else delete process.env.CODEX_MODEL;
+    if (originalNaradaModel !== undefined) process.env.NARADA_CODEX_MODEL = originalNaradaModel;
+    else delete process.env.NARADA_CODEX_MODEL;
   }
 });
 
@@ -107,7 +125,7 @@ test('createCarrierRuntimeContext uses provided explicit paths when both session
   assert.equal(ctx.naradaDir, null);
 });
 
-test('createCarrierRuntimeContext uses env fallback for siteRoot when omitted', () => {
+test('createCarrierRuntimeContext uses env default for siteRoot when omitted', () => {
   const original = process.env.NARADA_SITE_ROOT;
   process.env.NARADA_SITE_ROOT = '/tmp/narada-env-root';
   try {
@@ -122,42 +140,3 @@ test('createCarrierRuntimeContext uses env fallback for siteRoot when omitted', 
   }
 });
 
-test('normalizeCarrierRuntimeContext converts legacy flat config to context', () => {
-  const siteRoot = makeTempSiteRoot();
-  try {
-    const legacy = {
-      identity: 'narada.test',
-      session: 'test-session',
-      siteRoot,
-      intelligenceProvider: 'openai',
-      narsDelegatedAuthorityHandoff: { authority_ref: 'test' },
-      sessionSettings: { model: 'gpt-4', thinking: 'high', stream: false, goal: 'test-goal' },
-      transcriptDisplaySettings: { toolOutputs: false, observerMuted: true },
-      operationHeartbeatDirectiveEnabled: true,
-      operationHeartbeatDirectiveIntervalMs: 30000,
-      operationHeartbeatDirectiveInitialDelayMs: 5000,
-      healthUrl: 'http://127.0.0.1:9000/health',
-      eventStreamUrl: 'ws://127.0.0.1:9001/events',
-    };
-    const ctx = normalizeCarrierRuntimeContext(legacy);
-    assert.equal(ctx.identity, 'narada.test');
-    assert.equal(ctx.session, 'test-session');
-    assert.equal(ctx.providerSettings.model, 'gpt-4');
-    assert.equal(ctx.displaySettings.toolOutputs, false);
-    assert.equal(ctx.operationHeartbeatDirectiveIntervalMs, 30000);
-  } finally {
-    cleanupTempSiteRoot(siteRoot);
-  }
-});
-
-test('normalizeCarrierRuntimeContext passes through already-shaped context', () => {
-  const shaped = createCarrierRuntimeContext({
-    identity: 'narada.test',
-    session: 'test-session',
-    siteRoot: '/tmp/shaped',
-  });
-  const normalized = normalizeCarrierRuntimeContext(shaped);
-  assert.equal(normalized.identity, 'narada.test');
-  assert.equal(normalized.session, 'test-session');
-  assert.equal(normalized.siteRoot, '/tmp/shaped');
-});

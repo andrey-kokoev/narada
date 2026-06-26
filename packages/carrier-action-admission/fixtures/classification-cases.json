@@ -6,10 +6,10 @@
       "tool_name": "agent_context_startup_sequence",
       "arguments": {},
       "expected_decision": "read_only_admitted",
-      "expected_reason": "closed_name_fallback_read_only_tool"
+      "expected_reason": "closed_name_pattern_read_only_tool"
     },
     {
-      "name": "legacy_startup_alias_refused",
+      "name": "startup_alias_refused",
       "tool_name": "startup_sequence",
       "arguments": {},
       "expected_decision": "refused",
@@ -41,7 +41,7 @@
       "expected_access": "ok"
     },
     {
-      "name": "legacy_startup_alias_hidden",
+      "name": "startup_alias_hidden",
       "allowed_tools": ["agent_context_startup_sequence"],
       "tool_name": "startup_sequence",
       "expected_access": "mcp_tool_not_visible"

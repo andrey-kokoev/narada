@@ -225,6 +225,78 @@ def wav_frames(path, sample_rate, frame_ms):
         return frames, rate
 
 
+def input_device_descriptor(sd, device_index):
+    devices = sd.query_devices()
+    hostapis = sd.query_hostapis()
+    if device_index is None:
+        return "default_microphone"
+    device = devices[int(device_index)]
+    hostapi = hostapis[int(device.get("hostapi", 0))]
+    return f"[{int(device_index)}] {device.get('name')}, {hostapi.get('name')}"
+
+
+def input_device_candidates(sd, requested_device):
+    devices = sd.query_devices()
+    hostapis = sd.query_hostapis()
+
+    def is_input(index):
+        return int(devices[index].get("max_input_channels", 0)) > 0
+
+    def descriptor(index):
+        device = devices[index]
+        hostapi = hostapis[int(device.get("hostapi", 0))]
+        return {
+            "index": index,
+            "name": str(device.get("name") or ""),
+            "hostapi": str(hostapi.get("name") or ""),
+            "default_sample_rate": int(float(device.get("default_samplerate", 0))),
+        }
+
+    requested = str(requested_device or "").strip()
+    if requested and requested.lower() != "auto":
+        if requested.lstrip("-").isdigit():
+            index = int(requested)
+            if index < 0 or index >= len(devices) or not is_input(index):
+                raise RuntimeError(f"Requested input device is not available: {requested}")
+            return [descriptor(index)]
+        matches = [descriptor(index) for index in range(len(devices)) if is_input(index) and requested.lower() in str(devices[index].get("name") or "").lower()]
+        if not matches:
+            raise RuntimeError(f"Requested input device not found: {requested}")
+        return matches
+
+    candidates = [descriptor(index) for index in range(len(devices)) if is_input(index)]
+
+    def rank(candidate):
+        name = candidate["name"].lower()
+        hostapi = candidate["hostapi"].lower()
+        if "remote audio" in name and "directsound" in hostapi:
+            return (0, candidate["index"])
+        if "remote audio" in name and "mme" in hostapi:
+            return (1, candidate["index"])
+        if "remote audio" in name and "wasapi" in hostapi:
+            return (2, candidate["index"])
+        if "remote audio" in name:
+            return (3, candidate["index"])
+        if "primary sound capture" in name or "sound mapper" in name:
+            return (4, candidate["index"])
+        return (5, candidate["index"])
+
+    return sorted(candidates, key=rank)
+
+
+def sample_rate_candidates(requested_rate, device_default_rate):
+    candidates = [device_default_rate, requested_rate, 48000, 44100, 16000]
+    result = []
+    for rate in candidates:
+        try:
+            value = int(float(rate))
+        except Exception:
+            continue
+        if value > 0 and value not in result:
+            result.append(value)
+    return result
+
+
 def live_frames(args):
     try:
         import sounddevice as sd  # type: ignore
@@ -235,40 +307,55 @@ def live_frames(args):
             "Run the synthetic self-test path until the live audio dependency is installed."
         ) from exc
 
-    frame_samples = max(1, int(args.sample_rate * args.frame_ms / 1000))
-    collected = []
     total_frames = max(1, int(args.duration_seconds * 1000 / args.frame_ms))
+    attempts = []
+    candidates = input_device_candidates(sd, args.device)
 
-    def callback(indata, frame_count, time_info, status):
-        if status:
-            pass
-        mono = indata[:, 0] if len(indata.shape) > 1 else indata
-        pcm = b"".join(struct.pack("<h", float_to_int16(value)) for value in mono)
-        collected.append({"rms": float(np.sqrt(np.mean(np.square(mono)))), "pcm16": pcm})
+    for candidate in candidates:
+        for sample_rate in sample_rate_candidates(args.sample_rate, candidate.get("default_sample_rate")):
+            frame_samples = max(1, int(sample_rate * args.frame_ms / 1000))
+            collected = []
 
-    device = args.device
-    if isinstance(device, str) and device.strip().lstrip("-").isdigit():
-        device = int(device)
+            def callback(indata, frame_count, time_info, status):
+                if status:
+                    pass
+                mono = indata[:, 0] if len(indata.shape) > 1 else indata
+                pcm = b"".join(struct.pack("<h", float_to_int16(value)) for value in mono)
+                collected.append({"rms": float(np.sqrt(np.mean(np.square(mono)))), "pcm16": pcm})
 
-    with sd.InputStream(
-        samplerate=args.sample_rate,
-        channels=1,
-        dtype="float32",
-        blocksize=frame_samples,
-        device=device,
-        callback=callback,
-    ):
-        import time
+            try:
+                with sd.InputStream(
+                    samplerate=sample_rate,
+                    channels=1,
+                    dtype="float32",
+                    blocksize=frame_samples,
+                    device=candidate["index"],
+                    callback=callback,
+                ):
+                    import time
 
-        while len(collected) < total_frames:
-            time.sleep(args.frame_ms / 1000.0)
+                    while len(collected) < total_frames:
+                        time.sleep(args.frame_ms / 1000.0)
+                capture = {
+                    "device": candidate,
+                    "sample_rate": sample_rate,
+                    "selection": "auto" if not str(args.device or "").strip() or str(args.device).strip().lower() == "auto" else "requested",
+                    "attempts": attempts,
+                }
+                frames = []
+                cursor = 0
+                for frame in collected[:total_frames]:
+                    cursor += args.frame_ms
+                    frames.append({"duration_ms": args.frame_ms, "end_ms": cursor, "rms": frame["rms"], "pcm16": frame["pcm16"]})
+                return frames, capture
+            except Exception as exc:
+                attempts.append({
+                    "device": candidate,
+                    "sample_rate": sample_rate,
+                    "reason": str(exc),
+                })
 
-    frames = []
-    cursor = 0
-    for frame in collected[:total_frames]:
-        cursor += args.frame_ms
-        frames.append({"duration_ms": args.frame_ms, "end_ms": cursor, "rms": frame["rms"], "pcm16": frame["pcm16"]})
-    return frames
+    raise RuntimeError("No usable input device/sample-rate combination found: " + json.dumps(attempts[-8:]))
 
 
 def write_selected_wav(frames, selected, sample_rate, output_path):
@@ -445,6 +532,7 @@ def main():
     source_mode = "live_microphone"
     source_device = args.device or "default_microphone"
     actual_sample_rate = args.sample_rate
+    capture_selection = None
 
     try:
         if args.self_test_synthetic:
@@ -456,7 +544,10 @@ def main():
             source_mode = "local_wav_file"
             source_device = args.input_wav
         else:
-            frames = live_frames(args)
+            frames, capture_selection = live_frames(args)
+            actual_sample_rate = int(capture_selection["sample_rate"])
+            device = capture_selection["device"]
+            source_device = f"[{device['index']}] {device['name']}, {device['hostapi']}"
     except Exception as exc:
         state_events.append(emit_state_event(runtime_root, args.pc_site_root, run_id, "blocked", reason="capture_failed", detail=str(exc)))
         failure = {
@@ -469,6 +560,7 @@ def main():
                 "mode": source_mode,
                 "device": source_device,
             },
+            "capture_selection": capture_selection,
         }
         write_json(runtime_root / "failure.json", failure)
         print(json.dumps(failure, indent=2))
@@ -488,6 +580,7 @@ def main():
                 "duration_seconds": args.duration_seconds,
                 "frame_ms": args.frame_ms,
             },
+            "capture_selection": capture_selection,
             "rms": stats,
             "suggested_thresholds": {
                 "quiet_room": max(0.001, (stats["p95"] or 0.0) * 2.0),
@@ -604,6 +697,9 @@ def main():
         "created_at": observed_at,
         "runtime_path": str(runtime_root),
         "source_mode": source_mode,
+        "source_device": source_device,
+        "source_sample_rate": actual_sample_rate,
+        "capture_selection": capture_selection,
         "speech_detected": selected is not None,
         "segment_event_id": segment_event["event_id"],
         "segment_count": len(segments),

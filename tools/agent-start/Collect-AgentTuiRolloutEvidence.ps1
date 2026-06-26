@@ -89,26 +89,26 @@ function Invoke-BoundedLaunch {
         [Parameter(Mandatory)] [string]$Root,
         [Parameter(Mandatory)] [string]$Script,
         [Parameter(Mandatory)] [string]$Agent,
-        [ValidateSet("agent-cli", "agent-tui")] [string]$Runtime
+        [ValidateSet("agent-cli", "agent-tui")] [string]$Carrier
     )
 
     Assert-PathExists -Label "launch_root" -Path $Root -PathType Container
     $scriptPath = Join-Path $Root $Script
     Assert-PathExists -Label "launcher" -Path $scriptPath
-    if ($Runtime -eq "agent-tui") {
+    if ($Carrier -eq "agent-tui") {
         Assert-PathExists -Label "vsdevcmd" -Path $VsDevCmd
     }
 
-    Write-Host "launch: $Agent ($Runtime)"
+    Write-Host "launch: $Agent ($Carrier)"
 
-    if ($Runtime -eq "agent-tui") {
+    if ($Carrier -eq "agent-tui") {
         $command = "call `"$VsDevCmd`" -arch=x64 -host_arch=x64 >nul && cd /d `"$Root`" && pwsh -NoProfile -File `"$scriptPath`" agent-start -Agent $Agent -Runtime agent-tui -Exec"
         $lines = & cmd.exe /d /s /c $command 2>&1
         $exitCode = $LASTEXITCODE
     } else {
         Push-Location -LiteralPath $Root
         try {
-            $lines = & pwsh -NoProfile -File $scriptPath agent-start -Agent $Agent -Runtime agent-cli -Exec 2>&1
+            $lines = & pwsh -NoProfile -File $scriptPath agent-start -Agent $Agent -Carrier agent-cli -Runtime narada-agent-runtime-server -Exec 2>&1
             $exitCode = $LASTEXITCODE
         } finally {
             Pop-Location
@@ -117,12 +117,12 @@ function Invoke-BoundedLaunch {
 
     $lines | ForEach-Object { Write-Host $_ }
     if ($exitCode -ne 0) {
-        throw "launch_failed: $Agent ($Runtime) exited $exitCode"
+        throw "launch_failed: $Agent ($Carrier) exited $exitCode"
     }
 
     $pathLine = $lines | Where-Object { $_ -match 'launch_result_path:\s*(.+\.json)\s*$' } | Select-Object -Last 1
     if (-not $pathLine) {
-        throw "launch_result_path_not_found: $Agent ($Runtime)"
+        throw "launch_result_path_not_found: $Agent ($Carrier)"
     }
     $path = [regex]::Match([string]$pathLine, 'launch_result_path:\s*(.+\.json)\s*$').Groups[1].Value.Trim()
     Assert-PathExists -Label "launch_result_file" -Path $path
@@ -147,27 +147,27 @@ Assert-PathExists -Label "thoughts_site_root" -Path $ThoughtsSiteRoot -PathType 
 Assert-SeedEvidence -EvidenceMap $Evidence
 
 if ($RefreshAgentCli) {
-    $Evidence["narada-andrey.agent-cli"] = Invoke-BoundedLaunch -Root $NaradaAndreyRoot -Script "narada-andrey.ps1" -Agent "narada-andrey.resident" -Runtime "agent-cli"
-    $Evidence["narada-staccato.agent-cli"] = Invoke-BoundedLaunch -Root $StaccatoRoot -Script "narada-staccato.ps1" -Agent "narada-staccato.resident" -Runtime "agent-cli"
-    $Evidence["narada-revolution.agent-cli"] = Invoke-BoundedLaunch -Root $RevolutionRoot -Script "narada-revolution.ps1" -Agent "narada-revolution.resident" -Runtime "agent-cli"
-    $Evidence["narada-timour-marketing-agent.agent-cli"] = Invoke-BoundedLaunch -Root $TimourMarketingAgentRoot -Script "narada-timour-marketing-agent.ps1" -Agent "narada-timour-marketing-agent.resident" -Runtime "agent-cli"
-    $Evidence["narada-utz.agent-cli"] = Invoke-BoundedLaunch -Root $UtzRoot -Script "narada-utz.ps1" -Agent "narada-utz.resident" -Runtime "agent-cli"
-    $Evidence["narada-sonar.agent-cli"] = Invoke-BoundedLaunch -Root $SonarRoot -Script "narada-sonar.ps1" -Agent "sonar.resident" -Runtime "agent-cli"
-    $Evidence["smart-scheduling.agent-cli"] = Invoke-BoundedLaunch -Root $SmartRoot -Script "narada-smart-scheduling.ps1" -Agent "smart-scheduling.resident" -Runtime "agent-cli"
-    $Evidence["thoughts-project.agent-cli"] = Invoke-BoundedLaunch -Root $ThoughtsRoot -Script "narada-thoughts.ps1" -Agent "thoughts-project.resident" -Runtime "agent-cli"
+    $Evidence["narada-andrey.agent-cli"] = Invoke-BoundedLaunch -Root $NaradaAndreyRoot -Script "narada-andrey.ps1" -Agent "narada-andrey.resident" -Carrier "agent-cli"
+    $Evidence["narada-staccato.agent-cli"] = Invoke-BoundedLaunch -Root $StaccatoRoot -Script "narada-staccato.ps1" -Agent "narada-staccato.resident" -Carrier "agent-cli"
+    $Evidence["narada-revolution.agent-cli"] = Invoke-BoundedLaunch -Root $RevolutionRoot -Script "narada-revolution.ps1" -Agent "narada-revolution.resident" -Carrier "agent-cli"
+    $Evidence["narada-timour-marketing-agent.agent-cli"] = Invoke-BoundedLaunch -Root $TimourMarketingAgentRoot -Script "narada-timour-marketing-agent.ps1" -Agent "narada-timour-marketing-agent.resident" -Carrier "agent-cli"
+    $Evidence["narada-utz.agent-cli"] = Invoke-BoundedLaunch -Root $UtzRoot -Script "narada-utz.ps1" -Agent "narada-utz.resident" -Carrier "agent-cli"
+    $Evidence["narada-sonar.agent-cli"] = Invoke-BoundedLaunch -Root $SonarRoot -Script "narada-sonar.ps1" -Agent "sonar.resident" -Carrier "agent-cli"
+    $Evidence["smart-scheduling.agent-cli"] = Invoke-BoundedLaunch -Root $SmartRoot -Script "narada-smart-scheduling.ps1" -Agent "smart-scheduling.resident" -Carrier "agent-cli"
+    $Evidence["thoughts-project.agent-cli"] = Invoke-BoundedLaunch -Root $ThoughtsRoot -Script "narada-thoughts.ps1" -Agent "thoughts-project.resident" -Carrier "agent-cli"
 }
 
 if ($RefreshNaradaAndreyTui) {
-    $Evidence["narada-andrey.agent-tui"] = Invoke-BoundedLaunch -Root $NaradaAndreyRoot -Script "narada-andrey.ps1" -Agent "narada-andrey.resident" -Runtime "agent-tui"
+    $Evidence["narada-andrey.agent-tui"] = Invoke-BoundedLaunch -Root $NaradaAndreyRoot -Script "narada-andrey.ps1" -Agent "narada-andrey.resident" -Carrier "agent-tui"
 }
 
-$Evidence["narada-sonar.agent-tui"] = Invoke-BoundedLaunch -Root $SonarRoot -Script "narada-sonar.ps1" -Agent "sonar.resident" -Runtime "agent-tui"
-$Evidence["smart-scheduling.agent-tui"] = Invoke-BoundedLaunch -Root $SmartRoot -Script "narada-smart-scheduling.ps1" -Agent "smart-scheduling.resident" -Runtime "agent-tui"
-$Evidence["narada-staccato.agent-tui"] = Invoke-BoundedLaunch -Root $StaccatoRoot -Script "narada-staccato.ps1" -Agent "narada-staccato.resident" -Runtime "agent-tui"
-$Evidence["narada-revolution.agent-tui"] = Invoke-BoundedLaunch -Root $RevolutionRoot -Script "narada-revolution.ps1" -Agent "narada-revolution.resident" -Runtime "agent-tui"
-$Evidence["narada-timour-marketing-agent.agent-tui"] = Invoke-BoundedLaunch -Root $TimourMarketingAgentRoot -Script "narada-timour-marketing-agent.ps1" -Agent "narada-timour-marketing-agent.resident" -Runtime "agent-tui"
-$Evidence["narada-utz.agent-tui"] = Invoke-BoundedLaunch -Root $UtzRoot -Script "narada-utz.ps1" -Agent "narada-utz.resident" -Runtime "agent-tui"
-$Evidence["thoughts-project.agent-tui"] = Invoke-BoundedLaunch -Root $ThoughtsRoot -Script "narada-thoughts.ps1" -Agent "thoughts-project.resident" -Runtime "agent-tui"
+$Evidence["narada-sonar.agent-tui"] = Invoke-BoundedLaunch -Root $SonarRoot -Script "narada-sonar.ps1" -Agent "sonar.resident" -Carrier "agent-tui"
+$Evidence["smart-scheduling.agent-tui"] = Invoke-BoundedLaunch -Root $SmartRoot -Script "narada-smart-scheduling.ps1" -Agent "smart-scheduling.resident" -Carrier "agent-tui"
+$Evidence["narada-staccato.agent-tui"] = Invoke-BoundedLaunch -Root $StaccatoRoot -Script "narada-staccato.ps1" -Agent "narada-staccato.resident" -Carrier "agent-tui"
+$Evidence["narada-revolution.agent-tui"] = Invoke-BoundedLaunch -Root $RevolutionRoot -Script "narada-revolution.ps1" -Agent "narada-revolution.resident" -Carrier "agent-tui"
+$Evidence["narada-timour-marketing-agent.agent-tui"] = Invoke-BoundedLaunch -Root $TimourMarketingAgentRoot -Script "narada-timour-marketing-agent.ps1" -Agent "narada-timour-marketing-agent.resident" -Carrier "agent-tui"
+$Evidence["narada-utz.agent-tui"] = Invoke-BoundedLaunch -Root $UtzRoot -Script "narada-utz.ps1" -Agent "narada-utz.resident" -Carrier "agent-tui"
+$Evidence["thoughts-project.agent-tui"] = Invoke-BoundedLaunch -Root $ThoughtsRoot -Script "narada-thoughts.ps1" -Agent "thoughts-project.resident" -Carrier "agent-tui"
 
 if (-not $SkipAcceptanceReport) {
     Push-Location -LiteralPath $NaradaRoot

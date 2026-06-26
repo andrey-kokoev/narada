@@ -16,8 +16,7 @@
     "runtime_dependency_owner": "runtime dependencies are constructed by @narada2/carrier-runtime/runtime-dependencies; terminal projection is owned by @narada2/carrier-terminal-projection"
   },
   "bin": {
-    "narada-agent-runtime-server": "./bin/narada-agent-runtime-server.mjs",
-    "agent-runtime-server": "./bin/narada-agent-runtime-server.mjs"
+    "narada-agent-runtime-server": "./bin/narada-agent-runtime-server.mjs"
   },
   "exports": {
     ".": "./src/server-wrapper.mjs",

@@ -1,7 +1,7 @@
 # Show-OperatorSurfaceBindDialog.ps1
 # Canonical wrapper/alias for the focused-window identity binding selector.
 # This script delegates to Show-FocusedWindowIdentityBindingDialog.ps1 to
-# prevent "file not found" errors for agents referencing the legacy short name.
+# preserve the documented bind-dialog command path while the focused selector owns implementation.
 # See Task 215: CAPA: documented operator-surface bind selector path was stale
 
 param(

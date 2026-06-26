@@ -1,3 +1,4 @@
+import { projectNarsClientEvent } from '@narada2/nars-client-projection-contract';
 import { createTerminalStyle, formatTerminalMessageBlockLines } from './terminal-style.mjs';
 import {
   createMarkdownStreamState,
@@ -158,6 +159,20 @@ function routeLine({ label, body, labelStyle = (value) => value, bodyStyle = (va
   return `${labelStyle(label)}${style.muted(':')} ${bodyStyle(String(body ?? ''))}${timestampSuffix(state, style)}`;
 }
 
+function labelStyleForProjectionTone(tone, style) {
+  if (tone === 'assistant') return style.agent;
+  if (tone === 'operator') return style.operator;
+  if (tone === 'tool') return style.tool;
+  if (tone === 'error') return style.error;
+  return style.label;
+}
+
+function bodyStyleForProjectionTone(tone, style) {
+  if (tone === 'error') return style.error;
+  if (tone === 'tool') return style.muted;
+  return (value) => value;
+}
+
 function routedBodyLines({ label, body, labelStyle = (value) => value, bodyStyle = (value) => value, state, style }) {
   const prefix = `${labelStyle(label)}${style.muted(':')} `;
   const bodyText = String(body ?? '');
@@ -249,6 +264,8 @@ function formatStartupTable(event, style) {
 export function renderOperatorEvent(event, state = {}) {
   if (!event || typeof event !== 'object') return [];
   const style = state.style ?? createEventRenderingStyle({ enabled: false });
+  const projectedEvent = projectNarsClientEvent(event);
+  event = projectedEvent.event;
   if (!state.streamedTurns) state.streamedTurns = new Set();
   if (!state.streamedContentByTurn) state.streamedContentByTurn = new Map();
   if (!state.streamMarkdownStateByTurn) state.streamMarkdownStateByTurn = new Map();
@@ -364,6 +381,16 @@ export function renderOperatorEvent(event, state = {}) {
     case 'session_closed':
       return withStreamBoundary(state, [routeLine({ label: 'agent-cli', body: 'session closed', labelStyle: style.label, state, style })]);
     default:
+      if (projectedEvent.summary || projectedEvent.label !== projectedEvent.kind) {
+        return withStreamBoundary(state, [routeLine({
+          label: projectedEvent.label,
+          body: projectedEvent.summary || projectedEvent.kind,
+          labelStyle: labelStyleForProjectionTone(projectedEvent.tone, style),
+          bodyStyle: bodyStyleForProjectionTone(projectedEvent.tone, style),
+          state,
+          style,
+        })]);
+      }
       return withStreamBoundary(state, []);
   }
 }

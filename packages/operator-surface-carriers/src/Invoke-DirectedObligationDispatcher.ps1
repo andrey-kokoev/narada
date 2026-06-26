@@ -109,7 +109,7 @@ if (-not $state) {
 $due = @($view.due_obligations | Sort-Object @{ Expression = { Get-ObligationPriority ([string]$_.kind) }; Ascending = $true }, updated_at)
 $selected = if ($due.Count -gt 0) { $due[0] } else { $null }
 $sent = $null
-$fallback = $null
+$deliveryIssue = $null
 $suppressed = $false
 
 if ($selected) {
@@ -137,7 +137,7 @@ if ($selected) {
         if ($BridgeResultFixturePath) { $busArgs.BridgeResultFixturePath = $BridgeResultFixturePath }
         $delivery = (& $bus @busArgs) | ConvertFrom-NaradaJson
         $sent = $delivery
-        if ([string]$delivery.delivery_state -ne "delivered") { $fallback = "osm_delivery_not_delivered" }
+        if ([string]$delivery.delivery_state -ne "delivered") { $deliveryIssue = "osm_delivery_not_delivered" }
         $record = [ordered]@{
             fingerprint = $fingerprint
             obligation_id = [string]$selected.obligation_id
@@ -153,7 +153,7 @@ if ($selected) {
         if (-not $replaced) { $items.Add([pscustomobject]$record) }
         $state.items = @($items.ToArray())
     } else {
-        $fallback = "due_without_emit_osm"
+        $deliveryIssue = "due_without_emit_osm"
     }
 }
 
@@ -168,7 +168,7 @@ if (-not $NoStateWrite) {
         obligation_source_path = $view.source_path
         due_count = $due.Count
         next_obligation = $selected
-        fallback = $fallback
+        delivery_issue = $deliveryIssue
         suppressed = $suppressed
         delivery = $sent
         authority = [ordered]@{
@@ -188,7 +188,7 @@ $result = [pscustomobject][ordered]@{
     due_count = $due.Count
     emitted = [bool]$sent
     delivery = $sent
-    fallback_fact = $fallback
+    delivery_issue = $deliveryIssue
     suppressed = $suppressed
     state_path = $StatePath
     surface_facts_path = $factsPath

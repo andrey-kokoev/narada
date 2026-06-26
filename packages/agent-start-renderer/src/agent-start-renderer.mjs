@@ -83,10 +83,6 @@ export function formatAgentStartResult(result, options = {}) {
   return `${lines.join('\n')}\n`;
 }
 
-function runtimeDisplayName(runtimeName) {
-  return runtimeName === 'agent-cli' ? 'agent-runtime-server' : runtimeName;
-}
-
 export function formatAgentStartWaitPrompt(agentId, runtimeName) {
-  return `Press Enter to start ${runtimeDisplayName(runtimeName)} for ${agentId}...`;
+  return `Press Enter to start ${runtimeName} for ${agentId}...`;
 }

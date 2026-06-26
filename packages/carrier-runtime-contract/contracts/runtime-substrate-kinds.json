@@ -3,7 +3,7 @@
   "admitted_runtime_substrate_kinds": [
     "kimi",
     "codex",
-    "agent-cli",
+    "narada-agent-runtime-server",
     "pi",
     "claude-code",
     "agent-tui",

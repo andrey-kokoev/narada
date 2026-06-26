@@ -30,7 +30,7 @@ test('provider resolution module preserves default provider source and output fi
   assert.equal(resolution.resolution_states.at(-1).state, 'launch_ready');
 });
 
-test('provider resolution module refuses provider selection for non-agent-cli runtimes', () => {
+test('provider resolution module refuses provider selection for non-agent-cli carriers', () => {
   const refusal = providerResolution.resolveIntelligenceProviderLaunch('codex-subscription', 'codex', { source_field: 'cli_argument' }, {
     metadataByProvider,
     admittedProviders,
@@ -39,7 +39,7 @@ test('provider resolution module refuses provider selection for non-agent-cli ru
   });
   assert.equal(refusal.status, 'refused');
   assert.equal(refusal.reason_code, 'intelligence_provider_runtime_unsupported');
-  assert.equal(refusal.runtime_substrate_kind, 'codex');
+  assert.equal(refusal.carrier_kind, 'codex');
 });
 
 test('credential projection redacts API secrets while projecting required env', () => {

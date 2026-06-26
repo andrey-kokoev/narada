@@ -1,5 +1,6 @@
 import { mkdir, rm, writeFile } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   carrierControlPathCommand,
@@ -20,6 +21,9 @@ import {
 import { getSchedulerSiteDaemonStatus } from '../../src/lib/launcher-runtime.js';
 import type { CommandContext } from '../../src/lib/command-wrapper.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const naradaProperRoot = resolve(__dirname, '..', '..', '..', '..', '..');
 
 function createMockContext(): CommandContext {
   const logger = {
@@ -57,8 +61,9 @@ async function writeLaunchResult(siteRoot: string, name: string, identity: strin
     status: 'materialized',
     agent_start_event: name,
     identity,
-    runtime: 'agent-cli',
-    runtime_substrate_kind: 'agent-cli',
+    carrier_kind: 'agent-cli',
+    runtime: 'narada-agent-runtime-server',
+    runtime_substrate_kind: 'narada-agent-runtime-server',
     target_site_root: siteRoot,
     required_environment: {
       NARADA_SITE_ROOT: siteRoot,
@@ -68,10 +73,9 @@ async function writeLaunchResult(siteRoot: string, name: string, identity: strin
       control_path: controlPath,
       session_path: join(siteRoot, '.narada', 'crew', 'nars-sessions', 'carrier_test', 'session.jsonl'),
     },
-    agent_cli_launch: {
+    nars_launch: {
       control_path: controlPath,
       session_path: join(siteRoot, '.narada', 'crew', 'nars-sessions', 'carrier_test', 'session.jsonl'),
-      compatibility_alias_for: 'nars_launch',
     },
     carrier_session: {
       carrier_session_id: 'carrier_test',
@@ -186,19 +190,20 @@ describe('carrier launcher CLI commands', () => {
     expect((install.result as { elevation_packet: { task_name: string } }).elevation_packet.task_name).toBe('Narada-Test-Daemon');
   });
 
-  it('reports unavailable Site command surfaces without fake live mutation', async () => {
+  it('uses packaged agent-start for carrier start without fake live mutation', async () => {
     const siteRoot = await tempSite();
 
     const start = await carrierStartCommand({
       siteRoot,
       agent: 'sonar.resident',
-      runtime: 'agent-cli',
+      carrier: 'agent-cli',
       format: 'json',
     }, createMockContext());
 
-    expect(start.exitCode).toBe(ExitCode.INVALID_CONFIG);
+    expect(start.exitCode).toBe(ExitCode.GENERAL_ERROR);
     expect((start.result as { mutation_performed: boolean }).mutation_performed).toBe(false);
-    expect((start.result as { status: string }).status).toBe('site_launcher_unavailable');
+    expect((start.result as { status: string }).status).toBe('not_available');
+    expect((start.result as { agent_start: { command: string[] } }).agent_start.command).toContain('--carrier');
 
     const siteLoop = await siteLoopStatusCommand({
       siteRoot,
@@ -215,45 +220,56 @@ describe('carrier launcher CLI commands', () => {
 
     await expect(carrierStartCommand({
       siteRoot,
-      runtime: 'agent-cli',
+      carrier: 'agent-cli',
       dryRun: true,
       format: 'json',
     }, createMockContext())).rejects.toThrow(/agent_required/);
   });
 
   it('passes workspace root and intelligence provider through canonical agent-start', async () => {
-    const workspaceRoot = resolve(process.cwd(), '..', '..', '..');
+    const workspaceRoot = naradaProperRoot;
     const siteRoot = workspaceRoot;
     const agentStartDir = join(workspaceRoot, 'packages', 'agent-start', 'src');
+    const agentStartPath = join(agentStartDir, 'narada-agent-start.ts');
     await mkdir(agentStartDir, { recursive: true });
-    await writeFile(join(agentStartDir, 'narada-agent-start.ts'), '', 'utf8');
+    await writeFile(agentStartPath, '', 'utf8');
+    const previousNaradaProperRoot = process.env.NARADA_PROPER_ROOT;
+    process.env.NARADA_PROPER_ROOT = naradaProperRoot;
 
-    const start = await carrierStartCommand({
-      siteRoot,
-      workspaceRoot,
-      agent: 'narada.architect',
-      runtime: 'agent-cli',
-      intelligenceProvider: 'codex-subscription',
-      dryRun: true,
-      format: 'json',
-    }, createMockContext());
+    let start;
+    try {
+      start = await carrierStartCommand({
+        siteRoot,
+        workspaceRoot,
+        agent: 'narada.architect',
+        carrier: 'agent-cli',
+        intelligenceProvider: 'codex-subscription',
+        dryRun: true,
+        format: 'json',
+      }, createMockContext());
+    } finally {
+      if (previousNaradaProperRoot === undefined) delete process.env.NARADA_PROPER_ROOT;
+      else process.env.NARADA_PROPER_ROOT = previousNaradaProperRoot;
+    }
 
     expect(start.exitCode, JSON.stringify(start.result)).toBe(ExitCode.SUCCESS);
     expect((start.result as { workspace_root: string }).workspace_root).toBe(workspaceRoot);
     expect((start.result as { intelligence_provider: string }).intelligence_provider).toBe('codex-subscription');
-    const agentStart = (start.result as { agent_start: { parsed_stdout: { cwd: string; required_environment: Record<string, string> } } }).agent_start;
-    expect(agentStart.parsed_stdout.cwd).toBe(workspaceRoot);
-    expect(agentStart.parsed_stdout.required_environment.NARADA_WORKSPACE_ROOT).toBe(workspaceRoot);
-    expect(agentStart.parsed_stdout.required_environment.NARADA_INTELLIGENCE_PROVIDER).toBe('codex-subscription');
+    const agentStart = (start.result as { agent_start: { command: string[]; result_handoff: string; parsed_result: unknown } }).agent_start;
+    expect(agentStart.command).toContain(agentStartPath);
+    expect(agentStart.command).toContain('--json-output-file');
+    expect(agentStart.command).toContain('--intelligence-provider');
+    expect(agentStart.command).toContain('codex-subscription');
+    expect(agentStart.result_handoff).toBe('json_output_file');
   });
 
-  it('routes non-agent-cli runtime requests through canonical agent-start instead of the Site hardcoded launcher', async () => {
+  it('routes non-agent-cli carrier requests through canonical agent-start instead of the Site hardcoded launcher', async () => {
     const siteRoot = resolve(process.cwd(), '..', '..', 'mcp-fabric', 'test', 'fixtures', 'site-valid');
 
     const start = await carrierStartCommand({
       siteRoot,
       agent: 'sonar.resident',
-      runtime: 'codex',
+      carrier: 'codex',
       dryRun: true,
       format: 'json',
     }, createMockContext());
@@ -272,23 +288,23 @@ describe('carrier launcher CLI commands', () => {
     const reload = await carrierReloadCommand({
       siteRoot,
       agent: 'sonar.resident',
-      runtime: 'agent-cli',
+      carrier: 'agent-cli',
       format: 'json',
     }, createMockContext());
 
     expect([ExitCode.GENERAL_ERROR, ExitCode.INVALID_CONFIG]).toContain(reload.exitCode);
     expect((reload.result as { mutation_performed: boolean }).mutation_performed).toBe(false);
     expect((reload.result as { strategy: string }).strategy).toBe('restart');
-    expect((reload.result as { restart: { status: string } }).restart.status).toBe('site_launcher_unavailable');
+    expect((reload.result as { restart: { status: string } }).restart.status).toBe('carrier_operation_unavailable');
   });
 
-  it('keeps drain commands bounded when the Site launcher is unavailable', async () => {
+  it('reports drain as canonical lifecycle-unavailable evidence without Site CLI mediation', async () => {
     const siteRoot = await tempSite();
 
     const carrierDrain = await carrierDrainCommand({
       siteRoot,
       agent: 'sonar.resident',
-      runtime: 'agent-cli',
+      carrier: 'agent-cli',
       format: 'json',
     }, createMockContext());
     const loopDrain = await siteLoopDrainCommand({
@@ -296,9 +312,10 @@ describe('carrier launcher CLI commands', () => {
       format: 'json',
     }, createMockContext());
 
-    expect(carrierDrain.exitCode).toBe(ExitCode.GENERAL_ERROR);
+    expect(carrierDrain.exitCode).toBe(ExitCode.INVALID_CONFIG);
     expect((carrierDrain.result as { mutation_performed: boolean }).mutation_performed).toBe(false);
-    expect((carrierDrain.result as { site_command: { status: string } }).site_command.status).toBe('not_available');
+    expect((carrierDrain.result as { status: string }).status).toBe('carrier_operation_unavailable');
+    expect((carrierDrain.result as { site_command?: unknown }).site_command).toBeUndefined();
     expect(loopDrain.exitCode).toBe(ExitCode.GENERAL_ERROR);
     expect((loopDrain.result as { mutation_performed: boolean }).mutation_performed).toBe(false);
   });

@@ -17,7 +17,8 @@ export function registerLauncherCommands(program: Command): void {
     .option('--site <site...>', 'Site filter')
     .option('--config-path <path...>', 'One or more launch registry files')
     .option('--registry-path <path>', 'Launch registry path')
-    .option('--runtime <runtime>', 'Override runtime substrate')
+    .option('--carrier <carrier>', 'Override operator carrier')
+    .option('--runtime <runtime>', 'Override runtime implementation')
     .option('--intelligence-provider <provider>', 'agent-cli intelligence provider')
     .option('--enable-native-shell', 'Break-glass: permit native shell carrier posture where supported', false)
     .option('--no-wait-for-enter-before-exec', 'Do not add the wait gate before exec handoff')
@@ -35,6 +36,7 @@ export function registerLauncherCommands(program: Command): void {
         site: opts.site as string[] | undefined,
         configPath: opts.configPath as string[] | undefined,
         registryPath: opts.registryPath as string | undefined,
+        carrier: opts.carrier as string | undefined,
         runtime: opts.runtime as string | undefined,
         intelligenceProvider: opts.intelligenceProvider as string | undefined,
         enableNativeShell: opts.enableNativeShell as boolean | undefined,

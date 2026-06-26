@@ -10,7 +10,6 @@ export const SESSION_EVENT_FIXTURE_MANIFEST_SCHEMA = 'narada.carrier.session_eve
 export const TOOL_EFFECT_ADMISSION_CASES_SCHEMA = 'narada.carrier.tool_effect_admission_cases.v1';
 export const NARS_LIFECYCLE_HOOK_SCHEMA = 'narada.nars.lifecycle_hook.v1';
 export const CANONICAL_STARTUP_COMMAND_NAME = 'agent_context_startup_sequence';
-export const LEGACY_STARTUP_COMMAND_NAME = 'startup_sequence';
 
 export const SOURCE_KINDS = Object.freeze(['operator', 'system', 'agent', 'external']);
 export const OBSERVER_VISIBILITIES = Object.freeze(['record_only', 'operator_visible', 'agent_visible', 'conversation_visible']);
@@ -68,9 +67,6 @@ export const TRANSPORTS = Object.freeze([
   'carrier_server_api',
   'test_harness',
 ]);
-export const LEGACY_TRANSPORT_ALIASES = Object.freeze({
-  agent_cli_server_api: 'carrier_server_api',
-});
 export const DELIVERY_MODES = Object.freeze(['admit_for_current_turn', 'admit_after_active_turn']);
 export const HOLD_CONDITIONS = Object.freeze(['composer_clear_required']);
 export const TURN_STATES = Object.freeze(['idle', 'active', 'interrupt_requested', 'completed', 'interrupted', 'failed']);
@@ -284,12 +280,9 @@ export const CARRIER_CONTROL_METHODS = Object.freeze([
   'observers.status',
   'observer.mute',
   'observer.unmute',
-  // Compatibility alias for older projected clients. New clients must use carrier.command.execute.
-  'agent-cli.command',
 ]);
 
 export const NARS_COMMAND_METHOD = 'carrier.command.execute';
-export const NARS_COMMAND_COMPATIBILITY_METHODS = Object.freeze(['agent-cli.command']);
 
 const RFC3339_UTC_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 const ID_PREFIXES = Object.freeze({
@@ -389,8 +382,8 @@ export function classifyCarrierControlRequest(request = {}) {
   if (method === 'observers.status') return { ...base, method_kind: 'observers_status' };
   if (method === 'observer.mute') return { ...base, method_kind: 'observer_set_muted', observer_action: 'mute' };
   if (method === 'observer.unmute') return { ...base, method_kind: 'observer_set_muted', observer_action: 'unmute' };
-  if (method === NARS_COMMAND_METHOD || NARS_COMMAND_COMPATIBILITY_METHODS.includes(method)) {
-    return { ...base, method_kind: 'carrier_command_execute', compatibility_alias: method !== NARS_COMMAND_METHOD ? method : null };
+  if (method === NARS_COMMAND_METHOD) {
+    return { ...base, method_kind: 'carrier_command_execute' };
   }
   return {
     ...base,
@@ -441,8 +434,7 @@ export function createPayloadId() {
 }
 
 export function normalizeTransport(transport) {
-  if (typeof transport !== 'string') return transport;
-  return LEGACY_TRANSPORT_ALIASES[transport] ?? transport;
+  return transport;
 }
 
 export function isStartupNudge(content) {
@@ -454,7 +446,7 @@ export function startupCommandFromLaunchPacket(launchPacket = {}) {
   const rawName = typeof command?.name === 'string' && command.name.length > 0
     ? command.name
     : CANONICAL_STARTUP_COMMAND_NAME;
-  const name = rawName === 'startup_sequence' ? CANONICAL_STARTUP_COMMAND_NAME : rawName;
+  const name = rawName;
   const args = isObject(command?.arguments) ? command.arguments : {};
   return { name, arguments: args };
 }
@@ -1073,14 +1065,13 @@ export function classifyCarrierInputHold(input = {}, state = {}) {
   const directiveProvenance = isObject(metadata.directive_provenance) ? metadata.directive_provenance : {};
   const isSystemDirective = input.source_kind === 'system'
     || input.source === 'system_directive'
-    || metadata.legacy_source === 'system_directive'
     || directiveProvenance.kind === 'system_directive';
   const inputEventId = input.event_id ?? null;
   const directiveId = input.directive_id ?? null;
   const occurredAt = state.occurredAt ?? nowIso();
   const shouldHold = isSystemDirective
     && Boolean(state.composerHasDraft)
-    && (input.hold_condition === 'composer_clear_required' || input.source === 'system_directive' || metadata.legacy_source === 'system_directive');
+    && (input.hold_condition === 'composer_clear_required' || input.source === 'system_directive');
   if (state.release === true) {
     if (!isSystemDirective || state.alreadyHeld !== true) {
       return {
@@ -1179,29 +1170,6 @@ export function normalizeInputEvent(event) {
   return normalized;
 }
 
-export function normalizeLegacyInputRecord(record, defaults = {}) {
-  if (!isObject(record)) throw new Error('invalid_legacy_input_record:not_object');
-  const source = record.source ?? defaults.source ?? 'manual_operator';
-  let source_kind = defaults.source_kind ?? 'operator';
-  let delivery_mode = defaults.delivery_mode ?? 'admit_for_current_turn';
-  if (source === 'system_directive') source_kind = 'system';
-  if (source === 'operator_directive') source_kind = 'operator';
-  if (source === 'operator_steering') delivery_mode = 'admit_after_active_turn';
-  return createInputEvent({
-    event_id: record.event_id ?? createInputEventId(),
-    source_kind,
-    source_id: record.source_id ?? defaults.source_id ?? (source_kind === 'system' ? 'system' : 'operator'),
-    transport: record.transport ?? defaults.transport ?? 'carrier_server_api',
-    delivery_mode,
-    hold_condition: record.hold_condition ?? null,
-    content: record.content,
-    created_at: record.created_at ?? nowIso(),
-    authority_ref: record.authority_ref ?? null,
-    directive_id: record.directive_id ?? null,
-    metadata: { ...(record.metadata ?? {}), legacy_source: source },
-  });
-}
-
 export function classifyInputAdmission(event, state = {}) {
   const normalized = normalizeInputEvent(event);
   const activeTurn = Boolean(state.activeTurn);
@@ -1267,19 +1235,16 @@ export function normalizeControlInputRecord(record, defaults = {}) {
     });
   }
   if (record.input && isObject(record.input)) {
+    if (record.input.schema !== INPUT_EVENT_SCHEMA) {
+      throw new Error('invalid_carrier_control_input_record:input.invalid_schema');
+    }
     return createControlInputRecord({
       control_event_id: record.control_event_id ?? record.event_id ?? createControlEventId(),
       written_at: record.written_at ?? record.created_at ?? nowIso(),
-      input: record.input.schema === INPUT_EVENT_SCHEMA
-        ? normalizeInputEvent(record.input)
-        : normalizeLegacyInputRecord(record.input, { transport: 'control_jsonl', ...defaults }),
+      input: normalizeInputEvent(record.input),
     });
   }
-  return createControlInputRecord({
-    control_event_id: record.control_event_id ?? record.event_id ?? createControlEventId(),
-    written_at: record.written_at ?? record.created_at ?? nowIso(),
-    input: normalizeLegacyInputRecord(record, { transport: 'control_jsonl', ...defaults }),
-  });
+  throw new Error('invalid_carrier_control_input_record:unsupported_shape');
 }
 
 const SESSION_PAYLOAD_VALIDATORS = Object.freeze({

@@ -25,7 +25,22 @@ test('codexCommand prefers NARADA_CODEX_EXEC_COMMAND and parses prefix args', ()
   });
 });
 
-test('codexCommand resolves Windows codex.ps1 through pwsh', () => {
+test('codexCommand resolves Windows codex.ps1 through sibling node shim', () => {
+  const fakeBin = 'C:/fake/bin';
+  const script = join(fakeBin, 'codex.ps1');
+  const node = join(fakeBin, 'node.exe');
+  const codexJs = join(fakeBin, 'node_modules', '@openai', 'codex', 'bin', 'codex.js');
+  const result = codexCommand({
+    processEnv: { PATH: fakeBin },
+    platform: 'win32',
+    exists: existsFactory([script, node, codexJs]),
+  });
+  assert.equal(result.command, node);
+  assert.deepEqual(result.prefixArgs, [codexJs]);
+  assert.equal(result.source, 'path_ps1_node_shim');
+});
+
+test('codexCommand falls back to noninteractive pwsh when ps1 sibling node shim is unavailable', () => {
   const fakeBin = 'C:/fake/bin';
   const script = join(fakeBin, 'codex.ps1');
   const result = codexCommand({
@@ -34,7 +49,7 @@ test('codexCommand resolves Windows codex.ps1 through pwsh', () => {
     exists: existsFactory([script]),
   });
   assert.equal(result.command, 'pwsh');
-  assert.deepEqual(result.prefixArgs, ['-NoProfile', '-File', script]);
+  assert.deepEqual(result.prefixArgs, ['-NoProfile', '-NonInteractive', '-File', script]);
   assert.equal(result.source, 'path_ps1');
 });
 

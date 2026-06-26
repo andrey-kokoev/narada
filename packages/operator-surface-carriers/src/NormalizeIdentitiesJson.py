@@ -11,7 +11,7 @@ for identity in data["identities"]:
     if "identity_id" not in identity:
         identity["identity_id"] = identity.get("identity_name", "")
 
-    # Ensure identity_name exists (backward compatible alias)
+    # Ensure identity_name exists for current projections.
     if "identity_name" not in identity:
         identity["identity_name"] = identity["identity_id"]
 

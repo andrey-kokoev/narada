@@ -74,7 +74,10 @@ export function validateIdentityAgainstRoster(siteRoot, identity) {
 
   const rosterPath = join(siteRoot, '.ai', 'agents', 'roster.json');
   if (!existsSync(rosterPath)) {
-    return { valid: false, error: sqlRosterCheck.error ?? `roster_not_found: ${rosterPath}` };
+    return buildInferredRosterCheck(identity, {
+      reason: 'roster_unavailable_but_site_session_roster_enforcement_not_enabled',
+      prior_error: sqlRosterCheck.error ?? `roster_not_found: ${rosterPath}`,
+    });
   }
 
   let roster;
@@ -86,6 +89,12 @@ export function validateIdentityAgainstRoster(siteRoot, identity) {
 
   const agent = roster.agents?.find((candidate) => candidate.agent_id === identity);
   if (!agent) {
+    if (!siteEnforcesSessionRoster(roster)) {
+      return buildInferredRosterCheck(identity, {
+        reason: 'identity_not_in_roster_but_site_session_roster_enforcement_not_enabled',
+        prior_error: sqlRosterCheck.error ?? null,
+      });
+    }
     return { valid: false, error: `identity_not_in_roster: ${identity}` };
   }
 
@@ -102,6 +111,42 @@ export function validateIdentityAgainstRoster(siteRoot, identity) {
     capabilities,
     capability_policy: agent.capability_policy ?? defaultCapabilityPolicy(agent.role),
   };
+}
+
+function buildInferredRosterCheck(identity, { reason, prior_error = null } = {}) {
+  const role = inferRoleFromIdentity(identity);
+  return {
+    valid: true,
+    agent: {
+      agent_id: identity,
+      role,
+      capabilities: [],
+      roster_source: 'identity_inference_non_authoritative',
+    },
+    role,
+    role_binding: buildRoleBindingProjection({
+      agentId: identity,
+      role,
+      source: 'identity_inference_non_authoritative',
+      bindingAuthority: 'identity_inference_non_authoritative',
+    }),
+    capabilities: [],
+    capability_policy: defaultCapabilityPolicy(role),
+    roster_source: 'identity_inference_non_authoritative',
+    roster_enforcement: 'disabled',
+    reason,
+    prior_error,
+  };
+}
+
+function siteEnforcesSessionRoster(roster) {
+  return roster?.enforce_session_roster === true;
+}
+
+function inferRoleFromIdentity(identity) {
+  const suffix = String(identity ?? '').split('.').pop();
+  if (['architect', 'builder', 'builder2', 'resident'].includes(suffix)) return suffix;
+  return null;
 }
 
 function validateIdentityAgainstTaskLifecycleRoster(siteRoot, identity) {
@@ -159,14 +204,16 @@ function parseCapabilitiesJson(value) {
   }
 }
 
-export function buildRoleBindingProjection({ agentId, role, source }) {
+export function buildRoleBindingProjection({ agentId, role, source, bindingAuthority = 'agent_roster' }) {
   return {
     schema: 'narada.agent.role_binding.v0',
     agent_id: agentId,
     role_name: role ?? null,
     binding_source: source ?? 'unknown',
-    binding_authority: 'agent_roster',
-    semantics: 'Roster role binding is used for identity read models, routing, and eligibility; it is not activation authority or a capability grant.',
+    binding_authority: bindingAuthority,
+    semantics: bindingAuthority === 'agent_roster'
+      ? 'Roster role binding is used for identity read models, routing, and eligibility; it is not activation authority or a capability grant.'
+      : 'Role was inferred from identity shape because the Site has not opted into session roster enforcement; this is a read-model hint, not activation authority or a capability grant.',
     capability_policy_ref: 'capability_policy',
   };
 }

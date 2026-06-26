@@ -22,14 +22,6 @@ Canonical binary:
 narada-agent-runtime-server
 ```
 
-Compatibility alias:
-
-```text
-agent-runtime-server
-```
-
-The alias exists for compatibility only. New launcher, worker, wrapper, and documentation paths should resolve `narada-agent-runtime-server` from `@narada2/agent-runtime-server`.
-
 The stable runtime-server entrypoint belongs to `@narada2/agent-runtime-server` and executes the carrier substrate in-process through `@narada2/carrier-runtime`.
 
 ## Layer Shape
@@ -105,21 +97,21 @@ Minimum request methods:
 | `session.close` | Close or hand off a session with terminal evidence. |
 | `carrier.command.execute` | Execute a slash/operator command through the carrier command contract. |
 
-Human terminal input is not raw JSONL. A terminal attached to NARS is a projection of the protocol: ordinary lines become `conversation.send`, slash commands become protocol frames such as `carrier.command.execute` or direct session methods, and status/help affordances render from runtime state. `agent-cli.command` remains a compatibility alias for older projected clients only.
+Human terminal input is not raw JSONL. A terminal attached to NARS is a projection of the protocol: ordinary lines become `conversation.send`, slash commands become protocol frames such as `carrier.command.execute` or direct session methods, and status/help affordances render from runtime state.
 
 ## Client And Runtime Split
 
 NARS is the runtime owner. `@narada2/agent-runtime-server` owns session binding, provider/carrier turn execution, MCP fabric hosting, tool dispatch, durable `events.jsonl`, status/health/event subscription state, and lifecycle hook dispatch. Client packages must not silently recreate those responsibilities.
 
-`@narada2/agent-cli`, `agent-tui`, and `@narada2/agent-web-ui` are peer clients/projections over the NARS protocol. Their durable responsibilities are terminal/UI input handling, human-readable event rendering, local command affordances, and explicit attach/resume UX. In attach mode, ordinary operator text becomes `conversation.send`; slash commands become protocol frames such as `carrier.command.execute`, `session.status`, `session.health`, `session.events.subscribe`, `session.recovery`, `session.operations`, `conversation.interrupt`, and `session.close`; incoming event envelopes are rendered through the client projection. The current `@narada2/agent-web-ui` slice subscribes with `session.events.subscribe`, reads health, admits ordinary operator text as `conversation.send`, and projects slash commands into the same NARS protocol surface. Runtime hosting, provider turn execution, and MCP hosting remain outside the web package.
+`@narada2/agent-cli`, `agent-tui`, and `@narada2/agent-web-ui` are peer clients/projections over the NARS protocol. Their durable responsibilities are terminal/UI input handling, human-readable event rendering, local command affordances, and explicit attach/resume UX. In attach mode, ordinary operator text becomes `conversation.send`; slash commands become protocol frames such as `carrier.command.execute`, `session.status`, `session.health`, `session.events.subscribe`, `session.recovery`, `session.operations`, `conversation.interrupt`, and `session.close`; incoming event envelopes are rendered through the client projection. The current `@narada2/agent-web-ui` slice subscribes with `session.events.subscribe`, reads ambient browser status through the local HTTP `/api/health` proxy, admits ordinary operator text as `conversation.send`, and projects slash commands, including `/health` as `session.health`, into the same NARS protocol surface. Runtime hosting, provider turn execution, and MCP hosting remain outside the web package.
 
-Client projection metadata is centralized in `@narada2/nars-client-projection-contract`. Launchers and carrier runtime use it for attach command materialization; web UI uses it for admitted NARS methods, operator input command projection, and help text. `@narada2/carrier-protocol` remains the carrier protocol vocabulary/classification owner and must not grow client attach command strings or client-specific projection registries.
+Client projection metadata is centralized in `@narada2/nars-client-projection-contract`. Launchers and carrier runtime use it for attach command materialization; web UI uses it for admitted NARS methods, operator input command projection, shared event rendering vocabulary, and help text. The same session may be attached by peer clients with `narada-agent-cli --attach <event_endpoint>`, `agent-tui --attach <event_endpoint>`, or `narada-agent-web-ui --event-endpoint <event_endpoint> --health-endpoint <health_endpoint>`. `@narada2/carrier-protocol` remains the carrier protocol vocabulary/classification owner and must not grow client attach command strings or client-specific projection registries.
 
 Runtime dependency construction is owned by `@narada2/carrier-runtime/runtime-dependencies`, not by the client package. `agent-cli` must not expose runtime-server shims, `--server` delegation, or private carrier-substrate adapter flags; launchers resolve `narada-agent-runtime-server` from `@narada2/agent-runtime-server` directly.
 
-### Compatibility Removal Criteria
+### Runtime Ownership Guard
 
-The former `agent-cli` runtime-server compatibility adapter has been removed. Reintroduction requires an explicit migration document and tests proving it does not make `agent-cli` an owner of runtime/provider/MCP hosting.
+The former `agent-cli` runtime-server adapter has been removed. Reintroduction requires an explicit migration document and tests proving it does not make `agent-cli` an owner of runtime/provider/MCP hosting.
 
 ## Event Shape
 
@@ -211,7 +203,7 @@ NARS does not define a separate HTTP `GET /ready` endpoint yet. Readiness is a f
 
 ## Event Subscription Contract
 
-NARS event subscription is owned by `@narada2/agent-runtime-server`. The canonical protocol method is `session.events.subscribe`; WebSocket `/events`, raw stdout JSONL, terminal projections, and future SSE transports are projections or compatibility surfaces over the same sequenced runtime event stream.
+NARS event subscription is owned by `@narada2/agent-runtime-server`. The canonical protocol method is `session.events.subscribe`; WebSocket `/events`, raw stdout JSONL, terminal projections, and future SSE transports are projections over the same sequenced runtime event stream.
 
 `session.events.subscribe` request parameters:
 
@@ -234,7 +226,7 @@ NARS event subscription is owned by `@narada2/agent-runtime-server`. The canonic
 }
 ```
 
-`since_sequence` is preferred over `since_timestamp` when both are present. Sequence numbers are monotonically increasing within one NARS session and are exposed as both `event_sequence` and `sequence` for compatibility while the vocabulary settles. `include_replay=false` starts at the next live event. `max_replay` is bounded by runtime policy; implementations must not replay unbounded transcripts to a slow or newly attached client.
+`since_sequence` is preferred over `since_timestamp` when both are present. Sequence numbers are monotonically increasing within one NARS session and are exposed as both `event_sequence` and `sequence` during vocabulary convergence. `include_replay=false` starts at the next live event. `max_replay` is bounded by runtime policy; implementations must not replay unbounded transcripts to a slow or newly attached client.
 
 The subscription acknowledgement schema is `narada.nars.events.subscription.v1`:
 
@@ -267,7 +259,7 @@ Backpressure is local-runtime policy. The minimum contract is deterministic boun
 
 WebSocket `ws://127.0.0.1:<port>/events` is the first durable co-presence projection. It is local-bound by default, sends `session.events.subscribe` acknowledgements and event envelopes over the socket, and accepts ordinary NARS protocol frames such as `session.status`, `session.health`, `session.recovery`, `session.operations`, `conversation.send`, `conversation.interrupt`, `carrier.command.execute`, and `session.close` by forwarding them into the same runtime session. It must not synthesize a second provider/carrier runtime and must not fall back to ambient global MCP or Codex configuration.
 
-Raw stdout JSONL remains a compatibility projection for single attached processes. Durable `events.jsonl` remains the readback/recovery log. Lifecycle hooks remain callbacks correlated with events; they are not the event subscription authority and must not replace `session.events.subscribe` for client co-presence.
+Raw stdout JSONL is a single-process projection. Durable `events.jsonl` remains the readback/recovery log. Lifecycle hooks remain callbacks correlated with events; they are not the event subscription authority and must not replace `session.events.subscribe` for client co-presence.
 
 ## Lifecycle Hook Contract
 
@@ -498,10 +490,14 @@ pnpm --filter @narada2/agent-cli test
 pnpm --filter @narada2/agent-start test
 ```
 
-Launcher/fleet checks:
+Launcher/fleet checks use record shards so each command remains bounded. Increase
+`--record-offset` by `--record-limit` until the verifier reports no more selected
+records. Each launch dry-run is bounded by `--launch-timeout-ms`, defaulting to
+8500 ms.
 
 ```powershell
-pwsh -NoProfile -File C:\Users\Andrey\Narada\tools\agent-start\Test-AgentStartCoherence.ps1
+node packages/agent-start/bin/verify-registered-site-launchers.mjs --registry C:/Users/Andrey/Narada/config/launch/agents.psd1 --start-agent C:/Users/Andrey/Narada/Start-NaradaAgent.ps1 --runtime-policy default-only --record-offset 0 --record-limit 1
+node packages/agent-start/bin/verify-registered-site-launchers.mjs --registry C:/Users/Andrey/Narada/config/launch/agents.psd1 --start-agent C:/Users/Andrey/Narada/Start-NaradaAgent.ps1 --runtime-policy agent-tui-only --record-offset 0 --record-limit 1
 ```
 
 Expected coverage:

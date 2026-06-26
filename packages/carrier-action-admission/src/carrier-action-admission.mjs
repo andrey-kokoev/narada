@@ -1,7 +1,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
-import { FALLBACK_MUTATING_TOOLS, FALLBACK_READ_ONLY_TOOLS } from './tool-metadata.mjs';
+import { NAME_PATTERN_MUTATING_TOOLS, NAME_PATTERN_READ_ONLY_TOOLS } from './tool-metadata.mjs';
 import {
   actionAdmissionDir,
   listCarrierActionDecisions,
@@ -101,34 +101,34 @@ function registryToolNotDeclaredDiagnostics(toolName, metadata) {
 }
 
 function candidateRegistryPatchClassification(toolName, metadata) {
-  const fallback = fallbackRegistryPatchClassification(toolName);
+  const inferred = namePatternRegistryPatchClassification(toolName);
   const surfaceId = stringFieldOrNull(metadata.surface_id);
   const registrySource = stringFieldOrNull(metadata.registry_source);
   const generatedFile = stringFieldOrNull(metadata.generated_file);
   const serverName = stringFieldOrNull(metadata.server_name);
   return {
     schema: 'narada.carrier_action.registry_patch_candidate.v1',
-    classification: fallback.classification,
-    confidence: fallback.confidence,
+    classification: inferred.classification,
+    confidence: inferred.confidence,
     tool_name: toolName,
     surface_id: surfaceId,
     server_name: serverName,
     registry_source: registrySource,
     generated_file: generatedFile,
-    target_contract_field: fallback.target_contract_field,
-    recommended_action: registryPatchRecommendedAction(fallback, { surfaceId, registrySource, generatedFile, serverName }),
+    target_contract_field: inferred.target_contract_field,
+    recommended_action: registryPatchRecommendedAction(inferred, { surfaceId, registrySource, generatedFile, serverName }),
   };
 }
 
-function fallbackRegistryPatchClassification(toolName) {
-  if (FALLBACK_READ_ONLY_TOOLS.has(toolName)) {
+function namePatternRegistryPatchClassification(toolName) {
+  if (NAME_PATTERN_READ_ONLY_TOOLS.has(toolName)) {
     return {
       classification: 'add_to_read_only_tools',
       target_contract_field: 'tool_contract.read_only_tools',
       confidence: 'high',
     };
   }
-  if (FALLBACK_MUTATING_TOOLS.has(toolName) || normalizeActionFamily(toolName)) {
+  if (NAME_PATTERN_MUTATING_TOOLS.has(toolName) || normalizeActionFamily(toolName)) {
     return {
       classification: 'add_to_mutating_tools',
       target_contract_field: 'tool_contract.mutating_tools',
@@ -142,14 +142,14 @@ function fallbackRegistryPatchClassification(toolName) {
   };
 }
 
-function registryPatchRecommendedAction(fallback, { surfaceId, registrySource, generatedFile, serverName }) {
-  if (!fallback.target_contract_field) {
+function registryPatchRecommendedAction(inferred, { surfaceId, registrySource, generatedFile, serverName }) {
+  if (!inferred.target_contract_field) {
     return 'Review the live MCP tool and update the authoritative surface registry contract only after assigning its authority family.';
   }
   const target = surfaceId ? `surface ${surfaceId}` : serverName ? `server ${serverName}` : 'the matching surface';
   const source = registrySource ? ` in ${registrySource}` : '';
   const generated = generatedFile ? `, then regenerate ${generatedFile}` : '';
-  return `Add this tool to ${fallback.target_contract_field} for ${target}${source}${generated}.`;
+  return `Add this tool to ${inferred.target_contract_field} for ${target}${source}${generated}.`;
 }
 
 function stringFieldOrNull(value) {
@@ -269,35 +269,35 @@ function classifyCarrierActionRequest(toolName, args = {}, options = {}) {
     };
   }
 
-  if (FALLBACK_READ_ONLY_TOOLS.has(toolName)) {
+  if (NAME_PATTERN_READ_ONLY_TOOLS.has(toolName)) {
     return {
-      ...readOnlyClassification('closed_name_fallback_read_only_tool'),
-      classifier_source: 'closed_name_fallback',
+      ...readOnlyClassification('closed_name_pattern_read_only_tool'),
+      classifier_source: 'closed_name_pattern',
     };
   }
-  if (FALLBACK_MUTATING_TOOLS.has(toolName)) {
+  if (NAME_PATTERN_MUTATING_TOOLS.has(toolName)) {
     const family = normalizeActionFamily(toolName);
-    if (family) return withDelegatedAuthority({ ...familyClassification(family, 'closed_name_fallback_mutating_tool'), classifier_source: 'closed_name_fallback' });
-    return { ...refusedClassification('unsupported_mutating_tool_family', 'narada_proper_authority'), classifier_source: 'closed_name_fallback' };
+    if (family) return withDelegatedAuthority({ ...familyClassification(family, 'closed_name_pattern_mutating_tool'), classifier_source: 'closed_name_pattern' });
+    return { ...refusedClassification('unsupported_mutating_tool_family', 'narada_proper_authority'), classifier_source: 'closed_name_pattern' };
   }
 
   if (isCommandIntentTool(toolName)) {
-    return withDelegatedAuthority({ ...familyClassification('command', 'command_intent_request_requires_admission'), classifier_source: 'closed_name_fallback' });
+    return withDelegatedAuthority({ ...familyClassification('command', 'command_intent_request_requires_admission'), classifier_source: 'closed_name_pattern' });
   }
   if (isExecuteCommandTool(toolName)) {
-    return withDelegatedAuthority({ ...familyClassification('command', 'command_execution_requires_delegated_authority'), classifier_source: 'closed_name_fallback' });
+    return withDelegatedAuthority({ ...familyClassification('command', 'command_execution_requires_delegated_authority'), classifier_source: 'closed_name_pattern' });
   }
   if (isRawCommandTool(toolName)) {
-    return { ...refusedClassification('raw_command_execution_refused', 'command_execution_intent_service', 'command'), classifier_source: 'closed_name_fallback' };
+    return { ...refusedClassification('raw_command_execution_refused', 'command_execution_intent_service', 'command'), classifier_source: 'closed_name_pattern' };
   }
   if (isFileMutationTool(toolName)) {
-    return withDelegatedAuthority({ ...familyClassification('site_file_mutation', 'site_file_mutation_requires_delegated_authority'), classifier_source: 'closed_name_fallback' });
+    return withDelegatedAuthority({ ...familyClassification('site_file_mutation', 'site_file_mutation_requires_delegated_authority'), classifier_source: 'closed_name_pattern' });
   }
   if (/^task_lifecycle_/i.test(toolName)) {
-    return withDelegatedAuthority({ ...familyClassification('task_lifecycle_mutation', 'task_lifecycle_mutation_requires_canonical_task_authority'), classifier_source: 'closed_name_fallback' });
+    return withDelegatedAuthority({ ...familyClassification('task_lifecycle_mutation', 'task_lifecycle_mutation_requires_canonical_task_authority'), classifier_source: 'closed_name_pattern' });
   }
   if (/^(inbox_|narada_inbox_)/i.test(toolName)) {
-    return withDelegatedAuthority({ ...familyClassification('inbox_admission', 'inbox_mutation_requires_canonical_inbox_authority'), classifier_source: 'closed_name_fallback' });
+    return withDelegatedAuthority({ ...familyClassification('inbox_admission', 'inbox_mutation_requires_canonical_inbox_authority'), classifier_source: 'closed_name_pattern' });
   }
   if (isOutboxOrPublicationTool(toolName)) {
     return {
@@ -306,17 +306,17 @@ function classifyCarrierActionRequest(toolName, args = {}, options = {}) {
       decision: 'refused',
       reason: 'family_not_supported_in_v1_slice',
       secret_findings: [],
-      classifier_source: 'closed_name_fallback',
+      classifier_source: 'closed_name_pattern',
     };
   }
-  return { ...refusedClassification('unknown_non_read_only_tool_family', null, 'unknown_action_family'), classifier_source: metadata?.source ?? 'closed_name_fallback' };
+  return { ...refusedClassification('unknown_non_read_only_tool_family', null, 'unknown_action_family'), classifier_source: metadata?.source ?? 'closed_name_pattern' };
 }
 
 function knownMutationNameClassification(toolName) {
-  if (FALLBACK_READ_ONLY_TOOLS.has(toolName)) return null;
-  if (FALLBACK_MUTATING_TOOLS.has(toolName)) {
+  if (NAME_PATTERN_READ_ONLY_TOOLS.has(toolName)) return null;
+  if (NAME_PATTERN_MUTATING_TOOLS.has(toolName)) {
     const family = normalizeActionFamily(toolName);
-    if (family) return familyClassification(family, 'closed_name_fallback_mutating_tool');
+    if (family) return familyClassification(family, 'closed_name_pattern_mutating_tool');
     return refusedClassification('unsupported_mutating_tool_family', 'narada_proper_authority');
   }
   if (isCommandIntentTool(toolName)) return familyClassification('command', 'command_intent_request_requires_admission');
@@ -577,7 +577,7 @@ function createCarrierActionRequest({
       registry_diagnostics: classification.registry_diagnostics ?? null,
       raw_arguments_recorded: false,
       raw_secret_values_recorded: false,
-      classifier_source: classification.classifier_source ?? 'closed_name_fallback',
+      classifier_source: classification.classifier_source ?? 'closed_name_pattern',
       classifier_metadata: classifierMetadataSummary(toolMetadata),
       delegated_authority: classification.delegated_authority ?? null,
     },

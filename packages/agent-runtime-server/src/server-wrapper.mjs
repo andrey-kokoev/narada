@@ -336,10 +336,6 @@ function parseHealthOptions(args, env = process.env) {
   };
 }
 
-function carrierRuntimeArgs(forwardedArgs = []) {
-  return forwardedArgs.filter((arg) => arg !== '--server');
-}
-
 function argValue(args = [], name) {
   const index = args.indexOf(name);
   if (index === -1) return null;
@@ -493,7 +489,7 @@ async function main() {
   const rawJsonl = requestedArgs.includes('--raw-jsonl');
   const parsedHealth = parseHealthOptions(requestedArgs.filter((arg) => arg !== '--wrapper-events-jsonl' && arg !== '--raw-jsonl'));
   const parsedEvents = parseEventStreamOptions(parsedHealth.forwardedArgs);
-  const args = carrierRuntimeArgs(parsedEvents.forwardedArgs);
+  const args = parsedEvents.forwardedArgs;
   const lifecycleDispatcher = createNarsLifecycleHookDispatcher();
   const lifecycleBinding = lifecycleBindingFromArgs(args, process.env);
   const delegatedAuthorityHandoff = createDelegatedAuthorityHandoff({ args, env: process.env });
@@ -629,7 +625,6 @@ async function main() {
 export {
   parseHealthOptions,
   parseEventStreamOptions,
-  carrierRuntimeArgs,
   loadRuntimeDependencies,
   createDelegatedAuthorityHandoff,
   createEventHub,

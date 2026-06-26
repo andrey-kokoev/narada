@@ -1,9 +1,12 @@
 import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
 import { once } from 'node:events';
+import { existsSync } from 'node:fs';
+import { mkdir, readFile, rm, stat } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { PassThrough } from 'node:stream';
 import test from 'node:test';
-import { readFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
 import {
   buildConversationSendFrame,
   buildConversationSteerFrame,
@@ -12,6 +15,7 @@ import {
   isAgentWebUiNarsMethod,
   isAgentWebUiProtocolFrame,
   resolveAttachConfig,
+  reconnectDelayForAttempt,
   startAgentWebUi,
   summarizeRuntimeEvent,
 } from '../src/agent-web-ui.js';
@@ -19,7 +23,7 @@ import {
   buildClientConfig,
   parseAgentWebUiArgs,
   startAgentWebUiServer,
-} from '../bin/narada-agent-web-ui.mjs';
+} from '../src/server.js';
 import {
   createEventHub,
   startEventStreamProjection,
@@ -52,6 +56,46 @@ function readInjectedBrowserConfig(html) {
   const match = html.match(/<script type="application\/json" id="nars-config">([^<]+)<\/script>/);
   assert.ok(match, 'expected injected NARS config script');
   return JSON.parse(match[1]);
+}
+
+function findHeadlessBrowser() {
+  return [
+    'C:/Program Files/Microsoft/Edge/Application/msedge.exe',
+    'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
+    'C:/Program Files/Google/Chrome/Application/chrome.exe',
+    'C:/Program Files (x86)/Google/Chrome/Application/chrome.exe',
+  ].find((path) => existsSync(path)) ?? null;
+}
+
+async function captureHeadlessScreenshot({ browserPath, url, screenshotPath }) {
+  await new Promise((resolve, reject) => {
+    const child = spawn(browserPath, [
+      '--headless=new',
+      '--disable-gpu',
+      '--no-sandbox',
+      '--hide-scrollbars',
+      '--window-size=900,700',
+      `--screenshot=${screenshotPath}`,
+      url,
+    ], { stdio: ['ignore', 'ignore', 'pipe'] });
+    let stderr = '';
+    const timeout = setTimeout(() => {
+      child.kill();
+      reject(new Error('headless_browser_screenshot_timeout'));
+    }, 20000);
+    child.stderr.on('data', (chunk) => {
+      stderr += String(chunk);
+    });
+    child.on('error', (error) => {
+      clearTimeout(timeout);
+      reject(error);
+    });
+    child.on('exit', (code) => {
+      clearTimeout(timeout);
+      if (code === 0) resolve();
+      else reject(new Error(`headless_browser_screenshot_failed:${code}:${stderr.slice(0, 500)}`));
+    });
+  });
 }
 
 test('agent-web-ui emits admitted NARS methods for event attach and operator input', () => {
@@ -100,6 +144,7 @@ test('browser startup subscribes to events and submits operator text over the sa
       this.listeners = new Map();
       this.textContent = '';
       this.value = '';
+      this.dataset = {};
     }
     append(...children) { this.children.push(...children); }
     addEventListener(name, listener) { this.listeners.set(name, listener); }
@@ -144,6 +189,7 @@ test('browser startup subscribes to events and submits operator text over the sa
   const socket = FakeWebSocket.instances[0];
   assert.equal(started.socket, socket);
   assert.equal(socket.url, 'ws://127.0.0.1/events');
+  assert.equal(elements.get('health-endpoint').textContent, '/api/health (http-proxy)');
   socket.emit('open');
   assert.deepEqual(socket.sent[0], { id: 'agent-web-ui-events-subscribe', method: 'session.events.subscribe', params: { include_replay: true, max_replay: 4 } });
 
@@ -155,7 +201,7 @@ test('browser startup subscribes to events and submits operator text over the sa
     method: 'conversation.send',
     params: { message: 'run startup sequence', source: 'agent-web-ui' },
   });
-  assert.equal(elements.get('events').children.at(-1).children.at(1).textContent, 'run startup sequence');
+  assert.equal(elements.get('events').children.at(-1).children.at(1).children.at(0).textContent, 'run startup sequence');
 
   socket.emit('message', { data: JSON.stringify({ event: 'session_event', cursor: { sequence: 41 }, payload: { event: 'turn_started', turn_id: 'turn_active', event_sequence: 41 } }) });
   elements.get('operator-input').value = 'change course';
@@ -168,7 +214,7 @@ test('browser startup subscribes to events and submits operator text over the sa
   elements.get('operator-form').submit();
   assert.equal(socket.sent[3].method, 'conversation.send');
   socket.emit('close');
-  assert.equal(elements.get('stream').textContent, 'reconnecting');
+  assert.equal(elements.get('stream').textContent, 'reconnecting in 1s · disconnected 0s');
   assert.equal(reconnectTimers[0].delay, 1000);
   reconnectTimers[0].fn();
   const reconnectedSocket = FakeWebSocket.instances[1];
@@ -183,21 +229,35 @@ test('browser startup subscribes to events and submits operator text over the sa
   elements.get('operator-form').submit();
   assert.equal(reconnectedSocket.sent[1].method, 'session.status');
 
+  elements.get('operator-input').value = '/health';
+  elements.get('operator-form').submit();
+  assert.equal(reconnectedSocket.sent[2].method, 'session.health');
+
   elements.get('operator-input').value = '/exit';
   elements.get('operator-form').submit();
-  assert.equal(reconnectedSocket.sent[2].method, 'session.close');
+  assert.equal(reconnectedSocket.sent[3].method, 'session.close');
   assert.equal(started.connection.closed, true);
+});
+test('event stream reconnect uses bounded backoff and visible disconnected duration', () => {
+  assert.equal(reconnectDelayForAttempt(1), 1000);
+  assert.equal(reconnectDelayForAttempt(2), 2000);
+  assert.equal(reconnectDelayForAttempt(5), 10000);
+  assert.equal(reconnectDelayForAttempt(20), 10000);
 });
 
 test('attach config resolves one event endpoint and one health endpoint from query or injected config', () => {
   assert.deepEqual(resolveAttachConfig('?event_endpoint=ws://nars/events&health_endpoint=http://nars/health&max_replay=7'), {
     eventEndpoint: 'ws://nars/events',
     healthEndpoint: 'http://nars/health',
+    healthTransport: 'http-proxy',
+    protocolHealthMethod: 'session.health',
     maxReplay: 7,
   });
   assert.deepEqual(resolveAttachConfig('', { eventEndpoint: 'ws://injected/events', healthEndpoint: '/api/health' }), {
     eventEndpoint: 'ws://injected/events',
     healthEndpoint: '/api/health',
+    healthTransport: 'http-proxy',
+    protocolHealthMethod: 'session.health',
     maxReplay: 100,
   });
 });
@@ -214,6 +274,36 @@ test('static HTML exposes operator input composer without hidden privileged cont
   assert.match(html, /<textarea[^>]+id="operator-input"/i);
   assert.match(html, /<button[^>]+type="submit"/i);
   assert.doesNotMatch(html, /command\.execute|conversation\.interrupt/i);
+});
+
+test('static layout smoke covers shell, status, event list, composer, and event tone styles', async () => {
+  const html = await readFile(new URL('../src/index.html', import.meta.url), 'utf8');
+  const css = await readFile(new URL('../src/agent-web-ui.css', import.meta.url), 'utf8');
+  for (const marker of ['class="shell"', 'class="status"', 'id="events"', 'class="composer"', 'id="operator-input"']) {
+    assert.equal(html.includes(marker), true, marker);
+  }
+  for (const selector of ['.shell', '.status', '.events', '.composer', '.event-tone-assistant', '.event-tone-error']) {
+    assert.equal(css.includes(selector), true, selector);
+  }
+});
+
+test('browser screenshot smoke renders the served shell', async () => {
+  const browserPath = findHeadlessBrowser();
+  assert.ok(browserPath, 'expected an installed Chromium-family browser for screenshot smoke');
+  const tmpDir = new URL('../.tmp-tests/agent-web-ui-screenshot/', import.meta.url);
+  const screenshotUrl = new URL('shell.png', tmpDir);
+  await rm(tmpDir, { recursive: true, force: true });
+  await mkdir(tmpDir, { recursive: true });
+  const web = await startAgentWebUiServer({ host: '127.0.0.1', port: 0, eventEndpoint: null, healthEndpoint: null });
+  try {
+    await captureHeadlessScreenshot({ browserPath, url: web.url, screenshotPath: fileURLToPath(screenshotUrl) });
+    const screenshot = await readFile(screenshotUrl);
+    assert.deepEqual([...screenshot.subarray(0, 8)], [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    assert.ok((await stat(screenshotUrl)).size > 5000, 'expected non-empty rendered PNG screenshot');
+  } finally {
+    web.server.close();
+    await rm(tmpDir, { recursive: true, force: true });
+  }
 });
 
 test('package server injects operator-capable config and proxies health with GET only', async () => {
@@ -236,6 +326,8 @@ test('package server injects operator-capable config and proxies health with GET
     const index = await fetch(web.url).then((response) => response.text());
     assert.match(index, /"eventEndpoint":"ws:\/\/127\.0\.0\.1:1234\/events"/);
     assert.match(index, /"healthEndpoint":"\/api\/health"/);
+    assert.match(index, /"healthTransport":"http-proxy"/);
+    assert.match(index, /"protocolHealthMethod":"session.health"/);
     assert.match(index, /"operatorInput":true/);
     assert.match(index, /"conversation.send"/);
     assert.match(index, /"carrier.command.execute"/);
@@ -301,6 +393,8 @@ test('served web UI config attaches to live NARS health and event projections', 
     const config = readInjectedBrowserConfig(html);
     assert.equal(config.eventEndpoint, eventProjection.url);
     assert.equal(config.healthEndpoint, '/api/health');
+    assert.equal(config.healthTransport, 'http-proxy');
+    assert.equal(config.protocolHealthMethod, 'session.health');
     assert.equal(config.operatorInput, true);
     assert.equal(config.admittedMethods.includes('conversation.send'), true);
     assert.equal(config.admittedMethods.includes('conversation.interrupt'), true);
@@ -349,7 +443,6 @@ test('served web UI config attaches to live NARS health and event projections', 
     healthProjection.server.close();
   }
 });
-
 test('CLI args and client config keep runtime authority outside the web package', () => {
   const options = parseAgentWebUiArgs(['--event-endpoint', 'ws://nars/events', '--health-endpoint', 'http://nars/health', '--port', '4888']);
   assert.deepEqual(options, {
@@ -361,6 +454,8 @@ test('CLI args and client config keep runtime authority outside the web package'
   assert.deepEqual(buildClientConfig(options), {
     eventEndpoint: 'ws://nars/events',
     healthEndpoint: '/api/health',
+    healthTransport: 'http-proxy',
+    protocolHealthMethod: 'session.health',
     maxReplay: 100,
     operatorInput: true,
     admittedMethods: ['session.events.subscribe', 'conversation.send', 'session.status', 'session.health', 'session.recovery', 'session.operations', 'observers.status', 'observer.mute', 'observer.unmute', 'carrier.command.execute', 'conversation.interrupt', 'conversation.steer', 'session.close'],

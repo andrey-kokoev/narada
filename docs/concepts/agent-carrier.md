@@ -135,7 +135,7 @@ The carrier interface should be stable enough that Codex, Claude Code, Kimi, and
 
 For Codex, the flag means the launcher does not pass `--disable shell_tool`. It does not itself grant task, inbox, publication, filesystem, credential, or external-effect authority.
 
-For NARS-backed `-Runtime agent-cli` compatibility launches, `pi`, `kimi`, `claude-code`, and Narada-native carriers, command execution must be represented through the carrier's own admitted tool/capability channel. These carriers must not interpret `EnableNativeShell` as a standing native shell grant merely because the launcher surface accepts the flag for compatibility.
+For NARS-backed `-Carrier agent-cli -Runtime narada-agent-runtime-server` launches, `pi`, `kimi`, `claude-code`, and Narada-native carriers, command execution must be represented through the carrier's own admitted tool/capability channel. These carriers must not interpret `EnableNativeShell` as a standing native shell grant merely because the launcher surface accepts the flag.
 
 ## Launch Packet Contract
 

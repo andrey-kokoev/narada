@@ -5,14 +5,15 @@ import {
   getCarrierControlPath,
   getCarrierStatus,
   runAgentStartCommand,
-  runSiteCliCommand,
 } from '../lib/launcher-runtime.js';
+import { defaultRuntimeForCarrier } from '@narada2/carrier-runtime-contract/carrier-runtime-selection';
 
 export interface CarrierCommandOptions {
   siteRoot?: string;
   site?: string;
   workspaceRoot?: string;
   agent?: string;
+  carrier?: string;
   runtime?: string;
   intelligenceProvider?: string;
   timeout?: number;
@@ -31,6 +32,7 @@ export async function carrierStatusCommand(
   const status = getCarrierStatus({
     siteRoot: requireSiteRoot(options),
     agent: options.agent,
+    carrier: options.carrier,
     runtime: options.runtime,
   });
 
@@ -47,6 +49,7 @@ export async function carrierControlPathCommand(
   const status = getCarrierControlPath({
     siteRoot: requireSiteRoot(options),
     agent: options.agent,
+    carrier: options.carrier,
     runtime: options.runtime,
   });
   const result = {
@@ -71,6 +74,7 @@ export async function carrierReadinessCommand(
   const status = getCarrierStatus({
     siteRoot: requireSiteRoot(options),
     agent: options.agent,
+    carrier: options.carrier,
     runtime: options.runtime,
   });
   const ready = Boolean(
@@ -108,11 +112,13 @@ export async function carrierStartCommand(
   _context: CommandContext,
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
   const siteRoot = requireSiteRoot(options);
-  const runtime = options.runtime ?? 'agent-cli';
+  const carrier = options.carrier ?? 'agent-cli';
+  const runtime = options.runtime ?? defaultRuntimeForCarrier(carrier);
   const agent = requireAgent(options);
   const existing = getCarrierStatus({
     siteRoot,
     agent,
+    carrier,
     runtime,
   });
   if (existing.latest?.control_path_exists && existing.latest.parent_process_alive !== false) {
@@ -122,76 +128,44 @@ export async function carrierStartCommand(
       mutation_performed: false,
       site_root: siteRoot,
       agent,
+      carrier,
       runtime,
-      carrier: existing,
+      carrier_status: existing,
     };
     return {
       exitCode: ExitCode.SUCCESS,
       result: formattedResult(result, 'carrier already running', options.format ?? 'auto'),
     };
   }
-  if (runtime !== 'agent-cli' || options.dryRun || options.materializeOnly || options.exec) {
-    const start = runAgentStartCommand({
-      siteRoot,
-      workspaceRoot: options.workspaceRoot,
-      agent,
-      runtime,
-      intelligenceProvider: options.intelligenceProvider,
-      dryRun: options.dryRun ?? (!options.materializeOnly && !options.exec),
-      exec: options.exec,
-      wait: options.wait,
-      enableNativeShell: options.enableNativeShell,
-      launchSource: 'narada carrier start',
-    });
-    const result = {
-      schema: 'narada.carrier.start_result.v0',
-      status: start.status,
-      mutation_performed: start.mutation_performed,
-      site_root: siteRoot,
-      workspace_root: options.workspaceRoot ?? null,
-      agent,
-      runtime,
-      intelligence_provider: options.intelligenceProvider ?? null,
-      mode: options.exec ? 'exec' : options.materializeOnly ? 'materialize_only' : 'dry_run',
-      agent_start: start,
-    };
-    return {
-      exitCode: start.status === 'success' ? ExitCode.SUCCESS : ExitCode.GENERAL_ERROR,
-      result: formattedResult(result, `carrier start ${start.status}`, options.format ?? 'auto'),
-    };
-  }
-  const siteResult = runSiteCliCommand(siteRoot, [
-    'resident',
-    'summon',
-    '--background',
-  ]);
-  if (siteResult.status !== 'not_available') {
-    const result = {
-      schema: 'narada.carrier.start_result.v0',
-      status: siteResult.status,
-      mutation_performed: siteResult.mutation_performed,
-      site_root: siteRoot,
-      agent,
-      runtime,
-      site_command: siteResult,
-    };
-    return {
-      exitCode: siteResult.status === 'success' ? ExitCode.SUCCESS : ExitCode.GENERAL_ERROR,
-      result: formattedResult(result, `carrier start ${siteResult.status}`, options.format ?? 'auto'),
-    };
-  }
-  const result = {
-    schema: 'narada.carrier.start_plan.v0',
-    status: 'site_launcher_unavailable',
-    mutation_performed: false,
-    site_root: siteRoot,
+  const start = runAgentStartCommand({
+    siteRoot,
+    workspaceRoot: options.workspaceRoot,
     agent,
-    runtime: options.runtime,
-    reason: 'No Site CLI launcher was found; generic agent-start fallback is not yet safe to invoke from this finite command.',
+    carrier,
+    runtime,
+    intelligenceProvider: options.intelligenceProvider,
+    dryRun: options.dryRun ?? (!options.materializeOnly && !options.exec),
+    exec: options.exec,
+    wait: options.wait,
+    enableNativeShell: options.enableNativeShell,
+    launchSource: 'narada carrier start',
+  });
+  const result = {
+    schema: 'narada.carrier.start_result.v0',
+    status: start.status,
+    mutation_performed: start.mutation_performed,
+    site_root: siteRoot,
+    workspace_root: options.workspaceRoot ?? null,
+    agent,
+    carrier,
+    runtime,
+    intelligence_provider: options.intelligenceProvider ?? null,
+    mode: options.exec ? 'exec' : options.materializeOnly ? 'materialize_only' : 'dry_run',
+    agent_start: start,
   };
   return {
-    exitCode: ExitCode.INVALID_CONFIG,
-    result: formattedResult(result, result.reason, options.format ?? 'auto'),
+    exitCode: start.status === 'success' ? ExitCode.SUCCESS : ExitCode.GENERAL_ERROR,
+    result: formattedResult(result, `carrier start ${start.status}`, options.format ?? 'auto'),
   };
 }
 
@@ -200,60 +174,10 @@ export async function carrierRestartCommand(
   _context: CommandContext,
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
   const siteRoot = requireSiteRoot(options);
-  const runtime = options.runtime ?? 'agent-cli';
+  const carrier = options.carrier ?? 'agent-cli';
+  const runtime = defaultRuntimeForCarrier(carrier);
   const agent = requireAgent(options);
-  if (runtime !== 'agent-cli') {
-    const result = {
-      schema: 'narada.carrier.restart_plan.v0',
-      status: 'runtime_launcher_unavailable',
-      mutation_performed: false,
-      site_root: siteRoot,
-      agent,
-      runtime,
-      reason: `Live finite-command carrier restart is not wired for runtime ${runtime}.`,
-    };
-    return {
-      exitCode: ExitCode.INVALID_CONFIG,
-      result: formattedResult(result, result.reason, options.format ?? 'auto'),
-    };
-  }
-  const recover = runSiteCliCommand(siteRoot, [
-    'resident',
-    'recover-carrier',
-    '--reason',
-    'narada_carrier_restart',
-  ]);
-  const start = runSiteCliCommand(siteRoot, [
-    'resident',
-    'summon',
-    '--background',
-  ]);
-  if (recover.status !== 'not_available' || start.status !== 'not_available') {
-    const success = recover.status !== 'failed' && start.status === 'success';
-    const result = {
-      schema: 'narada.carrier.restart_result.v0',
-      status: success ? 'success' : 'failed',
-      mutation_performed: recover.mutation_performed || start.mutation_performed,
-      site_root: siteRoot,
-      agent,
-      runtime,
-      recover,
-      start,
-    };
-    return {
-      exitCode: success ? ExitCode.SUCCESS : ExitCode.GENERAL_ERROR,
-      result: formattedResult(result, `carrier restart ${result.status}`, options.format ?? 'auto'),
-    };
-  }
-  const result = {
-    schema: 'narada.carrier.restart_plan.v0',
-    status: 'site_launcher_unavailable',
-    mutation_performed: false,
-    site_root: siteRoot,
-    agent,
-    runtime: options.runtime,
-    reason: 'No Site CLI launcher was found; generic agent-start fallback is not yet safe to invoke from this finite command.',
-  };
+  const result = unsupportedCarrierLifecycle('restart', siteRoot, agent, carrier, runtime);
   return {
     exitCode: ExitCode.INVALID_CONFIG,
     result: formattedResult(result, result.reason, options.format ?? 'auto'),
@@ -265,33 +189,13 @@ export async function carrierDrainCommand(
   _context: CommandContext,
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
   const siteRoot = requireSiteRoot(options);
-  const runtime = options.runtime ?? 'agent-cli';
+  const carrier = options.carrier ?? 'agent-cli';
+  const runtime = defaultRuntimeForCarrier(carrier);
   const agent = requireAgent(options);
-  if (runtime !== 'agent-cli') {
-    const result = unsupportedCarrierLifecycle('drain', siteRoot, agent, runtime);
-    return {
-      exitCode: ExitCode.INVALID_CONFIG,
-      result: formattedResult(result, result.reason, options.format ?? 'auto'),
-    };
-  }
-  const siteResult = runSiteCliCommand(siteRoot, [
-    'loop',
-    'drain',
-    agent,
-    '--ensure-resident',
-  ]);
-  const result = {
-    schema: 'narada.carrier.drain_result.v0',
-    status: siteResult.status,
-    mutation_performed: siteResult.mutation_performed,
-    site_root: siteRoot,
-    agent,
-    runtime,
-    site_command: siteResult,
-  };
+  const result = unsupportedCarrierLifecycle('drain', siteRoot, agent, carrier, runtime);
   return {
-    exitCode: siteResult.status === 'success' ? ExitCode.SUCCESS : ExitCode.GENERAL_ERROR,
-    result: formattedResult(result, `carrier drain ${siteResult.status}`, options.format ?? 'auto'),
+    exitCode: ExitCode.INVALID_CONFIG,
+    result: formattedResult(result, result.reason, options.format ?? 'auto'),
   };
 }
 
@@ -300,9 +204,10 @@ export async function carrierReloadCommand(
   _context: CommandContext,
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
   const siteRoot = requireSiteRoot(options);
-  const runtime = options.runtime ?? 'agent-cli';
+  const carrier = options.carrier ?? 'agent-cli';
+  const runtime = defaultRuntimeForCarrier(carrier);
   const agent = requireAgent(options);
-  if (runtime === 'agent-cli') {
+  if (carrier === 'agent-cli') {
     const restart = await carrierRestartCommand(options, _context);
     const restartResult = restart.result as { status?: string; mutation_performed?: boolean };
     const result = {
@@ -311,6 +216,7 @@ export async function carrierReloadCommand(
       mutation_performed: restartResult.mutation_performed === true,
       site_root: siteRoot,
       agent,
+      carrier,
       runtime,
       strategy: 'restart',
       restart: restart.result,
@@ -320,7 +226,7 @@ export async function carrierReloadCommand(
       result: formattedResult(result, `carrier reload ${result.status}`, options.format ?? 'auto'),
     };
   }
-  const result = unsupportedCarrierLifecycle('reload', siteRoot, agent, runtime);
+  const result = unsupportedCarrierLifecycle('reload', siteRoot, agent, carrier, runtime);
   return {
     exitCode: ExitCode.INVALID_CONFIG,
     result: formattedResult(result, result.reason, options.format ?? 'auto'),
@@ -328,19 +234,21 @@ export async function carrierReloadCommand(
 }
 
 function unsupportedCarrierLifecycle(
-  action: 'reload' | 'drain',
+  action: 'restart' | 'reload' | 'drain',
   siteRoot: string,
   agent: string | undefined,
+  carrier: string,
   runtime: string,
 ) {
   return {
     schema: `narada.carrier.${action}_plan.v0`,
-    status: 'runtime_operation_unavailable',
+    status: 'carrier_operation_unavailable',
     mutation_performed: false,
     site_root: siteRoot,
     agent,
+    carrier,
     runtime,
-    reason: `Carrier ${action} is not wired for runtime ${runtime}.`,
+    reason: `Carrier ${action} is not wired for carrier ${carrier}.`,
   };
 }
 
@@ -367,6 +275,7 @@ function formatCarrierStatus(status: ReturnType<typeof getCarrierStatus>): strin
   return [
     `carrier: ${status.latest.carrier_session_id ?? 'unknown'}`,
     `identity: ${status.latest.identity ?? 'unknown'}`,
+    `carrier: ${status.latest.carrier_kind ?? 'unknown'}`,
     `runtime: ${status.latest.runtime_substrate_kind ?? status.latest.runtime ?? 'unknown'}`,
     `control: ${status.latest.control_path ?? 'missing'}${status.latest.control_path_exists ? ' (exists)' : ''}`,
     `parent_alive: ${String(status.latest.parent_process_alive)}`,

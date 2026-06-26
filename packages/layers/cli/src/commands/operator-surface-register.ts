@@ -273,7 +273,7 @@ export function registerOperatorSurfaceCommands(program: Command): void {
     .option('--raw-input', 'Treat text as raw input/keystrokes and suppress the typed-message sender header', false)
     .option('--operator-activity-state <state>', 'Observed Operator activity: idle, active_typing, active_pointer, or unknown')
     .option('--operator-activity-observed-at <iso>', 'Timestamp for the activity observation')
-    .option('--active-delivery <policy>', 'When Operator is active: queue, refuse, or fallback_to_inbox', 'queue')
+    .option('--active-delivery <policy>', 'When Operator is active: queue or refuse', 'queue')
     .option('--delivery-timeout-ms <ms>', 'Queue timeout before expiring delivery intent')
     .option('--urgent-interrupt-authority <ref>', 'Explicit authority reference permitting interruption during Operator activity')
     .option('--current-desktop <id>', 'Observed current desktop/workspace before delivery')

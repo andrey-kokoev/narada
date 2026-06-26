@@ -7,7 +7,6 @@ param(
     [string]$UserSiteRoot = $(if ($env:NARADA_USER_SITE_ROOT) { $env:NARADA_USER_SITE_ROOT } else { Join-Path $HOME 'Narada' }),
     [string]$PcSiteRoot = $(if ($env:NARADA_PC_SITE_ROOT) { $env:NARADA_PC_SITE_ROOT } else { "C:\ProgramData\Narada\sites\pc\desktop-sunroom-2" }),
     [string]$HealthScriptPath,
-    [string]$RuntimeBindingPath,
     [switch]$DryRun,
     [switch]$PassThru
 )
@@ -170,55 +169,12 @@ function Get-NaradaBindingCandidates {
     return $children
 }
 
-function Get-FallbackHealthFromRuntimeBindings {
-    if ([string]::IsNullOrWhiteSpace($RuntimeBindingPath)) {
-        $RuntimeBindingPath = Join-Path $PcSiteRoot "runtime\operator-surface-window-bindings.json"
-    }
-
-    $statuses = @()
-    if (Test-Path -LiteralPath $RuntimeBindingPath) {
-        $runtimeBindings = ConvertFrom-NaradaJson ([System.IO.File]::ReadAllText($RuntimeBindingPath))
-        $bindingCandidates = Get-NaradaBindingCandidates -Value (Get-NaradaPropertyValue -Object $runtimeBindings -Name "bindings" -Default $runtimeBindings)
-        foreach ($binding in @($bindingCandidates)) {
-            $identityName = [string](Get-NaradaPropertyValue -Object $binding -Name "identity_name" -Default (Get-NaradaPropertyValue -Object $binding -Name "identity_id" -Default ""))
-            $hwndValue = Resolve-NaradaBindingHwnd -Binding $binding
-            if ($null -eq $hwndValue) { continue }
-            $snapshot = Get-WindowSnapshot -Hwnd $hwndValue
-            $statuses += [ordered]@{
-                identity_name = $identityName
-                health = if ($snapshot.live_hwnd -and $snapshot.visible) { "healthy" } else { "degraded" }
-                reasons = @()
-                selected_hwnd = $hwndValue
-                predicates = [ordered]@{
-                    komorebi_admitted = $true
-                    live_hwnd = [bool]$snapshot.live_hwnd
-                    visible = [bool]$snapshot.visible
-                    uncloaked = [bool]$snapshot.visible
-                    on_screen = $true
-                    manageable = [bool]$snapshot.live_hwnd
-                    iconic = [bool]$snapshot.iconic
-                    style_admitted = $true
-                    style_repairable = [bool]$snapshot.live_hwnd
-                }
-                window = $snapshot
-            }
-        }
-    }
-
-    return [ordered]@{
-        schema = "narada.operator_surfaces.health_status.v0"
-        owner_site_id = "narada-andrey"
-        source = "runtime_binding_projection_fallback"
-        statuses = $statuses
-    }
-}
-
 if ([string]::IsNullOrWhiteSpace($HealthScriptPath)) {
     $HealthScriptPath = Join-Path $UserSiteRoot "tools\operator-surface-carriers\windows-glue\Get-OperatorSurfaceHealth.ps1"
 }
 
 $health = Invoke-HealthScript -Path $HealthScriptPath
-if ($null -eq $health) { $health = Get-FallbackHealthFromRuntimeBindings }
+if ($null -eq $health) { throw "operator_surface_health_required: $HealthScriptPath" }
 
 $windows = @()
 foreach ($status in @($health.statuses)) {
@@ -282,7 +238,7 @@ $result = [ordered]@{
     user_site_root = $UserSiteRoot
     pc_site_root = $PcSiteRoot
     authority = "mcp_invoked_windows_carrier"
-    health_source = if (Test-Path -LiteralPath $HealthScriptPath) { $HealthScriptPath } else { "runtime_binding_projection_fallback" }
+    health_source = $HealthScriptPath
     windows = $windows
 }
 

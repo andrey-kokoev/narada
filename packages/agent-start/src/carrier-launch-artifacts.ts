@@ -75,6 +75,7 @@ export function materializeCarrierLaunchFiles({
 
 export function materializeCarrierSessionRecord({
   identity,
+  carrier,
   runtime,
   startResult,
   dryRun = false,
@@ -101,11 +102,10 @@ export function materializeCarrierSessionRecord({
     runtime_contract_schema: runtimeContractSchema,
     runtime_substrate_kind: runtime,
     substrate: runtime,
-    carrier_runtime_kind: runtime === 'agent-cli' ? 'narada-agent-runtime-server' : runtime,
-    operator_surface_kind: runtime === 'agent-cli' ? 'agent-cli' : null,
-    compatibility_runtime_alias: runtime === 'agent-cli' ? 'agent-cli' : null,
-    window_carrier_kind: 'launcher_process',
-    carrier_kind: 'launcher_process',
+    launch_carrier_kind: carrier,
+    carrier_runtime_kind: carrier === 'agent-cli' ? 'narada-agent-runtime-server' : runtime,
+    operator_surface_kind: carrier === 'agent-cli' ? 'agent-cli' : null,
+    launcher_process_kind: 'launcher_process',
     workspace,
     launch_source: launchSource,
     user_site_root: userSiteRoot,

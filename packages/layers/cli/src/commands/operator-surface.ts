@@ -2,7 +2,6 @@ import { existsSync } from 'node:fs';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { join, resolve } from 'node:path';
-import { SqliteInboxStore } from '@narada2/control-plane';
 import type { CommandContext } from '../lib/command-wrapper.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { formattedResult, type CliFormat } from '../lib/cli-output.js';
@@ -158,9 +157,9 @@ interface OperatorSurfaceRuntimeBinding {
 }
 
 type OperatorActivityState = 'idle' | 'active_typing' | 'active_pointer' | 'unknown';
-type ActiveDeliveryPolicy = 'queue' | 'refuse' | 'fallback_to_inbox';
+type ActiveDeliveryPolicy = 'queue' | 'refuse';
 type CrossDesktopPolicy = 'same_desktop_only' | 'allow_with_authority' | 'operator_confirmed_switch_send_restore' | 'refuse';
-type DeliveryResultStatus = 'queued_waiting_for_idle' | 'delivered' | 'expired' | 'refused' | 'fallback_to_inbox' | 'deferred' | 'failed_with_fallback' | 'operator_confirmation_required';
+type DeliveryResultStatus = 'queued_waiting_for_idle' | 'delivered' | 'expired' | 'refused' | 'deferred' | 'operator_confirmation_required';
 type OperatorSurfaceDeliveryState = 'requested' | DeliveryResultStatus | 'explicit_interrupt' | 'operator_confirmed';
 
 const OPERATOR_SURFACE_DELIVERY_STATES: readonly OperatorSurfaceDeliveryState[] = [
@@ -169,9 +168,7 @@ const OPERATOR_SURFACE_DELIVERY_STATES: readonly OperatorSurfaceDeliveryState[] 
   'delivered',
   'expired',
   'refused',
-  'fallback_to_inbox',
   'deferred',
-  'failed_with_fallback',
   'operator_confirmation_required',
   'explicit_interrupt',
   'operator_confirmed',
@@ -911,7 +908,7 @@ function parseOperatorActivityState(value: string | undefined): OperatorActivity
 
 function parseActiveDeliveryPolicy(value: string | undefined): ActiveDeliveryPolicy {
   const normalized = value?.trim() || 'queue';
-  const allowed: ActiveDeliveryPolicy[] = ['queue', 'refuse', 'fallback_to_inbox'];
+  const allowed: ActiveDeliveryPolicy[] = ['queue', 'refuse'];
   if (!allowed.includes(normalized as ActiveDeliveryPolicy)) {
     throw new Error(`Unsupported active delivery policy: ${value}`);
   }
@@ -1058,9 +1055,7 @@ function decideOperatorSurfaceDelivery(args: {
     };
   }
   if (activityBlocks && !urgentAuthorized) {
-    const queuedStatus: DeliveryResultStatus = args.activeDeliveryPolicy === 'fallback_to_inbox'
-      ? 'fallback_to_inbox'
-      : args.activeDeliveryPolicy === 'refuse'
+    const queuedStatus: DeliveryResultStatus = args.activeDeliveryPolicy === 'refuse'
         ? 'refused'
         : args.deliveryTimeoutMs === 0
           ? 'expired'
@@ -1091,7 +1086,7 @@ function decideOperatorSurfaceDelivery(args: {
         restoration_evidence_required: operatorConfirmedSwitch,
         exact_safe_next_action: queuedStatus === 'queued_waiting_for_idle'
           ? 'Wait for Operator idle state, then retry governed delivery without stealing focus.'
-          : 'No focus/input mutation was performed; inspect fallback or retry when Operator is idle.',
+          : 'No focus/input mutation was performed; retry when Operator is idle.',
         reversible_or_rejected: true,
       },
       queue: queuedStatus === 'queued_waiting_for_idle'
@@ -1100,7 +1095,7 @@ function decideOperatorSurfaceDelivery(args: {
       delivery_case: queuedStatus === 'queued_waiting_for_idle' ? 'queued_until_operator_idle' : queuedStatus,
       safe_next_action: queuedStatus === 'queued_waiting_for_idle'
         ? 'Wait for Operator idle state, then retry governed delivery without stealing focus.'
-        : 'No focus/input mutation was performed; inspect fallback or retry when Operator is idle.',
+        : 'No focus/input mutation was performed; retry when Operator is idle.',
     };
   }
   const deliveryCase = operatorConfirmedSwitch
@@ -1372,50 +1367,7 @@ function buildDeliveryPromise(args: {
   };
 }
 
-function boundedDeliveryEvidence(args: {
-  eventId: string;
-  identity: string;
-  sender: string;
-  textDigest: string;
-  reason: string;
-}): Record<string, unknown> {
-  return {
-    event_id: args.eventId,
-    target_identity: args.identity,
-    sender_identity: args.sender,
-    text_digest: args.textDigest,
-    failure_reason: args.reason,
-  };
-}
-
-function writeDeliveryFallbackInbox(cwd: string, args: {
-  eventId: string;
-  identity: string;
-  sender: string;
-  textDigest: string;
-  reason: string;
-}): { envelope_id: string; target_locus: string } {
-  const store = new SqliteInboxStore(join(resolve(cwd), '.ai', 'inbox.db'));
-  try {
-    const envelope = store.insert({
-      envelope_id: `env_osm_fallback_${args.eventId}`,
-      received_at: new Date().toISOString(),
-      source: { kind: 'system_observation', ref: `operator-surface:${args.eventId}` },
-      target_locus: args.identity,
-      kind: 'observation',
-      authority: { level: 'system_observed', principal: 'operator-surface' },
-      payload: {
-        title: 'Operator Surface delivery fallback',
-        delivery_evidence: boundedDeliveryEvidence(args),
-      },
-    });
-    return { envelope_id: envelope.envelope_id, target_locus: envelope.target_locus ?? args.identity };
-  } finally {
-    store.close();
-  }
-}
-
-function fallbackBootstrapText(role: OperatorSurfaceAgentRole): string {
+function defaultBootstrapText(role: OperatorSurfaceAgentRole): string {
   const title = role === 'architect' ? 'Architect' : role === 'builder' ? 'Builder' : 'Observer';
   const rolePosture = role === 'observer'
     ? 'Observe coherence without building, lifecycle-reviewing, assigning, closing, or mutating tasks.'
@@ -1533,7 +1485,7 @@ export async function operatorSurfaceAgentInstantiateCommand(
     const bootstrapResult = bootstrap.result as { bootstrap_text?: string; error?: string };
     const bootstrapText = bootstrap.exitCode === ExitCode.SUCCESS && bootstrapResult.bootstrap_text
       ? bootstrapResult.bootstrap_text
-      : fallbackBootstrapText(role);
+      : defaultBootstrapText(role);
     const selfBindInstruction = 'narada operator-surface bind-focused --as self';
     const labelVerificationCommand = `narada operator-surface labels build --site ${JSON.stringify(site)} --format json`;
     const bindingVerification = {
@@ -1645,7 +1597,7 @@ export async function operatorSurfaceAgentInstantiateCommand(
       },
       identity: identityResult,
       bootstrap: {
-        source: bootstrap.exitCode === ExitCode.SUCCESS ? 'site_agent_bootstrap' : 'fallback',
+        source: bootstrap.exitCode === ExitCode.SUCCESS ? 'site_agent_bootstrap' : 'default_bootstrap',
         warning: bootstrap.exitCode === ExitCode.SUCCESS ? null : bootstrapResult.error ?? 'Site bootstrap contract unavailable',
         text: bootstrapText,
       },
@@ -2154,21 +2106,21 @@ export async function operatorSurfaceLabelsBuildCommand(
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
   const cwd = options.cwd ?? '.';
   const registry = await readOperatorSurfaceIdentities(cwd);
-  const compatibilityIssues = operatorSurfaceCarrierProjectionIssues(registry);
-  if (compatibilityIssues.length > 0) {
+  const projectionIssues = operatorSurfaceCarrierProjectionIssues(registry);
+  if (projectionIssues.length > 0) {
     return {
       exitCode: ExitCode.INVALID_CONFIG,
       result: {
         status: 'error',
         mutation_performed: false,
-        reason: 'operator_surface_identity_registry_incompatible_with_carrier_projection',
+        reason: 'operator_surface_identity_registry_not_projectable_to_carrier',
         registry_path: operatorSurfaceIdentityPath(cwd),
         projection_boundary: {
           durable_identity_authority: operatorSurfaceIdentityPath(cwd),
           carrier_fields_are_projection: true,
           windows_identity_name_source: 'identity_id',
         },
-        issues: compatibilityIssues,
+        issues: projectionIssues,
         repair_guidance: 'Repair durable identity records through narada operator-surface identity add or identity rename; do not edit Windows carrier files as identity authority.',
       },
     };
@@ -2191,7 +2143,7 @@ export async function operatorSurfaceLabelsBuildCommand(
         carrier_fields_are_projection: true,
         windows_identity_name_source: 'identity_id',
       },
-      projection_compatibility: {
+      projection_coherence: {
         status: 'pass',
         carrier: 'windows_focused_window_binding',
       },
@@ -2589,7 +2541,7 @@ function deriveOperatorSurfaceAgentActivityProjection(args: {
       {
         source: 'roster_projection',
         status: args.workStatus,
-        authority: 'compatibility_projection',
+        authority: 'roster_projection',
         ref: args.currentTask,
       },
       {
@@ -2793,15 +2745,15 @@ export async function operatorSurfaceInspectCompactCommand(
     };
   }
   const bindings = await readRuntimeBindings(cwd);
-  const compatibilityIssues = operatorSurfaceCarrierProjectionIssues(registry);
-  if (compatibilityIssues.length > 0) {
+  const projectionIssues = operatorSurfaceCarrierProjectionIssues(registry);
+  if (projectionIssues.length > 0) {
     return {
       exitCode: ExitCode.INVALID_CONFIG,
       result: {
         status: 'error',
         mutation_performed: false,
-        reason: 'operator_surface_identity_registry_incompatible_with_carrier_projection',
-        issues: compatibilityIssues,
+        reason: 'operator_surface_identity_registry_not_projectable_to_carrier',
+        issues: projectionIssues,
         repair_guidance: 'Repair durable identity records through narada operator-surface identity add or identity rename before compact inspection.',
       },
     };
@@ -3501,7 +3453,7 @@ export async function operatorSurfaceSendCommand(
     const renderedMessage = renderOperatorSurfaceMessage(sender, text, rawInput);
     const eventId = `ose_${Date.now()}_${textDigest(`${identity}:${renderedMessage.rendered_text}`).slice(0, 12)}`;
     const activationResult = parseActivationResult(options.activationResult);
-    const deliveryPromise = options.execute && (activeDeliveryPolicy === 'queue' || activeDeliveryPolicy === 'fallback_to_inbox')
+    const deliveryPromise = options.execute && activeDeliveryPolicy === 'queue'
       ? buildDeliveryPromise({
         eventId,
         identity,
@@ -3514,42 +3466,15 @@ export async function operatorSurfaceSendCommand(
       : null;
     const deliveryPromiseArtifact = deliveryPromise ? await writeOperatorSurfaceDeliveryPromise(cwd, deliveryPromise) : null;
     let effectiveDelivery = delivery;
-    let fallbackInbox: { envelope_id: string; target_locus: string } | null = null;
     if (options.execute && delivery.deliverable && activationResult === 'failed') {
-      if (activeDeliveryPolicy === 'fallback_to_inbox') {
-        fallbackInbox = writeDeliveryFallbackInbox(cwd, {
-          eventId,
-          identity,
-          sender,
-          textDigest: textDigest(renderedMessage.rendered_text),
-          reason: 'activation_failed',
-        });
-        effectiveDelivery = {
-          ...delivery,
-          status: 'failed_with_fallback',
-          state_path: ['requested', 'failed_with_fallback'],
-          deliverable: false,
-          reason: 'activation_failed',
-          queue: null,
-        };
-      } else {
-        effectiveDelivery = {
-          ...delivery,
-          status: 'deferred',
-          state_path: ['requested', 'deferred'],
-          deliverable: false,
-          reason: 'activation_failed',
-          queue: { timeout_ms: deliveryTimeoutMs, next_state: 'retry_after_activation_failure' },
-        };
-      }
-    } else if (options.execute && delivery.status === 'fallback_to_inbox') {
-      fallbackInbox = writeDeliveryFallbackInbox(cwd, {
-        eventId,
-        identity,
-        sender,
-        textDigest: textDigest(renderedMessage.rendered_text),
-        reason: delivery.reason,
-      });
+      effectiveDelivery = {
+        ...delivery,
+        status: 'deferred',
+        state_path: ['requested', 'deferred'],
+        deliverable: false,
+        reason: 'activation_failed',
+        queue: { timeout_ms: deliveryTimeoutMs, next_state: 'retry_after_activation_failure' },
+      };
     }
     let serialization: Record<string, unknown> | null = null;
     if (options.execute && effectiveDelivery.deliverable) {
@@ -3613,7 +3538,6 @@ export async function operatorSurfaceSendCommand(
       delivery_promise: deliveryPromise
         ? { promise_id: deliveryPromise.promise_id, artifact: deliveryPromiseArtifact, status: deliveryPromise.status }
         : null,
-      fallback_inbox: fallbackInbox,
       dry_run: Boolean(options.dryRun || !options.execute || !effectiveDelivery.deliverable),
       status: effectiveDelivery.deliverable
         ? options.execute ? 'event_recorded_for_runtime_locus' : 'validated_dry_run'
@@ -3627,7 +3551,6 @@ export async function operatorSurfaceSendCommand(
         mutation_performed: Boolean(options.execute && effectiveDelivery.deliverable),
         event_artifact: eventArtifact,
         delivery_promise_artifact: deliveryPromiseArtifact,
-        fallback_inbox: fallbackInbox,
         identity_resolution: publicIdentityResolution(identityResolution),
         ...agentFields,
         ...routeFields({ ...baseRoute, bindingStatus: 'bound', resolvedRecipient: identity }),

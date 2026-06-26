@@ -7,8 +7,9 @@ test('formats agent-start preamble with redacted API keys and startup sequence',
     agent_start_event: 'evt_1',
     identity: 'site.builder',
     role: 'builder',
-    runtime: 'agent-cli',
-    runtime_substrate_kind: 'agent-cli',
+    carrier_kind: 'agent-cli',
+    runtime: 'narada-agent-runtime-server',
+    runtime_substrate_kind: 'narada-agent-runtime-server',
     resume_command: 'agent-cli',
     capability_policy: {
       direct_substrate_script_execution: 'forbidden',
@@ -36,7 +37,7 @@ test('formats agent-start preamble with redacted API keys and startup sequence',
 });
 
 test('formats wait prompt', () => {
-  assert.equal(formatAgentStartWaitPrompt('site.builder', 'agent-cli'), 'Press Enter to start agent-runtime-server for site.builder...');
+  assert.equal(formatAgentStartWaitPrompt('site.builder', 'narada-agent-runtime-server'), 'Press Enter to start narada-agent-runtime-server for site.builder...');
 });
 
 test('handles sparse result without optional sections', () => {
@@ -62,7 +63,7 @@ test('does not redact empty API key values', () => {
   const text = formatAgentStartResult({
     identity: 'site.builder',
     role: 'builder',
-    runtime: 'agent-cli',
+    runtime: 'narada-agent-runtime-server',
     required_environment: {
       KIMI_API_KEY: '',
     },
@@ -77,8 +78,9 @@ test('emits ANSI color only when enabled', () => {
   const result = {
     identity: 'site.builder',
     role: 'builder',
-    runtime: 'agent-cli',
-    runtime_substrate_kind: 'agent-cli',
+    carrier_kind: 'agent-cli',
+    runtime: 'narada-agent-runtime-server',
+    runtime_substrate_kind: 'narada-agent-runtime-server',
     required_environment: {},
     startup_sequence: [],
   };

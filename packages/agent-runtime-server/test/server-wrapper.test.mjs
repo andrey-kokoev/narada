@@ -10,7 +10,6 @@ import { PassThrough } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 import * as canonicalRuntimeEvents from '../src/runtime-server-events.mjs';
 import {
-  carrierRuntimeArgs,
   createDelegatedAuthorityHandoff,
   createEventHub,
   createNarsLifecycleHookDispatcher,
@@ -60,14 +59,14 @@ test('package owns the Narada agent runtime server bins and exports', () => {
   assert.equal(packageJson.narada.carrier_substrate, '@narada2/carrier-runtime in-process');
   assert.equal(packageJson.narada.runtime_dependency_owner.includes('@narada2/carrier-runtime/runtime-dependencies'), true);
   assert.equal(packageJson.bin['narada-agent-runtime-server'], './bin/narada-agent-runtime-server.mjs');
-  assert.equal(packageJson.bin['agent-runtime-server'], './bin/narada-agent-runtime-server.mjs');
+  assert.equal(packageJson.bin['agent-runtime-server'], undefined);
   assert.equal(packageJson.exports['.'], './src/server-wrapper.mjs');
   assert.equal(packageJson.exports['./runtime-server-events'], './src/runtime-server-events.mjs');
   assert.equal(packageJson.dependencies['@narada2/agent-cli'], undefined);
   assert.equal(packageJson.dependencies['@narada2/carrier-terminal-projection'], 'workspace:*');
 });
 
-test('carrier runtime package boundary forbids temporary agent-cli compatibility adapter', () => {
+test('carrier runtime package boundary forbids agent-cli adapter imports', () => {
   const runtimePackage = JSON.parse(readFileSync(new URL('../../carrier-runtime/package.json', import.meta.url), 'utf8'));
   assert.equal(runtimePackage.dependencies?.['@narada2/agent-cli'], undefined);
   assert.equal(runtimePackage.exports?.['./compat-agent-cli-runtime-adapter'], undefined);
@@ -78,7 +77,7 @@ test('carrier runtime package boundary forbids temporary agent-cli compatibility
       const text = readFileSync(path, 'utf8');
       return /@narada2\/agent-cli|compat-agent-cli-runtime-adapter/.test(text) ? [path] : [];
     });
-  assert.deepEqual(offending, [], 'carrier-runtime must not import agent-cli or resurrect the temporary compatibility adapter');
+  assert.deepEqual(offending, [], 'carrier-runtime must not import agent-cli or reintroduce the retired adapter');
 });
 test('carrier runtime package boundary keeps client attach strings in projection registry', () => {
   const runtimeRoot = fileURLToPath(new URL('../../carrier-runtime', import.meta.url));
@@ -166,11 +165,6 @@ test('runtime server package boundary forbids direct agent-cli imports', () => {
       return /from ['"]@narada2\/agent-cli|import\(['"]@narada2\/agent-cli/.test(text) ? [path] : [];
     });
   assert.deepEqual(offending, [], 'agent-runtime-server must not import @narada2/agent-cli directly; use runtime-owned packages or explicit adapter packages');
-});
-
-test('runtime server normalizes compatibility argv before in-process carrier runtime', () => {
-  assert.deepEqual(carrierRuntimeArgs(['--identity', 'narada.test']), ['--identity', 'narada.test']);
-  assert.deepEqual(carrierRuntimeArgs(['--server', '--identity', 'narada.test']), ['--identity', 'narada.test']);
 });
 
 test('runtime server creates a governed delegated authority handoff for the carrier substrate', () => {
@@ -441,7 +435,7 @@ test('lifecycle dispatcher reports bounded redacted hook failures', async () => 
 });
 
 test('lifecycle binding is derived from runtime args before session bind', () => {
-  assert.deepEqual(lifecycleBindingFromArgs(['--server', '--identity', 'narada.test', '--session', 'runtime-package-test'], {
+  assert.deepEqual(lifecycleBindingFromArgs(['--identity', 'narada.test', '--session', 'runtime-package-test'], {
     NARADA_SITE_ROOT: 'D:/code/narada.test',
     NARADA_AGENT_START_EVENT_ID: 'evt_test',
   }), {
@@ -543,6 +537,7 @@ test('narada-owned entrypoint runs the carrier runtime in process', async () => 
     assert.match(events[0].health_endpoint, /^http:\/\/127\.0\.0\.1:\d+\/health$/);
     assert.match(events[0].event_endpoint, /^ws:\/\/127\.0\.0\.1:\d+\/events$/);
     assert.equal(events[0].attach_commands.agent_cli, `narada-agent-cli --attach ${events[0].event_endpoint}`);
+    assert.equal(events[0].attach_commands.agent_tui, `agent-tui --attach ${events[0].event_endpoint}`);
     assert.equal(events[0].attach_commands.agent_web_ui, `narada-agent-web-ui --event-endpoint ${events[0].event_endpoint} --health-endpoint ${events[0].health_endpoint}`);
     assert.match(events[0].attach_commands.operator_input_protocol, /conversation\.send/);
     assert.match(events[0].attach_commands.slash_command_protocol, /carrier\.command\.execute/);

@@ -58,7 +58,8 @@ param(
     [string]$ObligationId,
     [string]$TargetRole,
 
-    [string]$Runtime = "kimi",
+    [string]$Carrier = "kimi",
+    [string]$Runtime,
     [ValidateSet("openai-api", "kimi-api", "anthropic-api")]
     [string]$IntelligenceProvider,
     [switch]$NoLint,
@@ -234,11 +235,11 @@ function Invoke-NaradaAndreyDoctor {
             if_missing_capability_report = "Use inbox-mcp.local for cross-Site interaction."
         }
         review_pickup_escalation = [ordered]@{
-            status = if (@($reviewPickup.fallback_facts).Count -gt 0) { "attention" } elseif (@($reviewPickup.facts).Count -gt 0) { "observed" } else { "clear" }
+            status = if (@($reviewPickup.delivery_issue_facts).Count -gt 0) { "attention" } elseif (@($reviewPickup.facts).Count -gt 0) { "observed" } else { "clear" }
             source = "Invoke-ReviewPickupEscalation.ps1"
             reviewer_identity = $reviewPickup.reviewer_identity
             facts = @($reviewPickup.facts)
-            fallback_facts = @($reviewPickup.fallback_facts)
+            delivery_issue_facts = @($reviewPickup.delivery_issue_facts)
             state_path = $reviewPickup.state_path
             surface_facts_path = $reviewPickup.surface_facts_path
         }
@@ -248,7 +249,7 @@ function Invoke-NaradaAndreyDoctor {
             identity_name = $Agent
             due_count = if ($directedObligations.due_count -ne $null) { [int]$directedObligations.due_count } else { 0 }
             next_obligation = $directedObligations.next_obligation
-            fallback_fact = $directedObligations.fallback_fact
+            delivery_issue = $directedObligations.delivery_issue
             surface_facts_path = $directedObligations.surface_facts_path
             projection_authority = $false
         }
@@ -579,6 +580,7 @@ if ($Command -eq "agent-start") {
     if (-not (Test-Path -LiteralPath $script)) { throw "agent_start_surface_missing: $script" }
     $flags = @("agent-start")
     if ($Agent) { $flags += @("-Agent", $Agent) }
+    if ($Carrier) { $flags += @("-Carrier", $Carrier) }
     if ($Runtime) { $flags += @("-Runtime", $Runtime) }
     if ($Json) { $flags += "-Json" }
     if ($Exec) { $flags += "-Exec" }

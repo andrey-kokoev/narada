@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import { loadSiteMcpFabric, projectServerEnvironment } from '../../mcp-fabric/src/mcp-fabric.mjs';
-import { buildFallbackToolMetadata } from '../../carrier-action-admission/src/tool-metadata.mjs';
+import { buildNamePatternToolMetadata } from '../../carrier-action-admission/src/tool-metadata.mjs';
 
 const CHILD_PROCESS_ENV_ALLOWLIST = Object.freeze([
   'PATH',
@@ -57,6 +57,19 @@ const CHILD_PROCESS_ENV_ALLOWLIST = Object.freeze([
 ]);
 const MCP_STARTUP_FAILURES_KEY = '__mcp_startup_failures';
 const MCP_RUNTIME_DIAGNOSTICS_KEY = '__mcp_runtime_diagnostics';
+
+const WORKER_MCP_STARTUP_TOOL_NAMES = Object.freeze([
+  'agent_context_startup_sequence',
+  'agent_context_whoami',
+  'agent_context_show_bootstrap',
+  'agent_context_doctrinal_grounding',
+]);
+
+const WORKER_MCP_OUTPUT_READBACK_TOOL_NAMES = Object.freeze([
+  'fs_read_file',
+  'fs_read_file_range',
+  'fs_grep_search',
+]);
 
 function buildChildProcessEnv(extra = {}, baseEnv = process.env) {
   const env = {};
@@ -190,7 +203,7 @@ function toolFailureRecovery(message) {
 }
 
 function classifyTool(name, args) {
-  const metadata = buildFallbackToolMetadata(name);
+  const metadata = buildNamePatternToolMetadata(name);
   if (metadata?.read_only === true) return 'auto';
   return 'prompt';
 }
@@ -462,12 +475,12 @@ function createMcpStartupError(code, message, details = {}) {
   return error;
 }
 
-function mcpStartupDiagnostic(error, fallback = {}) {
+function mcpStartupDiagnostic(error, defaultFields = {}) {
   if (error?.diagnostic) return error.diagnostic;
   const message = error instanceof Error ? error.message : String(error);
   return {
     schema: 'narada.agent_cli.mcp_startup_diagnostic.v0',
-    ...fallback,
+    ...defaultFields,
     message,
   };
 }
@@ -489,6 +502,98 @@ function aggregateTools(mcpServers) {
       parameters: tool.inputSchema ?? { type: 'object', properties: {} },
     },
   }));
+}
+
+function workerMcpProjectionFromEnv(env = process.env) {
+  return parseWorkerMcpProjectionConfig(env.NARADA_WORKER_MCP_CONFIG);
+}
+
+function parseWorkerMcpProjectionConfig(value) {
+  if (value === undefined || value === null || value === '') return null;
+  let parsed;
+  try {
+    parsed = typeof value === 'string' ? JSON.parse(value) : value;
+  } catch (error) {
+    throw createMcpStartupError('worker_mcp_config_invalid_json', `Invalid NARADA_WORKER_MCP_CONFIG JSON: ${error.message}`, {
+      phase: 'worker_mcp_projection',
+    });
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw createMcpStartupError('worker_mcp_config_invalid', 'NARADA_WORKER_MCP_CONFIG must be a JSON object', {
+      phase: 'worker_mcp_projection',
+    });
+  }
+  const mode = String(parsed.native_mcp_mode ?? parsed.mode ?? 'scoped').trim().toLowerCase();
+  if (!['minimal', 'scoped', 'full'].includes(mode)) {
+    throw createMcpStartupError('worker_mcp_mode_invalid', `Unsupported worker MCP mode: ${mode}`, {
+      phase: 'worker_mcp_projection',
+      native_mcp_mode: mode,
+    });
+  }
+  return {
+    schema: parsed.schema ?? 'narada.worker.mcp_projection.v1',
+    native_mcp_mode: mode,
+    mcp_tool_allowlist: normalizeWorkerMcpToolList(parsed.mcp_tool_allowlist ?? parsed.required_mcp_tools ?? []),
+    include_startup_tools: parsed.include_startup_tools !== false,
+    include_output_readback_tools: parsed.include_output_readback_tools === true,
+  };
+}
+
+function normalizeWorkerMcpToolList(value) {
+  if (!Array.isArray(value)) return [];
+  const result = [];
+  const seen = new Set();
+  for (const item of value) {
+    const text = String(item ?? '').trim();
+    if (!text || seen.has(text)) continue;
+    seen.add(text);
+    result.push(text);
+  }
+  return result;
+}
+
+function applyWorkerMcpProjection(mcpServers, config = workerMcpProjectionFromEnv()) {
+  if (!config || config.native_mcp_mode === 'full') return mcpServers;
+  const allowed = new Set();
+  if (config.include_startup_tools !== false) for (const name of WORKER_MCP_STARTUP_TOOL_NAMES) allowed.add(name);
+  if (config.native_mcp_mode === 'scoped') for (const name of config.mcp_tool_allowlist ?? []) allowed.add(name);
+  if (config.include_output_readback_tools === true) for (const name of WORKER_MCP_OUTPUT_READBACK_TOOL_NAMES) allowed.add(name);
+
+  const projected = {};
+  for (const [serverName, server] of Object.entries(mcpServers ?? {})) {
+    const seenProviderNames = new Set();
+    const tools = (server.tools ?? []).filter((tool) => workerMcpToolAllowed({ serverName, tool, allowed, seenProviderNames }));
+    projected[serverName] = { ...server, tools };
+  }
+  attachMcpStartupFailures(projected, getMcpStartupFailures(mcpServers));
+  Object.defineProperty(projected, '__mcp_worker_projection', {
+    value: {
+      schema: 'narada.worker.mcp_projection.applied.v1',
+      native_mcp_mode: config.native_mcp_mode,
+      requested_tool_count: config.mcp_tool_allowlist?.length ?? 0,
+      exposed_server_count: Object.keys(projected).length,
+      exposed_tool_server_count: Object.values(projected).filter((server) => (server.tools ?? []).length > 0).length,
+      exposed_tool_count: aggregateToolBindings(projected).length,
+    },
+    enumerable: false,
+    configurable: true,
+  });
+  return projected;
+}
+
+function workerMcpToolAllowed({ serverName, tool, allowed, seenProviderNames }) {
+  if (!tool?.name) return false;
+  const providerName = providerSafeToolName(tool.name, seenProviderNames);
+  seenProviderNames.add(providerName);
+  const candidates = [
+    tool.name,
+    providerName,
+    `${serverName}.${tool.name}`,
+    `${serverName}.${providerName}`,
+    `mcp__${serverName.replace(/-/g, '_')}__${tool.name}`,
+    `mcp__${serverName.replace(/-/g, '_')}__${providerName}`,
+  ];
+  return candidates.some((candidate) => allowed.has(candidate));
 }
 
 function aggregateToolBindings(mcpServers) {
@@ -587,6 +692,9 @@ export {
   shouldSuppressMcpStderr,
   aggregateTools,
   aggregateToolBindings,
+  workerMcpProjectionFromEnv,
+  parseWorkerMcpProjectionConfig,
+  applyWorkerMcpProjection,
   providerSafeToolName,
   providerToolNameForOriginal,
   originalToolNameForProvider,

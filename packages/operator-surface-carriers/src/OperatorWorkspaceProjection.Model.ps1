@@ -341,8 +341,8 @@ function New-NaradaOperatorWorkspaceProjection {
             topology_variants = @($workspace.topology_variants)
         }
         authority = [ordered]@{
-            workspace_membership = "User Site SQLite operator-surface.db; operator-workspaces.json is a compatibility projection"
-            runtime_hwnd_bindings = "PC Site SQLite operator-surface-runtime.db; JSON bindings are compatibility projection evidence"
+            workspace_membership = "User Site SQLite operator-surface.db; operator-workspaces.json is generated projection evidence"
+            runtime_hwnd_bindings = "PC Site SQLite operator-surface-runtime.db; JSON bindings are generated projection evidence"
             komorebi = "tiling projection state"
         }
         desired_members = @($members)

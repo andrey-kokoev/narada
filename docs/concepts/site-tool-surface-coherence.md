@@ -61,7 +61,7 @@ The coherence audit fails when:
 - known hardcoded local root/CLI defaults appear in executable surfaces;
 - `TargetSiteRoot` defaults from the user Site root.
 
-Generated agent-cli wrappers are repaired by running `narada sites reconcile agent-cli-wrapper --root <site-root-or-workspace> --apply`. The command renders `Start-AgentCliSession.ps1` from the packaged `@narada2/agent-cli` template and stamps the normalized template hash into the Site-local wrapper.
+Generated agent-cli client/projection wrappers are repaired by running `narada sites reconcile agent-cli-wrapper --root <site-root-or-workspace> --apply`. The command renders `Start-AgentCliSession.ps1` from the packaged `@narada2/agent-cli` template and stamps the normalized template hash into the Site-local wrapper. This wrapper is not the `Carrier=agent-cli` launch path; carrier launch uses packaged `narada-agent-runtime-server` directly.
 
 Tool-surface manifests are repaired by running `narada sites reconcile tool-surface-manifest --root <site-root-or-workspace> --apply`. This command is Narada-proper-owned; it replaces profile-local manifest sync as the canonical finite repair surface.
 

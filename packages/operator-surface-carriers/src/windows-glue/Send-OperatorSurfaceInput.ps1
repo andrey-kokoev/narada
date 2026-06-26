@@ -16,8 +16,8 @@ param(
     [string]$ActiveInputPolicy,
     [int]$RequiredIdleMs = -1,
     [int]$IdleWaitTimeoutMs = -1,
-    [ValidateSet("sender_notification", "fallback_to_inbox", "expire")]
-    [string]$FallbackPolicy,
+    [ValidateSet("sender_notification", "expire")]
+    [string]$TimeoutOutcomePolicy,
     [int]$CrossDesktopWarningSeconds = 3,
     [string]$DeliveryPolicyPath,
     [int]$InputIdleFixtureMs = -1,
@@ -365,9 +365,9 @@ function Read-OperatorSurfaceInputDeliveryPolicy {
             requires_idle_gate = $true
             requires_same_desktop_or_explicit_cross_desktop_policy = $true
         }
-        fallback = [ordered]@{
+        timeout_outcome = [ordered]@{
             default = "sender_notification"
-            allowed = @("queued", "expired", "fallback_to_inbox", "sender_notification")
+            allowed = @("queued", "expired", "sender_notification")
         }
     }
 
@@ -543,8 +543,8 @@ if ($RequiredIdleMs -lt 0) {
 if ($IdleWaitTimeoutMs -lt 0) {
     $IdleWaitTimeoutMs = if ($deliveryPolicy.active_input.wait_timeout_ms -ne $null) { [int]$deliveryPolicy.active_input.wait_timeout_ms } else { 5000 }
 }
-if ([string]::IsNullOrWhiteSpace($FallbackPolicy)) {
-    $FallbackPolicy = if ($deliveryPolicy.active_input.on_timeout) { [string]$deliveryPolicy.active_input.on_timeout } elseif ($deliveryPolicy.fallback.default) { [string]$deliveryPolicy.fallback.default } else { "sender_notification" }
+if ([string]::IsNullOrWhiteSpace($TimeoutOutcomePolicy)) {
+    $TimeoutOutcomePolicy = if ($deliveryPolicy.active_input.on_timeout) { [string]$deliveryPolicy.active_input.on_timeout } elseif ($deliveryPolicy.timeout_outcome.default) { [string]$deliveryPolicy.timeout_outcome.default } else { "sender_notification" }
 }
 
 if ([string]::IsNullOrWhiteSpace($IdentityName)) {
@@ -803,7 +803,7 @@ $evidence = [ordered]@{
         active_input_policy = $ActiveInputPolicy
         required_idle_ms = $RequiredIdleMs
         idle_wait_timeout_ms = $IdleWaitTimeoutMs
-        fallback_policy = $FallbackPolicy
+        timeout_outcome_policy = $TimeoutOutcomePolicy
         cross_desktop_policy = $CrossDesktopPolicy
         foreground_last_resort_enabled = [bool]$deliveryPolicy.foreground_last_resort.enabled
         minimized_or_offscreen_policy = if ($deliveryPolicy.minimized_or_offscreen.policy) { [string]$deliveryPolicy.minimized_or_offscreen.policy } else { "not_declared" }
@@ -815,7 +815,7 @@ $evidence = [ordered]@{
         action = "not_evaluated"
         waited_ms = 0
         timed_out = $false
-        fallback_policy = $FallbackPolicy
+        timeout_outcome_policy = $TimeoutOutcomePolicy
     }
     low_churn_delivery = [ordered]@{
         current_text_path = "clipboard_paste_plus_sendkeys"
@@ -895,7 +895,7 @@ if ($RequiredIdleMs -gt 0 -and $idleBefore -ge 0 -and $idleBefore -lt $RequiredI
             if ($currentIdle -ge 0 -and $currentIdle -lt $RequiredIdleMs) {
                 $evidence.operator_input.timed_out = $true
                 $evidence.status = "queued_waiting_for_idle_expired"
-                $evidence.failure_reason = "operator_active_input_timeout: idle ${currentIdle}ms stayed below required ${RequiredIdleMs}ms after ${waitedMs}ms; fallback=$FallbackPolicy"
+                $evidence.failure_reason = "operator_active_input_timeout: idle ${currentIdle}ms stayed below required ${RequiredIdleMs}ms after ${waitedMs}ms; timeout_outcome=$TimeoutOutcomePolicy"
                 Write-JsonFile -Path $eventPath -Value $evidence
                 if ($PassThru) { $evidence | ConvertTo-Json -Depth 50 }
                 throw $evidence.failure_reason

@@ -55,14 +55,14 @@ export function nonEmptyString(value) {
   return value !== null && value !== undefined && String(value).trim() !== '';
 }
 
-export function resolveIntelligenceProviderInputSource(argumentValue, environmentValue, runtimeName, {
+export function resolveIntelligenceProviderInputSource(argumentValue, environmentValue, carrierName, {
   processEnv = process.env,
   siteEnvBindings,
 } = {}) {
   if (nonEmptyString(argumentValue)) {
     return { source_field: 'cli_argument' };
   }
-  if (runtimeName === 'agent-cli' && nonEmptyString(environmentValue)) {
+  if (carrierName === 'agent-cli' && nonEmptyString(environmentValue)) {
     const siteBinding = siteEnvBindings.get('NARADA_INTELLIGENCE_PROVIDER');
     if (siteBinding) return siteBinding;
     if (nonEmptyString(processEnv.NARADA_INTELLIGENCE_PROVIDER_SOURCE_FIELD)) {
@@ -99,7 +99,7 @@ export function requiredNextProviderSupportStep(state, adapterKind) {
   if (state === PROVIDER_SUPPORT_STATES.ADMITTED_UNSUPPORTED) return `Implement request adapter ${adapterKind} and move the provider to adapter_implemented.`;
   if (state === PROVIDER_SUPPORT_STATES.ADAPTER_IMPLEMENTED) return 'Verify launcher, docs, credential mapping, and runtime tests before marking verified_supported.';
   if (state === PROVIDER_SUPPORT_STATES.REMOVED) return 'Use an admitted replacement provider or restore the provider through a new contract revision.';
-  if (state === PROVIDER_SUPPORT_STATES.DEPRECATED) return 'Provider remains launchable for compatibility; migrate to a non-deprecated provider.';
+  if (state === PROVIDER_SUPPORT_STATES.DEPRECATED) return 'Provider remains launchable during the explicit deprecation window; migrate to a non-deprecated provider.';
   return 'Provider is verified for launch.';
 }
 
@@ -136,7 +136,7 @@ export function withResolutionStates(outcome, states) {
   };
 }
 
-export function resolveIntelligenceProviderLaunch(value, runtimeName, inputSource = { source_field: null }, {
+export function resolveIntelligenceProviderLaunch(value, carrierName, inputSource = { source_field: null }, {
   metadataByProvider,
   admittedProviders,
   defaultProvider,
@@ -147,7 +147,7 @@ export function resolveIntelligenceProviderLaunch(value, runtimeName, inputSourc
   const inputAbsent = value === null || value === undefined || String(value).trim() === '';
   if (inputAbsent) {
     pushState('input_absent');
-    if (runtimeName !== 'agent-cli') return null;
+    if (carrierName !== 'agent-cli') return null;
     value = defaultProvider;
     pushState('default_provider_selected', { intelligence_provider: value });
   }
@@ -159,18 +159,18 @@ export function resolveIntelligenceProviderLaunch(value, runtimeName, inputSourc
   }
   pushState('provider_known', { intelligence_provider: provider });
 
-  if (runtimeName !== 'agent-cli') {
+  if (carrierName !== 'agent-cli') {
     pushState('launch_refused', { reason_code: 'intelligence_provider_runtime_unsupported' });
     return withResolutionStates({
       schema,
       status: 'refused',
       reason_code: 'intelligence_provider_runtime_unsupported',
       intelligence_provider: provider,
-      runtime_substrate_kind: runtimeName,
-      reason: '-IntelligenceProvider currently applies only to -Runtime agent-cli. Kimi and Codex CLI provider selection remains owned by those carriers.',
+      carrier_kind: carrierName,
+      reason: '-IntelligenceProvider currently applies only to -Carrier agent-cli. Kimi and Codex CLI provider selection remains owned by those carriers.',
     }, states);
   }
-  pushState('runtime_supports_provider_selection', { runtime_substrate_kind: runtimeName });
+  pushState('carrier_supports_provider_selection', { carrier_kind: carrierName });
 
   const providerContract = metadataByProvider[provider];
   const credentialRequirement = providerCredentialRequirement(provider, providerContract);

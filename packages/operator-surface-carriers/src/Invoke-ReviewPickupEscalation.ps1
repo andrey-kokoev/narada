@@ -96,7 +96,7 @@ function Resolve-NaradaCliForReviewPickup {
         [string]$Explicit
     )
 
-    $fallback = "delegated CLI embodiment not loadable / missing EE-MCP capability"
+    $missingCapabilityReport = "delegated CLI embodiment not loadable / missing EE-MCP capability"
     $candidates = [System.Collections.Generic.List[object]]::new()
 
     if (-not [string]::IsNullOrWhiteSpace($Explicit)) {
@@ -135,7 +135,7 @@ function Resolve-NaradaCliForReviewPickup {
                     prefix_args = @($resolvedPath)
                     source = [string]$candidate.source
                     resolved_path = $resolvedPath
-                    missing_capability_report = $fallback
+                    missing_capability_report = $missingCapabilityReport
                 }
             }
 
@@ -146,21 +146,21 @@ function Resolve-NaradaCliForReviewPickup {
                 prefix_args = @()
                 source = [string]$candidate.source
                 resolved_path = $resolvedPath
-                missing_capability_report = $fallback
+                missing_capability_report = $missingCapabilityReport
             }
         }
     }
 
-    $shim = Get-Command narada -ErrorAction SilentlyContinue
-    if ($shim) {
+    $pathCommand = Get-Command narada -ErrorAction SilentlyContinue
+    if ($pathCommand) {
         return [pscustomobject][ordered]@{
             available = $true
             kind = "path_command"
-            executable = $shim.Source
+            executable = $pathCommand.Source
             prefix_args = @()
             source = "PATH:narada"
-            resolved_path = $shim.Source
-            missing_capability_report = $fallback
+            resolved_path = $pathCommand.Source
+            missing_capability_report = $missingCapabilityReport
         }
     }
 
@@ -171,7 +171,7 @@ function Resolve-NaradaCliForReviewPickup {
         prefix_args = @()
         source = "unavailable"
         resolved_path = $null
-        missing_capability_report = $fallback
+        missing_capability_report = $missingCapabilityReport
     }
 }
 
@@ -417,7 +417,7 @@ foreach ($target in $targets) {
         reviewer_activity = $activity
         due = $false
         suppressed = $false
-        fallback_exposed = $false
+        delivery_issue_exposed = $false
         reason = $null
     }
 
@@ -429,7 +429,7 @@ foreach ($target in $targets) {
         $fact.reason = "reviewer_active_on_item"
     } elseif (-not $reviewerIdle) {
         $fact.reason = if ($activity.admissible) { "reviewer_not_idle" } else { "reviewer_activity_not_admissible" }
-        $fact.fallback_exposed = $true
+        $fact.delivery_issue_exposed = $true
     } elseif ($ageSeconds -lt $DelaySeconds) {
         $fact.reason = "delay_not_elapsed"
     } else {
@@ -459,10 +459,10 @@ foreach ($target in $targets) {
             if ($BridgeResultFixturePath) { $args.BridgeResultFixturePath = $BridgeResultFixturePath }
             $delivery = (& $bus @args) | ConvertFrom-NaradaJson
             $fact.delivery = $delivery
-            $fact.fallback_exposed = [string]$delivery.delivery_state -ne "delivered"
+            $fact.delivery_issue_exposed = [string]$delivery.delivery_state -ne "delivered"
         } else {
             $fact.reason = "due_without_emit_osm"
-            $fact.fallback_exposed = $true
+            $fact.delivery_issue_exposed = $true
         }
         $record.sent_at = $now.ToString("o")
         $record.sent_count = [int]$record.sent_count + 1
@@ -501,7 +501,7 @@ $result = [pscustomobject][ordered]@{
     facts = @($facts.ToArray())
     sent = @($sent.ToArray())
     suppressed = @($suppressed.ToArray())
-    fallback_facts = @($facts.ToArray() | Where-Object { $_.fallback_exposed -eq $true })
+    delivery_issue_facts = @($facts.ToArray() | Where-Object { $_.delivery_issue_exposed -eq $true })
 }
 
 if ($PassThru) { $result | ConvertTo-Json -Depth 80 } else { $result }

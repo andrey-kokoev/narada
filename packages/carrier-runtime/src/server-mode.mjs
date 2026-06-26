@@ -6,7 +6,7 @@ import {
 } from '@narada2/carrier-protocol';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { normalizeCarrierRuntimeContext } from './carrier-runtime-context.mjs';
+import { createCarrierRuntimeContext } from './carrier-runtime-context.mjs';
 import { createInputQueue } from './input-queue.mjs';
 
 export async function runCarrierServerMode({
@@ -17,9 +17,7 @@ export async function runCarrierServerMode({
   runtimeContext,
   dependencies,
 } = {}) {
-  const ctx = runtimeContext
-    ? normalizeCarrierRuntimeContext(runtimeContext)
-    : normalizeCarrierRuntimeContext(config);
+  const ctx = createCarrierRuntimeContext(runtimeContext ?? config);
   const {
     identity,
     session,
@@ -38,6 +36,7 @@ export async function runCarrierServerMode({
   } = ctx;
   const {
     discoverAndStartMcpServers,
+    applyWorkerMcpProjection = (mcpServers) => mcpServers,
     aggregateTools,
     createMcpStatusSnapshot,
     readMcpPreflightArtifact,
@@ -63,7 +62,7 @@ export async function runCarrierServerMode({
     onOperationHeartbeatDirectiveStopped = () => {},
   } = dependencies ?? {};
 
-  const mcpServers = await discoverAndStartMcpServers(siteRoot);
+  const mcpServers = applyWorkerMcpProjection(await discoverAndStartMcpServers(siteRoot));
   const allTools = aggregateTools(mcpServers);
   const mcpStatus = createMcpStatusSnapshot(mcpServers);
   const mcpPreflightArtifact = readMcpPreflightArtifact();
@@ -137,14 +136,19 @@ export async function runCarrierServerMode({
     path: sessionPath ? join(dirname(sessionPath), 'heartbeat.json') : null,
     session,
     identity,
-    runtime: 'agent-cli',
+    runtime: 'narada-agent-runtime-server',
+    carrier_kind: 'agent-cli',
+    operator_surface_kind: 'agent-cli',
     mode: 'server',
     sessionDir: sessionPath ? dirname(sessionPath) : null,
   });
 
   emit('session_started', {
     transport: 'jsonl_stdio',
-    runtime: 'agent-cli',
+    runtime: 'narada-agent-runtime-server',
+    runtime_substrate_kind: 'narada-agent-runtime-server',
+    carrier_kind: 'agent-cli',
+    operator_surface_kind: 'agent-cli',
     mode: 'server',
     site_root: siteRoot,
     provider: intelligenceProvider,
@@ -251,7 +255,7 @@ export async function runCarrierServerMode({
   closeMcpServers(mcpServers);
 }
 
-function startCarrierHeartbeat({ path, session, identity, runtime, mode, sessionDir, intervalMs = 5000 } = {}) {
+function startCarrierHeartbeat({ path, session, identity, runtime, carrier_kind, operator_surface_kind, mode, sessionDir, intervalMs = 5000 } = {}) {
   if (!path) return { stop() {} };
   const startedAt = new Date().toISOString();
   const write = (status = 'alive') => {
@@ -262,6 +266,9 @@ function startCarrierHeartbeat({ path, session, identity, runtime, mode, session
       carrier_session_id: session,
       agent_id: identity,
       runtime,
+      runtime_substrate_kind: runtime,
+      carrier_kind,
+      operator_surface_kind,
       mode,
       pid: process.pid,
       session_dir: sessionDir,

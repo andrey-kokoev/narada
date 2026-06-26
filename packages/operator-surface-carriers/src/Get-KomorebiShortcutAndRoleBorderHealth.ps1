@@ -294,7 +294,7 @@ $distinguishingEvidence = if (-not $whkdConfigOk) {
 $visibleLabelStatus = if (-not $oslRunning) {
     "unavailable_osl_not_running"
 } elseif ($bindingDiagnoses.Count -gt 0) {
-    "labels_projected_from_compatibility_json"
+    "labels_projected_from_json"
 } else {
     "osl_alive_no_visible_label_projection"
 }
@@ -303,8 +303,8 @@ $healthTaxonomy = [ordered]@{
     schema = "narada.operator_surfaces.health_taxonomy.v0"
     canonical_model = "Separate binding authority, projection freshness, OSL process liveness, visible-label confidence, and repair-capability availability. Healthy process liveness alone is not healthy operator-surface state."
     authority_boundaries = [ordered]@{
-        binding_authority = "operator_surface_health SQLite diagnosis; this script reports projection-only compatibility evidence"
-        projection_authority = "projection_only_compatibility_json"
+        binding_authority = "operator_surface_health SQLite diagnosis; this script reports projection-only JSON evidence"
+        projection_authority = "projection_only_json"
         visible_label_authority = "OSL runtime observation plus projected binding labels"
         repair_authority = "declared local repair scripts; mutating repair still requires operator authority"
     }
@@ -339,7 +339,7 @@ $healthTaxonomy = [ordered]@{
             projected_binding_count = $labelBindings.Count
             role_color_binding_count = $roleColorBindings.Count
             missing_role_color_binding_count = $missingRoleColorBindings.Count
-            note = "Role border colors are projection values from SQLite-authoritative operator-surface profiles; the compatibility JSON is not authority."
+            note = "Role border colors are projection values from SQLite-authoritative operator-surface profiles; the JSON projection is not authority."
         }
         repair_capability_availability = [ordered]@{
             status = if (Test-Path -LiteralPath (Join-Path $UserSiteRoot "tools\operator-surface-carriers\Restart-WhkdDaemon.ps1")) { "available" } else { "missing_capability" }

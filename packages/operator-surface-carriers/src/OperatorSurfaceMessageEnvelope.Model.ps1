@@ -150,9 +150,9 @@ function New-OperatorSurfaceMessageEnvelope {
         target_operator_surface = [ordered]@{
             identity_name = $ToIdentity
         }
-        compatibility = [ordered]@{
+        schema_projection = [ordered]@{
             v0_aliases_present = $true
-            v0_aliases_deprecated = $true
+            v0_aliases_retired = $true
         }
         from = $Sender
         to = [ordered]@{

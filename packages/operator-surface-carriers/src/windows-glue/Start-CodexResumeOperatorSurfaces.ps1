@@ -5,8 +5,11 @@ param(
     [string]$UserSiteRoot = $(if ($env:NARADA_USER_SITE_ROOT) { $env:NARADA_USER_SITE_ROOT } else { Join-Path $HOME 'Narada' }),
     [string]$PcSiteRoot = $(if ($env:NARADA_PC_SITE_ROOT) { $env:NARADA_PC_SITE_ROOT } else { "C:\ProgramData\Narada\sites\pc\desktop-sunroom-2" }),
     [string[]]$IdentityResumePair,
-    [ValidateSet("codex", "kimi", "agent-cli")]
+    [ValidateSet("codex", "kimi", "narada-agent-runtime-server")]
     [string]$Runtime = "codex",
+    [Parameter(Mandatory = $true)]
+    [ValidateSet("codex", "kimi", "agent-cli")]
+    [string]$Carrier,
     [switch]$EnsurePresent,
     [switch]$ShowSummary,
     [switch]$DryRun,
@@ -363,6 +366,7 @@ foreach ($pair in @(Get-LaunchPairs)) {
         "-UserSiteRoot", $UserSiteRoot,
         "-IdentityName", $identityName,
         "-Runtime", $Runtime,
+        "-Carrier", $Carrier,
         "-CarrierId", $carrierId,
         "-ClaimPath", $claimPath
     )
@@ -370,6 +374,8 @@ foreach ($pair in @(Get-LaunchPairs)) {
     $action = [ordered]@{
         identity_name = $identityName
         runtime = $Runtime
+        runtime_substrate_kind = $Runtime
+        carrier_kind = $Carrier
         carrier_id = $carrierId
         claim_path = $claimPath
         before_snapshot_path = $beforePath
@@ -426,6 +432,8 @@ $launcherResult = [ordered]@{
     status = if ($DryRun) { "dry_run" } elseif ($EnsurePresent) { "ensured" } else { "launched" }
     dry_run = [bool]$DryRun
     runtime = $Runtime
+    runtime_substrate_kind = $Runtime
+    carrier_kind = $Carrier
     result_path = $launcherResultPath
     ensure_present = [bool]$EnsurePresent
     title_used_as_binding_proof = $false

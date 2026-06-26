@@ -20,12 +20,12 @@ const providerAdapterContext = {
   provider: process.env.NARADA_INTELLIGENCE_PROVIDER ?? 'codex-subscription',
   apiKey: '',
   baseUrl: 'https://api.openai.com',
-  model: process.env.CODEX_MODEL ?? process.env.NARADA_CODEX_MODEL ?? 'gpt-5',
+  model: process.env.CODEX_MODEL ?? process.env.NARADA_CODEX_MODEL ?? null,
   thinking: process.env.NARADA_AI_THINKING ?? process.env.NARADA_THINKING_LEVEL ?? 'medium',
   siteRoot: process.cwd(),
   nativeMcpTools: parseBooleanEnv(process.env.NARADA_CODEX_NATIVE_MCP_TOOLS, true),
   sessionDir: process.cwd(),
-  buildChildProcessEnv: fallbackChildProcessEnv,
+  buildChildProcessEnv: defaultChildProcessEnv,
   writeDurableTextFile: (path, text, encoding = 'utf8') => writeFileSync(path, text, encoding),
 };
 let codexSubscriptionThreadId = null;
@@ -34,15 +34,15 @@ function configureProviderAdapterContext(nextContext = {}) {
   Object.assign(providerAdapterContext, Object.fromEntries(Object.entries(nextContext).filter(([, value]) => value !== undefined)));
 }
 
-function parseBooleanEnv(value, fallback = false) {
-  if (value === undefined || value === null || value === '') return fallback;
+function parseBooleanEnv(value, defaultValue = false) {
+  if (value === undefined || value === null || value === '') return defaultValue;
   const normalized = String(value).trim().toLowerCase();
   if (['1', 'true', 'yes', 'on'].includes(normalized)) return true;
   if (['0', 'false', 'no', 'off'].includes(normalized)) return false;
-  return fallback;
+  return defaultValue;
 }
 
-function fallbackChildProcessEnv(extra = {}, baseEnv = process.env) {
+function defaultChildProcessEnv(extra = {}, baseEnv = process.env) {
   return { ...baseEnv, ...extra, FORCE_COLOR: '0', NO_COLOR: '1' };
 }
 
@@ -389,14 +389,14 @@ function parseAnthropicMessagesResponse(response) {
 function buildCodexExecArgs(request, options = {}) {
   const { model = providerAdapterContext.model, thinking = providerAdapterContext.thinking, siteRoot = providerAdapterContext.siteRoot } = options;
   const effort = reasoningEffort(thinking);
+  const requestedModel = request.arguments?.model ?? model;
   const common = [
     '--json',
     '--dangerously-bypass-approvals-and-sandbox',
-    '-m',
-    request.arguments?.model ?? model,
     '-c',
     'approval_policy="never"',
   ];
+  if (requestedModel) common.push('-m', requestedModel);
   if (effort) common.push('-c', `model_reasoning_effort="${effort}"`);
   if (request.arguments?.native_mcp_tools === true) {
     common.push(...codexExecMcpConfigArgs(request.arguments?.mcpServers ?? {}));
@@ -458,6 +458,16 @@ function codexExecEventText(event) {
   const item = event.item;
   if (item?.type === 'agent_message' && typeof item.text === 'string') return item.text;
   return '';
+}
+
+function accumulateCodexExecText(content, text) {
+  const appendText = content && text.startsWith(content) ? text.slice(content.length) : text;
+  const nextContent = content + appendText;
+  return {
+    content: nextContent,
+    appendText,
+    suppressStreaming: isPotentialNaradaToolCallText(nextContent) || !!parseNaradaToolCall(nextContent),
+  };
 }
 
 function defaultUserCodexHome() {
@@ -593,6 +603,7 @@ function formatCompactJsonSchema(schema, { limit = 1200 } = {}) {
 
 export {
   REQUEST_ADAPTERS,
+  accumulateCodexExecText,
   buildAnthropicMessagesRequest,
   buildCodexExecArgs,
   buildCodexMcpRequest,

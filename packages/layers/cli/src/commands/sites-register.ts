@@ -194,7 +194,7 @@ export function registerSitesCommands(program: Command): void {
 
   reconcileCmd
     .command('agent-cli-wrapper')
-    .description('Reconcile Start-AgentCliSession.ps1 from the packaged @narada2/agent-cli template')
+    .description('Reconcile the Start-AgentCliSession.ps1 client/projection wrapper from the packaged @narada2/agent-cli template')
     .option('--root <path>', 'Site root or containing workspace root', '.')
     .option('--apply', 'Write the reconciled wrapper', false)
     .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')

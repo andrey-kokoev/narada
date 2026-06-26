@@ -16,22 +16,22 @@ export function shouldDeferQueuedInput(event, { rl, promptState } = {}) {
 export function normalizeInputEvent(input, defaults = {}, { randomIdFn = defaultRandomId } = {}) {
   const record = normalizeInputRecord(input);
   const receivedAt = defaults.received_at ?? input?.received_at ?? new Date().toISOString();
-  const legacySource = record.source;
-  const protocolSourceKind = input?.source_kind ?? sourceKindForLegacyInputSource(legacySource);
+  const inputSource = record.source;
+  const protocolSourceKind = input?.source_kind ?? sourceKindForInputSource(inputSource);
   const protocolMetadata = {
     ...(input?.metadata ?? {}),
-    legacy_source: legacySource,
+    input_source: inputSource,
     ...(protocolSourceKind === 'system' && record.directive_id ? { directive_provenance: { kind: 'system_directive' } } : {}),
-    ...(legacySource === 'operator_directive' ? { directive_provenance: { kind: 'explicit_operator_directive_surface' } } : {}),
-    ...(legacySource === 'observer' && !input?.metadata?.observer ? { observer: defaultObserverMetadata(input) } : {}),
+    ...(inputSource === 'operator_directive' ? { directive_provenance: { kind: 'explicit_operator_directive_surface' } } : {}),
+    ...(inputSource === 'observer' && !input?.metadata?.observer ? { observer: defaultObserverMetadata(input) } : {}),
   };
   const protocolEvent = normalizeCarrierInputEvent({
     schema: 'narada.carrier.input_event.v1',
     event_id: input?.event_id ?? `input_${randomIdFn()}`,
     source_kind: protocolSourceKind,
-    source_id: input?.source_id ?? sourceIdForLegacyInputSource(legacySource),
-    transport: normalizeLegacyTransport(input?.transport ?? defaults.transport ?? transportForInputSource(legacySource)),
-    delivery_mode: input?.delivery_mode ?? deliveryModeForLegacyInputSource(legacySource),
+    source_id: input?.source_id ?? sourceIdForInputSource(inputSource),
+    transport: input?.transport ?? defaults.transport ?? transportForInputSource(inputSource),
+    delivery_mode: input?.delivery_mode ?? deliveryModeForInputSource(inputSource),
     hold_condition: input?.hold_condition ?? null,
     content: record.content,
     created_at: receivedAt,
@@ -43,7 +43,7 @@ export function normalizeInputEvent(input, defaults = {}, { randomIdFn = default
     ...protocolEvent,
     received_at: protocolEvent.created_at,
     content: record.content,
-    source: legacySource,
+    source: inputSource,
     authority_ref: record.authority_ref,
     directive_id: protocolEvent.directive_id,
     request_id: input?.request_id ?? null,
@@ -346,26 +346,19 @@ function transportForInputSource(source) {
   return 'interactive_terminal';
 }
 
-function normalizeLegacyTransport(transport) {
-  if (transport === 'terminal') return 'interactive_terminal';
-  if (transport === 'programmatic') return 'carrier_server_api';
-  if (transport === 'jsonl_stdio') return 'control_jsonl';
-  return transport;
-}
-
-function sourceKindForLegacyInputSource(source) {
+function sourceKindForInputSource(source) {
   if (source === 'system_directive') return 'system';
   if (source === 'observer') return 'agent';
   return 'operator';
 }
 
-function sourceIdForLegacyInputSource(source) {
+function sourceIdForInputSource(source) {
   if (source === 'system_directive') return 'narada.carrier-runtime.system_directive';
   if (source === 'observer') return 'narada.observer';
   return 'operator';
 }
 
-function deliveryModeForLegacyInputSource(source) {
+function deliveryModeForInputSource(source) {
   if (source === 'operator_steering' || source === 'observer') return 'admit_after_active_turn';
   return 'admit_for_current_turn';
 }

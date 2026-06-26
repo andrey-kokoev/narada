@@ -20,6 +20,30 @@ export interface CommandContext {
   logger: Logger;
 }
 
+export class CommandResultError extends Error {
+  result: unknown;
+
+  constructor(result: unknown, message = 'command_result_error') {
+    super(message);
+    this.name = 'CommandResultError';
+    this.result = result;
+  }
+}
+
+export function commandResultError(result: unknown, message?: string): CommandResultError {
+  return new CommandResultError(result, message);
+}
+
+function normalizeUnhandledCommandError(command: string, error: unknown): NormalizedCommandError {
+  const err = error instanceof Error ? error : new Error(String(error));
+  return {
+    status: 'error',
+    command,
+    error: err.message,
+    retryable: false,
+  };
+}
+
 export function silentCommandContext(options: {
   configPath?: string;
   verbose?: boolean;
@@ -117,6 +141,11 @@ export async function runDirectCommand(options: DirectCommandRunnerOptions): Pro
   try {
     result = await options.invocation();
   } catch (error) {
+    if (error instanceof CommandResultError) {
+      options.emit(error.result, options.format);
+      exit(ExitCode.GENERAL_ERROR);
+      return;
+    }
     const authorityResult = authorityCloneErrorToCommandResult(error);
     if (authorityResult) {
       options.emit(authorityResult.result, options.format);
@@ -124,10 +153,7 @@ export async function runDirectCommand(options: DirectCommandRunnerOptions): Pro
       return;
     }
     const normalized = normalizeCommandError(options.command, error);
-    if (!normalized) {
-      throw error;
-    }
-    options.emit(normalized, options.format);
+    options.emit(normalized ?? normalizeUnhandledCommandError(options.command, error), options.format);
     exit(ExitCode.GENERAL_ERROR);
     return;
   }
