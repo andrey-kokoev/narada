@@ -6,6 +6,7 @@
   "dependencies": {
     "@narada2/agent-context-mcp": "workspace:*",
     "@narada2/agent-runtime-server": "workspace:*",
+    "@narada2/carrier-runtime-contract": "workspace:*",
     "@narada2/carrier-protocol": "workspace:*",
     "@narada2/carrier-provider-support": "workspace:*",
     "@narada2/nars-client-projection-contract": "workspace:*"
@@ -20,9 +21,9 @@
     "./package.json": "./package.json"
   },
   "scripts": {
-    "test": "node --import tsx src/narada-agent-start.ts narada.architect --site-root ../.. --target-site-root ../.. --runtime agent-cli --intelligence-provider codex-subscription --dry-run --json && node --check bin/verify-registered-site-launchers.mjs && node --import tsx --test test/provider-module-contract.test.mjs && node --test test/launcher-registry-contract.test.mjs && node --test test/option-contract.test.mjs",
-    "test:launcher-contract": "node --test test/launcher-registry-contract.test.mjs",
+    "test": "node test/run-agent-start-tests.mjs",
+    "test:launcher-contract": "node test/run-launcher-registry-contract-shards.mjs",
     "verify": "node bin/verify-registered-site-launchers.mjs",
-    "test:option-contract": "node --test test/option-contract.test.mjs"
+    "test:option-contract": "node test/run-option-contract-shards.mjs"
   }
 }

@@ -67,7 +67,8 @@ function agentTuiEnv() {
 test('launcher option contract consumes shared carrier runtime and provider contracts', () => {
   assert.equal(sharedRuntimeContract.schema, 'narada.runtime_substrate_kind.v1');
   assert.equal(sharedRuntimeContract.admitted_runtime_substrate_kinds.includes('codex'), true);
-  assert.equal(sharedRuntimeContract.admitted_runtime_substrate_kinds.includes('agent-cli'), true);
+  assert.equal(sharedRuntimeContract.admitted_runtime_substrate_kinds.includes('agent-cli'), false);
+  assert.equal(sharedRuntimeContract.admitted_runtime_substrate_kinds.includes('narada-agent-runtime-server'), true);
   assert.equal(sharedRuntimeContract.admitted_runtime_substrate_kinds.includes('agent-tui'), true);
   assert.equal(sharedRuntimeContract.codex_context_isolation.forbidden_resume_modes.includes('codex resume --last'), true);
   assert.equal(sharedProviderContract.providers['codex-subscription'].adapter_kind, 'codex-mcp-server');
@@ -81,23 +82,23 @@ test('launcher option contract consumes shared carrier runtime and provider cont
 
 test('db option materializes the requested agent-context db path', () => {
   const dbPath = join(naradaProperRoot, '.ai', 'state', 'option-contract-agent-context.sqlite');
-  const output = runOk(['--runtime', 'agent-cli', '--db', dbPath]);
+  const output = runOk(['--carrier', 'agent-cli', '--runtime', 'narada-agent-runtime-server', '--db', dbPath]);
   assert.equal(output.required_environment.NARADA_AGENT_CONTEXT_DB, dbPath);
 });
 
 test('target site id is carried through dry-run output', () => {
-  const output = runOk(['--runtime', 'agent-cli', '--target-site-id', 'narada-proper-contract']);
+  const output = runOk(['--carrier', 'agent-cli', '--runtime', 'narada-agent-runtime-server', '--target-site-id', 'narada-proper-contract']);
   assert.equal(output.target_site_id, 'narada-proper-contract');
 });
 
 test('pc site root option is exposed in dry-run output when supplied', () => {
   const pcRoot = 'C:/ProgramData/Narada/sites/pc/option-contract';
-  const output = runOk(['--runtime', 'agent-cli', '--pc-site-root', pcRoot]);
+  const output = runOk(['--carrier', 'agent-cli', '--runtime', 'narada-agent-runtime-server', '--pc-site-root', pcRoot]);
   assert.equal(output.pc_site_root, pcRoot);
 });
 
-test('agent-cli resolves provider credential from environment fallback and redacts output', () => {
-  const output = runOk(['--runtime', 'agent-cli', '--intelligence-provider', 'kimi-api'], { KIMI_API_KEY: 'super-secret-test-key' });
+test('agent-cli resolves provider credential from environment source and redacts output', () => {
+  const output = runOk(['--carrier', 'agent-cli', '--runtime', 'narada-agent-runtime-server', '--intelligence-provider', 'kimi-api'], { KIMI_API_KEY: 'super-secret-test-key' });
   const env = output.required_environment;
   assert.equal(output.intelligence_provider_resolution.source_field, 'cli_argument');
   assert.equal(output.intelligence_provider_resolution.credential_present, true);
@@ -111,7 +112,7 @@ test('agent-cli resolves provider credential from environment fallback and redac
 });
 
 test('agent-cli projects provider credentials for MCP child surfaces without leaking values', () => {
-  const output = runOk(['--runtime', 'agent-cli', '--intelligence-provider', 'codex-subscription'], {
+  const output = runOk(['--carrier', 'agent-cli', '--runtime', 'narada-agent-runtime-server', '--intelligence-provider', 'codex-subscription'], {
     DEEPSEEK_API_KEY: 'deepseek-secret-test-key',
     DEEPSEEK_API_BASE_URL: 'https://deepseek.example.test',
   });
@@ -121,7 +122,7 @@ test('agent-cli projects provider credentials for MCP child surfaces without lea
 });
 
 test('agent-cli fails launcher preflight when API provider credential is missing', () => {
-  const result = runFailed(['--runtime', 'agent-cli'], {
+  const result = runFailed(['--carrier', 'agent-cli', '--runtime', 'narada-agent-runtime-server'], {
     NARADA_PROVIDER_SECRET_STORE: 'disabled',
     KIMI_CODE_API_KEY: '',
   });
@@ -137,7 +138,7 @@ test('agent-cli fails launcher preflight when API provider credential is missing
 });
 
 test('agent-cli accepts explicit intelligence provider and materializes provider env', () => {
-  const output = runOk(['--runtime', 'agent-cli', '--intelligence-provider', 'codex-subscription']);
+  const output = runOk(['--carrier', 'agent-cli', '--runtime', 'narada-agent-runtime-server', '--intelligence-provider', 'codex-subscription']);
   assert.equal(output.intelligence_provider_resolution.support_state, 'verified_supported');
   assert.equal(output.intelligence_provider_resolution.credential_source, 'deferred_until_first_provider_call');
   assert.equal(output.intelligence_provider_resolution.credential_present, true);
@@ -166,7 +167,7 @@ test('agent-cli can resolve intelligence provider from target site env file', ()
     },
   }, null, 2), 'utf8');
   writeFileSync(join(siteRoot, '.env'), 'NARADA_INTELLIGENCE_PROVIDER=codex-subscription\n', 'utf8');
-  const output = runOk(['--runtime', 'agent-cli', '--target-site-root', siteRoot], { NARADA_INTELLIGENCE_PROVIDER: '' });
+  const output = runOk(['--carrier', 'agent-cli', '--runtime', 'narada-agent-runtime-server', '--target-site-root', siteRoot], { NARADA_INTELLIGENCE_PROVIDER: '' });
   assert.equal(output.target_site_root, siteRoot);
   assert.equal(output.intelligence_provider_resolution.source_field, 'site_env');
   assert.equal(output.intelligence_provider_resolution.source_path, join(siteRoot, '.env'));
@@ -175,7 +176,7 @@ test('agent-cli can resolve intelligence provider from target site env file', ()
 });
 
 test('agent-cli can resolve intelligence provider from ambient environment', () => {
-  const output = runOk(['--runtime', 'agent-cli'], {
+  const output = runOk(['--carrier', 'agent-cli', '--runtime', 'narada-agent-runtime-server'], {
     NARADA_INTELLIGENCE_PROVIDER: 'codex-subscription',
     KIMI_CODE_API_KEY: '',
   });
@@ -184,7 +185,7 @@ test('agent-cli can resolve intelligence provider from ambient environment', () 
 });
 
 test('agent-cli reports launcher env provider source when supplied by workspace launcher', () => {
-  const output = runOk(['--runtime', 'agent-cli'], {
+  const output = runOk(['--carrier', 'agent-cli', '--runtime', 'narada-agent-runtime-server'], {
     NARADA_INTELLIGENCE_PROVIDER: 'codex-subscription',
     NARADA_INTELLIGENCE_PROVIDER_SOURCE_FIELD: 'launcher_env',
     NARADA_INTELLIGENCE_PROVIDER_SOURCE_PATH: 'C:/Users/Andrey/Narada/.env',
@@ -203,7 +204,7 @@ test('agent-cli refuses codex-subscription when Codex local auth preflight fails
     : '#!/bin/sh\necho "HTTP error: 401 Unauthorized" >&2\nexit 1\n';
   writeFileSync(fakeCodex, script, 'utf8');
 
-  const result = run(['--runtime', 'agent-cli', '--intelligence-provider', 'codex-subscription'], {
+  const result = run(['--carrier', 'agent-cli', '--runtime', 'narada-agent-runtime-server', '--intelligence-provider', 'codex-subscription'], {
     NARADA_CODEX_SUBSCRIPTION_PREFLIGHT: 'force',
     NARADA_CODEX_COMMAND: fakeCodex,
   });
@@ -235,7 +236,7 @@ Write-Output '{"type":"thread.started","thread_id":"fixture"}'
 exit 0
 `, 'utf8');
 
-  const output = runOk(['--runtime', 'agent-cli', '--intelligence-provider', 'codex-subscription'], {
+  const output = runOk(['--carrier', 'agent-cli', '--runtime', 'narada-agent-runtime-server', '--intelligence-provider', 'codex-subscription'], {
     NARADA_CODEX_SUBSCRIPTION_PREFLIGHT: 'force',
     NARADA_CODEX_COMMAND: '',
     PATH: `${fakeBin}${process.env.PATH ? `;${process.env.PATH}` : ''}`,
@@ -253,8 +254,8 @@ exit 0
   assert.equal(capture.narada_codex_auth_home_present, true);
 });
 
-test('agent-cli default provider falls back to registry default', () => {
-  const output = runOk(['--runtime', 'agent-cli'], {
+test('agent-cli default provider uses registry default', () => {
+  const output = runOk(['--carrier', 'agent-cli', '--runtime', 'narada-agent-runtime-server'], {
     NARADA_INTELLIGENCE_PROVIDER: '',
     KIMI_CODE_API_KEY: 'kimi-code-test-key',
   });
@@ -264,34 +265,33 @@ test('agent-cli default provider falls back to registry default', () => {
 });
 
 test('agent-cli exec launches package bin through node, not PowerShell', () => {
-  const output = runOk(['--runtime', 'agent-cli', '--exec']);
+  const output = runOk(['--carrier', 'agent-cli', '--runtime', 'narada-agent-runtime-server', '--exec']);
   const sessionId = output.carrier_session.carrier_session_id;
   assert.equal(output.exec_command.startsWith(process.execPath), true);
   assert.equal(output.exec_command.includes('pwsh'), false);
   assert.equal(output.nars_launch.command, process.execPath);
   assert.equal(output.nars_launch.carrier_runtime_kind, 'narada-agent-runtime-server');
   assert.equal(output.nars_launch.operator_surface_kind, 'agent-cli');
-  assert.equal(output.nars_launch.compatibility_runtime_alias, 'agent-cli');
   assert.equal(output.nars_launch.carrier_relation, 'narada_agent_runtime_server');
   assert.deepEqual(output.nars_launch.runtime_server, {
     package: '@narada2/agent-runtime-server',
     entrypoint: 'narada-agent-runtime-server',
-    compatibility_alias: 'agent-runtime-server',
+    runtime_kind: 'narada-agent-runtime-server',
   });
   assert.equal(Object.hasOwn(output.nars_launch, 'private_carrier_substrate'), false);
   assert.equal(output.nars_launch.control_transport, 'jsonl_sideband_file');
   assert.equal(output.nars_launch.reads_only_target_site_mcp_fabric, true);
   assert.equal(output.nars_launch.user_site_mcp_injected, false);
-  assert.equal(output.agent_cli_launch.compatibility_alias_for, 'nars_launch');
+  assert.equal(output.carrier_kind, 'agent-cli');
+  assert.equal(output.runtime_substrate_kind, 'narada-agent-runtime-server');
   assert.equal(output.nars_events.attach_commands.registry_schema, 'narada.nars.client_projection_registry.v1');
   assert.equal(output.nars_events.attach_commands.agent_cli, 'narada-agent-cli --attach <session_started.event_endpoint>');
+  assert.equal(output.nars_events.attach_commands.agent_tui, 'agent-tui --attach <session_started.event_endpoint>');
   assert.equal(output.nars_events.attach_commands.agent_web_ui, 'narada-agent-web-ui --event-endpoint <session_started.event_endpoint> --health-endpoint <session_started.health_endpoint>');
   assert.match(output.nars_events.attach_commands.operator_input_protocol, /conversation\.send/);
   assert.match(output.nars_events.attach_commands.slash_command_protocol, /carrier\.command\.execute/);
-  assert.deepEqual(output.nars_events.attach_commands.compatibility_methods, ['agent-cli.command']);
   assert.equal(output.carrier_session.record.carrier_runtime_kind, 'narada-agent-runtime-server');
   assert.equal(output.carrier_session.record.operator_surface_kind, 'agent-cli');
-  assert.equal(output.carrier_session.record.compatibility_runtime_alias, 'agent-cli');
   assert.equal(output.runtime_args[0].endsWith('agent-runtime-server.mjs'), true);
   assert.deepEqual(output.runtime_args.slice(1), [
     '--identity',
@@ -306,7 +306,7 @@ test('agent-cli exec launches package bin through node, not PowerShell', () => {
 });
 
 test('agent-cli dry-run records event-id propagation residual at runtime-server boundary', () => {
-  const output = runOk(['--runtime', 'agent-cli', '--exec']);
+  const output = runOk(['--carrier', 'agent-cli', '--runtime', 'narada-agent-runtime-server', '--exec']);
   const sessionId = output.carrier_session.carrier_session_id;
   assert.equal(output.required_environment.NARADA_AGENT_ID, identity);
   assert.equal(output.required_environment.NARADA_CARRIER_SESSION_ID, sessionId);
@@ -335,11 +335,13 @@ test('target site MCP fabric remains isolated from user site fabric', () => {
     },
   }, null, 2), 'utf8');
 
-  const output = runOk(['--runtime', 'agent-cli', '--target-site-root', siteRoot, '--exec']);
+  const output = runOk(['--carrier', 'agent-cli', '--runtime', 'narada-agent-runtime-server', '--target-site-root', siteRoot, '--exec']);
   assert.equal(output.session_site_root, siteRoot);
   assert.equal(output.mcp_fabric.site_root, siteRoot);
   assert.deepEqual(output.mcp_fabric.server_names, ['narada-target-only']);
+  assert.equal(output.mcp_fabric.server_names.every((name) => name.startsWith('narada-')), true);
   assert.equal(output.mcp_fabric.server_names.some((name) => name.includes('user')), false);
+  assert.equal(output.mcp_fabric.server_names.some((name) => name.startsWith('narada-andrey-')), false);
   assert.equal(output.nars_launch.site_mcp_fabric, join(siteRoot, '.ai', 'mcp'));
   assert.equal(output.nars_launch.reads_only_target_site_mcp_fabric, true);
   assert.equal(output.nars_launch.user_site_mcp_injected, false);
@@ -347,14 +349,14 @@ test('target site MCP fabric remains isolated from user site fabric', () => {
   assert.equal(output.runtime_args[output.runtime_args.indexOf('--site-root') + 1], siteRoot);
 });
 
-test('temporary MCP prefix gate reports lifecycle and replacement path', () => {
-  const siteRoot = mkdtempSync(join(tmpdir(), 'narada-agent-start-prefix-gate-'));
+test('non-canonical target MCP server names are refused before carrier handoff', () => {
+  const siteRoot = mkdtempSync(join(tmpdir(), 'narada-agent-start-mcp-prefix-gate-'));
   mkdirSync(join(siteRoot, '.ai'), { recursive: true });
   mkdirSync(join(siteRoot, '.ai', 'mcp'), { recursive: true });
   copyFileSync(join(naradaProperRoot, '.ai', 'task-lifecycle.db'), join(siteRoot, '.ai', 'task-lifecycle.db'));
-  writeFileSync(join(siteRoot, '.ai', 'mcp', 'bad-prefix.json'), JSON.stringify({
+  writeFileSync(join(siteRoot, '.ai', 'mcp', 'target-noncanonical.json'), JSON.stringify({
     mcpServers: {
-      leaked: {
+      'sonar-sop': {
         transport: 'stdio',
         command: 'node',
         args: ['--version'],
@@ -362,23 +364,57 @@ test('temporary MCP prefix gate reports lifecycle and replacement path', () => {
     },
   }, null, 2), 'utf8');
 
-  const result = runFailed(['--runtime', 'agent-cli', '--target-site-root', siteRoot]);
+  const result = runFailed(['--carrier', 'agent-cli', '--runtime', 'narada-agent-runtime-server', '--target-site-root', siteRoot]);
   const refusal = JSON.parse(result.stdout);
   assert.equal(refusal.reason_code, 'temporary_mcp_server_name_missing_narada_prefix');
-  assert.equal(refusal.details.temporary_leak_identification_tool, true);
-  assert.equal(refusal.details.lifecycle_decision, 'retain_until_registry_authority_gate_replaces_prefix_heuristic');
-  assert.match(refusal.details.replacement_path, /registry-backed authority validation/);
-  assert.deepEqual(refusal.details.offending_server_names, ['leaked']);
-  assert.match(refusal.required_next_step, /temporary gate exists to identify MCP authority leaks/);
+  assert.deepEqual(refusal.details.non_canonical_server_names, ['sonar-sop']);
+  assert.match(refusal.details.remediation, /Temporary MCP leak identification gate/);
 });
 
-test('non-agent-cli runtime refuses explicit intelligence provider selection', () => {
+test('MCP registry mismatch fails closed before launch', () => {
+  const siteRoot = mkdtempSync(join(tmpdir(), 'narada-agent-start-registry-gate-'));
+  mkdirSync(join(siteRoot, '.ai'), { recursive: true });
+  mkdirSync(join(siteRoot, '.ai', 'mcp'), { recursive: true });
+  mkdirSync(join(siteRoot, '.narada', 'capabilities'), { recursive: true });
+  copyFileSync(join(naradaProperRoot, '.ai', 'task-lifecycle.db'), join(siteRoot, '.ai', 'task-lifecycle.db'));
+  writeFileSync(join(siteRoot, '.ai', 'mcp', 'actual-mcp.json'), JSON.stringify({
+    mcpServers: {
+      'narada-actual': {
+        transport: 'stdio',
+        command: 'node',
+        args: ['--version'],
+      },
+    },
+  }, null, 2), 'utf8');
+  writeFileSync(join(siteRoot, '.narada', 'capabilities', 'mcp-surfaces.json'), JSON.stringify({
+    schema: 'narada.site.capabilities.mcp_surfaces.v1',
+    surfaces: [{
+      surface_id: 'expected.surface',
+      client_config: { generated_path: '.ai/mcp/expected-mcp.json' },
+      tool_contract: {
+        read_only_tools: ['agent_context_startup_sequence'],
+        mutating_tools: [],
+        refused_tools: [],
+      },
+    }],
+  }, null, 2), 'utf8');
+
+  const result = runFailed(['--carrier', 'agent-cli', '--runtime', 'narada-agent-runtime-server', '--target-site-root', siteRoot]);
+  const refusal = JSON.parse(result.stdout);
+  assert.equal(refusal.reason_code, 'mcp_fabric_registry_mismatch');
+  assert.equal(refusal.details.repair_plan.kind, 'registry_generated_file_mismatch');
+  assert.equal(refusal.details.missing[0].surface_id, 'expected.surface');
+  assert.equal(refusal.details.missing[0].generated_file, 'expected-mcp.json');
+  assert.match(refusal.required_next_step, /matches the Site surface registry/);
+});
+
+test('non-agent-cli carrier refuses explicit intelligence provider selection', () => {
   const result = runFailed(['--runtime', 'codex', '--intelligence-provider', 'codex-subscription'], {
     NARADA_CODEX_CLI_SCRIPT: launcherPath,
   });
   const refusal = JSON.parse(result.stdout);
   assert.equal(refusal.reason_code, 'intelligence_provider_runtime_unsupported');
-  assert.equal(refusal.runtime_substrate_kind, 'codex');
+  assert.equal(refusal.carrier_kind, 'codex');
 });
 
 test('unsupported runtime fails with runtime contract refusal', () => {
@@ -386,6 +422,14 @@ test('unsupported runtime fails with runtime contract refusal', () => {
   const refusal = JSON.parse(result.stdout);
   assert.equal(refusal.reason_code, 'runtime_substrate_kind_unsupported');
   assert.equal(refusal.candidate_runtime_substrate_kind, 'not-a-runtime');
+});
+
+test('agent-cli is refused as a runtime and must be selected as a carrier', () => {
+  const result = runFailed(['--runtime', 'agent-cli']);
+  const refusal = JSON.parse(result.stdout);
+  assert.equal(refusal.reason_code, 'runtime_carrier_conflation_refused');
+  assert.equal(refusal.candidate_runtime_substrate_kind, 'agent-cli');
+  assert.match(refusal.required_next_step, /--carrier agent-cli --runtime narada-agent-runtime-server/);
 });
 test('codex resolves CLI script from PATH and disables native shell by default', () => {
   const fakeBin = mkdtempSync(join(tmpdir(), 'narada-codex-path-'));
@@ -469,30 +513,8 @@ test('agent-tui materializes provider env without requiring ambient provider env
   assert.equal(existsSync(env.NARADA_AGENT_TUI_MCP_CONFIG), false, 'dry-run must not write generated agent-tui config');
 });
 
-test('agent-tui starting directive sources are mutually exclusive', () => {
-  const result = runFailed([
-    '--runtime',
-    'agent-tui',
-    '--agent-tui-starting-directive',
-    'inline directive',
-    '--agent-tui-starting-directive-file',
-    join(naradaProperRoot, 'README.md'),
-  ], agentTuiEnv());
-  assert.match(result.stderr, /agent_tui_starting_directive_source_ambiguous/);
-});
-
-test('agent-tui starting directive file must exist', () => {
-  const result = runFailed([
-    '--runtime',
-    'agent-tui',
-    '--agent-tui-starting-directive-file',
-    join(naradaProperRoot, 'missing-agent-tui-directive.txt'),
-  ], agentTuiEnv());
-  assert.match(result.stderr, /agent_tui_starting_directive_file_missing/);
-});
-
 test('starting carrier input is runtime-neutral for agent-cli', () => {
-  const output = runOk(['--runtime', 'agent-cli', '--starting-carrier-input', 'Operation: test startup input']);
+  const output = runOk(['--carrier', 'agent-cli', '--runtime', 'narada-agent-runtime-server', '--starting-carrier-input', 'Operation: test startup input']);
   assert.equal(output.starting_carrier_input.status, 'configured');
   assert.equal(output.starting_carrier_input.source, 'starting_carrier_input');
   assert.match(output.starting_carrier_input.content_preview, /Operation: test startup input/);
@@ -510,8 +532,10 @@ test('starting carrier input file is runtime-neutral for agent-tui', () => {
 
 test('starting carrier input sources are mutually exclusive', () => {
   const result = runFailed([
-    '--runtime',
+    '--carrier',
     'agent-cli',
+    '--runtime',
+    'narada-agent-runtime-server',
     '--starting-carrier-input',
     'inline directive',
     '--starting-carrier-input-file',
@@ -522,8 +546,10 @@ test('starting carrier input sources are mutually exclusive', () => {
 
 test('starting carrier input file must exist', () => {
   const result = runFailed([
-    '--runtime',
+    '--carrier',
     'agent-cli',
+    '--runtime',
+    'narada-agent-runtime-server',
     '--starting-carrier-input-file',
     join(naradaProperRoot, 'missing-starting-carrier-input.txt'),
   ]);
@@ -536,7 +562,7 @@ test('starting carrier input file must exist', () => {
 
 test('site-tools-root option is visible in dry-run output', () => {
   const siteToolsRoot = join(naradaProperRoot, 'tools');
-  const output = runOk(['--runtime', 'agent-cli', '--site-tools-root', siteToolsRoot]);
+  const output = runOk(['--carrier', 'agent-cli', '--runtime', 'narada-agent-runtime-server', '--site-tools-root', siteToolsRoot]);
   assert.equal(output.site_tools_root, siteToolsRoot);
 });
 
@@ -548,7 +574,7 @@ test('agent-tui runtime loop option selects runtime-loop args', () => {
 
 
 test('wait yolo and launch-source options are visible in dry-run output', () => {
-  const output = runOk(['--runtime', 'agent-cli', '--wait', '--yolo', '--launch-source', 'option-contract']);
+  const output = runOk(['--carrier', 'agent-cli', '--runtime', 'narada-agent-runtime-server', '--wait', '--yolo', '--launch-source', 'option-contract']);
   assert.equal(output.wait, true);
   assert.equal(output.yolo, true);
   assert.equal(output.launch_source, 'option-contract');
@@ -561,12 +587,6 @@ test('show-admission returns an existing codex admission record', () => {
   const shown = JSON.parse(result.stdout);
   assert.equal(shown.admission_id, admitted.admission_id);
 });
-
-test('agent-tui inline starting directive must be non-empty', () => {
-  const result = runFailed(['--runtime', 'agent-tui', '--agent-tui-starting-directive', '   '], agentTuiEnv());
-  assert.match(result.stderr, /agent_tui_starting_directive_empty/);
-});
-
 
 test('admission options expose admission result without launching', () => {
   const output = runOk(['--runtime', 'codex', '--admit-session'], { NARADA_CODEX_CLI_SCRIPT: launcherPath });
