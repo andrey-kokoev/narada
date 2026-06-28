@@ -631,7 +631,7 @@ async function resolveInteractiveSelectionOptions(
 
   const selectedSiteValues = selectedSites as string[];
   const roleChoices = roleChoicesForSelectedSites(records, selectedSiteValues);
-  const initialRoleValues = (options.role ?? []).filter((role) => roleChoices.some((choice) => choice.toLowerCase() === role.toLowerCase()));
+  const initialRoleValues = initialRoleValuesForInteractiveSelection(roleChoices, options.role);
 
   const selectedRoles = await prompts.multiselect({
     message: 'Select Role(s)',
@@ -767,6 +767,13 @@ export function roleChoicesForSelectedSites(records: WorkspaceLaunchRecord[], si
   return unique(records
     .filter((record) => recordMatchesSiteSelectors(record, siteSelectors))
     .map((record) => record.role));
+}
+
+export function initialRoleValuesForInteractiveSelection(roleChoices: string[], explicitRoles?: string[]): string[] {
+  const explicitRoleValues = (explicitRoles ?? []).filter((role) => roleChoices.some((choice) => choice.toLowerCase() === role.toLowerCase()));
+  if (explicitRoleValues.length > 0) return explicitRoleValues;
+  const residentChoice = roleChoices.find((role) => role.toLowerCase() === 'resident');
+  return residentChoice ? [residentChoice] : [];
 }
 
 function unique(values: string[]): string[] {

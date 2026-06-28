@@ -1,7 +1,7 @@
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { explainMcpCommand, intelligenceProviderChoices, intelligenceProviderChoicesForLaunchSelection, roleChoicesForSelectedSites, workspaceLaunchCommand, workspaceLaunchPlanCommand, type WorkspaceLaunchRecord } from '../../src/commands/launcher.js';
+import { explainMcpCommand, initialRoleValuesForInteractiveSelection, intelligenceProviderChoices, intelligenceProviderChoicesForLaunchSelection, roleChoicesForSelectedSites, workspaceLaunchCommand, workspaceLaunchPlanCommand, type WorkspaceLaunchRecord } from '../../src/commands/launcher.js';
 import type { CommandContext } from '../../src/lib/command-wrapper.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
 
@@ -314,6 +314,12 @@ describe('launcher workspace planning', () => {
 
     expect(roleChoicesForSelectedSites(records, ['sonar'])).toEqual(['resident', 'architect']);
     expect(roleChoicesForSelectedSites(records, ['smart-scheduling'])).toEqual(['builder']);
+  });
+
+  it('preselects resident in the interactive role selector when no explicit role is provided', () => {
+    expect(initialRoleValuesForInteractiveSelection(['resident', 'architect'])).toEqual(['resident']);
+    expect(initialRoleValuesForInteractiveSelection(['builder', 'architect'])).toEqual([]);
+    expect(initialRoleValuesForInteractiveSelection(['resident', 'architect'], ['architect'])).toEqual(['architect']);
   });
 
   it('offers registry default plus verified intelligence providers for interactive selection', () => {
