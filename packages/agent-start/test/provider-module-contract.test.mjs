@@ -55,7 +55,7 @@ test('credential projection redacts API secrets while projecting required env', 
       NARADA_PROVIDER_SECRET_STORE: 'disabled',
       KIMI_API_KEY: 'module-secret-value',
     },
-    codexSubscriptionPreflight: () => ({ ok: true, status: 'deferred_until_first_provider_call' }),
+    codexSubscriptionPreflight: () => ({ ok: true, status: 'passed' }),
   });
   assert.equal(projected.env.KIMI_API_KEY, 'module-secret-value');
   assert.equal(projected.credential.credential_source, 'environment');
@@ -63,7 +63,7 @@ test('credential projection redacts API secrets while projecting required env', 
   assert.doesNotMatch(JSON.stringify(projected.credential), /module-secret-value/);
 });
 
-test('codex subscription support defers normal dry-run auth and scrubs OpenAI API env', () => {
+test('codex subscription support defers dry-run auth and scrubs OpenAI API env', () => {
   const processEnv = {
     OPENAI_API_KEY: 'stale-api-key',
     OPENAI_BASE_URL: 'https://stale.example',
@@ -75,11 +75,60 @@ test('codex subscription support defers normal dry-run auth and scrubs OpenAI AP
     sessionSiteRoot: naradaProperRoot,
     dryRun: true,
   });
-  assert.equal(preflight.status, 'deferred_until_first_provider_call');
+  assert.equal(preflight.status, 'deferred_for_dry_run');
   assert.equal(preflight.ok, true);
   const env = codexSupport.codexSubscriptionPreflightEnv(processEnv);
   assert.equal(Object.hasOwn(env, 'OPENAI_API_KEY'), false);
   assert.equal(Object.hasOwn(env, 'OPENAI_BASE_URL'), false);
   assert.equal(Object.hasOwn(env, 'OPENAI_MODEL'), false);
   assert.equal(normalize(env.NARADA_CODEX_AUTH_HOME), normalize('C:/Users/Andrey/.codex'));
+});
+
+test('codex subscription support runs live auth preflight for non-dry launch by default', () => {
+  const calls = [];
+  const preflight = codexSupport.codexSubscriptionPreflight('codex-subscription', {
+    processEnv: { USERPROFILE: 'C:/Users/Andrey' },
+    processPlatform: 'linux',
+    sessionSiteRoot: naradaProperRoot,
+    dryRun: false,
+    spawnSync(command, args, options) {
+      calls.push({ command, args, options });
+      return { status: 0, stdout: '{"event":"ok"}\n', stderr: '', signal: null, error: null };
+    },
+  });
+  assert.equal(preflight.status, 'passed');
+  assert.equal(preflight.ok, true);
+  assert.equal(calls.length, 1);
+  assert.deepEqual(calls[0].args.slice(-3, -1), ['exec', '--json']);
+  assert.equal(Object.hasOwn(calls[0].options.env, 'OPENAI_API_KEY'), false);
+});
+
+test('codex subscription credential projection fails closed when launch preflight fails', () => {
+  const resolution = providerResolution.resolveIntelligenceProviderLaunch('codex-subscription', 'agent-cli', { source_field: 'cli_argument' }, {
+    metadataByProvider,
+    admittedProviders,
+    defaultProvider: providerRegistry.default_provider,
+    schema: providerResolution.INTELLIGENCE_PROVIDER_CONTRACT_SCHEMA,
+  });
+  const projected = providerCredentials.intelligenceProviderEnvironmentProjection(resolution, {
+    metadataByProvider,
+    processEnv: {},
+    codexSubscriptionPreflight: () => ({
+      schema: 'narada.codex_subscription.preflight.v1',
+      status: 'failed_unauthorized',
+      ok: false,
+      provider: 'codex-subscription',
+      command: 'codex exec --json',
+      unauthorized: true,
+    }),
+  });
+  assert.equal(projected.credential.credential_required, true);
+  assert.equal(projected.credential.credential_present, false);
+  assert.equal(projected.credential.credential_source, 'failed_unauthorized');
+  const refusal = providerCredentials.providerCredentialRefusal(resolution, projected.credential, {
+    schema: providerResolution.INTELLIGENCE_PROVIDER_CONTRACT_SCHEMA,
+    withResolutionStates: (packet, states) => ({ ...packet, resolution_states: states }),
+  });
+  assert.equal(refusal.reason_code, 'local_codex_subscription_auth_unavailable');
+  assert.match(refusal.required_next_step, /NARADA_CODEX_SUBSCRIPTION_PREFLIGHT=defer/);
 });

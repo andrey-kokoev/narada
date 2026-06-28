@@ -264,7 +264,7 @@ export function providerCredentialRefusal(providerResolution, credential, { sche
       credential_present: false,
       preflight: credential.preflight,
       reason: 'The selected provider uses local Codex subscription auth, but the Codex CLI preflight did not complete successfully.',
-      required_next_step: 'Run codex login or repair local Codex subscription auth, then retry the launcher. Remove NARADA_CODEX_SUBSCRIPTION_PREFLIGHT=force to use deferred launch validation.',
+      required_next_step: 'Run codex login or repair local Codex subscription auth, then retry the launcher. For diagnostics only, set NARADA_CODEX_SUBSCRIPTION_PREFLIGHT=defer to skip the launch-time probe.',
     }, [
       ...(providerResolution?.resolution_states ?? []),
       {

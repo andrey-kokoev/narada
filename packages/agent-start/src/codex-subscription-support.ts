@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { delimiter, join } from 'node:path';
 import { codexCommand } from '@narada2/carrier-provider-support/codex-subscription-command';
-import { spawnSync } from 'node:child_process';
+import { spawnSync as defaultSpawnSync } from 'node:child_process';
 import { homedir } from 'node:os';
 
 export const CODEX_SUBSCRIPTION_PREFLIGHT_ENV = 'NARADA_CODEX_SUBSCRIPTION_PREFLIGHT';
@@ -10,6 +10,11 @@ export const CODEX_SUBSCRIPTION_PREFLIGHT_TIMEOUT_MS = 60000;
 export function codexSubscriptionPreflightForced(processEnv = process.env) {
   const mode = String(processEnv[CODEX_SUBSCRIPTION_PREFLIGHT_ENV] ?? '').trim().toLowerCase();
   return mode === 'force';
+}
+
+export function codexSubscriptionPreflightDeferred(processEnv = process.env) {
+  const mode = String(processEnv[CODEX_SUBSCRIPTION_PREFLIGHT_ENV] ?? '').trim().toLowerCase();
+  return ['defer', 'deferred', 'skip'].includes(mode);
 }
 
 export function codexPreflightCommand(processEnv = process.env, processPlatform = process.platform) {
@@ -36,12 +41,17 @@ export function codexSubscriptionPreflight(provider, {
   processPlatform = process.platform,
   sessionSiteRoot,
   dryRun = false,
+  spawnSync = defaultSpawnSync,
 } = {}) {
   const mode = String(processEnv[CODEX_SUBSCRIPTION_PREFLIGHT_ENV] ?? '').trim().toLowerCase();
-  if (!codexSubscriptionPreflightForced(processEnv)) {
+  const shouldRunLiveProbe = codexSubscriptionPreflightForced(processEnv) || (!dryRun && !codexSubscriptionPreflightDeferred(processEnv));
+  if (!shouldRunLiveProbe) {
+    const status = dryRun
+      ? 'deferred_for_dry_run'
+      : 'deferred_by_operator_policy';
     return {
       schema: 'narada.codex_subscription.preflight.v1',
-      status: 'deferred_until_first_provider_call',
+      status,
       ok: true,
       provider,
       command: 'codex exec --json',
@@ -49,10 +59,9 @@ export function codexSubscriptionPreflight(provider, {
       environment_variable: CODEX_SUBSCRIPTION_PREFLIGHT_ENV,
       reason: dryRun
         ? 'Dry-run validates launch shape without making a provider call.'
-        : 'Launch defers local Codex subscription auth validation until the first provider call.',
+        : 'Launch-time local Codex subscription auth validation was explicitly deferred by NARADA_CODEX_SUBSCRIPTION_PREFLIGHT.',
     };
   }
-
   const command = codexPreflightCommand(processEnv, processPlatform);
   const prompt = 'Return exactly: ok';
   const result = spawnSync(command.command, [...command.prefixArgs, 'exec', '--json', prompt], {

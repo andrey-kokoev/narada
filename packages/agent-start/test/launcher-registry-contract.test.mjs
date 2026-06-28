@@ -102,12 +102,12 @@ function dryRunEnv(carrier) {
   if (carrier === 'codex') return { NARADA_CODEX_CLI_SCRIPT: packagedLauncherPath };
   if (carrier === 'agent-cli') return {
     NARADA_PROVIDER_SECRET_STORE: 'disabled',
-    NARADA_CODEX_SUBSCRIPTION_PREFLIGHT: 'disabled',
+    NARADA_CODEX_SUBSCRIPTION_PREFLIGHT: 'defer',
     KIMI_CODE_API_KEY: 'test-key',
   };
   if (carrier === 'agent-tui') return {
     NARADA_PROVIDER_SECRET_STORE: 'disabled',
-    NARADA_CODEX_SUBSCRIPTION_PREFLIGHT: 'disabled',
+    NARADA_CODEX_SUBSCRIPTION_PREFLIGHT: 'defer',
     NARADA_INTELLIGENCE_PROVIDER: 'kimi-code-api',
     KIMI_CODE_API_BASE_URL: 'https://api.kimi.com/coding/',
     KIMI_CODE_MODEL: 'kimi-k2.7',

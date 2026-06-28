@@ -19,8 +19,8 @@ The launcher output contract is owned by the current carrier/runtime vocabulary:
 
 - `intelligence_provider_resolution.source_field` remains `cli_argument`, `site_env`, `environment`, `launcher_env`, or `default_for_agent_cli` as before.
 - Credential values are only present in child process environment maps before redaction; dry-run and test output use redacted environment values and credential packets omit raw `value`.
-- `local_codex_subscription` reports `deferred_until_first_provider_call` unless `NARADA_CODEX_SUBSCRIPTION_PREFLIGHT=force` requests the bounded live probe.
-- Missing API credentials still fail with `intelligence_provider_credential_missing`; forced Codex subscription failures still fail with `local_codex_subscription_auth_unavailable`.
+- `local_codex_subscription` runs the bounded live Codex CLI auth probe for real launches by default, reports `deferred_for_dry_run` for dry-runs, and accepts `NARADA_CODEX_SUBSCRIPTION_PREFLIGHT=defer` only as an explicit diagnostic opt-out.
+- Missing API credentials still fail with `intelligence_provider_credential_missing`; Codex subscription auth failures fail with `local_codex_subscription_auth_unavailable` before carrier/runtime handoff.
 
 ## Migration Order
 

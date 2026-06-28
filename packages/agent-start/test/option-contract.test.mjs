@@ -31,7 +31,7 @@ const baseArgs = [
 ];
 const baseTestEnv = {
   NARADA_PROVIDER_SECRET_STORE: 'disabled',
-  NARADA_CODEX_SUBSCRIPTION_PREFLIGHT: 'disabled',
+  NARADA_CODEX_SUBSCRIPTION_PREFLIGHT: 'defer',
   KIMI_CODE_API_KEY: 'test-key',
 };
 
@@ -147,9 +147,9 @@ test('agent-cli fails launcher preflight when API provider credential is missing
 test('agent-cli accepts explicit intelligence provider and materializes provider env', () => {
   const output = runOk(['--carrier', 'agent-cli', '--runtime', 'narada-agent-runtime-server', '--intelligence-provider', 'codex-subscription']);
   assert.equal(output.intelligence_provider_resolution.support_state, 'verified_supported');
-  assert.equal(output.intelligence_provider_resolution.credential_source, 'deferred_until_first_provider_call');
+  assert.equal(output.intelligence_provider_resolution.credential_source, 'deferred_for_dry_run');
   assert.equal(output.intelligence_provider_resolution.credential_present, true);
-  assert.equal(output.intelligence_provider_resolution.credential.preflight.status, 'deferred_until_first_provider_call');
+  assert.equal(output.intelligence_provider_resolution.credential.preflight.status, 'deferred_for_dry_run');
   assert.equal(output.intelligence_provider_resolution.credential_requirement_kind, 'local_codex_subscription');
   assert.equal(output.intelligence_provider_resolution.credential_requirement.kind, 'local_codex_subscription');
   assert.equal(output.intelligence_provider_resolution.credential_secret_ref, null);
@@ -223,7 +223,7 @@ test('agent-cli refuses codex-subscription when Codex local auth preflight fails
   assert.match(refusal.preflight.status, /^failed/);
   assert.equal(Object.hasOwn(refusal.preflight, 'stderr_first_line'), true);
   assert.equal(Object.hasOwn(refusal.preflight, 'stdout_first_line'), true);
-  assert.equal(refusal.required_next_step, 'Run codex login or repair local Codex subscription auth, then retry the launcher. Remove NARADA_CODEX_SUBSCRIPTION_PREFLIGHT=force to use deferred launch validation.');
+  assert.equal(refusal.required_next_step, 'Run codex login or repair local Codex subscription auth, then retry the launcher. For diagnostics only, set NARADA_CODEX_SUBSCRIPTION_PREFLIGHT=defer to skip the launch-time probe.');
 });
 
 test('agent-cli codex-subscription preflight resolves Windows codex.ps1 and scrubs OpenAI API env', { skip: process.platform !== 'win32' }, () => {
