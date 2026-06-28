@@ -6,6 +6,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { materializeAgentSessionStart, openAgentContextDb, validateIdentityAgainstRoster } from './session-start.mjs';
 import { enforceAgentPathPolicy, resolveAgentPathPolicy } from './path-policy.mjs';
+import Database, { DEFAULT_BUSY_TIMEOUT_MS } from './sqlite-database.mjs';
 
 const root = dirname(fileURLToPath(import.meta.url));
 
@@ -17,6 +18,28 @@ test('agent context tool package owns site agent-context scripts', async () => {
   for (const file of files) {
     const text = await readFile(join(root, file), 'utf8');
     assert.notEqual(text.trim(), '', `${file} has content`);
+  }
+});
+
+test('agent-context sqlite wrapper configures a busy timeout for concurrent role launches', async () => {
+  const siteRoot = await mkdtemp(join(tmpdir(), 'narada-agent-context-busy-timeout-'));
+  try {
+    const dbPath = join(siteRoot, '.ai', 'state', 'agent-context.sqlite');
+    const db = openAgentContextDb(siteRoot, dbPath);
+    try {
+      assert.equal(db.prepare('PRAGMA busy_timeout').get().timeout, DEFAULT_BUSY_TIMEOUT_MS);
+    } finally {
+      db.close();
+    }
+
+    const overrideDb = new Database(dbPath, { busyTimeoutMs: 1234 });
+    try {
+      assert.equal(overrideDb.prepare('PRAGMA busy_timeout').get().timeout, 1234);
+    } finally {
+      overrideDb.close();
+    }
+  } finally {
+    await rm(siteRoot, { recursive: true, force: true });
   }
 });
 

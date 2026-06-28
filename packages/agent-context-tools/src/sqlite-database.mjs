@@ -10,6 +10,8 @@ const { DatabaseSync } = await import('node:sqlite');
 
 process.emitWarning = originalEmitWarning;
 
+export const DEFAULT_BUSY_TIMEOUT_MS = 5000;
+
 export default class Database {
   #db;
 
@@ -20,6 +22,10 @@ export default class Database {
     this.#db = new DatabaseSync(path, {
       readOnly: options.readonly === true || options.readOnly === true,
     });
+    const busyTimeoutMs = Number(options.busyTimeoutMs ?? options.busy_timeout_ms ?? DEFAULT_BUSY_TIMEOUT_MS);
+    if (Number.isFinite(busyTimeoutMs) && busyTimeoutMs >= 0) {
+      this.#db.exec(`PRAGMA busy_timeout = ${Math.trunc(busyTimeoutMs)}`);
+    }
   }
 
   exec(sql) {
