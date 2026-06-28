@@ -1,7 +1,7 @@
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { explainMcpCommand, intelligenceProviderChoices, interactiveSelectionSupportsIntelligenceProvider, roleChoicesForSelectedSites, workspaceLaunchPlanCommand, type WorkspaceLaunchRecord } from '../../src/commands/launcher.js';
+import { explainMcpCommand, intelligenceProviderChoices, intelligenceProviderChoicesForLaunchSelection, roleChoicesForSelectedSites, workspaceLaunchPlanCommand, type WorkspaceLaunchRecord } from '../../src/commands/launcher.js';
 import type { CommandContext } from '../../src/lib/command-wrapper.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
 
@@ -309,10 +309,10 @@ describe('launcher workspace planning', () => {
     expect(choices.every((choice) => choice.value && choice.label)).toBe(true);
   });
 
-  it('offers the provider selector only for launch sets that resolve to agent-cli', () => {
+  it('constrains provider choices to selected agent-cli runtime compatibility', () => {
     const records = [
-      { agent: 'sonar.resident', role: 'resident', site: 'narada-sonar', carrier: 'agent-cli', runtime: 'narada-agent-runtime-server' },
-      { agent: 'narada.architect', role: 'architect', site: 'narada', carrier: 'codex', runtime: 'codex' },
+      { agent: 'sonar.resident', role: 'resident', site: 'sonar', carrier: 'agent-cli', runtime: 'narada-agent-runtime-server' },
+      { agent: 'direct.codex', role: 'resident', site: 'direct', carrier: 'codex', runtime: 'codex' },
     ].map((record) => ({
       ...record,
       title: record.agent,
@@ -324,26 +324,44 @@ describe('launcher workspace planning', () => {
       config_path: 'registry.json',
     })) as WorkspaceLaunchRecord[];
 
-    expect(interactiveSelectionSupportsIntelligenceProvider({
+    const agentCliChoices = intelligenceProviderChoicesForLaunchSelection({
       records: [records[0]],
       operatorSurface: 'registry default',
       runtime: 'registry default',
-    })).toBe(true);
-    expect(interactiveSelectionSupportsIntelligenceProvider({
-      records,
-      operatorSurface: 'registry default',
-      runtime: 'registry default',
-    })).toBe(false);
-    expect(interactiveSelectionSupportsIntelligenceProvider({
-      records: [records[0]],
-      operatorSurface: 'agent-cli',
-      runtime: 'narada-agent-runtime-server',
-    })).toBe(true);
-    expect(() => interactiveSelectionSupportsIntelligenceProvider({
+    }).map((choice) => choice.value);
+    expect(agentCliChoices).toEqual(expect.arrayContaining(['registry default', 'codex-subscription', 'kimi-code-api']));
+    expect(agentCliChoices).not.toContain('nonexistent-provider');
+
+    const directCodexChoices = intelligenceProviderChoicesForLaunchSelection({
       records: [records[1]],
-      operatorSurface: 'agent-cli',
-      runtime: 'narada-agent-runtime-server',
-    })).toThrow(/carrier_operator_surface_conflict/);
+      operatorSurface: 'registry default',
+      runtime: 'registry default',
+    });
+    expect(directCodexChoices).toEqual([{ value: 'registry default', label: 'registry default', hint: 'no agent-cli launches selected' }]);
+  });
+
+  it('applies selected intelligence providers only to agent-cli launch plans', async () => {
+    const registryPath = await tempRegistry();
+    const plan = await workspaceLaunchPlanCommand({
+      registryPath,
+      site: ['sonar', 'smart-scheduling'],
+      role: ['resident'],
+      intelligenceProvider: 'codex-subscription',
+      format: 'json',
+    }, createMockContext());
+
+    expect(plan.exitCode).toBe(ExitCode.SUCCESS);
+    const result = plan.result as { selected_agents: Array<{ agent: string; launch_carrier: string; intelligence_provider: string | null; wt_args: string[]; smoke_command: string[] }> };
+    const sonar = result.selected_agents.find((agent) => agent.agent === 'sonar.resident');
+    const smartScheduling = result.selected_agents.find((agent) => agent.agent === 'smart-scheduling.resident');
+    expect(sonar?.launch_carrier).toBe('agent-cli');
+    expect(sonar?.intelligence_provider).toBe('codex-subscription');
+    expect(sonar?.wt_args.join(' ')).toContain('--intelligence-provider');
+    expect(sonar?.smoke_command).toContain('--intelligence-provider');
+    expect(smartScheduling?.launch_carrier).toBe('codex');
+    expect(smartScheduling?.intelligence_provider).toBeNull();
+    expect(smartScheduling?.wt_args.join(' ')).not.toContain('--intelligence-provider');
+    expect(smartScheduling?.smoke_command).not.toContain('--intelligence-provider');
   });
 
   it('accepts nars as an input alias for narada-agent-runtime-server', async () => {

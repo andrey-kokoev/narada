@@ -16,6 +16,7 @@ import {
 
 const requireFromLauncherCommand = createRequire(import.meta.url);
 const providerRegistry = loadProviderRegistry();
+const providerAdapters = loadProviderAdapters();
 
 interface ProviderRegistry {
   default_provider?: string;
@@ -23,6 +24,43 @@ interface ProviderRegistry {
     meaning?: string;
     support_state?: string;
   }>;
+}
+
+function loadProviderAdapters(): ProviderAdapters {
+  let adaptersPath: string;
+  try {
+    adaptersPath = resolveProviderAdaptersPath();
+  } catch (error) {
+    if (process.env.VITEST) return { admitted_providers: Object.keys(fallbackProviderRegistryForTests().providers ?? {}) };
+    throw error;
+  }
+  try {
+    return JSON.parse(readFileSync(adaptersPath, 'utf8')) as ProviderAdapters;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`provider_adapters_load_failed: ${adaptersPath}: ${message}`);
+  }
+}
+
+function resolveProviderAdaptersPath(): string {
+  const candidates: string[] = [];
+  try {
+    candidates.push(requireFromLauncherCommand.resolve('@narada2/carrier-provider-contract/provider-adapters'));
+  } catch {
+    // Workspace source checkouts can run before pnpm has materialized this dependency link.
+  }
+  candidates.push(
+    fileURLToPath(new URL('../../../../carrier-provider-contract/contracts/provider-adapters.json', import.meta.url)),
+    resolve(process.cwd(), '..', '..', 'carrier-provider-contract', 'contracts', 'provider-adapters.json'),
+    resolve(process.cwd(), 'packages', 'carrier-provider-contract', 'contracts', 'provider-adapters.json'),
+  );
+  const adaptersPath = candidates.find((candidate) => existsSync(candidate));
+  if (adaptersPath) return adaptersPath;
+  throw new Error(`provider_adapters_not_found: ${candidates.join(', ')}`);
+}
+
+interface ProviderAdapters {
+  admitted_providers?: string[];
 }
 
 function fallbackProviderRegistryForTests(): ProviderRegistry {
@@ -613,11 +651,8 @@ async function selectInteractiveIntelligenceProvider({
   runtime: string;
   current?: string;
 }): Promise<string | undefined> {
-  if (!interactiveSelectionSupportsIntelligenceProvider({ records, carrier, operatorSurface, runtime })) {
-    return undefined;
-  }
-
-  const choices = intelligenceProviderChoices();
+  const choices = intelligenceProviderChoicesForLaunchSelection({ records, carrier, operatorSurface, runtime });
+  if (choices.length <= 1) return undefined;
   const selectedProvider = await prompts.select({
     message: 'Select Intelligence Provider',
     options: choices.map((choice) => ({
@@ -631,7 +666,7 @@ async function selectInteractiveIntelligenceProvider({
   return selectedProvider as string;
 }
 
-export function interactiveSelectionSupportsIntelligenceProvider({
+export function intelligenceProviderChoicesForLaunchSelection({
   records,
   carrier,
   operatorSurface,
@@ -641,9 +676,8 @@ export function interactiveSelectionSupportsIntelligenceProvider({
   carrier?: string;
   operatorSurface: string;
   runtime: string;
-}): boolean {
-  if (records.length === 0) return false;
-  return records.every((record) => {
+}): Array<{ value: string; label: string; hint?: string }> {
+  const agentCliRecords = records.filter((record) => {
     const selection = resolveWorkspaceCarrierRuntimeSelection(
       carrier ?? record.carrier,
       operatorSurface === 'registry default' ? undefined : operatorSurface,
@@ -651,11 +685,17 @@ export function interactiveSelectionSupportsIntelligenceProvider({
     );
     return selection.carrier_kind === 'agent-cli';
   });
+  if (agentCliRecords.length === 0) {
+    return [{ value: 'registry default', label: 'registry default', hint: 'no agent-cli launches selected' }];
+  }
+  return intelligenceProviderChoices({ admittedProviders: providerAdapters.admitted_providers });
 }
 
-export function intelligenceProviderChoices(): Array<{ value: string; label: string; hint?: string }> {
+export function intelligenceProviderChoices({ admittedProviders }: { admittedProviders?: string[] } = {}): Array<{ value: string; label: string; hint?: string }> {
+  const admitted = admittedProviders ? new Set(admittedProviders) : null;
   const entries = Object.entries(providerRegistry.providers ?? {})
     .filter(([, provider]) => provider.support_state === 'verified_supported')
+    .filter(([provider]) => !admitted || admitted.has(provider))
     .map(([provider, metadata]) => ({
       value: provider,
       label: provider,
@@ -816,6 +856,7 @@ function buildAgentPlan(record: WorkspaceLaunchRecord, options: WorkspaceLaunchP
   const runtimeHostKind = carrierRuntimeSelection.runtime_host_kind;
   const enableNativeShell = options.enableNativeShell === true || record.enable_native_shell;
   const waitForEnter = options.noWaitForEnterBeforeExec !== true;
+  const intelligenceProvider = launchCarrier === 'agent-cli' ? (options.intelligenceProvider ?? null) : null;
   const naradaProper = resolve(process.env.NARADA_PROPER_ROOT ?? 'D:/code/narada');
   const carrierStartCommand = [
     'pnpm',
@@ -831,7 +872,7 @@ function buildAgentPlan(record: WorkspaceLaunchRecord, options: WorkspaceLaunchP
   ];
   if (record.workspace_root) carrierStartCommand.push('--workspace-root', record.workspace_root);
   if (enableNativeShell) carrierStartCommand.push('--enable-native-shell');
-  if (options.intelligenceProvider) carrierStartCommand.push('--intelligence-provider', options.intelligenceProvider);
+  if (intelligenceProvider) carrierStartCommand.push('--intelligence-provider', intelligenceProvider);
   if (waitForEnter) carrierStartCommand.push('--wait');
 
   const base = [
@@ -853,7 +894,7 @@ function buildAgentPlan(record: WorkspaceLaunchRecord, options: WorkspaceLaunchP
     '--format', 'json',
   ];
   if (record.workspace_root) smokeCommand.push('--workspace-root', record.workspace_root);
-  if (options.intelligenceProvider) smokeCommand.push('--intelligence-provider', options.intelligenceProvider);
+  if (intelligenceProvider) smokeCommand.push('--intelligence-provider', intelligenceProvider);
   if (enableNativeShell) smokeCommand.push('--enable-native-shell');
 
   return {
@@ -862,7 +903,7 @@ function buildAgentPlan(record: WorkspaceLaunchRecord, options: WorkspaceLaunchP
     runtime_host_kind: runtimeHostKind,
     launch_carrier: launchCarrier,
     launch_runtime: launchRuntime,
-    intelligence_provider: options.intelligenceProvider ?? null,
+    intelligence_provider: intelligenceProvider,
     wait_for_enter_before_exec: waitForEnter,
     enable_native_shell: enableNativeShell,
     wt_args: base,
