@@ -1,7 +1,8 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import { readFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 import { join, resolve } from 'node:path';
+import * as prompts from '@clack/prompts';
 import { commandResultError, type CommandContext } from '../lib/command-wrapper.js';
 import { formattedResult, type CliFormat } from '../lib/cli-output.js';
 import { ExitCode } from '../lib/exit-codes.js';
@@ -19,8 +20,12 @@ export interface WorkspaceLaunchPlanOptions {
   configPath?: string[];
   registryPath?: string;
   carrier?: string;
+  operatorSurface?: string;
   runtime?: string;
   intelligenceProvider?: string;
+  interactiveSelection?: boolean;
+  resultPath?: string;
+  suppressResultOutput?: boolean;
   enableNativeShell?: boolean;
   noWaitForEnterBeforeExec?: boolean;
   smoke?: boolean;
@@ -28,9 +33,10 @@ export interface WorkspaceLaunchPlanOptions {
   format?: CliFormat;
 }
 
-function validateCarrierRuntimeSelection(carrier: string, runtime: string): void {
+function resolveWorkspaceCarrierRuntimeSelection(carrier: string | undefined, operatorSurface: string | undefined, runtime: string): { carrier_kind: string; operator_surface_kind: string; runtime_substrate_kind: string; runtime_host_kind: string } {
   const selection = resolveCarrierRuntimeSelection({
     carrierValue: carrier,
+    operatorSurfaceValue: operatorSurface,
     runtimeValue: runtime,
     admittedRuntimeSubstrateKinds: ['kimi', 'codex', 'narada-agent-runtime-server', 'pi', 'claude-code', 'opencode'],
     runtimeContractSchema: 'narada.runtime_substrate_kind.v1',
@@ -44,10 +50,12 @@ function validateCarrierRuntimeSelection(carrier: string, runtime: string): void
       reason_code: selection.reason_code,
       reason: selection.reason,
       candidate_carrier_kind: selection.candidate_carrier_kind,
+      candidate_operator_surface_kind: selection.candidate_operator_surface_kind,
       candidate_runtime_substrate_kind: selection.candidate_runtime_substrate_kind,
       retryable: false,
     }, selection.reason_code);
   }
+  return selection;
 }
 
 async function resolveExplainSiteRoot(options: ExplainMcpOptions): Promise<Record<string, unknown> & { site_root: string }> {
@@ -76,6 +84,11 @@ async function resolveExplainSiteRoot(options: ExplainMcpOptions): Promise<Recor
     sample_agent: first.agent,
     site: first.site,
   };
+}
+
+async function writeWorkspacePlanResult(path: string | undefined, result: unknown): Promise<void> {
+  if (!path) return;
+  await writeFile(path, `${JSON.stringify(result, null, 2)}\n`, 'utf8');
 }
 
 function readRuntimeMcpFabric(siteRoot: string, serverFilter: string | null): Record<string, unknown> {
@@ -325,6 +338,8 @@ export interface WorkspaceLaunchRecord {
 }
 
 export interface WorkspaceLaunchAgentPlan extends WorkspaceLaunchRecord {
+  operator_surface_kind: string;
+  runtime_host_kind: string;
   launch_carrier: string;
   launch_runtime: string;
   intelligence_provider: string | null;
@@ -339,8 +354,9 @@ export async function workspaceLaunchPlanCommand(
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
   const registryPaths = resolveRegistryPaths(options);
   const records = (await Promise.all(registryPaths.map(readLaunchRegistry))).flat();
-  const selected = selectLaunchRecords(records, options);
-  const plans = selected.map((record) => buildAgentPlan(record, options));
+  const resolvedOptions = await resolveInteractiveSelectionOptions(records, options);
+  const selected = selectLaunchRecords(records, resolvedOptions);
+  const plans = selected.map((record) => buildAgentPlan(record, resolvedOptions));
   const wtArgs = plans.flatMap((plan, index) => [
     ...(index === 0 ? [] : [';']),
     ...plan.wt_args,
@@ -387,7 +403,10 @@ export async function workspaceLaunchPlanCommand(
         executor: 'none',
         migrated_from: 'Start-NaradaWorkspace.ps1 inline smoke aggregation',
       },
+      ...(resolvedOptions.resultPath ? { result_path: resolvedOptions.resultPath } : {}),
+      ...(resolvedOptions.suppressResultOutput ? { suppress_result_output: true } : {}),
     };
+    await writeWorkspacePlanResult(resolvedOptions.resultPath, smokeResult);
     return {
       exitCode: failed.length === 0 ? ExitCode.SUCCESS : ExitCode.GENERAL_ERROR,
       result: formattedResult(smokeResult, `workspace smoke ${smokeResult.status}`, options.format ?? 'auto'),
@@ -399,6 +418,7 @@ export async function workspaceLaunchPlanCommand(
     status: 'planned',
     mutation_performed: false,
     mode,
+    interactive_selection: resolvedOptions.interactiveSelection === true,
     count: plans.length,
     windows_terminal_invoked: false,
     registry_paths: registryPaths,
@@ -409,12 +429,119 @@ export async function workspaceLaunchPlanCommand(
       executor: 'operator_surface_windows_terminal',
       migrated_from: 'Start-NaradaWorkspace.ps1 inline registry/filter/wt planning',
     },
+    ...(resolvedOptions.resultPath ? { result_path: resolvedOptions.resultPath } : {}),
+    ...(resolvedOptions.suppressResultOutput ? { suppress_result_output: true } : {}),
   };
+  await writeWorkspacePlanResult(resolvedOptions.resultPath, result);
 
   return {
     exitCode: ExitCode.SUCCESS,
-    result: formattedResult(result, `planned ${plans.length} workspace launch(es)`, options.format ?? 'auto'),
+    result: formattedResult(result, `planned ${plans.length} workspace launch(es)`, resolvedOptions.format ?? 'auto'),
   };
+}
+
+async function resolveInteractiveSelectionOptions(
+  records: WorkspaceLaunchRecord[],
+  options: WorkspaceLaunchPlanOptions,
+): Promise<WorkspaceLaunchPlanOptions> {
+  if (!options.interactiveSelection) return options;
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    throw new Error('interactive_selection_requires_tty: --interactive-selection requires an interactive terminal');
+  }
+
+  const siteChoices = unique(records.map((record) => record.site));
+  const carrierChoices = unique([
+    'registry default',
+    ...records.map((record) => record.carrier),
+    'agent-cli',
+    'codex',
+    'kimi',
+    'pi',
+    'claude-code',
+    'opencode',
+  ]);
+  const runtimeChoices = unique([
+    'registry default',
+    ...records.map((record) => record.runtime),
+    'narada-agent-runtime-server',
+    'nars',
+    'codex',
+    'kimi',
+    'pi',
+    'claude-code',
+    'opencode',
+  ]);
+
+  const selectedSites = await prompts.multiselect({
+    message: 'Select Site(s)',
+    options: siteChoices.map((site) => ({ value: site, label: site })),
+    initialValues: options.site,
+    required: true,
+  });
+  if (prompts.isCancel(selectedSites)) throw new Error('interactive_selection_cancelled');
+
+  const selectedSiteValues = selectedSites as string[];
+  const roleChoices = roleChoicesForSelectedSites(records, selectedSiteValues);
+  const initialRoleValues = (options.role ?? []).filter((role) => roleChoices.some((choice) => choice.toLowerCase() === role.toLowerCase()));
+
+  const selectedRoles = await prompts.multiselect({
+    message: 'Select Role(s)',
+    options: roleChoices.map((role) => ({ value: role, label: role })),
+    initialValues: initialRoleValues.length > 0 ? initialRoleValues : undefined,
+    required: true,
+  });
+  if (prompts.isCancel(selectedRoles)) throw new Error('interactive_selection_cancelled');
+
+  const selectedCarrier = await prompts.select({
+    message: 'Select Operator Surface',
+    options: carrierChoices.map((carrier) => ({
+      value: carrier,
+      label: carrier,
+      hint: carrier === 'registry default' ? 'use each registry entry value' : undefined,
+    })),
+    initialValue: options.operatorSurface ?? options.carrier ?? 'registry default',
+  });
+  if (prompts.isCancel(selectedCarrier)) throw new Error('interactive_selection_cancelled');
+
+  const selectedRuntime = await prompts.select({
+    message: 'Select Runtime',
+    options: runtimeChoices.map((runtime) => ({
+      value: runtime,
+      label: runtime,
+      hint: runtime === 'registry default' ? 'use each registry entry value' : undefined,
+    })),
+    initialValue: options.runtime ?? 'registry default',
+  });
+  if (prompts.isCancel(selectedRuntime)) throw new Error('interactive_selection_cancelled');
+
+  return {
+    ...options,
+    all: false,
+    site: selectedSiteValues,
+    role: selectedRoles as string[],
+    operatorSurface: selectedCarrier === 'registry default' ? undefined : selectedCarrier,
+    runtime: selectedRuntime === 'registry default' ? undefined : selectedRuntime,
+  };
+}
+
+export function roleChoicesForSelectedSites(records: WorkspaceLaunchRecord[], siteSelectors: string[]): string[] {
+  return unique(records
+    .filter((record) => recordMatchesSiteSelectors(record, siteSelectors))
+    .map((record) => record.role));
+}
+
+function unique(values: string[]): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const value of values) {
+    const normalized = value.trim();
+    if (!normalized) continue;
+    const key = normalized.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(normalized);
+  }
+  return result;
 }
 
 function resolveRegistryPaths(options: WorkspaceLaunchPlanOptions): string[] {
@@ -487,6 +614,11 @@ function normalizeAgentRecord(registry: RawLaunchRegistry, agent: RawAgentRecord
 
 function selectLaunchRecords(records: WorkspaceLaunchRecord[], options: WorkspaceLaunchPlanOptions): WorkspaceLaunchRecord[] {
   let selected: WorkspaceLaunchRecord[];
+  const roleSelectors = options.role ?? [];
+  const siteSelectors = options.site ?? [];
+  const hasRoleSelector = roleSelectors.length > 0;
+  const hasSiteSelector = siteSelectors.length > 0;
+  const hasConfigPathSelector = Boolean(options.configPath && options.configPath.length > 0);
   if (options.agent && options.agent.length > 0) {
     selected = [];
     for (const agent of options.agent) {
@@ -495,47 +627,49 @@ function selectLaunchRecords(records: WorkspaceLaunchRecord[], options: Workspac
       if (matches.length > 1) throw new Error(`agent_duplicate_in_launch_registry: ${agent}`);
       selected.push(matches[0]);
     }
-  } else if (options.all || (options.configPath && options.configPath.length > 0)) {
+  } else if (options.all || hasConfigPathSelector || hasRoleSelector || hasSiteSelector) {
     selected = records;
   } else {
-    throw new Error('launch_selection_required: specify --agent, --all, or --config-path');
+    throw new Error('launch_selection_required: specify --agent, --all, --site, --role, or --config-path');
   }
 
-  if (options.role && options.role.length > 0) {
-    const roles = new Set(options.role.map((role) => role.toLowerCase()));
+  if (hasRoleSelector) {
+    const roles = new Set(roleSelectors.map((role) => role.toLowerCase()));
     selected = selected.filter((record) => roles.has(record.role.toLowerCase()));
-    if (selected.length === 0) throw new Error(`no_agents_match_role_filter: ${options.role.join(', ')}`);
+    if (selected.length === 0) throw new Error(`no_agents_match_role_filter: ${roleSelectors.join(', ')}`);
   }
 
-  if (options.site && options.site.length > 0) {
-    const sites = new Set(options.site.map((site) => site.toLowerCase()));
-    selected = selected.filter((record) => {
-      const aliases = [
-        record.site,
-        record.site.replace(/^narada-/, ''),
-        record.agent.split('.')[0],
-      ].filter(Boolean).map((value) => value.toLowerCase());
-      return aliases.some((alias) => sites.has(alias));
-    });
-    if (selected.length === 0) throw new Error(`no_agents_match_site_filter: ${options.site.join(', ')}`);
+  if (hasSiteSelector) {
+    selected = selected.filter((record) => recordMatchesSiteSelectors(record, siteSelectors));
+    if (selected.length === 0) throw new Error(`no_agents_match_site_filter: ${siteSelectors.join(', ')}`);
   }
 
   return selected;
 }
 
+function recordMatchesSiteSelectors(record: WorkspaceLaunchRecord, siteSelectors: string[]): boolean {
+  const sites = new Set(siteSelectors.map((site) => site.toLowerCase()));
+  const aliases = [
+    record.site,
+    record.site.replace(/^narada-/, ''),
+    record.agent.split('.')[0],
+  ].filter(Boolean).map((value) => value.toLowerCase());
+  return aliases.some((alias) => sites.has(alias));
+}
+
 function buildAgentPlan(record: WorkspaceLaunchRecord, options: WorkspaceLaunchPlanOptions): WorkspaceLaunchAgentPlan {
-  const launchCarrier = options.carrier ?? record.carrier;
-  const launchRuntime = options.runtime ?? record.runtime;
-  validateCarrierRuntimeSelection(launchCarrier, launchRuntime);
+  const operatorSurfaceInput = options.operatorSurface;
+  const carrierInput = options.carrier ?? record.carrier;
+  const runtimeInput = options.runtime ?? record.runtime;
+  const carrierRuntimeSelection = resolveWorkspaceCarrierRuntimeSelection(carrierInput, operatorSurfaceInput, runtimeInput);
+  const launchCarrier = carrierRuntimeSelection.carrier_kind;
+  const operatorSurfaceKind = carrierRuntimeSelection.operator_surface_kind;
+  const launchRuntime = carrierRuntimeSelection.runtime_substrate_kind;
+  const runtimeHostKind = carrierRuntimeSelection.runtime_host_kind;
   const enableNativeShell = options.enableNativeShell === true || record.enable_native_shell;
   const waitForEnter = options.noWaitForEnterBeforeExec !== true;
   const naradaProper = resolve(process.env.NARADA_PROPER_ROOT ?? 'D:/code/narada');
-  const base = [
-    'new-tab',
-    '--title', record.title,
-    '-d', record.workspace_root ?? record.narada_root,
-    'pwsh',
-    '-NoExit',
+  const carrierStartCommand = [
     'pnpm',
     '--dir', naradaProper,
     'exec',
@@ -547,10 +681,20 @@ function buildAgentPlan(record: WorkspaceLaunchRecord, options: WorkspaceLaunchP
     '--runtime', launchRuntime,
     '--exec',
   ];
-  if (record.workspace_root) base.push('--workspace-root', record.workspace_root);
-  if (enableNativeShell) base.push('--enable-native-shell');
-  if (options.intelligenceProvider) base.push('--intelligence-provider', options.intelligenceProvider);
-  if (waitForEnter) base.push('--wait');
+  if (record.workspace_root) carrierStartCommand.push('--workspace-root', record.workspace_root);
+  if (enableNativeShell) carrierStartCommand.push('--enable-native-shell');
+  if (options.intelligenceProvider) carrierStartCommand.push('--intelligence-provider', options.intelligenceProvider);
+  if (waitForEnter) carrierStartCommand.push('--wait');
+
+  const base = [
+    'new-tab',
+    '--title', record.title,
+    '-d', record.workspace_root ?? record.narada_root,
+    'pwsh',
+    '-NoExit',
+    '-Command',
+    toPowerShellCommand(carrierStartCommand),
+  ];
 
   const smokeCommand = [
     'narada', 'carrier', 'start', launchCarrier,
@@ -566,6 +710,8 @@ function buildAgentPlan(record: WorkspaceLaunchRecord, options: WorkspaceLaunchP
 
   return {
     ...record,
+    operator_surface_kind: operatorSurfaceKind,
+    runtime_host_kind: runtimeHostKind,
     launch_carrier: launchCarrier,
     launch_runtime: launchRuntime,
     intelligence_provider: options.intelligenceProvider ?? null,
@@ -578,4 +724,12 @@ function buildAgentPlan(record: WorkspaceLaunchRecord, options: WorkspaceLaunchP
 
 function nonEmpty(value: unknown): string | null {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
+}
+
+function toPowerShellCommand(args: string[]): string {
+  return `& ${args.map(quotePowerShellArgument).join(' ')}`;
+}
+
+function quotePowerShellArgument(value: string): string {
+  return `'${value.replace(/'/g, "''")}'`;
 }

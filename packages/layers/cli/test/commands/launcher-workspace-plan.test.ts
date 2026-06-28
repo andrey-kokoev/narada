@@ -1,7 +1,7 @@
-import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { explainMcpCommand, workspaceLaunchPlanCommand } from '../../src/commands/launcher.js';
+import { explainMcpCommand, roleChoicesForSelectedSites, workspaceLaunchPlanCommand, type WorkspaceLaunchRecord } from '../../src/commands/launcher.js';
 import type { CommandContext } from '../../src/lib/command-wrapper.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
 
@@ -134,6 +134,8 @@ describe('launcher workspace planning', () => {
       mutation_performed: boolean;
       selected_agents: Array<{
         agent: string;
+        operator_surface_kind: string;
+        runtime_host_kind: string;
         launch_carrier: string;
         launch_runtime: string;
         intelligence_provider: string;
@@ -149,27 +151,24 @@ describe('launcher workspace planning', () => {
     expect(result.ownership.executor).toBe('operator_surface_windows_terminal');
     expect(result.selected_agents).toHaveLength(1);
     expect(result.selected_agents[0].agent).toBe('sonar.resident');
+    expect(result.selected_agents[0].operator_surface_kind).toBe('agent-cli');
+    expect(result.selected_agents[0].runtime_host_kind).toBe('narada-agent-runtime-server');
     expect(result.selected_agents[0].launch_carrier).toBe('agent-cli');
     expect(result.selected_agents[0].launch_runtime).toBe('narada-agent-runtime-server');
     expect(result.selected_agents[0].intelligence_provider).toBe('codex-subscription');
     expect(result.selected_agents[0].wt_args).toEqual(expect.arrayContaining([
-      'pnpm',
-      '--dir',
-      'D:\\code\\narada',
-      'exec',
-      'narada',
-      'carrier',
-      'start',
+      'pwsh',
+      '-NoExit',
+      '-Command',
     ]));
-    expect(result.selected_agents[0].wt_args).toContain('agent-cli');
-    expect(result.selected_agents[0].wt_args).toContain('--runtime');
-    expect(result.selected_agents[0].wt_args).toContain('narada-agent-runtime-server');
-    expect(result.selected_agents[0].wt_args[result.selected_agents[0].wt_args.indexOf('--runtime') + 1]).toBe('narada-agent-runtime-server');
-    expect(result.selected_agents[0].wt_args).toContain('--workspace-root');
-    expect(result.selected_agents[0].wt_args).toContain('D:/code/narada.sonar');
-    expect(result.selected_agents[0].wt_args).toContain('--exec');
-    expect(result.selected_agents[0].wt_args).toContain('--wait');
-    expect(result.selected_agents[0].wt_args).toContain('--intelligence-provider');
+    const commandText = result.selected_agents[0].wt_args[result.selected_agents[0].wt_args.indexOf('-Command') + 1];
+    expect(commandText).toContain("& 'pnpm' '--dir' 'D:\\code\\narada' 'exec' 'narada' 'carrier' 'start'");
+    expect(commandText).toContain("'agent-cli'");
+    expect(commandText).toContain("'--runtime' 'narada-agent-runtime-server'");
+    expect(commandText).toContain("'--workspace-root' 'D:/code/narada.sonar'");
+    expect(commandText).toContain("'--exec'");
+    expect(commandText).toContain("'--wait'");
+    expect(commandText).toContain("'--intelligence-provider' 'codex-subscription'");
     expect(result.selected_agents[0].smoke_command).toEqual(expect.arrayContaining([
       'narada',
       'carrier',
@@ -186,12 +185,154 @@ describe('launcher workspace planning', () => {
     expect(result.wt_args[0]).toBe('new-tab');
   });
 
-  it('requires an explicit selection unless a config path is supplied', async () => {
+  it('accepts operator surface as the explicit replacement for carrier', async () => {
+    const registryPath = await tempRegistry();
+    const plan = await workspaceLaunchPlanCommand({
+      registryPath,
+      site: ['sonar'],
+      role: ['resident'],
+      operatorSurface: 'agent-cli',
+      runtime: 'narada-agent-runtime-server',
+      dryRun: true,
+      format: 'json',
+    }, createMockContext());
+
+    expect(plan.exitCode).toBe(ExitCode.SUCCESS);
+    const result = plan.result as { selected_agents: Array<{ operator_surface_kind: string; runtime_host_kind: string; launch_carrier: string }> };
+    expect(result.selected_agents[0].operator_surface_kind).toBe('agent-cli');
+    expect(result.selected_agents[0].runtime_host_kind).toBe('narada-agent-runtime-server');
+    expect(result.selected_agents[0].launch_carrier).toBe('agent-cli');
+  });
+
+  it('refuses conflicting carrier and operator surface inputs', async () => {
+    const registryPath = await tempRegistry();
+    await expect(workspaceLaunchPlanCommand({
+      registryPath,
+      site: ['sonar'],
+      role: ['resident'],
+      carrier: 'codex',
+      operatorSurface: 'agent-cli',
+      runtime: 'narada-agent-runtime-server',
+      dryRun: true,
+      format: 'json',
+    }, createMockContext())).rejects.toThrow(/carrier_operator_surface_conflict/);
+  });
+
+  it('requires an explicit selection unless a selector or config path is supplied', async () => {
     const registryPath = await tempRegistry();
     await expect(workspaceLaunchPlanCommand({
       registryPath,
       format: 'json',
     }, createMockContext())).rejects.toThrow(/launch_selection_required/);
+  });
+
+  it('refuses interactive selection outside an interactive terminal', async () => {
+    const registryPath = await tempRegistry();
+    await expect(workspaceLaunchPlanCommand({
+      registryPath,
+      interactiveSelection: true,
+      format: 'json',
+    }, createMockContext())).rejects.toThrow(/interactive_selection_requires_tty/);
+  });
+
+  it('can hand off a workspace plan through a result file without stdout output', async () => {
+    const registryPath = await tempRegistry();
+    const resultPath = join(tempDirs[0], 'workspace-plan-result.json');
+    const plan = await workspaceLaunchPlanCommand({
+      registryPath,
+      site: ['sonar'],
+      role: ['resident'],
+      carrier: 'agent-cli',
+      runtime: 'nars',
+      dryRun: true,
+      format: 'json',
+      resultPath,
+      suppressResultOutput: true,
+    }, createMockContext());
+
+    expect(plan.exitCode).toBe(ExitCode.SUCCESS);
+    const result = plan.result as { suppress_result_output: boolean; result_path: string; selected_agents: Array<{ agent: string }> };
+    expect(result.suppress_result_output).toBe(true);
+    expect(result.result_path).toBe(resultPath);
+    const written = JSON.parse(await readFile(resultPath, 'utf8')) as typeof result;
+    expect(written.selected_agents.map((agent) => agent.agent)).toEqual(['sonar.resident']);
+    expect(written.suppress_result_output).toBe(true);
+  });
+
+  it('treats site and role filters as bounded selectors', async () => {
+    const registryPath = await tempRegistry();
+    const plan = await workspaceLaunchPlanCommand({
+      registryPath,
+      site: ['sonar'],
+      role: ['resident'],
+      carrier: 'agent-cli',
+      runtime: 'narada-agent-runtime-server',
+      format: 'json',
+    }, createMockContext());
+
+    expect(plan.exitCode).toBe(ExitCode.SUCCESS);
+    const result = plan.result as { selected_agents: Array<{ agent: string }> };
+    expect(result.selected_agents.map((agent) => agent.agent)).toEqual(['sonar.resident']);
+  });
+
+  it('narrows interactive role choices to roles admitted by the selected site aliases', () => {
+    const records = [
+      { agent: 'sonar.resident', role: 'resident', site: 'narada-sonar' },
+      { agent: 'sonar.architect', role: 'architect', site: 'narada-sonar' },
+      { agent: 'smart-scheduling.builder', role: 'builder', site: 'smart-scheduling' },
+    ].map((record) => ({
+      ...record,
+      title: record.agent,
+      narada_root: 'D:/code/narada',
+      site_root: 'D:/code/narada',
+      workspace_root: 'D:/code/narada',
+      launcher_path: 'D:/code/narada/narada.ps1',
+      carrier: 'agent-cli',
+      runtime: 'narada-agent-runtime-server',
+      enable_native_shell: false,
+      config_path: 'registry.json',
+    })) as WorkspaceLaunchRecord[];
+
+    expect(roleChoicesForSelectedSites(records, ['sonar'])).toEqual(['resident', 'architect']);
+    expect(roleChoicesForSelectedSites(records, ['smart-scheduling'])).toEqual(['builder']);
+  });
+
+  it('accepts nars as an input alias for narada-agent-runtime-server', async () => {
+    const registryPath = await tempRegistry();
+    const plan = await workspaceLaunchPlanCommand({
+      registryPath,
+      site: ['sonar'],
+      role: ['resident'],
+      carrier: 'agent-cli',
+      runtime: 'nars',
+      format: 'json',
+    }, createMockContext());
+
+    expect(plan.exitCode).toBe(ExitCode.SUCCESS);
+    const result = plan.result as { selected_agents: Array<{ launch_runtime: string; wt_args: string[]; smoke_command: string[] }> };
+    expect(result.selected_agents[0].launch_runtime).toBe('narada-agent-runtime-server');
+    const commandText = result.selected_agents[0].wt_args[result.selected_agents[0].wt_args.indexOf('-Command') + 1];
+    expect(commandText).toContain("'--runtime' 'narada-agent-runtime-server'");
+    expect(commandText).not.toContain("'nars'");
+    expect(result.selected_agents[0].smoke_command).toContain('narada-agent-runtime-server');
+    expect(result.selected_agents[0].smoke_command).not.toContain('nars');
+  });
+
+  it('selects any listed site and any listed role while intersecting dimensions', async () => {
+    const registryPath = await tempRegistry();
+    const plan = await workspaceLaunchPlanCommand({
+      registryPath,
+      site: ['sonar', 'smart-scheduling'],
+      role: ['resident', 'builder'],
+      format: 'json',
+    }, createMockContext());
+
+    expect(plan.exitCode).toBe(ExitCode.SUCCESS);
+    const result = plan.result as { selected_agents: Array<{ agent: string }> };
+    expect(result.selected_agents.map((agent) => agent.agent)).toEqual([
+      'sonar.resident',
+      'smart-scheduling.resident',
+    ]);
   });
 
   it('preserves selected agent order and wait-gate override', async () => {
@@ -206,7 +347,8 @@ describe('launcher workspace planning', () => {
     expect(plan.exitCode).toBe(ExitCode.SUCCESS);
     const result = plan.result as { selected_agents: Array<{ agent: string; wt_args: string[] }>; wt_args: string[] };
     expect(result.selected_agents.map((agent) => agent.agent)).toEqual(['narada.architect', 'sonar.resident']);
-    expect(result.selected_agents[0].wt_args).not.toContain('--wait');
+    const commandText = result.selected_agents[0].wt_args[result.selected_agents[0].wt_args.indexOf('-Command') + 1];
+    expect(commandText).not.toContain("'--wait'");
     expect(result.wt_args).toContain(';');
   });
 

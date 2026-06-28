@@ -9,6 +9,7 @@ import {
 } from './carrier-runtime-contract.mjs';
 import {
   defaultRuntimeForCarrier,
+  normalizeRuntimeAlias,
   resolveCarrierRuntimeSelection,
 } from './carrier-runtime-selection.mjs';
 
@@ -61,6 +62,8 @@ test('carrier runtime selection keeps agent-cli carrier separate from runtime se
     runtimeContractSchema: contract.schema,
   });
   assert.equal(accepted.status, 'accepted');
+  assert.equal(accepted.operator_surface_kind, 'agent-cli');
+  assert.equal(accepted.runtime_host_kind, 'narada-agent-runtime-server');
   assert.equal(accepted.carrier_kind, 'agent-cli');
   assert.equal(accepted.runtime_substrate_kind, 'narada-agent-runtime-server');
 
@@ -71,6 +74,50 @@ test('carrier runtime selection keeps agent-cli carrier separate from runtime se
   });
   assert.equal(refused.status, 'refused');
   assert.equal(refused.reason_code, 'runtime_carrier_conflation_refused');
+});
+
+test('operator surface is the explicit primitive while carrier remains a legacy alias', () => {
+  const contract = loadRuntimeSubstrateKindsContract();
+  const accepted = resolveCarrierRuntimeSelection({
+    operatorSurfaceValue: 'agent-cli',
+    runtimeValue: 'narada-agent-runtime-server',
+    admittedRuntimeSubstrateKinds: contract.admitted_runtime_substrate_kinds,
+    runtimeContractSchema: contract.schema,
+  });
+  assert.equal(accepted.status, 'accepted');
+  assert.equal(accepted.operator_surface_kind, 'agent-cli');
+  assert.equal(accepted.runtime_host_kind, 'narada-agent-runtime-server');
+  assert.equal(accepted.carrier_kind, 'agent-cli');
+  assert.equal(accepted.runtime_substrate_kind, 'narada-agent-runtime-server');
+  assert.equal(accepted.operator_surface_source_field, 'operator_surface');
+  assert.equal(accepted.carrier_source_field, 'operator_surface');
+
+  const conflicted = resolveCarrierRuntimeSelection({
+    carrierValue: 'codex',
+    operatorSurfaceValue: 'agent-cli',
+    runtimeValue: 'narada-agent-runtime-server',
+    admittedRuntimeSubstrateKinds: contract.admitted_runtime_substrate_kinds,
+    runtimeContractSchema: contract.schema,
+  });
+  assert.equal(conflicted.status, 'refused');
+  assert.equal(conflicted.reason_code, 'carrier_operator_surface_conflict');
+});
+
+test('nars is a runtime input alias for narada-agent-runtime-server', () => {
+  const contract = loadRuntimeSubstrateKindsContract();
+  assert.equal(contract.admitted_runtime_substrate_kinds.includes('nars'), false);
+  assert.equal(normalizeRuntimeAlias('nars'), 'narada-agent-runtime-server');
+
+  const accepted = resolveCarrierRuntimeSelection({
+    carrierValue: 'agent-cli',
+    runtimeValue: 'nars',
+    admittedRuntimeSubstrateKinds: contract.admitted_runtime_substrate_kinds,
+    runtimeContractSchema: contract.schema,
+  });
+  assert.equal(accepted.status, 'accepted');
+  assert.equal(accepted.carrier_kind, 'agent-cli');
+  assert.equal(accepted.runtime_substrate_kind, 'narada-agent-runtime-server');
+  assert.equal(accepted.runtime_source_field, 'runtime');
 });
 
 test('runtime boolean values contract defines shared env flag vocabulary', () => {
