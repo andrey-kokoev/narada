@@ -1,7 +1,7 @@
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { explainMcpCommand, intelligenceProviderChoices, roleChoicesForSelectedSites, workspaceLaunchPlanCommand, type WorkspaceLaunchRecord } from '../../src/commands/launcher.js';
+import { explainMcpCommand, intelligenceProviderChoices, interactiveSelectionSupportsIntelligenceProvider, roleChoicesForSelectedSites, workspaceLaunchPlanCommand, type WorkspaceLaunchRecord } from '../../src/commands/launcher.js';
 import type { CommandContext } from '../../src/lib/command-wrapper.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
 
@@ -307,6 +307,43 @@ describe('launcher workspace planning', () => {
       'deepseek-api',
     ]));
     expect(choices.every((choice) => choice.value && choice.label)).toBe(true);
+  });
+
+  it('offers the provider selector only for launch sets that resolve to agent-cli', () => {
+    const records = [
+      { agent: 'sonar.resident', role: 'resident', site: 'narada-sonar', carrier: 'agent-cli', runtime: 'narada-agent-runtime-server' },
+      { agent: 'narada.architect', role: 'architect', site: 'narada', carrier: 'codex', runtime: 'codex' },
+    ].map((record) => ({
+      ...record,
+      title: record.agent,
+      narada_root: 'D:/code/narada',
+      site_root: 'D:/code/narada',
+      workspace_root: 'D:/code/narada',
+      launcher_path: 'D:/code/narada/narada.ps1',
+      enable_native_shell: false,
+      config_path: 'registry.json',
+    })) as WorkspaceLaunchRecord[];
+
+    expect(interactiveSelectionSupportsIntelligenceProvider({
+      records: [records[0]],
+      operatorSurface: 'registry default',
+      runtime: 'registry default',
+    })).toBe(true);
+    expect(interactiveSelectionSupportsIntelligenceProvider({
+      records,
+      operatorSurface: 'registry default',
+      runtime: 'registry default',
+    })).toBe(false);
+    expect(interactiveSelectionSupportsIntelligenceProvider({
+      records: [records[0]],
+      operatorSurface: 'agent-cli',
+      runtime: 'narada-agent-runtime-server',
+    })).toBe(true);
+    expect(() => interactiveSelectionSupportsIntelligenceProvider({
+      records: [records[1]],
+      operatorSurface: 'agent-cli',
+      runtime: 'narada-agent-runtime-server',
+    })).toThrow(/carrier_operator_surface_conflict/);
   });
 
   it('accepts nars as an input alias for narada-agent-runtime-server', async () => {

@@ -25,29 +25,50 @@ interface ProviderRegistry {
   }>;
 }
 
+function fallbackProviderRegistryForTests(): ProviderRegistry {
+  return {
+    default_provider: 'kimi-code-api',
+    providers: {
+      'anthropic-api': { meaning: 'Anthropic API via the Anthropic Messages API.', support_state: 'verified_supported' },
+      'codex-subscription': { meaning: 'Local Codex CLI subscription auth via codex mcp-server; no OpenAI API key or API billing path.', support_state: 'verified_supported' },
+      'deepseek-api': { meaning: 'DeepSeek API via OpenAI-compatible chat completions.', support_state: 'verified_supported' },
+      'kimi-api': { meaning: 'Kimi/Moonshot API via OpenAI-compatible chat completions.', support_state: 'verified_supported' },
+      'kimi-code-api': { meaning: 'Kimi Code API via OpenAI-compatible chat completions; uses KIMI_CODE_API_KEY against api.kimi.com/coding/v1.', support_state: 'verified_supported' },
+      'openai-api': { meaning: 'OpenAI API via OpenAI-compatible chat completions.', support_state: 'verified_supported' },
+    },
+  };
+}
+
 function resolveProviderRegistryPath(): string {
+  const candidates: string[] = [];
   try {
-    return requireFromLauncherCommand.resolve('@narada2/carrier-provider-contract/provider-registry');
+    candidates.push(requireFromLauncherCommand.resolve('@narada2/carrier-provider-contract/provider-registry'));
   } catch {
-    return fileURLToPath(new URL('../../../../carrier-provider-contract/contracts/provider-registry.json', import.meta.url));
+    // Workspace source checkouts can run before pnpm has materialized this dependency link.
   }
+  candidates.push(
+    fileURLToPath(new URL('../../../../carrier-provider-contract/contracts/provider-registry.json', import.meta.url)),
+    resolve(process.cwd(), '..', '..', 'carrier-provider-contract', 'contracts', 'provider-registry.json'),
+    resolve(process.cwd(), 'packages', 'carrier-provider-contract', 'contracts', 'provider-registry.json'),
+  );
+  const registryPath = candidates.find((candidate) => existsSync(candidate));
+  if (registryPath) return registryPath;
+  throw new Error(`provider_registry_not_found: ${candidates.join(', ')}`);
 }
 
 function loadProviderRegistry(): ProviderRegistry {
+  let registryPath: string;
   try {
-    return JSON.parse(readFileSync(resolveProviderRegistryPath(), 'utf8')) as ProviderRegistry;
-  } catch {
-    return {
-      default_provider: 'kimi-code-api',
-      providers: {
-        'anthropic-api': { meaning: 'Anthropic API via the Anthropic Messages API.', support_state: 'verified_supported' },
-        'codex-subscription': { meaning: 'Local Codex CLI subscription auth via codex mcp-server; no OpenAI API key or API billing path.', support_state: 'verified_supported' },
-        'deepseek-api': { meaning: 'DeepSeek API via OpenAI-compatible chat completions.', support_state: 'verified_supported' },
-        'kimi-api': { meaning: 'Kimi/Moonshot API via OpenAI-compatible chat completions.', support_state: 'verified_supported' },
-        'kimi-code-api': { meaning: 'Kimi Code API via OpenAI-compatible chat completions; uses KIMI_CODE_API_KEY against api.kimi.com/coding/v1.', support_state: 'verified_supported' },
-        'openai-api': { meaning: 'OpenAI API via OpenAI-compatible chat completions.', support_state: 'verified_supported' },
-      },
-    };
+    registryPath = resolveProviderRegistryPath();
+  } catch (error) {
+    if (process.env.VITEST) return fallbackProviderRegistryForTests();
+    throw error;
+  }
+  try {
+    return JSON.parse(readFileSync(registryPath, 'utf8')) as ProviderRegistry;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`provider_registry_load_failed: ${registryPath}: ${message}`);
   }
 }
 
@@ -592,15 +613,7 @@ async function selectInteractiveIntelligenceProvider({
   runtime: string;
   current?: string;
 }): Promise<string | undefined> {
-  const effectiveCarriers = records.map((record) => {
-    const selection = resolveWorkspaceCarrierRuntimeSelection(
-      carrier ?? record.carrier,
-      operatorSurface === 'registry default' ? undefined : operatorSurface,
-      runtime === 'registry default' ? record.runtime : runtime,
-    );
-    return selection.carrier_kind;
-  });
-  if (effectiveCarriers.length === 0 || effectiveCarriers.some((effectiveCarrier) => effectiveCarrier !== 'agent-cli')) {
+  if (!interactiveSelectionSupportsIntelligenceProvider({ records, carrier, operatorSurface, runtime })) {
     return undefined;
   }
 
@@ -616,6 +629,28 @@ async function selectInteractiveIntelligenceProvider({
   });
   if (prompts.isCancel(selectedProvider)) throw new Error('interactive_selection_cancelled');
   return selectedProvider as string;
+}
+
+export function interactiveSelectionSupportsIntelligenceProvider({
+  records,
+  carrier,
+  operatorSurface,
+  runtime,
+}: {
+  records: WorkspaceLaunchRecord[];
+  carrier?: string;
+  operatorSurface: string;
+  runtime: string;
+}): boolean {
+  if (records.length === 0) return false;
+  return records.every((record) => {
+    const selection = resolveWorkspaceCarrierRuntimeSelection(
+      carrier ?? record.carrier,
+      operatorSurface === 'registry default' ? undefined : operatorSurface,
+      runtime === 'registry default' ? record.runtime : runtime,
+    );
+    return selection.carrier_kind === 'agent-cli';
+  });
 }
 
 export function intelligenceProviderChoices(): Array<{ value: string; label: string; hint?: string }> {
