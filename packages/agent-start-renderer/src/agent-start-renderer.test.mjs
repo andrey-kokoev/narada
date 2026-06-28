@@ -17,6 +17,16 @@ test('formats agent-start preamble with redacted API keys and startup sequence',
       shell_access: 'mcp_only',
       lifecycle_mutations: 'mcp_only',
     },
+    mcp_fabric: {
+      source: '.ai/mcp',
+      site_root: 'D:/code/site',
+      files: ['narada-site-mcp.json'],
+      server_names: [
+        'narada-site-agent-context',
+        'narada-site-local-filesystem',
+      ],
+      skipped: [],
+    },
     required_environment: {
       NARADA_AGENT_ID: 'site.builder',
       KIMI_API_KEY: 'secret',
@@ -31,6 +41,12 @@ test('formats agent-start preamble with redacted API keys and startup sequence',
   assert.match(text, /identity: site\.builder/);
   assert.match(text, /KIMI_API_KEY=<set>/);
   assert.doesNotMatch(text, /secret/);
+  assert.match(text, /mcp_fabric:/);
+  assert.match(text, /source=\.ai\/mcp/);
+  assert.match(text, /files=narada-site-mcp\.json/);
+  assert.match(text, /server_count=2/);
+  assert.match(text, /narada-site-agent-context/);
+  assert.match(text, /narada-site-local-filesystem/);
   assert.match(text, /startup_command: agent_context_startup_sequence\(\{\}\)/);
   assert.match(text, /agent_context_startup_sequence \{\}/);
   assert.match(text, /agent_start_result_end: evt_1/);

@@ -34,6 +34,10 @@ function line(field, text, colorEnabled) {
   return `${key(`${field}:`, colorEnabled)} ${value(text, colorEnabled)}`;
 }
 
+function formatList(values = [], colorEnabled) {
+  return values.length > 0 ? values.map((item) => value(item, colorEnabled)).join(', ') : value('[]', colorEnabled);
+}
+
 export function formatAgentStartResult(result, options = {}) {
   const colorEnabled = options.colorEnabled ?? false;
   const runtime = options.runtime ?? result.runtime;
@@ -56,6 +60,24 @@ export function formatAgentStartResult(result, options = {}) {
     lines.push(`  ${key('script_execution_surface=', colorEnabled)}${policyValue(result.capability_policy.script_execution_surface ?? '<unspecified>', colorEnabled)}`);
     lines.push(`  ${key('shell_access=', colorEnabled)}${policyValue(result.capability_policy.shell_access ?? '<unspecified>', colorEnabled)}`);
     lines.push(`  ${key('lifecycle_mutations=', colorEnabled)}${policyValue(result.capability_policy.lifecycle_mutations ?? '<unspecified>', colorEnabled)}`);
+  }
+
+  if (result.mcp_fabric) {
+    const mcpFabric = result.mcp_fabric;
+    const serverNames = Array.isArray(mcpFabric.server_names) ? mcpFabric.server_names : [];
+    const files = Array.isArray(mcpFabric.files) ? mcpFabric.files : [];
+    const skipped = Array.isArray(mcpFabric.skipped) ? mcpFabric.skipped : [];
+    lines.push(header('mcp_fabric:', colorEnabled));
+    lines.push(`  ${key('source=', colorEnabled)}${value(mcpFabric.source ?? '<unspecified>', colorEnabled)}`);
+    lines.push(`  ${key('site_root=', colorEnabled)}${value(mcpFabric.site_root ?? '<unspecified>', colorEnabled)}`);
+    lines.push(`  ${key('files=', colorEnabled)}${formatList(files, colorEnabled)}`);
+    lines.push(`  ${key('server_count=', colorEnabled)}${value(String(serverNames.length), colorEnabled)}`);
+    for (const serverName of serverNames) {
+      lines.push(`    ${value(serverName, colorEnabled)}`);
+    }
+    if (skipped.length > 0) {
+      lines.push(`  ${key('skipped=', colorEnabled)}${formatList(skipped, colorEnabled)}`);
+    }
   }
 
   lines.push(header('required_environment:', colorEnabled));
