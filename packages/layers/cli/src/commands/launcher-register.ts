@@ -22,6 +22,7 @@ export function registerLauncherCommands(program: Command): void {
     .option('--runtime <runtime>', 'Override runtime implementation')
     .option('--intelligence-provider <provider>', 'agent-cli intelligence provider')
     .option('--interactive-selection', 'Interactively select Site, Role, Carrier, Runtime, and applicable Intelligence Provider before planning', false)
+    .option('--default-interactive-selection', 'Use interactive selection when no selection flags are supplied', false)
     .option('--result-path <path>', 'Write the workspace plan JSON to a file')
     .option('--suppress-result-output', 'Do not print the final result envelope after writing --result-path', false)
     .option('--enable-native-shell', 'Break-glass: permit native shell carrier posture where supported', false)
@@ -52,6 +53,7 @@ export function registerLauncherCommands(program: Command): void {
         runtime: opts.runtime as string | undefined,
         intelligenceProvider: opts.intelligenceProvider as string | undefined,
         interactiveSelection: opts.interactiveSelection as boolean | undefined,
+        defaultInteractiveSelection: opts.defaultInteractiveSelection as boolean | undefined,
         resultPath: opts.resultPath as string | undefined,
         suppressResultOutput: opts.suppressResultOutput as boolean | undefined,
         enableNativeShell: opts.enableNativeShell as boolean | undefined,
@@ -76,6 +78,7 @@ export function registerLauncherCommands(program: Command): void {
     .option('--runtime <runtime>', 'Override runtime implementation')
     .option('--intelligence-provider <provider>', 'agent-cli intelligence provider')
     .option('--interactive-selection', 'Interactively select Site, Role, Carrier, Runtime, and applicable Intelligence Provider before launching', false)
+    .option('--default-interactive-selection', 'Use interactive selection when no selection flags are supplied', false)
     .option('--result-path <path>', 'Write the workspace plan JSON to a file')
     .option('--suppress-result-output', 'Do not print the final result envelope after writing --result-path', false)
     .option('--enable-native-shell', 'Break-glass: permit native shell carrier posture where supported', false)
@@ -106,6 +109,7 @@ export function registerLauncherCommands(program: Command): void {
         runtime: opts.runtime as string | undefined,
         intelligenceProvider: opts.intelligenceProvider as string | undefined,
         interactiveSelection: opts.interactiveSelection as boolean | undefined,
+        defaultInteractiveSelection: opts.defaultInteractiveSelection as boolean | undefined,
         resultPath: opts.resultPath as string | undefined,
         suppressResultOutput: opts.suppressResultOutput as boolean | undefined,
         enableNativeShell: opts.enableNativeShell as boolean | undefined,

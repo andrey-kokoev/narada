@@ -1,7 +1,7 @@
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { explainMcpCommand, initialRoleValuesForInteractiveSelection, intelligenceProviderChoices, intelligenceProviderChoicesForLaunchSelection, roleChoicesForSelectedSites, workspaceLaunchCommand, workspaceLaunchPlanCommand, type WorkspaceLaunchRecord } from '../../src/commands/launcher.js';
+import { explainMcpCommand, hasWorkspaceLaunchSelectionIntent, initialRoleValuesForInteractiveSelection, intelligenceProviderChoices, intelligenceProviderChoicesForLaunchSelection, roleChoicesForSelectedSites, workspaceLaunchCommand, workspaceLaunchPlanCommand, type WorkspaceLaunchRecord } from '../../src/commands/launcher.js';
 import type { CommandContext } from '../../src/lib/command-wrapper.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
 
@@ -243,6 +243,46 @@ describe('launcher workspace planning', () => {
       registryPath,
       format: 'json',
     }, createMockContext())).rejects.toThrow(/launch_selection_required/);
+  });
+
+  it('does not treat empty selector arrays or whitespace as selection intent', async () => {
+    expect(hasWorkspaceLaunchSelectionIntent({
+      agent: ['', '  '],
+      role: [],
+      site: [''],
+      configPath: ['  '],
+    })).toBe(false);
+
+    const registryPath = await tempRegistry();
+    await expect(workspaceLaunchPlanCommand({
+      registryPath,
+      agent: ['', '  '],
+      role: [],
+      site: [''],
+      configPath: [],
+      format: 'json',
+    }, createMockContext())).rejects.toThrow(/launch_selection_required/);
+  });
+
+  it('defaults to interactive selection only when no selector intent is supplied', async () => {
+    const registryPath = await tempRegistry();
+    await expect(workspaceLaunchPlanCommand({
+      registryPath,
+      defaultInteractiveSelection: true,
+      format: 'json',
+    }, createMockContext())).rejects.toThrow(/interactive_selection_requires_tty/);
+
+    const plan = await workspaceLaunchPlanCommand({
+      registryPath,
+      defaultInteractiveSelection: true,
+      site: ['sonar'],
+      role: ['resident'],
+      format: 'json',
+    }, createMockContext());
+    expect(plan.exitCode).toBe(ExitCode.SUCCESS);
+    const result = plan.result as { interactive_selection: boolean; selected_agents: Array<{ agent: string }> };
+    expect(result.interactive_selection).toBe(false);
+    expect(result.selected_agents.map((agent) => agent.agent)).toEqual(['sonar.resident']);
   });
 
   it('refuses interactive selection outside an interactive terminal', async () => {

@@ -122,6 +122,7 @@ export interface WorkspaceLaunchPlanOptions {
   runtime?: string;
   intelligenceProvider?: string;
   interactiveSelection?: boolean;
+  defaultInteractiveSelection?: boolean;
   resultPath?: string;
   suppressResultOutput?: boolean;
   enableNativeShell?: boolean;
@@ -450,16 +451,17 @@ export async function workspaceLaunchPlanCommand(
   options: WorkspaceLaunchPlanOptions,
   context: CommandContext,
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
-  const registryPaths = resolveRegistryPaths(options);
+  const normalizedOptions = normalizeWorkspaceLaunchPlanOptions(options);
+  const registryPaths = resolveRegistryPaths(normalizedOptions);
   const records = (await Promise.all(registryPaths.map(readLaunchRegistry))).flat();
-  const resolvedOptions = await resolveInteractiveSelectionOptions(records, options);
+  const resolvedOptions = await resolveInteractiveSelectionOptions(records, normalizedOptions);
   const selected = selectLaunchRecords(records, resolvedOptions);
   const plans = selected.map((record) => buildAgentPlan(record, resolvedOptions));
   const wtArgs = plans.flatMap((plan, index) => [
     ...(index === 0 ? [] : [';']),
     ...plan.wt_args,
   ]);
-  if (options.smoke) {
+  if (resolvedOptions.smoke) {
     const agents = [];
     for (const plan of plans) {
       const smoke = await carrierStartCommand({
@@ -507,10 +509,10 @@ export async function workspaceLaunchPlanCommand(
     await writeWorkspacePlanResult(resolvedOptions.resultPath, smokeResult);
     return {
       exitCode: failed.length === 0 ? ExitCode.SUCCESS : ExitCode.GENERAL_ERROR,
-      result: formattedResult(smokeResult, `workspace smoke ${smokeResult.status}`, options.format ?? 'auto'),
+      result: formattedResult(smokeResult, `workspace smoke ${smokeResult.status}`, resolvedOptions.format ?? 'auto'),
     };
   }
-  const mode = options.smoke ? 'smoke' : options.dryRun ? 'dry_run' : 'plan';
+  const mode = resolvedOptions.smoke ? 'smoke' : resolvedOptions.dryRun ? 'dry_run' : 'plan';
   const result = {
     schema: 'narada.workspace_launch.plan.v1',
     status: 'planned',
@@ -791,10 +793,33 @@ function unique(values: string[]): string[] {
 }
 
 function resolveRegistryPaths(options: WorkspaceLaunchPlanOptions): string[] {
-  const paths = options.configPath && options.configPath.length > 0
-    ? options.configPath
+  const configPaths = nonEmptyStringArray(options.configPath);
+  const paths = configPaths.length > 0
+    ? configPaths
     : [options.registryPath ?? join(process.cwd(), 'config', 'launch', 'agents.psd1')];
   return paths.map((path) => resolve(path));
+}
+
+export function hasWorkspaceLaunchSelectionIntent(options: WorkspaceLaunchPlanOptions): boolean {
+  return options.all === true
+    || nonEmptyStringArray(options.agent).length > 0
+    || nonEmptyStringArray(options.role).length > 0
+    || nonEmptyStringArray(options.site).length > 0
+    || nonEmptyStringArray(options.configPath).length > 0;
+}
+
+function normalizeWorkspaceLaunchPlanOptions(options: WorkspaceLaunchPlanOptions): WorkspaceLaunchPlanOptions {
+  const normalized: WorkspaceLaunchPlanOptions = {
+    ...options,
+    agent: nonEmptyStringArray(options.agent),
+    role: nonEmptyStringArray(options.role),
+    site: nonEmptyStringArray(options.site),
+    configPath: nonEmptyStringArray(options.configPath),
+  };
+  if (normalized.defaultInteractiveSelection === true && !hasWorkspaceLaunchSelectionIntent(normalized)) {
+    return { ...normalized, interactiveSelection: true };
+  }
+  return normalized;
 }
 
 async function readLaunchRegistry(path: string): Promise<WorkspaceLaunchRecord[]> {
@@ -860,14 +885,16 @@ function normalizeAgentRecord(registry: RawLaunchRegistry, agent: RawAgentRecord
 
 function selectLaunchRecords(records: WorkspaceLaunchRecord[], options: WorkspaceLaunchPlanOptions): WorkspaceLaunchRecord[] {
   let selected: WorkspaceLaunchRecord[];
-  const roleSelectors = options.role ?? [];
-  const siteSelectors = options.site ?? [];
+  const agentSelectors = nonEmptyStringArray(options.agent);
+  const roleSelectors = nonEmptyStringArray(options.role);
+  const siteSelectors = nonEmptyStringArray(options.site);
+  const configPathSelectors = nonEmptyStringArray(options.configPath);
   const hasRoleSelector = roleSelectors.length > 0;
   const hasSiteSelector = siteSelectors.length > 0;
-  const hasConfigPathSelector = Boolean(options.configPath && options.configPath.length > 0);
-  if (options.agent && options.agent.length > 0) {
+  const hasConfigPathSelector = configPathSelectors.length > 0;
+  if (agentSelectors.length > 0) {
     selected = [];
-    for (const agent of options.agent) {
+    for (const agent of agentSelectors) {
       const matches = records.filter((record) => record.agent === agent);
       if (matches.length === 0) throw new Error(`agent_not_found_in_launch_registry: ${agent}`);
       if (matches.length > 1) throw new Error(`agent_duplicate_in_launch_registry: ${agent}`);
@@ -971,6 +998,10 @@ function buildAgentPlan(record: WorkspaceLaunchRecord, options: WorkspaceLaunchP
 
 function nonEmpty(value: unknown): string | null {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
+}
+
+function nonEmptyStringArray(values: string[] | undefined): string[] {
+  return (values ?? []).map((value) => nonEmpty(value)).filter((value): value is string => Boolean(value));
 }
 
 function toPowerShellCommand(args: string[]): string {
