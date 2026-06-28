@@ -524,7 +524,7 @@ export async function workspaceLaunchPlanCommand(
     wt_args: wtArgs,
     ownership: {
       planner: 'narada-cli',
-      executor: 'operator_surface_windows_terminal',
+      executor: 'narada-cli.workspace-launch',
       migrated_from: 'Start-NaradaWorkspace.ps1 inline registry/filter/wt planning',
     },
     ...(resolvedOptions.resultPath ? { result_path: resolvedOptions.resultPath } : {}),
@@ -535,6 +535,57 @@ export async function workspaceLaunchPlanCommand(
   return {
     exitCode: ExitCode.SUCCESS,
     result: formattedResult(result, `planned ${plans.length} workspace launch(es)`, resolvedOptions.format ?? 'auto'),
+  };
+}
+
+export async function workspaceLaunchCommand(
+  options: WorkspaceLaunchPlanOptions,
+  context: CommandContext,
+): Promise<{ exitCode: ExitCode; result: unknown }> {
+  const plan = await workspaceLaunchPlanCommand(options, context);
+  if (plan.exitCode !== ExitCode.SUCCESS || options.smoke) return plan;
+
+  const result = plan.result as Record<string, unknown>;
+  const wtArgs = stringArray(result.wt_args);
+  if (wtArgs.length === 0) {
+    throw new Error('narada_workspace_plan_empty_wt_args');
+  }
+
+  if (options.dryRun) {
+    const dryRunResult = {
+      ...result,
+      mode: 'dry_run',
+      mutation_performed: false,
+      windows_terminal_invoked: false,
+      launcher_execution_owner: 'narada-cli',
+    };
+    return {
+      exitCode: ExitCode.SUCCESS,
+      result: formattedResult(dryRunResult, `planned ${result.count ?? 0} workspace launch(es)`, options.format ?? 'auto'),
+    };
+  }
+
+  const effectiveWtArgs = process.env.WT_SESSION ? ['-w', '0', ...wtArgs] : wtArgs;
+  const launch = spawnSync('wt', effectiveWtArgs, {
+    stdio: 'inherit',
+    windowsHide: false,
+  });
+  if (launch.error) throw launch.error;
+  if (launch.status !== 0) {
+    throw new Error(`windows_terminal_launch_failed: wt exited ${launch.status ?? 'unknown'}`);
+  }
+
+  const launchResult = {
+    ...result,
+    mode: 'launch',
+    mutation_performed: true,
+    windows_terminal_invoked: true,
+    launcher_execution_owner: 'narada-cli',
+    wt_exit_code: launch.status ?? 0,
+  };
+  return {
+    exitCode: ExitCode.SUCCESS,
+    result: formattedResult(launchResult, `launched ${result.count ?? 0} workspace launch(es)`, options.format ?? 'auto'),
   };
 }
 

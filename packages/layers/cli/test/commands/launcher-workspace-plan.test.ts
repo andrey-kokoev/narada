@@ -1,7 +1,7 @@
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { explainMcpCommand, intelligenceProviderChoices, intelligenceProviderChoicesForLaunchSelection, roleChoicesForSelectedSites, workspaceLaunchPlanCommand, type WorkspaceLaunchRecord } from '../../src/commands/launcher.js';
+import { explainMcpCommand, intelligenceProviderChoices, intelligenceProviderChoicesForLaunchSelection, roleChoicesForSelectedSites, workspaceLaunchCommand, workspaceLaunchPlanCommand, type WorkspaceLaunchRecord } from '../../src/commands/launcher.js';
 import type { CommandContext } from '../../src/lib/command-wrapper.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
 
@@ -148,7 +148,7 @@ describe('launcher workspace planning', () => {
     expect(result.schema).toBe('narada.workspace_launch.plan.v1');
     expect(result.mutation_performed).toBe(false);
     expect(result.ownership.planner).toBe('narada-cli');
-    expect(result.ownership.executor).toBe('operator_surface_windows_terminal');
+    expect(result.ownership.executor).toBe('narada-cli.workspace-launch');
     expect(result.selected_agents).toHaveLength(1);
     expect(result.selected_agents[0].agent).toBe('sonar.resident');
     expect(result.selected_agents[0].operator_surface_kind).toBe('agent-cli');
@@ -182,6 +182,25 @@ describe('launcher workspace planning', () => {
       'narada-agent-runtime-server',
       '--dry-run',
     ]));
+    expect(result.wt_args[0]).toBe('new-tab');
+  });
+
+  it('exposes workspace launch as the CLI-owned execution boundary', async () => {
+    const registryPath = await tempRegistry();
+    const launch = await workspaceLaunchCommand({
+      registryPath,
+      site: ['sonar'],
+      role: ['resident'],
+      carrier: 'agent-cli',
+      runtime: 'narada-agent-runtime-server',
+      dryRun: true,
+      format: 'json',
+    }, createMockContext());
+
+    expect(launch.exitCode).toBe(ExitCode.SUCCESS);
+    const result = launch.result as { selected_agents: Array<{ agent: string }>; windows_terminal_invoked: boolean; wt_args: string[] };
+    expect(result.windows_terminal_invoked).toBe(false);
+    expect(result.selected_agents.map((agent) => agent.agent)).toEqual(['sonar.resident']);
     expect(result.wt_args[0]).toBe('new-tab');
   });
 
