@@ -249,6 +249,7 @@ export function runAgentStartCommand(options: AgentStartOptions): AgentStartComm
   const resultDir = join(workspaceRoot, '.ai', 'runtime', 'agent-start-command-results', `${Date.now()}-${Math.random().toString(16).slice(2)}`);
   mkdirSync(resultDir, { recursive: true });
   const resultPath = join(resultDir, 'result.json');
+  const inheritedInteractiveExec = options.exec === true && options.dryRun !== true;
   const args = [
     '--import',
     tsxImportPath(),
@@ -266,8 +267,8 @@ export function runAgentStartCommand(options: AgentStartOptions): AgentStartComm
     options.launchSource ?? 'narada carrier start',
     '--json-output-file',
     resultPath,
-    '--json',
   ];
+  if (!inheritedInteractiveExec) args.push('--json');
   if (options.intelligenceProvider) args.push('--intelligence-provider', options.intelligenceProvider);
   if (options.dryRun) args.push('--dry-run');
   if (options.exec) args.push('--exec');
@@ -290,13 +291,16 @@ export function runAgentStartCommand(options: AgentStartOptions): AgentStartComm
     };
   }
 
-  const execution = runProcess(process.execPath, args, workspaceRoot, {
+  const executionEnv = {
     NARADA_TARGET_SITE_ROOT: siteRoot,
     NARADA_LAUNCH_REGISTRY_SITE_ROOT: siteRoot,
     NARADA_LAUNCH_REGISTRY_WORKSPACE_ROOT: workspaceRoot,
     NARADA_AGENT_ID: options.agent,
     ...(options.intelligenceProvider ? { NARADA_INTELLIGENCE_PROVIDER: options.intelligenceProvider } : {}),
-  });
+  };
+  const execution = inheritedInteractiveExec
+    ? runProcessInherited(process.execPath, args, workspaceRoot, executionEnv)
+    : runProcess(process.execPath, args, workspaceRoot, executionEnv);
   const parsed = tryReadJsonFile(resultPath);
   return {
     schema: 'narada.agent_start.command_result.v0',
@@ -811,6 +815,34 @@ function runProcess(
     exit_code: exitCode,
     stdout: String(result.stdout ?? '').trim(),
     stderr: String(result.stderr ?? '').trim(),
+    error: result.error ? result.error.message : undefined,
+  };
+}
+
+function runProcessInherited(
+  command: string,
+  args: string[],
+  cwd: string,
+  env: Record<string, string> = {},
+): CommandExecutionResult {
+  const result = spawnSync(command, args, {
+    cwd,
+    stdio: 'inherit',
+    timeout: 0,
+    windowsHide: false,
+    env: {
+      ...process.env,
+      NODE_OPTIONS: appendNodeOption(process.env.NODE_OPTIONS, '--disable-warning=ExperimentalWarning'),
+      OUTPUT_FORMAT: 'json',
+      ...env,
+    },
+  });
+  const exitCode = result.status ?? (result.error ? 1 : 0);
+  return {
+    status: exitCode === 0 ? 'success' : 'failed',
+    exit_code: exitCode,
+    stdout: '',
+    stderr: '',
     error: result.error ? result.error.message : undefined,
   };
 }

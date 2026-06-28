@@ -86,6 +86,13 @@ test('db option materializes the requested agent-context db path', () => {
   assert.equal(output.required_environment.NARADA_AGENT_CONTEXT_DB, dbPath);
 });
 
+test('nars runtime alias materializes the canonical runtime server kind', () => {
+  const output = runOk(['--carrier', 'agent-cli', '--runtime', 'nars']);
+  assert.equal(output.runtime_substrate_kind, 'narada-agent-runtime-server');
+  assert.equal(output.nars_launch.carrier_runtime_kind, 'narada-agent-runtime-server');
+  assert.equal(output.carrier_session.record.carrier_runtime_kind, 'narada-agent-runtime-server');
+});
+
 test('target site id is carried through dry-run output', () => {
   const output = runOk(['--carrier', 'agent-cli', '--runtime', 'narada-agent-runtime-server', '--target-site-id', 'narada-proper-contract']);
   assert.equal(output.target_site_id, 'narada-proper-contract');
@@ -424,12 +431,12 @@ test('unsupported runtime fails with runtime contract refusal', () => {
   assert.equal(refusal.candidate_runtime_substrate_kind, 'not-a-runtime');
 });
 
-test('agent-cli is refused as a runtime and must be selected as a carrier', () => {
+test('agent-cli is refused as a runtime and must be selected as an operator surface', () => {
   const result = runFailed(['--runtime', 'agent-cli']);
   const refusal = JSON.parse(result.stdout);
   assert.equal(refusal.reason_code, 'runtime_carrier_conflation_refused');
   assert.equal(refusal.candidate_runtime_substrate_kind, 'agent-cli');
-  assert.match(refusal.required_next_step, /--carrier agent-cli --runtime narada-agent-runtime-server/);
+  assert.match(refusal.required_next_step, /--operator-surface agent-cli --runtime narada-agent-runtime-server/);
 });
 test('codex resolves CLI script from PATH and disables native shell by default', () => {
   const fakeBin = mkdtempSync(join(tmpdir(), 'narada-codex-path-'));

@@ -18,7 +18,7 @@ import {
   schedulerSiteDaemonInstallCommand,
   schedulerSiteDaemonStatusCommand,
 } from '../../src/commands/scheduler.js';
-import { getSchedulerSiteDaemonStatus } from '../../src/lib/launcher-runtime.js';
+import { getSchedulerSiteDaemonStatus, runAgentStartCommand } from '../../src/lib/launcher-runtime.js';
 import type { CommandContext } from '../../src/lib/command-wrapper.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
 
@@ -261,6 +261,41 @@ describe('carrier launcher CLI commands', () => {
     expect(agentStart.command).toContain('--intelligence-provider');
     expect(agentStart.command).toContain('codex-subscription');
     expect(agentStart.result_handoff).toBe('json_output_file');
+  });
+
+  it('keeps machine JSON off inherited interactive carrier launches', async () => {
+    const siteRoot = await tempSite();
+    const workspaceRoot = join(siteRoot, 'missing-narada-proper');
+
+    const interactive = runAgentStartCommand({
+      siteRoot,
+      workspaceRoot,
+      agent: 'sonar.resident',
+      carrier: 'agent-cli',
+      runtime: 'narada-agent-runtime-server',
+      exec: true,
+      wait: true,
+      launchSource: 'test',
+    });
+
+    expect(interactive.status).toBe('not_available');
+    expect(interactive.command).toContain('--json-output-file');
+    expect(interactive.command).toContain('--exec');
+    expect(interactive.command).toContain('--wait');
+    expect(interactive.command).not.toContain('--json');
+
+    const captured = runAgentStartCommand({
+      siteRoot,
+      workspaceRoot,
+      agent: 'sonar.resident',
+      carrier: 'agent-cli',
+      runtime: 'narada-agent-runtime-server',
+      launchSource: 'test',
+    });
+
+    expect(captured.status).toBe('not_available');
+    expect(captured.command).toContain('--json-output-file');
+    expect(captured.command).toContain('--json');
   });
 
   it('routes non-agent-cli carrier requests through canonical agent-start instead of the Site hardcoded launcher', async () => {
