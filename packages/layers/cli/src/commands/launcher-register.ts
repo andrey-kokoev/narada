@@ -21,7 +21,7 @@ export function registerLauncherCommands(program: Command): void {
     .option('--operator-surface <surface>', 'Override operator/client surface; preferred replacement for --carrier')
     .option('--runtime <runtime>', 'Override runtime implementation')
     .option('--intelligence-provider <provider>', 'agent-cli intelligence provider')
-    .option('--interactive-selection', 'Interactively select Site, Role, Carrier, and Runtime before planning', false)
+    .option('--interactive-selection', 'Interactively select Site, Role, Carrier, Runtime, and applicable Intelligence Provider before planning', false)
     .option('--result-path <path>', 'Write the workspace plan JSON to a file')
     .option('--suppress-result-output', 'Do not print the final result envelope after writing --result-path', false)
     .option('--enable-native-shell', 'Break-glass: permit native shell carrier posture where supported', false)

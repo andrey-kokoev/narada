@@ -289,6 +289,9 @@ importers:
       '@narada2/agent-context-memory':
         specifier: workspace:*
         version: link:../../agent-context-memory
+      '@narada2/carrier-provider-contract':
+        specifier: workspace:*
+        version: link:../../carrier-provider-contract
       '@narada2/carrier-runtime-contract':
         specifier: workspace:*
         version: link:../../carrier-runtime-contract

@@ -1,7 +1,7 @@
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { explainMcpCommand, roleChoicesForSelectedSites, workspaceLaunchPlanCommand, type WorkspaceLaunchRecord } from '../../src/commands/launcher.js';
+import { explainMcpCommand, intelligenceProviderChoices, roleChoicesForSelectedSites, workspaceLaunchPlanCommand, type WorkspaceLaunchRecord } from '../../src/commands/launcher.js';
 import type { CommandContext } from '../../src/lib/command-wrapper.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
 
@@ -295,6 +295,18 @@ describe('launcher workspace planning', () => {
 
     expect(roleChoicesForSelectedSites(records, ['sonar'])).toEqual(['resident', 'architect']);
     expect(roleChoicesForSelectedSites(records, ['smart-scheduling'])).toEqual(['builder']);
+  });
+
+  it('offers registry default plus verified intelligence providers for interactive selection', () => {
+    const choices = intelligenceProviderChoices();
+    expect(choices[0]).toMatchObject({ value: 'registry default' });
+    expect(choices.map((choice) => choice.value)).toEqual(expect.arrayContaining([
+      'codex-subscription',
+      'kimi-code-api',
+      'openai-api',
+      'deepseek-api',
+    ]));
+    expect(choices.every((choice) => choice.value && choice.label)).toBe(true);
   });
 
   it('accepts nars as an input alias for narada-agent-runtime-server', async () => {

@@ -2,6 +2,8 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { readFile, writeFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 import { join, resolve } from 'node:path';
+import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
 import * as prompts from '@clack/prompts';
 import { commandResultError, type CommandContext } from '../lib/command-wrapper.js';
 import { formattedResult, type CliFormat } from '../lib/cli-output.js';
@@ -11,6 +13,43 @@ import {
   defaultRuntimeForCarrier,
   resolveCarrierRuntimeSelection,
 } from '@narada2/carrier-runtime-contract/carrier-runtime-selection';
+
+const requireFromLauncherCommand = createRequire(import.meta.url);
+const providerRegistry = loadProviderRegistry();
+
+interface ProviderRegistry {
+  default_provider?: string;
+  providers?: Record<string, {
+    meaning?: string;
+    support_state?: string;
+  }>;
+}
+
+function resolveProviderRegistryPath(): string {
+  try {
+    return requireFromLauncherCommand.resolve('@narada2/carrier-provider-contract/provider-registry');
+  } catch {
+    return fileURLToPath(new URL('../../../../carrier-provider-contract/contracts/provider-registry.json', import.meta.url));
+  }
+}
+
+function loadProviderRegistry(): ProviderRegistry {
+  try {
+    return JSON.parse(readFileSync(resolveProviderRegistryPath(), 'utf8')) as ProviderRegistry;
+  } catch {
+    return {
+      default_provider: 'kimi-code-api',
+      providers: {
+        'anthropic-api': { meaning: 'Anthropic API via the Anthropic Messages API.', support_state: 'verified_supported' },
+        'codex-subscription': { meaning: 'Local Codex CLI subscription auth via codex mcp-server; no OpenAI API key or API billing path.', support_state: 'verified_supported' },
+        'deepseek-api': { meaning: 'DeepSeek API via OpenAI-compatible chat completions.', support_state: 'verified_supported' },
+        'kimi-api': { meaning: 'Kimi/Moonshot API via OpenAI-compatible chat completions.', support_state: 'verified_supported' },
+        'kimi-code-api': { meaning: 'Kimi Code API via OpenAI-compatible chat completions; uses KIMI_CODE_API_KEY against api.kimi.com/coding/v1.', support_state: 'verified_supported' },
+        'openai-api': { meaning: 'OpenAI API via OpenAI-compatible chat completions.', support_state: 'verified_supported' },
+      },
+    };
+  }
+}
 
 export interface WorkspaceLaunchPlanOptions {
   agent?: string[];
@@ -514,14 +553,88 @@ async function resolveInteractiveSelectionOptions(
   });
   if (prompts.isCancel(selectedRuntime)) throw new Error('interactive_selection_cancelled');
 
+  const selectedRoleValues = selectedRoles as string[];
+  const selectedRecords = selectLaunchRecords(records, {
+    ...options,
+    all: true,
+    site: selectedSiteValues,
+    role: selectedRoleValues,
+  });
+  const selectedProvider = await selectInteractiveIntelligenceProvider({
+    records: selectedRecords,
+    carrier: options.carrier,
+    operatorSurface: selectedCarrier as string,
+    runtime: selectedRuntime as string,
+    current: options.intelligenceProvider,
+  });
+
   return {
     ...options,
     all: false,
     site: selectedSiteValues,
-    role: selectedRoles as string[],
+    role: selectedRoleValues,
     operatorSurface: selectedCarrier === 'registry default' ? undefined : selectedCarrier,
     runtime: selectedRuntime === 'registry default' ? undefined : selectedRuntime,
+    intelligenceProvider: selectedProvider === 'registry default' ? undefined : selectedProvider,
   };
+}
+
+async function selectInteractiveIntelligenceProvider({
+  records,
+  carrier,
+  operatorSurface,
+  runtime,
+  current,
+}: {
+  records: WorkspaceLaunchRecord[];
+  carrier?: string;
+  operatorSurface: string;
+  runtime: string;
+  current?: string;
+}): Promise<string | undefined> {
+  const effectiveCarriers = records.map((record) => {
+    const selection = resolveWorkspaceCarrierRuntimeSelection(
+      carrier ?? record.carrier,
+      operatorSurface === 'registry default' ? undefined : operatorSurface,
+      runtime === 'registry default' ? record.runtime : runtime,
+    );
+    return selection.carrier_kind;
+  });
+  if (effectiveCarriers.length === 0 || effectiveCarriers.some((effectiveCarrier) => effectiveCarrier !== 'agent-cli')) {
+    return undefined;
+  }
+
+  const choices = intelligenceProviderChoices();
+  const selectedProvider = await prompts.select({
+    message: 'Select Intelligence Provider',
+    options: choices.map((choice) => ({
+      value: choice.value,
+      label: choice.label,
+      hint: choice.hint,
+    })),
+    initialValue: current ?? 'registry default',
+  });
+  if (prompts.isCancel(selectedProvider)) throw new Error('interactive_selection_cancelled');
+  return selectedProvider as string;
+}
+
+export function intelligenceProviderChoices(): Array<{ value: string; label: string; hint?: string }> {
+  const entries = Object.entries(providerRegistry.providers ?? {})
+    .filter(([, provider]) => provider.support_state === 'verified_supported')
+    .map(([provider, metadata]) => ({
+      value: provider,
+      label: provider,
+      hint: metadata.meaning,
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+  return [
+    {
+      value: 'registry default',
+      label: 'registry default',
+      hint: providerRegistry.default_provider ? `use default provider ${providerRegistry.default_provider}` : 'use launcher/provider defaults',
+    },
+    ...entries,
+  ];
 }
 
 export function roleChoicesForSelectedSites(records: WorkspaceLaunchRecord[], siteSelectors: string[]): string[] {
