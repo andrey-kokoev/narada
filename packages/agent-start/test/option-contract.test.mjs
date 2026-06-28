@@ -43,6 +43,15 @@ function run(extraArgs = [], extraEnv = {}) {
   });
 }
 
+function runRealLaunch(extraArgs = [], extraEnv = {}) {
+  const argsWithoutDryRun = baseArgs.filter((arg) => arg !== '--dry-run');
+  return spawnSync(process.execPath, [...argsWithoutDryRun, ...extraArgs], {
+    cwd: naradaProperRoot,
+    encoding: 'utf8',
+    env: { ...process.env, ...baseTestEnv, ...extraEnv },
+  });
+}
+
 function runOk(extraArgs = [], extraEnv = {}) {
   const result = run(extraArgs, extraEnv);
   assert.equal(result.status, 0, result.stderr || result.stdout);
@@ -224,6 +233,25 @@ test('agent-cli refuses codex-subscription when Codex local auth preflight fails
   assert.equal(Object.hasOwn(refusal.preflight, 'stderr_first_line'), true);
   assert.equal(Object.hasOwn(refusal.preflight, 'stdout_first_line'), true);
   assert.equal(refusal.required_next_step, 'Run codex login or repair local Codex subscription auth, then retry the launcher. For diagnostics only, set NARADA_CODEX_SUBSCRIPTION_PREFLIGHT=defer to skip the launch-time probe.');
+});
+
+test('agent-cli non-dry launch runs codex-subscription preflight by default before handoff', () => {
+  const fakeBin = mkdtempSync(join(tmpdir(), 'narada-codex-preflight-default-'));
+  const fakeCodex = join(fakeBin, process.platform === 'win32' ? 'codex.cmd' : 'codex');
+  const script = process.platform === 'win32'
+    ? '@echo off\r\necho HTTP error: 401 Unauthorized 1>&2\r\nexit /b 1\r\n'
+    : '#!/bin/sh\necho "HTTP error: 401 Unauthorized" >&2\nexit 1\n';
+  writeFileSync(fakeCodex, script, 'utf8');
+
+  const result = runRealLaunch(['--carrier', 'agent-cli', '--runtime', 'narada-agent-runtime-server', '--intelligence-provider', 'codex-subscription'], {
+    NARADA_CODEX_SUBSCRIPTION_PREFLIGHT: '',
+    NARADA_CODEX_COMMAND: fakeCodex,
+  });
+  assert.notEqual(result.status, 0, 'launcher should fail before carrier handoff');
+  const refusal = JSON.parse(result.stdout);
+  assert.equal(refusal.reason_code, 'local_codex_subscription_auth_unavailable');
+  assert.match(refusal.preflight.status, /^failed/);
+  assert.equal(refusal.preflight.command.includes('exec --json'), true);
 });
 
 test('agent-cli codex-subscription preflight resolves Windows codex.ps1 and scrubs OpenAI API env', { skip: process.platform !== 'win32' }, () => {
