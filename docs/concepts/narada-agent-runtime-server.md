@@ -305,6 +305,8 @@ Reason: NARS owns identity binding, session persistence, MCP discovery, provider
 
 The coherent ownership split is that Narada proper owns the Agent Runtime Server package and stable runtime-server entrypoint. `agent-cli` is a terminal/client projection, not a runtime name and not the carrier substrate behind NARS. Codex, Claude Code, Pi, Kimi, and API providers stay replaceable adapters behind the carrier/runtime boundary.
 
+NARS also owns local session discovery for existing runtime sessions. The implementation-facing mechanics live in [`nars-runtime-contract.md`](nars-runtime-contract.md#session-discovery-and-attachment-index): each session has Site-local durable records under `.narada/crew/nars-sessions/<session-id>/`, and NARS maintains a rebuildable discovery index so peer clients such as `agent-cli`, `agent-tui`, and `agent-web-ui` can attach by verified event and health endpoints without inspecting terminal windows or owning runtime state.
+
 ## De-Arbitrarization Result
 
 After descent, the remaining decision-relevant freedoms are explicit:

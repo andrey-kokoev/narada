@@ -6,11 +6,24 @@ This package is a client surface. It does not construct runtime dependencies, ho
 
 ## Run
 
+Operator-grade attach UX should use NARS session discovery once exposed by the Narada CLI:
+
+```bash
+narada agent-web-ui
+narada agent-web-ui --site sonar
+```
+
+Those commands discover active NARS sessions from the NARS-owned session index, health-check candidates, and attach this browser projection to the selected session.
+
+The current low-level package primitive attaches to one known NARS event endpoint and health endpoint:
+
 ```bash
 pnpm --filter @narada2/agent-web-ui start -- --event-endpoint ws://127.0.0.1:12345/events --health-endpoint http://127.0.0.1:12346/health
 ```
 
 The command prints a local URL. Open that URL in a browser to observe and message the session.
+
+The authoritative session discovery/index mechanics are documented in `docs/concepts/nars-runtime-contract.md` under `Session Discovery And Attachment Index`.
 
 ## Code Organization
 
