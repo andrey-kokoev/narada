@@ -284,14 +284,6 @@
       "posture": "macos_site_template"
     },
     {
-      "package": "@narada2/mailbox",
-      "path": "packages/verticals/mailbox",
-      "roles": [
-        "vertical"
-      ],
-      "posture": "mailbox_vertical"
-    },
-    {
       "package": "@narada2/mcp-fabric",
       "path": "packages/mcp-fabric",
       "roles": [
