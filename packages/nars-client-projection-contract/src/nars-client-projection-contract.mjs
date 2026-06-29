@@ -1,5 +1,21 @@
 export const NARS_COMMAND_METHOD = 'carrier.command.execute';
 
+export const NARS_CLIENT_PROJECTION_VERBOSITY_LEVELS = Object.freeze([
+  'conversation',
+  'operations',
+  'diagnostics',
+  'raw',
+]);
+
+export const NARS_CLIENT_PROJECTION_DEFAULT_VERBOSITY = 'operations';
+
+export const NARS_CLIENT_PROJECTION_VERBOSITY_RANK = Object.freeze({
+  conversation: 0,
+  operations: 1,
+  diagnostics: 2,
+  raw: 3,
+});
+
 export const AGENT_WEB_UI_NARS_METHOD_LIST = Object.freeze([
   'session.events.subscribe',
   'conversation.send',
@@ -186,6 +202,44 @@ export function unwrapNarsClientEvent(message) {
   return message;
 }
 
+export function normalizeNarsClientProjectionVerbosity(verbosity = NARS_CLIENT_PROJECTION_DEFAULT_VERBOSITY) {
+  const normalized = String(verbosity ?? NARS_CLIENT_PROJECTION_DEFAULT_VERBOSITY).trim().toLowerCase();
+  return NARS_CLIENT_PROJECTION_VERBOSITY_LEVELS.includes(normalized) ? normalized : NARS_CLIENT_PROJECTION_DEFAULT_VERBOSITY;
+}
+
+export function isRoutineHealthyNarsSessionHealth(event) {
+  if (!event || event.event !== 'session_health') return false;
+  const status = String(event.status ?? '').toLowerCase();
+  const mcpState = String(event.mcp?.operational_state ?? event.mcp_operational_state ?? '').toLowerCase();
+  const startupFailures = Number(event.mcp_startup_failure_count ?? event.mcp?.startup_failure_count ?? 0);
+  const runtimeFaults = Number(event.mcp_runtime_fault_count ?? event.mcp?.runtime_fault_count ?? 0);
+  return status === 'healthy' && (mcpState === '' || mcpState === 'healthy') && startupFailures === 0 && runtimeFaults === 0;
+}
+
+export function classifyNarsClientEventProjection(projection) {
+  const kind = projection?.kind ?? projection?.event?.event ?? 'unknown';
+  const event = projection?.event ?? projection;
+  if (kind === 'assistant_message' || kind === 'assistant_message_stream' || kind === 'user_message' || kind === 'operator_input_submitted' || kind === 'agent_web_ui_message' || kind === 'agent_web_ui_help') return 'conversation';
+  if (kind === 'error' || kind === 'websocket_error' || kind === 'web_ui_decode_error' || kind === 'web_ui_input_not_sent' || kind === 'runtime_error') return 'conversation';
+  if (kind === 'tool_call' || kind === 'tool_result' || kind === 'turn_failed') return 'operations';
+  if (kind === 'session_health') return isRoutineHealthyNarsSessionHealth(event) ? 'diagnostics' : 'operations';
+  if (kind === 'session_started' || kind === 'session_closed' || kind === 'session_status' || kind === 'session_recovery' || kind === 'session_operations' || kind === 'observer_status' || kind === 'observers_status' || kind === 'carrier_command_result') return 'operations';
+  if (kind === 'turn_started' || kind === 'turn_complete' || kind === 'directive_received' || kind === 'directive_receipt_recorded' || kind === 'directive_carrier_accepted_recorded' || kind === 'directive_complete' || kind === 'session_events_subscription_started' || kind === 'websocket_connected') return 'diagnostics';
+  if (kind?.startsWith?.('provider_')) return 'diagnostics';
+  return 'raw';
+}
+
+export function shouldProjectNarsClientProjection(projection, options = {}) {
+  const verbosity = normalizeNarsClientProjectionVerbosity(options.verbosity);
+  if (verbosity === 'raw') return true;
+  const eventLevel = classifyNarsClientEventProjection(projection);
+  return NARS_CLIENT_PROJECTION_VERBOSITY_RANK[eventLevel] <= NARS_CLIENT_PROJECTION_VERBOSITY_RANK[verbosity];
+}
+
+export function shouldProjectNarsClientEvent(message, options = {}) {
+  return shouldProjectNarsClientProjection(projectNarsClientEvent(message), options);
+}
+
 function eventTone(kind) {
   if (kind === 'assistant_message') return NARS_CLIENT_EVENT_TONES.assistant;
   if (kind === 'user_message') return NARS_CLIENT_EVENT_TONES.operator;
@@ -228,6 +282,8 @@ export function projectNarsClientEvent(message) {
 
 export const NARS_CLIENT_PROJECTION_REGISTRY = Object.freeze({
   schema: 'narada.nars.client_projection_registry.v1',
+  default_verbosity: NARS_CLIENT_PROJECTION_DEFAULT_VERBOSITY,
+  verbosity_levels: NARS_CLIENT_PROJECTION_VERBOSITY_LEVELS,
   clients: Object.freeze({
     agent_cli: Object.freeze({
       id: 'agent_cli',

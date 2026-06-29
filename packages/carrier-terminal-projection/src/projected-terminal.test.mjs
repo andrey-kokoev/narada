@@ -54,6 +54,57 @@ test('operator event rendering consumes shared NARS client event projection', ()
   assert.deepEqual(wrapped, ['WebSocket error: connection dropped']);
 });
 
+test('operator event rendering keeps session status distinct from health', () => {
+  const rendered = renderOperatorEvent({
+    event: 'session_status',
+    operational_posture: 'healthy',
+    request_outcome_summary: '0',
+  }, { timestamps: false });
+  assert.deepEqual(rendered, ['agent-cli: status healthy; requests 0']);
+});
+
+test('operator event rendering suppresses routine healthy session health polling', () => {
+  const event = {
+    event: 'session_health',
+    status: 'healthy',
+    mcp: { operational_state: 'healthy' },
+    health_endpoint: null,
+    mcp_startup_failure_count: 0,
+    mcp_runtime_fault_count: 0,
+  };
+  assert.deepEqual(renderOperatorEvent(event, { timestamps: false }), []);
+  assert.deepEqual(renderOperatorEvent(event, { timestamps: false, projectionVerbosity: 'conversation' }), []);
+  assert.equal(renderOperatorEvent(event, { timestamps: false, projectionVerbosity: 'diagnostics' })[0], 'agent-cli: health healthy; mcp healthy; endpoint none');
+  assert.equal(renderOperatorEvent(event, { timestamps: false, projectionVerbosity: 'raw' })[0], 'agent-cli: health healthy; mcp healthy; endpoint none');
+});
+
+test('operator event rendering hides session mechanics at conversation verbosity', () => {
+  assert.deepEqual(renderOperatorEvent({ event: 'session_started', agent_id: 'resident', session_id: 'carrier_test' }, { timestamps: false, projectionVerbosity: 'conversation' }), []);
+  assert.deepEqual(renderOperatorEvent({ event: 'session_events_subscription_started', replay_count: 3 }, { timestamps: false, projectionVerbosity: 'operations' }), []);
+  assert.equal(renderOperatorEvent({ event: 'session_events_subscription_started', replay_count: 3 }, { timestamps: false, projectionVerbosity: 'diagnostics' })[0], 'agent-cli: events subscription unknown; replay 3; cursor unknown');
+});
+
+test('operator event rendering keeps unhealthy session health visible', () => {
+  const rendered = renderOperatorEvent({
+    event: 'session_health',
+    status: 'degraded',
+    mcp: { operational_state: 'faulted' },
+    health_endpoint: '/api/health',
+    mcp_runtime_fault_count: 1,
+  }, { timestamps: false });
+  assert.equal(rendered.length, 1);
+  assert.equal(rendered[0].includes('health degraded; mcp faulted; endpoint /api/health'), true);
+});
+
+test('operator event rendering shows shared user messages from other attached surfaces', () => {
+  const rendered = renderOperatorEvent({
+    event: 'user_message',
+    content: 'Run startup sequence',
+    source: 'agent-web-ui',
+  }, { timestamps: false });
+  assert.deepEqual(rendered, ['operator:', '  Run startup sequence']);
+});
+
 test('operator event rendering accepts terminalColumns alias for wrapping', () => {
   const rendered = renderOperatorEvent({
     event: 'assistant_message',

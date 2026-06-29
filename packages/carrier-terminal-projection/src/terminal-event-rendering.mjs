@@ -1,4 +1,4 @@
-import { projectNarsClientEvent } from '@narada2/nars-client-projection-contract';
+import { NARS_CLIENT_PROJECTION_DEFAULT_VERBOSITY, normalizeNarsClientProjectionVerbosity, projectNarsClientEvent, shouldProjectNarsClientProjection } from '@narada2/nars-client-projection-contract';
 import { createTerminalStyle, formatTerminalMessageBlockLines } from './terminal-style.mjs';
 import {
   createMarkdownStreamState,
@@ -29,6 +29,16 @@ function withStreamBoundary(state, rendered) {
     state.openStreamTurnKey = null;
   }
   return rendered;
+}
+
+function applyTurnLifecycleState(event, state) {
+  if (event.event === 'turn_started') {
+    state.activeTurnId = event.turn_id ?? true;
+    return;
+  }
+  if (event.event === 'turn_complete' || event.event === 'turn_failed') {
+    if (!event.turn_id || state.activeTurnId === event.turn_id) state.activeTurnId = null;
+  }
 }
 
 function createEventRenderingStyle({ enabled = false } = {}) {
@@ -274,6 +284,9 @@ export function renderOperatorEvent(event, state = {}) {
     if (eventKind === 'carrier_host_command_requested' || eventKind === 'carrier_host_command_admitted' || eventKind === 'carrier_host_command_started') return [];
     return withStreamBoundary(state, formatHostCommandBlock(event, state, style));
   }
+  applyTurnLifecycleState(event, state);
+  const projectionVerbosity = normalizeNarsClientProjectionVerbosity(state.projectionVerbosity ?? state.verbosity ?? NARS_CLIENT_PROJECTION_DEFAULT_VERBOSITY);
+  if (!shouldProjectNarsClientProjection(projectedEvent, { verbosity: projectionVerbosity })) return [];
   switch (event.event) {
     case 'session_started':
       state.agentId = event.agent_id ?? state.agentId;
@@ -282,7 +295,7 @@ export function renderOperatorEvent(event, state = {}) {
     case 'session_status':
       return withStreamBoundary(state, [routeLine({ label: 'agent-cli', body: `status ${event.operational_posture_display ?? event.operational_posture ?? 'unknown'}; requests ${event.request_outcome_summary ?? '0'}`, labelStyle: style.label, state, style })]);
     case 'session_health':
-      return withStreamBoundary(state, [routeLine({ label: 'agent-cli', body: `health ${event.status ?? 'unknown'}; mcp ${event.mcp?.operational_state ?? 'unknown'}; endpoint ${event.health_endpoint ?? 'none'}`, labelStyle: style.label, state, style })]);
+      return withStreamBoundary(state, [routeLine({ label: 'agent-cli', body: `health ${event.status ?? 'unknown'}; mcp ${event.mcp?.operational_state ?? event.mcp_operational_state ?? 'unknown'}; endpoint ${event.health_endpoint ?? 'none'}`, labelStyle: style.label, state, style })]);
     case 'session_events_subscription_started':
       return withStreamBoundary(state, [routeLine({ label: 'agent-cli', body: `events subscription ${event.subscription_id ?? 'unknown'}; replay ${event.replay_count ?? 0}; cursor ${event.cursor?.next_sequence ?? 'unknown'}`, labelStyle: style.label, state, style })]);
     case 'session_recovery':
@@ -306,6 +319,15 @@ export function renderOperatorEvent(event, state = {}) {
         labelStyle: style.label,
         bodyStyle: event.terminal_state === 'invalid' || event.terminal_state === 'unsupported' ? style.warn : (value) => value,
       });
+      appendSuffixToLastLine(block, timestampSuffix(state, style));
+      return withStreamBoundary(state, block);
+    }
+    case 'user_message': {
+      const content = String(event.content ?? event.message ?? '').trimEnd();
+      if (!content) return [];
+      const renderedContent = renderMarkdownForProjectedTerminal(content, style);
+      const lines = wrapIndentedLines(renderedContent, { indent: '', columns: terminalColumns(state) - 2 });
+      const block = formatTerminalMessageBlockLines({ label: 'operator', lines, style, labelStyle: style.operatorDirective ?? style.label, bodyStyle: (value) => value });
       appendSuffixToLastLine(block, timestampSuffix(state, style));
       return withStreamBoundary(state, block);
     }

@@ -2,7 +2,9 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   AGENT_WEB_UI_NARS_METHOD_LIST,
+  NARS_CLIENT_PROJECTION_DEFAULT_VERBOSITY,
   NARS_CLIENT_PROJECTION_REGISTRY,
+  NARS_CLIENT_PROJECTION_VERBOSITY_LEVELS,
   NARS_COMMAND_METHOD,
   buildAgentWebUiConversationSendFrame,
   buildAgentWebUiConversationSteerFrame,
@@ -13,6 +15,7 @@ import {
   isAgentWebUiNarsMethod,
   isAgentWebUiProtocolFrame,
   projectNarsClientEvent,
+  shouldProjectNarsClientEvent,
 } from './nars-client-projection-contract.mjs';
 
 test('NARS client projection contract owns attach commands and web UI capabilities', () => {
@@ -32,6 +35,9 @@ test('NARS client projection contract owns attach commands and web UI capabiliti
     operator_input_protocol: '{"id":"input-1","method":"conversation.send","params":{"message":"<operator message>","source":"agent-web-ui"}}',
     slash_command_protocol: '{"id":"command-1","method":"carrier.command.execute","params":{"command":"/status","value":""}}',
   });
+  assert.equal(NARS_CLIENT_PROJECTION_REGISTRY.default_verbosity, 'operations');
+  assert.equal(NARS_CLIENT_PROJECTION_DEFAULT_VERBOSITY, 'operations');
+  assert.deepEqual(NARS_CLIENT_PROJECTION_VERBOSITY_LEVELS, ['conversation', 'operations', 'diagnostics', 'raw']);
 });
 
 test('NARS client projection contract owns web UI operator input projection', () => {
@@ -91,4 +97,35 @@ test('NARS client projection contract owns shared event rendering vocabulary', (
   });
   assert.equal(projectNarsClientEvent({ event: 'error', message: 'bad' }).tone, 'error');
   assert.equal(projectNarsClientEvent({ event: 'session_health', status: 'healthy', agent_id: 'narada.test', session_id: 'carrier_test' }).summary, 'healthy · narada.test · carrier_test');
+});
+
+test('NARS client projection verbosity filters shared event classes', () => {
+  const routineHealth = { event: 'session_health', status: 'healthy', mcp_operational_state: 'healthy', mcp_startup_failure_count: 0, mcp_runtime_fault_count: 0 };
+  const unhealthy = { event: 'session_health', status: 'degraded', mcp_operational_state: 'degraded', mcp_startup_failure_count: 1, mcp_runtime_fault_count: 0 };
+  const sessionStarted = { event: 'session_started', agent_id: 'resident', session_id: 'carrier_test' };
+  const assistant = { event: 'assistant_message', content: 'hello' };
+  const toolCall = { event: 'tool_call', tool_name: 'narada-site.whoami' };
+  const toolResult = { event: 'tool_result', tool_name: 'narada-site.whoami', status: 'ok' };
+  const turnComplete = { event: 'turn_complete', terminal_state: 'completed' };
+
+  assert.equal(shouldProjectNarsClientEvent(assistant, { verbosity: 'conversation' }), true);
+  assert.equal(shouldProjectNarsClientEvent(sessionStarted, { verbosity: 'conversation' }), false);
+  assert.equal(shouldProjectNarsClientEvent(sessionStarted, { verbosity: 'operations' }), true);
+  assert.equal(shouldProjectNarsClientEvent(toolCall, { verbosity: 'conversation' }), false);
+  assert.equal(shouldProjectNarsClientEvent(toolResult, { verbosity: 'conversation' }), false);
+  assert.equal(shouldProjectNarsClientEvent(toolCall, { verbosity: 'operations' }), true);
+  assert.equal(shouldProjectNarsClientEvent(toolResult, { verbosity: 'operations' }), true);
+  assert.equal(shouldProjectNarsClientEvent(turnComplete, { verbosity: 'conversation' }), false);
+  assert.equal(shouldProjectNarsClientEvent(turnComplete, { verbosity: 'operations' }), false);
+  assert.equal(shouldProjectNarsClientEvent(turnComplete, { verbosity: 'diagnostics' }), true);
+
+  assert.equal(shouldProjectNarsClientEvent(routineHealth, { verbosity: 'operations' }), false);
+  assert.equal(shouldProjectNarsClientEvent(routineHealth, { verbosity: 'diagnostics' }), true);
+  assert.equal(shouldProjectNarsClientEvent(routineHealth, { verbosity: 'raw' }), true);
+  assert.equal(shouldProjectNarsClientEvent(unhealthy, { verbosity: 'operations' }), true);
+
+  assert.equal(shouldProjectNarsClientEvent({ event: 'websocket_connected' }, { verbosity: 'operations' }), false);
+  assert.equal(shouldProjectNarsClientEvent({ event: 'websocket_connected' }, { verbosity: 'diagnostics' }), true);
+  assert.equal(shouldProjectNarsClientEvent({ event: 'unclassified_future_event' }, { verbosity: 'diagnostics' }), false);
+  assert.equal(shouldProjectNarsClientEvent({ event: 'unclassified_future_event' }, { verbosity: 'raw' }), true);
 });
