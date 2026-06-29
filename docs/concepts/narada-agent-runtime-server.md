@@ -91,6 +91,8 @@ Authority must remain in governed structure.
 
 The governed conversion boundary for requested effects is the [`Carrier Action Admission Boundary`](carrier-action-admission-boundary.md). Agent Runtime Server may produce or carry action requests, but that boundary decides whether a request becomes admission, refusal, deferral, or an inert candidate for another authority surface.
 
+Session discovery, liveness, attachment, and recovery are specified in [`NARS Session Management`](nars-session-management.md).
+
 ## Required Properties
 
 A Narada Agent Runtime Server must:

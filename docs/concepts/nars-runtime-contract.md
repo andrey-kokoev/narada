@@ -6,6 +6,8 @@ This document defines the implementation-facing shape of the Narada Agent Runtim
 
 The concept document [`narada-agent-runtime-server.md`](narada-agent-runtime-server.md) defines what NARS is. This document defines the contract implementation code should converge on: package ownership, launch boundary, session protocol, event shape, carrier adapter boundary, and verification expectations.
 
+The full target for session discovery, liveness, attachment, and recovery is [`nars-session-management.md`](nars-session-management.md).
+
 NARS is the Narada-owned runtime server contract for durable, machine-addressable agent sessions. It is not a synonym for Codex, `agent-cli`, a terminal, a transcript, or a model SDK.
 
 ## Package Authority
@@ -23,6 +25,8 @@ narada-agent-runtime-server
 ```
 
 The stable runtime-server entrypoint belongs to `@narada2/agent-runtime-server` and executes the carrier substrate in-process through `@narada2/carrier-runtime`.
+
+Session discovery, health, and attachment schemas are public NARS contract even when their current implementation helpers still live in `@narada2/carrier-runtime` during extraction. Client code should depend on the NARS contract, not on carrier-runtime helper placement.
 
 ## Layer Shape
 
@@ -144,6 +148,9 @@ The per-session discovery projection has schema `narada.nars.session_index_recor
 {
   "schema": "narada.nars.session_index_record.v1",
   "session_id": "carrier_...",
+  "carrier_session_id": "carrier_...",
+  "derived_from_event": "session_started",
+  "projection_generated_at": "2026-06-23T00:00:00.000Z",
   "agent_id": "sonar.resident",
   "site_id": "sonar",
   "site_root": "D:/code/narada.sonar",
@@ -158,6 +165,9 @@ The per-session discovery projection has schema `narada.nars.session_index_recor
   "last_seen_at": "2026-06-23T00:00:05.000Z",
   "terminal_state": null,
   "status_hint": "alive",
+  "launch_operator_surface_kind": "agent-cli",
+  "attached_projections": null,
+  "attached_projections_status": "not_tracked",
   "attach_commands": {
     "agent_cli": "narada-agent-cli --attach ws://127.0.0.1:12345/events",
     "agent_tui": "agent-tui --attach ws://127.0.0.1:12345/events",
@@ -201,10 +211,11 @@ Its schema is `narada.nars.session_index.v1`. It is a summary projection and poi
 Write semantics:
 
 1. On `session_started`, NARS writes `session-index-record.json` and updates `index.json` with the emitted `event_endpoint`, `health_endpoint`, attach commands, paths, identity, Site, runtime, and start time.
-2. On heartbeat tick, NARS updates `last_seen_at` and `status_hint` in the per-session record and aggregate. This is discovery evidence only; `session.health` remains the live liveness authority.
-3. On `session_closed`, NARS marks `terminal_state` and updates both projections.
-4. If the process crashes, no close event is required. Readers classify the session from heartbeat age and failed health checks.
-5. The aggregate index must be rebuildable by scanning `*/session-index-record.json`, `heartbeat.json`, and durable session events. A stale or corrupt aggregate must not make a live session inaccessible when per-session records remain readable.
+2. On heartbeat tick, NARS updates `heartbeat.json` and may update `last_seen_at` / `status_hint` in the per-session record. The aggregate `index.json` should not require a write on every heartbeat; implementations may coalesce, throttle, or rebuild aggregate updates from per-session records. This is discovery evidence only; `session.health` remains the live liveness authority.
+3. On client attach or detach, NARS may update `attached_projections` when a projection registration surface exists. Until then, `attached_projections=null` with `attached_projections_status=not_tracked` means unknown, and `launch_operator_surface_kind` records only the surface that launched the session, not every attached client.
+4. On `session_closed`, NARS marks `terminal_state` and updates both projections.
+5. If the process crashes, no close event is required. Readers classify the session from heartbeat age and failed health checks.
+6. The aggregate index must be rebuildable by scanning `*/session-index-record.json`, `heartbeat.json`, and durable session events. A stale or corrupt aggregate must not make a live session inaccessible when per-session records remain readable.
 
 Read semantics:
 
@@ -216,15 +227,14 @@ Read semantics:
 
 The session id value may currently be named `carrier_...` because launch materialization still uses `carrier_session_id`. New discovery APIs and docs should call it `session_id` or `NARS session id` and avoid introducing a `carrier_session_index` concept.
 
-This index supports operator UX such as:
+Per-Site indexes support target operator UX such as:
 
 ```text
-narada agent-web-ui
 narada agent-web-ui --site sonar
 narada agent-web-ui attach --event-endpoint <ws-url> --health-endpoint <http-url>
 ```
 
-The first two commands are discovery UX over the NARS session index. The explicit endpoint form remains the low-level attach primitive.
+No-argument global discovery, for example `narada agent-web-ui`, is a higher-level CLI feature over known Site roots. It must first discover candidate Sites from a User Site launch registry, known-site registry, explicit host/user config, or equivalent registry; then it reads each Site-local NARS session index and verifies candidates by health endpoint. The explicit endpoint form remains the low-level attach primitive.
 
 ## Event Shape
 
