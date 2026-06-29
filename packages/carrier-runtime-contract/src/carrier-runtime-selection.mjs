@@ -4,6 +4,7 @@ export const NARADA_AGENT_RUNTIME_SERVER_ALIAS = 'nars';
 
 export const ADMITTED_CARRIER_KINDS = Object.freeze([
   AGENT_CLI_CARRIER_KIND,
+  'agent-web-ui',
   'agent-tui',
   'codex',
   'kimi',
@@ -15,7 +16,11 @@ export const ADMITTED_CARRIER_KINDS = Object.freeze([
 export const ADMITTED_OPERATOR_SURFACE_KINDS = ADMITTED_CARRIER_KINDS;
 
 export function defaultRuntimeForCarrier(carrierKind) {
-  return carrierKind === AGENT_CLI_CARRIER_KIND ? NARADA_AGENT_RUNTIME_SERVER_KIND : carrierKind;
+  return carrierKind === AGENT_CLI_CARRIER_KIND || carrierKind === 'agent-web-ui' ? NARADA_AGENT_RUNTIME_SERVER_KIND : carrierKind;
+}
+
+function isNarsOperatorSurface(kind) {
+  return kind === AGENT_CLI_CARRIER_KIND || kind === 'agent-web-ui';
 }
 
 export function operatorSurfaceRefusal(candidate, {
@@ -102,13 +107,6 @@ export function resolveCarrierRuntimeSelection({
   const explicitOperatorSurface = typeof operatorSurfaceValue === 'string' && operatorSurfaceValue.trim() ? operatorSurfaceValue.trim() : null;
   const explicitRuntimeInput = typeof runtimeValue === 'string' && runtimeValue.trim() ? runtimeValue.trim() : null;
   const explicitRuntime = explicitRuntimeInput ? normalizeRuntimeAlias(explicitRuntimeInput) : null;
-  if (explicitCarrier && explicitOperatorSurface && explicitCarrier !== explicitOperatorSurface) {
-    return operatorSurfaceRefusal(explicitOperatorSurface, {
-      admittedOperatorSurfaceKinds,
-      reasonCode: 'carrier_operator_surface_conflict',
-      reason: 'Legacy carrier_kind and operator_surface_kind must agree during the compatibility migration.',
-    });
-  }
   if (explicitRuntime === AGENT_CLI_CARRIER_KIND) {
     return runtimeRefusal(explicitRuntime, {
       admittedRuntimeSubstrateKinds,
@@ -135,18 +133,18 @@ export function resolveCarrierRuntimeSelection({
   const runtimeResolution = normalizeRuntimeSubstrateKind(runtimeKind, { admittedRuntimeSubstrateKinds, runtimeContractSchema });
   if (runtimeResolution.status === 'refused') return runtimeResolution;
 
-  if (operatorSurfaceKind === AGENT_CLI_CARRIER_KIND && runtimeKind !== NARADA_AGENT_RUNTIME_SERVER_KIND) {
+  if (isNarsOperatorSurface(operatorSurfaceKind) && runtimeKind !== NARADA_AGENT_RUNTIME_SERVER_KIND) {
     return operatorSurfaceRefusal(operatorSurfaceKind, {
       admittedOperatorSurfaceKinds,
       reasonCode: 'operator_surface_runtime_mismatch',
-      reason: 'The agent-cli operator surface must attach to the narada-agent-runtime-server runtime host.',
+      reason: 'NARS operator surfaces must attach to the narada-agent-runtime-server runtime host.',
     });
   }
-  if (operatorSurfaceKind !== AGENT_CLI_CARRIER_KIND && runtimeKind === NARADA_AGENT_RUNTIME_SERVER_KIND) {
+  if (!isNarsOperatorSurface(operatorSurfaceKind) && runtimeKind === NARADA_AGENT_RUNTIME_SERVER_KIND) {
     return operatorSurfaceRefusal(operatorSurfaceKind, {
       admittedOperatorSurfaceKinds,
       reasonCode: 'operator_surface_runtime_mismatch',
-      reason: 'narada-agent-runtime-server requires the agent-cli operator surface projection.',
+      reason: 'narada-agent-runtime-server requires a NARS operator surface projection such as agent-cli or agent-web-ui.',
     });
   }
 

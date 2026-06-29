@@ -27,6 +27,7 @@ export function buildCarrierRuntimePaths(siteRoot, session) {
  * @param {string} options.identity
  * @param {string} options.session
  * @param {string} [options.siteRoot]
+ * @param {string} [options.siteId]
  * @param {string} [options.naradaDir]
  * @param {string} [options.sessionPath]
  * @param {string} [options.eventsPath]
@@ -39,12 +40,14 @@ export function buildCarrierRuntimePaths(siteRoot, session) {
  * @param {number} [options.operationHeartbeatDirectiveInitialDelayMs]
  * @param {string|null} [options.healthUrl]
  * @param {string|null} [options.eventStreamUrl]
+ * @param {string} [options.operatorSurfaceKind]
  * @returns {CarrierRuntimeContext}
  */
 export function createCarrierRuntimeContext({
   identity,
   session,
   siteRoot,
+  siteId,
   naradaDir,
   sessionPath,
   eventsPath,
@@ -57,6 +60,7 @@ export function createCarrierRuntimeContext({
   operationHeartbeatDirectiveInitialDelayMs = 60000,
   healthUrl = null,
   eventStreamUrl = null,
+  operatorSurfaceKind = process.env.NARADA_OPERATOR_SURFACE_KIND ?? 'agent-cli',
 } = {}) {
   if (!identity) throw new TypeError('identity is required');
   if (!session) throw new TypeError('session is required');
@@ -69,10 +73,12 @@ export function createCarrierRuntimeContext({
     identity,
     session,
     siteRoot: siteRoot ?? process.env.NARADA_SITE_ROOT ?? process.cwd(),
+    siteId: siteId ?? process.env.NARADA_SITE_ID ?? null,
     naradaDir: naradaDir ?? paths.naradaDir,
     sessionPath: paths.sessionPath,
     eventsPath: paths.eventsPath,
     intelligenceProvider,
+    operatorSurfaceKind,
     providerSettings: Object.freeze({
       model: providerSettings.model ?? process.env.CODEX_MODEL ?? process.env.NARADA_CODEX_MODEL ?? null,
       thinking: providerSettings.thinking ?? process.env.NARADA_AI_THINKING ?? 'medium',

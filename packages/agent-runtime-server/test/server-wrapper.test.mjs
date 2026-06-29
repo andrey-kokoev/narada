@@ -15,6 +15,7 @@ import {
   createNarsLifecycleHookDispatcher,
   dispatchNarsLifecycleHook,
   dispatchNarsLifecycleHooksForEvent,
+  formatHostStatusEvent,
   formatStartupMcpEvent,
   formatStartupMcpSummary,
   formatWrapperStatusEvent,
@@ -142,6 +143,26 @@ test('runtime event helpers are exported from the canonical runtime-server helpe
       assert.notEqual(canonicalHelper(event), undefined, `${helperName} did not accept ${event?.event ?? 'null'}`);
     }
   }
+});
+
+test('agent-web-ui launch host renderer does not present agent-cli projection text', () => {
+  const rendered = formatHostStatusEvent({
+    event: 'session_started',
+    agent_id: 'narada.test',
+    session_id: 'runtime-web-ui-host-test',
+    operator_surface_kind: 'agent-web-ui',
+    provider: 'codex-subscription',
+    model: 'gpt-5.5',
+    mcp_server_count: 15,
+    mcp_operational_state: 'healthy',
+    health_endpoint: 'http://127.0.0.1:12345/health',
+    event_endpoint: 'ws://127.0.0.1:12346/events',
+  }).join('\n');
+  assert.match(rendered, /agent-runtime-server: narada\.test/);
+  assert.match(rendered, /Surface agent-web-ui/);
+  assert.match(rendered, /Launch   narada-agent-web-ui --event-endpoint ws:\/\/127\.0\.0\.1:12346\/events --health-endpoint http:\/\/127\.0\.0\.1:12345\/health/);
+  assert.equal(rendered.includes('agent-cli:'), false);
+  assert.equal(rendered.includes('operator >'), false);
 });
 
 function walkFiles(root) {

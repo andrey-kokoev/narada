@@ -8,6 +8,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { createCarrierRuntimeContext } from './carrier-runtime-context.mjs';
 import { createInputQueue } from './input-queue.mjs';
+import { markNarsSessionIndexClosed, writeNarsSessionStartedIndex } from './nars-session-index.mjs';
 
 export async function runCarrierServerMode({
   input = process.stdin,
@@ -21,6 +22,7 @@ export async function runCarrierServerMode({
   const {
     identity,
     session,
+    siteId,
     siteRoot,
     sessionPath,
     eventsPath,
@@ -33,7 +35,9 @@ export async function runCarrierServerMode({
     operationHeartbeatDirectiveInitialDelayMs,
     healthUrl = null,
     eventStreamUrl = null,
+    operatorSurfaceKind = 'agent-cli',
   } = ctx;
+  const launchOperatorSurfaceKind = operatorSurfaceKind || 'agent-cli';
   const {
     discoverAndStartMcpServers,
     applyWorkerMcpProjection = (mcpServers) => mcpServers,
@@ -90,14 +94,27 @@ export async function runCarrierServerMode({
   const emit = (event, payload = {}) => {
     if (event === 'error' && payload?.code) recordSessionRequestIssue(state, payload.code);
     const lifecycleEvent = normalizeNarsRuntimeEventKind(event);
-    return emitServerEvent(output, {
+    const envelope = {
       event,
       ...(isNarsRuntimeEventKind(lifecycleEvent) ? { lifecycle_event: lifecycleEvent } : {}),
       agent_id: identity,
       session_id: session,
       timestamp: new Date().toISOString(),
       ...payload,
-    });
+    };
+    const result = emitServerEvent(output, envelope);
+    if (event === 'session_started') {
+      writeNarsSessionStartedIndex({ sessionStartedEvent: envelope, sessionPath, siteRoot });
+    } else if (event === 'session_closed') {
+      markNarsSessionIndexClosed({
+        sessionPath,
+        siteRoot,
+        terminalState: envelope.terminal_state ?? 'closed',
+        terminalReason: 'session_closed',
+        closedAt: envelope.timestamp,
+      });
+    }
+    return result;
   };
 
   state.inputQueue = createInputQueue({
@@ -137,8 +154,9 @@ export async function runCarrierServerMode({
     session,
     identity,
     runtime: 'narada-agent-runtime-server',
-    carrier_kind: 'agent-cli',
-    operator_surface_kind: 'agent-cli',
+    carrier_kind: launchOperatorSurfaceKind,
+    launch_operator_surface_kind: launchOperatorSurfaceKind,
+    operator_surface_kind: launchOperatorSurfaceKind,
     mode: 'server',
     sessionDir: sessionPath ? dirname(sessionPath) : null,
   });
@@ -147,9 +165,11 @@ export async function runCarrierServerMode({
     transport: 'jsonl_stdio',
     runtime: 'narada-agent-runtime-server',
     runtime_substrate_kind: 'narada-agent-runtime-server',
-    carrier_kind: 'agent-cli',
-    operator_surface_kind: 'agent-cli',
+    carrier_kind: launchOperatorSurfaceKind,
+    launch_operator_surface_kind: launchOperatorSurfaceKind,
+    operator_surface_kind: launchOperatorSurfaceKind,
     mode: 'server',
+    site_id: siteId,
     site_root: siteRoot,
     provider: intelligenceProvider,
     model: state.sessionSettings.model,
@@ -252,10 +272,17 @@ export async function runCarrierServerMode({
   activeOperationHeartbeatDirectiveEmitter?.stop?.();
   onOperationHeartbeatDirectiveStopped();
   heartbeat.stop?.('closed');
+  markNarsSessionIndexClosed({
+    sessionPath,
+    siteRoot,
+    terminalState: 'closed',
+    terminalReason: state.lastTerminalState === 'closed' ? 'session_closed' : 'runtime_process_exit',
+    closedAt: new Date().toISOString(),
+  });
   closeMcpServers(mcpServers);
 }
 
-function startCarrierHeartbeat({ path, session, identity, runtime, carrier_kind, operator_surface_kind, mode, sessionDir, intervalMs = 5000 } = {}) {
+function startCarrierHeartbeat({ path, session, identity, runtime, carrier_kind, launch_operator_surface_kind, operator_surface_kind, mode, sessionDir, intervalMs = 5000 } = {}) {
   if (!path) return { stop() {} };
   const startedAt = new Date().toISOString();
   const write = (status = 'alive') => {
@@ -263,11 +290,13 @@ function startCarrierHeartbeat({ path, session, identity, runtime, carrier_kind,
     writeFileSync(path, `${JSON.stringify({
       schema: 'narada.carrier_heartbeat.v1',
       status,
+      session_id: session,
       carrier_session_id: session,
       agent_id: identity,
       runtime,
       runtime_substrate_kind: runtime,
       carrier_kind,
+      launch_operator_surface_kind,
       operator_surface_kind,
       mode,
       pid: process.pid,

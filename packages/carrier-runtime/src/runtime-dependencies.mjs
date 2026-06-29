@@ -301,11 +301,21 @@ async function runServerInputEvent({ requestId, state, messages, allTools, mcpSe
 async function runServerConversationTurn({ requestId, state, messages, allTools, mcpServers, emit, callChatApiFn, input, directiveId = null, identity, session, siteRoot, appendSessionRecord, providerSettings }) {
   const turnId = `turn_${randomId()}`;
   const turn = createTurn(turnId, requestId);
+  const record = normalizeInputRecord(input);
   state.activeTurn = turn;
   if (directiveId) emit('directive_received', { request_id: requestId, turn_id: turnId, directive_id: directiveId, terminal_state: 'accepted', source: 'system_directive' });
+  emit('user_message', {
+    request_id: requestId,
+    turn_id: turnId,
+    input_event_id: input?.event_id ?? null,
+    content: record.content,
+    source: record.source ?? input?.source ?? null,
+    source_kind: input?.source_kind ?? null,
+    source_id: input?.source_id ?? null,
+    transport: input?.transport ?? null,
+  });
   emit('turn_started', { request_id: requestId, turn_id: turnId, terminal_state: 'accepted', ...(directiveId ? { directive_id: directiveId, source: 'system_directive' } : {}) });
   try {
-    const record = normalizeInputRecord(input);
     messages.push({ role: 'user', content: record.content });
     appendSessionRecord(sessionLogEntry({ role: 'user', content: record.content, source: record.source, eventId: input?.event_id, transport: input?.transport, directiveId: input?.directive_id }));
     const result = await runConversationLoop(messages, allTools, mcpServers, {
@@ -909,6 +919,7 @@ function serverHealth({ requestId, state, allTools, mcpServers, mcpPreflightArti
     runtime_substrate: 'narada-agent-runtime-server',
     runtime_substrate_kind: 'narada-agent-runtime-server',
     carrier_kind: 'agent-cli',
+    launch_operator_surface_kind: 'agent-cli',
     operator_surface_kind: 'agent-cli',
     delegated_authority_handoff: status.delegated_authority_handoff,
     delegated_authority_ref: status.delegated_authority_ref,

@@ -21,6 +21,21 @@ test('launch slice contract identifies the admitted carrier runtime', () => {
   assert.equal(contract.terminal_mode, true);
 });
 
+test('agent-web-ui is an admitted NARS operator surface and launch carrier', () => {
+  const contract = loadRuntimeSubstrateKindsContract();
+  const accepted = resolveCarrierRuntimeSelection({
+    carrierValue: 'agent-web-ui',
+    runtimeValue: 'nars',
+    admittedRuntimeSubstrateKinds: contract.admitted_runtime_substrate_kinds,
+    runtimeContractSchema: contract.schema,
+  });
+  assert.equal(accepted.status, 'accepted');
+  assert.equal(accepted.operator_surface_kind, 'agent-web-ui');
+  assert.equal(accepted.carrier_kind, 'agent-web-ui');
+  assert.equal(accepted.runtime_host_kind, 'narada-agent-runtime-server');
+  assert.equal(accepted.runtime_substrate_kind, 'narada-agent-runtime-server');
+});
+
 test('mcp runtime contract defines fabric environment boundary', () => {
   const contract = loadMcpRuntimeContract();
   assert.equal(contract.schema, 'narada.agent_tui.mcp_runtime_contract.v0');
@@ -53,6 +68,7 @@ test('runtime substrate contract admits carrier substrates and codex isolation b
 test('carrier runtime selection keeps agent-cli carrier separate from runtime server', () => {
   const contract = loadRuntimeSubstrateKindsContract();
   assert.equal(defaultRuntimeForCarrier('agent-cli'), 'narada-agent-runtime-server');
+  assert.equal(defaultRuntimeForCarrier('agent-web-ui'), 'narada-agent-runtime-server');
   assert.equal(defaultRuntimeForCarrier('codex'), 'codex');
 
   const accepted = resolveCarrierRuntimeSelection({
@@ -92,15 +108,18 @@ test('operator surface is the explicit primitive while carrier remains a legacy 
   assert.equal(accepted.operator_surface_source_field, 'operator_surface');
   assert.equal(accepted.carrier_source_field, 'operator_surface');
 
-  const conflicted = resolveCarrierRuntimeSelection({
+  const overridden = resolveCarrierRuntimeSelection({
     carrierValue: 'codex',
-    operatorSurfaceValue: 'agent-cli',
+    operatorSurfaceValue: 'agent-web-ui',
     runtimeValue: 'narada-agent-runtime-server',
     admittedRuntimeSubstrateKinds: contract.admitted_runtime_substrate_kinds,
     runtimeContractSchema: contract.schema,
   });
-  assert.equal(conflicted.status, 'refused');
-  assert.equal(conflicted.reason_code, 'carrier_operator_surface_conflict');
+  assert.equal(overridden.status, 'accepted');
+  assert.equal(overridden.operator_surface_kind, 'agent-web-ui');
+  assert.equal(overridden.carrier_kind, 'agent-web-ui');
+  assert.equal(overridden.operator_surface_source_field, 'operator_surface');
+  assert.equal(overridden.carrier_source_field, 'carrier');
 });
 
 test('nars is a runtime input alias for narada-agent-runtime-server', () => {

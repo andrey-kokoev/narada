@@ -32,6 +32,40 @@ function websocketAcceptValue(key) {
     .digest('base64');
 }
 
+export function formatHostStatusEvent(event) {
+  if (!event || event.event !== 'session_started') return [];
+  const launchCommand = formatAgentWebUiLaunchCommand(event);
+  return [
+    `agent-runtime-server: ${event.agent_id ?? 'unknown'}`,
+    `  Session ${event.session_id ?? 'unknown'}`,
+    `  Surface ${event.operator_surface_kind ?? event.launch_operator_surface_kind ?? 'unknown'}`,
+    `  Provider ${event.provider ?? 'unknown'}`,
+    `  Model    ${event.model ?? 'unknown'}`,
+    `  MCP      ${event.mcp_server_count ?? 0} servers, ${event.mcp_operational_state ?? 'unknown'}`,
+    `  Health   ${event.health_endpoint ?? 'not configured'}`,
+    `  Events   ${event.event_endpoint ?? 'not configured'}`,
+    launchCommand
+      ? `  Launch   ${launchCommand}`
+      : '  Input    attach an operator surface such as agent-web-ui',
+  ];
+}
+
+function formatAgentWebUiLaunchCommand(event) {
+  const eventEndpoint = event?.event_endpoint ? String(event.event_endpoint) : null;
+  if (!eventEndpoint) return null;
+  const parts = ['narada-agent-web-ui', '--event-endpoint', eventEndpoint];
+  const healthEndpoint = event?.health_endpoint ? String(event.health_endpoint) : null;
+  if (healthEndpoint) parts.push('--health-endpoint', healthEndpoint);
+  return parts.join(' ');
+}
+
+function valueAfterFlag(args, flag) {
+  const index = args.indexOf(flag);
+  if (index === -1 || index + 1 >= args.length) return null;
+  const value = args[index + 1];
+  return value && !String(value).startsWith('--') ? String(value) : null;
+}
+
 function encodeWebSocketTextFrame(payload) {
   const body = Buffer.from(String(payload), 'utf8');
   if (body.length < 126) return Buffer.concat([Buffer.from([0x81, body.length]), body]);
@@ -490,6 +524,7 @@ async function main() {
   const parsedHealth = parseHealthOptions(requestedArgs.filter((arg) => arg !== '--wrapper-events-jsonl' && arg !== '--raw-jsonl'));
   const parsedEvents = parseEventStreamOptions(parsedHealth.forwardedArgs);
   const args = parsedEvents.forwardedArgs;
+  const operatorSurfaceKind = valueAfterFlag(args, '--operator-surface') ?? process.env.NARADA_OPERATOR_SURFACE_KIND ?? 'agent-cli';
   const lifecycleDispatcher = createNarsLifecycleHookDispatcher();
   const lifecycleBinding = lifecycleBindingFromArgs(args, process.env);
   const delegatedAuthorityHandoff = createDelegatedAuthorityHandoff({ args, env: process.env });
@@ -529,6 +564,7 @@ async function main() {
     identity: lifecycleBinding.agent_id,
     session: lifecycleBinding.session_id,
     siteRoot: process.env.NARADA_SITE_ROOT,
+    operatorSurfaceKind,
     intelligenceProvider: process.env.NARADA_INTELLIGENCE_PROVIDER,
     narsDelegatedAuthorityHandoff: delegatedAuthorityHandoff,
     providerSettings: {
@@ -555,8 +591,9 @@ async function main() {
   let stdoutBuffer = '';
   let writeProjectedOutput = (text) => process.stdout.write(text);
   let renderProjectedEvent = () => [];
+  const useInteractiveTerminalProjection = !rawJsonl && operatorSurfaceKind === 'agent-cli';
 
-  if (!rawJsonl) {
+  if (useInteractiveTerminalProjection) {
     const projectedTerminal = runtimeDependencies.createProjectedTerminalBridge({
       input: process.stdin,
       output: process.stdout,
@@ -565,7 +602,8 @@ async function main() {
     writeProjectedOutput = projectedTerminal.writeProjectedOutput;
     renderProjectedEvent = projectedTerminal.renderEvent;
   } else {
-    process.stdin.pipe(runtimeInput);
+    if (rawJsonl) process.stdin.pipe(runtimeInput);
+    else process.stdin.resume?.();
   }
   runtimeOutput.on('data', (chunk) => {
     const text = String(chunk);
@@ -586,7 +624,7 @@ async function main() {
             for (const failure of result.failures) console.error(lifecycleHookFailureLine(failure));
           })
           .catch((error) => console.error(`[agent-runtime-server] lifecycle hook dispatch failed: ${error instanceof Error ? error.message : String(error)}`));
-        if (!rawJsonl) {
+        if (useInteractiveTerminalProjection) {
           for (const rendered of renderProjectedEvent(event)) {
             if (typeof rendered === 'string') {
               writeProjectedOutput(`${rendered}\n`, { preserveCurrentLine: rendered.startsWith('\n') });
@@ -595,6 +633,8 @@ async function main() {
               if (rendered.newline) writeProjectedOutput('\n', { preserveCurrentLine: true });
             }
           }
+        } else if (!rawJsonl) {
+          for (const rendered of formatHostStatusEvent(event)) process.stdout.write(`${rendered}\n`);
         }
         renderWrapperEvents({ event, wrapperEventsJsonl, state });
       } catch {}

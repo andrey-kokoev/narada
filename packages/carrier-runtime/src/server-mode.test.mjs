@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
@@ -18,6 +18,69 @@ function waitFor(predicate, { timeoutMs = 1000 } = {}) {
     poll();
   });
 }
+
+function readJson(path) {
+  return JSON.parse(readFileSync(path, 'utf8'));
+}
+
+test('server mode writes NARS session index record on startup', async () => {
+  const siteRoot = mkdtempSync(join(tmpdir(), 'carrier-index-start-test-'));
+  try {
+    const input = new PassThrough();
+    const output = new PassThrough();
+    output.resume();
+    const sessionId = 'carrier_20260623001000_start';
+    const sessionDir = join(siteRoot, '.narada', 'crew', 'nars-sessions', sessionId);
+    const runtimeContext = {
+      identity: 'sonar.resident',
+      session: sessionId,
+      siteId: 'sonar',
+      siteRoot,
+      sessionPath: join(sessionDir, 'session.jsonl'),
+      eventsPath: join(sessionDir, 'events.jsonl'),
+      healthUrl: 'http://127.0.0.1:12346/health',
+      eventStreamUrl: 'ws://127.0.0.1:12345/events',
+      operatorSurfaceKind: 'agent-web-ui',
+      providerSettings: { stream: false },
+    };
+    const { dependencies } = createCarrierRuntimeDependencies({ runtimeContext });
+    input.end();
+    await runCarrierServerMode({
+      input,
+      output,
+      callChatApiFn: async () => ({ choices: [{ message: { role: 'assistant', content: 'unused' } }] }),
+      runtimeContext,
+      dependencies: {
+        ...dependencies,
+        discoverAndStartMcpServers: async () => ({}),
+        closeMcpServers: () => {},
+        readMcpPreflightArtifact: () => null,
+      },
+    });
+
+    const recordPath = join(sessionDir, 'session-index-record.json');
+    const aggregatePath = join(siteRoot, '.narada', 'crew', 'nars-sessions', 'index.json');
+    assert.equal(existsSync(recordPath), true);
+    assert.equal(existsSync(aggregatePath), true);
+    const record = readJson(recordPath);
+    assert.equal(record.schema, 'narada.nars.session_index_record.v1');
+    assert.equal(record.session_id, sessionId);
+    assert.equal(record.agent_id, 'sonar.resident');
+    assert.equal(record.site_id, 'sonar');
+    assert.equal(record.site_id_source, 'session_started');
+    assert.equal(record.launch_operator_surface_kind, 'agent-web-ui');
+    assert.equal(record.event_endpoint, 'ws://127.0.0.1:12345/events');
+    assert.equal(record.health_endpoint, 'http://127.0.0.1:12346/health');
+    assert.equal(record.terminal_state, 'closed');
+    assert.equal(record.terminal_reason, 'runtime_process_exit');
+    const aggregate = readJson(aggregatePath);
+    assert.equal(aggregate.sessions.length, 1);
+    assert.equal(aggregate.sessions[0].session_id, sessionId);
+    assert.equal(aggregate.sessions[0].terminal_state, 'closed');
+  } finally {
+    rmSync(siteRoot, { recursive: true, force: true });
+  }
+});
 
 test('conversation.steer interrupts the active turn and becomes the next provider input', async () => {
   const siteRoot = mkdtempSync(join(tmpdir(), 'carrier-steer-test-'));
@@ -71,6 +134,10 @@ test('conversation.steer interrupts the active turn and becomes the next provide
 
     input.write(`${JSON.stringify({ id: 'first', method: 'conversation.send', params: { message: 'original request', source: 'programmatic_operator' } })}\n`);
     await waitFor(() => events.some((event) => event.event === 'turn_started') && providerCalls.length === 1);
+    const userMessageIndex = events.findIndex((event) => event.event === 'user_message' && event.content === 'original request' && event.source === 'programmatic_operator');
+    const firstTurnStartedIndex = events.findIndex((event) => event.event === 'turn_started');
+    assert.notEqual(userMessageIndex, -1);
+    assert.equal(userMessageIndex < firstTurnStartedIndex, true);
     input.write(`${JSON.stringify({ id: 'steer', method: 'conversation.steer', params: { message: 'change course' } })}\n`);
     input.end();
 

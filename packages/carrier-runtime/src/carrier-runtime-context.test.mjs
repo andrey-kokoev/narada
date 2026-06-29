@@ -71,6 +71,7 @@ test('createCarrierRuntimeContext constructs without importing agent-cli globals
     const ctx = createCarrierRuntimeContext({
       identity: 'narada.test',
       session: 'test-session',
+      siteId: 'narada-test-site',
       siteRoot,
       intelligenceProvider: 'openai',
       providerSettings: { model: 'gpt-4', thinking: 'high', stream: false, goal: 'test-goal' },
@@ -84,6 +85,7 @@ test('createCarrierRuntimeContext constructs without importing agent-cli globals
 
     assert.equal(ctx.identity, 'narada.test');
     assert.equal(ctx.session, 'test-session');
+    assert.equal(ctx.siteId, 'narada-test-site');
     assert.equal(ctx.siteRoot, siteRoot);
     assert.equal(ctx.intelligenceProvider, 'openai');
     assert.equal(ctx.narsDelegatedAuthorityHandoff, null);
