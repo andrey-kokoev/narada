@@ -92,6 +92,7 @@ export function materializeCarrierSessionRecord({
   const startedAt = new Date().toISOString();
   const record = {
     schema: 'narada.pc_runtime.carrier_session.v0',
+    session_id: carrierSessionId,
     carrier_session_id: carrierSessionId,
     status: dryRun ? 'planned' : 'registered',
     declared_agent_identity: identity,
@@ -103,8 +104,9 @@ export function materializeCarrierSessionRecord({
     runtime_substrate_kind: runtime,
     substrate: runtime,
     launch_carrier_kind: carrier,
-    carrier_runtime_kind: carrier === 'agent-cli' ? 'narada-agent-runtime-server' : runtime,
-    operator_surface_kind: carrier === 'agent-cli' ? 'agent-cli' : null,
+    carrier_runtime_kind: carrier === 'agent-cli' || carrier === 'agent-web-ui' ? 'narada-agent-runtime-server' : runtime,
+    launch_operator_surface_kind: carrier === 'agent-cli' || carrier === 'agent-web-ui' ? carrier : null,
+    operator_surface_kind: carrier === 'agent-cli' || carrier === 'agent-web-ui' ? carrier : null,
     launcher_process_kind: 'launcher_process',
     workspace,
     launch_source: launchSource,
@@ -135,6 +137,7 @@ export function materializeCarrierSessionRecord({
   return {
     schema: 'narada.pc_runtime.carrier_session.registration.v0',
     status: dryRun ? 'planned' : 'registered',
+    session_id: carrierSessionId,
     carrier_session_id: carrierSessionId,
     record_path: recordPath,
     environment: {

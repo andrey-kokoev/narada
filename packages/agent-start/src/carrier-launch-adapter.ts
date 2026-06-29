@@ -13,7 +13,7 @@ export function resolveToolFabricAdapter(carrierName, { schema, agentTuiCarrier,
       states: ['runtime_known', 'adapter_selected', 'source_declared', 'launch_ready'],
     };
   }
-  if (carrierName === 'agent-cli') {
+  if (carrierName === 'agent-cli' || carrierName === 'agent-web-ui') {
     return {
       schema,
       tool_fabric_adapter_kind: 'narada-agent-runtime-server-mcp-client',
@@ -148,7 +148,7 @@ export function buildCarrierSpawnArgs(carrierName, {
     return args;
   }
 
-  if (carrierName === 'agent-cli') {
+  if (carrierName === 'agent-cli' || carrierName === 'agent-web-ui') {
     const sessionId = carrierSessionRegistration?.carrier_session_id ?? agentCliSessionName(identity);
     return [
       agentRuntimeServerScriptPath(),
@@ -158,6 +158,8 @@ export function buildCarrierSpawnArgs(carrierName, {
       sessionId,
       '--site-root',
       sessionSiteRoot,
+      '--operator-surface',
+      carrierName,
     ];
   }
 
@@ -249,7 +251,7 @@ export function resolveCarrierCommand(carrierName, {
 }) {
   if (carrierName === agentTuiCarrier) return 'cargo';
   if (processPlatform === 'win32' && carrierName === 'codex') return processExecPath;
-  if (carrierName === 'agent-cli') return processExecPath;
+  if (carrierName === 'agent-cli' || carrierName === 'agent-web-ui') return processExecPath;
   if (carrierName === 'pi') return stableNodeCommand();
   if (carrierName === 'claude-code') return claudeCodeCommand ?? defaultClaudeCodeCommand;
   if (carrierName === 'opencode') return opencodeCommand ?? 'opencode';
@@ -311,6 +313,7 @@ export function buildCarrierEnvironmentProjection({
   runtimeEnvironment = {},
   identity,
   agentStartEventId,
+  targetSiteId,
   environmentSiteRoot,
   workspaceRoot,
   dbPath,
@@ -323,6 +326,7 @@ export function buildCarrierEnvironmentProjection({
     ...runtimeEnvironment,
     NARADA_AGENT_ID: identity,
     NARADA_AGENT_START_EVENT_ID: agentStartEventId,
+    ...(targetSiteId ? { NARADA_SITE_ID: targetSiteId } : {}),
     NARADA_SITE_ROOT: environmentSiteRoot,
     NARADA_WORKSPACE_ROOT: workspaceRoot,
     NARADA_AGENT_CONTEXT_DB: dbPath,
@@ -346,16 +350,20 @@ export function buildCarrierEnvironmentProjection({
 export function buildNarsLaunchPacket(carrierName, {
   processExecPath,
   carrierSessionRegistration,
+  targetSiteId,
   sessionSiteRoot,
   siteCarrierControlPath,
   siteCarrierSessionPath,
 }) {
-  if (carrierName !== 'agent-cli') return null;
+  if (carrierName !== 'agent-cli' && carrierName !== 'agent-web-ui') return null;
   const sessionId = carrierSessionRegistration.carrier_session_id;
   return {
     schema: 'narada.agent_start.nars_launch.v1',
+    session_id: sessionId,
+    ...(targetSiteId ? { site_id: targetSiteId } : {}),
     carrier_runtime_kind: 'narada-agent-runtime-server',
-    operator_surface_kind: 'agent-cli',
+    launch_operator_surface_kind: carrierName,
+    operator_surface_kind: carrierName,
     control_transport: 'jsonl_sideband_file',
     carrier_relation: 'narada_agent_runtime_server',
     runtime_server: {

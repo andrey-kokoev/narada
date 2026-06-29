@@ -105,6 +105,8 @@ test('nars runtime alias materializes the canonical runtime server kind', () => 
 test('target site id is carried through dry-run output', () => {
   const output = runOk(['--carrier', 'agent-cli', '--runtime', 'narada-agent-runtime-server', '--target-site-id', 'narada-proper-contract']);
   assert.equal(output.target_site_id, 'narada-proper-contract');
+  assert.equal(output.required_environment.NARADA_SITE_ID, 'narada-proper-contract');
+  assert.equal(output.nars_launch.site_id, 'narada-proper-contract');
 });
 
 test('pc site root option is exposed in dry-run output when supplied', () => {
@@ -294,7 +296,7 @@ test('agent-cli default provider uses registry default', () => {
     NARADA_INTELLIGENCE_PROVIDER: '',
     KIMI_CODE_API_KEY: 'kimi-code-test-key',
   });
-  assert.equal(output.intelligence_provider_resolution.source_field, 'default_for_agent_cli');
+  assert.equal(output.intelligence_provider_resolution.source_field, 'default_for_nars_operator_surface');
   assert.equal(output.required_environment.NARADA_INTELLIGENCE_PROVIDER, 'kimi-code-api');
   assert.equal(output.required_environment.KIMI_CODE_API_KEY, '<set>');
 });
@@ -305,7 +307,9 @@ test('agent-cli exec launches package bin through node, not PowerShell', () => {
   assert.equal(output.exec_command.startsWith(process.execPath), true);
   assert.equal(output.exec_command.includes('pwsh'), false);
   assert.equal(output.nars_launch.command, process.execPath);
+  assert.equal(output.nars_launch.session_id, sessionId);
   assert.equal(output.nars_launch.carrier_runtime_kind, 'narada-agent-runtime-server');
+  assert.equal(output.nars_launch.launch_operator_surface_kind, 'agent-cli');
   assert.equal(output.nars_launch.operator_surface_kind, 'agent-cli');
   assert.equal(output.nars_launch.carrier_relation, 'narada_agent_runtime_server');
   assert.deepEqual(output.nars_launch.runtime_server, {
@@ -326,6 +330,9 @@ test('agent-cli exec launches package bin through node, not PowerShell', () => {
   assert.match(output.nars_events.attach_commands.operator_input_protocol, /conversation\.send/);
   assert.match(output.nars_events.attach_commands.slash_command_protocol, /carrier\.command\.execute/);
   assert.equal(output.carrier_session.record.carrier_runtime_kind, 'narada-agent-runtime-server');
+  assert.equal(output.carrier_session.session_id, sessionId);
+  assert.equal(output.carrier_session.record.session_id, sessionId);
+  assert.equal(output.carrier_session.record.launch_operator_surface_kind, 'agent-cli');
   assert.equal(output.carrier_session.record.operator_surface_kind, 'agent-cli');
   assert.equal(output.runtime_args[0].endsWith('agent-runtime-server.mjs'), true);
   assert.deepEqual(output.runtime_args.slice(1), [
@@ -335,9 +342,39 @@ test('agent-cli exec launches package bin through node, not PowerShell', () => {
     sessionId,
     '--site-root',
     naradaProperRoot,
+    '--operator-surface',
+    'agent-cli',
   ]);
   assert.equal(output.runtime_args.includes('--control-jsonl'), false);
   assert.equal(output.runtime_args.includes('--session-jsonl'), false);
+});
+
+test('agent-web-ui exec launches NARS runtime server as first-class operator surface', () => {
+  const output = runOk(['--carrier', 'agent-web-ui', '--runtime', 'nars', '--exec']);
+  const sessionId = output.carrier_session.carrier_session_id;
+  assert.equal(output.exec_command.startsWith(process.execPath), true);
+  assert.equal(output.nars_launch.command, process.execPath);
+  assert.equal(output.nars_launch.session_id, sessionId);
+  assert.equal(output.nars_launch.carrier_runtime_kind, 'narada-agent-runtime-server');
+  assert.equal(output.nars_launch.launch_operator_surface_kind, 'agent-web-ui');
+  assert.equal(output.nars_launch.operator_surface_kind, 'agent-web-ui');
+  assert.equal(output.carrier_kind, 'agent-web-ui');
+  assert.equal(output.runtime_substrate_kind, 'narada-agent-runtime-server');
+  assert.equal(output.nars_events.attach_commands.agent_web_ui, 'narada-agent-web-ui --event-endpoint <session_started.event_endpoint> --health-endpoint <session_started.health_endpoint>');
+  assert.equal(output.carrier_session.record.carrier_runtime_kind, 'narada-agent-runtime-server');
+  assert.equal(output.carrier_session.record.launch_operator_surface_kind, 'agent-web-ui');
+  assert.equal(output.carrier_session.record.operator_surface_kind, 'agent-web-ui');
+  assert.equal(output.runtime_args[0].endsWith('agent-runtime-server.mjs'), true);
+  assert.deepEqual(output.runtime_args.slice(1), [
+    '--identity',
+    identity,
+    '--session',
+    sessionId,
+    '--site-root',
+    naradaProperRoot,
+    '--operator-surface',
+    'agent-web-ui',
+  ]);
 });
 
 test('agent-cli dry-run records event-id propagation residual at runtime-server boundary', () => {

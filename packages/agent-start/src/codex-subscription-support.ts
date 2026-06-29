@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { delimiter, join } from 'node:path';
 import { codexCommand } from '@narada2/carrier-provider-support/codex-subscription-command';
 import { spawnSync as defaultSpawnSync } from 'node:child_process';
@@ -6,6 +6,8 @@ import { homedir } from 'node:os';
 
 export const CODEX_SUBSCRIPTION_PREFLIGHT_ENV = 'NARADA_CODEX_SUBSCRIPTION_PREFLIGHT';
 export const CODEX_SUBSCRIPTION_PREFLIGHT_TIMEOUT_MS = 60000;
+export const CODEX_SUBSCRIPTION_PREFLIGHT_CACHE_TTL_MS = 15 * 60 * 1000;
+export const CODEX_SUBSCRIPTION_PREFLIGHT_CACHE_TTL_ENV = 'NARADA_CODEX_SUBSCRIPTION_PREFLIGHT_CACHE_TTL_MS';
 
 export function codexSubscriptionPreflightForced(processEnv = process.env) {
   const mode = String(processEnv[CODEX_SUBSCRIPTION_PREFLIGHT_ENV] ?? '').trim().toLowerCase();
@@ -42,6 +44,8 @@ export function codexSubscriptionPreflight(provider, {
   sessionSiteRoot,
   dryRun = false,
   spawnSync = defaultSpawnSync,
+  now = Date.now,
+  progressStream = process.stderr,
 } = {}) {
   const mode = String(processEnv[CODEX_SUBSCRIPTION_PREFLIGHT_ENV] ?? '').trim().toLowerCase();
   const shouldRunLiveProbe = codexSubscriptionPreflightForced(processEnv) || (!dryRun && !codexSubscriptionPreflightDeferred(processEnv));
@@ -63,6 +67,10 @@ export function codexSubscriptionPreflight(provider, {
     };
   }
   const command = codexPreflightCommand(processEnv, processPlatform);
+  const cacheKey = codexSubscriptionPreflightCacheKey({ provider, processEnv, command });
+  const cached = codexSubscriptionPreflightCacheRead({ sessionSiteRoot, cacheKey, now: now(), processEnv });
+  if (!codexSubscriptionPreflightForced(processEnv) && cached) return cached;
+  progressStream?.write?.(`Checking ${provider} local Codex subscription auth...\n`);
   const prompt = 'Return exactly: ok';
   const result = spawnSync(command.command, [...command.prefixArgs, 'exec', '--json', prompt], {
     cwd: sessionSiteRoot,
@@ -72,10 +80,10 @@ export function codexSubscriptionPreflight(provider, {
     env: codexSubscriptionPreflightEnv(processEnv),
   });
   const stdout = String(result.stdout ?? '');
-  const stderr = String(result.stderr ?? '');
-  const combined = `${stdout}\n${stderr}`;
+  const stderrText = String(result.stderr ?? '');
+  const combined = `${stdout}\n${stderrText}`;
   const unauthorized = /401\s+Unauthorized|Unauthorized/i.test(combined);
-  return {
+  const preflight = {
     schema: 'narada.codex_subscription.preflight.v1',
     status: result.status === 0 ? 'passed' : unauthorized ? 'failed_unauthorized' : 'failed',
     ok: result.status === 0,
@@ -86,9 +94,88 @@ export function codexSubscriptionPreflight(provider, {
     error: result.error ? result.error.message : null,
     unauthorized,
     stdout_first_line: stdout.split(/\r?\n/).find((line) => line.trim()) ?? '',
-    stderr_first_line: stderr.split(/\r?\n/).find((line) => line.trim()) ?? '',
+    stderr_first_line: stderrText.split(/\r?\n/).find((line) => line.trim()) ?? '',
     timeout_ms: CODEX_SUBSCRIPTION_PREFLIGHT_TIMEOUT_MS,
   };
+  if (preflight.ok) codexSubscriptionPreflightCacheWrite({ sessionSiteRoot, cacheKey, preflight, now: now(), processEnv });
+  return preflight;
+}
+
+function codexSubscriptionPreflightCacheTtlMs(processEnv = process.env) {
+  const configured = Number.parseInt(String(processEnv[CODEX_SUBSCRIPTION_PREFLIGHT_CACHE_TTL_ENV] ?? ''), 10);
+  if (Number.isFinite(configured) && configured >= 0) return configured;
+  return CODEX_SUBSCRIPTION_PREFLIGHT_CACHE_TTL_MS;
+}
+
+function codexSubscriptionPreflightCachePath(sessionSiteRoot) {
+  if (!sessionSiteRoot) return null;
+  return join(sessionSiteRoot, '.narada', '.ai', 'runtime', 'codex-subscription-preflight-cache.json');
+}
+
+function codexSubscriptionPreflightCacheKey({ provider, processEnv, command }) {
+  return [
+    provider,
+    command.command,
+    ...(command.prefixArgs ?? []),
+    codexAuthHome(processEnv) ?? '',
+    processEnv.CODEX_MODEL ?? '',
+  ].join('\u0000');
+}
+
+function codexSubscriptionPreflightCacheRead({ sessionSiteRoot, cacheKey, now, processEnv }) {
+  const ttlMs = codexSubscriptionPreflightCacheTtlMs(processEnv);
+  if (ttlMs <= 0) return null;
+  const cachePath = codexSubscriptionPreflightCachePath(sessionSiteRoot);
+  if (!cachePath || !existsSync(cachePath)) return null;
+  try {
+    const cache = JSON.parse(readFileSync(cachePath, 'utf8'));
+    const entry = cache.entries?.[cacheKey];
+    if (!entry?.ok || !entry.checked_at_ms || now - entry.checked_at_ms > ttlMs) return null;
+    return {
+      schema: 'narada.codex_subscription.preflight.v1',
+      status: 'passed_cached',
+      ok: true,
+      provider: entry.provider ?? 'codex-subscription',
+      command: entry.command ?? 'codex exec --json',
+      cache: {
+        status: 'hit',
+        checked_at: entry.checked_at ?? null,
+        age_ms: now - entry.checked_at_ms,
+        ttl_ms: ttlMs,
+        path: cachePath,
+      },
+      timeout_ms: CODEX_SUBSCRIPTION_PREFLIGHT_TIMEOUT_MS,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function codexSubscriptionPreflightCacheWrite({ sessionSiteRoot, cacheKey, preflight, now, processEnv }) {
+  const ttlMs = codexSubscriptionPreflightCacheTtlMs(processEnv);
+  if (ttlMs <= 0) return;
+  const cachePath = codexSubscriptionPreflightCachePath(sessionSiteRoot);
+  if (!cachePath) return;
+  try {
+    const cacheDir = join(sessionSiteRoot, '.narada', '.ai', 'runtime');
+    mkdirSync(cacheDir, { recursive: true });
+    let cache = { schema: 'narada.codex_subscription.preflight_cache.v1', entries: {} };
+    if (existsSync(cachePath)) {
+      try { cache = JSON.parse(readFileSync(cachePath, 'utf8')); } catch { /* replace invalid cache */ }
+      if (!cache || typeof cache !== 'object') cache = { schema: 'narada.codex_subscription.preflight_cache.v1', entries: {} };
+      if (!cache.entries || typeof cache.entries !== 'object') cache.entries = {};
+    }
+    cache.entries[cacheKey] = {
+      ok: true,
+      provider: preflight.provider,
+      command: preflight.command,
+      checked_at: new Date(now).toISOString(),
+      checked_at_ms: now,
+    };
+    writeFileSync(cachePath, `${JSON.stringify(cache, null, 2)}\n`, 'utf8');
+  } catch {
+    // Cache failures must not block launch; the live preflight already succeeded.
+  }
 }
 
 export function codexContextIsolationStatus({ exec = false, dryRun = false } = {}) {

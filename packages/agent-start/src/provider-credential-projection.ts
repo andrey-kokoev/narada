@@ -220,7 +220,7 @@ export function mcpProviderCredentialEnvironment({
   processEnv = process.env,
   codexSubscriptionPreflight,
 }) {
-  if (carrier !== 'agent-cli' && carrier !== agentTuiCarrier && carrier !== 'claude-code') return {};
+  if (carrier !== 'agent-cli' && carrier !== 'agent-web-ui' && carrier !== agentTuiCarrier && carrier !== 'claude-code') return {};
   const env = {};
   for (const [provider, metadata] of Object.entries(metadataByProvider)) {
     const requirement = providerCredentialRequirement(provider, metadata);

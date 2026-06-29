@@ -353,7 +353,7 @@ if (runtimeResolution.status === 'refused') {
 const runtime = runtimeResolution.runtime_substrate_kind;
 const carrier = runtimeResolution.carrier_kind;
 const intelligenceProviderArgInput = args.intelligence_provider ?? null;
-const intelligenceProviderEnvInput = carrier === AGENT_CLI_CARRIER_KIND ? process.env.NARADA_INTELLIGENCE_PROVIDER : null;
+const intelligenceProviderEnvInput = carrier === AGENT_CLI_CARRIER_KIND || carrier === 'agent-web-ui' ? process.env.NARADA_INTELLIGENCE_PROVIDER : null;
 const intelligenceProviderInput = intelligenceProviderArgInput ?? intelligenceProviderEnvInput ?? null;
 const intelligenceProviderInputSource = resolveIntelligenceProviderInputSource(intelligenceProviderArgInput, intelligenceProviderEnvInput, carrier, {
   processEnv: process.env,
@@ -595,6 +595,7 @@ function mcpEnvironmentValues() {
     NARADA_AGENT_ID: identity,
     NARADA_AGENT_START_EVENT_ID: startResult.agent_start_event,
     NARADA_CARRIER_SESSION_ID: carrierSessionRegistration.carrier_session_id,
+    ...(targetSiteId ? { NARADA_SITE_ID: targetSiteId } : {}),
     NARADA_SITE_ROOT: sessionSiteRoot,
     NARADA_WORKSPACE_ROOT: process.cwd(),
     NARADA_AGENT_CONTEXT_DB: dbPath,
@@ -828,6 +829,7 @@ const { requiredEnvironment, wouldSetEnvironment } = buildCarrierEnvironmentProj
   runtimeEnvironment,
   identity,
   agentStartEventId: startResult.agent_start_event,
+  targetSiteId,
   environmentSiteRoot,
   workspaceRoot,
   dbPath,
@@ -835,6 +837,7 @@ const { requiredEnvironment, wouldSetEnvironment } = buildCarrierEnvironmentProj
 const narsLaunch = buildNarsLaunchPacket(carrier, {
   processExecPath: process.execPath,
   carrierSessionRegistration,
+  targetSiteId,
   sessionSiteRoot,
   siteCarrierControlPath,
   siteCarrierSessionPath,
@@ -881,7 +884,7 @@ const output = {
   runtime_args: spawnArgs,
   exec_command: execFlag ? execCommand : null,
   context_isolation: carrier === 'codex' ? codexContextIsolationStatus({ exec: execFlag, dryRun }) : { status: 'isolated', carrier, runtime },
-  nars_health: carrier === 'agent-cli' ? {
+  nars_health: carrier === 'agent-cli' || carrier === 'agent-web-ui' ? {
     schema: 'narada.agent_start.nars_health_discovery.v1',
     owner: '@narada2/agent-runtime-server',
     method: 'session.health',
@@ -891,7 +894,7 @@ const output = {
     discovery_field: 'session_started.health_endpoint',
     note: 'The loopback HTTP endpoint is bound by the runtime server after process start; inspect session_started.health_endpoint or session.health for the live URL.',
   } : null,
-  nars_events: carrier === 'agent-cli' ? {
+  nars_events: carrier === 'agent-cli' || carrier === 'agent-web-ui' ? {
     schema: 'narada.agent_start.nars_event_stream_discovery.v1',
     owner: '@narada2/agent-runtime-server',
     method: 'session.events.subscribe',
@@ -924,7 +927,7 @@ if (!execFlag || dryRun) {
 if (waitFlag) {
   await waitForEnterBeforeCarrier({
     agentId: identity,
-    carrierName: carrier,
+    carrierName: runtime === 'narada-agent-runtime-server' ? 'agent-runtime-server' : carrier,
     writeStdout,
     loadAgentStartRenderer,
   });
@@ -935,7 +938,7 @@ if (carrierSessionRegistration.status !== 'registered') {
   process.exit(1);
 }
 
-if (carrier === 'agent-cli' || carrier === AGENT_TUI_CARRIER) {
+if (carrier === 'agent-cli' || carrier === 'agent-web-ui' || carrier === AGENT_TUI_CARRIER) {
   materializeCarrierLaunchFiles(carrierSessionRegistration.carrier_session_id, startingCarrierInput);
 }
 
@@ -955,6 +958,7 @@ spawnCarrierProcessAndExit({
     NARADA_AGENT_ID: identity,
     NARADA_AGENT_START_EVENT_ID: startResult.agent_start_event,
     NARADA_CARRIER_SESSION_ID: carrierSessionRegistration.carrier_session_id,
+    NARADA_OPERATOR_SURFACE_KIND: carrier,
     NARADA_SITE_ROOT: environmentSiteRoot,
     NARADA_WORKSPACE_ROOT: workspaceRoot,
     NARADA_AGENT_CONTEXT_DB: dbPath,

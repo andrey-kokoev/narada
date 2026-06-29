@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { dirname, normalize, resolve } from 'node:path';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { dirname, join, normalize, resolve } from 'node:path';
+import { tmpdir } from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -23,14 +24,26 @@ test('provider resolution module preserves default provider source and output fi
     schema: providerResolution.INTELLIGENCE_PROVIDER_CONTRACT_SCHEMA,
   });
   assert.equal(resolution.intelligence_provider, 'kimi-code-api');
-  assert.equal(resolution.source_field, 'default_for_agent_cli');
+  assert.equal(resolution.source_field, 'default_for_nars_operator_surface');
   assert.equal(resolution.request_adapter, 'openai-compatible-chat-completions');
   assert.equal(resolution.credential_requirement_kind, 'api_key_secret');
   assert.equal(resolution.credential_requirement.secret_ref, 'narada/provider/kimi-code-api/api-key');
   assert.equal(resolution.resolution_states.at(-1).state, 'launch_ready');
 });
 
-test('provider resolution module refuses provider selection for non-agent-cli carriers', () => {
+test('provider resolution module admits agent-web-ui as a NARS operator surface', () => {
+  const resolution = providerResolution.resolveIntelligenceProviderLaunch(null, 'agent-web-ui', { source_field: null }, {
+    metadataByProvider,
+    admittedProviders,
+    defaultProvider: providerRegistry.default_provider,
+    schema: providerResolution.INTELLIGENCE_PROVIDER_CONTRACT_SCHEMA,
+  });
+  assert.equal(resolution.intelligence_provider, 'kimi-code-api');
+  assert.equal(resolution.source_field, 'default_for_nars_operator_surface');
+  assert.equal(resolution.resolution_states.some((state) => state.state === 'carrier_supports_provider_selection' && state.carrier_kind === 'agent-web-ui'), true);
+});
+
+test('provider resolution module refuses provider selection for non-NARS carriers', () => {
   const refusal = providerResolution.resolveIntelligenceProviderLaunch('codex-subscription', 'codex', { source_field: 'cli_argument' }, {
     metadataByProvider,
     admittedProviders,
@@ -86,21 +99,85 @@ test('codex subscription support defers dry-run auth and scrubs OpenAI API env',
 
 test('codex subscription support runs live auth preflight for non-dry launch by default', () => {
   const calls = [];
+  const siteRoot = mkdtempSync(join(tmpdir(), 'narada-codex-preflight-live-'));
   const preflight = codexSupport.codexSubscriptionPreflight('codex-subscription', {
     processEnv: { USERPROFILE: 'C:/Users/Andrey' },
     processPlatform: 'linux',
-    sessionSiteRoot: naradaProperRoot,
+    sessionSiteRoot: siteRoot,
     dryRun: false,
     spawnSync(command, args, options) {
       calls.push({ command, args, options });
       return { status: 0, stdout: '{"event":"ok"}\n', stderr: '', signal: null, error: null };
     },
+    stderr: { write() {} },
   });
-  assert.equal(preflight.status, 'passed');
-  assert.equal(preflight.ok, true);
-  assert.equal(calls.length, 1);
-  assert.deepEqual(calls[0].args.slice(-3, -1), ['exec', '--json']);
-  assert.equal(Object.hasOwn(calls[0].options.env, 'OPENAI_API_KEY'), false);
+  try {
+    assert.equal(preflight.status, 'passed');
+    assert.equal(preflight.ok, true);
+    assert.equal(calls.length, 1);
+    assert.deepEqual(calls[0].args.slice(-3, -1), ['exec', '--json']);
+    assert.equal(Object.hasOwn(calls[0].options.env, 'OPENAI_API_KEY'), false);
+  } finally {
+    rmSync(siteRoot, { recursive: true, force: true });
+  }
+});
+
+test('codex subscription support caches successful live auth preflight briefly', () => {
+  const calls = [];
+  const progress = [];
+  const siteRoot = mkdtempSync(join(tmpdir(), 'narada-codex-preflight-cache-'));
+  const options = {
+    processEnv: { USERPROFILE: 'C:/Users/Andrey', CODEX_MODEL: 'gpt-5.5' },
+    processPlatform: 'linux',
+    sessionSiteRoot: siteRoot,
+    dryRun: false,
+    now: () => 1000,
+    spawnSync(command, args, spawnOptions) {
+      calls.push({ command, args, options: spawnOptions });
+      return { status: 0, stdout: '{"event":"ok"}\n', stderr: '', signal: null, error: null };
+    },
+    progressStream: { write: (line) => progress.push(line) },
+  };
+  try {
+    const first = codexSupport.codexSubscriptionPreflight('codex-subscription', options);
+    const second = codexSupport.codexSubscriptionPreflight('codex-subscription', { ...options, now: () => 2000 });
+    assert.equal(first.status, 'passed');
+    assert.equal(second.status, 'passed_cached');
+    assert.equal(second.cache.status, 'hit');
+    assert.equal(calls.length, 1);
+    assert.equal(progress.length, 1);
+    assert.match(progress[0], /Checking codex-subscription local Codex subscription auth/);
+  } finally {
+    rmSync(siteRoot, { recursive: true, force: true });
+  }
+});
+
+test('codex subscription support force mode bypasses successful cache', () => {
+  const calls = [];
+  const siteRoot = mkdtempSync(join(tmpdir(), 'narada-codex-preflight-force-'));
+  const baseOptions = {
+    processEnv: { USERPROFILE: 'C:/Users/Andrey' },
+    processPlatform: 'linux',
+    sessionSiteRoot: siteRoot,
+    dryRun: false,
+    now: () => 1000,
+    spawnSync() {
+      calls.push('spawn');
+      return { status: 0, stdout: '{"event":"ok"}\n', stderr: '', signal: null, error: null };
+    },
+    progressStream: { write() {} },
+  };
+  try {
+    assert.equal(codexSupport.codexSubscriptionPreflight('codex-subscription', baseOptions).status, 'passed');
+    assert.equal(codexSupport.codexSubscriptionPreflight('codex-subscription', {
+      ...baseOptions,
+      processEnv: { USERPROFILE: 'C:/Users/Andrey', NARADA_CODEX_SUBSCRIPTION_PREFLIGHT: 'force' },
+      now: () => 2000,
+    }).status, 'passed');
+    assert.equal(calls.length, 2);
+  } finally {
+    rmSync(siteRoot, { recursive: true, force: true });
+  }
 });
 
 test('codex subscription credential projection fails closed when launch preflight fails', () => {
