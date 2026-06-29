@@ -4,10 +4,20 @@ import { extname } from 'node:path';
 import { AGENT_WEB_UI_NARS_METHOD_LIST } from '@narada2/nars-client-projection-contract';
 
 const STATIC_ROOT = new URL('./', import.meta.url);
+const DIST_ROOT = new URL('../dist/', import.meta.url);
+const VENDOR_MODULES = new Map([
+  ['vendor/nars-client-projection-contract.js', new URL('../../nars-client-projection-contract/src/nars-client-projection-contract.mjs', import.meta.url)],
+  ['vendor/vue.js', new URL('../node_modules/vue/dist/vue.esm-browser.prod.js', import.meta.url)],
+]);
 const CONTENT_TYPES = new Map([
   ['.html', 'text/html; charset=utf-8'],
   ['.js', 'text/javascript; charset=utf-8'],
+  ['.mjs', 'text/javascript; charset=utf-8'],
   ['.css', 'text/css; charset=utf-8'],
+]);
+const BROWSER_IMPORT_REWRITES = new Map([
+  ['@narada2/nars-client-projection-contract', './vendor/nars-client-projection-contract.js'],
+  ['vue', './vendor/vue.js'],
 ]);
 
 export function parseAgentWebUiArgs(args = []) {
@@ -56,16 +66,42 @@ function sendJson(response, statusCode, payload) {
   response.end(`${JSON.stringify(payload)}\n`);
 }
 
+async function tryReadStaticRoot(root, relativePath) {
+  const fileUrl = new URL(relativePath, root);
+  if (!fileUrl.href.startsWith(root.href)) return null;
+  try {
+    return { content: await readFile(fileUrl, 'utf8') };
+  } catch {
+    return null;
+  }
+}
+
 async function readStaticFile(pathname, clientConfig) {
   const relativePath = pathname === '/' ? 'index.html' : pathname.replace(/^\/+/, '');
   if (relativePath.includes('..')) return null;
-  const fileUrl = new URL(relativePath, STATIC_ROOT);
-  if (!fileUrl.href.startsWith(STATIC_ROOT.href)) return null;
-  let content = await readFile(fileUrl, 'utf8');
-  if (relativePath === 'index.html') {
-    content = content.replace('__NARADA_AGENT_WEB_UI_CONFIG__', JSON.stringify(clientConfig));
+  const vendorModule = VENDOR_MODULES.get(relativePath);
+  if (vendorModule) {
+    return { content: await readFile(vendorModule, 'utf8'), contentType: CONTENT_TYPES.get(extname(relativePath)) ?? 'text/javascript; charset=utf-8' };
   }
-  return { content, contentType: CONTENT_TYPES.get(extname(relativePath)) ?? 'text/plain; charset=utf-8' };
+
+  const distFile = await tryReadStaticRoot(DIST_ROOT, relativePath);
+  if (distFile) {
+    const content = relativePath === 'index.html' ? distFile.content.replace('__NARADA_AGENT_WEB_UI_CONFIG__', JSON.stringify(clientConfig)) : distFile.content;
+    return { content, contentType: CONTENT_TYPES.get(extname(relativePath)) ?? 'text/plain; charset=utf-8' };
+  }
+
+  const sourceRelativePath = relativePath === 'index.html' ? 'compat-index.html' : relativePath;
+  const sourceFile = await tryReadStaticRoot(STATIC_ROOT, sourceRelativePath);
+  if (!sourceFile) return null;
+  let content = sourceFile.content;
+  if (sourceRelativePath === 'compat-index.html') {
+    content = content.replace('__NARADA_AGENT_WEB_UI_CONFIG__', JSON.stringify(clientConfig));
+  } else if (sourceRelativePath.endsWith('.js')) {
+    for (const [from, to] of BROWSER_IMPORT_REWRITES) {
+      content = content.replaceAll(`'${from}'`, `'${to}'`).replaceAll(`"${from}"`, `"${to}"`);
+    }
+  }
+  return { content, contentType: CONTENT_TYPES.get(extname(sourceRelativePath)) ?? 'text/plain; charset=utf-8' };
 }
 
 export function createAgentWebUiServer(options) {
@@ -95,17 +131,13 @@ export function createAgentWebUiServer(options) {
       }
       return;
     }
-    try {
-      const file = await readStaticFile(url.pathname, clientConfig);
-      if (!file) {
-        sendJson(response, 404, { error: 'not_found' });
-        return;
-      }
-      response.writeHead(200, { 'content-type': file.contentType });
-      response.end(file.content);
-    } catch {
+    const file = await readStaticFile(url.pathname, clientConfig);
+    if (!file) {
       sendJson(response, 404, { error: 'not_found' });
+      return;
     }
+    response.writeHead(200, { 'content-type': file.contentType });
+    response.end(file.content);
   });
   return server;
 }

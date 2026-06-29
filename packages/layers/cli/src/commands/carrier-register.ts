@@ -90,7 +90,7 @@ export function registerCarrierCommands(program: Command): void {
     .option('--agent <id>', 'Agent identity')
     .option('--carrier <carrier>', 'Carrier/operator surface')
     .option('--runtime <runtime>', 'Runtime substrate for the selected carrier')
-    .option('--intelligence-provider <provider>', 'agent-cli intelligence provider')
+    .option('--intelligence-provider <provider>', 'NARS operator-surface intelligence provider')
     .option('--dry-run', 'Plan the runtime launch without writing launch artifacts or spawning', false)
     .option('--materialize-only', 'Write launch artifacts without spawning the runtime', false)
     .option('--exec', 'Spawn the runtime process after materializing launch artifacts', false)

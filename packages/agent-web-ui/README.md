@@ -4,9 +4,11 @@ Browser operator surface for one NARS session.
 
 This package is a client surface. It does not construct runtime dependencies, host MCP fabric, or execute provider turns. It attaches to a NARS event endpoint and health endpoint, subscribes with `session.events.subscribe`, renders session status plus the live event transcript, submits ordinary operator messages as `conversation.send` frames, and projects slash-command input into NARS protocol frames.
 
+The browser shell is Vue 3 + Vite. Components are Narada-native and styled in the shadcn-vue spirit: small explicit primitives over Narada concepts such as NARS session status, projection verbosity, transcript rows, diagnostics, raw event details, and operator input. NARS protocol projection remains framework-neutral.
+
 ## Run
 
-Operator-grade attach UX should use NARS session discovery once exposed by the Narada CLI:
+Target operator-grade attach UX should use NARS session discovery once exposed by the Narada CLI. These Narada CLI commands are not implemented in this package yet:
 
 ```bash
 narada agent-web-ui
@@ -29,10 +31,14 @@ The authoritative session discovery/index mechanics are documented in `docs/conc
 
 - `bin/narada-agent-web-ui.mjs` is only the CLI bootstrap.
 - `src/server.js` owns the local static-file server and `/api/health` proxy.
-- `src/agent-web-ui.js` is the browser composition entrypoint and stable package export.
-- `src/config.js`, `src/event-stream.js`, `src/health.js`, `src/input.js`, `src/render.js`, and `src/runtime-events.js` own focused browser projection concerns.
-
-## Attach Commands
+- `src/main.ts` mounts the Vite-built Vue app.
+- `src/app/App.vue` composes the Narada-native browser shell.
+- `src/app/components/*` owns explicit UI primitives for status, transcript rows, diagnostics, and operator input.
+- `src/app/composables/*` owns browser-side orchestration for connection, health, retention, verbosity, and input.
+- `src/app/lib/*` owns projection, retention, and lazy raw-payload helpers.
+- `src/protocol/*` owns framework-neutral NARS WebSocket framing and operator input protocol.
+- `src/agent-web-ui.js`, `src/config.js`, `src/event-stream.js`, `src/health.js`, `src/input.js`, `src/render.js`, and `src/runtime-events.js` remain stable compatibility exports and source fallback helpers.
+- `vite.config.mjs` builds the browser shell from `src/index.html`.
 
 NARS exposes peer client attach commands for the same session event endpoint:
 

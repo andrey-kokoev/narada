@@ -62,6 +62,8 @@ export interface SitesCreateOptions extends SitesOptions {
   liveAuthorityBasis?: string;
 }
 
+export interface SitesSetupOptions extends SitesCreateOptions {}
+
 export interface SitesLiveCarrierOptions extends SitesOptions {
   carrier?: string;
   mode?: string;
@@ -968,6 +970,37 @@ export async function sitesCreateCommand(
     exitCode: plan.refusals.length === 0 ? ExitCode.SUCCESS : ExitCode.INVALID_CONFIG,
     result: plan,
   }, (options.format ?? 'auto') as CliFormat);
+}
+
+export async function sitesSetupCommand(
+  options: SitesSetupOptions,
+  context: CommandContext,
+): Promise<{ exitCode: ExitCode; result: unknown }> {
+  const hasNonInteractiveInput = Boolean(
+    options.config
+    || options.preset
+    || options.siteId
+    || options.root,
+  );
+
+  const envelope = await sitesCreateCommand({
+    ...options,
+    interactive: options.interactive ?? !hasNonInteractiveInput,
+  }, context);
+  return {
+    ...envelope,
+    result: normalizeSitesSetupResult(envelope.result),
+  };
+}
+
+function normalizeSitesSetupResult(result: unknown): unknown {
+  if (!result || typeof result !== 'object') return result;
+  const record = result as Record<string, unknown>;
+  if (record.command !== 'narada sites create') return result;
+  return {
+    ...record,
+    command: 'narada sites setup',
+  };
 }
 
 function formatCreateSiteEnvelope(

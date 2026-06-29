@@ -35,6 +35,7 @@ import {
   sitesCreateCommand,
   sitesCreatePresetsCommand,
   sitesLiveCarrierCommand,
+  sitesSetupCommand,
 } from '../../src/commands/sites.js';
 import type { CommandContext } from '../../src/lib/command-wrapper.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
@@ -392,6 +393,63 @@ describe('sitesCreateCommand', () => {
     });
     expect(plan.non_claims).toContain('capability or secret grants');
     expect(promptMock.note).toHaveBeenCalledWith(expect.stringContaining('Capability descriptors: Task lifecycle, Site config awareness'), 'Review');
+  });
+
+  it('defaults sites setup to the interactive wizard when no setup coordinates are supplied', async () => {
+    promptMock.selectResponses.push('preview', 'custom', 'project', 'project');
+    promptMock.textResponses.push('setup-site', 'D:\\Sites\\setup-site');
+    promptMock.multiselectResponses.push(['task_lifecycle', 'canonical_inbox']);
+    promptMock.confirmResponses.push(true);
+
+    const result = await sitesSetupCommand({
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const plan = result.result as {
+      schema: string;
+      command: string;
+      config_path: string;
+      selected_template: { template_components: string[] };
+      evidence: { interactive_preview_default: boolean; package_selection_grants_live_capability: boolean };
+    };
+    expect(plan.schema).toBe('narada.create_site.dry_run_plan.v0');
+    expect(plan.command).toBe('narada sites setup');
+    expect(plan.config_path).toBe('<interactive:create-site-options>');
+    expect(plan.selected_template.template_components).toEqual([
+      '@narada2/site-task-lifecycle',
+      '@narada2/site-inbox',
+    ]);
+    expect(plan.evidence).toMatchObject({
+      interactive_preview_default: true,
+      package_selection_grants_live_capability: false,
+    });
+    expect(promptMock.intro).toHaveBeenCalledWith('Narada Site creation');
+  });
+
+  it('runs sites setup non-interactively when explicit setup coordinates are supplied', async () => {
+    const result = await sitesSetupCommand({
+      siteId: 'setup-shorthand-site',
+      root: 'D:\\Sites\\setup-shorthand-site',
+      dryRun: true,
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const plan = result.result as {
+      command: string;
+      config_path: string;
+      selected_preset: string;
+      site: { site_id: string; site_root: string };
+    };
+    expect(plan.command).toBe('narada sites setup');
+    expect(plan.config_path).toBe('<inline:create-site-options>');
+    expect(plan.selected_preset).toBe('agent-site-core');
+    expect(plan.site).toMatchObject({
+      site_id: 'setup-shorthand-site',
+      site_root: 'D:\\Sites\\setup-shorthand-site',
+    });
+    expect(promptMock.intro).not.toHaveBeenCalled();
   });
 
   it('creates a Site skeleton only after interactive confirmation', async () => {

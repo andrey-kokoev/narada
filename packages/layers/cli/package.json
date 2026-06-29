@@ -41,7 +41,7 @@
     "build": "tsc && node scripts/write-build-manifest.mjs",
     "typecheck": "tsc --noEmit",
     "test": "node scripts/run-vitest-quiet.mjs run --silent && pnpm run test:realfs",
-    "test:launcher": "node scripts/run-vitest-quiet.mjs run --silent test/commands/carrier-launcher.test.ts test/commands/launcher-workspace-plan.test.ts && pnpm run test:realfs",
+    "test:launcher": "pnpm run build && node scripts/run-vitest-quiet.mjs run --silent test/commands/carrier-launcher.test.ts test/commands/launcher-workspace-plan.test.ts test/commands/nars.test.ts && pnpm run test:realfs",
     "test:realfs": "node --import tsx --test test/integration/*.test.mjs",
     "coverage": "vitest run --coverage"
   },
@@ -50,7 +50,9 @@
     "chalk": "^5.6.2",
     "cli-progress": "^3.12.0",
     "commander": "^11.1.0",
+    "@narada2/agent-web-ui": "workspace:*",
     "@narada2/control-plane": "workspace:*",
+    "@narada2/carrier-runtime": "workspace:*",
     "@narada2/carrier-provider-contract": "workspace:*",
     "@narada2/intent-zones": "workspace:*",
     "@narada2/task-governance-core": "workspace:*",

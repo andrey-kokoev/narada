@@ -264,7 +264,7 @@ export function runAgentStartCommand(options: AgentStartOptions): AgentStartComm
     '--runtime',
     options.runtime,
     '--launch-source',
-    options.launchSource ?? 'narada carrier start',
+    options.launchSource ?? 'narada operator-surface start',
     '--json-output-file',
     resultPath,
   ];

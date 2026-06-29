@@ -86,7 +86,7 @@ function extractCapabilities(body: string, title: string = ''): string[] {
   if (text.includes('typescript') || text.includes('typecheck')) caps.push('typescript');
   if (hasWord('test') || hasWord('fixture')) caps.push('testing');
   if (text.includes('sqlite') || hasWord('schema')) caps.push('database');
-  if (text.includes('graph api') || hasWord('mail')) caps.push('mailbox_vertical');
+  if (text.includes('graph api') || hasWord('mail')) caps.push('mailbox_surface');
   if (text.includes('cloudflare') || hasWord('worker')) caps.push('cloudflare');
   if (hasWord('design') || hasWord('contract') || hasWord('boundary')) caps.push('architecture');
   if (hasWord('documentation') || hasWord('readme')) caps.push('documentation');
@@ -552,14 +552,14 @@ export const SYNTHETIC_TASKS: FixtureTask[] = [
     body: '# Sync CLI command refactor\n\nRefactor the sync CLI command in TypeScript.\n\n## Chapter\nCLI Polish',
   },
   {
-    taskId: '20260422-502-mailbox-test-fixture',
+    taskId: '20260422-502-mailbox-mcp-fixture',
     taskNumber: 502,
     status: 'opened',
-    title: 'Mailbox charter test fixture',
+    title: 'Mailbox MCP test fixture',
     dependsOn: [],
-    chapter: 'Mailbox Vertical',
-    requiredCapabilities: ['testing', 'mailbox_vertical'],
-    body: '# Mailbox charter test fixture\n\nAdd test fixture for mailbox charter.\n\n## Chapter\nMailbox Vertical',
+    chapter: 'Mailbox MCP Surface',
+    requiredCapabilities: ['testing', 'mailbox_surface'],
+    body: '# Mailbox MCP test fixture\n\nAdd test fixture for mailbox MCP behavior.\n\n## Chapter\nMailbox MCP Surface',
   },
   {
     taskId: '20260422-503-cloudflare-worker',
@@ -684,13 +684,13 @@ export const SYNTHETIC_ASSIGNMENTS: FixtureAssignment[] = [
   // Task 500 was completed by agent-alpha (for affinity on 501)
   { task_id: '20260422-500-schema-migration', agent_id: 'agent-alpha', claimed_at: '2026-04-10T00:00:00Z', released_at: '2026-04-15T00:00:00Z', release_reason: 'completed' },
   // Task 502 was completed by agent-beta (for affinity on 503)
-  { task_id: '20260422-502-mailbox-test-fixture', agent_id: 'agent-beta', claimed_at: '2026-04-10T00:00:00Z', released_at: '2026-04-15T00:00:00Z', release_reason: 'completed' },
+  { task_id: '20260422-502-mailbox-mcp-fixture', agent_id: 'agent-beta', claimed_at: '2026-04-10T00:00:00Z', released_at: '2026-04-15T00:00:00Z', release_reason: 'completed' },
 ];
 
 export const SYNTHETIC_WRITE_SETS: Map<string, FixtureWriteSetManifest> = new Map([
   ['20260422-500-schema-migration', { declared_files: ['packages/layers/control-plane/src/schema.ts'], declared_creates: [], declared_deletes: [] }],
   ['20260422-501-sync-cli-command', { declared_files: ['packages/layers/cli/src/commands/sync.ts'], declared_creates: [], declared_deletes: [] }],
-  ['20260422-502-mailbox-test-fixture', { declared_files: ['packages/verticals/mailbox/test/**/*.ts'], declared_creates: [], declared_deletes: [] }],
+  ['20260422-502-mailbox-mcp-fixture', { declared_files: ['packages/site-common-tools/src/site-mail/**/*.mjs'], declared_creates: [], declared_deletes: [] }],
   ['20260422-503-cloudflare-worker', { declared_files: ['packages/sites/cloudflare/src/worker.ts'], declared_creates: [], declared_deletes: [] }],
   ['20260422-504-architecture-decision', { declared_files: ['.ai/decisions/*.md'], declared_creates: [], declared_deletes: [] }],
   ['20260422-505-operator-console-ui', { declared_files: ['packages/layers/daemon/src/ui/**/*.ts'], declared_creates: [], declared_deletes: [] }],
@@ -705,7 +705,7 @@ export const GROUND_TRUTH = new Map<number, string>([
   [500, 'agent-alpha'],    // typescript + database
   [501, 'agent-alpha'],    // typescript + cli (depends on 500, affinity)
   [502, 'agent-beta'],     // testing + mailbox (but agent-beta lacks mailbox; agent-alpha has testing)
-  // Actually 502 needs testing+mailbox_vertical. agent-alpha has testing, agent-beta lacks mailbox_vertical.
+  // Actually 502 needs testing+mailbox_surface. agent-alpha has testing, agent-beta lacks mailbox_surface.
   // agent-gamma has testing. No perfect match. agent-alpha is closest.
   [503, 'agent-beta'],     // cloudflare + typescript
   [504, 'agent-gamma'],    // architecture + documentation

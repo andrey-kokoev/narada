@@ -9,6 +9,7 @@
       "browser_event_stream_projection",
       "read_only_session_status_projection",
       "web_attachment_ux",
+      "vue_operator_surface_rendering",
       "browser_operator_input_projection"
     ],
     "does_not_own": [
@@ -29,13 +30,22 @@
   },
   "scripts": {
     "start": "node ./bin/narada-agent-web-ui.mjs",
+    "build": "vite build",
     "test": "node --test test/*.test.mjs",
-    "typecheck": "tsc --noEmit --allowJs --checkJs false bin/narada-agent-web-ui.mjs src/agent-web-ui.js src/config.js src/event-stream.js src/health.js src/input.js src/render.js src/runtime-events.js src/server.js"
+    "typecheck": "vue-tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@narada2/nars-client-projection-contract": "workspace:*"
+    "@narada2/nars-client-projection-contract": "workspace:*",
+    "markdown-it": "^14.2.0",
+    "mermaid": "^11.16.0",
+    "vue": "^3.5.0"
   },
   "devDependencies": {
-    "@narada2/agent-runtime-server": "workspace:*"
+    "@narada2/agent-runtime-server": "workspace:*",
+    "@types/markdown-it": "^14.1.2",
+    "@vitejs/plugin-vue": "^5.2.0",
+    "type-fest": "^4.41.0",
+    "vite": "^5.4.0",
+    "vue-tsc": "^2.2.0"
   }
 }

@@ -134,7 +134,7 @@ export async function carrierStartCommand(
     };
     return {
       exitCode: ExitCode.SUCCESS,
-      result: formattedResult(result, 'carrier already running', options.format ?? 'auto'),
+      result: formattedResult(result, 'operator-surface already running', options.format ?? 'auto'),
     };
   }
   const start = runAgentStartCommand({
@@ -148,7 +148,7 @@ export async function carrierStartCommand(
     exec: options.exec,
     wait: options.wait,
     enableNativeShell: options.enableNativeShell,
-    launchSource: 'narada carrier start',
+    launchSource: 'narada operator-surface start',
   });
   const result = {
     schema: 'narada.carrier.start_result.v0',
@@ -165,7 +165,7 @@ export async function carrierStartCommand(
   };
   return {
     exitCode: start.status === 'success' ? ExitCode.SUCCESS : ExitCode.GENERAL_ERROR,
-    result: formattedResult(result, `carrier start ${start.status}`, options.format ?? 'auto'),
+    result: formattedResult(result, `operator-surface start ${start.status}`, options.format ?? 'auto'),
   };
 }
 

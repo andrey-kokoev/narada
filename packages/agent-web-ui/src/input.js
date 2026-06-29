@@ -39,7 +39,7 @@ export function sendOperatorMessage(socketOrConnection, text, documentRef = docu
     return false;
   }
   socket.send(JSON.stringify(frame));
-  appendEvent({ event: 'operator_input_submitted', content: frame.params?.message ?? frame.params?.command ?? frame.method }, documentRef);
+  appendEvent({ event: 'operator_input_submitted', request_id: frame.id, content: frame.params?.message ?? frame.params?.command ?? frame.method }, documentRef);
   if (frame.method === 'session.close') connection?.close?.();
   return true;
 }

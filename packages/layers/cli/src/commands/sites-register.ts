@@ -7,6 +7,7 @@ import {
   sitesDoctorCommand,
   sitesInitCommand,
   sitesCreateCommand,
+  sitesSetupCommand,
   sitesCreatePresetsCommand,
   sitesLiveCarrierCommand,
   sitesBootstrapClientCommand,
@@ -37,6 +38,44 @@ export function registerSitesCommands(program: Command): void {
   const sitesCmd = program
     .command('sites')
     .description('Discover and manage Narada Sites');
+
+  sitesCmd
+    .command('setup')
+    .description('Interactively set up a Narada Site, or run setup from explicit Site coordinates')
+    .option('--config <path>', 'Create-site config JSON')
+    .option('-i, --interactive', 'Prompt for Site coordinates and descriptor capabilities')
+    .option('--preset <preset>', 'Greenfield template preset: minimal, agent-site-core, agent-memory, task-lifecycle, or site-machinery')
+    .option('--site-id <id>', 'Site id for shorthand setup')
+    .option('--root <path>', 'Site root for shorthand setup')
+    .option('--site-kind <kind>', 'Site kind for shorthand setup', 'project')
+    .option('--authority-locus <locus>', 'Authority locus for shorthand setup', 'project')
+    .option('--dry-run', 'Preview without creating a Site', false)
+    .option('--execute-live', 'After creating the Site skeleton, run admitted live carriers in sequence', false)
+    .option('--live-authority-basis <basis>', 'Authority basis for --execute-live carrier applies')
+    .option('--output-plan <path>', 'Write the dry-run plan JSON artifact')
+    .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
+    .option('-v, --verbose', 'Enable verbose output', false)
+    .action(async (opts: Record<string, unknown>) => {
+      const result = await sitesSetupCommand({
+        config: opts.config as string | undefined,
+        interactive: opts.interactive as boolean | undefined,
+        preset: opts.preset as string | undefined,
+        siteId: opts.siteId as string | undefined,
+        root: opts.root as string | undefined,
+        siteKind: opts.siteKind as string | undefined,
+        authorityLocus: opts.authorityLocus as string | undefined,
+        dryRun: opts.dryRun as boolean | undefined,
+        executeLive: opts.executeLive as boolean | undefined,
+        liveAuthorityBasis: opts.liveAuthorityBasis as string | undefined,
+        outputPlan: opts.outputPlan as string | undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
+        verbose: opts.verbose as boolean | undefined,
+      }, silentCommandContext({ verbose: !!opts.verbose }));
+      emitCommandResult(result.result, opts.format);
+      if (result.exitCode !== 0) {
+        process.exit(result.exitCode);
+      }
+    });
 
   sitesCmd
     .command('create')

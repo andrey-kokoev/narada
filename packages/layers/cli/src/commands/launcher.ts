@@ -401,6 +401,7 @@ interface RawLaunchRegistry {
   WorkspaceRoot?: string;
   Launcher?: string;
   LauncherPath?: string;
+  OperatorSurface?: string;
   Carrier?: string;
   Runtime?: string;
   Agents?: RawAgentRecord[] | RawAgentRecord;
@@ -416,6 +417,7 @@ interface RawAgentRecord {
   WorkspaceRoot?: string;
   Launcher?: string;
   LauncherPath?: string;
+  OperatorSurface?: string;
   Carrier?: string;
   Runtime?: string;
   EnableNativeShell?: boolean;
@@ -430,6 +432,7 @@ export interface WorkspaceLaunchRecord {
   site_root: string;
   workspace_root: string | null;
   launcher_path: string;
+  operator_surface: string;
   carrier: string;
   runtime: string;
   enable_native_shell: boolean;
@@ -441,6 +444,7 @@ export interface WorkspaceLaunchAgentPlan extends WorkspaceLaunchRecord {
   runtime_host_kind: string;
   launch_carrier: string;
   launch_runtime: string;
+  launch_carriers: string[];
   intelligence_provider: string | null;
   wait_for_enter_before_exec: boolean;
   wt_args: string[];
@@ -605,6 +609,7 @@ async function resolveInteractiveSelectionOptions(
     'registry default',
     ...records.map((record) => record.carrier),
     'agent-cli',
+    'agent-web-ui',
     'codex',
     'kimi',
     'pi',
@@ -643,16 +648,17 @@ async function resolveInteractiveSelectionOptions(
   });
   if (prompts.isCancel(selectedRoles)) throw new Error('interactive_selection_cancelled');
 
-  const selectedCarrier = await prompts.select({
-    message: 'Select Operator Surface',
+  const selectedCarriers = await prompts.multiselect({
+    message: 'Select Operator Surface(s)',
     options: carrierChoices.map((carrier) => ({
       value: carrier,
       label: carrier,
       hint: carrier === 'registry default' ? 'use each registry entry value' : undefined,
     })),
-    initialValue: options.operatorSurface ?? options.carrier ?? 'registry default',
+    initialValues: initialOperatorSurfaceValues(carrierChoices, options.operatorSurface ?? options.carrier),
+    required: true,
   });
-  if (prompts.isCancel(selectedCarrier)) throw new Error('interactive_selection_cancelled');
+  if (prompts.isCancel(selectedCarriers)) throw new Error('interactive_selection_cancelled');
 
   const selectedRuntime = await prompts.select({
     message: 'Select Runtime',
@@ -666,6 +672,8 @@ async function resolveInteractiveSelectionOptions(
   if (prompts.isCancel(selectedRuntime)) throw new Error('interactive_selection_cancelled');
 
   const selectedRoleValues = selectedRoles as string[];
+  const selectedCarrierValues = normalizeInteractiveOperatorSurfaceValues(selectedCarriers as string[]);
+  const providerOperatorSurface = selectedCarrierValues.includes('agent-cli') ? 'agent-cli' : (selectedCarrierValues[0] ?? 'registry default');
   const selectedRecords = selectLaunchRecords(records, {
     ...options,
     all: true,
@@ -674,8 +682,8 @@ async function resolveInteractiveSelectionOptions(
   });
   const selectedProvider = await selectInteractiveIntelligenceProvider({
     records: selectedRecords,
-    carrier: options.carrier,
-    operatorSurface: selectedCarrier as string,
+    carrier: undefined,
+    operatorSurface: providerOperatorSurface,
     runtime: selectedRuntime as string,
     current: options.intelligenceProvider,
   });
@@ -685,10 +693,23 @@ async function resolveInteractiveSelectionOptions(
     all: false,
     site: selectedSiteValues,
     role: selectedRoleValues,
-    operatorSurface: selectedCarrier === 'registry default' ? undefined : selectedCarrier,
+    carrier: selectedCarrierValues.includes('registry default') ? undefined : selectedCarrierValues.join(','),
+    operatorSurface: undefined,
     runtime: selectedRuntime === 'registry default' ? undefined : selectedRuntime,
     intelligenceProvider: selectedProvider === 'registry default' ? undefined : selectedProvider,
   };
+}
+
+export function initialOperatorSurfaceValues(choices: string[], current?: string): string[] {
+  if (!current) return ['registry default'];
+  const explicit = normalizeCarrierList(current).filter((value) => choices.some((choice) => choice.toLowerCase() === value.toLowerCase()));
+  return explicit.length > 0 ? explicit : ['registry default'];
+}
+
+export function normalizeInteractiveOperatorSurfaceValues(values: string[]): string[] {
+  const normalized = unique(values);
+  if (normalized.includes('registry default')) return ['registry default'];
+  return normalized;
 }
 
 async function selectInteractiveIntelligenceProvider({
@@ -730,16 +751,16 @@ export function intelligenceProviderChoicesForLaunchSelection({
   operatorSurface: string;
   runtime: string;
 }): Array<{ value: string; label: string; hint?: string }> {
-  const agentCliRecords = records.filter((record) => {
+  const narsSurfaceRecords = records.filter((record) => {
     const selection = resolveWorkspaceCarrierRuntimeSelection(
       carrier ?? record.carrier,
       operatorSurface === 'registry default' ? undefined : operatorSurface,
       runtime === 'registry default' ? record.runtime : runtime,
     );
-    return selection.carrier_kind === 'agent-cli';
+    return selection.carrier_kind === 'agent-cli' || selection.carrier_kind === 'agent-web-ui';
   });
-  if (agentCliRecords.length === 0) {
-    return [{ value: 'registry default', label: 'registry default', hint: 'no agent-cli launches selected' }];
+  if (narsSurfaceRecords.length === 0) {
+    return [{ value: 'registry default', label: 'registry default', hint: 'no NARS operator-surface launches selected' }];
   }
   return intelligenceProviderChoices({ admittedProviders: providerAdapters.admitted_providers });
 }
@@ -865,7 +886,8 @@ function normalizeAgentRecord(registry: RawLaunchRegistry, agent: RawAgentRecord
   const launcher = nonEmpty(agent.Launcher) ?? nonEmpty(registry.Launcher);
   const launcherPath = nonEmpty(agent.LauncherPath) ?? nonEmpty(registry.LauncherPath)
     ?? (launcher ? join(naradaRoot, launcher) : join(naradaRoot, 'narada-andrey.ps1'));
-  const carrier = nonEmpty(agent.Carrier) ?? nonEmpty(registry.Carrier) ?? 'codex';
+  const operatorSurface = nonEmpty(agent.OperatorSurface) ?? nonEmpty(registry.OperatorSurface) ?? nonEmpty(agent.Carrier) ?? nonEmpty(registry.Carrier) ?? 'codex';
+  const carrier = operatorSurface;
   const runtime = nonEmpty(agent.Runtime) ?? nonEmpty(registry.Runtime) ?? defaultRuntimeForCarrier(carrier);
   return {
     agent: agentId,
@@ -876,6 +898,7 @@ function normalizeAgentRecord(registry: RawLaunchRegistry, agent: RawAgentRecord
     site_root: siteRoot,
     workspace_root: workspaceRoot,
     launcher_path: launcherPath,
+    operator_surface: operatorSurface,
     carrier,
     runtime,
     enable_native_shell: agent.EnableNativeShell === true,
@@ -932,16 +955,18 @@ function recordMatchesSiteSelectors(record: WorkspaceLaunchRecord, siteSelectors
 
 function buildAgentPlan(record: WorkspaceLaunchRecord, options: WorkspaceLaunchPlanOptions): WorkspaceLaunchAgentPlan {
   const operatorSurfaceInput = options.operatorSurface;
-  const carrierInput = options.carrier ?? record.carrier;
+  const carrierInput = options.carrier ?? record.operator_surface ?? record.carrier;
+  const launchCarriers = operatorSurfaceInput ? normalizeCarrierList(operatorSurfaceInput) : normalizeCarrierList(carrierInput);
+  const primaryCarrierInput = launchCarriers.includes('agent-cli') ? 'agent-cli' : launchCarriers[0] ?? carrierInput;
   const runtimeInput = options.runtime ?? record.runtime;
-  const carrierRuntimeSelection = resolveWorkspaceCarrierRuntimeSelection(carrierInput, operatorSurfaceInput, runtimeInput);
+  const carrierRuntimeSelection = resolveWorkspaceCarrierRuntimeSelection(primaryCarrierInput, operatorSurfaceInput, runtimeInput);
   const launchCarrier = carrierRuntimeSelection.carrier_kind;
   const operatorSurfaceKind = carrierRuntimeSelection.operator_surface_kind;
   const launchRuntime = carrierRuntimeSelection.runtime_substrate_kind;
   const runtimeHostKind = carrierRuntimeSelection.runtime_host_kind;
   const enableNativeShell = options.enableNativeShell === true || record.enable_native_shell;
-  const waitForEnter = options.noWaitForEnterBeforeExec !== true;
-  const intelligenceProvider = launchCarrier === 'agent-cli' ? (options.intelligenceProvider ?? null) : null;
+  const waitForEnter = options.noWaitForEnterBeforeExec !== true && launchCarriers[0] !== 'agent-web-ui';
+  const intelligenceProvider = launchCarrier === 'agent-cli' || launchCarrier === 'agent-web-ui' ? (options.intelligenceProvider ?? null) : null;
   const naradaProper = resolve(process.env.NARADA_PROPER_ROOT ?? 'D:/code/narada');
   const carrierStartCommand = [
     'pnpm',
@@ -962,13 +987,23 @@ function buildAgentPlan(record: WorkspaceLaunchRecord, options: WorkspaceLaunchP
 
   const base = [
     'new-tab',
-    '--title', record.title,
+    '--title', launchCarrier === 'agent-web-ui' ? `${record.title} Runtime` : record.title,
     '-d', record.workspace_root ?? record.narada_root,
     'pwsh',
     '-NoExit',
     '-Command',
     toPowerShellCommand(carrierStartCommand),
   ];
+  const wtArgs = [...base];
+  if (launchCarrier === 'agent-web-ui') {
+    wtArgs.push(';', ...agentWebUiAttachWtArgs(record, naradaProper));
+  }
+  for (const extraCarrier of launchCarriers.filter((carrier) => carrier !== launchCarrier)) {
+    if (extraCarrier !== 'agent-web-ui') {
+      throw new Error(`unsupported_multi_carrier_projection: ${extraCarrier}`);
+    }
+    wtArgs.push(';', ...agentWebUiAttachWtArgs(record, naradaProper));
+  }
 
   const smokeCommand = [
     'narada', 'carrier', 'start', launchCarrier,
@@ -988,12 +1023,46 @@ function buildAgentPlan(record: WorkspaceLaunchRecord, options: WorkspaceLaunchP
     runtime_host_kind: runtimeHostKind,
     launch_carrier: launchCarrier,
     launch_runtime: launchRuntime,
+    launch_carriers: launchCarriers,
     intelligence_provider: intelligenceProvider,
     wait_for_enter_before_exec: waitForEnter,
     enable_native_shell: enableNativeShell,
-    wt_args: base,
+    wt_args: wtArgs,
     smoke_command: smokeCommand,
   };
+}
+
+function normalizeCarrierList(value: string | undefined): string[] {
+  const carriers = String(value ?? 'agent-cli')
+    .split(',')
+    .map((item) => nonEmpty(item))
+    .filter((item): item is string => Boolean(item));
+  return unique(carriers.length > 0 ? carriers : ['agent-cli']);
+}
+
+function agentWebUiAttachWtArgs(record: WorkspaceLaunchRecord, naradaProper: string): string[] {
+  const attachCommand = [
+    'pnpm',
+    '--dir', naradaProper,
+    'exec',
+    'narada',
+    'agent-web-ui',
+    'attach',
+    '--site-root', record.site_root,
+    '--agent', record.agent,
+    '--wait-for-session-ms', '60000',
+    '--open',
+  ];
+  const prelude = `Write-Host ${quotePowerShellArgument(`agent-web-ui: waiting for ${record.agent} NARS session, then starting browser projection`)}`;
+  return [
+    'new-tab',
+    '--title', `${record.title} Web UI`,
+    '-d', record.workspace_root ?? record.narada_root,
+    'pwsh',
+    '-NoExit',
+    '-Command',
+    `${prelude}\n${toPowerShellCommand(attachCommand)}`,
+  ];
 }
 
 function nonEmpty(value: unknown): string | null {
