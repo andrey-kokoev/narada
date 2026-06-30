@@ -143,6 +143,7 @@ test('browser startup subscribes to events and submits operator text over the sa
   class FakeElement {
     constructor(id = null) {
       this.id = id;
+      this.tagName = String(id ?? '').toUpperCase();
       this.children = [];
       this.listeners = new Map();
       this.textContent = '';
@@ -161,7 +162,7 @@ test('browser startup subscribes to events and submits operator text over the sa
   elements.get('nars-config').textContent = JSON.stringify({ eventEndpoint: 'ws://127.0.0.1/events', healthEndpoint: '/api/health', maxReplay: 4 });
   const documentRef = {
     getElementById(id) { return elements.get(id) ?? null; },
-    createElement() { return new FakeElement(); },
+    createElement(name) { return new FakeElement(name); },
   };
   class FakeWebSocket {
     static OPEN = 1;
@@ -244,6 +245,16 @@ test('browser startup subscribes to events and submits operator text over the sa
   socket.emit('message', { data: JSON.stringify({ agent_id: 'resident', session_id: 'carrier_test', event: { type: 'item.completed', item: { id: 'provider_final_echo_1', type: 'agent_message', text: 'I am hydrating context first.\n\nStartup sequence completed.' } } }) });
   assert.equal(elements.get('events').children.length, beforeProviderAssistantCount + 1);
   assert.equal(elements.get('events').children.at(-1), providerFinalRow);
+  socket.emit('message', { data: JSON.stringify({ agent_id: 'resident', session_id: 'carrier_test', event: { type: 'item.completed', item: { id: 'provider_markdown_1', type: 'agent_message', text: 'markdown\n# Sample Report\n\n| Item | Status | Owner |\n|---|---|---|\n| Intake review | Done | Alex |\n| Implementation | In progress | Priya |\n| Verification | Pending | Sam |\n\n## Notes\n\n- Keep rows short and scannable.\n- Use clear status labels.\n- Add links or dates when needed.' } } }) });
+  const markdownRow = elements.get('events').children.at(-1);
+  const markdownSummary = markdownRow.children.at(1).children.at(0);
+  const markdownFrame = markdownSummary.children.at(0);
+  assert.equal(markdownFrame.className, 'message-part rendered-part-frame');
+  assert.equal(markdownFrame.children.at(0).children.at(0).textContent, 'markdown');
+  const markdownBody = markdownFrame.children.at(1).children.at(0);
+  assert.equal(markdownBody.className, 'message-markdown');
+  assert.equal(markdownBody.children.some((child) => child.tagName === 'TABLE'), true);
+  assert.equal(markdownBody.children.some((child) => child.tagName === 'UL'), true);
   socket.emit('message', { data: JSON.stringify({ event: 'session_event', cursor: { sequence: 45 }, payload: { event: 'turn_complete', turn_id: 'turn_active', terminal_state: 'interrupted', event_sequence: 45 } }) });
   const beforeStatusNoiseCount = elements.get('events').children.length;
   socket.emit('message', { data: JSON.stringify({ event: 'session_health', status: 'healthy', agent_id: 'narada.test', session_id: 'carrier_test' }) });

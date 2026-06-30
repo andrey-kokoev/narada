@@ -5,6 +5,161 @@ export function setText(id, text, documentRef = document) {
   if (element) element.textContent = text;
 }
 
+function normalizeRenderableText(value) {
+  return String(value ?? '').trim().replace(/\r\n/g, '\n');
+}
+
+function stripMarkdownHint(value) {
+  return normalizeRenderableText(value).replace(/^\s*(markdown|md)\s*\n/i, '');
+}
+
+function looksLikeMarkdown(value) {
+  const text = stripMarkdownHint(value);
+  return text !== normalizeRenderableText(value)
+    || /(`[^`]+`|\*\*[^*]+\*\*|__[^_]+__|^\s*>\s+|^\s*#{1,6}\s+|^\s*\|.+\|\s*$|\n\s*\|?\s*:?-{3,}:?\s*\||\n\s*[-*+]\s+|\n\s*\d+\.\s+)/m.test(text);
+}
+
+function appendSummaryContent(container, value, documentRef) {
+  const text = stringSummary(value);
+  if (!looksLikeMarkdown(text)) {
+    container.textContent = text;
+    return;
+  }
+  container.append(createRenderedMarkdownFrame(stripMarkdownHint(text), documentRef));
+}
+
+function createRenderedMarkdownFrame(markdownText, documentRef) {
+  const figure = documentRef.createElement('figure');
+  figure.className = 'message-part rendered-part-frame';
+  const header = documentRef.createElement('figcaption');
+  header.className = 'rendered-part-header';
+  const title = documentRef.createElement('span');
+  title.className = 'rendered-part-title';
+  title.textContent = 'markdown';
+  const tabs = documentRef.createElement('span');
+  tabs.className = 'rendered-part-tabs';
+  const renderButton = createRenderedPartTab('Render', true, documentRef);
+  const codeButton = createRenderedPartTab('Code', false, documentRef);
+  tabs.append(codeButton, renderButton);
+  header.append(title, tabs);
+
+  const renderPanel = documentRef.createElement('div');
+  renderPanel.className = 'rendered-part-render';
+  renderPanel.append(renderMarkdownToDom(markdownText, documentRef));
+  const codePanel = documentRef.createElement('div');
+  codePanel.className = 'rendered-part-code';
+  codePanel.hidden = true;
+  const language = documentRef.createElement('figcaption');
+  language.textContent = 'markdown';
+  const pre = documentRef.createElement('pre');
+  const code = documentRef.createElement('code');
+  code.textContent = markdownText;
+  pre.append(code);
+  codePanel.append(language, pre);
+
+  const activate = (view) => {
+    const renderActive = view === 'render';
+    renderPanel.hidden = !renderActive;
+    codePanel.hidden = renderActive;
+    renderButton.dataset.active = renderActive ? 'true' : 'false';
+    codeButton.dataset.active = renderActive ? 'false' : 'true';
+    renderButton.className = `rendered-part-tab${renderActive ? ' is-active' : ''}`;
+    codeButton.className = `rendered-part-tab${renderActive ? '' : ' is-active'}`;
+  };
+  renderButton.addEventListener?.('click', () => activate('render'));
+  codeButton.addEventListener?.('click', () => activate('code'));
+  figure.append(header, renderPanel, codePanel);
+  return figure;
+}
+
+function createRenderedPartTab(label, active, documentRef) {
+  const button = documentRef.createElement('button');
+  button.type = 'button';
+  button.className = `rendered-part-tab${active ? ' is-active' : ''}`;
+  button.dataset.active = active ? 'true' : 'false';
+  button.textContent = label;
+  return button;
+}
+
+function renderMarkdownToDom(markdownText, documentRef) {
+  const wrapper = documentRef.createElement('div');
+  wrapper.className = 'message-markdown';
+  const lines = markdownText.split('\n');
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (!line.trim()) continue;
+    const table = tryParseMarkdownTable(lines, index, documentRef);
+    if (table) {
+      wrapper.append(table.node);
+      index = table.endIndex;
+      continue;
+    }
+    const heading = line.match(/^(#{1,3})\s+(.+)$/);
+    if (heading) {
+      const node = documentRef.createElement(`h${heading[1].length}`);
+      node.textContent = heading[2];
+      wrapper.append(node);
+      continue;
+    }
+    if (/^\s*[-*+]\s+/.test(line)) {
+      const list = documentRef.createElement('ul');
+      while (index < lines.length && /^\s*[-*+]\s+/.test(lines[index])) {
+        const item = documentRef.createElement('li');
+        item.textContent = lines[index].replace(/^\s*[-*+]\s+/, '');
+        list.append(item);
+        index += 1;
+      }
+      index -= 1;
+      wrapper.append(list);
+      continue;
+    }
+    const paragraph = documentRef.createElement('p');
+    paragraph.textContent = line;
+    wrapper.append(paragraph);
+  }
+  return wrapper;
+}
+
+function tryParseMarkdownTable(lines, startIndex, documentRef) {
+  if (!isMarkdownTableRow(lines[startIndex]) || !isMarkdownTableDivider(lines[startIndex + 1] ?? '')) return null;
+  const table = documentRef.createElement('table');
+  const thead = documentRef.createElement('thead');
+  const headerRow = documentRef.createElement('tr');
+  for (const cell of splitMarkdownTableRow(lines[startIndex])) {
+    const th = documentRef.createElement('th');
+    th.textContent = cell;
+    headerRow.append(th);
+  }
+  thead.append(headerRow);
+  table.append(thead);
+  const tbody = documentRef.createElement('tbody');
+  let index = startIndex + 2;
+  while (index < lines.length && isMarkdownTableRow(lines[index])) {
+    const row = documentRef.createElement('tr');
+    for (const cell of splitMarkdownTableRow(lines[index])) {
+      const td = documentRef.createElement('td');
+      td.textContent = cell;
+      row.append(td);
+    }
+    tbody.append(row);
+    index += 1;
+  }
+  table.append(tbody);
+  return { node: table, endIndex: index - 1 };
+}
+
+function isMarkdownTableRow(line) {
+  return /^\s*\|.+\|\s*$/.test(line ?? '');
+}
+
+function isMarkdownTableDivider(line) {
+  return /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$/.test(line ?? '');
+}
+
+function splitMarkdownTableRow(line) {
+  return String(line ?? '').trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((cell) => cell.trim());
+}
+
 function normalizeAssistantText(value) {
   return String(value ?? '').trim().replace(/\r\n/g, '\n');
 }
@@ -76,7 +231,7 @@ function renderEvent(event, documentRef = document, options = {}) {
   detail.className = 'event-detail';
   const summary = documentRef.createElement('div');
   summary.className = 'event-summary';
-  summary.textContent = stringSummary(projection.summary || projection.event);
+  appendSummaryContent(summary, projection.summary || projection.event, documentRef);
   detail.append(summary);
   if (verbosity === 'raw') {
     const raw = documentRef.createElement('details');
