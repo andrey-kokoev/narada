@@ -59,6 +59,7 @@ import {
   observerMetadata,
 } from './input-queue.mjs';
 import { spawnOwnedProcess } from './process-supervisor.mjs';
+import { readNarsEventLogPage } from './nars-event-log.mjs';
 
 const PROVIDER_METADATA = loadProviderMetadata();
 
@@ -191,10 +192,14 @@ function serverPreflightRecovery({ requestId, mcpPreflightArtifact }) {
 }
 
 function serverEventsSubscription({ requestId, params = {}, context = {} }) {
-  const replay = params.include_replay === false ? [] : readSessionEventsForSubscription({
+  const replayPage = params.include_replay === false ? null : readNarsEventLogPage({
     eventsPath: context.eventsPath,
-    maxReplay: params.max_replay ?? 100,
+    afterSequence: params.since_sequence,
+    sinceTimestamp: params.since_timestamp,
+    filters: params.filters,
+    limit: params.max_replay ?? 100,
   });
+  const replay = replayPage?.events ?? [];
   const lastEvent = replay.at(-1) ?? null;
   return {
     schema: 'narada.nars.events.subscription.v1',
@@ -204,6 +209,7 @@ function serverEventsSubscription({ requestId, params = {}, context = {} }) {
     transport: 'jsonl_stdio',
     replay_count: replay.length,
     replay,
+    replay_source: replayPage?.source ?? 'none',
     cursor: {
       last_sequence: lastEvent?.event_sequence ?? lastEvent?.sequence ?? null,
       next_sequence: currentEventSequence + 1,
@@ -211,6 +217,24 @@ function serverEventsSubscription({ requestId, params = {}, context = {} }) {
     filters: params.filters && typeof params.filters === 'object' ? params.filters : {},
     live_stream: 'stdout_jsonl',
     close_semantics: 'request_scoped_replay_over_stdio; durable live subscriptions require websocket transport',
+  };
+}
+
+function serverEventsRead({ requestId, params = {}, context = {} }) {
+  const page = readNarsEventLogPage({
+    eventsPath: context.eventsPath,
+    afterSequence: params.after_sequence ?? params.since_sequence,
+    beforeSequence: params.before_sequence,
+    sinceTimestamp: params.since_timestamp,
+    filters: params.filters,
+    limit: params.limit ?? params.max_replay ?? 100,
+    direction: params.direction,
+  });
+  return {
+    ...page,
+    event: 'session_events_read',
+    request_id: requestId,
+    transport: 'jsonl_stdio',
   };
 }
 
@@ -486,6 +510,13 @@ async function handleServerRequestLine(line, context) {
   } catch (error) {
     noteSessionActivity(context.state, 'invalid_json');
     context.emit('error', { request_id: null, code: 'invalid_json', message: error instanceof Error ? error.message : String(error) });
+    return;
+  }
+  if (request?.method === 'session.events.read') {
+    const requestId = request?.id ?? null;
+    noteSessionActivity(state, 'session_events_read_requested');
+    recordWorkflowRequest(context, 'session_events_read_requested', { requestId, method: 'session.events.read' });
+    emit('session_events_read', serverEventsRead({ requestId, params: request?.params ?? {}, context }));
     return;
   }
   await handleServerRequest(request, context);
@@ -1158,18 +1189,6 @@ function sessionHandoffs({ identity, session, eventCount = 20 } = {}) {
     session_events_issues: `${base} --session-events --session-events-filter issues --session-events-count ${eventCount}`,
     session_events_diagnostics: `${base} --session-events --session-events-filter diagnostics --session-events-count ${eventCount}`,
   };
-}
-
-function readSessionEventsForSubscription({ eventsPath, maxReplay = 100 } = {}) {
-  if (!eventsPath || !existsSync(eventsPath)) return [];
-  const limit = Math.max(0, Number(maxReplay ?? 100));
-  const events = [];
-  for (const line of readFileSync(eventsPath, 'utf8').split(/\r?\n/).filter(Boolean)) {
-    try {
-      events.push(JSON.parse(line));
-    } catch {}
-  }
-  return events.slice(-limit);
 }
 
 function summarizeCounts(counts = {}) {

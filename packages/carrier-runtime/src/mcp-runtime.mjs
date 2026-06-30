@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process';
+import { spawnHiddenPostureProcess } from '@narada2/process-launch-posture';
 import { loadSiteMcpFabric, projectServerEnvironment } from '../../mcp-fabric/src/mcp-fabric.mjs';
 import { buildNamePatternToolMetadata } from '../../carrier-action-admission/src/tool-metadata.mjs';
 
@@ -241,9 +241,9 @@ async function discoverAndStartMcpServers(siteRoot) {
     try {
       const args = [...serverConfig.args];
 
-      const proc = spawn(serverConfig.command, args, {
+      const proc = spawnHiddenPostureProcess(serverConfig.command, args, {
+        posture: 'mcp_server',
         cwd: siteRoot,
-        windowsHide: true,
         env: buildChildProcessEnv(projectServerEnvironment(serverConfig)),
       });
 

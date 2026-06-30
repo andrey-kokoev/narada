@@ -14,6 +14,7 @@ declare module '@narada2/nars-client-projection-contract' {
   export function projectNarsClientEvent(message: unknown): any;
   export function shouldProjectNarsClientProjection(projection: unknown, options?: object): boolean;
   export function unwrapNarsClientEvent(message: unknown): any;
+  export function buildAgentWebUiEventsReadFrame(options?: object): any;
   export function buildAgentWebUiSubscribeFrame(options?: object): any;
   export function buildAgentWebUiConversationSendFrame(message: string): any;
   export function buildAgentWebUiConversationSteerFrame(command: string): any;

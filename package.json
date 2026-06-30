@@ -8,6 +8,8 @@
     "narada:guard-task-db": "bash scripts/guard-task-lifecycle-db.sh",
     "narada:guard-cli-output": "node scripts/cli-output-admission-guard.mjs",
     "narada:guard-cli-output:report": "node scripts/cli-output-admission-guard.mjs --report",
+    "narada:guard-process-launch-posture": "node scripts/process-launch-posture-guard.mjs",
+    "narada:guard-process-launch-posture:report": "node scripts/process-launch-posture-guard.mjs --report",
     "site:continuity:loop": "node scripts/site-continuity-loop.mjs",
     "site:continuity:loop:test": "node --test scripts/site-continuity-loop.test.mjs",
     "cloudflare:operator:check": "node scripts/cloudflare-operator-check.mjs",

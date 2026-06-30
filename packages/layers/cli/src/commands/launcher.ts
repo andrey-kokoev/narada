@@ -1,6 +1,7 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { readFile, writeFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
+import { startOperatorTerminal } from '@narada2/process-launch-posture';
 import { join, resolve } from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
@@ -572,10 +573,7 @@ export async function workspaceLaunchCommand(
   }
 
   const effectiveWtArgs = process.env.WT_SESSION ? ['-w', '0', ...wtArgs] : wtArgs;
-  const launch = spawnSync('wt', effectiveWtArgs, {
-    stdio: 'inherit',
-    windowsHide: false,
-  });
+  const launch = startOperatorTerminal('wt', effectiveWtArgs).result;
   if (launch.error) throw launch.error;
   if (launch.status !== 0) {
     throw new Error(`windows_terminal_launch_failed: wt exited ${launch.status ?? 'unknown'}`);

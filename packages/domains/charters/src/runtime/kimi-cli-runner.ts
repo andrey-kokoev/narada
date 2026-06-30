@@ -10,7 +10,7 @@
  * with a timeout.
  */
 
-import { spawn } from "node:child_process";
+import { spawnProviderSubprocess } from "@narada2/process-launch-posture";
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -82,7 +82,7 @@ export class KimiCliCharterRunner implements CharterRunner {
       ok: boolean;
       details: string;
     }>((resolve) => {
-      const child = spawn(cliPath, ["--version"], {
+      const child = spawnProviderSubprocess(cliPath, ["--version"], {
         stdio: ["ignore", "pipe", "pipe"],
         timeout: 5000,
       });
@@ -156,7 +156,7 @@ export class KimiCliCharterRunner implements CharterRunner {
     const timeoutMs = this.opts.timeoutMs ?? 120000;
 
     return new Promise((resolve, reject) => {
-      const child = spawn(cliPath, args, {
+      const child = spawnProviderSubprocess(cliPath, args, {
         stdio: ["pipe", "pipe", "pipe"],
       });
 

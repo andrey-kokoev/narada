@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { request as httpRequest } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -65,6 +65,43 @@ test('package owns the Narada agent runtime server bins and exports', () => {
   assert.equal(packageJson.exports['./runtime-server-events'], './src/runtime-server-events.mjs');
   assert.equal(packageJson.dependencies['@narada2/agent-cli'], undefined);
   assert.equal(packageJson.dependencies['@narada2/carrier-terminal-projection'], 'workspace:*');
+});
+
+test('WebSocket /events replays and reads durable events.jsonl beyond memory buffer', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'runtime-events-log-test-'));
+  try {
+    const eventsPath = join(root, 'events.jsonl');
+    writeFileSync(eventsPath, `${[
+      { event_sequence: 1, sequence: 1, event: 'session_started', session_id: 'runtime-package-test' },
+      { event_sequence: 2, sequence: 2, event: 'assistant_message', content: 'durable-old' },
+      { event_sequence: 3, sequence: 3, event: 'tool_call', tool_name: 'durable.tool' },
+      { event_sequence: 4, sequence: 4, event: 'assistant_message', content: 'durable-new' },
+    ].map((event) => JSON.stringify(event)).join('\n')}\n`, 'utf8');
+    const childStdin = new PassThrough();
+    const hub = createEventHub({ maxBuffer: 1 });
+    hub.publish({ event_sequence: 99, event: 'memory_only' });
+    const projection = await startEventStreamProjection({ childStdin, eventHub: hub, host: '127.0.0.1', port: 0, eventsPath });
+    const client = await connectWebSocket(projection.url);
+    try {
+      assert.equal((await client.nextJson()).event, 'websocket_connected');
+      client.sendJson({ id: 'events-1', method: 'session.events.subscribe', params: { include_replay: true, max_replay: 10, since_sequence: 1 } });
+      const started = await client.nextJson();
+      assert.equal(started.event, 'session_events_subscription_started');
+      assert.equal(started.replay_source, 'events_jsonl');
+      assert.equal(started.replay_count, 3);
+      assert.deepEqual([(await client.nextJson()).payload.event_sequence, (await client.nextJson()).payload.event_sequence, (await client.nextJson()).payload.event_sequence], [2, 3, 4]);
+      client.sendJson({ id: 'read-1', method: 'session.events.read', params: { before_sequence: 4, direction: 'backward', limit: 2 } });
+      const read = await client.nextJson();
+      assert.equal(read.event, 'session_events_read');
+      assert.equal(read.source, 'events_jsonl');
+      assert.deepEqual(read.events.map((event) => event.event_sequence), [2, 3]);
+    } finally {
+      client.close();
+      projection.server.close();
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test('carrier runtime package boundary forbids agent-cli adapter imports', () => {

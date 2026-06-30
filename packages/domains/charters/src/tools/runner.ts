@@ -7,7 +7,7 @@
  * Spec: .ai/do-not-open/tasks/20260414-007-assignment-agent-c-tool-binding-runtime.md
  */
 
-import { spawn } from "node:child_process";
+import { runGovernedCommand } from "@narada2/process-launch-posture";
 import type { ToolInvocationRequest } from "../runtime/envelope.js";
 import type { ToolDefinition } from "../types/coordinator.js";
 import type { ToolCatalogEntry } from "../runtime/envelope.js";
@@ -144,7 +144,7 @@ export class ToolRunner {
 
     return new Promise((resolve) => {
       const start = Date.now();
-      const child = spawn(executable, [JSON.stringify(args)], {
+      const child = runGovernedCommand(executable, [JSON.stringify(args)], {
         cwd: definition.working_directory ?? definition.repo_root ?? process.cwd(),
         stdio: ["ignore", "pipe", "pipe"],
       });

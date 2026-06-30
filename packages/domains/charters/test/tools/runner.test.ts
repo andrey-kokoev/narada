@@ -1,4 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { ToolRunner } from "../../src/tools/runner.js";
 import type { ToolInvocationRequest } from "../../src/runtime/envelope.js";
 import type { ToolDefinition } from "../../src/types/coordinator.js";
@@ -6,16 +9,33 @@ import type { ToolCatalogEntry, ToolCallRecord } from "../../src/tools/index.js"
 
 describe("ToolRunner", () => {
   let originalFetch: typeof globalThis.fetch;
+  let tempRoot: string;
   const records: ToolCallRecord[] = [];
 
   beforeEach(() => {
     originalFetch = globalThis.fetch;
+    tempRoot = mkdtempSync(join(tmpdir(), "narada-charter-tool-runner-"));
     records.length = 0;
   });
 
   afterEach(() => {
     globalThis.fetch = originalFetch;
+    rmSync(tempRoot, { recursive: true, force: true });
   });
+
+  function makeNodeToolExecutable(name: string, body: string): string {
+    const scriptPath = join(tempRoot, `${name}.mjs`);
+    writeFileSync(scriptPath, body, "utf8");
+    if (process.platform === "win32") {
+      const commandPath = join(tempRoot, `${name}.cmd`);
+      writeFileSync(commandPath, `@echo off\r\n"${process.execPath}" "${scriptPath}" %*\r\n`, "utf8");
+      return commandPath;
+    }
+    const commandPath = join(tempRoot, name);
+    writeFileSync(commandPath, `#!/usr/bin/env sh\nexec "${process.execPath}" "${scriptPath}" "$@"\n`, "utf8");
+    chmodSync(commandPath, 0o755);
+    return commandPath;
+  }
 
   function makeRunner(definitions: Record<string, ToolDefinition>) {
     return new ToolRunner({
@@ -41,11 +61,15 @@ describe("ToolRunner", () => {
 
   describe("local_executable", () => {
     it("runs a successful local command and parses JSON stdout", async () => {
+      const executablePath = makeNodeToolExecutable(
+        "echo-json",
+        "const input = JSON.parse(process.argv[2] ?? '{}'); console.log(JSON.stringify(input));\n",
+      );
       const runner = makeRunner({
         echo: {
           id: "echo",
           source_type: "local_executable",
-          executable_path: "echo",
+          executable_path: executablePath,
         },
       });
 
@@ -97,11 +121,12 @@ describe("ToolRunner", () => {
     });
 
     it("returns error for non-zero exit code", async () => {
+      const executablePath = makeNodeToolExecutable("false-command", "process.exit(1);\n");
       const runner = makeRunner({
         false_cmd: {
           id: "false_cmd",
           source_type: "local_executable",
-          executable_path: process.execPath,
+          executable_path: executablePath,
         },
       });
 

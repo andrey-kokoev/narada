@@ -1,5 +1,7 @@
 <script setup lang="ts">
+import { ref } from 'vue';
 import NarsSessionShell from './components/NarsSessionShell.vue';
+import { useAgentActivity } from './composables/useAgentActivity';
 import { useHealthStatus } from './composables/useHealthStatus';
 import { useNarsConnection } from './composables/useNarsConnection';
 import { useNarsEvents } from './composables/useNarsEvents';
@@ -17,11 +19,21 @@ interface AgentWebUiConfig {
 const props = defineProps<{ config: AgentWebUiConfig }>();
 const retained = useRetainedEvents();
 const projection = useProjectionVerbosity();
-const connection = useNarsConnection({ eventEndpoint: props.config.eventEndpoint, maxReplay: props.config.maxReplay }, retained.retain);
+const connection = useNarsConnection(
+  { eventEndpoint: props.config.eventEndpoint, maxReplay: props.config.maxReplay },
+  retained.retain,
+  retained.retainMany,
+);
 const events = useNarsEvents(retained.events, projection.verbosity);
+const agentActivity = useAgentActivity(retained.events);
 const health = useHealthStatus({ endpoint: props.config.healthEndpoint });
 const input = useOperatorInput(connection.connection, retained.retain, retained.clear);
 const draft = input.draft;
+const followLatestRevision = ref(0);
+
+function submitOperatorDraft() {
+  if (input.submit()) followLatestRevision.value += 1;
+}
 </script>
 
 <template>
@@ -36,7 +48,9 @@ const draft = input.draft;
     :verbosity="projection.verbosity.value"
     :verbosity-levels="projection.levels"
     :rows="events.rows.value"
+    :agent-activity="agentActivity.activity.value"
+    :follow-latest-revision="followLatestRevision"
     @update:verbosity="projection.setVerbosity"
-    @submit="input.submit"
+    @submit="submitOperatorDraft"
   />
 </template>

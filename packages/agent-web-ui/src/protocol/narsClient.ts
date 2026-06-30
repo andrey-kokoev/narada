@@ -1,4 +1,4 @@
-import { buildAgentWebUiSubscribeFrame, isAgentWebUiProtocolFrame } from '@narada2/nars-client-projection-contract';
+import { buildAgentWebUiEventsReadFrame, buildAgentWebUiSubscribeFrame, isAgentWebUiProtocolFrame } from '@narada2/nars-client-projection-contract';
 import { applyRuntimeEventToWebUiState, sequenceFromRuntimeMessage } from '../runtime-events.js';
 import { reconnectDelayForAttempt } from '../event-stream.js';
 
@@ -17,6 +17,7 @@ export interface NarsClientConnection {
   readonly lastSequence: number | null;
   getSocket(): WebSocket | null;
   sendFrame(frame: unknown): boolean;
+  readEventsPage(options: { beforeSequence?: number; afterSequence?: number; direction?: 'forward' | 'backward'; limit?: number }): boolean;
   close(): void;
 }
 
@@ -44,6 +45,9 @@ export function createNarsClient(options: NarsClientOptions): NarsClientConnecti
       if (!socket || socket.readyState !== openState) return false;
       socket.send(JSON.stringify(frame));
       return true;
+    },
+    readEventsPage(options) {
+      return connection.sendFrame(buildAgentWebUiEventsReadFrame(options));
     },
     close() {
       state.closed = true;

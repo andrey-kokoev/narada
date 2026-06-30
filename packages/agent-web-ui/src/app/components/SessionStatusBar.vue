@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import ProjectionVerbositySelect from './ProjectionVerbositySelect.vue';
+import type { AgentActivityState } from '../composables/useAgentActivity';
 import type { ProjectionVerbosity } from '../composables/useProjectionVerbosity';
 
 defineProps<{
@@ -11,8 +12,11 @@ defineProps<{
   droppedCount: number;
   verbosity: ProjectionVerbosity;
   verbosityLevels: readonly ProjectionVerbosity[];
+  agentActivity: AgentActivityState;
 }>();
-const emit = defineEmits<{ 'update:verbosity': [value: ProjectionVerbosity] }>();
+const emit = defineEmits<{
+  'update:verbosity': [value: ProjectionVerbosity];
+}>();
 </script>
 
 <template>
@@ -32,6 +36,9 @@ const emit = defineEmits<{ 'update:verbosity': [value: ProjectionVerbosity] }>()
     <div>
       <span class="label">State</span>
       <span>{{ healthText }}</span>
+      <span v-if="agentActivity.active" class="activity-chip" :data-activity-state="agentActivity.state">
+        {{ agentActivity.state }}<template v-if="agentActivity.elapsedSeconds >= 5"> · {{ agentActivity.elapsedSeconds }}s</template>
+      </span>
     </div>
     <div>
       <label class="label" for="projection-verbosity">View</label>

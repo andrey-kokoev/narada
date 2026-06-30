@@ -18,6 +18,7 @@ export const NARS_CLIENT_PROJECTION_VERBOSITY_RANK = Object.freeze({
 
 export const AGENT_WEB_UI_NARS_METHOD_LIST = Object.freeze([
   'session.events.subscribe',
+  'session.events.read',
   'conversation.send',
   'session.status',
   'session.health',
@@ -90,6 +91,22 @@ export const AGENT_WEB_UI_NARS_METHODS = new Set(AGENT_WEB_UI_NARS_METHOD_LIST);
 
 export function isAgentWebUiNarsMethod(method) {
   return AGENT_WEB_UI_NARS_METHODS.has(method);
+}
+
+export function buildAgentWebUiEventsReadFrame(options = {}) {
+  const params = {
+    limit: Number.isFinite(options.limit) ? options.limit : 100,
+  };
+  if (options.afterSequence !== undefined) params.after_sequence = options.afterSequence;
+  if (options.beforeSequence !== undefined) params.before_sequence = options.beforeSequence;
+  if (options.sinceTimestamp !== undefined) params.since_timestamp = options.sinceTimestamp;
+  if (options.direction !== undefined) params.direction = options.direction;
+  if (options.filters && typeof options.filters === 'object') params.filters = options.filters;
+  return {
+    id: options.id ?? `agent-web-ui-events-read-${Date.now()}`,
+    method: 'session.events.read',
+    params,
+  };
 }
 
 export function buildAgentWebUiHelpText() {
@@ -230,10 +247,17 @@ export function classifyNarsClientEventProjection(projection) {
 }
 
 export function shouldProjectNarsClientProjection(projection, options = {}) {
+  if (isRoutineStateSampleProjection(projection) && options.includeStateSamples !== true) return false;
   const verbosity = normalizeNarsClientProjectionVerbosity(options.verbosity);
   if (verbosity === 'raw') return true;
   const eventLevel = classifyNarsClientEventProjection(projection);
   return NARS_CLIENT_PROJECTION_VERBOSITY_RANK[eventLevel] <= NARS_CLIENT_PROJECTION_VERBOSITY_RANK[verbosity];
+}
+
+export function isRoutineStateSampleProjection(projection) {
+  const kind = projection?.kind ?? projection?.event?.event ?? 'unknown';
+  const event = projection?.event ?? projection;
+  return kind === 'websocket_connected' || (kind === 'session_health' && isRoutineHealthyNarsSessionHealth(event));
 }
 
 export function shouldProjectNarsClientEvent(message, options = {}) {

@@ -46,6 +46,7 @@
     "vitest": "^1.0.0"
   },
   "dependencies": {
+    "@narada2/process-launch-posture": "workspace:*",
     "zod": "^3.25.76"
   },
   "homepage": "https://github.com/andrey-kokoev/narada",

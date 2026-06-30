@@ -11,7 +11,7 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { spawn } from 'node:child_process';
+import { openBrowserUrl } from '@narada2/process-launch-posture';
 
 export interface RenderArtifacts {
   /** Directory containing the artifacts */
@@ -94,33 +94,13 @@ export async function writeRenderArtifacts(
 }
 
 /**
- * Attempt to open the given file path in the default browser.
- * Returns true if the spawn succeeded, false otherwise.
- * Never throws — failures are silently swallowed and reported as false.
+ * Request opening the given file path in the default browser.
+ * The posture wrapper hides helper consoles on Windows; this legacy boolean API
+ * only reports that the request was queued.
  */
 export function openBrowser(filePath: string): boolean {
-  const platform = process.platform;
-  let command: string;
-  let args: string[];
-
-  if (platform === 'darwin') {
-    command = 'open';
-    args = [filePath];
-  } else if (platform === 'win32') {
-    command = 'cmd';
-    args = ['/c', 'start', '', filePath];
-  } else {
-    command = 'xdg-open';
-    args = [filePath];
-  }
-
-  try {
-    const child = spawn(command, args, { detached: true, stdio: 'ignore' });
-    child.unref();
-    return true;
-  } catch {
-    return false;
-  }
+  void openBrowserUrl(filePath).catch(() => {});
+  return true;
 }
 
 /**

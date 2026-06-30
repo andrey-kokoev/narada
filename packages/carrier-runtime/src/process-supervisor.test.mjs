@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import {
   createOwnedProcess,
+  spawnOwnedProcess,
   terminateWindowsProcessTree,
   windowsProcessTreeKillArgs,
 } from './process-supervisor.mjs';
@@ -22,6 +23,18 @@ test('windows process tree cleanup targets the spawned pid recursively and hidde
     args: ['/PID', '1234', '/T', '/F'],
     options: { stdio: 'ignore', windowsHide: true },
   }]);
+});
+
+test('spawnOwnedProcess forces hidden provider subprocess posture', () => {
+  const owner = spawnOwnedProcess(process.execPath, ['--version'], {
+    stdio: 'ignore',
+  }, {
+    owner: 'provider-test',
+  });
+
+  assert.equal(typeof owner.pid, 'number');
+  const result = owner.terminateTree('test_cleanup');
+  assert.equal(result.owner, 'provider-test');
 });
 
 test('owned process terminateTree uses Windows tree cleanup before direct child kill', () => {

@@ -358,7 +358,7 @@ describe("KimiCliCharterRunner", () => {
           "--input-format",
           "text",
         ],
-        { stdio: ["pipe", "pipe", "pipe"] },
+        { stdio: ["pipe", "pipe", "pipe"], windowsHide: true },
       );
       const child = mockedSpawn.mock.results[0]?.value as { stdin?: { end?: ReturnType<typeof vi.fn> } };
       expect(child.stdin?.end).toHaveBeenCalledWith(expect.stringContaining("single JSON object"));

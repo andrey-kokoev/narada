@@ -2,6 +2,7 @@
 import ConversationTranscript from './ConversationTranscript.vue';
 import OperatorComposer from './OperatorComposer.vue';
 import SessionStatusBar from './SessionStatusBar.vue';
+import type { AgentActivityState } from '../composables/useAgentActivity';
 import type { ProjectionVerbosity } from '../composables/useProjectionVerbosity';
 import type { ProjectedEventRow } from '../lib/eventProjection';
 
@@ -15,6 +16,8 @@ const props = defineProps<{
   verbosity: ProjectionVerbosity;
   verbosityLevels: readonly ProjectionVerbosity[];
   rows: ProjectedEventRow[];
+  agentActivity: AgentActivityState;
+  followLatestRevision: number;
 }>();
 const draft = defineModel<string>('draft', { required: true });
 const emit = defineEmits<{
@@ -47,9 +50,10 @@ const emit = defineEmits<{
       :dropped-count="droppedCount"
       :verbosity="verbosity"
       :verbosity-levels="verbosityLevels"
+      :agent-activity="agentActivity"
       @update:verbosity="emit('update:verbosity', $event)"
     />
-    <ConversationTranscript :rows="rows" :verbosity="verbosity" />
+    <ConversationTranscript :rows="rows" :verbosity="verbosity" :agent-activity="agentActivity" :follow-latest-revision="followLatestRevision" />
     <OperatorComposer v-model="draft" @submit="emit('submit')" />
   </main>
 </template>

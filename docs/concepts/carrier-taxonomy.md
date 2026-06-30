@@ -121,5 +121,6 @@ The surface decides how to render the visible note. The transport decides how th
 
 - [`Agent Carrier`](agent-carrier.md) defines the runtime embodiment obligations for one durable Agent in one bounded carrier session.
 - [`Carrier Runtime Contract`](../architecture/carrier-runtime-contract.md) defines which runtime meanings must be shared across carriers.
+- [`Process Launch Posture Target`](../architecture/process-launch-posture.md) defines how carrier hosts, surfaces, MCP fabrics, provider adapters, and command runners may start OS processes without accidental visibility or lifecycle leaks.
 - [`Conversation Observer`](conversation-observer.md) defines observer visibility and interjection semantics that carriers must preserve.
 - [`Operator Surface`](operator-surface.md) defines presentation surfaces that may inhabit or observe work without becoming carrier authority.

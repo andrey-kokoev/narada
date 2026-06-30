@@ -8,6 +8,7 @@ import {
   NARS_COMMAND_METHOD,
   buildAgentWebUiConversationSendFrame,
   buildAgentWebUiConversationSteerFrame,
+  buildAgentWebUiEventsReadFrame,
   buildAgentWebUiHelpText,
   buildAgentWebUiOperatorInputAction,
   buildAgentWebUiSubscribeFrame,
@@ -23,6 +24,7 @@ test('NARS client projection contract owns attach commands and web UI capabiliti
   assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('conversation.send'), true);
   assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('conversation.interrupt'), true);
   assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('conversation.steer'), true);
+  assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('session.events.read'), true);
   assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('command.execute'), false);
   assert.equal(NARS_CLIENT_PROJECTION_REGISTRY.clients.agent_web_ui.admitted_methods, AGENT_WEB_UI_NARS_METHOD_LIST);
   assert.equal(NARS_CLIENT_PROJECTION_REGISTRY.clients.agent_tui.attach_template, 'agent-tui --attach <event_endpoint>');
@@ -45,6 +47,11 @@ test('NARS client projection contract owns web UI operator input projection', ()
     id: 'events-1',
     method: 'session.events.subscribe',
     params: { include_replay: true, max_replay: 20 },
+  });
+  assert.deepEqual(buildAgentWebUiEventsReadFrame({ id: 'events-read-1', beforeSequence: 50, direction: 'backward', limit: 25 }), {
+    id: 'events-read-1',
+    method: 'session.events.read',
+    params: { limit: 25, before_sequence: 50, direction: 'backward' },
   });
   assert.deepEqual(buildAgentWebUiConversationSendFrame('run startup sequence', { id: 'input-1' }), {
     id: 'input-1',
@@ -77,6 +84,7 @@ test('NARS client projection contract owns web UI operator input projection', ()
   assert.equal(isAgentWebUiNarsMethod('carrier.command.execute'), true);
   assert.equal(isAgentWebUiNarsMethod('command.execute'), false);
   assert.equal(isAgentWebUiProtocolFrame({ id: 'ok', method: 'conversation.send', params: {} }), true);
+  assert.equal(isAgentWebUiProtocolFrame({ id: 'read', method: 'session.events.read', params: {} }), true);
   assert.equal(isAgentWebUiProtocolFrame({ id: 'blocked', method: 'session.sync', params: {} }), false);
 });
 
@@ -120,12 +128,14 @@ test('NARS client projection verbosity filters shared event classes', () => {
   assert.equal(shouldProjectNarsClientEvent(turnComplete, { verbosity: 'diagnostics' }), true);
 
   assert.equal(shouldProjectNarsClientEvent(routineHealth, { verbosity: 'operations' }), false);
-  assert.equal(shouldProjectNarsClientEvent(routineHealth, { verbosity: 'diagnostics' }), true);
-  assert.equal(shouldProjectNarsClientEvent(routineHealth, { verbosity: 'raw' }), true);
+  assert.equal(shouldProjectNarsClientEvent(routineHealth, { verbosity: 'diagnostics' }), false);
+  assert.equal(shouldProjectNarsClientEvent(routineHealth, { verbosity: 'raw' }), false);
+  assert.equal(shouldProjectNarsClientEvent(routineHealth, { verbosity: 'raw', includeStateSamples: true }), true);
   assert.equal(shouldProjectNarsClientEvent(unhealthy, { verbosity: 'operations' }), true);
 
   assert.equal(shouldProjectNarsClientEvent({ event: 'websocket_connected' }, { verbosity: 'operations' }), false);
-  assert.equal(shouldProjectNarsClientEvent({ event: 'websocket_connected' }, { verbosity: 'diagnostics' }), true);
+  assert.equal(shouldProjectNarsClientEvent({ event: 'websocket_connected' }, { verbosity: 'diagnostics' }), false);
+  assert.equal(shouldProjectNarsClientEvent({ event: 'websocket_connected' }, { verbosity: 'raw', includeStateSamples: true }), true);
   assert.equal(shouldProjectNarsClientEvent({ event: 'unclassified_future_event' }, { verbosity: 'diagnostics' }), false);
   assert.equal(shouldProjectNarsClientEvent({ event: 'unclassified_future_event' }, { verbosity: 'raw' }), true);
 });

@@ -7,10 +7,11 @@ import { createServer } from 'node:http';
 import { PassThrough } from 'node:stream';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+import postcss from 'postcss';
 import {
   buildConversationSendFrame,
   buildConversationSteerFrame,
-  NARS_CLIENT_PROJECTION_DEFAULT_VERBOSITY,
+  buildEventsReadFrame,
   buildOperatorInputAction,
   buildSubscribeFrame,
   isAgentWebUiNarsMethod,
@@ -27,6 +28,7 @@ import {
   parseAgentWebUiArgs,
   startAgentWebUiServer,
 } from '../src/server.js';
+import { createSessionProjection } from '../src/session-projection.js';
 import {
   createEventHub,
   startEventStreamProjection,
@@ -107,6 +109,10 @@ test('agent-web-ui emits admitted NARS methods for event attach and operator inp
   assert.deepEqual(subscribe.params, { include_replay: true, max_replay: 25 });
   assert.equal(isAgentWebUiProtocolFrame(subscribe), true);
 
+  const readPage = buildEventsReadFrame({ id: 'read-1', beforeSequence: 50, direction: 'backward', limit: 25 });
+  assert.deepEqual(readPage, { id: 'read-1', method: 'session.events.read', params: { limit: 25, before_sequence: 50, direction: 'backward' } });
+  assert.equal(isAgentWebUiProtocolFrame(readPage), true);
+
   const input = buildConversationSendFrame('run startup sequence', { id: 'input-1' });
   assert.deepEqual(input, {
     id: 'input-1',
@@ -163,7 +169,22 @@ test('browser startup subscribes to events and submits operator text over the sa
   const documentRef = {
     getElementById(id) { return elements.get(id) ?? null; },
     createElement(name) { return new FakeElement(name); },
+    createTextNode(text) { return { tagName: '#TEXT', textContent: String(text ?? ''), children: [], dataset: {} }; },
   };
+  const eventRows = () => elements.get('events').children;
+  const activityRow = () => eventRows().find((child) => String(child.dataset.eventKind ?? '').startsWith('activity_')) ?? null;
+  const durableRows = () => eventRows().filter((child) => !String(child.dataset.eventKind ?? '').startsWith('activity_'));
+  const findDescendant = (root, predicate) => {
+    if (!root) return null;
+    if (predicate(root)) return root;
+    for (const child of root.children ?? []) {
+      const match = findDescendant(child, predicate);
+      if (match) return match;
+    }
+    return null;
+  };
+  const findByClass = (root, className) => findDescendant(root, (node) => String(node.className ?? '').split(/\s+/).includes(className));
+  const findByTag = (root, tagName) => findDescendant(root, (node) => node.tagName === tagName.toUpperCase());
   class FakeWebSocket {
     static OPEN = 1;
     static instances = [];
@@ -193,7 +214,7 @@ test('browser startup subscribes to events and submits operator text over the sa
   const started = startAgentWebUi({ windowRef, documentRef });
   const socket = FakeWebSocket.instances[0];
   assert.equal(started.socket, socket);
-  assert.equal(elements.get('projection-verbosity').value, NARS_CLIENT_PROJECTION_DEFAULT_VERBOSITY);
+  assert.equal(elements.get('projection-verbosity').value, 'conversation');
   assert.equal(socket.url, 'ws://127.0.0.1/events');
   assert.equal(elements.get('health-endpoint').textContent, '/api/health (http-proxy)');
   socket.emit('open');
@@ -207,54 +228,62 @@ test('browser startup subscribes to events and submits operator text over the sa
     method: 'conversation.send',
     params: { message: 'run startup sequence', source: 'agent-web-ui' },
   });
-  const operatorEchoRow = elements.get('events').children.at(-1);
+  const operatorEchoRow = durableRows().at(-1);
   assert.equal(operatorEchoRow.dataset.eventKind, 'operator_input_submitted');
   assert.equal(operatorEchoRow.dataset.eventTone, 'operator');
   assert.equal(operatorEchoRow.children.at(1).children.at(0).textContent, 'run startup sequence');
+  assert.equal(activityRow().dataset.eventKind, 'activity_queued');
+  assert.equal(activityRow().children.at(1).children.at(0).children.at(1).textContent, 'Waiting for agent...');
 
   socket.emit('message', { data: JSON.stringify({ event: 'session_event', cursor: { sequence: 40 }, payload: { event: 'user_message', request_id: socket.sent[1].id, content: 'run startup sequence', event_sequence: 40 } }) });
-  assert.equal(elements.get('events').children.at(-1), operatorEchoRow);
+  assert.equal(durableRows().at(-1), operatorEchoRow);
   assert.equal(operatorEchoRow.dataset.eventKind, 'user_message');
   assert.equal(operatorEchoRow.dataset.eventTone, 'operator');
 
   socket.emit('message', { data: JSON.stringify({ event: 'session_event', cursor: { sequence: 41 }, payload: { event: 'turn_started', turn_id: 'turn_active', event_sequence: 41 } }) });
+  assert.equal(activityRow().dataset.eventKind, 'activity_thinking');
   elements.get('operator-input').value = 'change course';
   elements.get('operator-form').submit();
   assert.equal(socket.sent[2].method, 'conversation.steer');
   assert.deepEqual(socket.sent[2].params, { message: 'change course', source: 'agent-web-ui', active_turn_id: 'turn_active' });
   socket.emit('message', { data: JSON.stringify({ event: 'session_event', cursor: { sequence: 42 }, payload: { event: 'assistant_message_stream', turn_id: 'turn_active', content: 'a', event_sequence: 42 } }) });
-  const assistantStreamRow = elements.get('events').children.at(-1);
+  const assistantStreamRow = durableRows().at(-1);
   assert.equal(assistantStreamRow.dataset.eventKind, 'assistant_message_stream');
+  assert.equal(activityRow().dataset.eventKind, 'activity_streaming');
   socket.emit('message', { data: JSON.stringify({ event: 'session_event', cursor: { sequence: 43 }, payload: { event: 'assistant_message_stream', turn_id: 'turn_active', content: 'c', event_sequence: 43 } }) });
-  assert.equal(elements.get('events').children.at(-1), assistantStreamRow);
+  assert.equal(durableRows().at(-1), assistantStreamRow);
   assert.equal(assistantStreamRow.children.at(1).children.at(0).textContent, 'ac');
   socket.emit('message', { data: JSON.stringify({ event: 'session_event', cursor: { sequence: 44 }, payload: { event: 'assistant_message', turn_id: 'turn_active', content: 'ack', event_sequence: 44 } }) });
-  assert.equal(elements.get('events').children.at(-1), assistantStreamRow);
+  assert.equal(durableRows().at(-1), assistantStreamRow);
   assert.equal(assistantStreamRow.dataset.eventKind, 'assistant_message');
   assert.equal(assistantStreamRow.children.at(1).children.at(0).textContent, 'ack');
-  const beforeProviderAssistantCount = elements.get('events').children.length;
+  assert.equal(activityRow(), null);
+  const beforeProviderAssistantCount = durableRows().length;
   socket.emit('message', { data: JSON.stringify({ agent_id: 'resident', session_id: 'carrier_test', event: { type: 'item.started', item: { id: 'provider_stream_1', type: 'agent_message', text: 'I am hydrating context first.' } } }) });
-  const providerStreamRow = elements.get('events').children.at(-1);
+  const providerStreamRow = durableRows().at(-1);
   assert.equal(providerStreamRow.dataset.eventKind, 'assistant_message_stream');
+  assert.equal(activityRow().dataset.eventKind, 'activity_streaming');
   socket.emit('message', { data: JSON.stringify({ agent_id: 'resident', session_id: 'carrier_test', event: { type: 'item.completed', item: { id: 'provider_final_1', type: 'agent_message', text: 'I am hydrating context first.\n\nStartup sequence completed.' } } }) });
-  assert.equal(elements.get('events').children.length, beforeProviderAssistantCount + 1);
-  const providerFinalRow = elements.get('events').children.at(-1);
+  assert.equal(durableRows().length, beforeProviderAssistantCount + 1);
+  const providerFinalRow = durableRows().at(-1);
   assert.notEqual(providerFinalRow, providerStreamRow);
   assert.equal(providerFinalRow.dataset.eventKind, 'assistant_message');
   assert.equal(providerFinalRow.children.at(1).children.at(0).textContent, 'I am hydrating context first.\n\nStartup sequence completed.');
   socket.emit('message', { data: JSON.stringify({ agent_id: 'resident', session_id: 'carrier_test', event: { type: 'item.completed', item: { id: 'provider_final_echo_1', type: 'agent_message', text: 'I am hydrating context first.\n\nStartup sequence completed.' } } }) });
-  assert.equal(elements.get('events').children.length, beforeProviderAssistantCount + 1);
-  assert.equal(elements.get('events').children.at(-1), providerFinalRow);
+  assert.equal(durableRows().length, beforeProviderAssistantCount + 1);
+  assert.equal(durableRows().at(-1), providerFinalRow);
   socket.emit('message', { data: JSON.stringify({ agent_id: 'resident', session_id: 'carrier_test', event: { type: 'item.completed', item: { id: 'provider_markdown_1', type: 'agent_message', text: 'markdown\n# Sample Report\n\n| Item | Status | Owner |\n|---|---|---|\n| Intake review | Done | Alex |\n| Implementation | In progress | Priya |\n| Verification | Pending | Sam |\n\n## Notes\n\n- Keep rows short and scannable.\n- Use clear status labels.\n- Add links or dates when needed.' } } }) });
-  const markdownRow = elements.get('events').children.at(-1);
-  const markdownSummary = markdownRow.children.at(1).children.at(0);
-  const markdownFrame = markdownSummary.children.at(0);
-  assert.equal(markdownFrame.className, 'message-part rendered-part-frame');
-  assert.equal(markdownFrame.children.at(0).children.at(0).textContent, 'markdown');
-  const markdownBody = markdownFrame.children.at(1).children.at(0);
-  assert.equal(markdownBody.className, 'message-markdown');
-  assert.equal(markdownBody.children.some((child) => child.tagName === 'TABLE'), true);
-  assert.equal(markdownBody.children.some((child) => child.tagName === 'UL'), true);
+  const markdownRow = durableRows().at(-1);
+  const markdownFrame = findByClass(markdownRow, 'rendered-part-frame');
+  assert.ok(markdownFrame, 'expected rendered markdown frame');
+  assert.equal(findByClass(markdownFrame, 'rendered-part-title'), null, 'content type title should not be persistently visible');
+  assert.ok(findByClass(markdownFrame, 'rendered-part-tabs'), 'expected right-edge view tabs');
+  assert.ok(findByClass(markdownFrame, 'rendered-part-copy'), 'expected copy button in Code view');
+  assert.equal(findByClass(markdownFrame, 'rendered-part-code-title')?.textContent, 'markdown');
+  const markdownBody = findByClass(markdownFrame, 'message-markdown');
+  assert.ok(markdownBody, 'expected rendered markdown body');
+  assert.ok(findByTag(markdownBody, 'table'), 'expected rendered markdown table');
+  assert.ok(findByTag(markdownBody, 'ul'), 'expected rendered markdown list');
   socket.emit('message', { data: JSON.stringify({ event: 'session_event', cursor: { sequence: 45 }, payload: { event: 'turn_complete', turn_id: 'turn_active', terminal_state: 'interrupted', event_sequence: 45 } }) });
   const beforeStatusNoiseCount = elements.get('events').children.length;
   socket.emit('message', { data: JSON.stringify({ event: 'session_health', status: 'healthy', agent_id: 'narada.test', session_id: 'carrier_test' }) });
@@ -262,22 +291,23 @@ test('browser startup subscribes to events and submits operator text over the sa
   assert.equal(elements.get('events').children.length, beforeStatusNoiseCount);
   elements.get('projection-verbosity').value = 'diagnostics';
   elements.get('projection-verbosity').change();
-  assert.equal(elements.get('events').children.some((child) => child.dataset.eventKind === 'session_health'), true);
-  assert.equal(elements.get('events').children.some((child) => child.dataset.eventKind === 'websocket_connected'), true);
+  assert.equal(elements.get('events').children.some((child) => child.dataset.eventKind === 'session_health'), false);
+  assert.equal(elements.get('events').children.some((child) => child.dataset.eventKind === 'websocket_connected'), false);
   elements.get('projection-verbosity').value = 'raw';
   elements.get('projection-verbosity').change();
   socket.emit('message', { data: JSON.stringify({ event: 'unclassified_future_event', content: 'raw only' }) });
-  assert.equal(elements.get('events').children.at(-1).dataset.eventKind, 'unclassified_future_event');
-  assert.equal(elements.get('events').children.at(-1).children.at(1).children.length, 2);
+  assert.equal(durableRows().at(-1).dataset.eventKind, 'unclassified_future_event');
+  assert.equal(durableRows().at(-1).children.at(1).children.length, 2);
   elements.get('projection-verbosity').value = 'operations';
   elements.get('projection-verbosity').change();
   assert.equal(elements.get('events').children.some((child) => child.dataset.eventKind === 'unclassified_future_event'), false);
   assert.equal(elements.get('events').children.some((child) => child.dataset.eventKind === 'session_health'), false);
   socket.emit('message', { data: JSON.stringify({ event_sequence: 46, sequence: 46, agent_id: 'resident', session_id: 'carrier_test', event: { type: 'item.started', item: { id: 'tool_1', type: 'mcp_tool_call', server: 'narada-sonar-agent-context', tool: 'agent_context_startup_sequence', status: 'in_progress' } } }) });
-  const toolRow = elements.get('events').children.at(-1);
+  const toolRow = durableRows().at(-1);
   assert.equal(toolRow.dataset.eventKind, 'tool_call');
+  assert.equal(activityRow().dataset.eventKind, 'activity_tool');
   socket.emit('message', { data: JSON.stringify({ event_sequence: 47, sequence: 47, agent_id: 'resident', session_id: 'carrier_test', event: { type: 'item.completed', item: { id: 'tool_1', type: 'mcp_tool_call', server: 'narada-sonar-agent-context', tool: 'agent_context_startup_sequence', status: 'completed', result: { content: [{ type: 'text', text: '{"status":"ok"}' }] } } } }) });
-  assert.equal(elements.get('events').children.at(-1), toolRow);
+  assert.equal(durableRows().at(-1), toolRow);
   assert.equal(toolRow.dataset.eventKind, 'tool_result');
   assert.equal(toolRow.children.at(1).children.at(0).textContent, 'narada-sonar-agent-context.agent_context_startup_sequence complete');
   assert.notEqual(toolRow.children.at(1).children.at(0).textContent, '[object Object]');
@@ -362,10 +392,33 @@ test('web UI projection normalizes nested provider events and suppresses status 
   assert.equal(assistantProjection.kind, 'assistant_message');
   assert.equal(assistantProjection.summary, 'Startup sequence completed.');
   assert.equal(shouldRenderRuntimeEvent({ event: 'session_health', status: 'healthy' }), false);
-  assert.equal(shouldRenderRuntimeEvent({ event: 'session_health', status: 'healthy' }, { verbosity: 'diagnostics' }), true);
-  assert.equal(shouldRenderRuntimeEvent({ event: 'session_health', status: 'healthy' }, { verbosity: 'raw' }), true);
-  assert.equal(shouldRenderRuntimeEvent({ event: 'websocket_connected' }), false);
+  assert.equal(shouldRenderRuntimeEvent({ event: 'session_health', status: 'healthy' }, { verbosity: 'diagnostics' }), false);
+  assert.equal(shouldRenderRuntimeEvent({ event: 'session_health', status: 'healthy' }, { verbosity: 'raw' }), false);
+  assert.equal(shouldRenderRuntimeEvent({ event: 'session_health', status: 'degraded' }, { verbosity: 'diagnostics' }), true);
+  assert.equal(shouldRenderRuntimeEvent({ event: 'websocket_connected' }, { verbosity: 'raw' }), false);
   assert.equal(shouldRenderRuntimeEvent({ event: 'session_event', payload: { event: 'assistant_message', content: 'ok' } }), true);
+});
+
+test('session projection reduces routine health into state and clears completed tool activity', () => {
+  const events = [
+    { event: 'session_health', status: 'healthy', agent_id: 'resident', session_id: 'carrier_test', timestamp: '2026-06-30T15:00:00.000Z' },
+    { event: 'session_health', status: 'healthy', agent_id: 'resident', session_id: 'carrier_test', timestamp: '2026-06-30T15:00:10.000Z' },
+    { event_sequence: 10, sequence: 10, agent_id: 'resident', session_id: 'carrier_test', timestamp: '2026-06-30T15:00:11.000Z', event: { type: 'item.started', item: { id: 'tool_1', type: 'mcp_tool_call', server: 'narada-sonar-agent-context', tool: 'agent_context_startup_sequence' } } },
+    { event_sequence: 11, sequence: 11, agent_id: 'resident', session_id: 'carrier_test', timestamp: '2026-06-30T15:00:12.000Z', event: { type: 'item.completed', item: { id: 'tool_1', type: 'mcp_tool_call', server: 'narada-sonar-agent-context', tool: 'agent_context_startup_sequence', result: { content: [{ type: 'text', text: '{"status":"ok"}' }] } } } },
+    { event: 'session_health', status: 'healthy', agent_id: 'resident', session_id: 'carrier_test', timestamp: '2026-06-30T15:04:00.000Z' },
+  ];
+  const projection = createSessionProjection(events, { verbosity: 'diagnostics', nowMs: Date.parse('2026-06-30T15:04:36.000Z') });
+  assert.equal(projection.health.status, 'healthy');
+  assert.equal(projection.health.healthySampleCount, 3);
+  assert.equal(projection.rows.some((row) => row.kind === 'session_health'), false);
+  assert.equal(projection.rows.some((row) => row.kind === 'websocket_connected'), false);
+  assert.equal(projection.rows.some((row) => row.kind === 'tool_result'), true);
+  assert.equal(projection.activity.active, true);
+  assert.equal(projection.activity.state, 'thinking');
+  assert.notEqual(projection.activity.state, 'tool');
+
+  const completeProjection = createSessionProjection([...events, { event: 'turn_complete', turn_id: 'turn_after_tool', terminal_state: 'completed', timestamp: '2026-06-30T15:04:37.000Z' }], { verbosity: 'diagnostics' });
+  assert.equal(completeProjection.activity.active, false);
 });
 
 test('Vue operator components expose composer without hidden privileged controls', async () => {
@@ -384,6 +437,7 @@ test('Vue layout smoke covers shell, status, event list, composer, and event ton
   const shell = await readFile(new URL('../src/app/components/NarsSessionShell.vue', import.meta.url), 'utf8');
   const transcript = await readFile(new URL('../src/app/components/ConversationTranscript.vue', import.meta.url), 'utf8');
   const status = await readFile(new URL('../src/app/components/SessionStatusBar.vue', import.meta.url), 'utf8');
+  const retainedEvents = await readFile(new URL('../src/app/composables/useRetainedEvents.ts', import.meta.url), 'utf8');
   const selectorComponent = await readFile(new URL('../src/app/components/ProjectionVerbositySelect.vue', import.meta.url), 'utf8');
   const composer = await readFile(new URL('../src/app/components/OperatorComposer.vue', import.meta.url), 'utf8');
   const css = await readFile(new URL('../src/agent-web-ui.css', import.meta.url), 'utf8');
@@ -393,10 +447,80 @@ test('Vue layout smoke covers shell, status, event list, composer, and event ton
   for (const marker of ['id="events"', 'id="projection-verbosity"', 'class="composer"', 'id="operator-input"']) {
     assert.equal([transcript, status, selectorComponent, composer].some((source) => source.includes(marker)), true, marker);
   }
-  for (const cssSelector of ['.shell', '.status', '.status select', '.events', '.composer', '.event-tone-assistant', '.event-tone-error']) {
+  assert.match(shell, /follow-latest-revision="followLatestRevision"/);
+  assert.match(transcript, /followLatestRevision/);
+  assert.match(transcript, /nextTick\(scrollToBottom\)/);
+  assert.match(retainedEvents, /Number\.POSITIVE_INFINITY/);
+  assert.match(css, /content-visibility:\s*auto/);
+  assert.doesNotMatch(transcript, /visibleItems|ResizeObserver|event-virtual-item/);
+  assert.doesNotMatch(transcript, /scrollTop\s*</);
+  assert.doesNotMatch(transcript, /loadOlder|history-loading/);
+  assert.doesNotMatch(css, /\.history-loading/);
+  for (const cssSelector of ['.shell', '.status', '.status select', '.events', '.events-scroll', '.composer', '.event-tone-assistant', '.event-tone-error']) {
     assert.equal(css.includes(cssSelector), true, cssSelector);
   }
 });
+
+test('agent-web-ui CSS enforces theme-token discipline for new color declarations', async () => {
+  const css = await readFile(new URL('../src/agent-web-ui.css', import.meta.url), 'utf8');
+  const root = postcss.parse(css, { from: 'agent-web-ui.css' });
+  const violations = rawColorDeclarationViolations(root);
+  assert.deepEqual(violations, []);
+
+  const lightTokens = rawColorTokensInRoot(root, { dark: false });
+  const darkTokens = rawColorTokensInRoot(root, { dark: true });
+  const missingDarkTokens = [...lightTokens].filter((token) => !darkTokens.has(token));
+  assert.deepEqual(missingDarkTokens, []);
+});
+
+function rawColorDeclarationViolations(root) {
+  const violations = [];
+  root.walkDecls((declaration) => {
+    if (!hasRawColor(declaration.value)) return;
+    const parentRule = nearestRule(declaration);
+    if (parentRule?.selector === ':root' && declaration.prop.startsWith('--')) return;
+    violations.push(`${locationLabel(declaration)} ${parentRule?.selector ?? '<root>'} { ${declaration.prop}: ${declaration.value}; }`);
+  });
+  return violations;
+}
+
+function rawColorTokensInRoot(root, { dark }) {
+  const tokens = new Set();
+  root.walkDecls((declaration) => {
+    if (!declaration.prop.startsWith('--') || !hasRawColor(declaration.value)) return;
+    const parentRule = nearestRule(declaration);
+    if (parentRule?.selector !== ':root') return;
+    if (isInsideDarkMedia(declaration) !== dark) return;
+    tokens.add(declaration.prop);
+  });
+  return tokens;
+}
+
+function nearestRule(node) {
+  let current = node.parent;
+  while (current) {
+    if (current.type === 'rule') return current;
+    current = current.parent;
+  }
+  return null;
+}
+
+function isInsideDarkMedia(node) {
+  let current = node.parent;
+  while (current) {
+    if (current.type === 'atrule' && current.name === 'media' && current.params.includes('prefers-color-scheme: dark')) return true;
+    current = current.parent;
+  }
+  return false;
+}
+
+function hasRawColor(value) {
+  return /#[0-9a-fA-F]{3,8}|rgba?\(/.test(value);
+}
+
+function locationLabel(node) {
+  return `${node.source?.start?.line ?? '?'}:${node.source?.start?.column ?? '?'}`;
+}
 
 test('Vue message content renderer has typed parts, inline code, and lazy Mermaid fallback', async () => {
   const eventRow = await readFile(new URL('../src/app/components/EventRow.vue', import.meta.url), 'utf8');
@@ -421,9 +545,17 @@ test('Vue message content renderer has typed parts, inline code, and lazy Mermai
   assert.match(markdownPart, /linkify: true/);
   assert.match(markdownPart, /v-html="renderedMarkdown"/);
   assert.match(renderedFrame, /activeView = ref<'render' \| 'code'>\('render'\)/);
+  assert.match(renderedFrame, /copySource/);
+  assert.match(renderedFrame, /class="rendered-part-copy"/);
+  assert.doesNotMatch(renderedFrame, /rendered-part-title/);
   assert.match(renderedFrame, />Code<\/button>/);
   assert.match(renderedFrame, />Render<\/button>/);
-  assert.equal(parser.includes('\\n\\s*\\|?\\s*:?-{3,}:?\\s*\\|'), true);
+  assert.match(css, /\.rendered-part-tabs[\s\S]*?flex-direction: column/);
+  assert.doesNotMatch(css, /\.rendered-part-tab[\s\S]*?writing-mode/);
+  assert.match(css, /\.rendered-part-tab[\s\S]*?text-align: left/);
+  assert.match(css, /\.rendered-part-code pre[\s\S]*?white-space: pre-wrap/);
+  assert.match(css, /\.rendered-part-copy[\s\S]*?cursor: pointer/);
+  assert.equal(parser.includes('(?:^|\\n)\\s*[-*+]\\s+'), true);
   assert.match(mermaidPart, /import\('mermaid'\)/);
   assert.match(mermaidPart, /nextMermaidInstanceId/);
   assert.match(mermaidPart, /securityLevel: 'strict'/);
@@ -626,6 +758,6 @@ test('CLI args and client config keep runtime authority outside the web package'
     protocolHealthMethod: 'session.health',
     maxReplay: 100,
     operatorInput: true,
-    admittedMethods: ['session.events.subscribe', 'conversation.send', 'session.status', 'session.health', 'session.recovery', 'session.operations', 'observers.status', 'observer.mute', 'observer.unmute', 'carrier.command.execute', 'conversation.interrupt', 'conversation.steer', 'session.close'],
+    admittedMethods: ['session.events.subscribe', 'session.events.read', 'conversation.send', 'session.status', 'session.health', 'session.recovery', 'session.operations', 'observers.status', 'observer.mute', 'observer.unmute', 'carrier.command.execute', 'conversation.interrupt', 'conversation.steer', 'session.close'],
   });
 });

@@ -266,6 +266,7 @@ export const CARRIER_CONTROL_METHODS = Object.freeze([
   'session.status',
   'session.health',
   'session.events.subscribe',
+  'session.events.read',
   'session.recovery',
   'session.operations',
   'preflight.recovery',
@@ -370,6 +371,7 @@ export function classifyCarrierControlRequest(request = {}) {
   if (method === 'session.status') return { ...base, method_kind: 'session_status', allowed_when_closed: true };
   if (method === 'session.health') return { ...base, method_kind: 'session_health', allowed_when_closed: true, concurrent_allowed: true };
   if (method === 'session.events.subscribe') return { ...base, method_kind: 'session_events_subscribe', allowed_when_closed: true, concurrent_allowed: true };
+  if (method === 'session.events.read') return { ...base, method_kind: 'session_events_read', allowed_when_closed: true, concurrent_allowed: true };
   if (method === 'session.recovery') return { ...base, method_kind: 'session_recovery' };
   if (method === 'session.operations') return { ...base, method_kind: 'session_operations' };
   if (method === 'preflight.recovery') return { ...base, method_kind: 'preflight_recovery' };

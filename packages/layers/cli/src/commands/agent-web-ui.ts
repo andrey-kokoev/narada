@@ -1,5 +1,5 @@
 import type { CommandContext } from '../lib/command-wrapper.js';
-import { spawn } from 'node:child_process';
+import { openBrowserUrl } from '@narada2/process-launch-posture';
 import { formattedResult, type CliFormat } from '../lib/cli-output.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { narsAttachCommandCommand, narsSessionsCommand } from './nars.js';
@@ -18,17 +18,6 @@ export interface AgentWebUiAttachOptions {
   format?: CliFormat;
   launchRegistryPath?: string;
   open?: boolean;
-}
-
-function openBrowserUrl(url: string): Promise<void> {
-  const command = process.platform === 'win32' ? 'cmd.exe' : (process.platform === 'darwin' ? 'open' : 'xdg-open');
-  const args = process.platform === 'win32' ? ['/c', 'start', '', url] : [url];
-  return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { detached: true, stdio: 'ignore' });
-    child.once('error', reject);
-    child.once('spawn', resolve);
-    child.unref();
-  });
 }
 
 interface ResolvedAttachSession {

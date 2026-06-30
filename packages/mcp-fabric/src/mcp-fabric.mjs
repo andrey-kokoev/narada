@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { basename, isAbsolute, join, normalize, relative, resolve } from 'node:path';
-import { spawn } from 'node:child_process';
+import { spawnHiddenPostureProcess } from '@narada2/process-launch-posture';
 import { fileURLToPath } from 'node:url';
 import { loadMcpSurfaceRegistry, registrySurfaces, siteControlRoot } from '../../carrier-action-admission/src/tool-metadata.mjs';
 
@@ -323,9 +323,9 @@ async function probeMcpServer({ siteRoot, serverName, server, sourceFile, config
   }
 
   try {
-    proc = spawn(server.command, server.args ?? [], {
+    proc = spawnHiddenPostureProcess(server.command, server.args ?? [], {
+      posture: 'mcp_server',
       cwd: siteRoot,
-      windowsHide: true,
       env: {
         ...process.env,
         ...projectServerEnvironment(server, env),

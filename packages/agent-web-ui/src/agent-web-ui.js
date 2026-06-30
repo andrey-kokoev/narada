@@ -1,6 +1,7 @@
 import {
   AGENT_WEB_UI_NARS_METHOD_LIST,
   AGENT_WEB_UI_NARS_METHODS,
+  buildAgentWebUiEventsReadFrame as buildEventsReadFrame,
   isAgentWebUiNarsMethod,
   isAgentWebUiProtocolFrame,
 } from '@narada2/nars-client-projection-contract';
@@ -25,6 +26,8 @@ import {
 } from './runtime-events.js';
 import { rerenderEvents, setText } from './render.js';
 
+export const AGENT_WEB_UI_DEFAULT_VERBOSITY = 'conversation';
+
 export {
   AGENT_WEB_UI_NARS_METHOD_LIST,
   AGENT_WEB_UI_NARS_METHODS,
@@ -36,6 +39,7 @@ export {
   normalizeNarsClientProjectionVerbosity,
   projectRuntimeEvent,
   shouldRenderRuntimeEvent,
+  buildEventsReadFrame,
   buildConversationSendFrame,
   buildConversationSteerFrame,
   buildOperatorInputAction,
@@ -76,7 +80,7 @@ function bindProjectionVerbositySelector(documentRef) {
       selector.append(option);
     }
   }
-  selector.value = normalizeNarsClientProjectionVerbosity(selector.value || NARS_CLIENT_PROJECTION_DEFAULT_VERBOSITY);
+  selector.value = normalizeNarsClientProjectionVerbosity(selector.value || AGENT_WEB_UI_DEFAULT_VERBOSITY);
   selector.addEventListener?.('change', () => rerenderEvents(documentRef));
 }
 

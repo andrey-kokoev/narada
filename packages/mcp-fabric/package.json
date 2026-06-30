@@ -14,6 +14,7 @@
     "typecheck": "tsc --noEmit --allowJs --checkJs false src/mcp-fabric.mjs"
   },
   "dependencies": {
-    "@narada2/carrier-action-admission": "workspace:*"
+    "@narada2/carrier-action-admission": "workspace:*",
+    "@narada2/process-launch-posture": "workspace:*"
   }
 }

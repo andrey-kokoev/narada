@@ -6,7 +6,7 @@ This document defines the implementation-facing shape of the Narada Agent Runtim
 
 The concept document [`narada-agent-runtime-server.md`](narada-agent-runtime-server.md) defines what NARS is. This document defines the contract implementation code should converge on: package ownership, launch boundary, session protocol, event shape, carrier adapter boundary, and verification expectations.
 
-The full target for session discovery, liveness, attachment, and recovery is [`nars-session-management.md`](nars-session-management.md).
+The full target for session discovery, liveness, attachment, and recovery is [`nars-session-management.md`](nars-session-management.md). The target for authenticated remote browser observation through Cloudflare or equivalent ingress is [`nars-remote-projection-gateway.md`](nars-remote-projection-gateway.md).
 
 NARS is the Narada-owned runtime server contract for durable, machine-addressable agent sessions. It is not a synonym for Codex, `agent-cli`, a terminal, a transcript, or a model SDK.
 
@@ -326,7 +326,7 @@ NARS does not define a separate HTTP `GET /ready` endpoint yet. Readiness is a f
 
 ## Event Subscription Contract
 
-NARS event subscription is owned by `@narada2/agent-runtime-server`. The canonical protocol method is `session.events.subscribe`; WebSocket `/events`, raw stdout JSONL, terminal projections, and future SSE transports are projections over the same sequenced runtime event stream.
+NARS event subscription is owned by `@narada2/agent-runtime-server`. The canonical live-tail protocol method is `session.events.subscribe`; WebSocket `/events`, raw stdout JSONL, terminal projections, and future SSE transports are projections over the same sequenced runtime event stream. Durable history reads use `session.events.read` against the session `events.jsonl` log; clients should not depend on a WebSocket's in-memory replay buffer for full transcript recovery.
 
 `session.events.subscribe` request parameters:
 
@@ -377,6 +377,25 @@ Live and replayed events are wrapped for subscription transports using `narada.n
   "payload": { "event": "assistant_message", "event_sequence": 46 }
 }
 ```
+
+`session.events.read` pages the durable event log and is the canonical way for a browser or secondary projection to backfill older history:
+
+```json
+{
+  "id": "events-read-1",
+  "method": "session.events.read",
+  "params": {
+    "before_sequence": 42,
+    "direction": "backward",
+    "limit": 100,
+    "filters": {
+      "event_kinds": ["assistant_message", "tool_call", "tool_result"]
+    }
+  }
+}
+```
+
+The response schema is `narada.nars.events.read.v1` with `event: "session_events_read"`, `source: "events_jsonl"`, ordered `events`, `event_count`, `has_more`, and a cursor containing `before_sequence`, `after_sequence`, `last_sequence`, and `next_sequence`. Backward reads return events in chronological order within the returned page. Clients merge pages by event sequence and must de-duplicate replayed or overlapping events.
 
 Backpressure is local-runtime policy. The minimum contract is deterministic bounded buffering: slow subscribers may be dropped or receive a structured error, but must not block the carrier event loop or corrupt durable `events.jsonl`. Reconnect uses the last acknowledged `cursor.sequence` as `since_sequence`; clients should tolerate idempotent replay of the last seen event and de-duplicate by sequence.
 

@@ -1,4 +1,5 @@
-import { spawn, spawnSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
+import { spawnHiddenPostureProcess } from '@narada2/process-launch-posture';
 
 function isLiveProcess(child) {
   return child && !child.killed && child.exitCode === null && child.signalCode === null;
@@ -69,7 +70,10 @@ function createOwnedProcess(child, options = {}) {
 }
 
 function spawnOwnedProcess(command, args = [], spawnOptions = {}, supervisorOptions = {}) {
-  const child = spawn(command, args, spawnOptions);
+  const child = spawnHiddenPostureProcess(command, args, {
+    ...spawnOptions,
+    posture: supervisorOptions.posture ?? 'provider_subprocess',
+  });
   return createOwnedProcess(child, supervisorOptions);
 }
 

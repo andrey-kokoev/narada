@@ -3,6 +3,7 @@ import { createServer } from 'node:http';
 import { PassThrough } from 'node:stream';
 import { createCarrierRuntimeContext } from '@narada2/carrier-runtime/carrier-runtime-context';
 import { createCarrierRuntimeDependencies } from '@narada2/carrier-runtime/runtime-dependencies';
+import { readNarsEventLogPage } from '@narada2/carrier-runtime/nars-event-log';
 import { runCarrierServerMode } from '@narada2/carrier-runtime/server-mode';
 import { createProjectedTerminalBridge } from '@narada2/carrier-terminal-projection/projected-terminal';
 import {
@@ -116,7 +117,7 @@ function decodeWebSocketFrames(buffer) {
   return { frames, rest: buffer.subarray(offset) };
 }
 
-function startEventStreamProjection({ childStdin, eventHub, host, port }) {
+function startEventStreamProjection({ childStdin, eventHub, host, port, eventsPath = null }) {
   const server = createServer((request, response) => {
     response.writeHead(426, { 'content-type': 'application/json' });
     response.end(`${JSON.stringify({ error: 'upgrade_required', transport: 'websocket', path: '/events' })}\n`);
@@ -166,7 +167,14 @@ function startEventStreamProjection({ childStdin, eventHub, host, port }) {
           const subscriptionId = params.subscription_id ?? `sub_${message.id ?? Date.now()}`;
           const subscription = eventHub.subscribe({ subscriptionId, filters, send });
           subscriptions.add(subscription);
-          const replay = params.include_replay === false ? [] : eventHub.replayFor({
+          const replayPage = params.include_replay === false || !eventsPath ? null : readNarsEventLogPage({
+            eventsPath,
+            afterSequence: params.since_sequence,
+            sinceTimestamp: params.since_timestamp,
+            filters,
+            limit: params.max_replay ?? 100,
+          });
+          const replay = replayPage ? replayPage.events : eventHub.replayFor({
             sinceSequence: params.since_sequence,
             sinceTimestamp: params.since_timestamp,
             filters,
@@ -179,12 +187,31 @@ function startEventStreamProjection({ childStdin, eventHub, host, port }) {
             subscription_id: subscriptionId,
             transport: 'websocket',
             replay_count: replay.length,
-            cursor: eventHub.cursor(),
+            replay_source: replayPage ? replayPage.source : 'memory_event_hub',
+            cursor: replayPage?.cursor ?? eventHub.cursor(),
             filters,
           });
           for (const event of replay) {
             send({ schema: 'narada.nars.events.envelope.v1', event: 'session_event', subscription_id: subscriptionId, cursor: { sequence: event.event_sequence, next_sequence: event.event_sequence + 1 }, payload: event });
           }
+          continue;
+        }
+        if (message.method === 'session.events.read') {
+          const params = message.params ?? {};
+          send({
+            ...readNarsEventLogPage({
+              eventsPath,
+              afterSequence: params.after_sequence ?? params.since_sequence,
+              beforeSequence: params.before_sequence,
+              sinceTimestamp: params.since_timestamp,
+              filters: params.filters,
+              limit: params.limit ?? params.max_replay ?? 100,
+              direction: params.direction,
+            }),
+            event: 'session_events_read',
+            request_id: message.id ?? null,
+            transport: 'websocket',
+          });
           continue;
         }
         const stdin = typeof childStdin === 'function' ? childStdin() : childStdin;
@@ -540,6 +567,12 @@ async function main() {
   const eventHub = createEventHub();
   const runtimeInput = new PassThrough();
   const runtimeOutput = new PassThrough();
+  const preliminaryRuntimeContext = createCarrierRuntimeContext({
+    identity: lifecycleBinding.agent_id,
+    session: lifecycleBinding.session_id,
+    siteRoot: process.env.NARADA_SITE_ROOT,
+    operatorSurfaceKind,
+  });
   if (parsedHealth.health.enabled) {
     healthProjection = await startHealthProjection({
       childStdin: () => runtimeInput,
@@ -554,6 +587,7 @@ async function main() {
       eventHub,
       host: parsedEvents.events.host,
       port: parsedEvents.events.port,
+      eventsPath: preliminaryRuntimeContext.eventsPath,
     });
     process.env.NARADA_EVENT_STREAM_URL = eventStreamProjection.url;
     process.env.NARADA_WEBSOCKET_URL = eventStreamProjection.url;
@@ -580,6 +614,8 @@ async function main() {
     operationHeartbeatDirectiveInitialDelayMs: Number.parseInt(process.env.NARADA_OPERATION_HEARTBEAT_DIRECTIVE_INITIAL_DELAY_MS ?? '60000', 10),
     healthUrl: process.env.NARADA_HEALTH_URL ?? null,
     eventStreamUrl: process.env.NARADA_EVENT_STREAM_URL ?? null,
+    eventsPath: preliminaryRuntimeContext.eventsPath,
+    sessionPath: preliminaryRuntimeContext.sessionPath,
   });
   const runtimeDependencies = await loadRuntimeDependencies(runtimeContext);
 

@@ -1,3 +1,4 @@
+import { createSessionProjection, classifyRuntimeMessage } from './session-projection.js';
 import { NARS_CLIENT_PROJECTION_DEFAULT_VERBOSITY, normalizeNarsClientProjectionVerbosity, projectRuntimeEvent, shouldRenderRuntimeProjection } from './runtime-events.js';
 
 export function setText(id, text, documentRef = document) {
@@ -31,31 +32,48 @@ function appendSummaryContent(container, value, documentRef) {
 function createRenderedMarkdownFrame(markdownText, documentRef) {
   const figure = documentRef.createElement('figure');
   figure.className = 'message-part rendered-part-frame';
-  const header = documentRef.createElement('figcaption');
-  header.className = 'rendered-part-header';
-  const title = documentRef.createElement('span');
-  title.className = 'rendered-part-title';
-  title.textContent = 'markdown';
-  const tabs = documentRef.createElement('span');
+  const tabs = documentRef.createElement('div');
   tabs.className = 'rendered-part-tabs';
+  tabs.setAttribute?.('role', 'tablist');
+  tabs.setAttribute?.('aria-label', 'markdown view');
   const renderButton = createRenderedPartTab('Render', true, documentRef);
   const codeButton = createRenderedPartTab('Code', false, documentRef);
-  tabs.append(codeButton, renderButton);
-  header.append(title, tabs);
+  tabs.append(renderButton, codeButton);
 
   const renderPanel = documentRef.createElement('div');
   renderPanel.className = 'rendered-part-render';
+  renderPanel.setAttribute?.('role', 'tabpanel');
   renderPanel.append(renderMarkdownToDom(markdownText, documentRef));
   const codePanel = documentRef.createElement('div');
   codePanel.className = 'rendered-part-code';
+  codePanel.setAttribute?.('role', 'tabpanel');
   codePanel.hidden = true;
-  const language = documentRef.createElement('figcaption');
-  language.textContent = 'markdown';
+  const toolbar = documentRef.createElement('div');
+  toolbar.className = 'rendered-part-code-toolbar';
+  const codeTitle = documentRef.createElement('span');
+  codeTitle.className = 'rendered-part-code-title';
+  codeTitle.textContent = 'markdown';
+  const copyButton = documentRef.createElement('button');
+  copyButton.type = 'button';
+  copyButton.className = 'rendered-part-copy';
+  copyButton.textContent = 'Copy';
+  copyButton.addEventListener?.('click', async () => {
+    try {
+      await globalThis.navigator?.clipboard?.writeText?.(markdownText);
+      copyButton.textContent = 'Copied';
+    } catch {
+      copyButton.textContent = 'Failed';
+    }
+    globalThis.setTimeout?.(() => {
+      copyButton.textContent = 'Copy';
+    }, 1400);
+  });
+  toolbar.append(codeTitle, copyButton);
   const pre = documentRef.createElement('pre');
   const code = documentRef.createElement('code');
   code.textContent = markdownText;
   pre.append(code);
-  codePanel.append(language, pre);
+  codePanel.append(toolbar, pre);
 
   const activate = (view) => {
     const renderActive = view === 'render';
@@ -65,19 +83,22 @@ function createRenderedMarkdownFrame(markdownText, documentRef) {
     codeButton.dataset.active = renderActive ? 'false' : 'true';
     renderButton.className = `rendered-part-tab${renderActive ? ' is-active' : ''}`;
     codeButton.className = `rendered-part-tab${renderActive ? '' : ' is-active'}`;
+    renderButton.setAttribute?.('aria-selected', renderActive ? 'true' : 'false');
+    codeButton.setAttribute?.('aria-selected', renderActive ? 'false' : 'true');
   };
   renderButton.addEventListener?.('click', () => activate('render'));
   codeButton.addEventListener?.('click', () => activate('code'));
-  figure.append(header, renderPanel, codePanel);
+  figure.append(renderPanel, codePanel, tabs);
   return figure;
 }
-
 function createRenderedPartTab(label, active, documentRef) {
   const button = documentRef.createElement('button');
   button.type = 'button';
   button.className = `rendered-part-tab${active ? ' is-active' : ''}`;
   button.dataset.active = active ? 'true' : 'false';
   button.textContent = label;
+  button.setAttribute?.('role', 'tab');
+  button.setAttribute?.('aria-selected', active ? 'true' : 'false');
   return button;
 }
 
@@ -88,6 +109,23 @@ function renderMarkdownToDom(markdownText, documentRef) {
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index];
     if (!line.trim()) continue;
+    const fence = line.match(/^```([^`]*)\s*$/);
+    if (fence) {
+      const block = documentRef.createElement('pre');
+      const code = documentRef.createElement('code');
+      const language = String(fence[1] ?? '').trim();
+      if (language) code.className = `language-${language}`;
+      const content = [];
+      index += 1;
+      while (index < lines.length && !/^```\s*$/.test(lines[index])) {
+        content.push(lines[index]);
+        index += 1;
+      }
+      code.textContent = content.join('\n');
+      block.append(code);
+      wrapper.append(block);
+      continue;
+    }
     const table = tryParseMarkdownTable(lines, index, documentRef);
     if (table) {
       wrapper.append(table.node);
@@ -97,7 +135,7 @@ function renderMarkdownToDom(markdownText, documentRef) {
     const heading = line.match(/^(#{1,3})\s+(.+)$/);
     if (heading) {
       const node = documentRef.createElement(`h${heading[1].length}`);
-      node.textContent = heading[2];
+      appendInlineMarkdown(node, heading[2], documentRef);
       wrapper.append(node);
       continue;
     }
@@ -105,7 +143,7 @@ function renderMarkdownToDom(markdownText, documentRef) {
       const list = documentRef.createElement('ul');
       while (index < lines.length && /^\s*[-*+]\s+/.test(lines[index])) {
         const item = documentRef.createElement('li');
-        item.textContent = lines[index].replace(/^\s*[-*+]\s+/, '');
+        appendInlineMarkdown(item, lines[index].replace(/^\s*[-*+]\s+/, ''), documentRef);
         list.append(item);
         index += 1;
       }
@@ -114,10 +152,23 @@ function renderMarkdownToDom(markdownText, documentRef) {
       continue;
     }
     const paragraph = documentRef.createElement('p');
-    paragraph.textContent = line;
+    appendInlineMarkdown(paragraph, line, documentRef);
     wrapper.append(paragraph);
   }
   return wrapper;
+}
+
+function appendInlineMarkdown(parent, text, documentRef) {
+  const segments = String(text ?? '').split(/(`[^`]+`)/g).filter((segment) => segment.length > 0);
+  for (const segment of segments) {
+    if (/^`[^`]+`$/.test(segment)) {
+      const code = documentRef.createElement('code');
+      code.textContent = segment.slice(1, -1);
+      parent.append(code);
+      continue;
+    }
+    parent.append(documentRef.createTextNode(segment));
+  }
 }
 
 function tryParseMarkdownTable(lines, startIndex, documentRef) {
@@ -127,7 +178,7 @@ function tryParseMarkdownTable(lines, startIndex, documentRef) {
   const headerRow = documentRef.createElement('tr');
   for (const cell of splitMarkdownTableRow(lines[startIndex])) {
     const th = documentRef.createElement('th');
-    th.textContent = cell;
+    appendInlineMarkdown(th, cell, documentRef);
     headerRow.append(th);
   }
   thead.append(headerRow);
@@ -138,7 +189,7 @@ function tryParseMarkdownTable(lines, startIndex, documentRef) {
     const row = documentRef.createElement('tr');
     for (const cell of splitMarkdownTableRow(lines[index])) {
       const td = documentRef.createElement('td');
-      td.textContent = cell;
+      appendInlineMarkdown(td, cell, documentRef);
       row.append(td);
     }
     tbody.append(row);
@@ -198,11 +249,68 @@ export function currentProjectionVerbosity(documentRef = document) {
 export function appendEvent(event, documentRef = document, options = {}) {
   if (options.store !== false) eventStore(documentRef).push(event);
   renderEvent(event, documentRef, options);
+  renderActivityIndicator(documentRef);
+}
+
+function renderActivityIndicator(documentRef) {
+  const list = documentRef.getElementById('events');
+  if (!list) return;
+  const activity = activityFromEvents(eventStore(documentRef));
+  removeActivityIndicator(list);
+  if (!activity.active) return;
+  const item = documentRef.createElement('li');
+  item.id = 'agent-activity-indicator';
+  item.className = 'event event-agent-activity event-tone-assistant';
+  item.dataset.eventKind = `activity_${activity.state}`;
+  item.dataset.eventTone = 'assistant';
+  const heading = documentRef.createElement('div');
+  heading.className = 'event-heading';
+  const label = documentRef.createElement('span');
+  label.className = 'event-label';
+  label.textContent = 'Activity';
+  const kind = documentRef.createElement('span');
+  kind.className = 'event-kind';
+  kind.textContent = activity.state;
+  heading.append(label, kind);
+  const detail = documentRef.createElement('div');
+  detail.className = 'event-detail';
+  const summary = documentRef.createElement('div');
+  summary.className = 'event-summary agent-activity-summary';
+  const pulse = documentRef.createElement('span');
+  pulse.className = 'activity-pulse';
+  const text = documentRef.createElement('span');
+  text.textContent = activity.label;
+  summary.append(pulse, text);
+  if (activity.detail) {
+    const detailText = documentRef.createElement('span');
+    detailText.className = 'agent-activity-detail';
+    detailText.textContent = activity.detail;
+    summary.append(detailText);
+  }
+  detail.append(summary);
+  item.append(heading, detail);
+  list.append(item);
+}
+
+function removeActivityIndicator(list) {
+  for (const child of Array.from(list.children ?? [])) {
+    if (child?.id !== 'agent-activity-indicator') continue;
+    if (typeof child.remove === 'function') child.remove();
+    else if (Array.isArray(list.children)) {
+      const index = list.children.indexOf(child);
+      if (index >= 0) list.children.splice(index, 1);
+    }
+  }
+}
+
+function activityFromEvents(events) {
+  return createSessionProjection(events).activity;
 }
 
 function renderEvent(event, documentRef = document, options = {}) {
   const list = documentRef.getElementById('events');
   if (!list) return;
+  if (classifyRuntimeMessage(event) === 'state_sample') return;
   let projection = projectRuntimeEvent(event);
   const verbosity = normalizeNarsClientProjectionVerbosity(options.verbosity ?? currentProjectionVerbosity(documentRef));
   if (!shouldRenderRuntimeProjection(projection, { verbosity })) return;
@@ -301,4 +409,5 @@ export function clearEvents(documentRef = document, options = {}) {
   const list = documentRef.getElementById('events');
   if (list) clearNode(list);
   if (!options.keepStore) documentRef.__naradaAgentWebUiEvents = [];
+  renderActivityIndicator(documentRef);
 }

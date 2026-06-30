@@ -251,6 +251,16 @@ assert.deepEqual(classifyCarrierControlRequest({ id: 'events-1', method: 'sessio
   error: null,
   method_kind: 'session_events_subscribe',
 });
+assert.deepEqual(classifyCarrierControlRequest({ id: 'events-read-1', method: 'session.events.read' }), {
+  request_id: 'events-read-1',
+  method: 'session.events.read',
+  concurrent_allowed: true,
+  allowed_when_closed: true,
+  native_control_input: false,
+  observer_action: null,
+  error: null,
+  method_kind: 'session_events_read',
+});
 assert.deepEqual(classifyCarrierControlRequest({ id: 'recovery-1', method: 'session.recovery' }), {
   request_id: 'recovery-1',
   method: 'session.recovery',

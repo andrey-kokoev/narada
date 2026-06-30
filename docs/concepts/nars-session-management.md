@@ -4,7 +4,7 @@
 
 This document defines the full target shape for local NARS session discovery, liveness, attachment, and recovery. It is the implementation checklist for turning one launched `narada-agent-runtime-server` session into something other operator surfaces can find and attach to without depending on terminal windows, ambient Codex config, or `agent-cli` process state.
 
-The runtime contract remains in [`nars-runtime-contract.md`](nars-runtime-contract.md). This document expands only the session-management slice.
+The runtime contract remains in [`nars-runtime-contract.md`](nars-runtime-contract.md). This document expands only the session-management slice. Remote browser access through Cloudflare or another public ingress is a separate projection/admission boundary described in [`nars-remote-projection-gateway.md`](nars-remote-projection-gateway.md).
 
 ## Target Outcome
 
@@ -68,6 +68,8 @@ The aggregate index lives at:
 ```
 
 The aggregate is a convenience projection. Per-session records, heartbeats, and events remain sufficient to recover discovery state.
+
+`events.jsonl` is the durable ordered session event log. Live clients may subscribe through the NARS event endpoint, but history and scrollback must page this file through the NARS protocol method `session.events.read`; browser caches and WebSocket replay buffers are projections, not the source of truth. Page readers merge records by `event_sequence`/`sequence` and tolerate overlapping replay.
 
 ## Per-Session Record
 
