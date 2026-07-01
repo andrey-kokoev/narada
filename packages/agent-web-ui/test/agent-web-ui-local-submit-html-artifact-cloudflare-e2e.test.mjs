@@ -9,6 +9,7 @@ import test from 'node:test';
 import { createCloudflareNarsProjectionWorker } from '@narada2/cloudflare-nars-projection/worker';
 import { resolveNaradaSitePaths } from '@narada2/site-paths';
 import {
+  deliverRemoteProjectionInputsOnce,
   registerProjectionRemotely,
   startLocalProjectionBridgeOnce,
 } from '@narada2/cloudflare-nars-projection/node';
@@ -76,19 +77,50 @@ async function workerFetch(worker, url, init = {}) {
   return worker.fetch(new Request(url, init));
 }
 
-function createHealthServer({ siteRoot, sessionId }) {
+function createLocalNarsHttpServer({ siteRoot, sessionId, artifactsDir }) {
   return createServer((request, response) => {
+    const url = new URL(request.url ?? '/', 'http://127.0.0.1');
+    if (url.pathname === '/health') {
+      response.writeHead(200, { 'content-type': 'application/json; charset=utf-8' });
+      response.end(`${JSON.stringify({
+        schema: 'narada.nars.health.v1',
+        status: 'healthy',
+        site_id: 'narada.e2e',
+        site_root: siteRoot,
+        agent_id: 'resident',
+        role: 'resident',
+        session_id: sessionId,
+        mcp_operational_state: 'healthy',
+      })}\n`);
+      return;
+    }
+
+    const artifactMatch = url.pathname.match(/^\/sessions\/([^/]+)\/artifacts\/([^/]+)(?:\/(content))?$/);
+    if (!artifactMatch || decodeURIComponent(artifactMatch[1]) !== sessionId) {
+      response.writeHead(404, { 'content-type': 'application/json; charset=utf-8' });
+      response.end(`${JSON.stringify({ error: 'not_found' })}\n`);
+      return;
+    }
+    const artifactId = decodeURIComponent(artifactMatch[2]);
+    const index = JSON.parse(readFileSync(join(artifactsDir, 'index.json'), 'utf8'));
+    const artifact = index.artifacts?.find((entry) => entry.artifact_id === artifactId) ?? null;
+    if (!artifact) {
+      response.writeHead(404, { 'content-type': 'application/json; charset=utf-8' });
+      response.end(`${JSON.stringify({ error: 'artifact_not_found', artifact_id: artifactId })}\n`);
+      return;
+    }
+    if (artifactMatch[3] === 'content') {
+      response.writeHead(200, {
+        'content-type': artifact.content_type ?? 'application/octet-stream',
+        'x-narada-artifact-id': artifact.artifact_id,
+        'x-narada-artifact-kind': artifact.kind ?? 'unknown',
+        'content-security-policy': "sandbox allow-scripts allow-forms; default-src 'self' data: blob:; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'none'; base-uri 'none'; form-action 'none'",
+      });
+      response.end(readFileSync(artifact.source_path));
+      return;
+    }
     response.writeHead(200, { 'content-type': 'application/json; charset=utf-8' });
-    response.end(`${JSON.stringify({
-      schema: 'narada.nars.health.v1',
-      status: 'healthy',
-      site_id: 'narada.e2e',
-      site_root: siteRoot,
-      agent_id: 'resident',
-      role: 'resident',
-      session_id: sessionId,
-      mcp_operational_state: 'healthy',
-    })}\n`);
+    response.end(`${JSON.stringify({ schema: 'narada.nars.artifact_read.v1', status: 'ok', artifact })}\n`);
   });
 }
 
@@ -255,7 +287,7 @@ test('local agent-web-ui submitted intent creates NARS HTML artifact that remote
   eventHub.publish(startedEvent);
   const eventProjection = await startEventStreamProjection({ childStdin: runtimeInput, eventHub, host: '127.0.0.1', port: 0, eventsPath });
   const syntheticRuntime = wireSyntheticArtifactRuntime({ runtimeInput, eventHub, siteRoot, sessionId, artifactsDir, eventsPath });
-  const healthServer = createHealthServer({ siteRoot, sessionId });
+  const healthServer = createLocalNarsHttpServer({ siteRoot, sessionId, artifactsDir });
   const healthBaseUrl = await listen(healthServer);
   const localWeb = await startAgentWebUiServer({
     host: '127.0.0.1',
@@ -308,6 +340,25 @@ test('local agent-web-ui submitted intent creates NARS HTML artifact that remote
     ]);
     assert.equal(created.artifact.artifact_id, 'art_local_submit_html');
     assert.equal((await waitForPageText(localPage, 'Artifact submitted to NARS from local web UI.', 15000)).found, true);
+    assert.equal((await waitForPageText(localPage, 'Local Submit HTML Preview', 15000)).found, true);
+    const localIframe = await waitForPageTextWithAction(
+      localPage,
+      'Local Submit HTML Preview',
+      15000,
+      async () => localPage.evaluate('Boolean(document.querySelector("iframe.artifact-html-preview"))'),
+    );
+    assert.equal(localIframe.found, true, JSON.stringify(localIframe));
+    const localIframeSrc = await localPage.evaluate('document.querySelector("iframe.artifact-html-preview")?.src ?? ""');
+    assert.match(localIframeSrc, /\/api\/nars\/sessions\/nars_local_submit_html_artifact_e2e\/artifacts\/art_local_submit_html\/content/);
+    const localIframeNetwork = await localPage.waitForNetworkResponse(
+      (entry) => String(entry.url ?? '').includes('/api/nars/sessions/nars_local_submit_html_artifact_e2e/artifacts/art_local_submit_html/content'),
+      5000,
+    );
+    assert.equal(localIframeNetwork.found, true, JSON.stringify(localIframeNetwork));
+    assert.equal(localIframeNetwork.status, 200, JSON.stringify(localIframeNetwork));
+    const localIframeResponse = await fetch(localIframeSrc);
+    assert.equal(localIframeResponse.status, 200);
+    assert.match(await localIframeResponse.text(), /HTML artifact created after local web UI submit/);
 
     const registration = await registerProjectionRemotely({
       site_id: 'narada.e2e',
@@ -361,6 +412,39 @@ test('local agent-web-ui submitted intent creates NARS HTML artifact that remote
     assert.ok(servedIframe, JSON.stringify(servedResponses.map((entry) => ({ url: entry.url, status: entry.status, content_type: entry.content_type }))));
     assert.equal(servedIframe.status, 200);
     assert.match(servedIframe.body, /HTML artifact created after local web UI submit/);
+
+    const remoteSubmitted = await remotePage.evaluate(String.raw`(async () => {
+      const input = document.querySelector('#operator-input');
+      const form = document.querySelector('#operator-form');
+      if (!input || !form) return { ok: false, reason: 'missing_composer' };
+      input.value = 'Remote Cloudflare surface message for local NARS admission';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      return { ok: true };
+    })()`);
+    assert.equal(remoteSubmitted.ok, true, JSON.stringify(remoteSubmitted));
+
+    const admittedInputs = [];
+    let delivery = null;
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      delivery = await deliverRemoteProjectionInputsOnce({
+        site_root: siteRoot,
+        projection_id: projectionId,
+        cloudflare_api_base_url: workerBaseUrl,
+        fetch_impl: (input, init) => workerFetch(worker, input, init),
+        submit_nars_input(input) {
+          admittedInputs.push(input);
+          return { status: 'accepted_by_local_nars', input_id: input.input_id, method: input.method };
+        },
+      });
+      if (delivery.delivered_count === 1) break;
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+    assert.equal(delivery?.status, 'delivered', JSON.stringify(delivery));
+    assert.equal(delivery?.delivered_count, 1, JSON.stringify(delivery));
+    assert.equal(admittedInputs.length, 1, JSON.stringify(admittedInputs));
+    assert.equal(admittedInputs[0].method, 'conversation.send');
+    assert.deepEqual(admittedInputs[0].payload, { message: 'Remote Cloudflare surface message for local NARS admission', source: 'agent-web-ui' });
   } finally {
     if (remotePage) await remotePage.close();
     if (localPage) await localPage.close();

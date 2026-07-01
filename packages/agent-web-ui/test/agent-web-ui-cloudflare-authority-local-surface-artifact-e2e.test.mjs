@@ -28,7 +28,7 @@ async function closeServer(server) {
   await new Promise((resolve) => server.close(resolve));
 }
 
-function createWorkerHttpServer(worker, servedResponses = []) {
+function createWorkerHttpServer(worker, envRef = { current: {} }, servedResponses = []) {
   return createServer(async (request, response) => {
     try {
       const chunks = [];
@@ -44,7 +44,7 @@ function createWorkerHttpServer(worker, servedResponses = []) {
         method: request.method,
         headers,
         ...(body && request.method !== 'GET' && request.method !== 'HEAD' ? { body } : {}),
-      }));
+      }), envRef.current);
       const responseBody = Buffer.from(await upstream.arrayBuffer());
       servedResponses.push({
         method: request.method,
@@ -74,7 +74,8 @@ test('local agent-web-ui submits to Cloudflare-hosted NARS authority and renders
   const sessionId = 'cf_authority_local_surface_artifact_e2e';
   const worker = createCloudflareNarsProjectionWorker({ now: () => now });
   const servedResponses = [];
-  const workerServer = createWorkerHttpServer(worker, servedResponses);
+  const envRef = { current: {} };
+  const workerServer = createWorkerHttpServer(worker, envRef, servedResponses);
   const workerBaseUrl = await listen(workerServer);
 
   const created = await jsonOf(worker.fetch(new Request(`${workerBaseUrl}/api/nars/authority/sessions`, {
@@ -143,6 +144,93 @@ test('local agent-web-ui submits to Cloudflare-hosted NARS authority and renders
   } finally {
     if (page) await page.close();
     await closeServer(localWeb.server);
+    await closeServer(workerServer);
+  }
+});
+
+test('hosted Cloudflare web UI submits to Cloudflare-hosted NARS authority and renders authority HTML artifact', async () => {
+  const browserPath = findHeadlessBrowser();
+  assert.ok(browserPath, 'expected an installed Chromium-family browser for Cloudflare authority hosted-surface artifact E2E');
+
+  const sessionId = 'cf_authority_hosted_surface_artifact_e2e';
+  const worker = createCloudflareNarsProjectionWorker({ now: () => now });
+  const envRef = { current: {} };
+  const servedResponses = [];
+  const workerServer = createWorkerHttpServer(worker, envRef, servedResponses);
+  const workerBaseUrl = await listen(workerServer);
+
+  const created = await jsonOf(worker.fetch(new Request(`${workerBaseUrl}/api/nars/authority/sessions`, {
+    method: 'POST',
+    body: JSON.stringify({
+      session_id: sessionId,
+      site_id: 'narada.cloudflare.e2e',
+      agent_id: 'cloudflare.resident',
+    }),
+  })));
+  assert.equal(created.status, 'created');
+  assert.equal(created.session_id, sessionId);
+
+  const assetServerResult = await startAgentWebUiServer({
+    host: '127.0.0.1',
+    port: 0,
+    cloudflareAuthoritySessionId: sessionId,
+    cloudflareApiBaseUrl: workerBaseUrl,
+  });
+  const assetBaseUrl = assetServerResult.url.replace(/\/+$/, '');
+  envRef.current = {
+    ASSETS: {
+      fetch(request) {
+        const url = new URL(request.url);
+        return fetch(`${assetBaseUrl}${url.pathname}${url.search}`);
+      },
+    },
+  };
+
+  let page = null;
+  try {
+    page = await openCdpPage({ browserPath, url: `${workerBaseUrl}/`, userDataPrefix: 'narada-cf-authority-hosted-surface-artifact-' });
+    const initialReplay = await waitForPageText(page, 'narada.cloudflare.e2e / cloudflare.resident', 15000);
+    assert.equal(initialReplay.found, true, JSON.stringify(initialReplay));
+
+    const submitted = await page.evaluate(String.raw`(async () => {
+      const input = document.querySelector('#operator-input');
+      const form = document.querySelector('#operator-form');
+      if (!input || !form) return { ok: false, reason: 'missing_composer' };
+      input.value = 'Create an HTML artifact in the Cloudflare authority runtime from hosted UI';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      return { ok: true };
+    })()`);
+    assert.equal(submitted.ok, true, JSON.stringify(submitted));
+
+    assert.equal((await waitForPageText(page, 'Cloudflare Authority HTML Preview', 15000)).found, true);
+    const iframe = await waitForPageTextWithAction(
+      page,
+      'Cloudflare Authority HTML Preview',
+      15000,
+      async () => page.evaluate('Boolean(document.querySelector("iframe.artifact-html-preview"))'),
+    );
+    assert.equal(iframe.found, true, JSON.stringify(iframe));
+
+    const iframeSrc = await page.evaluate('document.querySelector("iframe.artifact-html-preview")?.src ?? ""');
+    assert.match(iframeSrc, /\/api\/nars\/authority\/sessions\/cf_authority_hosted_surface_artifact_e2e\/artifacts\/art_cf_authority_html\/content/);
+    const iframeNetwork = await page.waitForNetworkResponse(
+      (entry) => String(entry.url ?? '').includes('/api/nars/authority/sessions/cf_authority_hosted_surface_artifact_e2e/artifacts/art_cf_authority_html/content'),
+      5000,
+    );
+    assert.equal(iframeNetwork.found, true, JSON.stringify(iframeNetwork));
+    assert.equal(iframeNetwork.status, 200, JSON.stringify(iframeNetwork));
+    const iframeResponse = await fetch(iframeSrc);
+    assert.equal(iframeResponse.status, 200);
+    assert.match(await iframeResponse.text(), /HTML artifact created by Cloudflare-hosted NARS authority/);
+
+    const replay = await jsonOf(worker.fetch(new Request(`${workerBaseUrl}/api/nars/authority/sessions/${sessionId}/events?since_sequence=1`)));
+    assert.equal(replay.status, 'ok');
+    assert.ok(replay.events.some((entry) => entry.payload?.event === 'session_artifact_registered'), JSON.stringify(replay));
+    assert.ok(replay.events.some((entry) => JSON.stringify(entry.payload).includes('art_cf_authority_html')), JSON.stringify(replay));
+  } finally {
+    if (page) await page.close();
+    await closeServer(assetServerResult.server);
     await closeServer(workerServer);
   }
 });
