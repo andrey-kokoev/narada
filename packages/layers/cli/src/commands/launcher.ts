@@ -122,6 +122,7 @@ export interface WorkspaceLaunchPlanOptions {
   operatorSurface?: string;
   runtime?: string;
   intelligenceProvider?: string;
+  cloudflareApiBaseUrl?: string;
   interactiveSelection?: boolean;
   defaultInteractiveSelection?: boolean;
   resultPath?: string;
@@ -965,6 +966,10 @@ function buildAgentPlan(record: WorkspaceLaunchRecord, options: WorkspaceLaunchP
   const enableNativeShell = options.enableNativeShell === true || record.enable_native_shell;
   const waitForEnter = options.noWaitForEnterBeforeExec !== true && launchCarriers[0] !== 'agent-web-ui';
   const intelligenceProvider = launchCarrier === 'agent-cli' || launchCarrier === 'agent-web-ui' ? (options.intelligenceProvider ?? null) : null;
+  const cloudflareApiBaseUrl = options.cloudflareApiBaseUrl?.trim()
+    || process.env.NARADA_CLOUDFLARE_NARS_PROJECTION_URL
+    || process.env.CLOUDFLARE_NARS_PROJECTION_URL
+    || null;
   const naradaProper = resolve(process.env.NARADA_PROPER_ROOT ?? 'D:/code/narada');
   const carrierStartCommand = [
     'pnpm',
@@ -994,13 +999,13 @@ function buildAgentPlan(record: WorkspaceLaunchRecord, options: WorkspaceLaunchP
   ];
   const wtArgs = [...base];
   if (launchCarrier === 'agent-web-ui') {
-    wtArgs.push(';', ...agentWebUiAttachWtArgs(record, naradaProper));
+    wtArgs.push(';', ...agentWebUiAttachWtArgs(record, naradaProper, cloudflareApiBaseUrl));
   }
   for (const extraCarrier of launchCarriers.filter((carrier) => carrier !== launchCarrier)) {
     if (extraCarrier !== 'agent-web-ui') {
       throw new Error(`unsupported_multi_carrier_projection: ${extraCarrier}`);
     }
-    wtArgs.push(';', ...agentWebUiAttachWtArgs(record, naradaProper));
+    wtArgs.push(';', ...agentWebUiAttachWtArgs(record, naradaProper, cloudflareApiBaseUrl));
   }
 
   const smokeCommand = [
@@ -1038,7 +1043,7 @@ function normalizeCarrierList(value: string | undefined): string[] {
   return unique(carriers.length > 0 ? carriers : ['agent-cli']);
 }
 
-function agentWebUiAttachWtArgs(record: WorkspaceLaunchRecord, naradaProper: string): string[] {
+function agentWebUiAttachWtArgs(record: WorkspaceLaunchRecord, naradaProper: string, cloudflareApiBaseUrl: string | null): string[] {
   const attachCommand = [
     'pnpm',
     '--dir', naradaProper,
@@ -1051,6 +1056,7 @@ function agentWebUiAttachWtArgs(record: WorkspaceLaunchRecord, naradaProper: str
     '--wait-for-session-ms', '60000',
     '--open',
   ];
+  if (cloudflareApiBaseUrl) attachCommand.push('--cloudflare-api-base-url', cloudflareApiBaseUrl);
   const prelude = `Write-Host ${quotePowerShellArgument(`agent-web-ui: waiting for ${record.agent} NARS session, then starting browser projection`)}`;
   return [
     'new-tab',

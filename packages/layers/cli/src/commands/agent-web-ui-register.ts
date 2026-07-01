@@ -24,6 +24,7 @@ export function registerAgentWebUiCommands(program: Command): void {
     .option('--no-open', 'Do not open the web UI in the default browser after startup', false)
     .option('--health-timeout-ms <ms>', 'Health probe timeout before refusing live attach', '500')
     .option('--wait-for-session-ms <ms>', 'Wait for a matching --agent NARS session to appear when --session is omitted', '0')
+    .option('--cloudflare-api-base-url <url>', 'Default Cloudflare NARS projection Worker URL for local publish controls')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
     .action(async (opts: Record<string, unknown>) => {
       const result = await agentWebUiAttachCommand({
@@ -38,6 +39,7 @@ export function registerAgentWebUiCommands(program: Command): void {
         open: opts.open as boolean | undefined,
         healthTimeoutMs: opts.healthTimeoutMs ? Number(opts.healthTimeoutMs) : undefined,
         waitForSessionMs: opts.waitForSessionMs ? Number(opts.waitForSessionMs) : undefined,
+        cloudflareApiBaseUrl: opts.cloudflareApiBaseUrl as string | undefined,
         format: resolveCommandFormat(opts.format, 'auto'),
       }, silentCommandContext());
       if (opts.dryRun || result.exitCode !== ExitCode.SUCCESS) {

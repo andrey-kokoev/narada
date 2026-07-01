@@ -52,6 +52,7 @@ export function registerLauncherCommands(program: Command): void {
         operatorSurface: opts.operatorSurface as string | undefined,
         runtime: opts.runtime as string | undefined,
         intelligenceProvider: opts.intelligenceProvider as string | undefined,
+        cloudflareApiBaseUrl: opts.cloudflareApiBaseUrl as string | undefined,
         interactiveSelection: opts.interactiveSelection as boolean | undefined,
         defaultInteractiveSelection: opts.defaultInteractiveSelection as boolean | undefined,
         resultPath: opts.resultPath as string | undefined,
@@ -77,6 +78,7 @@ export function registerLauncherCommands(program: Command): void {
     .option('--operator-surface <surface>', 'Override operator/client surface; preferred replacement for --carrier')
     .option('--runtime <runtime>', 'Override runtime implementation')
     .option('--intelligence-provider <provider>', 'NARS operator-surface intelligence provider')
+    .option('--cloudflare-api-base-url <url>', 'Default Cloudflare NARS projection Worker URL for agent-web-ui publish controls')
     .option('--interactive-selection', 'Interactively select Site, Role, Carrier, Runtime, and applicable Intelligence Provider before launching', false)
     .option('--default-interactive-selection', 'Use interactive selection when no selection flags are supplied', false)
     .option('--result-path <path>', 'Write the workspace plan JSON to a file')

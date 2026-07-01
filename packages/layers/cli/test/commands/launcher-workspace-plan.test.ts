@@ -214,6 +214,7 @@ describe('launcher workspace planning', () => {
       role: ['resident'],
       carrier: 'agent-cli,agent-web-ui',
       runtime: 'narada-agent-runtime-server',
+      cloudflareApiBaseUrl: 'https://projection.example.test',
       dryRun: true,
       format: 'json',
     }, createMockContext());
@@ -232,6 +233,7 @@ describe('launcher workspace planning', () => {
     expect(commandText).toContain("'--agent' 'sonar.resident'");
     expect(commandText).toContain("'--wait-for-session-ms' '60000'");
     expect(commandText).toContain("'--open'");
+    expect(commandText).toContain("'--cloudflare-api-base-url' 'https://projection.example.test'");
     expect(webUiCommandText).not.toContain(';');
     expect(webUiCommandText).toContain('\n& ');
     expect(result.wt_args.filter((arg) => arg === ';')).toHaveLength(1);

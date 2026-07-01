@@ -18,6 +18,7 @@ export interface AgentWebUiAttachOptions {
   format?: CliFormat;
   launchRegistryPath?: string;
   open?: boolean;
+  cloudflareApiBaseUrl?: string;
 }
 
 interface ResolvedAttachSession {
@@ -226,7 +227,7 @@ export async function agentWebUiAttachCommand(
   options: AgentWebUiAttachOptions,
   context: CommandContext,
   deps: {
-    startAgentWebUiServer?: (options: { host: string; port: number; eventEndpoint: string; healthEndpoint: string | null }) => Promise<{ url: string; server?: { close?: () => void } }>;
+    startAgentWebUiServer?: (options: { host: string; port: number; eventEndpoint: string; healthEndpoint: string | null; sessionId: string; siteRoot: string | null; siteId: string | null; agentId: string | null; cloudflareApiBaseUrl: string | null }) => Promise<{ url: string; server?: { close?: () => void } }>;
     openUrl?: (url: string) => Promise<void> | void;
     progress?: ProgressReporter;
   } = {},
@@ -303,7 +304,20 @@ export async function agentWebUiAttachCommand(
   }
   progress(`agent-web-ui: starting local web UI for ${sessionId}`);
   const startAgentWebUiServer = deps.startAgentWebUiServer ?? (await import('@narada2/agent-web-ui/server')).startAgentWebUiServer;
-  const started = await startAgentWebUiServer({ host, port, eventEndpoint, healthEndpoint });
+  const started = await startAgentWebUiServer({
+    host,
+    port,
+    eventEndpoint,
+    healthEndpoint,
+    sessionId,
+    siteRoot: attach.site_root ?? null,
+    siteId: attach.site_id ?? stringField(attach.session, 'site_id') ?? options.site ?? null,
+    agentId: options.agent?.trim() || stringField(attach.session, 'agent_id'),
+    cloudflareApiBaseUrl: options.cloudflareApiBaseUrl?.trim()
+      || process.env.NARADA_CLOUDFLARE_NARS_PROJECTION_URL
+      || process.env.CLOUDFLARE_NARS_PROJECTION_URL
+      || null,
+  });
   const plan = buildPlan({
     status: 'started',
     sessionId,

@@ -462,6 +462,7 @@ describe('nars CLI commands', () => {
 
     const result = await agentWebUiAttachCommand({
       launchRegistryPath,
+      site: 'sonar',
       session: 'carrier_closed_test',
       allowStaleSession: true,
       format: 'json',
@@ -473,6 +474,11 @@ describe('nars CLI commands', () => {
       port: 0,
       eventEndpoint: 'ws://127.0.0.1:12345/events',
       healthEndpoint: 'http://127.0.0.1:12346/health',
+      sessionId: 'carrier_closed_test',
+      siteRoot,
+      siteId: 'sonar',
+      agentId: 'sonar.resident',
+      cloudflareApiBaseUrl: null,
     });
   });
 });
