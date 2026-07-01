@@ -1,6 +1,7 @@
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { Command } from 'commander';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { resolveNaradaSitePaths } from '@narada2/site-paths';
 import {
@@ -22,6 +23,7 @@ import {
 import { getSchedulerSiteDaemonStatus, runAgentStartCommand } from '../../src/lib/launcher-runtime.js';
 import type { CommandContext } from '../../src/lib/command-wrapper.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
+import { registerCarrierCommands } from '../../src/commands/carrier-register.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const naradaProperRoot = resolve(__dirname, '..', '..', '..', '..', '..');
@@ -117,6 +119,17 @@ afterEach(async () => {
 });
 
 describe('carrier launcher CLI commands', () => {
+  it('presents carrier CLI as a compatibility surface in operator-facing help', () => {
+    const program = new Command();
+    registerCarrierCommands(program);
+    const carrier = program.commands.find((command) => command.name() === 'carrier');
+    expect(carrier?.description()).toBe('Compatibility runtime launch/session commands; prefer operator-surface runtime start for new NARS launches');
+    const start = carrier?.commands.find((command) => command.name() === 'start');
+    expect(start?.description()).toBe('Compatibility alias for operator-surface runtime start');
+    expect(start?.helpInformation()).toContain('Compatibility alias for operator surface');
+    expect(start?.helpInformation()).not.toContain('Carrier/operator surface');
+  });
+
   it('reads latest carrier launch result and control path evidence', async () => {
     const siteRoot = await tempSite();
     const controlPath = await writeLaunchResult(siteRoot, 'evt-test', 'sonar.resident');

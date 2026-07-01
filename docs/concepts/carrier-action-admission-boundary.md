@@ -166,7 +166,7 @@ MCP surface metadata is projected from the Site-local `.narada/capabilities/mcp-
 
 Registry metadata is authoritative for a matched surface. If a live MCP server exposes a tool that is absent from its authoritative surface contract, the request is refused with `surface_registry_tool_not_declared`. Closed-name fallback classification is reserved for tools and servers without registry-backed metadata; it must not silently grant posture to an unlisted tool on an authoritative surface. Registry-to-client-config validation is diagnostic during carrier startup and strict only when explicitly requested by tooling such as doctors, audits, or tests.
 
-In NARS server mode for `-Carrier agent-cli -Runtime narada-agent-runtime-server` launches:
+In NARS server mode for `-OperatorSurface agent-cli -Runtime nars` launches (compatibility spelling: `-Carrier agent-cli -Runtime narada-agent-runtime-server`):
 
 - read-only admitted requests execute and return tool output;
 - mutating, external-effecting, credential-bearing, unknown, ambiguous, and authoritative-unlisted requests do not execute;

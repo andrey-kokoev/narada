@@ -53,6 +53,8 @@ test('provider resolution module refuses provider selection for non-NARS carrier
   assert.equal(refusal.status, 'refused');
   assert.equal(refusal.reason_code, 'intelligence_provider_runtime_unsupported');
   assert.equal(refusal.carrier_kind, 'codex');
+  assert.match(refusal.reason, /NARS operator surfaces such as agent-cli or agent-web-ui/);
+  assert.doesNotMatch(refusal.reason, /-Carrier/);
 });
 
 test('credential projection redacts API secrets while projecting required env', () => {

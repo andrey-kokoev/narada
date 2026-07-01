@@ -3,8 +3,8 @@
 Run these checks before declaring a Site aligned with packaged NARS launch and the `agent-cli` terminal projection.
 
 0. Run `narada sites deps sync --root <site> --apply` and confirm the follow-up dry run reports `status: current`.
-1. Start the Site with `-Carrier agent-cli -Runtime narada-agent-runtime-server`.
-2. Confirm the preamble shows the packaged NARS launch path and `agent-cli` carrier/operator surface.
+1. Start the Site with `Start-NaradaWorkspace.ps1 -OperatorSurface agent-cli -Runtime nars -Site <site> -Role <role>` or the equivalent `narada launcher workspace-launch --operator-surface agent-cli --runtime nars ...` path.
+2. Confirm the preamble shows the packaged NARS launch path and `agent-cli` Operator Surface attached to `narada-agent-runtime-server`.
 3. Run startup sequence.
 4. Read a truncated output with `mcp_output_show({"ref":"mcp_output:..."})`.
 5. Create a long payload with `mcp_payload_create`; confirm inline JSON contains `payload_ref`.
