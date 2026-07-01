@@ -167,7 +167,7 @@ export function resolveIntelligenceProviderLaunch(value, carrierName, inputSourc
       reason_code: 'intelligence_provider_runtime_unsupported',
       intelligence_provider: provider,
       carrier_kind: carrierName,
-      reason: '-IntelligenceProvider currently applies only to NARS operator surfaces such as -Carrier agent-cli or -Carrier agent-web-ui. Kimi and Codex CLI provider selection remains owned by those carriers.',
+      reason: '-IntelligenceProvider currently applies only to NARS operator surfaces such as agent-cli or agent-web-ui. Kimi and Codex CLI provider selection remains owned by their native runtime adapters.',
     }, states);
   }
   pushState('carrier_supports_provider_selection', { carrier_kind: carrierName });

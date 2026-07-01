@@ -14,11 +14,11 @@ import {
 export function registerCarrierCommands(program: Command): void {
   const carrier = program
     .command('carrier')
-    .description('Carrier runtime launcher status and lifecycle commands');
+    .description('Compatibility runtime launch/session commands; prefer operator-surface runtime start for new NARS launches');
 
   carrier
     .command('status')
-    .description('Inspect latest carrier launch-result evidence for a Site agent')
+    .description('Inspect latest runtime launch-result evidence for a Site agent')
     .option('--site-root <path>', 'Target Site root')
     .option('--site <path>', 'Alias for --site-root')
     .option('--agent <id>', 'Agent identity to inspect')
@@ -39,7 +39,7 @@ export function registerCarrierCommands(program: Command): void {
 
   carrier
     .command('control-path')
-    .description('Print the latest carrier control.jsonl path for a Site agent')
+    .description('Print the latest NARS control.jsonl path for a Site agent')
     .option('--site-root <path>', 'Target Site root')
     .option('--site <path>', 'Alias for --site-root')
     .option('--agent <id>', 'Agent identity to inspect')
@@ -60,7 +60,7 @@ export function registerCarrierCommands(program: Command): void {
 
   carrier
     .command('readiness')
-    .description('Return bounded carrier readiness from latest launch-result evidence')
+    .description('Return bounded runtime readiness from latest launch-result evidence')
     .option('--site-root <path>', 'Target Site root')
     .option('--site <path>', 'Alias for --site-root')
     .option('--agent <id>', 'Agent identity to inspect')
@@ -83,13 +83,13 @@ export function registerCarrierCommands(program: Command): void {
 
   carrier
     .command('start [carrier]')
-    .description('Start or plan a carrier through the canonical agent-start runtime adapter')
+    .description('Compatibility alias for operator-surface runtime start')
     .option('--site-root <path>', 'Target Site root')
     .option('--site <path>', 'Alias for --site-root')
-    .option('--workspace-root <path>', 'Workspace root for the launched carrier')
+    .option('--workspace-root <path>', 'Workspace root for the launched runtime')
     .option('--agent <id>', 'Agent identity')
-    .option('--carrier <carrier>', 'Carrier/operator surface')
-    .option('--runtime <runtime>', 'Runtime substrate for the selected carrier')
+    .option('--carrier <carrier>', 'Compatibility alias for operator surface')
+    .option('--runtime <runtime>', 'Runtime substrate for the selected operator surface')
     .option('--intelligence-provider <provider>', 'NARS operator-surface intelligence provider')
     .option('--dry-run', 'Plan the runtime launch without writing launch artifacts or spawning', false)
     .option('--materialize-only', 'Write launch artifacts without spawning the runtime', false)
@@ -120,11 +120,11 @@ export function registerCarrierCommands(program: Command): void {
 
   carrier
     .command('restart [carrier]')
-    .description('Reserved canonical carrier restart command; reports plan until live mutation is wired')
+    .description('Reserved compatibility restart command; reports plan until live mutation is wired')
     .option('--site-root <path>', 'Target Site root')
     .option('--site <path>', 'Alias for --site-root')
     .option('--agent <id>', 'Agent identity')
-    .option('--carrier <carrier>', 'Carrier/operator surface')
+    .option('--carrier <carrier>', 'Compatibility alias for operator surface')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
     .action(directCommandAction<[string | undefined, Record<string, unknown>]>({
       command: 'carrier restart',
@@ -145,7 +145,7 @@ export function registerCarrierCommands(program: Command): void {
     .option('--site-root <path>', 'Target Site root')
     .option('--site <path>', 'Alias for --site-root')
     .option('--agent <id>', 'Agent identity')
-    .option('--carrier <carrier>', 'Carrier/operator surface')
+    .option('--carrier <carrier>', 'Compatibility alias for operator surface')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
     .action(directCommandAction<[string | undefined, Record<string, unknown>]>({
       command: 'carrier reload',
@@ -166,7 +166,7 @@ export function registerCarrierCommands(program: Command): void {
     .option('--site-root <path>', 'Target Site root')
     .option('--site <path>', 'Alias for --site-root')
     .option('--agent <id>', 'Agent identity')
-    .option('--carrier <carrier>', 'Carrier/operator surface')
+    .option('--carrier <carrier>', 'Compatibility alias for operator surface')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
     .action(directCommandAction<[string | undefined, Record<string, unknown>]>({
       command: 'carrier drain',
