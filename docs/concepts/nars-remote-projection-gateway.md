@@ -4,7 +4,7 @@
 
 This document defines the target shape for exposing local NARS session observation to a remote browser through Cloudflare without making Cloudflare the local runtime owner and without exposing raw local NARS endpoints directly.
 
-The local session-management contract remains in [`nars-session-management.md`](nars-session-management.md). The runtime contract remains in [`nars-runtime-contract.md`](nars-runtime-contract.md). This document defines the remote projection and admission boundary that may sit in front of local NARS sessions.
+The local session-management contract remains in [`nars-session-management.md`](nars-session-management.md). The runtime contract remains in [`nars-runtime-contract.md`](nars-runtime-contract.md). The broader Cloudflare-hosted operator projection target is [`cloudflare-nars-web-projection.md`](cloudflare-nars-web-projection.md); this gateway document is the narrower local/remote gateway slice under that target shape.
 
 ## Target Outcome
 

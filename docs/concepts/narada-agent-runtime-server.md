@@ -205,6 +205,7 @@ The protocol should support at least:
 | Operation | Purpose |
 | --- | --- |
 | `conversation.send` | Append one automation/user turn and run the agent loop until the turn is complete or blocked. |
+| `conversation.enqueue` | Accept ordinary operator input for FIFO admission after the active turn without interrupting it. |
 | `conversation.interrupt` | Request bounded interruption of an active turn. |
 | `session.status` | Inspect identity, readiness, active turn, tool posture, and blockers. |
 | `session.resume` | Reattach automation to an existing durable session. |

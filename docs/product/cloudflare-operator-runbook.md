@@ -61,6 +61,21 @@ pnpm cloudflare:operator:check:human
 
 `cloudflare:operator:login` starts a short-lived loopback listener, opens the Worker capture URL in the browser, sends the operator through Microsoft login if needed, and stores only the signed `narada_operator_session` cookie in `CLOUDFLARE_OPERATOR_COOKIE_FILE`. It updates the ignored root `.env` with that cookie-file path unless `--no-write-env` is supplied. It does not store Microsoft tokens.
 
+Cloudflare NARS Web Projection uses the same captured operator cookie only as an optional/required preflight for cookie-backed `site.read`. A projection registration that is run with `--require-operator-session` must prove both the projection Worker health endpoint and the Cloudflare carrier `site.read` path before it writes remote projection access. If that preflight reports `cloudflare_operator_session_stale` or the underlying `site.read` returns 401, run:
+
+```powershell
+pnpm cloudflare:operator:login
+pnpm cloudflare:operator:check:human
+```
+
+Then retry:
+
+```powershell
+narada nars projection register --site-id <site-id> --site-root <site-root> --session <nars-session-id> --cloudflare-api-base-url <projection-worker-url> --cloudflare-carrier-url <carrier-worker-url> --operator-cookie-file <cookie-file> --require-operator-session --preflight-only --no-dry-run
+```
+
+The preflight is intentionally before mutation. It must not hardcode tokens, and it must not treat a stale human browser session as permission to mint projection credentials.
+
 To bootstrap the ignored `.env` from explicit local flags:
 
 ```powershell

@@ -4,7 +4,7 @@
 
 This document defines the full target shape for local NARS session discovery, liveness, attachment, and recovery. It is the implementation checklist for turning one launched `narada-agent-runtime-server` session into something other operator surfaces can find and attach to without depending on terminal windows, ambient Codex config, or `agent-cli` process state.
 
-The runtime contract remains in [`nars-runtime-contract.md`](nars-runtime-contract.md). This document expands only the session-management slice. Remote browser access through Cloudflare or another public ingress is a separate projection/admission boundary described in [`nars-remote-projection-gateway.md`](nars-remote-projection-gateway.md).
+The runtime contract remains in [`nars-runtime-contract.md`](nars-runtime-contract.md). This document expands only the session-management slice. Remote browser access through Cloudflare or another public ingress is a separate projection/admission boundary described in [`cloudflare-nars-web-projection.md`](cloudflare-nars-web-projection.md), with the narrower gateway slice in [`nars-remote-projection-gateway.md`](nars-remote-projection-gateway.md).
 
 ## Target Outcome
 
@@ -59,6 +59,7 @@ Each Site stores NARS session evidence under:
   events.jsonl
   heartbeat.json
   session-index-record.json
+  artifacts/index.json
 ```
 
 The aggregate index lives at:
@@ -70,6 +71,76 @@ The aggregate index lives at:
 The aggregate is a convenience projection. Per-session records, heartbeats, and events remain sufficient to recover discovery state.
 
 `events.jsonl` is the durable ordered session event log. Live clients may subscribe through the NARS event endpoint, but history and scrollback must page this file through the NARS protocol method `session.events.read`; browser caches and WebSocket replay buffers are projections, not the source of truth. Page readers merge records by `event_sequence`/`sequence` and tolerate overlapping replay.
+
+## Session Artifacts
+
+NARS owns registered artifacts for a session. A message must not ask a browser to render an arbitrary local path or `file://` URL. Instead, NARS registers an admitted artifact, stores a session-scoped artifact id, and serves metadata/content through local NARS endpoints.
+
+Artifacts live under:
+
+```text
+<site-root>/.narada/crew/nars-sessions/<session-id>/artifacts/index.json
+```
+
+The private record may include a local `source_path`; public metadata returned to clients must not expose that path:
+
+```json
+{
+  "schema": "narada.nars.artifact_public.v1",
+  "artifact_id": "art_...",
+  "session_id": "carrier_...",
+  "agent_id": "resident",
+  "kind": "html",
+  "title": "Report preview",
+  "content_type": "text/html; charset=utf-8",
+  "created_at": "2026-06-30T19:00:00.000Z",
+  "access": { "scope": "session", "token_required": false },
+  "render": {
+    "preferred": "inline",
+    "sandbox": {
+      "allow_scripts": true,
+      "allow_forms": true,
+      "allow_same_origin": false,
+      "allow_top_navigation": false
+    }
+  },
+  "lifecycle": { "state": "active", "owner": "nars-session" }
+}
+```
+
+NARS exposes artifact endpoints on the local runtime HTTP origin:
+
+```text
+POST /sessions/:sessionId/artifacts
+GET  /sessions/:sessionId/artifacts
+GET  /sessions/:sessionId/artifacts/:artifactId
+POST /sessions/:sessionId/artifacts/:artifactId/message
+GET  /sessions/:sessionId/artifacts/:artifactId/content
+```
+
+The current implementation admits artifact source paths only under the Site root or the current session directory. HTML content is served with `text/html` and a restrictive sandbox Content-Security-Policy. Missing, stale, unsupported, or unadmitted artifacts return structured JSON errors instead of blank panels.
+
+Assistant messages reference artifacts as structured parts:
+
+```json
+{
+  "event": "assistant_message",
+  "content": [
+    { "type": "markdown", "text": "Here is the generated report:" },
+    {
+      "type": "artifact_ref",
+      "artifact_id": "art_...",
+      "kind": "html",
+      "title": "Report preview",
+      "render_hint": "inline"
+    }
+  ]
+}
+```
+
+String `assistant_message.content` remains valid for backward compatibility. When structured `content[]` is present, clients should render parts in order. `agent-web-ui` renders artifact refs through its `/api/nars` proxy, so iframe previews use NARS-served session artifact URLs rather than local filesystem paths.
+
+The preferred operator-visible presentation path is NARS-owned: after an artifact is registered, `POST /sessions/:sessionId/artifacts/:artifactId/message` appends and broadcasts an `assistant_message` event whose `content[]` includes the `artifact_ref`. MCP clients should use that path, via the artifacts MCP `artifact_present` tool, instead of expecting a model to convert a tool result into structured assistant content.
 
 ## Per-Session Record
 

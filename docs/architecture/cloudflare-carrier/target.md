@@ -62,7 +62,7 @@ The control room maps lifecycle `next_action` values to existing operator action
 }
 ```
 
-This shape is illustrative, not exclusive. A production topology may combine Workers, Durable Objects, Queues, Workflows, HTTP, SSE, and WebSockets. Those are host and transport choices unless they change runtime semantics. Remote observation of local NARS sessions through Cloudflare is a separate projection/admission target, defined in [`../../concepts/nars-remote-projection-gateway.md`](../../concepts/nars-remote-projection-gateway.md), and must not be confused with Cloudflare-hosted carrier execution.
+This shape is illustrative, not exclusive. A production topology may combine Workers, Durable Objects, Queues, Workflows, HTTP, SSE, and WebSockets. Those are host and transport choices unless they change runtime semantics. Cloudflare-hosted projection of local NARS sessions is a separate projection/admission target, defined in [`../../concepts/cloudflare-nars-web-projection.md`](../../concepts/cloudflare-nars-web-projection.md), with the narrower gateway slice in [`../../concepts/nars-remote-projection-gateway.md`](../../concepts/nars-remote-projection-gateway.md). It must not be confused with Cloudflare-hosted carrier execution.
 
 ## Layer Ownership
 
