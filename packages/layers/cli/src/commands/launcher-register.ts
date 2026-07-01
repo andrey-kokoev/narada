@@ -17,15 +17,16 @@ export function registerLauncherCommands(program: Command): void {
     .option('--site <site...>', 'Site filter')
     .option('--config-path <path...>', 'One or more launch registry files')
     .option('--registry-path <path>', 'Launch registry path')
-    .option('--carrier <carrier>', 'Override operator carrier')
+    .option('--carrier <carrier>', 'Legacy alias for --operator-surface')
     .option('--operator-surface <surface>', 'Override operator/client surface; preferred replacement for --carrier')
     .option('--runtime <runtime>', 'Override runtime implementation')
     .option('--intelligence-provider <provider>', 'NARS operator-surface intelligence provider')
-    .option('--interactive-selection', 'Interactively select Site, Role, Carrier, Runtime, and applicable Intelligence Provider before planning', false)
+    .option('--cloudflare-api-base-url <url>', 'Default Cloudflare NARS projection Worker URL for agent-web-ui publish controls')
+    .option('--interactive-selection', 'Interactively select Site, Role, Operator Surface, Runtime, and applicable Intelligence Provider before planning', false)
     .option('--default-interactive-selection', 'Use interactive selection when no selection flags are supplied', false)
     .option('--result-path <path>', 'Write the workspace plan JSON to a file')
     .option('--suppress-result-output', 'Do not print the final result envelope after writing --result-path', false)
-    .option('--enable-native-shell', 'Break-glass: permit native shell carrier posture where supported', false)
+    .option('--enable-native-shell', 'Break-glass: permit native shell posture where supported', false)
     .option('--no-wait-for-enter-before-exec', 'Do not add the wait gate before exec handoff')
     .option('--smoke', 'Return smoke dry-run commands instead of opening terminals', false)
     .option('--dry-run', 'Return Windows Terminal argv plan without opening terminals', false)
@@ -74,16 +75,16 @@ export function registerLauncherCommands(program: Command): void {
     .option('--site <site...>', 'Site filter')
     .option('--config-path <path...>', 'One or more launch registry files')
     .option('--registry-path <path>', 'Launch registry path')
-    .option('--carrier <carrier>', 'Override operator carrier')
+    .option('--carrier <carrier>', 'Legacy alias for --operator-surface')
     .option('--operator-surface <surface>', 'Override operator/client surface; preferred replacement for --carrier')
     .option('--runtime <runtime>', 'Override runtime implementation')
     .option('--intelligence-provider <provider>', 'NARS operator-surface intelligence provider')
     .option('--cloudflare-api-base-url <url>', 'Default Cloudflare NARS projection Worker URL for agent-web-ui publish controls')
-    .option('--interactive-selection', 'Interactively select Site, Role, Carrier, Runtime, and applicable Intelligence Provider before launching', false)
+    .option('--interactive-selection', 'Interactively select Site, Role, Operator Surface, Runtime, and applicable Intelligence Provider before launching', false)
     .option('--default-interactive-selection', 'Use interactive selection when no selection flags are supplied', false)
     .option('--result-path <path>', 'Write the workspace plan JSON to a file')
     .option('--suppress-result-output', 'Do not print the final result envelope after writing --result-path', false)
-    .option('--enable-native-shell', 'Break-glass: permit native shell carrier posture where supported', false)
+    .option('--enable-native-shell', 'Break-glass: permit native shell posture where supported', false)
     .option('--no-wait-for-enter-before-exec', 'Do not add the wait gate before exec handoff')
     .option('--smoke', 'Return smoke dry-run commands instead of opening terminals', false)
     .option('--dry-run', 'Return Windows Terminal argv plan without opening terminals', false)
@@ -110,6 +111,7 @@ export function registerLauncherCommands(program: Command): void {
         operatorSurface: opts.operatorSurface as string | undefined,
         runtime: opts.runtime as string | undefined,
         intelligenceProvider: opts.intelligenceProvider as string | undefined,
+        cloudflareApiBaseUrl: opts.cloudflareApiBaseUrl as string | undefined,
         interactiveSelection: opts.interactiveSelection as boolean | undefined,
         defaultInteractiveSelection: opts.defaultInteractiveSelection as boolean | undefined,
         resultPath: opts.resultPath as string | undefined,

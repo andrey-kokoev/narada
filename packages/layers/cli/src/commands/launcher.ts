@@ -499,7 +499,7 @@ export async function workspaceLaunchPlanCommand(
       windows_terminal_invoked: false,
       mcp_initialization: {
         status: 'not_executed_in_dry_run',
-        reason: 'Smoke mode calls carrier start dry-run only; live MCP startup remains an execution probe.',
+        reason: 'Smoke mode calls operator-surface runtime start dry-run only; live MCP startup remains an execution probe.',
       },
       registry_paths: registryPaths,
       agents,
