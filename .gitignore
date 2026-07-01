@@ -34,11 +34,13 @@ config.json
 .narada/crew/agent-tui-live-turn-*.txt
 .narada/crew/codex-home/
 .narada/crew/nars-sessions/
+.narada/crew/nars-projections/
 .narada/auth/
 .narada/site-continuity/
 .narada/site-tool-surface.manifest.json
 .narada/tmp/
 packages/*/target/
+packages/*/.narada/
 packages/layers/cli/.ai/inbox.db
 packages/layers/cli/.ai/inbox.db-*
 packages/layers/cli/.ai/mutation-evidence/

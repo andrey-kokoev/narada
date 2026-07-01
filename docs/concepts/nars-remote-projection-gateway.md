@@ -4,7 +4,7 @@
 
 This document defines the target shape for exposing local NARS session observation to a remote browser through Cloudflare without making Cloudflare the local runtime owner and without exposing raw local NARS endpoints directly.
 
-The local session-management contract remains in [`nars-session-management.md`](nars-session-management.md). The runtime contract remains in [`nars-runtime-contract.md`](nars-runtime-contract.md). The broader Cloudflare-hosted operator projection target is [`cloudflare-nars-web-projection.md`](cloudflare-nars-web-projection.md); this gateway document is the narrower local/remote gateway slice under that target shape.
+The local session-management contract remains in [`nars-session-management.md`](nars-session-management.md). The runtime contract remains in [`nars-runtime-contract.md`](nars-runtime-contract.md). The general graph ontology is [`narada-runtime-projection-graph.md`](narada-runtime-projection-graph.md). The broader Cloudflare-hosted operator projection target is [`cloudflare-nars-web-projection.md`](cloudflare-nars-web-projection.md); this gateway document is the narrower local/remote gateway slice under that target shape.
 
 ## Target Outcome
 
@@ -27,6 +27,8 @@ A remote operator can open a Cloudflare-hosted page and observe one or more loca
 - Do not grant remote operator input, host commands, tool execution, or lifecycle mutation in the first read-only observation slice.
 
 ## Topology
+
+In Runtime Projection Graph terms, this read-only gateway is a constrained `projection_edge` from local NARS authority into a remote observation surface. It intentionally omits a remote `intent_route` until an operator-input admission slice grants one.
 
 ```text
 Cloudflare Page / remote browser

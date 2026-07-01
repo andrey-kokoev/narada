@@ -10,7 +10,6 @@ Semantic and architecture-boundary concepts. These documents define how the syst
 - [`narada-agent-runtime-server.md`](concepts/narada-agent-runtime-server.md) — Vendor-neutral, stateful, machine-addressable Agent runtime server concept
 - [`nars-runtime-contract.md`](concepts/nars-runtime-contract.md) — Implementation-facing NARS package, protocol, event, carrier, worker, and verification contract
 - [`nars-client-projection-contract.md`](concepts/nars-client-projection-contract.md) — Shared client projection semantics for agent-cli, agent-web-ui, and Cloudflare NARS projections
-- [`first-class-narada-runtime-concepts.md`](concepts/first-class-narada-runtime-concepts.md) — Coordination map for first-class NARS, projection, delegation, provider, role, speech, feedback, health, and artifact concepts
 - [`carrier-action-admission-boundary.md`](concepts/carrier-action-admission-boundary.md) — Governed conversion boundary from carrier action requests to authority-bearing Site decisions
 - [`governed-transduction.md`](concepts/governed-transduction.md) — Lineage-preserving transformation through governed admission boundaries
 - [`system.md`](concepts/system.md) — System architecture and data flow overview

@@ -6,7 +6,7 @@ This document defines the implementation-facing shape of the Narada Agent Runtim
 
 The concept document [`narada-agent-runtime-server.md`](narada-agent-runtime-server.md) defines what NARS is. This document defines the contract implementation code should converge on: package ownership, launch boundary, session protocol, event shape, carrier adapter boundary, and verification expectations.
 
-The full target for session discovery, liveness, attachment, and recovery is [`nars-session-management.md`](nars-session-management.md). The target for Cloudflare-hosted remote browser projection of local NARS sessions is [`cloudflare-nars-web-projection.md`](cloudflare-nars-web-projection.md), with the narrower gateway slice in [`nars-remote-projection-gateway.md`](nars-remote-projection-gateway.md).
+The full target for session discovery, liveness, attachment, and recovery is [`nars-session-management.md`](nars-session-management.md). The general authority/projection/surface topology is [`narada-runtime-projection-graph.md`](narada-runtime-projection-graph.md). The target for Cloudflare-hosted remote browser projection of local NARS sessions is [`cloudflare-nars-web-projection.md`](cloudflare-nars-web-projection.md), with the narrower gateway slice in [`nars-remote-projection-gateway.md`](nars-remote-projection-gateway.md).
 
 NARS is the Narada-owned runtime server contract for durable, machine-addressable agent sessions. It is not a synonym for Codex, `agent-cli`, a terminal, a transcript, or a model SDK.
 
@@ -106,6 +106,8 @@ Human terminal input is not raw JSONL. A terminal attached to NARS is a projecti
 ## Client And Runtime Split
 
 NARS is the runtime owner. `@narada2/agent-runtime-server` owns session binding, provider/carrier turn execution, MCP fabric hosting, tool dispatch, durable `events.jsonl`, status/health/event subscription state, and lifecycle hook dispatch. Client packages must not silently recreate those responsibilities.
+
+In Runtime Projection Graph terms, NARS is an `authority_runtime`; attached clients and remote browser embodiments are `projection_surface` nodes unless a separate authority transfer explicitly says otherwise.
 
 `@narada2/agent-cli`, `agent-tui`, and `@narada2/agent-web-ui` are peer clients/projections over the NARS protocol. Their durable responsibilities are terminal/UI input handling, human-readable event rendering, local command affordances, and explicit attach/resume UX. In attach mode, ordinary operator text becomes `conversation.send` when idle and `conversation.enqueue` during active turns; slash commands become protocol frames such as `carrier.command.execute`, `session.status`, `session.health`, `session.events.subscribe`, `session.recovery`, `session.operations`, `conversation.interrupt`, and `session.close`; incoming event envelopes are rendered through the client projection. The current `@narada2/agent-web-ui` slice subscribes with `session.events.subscribe`, reads ambient browser status through the local HTTP `/api/health` proxy, admits ordinary operator text as `conversation.send` when idle and `conversation.enqueue` during active turns, and projects slash commands, including `/health` as `session.health`, into the same NARS protocol surface. Runtime hosting, provider turn execution, and MCP hosting remain outside the web package.
 
