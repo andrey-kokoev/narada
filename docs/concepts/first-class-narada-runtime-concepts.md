@@ -211,3 +211,32 @@ Acceptance coverage:
 - Site defaults and Agent partial overrides are named as the target shape.
 - The remaining implementation gap is explicit rather than implied complete.
 - Combination validation is part of the acceptance target.
+
+## 1556 - Role Enforcement Policy
+
+CL: 0.989
+
+First-class object: resolved task role and capability policy across product, host, User Site, target Site, and task scopes.
+
+Authority contracts:
+
+- [`task-lifecycle-role-enforcement-policy.md`](task-lifecycle-role-enforcement-policy.md)
+- Task lifecycle MCP target docs and role/capability enforcement tests
+
+Current implementation posture:
+
+- Role enforcement has a policy document and task lifecycle tests for target role, generic engineer, outcome contracts, review capability, and verification capability.
+- Role binding is an eligibility filter, while lifecycle mutation authority remains explicit and auditable.
+- Advisory and strict modes must not be conflated because different Sites may be at different enforcement maturity.
+
+Remaining implementation work:
+
+- Surface the resolved policy consistently in claim, continue, finish, review, workboard, and diagnostics.
+- Make Site-level opt-in and host/User defaults explicit where they participate in resolution.
+- Ensure refusal messages explain role binding, authority basis, and available remediation separately.
+
+Acceptance coverage:
+
+- The policy object is named independently from any one task lifecycle tool call.
+- Advisory and strict modes are stated as distinct enforcement postures.
+- Diagnostics must identify the resolved policy basis, not just the refusal outcome.
