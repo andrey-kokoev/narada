@@ -268,3 +268,32 @@ Acceptance coverage:
 - MCP feedback is named as a first-class loop, not an incidental operator request.
 - Feedback is traceable into tasks or surface backlog without becoming mutation authority by itself.
 - The distinction between ergonomics feedback and task execution evidence is explicit.
+
+## 1558 - Health, Heartbeat, And Lifecycle Hooks
+
+CL: 0.995
+
+First-class object: NARS-owned health projection, heartbeat freshness, session events, and session/turn lifecycle hooks.
+
+Authority contracts:
+
+- [`nars-runtime-contract.md`](nars-runtime-contract.md)
+- [`nars-session-management.md`](nars-session-management.md)
+
+Current implementation posture:
+
+- NARS runtime contract names `session.health`, HTTP `/health`, heartbeat freshness, session events, and lifecycle hook payloads.
+- Session management docs define health and heartbeat as liveness projections rather than terminal-window guesses.
+- Client views are expected to observe health without letting routine samples pollute conversation history.
+
+Remaining implementation work:
+
+- Keep routine healthy heartbeats out of operator chat while still surfacing degraded and error states.
+- Add or preserve hook payload tests where runtime extraction changed package boundaries.
+- Make session and turn lifecycle hook semantics stable enough for CLI, TUI, Web UI, and future surfaces to share.
+
+Acceptance coverage:
+
+- Health and heartbeat are documented as NARS-owned projections.
+- Lifecycle hooks are stated as shared runtime semantics, not client-local callbacks.
+- Routine health visibility and conversation rendering are explicitly separated.
