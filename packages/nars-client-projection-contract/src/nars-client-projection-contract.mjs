@@ -79,6 +79,8 @@ export const NARS_CLIENT_EVENT_LABELS = Object.freeze({
   session_artifact_registered: 'Artifact registered',
   session_artifact_read: 'Artifact',
   session_health: 'Health',
+  carrier_diagnostic_recorded: 'Diagnostic',
+  mcp_runtime_fault: 'MCP runtime fault',
   authority_session_revoked: 'Session revoked',
   session_status: 'Status',
   session_recovery: 'Recovery',
@@ -278,6 +280,7 @@ export function classifyNarsClientEventProjection(projection) {
   if (kind === 'assistant_message' || kind === 'assistant_message_stream' || kind === 'user_message' || kind === 'operator_input_submitted' || kind === 'agent_web_ui_message' || kind === 'agent_web_ui_help') return 'conversation';
   if (kind === 'error' || kind === 'websocket_error' || kind === 'web_ui_decode_error' || kind === 'web_ui_input_not_sent' || kind === 'runtime_error') return 'conversation';
   if (kind === 'authority_session_revoked') return 'diagnostics';
+  if (kind === 'carrier_diagnostic_recorded' || kind === 'mcp_runtime_fault') return 'diagnostics';
   if (kind === 'tool_call' || kind === 'tool_result' || kind === 'turn_failed') return 'operations';
   if (kind === 'session_artifact_registered' || kind === 'session_artifact_read') return 'operations';
   if (kind === 'conversation_enqueue_requested' || kind === 'input_queued_for_turn_boundary' || kind === 'input_admitted_to_turn' || kind === 'input_dropped_by_operator' || kind === 'input_abandoned_on_session_end' || kind === 'input_completed') return 'operations';
@@ -317,9 +320,10 @@ function eventTone(kind) {
   if (kind === 'user_message') return NARS_CLIENT_EVENT_TONES.operator;
   if (kind === 'tool_call' || kind === 'tool_result') return NARS_CLIENT_EVENT_TONES.tool;
   if (kind === 'session_artifact_registered' || kind === 'session_artifact_read') return NARS_CLIENT_EVENT_TONES.status;
-  if (kind === 'error' || kind === 'websocket_error' || kind === 'web_ui_decode_error' || kind === 'turn_failed' || kind === 'authority_session_revoked') return NARS_CLIENT_EVENT_TONES.error;
+  if (kind === 'error' || kind === 'websocket_error' || kind === 'web_ui_decode_error' || kind === 'turn_failed' || kind === 'authority_session_revoked' || kind === 'mcp_runtime_fault') return NARS_CLIENT_EVENT_TONES.error;
   if (kind?.startsWith?.('agent_web_ui_') || kind === 'operator_input_submitted' || kind === 'web_ui_input_not_sent') return NARS_CLIENT_EVENT_TONES.local;
   if (kind === 'conversation_enqueue_requested' || kind?.startsWith?.('input_')) return NARS_CLIENT_EVENT_TONES.status;
+  if (kind === 'carrier_diagnostic_recorded') return NARS_CLIENT_EVENT_TONES.status;
   if (kind?.startsWith?.('session_') || kind?.startsWith?.('turn_')) return NARS_CLIENT_EVENT_TONES.session;
   return NARS_CLIENT_EVENT_TONES.unknown;
 }
@@ -336,6 +340,7 @@ function eventSummary(event, kind) {
   if (kind === 'session_artifact_registered') return event.artifact?.title ?? event.artifact?.artifact_id ?? 'artifact registered';
   if (kind === 'session_artifact_read') return event.artifact?.title ?? event.artifact?.artifact_id ?? 'artifact';
   if (kind === 'session_health') return `${event.status ?? 'health'} · ${event.agent_id ?? 'agent'} · ${event.session_id ?? 'session'}`;
+  if (kind === 'mcp_runtime_fault' || kind === 'carrier_diagnostic_recorded') return diagnosticSummary(event, kind);
   if (kind === 'turn_complete') return event.terminal_state ?? 'turn complete';
   if (kind === 'turn_started') return event.turn_id ?? 'turn started';
   if (kind === 'conversation_enqueue_requested') return event.delivery_semantics ?? 'queued for next turn';
@@ -344,6 +349,16 @@ function eventSummary(event, kind) {
   if (typeof event?.message === 'string') return event.message;
   if (typeof event?.content === 'string') return event.content;
   return '';
+}
+
+function diagnosticSummary(event, kind) {
+  if (kind === 'mcp_runtime_fault' || event?.diagnostic_code === 'mcp_runtime_fault') {
+    const server = event.server_name ?? 'unknown';
+    const tool = event.tool_name ?? '<missing>';
+    const error = event.error_code ?? event.error ?? event.message ?? null;
+    return `MCP runtime fault ${server}:${tool}${error ? ` ${error}` : ''}`;
+  }
+  return event?.message ?? event?.diagnostic_code ?? kind;
 }
 
 export function projectNarsClientEvent(message) {

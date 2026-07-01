@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import test from 'node:test';
+import { createCloudflareNarsAuthorityService } from '@narada2/cloudflare-nars-projection';
 import { createCloudflareNarsProjectionWorker } from '@narada2/cloudflare-nars-projection/worker';
 import { startAgentWebUiServer } from '../src/server.js';
 import {
@@ -67,12 +68,106 @@ async function jsonOf(responseOrPromise) {
   return response.json();
 }
 
+function seedCloudflareAuthorityMcpEvents(authorityService, session, timestamp = now) {
+  const snapshot = authorityService.snapshot();
+  const sessionEvents = snapshot.events.filter((entry) => entry.session_id === session.session_id);
+  const baseSequence = sessionEvents.reduce((max, entry) => Math.max(max, Number(entry.event_sequence ?? 0)), 0);
+  const payloads = [
+    {
+      event: 'tool_call',
+      type: 'tool.call',
+      turn_id: 'turn_cf_authority_mcp',
+      request_id: 'input_cf_authority_mcp',
+      tool_name: 'cf-authority.fixture_read',
+      tool: 'cf-authority.fixture_read',
+      decision: 'read_only_admitted',
+      argument_summary: { topic: 'cloudflare-authority-local-surface' },
+      authority_origin: 'cloudflare',
+      carrier_mutation_admitted: false,
+    },
+    {
+      event: 'tool_result',
+      type: 'tool.result',
+      turn_id: 'turn_cf_authority_mcp',
+      request_id: 'input_cf_authority_mcp',
+      tool_name: 'cf-authority.fixture_read',
+      tool: 'cf-authority.fixture_read',
+      status: 'ok',
+      duration_ms: 11,
+      decision: 'read_only_admitted',
+      authority_origin: 'cloudflare',
+      carrier_mutation_admitted: false,
+    },
+    {
+      event: 'tool_result',
+      type: 'tool.result',
+      turn_id: 'turn_cf_authority_mcp',
+      request_id: 'input_cf_authority_mcp',
+      tool_name: 'cf-authority.fixture_fail',
+      tool: 'cf-authority.fixture_fail',
+      status: 'failed',
+      error: 'fixture_mcp_forced_failure',
+      error_code: 'fixture_mcp_forced_failure',
+      duration_ms: 5,
+      decision: 'read_only_admitted',
+      authority_origin: 'cloudflare',
+      carrier_mutation_admitted: false,
+    },
+    {
+      event: 'mcp_runtime_fault',
+      type: 'diagnostic.mcp_runtime_fault',
+      diagnostic_code: 'mcp_runtime_fault',
+      server_name: 'cf-authority',
+      tool_name: 'fixture_fail',
+      error_code: 'fixture_mcp_forced_failure',
+      message: 'Cloudflare authority fixture MCP failure',
+      authority_origin: 'cloudflare',
+    },
+  ];
+  const mcpEvents = payloads.map((payload, index) => {
+    const eventSequence = baseSequence + index + 1;
+    return {
+      schema: 'narada.cloudflare_nars_authority.event.v1',
+      session_id: session.session_id,
+      site_id: session.site_id,
+      agent_id: session.agent_id,
+      event_sequence: eventSequence,
+      event_id: `cf_evt_${session.session_id}_${eventSequence}`,
+      timestamp,
+      payload: {
+        event_sequence: eventSequence,
+        sequence: eventSequence,
+        timestamp,
+        agent_id: session.agent_id,
+        session_id: session.session_id,
+        ...payload,
+      },
+    };
+  });
+  authorityService.load({
+    ...snapshot,
+    events: [...snapshot.events, ...mcpEvents],
+  });
+  return mcpEvents;
+}
+
+async function setProjectionView(page, value) {
+  return page.evaluate(String.raw`((nextValue) => {
+    const select = document.querySelector('#projection-verbosity');
+    if (!select) return { ok: false, reason: 'missing_projection_verbosity_select' };
+    select.value = nextValue;
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    return { ok: true, value: select.value };
+  })(${JSON.stringify(value)})`);
+}
+
 test('local agent-web-ui submits to Cloudflare-hosted NARS authority and renders authority HTML artifact', async () => {
   const browserPath = findHeadlessBrowser();
   assert.ok(browserPath, 'expected an installed Chromium-family browser for Cloudflare authority local-surface artifact E2E');
 
   const sessionId = 'cf_authority_local_surface_artifact_e2e';
-  const worker = createCloudflareNarsProjectionWorker({ now: () => now });
+  const authorityService = createCloudflareNarsAuthorityService();
+  const worker = createCloudflareNarsProjectionWorker({ now: () => now, authority_service: authorityService });
   const servedResponses = [];
   const envRef = { current: {} };
   const workerServer = createWorkerHttpServer(worker, envRef, servedResponses);
@@ -88,6 +183,7 @@ test('local agent-web-ui submits to Cloudflare-hosted NARS authority and renders
   })));
   assert.equal(created.status, 'created');
   assert.equal(created.session_id, sessionId);
+  seedCloudflareAuthorityMcpEvents(authorityService, created.session);
 
   const localWeb = await startAgentWebUiServer({
     host: '127.0.0.1',
@@ -101,6 +197,30 @@ test('local agent-web-ui submits to Cloudflare-hosted NARS authority and renders
     page = await openCdpPage({ browserPath, url: localWeb.url, userDataPrefix: 'narada-cf-authority-local-surface-artifact-' });
     const initialReplay = await waitForPageText(page, 'narada.cloudflare.e2e / cloudflare.resident', 15000);
     assert.equal(initialReplay.found, true, JSON.stringify(initialReplay));
+    assert.equal((await waitForPageText(page, 'cf-authority.fixture_read', 15000)).found, true);
+    assert.equal((await waitForPageText(page, 'cf-authority.fixture_read ok', 15000)).found, true);
+    assert.equal((await waitForPageText(page, 'cf-authority.fixture_fail failed', 15000)).found, true);
+
+    const switchedToConversation = await setProjectionView(page, 'conversation');
+    assert.deepEqual(switchedToConversation, { ok: true, value: 'conversation' });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const conversationText = await page.evaluate('document.body.innerText');
+    assert.doesNotMatch(conversationText, /cf-authority\\.fixture_read/);
+    assert.doesNotMatch(conversationText, /fixture_mcp_forced_failure/);
+
+    const switchedToDiagnostics = await setProjectionView(page, 'diagnostics');
+    assert.deepEqual(switchedToDiagnostics, { ok: true, value: 'diagnostics' });
+    assert.equal((await waitForPageText(page, 'MCP runtime fault cf-authority:fixture_fail fixture_mcp_forced_failure', 15000)).found, true);
+    const diagnosticsText = await page.evaluate('document.body.innerText');
+    assert.doesNotMatch(diagnosticsText, /cf-authority\\.fixture_read ok/);
+
+    const switchedToOperations = await setProjectionView(page, 'operations');
+    assert.deepEqual(switchedToOperations, { ok: true, value: 'operations' });
+    assert.equal((await waitForPageText(page, 'cf-authority.fixture_read', 15000)).found, true);
+    assert.equal((await waitForPageText(page, 'cf-authority.fixture_read ok', 15000)).found, true);
+    assert.equal((await waitForPageText(page, 'cf-authority.fixture_fail failed', 15000)).found, true);
+    const operationsText = await page.evaluate('document.body.innerText');
+    assert.doesNotMatch(operationsText, /MCP runtime fault cf-authority:fixture_fail fixture_mcp_forced_failure/);
 
     const submitted = await page.evaluate(String.raw`(async () => {
       const input = document.querySelector('#operator-input');
@@ -139,6 +259,9 @@ test('local agent-web-ui submits to Cloudflare-hosted NARS authority and renders
 
     const replay = await jsonOf(worker.fetch(new Request(`${workerBaseUrl}/api/nars/authority/sessions/${sessionId}/events?since_sequence=1`)));
     assert.equal(replay.status, 'ok');
+    assert.ok(replay.events.some((entry) => entry.payload?.event === 'tool_call' && entry.payload?.tool_name === 'cf-authority.fixture_read'), JSON.stringify(replay));
+    assert.ok(replay.events.some((entry) => entry.payload?.event === 'tool_result' && entry.payload?.tool_name === 'cf-authority.fixture_fail' && entry.payload?.status === 'failed'), JSON.stringify(replay));
+    assert.ok(replay.events.some((entry) => entry.payload?.event === 'mcp_runtime_fault' && entry.payload?.error_code === 'fixture_mcp_forced_failure'), JSON.stringify(replay));
     assert.ok(replay.events.some((entry) => entry.payload?.event === 'session_artifact_registered'), JSON.stringify(replay));
     assert.ok(replay.events.some((entry) => JSON.stringify(entry.payload).includes('art_cf_authority_html')), JSON.stringify(replay));
   } finally {

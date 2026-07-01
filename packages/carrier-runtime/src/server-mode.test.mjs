@@ -24,6 +24,218 @@ function readJson(path) {
   return JSON.parse(readFileSync(path, 'utf8'));
 }
 
+function readJsonl(path) {
+  return readFileSync(path, 'utf8')
+    .trim()
+    .split(/\r?\n/)
+    .filter(Boolean)
+    .map((line) => JSON.parse(line));
+}
+
+function writeFixtureMcpSurface(siteRoot, { failToolCall = false } = {}) {
+  mkdirSync(join(siteRoot, '.ai', 'mcp'), { recursive: true });
+  mkdirSync(join(siteRoot, '.narada', 'capabilities'), { recursive: true });
+  mkdirSync(join(siteRoot, 'tools'), { recursive: true });
+  writeFileSync(join(siteRoot, 'tools', 'fixture-mcp.mjs'), `
+let buffer = '';
+const failToolCall = ${JSON.stringify(failToolCall)};
+function write(message) {
+  process.stdout.write(JSON.stringify(message) + '\\n');
+}
+function handle(request) {
+  if (request.method === 'initialize') {
+    write({ jsonrpc: '2.0', id: request.id, result: { protocolVersion: '2024-11-05', capabilities: { tools: {} }, serverInfo: { name: 'narada-fixture-mcp', version: '0.0.0-test' } } });
+    return;
+  }
+  if (request.method === 'tools/list') {
+    write({ jsonrpc: '2.0', id: request.id, result: { tools: [{ name: 'fixture_read', description: 'Read deterministic fixture data', inputSchema: { type: 'object', properties: { topic: { type: 'string' } } } }] } });
+    return;
+  }
+  if (request.method === 'tools/call') {
+    if (failToolCall) {
+      write({ jsonrpc: '2.0', id: request.id, error: { code: -32000, message: 'fixture_mcp_forced_failure' } });
+      setTimeout(() => process.exit(0), 0);
+      return;
+    }
+    write({ jsonrpc: '2.0', id: request.id, result: { content: [{ type: 'text', text: JSON.stringify({ status: 'ok', tool: request.params?.name, topic: request.params?.arguments?.topic ?? null }) }] } });
+    setTimeout(() => process.exit(0), 0);
+    return;
+  }
+  write({ jsonrpc: '2.0', id: request.id, error: { code: -32601, message: 'unsupported method ' + request.method } });
+}
+process.stdin.setEncoding('utf8');
+process.stdin.on('data', (chunk) => {
+  buffer += chunk;
+  let newlineIndex;
+  while ((newlineIndex = buffer.indexOf('\\n')) !== -1) {
+    const line = buffer.slice(0, newlineIndex).trim();
+    buffer = buffer.slice(newlineIndex + 1);
+    if (!line) continue;
+    handle(JSON.parse(line));
+  }
+});
+`, 'utf8');
+  writeFileSync(join(siteRoot, '.ai', 'mcp', 'fixture-mcp.json'), `${JSON.stringify({
+    schema: 'narada.mcp.client_config.v0',
+    mcpServers: {
+      'narada-fixture': {
+        command: 'node',
+        args: ['{site_root}/tools/fixture-mcp.mjs'],
+        surface_id: 'fixture.surface',
+        target_site_root: '{site_root}',
+      },
+    },
+  }, null, 2)}\n`, 'utf8');
+  writeFileSync(join(siteRoot, '.narada', 'capabilities', 'mcp-surfaces.json'), `${JSON.stringify({
+    schema: 'narada.site.capabilities.mcp_surfaces.v1',
+    surfaces: [{
+      surface_id: 'fixture.surface',
+      client_config: { generated_path: '.ai/mcp/fixture-mcp.json' },
+      tool_contract: {
+        read_only_tools: ['fixture_read'],
+        mutating_tools: [],
+        refused_tools: [],
+      },
+    }],
+  }, null, 2)}\n`, 'utf8');
+}
+
+test('server mode executes a provider-requested MCP tool through real fabric and records evidence', async () => {
+  const siteRoot = mkdtempSync(join(tmpdir(), 'carrier-mcp-e2e-test-'));
+  try {
+    writeFixtureMcpSurface(siteRoot);
+    const input = new PassThrough();
+    const output = new PassThrough();
+    const events = [];
+    let outputBuffer = '';
+    output.setEncoding('utf8');
+    output.on('data', (chunk) => {
+      outputBuffer += chunk;
+      const lines = outputBuffer.split(/\r?\n/);
+      outputBuffer = lines.pop() ?? '';
+      for (const line of lines) {
+        if (line.trim()) events.push(JSON.parse(line));
+      }
+    });
+
+    const sessionDir = resolveNaradaSitePaths({ siteRoot, sessionId: 'session_mcp_tool_e2e' }).narsSessionDir;
+    const runtimeContext = {
+      identity: 'agent.test',
+      session: 'session_mcp_tool_e2e',
+      siteRoot,
+      sessionPath: join(sessionDir, 'session.jsonl'),
+      eventsPath: join(sessionDir, 'events.jsonl'),
+      providerSettings: { stream: false },
+    };
+    const { dependencies } = createCarrierRuntimeDependencies({ runtimeContext });
+    const providerCalls = [];
+    input.write(`${JSON.stringify({ id: 'mcp-e2e-input', method: 'conversation.send', params: { message: 'Use the fixture MCP tool', source: 'programmatic_operator' } })}\n`);
+    input.end();
+    await runCarrierServerMode({
+      input,
+      output,
+      callChatApiFn: async (messages, tools) => {
+        providerCalls.push({ messages, tools });
+        if (providerCalls.length === 1) {
+          assert.equal(tools.some((tool) => tool.function?.name === 'fixture_read'), true);
+          return { choices: [{ message: { role: 'assistant', content: null, tool_calls: [{ id: 'call_fixture_read', type: 'function', function: { name: 'fixture_read', arguments: JSON.stringify({ topic: 'mcp-e2e' }) } }] } }] };
+        }
+        assert.equal(messages.some((message) => message.role === 'tool' && /mcp-e2e/.test(String(message.content))), true);
+        return { choices: [{ message: { role: 'assistant', content: 'Fixture MCP tool returned ok.' } }] };
+      },
+      runtimeContext,
+      dependencies: {
+        ...dependencies,
+        readMcpPreflightArtifact: () => null,
+      },
+    });
+
+    assert.equal(providerCalls.length, 2);
+    assert.equal(events.some((event) => event.event === 'session_started' && event.mcp_server_count === 1 && event.mcp_operational_state === 'healthy'), true);
+    const toolCall = events.find((event) => event.event === 'tool_call' && event.tool === 'fixture_read');
+    assert.ok(toolCall, JSON.stringify(events));
+    assert.equal(toolCall.decision, 'read_only_admitted');
+    const toolResult = events.find((event) => event.event === 'tool_result' && event.tool === 'fixture_read');
+    assert.ok(toolResult, JSON.stringify(events));
+    assert.equal(toolResult.status, 'ok');
+    assert.equal(events.some((event) => event.event === 'assistant_message' && event.content === 'Fixture MCP tool returned ok.'), true);
+    assert.equal(events.some((event) => event.event === 'turn_complete' && event.terminal_state === 'completed'), true);
+
+    const sessionRecords = readJsonl(join(sessionDir, 'session.jsonl'));
+    const durableToolCall = sessionRecords.find((record) => record.event_kind === 'tool_call_requested');
+    assert.equal(durableToolCall?.payload?.tool_name, 'fixture_read');
+    assert.equal(durableToolCall?.payload?.requesting_agent_id, 'agent.test');
+    const durableToolResult = sessionRecords.find((record) => record.event_kind === 'tool_result_received');
+    assert.equal(durableToolResult?.payload?.tool_name, 'fixture_read');
+    assert.equal(durableToolResult?.payload?.status, 'ok');
+    assert.match(durableToolResult?.payload?.result_summary, /mcp-e2e/);
+  } finally {
+    rmSync(siteRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  }
+});
+
+test('server mode emits MCP runtime diagnostics when a real fabric tool call fails', async () => {
+  const siteRoot = mkdtempSync(join(tmpdir(), 'carrier-mcp-failure-e2e-test-'));
+  try {
+    writeFixtureMcpSurface(siteRoot, { failToolCall: true });
+    const input = new PassThrough();
+    const output = new PassThrough();
+    const events = [];
+    let outputBuffer = '';
+    output.setEncoding('utf8');
+    output.on('data', (chunk) => {
+      outputBuffer += chunk;
+      const lines = outputBuffer.split(/\r?\n/);
+      outputBuffer = lines.pop() ?? '';
+      for (const line of lines) {
+        if (line.trim()) events.push(JSON.parse(line));
+      }
+    });
+
+    const sessionDir = resolveNaradaSitePaths({ siteRoot, sessionId: 'session_mcp_tool_failure_e2e' }).narsSessionDir;
+    const runtimeContext = {
+      identity: 'agent.test',
+      session: 'session_mcp_tool_failure_e2e',
+      siteRoot,
+      sessionPath: join(sessionDir, 'session.jsonl'),
+      eventsPath: join(sessionDir, 'events.jsonl'),
+      providerSettings: { stream: false },
+    };
+    const { dependencies } = createCarrierRuntimeDependencies({ runtimeContext });
+    input.write(`${JSON.stringify({ id: 'mcp-e2e-failure-input', method: 'conversation.send', params: { message: 'Use the failing fixture MCP tool', source: 'programmatic_operator' } })}\n`);
+    input.end();
+    let providerCalls = 0;
+    await runCarrierServerMode({
+      input,
+      output,
+      callChatApiFn: async () => {
+        providerCalls += 1;
+        if (providerCalls === 1) {
+          return { choices: [{ message: { role: 'assistant', content: null, tool_calls: [{ id: 'call_fixture_read_fail', type: 'function', function: { name: 'fixture_read', arguments: JSON.stringify({ topic: 'mcp-failure-e2e' }) } }] } }] };
+        }
+        return { choices: [{ message: { role: 'assistant', content: 'Observed fixture MCP failure.' } }] };
+      },
+      runtimeContext,
+      dependencies: {
+        ...dependencies,
+        readMcpPreflightArtifact: () => null,
+      },
+    });
+    assert.equal(providerCalls, 2);
+
+    const diagnostic = events.find((event) => event.event === 'carrier_diagnostic_recorded' && event.diagnostic_code === 'mcp_runtime_fault');
+    assert.ok(diagnostic, JSON.stringify(events));
+    assert.equal(diagnostic.server_name, 'narada-fixture');
+    assert.equal(diagnostic.tool_name, 'fixture_read');
+    assert.match(diagnostic.error, /fixture_mcp_forced_failure/);
+    const failedToolResult = events.find((event) => event.event === 'tool_result' && event.tool === 'fixture_read');
+    assert.equal(failedToolResult?.status, 'error');
+    assert.match(failedToolResult?.error, /fixture_mcp_forced_failure/);
+  } finally {
+    rmSync(siteRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  }
+});
+
 test('server mode writes NARS session index record on startup', async () => {
   const siteRoot = mkdtempSync(join(tmpdir(), 'carrier-index-start-test-'));
   try {

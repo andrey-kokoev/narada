@@ -113,6 +113,13 @@ test('NARS client projection contract owns shared event rendering vocabulary', (
     summary: 'narada-site.whoami ok',
     event: { event: 'tool_result', tool_name: 'narada-site.whoami', status: 'ok' },
   });
+  assert.deepEqual(projectNarsClientEvent({ event: 'mcp_runtime_fault', server_name: 'narada-site', tool_name: 'fixture_fail', error_code: 'fixture_mcp_forced_failure' }), {
+    kind: 'mcp_runtime_fault',
+    label: 'MCP runtime fault',
+    tone: 'error',
+    summary: 'MCP runtime fault narada-site:fixture_fail fixture_mcp_forced_failure',
+    event: { event: 'mcp_runtime_fault', server_name: 'narada-site', tool_name: 'fixture_fail', error_code: 'fixture_mcp_forced_failure' },
+  });
   assert.equal(projectNarsClientEvent({ event: 'error', message: 'bad' }).tone, 'error');
   assert.equal(projectNarsClientEvent({ event: 'session_health', status: 'healthy', agent_id: 'narada.test', session_id: 'carrier_test' }).summary, 'healthy · narada.test · carrier_test');
   assert.deepEqual(projectNarsClientEvent({ event: 'authority_session_revoked', session_id: 'cf_session_1', code: 'session_revoked' }), {
@@ -140,6 +147,7 @@ test('NARS client projection verbosity filters shared event classes', () => {
   const assistant = { event: 'assistant_message', content: 'hello' };
   const toolCall = { event: 'tool_call', tool_name: 'narada-site.whoami' };
   const toolResult = { event: 'tool_result', tool_name: 'narada-site.whoami', status: 'ok' };
+  const mcpRuntimeFault = { event: 'mcp_runtime_fault', server_name: 'narada-site', tool_name: 'fixture_fail', error_code: 'fixture_mcp_forced_failure' };
   const turnComplete = { event: 'turn_complete', terminal_state: 'completed' };
 
   assert.equal(shouldProjectNarsClientEvent(assistant, { verbosity: 'conversation' }), true);
@@ -152,6 +160,9 @@ test('NARS client projection verbosity filters shared event classes', () => {
   assert.equal(shouldProjectNarsClientEvent(assistant, { verbosity: 'diagnostics' }), false);
   assert.equal(shouldProjectNarsClientEvent(toolCall, { verbosity: 'diagnostics' }), false);
   assert.equal(shouldProjectNarsClientEvent(toolResult, { verbosity: 'diagnostics' }), false);
+  assert.equal(shouldProjectNarsClientEvent(mcpRuntimeFault, { verbosity: 'conversation' }), false);
+  assert.equal(shouldProjectNarsClientEvent(mcpRuntimeFault, { verbosity: 'operations' }), false);
+  assert.equal(shouldProjectNarsClientEvent(mcpRuntimeFault, { verbosity: 'diagnostics' }), true);
   assert.equal(shouldProjectNarsClientEvent(turnComplete, { verbosity: 'conversation' }), false);
   assert.equal(shouldProjectNarsClientEvent(turnComplete, { verbosity: 'operations' }), false);
   assert.equal(shouldProjectNarsClientEvent(turnComplete, { verbosity: 'diagnostics' }), true);

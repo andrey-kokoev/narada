@@ -236,10 +236,34 @@ function wireSyntheticArtifactRuntime({ runtimeInput, eventHub, siteRoot, sessio
 
     publish({ event: 'operator_input_submitted', request_id: requestId, content: message, source: 'agent-web-ui' });
     publish({ event: 'user_message', request_id: requestId, content: message, source: 'agent-web-ui' });
+    publish({ event: 'turn_started', request_id: requestId, turn_id: 'turn_local_submit_mcp', provider: 'fixture-provider' });
+    publish({
+      event: 'tool_call',
+      request_id: requestId,
+      turn_id: 'turn_local_submit_mcp',
+      tool: 'fixture_read',
+      tool_name: 'fixture_read',
+      decision: 'read_only_admitted',
+      argument_summary: { topic: 'local-submit-html-artifact' },
+      carrier_mutation_admitted: false,
+    });
+    publish({
+      event: 'tool_result',
+      request_id: requestId,
+      turn_id: 'turn_local_submit_mcp',
+      tool: 'fixture_read',
+      tool_name: 'fixture_read',
+      status: 'ok',
+      duration_ms: 7,
+      decision: 'read_only_admitted',
+      output_ref: null,
+      carrier_mutation_admitted: false,
+    });
     publish({ event: 'session_artifact_registered', request_id: requestId, artifact });
     publish({
       event: 'assistant_message',
       request_id: requestId,
+      turn_id: 'turn_local_submit_mcp',
       source: 'synthetic_nars_artifact_creation',
       content: [
         { type: 'text', text: 'Artifact submitted to NARS from local web UI.' },
@@ -252,6 +276,7 @@ function wireSyntheticArtifactRuntime({ runtimeInput, eventHub, siteRoot, sessio
         },
       ],
     });
+    publish({ event: 'turn_complete', request_id: requestId, turn_id: 'turn_local_submit_mcp', terminal_state: 'completed' });
     artifactCreatedResolve({ artifact, htmlPath });
   };
 
@@ -412,6 +437,29 @@ test('local agent-web-ui submitted intent creates NARS HTML artifact that remote
     assert.ok(servedIframe, JSON.stringify(servedResponses.map((entry) => ({ url: entry.url, status: entry.status, content_type: entry.content_type }))));
     assert.equal(servedIframe.status, 200);
     assert.match(servedIframe.body, /HTML artifact created after local web UI submit/);
+
+    const switchedToChat = await remotePage.evaluate(String.raw`(() => {
+      const select = document.querySelector('#projection-verbosity');
+      if (!select) return { ok: false, reason: 'missing_projection_verbosity_select' };
+      select.value = 'conversation';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+      return { ok: true, value: select.value };
+    })()`);
+    assert.deepEqual(switchedToChat, { ok: true, value: 'conversation' });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const remoteChatText = await remotePage.evaluate('document.body.innerText');
+    assert.doesNotMatch(remoteChatText, /fixture_read ok/);
+    const switchedToOperations = await remotePage.evaluate(String.raw`(() => {
+      const select = document.querySelector('#projection-verbosity');
+      if (!select) return { ok: false, reason: 'missing_projection_verbosity_select' };
+      select.value = 'operations';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+      return { ok: true, value: select.value };
+    })()`);
+    assert.deepEqual(switchedToOperations, { ok: true, value: 'operations' });
+    assert.equal((await waitForPageText(remotePage, 'fixture_read', 15000)).found, true);
+    assert.equal((await waitForPageText(remotePage, 'fixture_read ok', 15000)).found, true);
+    assert.equal((await waitForPageText(remotePage, 'tool_result', 15000)).found, true);
 
     const remoteSubmitted = await remotePage.evaluate(String.raw`(async () => {
       const input = document.querySelector('#operator-input');
