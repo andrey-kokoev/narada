@@ -9,8 +9,9 @@ Semantic and architecture-boundary concepts. These documents define how the syst
 - [`runtime-usc-boundary.md`](concepts/runtime-usc-boundary.md) — Runtime / USC / operator ownership boundary
 - [`narada-agent-runtime-server.md`](concepts/narada-agent-runtime-server.md) — Vendor-neutral, stateful, machine-addressable Agent runtime server concept
 - [`nars-runtime-contract.md`](concepts/nars-runtime-contract.md) — Implementation-facing NARS package, protocol, event, carrier, worker, and verification contract
+- [`nars-client-projection-contract.md`](concepts/nars-client-projection-contract.md) — Shared client projection semantics for agent-cli, agent-web-ui, and Cloudflare NARS projections
+- [`first-class-narada-runtime-concepts.md`](concepts/first-class-narada-runtime-concepts.md) — Coordination map for first-class NARS, projection, delegation, provider, role, speech, feedback, health, and artifact concepts
 - [`carrier-action-admission-boundary.md`](concepts/carrier-action-admission-boundary.md) — Governed conversion boundary from carrier action requests to authority-bearing Site decisions
-- [`site-operating-loop.md`](concepts/site-operating-loop.md) — First-class Site object for continuous, scheduled, or triggered control loops
 - [`governed-transduction.md`](concepts/governed-transduction.md) — Lineage-preserving transformation through governed admission boundaries
 - [`system.md`](concepts/system.md) — System architecture and data flow overview
 - [`mailbox-knowledge-model.md`](concepts/mailbox-knowledge-model.md) — Knowledge placement, proof vs knowledge, and playbook examples
@@ -26,6 +27,7 @@ User-facing product proofs, onboarding, operator loop, and runbooks. These are t
 - [`site-qualification-policy.md`](product/site-qualification-policy.md) — Site-level role/principal qualification and requalification policy
 - [`site-continuity-across-embodiments.md`](product/site-continuity-across-embodiments.md) — Same-Site continuity between local Windows and Cloudflare embodiments without authority transfer
 - [`cloudflare-operator-runbook.md`](product/cloudflare-operator-runbook.md) — Single operator command path to verify and enter the live Cloudflare embodiment
+- [`cloudflare-nars-web-projection-live-smoke.md`](product/cloudflare-nars-web-projection-live-smoke.md) — Deployed Cloudflare agent-web-ui proof against live local NARS
 - [`first-operation-proof.md`](product/first-operation-proof.md) — Canonical mailbox operation product proof
 - [`operator-loop.md`](product/operator-loop.md) — Minimal operator rhythm for live operations
 - [`runbook.md`](product/runbook.md) — Troubleshooting, setup, and lifecycle runbook

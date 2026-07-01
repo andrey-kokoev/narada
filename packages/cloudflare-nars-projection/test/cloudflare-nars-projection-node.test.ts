@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { describe, expect, test } from 'vitest';
 import { createCloudflareNarsProjectionWorker } from '../src/worker.js';
-import { deliverRemoteProjectionInputsOnce, preflightCloudflareProjectionRegistration, registerProjectionRemotely, writeProjectionRegistrationPlan, readProjectionRegistration, startLocalProjectionBridgeLoop, startLocalProjectionBridgeOnce } from '../src/node.js';
+import { deliverRemoteProjectionInputsOnce, preflightCloudflareProjectionRegistration, registerProjectionRemotely, writeProjectionRegistrationPlan, readProjectionRegistration, startLocalProjectionBridgeLoop, startLocalProjectionBridgeOnce, startLocalProjectionBridgeRunProcess } from '../src/node.js';
 
 const now = '2026-06-30T21:30:00.000Z';
 
@@ -72,6 +72,43 @@ describe('node projection store and bridge', () => {
     expect(stored.intent?.nars_session_id).toBe(sessionId);
     expect(stored.remote_access?.bridge_credential.kind).toBe('bridge');
     expect(plan.status).toBe('registered_locally_pending_cloudflare_write');
+  });
+
+  test('bridge-run process launcher builds durable polling command without shell mediation', () => {
+    const spawned = [];
+    const result = startLocalProjectionBridgeRunProcess({
+      site_root: 'D:/code/narada.sonar',
+      projection_id: 'proj_process',
+      cloudflare_api_base_url: 'https://projection.example.test',
+      poll_interval_ms: 2500,
+      spawn_impl: (command, args, options) => {
+        spawned.push({ command, args, options });
+        return { pid: 4242, unref() {} } as never;
+      },
+    });
+    expect(result).toMatchObject({ status: 'launched', projection_id: 'proj_process', pid: 4242, detached: true });
+    expect(spawned[0]).toMatchObject({
+      command: process.execPath,
+      args: [expect.stringMatching(/layers[\\/]cli[\\/]dist[\\/]main\.js$/), 'nars', 'projection', 'bridge-run', '--site-root', 'D:/code/narada.sonar', '--projection-id', 'proj_process', '--cloudflare-api-base-url', 'https://projection.example.test', '--poll-interval-ms', '2500'],
+      options: { cwd: 'D:/code/narada.sonar', detached: true, stdio: 'ignore', windowsHide: true },
+    });
+  });
+
+  test('bridge-run process launcher keeps explicit command override for packaged callers', () => {
+    const spawned = [];
+    startLocalProjectionBridgeRunProcess({
+      site_root: 'D:/code/narada.sonar',
+      projection_id: 'proj_process',
+      command: 'narada',
+      spawn_impl: (command, args, options) => {
+        spawned.push({ command, args, options });
+        return { pid: 4242, on() {}, unref() {} } as never;
+      },
+    });
+    expect(spawned[0]).toMatchObject({
+      command: 'narada',
+      args: ['nars', 'projection', 'bridge-run', '--site-root', 'D:/code/narada.sonar', '--projection-id', 'proj_process'],
+    });
   });
 
   test('remote registration preflight refuses before mutation when projection health is unavailable', async () => {

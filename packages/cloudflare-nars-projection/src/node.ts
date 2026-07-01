@@ -1,5 +1,7 @@
+import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   buildProjectionRegistrationPlan,
   createBridgeState,
@@ -52,6 +54,16 @@ function projectionPreflightRefusal(code: string, operatorAction: string, probe:
     operator_action: operatorAction,
     probe,
   };
+}
+
+function resolveNaradaCliEntrypoint(): string {
+  const candidates = [
+    fileURLToPath(new URL('../../layers/cli/dist/main.js', import.meta.url)),
+    join(process.cwd(), 'packages', 'layers', 'cli', 'dist', 'main.js'),
+  ];
+  const found = candidates.find((candidate) => existsSync(candidate));
+  if (found) return found;
+  return candidates[0];
 }
 
 async function probeJsonEndpoint(fetchImpl: typeof fetch, url: string) {
@@ -232,14 +244,17 @@ export async function deliverRemoteProjectionInputsOnce(args: {
         headers: { 'content-type': 'application/json', 'x-narada-bridge-token-fingerprint': bridgeToken },
         body: JSON.stringify({ ok: true, nars_admission: narsAdmission }),
       });
-      acknowledgements.push(await ack.json().catch(() => ({ status: ack.ok ? 'acknowledged' : 'unknown' })));
+      const acknowledgement = await ack.json().catch(() => ({ status: ack.ok ? 'acknowledged' : 'unknown' }));
+      acknowledgements.push({ ...acknowledgement, ok: true, nars_admission: narsAdmission });
     } catch (error) {
+      const narsAdmission = { status: 'refused_by_bridge', error: error instanceof Error ? error.message : String(error) };
       const ack = await fetchImpl(`${base}/input/${encodeURIComponent(input.input_id)}/ack`, {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'x-narada-bridge-token-fingerprint': bridgeToken },
-        body: JSON.stringify({ ok: false, nars_admission: { status: 'refused_by_bridge', error: error instanceof Error ? error.message : String(error) } }),
+        body: JSON.stringify({ ok: false, nars_admission: narsAdmission }),
       });
-      acknowledgements.push(await ack.json().catch(() => ({ status: ack.ok ? 'acknowledged' : 'unknown' })));
+      const acknowledgement = await ack.json().catch(() => ({ status: ack.ok ? 'acknowledged' : 'unknown' }));
+      acknowledgements.push({ ...acknowledgement, ok: false, nars_admission: narsAdmission });
     }
   }
   return { status: 'delivered' as const, projection_id: args.projection_id, delivered_count: acknowledgements.length, acknowledgements };
@@ -424,6 +439,52 @@ export async function startLocalProjectionBridgeLoop(args: Parameters<typeof sta
     iteration_count: results.length,
     last_result: results.at(-1) ?? null,
     results,
+  };
+}
+
+export function startLocalProjectionBridgeRunProcess(args: {
+  site_root: string;
+  projection_id: string;
+  cloudflare_api_base_url?: string | null;
+  max_events?: number;
+  max_artifacts?: number;
+  poll_interval_ms?: number;
+  command?: string;
+  cwd?: string;
+  env?: NodeJS.ProcessEnv;
+  spawn_impl?: typeof spawn;
+}) {
+  const command = args.command ?? process.execPath;
+  const argv = args.command ? [] : [resolveNaradaCliEntrypoint()];
+  argv.push(
+    'nars',
+    'projection',
+    'bridge-run',
+    '--site-root',
+    args.site_root,
+    '--projection-id',
+    args.projection_id,
+  );
+  if (args.cloudflare_api_base_url) argv.push('--cloudflare-api-base-url', args.cloudflare_api_base_url);
+  if (args.max_events != null) argv.push('--max-events', String(args.max_events));
+  if (args.max_artifacts != null) argv.push('--max-artifacts', String(args.max_artifacts));
+  if (args.poll_interval_ms != null) argv.push('--poll-interval-ms', String(args.poll_interval_ms));
+  const child = (args.spawn_impl ?? spawn)(command, argv, {
+    cwd: args.cwd ?? args.site_root,
+    detached: true,
+    stdio: 'ignore',
+    windowsHide: true,
+    env: args.env ?? process.env,
+  });
+  child.on?.('error', () => {});
+  child.unref?.();
+  return {
+    status: 'launched' as const,
+    projection_id: args.projection_id,
+    command,
+    args: argv,
+    pid: child.pid ?? null,
+    detached: true,
   };
 }
 

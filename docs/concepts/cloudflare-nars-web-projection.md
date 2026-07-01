@@ -6,7 +6,7 @@ Cloudflare NARS Web Projection is the target shape for making a Cloudflare-hoste
 
 Local NARS remains the canonical runtime authority for the session, event log, artifact registry, artifact content, queue, turn lifecycle, tool activity, health, and operator input admission. Cloudflare hosts a remote projection embodiment: browser UI, remote access policy, bounded projection cache, event fanout, artifact cache, and input relay.
 
-This document governs the target architecture. The older read-only gateway slice is described in [`nars-remote-projection-gateway.md`](nars-remote-projection-gateway.md). Local session discovery and event-log authority remain in [`nars-session-management.md`](nars-session-management.md) and [`nars-runtime-contract.md`](nars-runtime-contract.md). Operator input semantics remain in [`operator-input-admission.md`](operator-input-admission.md).
+This document governs one concrete instance of the [`Narada Runtime Projection Graph`](narada-runtime-projection-graph.md). The older read-only gateway slice is described in [`nars-remote-projection-gateway.md`](nars-remote-projection-gateway.md). Local session discovery and event-log authority remain in [`nars-session-management.md`](nars-session-management.md) and [`nars-runtime-contract.md`](nars-runtime-contract.md). Operator input semantics remain in [`operator-input-admission.md`](operator-input-admission.md).
 
 ## Non-Goals
 
@@ -38,6 +38,8 @@ The joining object is a `projection_id`. It connects a local projection intent t
 
 ## Target Topology
 
+In graph terms, this slice maps local NARS as `authority_runtime`, the local bridge as a `projection_edge`, the Cloudflare projection service as `projection_store`, the Cloudflare-hosted browser UI as `projection_surface`, and browser input relay as an `intent_route` back to local NARS.
+
 ```text
 local NARS session
   owns session, turns, tools, queue, health, canonical events
@@ -63,6 +65,95 @@ Cloudflare-hosted browser UI
 ```
 
 Cloudflare is a remote projection host. It is not a second NARS process.
+
+## Live Smoke Lineages
+
+There are two live smoke lineages and they prove different authority shapes:
+
+| Script | Authority runtime | Cloudflare role | What it proves |
+| --- | --- | --- | --- |
+| `pnpm --filter @narada2/cloudflare-nars-projection smoke:local-origin-live` | Local NARS session. | Remote projection store, hosted browser shell, event/artifact cache, and input relay. | A local authoritative NARS session can be projected to Cloudflare and consumed remotely without moving session authority. |
+| `pnpm --filter @narada2/cloudflare-nars-projection smoke:cloudflare-origin-live` | Cloudflare synthetic NARS authority runtime. | Session authority for a synthetic no-provider/no-tools runtime. | Cloudflare can own session identity, event replay, WebSocket live delivery, input admission, health, and revocation for a synthetic NARS authority slice. |
+
+The command names expose the authority-origin axis. Compatibility aliases currently remain: `smoke:live` maps to `smoke:local-origin-live`, and `smoke:authority-live` maps to `smoke:cloudflare-origin-live`. Passing one does not imply the other has passed.
+
+## Cloudflare-Origin Authority Runtime Slice
+
+The first Cloudflare-origin slice is a separate runtime projection graph instance. It does not change the local-origin projection above.
+
+In this slice, Cloudflare is the `authority_runtime` for a synthetic NARS session. The session authority owns session creation, canonical event identity, bounded replay, WebSocket live delivery, health, operator input admission, and revocation. It explicitly does not execute providers or tools.
+
+```text
+Cloudflare synthetic NARS authority runtime
+  owns session identity, canonical event sequence, health, input admission, revocation
+  emits synthetic turn events without provider/tool execution
+
+local operator surface
+  attaches to the Cloudflare authority runtime
+  replays canonical events
+  receives live WebSocket events
+  submits operator input through explicit NARS input verbs
+```
+
+The first implementation target is intentionally small:
+
+- `POST /api/nars/authority/sessions` creates a Cloudflare-origin synthetic session and emits `session_started`.
+- `GET /api/nars/authority/sessions/:session_id/events` replays canonical authority events by sequence cursor.
+- `WS /api/nars/authority/sessions/:session_id/events/websocket` attaches a local operator surface to replay and live delivery.
+- `POST /api/nars/authority/sessions/:session_id/input` admits operator input and emits synthetic user, turn, assistant, and completion events.
+- `GET /api/nars/authority/sessions/:session_id/health` reports authority health for the session.
+- `DELETE /api/nars/authority/sessions/:session_id` revokes the session and makes subsequent health, replay, and input calls refuse with `session_revoked`.
+
+The local operator surface attaches with:
+
+```bash
+narada-agent-web-ui --cloudflare-authority-session-id <session-id> --cloudflare-api-base-url <projection-host-url>
+```
+
+That local surface uses the authority WebSocket endpoint for event delivery and the authority input endpoint for operator input admission.
+
+This slice proves Cloudflare can be an authority runtime in the runtime projection graph without pretending to be a local NARS projection cache and without invoking intelligence providers or MCP tools.
+
+### Deployed Authority Runtime Smoke
+
+The deployed Cloudflare-origin authority path has an explicit live smoke command:
+
+```bash
+pnpm --filter @narada2/cloudflare-nars-projection smoke:cloudflare-origin-live -- --live --cloudflare-api-base-url https://narada-nars-projection.andrei-kokoev.workers.dev
+```
+
+Running the command without `--live` is a safe planning mode. It does not mutate Cloudflare state and prints the command shape required for a live run.
+
+By default, the smoke is operator-readable. It prints each phase while it works, then summarizes the authority origin, authority runtime kind, Worker URL, synthetic session id, hosted web UI URL, WebSocket endpoint, check statuses, cleanup status, evidence path, latest evidence path, and evidence index path. For machine-readable output, pass `--format json`; the full evidence object is also written to disk.
+
+The smoke creates one synthetic Cloudflare-origin NARS authority session, checks service and session health, checks bounded replay, opens the authority WebSocket, admits one `conversation.send` input, observes synthetic user/assistant/turn completion events, checks the hosted web UI shell, revokes the session, and verifies post-revoke refusal for health, replay, and input.
+
+Current evidence boundary:
+
+1. The service endpoint is deployed and can report projection service health.
+2. The Cloudflare authority runtime can create a synthetic session and emit canonical replayable events.
+3. The authority WebSocket can deliver replay plus live synthetic turn events to a non-browser observer.
+4. The authority input endpoint can admit an operator `conversation.send` envelope and emit the expected synthetic user, assistant, and completion events.
+5. Session revocation makes direct health, replay, and input APIs refuse with `session_revoked`.
+6. Hosted web UI evidence is compositional. `hosted_shell_check_kind: http_html_shell_only` proves only that the deployed Worker returns the web UI document for an authority-session URL. `hosted_web_ui_evidence.levels[]` records the ordered proof levels, and `strongest_hosted_web_ui_evidence: browser_level_authority_e2e` is the browser-level proof: it opens the deployed web UI in a real browser, verifies JavaScript boot and authority URL configuration, renders replay and live WebSocket events, submits operator input through the composer, renders the synthetic assistant response and turn completion without duplicate user/assistant messages, revokes the session, and verifies the UI reports revoked/disconnected state.
+
+Resolution item #4 is the browser-level hosted web UI proof. It is resolved only when the deployed `smoke:cloudflare-origin-live` evidence includes `hosted_browser.status: passed`, `strongest_hosted_web_ui_evidence: browser_level_authority_e2e`, and the browser-level `hosted_web_ui_evidence.levels[]` all pass. Shell-only evidence is still retained as a fast availability check but is not sufficient for #4.
+
+Evidence artifacts are append-only plus indexed. Each live run writes a timestamped evidence file, a stable `*-latest.json` copy, and a stable `*-index.json` pointer with latest status and strongest hosted web UI evidence. The latest/index files are operator ergonomics; the timestamped evidence remains the audit artifact.
+
+Evidence Status:
+
+| Field | Value |
+| --- | --- |
+| Status | Browser-level deployed authority E2E passed. |
+| Last verified command | `pnpm --filter @narada2/cloudflare-nars-projection smoke:cloudflare-origin-live -- --live --cloudflare-api-base-url https://narada-nars-projection.andrei-kokoev.workers.dev` |
+| Strongest evidence | `browser_level_authority_e2e` |
+| Evidence fields | `hosted_web_ui_evidence.levels[]`, `strongest_hosted_web_ui_evidence`, `evidence_path`, `evidence_latest_path`, `evidence_index_path` |
+| Known gaps | Cloudflare-origin authority remains synthetic/no-provider/no-tools; provider/tool-capable Cloudflare authority is a separate design decision. |
+
+The next goal after resolution of #4 is to decide whether Cloudflare-origin authority remains a synthetic/no-provider runtime slice or grows into a real provider/tool-capable authority runtime. That is a separate authority-design decision, not part of the browser-level proof.
+
+If the smoke fails after creating a synthetic session, it performs a best-effort cleanup revoke before writing evidence. A successful run leaves the synthetic session revoked.
 
 ## Projection Instance
 
@@ -140,6 +231,29 @@ Required event invariants:
 - Cloudflare preserves `site_id`, `nars_session_id`, `projection_id`, `event_sequence`, `event_id`, schema, and timestamp where present.
 - Cloudflare may cache projected events, but cache disagreement with local NARS resolves in favor of local NARS.
 - Browser reconnect uses cursor/sequence semantics and tolerates idempotent replay.
+
+## Remote Live Transport
+
+The remote browser projection is WebSocket-first for live event delivery.
+
+The steady-state transport split is:
+
+| Route | Role |
+| --- | --- |
+| `GET /api/nars/projections/:projection_id/events` | Bounded replay, refresh, cursor recovery, and diagnostics. |
+| `WS /api/nars/projections/:projection_id/events/websocket` | Live browser subscription and push fanout from the Cloudflare Durable Object. |
+| `POST /api/nars/projections/:projection_id/events` | Bridge publication of projected local NARS events into Cloudflare. |
+| `POST /api/nars/projections/:projection_id/input` | Browser operator input relay toward the local bridge and local NARS admission. |
+
+The browser may perform one HTTP replay read before opening the WebSocket. That replay is not the live delivery mechanism and must not be described as long polling. After bootstrap, newly published events should arrive by WebSocket push from the Durable Object subscriber set.
+
+SSE may remain as a compatibility or diagnostic route, but it is not the authoritative browser live path for this projection. Live deployed behavior, not local plausibility, decides the supported operator path.
+
+This separation prevents three failure modes:
+
+- remote UI appearing healthy while only showing stale replayed events;
+- hidden browser polling that masks missing fanout;
+- unit tests specifying an unused transport while the deployed path uses another one.
 
 ## Artifact Registry And Content Flow
 
@@ -322,11 +436,11 @@ The first implementation target is Cloudflare Worker plus static app:
 - Worker serves event subscription, artifact metadata/content, and operator input relay routes.
 - Static app renders the operator projection.
 
-Durable Objects are a later coordination option for multi-client fanout, cursor-aware per-projection state, and stronger server-side cache coordination. They are not required to define the initial target.
+Durable Objects are the Cloudflare-side coordination point for per-projection state, WebSocket subscriber fanout, cursor-aware replay, and stronger server-side cache coordination. They remain projection infrastructure, not NARS authority.
 
 ## Manual Live Smoke Path
 
-Automated tests should use local/fake projection services and must not require live Cloudflare credentials. A live Cloudflare smoke, when intentionally run by an operator, should use the same two-phase shape:
+Automated tests should use local/fake projection services and must not require live Cloudflare credentials. A live Cloudflare smoke, when intentionally run by an operator, should use the same two-phase shape. The operator procedure and evidence contract are maintained in [`../product/cloudflare-nars-web-projection-live-smoke.md`](../product/cloudflare-nars-web-projection-live-smoke.md).
 
 1. Build the browser shell and Worker package:
 
@@ -358,17 +472,17 @@ Automated tests should use local/fake projection services and must not require l
    https://<projection-host>/?cloudflare_projection_id=<projection-id>&cloudflare_api_base_url=https://<projection-host>
    ```
 
-7. Verify upward event replay, artifact metadata projection, a policy-admitted artifact read when configured, a policy-admitted operator input verb, and revocation/refusal behavior.
+7. Verify upward event replay, WebSocket live delivery, artifact metadata projection, a policy-admitted artifact read when configured, a policy-admitted operator input verb, and revocation/refusal behavior.
 
    The bounded opt-in script is:
 
    ```text
    pnpm --filter @narada2/cloudflare-nars-projection build
-   pnpm --filter @narada2/cloudflare-nars-projection smoke:live -- --cloudflare-api-base-url https://<projection-host> --site-root <site-root> --site-id <site-id> --session <nars-session-id>
-   pnpm --filter @narada2/cloudflare-nars-projection smoke:live -- --live --cloudflare-api-base-url https://<projection-host> --site-root <site-root> --site-id <site-id> --session <nars-session-id> --evidence-path <path>
+   pnpm --filter @narada2/cloudflare-nars-projection smoke:local-origin-live -- --cloudflare-api-base-url https://<projection-host> --site-root <site-root> --site-id <site-id> --session <nars-session-id>
+   pnpm --filter @narada2/cloudflare-nars-projection smoke:local-origin-live -- --live --cloudflare-api-base-url https://<projection-host> --site-root <site-root> --site-id <site-id> --session <nars-session-id> --evidence-path <path>
    ```
 
-   Without `--live`, the smoke prints the required live arguments and performs no mutation. With `--live`, it writes a concise evidence JSON covering registration, bridge replay, artifact metadata/content read when available, one operator input relay, revocation, and post-revocation refusal.
+   Without `--live`, the smoke prints the required live arguments and performs no mutation. With `--live`, it writes a concise evidence JSON covering registration, bridge replay, deployed hosted browser attachment, Cloudflare WebSocket projection, artifact metadata/content read when available, one operator input relay, local NARS admission, bridge replication back to Cloudflare, revocation, and post-revocation refusal.
 
 If Cloudflare registration or bridge connectivity is unavailable, the expected result is a typed degraded/local-only projection status. Local NARS launch and local session health must remain successful.
 
@@ -398,3 +512,5 @@ If Cloudflare registration or bridge connectivity is unavailable, the expected r
 14. Artifact replication belongs to the same local projection bridge process by default, as an artifact lane.
 15. Artifact metadata may be projected as public records; artifact content is opt-in and config-rich.
 16. Cloudflare artifact cache is non-canonical; local NARS artifact registry/content remains authority.
+17. Remote browser live delivery is WebSocket-first; HTTP event reads are replay/recovery, not polling.
+18. Completion evidence for deployed projection must prove semantic round trip through deployed Cloudflare, hosted browser UI, bridge, live local NARS admission, replication back, and revocation/refusal.
