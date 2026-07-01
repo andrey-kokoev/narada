@@ -109,7 +109,7 @@ function codexSubscriptionPreflightCacheTtlMs(processEnv = process.env) {
 
 function codexSubscriptionPreflightCachePath(sessionSiteRoot) {
   if (!sessionSiteRoot) return null;
-  return join(sessionSiteRoot, '.narada', '.ai', 'runtime', 'codex-subscription-preflight-cache.json');
+  return join(sessionSiteRoot, '.ai', 'runtime', 'codex-subscription-preflight-cache.json');
 }
 
 function codexSubscriptionPreflightCacheKey({ provider, processEnv, command }) {
@@ -157,7 +157,7 @@ function codexSubscriptionPreflightCacheWrite({ sessionSiteRoot, cacheKey, prefl
   const cachePath = codexSubscriptionPreflightCachePath(sessionSiteRoot);
   if (!cachePath) return;
   try {
-    const cacheDir = join(sessionSiteRoot, '.narada', '.ai', 'runtime');
+    const cacheDir = join(sessionSiteRoot, '.ai', 'runtime');
     mkdirSync(cacheDir, { recursive: true });
     let cache = { schema: 'narada.codex_subscription.preflight_cache.v1', entries: {} };
     if (existsSync(cachePath)) {

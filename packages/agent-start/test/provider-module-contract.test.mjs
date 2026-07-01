@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { dirname, join, normalize, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -147,6 +147,9 @@ test('codex subscription support caches successful live auth preflight briefly',
     assert.equal(calls.length, 1);
     assert.equal(progress.length, 1);
     assert.match(progress[0], /Checking codex-subscription local Codex subscription auth/);
+    assert.equal(second.cache.path, join(siteRoot, '.ai', 'runtime', 'codex-subscription-preflight-cache.json'));
+    assert.equal(existsSync(second.cache.path), true);
+    assert.equal(existsSync(join(siteRoot, '.narada', '.ai', 'runtime', 'codex-subscription-preflight-cache.json')), false);
   } finally {
     rmSync(siteRoot, { recursive: true, force: true });
   }
