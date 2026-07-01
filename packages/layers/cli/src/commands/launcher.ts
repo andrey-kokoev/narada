@@ -971,22 +971,23 @@ function buildAgentPlan(record: WorkspaceLaunchRecord, options: WorkspaceLaunchP
     || process.env.CLOUDFLARE_NARS_PROJECTION_URL
     || null;
   const naradaProper = resolve(process.env.NARADA_PROPER_ROOT ?? 'D:/code/narada');
-  const carrierStartCommand = [
+  const operatorSurfaceStartCommand = [
     'pnpm',
     '--dir', naradaProper,
     'exec',
     'narada',
-    'carrier',
+    'operator-surface',
+    'runtime',
     'start', launchCarrier,
     '--site-root', record.site_root,
     '--agent', record.agent,
     '--runtime', launchRuntime,
     '--exec',
   ];
-  if (record.workspace_root) carrierStartCommand.push('--workspace-root', record.workspace_root);
-  if (enableNativeShell) carrierStartCommand.push('--enable-native-shell');
-  if (intelligenceProvider) carrierStartCommand.push('--intelligence-provider', intelligenceProvider);
-  if (waitForEnter) carrierStartCommand.push('--wait');
+  if (record.workspace_root) operatorSurfaceStartCommand.push('--workspace-root', record.workspace_root);
+  if (enableNativeShell) operatorSurfaceStartCommand.push('--enable-native-shell');
+  if (intelligenceProvider) operatorSurfaceStartCommand.push('--intelligence-provider', intelligenceProvider);
+  if (waitForEnter) operatorSurfaceStartCommand.push('--wait');
 
   const base = [
     'new-tab',
@@ -995,7 +996,7 @@ function buildAgentPlan(record: WorkspaceLaunchRecord, options: WorkspaceLaunchP
     'pwsh',
     '-NoExit',
     '-Command',
-    toPowerShellCommand(carrierStartCommand),
+    toPowerShellCommand(operatorSurfaceStartCommand),
   ];
   const wtArgs = [...base];
   if (launchCarrier === 'agent-web-ui') {
@@ -1009,7 +1010,7 @@ function buildAgentPlan(record: WorkspaceLaunchRecord, options: WorkspaceLaunchP
   }
 
   const smokeCommand = [
-    'narada', 'carrier', 'start', launchCarrier,
+    'narada', 'operator-surface', 'runtime', 'start', launchCarrier,
     '--site-root', record.site_root,
     '--agent', record.agent,
     '--runtime', launchRuntime,

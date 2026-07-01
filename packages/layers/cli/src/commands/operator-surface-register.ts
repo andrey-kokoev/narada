@@ -16,11 +16,50 @@ import {
   operatorSurfaceStatusCommand,
   operatorSurfaceVoiceTranscriptionCheckCommand,
 } from './operator-surface.js';
+import { carrierStartCommand } from './carrier.js';
 
 export function registerOperatorSurfaceCommands(program: Command): void {
   const surfaceCmd = program
     .command('operator-surface')
     .description('Operator Surface identity and runtime binding operators');
+
+  const runtimeCmd = surfaceCmd.command('runtime').description('Operator Surface runtime launch and lifecycle operators');
+  runtimeCmd
+    .command('start [surface]')
+    .description('Start or plan an Operator Surface through the canonical agent-start runtime adapter')
+    .option('--site-root <path>', 'Target Site root')
+    .option('--site <path>', 'Alias for --site-root')
+    .option('--workspace-root <path>', 'Workspace root for the launched surface')
+    .option('--agent <id>', 'Agent identity')
+    .option('--operator-surface <surface>', 'Operator Surface to launch')
+    .option('--runtime <runtime>', 'Runtime substrate for the selected Operator Surface')
+    .option('--intelligence-provider <provider>', 'NARS operator-surface intelligence provider')
+    .option('--dry-run', 'Plan the runtime launch without writing launch artifacts or spawning', false)
+    .option('--materialize-only', 'Write launch artifacts without spawning the runtime', false)
+    .option('--exec', 'Spawn the runtime process after materializing launch artifacts', false)
+    .option('--wait', 'Wait for an operator keypress before spawning the runtime', false)
+    .option('--enable-native-shell', 'Break-glass: do not disable Codex native shell_tool', false)
+    .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
+    .action(directCommandAction<[string | undefined, Record<string, unknown>]>({
+      command: 'operator-surface runtime start',
+      emit: emitCommandResult,
+      format: (_surface: string | undefined, opts: Record<string, unknown>) => opts.format,
+      invocation: (surface, opts) => carrierStartCommand({
+        siteRoot: opts.siteRoot as string | undefined,
+        site: opts.site as string | undefined,
+        workspaceRoot: opts.workspaceRoot as string | undefined,
+        agent: opts.agent as string | undefined,
+        carrier: (opts.operatorSurface as string | undefined) ?? surface,
+        runtime: opts.runtime as string | undefined,
+        intelligenceProvider: opts.intelligenceProvider as string | undefined,
+        dryRun: opts.dryRun as boolean | undefined,
+        materializeOnly: opts.materializeOnly as boolean | undefined,
+        exec: opts.exec as boolean | undefined,
+        wait: opts.wait as boolean | undefined,
+        enableNativeShell: opts.enableNativeShell as boolean | undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
+      }, silentCommandContext()),
+    }));
 
   const agentCmd = surfaceCmd.command('agent').description('High-level Operator Surface agent paths');
   agentCmd

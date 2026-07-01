@@ -163,7 +163,7 @@ describe('launcher workspace planning', () => {
       '-Command',
     ]));
     const commandText = result.selected_agents[0].wt_args[result.selected_agents[0].wt_args.indexOf('-Command') + 1];
-    expect(commandText).toContain("& 'pnpm' '--dir' 'D:\\code\\narada' 'exec' 'narada' 'carrier' 'start'");
+    expect(commandText).toContain("& 'pnpm' '--dir' 'D:\\code\\narada' 'exec' 'narada' 'operator-surface' 'runtime' 'start'");
     expect(commandText).toContain("'agent-cli'");
     expect(commandText).toContain("'--runtime' 'narada-agent-runtime-server'");
     expect(commandText).toContain("'--workspace-root' 'D:/code/narada.sonar'");
@@ -172,7 +172,8 @@ describe('launcher workspace planning', () => {
     expect(commandText).toContain("'--intelligence-provider' 'codex-subscription'");
     expect(result.selected_agents[0].smoke_command).toEqual(expect.arrayContaining([
       'narada',
-      'carrier',
+      'operator-surface',
+      'runtime',
       'start',
       'agent-cli',
       '--site-root',
@@ -226,7 +227,7 @@ describe('launcher workspace planning', () => {
     expect(agent.wt_args.filter((arg) => arg === ';')).toHaveLength(1);
     const commandText = agent.wt_args.join(' ');
     const webUiCommandText = agent.wt_args[agent.wt_args.lastIndexOf('-Command') + 1];
-    expect(commandText).toContain("'carrier' 'start' 'agent-cli'");
+    expect(commandText).toContain("'operator-surface' 'runtime' 'start' 'agent-cli'");
     expect(commandText).toContain("'--runtime' 'narada-agent-runtime-server'");
     expect(commandText).toContain('agent-web-ui: waiting for sonar.resident NARS session, then starting browser projection');
     expect(commandText).toContain("'agent-web-ui' 'attach'");
@@ -431,7 +432,7 @@ describe('launcher workspace planning', () => {
     expect(agent.launch_carriers).toEqual(['agent-web-ui']);
     const commandText = agent.wt_args.join(' ');
     expect(commandText).toContain('resident Runtime');
-    expect(commandText).toContain("'carrier' 'start' 'agent-web-ui'");
+    expect(commandText).toContain("'operator-surface' 'runtime' 'start' 'agent-web-ui'");
     expect(commandText).toContain("'agent-web-ui' 'attach'");
     expect(commandText).not.toContain("'--wait'");
   });
