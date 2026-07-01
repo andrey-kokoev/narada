@@ -124,6 +124,8 @@ export function createInputQueue({
   carrierSessionEventEntryFn = (event_kind, payload) => ({ event_kind, payload }),
   noteSessionActivityFn = () => {},
   recordObserverInputQueuedFn = () => {},
+  onQueueStateChangedFn = () => {},
+  initialPending = [],
   classifyInputRuntimeQueueAdmissionFn = () => ({ queue_events: [] }),
   classifyInputRuntimeAdmissionFn = () => ({ admission_events: [] }),
   classifyInputRuntimeHoldFn = (event, state) => classifyCarrierInputHold(inputWithObserverMetadata(event), state),
@@ -134,7 +136,9 @@ export function createInputQueue({
   transcriptDisplaySettings = {},
   randomIdFn = defaultRandomId,
 } = {}) {
-  const pending = [];
+  const pending = Array.isArray(initialPending)
+    ? initialPending.map((event) => normalizeInputEvent(event, {}, { randomIdFn }))
+    : [];
   const state = { running: false, deferredNotified: new Set(), heldSystemDirectives: new Set() };
   return {
     get isRunning() { return state.running; },
@@ -145,6 +149,7 @@ export function createInputQueue({
     enqueue: async (event, options = {}) => {
       const normalized = normalizeInputEvent(event, {}, { randomIdFn });
       pending.push(normalized);
+      persistQueueState('queued', normalized);
       noteSessionActivityFn(options.state, 'input_event_queued', normalized.created_at ?? normalized.received_at ?? new Date().toISOString());
       appendSessionFn(sessionEventEntryFn('input_event_queued', {
         event_id: normalized.event_id,
@@ -168,6 +173,8 @@ export function createInputQueue({
     drainUntilIdle,
     state: queueSnapshot,
     items: queueItems,
+    clearOperatorInput,
+    dropOperatorInput,
     clearOperatorSteering,
     dropOperatorSteering,
     finalizeSession,
@@ -207,6 +214,7 @@ export function createInputQueue({
       dropped.unshift(event);
     }
     for (const event of dropped) recordDroppedByOperator(event, 'queue_clear');
+    if (dropped.length > 0) persistQueueState('queue_clear', dropped.at(-1));
     return dropped;
   }
 
@@ -218,6 +226,31 @@ export function createInputQueue({
     if (!target) return null;
     const [event] = pending.splice(target.pendingIndex, 1);
     recordDroppedByOperator(event, 'queue_drop');
+    persistQueueState('queue_drop', event);
+    return event;
+  }
+
+  function clearOperatorInput() {
+    const dropped = [];
+    for (let index = pending.length - 1; index >= 0; index--) {
+      if (!isOperatorQueuedInput(pending[index])) continue;
+      const [event] = pending.splice(index, 1);
+      dropped.unshift(event);
+    }
+    for (const event of dropped) recordDroppedByOperator(event, 'queue_clear');
+    if (dropped.length > 0) persistQueueState('queue_clear', dropped.at(-1));
+    return dropped;
+  }
+
+  function dropOperatorInput(index) {
+    const operatorInput = pending
+      .map((event, pendingIndex) => ({ event, pendingIndex }))
+      .filter(({ event }) => isOperatorQueuedInput(event));
+    const target = operatorInput[index - 1];
+    if (!target) return null;
+    const [event] = pending.splice(target.pendingIndex, 1);
+    recordDroppedByOperator(event, 'queue_drop');
+    persistQueueState('queue_drop', event);
     return event;
   }
 
@@ -237,6 +270,7 @@ export function createInputQueue({
       state.deferredNotified.delete(event.event_id);
       state.heldSystemDirectives.delete(event.event_id);
     }
+    if (abandoned.length > 0) persistQueueState('session_finalize', abandoned.at(-1));
     return abandoned;
   }
 
@@ -252,6 +286,7 @@ export function createInputQueue({
       return null;
     }
     const event = pending.shift();
+    persistQueueState('admitted_to_turn', event);
     state.deferredNotified.delete(event.event_id);
     recordSystemDirectiveReleased(event);
     state.running = true;
@@ -288,6 +323,7 @@ export function createInputQueue({
         input_event_id: event.event_id,
         terminal_state: result?.terminal_state ?? 'completed',
       }));
+      persistQueueState('completed', event);
       return result;
     } finally {
       state.running = false;
@@ -329,6 +365,21 @@ export function createInputQueue({
     if (!state.running && pending.length > 0 && shouldDefer(pending[0])) await drainOnce();
     return last;
   }
+
+  function persistQueueState(transition, event = null) {
+    onQueueStateChangedFn({
+      snapshot: queueSnapshot(),
+      pending: queueItems().map((item) => pending[item.index - 1] ?? item),
+      items: queueItems(),
+      transition,
+      event,
+    });
+  }
+}
+
+function isOperatorQueuedInput(event = {}) {
+  if (event.source_kind === 'operator') return true;
+  return ['manual_operator', 'programmatic_operator', 'operator_directive', 'operator_steering'].includes(event.source);
 }
 
 export function readlineHasPartialInput(rl) {

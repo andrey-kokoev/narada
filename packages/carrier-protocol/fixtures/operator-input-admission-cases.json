@@ -1,0 +1,142 @@
+{
+  "schema": "narada.carrier.operator_input_admission_cases.v1",
+  "cases": [
+    {
+      "name": "send_admits_idle_without_interrupt",
+      "constructor": "send",
+      "method": "conversation.send",
+      "input": {
+        "schema": "narada.carrier.input_event.v1",
+        "event_id": "input_operator_send_idle",
+        "source_kind": "operator",
+        "source_id": "operator",
+        "transport": "carrier_server_api",
+        "delivery_mode": "admit_for_current_turn",
+        "hold_condition": null,
+        "content": "run startup sequence",
+        "created_at": "2026-06-30T00:00:00.000Z",
+        "authority_ref": null,
+        "directive_id": null,
+        "metadata": {}
+      },
+      "state": { "activeTurn": false },
+      "expected": {
+        "input_kind": "operator_message",
+        "turn_timing": "current_or_next_idle_turn",
+        "active_turn_effect": "none",
+        "queue_durability": "none",
+        "ordering": "immediate",
+        "authority": "operator",
+        "admission_action": "admit",
+        "queue_event_kinds": [],
+        "admission_event_kinds": ["input_admitted_to_turn"]
+      }
+    },
+    {
+      "name": "send_rejects_active_without_interrupt",
+      "constructor": "send",
+      "method": "conversation.send",
+      "input": {
+        "schema": "narada.carrier.input_event.v1",
+        "event_id": "input_operator_send_active",
+        "source_kind": "operator",
+        "source_id": "operator",
+        "transport": "carrier_server_api",
+        "delivery_mode": "admit_for_current_turn",
+        "hold_condition": null,
+        "content": "run after this",
+        "created_at": "2026-06-30T00:00:01.000Z",
+        "authority_ref": null,
+        "directive_id": null,
+        "metadata": {}
+      },
+      "state": { "activeTurn": true },
+      "expected": {
+        "input_kind": "operator_message",
+        "turn_timing": "current_or_next_idle_turn",
+        "active_turn_effect": "none",
+        "queue_durability": "none",
+        "ordering": "immediate",
+        "authority": "operator",
+        "admission_action": "reject",
+        "admission_reason": "active_turn",
+        "queue_event_kinds": [],
+        "admission_event_kinds": []
+      }
+    },
+    {
+      "name": "enqueue_queues_active_without_interrupt",
+      "constructor": "enqueue",
+      "method": "conversation.enqueue",
+      "input": {
+        "schema": "narada.carrier.input_event.v1",
+        "event_id": "input_operator_enqueue_active",
+        "source_kind": "operator",
+        "source_id": "operator",
+        "transport": "carrier_server_api",
+        "delivery_mode": "admit_after_active_turn",
+        "hold_condition": null,
+        "content": "after this finishes, run tests",
+        "created_at": "2026-06-30T00:00:02.000Z",
+        "authority_ref": null,
+        "directive_id": null,
+        "metadata": {
+          "operator_input_admission": {
+            "constructor": "enqueue"
+          }
+        }
+      },
+      "state": { "activeTurn": true },
+      "expected": {
+        "input_kind": "operator_message",
+        "turn_timing": "after_active_turn",
+        "active_turn_effect": "none",
+        "queue_durability": "nars_session_durable",
+        "ordering": "fifo_after_active_turn",
+        "authority": "operator",
+        "admission_action": "queue",
+        "admission_reason": "active_turn",
+        "queue_state": "queued_for_turn_boundary",
+        "queue_event_kinds": ["input_queued_for_turn_boundary"],
+        "admission_event_kinds": []
+      }
+    },
+    {
+      "name": "steer_is_interruptive_and_next_turn_ordered",
+      "constructor": "steer",
+      "method": "conversation.steer",
+      "input": {
+        "schema": "narada.carrier.input_event.v1",
+        "event_id": "input_operator_steer_active",
+        "source_kind": "operator",
+        "source_id": "operator",
+        "transport": "carrier_server_api",
+        "delivery_mode": "admit_after_active_turn",
+        "hold_condition": null,
+        "content": "stop and inspect the error first",
+        "created_at": "2026-06-30T00:00:03.000Z",
+        "authority_ref": null,
+        "directive_id": null,
+        "metadata": {
+          "operator_steering": {
+            "delivery_semantics": "interrupt_active_turn_then_admit_next_turn"
+          }
+        }
+      },
+      "state": { "activeTurn": true },
+      "expected": {
+        "input_kind": "operator_steering",
+        "turn_timing": "after_active_turn",
+        "active_turn_effect": "interrupt",
+        "queue_durability": "nars_session_durable",
+        "ordering": "front_after_interrupt",
+        "authority": "operator",
+        "admission_action": "queue",
+        "admission_reason": "active_turn",
+        "queue_state": "queued_for_turn_boundary",
+        "queue_event_kinds": ["input_queued_for_turn_boundary"],
+        "admission_event_kinds": []
+      }
+    }
+  ]
+}

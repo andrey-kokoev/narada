@@ -5,7 +5,7 @@ import { once } from 'node:events';
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { request as httpRequest } from 'node:http';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { PassThrough } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 import * as canonicalRuntimeEvents from '../src/runtime-server-events.mjs';
@@ -303,6 +303,15 @@ test('event hub supports replay, filtering, and bounded cursors', () => {
   assert.deepEqual(hub.cursor(), { last_sequence: 3, next_sequence: 4 });
 });
 
+test('event hub assigns monotonic sequences when incoming events collide with current cursor', () => {
+  const hub = createEventHub({ maxBuffer: 10 });
+  assert.equal(hub.publish({ event_sequence: 47, sequence: 47, event: 'assistant_message', content: 'artifact presented' }).event_sequence, 47);
+  assert.equal(hub.publish({ event_sequence: 47, sequence: 47, event: 'tool_result', tool: 'artifact_present' }).event_sequence, 48);
+  assert.equal(hub.publish({ event_sequence: 46, sequence: 46, event: 'assistant_message', content: 'late provider aggregate' }).event_sequence, 49);
+  assert.deepEqual(hub.replayFor({ maxReplay: 10 }).map((event) => event.event_sequence), [47, 48, 49]);
+  assert.deepEqual(hub.cursor(), { last_sequence: 49, next_sequence: 50 });
+});
+
 test('WebSocket /events subscribes with replay and forwards protocol frames', async () => {
   assert.deepEqual(parseEventStreamOptions(['--event-host', '127.0.0.1', '--event-port', '0', '--no-health']).events, {
     enabled: true,
@@ -549,6 +558,70 @@ test('HTTP /health projects native session.health response', async () => {
     assert.equal(body.agent_id, 'narada.test');
   } finally {
     projection.server.close();
+  }
+});
+
+test('HTTP artifact endpoints register and serve session-scoped HTML artifacts', async () => {
+  const siteRoot = mkdtempSync(join(tmpdir(), 'narada-runtime-artifact-http-'));
+  const sessionPath = join(siteRoot, '.narada', 'crew', 'nars-sessions', 'carrier_artifact_http', 'session.jsonl');
+  const eventsPath = join(dirname(sessionPath), 'events.jsonl');
+  const sourcePath = join(dirname(sessionPath), 'report.html');
+  mkdirSync(dirname(sourcePath), { recursive: true });
+  writeFileSync(sourcePath, '<!doctype html><h1>NARS Artifact</h1>', 'utf8');
+  const childStdin = new PassThrough();
+  const eventHub = createEventHub();
+  const projection = await startHealthProjection({
+    childStdin,
+    host: '127.0.0.1',
+    port: 0,
+    timeoutMs: 1000,
+    runtimeContext: {
+      identity: 'resident',
+      session: 'carrier_artifact_http',
+      siteRoot,
+      sessionPath,
+      eventsPath,
+      eventHub,
+    },
+  });
+  try {
+    const registeredResponse = await fetch(new URL('/sessions/carrier_artifact_http/artifacts', projection.url), {
+      method: 'POST',
+      body: JSON.stringify({ source_path: sourcePath, kind: 'html', title: 'Artifact report' }),
+    });
+    assert.equal(registeredResponse.status, 201);
+    const registered = await registeredResponse.json();
+    assert.equal(registered.artifact.title, 'Artifact report');
+    assert.equal(registered.artifact.source_path, undefined);
+    const artifactId = registered.artifact.artifact_id;
+
+    const metadata = await fetch(new URL(`/sessions/carrier_artifact_http/artifacts/${artifactId}`, projection.url)).then((response) => response.json());
+    assert.equal(metadata.artifact.kind, 'html');
+    assert.equal(metadata.artifact.render.sandbox.allow_top_navigation, false);
+
+    const contentResponse = await fetch(new URL(`/sessions/carrier_artifact_http/artifacts/${artifactId}/content`, projection.url));
+    assert.equal(contentResponse.headers.get('content-type'), 'text/html; charset=utf-8');
+    assert.match(contentResponse.headers.get('content-security-policy'), /sandbox/);
+    assert.match(await contentResponse.text(), /NARS Artifact/);
+
+    const presentedResponse = await fetch(new URL(`/sessions/carrier_artifact_http/artifacts/${artifactId}/message`, projection.url), {
+      method: 'POST',
+      body: JSON.stringify({ text: 'Here is the artifact.' }),
+    });
+    assert.equal(presentedResponse.status, 201);
+    const presented = await presentedResponse.json();
+    assert.equal(presented.status, 'presented');
+    assert.equal(presented.event.event, 'assistant_message');
+    assert.deepEqual(presented.event.content, [
+      { type: 'text', text: 'Here is the artifact.' },
+      { type: 'artifact_ref', artifact_id: artifactId, kind: 'html', title: 'Artifact report', render_hint: 'inline' },
+    ]);
+    assert.equal(eventHub.replayFor({ filters: { event_kinds: ['assistant_message'] }, maxReplay: 10 }).at(-1).artifact_id, artifactId);
+    const durableEvents = readFileSync(eventsPath, 'utf8').trim().split(/\r?\n/).map((line) => JSON.parse(line));
+    assert.equal(durableEvents.at(-1).artifact_id, artifactId);
+  } finally {
+    projection.server.close();
+    rmSync(siteRoot, { recursive: true, force: true });
   }
 });
 

@@ -74,8 +74,8 @@ test('operator event rendering suppresses routine healthy session health polling
   };
   assert.deepEqual(renderOperatorEvent(event, { timestamps: false }), []);
   assert.deepEqual(renderOperatorEvent(event, { timestamps: false, projectionVerbosity: 'conversation' }), []);
-  assert.equal(renderOperatorEvent(event, { timestamps: false, projectionVerbosity: 'diagnostics' })[0], 'agent-cli: health healthy; mcp healthy; endpoint none');
-  assert.equal(renderOperatorEvent(event, { timestamps: false, projectionVerbosity: 'raw' })[0], 'agent-cli: health healthy; mcp healthy; endpoint none');
+  assert.deepEqual(renderOperatorEvent(event, { timestamps: false, projectionVerbosity: 'diagnostics' }), []);
+  assert.deepEqual(renderOperatorEvent(event, { timestamps: false, projectionVerbosity: 'raw' }), []);
 });
 
 test('operator event rendering hides session mechanics at conversation verbosity', () => {
@@ -290,7 +290,7 @@ test('projected terminal bridge repaints multiline draft after async output', as
   assert.equal(bridge.composer.getDraft(), pasted);
 });
 
-test('projected terminal bridge submits steering while a turn is active', async () => {
+test('projected terminal bridge enqueues ordinary input while a turn is active', async () => {
   const input = new PassThrough();
   input.isTTY = true;
   input.setRawMode = () => input;
@@ -321,7 +321,7 @@ test('projected terminal bridge submits steering while a turn is active', async 
   bridge.close();
 
   assert.equal(frames.length, 2);
-  assert.equal(frames[0].method, 'conversation.steer');
+  assert.equal(frames[0].method, 'conversation.enqueue');
   assert.equal(frames[0].params.message, 'steer this turn');
   assert.equal(frames[1].method, 'conversation.send');
   assert.equal(frames[1].params.message, 'new turn');

@@ -6,6 +6,7 @@ import {
   NARS_CLIENT_PROJECTION_REGISTRY,
   NARS_CLIENT_PROJECTION_VERBOSITY_LEVELS,
   NARS_COMMAND_METHOD,
+  buildAgentWebUiConversationEnqueueFrame,
   buildAgentWebUiConversationSendFrame,
   buildAgentWebUiConversationSteerFrame,
   buildAgentWebUiEventsReadFrame,
@@ -22,6 +23,7 @@ import {
 test('NARS client projection contract owns attach commands and web UI capabilities', () => {
   assert.equal(NARS_COMMAND_METHOD, 'carrier.command.execute');
   assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('conversation.send'), true);
+  assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('conversation.enqueue'), true);
   assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('conversation.interrupt'), true);
   assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('conversation.steer'), true);
   assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('session.events.read'), true);
@@ -35,6 +37,7 @@ test('NARS client projection contract owns attach commands and web UI capabiliti
     agent_web_ui: 'narada-agent-web-ui --event-endpoint ws://127.0.0.1/events --health-endpoint http://127.0.0.1/health',
     protocol: '{"id":"events-1","method":"session.events.subscribe","params":{"include_replay":true,"max_replay":20}}',
     operator_input_protocol: '{"id":"input-1","method":"conversation.send","params":{"message":"<operator message>","source":"agent-web-ui"}}',
+    queued_operator_input_protocol: '{"id":"input-2","method":"conversation.enqueue","params":{"message":"<operator message>","source":"agent-web-ui"}}',
     slash_command_protocol: '{"id":"command-1","method":"carrier.command.execute","params":{"command":"/status","value":""}}',
   });
   assert.equal(NARS_CLIENT_PROJECTION_REGISTRY.default_verbosity, 'operations');
@@ -64,9 +67,14 @@ test('NARS client projection contract owns web UI operator input projection', ()
     method: 'conversation.steer',
     params: { message: 'change course', source: 'agent-web-ui', active_turn_id: 'turn_1' },
   });
-  assert.deepEqual(buildAgentWebUiOperatorInputAction('change course', { id: 'steer-2', activeTurn: true, activeTurnId: 'turn_2' }).frame, {
-    id: 'steer-2',
-    method: 'conversation.steer',
+  assert.deepEqual(buildAgentWebUiConversationEnqueueFrame('run after this', { id: 'enqueue-1', activeTurnId: 'turn_2' }), {
+    id: 'enqueue-1',
+    method: 'conversation.enqueue',
+    params: { message: 'run after this', source: 'agent-web-ui', active_turn_id: 'turn_2' },
+  });
+  assert.deepEqual(buildAgentWebUiOperatorInputAction('change course', { id: 'enqueue-2', activeTurn: true, activeTurnId: 'turn_2' }).frame, {
+    id: 'enqueue-2',
+    method: 'conversation.enqueue',
     params: { message: 'change course', source: 'agent-web-ui', active_turn_id: 'turn_2' },
   });
   assert.equal(buildAgentWebUiOperatorInputAction('/help').kind, 'local_help');
@@ -80,7 +88,7 @@ test('NARS client projection contract owns web UI operator input projection', ()
   assert.equal(buildAgentWebUiOperatorInputAction('/tools mcp', { id: 'tools-1' }).frame.method, 'carrier.command.execute');
   assert.deepEqual(buildAgentWebUiOperatorInputAction('/observer mute', { id: 'mute-1' }).frame, { id: 'mute-1', method: 'observer.mute', params: {} });
   assert.equal(buildAgentWebUiOperatorInputAction('/observer').message, 'Usage: /observer mute|unmute');
-  assert.match(buildAgentWebUiHelpText(), /conversation\.steer/);
+  assert.match(buildAgentWebUiHelpText(), /conversation\.enqueue/);
   assert.equal(isAgentWebUiNarsMethod('carrier.command.execute'), true);
   assert.equal(isAgentWebUiNarsMethod('command.execute'), false);
   assert.equal(isAgentWebUiProtocolFrame({ id: 'ok', method: 'conversation.send', params: {} }), true);

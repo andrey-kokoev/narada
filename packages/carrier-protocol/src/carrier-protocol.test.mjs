@@ -19,6 +19,7 @@ import {
   NARS_TURN_EVENT_KINDS,
   NARS_TURN_LIFECYCLE_HOOKS,
   OBSERVER_VISIBILITIES,
+  OPERATOR_INPUT_ADMISSION_CONSTRUCTORS,
   DIRECTIVE_KINDS,
   DIRECTIVE_SUPPRESSION_REASONS,
   DIRECTIVE_TARGET_KINDS,
@@ -110,6 +111,7 @@ const baseInput = {
 
 const sessionEventFixtureManifest = readFixture('session-event-fixtures.json');
 const inputPipelineCases = readFixture('carrier-input-pipeline-cases.json');
+const operatorInputAdmissionCases = readFixture('operator-input-admission-cases.json');
 const directiveEmitterRegistryCases = readFixture('carrier-directive-emitter-registry-cases.json');
 const toolEffectAdmissionCases = readFixture('tool-effect-admission-cases.json');
 
@@ -125,6 +127,10 @@ assert.deepEqual(PAYLOAD_REF_READER_TOOLS, ['mcp_payload_read', 'mcp_payload_sho
 assert.deepEqual(TOOL_RESULT_STATUSES, ['ok', 'denied', 'failed']);
 assert.deepEqual(TOOL_EFFECT_ADMISSION_ACTIONS, ['admit', 'deny']);
 assert.deepEqual(TOOL_EFFECT_ADMISSION_REASONS, ['read_only_tool_effect_admitted', 'tool_effect_adapter_unconfigured', 'tool_effect_admission_required', 'unsupported_tool_effect', 'tool_effect_authority_denied', 'write_tool_effect_admitted']);
+assert.deepEqual(Object.keys(OPERATOR_INPUT_ADMISSION_CONSTRUCTORS), ['send', 'enqueue', 'steer']);
+assert.equal(OPERATOR_INPUT_ADMISSION_CONSTRUCTORS.send.active_turn_effect, 'none');
+assert.equal(OPERATOR_INPUT_ADMISSION_CONSTRUCTORS.enqueue.active_turn_effect, 'none');
+assert.equal(OPERATOR_INPUT_ADMISSION_CONSTRUCTORS.steer.active_turn_effect, 'interrupt');
 assert.equal(CARRIER_PROTOCOL_SCHEMAS.nars_lifecycle_hook.schema, NARS_LIFECYCLE_HOOK_SCHEMA);
 assert.deepEqual(NARS_SESSION_LIFECYCLE_HOOKS, ['beforeSessionBind', 'afterSessionStarted', 'afterSessionStatus', 'beforeSessionClose', 'afterSessionClosed', 'onSessionError']);
 assert.deepEqual(NARS_TURN_LIFECYCLE_HOOKS, ['beforeDirectiveAccept', 'afterDirectiveAccepted', 'beforeTurnStart', 'onAssistantMessage', 'onToolCall', 'onToolResult', 'onCommandResult', 'afterTurnComplete', 'onRuntimeError']);
@@ -305,6 +311,8 @@ assert.equal(classifyCarrierControlRequest({ id: 'interrupt-1', method: 'convers
 assert.equal(classifyCarrierControlRequest({ id: 'interrupt-1', method: 'conversation.interrupt' }).concurrent_allowed, true);
 assert.equal(classifyCarrierControlRequest({ id: 'steer-1', method: 'conversation.steer' }).method_kind, 'conversation_steer');
 assert.equal(classifyCarrierControlRequest({ id: 'steer-1', method: 'conversation.steer' }).concurrent_allowed, true);
+assert.equal(classifyCarrierControlRequest({ id: 'enqueue-1', method: 'conversation.enqueue' }).method_kind, 'conversation_enqueue');
+assert.equal(classifyCarrierControlRequest({ id: 'enqueue-1', method: 'conversation.enqueue' }).concurrent_allowed, true);
 assert.deepEqual(classifyCarrierControlRequest({ id: 'command-1', method: 'carrier.command.execute' }), {
   request_id: 'command-1',
   method: 'carrier.command.execute',
@@ -388,6 +396,25 @@ for (const entry of inputPipelineCases.cases) {
   assert.equal(hold.hold_action, entry.expected.hold_action, entry.name);
   assert.equal(hold.should_defer, entry.expected.should_defer, entry.name);
   assert.deepEqual(hold.hold_events.map((event) => event.event_kind), entry.expected.hold_event_kinds ?? [], entry.name);
+}
+assert.equal(operatorInputAdmissionCases.schema, 'narada.carrier.operator_input_admission_cases.v1');
+for (const entry of operatorInputAdmissionCases.cases) {
+  const constructor = OPERATOR_INPUT_ADMISSION_CONSTRUCTORS[entry.constructor];
+  assert.ok(constructor, entry.name);
+  assert.equal(constructor.method, entry.method, entry.name);
+  assert.equal(constructor.input_kind, entry.expected.input_kind, entry.name);
+  assert.equal(constructor.turn_timing, entry.expected.turn_timing, entry.name);
+  assert.equal(constructor.active_turn_effect, entry.expected.active_turn_effect, entry.name);
+  assert.equal(constructor.queue_durability, entry.expected.queue_durability, entry.name);
+  assert.equal(constructor.ordering, entry.expected.ordering, entry.name);
+  assert.equal(constructor.authority, entry.expected.authority, entry.name);
+  const input = normalizeInputEvent(entry.input);
+  const queueAdmission = classifyCarrierInputQueueAdmission(input, entry.state);
+  assert.equal(queueAdmission.admission_action, entry.expected.admission_action, entry.name);
+  if (hasOwn(entry.expected, 'admission_reason')) assert.equal(queueAdmission.admission_reason, entry.expected.admission_reason, entry.name);
+  if (hasOwn(entry.expected, 'queue_state')) assert.equal(queueAdmission.queue_state, entry.expected.queue_state, entry.name);
+  assert.deepEqual(queueAdmission.queue_events.map((event) => event.event_kind), entry.expected.queue_event_kinds, entry.name);
+  assert.deepEqual(queueAdmission.admission_events.map((event) => event.event_kind), entry.expected.admission_event_kinds, entry.name);
 }
 assert.deepEqual(validateInputEvent(readFixture('input-event.json')), []);
 assert.deepEqual(validateControlInputRecord(readFixture('control-input-event.json')), []);

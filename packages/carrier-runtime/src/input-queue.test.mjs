@@ -58,3 +58,40 @@ test('input queue drains in order and can drop operator steering', async () => {
   assert.equal(queue.pendingCount, 0);
   assert.equal(sessionEvents.some((entry) => entry.event === 'input_event_started'), true);
 });
+
+test('input queue persists pending transitions through queue state hook', async () => {
+  const states = [];
+  const queue = createInputQueue({
+    drain: async (event) => ({ terminal_state: event.content === 'first' ? 'completed' : 'completed' }),
+    onQueueStateChangedFn: (state) => states.push(state),
+    randomIdFn: () => `persist_${states.length}`,
+  });
+  await queue.enqueue({ content: 'first', source: 'manual_operator' });
+  await queue.enqueue({ content: 'second', source: 'programmatic_operator', delivery_mode: 'admit_after_active_turn' });
+  assert.equal(states.at(-1).pending.length, 2);
+  await queue.drainUntilIdle();
+  assert.equal(states.at(-1).pending.length, 0);
+  assert.equal(states.some((state) => state.transition === 'admitted_to_turn'), true);
+  assert.equal(states.some((state) => state.transition === 'completed'), true);
+});
+
+test('input queue can drop and clear generic queued operator input', async () => {
+  const sessionEvents = [];
+  const queue = createInputQueue({
+    drain: async () => ({ terminal_state: 'completed' }),
+    appendSessionFn: (entry) => sessionEvents.push(entry),
+    carrierSessionEventEntryFn: (event_kind, payload) => ({ event_kind, payload }),
+    randomIdFn: () => `operator_input_${sessionEvents.length}`,
+  });
+  await queue.enqueue({ content: 'manual', source: 'manual_operator' });
+  await queue.enqueue({ content: 'web ui', source: 'programmatic_operator', delivery_mode: 'admit_after_active_turn' });
+  await queue.enqueue({ content: 'system', source: 'system_directive' });
+
+  assert.equal(queue.dropOperatorInput(2).content, 'web ui');
+  assert.equal(queue.pendingCount, 2);
+  const cleared = queue.clearOperatorInput();
+  assert.deepEqual(cleared.map((event) => event.content), ['manual']);
+  assert.equal(queue.pendingCount, 1);
+  assert.equal(queue.items()[0].content, 'system');
+  assert.equal(sessionEvents.filter((entry) => entry.event_kind === 'input_dropped_by_operator').length, 2);
+});

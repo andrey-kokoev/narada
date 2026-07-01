@@ -165,6 +165,22 @@ function formatEventValue(value, { limit = 500 } = {}) {
   return String(value);
 }
 
+function terminalAssistantContent(content) {
+  if (!Array.isArray(content)) return String(content ?? '');
+  return content.map((part) => {
+    if (part == null) return '';
+    if (typeof part !== 'object') return String(part);
+    if (part.type === 'text' || part.type === 'markdown') return String(part.text ?? '');
+    if (part.type === 'artifact_ref') {
+      const title = part.title ?? part.artifact_id ?? 'artifact';
+      const kind = part.kind ? ` ${part.kind}` : '';
+      return `[${title}${kind} artifact]`;
+    }
+    if (part.type === 'code') return String(part.text ?? '');
+    return formatEventValue(part);
+  }).filter(Boolean).join('\n\n');
+}
+
 function routeLine({ label, body, labelStyle = (value) => value, bodyStyle = (value) => value, state, style }) {
   return `${labelStyle(label)}${style.muted(':')} ${bodyStyle(String(body ?? ''))}${timestampSuffix(state, style)}`;
 }
@@ -367,7 +383,7 @@ export function renderOperatorEvent(event, state = {}) {
     case 'assistant_message': {
       const thinkingClear = clearRenderedThinking(state);
       const turnKey = event.turn_id ?? '__default_stream_turn';
-      const finalContent = String(event.content ?? '');
+      const finalContent = terminalAssistantContent(event.content);
       const streamedContent = state.streamedContentByTurn.get(turnKey) ?? '';
       const content = (streamedContent && finalContent.startsWith(streamedContent) ? finalContent.slice(streamedContent.length).trimStart() : finalContent).trimEnd();
       if (!content) return thinkingClear;

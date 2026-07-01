@@ -5,6 +5,7 @@ import {
   BRACKETED_PASTE_START,
   createExplicitJsonControlFrame,
   createOperatorConversationFrame,
+  createOperatorConversationEnqueueFrame,
   createOperatorSteeringFrame,
   createProjectedSlashCommandAction,
   projectedHelpText,
@@ -147,7 +148,7 @@ export function createProjectedTerminalBridge({
     }
 
     const frame = operatorState.activeTurnId
-      ? createOperatorSteeringFrame(line)
+      ? createOperatorConversationEnqueueFrame(line)
       : createOperatorConversationFrame(line);
     if (frame && interactive) {
       writeSubmittedOperatorPrompt({ output, operatorState, line, style });

@@ -60,6 +60,13 @@ import {
 } from './input-queue.mjs';
 import { spawnOwnedProcess } from './process-supervisor.mjs';
 import { readNarsEventLogPage } from './nars-event-log.mjs';
+import {
+  publicNarsArtifactIndex,
+  publicNarsArtifactRecord,
+  readNarsArtifact,
+  readNarsArtifactIndex,
+  registerNarsArtifact,
+} from './nars-artifacts.mjs';
 
 const PROVIDER_METADATA = loadProviderMetadata();
 
@@ -104,6 +111,11 @@ export function createCarrierRuntimeDependencies({ runtimeContext = {}, env = pr
     recordMcpStartupFailures: (mcpServers, options = {}) => recordMcpStartupFailures(mcpServers, { ...options, appendSessionRecord }),
     createOperationHeartbeatDirectiveEmitter,
     handleServerRequestLine: (line, context) => handleServerRequestLine(line, { ...context, identity, session, siteRoot, sessionPath, eventsPath, appendSessionRecord, providerSettings, narsDelegatedAuthorityHandoff: runtimeContext.narsDelegatedAuthorityHandoff ?? null }),
+    appendSessionRecord,
+    sessionEventEntry: (event, payload) => ({ event, ...payload, timestamp: new Date().toISOString() }),
+    carrierSessionEventEntry,
+    classifyInputRuntimeQueueAdmission: (event, displaySettings = {}, queueState = {}) => classifyCarrierInputAdmission(event, { activeTurn: queueState.activeTurn, observerMuted: displaySettings.observerMuted }),
+    classifyInputRuntimeAdmission: (event) => classifyCarrierInputAdmission(event),
     closeMcpServers,
     recordSessionRequestIssue,
     noteSessionActivity,
@@ -128,6 +140,17 @@ export function createCarrierRuntimeDependencies({ runtimeContext = {}, env = pr
       session,
     }),
     dependencies,
+  };
+}
+
+function inputQueueStatus(state = {}) {
+  const snapshot = state.inputQueue?.state?.() ?? {};
+  const items = state.inputQueue?.items?.() ?? [];
+  return {
+    ...snapshot,
+    items,
+    state_path: state.operatorInputQueueStatePath ?? null,
+    durability: state.operatorInputQueueStatePath ? 'nars_session_file' : 'memory_only',
   };
 }
 
@@ -214,6 +237,7 @@ function serverEventsSubscription({ requestId, params = {}, context = {} }) {
       last_sequence: lastEvent?.event_sequence ?? lastEvent?.sequence ?? null,
       next_sequence: currentEventSequence + 1,
     },
+    operator_input_queue: inputQueueStatus(state),
     filters: params.filters && typeof params.filters === 'object' ? params.filters : {},
     live_stream: 'stdout_jsonl',
     close_semantics: 'request_scoped_replay_over_stdio; durable live subscriptions require websocket transport',
@@ -246,6 +270,7 @@ function serverOperations({ requestId, state, mcpServers, mcpPreflightArtifact, 
     event: 'session_operations',
     active_turn_state: state.activeTurn ? 'running' : 'idle',
     active_turn_id: state.activeTurn?.turnId ?? null,
+    operator_input_queue: inputQueueStatus(state),
     ...mcpStatus,
     ...createMcpPreflightArtifactSnapshot(mcpPreflightArtifact),
     ...createSessionActivitySnapshot(state),
@@ -514,12 +539,72 @@ async function handleServerRequestLine(line, context) {
   }
   if (request?.method === 'session.events.read') {
     const requestId = request?.id ?? null;
-    noteSessionActivity(state, 'session_events_read_requested');
+    noteSessionActivity(context.state, 'session_events_read_requested');
     recordWorkflowRequest(context, 'session_events_read_requested', { requestId, method: 'session.events.read' });
-    emit('session_events_read', serverEventsRead({ requestId, params: request?.params ?? {}, context }));
+    context.emit('session_events_read', serverEventsRead({ requestId, params: request?.params ?? {}, context }));
+    return;
+  }
+  if (request?.method === 'session.artifacts.register') {
+    const requestId = request?.id ?? null;
+    noteSessionActivity(context.state, 'session_artifact_register_requested');
+    recordWorkflowRequest(context, 'session_artifact_register_requested', { requestId, method: 'session.artifacts.register' });
+    try {
+      context.emit('session_artifact_registered', serverArtifactRegister({ requestId, params: request?.params ?? {}, context }));
+    } catch (error) {
+      context.emit('error', { request_id: requestId, code: error?.code ?? 'artifact_register_failed', message: error instanceof Error ? error.message : String(error), details: error?.details ?? null });
+    }
+    return;
+  }
+  if (request?.method === 'session.artifacts.read') {
+    const requestId = request?.id ?? null;
+    noteSessionActivity(context.state, 'session_artifact_read_requested');
+    recordWorkflowRequest(context, 'session_artifact_read_requested', { requestId, method: 'session.artifacts.read' });
+    try {
+      context.emit('session_artifact_read', serverArtifactRead({ requestId, params: request?.params ?? {}, context }));
+    } catch (error) {
+      context.emit('error', { request_id: requestId, code: error?.code ?? 'artifact_read_failed', message: error instanceof Error ? error.message : String(error), details: error?.details ?? null });
+    }
     return;
   }
   await handleServerRequest(request, context);
+}
+
+function serverArtifactRegister({ requestId, params = {}, context = {} }) {
+  const registered = registerNarsArtifact({
+    sessionPath: context.sessionPath,
+    sessionId: context.session,
+    agentId: context.identity,
+    siteRoot: context.siteRoot,
+    sourcePath: params.source_path ?? params.path,
+    kind: params.kind,
+    title: params.title,
+    contentType: params.content_type,
+    renderHint: params.render_hint,
+    accessScope: params.access?.scope ?? params.access_scope,
+  });
+  return {
+    schema: 'narada.nars.artifact_registered.v1',
+    event: 'session_artifact_registered',
+    request_id: requestId,
+    transport: 'jsonl_stdio',
+    artifact: registered.public_record,
+    artifact_url: `/sessions/${encodeURIComponent(context.session)}/artifacts/${encodeURIComponent(registered.record.artifact_id)}`,
+    content_url: `/sessions/${encodeURIComponent(context.session)}/artifacts/${encodeURIComponent(registered.record.artifact_id)}/content`,
+  };
+}
+
+function serverArtifactRead({ requestId, params = {}, context = {} }) {
+  const artifactId = params.artifact_id ?? params.artifactId ?? null;
+  const artifact = artifactId
+    ? publicNarsArtifactRecord(readNarsArtifact({ sessionPath: context.sessionPath, artifactId }))
+    : publicNarsArtifactIndex(readNarsArtifactIndex({ sessionPath: context.sessionPath }));
+  return {
+    schema: 'narada.nars.artifact_read.v1',
+    event: 'session_artifact_read',
+    request_id: requestId,
+    transport: 'jsonl_stdio',
+    artifact,
+  };
 }
 
 async function handleServerRequest(request, context) {
@@ -581,6 +666,38 @@ async function handleServerRequest(request, context) {
       emit('error', { request_id: requestId, code: 'session_closed', message: 'Session is closed.' });
       return;
     }
+    if (controlRequest.method_kind === 'conversation_enqueue') {
+      const message = String(request?.params?.message ?? '');
+      if (!message.trim()) {
+        emit('error', { request_id: requestId, code: 'message_required', message: 'conversation.enqueue requires params.message' });
+        return;
+      }
+      context.appendSessionRecord?.({
+        event: 'conversation_enqueue_requested',
+        request_id: requestId,
+        method: request?.method ?? 'conversation.enqueue',
+        delivery_semantics: 'admit_after_active_turn_without_interrupt',
+        operation_status: 'requested',
+        requested_at: new Date().toISOString(),
+      });
+      emit('conversation_enqueue_requested', {
+        request_id: requestId,
+        method: request?.method ?? 'conversation.enqueue',
+        delivery_semantics: 'admit_after_active_turn_without_interrupt',
+        operation_status: 'queued',
+        active_turn_id: state.activeTurn?.turnId ?? null,
+        requested_at: new Date().toISOString(),
+      });
+      await state.inputQueue.enqueue(normalizeInputEvent({
+        content: message,
+        source: request?.params?.source ?? 'programmatic_operator',
+        source_id: request?.params?.source_id ?? 'agent-runtime-server.operator_surface',
+        authority_ref: request?.params?.authority_ref ?? null,
+        request_id: requestId,
+        delivery_mode: 'admit_after_active_turn',
+      }, { transport: 'carrier_server_api' }), { drain: true, state });
+      return;
+    }
     if (controlRequest.error) {
       emit('error', { request_id: requestId, code: controlRequest.error.code, message: controlRequest.error.message });
       return;
@@ -612,6 +729,41 @@ async function handleServerRequest(request, context) {
       if (command === '/tools' || command === '/tool') {
         emit('carrier_command_result', serverCommandMessage({ requestId, command, message: 'MCP tool catalog.', fields: { tools: mcpToolCatalogEntries(mcpServers) } }));
         return;
+      }
+      if (command === '/queue') {
+        const action = value.split(/\s+/).filter(Boolean)[0] ?? '';
+        const queue = inputQueueStatus(state);
+        if (!action) {
+          emit('carrier_command_result', serverCommandMessage({
+            requestId,
+            command,
+            message: `Queued operator input: ${queue.pendingCount ?? 0} item(s).`,
+            fields: { operator_input_queue: queue },
+          }));
+          return;
+        }
+        if (action === 'clear') {
+          const dropped = state.inputQueue?.clearOperatorInput?.() ?? [];
+          emit('carrier_command_result', serverCommandMessage({
+            requestId,
+            command,
+            message: `Cleared ${dropped.length} queued operator input item(s).`,
+            fields: { dropped_count: dropped.length, operator_input_queue: inputQueueStatus(state) },
+          }));
+          return;
+        }
+        if (action === 'drop') {
+          const index = Number(value.split(/\s+/).filter(Boolean)[1] ?? 1);
+          const dropped = Number.isInteger(index) && index > 0 ? state.inputQueue?.dropOperatorInput?.(index) : null;
+          emit('carrier_command_result', serverCommandMessage({
+            requestId,
+            command,
+            terminalState: dropped ? 'completed' : 'not_found',
+            message: dropped ? `Dropped queued operator input item ${index}.` : `No queued operator input item ${Number.isInteger(index) && index > 0 ? index : '<invalid>'}.`,
+            fields: { dropped_input_event_id: dropped?.event_id ?? null, operator_input_queue: inputQueueStatus(state) },
+          }));
+          return;
+        }
       }
       emit('carrier_command_result', serverCommandMessage({ requestId, command: command || 'unknown', terminalState: 'unsupported', message: `Unsupported command: ${command || '<missing>'}` }));
       return;

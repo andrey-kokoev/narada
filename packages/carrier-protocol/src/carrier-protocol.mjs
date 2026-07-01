@@ -68,6 +68,35 @@ export const TRANSPORTS = Object.freeze([
   'test_harness',
 ]);
 export const DELIVERY_MODES = Object.freeze(['admit_for_current_turn', 'admit_after_active_turn']);
+export const OPERATOR_INPUT_ADMISSION_CONSTRUCTORS = Object.freeze({
+  send: Object.freeze({
+    method: 'conversation.send',
+    input_kind: 'operator_message',
+    turn_timing: 'current_or_next_idle_turn',
+    active_turn_effect: 'none',
+    queue_durability: 'none',
+    ordering: 'immediate',
+    authority: 'operator',
+  }),
+  enqueue: Object.freeze({
+    method: 'conversation.enqueue',
+    input_kind: 'operator_message',
+    turn_timing: 'after_active_turn',
+    active_turn_effect: 'none',
+    queue_durability: 'nars_session_durable',
+    ordering: 'fifo_after_active_turn',
+    authority: 'operator',
+  }),
+  steer: Object.freeze({
+    method: 'conversation.steer',
+    input_kind: 'operator_steering',
+    turn_timing: 'after_active_turn',
+    active_turn_effect: 'interrupt',
+    queue_durability: 'nars_session_durable',
+    ordering: 'front_after_interrupt',
+    authority: 'operator',
+  }),
+});
 export const HOLD_CONDITIONS = Object.freeze(['composer_clear_required']);
 export const TURN_STATES = Object.freeze(['idle', 'active', 'interrupt_requested', 'completed', 'interrupted', 'failed']);
 export const TERMINAL_TURN_STATES = Object.freeze(['completed', 'interrupted', 'failed']);
@@ -274,6 +303,7 @@ export const CARRIER_CONTROL_METHODS = Object.freeze([
   'session.close',
   'conversation.interrupt',
   'conversation.steer',
+  'conversation.enqueue',
   'conversation.send',
   'system_directive.deliver',
   'carrier.input.deliver',
@@ -379,6 +409,7 @@ export function classifyCarrierControlRequest(request = {}) {
   if (method === 'session.close') return { ...base, method_kind: 'session_close', allowed_when_closed: true };
   if (method === 'conversation.interrupt') return { ...base, method_kind: 'conversation_interrupt', concurrent_allowed: true };
   if (method === 'conversation.steer') return { ...base, method_kind: 'conversation_steer', concurrent_allowed: true };
+  if (method === 'conversation.enqueue') return { ...base, method_kind: 'conversation_enqueue', concurrent_allowed: true };
   if (method === 'conversation.send') return { ...base, method_kind: 'conversation_send' };
   if (method === 'system_directive.deliver') return { ...base, method_kind: 'system_directive_deliver' };
   if (method === 'observers.status') return { ...base, method_kind: 'observers_status' };

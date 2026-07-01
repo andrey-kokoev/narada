@@ -158,8 +158,8 @@ export function projectedHelpText() {
     '/observer mute        Mute visible observer interjections',
     '/observer unmute      Unmute visible observer interjections',
     '/queue                Show queued carrier input',
-    '/queue clear          Clear queued operator steering',
-    '/queue drop <index>   Drop one queued operator steering item',
+    '/queue clear          Clear queued operator input',
+    '/queue drop <index>   Drop one queued operator input item',
     '/clear                Clear terminal display',
     '/exit                 Save and quit',
     '/json <frame>         Send explicit JSONL control frame',
@@ -173,6 +173,22 @@ export function createOperatorConversationFrame(line) {
   return {
     id: requestId,
     method: 'conversation.send',
+    params: {
+      request_id: requestId,
+      message: rawMessage,
+      source: 'programmatic_operator',
+      source_id: 'agent-runtime-server.operator_terminal',
+    },
+  };
+}
+
+export function createOperatorConversationEnqueueFrame(line) {
+  const rawMessage = String(line ?? '');
+  if (!rawMessage.trim()) return null;
+  const requestId = `operator-conversation-enqueue-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return {
+    id: requestId,
+    method: 'conversation.enqueue',
     params: {
       request_id: requestId,
       message: rawMessage,

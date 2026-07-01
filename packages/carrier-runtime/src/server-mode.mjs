@@ -9,6 +9,11 @@ import { dirname, join } from 'node:path';
 import { createCarrierRuntimeContext } from './carrier-runtime-context.mjs';
 import { createInputQueue } from './input-queue.mjs';
 import { markNarsSessionIndexClosed, writeNarsSessionStartedIndex } from './nars-session-index.mjs';
+import {
+  operatorInputQueueStatePathFromSessionPath,
+  readOperatorInputQueueState,
+  writeOperatorInputQueueState,
+} from './operator-input-queue-state.mjs';
 
 export async function runCarrierServerMode({
   input = process.stdin,
@@ -62,6 +67,11 @@ export async function runCarrierServerMode({
     normalizeCarrierGoalState,
     carrierGoalStatusLabel,
     recordCarrierDiagnostic = () => {},
+    appendSessionRecord = () => {},
+    sessionEventEntry = (event, payload) => ({ event, ...payload }),
+    carrierSessionEventEntry = (event_kind, payload) => ({ event_kind, payload }),
+    classifyInputRuntimeQueueAdmission = () => ({ queue_events: [] }),
+    classifyInputRuntimeAdmission = () => ({ admission_events: [] }),
     onOperationHeartbeatDirectiveStarted = () => {},
     onOperationHeartbeatDirectiveStopped = () => {},
   } = dependencies ?? {};
@@ -117,7 +127,21 @@ export async function runCarrierServerMode({
     return result;
   };
 
+  const queueStatePath = operatorInputQueueStatePathFromSessionPath(sessionPath);
+  const queueState = readOperatorInputQueueState(queueStatePath);
+  state.operatorInputQueueStatePath = queueStatePath;
+  const appendQueueSessionRecord = (entry) => {
+    appendSessionRecord(entry);
+    if (entry?.event) {
+      emit(entry.event, entry);
+      return;
+    }
+    if (entry?.event_kind) {
+      emit(entry.event_kind, entry.payload ?? {});
+    }
+  };
   state.inputQueue = createInputQueue({
+    initialPending: queueState.pending,
     drain: (event) => {
       const requestId = event.request_id ?? event.event_id;
       if (state.closed) {
@@ -146,7 +170,28 @@ export async function runCarrierServerMode({
         providerSettings: state.sessionSettings,
       });
     },
+    appendSessionFn: appendQueueSessionRecord,
+    sessionEventEntryFn: sessionEventEntry,
+    carrierSessionEventEntryFn: carrierSessionEventEntry,
+    noteSessionActivityFn: noteSessionActivity,
+    classifyInputRuntimeQueueAdmissionFn: classifyInputRuntimeQueueAdmission,
+    classifyInputRuntimeAdmissionFn: classifyInputRuntimeAdmission,
+    onQueueStateChangedFn: ({ pending, transition, event }) => {
+      const previous = readOperatorInputQueueState(queueStatePath);
+      writeOperatorInputQueueState(queueStatePath, {
+        revision: previous.revision,
+        pending,
+        last_transition: {
+          transition,
+          input_event_id: event?.event_id ?? null,
+          occurred_at: new Date().toISOString(),
+        },
+      });
+    },
   });
+  if (queueStatePath && !queueState.corrupt && queueState.pending_count === 0) {
+    writeOperatorInputQueueState(queueStatePath, { revision: queueState.revision, pending: [] });
+  }
 
   noteSessionActivity(state, 'session_started', state.startedAt);
   const heartbeat = startCarrierHeartbeat({
@@ -196,6 +241,16 @@ export async function runCarrierServerMode({
     session_path: sessionPath,
     events_path: eventsPath,
   });
+  if (state.inputQueue.pendingCount > 0) {
+    const restoredDrain = state.inputQueue.drainUntilIdle().catch((error) => {
+      emit('error', {
+        code: 'operator_input_queue_restore_failed',
+        message: error instanceof Error ? error.message : String(error),
+      });
+    });
+    state.pendingRequests.add(restoredDrain);
+    restoredDrain.finally(() => state.pendingRequests.delete(restoredDrain));
+  }
   recordMcpPreflightArtifactLinkage({ emit, preflightArtifact: mcpPreflightArtifact });
   recordMcpStartupFailures(mcpServers, { emit });
 

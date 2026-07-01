@@ -96,7 +96,7 @@
       "primary": "/queue clear",
       "aliases": [],
       "effect": "clear_queued_operator_steering",
-      "help": "Clear queued operator steering"
+      "help": "Clear queued operator input"
     },
     {
       "name": "queue_drop",
@@ -104,7 +104,7 @@
       "aliases": [],
       "argument": "index",
       "effect": "drop_queued_operator_steering_item",
-      "help": "Drop one queued operator steering item"
+      "help": "Drop one queued operator input item"
     },
     {
       "name": "clear",

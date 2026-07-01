@@ -1,9 +1,17 @@
 import { createHash } from 'node:crypto';
+import { appendFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { PassThrough } from 'node:stream';
 import { createCarrierRuntimeContext } from '@narada2/carrier-runtime/carrier-runtime-context';
 import { createCarrierRuntimeDependencies } from '@narada2/carrier-runtime/runtime-dependencies';
 import { readNarsEventLogPage } from '@narada2/carrier-runtime/nars-event-log';
+import {
+  publicNarsArtifactRecord,
+  readNarsArtifact,
+  readNarsArtifactContent,
+  readNarsArtifactIndex,
+  registerNarsArtifact,
+} from '@narada2/carrier-runtime/nars-artifacts';
 import { runCarrierServerMode } from '@narada2/carrier-runtime/server-mode';
 import { createProjectedTerminalBridge } from '@narada2/carrier-terminal-projection/projected-terminal';
 import {
@@ -319,15 +327,18 @@ function createEventHub({ maxBuffer = 1000 } = {}) {
     publish(event) {
       if (!event || typeof event !== 'object') return null;
       const existingSequence = Number(event.event_sequence ?? event.sequence);
-      if (Number.isFinite(existingSequence) && existingSequence > 0) {
-        sequence = Math.max(sequence, existingSequence);
+      let assignedSequence;
+      if (Number.isFinite(existingSequence) && existingSequence > sequence) {
+        sequence = existingSequence;
+        assignedSequence = existingSequence;
       } else {
         sequence += 1;
+        assignedSequence = sequence;
       }
       const sequencedEvent = {
-        event_sequence: Number.isFinite(existingSequence) && existingSequence > 0 ? existingSequence : sequence,
-        sequence: Number.isFinite(existingSequence) && existingSequence > 0 ? existingSequence : sequence,
         ...event,
+        event_sequence: assignedSequence,
+        sequence: assignedSequence,
       };
       buffer.push(sequencedEvent);
       while (buffer.length > maxBuffer) buffer.shift();
@@ -448,7 +459,130 @@ function createDelegatedAuthorityHandoff({ args = [], env = process.env, generat
   };
 }
 
-function startHealthProjection({ childStdin, host, port, timeoutMs = 2000 }) {
+function sendJsonResponse(response, statusCode, payload) {
+  response.writeHead(statusCode, { 'content-type': 'application/json; charset=utf-8' });
+  response.end(`${JSON.stringify(payload)}\n`);
+}
+
+async function readRequestJson(request) {
+  let body = '';
+  for await (const chunk of request) body += String(chunk);
+  if (!body.trim()) return {};
+  return JSON.parse(body);
+}
+
+function artifactHttpError(response, error) {
+  const code = error?.code ?? 'artifact_error';
+  const status = code === 'artifact_not_found' || code === 'artifact_content_missing' ? 404 : code === 'artifact_path_outside_admitted_roots' ? 403 : 400;
+  sendJsonResponse(response, status, { schema: 'narada.nars.artifact_error.v1', error: code, message: error instanceof Error ? error.message : String(error), details: error?.details ?? null });
+}
+
+async function handleArtifactHttpRequest({ request, response, runtimeContext }) {
+  const url = new URL(request.url ?? '/', 'http://127.0.0.1');
+  const match = url.pathname.match(/^\/sessions\/([^/]+)\/artifacts(?:\/([^/]+)(?:\/(content|message))?)?$/);
+  if (!match) return false;
+  const sessionId = decodeURIComponent(match[1]);
+  const artifactId = match[2] ? decodeURIComponent(match[2]) : null;
+  const content = match[3] === 'content';
+  const message = match[3] === 'message';
+  if (sessionId !== runtimeContext.session) {
+    sendJsonResponse(response, 404, { schema: 'narada.nars.artifact_error.v1', error: 'session_not_found', message: 'Artifact session does not match this NARS runtime.' });
+    return true;
+  }
+  try {
+    if (request.method === 'POST' && !artifactId && !content && !message) {
+      const params = await readRequestJson(request);
+      const registered = registerNarsArtifact({
+        sessionPath: runtimeContext.sessionPath,
+        sessionId: runtimeContext.session,
+        agentId: runtimeContext.identity,
+        siteRoot: runtimeContext.siteRoot,
+        sourcePath: params.source_path ?? params.path,
+        kind: params.kind,
+        title: params.title,
+        contentType: params.content_type,
+        renderHint: params.render_hint,
+        accessScope: params.access?.scope ?? params.access_scope,
+      });
+      sendJsonResponse(response, 201, { schema: 'narada.nars.artifact_registered.v1', artifact: registered.public_record });
+      return true;
+    }
+    if (request.method === 'POST' && artifactId && message) {
+      const params = await readRequestJson(request);
+      const artifact = publicNarsArtifactRecord(readNarsArtifact({ sessionPath: runtimeContext.sessionPath, artifactId }));
+      const messageEvent = buildArtifactAssistantMessageEvent({ runtimeContext, artifact, params });
+      const published = publishRuntimeEvent({ eventHub: runtimeContext.eventHub, runtimeContext, event: messageEvent });
+      sendJsonResponse(response, 201, {
+        schema: 'narada.nars.artifact_message_presented.v1',
+        status: 'presented',
+        artifact,
+        event: published,
+        message_part: artifactMessagePartFromRecord(artifact, params),
+      });
+      return true;
+    }
+    if (request.method !== 'GET') {
+      sendJsonResponse(response, 405, { error: 'method_not_allowed' });
+      return true;
+    }
+    if (!artifactId) {
+      sendJsonResponse(response, 200, readNarsArtifactIndex({ sessionPath: runtimeContext.sessionPath }));
+      return true;
+    }
+    if (!content) {
+      sendJsonResponse(response, 200, { schema: 'narada.nars.artifact_read.v1', artifact: publicNarsArtifactRecord(readNarsArtifact({ sessionPath: runtimeContext.sessionPath, artifactId })) });
+      return true;
+    }
+    const artifactContent = readNarsArtifactContent({ sessionPath: runtimeContext.sessionPath, artifactId });
+    response.writeHead(200, { 'content-type': artifactContent.content_type, ...artifactContent.headers });
+    response.end(artifactContent.content);
+    return true;
+  } catch (error) {
+    artifactHttpError(response, error);
+    return true;
+  }
+}
+
+function buildArtifactAssistantMessageEvent({ runtimeContext, artifact, params = {} }) {
+  const messagePart = artifactMessagePartFromRecord(artifact, params);
+  const text = optionalText(params.text) ?? optionalText(params.message) ?? `Artifact ready: ${messagePart.title ?? messagePart.artifact_id}`;
+  return {
+    event: 'assistant_message',
+    event_family: 'turn',
+    agent_id: runtimeContext.identity,
+    session_id: runtimeContext.session,
+    request_id: optionalText(params.request_id) ?? `artifact_present_${messagePart.artifact_id}`,
+    timestamp: new Date().toISOString(),
+    source: 'nars_artifact_presentation',
+    content: [
+      { type: 'text', text },
+      messagePart,
+    ],
+    artifact_id: messagePart.artifact_id,
+  };
+}
+
+function artifactMessagePartFromRecord(artifact, params = {}) {
+  return {
+    type: 'artifact_ref',
+    artifact_id: String(artifact.artifact_id ?? artifact.id),
+    ...(artifact.kind || params.kind ? { kind: String(artifact.kind ?? params.kind) } : {}),
+    ...(artifact.title || params.title ? { title: String(artifact.title ?? params.title) } : {}),
+    ...(artifact.render_hint || params.render_hint ? { render_hint: String(artifact.render_hint ?? params.render_hint) } : { render_hint: 'inline' }),
+  };
+}
+
+function publishRuntimeEvent({ eventHub, runtimeContext, event }) {
+  const published = eventHub?.publish(event) ?? event;
+  if (runtimeContext.eventsPath) appendFileSync(runtimeContext.eventsPath, `${JSON.stringify(published)}\n`, 'utf8');
+  return published;
+}
+
+function optionalText(value) {
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+function startHealthProjection({ childStdin, host, port, timeoutMs = 2000, runtimeContext }) {
   const pending = new Map();
   let sequence = 0;
   const requestHealth = () => new Promise((resolve, reject) => {
@@ -467,6 +601,7 @@ function startHealthProjection({ childStdin, host, port, timeoutMs = 2000 }) {
     stdin.write(`${JSON.stringify({ id: requestId, method: 'session.health', params: {} })}\n`);
   });
   const server = createServer(async (request, response) => {
+    if (await handleArtifactHttpRequest({ request, response, runtimeContext })) return;
     if (request.method !== 'GET' || request.url?.split('?')[0] !== '/health') {
       response.writeHead(404, { 'content-type': 'application/json' });
       response.end(`${JSON.stringify({ error: 'not_found' })}\n`);
@@ -578,6 +713,7 @@ async function main() {
       childStdin: () => runtimeInput,
       host: parsedHealth.health.host,
       port: parsedHealth.health.port,
+      runtimeContext: { ...preliminaryRuntimeContext, eventHub },
     });
     process.env.NARADA_HEALTH_URL = healthProjection.url;
   }
