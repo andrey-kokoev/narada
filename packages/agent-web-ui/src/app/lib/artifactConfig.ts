@@ -22,7 +22,7 @@ export const ArtifactRenderingConfigKey: InjectionKey<ArtifactRenderingConfig> =
 export function artifactMetadataPath(config: ArtifactRenderingConfig, sessionId: string | null | undefined, artifactId: string): string | null {
   const basePath = config.artifactBasePath?.replace(/\/+$/, '') ?? null;
   if (!basePath || !artifactId) return null;
-  if (config.artifactTransport === 'cloudflare-projection') return withBrowserToken(`${basePath}/${encodeURIComponent(artifactId)}`, config.browserToken);
+  if (config.artifactTransport === 'cloudflare-projection' || config.artifactTransport === 'cloudflare-authority') return withBrowserToken(`${basePath}/${encodeURIComponent(artifactId)}`, config.browserToken);
   if (!sessionId) return null;
   return `${basePath}/sessions/${encodeURIComponent(sessionId)}/artifacts/${encodeURIComponent(artifactId)}`;
 }
@@ -30,7 +30,7 @@ export function artifactMetadataPath(config: ArtifactRenderingConfig, sessionId:
 export function artifactContentPath(config: ArtifactRenderingConfig, sessionId: string | null | undefined, artifactId: string): string | null {
   const basePath = config.artifactBasePath?.replace(/\/+$/, '') ?? null;
   if (!basePath || !artifactId) return null;
-  if (config.artifactTransport === 'cloudflare-projection') return withBrowserToken(`${basePath}/${encodeURIComponent(artifactId)}/content`, config.browserToken);
+  if (config.artifactTransport === 'cloudflare-projection' || config.artifactTransport === 'cloudflare-authority') return withBrowserToken(`${basePath}/${encodeURIComponent(artifactId)}/content`, config.browserToken);
   if (!sessionId) return null;
   return `${basePath}/sessions/${encodeURIComponent(sessionId)}/artifacts/${encodeURIComponent(artifactId)}/content`;
 }

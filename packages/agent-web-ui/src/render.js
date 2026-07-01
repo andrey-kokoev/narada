@@ -149,7 +149,7 @@ function withBrowserToken(url, browserToken) {
 function artifactContentPath({ basePath, artifactTransport, sessionId, artifactId, browserToken }) {
   const normalizedBasePath = basePath?.replace(/\/+$/, '') ?? null;
   if (!normalizedBasePath || !artifactId) return null;
-  if (artifactTransport === 'cloudflare-projection') return withBrowserToken(`${normalizedBasePath}/${encodeURIComponent(artifactId)}/content`, browserToken);
+  if (artifactTransport === 'cloudflare-projection' || artifactTransport === 'cloudflare-authority') return withBrowserToken(`${normalizedBasePath}/${encodeURIComponent(artifactId)}/content`, browserToken);
   if (!sessionId) return null;
   return `${normalizedBasePath}/sessions/${encodeURIComponent(sessionId)}/artifacts/${encodeURIComponent(artifactId)}/content`;
 }

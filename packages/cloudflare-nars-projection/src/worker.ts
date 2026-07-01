@@ -59,6 +59,7 @@ export function createCloudflareNarsProjectionWorker(options: CloudflareNarsProj
       const url = new URL(request.url);
       const path = trimPath(url.pathname);
       if (!path.startsWith('api/nars/')) return serveStaticAsset(request, env);
+      if (request.method === 'OPTIONS') return corsResponse();
       if (request.method === 'GET' && path === 'api/nars/authority/health') {
         return json({ schema: 'narada.cloudflare_nars_authority.service_health.v1', status: 'healthy', execution: 'synthetic_no_provider_no_tools' });
       }
@@ -88,6 +89,19 @@ export function createCloudflareNarsProjectionWorker(options: CloudflareNarsProj
             since_sequence: numberParam(url, 'since_sequence'),
             max_events: numberParam(url, 'max_events') ?? undefined,
           }));
+        }
+        const authorityArtifact = authority.suffix.match(/^artifacts(?:\/([^/]+))?(?:\/(content))?$/);
+        if (authorityArtifact) {
+          const artifactId = authorityArtifact[1] ? decodeURIComponent(authorityArtifact[1]) : null;
+          if (request.method === 'GET' && authorityArtifact[2] === 'content' && artifactId) {
+            const read = authorityService.readArtifactContent({ session_id: authority.sessionId, artifact_id: artifactId });
+            if (read.status !== 'ok' || !read.content) return json(read, 404);
+            return new Response(read.content.body, { status: 200, headers: withCorsHeaders(read.content.headers) });
+          }
+          if (request.method === 'GET') {
+            const read = authorityService.readArtifactMetadata({ session_id: authority.sessionId, artifact_id: artifactId });
+            return json(artifactId && read.status === 'ok' ? { ...read, artifact: read.artifacts[0] ?? null } : read);
+          }
         }
         if (request.method === 'POST' && authority.suffix === 'input') {
           const body = await readJson(request);
@@ -521,7 +535,7 @@ async function handleArtifactRoute(args: {
     });
     if (read.status !== 'ok' || !read.content) return json(read, 404);
     const bytes = base64ToBytes(read.content.content_base64);
-    return new Response(toArrayBuffer(bytes), { status: 200, headers: read.content.headers });
+    return new Response(toArrayBuffer(bytes), { status: 200, headers: withCorsHeaders(read.content.headers) });
   }
   if (args.request.method === 'POST' && !args.content) {
     const body = await readJson(args.request);
@@ -581,7 +595,20 @@ function trimPath(pathname: string): string {
 }
 
 function json(payload: unknown, status = 200): Response {
-  return new Response(JSON.stringify(payload), { status, headers: { 'content-type': 'application/json; charset=utf-8' } });
+  return new Response(JSON.stringify(payload), { status, headers: withCorsHeaders({ 'content-type': 'application/json; charset=utf-8' }) });
+}
+
+function corsResponse(): Response {
+  return new Response(null, { status: 204, headers: withCorsHeaders({}) });
+}
+
+function withCorsHeaders(headers: HeadersInit): Headers {
+  const next = new Headers(headers);
+  next.set('access-control-allow-origin', '*');
+  next.set('access-control-allow-methods', 'GET,POST,DELETE,OPTIONS');
+  next.set('access-control-allow-headers', 'content-type,authorization,x-narada-browser-token-fingerprint,x-narada-bridge-token-fingerprint');
+  next.set('access-control-expose-headers', 'content-type,x-narada-artifact-id,x-narada-artifact-kind');
+  return next;
 }
 
 async function serveStaticAsset(request: Request, env: CloudflareNarsProjectionWorkerEnv): Promise<Response> {

@@ -14,6 +14,8 @@ export const CLOUDFLARE_NARS_AUTHORITY_EVENT_SCHEMA = 'narada.cloudflare_nars_au
 export const CLOUDFLARE_NARS_AUTHORITY_EVENTS_SCHEMA = 'narada.cloudflare_nars_authority.events.v1';
 export const CLOUDFLARE_NARS_AUTHORITY_HEALTH_SCHEMA = 'narada.cloudflare_nars_authority.health.v1';
 export const CLOUDFLARE_NARS_AUTHORITY_INPUT_SCHEMA = 'narada.cloudflare_nars_authority.input_admission.v1';
+export const CLOUDFLARE_NARS_AUTHORITY_ARTIFACT_SCHEMA = 'narada.cloudflare_nars_authority.artifact.v1';
+export const CLOUDFLARE_NARS_AUTHORITY_ARTIFACTS_SCHEMA = 'narada.cloudflare_nars_authority.artifacts.v1';
 
 export const CLOUDFLARE_NARS_INPUT_METHODS = [
   'conversation.send',
@@ -66,6 +68,18 @@ function normalizeArtifactProjectionPolicy(value: Partial<ArtifactProjectionPoli
     image: { mode: normalizeArtifactContentMode(input.image?.mode, DEFAULT_ARTIFACT_POLICY.image.mode) },
     cache_ttl_seconds: Number.isFinite(Number(input.cache_ttl_seconds)) ? Math.max(0, Math.floor(Number(input.cache_ttl_seconds))) : DEFAULT_ARTIFACT_POLICY.cache_ttl_seconds,
     redact_local_paths: input.redact_local_paths !== false,
+  };
+}
+
+function refusedAuthorityArtifacts(sessionId: string, artifactId: string | null, code: string): CloudflareNarsAuthorityArtifactReadResult {
+  return {
+    schema: CLOUDFLARE_NARS_AUTHORITY_ARTIFACTS_SCHEMA,
+    status: 'refused',
+    code,
+    session_id: sessionId,
+    artifact_id: artifactId,
+    artifacts: [],
+    artifact_count: 0,
   };
 }
 
@@ -515,6 +529,8 @@ export function createCloudflareNarsAuthorityService(options: {
 } = {}) {
   const sessions = new Map<string, CloudflareNarsAuthoritySession>();
   const events = new Map<string, CloudflareNarsAuthorityEvent[]>();
+  const artifacts = new Map<string, CloudflareNarsAuthorityArtifact[]>();
+  const artifactContent = new Map<string, CloudflareNarsAuthorityArtifactContent>();
   const maxEvents = Math.max(1, Math.floor(options.max_events ?? 500));
   const service = {
     createSession(args: CloudflareNarsAuthoritySessionInput, now = new Date().toISOString()): CloudflareNarsAuthorityCreateSessionResult {
@@ -535,6 +551,7 @@ export function createCloudflareNarsAuthorityService(options: {
       };
       sessions.set(sessionId, session);
       events.set(sessionId, []);
+      artifacts.set(sessionId, []);
       appendAuthorityEvent(sessionId, {
         event: 'session_started',
         type: 'session.started',
@@ -576,15 +593,36 @@ export function createCloudflareNarsAuthorityService(options: {
       const inputId = `input_${safeToken(now)}_${Math.random().toString(36).slice(2, 8)}`;
       const payload = args.payload ?? {};
       const message = typeof payload.message === 'string' ? payload.message : typeof payload.text === 'string' ? payload.text : '';
+      const artifact = createSyntheticAuthorityHtmlArtifact(args.session_id, inputId, now);
       const admitted = [
         appendAuthorityEvent(args.session_id, { event: 'operator_input_admitted', type: 'operator_input.admitted', input_id: inputId, method: args.method, payload }, now),
         appendAuthorityEvent(args.session_id, { event: 'user_message', type: 'user_message', input_id: inputId, content: message }, now),
         appendAuthorityEvent(args.session_id, { event: 'turn_started', type: 'turn.started', input_id: inputId }, now),
-        appendAuthorityEvent(args.session_id, { event: 'assistant_message', type: 'assistant_message', input_id: inputId, content: `Synthetic Cloudflare-origin response admitted ${args.method}.`, execution_kind: 'synthetic_no_provider_no_tools' }, now),
+        appendAuthorityEvent(args.session_id, { event: 'session_artifact_registered', type: 'session_artifact.registered', input_id: inputId, artifact }, now),
+        appendAuthorityEvent(args.session_id, { event: 'assistant_message', type: 'assistant_message', input_id: inputId, content: [
+          { type: 'text', text: `Synthetic Cloudflare-origin response admitted ${args.method}.` },
+          { type: 'artifact_ref', artifact_id: artifact.artifact_id, kind: artifact.kind, title: artifact.title, render_hint: 'inline' },
+        ], execution_kind: 'synthetic_no_provider_no_tools' }, now),
         appendAuthorityEvent(args.session_id, { event: 'turn_complete', type: 'turn.completed', input_id: inputId, terminal_state: 'completed_synthetic' }, now),
       ];
       sessions.set(args.session_id, { ...session, updated_at: now });
       return { schema: CLOUDFLARE_NARS_AUTHORITY_INPUT_SCHEMA, status: 'admitted', session_id: args.session_id, input_id: inputId, method: args.method as CloudflareNarsInputMethod, execution_kind: 'synthetic_no_provider_no_tools', events: admitted };
+    },
+    readArtifactMetadata(args: { session_id: string; artifact_id?: string | null }): CloudflareNarsAuthorityArtifactReadResult {
+      const session = sessions.get(args.session_id);
+      if (!session) return refusedAuthorityArtifacts(args.session_id, args.artifact_id ?? null, 'session_not_found');
+      if (session.lifecycle_state !== 'active') return refusedAuthorityArtifacts(args.session_id, args.artifact_id ?? null, `session_${session.lifecycle_state}`);
+      const all = artifacts.get(args.session_id) ?? [];
+      const selected = args.artifact_id ? all.filter((artifact) => artifact.artifact_id === args.artifact_id) : all;
+      return { schema: CLOUDFLARE_NARS_AUTHORITY_ARTIFACTS_SCHEMA, status: 'ok', session_id: args.session_id, artifacts: selected, artifact_count: selected.length };
+    },
+    readArtifactContent(args: { session_id: string; artifact_id: string }): CloudflareNarsAuthorityArtifactContentReadResult {
+      const session = sessions.get(args.session_id);
+      if (!session) return { schema: CLOUDFLARE_NARS_AUTHORITY_ARTIFACTS_SCHEMA, status: 'refused', code: 'session_not_found', session_id: args.session_id, artifact_id: args.artifact_id };
+      if (session.lifecycle_state !== 'active') return { schema: CLOUDFLARE_NARS_AUTHORITY_ARTIFACTS_SCHEMA, status: 'refused', code: `session_${session.lifecycle_state}`, session_id: args.session_id, artifact_id: args.artifact_id };
+      const content = artifactContent.get(`${args.session_id}:${args.artifact_id}`);
+      if (!content) return { schema: CLOUDFLARE_NARS_AUTHORITY_ARTIFACTS_SCHEMA, status: 'refused', code: 'artifact_content_not_found', session_id: args.session_id, artifact_id: args.artifact_id };
+      return { schema: CLOUDFLARE_NARS_AUTHORITY_ARTIFACTS_SCHEMA, status: 'ok', session_id: args.session_id, artifact_id: args.artifact_id, content };
     },
     revokeSession(sessionId: string, revokedAt = new Date().toISOString()) {
       const session = sessions.get(sessionId);
@@ -593,15 +631,46 @@ export function createCloudflareNarsAuthorityService(options: {
       return { status: 'revoked', session_id: sessionId };
     },
     snapshot(): CloudflareNarsAuthorityWorkerState {
-      return { schema: 'narada.cloudflare_nars_authority.worker_state.v1', sessions: [...sessions.values()], events: [...events.values()].flat() };
+      return { schema: 'narada.cloudflare_nars_authority.worker_state.v1', sessions: [...sessions.values()], events: [...events.values()].flat(), artifacts: [...artifacts.values()].flat(), artifact_content: [...artifactContent.values()] };
     },
     load(state: CloudflareNarsAuthorityWorkerState | null | undefined) {
       sessions.clear();
       events.clear();
+      artifacts.clear();
+      artifactContent.clear();
       for (const session of state?.sessions ?? []) sessions.set(session.session_id, session);
       for (const event of state?.events ?? []) events.set(event.session_id, [...(events.get(event.session_id) ?? []), event]);
+      for (const artifact of state?.artifacts ?? []) artifacts.set(artifact.session_id, [...(artifacts.get(artifact.session_id) ?? []), artifact]);
+      for (const content of state?.artifact_content ?? []) artifactContent.set(`${content.session_id}:${content.artifact_id}`, content);
     },
   };
+  function createSyntheticAuthorityHtmlArtifact(sessionId: string, inputId: string, now: string): CloudflareNarsAuthorityArtifact {
+    const artifact: CloudflareNarsAuthorityArtifact = {
+      schema: CLOUDFLARE_NARS_AUTHORITY_ARTIFACT_SCHEMA,
+      artifact_id: 'art_cf_authority_html',
+      session_id: sessionId,
+      kind: 'html',
+      title: 'Cloudflare Authority HTML Preview',
+      content_type: 'text/html; charset=utf-8',
+      created_at: now,
+      created_by: 'cloudflare_nars_authority.synthetic_runtime',
+      creation_input_id: inputId,
+      access: { scope: 'session', token_required: false },
+      render: { preferred: 'inline', sandbox: { allow_scripts: true, allow_top_navigation: false } },
+      lifecycle: { state: 'active', owner: 'cloudflare-nars-authority' },
+    };
+    artifacts.set(sessionId, [...(artifacts.get(sessionId) ?? []).filter((entry) => entry.artifact_id !== artifact.artifact_id), artifact]);
+    artifactContent.set(`${sessionId}:${artifact.artifact_id}`, {
+      schema: CLOUDFLARE_NARS_AUTHORITY_ARTIFACT_SCHEMA,
+      session_id: sessionId,
+      artifact_id: artifact.artifact_id,
+      content_type: artifact.content_type,
+      body: '<!doctype html><html lang="en"><body><main id="cf-authority-html-artifact-e2e">HTML artifact created by Cloudflare-hosted NARS authority</main></body></html>',
+      headers: { 'content-type': artifact.content_type, 'x-narada-artifact-id': artifact.artifact_id, 'x-narada-artifact-kind': artifact.kind },
+      created_at: now,
+    });
+    return artifact;
+  }
   function appendAuthorityEvent(sessionId: string, payload: Record<string, unknown>, now: string): CloudflareNarsAuthorityEvent {
     const session = sessions.get(sessionId);
     if (!session) throw new Error('authority_session_not_found');
@@ -1024,6 +1093,52 @@ export interface CloudflareNarsAuthorityWorkerState {
   schema: 'narada.cloudflare_nars_authority.worker_state.v1';
   sessions: CloudflareNarsAuthoritySession[];
   events: CloudflareNarsAuthorityEvent[];
+  artifacts?: CloudflareNarsAuthorityArtifact[];
+  artifact_content?: CloudflareNarsAuthorityArtifactContent[];
+}
+
+export interface CloudflareNarsAuthorityArtifact {
+  schema: typeof CLOUDFLARE_NARS_AUTHORITY_ARTIFACT_SCHEMA;
+  artifact_id: string;
+  session_id: string;
+  kind: ArtifactKind;
+  title: string;
+  content_type: string;
+  created_at: string;
+  created_by: string;
+  creation_input_id: string;
+  access: Record<string, unknown>;
+  render: Record<string, unknown>;
+  lifecycle: Record<string, unknown>;
+}
+
+export interface CloudflareNarsAuthorityArtifactContent {
+  schema: typeof CLOUDFLARE_NARS_AUTHORITY_ARTIFACT_SCHEMA;
+  session_id: string;
+  artifact_id: string;
+  content_type: string;
+  body: string;
+  headers: Record<string, string>;
+  created_at: string;
+}
+
+export interface CloudflareNarsAuthorityArtifactReadResult {
+  schema: typeof CLOUDFLARE_NARS_AUTHORITY_ARTIFACTS_SCHEMA;
+  status: 'ok' | 'refused';
+  code?: string;
+  session_id: string;
+  artifact_id?: string | null;
+  artifacts: CloudflareNarsAuthorityArtifact[];
+  artifact_count: number;
+}
+
+export interface CloudflareNarsAuthorityArtifactContentReadResult {
+  schema: typeof CLOUDFLARE_NARS_AUTHORITY_ARTIFACTS_SCHEMA;
+  status: 'ok' | 'refused';
+  code?: string;
+  session_id: string;
+  artifact_id: string;
+  content?: CloudflareNarsAuthorityArtifactContent;
 }
 
 export interface AgentWebUiCloudflareProjectionConfig {
@@ -1047,6 +1162,8 @@ export interface AgentWebUiCloudflareAuthorityConfig {
   health_endpoint: string;
   input_endpoint: string;
   cache_endpoint: string;
+  artifact_base_path: string;
+  artifact_metadata_endpoint: string;
 }
 
 const DEFAULT_EVENT_POLICY: ProjectionEventPolicyMode = 'operator';
@@ -1336,6 +1453,8 @@ export function buildAgentWebUiCloudflareAuthorityConfig(args: {
     health_endpoint: `${base}${path}/health`,
     input_endpoint: `${base}${path}/input`,
     cache_endpoint: `${base}${path}/events`,
+    artifact_base_path: `${base}${path}/artifacts`,
+    artifact_metadata_endpoint: `${base}${path}/artifacts`,
   };
 }
 

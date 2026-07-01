@@ -516,7 +516,8 @@ describe('Cloudflare Worker routes', () => {
       expect(liveMessages).toContainEqual(expect.objectContaining({ event: 'turn_complete', terminal_state: 'completed_synthetic' }));
 
       const replayAfterInput = await jsonOf(outerWorker.fetch(new Request(`${base}/events?since_sequence=1`), env));
-      expect(replayAfterInput).toMatchObject({ status: 'ok', event_count: 5 });
+      expect(replayAfterInput).toMatchObject({ status: 'ok', event_count: 6 });
+      expect(replayAfterInput.events.map((entry: { payload: { event: string } }) => entry.payload.event)).toContain('session_artifact_registered');
 
       expect(await jsonOf(outerWorker.fetch(new Request(base, { method: 'DELETE' }), env))).toMatchObject({ status: 'revoked', session_id: 'cf_session_synthetic_1' });
       expect(sockets[0].client.messages.map(JSON.parse)).toContainEqual(expect.objectContaining({ event: 'authority_session_revoked', code: 'session_revoked', session_id: 'cf_session_synthetic_1' }));
