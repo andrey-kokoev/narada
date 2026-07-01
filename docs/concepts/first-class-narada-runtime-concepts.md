@@ -297,3 +297,33 @@ Acceptance coverage:
 - Health and heartbeat are documented as NARS-owned projections.
 - Lifecycle hooks are stated as shared runtime semantics, not client-local callbacks.
 - Routine health visibility and conversation rendering are explicitly separated.
+
+## 1559 - Renderable Artifacts
+
+CL: 0.991
+
+First-class object: session-scoped artifact registration, serving, message references, and client rendering.
+
+Authority contracts:
+
+- [`nars-session-management.md`](nars-session-management.md)
+- `@narada2/artifacts-mcp` artifact registration/list/read/present tools
+- `@narada2/agent-runtime-server` artifact routes and message-part references
+
+Current implementation posture:
+
+- Artifact registration, listing, reading, and presentation exist as dedicated MCP/runtime mechanics.
+- NARS exposes artifact routes and client-facing message parts can carry `artifact_ref` instead of dumping raw payloads into chat.
+- Web and terminal clients still need consistent rendering policy for artifact links, previews, content safety, and copy/download affordances.
+
+Remaining implementation work:
+
+- Keep large/raw tool payloads out of conversation by preferring artifact references.
+- Define safe rendering policy by content type and trust boundary.
+- Add client parity checks for artifact refs in CLI, TUI, Web UI, and future surfaces.
+
+Acceptance coverage:
+
+- Renderable artifacts are named as first-class session-scoped objects.
+- Artifact references are preferred over raw payload dumps for large or structured outputs.
+- Content policy and client rendering are recorded as explicit remaining work.
