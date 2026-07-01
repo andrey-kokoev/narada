@@ -99,3 +99,31 @@ Acceptance coverage:
 - Conversation, operations, diagnostics, and raw inclusion rules are linked to the projection contract.
 - Provider telemetry is explicitly non-canonical conversation.
 - Clients are directed to consume shared projection semantics rather than invent local classifiers.
+
+## 1552 - Delegation `work_order` Contract
+
+CL: 0.991
+
+First-class object: governing delegation contract for scope, repositories, budgets, mutation boundaries, deliverables, authority gates, and verification policy.
+
+Authority contract:
+
+- `@narada2/delegated-task-mcp` target docs and tests in `D:/code/mcp-surfaces`
+
+Current implementation posture:
+
+- Delegation tests cover `work_order`, `allowed_repositories`, `budget`, `verification_budget`, `test_budget`, mutation boundaries, deliverables, and dependencies.
+- `work_order` is the governing object; budget is only a sub-object inside it.
+- Compatibility paths still accept simpler task descriptions, but the target shape is a structured work order.
+
+Remaining implementation work:
+
+- Document canonical `work_order` examples and operator guidance.
+- Make validation failures distinguish missing work order, invalid budget, repository boundary violation, and deliverable mismatch.
+- Migrate callers away from legacy step-list compatibility where a `work_order` is available.
+
+Acceptance coverage:
+
+- The governing object is named `work_order`, not `budget`.
+- Repository boundaries, budgets, deliverables, dependencies, and authority gates are included in the contract.
+- Legacy compatibility is recorded as transitional rather than the target delegation interface.
