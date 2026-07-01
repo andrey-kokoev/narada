@@ -270,6 +270,7 @@ export function isRoutineHealthyNarsSessionHealth(event) {
 }
 
 export function classifyNarsClientEventProjection(projection) {
+  if (projection?.class) return projection.class;
   const kind = projection?.kind ?? projection?.event?.event ?? 'unknown';
   const event = projection?.event ?? projection;
   if (kind === 'assistant_message' || kind === 'assistant_message_stream' || kind === 'user_message' || kind === 'operator_input_submitted' || kind === 'agent_web_ui_message' || kind === 'agent_web_ui_help') return 'conversation';
@@ -303,7 +304,7 @@ export function shouldProjectNarsClientEvent(message, options = {}) {
 }
 
 function eventTone(kind) {
-  if (kind === 'assistant_message') return NARS_CLIENT_EVENT_TONES.assistant;
+  if (kind === 'assistant_message' || kind === 'provider_agent_message') return NARS_CLIENT_EVENT_TONES.assistant;
   if (kind === 'user_message') return NARS_CLIENT_EVENT_TONES.operator;
   if (kind === 'tool_call' || kind === 'tool_result') return NARS_CLIENT_EVENT_TONES.tool;
   if (kind === 'session_artifact_registered' || kind === 'session_artifact_read') return NARS_CLIENT_EVENT_TONES.status;
@@ -316,6 +317,7 @@ function eventTone(kind) {
 
 function eventSummary(event, kind) {
   if (kind === 'assistant_message') return event.content ?? event.message ?? 'assistant message';
+  if (kind === 'provider_agent_message') return event.provider_event?.item?.text ?? event.event?.item?.text ?? 'provider agent message';
   if (kind === 'user_message') return event.content ?? event.message ?? 'operator message';
   if (kind === 'tool_call') return event.tool_name ?? event.name ?? 'tool call';
   if (kind === 'tool_result') return `${event.tool_name ?? event.name ?? 'tool result'}${event.status ? ` ${event.status}` : ''}`;
@@ -336,6 +338,8 @@ function eventSummary(event, kind) {
 
 export function projectNarsClientEvent(message) {
   const event = unwrapNarsClientEvent(message);
+  const providerProjection = projectNestedProviderNarsClientEvent(event);
+  if (providerProjection) return providerProjection;
   const kind = event?.event ?? 'unknown';
   const label = NARS_CLIENT_EVENT_LABELS[kind] ?? kind;
   const summary = eventSummary(event, kind);
@@ -346,6 +350,79 @@ export function projectNarsClientEvent(message) {
     summary,
     event,
   };
+}
+
+function projectNestedProviderNarsClientEvent(event) {
+  const providerEvent = event?.event;
+  if (!providerEvent || typeof providerEvent !== 'object') return null;
+  const type = String(providerEvent.type ?? 'event');
+  if (type === 'thread.started') {
+    return projection({ kind: 'provider_thread_started', class: 'diagnostics', label: 'Provider thread started', tone: 'session', summary: providerEvent.thread_id ?? 'provider thread started', event, renderKey: sequenceRenderKey(event) });
+  }
+  if (type === 'turn.started') {
+    return projection({ kind: 'provider_turn_started', class: 'diagnostics', label: 'Provider turn started', tone: 'session', summary: 'provider turn started', event, renderKey: sequenceRenderKey(event) });
+  }
+  if (type === 'turn.completed') {
+    const usage = providerEvent.usage && typeof providerEvent.usage === 'object' ? providerEvent.usage : null;
+    const summary = usage ? `input ${usage.input_tokens ?? '?'} · output ${usage.output_tokens ?? '?'}` : 'provider turn completed';
+    return projection({ kind: 'provider_turn_completed', class: 'diagnostics', label: 'Provider turn complete', tone: 'session', summary, event, renderKey: sequenceRenderKey(event) });
+  }
+  if (type === 'item.started' || type === 'item.completed') return projectNestedProviderItemEvent(type, providerEvent.item, event);
+  return projection({ kind: `provider_${safeKind(type)}`, class: 'diagnostics', label: 'Provider event', tone: 'unknown', summary: safeSummary(providerEvent), event, renderKey: sequenceRenderKey(event) });
+}
+
+function projectNestedProviderItemEvent(type, item, event) {
+  if (!item || typeof item !== 'object') {
+    return projection({ kind: `provider_${safeKind(type)}`, class: 'diagnostics', label: 'Provider item', tone: 'unknown', summary: type, event, renderKey: sequenceRenderKey(event) });
+  }
+  const completed = type === 'item.completed';
+  if (item.type === 'mcp_tool_call') {
+    const name = [item.server, item.tool].filter(Boolean).join('.') || 'tool call';
+    const status = completed ? item.error ? 'failed' : 'complete' : 'running';
+    return projection({ kind: completed ? 'tool_result' : 'tool_call', class: 'operations', label: completed ? 'Tool result' : 'Tool call', tone: item.error ? 'error' : 'tool', summary: `${name} ${status}`, event, renderKey: providerItemRenderKey(event, item, 'tool') });
+  }
+  if (item.type === 'agent_message') {
+    return projection({ kind: 'provider_agent_message', class: 'diagnostics', label: 'Provider message', tone: 'assistant', summary: String(item.text ?? ''), event, renderKey: providerItemRenderKey(event, item, 'provider-agent-message') });
+  }
+  return projection({ kind: `provider_item_${safeKind(item.type ?? 'unknown')}`, class: 'diagnostics', label: 'Provider item', tone: 'unknown', summary: safeSummary(item), event, renderKey: providerItemRenderKey(event, item, 'provider-item') });
+}
+
+function projection({ kind, class: eventClass = null, label, tone, summary, event, renderKey = null }) {
+  return {
+    kind,
+    ...(eventClass ? { class: eventClass } : {}),
+    label,
+    tone,
+    summary,
+    event,
+    ...(renderKey ? { renderKey } : {}),
+  };
+}
+
+function providerItemRenderKey(event, item, prefix) {
+  const itemId = item?.id ?? null;
+  if (!itemId) return sequenceRenderKey(event);
+  return `${prefix}:provider-item:${event?.agent_id ?? 'agent'}:${event?.session_id ?? 'session'}:${itemId}`;
+}
+
+function sequenceRenderKey(event) {
+  const sequence = event?.event_sequence ?? event?.sequence;
+  return Number.isFinite(Number(sequence)) ? `sequence:${sequence}` : null;
+}
+
+function safeKind(value) {
+  return String(value ?? 'unknown').replace(/[^a-z0-9_]+/gi, '_');
+}
+
+function safeSummary(value) {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (typeof value !== 'object') return String(value);
+  if (typeof value.message === 'string') return value.message;
+  if (typeof value.text === 'string') return value.text;
+  if (typeof value.type === 'string') return value.type;
+  return JSON.stringify(value);
 }
 
 export const NARS_CLIENT_PROJECTION_REGISTRY = Object.freeze({

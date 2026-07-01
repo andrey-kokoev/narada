@@ -2,6 +2,7 @@ import { describe, expect, test } from 'vitest';
 import {
   CLOUDFLARE_NARS_PROJECTION_ACCESS_SCHEMA,
   CLOUDFLARE_NARS_PROJECTION_INTENT_SCHEMA,
+  buildAgentWebUiCloudflareAuthorityConfig,
   buildAgentWebUiCloudflareProjectionConfig,
   buildProjectionRegistrationPlan,
   classifyCloudflareInputRelay,
@@ -19,7 +20,7 @@ import {
   revokeProjection,
   validateProjectionCredential,
 } from '../src/index.js';
-import { createCloudflareNarsProjectionWorker } from '../src/worker.js';
+import { createCloudflareNarsProjectionWorker, NarsProjectionState } from '../src/worker.js';
 
 const now = '2026-06-30T21:00:00.000Z';
 
@@ -46,6 +47,240 @@ describe('Cloudflare NARS projection schemas', () => {
     expect(access.bridge_credential.kind).toBe('bridge');
     expect(access.browser_access_tokens[0].kind).toBe('browser');
     expect(JSON.stringify(access)).not.toContain('secret');
+  });
+
+  test('Worker registration from raw intent remains active and can publish/replay', async () => {
+    const worker = createCloudflareNarsProjectionWorker({ now: () => now });
+    const intent = {
+      schema: CLOUDFLARE_NARS_PROJECTION_INTENT_SCHEMA,
+      projection_id: 'proj_raw_intent_active',
+      site_id: 'narada.sonar',
+      nars_session_id: 'carrier_raw_intent',
+      event_stream_policy: 'operator',
+      artifact_projection_policy: { metadata: 'public_records', content: 'none' },
+      operator_input_policy: ['conversation.send', 'conversation.enqueue'],
+      replica_cache_policy: 'short_bounded',
+    };
+    const base = `https://projection.example.test/api/nars/projections/${intent.projection_id}`;
+    const registered = await jsonOf(worker.fetch(new Request('https://projection.example.test/api/nars/projections/register', {
+      method: 'POST',
+      body: JSON.stringify({ intent }),
+    })));
+    expect(registered.remote_access.lifecycle_state).toBe('active');
+
+    expect(await jsonOf(worker.fetch(new Request(`${base}/events`, {
+      method: 'POST',
+      headers: { 'x-narada-bridge-token-fingerprint': registered.remote_access.bridge_credential.token_fingerprint },
+      body: JSON.stringify({ site_id: intent.site_id, nars_session_id: intent.nars_session_id, event: { event: 'user_message', event_sequence: 1, content: 'hello' } }),
+    })))).toMatchObject({ status: 'published', projection_id: intent.projection_id });
+
+    expect(await jsonOf(worker.fetch(new Request(`${base}/events?since_sequence=0`, {
+      headers: { 'x-narada-browser-token-fingerprint': registered.remote_access.browser_access_tokens[0].token_fingerprint },
+    })))).toMatchObject({ status: 'ok', event_count: 1 });
+  });
+
+  test('Worker Durable Object routing keeps projection state across register publish and replay', async () => {
+    const outerWorker = createCloudflareNarsProjectionWorker({ now: () => now });
+    const objects = new Map<string, NarsProjectionState>();
+    const env = {
+      NARS_PROJECTION_STATE: {
+        idFromName(name: string) { return name; },
+        get(id: string) {
+          if (!objects.has(id)) {
+            const storage = new Map<string, unknown>();
+            objects.set(id, new NarsProjectionState({
+              storage: {
+                get<T = unknown>(key: string) { return storage.get(key) as T | undefined; },
+                put(key: string, value: unknown) { storage.set(key, value); },
+              },
+            }));
+          }
+          return objects.get(id)!;
+        },
+      },
+    };
+    const intent = sampleIntent();
+    const base = `https://projection.example.test/api/nars/projections/${intent.projection_id}`;
+    const registered = await jsonOf(outerWorker.fetch(new Request('https://projection.example.test/api/nars/projections/register', {
+      method: 'POST',
+      body: JSON.stringify({ intent }),
+    }), env));
+    expect(registered).toMatchObject({ status: 'registered', projection_id: intent.projection_id });
+
+    expect(await jsonOf(outerWorker.fetch(new Request(`${base}/events`, {
+      method: 'POST',
+      headers: { 'x-narada-bridge-token-fingerprint': registered.remote_access.bridge_credential.token_fingerprint },
+      body: JSON.stringify({ site_id: intent.site_id, nars_session_id: intent.nars_session_id, event: { event: 'assistant_message', event_sequence: 7, content: 'durable hello' } }),
+    }), env))).toMatchObject({ status: 'published', projection_id: intent.projection_id });
+
+    const replay = await jsonOf(outerWorker.fetch(new Request(`${base}/events?since_sequence=0`, {
+      headers: { 'x-narada-browser-token-fingerprint': registered.remote_access.browser_access_tokens[0].token_fingerprint },
+    }), env));
+    expect(replay).toMatchObject({ status: 'ok', event_count: 1 });
+    expect(replay.events[0].payload.content).toBe('durable hello');
+  });
+
+  test('Worker Durable Object routing streams bridge-published events to subscribed browsers', async () => {
+    const outerWorker = createCloudflareNarsProjectionWorker({ now: () => now });
+    const objects = new Map<string, NarsProjectionState>();
+    const env = {
+      NARS_PROJECTION_STATE: {
+        idFromName(name: string) { return name; },
+        get(id: string) {
+          if (!objects.has(id)) {
+            const storage = new Map<string, unknown>();
+            objects.set(id, new NarsProjectionState({
+              storage: {
+                get<T = unknown>(key: string) { return storage.get(key) as T | undefined; },
+                put(key: string, value: unknown) { storage.set(key, value); },
+              },
+            }));
+          }
+          return objects.get(id)!;
+        },
+      },
+    };
+    const intent = sampleIntent();
+    const base = `https://projection.example.test/api/nars/projections/${intent.projection_id}`;
+    const registered = await jsonOf(outerWorker.fetch(new Request('https://projection.example.test/api/nars/projections/register', {
+      method: 'POST',
+      body: JSON.stringify({ intent }),
+    }), env));
+
+    const streamResponse = await outerWorker.fetch(new Request(`${base}/events/stream?since_sequence=0`, {
+      headers: { 'x-narada-browser-token-fingerprint': registered.remote_access.browser_access_tokens[0].token_fingerprint },
+    }), env);
+    expect(streamResponse.status).toBe(200);
+    expect(streamResponse.headers.get('content-type')).toContain('text/event-stream');
+    const reader = streamResponse.body!.getReader();
+    await readStreamUntil(reader, 'nars-stream-connected');
+
+    expect(await jsonOf(outerWorker.fetch(new Request(`${base}/events`, {
+      method: 'POST',
+      headers: { 'x-narada-bridge-token-fingerprint': registered.remote_access.bridge_credential.token_fingerprint },
+      body: JSON.stringify({ site_id: intent.site_id, nars_session_id: intent.nars_session_id, event: { event: 'assistant_message', event_sequence: 9, content: 'streamed hello' } }),
+    }), env))).toMatchObject({ status: 'published', projection_id: intent.projection_id });
+
+    expect(await readStreamUntil(reader, 'streamed hello')).toContain('assistant_message');
+    await reader.cancel();
+  });
+
+  test('Worker Durable Object routing pushes bridge-published events over projection WebSocket', async () => {
+    const outerWorker = createCloudflareNarsProjectionWorker({ now: () => now });
+    const objects = new Map<string, NarsProjectionState>();
+    const env = {
+      NARS_PROJECTION_STATE: {
+        idFromName(name: string) { return name; },
+        get(id: string) {
+          if (!objects.has(id)) {
+            const storage = new Map<string, unknown>();
+            objects.set(id, new NarsProjectionState({
+              storage: {
+                get<T = unknown>(key: string) { return storage.get(key) as T | undefined; },
+                put(key: string, value: unknown) { storage.set(key, value); },
+              },
+            }));
+          }
+          return objects.get(id)!;
+        },
+      },
+    };
+    const sockets: FakeWebSocketPair[] = [];
+    const globalWithWebSocketPair = globalThis as typeof globalThis & { WebSocketPair?: unknown };
+    const originalWebSocketPair = globalWithWebSocketPair.WebSocketPair;
+    globalWithWebSocketPair.WebSocketPair = class {
+      constructor() {
+        const pair = createFakeWebSocketPair();
+        sockets.push(pair);
+        return pair;
+      }
+    };
+    try {
+      const intent = sampleIntent();
+      const base = `https://projection.example.test/api/nars/projections/${intent.projection_id}`;
+      const registered = await jsonOf(outerWorker.fetch(new Request('https://projection.example.test/api/nars/projections/register', {
+        method: 'POST',
+        body: JSON.stringify({ intent }),
+      }), env));
+
+      const response = await withCloudflareWebSocketResponse(() => outerWorker.fetch(new Request(`${base}/events/websocket?browser_token=${registered.remote_access.browser_access_tokens[0].token_fingerprint}&since_sequence=0`, {
+        headers: { Upgrade: 'websocket' },
+      }), env));
+      expect(response.status).toBe(101);
+      expect(sockets[0].client.messages.map(JSON.parse)).toContainEqual(expect.objectContaining({ event: 'websocket_connected' }));
+
+      expect(await jsonOf(outerWorker.fetch(new Request(`${base}/events`, {
+        method: 'POST',
+        headers: { 'x-narada-bridge-token-fingerprint': registered.remote_access.bridge_credential.token_fingerprint },
+        body: JSON.stringify({ site_id: intent.site_id, nars_session_id: intent.nars_session_id, event: { event: 'assistant_message', event_sequence: 10, content: 'websocket hello' } }),
+      }), env))).toMatchObject({ status: 'published', projection_id: intent.projection_id });
+
+      expect(sockets[0].client.messages.map(JSON.parse)).toContainEqual(expect.objectContaining({ event: 'assistant_message', content: 'websocket hello' }));
+    } finally {
+      if (originalWebSocketPair === undefined) delete globalWithWebSocketPair.WebSocketPair;
+      else globalWithWebSocketPair.WebSocketPair = originalWebSocketPair;
+    }
+  });
+
+  test('Worker Durable Object routing persists projection state across object instance restart', async () => {
+    const outerWorker = createCloudflareNarsProjectionWorker({ now: () => now });
+    const storage = new Map<string, unknown>();
+    const env = {
+      NARS_PROJECTION_STATE: {
+        idFromName(name: string) { return name; },
+        get(_id: string) {
+          return new NarsProjectionState({
+            storage: {
+              get<T = unknown>(key: string) { return storage.get(key) as T | undefined; },
+              put(key: string, value: unknown) { storage.set(key, value); },
+            },
+          });
+        },
+      },
+    };
+    const intent = sampleIntent();
+    const base = `https://projection.example.test/api/nars/projections/${intent.projection_id}`;
+    const registered = await jsonOf(outerWorker.fetch(new Request('https://projection.example.test/api/nars/projections/register', {
+      method: 'POST',
+      body: JSON.stringify({ intent }),
+    }), env));
+    expect(registered).toMatchObject({ status: 'registered', projection_id: intent.projection_id });
+
+    expect(await jsonOf(outerWorker.fetch(new Request(`${base}/events`, {
+      method: 'POST',
+      headers: { 'x-narada-bridge-token-fingerprint': registered.remote_access.bridge_credential.token_fingerprint },
+      body: JSON.stringify({ site_id: intent.site_id, nars_session_id: intent.nars_session_id, event: { event: 'assistant_message', event_sequence: 11, content: 'persisted durable hello' } }),
+    }), env))).toMatchObject({ status: 'published', projection_id: intent.projection_id });
+
+    const replay = await jsonOf(outerWorker.fetch(new Request(`${base}/events?since_sequence=0`, {
+      headers: { 'x-narada-browser-token-fingerprint': registered.remote_access.browser_access_tokens[0].token_fingerprint },
+    }), env));
+    expect(replay).toMatchObject({ status: 'ok', event_count: 1 });
+    expect(replay.events[0].payload.content).toBe('persisted durable hello');
+  });
+
+  test('Worker registration resets stale projection cache for the same projection id', async () => {
+    const worker = createCloudflareNarsProjectionWorker({ now: () => now });
+    const intent = sampleIntent();
+    const base = `https://projection.example.test/api/nars/projections/${intent.projection_id}`;
+    const first = await jsonOf(worker.fetch(new Request('https://projection.example.test/api/nars/projections/register', {
+      method: 'POST',
+      body: JSON.stringify({ intent }),
+    })));
+    await worker.fetch(new Request(`${base}/events`, {
+      method: 'POST',
+      headers: { 'x-narada-bridge-token-fingerprint': first.remote_access.bridge_credential.token_fingerprint },
+      body: JSON.stringify({ site_id: intent.site_id, nars_session_id: intent.nars_session_id, event: { event: 'assistant_message', event_sequence: 999001, content: 'stale diagnostic' } }),
+    }));
+
+    const second = await jsonOf(worker.fetch(new Request('https://projection.example.test/api/nars/projections/register', {
+      method: 'POST',
+      body: JSON.stringify({ intent }),
+    })));
+    const replay = await jsonOf(worker.fetch(new Request(`${base}/events?since_sequence=0`, {
+      headers: { 'x-narada-browser-token-fingerprint': second.remote_access.browser_access_tokens[0].token_fingerprint },
+    })));
+    expect(replay).toMatchObject({ status: 'ok', event_count: 0 });
   });
 
   test('publishes artifact metadata/content and refuses event-only credential misuse', () => {
@@ -215,6 +450,89 @@ describe('worker boundary service', () => {
 });
 
 describe('Cloudflare Worker routes', () => {
+  test('Cloudflare-origin synthetic NARS authority session replays, streams live, admits input, reports health, and revokes', async () => {
+    const outerWorker = createCloudflareNarsProjectionWorker({ now: () => now });
+    const objects = new Map<string, NarsProjectionState>();
+    const env = {
+      NARS_PROJECTION_STATE: {
+        idFromName(name: string) { return name; },
+        get(id: string) {
+          if (!objects.has(id)) {
+            const storage = new Map<string, unknown>();
+            objects.set(id, new NarsProjectionState({
+              storage: {
+                get<T = unknown>(key: string) { return storage.get(key) as T | undefined; },
+                put(key: string, value: unknown) { storage.set(key, value); },
+              },
+            }));
+          }
+          return objects.get(id)!;
+        },
+      },
+    };
+    const sockets: FakeWebSocketPair[] = [];
+    const globalWithWebSocketPair = globalThis as typeof globalThis & { WebSocketPair?: unknown };
+    const originalWebSocketPair = globalWithWebSocketPair.WebSocketPair;
+    globalWithWebSocketPair.WebSocketPair = class {
+      constructor() {
+        const pair = createFakeWebSocketPair();
+        sockets.push(pair);
+        return pair;
+      }
+    };
+    try {
+      const created = await jsonOf(outerWorker.fetch(new Request('https://projection.example.test/api/nars/authority/sessions', {
+        method: 'POST',
+        body: JSON.stringify({ session_id: 'cf_session_synthetic_1', site_id: 'narada.cloudflare.test', agent_id: 'cloudflare.resident' }),
+      }), env));
+      expect(created).toMatchObject({ status: 'created', session_id: 'cf_session_synthetic_1', session: { execution_mode: 'synthetic_no_provider_no_tools' } });
+
+      const base = 'https://projection.example.test/api/nars/authority/sessions/cf_session_synthetic_1';
+      expect(await jsonOf(outerWorker.fetch(new Request(`${base}/health`), env))).toMatchObject({ status: 'healthy', session_id: 'cf_session_synthetic_1' });
+
+      const replay = await jsonOf(outerWorker.fetch(new Request(`${base}/events?since_sequence=0`), env));
+      expect(replay).toMatchObject({ status: 'ok', event_count: 1 });
+      expect(replay.events[0].payload).toMatchObject({ event: 'session_started' });
+
+      const response = await withCloudflareWebSocketResponse(() => outerWorker.fetch(new Request(`${base}/events/websocket?since_sequence=0`, {
+        headers: { Upgrade: 'websocket' },
+      }), env));
+      expect(response.status).toBe(101);
+      const localOperatorSurface = sockets[0].client.messages.map(JSON.parse);
+      expect(localOperatorSurface).toContainEqual(expect.objectContaining({ event: 'websocket_connected', transport: 'cloudflare_authority_websocket' }));
+      expect(localOperatorSurface).toContainEqual(expect.objectContaining({ event: 'session_started' }));
+
+      const input = await jsonOf(outerWorker.fetch(new Request(`${base}/input`, {
+        method: 'POST',
+        body: JSON.stringify({ method: 'conversation.send', payload: { message: 'hello from local operator surface' } }),
+      }), env));
+      expect(input).toMatchObject({ status: 'admitted', execution_kind: 'synthetic_no_provider_no_tools', method: 'conversation.send' });
+      expect(JSON.stringify(input)).not.toContain('provider_call');
+      expect(JSON.stringify(input)).not.toContain('tool_call');
+
+      const liveMessages = sockets[0].client.messages.map(JSON.parse);
+      expect(liveMessages).toContainEqual(expect.objectContaining({ event: 'user_message', content: 'hello from local operator surface' }));
+      expect(liveMessages).toContainEqual(expect.objectContaining({ event: 'assistant_message', execution_kind: 'synthetic_no_provider_no_tools' }));
+      expect(liveMessages).toContainEqual(expect.objectContaining({ event: 'turn_complete', terminal_state: 'completed_synthetic' }));
+
+      const replayAfterInput = await jsonOf(outerWorker.fetch(new Request(`${base}/events?since_sequence=1`), env));
+      expect(replayAfterInput).toMatchObject({ status: 'ok', event_count: 5 });
+
+      expect(await jsonOf(outerWorker.fetch(new Request(base, { method: 'DELETE' }), env))).toMatchObject({ status: 'revoked', session_id: 'cf_session_synthetic_1' });
+      expect(sockets[0].client.messages.map(JSON.parse)).toContainEqual(expect.objectContaining({ event: 'authority_session_revoked', code: 'session_revoked', session_id: 'cf_session_synthetic_1' }));
+      expect(sockets[0].client.closed).toBe(true);
+      expect(await jsonOf(outerWorker.fetch(new Request(`${base}/health`), env))).toMatchObject({ status: 'refused', code: 'session_revoked' });
+      expect(await jsonOf(outerWorker.fetch(new Request(`${base}/events?since_sequence=0`), env))).toMatchObject({ status: 'refused', code: 'session_revoked' });
+      expect(await jsonOf(outerWorker.fetch(new Request(`${base}/input`, {
+        method: 'POST',
+        body: JSON.stringify({ method: 'conversation.send', payload: { message: 'after revoke' } }),
+      }), env))).toMatchObject({ status: 'refused', code: 'session_revoked' });
+    } finally {
+      if (originalWebSocketPair === undefined) delete globalWithWebSocketPair.WebSocketPair;
+      else globalWithWebSocketPair.WebSocketPair = originalWebSocketPair;
+    }
+  });
+
   test('serves agent-web-ui static assets outside the projection API route space', async () => {
     const requested: string[] = [];
     const worker = createCloudflareNarsProjectionWorker();
@@ -379,6 +697,83 @@ async function jsonOf(responsePromise: Promise<Response>) {
   return responsePromise.then((response) => response.json());
 }
 
+async function readStreamUntil(reader: ReadableStreamDefaultReader<Uint8Array>, text: string) {
+  const decoder = new TextDecoder();
+  let seen = '';
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const chunk = await Promise.race([
+      reader.read(),
+      new Promise<ReadableStreamReadResult<Uint8Array>>((_, reject) => setTimeout(() => reject(new Error(`stream_timeout_waiting_for_${text}`)), 500)),
+    ]);
+    if (chunk.done) break;
+    seen += decoder.decode(chunk.value, { stream: true });
+    if (seen.includes(text)) return seen;
+  }
+  throw new Error(`stream_text_not_seen: ${text}; saw ${seen}`);
+}
+
+type FakeWebSocketEvent = 'close' | 'error' | 'message';
+
+interface FakeWebSocket {
+  messages: string[];
+  peer: FakeWebSocket | null;
+  closed: boolean;
+  accept(): void;
+  addEventListener(type: FakeWebSocketEvent, handler: (event?: { data?: string }) => void): void;
+  send(message: string): void;
+  close(code?: number, reason?: string): void;
+}
+
+interface FakeWebSocketPair {
+  0: FakeWebSocket;
+  1: FakeWebSocket;
+  client: FakeWebSocket;
+  server: FakeWebSocket;
+}
+
+function createFakeWebSocketPair(): FakeWebSocketPair {
+  const createSocket = (): FakeWebSocket => ({
+    messages: [],
+    peer: null,
+    closed: false,
+    accept() {},
+    addEventListener() {},
+    send(message: string) {
+      this.peer?.messages.push(message);
+    },
+    close() {
+      this.closed = true;
+      if (this.peer) this.peer.closed = true;
+    },
+  });
+  const client = createSocket();
+  const server = createSocket();
+  client.peer = server;
+  server.peer = client;
+  return { 0: client, 1: server, client, server };
+}
+
+async function withCloudflareWebSocketResponse(run: () => Promise<Response>): Promise<Response> {
+  const globalWithResponse = globalThis as typeof globalThis & { Response: typeof Response };
+  const OriginalResponse = globalWithResponse.Response;
+  globalWithResponse.Response = class extends OriginalResponse {
+    constructor(body?: BodyInit | null, init?: ResponseInit & { webSocket?: unknown }) {
+      if (init?.status === 101) {
+        super(null, { ...init, status: 200 });
+        Object.defineProperty(this, 'status', { value: 101 });
+        Object.defineProperty(this, 'webSocket', { value: init.webSocket });
+        return;
+      }
+      super(body, init);
+    }
+  } as typeof Response;
+  try {
+    return await run();
+  } finally {
+    globalWithResponse.Response = OriginalResponse;
+  }
+}
+
 describe('credential authority split', () => {
   test('refuses browser tokens for bridge publish and bridge credentials for browser access', () => {
     const access = createCloudflareNarsRemoteAccessRecord({ intent: sampleIntent(), created_at: now });
@@ -460,9 +855,37 @@ describe('event projection and cache', () => {
     });
 
     expect(projected).not.toBeNull();
-    expect(projected?.event_class).toBe('tool');
+    expect(projected?.event_class).toBe('operations');
     expect(projected?.redactions.length).toBeGreaterThan(0);
     expect(JSON.stringify(projected)).not.toContain('secret-token');
+  });
+
+  test('does not publish provider agent-message telemetry as conversation', () => {
+    const providerMessage = {
+      event_sequence: 12,
+      agent_id: 'resident',
+      session_id: 'carrier_123',
+      event: { type: 'item.completed', item: { id: 'provider_intro', type: 'agent_message', text: 'I am hydrating context first.' } },
+    };
+
+    expect(projectNarsEventForCloudflare({
+      projection_id: 'proj_1',
+      site_id: 'narada.sonar',
+      nars_session_id: 'carrier_123',
+      policy: 'conversation',
+      event: providerMessage,
+    })).toBeNull();
+
+    const diagnostic = projectNarsEventForCloudflare({
+      projection_id: 'proj_1',
+      site_id: 'narada.sonar',
+      nars_session_id: 'carrier_123',
+      policy: 'diagnostic',
+      event: providerMessage,
+    });
+
+    expect(diagnostic).not.toBeNull();
+    expect(diagnostic?.event_class).toBe('diagnostics');
   });
 
   test('suppresses diagnostic health noise in conversation policy', () => {
@@ -553,5 +976,15 @@ describe('agent-web-ui Cloudflare mode', () => {
     expect(config.input_endpoint).toBe('https://projection.example.test/api/nars/projections/proj_1/input');
     expect(config.artifact_base_path).toBe('https://projection.example.test/api/nars/projections/proj_1/artifacts');
     expect(config.health_endpoint).not.toContain('127.0.0.1');
+  });
+
+  test('builds Cloudflare authority endpoints with HTTP replay plus POST input for browser surfaces', () => {
+    const config = buildAgentWebUiCloudflareAuthorityConfig({ session_id: 'cf_session_1', api_base_url: 'https://projection.example.test/' });
+
+    expect(config.mode).toBe('cloudflare_authority');
+    expect(config.event_endpoint).toBe('https://projection.example.test/api/nars/authority/sessions/cf_session_1/events');
+    expect(config.input_endpoint).toBe('https://projection.example.test/api/nars/authority/sessions/cf_session_1/input');
+    expect(config.health_endpoint).toBe('https://projection.example.test/api/nars/authority/sessions/cf_session_1/health');
+    expect(config.event_endpoint).not.toContain('127.0.0.1');
   });
 });

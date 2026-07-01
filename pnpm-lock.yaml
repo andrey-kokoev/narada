@@ -276,6 +276,10 @@ importers:
         version: link:../site-continuity
 
   packages/cloudflare-nars-projection:
+    dependencies:
+      '@narada2/nars-client-projection-contract':
+        specifier: workspace:*
+        version: link:../nars-client-projection-contract
     devDependencies:
       typescript:
         specifier: ^5.3.0

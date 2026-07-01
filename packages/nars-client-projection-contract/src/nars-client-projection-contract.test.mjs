@@ -14,10 +14,12 @@ import {
   buildAgentWebUiOperatorInputAction,
   buildAgentWebUiSubscribeFrame,
   buildNarsAttachCommands,
+  classifyNarsClientEventProjection,
   isAgentWebUiNarsMethod,
   isAgentWebUiProtocolFrame,
   projectNarsClientEvent,
   shouldProjectNarsClientEvent,
+  shouldProjectNarsClientProjection,
 } from './nars-client-projection-contract.mjs';
 
 test('NARS client projection contract owns attach commands and web UI capabilities', () => {
@@ -146,4 +148,56 @@ test('NARS client projection verbosity filters shared event classes', () => {
   assert.equal(shouldProjectNarsClientEvent({ event: 'websocket_connected' }, { verbosity: 'raw', includeStateSamples: true }), true);
   assert.equal(shouldProjectNarsClientEvent({ event: 'unclassified_future_event' }, { verbosity: 'diagnostics' }), false);
   assert.equal(shouldProjectNarsClientEvent({ event: 'unclassified_future_event' }, { verbosity: 'raw' }), true);
+});
+
+test('NARS client projection contract classifies nested provider events without treating provider text as conversation', () => {
+  const providerAgent = {
+    event_sequence: 2,
+    agent_id: 'resident',
+    session_id: 'carrier_test',
+    event: { type: 'item.completed', item: { id: 'provider_intro', type: 'agent_message', text: 'I am checking context first.' } },
+  };
+  const projectedAgent = projectNarsClientEvent(providerAgent);
+  assert.equal(projectedAgent.kind, 'provider_agent_message');
+  assert.equal(projectedAgent.class, 'diagnostics');
+  assert.equal(projectedAgent.label, 'Provider message');
+  assert.equal(projectedAgent.tone, 'assistant');
+  assert.equal(projectedAgent.summary, 'I am checking context first.');
+  assert.equal(projectedAgent.renderKey, 'provider-agent-message:provider-item:resident:carrier_test:provider_intro');
+  assert.equal(classifyNarsClientEventProjection(projectedAgent), 'diagnostics');
+  assert.equal(shouldProjectNarsClientProjection(projectedAgent, { verbosity: 'conversation' }), false);
+  assert.equal(shouldProjectNarsClientProjection(projectedAgent, { verbosity: 'operations' }), false);
+  assert.equal(shouldProjectNarsClientProjection(projectedAgent, { verbosity: 'diagnostics' }), true);
+
+  const providerTool = projectNarsClientEvent({
+    event_sequence: 3,
+    agent_id: 'resident',
+    session_id: 'carrier_test',
+    event: { type: 'item.completed', item: { id: 'tool_1', type: 'mcp_tool_call', server: 'narada-sonar-agent-context', tool: 'agent_context_startup_sequence', status: 'completed' } },
+  });
+  assert.equal(providerTool.kind, 'tool_result');
+  assert.equal(providerTool.class, 'operations');
+  assert.equal(providerTool.summary, 'narada-sonar-agent-context.agent_context_startup_sequence complete');
+  assert.equal(shouldProjectNarsClientProjection(providerTool, { verbosity: 'conversation' }), false);
+  assert.equal(shouldProjectNarsClientProjection(providerTool, { verbosity: 'operations' }), true);
+
+  const providerTurn = projectNarsClientEvent({ event: { type: 'turn.completed', usage: { input_tokens: 10, output_tokens: 2 } } });
+  assert.equal(providerTurn.kind, 'provider_turn_completed');
+  assert.equal(providerTurn.class, 'diagnostics');
+  assert.equal(providerTurn.summary, 'input 10 · output 2');
+});
+
+test('NARS client projection contract keeps lifecycle assistant messages as the canonical conversation row', () => {
+  const lifecycleAssistant = projectNarsClientEvent({
+    event: 'assistant_message',
+    lifecycle_event: 'assistant_message',
+    turn_id: 'turn_startup',
+    request_id: 'input_startup',
+    content: 'Startup sequence completed.',
+    agent_id: 'resident',
+    session_id: 'carrier_test',
+  });
+  assert.equal(lifecycleAssistant.kind, 'assistant_message');
+  assert.equal(classifyNarsClientEventProjection(lifecycleAssistant), 'conversation');
+  assert.equal(shouldProjectNarsClientProjection(lifecycleAssistant, { verbosity: 'conversation' }), true);
 });

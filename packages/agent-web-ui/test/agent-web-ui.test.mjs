@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
-import { existsSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { mkdir, readFile, rm, stat } from 'node:fs/promises';
 import { createServer } from 'node:http';
+import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
 import test from 'node:test';
+import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import postcss from 'postcss';
 import {
@@ -35,6 +37,8 @@ import {
   startEventStreamProjection,
   startHealthProjection,
 } from '@narada2/agent-runtime-server/test-fixtures';
+import { createCloudflareNarsProjectionWorker } from '@narada2/cloudflare-nars-projection/worker';
+import { registerProjectionRemotely, startLocalProjectionBridgeOnce, deliverRemoteProjectionInputsOnce } from '@narada2/cloudflare-nars-projection/node';
 import { appendEvent } from '../src/render.js';
 
 async function connectWebSocket(url) {
@@ -57,6 +61,69 @@ async function connectWebSocket(url) {
     },
     close() { socket.close(); },
   };
+}
+
+function createFakeAgentWebUiElements() {
+  class FakeElement {
+    constructor(id = null) {
+      this.id = id;
+      this.tagName = String(id ?? '').toUpperCase();
+      this.children = [];
+      this.listeners = new Map();
+      this.textContent = '';
+      this.value = '';
+      this.dataset = {};
+      this.className = '';
+    }
+    append(...children) { this.children.push(...children); }
+    addEventListener(name, listener) { this.listeners.set(name, listener); }
+    submit() { this.listeners.get('submit')?.({ preventDefault() {} }); }
+    setAttribute(name, value) { this[name] = value; }
+  }
+  const byId = new Map();
+  for (const id of ['nars-config', 'event-endpoint', 'health-endpoint', 'stream', 'health', 'projection-verbosity', 'events', 'operator-form', 'operator-input']) {
+    byId.set(id, new FakeElement(id));
+  }
+  const documentRef = {
+    getElementById(id) { return byId.get(id) ?? null; },
+    createElement(name) { return new FakeElement(name); },
+    createTextNode(text) { return { tagName: '#TEXT', textContent: String(text ?? ''), children: [], dataset: {} }; },
+  };
+  return { byId, documentRef };
+}
+
+function textOfNode(node) {
+  if (!node) return '';
+  return `${node.textContent ?? ''}${(node.children ?? []).map(textOfNode).join('')}`;
+}
+
+function createLocalProjectionSite() {
+  const siteRoot = mkdtempSync(join(tmpdir(), 'narada-web-ui-projection-'));
+  const sessionId = 'carrier_web_ui_e2e';
+  const sessionDir = join(siteRoot, '.narada', 'crew', 'nars-sessions', sessionId);
+  mkdirSync(sessionDir, { recursive: true });
+  const eventsPath = join(sessionDir, 'events.jsonl');
+  const sessionPath = join(sessionDir, 'session.jsonl');
+  writeFileSync(sessionPath, '');
+  writeFileSync(eventsPath, `${JSON.stringify({ event: 'assistant_message', event_sequence: 1, content: 'hello from local NARS' })}\n`);
+  const recordPath = join(sessionDir, 'session-index-record.json');
+  writeFileSync(recordPath, `${JSON.stringify({
+    schema: 'narada.nars.session_index_record.v1',
+    session_id: sessionId,
+    carrier_session_id: sessionId,
+    agent_id: 'resident',
+    site_id: 'narada.sonar',
+    site_root: siteRoot,
+    events_path: eventsPath,
+    session_path: sessionPath,
+    health_endpoint: 'http://127.0.0.1:9/health',
+  }, null, 2)}\n`);
+  writeFileSync(join(siteRoot, '.narada', 'crew', 'nars-sessions', 'index.json'), `${JSON.stringify({
+    schema: 'narada.nars.session_index.v1',
+    site_root: siteRoot,
+    sessions: [{ session_id: sessionId, carrier_session_id: sessionId, record_path: recordPath }],
+  }, null, 2)}\n`);
+  return siteRoot;
 }
 
 function readInjectedBrowserConfig(html) {
@@ -182,10 +249,11 @@ test('browser startup can use Cloudflare projection HTTP events and input endpoi
     createTextNode(text) { return { tagName: '#TEXT', textContent: String(text ?? ''), children: [], dataset: {} }; },
   };
   const fetchCalls = [];
+  const timers = [];
   const windowRef = {
     location: { search: '' },
     setInterval() { return 'timer-1'; },
-    setTimeout() { return 'timer-2'; },
+    setTimeout(fn) { timers.push(fn); return `timer-${timers.length}`; },
     clearTimeout() {},
     fetch: async (url, init = {}) => {
       fetchCalls.push({ url: String(url), init });
@@ -199,8 +267,9 @@ test('browser startup can use Cloudflare projection HTTP events and input endpoi
   await new Promise((resolve) => setTimeout(resolve, 0));
   assert.equal(started.config.mode, 'cloudflare_projection');
   assert.equal(started.config.artifactBasePath, 'https://projection.example.test/api/nars/projections/proj_test/artifacts');
-  assert.equal(elements.get('stream').textContent, 'connected');
+  assert.equal(elements.get('stream').textContent, 'long-poll connected');
   assert.equal(elements.get('events').children.at(-1).dataset.eventKind, 'assistant_message');
+  assert.equal(fetchCalls.find((call) => call.url.includes('/events')).url.includes('max_events=4'), true);
 
   elements.get('operator-input').value = 'run startup sequence';
   elements.get('operator-form').submit();
@@ -208,6 +277,172 @@ test('browser startup can use Cloudflare projection HTTP events and input endpoi
   const inputCall = fetchCalls.find((call) => call.url.endsWith('/input'));
   assert.ok(inputCall);
   assert.equal(JSON.parse(inputCall.init.body).method, 'conversation.send');
+});
+
+test('browser startup can attach to Cloudflare-origin authority session over HTTP replay and submit input', async () => {
+  class FakeElement {
+    constructor(id = null) {
+      this.id = id;
+      this.tagName = String(id ?? '').toUpperCase();
+      this.children = [];
+      this.listeners = new Map();
+      this.textContent = '';
+      this.value = '';
+      this.dataset = {};
+      this.className = '';
+    }
+    append(...children) { this.children.push(...children); }
+    addEventListener(name, listener) { this.listeners.set(name, listener); }
+    submit() { this.listeners.get('submit')?.({ preventDefault() {} }); }
+    setAttribute(name, value) { this[name] = value; }
+  }
+  class FakeWebSocket {
+    static OPEN = 1;
+    static instances = [];
+    constructor(url) {
+      this.url = url;
+      this.readyState = FakeWebSocket.OPEN;
+      this.sent = [];
+      this.listeners = new Map();
+      FakeWebSocket.instances.push(this);
+    }
+    addEventListener(name, listener) { this.listeners.set(name, listener); }
+    send(frame) { this.sent.push(JSON.parse(frame)); }
+    emit(name, event = {}) { this.listeners.get(name)?.(event); }
+  }
+  const elements = new Map();
+  for (const id of ['nars-config', 'event-endpoint', 'health-endpoint', 'stream', 'health', 'projection-verbosity', 'events', 'operator-form', 'operator-input']) {
+    elements.set(id, new FakeElement(id));
+  }
+  elements.get('nars-config').textContent = JSON.stringify({
+    cloudflareAuthoritySessionId: 'cf_session_surface_1',
+    cloudflareApiBaseUrl: 'https://projection.example.test',
+    maxReplay: 3,
+  });
+  const documentRef = {
+    getElementById(id) { return elements.get(id) ?? null; },
+    createElement(name) { return new FakeElement(name); },
+    createTextNode(text) { return { tagName: '#TEXT', textContent: String(text ?? ''), children: [], dataset: {} }; },
+  };
+  const fetchCalls = [];
+  const windowRef = {
+    location: { search: '' },
+    WebSocket: FakeWebSocket,
+    setInterval() { return 'timer-1'; },
+    setTimeout() { return 'timer-2'; },
+    clearTimeout() {},
+    fetch: async (url, init = {}) => {
+      fetchCalls.push({ url: String(url), init });
+      if (String(url).includes('/input')) return { ok: true, status: 200, json: async () => ({ status: 'admitted', execution_kind: 'synthetic_no_provider_no_tools' }) };
+      if (String(url).includes('/events')) return { ok: true, status: 200, json: async () => ({ status: 'ok', events: [{ payload: { event: 'assistant_message', event_sequence: 1, content: 'hello from cloudflare authority' }, event_sequence: 1 }] }) };
+      return { ok: true, status: 200, json: async () => ({ status: 'healthy' }) };
+    },
+  };
+
+  const started = startAgentWebUi({ windowRef, documentRef });
+  assert.equal(started.config.mode, 'cloudflare_authority');
+  assert.equal(started.config.eventEndpoint, 'https://projection.example.test/api/nars/authority/sessions/cf_session_surface_1/events');
+  for (let attempt = 0; attempt < 5 && FakeWebSocket.instances.length === 0; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+  assert.equal(fetchCalls.some((call) => call.url.startsWith('https://projection.example.test/api/nars/authority/sessions/cf_session_surface_1/events?')), true);
+  assert.equal(FakeWebSocket.instances.length, 0);
+  assert.equal(elements.get('stream').textContent, 'long-poll connected');
+  assert.equal(elements.get('events').children.some((child) => child.dataset?.eventKind === 'assistant_message'), true);
+
+  elements.get('operator-input').value = 'continue';
+  elements.get('operator-form').submit();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  const inputCall = fetchCalls.find((call) => call.url.endsWith('/input'));
+  assert.ok(inputCall);
+  assert.equal(inputCall.url, 'https://projection.example.test/api/nars/authority/sessions/cf_session_surface_1/input');
+  const inputBody = JSON.parse(inputCall.init.body);
+  assert.equal(inputBody.method, 'conversation.send');
+  assert.deepEqual(inputBody.payload, { message: 'continue', source: 'agent-web-ui' });
+});
+
+test('hosted agent-web-ui can read and write a published local NARS session through Cloudflare projection', async () => {
+  const siteRoot = createLocalProjectionSite();
+  const sessionId = 'carrier_web_ui_e2e';
+  const worker = createCloudflareNarsProjectionWorker({ now: () => '2026-07-01T15:00:00.000Z' });
+  const fetchViaWorker = (input, init) => worker.fetch(new Request(input, init));
+  const registration = await registerProjectionRemotely({
+    site_id: 'narada.sonar',
+    site_root: siteRoot,
+    nars_session_id: sessionId,
+    projection_id: 'proj_hosted_web_ui_e2e',
+    dry_run: false,
+    cloudflare_api_base_url: 'https://projection.example.test',
+    fetch_impl: fetchViaWorker,
+  });
+  assert.equal(registration.status, 'registered_remotely');
+  const bridge = await startLocalProjectionBridgeOnce({
+    site_root: siteRoot,
+    projection_id: 'proj_hosted_web_ui_e2e',
+    cloudflare_api_base_url: 'https://projection.example.test',
+    fetch_impl: fetchViaWorker,
+    health_probe: () => 'healthy',
+  });
+  assert.equal(bridge.status, 'connected');
+  assert.equal(bridge.projected_event_count, 1);
+
+  const browserToken = registration.remote_access.browser_access_tokens[0].token_fingerprint;
+  const elements = createFakeAgentWebUiElements();
+  const fetchCalls = [];
+  const timers = [];
+  const windowRef = {
+    location: { search: `?cloudflare_projection_id=proj_hosted_web_ui_e2e&cloudflare_api_base_url=https://projection.example.test&cloudflare_browser_token=${encodeURIComponent(browserToken)}` },
+    setInterval() { return 'interval-1'; },
+    setTimeout(fn) { timers.push(fn); return `timer-${timers.length}`; },
+    clearTimeout() {},
+    fetch: async (url, init = {}) => {
+      fetchCalls.push({ url: String(url), init });
+      return fetchViaWorker(url, init);
+    },
+  };
+
+  const started = startAgentWebUi({ windowRef, documentRef: elements.documentRef });
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.equal(started.config.mode, 'cloudflare_projection');
+  assert.equal(started.config.browserToken, browserToken);
+  assert.equal(elements.byId.get('stream').textContent, 'long-poll connected');
+  assert.equal(elements.byId.get('events').children.some((child) => child.dataset?.eventKind === 'assistant_message'), true);
+  assert.equal(fetchCalls.some((call) => call.url.includes('/events') && call.init.headers?.['x-narada-browser-token-fingerprint'] === browserToken), true);
+  assert.equal(fetchCalls.some((call) => call.url.includes('/health') && call.init.headers?.['x-narada-browser-token-fingerprint'] === browserToken), true);
+
+  const sessionDir = join(siteRoot, '.narada', 'crew', 'nars-sessions', sessionId);
+  writeFileSync(join(sessionDir, 'events.jsonl'), `${JSON.stringify({ event: 'assistant_message', event_sequence: 1, content: 'hello from local NARS' })}\n${JSON.stringify({ event: 'assistant_message', event_sequence: 2, content: 'hello after hosted page opened' })}\n`);
+  await startLocalProjectionBridgeOnce({
+    site_root: siteRoot,
+    projection_id: 'proj_hosted_web_ui_e2e',
+    cloudflare_api_base_url: 'https://projection.example.test',
+    fetch_impl: fetchViaWorker,
+    health_probe: () => 'healthy',
+  });
+  assert.ok(timers.length > 0, 'expected Cloudflare projection long-poll timer');
+  timers.shift()();
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.equal(elements.byId.get('events').children.some((child) => textOfNode(child).includes('hello after hosted page opened')), true);
+
+  elements.byId.get('operator-input').value = 'remote operator input';
+  elements.byId.get('operator-form').submit();
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.equal(fetchCalls.some((call) => call.url.endsWith('/input') && call.init.headers?.['x-narada-browser-token-fingerprint'] === browserToken), true);
+
+  const admitted = [];
+  const delivery = await deliverRemoteProjectionInputsOnce({
+    site_root: siteRoot,
+    projection_id: 'proj_hosted_web_ui_e2e',
+    cloudflare_api_base_url: 'https://projection.example.test',
+    fetch_impl: fetchViaWorker,
+    submit_nars_input: (input) => {
+      admitted.push(input);
+      return { status: 'accepted_by_nars', method: input.method };
+    },
+  });
+  assert.equal(delivery.status, 'delivered');
+  assert.equal(admitted[0].method, 'conversation.send');
+  assert.equal(admitted[0].payload.message, 'remote operator input');
 });
 
 test('browser startup shows degraded Cloudflare projection stream failures', async () => {
@@ -351,7 +586,7 @@ test('browser startup subscribes to events and submits operator text over the sa
   assert.equal(durableRows().length, beforeStreamCount);
   socket.emit('message', { data: JSON.stringify({ event: 'session_event', cursor: { sequence: 44 }, payload: { event: 'assistant_message', turn_id: 'turn_active', content: 'ack', event_sequence: 44 } }) });
   const assistantFinalRow = durableRows().at(-1);
-  assert.equal(durableRows().length, beforeStreamCount + 1);
+  assert.equal(durableRows().length, beforeStreamCount);
   assert.equal(assistantFinalRow.dataset.eventKind, 'assistant_message');
   assert.equal(assistantFinalRow.children.at(1).children.at(0).textContent, 'ack');
   assert.equal(activityRow(), null);
@@ -360,9 +595,7 @@ test('browser startup subscribes to events and submits operator text over the sa
   assert.equal(durableRows().length, beforeProviderAssistantCount);
   assert.equal(activityRow().dataset.eventKind, 'activity_streaming');
   socket.emit('message', { data: JSON.stringify({ agent_id: 'resident', session_id: 'carrier_test', event: { type: 'item.completed', item: { id: 'provider_final_1', type: 'agent_message', text: 'I am hydrating context first.\n\nStartup sequence completed.' } } }) });
-  assert.equal(durableRows().length, beforeProviderAssistantCount + 1);
-  assert.equal(durableRows().at(-1).dataset.eventKind, 'assistant_message');
-  assert.equal(durableRows().at(-1).children.at(1).children.at(0).textContent, 'I am hydrating context first.\n\nStartup sequence completed.');
+  assert.equal(durableRows().length, beforeProviderAssistantCount);
   assert.equal(activityRow(), null);
   socket.emit('message', { data: JSON.stringify({ event: 'assistant_message', request_id: 'input_provider_final', content: 'I am hydrating context first.\n\nStartup sequence completed.', agent_id: 'resident', session_id: 'carrier_test' }) });
   assert.equal(durableRows().length, beforeProviderAssistantCount + 1);
@@ -493,6 +726,7 @@ test('attach config resolves one event endpoint and one health endpoint from que
     mode: 'local_nars_projection',
     projectionId: null,
     cloudflareApiBaseUrl: null,
+    browserToken: null,
     eventEndpoint: 'ws://nars/events',
     healthEndpoint: 'http://nars/health',
     inputEndpoint: null,
@@ -500,6 +734,7 @@ test('attach config resolves one event endpoint and one health endpoint from que
     healthTransport: 'http-proxy',
     artifactBasePath: '/api/nars',
     artifactTransport: 'local-nars-proxy',
+    projectionControl: null,
     protocolHealthMethod: 'session.health',
     maxReplay: 7,
   });
@@ -507,6 +742,7 @@ test('attach config resolves one event endpoint and one health endpoint from que
     mode: 'local_nars_projection',
     projectionId: null,
     cloudflareApiBaseUrl: null,
+    browserToken: null,
     eventEndpoint: 'ws://injected/events',
     healthEndpoint: '/api/health',
     inputEndpoint: null,
@@ -514,6 +750,7 @@ test('attach config resolves one event endpoint and one health endpoint from que
     healthTransport: 'http-proxy',
     artifactBasePath: '/api/nars',
     artifactTransport: 'local-nars-proxy',
+    projectionControl: null,
     protocolHealthMethod: 'session.health',
     maxReplay: 100,
   });
@@ -538,8 +775,11 @@ test('web UI projection normalizes nested provider events and suppresses status 
   const assistantProjection = projectRuntimeEvent({
     event: { type: 'item.completed', item: { type: 'agent_message', text: 'Startup sequence completed.' } },
   });
-  assert.equal(assistantProjection.kind, 'assistant_message');
+  assert.equal(assistantProjection.kind, 'provider_agent_message');
+  assert.equal(assistantProjection.class, 'diagnostics');
   assert.equal(assistantProjection.summary, 'Startup sequence completed.');
+  assert.equal(shouldRenderRuntimeEvent({ event: { type: 'item.completed', item: { type: 'agent_message', text: 'Startup sequence completed.' } } }, { verbosity: 'conversation' }), false);
+  assert.equal(shouldRenderRuntimeEvent({ event: { type: 'item.completed', item: { type: 'agent_message', text: 'Startup sequence completed.' } } }, { verbosity: 'diagnostics' }), true);
   assert.equal(shouldRenderRuntimeEvent({ event: 'session_health', status: 'healthy' }), false);
   assert.equal(shouldRenderRuntimeEvent({ event: 'session_health', status: 'healthy' }, { verbosity: 'diagnostics' }), false);
   assert.equal(shouldRenderRuntimeEvent({ event: 'session_health', status: 'healthy' }, { verbosity: 'raw' }), false);
@@ -548,7 +788,7 @@ test('web UI projection normalizes nested provider events and suppresses status 
   assert.equal(shouldRenderRuntimeEvent({ event: 'session_event', payload: { event: 'assistant_message', content: 'ok' } }), true);
 });
 
-test('conversation projection shows completed provider assistant messages and hides lifecycle aggregate echo', () => {
+test('conversation projection shows canonical lifecycle assistant message and hides provider assistant telemetry', () => {
   const events = [
     { event: 'operator_input_submitted', request_id: 'input_startup', content: 'run startup sequence', timestamp: '2026-06-30T18:11:00.000Z' },
     { event: 'user_message', request_id: 'input_startup', content: 'run startup sequence', event_sequence: 1, timestamp: '2026-06-30T18:11:01.000Z' },
@@ -558,15 +798,16 @@ test('conversation projection shows completed provider assistant messages and hi
   ];
   const projection = createSessionProjection(events, { verbosity: 'conversation', nowMs: Date.parse('2026-06-30T18:11:05.000Z') });
   const assistantRows = projection.rows.filter((row) => row.kind === 'assistant_message');
-  assert.equal(assistantRows.length, 2);
+  assert.equal(assistantRows.length, 1);
   assert.match(assistantRows[0].summary, /Narada startup affordance/);
-  assert.match(assistantRows[1].summary, /Startup sequence ran successfully/);
+  assert.match(assistantRows[0].summary, /Startup sequence ran successfully/);
+  assert.equal(projection.rows.some((row) => row.kind === 'provider_agent_message'), false);
   assert.equal(projection.rows.some((row) => row.kind === 'assistant_message_stream'), false);
   assert.equal(projection.activity.active, false);
 
 });
 
-test('conversation projection keeps artifact presentation after provider intent and before final provider note', () => {
+test('conversation projection keeps artifact presentation and lifecycle message while hiding provider notes', () => {
   const events = [
     { event_sequence: 63, sequence: 63, agent_id: 'resident', session_id: 'carrier_test', event: { type: 'item.completed', item: { id: 'item_9', type: 'agent_message', text: 'The artifact is registered. I’m calling artifact_present now so the UI can render it inline.' } } },
     { event_sequence: 67, sequence: 67, event: 'assistant_message', source: 'nars_artifact_presentation', agent_id: 'resident', session_id: 'carrier_test', request_id: 'artifact_present_art_1', content: [{ type: 'text', text: 'Here is the registered HTML artifact rendered inline.' }, { type: 'artifact_ref', artifact_id: 'art_1', kind: 'html', title: 'Preview', render_hint: 'inline' }] },
@@ -575,13 +816,13 @@ test('conversation projection keeps artifact presentation after provider intent 
   ];
   const projection = createSessionProjection(events, { verbosity: 'conversation' });
   const assistantRows = projection.rows.filter((row) => row.kind === 'assistant_message');
-  assert.equal(assistantRows.length, 3);
-  assert.match(assistantRows[0].summary, /calling artifact_present/);
-  assert.equal(Array.isArray(assistantRows[1].summary), true);
-  assert.match(assistantRows[2].summary, /Done/);
+  assert.equal(assistantRows.length, 2);
+  assert.equal(Array.isArray(assistantRows[0].summary), true);
+  assert.match(assistantRows[1].summary, /Done/);
+  assert.equal(projection.rows.some((row) => row.kind === 'provider_agent_message'), false);
 });
 
-test('DOM renderer keeps artifact presentation in event order and hides lifecycle aggregate echo', () => {
+test('DOM renderer keeps artifact presentation and lifecycle message while hiding provider notes', () => {
   class FakeElement {
     constructor(tagName = 'div') {
       this.tagName = String(tagName).toUpperCase();
@@ -634,10 +875,10 @@ test('DOM renderer keeps artifact presentation in event order and hides lifecycl
   ];
   for (const event of events) appendEvent(event, documentRef, { verbosity: 'conversation' });
   const rows = elements.get('events').children.filter((child) => child?.dataset?.eventKind === 'assistant_message');
-  assert.equal(rows.length, 3);
-  assert.match(rows[0].dataset.assistantSummary, /calling artifact_present/);
-  assert.match(rows[1].dataset.assistantSummary, /registered HTML artifact/);
-  assert.match(rows[2].dataset.assistantSummary, /Done/);
+  assert.equal(rows.length, 2);
+  assert.match(rows[0].dataset.assistantSummary, /registered HTML artifact/);
+  assert.match(rows[1].dataset.assistantSummary, /Done/);
+  assert.equal(elements.get('events').children.some((child) => child?.dataset?.eventKind === 'provider_agent_message'), false);
 });
 
 test('replayed user message does not duplicate operator row or reopen queued activity after assistant completion', () => {
@@ -716,7 +957,7 @@ test('session projection reduces routine health into state and clears completed 
   assert.equal(projection.health.healthySampleCount, 3);
   assert.equal(projection.rows.some((row) => row.kind === 'session_health'), false);
   assert.equal(projection.rows.some((row) => row.kind === 'websocket_connected'), false);
-  assert.equal(projection.rows.some((row) => row.kind === 'tool_result'), false);
+  assert.equal(projection.rows.some((row) => row.kind === 'tool_result'), true);
   assert.equal(projection.activity.active, true);
   assert.equal(projection.activity.state, 'thinking');
   assert.notEqual(projection.activity.state, 'tool');
@@ -725,7 +966,7 @@ test('session projection reduces routine health into state and clears completed 
   assert.equal(completeProjection.activity.active, false);
 });
 
-test('diagnostics projection is a signal view, not a transcript clone', () => {
+test('diagnostics projection is cumulative and includes conversation, operations, and diagnostic signals', () => {
   const base = { agent_id: 'resident', session_id: 'carrier_diag', timestamp: '2026-06-30T18:00:00.000Z', provider: 'codex-subscription' };
   const events = [
     { ...base, event: 'operator_input_submitted', request_id: 'input_diag', content: 'run startup sequence' },
@@ -738,8 +979,7 @@ test('diagnostics projection is a signal view, not a transcript clone', () => {
     { ...base, event: 'turn_failed', terminal_state: 'failed', message: 'provider failed' },
   ];
   const projection = createSessionProjection(events, { verbosity: 'diagnostics', nowMs: Date.parse('2026-06-30T18:00:05.000Z') });
-  assert.deepEqual(projection.rows.map((row) => row.kind), ['tool_result', 'session_health', 'websocket_error', 'turn_failed']);
-  assert.equal(projection.rows.every((row) => row.disposition === 'diagnostic_signal' || row.summary.includes('failed')), true);
+  assert.deepEqual(projection.rows.map((row) => row.kind), ['operator_input_submitted', 'tool_call', 'tool_result', 'tool_result', 'assistant_message', 'session_health', 'websocket_error', 'turn_failed']);
   assert.match(projection.rows.map((row) => row.summary).join('\n'), /sop unavailable|degraded|socket dropped|provider failed|turn_failed/i);
 });
 
@@ -1109,6 +1349,7 @@ test('CLI args and client config keep runtime authority outside the web package'
     healthTransport: 'http-proxy',
     artifactBasePath: '/api/nars',
     artifactTransport: 'local-nars-proxy',
+    projectionControl: null,
     protocolHealthMethod: 'session.health',
     maxReplay: 100,
     operatorInput: true,
@@ -1116,12 +1357,88 @@ test('CLI args and client config keep runtime authority outside the web package'
   });
 });
 
+test('local client config exposes Cloudflare projection control only with session authority', () => {
+  assert.equal(buildClientConfig({ eventEndpoint: 'ws://nars/events', healthEndpoint: 'http://nars/health' }).projectionControl, null);
+  assert.deepEqual(buildClientConfig({
+    eventEndpoint: 'ws://nars/events',
+    healthEndpoint: 'http://nars/health',
+    sessionId: 'carrier_1',
+    siteRoot: 'D:/code/narada.sonar',
+    siteId: 'narada.sonar',
+    cloudflareApiBaseUrl: 'https://projection.example.test/',
+  }).projectionControl, {
+    cloudflare: {
+      available: true,
+      startEndpoint: '/api/projections/cloudflare/start',
+      statusEndpoint: '/api/projections/cloudflare/status',
+      defaultApiBaseUrl: 'https://projection.example.test',
+    },
+  });
+});
+
+test('local projection control refuses browser-supplied session authority and starts from server context', async () => {
+  let captured = null;
+  const web = await startAgentWebUiServer({
+    host: '127.0.0.1',
+    port: 0,
+    eventEndpoint: 'ws://nars/events',
+    healthEndpoint: 'http://nars/health',
+    sessionId: 'carrier_server',
+    siteRoot: 'D:/code/narada.sonar',
+    siteId: 'narada.sonar',
+    agentId: 'resident',
+    cloudflareApiBaseUrl: 'https://projection.example.test/',
+  }, {
+    startCloudflareProjection: async (input) => {
+      captured = input;
+      return {
+        schema: 'narada.agent_web_ui.cloudflare_projection_start.v1',
+        status: 'published',
+        projection_id: 'proj_server',
+        remote_url: 'https://projection.example.test/?cloudflare_projection_id=proj_server&cloudflare_api_base_url=https%3A%2F%2Fprojection.example.test',
+      };
+    },
+  });
+  try {
+    const refused = await fetch(`${web.url}api/projections/cloudflare/start`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ cloudflare_api_base_url: 'https://projection.example.test', site_root: 'D:/other' }),
+    });
+    assert.equal(refused.status, 400);
+    assert.match((await refused.json()).reason, /projection_authority_override_refused:site_root/);
+
+    const accepted = await fetch(`${web.url}api/projections/cloudflare/start`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+    assert.equal(accepted.status, 200);
+    assert.deepEqual(captured, {
+      siteId: 'narada.sonar',
+      siteRoot: 'D:/code/narada.sonar',
+      sessionId: 'carrier_server',
+      agentId: 'resident',
+      cloudflareApiBaseUrl: 'https://projection.example.test',
+      projectionId: undefined,
+      eventPolicy: undefined,
+      inputPolicy: undefined,
+      cachePolicy: undefined,
+      artifactPolicy: undefined,
+    });
+    assert.equal((await accepted.json()).remote_url.includes('cloudflare_projection_id=proj_server'), true);
+  } finally {
+    web.server.close();
+  }
+});
+
 test('resolveAttachConfig supports Cloudflare projection API mode', () => {
-  const config = resolveAttachConfig('?cloudflare_projection_id=proj_1&cloudflare_api_base_url=https://projection.example.test');
+  const config = resolveAttachConfig('?cloudflare_projection_id=proj_1&cloudflare_api_base_url=https://projection.example.test&cloudflare_browser_token=browser_test');
   assert.equal(config.mode, 'cloudflare_projection');
   assert.equal(config.eventEndpoint, 'https://projection.example.test/api/nars/projections/proj_1/events');
   assert.equal(config.healthEndpoint, 'https://projection.example.test/api/nars/projections/proj_1/health');
   assert.equal(config.inputEndpoint, 'https://projection.example.test/api/nars/projections/proj_1/input');
+  assert.equal(config.browserToken, 'browser_test');
   assert.equal(config.cacheEndpoint, 'https://projection.example.test/api/nars/projections/proj_1/events/cache');
   assert.equal(config.healthTransport, 'cloudflare-projection');
   assert.equal(config.artifactBasePath, 'https://projection.example.test/api/nars/projections/proj_1/artifacts');

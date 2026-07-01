@@ -23,7 +23,13 @@
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "smoke:live": "node scripts/cloudflare-nars-web-projection-live-smoke.mjs"
+    "deploy:dry-run": "wrangler deploy --dry-run --config wrangler.toml",
+    "deploy:live": "wrangler deploy --config wrangler.toml",
+    "smoke:live": "node scripts/cloudflare-nars-web-projection-live-smoke.mjs",
+    "smoke:authority-live": "node scripts/cloudflare-nars-authority-live-smoke.mjs"
+  },
+  "dependencies": {
+    "@narada2/nars-client-projection-contract": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.3.0",

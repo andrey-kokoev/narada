@@ -19,9 +19,13 @@
     ]
   },
   "exports": {
-    ".": "./src/nars-client-projection-contract.mjs",
+    ".": {
+      "types": "./src/nars-client-projection-contract.d.ts",
+      "import": "./src/nars-client-projection-contract.mjs"
+    },
     "./package.json": "./package.json"
   },
+  "types": "./src/nars-client-projection-contract.d.ts",
   "scripts": {
     "test": "node --test src/*.test.mjs",
     "typecheck": "tsc --noEmit --allowJs --checkJs false src/nars-client-projection-contract.mjs"

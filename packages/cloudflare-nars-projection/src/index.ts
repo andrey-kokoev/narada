@@ -1,3 +1,5 @@
+import { classifyNarsClientEventProjection, projectNarsClientEvent } from '@narada2/nars-client-projection-contract';
+
 export const CLOUDFLARE_NARS_PROJECTION_INTENT_SCHEMA = 'narada.cloudflare_nars_projection.intent.v1';
 export const CLOUDFLARE_NARS_PROJECTION_ACCESS_SCHEMA = 'narada.cloudflare_nars_projection.remote_access.v1';
 export const CLOUDFLARE_NARS_PROJECTION_EVENT_SCHEMA = 'narada.cloudflare_nars_projection.event.v1';
@@ -7,11 +9,26 @@ export const CLOUDFLARE_NARS_INPUT_RELAY_SCHEMA = 'narada.cloudflare_nars_projec
 export const CLOUDFLARE_NARS_ARTIFACT_METADATA_SCHEMA = 'narada.cloudflare_nars_projection.artifact_metadata.v1';
 export const CLOUDFLARE_NARS_ARTIFACT_CONTENT_SCHEMA = 'narada.cloudflare_nars_projection.artifact_content.v1';
 export const CLOUDFLARE_NARS_ARTIFACT_CACHE_SCHEMA = 'narada.cloudflare_nars_projection.artifact_cache.v1';
+export const CLOUDFLARE_NARS_AUTHORITY_SESSION_SCHEMA = 'narada.cloudflare_nars_authority.session.v1';
+export const CLOUDFLARE_NARS_AUTHORITY_EVENT_SCHEMA = 'narada.cloudflare_nars_authority.event.v1';
+export const CLOUDFLARE_NARS_AUTHORITY_EVENTS_SCHEMA = 'narada.cloudflare_nars_authority.events.v1';
+export const CLOUDFLARE_NARS_AUTHORITY_HEALTH_SCHEMA = 'narada.cloudflare_nars_authority.health.v1';
+export const CLOUDFLARE_NARS_AUTHORITY_INPUT_SCHEMA = 'narada.cloudflare_nars_authority.input_admission.v1';
 
 export const CLOUDFLARE_NARS_INPUT_METHODS = [
   'conversation.send',
   'conversation.enqueue',
   'conversation.steer',
+  'conversation.interrupt',
+  'session.status',
+  'session.health',
+  'session.recovery',
+  'session.operations',
+  'observers.status',
+  'observer.mute',
+  'observer.unmute',
+  'carrier.command.execute',
+  'session.close',
 ] as const;
 
 export type CloudflareNarsInputMethod = typeof CLOUDFLARE_NARS_INPUT_METHODS[number];
@@ -152,6 +169,24 @@ export function createArtifactProjectionCache() {
       if (!cached) return refusedArtifactContentRead(projectionId, artifactId, 'artifact_content_cache_miss');
       return { schema: CLOUDFLARE_NARS_ARTIFACT_CACHE_SCHEMA, status: 'ok', projection_id: projectionId, artifact_id: artifactId, content: cached };
     },
+    clearProjection(projectionId: string) {
+      metadata.delete(projectionId);
+      for (const key of [...content.keys()]) {
+        if (key.startsWith(`${projectionId}:`)) content.delete(key);
+      }
+    },
+    snapshot() {
+      return {
+        metadata: [...metadata.values()].flat(),
+        content: [...content.values()],
+      };
+    },
+    load(snapshot: { metadata?: ProjectedArtifactMetadata[]; content?: ProjectedArtifactContent[] }) {
+      metadata.clear();
+      content.clear();
+      for (const record of snapshot.metadata ?? []) this.putMetadata(record);
+      for (const record of snapshot.content ?? []) this.putContent(record);
+    },
   };
 }
 
@@ -215,18 +250,21 @@ export interface CloudflareNarsProjectionIntentInput {
 export function createCloudflareNarsProjectionWorkerService(options: {
   max_events?: number;
   nars_input_relay?: (input: { projection_id: string; method: CloudflareNarsInputMethod; payload: Record<string, unknown> }) => unknown | Promise<unknown>;
+  initial_state?: CloudflareNarsProjectionWorkerState | null;
 } = {}) {
   const accessRecords = new Map<string, CloudflareNarsRemoteAccessRecord>();
   const cache = createBoundedProjectionCache(options.max_events ?? 200);
   const artifactCache = createArtifactProjectionCache();
   const pendingInputs = new Map<string, CloudflareNarsPendingInput[]>();
-  return {
+  const service = {
     register(record: CloudflareNarsRemoteAccessRecord) {
+      resetProjectionState(record.projection_id);
       accessRecords.set(record.projection_id, record);
       return { status: 'registered', projection_id: record.projection_id, remote_access: record };
     },
     registerIntent(intent: CloudflareNarsProjectionIntent, createdAt = new Date().toISOString()) {
       const record = createCloudflareNarsRemoteAccessRecord({ intent, created_at: createdAt });
+      resetProjectionState(record.projection_id);
       accessRecords.set(record.projection_id, record);
       return { status: 'registered', projection_id: record.projection_id, remote_access: record };
     },
@@ -442,6 +480,162 @@ export function createCloudflareNarsProjectionWorkerService(options: {
         ? { schema: CLOUDFLARE_NARS_INPUT_RELAY_SCHEMA, status: 'acknowledged', projection_id: args.projection_id, input_id: args.input_id }
         : { schema: CLOUDFLARE_NARS_INPUT_RELAY_SCHEMA, status: 'refused', code: 'input_not_found', projection_id: args.projection_id, input_id: args.input_id };
     },
+    snapshot(): CloudflareNarsProjectionWorkerState {
+      const artifactSnapshot = artifactCache.snapshot();
+      return {
+        schema: 'narada.cloudflare_nars_projection.worker_state.v1',
+        access_records: [...accessRecords.values()],
+        events: cache.snapshot(),
+        artifact_metadata: artifactSnapshot.metadata,
+        artifact_content: artifactSnapshot.content,
+        pending_inputs: [...pendingInputs.values()].flat(),
+      };
+    },
+    load(state: CloudflareNarsProjectionWorkerState | null | undefined) {
+      accessRecords.clear();
+      pendingInputs.clear();
+      cache.load(state?.events ?? []);
+      artifactCache.load({ metadata: state?.artifact_metadata ?? [], content: state?.artifact_content ?? [] });
+      for (const record of state?.access_records ?? []) accessRecords.set(record.projection_id, record);
+      for (const input of state?.pending_inputs ?? []) pendingInputs.set(input.projection_id, [...(pendingInputs.get(input.projection_id) ?? []), input]);
+    },
+  };
+  function resetProjectionState(projectionId: string) {
+    cache.clearProjection(projectionId);
+    artifactCache.clearProjection(projectionId);
+    pendingInputs.delete(projectionId);
+  }
+  service.load(options.initial_state);
+  return service;
+}
+
+export function createCloudflareNarsAuthorityService(options: {
+  initial_state?: CloudflareNarsAuthorityWorkerState | null;
+  max_events?: number;
+} = {}) {
+  const sessions = new Map<string, CloudflareNarsAuthoritySession>();
+  const events = new Map<string, CloudflareNarsAuthorityEvent[]>();
+  const maxEvents = Math.max(1, Math.floor(options.max_events ?? 500));
+  const service = {
+    createSession(args: CloudflareNarsAuthoritySessionInput, now = new Date().toISOString()): CloudflareNarsAuthorityCreateSessionResult {
+      const siteId = requireNonEmpty(args.site_id, 'site_id');
+      const agentId = requireNonEmpty(args.agent_id, 'agent_id');
+      const sessionId = args.session_id?.trim() || `cf_nars_${safeToken(siteId)}_${safeToken(agentId)}_${safeToken(now)}`;
+      const session: CloudflareNarsAuthoritySession = {
+        schema: CLOUDFLARE_NARS_AUTHORITY_SESSION_SCHEMA,
+        session_id: sessionId,
+        site_id: siteId,
+        agent_id: agentId,
+        authority_runtime: 'cloudflare_nars_authority',
+        execution_mode: 'synthetic_no_provider_no_tools',
+        lifecycle_state: 'active',
+        created_at: now,
+        updated_at: now,
+        revoked_at: null,
+      };
+      sessions.set(sessionId, session);
+      events.set(sessionId, []);
+      appendAuthorityEvent(sessionId, {
+        event: 'session_started',
+        type: 'session.started',
+        content: `Cloudflare-origin synthetic NARS session started for ${agentId}`,
+      }, now);
+      return { status: 'created', session_id: sessionId, session };
+    },
+    readHealth(sessionId: string): CloudflareNarsAuthorityHealthResult {
+      const session = sessions.get(sessionId);
+      if (!session) return { schema: CLOUDFLARE_NARS_AUTHORITY_HEALTH_SCHEMA, status: 'refused', code: 'session_not_found', session_id: sessionId };
+      if (session.lifecycle_state !== 'active') return { schema: CLOUDFLARE_NARS_AUTHORITY_HEALTH_SCHEMA, status: 'refused', code: `session_${session.lifecycle_state}`, session_id: sessionId };
+      return { schema: CLOUDFLARE_NARS_AUTHORITY_HEALTH_SCHEMA, status: 'healthy', session_id: sessionId, site_id: session.site_id, agent_id: session.agent_id, execution_mode: session.execution_mode };
+    },
+    readEvents(args: { session_id: string; since_sequence?: number | null; max_events?: number }): CloudflareNarsAuthorityReadEventsResult {
+      const session = sessions.get(args.session_id);
+      if (!session) return refusedAuthorityEvents(args.session_id, 'session_not_found', args.since_sequence ?? null);
+      if (session.lifecycle_state !== 'active') return refusedAuthorityEvents(args.session_id, `session_${session.lifecycle_state}`, args.since_sequence ?? null);
+      const all = events.get(args.session_id) ?? [];
+      const filtered = args.since_sequence == null ? all : all.filter((event) => event.event_sequence > args.since_sequence!);
+      const limit = Math.max(0, Math.min(Math.floor(args.max_events ?? maxEvents), maxEvents));
+      const selected = filtered.slice(0, limit);
+      const lastSequence = selected.reduce<number | null>((max, event) => Math.max(max ?? 0, event.event_sequence), null);
+      return {
+        schema: CLOUDFLARE_NARS_AUTHORITY_EVENTS_SCHEMA,
+        status: 'ok',
+        session_id: args.session_id,
+        events: selected,
+        event_count: selected.length,
+        has_more: filtered.length > selected.length,
+        cursor: { since_sequence: args.since_sequence ?? null, last_sequence: lastSequence, next_sequence: lastSequence == null ? null : lastSequence + 1 },
+      };
+    },
+    submitInput(args: { session_id: string; method: string; payload?: Record<string, unknown>; now?: string }): CloudflareNarsAuthorityInputResult {
+      const session = sessions.get(args.session_id);
+      if (!session) return { schema: CLOUDFLARE_NARS_AUTHORITY_INPUT_SCHEMA, status: 'refused', code: 'session_not_found', session_id: args.session_id, method: args.method };
+      if (session.lifecycle_state !== 'active') return { schema: CLOUDFLARE_NARS_AUTHORITY_INPUT_SCHEMA, status: 'refused', code: `session_${session.lifecycle_state}`, session_id: args.session_id, method: args.method };
+      if (!isCloudflareNarsInputMethod(args.method)) return { schema: CLOUDFLARE_NARS_AUTHORITY_INPUT_SCHEMA, status: 'refused', code: 'unsupported_operator_input_method', session_id: args.session_id, method: args.method };
+      const now = args.now ?? new Date().toISOString();
+      const inputId = `input_${safeToken(now)}_${Math.random().toString(36).slice(2, 8)}`;
+      const payload = args.payload ?? {};
+      const message = typeof payload.message === 'string' ? payload.message : typeof payload.text === 'string' ? payload.text : '';
+      const admitted = [
+        appendAuthorityEvent(args.session_id, { event: 'operator_input_admitted', type: 'operator_input.admitted', input_id: inputId, method: args.method, payload }, now),
+        appendAuthorityEvent(args.session_id, { event: 'user_message', type: 'user_message', input_id: inputId, content: message }, now),
+        appendAuthorityEvent(args.session_id, { event: 'turn_started', type: 'turn.started', input_id: inputId }, now),
+        appendAuthorityEvent(args.session_id, { event: 'assistant_message', type: 'assistant_message', input_id: inputId, content: `Synthetic Cloudflare-origin response admitted ${args.method}.`, execution_kind: 'synthetic_no_provider_no_tools' }, now),
+        appendAuthorityEvent(args.session_id, { event: 'turn_complete', type: 'turn.completed', input_id: inputId, terminal_state: 'completed_synthetic' }, now),
+      ];
+      sessions.set(args.session_id, { ...session, updated_at: now });
+      return { schema: CLOUDFLARE_NARS_AUTHORITY_INPUT_SCHEMA, status: 'admitted', session_id: args.session_id, input_id: inputId, method: args.method as CloudflareNarsInputMethod, execution_kind: 'synthetic_no_provider_no_tools', events: admitted };
+    },
+    revokeSession(sessionId: string, revokedAt = new Date().toISOString()) {
+      const session = sessions.get(sessionId);
+      if (!session) return { status: 'refused', code: 'session_not_found', session_id: sessionId };
+      sessions.set(sessionId, { ...session, lifecycle_state: 'revoked', revoked_at: revokedAt, updated_at: revokedAt });
+      return { status: 'revoked', session_id: sessionId };
+    },
+    snapshot(): CloudflareNarsAuthorityWorkerState {
+      return { schema: 'narada.cloudflare_nars_authority.worker_state.v1', sessions: [...sessions.values()], events: [...events.values()].flat() };
+    },
+    load(state: CloudflareNarsAuthorityWorkerState | null | undefined) {
+      sessions.clear();
+      events.clear();
+      for (const session of state?.sessions ?? []) sessions.set(session.session_id, session);
+      for (const event of state?.events ?? []) events.set(event.session_id, [...(events.get(event.session_id) ?? []), event]);
+    },
+  };
+  function appendAuthorityEvent(sessionId: string, payload: Record<string, unknown>, now: string): CloudflareNarsAuthorityEvent {
+    const session = sessions.get(sessionId);
+    if (!session) throw new Error('authority_session_not_found');
+    const current = events.get(sessionId) ?? [];
+    const sequence = (current.at(-1)?.event_sequence ?? 0) + 1;
+    const event: CloudflareNarsAuthorityEvent = {
+      schema: CLOUDFLARE_NARS_AUTHORITY_EVENT_SCHEMA,
+      session_id: sessionId,
+      site_id: session.site_id,
+      agent_id: session.agent_id,
+      event_sequence: sequence,
+      event_id: `cf_evt_${safeToken(sessionId)}_${sequence}`,
+      timestamp: now,
+      payload: { event_sequence: sequence, timestamp: now, ...payload },
+    };
+    const next = [...current, event];
+    while (next.length > maxEvents) next.shift();
+    events.set(sessionId, next);
+    return event;
+  }
+  service.load(options.initial_state);
+  return service;
+}
+
+function refusedAuthorityEvents(sessionId: string, code: string, sinceSequence: number | null): CloudflareNarsAuthorityReadEventsResult {
+  return {
+    schema: CLOUDFLARE_NARS_AUTHORITY_EVENTS_SCHEMA,
+    status: 'refused',
+    code,
+    session_id: sessionId,
+    events: [],
+    event_count: 0,
+    has_more: false,
+    cursor: { since_sequence: sinceSequence, last_sequence: null, next_sequence: null },
   };
 }
 
@@ -661,6 +855,15 @@ export interface BoundedProjectionCacheEntry {
   event: ProjectedEvent;
 }
 
+export interface CloudflareNarsProjectionWorkerState {
+  schema: 'narada.cloudflare_nars_projection.worker_state.v1';
+  access_records: CloudflareNarsRemoteAccessRecord[];
+  events: ProjectedEvent[];
+  artifact_metadata: ProjectedArtifactMetadata[];
+  artifact_content: ProjectedArtifactContent[];
+  pending_inputs: CloudflareNarsPendingInput[];
+}
+
 export interface BoundedProjectionCacheRead {
   schema: typeof CLOUDFLARE_NARS_PROJECTION_CACHE_SCHEMA;
   projection_id: string;
@@ -745,16 +948,105 @@ export interface CloudflareNarsPendingInput {
   nars_admission?: unknown;
 }
 
+export interface CloudflareNarsAuthoritySessionInput {
+  session_id?: string;
+  site_id: string;
+  agent_id: string;
+}
+
+export interface CloudflareNarsAuthoritySession {
+  schema: typeof CLOUDFLARE_NARS_AUTHORITY_SESSION_SCHEMA;
+  session_id: string;
+  site_id: string;
+  agent_id: string;
+  authority_runtime: 'cloudflare_nars_authority';
+  execution_mode: 'synthetic_no_provider_no_tools';
+  lifecycle_state: 'active' | 'revoked';
+  created_at: string;
+  updated_at: string;
+  revoked_at: string | null;
+}
+
+export interface CloudflareNarsAuthorityEvent {
+  schema: typeof CLOUDFLARE_NARS_AUTHORITY_EVENT_SCHEMA;
+  session_id: string;
+  site_id: string;
+  agent_id: string;
+  event_sequence: number;
+  event_id: string;
+  timestamp: string;
+  payload: Record<string, unknown>;
+}
+
+export interface CloudflareNarsAuthorityCreateSessionResult {
+  status: 'created';
+  session_id: string;
+  session: CloudflareNarsAuthoritySession;
+}
+
+export interface CloudflareNarsAuthorityHealthResult {
+  schema: typeof CLOUDFLARE_NARS_AUTHORITY_HEALTH_SCHEMA;
+  status: 'healthy' | 'refused';
+  code?: string;
+  session_id: string;
+  site_id?: string;
+  agent_id?: string;
+  execution_mode?: 'synthetic_no_provider_no_tools';
+}
+
+export interface CloudflareNarsAuthorityReadEventsResult {
+  schema: typeof CLOUDFLARE_NARS_AUTHORITY_EVENTS_SCHEMA;
+  status: 'ok' | 'refused';
+  code?: string;
+  session_id: string;
+  events: CloudflareNarsAuthorityEvent[];
+  event_count: number;
+  has_more: boolean;
+  cursor: {
+    since_sequence: number | null;
+    last_sequence: number | null;
+    next_sequence: number | null;
+  };
+}
+
+export interface CloudflareNarsAuthorityInputResult {
+  schema: typeof CLOUDFLARE_NARS_AUTHORITY_INPUT_SCHEMA;
+  status: 'admitted' | 'refused';
+  code?: string;
+  session_id: string;
+  input_id?: string;
+  method: string;
+  execution_kind?: 'synthetic_no_provider_no_tools';
+  events?: CloudflareNarsAuthorityEvent[];
+}
+
+export interface CloudflareNarsAuthorityWorkerState {
+  schema: 'narada.cloudflare_nars_authority.worker_state.v1';
+  sessions: CloudflareNarsAuthoritySession[];
+  events: CloudflareNarsAuthorityEvent[];
+}
+
 export interface AgentWebUiCloudflareProjectionConfig {
   mode: 'cloudflare_projection';
   projection_id: string;
   api_base_url: string;
+  browser_token_fingerprint?: string;
   event_endpoint: string;
   health_endpoint: string;
   input_endpoint: string;
   cache_endpoint: string;
   artifact_base_path: string;
   artifact_metadata_endpoint: string;
+}
+
+export interface AgentWebUiCloudflareAuthorityConfig {
+  mode: 'cloudflare_authority';
+  session_id: string;
+  api_base_url: string;
+  event_endpoint: string;
+  health_endpoint: string;
+  input_endpoint: string;
+  cache_endpoint: string;
 }
 
 const DEFAULT_EVENT_POLICY: ProjectionEventPolicyMode = 'operator';
@@ -810,7 +1102,7 @@ export function createCloudflareNarsRemoteAccessRecord(input: {
     projection_id: input.intent.projection_id,
     site_id: input.intent.site_id,
     nars_session_id: input.intent.nars_session_id,
-    lifecycle_state: input.intent.lifecycle_state,
+    lifecycle_state: input.intent.lifecycle_state ?? 'active',
     event_stream_policy: input.intent.event_stream_policy,
     artifact_projection_policy: input.intent.artifact_projection_policy,
     operator_input_policy: [...input.intent.operator_input_policy],
@@ -940,6 +1232,16 @@ export function createBoundedProjectionCache(maxEvents = 200) {
         },
       };
     },
+    snapshot() {
+      return [...entries.values()].flat().map((entry) => entry.event);
+    },
+    clearProjection(projectionId: string) {
+      entries.delete(projectionId);
+    },
+    load(events: ProjectedEvent[]) {
+      entries.clear();
+      for (const event of events) this.push(event);
+    },
   };
 }
 
@@ -1001,6 +1303,7 @@ export function classifyCloudflareInputRelay(record: CloudflareNarsRemoteAccessR
 export function buildAgentWebUiCloudflareProjectionConfig(args: {
   projection_id: string;
   api_base_url: string;
+  browser_token_fingerprint?: string | null;
 }): AgentWebUiCloudflareProjectionConfig {
   const projectionId = encodeURIComponent(requireNonEmpty(args.projection_id, 'projection_id'));
   const base = requireNonEmpty(args.api_base_url, 'api_base_url').replace(/\/+$/, '');
@@ -1008,12 +1311,31 @@ export function buildAgentWebUiCloudflareProjectionConfig(args: {
     mode: 'cloudflare_projection',
     projection_id: args.projection_id,
     api_base_url: base,
+    ...(args.browser_token_fingerprint ? { browser_token_fingerprint: args.browser_token_fingerprint } : {}),
     event_endpoint: `${base}/api/nars/projections/${projectionId}/events`,
     health_endpoint: `${base}/api/nars/projections/${projectionId}/health`,
     input_endpoint: `${base}/api/nars/projections/${projectionId}/input`,
     cache_endpoint: `${base}/api/nars/projections/${projectionId}/events/cache`,
     artifact_base_path: `${base}/api/nars/projections/${projectionId}/artifacts`,
     artifact_metadata_endpoint: `${base}/api/nars/projections/${projectionId}/artifacts`,
+  };
+}
+
+export function buildAgentWebUiCloudflareAuthorityConfig(args: {
+  session_id: string;
+  api_base_url: string;
+}): AgentWebUiCloudflareAuthorityConfig {
+  const sessionId = encodeURIComponent(requireNonEmpty(args.session_id, 'session_id'));
+  const base = requireNonEmpty(args.api_base_url, 'api_base_url').replace(/\/+$/, '');
+  const path = `/api/nars/authority/sessions/${sessionId}`;
+  return {
+    mode: 'cloudflare_authority',
+    session_id: args.session_id,
+    api_base_url: base,
+    event_endpoint: `${base}${path}/events`,
+    health_endpoint: `${base}${path}/health`,
+    input_endpoint: `${base}${path}/input`,
+    cache_endpoint: `${base}${path}/events`,
   };
 }
 
@@ -1084,7 +1406,7 @@ function findCredential(record: CloudflareNarsRemoteAccessRecord, kind: Credenti
 }
 
 function normalizeInputPolicy(value: CloudflareNarsInputMethod[] | undefined): CloudflareNarsInputMethod[] {
-  const source = value?.length ? value : ['conversation.send', 'conversation.enqueue'];
+  const source = value?.length ? value : [...CLOUDFLARE_NARS_INPUT_METHODS];
   return [...new Set(source.filter(isCloudflareNarsInputMethod))];
 }
 
@@ -1094,18 +1416,13 @@ function normalizeEventPolicy(value: unknown): ProjectionEventPolicyMode {
 }
 
 function classifyNarsEvent(event: Record<string, unknown>): string {
-  const type = String(event.event ?? event.type ?? event.kind ?? 'unknown');
-  if (/assistant_message|user_message|operator_input|message/i.test(type)) return 'conversation';
-  if (/queue|directive|turn|input|admission/i.test(type)) return 'operator';
-  if (/health|diagnostic|error|fault|mcp/i.test(type)) return 'diagnostic';
-  if (/tool/i.test(type)) return 'tool';
-  return 'raw';
+  return classifyNarsClientEventProjection(projectNarsClientEvent(event));
 }
 
 function eventClassAllowed(eventClass: string, policy: ProjectionEventPolicyMode): boolean {
   if (policy === 'raw') return true;
-  if (policy === 'diagnostic') return ['conversation', 'operator', 'diagnostic', 'tool'].includes(eventClass);
-  if (policy === 'operator') return ['conversation', 'operator', 'tool'].includes(eventClass);
+  if (policy === 'diagnostic') return ['conversation', 'operations', 'diagnostics'].includes(eventClass);
+  if (policy === 'operator') return ['conversation', 'operations'].includes(eventClass);
   return eventClass === 'conversation';
 }
 

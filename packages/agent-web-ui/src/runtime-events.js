@@ -16,8 +16,8 @@ export {
 export const unwrapRuntimeEvent = unwrapNarsClientEvent;
 
 export function projectRuntimeEvent(message) {
-  const projected = projectNestedProviderEvent(message);
-  if (projected) return projected;
+  const narsRuntimeProjection = projectNarsRuntimeEvent(message);
+  if (narsRuntimeProjection) return narsRuntimeProjection;
   return withRenderIdentity(projectNarsClientEvent(message));
 }
 
@@ -44,42 +44,42 @@ export function applyRuntimeEventToWebUiState(state, message) {
   return state;
 }
 
-function projectNestedProviderEvent(message) {
+function projectNarsRuntimeEvent(message) {
   const event = unwrapRuntimeEvent(message);
-  const providerEvent = event?.event;
-  if (!providerEvent || typeof providerEvent !== 'object') return null;
-  const type = providerEvent.type;
-  if (type === 'thread.started') {
-    return projection({ kind: 'provider_thread_started', label: 'Thread started', tone: 'session', summary: providerEvent.thread_id ?? 'thread started', event });
+  if (!event || typeof event !== 'object') return null;
+  if (event.event === 'authority_session_revoked') {
+    return projection({
+      kind: 'session_revoked',
+      label: 'Session revoked',
+      tone: 'error',
+      summary: event.code ?? 'session_revoked',
+      event,
+      renderKey: event.session_id ? `authority-session-revoked:${event.session_id}` : null,
+    });
   }
-  if (type === 'turn.started') {
-    return projection({ kind: 'provider_turn_started', label: 'Turn started', tone: 'session', summary: 'provider turn started', event });
+  if (event.event === 'conversation_enqueue_requested') {
+    const requestId = event.request_id ? String(event.request_id) : 'queued input';
+    return projection({
+      kind: 'operator_input_queued',
+      label: 'Input queued',
+      tone: 'operator',
+      summary: `${requestId} queued`,
+      event,
+      renderKey: event.event_sequence == null ? `operator-input-queued:${requestId}` : `sequence:${event.event_sequence}`,
+    });
   }
-  if (type === 'turn.completed') {
-    const usage = providerEvent.usage && typeof providerEvent.usage === 'object' ? providerEvent.usage : null;
-    const summary = usage ? `input ${usage.input_tokens ?? '?'} · output ${usage.output_tokens ?? '?'}` : 'provider turn completed';
-    return projection({ kind: 'provider_turn_completed', label: 'Provider turn complete', tone: 'session', summary, event });
+  if (event.event === 'input_queued_for_turn_boundary') {
+    const inputEventId = event.input_event_id ? String(event.input_event_id) : 'input queued for turn boundary';
+    return projection({
+      kind: 'operator_input_queued',
+      label: 'Input queued',
+      tone: 'operator',
+      summary: `${inputEventId} queued for turn boundary`,
+      event,
+      renderKey: event.event_sequence == null ? `operator-input-boundary:${inputEventId}` : `sequence:${event.event_sequence}`,
+    });
   }
-  if (type === 'item.started' || type === 'item.completed') {
-    return projectProviderItemEvent(type, providerEvent.item, event);
-  }
-  return projection({ kind: `provider_${String(type ?? 'event').replace(/[^a-z0-9_]+/gi, '_')}`, label: 'Provider event', tone: 'unknown', summary: safeSummary(providerEvent), event });
-}
-
-function projectProviderItemEvent(type, item, event) {
-  if (!item || typeof item !== 'object') {
-    return projection({ kind: `provider_${type.replace('.', '_')}`, label: 'Provider item', tone: 'unknown', summary: type, event });
-  }
-  const completed = type === 'item.completed';
-  if (item.type === 'mcp_tool_call') {
-    const name = [item.server, item.tool].filter(Boolean).join('.') || 'tool call';
-    const status = completed ? item.error ? 'failed' : 'complete' : 'running';
-    return projection({ kind: completed ? 'tool_result' : 'tool_call', label: completed ? 'Tool result' : 'Tool call', tone: item.error ? 'error' : 'tool', summary: `${name} ${status}`, event, renderKey: providerItemRenderKey(event, item, 'tool') });
-  }
-  if (item.type === 'agent_message') {
-    return projection({ kind: completed ? 'assistant_message' : 'assistant_message_stream', label: 'Agent', tone: 'assistant', summary: String(item.text ?? ''), event, renderKey: providerItemRenderKey(event, item, 'assistant') });
-  }
-  return projection({ kind: `provider_item_${String(item.type ?? 'unknown').replace(/[^a-z0-9_]+/gi, '_')}`, label: 'Provider item', tone: 'unknown', summary: safeSummary(item), event });
+  return null;
 }
 
 function projection({ kind, label, tone, summary, event, renderKey = null }) {
@@ -100,71 +100,11 @@ function withRenderIdentity(projected) {
   return projected;
 }
 
-function providerItemRenderKey(event, item, prefix) {
-  const itemId = item?.id ?? null;
-  if (!itemId) return null;
-  return `${prefix}:provider-item:${event?.agent_id ?? 'agent'}:${event?.session_id ?? 'session'}:${itemId}`;
-}
-
-function safeSummary(value) {
-  if (value === null || value === undefined) return '';
-  if (typeof value === 'string') return value;
-  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
-  if (typeof value !== 'object') return String(value);
-  if (typeof value.message === 'string') return value.message;
-  if (typeof value.text === 'string') return value.text;
-  if (typeof value.type === 'string') return value.type;
-  return JSON.stringify(value);
-}
-
 export function shouldRenderRuntimeEvent(message, options = {}) {
   return shouldRenderRuntimeProjection(projectRuntimeEvent(message), options);
 }
 
 export function shouldRenderRuntimeProjection(projection, options = {}) {
   const verbosity = normalizeNarsClientProjectionVerbosity(options.verbosity ?? NARS_CLIENT_PROJECTION_DEFAULT_VERBOSITY);
-  if (verbosity === 'conversation' && isNonCanonicalAssistantProjection(projection)) return false;
-  if (verbosity === 'diagnostics' && !isDiagnosticProjection(projection)) return false;
   return shouldProjectNarsClientProjection(projection, { ...options, verbosity });
-}
-
-function isDiagnosticProjection(projection) {
-  if (!projection || typeof projection !== 'object') return false;
-  const kind = String(projection.kind ?? '');
-  const tone = String(projection.tone ?? '');
-  if (tone === 'error') return true;
-  if (/error|failed|fault|degraded|refused|unavailable/i.test(kind)) return true;
-  if (kind === 'session_health' || kind === 'turn_failed' || kind === 'websocket_error' || kind === 'web_ui_decode_error' || kind === 'web_ui_input_not_sent') return true;
-  const event = projection.event;
-  if (event && typeof event === 'object' && (event.error || event.status === 'failed' || event.terminal_state === 'failed')) return true;
-  const eventName = typeof event?.event === 'string' ? event.event : null;
-  if (eventName && /error|failed|fault|degraded|refused|unavailable/i.test(eventName)) return true;
-  if (eventName === 'session_health') return !isRoutineHealthyProjectionEvent(event);
-  const nestedEvent = event?.event;
-  if (nestedEvent && typeof nestedEvent === 'object') {
-    if (nestedEvent.error) return true;
-    const item = nestedEvent.item;
-    if (item && typeof item === 'object' && (item.error || item.status === 'failed')) return true;
-  }
-  return false;
-}
-
-function isRoutineHealthyProjectionEvent(event) {
-  if (!event || event.event !== 'session_health') return false;
-  const status = String(event.status ?? '').toLowerCase();
-  const mcpState = String(event.mcp?.operational_state ?? event.mcp_operational_state ?? '').toLowerCase();
-  const startupFailures = Number(event.mcp_startup_failure_count ?? event.mcp?.startup_failure_count ?? 0);
-  const runtimeFaults = Number(event.mcp_runtime_fault_count ?? event.mcp?.runtime_fault_count ?? 0);
-  return status === 'healthy' && (mcpState === '' || mcpState === 'healthy') && startupFailures === 0 && runtimeFaults === 0;
-}
-
-function isNonCanonicalAssistantProjection(projection) {
-  if (!projection || typeof projection !== 'object') return false;
-  if (projection.kind === 'assistant_message_stream') return true;
-  if (projection.kind !== 'assistant_message') return false;
-  const event = projection.event;
-  const providerEvent = event?.event;
-  if (!providerEvent || typeof providerEvent !== 'object') return false;
-  const item = providerEvent.item;
-  return providerEvent.type === 'item.started' && item?.type === 'agent_message';
 }
