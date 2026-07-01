@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { resolveNaradaSitePaths } from '@narada2/site-paths';
 import {
   buildProjectionRegistrationPlan,
   createBridgeState,
@@ -503,7 +504,7 @@ function bridgeRefusal(args: { site_root: string; projection_id: string }, reaso
 }
 
 function findSessionRecord(siteRoot: string, sessionId: string) {
-  const indexPath = join(siteRoot, '.narada', 'crew', 'nars-sessions', 'index.json');
+  const indexPath = join(resolveNaradaSitePaths({ siteRoot }).narsSessionsRoot, 'index.json');
   const index = readJson(indexPath) as { sessions?: Array<Record<string, unknown>> } | null;
   const entry = index?.sessions?.find((candidate) => candidate.session_id === sessionId || candidate.carrier_session_id === sessionId);
   const recordPath = typeof entry?.record_path === 'string' ? entry.record_path : null;

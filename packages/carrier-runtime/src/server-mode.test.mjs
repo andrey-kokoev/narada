@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
 import test from 'node:test';
+import { resolveNaradaSitePaths } from '@narada2/site-paths';
 import { createCarrierRuntimeDependencies } from './runtime-dependencies.mjs';
 import { runCarrierServerMode } from './server-mode.mjs';
 
@@ -30,7 +31,8 @@ test('server mode writes NARS session index record on startup', async () => {
     const output = new PassThrough();
     output.resume();
     const sessionId = 'carrier_20260623001000_start';
-    const sessionDir = join(siteRoot, '.narada', 'crew', 'nars-sessions', sessionId);
+    const sitePaths = resolveNaradaSitePaths({ siteRoot, sessionId });
+    const sessionDir = sitePaths.narsSessionDir;
     const runtimeContext = {
       identity: 'sonar.resident',
       session: sessionId,
@@ -59,7 +61,7 @@ test('server mode writes NARS session index record on startup', async () => {
     });
 
     const recordPath = join(sessionDir, 'session-index-record.json');
-    const aggregatePath = join(siteRoot, '.narada', 'crew', 'nars-sessions', 'index.json');
+    const aggregatePath = join(sitePaths.narsSessionsRoot, 'index.json');
     assert.equal(existsSync(recordPath), true);
     assert.equal(existsSync(aggregatePath), true);
     const record = readJson(recordPath);
@@ -108,7 +110,7 @@ test('conversation.enqueue during an active turn queues without interrupting and
       return { choices: [{ message: { role: 'assistant', content: `done ${providerCalls.length}` } }] };
     };
 
-    const sessionDir = join(siteRoot, '.narada', 'crew', 'nars-sessions', 'session_enqueue_test');
+    const sessionDir = resolveNaradaSitePaths({ siteRoot, sessionId: 'session_enqueue_test' }).narsSessionDir;
     const runtimeContext = {
       identity: 'agent.test',
       session: 'session_enqueue_test',
@@ -160,7 +162,7 @@ test('server mode reloads pending operator input queue state on startup', async 
     const input = new PassThrough();
     const output = new PassThrough();
     output.resume();
-    const sessionDir = join(siteRoot, '.narada', 'crew', 'nars-sessions', 'session_queue_restore_test');
+    const sessionDir = resolveNaradaSitePaths({ siteRoot, sessionId: 'session_queue_restore_test' }).narsSessionDir;
     mkdirSync(sessionDir, { recursive: true });
     writeFileSync(join(sessionDir, 'operator-input-queue.json'), `${JSON.stringify({
       schema: 'narada.nars.operator_input_queue_state.v1',

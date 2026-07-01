@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
+import { resolveNaradaSitePaths } from '@narada2/site-paths';
 import {
   deliverRemoteProjectionInputsOnce,
   preflightCloudflareProjectionRegistration,
@@ -310,11 +311,12 @@ async function submitFrameToNarsWebSocket(args) {
 }
 
 function readLocalSessionRecord(siteRoot, projectionId) {
-  const registrationPath = join(siteRoot, '.narada', 'crew', 'nars-projections', projectionId, 'intent.json');
+  const sitePaths = resolveNaradaSitePaths({ siteRoot });
+  const registrationPath = join(sitePaths.siteAuthorityRoot, 'crew', 'nars-projections', projectionId, 'intent.json');
   const intent = readJsonFile(registrationPath);
   const sessionId = intent?.nars_session_id;
   if (!sessionId) return null;
-  const index = readJsonFile(join(siteRoot, '.narada', 'crew', 'nars-sessions', 'index.json'));
+  const index = readJsonFile(join(sitePaths.narsSessionsRoot, 'index.json'));
   const entry = index?.sessions?.find((candidate) => candidate.session_id === sessionId || candidate.carrier_session_id === sessionId);
   return entry?.record_path ? readJsonFile(entry.record_path) : null;
 }

@@ -1,20 +1,18 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { join, dirname, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { resolveNaradaSitePaths, siteAuthorityRootFromSiteRoot } from '@narada2/site-paths';
 
 export function siteNaradaRoot(siteRoot) {
-  const normalized = resolve(String(siteRoot ?? ''));
-  return normalized.toLowerCase().endsWith('\\.narada') || normalized.toLowerCase().endsWith('/.narada')
-    ? normalized
-    : join(normalized, '.narada');
+  return siteAuthorityRootFromSiteRoot(siteRoot);
 }
 
 export function carrierControlPath(siteRoot, sessionId) {
-  return join(siteNaradaRoot(siteRoot), 'crew', 'nars-sessions', sessionId, 'control.jsonl');
+  return resolveNaradaSitePaths({ siteRoot, sessionId }).narsControlPath;
 }
 
 export function carrierSessionPath(siteRoot, sessionId) {
-  return join(siteNaradaRoot(siteRoot), 'crew', 'nars-sessions', sessionId, 'session.jsonl');
+  return resolveNaradaSitePaths({ siteRoot, sessionId }).narsSessionPath;
 }
 
 export function newCarrierSessionId() {

@@ -2,6 +2,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { resolveNaradaSitePaths } from '@narada2/site-paths';
 import { agentWebUiAttachCommand } from '../../src/commands/agent-web-ui.js';
 import { narsAttachCommandCommand, narsSessionsCommand } from '../../src/commands/nars.js';
 import type { CommandContext } from '../../src/lib/command-wrapper.js';
@@ -45,7 +46,7 @@ function tempSite(): string {
 }
 
 function writeSession(siteRoot: string, sessionId = 'carrier_cli_test'): void {
-  const sessionDir = join(siteRoot, '.narada', 'crew', 'nars-sessions', sessionId);
+  const sessionDir = resolveNaradaSitePaths({ siteRoot, sessionId }).narsSessionDir!;
   mkdirSync(sessionDir, { recursive: true });
   writeFileSync(join(sessionDir, 'session-index-record.json'), `${JSON.stringify({
     schema: 'narada.nars.session_index_record.v1',
@@ -82,7 +83,7 @@ function writeSession(siteRoot: string, sessionId = 'carrier_cli_test'): void {
 
 function writeClosedSession(siteRoot: string, sessionId = 'carrier_closed_test'): void {
   writeSession(siteRoot, sessionId);
-  const sessionDir = join(siteRoot, '.narada', 'crew', 'nars-sessions', sessionId);
+  const sessionDir = resolveNaradaSitePaths({ siteRoot, sessionId }).narsSessionDir!;
   const recordPath = join(sessionDir, 'session-index-record.json');
   const record = JSON.parse(readFileSync(recordPath, 'utf8'));
   record.terminal_state = 'closed';
@@ -91,7 +92,7 @@ function writeClosedSession(siteRoot: string, sessionId = 'carrier_closed_test')
 }
 
 function retimeSession(siteRoot: string, sessionId: string, timestamp: string): void {
-  const recordPath = join(siteRoot, '.narada', 'crew', 'nars-sessions', sessionId, 'session-index-record.json');
+  const recordPath = resolveNaradaSitePaths({ siteRoot, sessionId }).narsSessionIndexRecordPath!;
   const record = JSON.parse(readFileSync(recordPath, 'utf8'));
   record.started_at = timestamp;
   record.last_seen_at = timestamp;
@@ -184,7 +185,7 @@ describe('nars CLI commands', () => {
     retimeSession(siteRoot, 'carrier_fresh', '2026-06-23T00:00:00.000Z');
     writeSession(siteRoot, 'carrier_stale_newer');
     retimeSession(siteRoot, 'carrier_stale_newer', '2026-06-23T00:10:00.000Z');
-    rmSync(join(siteRoot, '.narada', 'crew', 'nars-sessions', 'carrier_stale_newer', 'heartbeat.json'), { force: true });
+    rmSync(resolveNaradaSitePaths({ siteRoot, sessionId: 'carrier_stale_newer' }).narsHeartbeatPath!, { force: true });
     const launchRegistryPath = writeLaunchRegistry(siteRoot);
 
     const result = await agentWebUiAttachCommand({

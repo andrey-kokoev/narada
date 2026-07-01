@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import { createCloudflareNarsProjectionWorker } from '@narada2/cloudflare-nars-projection/worker';
+import { resolveNaradaSitePaths } from '@narada2/site-paths';
 import {
   registerProjectionRemotely,
   startLocalProjectionBridgeOnce,
@@ -23,7 +24,8 @@ const now = '2026-07-01T12:00:00.000Z';
 function createLocalNarsSiteWithHtmlArtifact() {
   const siteRoot = mkdtempSync(join(tmpdir(), 'narada-web-ui-html-artifact-e2e-'));
   const sessionId = 'carrier_html_artifact_e2e';
-  const sessionDir = join(siteRoot, '.narada', 'crew', 'nars-sessions', sessionId);
+  const sitePaths = resolveNaradaSitePaths({ siteRoot, sessionId });
+  const sessionDir = sitePaths.narsSessionDir;
   const artifactsDir = join(sessionDir, 'artifacts');
   mkdirSync(artifactsDir, { recursive: true });
 
@@ -105,8 +107,7 @@ function createLocalNarsSiteWithHtmlArtifact() {
     health_endpoint: 'http://127.0.0.1:9/health',
   }, null, 2)}\n`, 'utf8');
 
-  const indexDir = join(siteRoot, '.narada', 'crew', 'nars-sessions');
-  writeFileSync(join(indexDir, 'index.json'), `${JSON.stringify({
+  writeFileSync(join(sitePaths.narsSessionsRoot, 'index.json'), `${JSON.stringify({
     schema: 'narada.nars.session_index.v1',
     site_root: siteRoot,
     sessions: [{ session_id: sessionId, carrier_session_id: sessionId, record_path: recordPath }],

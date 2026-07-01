@@ -3,6 +3,7 @@ import test from 'node:test';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { resolveNaradaSitePaths } from '@narada2/site-paths';
 import {
   NARS_ARTIFACT_INDEX_SCHEMA,
   NARS_ARTIFACT_PUBLIC_SCHEMA,
@@ -20,7 +21,7 @@ function cleanup(path) {
 }
 
 function sessionPath(siteRoot, sessionId = 'carrier_artifact_test') {
-  return join(siteRoot, '.narada', 'crew', 'nars-sessions', sessionId, 'session.jsonl');
+  return resolveNaradaSitePaths({ siteRoot, sessionId }).narsSessionPath;
 }
 
 test('registerNarsArtifact stores session-scoped public metadata without exposing source path', () => {

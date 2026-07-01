@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createRequire } from 'node:module';
+import { resolveNaradaSitePaths } from '@narada2/site-paths';
 
 const require = createRequire(import.meta.url);
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -575,9 +576,9 @@ test('agent-tui materializes provider env without requiring ambient provider env
     '--site-root',
     naradaProperRoot,
     '--control-jsonl',
-    join(naradaProperRoot, '.narada', 'crew', 'nars-sessions', sessionId, 'control.jsonl'),
+    resolveNaradaSitePaths({ siteRoot: naradaProperRoot, sessionId }).narsControlPath,
     '--session-jsonl',
-    join(naradaProperRoot, '.narada', 'crew', 'nars-sessions', sessionId, 'session.jsonl'),
+    resolveNaradaSitePaths({ siteRoot: naradaProperRoot, sessionId }).narsSessionPath,
     '--interactive-loop',
     '--max-steps',
     '42',

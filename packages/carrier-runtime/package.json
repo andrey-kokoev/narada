@@ -38,6 +38,7 @@
     "@narada2/carrier-provider-support": "workspace:*",
     "@narada2/mcp-fabric": "workspace:*",
     "@narada2/nars-client-projection-contract": "workspace:*",
+    "@narada2/site-paths": "workspace:*",
     "@narada2/process-launch-posture": "workspace:*"
   }
 }

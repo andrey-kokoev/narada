@@ -50,10 +50,23 @@ Do not introduce `carrier_session_index` or make clients infer that `carrier_` m
 
 ## Site-Local Storage
 
+NARS session storage is derived from the Site authority root, not by clients appending path strings ad hoc. The canonical resolver is `@narada2/site-paths` and its `resolveNaradaSitePaths` API.
+
+Path vocabulary:
+
+| Term | Meaning |
+| --- | --- |
+| `siteRoot` | The operator/config-declared Site root, preserved as the external Site binding. It may be a workspace-style root such as `D:/code/narada.sonar` or an embedded Site authority root such as `D:/code/smart-scheduling/.narada`. |
+| `siteAuthorityRoot` | The directory that owns Site-local Narada authority files. For workspace-style Sites this is `<siteRoot>/.narada`; for embedded Sites it may already equal `siteRoot`. |
+| `workspaceRoot` | The containing project/workspace root when distinguishable. For an embedded `.narada` Site root, this is the parent directory. |
+| `narsSessionsRoot` | The canonical NARS session storage root: `<siteAuthorityRoot>/crew/nars-sessions`. |
+
+Production code must consume named paths from `@narada2/site-paths` instead of reconstructing NARS session paths with `join(siteRoot, '.narada', ...)`.
+
 Each Site stores NARS session evidence under:
 
 ```text
-<site-root>/.narada/crew/nars-sessions/<session-id>/
+<siteAuthorityRoot>/crew/nars-sessions/<session-id>/
   control.jsonl
   session.jsonl
   events.jsonl
@@ -65,7 +78,7 @@ Each Site stores NARS session evidence under:
 The aggregate index lives at:
 
 ```text
-<site-root>/.narada/crew/nars-sessions/index.json
+<siteAuthorityRoot>/crew/nars-sessions/index.json
 ```
 
 The aggregate is a convenience projection. Per-session records, heartbeats, and events remain sufficient to recover discovery state.
@@ -81,7 +94,7 @@ NARS owns registered artifacts for a session. A message must not ask a browser t
 Artifacts live under:
 
 ```text
-<site-root>/.narada/crew/nars-sessions/<session-id>/artifacts/index.json
+<siteAuthorityRoot>/crew/nars-sessions/<session-id>/artifacts/index.json
 ```
 
 The private record may include a local `source_path`; public metadata returned to clients must not expose that path:

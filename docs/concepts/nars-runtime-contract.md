@@ -123,10 +123,10 @@ The former `agent-cli` runtime-server adapter has been removed. Reintroduction r
 
 NARS owns local session discovery for NARS sessions. Client projections such as `agent-cli`, `agent-tui`, and `agent-web-ui` may use discovery to find attachable sessions, but they must not become the source of session truth.
 
-The canonical per-session storage remains the Site-local NARS session directory:
+The canonical per-session storage remains the Site-local NARS session directory derived from `siteAuthorityRoot`. Production code resolves this through `@narada2/site-paths`; callers must not manually append `.narada` to an arbitrary `siteRoot`.
 
 ```text
-<site-root>/.narada/crew/nars-sessions/<session-id>/
+<siteAuthorityRoot>/crew/nars-sessions/<session-id>/
   control.jsonl
   session.jsonl
   events.jsonl
@@ -157,7 +157,7 @@ The per-session discovery projection has schema `narada.nars.session_index_recor
   "site_id": "sonar",
   "site_root": "D:/code/narada.sonar",
   "runtime_kind": "narada-agent-runtime-server",
-  "session_dir": "D:/code/narada.sonar/.narada/crew/nars-sessions/carrier_...",
+  "session_dir": "<siteAuthorityRoot>/crew/nars-sessions/carrier_...",
   "session_path": ".../session.jsonl",
   "events_path": ".../events.jsonl",
   "heartbeat_path": ".../heartbeat.json",
@@ -181,7 +181,7 @@ The per-session discovery projection has schema `narada.nars.session_index_recor
 The aggregate index lives beside session directories:
 
 ```text
-<site-root>/.narada/crew/nars-sessions/index.json
+<siteAuthorityRoot>/crew/nars-sessions/index.json
 ```
 
 Its schema is `narada.nars.session_index.v1`. It is a summary projection and pointer table, not an authority replacement:

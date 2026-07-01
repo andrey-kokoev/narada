@@ -2,6 +2,7 @@ import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { resolveNaradaSitePaths } from '@narada2/site-paths';
 import {
   carrierControlPathCommand,
   carrierDrainCommand,
@@ -52,8 +53,9 @@ async function tempSite(): Promise<string> {
 async function writeLaunchResult(siteRoot: string, name: string, identity: string): Promise<string> {
   const resultDir = join(siteRoot, '.ai', 'runtime', 'agent-start-results');
   await mkdir(resultDir, { recursive: true });
-  const controlPath = join(siteRoot, '.narada', 'crew', 'nars-sessions', 'carrier_test', 'control.jsonl');
-  await mkdir(join(siteRoot, '.narada', 'crew', 'nars-sessions', 'carrier_test'), { recursive: true });
+  const sitePaths = resolveNaradaSitePaths({ siteRoot, sessionId: 'carrier_test' });
+  const controlPath = sitePaths.narsControlPath!;
+  await mkdir(sitePaths.narsSessionDir!, { recursive: true });
   await writeFile(controlPath, '', 'utf8');
   const path = join(resultDir, `${name}.result.json`);
   await writeFile(path, `${JSON.stringify({
@@ -71,11 +73,11 @@ async function writeLaunchResult(siteRoot: string, name: string, identity: strin
     },
     nars_launch: {
       control_path: controlPath,
-      session_path: join(siteRoot, '.narada', 'crew', 'nars-sessions', 'carrier_test', 'session.jsonl'),
+      session_path: sitePaths.narsSessionPath,
     },
     nars_launch: {
       control_path: controlPath,
-      session_path: join(siteRoot, '.narada', 'crew', 'nars-sessions', 'carrier_test', 'session.jsonl'),
+      session_path: sitePaths.narsSessionPath,
     },
     carrier_session: {
       carrier_session_id: 'carrier_test',
@@ -93,6 +95,7 @@ async function writeLaunchResult(siteRoot: string, name: string, identity: strin
 async function writeLaunchResultWithoutControlFile(siteRoot: string, name: string): Promise<void> {
   const resultDir = join(siteRoot, '.ai', 'runtime', 'agent-start-results');
   await mkdir(resultDir, { recursive: true });
+  const controlPath = resolveNaradaSitePaths({ siteRoot, sessionId: 'carrier_missing_control' }).narsControlPath!;
   await writeFile(join(resultDir, `${name}.result.json`), `${JSON.stringify({
     schema: 'narada.agent_start.result.v0',
     status: 'materialized',
@@ -104,7 +107,7 @@ async function writeLaunchResultWithoutControlFile(siteRoot: string, name: strin
     runtime_args: [
       'agent-cli',
       '--control-jsonl',
-      join(siteRoot, '.narada', 'crew', 'nars-sessions', 'carrier_missing_control', 'control.jsonl'),
+      controlPath,
     ],
   })}\n`, 'utf8');
 }

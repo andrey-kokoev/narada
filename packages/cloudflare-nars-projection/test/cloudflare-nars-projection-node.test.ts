@@ -2,6 +2,7 @@ import { appendFileSync, mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { describe, expect, test } from 'vitest';
+import { resolveNaradaSitePaths } from '@narada2/site-paths';
 import { createCloudflareNarsProjectionWorker } from '../src/worker.js';
 import { deliverRemoteProjectionInputsOnce, preflightCloudflareProjectionRegistration, registerProjectionRemotely, writeProjectionRegistrationPlan, readProjectionRegistration, startLocalProjectionBridgeLoop, startLocalProjectionBridgeOnce, startLocalProjectionBridgeRunProcess } from '../src/node.js';
 
@@ -10,7 +11,8 @@ const now = '2026-06-30T21:30:00.000Z';
 function createSiteWithSession() {
   const siteRoot = mkdtempSync(join(tmpdir(), 'narada-projection-site-'));
   const sessionId = 'carrier_test';
-  const sessionDir = join(siteRoot, '.narada', 'crew', 'nars-sessions', sessionId);
+  const sitePaths = resolveNaradaSitePaths({ siteRoot, sessionId });
+  const sessionDir = sitePaths.narsSessionDir;
   mkdirSync(sessionDir, { recursive: true });
   const eventsPath = join(sessionDir, 'events.jsonl');
   const sessionPath = join(sessionDir, 'session.jsonl');
@@ -32,7 +34,7 @@ function createSiteWithSession() {
     session_path: sessionPath,
     health_endpoint: 'http://127.0.0.1:9/health',
   }, null, 2)}\n`);
-  writeFileSync(join(siteRoot, '.narada', 'crew', 'nars-sessions', 'index.json'), `${JSON.stringify({
+  writeFileSync(join(sitePaths.narsSessionsRoot, 'index.json'), `${JSON.stringify({
     schema: 'narada.nars.session_index.v1',
     site_root: siteRoot,
     sessions: [{ session_id: sessionId, carrier_session_id: sessionId, record_path: recordPath }],
@@ -41,7 +43,7 @@ function createSiteWithSession() {
 }
 
 function addArtifacts(siteRoot, sessionId) {
-  const sessionDir = join(siteRoot, '.narada', 'crew', 'nars-sessions', sessionId);
+  const sessionDir = resolveNaradaSitePaths({ siteRoot, sessionId }).narsSessionDir;
   const artifactsDir = join(sessionDir, 'artifacts');
   const markdownPath = join(artifactsDir, 'report.md');
   const htmlPath = join(artifactsDir, 'preview.html');
@@ -300,7 +302,7 @@ describe('node projection store and bridge', () => {
     const { siteRoot, sessionId } = createSiteWithSession();
     const plan = writeProjectionRegistrationPlan({ site_id: 'narada.sonar', site_root: siteRoot, nars_session_id: sessionId, dry_run: false, created_at: now });
     const published = [];
-    const sessionDir = join(siteRoot, '.narada', 'crew', 'nars-sessions', sessionId);
+    const sessionDir = resolveNaradaSitePaths({ siteRoot, sessionId }).narsSessionDir;
     const eventsPath = join(sessionDir, 'events.jsonl');
     const result = await startLocalProjectionBridgeLoop({
       site_root: siteRoot,

@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { PassThrough } from 'node:stream';
 import { fileURLToPath } from 'node:url';
+import { resolveNaradaSitePaths } from '@narada2/site-paths';
 import * as canonicalRuntimeEvents from '../src/runtime-server-events.mjs';
 import {
   createDelegatedAuthorityHandoff,
@@ -563,7 +564,7 @@ test('HTTP /health projects native session.health response', async () => {
 
 test('HTTP artifact endpoints register and serve session-scoped HTML artifacts', async () => {
   const siteRoot = mkdtempSync(join(tmpdir(), 'narada-runtime-artifact-http-'));
-  const sessionPath = join(siteRoot, '.narada', 'crew', 'nars-sessions', 'carrier_artifact_http', 'session.jsonl');
+  const sessionPath = resolveNaradaSitePaths({ siteRoot, sessionId: 'carrier_artifact_http' }).narsSessionPath;
   const eventsPath = join(dirname(sessionPath), 'events.jsonl');
   const sourcePath = join(dirname(sessionPath), 'report.html');
   mkdirSync(dirname(sourcePath), { recursive: true });

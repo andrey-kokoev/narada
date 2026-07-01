@@ -10,6 +10,7 @@
     "narada:guard-cli-output:report": "node scripts/cli-output-admission-guard.mjs --report",
     "narada:guard-process-launch-posture": "node scripts/process-launch-posture-guard.mjs",
     "narada:guard-process-launch-posture:report": "node scripts/process-launch-posture-guard.mjs --report",
+    "narada:guard-site-paths": "node scripts/site-path-semantics-guard.mjs",
     "site:continuity:loop": "node scripts/site-continuity-loop.mjs",
     "site:continuity:loop:test": "node --test scripts/site-continuity-loop.test.mjs",
     "cloudflare:operator:check": "node scripts/cloudflare-operator-check.mjs",

@@ -3,6 +3,7 @@ import test from 'node:test';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { resolveNaradaSitePaths } from '@narada2/site-paths';
 import {
   classifyNarsSessionDisplayState,
   discoverNarsSessions,
@@ -22,7 +23,7 @@ function cleanup(path) {
 }
 
 function sessionPath(siteRoot, sessionId = 'carrier_20260623000000_test') {
-  return join(siteRoot, '.narada', 'crew', 'nars-sessions', sessionId, 'session.jsonl');
+  return resolveNaradaSitePaths({ siteRoot, sessionId }).narsSessionPath;
 }
 
 function readJson(path) {

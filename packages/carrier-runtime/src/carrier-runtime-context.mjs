@@ -1,4 +1,4 @@
-import { join, resolve, basename } from 'node:path';
+import { resolveNaradaSitePaths } from '@narada2/site-paths';
 
 /**
  * Build canonical carrier runtime paths from siteRoot and session.
@@ -7,14 +7,15 @@ import { join, resolve, basename } from 'node:path';
  * @returns {{ naradaDir: string, sessionDir: string, sessionPath: string, eventsPath: string }}
  */
 export function buildCarrierRuntimePaths(siteRoot, session) {
-  const resolvedSiteRoot = resolve(siteRoot ?? process.env.NARADA_SITE_ROOT ?? process.cwd());
-  const naradaDir = basename(resolvedSiteRoot) === '.narada' ? resolvedSiteRoot : join(resolvedSiteRoot, '.narada');
-  const sessionDir = join(naradaDir, 'crew', 'nars-sessions', session);
+  const paths = resolveNaradaSitePaths({
+    siteRoot: siteRoot ?? process.env.NARADA_SITE_ROOT ?? process.cwd(),
+    sessionId: session,
+  });
   return {
-    naradaDir,
-    sessionDir,
-    sessionPath: join(sessionDir, 'session.jsonl'),
-    eventsPath: join(sessionDir, 'events.jsonl'),
+    naradaDir: paths.siteAuthorityRoot,
+    sessionDir: paths.narsSessionDir,
+    sessionPath: paths.narsSessionPath,
+    eventsPath: paths.narsEventsPath,
   };
 }
 

@@ -37,6 +37,7 @@
   "dependencies": {
     "@narada2/cloudflare-nars-projection": "workspace:*",
     "@narada2/nars-client-projection-contract": "workspace:*",
+    "@narada2/site-paths": "workspace:*",
     "markdown-it": "^14.2.0",
     "mermaid": "^11.16.0",
     "vue": "^3.5.0"

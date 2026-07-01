@@ -10,6 +10,7 @@ import test from 'node:test';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import postcss from 'postcss';
+import { resolveNaradaSitePaths } from '@narada2/site-paths';
 import {
   buildConversationSendFrame,
   buildConversationEnqueueFrame,
@@ -100,7 +101,8 @@ function textOfNode(node) {
 function createLocalProjectionSite() {
   const siteRoot = mkdtempSync(join(tmpdir(), 'narada-web-ui-projection-'));
   const sessionId = 'carrier_web_ui_e2e';
-  const sessionDir = join(siteRoot, '.narada', 'crew', 'nars-sessions', sessionId);
+  const sitePaths = resolveNaradaSitePaths({ siteRoot, sessionId });
+  const sessionDir = sitePaths.narsSessionDir;
   mkdirSync(sessionDir, { recursive: true });
   const eventsPath = join(sessionDir, 'events.jsonl');
   const sessionPath = join(sessionDir, 'session.jsonl');
@@ -118,7 +120,7 @@ function createLocalProjectionSite() {
     session_path: sessionPath,
     health_endpoint: 'http://127.0.0.1:9/health',
   }, null, 2)}\n`);
-  writeFileSync(join(siteRoot, '.narada', 'crew', 'nars-sessions', 'index.json'), `${JSON.stringify({
+  writeFileSync(join(sitePaths.narsSessionsRoot, 'index.json'), `${JSON.stringify({
     schema: 'narada.nars.session_index.v1',
     site_root: siteRoot,
     sessions: [{ session_id: sessionId, carrier_session_id: sessionId, record_path: recordPath }],
@@ -410,7 +412,7 @@ test('hosted agent-web-ui can read and write a published local NARS session thro
   assert.equal(fetchCalls.some((call) => call.url.includes('/events') && call.init.headers?.['x-narada-browser-token-fingerprint'] === browserToken), true);
   assert.equal(fetchCalls.some((call) => call.url.includes('/health') && call.init.headers?.['x-narada-browser-token-fingerprint'] === browserToken), true);
 
-  const sessionDir = join(siteRoot, '.narada', 'crew', 'nars-sessions', sessionId);
+  const sessionDir = resolveNaradaSitePaths({ siteRoot, sessionId }).narsSessionDir;
   writeFileSync(join(sessionDir, 'events.jsonl'), `${JSON.stringify({ event: 'assistant_message', event_sequence: 1, content: 'hello from local NARS' })}\n${JSON.stringify({ event: 'assistant_message', event_sequence: 2, content: 'hello after hosted page opened' })}\n`);
   await startLocalProjectionBridgeOnce({
     site_root: siteRoot,

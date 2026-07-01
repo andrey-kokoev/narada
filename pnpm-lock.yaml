@@ -143,6 +143,9 @@ importers:
       '@narada2/carrier-terminal-projection':
         specifier: workspace:*
         version: link:../carrier-terminal-projection
+      '@narada2/site-paths':
+        specifier: workspace:*
+        version: link:../site-paths
 
   packages/agent-start:
     dependencies:
@@ -164,6 +167,9 @@ importers:
       '@narada2/nars-client-projection-contract':
         specifier: workspace:*
         version: link:../nars-client-projection-contract
+      '@narada2/site-paths':
+        specifier: workspace:*
+        version: link:../site-paths
 
   packages/agent-start-bootstrap: {}
 
@@ -177,6 +183,9 @@ importers:
       '@narada2/nars-client-projection-contract':
         specifier: workspace:*
         version: link:../nars-client-projection-contract
+      '@narada2/site-paths':
+        specifier: workspace:*
+        version: link:../site-paths
       markdown-it:
         specifier: ^14.2.0
         version: 14.2.0
@@ -248,6 +257,9 @@ importers:
       '@narada2/process-launch-posture':
         specifier: workspace:*
         version: link:../process-launch-posture
+      '@narada2/site-paths':
+        specifier: workspace:*
+        version: link:../site-paths
 
   packages/carrier-runtime-contract: {}
 
@@ -280,6 +292,9 @@ importers:
       '@narada2/nars-client-projection-contract':
         specifier: workspace:*
         version: link:../nars-client-projection-contract
+      '@narada2/site-paths':
+        specifier: workspace:*
+        version: link:../site-paths
     devDependencies:
       typescript:
         specifier: ^5.3.0
@@ -386,6 +401,9 @@ importers:
       '@narada2/site-config':
         specifier: workspace:*
         version: link:../../site-config
+      '@narada2/site-paths':
+        specifier: workspace:*
+        version: link:../../site-paths
       '@narada2/site-registry-cloudflare':
         specifier: workspace:*
         version: link:../../site-registry-cloudflare
@@ -640,6 +658,8 @@ importers:
       vitest:
         specifier: ^1.0.0
         version: 1.6.1(@types/node@20.19.39)(lightningcss@1.32.0)
+
+  packages/site-paths: {}
 
   packages/site-registry-cloudflare:
     dependencies:
