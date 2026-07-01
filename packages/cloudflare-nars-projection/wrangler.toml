@@ -1,0 +1,8 @@
+name = "narada-nars-projection"
+main = "dist/worker.js"
+compatibility_date = "2026-06-30"
+
+[assets]
+directory = "../agent-web-ui/dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"

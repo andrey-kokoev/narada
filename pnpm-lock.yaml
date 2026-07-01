@@ -171,6 +171,9 @@ importers:
 
   packages/agent-web-ui:
     dependencies:
+      '@narada2/cloudflare-nars-projection':
+        specifier: workspace:*
+        version: link:../cloudflare-nars-projection
       '@narada2/nars-client-projection-contract':
         specifier: workspace:*
         version: link:../nars-client-projection-contract
@@ -272,6 +275,15 @@ importers:
         specifier: workspace:*
         version: link:../site-continuity
 
+  packages/cloudflare-nars-projection:
+    devDependencies:
+      typescript:
+        specifier: ^5.3.0
+        version: 5.9.3
+      vitest:
+        specifier: ^1.0.0
+        version: 1.6.1(@types/node@22.19.19)(lightningcss@1.32.0)
+
   packages/cloudflare-site-registry: {}
 
   packages/crew-startup-shortcut:
@@ -340,6 +352,9 @@ importers:
       '@narada2/charters':
         specifier: workspace:*
         version: link:../../domains/charters
+      '@narada2/cloudflare-nars-projection':
+        specifier: workspace:*
+        version: link:../../cloudflare-nars-projection
       '@narada2/cloudflare-site':
         specifier: workspace:*
         version: link:../../sites/cloudflare

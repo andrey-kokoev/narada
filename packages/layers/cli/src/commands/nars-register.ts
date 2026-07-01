@@ -2,6 +2,7 @@ import type { Command } from 'commander';
 import { directCommandAction, silentCommandContext } from '../lib/command-wrapper.js';
 import { emitCommandResult, resolveCommandFormat } from '../lib/cli-output.js';
 import { narsAttachCommandCommand, narsSessionsCommand } from './nars.js';
+import { narsProjectionBridgeRunCommand, narsProjectionBridgeStartCommand, narsProjectionRegisterCommand } from './nars-projection.js';
 
 export function registerNarsCommands(program: Command): void {
   const nars = program
@@ -29,6 +30,108 @@ export function registerNarsCommands(program: Command): void {
         limit: opts.limit ? Number(opts.limit) : undefined,
         format: resolveCommandFormat(opts.format, 'auto'),
       }, silentCommandContext()),
+    }));
+
+  const projection = nars
+    .command('projection')
+    .description('Manage NARS projection attachments');
+
+  projection
+    .command('register')
+    .description('Plan or register a Cloudflare-hosted projection for one NARS session')
+    .requiredOption('--site-id <id>', 'Narada Site id for the projected local NARS session')
+    .requiredOption('--session <id>', 'Concrete NARS session id')
+    .option('--site-root <path>', 'Local Site root')
+    .option('--projection-id <id>', 'Stable projection id')
+    .option('--event-policy <policy>', 'Event policy: conversation|operator|diagnostic|raw', 'operator')
+    .option('--input-verb <method...>', 'Allowed input verb(s); repeat or comma-separate values', ['conversation.send', 'conversation.enqueue'])
+    .option('--cache-policy <policy>', 'Cache policy: short_bounded|durable_archive', 'short_bounded')
+    .option('--artifact-content <mode>', 'Artifact content policy: metadata_only|selected_kinds|explicit_artifacts|none', 'metadata_only')
+    .option('--artifact-kind <kind...>', 'Allowed artifact kind(s); repeat or comma-separate values', ['markdown', 'json', 'text'])
+    .option('--cloudflare-api-base-url <url>', 'Cloudflare projection API base URL; with --no-dry-run this registers remote access immediately')
+    .option('--cloudflare-carrier-url <url>', 'Cloudflare carrier Worker URL used for optional cookie-backed site.read preflight')
+    .option('--operator-cookie-file <path>', 'Captured narada_operator_session cookie file for optional/required operator session preflight')
+    .option('--site-coherence-site-id <id>', 'Cloudflare Site id to read during operator-session preflight', 'site_narada_cloudflare')
+    .option('--require-operator-session', 'Refuse live registration unless cookie-backed Cloudflare site.read preflight succeeds')
+    .option('--preflight-only', 'Run live projection registration preflight without writing local or remote registration')
+    .option('--created-by <principal>', 'Principal creating the projection intent', 'operator')
+    .option('--dry-run', 'Build the registration plan without remote mutation', true)
+    .option('--no-dry-run', 'Record a local pending-registration plan for a later Cloudflare write')
+    .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
+    .action(directCommandAction<[Record<string, unknown>]>({
+      command: 'nars projection register',
+      emit: emitCommandResult,
+      format: (opts: Record<string, unknown>) => opts.format,
+      invocation: (opts) => narsProjectionRegisterCommand({
+        siteId: opts.siteId as string | undefined,
+        siteRoot: opts.siteRoot as string | undefined,
+        session: opts.session as string | undefined,
+        projectionId: opts.projectionId as string | undefined,
+        eventPolicy: opts.eventPolicy as string | undefined,
+        inputVerb: opts.inputVerb as string[] | undefined,
+        cachePolicy: opts.cachePolicy as string | undefined,
+        artifactContent: opts.artifactContent as string | undefined,
+        artifactKind: opts.artifactKind as string[] | undefined,
+        cloudflareApiBaseUrl: opts.cloudflareApiBaseUrl as string | undefined,
+        cloudflareCarrierUrl: opts.cloudflareCarrierUrl as string | undefined,
+        operatorCookieFile: opts.operatorCookieFile as string | undefined,
+        siteCoherenceSiteId: opts.siteCoherenceSiteId as string | undefined,
+        requireOperatorSession: opts.requireOperatorSession as boolean | undefined,
+        preflightOnly: opts.preflightOnly as boolean | undefined,
+        createdBy: opts.createdBy as string | undefined,
+        dryRun: opts.dryRun as boolean | undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
+      }),
+    }));
+
+  projection
+    .command('bridge-start')
+    .description('Start one local Cloudflare NARS projection bridge pass for a registered projection')
+    .requiredOption('--site-root <path>', 'Local Site root')
+    .requiredOption('--projection-id <id>', 'Projection id')
+    .option('--cloudflare-api-base-url <url>', 'Cloudflare projection API base URL for remote publish')
+    .option('--max-events <n>', 'Maximum events to backfill in this pass', '200')
+    .option('--max-artifacts <n>', 'Maximum artifacts to backfill in this pass', '50')
+    .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
+    .action(directCommandAction<[Record<string, unknown>]>({
+      command: 'nars projection bridge-start',
+      emit: emitCommandResult,
+      format: (opts: Record<string, unknown>) => opts.format,
+      invocation: (opts) => narsProjectionBridgeStartCommand({
+        siteRoot: opts.siteRoot as string | undefined,
+        projectionId: opts.projectionId as string | undefined,
+        cloudflareApiBaseUrl: opts.cloudflareApiBaseUrl as string | undefined,
+        maxEvents: opts.maxEvents ? Number(opts.maxEvents) : undefined,
+        maxArtifacts: opts.maxArtifacts ? Number(opts.maxArtifacts) : undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
+      }),
+    }));
+
+  projection
+    .command('bridge-run')
+    .description('Run the local Cloudflare NARS projection bridge as a durable polling process')
+    .requiredOption('--site-root <path>', 'Local Site root')
+    .requiredOption('--projection-id <id>', 'Projection id')
+    .option('--cloudflare-api-base-url <url>', 'Cloudflare projection API base URL for remote publish')
+    .option('--max-events <n>', 'Maximum events to backfill in each pass', '200')
+    .option('--max-artifacts <n>', 'Maximum artifacts to backfill in each pass', '50')
+    .option('--poll-interval-ms <n>', 'Polling interval in milliseconds', '5000')
+    .option('--stop-after-iterations <n>', 'Testing/diagnostic stop condition')
+    .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
+    .action(directCommandAction<[Record<string, unknown>]>({
+      command: 'nars projection bridge-run',
+      emit: emitCommandResult,
+      format: (opts: Record<string, unknown>) => opts.format,
+      invocation: (opts) => narsProjectionBridgeRunCommand({
+        siteRoot: opts.siteRoot as string | undefined,
+        projectionId: opts.projectionId as string | undefined,
+        cloudflareApiBaseUrl: opts.cloudflareApiBaseUrl as string | undefined,
+        maxEvents: opts.maxEvents ? Number(opts.maxEvents) : undefined,
+        maxArtifacts: opts.maxArtifacts ? Number(opts.maxArtifacts) : undefined,
+        pollIntervalMs: opts.pollIntervalMs ? Number(opts.pollIntervalMs) : undefined,
+        stopAfterIterations: opts.stopAfterIterations ? Number(opts.stopAfterIterations) : undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
+      }),
     }));
 
   nars
