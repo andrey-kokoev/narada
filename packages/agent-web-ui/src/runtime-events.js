@@ -16,8 +16,6 @@ export {
 export const unwrapRuntimeEvent = unwrapNarsClientEvent;
 
 export function projectRuntimeEvent(message) {
-  const narsRuntimeProjection = projectNarsRuntimeEvent(message);
-  if (narsRuntimeProjection) return narsRuntimeProjection;
   return withRenderIdentity(projectNarsClientEvent(message));
 }
 
@@ -42,48 +40,6 @@ export function applyRuntimeEventToWebUiState(state, message) {
     state.activeTurnId = null;
   }
   return state;
-}
-
-function projectNarsRuntimeEvent(message) {
-  const event = unwrapRuntimeEvent(message);
-  if (!event || typeof event !== 'object') return null;
-  if (event.event === 'authority_session_revoked') {
-    return projection({
-      kind: 'session_revoked',
-      label: 'Session revoked',
-      tone: 'error',
-      summary: event.code ?? 'session_revoked',
-      event,
-      renderKey: event.session_id ? `authority-session-revoked:${event.session_id}` : null,
-    });
-  }
-  if (event.event === 'conversation_enqueue_requested') {
-    const requestId = event.request_id ? String(event.request_id) : 'queued input';
-    return projection({
-      kind: 'operator_input_queued',
-      label: 'Input queued',
-      tone: 'operator',
-      summary: `${requestId} queued`,
-      event,
-      renderKey: event.event_sequence == null ? `operator-input-queued:${requestId}` : `sequence:${event.event_sequence}`,
-    });
-  }
-  if (event.event === 'input_queued_for_turn_boundary') {
-    const inputEventId = event.input_event_id ? String(event.input_event_id) : 'input queued for turn boundary';
-    return projection({
-      kind: 'operator_input_queued',
-      label: 'Input queued',
-      tone: 'operator',
-      summary: `${inputEventId} queued for turn boundary`,
-      event,
-      renderKey: event.event_sequence == null ? `operator-input-boundary:${inputEventId}` : `sequence:${event.event_sequence}`,
-    });
-  }
-  return null;
-}
-
-function projection({ kind, label, tone, summary, event, renderKey = null }) {
-  return { kind, label, tone, summary, event, renderKey };
 }
 
 function withRenderIdentity(projected) {

@@ -24,9 +24,11 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "deploy:dry-run": "wrangler deploy --dry-run --config wrangler.toml",
-    "deploy:live": "wrangler deploy --config wrangler.toml",
-    "smoke:live": "node scripts/cloudflare-nars-web-projection-live-smoke.mjs",
-    "smoke:authority-live": "node scripts/cloudflare-nars-authority-live-smoke.mjs"
+    "deploy:live": "pnpm --filter @narada2/agent-web-ui build && wrangler deploy --config wrangler.toml",
+    "smoke:local-origin-live": "node scripts/cloudflare-nars-web-projection-live-smoke.mjs",
+    "smoke:cloudflare-origin-live": "node scripts/cloudflare-nars-authority-live-smoke.mjs",
+    "smoke:live": "pnpm run smoke:local-origin-live",
+    "smoke:authority-live": "pnpm run smoke:cloudflare-origin-live"
   },
   "dependencies": {
     "@narada2/nars-client-projection-contract": "workspace:*"

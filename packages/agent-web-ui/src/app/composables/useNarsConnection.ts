@@ -3,6 +3,8 @@ import { createNarsClient, type NarsClientConnection } from '../../protocol/nars
 
 export interface NarsConnectionConfig {
   eventEndpoint: string | null;
+  inputEndpoint?: string | null;
+  browserToken?: string | null;
   maxReplay?: number;
 }
 
@@ -18,12 +20,14 @@ export function useNarsConnection(
 
   connection.value = createNarsClient({
     endpoint: config.eventEndpoint,
+    inputEndpoint: config.inputEndpoint,
+    browserToken: config.browserToken,
     maxReplay: config.maxReplay,
     onStatus(status) { streamText.value = status; },
     onEvent(event) {
       activeTurnId.value = connection.value?.activeTurnId ?? null;
       if (isEventsReadResponse(event)) {
-        retainMany(event.events.map((payload: unknown) => ({ event: 'session_event', payload })));
+        retainMany(event.events);
         onEventsRead?.(event);
         return;
       }

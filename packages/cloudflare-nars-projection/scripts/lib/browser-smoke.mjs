@@ -60,8 +60,17 @@ export async function openCdpPage({ browserPath, url, userDataPrefix = 'narada-b
   const networkRequests = new Map();
   const networkResponses = [];
   const networkWaiters = new Set();
+  const executionContextsByFrame = new Map();
   ws.addEventListener('message', (message) => {
     const payload = JSON.parse(String(message.data));
+    if (payload.method === 'Runtime.executionContextCreated') {
+      const context = payload.params?.context;
+      const frameId = context?.auxData?.frameId;
+      if (typeof frameId === 'string' && typeof context?.id === 'number') {
+        executionContextsByFrame.set(frameId, context.id);
+      }
+      return;
+    }
     if (payload.method === 'Network.requestWillBeSent') {
       networkRequests.set(payload.params.requestId, {
         request_id: payload.params.requestId,
@@ -110,6 +119,36 @@ export async function openCdpPage({ browserPath, url, userDataPrefix = 'narada-b
       const result = await send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true });
       if (result.exceptionDetails) throw new Error(JSON.stringify(result.exceptionDetails));
       return result.result?.value;
+    },
+    async evaluateInFrameByUrl(urlPart, expression) {
+      const frames = await this.listFrames();
+      const frame = frames.find((candidate) => String(candidate.url ?? '').includes(urlPart));
+      if (!frame) throw new Error(`frame_not_found:${urlPart}:${JSON.stringify(frames.map((candidate) => candidate.url ?? ''))}`);
+      const contextId = executionContextsByFrame.get(frame.id);
+      if (!contextId) throw new Error(`frame_execution_context_not_found:${urlPart}`);
+      const result = await send('Runtime.evaluate', { expression, contextId, awaitPromise: true, returnByValue: true });
+      if (result.exceptionDetails) throw new Error(JSON.stringify(result.exceptionDetails));
+      return result.result?.value;
+    },
+    async listFrames() {
+      const frameTree = await send('Page.getFrameTree');
+      const frames = [];
+      const visit = (entry) => {
+        if (!entry) return;
+        if (entry.frame) frames.push(entry.frame);
+        for (const child of entry.childFrames ?? []) visit(child);
+      };
+      visit(frameTree.frameTree);
+      return frames;
+    },
+    async accessibilityText() {
+      const result = await send('Accessibility.getFullAXTree').catch((error) => ({ error: error instanceof Error ? error.message : String(error) }));
+      if (result?.error) return { error: result.error, text: '' };
+      const text = (result.nodes ?? [])
+        .flatMap((node) => [node.name?.value, node.value?.value, node.description?.value])
+        .filter((value) => typeof value === 'string' && value.trim())
+        .join('\n');
+      return { text };
     },
     async textOccurrenceCount(text) {
       return await this.evaluate(`(() => {

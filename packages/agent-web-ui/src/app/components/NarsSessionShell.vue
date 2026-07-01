@@ -3,6 +3,7 @@ import ConversationTranscript from './ConversationTranscript.vue';
 import OperatorComposer from './OperatorComposer.vue';
 import SessionStatusBar from './SessionStatusBar.vue';
 import type { AgentActivityState } from '../composables/useAgentActivity';
+import type { useCloudflareProjection } from '../composables/useCloudflareProjection';
 import type { ProjectionVerbosity } from '../composables/useProjectionVerbosity';
 import type { SessionIdentitySummary } from '../composables/useNarsEvents';
 import type { ProjectedEventRow } from '../lib/eventProjection';
@@ -19,11 +20,13 @@ const props = defineProps<{
   rows: ProjectedEventRow[];
   sessionIdentity: SessionIdentitySummary;
   agentActivity: AgentActivityState;
+  cloudflareProjection: ReturnType<typeof useCloudflareProjection>;
   followLatestRevision: number;
 }>();
 const draft = defineModel<string>('draft', { required: true });
 const emit = defineEmits<{
   'update:verbosity': [value: ProjectionVerbosity];
+  'publish-cloudflare': [cloudflareApiBaseUrl: string];
   submit: [];
 }>();
 </script>
@@ -53,7 +56,9 @@ const emit = defineEmits<{
       :verbosity="verbosity"
       :verbosity-levels="verbosityLevels"
       :agent-activity="agentActivity"
+      :cloudflare-projection="cloudflareProjection"
       @update:verbosity="emit('update:verbosity', $event)"
+      @publish-cloudflare="emit('publish-cloudflare', $event)"
     />
     <ConversationTranscript :rows="rows" :verbosity="verbosity" :agent-activity="agentActivity" :follow-latest-revision="followLatestRevision" />
     <OperatorComposer v-model="draft" @submit="emit('submit')" />

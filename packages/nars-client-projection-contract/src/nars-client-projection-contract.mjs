@@ -79,6 +79,7 @@ export const NARS_CLIENT_EVENT_LABELS = Object.freeze({
   session_artifact_registered: 'Artifact registered',
   session_artifact_read: 'Artifact',
   session_health: 'Health',
+  authority_session_revoked: 'Session revoked',
   session_status: 'Status',
   session_recovery: 'Recovery',
   session_operations: 'Operations',
@@ -90,6 +91,7 @@ export const NARS_CLIENT_EVENT_LABELS = Object.freeze({
   agent_web_ui_help: 'Help',
   agent_web_ui_message: 'Message',
   operator_input_submitted: 'Operator input',
+  conversation_enqueue_requested: 'Input queued',
   input_queued_for_turn_boundary: 'Queued input',
   input_admitted_to_turn: 'Input admitted',
   input_dropped_by_operator: 'Input dropped',
@@ -275,6 +277,7 @@ export function classifyNarsClientEventProjection(projection) {
   const event = projection?.event ?? projection;
   if (kind === 'assistant_message' || kind === 'assistant_message_stream' || kind === 'user_message' || kind === 'operator_input_submitted' || kind === 'agent_web_ui_message' || kind === 'agent_web_ui_help') return 'conversation';
   if (kind === 'error' || kind === 'websocket_error' || kind === 'web_ui_decode_error' || kind === 'web_ui_input_not_sent' || kind === 'runtime_error') return 'conversation';
+  if (kind === 'authority_session_revoked') return 'diagnostics';
   if (kind === 'tool_call' || kind === 'tool_result' || kind === 'turn_failed') return 'operations';
   if (kind === 'session_artifact_registered' || kind === 'session_artifact_read') return 'operations';
   if (kind === 'conversation_enqueue_requested' || kind === 'input_queued_for_turn_boundary' || kind === 'input_admitted_to_turn' || kind === 'input_dropped_by_operator' || kind === 'input_abandoned_on_session_end' || kind === 'input_completed') return 'operations';
@@ -290,7 +293,13 @@ export function shouldProjectNarsClientProjection(projection, options = {}) {
   const verbosity = normalizeNarsClientProjectionVerbosity(options.verbosity);
   if (verbosity === 'raw') return true;
   const eventLevel = classifyNarsClientEventProjection(projection);
+  if (verbosity === 'diagnostics') return isDiagnosticSignalProjection(projection, eventLevel);
   return NARS_CLIENT_PROJECTION_VERBOSITY_RANK[eventLevel] <= NARS_CLIENT_PROJECTION_VERBOSITY_RANK[verbosity];
+}
+
+function isDiagnosticSignalProjection(projection, eventLevel = classifyNarsClientEventProjection(projection)) {
+  const kind = projection?.kind ?? projection?.event?.event ?? 'unknown';
+  return eventLevel === 'diagnostics' || projection?.tone === NARS_CLIENT_EVENT_TONES.error || (kind === 'session_health' && !isRoutineStateSampleProjection(projection));
 }
 
 export function isRoutineStateSampleProjection(projection) {
@@ -308,7 +317,7 @@ function eventTone(kind) {
   if (kind === 'user_message') return NARS_CLIENT_EVENT_TONES.operator;
   if (kind === 'tool_call' || kind === 'tool_result') return NARS_CLIENT_EVENT_TONES.tool;
   if (kind === 'session_artifact_registered' || kind === 'session_artifact_read') return NARS_CLIENT_EVENT_TONES.status;
-  if (kind === 'error' || kind === 'websocket_error' || kind === 'web_ui_decode_error' || kind === 'turn_failed') return NARS_CLIENT_EVENT_TONES.error;
+  if (kind === 'error' || kind === 'websocket_error' || kind === 'web_ui_decode_error' || kind === 'turn_failed' || kind === 'authority_session_revoked') return NARS_CLIENT_EVENT_TONES.error;
   if (kind?.startsWith?.('agent_web_ui_') || kind === 'operator_input_submitted' || kind === 'web_ui_input_not_sent') return NARS_CLIENT_EVENT_TONES.local;
   if (kind === 'conversation_enqueue_requested' || kind?.startsWith?.('input_')) return NARS_CLIENT_EVENT_TONES.status;
   if (kind?.startsWith?.('session_') || kind?.startsWith?.('turn_')) return NARS_CLIENT_EVENT_TONES.session;
@@ -322,6 +331,7 @@ function eventSummary(event, kind) {
   if (kind === 'tool_call') return event.tool_name ?? event.name ?? 'tool call';
   if (kind === 'tool_result') return `${event.tool_name ?? event.name ?? 'tool result'}${event.status ? ` ${event.status}` : ''}`;
   if (kind === 'session_started') return `${event.agent_id ?? 'agent'} / ${event.session_id ?? 'session'}`;
+  if (kind === 'authority_session_revoked') return event.code ?? 'session_revoked';
   if (kind === 'session_events_subscription_started') return `${event.replay_count ?? 0} replayed event(s)`;
   if (kind === 'session_artifact_registered') return event.artifact?.title ?? event.artifact?.artifact_id ?? 'artifact registered';
   if (kind === 'session_artifact_read') return event.artifact?.title ?? event.artifact?.artifact_id ?? 'artifact';
@@ -343,13 +353,24 @@ export function projectNarsClientEvent(message) {
   const kind = event?.event ?? 'unknown';
   const label = NARS_CLIENT_EVENT_LABELS[kind] ?? kind;
   const summary = eventSummary(event, kind);
+  const renderKey = genericRenderKey(event, kind);
   return {
     kind,
     label,
     tone: eventTone(kind),
     summary,
     event,
+    ...(renderKey ? { renderKey } : {}),
   };
+}
+
+function genericRenderKey(event, kind) {
+  const sequenceKey = sequenceRenderKey(event);
+  if (sequenceKey) return sequenceKey;
+  if (kind === 'authority_session_revoked' && event?.session_id) return `authority-session-revoked:${event.session_id}`;
+  if (kind === 'conversation_enqueue_requested' && event?.request_id) return `operator-input-queued:${event.request_id}`;
+  if (kind === 'input_queued_for_turn_boundary' && event?.input_event_id) return `operator-input-boundary:${event.input_event_id}`;
+  return null;
 }
 
 function projectNestedProviderNarsClientEvent(event) {

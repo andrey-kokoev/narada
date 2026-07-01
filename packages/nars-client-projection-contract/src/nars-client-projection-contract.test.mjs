@@ -115,6 +115,22 @@ test('NARS client projection contract owns shared event rendering vocabulary', (
   });
   assert.equal(projectNarsClientEvent({ event: 'error', message: 'bad' }).tone, 'error');
   assert.equal(projectNarsClientEvent({ event: 'session_health', status: 'healthy', agent_id: 'narada.test', session_id: 'carrier_test' }).summary, 'healthy · narada.test · carrier_test');
+  assert.deepEqual(projectNarsClientEvent({ event: 'authority_session_revoked', session_id: 'cf_session_1', code: 'session_revoked' }), {
+    kind: 'authority_session_revoked',
+    label: 'Session revoked',
+    tone: 'error',
+    summary: 'session_revoked',
+    event: { event: 'authority_session_revoked', session_id: 'cf_session_1', code: 'session_revoked' },
+    renderKey: 'authority-session-revoked:cf_session_1',
+  });
+  assert.deepEqual(projectNarsClientEvent({ event: 'conversation_enqueue_requested', request_id: 'req_1', delivery_semantics: 'queued for next turn' }), {
+    kind: 'conversation_enqueue_requested',
+    label: 'Input queued',
+    tone: 'status',
+    summary: 'queued for next turn',
+    event: { event: 'conversation_enqueue_requested', request_id: 'req_1', delivery_semantics: 'queued for next turn' },
+    renderKey: 'operator-input-queued:req_1',
+  });
 });
 
 test('NARS client projection verbosity filters shared event classes', () => {
@@ -133,6 +149,9 @@ test('NARS client projection verbosity filters shared event classes', () => {
   assert.equal(shouldProjectNarsClientEvent(toolResult, { verbosity: 'conversation' }), false);
   assert.equal(shouldProjectNarsClientEvent(toolCall, { verbosity: 'operations' }), true);
   assert.equal(shouldProjectNarsClientEvent(toolResult, { verbosity: 'operations' }), true);
+  assert.equal(shouldProjectNarsClientEvent(assistant, { verbosity: 'diagnostics' }), false);
+  assert.equal(shouldProjectNarsClientEvent(toolCall, { verbosity: 'diagnostics' }), false);
+  assert.equal(shouldProjectNarsClientEvent(toolResult, { verbosity: 'diagnostics' }), false);
   assert.equal(shouldProjectNarsClientEvent(turnComplete, { verbosity: 'conversation' }), false);
   assert.equal(shouldProjectNarsClientEvent(turnComplete, { verbosity: 'operations' }), false);
   assert.equal(shouldProjectNarsClientEvent(turnComplete, { verbosity: 'diagnostics' }), true);
@@ -142,6 +161,7 @@ test('NARS client projection verbosity filters shared event classes', () => {
   assert.equal(shouldProjectNarsClientEvent(routineHealth, { verbosity: 'raw' }), false);
   assert.equal(shouldProjectNarsClientEvent(routineHealth, { verbosity: 'raw', includeStateSamples: true }), true);
   assert.equal(shouldProjectNarsClientEvent(unhealthy, { verbosity: 'operations' }), true);
+  assert.equal(shouldProjectNarsClientEvent(unhealthy, { verbosity: 'diagnostics' }), true);
 
   assert.equal(shouldProjectNarsClientEvent({ event: 'websocket_connected' }, { verbosity: 'operations' }), false);
   assert.equal(shouldProjectNarsClientEvent({ event: 'websocket_connected' }, { verbosity: 'diagnostics' }), false);

@@ -61,8 +61,8 @@ export function startAgentWebUi({ windowRef = globalThis.window, documentRef = g
   setText('event-endpoint', config.eventEndpoint ?? 'not configured', documentRef);
   setText('health-endpoint', config.healthEndpoint ? `${config.healthEndpoint} (${config.healthTransport})` : 'not configured', documentRef);
   const fetchFn = windowRef.fetch ?? globalThis.fetch;
-  refreshHttpHealthStatus(config.healthEndpoint, documentRef, fetchFn);
-  const healthTimer = config.healthEndpoint ? windowRef.setInterval(() => refreshHttpHealthStatus(config.healthEndpoint, documentRef, fetchFn), 10000) : null;
+  refreshHttpHealthStatus(config, documentRef, fetchFn);
+  const healthTimer = config.healthEndpoint ? windowRef.setInterval(() => refreshHttpHealthStatus(config, documentRef, fetchFn), 10000) : null;
   const connection = connectEvents(config, config.maxReplay, documentRef, windowRef.WebSocket ?? globalThis.WebSocket, {
     setTimeout: windowRef.setTimeout ?? globalThis.setTimeout,
     clearTimeout: windowRef.clearTimeout ?? globalThis.clearTimeout,

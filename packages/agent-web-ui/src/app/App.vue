@@ -2,6 +2,7 @@
 import { provide, ref } from 'vue';
 import NarsSessionShell from './components/NarsSessionShell.vue';
 import { useAgentActivity } from './composables/useAgentActivity';
+import { useCloudflareProjection, type ProjectionControlConfig } from './composables/useCloudflareProjection';
 import { useHealthStatus } from './composables/useHealthStatus';
 import { useNarsConnection } from './composables/useNarsConnection';
 import { useNarsEvents } from './composables/useNarsEvents';
@@ -14,8 +15,11 @@ interface AgentWebUiConfig {
   eventEndpoint: string | null;
   healthEndpoint: string | null;
   healthTransport: string;
+  inputEndpoint?: string | null;
+  browserToken?: string | null;
   artifactBasePath?: string | null;
   artifactTransport?: string | null;
+  projectionControl?: ProjectionControlConfig | null;
   maxReplay?: number;
 }
 
@@ -23,17 +27,19 @@ const props = defineProps<{ config: AgentWebUiConfig }>();
 provide(ArtifactRenderingConfigKey, {
   artifactBasePath: props.config.artifactBasePath ?? null,
   artifactTransport: props.config.artifactTransport ?? null,
+  browserToken: props.config.browserToken ?? null,
 });
 const retained = useRetainedEvents();
 const projection = useProjectionVerbosity();
-const health = useHealthStatus({ endpoint: props.config.healthEndpoint });
+const health = useHealthStatus({ endpoint: props.config.healthEndpoint, browserToken: props.config.browserToken ?? null });
 const connection = useNarsConnection(
-  { eventEndpoint: props.config.eventEndpoint, maxReplay: props.config.maxReplay },
+  { eventEndpoint: props.config.eventEndpoint, inputEndpoint: props.config.inputEndpoint, browserToken: props.config.browserToken ?? null, maxReplay: props.config.maxReplay },
   retained.retain,
   retained.retainMany,
 );
 const events = useNarsEvents(retained.events, projection.verbosity, health.identity);
 const agentActivity = useAgentActivity(retained.events);
+const cloudflareProjection = useCloudflareProjection(props.config.projectionControl?.cloudflare ?? null);
 const input = useOperatorInput(connection.connection, retained.retain, retained.clear);
 const draft = input.draft;
 const followLatestRevision = ref(0);
@@ -57,8 +63,10 @@ function submitOperatorDraft() {
     :rows="events.rows.value"
     :session-identity="events.sessionIdentity.value"
     :agent-activity="agentActivity.activity.value"
+    :cloudflare-projection="cloudflareProjection"
     :follow-latest-revision="followLatestRevision"
     @update:verbosity="projection.setVerbosity"
+    @publish-cloudflare="cloudflareProjection.publish"
     @submit="submitOperatorDraft"
   />
 </template>

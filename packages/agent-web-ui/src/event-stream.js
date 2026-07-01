@@ -9,6 +9,10 @@ export function reconnectDelayForAttempt(attempt, { baseMs = 1000, maxMs = 10000
   return Math.min(maxMs, baseMs * (2 ** exponent));
 }
 
+function projectionHeaders(browserToken) {
+  return browserToken ? { 'x-narada-browser-token-fingerprint': browserToken } : {};
+}
+
 function disconnectedDurationText(disconnectedAt, now = Date.now()) {
   if (!disconnectedAt) return '0s';
   return `${Math.max(0, Math.floor((now - disconnectedAt) / 1000))}s`;
@@ -24,6 +28,7 @@ export function connectEvents(endpointOrConfig, maxReplay, documentRef = documen
     : { eventEndpoint: endpointOrConfig, inputEndpoint: null, cacheEndpoint: null, healthTransport: 'websocket' };
   const endpoint = config.eventEndpoint ?? config.event_endpoint ?? endpointOrConfig;
   const inputEndpoint = config.inputEndpoint ?? config.input_endpoint ?? null;
+  const browserToken = config.browserToken ?? config.browser_token_fingerprint ?? null;
   const fetchFn = timers.fetch ?? globalThis.fetch;
   if (!endpoint) {
     setText('stream', 'event endpoint not configured', documentRef);
@@ -49,7 +54,7 @@ export function connectEvents(endpointOrConfig, maxReplay, documentRef = documen
       }
       fetchFn(inputEndpoint, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json', ...projectionHeaders(browserToken) },
         body: JSON.stringify({ method: frame.method, payload: frame.params ?? {}, request_id: frame.id }),
       }).then(async (response) => {
         const body = await response.json().catch(() => ({ event: 'projection_input_response', status: response.ok ? 'ok' : 'failed' }));
@@ -66,10 +71,15 @@ export function connectEvents(endpointOrConfig, maxReplay, documentRef = documen
   if (/^https?:/i.test(String(endpoint))) {
     const readRemote = async () => {
       try {
+        const subscribeFrame = buildSubscribeFrame({
+          maxReplay,
+          includeReplay: true,
+          ...(connection.lastSequence === null ? {} : { sinceSequence: connection.lastSequence }),
+        });
         const url = new URL(endpoint);
-        if (connection.lastSequence !== null) url.searchParams.set('since_sequence', String(connection.lastSequence));
-        url.searchParams.set('max_events', String(maxReplay ?? 100));
-        const response = await fetchFn(url.href, { method: 'GET' });
+        if (subscribeFrame.params?.since_sequence != null) url.searchParams.set('since_sequence', String(subscribeFrame.params.since_sequence));
+        url.searchParams.set('max_events', String(subscribeFrame.params?.max_replay ?? maxReplay ?? 100));
+        const response = await fetchFn(url.href, { method: 'GET', headers: projectionHeaders(browserToken) });
         const body = await response.json();
         for (const item of body.events ?? []) {
           const message = item?.payload ?? item;
@@ -78,15 +88,16 @@ export function connectEvents(endpointOrConfig, maxReplay, documentRef = documen
           applyRuntimeEventToWebUiState(connection, message);
           appendEvent(message, documentRef);
         }
-        setText('stream', response.ok ? 'connected' : `remote projection ${response.status}`, documentRef);
+        setText('stream', response.ok ? 'long-poll connected' : `remote projection ${response.status}`, documentRef);
       } catch (error) {
         setText('stream', 'remote projection unavailable', documentRef);
         appendEvent({ event: 'projection_stream_unavailable', message: error instanceof Error ? error.message : String(error) }, documentRef);
+      } finally {
+        if (!connection.closed) connection.reconnectTimer = setTimeoutFn(readRemote, 2000);
       }
     };
     setText('stream', 'loading remote projection', documentRef);
     readRemote();
-    connection.reconnectTimer = setTimeoutFn(readRemote, 2000);
     return connection;
   }
   const connect = () => {

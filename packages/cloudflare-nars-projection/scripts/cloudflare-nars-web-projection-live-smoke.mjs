@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import {
   deliverRemoteProjectionInputsOnce,
   preflightCloudflareProjectionRegistration,
@@ -74,7 +74,7 @@ async function run() {
   }
   const bridgeToken = registration.remote_access.bridge_credential.token_fingerprint;
   const browserToken = registration.remote_access.browser_access_tokens[0]?.token_fingerprint;
-  const hostedWebUrl = `${args.cloudflareApiBaseUrl.replace(/\/+$/, '')}/?cloudflare_projection_id=${encodeURIComponent(projectionId)}&cloudflare_api_base_url=${encodeURIComponent(args.cloudflareApiBaseUrl.replace(/\/+$/, ''))}&cloudflare_browser_token=${encodeURIComponent(browserToken)}`;
+  const hostedWebUrl = `${args.cloudflareApiBaseUrl.replace(/\/+$/, '')}/?cloudflare_projection_id=${encodeURIComponent(projectionId)}&cloudflare_api_base_url=${encodeURIComponent(args.cloudflareApiBaseUrl.replace(/\/+$/, ''))}&cloudflare_browser_token=${encodeURIComponent(browserToken)}&smoke_cache_bust=${Date.now()}`;
   const base = `${args.cloudflareApiBaseUrl.replace(/\/+$/, '')}/api/nars/projections/${encodeURIComponent(projectionId)}`;
 
   const bridge = await startLocalProjectionBridgeOnce({
@@ -91,6 +91,7 @@ async function run() {
     siteRoot: args.siteRoot,
     projectionId,
     cloudflareApiBaseUrl: args.cloudflareApiBaseUrl,
+    browserToken,
   });
   const metadata = await getJson(`${base}/artifacts`, { 'x-narada-browser-token-fingerprint': browserToken });
   let artifactContent = { status: 'not_checked', reason: 'no_projected_artifact_metadata' };
@@ -186,6 +187,16 @@ async function verifyHostedBrowserProjection(args) {
       cloudflare_api_base_url: args.cloudflareApiBaseUrl,
       max_events: 5000,
     });
+    const remoteCache = acknowledgedInputId
+      ? await waitForRemoteProjectionCacheText({
+        cloudflareApiBaseUrl: args.cloudflareApiBaseUrl,
+        projectionId: args.projectionId,
+        browserToken: args.browserToken,
+        text: acknowledgedInputId,
+        sinceSequence: Math.max(0, Number(bridgeAfterInput.bridge_state?.last_replicated_sequence ?? 0) - 20),
+        timeoutMs: 10000,
+      })
+      : { found: false, reason: 'no_acknowledged_input_id' };
     await selectHostedBrowserView(page, 'Raw');
     await scrollHostedBrowserTranscriptToBottom(page);
     const replicated = acknowledgedInputId
@@ -198,13 +209,29 @@ async function verifyHostedBrowserProjection(args) {
       && localEventLog.found
       && bridgeAfterInput.status === 'connected'
       && bridgeAfterInput.projected_event_count > 0
+      && remoteCache.found
       && replicated.found;
-    return { status: passed ? 'passed' : 'failed', strict_round_trip: true, initial, stream, view: 'Raw', input, optimistic, delivery, acknowledged_input_id: acknowledgedInputId, local_event_log: localEventLog, bridge_after_input: bridgeAfterInput, replicated, message, submitted_input: submittedInput };
+    return { status: passed ? 'passed' : 'failed', strict_round_trip: true, initial, stream, view: 'Raw', input, optimistic, delivery, acknowledged_input_id: acknowledgedInputId, local_event_log: localEventLog, bridge_after_input: bridgeAfterInput, remote_cache: remoteCache, replicated, message, submitted_input: submittedInput };
   } catch (error) {
     return { status: 'failed', code: 'hosted_browser_projection_failed', error: error instanceof Error ? error.message : String(error), message };
   } finally {
     await page.close();
   }
+}
+
+async function waitForRemoteProjectionCacheText(args) {
+  const base = `${args.cloudflareApiBaseUrl.replace(/\/+$/, '')}/api/nars/projections/${encodeURIComponent(args.projectionId)}/events`;
+  const headers = { 'x-narada-browser-token-fingerprint': args.browserToken };
+  const started = Date.now();
+  let last = null;
+  while (Date.now() - started < args.timeoutMs) {
+    const url = `${base}?since_sequence=${encodeURIComponent(String(args.sinceSequence ?? 0))}&max_events=200`;
+    last = await getJson(url, headers);
+    const text = JSON.stringify(last);
+    if (text.includes(args.text)) return { found: true, waited_ms: Date.now() - started, since_sequence: args.sinceSequence ?? 0, event_count: last.event_count ?? last.events?.length ?? null };
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  return { found: false, waited_ms: Date.now() - started, since_sequence: args.sinceSequence ?? 0, event_count: last?.event_count ?? last?.events?.length ?? null, status: last?.status ?? null, code: last?.code ?? null };
 }
 
 async function submitHostedBrowserOperatorMessage(page, message) {

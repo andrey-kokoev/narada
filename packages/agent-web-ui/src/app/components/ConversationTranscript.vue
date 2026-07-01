@@ -59,7 +59,7 @@ watch(() => props.followLatestRevision, () => {
     <ol id="events" class="events" aria-label="NARS session events">
       <EventRow v-for="row in rows" :key="row.key" :row="row" :verbosity="verbosity" />
       <li
-        v-if="agentActivity.active"
+        v-if="agentActivity.active && (verbosity === 'conversation' || verbosity === 'operations')"
         class="event event-agent-activity event-tone-assistant"
         :data-event-kind="`activity_${agentActivity.state}`"
         data-event-tone="assistant"

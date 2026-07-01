@@ -61,9 +61,10 @@ function appendStructuredSummaryContent(container, parts, documentRef, context =
 function createArtifactReferenceCard(part, documentRef, context = {}) {
   const basePath = injectedArtifactBasePath(documentRef);
   const artifactTransport = injectedArtifactTransport(documentRef);
+  const browserToken = injectedBrowserToken(documentRef);
   const sessionId = String(context.sessionId ?? part.session_id ?? '').trim();
   const artifactId = String(part.artifact_id);
-  const contentPath = artifactContentPath({ basePath, artifactTransport, sessionId, artifactId });
+  const contentPath = artifactContentPath({ basePath, artifactTransport, sessionId, artifactId, browserToken });
   const card = documentRef.createElement('section');
   card.className = 'artifact-card';
   card.dataset.kind = String(part.kind ?? 'artifact');
@@ -127,10 +128,28 @@ function injectedArtifactTransport(documentRef) {
   }
 }
 
-function artifactContentPath({ basePath, artifactTransport, sessionId, artifactId }) {
+function injectedBrowserToken(documentRef) {
+  try {
+    const text = documentRef.getElementById?.('nars-config')?.textContent;
+    if (!text) return null;
+    const parsed = JSON.parse(text);
+    return parsed.browserToken ?? parsed.browser_token ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function withBrowserToken(url, browserToken) {
+  if (!browserToken) return url;
+  const parsed = new URL(url);
+  parsed.searchParams.set('browser-token', browserToken);
+  return parsed.toString();
+}
+
+function artifactContentPath({ basePath, artifactTransport, sessionId, artifactId, browserToken }) {
   const normalizedBasePath = basePath?.replace(/\/+$/, '') ?? null;
   if (!normalizedBasePath || !artifactId) return null;
-  if (artifactTransport === 'cloudflare-projection') return `${normalizedBasePath}/${encodeURIComponent(artifactId)}/content`;
+  if (artifactTransport === 'cloudflare-projection') return withBrowserToken(`${normalizedBasePath}/${encodeURIComponent(artifactId)}/content`, browserToken);
   if (!sessionId) return null;
   return `${normalizedBasePath}/sessions/${encodeURIComponent(sessionId)}/artifacts/${encodeURIComponent(artifactId)}/content`;
 }
@@ -389,8 +408,9 @@ function renderActivityIndicator(documentRef) {
   const list = documentRef.getElementById('events');
   if (!list) return;
   const activity = activityFromEvents(eventStore(documentRef));
+  const verbosity = currentProjectionVerbosity(documentRef);
   removeActivityIndicator(list);
-  if (!activity.active) return;
+  if (!activity.active || (verbosity !== 'conversation' && verbosity !== 'operations')) return;
   const item = documentRef.createElement('li');
   item.id = 'agent-activity-indicator';
   item.className = 'event event-agent-activity event-tone-assistant';

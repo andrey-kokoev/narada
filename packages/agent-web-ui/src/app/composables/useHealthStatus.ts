@@ -9,6 +9,7 @@ export interface HealthIdentitySummary {
 
 export interface HealthStatusOptions {
   endpoint: string | null;
+  browserToken?: string | null;
   fetchFn?: typeof fetch;
   intervalMs?: number;
 }
@@ -25,7 +26,7 @@ export function useHealthStatus(options: HealthStatusOptions) {
       return;
     }
     try {
-      const response = await fetchFn(options.endpoint, { method: 'GET', cache: 'no-store' });
+      const response = await fetchFn(options.endpoint, { method: 'GET', cache: 'no-store', headers: projectionHeaders(options.browserToken) });
       const body = await response.json();
       identity.value = {
         siteId: stringField(body, 'site_id'),
@@ -33,7 +34,7 @@ export function useHealthStatus(options: HealthStatusOptions) {
         role: stringField(body, 'role'),
         sessionId: stringField(body, 'session_id'),
       };
-      text.value = `${body.status ?? response.status} · ${body.agent_id ?? 'agent'} · ${body.session_id ?? 'session'}`;
+      text.value = healthStatusText(body, response.status);
     } catch (error) {
       text.value = `health unavailable · ${error instanceof Error ? error.message : String(error)}`;
     }
@@ -45,6 +46,18 @@ export function useHealthStatus(options: HealthStatusOptions) {
     if (timer) clearInterval(timer);
   });
   return { text, identity, refresh };
+}
+
+function healthStatusText(body: Record<string, unknown>, httpStatus: number): string {
+  const status = String(body.status ?? httpStatus);
+  const code = stringField(body, 'code');
+  const agentId = stringField(body, 'agent_id') ?? 'agent';
+  const sessionId = stringField(body, 'session_id') ?? 'session';
+  return [status, code, agentId, sessionId].filter(Boolean).join(' · ');
+}
+
+function projectionHeaders(browserToken: string | null | undefined): Record<string, string> {
+  return browserToken ? { 'x-narada-browser-token-fingerprint': browserToken } : {};
 }
 
 function stringField(record: unknown, field: string): string | null {

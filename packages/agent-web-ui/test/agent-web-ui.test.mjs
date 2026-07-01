@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { mkdir, readFile, rm, stat } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { join } from 'node:path';
@@ -437,12 +437,26 @@ test('hosted agent-web-ui can read and write a published local NARS session thro
     fetch_impl: fetchViaWorker,
     submit_nars_input: (input) => {
       admitted.push(input);
+      appendFileSync(join(sessionDir, 'events.jsonl'), `${JSON.stringify({ event: 'input_admitted_to_turn', event_sequence: 3, input_event_id: input.input_id, terminal_state: 'accepted' })}\n`);
       return { status: 'accepted_by_nars', method: input.method };
     },
   });
   assert.equal(delivery.status, 'delivered');
   assert.equal(admitted[0].method, 'conversation.send');
   assert.equal(admitted[0].payload.message, 'remote operator input');
+
+  elements.byId.get('projection-verbosity').value = 'raw';
+  await startLocalProjectionBridgeOnce({
+    site_root: siteRoot,
+    projection_id: 'proj_hosted_web_ui_e2e',
+    cloudflare_api_base_url: 'https://projection.example.test',
+    fetch_impl: fetchViaWorker,
+    health_probe: () => 'healthy',
+  });
+  assert.ok(timers.length > 0, 'expected Cloudflare projection reconcile timer after remote input delivery');
+  timers.shift()();
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.equal(elements.byId.get('events').children.some((child) => textOfNode(child).includes(admitted[0].input_id)), true);
 });
 
 test('browser startup shows degraded Cloudflare projection stream failures', async () => {
@@ -957,7 +971,7 @@ test('session projection reduces routine health into state and clears completed 
   assert.equal(projection.health.healthySampleCount, 3);
   assert.equal(projection.rows.some((row) => row.kind === 'session_health'), false);
   assert.equal(projection.rows.some((row) => row.kind === 'websocket_connected'), false);
-  assert.equal(projection.rows.some((row) => row.kind === 'tool_result'), true);
+  assert.equal(projection.rows.some((row) => row.kind === 'tool_result'), false);
   assert.equal(projection.activity.active, true);
   assert.equal(projection.activity.state, 'thinking');
   assert.notEqual(projection.activity.state, 'tool');
@@ -966,7 +980,7 @@ test('session projection reduces routine health into state and clears completed 
   assert.equal(completeProjection.activity.active, false);
 });
 
-test('diagnostics projection is cumulative and includes conversation, operations, and diagnostic signals', () => {
+test('diagnostics projection shows fault signals without routine transcript and operation rows', () => {
   const base = { agent_id: 'resident', session_id: 'carrier_diag', timestamp: '2026-06-30T18:00:00.000Z', provider: 'codex-subscription' };
   const events = [
     { ...base, event: 'operator_input_submitted', request_id: 'input_diag', content: 'run startup sequence' },
@@ -979,8 +993,8 @@ test('diagnostics projection is cumulative and includes conversation, operations
     { ...base, event: 'turn_failed', terminal_state: 'failed', message: 'provider failed' },
   ];
   const projection = createSessionProjection(events, { verbosity: 'diagnostics', nowMs: Date.parse('2026-06-30T18:00:05.000Z') });
-  assert.deepEqual(projection.rows.map((row) => row.kind), ['operator_input_submitted', 'tool_call', 'tool_result', 'tool_result', 'assistant_message', 'session_health', 'websocket_error', 'turn_failed']);
-  assert.match(projection.rows.map((row) => row.summary).join('\n'), /sop unavailable|degraded|socket dropped|provider failed|turn_failed/i);
+  assert.deepEqual(projection.rows.map((row) => row.kind), ['session_health', 'websocket_error', 'turn_failed']);
+  assert.match(projection.rows.map((row) => row.summary).join('\n'), /degraded|socket dropped|provider failed|turn_failed/i);
 });
 
 test('Vue operator components expose composer without hidden privileged controls', async () => {

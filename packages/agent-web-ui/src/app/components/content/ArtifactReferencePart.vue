@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, inject, onMounted, ref } from 'vue';
-import { ArtifactRenderingConfigKey, artifactContentPath, artifactMetadataPath } from '../../lib/artifactConfig';
+import { ArtifactRenderingConfigKey, artifactContentPath, artifactFetchHeaders, artifactMetadataPath } from '../../lib/artifactConfig';
 
 interface ArtifactRefContent {
   type: 'artifact_ref';
@@ -15,7 +15,7 @@ const props = defineProps<{
   sessionId?: string | null;
 }>();
 
-const config = inject(ArtifactRenderingConfigKey, { artifactBasePath: null, artifactTransport: null });
+const config = inject(ArtifactRenderingConfigKey, { artifactBasePath: null, artifactTransport: null, browserToken: null });
 const status = ref<'idle' | 'loading' | 'ready' | 'unavailable'>('idle');
 const message = ref('');
 const metadata = ref<Record<string, unknown> | null>(null);
@@ -42,7 +42,7 @@ async function refreshArtifact() {
   status.value = 'loading';
   copied.value = false;
   try {
-    const response = await fetch(metadataUrl.value, { method: 'GET' });
+    const response = await fetch(metadataUrl.value, { method: 'GET', headers: artifactFetchHeaders(config) });
     const body = await response.json().catch(() => null);
     if (!response.ok) {
       status.value = 'unavailable';
