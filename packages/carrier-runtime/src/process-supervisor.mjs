@@ -1,6 +1,9 @@
 import { spawnSync } from 'node:child_process';
 import { spawnHiddenPostureProcess } from '@narada2/process-launch-posture';
 
+const ownedProcessRegistry = new Set();
+const cleanupTargets = new WeakSet();
+
 function isLiveProcess(child) {
   return child && !child.killed && child.exitCode === null && child.signalCode === null;
 }
@@ -26,6 +29,8 @@ function createOwnedProcess(child, options = {}) {
   const platform = options.platform ?? process.platform;
   const spawnSyncFn = options.spawnSyncFn ?? spawnSync;
   const owner = options.owner ?? 'carrier-runtime';
+  const registry = options.registry ?? ownedProcessRegistry;
+  const processTarget = options.processTarget ?? process;
   let terminated = false;
 
   const terminateTree = (reason = 'unspecified') => {
@@ -51,7 +56,7 @@ function createOwnedProcess(child, options = {}) {
     return { owner, reason, attempted: treeResult.attempted, status: treeResult.status, error: treeResult.error };
   };
 
-  return {
+  const ownedProcess = {
     child,
     get pid() {
       return child?.pid ?? null;
@@ -67,6 +72,37 @@ function createOwnedProcess(child, options = {}) {
     },
     terminateTree,
   };
+
+  if (options.registerForProcessExit !== false) {
+    registerOwnedProcess(ownedProcess, { registry, processTarget });
+  }
+
+  return ownedProcess;
+}
+
+function registerOwnedProcess(ownedProcess, { registry = ownedProcessRegistry, processTarget = process } = {}) {
+  if (!ownedProcess?.child) return;
+  registry.add(ownedProcess);
+  const unregister = () => registry.delete(ownedProcess);
+  ownedProcess.child.once?.('exit', unregister);
+  ownedProcess.child.once?.('close', unregister);
+  ownedProcess.child.once?.('error', unregister);
+  installOwnedProcessExitCleanup({ registry, processTarget });
+}
+
+function installOwnedProcessExitCleanup({ registry = ownedProcessRegistry, processTarget = process } = {}) {
+  if (!processTarget?.once || cleanupTargets.has(processTarget)) return;
+  cleanupTargets.add(processTarget);
+  processTarget.once('exit', () => terminateOwnedProcessRegistry('process_exit', { registry }));
+}
+
+function terminateOwnedProcessRegistry(reason = 'process_exit', { registry = ownedProcessRegistry } = {}) {
+  const owners = [...registry];
+  registry.clear();
+  for (const owner of owners) {
+    owner.terminateTree?.(reason);
+  }
+  return { reason, attempted: owners.length };
 }
 
 function spawnOwnedProcess(command, args = [], spawnOptions = {}, supervisorOptions = {}) {
@@ -79,6 +115,7 @@ function spawnOwnedProcess(command, args = [], spawnOptions = {}, supervisorOpti
 
 export {
   createOwnedProcess,
+  terminateOwnedProcessRegistry,
   spawnOwnedProcess,
   terminateWindowsProcessTree,
   windowsProcessTreeKillArgs,

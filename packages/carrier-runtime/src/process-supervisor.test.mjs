@@ -4,6 +4,7 @@ import { EventEmitter } from 'node:events';
 import {
   createOwnedProcess,
   spawnOwnedProcess,
+  terminateOwnedProcessRegistry,
   terminateWindowsProcessTree,
   windowsProcessTreeKillArgs,
 } from './process-supervisor.mjs';
@@ -101,4 +102,72 @@ test('owned process terminateTree is idempotent', () => {
     status: null,
     error: null,
   });
+});
+
+test('owned process registry removes children after normal exit', () => {
+  const registry = new Set();
+  const processTarget = new EventEmitter();
+  const child = new EventEmitter();
+  child.pid = 1111;
+  child.killed = false;
+  child.exitCode = null;
+  child.signalCode = null;
+  child.kill = () => {
+    child.killed = true;
+  };
+
+  createOwnedProcess(child, { registry, processTarget });
+  assert.equal(registry.size, 1);
+
+  child.emit('exit', 0);
+  assert.equal(registry.size, 0);
+});
+
+test('owned process registry cleans live children on process exit', () => {
+  const registry = new Set();
+  const processTarget = new EventEmitter();
+  const calls = [];
+  const child = new EventEmitter();
+  child.pid = 2222;
+  child.killed = false;
+  child.exitCode = null;
+  child.signalCode = null;
+  child.kill = () => {
+    child.killed = true;
+    calls.push({ command: 'child.kill' });
+  };
+
+  createOwnedProcess(child, {
+    registry,
+    processTarget,
+    platform: 'win32',
+    spawnSyncFn: (command, args, options) => {
+      calls.push({ command, args, options });
+      return { status: 0 };
+    },
+  });
+
+  assert.equal(registry.size, 1);
+  processTarget.emit('exit');
+
+  assert.equal(registry.size, 0);
+  assert.deepEqual(calls[0], {
+    command: 'taskkill.exe',
+    args: windowsProcessTreeKillArgs(2222),
+    options: { stdio: 'ignore', windowsHide: true },
+  });
+  assert.deepEqual(calls[1], { command: 'child.kill' });
+});
+
+test('terminateOwnedProcessRegistry clears and reports attempted owners', () => {
+  const registry = new Set();
+  const calls = [];
+  registry.add({ terminateTree: (reason) => calls.push(reason) });
+  registry.add({ terminateTree: (reason) => calls.push(reason) });
+
+  const result = terminateOwnedProcessRegistry('test_exit', { registry });
+
+  assert.deepEqual(result, { reason: 'test_exit', attempted: 2 });
+  assert.deepEqual(calls, ['test_exit', 'test_exit']);
+  assert.equal(registry.size, 0);
 });
