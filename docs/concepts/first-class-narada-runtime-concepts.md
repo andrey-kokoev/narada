@@ -240,3 +240,31 @@ Acceptance coverage:
 - The policy object is named independently from any one task lifecycle tool call.
 - Advisory and strict modes are stated as distinct enforcement postures.
 - Diagnostics must identify the resolved policy basis, not just the refusal outcome.
+
+## 1557 - MCP Ergonomics Feedback Loop
+
+CL: 0.997
+
+First-class object: feedback intake, routing, status, import, and downstream task linkage for MCP surface ergonomics.
+
+Authority contract:
+
+- `@narada2/surface-feedback-mcp` feedback store and registrar binding guidance
+
+Current implementation posture:
+
+- Surface feedback exists as a dedicated MCP surface and is used during launcher, delegation, lifecycle, filesystem, and projection work.
+- User Site and workspace guidance already instruct agents to submit MCP ergonomics observations while working.
+- Delegation and task lifecycle flows can reference feedback IDs, but feedback is not itself execution completion authority.
+
+Remaining implementation work:
+
+- Audit that every maintained MCP surface advertises the feedback path clearly.
+- Clarify the distinction between feedback, execution tasks, and lifecycle closeout evidence.
+- Improve feedback-to-task conversion and status visibility so useful reports do not disappear into an unreviewed queue.
+
+Acceptance coverage:
+
+- MCP feedback is named as a first-class loop, not an incidental operator request.
+- Feedback is traceable into tasks or surface backlog without becoming mutation authority by itself.
+- The distinction between ergonomics feedback and task execution evidence is explicit.
