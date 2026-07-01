@@ -6,7 +6,7 @@ export interface ProjectedEventRow {
   kind: string;
   label: string;
   tone: string;
-  summary: string;
+  summary: unknown;
   event: unknown;
   renderKey?: string | null;
   streamContent?: string;

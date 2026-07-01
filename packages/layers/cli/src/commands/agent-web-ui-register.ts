@@ -64,7 +64,7 @@ function formatStartedAgentWebUi(result: unknown): string {
       `  Site    ${typeof plan.site_id === 'string' ? plan.site_id : (typeof plan.site_root === 'string' ? plan.site_root : 'unknown')}`,
       `  Events  ${typeof plan.event_endpoint === 'string' ? plan.event_endpoint : 'not configured'}`,
       `  Health  ${typeof plan.health_endpoint === 'string' ? `${plan.health_endpoint} via local /api/health` : 'not configured'}`,
-      '  Input   conversation.send + slash commands',
+      '  Input   conversation.send/enqueue + slash commands',
     ].join('\n');
   }
   return 'agent-web-ui started';

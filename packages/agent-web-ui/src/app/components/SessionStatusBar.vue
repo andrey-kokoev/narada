@@ -9,7 +9,7 @@ defineProps<{
   healthTransport: string;
   streamText: string;
   healthText: string;
-  droppedCount: number;
+  summarizedStateSampleCount: number;
   verbosity: ProjectionVerbosity;
   verbosityLevels: readonly ProjectionVerbosity[];
   agentActivity: AgentActivityState;
@@ -43,7 +43,7 @@ const emit = defineEmits<{
     <div>
       <label class="label" for="projection-verbosity">View</label>
       <ProjectionVerbositySelect :model-value="verbosity" :levels="verbosityLevels" @update:model-value="emit('update:verbosity', $event)" />
-      <span v-if="droppedCount" class="retention-note">{{ droppedCount }} hidden old events</span>
+      <span v-if="summarizedStateSampleCount && (verbosity === 'diagnostics' || verbosity === 'raw')" class="retention-note">{{ summarizedStateSampleCount }} routine status update{{ summarizedStateSampleCount === 1 ? '' : 's' }} folded into State</span>
     </div>
   </section>
 </template>

@@ -387,7 +387,7 @@ function formatPlan(plan: AgentWebUiAttachPlan): string {
       `  Site    ${plan.site_id ?? plan.site_root ?? 'unknown'}`,
       `  Events  ${plan.event_endpoint}`,
       `  Health  ${plan.health_endpoint ?? 'not configured'} via local /api/health`,
-      '  Input   conversation.send + slash commands',
+      '  Input   conversation.send/enqueue + slash commands',
     ].join('\n');
   }
   return [

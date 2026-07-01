@@ -6,6 +6,135 @@ export function setText(id, text, documentRef = document) {
   if (element) element.textContent = text;
 }
 
+function pruneSupersededOperatorEcho(list, projection) {
+  if (projection.kind !== 'user_message') return;
+  const summary = normalizeAssistantText(stringSummary(projection.summary || projection.event));
+  if (!summary) return;
+  const scope = eventScope(projection.event);
+  for (const child of Array.from(list.children ?? [])) {
+    if (child?.dataset?.eventKind !== 'operator_input_submitted') continue;
+    if (!sameDatasetOperatorScope(child.dataset, scope)) continue;
+    if (normalizeAssistantText(child.dataset.operatorSummary ?? child.textContent ?? '') !== summary) continue;
+    if (typeof child.remove === 'function') child.remove();
+    else if (Array.isArray(list.children)) {
+      const index = list.children.indexOf(child);
+      if (index >= 0) list.children.splice(index, 1);
+    }
+  }
+}
+
+function isDuplicateOperatorMessage(list, item, projection) {
+  if (!isOperatorProjection(projection)) return false;
+  const summary = normalizeAssistantText(stringSummary(projection.summary || projection.event));
+  if (!summary) return false;
+  for (const child of Array.from(list.children ?? [])) {
+    if (child === item) continue;
+    if (!isOperatorEventKind(child?.dataset?.eventKind)) continue;
+    if (!sameDatasetOperatorScope(child.dataset, eventScope(projection.event))) continue;
+    const childSummary = normalizeAssistantText(child?.dataset?.operatorSummary ?? child?.textContent ?? '');
+    if (childSummary === summary) return true;
+  }
+  item.dataset.operatorSummary = summary;
+  return false;
+}
+
+function sessionIdFromProjection(projection) {
+  const event = projection?.event ?? {};
+  const nested = event?.event ?? {};
+  return String(event.session_id ?? nested.session_id ?? '').trim() || null;
+}
+
+function appendStructuredSummaryContent(container, parts, documentRef, context = {}) {
+  for (const part of parts) {
+    if (part?.type === 'artifact_ref' && part.artifact_id) {
+      container.append(createArtifactReferenceCard(part, documentRef, context));
+      continue;
+    }
+    if ((part?.type === 'markdown' || part?.type === 'text') && typeof part.text === 'string') {
+      appendSummaryContent(container, part.text, documentRef, context);
+      continue;
+    }
+    appendSummaryContent(container, stringSummary(part), documentRef, context);
+  }
+}
+
+function createArtifactReferenceCard(part, documentRef, context = {}) {
+  const basePath = injectedArtifactBasePath(documentRef);
+  const artifactTransport = injectedArtifactTransport(documentRef);
+  const sessionId = String(context.sessionId ?? part.session_id ?? '').trim();
+  const artifactId = String(part.artifact_id);
+  const contentPath = artifactContentPath({ basePath, artifactTransport, sessionId, artifactId });
+  const card = documentRef.createElement('section');
+  card.className = 'artifact-card';
+  card.dataset.kind = String(part.kind ?? 'artifact');
+  const header = documentRef.createElement('header');
+  header.className = 'artifact-card-header';
+  const titleWrap = documentRef.createElement('div');
+  const title = documentRef.createElement('div');
+  title.className = 'artifact-title';
+  title.textContent = String(part.title ?? artifactId);
+  const meta = documentRef.createElement('div');
+  meta.className = 'artifact-meta';
+  meta.textContent = `${part.kind ?? 'artifact'} artifact`;
+  titleWrap.append(title, meta);
+  const actions = documentRef.createElement('div');
+  actions.className = 'artifact-actions';
+  if (contentPath) {
+    const open = documentRef.createElement('a');
+    open.href = contentPath;
+    open.target = '_blank';
+    open.rel = 'noreferrer';
+    open.textContent = 'Open';
+    actions.append(open);
+  }
+  header.append(titleWrap, actions);
+  card.append(header);
+  if (String(part.kind ?? '') === 'html' && contentPath) {
+    const frame = documentRef.createElement('iframe');
+    frame.className = 'artifact-html-preview';
+    frame.sandbox = 'allow-scripts allow-forms';
+    frame.src = contentPath;
+    frame.title = String(part.title ?? artifactId);
+    card.append(frame);
+  } else {
+    const status = documentRef.createElement('p');
+    status.className = 'artifact-status';
+    status.textContent = contentPath ? 'Preview is not available for this artifact type. Use Open to view it.' : 'Artifact session is not available for this message.';
+    card.append(status);
+  }
+  return card;
+}
+
+function injectedArtifactBasePath(documentRef) {
+  try {
+    const text = documentRef.getElementById?.('nars-config')?.textContent;
+    if (!text) return null;
+    const parsed = JSON.parse(text);
+    return parsed.artifactBasePath ?? parsed.artifact_base_path ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function injectedArtifactTransport(documentRef) {
+  try {
+    const text = documentRef.getElementById?.('nars-config')?.textContent;
+    if (!text) return null;
+    const parsed = JSON.parse(text);
+    return parsed.artifactTransport ?? parsed.artifact_transport ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function artifactContentPath({ basePath, artifactTransport, sessionId, artifactId }) {
+  const normalizedBasePath = basePath?.replace(/\/+$/, '') ?? null;
+  if (!normalizedBasePath || !artifactId) return null;
+  if (artifactTransport === 'cloudflare-projection') return `${normalizedBasePath}/${encodeURIComponent(artifactId)}/content`;
+  if (!sessionId) return null;
+  return `${normalizedBasePath}/sessions/${encodeURIComponent(sessionId)}/artifacts/${encodeURIComponent(artifactId)}/content`;
+}
+
 function normalizeRenderableText(value) {
   return String(value ?? '').trim().replace(/\r\n/g, '\n');
 }
@@ -20,7 +149,11 @@ function looksLikeMarkdown(value) {
     || /(`[^`]+`|\*\*[^*]+\*\*|__[^_]+__|^\s*>\s+|^\s*#{1,6}\s+|^\s*\|.+\|\s*$|\n\s*\|?\s*:?-{3,}:?\s*\||\n\s*[-*+]\s+|\n\s*\d+\.\s+)/m.test(text);
 }
 
-function appendSummaryContent(container, value, documentRef) {
+function appendSummaryContent(container, value, documentRef, context = {}) {
+  if (Array.isArray(value)) {
+    appendStructuredSummaryContent(container, value, documentRef, context);
+    return;
+  }
   const text = stringSummary(value);
   if (!looksLikeMarkdown(text)) {
     container.textContent = text;
@@ -316,30 +449,55 @@ function renderEvent(event, documentRef = document, options = {}) {
   if (!shouldRenderRuntimeProjection(projection, { verbosity })) return;
   const item = projection.renderKey ? findRenderedEvent(list, projection.renderKey) ?? documentRef.createElement('li') : documentRef.createElement('li');
   projection = accumulateStreamingProjection(item, projection);
+  if (isSupersededLifecycleAssistantAggregate(list, projection)) return;
   pruneSupersededAssistantStreams(list, projection);
+  pruneSupersededOperatorEcho(list, projection);
   if (isDuplicateAssistantMessage(list, item, projection)) return;
+  if (isDuplicateOperatorMessage(list, item, projection)) return;
+  const disposition = classifyRuntimeMessage(event);
   clearNode(item);
-  item.className = `event event-${String(projection.kind).replace(/[^a-z0-9_-]/gi, '-')} event-tone-${projection.tone}`;
+  item.className = [
+    'event',
+    `event-view-${verbosity}`,
+    `event-disposition-${String(disposition).replace(/[^a-z0-9_-]/gi, '-')}`,
+    `event-${String(projection.kind).replace(/[^a-z0-9_-]/gi, '-')}`,
+    `event-tone-${projection.tone}`,
+  ].join(' ');
   item.dataset.eventKind = projection.kind;
   item.dataset.eventTone = projection.tone;
+  item.dataset.eventDisposition = disposition;
   if (projection.renderKey) item.dataset.eventRenderKey = projection.renderKey;
   if (projection.streamContent !== undefined) item.dataset.streamContent = projection.streamContent;
+  if (projection.kind === 'assistant_message' || projection.kind === 'assistant_message_stream') {
+    const scope = eventScope(projection.event);
+    item.dataset.assistantAgentId = scope.agentId ?? '';
+    item.dataset.assistantSessionId = scope.sessionId ?? '';
+    item.dataset.assistantProviderMessage = isProviderAssistantMessage(projection.event) ? 'true' : 'false';
+  }
+  if (isOperatorProjection(projection)) {
+    const scope = eventScope(projection.event);
+    item.dataset.operatorSessionId = scope.sessionId ?? '';
+    item.dataset.operatorSummary = normalizeAssistantText(stringSummary(projection.summary || projection.event));
+  }
 
   const heading = documentRef.createElement('div');
   heading.className = 'event-heading';
   const label = documentRef.createElement('span');
   label.className = 'event-label';
   label.textContent = projection.label;
-  const kind = documentRef.createElement('span');
-  kind.className = 'event-kind';
-  kind.textContent = projection.kind;
-  heading.append(label, kind);
+  heading.append(label);
+  if (verbosity !== 'conversation') {
+    const kind = documentRef.createElement('span');
+    kind.className = 'event-kind';
+    kind.textContent = projection.kind;
+    heading.append(kind);
+  }
 
   const detail = documentRef.createElement('div');
   detail.className = 'event-detail';
   const summary = documentRef.createElement('div');
   summary.className = 'event-summary';
-  appendSummaryContent(summary, projection.summary || projection.event, documentRef);
+  appendSummaryContent(summary, projection.summary || projection.event, documentRef, { sessionId: sessionIdFromProjection(projection) });
   detail.append(summary);
   if (verbosity === 'raw') {
     const raw = documentRef.createElement('details');
@@ -358,17 +516,70 @@ function renderEvent(event, documentRef = document, options = {}) {
 
 function pruneSupersededAssistantStreams(list, projection) {
   if (projection.kind !== 'assistant_message') return;
-  const finalSummary = stringSummary(projection.summary || projection.event);
+  const finalSummary = normalizeAssistantText(stringSummary(projection.summary || projection.event));
   for (const child of Array.from(list.children ?? [])) {
-    if (child?.dataset?.eventKind !== 'assistant_message_stream') continue;
-    const streamContent = child?.dataset?.streamContent ?? child?.textContent ?? '';
-    if (!streamContent || !finalSummary.startsWith(streamContent)) continue;
+    if (child?.dataset?.eventKind !== 'assistant_message_stream' && child?.dataset?.eventKind !== 'assistant_message') continue;
+    const priorSummary = normalizeAssistantText(child?.dataset?.assistantSummary ?? child?.dataset?.streamContent ?? child?.textContent ?? '');
+    if (!priorSummary || priorSummary === finalSummary) continue;
+    if (!finalSummary.includes(priorSummary)) continue;
     if (typeof child.remove === 'function') child.remove();
     else if (Array.isArray(list.children)) {
       const index = list.children.indexOf(child);
       if (index >= 0) list.children.splice(index, 1);
     }
   }
+}
+
+function isSupersededLifecycleAssistantAggregate(list, projection) {
+  if (projection.kind !== 'assistant_message') return false;
+  const event = projection.event;
+  if (!event || typeof event !== 'object') return false;
+  if (event.lifecycle_event !== 'assistant_message' || !event.turn_id) return false;
+  const finalSummary = normalizeAssistantText(stringSummary(projection.summary || projection.event));
+  if (!finalSummary) return false;
+  const scope = eventScope(event);
+  for (const child of Array.from(list.children ?? [])) {
+    if (child?.dataset?.eventKind !== 'assistant_message') continue;
+    if (child?.dataset?.assistantProviderMessage !== 'true') continue;
+    if (!sameDatasetAssistantScope(child.dataset, scope)) continue;
+    const priorSummary = normalizeAssistantText(child.dataset.assistantSummary ?? child.textContent ?? '');
+    if (priorSummary && finalSummary.includes(priorSummary)) return true;
+  }
+  return false;
+}
+
+function isProviderAssistantMessage(event) {
+  const providerEvent = event?.event;
+  return Boolean(providerEvent && typeof providerEvent === 'object' && providerEvent.type === 'item.completed' && providerEvent.item?.type === 'agent_message');
+}
+
+function sameDatasetAssistantScope(dataset, scope) {
+  const agentId = dataset?.assistantAgentId || null;
+  const sessionId = dataset?.assistantSessionId || null;
+  if (!agentId && !sessionId && !scope.agentId && !scope.sessionId) return true;
+  return agentId === scope.agentId && sessionId === scope.sessionId;
+}
+
+function isOperatorProjection(projection) {
+  return projection?.kind === 'user_message' || projection?.kind === 'operator_input_submitted';
+}
+
+function isOperatorEventKind(kind) {
+  return kind === 'user_message' || kind === 'operator_input_submitted';
+}
+
+function sameDatasetOperatorScope(dataset, scope) {
+  const sessionId = dataset?.operatorSessionId || null;
+  if (!sessionId || !scope.sessionId) return true;
+  return sessionId === scope.sessionId;
+}
+
+function eventScope(value) {
+  if (!value || typeof value !== 'object') return { agentId: null, sessionId: null };
+  return {
+    agentId: value.agent_id ?? value.agentId ?? null,
+    sessionId: value.session_id ?? value.sessionId ?? null,
+  };
 }
 
 export function rerenderEvents(documentRef = document, options = {}) {
@@ -399,6 +610,7 @@ function clearNode(node) {
 
 function stringSummary(value) {
   if (value === null || value === undefined) return '';
+  if (Array.isArray(value)) return value.map((part) => stringSummary(part)).join('\n');
   if (typeof value === 'string') return value;
   if (typeof value === 'number' || typeof value === 'boolean') return String(value);
   if (typeof value === 'object') return JSON.stringify(value, null, 2);

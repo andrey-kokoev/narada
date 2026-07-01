@@ -1,8 +1,56 @@
-export type MessageRenderKind = 'plain_text' | 'markdown' | 'code_block' | 'mermaid_diagram' | 'json_block';
+export type MessageRenderKind = 'plain_text' | 'markdown' | 'code_block' | 'mermaid_diagram' | 'json_block' | 'artifact_ref';
+
+export interface ArtifactRefContent {
+  type: 'artifact_ref';
+  artifact_id: string;
+  kind?: string;
+  title?: string;
+  render_hint?: string;
+}
+
+function parseStructuredMessageContent(content: unknown[]): MessageRenderPart[] {
+  const parts: MessageRenderPart[] = [];
+  let ordinal = 0;
+  for (const part of content) {
+    if (!part || typeof part !== 'object') {
+      ordinal = appendTextPart(parts, String(part ?? ''), ordinal);
+      continue;
+    }
+    const typed = part as Record<string, unknown>;
+    if (typed.type === 'artifact_ref' && typeof typed.artifact_id === 'string' && typed.artifact_id.trim()) {
+      parts.push({
+        kind: 'artifact_ref',
+        content: typed.title ? String(typed.title) : typed.artifact_id,
+        artifact: {
+          type: 'artifact_ref',
+          artifact_id: typed.artifact_id,
+          ...(typed.kind ? { kind: String(typed.kind) } : {}),
+          ...(typed.title ? { title: String(typed.title) } : {}),
+          ...(typed.render_hint ? { render_hint: String(typed.render_hint) } : {}),
+        },
+        ordinal,
+      });
+      ordinal += 1;
+      continue;
+    }
+    if ((typed.type === 'markdown' || typed.type === 'text') && typeof typed.text === 'string') {
+      ordinal = appendTextPart(parts, typed.text, ordinal);
+      continue;
+    }
+    if (typed.type === 'code' && typeof typed.text === 'string') {
+      parts.push({ kind: 'code_block', content: typed.text, language: typeof typed.language === 'string' ? typed.language : undefined, ordinal });
+      ordinal += 1;
+      continue;
+    }
+    ordinal = appendTextPart(parts, JSON.stringify(typed, null, 2), ordinal);
+  }
+  return parts;
+}
 
 export interface MessageRenderPart {
   kind: MessageRenderKind;
   content: string;
+  artifact?: ArtifactRefContent;
   language?: string;
   ordinal: number;
 }
@@ -16,7 +64,8 @@ interface FencedBlock {
 
 const FENCE_PATTERN = /(^|\n)```([^\n`]*)\n([\s\S]*?)\n```(?=\n|$)/g;
 
-export function parseMessageContent(content: string): MessageRenderPart[] {
+export function parseMessageContent(content: unknown): MessageRenderPart[] {
+  if (Array.isArray(content)) return parseStructuredMessageContent(content);
   const text = String(content ?? '');
   if (!text) return [];
   const parts: MessageRenderPart[] = [];

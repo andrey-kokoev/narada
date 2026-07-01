@@ -10,6 +10,7 @@ import { connectEvents, buildSubscribeFrame, reconnectDelayForAttempt } from './
 import { refreshHttpHealthStatus } from './health.js';
 import {
   bindComposer,
+  buildConversationEnqueueFrame,
   buildConversationSendFrame,
   buildConversationSteerFrame,
   buildOperatorInputAction,
@@ -39,6 +40,7 @@ export {
   normalizeNarsClientProjectionVerbosity,
   projectRuntimeEvent,
   shouldRenderRuntimeEvent,
+  buildConversationEnqueueFrame,
   buildEventsReadFrame,
   buildConversationSendFrame,
   buildConversationSteerFrame,
@@ -61,9 +63,10 @@ export function startAgentWebUi({ windowRef = globalThis.window, documentRef = g
   const fetchFn = windowRef.fetch ?? globalThis.fetch;
   refreshHttpHealthStatus(config.healthEndpoint, documentRef, fetchFn);
   const healthTimer = config.healthEndpoint ? windowRef.setInterval(() => refreshHttpHealthStatus(config.healthEndpoint, documentRef, fetchFn), 10000) : null;
-  const connection = connectEvents(config.eventEndpoint, config.maxReplay, documentRef, windowRef.WebSocket ?? globalThis.WebSocket, {
+  const connection = connectEvents(config, config.maxReplay, documentRef, windowRef.WebSocket ?? globalThis.WebSocket, {
     setTimeout: windowRef.setTimeout ?? globalThis.setTimeout,
     clearTimeout: windowRef.clearTimeout ?? globalThis.clearTimeout,
+    fetch: fetchFn,
   });
   bindComposer(connection, documentRef);
   return { config, socket: connection?.getSocket?.() ?? null, connection, healthTimer };
@@ -85,5 +88,8 @@ function bindProjectionVerbositySelector(documentRef) {
 }
 
 if (typeof window !== 'undefined' && typeof document !== 'undefined') {
-  window.addEventListener('DOMContentLoaded', () => startAgentWebUi());
+  window.addEventListener('DOMContentLoaded', () => {
+    if (document.getElementById('app')) return;
+    startAgentWebUi();
+  });
 }

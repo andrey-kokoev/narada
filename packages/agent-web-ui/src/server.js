@@ -44,16 +44,43 @@ export function parseAgentWebUiArgs(args = []) {
       index += 1;
       continue;
     }
+    if (arg === '--cloudflare-projection-id' || arg === '--projection-id') {
+      options.cloudflareProjectionId = args[index + 1] ?? null;
+      index += 1;
+      continue;
+    }
+    if (arg === '--cloudflare-api-base-url' || arg === '--api-base-url') {
+      options.cloudflareApiBaseUrl = args[index + 1] ?? null;
+      index += 1;
+      continue;
+    }
     if (arg === '--help' || arg === '-h') options.help = true;
   }
   return options;
 }
 
 export function buildClientConfig(options) {
+  if (options.cloudflareProjectionId && options.cloudflareApiBaseUrl) {
+    return {
+      cloudflareProjectionId: options.cloudflareProjectionId,
+      cloudflareApiBaseUrl: options.cloudflareApiBaseUrl,
+      projectionId: options.cloudflareProjectionId,
+      apiBaseUrl: options.cloudflareApiBaseUrl,
+      healthTransport: 'cloudflare-projection',
+      artifactBasePath: `${String(options.cloudflareApiBaseUrl).replace(/\/+$/, '')}/api/nars/projections/${encodeURIComponent(options.cloudflareProjectionId)}/artifacts`,
+      artifactTransport: 'cloudflare-projection',
+      protocolHealthMethod: 'session.health',
+      maxReplay: 100,
+      operatorInput: true,
+      admittedMethods: [...AGENT_WEB_UI_NARS_METHOD_LIST],
+    };
+  }
   return {
     eventEndpoint: options.eventEndpoint ?? null,
     healthEndpoint: options.healthEndpoint ? '/api/health' : null,
     healthTransport: options.healthEndpoint ? 'http-proxy' : 'not-configured',
+    artifactBasePath: options.healthEndpoint ? '/api/nars' : null,
+    artifactTransport: 'local-nars-proxy',
     protocolHealthMethod: 'session.health',
     maxReplay: 100,
     operatorInput: true,
@@ -110,6 +137,29 @@ export function createAgentWebUiServer(options) {
     const url = new URL(request.url ?? '/', `http://${request.headers.host ?? '127.0.0.1'}`);
     if (request.method !== 'GET') {
       sendJson(response, 405, { error: 'method_not_allowed' });
+      return;
+    }
+    if (url.pathname.startsWith('/api/nars/')) {
+      if (!options.healthEndpoint) {
+        sendJson(response, 400, { error: 'nars_endpoint_not_configured' });
+        return;
+      }
+      try {
+        const upstreamBase = new URL(options.healthEndpoint);
+        const upstreamPath = url.pathname.replace(/^\/api\/nars/, '');
+        const upstreamUrl = new URL(upstreamPath + url.search, upstreamBase.origin);
+        const upstream = await fetch(upstreamUrl, { method: 'GET' });
+        const body = await upstream.arrayBuffer();
+        response.writeHead(upstream.status, {
+          'content-type': upstream.headers.get('content-type') ?? 'application/octet-stream',
+          ...(upstream.headers.get('content-security-policy') ? { 'content-security-policy': upstream.headers.get('content-security-policy') } : {}),
+          ...(upstream.headers.get('x-narada-artifact-id') ? { 'x-narada-artifact-id': upstream.headers.get('x-narada-artifact-id') } : {}),
+          ...(upstream.headers.get('x-narada-artifact-kind') ? { 'x-narada-artifact-kind': upstream.headers.get('x-narada-artifact-kind') } : {}),
+        });
+        response.end(Buffer.from(body));
+      } catch (error) {
+        sendJson(response, 502, { error: 'nars_endpoint_unavailable', message: error instanceof Error ? error.message : String(error) });
+      }
       return;
     }
     if (url.pathname === '/api/config') {

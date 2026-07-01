@@ -33,7 +33,7 @@ function listen(server, host = '127.0.0.1') {
 async function withHealthServer(fn) {
   const server = createServer((request, response) => {
     response.writeHead(200, { 'content-type': 'application/json' });
-    response.end(JSON.stringify({ schema: 'narada.nars.health.v1', status: 'healthy', agent_id: 'ux.agent', session_id: 'ux_session', mcp_operational_state: 'healthy' }));
+    response.end(JSON.stringify({ schema: 'narada.nars.health.v1', status: 'healthy', site_id: 'narada.ux', agent_id: 'ux.agent', role: 'resident', session_id: 'ux_session', mcp_operational_state: 'healthy' }));
   });
   const url = await listen(server);
   try {
@@ -45,7 +45,7 @@ async function withHealthServer(fn) {
 
 function publishScenarioEvents(eventHub, scenario) {
   const base = { agent_id: 'ux.agent', session_id: `ux_${scenario}`, timestamp: new Date().toISOString(), provider: 'codex-subscription' };
-  eventHub.publish({ ...base, event: 'session_started', model: 'gpt-5.5', mcp_server_count: 15, mcp_operational_state: 'healthy' });
+  eventHub.publish({ ...base, event: 'session_started', site_id: 'narada.ux', role: 'resident', model: 'gpt-5.5', mcp_server_count: 15, mcp_operational_state: 'healthy' });
   if (scenario === 'thinking') {
     eventHub.publish({ ...base, event: 'operator_input_submitted', request_id: 'input_thinking', content: 'Think through the plan' });
     eventHub.publish({ ...base, event: 'turn_started', turn_id: 'turn_thinking', request_id: 'input_thinking' });
@@ -83,6 +83,25 @@ function publishScenarioEvents(eventHub, scenario) {
       '',
       'The content should stay inside the message card on desktop and mobile.',
     ].join('\n') });
+    return;
+  }
+  if (scenario === 'diagnostics') {
+    eventHub.publish({ ...base, event: 'operator_input_submitted', request_id: 'input_diag', content: 'Run startup sequence' });
+    eventHub.publish({ ...base, event: 'tool_call', request_id: 'input_diag', tool_name: 'narada-sonar-agent-context.agent_context_startup_sequence' });
+    eventHub.publish({ ...base, event: 'tool_result', request_id: 'input_diag', tool_name: 'narada-sonar-agent-context.agent_context_startup_sequence', status: 'ok' });
+    eventHub.publish({ ...base, event: 'assistant_message', request_id: 'input_diag', content: 'Startup sequence completed.' });
+    eventHub.publish({ ...base, event: 'session_health', status: 'degraded', mcp_operational_state: 'degraded', mcp_runtime_fault_count: 1 });
+    eventHub.publish({ ...base, event: 'websocket_error', message: 'socket dropped' });
+    eventHub.publish({ ...base, event: 'turn_failed', terminal_state: 'failed', message: 'provider failed' });
+    return;
+  }
+  if (scenario === 'raw') {
+    eventHub.publish({ ...base, event: 'websocket_connected' });
+    eventHub.publish({ ...base, event: 'session_health', status: 'healthy', mcp_operational_state: 'healthy' });
+    eventHub.publish({ ...base, event: 'operator_input_submitted', request_id: 'input_raw', content: 'Run startup sequence' });
+    eventHub.publish({ ...base, event: 'tool_call', request_id: 'input_raw', tool_name: 'narada-sonar-agent-context.agent_context_startup_sequence' });
+    eventHub.publish({ ...base, event: 'tool_result', request_id: 'input_raw', tool_name: 'narada-sonar-agent-context.agent_context_startup_sequence', status: 'ok' });
+    eventHub.publish({ ...base, event: 'assistant_message', request_id: 'input_raw', content: 'Startup sequence completed.' });
     return;
   }
   eventHub.publish({ ...base, event: 'operator_input_submitted', request_id: 'input_normal', content: 'Run startup sequence' });
@@ -293,8 +312,8 @@ async function runScenarioViewport({ browserPath, scenario, viewport, outDir }) 
   return withScenarioServer(scenario.name, async (url, publishEvents = () => {}) => {
     const page = await openCdpPage({ browserPath, url, viewport, workDir: outDir });
     try {
-      if (scenario.view === 'operations') {
-        await page.evaluate(`(() => { const select = document.querySelector('#projection-verbosity'); select.value = 'operations'; select.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+      if (scenario.view) {
+        await page.evaluate(`((view) => { const select = document.querySelector('#projection-verbosity'); select.value = view; select.dispatchEvent(new Event('change', { bubbles: true })); })(${JSON.stringify(scenario.view)})`);
         await new Promise((resolve) => setTimeout(resolve, 250));
       }
       publishEvents();
@@ -306,11 +325,24 @@ async function runScenarioViewport({ browserPath, scenario, viewport, outDir }) 
       assert.ok(screenshot.length > 5000, `expected non-empty screenshot: ${screenshotPath}`);
       const result = await page.evaluate(UX_ASSERTION_SCRIPT);
       assert.deepEqual(result.failures, [], `${scenario.name}/${viewport.name}: ${JSON.stringify({ failures: result.failures, messages: result.messages })}`);
+      if (scenario.name !== 'disconnected') {
+        assert.match(result.text, /narada\.ux\s*\/\s*ux\.agent/i, 'expected header to show site and agent identity');
+        assert.match(result.text, /Role:\s*resident/i, 'expected header to show agent role');
+      }
       if (scenario.name === 'thinking') assert.match(result.text, /Thinking|Waiting for agent|thinking/i, 'expected active thinking indicator');
       if (scenario.name === 'disconnected') assert.match(result.text, /disconnected|reconnecting|failed/i, 'expected disconnected/reconnecting state');
       if (scenario.name === 'operations') {
         assert.match(result.text, /Tool call/i, 'expected operations tool call row');
         assert.match(result.text, /Tool result/i, 'expected operations tool result row');
+      }
+      if (scenario.name === 'diagnostics') {
+        assert.match(result.text, /degraded|socket dropped|provider failed/i, 'expected diagnostics fault signals');
+        assert.doesNotMatch(result.text, /Tool call|Tool result|Startup sequence completed/i, 'expected diagnostics to suppress routine transcript and operation rows');
+      }
+      if (scenario.name === 'raw') {
+        assert.match(result.text, /Raw event/i, 'expected raw payload drawer affordance');
+        assert.match(result.text, /routine status updates? folded into State/i, 'expected raw view to summarize routine state samples');
+        assert.match(result.text, /Tool call|Tool result/i, 'expected raw view to keep operation records');
       }
       if (scenario.name === 'markdown') {
         assert.match(result.text, /Sample Report/);
@@ -320,6 +352,7 @@ async function runScenarioViewport({ browserPath, scenario, viewport, outDir }) 
         assert.ok(result.markdownListCodeCount >= 8, `expected inline code inside markdown list items to render as code DOM: ${JSON.stringify(result)}`);
       }
       if (scenario.name === 'normal') {
+        assert.doesNotMatch(result.text, /routine status updates? folded into State/i, 'expected Chat view to hide debug state-sample note');
         const submitScroll = await page.evaluate(SUBMIT_SCROLL_ASSERTION_SCRIPT);
         assert.equal(submitScroll.ok, true, `${scenario.name}/${viewport.name}: expected submit to scroll transcript to bottom: ${JSON.stringify(submitScroll)}`);
       }
@@ -342,6 +375,8 @@ test('agent-web-ui UX smoke matrix has no obvious layout regressions', async () 
     { name: 'disconnected' },
     { name: 'markdown' },
     { name: 'operations', view: 'operations' },
+    { name: 'diagnostics', view: 'diagnostics' },
+    { name: 'raw', view: 'raw' },
   ];
   const viewports = [
     { name: 'desktop', width: 1280, height: 900 },

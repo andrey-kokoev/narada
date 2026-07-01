@@ -4,6 +4,7 @@ import OperatorComposer from './OperatorComposer.vue';
 import SessionStatusBar from './SessionStatusBar.vue';
 import type { AgentActivityState } from '../composables/useAgentActivity';
 import type { ProjectionVerbosity } from '../composables/useProjectionVerbosity';
+import type { SessionIdentitySummary } from '../composables/useNarsEvents';
 import type { ProjectedEventRow } from '../lib/eventProjection';
 
 const props = defineProps<{
@@ -12,10 +13,11 @@ const props = defineProps<{
   healthTransport: string;
   streamText: string;
   healthText: string;
-  droppedCount: number;
+  summarizedStateSampleCount: number;
   verbosity: ProjectionVerbosity;
   verbosityLevels: readonly ProjectionVerbosity[];
   rows: ProjectedEventRow[];
+  sessionIdentity: SessionIdentitySummary;
   agentActivity: AgentActivityState;
   followLatestRevision: number;
 }>();
@@ -32,8 +34,8 @@ const emit = defineEmits<{
       <div class="brand-lockup">
         <span class="brand-mark" aria-hidden="true">N</span>
         <div>
-          <h1>Narada Session</h1>
-          <p>Browser projection attached to one NARS runtime.</p>
+          <h1>{{ sessionIdentity.title }}</h1>
+          <p>{{ sessionIdentity.subtitle }}</p>
         </div>
       </div>
       <div class="session-chip" :data-state="healthText.split(' ')[0]">
@@ -47,7 +49,7 @@ const emit = defineEmits<{
       :health-transport="healthTransport"
       :stream-text="streamText"
       :health-text="healthText"
-      :dropped-count="droppedCount"
+      :summarized-state-sample-count="summarizedStateSampleCount"
       :verbosity="verbosity"
       :verbosity-levels="verbosityLevels"
       :agent-activity="agentActivity"

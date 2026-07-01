@@ -36,6 +36,29 @@ export function createSessionProjection(events = [], options = {}) {
   return projection;
 }
 
+function supersededLifecycleAssistantAggregate(row, state) {
+  if (row.kind !== 'assistant_message') return false;
+  const event = row.event;
+  if (!event || typeof event !== 'object') return false;
+  if (event.lifecycle_event !== 'assistant_message' || !event.turn_id) return false;
+  const summary = normalizeAssistantText(row.summary);
+  if (!summary) return false;
+  let coveredPriorRows = 0;
+  for (const prior of state.renderedByKey.values()) {
+    if (prior.kind !== 'assistant_message') continue;
+    if (!sameAssistantScope(prior.event, event)) continue;
+    if (!isProviderAssistantMessage(prior.event)) continue;
+    const priorSummary = normalizeAssistantText(prior.summary);
+    if (priorSummary && summary.includes(priorSummary)) coveredPriorRows += 1;
+  }
+  return coveredPriorRows > 0;
+}
+
+function isProviderAssistantMessage(event) {
+  const providerEvent = event?.event;
+  return Boolean(providerEvent && typeof providerEvent === 'object' && providerEvent.type === 'item.completed' && providerEvent.item?.type === 'agent_message');
+}
+
 export function classifyRuntimeMessage(message) {
   const event = unwrapRuntimeEvent(message);
   if (!event || typeof event !== 'object') return 'raw_record';
@@ -113,8 +136,11 @@ function projectMessageRow(message, options, state) {
     streamContent: projection.streamContent,
     disposition: classifyRuntimeMessage(message),
   };
+  if (supersededLifecycleAssistantAggregate(row, state)) return null;
   pruneSupersededAssistantStreams(row, state);
   if (duplicateAssistantMessageKey(row, state)) return null;
+  pruneSupersededOperatorEcho(row, state);
+  if (duplicateOperatorMessageKey(row, state)) return null;
   state.renderedByKey.set(key, row);
   if (!state.order.includes(key)) state.order.push(key);
   return row;
@@ -125,14 +151,14 @@ function materializedRows(state) {
 }
 
 function projectionIdentityKey(event, projection) {
-  const sequence = sequenceFromRuntimeMessage(event);
-  if (sequence !== null) return `sequence:${sequence}`;
   const projectedEvent = unwrapRuntimeEvent(event) ?? projection?.event;
   if (projectedEvent && typeof projectedEvent === 'object') {
     const requestId = projectedEvent.request_id;
     if (requestId && (projection.kind === 'operator_input_submitted' || projection.kind === 'user_message')) return `operator:${String(requestId)}`;
     if (requestId && (projection.kind === 'assistant_message' || projection.kind === 'assistant_message_stream')) return `assistant:${String(requestId)}`;
   }
+  const sequence = sequenceFromRuntimeMessage(event);
+  if (sequence !== null) return `sequence:${sequence}`;
   return null;
 }
 
@@ -148,12 +174,53 @@ function duplicateAssistantMessageKey(row, state) {
   return null;
 }
 
+function duplicateOperatorMessageKey(row, state) {
+  if (!isOperatorMessageRow(row)) return null;
+  const summary = normalizeAssistantText(row.summary);
+  if (!summary) return null;
+  for (const [key, prior] of state.renderedByKey) {
+    if (!isOperatorMessageRow(prior)) continue;
+    if (!sameOperatorScope(prior.event, row.event)) continue;
+    if (normalizeAssistantText(prior.summary) === summary) return key;
+  }
+  return null;
+}
+
+function pruneSupersededOperatorEcho(row, state) {
+  if (row.kind !== 'user_message') return;
+  const summary = normalizeAssistantText(row.summary);
+  if (!summary) return;
+  for (const [key, prior] of state.renderedByKey) {
+    if (prior.kind !== 'operator_input_submitted') continue;
+    if (!sameOperatorScope(prior.event, row.event)) continue;
+    if (normalizeAssistantText(prior.summary) !== summary) continue;
+    state.renderedByKey.delete(key);
+    const index = state.order.indexOf(key);
+    if (index >= 0) state.order.splice(index, 1);
+  }
+}
+
+function isOperatorMessageRow(row) {
+  return row?.kind === 'user_message' || row?.kind === 'operator_input_submitted';
+}
+
+function sameOperatorScope(a, b) {
+  const left = eventScope(a);
+  const right = eventScope(b);
+  if (!left.sessionId || !right.sessionId) return true;
+  return left.sessionId === right.sessionId;
+}
+
 function pruneSupersededAssistantStreams(finalRow, state) {
   if (finalRow.kind !== 'assistant_message') return;
   for (const [key, prior] of state.renderedByKey) {
-    if (prior.kind !== 'assistant_message_stream') continue;
+    if (prior.kind !== 'assistant_message_stream' && prior.kind !== 'assistant_message') continue;
+    if (key === finalRow.key) continue;
     if (!sameAssistantScope(prior.event, finalRow.event)) continue;
-    if (!finalRow.summary.startsWith(prior.summary)) continue;
+    const priorSummary = normalizeAssistantText(prior.summary);
+    const finalSummary = normalizeAssistantText(finalRow.summary);
+    if (!priorSummary || priorSummary === finalSummary) continue;
+    if (!finalSummary.includes(priorSummary)) continue;
     state.renderedByKey.delete(key);
     const index = state.order.indexOf(key);
     if (index >= 0) state.order.splice(index, 1);
@@ -175,7 +242,7 @@ function applyActivityEvent(state, message) {
   const event = unwrapRuntimeEvent(message);
   const timestampMs = timestampFromEvent(event) ?? timestampFromEvent(message) ?? state.startedAtMs ?? Date.now();
   if (!event || typeof event !== 'object') return state;
-  if (event.event === 'operator_input_submitted' || event.event === 'user_message') return startActivity(state, 'queued', timestampMs, 'Waiting for agent...', null);
+  if (event.event === 'operator_input_submitted') return startActivity(state, 'queued', timestampMs, 'Waiting for agent...', null);
   if (event.event === 'directive_received' || event.event === 'directive_carrier_accepted_recorded') return startActivity(state, 'queued', timestampMs, 'Waiting for agent...', 'directive accepted');
   if (event.event === 'turn_started') return Object.assign(startActivity(state, 'thinking', timestampMs, agentLabel(event, 'is thinking...'), providerDetail(event)), { activeTurnId: event.turn_id ?? true });
   if (event.event === 'assistant_message_stream') return startActivity(state, 'streaming', timestampMs, agentLabel(event, 'is responding...'), null);
@@ -292,6 +359,7 @@ function normalizeAssistantText(value) {
 
 function summarizeValue(value) {
   if (value === null || value === undefined) return '';
+  if (Array.isArray(value)) return value;
   if (typeof value === 'string') return value;
   if (typeof value === 'number' || typeof value === 'boolean') return String(value);
   if (typeof value === 'object') return JSON.stringify(value, null, 2);

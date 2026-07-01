@@ -2,7 +2,7 @@
 
 Browser operator surface for one NARS session.
 
-This package is a client surface. It does not construct runtime dependencies, host MCP fabric, or execute provider turns. It attaches to a NARS event endpoint and health endpoint, subscribes with `session.events.subscribe`, renders session status plus the live event transcript, submits ordinary operator messages as `conversation.send` frames, and projects slash-command input into NARS protocol frames.
+This package is a client surface. It does not construct runtime dependencies, host MCP fabric, or execute provider turns. It attaches to a NARS event endpoint and health endpoint, subscribes with `session.events.subscribe`, renders session status plus the live event transcript, submits ordinary operator messages as `conversation.send` when idle and `conversation.enqueue` during active turns, and projects slash-command input into NARS protocol frames.
 
 The browser shell is Vue 3 + Vite. Components are Narada-native and styled in the shadcn-vue spirit: small explicit primitives over Narada concepts such as NARS session status, projection verbosity, transcript rows, diagnostics, raw event details, and operator input. NARS protocol projection remains framework-neutral.
 
@@ -26,6 +26,21 @@ pnpm --filter @narada2/agent-web-ui start -- --event-endpoint ws://127.0.0.1:123
 The command prints a local URL. Open that URL in a browser to observe and message the session.
 
 The authoritative session discovery/index mechanics are documented in `docs/concepts/nars-runtime-contract.md` under `Session Discovery And Attachment Index`.
+
+## Cloudflare Projection Shell
+
+The same built Vue shell can be served by `@narada2/cloudflare-nars-projection` as a Cloudflare Worker assets binding. Build the web UI first, then build/deploy the projection Worker:
+
+```bash
+pnpm --filter @narada2/agent-web-ui build
+pnpm --filter @narada2/cloudflare-nars-projection build
+```
+
+The Worker `wrangler.toml` points at `../agent-web-ui/dist` and keeps NARS projection APIs under `/api/nars/projections/...`. Open the hosted shell with query configuration rather than a hardcoded local session:
+
+```text
+https://<projection-host>/?cloudflare_projection_id=<projection-id>&cloudflare_api_base_url=https://<projection-host>
+```
 
 ## Code Organization
 

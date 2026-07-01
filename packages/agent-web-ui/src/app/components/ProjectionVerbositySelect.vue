@@ -6,15 +6,22 @@ defineProps<{
   levels: readonly ProjectionVerbosity[];
 }>();
 const emit = defineEmits<{ 'update:modelValue': [value: ProjectionVerbosity] }>();
+
+const VIEW_LABELS: Record<ProjectionVerbosity, string> = {
+  conversation: 'Chat',
+  operations: 'Operations',
+  diagnostics: 'Diagnostics',
+  raw: 'Raw',
+};
 </script>
 
 <template>
   <select
     id="projection-verbosity"
-    aria-label="Projection verbosity"
+    aria-label="View"
     :value="modelValue"
     @change="emit('update:modelValue', ($event.target as HTMLSelectElement).value as ProjectionVerbosity)"
   >
-    <option v-for="level in levels" :key="level" :value="level">{{ level }}</option>
+    <option v-for="level in levels" :key="level" :value="level">{{ VIEW_LABELS[level] }}</option>
   </select>
 </template>

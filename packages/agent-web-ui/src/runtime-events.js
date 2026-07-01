@@ -122,5 +122,49 @@ export function shouldRenderRuntimeEvent(message, options = {}) {
 }
 
 export function shouldRenderRuntimeProjection(projection, options = {}) {
-  return shouldProjectNarsClientProjection(projection, options);
+  const verbosity = normalizeNarsClientProjectionVerbosity(options.verbosity ?? NARS_CLIENT_PROJECTION_DEFAULT_VERBOSITY);
+  if (verbosity === 'conversation' && isNonCanonicalAssistantProjection(projection)) return false;
+  if (verbosity === 'diagnostics' && !isDiagnosticProjection(projection)) return false;
+  return shouldProjectNarsClientProjection(projection, { ...options, verbosity });
+}
+
+function isDiagnosticProjection(projection) {
+  if (!projection || typeof projection !== 'object') return false;
+  const kind = String(projection.kind ?? '');
+  const tone = String(projection.tone ?? '');
+  if (tone === 'error') return true;
+  if (/error|failed|fault|degraded|refused|unavailable/i.test(kind)) return true;
+  if (kind === 'session_health' || kind === 'turn_failed' || kind === 'websocket_error' || kind === 'web_ui_decode_error' || kind === 'web_ui_input_not_sent') return true;
+  const event = projection.event;
+  if (event && typeof event === 'object' && (event.error || event.status === 'failed' || event.terminal_state === 'failed')) return true;
+  const eventName = typeof event?.event === 'string' ? event.event : null;
+  if (eventName && /error|failed|fault|degraded|refused|unavailable/i.test(eventName)) return true;
+  if (eventName === 'session_health') return !isRoutineHealthyProjectionEvent(event);
+  const nestedEvent = event?.event;
+  if (nestedEvent && typeof nestedEvent === 'object') {
+    if (nestedEvent.error) return true;
+    const item = nestedEvent.item;
+    if (item && typeof item === 'object' && (item.error || item.status === 'failed')) return true;
+  }
+  return false;
+}
+
+function isRoutineHealthyProjectionEvent(event) {
+  if (!event || event.event !== 'session_health') return false;
+  const status = String(event.status ?? '').toLowerCase();
+  const mcpState = String(event.mcp?.operational_state ?? event.mcp_operational_state ?? '').toLowerCase();
+  const startupFailures = Number(event.mcp_startup_failure_count ?? event.mcp?.startup_failure_count ?? 0);
+  const runtimeFaults = Number(event.mcp_runtime_fault_count ?? event.mcp?.runtime_fault_count ?? 0);
+  return status === 'healthy' && (mcpState === '' || mcpState === 'healthy') && startupFailures === 0 && runtimeFaults === 0;
+}
+
+function isNonCanonicalAssistantProjection(projection) {
+  if (!projection || typeof projection !== 'object') return false;
+  if (projection.kind === 'assistant_message_stream') return true;
+  if (projection.kind !== 'assistant_message') return false;
+  const event = projection.event;
+  const providerEvent = event?.event;
+  if (!providerEvent || typeof providerEvent !== 'object') return false;
+  const item = providerEvent.item;
+  return providerEvent.type === 'item.started' && item?.type === 'agent_message';
 }

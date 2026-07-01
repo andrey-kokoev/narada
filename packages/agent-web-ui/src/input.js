@@ -1,5 +1,6 @@
 import {
   buildAgentWebUiConversationSendFrame,
+  buildAgentWebUiConversationEnqueueFrame,
   buildAgentWebUiConversationSteerFrame,
   buildAgentWebUiHelpText,
   buildAgentWebUiOperatorInputAction,
@@ -9,6 +10,7 @@ import { appendEvent, clearEvents } from './render.js';
 
 export const buildOperatorInputAction = buildAgentWebUiOperatorInputAction;
 export const buildConversationSendFrame = buildAgentWebUiConversationSendFrame;
+export const buildConversationEnqueueFrame = buildAgentWebUiConversationEnqueueFrame;
 export const buildConversationSteerFrame = buildAgentWebUiConversationSteerFrame;
 
 export function sendOperatorMessage(socketOrConnection, text, documentRef = document) {
@@ -33,6 +35,16 @@ export function sendOperatorMessage(socketOrConnection, text, documentRef = docu
   }
   const frame = action.frame;
   if (!isAgentWebUiProtocolFrame(frame)) throw new Error('unsupported_agent_web_ui_protocol_frame');
+  if (typeof connection?.sendFrame === 'function') {
+    const sent = connection.sendFrame(frame);
+    if (!sent) {
+      appendEvent({ event: 'web_ui_input_not_sent', message: 'event stream is not open' }, documentRef);
+      return false;
+    }
+    appendEvent({ event: 'operator_input_submitted', request_id: frame.id, content: frame.params?.message ?? frame.params?.command ?? frame.method }, documentRef);
+    if (frame.method === 'session.close') connection?.close?.();
+    return true;
+  }
   const openState = socket?.constructor?.OPEN ?? globalThis.WebSocket?.OPEN ?? 1;
   if (socket?.readyState !== openState) {
     appendEvent({ event: 'web_ui_input_not_sent', message: 'event stream is not open' }, documentRef);
