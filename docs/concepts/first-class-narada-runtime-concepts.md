@@ -183,3 +183,31 @@ Acceptance coverage:
 - Provider failures are described as launch preflight failures, not opaque runtime errors.
 - Runtime/provider compatibility is named as part of launch admission.
 - Remediation guidance is specific to the missing or invalid credential source.
+
+## 1555 - Site/Agent Speech Preferences
+
+CL: 0.986
+
+First-class object: Site default speech settings with Agent-level partial overrides.
+
+Authority contract:
+
+- `@narada2/speech-mcp` provider/model/voice schema and operator-routing speech defaults
+
+Current implementation posture:
+
+- Speech MCP supports provider, model, and voice selection for operator-facing speech output.
+- Site-level and Agent-level preferences have a clear target shape: Site provides defaults, Agent supplies partial overrides.
+- The inheritance model is conceptually settled, but config schema and validation coverage are not yet fully implemented.
+
+Remaining implementation work:
+
+- Add Site and Agent config schema fields for speech preferences.
+- Implement an inheritance resolver where Agent values override only the fields they name.
+- Validate provider/model/voice combinations after inheritance and produce actionable diagnostics.
+
+Acceptance coverage:
+
+- Site defaults and Agent partial overrides are named as the target shape.
+- The remaining implementation gap is explicit rather than implied complete.
+- Combination validation is part of the acceptance target.
