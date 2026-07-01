@@ -127,3 +127,31 @@ Acceptance coverage:
 - The governing object is named `work_order`, not `budget`.
 - Repository boundaries, budgets, deliverables, dependencies, and authority gates are included in the contract.
 - Legacy compatibility is recorded as transitional rather than the target delegation interface.
+
+## 1553 - Delegation DAG Templates
+
+CL: 0.993
+
+First-class object: named delegation DAG templates for common work shapes such as research/synthesis, implementation/review/repair, and guarded publication.
+
+Authority contract:
+
+- `@narada2/delegated-task-mcp` template catalog and template validation tests
+
+Current implementation posture:
+
+- Template catalog covers milestones, dependencies, joins, gates, review, repair, verification, and authority-gated publication.
+- Templates are emerging as reusable topology objects rather than ad hoc lists of worker prompts.
+- DAG execution still exposes more raw structure than an operator should need for routine cases.
+
+Remaining implementation work:
+
+- Improve template discovery and selection guidance.
+- Make template result topology easier to inspect after launch.
+- Add examples that show when to use parallel research, fan-out implementation, review gates, and repair loops.
+
+Acceptance coverage:
+
+- DAG templates are named as first-class delegation objects.
+- Review/repair/verification gates are included in the target shape.
+- Operators are directed toward templates instead of repeatedly hand-authoring common graphs.
