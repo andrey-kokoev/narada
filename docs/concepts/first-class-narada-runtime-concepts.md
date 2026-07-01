@@ -70,3 +70,32 @@ Acceptance coverage:
 - Operator surfaces are documented as peer projections of one NARS session.
 - Attach/discovery failure semantics are stated as endpoint/session/health problems, not terminal ownership problems.
 - Multi-surface launch belongs to NARS session attach semantics, not to separate runtime ownership.
+
+## 1551 - Event Projection And Rendering Policy
+
+CL: 0.994
+
+First-class object: shared projection classification into conversation, operations, diagnostics, and raw views.
+
+Authority contract:
+
+- [`nars-client-projection-contract.md`](nars-client-projection-contract.md)
+
+Current implementation posture:
+
+- `@narada2/nars-client-projection-contract` owns event classification and view eligibility.
+- Canonical conversation comes from NARS lifecycle events, not provider telemetry.
+- Provider agent messages, stream fragments, routine health samples, and websocket/replay records are progress, operations, diagnostics, or raw records rather than durable chat facts.
+- Client packages own medium-specific rendering but not event semantics.
+
+Remaining implementation work:
+
+- Reduce local client rendering drift as new message parts and projections appear.
+- Add cross-client parity checks for realistic turns that include operator input, tool calls, provider telemetry, lifecycle assistant messages, and artifact references.
+- Keep routine health out of conversation while preserving degraded/error visibility.
+
+Acceptance coverage:
+
+- Conversation, operations, diagnostics, and raw inclusion rules are linked to the projection contract.
+- Provider telemetry is explicitly non-canonical conversation.
+- Clients are directed to consume shared projection semantics rather than invent local classifiers.
