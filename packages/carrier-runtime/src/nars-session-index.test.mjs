@@ -7,6 +7,7 @@ import {
   classifyNarsSessionDisplayState,
   discoverNarsSessions,
   markNarsSessionIndexClosed,
+  narsSessionsRootFromSiteRoot,
   readNarsSessionIndex,
   rebuildNarsSessionIndex,
   writeNarsSessionStartedIndex,
@@ -86,6 +87,42 @@ test('writeNarsSessionStartedIndex writes per-session record and aggregate index
     assert.equal(aggregate.sessions[0].record_path, result.paths.record_path);
   } finally {
     cleanup(siteRoot);
+  }
+});
+
+test('discoverNarsSessions accepts a Site root that is already the .narada root', () => {
+  const workspaceRoot = makeTempSiteRoot();
+  const siteRoot = join(workspaceRoot, '.narada');
+  try {
+    const sessionId = 'carrier_20260701202225_staccato';
+    const sessionDir = join(siteRoot, 'crew', 'nars-sessions', sessionId);
+    const event = {
+      ...startedEvent(workspaceRoot, sessionId),
+      agent_id: 'narada-staccato.resident',
+      site_root: siteRoot,
+      session_path: join(sessionDir, 'session.jsonl'),
+      events_path: join(sessionDir, 'events.jsonl'),
+    };
+    writeNarsSessionStartedIndex({
+      sessionStartedEvent: event,
+      sessionPath: event.session_path,
+      siteRoot,
+      now: new Date('2026-07-01T20:22:30.000Z'),
+    });
+
+    assert.equal(narsSessionsRootFromSiteRoot(siteRoot), join(siteRoot, 'crew', 'nars-sessions'));
+    const discovery = discoverNarsSessions({
+      siteRoot,
+      healthBySessionId: { [sessionId]: 'healthy' },
+      now: new Date('2026-07-01T20:22:35.000Z'),
+    });
+
+    assert.equal(discovery.sessions.length, 1);
+    assert.equal(discovery.sessions[0].session_id, sessionId);
+    assert.equal(discovery.sessions[0].agent_id, 'narada-staccato.resident');
+    assert.equal(discovery.sessions[0].display_state, 'active');
+  } finally {
+    cleanup(workspaceRoot);
   }
 });
 

@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { basename, dirname, join } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
 export const NARS_SESSION_INDEX_RECORD_SCHEMA = 'narada.nars.session_index_record.v1';
@@ -26,7 +26,14 @@ const DEFAULT_HEARTBEAT_FRESH_MS = 30000;
 
 export function narsSessionsRootFromSiteRoot(siteRoot) {
   if (!siteRoot) throw new Error('site_root_required');
-  return join(String(siteRoot), '.narada', 'crew', 'nars-sessions');
+  return join(siteNaradaRoot(siteRoot), 'crew', 'nars-sessions');
+}
+
+function siteNaradaRoot(siteRoot) {
+  const normalized = resolve(String(siteRoot ?? ''));
+  return normalized.toLowerCase().endsWith('\\.narada') || normalized.toLowerCase().endsWith('/.narada')
+    ? normalized
+    : join(normalized, '.narada');
 }
 
 export function discoverNarsSessions({ siteRoot, sessionsRoot = null, now = new Date(), heartbeatFreshMs = DEFAULT_HEARTBEAT_FRESH_MS, healthBySessionId = null } = {}) {
