@@ -155,3 +155,31 @@ Acceptance coverage:
 - DAG templates are named as first-class delegation objects.
 - Review/repair/verification gates are included in the target shape.
 - Operators are directed toward templates instead of repeatedly hand-authoring common graphs.
+
+## 1554 - Provider/Auth Launch Preflight
+
+CL: 0.991
+
+First-class object: provider/runtime compatibility and credential readiness before operator handoff.
+
+Authority contract:
+
+- `@narada2/agent-start` provider resolution, credential projection, and launch preflight tests
+
+Current implementation posture:
+
+- Launch preflight covers provider registry resolution, missing credentials, Codex subscription readiness, unsupported provider/runtime combinations, and API key projection.
+- Provider/auth checks belong before the operator surface takes over, because failures after handoff are harder to diagnose and repair.
+- Runtime and operator surface selection must constrain provider choices rather than accepting impossible combinations.
+
+Remaining implementation work:
+
+- Keep interactive and noninteractive provider selection behavior aligned.
+- Make diagnostics name runtime, operator surface, selected provider, credential source, and remediation.
+- Preserve provider-specific secret names rather than collapsing all API keys into one generic variable.
+
+Acceptance coverage:
+
+- Provider failures are described as launch preflight failures, not opaque runtime errors.
+- Runtime/provider compatibility is named as part of launch admission.
+- Remediation guidance is specific to the missing or invalid credential source.
