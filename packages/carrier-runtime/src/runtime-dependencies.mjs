@@ -67,6 +67,12 @@ import {
   readNarsArtifactIndex,
   registerNarsArtifact,
 } from './nars-artifacts.mjs';
+import {
+  authorityTransitionSourceStateSnapshot,
+  beginSourceDrain,
+  classifySourceWriteAdmission,
+  sealSourceAuthority,
+} from './authority-transition-state.mjs';
 
 const PROVIDER_METADATA = loadProviderMetadata();
 
@@ -140,6 +146,144 @@ export function createCarrierRuntimeDependencies({ runtimeContext = {}, env = pr
       session,
     }),
     dependencies,
+  };
+}
+
+function authorityTransitionStatus(state = {}) {
+  return authorityTransitionSourceStateSnapshot(state.authorityTransition ?? {});
+}
+
+function sourceWriteAdmissionForRequest(state = {}, { methodKind = null, method = null, params = {} } = {}) {
+  const transitionPolicy = params?.transition_policy ?? params?.transitionPolicy ?? null;
+  return classifySourceWriteAdmission(state.authorityTransition, { methodKind, method, transitionPolicy });
+}
+
+function emitSourceWriteRefusal(context = {}, { requestId = null, methodKind = null, method = null, admission } = {}) {
+  const payload = {
+    event: 'authority_transition_input_refused',
+    request_id: requestId,
+    method,
+    method_kind: methodKind,
+    reason_code: admission.reason_code,
+    reason: admission.reason,
+    authority_transition: admission.authority_transition ?? authorityTransitionStatus(context.state),
+    terminal_state: 'refused',
+  };
+  context.appendSessionRecord?.({ ...payload, requested_at: new Date().toISOString() });
+  context.emit('authority_transition_input_refused', payload);
+}
+
+function refuseSourceWriteIfNotAdmitted(context = {}, { requestId = null, methodKind = null, method = null, params = {} } = {}) {
+  const admission = sourceWriteAdmissionForRequest(context.state, { methodKind, method, params });
+  if (admission.admitted) return admission;
+  emitSourceWriteRefusal(context, { requestId, methodKind, method, admission });
+  return admission;
+}
+
+function authorityTransitionSourceStatus(state = {}) {
+  const source = authorityTransitionStatus(state);
+  const sourceState = source.source_write_admission === 'sealed'
+    ? 'sealed'
+    : source.source_write_admission === 'draining'
+      ? 'draining'
+      : 'active';
+  return {
+    state: sourceState,
+    authority_transition_state: source.authority_transition_state,
+    source_write_admission: source.source_write_admission,
+    drain_policy: sourceState === 'draining' ? 'refuse_new_source_writes' : 'none',
+    draining_at: source.drain_started_at ?? null,
+    sealed_at: source.sealed_at ?? null,
+    seal_evidence: source.sealed_at ? {
+      event_cursor: {
+        last_source_sequence_before_seal: source.source_last_sequence,
+        next_source_sequence_after_seal: Number.isInteger(source.source_last_sequence) ? source.source_last_sequence + 1 : null,
+      },
+      operator_input_queue: inputQueueStatus(state),
+    } : null,
+  };
+}
+
+function setAuthorityTransitionSourceState(state = {}, next = {}) {
+  if (next.state === 'draining') {
+    state.authorityTransition = beginSourceDrain({
+      path: state.authorityTransitionStatePath,
+      sessionPath: state.sessionPath,
+      state: state.authorityTransition,
+      reason: next.reason ?? null,
+      requestedBy: next.requested_by ?? null,
+    });
+  } else if (next.state === 'sealed') {
+    state.authorityTransition = sealSourceAuthority({
+      path: state.authorityTransitionStatePath,
+      sessionPath: state.sessionPath,
+      state: state.authorityTransition,
+      sourceLastSequence: next.seal_evidence?.event_cursor?.last_source_sequence_before_seal,
+      reason: next.reason ?? null,
+      requestedBy: next.requested_by ?? null,
+    });
+  }
+  return authorityTransitionSourceStatus(state);
+}
+
+function isCanonicalSourceWriteRequest(controlRequest = {}) {
+  return [
+    'conversation_enqueue',
+    'conversation_send',
+    'conversation_steer',
+    'carrier_input_deliver',
+    'system_directive_deliver',
+  ].includes(controlRequest.method_kind);
+}
+
+function authoritySourceWriteRefusal(state = {}, controlRequest = {}) {
+  if (!isCanonicalSourceWriteRequest(controlRequest)) return null;
+  const source = authorityTransitionSourceStatus(state);
+  if (source.state === 'sealed') {
+    return {
+      code: 'authority_source_sealed',
+      message: 'Source authority is sealed; canonical source writes are refused to prevent split authority.',
+      failed_invariant: 'sealed_source_must_not_admit_canonical_writes',
+      authority_transition_source: source,
+    };
+  }
+  if (source.state === 'draining') {
+    return {
+      code: 'authority_source_draining',
+      message: 'Source authority is draining; new canonical source writes are refused until transition is sealed or cancelled.',
+      failed_invariant: 'draining_source_must_not_expand_operator_input_queue',
+      authority_transition_source: source,
+    };
+  }
+  return null;
+}
+
+function sourceSealReadiness(state = {}) {
+  const queue = inputQueueStatus(state);
+  if (state.activeTurn) {
+    return {
+      ready: false,
+      reason_code: 'active_turn_in_progress',
+      message: 'Cannot seal source authority while an active turn is running.',
+    };
+  }
+  if ((queue.pendingCount ?? 0) > 0) {
+    return {
+      ready: false,
+      reason_code: 'operator_input_queue_not_drained',
+      message: 'Cannot seal source authority while operator input remains queued.',
+    };
+  }
+  return { ready: true, reason_code: null, message: null };
+}
+
+function authoritySourceSealEvidence(state = {}) {
+  return {
+    event_cursor: {
+      last_source_sequence_before_seal: currentEventSequence,
+      next_source_sequence_after_seal: currentEventSequence + 1,
+    },
+    operator_input_queue: inputQueueStatus(state),
   };
 }
 
@@ -270,6 +414,11 @@ function serverOperations({ requestId, state, mcpServers, mcpPreflightArtifact, 
     event: 'session_operations',
     active_turn_state: state.activeTurn ? 'running' : 'idle',
     active_turn_id: state.activeTurn?.turnId ?? null,
+    operator_input_queue: inputQueueStatus(state),
+    authority_transition: authorityTransitionStatus(state),
+    authority_transition_state: state.authorityTransition?.authority_transition_state ?? null,
+    source_write_admission: state.authorityTransition?.source_write_admission ?? 'active',
+    authority_transition_source: authorityTransitionSourceStatus(state),
     operator_input_queue: inputQueueStatus(state),
     ...mcpStatus,
     ...createMcpPreflightArtifactSnapshot(mcpPreflightArtifact),
@@ -664,6 +813,76 @@ async function handleServerRequest(request, context) {
   try {
     if (state.closed && !controlRequest.allowed_when_closed) {
       emit('error', { request_id: requestId, code: 'session_closed', message: 'Session is closed.' });
+      return;
+    }
+    if (controlRequest.method_kind === 'authority_source_status') {
+      emit('authority_source_status', {
+        request_id: requestId,
+        authority_transition_source: authorityTransitionSourceStatus(state),
+        operator_input_queue: inputQueueStatus(state),
+        active_turn_state: state.activeTurn ? 'running' : 'idle',
+        active_turn_id: state.activeTurn?.turnId ?? null,
+      });
+      return;
+    }
+    if (controlRequest.method_kind === 'authority_source_drain') {
+      const current = authorityTransitionSourceStatus(state);
+      if (current.state === 'sealed') {
+        emit('authority_source_drain_refused', {
+          request_id: requestId,
+          reason_code: 'source_already_sealed',
+          failed_invariant: 'sealed_source_state_is_terminal_for_this_slice',
+          authority_transition_source: current,
+        });
+        return;
+      }
+      const source = setAuthorityTransitionSourceState(state, { state: 'draining', draining_at: new Date().toISOString() });
+      emit('authority_source_draining', {
+        request_id: requestId,
+        authority_transition_source: source,
+        operator_input_queue: inputQueueStatus(state),
+        active_turn_state: state.activeTurn ? 'running' : 'idle',
+        active_turn_id: state.activeTurn?.turnId ?? null,
+      });
+      return;
+    }
+    if (controlRequest.method_kind === 'authority_source_seal') {
+      const readiness = sourceSealReadiness(state);
+      if (!readiness.ready) {
+        emit('authority_source_seal_refused', {
+          request_id: requestId,
+          reason_code: readiness.reason_code,
+          message: readiness.message,
+          failed_invariant: 'source_can_only_seal_after_active_turn_and_queue_are_drained',
+          authority_transition_source: authorityTransitionSourceStatus(state),
+          operator_input_queue: inputQueueStatus(state),
+          active_turn_state: state.activeTurn ? 'running' : 'idle',
+          active_turn_id: state.activeTurn?.turnId ?? null,
+        });
+        return;
+      }
+      const sealEvidence = authoritySourceSealEvidence(state);
+      const source = setAuthorityTransitionSourceState(state, {
+        state: 'sealed',
+        sealed_at: new Date().toISOString(),
+        seal_evidence: sealEvidence,
+      });
+      emit('authority_source_sealed', {
+        request_id: requestId,
+        authority_transition_source: source,
+        seal_evidence: sealEvidence,
+      });
+      return;
+    }
+    const sourceWriteRefusal = authoritySourceWriteRefusal(state, controlRequest);
+    if (sourceWriteRefusal) {
+      emit('authority_source_write_refused', {
+        request_id: requestId,
+        method: controlRequest.method,
+        ...sourceWriteRefusal,
+        operator_input_queue: inputQueueStatus(state),
+      });
+      emit('error', { request_id: requestId, code: sourceWriteRefusal.code, message: sourceWriteRefusal.message });
       return;
     }
     if (controlRequest.method_kind === 'conversation_enqueue') {
@@ -1066,6 +1285,8 @@ export function serverStatus({ requestId, state, allTools, mcpServers, mcpPrefli
     goal_display: carrierGoalStatusLabel(goal),
     active_turn_state: state.activeTurn ? 'running' : 'idle',
     active_turn_id: state.activeTurn?.turnId ?? null,
+    authority_transition_source: authorityTransitionSourceStatus(state),
+    operator_input_queue: inputQueueStatus(state),
     mcp_server_count: Object.keys(mcpServers).length,
     ...mcpStatus,
     ...createMcpPreflightArtifactSnapshot(mcpPreflightArtifact),
@@ -1125,6 +1346,10 @@ function serverHealth({ requestId, state, allTools, mcpServers, mcpPreflightArti
       operational_posture: status.operational_posture,
       operational_posture_display: status.operational_posture_display,
     },
+    authority_transition: status.authority_transition,
+    authority_transition_state: status.authority_transition_state,
+    source_write_admission: status.source_write_admission,
+    authority_transition_source: status.authority_transition_source,
     handoffs: status.handoffs,
   };
 }

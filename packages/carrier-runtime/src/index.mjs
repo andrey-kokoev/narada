@@ -7,3 +7,4 @@ export * from './runtime-dependencies.mjs';
 export * from './carrier-runtime-context.mjs';
 export * from './nars-session-index.mjs';
 export * from './operator-input-queue-state.mjs';
+export * from './authority-transition-state.mjs';

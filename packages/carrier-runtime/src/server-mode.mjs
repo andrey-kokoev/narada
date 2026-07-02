@@ -14,6 +14,11 @@ import {
   readOperatorInputQueueState,
   writeOperatorInputQueueState,
 } from './operator-input-queue-state.mjs';
+import {
+  authorityTransitionSourceStateSnapshot,
+  authorityTransitionStatePathFromSessionPath,
+  readAuthorityTransitionSourceState,
+} from './authority-transition-state.mjs';
 
 export async function runCarrierServerMode({
   input = process.stdin,
@@ -82,8 +87,12 @@ export async function runCarrierServerMode({
   const mcpPreflightArtifact = readMcpPreflightArtifact();
   const mcpPreflightSnapshot = createMcpPreflightArtifactSnapshot(mcpPreflightArtifact);
   const rolePrompt = loadRolePrompt(identity, siteRoot);
+  const authorityTransitionStatePath = authorityTransitionStatePathFromSessionPath(sessionPath);
   const state = {
     activeTurn: null,
+    sessionPath,
+    authorityTransitionStatePath,
+    authorityTransition: readAuthorityTransitionSourceState(authorityTransitionStatePath),
     closed: false,
     displaySettings: { ...displaySettings },
     sessionSettings: { ...providerSettings },
@@ -227,6 +236,9 @@ export async function runCarrierServerMode({
     ...mcpPreflightSnapshot,
     ...createSessionActivitySnapshot(state),
     ...createOperationalPostureSnapshot({ state, mcpOperationalState: mcpStatus.mcp_operational_state }),
+    authority_transition_state: state.authorityTransition.authority_transition_state,
+    source_write_admission: state.authorityTransition.source_write_admission,
+    authority_transition: authorityTransitionSourceStateSnapshot(state.authorityTransition),
     tool_count: allTools.length,
     mcp_servers: mcpServerSummaryEntries(mcpServers),
     tool_outputs: displaySettings.toolOutputs ? 'shown' : 'hidden',

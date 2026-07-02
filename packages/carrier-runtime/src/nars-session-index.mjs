@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import {
   NARS_AUTHORITY_RUNTIME_HOST_KINDS,
   NARS_AUTHORITY_RUNTIME_HOST_TRANSITION_STATES,
+  NARS_AUTHORITY_RUNTIME_SOURCE_WRITE_ADMISSIONS,
 } from '@narada2/carrier-protocol';
 import { narsSessionsRootFromSiteRoot as resolveNarsSessionsRootFromSiteRoot } from '@narada2/site-paths';
 
@@ -141,6 +142,25 @@ export function markNarsSessionIndexClosed({ sessionPath, terminalState = 'close
   return { record: next, index, paths };
 }
 
+export function updateNarsSessionAuthorityTransitionState({ sessionPath, authorityTransitionState = null, sourceWriteAdmission = null, supersededBySessionId = undefined, authorityLocatorRef = undefined, updatedAt = new Date().toISOString(), siteRoot } = {}) {
+  const paths = narsSessionIndexPathsFromSessionPath(sessionPath);
+  if (!paths || !existsSync(paths.record_path)) return null;
+  const current = readJson(paths.record_path);
+  if (!current || current.schema !== NARS_SESSION_INDEX_RECORD_SCHEMA) return null;
+  const next = {
+    ...current,
+    authority_transition_state: normalizeAuthorityTransitionState(authorityTransitionState),
+    source_write_admission: NARS_AUTHORITY_RUNTIME_SOURCE_WRITE_ADMISSIONS.includes(sourceWriteAdmission) ? sourceWriteAdmission : current.source_write_admission ?? null,
+    ...(supersededBySessionId !== undefined ? { superseded_by_session_id: normalizeOptionalString(supersededBySessionId) } : {}),
+    ...(authorityLocatorRef !== undefined ? { authority_locator_ref: normalizeOptionalString(authorityLocatorRef) } : {}),
+    last_seen_at: updatedAt,
+    projection_generated_at: updatedAt,
+  };
+  writeJson(paths.record_path, next);
+  const index = rebuildNarsSessionIndex({ sessionsRoot: dirname(paths.session_dir), siteRoot: siteRoot ?? next.site_root, generatedAt: updatedAt });
+  return { record: next, index, paths };
+}
+
 export function readNarsSessionIndex({ sessionsRoot, siteRoot } = {}) {
   if (!sessionsRoot || !existsSync(sessionsRoot)) {
     return buildAggregateIndex({ siteRoot, sessions: [], generatedAt: new Date().toISOString() });
@@ -220,6 +240,7 @@ function buildSessionIndexRecord({ sessionStartedEvent, sessionPath, siteRoot, p
     authority_runtime_id: normalizeOptionalString(sessionStartedEvent.authority_runtime_id)
       ?? defaultAuthorityRuntimeId({ hostKind: authorityRuntimeHost, sessionId }),
     authority_transition_state: normalizeAuthorityTransitionState(sessionStartedEvent.authority_transition_state),
+    source_write_admission: NARS_AUTHORITY_RUNTIME_SOURCE_WRITE_ADMISSIONS.includes(sessionStartedEvent.source_write_admission) ? sessionStartedEvent.source_write_admission : 'active',
     superseded_by_session_id: normalizeOptionalString(sessionStartedEvent.superseded_by_session_id),
     authority_locator_ref: normalizeOptionalString(sessionStartedEvent.authority_locator_ref),
     attached_projections: null,
@@ -249,6 +270,7 @@ function toAggregateEntry(record) {
     authority_epoch: normalizeAuthorityEpoch(record.authority_epoch, null),
     authority_runtime_id: normalizeOptionalString(record.authority_runtime_id),
     authority_transition_state: normalizeAuthorityTransitionState(record.authority_transition_state),
+    source_write_admission: NARS_AUTHORITY_RUNTIME_SOURCE_WRITE_ADMISSIONS.includes(record.source_write_admission) ? record.source_write_admission : null,
     superseded_by_session_id: normalizeOptionalString(record.superseded_by_session_id),
     authority_locator_ref: normalizeOptionalString(record.authority_locator_ref),
     launch_operator_surface_kind: record.launch_operator_surface_kind ?? null,

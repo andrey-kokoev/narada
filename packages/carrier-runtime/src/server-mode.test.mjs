@@ -292,7 +292,7 @@ test('server mode writes NARS session index record on startup', async () => {
     assert.equal(aggregate.sessions[0].session_id, sessionId);
     assert.equal(aggregate.sessions[0].terminal_state, 'closed');
   } finally {
-    rmSync(siteRoot, { recursive: true, force: true });
+    rmSync(siteRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
   }
 });
 
@@ -364,7 +364,7 @@ test('conversation.enqueue during an active turn queues without interrupting and
     assert.equal(events.some((event) => event.event === 'conversation_enqueue_requested'), true);
     assert.equal(events.some((event) => event.event === 'turn_interrupted'), false);
   } finally {
-    rmSync(siteRoot, { recursive: true, force: true });
+    rmSync(siteRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
   }
 });
 
@@ -427,7 +427,141 @@ test('server mode reloads pending operator input queue state on startup', async 
     assert.equal(providerCalls[0].some((message) => message.role === 'user' && message.content === 'restored operator input'), true);
     assert.equal(readJson(join(sessionDir, 'operator-input-queue.json')).pending_count, 0);
   } finally {
-    rmSync(siteRoot, { recursive: true, force: true });
+    rmSync(siteRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+  }
+});
+
+test('authority source drain refuses new canonical source writes', async () => {
+  const siteRoot = mkdtempSync(join(tmpdir(), 'carrier-source-drain-test-'));
+  try {
+    const input = new PassThrough();
+    const output = new PassThrough();
+    const events = [];
+    let outputBuffer = '';
+    output.setEncoding('utf8');
+    output.on('data', (chunk) => {
+      outputBuffer += chunk;
+      const lines = outputBuffer.split(/\r?\n/);
+      outputBuffer = lines.pop() ?? '';
+      for (const line of lines) if (line.trim()) events.push(JSON.parse(line));
+    });
+
+    const sessionDir = resolveNaradaSitePaths({ siteRoot, sessionId: 'session_source_drain_test' }).narsSessionDir;
+    const runtimeContext = {
+      identity: 'agent.test',
+      session: 'session_source_drain_test',
+      siteRoot,
+      sessionPath: join(sessionDir, 'session.jsonl'),
+      eventsPath: join(sessionDir, 'events.jsonl'),
+      providerSettings: { stream: false },
+    };
+    const { dependencies } = createCarrierRuntimeDependencies({ runtimeContext });
+    let providerCalls = 0;
+    const running = runCarrierServerMode({
+      input,
+      output,
+      callChatApiFn: async () => {
+        providerCalls += 1;
+        return { choices: [{ message: { role: 'assistant', content: 'unexpected' } }] };
+      },
+      runtimeContext,
+      dependencies: {
+        ...dependencies,
+        discoverAndStartMcpServers: async () => ({}),
+        closeMcpServers: () => {},
+        readMcpPreflightArtifact: () => null,
+      },
+    });
+
+    input.write(`${JSON.stringify({ id: 'drain', method: 'authority.source.drain' })}\n`);
+    await waitFor(() => events.some((event) => event.event === 'authority_source_draining'));
+    input.write(`${JSON.stringify({ id: 'send', method: 'conversation.send', params: { message: 'must not run' } })}\n`);
+    input.write(`${JSON.stringify({ id: 'enqueue', method: 'conversation.enqueue', params: { message: 'must not queue' } })}\n`);
+    input.write(`${JSON.stringify({ id: 'steer', method: 'conversation.steer', params: { message: 'must not steer' } })}\n`);
+    input.write(`${JSON.stringify({ id: 'status', method: 'authority.source.status' })}\n`);
+    input.end();
+    await running;
+
+    assert.equal(providerCalls, 0);
+    const refusals = events.filter((event) => event.event === 'authority_source_write_refused');
+    assert.equal(refusals.length, 3);
+    assert.equal(refusals.every((event) => event.code === 'authority_source_draining'), true);
+    const statusEvent = events.find((event) => event.event === 'authority_source_status');
+    assert.equal(statusEvent?.authority_transition_source?.state, 'draining');
+    const transitionState = readJson(join(sessionDir, 'authority-transition-state.json'));
+    assert.equal(transitionState.source_write_admission, 'draining');
+    assert.equal(transitionState.authority_transition_state, 'source_draining');
+    assert.equal(readJson(join(sessionDir, 'operator-input-queue.json')).pending_count, 0);
+  } finally {
+    rmSync(siteRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+  }
+});
+
+test('authority source seal persists seal evidence and refuses writes after seal', async () => {
+  const siteRoot = mkdtempSync(join(tmpdir(), 'carrier-source-seal-test-'));
+  try {
+    const input = new PassThrough();
+    const output = new PassThrough();
+    const events = [];
+    let outputBuffer = '';
+    output.setEncoding('utf8');
+    output.on('data', (chunk) => {
+      outputBuffer += chunk;
+      const lines = outputBuffer.split(/\r?\n/);
+      outputBuffer = lines.pop() ?? '';
+      for (const line of lines) if (line.trim()) events.push(JSON.parse(line));
+    });
+
+    const sessionDir = resolveNaradaSitePaths({ siteRoot, sessionId: 'session_source_seal_test' }).narsSessionDir;
+    const runtimeContext = {
+      identity: 'agent.test',
+      session: 'session_source_seal_test',
+      siteRoot,
+      sessionPath: join(sessionDir, 'session.jsonl'),
+      eventsPath: join(sessionDir, 'events.jsonl'),
+      providerSettings: { stream: false },
+    };
+    const { dependencies } = createCarrierRuntimeDependencies({ runtimeContext });
+    let providerCalls = 0;
+    const running = runCarrierServerMode({
+      input,
+      output,
+      callChatApiFn: async () => {
+        providerCalls += 1;
+        return { choices: [{ message: { role: 'assistant', content: 'unexpected' } }] };
+      },
+      runtimeContext,
+      dependencies: {
+        ...dependencies,
+        discoverAndStartMcpServers: async () => ({}),
+        closeMcpServers: () => {},
+        readMcpPreflightArtifact: () => null,
+      },
+    });
+
+    input.write(`${JSON.stringify({ id: 'drain', method: 'authority.source.drain' })}\n`);
+    await waitFor(() => events.some((event) => event.event === 'authority_source_draining'));
+    input.write(`${JSON.stringify({ id: 'seal', method: 'authority.source.seal' })}\n`);
+    await waitFor(() => events.some((event) => event.event === 'authority_source_sealed'));
+    input.write(`${JSON.stringify({ id: 'send', method: 'conversation.send', params: { message: 'must not run after seal' } })}\n`);
+    input.end();
+    await running;
+
+    assert.equal(providerCalls, 0);
+    const sealed = events.find((event) => event.event === 'authority_source_sealed');
+    assert.equal(sealed?.authority_transition_source?.state, 'sealed');
+    assert.equal(Number.isInteger(sealed?.seal_evidence?.event_cursor?.last_source_sequence_before_seal), true);
+    const refusal = events.find((event) => event.event === 'authority_source_write_refused');
+    assert.equal(refusal?.code, 'authority_source_sealed');
+    const transitionState = readJson(join(sessionDir, 'authority-transition-state.json'));
+    assert.equal(transitionState.source_write_admission, 'sealed');
+    assert.equal(transitionState.authority_transition_state, 'source_sealed');
+    assert.equal(Number.isInteger(transitionState.source_last_sequence), true);
+    const sessionIndexRecord = readJson(join(sessionDir, 'session-index-record.json'));
+    assert.equal(sessionIndexRecord.authority_transition_state, 'source_sealed');
+    assert.equal(sessionIndexRecord.source_write_admission, 'sealed');
+  } finally {
+    rmSync(siteRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
   }
 });
 
@@ -504,6 +638,7 @@ test('conversation.steer interrupts the active turn and becomes the next provide
     assert.equal(steerEventIndex < interruptEventIndex, true);
     assert.equal(events.some((event) => event.event === 'turn_complete' && event.terminal_state === 'interrupted'), true);
   } finally {
-    rmSync(siteRoot, { recursive: true, force: true });
+    rmSync(siteRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
   }
 });
+
