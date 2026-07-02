@@ -724,6 +724,121 @@ test('authority target activation emits deterministic boundary event and admits 
   }
 });
 
+test('synthetic local to Cloudflare authority transition refuses source writes and admits target writes', async () => {
+  const siteRoot = mkdtempSync(join(tmpdir(), 'carrier-local-cloudflare-authority-e2e-'));
+  try {
+    const input = new PassThrough();
+    const output = new PassThrough();
+    const events = [];
+    let outputBuffer = '';
+    output.setEncoding('utf8');
+    output.on('data', (chunk) => {
+      outputBuffer += chunk;
+      const lines = outputBuffer.split(/\r?\n/);
+      outputBuffer = lines.pop() ?? '';
+      for (const line of lines) if (line.trim()) events.push(JSON.parse(line));
+    });
+
+    const sessionId = 'session_local_to_cloudflare_test';
+    const sessionDir = resolveNaradaSitePaths({ siteRoot, sessionId }).narsSessionDir;
+    const runtimeContext = {
+      identity: 'agent.test',
+      session: sessionId,
+      siteRoot,
+      sessionPath: join(sessionDir, 'session.jsonl'),
+      eventsPath: join(sessionDir, 'events.jsonl'),
+      authorityRuntimeHost: 'local',
+      providerSettings: { stream: false },
+    };
+    const { dependencies } = createCarrierRuntimeDependencies({ runtimeContext });
+    let providerCalls = 0;
+    const running = runCarrierServerMode({
+      input,
+      output,
+      callChatApiFn: async () => {
+        providerCalls += 1;
+        return { choices: [{ message: { role: 'assistant', content: 'cloudflare target write admitted' } }] };
+      },
+      runtimeContext,
+      dependencies: {
+        ...dependencies,
+        discoverAndStartMcpServers: async () => ({}),
+        closeMcpServers: () => {},
+        readMcpPreflightArtifact: () => null,
+      },
+    });
+
+    input.write(`${JSON.stringify({ id: 'drain-source', method: 'authority.source.drain' })}\n`);
+    await waitFor(() => events.some((event) => event.event === 'authority_source_draining'));
+    input.write(`${JSON.stringify({ id: 'seal-source', method: 'authority.source.seal' })}\n`);
+    await waitFor(() => events.some((event) => event.event === 'authority_source_sealed'));
+    input.write(`${JSON.stringify({ id: 'source-write-after-seal', method: 'conversation.send', params: { message: 'must be refused by sealed local source' } })}\n`);
+
+    const targetLocator = {
+      kind: 'cloudflare-host',
+      site_id: 'site_synthetic_cloudflare_target',
+      session_id: 'cf_session_local_to_cloudflare_test',
+      worker_url: 'https://synthetic-cloudflare-target.example.test',
+    };
+    input.write(`${JSON.stringify({
+      id: 'prepare-cloudflare-target',
+      method: 'authority.target.prepare',
+      params: {
+        superseded_by_session_id: sessionId,
+        authority_locator_ref: 'authority_locator:cloudflare-host/site_synthetic_cloudflare_target/cf_session_local_to_cloudflare_test',
+        target_authority_locator: targetLocator,
+      },
+    })}\n`);
+    await waitFor(() => events.some((event) => event.event === 'authority_target_prepared'));
+    input.write(`${JSON.stringify({
+      id: 'activate-cloudflare-target',
+      method: 'authority.target.activate',
+      params: {
+        authority_epoch_token: { source_authority_epoch: 10, target_authority_epoch: 11, token_id: 'local-cloudflare-epoch-11' },
+        target_health: { status: 'healthy', checked_by: 'synthetic-e2e' },
+        mcp_fabric: { status: 'compatible', attached_surface_count: 0 },
+        artifacts: { source_paths_exposed: false },
+        superseded_by_session_id: sessionId,
+        authority_locator_ref: 'authority_locator:cloudflare-host/site_synthetic_cloudflare_target/cf_session_local_to_cloudflare_test',
+        target_authority_locator: targetLocator,
+      },
+    })}\n`);
+    await waitFor(() => events.some((event) => event.event === 'authority_target_active'));
+    input.write(`${JSON.stringify({ id: 'target-write-after-activation', method: 'conversation.send', params: { message: 'accepted by cloudflare target authority' } })}\n`);
+    input.end();
+    await running;
+
+    const sourceRefusal = events.find((event) => event.event === 'authority_source_write_refused');
+    assert.equal(sourceRefusal?.code, 'authority_source_sealed');
+    const active = events.find((event) => event.event === 'authority_target_active');
+    assert.equal(active.event_sequence, active.target_first_sequence);
+    assert.equal(active.activation_id, `authority_target_active:${sessionId}:11:${active.target_first_sequence}`);
+    assert.equal(active.authority_transition_target.state, 'active');
+    assert.equal(active.authority_transition_source.target_authority_locator.kind, 'cloudflare-host');
+    assert.equal(active.authority_transition_source.authority_locator_ref, 'authority_locator:cloudflare-host/site_synthetic_cloudflare_target/cf_session_local_to_cloudflare_test');
+    assert.equal(providerCalls, 1);
+    const replayableLog = readJsonl(join(sessionDir, 'events.jsonl'));
+    assert.equal(replayableLog.some((entry) => entry.event === 'authority_source_sealed'), true);
+    assert.equal(replayableLog.some((entry) => entry.event === 'authority_target_active'), true);
+
+    const transitionState = readJson(join(sessionDir, 'authority-transition-state.json'));
+    assert.equal(transitionState.authority_transition_state, 'target_active');
+    assert.equal(transitionState.source_write_admission, 'sealed');
+    assert.equal(transitionState.target_write_admission, 'active_after_epoch_token');
+    assert.equal(transitionState.target_authority_locator.kind, 'cloudflare-host');
+    assert.equal(transitionState.superseded_by_session_id, sessionId);
+    assert.equal(transitionState.authority_locator_ref, 'authority_locator:cloudflare-host/site_synthetic_cloudflare_target/cf_session_local_to_cloudflare_test');
+    const sessionIndexRecord = readJson(join(sessionDir, 'session-index-record.json'));
+    assert.equal(sessionIndexRecord.authority_transition_state, 'target_active');
+    assert.equal(sessionIndexRecord.source_write_admission, 'sealed');
+    assert.equal(sessionIndexRecord.superseded_by_session_id, sessionId);
+    assert.equal(sessionIndexRecord.authority_locator_ref, 'authority_locator:cloudflare-host/site_synthetic_cloudflare_target/cf_session_local_to_cloudflare_test');
+    assert.equal(sessionIndexRecord.terminal_state, 'closed');
+  } finally {
+    removeTempDir(siteRoot);
+  }
+});
+
 test('conversation.steer interrupts the active turn and becomes the next provider input', async () => {
   const siteRoot = mkdtempSync(join(tmpdir(), 'carrier-steer-test-'));
   try {
