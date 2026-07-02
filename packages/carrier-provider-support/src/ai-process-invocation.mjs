@@ -14,6 +14,10 @@ export class AiProcessInvocationRefusalError extends Error {
   }
 }
 
+function leaseRoot(admission) {
+  return admission?.lease_path ? resolve(admission.lease_path, '..', '..') : aiProcessInvocationRoot({ siteRoot: admission.site_root, cwd: admission.cwd });
+}
+
 function liveCapRefusal({ record, leaseDir, artifactDir, leasePath, options, allowDuplicate }) {
   const cap = Number(record.policy.max_live_codex_invocations_per_site_session);
   if (allowDuplicate || record.adapter_kind !== 'codex' || !Number.isInteger(cap) || cap <= 0) return null;
@@ -21,7 +25,8 @@ function liveCapRefusal({ record, leaseDir, artifactDir, leasePath, options, all
   if (live.length < cap) return null;
   const refusal = {
     ...record,
-    event: 'refused',
+    event: 'refusal',
+    lifecycle_state: 'refused',
     admitted: false,
     reason: 'codex_live_invocation_cap_exceeded',
     existing_invocations: live,
@@ -123,7 +128,8 @@ export function admitAiProcessInvocation(invocation, options = {}) {
   if (existing && isPidAlive(existing.owner_pid, options.isPidAlive) && !allowDuplicate) {
     const refusal = {
       ...record,
-      event: 'refused',
+      event: 'refusal',
+      lifecycle_state: 'refused',
       admitted: false,
       reason: 'duplicate_live_invocation',
       existing_invocation: existing,
@@ -140,7 +146,7 @@ export function admitAiProcessInvocation(invocation, options = {}) {
   const capRefusal = liveCapRefusal({ record, leaseDir, artifactDir, leasePath, options, allowDuplicate });
   if (capRefusal) return capRefusal;
 
-  const admitted = { ...record, event: 'admitted', admitted: true, lease_path: leasePath };
+  const admitted = { ...record, event: 'launch', lifecycle_state: 'admitted', admitted: true, lease_path: leasePath };
   writeFileSync(leasePath, `${JSON.stringify(admitted, null, 2)}\n`, 'utf8');
   admitted.artifact_path = writeEvidenceArtifact(artifactDir, admitted);
   return admitted;
@@ -148,12 +154,13 @@ export function admitAiProcessInvocation(invocation, options = {}) {
 
 export function releaseAiProcessInvocationLease(admission, result = {}) {
   if (!admission?.admitted) return;
-  const artifactDir = join(aiProcessInvocationRoot({ siteRoot: admission.site_root, cwd: admission.cwd }), 'artifacts');
+  const artifactDir = join(leaseRoot(admission), 'artifacts');
   try { rmSync(admission.lease_path, { force: true }); } catch { /* best effort */ }
   try {
     writeEvidenceArtifact(artifactDir, {
       ...admission,
-      event: 'exited',
+      event: 'exit',
+      lifecycle_state: 'exited',
       exit_code: result.exitCode ?? result.status ?? null,
       signal: result.signal ?? null,
       exited_at: new Date().toISOString(),
