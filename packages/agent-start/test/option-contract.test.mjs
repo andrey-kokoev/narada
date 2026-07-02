@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -41,7 +41,25 @@ function run(extraArgs = [], extraEnv = {}) {
     cwd: naradaProperRoot,
     encoding: 'utf8',
     env: { ...process.env, ...baseTestEnv, ...extraEnv },
+    windowsHide: true,
   });
+}
+
+function writeMinimalMcpFabric(siteRoot, serverName) {
+  mkdirSync(join(siteRoot, '.ai'), { recursive: true });
+  mkdirSync(join(siteRoot, '.ai', 'mcp'), { recursive: true });
+  copyFileSync(join(naradaProperRoot, '.ai', 'task-lifecycle.db'), join(siteRoot, '.ai', 'task-lifecycle.db'));
+  writeFileSync(join(siteRoot, '.ai', 'mcp', `${serverName}.json`), JSON.stringify({
+    mcpServers: {
+      [serverName]: {
+        transport: 'stdio',
+        command: 'node',
+        args: ['--version'],
+        tools: ['agent_context_startup_sequence'],
+        target_site_root: '{site_root}',
+      },
+    },
+  }, null, 2), 'utf8');
 }
 
 function runRealLaunch(extraArgs = [], extraEnv = {}) {
@@ -50,6 +68,7 @@ function runRealLaunch(extraArgs = [], extraEnv = {}) {
     cwd: naradaProperRoot,
     encoding: 'utf8',
     env: { ...process.env, ...baseTestEnv, ...extraEnv },
+    windowsHide: true,
   });
 }
 
@@ -665,6 +684,43 @@ test('admission options expose admission result without launching', () => {
   const output = runOk(['--runtime', 'codex', '--admit-session'], { NARADA_CODEX_CLI_SCRIPT: launcherPath });
   assert.equal(typeof output.admission_id, 'string');
   assert.match(output.admission_id, /^codexadm_/);
+});
+
+test('direct codex carrier exec records AiProcessInvocation launch and exit evidence', () => {
+  const siteRoot = mkdtempSync(join(tmpdir(), 'narada-direct-codex-ai-invocation-'));
+  writeMinimalMcpFabric(siteRoot, 'narada-test-agent-context');
+  const fakeCodexScript = join(siteRoot, 'fake-codex.js');
+  writeFileSync(fakeCodexScript, 'process.exit(0);\n', 'utf8');
+
+  const result = spawnSync(process.execPath, [
+    '--import',
+    tsxLoaderPath,
+    launcherPath,
+    identity,
+    '--site-root',
+    siteRoot,
+    '--target-site-root',
+    siteRoot,
+    '--runtime',
+    'codex',
+    '--mcp-scope',
+    'local-site',
+    '--exec',
+    '--json',
+  ], {
+    cwd: siteRoot,
+    encoding: 'utf8',
+    env: { ...process.env, ...baseTestEnv, NARADA_CODEX_CLI_SCRIPT: fakeCodexScript },
+    windowsHide: true,
+  });
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const root = join(siteRoot, '.ai', 'runtime', 'ai-process-invocation');
+  const entries = readdirSync(root, { recursive: true, withFileTypes: true })
+    .filter((entry) => entry.isFile() && entry.name.endsWith('.json'));
+  const artifacts = entries.map((entry) => JSON.parse(readFileSync(join(entry.parentPath, entry.name), 'utf8')));
+  assert.equal(artifacts.some((artifact) => artifact.event === 'launch' && artifact.projection === 'direct-carrier'), true);
+  assert.equal(artifacts.some((artifact) => artifact.event === 'exit' && artifact.projection === 'direct-carrier'), true);
 });
 
 test('opencode runtime is admitted by the contract', () => {

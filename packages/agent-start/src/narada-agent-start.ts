@@ -945,24 +945,38 @@ if (carrier === 'agent-cli' || carrier === 'agent-web-ui' || carrier === AGENT_T
 const isOpencodeWin32 = carrier === 'opencode' && process.platform === 'win32';
 const spawnCommand = isOpencodeWin32 ? 'cmd.exe' : resolveCarrierExecutableCommand(carrier);
 const spawnCommandArgs = isOpencodeWin32 ? ['/c', resolveCarrierExecutableCommand(carrier), ...spawnArgs] : spawnArgs;
+const processEnvironment = {
+  ...process.env,
+  ...intelligenceProviderEnv,
+  ...mcpProviderCredentialEnv,
+  ...(carrier === 'pi' ? {} : runtimeEnvironment),
+  NARADA_AGENT_ID: identity,
+  NARADA_AGENT_START_EVENT_ID: startResult.agent_start_event,
+  NARADA_CARRIER_SESSION_ID: carrierSessionRegistration.carrier_session_id,
+  NARADA_OPERATOR_SURFACE_KIND: carrier,
+  NARADA_SITE_ROOT: environmentSiteRoot,
+  NARADA_WORKSPACE_ROOT: workspaceRoot,
+  NARADA_AGENT_CONTEXT_DB: dbPath,
+  ...agentTuiEnvironment,
+};
+const aiProcessInvocation = carrier === 'codex'
+  ? {
+      adapterKind: 'codex',
+      projection: 'direct-carrier',
+      purpose: 'operator_surface_runtime',
+      siteRoot: sessionSiteRoot,
+      workspaceRoot,
+      agentId: identity,
+      sessionId: carrierSessionRegistration.carrier_session_id,
+      threadId: startResult.agent_start_event,
+    }
+  : null;
 
 spawnCarrierProcessAndExit({
   command: spawnCommand,
   args: spawnCommandArgs,
   cwd: process.cwd(),
-  env: {
-    ...process.env,
-    ...intelligenceProviderEnv,
-    ...mcpProviderCredentialEnv,
-    ...(carrier === 'pi' ? {} : runtimeEnvironment),
-    NARADA_AGENT_ID: identity,
-    NARADA_AGENT_START_EVENT_ID: startResult.agent_start_event,
-    NARADA_CARRIER_SESSION_ID: carrierSessionRegistration.carrier_session_id,
-    NARADA_OPERATOR_SURFACE_KIND: carrier,
-    NARADA_SITE_ROOT: environmentSiteRoot,
-    NARADA_WORKSPACE_ROOT: workspaceRoot,
-    NARADA_AGENT_CONTEXT_DB: dbPath,
-    ...agentTuiEnvironment,
-  },
+  env: processEnvironment,
   spawnOptions: carrierSpawnOptions(carrier),
+  aiProcessInvocation,
 });
