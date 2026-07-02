@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { resolveNaradaSitePaths } from '@narada2/site-paths';
 import {
   NARS_AUTHORITY_RUNTIME_HOST_TRANSITION_STATES,
   NARS_AUTHORITY_RUNTIME_SOURCE_WRITE_ADMISSIONS,
@@ -36,7 +37,57 @@ export function writeAuthorityTransitionSourceState(path, state = {}) {
   return next;
 }
 
-export function prepareTargetAuthority({ path, sessionPath, state, targetAuthorityLocator = null, supersededBySessionId = null, authorityLocatorRef = null, reason = null, requestedBy = null, now = new Date() } = {}) {
+export function planTargetAuthorityTransition({ sourceAuthorityRuntimeHost = 'local', currentSiteRoot = null, currentSessionId = null, targetAuthorityLocator = null, supersededBySessionId = null, authorityLocatorRef = null } = {}) {
+  const sourceHostKind = normalizeAuthorityRuntimeHostKind(sourceAuthorityRuntimeHost, 'local');
+  const rawLocator = normalizeOptionalObject(targetAuthorityLocator);
+  const targetHostKind = normalizeAuthorityRuntimeHostKind(rawLocator?.kind ?? rawLocator?.host_kind, null);
+  const refusals = [];
+  if (!rawLocator) refusals.push(authorityTargetPlanRefusal('target_authority_locator_missing', 'target_authority_locator_required', 'Target preparation requires an explicit target authority locator.'));
+  if (!targetHostKind) refusals.push(authorityTargetPlanRefusal('target_authority_host_kind_invalid', 'target_authority_locator_kind_required', 'Target authority locator kind must be local or cloudflare-host.'));
+  let normalizedLocator = rawLocator ? { ...rawLocator, kind: targetHostKind ?? rawLocator.kind } : null;
+  const requirements = [];
+  if (targetHostKind === 'local') {
+    requirements.push('local_target_session_id', 'local_target_site_path_resolution');
+    const targetSessionId = normalizeOptionalString(rawLocator?.session_id ?? rawLocator?.sessionId ?? currentSessionId);
+    if (!targetSessionId) refusals.push(authorityTargetPlanRefusal('local_target_session_id_missing', 'local_target_requires_session_id', 'Local target preparation requires a session_id.'));
+    const rawSiteRoot = rawLocator?.site_root ?? rawLocator?.siteRoot ?? (sourceHostKind === 'local' ? currentSiteRoot : null);
+    if (!rawSiteRoot) {
+      refusals.push(authorityTargetPlanRefusal('local_target_site_root_missing', 'cloudflare_to_local_requires_explicit_site_root', 'Cloudflare-to-local preparation requires an explicit local site_root.'));
+    } else if (targetSessionId) {
+      const resolvedSiteRoot = resolve(String(rawSiteRoot));
+      const sitePaths = resolveNaradaSitePaths({ siteRoot: resolvedSiteRoot, sessionId: targetSessionId });
+      normalizedLocator = {
+        ...normalizedLocator,
+        kind: 'local',
+        site_root: resolvedSiteRoot,
+        session_id: targetSessionId,
+        session_dir: sitePaths.narsSessionDir,
+        session_path: sitePaths.narsSessionPath,
+        events_path: sitePaths.narsEventsPath,
+      };
+    }
+  } else if (targetHostKind === 'cloudflare-host') {
+    requirements.push('cloudflare_target_site_id', 'cloudflare_target_session_id');
+    if (!normalizeOptionalString(rawLocator?.site_id ?? rawLocator?.siteId)) refusals.push(authorityTargetPlanRefusal('cloudflare_target_site_id_missing', 'cloudflare_target_requires_site_id', 'Cloudflare target preparation requires a site_id.'));
+    if (!normalizeOptionalString(rawLocator?.session_id ?? rawLocator?.sessionId)) refusals.push(authorityTargetPlanRefusal('cloudflare_target_session_id_missing', 'cloudflare_target_requires_session_id', 'Cloudflare target preparation requires a session_id.'));
+  }
+  return {
+    schema: 'narada.nars.authority_transition_plan.v1',
+    status: refusals.length > 0 ? 'refused' : 'ready',
+    direction: targetHostKind ? `${sourceHostKind}_to_${targetHostKind}` : 'unknown',
+    source_authority_runtime_host: sourceHostKind,
+    target_authority_runtime_host: targetHostKind,
+    target_authority_locator: normalizedLocator,
+    superseded_by_session_id: normalizeOptionalString(supersededBySessionId),
+    authority_locator_ref: normalizeOptionalString(authorityLocatorRef),
+    preparation_requirements: requirements,
+    shared_activation_requirements: ['source_seal_evidence', 'source_event_cursor', 'authority_epoch_token', 'target_first_sequence', 'target_health', 'mcp_fabric', 'artifact_handoff_policy'],
+    direction_specific_requirements: requirements,
+    refusals,
+  };
+}
+
+export function prepareTargetAuthority({ path, sessionPath, state, targetAuthorityLocator = null, supersededBySessionId = null, authorityLocatorRef = null, transitionPlan = null, reason = null, requestedBy = null, now = new Date() } = {}) {
   const current = normalizeAuthorityTransitionSourceState(state ?? readAuthorityTransitionSourceState(path));
   const occurredAt = now.toISOString();
   const next = writeAuthorityTransitionSourceState(path, {
@@ -47,6 +98,7 @@ export function prepareTargetAuthority({ path, sessionPath, state, targetAuthori
     target_authority_locator: normalizeOptionalObject(targetAuthorityLocator) ?? current.target_authority_locator ?? null,
     superseded_by_session_id: normalizeOptionalString(supersededBySessionId) ?? current.superseded_by_session_id ?? null,
     authority_locator_ref: normalizeOptionalString(authorityLocatorRef) ?? current.authority_locator_ref ?? null,
+    target_transition_plan: normalizeOptionalObject(transitionPlan) ?? current.target_transition_plan ?? null,
     target_prepare_reason: reason ?? current.target_prepare_reason ?? null,
     target_prepare_requested_by: requestedBy ?? current.target_prepare_requested_by ?? null,
     last_transition: { transition: 'preparing_target', occurred_at: occurredAt, reason, requested_by: requestedBy },
@@ -155,6 +207,7 @@ export function authorityTransitionSourceStateSnapshot(state = {}) {
     target_authority_locator: normalized.target_authority_locator,
     superseded_by_session_id: normalized.superseded_by_session_id,
     authority_locator_ref: normalized.authority_locator_ref,
+    target_transition_plan: normalized.target_transition_plan,
     last_transition: normalized.last_transition,
   };
 }
@@ -231,6 +284,7 @@ export function emptyAuthorityTransitionSourceState({ path = null, corrupt = fal
     target_authority_locator: null,
     superseded_by_session_id: null,
     authority_locator_ref: null,
+    target_transition_plan: null,
     last_transition: null,
   });
 }
@@ -268,6 +322,7 @@ function normalizeAuthorityTransitionSourceState(state = {}) {
     target_authority_locator: normalizeOptionalObject(state.target_authority_locator),
     superseded_by_session_id: normalizeOptionalString(state.superseded_by_session_id),
     authority_locator_ref: normalizeOptionalString(state.authority_locator_ref),
+    target_transition_plan: normalizeOptionalObject(state.target_transition_plan),
     target_activation_reason: state.target_activation_reason ?? null,
     target_activation_requested_by: state.target_activation_requested_by ?? null,
     seal_reason: state.seal_reason ?? null,
@@ -282,4 +337,12 @@ function normalizeOptionalString(value) {
 
 function normalizeOptionalObject(value) {
   return value && typeof value === 'object' && !Array.isArray(value) ? value : null;
+}
+
+function normalizeAuthorityRuntimeHostKind(value, fallback = null) {
+  return value === 'local' || value === 'cloudflare-host' ? value : fallback;
+}
+
+function authorityTargetPlanRefusal(reasonCode, failedInvariant, reason) {
+  return { reason_code: reasonCode, failed_invariant: failedInvariant, reason };
 }

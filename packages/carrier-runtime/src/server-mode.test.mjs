@@ -7,6 +7,12 @@ import test from 'node:test';
 import { resolveNaradaSitePaths } from '@narada2/site-paths';
 import { createCarrierRuntimeDependencies } from './runtime-dependencies.mjs';
 import { runCarrierServerMode } from './server-mode.mjs';
+import {
+  activateTargetAuthority,
+  planTargetAuthorityTransition,
+  prepareTargetAuthority,
+  sealSourceAuthority,
+} from './authority-transition-state.mjs';
 
 function waitFor(predicate, { timeoutMs = 1000 } = {}) {
   const startedAt = Date.now();
@@ -613,7 +619,11 @@ test('authority target activation refuses missing source seal and epoch evidence
       },
     });
 
-    input.write(`${JSON.stringify({ id: 'prepare', method: 'authority.target.prepare' })}\n`);
+    input.write(`${JSON.stringify({
+      id: 'prepare',
+      method: 'authority.target.prepare',
+      params: { target_authority_locator: { kind: 'local', session_id: 'session_target_refusal_test' } },
+    })}\n`);
     await waitFor(() => events.some((event) => event.event === 'authority_target_prepared'));
     input.write(`${JSON.stringify({ id: 'send-before-active', method: 'conversation.send', params: { message: 'must not run before target active' } })}\n`);
     input.write(`${JSON.stringify({ id: 'activate', method: 'authority.target.activate' })}\n`);
@@ -836,6 +846,74 @@ test('synthetic local to Cloudflare authority transition refuses source writes a
     assert.equal(sessionIndexRecord.terminal_state, 'closed');
   } finally {
     removeTempDir(siteRoot);
+  }
+});
+
+test('Cloudflare to local authority planning is modeled as a forward epoch with resolved local target paths', () => {
+  const sourceSiteRoot = mkdtempSync(join(tmpdir(), 'carrier-cloudflare-local-source-plan-'));
+  const targetSiteRoot = mkdtempSync(join(tmpdir(), 'carrier-cloudflare-local-target-plan-'));
+  try {
+    const sourceSessionId = 'cf_session_planning_source';
+    const targetSessionId = 'local_session_planning_target';
+    const sourceSessionDir = resolveNaradaSitePaths({ siteRoot: sourceSiteRoot, sessionId: sourceSessionId }).narsSessionDir;
+    const sourceSessionPath = join(sourceSessionDir, 'session.jsonl');
+    const sourceStatePath = join(sourceSessionDir, 'authority-transition-state.json');
+    const plan = planTargetAuthorityTransition({
+      sourceAuthorityRuntimeHost: 'cloudflare-host',
+      currentSiteRoot: sourceSiteRoot,
+      currentSessionId: sourceSessionId,
+      supersededBySessionId: sourceSessionId,
+      authorityLocatorRef: 'authority_locator:local/local-site/local_session_planning_target',
+      targetAuthorityLocator: {
+        kind: 'local',
+        site_root: targetSiteRoot,
+        session_id: targetSessionId,
+      },
+    });
+    assert.equal(plan.status, 'ready');
+    assert.equal(plan.direction, 'cloudflare-host_to_local');
+    assert.equal(plan.target_authority_locator.kind, 'local');
+    assert.equal(plan.target_authority_locator.session_id, targetSessionId);
+    assert.equal(plan.target_authority_locator.session_path.endsWith(join('.narada', 'crew', 'nars-sessions', targetSessionId, 'session.jsonl')), true);
+    assert.deepEqual(plan.direction_specific_requirements, ['local_target_session_id', 'local_target_site_path_resolution']);
+    assert.equal(plan.shared_activation_requirements.includes('authority_epoch_token'), true);
+
+    let state = prepareTargetAuthority({
+      path: sourceStatePath,
+      sessionPath: sourceSessionPath,
+      targetAuthorityLocator: plan.target_authority_locator,
+      supersededBySessionId: plan.superseded_by_session_id,
+      authorityLocatorRef: plan.authority_locator_ref,
+      transitionPlan: plan,
+    });
+    state = sealSourceAuthority({ path: sourceStatePath, sessionPath: sourceSessionPath, state, sourceLastSequence: 12 });
+    state = activateTargetAuthority({
+      path: sourceStatePath,
+      sessionPath: sourceSessionPath,
+      state,
+      activationId: 'authority_target_active:cf_session_planning_source:8:13',
+      targetFirstSequence: 13,
+      authorityEpochToken: { source_authority_epoch: 7, target_authority_epoch: 8, token_id: 'cloudflare-local-forward-epoch-8' },
+      targetAuthorityLocator: plan.target_authority_locator,
+      supersededBySessionId: plan.superseded_by_session_id,
+      authorityLocatorRef: plan.authority_locator_ref,
+    });
+    assert.equal(state.authority_transition_state, 'target_active');
+    assert.equal(state.source_write_admission, 'sealed');
+    assert.equal(state.authority_epoch_token.source_authority_epoch, 7);
+    assert.equal(state.authority_epoch_token.target_authority_epoch, 8);
+    assert.equal(state.target_transition_plan.direction, 'cloudflare-host_to_local');
+    assert.equal(state.superseded_by_session_id, sourceSessionId);
+
+    const refused = planTargetAuthorityTransition({
+      sourceAuthorityRuntimeHost: 'cloudflare-host',
+      targetAuthorityLocator: { kind: 'local', session_id: targetSessionId },
+    });
+    assert.equal(refused.status, 'refused');
+    assert.equal(refused.refusals.some((refusal) => refusal.reason_code === 'local_target_site_root_missing'), true);
+  } finally {
+    removeTempDir(sourceSiteRoot);
+    removeTempDir(targetSiteRoot);
   }
 });
 

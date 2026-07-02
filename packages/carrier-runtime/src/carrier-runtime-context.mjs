@@ -42,6 +42,7 @@ export function buildCarrierRuntimePaths(siteRoot, session) {
  * @param {string|null} [options.healthUrl]
  * @param {string|null} [options.eventStreamUrl]
  * @param {string} [options.operatorSurfaceKind]
+ * @param {string} [options.authorityRuntimeHost]
  * @returns {CarrierRuntimeContext}
  */
 export function createCarrierRuntimeContext({
@@ -62,6 +63,7 @@ export function createCarrierRuntimeContext({
   healthUrl = null,
   eventStreamUrl = null,
   operatorSurfaceKind = process.env.NARADA_OPERATOR_SURFACE_KIND ?? 'agent-cli',
+  authorityRuntimeHost = process.env.NARADA_AUTHORITY_RUNTIME_HOST ?? 'local',
 } = {}) {
   if (!identity) throw new TypeError('identity is required');
   if (!session) throw new TypeError('session is required');
@@ -80,6 +82,7 @@ export function createCarrierRuntimeContext({
     eventsPath: paths.eventsPath,
     intelligenceProvider,
     operatorSurfaceKind,
+    authorityRuntimeHost,
     providerSettings: Object.freeze({
       model: providerSettings.model ?? process.env.CODEX_MODEL ?? process.env.NARADA_CODEX_MODEL ?? null,
       thinking: providerSettings.thinking ?? process.env.NARADA_AI_THINKING ?? 'medium',

@@ -46,6 +46,7 @@ export async function runCarrierServerMode({
     healthUrl = null,
     eventStreamUrl = null,
     operatorSurfaceKind = 'agent-cli',
+    authorityRuntimeHost = 'local',
   } = ctx;
   const launchOperatorSurfaceKind = operatorSurfaceKind || 'agent-cli';
   const {
@@ -225,6 +226,7 @@ export async function runCarrierServerMode({
     mode: 'server',
     site_id: siteId,
     site_root: siteRoot,
+    authority_runtime_host: authorityRuntimeHost,
     provider: intelligenceProvider,
     model: state.sessionSettings.model,
     thinking: state.sessionSettings.thinking,

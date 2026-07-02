@@ -72,6 +72,7 @@ import {
   activateTargetAuthority,
   beginSourceDrain,
   classifySourceWriteAdmission,
+  planTargetAuthorityTransition,
   prepareTargetAuthority,
   sealSourceAuthority,
 } from './authority-transition-state.mjs';
@@ -84,6 +85,7 @@ export function createCarrierRuntimeDependencies({ runtimeContext = {}, env = pr
   const siteRoot = resolve(runtimeContext.siteRoot ?? env.NARADA_SITE_ROOT ?? process.cwd());
   const sessionPath = runtimeContext.sessionPath;
   const eventsPath = runtimeContext.eventsPath;
+  const authorityRuntimeHost = runtimeContext.authorityRuntimeHost ?? env.NARADA_AUTHORITY_RUNTIME_HOST ?? 'local';
   const intelligenceProvider = runtimeContext.intelligenceProvider ?? env.NARADA_INTELLIGENCE_PROVIDER ?? 'codex-subscription';
   const providerEnvironmentValues = providerEnvironment(intelligenceProvider, PROVIDER_METADATA);
   const providerSettings = {
@@ -118,7 +120,7 @@ export function createCarrierRuntimeDependencies({ runtimeContext = {}, env = pr
     recordMcpPreflightArtifactLinkage: ({ emit, preflightArtifact } = {}) => recordMcpPreflightArtifactLinkage({ emit, preflightArtifact, appendSessionRecord }),
     recordMcpStartupFailures: (mcpServers, options = {}) => recordMcpStartupFailures(mcpServers, { ...options, appendSessionRecord }),
     createOperationHeartbeatDirectiveEmitter,
-    handleServerRequestLine: (line, context) => handleServerRequestLine(line, { ...context, identity, session, siteRoot, sessionPath, eventsPath, appendSessionRecord, providerSettings, narsDelegatedAuthorityHandoff: runtimeContext.narsDelegatedAuthorityHandoff ?? null }),
+    handleServerRequestLine: (line, context) => handleServerRequestLine(line, { ...context, identity, session, siteRoot, sessionPath, eventsPath, authorityRuntimeHost, appendSessionRecord, providerSettings, narsDelegatedAuthorityHandoff: runtimeContext.narsDelegatedAuthorityHandoff ?? null }),
     appendSessionRecord,
     sessionEventEntry: (event, payload) => ({ event, ...payload, timestamp: new Date().toISOString() }),
     carrierSessionEventEntry,
@@ -936,13 +938,33 @@ async function handleServerRequest(request, context) {
     }
     if (controlRequest.method_kind === 'authority_target_prepare') {
       const params = request?.params ?? {};
+      const plan = planTargetAuthorityTransition({
+        sourceAuthorityRuntimeHost: context.authorityRuntimeHost,
+        currentSiteRoot: context.siteRoot,
+        currentSessionId: context.session,
+        targetAuthorityLocator: params.target_authority_locator ?? params.targetAuthorityLocator ?? null,
+        supersededBySessionId: params.superseded_by_session_id ?? params.supersededBySessionId ?? null,
+        authorityLocatorRef: params.authority_locator_ref ?? params.authorityLocatorRef ?? null,
+      });
+      if (plan.status === 'refused') {
+        emit('authority_target_prepare_refused', {
+          request_id: requestId,
+          status: 'refused',
+          refusals: plan.refusals,
+          authority_transition_plan: plan,
+          authority_transition_source: authorityTransitionSourceStatus(state),
+          authority_transition_target: authorityTransitionTargetStatus(state),
+        });
+        return;
+      }
       state.authorityTransition = prepareTargetAuthority({
         path: state.authorityTransitionStatePath,
         sessionPath: state.sessionPath,
         state: state.authorityTransition,
-        targetAuthorityLocator: params.target_authority_locator ?? params.targetAuthorityLocator ?? null,
-        supersededBySessionId: params.superseded_by_session_id ?? params.supersededBySessionId ?? null,
-        authorityLocatorRef: params.authority_locator_ref ?? params.authorityLocatorRef ?? null,
+        targetAuthorityLocator: plan.target_authority_locator,
+        supersededBySessionId: plan.superseded_by_session_id,
+        authorityLocatorRef: plan.authority_locator_ref,
+        transitionPlan: plan,
         reason: params.reason ?? null,
         requestedBy: params.requested_by ?? params.requestedBy ?? null,
       });
