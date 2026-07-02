@@ -10,6 +10,7 @@ import {
 } from '@narada2/carrier-action-admission';
 import { resolveToolMetadata } from '@narada2/carrier-action-admission/tool-metadata';
 import { codexCommand as resolveCodexCommand } from '@narada2/carrier-provider-support/codex-subscription-command';
+import { AiProcessInvocationRefusalError, spawnAiProcessInvocation } from '@narada2/carrier-provider-support/ai-process-invocation';
 import {
   classifyCarrierControlRequest,
   classifyCarrierInputAdmission,
@@ -151,6 +152,13 @@ export function createCarrierRuntimeDependencies({ runtimeContext = {}, env = pr
     }),
     dependencies,
   };
+}
+
+function codexAiProcessInvocationError(error) {
+  if (error instanceof AiProcessInvocationRefusalError) {
+    return new Error(`codex ai process invocation refused: ${error.admission.reason}; artifact=${error.admission.artifact_path}`);
+  }
+  return error;
 }
 
 function authorityTransitionTargetStatus(state = {}) {
@@ -1362,7 +1370,17 @@ function sendCodexExecJsonRequest(request, settings = {}) {
     const args = buildCodexExecArgs(request, settings);
     const prompt = codexExecPrompt(request);
     const mcpServers = codexRequestMcpServers(request, settings);
-    const processOwner = spawnOwnedProcess(command.command, [...command.prefixArgs, ...args], { cwd: request.arguments?.cwd ?? settings.siteRoot ?? process.cwd(), windowsHide: true, env: buildCodexSubprocessEnv(mcpServers, settings), stdio: ['pipe', 'pipe', 'pipe'] });
+    const cwd = request.arguments?.cwd ?? settings.siteRoot ?? process.cwd();
+    const env = buildCodexSubprocessEnv(mcpServers, settings);
+    let processOwner;
+    try {
+      processOwner = spawnAiProcessInvocation({ adapterKind: 'codex', projection: 'codex-subscription', purpose: 'provider_request', siteRoot: settings.siteRoot ?? cwd, cwd, command: command.command, argv: [...command.prefixArgs, ...args], env }, {
+        spawnProcess: spawnOwnedProcess,
+        spawnOptions: { cwd, windowsHide: true, env, stdio: ['pipe', 'pipe', 'pipe'] },
+      });
+    } catch (error) {
+      return rejectRequest(codexAiProcessInvocationError(error));
+    }
     const child = processOwner.child;
     child.stdin.end(prompt);
     let stdoutBuffer = '';
@@ -1417,7 +1435,17 @@ function sendCodexExecJsonBufferedRequest(request, settings = {}) {
     const args = buildCodexExecArgs(request, settings);
     const prompt = codexExecPrompt(request);
     const mcpServers = codexRequestMcpServers(request, settings);
-    const processOwner = spawnOwnedProcess(command.command, [...command.prefixArgs, ...args], { cwd: request.arguments?.cwd ?? settings.siteRoot ?? process.cwd(), windowsHide: true, env: buildCodexSubprocessEnv(mcpServers, settings), stdio: ['pipe', 'pipe', 'pipe'] });
+    const cwd = request.arguments?.cwd ?? settings.siteRoot ?? process.cwd();
+    const env = buildCodexSubprocessEnv(mcpServers, settings);
+    let processOwner;
+    try {
+      processOwner = spawnAiProcessInvocation({ adapterKind: 'codex', projection: 'codex-subscription', purpose: 'provider_request_buffered', siteRoot: settings.siteRoot ?? cwd, cwd, command: command.command, argv: [...command.prefixArgs, ...args], env }, {
+        spawnProcess: spawnOwnedProcess,
+        spawnOptions: { cwd, windowsHide: true, env, stdio: ['pipe', 'pipe', 'pipe'] },
+      });
+    } catch (error) {
+      return rejectRequest(codexAiProcessInvocationError(error));
+    }
     const child = processOwner.child;
     child.stdin.end(prompt);
     let stdout = '';

@@ -12,6 +12,13 @@ test('codex-subscription provider execution uses shared command resolver', () =>
   assert.doesNotMatch(runtimeDependenciesSource, /NARADA_CODEX_EXEC_COMMAND \?\? process\.env\.NARADA_CODEX_COMMAND \?\? process\.env\.CODEX_COMMAND \?\? 'codex'/);
 });
 
+test('codex-subscription provider execution is admitted through AiProcessInvocation', () => {
+  assert.match(runtimeDependenciesSource, /@narada2\/carrier-provider-support\/ai-process-invocation/);
+  assert.match(runtimeDependenciesSource, /spawnAiProcessInvocation\(\{ adapterKind: 'codex', projection: 'codex-subscription', purpose: 'provider_request'/);
+  assert.match(runtimeDependenciesSource, /spawnAiProcessInvocation\(\{ adapterKind: 'codex', projection: 'codex-subscription', purpose: 'provider_request_buffered'/);
+  assert.doesNotMatch(runtimeDependenciesSource, /const processOwner = spawnOwnedProcess\(command\.command/);
+});
+
 test('codex-subscription provider execution classifies unresolved CLI spawn failures', () => {
   assert.match(runtimeDependenciesSource, /codex_cli_unresolved/);
   assert.match(runtimeDependenciesSource, /NARADA_CODEX_EXEC_COMMAND\/NARADA_CODEX_COMMAND/);

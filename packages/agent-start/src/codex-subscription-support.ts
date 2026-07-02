@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { delimiter, join } from 'node:path';
+import { runAiProcessInvocationSync } from '@narada2/carrier-provider-support/ai-process-invocation';
 import { codexCommand } from '@narada2/carrier-provider-support/codex-subscription-command';
 import { spawnSync as defaultSpawnSync } from 'node:child_process';
 import { homedir } from 'node:os';
@@ -72,12 +73,26 @@ export function codexSubscriptionPreflight(provider, {
   if (!codexSubscriptionPreflightForced(processEnv) && cached) return cached;
   progressStream?.write?.(`Checking ${provider} local Codex subscription auth...\n`);
   const prompt = 'Return exactly: ok';
-  const result = spawnSync(command.command, [...command.prefixArgs, 'exec', '--json', prompt], {
+  const argv = [...command.prefixArgs, 'exec', '--json', prompt];
+  const env = codexSubscriptionPreflightEnv(processEnv);
+  const result = runAiProcessInvocationSync({
+    adapterKind: 'codex',
+    projection: 'codex-subscription',
+    purpose: 'auth_probe',
+    siteRoot: sessionSiteRoot,
     cwd: sessionSiteRoot,
-    encoding: 'utf8',
-    timeout: CODEX_SUBSCRIPTION_PREFLIGHT_TIMEOUT_MS,
-    windowsHide: true,
-    env: codexSubscriptionPreflightEnv(processEnv),
+    command: command.command,
+    argv,
+    env,
+  }, {
+    spawnSync,
+    spawnOptions: {
+      cwd: sessionSiteRoot,
+      encoding: 'utf8',
+      timeout: CODEX_SUBSCRIPTION_PREFLIGHT_TIMEOUT_MS,
+      windowsHide: true,
+      env,
+    },
   });
   const stdout = String(result.stdout ?? '');
   const stderrText = String(result.stderr ?? '');
@@ -96,6 +111,7 @@ export function codexSubscriptionPreflight(provider, {
     stdout_first_line: stdout.split(/\r?\n/).find((line) => line.trim()) ?? '',
     stderr_first_line: stderrText.split(/\r?\n/).find((line) => line.trim()) ?? '',
     timeout_ms: CODEX_SUBSCRIPTION_PREFLIGHT_TIMEOUT_MS,
+    ai_process_invocation: result.aiProcessInvocation ?? null,
   };
   if (preflight.ok) codexSubscriptionPreflightCacheWrite({ sessionSiteRoot, cacheKey, preflight, now: now(), processEnv });
   return preflight;
