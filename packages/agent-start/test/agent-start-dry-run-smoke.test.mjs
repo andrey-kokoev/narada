@@ -40,6 +40,7 @@ test('agent-start dry-run emits coherent agent-cli/NARS launch JSON', () => {
   ], {
     cwd: packageRoot,
     encoding: 'utf8',
+    windowsHide: true,
   });
 
   assert.equal(result.status, 0, result.stderr || result.stdout);

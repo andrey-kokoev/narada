@@ -27,6 +27,12 @@ interface ProviderRegistry {
   }>;
 }
 
+function normalizeMcpScope(value: string | undefined): string {
+  const normalized = String(value ?? 'all').trim().toLowerCase();
+  if (['all', 'host', 'user-site', 'local-site', 'none'].includes(normalized)) return normalized;
+  throw new Error(`mcp_scope_not_admitted: ${normalized}. Admitted scopes: all, host, user-site, local-site, none`);
+}
+
 function loadProviderAdapters(): ProviderAdapters {
   let adaptersPath: string;
   try {
@@ -122,6 +128,7 @@ export interface WorkspaceLaunchPlanOptions {
   operatorSurface?: string;
   runtime?: string;
   intelligenceProvider?: string;
+  mcpScope?: string;
   cloudflareApiBaseUrl?: string;
   interactiveSelection?: boolean;
   defaultInteractiveSelection?: boolean;
@@ -406,6 +413,7 @@ interface RawLaunchRegistry {
   OperatorSurface?: string;
   Carrier?: string;
   Runtime?: string;
+  McpScope?: string;
   Agents?: RawAgentRecord[] | RawAgentRecord;
 }
 
@@ -422,6 +430,7 @@ interface RawAgentRecord {
   OperatorSurface?: string;
   Carrier?: string;
   Runtime?: string;
+  McpScope?: string;
   EnableNativeShell?: boolean;
 }
 
@@ -438,6 +447,7 @@ export interface WorkspaceLaunchRecord {
   carrier: string;
   runtime: string;
   enable_native_shell: boolean;
+  mcp_scope: string | null;
   config_path: string;
 }
 
@@ -449,8 +459,10 @@ export interface WorkspaceLaunchAgentPlan extends WorkspaceLaunchRecord {
   launch_carriers: string[];
   intelligence_provider: string | null;
   wait_for_enter_before_exec: boolean;
+  mcp_scope: string;
   wt_args: string[];
   smoke_command: string[];
+  operator_projection_open_requests: Array<Record<string, unknown>>;
 }
 
 export async function workspaceLaunchPlanCommand(
@@ -476,6 +488,7 @@ export async function workspaceLaunchPlanCommand(
         agent: plan.agent,
         carrier: plan.launch_carrier,
         intelligenceProvider: plan.intelligence_provider ?? undefined,
+        mcpScope: plan.mcp_scope,
         dryRun: true,
         enableNativeShell: plan.enable_native_shell,
         format: 'json',
@@ -901,6 +914,7 @@ function normalizeAgentRecord(registry: RawLaunchRegistry, agent: RawAgentRecord
     carrier,
     runtime,
     enable_native_shell: agent.EnableNativeShell === true,
+    mcp_scope: nonEmpty(agent.McpScope) ?? nonEmpty(registry.McpScope) ?? null,
     config_path: configPath,
   };
 }
@@ -964,6 +978,7 @@ function buildAgentPlan(record: WorkspaceLaunchRecord, options: WorkspaceLaunchP
   const launchRuntime = carrierRuntimeSelection.runtime_substrate_kind;
   const runtimeHostKind = carrierRuntimeSelection.runtime_host_kind;
   const enableNativeShell = options.enableNativeShell === true || record.enable_native_shell;
+  const mcpScope = normalizeMcpScope(options.mcpScope ?? record.mcp_scope ?? undefined);
   const waitForEnter = options.noWaitForEnterBeforeExec !== true && launchCarriers[0] !== 'agent-web-ui';
   const intelligenceProvider = launchCarrier === 'agent-cli' || launchCarrier === 'agent-web-ui' ? (options.intelligenceProvider ?? null) : null;
   const cloudflareApiBaseUrl = options.cloudflareApiBaseUrl?.trim()
@@ -987,6 +1002,7 @@ function buildAgentPlan(record: WorkspaceLaunchRecord, options: WorkspaceLaunchP
   if (record.workspace_root) operatorSurfaceStartCommand.push('--workspace-root', record.workspace_root);
   if (enableNativeShell) operatorSurfaceStartCommand.push('--enable-native-shell');
   if (intelligenceProvider) operatorSurfaceStartCommand.push('--intelligence-provider', intelligenceProvider);
+  operatorSurfaceStartCommand.push('--mcp-scope', mcpScope);
   if (waitForEnter) operatorSurfaceStartCommand.push('--wait');
 
   const base = [
@@ -1020,6 +1036,10 @@ function buildAgentPlan(record: WorkspaceLaunchRecord, options: WorkspaceLaunchP
   if (record.workspace_root) smokeCommand.push('--workspace-root', record.workspace_root);
   if (intelligenceProvider) smokeCommand.push('--intelligence-provider', intelligenceProvider);
   if (enableNativeShell) smokeCommand.push('--enable-native-shell');
+  smokeCommand.push('--mcp-scope', mcpScope);
+  const operatorProjectionOpenRequests = launchCarriers.includes('agent-web-ui')
+    ? [plannedAgentWebUiProjectionOpenRequest(record)]
+    : [];
 
   return {
     ...record,
@@ -1030,9 +1050,11 @@ function buildAgentPlan(record: WorkspaceLaunchRecord, options: WorkspaceLaunchP
     launch_carriers: launchCarriers,
     intelligence_provider: intelligenceProvider,
     wait_for_enter_before_exec: waitForEnter,
+    mcp_scope: mcpScope,
     enable_native_shell: enableNativeShell,
     wt_args: wtArgs,
     smoke_command: smokeCommand,
+    operator_projection_open_requests: operatorProjectionOpenRequests,
   };
 }
 
@@ -1068,6 +1090,23 @@ function agentWebUiAttachWtArgs(record: WorkspaceLaunchRecord, naradaProper: str
     '-Command',
     `${prelude}\n${toPowerShellCommand(attachCommand)}`,
   ];
+}
+
+function plannedAgentWebUiProjectionOpenRequest(record: WorkspaceLaunchRecord): Record<string, unknown> {
+  return {
+    schema: 'narada.operator_projection_open_request.v1',
+    status: 'planned',
+    projection_kind: 'browser_url',
+    target_ref: null,
+    target_ref_resolution: 'agent-web-ui attach resolves local URL after NARS session attach and server start',
+    purpose: 'agent_web_ui_attach',
+    caller: { package: '@narada2/cli', command: 'workspace launch', module: 'commands/launcher' },
+    mode: 'execute',
+    policy: { allow_visible_host_effect: true, suppress_reason: null },
+    mutation_performed: false,
+    launch_agent: record.agent,
+    launch_site: record.site,
+  };
 }
 
 function nonEmpty(value: unknown): string | null {

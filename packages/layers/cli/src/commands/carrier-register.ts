@@ -91,6 +91,7 @@ export function registerCarrierCommands(program: Command): void {
     .option('--carrier <carrier>', 'Compatibility alias for operator surface')
     .option('--runtime <runtime>', 'Runtime substrate for the selected operator surface')
     .option('--intelligence-provider <provider>', 'NARS operator-surface intelligence provider')
+    .option('--mcp-scope <scope>', 'MCP injection scope: all|host|user-site|local-site|none', 'all')
     .option('--dry-run', 'Plan the runtime launch without writing launch artifacts or spawning', false)
     .option('--materialize-only', 'Write launch artifacts without spawning the runtime', false)
     .option('--exec', 'Spawn the runtime process after materializing launch artifacts', false)
@@ -109,6 +110,7 @@ export function registerCarrierCommands(program: Command): void {
         carrier: (opts.carrier as string | undefined) ?? carrier,
         runtime: opts.runtime as string | undefined,
         intelligenceProvider: opts.intelligenceProvider as string | undefined,
+        mcpScope: opts.mcpScope as string | undefined,
         dryRun: opts.dryRun as boolean | undefined,
         materializeOnly: opts.materializeOnly as boolean | undefined,
         exec: opts.exec as boolean | undefined,

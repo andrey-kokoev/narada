@@ -264,6 +264,7 @@ Current expected posture:
 - Revolution, Staccato, Utz, Timour Marketing Agent, Sonar, Smart Scheduling, and Thoughts have conservative generated registries sourced from their own `.ai/mcp` fabric.
 - No launcher-known Site should have stale generated client-config surfaces.
 - Codex launch defaults should have `EnableNativeShell = $false`.
+- Launch-time MCP injection scope is governed by [MCP Injection Loci](./mcp-injection-loci.md); `McpScope=local-site` must prevent User Site or host MCP bleed into carriers that otherwise inherit ambient MCP config.
 
 ## Closure Condition
 

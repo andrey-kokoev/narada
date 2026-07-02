@@ -357,6 +357,14 @@ describe('nars CLI commands', () => {
       session_id: 'carrier_cli_test',
       site_id: 'sonar',
       event_endpoint: 'ws://127.0.0.1:12345/events',
+      operator_projection_open_request: {
+        schema: 'narada.operator_projection_open_request.v1',
+        status: 'planned',
+        projection_kind: 'browser_url',
+        target_ref: null,
+        purpose: 'agent_web_ui_attach',
+        target_ref_resolution: 'agent-web-ui attach resolves local URL after server start',
+      },
     });
   });
 
@@ -701,9 +709,18 @@ describe('nars CLI commands', () => {
       session: 'carrier_closed_test',
       allowStaleSession: true,
       format: 'json',
-    }, createMockContext(), { startAgentWebUiServer });
+    }, createMockContext(), { startAgentWebUiServer, openUrl: vi.fn(async () => undefined) });
 
     expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      operator_projection_open_request: {
+        schema: 'narada.operator_projection_open_request.v1',
+        status: 'opened',
+        projection_kind: 'browser_url',
+        target_ref: 'http://127.0.0.1:9999/',
+        purpose: 'agent_web_ui_attach',
+      },
+    });
     expect(startAgentWebUiServer).toHaveBeenCalledWith({
       host: '127.0.0.1',
       port: 0,

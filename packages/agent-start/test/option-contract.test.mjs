@@ -109,6 +109,98 @@ test('launcher option contract consumes shared carrier runtime and provider cont
   assert.equal(sharedProviderAdapterContract.production_provider_adapter_kind, 'codex_subscription_adapter');
 });
 
+test('McpScope none projects an explicit empty fabric and no effective loci', () => {
+  const output = runOk(['--carrier', 'codex', '--runtime', 'codex', '--mcp-scope', 'none']);
+  assert.equal(output.mcp_scope.requested, 'none');
+  assert.deepEqual(output.mcp_scope.requested_loci, []);
+  assert.deepEqual(output.mcp_scope.effective_loci, []);
+  assert.deepEqual(output.mcp_fabric.server_names, []);
+  assert.equal(output.mcp_scope.enforcement.inherited_codex_home_allowed, false);
+  assert.deepEqual(output.mcp_scope.enforcement.projected_server_names, []);
+});
+
+test('McpScope user-site loads only explicit User Site MCP fabric', () => {
+  const targetRoot = mkdtempSync(join(tmpdir(), 'narada-agent-start-target-scope-'));
+  const userRoot = mkdtempSync(join(tmpdir(), 'narada-agent-start-user-scope-'));
+  writeMinimalMcpFabric(targetRoot, 'narada-target-only');
+  writeMinimalMcpFabric(userRoot, 'narada-user-only');
+
+  const output = runOk([
+    '--carrier', 'codex',
+    '--runtime', 'codex',
+    '--target-site-root', targetRoot,
+    '--mcp-scope', 'user-site',
+    '--user-site-root', userRoot,
+  ]);
+  assert.equal(output.mcp_scope.requested, 'user-site');
+  assert.deepEqual(output.mcp_scope.requested_loci, ['user-site']);
+  assert.deepEqual(output.mcp_scope.effective_loci, ['user-site']);
+  assert.deepEqual(output.mcp_fabric.server_names, ['narada-user-only']);
+  assert.equal(output.mcp_fabric.server_names.includes('narada-target-only'), false);
+});
+
+test('McpScope host loads only explicit Host MCP fabric', () => {
+  const targetRoot = mkdtempSync(join(tmpdir(), 'narada-agent-start-target-scope-'));
+  const hostRoot = mkdtempSync(join(tmpdir(), 'narada-agent-start-host-scope-'));
+  writeMinimalMcpFabric(targetRoot, 'narada-target-only');
+  writeMinimalMcpFabric(hostRoot, 'narada-host-only');
+
+  const output = runOk([
+    '--carrier', 'codex',
+    '--runtime', 'codex',
+    '--target-site-root', targetRoot,
+    '--mcp-scope', 'host',
+    '--host-site-root', hostRoot,
+  ]);
+  assert.equal(output.mcp_scope.requested, 'host');
+  assert.deepEqual(output.mcp_scope.requested_loci, ['host']);
+  assert.deepEqual(output.mcp_scope.effective_loci, ['host']);
+  assert.deepEqual(output.mcp_fabric.server_names, ['narada-host-only']);
+  assert.equal(output.mcp_fabric.server_names.includes('narada-target-only'), false);
+});
+
+test('McpScope all explicitly composes available Host, User Site, and local Site MCP fabrics', () => {
+  const targetRoot = mkdtempSync(join(tmpdir(), 'narada-agent-start-target-scope-'));
+  const userRoot = mkdtempSync(join(tmpdir(), 'narada-agent-start-user-scope-'));
+  const hostRoot = mkdtempSync(join(tmpdir(), 'narada-agent-start-host-scope-'));
+  writeMinimalMcpFabric(targetRoot, 'narada-target-only');
+  writeMinimalMcpFabric(userRoot, 'narada-user-only');
+  writeMinimalMcpFabric(hostRoot, 'narada-host-only');
+
+  const output = runOk([
+    '--carrier', 'codex',
+    '--runtime', 'codex',
+    '--target-site-root', targetRoot,
+    '--mcp-scope', 'all',
+    '--user-site-root', userRoot,
+    '--host-site-root', hostRoot,
+  ]);
+  assert.equal(output.mcp_scope.requested, 'all');
+  assert.deepEqual(output.mcp_scope.requested_loci, ['host', 'user-site', 'local-site']);
+  assert.deepEqual(output.mcp_scope.effective_loci, ['host', 'user-site', 'local-site']);
+  assert.deepEqual(output.mcp_fabric.server_names, ['narada-host-only', 'narada-target-only', 'narada-user-only']);
+  assert.equal(output.mcp_scope.resolution.enforcement, 'explicit_locus_composition');
+});
+
+test('Codex McpScope none materializes isolated config with no MCP servers', () => {
+  const targetRoot = mkdtempSync(join(tmpdir(), 'narada-agent-start-codex-none-'));
+  writeMinimalMcpFabric(targetRoot, 'narada-target-only');
+
+  const result = runRealLaunch([
+    '--carrier', 'codex',
+    '--runtime', 'codex',
+    '--target-site-root', targetRoot,
+    '--mcp-scope', 'none',
+  ]);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const output = JSON.parse(result.stdout);
+  const configText = readFileSync(output.mcp_scope.enforcement.config_path, 'utf8');
+  assert.equal(output.mcp_scope.enforcement.status, 'materialized');
+  assert.equal(output.mcp_scope.enforcement.inherited_codex_home_allowed, false);
+  assert.equal(configText.includes('[mcp_servers.'), false);
+  assert.equal(configText.includes('McpScope=none'), true);
+});
+
 test('db option materializes the requested agent-context db path', () => {
   const dbPath = join(naradaProperRoot, '.ai', 'state', 'option-contract-agent-context.sqlite');
   const output = runOk(['--carrier', 'agent-cli', '--runtime', 'narada-agent-runtime-server', '--db', dbPath]);
@@ -427,7 +519,7 @@ test('target site MCP fabric remains isolated from user site fabric', () => {
     },
   }, null, 2), 'utf8');
 
-  const output = runOk(['--carrier', 'agent-cli', '--runtime', 'narada-agent-runtime-server', '--target-site-root', siteRoot, '--exec']);
+  const output = runOk(['--carrier', 'agent-cli', '--runtime', 'narada-agent-runtime-server', '--target-site-root', siteRoot, '--mcp-scope', 'local-site', '--exec']);
   assert.equal(output.session_site_root, siteRoot);
   assert.equal(output.mcp_fabric.site_root, siteRoot);
   assert.deepEqual(output.mcp_fabric.server_names, ['narada-target-only']);
@@ -740,7 +832,9 @@ test('opencode dry-run resolves as opencode-native-mcp', () => {
   assert.equal(output.runtime_args.length, 2);
   assert.equal(output.runtime_args[0], '--prompt');
   assert.ok(output.runtime_args[1].includes('Use agent_context_startup_sequence first'));
-  assert.equal(output.mcp_fabric, null);
+  assert.deepEqual(output.mcp_fabric.server_names, []);
+  assert.equal(output.mcp_scope.resolution.enforcement, 'carrier_without_narada_mcp_adapter');
+  assert.equal(output.mcp_scope.enforcement.status, 'enforced_by_carrier_adapter');
   assert.equal(output.mcp_tool_approval, null);
 });
 

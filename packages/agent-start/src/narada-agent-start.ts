@@ -17,7 +17,7 @@
  *   narada-agent-start <identity> [--carrier <carrier>] [--runtime <runtime>] [--db <path>] [--json] [--dry-run] [--exec] [--wait] [--yolo] [--enable-native-shell] [--target-site-id <site-id>] [--target-site-root <path>]
  */
 
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createHash } from 'node:crypto';
@@ -97,6 +97,14 @@ function parseArgs(argv) {
   return result;
 }
 
+function canonicalJson(value) {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
 function identityToken(identity) {
   return String(identity).replace(/[^A-Za-z0-9]+/g, '_');
 }
@@ -137,6 +145,8 @@ const dryRun = !!args.dry_run;
 const waitFlag = !!args.wait || process.env.NARADA_AGENT_START_WAIT === '1';
 const yoloFlag = !!args.yolo;
 const enableNativeShellFlag = !!args.enable_native_shell;
+const ADMITTED_MCP_SCOPES = Object.freeze(['all', 'host', 'user-site', 'local-site', 'none']);
+const mcpScope = normalizeMcpScope(args.mcp_scope ?? process.env.NARADA_MCP_SCOPE ?? 'all');
 const pcSiteRoot = args.pc_site_root ?? process.env.NARADA_PC_SITE_ROOT ?? 'C:/ProgramData/Narada/sites/pc/desktop-sunroom-2';
 const launchSource = args.launch_source ?? 'agent-start';
 const admitSessionFlag = !!args.admit_session;
@@ -169,6 +179,21 @@ const ADMITTED_TOOL_FABRIC_ADAPTER_KINDS = Object.freeze([
   'opencode-native-mcp',
   'ambient-carrier-tools',
 ]);
+
+function normalizeMcpScope(value) {
+  const normalized = String(value ?? 'all').trim().toLowerCase();
+  if (ADMITTED_MCP_SCOPES.includes(normalized)) return normalized;
+  throw new Error(`mcp_scope_not_admitted: ${normalized}. Admitted scopes: ${ADMITTED_MCP_SCOPES.join(', ')}`);
+}
+
+function mcpScopeLoci(scope) {
+  if (scope === 'none') return [];
+  if (scope === 'host') return ['host'];
+  if (scope === 'user-site') return ['user-site'];
+  if (scope === 'local-site') return ['local-site'];
+  return ['host', 'user-site', 'local-site'];
+}
+
 function naradaPackageRoot(packageName) {
   return naradaPackages.packageRoot(packageName);
 }
@@ -190,6 +215,7 @@ const DEFAULT_PI_MODEL = 'gpt-5.5';
 const DEFAULT_CLAUDE_CODE_COMMAND = 'claude';
 const DEFAULT_CLAUDE_CODE_MODEL = 'sonnet';
 let mcpFabric = null;
+let mcpScopeResolution = null;
 let agentStartRenderer = null;
 function resolveToolFabricAdapter(carrierName, runtimeName) {
   return resolveCarrierToolFabricAdapter(carrierName, {
@@ -603,11 +629,189 @@ function mcpEnvironmentValues() {
 }
 
 function codexMcpServerDefinitions() {
-  return projectFabricForCodex(mcpFabric);
+  return mcpFabric ? projectFabricForCodex(mcpFabric) : [];
 }
 
 function codexMcpServerNames() {
-  return mcpServerNames(mcpFabric);
+  return mcpFabric ? mcpServerNames(mcpFabric) : [];
+}
+
+function resolveUserSiteRoot() {
+  return resolve(args.user_site_root ?? process.env.NARADA_USER_SITE_ROOT ?? join(homedir(), 'Narada'));
+}
+
+function resolveHostSiteRoot() {
+  return resolve(args.host_site_root ?? process.env.NARADA_HOST_SITE_ROOT ?? process.env.NARADA_PC_SITE_ROOT ?? pcSiteRoot);
+}
+
+function mcpLocusRoot(locus) {
+  if (locus === 'host') return resolveHostSiteRoot();
+  if (locus === 'user-site') return resolveUserSiteRoot();
+  return sessionSiteRoot;
+}
+
+function missingFabricDirectory(root) {
+  return !existsSync(join(root, '.ai', 'mcp')) && !existsSync(join(root, '.narada', '.ai', 'mcp'));
+}
+
+function emptyScopedMcpFabric() {
+  return {
+    schema: 'narada.mcp.fabric.loaded.v1',
+    site_root: sessionSiteRoot,
+    source: `mcp-scope:${mcpScope}`,
+    mcp_dir: null,
+    candidate_mcp_dirs: [],
+    files: [],
+    servers: {},
+    sources: {},
+    skipped: [],
+    registry_validation: undefined,
+    scope_loci: [],
+    locus_fabrics: [],
+    missing_loci: [],
+  };
+}
+
+function composeMcpFabrics(locusFabrics, missingLoci) {
+  const composed = emptyScopedMcpFabric();
+  composed.source = `mcp-scope:${mcpScope}`;
+  composed.scope_loci = locusFabrics.map((entry) => entry.locus);
+  composed.locus_fabrics = locusFabrics.map((entry) => ({
+    locus: entry.locus,
+    site_root: entry.root,
+    source: entry.fabric.source,
+    mcp_dir: entry.fabric.mcp_dir,
+    server_names: mcpServerNames(entry.fabric),
+  }));
+  composed.missing_loci = missingLoci;
+  for (const entry of locusFabrics) {
+    for (const file of entry.fabric.files ?? []) composed.files.push(`${entry.locus}:${file}`);
+    for (const skipped of entry.fabric.skipped ?? []) composed.skipped.push({ locus: entry.locus, ...skipped });
+    for (const [serverName, server] of Object.entries(entry.fabric.servers ?? {})) {
+      if (composed.servers[serverName] && canonicalJson(composed.servers[serverName]) !== canonicalJson(server)) {
+        throw new McpFabricError('mcp_scope_duplicate_server_conflict', `Conflicting MCP server definition for ${serverName} across MCP scope loci`, {
+          scope: mcpScope,
+          serverName,
+          existing_source: composed.sources[serverName],
+          conflicting_locus: entry.locus,
+          conflicting_root: entry.root,
+        });
+      }
+      composed.servers[serverName] = server;
+      composed.sources[serverName] = `${entry.locus}:${entry.fabric.sources?.[serverName] ?? 'unknown'}`;
+    }
+  }
+  return composed;
+}
+
+function loadScopedMcpFabric() {
+  const loci = mcpScopeLoci(mcpScope);
+  if (loci.length === 0) {
+    const empty = emptyScopedMcpFabric();
+    mcpScopeResolution = {
+      schema: 'narada.mcp.scope_resolution.v1',
+      scope: mcpScope,
+      requested_loci: [],
+      loaded_loci: [],
+      missing_loci: [],
+      enforcement: 'empty_explicit_fabric',
+    };
+    return empty;
+  }
+  const locusFabrics = [];
+  const missingLoci = [];
+  for (const locus of loci) {
+    const root = mcpLocusRoot(locus);
+    const required = mcpScope !== 'all' || locus === 'local-site';
+    if (!required && missingFabricDirectory(root)) {
+      missingLoci.push({ locus, site_root: root, reason: 'mcp_fabric_missing_optional_for_all_scope' });
+      continue;
+    }
+    const fabric = loadSiteMcpFabric(root, { required, validateRegistry: required ? true : 'diagnostic' });
+    if (Object.keys(fabric.servers ?? {}).length === 0) {
+      missingLoci.push({ locus, site_root: root, reason: 'mcp_fabric_empty' });
+      continue;
+    }
+    locusFabrics.push({ locus, root, fabric });
+  }
+  const composed = composeMcpFabrics(locusFabrics, missingLoci);
+  mcpScopeResolution = {
+    schema: 'narada.mcp.scope_resolution.v1',
+    scope: mcpScope,
+    requested_loci: loci,
+    loaded_loci: locusFabrics.map((entry) => entry.locus),
+    missing_loci: missingLoci,
+    enforcement: mcpScope === 'all' ? 'explicit_locus_composition' : 'single_locus_explicit_fabric',
+  };
+  return composed;
+}
+
+const CODEX_AUTH_FILE_NAMES = Object.freeze(['auth.json', 'credentials.json', 'credential.json', 'token.json', 'tokens.json', 'session.json', 'sessions.json']);
+
+function codexConfigTomlString(value) {
+  return JSON.stringify(String(value).replaceAll('\\', '/'));
+}
+
+function codexConfigTomlArray(values) {
+  return `[${values.map(codexConfigTomlString).join(', ')}]`;
+}
+
+function codexScopedConfigToml(servers, scope) {
+  const lines = [
+    `# Generated by narada-agent-start for McpScope=${scope}.`,
+    '# Contains only explicitly composed Narada MCP fabric; user-level Codex MCP config is not inherited.',
+    '',
+  ];
+  for (const server of servers) {
+    lines.push(`[mcp_servers.${JSON.stringify(server.name)}]`);
+    lines.push(`command = ${codexConfigTomlString(server.command)}`);
+    lines.push(`args = ${codexConfigTomlArray(server.args)}`);
+    lines.push(`env_vars = ${codexConfigTomlArray(server.env_vars)}`);
+    lines.push('default_tools_approval_mode = "approve"');
+    if (server.startup_timeout_sec) lines.push(`startup_timeout_sec = ${Number(server.startup_timeout_sec)}`);
+    lines.push('');
+  }
+  return lines.join('\n');
+}
+
+function projectCodexAuthFiles(sourceHome, targetHome) {
+  if (!sourceHome || !existsSync(sourceHome)) return [];
+  const copied = [];
+  for (const fileName of CODEX_AUTH_FILE_NAMES) {
+    const sourcePath = join(sourceHome, fileName);
+    if (!existsSync(sourcePath)) continue;
+    try {
+      if (!statSync(sourcePath).isFile()) continue;
+      copyFileSync(sourcePath, join(targetHome, fileName));
+      copied.push(fileName);
+    } catch {
+      // Optional auth projection should not block env/API-key based starts.
+    }
+  }
+  return copied;
+}
+
+function codexMcpScopeProjection() {
+  if (carrier !== 'codex') {
+    return {
+      status: 'enforced_by_carrier_adapter',
+      scope: mcpScope,
+      carrier,
+      inherited_user_config_possible: false,
+      evidence: 'This carrier adapter receives MCP servers from the launcher-selected Site fabric path instead of reading Codex global config.',
+    };
+  }
+  const sessionKey = carrierSessionRegistration.carrier_session_id ?? startResult.agent_start_event;
+  const codexHome = join(sessionSiteRoot, '.ai', 'runtime', 'codex-home', sessionKey);
+  const configPath = join(codexHome, 'config.toml');
+  if (dryRun) {
+    return { status: 'planned', scope: mcpScope, carrier, inherited_codex_home_allowed: false, codex_home: codexHome, config_path: configPath, projected_server_names: codexMcpServerNames() };
+  }
+  mkdirSync(codexHome, { recursive: true });
+  const authSourceHome = process.env.NARADA_CODEX_AUTH_HOME ?? join(homedir(), '.codex');
+  const inherited_auth_files = projectCodexAuthFiles(authSourceHome, codexHome);
+  writeFileSync(configPath, `${codexScopedConfigToml(codexMcpServerDefinitions(), mcpScope)}\n`, 'utf8');
+  return { status: 'materialized', scope: mcpScope, carrier, inherited_codex_home_allowed: false, codex_home: codexHome, config_path: configPath, inherited_auth_files, projected_server_names: codexMcpServerNames() };
 }
 
 function mcpToolApprovalPacket({ approved, note }) {
@@ -788,19 +992,22 @@ try {
   process.exit(1);
 }
 
-const carrierActions = {
-  cleared_kimi_session: clearKimiSession(identity),
-  set_kimi_title: setKimiSessionTitle(identity, startResult.role),
-  carrier_session_registration: carrierSessionRegistration,
-  codex_mcp_registration: codexMcpRegistrationStatus(identity, startResult.agent_start_event),
-};
-
 if (carrier !== 'kimi' && carrier !== 'opencode') {
   try {
-    mcpFabric = loadSiteMcpFabric(sessionSiteRoot, { required: true, validateRegistry: true });
+    mcpFabric = loadScopedMcpFabric();
   } catch (error) {
     await failToolFabricRefusal(error);
   }
+} else {
+  mcpFabric = emptyScopedMcpFabric();
+  mcpScopeResolution = {
+    schema: 'narada.mcp.scope_resolution.v1',
+    scope: mcpScope,
+    requested_loci: mcpScopeLoci(mcpScope),
+    loaded_loci: [],
+    missing_loci: [],
+    enforcement: 'carrier_without_narada_mcp_adapter',
+  };
 }
 
 const spawnArgs = buildSpawnArgs(carrier, identity, carrierSessionRegistration);
@@ -809,6 +1016,14 @@ const execCommand = [resolveCarrierExecutableCommand(carrier), ...spawnArgs.map(
 const carrierEnvironment = carrierSessionRegistration.environment ?? {};
 const agentTuiEnvironment = agentTuiTerminalEnvironment();
 const mcpProviderCredentialEnv = mcpProviderCredentialEnvironment();
+const codexMcpScope = codexMcpScopeProjection();
+const carrierActions = {
+  cleared_kimi_session: clearKimiSession(identity),
+  set_kimi_title: setKimiSessionTitle(identity, startResult.role),
+  carrier_session_registration: carrierSessionRegistration,
+  codex_mcp_registration: codexMcpRegistrationStatus(identity, startResult.agent_start_event),
+  codex_mcp_scope: codexMcpScope,
+};
 const startingCarrierInput = resolveStartingCarrierInput();
 const environmentSiteRoot = sessionSiteRoot;
 const workspaceRoot = process.cwd();
@@ -869,7 +1084,19 @@ const output = {
     files: mcpFabric.files,
     server_names: mcpServerNames(mcpFabric),
     skipped: mcpFabric.skipped,
+    scope_loci: mcpFabric.scope_loci ?? ['local-site'],
+    locus_fabrics: mcpFabric.locus_fabrics ?? [],
+    missing_loci: mcpFabric.missing_loci ?? [],
   } : null,
+  mcp_scope: {
+    requested: mcpScope,
+    admitted_scopes: [...ADMITTED_MCP_SCOPES],
+    requested_loci: mcpScopeLoci(mcpScope),
+    effective_loci: mcpScopeResolution?.loaded_loci ?? [],
+    missing_loci: mcpScopeResolution?.missing_loci ?? [],
+    resolution: mcpScopeResolution,
+    enforcement: codexMcpScope,
+  },
   intelligence_provider_contract_schema: INTELLIGENCE_PROVIDER_CONTRACT_SCHEMA,
   intelligence_provider: intelligenceProviderOutputResolution?.intelligence_provider ?? null,
   intelligence_provider_resolution: intelligenceProviderOutputResolution,
@@ -958,6 +1185,7 @@ const processEnvironment = {
   NARADA_WORKSPACE_ROOT: workspaceRoot,
   NARADA_AGENT_CONTEXT_DB: dbPath,
   ...agentTuiEnvironment,
+  ...(codexMcpScope.status === 'materialized' ? { CODEX_HOME: codexMcpScope.codex_home, CODEX_CONFIG_DIR: codexMcpScope.codex_home } : {}),
 };
 const aiProcessInvocation = carrier === 'codex'
   ? {

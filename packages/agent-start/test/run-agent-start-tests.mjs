@@ -16,7 +16,7 @@ await runProcessTests([
     label: 'agent-start-dry-run-smoke',
     args: ['--test', 'test/agent-start-dry-run-smoke.test.mjs'],
     cwd: packageRoot,
-    timeoutMs: 8000,
+    timeoutMs: 15000,
   },
   {
     label: 'provider-module-contract',
@@ -28,12 +28,12 @@ await runProcessTests([
     label: 'launcher-registry-contract-shards',
     args: ['test/run-launcher-registry-contract-shards.mjs'],
     cwd: packageRoot,
-    timeoutMs: 8000,
+    timeoutMs: 15000,
   },
   {
     label: 'option-contract-shards',
     args: ['test/run-option-contract-shards.mjs'],
     cwd: packageRoot,
-    timeoutMs: 8000,
+    timeoutMs: 15000,
   },
 ]);

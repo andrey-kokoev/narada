@@ -16,7 +16,7 @@ const packagedLauncherPath = join(naradaProperRoot, 'packages', 'agent-start', '
 const tsxLoaderPath = pathToFileURL(require.resolve('tsx')).href;
 const admittedCarrierMatrix = Object.freeze(['agent-cli', 'agent-tui', 'codex', 'opencode']);
 const requiredFields = Object.freeze(['Agent', 'NaradaRoot', 'WorkspaceRoot', 'SiteRoot', 'Launcher', 'Carrier', 'Runtime']);
-const pwshAvailable = spawnSync('pwsh', ['-NoProfile', '-Command', '$PSVersionTable.PSVersion.Major'], { encoding: 'utf8' }).status === 0;
+const pwshAvailable = spawnHiddenSync('pwsh', ['-NoProfile', '-Command', '$PSVersionTable.PSVersion.Major'], { encoding: 'utf8' }).status === 0;
 const nonNaradaProperSites = Object.freeze([
   'narada-andrey',
   'narada-staccato',
@@ -27,6 +27,10 @@ const nonNaradaProperSites = Object.freeze([
   'smart-scheduling',
   'thoughts-project',
 ]);
+
+function spawnHiddenSync(command, args, options = {}) {
+  return spawnSync(command, args, { windowsHide: true, ...options });
+}
 
 function parseRegistry(text) {
   const records = [];
@@ -120,7 +124,7 @@ function assertCarrierMatrixDryRuns(records, sourceLabel) {
   for (const record of records) {
     for (const carrier of admittedCarrierMatrix) {
       const runtime = carrier === 'agent-cli' ? 'narada-agent-runtime-server' : carrier;
-      const result = spawnSync(process.execPath, [
+      const result = spawnHiddenSync(process.execPath, [
         '--import',
         tsxLoaderPath,
         packagedLauncherPath,
@@ -161,7 +165,7 @@ test('live operator registry conforms when explicitly supplied', { skip: !proces
 });
 
 test('registered launcher verifier documents sharding filters', () => {
-  const result = spawnSync(process.execPath, [join(packageRoot, 'bin', 'verify-registered-site-launchers.mjs'), '--help'], {
+  const result = spawnHiddenSync(process.execPath, [join(packageRoot, 'bin', 'verify-registered-site-launchers.mjs'), '--help'], {
     encoding: 'utf8',
   });
   assert.equal(result.status, 0, result.stderr || result.stdout);
@@ -247,7 +251,7 @@ test('registered launcher verifier exercises the PowerShell dry-run handoff', { 
       '',
     ].join('\n'), 'utf8');
 
-    const result = spawnSync(process.execPath, [
+    const result = spawnHiddenSync(process.execPath, [
       join(packageRoot, 'bin', 'verify-registered-site-launchers.mjs'),
       '--registry',
       registryPath,
@@ -274,7 +278,7 @@ test('registered launcher verifier exercises the PowerShell dry-run handoff', { 
     assert.deepEqual(output.filters.agents, ['narada-test.resident']);
     assert.deepEqual(output.shard, { record_offset: 0, record_limit: null, launch_timeout_ms: 8500 });
 
-    const shard = spawnSync(process.execPath, [
+    const shard = spawnHiddenSync(process.execPath, [
       join(packageRoot, 'bin', 'verify-registered-site-launchers.mjs'),
       '--registry',
       registryPath,
@@ -301,7 +305,7 @@ test('registered launcher verifier exercises the PowerShell dry-run handoff', { 
     assert.equal(shardOutput.checked_launches, 1);
     assert.deepEqual(shardOutput.shard, { record_offset: 1, record_limit: 1, launch_timeout_ms: 8500 });
 
-    const emptyShard = spawnSync(process.execPath, [
+    const emptyShard = spawnHiddenSync(process.execPath, [
       join(packageRoot, 'bin', 'verify-registered-site-launchers.mjs'),
       '--registry',
       registryPath,
@@ -324,7 +328,7 @@ test('registered launcher verifier exercises the PowerShell dry-run handoff', { 
     assert.equal(emptyShardOutput.filtered_records, 2);
     assert.deepEqual(emptyShardOutput.shard, { record_offset: 2, record_limit: 1, launch_timeout_ms: 8500 });
 
-    const noMatch = spawnSync(process.execPath, [
+    const noMatch = spawnHiddenSync(process.execPath, [
       join(packageRoot, 'bin', 'verify-registered-site-launchers.mjs'),
       '--registry',
       registryPath,
@@ -346,7 +350,7 @@ test('registered launcher verifier exercises the PowerShell dry-run handoff', { 
 
     mkdirSync(join(siteRoot, 'tools', 'agent-start'), { recursive: true });
     writeFileSync(join(siteRoot, 'tools', 'agent-start', 'start-agent.mjs'), 'throw new Error("stale fork");\n', 'utf8');
-    const staleFork = spawnSync(process.execPath, [
+    const staleFork = spawnHiddenSync(process.execPath, [
       join(packageRoot, 'bin', 'verify-registered-site-launchers.mjs'),
       '--registry',
       registryPath,

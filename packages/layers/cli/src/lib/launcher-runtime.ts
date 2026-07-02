@@ -59,6 +59,7 @@ export interface AgentStartOptions {
   carrier?: string;
   runtime: string;
   intelligenceProvider?: string;
+  mcpScope?: string;
   dryRun?: boolean;
   exec?: boolean;
   wait?: boolean;
@@ -270,6 +271,7 @@ export function runAgentStartCommand(options: AgentStartOptions): AgentStartComm
   ];
   if (!inheritedInteractiveExec) args.push('--json');
   if (options.intelligenceProvider) args.push('--intelligence-provider', options.intelligenceProvider);
+  if (options.mcpScope) args.push('--mcp-scope', options.mcpScope);
   if (options.dryRun) args.push('--dry-run');
   if (options.exec) args.push('--exec');
   if (options.wait) args.push('--wait');

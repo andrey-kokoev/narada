@@ -16,6 +16,7 @@ export interface CarrierCommandOptions {
   carrier?: string;
   runtime?: string;
   intelligenceProvider?: string;
+  mcpScope?: string;
   timeout?: number;
   dryRun?: boolean;
   materializeOnly?: boolean;
@@ -144,6 +145,7 @@ export async function carrierStartCommand(
     carrier,
     runtime,
     intelligenceProvider: options.intelligenceProvider,
+    mcpScope: options.mcpScope,
     dryRun: options.dryRun ?? (!options.materializeOnly && !options.exec),
     exec: options.exec,
     wait: options.wait,
@@ -160,6 +162,7 @@ export async function carrierStartCommand(
     carrier,
     runtime,
     intelligence_provider: options.intelligenceProvider ?? null,
+    mcp_scope: options.mcpScope ?? 'all',
     mode: options.exec ? 'exec' : options.materializeOnly ? 'materialize_only' : 'dry_run',
     agent_start: start,
   };

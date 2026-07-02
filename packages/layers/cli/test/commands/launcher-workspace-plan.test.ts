@@ -187,6 +187,56 @@ describe('launcher workspace planning', () => {
     expect(result.wt_args[0]).toBe('new-tab');
   });
 
+  it('threads local-site MCP scope into runtime start commands', async () => {
+    const registryPath = await tempRegistry();
+    const plan = await workspaceLaunchPlanCommand({
+      registryPath,
+      all: true,
+      site: ['narada'],
+      carrier: 'codex',
+      runtime: 'codex',
+      mcpScope: 'local-site',
+      dryRun: true,
+      format: 'json',
+    }, createMockContext());
+
+    expect(plan.exitCode).toBe(ExitCode.SUCCESS);
+    const result = plan.result as { selected_agents: Array<{ mcp_scope: string; wt_args: string[]; smoke_command: string[] }> };
+    const agent = result.selected_agents[0];
+    expect(agent.mcp_scope).toBe('local-site');
+    const commandText = agent.wt_args[agent.wt_args.indexOf('-Command') + 1];
+    expect(commandText).toContain("'--mcp-scope' 'local-site'");
+    expect(agent.smoke_command).toEqual(expect.arrayContaining(['--mcp-scope', 'local-site']));
+  });
+
+  it('uses registry McpScope as the launch default when no explicit scope is supplied', async () => {
+    const dir = join(process.cwd(), '.ai', 'tmp-tests', `launcher-plan-mcp-scope-${Date.now()}-${Math.random().toString(16).slice(2)}`);
+    await mkdir(dir, { recursive: true });
+    tempDirs.push(dir);
+    const registryPath = join(dir, 'agents.json');
+    await writeFile(registryPath, JSON.stringify({
+      NaradaRoot: 'D:/code/narada',
+      SiteRoot: 'D:/code/narada',
+      WorkspaceRoot: 'D:/code/narada',
+      McpScope: 'none',
+      Agents: [{ Agent: 'narada.architect', Role: 'architect', Site: 'narada', OperatorSurface: 'codex', Runtime: 'codex' }],
+    }), 'utf8');
+
+    const plan = await workspaceLaunchPlanCommand({
+      registryPath,
+      all: true,
+      dryRun: true,
+      format: 'json',
+    }, createMockContext());
+
+    expect(plan.exitCode).toBe(ExitCode.SUCCESS);
+    const result = plan.result as { selected_agents: Array<{ mcp_scope: string; wt_args: string[]; smoke_command: string[] }> };
+    const agent = result.selected_agents[0];
+    expect(agent.mcp_scope).toBe('none');
+    expect(agent.wt_args[agent.wt_args.indexOf('-Command') + 1]).toContain("'--mcp-scope' 'none'");
+    expect(agent.smoke_command).toEqual(expect.arrayContaining(['--mcp-scope', 'none']));
+  });
+
   it('exposes workspace launch as the CLI-owned execution boundary', async () => {
     const registryPath = await tempRegistry();
     const launch = await workspaceLaunchCommand({
@@ -221,9 +271,18 @@ describe('launcher workspace planning', () => {
     }, createMockContext());
 
     expect(plan.exitCode).toBe(ExitCode.SUCCESS);
-    const result = plan.result as { selected_agents: Array<{ launch_carriers: string[]; wt_args: string[] }>; wt_args: string[] };
+    const result = plan.result as { selected_agents: Array<{ launch_carriers: string[]; wt_args: string[]; operator_projection_open_requests: Array<Record<string, unknown>> }>; wt_args: string[] };
     const agent = result.selected_agents[0];
     expect(agent.launch_carriers).toEqual(['agent-cli', 'agent-web-ui']);
+    expect(agent.operator_projection_open_requests).toHaveLength(1);
+    expect(agent.operator_projection_open_requests[0]).toMatchObject({
+      schema: 'narada.operator_projection_open_request.v1',
+      status: 'planned',
+      projection_kind: 'browser_url',
+      purpose: 'agent_web_ui_attach',
+      caller: { command: 'workspace launch' },
+      mutation_performed: false,
+    });
     expect(agent.wt_args.filter((arg) => arg === ';')).toHaveLength(1);
     const commandText = agent.wt_args.join(' ');
     const webUiCommandText = agent.wt_args[agent.wt_args.lastIndexOf('-Command') + 1];

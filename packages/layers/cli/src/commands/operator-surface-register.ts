@@ -34,6 +34,7 @@ export function registerOperatorSurfaceCommands(program: Command): void {
     .option('--operator-surface <surface>', 'Operator Surface to launch')
     .option('--runtime <runtime>', 'Runtime substrate for the selected Operator Surface')
     .option('--intelligence-provider <provider>', 'NARS operator-surface intelligence provider')
+    .option('--mcp-scope <scope>', 'MCP injection scope: all|host|user-site|local-site|none', 'all')
     .option('--dry-run', 'Plan the runtime launch without writing launch artifacts or spawning', false)
     .option('--materialize-only', 'Write launch artifacts without spawning the runtime', false)
     .option('--exec', 'Spawn the runtime process after materializing launch artifacts', false)
@@ -52,6 +53,7 @@ export function registerOperatorSurfaceCommands(program: Command): void {
         carrier: (opts.operatorSurface as string | undefined) ?? surface,
         runtime: opts.runtime as string | undefined,
         intelligenceProvider: opts.intelligenceProvider as string | undefined,
+        mcpScope: opts.mcpScope as string | undefined,
         dryRun: opts.dryRun as boolean | undefined,
         materializeOnly: opts.materializeOnly as boolean | undefined,
         exec: opts.exec as boolean | undefined,

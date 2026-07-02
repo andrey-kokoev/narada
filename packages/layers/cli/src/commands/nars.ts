@@ -457,13 +457,26 @@ function formatNarsSessions(discovery: { site_root?: unknown; sessions?: Array<R
     String(session.site_id ?? '').padEnd(14),
     String(session.agent_id ?? '').padEnd(24),
     String(session.launch_operator_surface_kind ?? '').padEnd(10),
+    formatSessionAuthority(session).padEnd(28),
     String(session.started_at ?? ''),
   ].join('  '));
   return [
     heading,
-    ['state'.padEnd(20), 'session'.padEnd(34), 'site'.padEnd(14), 'agent'.padEnd(24), 'surface'.padEnd(10), 'started'].join('  '),
+    ['state'.padEnd(20), 'session'.padEnd(34), 'site'.padEnd(14), 'agent'.padEnd(24), 'surface'.padEnd(10), 'authority'.padEnd(28), 'started'].join('  '),
     ...rows,
   ].join('\n');
+}
+
+function formatSessionAuthority(session: Record<string, unknown>): string {
+  const host = String(session.authority_runtime_host ?? 'unknown');
+  const epoch = Number.isInteger(session.authority_epoch) ? ` e${session.authority_epoch}` : '';
+  const transition = typeof session.authority_transition_state === 'string' && session.authority_transition_state
+    ? ` ${session.authority_transition_state}`
+    : '';
+  const superseded = typeof session.superseded_by_session_id === 'string' && session.superseded_by_session_id
+    ? ` -> ${session.superseded_by_session_id}`
+    : '';
+  return `${host}${epoch}${transition}${superseded}`;
 }
 
 function normalizeSurface(surface: string): string {
