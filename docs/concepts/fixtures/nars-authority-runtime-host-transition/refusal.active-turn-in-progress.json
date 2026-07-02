@@ -1,0 +1,15 @@
+{
+  "schema": "narada.nars.authority_runtime_host_transition_refusal.v1",
+  "status": "refused",
+  "reason_code": "active_turn_in_progress",
+  "reason": "The source authority cannot be sealed while a provider turn is active.",
+  "failed_invariant": "The source authority must be drainable and sealable before target activation.",
+  "operator_repair": "Complete, interrupt, or explicitly abandon the active turn, then rerun the transition planner.",
+  "transition_request": {
+    "session_id": "carrier_202607020001_example",
+    "source_host_kind": "local",
+    "target_host_kind": "cloudflare-host"
+  },
+  "evidence_refs": ["session.status:active_turn=true"]
+}
+

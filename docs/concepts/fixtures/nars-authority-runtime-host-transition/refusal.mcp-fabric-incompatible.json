@@ -1,0 +1,15 @@
+{
+  "schema": "narada.nars.authority_runtime_host_transition_refusal.v1",
+  "status": "refused",
+  "reason_code": "mcp_fabric_incompatible",
+  "reason": "The target authority runtime cannot provide the declared required MCP fabric posture.",
+  "failed_invariant": "MCP fabric compatibility must be checked or explicitly degraded before target activation.",
+  "operator_repair": "Repair target fabric config or rerun with an explicit degraded-mode acceptance when the transition slice permits it.",
+  "transition_request": {
+    "session_id": "carrier_202607020001_example",
+    "source_host_kind": "local",
+    "target_host_kind": "cloudflare-host"
+  },
+  "evidence_refs": ["mcp_fabric_report:required_locus_missing"]
+}
+

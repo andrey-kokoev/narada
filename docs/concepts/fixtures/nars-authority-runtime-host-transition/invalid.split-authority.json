@@ -1,0 +1,13 @@
+{
+  "schema": "narada.nars.authority_runtime_host_transition.v1",
+  "why_invalid": "Both source and target claim active write admission for the same transition boundary.",
+  "session_id": "carrier_202607020001_example",
+  "source_authority_runtime": { "host_kind": "local", "authority_epoch": 3 },
+  "target_authority_runtime": { "host_kind": "cloudflare-host", "authority_epoch": 4 },
+  "fencing": {
+    "source_write_admission": "active",
+    "target_write_admission": "active_after_epoch_token",
+    "split_brain_guard": "authority_epoch_token_required"
+  }
+}
+

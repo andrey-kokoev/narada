@@ -48,7 +48,7 @@ Anything named `projection_*` is non-canonical unless it explicitly also occupie
 
 1. An authority runtime mints canonical event identity and owns mutation admission.
 2. A projection edge may copy, filter, summarize, redact, transform, and attest, but it does not become authority over the copied state.
-3. A projection store is allowed to be useful and durable, but disagreement between an authority runtime and its projection resolves in favor of the authority runtime unless a separate governed authority transfer occurs.
+3. A projection store is allowed to be useful and durable, but disagreement between an authority runtime and its projection resolves in favor of the authority runtime unless a separate governed authority transfer occurs. For NARS sessions, that transfer is modeled as a [`NARS Authority Runtime Host Transition`](nars-authority-runtime-host-transition.md).
 4. A projection surface does not become an admission authority by rendering state or collecting input.
 5. Intent routes are not reverse projections. They are explicit admission paths into an authority runtime.
 6. Transport choices such as JSONL, HTTP, WebSocket, SSE, Worker, Durable Object, tunnel, file, or cache are implementation details unless they change authority or admission semantics.

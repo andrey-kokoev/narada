@@ -1,0 +1,152 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "narada.nars.authority_runtime_host_transition.v1.schema.json",
+  "title": "NARS Authority Runtime Host Transition",
+  "type": "object",
+  "required": [
+    "schema",
+    "transition_id",
+    "session_id",
+    "session_lineage_id",
+    "agent_id",
+    "site_id",
+    "state",
+    "source_authority_runtime",
+    "target_authority_runtime",
+    "handoff",
+    "fencing",
+    "evidence_refs"
+  ],
+  "properties": {
+    "schema": { "const": "narada.nars.authority_runtime_host_transition.v1" },
+    "transition_id": { "type": "string", "pattern": "^arht_" },
+    "session_id": { "type": "string", "minLength": 1 },
+    "session_lineage_id": { "type": "string", "minLength": 1 },
+    "agent_id": { "type": "string", "minLength": 1 },
+    "site_id": { "type": "string", "minLength": 1 },
+    "requested_by": { "type": "string", "minLength": 1 },
+    "requested_at": { "type": "string", "format": "date-time" },
+    "state": {
+      "enum": [
+        "not_requested",
+        "proposed",
+        "preparing_target",
+        "source_draining",
+        "source_sealed",
+        "target_activating",
+        "target_active",
+        "source_retired",
+        "preparation_failed",
+        "drain_failed",
+        "seal_failed",
+        "target_activation_failed",
+        "transition_aborted"
+      ]
+    },
+    "source_authority_runtime": { "$ref": "#/$defs/authority_runtime_ref" },
+    "target_authority_runtime": { "$ref": "#/$defs/authority_runtime_ref" },
+    "handoff": {
+      "type": "object",
+      "required": ["event_log", "operator_input_queue", "artifacts", "health", "mcp_fabric", "provider_state"],
+      "properties": {
+        "event_log": { "$ref": "#/$defs/event_log_handoff" },
+        "operator_input_queue": { "$ref": "#/$defs/queue_handoff" },
+        "artifacts": { "$ref": "#/$defs/artifact_handoff" },
+        "health": { "$ref": "#/$defs/health_handoff" },
+        "mcp_fabric": { "$ref": "#/$defs/mcp_handoff" },
+        "provider_state": { "$ref": "#/$defs/provider_handoff" }
+      },
+      "additionalProperties": false
+    },
+    "fencing": {
+      "type": "object",
+      "required": ["source_write_admission", "target_write_admission", "split_brain_guard"],
+      "properties": {
+        "source_write_admission": { "enum": ["active", "draining", "sealed", "retired"] },
+        "target_write_admission": { "enum": ["not_before_source_seal", "active_after_epoch_token", "refused"] },
+        "split_brain_guard": { "enum": ["authority_epoch_token_required"] }
+      },
+      "additionalProperties": false
+    },
+    "evidence_refs": { "type": "array", "items": { "type": "string" } },
+    "completed_at": { "type": ["string", "null"], "format": "date-time" },
+    "terminal_reason": { "type": ["string", "null"] }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "authority_runtime_ref": {
+      "type": "object",
+      "required": ["authority_runtime_id", "host_kind", "authority_epoch", "health_ref", "authority_role"],
+      "properties": {
+        "authority_runtime_id": { "type": "string", "minLength": 1 },
+        "host_kind": { "enum": ["local", "cloudflare-host"] },
+        "authority_epoch": { "type": "integer", "minimum": 1 },
+        "health_ref": { "type": "string", "minLength": 1 },
+        "authority_role": { "const": "canonical_session_runtime" },
+        "event_cursor": {
+          "type": "object",
+          "required": ["last_sequence"],
+          "properties": { "last_sequence": { "type": "integer", "minimum": 0 } },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "event_log_handoff": {
+      "type": "object",
+      "required": ["mode", "source_last_sequence", "target_first_sequence"],
+      "properties": {
+        "mode": { "enum": ["checkpoint_plus_cursor"] },
+        "source_last_sequence": { "type": "integer", "minimum": 0 },
+        "target_first_sequence": { "type": "integer", "minimum": 1 }
+      },
+      "additionalProperties": false
+    },
+    "queue_handoff": {
+      "type": "object",
+      "required": ["mode", "pending_count_at_request", "pending_count_at_seal"],
+      "properties": {
+        "mode": { "enum": ["drain_before_seal", "transfer_after_seal", "refuse_new_until_target_active"] },
+        "pending_count_at_request": { "type": "integer", "minimum": 0 },
+        "pending_count_at_seal": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "artifact_handoff": {
+      "type": "object",
+      "required": ["mode", "source_paths_exposed"],
+      "properties": {
+        "mode": { "enum": ["registry_plus_admitted_content", "registry_only_lazy_content", "none"] },
+        "source_paths_exposed": { "const": false }
+      },
+      "additionalProperties": false
+    },
+    "health_handoff": {
+      "type": "object",
+      "required": ["source_health_until", "target_health_required_before"],
+      "properties": {
+        "source_health_until": { "enum": ["source_sealed", "transition_aborted"] },
+        "target_health_required_before": { "enum": ["target_activating", "target_active"] }
+      },
+      "additionalProperties": false
+    },
+    "mcp_handoff": {
+      "type": "object",
+      "required": ["mode", "status"],
+      "properties": {
+        "mode": { "enum": ["compatibility_report_required", "explicit_degraded_acceptance"] },
+        "status": { "enum": ["pending", "compatible", "degraded_explicit", "incompatible"] }
+      },
+      "additionalProperties": false
+    },
+    "provider_handoff": {
+      "type": "object",
+      "required": ["mode"],
+      "properties": {
+        "mode": { "enum": ["unsupported_for_synthetic_slice", "not_present"] }
+      },
+      "additionalProperties": false
+    }
+  }
+}
+

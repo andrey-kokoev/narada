@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "narada.nars.authority_runtime_host_transition_refusal.v1.schema.json",
+  "title": "NARS Authority Runtime Host Transition Refusal",
+  "type": "object",
+  "required": ["schema", "status", "reason_code", "reason", "failed_invariant", "operator_repair", "transition_request"],
+  "properties": {
+    "schema": { "const": "narada.nars.authority_runtime_host_transition_refusal.v1" },
+    "status": { "const": "refused" },
+    "reason_code": { "type": "string", "minLength": 1 },
+    "reason": { "type": "string", "minLength": 1 },
+    "failed_invariant": { "type": "string", "minLength": 1 },
+    "operator_repair": { "type": "string", "minLength": 1 },
+    "transition_request": {
+      "type": "object",
+      "required": ["session_id", "source_host_kind", "target_host_kind"],
+      "properties": {
+        "session_id": { "type": "string", "minLength": 1 },
+        "source_host_kind": { "enum": ["local", "cloudflare-host"] },
+        "target_host_kind": { "enum": ["local", "cloudflare-host"] }
+      },
+      "additionalProperties": true
+    },
+    "evidence_refs": { "type": "array", "items": { "type": "string" } }
+  },
+  "additionalProperties": false
+}
+

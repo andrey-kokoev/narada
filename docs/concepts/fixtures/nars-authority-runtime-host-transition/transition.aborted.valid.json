@@ -1,0 +1,44 @@
+{
+  "schema": "narada.nars.authority_runtime_host_transition.v1",
+  "transition_id": "arht_20260702_aborted",
+  "session_id": "carrier_202607020001_example",
+  "session_lineage_id": "nars_lineage_202607020001_example",
+  "agent_id": "resident",
+  "site_id": "narada.sonar",
+  "requested_by": "operator",
+  "requested_at": "2026-07-02T00:00:00.000Z",
+  "state": "transition_aborted",
+  "source_authority_runtime": {
+    "authority_runtime_id": "auth_local_202607020001_example",
+    "host_kind": "local",
+    "authority_epoch": 3,
+    "health_ref": "session.health",
+    "authority_role": "canonical_session_runtime",
+    "event_cursor": { "last_sequence": 120 }
+  },
+  "target_authority_runtime": {
+    "authority_runtime_id": "auth_cf_202607020001_example",
+    "host_kind": "cloudflare-host",
+    "authority_epoch": 4,
+    "health_ref": "cloudflare_authority.session.health",
+    "authority_role": "canonical_session_runtime",
+    "event_cursor": { "last_sequence": 120 }
+  },
+  "handoff": {
+    "event_log": { "mode": "checkpoint_plus_cursor", "source_last_sequence": 120, "target_first_sequence": 121 },
+    "operator_input_queue": { "mode": "drain_before_seal", "pending_count_at_request": 0, "pending_count_at_seal": 0 },
+    "artifacts": { "mode": "registry_plus_admitted_content", "source_paths_exposed": false },
+    "health": { "source_health_until": "transition_aborted", "target_health_required_before": "target_activating" },
+    "mcp_fabric": { "mode": "compatibility_report_required", "status": "incompatible" },
+    "provider_state": { "mode": "unsupported_for_synthetic_slice" }
+  },
+  "fencing": {
+    "source_write_admission": "active",
+    "target_write_admission": "refused",
+    "split_brain_guard": "authority_epoch_token_required"
+  },
+  "evidence_refs": ["refusal:mcp_fabric_incompatible"],
+  "completed_at": "2026-07-02T00:00:30.000Z",
+  "terminal_reason": "mcp_fabric_incompatible"
+}
+

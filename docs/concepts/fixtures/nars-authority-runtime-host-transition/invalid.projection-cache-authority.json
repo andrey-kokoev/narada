@@ -1,0 +1,17 @@
+{
+  "schema": "narada.nars.authority_runtime_host_transition.v1",
+  "why_invalid": "A projection_store is being submitted as if it were the target authority_runtime.",
+  "session_id": "carrier_202607020001_example",
+  "target_projection_store": {
+    "projection_store_id": "store_cloudflare_projection_example",
+    "kind": "cloudflare_projection_store",
+    "authority_posture": "non_canonical_projection"
+  },
+  "target_authority_runtime": {
+    "authority_runtime_id": "store_cloudflare_projection_example",
+    "host_kind": "cloudflare-host",
+    "authority_epoch": 4,
+    "authority_role": "projection_store"
+  }
+}
+

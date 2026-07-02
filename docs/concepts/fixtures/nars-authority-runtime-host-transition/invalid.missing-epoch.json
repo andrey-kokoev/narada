@@ -1,0 +1,8 @@
+{
+  "schema": "narada.nars.authority_runtime_host_transition.v1",
+  "why_invalid": "The target authority runtime has no authority_epoch, so ordering and fencing cannot be proven.",
+  "session_id": "carrier_202607020001_example",
+  "source_authority_runtime": { "host_kind": "local", "authority_epoch": 3 },
+  "target_authority_runtime": { "host_kind": "cloudflare-host" }
+}
+

@@ -9,6 +9,8 @@ Semantic and architecture-boundary concepts. These documents define how the syst
 - [`runtime-usc-boundary.md`](concepts/runtime-usc-boundary.md) — Runtime / USC / operator ownership boundary
 - [`narada-agent-runtime-server.md`](concepts/narada-agent-runtime-server.md) — Vendor-neutral, stateful, machine-addressable Agent runtime server concept
 - [`nars-runtime-contract.md`](concepts/nars-runtime-contract.md) — Implementation-facing NARS package, protocol, event, carrier, worker, and verification contract
+- [`nars-authority-runtime-host-transition.md`](concepts/nars-authority-runtime-host-transition.md) — Governed transition of canonical NARS authority between local and Cloudflare-host runtimes
+- [`nars-authority-runtime-host-transition-implementation-readiness.md`](concepts/nars-authority-runtime-host-transition-implementation-readiness.md) — Implementation-ready planner, refusal, handoff, E2E, and surface UX target for authority host transitions
 - [`nars-client-projection-contract.md`](concepts/nars-client-projection-contract.md) — Shared client projection semantics for agent-cli, agent-web-ui, and Cloudflare NARS projections
 - [`carrier-action-admission-boundary.md`](concepts/carrier-action-admission-boundary.md) — Governed conversion boundary from carrier action requests to authority-bearing Site decisions
 - [`governed-transduction.md`](concepts/governed-transduction.md) — Lineage-preserving transformation through governed admission boundaries
