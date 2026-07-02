@@ -28,6 +28,7 @@ const APPROVAL_PROMPT = 'prompt';
 const APPROVAL_BLOCK = 'block';
 const GIT_AUTHORITY_BASIS_KINDS = ['operator_direct_instruction', 'task_closeout_policy'];
 const GIT_AUTHORITY_BASIS_DESCRIPTION = `Required shape: { kind: one of ${GIT_AUTHORITY_BASIS_KINDS.join(', ')}, summary: non-empty string }.`;
+const EXECUTE_PAYLOAD_REF_REMEDIATION = 'Create the command packet with this same Shell MCP surface using mcp_payload_create, payload { command, working_directory?, timeout?, break_glass_operation_id? }, then pass the returned payload_ref to execute_command.';
 
 // Whitelist: safe commands that never need approval
 const WHITELIST_PATTERNS = [
@@ -163,13 +164,13 @@ function listTools() {
   return [
     {
       name: 'execute_command',
-      description: 'Execute a shell command from an immutable payload_ref with structured output, approval gates, and audit logging.',
+      description: `Execute a shell command from an immutable payload_ref with structured output, approval gates, and audit logging. ${EXECUTE_PAYLOAD_REF_REMEDIATION}`,
       inputSchema: {
         type: 'object',
         properties: {
           payload_ref: {
             type: 'string',
-            description: 'Required immutable transient payload ref such as mcp_payload:<id>@v1. Payload must contain command plus optional timeout, working_directory, and break_glass_operation_id.',
+            description: `Required immutable transient payload ref such as mcp_payload:<id>@v1. Payload must contain command plus optional timeout, working_directory, and break_glass_operation_id. Create it first with mcp_payload_create on this Shell MCP surface.`,
           },
         },
         required: ['payload_ref'],
@@ -442,13 +443,13 @@ async function callTool(params, serverOptions) {
 function resolveExecuteCommandPayloadArgs(args, root) {
   const input = asRecord(args);
   if (Object.prototype.hasOwnProperty.call(input, 'command')) {
-    throw new Error('execute_command_inline_command_refused: command text must be supplied by immutable payload_ref, not inline tool arguments');
+    throw new Error(`execute_command_inline_command_refused: command text must be supplied by immutable payload_ref, not inline tool arguments. remediation=${EXECUTE_PAYLOAD_REF_REMEDIATION}`);
   }
   if (Object.prototype.hasOwnProperty.call(input, 'payload_path')) {
-    throw new Error('execute_command_payload_path_refused: execute_command requires immutable payload_ref, not payload_path');
+    throw new Error(`execute_command_payload_path_refused: execute_command requires immutable payload_ref, not payload_path. remediation=${EXECUTE_PAYLOAD_REF_REMEDIATION}`);
   }
   if (!stringField(input, 'payload_ref')) {
-    throw new Error('execute_command_requires_payload_ref');
+    throw new Error(`execute_command_requires_payload_ref: ${EXECUTE_PAYLOAD_REF_REMEDIATION}`);
   }
   const payloadResolution = resolveToolPayloadArgs({
     siteRoot: root,
@@ -457,7 +458,7 @@ function resolveExecuteCommandPayloadArgs(args, root) {
     allowedTools: ['execute_command'],
   });
   if (!payloadResolution.payloadSource?.ref) {
-    throw new Error('execute_command_requires_payload_ref');
+    throw new Error(`execute_command_requires_payload_ref: ${EXECUTE_PAYLOAD_REF_REMEDIATION}`);
   }
   return payloadResolution;
 }
