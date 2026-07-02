@@ -61,7 +61,7 @@ export function createCloudflareNarsProjectionWorker(options: CloudflareNarsProj
       if (!path.startsWith('api/nars/')) return serveStaticAsset(request, env);
       if (request.method === 'OPTIONS') return corsResponse();
       if (request.method === 'GET' && path === 'api/nars/authority/health') {
-        return json({ schema: 'narada.cloudflare_nars_authority.service_health.v1', status: 'healthy', execution: 'synthetic_no_provider_no_tools' });
+        return json({ schema: 'narada.cloudflare_nars_authority.service_health.v1', status: 'healthy', execution: authorityService.execution_mode });
       }
       if (request.method === 'GET' && path === 'api/nars/projections/health') {
         return json({ schema: 'narada.cloudflare_nars_projection.service_health.v1', status: 'healthy' });
@@ -243,6 +243,9 @@ export class NarsProjectionState {
     if (route && request.method === 'POST' && route.suffix === 'events') {
       await this.broadcastPublishedEvent(response.clone());
     }
+    if (route && request.method === 'DELETE' && route.suffix === '') {
+      await this.broadcastProjectionRevoked(response.clone(), route.projectionId);
+    }
     return response;
   }
 
@@ -338,6 +341,39 @@ export class NarsProjectionState {
       try {
         subscriber.socket.send(JSON.stringify(event.payload));
       } catch {
+        this.sockets.delete(subscriber);
+      }
+    }
+  }
+
+  private async broadcastProjectionRevoked(response: Response, projectionId: string): Promise<void> {
+    const body = await response.json().catch(() => null);
+    if (body?.status !== 'revoked') return;
+    const payload = {
+      event: 'projection_revoked',
+      type: 'projection.revoked',
+      projection_id: projectionId,
+      code: 'projection_revoked',
+    };
+    const encoder = new TextEncoder();
+    for (const subscriber of [...this.subscribers]) {
+      if (subscriber.projectionId !== projectionId) continue;
+      try {
+        subscriber.controller.enqueue(encoder.encode(`event: nars-event\ndata: ${JSON.stringify(payload)}\n\n`));
+      } catch {
+        // Ignore broken subscribers; the set is best-effort fanout state.
+      } finally {
+        this.subscribers.delete(subscriber);
+      }
+    }
+    for (const subscriber of [...this.sockets]) {
+      if (subscriber.projectionId !== projectionId) continue;
+      try {
+        subscriber.socket.send(JSON.stringify(payload));
+        subscriber.socket.close(4000, 'projection_revoked');
+      } catch {
+        // Ignore broken subscribers; the set is best-effort fanout state.
+      } finally {
         this.sockets.delete(subscriber);
       }
     }

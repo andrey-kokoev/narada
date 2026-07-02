@@ -8,6 +8,7 @@ import {
   classifyCloudflareInputRelay,
   createArtifactProjectionCache,
   createBoundedProjectionCache,
+  createCloudflareNarsAuthorityService,
   createCloudflareNarsProjectionWorkerService,
   createBridgeState,
   createCloudflareNarsProjectionIntent,
@@ -216,6 +217,10 @@ describe('Cloudflare NARS projection schemas', () => {
       }), env))).toMatchObject({ status: 'published', projection_id: intent.projection_id });
 
       expect(sockets[0].client.messages.map(JSON.parse)).toContainEqual(expect.objectContaining({ event: 'assistant_message', content: 'websocket hello' }));
+
+      expect(await jsonOf(outerWorker.fetch(new Request(base, { method: 'DELETE' }), env))).toMatchObject({ status: 'revoked', projection_id: intent.projection_id });
+      expect(sockets[0].client.messages.map(JSON.parse)).toContainEqual(expect.objectContaining({ event: 'projection_revoked', code: 'projection_revoked', projection_id: intent.projection_id }));
+      expect(sockets[0].client.closed).toBe(true);
     } finally {
       if (originalWebSocketPair === undefined) delete globalWithWebSocketPair.WebSocketPair;
       else globalWithWebSocketPair.WebSocketPair = originalWebSocketPair;
@@ -447,10 +452,76 @@ describe('worker boundary service', () => {
       browser_token_fingerprint: access.browser_access_tokens[0].token_fingerprint,
     }).code).toBe('projection_revoked');
   });
+
+  test('Cloudflare authority runtime executes tool adapter success and failure paths from admitted input', () => {
+    const service = createCloudflareNarsAuthorityService({ max_events: 50 });
+    const created = service.createSession({
+      session_id: 'cf_authority_runtime_service_e2e',
+      site_id: 'narada.cloudflare.test',
+      agent_id: 'cloudflare.resident',
+    }, now);
+    expect(created.session.execution_mode).toBe('cloudflare_runtime_tool_adapter');
+
+    const admitted = service.submitInput({
+      session_id: created.session_id,
+      method: 'conversation.send',
+      payload: { message: 'exercise Cloudflare tool adapter' },
+      now,
+    });
+    expect(admitted).toMatchObject({ status: 'admitted', execution_kind: 'cloudflare_runtime_tool_adapter' });
+    expect(admitted.events?.map((entry) => entry.payload.event)).toEqual([
+      'operator_input_admitted',
+      'user_message',
+      'turn_started',
+      'tool_call',
+      'tool_result',
+      'tool_call',
+      'tool_result',
+      'mcp_runtime_fault',
+      'session_artifact_registered',
+      'assistant_message',
+      'turn_complete',
+    ]);
+
+    const replay = service.readEvents({ session_id: created.session_id, since_sequence: 1 });
+    expect(replay.status).toBe('ok');
+    expect(replay.events).toContainEqual(expect.objectContaining({ payload: expect.objectContaining({ event: 'tool_result', tool_name: 'cf-authority.session_context_read', status: 'ok' }) }));
+    expect(replay.events).toContainEqual(expect.objectContaining({ payload: expect.objectContaining({ event: 'tool_result', tool_name: 'cf-authority.diagnostic_probe', status: 'failed', error_code: 'cloudflare_authority_diagnostic_probe_failed' }) }));
+    expect(replay.events).toContainEqual(expect.objectContaining({ payload: expect.objectContaining({ event: 'mcp_runtime_fault', error_code: 'cloudflare_authority_diagnostic_probe_failed' }) }));
+    expect(service.readArtifactMetadata({ session_id: created.session_id, artifact_id: 'art_cf_authority_html' })).toMatchObject({ status: 'ok', artifact_count: 1 });
+    expect(service.readArtifactContent({ session_id: created.session_id, artifact_id: 'art_cf_authority_html' })).toMatchObject({ status: 'ok', content: { content_type: 'text/html; charset=utf-8' } });
+  });
+
+  test('Cloudflare authority input methods have distinct adapter semantics', () => {
+    const service = createCloudflareNarsAuthorityService({ max_events: 80 });
+    const created = service.createSession({
+      session_id: 'cf_authority_input_methods_e2e',
+      site_id: 'narada.cloudflare.test',
+      agent_id: 'cloudflare.resident',
+    }, now);
+
+    const send = service.submitInput({ session_id: created.session_id, method: 'conversation.send', payload: { message: 'send' }, now });
+    const enqueue = service.submitInput({ session_id: created.session_id, method: 'conversation.enqueue', payload: { message: 'enqueue' }, now });
+    const steer = service.submitInput({ session_id: created.session_id, method: 'conversation.steer', payload: { message: 'steer' }, now });
+    const interrupt = service.submitInput({ session_id: created.session_id, method: 'conversation.interrupt', payload: { message: 'interrupt' }, now });
+    const status = service.submitInput({ session_id: created.session_id, method: 'session.status', payload: {}, now });
+    expect([send, enqueue, steer, interrupt, status].map((result) => result.status)).toEqual(['admitted', 'admitted', 'admitted', 'admitted', 'admitted']);
+    expect(send.events?.some((entry) => entry.payload.event === 'tool_call')).toBe(true);
+    expect(enqueue.events?.some((entry) => entry.payload.event === 'session_artifact_registered')).toBe(true);
+    expect(steer.events?.map((entry) => entry.payload.event)).toEqual(['operator_input_admitted', 'user_message', 'operator_steer_admitted', 'turn_complete']);
+    expect(interrupt.events?.map((entry) => entry.payload.event)).toEqual(['operator_input_admitted', 'user_message', 'turn_interrupted', 'turn_complete']);
+    expect(status.events?.map((entry) => entry.payload.event)).toEqual(['operator_input_admitted', 'user_message', 'turn_started', 'assistant_message', 'turn_complete']);
+
+    const close = service.submitInput({ session_id: created.session_id, method: 'session.close', payload: { message: 'close' }, now });
+    expect(close).toMatchObject({ status: 'admitted', method: 'session.close' });
+    expect(close.events?.map((entry) => entry.payload.event)).toEqual(['operator_input_admitted', 'user_message', 'session_closed']);
+    expect(service.readHealth(created.session_id)).toMatchObject({ status: 'refused', code: 'session_revoked' });
+    expect(service.submitInput({ session_id: created.session_id, method: 'conversation.send', payload: { message: 'after close' }, now })).toMatchObject({ status: 'refused', code: 'session_revoked' });
+  });
 });
 
 describe('Cloudflare Worker routes', () => {
-  test('Cloudflare-origin synthetic NARS authority session replays, streams live, admits input, reports health, and revokes', async () => {
+  test('Cloudflare-origin NARS authority session executes tool adapter, replays, streams live, reports health, and revokes', async () => {
     const outerWorker = createCloudflareNarsProjectionWorker({ now: () => now });
     const objects = new Map<string, NarsProjectionState>();
     const env = {
@@ -483,12 +554,12 @@ describe('Cloudflare Worker routes', () => {
     try {
       const created = await jsonOf(outerWorker.fetch(new Request('https://projection.example.test/api/nars/authority/sessions', {
         method: 'POST',
-        body: JSON.stringify({ session_id: 'cf_session_synthetic_1', site_id: 'narada.cloudflare.test', agent_id: 'cloudflare.resident' }),
+        body: JSON.stringify({ session_id: 'cf_session_runtime_1', site_id: 'narada.cloudflare.test', agent_id: 'cloudflare.resident' }),
       }), env));
-      expect(created).toMatchObject({ status: 'created', session_id: 'cf_session_synthetic_1', session: { execution_mode: 'synthetic_no_provider_no_tools' } });
+      expect(created).toMatchObject({ status: 'created', session_id: 'cf_session_runtime_1', session: { execution_mode: 'cloudflare_runtime_tool_adapter' } });
 
-      const base = 'https://projection.example.test/api/nars/authority/sessions/cf_session_synthetic_1';
-      expect(await jsonOf(outerWorker.fetch(new Request(`${base}/health`), env))).toMatchObject({ status: 'healthy', session_id: 'cf_session_synthetic_1' });
+      const base = 'https://projection.example.test/api/nars/authority/sessions/cf_session_runtime_1';
+      expect(await jsonOf(outerWorker.fetch(new Request(`${base}/health`), env))).toMatchObject({ status: 'healthy', session_id: 'cf_session_runtime_1', execution_mode: 'cloudflare_runtime_tool_adapter' });
 
       const replay = await jsonOf(outerWorker.fetch(new Request(`${base}/events?since_sequence=0`), env));
       expect(replay).toMatchObject({ status: 'ok', event_count: 1 });
@@ -506,21 +577,38 @@ describe('Cloudflare Worker routes', () => {
         method: 'POST',
         body: JSON.stringify({ method: 'conversation.send', payload: { message: 'hello from local operator surface' } }),
       }), env));
-      expect(input).toMatchObject({ status: 'admitted', execution_kind: 'synthetic_no_provider_no_tools', method: 'conversation.send' });
+      expect(input).toMatchObject({ status: 'admitted', execution_kind: 'cloudflare_runtime_tool_adapter', method: 'conversation.send' });
       expect(JSON.stringify(input)).not.toContain('provider_call');
-      expect(JSON.stringify(input)).not.toContain('tool_call');
+      expect(input.events.map((entry: { payload: { event: string } }) => entry.payload.event)).toEqual([
+        'operator_input_admitted',
+        'user_message',
+        'turn_started',
+        'tool_call',
+        'tool_result',
+        'tool_call',
+        'tool_result',
+        'mcp_runtime_fault',
+        'session_artifact_registered',
+        'assistant_message',
+        'turn_complete',
+      ]);
 
       const liveMessages = sockets[0].client.messages.map(JSON.parse);
       expect(liveMessages).toContainEqual(expect.objectContaining({ event: 'user_message', content: 'hello from local operator surface' }));
-      expect(liveMessages).toContainEqual(expect.objectContaining({ event: 'assistant_message', execution_kind: 'synthetic_no_provider_no_tools' }));
-      expect(liveMessages).toContainEqual(expect.objectContaining({ event: 'turn_complete', terminal_state: 'completed_synthetic' }));
+      expect(liveMessages).toContainEqual(expect.objectContaining({ event: 'tool_call', tool_name: 'cf-authority.session_context_read' }));
+      expect(liveMessages).toContainEqual(expect.objectContaining({ event: 'tool_result', tool_name: 'cf-authority.session_context_read', status: 'ok' }));
+      expect(liveMessages).toContainEqual(expect.objectContaining({ event: 'tool_result', tool_name: 'cf-authority.diagnostic_probe', status: 'failed' }));
+      expect(liveMessages).toContainEqual(expect.objectContaining({ event: 'mcp_runtime_fault', error_code: 'cloudflare_authority_diagnostic_probe_failed' }));
+      expect(liveMessages).toContainEqual(expect.objectContaining({ event: 'assistant_message', execution_kind: 'cloudflare_runtime_tool_adapter' }));
+      expect(liveMessages).toContainEqual(expect.objectContaining({ event: 'turn_complete', terminal_state: 'completed' }));
 
       const replayAfterInput = await jsonOf(outerWorker.fetch(new Request(`${base}/events?since_sequence=1`), env));
-      expect(replayAfterInput).toMatchObject({ status: 'ok', event_count: 6 });
+      expect(replayAfterInput).toMatchObject({ status: 'ok', event_count: 11 });
+      expect(replayAfterInput.events.map((entry: { payload: { event: string } }) => entry.payload.event)).toContain('mcp_runtime_fault');
       expect(replayAfterInput.events.map((entry: { payload: { event: string } }) => entry.payload.event)).toContain('session_artifact_registered');
 
-      expect(await jsonOf(outerWorker.fetch(new Request(base, { method: 'DELETE' }), env))).toMatchObject({ status: 'revoked', session_id: 'cf_session_synthetic_1' });
-      expect(sockets[0].client.messages.map(JSON.parse)).toContainEqual(expect.objectContaining({ event: 'authority_session_revoked', code: 'session_revoked', session_id: 'cf_session_synthetic_1' }));
+      expect(await jsonOf(outerWorker.fetch(new Request(base, { method: 'DELETE' }), env))).toMatchObject({ status: 'revoked', session_id: 'cf_session_runtime_1' });
+      expect(sockets[0].client.messages.map(JSON.parse)).toContainEqual(expect.objectContaining({ event: 'authority_session_revoked', code: 'session_revoked', session_id: 'cf_session_runtime_1' }));
       expect(sockets[0].client.closed).toBe(true);
       expect(await jsonOf(outerWorker.fetch(new Request(`${base}/health`), env))).toMatchObject({ status: 'refused', code: 'session_revoked' });
       expect(await jsonOf(outerWorker.fetch(new Request(`${base}/events?since_sequence=0`), env))).toMatchObject({ status: 'refused', code: 'session_revoked' });
@@ -645,23 +733,39 @@ describe('Cloudflare Worker routes', () => {
   });
 
   test('Worker input route validates browser credentials and policy-listed verbs', async () => {
-    const intent = sampleIntent();
+    const intent = createCloudflareNarsProjectionIntent({
+      projection_id: 'proj_input_methods',
+      site_id: 'narada.sonar',
+      site_root: 'D:/code/narada.sonar',
+      nars_session_id: 'carrier_input_methods',
+      operator_input_policy: ['conversation.send', 'conversation.enqueue', 'conversation.steer', 'conversation.interrupt', 'session.close'],
+      created_by: 'operator',
+    }, now);
     const access = createCloudflareNarsRemoteAccessRecord({ intent, created_at: now });
-    const service = createCloudflareNarsProjectionWorkerService({ nars_input_relay: ({ method }) => ({ status: 'accepted_by_nars', method }) });
+    const admittedMethods: string[] = [];
+    const service = createCloudflareNarsProjectionWorkerService({
+      nars_input_relay: ({ method }) => {
+        admittedMethods.push(method);
+        return { status: 'accepted_by_nars', method };
+      },
+    });
     const worker = createCloudflareNarsProjectionWorker({ service, now: () => now });
     const base = `https://projection.example.test/api/nars/projections/${intent.projection_id}`;
     service.register(access);
 
-    expect(await jsonOf(worker.fetch(new Request(`${base}/input`, {
-      method: 'POST',
-      headers: { 'x-narada-browser-token-fingerprint': access.browser_access_tokens[0].token_fingerprint },
-      body: JSON.stringify({ method: 'conversation.enqueue', payload: { message: 'next' } }),
-    })))).toMatchObject({ ok: true, semantic_success_point: 'nars_admission', nars_admission: { status: 'accepted_by_nars' } });
+    for (const method of ['conversation.send', 'conversation.enqueue', 'conversation.steer', 'conversation.interrupt', 'session.close']) {
+      expect(await jsonOf(worker.fetch(new Request(`${base}/input`, {
+        method: 'POST',
+        headers: { 'x-narada-browser-token-fingerprint': access.browser_access_tokens[0].token_fingerprint },
+        body: JSON.stringify({ method, payload: { message: method } }),
+      })))).toMatchObject({ ok: true, semantic_success_point: 'nars_admission', method, nars_admission: { status: 'accepted_by_nars', method } });
+    }
+    expect(admittedMethods).toEqual(['conversation.send', 'conversation.enqueue', 'conversation.steer', 'conversation.interrupt', 'session.close']);
 
     expect(await jsonOf(worker.fetch(new Request(`${base}/input`, {
       method: 'POST',
       headers: { 'x-narada-browser-token-fingerprint': access.browser_access_tokens[0].token_fingerprint },
-      body: JSON.stringify({ method: 'conversation.steer', payload: { message: 'no' } }),
+      body: JSON.stringify({ method: 'session.status', payload: {} }),
     })))).toMatchObject({ ok: false, code: 'operator_input_method_not_admitted' });
   });
 

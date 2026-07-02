@@ -82,6 +82,7 @@ export const NARS_CLIENT_EVENT_LABELS = Object.freeze({
   carrier_diagnostic_recorded: 'Diagnostic',
   mcp_runtime_fault: 'MCP runtime fault',
   authority_session_revoked: 'Session revoked',
+  projection_revoked: 'Projection revoked',
   session_status: 'Status',
   session_recovery: 'Recovery',
   session_operations: 'Operations',
@@ -279,7 +280,7 @@ export function classifyNarsClientEventProjection(projection) {
   const event = projection?.event ?? projection;
   if (kind === 'assistant_message' || kind === 'assistant_message_stream' || kind === 'user_message' || kind === 'operator_input_submitted' || kind === 'agent_web_ui_message' || kind === 'agent_web_ui_help') return 'conversation';
   if (kind === 'error' || kind === 'websocket_error' || kind === 'web_ui_decode_error' || kind === 'web_ui_input_not_sent' || kind === 'runtime_error') return 'conversation';
-  if (kind === 'authority_session_revoked') return 'diagnostics';
+  if (kind === 'authority_session_revoked' || kind === 'projection_revoked') return 'diagnostics';
   if (kind === 'carrier_diagnostic_recorded' || kind === 'mcp_runtime_fault') return 'diagnostics';
   if (kind === 'tool_call' || kind === 'tool_result' || kind === 'turn_failed') return 'operations';
   if (kind === 'session_artifact_registered' || kind === 'session_artifact_read') return 'operations';
@@ -320,7 +321,7 @@ function eventTone(kind) {
   if (kind === 'user_message') return NARS_CLIENT_EVENT_TONES.operator;
   if (kind === 'tool_call' || kind === 'tool_result') return NARS_CLIENT_EVENT_TONES.tool;
   if (kind === 'session_artifact_registered' || kind === 'session_artifact_read') return NARS_CLIENT_EVENT_TONES.status;
-  if (kind === 'error' || kind === 'websocket_error' || kind === 'web_ui_decode_error' || kind === 'turn_failed' || kind === 'authority_session_revoked' || kind === 'mcp_runtime_fault') return NARS_CLIENT_EVENT_TONES.error;
+  if (kind === 'error' || kind === 'websocket_error' || kind === 'web_ui_decode_error' || kind === 'turn_failed' || kind === 'authority_session_revoked' || kind === 'projection_revoked' || kind === 'mcp_runtime_fault') return NARS_CLIENT_EVENT_TONES.error;
   if (kind?.startsWith?.('agent_web_ui_') || kind === 'operator_input_submitted' || kind === 'web_ui_input_not_sent') return NARS_CLIENT_EVENT_TONES.local;
   if (kind === 'conversation_enqueue_requested' || kind?.startsWith?.('input_')) return NARS_CLIENT_EVENT_TONES.status;
   if (kind === 'carrier_diagnostic_recorded') return NARS_CLIENT_EVENT_TONES.status;
@@ -336,6 +337,7 @@ function eventSummary(event, kind) {
   if (kind === 'tool_result') return `${event.tool_name ?? event.name ?? 'tool result'}${event.status ? ` ${event.status}` : ''}`;
   if (kind === 'session_started') return `${event.agent_id ?? 'agent'} / ${event.session_id ?? 'session'}`;
   if (kind === 'authority_session_revoked') return event.code ?? 'session_revoked';
+  if (kind === 'projection_revoked') return event.code ?? 'projection_revoked';
   if (kind === 'session_events_subscription_started') return `${event.replay_count ?? 0} replayed event(s)`;
   if (kind === 'session_artifact_registered') return event.artifact?.title ?? event.artifact?.artifact_id ?? 'artifact registered';
   if (kind === 'session_artifact_read') return event.artifact?.title ?? event.artifact?.artifact_id ?? 'artifact';
@@ -383,6 +385,7 @@ function genericRenderKey(event, kind) {
   const sequenceKey = sequenceRenderKey(event);
   if (sequenceKey) return sequenceKey;
   if (kind === 'authority_session_revoked' && event?.session_id) return `authority-session-revoked:${event.session_id}`;
+  if (kind === 'projection_revoked' && event?.projection_id) return `projection-revoked:${event.projection_id}`;
   if (kind === 'conversation_enqueue_requested' && event?.request_id) return `operator-input-queued:${event.request_id}`;
   if (kind === 'input_queued_for_turn_boundary' && event?.input_event_id) return `operator-input-boundary:${event.input_event_id}`;
   return null;

@@ -99,13 +99,14 @@ async function run() {
 
     const passed = serviceHealth.status === 'healthy'
       && created.status === 'created'
-      && created.session?.execution_mode === 'synthetic_no_provider_no_tools'
+      && created.session?.execution_mode === 'cloudflare_runtime_tool_adapter'
       && health.status === 'healthy'
       && initialReplay.status === 'ok'
       && initialReplay.events?.some((event) => event.payload?.event === 'session_started')
       && live.status === 'passed'
       && replayAfterInput.status === 'ok'
-      && replayAfterInput.events?.some((event) => event.payload?.event === 'assistant_message' && event.payload?.execution_kind === 'synthetic_no_provider_no_tools')
+      && replayAfterInput.events?.some((event) => event.payload?.event === 'assistant_message' && event.payload?.execution_kind === 'cloudflare_runtime_tool_adapter')
+      && replayAfterInput.events?.some((event) => event.payload?.event === 'mcp_runtime_fault' && event.payload?.error_code === 'cloudflare_authority_diagnostic_probe_failed')
       && hostedShell.ok === true
       && hostedBrowser.status === 'passed'
       && revoke?.status === 'revoked'
@@ -126,7 +127,7 @@ async function run() {
       hosted_web_url: hostedWebUrl,
       web_socket_endpoint: webSocketEndpoint,
       authority_origin: 'cloudflare',
-      authority_runtime_kind: 'cloudflare_synthetic_nars_authority_runtime',
+      authority_runtime_kind: 'cloudflare_authority_tool_adapter_runtime',
       smoke_lineage: 'cloudflare-origin-live',
       hosted_shell_check_kind: 'http_html_shell_only',
       hosted_browser_check_kind: 'browser_level_authority_e2e',
@@ -166,9 +167,8 @@ async function verifyHostedAuthorityBrowser(args) {
   const browserPath = findHeadlessBrowser();
   if (!browserPath) return { status: 'failed', code: 'headless_browser_not_found' };
   const message = `Cloudflare authority browser E2E ${Date.now()}`;
-  const frame = { id: `authority-browser-e2e-${Date.now()}`, method: 'conversation.enqueue', params: { message, source: 'authority-live-smoke' } };
-  const submittedInput = `/json ${JSON.stringify(frame)}`;
-  const assistantText = 'Synthetic Cloudflare-origin response admitted conversation.enqueue.';
+  const submittedInput = message;
+  const assistantText = 'Cloudflare runtime tool adapter executed conversation.send.';
   const page = await openCdpPage({ browserPath, url: args.hostedWebUrl, userDataPrefix: 'narada-cloudflare-authority-browser-' });
   try {
     const stream = await waitForPageText(page, 'stream connected', 20000);
@@ -180,12 +180,26 @@ async function verifyHostedAuthorityBrowser(args) {
     const input = await submitHostedAuthorityOperatorMessage(page, submittedInput, message);
     const userRendered = await waitForPageTextOccurrence(page, message, beforeMessageCount + 1, 15000);
     const assistantRendered = await waitForPageTextOccurrence(page, assistantText, beforeAssistantCount + 1, 15000);
+    const liveAssistantFrame = await page.waitForWebSocketFrame((entry) => {
+      const url = String(entry.url ?? '');
+      const payload = String(entry.payload_data ?? '');
+      return url.includes(`/api/nars/authority/sessions/${args.sessionId}/events/websocket`)
+        && payload.includes('assistant_message')
+        && payload.includes(assistantText);
+    }, 15000);
     await sleep(500);
     const userMessageCount = await page.textOccurrenceCount(message);
     const assistantMessageCount = await page.textOccurrenceCount(assistantText);
     await selectHostedBrowserView(page, 'Diagnostics');
-    const turnCompleteRendered = await waitForPageText(page, 'completed_synthetic', 15000);
+    const turnCompleteRendered = await waitForPageText(page, 'completed', 15000);
     const revoke = await revokeSession(args.sessionBase);
+    const revocationFrame = await page.waitForWebSocketFrame((entry) => {
+      const url = String(entry.url ?? '');
+      const payload = String(entry.payload_data ?? '');
+      return url.includes(`/api/nars/authority/sessions/${args.sessionId}/events/websocket`)
+        && payload.includes('authority_session_revoked')
+        && payload.includes('session_revoked');
+    }, 15000);
     await selectHostedBrowserView(page, 'Diagnostics');
     const revokedRendered = await waitForPageText(page, 'session_revoked', 15000);
     const disconnectedRendered = await waitForPageText(page, 'stream reconnecting', 15000);
@@ -195,10 +209,12 @@ async function verifyHostedAuthorityBrowser(args) {
       && (input.input_response?.body?.status === 'admitted' || input.input_response?.status === 200)
       && userRendered.found
       && assistantRendered.found
-      && userMessageCount === 1
-      && assistantMessageCount === 1
+      && liveAssistantFrame.found
+      && userMessageCount === beforeMessageCount + 1
+      && assistantMessageCount === beforeAssistantCount + 1
       && turnCompleteRendered.found
       && revoke.status === 'revoked'
+      && revocationFrame.found
       && revokedRendered.found
       && disconnectedRendered.found;
     return {
@@ -210,12 +226,16 @@ async function verifyHostedAuthorityBrowser(args) {
       input,
       user_rendered: userRendered,
       assistant_rendered: assistantRendered,
-      duplicate_suppression: {
+      live_assistant_websocket_frame: liveAssistantFrame,
+      message_cardinality: {
         user_message_count: userMessageCount,
+        expected_user_message_count: beforeMessageCount + 1,
         assistant_message_count: assistantMessageCount,
+        expected_assistant_message_count: beforeAssistantCount + 1,
       },
       turn_complete_rendered: turnCompleteRendered,
       revoke,
+      revocation_websocket_frame: revocationFrame,
       revoked_state_rendered: revokedRendered,
       disconnected_state_rendered: disconnectedRendered,
     };
@@ -295,9 +315,10 @@ async function observeAuthorityWebSocket(args) {
         const parsed = parseJson(String(event.data));
         observed.push(parsed);
         const hasUser = observed.some((entry) => entry?.event === 'user_message' && String(entry?.content ?? '').includes(args.message));
-        const hasAssistant = observed.some((entry) => entry?.event === 'assistant_message' && entry?.execution_kind === 'synthetic_no_provider_no_tools');
-        const hasComplete = observed.some((entry) => entry?.event === 'turn_complete' && entry?.terminal_state === 'completed_synthetic');
-        if (hasUser && hasAssistant && hasComplete) {
+        const hasAssistant = observed.some((entry) => entry?.event === 'assistant_message' && entry?.execution_kind === 'cloudflare_runtime_tool_adapter');
+        const hasMcpFault = observed.some((entry) => entry?.event === 'mcp_runtime_fault' && entry?.error_code === 'cloudflare_authority_diagnostic_probe_failed');
+        const hasComplete = observed.some((entry) => entry?.event === 'turn_complete' && entry?.terminal_state === 'completed');
+        if (hasUser && hasAssistant && hasMcpFault && hasComplete) {
           clearTimeout(timer);
           resolve();
         }
@@ -359,9 +380,11 @@ function hostedWebUiEvidence({ hostedShell, hostedBrowser }) {
       { level: 'live_stream_rendered', status: hostedBrowser?.stream?.found === true ? 'passed' : 'failed' },
       { level: 'operator_input_submitted', status: hostedBrowser?.input?.status === 'submitted_from_hosted_browser_ui' ? 'passed' : 'failed' },
       { level: 'assistant_rendered', status: hostedBrowser?.assistant_rendered?.found === true ? 'passed' : 'failed' },
+      { level: 'live_websocket_assistant_frame_verified', status: hostedBrowser?.live_assistant_websocket_frame?.found === true ? 'passed' : 'failed' },
       { level: 'turn_completion_rendered', status: hostedBrowser?.turn_complete_rendered?.found === true ? 'passed' : 'failed' },
-      { level: 'duplicate_suppression_verified', status: hostedBrowser?.duplicate_suppression?.user_message_count === 1 && hostedBrowser?.duplicate_suppression?.assistant_message_count === 1 ? 'passed' : 'failed' },
+      { level: 'message_cardinality_verified', status: hostedBrowser?.message_cardinality?.user_message_count === hostedBrowser?.message_cardinality?.expected_user_message_count && hostedBrowser?.message_cardinality?.assistant_message_count === hostedBrowser?.message_cardinality?.expected_assistant_message_count ? 'passed' : 'failed' },
       { level: 'revocation_rendered', status: hostedBrowser?.revoked_state_rendered?.found === true ? 'passed' : 'failed' },
+      { level: 'live_websocket_revocation_frame_verified', status: hostedBrowser?.revocation_websocket_frame?.found === true ? 'passed' : 'failed' },
       { level: 'disconnection_rendered', status: hostedBrowser?.disconnected_state_rendered?.found === true ? 'passed' : 'failed' },
     ],
   };

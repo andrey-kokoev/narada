@@ -79,6 +79,7 @@ function createFakeAgentWebUiElements() {
     append(...children) { this.children.push(...children); }
     addEventListener(name, listener) { this.listeners.set(name, listener); }
     submit() { this.listeners.get('submit')?.({ preventDefault() {} }); }
+    change() { this.listeners.get('change')?.({}); }
     setAttribute(name, value) { this[name] = value; }
   }
   const byId = new Map();
@@ -221,7 +222,7 @@ test('agent-web-ui emits admitted NARS methods for event attach and operator inp
   }
 });
 
-test('browser startup can use Cloudflare projection HTTP events and input endpoints', async () => {
+test('browser startup can use Cloudflare projection replay, live WebSocket, and input endpoints', async () => {
   class FakeElement {
     constructor(id = null) {
       this.id = id;
@@ -235,6 +236,21 @@ test('browser startup can use Cloudflare projection HTTP events and input endpoi
     append(...children) { this.children.push(...children); }
     addEventListener(name, listener) { this.listeners.set(name, listener); }
     submit() { this.listeners.get('submit')?.({ preventDefault() {} }); }
+    change() { this.listeners.get('change')?.({}); }
+  }
+  class FakeWebSocket {
+    static OPEN = 1;
+    static instances = [];
+    constructor(url) {
+      this.url = url;
+      this.readyState = FakeWebSocket.OPEN;
+      this.sent = [];
+      this.listeners = new Map();
+      FakeWebSocket.instances.push(this);
+    }
+    addEventListener(name, listener) { this.listeners.set(name, listener); }
+    send(frame) { this.sent.push(JSON.parse(frame)); }
+    emit(name, event = {}) { this.listeners.get(name)?.(event); }
   }
   const elements = new Map();
   for (const id of ['nars-config', 'event-endpoint', 'health-endpoint', 'stream', 'health', 'projection-verbosity', 'events', 'operator-form', 'operator-input']) {
@@ -254,6 +270,7 @@ test('browser startup can use Cloudflare projection HTTP events and input endpoi
   const timers = [];
   const windowRef = {
     location: { search: '' },
+    WebSocket: FakeWebSocket,
     setInterval() { return 'timer-1'; },
     setTimeout(fn) { timers.push(fn); return `timer-${timers.length}`; },
     clearTimeout() {},
@@ -269,9 +286,23 @@ test('browser startup can use Cloudflare projection HTTP events and input endpoi
   await new Promise((resolve) => setTimeout(resolve, 0));
   assert.equal(started.config.mode, 'cloudflare_projection');
   assert.equal(started.config.artifactBasePath, 'https://projection.example.test/api/nars/projections/proj_test/artifacts');
-  assert.equal(elements.get('stream').textContent, 'long-poll connected');
+  for (let attempt = 0; attempt < 5 && FakeWebSocket.instances.length === 0; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+  assert.equal(FakeWebSocket.instances.length, 1);
+  const socket = FakeWebSocket.instances[0];
+  assert.equal(socket.url, 'wss://projection.example.test/api/nars/projections/proj_test/events/websocket?since_sequence=1&max_events=4');
+  socket.emit('open');
+  assert.equal(elements.get('stream').textContent, 'stream connected');
   assert.equal(elements.get('events').children.at(-1).dataset.eventKind, 'assistant_message');
   assert.equal(fetchCalls.find((call) => call.url.includes('/events')).url.includes('max_events=4'), true);
+  assert.equal(timers.length, 0, 'Cloudflare projection WebSocket mode must not keep a competing long-poll timer');
+  socket.emit('message', { data: JSON.stringify({ event: 'assistant_message', event_sequence: 2, content: 'live projection hello' }) });
+  assert.equal(elements.get('events').children.some((child) => textOfNode(child).includes('live projection hello')), true);
+
+  const inputBodies = () => fetchCalls
+    .filter((call) => call.url.endsWith('/input'))
+    .map((call) => JSON.parse(call.init.body));
 
   elements.get('operator-input').value = 'run startup sequence';
   elements.get('operator-form').submit();
@@ -279,9 +310,46 @@ test('browser startup can use Cloudflare projection HTTP events and input endpoi
   const inputCall = fetchCalls.find((call) => call.url.endsWith('/input'));
   assert.ok(inputCall);
   assert.equal(JSON.parse(inputCall.init.body).method, 'conversation.send');
+
+  socket.emit('message', { data: JSON.stringify({ event: 'turn_started', event_sequence: 3, turn_id: 'turn_cf_projection' }) });
+  elements.get('operator-input').value = 'queue after active turn';
+  elements.get('operator-form').submit();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(inputBodies().at(-1), {
+    method: 'conversation.enqueue',
+    payload: { message: 'queue after active turn', source: 'agent-web-ui', active_turn_id: 'turn_cf_projection' },
+    request_id: inputBodies().at(-1).request_id,
+  });
+
+  elements.get('operator-input').value = '/json {"id":"steer-projection","method":"conversation.steer","params":{"message":"steer projection","source":"agent-web-ui","active_turn_id":"turn_cf_projection"}}';
+  elements.get('operator-form').submit();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(inputBodies().at(-1), {
+    method: 'conversation.steer',
+    payload: { message: 'steer projection', source: 'agent-web-ui', active_turn_id: 'turn_cf_projection' },
+    request_id: 'steer-projection',
+  });
+
+  elements.get('operator-input').value = '/interrupt';
+  elements.get('operator-form').submit();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(inputBodies().at(-1).method, 'conversation.interrupt');
+
+  socket.emit('message', { data: JSON.stringify({ event: 'projection_revoked', projection_id: 'proj_test', code: 'projection_revoked' }) });
+  elements.get('projection-verbosity').value = 'diagnostics';
+  elements.get('projection-verbosity').change();
+  const revokedRow = elements.get('events').children.find((child) => child.dataset?.eventKind === 'projection_revoked');
+  assert.ok(revokedRow, 'expected Cloudflare projection revocation to be visible in diagnostics');
+  assert.equal(revokedRow.dataset.eventDisposition, 'diagnostic_signal');
+
+  elements.get('operator-input').value = '/exit';
+  elements.get('operator-form').submit();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(inputBodies().at(-1).method, 'session.close');
+  assert.equal(started.connection.closed, true);
 });
 
-test('browser startup can attach to Cloudflare-origin authority session over HTTP replay and submit input', async () => {
+test('browser startup can attach to Cloudflare-origin authority session over replay, live WebSocket, and HTTP input', async () => {
   class FakeElement {
     constructor(id = null) {
       this.id = id;
@@ -296,6 +364,7 @@ test('browser startup can attach to Cloudflare-origin authority session over HTT
     append(...children) { this.children.push(...children); }
     addEventListener(name, listener) { this.listeners.set(name, listener); }
     submit() { this.listeners.get('submit')?.({ preventDefault() {} }); }
+    change() { this.listeners.get('change')?.({}); }
     setAttribute(name, value) { this[name] = value; }
   }
   class FakeWebSocket {
@@ -335,7 +404,7 @@ test('browser startup can attach to Cloudflare-origin authority session over HTT
     clearTimeout() {},
     fetch: async (url, init = {}) => {
       fetchCalls.push({ url: String(url), init });
-      if (String(url).includes('/input')) return { ok: true, status: 200, json: async () => ({ status: 'admitted', execution_kind: 'synthetic_no_provider_no_tools' }) };
+      if (String(url).includes('/input')) return { ok: true, status: 200, json: async () => ({ status: 'admitted', execution_kind: 'cloudflare_runtime_tool_adapter' }) };
       if (String(url).includes('/events')) return { ok: true, status: 200, json: async () => ({ status: 'ok', events: [{ payload: { event: 'assistant_message', event_sequence: 1, content: 'hello from cloudflare authority' }, event_sequence: 1 }] }) };
       return { ok: true, status: 200, json: async () => ({ status: 'healthy' }) };
     },
@@ -348,9 +417,18 @@ test('browser startup can attach to Cloudflare-origin authority session over HTT
     await new Promise((resolve) => setTimeout(resolve, 0));
   }
   assert.equal(fetchCalls.some((call) => call.url.startsWith('https://projection.example.test/api/nars/authority/sessions/cf_session_surface_1/events?')), true);
-  assert.equal(FakeWebSocket.instances.length, 0);
-  assert.equal(elements.get('stream').textContent, 'long-poll connected');
+  assert.equal(FakeWebSocket.instances.length, 1);
+  const socket = FakeWebSocket.instances[0];
+  assert.equal(socket.url, 'wss://projection.example.test/api/nars/authority/sessions/cf_session_surface_1/events/websocket?since_sequence=1&max_events=3');
+  socket.emit('open');
+  assert.equal(elements.get('stream').textContent, 'stream connected');
   assert.equal(elements.get('events').children.some((child) => child.dataset?.eventKind === 'assistant_message'), true);
+  socket.emit('message', { data: JSON.stringify({ event: 'assistant_message', event_sequence: 2, content: 'live cloudflare authority message' }) });
+  assert.equal(elements.get('events').children.some((child) => textOfNode(child).includes('live cloudflare authority message')), true);
+
+  const inputBodies = () => fetchCalls
+    .filter((call) => call.url.endsWith('/input'))
+    .map((call) => JSON.parse(call.init.body));
 
   elements.get('operator-input').value = 'continue';
   elements.get('operator-form').submit();
@@ -361,6 +439,43 @@ test('browser startup can attach to Cloudflare-origin authority session over HTT
   const inputBody = JSON.parse(inputCall.init.body);
   assert.equal(inputBody.method, 'conversation.send');
   assert.deepEqual(inputBody.payload, { message: 'continue', source: 'agent-web-ui' });
+
+  socket.emit('message', { data: JSON.stringify({ event: 'turn_started', event_sequence: 3, turn_id: 'turn_cf_authority' }) });
+  elements.get('operator-input').value = 'queue on cloudflare authority';
+  elements.get('operator-form').submit();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(inputBodies().at(-1), {
+    method: 'conversation.enqueue',
+    payload: { message: 'queue on cloudflare authority', source: 'agent-web-ui', active_turn_id: 'turn_cf_authority' },
+    request_id: inputBodies().at(-1).request_id,
+  });
+
+  elements.get('operator-input').value = '/json {"id":"steer-authority","method":"conversation.steer","params":{"message":"steer authority","source":"agent-web-ui","active_turn_id":"turn_cf_authority"}}';
+  elements.get('operator-form').submit();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(inputBodies().at(-1), {
+    method: 'conversation.steer',
+    payload: { message: 'steer authority', source: 'agent-web-ui', active_turn_id: 'turn_cf_authority' },
+    request_id: 'steer-authority',
+  });
+
+  elements.get('operator-input').value = '/interrupt';
+  elements.get('operator-form').submit();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(inputBodies().at(-1).method, 'conversation.interrupt');
+
+  socket.emit('message', { data: JSON.stringify({ event: 'authority_session_revoked', event_sequence: 3, code: 'session_revoked', session_id: 'cf_session_surface_1' }) });
+  elements.get('projection-verbosity').value = 'diagnostics';
+  elements.get('projection-verbosity').change();
+  const revokedRow = elements.get('events').children.find((child) => child.dataset?.eventKind === 'authority_session_revoked');
+  assert.ok(revokedRow, 'expected Cloudflare authority revocation to be visible in diagnostics');
+  assert.equal(revokedRow.dataset.eventDisposition, 'diagnostic_signal');
+
+  elements.get('operator-input').value = '/exit';
+  elements.get('operator-form').submit();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(inputBodies().at(-1).method, 'session.close');
+  assert.equal(started.connection.closed, true);
 });
 
 test('hosted agent-web-ui can read and write a published local NARS session through Cloudflare projection', async () => {
@@ -394,6 +509,7 @@ test('hosted agent-web-ui can read and write a published local NARS session thro
   const timers = [];
   const windowRef = {
     location: { search: `?cloudflare_projection_id=proj_hosted_web_ui_e2e&cloudflare_api_base_url=https://projection.example.test&cloudflare_browser_token=${encodeURIComponent(browserToken)}` },
+    WebSocket: false,
     setInterval() { return 'interval-1'; },
     setTimeout(fn) { timers.push(fn); return `timer-${timers.length}`; },
     clearTimeout() {},
@@ -478,6 +594,7 @@ test('browser startup shows degraded Cloudflare projection stream failures', asy
   startAgentWebUi({
     windowRef: {
       location: { search: '' },
+      WebSocket: false,
       setInterval() { return 'timer-1'; },
       setTimeout() { return 'timer-2'; },
       fetch: async (url) => {
@@ -725,9 +842,21 @@ test('browser startup subscribes to events and submits operator text over the sa
   elements.get('operator-form').submit();
   assert.equal(reconnectedSocket.sent[2].method, 'session.health');
 
+  elements.get('operator-input').value = '/json {"id":"steer-local","method":"conversation.steer","params":{"message":"steer local","source":"agent-web-ui","active_turn_id":"turn_after_tool"}}';
+  elements.get('operator-form').submit();
+  assert.deepEqual(reconnectedSocket.sent[3], {
+    id: 'steer-local',
+    method: 'conversation.steer',
+    params: { message: 'steer local', source: 'agent-web-ui', active_turn_id: 'turn_after_tool' },
+  });
+
+  elements.get('operator-input').value = '/interrupt';
+  elements.get('operator-form').submit();
+  assert.equal(reconnectedSocket.sent[4].method, 'conversation.interrupt');
+
   elements.get('operator-input').value = '/exit';
   elements.get('operator-form').submit();
-  assert.equal(reconnectedSocket.sent[3].method, 'session.close');
+  assert.equal(reconnectedSocket.sent[5].method, 'session.close');
   assert.equal(started.connection.closed, true);
 });
 test('event stream reconnect uses bounded backoff and visible disconnected duration', () => {
@@ -821,6 +950,18 @@ test('conversation projection shows canonical lifecycle assistant message and hi
   assert.equal(projection.rows.some((row) => row.kind === 'assistant_message_stream'), false);
   assert.equal(projection.activity.active, false);
 
+});
+
+test('conversation projection keeps identical assistant text from distinct turns', () => {
+  const events = [
+    { event: 'assistant_message', request_id: 'input_first', turn_id: 'turn_first', content: 'Cloudflare runtime tool adapter executed conversation.send.', event_sequence: 20, sequence: 20, agent_id: 'resident', session_id: 'carrier_test' },
+    { event: 'assistant_message', request_id: 'input_first', turn_id: 'turn_first', content: 'Cloudflare runtime tool adapter executed conversation.send.', event_sequence: 21, sequence: 21, agent_id: 'resident', session_id: 'carrier_test' },
+    { event: 'assistant_message', request_id: 'input_second', turn_id: 'turn_second', content: 'Cloudflare runtime tool adapter executed conversation.send.', event_sequence: 22, sequence: 22, agent_id: 'resident', session_id: 'carrier_test' },
+  ];
+  const projection = createSessionProjection(events, { verbosity: 'conversation' });
+  const assistantRows = projection.rows.filter((row) => row.kind === 'assistant_message');
+  assert.equal(assistantRows.length, 2);
+  assert.deepEqual(assistantRows.map((row) => row.event.request_id), ['input_first', 'input_second']);
 });
 
 test('conversation projection keeps artifact presentation and lifecycle message while hiding provider notes', () => {
@@ -1327,6 +1468,22 @@ test('served web UI config attaches to live NARS health and event projections', 
       id: 'input-1',
       method: 'conversation.send',
       params: { message: 'run startup sequence', source: 'agent-web-ui' },
+    });
+
+    client.sendJson({ id: 'enqueue-1', method: 'conversation.enqueue', params: { message: 'after current turn', source: 'agent-web-ui', active_turn_id: 'turn_ws' } });
+    await waitForFrame(() => childFrames.some((frame) => frame.id === 'enqueue-1'));
+    assert.deepEqual(childFrames.find((frame) => frame.id === 'enqueue-1'), {
+      id: 'enqueue-1',
+      method: 'conversation.enqueue',
+      params: { message: 'after current turn', source: 'agent-web-ui', active_turn_id: 'turn_ws' },
+    });
+
+    client.sendJson({ id: 'steer-1', method: 'conversation.steer', params: { message: 'steer now', source: 'agent-web-ui', active_turn_id: 'turn_ws' } });
+    await waitForFrame(() => childFrames.some((frame) => frame.id === 'steer-1'));
+    assert.deepEqual(childFrames.find((frame) => frame.id === 'steer-1'), {
+      id: 'steer-1',
+      method: 'conversation.steer',
+      params: { message: 'steer now', source: 'agent-web-ui', active_turn_id: 'turn_ws' },
     });
 
     client.sendJson({ id: 'interrupt-1', method: 'conversation.interrupt', params: {} });

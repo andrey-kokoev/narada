@@ -60,6 +60,9 @@ export async function openCdpPage({ browserPath, url, userDataPrefix = 'narada-b
   const networkRequests = new Map();
   const networkResponses = [];
   const networkWaiters = new Set();
+  const webSocketRequests = new Map();
+  const webSocketFrames = [];
+  const webSocketFrameWaiters = new Set();
   const executionContextsByFrame = new Map();
   ws.addEventListener('message', (message) => {
     const payload = JSON.parse(String(message.data));
@@ -92,6 +95,27 @@ export async function openCdpPage({ browserPath, url, userDataPrefix = 'narada-b
       for (const waiter of [...networkWaiters]) {
         if (!waiter.predicate(entry)) continue;
         networkWaiters.delete(waiter);
+        clearTimeout(waiter.timer);
+        waiter.resolve({ found: true, ...entry, waited_ms: Date.now() - waiter.started });
+      }
+      return;
+    }
+    if (payload.method === 'Network.webSocketCreated') {
+      webSocketRequests.set(payload.params.requestId, { request_id: payload.params.requestId, url: payload.params.url });
+      return;
+    }
+    if (payload.method === 'Network.webSocketFrameReceived') {
+      const request = webSocketRequests.get(payload.params.requestId) ?? networkRequests.get(payload.params.requestId) ?? {};
+      const entry = {
+        request_id: payload.params.requestId,
+        url: request.url,
+        payload_data: payload.params.response?.payloadData ?? '',
+        opcode: payload.params.response?.opcode,
+      };
+      webSocketFrames.push(entry);
+      for (const waiter of [...webSocketFrameWaiters]) {
+        if (!waiter.predicate(entry)) continue;
+        webSocketFrameWaiters.delete(waiter);
         clearTimeout(waiter.timer);
         waiter.resolve({ found: true, ...entry, waited_ms: Date.now() - waiter.started });
       }
@@ -181,6 +205,26 @@ export async function openCdpPage({ browserPath, url, userDataPrefix = 'narada-b
         networkWaiters.add(waiter);
       });
     },
+    webSocketFrames() {
+      return webSocketFrames.slice();
+    },
+    async waitForWebSocketFrame(predicate, timeoutMs) {
+      const started = Date.now();
+      const existing = webSocketFrames.find(predicate);
+      if (existing) return { found: true, ...existing, waited_ms: 0 };
+      return await new Promise((resolve) => {
+        const waiter = {
+          predicate,
+          started,
+          resolve,
+          timer: setTimeout(() => {
+            webSocketFrameWaiters.delete(waiter);
+            resolve({ found: false, waited_ms: Date.now() - started, recent_frames: webSocketFrames.slice(-12) });
+          }, timeoutMs),
+        };
+        webSocketFrameWaiters.add(waiter);
+      });
+    },
     async getNetworkResponseBody(requestId) {
       const result = await send('Network.getResponseBody', { requestId }).catch((error) => ({ error: error instanceof Error ? error.message : String(error) }));
       if (result?.error) return result;
@@ -188,7 +232,12 @@ export async function openCdpPage({ browserPath, url, userDataPrefix = 'narada-b
       try { return JSON.parse(body); } catch { return { body, base64_encoded: Boolean(result?.base64Encoded) }; }
     },
     async close() {
-      try { await send('Browser.close'); } catch {}
+      try {
+        await Promise.race([
+          send('Browser.close'),
+          new Promise((resolve) => setTimeout(resolve, 1000)),
+        ]);
+      } catch {}
       try { ws.close(); } catch {}
       await new Promise((resolve) => {
         if (child.exitCode !== null || child.signalCode !== null) return resolve();

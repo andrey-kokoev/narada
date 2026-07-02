@@ -13,6 +13,15 @@ function projectionHeaders(browserToken) {
   return browserToken ? { 'x-narada-browser-token-fingerprint': browserToken } : {};
 }
 
+function cloudflareWebSocketEndpoint(endpoint, browserToken) {
+  const url = new URL(endpoint);
+  url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+  const path = url.pathname.replace(/\/events$/, '/events/websocket');
+  url.pathname = path === url.pathname ? `${url.pathname.replace(/\/+$/, '')}/websocket` : path;
+  if (browserToken) url.searchParams.set('browser_token', browserToken);
+  return url.href;
+}
+
 function disconnectedDurationText(disconnectedAt, now = Date.now()) {
   if (!disconnectedAt) return '0s';
   return `${Math.max(0, Math.floor((now - disconnectedAt) / 1000))}s`;
@@ -69,6 +78,13 @@ export function connectEvents(endpointOrConfig, maxReplay, documentRef = documen
     },
   };
   if (/^https?:/i.test(String(endpoint))) {
+    const remoteWebSocketEnabled = (config.mode === 'cloudflare_authority' || config.mode === 'cloudflare_projection') && typeof WebSocketCtor === 'function';
+    const processRemoteMessage = (message) => {
+      const sequence = sequenceFromRuntimeMessage(message);
+      if (sequence !== null) connection.lastSequence = sequence;
+      applyRuntimeEventToWebUiState(connection, message);
+      appendEvent(message, documentRef);
+    };
     const readRemote = async () => {
       try {
         const subscribeFrame = buildSubscribeFrame({
@@ -84,20 +100,59 @@ export function connectEvents(endpointOrConfig, maxReplay, documentRef = documen
         for (const item of body.events ?? []) {
           const message = item?.payload ?? item;
           const sequence = sequenceFromRuntimeMessage(message) ?? item?.event_sequence ?? item?.sequence ?? null;
-          if (sequence !== null) connection.lastSequence = sequence;
-          applyRuntimeEventToWebUiState(connection, message);
-          appendEvent(message, documentRef);
+          if (sequence !== null && message && typeof message === 'object' && message.event_sequence == null) message.event_sequence = sequence;
+          processRemoteMessage(message);
         }
         setText('stream', response.ok ? 'long-poll connected' : `remote projection ${response.status}`, documentRef);
       } catch (error) {
         setText('stream', 'remote projection unavailable', documentRef);
         appendEvent({ event: 'projection_stream_unavailable', message: error instanceof Error ? error.message : String(error) }, documentRef);
       } finally {
-        if (!connection.closed) connection.reconnectTimer = setTimeoutFn(readRemote, 2000);
+        if (!connection.closed && !remoteWebSocketEnabled) connection.reconnectTimer = setTimeoutFn(readRemote, 2000);
       }
     };
+    const connectRemoteWebSocket = () => {
+      const subscribeFrame = buildSubscribeFrame({
+        maxReplay,
+        includeReplay: true,
+        ...(connection.lastSequence === null ? {} : { sinceSequence: connection.lastSequence }),
+      });
+      const url = new URL(cloudflareWebSocketEndpoint(endpoint, browserToken));
+      if (subscribeFrame.params?.since_sequence != null) url.searchParams.set('since_sequence', String(subscribeFrame.params.since_sequence));
+      url.searchParams.set('max_events', String(subscribeFrame.params?.max_replay ?? maxReplay ?? 100));
+      const socket = new WebSocketCtor(url.href);
+      connection.socket = socket;
+      socket.addEventListener('open', () => {
+        connection.reconnectAttempt = 0;
+        connection.disconnectedAt = null;
+        setText('stream', 'stream connected', documentRef);
+      });
+      socket.addEventListener('message', (event) => {
+        try {
+          const message = JSON.parse(event.data);
+          if (message?.event === 'websocket_connected') return;
+          processRemoteMessage(message);
+        } catch (error) {
+          appendEvent({ event: 'web_ui_decode_error', message: error instanceof Error ? error.message : String(error) }, documentRef);
+        }
+      });
+      socket.addEventListener('close', () => {
+        if (connection.closed) {
+          setText('stream', 'closed', documentRef);
+          return;
+        }
+        connection.disconnectedAt ??= Date.now();
+        connection.reconnectAttempt += 1;
+        const delayMs = reconnectDelayForAttempt(connection.reconnectAttempt);
+        setReconnectText(connection, documentRef, delayMs);
+        setTimeoutFn(connectRemoteWebSocket, delayMs);
+      });
+      socket.addEventListener('error', () => appendEvent({ event: 'websocket_error', message: 'remote websocket error' }, documentRef));
+    };
     setText('stream', 'loading remote projection', documentRef);
-    readRemote();
+    void readRemote().then(() => {
+      if (remoteWebSocketEnabled && !connection.closed && !connection.socket) connectRemoteWebSocket();
+    });
     return connection;
   }
   const connect = () => {

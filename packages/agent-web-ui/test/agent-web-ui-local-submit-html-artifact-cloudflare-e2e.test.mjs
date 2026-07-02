@@ -77,6 +77,20 @@ async function workerFetch(worker, url, init = {}) {
   return worker.fetch(new Request(url, init));
 }
 
+async function jsonOf(responsePromise) {
+  return (await responsePromise).json();
+}
+
+async function setProjectionView(page, value) {
+  return page.evaluate(String.raw`((nextValue) => {
+    const select = document.querySelector('#projection-verbosity');
+    if (!select) return { ok: false, reason: 'missing_projection_verbosity_select' };
+    select.value = nextValue;
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    return { ok: true, value: select.value };
+  })(${JSON.stringify(value)})`);
+}
+
 function createLocalNarsHttpServer({ siteRoot, sessionId, artifactsDir }) {
   return createServer((request, response) => {
     const url = new URL(request.url ?? '/', 'http://127.0.0.1');
@@ -173,7 +187,7 @@ function createEmptyLocalNarsSite() {
   return { siteRoot, sessionId, sessionDir, artifactsDir, eventsPath };
 }
 
-function wireSyntheticArtifactRuntime({ runtimeInput, eventHub, siteRoot, sessionId, artifactsDir, eventsPath }) {
+function wireLocalFixtureArtifactRuntime({ runtimeInput, eventHub, siteRoot, sessionId, artifactsDir, eventsPath }) {
   let buffer = '';
   let nextSequence = 2;
   let artifactCreatedResolve;
@@ -219,7 +233,7 @@ function wireSyntheticArtifactRuntime({ runtimeInput, eventHub, siteRoot, sessio
       source_path: htmlPath,
       content_type: 'text/html; charset=utf-8',
       created_at: now,
-      created_by: 'synthetic-nars-authority',
+      created_by: 'local-fixture-runtime',
       creation_input: { request_id: requestId, message },
       access: { scope: 'session', token_required: false },
       render: {
@@ -259,12 +273,45 @@ function wireSyntheticArtifactRuntime({ runtimeInput, eventHub, siteRoot, sessio
       output_ref: null,
       carrier_mutation_admitted: false,
     });
+    publish({
+      event: 'tool_call',
+      request_id: requestId,
+      turn_id: 'turn_local_submit_mcp',
+      tool: 'fixture_fail',
+      tool_name: 'fixture_fail',
+      decision: 'read_only_admitted',
+      argument_summary: { topic: 'local-submit-html-artifact-failure-diagnostic' },
+      carrier_mutation_admitted: false,
+    });
+    publish({
+      event: 'tool_result',
+      request_id: requestId,
+      turn_id: 'turn_local_submit_mcp',
+      tool: 'fixture_fail',
+      tool_name: 'fixture_fail',
+      status: 'failed',
+      error: 'fixture_mcp_forced_failure',
+      error_code: 'fixture_mcp_forced_failure',
+      duration_ms: 3,
+      decision: 'read_only_admitted',
+      carrier_mutation_admitted: false,
+    });
+    publish({
+      event: 'mcp_runtime_fault',
+      request_id: requestId,
+      turn_id: 'turn_local_submit_mcp',
+      diagnostic_code: 'mcp_runtime_fault',
+      server_name: 'local-fixture',
+      tool_name: 'fixture_fail',
+      error_code: 'fixture_mcp_forced_failure',
+      message: 'Local runtime fixture MCP failure',
+    });
     publish({ event: 'session_artifact_registered', request_id: requestId, artifact });
     publish({
       event: 'assistant_message',
       request_id: requestId,
       turn_id: 'turn_local_submit_mcp',
-      source: 'synthetic_nars_artifact_creation',
+      source: 'local_fixture_artifact_creation',
       content: [
         { type: 'text', text: 'Artifact submitted to NARS from local web UI.' },
         {
@@ -301,7 +348,7 @@ function wireSyntheticArtifactRuntime({ runtimeInput, eventHub, siteRoot, sessio
   return { artifactCreated };
 }
 
-test('local agent-web-ui submitted intent creates NARS HTML artifact that remote Cloudflare surface renders', async () => {
+test('local runtime input renders artifact and MCP lanes on local and Cloudflare-hosted web surfaces', async () => {
   const browserPath = findHeadlessBrowser();
   assert.ok(browserPath, 'expected an installed Chromium-family browser for local-submit artifact E2E');
 
@@ -311,7 +358,7 @@ test('local agent-web-ui submitted intent creates NARS HTML artifact that remote
   const startedEvent = JSON.parse(readFileSync(eventsPath, 'utf8').trim());
   eventHub.publish(startedEvent);
   const eventProjection = await startEventStreamProjection({ childStdin: runtimeInput, eventHub, host: '127.0.0.1', port: 0, eventsPath });
-  const syntheticRuntime = wireSyntheticArtifactRuntime({ runtimeInput, eventHub, siteRoot, sessionId, artifactsDir, eventsPath });
+  const fixtureRuntime = wireLocalFixtureArtifactRuntime({ runtimeInput, eventHub, siteRoot, sessionId, artifactsDir, eventsPath });
   const healthServer = createLocalNarsHttpServer({ siteRoot, sessionId, artifactsDir });
   const healthBaseUrl = await listen(healthServer);
   const localWeb = await startAgentWebUiServer({
@@ -360,7 +407,7 @@ test('local agent-web-ui submitted intent creates NARS HTML artifact that remote
     assert.equal(submitted.ok, true, JSON.stringify(submitted));
 
     const created = await Promise.race([
-      syntheticRuntime.artifactCreated,
+      fixtureRuntime.artifactCreated,
       new Promise((_, reject) => setTimeout(() => reject(new Error('artifact_creation_timeout')), 10000)),
     ]);
     assert.equal(created.artifact.artifact_id, 'art_local_submit_html');
@@ -385,6 +432,23 @@ test('local agent-web-ui submitted intent creates NARS HTML artifact that remote
     assert.equal(localIframeResponse.status, 200);
     assert.match(await localIframeResponse.text(), /HTML artifact created after local web UI submit/);
 
+    const localConversation = await setProjectionView(localPage, 'conversation');
+    assert.deepEqual(localConversation, { ok: true, value: 'conversation' });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const localConversationText = await localPage.evaluate('document.body.innerText');
+    assert.doesNotMatch(localConversationText, /fixture_read ok/);
+    assert.doesNotMatch(localConversationText, /fixture_mcp_forced_failure/);
+
+    const localDiagnostics = await setProjectionView(localPage, 'diagnostics');
+    assert.deepEqual(localDiagnostics, { ok: true, value: 'diagnostics' });
+    assert.equal((await waitForPageText(localPage, 'MCP runtime fault local-fixture:fixture_fail fixture_mcp_forced_failure', 15000)).found, true);
+
+    const localOperations = await setProjectionView(localPage, 'operations');
+    assert.deepEqual(localOperations, { ok: true, value: 'operations' });
+    assert.equal((await waitForPageText(localPage, 'fixture_read', 15000)).found, true);
+    assert.equal((await waitForPageText(localPage, 'fixture_read ok', 15000)).found, true);
+    assert.equal((await waitForPageText(localPage, 'fixture_fail failed', 15000)).found, true);
+
     const registration = await registerProjectionRemotely({
       site_id: 'narada.e2e',
       site_root: siteRoot,
@@ -393,6 +457,7 @@ test('local agent-web-ui submitted intent creates NARS HTML artifact that remote
       created_at: now,
       dry_run: false,
       cloudflare_api_base_url: workerBaseUrl,
+      event_stream_policy: 'diagnostic',
       artifact_projection_policy: {
         content: 'explicit_artifacts',
         explicit_artifact_ids: ['art_local_submit_html'],
@@ -438,27 +503,24 @@ test('local agent-web-ui submitted intent creates NARS HTML artifact that remote
     assert.equal(servedIframe.status, 200);
     assert.match(servedIframe.body, /HTML artifact created after local web UI submit/);
 
-    const switchedToChat = await remotePage.evaluate(String.raw`(() => {
-      const select = document.querySelector('#projection-verbosity');
-      if (!select) return { ok: false, reason: 'missing_projection_verbosity_select' };
-      select.value = 'conversation';
-      select.dispatchEvent(new Event('change', { bubbles: true }));
-      return { ok: true, value: select.value };
-    })()`);
+    const switchedToChat = await setProjectionView(remotePage, 'conversation');
     assert.deepEqual(switchedToChat, { ok: true, value: 'conversation' });
     await new Promise((resolve) => setTimeout(resolve, 50));
     const remoteChatText = await remotePage.evaluate('document.body.innerText');
     assert.doesNotMatch(remoteChatText, /fixture_read ok/);
-    const switchedToOperations = await remotePage.evaluate(String.raw`(() => {
-      const select = document.querySelector('#projection-verbosity');
-      if (!select) return { ok: false, reason: 'missing_projection_verbosity_select' };
-      select.value = 'operations';
-      select.dispatchEvent(new Event('change', { bubbles: true }));
-      return { ok: true, value: select.value };
-    })()`);
+    assert.doesNotMatch(remoteChatText, /fixture_mcp_forced_failure/);
+
+    const switchedToDiagnostics = await setProjectionView(remotePage, 'diagnostics');
+    assert.deepEqual(switchedToDiagnostics, { ok: true, value: 'diagnostics' });
+    assert.equal((await waitForPageText(remotePage, 'MCP runtime fault local-fixture:fixture_fail fixture_mcp_forced_failure', 15000)).found, true);
+    const remoteDiagnosticsText = await remotePage.evaluate('document.body.innerText');
+    assert.doesNotMatch(remoteDiagnosticsText, /fixture_read ok/);
+
+    const switchedToOperations = await setProjectionView(remotePage, 'operations');
     assert.deepEqual(switchedToOperations, { ok: true, value: 'operations' });
     assert.equal((await waitForPageText(remotePage, 'fixture_read', 15000)).found, true);
     assert.equal((await waitForPageText(remotePage, 'fixture_read ok', 15000)).found, true);
+    assert.equal((await waitForPageText(remotePage, 'fixture_fail failed', 15000)).found, true);
     assert.equal((await waitForPageText(remotePage, 'tool_result', 15000)).found, true);
 
     const remoteSubmitted = await remotePage.evaluate(String.raw`(async () => {
@@ -493,6 +555,19 @@ test('local agent-web-ui submitted intent creates NARS HTML artifact that remote
     assert.equal(admittedInputs.length, 1, JSON.stringify(admittedInputs));
     assert.equal(admittedInputs[0].method, 'conversation.send');
     assert.deepEqual(admittedInputs[0].payload, { message: 'Remote Cloudflare surface message for local NARS admission', source: 'agent-web-ui' });
+
+    const revoked = await jsonOf(worker.fetch(new Request(`${workerBaseUrl}/api/nars/projections/${projectionId}`, { method: 'DELETE' })));
+    assert.equal(revoked.status, 'revoked');
+    assert.equal(revoked.projection_id, projectionId);
+    const revokedView = await setProjectionView(remotePage, 'diagnostics');
+    assert.deepEqual(revokedView, { ok: true, value: 'diagnostics' });
+    const revokedSignal = await waitForPageText(remotePage, 'projection_revoked', 15000);
+    assert.equal(revokedSignal.found, true, JSON.stringify(revokedSignal));
+    const refusedAfterRevoke = await jsonOf(worker.fetch(new Request(`${workerBaseUrl}/api/nars/projections/${projectionId}/events?since_sequence=0`, {
+      headers: { 'x-narada-browser-token-fingerprint': browserToken },
+    })));
+    assert.equal(refusedAfterRevoke.status, 'refused');
+    assert.equal(refusedAfterRevoke.code, 'projection_revoked');
   } finally {
     if (remotePage) await remotePage.close();
     if (localPage) await localPage.close();

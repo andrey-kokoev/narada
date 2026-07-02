@@ -130,6 +130,14 @@ test('NARS client projection contract owns shared event rendering vocabulary', (
     event: { event: 'authority_session_revoked', session_id: 'cf_session_1', code: 'session_revoked' },
     renderKey: 'authority-session-revoked:cf_session_1',
   });
+  assert.deepEqual(projectNarsClientEvent({ event: 'projection_revoked', projection_id: 'proj_1', code: 'projection_revoked' }), {
+    kind: 'projection_revoked',
+    label: 'Projection revoked',
+    tone: 'error',
+    summary: 'projection_revoked',
+    event: { event: 'projection_revoked', projection_id: 'proj_1', code: 'projection_revoked' },
+    renderKey: 'projection-revoked:proj_1',
+  });
   assert.deepEqual(projectNarsClientEvent({ event: 'conversation_enqueue_requested', request_id: 'req_1', delivery_semantics: 'queued for next turn' }), {
     kind: 'conversation_enqueue_requested',
     label: 'Input queued',

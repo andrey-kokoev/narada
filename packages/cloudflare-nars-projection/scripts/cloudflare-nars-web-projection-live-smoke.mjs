@@ -87,6 +87,10 @@ async function run() {
   });
   const replay = await getJson(`${base}/events?since_sequence=0`, { 'x-narada-browser-token-fingerprint': browserToken });
   const hostedShell = await getText(hostedWebUrl);
+  const metadata = await getJson(`${base}/artifacts`, { 'x-narada-browser-token-fingerprint': browserToken });
+  let artifactContent = { status: 'not_checked', reason: 'no_projected_artifact_metadata' };
+  const artifactId = metadata?.artifacts?.[0]?.artifact_id;
+  if (artifactId) artifactContent = await getJson(`${base}/artifacts/${encodeURIComponent(artifactId)}/content`, { 'x-narada-browser-token-fingerprint': browserToken });
   const hostedBrowser = await verifyHostedBrowserProjection({
     hostedWebUrl,
     siteRoot: args.siteRoot,
@@ -94,13 +98,9 @@ async function run() {
     cloudflareApiBaseUrl: args.cloudflareApiBaseUrl,
     browserToken,
   });
-  const metadata = await getJson(`${base}/artifacts`, { 'x-narada-browser-token-fingerprint': browserToken });
-  let artifactContent = { status: 'not_checked', reason: 'no_projected_artifact_metadata' };
-  const artifactId = metadata?.artifacts?.[0]?.artifact_id;
-  if (artifactId) artifactContent = await getJson(`${base}/artifacts/${encodeURIComponent(artifactId)}/content`, { 'x-narada-browser-token-fingerprint': browserToken });
   const input = hostedBrowser.input ?? { status: 'not_checked', reason: 'covered_by_hosted_browser_strict_round_trip' };
   const delivery = hostedBrowser.delivery ?? { status: 'not_checked', reason: 'covered_by_hosted_browser_strict_round_trip' };
-  const revoke = await fetch(base, { method: 'DELETE' }).then((response) => response.json().catch(() => ({ status: response.ok ? 'revoked' : 'unknown' })));
+  const revoke = hostedBrowser.revoke ?? await fetch(base, { method: 'DELETE' }).then((response) => response.json().catch(() => ({ status: response.ok ? 'revoked' : 'unknown' })));
   const refusedAfterRevoke = await getJson(`${base}/events?since_sequence=0`, { 'x-narada-browser-token-fingerprint': browserToken });
   const projectedEventCount = Number(bridge.projected_event_count ?? 0);
   const replayEventCount = Number(replay.event_count ?? 0);
@@ -203,6 +203,23 @@ async function verifyHostedBrowserProjection(args) {
     const replicated = acknowledgedInputId
       ? await waitForPageTextWithAction(page, acknowledgedInputId, 15000, () => scrollHostedBrowserTranscriptToBottom(page))
       : { found: false, reason: 'no_acknowledged_input_id' };
+    const replicatedWebSocketFrame = acknowledgedInputId
+      ? await page.waitForWebSocketFrame((entry) => {
+        const url = String(entry.url ?? '');
+        const payload = String(entry.payload_data ?? '');
+        return url.includes(`/api/nars/projections/${args.projectionId}/events/websocket`)
+          && payload.includes(acknowledgedInputId);
+      }, 15000)
+      : { found: false, reason: 'no_acknowledged_input_id' };
+    const revoke = await fetch(`${args.cloudflareApiBaseUrl.replace(/\/+$/, '')}/api/nars/projections/${encodeURIComponent(args.projectionId)}`, { method: 'DELETE' })
+      .then((response) => response.json().catch(() => ({ status: response.ok ? 'revoked' : 'unknown' })));
+    const revocationWebSocketFrame = await page.waitForWebSocketFrame((entry) => {
+      const url = String(entry.url ?? '');
+      const payload = String(entry.payload_data ?? '');
+      return url.includes(`/api/nars/projections/${args.projectionId}/events/websocket`)
+        && payload.includes('projection_revoked');
+    }, 15000);
+    const revokedRendered = await waitForPageText(page, 'projection_revoked', 15000);
     const passed = input.status === 'submitted_from_hosted_browser_ui'
       && delivery.status === 'delivered'
       && delivery.delivered_count >= 1
@@ -211,8 +228,11 @@ async function verifyHostedBrowserProjection(args) {
       && bridgeAfterInput.status === 'connected'
       && bridgeAfterInput.projected_event_count > 0
       && remoteCache.found
-      && replicated.found;
-    return { status: passed ? 'passed' : 'failed', strict_round_trip: true, initial, stream, view: 'Raw', input, optimistic, delivery, acknowledged_input_id: acknowledgedInputId, local_event_log: localEventLog, bridge_after_input: bridgeAfterInput, remote_cache: remoteCache, replicated, message, submitted_input: submittedInput };
+      && replicatedWebSocketFrame.found
+      && revoke.status === 'revoked'
+      && revocationWebSocketFrame.found
+      && revokedRendered.found;
+    return { status: passed ? 'passed' : 'failed', strict_round_trip: true, initial, stream, view: 'Raw', input, optimistic, delivery, acknowledged_input_id: acknowledgedInputId, local_event_log: localEventLog, bridge_after_input: bridgeAfterInput, remote_cache: remoteCache, replicated, replicated_websocket_frame: replicatedWebSocketFrame, revoke, revocation_websocket_frame: revocationWebSocketFrame, revoked_rendered: revokedRendered, message, submitted_input: submittedInput };
   } catch (error) {
     return { status: 'failed', code: 'hosted_browser_projection_failed', error: error instanceof Error ? error.message : String(error), message };
   } finally {
@@ -375,7 +395,10 @@ function hostedWebUiEvidence({ hostedShell, hostedBrowser }) {
       { level: 'live_stream_rendered', status: hostedBrowser?.stream?.found === true ? 'passed' : 'failed' },
       { level: 'operator_input_submitted', status: hostedBrowser?.input?.status === 'submitted_from_hosted_browser_ui' ? 'passed' : 'failed' },
       { level: 'local_input_delivered', status: hostedBrowser?.delivery?.status === 'delivered' ? 'passed' : 'failed' },
-      { level: 'projected_input_replicated', status: hostedBrowser?.replicated?.found === true ? 'passed' : 'failed' },
+      { level: 'projected_input_replicated', status: hostedBrowser?.remote_cache?.found === true || hostedBrowser?.replicated?.found === true ? 'passed' : 'failed' },
+      { level: 'live_websocket_projected_input_frame_verified', status: hostedBrowser?.replicated_websocket_frame?.found === true ? 'passed' : 'failed' },
+      { level: 'revocation_rendered', status: hostedBrowser?.revoked_rendered?.found === true ? 'passed' : 'failed' },
+      { level: 'live_websocket_revocation_frame_verified', status: hostedBrowser?.revocation_websocket_frame?.found === true ? 'passed' : 'failed' },
       { level: 'artifact_metadata_rendered', status: hostedBrowser?.status === 'passed' ? 'passed' : 'unknown' },
     ],
   };

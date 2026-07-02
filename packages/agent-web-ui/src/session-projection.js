@@ -65,7 +65,7 @@ export function classifyRuntimeMessage(message) {
   if (isRoutineHealthySessionHealth(event) || event.event === 'websocket_connected') return 'state_sample';
   if (event.event === 'session_health') return 'diagnostic_signal';
   if (event.event === 'assistant_message' || event.event === 'assistant_message_stream' || event.event === 'user_message' || event.event === 'operator_input_submitted' || event.event === 'agent_web_ui_message' || event.event === 'agent_web_ui_help') return 'conversation_fact';
-  if (event.event === 'error' || event.event === 'websocket_error' || event.event === 'web_ui_decode_error' || event.event === 'web_ui_input_not_sent' || event.event === 'turn_failed' || event.event === 'authority_session_revoked') return 'diagnostic_signal';
+  if (event.event === 'error' || event.event === 'websocket_error' || event.event === 'web_ui_decode_error' || event.event === 'web_ui_input_not_sent' || event.event === 'turn_failed' || event.event === 'authority_session_revoked' || event.event === 'projection_revoked') return 'diagnostic_signal';
   if (event.event === 'tool_call' || event.event === 'tool_result' || event.event === 'turn_started' || event.event === 'turn_complete') return 'operation_fact';
   if (event.event === 'directive_received' || event.event === 'directive_receipt_recorded' || event.event === 'directive_carrier_accepted_recorded' || event.event === 'directive_complete' || event.event === 'session_events_subscription_started') return 'protocol_evidence';
   const providerEvent = event.event;
@@ -166,12 +166,22 @@ function duplicateAssistantMessageKey(row, state) {
   if (row.kind !== 'assistant_message') return null;
   const summary = normalizeAssistantText(row.summary);
   if (!summary) return null;
+  const rowIdentity = assistantMessageIdentity(row.event);
   for (const [key, prior] of state.renderedByKey) {
     if (prior.kind !== 'assistant_message') continue;
     if (!sameAssistantScope(prior.event, row.event)) continue;
+    const priorIdentity = assistantMessageIdentity(prior.event);
+    if (rowIdentity || priorIdentity) {
+      if (!rowIdentity || !priorIdentity || rowIdentity !== priorIdentity) continue;
+    }
     if (normalizeAssistantText(prior.summary) === summary) return key;
   }
   return null;
+}
+
+function assistantMessageIdentity(event) {
+  if (!event || typeof event !== 'object') return null;
+  return event.request_id ?? event.input_id ?? event.turn_id ?? event.event_id ?? null;
 }
 
 function duplicateOperatorMessageKey(row, state) {

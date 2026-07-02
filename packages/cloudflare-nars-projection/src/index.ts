@@ -40,6 +40,48 @@ export type ProjectionCachePolicy = 'short_bounded' | 'durable_archive';
 export type ProjectionEventPolicyMode = 'conversation' | 'operator' | 'diagnostic' | 'raw';
 export type ArtifactKind = 'html' | 'markdown' | 'image' | 'json' | 'text';
 export type ArtifactProjectionContentMode = 'none' | 'metadata_only' | 'selected_kinds' | 'explicit_artifacts';
+export type CloudflareNarsAuthorityExecutionMode = 'cloudflare_runtime_tool_adapter';
+
+export interface CloudflareNarsAuthorityToolCall {
+  server_name: string;
+  tool_name: string;
+  tool: string;
+  arguments?: Record<string, unknown>;
+}
+
+export interface CloudflareNarsAuthorityToolResult {
+  status: 'ok' | 'failed';
+  content?: unknown;
+  error?: string;
+  error_code?: string;
+  duration_ms?: number;
+}
+
+export interface CloudflareNarsAuthorityToolAdapter {
+  server_name: string;
+  list_tools(): string[];
+  call_tool(call: CloudflareNarsAuthorityToolCall): CloudflareNarsAuthorityToolResult;
+}
+
+export interface CloudflareNarsAuthorityRuntimeExecutionInput {
+  session: CloudflareNarsAuthoritySession;
+  input_id: string;
+  method: CloudflareNarsInputMethod;
+  payload: Record<string, unknown>;
+  message: string;
+  now: string;
+  create_html_artifact: () => CloudflareNarsAuthorityArtifact;
+}
+
+export interface CloudflareNarsAuthorityRuntimeExecutionResult {
+  execution_kind: CloudflareNarsAuthorityExecutionMode;
+  event_payloads: Record<string, unknown>[];
+}
+
+export interface CloudflareNarsAuthorityRuntimeExecutor {
+  execution_mode: CloudflareNarsAuthorityExecutionMode;
+  execute(input: CloudflareNarsAuthorityRuntimeExecutionInput): CloudflareNarsAuthorityRuntimeExecutionResult;
+}
 
 export interface ArtifactProjectionPolicy {
   metadata: 'none' | 'public_records';
@@ -69,6 +111,14 @@ function normalizeArtifactProjectionPolicy(value: Partial<ArtifactProjectionPoli
     cache_ttl_seconds: Number.isFinite(Number(input.cache_ttl_seconds)) ? Math.max(0, Math.floor(Number(input.cache_ttl_seconds))) : DEFAULT_ARTIFACT_POLICY.cache_ttl_seconds,
     redact_local_paths: input.redact_local_paths !== false,
   };
+}
+
+export function createCloudflareNarsTestRuntimeExecutor(): CloudflareNarsAuthorityRuntimeExecutor {
+  return createCloudflareNarsToolAdapterRuntimeExecutor(createCloudflareNarsTestToolAdapter());
+}
+
+export function createCloudflareNarsAuthorityRuntimeExecutor(): CloudflareNarsAuthorityRuntimeExecutor {
+  return createCloudflareNarsToolAdapterRuntimeExecutor(createCloudflareNarsAuthorityToolAdapter());
 }
 
 function refusedAuthorityArtifacts(sessionId: string, artifactId: string | null, code: string): CloudflareNarsAuthorityArtifactReadResult {
@@ -526,13 +576,16 @@ export function createCloudflareNarsProjectionWorkerService(options: {
 export function createCloudflareNarsAuthorityService(options: {
   initial_state?: CloudflareNarsAuthorityWorkerState | null;
   max_events?: number;
+  runtime_executor?: CloudflareNarsAuthorityRuntimeExecutor;
 } = {}) {
   const sessions = new Map<string, CloudflareNarsAuthoritySession>();
   const events = new Map<string, CloudflareNarsAuthorityEvent[]>();
   const artifacts = new Map<string, CloudflareNarsAuthorityArtifact[]>();
   const artifactContent = new Map<string, CloudflareNarsAuthorityArtifactContent>();
   const maxEvents = Math.max(1, Math.floor(options.max_events ?? 500));
+  const runtimeExecutor = options.runtime_executor ?? createCloudflareNarsAuthorityRuntimeExecutor();
   const service = {
+    execution_mode: runtimeExecutor.execution_mode,
     createSession(args: CloudflareNarsAuthoritySessionInput, now = new Date().toISOString()): CloudflareNarsAuthorityCreateSessionResult {
       const siteId = requireNonEmpty(args.site_id, 'site_id');
       const agentId = requireNonEmpty(args.agent_id, 'agent_id');
@@ -543,7 +596,7 @@ export function createCloudflareNarsAuthorityService(options: {
         site_id: siteId,
         agent_id: agentId,
         authority_runtime: 'cloudflare_nars_authority',
-        execution_mode: 'synthetic_no_provider_no_tools',
+        execution_mode: runtimeExecutor.execution_mode,
         lifecycle_state: 'active',
         created_at: now,
         updated_at: now,
@@ -555,7 +608,7 @@ export function createCloudflareNarsAuthorityService(options: {
       appendAuthorityEvent(sessionId, {
         event: 'session_started',
         type: 'session.started',
-        content: `Cloudflare-origin synthetic NARS session started for ${agentId}`,
+        content: `Cloudflare-origin NARS session started for ${agentId}`,
       }, now);
       return { status: 'created', session_id: sessionId, session };
     },
@@ -593,20 +646,27 @@ export function createCloudflareNarsAuthorityService(options: {
       const inputId = `input_${safeToken(now)}_${Math.random().toString(36).slice(2, 8)}`;
       const payload = args.payload ?? {};
       const message = typeof payload.message === 'string' ? payload.message : typeof payload.text === 'string' ? payload.text : '';
-      const artifact = createSyntheticAuthorityHtmlArtifact(args.session_id, inputId, now);
       const admitted = [
         appendAuthorityEvent(args.session_id, { event: 'operator_input_admitted', type: 'operator_input.admitted', input_id: inputId, method: args.method, payload }, now),
         appendAuthorityEvent(args.session_id, { event: 'user_message', type: 'user_message', input_id: inputId, content: message }, now),
-        appendAuthorityEvent(args.session_id, { event: 'turn_started', type: 'turn.started', input_id: inputId }, now),
-        appendAuthorityEvent(args.session_id, { event: 'session_artifact_registered', type: 'session_artifact.registered', input_id: inputId, artifact }, now),
-        appendAuthorityEvent(args.session_id, { event: 'assistant_message', type: 'assistant_message', input_id: inputId, content: [
-          { type: 'text', text: `Synthetic Cloudflare-origin response admitted ${args.method}.` },
-          { type: 'artifact_ref', artifact_id: artifact.artifact_id, kind: artifact.kind, title: artifact.title, render_hint: 'inline' },
-        ], execution_kind: 'synthetic_no_provider_no_tools' }, now),
-        appendAuthorityEvent(args.session_id, { event: 'turn_complete', type: 'turn.completed', input_id: inputId, terminal_state: 'completed_synthetic' }, now),
       ];
-      sessions.set(args.session_id, { ...session, updated_at: now });
-      return { schema: CLOUDFLARE_NARS_AUTHORITY_INPUT_SCHEMA, status: 'admitted', session_id: args.session_id, input_id: inputId, method: args.method as CloudflareNarsInputMethod, execution_kind: 'synthetic_no_provider_no_tools', events: admitted };
+      const execution = runtimeExecutor.execute({
+        session,
+        input_id: inputId,
+        method: args.method as CloudflareNarsInputMethod,
+        payload,
+        message,
+        now,
+        create_html_artifact: () => createAuthorityHtmlArtifact(args.session_id, inputId, now),
+      });
+      for (const payload of execution.event_payloads) admitted.push(appendAuthorityEvent(args.session_id, payload, now));
+      sessions.set(args.session_id, {
+        ...session,
+        lifecycle_state: args.method === 'session.close' ? 'revoked' : session.lifecycle_state,
+        revoked_at: args.method === 'session.close' ? now : session.revoked_at,
+        updated_at: now,
+      });
+      return { schema: CLOUDFLARE_NARS_AUTHORITY_INPUT_SCHEMA, status: 'admitted', session_id: args.session_id, input_id: inputId, method: args.method as CloudflareNarsInputMethod, execution_kind: execution.execution_kind, events: admitted };
     },
     readArtifactMetadata(args: { session_id: string; artifact_id?: string | null }): CloudflareNarsAuthorityArtifactReadResult {
       const session = sessions.get(args.session_id);
@@ -644,7 +704,7 @@ export function createCloudflareNarsAuthorityService(options: {
       for (const content of state?.artifact_content ?? []) artifactContent.set(`${content.session_id}:${content.artifact_id}`, content);
     },
   };
-  function createSyntheticAuthorityHtmlArtifact(sessionId: string, inputId: string, now: string): CloudflareNarsAuthorityArtifact {
+  function createAuthorityHtmlArtifact(sessionId: string, inputId: string, now: string): CloudflareNarsAuthorityArtifact {
     const artifact: CloudflareNarsAuthorityArtifact = {
       schema: CLOUDFLARE_NARS_AUTHORITY_ARTIFACT_SCHEMA,
       artifact_id: 'art_cf_authority_html',
@@ -653,7 +713,7 @@ export function createCloudflareNarsAuthorityService(options: {
       title: 'Cloudflare Authority HTML Preview',
       content_type: 'text/html; charset=utf-8',
       created_at: now,
-      created_by: 'cloudflare_nars_authority.synthetic_runtime',
+      created_by: 'cloudflare_nars_authority.runtime_tool_adapter',
       creation_input_id: inputId,
       access: { scope: 'session', token_required: false },
       render: { preferred: 'inline', sandbox: { allow_scripts: true, allow_top_navigation: false } },
@@ -693,6 +753,167 @@ export function createCloudflareNarsAuthorityService(options: {
   }
   service.load(options.initial_state);
   return service;
+}
+
+export function createCloudflareNarsTestToolAdapter(): CloudflareNarsAuthorityToolAdapter {
+  return {
+    server_name: 'cf-authority',
+    list_tools() {
+      return ['session_context_read', 'diagnostic_probe'];
+    },
+    call_tool(call) {
+      if (call.server_name !== 'cf-authority') {
+        return { status: 'failed', error: 'unsupported_cloudflare_tool_server', error_code: 'unsupported_cloudflare_tool_server', duration_ms: 0 };
+      }
+      if (call.tool_name === 'session_context_read') {
+        return { status: 'ok', content: { topic: call.arguments?.topic ?? 'cloudflare-authority' }, duration_ms: 11 };
+      }
+      if (call.tool_name === 'diagnostic_probe') {
+        return { status: 'failed', error: 'cloudflare_authority_diagnostic_probe_failed', error_code: 'cloudflare_authority_diagnostic_probe_failed', duration_ms: 5 };
+      }
+      return { status: 'failed', error: 'cloudflare_tool_not_found', error_code: 'cloudflare_tool_not_found', duration_ms: 0 };
+    },
+  };
+}
+
+export function createCloudflareNarsAuthorityToolAdapter(): CloudflareNarsAuthorityToolAdapter {
+  return {
+    server_name: 'cf-authority',
+    list_tools() {
+      return ['session_context_read', 'diagnostic_probe'];
+    },
+    call_tool(call) {
+      if (call.server_name !== 'cf-authority') {
+        return { status: 'failed', error: 'unsupported_cloudflare_tool_server', error_code: 'unsupported_cloudflare_tool_server', duration_ms: 0 };
+      }
+      if (call.tool_name === 'session_context_read') {
+        return {
+          status: 'ok',
+          content: {
+            site_id: call.arguments?.site_id ?? null,
+            agent_id: call.arguments?.agent_id ?? null,
+            topic: call.arguments?.topic ?? 'cloudflare-authority',
+            authority_origin: 'cloudflare',
+          },
+          duration_ms: 11,
+        };
+      }
+      if (call.tool_name === 'diagnostic_probe') {
+        return { status: 'failed', error: 'cloudflare_authority_diagnostic_probe_failed', error_code: 'cloudflare_authority_diagnostic_probe_failed', duration_ms: 5 };
+      }
+      return { status: 'failed', error: 'cloudflare_tool_not_found', error_code: 'cloudflare_tool_not_found', duration_ms: 0 };
+    },
+  };
+}
+
+export function createCloudflareNarsToolAdapterRuntimeExecutor(toolAdapter: CloudflareNarsAuthorityToolAdapter = createCloudflareNarsAuthorityToolAdapter()): CloudflareNarsAuthorityRuntimeExecutor {
+  const emitToolCall = (input: CloudflareNarsAuthorityRuntimeExecutionInput, call: CloudflareNarsAuthorityToolCall) => ({
+    event: 'tool_call',
+    type: 'tool.call',
+    input_id: input.input_id,
+    server_name: call.server_name,
+    tool_name: call.tool,
+    tool: call.tool,
+    decision: 'read_only_admitted',
+    argument_summary: call.arguments ?? {},
+    authority_origin: 'cloudflare',
+    carrier_mutation_admitted: false,
+  });
+  const emitToolResult = (input: CloudflareNarsAuthorityRuntimeExecutionInput, call: CloudflareNarsAuthorityToolCall, result: CloudflareNarsAuthorityToolResult) => ({
+    event: 'tool_result',
+    type: 'tool.result',
+    input_id: input.input_id,
+    server_name: call.server_name,
+    tool_name: call.tool,
+    tool: call.tool,
+    status: result.status,
+    ...(result.error ? { error: result.error } : {}),
+    ...(result.error_code ? { error_code: result.error_code } : {}),
+    ...(result.content !== undefined ? { content: result.content } : {}),
+    duration_ms: result.duration_ms ?? 0,
+    decision: 'read_only_admitted',
+    authority_origin: 'cloudflare',
+    carrier_mutation_admitted: false,
+  });
+  const simpleCompletion = (input: CloudflareNarsAuthorityRuntimeExecutionInput, message: string, terminalState = 'completed') => ({
+    execution_kind: 'cloudflare_runtime_tool_adapter' as const,
+    event_payloads: [
+      { event: 'turn_started', type: 'turn.started', input_id: input.input_id },
+      { event: 'assistant_message', type: 'assistant_message', input_id: input.input_id, content: message, execution_kind: 'cloudflare_runtime_tool_adapter' },
+      { event: 'turn_complete', type: 'turn.completed', input_id: input.input_id, terminal_state: terminalState },
+    ],
+  });
+  return {
+    execution_mode: 'cloudflare_runtime_tool_adapter',
+    execute(input) {
+      if (input.method === 'conversation.steer') {
+        return {
+          execution_kind: 'cloudflare_runtime_tool_adapter',
+          event_payloads: [
+            { event: 'operator_steer_admitted', type: 'operator_input.steer_admitted', input_id: input.input_id, method: input.method, payload: input.payload },
+            { event: 'turn_complete', type: 'turn.completed', input_id: input.input_id, terminal_state: 'steered' },
+          ],
+        };
+      }
+      if (input.method === 'conversation.interrupt') {
+        return {
+          execution_kind: 'cloudflare_runtime_tool_adapter',
+          event_payloads: [
+            { event: 'turn_interrupted', type: 'turn.interrupted', input_id: input.input_id, reason: input.message || 'operator_interrupt' },
+            { event: 'turn_complete', type: 'turn.completed', input_id: input.input_id, terminal_state: 'interrupted' },
+          ],
+        };
+      }
+      if (input.method === 'session.close') {
+        return {
+          execution_kind: 'cloudflare_runtime_tool_adapter',
+          event_payloads: [
+            { event: 'session_closed', type: 'session.closed', input_id: input.input_id, reason: input.message || 'operator_close' },
+          ],
+        };
+      }
+      if (input.method !== 'conversation.send' && input.method !== 'conversation.enqueue') {
+        return simpleCompletion(input, `Cloudflare runtime tool adapter handled ${input.method}.`);
+      }
+      const artifact = input.create_html_artifact();
+      const readCall = { server_name: toolAdapter.server_name, tool_name: 'session_context_read', tool: `${toolAdapter.server_name}.session_context_read`, arguments: { site_id: input.session.site_id, agent_id: input.session.agent_id, topic: input.message || input.method } };
+      const failCall = { server_name: toolAdapter.server_name, tool_name: 'diagnostic_probe', tool: `${toolAdapter.server_name}.diagnostic_probe`, arguments: { topic: 'cloudflare-authority-diagnostic-probe' } };
+      const readResult = toolAdapter.call_tool(readCall);
+      const failResult = toolAdapter.call_tool(failCall);
+      return {
+        execution_kind: 'cloudflare_runtime_tool_adapter',
+        event_payloads: [
+          { event: 'turn_started', type: 'turn.started', input_id: input.input_id },
+          emitToolCall(input, readCall),
+          emitToolResult(input, readCall, readResult),
+          emitToolCall(input, failCall),
+          emitToolResult(input, failCall, failResult),
+          {
+            event: 'mcp_runtime_fault',
+            type: 'diagnostic.mcp_runtime_fault',
+            diagnostic_code: 'mcp_runtime_fault',
+            server_name: toolAdapter.server_name,
+            tool_name: failCall.tool_name,
+            error_code: failResult.error_code ?? 'cloudflare_tool_adapter_failure',
+            message: failResult.error ?? 'Cloudflare authority tool adapter failure',
+            authority_origin: 'cloudflare',
+          },
+          { event: 'session_artifact_registered', type: 'session_artifact.registered', input_id: input.input_id, artifact },
+          {
+            event: 'assistant_message',
+            type: 'assistant_message',
+            input_id: input.input_id,
+            content: [
+              { type: 'text', text: `Cloudflare runtime tool adapter executed ${input.method}.` },
+              { type: 'artifact_ref', artifact_id: artifact.artifact_id, kind: artifact.kind, title: artifact.title, render_hint: 'inline' },
+            ],
+            execution_kind: 'cloudflare_runtime_tool_adapter',
+          },
+          { event: 'turn_complete', type: 'turn.completed', input_id: input.input_id, terminal_state: 'completed' },
+        ],
+      };
+    },
+  };
 }
 
 function refusedAuthorityEvents(sessionId: string, code: string, sinceSequence: number | null): CloudflareNarsAuthorityReadEventsResult {
@@ -1029,7 +1250,7 @@ export interface CloudflareNarsAuthoritySession {
   site_id: string;
   agent_id: string;
   authority_runtime: 'cloudflare_nars_authority';
-  execution_mode: 'synthetic_no_provider_no_tools';
+  execution_mode: CloudflareNarsAuthorityExecutionMode;
   lifecycle_state: 'active' | 'revoked';
   created_at: string;
   updated_at: string;
@@ -1060,7 +1281,7 @@ export interface CloudflareNarsAuthorityHealthResult {
   session_id: string;
   site_id?: string;
   agent_id?: string;
-  execution_mode?: 'synthetic_no_provider_no_tools';
+  execution_mode?: CloudflareNarsAuthorityExecutionMode;
 }
 
 export interface CloudflareNarsAuthorityReadEventsResult {
@@ -1085,7 +1306,7 @@ export interface CloudflareNarsAuthorityInputResult {
   session_id: string;
   input_id?: string;
   method: string;
-  execution_kind?: 'synthetic_no_provider_no_tools';
+  execution_kind?: CloudflareNarsAuthorityExecutionMode;
   events?: CloudflareNarsAuthorityEvent[];
 }
 
