@@ -77,6 +77,17 @@ function writeSession(siteRoot: string, sessionId = 'carrier_cli_test'): void {
     authority_transition_state: null,
     superseded_by_session_id: null,
     authority_locator_ref: null,
+    authority_transition_feasibility: {
+      active_turn: { status: 'clear', active: false },
+      operator_input_queue: { mode: 'drain_before_seal', pending_count_at_request: 0, pending_count_at_seal: 0 },
+      event_cursor: { last_sequence: 120 },
+      target_health_by_host: { ['cloudflare-host']: { status: 'healthy' } },
+      source_seal: { status: 'available', available: true },
+      mcp_fabric: { mode: 'compatibility_report_required', status: 'compatible' },
+      artifacts: { mode: 'registry_plus_admitted_content', source_paths_exposed: false },
+      credentials: { status: 'available', refs_only: true },
+      target_descriptor: { authority_role: 'canonical_session_runtime' },
+    },
     attached_projections: null,
     attached_projections_status: 'not_tracked',
     attach_commands: {
@@ -171,8 +182,97 @@ describe('nars CLI commands', () => {
       state: 'proposed',
       source_authority_runtime: { host_kind: 'local', authority_epoch: 3 },
       target_authority_runtime: { host_kind: 'cloudflare-host', authority_epoch: 4 },
+      handoff: {
+        event_log: { source_last_sequence: 120, target_first_sequence: 121 },
+        mcp_fabric: { status: 'compatible' },
+      },
+      fencing: {
+        source_write_admission: 'active',
+        target_write_admission: 'not_before_source_seal',
+      },
     });
     expect(body.warnings[0]).toMatchObject({ code: 'read_only_planner_slice' });
+  });
+
+  it('refuses authority transition planning when required feasibility checks fail', async () => {
+    const siteRoot = tempSite();
+    writeSession(siteRoot, 'carrier_matrix_refusal');
+    const recordPath = resolveNaradaSitePaths({ siteRoot, sessionId: 'carrier_matrix_refusal' }).narsSessionIndexRecordPath!;
+    const record = JSON.parse(readFileSync(recordPath, 'utf8'));
+    record.authority_transition_feasibility.active_turn = { status: 'active', active: true };
+    record.authority_transition_feasibility.mcp_fabric = { mode: 'compatibility_report_required', status: 'incompatible' };
+    record.authority_transition_feasibility.artifacts = { mode: 'registry_plus_admitted_content', source_paths_exposed: true };
+    record.authority_transition_feasibility.target_descriptor = { authority_role: 'projection_store' };
+    writeFileSync(recordPath, `${JSON.stringify(record, null, 2)}\n`, 'utf8');
+
+    const result = await narsAuthorityTransitionPlanCommand({
+      siteRoot,
+      session: 'carrier_matrix_refusal',
+      targetHost: 'cloudflare-host',
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.INVALID_CONFIG);
+    const body = result.result as { refusals: Array<Record<string, unknown>>; checks: Array<Record<string, unknown>> };
+    expect(body.refusals.map((entry) => entry.reason_code)).toEqual(expect.arrayContaining([
+      'active_turn_in_progress',
+      'mcp_fabric_incompatible',
+      'artifact_handoff_policy_refused',
+      'projection_cache_is_not_authority',
+    ]));
+    expect(body.checks.find((entry) => entry.name === 'active_turn')).toMatchObject({ status: 'refused' });
+  });
+
+  it.each([
+    ['active_turn', 'active_turn_in_progress', (record: Record<string, any>) => { record.authority_transition_feasibility.active_turn = { status: 'active', active: true }; }],
+    ['operator_input_queue', 'queue_not_drainable', (record: Record<string, any>) => { record.authority_transition_feasibility.operator_input_queue = { mode: 'drain_before_seal', pending_count_at_request: 1, pending_count_at_seal: 1 }; }],
+    ['event_cursor', 'event_cursor_unavailable', (record: Record<string, any>) => { delete record.authority_transition_feasibility.event_cursor.last_sequence; }],
+    ['target_health', 'target_health_unavailable', (record: Record<string, any>) => { record.authority_transition_feasibility.target_health_by_host['cloudflare-host'] = { status: 'unavailable' }; }],
+    ['source_seal', 'source_seal_unavailable', (record: Record<string, any>) => { record.authority_transition_feasibility.source_seal = { status: 'unavailable', available: false }; }],
+    ['mcp_fabric', 'mcp_fabric_incompatible', (record: Record<string, any>) => { record.authority_transition_feasibility.mcp_fabric = { mode: 'compatibility_report_required', status: 'incompatible' }; }],
+    ['artifacts', 'artifact_handoff_policy_refused', (record: Record<string, any>) => { record.authority_transition_feasibility.artifacts = { mode: 'registry_plus_admitted_content', source_paths_exposed: true }; }],
+    ['credentials', 'transition_credentials_unavailable', (record: Record<string, any>) => { record.authority_transition_feasibility.credentials = { status: 'missing', refs_only: true }; }],
+    ['projection_authority_guard', 'projection_cache_is_not_authority', (record: Record<string, any>) => { record.authority_transition_feasibility.target_descriptor = { authority_role: 'projection_store' }; }],
+  ])('refuses authority transition planning for %s violation', async (checkName, refusalCode, mutate) => {
+    const siteRoot = tempSite();
+    writeSession(siteRoot, `carrier_${String(checkName)}`);
+    const recordPath = resolveNaradaSitePaths({ siteRoot, sessionId: `carrier_${String(checkName)}` }).narsSessionIndexRecordPath!;
+    const record = JSON.parse(readFileSync(recordPath, 'utf8'));
+    mutate(record);
+    writeFileSync(recordPath, `${JSON.stringify(record, null, 2)}\n`, 'utf8');
+
+    const result = await narsAuthorityTransitionPlanCommand({
+      siteRoot,
+      session: `carrier_${String(checkName)}`,
+      targetHost: 'cloudflare-host',
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.INVALID_CONFIG);
+    const body = result.result as { refusals: Array<Record<string, unknown>>; checks: Array<Record<string, unknown>> };
+    expect(body.refusals.map((entry) => entry.reason_code)).toContain(refusalCode);
+    expect(body.checks.find((entry) => entry.name === checkName)).toMatchObject({ status: 'refused' });
+    expect(body.transition_record_candidate).toBeNull();
+  });
+
+  it('refuses authority transition planning for stale session discovery', async () => {
+    const siteRoot = tempSite();
+    writeSession(siteRoot, 'carrier_stale_discovery');
+    const sessionDir = resolveNaradaSitePaths({ siteRoot, sessionId: 'carrier_stale_discovery' }).narsSessionDir!;
+    writeFileSync(join(sessionDir, 'heartbeat.json'), `${JSON.stringify({ timestamp: '2026-06-23T00:00:00.000Z' })}\n`, 'utf8');
+
+    const result = await narsAuthorityTransitionPlanCommand({
+      siteRoot,
+      session: 'carrier_stale_discovery',
+      targetHost: 'cloudflare-host',
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.INVALID_CONFIG);
+    const body = result.result as { refusals: Array<Record<string, unknown>>; checks: Array<Record<string, unknown>> };
+    expect(body.refusals.map((entry) => entry.reason_code)).toContain('session_discovery_stale');
+    expect(body.checks.find((entry) => entry.name === 'stale_discovery')).toMatchObject({ status: 'refused' });
+    expect(body.transition_record_candidate).toBeNull();
   });
 
   it('refuses authority transition planning for legacy sessions without comparable authority epoch', async () => {

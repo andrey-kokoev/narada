@@ -167,8 +167,13 @@ function buildAuthorityTransitionPlan({
   const sourceHost = typeof sourceHostRaw === 'string' ? sourceHostRaw : 'unknown_legacy';
   const sourceEpoch = Number.isInteger(sourceEpochRaw) ? sourceEpochRaw as number : null;
   const sourceRuntimeId = typeof sourceRuntimeIdRaw === 'string' ? sourceRuntimeIdRaw : null;
+  const feasibility = feasibilityEvidenceFromSession(session);
   if (matched) {
     checks.push(check('session_discovery', 'ok', `found ${sessionId} in ${matched.siteResolution.site_root}`));
+    if (session?.display_state === 'stale' || session?.display_state === 'historical' || session?.heartbeat_fresh === false) {
+      checks.push(check('stale_discovery', 'refused', 'session discovery is stale or historical'));
+      refusals.push(refusal('session_discovery_stale', 'Session discovery is stale; rebuild or verify the live authority before planning.'));
+    }
     if (!NARS_AUTHORITY_RUNTIME_HOST_KINDS.includes(sourceHost)) {
       refusals.push(refusal('authority_host_unknown_legacy', 'Session index record lacks comparable authority_runtime_host metadata.'));
     }
@@ -179,10 +184,17 @@ function buildAuthorityTransitionPlan({
       refusals.push(refusal('target_host_matches_source', 'Target authority host must differ from source authority host.'));
     }
     checks.push(check('source_authority_metadata', sourceEpoch === null ? 'refused' : 'ok', `${sourceHost} epoch ${sourceEpoch ?? 'unknown'}`));
+    applyFeasibilityChecks({ feasibility, targetHost, checks, refusals });
   }
 
   const status = refusals.length === 0 ? 'feasible' : 'refused';
   const targetEpoch = sourceEpoch === null ? null : sourceEpoch + 1;
+  const sourceLastSequence = asNonNegativeInteger(feasibility?.event_cursor?.last_sequence);
+  const queuePendingAtSeal = asNonNegativeInteger(feasibility?.operator_input_queue?.pending_count_at_seal) ?? asNonNegativeInteger(feasibility?.operator_input_queue?.pending_count) ?? 0;
+  const queuePendingAtRequest = asNonNegativeInteger(feasibility?.operator_input_queue?.pending_count_at_request) ?? queuePendingAtSeal;
+  const artifactMode = asNonEmptyString(feasibility?.artifacts?.mode) ?? 'registry_plus_admitted_content';
+  const mcpFabricMode = asNonEmptyString(feasibility?.mcp_fabric?.mode) ?? 'compatibility_report_required';
+  const mcpFabricStatus = asNonEmptyString(feasibility?.mcp_fabric?.status) ?? 'pending';
   const transitionRecordCandidate = status === 'feasible' && matched && sourceEpoch !== null
     ? {
       schema: NARS_AUTHORITY_RUNTIME_HOST_TRANSITION_SCHEMA,
@@ -200,6 +212,7 @@ function buildAuthorityTransitionPlan({
         authority_epoch: sourceEpoch,
         health_ref: session?.health_endpoint ?? 'session.health',
         authority_role: 'canonical_session_runtime',
+        event_cursor: { last_sequence: sourceLastSequence ?? 0 },
       },
       target_authority_runtime: {
         authority_runtime_id: `auth_${targetHost.replace(/[^A-Za-z0-9]+/g, '_')}_${String(sessionId).replace(/[^A-Za-z0-9_]+/g, '_')}`,
@@ -207,17 +220,27 @@ function buildAuthorityTransitionPlan({
         authority_epoch: targetEpoch,
         health_ref: `${targetHost}.session.health`,
         authority_role: 'canonical_session_runtime',
+        event_cursor: { last_sequence: sourceLastSequence ?? 0 },
       },
-      handoff: null,
-      fencing: null,
+      handoff: {
+        event_log: { mode: 'checkpoint_plus_cursor', source_last_sequence: sourceLastSequence ?? 0, target_first_sequence: (sourceLastSequence ?? 0) + 1 },
+        operator_input_queue: { mode: 'drain_before_seal', pending_count_at_request: queuePendingAtRequest, pending_count_at_seal: queuePendingAtSeal },
+        artifacts: { mode: artifactMode, source_paths_exposed: false },
+        health: { source_health_until: 'source_sealed', target_health_required_before: 'target_activating' },
+        mcp_fabric: { mode: mcpFabricMode, status: mcpFabricStatus },
+        provider_state: { mode: 'unsupported_for_synthetic_slice' },
+      },
+      fencing: {
+        source_write_admission: 'active',
+        target_write_admission: 'not_before_source_seal',
+        split_brain_guard: 'authority_epoch_token_required',
+      },
       evidence_refs: [],
       completed_at: null,
       terminal_reason: null,
     }
     : null;
-  if (status === 'feasible') {
-    warnings.push({ code: 'read_only_planner_slice', message: 'Drain, seal, event cursor, target health, artifact, and MCP fabric checks are planned by follow-on feasibility tasks.' });
-  }
+  if (status === 'feasible') warnings.push({ code: 'read_only_planner_slice', message: 'Planning is read-only; execute remains a separate governed command.' });
   return {
     schema: 'narada.nars.authority_runtime_host_transition_plan.v1',
     status,
@@ -245,6 +268,63 @@ function check(name: string, status: string, summary: string): Record<string, un
 
 function refusal(reasonCode: string, reason: string): Record<string, unknown> {
   return { reason_code: reasonCode, reason };
+}
+
+function feasibilityEvidenceFromSession(session: Record<string, unknown> | null): Record<string, any> | null {
+  const record = session?.record && typeof session.record === 'object' ? session.record as Record<string, any> : null;
+  const evidence = record?.authority_transition_feasibility ?? session?.authority_transition_feasibility;
+  return evidence && typeof evidence === 'object' && !Array.isArray(evidence) ? evidence as Record<string, any> : null;
+}
+
+function applyFeasibilityChecks({
+  feasibility,
+  targetHost,
+  checks,
+  refusals,
+}: {
+  feasibility: Record<string, any> | null;
+  targetHost: string;
+  checks: Array<Record<string, unknown>>;
+  refusals: Array<Record<string, unknown>>;
+}): void {
+  const activeTurnClear = feasibility?.active_turn?.status === 'clear' || feasibility?.active_turn?.active === false;
+  addMatrixCheck(checks, refusals, 'active_turn', activeTurnClear, 'active turn is clear', 'active_turn_in_progress', 'The source authority cannot be sealed while a provider turn is active or unknown.');
+  const queuePending = asNonNegativeInteger(feasibility?.operator_input_queue?.pending_count_at_seal) ?? asNonNegativeInteger(feasibility?.operator_input_queue?.pending_count);
+  addMatrixCheck(checks, refusals, 'operator_input_queue', queuePending === 0, `pending at seal: ${queuePending ?? 'unknown'}`, 'queue_not_drainable', 'Operator input queue is not proven drainable before source seal.');
+  const sourceLastSequence = asNonNegativeInteger(feasibility?.event_cursor?.last_sequence);
+  addMatrixCheck(checks, refusals, 'event_cursor', sourceLastSequence !== null, `source cursor: ${sourceLastSequence ?? 'unknown'}`, 'event_cursor_unavailable', 'Source event cursor is unavailable.');
+  const targetHealth = feasibility?.target_health_by_host?.[targetHost] ?? feasibility?.target_health;
+  addMatrixCheck(checks, refusals, 'target_health', targetHealth?.status === 'healthy' || targetHealth === 'healthy', `target health: ${targetHealth?.status ?? targetHealth ?? 'unknown'}`, 'target_health_unavailable', 'Target authority health is unavailable.');
+  addMatrixCheck(checks, refusals, 'source_seal', feasibility?.source_seal?.available === true || feasibility?.source_seal?.status === 'available', 'source seal gate is available', 'source_seal_unavailable', 'Source seal gate is unavailable.');
+  const mcpStatus = feasibility?.mcp_fabric?.status;
+  addMatrixCheck(checks, refusals, 'mcp_fabric', mcpStatus === 'compatible' || mcpStatus === 'degraded_explicit', `mcp fabric: ${mcpStatus ?? 'unknown'}`, 'mcp_fabric_incompatible', 'MCP fabric compatibility is not proven.');
+  const artifacts = feasibility?.artifacts;
+  addMatrixCheck(checks, refusals, 'artifacts', Boolean(artifacts?.mode) && artifacts?.source_paths_exposed === false, `artifact handoff: ${artifacts?.mode ?? 'unknown'}`, 'artifact_handoff_policy_refused', 'Artifact handoff policy is not proven or exposes source paths.');
+  const credentials = feasibility?.credentials;
+  addMatrixCheck(checks, refusals, 'credentials', credentials?.status === 'available' || credentials?.available === true, `credentials: ${credentials?.status ?? 'unknown'}`, 'transition_credentials_unavailable', 'Transition credentials or capability refs are unavailable.');
+  const targetDescriptor = feasibility?.target_descriptor;
+  addMatrixCheck(checks, refusals, 'projection_authority_guard', targetDescriptor?.authority_role !== 'projection_store', `target role: ${targetDescriptor?.authority_role ?? 'canonical_session_runtime'}`, 'projection_cache_is_not_authority', 'Projection cache cannot be promoted to authority.');
+}
+
+function addMatrixCheck(
+  checks: Array<Record<string, unknown>>,
+  refusals: Array<Record<string, unknown>>,
+  name: string,
+  ok: boolean,
+  summary: string,
+  refusalCode: string,
+  refusalReason: string,
+): void {
+  checks.push(check(name, ok ? 'ok' : 'refused', summary));
+  if (!ok) refusals.push(refusal(refusalCode, refusalReason));
+}
+
+function asNonNegativeInteger(value: unknown): number | null {
+  return Number.isInteger(value) && (value as number) >= 0 ? value as number : null;
+}
+
+function asNonEmptyString(value: unknown): string | null {
+  return typeof value === 'string' && value.length > 0 ? value : null;
 }
 
 export interface NarsAttachCommandOptions extends NarsSessionsOptions {
