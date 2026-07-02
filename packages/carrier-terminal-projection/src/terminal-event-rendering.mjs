@@ -259,9 +259,14 @@ function startupRows(event) {
     ['Thinking', event.thinking ?? '<unknown>'],
     ['Stream', event.stream === false ? 'off' : 'on'],
     ['Goal', event.goal_display ?? event.goal ?? 'not set'],
+    ['Authority', `${event.authority_runtime_host ?? 'unknown'}${event.authority_epoch !== undefined && event.authority_epoch !== null ? ` epoch ${event.authority_epoch}` : ''}`],
+    ['Authority state', event.authority_transition_state ?? event.authority_transition_target?.state ?? event.authority_transition_source?.state ?? 'active'],
     ['MCP servers', event.mcp_server_count ?? 0],
     ['MCP state', event.mcp_operational_state ?? 'unknown'],
   ];
+  const locator = event.authority_locator_ref ?? event.authority_transition_source?.authority_locator_ref ?? event.authority_transition_target?.authority_locator_ref ?? null;
+  if (locator) rows.push(['Authority locator', locator]);
+  if (event.superseded_by_session_id) rows.push(['Superseded by', event.superseded_by_session_id]);
   if ((event.mcp_startup_failure_count ?? 0) > 0) rows.push(['MCP startup failures', event.mcp_startup_failure_summary ?? event.mcp_startup_failure_count]);
   if ((event.mcp_runtime_fault_count ?? 0) > 0) rows.push(['MCP runtime faults', event.mcp_runtime_fault_summary ?? event.mcp_runtime_fault_count]);
   for (const server of event.mcp_servers ?? []) {

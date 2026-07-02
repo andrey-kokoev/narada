@@ -32,6 +32,10 @@ test('startup event renders operator-facing runtime summary rows', () => {
     stream: true,
     mcp_server_count: 1,
     mcp_operational_state: 'healthy',
+    authority_runtime_host: 'cloudflare-host',
+    authority_epoch: 4,
+    authority_transition_state: 'target_active',
+    authority_locator_ref: 'authority_locator:cloudflare-host/site/cf_session',
     mcp_servers: [{ name: 'narada-test-agent-context', tool_count: 8 }],
     tool_count: 8,
     tool_outputs: 'shown',
@@ -40,7 +44,22 @@ test('startup event renders operator-facing runtime summary rows', () => {
   });
   assert.equal(rendered.some((line) => line.includes('agent-cli')), true);
   assert.equal(rendered.some((line) => line.includes('narada.test')), true);
+  assert.equal(rendered.some((line) => line.includes('cloudflare-host epoch 4')), true);
+  assert.equal(rendered.some((line) => line.includes('target_active')), true);
+  assert.equal(rendered.some((line) => line.includes('authority_locator:cloudflare-host/site/cf_session')), true);
   assert.equal(rendered.some((line) => line.includes('narada-test-agent-context')), true);
+});
+
+test('operator event rendering shows stale authority reattach target distinctly', () => {
+  const rendered = renderOperatorEvent({
+    event: 'authority_source_write_refused',
+    code: 'authority_source_sealed',
+    authority_transition_source: {
+      state: 'sealed',
+      target_authority_locator: { kind: 'cloudflare-host', site_id: 'site', session_id: 'cf_session' },
+    },
+  }, { timestamps: false });
+  assert.deepEqual(rendered, ['Source write refused: authority_source_sealed; reattach cloudflare-host/site/cf_session']);
 });
 
 test('operator event rendering consumes shared NARS client event projection', () => {
