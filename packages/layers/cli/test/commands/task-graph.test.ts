@@ -356,10 +356,17 @@ describe('task graph inspection operator', () => {
         artifact_dir: string;
         mermaid_path: string;
         html_path: string;
+        operator_projection_open_request: Record<string, unknown>;
       };
       expect(r.status).toBe('success');
       expect(r.view).toBe(true);
       expect(r.opened).toBe(false);
+      expect(r.operator_projection_open_request).toMatchObject({
+        schema: 'narada.operator_projection_open_request.v1',
+        status: 'suppressed',
+        projection_kind: 'browser_url',
+        purpose: 'artifact_browser_render',
+      });
       expect(r.artifact_dir).toContain('narada-task-graph-');
 
       expect(statSync(r.mermaid_path).isFile()).toBe(true);
@@ -387,10 +394,17 @@ describe('task graph inspection operator', () => {
         view: boolean;
         opened: boolean;
         artifact_dir: string;
+        message: string;
+        operator_projection_open_request: Record<string, unknown>;
       };
       expect(r.view).toBe(true);
       expect(r.opened).toBe(false);
       expect(r.message).toContain('Artifacts written to');
+      expect(r.operator_projection_open_request).toMatchObject({
+        schema: 'narada.operator_projection_open_request.v1',
+        status: 'suppressed',
+        admission_reason: 'operator_policy:no_open',
+      });
 
       rmSync(r.artifact_dir, { recursive: true, force: true });
     });

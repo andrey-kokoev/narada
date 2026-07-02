@@ -74,6 +74,125 @@ function openBrowserUrl(target, { platform = process.platform, spawnImpl = spawn
   });
 }
 
+const OPERATOR_PROJECTION_OPEN_REQUEST_SCHEMA = 'narada.operator_projection_open_request.v1';
+
+function createOperatorProjectionOpenRequest(input = {}, options = {}) {
+  const targetRef = input.target_ref ?? input.targetRef ?? input.target ?? null;
+  const projectionKind = input.projection_kind ?? input.projectionKind ?? 'browser_url';
+  const caller = normalizeOperatorProjectionCaller(input.caller);
+  const policy = normalizeOperatorProjectionPolicy(input.policy, input);
+  return {
+    schema: OPERATOR_PROJECTION_OPEN_REQUEST_SCHEMA,
+    projection_kind: String(projectionKind),
+    target_ref: targetRef === null || targetRef === undefined ? null : String(targetRef),
+    purpose: String(input.purpose ?? 'operator_projection'),
+    caller,
+    mode: String(input.mode ?? 'execute'),
+    policy,
+    created_at: options.now instanceof Date ? options.now.toISOString() : new Date().toISOString(),
+  };
+}
+
+function admitOperatorProjectionOpenRequest(input = {}, options = {}) {
+  const request = createOperatorProjectionOpenRequest(input, options);
+  if (request.mode === 'plan') {
+    return operatorProjectionOpenOutcome(request, 'planned', {
+      admission_reason: 'plan_mode',
+      mutation_performed: false,
+    });
+  }
+  if (!request.target_ref) {
+    return operatorProjectionOpenOutcome(request, 'refused', {
+      admission_reason: 'target_ref_required',
+      mutation_performed: false,
+    });
+  }
+  if (request.projection_kind !== 'browser_url') {
+    return operatorProjectionOpenOutcome(request, 'refused', {
+      admission_reason: `unsupported_projection_kind:${request.projection_kind}`,
+      mutation_performed: false,
+    });
+  }
+  const suppressReason = request.policy.suppress_reason ?? operatorProjectionEnvironmentSuppressReason(options.env ?? process.env, options.platform ?? process.platform);
+  if (suppressReason) {
+    return operatorProjectionOpenOutcome(request, 'suppressed', {
+      admission_reason: suppressReason,
+      mutation_performed: false,
+    });
+  }
+  if (request.policy.allow_visible_host_effect !== true) {
+    return operatorProjectionOpenOutcome(request, 'refused', {
+      admission_reason: 'visible_host_effect_not_admitted',
+      mutation_performed: false,
+    });
+  }
+  return operatorProjectionOpenOutcome(request, 'admitted', {
+    admission_reason: 'visible_host_effect_admitted',
+    mutation_performed: false,
+  });
+}
+
+async function executeOperatorProjectionOpenRequest(input = {}, options = {}) {
+  const admitted = admitOperatorProjectionOpenRequest(input, options);
+  if (admitted.status !== 'admitted') return admitted;
+  const executor = options.openUrl
+    ? async (target) => {
+      await options.openUrl(target);
+      return { posture: 'browser_open', command: 'injected_open_url', args: [target], detached: true, stdio: 'ignore', windowsHide: true, pid: null };
+    }
+    : (options.openBrowserUrl ?? openBrowserUrl);
+  try {
+    const executorResult = await executor(admitted.target_ref, options.browserOpenOptions ?? {});
+    return operatorProjectionOpenOutcome(admitted, 'opened', {
+      admission_reason: admitted.admission_reason,
+      mutation_performed: true,
+      opened_at: options.now instanceof Date ? options.now.toISOString() : new Date().toISOString(),
+      executor_result: executorResult,
+    });
+  } catch (error) {
+    return operatorProjectionOpenOutcome(admitted, 'failed', {
+      admission_reason: admitted.admission_reason,
+      mutation_performed: false,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
+function normalizeOperatorProjectionCaller(caller) {
+  const record = caller && typeof caller === 'object' && !Array.isArray(caller) ? caller : {};
+  return {
+    package: typeof record.package === 'string' ? record.package : null,
+    command: typeof record.command === 'string' ? record.command : null,
+    module: typeof record.module === 'string' ? record.module : null,
+  };
+}
+
+function normalizeOperatorProjectionPolicy(policy, input) {
+  const record = policy && typeof policy === 'object' && !Array.isArray(policy) ? policy : {};
+  const allowVisibleHostEffect = record.allow_visible_host_effect ?? record.allowVisibleHostEffect ?? input.allowVisibleHostEffect;
+  const suppressReason = record.suppress_reason ?? record.suppressReason ?? input.suppressReason ?? null;
+  return {
+    allow_visible_host_effect: allowVisibleHostEffect === undefined ? true : allowVisibleHostEffect === true,
+    suppress_reason: typeof suppressReason === 'string' && suppressReason.trim() ? suppressReason.trim() : null,
+  };
+}
+
+function operatorProjectionEnvironmentSuppressReason(env, platform) {
+  if (env.NARADA_NO_BROWSER) return 'operator_policy:NARADA_NO_BROWSER';
+  if (env.CI) return 'headless:CI';
+  if (env.HEADLESS) return 'headless:HEADLESS';
+  if (platform === 'linux' && !env.DISPLAY) return 'headless:linux_without_DISPLAY';
+  return null;
+}
+
+function operatorProjectionOpenOutcome(request, status, fields) {
+  return {
+    ...request,
+    status,
+    ...fields,
+  };
+}
+
 function startOperatorTerminal(command, args = [], options = {}) {
   if (!command || typeof command !== 'string') throw new Error('operator_terminal_command_required');
   const { spawnSyncImpl = spawnSync, ...spawnOptions } = options;
@@ -104,6 +223,9 @@ function startElevatedOrOperatorPrompt(command, args = [], options = {}) {
 
 export {
   browserOpenCommand,
+  createOperatorProjectionOpenRequest,
+  admitOperatorProjectionOpenRequest,
+  executeOperatorProjectionOpenRequest,
   normalizeHiddenCommand,
   openBrowserUrl,
   runGovernedCommand,

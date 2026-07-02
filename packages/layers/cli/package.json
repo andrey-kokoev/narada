@@ -42,6 +42,7 @@
     "typecheck": "tsc --noEmit",
     "test": "node scripts/run-vitest-quiet.mjs run --silent && pnpm run test:realfs",
     "test:launcher": "pnpm run build && node scripts/run-vitest-quiet.mjs run --silent test/commands/carrier-launcher.test.ts test/commands/launcher-workspace-plan.test.ts test/commands/nars.test.ts && pnpm run test:realfs",
+    "test:operator-projection-open": "node scripts/run-vitest-quiet.mjs run --silent test/commands/nars.test.ts test/commands/launcher-workspace-plan.test.ts test/lib/browser-render.test.ts test/commands/task-graph.test.ts",
     "test:realfs": "node --import tsx --test test/integration/*.test.mjs",
     "coverage": "vitest run --coverage"
   },

@@ -80,6 +80,49 @@ Wrappers must also make stream posture explicit:
 - `ignore`: helper has no meaningful stream contract;
 - `inherit`: only admitted for visible operator processes or explicit debug/test fixtures.
 
+## Operator Projection Open Request
+
+`browser_open` needs a semantic request layer above `openBrowserUrl(...)`. The target first-class object is `OperatorProjectionOpenRequest`.
+
+It exists because opening a browser, file viewer, dashboard, or artifact view is an operator-visible projection side effect. The URL or artifact is not merely output, and launching the default browser is not a domain-command implementation detail. A command that wants to show something to the operator must create an open request, receive an admission/suppression/refusal decision, and only then hand off to the posture-owned executor.
+
+This object is parallel to, but not symmetrical with, `AiProcessInvocation`: both are invocation-path choke points for side effects that should not be hidden inside domain commands, but `AiProcessInvocation` governs AI runtime process creation and lifecycle while `OperatorProjectionOpenRequest` governs a short visible projection handoff.
+
+Target shape:
+
+```json
+{
+  "schema": "narada.operator_projection_open_request.v1",
+  "projection_kind": "browser_url",
+  "target_ref": "http://127.0.0.1:9999/",
+  "purpose": "operator_projection",
+  "caller": {
+    "package": "@narada2/cli",
+    "command": "agent-web-ui attach"
+  },
+  "mode": "execute",
+  "policy": {
+    "allow_visible_host_effect": true
+  }
+}
+```
+
+Initial `projection_kind` values should cover `browser_url`, `artifact_view`, `dashboard`, `file_view`, and `auth_flow`. Initial outcomes should include `planned`, `admitted`, `opened`, `suppressed`, `refused`, and `failed`. Suppression is not failure: dry-run, test, headless, and operator policy can all intentionally suppress the host UI effect while preserving the request as evidence.
+
+Rules:
+
+- Domain commands should not call `openBrowserUrl(...)` directly.
+- Domain commands should create `OperatorProjectionOpenRequest` and render or persist the outcome.
+- Tests should assert the request/outcome and inject a non-opening executor unless a fixture explicitly tests visible host behavior.
+- Dry-run and headless execution should default to `planned` or `suppressed`, never to a real host UI open.
+- Suppressed outcomes with a concrete `target_ref` should be rendered with manual-open guidance: show the URL or artifact path the operator can open themselves, and make clear no host UI was launched.
+- Planned outcomes whose target is not known yet should carry `target_ref: null` plus a resolution note from the caller.
+- `openBrowserUrl(...)` remains the low-level executor for admitted `browser_url` requests.
+
+The substrate lives in `@narada2/process-launch-posture` as `createOperatorProjectionOpenRequest`, `admitOperatorProjectionOpenRequest`, and `executeOperatorProjectionOpenRequest`. Current CLI integrations route `agent-web-ui attach` and task graph browser-render opens through this substrate, and launcher plans expose planned `operator_projection_open_requests` for `agent-web-ui` projections whose URL is resolved at attach time.
+
+The request belongs in process-launch posture because it admits the visible host effect. Its semantic placement in the runtime graph is documented in [`Narada Runtime Projection Graph`](../concepts/narada-runtime-projection-graph.md#operator-projection-open-requests).
+
 ## Guard Target
 
 A repository guard should mechanically enforce this contract.
@@ -137,13 +180,14 @@ Operator-facing surfaces should render concise status. Detailed argv, stderr, an
 ## Migration Plan
 
 1. Add the process-launch posture wrapper module.
-2. Move known browser-open helpers to `openBrowserUrl` first.
-3. Move provider subprocess launch to `spawnProviderSubprocess` while preserving current owned-process tree cancellation.
-4. Move MCP server launch to `spawnMcpServer` or annotate it until the fabric wrapper exists.
-5. Move launcher Windows Terminal starts to `startOperatorTerminal`.
-6. Add `spawnTestChild` and migrate package test helpers.
-7. Add the repository guard in report mode.
-8. Burn down annotations until the guard can fail by default in verification.
+2. Keep `OperatorProjectionOpenRequest` as the admission/suppression layer above `openBrowserUrl`.
+3. Move any remaining browser-open helpers to `openBrowserUrl` through `OperatorProjectionOpenRequest` first.
+4. Move provider subprocess launch to `spawnProviderSubprocess` while preserving current owned-process tree cancellation.
+5. Move MCP server launch to `spawnMcpServer` or annotate it until the fabric wrapper exists.
+6. Move launcher Windows Terminal starts to `startOperatorTerminal`.
+7. Add `spawnTestChild` and migrate package test helpers.
+8. Add the repository guard in report mode.
+9. Burn down annotations until the guard can fail by default in verification.
 
 ## Current Known Risk Classes
 

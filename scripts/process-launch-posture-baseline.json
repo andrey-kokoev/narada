@@ -1,6 +1,6 @@
 {
   "schema": "narada.process_launch_posture.baseline.v1",
-  "generated_at": "2026-06-30T17:49:13.523Z",
+  "generated_at": "2026-07-02T18:05:15.612Z",
   "note": "Migration baseline for raw process launch sites. New sites must use @narada2/process-launch-posture wrappers or be intentionally added here.",
   "entries": [
     {
@@ -12,9 +12,9 @@
       "text": "const proc = spawnSync(server.command, server.args, {"
     },
     {
-      "id": "packages/agent-runtime-server/test/server-wrapper.test.mjs:560:child_process.spawn",
+      "id": "packages/agent-runtime-server/test/server-wrapper.test.mjs:634:child_process.spawn",
       "file": "packages/agent-runtime-server/test/server-wrapper.test.mjs",
-      "line": 560,
+      "line": 634,
       "api": "child_process.spawn",
       "posture": "test_child",
       "text": "const child = spawn(process.execPath, ["
@@ -28,20 +28,20 @@
       "text": "const result = spawnSync('pwsh', args, {"
     },
     {
-      "id": "packages/agent-start/src/carrier-process-launch.ts:26:child_process.spawn",
+      "id": "packages/agent-start/src/carrier-process-launch.ts:43:child_process.spawn",
       "file": "packages/agent-start/src/carrier-process-launch.ts",
-      "line": 26,
+      "line": 43,
       "api": "child_process.spawn",
       "posture": "operator_terminal",
-      "text": "const child = spawn(command, args, {"
+      "text": "spawnProcess: (spawnCommand, spawnArgs, options) => ({ child: spawn(spawnCommand, spawnArgs, options) }),"
     },
     {
-      "id": "packages/agent-start/src/codex-subscription-support.ts:75:child_process.spawnSync",
-      "file": "packages/agent-start/src/codex-subscription-support.ts",
-      "line": 75,
-      "api": "child_process.spawnSync",
-      "posture": "provider_subprocess",
-      "text": "const result = spawnSync(command.command, [...command.prefixArgs, 'exec', '--json', prompt], {"
+      "id": "packages/agent-start/src/carrier-process-launch.ts:48:child_process.spawn",
+      "file": "packages/agent-start/src/carrier-process-launch.ts",
+      "line": 48,
+      "api": "child_process.spawn",
+      "posture": "operator_terminal",
+      "text": "child = spawn(command, args, resolvedSpawnOptions);"
     },
     {
       "id": "packages/agent-start/src/provider-credential-projection.ts:62:child_process.spawnSync",
@@ -68,124 +68,92 @@
       "text": "const child = spawn(command, args, {"
     },
     {
-      "id": "packages/agent-start/test/launcher-registry-contract.test.mjs:123:child_process.spawnSync",
+      "id": "packages/agent-start/test/launcher-registry-contract.test.mjs:32:child_process.spawnSync",
       "file": "packages/agent-start/test/launcher-registry-contract.test.mjs",
-      "line": 123,
+      "line": 32,
       "api": "child_process.spawnSync",
       "posture": "test_child",
-      "text": "const result = spawnSync(process.execPath, ["
+      "text": "return spawnSync(command, args, { windowsHide: true, ...options });"
     },
     {
-      "id": "packages/agent-start/test/launcher-registry-contract.test.mjs:164:child_process.spawnSync",
-      "file": "packages/agent-start/test/launcher-registry-contract.test.mjs",
-      "line": 164,
-      "api": "child_process.spawnSync",
-      "posture": "test_child",
-      "text": "const result = spawnSync(process.execPath, [join(packageRoot, 'bin', 'verify-registered-site-launchers.mjs'), '--help'], {"
-    },
-    {
-      "id": "packages/agent-start/test/launcher-registry-contract.test.mjs:19:child_process.spawnSync",
-      "file": "packages/agent-start/test/launcher-registry-contract.test.mjs",
-      "line": 19,
-      "api": "child_process.spawnSync",
-      "posture": "test_child",
-      "text": "const pwshAvailable = spawnSync('pwsh', ['-NoProfile', '-Command', '$PSVersionTable.PSVersion.Major'], { encoding: 'utf8' }).status === 0;"
-    },
-    {
-      "id": "packages/agent-start/test/launcher-registry-contract.test.mjs:250:child_process.spawnSync",
-      "file": "packages/agent-start/test/launcher-registry-contract.test.mjs",
-      "line": 250,
-      "api": "child_process.spawnSync",
-      "posture": "test_child",
-      "text": "const result = spawnSync(process.execPath, ["
-    },
-    {
-      "id": "packages/agent-start/test/launcher-registry-contract.test.mjs:277:child_process.spawnSync",
-      "file": "packages/agent-start/test/launcher-registry-contract.test.mjs",
-      "line": 277,
-      "api": "child_process.spawnSync",
-      "posture": "test_child",
-      "text": "const shard = spawnSync(process.execPath, ["
-    },
-    {
-      "id": "packages/agent-start/test/launcher-registry-contract.test.mjs:304:child_process.spawnSync",
-      "file": "packages/agent-start/test/launcher-registry-contract.test.mjs",
-      "line": 304,
-      "api": "child_process.spawnSync",
-      "posture": "test_child",
-      "text": "const emptyShard = spawnSync(process.execPath, ["
-    },
-    {
-      "id": "packages/agent-start/test/launcher-registry-contract.test.mjs:327:child_process.spawnSync",
-      "file": "packages/agent-start/test/launcher-registry-contract.test.mjs",
-      "line": 327,
-      "api": "child_process.spawnSync",
-      "posture": "test_child",
-      "text": "const noMatch = spawnSync(process.execPath, ["
-    },
-    {
-      "id": "packages/agent-start/test/launcher-registry-contract.test.mjs:349:child_process.spawnSync",
-      "file": "packages/agent-start/test/launcher-registry-contract.test.mjs",
-      "line": 349,
-      "api": "child_process.spawnSync",
-      "posture": "test_child",
-      "text": "const staleFork = spawnSync(process.execPath, ["
-    },
-    {
-      "id": "packages/agent-start/test/option-contract.test.mjs:39:child_process.spawnSync",
+      "id": "packages/agent-start/test/option-contract.test.mjs:40:child_process.spawnSync",
       "file": "packages/agent-start/test/option-contract.test.mjs",
-      "line": 39,
+      "line": 40,
       "api": "child_process.spawnSync",
       "posture": "test_child",
       "text": "return spawnSync(process.execPath, [...baseArgs, ...extraArgs], {"
     },
     {
-      "id": "packages/agent-start/test/option-contract.test.mjs:48:child_process.spawnSync",
+      "id": "packages/agent-start/test/option-contract.test.mjs:67:child_process.spawnSync",
       "file": "packages/agent-start/test/option-contract.test.mjs",
-      "line": 48,
+      "line": 67,
       "api": "child_process.spawnSync",
       "posture": "test_child",
       "text": "return spawnSync(process.execPath, [...argsWithoutDryRun, ...extraArgs], {"
     },
     {
-      "id": "packages/agent-start/test/provider-module-contract.test.mjs:108:child_process.spawnSync",
+      "id": "packages/agent-start/test/option-contract.test.mjs:787:child_process.spawnSync",
+      "file": "packages/agent-start/test/option-contract.test.mjs",
+      "line": 787,
+      "api": "child_process.spawnSync",
+      "posture": "test_child",
+      "text": "const result = spawnSync(process.execPath, ["
+    },
+    {
+      "id": "packages/agent-start/test/provider-module-contract.test.mjs:111:child_process.spawnSync",
       "file": "packages/agent-start/test/provider-module-contract.test.mjs",
-      "line": 108,
+      "line": 111,
       "api": "child_process.spawnSync",
       "posture": "test_child",
       "text": "spawnSync(command, args, options) {"
     },
     {
-      "id": "packages/agent-start/test/provider-module-contract.test.mjs:135:child_process.spawnSync",
+      "id": "packages/agent-start/test/provider-module-contract.test.mjs:158:child_process.spawnSync",
       "file": "packages/agent-start/test/provider-module-contract.test.mjs",
-      "line": 135,
-      "api": "child_process.spawnSync",
-      "posture": "test_child",
-      "text": "spawnSync(command, args, spawnOptions) {"
-    },
-    {
-      "id": "packages/agent-start/test/provider-module-contract.test.mjs:164:child_process.spawnSync",
-      "file": "packages/agent-start/test/provider-module-contract.test.mjs",
-      "line": 164,
+      "line": 158,
       "api": "child_process.spawnSync",
       "posture": "test_child",
       "text": "spawnSync() {"
     },
     {
-      "id": "packages/agent-web-ui/test/agent-web-ui-ux-smoke.test.mjs:123:child_process.spawn",
+      "id": "packages/agent-start/test/provider-module-contract.test.mjs:185:child_process.spawnSync",
+      "file": "packages/agent-start/test/provider-module-contract.test.mjs",
+      "line": 185,
+      "api": "child_process.spawnSync",
+      "posture": "test_child",
+      "text": "spawnSync(command, args, spawnOptions) {"
+    },
+    {
+      "id": "packages/agent-start/test/provider-module-contract.test.mjs:217:child_process.spawnSync",
+      "file": "packages/agent-start/test/provider-module-contract.test.mjs",
+      "line": 217,
+      "api": "child_process.spawnSync",
+      "posture": "test_child",
+      "text": "spawnSync() {"
+    },
+    {
+      "id": "packages/agent-web-ui/test/agent-web-ui-ux-smoke.test.mjs:142:child_process.spawn",
       "file": "packages/agent-web-ui/test/agent-web-ui-ux-smoke.test.mjs",
-      "line": 123,
+      "line": 142,
       "api": "child_process.spawn",
       "posture": "test_child",
       "text": "const child = spawn(browserPath, ["
     },
     {
-      "id": "packages/agent-web-ui/test/agent-web-ui.test.mjs:77:child_process.spawn",
+      "id": "packages/agent-web-ui/test/agent-web-ui.test.mjs:149:child_process.spawn",
       "file": "packages/agent-web-ui/test/agent-web-ui.test.mjs",
-      "line": 77,
+      "line": 149,
       "api": "child_process.spawn",
       "posture": "test_child",
       "text": "const child = spawn(browserPath, ["
+    },
+    {
+      "id": "packages/carrier-provider-support/src/ai-process-invocation.mjs:178:child_process.spawnSync",
+      "file": "packages/carrier-provider-support/src/ai-process-invocation.mjs",
+      "line": 178,
+      "api": "child_process.spawnSync",
+      "posture": "provider_subprocess",
+      "text": "const result = spawnSync(invocation.command, invocation.argv ?? [], spawnOptions);"
     },
     {
       "id": "packages/cloudflare-carrier/scripts/cloudflare-carrier-control-plane-convergence-live.mjs:215:child_process.execFile",
@@ -444,6 +412,14 @@
       "text": "const result = await execFile('git', args, { cwd, timeout: 30000, windowsHide: true });"
     },
     {
+      "id": "packages/cloudflare-nars-projection/scripts/lib/browser-smoke.mjs:18:child_process.spawn",
+      "file": "packages/cloudflare-nars-projection/scripts/lib/browser-smoke.mjs",
+      "line": 18,
+      "api": "child_process.spawn",
+      "posture": "browser_open",
+      "text": "const child = spawn(browserPath, ["
+    },
+    {
       "id": "packages/layers/cli/scripts/run-vitest-quiet.mjs:24:child_process.spawnSync",
       "file": "packages/layers/cli/scripts/run-vitest-quiet.mjs",
       "line": 24,
@@ -532,9 +508,9 @@
       "text": "return execFileSync('git', args, {"
     },
     {
-      "id": "packages/layers/cli/src/commands/launcher.ts:860:child_process.spawnSync",
+      "id": "packages/layers/cli/src/commands/launcher.ts:874:child_process.spawnSync",
       "file": "packages/layers/cli/src/commands/launcher.ts",
-      "line": 860,
+      "line": 874,
       "api": "child_process.spawnSync",
       "posture": "operator_terminal",
       "text": "const result = spawnSync('pwsh', ['-NoProfile', '-NonInteractive', '-Command', script], {"
@@ -660,25 +636,25 @@
       "text": "const output = execFileSync(contract.command, ['--version'], {"
     },
     {
-      "id": "packages/layers/cli/src/lib/launcher-runtime.ts:385:child_process.spawnSync",
+      "id": "packages/layers/cli/src/lib/launcher-runtime.ts:387:child_process.spawnSync",
       "file": "packages/layers/cli/src/lib/launcher-runtime.ts",
-      "line": 385,
+      "line": 387,
       "api": "child_process.spawnSync",
       "posture": "operator_terminal",
       "text": "const result = spawnSync('powershell.exe', ["
     },
     {
-      "id": "packages/layers/cli/src/lib/launcher-runtime.ts:800:child_process.spawnSync",
+      "id": "packages/layers/cli/src/lib/launcher-runtime.ts:802:child_process.spawnSync",
       "file": "packages/layers/cli/src/lib/launcher-runtime.ts",
-      "line": 800,
+      "line": 802,
       "api": "child_process.spawnSync",
       "posture": "operator_terminal",
       "text": "const result = spawnSync(command, args, {"
     },
     {
-      "id": "packages/layers/cli/src/lib/launcher-runtime.ts:828:child_process.spawnSync",
+      "id": "packages/layers/cli/src/lib/launcher-runtime.ts:830:child_process.spawnSync",
       "file": "packages/layers/cli/src/lib/launcher-runtime.ts",
-      "line": 828,
+      "line": 830,
       "api": "child_process.spawnSync",
       "posture": "operator_terminal",
       "text": "const result = spawnSync(command, args, {"
@@ -1116,20 +1092,28 @@
       "text": "const doctorCli = spawnSync(process.execPath, ["
     },
     {
-      "id": "packages/mcp-shell-windows/server.mjs:1839:child_process.spawnSync",
+      "id": "packages/mcp-shell-windows/server.mjs:1840:child_process.spawnSync",
       "file": "packages/mcp-shell-windows/server.mjs",
-      "line": 1839,
+      "line": 1840,
       "api": "child_process.spawnSync",
       "posture": "mcp_server",
       "text": "return spawnSync(command, args, {"
     },
     {
-      "id": "packages/mcp-shell-windows/server.mjs:1945:child_process.spawn",
+      "id": "packages/mcp-shell-windows/server.mjs:1946:child_process.spawn",
       "file": "packages/mcp-shell-windows/server.mjs",
-      "line": 1945,
+      "line": 1946,
       "api": "child_process.spawn",
       "posture": "mcp_server",
       "text": "const child = spawn(shell, shellArgs, {"
+    },
+    {
+      "id": "packages/mcp-shell-windows/test/policy.test.ts:12:child_process.spawn",
+      "file": "packages/mcp-shell-windows/test/policy.test.ts",
+      "line": 12,
+      "api": "child_process.spawn",
+      "posture": "test_child",
+      "text": "const child = spawn(process.execPath, [serverPath, '--site-root', siteRoot], { stdio: ['pipe', 'pipe', 'pipe'] });"
     },
     {
       "id": "packages/narada-proper-mcp/src/commands/process.ts:16:child_process.execFileSync",
@@ -1284,17 +1268,17 @@
       "text": "const rg = spawnSync('rg', ["
     },
     {
-      "id": "packages/site-common-tools/src/mcp-servers/shell/shell-mcp-server.mjs:1866:child_process.spawnSync",
+      "id": "packages/site-common-tools/src/mcp-servers/shell/shell-mcp-server.mjs:1867:child_process.spawnSync",
       "file": "packages/site-common-tools/src/mcp-servers/shell/shell-mcp-server.mjs",
-      "line": 1866,
+      "line": 1867,
       "api": "child_process.spawnSync",
       "posture": "mcp_server",
       "text": "return spawnSync(command, args, {"
     },
     {
-      "id": "packages/site-common-tools/src/mcp-servers/shell/shell-mcp-server.mjs:1972:child_process.spawn",
+      "id": "packages/site-common-tools/src/mcp-servers/shell/shell-mcp-server.mjs:1973:child_process.spawn",
       "file": "packages/site-common-tools/src/mcp-servers/shell/shell-mcp-server.mjs",
-      "line": 1972,
+      "line": 1973,
       "api": "child_process.spawn",
       "posture": "mcp_server",
       "text": "const child = spawn(shell, shellArgs, {"
@@ -1668,25 +1652,25 @@
       "text": "return execFileSync(command, args, {"
     },
     {
-      "id": "scripts/process-launch-posture-guard.mjs:36:PowerShell.Start-Process",
+      "id": "scripts/process-launch-posture-guard.mjs:41:PowerShell.Start-Process",
       "file": "scripts/process-launch-posture-guard.mjs",
-      "line": 36,
+      "line": 41,
       "api": "PowerShell.Start-Process",
       "posture": "governed_command_execution",
       "text": "{ api: 'PowerShell.Start-Process', pattern: /\\bStart-Process\\b/i },"
     },
     {
-      "id": "scripts/process-launch-posture-guard.mjs:38:browser.open-command",
+      "id": "scripts/process-launch-posture-guard.mjs:43:browser.open-command",
       "file": "scripts/process-launch-posture-guard.mjs",
-      "line": 38,
+      "line": 43,
       "api": "browser.open-command",
       "posture": "governed_command_execution",
       "text": "{ api: 'browser.open-command', pattern: /\\bcommand\\s*=\\s*['\\\"]open['\\\"]|\\bcommand\\s*=\\s*['\\\"]xdg-open['\\\"]|\\bxdg-open\\b/ },"
     },
     {
-      "id": "scripts/process-launch-posture-guard.mjs:69:browser.open-command",
+      "id": "scripts/process-launch-posture-guard.mjs:75:browser.open-command",
       "file": "scripts/process-launch-posture-guard.mjs",
-      "line": 69,
+      "line": 75,
       "api": "browser.open-command",
       "posture": "governed_command_execution",
       "text": "if (/browser|agent-web-ui|render/i.test(file) && /cmd|xdg-open|open|start|spawn/i.test(text)) return 'browser_open';"

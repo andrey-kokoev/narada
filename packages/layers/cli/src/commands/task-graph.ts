@@ -99,6 +99,7 @@ export async function taskGraphCommand(
           mermaid_path: renderResult.mermaidPath,
           html_path: renderResult.htmlPath,
           message: renderResult.message,
+          operator_projection_open_request: renderResult.operatorProjectionOpenRequest ?? null,
         },
       };
     }
@@ -118,6 +119,7 @@ export async function taskGraphCommand(
         mermaid_path: renderResult.mermaidPath,
         html_path: renderResult.htmlPath,
         message: renderResult.message,
+        operator_projection_open_request: renderResult.operatorProjectionOpenRequest ?? null,
       },
     };
   }

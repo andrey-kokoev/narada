@@ -77,6 +77,11 @@ describe('browser-render helper', () => {
 
       expect(result.opened).toBe(false);
       expect(result.message).toContain('Artifacts written to');
+      expect(result.operatorProjectionOpenRequest).toMatchObject({
+        schema: 'narada.operator_projection_open_request.v1',
+        status: 'suppressed',
+        admission_reason: 'operator_policy:no_open',
+      });
       expect(statSync(result.mermaidPath).isFile()).toBe(true);
       expect(statSync(result.htmlPath).isFile()).toBe(true);
     });
@@ -90,6 +95,11 @@ describe('browser-render helper', () => {
 
         expect(result.opened).toBe(false);
         expect(result.message).toContain('Headless environment detected');
+        expect(result.operatorProjectionOpenRequest).toMatchObject({ status: 'suppressed' });
+        expect(result.operatorProjectionOpenRequest).toMatchObject({
+          status: 'suppressed',
+          admission_reason: 'headless_environment',
+        });
         expect(statSync(result.mermaidPath).isFile()).toBe(true);
       } finally {
         if (originalCi === undefined) {

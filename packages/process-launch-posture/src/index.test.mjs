@@ -3,6 +3,9 @@ import { test } from 'node:test';
 import { EventEmitter } from 'node:events';
 import {
   browserOpenCommand,
+  createOperatorProjectionOpenRequest,
+  admitOperatorProjectionOpenRequest,
+  executeOperatorProjectionOpenRequest,
   normalizeHiddenCommand,
   openBrowserUrl,
   runGovernedCommand,
@@ -81,6 +84,83 @@ test('openBrowserUrl forces hidden detached ignored-stdio launch posture', async
   assert.equal(observed.options.windowsHide, true);
   assert.equal(observed.options.detached, true);
   assert.equal(observed.options.stdio, 'ignore');
+});
+
+test('OperatorProjectionOpenRequest records browser projection intent as data', () => {
+  const request = createOperatorProjectionOpenRequest({
+    projection_kind: 'browser_url',
+    target_ref: 'http://127.0.0.1:9999/',
+    purpose: 'agent_web_ui_attach',
+    caller: { package: '@narada2/cli', command: 'agent-web-ui attach' },
+    mode: 'plan',
+  }, { now: new Date('2026-07-02T00:00:00.000Z') });
+
+  assert.equal(request.schema, 'narada.operator_projection_open_request.v1');
+  assert.equal(request.target_ref, 'http://127.0.0.1:9999/');
+  assert.equal(request.policy.allow_visible_host_effect, true);
+  assert.equal(request.created_at, '2026-07-02T00:00:00.000Z');
+});
+
+test('OperatorProjectionOpenRequest plans and suppresses without visible host effects', async () => {
+  const plan = await executeOperatorProjectionOpenRequest({
+    target_ref: 'http://127.0.0.1:9999/',
+    mode: 'plan',
+  });
+  assert.equal(plan.status, 'planned');
+  assert.equal(plan.mutation_performed, false);
+
+  const unresolvedPlan = await executeOperatorProjectionOpenRequest({
+    target_ref: null,
+    mode: 'plan',
+  });
+  assert.equal(unresolvedPlan.status, 'planned');
+  assert.equal(unresolvedPlan.target_ref, null);
+
+  const suppressed = await executeOperatorProjectionOpenRequest({
+    target_ref: 'http://127.0.0.1:9999/',
+    policy: { suppress_reason: 'operator_policy:test' },
+  });
+  assert.equal(suppressed.status, 'suppressed');
+  assert.equal(suppressed.admission_reason, 'operator_policy:test');
+  assert.equal(suppressed.mutation_performed, false);
+});
+
+test('OperatorProjectionOpenRequest refuses missing target and unsupported projection kind', () => {
+  assert.equal(admitOperatorProjectionOpenRequest({ target_ref: '' }).status, 'refused');
+  const unsupported = admitOperatorProjectionOpenRequest({
+    projection_kind: 'terminal_tab',
+    target_ref: 'wt://new-tab',
+  });
+  assert.equal(unsupported.status, 'refused');
+  assert.match(unsupported.admission_reason, /unsupported_projection_kind/);
+});
+
+test('OperatorProjectionOpenRequest executes through injected browser opener', async () => {
+  const calls = [];
+  const result = await executeOperatorProjectionOpenRequest({
+    target_ref: 'file:///tmp/index.html',
+    caller: { package: '@narada2/process-launch-posture', command: 'test' },
+  }, {
+    env: {},
+    openUrl: async (target) => { calls.push(target); },
+  });
+
+  assert.equal(result.status, 'opened');
+  assert.equal(result.mutation_performed, true);
+  assert.deepEqual(calls, ['file:///tmp/index.html']);
+});
+
+test('OperatorProjectionOpenRequest reports executor failures as failed outcomes', async () => {
+  const result = await executeOperatorProjectionOpenRequest({
+    target_ref: 'file:///tmp/index.html',
+  }, {
+    env: {},
+    openBrowserUrl: async () => { throw new Error('boom'); },
+  });
+
+  assert.equal(result.status, 'failed');
+  assert.equal(result.mutation_performed, false);
+  assert.equal(result.error, 'boom');
 });
 
 test('spawnHiddenPostureProcess refuses visible-only posture names', () => {

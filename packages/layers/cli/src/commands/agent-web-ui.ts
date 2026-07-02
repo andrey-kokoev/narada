@@ -1,5 +1,5 @@
 import type { CommandContext } from '../lib/command-wrapper.js';
-import { openBrowserUrl } from '@narada2/process-launch-posture';
+import { executeOperatorProjectionOpenRequest } from '@narada2/process-launch-posture';
 import { formattedResult, type CliFormat } from '../lib/cli-output.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { narsAttachCommandCommand, narsSessionsCommand } from './nars.js';
@@ -244,6 +244,7 @@ export interface AgentWebUiAttachPlan {
   url: string | null;
   command: string;
   authority_transition: AuthorityTransitionSnapshot;
+  operator_projection_open_request?: Record<string, unknown>;
 }
 
 export async function agentWebUiAttachCommand(
@@ -308,6 +309,11 @@ export async function agentWebUiAttachCommand(
       url: null,
       session: attach.session,
     });
+    plan.operator_projection_open_request = await buildAgentWebUiOpenRequest({
+      targetRef: null,
+      mode: 'plan',
+      suppressReason: options.open === false ? 'operator_policy:no_open' : null,
+    });
     return {
       exitCode: ExitCode.SUCCESS,
       result: formattedResult(plan, formatPlan(plan), options.format ?? 'auto'),
@@ -355,18 +361,52 @@ export async function agentWebUiAttachCommand(
     session: attach.session,
   });
   const shouldOpen = options.open !== false;
+  let operatorProjectionOpenRequest: Record<string, unknown> | undefined;
   if (shouldOpen && started.url) {
     progress(`agent-web-ui: opening browser ${started.url}`);
-    try {
-      await (deps.openUrl ?? openBrowserUrl)(started.url);
-    } catch (error) {
+    operatorProjectionOpenRequest = await buildAgentWebUiOpenRequest({
+      targetRef: started.url,
+      mode: 'execute',
+      openUrl: deps.openUrl,
+    });
+    if (operatorProjectionOpenRequest.status !== 'opened') {
       progress(`agent-web-ui: browser open failed; use ${started.url}`);
     }
+  } else if (started.url) {
+    operatorProjectionOpenRequest = await buildAgentWebUiOpenRequest({
+      targetRef: started.url,
+      mode: 'execute',
+      suppressReason: 'operator_policy:no_open',
+    });
   }
+  plan.operator_projection_open_request = operatorProjectionOpenRequest;
   return {
     exitCode: ExitCode.SUCCESS,
     result: formattedResult(plan, formatPlan(plan), options.format ?? 'auto'),
   };
+}
+
+async function buildAgentWebUiOpenRequest(args: {
+  targetRef: string | null;
+  mode: 'plan' | 'execute';
+  suppressReason?: string | null;
+  openUrl?: (url: string) => Promise<void> | void;
+}): Promise<Record<string, unknown>> {
+  const outcome = await executeOperatorProjectionOpenRequest({
+    projection_kind: 'browser_url',
+    target_ref: args.targetRef,
+    purpose: 'agent_web_ui_attach',
+    caller: { package: '@narada2/cli', command: 'agent-web-ui attach', module: 'commands/agent-web-ui' },
+    mode: args.mode,
+    policy: {
+      allow_visible_host_effect: args.suppressReason ? false : true,
+      suppress_reason: args.suppressReason ?? null,
+    },
+  }, args.openUrl ? { openUrl: args.openUrl, env: {} } : undefined) as unknown as Record<string, unknown>;
+  if (args.targetRef === null) {
+    outcome.target_ref_resolution = 'agent-web-ui attach resolves local URL after server start';
+  }
+  return outcome;
 }
 
 async function waitForAttachability(

@@ -24,6 +24,62 @@ export interface BrowserOpenOptions {
   spawnImpl?: typeof import('node:child_process').spawn;
 }
 
+export interface OperatorProjectionOpenCaller {
+  package?: string | null;
+  command?: string | null;
+  module?: string | null;
+}
+
+export interface OperatorProjectionOpenPolicy {
+  allow_visible_host_effect?: boolean;
+  allowVisibleHostEffect?: boolean;
+  suppress_reason?: string | null;
+  suppressReason?: string | null;
+}
+
+export interface OperatorProjectionOpenRequestInput {
+  projection_kind?: string;
+  projectionKind?: string;
+  target_ref?: string | null;
+  targetRef?: string | null;
+  target?: string | null;
+  purpose?: string;
+  caller?: OperatorProjectionOpenCaller;
+  mode?: 'plan' | 'execute' | string;
+  policy?: OperatorProjectionOpenPolicy;
+  allowVisibleHostEffect?: boolean;
+  suppressReason?: string | null;
+}
+
+export interface OperatorProjectionOpenRequest {
+  schema: 'narada.operator_projection_open_request.v1';
+  projection_kind: string;
+  target_ref: string | null;
+  purpose: string;
+  caller: Required<OperatorProjectionOpenCaller>;
+  mode: string;
+  policy: { allow_visible_host_effect: boolean; suppress_reason: string | null };
+  created_at: string;
+}
+
+export interface OperatorProjectionOpenOutcome extends OperatorProjectionOpenRequest {
+  status: 'planned' | 'admitted' | 'opened' | 'suppressed' | 'refused' | 'failed';
+  admission_reason: string;
+  mutation_performed: boolean;
+  opened_at?: string;
+  executor_result?: unknown;
+  error?: string;
+}
+
+export interface OperatorProjectionOpenExecutionOptions {
+  env?: NodeJS.ProcessEnv;
+  platform?: NodeJS.Platform;
+  now?: Date;
+  browserOpenOptions?: BrowserOpenOptions;
+  openUrl?: (target: string) => Promise<void> | void;
+  openBrowserUrl?: (target: string, options?: BrowserOpenOptions) => Promise<BrowserOpenResult | unknown>;
+}
+
 export interface OperatorTerminalResult {
   posture: 'operator_terminal' | 'elevated_or_operator_prompt';
   command: string;
@@ -54,6 +110,12 @@ export function normalizeHiddenCommand(command: string, args?: string[], options
 };
 
 export function openBrowserUrl(target: string, options?: BrowserOpenOptions): Promise<BrowserOpenResult>;
+
+export function createOperatorProjectionOpenRequest(input?: OperatorProjectionOpenRequestInput, options?: { now?: Date }): OperatorProjectionOpenRequest;
+
+export function admitOperatorProjectionOpenRequest(input?: OperatorProjectionOpenRequestInput, options?: Pick<OperatorProjectionOpenExecutionOptions, 'env' | 'platform' | 'now'>): OperatorProjectionOpenOutcome;
+
+export function executeOperatorProjectionOpenRequest(input?: OperatorProjectionOpenRequestInput, options?: OperatorProjectionOpenExecutionOptions): Promise<OperatorProjectionOpenOutcome>;
 
 export function startOperatorTerminal(command: string, args?: string[], options?: OperatorTerminalOptions): OperatorTerminalResult;
 

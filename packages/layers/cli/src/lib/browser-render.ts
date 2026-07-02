@@ -11,7 +11,7 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { openBrowserUrl } from '@narada2/process-launch-posture';
+import { executeOperatorProjectionOpenRequest } from '@narada2/process-launch-posture';
 
 export interface RenderArtifacts {
   /** Directory containing the artifacts */
@@ -24,6 +24,8 @@ export interface RenderArtifacts {
   opened: boolean;
   /** Human-readable message about what happened */
   message: string;
+  /** Governed request record for the operator projection open, when applicable */
+  operatorProjectionOpenRequest?: Record<string, unknown>;
 }
 
 /**
@@ -99,8 +101,26 @@ export async function writeRenderArtifacts(
  * only reports that the request was queued.
  */
 export function openBrowser(filePath: string): boolean {
-  void openBrowserUrl(filePath).catch(() => {});
+  void executeOperatorProjectionOpenRequest({
+    projection_kind: 'browser_url',
+    target_ref: filePath,
+    purpose: 'artifact_browser_render',
+    caller: { package: '@narada2/cli', command: 'task graph view', module: 'lib/browser-render' },
+    mode: 'execute',
+    policy: { allow_visible_host_effect: true },
+  }).catch(() => {});
   return true;
+}
+
+async function requestOpenBrowser(filePath: string): Promise<Record<string, unknown>> {
+  return await executeOperatorProjectionOpenRequest({
+    projection_kind: 'browser_url',
+    target_ref: filePath,
+    purpose: 'artifact_browser_render',
+    caller: { package: '@narada2/cli', command: 'task graph view', module: 'lib/browser-render' },
+    mode: 'execute',
+    policy: { allow_visible_host_effect: true },
+  }) as unknown as Record<string, unknown>;
 }
 
 /**
@@ -119,27 +139,46 @@ export async function renderAndMaybeOpen(
   const { artifactDir, mermaidPath, htmlPath } = await writeRenderArtifacts(mermaidSource, title);
 
   if (!shouldOpen) {
+    const operatorProjectionOpenRequest = await executeOperatorProjectionOpenRequest({
+      projection_kind: 'browser_url',
+      target_ref: htmlPath,
+      purpose: 'artifact_browser_render',
+      caller: { package: '@narada2/cli', command: 'task graph view', module: 'lib/browser-render' },
+      mode: 'execute',
+      policy: { allow_visible_host_effect: false, suppress_reason: 'operator_policy:no_open' },
+    }) as unknown as Record<string, unknown>;
     return {
       artifactDir,
       mermaidPath,
       htmlPath,
       opened: false,
       message: `Artifacts written to ${artifactDir}`,
+      operatorProjectionOpenRequest,
     };
   }
 
   const isHeadless = detectHeadless();
   if (isHeadless) {
+    const operatorProjectionOpenRequest = await executeOperatorProjectionOpenRequest({
+      projection_kind: 'browser_url',
+      target_ref: htmlPath,
+      purpose: 'artifact_browser_render',
+      caller: { package: '@narada2/cli', command: 'task graph view', module: 'lib/browser-render' },
+      mode: 'execute',
+      policy: { allow_visible_host_effect: true, suppress_reason: 'headless_environment' },
+    }) as unknown as Record<string, unknown>;
     return {
       artifactDir,
       mermaidPath,
       htmlPath,
       opened: false,
       message: `Headless environment detected. Artifacts written to ${artifactDir}`,
+      operatorProjectionOpenRequest,
     };
   }
 
-  const opened = openBrowser(htmlPath);
+  const operatorProjectionOpenRequest = await requestOpenBrowser(htmlPath);
+  const opened = operatorProjectionOpenRequest.status === 'opened';
   return {
     artifactDir,
     mermaidPath,
@@ -148,6 +187,7 @@ export async function renderAndMaybeOpen(
     message: opened
       ? `Opened ${htmlPath}`
       : `Could not open browser. Artifacts written to ${artifactDir}`,
+    operatorProjectionOpenRequest,
   };
 }
 

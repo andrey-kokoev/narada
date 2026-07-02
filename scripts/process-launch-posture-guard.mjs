@@ -27,6 +27,11 @@ const wrapperFiles = new Set([
   'packages/process-launch-posture/src/index.mjs',
 ]);
 
+const operatorProjectionOpenBypassAllowed = new Set([
+  'packages/process-launch-posture/src/index.test.mjs',
+  'packages/process-launch-posture/src/index.d.ts',
+]);
+
 const rawLaunchPatterns = [
   { api: 'child_process.spawn', pattern: /(?<![.$\w])spawn\s*\(/ },
   { api: 'child_process.spawnSync', pattern: /(?<![.$\w])spawnSync\s*\(/ },
@@ -36,6 +41,7 @@ const rawLaunchPatterns = [
   { api: 'PowerShell.Start-Process', pattern: /\bStart-Process\b/i },
   { api: 'windows.cmd-start', pattern: /\bcmd(?:\.exe)?['\"]?\s*,?\s*\[?\s*['\"]\/c['\"]\s*,\s*['\"]start['\"]/i },
   { api: 'browser.open-command', pattern: /\bcommand\s*=\s*['\"]open['\"]|\bcommand\s*=\s*['\"]xdg-open['\"]|\bxdg-open\b/ },
+  { api: 'process_launch_posture.openBrowserUrl', pattern: /\bopenBrowserUrl\s*\(/ },
 ];
 
 const postureAnnotationPattern = /narada-process-launch-posture:\s*([a-z_]+)/;
@@ -93,6 +99,7 @@ function scan() {
     lines.forEach((text, lineIndex) => {
       for (const rule of rawLaunchPatterns) {
         if (!rule.pattern.test(text)) continue;
+        if (rule.api === 'process_launch_posture.openBrowserUrl' && operatorProjectionOpenBypassAllowed.has(file)) continue;
         if (rule.api === 'child_process.exec' && /^\s*exec\s*\([^)]*\)\s*\{/.test(text)) continue;
         const annotation = annotationFor(lines, lineIndex);
         findings.push({
