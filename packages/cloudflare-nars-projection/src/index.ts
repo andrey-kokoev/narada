@@ -41,6 +41,17 @@ export type ProjectionEventPolicyMode = 'conversation' | 'operator' | 'diagnosti
 export type ArtifactKind = 'html' | 'markdown' | 'image' | 'json' | 'text';
 export type ArtifactProjectionContentMode = 'none' | 'metadata_only' | 'selected_kinds' | 'explicit_artifacts';
 export type CloudflareNarsAuthorityExecutionMode = 'cloudflare_runtime_tool_adapter';
+export type CloudflareMcpLocus = 'cloudflare-host' | 'cloudflare-account-or-user' | 'cloudflare-site' | 'session-native';
+export type CloudflareMcpScope = 'none' | CloudflareMcpLocus | 'all';
+export type CloudflareNativeMcpAdapterKind = 'cf-authority' | 'cf-authority-artifacts';
+
+export const CLOUDFLARE_MCP_LOCI: CloudflareMcpLocus[] = ['cloudflare-host', 'cloudflare-account-or-user', 'cloudflare-site', 'session-native'];
+export const DEFAULT_CLOUDFLARE_MCP_SCOPE: CloudflareMcpScope = 'all';
+
+const DEFAULT_CLOUDFLARE_NATIVE_MCP_ADAPTERS: CloudflareMcpServerDescriptor[] = [
+  { locus: 'cloudflare-site', adapter_kind: 'cf-authority', server_name: 'cf-authority', mutation_posture: 'read_only_with_diagnostic_fault_probe' },
+  { locus: 'session-native', adapter_kind: 'cf-authority-artifacts', server_name: 'cf-authority-artifacts', mutation_posture: 'session_artifact_authority_mutation' },
+];
 
 export interface CloudflareNarsAuthorityToolCall {
   server_name: string;
@@ -63,6 +74,59 @@ export interface CloudflareNarsAuthorityToolAdapter {
   call_tool(call: CloudflareNarsAuthorityToolCall): CloudflareNarsAuthorityToolResult;
 }
 
+export interface CloudflareToolAdapterRegistry {
+  register(adapter: CloudflareNarsAuthorityToolAdapter): CloudflareToolAdapterRegistryMutationResult;
+  listServers(): string[];
+  listTools(serverName?: string): CloudflareToolAdapterRegistryToolDescriptor[];
+  callTool(call: CloudflareNarsAuthorityToolCall): CloudflareNarsAuthorityToolResult;
+}
+
+export interface CloudflareToolAdapterRegistryMutationResult {
+  status: 'registered' | 'refused';
+  code?: string;
+  server_name: string;
+}
+
+export interface CloudflareToolAdapterRegistryToolDescriptor {
+  server_name: string;
+  tool_name: string;
+  tool: string;
+}
+
+export interface CloudflareMcpServerDescriptor {
+  locus: CloudflareMcpLocus;
+  adapter_kind: CloudflareNativeMcpAdapterKind;
+  server_name?: string;
+  enabled?: boolean;
+  mutation_posture?: string;
+}
+
+export interface CloudflareMcpFabricConfig {
+  scope?: CloudflareMcpScope;
+  native_adapters?: CloudflareMcpServerDescriptor[];
+}
+
+export interface CloudflareMcpFabricSummary {
+  schema: 'narada.cloudflare_nars_authority.mcp_fabric.v1';
+  status: 'ok' | 'refused';
+  code?: string;
+  requested_scope: CloudflareMcpScope;
+  requested_loci: CloudflareMcpLocus[];
+  effective_loci: CloudflareMcpLocus[];
+  required_loci: CloudflareMcpLocus[];
+  optional_loci: CloudflareMcpLocus[];
+  server_count: number;
+  server_names: string[];
+  servers: Required<CloudflareMcpServerDescriptor>[];
+}
+
+export interface CloudflareNarsAuthorityArtifactToolAuthority {
+  registerArtifact(args: { session_id: string; artifact_id?: string | null; kind?: unknown; title?: string | null; content?: string | null; content_type?: string | null; input_id?: string | null; now?: string }): CloudflareNarsAuthorityArtifactRegisterResult;
+  readArtifactMetadata(args: { session_id: string; artifact_id?: string | null }): CloudflareNarsAuthorityArtifactReadResult;
+  readArtifactContent(args: { session_id: string; artifact_id: string }): CloudflareNarsAuthorityArtifactContentReadResult;
+  presentArtifact(args: { session_id: string; artifact_id: string; text?: string | null; now?: string }): CloudflareNarsAuthorityArtifactPresentResult;
+}
+
 export interface CloudflareNarsAuthorityRuntimeExecutionInput {
   session: CloudflareNarsAuthoritySession;
   input_id: string;
@@ -70,7 +134,8 @@ export interface CloudflareNarsAuthorityRuntimeExecutionInput {
   payload: Record<string, unknown>;
   message: string;
   now: string;
-  create_html_artifact: () => CloudflareNarsAuthorityArtifact;
+  tool_registry: CloudflareToolAdapterRegistry;
+  mcp_fabric: CloudflareMcpFabricSummary;
 }
 
 export interface CloudflareNarsAuthorityRuntimeExecutionResult {
@@ -114,11 +179,85 @@ function normalizeArtifactProjectionPolicy(value: Partial<ArtifactProjectionPoli
 }
 
 export function createCloudflareNarsTestRuntimeExecutor(): CloudflareNarsAuthorityRuntimeExecutor {
-  return createCloudflareNarsToolAdapterRuntimeExecutor(createCloudflareNarsTestToolAdapter());
+  return createCloudflareNarsToolAdapterRuntimeExecutor(createCloudflareToolAdapterRegistry([createCloudflareNarsTestToolAdapter()]));
 }
 
 export function createCloudflareNarsAuthorityRuntimeExecutor(): CloudflareNarsAuthorityRuntimeExecutor {
-  return createCloudflareNarsToolAdapterRuntimeExecutor(createCloudflareNarsAuthorityToolAdapter());
+  return createCloudflareNarsToolAdapterRuntimeExecutor();
+}
+
+export function normalizeCloudflareMcpFabricConfig(config: CloudflareMcpFabricConfig | null | undefined): CloudflareMcpFabricSummary {
+  const requestedScope = normalizeCloudflareMcpScope(config?.scope);
+  const requestedLoci = requestedScope === 'none' ? [] : requestedScope === 'all' ? [...CLOUDFLARE_MCP_LOCI] : [requestedScope];
+  const nativeAdapters = Array.isArray(config?.native_adapters) ? config!.native_adapters! : DEFAULT_CLOUDFLARE_NATIVE_MCP_ADAPTERS;
+  const servers: Required<CloudflareMcpServerDescriptor>[] = [];
+  const serverNames = new Set<string>();
+  for (const entry of nativeAdapters) {
+    if (entry?.enabled === false) continue;
+    const locus = normalizeCloudflareMcpLocus(entry?.locus);
+    const adapterKind = normalizeCloudflareNativeMcpAdapterKind(entry?.adapter_kind);
+    if (!locus || !adapterKind) {
+      return emptyCloudflareMcpFabricSummary(requestedScope, requestedLoci, 'invalid_cloudflare_mcp_adapter_descriptor');
+    }
+    if (!requestedLoci.includes(locus)) continue;
+    const serverName = entry.server_name?.trim() || adapterKind;
+    if (serverNames.has(serverName)) {
+      return emptyCloudflareMcpFabricSummary(requestedScope, requestedLoci, 'cloudflare_mcp_duplicate_server_conflict');
+    }
+    serverNames.add(serverName);
+    servers.push({
+      locus,
+      adapter_kind: adapterKind,
+      server_name: serverName,
+      enabled: true,
+      mutation_posture: entry.mutation_posture ?? defaultCloudflareMcpMutationPosture(adapterKind),
+    });
+  }
+  return {
+    schema: 'narada.cloudflare_nars_authority.mcp_fabric.v1',
+    status: 'ok',
+    requested_scope: requestedScope,
+    requested_loci: requestedLoci,
+    effective_loci: [...new Set(servers.map((server) => server.locus))],
+    required_loci: ['cloudflare-site', 'session-native'],
+    optional_loci: ['cloudflare-host', 'cloudflare-account-or-user'],
+    server_count: servers.length,
+    server_names: servers.map((server) => server.server_name).sort(),
+    servers,
+  };
+}
+
+function emptyCloudflareMcpFabricSummary(scope: CloudflareMcpScope, requestedLoci: CloudflareMcpLocus[], code: string): CloudflareMcpFabricSummary {
+  return {
+    schema: 'narada.cloudflare_nars_authority.mcp_fabric.v1',
+    status: 'refused',
+    code,
+    requested_scope: scope,
+    requested_loci: requestedLoci,
+    effective_loci: [],
+    required_loci: ['cloudflare-site', 'session-native'],
+    optional_loci: ['cloudflare-host', 'cloudflare-account-or-user'],
+    server_count: 0,
+    server_names: [],
+    servers: [],
+  };
+}
+
+function normalizeCloudflareMcpScope(value: unknown): CloudflareMcpScope {
+  if (value === 'none' || value === 'all') return value;
+  return normalizeCloudflareMcpLocus(value) ?? DEFAULT_CLOUDFLARE_MCP_SCOPE;
+}
+
+function normalizeCloudflareMcpLocus(value: unknown): CloudflareMcpLocus | null {
+  return typeof value === 'string' && (CLOUDFLARE_MCP_LOCI as string[]).includes(value) ? value as CloudflareMcpLocus : null;
+}
+
+function normalizeCloudflareNativeMcpAdapterKind(value: unknown): CloudflareNativeMcpAdapterKind | null {
+  return value === 'cf-authority' || value === 'cf-authority-artifacts' ? value : null;
+}
+
+function defaultCloudflareMcpMutationPosture(adapterKind: CloudflareNativeMcpAdapterKind): string {
+  return adapterKind === 'cf-authority-artifacts' ? 'session_artifact_authority_mutation' : 'read_only_with_diagnostic_fault_probe';
 }
 
 function refusedAuthorityArtifacts(sessionId: string, artifactId: string | null, code: string): CloudflareNarsAuthorityArtifactReadResult {
@@ -577,11 +716,13 @@ export function createCloudflareNarsAuthorityService(options: {
   initial_state?: CloudflareNarsAuthorityWorkerState | null;
   max_events?: number;
   runtime_executor?: CloudflareNarsAuthorityRuntimeExecutor;
+  mcp_fabric?: CloudflareMcpFabricConfig | null;
 } = {}) {
   const sessions = new Map<string, CloudflareNarsAuthoritySession>();
   const events = new Map<string, CloudflareNarsAuthorityEvent[]>();
   const artifacts = new Map<string, CloudflareNarsAuthorityArtifact[]>();
   const artifactContent = new Map<string, CloudflareNarsAuthorityArtifactContent>();
+  const sessionMcpFabrics = new Map<string, CloudflareMcpFabricSummary>();
   const maxEvents = Math.max(1, Math.floor(options.max_events ?? 500));
   const runtimeExecutor = options.runtime_executor ?? createCloudflareNarsAuthorityRuntimeExecutor();
   const service = {
@@ -590,6 +731,8 @@ export function createCloudflareNarsAuthorityService(options: {
       const siteId = requireNonEmpty(args.site_id, 'site_id');
       const agentId = requireNonEmpty(args.agent_id, 'agent_id');
       const sessionId = args.session_id?.trim() || `cf_nars_${safeToken(siteId)}_${safeToken(agentId)}_${safeToken(now)}`;
+      const mcpFabric = normalizeCloudflareMcpFabricConfig(args.mcp_fabric ?? options.mcp_fabric);
+      if (mcpFabric.status !== 'ok') return { status: 'refused', code: mcpFabric.code ?? 'cloudflare_mcp_fabric_refused', session_id: sessionId, mcp_fabric: mcpFabric };
       const session: CloudflareNarsAuthoritySession = {
         schema: CLOUDFLARE_NARS_AUTHORITY_SESSION_SCHEMA,
         session_id: sessionId,
@@ -601,8 +744,10 @@ export function createCloudflareNarsAuthorityService(options: {
         created_at: now,
         updated_at: now,
         revoked_at: null,
+        mcp_fabric: mcpFabric,
       };
       sessions.set(sessionId, session);
+      sessionMcpFabrics.set(sessionId, mcpFabric);
       events.set(sessionId, []);
       artifacts.set(sessionId, []);
       appendAuthorityEvent(sessionId, {
@@ -616,7 +761,7 @@ export function createCloudflareNarsAuthorityService(options: {
       const session = sessions.get(sessionId);
       if (!session) return { schema: CLOUDFLARE_NARS_AUTHORITY_HEALTH_SCHEMA, status: 'refused', code: 'session_not_found', session_id: sessionId };
       if (session.lifecycle_state !== 'active') return { schema: CLOUDFLARE_NARS_AUTHORITY_HEALTH_SCHEMA, status: 'refused', code: `session_${session.lifecycle_state}`, session_id: sessionId };
-      return { schema: CLOUDFLARE_NARS_AUTHORITY_HEALTH_SCHEMA, status: 'healthy', session_id: sessionId, site_id: session.site_id, agent_id: session.agent_id, execution_mode: session.execution_mode };
+      return { schema: CLOUDFLARE_NARS_AUTHORITY_HEALTH_SCHEMA, status: 'healthy', session_id: sessionId, site_id: session.site_id, agent_id: session.agent_id, execution_mode: session.execution_mode, mcp_fabric: sessionMcpFabrics.get(sessionId) ?? session.mcp_fabric };
     },
     readEvents(args: { session_id: string; since_sequence?: number | null; max_events?: number }): CloudflareNarsAuthorityReadEventsResult {
       const session = sessions.get(args.session_id);
@@ -657,7 +802,8 @@ export function createCloudflareNarsAuthorityService(options: {
         payload,
         message,
         now,
-        create_html_artifact: () => createAuthorityHtmlArtifact(args.session_id, inputId, now),
+        tool_registry: createCloudflareNarsAuthorityMcpRegistry({ authority: service, fabric: sessionMcpFabrics.get(args.session_id) ?? session.mcp_fabric }),
+        mcp_fabric: sessionMcpFabrics.get(args.session_id) ?? session.mcp_fabric,
       });
       for (const payload of execution.event_payloads) admitted.push(appendAuthorityEvent(args.session_id, payload, now));
       sessions.set(args.session_id, {
@@ -684,6 +830,62 @@ export function createCloudflareNarsAuthorityService(options: {
       if (!content) return { schema: CLOUDFLARE_NARS_AUTHORITY_ARTIFACTS_SCHEMA, status: 'refused', code: 'artifact_content_not_found', session_id: args.session_id, artifact_id: args.artifact_id };
       return { schema: CLOUDFLARE_NARS_AUTHORITY_ARTIFACTS_SCHEMA, status: 'ok', session_id: args.session_id, artifact_id: args.artifact_id, content };
     },
+    registerArtifact(args: { session_id: string; artifact_id?: string | null; kind?: unknown; title?: string | null; content?: string | null; content_type?: string | null; input_id?: string | null; now?: string }): CloudflareNarsAuthorityArtifactRegisterResult {
+      const session = sessions.get(args.session_id);
+      const artifactId = args.artifact_id?.trim() || `art_cf_${safeToken(args.session_id)}_${safeToken(args.now ?? new Date().toISOString())}`;
+      if (!session) return { schema: CLOUDFLARE_NARS_AUTHORITY_ARTIFACTS_SCHEMA, status: 'refused', code: 'session_not_found', session_id: args.session_id, artifact_id: artifactId };
+      if (session.lifecycle_state !== 'active') return { schema: CLOUDFLARE_NARS_AUTHORITY_ARTIFACTS_SCHEMA, status: 'refused', code: `session_${session.lifecycle_state}`, session_id: args.session_id, artifact_id: artifactId };
+      const now = args.now ?? new Date().toISOString();
+      const kind = normalizeArtifactKind(args.kind) ?? 'text';
+      const contentType = args.content_type?.trim() || contentTypeForArtifactKind(kind);
+      const artifact: CloudflareNarsAuthorityArtifact = {
+        schema: CLOUDFLARE_NARS_AUTHORITY_ARTIFACT_SCHEMA,
+        artifact_id: artifactId,
+        session_id: args.session_id,
+        kind,
+        title: args.title?.trim() || artifactId,
+        content_type: contentType,
+        created_at: now,
+        created_by: 'cloudflare_nars_authority.artifact_mcp_adapter',
+        creation_input_id: args.input_id?.trim() || `artifact_register_${safeToken(now)}`,
+        access: { scope: 'session', token_required: false },
+        render: { preferred: kind === 'html' || kind === 'markdown' || kind === 'image' ? 'inline' : 'download' },
+        lifecycle: { state: 'active', owner: 'cloudflare-nars-authority' },
+      };
+      artifacts.set(args.session_id, [...(artifacts.get(args.session_id) ?? []).filter((entry) => entry.artifact_id !== artifact.artifact_id), artifact]);
+      if (args.content != null) {
+        artifactContent.set(`${args.session_id}:${artifact.artifact_id}`, {
+          schema: CLOUDFLARE_NARS_AUTHORITY_ARTIFACT_SCHEMA,
+          session_id: args.session_id,
+          artifact_id: artifact.artifact_id,
+          content_type: contentType,
+          body: String(args.content),
+          headers: { 'content-type': contentType, 'x-narada-artifact-id': artifact.artifact_id, 'x-narada-artifact-kind': artifact.kind },
+          created_at: now,
+        });
+      }
+      appendAuthorityEvent(args.session_id, { event: 'session_artifact_registered', type: 'session_artifact.registered', input_id: artifact.creation_input_id, artifact }, now);
+      return { schema: CLOUDFLARE_NARS_AUTHORITY_ARTIFACTS_SCHEMA, status: 'registered', session_id: args.session_id, artifact_id: artifact.artifact_id, artifact };
+    },
+    presentArtifact(args: { session_id: string; artifact_id: string; text?: string | null; now?: string }): CloudflareNarsAuthorityArtifactPresentResult {
+      const session = sessions.get(args.session_id);
+      if (!session) return { schema: CLOUDFLARE_NARS_AUTHORITY_ARTIFACTS_SCHEMA, status: 'refused', code: 'session_not_found', session_id: args.session_id, artifact_id: args.artifact_id };
+      if (session.lifecycle_state !== 'active') return { schema: CLOUDFLARE_NARS_AUTHORITY_ARTIFACTS_SCHEMA, status: 'refused', code: `session_${session.lifecycle_state}`, session_id: args.session_id, artifact_id: args.artifact_id };
+      const artifact = (artifacts.get(args.session_id) ?? []).find((entry) => entry.artifact_id === args.artifact_id);
+      if (!artifact) return { schema: CLOUDFLARE_NARS_AUTHORITY_ARTIFACTS_SCHEMA, status: 'refused', code: 'artifact_not_found', session_id: args.session_id, artifact_id: args.artifact_id };
+      const now = args.now ?? new Date().toISOString();
+      const event = appendAuthorityEvent(args.session_id, {
+        event: 'assistant_message',
+        type: 'assistant_message',
+        source: 'cloudflare_authority_artifact_mcp',
+        request_id: `artifact_present_${artifact.artifact_id}`,
+        content: [
+          { type: 'text', text: args.text?.trim() || `Artifact ready: ${artifact.title}` },
+          { type: 'artifact_ref', artifact_id: artifact.artifact_id, kind: artifact.kind, title: artifact.title, render_hint: artifact.render?.preferred ?? 'inline' },
+        ],
+      }, now);
+      return { schema: CLOUDFLARE_NARS_AUTHORITY_ARTIFACTS_SCHEMA, status: 'presented', session_id: args.session_id, artifact_id: artifact.artifact_id, event };
+    },
     revokeSession(sessionId: string, revokedAt = new Date().toISOString()) {
       const session = sessions.get(sessionId);
       if (!session) return { status: 'refused', code: 'session_not_found', session_id: sessionId };
@@ -698,39 +900,14 @@ export function createCloudflareNarsAuthorityService(options: {
       events.clear();
       artifacts.clear();
       artifactContent.clear();
+      sessionMcpFabrics.clear();
       for (const session of state?.sessions ?? []) sessions.set(session.session_id, session);
+      for (const session of state?.sessions ?? []) sessionMcpFabrics.set(session.session_id, session.mcp_fabric ?? normalizeCloudflareMcpFabricConfig(options.mcp_fabric));
       for (const event of state?.events ?? []) events.set(event.session_id, [...(events.get(event.session_id) ?? []), event]);
       for (const artifact of state?.artifacts ?? []) artifacts.set(artifact.session_id, [...(artifacts.get(artifact.session_id) ?? []), artifact]);
       for (const content of state?.artifact_content ?? []) artifactContent.set(`${content.session_id}:${content.artifact_id}`, content);
     },
   };
-  function createAuthorityHtmlArtifact(sessionId: string, inputId: string, now: string): CloudflareNarsAuthorityArtifact {
-    const artifact: CloudflareNarsAuthorityArtifact = {
-      schema: CLOUDFLARE_NARS_AUTHORITY_ARTIFACT_SCHEMA,
-      artifact_id: 'art_cf_authority_html',
-      session_id: sessionId,
-      kind: 'html',
-      title: 'Cloudflare Authority HTML Preview',
-      content_type: 'text/html; charset=utf-8',
-      created_at: now,
-      created_by: 'cloudflare_nars_authority.runtime_tool_adapter',
-      creation_input_id: inputId,
-      access: { scope: 'session', token_required: false },
-      render: { preferred: 'inline', sandbox: { allow_scripts: true, allow_top_navigation: false } },
-      lifecycle: { state: 'active', owner: 'cloudflare-nars-authority' },
-    };
-    artifacts.set(sessionId, [...(artifacts.get(sessionId) ?? []).filter((entry) => entry.artifact_id !== artifact.artifact_id), artifact]);
-    artifactContent.set(`${sessionId}:${artifact.artifact_id}`, {
-      schema: CLOUDFLARE_NARS_AUTHORITY_ARTIFACT_SCHEMA,
-      session_id: sessionId,
-      artifact_id: artifact.artifact_id,
-      content_type: artifact.content_type,
-      body: '<!doctype html><html lang="en"><body><main id="cf-authority-html-artifact-e2e">HTML artifact created by Cloudflare-hosted NARS authority</main></body></html>',
-      headers: { 'content-type': artifact.content_type, 'x-narada-artifact-id': artifact.artifact_id, 'x-narada-artifact-kind': artifact.kind },
-      created_at: now,
-    });
-    return artifact;
-  }
   function appendAuthorityEvent(sessionId: string, payload: Record<string, unknown>, now: string): CloudflareNarsAuthorityEvent {
     const session = sessions.get(sessionId);
     if (!session) throw new Error('authority_session_not_found');
@@ -756,13 +933,14 @@ export function createCloudflareNarsAuthorityService(options: {
 }
 
 export function createCloudflareNarsTestToolAdapter(): CloudflareNarsAuthorityToolAdapter {
+  const serverName = 'cf-authority';
   return {
-    server_name: 'cf-authority',
+    server_name: serverName,
     list_tools() {
       return ['session_context_read', 'diagnostic_probe'];
     },
     call_tool(call) {
-      if (call.server_name !== 'cf-authority') {
+      if (call.server_name !== serverName) {
         return { status: 'failed', error: 'unsupported_cloudflare_tool_server', error_code: 'unsupported_cloudflare_tool_server', duration_ms: 0 };
       }
       if (call.tool_name === 'session_context_read') {
@@ -776,14 +954,14 @@ export function createCloudflareNarsTestToolAdapter(): CloudflareNarsAuthorityTo
   };
 }
 
-export function createCloudflareNarsAuthorityToolAdapter(): CloudflareNarsAuthorityToolAdapter {
+export function createCloudflareNarsAuthorityToolAdapter(serverName = 'cf-authority'): CloudflareNarsAuthorityToolAdapter {
   return {
-    server_name: 'cf-authority',
+    server_name: serverName,
     list_tools() {
       return ['session_context_read', 'diagnostic_probe'];
     },
     call_tool(call) {
-      if (call.server_name !== 'cf-authority') {
+      if (call.server_name !== serverName) {
         return { status: 'failed', error: 'unsupported_cloudflare_tool_server', error_code: 'unsupported_cloudflare_tool_server', duration_ms: 0 };
       }
       if (call.tool_name === 'session_context_read') {
@@ -806,7 +984,112 @@ export function createCloudflareNarsAuthorityToolAdapter(): CloudflareNarsAuthor
   };
 }
 
-export function createCloudflareNarsToolAdapterRuntimeExecutor(toolAdapter: CloudflareNarsAuthorityToolAdapter = createCloudflareNarsAuthorityToolAdapter()): CloudflareNarsAuthorityRuntimeExecutor {
+export function createCloudflareNarsAuthorityArtifactToolAdapter(authority: CloudflareNarsAuthorityArtifactToolAuthority, serverName = 'cf-authority-artifacts'): CloudflareNarsAuthorityToolAdapter {
+  const requireStringArgument = (args: Record<string, unknown> | undefined, name: string): string | null => {
+    const value = args?.[name];
+    return typeof value === 'string' && value.trim() ? value.trim() : null;
+  };
+  const authorityResult = (result: { status: string; code?: string }, okStatuses: string[] = ['ok']): CloudflareNarsAuthorityToolResult => {
+    if (okStatuses.includes(result.status)) return { status: 'ok', content: result, duration_ms: 3 };
+    return { status: 'failed', content: result, error: result.code ?? result.status, error_code: result.code ?? result.status, duration_ms: 3 };
+  };
+  return {
+    server_name: serverName,
+    list_tools() {
+      return ['artifact_register', 'artifact_read', 'artifact_content_read', 'artifact_present'];
+    },
+    call_tool(call) {
+      if (call.server_name !== serverName) {
+        return { status: 'failed', error: 'unsupported_cloudflare_tool_server', error_code: 'unsupported_cloudflare_tool_server', duration_ms: 0 };
+      }
+      const args = call.arguments ?? {};
+      const sessionId = requireStringArgument(args, 'session_id');
+      if (!sessionId) return { status: 'failed', error: 'missing_required_argument: session_id', error_code: 'missing_required_argument', duration_ms: 0 };
+      if (call.tool_name === 'artifact_register') {
+        const result = authority.registerArtifact({
+          session_id: sessionId,
+          artifact_id: typeof args.artifact_id === 'string' ? args.artifact_id : null,
+          kind: args.kind,
+          title: typeof args.title === 'string' ? args.title : null,
+          content: typeof args.content === 'string' ? args.content : null,
+          content_type: typeof args.content_type === 'string' ? args.content_type : null,
+          input_id: typeof args.input_id === 'string' ? args.input_id : null,
+          now: typeof args.now === 'string' ? args.now : undefined,
+        });
+        return authorityResult(result, ['registered']);
+      }
+      if (call.tool_name === 'artifact_read') {
+        return authorityResult(authority.readArtifactMetadata({
+          session_id: sessionId,
+          artifact_id: typeof args.artifact_id === 'string' ? args.artifact_id : null,
+        }));
+      }
+      if (call.tool_name === 'artifact_content_read') {
+        const artifactId = requireStringArgument(args, 'artifact_id');
+        if (!artifactId) return { status: 'failed', error: 'missing_required_argument: artifact_id', error_code: 'missing_required_argument', duration_ms: 0 };
+        return authorityResult(authority.readArtifactContent({ session_id: sessionId, artifact_id: artifactId }));
+      }
+      if (call.tool_name === 'artifact_present') {
+        const artifactId = requireStringArgument(args, 'artifact_id');
+        if (!artifactId) return { status: 'failed', error: 'missing_required_argument: artifact_id', error_code: 'missing_required_argument', duration_ms: 0 };
+        return authorityResult(authority.presentArtifact({
+          session_id: sessionId,
+          artifact_id: artifactId,
+          text: typeof args.text === 'string' ? args.text : null,
+          now: typeof args.now === 'string' ? args.now : undefined,
+        }), ['presented']);
+      }
+      return { status: 'failed', error: 'cloudflare_tool_not_found', error_code: 'cloudflare_tool_not_found', duration_ms: 0 };
+    },
+  };
+}
+
+export function createCloudflareToolAdapterRegistry(adapters: CloudflareNarsAuthorityToolAdapter[] = []): CloudflareToolAdapterRegistry {
+  const servers = new Map<string, CloudflareNarsAuthorityToolAdapter>();
+  const registry: CloudflareToolAdapterRegistry = {
+    register(adapter) {
+      if (servers.has(adapter.server_name)) return { status: 'refused', code: 'cloudflare_mcp_duplicate_server_conflict', server_name: adapter.server_name };
+      servers.set(adapter.server_name, adapter);
+      return { status: 'registered', server_name: adapter.server_name };
+    },
+    listServers() {
+      return [...servers.keys()].sort();
+    },
+    listTools(serverName) {
+      const selected = serverName ? [[serverName, servers.get(serverName)] as const] : [...servers.entries()].sort(([left], [right]) => left.localeCompare(right));
+      return selected.flatMap(([name, adapter]) => adapter ? adapter.list_tools().map((toolName) => ({ server_name: name, tool_name: toolName, tool: `${name}.${toolName}` })) : []);
+    },
+    callTool(call) {
+      const adapter = servers.get(call.server_name);
+      if (!adapter) return { status: 'failed', error: 'cloudflare_mcp_server_not_found', error_code: 'cloudflare_mcp_server_not_found', duration_ms: 0 };
+      if (!adapter.list_tools().includes(call.tool_name)) return { status: 'failed', error: 'cloudflare_mcp_tool_not_found', error_code: 'cloudflare_mcp_tool_not_found', duration_ms: 0 };
+      return adapter.call_tool(call);
+    },
+  };
+  for (const adapter of adapters) registry.register(adapter);
+  return registry;
+}
+
+export function createCloudflareNarsAuthorityMcpRegistry(args: { authority: CloudflareNarsAuthorityArtifactToolAuthority; fabric: CloudflareMcpFabricSummary }): CloudflareToolAdapterRegistry {
+  const registry = createCloudflareToolAdapterRegistry();
+  if (args.fabric.status !== 'ok') return registry;
+  for (const server of args.fabric.servers) {
+    const adapter = server.adapter_kind === 'cf-authority'
+      ? createCloudflareNarsAuthorityToolAdapter(server.server_name)
+      : createCloudflareNarsAuthorityArtifactToolAdapter(args.authority, server.server_name);
+    registry.register(adapter);
+  }
+  return registry;
+}
+
+function asCloudflareToolRegistry(value: CloudflareToolAdapterRegistry | CloudflareNarsAuthorityToolAdapter | null | undefined): CloudflareToolAdapterRegistry | null {
+  if (!value) return null;
+  if ('callTool' in value && typeof value.callTool === 'function') return value;
+  return createCloudflareToolAdapterRegistry([value as CloudflareNarsAuthorityToolAdapter]);
+}
+
+export function createCloudflareNarsToolAdapterRuntimeExecutor(toolRegistryOrAdapter: CloudflareToolAdapterRegistry | CloudflareNarsAuthorityToolAdapter | null = null): CloudflareNarsAuthorityRuntimeExecutor {
+  const configuredRegistry = asCloudflareToolRegistry(toolRegistryOrAdapter);
   const emitToolCall = (input: CloudflareNarsAuthorityRuntimeExecutionInput, call: CloudflareNarsAuthorityToolCall) => ({
     event: 'tool_call',
     type: 'tool.call',
@@ -814,10 +1097,11 @@ export function createCloudflareNarsToolAdapterRuntimeExecutor(toolAdapter: Clou
     server_name: call.server_name,
     tool_name: call.tool,
     tool: call.tool,
-    decision: 'read_only_admitted',
+    decision: call.tool_name.startsWith('artifact_') ? 'authority_mutation_admitted' : 'read_only_admitted',
     argument_summary: call.arguments ?? {},
     authority_origin: 'cloudflare',
-    carrier_mutation_admitted: false,
+    carrier_mutation_admitted: call.tool_name.startsWith('artifact_'),
+    mcp_fabric_scope: input.mcp_fabric.requested_scope,
   });
   const emitToolResult = (input: CloudflareNarsAuthorityRuntimeExecutionInput, call: CloudflareNarsAuthorityToolCall, result: CloudflareNarsAuthorityToolResult) => ({
     event: 'tool_result',
@@ -831,9 +1115,10 @@ export function createCloudflareNarsToolAdapterRuntimeExecutor(toolAdapter: Clou
     ...(result.error_code ? { error_code: result.error_code } : {}),
     ...(result.content !== undefined ? { content: result.content } : {}),
     duration_ms: result.duration_ms ?? 0,
-    decision: 'read_only_admitted',
+    decision: call.tool_name.startsWith('artifact_') ? 'authority_mutation_admitted' : 'read_only_admitted',
     authority_origin: 'cloudflare',
-    carrier_mutation_admitted: false,
+    carrier_mutation_admitted: call.tool_name.startsWith('artifact_'),
+    mcp_fabric_scope: input.mcp_fabric.requested_scope,
   });
   const simpleCompletion = (input: CloudflareNarsAuthorityRuntimeExecutionInput, message: string, terminalState = 'completed') => ({
     execution_kind: 'cloudflare_runtime_tool_adapter' as const,
@@ -875,42 +1160,70 @@ export function createCloudflareNarsToolAdapterRuntimeExecutor(toolAdapter: Clou
       if (input.method !== 'conversation.send' && input.method !== 'conversation.enqueue') {
         return simpleCompletion(input, `Cloudflare runtime tool adapter handled ${input.method}.`);
       }
-      const artifact = input.create_html_artifact();
-      const readCall = { server_name: toolAdapter.server_name, tool_name: 'session_context_read', tool: `${toolAdapter.server_name}.session_context_read`, arguments: { site_id: input.session.site_id, agent_id: input.session.agent_id, topic: input.message || input.method } };
-      const failCall = { server_name: toolAdapter.server_name, tool_name: 'diagnostic_probe', tool: `${toolAdapter.server_name}.diagnostic_probe`, arguments: { topic: 'cloudflare-authority-diagnostic-probe' } };
-      const readResult = toolAdapter.call_tool(readCall);
-      const failResult = toolAdapter.call_tool(failCall);
-      return {
-        execution_kind: 'cloudflare_runtime_tool_adapter',
-        event_payloads: [
-          { event: 'turn_started', type: 'turn.started', input_id: input.input_id },
-          emitToolCall(input, readCall),
-          emitToolResult(input, readCall, readResult),
-          emitToolCall(input, failCall),
-          emitToolResult(input, failCall, failResult),
-          {
+      const registry = input.tool_registry ?? configuredRegistry ?? createCloudflareToolAdapterRegistry();
+      const tools = registry.listTools();
+      const readTool = tools.find((tool) => tool.tool_name === 'session_context_read');
+      if (!readTool) return simpleCompletion(input, `Cloudflare runtime MCP fabric had no session_context_read tool for ${input.method}.`, 'completed_without_tool');
+      const diagnosticTool = tools.find((tool) => tool.tool_name === 'diagnostic_probe');
+      const artifactRegisterTool = tools.find((tool) => tool.tool_name === 'artifact_register');
+      const readCall = { server_name: readTool.server_name, tool_name: readTool.tool_name, tool: readTool.tool, arguments: { site_id: input.session.site_id, agent_id: input.session.agent_id, topic: input.message || input.method } };
+      const readResult = registry.callTool(readCall);
+      const failCall = diagnosticTool ? { server_name: diagnosticTool.server_name, tool_name: diagnosticTool.tool_name, tool: diagnosticTool.tool, arguments: { topic: 'cloudflare-authority-diagnostic-probe' } } : null;
+      const failResult = failCall ? registry.callTool(failCall) : null;
+      const artifactCall = artifactRegisterTool ? {
+        server_name: artifactRegisterTool.server_name,
+        tool_name: artifactRegisterTool.tool_name,
+        tool: artifactRegisterTool.tool,
+        arguments: {
+          session_id: input.session.session_id,
+          artifact_id: 'art_cf_authority_html',
+          kind: 'html',
+          title: 'Cloudflare Authority HTML Preview',
+          content_type: 'text/html; charset=utf-8',
+          content: '<!doctype html><html lang="en"><body><main id="cf-authority-html-artifact-e2e">HTML artifact created by Cloudflare-hosted NARS authority</main></body></html>',
+          input_id: input.input_id,
+          now: input.now,
+        },
+      } : null;
+      const artifactResult = artifactCall ? registry.callTool(artifactCall) : null;
+      const artifact = objectField(objectField(artifactResult?.content)?.artifact) as CloudflareNarsAuthorityArtifact | null;
+      const eventPayloads: Record<string, unknown>[] = [
+        { event: 'turn_started', type: 'turn.started', input_id: input.input_id },
+        emitToolCall(input, readCall),
+        emitToolResult(input, readCall, readResult),
+      ];
+      if (failCall && failResult) {
+        eventPayloads.push(emitToolCall(input, failCall), emitToolResult(input, failCall, failResult));
+        if (failResult.status === 'failed') {
+          eventPayloads.push({
             event: 'mcp_runtime_fault',
             type: 'diagnostic.mcp_runtime_fault',
             diagnostic_code: 'mcp_runtime_fault',
-            server_name: toolAdapter.server_name,
+            server_name: failCall.server_name,
             tool_name: failCall.tool_name,
             error_code: failResult.error_code ?? 'cloudflare_tool_adapter_failure',
             message: failResult.error ?? 'Cloudflare authority tool adapter failure',
             authority_origin: 'cloudflare',
-          },
-          { event: 'session_artifact_registered', type: 'session_artifact.registered', input_id: input.input_id, artifact },
-          {
-            event: 'assistant_message',
-            type: 'assistant_message',
-            input_id: input.input_id,
-            content: [
-              { type: 'text', text: `Cloudflare runtime tool adapter executed ${input.method}.` },
-              { type: 'artifact_ref', artifact_id: artifact.artifact_id, kind: artifact.kind, title: artifact.title, render_hint: 'inline' },
-            ],
-            execution_kind: 'cloudflare_runtime_tool_adapter',
-          },
-          { event: 'turn_complete', type: 'turn.completed', input_id: input.input_id, terminal_state: 'completed' },
+            mcp_fabric_scope: input.mcp_fabric.requested_scope,
+          });
+        }
+      }
+      if (artifactCall && artifactResult) {
+        eventPayloads.push(emitToolCall(input, artifactCall), emitToolResult(input, artifactCall, artifactResult));
+      }
+      eventPayloads.push({
+        event: 'assistant_message',
+        type: 'assistant_message',
+        input_id: input.input_id,
+        content: [
+          { type: 'text', text: `Cloudflare runtime tool adapter executed ${input.method}.` },
+          ...(artifact ? [{ type: 'artifact_ref', artifact_id: artifact.artifact_id, kind: artifact.kind, title: artifact.title, render_hint: 'inline' }] : []),
         ],
+        execution_kind: 'cloudflare_runtime_tool_adapter',
+      }, { event: 'turn_complete', type: 'turn.completed', input_id: input.input_id, terminal_state: 'completed' });
+      return {
+        execution_kind: 'cloudflare_runtime_tool_adapter',
+        event_payloads: eventPayloads,
       };
     },
   };
@@ -1242,6 +1555,7 @@ export interface CloudflareNarsAuthoritySessionInput {
   session_id?: string;
   site_id: string;
   agent_id: string;
+  mcp_fabric?: CloudflareMcpFabricConfig | null;
 }
 
 export interface CloudflareNarsAuthoritySession {
@@ -1255,6 +1569,7 @@ export interface CloudflareNarsAuthoritySession {
   created_at: string;
   updated_at: string;
   revoked_at: string | null;
+  mcp_fabric: CloudflareMcpFabricSummary;
 }
 
 export interface CloudflareNarsAuthorityEvent {
@@ -1269,9 +1584,11 @@ export interface CloudflareNarsAuthorityEvent {
 }
 
 export interface CloudflareNarsAuthorityCreateSessionResult {
-  status: 'created';
+  status: 'created' | 'refused';
+  code?: string;
   session_id: string;
-  session: CloudflareNarsAuthoritySession;
+  session?: CloudflareNarsAuthoritySession;
+  mcp_fabric?: CloudflareMcpFabricSummary;
 }
 
 export interface CloudflareNarsAuthorityHealthResult {
@@ -1282,6 +1599,7 @@ export interface CloudflareNarsAuthorityHealthResult {
   site_id?: string;
   agent_id?: string;
   execution_mode?: CloudflareNarsAuthorityExecutionMode;
+  mcp_fabric?: CloudflareMcpFabricSummary;
 }
 
 export interface CloudflareNarsAuthorityReadEventsResult {
@@ -1360,6 +1678,24 @@ export interface CloudflareNarsAuthorityArtifactContentReadResult {
   session_id: string;
   artifact_id: string;
   content?: CloudflareNarsAuthorityArtifactContent;
+}
+
+export interface CloudflareNarsAuthorityArtifactRegisterResult {
+  schema: typeof CLOUDFLARE_NARS_AUTHORITY_ARTIFACTS_SCHEMA;
+  status: 'registered' | 'refused';
+  code?: string;
+  session_id: string;
+  artifact_id: string;
+  artifact?: CloudflareNarsAuthorityArtifact;
+}
+
+export interface CloudflareNarsAuthorityArtifactPresentResult {
+  schema: typeof CLOUDFLARE_NARS_AUTHORITY_ARTIFACTS_SCHEMA;
+  status: 'presented' | 'refused';
+  code?: string;
+  session_id: string;
+  artifact_id: string;
+  event?: CloudflareNarsAuthorityEvent;
 }
 
 export interface AgentWebUiCloudflareProjectionConfig {

@@ -78,6 +78,7 @@ export function createCloudflareNarsProjectionWorker(options: CloudflareNarsProj
           session_id: stringOrUndefined(body.session_id),
           site_id: stringOrUndefined(body.site_id) ?? '',
           agent_id: stringOrUndefined(body.agent_id) ?? '',
+          mcp_fabric: objectRecord(body.mcp_fabric),
         }, now()));
       }
       const authority = authorityRoute(request);

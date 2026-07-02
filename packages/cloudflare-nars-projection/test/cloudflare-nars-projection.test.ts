@@ -8,11 +8,14 @@ import {
   classifyCloudflareInputRelay,
   createArtifactProjectionCache,
   createBoundedProjectionCache,
+  createCloudflareNarsAuthorityMcpRegistry,
   createCloudflareNarsAuthorityService,
   createCloudflareNarsProjectionWorkerService,
+  createCloudflareToolAdapterRegistry,
   createBridgeState,
   createCloudflareNarsProjectionIntent,
   createCloudflareNarsRemoteAccessRecord,
+  normalizeCloudflareMcpFabricConfig,
   planBridgeBackfill,
   projectNarsArtifactContentForCloudflare,
   projectNarsArtifactMetadataForCloudflare,
@@ -478,7 +481,8 @@ describe('worker boundary service', () => {
       'tool_call',
       'tool_result',
       'mcp_runtime_fault',
-      'session_artifact_registered',
+      'tool_call',
+      'tool_result',
       'assistant_message',
       'turn_complete',
     ]);
@@ -487,9 +491,145 @@ describe('worker boundary service', () => {
     expect(replay.status).toBe('ok');
     expect(replay.events).toContainEqual(expect.objectContaining({ payload: expect.objectContaining({ event: 'tool_result', tool_name: 'cf-authority.session_context_read', status: 'ok' }) }));
     expect(replay.events).toContainEqual(expect.objectContaining({ payload: expect.objectContaining({ event: 'tool_result', tool_name: 'cf-authority.diagnostic_probe', status: 'failed', error_code: 'cloudflare_authority_diagnostic_probe_failed' }) }));
+    expect(replay.events).toContainEqual(expect.objectContaining({ payload: expect.objectContaining({ event: 'tool_result', tool_name: 'cf-authority-artifacts.artifact_register', status: 'ok', mcp_fabric_scope: 'all' }) }));
+    expect(replay.events).toContainEqual(expect.objectContaining({ payload: expect.objectContaining({ event: 'session_artifact_registered' }) }));
     expect(replay.events).toContainEqual(expect.objectContaining({ payload: expect.objectContaining({ event: 'mcp_runtime_fault', error_code: 'cloudflare_authority_diagnostic_probe_failed' }) }));
     expect(service.readArtifactMetadata({ session_id: created.session_id, artifact_id: 'art_cf_authority_html' })).toMatchObject({ status: 'ok', artifact_count: 1 });
     expect(service.readArtifactContent({ session_id: created.session_id, artifact_id: 'art_cf_authority_html' })).toMatchObject({ status: 'ok', content: { content_type: 'text/html; charset=utf-8' } });
+  });
+
+  test('Cloudflare/local MCP fabric symmetry normalizes none single-locus all scopes and duplicate conflicts', () => {
+    expect(normalizeCloudflareMcpFabricConfig(null)).toMatchObject({
+      status: 'ok',
+      requested_scope: 'all',
+      effective_loci: ['cloudflare-site', 'session-native'],
+      server_count: 2,
+      server_names: ['cf-authority', 'cf-authority-artifacts'],
+    });
+    expect(normalizeCloudflareMcpFabricConfig({ scope: 'none' })).toMatchObject({
+      status: 'ok',
+      requested_scope: 'none',
+      effective_loci: [],
+      server_count: 0,
+      server_names: [],
+    });
+    expect(normalizeCloudflareMcpFabricConfig({ scope: 'cloudflare-site' })).toMatchObject({
+      status: 'ok',
+      requested_scope: 'cloudflare-site',
+      effective_loci: ['cloudflare-site'],
+      server_count: 1,
+      server_names: ['cf-authority'],
+    });
+    expect(normalizeCloudflareMcpFabricConfig({
+      scope: 'all',
+      native_adapters: [
+        { locus: 'cloudflare-site', adapter_kind: 'cf-authority', server_name: 'duplicate' },
+        { locus: 'session-native', adapter_kind: 'cf-authority-artifacts', server_name: 'duplicate' },
+      ],
+    })).toMatchObject({ status: 'refused', code: 'cloudflare_mcp_duplicate_server_conflict', server_count: 0 });
+    expect(normalizeCloudflareMcpFabricConfig({
+      scope: 'all',
+      native_adapters: [{ locus: 'invalid-locus' as never, adapter_kind: 'cf-authority', server_name: 'bad' }],
+    })).toMatchObject({ status: 'refused', code: 'invalid_cloudflare_mcp_adapter_descriptor' });
+  });
+
+  test('Cloudflare ToolAdapterRegistry lists, calls, and refuses invalid registry operations', () => {
+    const registry = createCloudflareToolAdapterRegistry();
+    const registered = registry.register({
+      server_name: 'test-server',
+      list_tools: () => ['ping'],
+      call_tool: (call) => call.tool_name === 'ping'
+        ? { status: 'ok', content: { pong: call.arguments?.topic ?? true }, duration_ms: 1 }
+        : { status: 'failed', error: 'missing', error_code: 'missing', duration_ms: 0 },
+    });
+    expect(registered).toEqual({ status: 'registered', server_name: 'test-server' });
+    expect(registry.listServers()).toEqual(['test-server']);
+    expect(registry.listTools()).toEqual([{ server_name: 'test-server', tool_name: 'ping', tool: 'test-server.ping' }]);
+    expect(registry.callTool({ server_name: 'test-server', tool_name: 'ping', tool: 'test-server.ping', arguments: { topic: 'ok' } })).toMatchObject({ status: 'ok', content: { pong: 'ok' } });
+    expect(registry.callTool({ server_name: 'missing-server', tool_name: 'ping', tool: 'missing-server.ping' })).toMatchObject({ status: 'failed', error_code: 'cloudflare_mcp_server_not_found' });
+    expect(registry.callTool({ server_name: 'test-server', tool_name: 'missing', tool: 'test-server.missing' })).toMatchObject({ status: 'failed', error_code: 'cloudflare_mcp_tool_not_found' });
+    expect(registry.register({ server_name: 'test-server', list_tools: () => [], call_tool: () => ({ status: 'ok' }) })).toMatchObject({ status: 'refused', code: 'cloudflare_mcp_duplicate_server_conflict' });
+  });
+
+  test('Cloudflare authority runtime obeys MCP fabric scope without silent hardcoded adapter injection', () => {
+    const service = createCloudflareNarsAuthorityService({ max_events: 50 });
+    const created = service.createSession({
+      session_id: 'cf_authority_no_mcp_scope',
+      site_id: 'narada.cloudflare.test',
+      agent_id: 'cloudflare.resident',
+      mcp_fabric: { scope: 'none' },
+    }, now);
+    expect(created).toMatchObject({ status: 'created', session: { mcp_fabric: { requested_scope: 'none', server_count: 0 } } });
+
+    const admitted = service.submitInput({ session_id: created.session_id, method: 'conversation.send', payload: { message: 'no mcp' }, now });
+    expect(admitted).toMatchObject({ status: 'admitted' });
+    expect(admitted.events?.some((entry) => entry.payload.event === 'tool_call')).toBe(false);
+    expect(admitted.events).toContainEqual(expect.objectContaining({ payload: expect.objectContaining({ event: 'turn_complete', terminal_state: 'completed_without_tool' }) }));
+    expect(service.readArtifactMetadata({ session_id: created.session_id, artifact_id: 'art_cf_authority_html' })).toMatchObject({ status: 'ok', artifact_count: 0 });
+    expect(service.readHealth(created.session_id)).toMatchObject({ status: 'healthy', mcp_fabric: { requested_scope: 'none', server_count: 0, server_names: [] } });
+  });
+
+  test('Cloudflare authority session creation refuses invalid MCP fabric diagnostics', () => {
+    const service = createCloudflareNarsAuthorityService({ max_events: 50 });
+    const created = service.createSession({
+      session_id: 'cf_authority_bad_mcp_fabric',
+      site_id: 'narada.cloudflare.test',
+      agent_id: 'cloudflare.resident',
+      mcp_fabric: {
+        scope: 'all',
+        native_adapters: [
+          { locus: 'cloudflare-site', adapter_kind: 'cf-authority', server_name: 'same' },
+          { locus: 'session-native', adapter_kind: 'cf-authority-artifacts', server_name: 'same' },
+        ],
+      },
+    }, now);
+    expect(created).toMatchObject({
+      status: 'refused',
+      code: 'cloudflare_mcp_duplicate_server_conflict',
+      session_id: 'cf_authority_bad_mcp_fabric',
+      mcp_fabric: { status: 'refused', server_count: 0, server_names: [] },
+    });
+    expect(service.readHealth('cf_authority_bad_mcp_fabric')).toMatchObject({ status: 'refused', code: 'session_not_found' });
+  });
+
+  test('Cloudflare authority artifact MCP adapter routes through session artifact authority', () => {
+    const service = createCloudflareNarsAuthorityService({ max_events: 50 });
+    const created = service.createSession({
+      session_id: 'cf_authority_artifact_mcp_e2e',
+      site_id: 'narada.cloudflare.test',
+      agent_id: 'cloudflare.resident',
+    }, now);
+    const registry = createCloudflareNarsAuthorityMcpRegistry({ authority: service, fabric: created.session.mcp_fabric });
+    expect(registry.listServers()).toEqual(['cf-authority', 'cf-authority-artifacts']);
+    expect(registry.listTools('cf-authority-artifacts').map((tool) => tool.tool_name)).toEqual(['artifact_register', 'artifact_read', 'artifact_content_read', 'artifact_present']);
+
+    const registered = registry.callTool({
+      server_name: 'cf-authority-artifacts',
+      tool_name: 'artifact_register',
+      tool: 'cf-authority-artifacts.artifact_register',
+      arguments: {
+        session_id: created.session_id,
+        artifact_id: 'art_cf_mcp_md',
+        kind: 'markdown',
+        title: 'MCP artifact',
+        content: '# MCP artifact',
+        now,
+      },
+    });
+    expect(registered).toMatchObject({ status: 'ok', content: { status: 'registered', artifact: { artifact_id: 'art_cf_mcp_md', kind: 'markdown' } } });
+
+    const metadata = registry.callTool({ server_name: 'cf-authority-artifacts', tool_name: 'artifact_read', tool: 'cf-authority-artifacts.artifact_read', arguments: { session_id: created.session_id, artifact_id: 'art_cf_mcp_md' } });
+    expect(metadata).toMatchObject({ status: 'ok', content: { status: 'ok', artifact_count: 1, artifacts: [{ artifact_id: 'art_cf_mcp_md' }] } });
+
+    const content = registry.callTool({ server_name: 'cf-authority-artifacts', tool_name: 'artifact_content_read', tool: 'cf-authority-artifacts.artifact_content_read', arguments: { session_id: created.session_id, artifact_id: 'art_cf_mcp_md' } });
+    expect(content).toMatchObject({ status: 'ok', content: { status: 'ok', content: { body: '# MCP artifact', content_type: 'text/markdown; charset=utf-8' } } });
+
+    const presented = registry.callTool({ server_name: 'cf-authority-artifacts', tool_name: 'artifact_present', tool: 'cf-authority-artifacts.artifact_present', arguments: { session_id: created.session_id, artifact_id: 'art_cf_mcp_md', text: 'Rendered via artifact MCP', now } });
+    expect(presented).toMatchObject({ status: 'ok', content: { status: 'presented', event: { payload: { event: 'assistant_message', source: 'cloudflare_authority_artifact_mcp' } } } });
+    expect(service.readEvents({ session_id: created.session_id, since_sequence: 0 }).events).toContainEqual(expect.objectContaining({ payload: expect.objectContaining({ event: 'assistant_message', source: 'cloudflare_authority_artifact_mcp' }) }));
+
+    service.revokeSession(created.session_id, now);
+    expect(registry.callTool({ server_name: 'cf-authority-artifacts', tool_name: 'artifact_read', tool: 'cf-authority-artifacts.artifact_read', arguments: { session_id: created.session_id } })).toMatchObject({ status: 'failed', error_code: 'session_revoked' });
   });
 
   test('Cloudflare authority input methods have distinct adapter semantics', () => {
@@ -507,7 +647,8 @@ describe('worker boundary service', () => {
     const status = service.submitInput({ session_id: created.session_id, method: 'session.status', payload: {}, now });
     expect([send, enqueue, steer, interrupt, status].map((result) => result.status)).toEqual(['admitted', 'admitted', 'admitted', 'admitted', 'admitted']);
     expect(send.events?.some((entry) => entry.payload.event === 'tool_call')).toBe(true);
-    expect(enqueue.events?.some((entry) => entry.payload.event === 'session_artifact_registered')).toBe(true);
+    expect(enqueue.events?.some((entry) => entry.payload.tool_name === 'cf-authority-artifacts.artifact_register')).toBe(true);
+    expect(service.readEvents({ session_id: created.session_id, since_sequence: 0 }).events.some((entry) => entry.payload.event === 'session_artifact_registered')).toBe(true);
     expect(steer.events?.map((entry) => entry.payload.event)).toEqual(['operator_input_admitted', 'user_message', 'operator_steer_admitted', 'turn_complete']);
     expect(interrupt.events?.map((entry) => entry.payload.event)).toEqual(['operator_input_admitted', 'user_message', 'turn_interrupted', 'turn_complete']);
     expect(status.events?.map((entry) => entry.payload.event)).toEqual(['operator_input_admitted', 'user_message', 'turn_started', 'assistant_message', 'turn_complete']);
@@ -554,12 +695,12 @@ describe('Cloudflare Worker routes', () => {
     try {
       const created = await jsonOf(outerWorker.fetch(new Request('https://projection.example.test/api/nars/authority/sessions', {
         method: 'POST',
-        body: JSON.stringify({ session_id: 'cf_session_runtime_1', site_id: 'narada.cloudflare.test', agent_id: 'cloudflare.resident' }),
+        body: JSON.stringify({ session_id: 'cf_session_runtime_1', site_id: 'narada.cloudflare.test', agent_id: 'cloudflare.resident', mcp_fabric: { scope: 'all' } }),
       }), env));
-      expect(created).toMatchObject({ status: 'created', session_id: 'cf_session_runtime_1', session: { execution_mode: 'cloudflare_runtime_tool_adapter' } });
+      expect(created).toMatchObject({ status: 'created', session_id: 'cf_session_runtime_1', session: { execution_mode: 'cloudflare_runtime_tool_adapter', mcp_fabric: { requested_scope: 'all', server_count: 2, server_names: ['cf-authority', 'cf-authority-artifacts'] } } });
 
       const base = 'https://projection.example.test/api/nars/authority/sessions/cf_session_runtime_1';
-      expect(await jsonOf(outerWorker.fetch(new Request(`${base}/health`), env))).toMatchObject({ status: 'healthy', session_id: 'cf_session_runtime_1', execution_mode: 'cloudflare_runtime_tool_adapter' });
+      expect(await jsonOf(outerWorker.fetch(new Request(`${base}/health`), env))).toMatchObject({ status: 'healthy', session_id: 'cf_session_runtime_1', execution_mode: 'cloudflare_runtime_tool_adapter', mcp_fabric: { requested_scope: 'all', server_count: 2, server_names: ['cf-authority', 'cf-authority-artifacts'] } });
 
       const replay = await jsonOf(outerWorker.fetch(new Request(`${base}/events?since_sequence=0`), env));
       expect(replay).toMatchObject({ status: 'ok', event_count: 1 });
@@ -588,7 +729,8 @@ describe('Cloudflare Worker routes', () => {
         'tool_call',
         'tool_result',
         'mcp_runtime_fault',
-        'session_artifact_registered',
+        'tool_call',
+        'tool_result',
         'assistant_message',
         'turn_complete',
       ]);
@@ -598,14 +740,17 @@ describe('Cloudflare Worker routes', () => {
       expect(liveMessages).toContainEqual(expect.objectContaining({ event: 'tool_call', tool_name: 'cf-authority.session_context_read' }));
       expect(liveMessages).toContainEqual(expect.objectContaining({ event: 'tool_result', tool_name: 'cf-authority.session_context_read', status: 'ok' }));
       expect(liveMessages).toContainEqual(expect.objectContaining({ event: 'tool_result', tool_name: 'cf-authority.diagnostic_probe', status: 'failed' }));
+      expect(liveMessages).toContainEqual(expect.objectContaining({ event: 'tool_result', tool_name: 'cf-authority-artifacts.artifact_register', status: 'ok', mcp_fabric_scope: 'all' }));
       expect(liveMessages).toContainEqual(expect.objectContaining({ event: 'mcp_runtime_fault', error_code: 'cloudflare_authority_diagnostic_probe_failed' }));
       expect(liveMessages).toContainEqual(expect.objectContaining({ event: 'assistant_message', execution_kind: 'cloudflare_runtime_tool_adapter' }));
       expect(liveMessages).toContainEqual(expect.objectContaining({ event: 'turn_complete', terminal_state: 'completed' }));
 
       const replayAfterInput = await jsonOf(outerWorker.fetch(new Request(`${base}/events?since_sequence=1`), env));
-      expect(replayAfterInput).toMatchObject({ status: 'ok', event_count: 11 });
+      expect(replayAfterInput).toMatchObject({ status: 'ok' });
+      expect(replayAfterInput.event_count).toBeGreaterThanOrEqual(12);
       expect(replayAfterInput.events.map((entry: { payload: { event: string } }) => entry.payload.event)).toContain('mcp_runtime_fault');
       expect(replayAfterInput.events.map((entry: { payload: { event: string } }) => entry.payload.event)).toContain('session_artifact_registered');
+      expect(replayAfterInput.events).toContainEqual(expect.objectContaining({ payload: expect.objectContaining({ event: 'tool_result', tool_name: 'cf-authority-artifacts.artifact_register', mcp_fabric_scope: 'all' }) }));
 
       expect(await jsonOf(outerWorker.fetch(new Request(base, { method: 'DELETE' }), env))).toMatchObject({ status: 'revoked', session_id: 'cf_session_runtime_1' });
       expect(sockets[0].client.messages.map(JSON.parse)).toContainEqual(expect.objectContaining({ event: 'authority_session_revoked', code: 'session_revoked', session_id: 'cf_session_runtime_1' }));

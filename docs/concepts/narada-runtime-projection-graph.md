@@ -68,6 +68,25 @@ local NARS authority_runtime
 
 The graph form prevents the local-to-Cloudflare path from being mistaken for the general model.
 
+## Operator Projection Open Requests
+
+An `OperatorProjectionOpenRequest` is the governed request to make one projection visible to the operator through a host UI such as the default browser, artifact viewer, dashboard, file viewer, or auth-flow surface.
+
+It is not a projection store and not an authority runtime. It is the handoff request from a domain command or projection surface to an operator-visible projection executor. The target URL, artifact, dashboard, or file is a projection target; the browser or host app is only the presentation carrier for that target.
+
+In graph terms:
+
+```text
+domain command or projection_surface
+  -> OperatorProjectionOpenRequest
+  -> admitted browser/file/dashboard executor
+  -> projection_surface visible to operator
+```
+
+The request does not move authority into the browser. For example, opening `agent-web-ui` makes a NARS projection visible; it does not make the browser the NARS authority runtime. Browser input still returns through an explicit `intent_route` and must be admitted by the authority runtime.
+
+Process-launch posture owns the host-effect mechanics and request outcomes. See [`Process Launch Posture Target`](../architecture/process-launch-posture.md#operator-projection-open-request).
+
 ## Local-Origin Cloudflare Projection Instance
 
 The current Cloudflare NARS Web Projection is one graph instance:

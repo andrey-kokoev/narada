@@ -114,6 +114,46 @@ That local surface uses the authority WebSocket endpoint for event delivery and 
 
 This slice proves Cloudflare can be an authority runtime in the runtime projection graph without pretending to be a local NARS projection cache and without invoking intelligence providers or MCP tools.
 
+## Cloudflare MCP Fabric
+
+Cloudflare-origin authority sessions use a scoped MCP fabric contract, not one-off hardcoded tool shortcuts. The fabric is the Cloudflare counterpart to local launch MCP scope composition: local launch composes host, user-site, local-site, `none`, and `all` scopes from target-owned MCP configuration; Cloudflare composes Cloudflare-native loci that are meaningful on the hosted authority side.
+
+Cloudflare MCP loci are:
+
+| Locus | Meaning | Default posture |
+| --- | --- | --- |
+| `cloudflare-host` | Host/platform-wide Cloudflare substrate tools. | Optional; empty until a host-level adapter exists. |
+| `cloudflare-account-or-user` | Account/user-level Cloudflare tools, such as future account registries. | Optional; empty until account/user adapters exist. |
+| `cloudflare-site` | Site/project authority tools owned by the Cloudflare authority runtime. | Required for the default authority fabric. |
+| `session-native` | Session-owned authority tools, such as the session artifact authority adapter. | Required for the default authority fabric. |
+
+Scope values are `none`, one explicit locus, or `all`. `none` produces an empty fabric and must not silently inject any Cloudflare authority adapters. A single-locus scope admits only adapters assigned to that locus. `all` admits every configured locus; optional loci with no adapters remain empty, so the current default `all` effectively yields the required `cloudflare-site` and `session-native` adapters.
+
+Native Cloudflare MCP server descriptors carry:
+
+```json
+{
+  "locus": "cloudflare-site",
+  "adapter_kind": "cf-authority",
+  "server_name": "cf-authority",
+  "enabled": true,
+  "mutation_posture": "read_only_with_diagnostic_fault_probe"
+}
+```
+
+The initial native adapter kinds are:
+
+| Adapter kind | Default server | Locus | Mutation posture |
+| --- | --- | --- | --- |
+| `cf-authority` | `cf-authority` | `cloudflare-site` | Read-only context plus diagnostic fault probe. |
+| `cf-authority-artifacts` | `cf-authority-artifacts` | `session-native` | Session artifact authority mutation. |
+
+Server names must be unique after scope filtering. Duplicate active server names refuse session creation with `cloudflare_mcp_duplicate_server_conflict`; invalid loci or adapter kinds refuse with `invalid_cloudflare_mcp_adapter_descriptor`. These refusals are configuration failures, not runtime tool failures.
+
+Cloudflare MCP adapters are projections over NARS authority. They do not own independent canonical stores. The `cf-authority-artifacts` adapter mutates the Cloudflare-origin NARS authority artifact registry through the session authority API and emits canonical session artifact events from that authority. Direct HTTP artifact routes remain browser projection routes and are not MCP calls.
+
+The normalized fabric summary is part of session and health diagnostics. It includes requested scope, requested/effective loci, required/optional loci, server count, server names, and the normalized server descriptors. Operator surfaces should use that summary to distinguish no MCPs, configured MCPs, and fabric misconfiguration.
+
 ### Deployed Authority Runtime Smoke
 
 The deployed Cloudflare-origin authority path has an explicit live smoke command:

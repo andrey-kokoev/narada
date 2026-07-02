@@ -95,6 +95,15 @@ export const NARS_CLIENT_EVENT_LABELS = Object.freeze({
   agent_web_ui_message: 'Message',
   operator_input_submitted: 'Operator input',
   conversation_enqueue_requested: 'Input queued',
+  authority_source_draining: 'Authority draining',
+  authority_source_sealed: 'Authority sealed',
+  authority_source_write_refused: 'Source write refused',
+  authority_target_prepared: 'Target prepared',
+  authority_target_active: 'Target active',
+  authority_target_write_refused: 'Target write refused',
+  authority_target_activation_refused: 'Target activation refused',
+  authority_source_status: 'Authority status',
+  authority_target_status: 'Authority status',
   input_queued_for_turn_boundary: 'Queued input',
   input_admitted_to_turn: 'Input admitted',
   input_dropped_by_operator: 'Input dropped',
@@ -106,6 +115,40 @@ export const AGENT_WEB_UI_NARS_METHODS = new Set(AGENT_WEB_UI_NARS_METHOD_LIST);
 
 export function isAgentWebUiNarsMethod(method) {
   return AGENT_WEB_UI_NARS_METHODS.has(method);
+}
+
+function authorityTransitionSummary(event, kind) {
+  const source = event.authority_transition_source && typeof event.authority_transition_source === 'object' ? event.authority_transition_source : null;
+  const target = event.authority_transition_target && typeof event.authority_transition_target === 'object' ? event.authority_transition_target : null;
+  const locator = source?.target_authority_locator ?? target?.target_authority_locator ?? null;
+  const locatorText = authorityLocatorSummary(locator, source?.authority_locator_ref ?? target?.authority_locator_ref ?? null);
+  if (kind === 'authority_source_draining') return 'source draining; new source writes refused';
+  if (kind === 'authority_source_sealed') return `${source?.state ?? 'source sealed'}${locatorText ? `; target ${locatorText}` : ''}`;
+  if (kind === 'authority_source_write_refused') return `${event.code ?? 'source write refused'}${locatorText ? `; reattach ${locatorText}` : ''}`;
+  if (kind === 'authority_target_prepared') return `target prepared; writes ${target?.target_write_admission ?? 'not admitted'}${locatorText ? `; ${locatorText}` : ''}`;
+  if (kind === 'authority_target_active') return `target active epoch ${event.authority_epoch_token?.target_authority_epoch ?? 'unknown'}; first event ${event.target_first_sequence ?? 'unknown'}${locatorText ? `; ${locatorText}` : ''}`;
+  if (kind === 'authority_target_write_refused') return event.code ?? 'target write refused';
+  if (kind === 'authority_target_activation_refused') {
+    const refusals = Array.isArray(event.refusals) ? event.refusals.map((entry) => entry?.reason_code).filter(Boolean).join(', ') : '';
+    return refusals ? `target activation refused: ${refusals}` : 'target activation refused';
+  }
+  if (kind === 'authority_source_status' || kind === 'authority_target_status') {
+    return `source ${source?.state ?? 'unknown'}; target ${target?.state ?? 'unknown'}${locatorText ? `; ${locatorText}` : ''}`;
+  }
+  return event.message ?? kind;
+}
+
+function authorityLocatorSummary(locator, fallbackRef = null) {
+  if (locator && typeof locator === 'object') {
+    const host = locator.kind ?? locator.host_kind ?? 'target';
+    const session = locator.session_id ?? locator.sessionId ?? null;
+    const site = locator.site_id ?? locator.siteId ?? null;
+    if (session && site) return `${host}/${site}/${session}`;
+    if (session) return `${host}/${session}`;
+    if (site) return `${host}/${site}`;
+    return String(host);
+  }
+  return typeof fallbackRef === 'string' && fallbackRef.trim() ? fallbackRef.trim() : null;
 }
 
 export function buildNarsArtifactRefPart({ artifactId, artifact_id, kind = null, title = null, renderHint = null, render_hint = null } = {}) {
@@ -286,6 +329,7 @@ export function classifyNarsClientEventProjection(projection) {
   if (kind === 'session_artifact_registered' || kind === 'session_artifact_read') return 'operations';
   if (kind === 'conversation_enqueue_requested' || kind === 'input_queued_for_turn_boundary' || kind === 'input_admitted_to_turn' || kind === 'input_dropped_by_operator' || kind === 'input_abandoned_on_session_end' || kind === 'input_completed') return 'operations';
   if (kind === 'session_health') return isRoutineHealthyNarsSessionHealth(event) ? 'diagnostics' : 'operations';
+  if (kind?.startsWith?.('authority_source_') || kind?.startsWith?.('authority_target_')) return 'operations';
   if (kind === 'session_started' || kind === 'session_closed' || kind === 'session_status' || kind === 'session_recovery' || kind === 'session_operations' || kind === 'observer_status' || kind === 'observers_status' || kind === 'carrier_command_result') return 'operations';
   if (kind === 'turn_started' || kind === 'turn_complete' || kind === 'directive_received' || kind === 'directive_receipt_recorded' || kind === 'directive_carrier_accepted_recorded' || kind === 'directive_complete' || kind === 'session_events_subscription_started' || kind === 'websocket_connected') return 'diagnostics';
   if (kind?.startsWith?.('provider_')) return 'diagnostics';
@@ -324,6 +368,8 @@ function eventTone(kind) {
   if (kind === 'error' || kind === 'websocket_error' || kind === 'web_ui_decode_error' || kind === 'turn_failed' || kind === 'authority_session_revoked' || kind === 'projection_revoked' || kind === 'mcp_runtime_fault') return NARS_CLIENT_EVENT_TONES.error;
   if (kind?.startsWith?.('agent_web_ui_') || kind === 'operator_input_submitted' || kind === 'web_ui_input_not_sent') return NARS_CLIENT_EVENT_TONES.local;
   if (kind === 'conversation_enqueue_requested' || kind?.startsWith?.('input_')) return NARS_CLIENT_EVENT_TONES.status;
+  if (kind?.startsWith?.('authority_source_write_refused') || kind?.startsWith?.('authority_target_write_refused') || kind === 'authority_target_activation_refused') return NARS_CLIENT_EVENT_TONES.error;
+  if (kind?.startsWith?.('authority_source_') || kind?.startsWith?.('authority_target_')) return NARS_CLIENT_EVENT_TONES.status;
   if (kind === 'carrier_diagnostic_recorded') return NARS_CLIENT_EVENT_TONES.status;
   if (kind?.startsWith?.('session_') || kind?.startsWith?.('turn_')) return NARS_CLIENT_EVENT_TONES.session;
   return NARS_CLIENT_EVENT_TONES.unknown;
@@ -346,6 +392,7 @@ function eventSummary(event, kind) {
   if (kind === 'turn_complete') return event.terminal_state ?? 'turn complete';
   if (kind === 'turn_started') return event.turn_id ?? 'turn started';
   if (kind === 'conversation_enqueue_requested') return event.delivery_semantics ?? 'queued for next turn';
+  if (kind?.startsWith?.('authority_source_') || kind?.startsWith?.('authority_target_')) return authorityTransitionSummary(event, kind);
   if (kind?.startsWith?.('input_')) return `${event.input_event_id ?? event.event_id ?? 'input'}${event.terminal_state ? ` ${event.terminal_state}` : ''}`;
   if (kind === 'error' || kind === 'websocket_error' || kind === 'web_ui_decode_error') return event.message ?? event.code ?? 'error';
   if (typeof event?.message === 'string') return event.message;

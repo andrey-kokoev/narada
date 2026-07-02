@@ -64,6 +64,7 @@ async function run() {
   const sessionId = args.sessionId ?? `cf_authority_live_${Date.now()}`;
   const siteId = args.siteId ?? 'narada.cloudflare.live';
   const agentId = args.agentId ?? 'cloudflare.resident';
+  const mcpFabric = { scope: 'all' };
   const sessionBase = `${baseUrl}/api/nars/authority/sessions/${encodeURIComponent(sessionId)}`;
   const message = args.message ?? `Cloudflare authority live smoke ${Date.now()}`;
   const hostedWebUrl = `${baseUrl}/?cloudflare_authority_session_id=${encodeURIComponent(sessionId)}&cloudflare_api_base_url=${encodeURIComponent(baseUrl)}`;
@@ -75,7 +76,7 @@ async function run() {
     phase(`checking service health at ${baseUrl}`);
     const serviceHealth = await getJson(`${baseUrl}/api/nars/authority/health`);
     phase(`creating synthetic authority session ${sessionId}`);
-    created = await postJson(`${baseUrl}/api/nars/authority/sessions`, { session_id: sessionId, site_id: siteId, agent_id: agentId });
+    created = await postJson(`${baseUrl}/api/nars/authority/sessions`, { session_id: sessionId, site_id: siteId, agent_id: agentId, mcp_fabric: mcpFabric });
     phase('checking session health');
     const health = await getJson(`${sessionBase}/health`);
     phase('checking bounded event replay');
@@ -100,12 +101,18 @@ async function run() {
     const passed = serviceHealth.status === 'healthy'
       && created.status === 'created'
       && created.session?.execution_mode === 'cloudflare_runtime_tool_adapter'
+      && created.session?.mcp_fabric?.requested_scope === 'all'
+      && created.session?.mcp_fabric?.server_names?.includes('cf-authority')
+      && created.session?.mcp_fabric?.server_names?.includes('cf-authority-artifacts')
       && health.status === 'healthy'
+      && health.mcp_fabric?.requested_scope === 'all'
       && initialReplay.status === 'ok'
       && initialReplay.events?.some((event) => event.payload?.event === 'session_started')
       && live.status === 'passed'
       && replayAfterInput.status === 'ok'
       && replayAfterInput.events?.some((event) => event.payload?.event === 'assistant_message' && event.payload?.execution_kind === 'cloudflare_runtime_tool_adapter')
+      && replayAfterInput.events?.some((event) => event.payload?.event === 'tool_result' && event.payload?.tool_name === 'cf-authority.session_context_read' && event.payload?.mcp_fabric_scope === 'all')
+      && replayAfterInput.events?.some((event) => event.payload?.event === 'tool_result' && event.payload?.tool_name === 'cf-authority-artifacts.artifact_register' && event.payload?.mcp_fabric_scope === 'all')
       && replayAfterInput.events?.some((event) => event.payload?.event === 'mcp_runtime_fault' && event.payload?.error_code === 'cloudflare_authority_diagnostic_probe_failed')
       && hostedShell.ok === true
       && hostedBrowser.status === 'passed'
@@ -128,6 +135,8 @@ async function run() {
       web_socket_endpoint: webSocketEndpoint,
       authority_origin: 'cloudflare',
       authority_runtime_kind: 'cloudflare_authority_tool_adapter_runtime',
+      mcp_fabric_config: mcpFabric,
+      mcp_fabric_evidence_kind: 'registry_mediated_cloudflare_mcp_fabric',
       smoke_lineage: 'cloudflare-origin-live',
       hosted_shell_check_kind: 'http_html_shell_only',
       hosted_browser_check_kind: 'browser_level_authority_e2e',

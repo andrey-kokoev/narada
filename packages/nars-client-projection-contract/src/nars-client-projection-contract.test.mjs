@@ -146,6 +146,39 @@ test('NARS client projection contract owns shared event rendering vocabulary', (
     event: { event: 'conversation_enqueue_requested', request_id: 'req_1', delivery_semantics: 'queued for next turn' },
     renderKey: 'operator-input-queued:req_1',
   });
+  assert.deepEqual(projectNarsClientEvent({
+    event: 'authority_source_write_refused',
+    code: 'authority_source_sealed',
+    authority_transition_source: {
+      state: 'sealed',
+      authority_locator_ref: 'authority_locator:cloudflare-host/site/cf_session',
+      target_authority_locator: { kind: 'cloudflare-host', site_id: 'site', session_id: 'cf_session' },
+    },
+  }), {
+    kind: 'authority_source_write_refused',
+    label: 'Source write refused',
+    tone: 'error',
+    summary: 'authority_source_sealed; reattach cloudflare-host/site/cf_session',
+    event: {
+      event: 'authority_source_write_refused',
+      code: 'authority_source_sealed',
+      authority_transition_source: {
+        state: 'sealed',
+        authority_locator_ref: 'authority_locator:cloudflare-host/site/cf_session',
+        target_authority_locator: { kind: 'cloudflare-host', site_id: 'site', session_id: 'cf_session' },
+      },
+    },
+  });
+  assert.equal(projectNarsClientEvent({
+    event: 'authority_target_active',
+    target_first_sequence: 42,
+    authority_epoch_token: { target_authority_epoch: 11 },
+    authority_transition_source: { target_authority_locator: { kind: 'cloudflare-host', session_id: 'cf_session' } },
+  }).summary, 'target active epoch 11; first event 42; cloudflare-host/cf_session');
+  assert.equal(projectNarsClientEvent({
+    event: 'authority_target_activation_refused',
+    refusals: [{ reason_code: 'source_seal_evidence_missing' }, { reason_code: 'authority_epoch_token_invalid' }],
+  }).summary, 'target activation refused: source_seal_evidence_missing, authority_epoch_token_invalid');
 });
 
 test('NARS client projection verbosity filters shared event classes', () => {
@@ -181,6 +214,8 @@ test('NARS client projection verbosity filters shared event classes', () => {
   assert.equal(shouldProjectNarsClientEvent(routineHealth, { verbosity: 'raw', includeStateSamples: true }), true);
   assert.equal(shouldProjectNarsClientEvent(unhealthy, { verbosity: 'operations' }), true);
   assert.equal(shouldProjectNarsClientEvent(unhealthy, { verbosity: 'diagnostics' }), true);
+  assert.equal(shouldProjectNarsClientEvent({ event: 'authority_target_active' }, { verbosity: 'operations' }), true);
+  assert.equal(shouldProjectNarsClientEvent({ event: 'authority_source_write_refused' }, { verbosity: 'conversation' }), false);
 
   assert.equal(shouldProjectNarsClientEvent({ event: 'websocket_connected' }, { verbosity: 'operations' }), false);
   assert.equal(shouldProjectNarsClientEvent({ event: 'websocket_connected' }, { verbosity: 'diagnostics' }), false);
