@@ -6,6 +6,7 @@ Root documentation organized by semantic layer.
 
 Semantic and architecture-boundary concepts. These documents define how the system thinks about itself and how layers own boundaries.
 
+- [`concept-registry.md`](concepts/concept-registry.md) — Semantic registry for Concept, ConceptRecord, ConceptRegistry, and ConceptPromotion
 - [`runtime-usc-boundary.md`](concepts/runtime-usc-boundary.md) — Runtime / USC / operator ownership boundary
 - [`narada-agent-runtime-server.md`](concepts/narada-agent-runtime-server.md) — Vendor-neutral, stateful, machine-addressable Agent runtime server concept
 - [`nars-runtime-contract.md`](concepts/nars-runtime-contract.md) — Implementation-facing NARS package, protocol, event, carrier, worker, and verification contract
