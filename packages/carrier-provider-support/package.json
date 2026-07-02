@@ -5,11 +5,12 @@
   "type": "module",
   "exports": {
     ".": "./src/index.mjs",
+    "./ai-process-invocation": "./src/ai-process-invocation.mjs",
     "./codex-subscription-command": "./src/codex-subscription-command.mjs",
     "./package.json": "./package.json"
   },
   "scripts": {
     "test": "node --test src/*.test.mjs",
-    "typecheck": "tsc --noEmit --allowJs --checkJs false src/index.mjs src/codex-subscription-command.mjs"
+    "typecheck": "tsc --noEmit --allowJs --checkJs false src/index.mjs src/codex-subscription-command.mjs src/ai-process-invocation.mjs"
   }
 }
