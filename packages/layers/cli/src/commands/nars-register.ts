@@ -1,7 +1,7 @@
 import type { Command } from 'commander';
 import { directCommandAction, silentCommandContext } from '../lib/command-wrapper.js';
 import { emitCommandResult, resolveCommandFormat } from '../lib/cli-output.js';
-import { narsAttachCommandCommand, narsSessionsCommand } from './nars.js';
+import { narsAttachCommandCommand, narsAuthorityTransitionPlanCommand, narsSessionsCommand } from './nars.js';
 import { narsProjectionBridgeRunCommand, narsProjectionBridgeStartCommand, narsProjectionRegisterCommand } from './nars-projection.js';
 
 export function registerNarsCommands(program: Command): void {
@@ -35,6 +35,31 @@ export function registerNarsCommands(program: Command): void {
   const projection = nars
     .command('projection')
     .description('Manage NARS projection attachments');
+
+  const authorityTransition = nars
+    .command('authority-transition')
+    .description('Plan governed NARS authority runtime host transitions');
+
+  authorityTransition
+    .command('plan')
+    .description('Read-only plan for moving NARS authority from the current host to a target host')
+    .requiredOption('--session <id>', 'Concrete NARS session id')
+    .requiredOption('--target-host <host-kind>', 'Target authority host kind: local|cloudflare-host')
+    .option('--site-root <path>', 'Target Site root')
+    .option('--site <id>', 'Registered Site id')
+    .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
+    .action(directCommandAction<[Record<string, unknown>]>({
+      command: 'nars authority-transition plan',
+      emit: emitCommandResult,
+      format: (opts: Record<string, unknown>) => opts.format,
+      invocation: (opts) => narsAuthorityTransitionPlanCommand({
+        siteRoot: opts.siteRoot as string | undefined,
+        site: opts.site as string | undefined,
+        session: opts.session as string | undefined,
+        targetHost: opts.targetHost as string | undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
+      }, silentCommandContext()),
+    }));
 
   projection
     .command('register')

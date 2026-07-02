@@ -4,6 +4,9 @@ import { ExitCode } from '../lib/exit-codes.js';
 import { discoverNarsSessions } from '@narada2/carrier-runtime/nars-session-index';
 import { listKnownSiteRootsForCli, resolveSiteRootForCli, type ResolvedSiteRoot } from '../lib/site-root-resolver.js';
 
+const NARS_AUTHORITY_RUNTIME_HOST_KINDS = ['local', 'cloudflare-host'];
+const NARS_AUTHORITY_RUNTIME_HOST_TRANSITION_SCHEMA = 'narada.nars.authority_runtime_host_transition.v1';
+
 export interface NarsSessionsOptions {
   siteRoot?: string;
   site?: string;
@@ -12,6 +15,50 @@ export interface NarsSessionsOptions {
   limit?: number;
   format?: CliFormat;
   launchRegistryPath?: string;
+}
+
+function formatAuthorityTransitionPlan(plan: Record<string, unknown>): string {
+  const lines = [
+    'NARS authority host transition plan',
+    `  session: ${plan.session_id ?? ''}`,
+    `  from: ${plan.source_authority_runtime_host ?? 'unknown'} epoch ${plan.source_authority_epoch ?? 'unknown'}`,
+    `  to: ${plan.target_authority_runtime_host ?? 'unknown'} epoch ${plan.target_authority_epoch ?? 'unknown'}`,
+    `  state: ${plan.status ?? 'unknown'}`,
+  ];
+  const checks = Array.isArray(plan.checks) ? plan.checks as Array<Record<string, unknown>> : [];
+  if (checks.length > 0) {
+    lines.push('  checks:');
+    for (const entry of checks) lines.push(`    ${entry.name}: ${entry.status} - ${entry.summary}`);
+  }
+  const refusals = Array.isArray(plan.refusals) ? plan.refusals as Array<Record<string, unknown>> : [];
+  if (refusals.length > 0) {
+    lines.push('  refusals:');
+    for (const entry of refusals) lines.push(`    ${entry.reason_code}: ${entry.reason}`);
+  }
+  const warnings = Array.isArray(plan.warnings) ? plan.warnings as Array<Record<string, unknown>> : [];
+  if (warnings.length > 0) {
+    lines.push('  warnings:');
+    for (const entry of warnings) lines.push(`    ${entry.code}: ${entry.message}`);
+  }
+  lines.push(`  next: ${plan.recommended_next_action ?? 'unknown'}`);
+  return lines.join('\n');
+}
+
+export async function narsAuthorityTransitionPlanCommand(
+  options: NarsAuthorityTransitionPlanOptions,
+  _context: CommandContext,
+): Promise<{ exitCode: ExitCode; result: unknown }> {
+  const sessionId = options.session;
+  if (!sessionId) throw new Error('nars_session_required: pass --session <session-id>');
+  const targetHost = options.targetHost;
+  if (!targetHost) throw new Error('nars_authority_target_host_required: pass --target-host <host-kind>');
+  const siteResolutions = await resolveNarsSiteRoots(options);
+  const matched = findSessionInSites(siteResolutions, sessionId);
+  const plan = buildAuthorityTransitionPlan({ matched, sessionId, targetHost });
+  return {
+    exitCode: plan.status === 'feasible' ? ExitCode.SUCCESS : ExitCode.INVALID_CONFIG,
+    result: formattedResult(plan, formatAuthorityTransitionPlan(plan), options.format ?? 'auto'),
+  };
 }
 
 async function resolveNarsSiteRoots(options: NarsSessionsOptions): Promise<ResolvedSiteRoot[]> {
@@ -73,6 +120,12 @@ function toCommandSession(session: Record<string, unknown>, siteResolution: Reso
     heartbeat_age_ms: session.heartbeat_age_ms,
     heartbeat_at: heartbeat?.heartbeat_at ?? heartbeat?.timestamp ?? null,
     health_status: session.health_status,
+    authority_runtime_host: session.authority_runtime_host,
+    authority_epoch: session.authority_epoch,
+    authority_runtime_id: session.authority_runtime_id,
+    authority_transition_state: session.authority_transition_state,
+    superseded_by_session_id: session.superseded_by_session_id,
+    authority_locator_ref: session.authority_locator_ref,
     event_endpoint: session.event_endpoint,
     health_endpoint: session.health_endpoint,
     session_dir: session.session_dir,
@@ -87,9 +140,121 @@ function normalizeLimit(limit: number): number {
   return Math.min(Math.trunc(limit), 200);
 }
 
+function buildAuthorityTransitionPlan({
+  matched,
+  sessionId,
+  targetHost,
+}: {
+  matched: { siteResolution: ResolvedSiteRoot; session: Record<string, unknown> } | null;
+  sessionId: string;
+  targetHost: string;
+}): Record<string, unknown> {
+  const generatedAt = new Date().toISOString();
+  const checks: Array<Record<string, unknown>> = [];
+  const refusals: Array<Record<string, unknown>> = [];
+  const warnings: Array<Record<string, unknown>> = [];
+  if (!NARS_AUTHORITY_RUNTIME_HOST_KINDS.includes(targetHost)) {
+    refusals.push(refusal('invalid_target_host', `Target host must be one of: ${NARS_AUTHORITY_RUNTIME_HOST_KINDS.join(', ')}`));
+  }
+  if (!matched) {
+    refusals.push(refusal('session_not_found', `No NARS session index record found for ${sessionId}.`));
+  }
+
+  const session = matched?.session ?? null;
+  const sourceHostRaw = session?.authority_runtime_host;
+  const sourceEpochRaw = session?.authority_epoch;
+  const sourceRuntimeIdRaw = session?.authority_runtime_id;
+  const sourceHost = typeof sourceHostRaw === 'string' ? sourceHostRaw : 'unknown_legacy';
+  const sourceEpoch = Number.isInteger(sourceEpochRaw) ? sourceEpochRaw as number : null;
+  const sourceRuntimeId = typeof sourceRuntimeIdRaw === 'string' ? sourceRuntimeIdRaw : null;
+  if (matched) {
+    checks.push(check('session_discovery', 'ok', `found ${sessionId} in ${matched.siteResolution.site_root}`));
+    if (!NARS_AUTHORITY_RUNTIME_HOST_KINDS.includes(sourceHost)) {
+      refusals.push(refusal('authority_host_unknown_legacy', 'Session index record lacks comparable authority_runtime_host metadata.'));
+    }
+    if (sourceEpoch === null) {
+      refusals.push(refusal('authority_epoch_unavailable', 'Session index record lacks comparable authority_epoch metadata.'));
+    }
+    if (sourceHost === targetHost) {
+      refusals.push(refusal('target_host_matches_source', 'Target authority host must differ from source authority host.'));
+    }
+    checks.push(check('source_authority_metadata', sourceEpoch === null ? 'refused' : 'ok', `${sourceHost} epoch ${sourceEpoch ?? 'unknown'}`));
+  }
+
+  const status = refusals.length === 0 ? 'feasible' : 'refused';
+  const targetEpoch = sourceEpoch === null ? null : sourceEpoch + 1;
+  const transitionRecordCandidate = status === 'feasible' && matched && sourceEpoch !== null
+    ? {
+      schema: NARS_AUTHORITY_RUNTIME_HOST_TRANSITION_SCHEMA,
+      transition_id: `arht_plan_${String(sessionId).replace(/[^A-Za-z0-9_]+/g, '_')}_${targetHost.replace(/[^A-Za-z0-9]+/g, '_')}`,
+      session_id: sessionId,
+      session_lineage_id: `nars_lineage_${sessionId}`,
+      agent_id: session?.agent_id ?? null,
+      site_id: session?.site_id ?? matched.siteResolution.site_id ?? null,
+      requested_by: 'operator',
+      requested_at: generatedAt,
+      state: 'proposed',
+      source_authority_runtime: {
+        authority_runtime_id: sourceRuntimeId,
+        host_kind: sourceHost,
+        authority_epoch: sourceEpoch,
+        health_ref: session?.health_endpoint ?? 'session.health',
+        authority_role: 'canonical_session_runtime',
+      },
+      target_authority_runtime: {
+        authority_runtime_id: `auth_${targetHost.replace(/[^A-Za-z0-9]+/g, '_')}_${String(sessionId).replace(/[^A-Za-z0-9_]+/g, '_')}`,
+        host_kind: targetHost,
+        authority_epoch: targetEpoch,
+        health_ref: `${targetHost}.session.health`,
+        authority_role: 'canonical_session_runtime',
+      },
+      handoff: null,
+      fencing: null,
+      evidence_refs: [],
+      completed_at: null,
+      terminal_reason: null,
+    }
+    : null;
+  if (status === 'feasible') {
+    warnings.push({ code: 'read_only_planner_slice', message: 'Drain, seal, event cursor, target health, artifact, and MCP fabric checks are planned by follow-on feasibility tasks.' });
+  }
+  return {
+    schema: 'narada.nars.authority_runtime_host_transition_plan.v1',
+    status,
+    mutation_performed: false,
+    generated_at: generatedAt,
+    session_id: sessionId,
+    site_root: matched?.siteResolution.site_root ?? null,
+    site_root_source: matched?.siteResolution.source ?? null,
+    site_id: matched?.siteResolution.site_id ?? session?.site_id ?? null,
+    source_authority_runtime_host: matched ? sourceHost : null,
+    source_authority_epoch: sourceEpoch,
+    target_authority_runtime_host: targetHost,
+    target_authority_epoch: targetEpoch,
+    transition_record_candidate: transitionRecordCandidate,
+    checks,
+    warnings,
+    refusals,
+    recommended_next_action: status === 'feasible' ? 'run_feasibility_checks_before_execute' : 'repair_refusals_and_rerun_plan',
+  };
+}
+
+function check(name: string, status: string, summary: string): Record<string, unknown> {
+  return { name, status, summary };
+}
+
+function refusal(reasonCode: string, reason: string): Record<string, unknown> {
+  return { reason_code: reasonCode, reason };
+}
+
 export interface NarsAttachCommandOptions extends NarsSessionsOptions {
   session?: string;
   surface?: string;
+}
+
+export interface NarsAuthorityTransitionPlanOptions extends NarsSessionsOptions {
+  session?: string;
+  targetHost?: string;
 }
 
 export async function narsSessionsCommand(

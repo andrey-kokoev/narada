@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { resolveNaradaSitePaths } from '@narada2/site-paths';
 import { agentWebUiAttachCommand } from '../../src/commands/agent-web-ui.js';
-import { narsAttachCommandCommand, narsSessionsCommand } from '../../src/commands/nars.js';
+import { narsAttachCommandCommand, narsAuthorityTransitionPlanCommand, narsSessionsCommand } from '../../src/commands/nars.js';
 import type { CommandContext } from '../../src/lib/command-wrapper.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
 
@@ -71,6 +71,12 @@ function writeSession(siteRoot: string, sessionId = 'carrier_cli_test'): void {
     terminal_state: null,
     status_hint: 'alive',
     status_hint_authority: 'discovery_projection_only',
+    authority_runtime_host: 'local',
+    authority_epoch: 3,
+    authority_runtime_id: `auth_local_${sessionId}`,
+    authority_transition_state: null,
+    superseded_by_session_id: null,
+    authority_locator_ref: null,
     attached_projections: null,
     attached_projections_status: 'not_tracked',
     attach_commands: {
@@ -134,6 +140,69 @@ describe('nars CLI commands', () => {
     });
     expect(body.sessions[0].record).toBeUndefined();
     expect(body.sessions[0].heartbeat).toBeUndefined();
+  });
+
+  it('plans a read-only NARS authority host transition from session index metadata', async () => {
+    const siteRoot = tempSite();
+    writeSession(siteRoot);
+
+    const result = await narsAuthorityTransitionPlanCommand({
+      siteRoot,
+      session: 'carrier_cli_test',
+      targetHost: 'cloudflare-host',
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      schema: 'narada.nars.authority_runtime_host_transition_plan.v1',
+      status: 'feasible',
+      mutation_performed: false,
+      session_id: 'carrier_cli_test',
+      source_authority_runtime_host: 'local',
+      source_authority_epoch: 3,
+      target_authority_runtime_host: 'cloudflare-host',
+      target_authority_epoch: 4,
+      recommended_next_action: 'run_feasibility_checks_before_execute',
+    });
+    const body = result.result as { transition_record_candidate: Record<string, unknown>; warnings: Array<Record<string, unknown>> };
+    expect(body.transition_record_candidate).toMatchObject({
+      schema: 'narada.nars.authority_runtime_host_transition.v1',
+      state: 'proposed',
+      source_authority_runtime: { host_kind: 'local', authority_epoch: 3 },
+      target_authority_runtime: { host_kind: 'cloudflare-host', authority_epoch: 4 },
+    });
+    expect(body.warnings[0]).toMatchObject({ code: 'read_only_planner_slice' });
+  });
+
+  it('refuses authority transition planning for legacy sessions without comparable authority epoch', async () => {
+    const siteRoot = tempSite();
+    writeSession(siteRoot, 'carrier_legacy_transition');
+    const recordPath = resolveNaradaSitePaths({ siteRoot, sessionId: 'carrier_legacy_transition' }).narsSessionIndexRecordPath!;
+    const record = JSON.parse(readFileSync(recordPath, 'utf8'));
+    delete record.authority_runtime_host;
+    delete record.authority_epoch;
+    delete record.authority_runtime_id;
+    writeFileSync(recordPath, `${JSON.stringify(record, null, 2)}\n`, 'utf8');
+
+    const result = await narsAuthorityTransitionPlanCommand({
+      siteRoot,
+      session: 'carrier_legacy_transition',
+      targetHost: 'cloudflare-host',
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.INVALID_CONFIG);
+    expect(result.result).toMatchObject({
+      status: 'refused',
+      source_authority_runtime_host: 'unknown_legacy',
+      source_authority_epoch: null,
+      transition_record_candidate: null,
+      recommended_next_action: 'repair_refusals_and_rerun_plan',
+    });
+    const body = result.result as { refusals: Array<Record<string, unknown>> };
+    expect(body.refusals.map((entry) => entry.reason_code)).toContain('authority_host_unknown_legacy');
+    expect(body.refusals.map((entry) => entry.reason_code)).toContain('authority_epoch_unavailable');
   });
 
   it('plans direct agent-web-ui attachment by discovering a live agent session', async () => {
