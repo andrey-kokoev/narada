@@ -1,6 +1,10 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
+import {
+  NARS_AUTHORITY_RUNTIME_HOST_KINDS,
+  NARS_AUTHORITY_RUNTIME_HOST_TRANSITION_STATES,
+} from '@narada2/carrier-protocol';
 import { narsSessionsRootFromSiteRoot as resolveNarsSessionsRootFromSiteRoot } from '@narada2/site-paths';
 
 export const NARS_SESSION_INDEX_RECORD_SCHEMA = 'narada.nars.session_index_record.v1';
@@ -14,6 +18,11 @@ export const NARS_SESSION_STATUS_HINT_AUTHORITY = Object.freeze({
 });
 export const NARS_SESSION_ATTACHED_PROJECTIONS_STATUS = Object.freeze({
   NOT_TRACKED: 'not_tracked',
+});
+export const NARS_SESSION_AUTHORITY_RUNTIME_HOST = Object.freeze({
+  LOCAL: 'local',
+  CLOUDFLARE_HOST: 'cloudflare-host',
+  UNKNOWN_LEGACY: 'unknown_legacy',
 });
 export const NARS_SESSION_DISPLAY_STATE = Object.freeze({
   ACTIVE: 'active',
@@ -174,6 +183,13 @@ function buildSessionIndexRecord({ sessionStartedEvent, sessionPath, siteRoot, p
   const generatedAt = now.toISOString();
   const eventEndpoint = sessionStartedEvent.event_endpoint ?? sessionStartedEvent.websocket_endpoint ?? null;
   const healthEndpoint = sessionStartedEvent.health_endpoint ?? null;
+  const authorityRuntimeHost = normalizeAuthorityRuntimeHost(
+    sessionStartedEvent.authority_runtime_host
+      ?? sessionStartedEvent.authority_runtime_host_kind
+      ?? sessionStartedEvent.runtime_authority_host,
+    NARS_SESSION_AUTHORITY_RUNTIME_HOST.LOCAL,
+  );
+  const authorityEpoch = normalizeAuthorityEpoch(sessionStartedEvent.authority_epoch, 1);
   return {
     schema: NARS_SESSION_INDEX_RECORD_SCHEMA,
     session_id: sessionId,
@@ -199,6 +215,13 @@ function buildSessionIndexRecord({ sessionStartedEvent, sessionPath, siteRoot, p
     terminal_state: sessionStartedEvent.terminal_state ?? null,
     status_hint: 'alive',
     status_hint_authority: NARS_SESSION_STATUS_HINT_AUTHORITY.DISCOVERY_PROJECTION_ONLY,
+    authority_runtime_host: authorityRuntimeHost,
+    authority_epoch: authorityEpoch,
+    authority_runtime_id: normalizeOptionalString(sessionStartedEvent.authority_runtime_id)
+      ?? defaultAuthorityRuntimeId({ hostKind: authorityRuntimeHost, sessionId }),
+    authority_transition_state: normalizeAuthorityTransitionState(sessionStartedEvent.authority_transition_state),
+    superseded_by_session_id: normalizeOptionalString(sessionStartedEvent.superseded_by_session_id),
+    authority_locator_ref: normalizeOptionalString(sessionStartedEvent.authority_locator_ref),
     attached_projections: null,
     attached_projections_status: NARS_SESSION_ATTACHED_PROJECTIONS_STATUS.NOT_TRACKED,
     attach_commands: sessionStartedEvent.attach_commands ?? null,
@@ -222,9 +245,38 @@ function toAggregateEntry(record) {
     terminal_state: record.terminal_state ?? null,
     status_hint: record.status_hint ?? null,
     status_hint_authority: record.status_hint_authority ?? NARS_SESSION_STATUS_HINT_AUTHORITY.DISCOVERY_PROJECTION_ONLY,
+    authority_runtime_host: normalizeAuthorityRuntimeHost(record.authority_runtime_host, NARS_SESSION_AUTHORITY_RUNTIME_HOST.UNKNOWN_LEGACY),
+    authority_epoch: normalizeAuthorityEpoch(record.authority_epoch, null),
+    authority_runtime_id: normalizeOptionalString(record.authority_runtime_id),
+    authority_transition_state: normalizeAuthorityTransitionState(record.authority_transition_state),
+    superseded_by_session_id: normalizeOptionalString(record.superseded_by_session_id),
+    authority_locator_ref: normalizeOptionalString(record.authority_locator_ref),
     launch_operator_surface_kind: record.launch_operator_surface_kind ?? null,
     attached_projections_status: record.attached_projections_status ?? NARS_SESSION_ATTACHED_PROJECTIONS_STATUS.NOT_TRACKED,
   };
+}
+
+function normalizeAuthorityRuntimeHost(value, fallback) {
+  if (NARS_AUTHORITY_RUNTIME_HOST_KINDS.includes(value)) return value;
+  return fallback;
+}
+
+function normalizeAuthorityEpoch(value, fallback) {
+  return Number.isInteger(value) && value >= 1 ? value : fallback;
+}
+
+function normalizeOptionalString(value) {
+  return typeof value === 'string' && value.trim().length > 0 ? value : null;
+}
+
+function normalizeAuthorityTransitionState(value) {
+  return NARS_AUTHORITY_RUNTIME_HOST_TRANSITION_STATES.includes(value) ? value : null;
+}
+
+function defaultAuthorityRuntimeId({ hostKind, sessionId }) {
+  const safeHostKind = String(hostKind ?? 'unknown').replace(/[^A-Za-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'unknown';
+  const safeSessionId = String(sessionId ?? 'unknown').replace(/[^A-Za-z0-9_]+/g, '_') || 'unknown';
+  return `auth_${safeHostKind}_${safeSessionId}`;
 }
 
 function buildAggregateIndex({ siteRoot, sessions, generatedAt }) {

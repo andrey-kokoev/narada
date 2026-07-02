@@ -8,6 +8,7 @@ import {
   classifyNarsSessionDisplayState,
   discoverNarsSessions,
   markNarsSessionIndexClosed,
+  NARS_SESSION_AUTHORITY_RUNTIME_HOST,
   narsSessionsRootFromSiteRoot,
   readNarsSessionIndex,
   rebuildNarsSessionIndex,
@@ -76,6 +77,12 @@ test('writeNarsSessionStartedIndex writes per-session record and aggregate index
     assert.equal(result.record.health_endpoint, event.health_endpoint);
     assert.equal(result.record.terminal_state, null);
     assert.equal(result.record.status_hint_authority, 'discovery_projection_only');
+    assert.equal(result.record.authority_runtime_host, 'local');
+    assert.equal(result.record.authority_epoch, 1);
+    assert.equal(result.record.authority_runtime_id, `auth_local_${event.session_id}`);
+    assert.equal(result.record.authority_transition_state, null);
+    assert.equal(result.record.superseded_by_session_id, null);
+    assert.equal(result.record.authority_locator_ref, null);
     assert.equal(result.record.attached_projections, null);
     assert.equal(result.record.attached_projections_status, 'not_tracked');
 
@@ -86,6 +93,70 @@ test('writeNarsSessionStartedIndex writes per-session record and aggregate index
     assert.equal(aggregate.sessions.length, 1);
     assert.equal(aggregate.sessions[0].session_id, event.session_id);
     assert.equal(aggregate.sessions[0].record_path, result.paths.record_path);
+    assert.equal(aggregate.sessions[0].authority_runtime_host, 'local');
+    assert.equal(aggregate.sessions[0].authority_epoch, 1);
+    assert.equal(aggregate.sessions[0].authority_runtime_id, `auth_local_${event.session_id}`);
+  } finally {
+    cleanup(siteRoot);
+  }
+});
+
+test('writeNarsSessionStartedIndex preserves explicit authority host and transition metadata', () => {
+  const siteRoot = makeTempSiteRoot();
+  try {
+    const event = startedEvent(siteRoot, 'carrier_cloudflare_authority', '2026-06-23T00:00:00.000Z', {
+      authority_runtime_host: 'cloudflare-host',
+      authority_epoch: 4,
+      authority_runtime_id: 'auth_cf_carrier_cloudflare_authority',
+      authority_transition_state: 'target_active',
+      superseded_by_session_id: 'carrier_local_superseded',
+      authority_locator_ref: 'authority_locator:cloudflare-host/carrier_cloudflare_authority',
+    });
+    const result = writeNarsSessionStartedIndex({
+      sessionStartedEvent: event,
+      sessionPath: event.session_path,
+      siteRoot,
+      now: new Date('2026-06-23T00:00:05.000Z'),
+    });
+
+    assert.equal(result.record.authority_runtime_host, 'cloudflare-host');
+    assert.equal(result.record.authority_epoch, 4);
+    assert.equal(result.record.authority_runtime_id, 'auth_cf_carrier_cloudflare_authority');
+    assert.equal(result.record.authority_transition_state, 'target_active');
+    assert.equal(result.record.superseded_by_session_id, 'carrier_local_superseded');
+    assert.equal(result.record.authority_locator_ref, 'authority_locator:cloudflare-host/carrier_cloudflare_authority');
+    assert.equal(result.index.sessions[0].authority_runtime_host, 'cloudflare-host');
+    assert.equal(result.index.sessions[0].authority_epoch, 4);
+    assert.equal(result.index.sessions[0].authority_transition_state, 'target_active');
+  } finally {
+    cleanup(siteRoot);
+  }
+});
+
+test('rebuildNarsSessionIndex projects legacy records without authority metadata as unknown legacy', () => {
+  const siteRoot = makeTempSiteRoot();
+  try {
+    const sessionId = 'carrier_legacy_authority_unknown';
+    const sessionDir = dirname(sessionPath(siteRoot, sessionId));
+    mkdirSync(sessionDir, { recursive: true });
+    writeFileSync(join(sessionDir, 'session-index-record.json'), `${JSON.stringify({
+      schema: 'narada.nars.session_index_record.v1',
+      session_id: sessionId,
+      carrier_session_id: sessionId,
+      agent_id: 'sonar.resident',
+      site_id: 'sonar',
+      site_root: siteRoot,
+      session_dir: sessionDir,
+      heartbeat_path: join(sessionDir, 'heartbeat.json'),
+      started_at: '2026-06-23T00:00:00.000Z',
+      last_seen_at: '2026-06-23T00:00:00.000Z',
+      status_hint: 'alive',
+    }, null, 2)}\n`, 'utf8');
+
+    const rebuilt = rebuildNarsSessionIndex({ sessionsRoot: dirname(sessionDir), siteRoot });
+    assert.equal(rebuilt.sessions[0].authority_runtime_host, NARS_SESSION_AUTHORITY_RUNTIME_HOST.UNKNOWN_LEGACY);
+    assert.equal(rebuilt.sessions[0].authority_epoch, null);
+    assert.equal(rebuilt.sessions[0].authority_runtime_id, null);
   } finally {
     cleanup(siteRoot);
   }
