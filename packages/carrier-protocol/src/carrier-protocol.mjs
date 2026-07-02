@@ -9,6 +9,9 @@ export const TURN_TERMINAL_PAYLOAD_SCHEMA = 'narada.agent_tui.turn_terminal_payl
 export const SESSION_EVENT_FIXTURE_MANIFEST_SCHEMA = 'narada.carrier.session_event_fixture_manifest.v1';
 export const TOOL_EFFECT_ADMISSION_CASES_SCHEMA = 'narada.carrier.tool_effect_admission_cases.v1';
 export const NARS_LIFECYCLE_HOOK_SCHEMA = 'narada.nars.lifecycle_hook.v1';
+export const NARS_AUTHORITY_RUNTIME_HOST_TRANSITION_SCHEMA = 'narada.nars.authority_runtime_host_transition.v1';
+export const NARS_AUTHORITY_RUNTIME_HOST_TRANSITION_REFUSAL_SCHEMA = 'narada.nars.authority_runtime_host_transition_refusal.v1';
+export const NARS_AUTHORITY_RUNTIME_HOST_TRANSITION_CASES_SCHEMA = 'narada.nars.authority_runtime_host_transition_cases.v1';
 export const CANONICAL_STARTUP_COMMAND_NAME = 'agent_context_startup_sequence';
 
 export const SOURCE_KINDS = Object.freeze(['operator', 'system', 'agent', 'external']);
@@ -116,6 +119,38 @@ export const TOOL_EFFECT_ADMISSION_REASONS = Object.freeze([
   'tool_effect_authority_denied',
   'write_tool_effect_admitted',
 ]);
+export const NARS_AUTHORITY_RUNTIME_HOST_KINDS = Object.freeze(['local', 'cloudflare-host']);
+export const NARS_AUTHORITY_RUNTIME_HOST_TRANSITION_STATES = Object.freeze([
+  'not_requested',
+  'proposed',
+  'preparing_target',
+  'source_draining',
+  'source_sealed',
+  'target_activating',
+  'target_active',
+  'source_retired',
+  'preparation_failed',
+  'drain_failed',
+  'seal_failed',
+  'target_activation_failed',
+  'transition_aborted',
+]);
+export const NARS_AUTHORITY_RUNTIME_HOST_TRANSITION_TERMINAL_STATES = Object.freeze([
+  'source_retired',
+  'preparation_failed',
+  'drain_failed',
+  'seal_failed',
+  'target_activation_failed',
+  'transition_aborted',
+]);
+export const NARS_AUTHORITY_RUNTIME_SOURCE_WRITE_ADMISSIONS = Object.freeze(['active', 'draining', 'sealed', 'retired']);
+export const NARS_AUTHORITY_RUNTIME_TARGET_WRITE_ADMISSIONS = Object.freeze(['not_before_source_seal', 'active_after_epoch_token', 'refused']);
+export const NARS_AUTHORITY_RUNTIME_EVENT_LOG_HANDOFF_MODES = Object.freeze(['checkpoint_plus_cursor']);
+export const NARS_AUTHORITY_RUNTIME_QUEUE_HANDOFF_MODES = Object.freeze(['drain_before_seal', 'transfer_after_seal', 'refuse_new_until_target_active']);
+export const NARS_AUTHORITY_RUNTIME_ARTIFACT_HANDOFF_MODES = Object.freeze(['registry_plus_admitted_content', 'registry_only_lazy_content', 'none']);
+export const NARS_AUTHORITY_RUNTIME_MCP_FABRIC_HANDOFF_MODES = Object.freeze(['compatibility_report_required', 'explicit_degraded_acceptance']);
+export const NARS_AUTHORITY_RUNTIME_MCP_FABRIC_STATUSES = Object.freeze(['pending', 'compatible', 'degraded_explicit', 'incompatible']);
+export const NARS_AUTHORITY_RUNTIME_PROVIDER_HANDOFF_MODES = Object.freeze(['unsupported_for_synthetic_slice', 'not_present']);
 export function classifyToolEffectAdmission(toolCall = {}, {
   adapterConfigured = false,
   admissionRequired = false,
@@ -343,6 +378,32 @@ export const CARRIER_PROTOCOL_SCHEMAS = Object.freeze({
     required: Object.freeze(['schema', 'hook', 'hook_kind', 'agent_id', 'session_id', 'timestamp']),
     optional: Object.freeze(['event_kind', 'request_id', 'turn_id', 'directive_id', 'terminal_state', 'error', 'metadata', 'source_event']),
   }),
+  nars_authority_runtime_host_transition: Object.freeze({
+    schema: NARS_AUTHORITY_RUNTIME_HOST_TRANSITION_SCHEMA,
+    required: Object.freeze([
+      'schema',
+      'transition_id',
+      'session_id',
+      'session_lineage_id',
+      'agent_id',
+      'site_id',
+      'state',
+      'source_authority_runtime',
+      'target_authority_runtime',
+      'handoff',
+      'fencing',
+      'evidence_refs',
+    ]),
+    optional: Object.freeze(['requested_by', 'requested_at', 'completed_at', 'terminal_reason']),
+  }),
+  nars_authority_runtime_host_transition_refusal: Object.freeze({
+    schema: NARS_AUTHORITY_RUNTIME_HOST_TRANSITION_REFUSAL_SCHEMA,
+    required: Object.freeze(['schema', 'status', 'reason_code', 'reason', 'failed_invariant', 'operator_repair', 'transition_request', 'evidence_refs']),
+  }),
+  nars_authority_runtime_host_transition_cases: Object.freeze({
+    schema: NARS_AUTHORITY_RUNTIME_HOST_TRANSITION_CASES_SCHEMA,
+    required: Object.freeze(['schema', 'provenance', 'valid_records', 'refusal_records', 'invalid_records']),
+  }),
   payload_ref: Object.freeze({
     schema: PAYLOAD_REF_SCHEMA,
     required: Object.freeze(['schema', 'payload_ref', 'reader_tool', 'summary']),
@@ -539,6 +600,186 @@ export function validatePayloadPolicy(policy) {
 export function assertValidPayloadPolicy(policy) {
   const errors = validatePayloadPolicy(policy);
   if (errors.length > 0) throw new Error(`invalid_carrier_payload_policy:${errors.join(',')}`);
+}
+
+function validateRequiredFields(record, requiredFields, prefix = '') {
+  const errors = [];
+  for (const field of requiredFields) {
+    if (!hasOwn(record, field)) errors.push(`${prefix}missing_required_field:${field}`);
+  }
+  return errors;
+}
+
+function validateNonEmptyString(value, errorCode) {
+  return typeof value === 'string' && value.trim().length > 0 ? [] : [errorCode];
+}
+
+function validateNonNegativeInteger(value, errorCode) {
+  return Number.isInteger(value) && value >= 0 ? [] : [errorCode];
+}
+
+function validatePositiveInteger(value, errorCode) {
+  return Number.isInteger(value) && value >= 1 ? [] : [errorCode];
+}
+
+function validateStringArray(value, errorCode) {
+  if (!Array.isArray(value)) return [errorCode];
+  return value.every((entry) => typeof entry === 'string') ? [] : [errorCode];
+}
+
+function validateAuthorityRuntimeRef(ref, prefix) {
+  const errors = [];
+  if (!isObject(ref)) return [`${prefix}.not_object`];
+  errors.push(...validateRequiredFields(ref, ['authority_runtime_id', 'host_kind', 'authority_epoch', 'health_ref', 'authority_role'], `${prefix}.`));
+  errors.push(...validateNonEmptyString(ref.authority_runtime_id, `${prefix}.invalid_authority_runtime_id`));
+  if (!enumIncludes(NARS_AUTHORITY_RUNTIME_HOST_KINDS, ref.host_kind)) errors.push(`${prefix}.invalid_host_kind:${String(ref.host_kind)}`);
+  errors.push(...validatePositiveInteger(ref.authority_epoch, `${prefix}.invalid_authority_epoch`));
+  errors.push(...validateNonEmptyString(ref.health_ref, `${prefix}.invalid_health_ref`));
+  if (ref.authority_role !== 'canonical_session_runtime') errors.push(`${prefix}.not_canonical_authority_role:${String(ref.authority_role)}`);
+  if (ref.event_cursor !== undefined) {
+    if (!isObject(ref.event_cursor)) {
+      errors.push(`${prefix}.event_cursor_not_object`);
+    } else {
+      errors.push(...validateRequiredFields(ref.event_cursor, ['last_sequence'], `${prefix}.event_cursor.`));
+      errors.push(...validateNonNegativeInteger(ref.event_cursor.last_sequence, `${prefix}.event_cursor.invalid_last_sequence`));
+    }
+  }
+  return errors;
+}
+
+function validateTransitionHandoff(handoff) {
+  const errors = [];
+  if (!isObject(handoff)) return ['handoff_not_object'];
+  errors.push(...validateRequiredFields(handoff, ['event_log', 'operator_input_queue', 'artifacts', 'health', 'mcp_fabric', 'provider_state'], 'handoff.'));
+  const eventLog = handoff.event_log;
+  if (!isObject(eventLog)) {
+    errors.push('handoff.event_log_not_object');
+  } else {
+    if (!enumIncludes(NARS_AUTHORITY_RUNTIME_EVENT_LOG_HANDOFF_MODES, eventLog.mode)) errors.push(`handoff.event_log.invalid_mode:${String(eventLog.mode)}`);
+    errors.push(...validateNonNegativeInteger(eventLog.source_last_sequence, 'handoff.event_log.invalid_source_last_sequence'));
+    errors.push(...validatePositiveInteger(eventLog.target_first_sequence, 'handoff.event_log.invalid_target_first_sequence'));
+    if (Number.isInteger(eventLog.source_last_sequence) && Number.isInteger(eventLog.target_first_sequence) && eventLog.target_first_sequence <= eventLog.source_last_sequence) {
+      errors.push('handoff.event_log.target_first_sequence_must_follow_source_last_sequence');
+    }
+  }
+  const queue = handoff.operator_input_queue;
+  if (!isObject(queue)) {
+    errors.push('handoff.operator_input_queue_not_object');
+  } else {
+    if (!enumIncludes(NARS_AUTHORITY_RUNTIME_QUEUE_HANDOFF_MODES, queue.mode)) errors.push(`handoff.operator_input_queue.invalid_mode:${String(queue.mode)}`);
+    errors.push(...validateNonNegativeInteger(queue.pending_count_at_request, 'handoff.operator_input_queue.invalid_pending_count_at_request'));
+    errors.push(...validateNonNegativeInteger(queue.pending_count_at_seal, 'handoff.operator_input_queue.invalid_pending_count_at_seal'));
+  }
+  const artifacts = handoff.artifacts;
+  if (!isObject(artifacts)) {
+    errors.push('handoff.artifacts_not_object');
+  } else {
+    if (!enumIncludes(NARS_AUTHORITY_RUNTIME_ARTIFACT_HANDOFF_MODES, artifacts.mode)) errors.push(`handoff.artifacts.invalid_mode:${String(artifacts.mode)}`);
+    if (artifacts.source_paths_exposed !== false) errors.push('handoff.artifacts.source_paths_exposed_must_be_false');
+  }
+  const health = handoff.health;
+  if (!isObject(health)) {
+    errors.push('handoff.health_not_object');
+  } else {
+    if (!enumIncludes(['source_sealed', 'transition_aborted'], health.source_health_until)) errors.push(`handoff.health.invalid_source_health_until:${String(health.source_health_until)}`);
+    if (!enumIncludes(['target_activating', 'target_active'], health.target_health_required_before)) errors.push(`handoff.health.invalid_target_health_required_before:${String(health.target_health_required_before)}`);
+  }
+  const mcpFabric = handoff.mcp_fabric;
+  if (!isObject(mcpFabric)) {
+    errors.push('handoff.mcp_fabric_not_object');
+  } else {
+    if (!enumIncludes(NARS_AUTHORITY_RUNTIME_MCP_FABRIC_HANDOFF_MODES, mcpFabric.mode)) errors.push(`handoff.mcp_fabric.invalid_mode:${String(mcpFabric.mode)}`);
+    if (!enumIncludes(NARS_AUTHORITY_RUNTIME_MCP_FABRIC_STATUSES, mcpFabric.status)) errors.push(`handoff.mcp_fabric.invalid_status:${String(mcpFabric.status)}`);
+  }
+  const providerState = handoff.provider_state;
+  if (!isObject(providerState)) {
+    errors.push('handoff.provider_state_not_object');
+  } else if (!enumIncludes(NARS_AUTHORITY_RUNTIME_PROVIDER_HANDOFF_MODES, providerState.mode)) {
+    errors.push(`handoff.provider_state.invalid_mode:${String(providerState.mode)}`);
+  }
+  return errors;
+}
+
+function validateTransitionFencing(fencing) {
+  const errors = [];
+  if (!isObject(fencing)) return ['fencing_not_object'];
+  errors.push(...validateRequiredFields(fencing, ['source_write_admission', 'target_write_admission', 'split_brain_guard'], 'fencing.'));
+  if (!enumIncludes(NARS_AUTHORITY_RUNTIME_SOURCE_WRITE_ADMISSIONS, fencing.source_write_admission)) errors.push(`fencing.invalid_source_write_admission:${String(fencing.source_write_admission)}`);
+  if (!enumIncludes(NARS_AUTHORITY_RUNTIME_TARGET_WRITE_ADMISSIONS, fencing.target_write_admission)) errors.push(`fencing.invalid_target_write_admission:${String(fencing.target_write_admission)}`);
+  if (fencing.split_brain_guard !== 'authority_epoch_token_required') errors.push(`fencing.invalid_split_brain_guard:${String(fencing.split_brain_guard)}`);
+  if (fencing.source_write_admission === 'active' && fencing.target_write_admission === 'active_after_epoch_token') {
+    errors.push('fencing.split_authority_write_admission');
+  }
+  return errors;
+}
+
+export function validateNarsAuthorityRuntimeHostTransitionRecord(record) {
+  const errors = [];
+  if (!isObject(record)) return ['authority_runtime_host_transition_not_object'];
+  if (record.schema !== NARS_AUTHORITY_RUNTIME_HOST_TRANSITION_SCHEMA) errors.push(`invalid_schema:${String(record.schema)}`);
+  errors.push(...validateRequiredFields(record, CARRIER_PROTOCOL_SCHEMAS.nars_authority_runtime_host_transition.required));
+  if (typeof record.transition_id !== 'string' || !record.transition_id.startsWith('arht_')) errors.push('invalid_transition_id');
+  errors.push(...validateNonEmptyString(record.session_id, 'invalid_session_id'));
+  errors.push(...validateNonEmptyString(record.session_lineage_id, 'invalid_session_lineage_id'));
+  errors.push(...validateNonEmptyString(record.agent_id, 'invalid_agent_id'));
+  errors.push(...validateNonEmptyString(record.site_id, 'invalid_site_id'));
+  if (record.requested_by !== undefined) errors.push(...validateNonEmptyString(record.requested_by, 'invalid_requested_by'));
+  if (record.requested_at !== undefined && !isRfc3339Utc(record.requested_at)) errors.push('invalid_requested_at');
+  if (!enumIncludes(NARS_AUTHORITY_RUNTIME_HOST_TRANSITION_STATES, record.state)) errors.push(`invalid_state:${String(record.state)}`);
+  errors.push(...validateAuthorityRuntimeRef(record.source_authority_runtime, 'source_authority_runtime'));
+  errors.push(...validateAuthorityRuntimeRef(record.target_authority_runtime, 'target_authority_runtime'));
+  if (isObject(record.source_authority_runtime) && isObject(record.target_authority_runtime)) {
+    if (record.source_authority_runtime.host_kind === record.target_authority_runtime.host_kind) errors.push('authority_runtime_hosts_not_distinct');
+    if (Number.isInteger(record.source_authority_runtime.authority_epoch) && Number.isInteger(record.target_authority_runtime.authority_epoch) && record.target_authority_runtime.authority_epoch <= record.source_authority_runtime.authority_epoch) {
+      errors.push('target_authority_epoch_must_exceed_source_authority_epoch');
+    }
+  }
+  errors.push(...validateTransitionHandoff(record.handoff));
+  errors.push(...validateTransitionFencing(record.fencing));
+  errors.push(...validateStringArray(record.evidence_refs, 'invalid_evidence_refs'));
+  if (record.completed_at !== undefined && record.completed_at !== null && !isRfc3339Utc(record.completed_at)) errors.push('invalid_completed_at');
+  if (record.terminal_reason !== undefined && record.terminal_reason !== null && typeof record.terminal_reason !== 'string') errors.push('invalid_terminal_reason');
+  if (record.state === 'target_active') {
+    if (record.fencing?.source_write_admission !== 'sealed' && record.fencing?.source_write_admission !== 'retired') errors.push('target_active_requires_source_sealed_or_retired');
+    if (record.fencing?.target_write_admission !== 'active_after_epoch_token') errors.push('target_active_requires_target_write_admission');
+  }
+  if (NARS_AUTHORITY_RUNTIME_HOST_TRANSITION_TERMINAL_STATES.includes(record.state) && record.state !== 'source_retired') {
+    if (record.completed_at === undefined || record.completed_at === null) errors.push('terminal_transition_requires_completed_at');
+    if (record.terminal_reason === undefined) errors.push('terminal_transition_requires_terminal_reason');
+  }
+  return errors;
+}
+
+export function assertValidNarsAuthorityRuntimeHostTransitionRecord(record) {
+  const errors = validateNarsAuthorityRuntimeHostTransitionRecord(record);
+  if (errors.length > 0) throw new Error(`invalid_nars_authority_runtime_host_transition:${errors.join(',')}`);
+}
+
+export function validateNarsAuthorityRuntimeHostTransitionRefusal(refusal) {
+  const errors = [];
+  if (!isObject(refusal)) return ['authority_runtime_host_transition_refusal_not_object'];
+  if (refusal.schema !== NARS_AUTHORITY_RUNTIME_HOST_TRANSITION_REFUSAL_SCHEMA) errors.push(`invalid_schema:${String(refusal.schema)}`);
+  errors.push(...validateRequiredFields(refusal, CARRIER_PROTOCOL_SCHEMAS.nars_authority_runtime_host_transition_refusal.required));
+  if (refusal.status !== 'refused') errors.push(`invalid_status:${String(refusal.status)}`);
+  errors.push(...validateNonEmptyString(refusal.reason_code, 'invalid_reason_code'));
+  errors.push(...validateNonEmptyString(refusal.reason, 'invalid_reason'));
+  errors.push(...validateNonEmptyString(refusal.failed_invariant, 'invalid_failed_invariant'));
+  errors.push(...validateNonEmptyString(refusal.operator_repair, 'invalid_operator_repair'));
+  if (!isObject(refusal.transition_request)) {
+    errors.push('transition_request_not_object');
+  } else {
+    errors.push(...validateNonEmptyString(refusal.transition_request.session_id, 'transition_request.invalid_session_id'));
+    if (!enumIncludes(NARS_AUTHORITY_RUNTIME_HOST_KINDS, refusal.transition_request.source_host_kind)) errors.push(`transition_request.invalid_source_host_kind:${String(refusal.transition_request.source_host_kind)}`);
+    if (!enumIncludes(NARS_AUTHORITY_RUNTIME_HOST_KINDS, refusal.transition_request.target_host_kind)) errors.push(`transition_request.invalid_target_host_kind:${String(refusal.transition_request.target_host_kind)}`);
+    if (refusal.transition_request.source_host_kind === refusal.transition_request.target_host_kind) errors.push('transition_request.host_kinds_not_distinct');
+  }
+  errors.push(...validateStringArray(refusal.evidence_refs, 'invalid_evidence_refs'));
+  return errors;
+}
+
+export function assertValidNarsAuthorityRuntimeHostTransitionRefusal(refusal) {
+  const errors = validateNarsAuthorityRuntimeHostTransitionRefusal(refusal);
+  if (errors.length > 0) throw new Error(`invalid_nars_authority_runtime_host_transition_refusal:${errors.join(',')}`);
 }
 
 export function validatePayloadRef(ref) {

@@ -1,0 +1,304 @@
+{
+  "schema": "narada.nars.authority_runtime_host_transition_cases.v1",
+  "provenance": "Copied from docs/concepts/fixtures/nars-authority-runtime-host-transition for package-owned protocol validation tests.",
+  "valid_records": [
+    {
+      "name": "proposed local to Cloudflare transition",
+      "record": {
+        "schema": "narada.nars.authority_runtime_host_transition.v1",
+        "transition_id": "arht_20260702_proposed",
+        "session_id": "carrier_202607020001_example",
+        "session_lineage_id": "nars_lineage_202607020001_example",
+        "agent_id": "resident",
+        "site_id": "narada.sonar",
+        "requested_by": "operator",
+        "requested_at": "2026-07-02T00:00:00.000Z",
+        "state": "proposed",
+        "source_authority_runtime": {
+          "authority_runtime_id": "auth_local_202607020001_example",
+          "host_kind": "local",
+          "authority_epoch": 3,
+          "health_ref": "session.health",
+          "authority_role": "canonical_session_runtime",
+          "event_cursor": { "last_sequence": 120 }
+        },
+        "target_authority_runtime": {
+          "authority_runtime_id": "auth_cf_202607020001_example",
+          "host_kind": "cloudflare-host",
+          "authority_epoch": 4,
+          "health_ref": "cloudflare_authority.session.health",
+          "authority_role": "canonical_session_runtime",
+          "event_cursor": { "last_sequence": 120 }
+        },
+        "handoff": {
+          "event_log": { "mode": "checkpoint_plus_cursor", "source_last_sequence": 120, "target_first_sequence": 121 },
+          "operator_input_queue": { "mode": "drain_before_seal", "pending_count_at_request": 0, "pending_count_at_seal": 0 },
+          "artifacts": { "mode": "registry_plus_admitted_content", "source_paths_exposed": false },
+          "health": { "source_health_until": "source_sealed", "target_health_required_before": "target_activating" },
+          "mcp_fabric": { "mode": "compatibility_report_required", "status": "pending" },
+          "provider_state": { "mode": "unsupported_for_synthetic_slice" }
+        },
+        "fencing": {
+          "source_write_admission": "active",
+          "target_write_admission": "not_before_source_seal",
+          "split_brain_guard": "authority_epoch_token_required"
+        },
+        "evidence_refs": [],
+        "completed_at": null,
+        "terminal_reason": null
+      }
+    },
+    {
+      "name": "target active with source sealed",
+      "record": {
+        "schema": "narada.nars.authority_runtime_host_transition.v1",
+        "transition_id": "arht_20260702_target_active",
+        "session_id": "carrier_202607020001_example",
+        "session_lineage_id": "nars_lineage_202607020001_example",
+        "agent_id": "resident",
+        "site_id": "narada.sonar",
+        "requested_by": "operator",
+        "requested_at": "2026-07-02T00:00:00.000Z",
+        "state": "target_active",
+        "source_authority_runtime": {
+          "authority_runtime_id": "auth_local_202607020001_example",
+          "host_kind": "local",
+          "authority_epoch": 3,
+          "health_ref": "session.health",
+          "authority_role": "canonical_session_runtime",
+          "event_cursor": { "last_sequence": 120 }
+        },
+        "target_authority_runtime": {
+          "authority_runtime_id": "auth_cf_202607020001_example",
+          "host_kind": "cloudflare-host",
+          "authority_epoch": 4,
+          "health_ref": "cloudflare_authority.session.health",
+          "authority_role": "canonical_session_runtime",
+          "event_cursor": { "last_sequence": 121 }
+        },
+        "handoff": {
+          "event_log": { "mode": "checkpoint_plus_cursor", "source_last_sequence": 120, "target_first_sequence": 121 },
+          "operator_input_queue": { "mode": "drain_before_seal", "pending_count_at_request": 0, "pending_count_at_seal": 0 },
+          "artifacts": { "mode": "registry_plus_admitted_content", "source_paths_exposed": false },
+          "health": { "source_health_until": "source_sealed", "target_health_required_before": "target_active" },
+          "mcp_fabric": { "mode": "compatibility_report_required", "status": "compatible" },
+          "provider_state": { "mode": "unsupported_for_synthetic_slice" }
+        },
+        "fencing": {
+          "source_write_admission": "sealed",
+          "target_write_admission": "active_after_epoch_token",
+          "split_brain_guard": "authority_epoch_token_required"
+        },
+        "evidence_refs": ["source_seal:auth_local_202607020001_example", "target_health:auth_cf_202607020001_example"],
+        "completed_at": "2026-07-02T00:01:00.000Z",
+        "terminal_reason": null
+      }
+    },
+    {
+      "name": "aborted before target activation",
+      "record": {
+        "schema": "narada.nars.authority_runtime_host_transition.v1",
+        "transition_id": "arht_20260702_aborted",
+        "session_id": "carrier_202607020001_example",
+        "session_lineage_id": "nars_lineage_202607020001_example",
+        "agent_id": "resident",
+        "site_id": "narada.sonar",
+        "requested_by": "operator",
+        "requested_at": "2026-07-02T00:00:00.000Z",
+        "state": "transition_aborted",
+        "source_authority_runtime": {
+          "authority_runtime_id": "auth_local_202607020001_example",
+          "host_kind": "local",
+          "authority_epoch": 3,
+          "health_ref": "session.health",
+          "authority_role": "canonical_session_runtime",
+          "event_cursor": { "last_sequence": 120 }
+        },
+        "target_authority_runtime": {
+          "authority_runtime_id": "auth_cf_202607020001_example",
+          "host_kind": "cloudflare-host",
+          "authority_epoch": 4,
+          "health_ref": "cloudflare_authority.session.health",
+          "authority_role": "canonical_session_runtime",
+          "event_cursor": { "last_sequence": 120 }
+        },
+        "handoff": {
+          "event_log": { "mode": "checkpoint_plus_cursor", "source_last_sequence": 120, "target_first_sequence": 121 },
+          "operator_input_queue": { "mode": "drain_before_seal", "pending_count_at_request": 0, "pending_count_at_seal": 0 },
+          "artifacts": { "mode": "registry_plus_admitted_content", "source_paths_exposed": false },
+          "health": { "source_health_until": "transition_aborted", "target_health_required_before": "target_activating" },
+          "mcp_fabric": { "mode": "compatibility_report_required", "status": "incompatible" },
+          "provider_state": { "mode": "unsupported_for_synthetic_slice" }
+        },
+        "fencing": {
+          "source_write_admission": "active",
+          "target_write_admission": "refused",
+          "split_brain_guard": "authority_epoch_token_required"
+        },
+        "evidence_refs": ["refusal:mcp_fabric_incompatible"],
+        "completed_at": "2026-07-02T00:00:30.000Z",
+        "terminal_reason": "mcp_fabric_incompatible"
+      }
+    }
+  ],
+  "refusal_records": [
+    {
+      "name": "active turn refusal",
+      "record": {
+        "schema": "narada.nars.authority_runtime_host_transition_refusal.v1",
+        "status": "refused",
+        "reason_code": "active_turn_in_progress",
+        "reason": "The source authority cannot be sealed while a provider turn is active.",
+        "failed_invariant": "The source authority must be drainable and sealable before target activation.",
+        "operator_repair": "Complete, interrupt, or explicitly abandon the active turn, then rerun the transition planner.",
+        "transition_request": {
+          "session_id": "carrier_202607020001_example",
+          "source_host_kind": "local",
+          "target_host_kind": "cloudflare-host"
+        },
+        "evidence_refs": ["session.status:active_turn=true"]
+      }
+    },
+    {
+      "name": "mcp fabric incompatible refusal",
+      "record": {
+        "schema": "narada.nars.authority_runtime_host_transition_refusal.v1",
+        "status": "refused",
+        "reason_code": "mcp_fabric_incompatible",
+        "reason": "The target authority runtime cannot provide the declared required MCP fabric posture.",
+        "failed_invariant": "MCP fabric compatibility must be checked or explicitly degraded before target activation.",
+        "operator_repair": "Repair target fabric config or rerun with an explicit degraded-mode acceptance when the transition slice permits it.",
+        "transition_request": {
+          "session_id": "carrier_202607020001_example",
+          "source_host_kind": "local",
+          "target_host_kind": "cloudflare-host"
+        },
+        "evidence_refs": ["mcp_fabric_report:required_locus_missing"]
+      }
+    }
+  ],
+  "invalid_records": [
+    {
+      "name": "split authority write admission",
+      "expected_errors": ["fencing.split_authority_write_admission"],
+      "record": {
+        "schema": "narada.nars.authority_runtime_host_transition.v1",
+        "transition_id": "arht_20260702_split_authority",
+        "session_id": "carrier_202607020001_example",
+        "session_lineage_id": "nars_lineage_202607020001_example",
+        "agent_id": "resident",
+        "site_id": "narada.sonar",
+        "state": "target_active",
+        "source_authority_runtime": {
+          "authority_runtime_id": "auth_local_202607020001_example",
+          "host_kind": "local",
+          "authority_epoch": 3,
+          "health_ref": "session.health",
+          "authority_role": "canonical_session_runtime"
+        },
+        "target_authority_runtime": {
+          "authority_runtime_id": "auth_cf_202607020001_example",
+          "host_kind": "cloudflare-host",
+          "authority_epoch": 4,
+          "health_ref": "cloudflare_authority.session.health",
+          "authority_role": "canonical_session_runtime"
+        },
+        "handoff": {
+          "event_log": { "mode": "checkpoint_plus_cursor", "source_last_sequence": 120, "target_first_sequence": 121 },
+          "operator_input_queue": { "mode": "drain_before_seal", "pending_count_at_request": 0, "pending_count_at_seal": 0 },
+          "artifacts": { "mode": "registry_plus_admitted_content", "source_paths_exposed": false },
+          "health": { "source_health_until": "source_sealed", "target_health_required_before": "target_active" },
+          "mcp_fabric": { "mode": "compatibility_report_required", "status": "compatible" },
+          "provider_state": { "mode": "unsupported_for_synthetic_slice" }
+        },
+        "fencing": {
+          "source_write_admission": "active",
+          "target_write_admission": "active_after_epoch_token",
+          "split_brain_guard": "authority_epoch_token_required"
+        },
+        "evidence_refs": []
+      }
+    },
+    {
+      "name": "missing target epoch",
+      "expected_errors": ["target_authority_runtime.missing_required_field:authority_epoch", "target_authority_runtime.invalid_authority_epoch"],
+      "record": {
+        "schema": "narada.nars.authority_runtime_host_transition.v1",
+        "transition_id": "arht_20260702_missing_epoch",
+        "session_id": "carrier_202607020001_example",
+        "session_lineage_id": "nars_lineage_202607020001_example",
+        "agent_id": "resident",
+        "site_id": "narada.sonar",
+        "state": "proposed",
+        "source_authority_runtime": {
+          "authority_runtime_id": "auth_local_202607020001_example",
+          "host_kind": "local",
+          "authority_epoch": 3,
+          "health_ref": "session.health",
+          "authority_role": "canonical_session_runtime"
+        },
+        "target_authority_runtime": {
+          "authority_runtime_id": "auth_cf_202607020001_example",
+          "host_kind": "cloudflare-host",
+          "health_ref": "cloudflare_authority.session.health",
+          "authority_role": "canonical_session_runtime"
+        },
+        "handoff": {
+          "event_log": { "mode": "checkpoint_plus_cursor", "source_last_sequence": 120, "target_first_sequence": 121 },
+          "operator_input_queue": { "mode": "drain_before_seal", "pending_count_at_request": 0, "pending_count_at_seal": 0 },
+          "artifacts": { "mode": "registry_plus_admitted_content", "source_paths_exposed": false },
+          "health": { "source_health_until": "source_sealed", "target_health_required_before": "target_activating" },
+          "mcp_fabric": { "mode": "compatibility_report_required", "status": "pending" },
+          "provider_state": { "mode": "unsupported_for_synthetic_slice" }
+        },
+        "fencing": {
+          "source_write_admission": "active",
+          "target_write_admission": "not_before_source_seal",
+          "split_brain_guard": "authority_epoch_token_required"
+        },
+        "evidence_refs": []
+      }
+    },
+    {
+      "name": "projection store cannot become authority",
+      "expected_errors": ["target_authority_runtime.not_canonical_authority_role:projection_store"],
+      "record": {
+        "schema": "narada.nars.authority_runtime_host_transition.v1",
+        "transition_id": "arht_20260702_projection_cache",
+        "session_id": "carrier_202607020001_example",
+        "session_lineage_id": "nars_lineage_202607020001_example",
+        "agent_id": "resident",
+        "site_id": "narada.sonar",
+        "state": "proposed",
+        "source_authority_runtime": {
+          "authority_runtime_id": "auth_local_202607020001_example",
+          "host_kind": "local",
+          "authority_epoch": 3,
+          "health_ref": "session.health",
+          "authority_role": "canonical_session_runtime"
+        },
+        "target_authority_runtime": {
+          "authority_runtime_id": "store_cloudflare_projection_example",
+          "host_kind": "cloudflare-host",
+          "authority_epoch": 4,
+          "health_ref": "projection.health",
+          "authority_role": "projection_store"
+        },
+        "handoff": {
+          "event_log": { "mode": "checkpoint_plus_cursor", "source_last_sequence": 120, "target_first_sequence": 121 },
+          "operator_input_queue": { "mode": "drain_before_seal", "pending_count_at_request": 0, "pending_count_at_seal": 0 },
+          "artifacts": { "mode": "registry_plus_admitted_content", "source_paths_exposed": false },
+          "health": { "source_health_until": "source_sealed", "target_health_required_before": "target_activating" },
+          "mcp_fabric": { "mode": "compatibility_report_required", "status": "pending" },
+          "provider_state": { "mode": "unsupported_for_synthetic_slice" }
+        },
+        "fencing": {
+          "source_write_admission": "active",
+          "target_write_admission": "not_before_source_seal",
+          "split_brain_guard": "authority_epoch_token_required"
+        },
+        "evidence_refs": []
+      }
+    }
+  ]
+}

@@ -13,6 +13,11 @@ import {
   CARRIER_DIRECTIVE_EMITTER_REGISTRY,
   NARS_LIFECYCLE_HOOK_SCHEMA,
   NARS_LIFECYCLE_HOOKS,
+  NARS_AUTHORITY_RUNTIME_HOST_KINDS,
+  NARS_AUTHORITY_RUNTIME_HOST_TRANSITION_CASES_SCHEMA,
+  NARS_AUTHORITY_RUNTIME_HOST_TRANSITION_REFUSAL_SCHEMA,
+  NARS_AUTHORITY_RUNTIME_HOST_TRANSITION_SCHEMA,
+  NARS_AUTHORITY_RUNTIME_HOST_TRANSITION_STATES,
   NARS_RUNTIME_EVENT_KINDS,
   NARS_SESSION_EVENT_KINDS,
   NARS_SESSION_LIFECYCLE_HOOKS,
@@ -35,6 +40,8 @@ import {
   TURN_TERMINAL_PAYLOAD_SCHEMA,
   assertValidControlInputRecord,
   assertValidInputEvent,
+  assertValidNarsAuthorityRuntimeHostTransitionRecord,
+  assertValidNarsAuthorityRuntimeHostTransitionRefusal,
   assertValidPayloadRef,
   assertValidSessionEvent,
   classifyCarrierControlRequest,
@@ -74,6 +81,8 @@ import {
   startupCommandFromLaunchPacket,
   validateControlInputRecord,
   validateInputEvent,
+  validateNarsAuthorityRuntimeHostTransitionRecord,
+  validateNarsAuthorityRuntimeHostTransitionRefusal,
   validateNarsLifecycleHookPayload,
   validatePayloadRef,
   validatePayloadPolicy,
@@ -114,6 +123,7 @@ const inputPipelineCases = readFixture('carrier-input-pipeline-cases.json');
 const operatorInputAdmissionCases = readFixture('operator-input-admission-cases.json');
 const directiveEmitterRegistryCases = readFixture('carrier-directive-emitter-registry-cases.json');
 const toolEffectAdmissionCases = readFixture('tool-effect-admission-cases.json');
+const authorityRuntimeHostTransitionCases = readFixture('authority-runtime-host-transition-cases.json');
 
 assert.equal(CARRIER_PROTOCOL_SCHEMAS.input_event.schema, INPUT_EVENT_SCHEMA);
 assert.equal(CARRIER_PROTOCOL_SCHEMAS.session_event_fixture_manifest.schema, SESSION_EVENT_FIXTURE_MANIFEST_SCHEMA);
@@ -132,6 +142,11 @@ assert.equal(OPERATOR_INPUT_ADMISSION_CONSTRUCTORS.send.active_turn_effect, 'non
 assert.equal(OPERATOR_INPUT_ADMISSION_CONSTRUCTORS.enqueue.active_turn_effect, 'none');
 assert.equal(OPERATOR_INPUT_ADMISSION_CONSTRUCTORS.steer.active_turn_effect, 'interrupt');
 assert.equal(CARRIER_PROTOCOL_SCHEMAS.nars_lifecycle_hook.schema, NARS_LIFECYCLE_HOOK_SCHEMA);
+assert.equal(CARRIER_PROTOCOL_SCHEMAS.nars_authority_runtime_host_transition.schema, NARS_AUTHORITY_RUNTIME_HOST_TRANSITION_SCHEMA);
+assert.equal(CARRIER_PROTOCOL_SCHEMAS.nars_authority_runtime_host_transition_refusal.schema, NARS_AUTHORITY_RUNTIME_HOST_TRANSITION_REFUSAL_SCHEMA);
+assert.equal(CARRIER_PROTOCOL_SCHEMAS.nars_authority_runtime_host_transition_cases.schema, NARS_AUTHORITY_RUNTIME_HOST_TRANSITION_CASES_SCHEMA);
+assert.deepEqual(NARS_AUTHORITY_RUNTIME_HOST_KINDS, ['local', 'cloudflare-host']);
+assert.deepEqual(NARS_AUTHORITY_RUNTIME_HOST_TRANSITION_STATES, ['not_requested', 'proposed', 'preparing_target', 'source_draining', 'source_sealed', 'target_activating', 'target_active', 'source_retired', 'preparation_failed', 'drain_failed', 'seal_failed', 'target_activation_failed', 'transition_aborted']);
 assert.deepEqual(NARS_SESSION_LIFECYCLE_HOOKS, ['beforeSessionBind', 'afterSessionStarted', 'afterSessionStatus', 'beforeSessionClose', 'afterSessionClosed', 'onSessionError']);
 assert.deepEqual(NARS_TURN_LIFECYCLE_HOOKS, ['beforeDirectiveAccept', 'afterDirectiveAccepted', 'beforeTurnStart', 'onAssistantMessage', 'onToolCall', 'onToolResult', 'onCommandResult', 'afterTurnComplete', 'onRuntimeError']);
 assert.deepEqual(NARS_LIFECYCLE_HOOKS, [...NARS_SESSION_LIFECYCLE_HOOKS, ...NARS_TURN_LIFECYCLE_HOOKS]);
@@ -195,6 +210,23 @@ assert.match(thrownMessage(() => createNarsLifecycleHookPayload({
   timestamp: '2026-06-23T00:00:00.000Z',
   terminal_state: 'closed',
 })), /invalid_terminal_state:closed/);
+assert.equal(authorityRuntimeHostTransitionCases.schema, NARS_AUTHORITY_RUNTIME_HOST_TRANSITION_CASES_SCHEMA);
+assert.match(authorityRuntimeHostTransitionCases.provenance, /docs\/concepts\/fixtures\/nars-authority-runtime-host-transition/);
+for (const fixtureCase of authorityRuntimeHostTransitionCases.valid_records) {
+  assert.deepEqual(validateNarsAuthorityRuntimeHostTransitionRecord(fixtureCase.record), [], fixtureCase.name);
+  assert.doesNotThrow(() => assertValidNarsAuthorityRuntimeHostTransitionRecord(fixtureCase.record), fixtureCase.name);
+}
+for (const fixtureCase of authorityRuntimeHostTransitionCases.refusal_records) {
+  assert.deepEqual(validateNarsAuthorityRuntimeHostTransitionRefusal(fixtureCase.record), [], fixtureCase.name);
+  assert.doesNotThrow(() => assertValidNarsAuthorityRuntimeHostTransitionRefusal(fixtureCase.record), fixtureCase.name);
+}
+for (const fixtureCase of authorityRuntimeHostTransitionCases.invalid_records) {
+  const errors = validateNarsAuthorityRuntimeHostTransitionRecord(fixtureCase.record);
+  for (const expectedError of fixtureCase.expected_errors) {
+    assert.equal(errors.includes(expectedError), true, `${fixtureCase.name}: expected ${expectedError} in ${errors.join(',')}`);
+  }
+  assert.match(thrownMessage(() => assertValidNarsAuthorityRuntimeHostTransitionRecord(fixtureCase.record)), /invalid_nars_authority_runtime_host_transition:/, fixtureCase.name);
+}
 assert.equal(toolEffectAdmissionCases.schema, TOOL_EFFECT_ADMISSION_CASES_SCHEMA);
 for (const fixtureCase of toolEffectAdmissionCases.cases) {
   assert.deepEqual(classifyToolEffectAdmission(fixtureCase.tool_call, fixtureCase.state), fixtureCase.expected, fixtureCase.name);
