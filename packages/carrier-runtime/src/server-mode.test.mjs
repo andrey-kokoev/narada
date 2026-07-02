@@ -179,7 +179,7 @@ test('server mode executes a provider-requested MCP tool through real fabric and
     assert.equal(durableToolResult?.payload?.status, 'ok');
     assert.match(durableToolResult?.payload?.result_summary, /mcp-e2e/);
   } finally {
-    rmSync(siteRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    removeTempDir(siteRoot);
   }
 });
 
@@ -241,7 +241,7 @@ test('server mode emits MCP runtime diagnostics when a real fabric tool call fai
     assert.equal(failedToolResult?.status, 'error');
     assert.match(failedToolResult?.error, /fixture_mcp_forced_failure/);
   } finally {
-    rmSync(siteRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    removeTempDir(siteRoot);
   }
 });
 
@@ -569,6 +569,156 @@ test('authority source seal persists seal evidence and refuses writes after seal
     const sessionIndexRecord = readJson(join(sessionDir, 'session-index-record.json'));
     assert.equal(sessionIndexRecord.authority_transition_state, 'source_sealed');
     assert.equal(sessionIndexRecord.source_write_admission, 'sealed');
+  } finally {
+    removeTempDir(siteRoot);
+  }
+});
+
+
+test('authority target activation refuses missing source seal and epoch evidence', async () => {
+  const siteRoot = mkdtempSync(join(tmpdir(), 'carrier-target-activation-refusal-test-'));
+  try {
+    const input = new PassThrough();
+    const output = new PassThrough();
+    const events = [];
+    let outputBuffer = '';
+    output.setEncoding('utf8');
+    output.on('data', (chunk) => {
+      outputBuffer += chunk;
+      const lines = outputBuffer.split(/\r?\n/);
+      outputBuffer = lines.pop() ?? '';
+      for (const line of lines) if (line.trim()) events.push(JSON.parse(line));
+    });
+
+    const sessionDir = resolveNaradaSitePaths({ siteRoot, sessionId: 'session_target_refusal_test' }).narsSessionDir;
+    const runtimeContext = {
+      identity: 'agent.test',
+      session: 'session_target_refusal_test',
+      siteRoot,
+      sessionPath: join(sessionDir, 'session.jsonl'),
+      eventsPath: join(sessionDir, 'events.jsonl'),
+      providerSettings: { stream: false },
+    };
+    const { dependencies } = createCarrierRuntimeDependencies({ runtimeContext });
+    const running = runCarrierServerMode({
+      input,
+      output,
+      callChatApiFn: async () => ({ choices: [{ message: { role: 'assistant', content: 'unexpected' } }] }),
+      runtimeContext,
+      dependencies: {
+        ...dependencies,
+        discoverAndStartMcpServers: async () => ({}),
+        closeMcpServers: () => {},
+        readMcpPreflightArtifact: () => null,
+      },
+    });
+
+    input.write(`${JSON.stringify({ id: 'prepare', method: 'authority.target.prepare' })}\n`);
+    await waitFor(() => events.some((event) => event.event === 'authority_target_prepared'));
+    input.write(`${JSON.stringify({ id: 'send-before-active', method: 'conversation.send', params: { message: 'must not run before target active' } })}\n`);
+    input.write(`${JSON.stringify({ id: 'activate', method: 'authority.target.activate' })}\n`);
+    input.end();
+    await running;
+
+    const writeRefusal = events.find((event) => event.event === 'authority_target_write_refused');
+    assert.equal(writeRefusal?.code, 'authority_target_not_active');
+    const activationRefusal = events.find((event) => event.event === 'authority_target_activation_refused');
+    assert.equal(activationRefusal?.status, 'refused');
+    assert.equal(activationRefusal.refusals.some((refusal) => refusal.reason_code === 'source_seal_evidence_missing'), true);
+    assert.equal(activationRefusal.refusals.some((refusal) => refusal.reason_code === 'authority_epoch_token_invalid'), true);
+    const transitionState = readJson(join(sessionDir, 'authority-transition-state.json'));
+    assert.equal(transitionState.authority_transition_state, 'preparing_target');
+    assert.equal(transitionState.target_write_admission, 'not_before_source_seal');
+  } finally {
+    removeTempDir(siteRoot);
+  }
+});
+
+test('authority target activation emits deterministic boundary event and admits target writes', async () => {
+  const siteRoot = mkdtempSync(join(tmpdir(), 'carrier-target-activation-success-test-'));
+  try {
+    const input = new PassThrough();
+    const output = new PassThrough();
+    const events = [];
+    let outputBuffer = '';
+    output.setEncoding('utf8');
+    output.on('data', (chunk) => {
+      outputBuffer += chunk;
+      const lines = outputBuffer.split(/\r?\n/);
+      outputBuffer = lines.pop() ?? '';
+      for (const line of lines) if (line.trim()) events.push(JSON.parse(line));
+    });
+
+    const sessionDir = resolveNaradaSitePaths({ siteRoot, sessionId: 'session_target_success_test' }).narsSessionDir;
+    const runtimeContext = {
+      identity: 'agent.test',
+      session: 'session_target_success_test',
+      siteRoot,
+      sessionPath: join(sessionDir, 'session.jsonl'),
+      eventsPath: join(sessionDir, 'events.jsonl'),
+      providerSettings: { stream: false },
+    };
+    const { dependencies } = createCarrierRuntimeDependencies({ runtimeContext });
+    let providerCalls = 0;
+    const running = runCarrierServerMode({
+      input,
+      output,
+      callChatApiFn: async () => {
+        providerCalls += 1;
+        return { choices: [{ message: { role: 'assistant', content: 'target write admitted' } }] };
+      },
+      runtimeContext,
+      dependencies: {
+        ...dependencies,
+        discoverAndStartMcpServers: async () => ({}),
+        closeMcpServers: () => {},
+        readMcpPreflightArtifact: () => null,
+      },
+    });
+
+    input.write(`${JSON.stringify({ id: 'drain', method: 'authority.source.drain' })}\n`);
+    await waitFor(() => events.some((event) => event.event === 'authority_source_draining'));
+    input.write(`${JSON.stringify({ id: 'seal', method: 'authority.source.seal' })}\n`);
+    await waitFor(() => events.some((event) => event.event === 'authority_source_sealed'));
+    input.write(`${JSON.stringify({
+      id: 'prepare',
+      method: 'authority.target.prepare',
+      params: {
+        superseded_by_session_id: 'session_target_success_test',
+        authority_locator_ref: 'locator:target:test',
+        target_authority_locator: { kind: 'local', session_id: 'session_target_success_test' },
+      },
+    })}\n`);
+    await waitFor(() => events.some((event) => event.event === 'authority_target_prepared'));
+    input.write(`${JSON.stringify({
+      id: 'activate',
+      method: 'authority.target.activate',
+      params: {
+        authority_epoch_token: { source_authority_epoch: 1, target_authority_epoch: 2, token_id: 'epoch-token-test' },
+        target_health: { status: 'healthy' },
+        mcp_fabric: { status: 'compatible' },
+        artifacts: { source_paths_exposed: false },
+        superseded_by_session_id: 'session_target_success_test',
+        authority_locator_ref: 'locator:target:test',
+        target_authority_locator: { kind: 'local', session_id: 'session_target_success_test' },
+      },
+    })}\n`);
+    await waitFor(() => events.some((event) => event.event === 'authority_target_active'));
+    input.write(`${JSON.stringify({ id: 'send', method: 'conversation.send', params: { message: 'run on target authority' } })}\n`);
+    input.end();
+    await running;
+
+    const active = events.find((event) => event.event === 'authority_target_active');
+    assert.equal(active.event_sequence, active.target_first_sequence);
+    assert.equal(active.activation_id, 'authority_target_active:session_target_success_test:2:' + active.target_first_sequence);
+    assert.equal(active.authority_transition_target.state, 'active');
+    assert.equal(active.authority_transition_source.target_authority_locator.session_id, 'session_target_success_test');
+    assert.equal(providerCalls, 1);
+    const transitionState = readJson(join(sessionDir, 'authority-transition-state.json'));
+    assert.equal(transitionState.authority_transition_state, 'target_active');
+    assert.equal(transitionState.target_write_admission, 'active_after_epoch_token');
+    assert.equal(transitionState.target_first_sequence, active.target_first_sequence);
+    assert.equal(transitionState.authority_locator_ref, 'locator:target:test');
   } finally {
     removeTempDir(siteRoot);
   }

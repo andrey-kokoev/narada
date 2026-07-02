@@ -239,6 +239,11 @@ export async function runCarrierServerMode({
     authority_transition_state: state.authorityTransition.authority_transition_state,
     source_write_admission: state.authorityTransition.source_write_admission,
     authority_transition: authorityTransitionSourceStateSnapshot(state.authorityTransition),
+    authority_transition_target: {
+      target_write_admission: state.authorityTransition.target_write_admission,
+      target_first_sequence: state.authorityTransition.target_first_sequence ?? null,
+      activation_id: state.authorityTransition.activation_id ?? null,
+    },
     tool_count: allTools.length,
     mcp_servers: mcpServerSummaryEntries(mcpServers),
     tool_outputs: displaySettings.toolOutputs ? 'shown' : 'hidden',

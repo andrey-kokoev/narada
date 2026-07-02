@@ -69,8 +69,10 @@ import {
 } from './nars-artifacts.mjs';
 import {
   authorityTransitionSourceStateSnapshot,
+  activateTargetAuthority,
   beginSourceDrain,
   classifySourceWriteAdmission,
+  prepareTargetAuthority,
   sealSourceAuthority,
 } from './authority-transition-state.mjs';
 
@@ -149,6 +151,87 @@ export function createCarrierRuntimeDependencies({ runtimeContext = {}, env = pr
   };
 }
 
+function authorityTransitionTargetStatus(state = {}) {
+  const transition = authorityTransitionStatus(state);
+  const targetState = transition.authority_transition_state === 'target_active'
+    ? 'active'
+    : transition.authority_transition_state === 'target_activating'
+      ? 'activating'
+      : transition.authority_transition_state === 'preparing_target' || transition.target_prepared_at
+        ? 'prepared'
+        : 'not_prepared';
+  return {
+    state: targetState,
+    authority_transition_state: transition.authority_transition_state,
+    target_write_admission: transition.target_write_admission,
+    target_prepared_at: transition.target_prepared_at ?? null,
+    target_activated_at: transition.target_activated_at ?? null,
+    target_first_sequence: transition.target_first_sequence ?? null,
+    authority_epoch_token: transition.authority_epoch_token ?? null,
+    activation_id: transition.activation_id ?? null,
+    target_authority_locator: transition.target_authority_locator ?? null,
+    superseded_by_session_id: transition.superseded_by_session_id ?? null,
+    authority_locator_ref: transition.authority_locator_ref ?? null,
+  };
+}
+
+function targetWriteAdmissionRefusal(state = {}, controlRequest = {}) {
+  if (!isCanonicalSourceWriteRequest(controlRequest)) return null;
+  const target = authorityTransitionTargetStatus(state);
+  if (target.state !== 'activating' && target.state !== 'prepared') return null;
+  return {
+    code: 'authority_target_not_active',
+    message: 'Target authority is prepared but not active; canonical writes require source seal evidence and an authority epoch token.',
+    failed_invariant: 'target_must_not_admit_writes_before_activation_evidence',
+    authority_transition_target: target,
+  };
+}
+
+function targetActivationRefusals(state = {}, params = {}) {
+  const refusals = [];
+  const transition = authorityTransitionStatus(state);
+  const sourceSealEvidence = params.source_seal_evidence ?? params.sourceSealEvidence ?? null;
+  const eventCursor = sourceSealEvidence?.event_cursor ?? sourceSealEvidence?.eventCursor ?? null;
+  const sourceLastSequence = eventCursor?.last_source_sequence_before_seal ?? eventCursor?.source_last_sequence ?? transition.source_last_sequence;
+  const requestedTargetFirstSequence = params.target_first_sequence ?? params.targetFirstSequence ?? currentEventSequence + 1;
+  if (transition.source_write_admission !== 'sealed' && sourceSealEvidence?.source_write_admission !== 'sealed') {
+    refusals.push(targetActivationRefusal('source_seal_evidence_missing', 'source_must_be_sealed_before_target_activation', 'Target activation requires evidence that the source is sealed.'));
+  }
+  if (!Number.isInteger(sourceLastSequence) || sourceLastSequence < 0) {
+    refusals.push(targetActivationRefusal('event_boundary_missing', 'target_first_sequence_must_follow_source_last_sequence', 'Target activation requires a source last-sequence event boundary.'));
+  }
+  if (!Number.isInteger(requestedTargetFirstSequence) || requestedTargetFirstSequence !== currentEventSequence + 1) {
+    refusals.push(targetActivationRefusal('target_first_sequence_boundary_mismatch', 'target_active_event_must_be_emitted_at_declared_sequence_boundary', 'Target activation target_first_sequence must equal the next runtime event sequence.'));
+  }
+  const token = params.authority_epoch_token ?? params.authorityEpochToken ?? null;
+  const sourceEpoch = token?.source_authority_epoch;
+  const targetEpoch = token?.target_authority_epoch;
+  if (!Number.isInteger(sourceEpoch) || !Number.isInteger(targetEpoch) || targetEpoch <= sourceEpoch) {
+    refusals.push(targetActivationRefusal('authority_epoch_token_invalid', 'target_epoch_must_exceed_source_epoch', 'Target activation requires a monotonic authority epoch token.'));
+  }
+  const targetHealth = params.target_health ?? params.targetHealth ?? null;
+  if (targetHealth?.status !== 'healthy') {
+    refusals.push(targetActivationRefusal('target_health_unavailable', 'target_health_required_before_target_active', 'Target activation requires fresh healthy target evidence.'));
+  }
+  const mcpFabric = params.mcp_fabric ?? params.mcpFabric ?? { status: 'compatible' };
+  if (!['compatible', 'degraded_explicit'].includes(mcpFabric?.status)) {
+    refusals.push(targetActivationRefusal('mcp_fabric_incompatible', 'mcp_fabric_must_be_compatible_or_explicitly_degraded', 'Target activation requires compatible MCP fabric or explicit degraded acceptance.'));
+  }
+  const artifacts = params.artifacts ?? { source_paths_exposed: false };
+  if (artifacts?.source_paths_exposed === true) {
+    refusals.push(targetActivationRefusal('artifact_handoff_policy_refused', 'artifact_handoff_must_not_expose_unadmitted_source_paths', 'Target activation requires artifact handoff policy evidence.'));
+  }
+  return { refusals, sourceLastSequence, targetFirstSequence: requestedTargetFirstSequence, token };
+}
+
+function targetActivationRefusal(reasonCode, failedInvariant, reason) {
+  return { reason_code: reasonCode, failed_invariant: failedInvariant, reason };
+}
+
+function deterministicTargetActivationId({ session, targetEpoch, targetFirstSequence }) {
+  return `authority_target_active:${session ?? 'unknown'}:${targetEpoch}:${targetFirstSequence}`;
+}
+
 function authorityTransitionStatus(state = {}) {
   return authorityTransitionSourceStateSnapshot(state.authorityTransition ?? {});
 }
@@ -201,6 +284,9 @@ function authorityTransitionSourceStatus(state = {}) {
       },
       operator_input_queue: inputQueueStatus(state),
     } : null,
+    superseded_by_session_id: source.superseded_by_session_id ?? null,
+    authority_locator_ref: source.authority_locator_ref ?? null,
+    target_authority_locator: source.target_authority_locator ?? null,
   };
 }
 
@@ -238,6 +324,7 @@ function isCanonicalSourceWriteRequest(controlRequest = {}) {
 
 function authoritySourceWriteRefusal(state = {}, controlRequest = {}) {
   if (!isCanonicalSourceWriteRequest(controlRequest)) return null;
+  if (authorityTransitionTargetStatus(state).state === 'active') return null;
   const source = authorityTransitionSourceStatus(state);
   if (source.state === 'sealed') {
     return {
@@ -419,6 +506,7 @@ function serverOperations({ requestId, state, mcpServers, mcpPreflightArtifact, 
     authority_transition_state: state.authorityTransition?.authority_transition_state ?? null,
     source_write_admission: state.authorityTransition?.source_write_admission ?? 'active',
     authority_transition_source: authorityTransitionSourceStatus(state),
+    authority_transition_target: authorityTransitionTargetStatus(state),
     operator_input_queue: inputQueueStatus(state),
     ...mcpStatus,
     ...createMcpPreflightArtifactSnapshot(mcpPreflightArtifact),
@@ -815,13 +903,94 @@ async function handleServerRequest(request, context) {
       emit('error', { request_id: requestId, code: 'session_closed', message: 'Session is closed.' });
       return;
     }
+    const targetWriteRefusal = targetWriteAdmissionRefusal(state, controlRequest);
+    if (targetWriteRefusal) {
+      emit('authority_target_write_refused', {
+        request_id: requestId,
+        method: controlRequest.method,
+        ...targetWriteRefusal,
+        operator_input_queue: inputQueueStatus(state),
+      });
+      emit('error', { request_id: requestId, code: targetWriteRefusal.code, message: targetWriteRefusal.message });
+      return;
+    }
     if (controlRequest.method_kind === 'authority_source_status') {
       emit('authority_source_status', {
         request_id: requestId,
         authority_transition_source: authorityTransitionSourceStatus(state),
+        authority_transition_target: authorityTransitionTargetStatus(state),
         operator_input_queue: inputQueueStatus(state),
         active_turn_state: state.activeTurn ? 'running' : 'idle',
         active_turn_id: state.activeTurn?.turnId ?? null,
+      });
+      return;
+    }
+    if (controlRequest.method_kind === 'authority_target_status') {
+      emit('authority_target_status', {
+        request_id: requestId,
+        authority_transition_source: authorityTransitionSourceStatus(state),
+        authority_transition_target: authorityTransitionTargetStatus(state),
+        operator_input_queue: inputQueueStatus(state),
+      });
+      return;
+    }
+    if (controlRequest.method_kind === 'authority_target_prepare') {
+      const params = request?.params ?? {};
+      state.authorityTransition = prepareTargetAuthority({
+        path: state.authorityTransitionStatePath,
+        sessionPath: state.sessionPath,
+        state: state.authorityTransition,
+        targetAuthorityLocator: params.target_authority_locator ?? params.targetAuthorityLocator ?? null,
+        supersededBySessionId: params.superseded_by_session_id ?? params.supersededBySessionId ?? null,
+        authorityLocatorRef: params.authority_locator_ref ?? params.authorityLocatorRef ?? null,
+        reason: params.reason ?? null,
+        requestedBy: params.requested_by ?? params.requestedBy ?? null,
+      });
+      emit('authority_target_prepared', {
+        request_id: requestId,
+        authority_transition_source: authorityTransitionSourceStatus(state),
+        authority_transition_target: authorityTransitionTargetStatus(state),
+      });
+      return;
+    }
+    if (controlRequest.method_kind === 'authority_target_activate') {
+      const activation = targetActivationRefusals(state, request?.params ?? {});
+      if (activation.refusals.length > 0) {
+        emit('authority_target_activation_refused', {
+          request_id: requestId,
+          status: 'refused',
+          refusals: activation.refusals,
+          authority_transition_source: authorityTransitionSourceStatus(state),
+          authority_transition_target: authorityTransitionTargetStatus(state),
+        });
+        return;
+      }
+      const targetFirstSequence = activation.targetFirstSequence;
+      const activationId = deterministicTargetActivationId({
+        session: context.session,
+        targetEpoch: activation.token.target_authority_epoch,
+        targetFirstSequence,
+      });
+      state.authorityTransition = activateTargetAuthority({
+        path: state.authorityTransitionStatePath,
+        sessionPath: state.sessionPath,
+        state: state.authorityTransition,
+        activationId,
+        targetFirstSequence,
+        authorityEpochToken: activation.token,
+        targetAuthorityLocator: request?.params?.target_authority_locator ?? request?.params?.targetAuthorityLocator ?? null,
+        supersededBySessionId: request?.params?.superseded_by_session_id ?? request?.params?.supersededBySessionId ?? null,
+        authorityLocatorRef: request?.params?.authority_locator_ref ?? request?.params?.authorityLocatorRef ?? null,
+        reason: request?.params?.reason ?? null,
+        requestedBy: request?.params?.requested_by ?? request?.params?.requestedBy ?? null,
+      });
+      emit('authority_target_active', {
+        request_id: requestId,
+        activation_id: activationId,
+        target_first_sequence: targetFirstSequence,
+        authority_epoch_token: activation.token,
+        authority_transition_source: authorityTransitionSourceStatus(state),
+        authority_transition_target: authorityTransitionTargetStatus(state),
       });
       return;
     }
@@ -1286,6 +1455,7 @@ export function serverStatus({ requestId, state, allTools, mcpServers, mcpPrefli
     active_turn_state: state.activeTurn ? 'running' : 'idle',
     active_turn_id: state.activeTurn?.turnId ?? null,
     authority_transition_source: authorityTransitionSourceStatus(state),
+    authority_transition_target: authorityTransitionTargetStatus(state),
     operator_input_queue: inputQueueStatus(state),
     mcp_server_count: Object.keys(mcpServers).length,
     ...mcpStatus,

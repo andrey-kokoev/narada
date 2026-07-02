@@ -471,6 +471,9 @@ export function classifyCarrierControlRequest(request = {}) {
   if (method === 'authority.source.drain') return { ...base, method_kind: 'authority_source_drain', concurrent_allowed: true };
   if (method === 'authority.source.seal') return { ...base, method_kind: 'authority_source_seal', concurrent_allowed: true };
   if (method === 'authority.source.status') return { ...base, method_kind: 'authority_source_status', allowed_when_closed: true, concurrent_allowed: true };
+  if (method === 'authority.target.prepare') return { ...base, method_kind: 'authority_target_prepare', concurrent_allowed: true };
+  if (method === 'authority.target.activate') return { ...base, method_kind: 'authority_target_activate', concurrent_allowed: true };
+  if (method === 'authority.target.status') return { ...base, method_kind: 'authority_target_status', allowed_when_closed: true, concurrent_allowed: true };
   if (method === 'conversation.interrupt') return { ...base, method_kind: 'conversation_interrupt', concurrent_allowed: true };
   if (method === 'conversation.steer') return { ...base, method_kind: 'conversation_steer', concurrent_allowed: true };
   if (method === 'conversation.enqueue') return { ...base, method_kind: 'conversation_enqueue', concurrent_allowed: true };
