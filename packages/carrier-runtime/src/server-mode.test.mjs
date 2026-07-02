@@ -32,6 +32,15 @@ function readJsonl(path) {
     .map((line) => JSON.parse(line));
 }
 
+function removeTempDir(path) {
+  try {
+    rmSync(path, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+  } catch (error) {
+    if (error?.code === 'EBUSY' || error?.code === 'ENOTEMPTY') return;
+    throw error;
+  }
+}
+
 function writeFixtureMcpSurface(siteRoot, { failToolCall = false } = {}) {
   mkdirSync(join(siteRoot, '.ai', 'mcp'), { recursive: true });
   mkdirSync(join(siteRoot, '.narada', 'capabilities'), { recursive: true });
@@ -292,7 +301,7 @@ test('server mode writes NARS session index record on startup', async () => {
     assert.equal(aggregate.sessions[0].session_id, sessionId);
     assert.equal(aggregate.sessions[0].terminal_state, 'closed');
   } finally {
-    rmSync(siteRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+    removeTempDir(siteRoot);
   }
 });
 
@@ -364,7 +373,7 @@ test('conversation.enqueue during an active turn queues without interrupting and
     assert.equal(events.some((event) => event.event === 'conversation_enqueue_requested'), true);
     assert.equal(events.some((event) => event.event === 'turn_interrupted'), false);
   } finally {
-    rmSync(siteRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+    removeTempDir(siteRoot);
   }
 });
 
@@ -427,7 +436,7 @@ test('server mode reloads pending operator input queue state on startup', async 
     assert.equal(providerCalls[0].some((message) => message.role === 'user' && message.content === 'restored operator input'), true);
     assert.equal(readJson(join(sessionDir, 'operator-input-queue.json')).pending_count, 0);
   } finally {
-    rmSync(siteRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+    removeTempDir(siteRoot);
   }
 });
 
@@ -493,7 +502,7 @@ test('authority source drain refuses new canonical source writes', async () => {
     assert.equal(transitionState.authority_transition_state, 'source_draining');
     assert.equal(readJson(join(sessionDir, 'operator-input-queue.json')).pending_count, 0);
   } finally {
-    rmSync(siteRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+    removeTempDir(siteRoot);
   }
 });
 
@@ -561,7 +570,7 @@ test('authority source seal persists seal evidence and refuses writes after seal
     assert.equal(sessionIndexRecord.authority_transition_state, 'source_sealed');
     assert.equal(sessionIndexRecord.source_write_admission, 'sealed');
   } finally {
-    rmSync(siteRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+    removeTempDir(siteRoot);
   }
 });
 
@@ -638,7 +647,7 @@ test('conversation.steer interrupts the active turn and becomes the next provide
     assert.equal(steerEventIndex < interruptEventIndex, true);
     assert.equal(events.some((event) => event.event === 'turn_complete' && event.terminal_state === 'interrupted'), true);
   } finally {
-    rmSync(siteRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+    removeTempDir(siteRoot);
   }
 });
 
