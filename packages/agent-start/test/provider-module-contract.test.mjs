@@ -15,6 +15,7 @@ const admittedProviders = Object.keys(metadataByProvider);
 const providerResolution = await import(pathToFileURL(resolve(packageRoot, 'src', 'provider-resolution.ts')));
 const providerCredentials = await import(pathToFileURL(resolve(packageRoot, 'src', 'provider-credential-projection.ts')));
 const codexSupport = await import(pathToFileURL(resolve(packageRoot, 'src', 'codex-subscription-support.ts')));
+const aiProcessInvocation = await import('@narada2/carrier-provider-support/ai-process-invocation');
 
 test('provider resolution module preserves default provider source and output fields', () => {
   const resolution = providerResolution.resolveIntelligenceProviderLaunch(null, 'agent-cli', { source_field: null }, {
@@ -124,6 +125,49 @@ test('codex subscription support runs live auth preflight for non-dry launch by 
     assert.equal(preflight.ai_process_invocation.purpose, 'auth_probe');
     assert.equal(preflight.ai_process_invocation.adapter_kind, 'codex');
   } finally {
+    rmSync(siteRoot, { recursive: true, force: true });
+  }
+});
+
+test('codex subscription preflight refuses duplicate AiProcessInvocation before spawnSync', () => {
+  const siteRoot = mkdtempSync(join(tmpdir(), 'narada-codex-preflight-duplicate-'));
+  const processEnv = {
+    USERPROFILE: 'C:/Users/Andrey',
+    CODEX_SUBSCRIPTION_PREFLIGHT_CACHE_TTL_MS: '0',
+  };
+  const command = codexSupport.codexPreflightCommand(processEnv, 'linux');
+  const argv = [...command.prefixArgs, 'exec', '--json', 'Return exactly: ok'];
+  const env = codexSupport.codexSubscriptionPreflightEnv(processEnv);
+  const first = aiProcessInvocation.admitAiProcessInvocation({
+    adapterKind: 'codex',
+    projection: 'codex-subscription',
+    purpose: 'auth_probe',
+    siteRoot,
+    cwd: siteRoot,
+    command: command.command,
+    argv,
+    env,
+  }, { ownerPid: process.pid });
+  let called = false;
+  try {
+    const preflight = codexSupport.codexSubscriptionPreflight('codex-subscription', {
+      processEnv,
+      processPlatform: 'linux',
+      sessionSiteRoot: siteRoot,
+      dryRun: false,
+      spawnSync() {
+        called = true;
+        return { status: 0, stdout: '{"event":"ok"}\n', stderr: '', signal: null, error: null };
+      },
+      stderr: { write() {} },
+    });
+    assert.equal(called, false);
+    assert.equal(preflight.status, 'failed');
+    assert.equal(preflight.ok, false);
+    assert.equal(preflight.ai_process_invocation.event, 'refusal');
+    assert.equal(preflight.ai_process_invocation.reason, 'duplicate_live_invocation');
+  } finally {
+    aiProcessInvocation.releaseAiProcessInvocationLease(first);
     rmSync(siteRoot, { recursive: true, force: true });
   }
 });
