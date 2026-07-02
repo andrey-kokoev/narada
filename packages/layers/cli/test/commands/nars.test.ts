@@ -108,6 +108,22 @@ function writeClosedSession(siteRoot: string, sessionId = 'carrier_closed_test')
   writeFileSync(recordPath, `${JSON.stringify(record, null, 2)}\n`, 'utf8');
 }
 
+function writeSupersededSession(siteRoot: string, sessionId = 'carrier_source_test', targetSessionId = 'carrier_target_test'): void {
+  writeSession(siteRoot, sessionId);
+  const recordPath = resolveNaradaSitePaths({ siteRoot, sessionId }).narsSessionIndexRecordPath!;
+  const record = JSON.parse(readFileSync(recordPath, 'utf8'));
+  record.authority_transition_state = 'target_active';
+  record.source_write_admission = 'sealed';
+  record.superseded_by_session_id = targetSessionId;
+  record.authority_locator_ref = 'authority-locator:target';
+  record.target_authority_locator = {
+    session_id: targetSessionId,
+    event_endpoint: 'wss://projection.example.test/authority/events',
+    health_endpoint: 'https://projection.example.test/authority/health',
+  };
+  writeFileSync(recordPath, `${JSON.stringify(record, null, 2)}\n`, 'utf8');
+}
+
 function retimeSession(siteRoot: string, sessionId: string, timestamp: string): void {
   const recordPath = resolveNaradaSitePaths({ siteRoot, sessionId }).narsSessionIndexRecordPath!;
   const record = JSON.parse(readFileSync(recordPath, 'utf8'));
@@ -151,6 +167,23 @@ describe('nars CLI commands', () => {
     });
     expect(body.sessions[0].record).toBeUndefined();
     expect(body.sessions[0].heartbeat).toBeUndefined();
+  });
+
+  it('renders authority host and supersession state in session text output', async () => {
+    const siteRoot = tempSite();
+    writeSession(siteRoot, 'carrier_superseded_source');
+    const recordPath = resolveNaradaSitePaths({ siteRoot, sessionId: 'carrier_superseded_source' }).narsSessionIndexRecordPath!;
+    const record = JSON.parse(readFileSync(recordPath, 'utf8'));
+    record.authority_transition_state = 'source_sealed';
+    record.superseded_by_session_id = 'cf_session_target';
+    writeFileSync(recordPath, `${JSON.stringify(record, null, 2)}\n`, 'utf8');
+
+    const result = await narsSessionsCommand({ siteRoot, health: false, format: 'human' }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const rendered = (result.result as { _formatted: string })._formatted;
+    expect(rendered).toContain('authority');
+    expect(rendered).toContain('local e3 source_sealed -> cf_session_target');
   });
 
   it('plans a read-only NARS authority host transition from session index metadata', async () => {
@@ -324,6 +357,38 @@ describe('nars CLI commands', () => {
       session_id: 'carrier_cli_test',
       site_id: 'sonar',
       event_endpoint: 'ws://127.0.0.1:12345/events',
+    });
+  });
+
+  it('refuses direct agent-web-ui attachment to a superseded source with reattach metadata', async () => {
+    const siteRoot = tempSite();
+    writeSupersededSession(siteRoot);
+    const launchRegistryPath = writeLaunchRegistry(siteRoot);
+
+    const result = await agentWebUiAttachCommand({
+      launchRegistryPath,
+      session: 'carrier_source_test',
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.INVALID_CONFIG);
+    expect(result.result).toMatchObject({
+      schema: 'narada.agent_web_ui.attach_refusal.v1',
+      status: 'refused',
+      reason: 'source_authority_superseded',
+      session_id: 'carrier_source_test',
+      authority_transition: {
+        authority_runtime_host: 'local',
+        authority_epoch: 3,
+        authority_transition_state: 'target_active',
+        source_write_admission: 'sealed',
+        stale_source: true,
+        input_policy: 'disabled_source_sealed',
+        reattach: {
+          target_session_id: 'carrier_target_test',
+          target_locator_ref: 'authority-locator:target',
+        },
+      },
     });
   });
 
@@ -648,6 +713,7 @@ describe('nars CLI commands', () => {
       siteRoot,
       siteId: 'sonar',
       agentId: 'sonar.resident',
+      authorityTransition: expect.objectContaining({ authority_runtime_host: 'local', authority_epoch: 3, input_policy: 'enabled' }),
       cloudflareApiBaseUrl: null,
     });
   });

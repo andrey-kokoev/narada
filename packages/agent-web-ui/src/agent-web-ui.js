@@ -60,6 +60,7 @@ export function startAgentWebUi({ windowRef = globalThis.window, documentRef = g
   bindProjectionVerbositySelector(documentRef);
   setText('event-endpoint', config.eventEndpoint ?? 'not configured', documentRef);
   setText('health-endpoint', config.healthEndpoint ? `${config.healthEndpoint} (${config.healthTransport})` : 'not configured', documentRef);
+  renderAuthorityTransition(config.authorityTransition, documentRef);
   const fetchFn = windowRef.fetch ?? globalThis.fetch;
   refreshHttpHealthStatus(config, documentRef, fetchFn);
   const healthTimer = config.healthEndpoint ? windowRef.setInterval(() => refreshHttpHealthStatus(config, documentRef, fetchFn), 10000) : null;
@@ -70,6 +71,28 @@ export function startAgentWebUi({ windowRef = globalThis.window, documentRef = g
   });
   bindComposer(connection, documentRef);
   return { config, socket: connection?.getSocket?.() ?? null, connection, healthTimer };
+}
+
+export function renderAuthorityTransition(authorityTransition, documentRef = globalThis.document) {
+  const status = documentRef?.getElementById?.('authority-status');
+  const reattach = documentRef?.getElementById?.('authority-reattach');
+  if (!status && !reattach) return;
+  if (!authorityTransition) {
+    if (status) status.textContent = 'not advertised';
+    if (reattach) reattach.textContent = '';
+    return;
+  }
+  const host = authorityTransition.authority_runtime_host ?? 'unknown';
+  const epoch = Number.isInteger(authorityTransition.authority_epoch) ? ` e${authorityTransition.authority_epoch}` : '';
+  const transition = authorityTransition.authority_transition_state ? ` · ${authorityTransition.authority_transition_state}` : '';
+  const writeAdmission = authorityTransition.source_write_admission ? ` · writes ${authorityTransition.source_write_admission}` : '';
+  if (status) status.textContent = `${host}${epoch}${transition}${writeAdmission}`;
+  if (!reattach) return;
+  const targetSession = authorityTransition.reattach?.target_session_id ?? authorityTransition.superseded_by_session_id ?? null;
+  const targetRef = authorityTransition.reattach?.target_locator_ref ?? authorityTransition.authority_locator_ref ?? null;
+  reattach.textContent = authorityTransition.stale_source
+    ? `Stale authority; reattach to ${targetSession ?? targetRef ?? 'target authority'}.`
+    : '';
 }
 
 function bindProjectionVerbositySelector(documentRef) {

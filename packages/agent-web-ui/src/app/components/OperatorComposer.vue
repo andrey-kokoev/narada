@@ -2,6 +2,7 @@
 import { nextTick, onMounted, ref } from 'vue';
 
 const draft = defineModel<string>({ required: true });
+defineProps<{ disabled?: boolean; disabledReason?: string }>();
 const emit = defineEmits<{ submit: [] }>();
 const inputRef = ref<HTMLTextAreaElement | null>(null);
 
@@ -27,8 +28,10 @@ function handleKeydown(event: KeyboardEvent) {
       autocomplete="off"
       spellcheck="true"
       placeholder="Enter to submit. Shift+Enter for new line"
+      :disabled="disabled"
       @keydown="handleKeydown"
     />
-    <button type="submit">Send</button>
+    <button type="submit" :disabled="disabled">Send</button>
+    <p v-if="disabled" class="composer-status">{{ disabledReason }}</p>
   </form>
 </template>

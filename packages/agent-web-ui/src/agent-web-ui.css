@@ -155,7 +155,7 @@ select {
 
 .status {
   display: grid;
-  grid-template-columns: 1.2fr 1.2fr 0.75fr 1.45fr 0.7fr;
+  grid-template-columns: 1.15fr 1.15fr 0.72fr 1.25fr 1.25fr 0.7fr;
   gap: 10px;
   padding: 12px 20px;
   border-bottom: 1px solid var(--line);
@@ -163,7 +163,7 @@ select {
 }
 
 .status.status-has-projection-control {
-  grid-template-columns: 1.2fr 1.2fr 0.75fr 1.2fr 0.65fr 1.35fr;
+  grid-template-columns: 1.05fr 1.05fr 0.68fr 1.1fr 1.15fr 0.62fr 1.35fr;
 }
 
 .status > div {
@@ -919,6 +919,19 @@ select {
 
 .composer button:hover {
   background: var(--button-hover-bg);
+}
+
+.composer textarea:disabled,
+.composer button:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+.composer-status {
+  grid-column: 1 / -1;
+  margin: -4px 0 0;
+  color: var(--warning);
+  font: 12px/1.35 var(--mono);
 }
 
 @media (max-width: 900px) {

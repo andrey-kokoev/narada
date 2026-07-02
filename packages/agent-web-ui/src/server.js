@@ -231,6 +231,7 @@ export function buildClientConfig(options) {
       maxReplay: 100,
       operatorInput: true,
       admittedMethods: [...AGENT_WEB_UI_NARS_METHOD_LIST],
+      authorityTransition: options.authorityTransition ?? null,
     };
   }
   if (options.cloudflareProjectionId && options.cloudflareApiBaseUrl) {
@@ -246,6 +247,7 @@ export function buildClientConfig(options) {
       maxReplay: 100,
       operatorInput: true,
       admittedMethods: [...AGENT_WEB_UI_NARS_METHOD_LIST],
+      authorityTransition: options.authorityTransition ?? null,
     };
   }
   return {
@@ -266,6 +268,7 @@ export function buildClientConfig(options) {
     maxReplay: 100,
     operatorInput: true,
     admittedMethods: [...AGENT_WEB_UI_NARS_METHOD_LIST],
+    authorityTransition: options.authorityTransition ?? null,
   };
 }
 

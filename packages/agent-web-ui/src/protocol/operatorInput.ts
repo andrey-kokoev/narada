@@ -7,7 +7,14 @@ export interface OperatorInputResult {
   localEvent?: unknown;
 }
 
-export function submitOperatorInput(text: string, connection: NarsClientConnection | null): OperatorInputResult {
+export interface AuthorityTransitionInputPolicy {
+  input_policy?: string | null;
+  stale_source?: boolean | null;
+  superseded_by_session_id?: string | null;
+  authority_locator_ref?: string | null;
+}
+
+export function submitOperatorInput(text: string, connection: NarsClientConnection | null, authorityTransition: AuthorityTransitionInputPolicy | null = null): OperatorInputResult {
   const action = buildAgentWebUiOperatorInputAction(text, {
     activeTurn: Boolean(connection?.activeTurnId),
     activeTurnId: connection?.activeTurnId,
@@ -22,6 +29,18 @@ export function submitOperatorInput(text: string, connection: NarsClientConnecti
   if (action.kind === 'message') {
     return { handled: false, shouldClearDraft: false, localEvent: { event: 'agent_web_ui_message', message: action.message } };
   }
+  if (authorityTransitionRefusesInput(action.frame, authorityTransition)) {
+    return {
+      handled: false,
+      shouldClearDraft: false,
+      localEvent: {
+        event: 'web_ui_input_not_sent',
+        message: 'source authority is sealed; reattach to target authority before sending conversation input',
+        reason_code: 'source_authority_superseded',
+        authority_transition: authorityTransition,
+      },
+    };
+  }
   const sent = connection?.sendFrame(action.frame) ?? false;
   if (!sent) return { handled: false, shouldClearDraft: false, localEvent: { event: 'web_ui_input_not_sent', message: 'event stream is not open' } };
   const frame = action.frame;
@@ -31,4 +50,10 @@ export function submitOperatorInput(text: string, connection: NarsClientConnecti
     shouldClearDraft: true,
     localEvent: { event: 'operator_input_submitted', request_id: frame.id, content: frame.params?.message ?? frame.params?.command ?? frame.method },
   };
+}
+
+function authorityTransitionRefusesInput(frame: { method?: string }, authorityTransition: AuthorityTransitionInputPolicy | null): boolean {
+  if (!String(frame?.method ?? '').startsWith('conversation.')) return false;
+  if (!authorityTransition) return false;
+  return authorityTransition.input_policy === 'disabled_source_sealed' || authorityTransition.stale_source === true;
 }

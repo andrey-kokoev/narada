@@ -115,10 +115,30 @@ interface AttachabilityResult {
   health_status: string | null;
 }
 
+interface AuthorityTransitionSnapshot {
+  authority_runtime_host: string | null;
+  authority_epoch: number | null;
+  authority_runtime_id: string | null;
+  authority_transition_state: string | null;
+  source_write_admission: string | null;
+  superseded_by_session_id: string | null;
+  authority_locator_ref: string | null;
+  target_authority_locator: Record<string, unknown> | null;
+  stale_source: boolean;
+  input_policy: 'enabled' | 'disabled_source_sealed';
+  reattach: {
+    target_session_id: string | null;
+    target_locator_ref: string | null;
+    target_authority_locator: Record<string, unknown> | null;
+  } | null;
+}
+
 async function assessAttachability(
   session: Record<string, unknown> | null | undefined,
   options: { healthEndpoint: string | null; timeoutMs: number },
 ): Promise<AttachabilityResult> {
+  const authority = authorityTransitionSnapshot(session);
+  if (authority.stale_source) return { status: 'not_attachable', reason: 'source_authority_superseded', health_status: stringField(session, 'health_status') };
   const terminalState = stringField(session, 'terminal_state');
   if (terminalState && terminalState !== 'running') return { status: 'not_attachable', reason: `terminal_state_${terminalState}`, health_status: stringField(session, 'health_status') };
   const displayState = stringField(session, 'display_state');
@@ -145,7 +165,7 @@ async function probeHealthEndpoint(endpoint: string, timeoutMs: number): Promise
 
 function buildFailure(args: {
   sessionId: string;
-  attach: { site_root?: string | null; site_root_source?: string | null; site_id?: string | null };
+  attach: { site_root?: string | null; site_root_source?: string | null; site_id?: string | null; session?: Record<string, unknown> | null };
   eventEndpoint: string;
   healthEndpoint: string | null;
   host: string;
@@ -166,6 +186,7 @@ function buildFailure(args: {
     host: args.host,
     port: args.port,
     override: '--allow-stale-session',
+    authority_transition: authorityTransitionSnapshot(args.attach.session),
   };
 }
 
@@ -193,6 +214,7 @@ function formatFailure(failure: ReturnType<typeof buildFailure>): string {
     `  Session ${failure.session_id}`,
     `  Site    ${failure.site_id ?? failure.site_root ?? 'unknown'}`,
     `  Health  ${failure.health_status ?? 'not checked'}`,
+    `  Authority ${formatAuthorityTransition(failure.authority_transition)}`,
     `  Events  ${failure.event_endpoint}`,
     `  Override ${failure.override}`,
   ].join('\n');
@@ -221,13 +243,14 @@ export interface AgentWebUiAttachPlan {
   port: number;
   url: string | null;
   command: string;
+  authority_transition: AuthorityTransitionSnapshot;
 }
 
 export async function agentWebUiAttachCommand(
   options: AgentWebUiAttachOptions,
   context: CommandContext,
   deps: {
-    startAgentWebUiServer?: (options: { host: string; port: number; eventEndpoint: string; healthEndpoint: string | null; sessionId: string; siteRoot: string | null; siteId: string | null; agentId: string | null; cloudflareApiBaseUrl: string | null }) => Promise<{ url: string; server?: { close?: () => void } }>;
+    startAgentWebUiServer?: (options: { host: string; port: number; eventEndpoint: string; healthEndpoint: string | null; sessionId: string; siteRoot: string | null; siteId: string | null; agentId: string | null; authorityTransition?: AuthorityTransitionSnapshot; cloudflareApiBaseUrl: string | null }) => Promise<{ url: string; server?: { close?: () => void } }>;
     openUrl?: (url: string) => Promise<void> | void;
     progress?: ProgressReporter;
   } = {},
@@ -283,6 +306,7 @@ export async function agentWebUiAttachCommand(
       host,
       port,
       url: null,
+      session: attach.session,
     });
     return {
       exitCode: ExitCode.SUCCESS,
@@ -313,6 +337,7 @@ export async function agentWebUiAttachCommand(
     siteRoot: attach.site_root ?? null,
     siteId: attach.site_id ?? stringField(attach.session, 'site_id') ?? options.site ?? null,
     agentId: options.agent?.trim() || stringField(attach.session, 'agent_id'),
+    authorityTransition: authorityTransitionSnapshot(attach.session),
     cloudflareApiBaseUrl: options.cloudflareApiBaseUrl?.trim()
       || process.env.NARADA_CLOUDFLARE_NARS_PROJECTION_URL
       || process.env.CLOUDFLARE_NARS_PROJECTION_URL
@@ -327,6 +352,7 @@ export async function agentWebUiAttachCommand(
     host,
     port,
     url: started.url,
+    session: attach.session,
   });
   const shouldOpen = options.open !== false;
   if (shouldOpen && started.url) {
@@ -376,6 +402,7 @@ function buildPlan(args: {
   host: string;
   port: number;
   url: string | null;
+  session?: Record<string, unknown> | null;
 }): AgentWebUiAttachPlan {
   return {
     schema: 'narada.agent_web_ui.attach_plan.v1',
@@ -390,6 +417,7 @@ function buildPlan(args: {
     port: args.port,
     url: args.url,
     command: args.attach.command ?? `narada-agent-web-ui --event-endpoint ${args.eventEndpoint}${args.healthEndpoint ? ` --health-endpoint ${args.healthEndpoint}` : ''}`,
+    authority_transition: authorityTransitionSnapshot(args.session),
   };
 }
 
@@ -401,6 +429,7 @@ function formatPlan(plan: AgentWebUiAttachPlan): string {
       `  Site    ${plan.site_id ?? plan.site_root ?? 'unknown'}`,
       `  Events  ${plan.event_endpoint}`,
       `  Health  ${plan.health_endpoint ?? 'not configured'} via local /api/health`,
+      `  Authority ${formatAuthorityTransition(plan.authority_transition)}`,
       '  Input   conversation.send/enqueue + slash commands',
     ].join('\n');
   }
@@ -408,8 +437,54 @@ function formatPlan(plan: AgentWebUiAttachPlan): string {
     'agent-web-ui attach plan',
     `  Session ${plan.session_id}`,
     `  Site    ${plan.site_id ?? plan.site_root ?? 'unknown'}`,
+    `  Authority ${formatAuthorityTransition(plan.authority_transition)}`,
     `  Command ${plan.command}`,
   ].join('\n');
+}
+
+function authorityTransitionSnapshot(session: Record<string, unknown> | null | undefined): AuthorityTransitionSnapshot {
+  const record = objectField(session, 'record');
+  const sourceWriteAdmission = stringField(session, 'source_write_admission') ?? stringField(record, 'source_write_admission');
+  const transitionState = stringField(session, 'authority_transition_state') ?? stringField(record, 'authority_transition_state');
+  const supersededBySessionId = stringField(session, 'superseded_by_session_id') ?? stringField(record, 'superseded_by_session_id');
+  const authorityTransition = objectField(record, 'authority_transition');
+  const targetLocator = objectField(record, 'target_authority_locator') ?? objectField(authorityTransition, 'target_authority_locator');
+  const staleSource = sourceWriteAdmission === 'sealed' || sourceWriteAdmission === 'retired' || transitionState === 'target_active' || Boolean(supersededBySessionId);
+  return {
+    authority_runtime_host: stringField(session, 'authority_runtime_host') ?? stringField(record, 'authority_runtime_host'),
+    authority_epoch: integerField(session, 'authority_epoch') ?? integerField(record, 'authority_epoch'),
+    authority_runtime_id: stringField(session, 'authority_runtime_id') ?? stringField(record, 'authority_runtime_id'),
+    authority_transition_state: transitionState,
+    source_write_admission: sourceWriteAdmission,
+    superseded_by_session_id: supersededBySessionId,
+    authority_locator_ref: stringField(session, 'authority_locator_ref') ?? stringField(record, 'authority_locator_ref'),
+    target_authority_locator: targetLocator,
+    stale_source: staleSource,
+    input_policy: staleSource ? 'disabled_source_sealed' : 'enabled',
+    reattach: staleSource ? {
+      target_session_id: supersededBySessionId,
+      target_locator_ref: stringField(session, 'authority_locator_ref') ?? stringField(record, 'authority_locator_ref'),
+      target_authority_locator: targetLocator,
+    } : null,
+  };
+}
+
+function formatAuthorityTransition(authority: AuthorityTransitionSnapshot): string {
+  const host = authority.authority_runtime_host ?? 'unknown';
+  const epoch = authority.authority_epoch ? ` e${authority.authority_epoch}` : '';
+  const transition = authority.authority_transition_state ? ` ${authority.authority_transition_state}` : '';
+  const target = authority.reattach?.target_session_id ? ` -> ${authority.reattach.target_session_id}` : '';
+  return `${host}${epoch}${transition}${target}`;
+}
+
+function integerField(record: Record<string, unknown> | null | undefined, field: string): number | null {
+  const value = record?.[field];
+  return Number.isInteger(value) ? value as number : null;
+}
+
+function objectField(record: Record<string, unknown> | null | undefined, field: string): Record<string, unknown> | null {
+  const value = record?.[field];
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null;
 }
 
 function stringField(record: Record<string, unknown> | null | undefined, field: string): string | null {

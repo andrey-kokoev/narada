@@ -15,6 +15,7 @@ const props = defineProps<{
   verbosity: ProjectionVerbosity;
   verbosityLevels: readonly ProjectionVerbosity[];
   agentActivity: AgentActivityState;
+  authorityTransition: Record<string, unknown> | null;
   cloudflareProjection: ReturnType<typeof useCloudflareProjection>;
 }>();
 const emit = defineEmits<{
@@ -33,6 +34,28 @@ async function copyRemoteUrl(url: string) {
     copyLabel.value = 'Copy failed';
     setTimeout(() => { copyLabel.value = 'Copy'; }, 1800);
   }
+}
+
+function authorityText(authority: Record<string, unknown> | null): string {
+  if (!authority) return 'not advertised';
+  const host = typeof authority.authority_runtime_host === 'string' ? authority.authority_runtime_host : 'unknown';
+  const epoch = Number.isInteger(authority.authority_epoch) ? ` e${authority.authority_epoch}` : '';
+  const transition = typeof authority.authority_transition_state === 'string' && authority.authority_transition_state ? ` · ${authority.authority_transition_state}` : '';
+  const writes = typeof authority.source_write_admission === 'string' && authority.source_write_admission ? ` · writes ${authority.source_write_admission}` : '';
+  return `${host}${epoch}${transition}${writes}`;
+}
+
+function reattachText(authority: Record<string, unknown> | null): string | null {
+  if (!authority?.stale_source) return null;
+  const reattach = authority.reattach && typeof authority.reattach === 'object' && !Array.isArray(authority.reattach) ? authority.reattach as Record<string, unknown> : null;
+  const target = typeof reattach?.target_session_id === 'string' && reattach.target_session_id
+    ? reattach.target_session_id
+    : typeof authority.superseded_by_session_id === 'string' && authority.superseded_by_session_id
+      ? authority.superseded_by_session_id
+      : typeof authority.authority_locator_ref === 'string' && authority.authority_locator_ref
+        ? authority.authority_locator_ref
+        : 'target authority';
+  return `Stale authority; reattach to ${target}.`;
 }
 </script>
 
@@ -56,6 +79,11 @@ async function copyRemoteUrl(url: string) {
       <span v-if="agentActivity.active" class="activity-chip" :data-activity-state="agentActivity.state">
         {{ agentActivity.state }}<template v-if="agentActivity.elapsedSeconds >= 5"> · {{ agentActivity.elapsedSeconds }}s</template>
       </span>
+    </div>
+    <div>
+      <span class="label">Authority</span>
+      <span>{{ authorityText(authorityTransition) }}</span>
+      <span v-if="reattachText(authorityTransition)" class="retention-note">{{ reattachText(authorityTransition) }}</span>
     </div>
     <div>
       <label class="label" for="projection-verbosity">View</label>

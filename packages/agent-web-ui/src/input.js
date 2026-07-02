@@ -7,6 +7,7 @@ import {
   isAgentWebUiProtocolFrame,
 } from '@narada2/nars-client-projection-contract';
 import { appendEvent, clearEvents } from './render.js';
+import { readInjectedConfig, resolveAttachConfig } from './config.js';
 
 export const buildOperatorInputAction = buildAgentWebUiOperatorInputAction;
 export const buildConversationSendFrame = buildAgentWebUiConversationSendFrame;
@@ -34,6 +35,11 @@ export function sendOperatorMessage(socketOrConnection, text, documentRef = docu
     return false;
   }
   const frame = action.frame;
+  const authorityRefusal = authorityInputRefusal(frame, documentRef);
+  if (authorityRefusal) {
+    appendEvent(authorityRefusal, documentRef);
+    return false;
+  }
   if (!isAgentWebUiProtocolFrame(frame)) throw new Error('unsupported_agent_web_ui_protocol_frame');
   if (typeof connection?.sendFrame === 'function') {
     const sent = connection.sendFrame(frame);
@@ -54,6 +60,19 @@ export function sendOperatorMessage(socketOrConnection, text, documentRef = docu
   appendEvent({ event: 'operator_input_submitted', request_id: frame.id, content: frame.params?.message ?? frame.params?.command ?? frame.method }, documentRef);
   if (frame.method === 'session.close') connection?.close?.();
   return true;
+}
+
+function authorityInputRefusal(frame, documentRef) {
+  if (!String(frame?.method ?? '').startsWith('conversation.')) return null;
+  const config = resolveAttachConfig('', readInjectedConfig(documentRef));
+  const authority = config.authorityTransition;
+  if (!authority || authority.input_policy === 'enabled') return null;
+  return {
+    event: 'web_ui_input_not_sent',
+    message: 'source authority is sealed; reattach to target authority before sending conversation input',
+    reason_code: 'source_authority_superseded',
+    authority_transition: authority,
+  };
 }
 
 export function bindComposer(connection, documentRef = document) {

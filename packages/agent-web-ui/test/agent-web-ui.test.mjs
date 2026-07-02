@@ -83,7 +83,7 @@ function createFakeAgentWebUiElements() {
     setAttribute(name, value) { this[name] = value; }
   }
   const byId = new Map();
-  for (const id of ['nars-config', 'event-endpoint', 'health-endpoint', 'stream', 'health', 'projection-verbosity', 'events', 'operator-form', 'operator-input']) {
+  for (const id of ['nars-config', 'event-endpoint', 'health-endpoint', 'stream', 'health', 'authority-status', 'authority-reattach', 'projection-verbosity', 'events', 'operator-form', 'operator-input']) {
     byId.set(id, new FakeElement(id));
   }
   const documentRef = {
@@ -253,7 +253,7 @@ test('browser startup can use Cloudflare projection replay, live WebSocket, and 
     emit(name, event = {}) { this.listeners.get(name)?.(event); }
   }
   const elements = new Map();
-  for (const id of ['nars-config', 'event-endpoint', 'health-endpoint', 'stream', 'health', 'projection-verbosity', 'events', 'operator-form', 'operator-input']) {
+  for (const id of ['nars-config', 'event-endpoint', 'health-endpoint', 'stream', 'health', 'authority-status', 'authority-reattach', 'projection-verbosity', 'events', 'operator-form', 'operator-input']) {
     elements.set(id, new FakeElement(id));
   }
   elements.get('nars-config').textContent = JSON.stringify({
@@ -608,6 +608,61 @@ test('browser startup shows degraded Cloudflare projection stream failures', asy
   assert.equal(elements.get('stream').textContent, 'remote projection unavailable');
 });
 
+test('browser startup renders stale authority and blocks ordinary source input', () => {
+  const { byId: elements, documentRef } = createFakeAgentWebUiElements();
+  elements.get('nars-config').textContent = JSON.stringify({
+    eventEndpoint: 'ws://127.0.0.1/events',
+    healthEndpoint: '/api/health',
+    authorityTransition: {
+      authority_runtime_host: 'local',
+      authority_epoch: 3,
+      authority_transition_state: 'target_active',
+      source_write_admission: 'sealed',
+      superseded_by_session_id: 'carrier_target',
+      stale_source: true,
+      input_policy: 'disabled_source_sealed',
+      reattach: { target_session_id: 'carrier_target', target_locator_ref: 'authority-locator:target' },
+    },
+  });
+  class FakeWebSocket {
+    static OPEN = 1;
+    static instances = [];
+    constructor(url) {
+      this.url = url;
+      this.readyState = FakeWebSocket.OPEN;
+      this.sent = [];
+      this.listeners = new Map();
+      FakeWebSocket.instances.push(this);
+    }
+    addEventListener(name, listener) { this.listeners.set(name, listener); }
+    send(frame) { this.sent.push(JSON.parse(frame)); }
+    emit(name, event = {}) { this.listeners.get(name)?.(event); }
+  }
+  startAgentWebUi({
+    windowRef: {
+      location: { search: '' },
+      WebSocket: FakeWebSocket,
+      setInterval() { return 'timer-1'; },
+      setTimeout() { return 'timer-2'; },
+      fetch: async () => ({ status: 200, json: async () => ({ status: 'healthy' }) }),
+    },
+    documentRef,
+  });
+  const socket = FakeWebSocket.instances[0];
+  socket.emit('open');
+  assert.equal(elements.get('authority-status').textContent, 'local e3 · target_active · writes sealed');
+  assert.match(elements.get('authority-reattach').textContent, /reattach to carrier_target/i);
+
+  elements.get('operator-input').value = 'send from stale source';
+  elements.get('operator-form').submit();
+
+  assert.equal(socket.sent.length, 1, 'only the subscribe frame should be sent');
+  assert.equal(elements.get('operator-input').value, 'send from stale source');
+  const refusal = elements.get('events').children.at(-1);
+  assert.equal(refusal.dataset.eventKind, 'web_ui_input_not_sent');
+  assert.match(refusal.children.at(1).children.at(0).textContent, /source authority is sealed/i);
+});
+
 test('browser startup subscribes to events and submits operator text over the same WebSocket', async () => {
   class FakeElement {
     constructor(id = null) {
@@ -880,6 +935,7 @@ test('attach config resolves one event endpoint and one health endpoint from que
     artifactBasePath: '/api/nars',
     artifactTransport: 'local-nars-proxy',
     projectionControl: null,
+    authorityTransition: null,
     protocolHealthMethod: 'session.health',
     maxReplay: 7,
   });
@@ -896,6 +952,7 @@ test('attach config resolves one event endpoint and one health endpoint from que
     artifactBasePath: '/api/nars',
     artifactTransport: 'local-nars-proxy',
     projectionControl: null,
+    authorityTransition: null,
     protocolHealthMethod: 'session.health',
     maxReplay: 100,
   });
@@ -905,6 +962,27 @@ test('runtime event summaries unwrap NARS session_event envelopes', () => {
   assert.equal(summarizeRuntimeEvent({ event: 'session_events_subscription_started', replay_count: 3 }), '3 replayed event(s)');
   assert.equal(summarizeRuntimeEvent({ event: 'session_event', payload: { event: 'assistant_message', content: 'hello' } }), 'hello');
   assert.equal(summarizeRuntimeEvent({ event: 'session_event', payload: { event: 'tool_call', tool_name: 'narada-site.whoami' } }), 'narada-site.whoami');
+});
+
+test('web UI projection renders stale authority reattach target distinctly', () => {
+  const projection = projectRuntimeEvent({
+    event: 'authority_source_write_refused',
+    code: 'authority_source_sealed',
+    authority_transition_source: {
+      state: 'sealed',
+      target_authority_locator: {
+        kind: 'cloudflare-host',
+        site_id: 'site',
+        session_id: 'cf_session',
+      },
+    },
+  });
+  assert.equal(projection.kind, 'authority_source_write_refused');
+  assert.equal(projection.label, 'Source write refused');
+  assert.equal(projection.tone, 'error');
+  assert.equal(projection.summary, 'authority_source_sealed; reattach cloudflare-host/site/cf_session');
+  assert.equal(shouldRenderRuntimeEvent(projection.event, { verbosity: 'conversation' }), false);
+  assert.equal(shouldRenderRuntimeEvent(projection.event, { verbosity: 'operations' }), true);
 });
 
 test('web UI projection normalizes nested provider events and suppresses status noise', () => {
@@ -1523,6 +1601,7 @@ test('CLI args and client config keep runtime authority outside the web package'
     artifactBasePath: '/api/nars',
     artifactTransport: 'local-nars-proxy',
     projectionControl: null,
+    authorityTransition: null,
     protocolHealthMethod: 'session.health',
     maxReplay: 100,
     operatorInput: true,

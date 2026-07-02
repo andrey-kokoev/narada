@@ -20,6 +20,7 @@ const props = defineProps<{
   rows: ProjectedEventRow[];
   sessionIdentity: SessionIdentitySummary;
   agentActivity: AgentActivityState;
+  authorityTransition: Record<string, unknown> | null;
   cloudflareProjection: ReturnType<typeof useCloudflareProjection>;
   followLatestRevision: number;
 }>();
@@ -56,11 +57,12 @@ const emit = defineEmits<{
       :verbosity="verbosity"
       :verbosity-levels="verbosityLevels"
       :agent-activity="agentActivity"
+      :authority-transition="authorityTransition"
       :cloudflare-projection="cloudflareProjection"
       @update:verbosity="emit('update:verbosity', $event)"
       @publish-cloudflare="emit('publish-cloudflare', $event)"
     />
     <ConversationTranscript :rows="rows" :verbosity="verbosity" :agent-activity="agentActivity" :follow-latest-revision="followLatestRevision" />
-    <OperatorComposer v-model="draft" @submit="emit('submit')" />
+    <OperatorComposer v-model="draft" :disabled="authorityTransition?.input_policy === 'disabled_source_sealed'" disabled-reason="Source authority is sealed. Reattach to the target authority before sending." @submit="emit('submit')" />
   </main>
 </template>

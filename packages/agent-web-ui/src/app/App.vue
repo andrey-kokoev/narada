@@ -20,6 +20,7 @@ interface AgentWebUiConfig {
   artifactBasePath?: string | null;
   artifactTransport?: string | null;
   projectionControl?: ProjectionControlConfig | null;
+  authorityTransition?: Record<string, unknown> | null;
   maxReplay?: number;
 }
 
@@ -40,7 +41,7 @@ const connection = useNarsConnection(
 const events = useNarsEvents(retained.events, projection.verbosity, health.identity);
 const agentActivity = useAgentActivity(retained.events);
 const cloudflareProjection = useCloudflareProjection(props.config.projectionControl?.cloudflare ?? null);
-const input = useOperatorInput(connection.connection, retained.retain, retained.clear);
+const input = useOperatorInput(connection.connection, retained.retain, retained.clear, props.config.authorityTransition ?? null);
 const draft = input.draft;
 const followLatestRevision = ref(0);
 
@@ -63,6 +64,7 @@ function submitOperatorDraft() {
     :rows="events.rows.value"
     :session-identity="events.sessionIdentity.value"
     :agent-activity="agentActivity.activity.value"
+    :authority-transition="config.authorityTransition ?? null"
     :cloudflare-projection="cloudflareProjection"
     :follow-latest-revision="followLatestRevision"
     @update:verbosity="projection.setVerbosity"
