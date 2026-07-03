@@ -106,10 +106,7 @@ export async function runCarrierServerMode({
     requestIssueCounts: {},
     requestOutcomeCounts: {},
   };
-  let messages = loadSession(sessionPath);
-  if (messages.length === 0 && rolePrompt) {
-    messages.push({ role: 'system', content: rolePrompt });
-  }
+  let messages = messagesWithRolePrompt(loadSession(sessionPath), rolePrompt);
 
   const emit = (event, payload = {}) => {
     if (event === 'error' && payload?.code) recordSessionRequestIssue(state, payload.code);
@@ -354,6 +351,12 @@ export async function runCarrierServerMode({
     closedAt: new Date().toISOString(),
   });
   closeMcpServers(mcpServers);
+}
+
+function messagesWithRolePrompt(messages, rolePrompt) {
+  if (!rolePrompt) return messages;
+  const history = messages[0]?.role === 'system' ? messages.slice(1) : messages;
+  return [{ role: 'system', content: rolePrompt }, ...history];
 }
 
 function startCarrierHeartbeat({ path, session, identity, runtime, carrier_kind, launch_operator_surface_kind, operator_surface_kind, mode, sessionDir, intervalMs = 5000 } = {}) {
