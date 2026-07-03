@@ -16,6 +16,7 @@ export class McpFabricError extends Error {
 export function loadSiteMcpFabric(siteRoot, options = {}) {
   const required = options.required ?? false;
   const validateRegistry = options.validateRegistry ?? 'diagnostic';
+  const injectionScopeFilter = normalizeInjectionScopeFilter(options.injectionScope ?? options.injection_scope ?? null);
   const fabricDirectory = resolveSiteMcpFabricDirectory(siteRoot);
   const mcpDir = fabricDirectory.mcpDir;
   if (!existsSync(mcpDir)) {
@@ -35,7 +36,7 @@ export function loadSiteMcpFabric(siteRoot, options = {}) {
     });
   }
 
-  const files = readdirSync(mcpDir, { withFileTypes: true })
+  const candidateFiles = readdirSync(mcpDir, { withFileTypes: true })
     .filter((entry) => entry.isFile() && entry.name.endsWith('.json'))
     .map((entry) => entry.name)
     .sort((a, b) => a.localeCompare(b));
@@ -44,11 +45,16 @@ export function loadSiteMcpFabric(siteRoot, options = {}) {
   const skipped = [];
   const surfaceRegistry = loadMcpSurfaceRegistry(siteRoot);
 
-  for (const file of files) {
+  for (const file of candidateFiles) {
     const path = join(mcpDir, file);
     const packet = parseJsonFile(path);
     const serverEntries = Object.entries(packet.mcpServers ?? {});
     for (const [serverName, rawServer] of serverEntries) {
+      const injectionScope = serverInjectionScope(rawServer);
+      if (injectionScopeFilter && !injectionScopeFilter.has(injectionScope)) {
+        skipped.push({ file, server_name: serverName, reason: 'injection_scope_not_requested', injection_scope: injectionScope });
+        continue;
+      }
       const normalized = normalizeServerConfig(serverName, rawServer, siteRoot);
       if (!normalized) {
         skipped.push({ file, server_name: serverName, reason: 'transport_not_stdio', transport: rawServer?.transport ?? null });
@@ -86,16 +92,17 @@ export function loadSiteMcpFabric(siteRoot, options = {}) {
     server.registry_metadata_authoritative = surfaceRegistry.status === 'loaded' && !!registryTools;
   }
 
-  if (required && skipped.length > 0) {
+  const unsupportedTransportSkipped = skipped.filter((entry) => entry.reason === 'transport_not_stdio');
+  if (required && unsupportedTransportSkipped.length > 0) {
     throw new McpFabricError('mcp_fabric_unsupported_transport', `Unsupported MCP transport found in ${mcpDir}`, {
       siteRoot,
       mcpDir,
-      skipped,
+      skipped: unsupportedTransportSkipped,
     });
   }
 
   if (required && Object.keys(servers).length === 0) {
-    throw new McpFabricError('mcp_fabric_empty', `No stdio MCP servers found in ${mcpDir}`, { siteRoot, mcpDir, files });
+    throw new McpFabricError('mcp_fabric_empty', `No stdio MCP servers found in ${mcpDir}`, { siteRoot, mcpDir, files: candidateFiles });
   }
 
   const nonCanonicalServerNames = Object.keys(servers)
@@ -114,7 +121,7 @@ export function loadSiteMcpFabric(siteRoot, options = {}) {
     );
   }
 
-  const registryValidation = validateFabricAgainstRegistry(siteRoot, mcpDir, files, servers);
+  const registryValidation = validateFabricAgainstRegistry(siteRoot, mcpDir, candidateFiles, servers);
   if (validateRegistry === true && registryValidation.status === 'mismatch') {
     const details = {
       siteRoot,
@@ -132,7 +139,8 @@ export function loadSiteMcpFabric(siteRoot, options = {}) {
     source: fabricDirectory.source,
     mcp_dir: mcpDir,
     candidate_mcp_dirs: fabricDirectory.candidates,
-    files,
+    files: loadedSourceFiles(sources),
+    candidate_files: candidateFiles,
     servers,
     sources,
     skipped,
@@ -264,6 +272,7 @@ export async function runMcpFabricDoctor(siteRoot, options = {}) {
     site_root: siteRoot,
     mcp_dir: fabric.mcp_dir,
     files: fabric.files,
+    candidate_files: fabric.candidate_files ?? fabric.files,
     registry_validation: fabric.registry_validation ?? null,
     generated_config_diagnostics: configDiagnostics,
     rows,
@@ -766,8 +775,36 @@ function normalizeServerConfig(serverName, rawServer, siteRoot) {
     ...(rawServer.surface_id ? { surface_id: String(rawServer.surface_id) } : {}),
     target_site_root: normalizedTargetSiteRoot,
     ...(rawServer.authority_posture ? { authority_posture: String(rawServer.authority_posture) } : {}),
+    injection_scope: serverInjectionScope(rawServer),
+    ...(rawServer.authority_locus && typeof rawServer.authority_locus === 'object' ? { authority_locus: rawServer.authority_locus } : {}),
+    ...(rawServer.mutation_locus && typeof rawServer.mutation_locus === 'object' ? { mutation_locus: rawServer.mutation_locus } : {}),
+    ...(rawServer.restart_owner ? { restart_owner: String(rawServer.restart_owner) } : {}),
+    ...(rawServer.bound_into_site ? { bound_into_site: String(rawServer.bound_into_site) } : {}),
+    ...(rawServer.narada_scope && typeof rawServer.narada_scope === 'object' ? { narada_scope: rawServer.narada_scope } : {}),
     ...(Number.isFinite(Number(rawServer.startup_timeout_sec)) ? { startup_timeout_sec: Number(rawServer.startup_timeout_sec) } : {}),
   };
+}
+
+function loadedSourceFiles(sources) {
+  return Array.from(new Set(Object.values(sources).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+}
+
+function normalizeInjectionScopeFilter(value) {
+  if (!value) return null;
+  const values = Array.isArray(value) ? value : [value];
+  return new Set(values.map(normalizeInjectionScopeToken).filter(Boolean));
+}
+
+function serverInjectionScope(rawServer) {
+  return normalizeInjectionScopeToken(rawServer?.narada_scope?.injection_scope ?? rawServer?.injection_scope ?? 'local_site') ?? 'local_site';
+}
+
+function normalizeInjectionScopeToken(value) {
+  const normalized = String(value ?? '').trim().toLowerCase().replace(/-/g, '_');
+  if (normalized === 'host') return 'host';
+  if (normalized === 'user_site') return 'user_site';
+  if (normalized === 'local_site') return 'local_site';
+  return null;
 }
 
 function firstServerPathPolicyViolation(serverName, siteRoot, args, targetSiteRoot) {

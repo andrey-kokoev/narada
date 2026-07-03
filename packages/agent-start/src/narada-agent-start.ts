@@ -662,6 +662,7 @@ function emptyScopedMcpFabric() {
     mcp_dir: null,
     candidate_mcp_dirs: [],
     files: [],
+    candidate_files: [],
     servers: {},
     sources: {},
     skipped: [],
@@ -681,11 +682,13 @@ function composeMcpFabrics(locusFabrics, missingLoci) {
     site_root: entry.root,
     source: entry.fabric.source,
     mcp_dir: entry.fabric.mcp_dir,
+    candidate_files: entry.fabric.candidate_files ?? entry.fabric.files ?? [],
     server_names: mcpServerNames(entry.fabric),
   }));
   composed.missing_loci = missingLoci;
   for (const entry of locusFabrics) {
     for (const file of entry.fabric.files ?? []) composed.files.push(`${entry.locus}:${file}`);
+    for (const file of entry.fabric.candidate_files ?? entry.fabric.files ?? []) composed.candidate_files.push(`${entry.locus}:${file}`);
     for (const skipped of entry.fabric.skipped ?? []) composed.skipped.push({ locus: entry.locus, ...skipped });
     for (const [serverName, server] of Object.entries(entry.fabric.servers ?? {})) {
       if (composed.servers[serverName] && canonicalJson(composed.servers[serverName]) !== canonicalJson(server)) {
@@ -727,7 +730,7 @@ function loadScopedMcpFabric() {
       missingLoci.push({ locus, site_root: root, reason: 'mcp_fabric_missing_optional_for_all_scope' });
       continue;
     }
-    const fabric = loadSiteMcpFabric(root, { required, validateRegistry: required ? true : 'diagnostic' });
+    const fabric = loadSiteMcpFabric(root, { required, validateRegistry: required ? true : 'diagnostic', injectionScope: locus });
     if (Object.keys(fabric.servers ?? {}).length === 0) {
       missingLoci.push({ locus, site_root: root, reason: 'mcp_fabric_empty' });
       continue;
@@ -1275,6 +1278,7 @@ const output = {
     source: mcpFabric.source,
     site_root: mcpFabric.site_root,
     files: mcpFabric.files,
+    candidate_files: mcpFabric.candidate_files,
     server_names: mcpServerNames(mcpFabric),
     skipped: mcpFabric.skipped,
     scope_loci: mcpFabric.scope_loci ?? ['local-site'],

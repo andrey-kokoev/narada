@@ -45,7 +45,7 @@ function run(extraArgs = [], extraEnv = {}) {
   });
 }
 
-function writeMinimalMcpFabric(siteRoot, serverName) {
+function writeMinimalMcpFabric(siteRoot, serverName, injectionScope = 'local_site') {
   mkdirSync(join(siteRoot, '.ai'), { recursive: true });
   mkdirSync(join(siteRoot, '.ai', 'mcp'), { recursive: true });
   copyFileSync(join(naradaProperRoot, '.ai', 'task-lifecycle.db'), join(siteRoot, '.ai', 'task-lifecycle.db'));
@@ -57,6 +57,27 @@ function writeMinimalMcpFabric(siteRoot, serverName) {
         args: ['--version'],
         tools: ['agent_context_startup_sequence'],
         target_site_root: '{site_root}',
+        injection_scope: injectionScope,
+        narada_scope: { injection_scope: injectionScope },
+      },
+    },
+  }, null, 2), 'utf8');
+}
+
+function writeMinimalMcpServerFile(siteRoot, fileName, serverName, commandArg, injectionScope = 'local_site') {
+  mkdirSync(join(siteRoot, '.ai'), { recursive: true });
+  mkdirSync(join(siteRoot, '.ai', 'mcp'), { recursive: true });
+  copyFileSync(join(naradaProperRoot, '.ai', 'task-lifecycle.db'), join(siteRoot, '.ai', 'task-lifecycle.db'));
+  writeFileSync(join(siteRoot, '.ai', 'mcp', fileName), JSON.stringify({
+    mcpServers: {
+      [serverName]: {
+        transport: 'stdio',
+        command: 'node',
+        args: [commandArg],
+        tools: ['agent_context_startup_sequence'],
+        target_site_root: '{site_root}',
+        injection_scope: injectionScope,
+        narada_scope: { injection_scope: injectionScope },
       },
     },
   }, null, 2), 'utf8');
@@ -127,7 +148,7 @@ test('McpScope user-site loads only explicit User Site MCP fabric', () => {
   const targetRoot = mkdtempSync(join(tmpdir(), 'narada-agent-start-target-scope-'));
   const userRoot = mkdtempSync(join(tmpdir(), 'narada-agent-start-user-scope-'));
   writeMinimalMcpFabric(targetRoot, 'narada-target-only');
-  writeMinimalMcpFabric(userRoot, 'narada-user-only');
+  writeMinimalMcpFabric(userRoot, 'narada-user-only', 'user_site');
 
   const output = runOk([
     '--carrier', 'codex',
@@ -147,7 +168,7 @@ test('McpScope host loads only explicit Host MCP fabric', () => {
   const targetRoot = mkdtempSync(join(tmpdir(), 'narada-agent-start-target-scope-'));
   const hostRoot = mkdtempSync(join(tmpdir(), 'narada-agent-start-host-scope-'));
   writeMinimalMcpFabric(targetRoot, 'narada-target-only');
-  writeMinimalMcpFabric(hostRoot, 'narada-host-only');
+  writeMinimalMcpFabric(hostRoot, 'narada-host-only', 'host');
 
   const output = runOk([
     '--carrier', 'codex',
@@ -168,8 +189,10 @@ test('McpScope all explicitly composes available Host, User Site, and local Site
   const userRoot = mkdtempSync(join(tmpdir(), 'narada-agent-start-user-scope-'));
   const hostRoot = mkdtempSync(join(tmpdir(), 'narada-agent-start-host-scope-'));
   writeMinimalMcpFabric(targetRoot, 'narada-target-only');
-  writeMinimalMcpFabric(userRoot, 'narada-user-only');
-  writeMinimalMcpFabric(hostRoot, 'narada-host-only');
+  writeMinimalMcpFabric(userRoot, 'narada-user-only', 'user_site');
+  writeMinimalMcpServerFile(userRoot, 'narada-user-local-a.json', 'narada-user-local-duplicate', '--version', 'local_site');
+  writeMinimalMcpServerFile(userRoot, 'narada-user-local-b.json', 'narada-user-local-duplicate', '--help', 'local_site');
+  writeMinimalMcpFabric(hostRoot, 'narada-host-only', 'host');
 
   const output = runOk([
     '--carrier', 'codex',
@@ -183,6 +206,12 @@ test('McpScope all explicitly composes available Host, User Site, and local Site
   assert.deepEqual(output.mcp_scope.requested_loci, ['host', 'user-site', 'local-site']);
   assert.deepEqual(output.mcp_scope.effective_loci, ['host', 'user-site', 'local-site']);
   assert.deepEqual(output.mcp_fabric.server_names, ['narada-host-only', 'narada-target-only', 'narada-user-only']);
+  assert.equal(output.mcp_fabric.server_names.includes('narada-user-local-duplicate'), false);
+  assert.equal(output.mcp_fabric.files.includes('user-site:narada-user-local-a.json'), false);
+  assert.equal(output.mcp_fabric.files.includes('user-site:narada-user-local-b.json'), false);
+  assert.ok(output.mcp_fabric.candidate_files.includes('user-site:narada-user-local-a.json'));
+  assert.ok(output.mcp_fabric.candidate_files.includes('user-site:narada-user-local-b.json'));
+  assert.ok(output.mcp_fabric.skipped.some((entry) => entry.locus === 'user-site' && entry.server_name === 'narada-user-local-duplicate' && entry.reason === 'injection_scope_not_requested'));
   assert.equal(output.mcp_scope.resolution.enforcement, 'explicit_locus_composition');
 });
 
