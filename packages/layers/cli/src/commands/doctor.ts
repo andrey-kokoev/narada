@@ -55,6 +55,28 @@ interface BootstrapDoctorReport {
     dist_fresh: boolean | null;
     reason: string;
   };
+  build_freshness_check: {
+    schema: 'narada.launcher_build_freshness_check.v0';
+    status: 'fresh' | 'stale' | 'unknown';
+    dist_fresh: boolean | null;
+    detail: string;
+    strict_mode: boolean;
+    repair_policy: 'block_until_rebuilt' | 'warn_and_repair' | 'no_repair_needed';
+    repair_command: string | null;
+    repair_args: string[];
+  };
+  build_repair_action: {
+    schema: 'narada.launcher_build_repair_action.v0';
+    status: 'required' | 'not_required';
+    commands: Array<{
+      check: string;
+      command: string;
+      args: string[];
+    }>;
+    primary_command: string | null;
+    primary_args: string[];
+    repair_required: boolean;
+  } | null;
   repair_plan: Array<{
     check: string;
     command: string;
@@ -422,6 +444,32 @@ async function doctorBootstrap(
         ? strictMode ? 'strict stale dist block' : 'permissive stale dist warning'
         : freshness.detail,
     },
+    build_freshness_check: {
+      schema: 'narada.launcher_build_freshness_check.v0',
+      status: freshness.fresh === null ? 'unknown' : freshness.fresh ? 'fresh' : 'stale',
+      dist_fresh: freshness.fresh,
+      detail: freshness.detail,
+      strict_mode: strictMode,
+      repair_policy: freshness.fresh === false
+        ? strictMode
+          ? 'block_until_rebuilt'
+          : 'warn_and_repair'
+        : 'no_repair_needed',
+      repair_command: freshness.fresh === false ? 'pnpm --filter @narada2/cli build && pnpm run narada:install-shim' : null,
+      repair_args: freshness.fresh === false ? ['pnpm', '--filter', '@narada2/cli', 'build'] : [],
+    },
+    build_repair_action: repairPlan.length > 0 ? {
+      schema: 'narada.launcher_build_repair_action.v0',
+      status: freshness.fresh === false ? 'required' : 'not_required',
+      commands: repairPlan.map((item) => ({
+        check: item.check,
+        command: item.command,
+        args: item.args,
+      })),
+      primary_command: repairPlan[0]?.command ?? null,
+      primary_args: repairPlan[0]?.args ?? [],
+      repair_required: freshness.fresh === false,
+    } : null,
     repair_plan: repairPlan,
     summary: { pass, fail, warn },
   };

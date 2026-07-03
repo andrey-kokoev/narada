@@ -332,6 +332,13 @@ describe('doctor command', () => {
     expect(report.checks.find((check) => check.name === 'package-build-posture')?.status).toBe('pass');
     expect(report.checks.find((check) => check.name === 'governance-commands-allowed')?.status).toBe('pass');
     expect(report.cli_execution_posture).toMatchObject({ governance_commands_allowed: true, dist_fresh: true });
+    expect(report.build_freshness_check).toMatchObject({
+      schema: 'narada.launcher_build_freshness_check.v0',
+      status: 'fresh',
+      dist_fresh: true,
+      repair_policy: 'no_repair_needed',
+    });
+    expect(report.build_repair_action).toBeNull();
     expect(report.checks.find((check) => check.name === 'node-sqlite-available')).toBeDefined();
     expect(report.checks.find((check) => check.name === 'sqlite-runtime-posture')).toBeDefined();
   });
@@ -366,6 +373,18 @@ describe('doctor command', () => {
       governance_commands_allowed: true,
       dist_fresh: false,
       reason: 'permissive stale dist warning',
+    });
+    expect(report.build_freshness_check).toMatchObject({
+      schema: 'narada.launcher_build_freshness_check.v0',
+      status: 'stale',
+      dist_fresh: false,
+      repair_policy: 'warn_and_repair',
+    });
+    expect(report.build_repair_action).toMatchObject({
+      schema: 'narada.launcher_build_repair_action.v0',
+      status: 'required',
+      primary_command: 'pnpm --filter @narada2/cli build && pnpm run narada:install-shim',
+      repair_required: true,
     });
   });
 

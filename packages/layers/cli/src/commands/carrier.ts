@@ -165,6 +165,9 @@ export async function carrierStartCommand(
     mcp_scope: options.mcpScope ?? 'all',
     mode: options.exec ? 'exec' : options.materializeOnly ? 'materialize_only' : 'dry_run',
     agent_start: start,
+    launcher_contracts: (start.parsed_result as { launcher_contracts?: unknown } | null | undefined)?.launcher_contracts ?? null,
+    launch_result_artifact: (start.parsed_result as { launcher_contracts?: { launch_result_artifact?: unknown } } | null | undefined)?.launcher_contracts?.launch_result_artifact ?? null,
+    operator_projection_open_request: (start.parsed_result as { launcher_contracts?: { operator_projection_open_request?: unknown } } | null | undefined)?.launcher_contracts?.operator_projection_open_request ?? null,
   };
   return {
     exitCode: start.status === 'success' ? ExitCode.SUCCESS : ExitCode.GENERAL_ERROR,
