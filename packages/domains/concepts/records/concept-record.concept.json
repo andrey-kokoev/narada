@@ -1,0 +1,36 @@
+{
+  "concept_id": "concept_record",
+  "canonical_name": "ConceptRecord",
+  "short_definition": "The stored registry embodiment of one Concept.",
+  "description": "A ConceptRecord is structured data that carries enough metadata for tools and operators to inspect concept status, ownership, aliases, relations, anchors, and lifecycle without scraping prose.",
+  "kind": "artifact",
+  "status": "active",
+  "aliases": ["registry record"],
+  "deprecated_aliases": [],
+  "anti_aliases": ["schema"],
+  "boundaries": [
+    "Not the concept itself.",
+    "Not a generic glossary row.",
+    "Not a schema-only embodiment."
+  ],
+  "relations": [
+    { "kind": "embodies", "concept_id": "concept" },
+    { "kind": "stored_by", "concept_id": "concept_registry" }
+  ],
+  "owner_surface": "@narada2/concepts package",
+  "authority": {
+    "kind": "package",
+    "ref": "packages/domains/concepts",
+    "notes": "Narada proper owns semantic changes; the package owns validation and loading."
+  },
+  "schemas": ["packages/domains/concepts/src/schema.ts"],
+  "docs": ["docs/concepts/concept-registry.md"],
+  "tasks": ["1724", "1725", "1726"],
+  "code_refs": ["packages/domains/concepts/src/registry.ts"],
+  "tests": ["packages/domains/concepts/test/registry.test.ts"],
+  "examples": ["concept_record"],
+  "counterexamples": ["a task report", "a schema definition by itself"],
+  "open_questions": [],
+  "confidence": { "cl": 0.99, "basis": "The documentation explicitly defines this as the stored registry embodiment term." },
+  "reviewed_at": "2026-07-02T19:00:00.000Z"
+}

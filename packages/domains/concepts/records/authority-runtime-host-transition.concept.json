@@ -1,0 +1,39 @@
+{
+  "concept_id": "authority_runtime_host_transition",
+  "canonical_name": "AuthorityRuntimeHostTransition",
+  "short_definition": "The governed operation that changes which host owns canonical NARS authority for a session lineage.",
+  "description": "An AuthorityRuntimeHostTransition is not a pointer flip or a transport cache refresh. It is the explicit crossing that fences one authority runtime, activates another, and preserves replayable evidence of the handoff, host kind, authority epoch, and transition outcome.",
+  "kind": "lifecycle",
+  "status": "draft",
+  "aliases": ["authority host transition", "host transition"],
+  "deprecated_aliases": [],
+  "anti_aliases": ["projection refresh", "browser attach", "cache warmup"],
+  "boundaries": [
+    "Not a projection-store refresh.",
+    "Not a browser attach action.",
+    "Not a rollback or a delete-and-recreate shortcut."
+  ],
+  "relations": [
+    { "kind": "extends", "concept_id": "projection_topology" },
+    { "kind": "depends_on", "concept_id": "nars_session_management" },
+    { "kind": "observes", "concept_id": "runtime_health_posture" }
+  ],
+  "owner_surface": "Narada authority host transition doctrine",
+  "authority": {
+    "kind": "documentation_and_implementation",
+    "ref": "docs/concepts/nars-authority-runtime-host-transition.md",
+    "notes": "The concept is documented with transition state, fencing, and record shape targets."
+  },
+  "schemas": ["docs/concepts/nars-authority-runtime-host-transition.md"],
+  "docs": ["docs/concepts/nars-authority-runtime-host-transition.md", "docs/concepts/narada-runtime-projection-graph.md"],
+  "tasks": ["nars-authority-runtime-host-transition", "first-class-system-objects"],
+  "code_refs": ["packages/carrier-runtime/src/authority-transition-state.mjs"],
+  "tests": [],
+  "examples": ["local -> cloudflare-host authority rehome with fenced source writes"],
+  "counterexamples": ["opening a second browser surface"],
+  "open_questions": [
+    "How much of the transition record belongs in the authority runtime versus the projection store?"
+  ],
+  "confidence": { "cl": 0.98, "basis": "The transition concept is documented as a first-class governed operation with a target record shape." },
+  "reviewed_at": "2026-07-02T19:00:00.000Z"
+}

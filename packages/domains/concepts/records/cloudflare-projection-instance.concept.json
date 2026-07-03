@@ -1,0 +1,36 @@
+{
+  "concept_id": "cloudflare_projection_instance",
+  "canonical_name": "CloudflareProjectionInstance",
+  "short_definition": "A first-class instance record for a Cloudflare projection with identity, policy, health, and teardown.",
+  "description": "CloudflareProjectionInstance ties together the projection id, source authority runtime, target Cloudflare execution surface, endpoint state, access policy, and teardown/revocation semantics. It is the operator-facing object that explains what is running and how it can be stopped.",
+  "kind": "instance",
+  "status": "draft",
+  "aliases": ["projection instance", "cloudflare projection", "remote projection instance"],
+  "deprecated_aliases": [],
+  "anti_aliases": ["plain URL", "browser token", "local source file"],
+  "boundaries": [
+    "Not the local NARS session itself.",
+    "Not a bare access token.",
+    "Not a generic browser tab."
+  ],
+  "relations": [
+    { "kind": "depends_on", "concept_id": "artifact_projection_plan" },
+    { "kind": "depends_on", "concept_id": "authority_runtime_host_transition" }
+  ],
+  "owner_surface": "Narada projection doctrine",
+  "authority": {
+    "kind": "documentation_and_implementation",
+    "ref": "docs/concepts/cloudflare-nars-web-projection.md",
+    "notes": "The projection doc already names the projection instance as the central object and documents its fields."
+  },
+  "schemas": ["docs/concepts/cloudflare-nars-web-projection.md"],
+  "docs": ["docs/concepts/cloudflare-nars-web-projection.md"],
+  "tasks": ["1696", "first-class-system-objects"],
+  "code_refs": ["packages/cloudflare-nars-projection/src/projection.ts", "packages/agent-web-ui/src/app/lib/eventProjection.ts"],
+  "tests": ["packages/cloudflare-nars-projection/test/projection-live.test.mjs"],
+  "examples": ["projection_id=proj_...; state=running; health=healthy"],
+  "counterexamples": ["a health URL with no identity or policy record"],
+  "open_questions": [],
+  "confidence": { "cl": 0.96, "basis": "The projection doc already defines a concrete instance object with lifecycle, policy, and teardown fields." },
+  "reviewed_at": "2026-07-02T22:00:00.000Z"
+}

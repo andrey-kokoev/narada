@@ -1,0 +1,36 @@
+{
+  "concept_id": "mcp_feedback_routing_lifecycle",
+  "canonical_name": "MCPFeedbackRoutingLifecycle",
+  "short_definition": "The intake, routing, conversion, and closure lifecycle for MCP feedback.",
+  "description": "MCPFeedbackRoutingLifecycle makes feedback submissions first-class by tracking where they came from, how they were triaged, whether they were converted into tasks, and what closure evidence was recorded. It is the lifecycle around feedback, not the feedback payload itself.",
+  "kind": "lifecycle",
+  "status": "draft",
+  "aliases": ["feedback routing lifecycle", "surface feedback lifecycle", "mcp feedback lifecycle"],
+  "deprecated_aliases": [],
+  "anti_aliases": ["execution task", "direct mutation authority", "anonymous note"],
+  "boundaries": [
+    "Not the surface input channel.",
+    "Not the execution task created from feedback.",
+    "Not a replacement for review authority."
+  ],
+  "relations": [
+    { "kind": "depends_on", "concept_id": "mcp_ergonomics_feedback_loop" },
+    { "kind": "depends_on", "concept_id": "concept_registry" }
+  ],
+  "owner_surface": "Narada surface feedback doctrine",
+  "authority": {
+    "kind": "task_and_doc_governance",
+    "ref": "docs/concepts/concept-registry.md",
+    "notes": "Feedback routing is the lifecycle wrapper around the dedicated surface-feedback MCP workflow."
+  },
+  "schemas": ["docs/concepts/concept-registry.md"],
+  "docs": ["docs/concepts/concept-registry.md", "packages/domains/concepts/records/mcp-ergonomics-feedback-loop.concept.json"],
+  "tasks": ["1690", "first-class-system-objects"],
+  "code_refs": ["mcp-surfaces/packages/surface-feedback-mcp/src/main.ts", "mcp-surfaces/packages/surface-feedback-mcp/src/guidance.ts"],
+  "tests": ["mcp-surfaces/packages/surface-feedback-mcp/test/surface-feedback-mcp.test.ts"],
+  "examples": ["submitted -> routed -> converted_to_task -> closed"],
+  "counterexamples": ["a status update from a delegated worker"],
+  "open_questions": [],
+  "confidence": { "cl": 0.95, "basis": "The dedicated surface-feedback MCP already supports submission, routing, import, and resolution state." },
+  "reviewed_at": "2026-07-02T22:00:00.000Z"
+}

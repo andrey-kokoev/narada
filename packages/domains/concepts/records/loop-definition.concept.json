@@ -1,0 +1,35 @@
+{
+  "concept_id": "loop_definition",
+  "canonical_name": "LoopDefinition",
+  "short_definition": "The declarative Site Operating Loop policy object that describes cadence, triggers, observations, emissions, and evidence shape.",
+  "description": "LoopDefinition is the first-class semantic object for the governing loop definition, distinct from the runtime host and from a single Loop Run. It names which Site control routine exists, what it observes, what it may emit, and how recurring execution is bounded.",
+  "kind": "policy",
+  "status": "draft",
+  "aliases": ["site operating loop definition", "operating loop definition", "loop policy"],
+  "deprecated_aliases": [],
+  "anti_aliases": ["daemon", "prompt", "task", "carrier", "single run"],
+  "boundaries": [
+    "Not the loop runtime host.",
+    "Not one bounded Loop Run.",
+    "Not a source adapter or a prompt string."
+  ],
+  "relations": [
+    { "kind": "paired_with", "concept_id": "watch_definition" }
+  ],
+  "owner_surface": "@narada2/site-operating-loop package",
+  "authority": {
+    "kind": "package",
+    "ref": "packages/site-operating-loop",
+    "notes": "The package owns the runtime host and loop-module validation; the concept names the durable loop definition."
+  },
+  "schemas": ["docs/concepts/site-operating-loop.md", "docs/concepts/site-operating-loop-runtime-contract.md"],
+  "docs": ["docs/concepts/site-operating-loop.md", "docs/concepts/site-operating-loop-runtime-contract.md"],
+  "tasks": ["1708"],
+  "code_refs": ["packages/site-operating-loop"],
+  "tests": ["packages/site-operating-loop/test/*.test.mjs"],
+  "examples": ["mailbox arrival watch wakes a bounded loop run"],
+  "counterexamples": ["a daemon process", "one prompt turn", "a single emitted task"],
+  "open_questions": [],
+  "confidence": { "cl": 0.98, "basis": "The Site Operating Loop docs and runtime contract already define the governing loop semantics separately from substrate." },
+  "reviewed_at": "2026-07-02T21:30:00.000Z"
+}

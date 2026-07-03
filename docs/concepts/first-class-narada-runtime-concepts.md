@@ -327,3 +327,298 @@ Acceptance coverage:
 - Renderable artifacts are named as first-class session-scoped objects.
 - Artifact references are preferred over raw payload dumps for large or structured outputs.
 - Content policy and client rendering are recorded as explicit remaining work.
+
+## 1560 - AuthorityGrant
+
+CL: 0.993
+
+First-class object: explicit grant object for who may do what, under which authority, over which scope, and with what expiry or revocation posture.
+
+Authority contracts:
+
+- [`SEMANTICS.md`](../../SEMANTICS.md)
+- [`task-lifecycle-role-enforcement-policy.md`](task-lifecycle-role-enforcement-policy.md)
+- [`../../docs/product/message-routing-authority-posture.md`](../product/message-routing-authority-posture.md)
+
+Current implementation posture:
+
+- Narada still carries authority as scattered `authority_basis` text, tool policy, task routing, launch permissions, and projection tokens.
+- The target shape needs grantor, grantee, action/capability, scope, authority basis, expiry/revocation, evidence refs, audit metadata, and enforcement posture.
+- The grant object must stay separate from secret tokens and from the enforcement mechanisms that consume it.
+
+Mapped authority cases:
+
+- task lifecycle claim/close authority: explicit task owner or reviewer capability with audit trail.
+- launcher admission: a launch principal may start a surface only within the declared session and Site scope.
+- MCP mutation: a capability grant can authorize a specific mutation family without granting blanket runtime power.
+- Cloudflare projection: a projection grant can authorize a site or worker to publish a bounded artifact or state projection.
+- delegation: a delegated agent can act on a scoped task or inbox envelope without inheriting unrelated authority.
+
+Remaining implementation work:
+
+- Define the schema and lifecycle as a durable object, not an ad hoc text convention.
+- Record revocation, expiry, and evidence invalidation semantics explicitly.
+- Distinguish declaration, admission, and enforcement so checks remain layered instead of collapsing into one gate.
+
+Acceptance coverage:
+
+- AuthorityGrant is named as a first-class object with explicit lifecycle posture.
+- At least five existing authority cases are mapped to the object.
+- Revocation, expiry, evidence, and audit semantics are documented.
+- The declaration/admission/enforcement split is stated as required implementation shape.
+
+## 1561 - SurfaceAttachment
+
+CL: 0.992
+
+First-class object: operator surface attachment as a runtime relationship rather than a one-off attach command.
+
+Authority contracts:
+
+- [`nars-session-management.md`](nars-session-management.md)
+- [`nars-client-projection-contract.md`](nars-client-projection-contract.md)
+- [`agent-carrier.md`](agent-carrier.md)
+
+Current implementation posture:
+
+- `agent-cli`, `agent-tui`, `agent-web-ui`, and future surfaces need a shared attach/detach model.
+- The object needs surface kind, surface instance id, runtime session, projection mode, view policy, permission set, event cursor, health, attach source, detach state, and lifecycle timestamps.
+- Launcher behavior, NARS session index lookup, and web UI attach behavior must all be representable in the same attachment shape.
+
+Mapped attachment cases:
+
+- `agent-cli` attached to a NARS session through launcher discovery.
+- `agent-web-ui` attached through a browser-backed projection mode with view-policy filtering.
+- stale attachment after session loss or heartbeat expiry.
+- failed attachment after endpoint discovery, permission, or health checks reject the relationship.
+
+Remaining implementation work:
+
+- Keep attachment state first-class instead of deriving it only from attach command logs.
+- Separate runtime authority from operator surface presentation authority.
+- Preserve surface-specific differences while still sharing the common attachment object.
+
+Acceptance coverage:
+
+- SurfaceAttachment is documented as a schema and lifecycle relation.
+- `agent-cli` and `agent-web-ui` attachment cases are representable.
+- Attach, detach, stale, and failed states are explicit.
+- Session index and operator view policy integration is named.
+
+## 1562 - AdmissionPolicy
+
+CL: 0.994
+
+First-class object: unified admission decision policy for inbound operator messages, inbox events, email-derived tasks, remote inputs, and projection ingress.
+
+Authority contracts:
+
+- [`message-routing-authority-posture.md`](../product/message-routing-authority-posture.md)
+- [`canonical-mutation-evidence.md`](canonical-mutation-evidence.md)
+- [`task-lifecycle-role-enforcement-policy.md`](task-lifecycle-role-enforcement-policy.md)
+
+Current implementation posture:
+
+- Narada currently spreads accept/queue/reject/delay/review decisions across surfaces, NARS, task lifecycle, and site-specific flows.
+- The policy needs source, target authority, accepted payload kinds, queueing semantics, turn-state behavior, review gates, rejection reasons, retry posture, and audit evidence.
+- NARS should own canonical operator-message admission semantics while site-level governance still controls target-specific admission.
+
+Mapped ingress cases:
+
+- operator message queueing and backpressure.
+- email intake into facts or tasks.
+- inbox task creation from a governed incoming message.
+- Cloudflare remote operator input entering a local or remote projection boundary.
+
+Remaining implementation work:
+
+- Define the decision outcomes explicitly: accepted, queued, rejected, delayed, and review-required.
+- Preserve site-level governance instead of flattening all ingress into one universal allow/deny switch.
+- Record retry and audit posture so admission can be explained after the fact.
+
+Acceptance coverage:
+
+- AdmissionPolicy is documented as a schema and decision model.
+- Queueing, acceptance, rejection, delay, and review-required outcomes are represented.
+- Canonical operator-message admission semantics are assigned to NARS.
+- At least four ingress paths are mapped.
+
+## 1563 - ObjectLifecyclePolicy
+
+CL: 0.993
+
+First-class object: shared lifecycle semantics for first-class Narada objects instead of each object inventing states independently.
+
+Authority contracts:
+
+- [`canonical-mutation-evidence.md`](canonical-mutation-evidence.md)
+- [`task-lifecycle-role-enforcement-policy.md`](task-lifecycle-role-enforcement-policy.md)
+- [`nars-session-management.md`](nars-session-management.md)
+
+Current implementation posture:
+
+- Tasks, sessions, projections, artifacts, attachments, grants, loops, and health records each need creation, mutation, closure, archival, retention, revocation, replay, cleanup, and stale-state rules.
+- A shared policy should define allowed states, transitions, ownership, mutation authority, retention, archival, revocation, replay, cleanup, stale detection, and audit requirements.
+- Object-specific lifecycle policies remain necessary where an object family has a distinct domain meaning or safety boundary.
+
+Mapped object families:
+
+- tasks
+- sessions
+- projections
+- artifacts
+- attachments
+- grants
+
+Remaining implementation work:
+
+- Identify the shared lifecycle algebra that can be reused across those families.
+- Keep object-specific policy hooks for the families that need them.
+- Preserve existing task lifecycle semantics while adopting a more generic lifecycle vocabulary.
+
+Acceptance coverage:
+
+- Lifecycle policy schema is documented.
+- At least six object families are mapped to shared and object-specific rules.
+- Retention, revocation, stale, and archival semantics are explicit.
+- Gradual adoption without breaking task lifecycle semantics is stated as a requirement.
+
+## 1564 - OperatorViewPolicy
+
+CL: 0.994
+
+First-class object: shared rules for what operator surfaces show in conversation, activity, diagnostics, raw, and status views.
+
+Authority contracts:
+
+- [`nars-client-projection-contract.md`](nars-client-projection-contract.md)
+- [`nars-runtime-contract.md`](nars-runtime-contract.md)
+- [`../product/message-routing-authority-posture.md`](../product/message-routing-authority-posture.md)
+
+Current implementation posture:
+
+- `agent-cli` and `agent-web-ui` have renderer-local policy drift around health spam, duplicate messages, raw objects, tool events, and progress indicators.
+- The policy needs lanes/views, verbosity, event class visibility, deduplication, markdown/artifact rendering, health suppression, progress indicators, raw diagnostics access, and per-surface overrides.
+- Surfaces may render differently while still sharing the same classification rules.
+
+Mapped view cases:
+
+- conversation view: canonical operator conversation only.
+- activity view: progress, operations, and task movement.
+- diagnostics view: degraded state, failures, and bounded troubleshooting details.
+- raw view: explicit raw access without accidental leakage into conversation.
+- status view: concise operator-facing health and progress summary.
+
+Remaining implementation work:
+
+- Move classifier rules out of renderers and into shared policy.
+- Preserve raw diagnostics access without making raw the default presentation.
+- Treat duplication, health spam, and raw object leakage as policy failures.
+
+Acceptance coverage:
+
+- OperatorViewPolicy is documented as a schema and policy surface.
+- Conversation, activity, diagnostics, raw, and status semantics are explicit.
+- `agent-cli` and `agent-web-ui` share classification rules while rendering differently.
+- Duplication, health spam, and raw object leakage are named failure modes.
+
+## 1565 - EvidencePacket
+
+CL: 0.995
+
+First-class object: structured proof of claims across tasks, SOPs, git commits, E2E tests, probes, and projections.
+
+Authority contracts:
+
+- [`canonical-mutation-evidence.md`](canonical-mutation-evidence.md)
+- [`task-lifecycle-role-enforcement-policy.md`](task-lifecycle-role-enforcement-policy.md)
+- [`message-routing-authority-posture.md`](../product/message-routing-authority-posture.md)
+
+Current implementation posture:
+
+- Evidence currently appears as task lifecycle notes, SOP receipts, git diffs, test output, projection artifacts, and ad hoc summaries.
+- The packet should carry claim, evidence type, producer, verifier, artifact refs, command/test refs, timestamps, trust level, scope, and invalidation conditions.
+- Evidence must remain referenceable by task lifecycle and review flows without discarding existing evidence fields.
+
+Mapped evidence sources:
+
+- task closeout evidence
+- SOP run evidence
+- git commit evidence
+- E2E proof artifacts
+- projection health evidence
+
+Remaining implementation work:
+
+- Make verifier and trust semantics explicit instead of implicit in prose.
+- Define invalidation conditions so stale or superseded evidence can be recognized.
+- Keep lightweight notes possible for trivial cases while retaining structure for meaningful claims.
+
+Acceptance coverage:
+
+- EvidencePacket is documented as a schema.
+- At least five existing evidence sources are mapped.
+- Verifier, trust, and invalidation semantics are explicit.
+- Task lifecycle and review flows can reference the packet without losing existing evidence fields.
+
+## 1708 - LoopDefinition And WatchDefinition
+
+CL: 0.985
+
+First-class object: the declarative Site Operating Loop definition and its watch/trigger definition, distinct from the runtime host and from a single bounded Loop Run.
+
+Authority contracts:
+
+- [`site-operating-loop.md`](site-operating-loop.md)
+- [`site-operating-loop-runtime-contract.md`](site-operating-loop-runtime-contract.md)
+
+Current implementation posture:
+
+- Narada already has a generic Site Operating Loop runtime host, loop module contract, trigger admission, bounded runs, and durable run evidence.
+- The semantic gap is the durable definition object that names the loop policy and the companion watch definition that explains what wakes or gates a run.
+- The existing runtime contract already keeps host substrate separate from loop semantics, so the first-class object can be named without collapsing into the runtime package.
+
+Remaining implementation work:
+
+- Expose first-class LoopDefinition and WatchDefinition records in the concept registry.
+- Keep loop-definition semantics separate from the runtime host, one run, and raw substrate.
+- Clarify how watches map to trigger admission and cadence without reducing them to a plain subscription.
+
+Acceptance coverage:
+
+- LoopDefinition and WatchDefinition are named as distinct first-class objects.
+- The Site Operating Loop docs are linked as the authority surface.
+- Runtime host, loop definition, watch definition, and Loop Run remain separate objects.
+- Trigger admission and step execution remain runtime responsibilities, not definition responsibilities.
+
+## 1709 - ProjectionTopology
+
+CL: 0.985
+
+First-class object: the canonical topology describing authority runtimes, projection stores, projection surfaces, and intent routes.
+
+Authority contracts:
+
+- [`narada-runtime-projection-graph.md`](narada-runtime-projection-graph.md)
+- [`nars-runtime-contract.md`](nars-runtime-contract.md)
+- [`nars-session-management.md`](nars-session-management.md)
+- [`nars-client-projection-contract.md`](nars-client-projection-contract.md)
+- [`nars-authority-runtime-host-transition.md`](nars-authority-runtime-host-transition.md)
+
+Current implementation posture:
+
+- The Narada Runtime Projection Graph doc already names the general topology and its authority/projection split.
+- Session management, client projection, operator projection open requests, and authority host transitions are concrete embodiments of that topology.
+- The missing step is the registry-facing first-class name so the topology can be queried without re-deriving it from prose.
+
+Remaining implementation work:
+
+- Keep projection stores non-canonical and authority runtimes canonical.
+- Preserve authority/runtime separation across local, Cloudflare, and future host transitions.
+- Surface the topology as a queryable registry object instead of only as prose.
+
+Acceptance coverage:
+
+- ProjectionTopology is named as the topology concept, with the Narada Runtime Projection Graph as an embodiment.
+- NARS session management, client projection, and authority host transition are expressed as topology embodiments.
+- Projection surfaces do not become authority by durability, freshness, or attachment order.

@@ -1,0 +1,37 @@
+{
+  "concept_id": "concept",
+  "canonical_name": "Concept",
+  "short_definition": "A Narada semantic unit with identity, definition, boundaries, relations, ownership, and implementation anchors.",
+  "description": "A Concept is not primarily a database row, TypeScript type, JSON schema, task, doc page, or package. Those may embody it, but the Concept is the governed meaning that stays stable across docs, code, tasks, tests, and surfaces.",
+  "kind": "entity",
+  "status": "active",
+  "aliases": ["semantic unit"],
+  "deprecated_aliases": [],
+  "anti_aliases": ["schema", "task", "package", "doc page"],
+  "boundaries": [
+    "Not the registry row that stores the meaning.",
+    "Not a schema or implementation detail by itself.",
+    "Not a task or doc page that mentions the concept."
+  ],
+  "relations": [
+    { "kind": "embodied_by", "concept_id": "concept_record" },
+    { "kind": "collected_by", "concept_id": "concept_registry" },
+    { "kind": "governed_by", "concept_id": "concept_promotion" }
+  ],
+  "owner_surface": "Narada proper concept doctrine",
+  "authority": {
+    "kind": "documentation_and_implementation",
+    "ref": "docs/concepts/concept-registry.md",
+    "notes": "Semantic changes require aligned docs, code, tests, and task evidence."
+  },
+  "schemas": ["packages/domains/concepts/src/schema.ts"],
+  "docs": ["docs/concepts/concept-registry.md"],
+  "tasks": ["1724", "1725", "1726", "1727", "1728", "1729", "1730", "1731", "1732", "1733"],
+  "code_refs": ["packages/domains/concepts/src/registry.ts"],
+  "tests": ["packages/domains/concepts/test/registry.test.ts"],
+  "examples": ["Concept", "SurfaceAttachment"],
+  "counterexamples": ["a plain noun used once in a task title"],
+  "open_questions": [],
+  "confidence": { "cl": 0.99, "basis": "Architecture document and this implementation batch agree on the semantic split." },
+  "reviewed_at": "2026-07-02T19:00:00.000Z"
+}

@@ -1,0 +1,37 @@
+{
+  "concept_id": "runtime_capability_profile",
+  "canonical_name": "RuntimeCapabilityProfile",
+  "short_definition": "The declared capability profile for a runtime or host as a first-class object.",
+  "description": "RuntimeCapabilityProfile makes the capability envelope explicit instead of inferring it from carrier choice, ad hoc flags, or downstream failure. It describes what the runtime or host can admit, project, render, and execute so launcher and orchestration code can reason about compatibility before the session starts.",
+  "kind": "capability",
+  "status": "draft",
+  "aliases": ["capability profile", "runtime capability profile"],
+  "deprecated_aliases": [],
+  "anti_aliases": ["process flags", "launcher option bag", "health check"],
+  "boundaries": [
+    "Not the process argument vector.",
+    "Not the host identity alone.",
+    "Not a one-off feature request."
+  ],
+  "relations": [
+    { "kind": "depends_on", "concept_id": "host_profile" },
+    { "kind": "complements", "concept_id": "compatibility_migration_contract" },
+    { "kind": "informs", "concept_id": "operator_error_taxonomy" }
+  ],
+  "owner_surface": "Narada runtime architecture doctrine",
+  "authority": {
+    "kind": "task_and_doc_governance",
+    "ref": "docs/concepts/concept-registry.md",
+    "notes": "The registry chapter names this as a recurring promoted shape for runtime and host capability declarations."
+  },
+  "schemas": ["docs/concepts/concept-registry.md"],
+  "docs": ["docs/concepts/concept-registry.md"],
+  "tasks": ["1706", "first-class-system-objects"],
+  "code_refs": ["packages/agent-start/src/narada-agent-start.ts", "packages/layers/cli/src/commands/doctor.ts"],
+  "tests": ["packages/agent-start/test/option-contract.test.mjs", "packages/layers/cli/test/commands/doctor.test.ts"],
+  "examples": ["supports_runtime=codex; supports_projection=agent-web-ui; supports_hosting=nars"],
+  "counterexamples": ["a plain list of environment variables"],
+  "open_questions": ["Should runtime capability profiles be emitted by launcher dry-runs or queried from a separate registry?"],
+  "confidence": { "cl": 0.98, "basis": "The registry chapter already names RuntimeCapabilityProfile as a recurring promoted shape across launch/runtime surfaces." },
+  "reviewed_at": "2026-07-02T21:00:00.000Z"
+}

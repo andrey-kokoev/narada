@@ -1,0 +1,38 @@
+{
+  "concept_id": "compatibility_migration_contract",
+  "canonical_name": "CompatibilityMigrationContract",
+  "short_definition": "The governed contract for translating old terminology, interfaces, and records onto their current canonical forms during migration.",
+  "description": "CompatibilityMigrationContract names the migration boundary itself. It covers old-to-new term mapping, interface compatibility windows, alias sunset rules, and evidence for when a compatibility path may be removed. It is the object that lets Narada explain and manage migration posture explicitly instead of burying compatibility behavior in ad hoc shims.",
+  "kind": "policy",
+  "status": "draft",
+  "aliases": ["compatibility migration", "compat migration contract", "migration contract"],
+  "deprecated_aliases": [],
+  "anti_aliases": ["one-off shim", "rename list", "release note"],
+  "boundaries": [
+    "Not a hidden backwards-compatibility hack.",
+    "Not a release note or migration checklist.",
+    "Not the promoted thing being migrated."
+  ],
+  "relations": [
+    { "kind": "depends_on", "concept_id": "concept_promotion" },
+    { "kind": "informs", "concept_id": "concept_registry" },
+    { "kind": "complements", "concept_id": "runtime_capability_profile" },
+    { "kind": "complements", "concept_id": "host_profile" }
+  ],
+  "owner_surface": "Narada concept governance",
+  "authority": {
+    "kind": "task_and_doc_governance",
+    "ref": "docs/concepts/concept-registry.md",
+    "notes": "The concept is named in the registry chapter's promotion criteria as a first-class candidate."
+  },
+  "schemas": ["docs/concepts/concept-registry.md"],
+  "docs": ["docs/concepts/concept-registry.md"],
+  "tasks": ["1701", "first-class-system-objects"],
+  "code_refs": [],
+  "tests": ["packages/domains/concepts/test/registry.test.ts"],
+  "examples": ["old name -> canonical name with explicit compatibility window"],
+  "counterexamples": ["a silent alias that nobody tracks"],
+  "open_questions": ["Should the compatibility window itself become a separate registry object?"],
+  "confidence": { "cl": 0.97, "basis": "The registry chapter explicitly lists compatibility migration as a promotion criterion." },
+  "reviewed_at": "2026-07-02T21:00:00.000Z"
+}

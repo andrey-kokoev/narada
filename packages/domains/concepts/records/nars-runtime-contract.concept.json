@@ -1,0 +1,37 @@
+{
+  "concept_id": "nars_runtime_contract",
+  "canonical_name": "NARSRuntimeContract",
+  "short_definition": "The implementation-facing contract for the Narada Agent Runtime Server.",
+  "description": "The NARS Runtime Contract defines package authority, launch boundary, protocol shape, carrier adapter boundary, client/runtime split, and verification expectations for the Narada Agent Runtime Server. It is the operational contract below launcher planning and above provider-specific carrier execution.",
+  "kind": "protocol",
+  "status": "active",
+  "aliases": ["NARS contract", "runtime contract"],
+  "deprecated_aliases": [],
+  "anti_aliases": ["agent-cli implementation detail", "provider SDK", "terminal transcript"],
+  "boundaries": [
+    "Not the launcher planner.",
+    "Not the provider adapter.",
+    "Not a browser or terminal shell."
+  ],
+  "relations": [
+    { "kind": "depends_on", "concept_id": "nars_session_management" },
+    { "kind": "depends_on", "concept_id": "nars_client_projection_contract" },
+    { "kind": "embodies", "concept_id": "runtime_health_posture" }
+  ],
+  "owner_surface": "Narada runtime architecture doctrine",
+  "authority": {
+    "kind": "documentation_and_implementation",
+    "ref": "docs/concepts/nars-runtime-contract.md",
+    "notes": "The contract is documented and realized through agent-runtime-server, carrier-runtime, and client projections."
+  },
+  "schemas": ["docs/concepts/nars-runtime-contract.md"],
+  "docs": ["docs/concepts/nars-runtime-contract.md"],
+  "tasks": ["1549", "1550", "first-class-system-objects"],
+  "code_refs": ["packages/agent-runtime-server/bin/narada-agent-runtime-server.mjs", "packages/carrier-runtime/src/server-mode.mjs", "packages/layers/cli/src/commands/nars.ts"],
+  "tests": ["packages/agent-runtime-server/test/server-wrapper.test.mjs", "packages/carrier-runtime/src/server-mode.test.mjs", "packages/layers/cli/test/commands/nars.test.ts"],
+  "examples": ["session.health", "session.events.subscribe", "carrier.command.execute"],
+  "counterexamples": ["ambient provider config selection"],
+  "open_questions": [],
+  "confidence": { "cl": 0.995, "basis": "The runtime contract is documented as the operational contract for NARS and is backed by runtime and client tests." },
+  "reviewed_at": "2026-07-02T19:00:00.000Z"
+}

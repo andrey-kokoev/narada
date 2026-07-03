@@ -1,0 +1,60 @@
+{
+  "concept_id": "concept_promotion",
+  "canonical_name": "ConceptPromotion",
+  "short_definition": "The governed lifecycle by which an implicit recurring shape becomes an accepted Concept.",
+  "description": "ConceptPromotion is the process object, not the candidate itself. It covers the path from observed friction through proposal, boundedness, acceptance, embodiment, validation, and active use.",
+  "kind": "lifecycle",
+  "status": "active",
+  "aliases": ["promotion lifecycle"],
+  "deprecated_aliases": [],
+  "anti_aliases": ["task", "schema", "candidate"],
+  "boundaries": [
+    "Not a proposal record alone.",
+    "Not the promoted ConceptRecord itself.",
+    "Not an arbitrary naming exercise."
+  ],
+  "relations": [
+    { "kind": "promotes", "concept_id": "concept" },
+    { "kind": "materializes", "concept_id": "concept_record" },
+    { "kind": "governs", "concept_id": "concept_registry" }
+  ],
+  "owner_surface": "Narada concept governance",
+  "authority": {
+    "kind": "task_and_doc_governance",
+    "ref": "docs/concepts/concept-registry.md",
+    "notes": "Task chapters may propose and embody concepts, but registry acceptance stays governed."
+  },
+  "promotion_lifecycle": {
+    "stage": "active",
+    "evidence": [
+      {
+        "kind": "doc",
+        "ref": "docs/concepts/concept-registry.md#conceptpromotion-lifecycle"
+      },
+      {
+        "kind": "schema",
+        "ref": "packages/domains/concepts/src/schema.ts"
+      },
+      {
+        "kind": "test",
+        "ref": "packages/domains/concepts/test/schema.test.ts"
+      }
+    ],
+    "authority": {
+      "kind": "task_and_doc_governance",
+      "ref": "docs/concepts/concept-registry.md",
+      "notes": "Promotion remains governed by the registry and its task/doc evidence."
+    },
+    "timestamp": "2026-07-02T19:00:00.000Z"
+  },
+  "schemas": ["packages/domains/concepts/src/schema.ts"],
+  "docs": ["docs/concepts/concept-registry.md"],
+  "tasks": ["1729", "1732", "1737"],
+  "code_refs": ["packages/domains/concepts/src/registry.ts"],
+  "tests": ["packages/domains/concepts/test/schema.test.ts"],
+  "examples": ["observed -> proposed -> bounded -> accepted -> embodied -> validated -> active"],
+  "counterexamples": ["a one-off rename"],
+  "open_questions": [],
+  "confidence": { "cl": 0.98, "basis": "The concept-registry document defines the lifecycle explicitly." },
+  "reviewed_at": "2026-07-02T19:00:00.000Z"
+}

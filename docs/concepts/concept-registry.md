@@ -24,8 +24,12 @@ Narada repeatedly promotes recurring shapes into named objects:
 - `ProjectionTopology`
 - `ObjectLifecyclePolicy`
 - `OperatorViewPolicy`
+- `LoopDefinition`
+- `WatchDefinition`
 - `EvidencePacket`
 - `HostProfile`
+- `CompatibilityMigrationContract`
+- `OperatorFacingErrorTaxonomy`
 
 Before promotion, these shapes exist as friction:
 
@@ -79,6 +83,8 @@ It should support both human navigation and machine use. It is the semantic regi
 A **ConceptPromotion** is the governed lifecycle by which an implicit recurring Narada shape becomes an explicit Concept.
 
 Candidate or proposal is only one phase inside ConceptPromotion. The object is the promotion process, not the candidate itself.
+
+ConceptPromotion is Narada-proper source-controlled domain machinery. Its authority lives in this repository's concept records, schema, validation, tests, docs, and CLI/dev tooling. It is not a Site MCP surface, runtime/NARS state machine, SQLite authority, or task lifecycle authority. Tasks may carry work and review evidence for a promotion, but the ConceptRegistry remains the semantic authority after acceptance.
 
 ## Non-Goals
 
@@ -139,6 +145,7 @@ Initial concept kinds should be broad and composable:
 | `artifact` | Durable evidence/content object semantics. |
 | `event` | Event meaning, ordering, and visibility semantics. |
 | `capability` | Declared ability of a runtime, surface, or host. |
+| `instance` | Concrete running or configured instance of a concept-bearing object. |
 
 These kinds should remain small until implementation pressure proves a need for more.
 
@@ -214,6 +221,42 @@ Validation evidence should cite tests, review, or explicit operator acceptance. 
 
 The concept is authoritative for new work. New implementation should use its canonical name and respect its boundaries.
 
+### Structured Promotion Record
+
+The `ConceptPromotion` registry record should keep the lifecycle in structured form instead of prose alone:
+
+```json
+{
+  "promotion_lifecycle": {
+    "stage": "active",
+    "evidence": [
+      { "kind": "doc", "ref": "docs/concepts/concept-registry.md#conceptpromotion-lifecycle" },
+      { "kind": "schema", "ref": "packages/domains/concepts/src/schema.ts" },
+      { "kind": "test", "ref": "packages/domains/concepts/test/schema.test.ts" }
+    ],
+    "authority": { "kind": "task_and_doc_governance", "ref": "docs/concepts/concept-registry.md" },
+    "timestamp": "2026-07-02T19:00:00.000Z"
+  }
+}
+```
+
+The structured lifecycle data should be the canonical machine-readable source for promotion stage, evidence, and authority; the prose lifecycle remains the human explanation.
+
+### Status And Stage Coherence
+
+ConceptRecord `status` describes the authority posture of the concept. `promotion_lifecycle.stage` describes the lifecycle phase that justified that posture. When lifecycle data is present, these values must remain coherent:
+
+| ConceptRecord status | Allowed ConceptPromotion stage |
+| --- | --- |
+| `observed` | `observed` |
+| `draft` | `proposed`, `bounded`, `accepted`, `embodied`, `validated` |
+| `active` | `active` |
+| `rejected` | `rejected` |
+| `deprecated` | `deprecated` |
+| `superseded` | `superseded` |
+
+Active concepts should eventually carry `promotion_lifecycle` records with validation evidence. During migration, missing lifecycle data is a queryable lifecycle gap rather than an immediate registry-invalid condition. Once lifecycle metadata is present, stage/status mismatch and empty lifecycle evidence are validation errors.
+
 ## Promotion Criteria
 
 A shape should be promoted to Concept only when at least one of these is true:
@@ -282,17 +325,45 @@ These chapters are not the registry. They are work queues that should either cre
 
 ## Storage And Authority Target
 
-The first durable step is this architecture document. The target implementation should then introduce a structured ConceptRegistry owned by Narada proper.
+The first durable step is this architecture document. The target implementation introduces a structured ConceptRegistry owned by Narada proper.
 
-Candidate storage shape:
+Canonical storage shape:
 
 ```text
-docs/concepts/concept-registry.md        # doctrine and operating rules
-concepts/*.concept.json                  # future machine-readable records, if warranted
-packages/...                             # future typed schema/loader, if warranted
+docs/concepts/concept-registry.md                 # doctrine and operating rules
+packages/domains/concepts/records/*.concept.json   # canonical machine-readable ConceptRecords
+packages/domains/concepts/src/registry.ts          # authoritative loader and lookup logic
+packages/layers/cli/src/commands/concepts.ts       # operator-facing list/show/validate command
 ```
 
-Exact storage should be decided by implementation pressure. The invariant is that ConceptRecords must be inspectable without searching arbitrary prose and must link back to their authority docs and embodiments.
+The invariant is that ConceptRecords must be inspectable without searching arbitrary prose and must link back to their authority docs and embodiments.
+
+The package boundary is intentional:
+
+- `docs/` owns the semantic doctrine and review rules.
+- `packages/domains/concepts` owns the stored records, schema, loader, and validation rules.
+- `packages/layers/cli` owns the discoverable human/operator query surface.
+
+## Migration Guidance
+
+Task chapters are proposal and embodiment work queues, not the registry itself.
+
+When a task chapter introduces or stabilizes a concept, it should:
+
+1. propose the concept in the chapter task body;
+2. update or seed the matching ConceptRecord in `packages/domains/concepts/records/` once the meaning is stable;
+3. keep task numbers and chapter ids in the record's `tasks` field;
+4. keep the registry authoritative once the concept is accepted.
+
+When loop, watch, or projection-topology semantics stabilize, seed or update the matching ConceptRecords as `LoopDefinition`, `WatchDefinition`, and `ProjectionTopology` instead of leaving those names stranded in runtime notes or launcher prose.
+
+Recent chapter examples:
+
+- `launcher-first-class-objects` for launcher-specific first-classization tasks 1664-1673;
+- `first-class-system-objects` for system object candidates/tasks 1686-1703;
+- `first-class-relationship-policy-objects` for relationship/policy candidates/tasks 1704-1713.
+
+These chapters can propose or embody concepts such as `SurfaceAttachment`, `AuthorityGrant`, `RuntimeCapabilityProfile`, `HostProfile`, `CompatibilityMigrationContract`, `OperatorFacingErrorTaxonomy`, and `AdmissionPolicy`, but the ConceptRegistry remains the semantic authority after acceptance.
 
 ## Example: SurfaceAttachment ConceptRecord
 

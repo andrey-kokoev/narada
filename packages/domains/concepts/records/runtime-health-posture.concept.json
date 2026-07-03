@@ -1,0 +1,36 @@
+{
+  "concept_id": "runtime_health_posture",
+  "canonical_name": "RuntimeHealthPosture",
+  "short_definition": "The structured health and endpoint posture projection for a live runtime session.",
+  "description": "RuntimeHealthPosture is the compact first-class projection that summarizes NARS health and event-stream discovery without dumping the raw session stream into launch banners. It carries endpoint, status, and operational posture information that agent-cli and agent-web-ui can render consistently.",
+  "kind": "surface",
+  "status": "active",
+  "aliases": ["health posture", "runtime posture"],
+  "deprecated_aliases": [],
+  "anti_aliases": ["raw health spam", "conversation row", "provider telemetry"],
+  "boundaries": [
+    "Not the raw event stream.",
+    "Not the canonical conversation transcript.",
+    "Not the provider API call result."
+  ],
+  "relations": [
+    { "kind": "depends_on", "concept_id": "nars_runtime_contract" },
+    { "kind": "depends_on", "concept_id": "nars_session_management" }
+  ],
+  "owner_surface": "@narada2/agent-start package",
+  "authority": {
+    "kind": "package",
+    "ref": "packages/agent-start",
+    "notes": "The agent-start launcher materializes the posture projection and the renderer consumes it."
+  },
+  "schemas": ["packages/agent-start/src/narada-agent-start.ts"],
+  "docs": ["packages/agent-start/docs/provider-decomposition.md"],
+  "tasks": ["1703", "1558", "first-class-system-objects"],
+  "code_refs": ["packages/agent-start/src/narada-agent-start.ts", "packages/agent-start-renderer/src/agent-start-renderer.mjs", "packages/agent-start-renderer/src/agent-start-renderer.test.mjs", "packages/agent-start/test/option-contract.test.mjs"],
+  "tests": ["packages/agent-start-renderer/src/agent-start-renderer.test.mjs", "packages/agent-start/test/option-contract.test.mjs"],
+  "examples": ["status=healthy health=http://127.0.0.1:12346/health events=ws://127.0.0.1:12345/events"],
+  "counterexamples": ["raw session-start JSON wall"],
+  "open_questions": [],
+  "confidence": { "cl": 0.99, "basis": "The launcher now materializes and renders the posture projection directly." },
+  "reviewed_at": "2026-07-02T19:00:00.000Z"
+}

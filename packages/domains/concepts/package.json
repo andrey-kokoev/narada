@@ -1,0 +1,53 @@
+{
+  "name": "@narada2/concepts",
+  "version": "0.1.0",
+  "description": "ConceptRegistry storage, validation, and lookup for Narada concepts",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist/",
+    "records/",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "directory": "packages/domains/concepts"
+  },
+  "keywords": [
+    "narada",
+    "concept",
+    "concept-registry",
+    "registry"
+  ],
+  "author": "Narada <team@narada.dev>",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "typescript": "^5.3.0",
+    "vitest": "^1.0.0"
+  },
+  "homepage": "https://github.com/andrey-kokoev/narada",
+  "bugs": {
+    "url": "https://github.com/andrey-kokoev/narada/issues"
+  }
+}

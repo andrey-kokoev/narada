@@ -1,0 +1,36 @@
+{
+  "concept_id": "work_order",
+  "canonical_name": "WorkOrder",
+  "short_definition": "The governing delegation object for scope, boundaries, budgets, deliverables, authority gates, and verification policy.",
+  "description": "WorkOrder is the first-class delegation object. Budget is only one sub-object inside it. It can carry scope, allowed repositories, forbidden boundaries, mutation policy, verification budget, deliverables, exit interview policy, and reviewer gates while still normalizing into an explicit DAG when needed.",
+  "kind": "policy",
+  "status": "active",
+  "aliases": ["delegation work order", "work order contract"],
+  "deprecated_aliases": [],
+  "anti_aliases": ["step list", "prompt bundle", "shell command"],
+  "boundaries": [
+    "Not a legacy step list by itself.",
+    "Not a budget-only object.",
+    "Not a shell/git/filesystem mutation surface."
+  ],
+  "relations": [
+    { "kind": "depends_on", "concept_id": "delegation_dag_template" },
+    { "kind": "informs", "concept_id": "mcp_ergonomics_feedback_loop" }
+  ],
+  "owner_surface": "@narada2/delegated-task-mcp package",
+  "authority": {
+    "kind": "package",
+    "ref": "mcp-surfaces/packages/delegated-task-mcp",
+    "notes": "The delegated-task surface validates work orders, expands declarative DAGs, and records workflow previews."
+  },
+  "schemas": ["mcp-surfaces/packages/delegated-task-mcp/src/main.ts"],
+  "docs": ["mcp-surfaces/packages/delegated-task-mcp/README.md", "docs/concepts/first-class-narada-runtime-concepts.md"],
+  "tasks": ["1552", "1687", "first-class-system-objects"],
+  "code_refs": ["mcp-surfaces/packages/delegated-task-mcp/src/main.ts", "mcp-surfaces/packages/delegated-task-mcp/test/delegated-task-mcp.test.ts"],
+  "tests": ["mcp-surfaces/packages/delegated-task-mcp/test/protocol-smoke.test.ts", "mcp-surfaces/packages/delegated-task-mcp/test/delegated-task-mcp.test.ts"],
+  "examples": ["objective + allowed_repositories + verification_budget + deliverables + exit interview policy"],
+  "counterexamples": ["a plain task prompt", "a per-step array without governing contract fields"],
+  "open_questions": [],
+  "confidence": { "cl": 0.995, "basis": "The delegated-task MCP already validates work orders as the governing delegation object." },
+  "reviewed_at": "2026-07-02T19:00:00.000Z"
+}

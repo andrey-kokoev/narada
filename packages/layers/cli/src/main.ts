@@ -21,6 +21,7 @@ import { registerTaskDispatchCommands } from './commands/task-dispatch-register.
 import { registerTaskReconcileCommands } from './commands/task-reconcile-register.js';
 import { registerTaskOperationsCommands } from './commands/task-operations-register.js';
 import { registerChapterCommands } from './commands/chapter-register.js';
+import { registerConceptCommands } from './commands/concepts.js';
 import { registerConstructionLoopCommands } from './commands/construction-loop-register.js';
 import { registerVerifyCommands } from './commands/verify-register.js';
 import { registerCrossingCommands } from './commands/crossing-register.js';
@@ -135,6 +136,7 @@ registerKbCommands(program);
 registerRoutingCommands(program);
 registerCoherenceCommands(program);
 registerChapterCommands(program);
+registerConceptCommands(program);
 registerConstructionLoopCommands(program);
 registerVerifyCommands(program);
 registerCommandRunCommands(program);

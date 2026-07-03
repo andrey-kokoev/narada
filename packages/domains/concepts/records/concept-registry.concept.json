@@ -1,0 +1,37 @@
+{
+  "concept_id": "concept_registry",
+  "canonical_name": "ConceptRegistry",
+  "short_definition": "The authoritative collection and lookup surface for ConceptRecords.",
+  "description": "The ConceptRegistry is the semantic registry for Narada concepts, not a generic glossary. It supports human navigation and machine use and remains the authority once a concept is accepted.",
+  "kind": "surface",
+  "status": "active",
+  "aliases": ["registry"],
+  "deprecated_aliases": [],
+  "anti_aliases": ["glossary", "schema registry"],
+  "boundaries": [
+    "Not the ConceptRecord itself.",
+    "Not a generic vocabulary list.",
+    "Not a replacement for schemas, docs, tests, tasks, or code."
+  ],
+  "relations": [
+    { "kind": "stores", "concept_id": "concept_record" },
+    { "kind": "authoritative_for", "concept_id": "concept" },
+    { "kind": "governed_by", "concept_id": "concept_promotion" }
+  ],
+  "owner_surface": "@narada2/concepts package",
+  "authority": {
+    "kind": "package",
+    "ref": "packages/domains/concepts",
+    "notes": "Records live in the package-owned records directory and are queried by the Narada CLI."
+  },
+  "schemas": ["packages/domains/concepts/src/schema.ts"],
+  "docs": ["docs/concepts/concept-registry.md"],
+  "tasks": ["1724", "1728", "1730", "1736"],
+  "code_refs": ["packages/domains/concepts/src/registry.ts", "packages/layers/cli/src/commands/concepts.ts"],
+  "tests": ["packages/domains/concepts/test/registry.test.ts", "packages/layers/cli/test/commands/concepts.test.ts"],
+  "examples": ["packages/domains/concepts/records/*.concept.json"],
+  "counterexamples": ["a loose markdown index"],
+  "open_questions": [],
+  "confidence": { "cl": 0.99, "basis": "The architecture document assigns this as the authoritative collection and lookup surface." },
+  "reviewed_at": "2026-07-02T19:00:00.000Z"
+}

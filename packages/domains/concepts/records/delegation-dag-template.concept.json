@@ -1,0 +1,36 @@
+{
+  "concept_id": "delegation_dag_template",
+  "canonical_name": "DelegationDAGTemplate",
+  "short_definition": "A named reusable DAG shape for common delegated work patterns.",
+  "description": "DelegationDAGTemplate captures reusable orchestration shapes such as parallel research, synthesis, implementation/review/repair, guarded publication, and other repeated worker topologies so operators do not keep hand-authoring the same graph.",
+  "kind": "lifecycle",
+  "status": "active",
+  "aliases": ["delegation template", "workflow template", "dag template"],
+  "deprecated_aliases": [],
+  "anti_aliases": ["one-off prompt list", "flat step list"],
+  "boundaries": [
+    "Not the work order itself.",
+    "Not a single worker prompt.",
+    "Not a shell execution plan."
+  ],
+  "relations": [
+    { "kind": "depends_on", "concept_id": "work_order" },
+    { "kind": "observes", "concept_id": "mcp_ergonomics_feedback_loop" }
+  ],
+  "owner_surface": "@narada2/delegated-task-mcp package",
+  "authority": {
+    "kind": "package",
+    "ref": "mcp-surfaces/packages/delegated-task-mcp",
+    "notes": "The delegated-task surface exposes reusable workflow templates and validates DAG expansion."
+  },
+  "schemas": ["mcp-surfaces/packages/delegated-task-mcp/src/main.ts"],
+  "docs": ["mcp-surfaces/packages/delegated-task-mcp/README.md", "docs/concepts/first-class-narada-runtime-concepts.md"],
+  "tasks": ["1553", "first-class-system-objects"],
+  "code_refs": ["mcp-surfaces/packages/delegated-task-mcp/src/main.ts", "mcp-surfaces/packages/delegated-task-mcp/test/delegated-task-mcp.test.ts"],
+  "tests": ["mcp-surfaces/packages/delegated-task-mcp/test/protocol-smoke.test.ts"],
+  "examples": ["implement_review_repair_verify", "parallel research -> join -> synthesize -> execute -> review"],
+  "counterexamples": ["a single worker instruction string"],
+  "open_questions": [],
+  "confidence": { "cl": 0.99, "basis": "The delegated-task MCP already exposes a template catalog and DAG expansion behavior." },
+  "reviewed_at": "2026-07-02T19:00:00.000Z"
+}

@@ -1,0 +1,37 @@
+{
+  "concept_id": "host_profile",
+  "canonical_name": "HostProfile",
+  "short_definition": "The structured description of a host environment and its stable affordances.",
+  "description": "HostProfile captures the host-level constraints and affordances that a runtime can rely on: where it lives, what execution posture it has, and which orchestration boundaries are stable enough to reason about before launch. It separates host semantics from runtime capabilities so launcher logic can ask the right questions of each.",
+  "kind": "host",
+  "status": "draft",
+  "aliases": ["host profile"],
+  "deprecated_aliases": [],
+  "anti_aliases": ["runtime adapter kind", "site config", "process environment"],
+  "boundaries": [
+    "Not the runtime process itself.",
+    "Not a site-local config file.",
+    "Not an ephemeral shell session."
+  ],
+  "relations": [
+    { "kind": "complements", "concept_id": "runtime_capability_profile" },
+    { "kind": "informs", "concept_id": "compatibility_migration_contract" },
+    { "kind": "informs", "concept_id": "operator_error_taxonomy" }
+  ],
+  "owner_surface": "Narada launch and host architecture doctrine",
+  "authority": {
+    "kind": "task_and_doc_governance",
+    "ref": "docs/concepts/concept-registry.md",
+    "notes": "The registry chapter names HostProfile as a recurring promoted shape for host-level configuration above user-site boundaries."
+  },
+  "schemas": ["docs/concepts/concept-registry.md"],
+  "docs": ["docs/concepts/concept-registry.md"],
+  "tasks": ["1713", "first-class-relationship-policy-objects"],
+  "code_refs": ["packages/agent-start/src/narada-agent-start.ts", "packages/layers/cli/src/commands/doctor.ts"],
+  "tests": ["packages/agent-start/test/option-contract.test.mjs", "packages/layers/cli/test/commands/doctor.test.ts"],
+  "examples": ["host_site_root=C:/ProgramData/Narada/sites/pc/desktop-sunroom-2"],
+  "counterexamples": ["a user profile file", "a runtime adapter kind"],
+  "open_questions": ["Should HostProfile be derived from stable host config plus launcher-derived evidence?"],
+  "confidence": { "cl": 0.98, "basis": "The registry chapter explicitly lists HostProfile as a recurring concept candidate above user-site configuration." },
+  "reviewed_at": "2026-07-02T21:00:00.000Z"
+}

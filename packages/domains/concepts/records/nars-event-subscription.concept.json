@@ -1,0 +1,36 @@
+{
+  "concept_id": "nars_event_subscription",
+  "canonical_name": "NarsEventSubscription",
+  "short_definition": "The contract for replay/live subscription to NARS events with lanes, cursors, filters, and backpressure.",
+  "description": "NarsEventSubscription describes how a client subscribes to a NARS session's event stream while preserving replay boundaries, live delivery, lane filtering, heartbeat handling, and reconnect behavior. It is the shared contract for CLI, TUI, web UI, and projection surfaces.",
+  "kind": "protocol",
+  "status": "draft",
+  "aliases": ["NARS event subscription", "event subscription contract", "event stream contract"],
+  "deprecated_aliases": [],
+  "anti_aliases": ["raw websocket frame", "conversation transcript", "tail -f"],
+  "boundaries": [
+    "Not the raw transport itself.",
+    "Not a renderer implementation.",
+    "Not a single surface's private filter logic."
+  ],
+  "relations": [
+    { "kind": "depends_on", "concept_id": "nars_runtime_contract" },
+    { "kind": "depends_on", "concept_id": "nars_client_projection_contract" }
+  ],
+  "owner_surface": "Narada NARS runtime doctrine",
+  "authority": {
+    "kind": "documentation_and_implementation",
+    "ref": "docs/concepts/nars-runtime-contract.md",
+    "notes": "The runtime contract already defines session.events.subscribe and event families; this record names the subscription layer explicitly."
+  },
+  "schemas": ["docs/concepts/nars-runtime-contract.md"],
+  "docs": ["docs/concepts/nars-runtime-contract.md", "docs/concepts/nars-client-projection-contract.md"],
+  "tasks": ["1693", "first-class-system-objects"],
+  "code_refs": ["packages/carrier-runtime/src/server-mode.mjs", "packages/carrier-terminal-projection/src/projected-input.mjs", "packages/layers/cli/src/commands/nars.ts"],
+  "tests": ["packages/carrier-runtime/src/server-mode.test.mjs", "packages/layers/cli/test/commands/nars.ts"],
+  "examples": ["conversation lane with replay cursor and live cursor"],
+  "counterexamples": ["every diagnostic event forced into the chat lane"],
+  "open_questions": [],
+  "confidence": { "cl": 0.95, "basis": "NARS runtime already emits structured session events and the client projection contract already classifies them." },
+  "reviewed_at": "2026-07-02T22:00:00.000Z"
+}

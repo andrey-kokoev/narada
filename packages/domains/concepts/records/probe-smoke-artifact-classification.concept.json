@@ -1,0 +1,36 @@
+{
+  "concept_id": "probe_smoke_artifact_classification",
+  "canonical_name": "ProbeSmokeArtifactClassification",
+  "short_definition": "A classification policy for probe and smoke artifacts with cleanup and commit guidance.",
+  "description": "ProbeSmokeArtifactClassification distinguishes generated smoke artifacts, probe outputs, diagnostics, and clean evidence from ordinary source changes. It tells operator workflows which files should be committed, ignored, cleaned up, or preserved for evidence.",
+  "kind": "policy",
+  "status": "draft",
+  "aliases": ["probe artifact classification", "smoke artifact classification", "diagnostic artifact policy"],
+  "deprecated_aliases": [],
+  "anti_aliases": ["gitignore by accident", "delete all untracked files", "source code diff"],
+  "boundaries": [
+    "Not arbitrary ignore rules.",
+    "Not a cleanup command.",
+    "Not a source-change classification scheme."
+  ],
+  "relations": [
+    { "kind": "depends_on", "concept_id": "work_order" },
+    { "kind": "informs", "concept_id": "concept_registry" }
+  ],
+  "owner_surface": "Narada repository hygiene doctrine",
+  "authority": {
+    "kind": "task_and_doc_governance",
+    "ref": "docs/concepts/concept-registry.md",
+    "notes": "The concept registry chapter explicitly asks the system-object chapter to classify launcher and structured-command smoke artifacts."
+  },
+  "schemas": ["docs/concepts/concept-registry.md"],
+  "docs": ["docs/concepts/concept-registry.md"],
+  "tasks": ["1700", "first-class-system-objects"],
+  "code_refs": ["packages/layers/cli/src/commands/concepts.ts", "packages/agent-start/src/narada-agent-start.ts"],
+  "tests": ["packages/layers/cli/test/commands/concepts.test.ts"],
+  "examples": ["structured-command smoke output", "launcher smoke output", "temporary diagnostics"],
+  "counterexamples": ["project source files mixed with a smoke artifact"],
+  "open_questions": [],
+  "confidence": { "cl": 0.95, "basis": "The concept registry chapter already treats smoke artifacts as a distinct classification problem for the system-object chapter." },
+  "reviewed_at": "2026-07-02T22:00:00.000Z"
+}

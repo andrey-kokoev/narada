@@ -1,0 +1,36 @@
+{
+  "concept_id": "artifact_projection_plan",
+  "canonical_name": "ArtifactProjectionPlan",
+  "short_definition": "A first-class policy for projecting and replicating artifacts across local and remote surfaces.",
+  "description": "ArtifactProjectionPlan describes which artifacts may be projected, where they may appear, what content mode applies, what rendering hints are allowed, and how revocation or expiry should behave. It keeps projection policy explicit instead of inferring it from file paths or host reachability.",
+  "kind": "policy",
+  "status": "draft",
+  "aliases": ["artifact projection", "replication plan", "projection policy"],
+  "deprecated_aliases": [],
+  "anti_aliases": ["raw file copy", "browser cache", "unbounded sync"],
+  "boundaries": [
+    "Not the artifact itself.",
+    "Not raw filesystem access.",
+    "Not a renderer-specific formatting rule."
+  ],
+  "relations": [
+    { "kind": "depends_on", "concept_id": "nars_client_projection_contract" },
+    { "kind": "depends_on", "concept_id": "projection_topology" }
+  ],
+  "owner_surface": "Narada projection doctrine",
+  "authority": {
+    "kind": "documentation_and_implementation",
+    "ref": "docs/concepts/cloudflare-nars-web-projection.md",
+    "notes": "The Cloudflare projection docs already define artifact projection policy, allowed kinds, and projection lifecycle constraints."
+  },
+  "schemas": ["docs/concepts/cloudflare-nars-web-projection.md"],
+  "docs": ["docs/concepts/cloudflare-nars-web-projection.md", "docs/concepts/narada-runtime-projection-graph.md"],
+  "tasks": ["1695", "first-class-system-objects"],
+  "code_refs": ["packages/cloudflare-nars-projection/src/projection.ts", "packages/agent-web-ui/src/render.js"],
+  "tests": ["packages/cloudflare-nars-projection/test/projection-live.test.mjs"],
+  "examples": ["metadata-only, selected markdown/json/text kinds, remote rendering"],
+  "counterexamples": ["replicate arbitrary local paths by default"],
+  "open_questions": [],
+  "confidence": { "cl": 0.95, "basis": "The Cloudflare projection contract already carries artifact policy and revocation semantics in first-class form." },
+  "reviewed_at": "2026-07-02T22:00:00.000Z"
+}

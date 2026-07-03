@@ -1,0 +1,37 @@
+{
+  "concept_id": "projection_topology",
+  "canonical_name": "ProjectionTopology",
+  "short_definition": "The canonical topology describing authority runtimes, projection stores, projection surfaces, and intent routes.",
+  "description": "ProjectionTopology is the registry name for the Narada runtime topology that connects authority runtimes, projection stores, projection surfaces, and intent routes. The Narada Runtime Projection Graph doc is the living embodiment and documentation for this concept.",
+  "kind": "lifecycle",
+  "status": "draft",
+  "aliases": ["NaradaRuntimeProjectionGraph", "runtime projection graph", "projection graph"],
+  "deprecated_aliases": ["narada_runtime_projection_graph"],
+  "anti_aliases": ["terminal window", "browser tab", "generic tunnel"],
+  "boundaries": [
+    "Not a single transport path.",
+    "Not a projection store itself.",
+    "Not a per-package local naming choice."
+  ],
+  "relations": [
+    { "kind": "embodied_by", "concept_id": "nars_runtime_contract" },
+    { "kind": "embodied_by", "concept_id": "nars_session_management" },
+    { "kind": "embodied_by", "concept_id": "operator_projection_open_request" }
+  ],
+  "owner_surface": "Narada projection topology doctrine",
+  "authority": {
+    "kind": "documentation",
+    "ref": "docs/concepts/narada-runtime-projection-graph.md",
+    "notes": "The topology is defined in the concepts documentation and cross-linked from slice docs."
+  },
+  "schemas": ["docs/concepts/narada-runtime-projection-graph.md"],
+  "docs": ["docs/concepts/narada-runtime-projection-graph.md", "docs/concepts/nars-runtime-contract.md", "docs/concepts/nars-session-management.md", "docs/concepts/nars-client-projection-contract.md", "docs/concepts/nars-authority-runtime-host-transition.md"],
+  "tasks": ["1709", "narada-runtime-projection-graph-operational-plan", "first-class-system-objects"],
+  "code_refs": ["packages/agent-web-ui/src/session-projection.js", "packages/layers/cli/src/commands/agent-web-ui.ts"],
+  "tests": ["packages/agent-web-ui/test/agent-web-ui.test.mjs", "packages/agent-web-ui/test/agent-web-ui-cloudflare-html-artifact-e2e.test.mjs"],
+  "examples": ["local authority_runtime -> projection_edge -> projection_store -> projection_surface"],
+  "counterexamples": ["Cloudflare cache freshness by itself"],
+  "open_questions": ["How much of the graph should eventually be persisted as a machine-readable record?"],
+  "confidence": { "cl": 0.985, "basis": "The topology is documented as the general graph ontology and referenced by the current slice docs." },
+  "reviewed_at": "2026-07-02T19:00:00.000Z"
+}

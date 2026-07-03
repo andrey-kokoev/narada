@@ -1,0 +1,36 @@
+{
+  "concept_id": "task_chapter_execution_plan",
+  "canonical_name": "TaskChapterExecutionPlan",
+  "short_definition": "A first-class execution plan for a task chapter as a sequence, parallel batch, or DAG.",
+  "description": "TaskChapterExecutionPlan captures how a chapter of opened tasks should be executed, including task nodes, dependencies, parallel batches, delegation strategy, cognition levels, review gates, stop conditions, and terminal evidence. It turns conversational execution guidance into a named plan object instead of an ad hoc step list.",
+  "kind": "lifecycle",
+  "status": "draft",
+  "aliases": ["chapter execution plan", "task chapter plan", "execution DAG"],
+  "deprecated_aliases": [],
+  "anti_aliases": ["flat todo list", "single worker prompt", "shell plan"],
+  "boundaries": [
+    "Not the task chapter itself.",
+    "Not a single delegated worker output.",
+    "Not a shell command sequence."
+  ],
+  "relations": [
+    { "kind": "depends_on", "concept_id": "work_order" },
+    { "kind": "depends_on", "concept_id": "delegation_dag_template" }
+  ],
+  "owner_surface": "Narada task lifecycle doctrine",
+  "authority": {
+    "kind": "task_and_doc_governance",
+    "ref": "docs/concepts/concept-registry.md",
+    "notes": "Chapter execution plans are promoted from task-chapter execution guidance into a durable concept record."
+  },
+  "schemas": ["docs/concepts/concept-registry.md"],
+  "docs": ["docs/concepts/concept-registry.md", "docs/concepts/first-class-narada-runtime-concepts.md"],
+  "tasks": ["1688", "first-class-system-objects"],
+  "code_refs": ["mcp-surfaces/packages/delegated-task-mcp/src/main.ts", "mcp-surfaces/packages/delegated-task-mcp/test/delegated-task-mcp.test.ts"],
+  "tests": ["mcp-surfaces/packages/delegated-task-mcp/test/protocol-smoke.test.ts"],
+  "examples": ["parallel research -> join -> synthesis -> implementation -> review"],
+  "counterexamples": ["a conversation outline with no dependency shape"],
+  "open_questions": [],
+  "confidence": { "cl": 0.96, "basis": "The registry chapter already treats chapters as work queues and the delegated-task MCP already exposes reusable DAG templates." },
+  "reviewed_at": "2026-07-02T22:00:00.000Z"
+}

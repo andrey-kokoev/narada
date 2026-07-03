@@ -1,0 +1,37 @@
+{
+  "concept_id": "surface_attachment",
+  "canonical_name": "SurfaceAttachment",
+  "short_definition": "The relationship between an operator surface instance and an authority runtime session.",
+  "description": "SurfaceAttachment captures the governed association between a surface process, the session it projects, and the authority regime that allows the connection.",
+  "kind": "relation",
+  "status": "draft",
+  "aliases": ["surface attach", "operator surface attachment"],
+  "deprecated_aliases": [],
+  "anti_aliases": ["runtime session", "browser tab", "operator message"],
+  "boundaries": [
+    "Not the runtime session itself.",
+    "Not the UI process alone.",
+    "Not an operator message or admission event."
+  ],
+  "relations": [
+    { "kind": "attaches_to", "concept_id": "concept_registry" },
+    { "kind": "observes", "concept_id": "concept_promotion" },
+    { "kind": "embodied_by", "concept_id": "concept_record" }
+  ],
+  "owner_surface": "Narada proper launcher/NARS architecture",
+  "authority": {
+    "kind": "package",
+    "ref": "packages/domains/concepts",
+    "notes": "This concept is still being stabilized by launcher/runtime work."
+  },
+  "schemas": ["packages/domains/concepts/src/schema.ts"],
+  "docs": ["docs/concepts/concept-registry.md"],
+  "tasks": ["1705", "1724"],
+  "code_refs": ["packages/layers/cli/src/commands/concepts.ts"],
+  "tests": ["packages/domains/concepts/test/registry.test.ts"],
+  "examples": ["An operator surface attached to one runtime session"],
+  "counterexamples": ["a raw browser tab", "a runtime session with no surface"],
+  "open_questions": ["Which runtime host owns attachment transitions?"],
+  "confidence": { "cl": 0.95, "basis": "Repeated attach ambiguity across launcher, agent-cli, and session-index work." },
+  "reviewed_at": "2026-07-02T19:00:00.000Z"
+}

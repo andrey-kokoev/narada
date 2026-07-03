@@ -217,10 +217,10 @@ Candidate invariant:
 
 ```text
 Concept markdown owns authored meaning.
-Concept lifecycle authority should own status, canonicality, admission evidence, dependencies, transitions, and supersession.
+ConceptRegistry records own status, canonicality, admission evidence, dependencies, transitions, and supersession.
 ```
 
-This is a residual, not an implemented feature and not canonical doctrine. A future proposal should design a durable concept lifecycle authority substrate, probably SQLite-backed, and test it against existing concept docs, `SEMANTICS.md`, task lifecycle, chapters, and doctrine promotion.
+This is a residual, not an implemented feature and not canonical doctrine. Inquiry Topology may emit concept pressure or proposed lifecycle evidence, but ConceptPromotion lifecycle authority remains Narada-proper source-controlled ConceptRegistry machinery. It should not grow a separate Site MCP, runtime, SQLite, or task-lifecycle authority unless a later design explicitly supersedes the ConceptRegistry boundary.
 
 ## Admission Criteria For Canonical Lift
 
@@ -239,5 +239,5 @@ Inquiry Topology should not be promoted to canonical semantics until these crite
 - Decide whether Inquiry Topology belongs as a Site factor, an Operation-level substrate, an agent-context extension, or a separate governed substrate.
 - Decide the first SQLite authority home if implemented.
 - Decide whether traversal posture is advisory metadata or an admitted policy field.
-- Design the durable concept lifecycle authority substrate.
+- Decide how Inquiry Topology should emit concept pressure into Narada-proper ConceptPromotion records without becoming the lifecycle authority.
 - Determine how Inquiry Topology should interact with agent startup summaries and checkpoints.

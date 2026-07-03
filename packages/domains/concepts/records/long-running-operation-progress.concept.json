@@ -1,0 +1,36 @@
+{
+  "concept_id": "long_running_operation_progress",
+  "canonical_name": "LongRunningOperationProgress",
+  "short_definition": "Structured operator-visible progress for waits that take longer than a few seconds.",
+  "description": "LongRunningOperationProgress defines how launcher, attach, preflight, and runtime startup waits should emit progress without polluting the canonical conversation stream. It gives a shared shape for operation id, phase, elapsed time, waiting-on, retry policy, and cancellation or timeout semantics.",
+  "kind": "protocol",
+  "status": "draft",
+  "aliases": ["progress contract", "operation progress", "wait progress"],
+  "deprecated_aliases": [],
+  "anti_aliases": ["chat heartbeat noise", "silent spinner", "raw blank window"],
+  "boundaries": [
+    "Not a conversation message.",
+    "Not a provider turn transcript.",
+    "Not a short-command status line."
+  ],
+  "relations": [
+    { "kind": "depends_on", "concept_id": "nars_runtime_contract" },
+    { "kind": "depends_on", "concept_id": "nars_client_projection_contract" }
+  ],
+  "owner_surface": "Narada operator UX doctrine",
+  "authority": {
+    "kind": "task_and_doc_governance",
+    "ref": "docs/concepts/first-class-narada-runtime-concepts.md",
+    "notes": "The runtime concepts chapter already records the need for operator-visible progress during slow waits."
+  },
+  "schemas": ["docs/concepts/first-class-narada-runtime-concepts.md"],
+  "docs": ["docs/concepts/first-class-narada-runtime-concepts.md"],
+  "tasks": ["1698", "first-class-system-objects"],
+  "code_refs": ["packages/agent-start/src/narada-agent-start.ts", "packages/layers/cli/src/commands/nars.ts", "packages/agent-web-ui/src/render.js"],
+  "tests": ["packages/agent-start/test/option-contract.test.mjs", "packages/agent-web-ui/test/agent-web-ui.test.mjs"],
+  "examples": ["waiting_on=codex preflight; retry=2; elapsed=00:12"],
+  "counterexamples": ["repeating health events in the conversation lane"],
+  "open_questions": ["Should progress state be a stream, event, or queryable snapshot?"],
+  "confidence": { "cl": 0.94, "basis": "The runtime concepts doc already calls out progress indicator drift and the operator UX need for visible waits." },
+  "reviewed_at": "2026-07-02T22:00:00.000Z"
+}

@@ -1,0 +1,35 @@
+{
+  "concept_id": "watch_definition",
+  "canonical_name": "WatchDefinition",
+  "short_definition": "The declarative watch object that names what signal, predicate, or cadence should wake or gate a Site Operating Loop.",
+  "description": "WatchDefinition is the first-class semantic object for the watch side of a Site Operating Loop. It stays separate from the loop runtime host, the loop module body, and any one bounded Loop Run so that wakeup semantics remain inspectable and reusable.",
+  "kind": "policy",
+  "status": "draft",
+  "aliases": ["watch definition", "watch policy", "loop watch definition", "watch spec"],
+  "deprecated_aliases": [],
+  "anti_aliases": ["polling process", "subscription transport", "carrier", "runtime loop"],
+  "boundaries": [
+    "Not the loop runtime host.",
+    "Not a trigger delivery transport.",
+    "Not a single Loop Run or emitted object."
+  ],
+  "relations": [
+    { "kind": "paired_with", "concept_id": "loop_definition" }
+  ],
+  "owner_surface": "@narada2/site-operating-loop package",
+  "authority": {
+    "kind": "package",
+    "ref": "packages/site-operating-loop",
+    "notes": "The package owns generic loop runtime semantics; the watch definition names the wake/gate condition."
+  },
+  "schemas": ["docs/concepts/site-operating-loop.md", "docs/concepts/site-operating-loop-runtime-contract.md"],
+  "docs": ["docs/concepts/site-operating-loop.md", "docs/concepts/site-operating-loop-runtime-contract.md"],
+  "tasks": ["1708"],
+  "code_refs": ["packages/site-operating-loop"],
+  "tests": ["packages/site-operating-loop/test/*.test.mjs"],
+  "examples": ["timer, webhook, or mailbox arrival watch"],
+  "counterexamples": ["a daemon timer loop", "an outbound reply", "a single trigger event"],
+  "open_questions": [],
+  "confidence": { "cl": 0.98, "basis": "The Site Operating Loop docs already distinguish loop policy, triggers, and bounded runs; the watch object names the wake/gate side of that split." },
+  "reviewed_at": "2026-07-02T21:30:00.000Z"
+}

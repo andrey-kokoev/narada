@@ -1,0 +1,37 @@
+{
+  "concept_id": "nars_session_management",
+  "canonical_name": "NARSSessionManagement",
+  "short_definition": "The Site-local session discovery, liveness, attachment, and recovery contract for NARS sessions.",
+  "description": "NARS Session Management defines how a launched runtime becomes discoverable, attachable, and recoverable through Site-local session records and aggregate indexes. It keeps liveness authority in /health or session.health and treats session indexes as discovery projections rather than canonical authority.",
+  "kind": "lifecycle",
+  "status": "active",
+  "aliases": ["session index", "NARS session index", "session discovery"],
+  "deprecated_aliases": [],
+  "anti_aliases": ["terminal window", "ambient codex config", "carrier session id as authority"],
+  "boundaries": [
+    "Not the runtime session itself.",
+    "Not the liveness authority itself.",
+    "Not a global daemon."
+  ],
+  "relations": [
+    { "kind": "depends_on", "concept_id": "nars_runtime_contract" },
+    { "kind": "depends_on", "concept_id": "nars_client_projection_contract" },
+    { "kind": "embodied_by", "concept_id": "authority_runtime_host_transition" }
+  ],
+  "owner_surface": "Narada session-management doctrine",
+  "authority": {
+    "kind": "documentation_and_implementation",
+    "ref": "docs/concepts/nars-session-management.md",
+    "notes": "The contract defines Site-local session discovery, per-session records, aggregate indexes, and attach commands."
+  },
+  "schemas": ["docs/concepts/nars-session-management.md"],
+  "docs": ["docs/concepts/nars-session-management.md", "docs/concepts/nars-runtime-contract.md"],
+  "tasks": ["1549", "first-class-system-objects"],
+  "code_refs": ["packages/carrier-runtime/src/nars-session-index.mjs", "packages/carrier-runtime/src/server-mode.mjs", "packages/layers/cli/src/commands/nars.ts", "packages/agent-web-ui/README.md"],
+  "tests": ["packages/carrier-runtime/src/nars-session-index.test.mjs", "packages/carrier-runtime/src/server-mode.test.mjs", "packages/layers/cli/test/commands/nars.test.ts", "packages/agent-web-ui/test/agent-web-ui.test.mjs"],
+  "examples": ["<siteAuthorityRoot>/crew/nars-sessions/<session-id>/session-index-record.json"],
+  "counterexamples": ["a stale terminal title", "a raw process list"],
+  "open_questions": [],
+  "confidence": { "cl": 0.995, "basis": "The session-management contract is explicit about storage, discovery, liveness, and attachment semantics." },
+  "reviewed_at": "2026-07-02T19:00:00.000Z"
+}

@@ -1,0 +1,36 @@
+{
+  "concept_id": "operator_message_admission",
+  "canonical_name": "OperatorMessageAdmission",
+  "short_definition": "The NARS-owned admission contract for send, enqueue, and steer operator input.",
+  "description": "OperatorMessageAdmission makes operator input semantics explicit. It distinguishes immediate send, durable enqueue, and interruptive steer/directive modes, including queue position, cancellation, and delivery result, so surfaces no longer invent their own rules.",
+  "kind": "protocol",
+  "status": "draft",
+  "aliases": ["operator input admission", "message admission", "input queue contract"],
+  "deprecated_aliases": [],
+  "anti_aliases": ["browser draft state", "plain text box", "chat history only"],
+  "boundaries": [
+    "Not a surface-local draft.",
+    "Not a provider turn result.",
+    "Not an operator identity object."
+  ],
+  "relations": [
+    { "kind": "depends_on", "concept_id": "nars_runtime_contract" },
+    { "kind": "depends_on", "concept_id": "nars_client_projection_contract" }
+  ],
+  "owner_surface": "Narada NARS operator admission doctrine",
+  "authority": {
+    "kind": "documentation_and_implementation",
+    "ref": "docs/concepts/operator-input-admission.md",
+    "notes": "The operator input admission concept is already implemented at protocol/runtime level and documented in the operator admission doc."
+  },
+  "schemas": ["docs/concepts/operator-input-admission.md"],
+  "docs": ["docs/concepts/operator-input-admission.md"],
+  "tasks": ["1694", "first-class-system-objects"],
+  "code_refs": ["packages/carrier-runtime/src/server-mode.mjs", "packages/layers/cli/src/commands/nars.ts", "packages/agent-web-ui/src/app/lib/eventProjection.ts"],
+  "tests": ["packages/layers/cli/test/commands/nars.ts", "packages/agent-web-ui/test/agent-web-ui.test.mjs"],
+  "examples": ["send when idle, enqueue after active turn, steer to interrupt"],
+  "counterexamples": ["browser-only optimistic queueing with no NARS acknowledgement"],
+  "open_questions": [],
+  "confidence": { "cl": 0.97, "basis": "The operator admission doc already defines send/enqueue/steer and the NARS queue persistence path." },
+  "reviewed_at": "2026-07-02T22:00:00.000Z"
+}

@@ -1,0 +1,36 @@
+{
+  "concept_id": "mcp_ergonomics_feedback_loop",
+  "canonical_name": "MCPErgonomicsFeedbackLoop",
+  "short_definition": "The durable intake, routing, conversion, and resolution loop for MCP surface ergonomics feedback.",
+  "description": "MCPErgonomicsFeedbackLoop captures the first-class path from an operator or agent observation, through surface feedback intake, to routed triage, task conversion, and resolution evidence. It is a feedback loop, not an execution authority.",
+  "kind": "lifecycle",
+  "status": "active",
+  "aliases": ["surface feedback loop", "mcp feedback loop", "ergonomics feedback"],
+  "deprecated_aliases": [],
+  "anti_aliases": ["execution task", "mutation authority", "chat note"],
+  "boundaries": [
+    "Not the task that may be created from feedback.",
+    "Not the surface itself.",
+    "Not a substitute for review or closeout evidence."
+  ],
+  "relations": [
+    { "kind": "depends_on", "concept_id": "work_order" },
+    { "kind": "informs", "concept_id": "delegation_dag_template" }
+  ],
+  "owner_surface": "@narada2/surface-feedback-mcp package",
+  "authority": {
+    "kind": "package",
+    "ref": "mcp-surfaces/packages/surface-feedback-mcp",
+    "notes": "Surface feedback is routed and tracked by the dedicated feedback surface."
+  },
+  "schemas": ["mcp-surfaces/packages/surface-feedback-mcp/src/main.ts"],
+  "docs": ["mcp-surfaces/packages/surface-feedback-mcp/README.md"],
+  "tasks": ["1557", "surface-feedback"],
+  "code_refs": ["mcp-surfaces/packages/surface-feedback-mcp/src/main.ts", "mcp-surfaces/packages/surface-feedback-mcp/src/guidance.ts"],
+  "tests": ["mcp-surfaces/packages/surface-feedback-mcp/test/surface-feedback-mcp.test.ts", "mcp-surfaces/packages/surface-feedback-mcp/test/protocol-smoke.test.ts"],
+  "examples": ["submit feedback -> route -> convert_to_task -> close with resolution note"],
+  "counterexamples": ["a delegated worker status update"],
+  "open_questions": [],
+  "confidence": { "cl": 0.99, "basis": "The dedicated surface-feedback MCP already implements submission, routing, import, and resolution state." },
+  "reviewed_at": "2026-07-02T19:00:00.000Z"
+}

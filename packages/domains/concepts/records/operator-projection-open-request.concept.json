@@ -1,0 +1,36 @@
+{
+  "concept_id": "operator_projection_open_request",
+  "canonical_name": "OperatorProjectionOpenRequest",
+  "short_definition": "The governed request to open one projection to an operator-visible surface.",
+  "description": "OperatorProjectionOpenRequest is the semantic request layer above browser opening and other presentation carriers. It captures intent to make a projection visible, while the browser or host app remains only the presentation carrier for that target.",
+  "kind": "protocol",
+  "status": "active",
+  "aliases": ["projection open request", "browser_open request", "operator open request"],
+  "deprecated_aliases": [],
+  "anti_aliases": ["browser tab", "openBrowserUrl", "UI click"],
+  "boundaries": [
+    "Not the browser itself.",
+    "Not the projection target itself.",
+    "Not an authority runtime."
+  ],
+  "relations": [
+    { "kind": "depends_on", "concept_id": "projection_topology" },
+    { "kind": "depends_on", "concept_id": "nars_client_projection_contract" }
+  ],
+  "owner_surface": "Narada process launch posture doctrine",
+  "authority": {
+    "kind": "documentation_and_implementation",
+    "ref": "docs/architecture/process-launch-posture.md",
+    "notes": "The launch-posture architecture names the object and the current substrate implementation."
+  },
+  "schemas": ["docs/architecture/process-launch-posture.md"],
+  "docs": ["docs/architecture/process-launch-posture.md", "docs/concepts/narada-runtime-projection-graph.md"],
+  "tasks": ["process-launch-posture", "first-class-system-objects"],
+  "code_refs": ["packages/process-launch-posture/src/index.mjs", "packages/process-launch-posture/src/index.test.mjs", "packages/layers/cli/src/lib/browser-render.ts", "packages/layers/cli/src/commands/agent-web-ui.ts"],
+  "tests": ["packages/process-launch-posture/src/index.test.mjs", "packages/layers/cli/test/commands/agent-web-ui.test.ts"],
+  "examples": ["open agent-web-ui for a specific NARS session"],
+  "counterexamples": ["a raw `start` shell command"],
+  "open_questions": [],
+  "confidence": { "cl": 0.985, "basis": "The process-launch-posture document names the object and the current substrate implementation paths." },
+  "reviewed_at": "2026-07-02T19:00:00.000Z"
+}

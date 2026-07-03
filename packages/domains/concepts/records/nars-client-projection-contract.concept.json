@@ -1,0 +1,36 @@
+{
+  "concept_id": "nars_client_projection_contract",
+  "canonical_name": "NARSClientProjectionContract",
+  "short_definition": "The shared event-classification and view-eligibility contract for NARS clients.",
+  "description": "The NARS Client Projection Contract prevents agent-cli, agent-web-ui, Cloudflare projection surfaces, and future clients from independently inventing what a NARS event means to an operator. It classifies conversation, operations, diagnostics, and raw records and defines which views may show which classes.",
+  "kind": "protocol",
+  "status": "active",
+  "aliases": ["client projection contract", "projection contract"],
+  "deprecated_aliases": [],
+  "anti_aliases": ["client-specific regex classifier", "terminal renderer", "browser shell"],
+  "boundaries": [
+    "Not the runtime event stream itself.",
+    "Not a renderer implementation.",
+    "Not a browser-only contract."
+  ],
+  "relations": [
+    { "kind": "depends_on", "concept_id": "nars_runtime_contract" },
+    { "kind": "depends_on", "concept_id": "projection_topology" }
+  ],
+  "owner_surface": "Narada client projection doctrine",
+  "authority": {
+    "kind": "package",
+    "ref": "packages/nars-client-projection-contract",
+    "notes": "The package owns shared projection semantics and attach-command registry metadata."
+  },
+  "schemas": ["packages/nars-client-projection-contract/src/nars-client-projection-contract.mjs"],
+  "docs": ["docs/concepts/nars-runtime-contract.md"],
+  "tasks": ["1551", "first-class-system-objects"],
+  "code_refs": ["packages/nars-client-projection-contract/src/nars-client-projection-contract.mjs", "packages/agent-web-ui/src/app/lib/eventProjection.ts", "packages/agent-web-ui/src/render.js"],
+  "tests": ["packages/nars-client-projection-contract/src/nars-client-projection-contract.test.mjs", "packages/agent-web-ui/test/agent-web-ui.test.mjs"],
+  "examples": ["tool_call -> operations", "provider telemetry -> diagnostics"],
+  "counterexamples": ["raw provider text promoted into conversation"],
+  "open_questions": [],
+  "confidence": { "cl": 0.99, "basis": "The shared classification contract already exists and is used by multiple clients." },
+  "reviewed_at": "2026-07-02T19:00:00.000Z"
+}

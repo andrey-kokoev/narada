@@ -62,6 +62,7 @@
     "@narada2/agent-context-memory": "workspace:*",
     "@narada2/carrier-runtime-contract": "workspace:*",
     "@narada2/charters": "workspace:*",
+    "@narada2/concepts": "workspace:*",
     "@narada2/ops-kit": "workspace:*",
     "@narada2/search": "workspace:*",
     "@narada2/site-config": "workspace:*",

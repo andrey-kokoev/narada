@@ -1,0 +1,36 @@
+{
+  "concept_id": "e2e_scenario_contract",
+  "canonical_name": "E2EScenarioContract",
+  "short_definition": "A first-class scenario matrix for end-to-end tests across runtime origin, surface host, MCP usage, and artifacts.",
+  "description": "E2EScenarioContract makes end-to-end test scenarios explicit so the operator can distinguish local and Cloudflare origins, attached surfaces, projection paths, operator-admission paths, and expected proof artifacts without relying on scattered ad hoc test names.",
+  "kind": "protocol",
+  "status": "draft",
+  "aliases": ["E2E scenario", "scenario contract", "test scenario matrix"],
+  "deprecated_aliases": [],
+  "anti_aliases": ["unit test name", "manual smoke note", "one-off repro"],
+  "boundaries": [
+    "Not every unit test.",
+    "Not a specific test runner invocation.",
+    "Not the evidence artifact itself."
+  ],
+  "relations": [
+    { "kind": "depends_on", "concept_id": "nars_runtime_contract" },
+    { "kind": "depends_on", "concept_id": "nars_client_projection_contract" }
+  ],
+  "owner_surface": "Narada test doctrine",
+  "authority": {
+    "kind": "task_and_doc_governance",
+    "ref": "docs/concepts/first-class-narada-runtime-concepts.md",
+    "notes": "The runtime concepts chapter already motivates explicit scenario coverage across local and Cloudflare surfaces."
+  },
+  "schemas": ["docs/concepts/first-class-narada-runtime-concepts.md"],
+  "docs": ["docs/concepts/first-class-narada-runtime-concepts.md"],
+  "tasks": ["1699", "first-class-system-objects"],
+  "code_refs": ["packages/agent-runtime-server/test/server-wrapper.test.mjs", "packages/agent-web-ui/test/agent-web-ui.test.mjs"],
+  "tests": ["packages/agent-runtime-server/test/server-wrapper.test.mjs", "packages/agent-web-ui/test/agent-web-ui.test.mjs"],
+  "examples": ["local runtime -> local surface; cloudflare runtime -> web surface"],
+  "counterexamples": ["a raw list of test file names with no scenario axes"],
+  "open_questions": [],
+  "confidence": { "cl": 0.93, "basis": "The repo already has a broad mix of runtime and projection tests, but the scenario matrix is still implicit." },
+  "reviewed_at": "2026-07-02T22:00:00.000Z"
+}

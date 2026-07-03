@@ -1,0 +1,37 @@
+{
+  "concept_id": "operator_error_taxonomy",
+  "canonical_name": "OperatorFacingErrorTaxonomy",
+  "short_definition": "The structured classification of failures, refusals, and recovery paths that are visible to operators.",
+  "description": "OperatorFacingErrorTaxonomy groups launcher, runtime, and MCP failures into stable categories with clear remediation paths. It is intended to replace vague exits, raw stack traces, and ad hoc fatal messages with structured operator-facing meaning that can be rendered, routed, and reviewed consistently.",
+  "kind": "policy",
+  "status": "draft",
+  "aliases": ["operator-facing error taxonomy", "operator error taxonomy", "error taxonomy"],
+  "deprecated_aliases": [],
+  "anti_aliases": ["raw exception", "stack trace", "exit code only"],
+  "boundaries": [
+    "Not an internal debug codebook.",
+    "Not a raw exception object.",
+    "Not a log search index."
+  ],
+  "relations": [
+    { "kind": "depends_on", "concept_id": "concept_promotion" },
+    { "kind": "informs", "concept_id": "concept_registry" },
+    { "kind": "complements", "concept_id": "runtime_health_posture" }
+  ],
+  "owner_surface": "Narada operator failure doctrine",
+  "authority": {
+    "kind": "task_and_doc_governance",
+    "ref": "docs/concepts/concept-registry.md",
+    "notes": "The registry chapter identifies operator-facing failures as a promotion target because they recur across launcher and runtime surfaces."
+  },
+  "schemas": ["docs/concepts/concept-registry.md"],
+  "docs": ["docs/concepts/concept-registry.md"],
+  "tasks": ["1702", "first-class-system-objects"],
+  "code_refs": ["packages/agent-start/src/narada-agent-start.ts", "packages/agent-start-renderer/src/agent-start-renderer.mjs", "packages/layers/cli/src/commands/concepts.ts"],
+  "tests": ["packages/agent-start/test/option-contract.test.mjs", "packages/agent-start-renderer/src/agent-start-renderer.test.mjs"],
+  "examples": ["A refusal packet with reason_code, remediation, and next step"],
+  "counterexamples": ["A bare stack trace with no remediation"],
+  "open_questions": ["Should taxonomy entries be stored as records or generated from the runtime error catalog?"],
+  "confidence": { "cl": 0.97, "basis": "The launcher and renderer already emit structured refusal packets, but the taxonomy is still being named and bounded." },
+  "reviewed_at": "2026-07-02T21:00:00.000Z"
+}
