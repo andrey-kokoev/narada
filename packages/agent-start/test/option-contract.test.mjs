@@ -37,7 +37,7 @@ const baseTestEnv = {
 };
 
 function run(extraArgs = [], extraEnv = {}) {
-  return spawnSync(process.execPath, [...baseArgs, ...extraArgs], {
+  return spawnSync(process.execPath, [...baseArgs, ...withDefaultMcpScopeNone(extraArgs)], {
     cwd: naradaProperRoot,
     encoding: 'utf8',
     env: { ...process.env, ...baseTestEnv, ...extraEnv },
@@ -64,12 +64,16 @@ function writeMinimalMcpFabric(siteRoot, serverName) {
 
 function runRealLaunch(extraArgs = [], extraEnv = {}) {
   const argsWithoutDryRun = baseArgs.filter((arg) => arg !== '--dry-run');
-  return spawnSync(process.execPath, [...argsWithoutDryRun, ...extraArgs], {
+  return spawnSync(process.execPath, [...argsWithoutDryRun, ...withDefaultMcpScopeNone(extraArgs)], {
     cwd: naradaProperRoot,
     encoding: 'utf8',
     env: { ...process.env, ...baseTestEnv, ...extraEnv },
     windowsHide: true,
   });
+}
+
+function withDefaultMcpScopeNone(extraArgs) {
+  return extraArgs.includes('--mcp-scope') ? extraArgs : ['--mcp-scope', 'none', ...extraArgs];
 }
 
 function runOk(extraArgs = [], extraEnv = {}) {
@@ -201,6 +205,11 @@ test('Codex McpScope none materializes isolated config with no MCP servers', () 
   assert.equal(configText.includes('McpScope=none'), true);
 });
 
+test('agent-start output bundles first-class launcher contracts for operator surfaces and selections', () => {
+  const output = runOk(['--carrier', 'agent-cli', '--runtime', 'narada-agent-runtime-server', '--mcp-scope', 'none', '--intelligence-provider', 'kimi-code-api']);
+  expectLauncherContracts(output);
+});
+
 test('db option materializes the requested agent-context db path', () => {
   const dbPath = join(naradaProperRoot, '.ai', 'state', 'option-contract-agent-context.sqlite');
   const output = runOk(['--carrier', 'agent-cli', '--runtime', 'narada-agent-runtime-server', '--db', dbPath]);
@@ -208,7 +217,7 @@ test('db option materializes the requested agent-context db path', () => {
 });
 
 test('nars runtime alias materializes the canonical runtime server kind', () => {
-  const output = runOk(['--carrier', 'agent-cli', '--runtime', 'nars']);
+  const output = runOk(['--carrier', 'agent-cli', '--runtime', 'nars', '--mcp-scope', 'none']);
   assert.equal(output.runtime_substrate_kind, 'narada-agent-runtime-server');
   assert.equal(output.nars_launch.carrier_runtime_kind, 'narada-agent-runtime-server');
   assert.equal(output.carrier_session.record.carrier_runtime_kind, 'narada-agent-runtime-server');
@@ -240,6 +249,18 @@ test('agent-cli resolves provider credential from environment source and redacts
   assert.equal(env.KIMI_API_KEY, '<set>');
   assert.doesNotMatch(JSON.stringify(output), /super-secret-test-key/);
 });
+
+function expectLauncherContracts(output) {
+  assert.equal(output.launcher_contracts.schema, 'narada.launcher_contract_bundle.v0');
+  assert.equal(output.launcher_contracts.launch_result_artifact.schema, 'narada.launch_result_artifact.v0');
+  assert.equal(output.launcher_contracts.operator_surface_attachment.schema, 'narada.operator_surface_attachment.v0');
+  assert.equal(output.launcher_contracts.authority_runtime_host_selection.schema, 'narada.authority_runtime_host_selection.v0');
+  assert.equal(output.launcher_contracts.runtime_health_posture.schema, 'narada.runtime_health_posture.v0');
+  assert.equal(output.launcher_contracts.mcp_fabric_injection_plan.schema, 'narada.mcp_fabric_injection_plan.v0');
+  assert.equal(output.launcher_contracts.launch_selection_session.schema, 'narada.launch_selection_session.v0');
+  assert.equal(output.launcher_contracts.intelligence_provider_readiness_check.schema, 'narada.intelligence_provider_readiness_check.v0');
+  assert.equal(output.launcher_contracts.operator_terminal_projection_plan.schema, 'narada.operator_terminal_projection_plan.v0');
+}
 
 test('agent-cli projects provider credentials for MCP child surfaces without leaking values', () => {
   const output = runOk(['--carrier', 'agent-cli', '--runtime', 'narada-agent-runtime-server', '--intelligence-provider', 'codex-subscription'], {
@@ -548,7 +569,7 @@ test('non-canonical target MCP server names are refused before carrier handoff',
     },
   }, null, 2), 'utf8');
 
-  const result = runFailed(['--carrier', 'agent-cli', '--runtime', 'narada-agent-runtime-server', '--target-site-root', siteRoot]);
+  const result = runFailed(['--carrier', 'agent-cli', '--runtime', 'narada-agent-runtime-server', '--target-site-root', siteRoot, '--mcp-scope', 'local-site']);
   const refusal = JSON.parse(result.stdout);
   assert.equal(refusal.reason_code, 'temporary_mcp_server_name_missing_narada_prefix');
   assert.deepEqual(refusal.details.non_canonical_server_names, ['sonar-sop']);
@@ -583,7 +604,7 @@ test('MCP registry mismatch fails closed before launch', () => {
     }],
   }, null, 2), 'utf8');
 
-  const result = runFailed(['--carrier', 'agent-cli', '--runtime', 'narada-agent-runtime-server', '--target-site-root', siteRoot]);
+  const result = runFailed(['--carrier', 'agent-cli', '--runtime', 'narada-agent-runtime-server', '--target-site-root', siteRoot, '--mcp-scope', 'local-site']);
   const refusal = JSON.parse(result.stdout);
   assert.equal(refusal.reason_code, 'mcp_fabric_registry_mismatch');
   assert.equal(refusal.details.repair_plan.kind, 'registry_generated_file_mismatch');

@@ -38,6 +38,25 @@ function formatList(values = [], colorEnabled) {
   return values.length > 0 ? values.map((item) => value(item, colorEnabled)).join(', ') : value('[]', colorEnabled);
 }
 
+function summarizeContractObject(contract, colorEnabled) {
+  if (!contract || typeof contract !== 'object') return value('n/a', colorEnabled);
+  const entries = [];
+  for (const [keyName, rawValue] of Object.entries(contract)) {
+    if (rawValue === null || rawValue === undefined) continue;
+    if (Array.isArray(rawValue)) {
+      entries.push(`${keyName}=[${rawValue.length}]`);
+      continue;
+    }
+    if (typeof rawValue === 'object') {
+      const status = rawValue.status ?? rawValue.schema ?? rawValue.reason_code ?? null;
+      entries.push(status ? `${keyName}=${status}` : keyName);
+      continue;
+    }
+    entries.push(`${keyName}=${String(rawValue)}`);
+  }
+  return entries.length > 0 ? entries.join(', ') : 'empty';
+}
+
 export function formatAgentStartResult(result, options = {}) {
   const colorEnabled = options.colorEnabled ?? false;
   const runtime = options.runtime ?? result.runtime;
@@ -90,6 +109,57 @@ export function formatAgentStartResult(result, options = {}) {
     const startupArgs = result.startup_command.arguments ?? {};
     const startupDisplay = result.startup_command.display ?? `${result.startup_command.name}(${JSON.stringify(startupArgs)})`;
     lines.push(line('startup_command', startupDisplay, colorEnabled));
+  }
+
+  if (result.launcher_contracts) {
+    const contracts = result.launcher_contracts;
+    lines.push(header('launcher_contracts:', colorEnabled));
+    if (contracts.launch_result_artifact) {
+      const artifact = contracts.launch_result_artifact;
+      lines.push(`  ${key('launch_result_artifact=', colorEnabled)}${value(`${artifact.status ?? 'unknown'} ${artifact.artifact_path ?? '<missing>'}`, colorEnabled)}`);
+    }
+    if (contracts.operator_projection_open_request) {
+      const openRequest = contracts.operator_projection_open_request;
+      lines.push(`  ${key('operator_projection_open_request=', colorEnabled)}${value(`${openRequest.status ?? 'unknown'} ${openRequest.projection_kind ?? 'unknown'} ${openRequest.target_ref ?? '<pending>'}`, colorEnabled)}`);
+    }
+    if (contracts.authority_runtime_host_selection) {
+      const selection = contracts.authority_runtime_host_selection;
+      lines.push(`  ${key('authority_runtime_host_selection=', colorEnabled)}${value(`${selection.operator_surface_kind ?? 'unknown'} -> ${selection.runtime_host_kind ?? 'unknown'}`, colorEnabled)}`);
+    }
+    if (contracts.operator_surface_attachment) {
+      const attachment = contracts.operator_surface_attachment;
+      lines.push(`  ${key('operator_surface_attachment=', colorEnabled)}${value(`${attachment.operator_surface_kind ?? 'unknown'} / ${attachment.tool_fabric_adapter_kind ?? 'unknown'}`, colorEnabled)}`);
+    }
+    if (contracts.mcp_fabric_injection_plan) {
+      const injection = contracts.mcp_fabric_injection_plan;
+      lines.push(`  ${key('mcp_fabric_injection_plan=', colorEnabled)}${value(`${injection.requested_scope ?? 'unknown'}; ${summarizeContractObject(injection.isolation, colorEnabled)}`, colorEnabled)}`);
+    }
+    if (contracts.launch_selection_session) {
+      const selection = contracts.launch_selection_session;
+      lines.push(`  ${key('launch_selection_session=', colorEnabled)}${value(`${selection.carrier_kind ?? 'unknown'} / ${selection.runtime ?? 'unknown'} / ${selection.intelligence_provider ?? 'none'}`, colorEnabled)}`);
+    }
+    if (contracts.intelligence_provider_readiness_check) {
+      const provider = contracts.intelligence_provider_readiness_check;
+      lines.push(`  ${key('intelligence_provider_readiness_check=', colorEnabled)}${value(`${provider.intelligence_provider ?? 'unknown'} ${provider.status ?? 'unknown'}`, colorEnabled)}`);
+    }
+    if (contracts.operator_terminal_projection_plan) {
+      const terminal = contracts.operator_terminal_projection_plan;
+      lines.push(`  ${key('operator_terminal_projection_plan=', colorEnabled)}${value(`${terminal.terminal_kind ?? 'unknown'} / wait=${String(Boolean(terminal.wait_for_enter))}`, colorEnabled)}`);
+    }
+    if (contracts.launch_failure_rendering) {
+      const failure = contracts.launch_failure_rendering;
+      lines.push(`  ${key('launch_failure_rendering=', colorEnabled)}${value(`${failure.status ?? 'unknown'} ${failure.reason_code ?? ''}`.trim(), colorEnabled)}`);
+    }
+  }
+
+  if (result.runtime_health_posture) {
+    const posture = result.runtime_health_posture;
+    const health = posture.dimensions?.health;
+    const events = posture.dimensions?.events;
+    lines.push(header('runtime_health_posture:', colorEnabled));
+    lines.push(`  ${key('status=', colorEnabled)}${value(posture.status ?? 'unknown', colorEnabled)}`);
+    lines.push(`  ${key('health=', colorEnabled)}${value(health ? `${health.status ?? 'unknown'} ${health.http_path ?? ''}`.trim() : 'n/a', colorEnabled)}`);
+    lines.push(`  ${key('events=', colorEnabled)}${value(events ? `${events.status ?? 'unknown'} ${events.websocket_path ?? ''}`.trim() : 'n/a', colorEnabled)}`);
   }
 
   lines.push(header('startup_sequence:', colorEnabled));

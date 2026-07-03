@@ -32,6 +32,31 @@ test('formats agent-start preamble with redacted API keys and startup sequence',
       KIMI_API_KEY: 'secret',
     },
     startup_command: { name: 'agent_context_startup_sequence', arguments: {}, display: 'agent_context_startup_sequence({})' },
+    launcher_contracts: {
+      launch_result_artifact: { status: 'materialized', artifact_path: 'x.result.json' },
+      operator_projection_open_request: { status: 'opened', projection_kind: 'browser_url', target_ref: 'http://127.0.0.1:4545' },
+      authority_runtime_host_selection: { operator_surface_kind: 'agent-cli', runtime_host_kind: 'narada-agent-runtime-server' },
+      operator_surface_attachment: { operator_surface_kind: 'agent-cli', tool_fabric_adapter_kind: 'narada-agent-runtime-server-mcp-client' },
+      runtime_health_posture: {
+        status: 'projected_for_runtime',
+        dimensions: {
+          health: { status: 'projected', http_path: '/health' },
+          events: { status: 'projected', websocket_path: '/events' },
+        },
+      },
+      mcp_fabric_injection_plan: { requested_scope: 'all', isolation: { status: 'materialized' } },
+      launch_selection_session: { carrier_kind: 'agent-cli', runtime: 'narada-agent-runtime-server', intelligence_provider: 'kimi-code-api' },
+      intelligence_provider_readiness_check: { intelligence_provider: 'kimi-code-api', status: 'ready' },
+      operator_terminal_projection_plan: { terminal_kind: 'agent-cli', wait_for_enter: true },
+      launch_failure_rendering: null,
+    },
+    runtime_health_posture: {
+      status: 'projected_for_runtime',
+      dimensions: {
+        health: { status: 'projected', http_path: '/health' },
+        events: { status: 'projected', websocket_path: '/events' },
+      },
+    },
     startup_sequence: [{ tool: 'agent_context_startup_sequence', arguments: {} }],
     exec: true,
     launch_result_path: 'x.result.json',
@@ -42,6 +67,16 @@ test('formats agent-start preamble with redacted API keys and startup sequence',
   assert.match(text, /KIMI_API_KEY=<set>/);
   assert.doesNotMatch(text, /secret/);
   assert.match(text, /mcp_fabric:/);
+  assert.match(text, /launcher_contracts:/);
+  assert.match(text, /launch_result_artifact=/);
+  assert.match(text, /operator_projection_open_request=/);
+  assert.match(text, /authority_runtime_host_selection=/);
+  assert.match(text, /operator_surface_attachment=/);
+  assert.match(text, /runtime_health_posture:/);
+  assert.match(text, /health=projected \/health/);
+  assert.match(text, /events=projected \/events/);
+  assert.match(text, /launch_selection_session=/);
+  assert.match(text, /intelligence_provider_readiness_check=/);
   assert.match(text, /source=\.ai\/mcp/);
   assert.match(text, /files=narada-site-mcp\.json/);
   assert.match(text, /server_count=2/);
