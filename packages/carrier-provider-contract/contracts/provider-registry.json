@@ -96,6 +96,22 @@
         "env_names": ["DEEPSEEK_API_KEY"]
       }
     },
+    "openrouter-api": {
+      "meaning": "OpenRouter API via OpenAI-compatible chat completions; preserves configured router model identity.",
+      "base_url": "https://openrouter.ai/api/",
+      "default_model": "openai/gpt-5.5",
+      "adapter_kind": "openai-compatible-chat-completions",
+      "support_state": "verified_supported",
+      "base_url_env_names": ["OPENROUTER_BASE_URL", "OPENROUTER_API_BASE_URL"],
+      "model_env_names": ["OPENROUTER_MODEL"],
+      "credential_env_names": ["OPENROUTER_API_KEY"],
+      "credential_secret_ref": "narada/provider/openrouter-api/api-key",
+      "credential_requirement": {
+        "kind": "api_key_secret",
+        "secret_ref": "narada/provider/openrouter-api/api-key",
+        "env_names": ["OPENROUTER_API_KEY"]
+      }
+    },
     "codex-subscription": {
       "meaning": "Local Codex CLI subscription auth via codex mcp-server; no OpenAI API key or API billing path.",
       "base_url": "codex://local-subscription",

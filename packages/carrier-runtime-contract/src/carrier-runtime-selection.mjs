@@ -14,6 +14,8 @@ export const ADMITTED_CARRIER_KINDS = Object.freeze([
 ]);
 
 export const ADMITTED_OPERATOR_SURFACE_KINDS = ADMITTED_CARRIER_KINDS;
+export const OPERATOR_SURFACE_RUNTIME_SELECTION_SCHEMA = 'narada.operator_surface_runtime_selection.v1';
+export const LEGACY_CARRIER_RUNTIME_SELECTION_SCHEMA = 'narada.carrier_runtime_selection.v1';
 
 export function defaultRuntimeForCarrier(carrierKind) {
   return carrierKind === AGENT_CLI_CARRIER_KIND || carrierKind === 'agent-web-ui' ? NARADA_AGENT_RUNTIME_SERVER_KIND : carrierKind;
@@ -149,10 +151,12 @@ export function resolveCarrierRuntimeSelection({
   }
 
   return {
-    schema: 'narada.carrier_runtime_selection.v1',
+    schema: OPERATOR_SURFACE_RUNTIME_SELECTION_SCHEMA,
+    legacy_schema: LEGACY_CARRIER_RUNTIME_SELECTION_SCHEMA,
     status: 'accepted',
     operator_surface_kind: operatorSurfaceKind,
     runtime_host_kind: runtimeKind,
+    launch_operator_surface_kind: operatorSurfaceKind,
     carrier_kind: carrierKind,
     runtime_substrate_kind: runtimeKind,
     runtime_contract_schema: runtimeContractSchema,

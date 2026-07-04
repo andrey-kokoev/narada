@@ -23,7 +23,7 @@ export const NARS_SESSION_ATTACHED_PROJECTIONS_STATUS = Object.freeze({
 export const NARS_SESSION_AUTHORITY_RUNTIME_HOST = Object.freeze({
   LOCAL: 'local',
   CLOUDFLARE_HOST: 'cloudflare-host',
-  UNKNOWN_LEGACY: 'unknown_legacy',
+  UNKNOWN_AUTHORITY_METADATA: 'unknown_authority_metadata',
 });
 export const NARS_SESSION_DISPLAY_STATE = Object.freeze({
   ACTIVE: 'active',
@@ -213,6 +213,8 @@ function buildSessionIndexRecord({ sessionStartedEvent, sessionPath, siteRoot, p
   return {
     schema: NARS_SESSION_INDEX_RECORD_SCHEMA,
     session_id: sessionId,
+    runtime_session_id: sessionStartedEvent.runtime_session_id ?? sessionId,
+    nars_session_id: sessionStartedEvent.nars_session_id ?? sessionId,
     carrier_session_id: sessionStartedEvent.carrier_session_id ?? sessionId,
     derived_from_event: 'session_started',
     projection_generated_at: generatedAt,
@@ -252,6 +254,8 @@ function buildSessionIndexRecord({ sessionStartedEvent, sessionPath, siteRoot, p
 function toAggregateEntry(record) {
   return {
     session_id: record.session_id,
+    runtime_session_id: record.runtime_session_id ?? record.session_id,
+    nars_session_id: record.nars_session_id ?? record.session_id,
     carrier_session_id: record.carrier_session_id ?? record.session_id,
     agent_id: record.agent_id ?? null,
     site_id: record.site_id ?? null,
@@ -266,7 +270,7 @@ function toAggregateEntry(record) {
     terminal_state: record.terminal_state ?? null,
     status_hint: record.status_hint ?? null,
     status_hint_authority: record.status_hint_authority ?? NARS_SESSION_STATUS_HINT_AUTHORITY.DISCOVERY_PROJECTION_ONLY,
-    authority_runtime_host: normalizeAuthorityRuntimeHost(record.authority_runtime_host, NARS_SESSION_AUTHORITY_RUNTIME_HOST.UNKNOWN_LEGACY),
+    authority_runtime_host: normalizeAuthorityRuntimeHost(record.authority_runtime_host, NARS_SESSION_AUTHORITY_RUNTIME_HOST.UNKNOWN_AUTHORITY_METADATA),
     authority_epoch: normalizeAuthorityEpoch(record.authority_epoch, null),
     authority_runtime_id: normalizeOptionalString(record.authority_runtime_id),
     authority_transition_state: normalizeAuthorityTransitionState(record.authority_transition_state),
@@ -278,13 +282,13 @@ function toAggregateEntry(record) {
   };
 }
 
-function normalizeAuthorityRuntimeHost(value, fallback) {
+function normalizeAuthorityRuntimeHost(value, defaultValue) {
   if (NARS_AUTHORITY_RUNTIME_HOST_KINDS.includes(value)) return value;
-  return fallback;
+  return defaultValue;
 }
 
-function normalizeAuthorityEpoch(value, fallback) {
-  return Number.isInteger(value) && value >= 1 ? value : fallback;
+function normalizeAuthorityEpoch(value, defaultValue) {
+  return Number.isInteger(value) && value >= 1 ? value : defaultValue;
 }
 
 function normalizeOptionalString(value) {

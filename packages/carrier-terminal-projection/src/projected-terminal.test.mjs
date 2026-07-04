@@ -19,6 +19,9 @@ test('projected slash commands produce NARS protocol frames', () => {
   assert.equal(createProjectedSlashCommandAction('/health').frame.method, 'session.health');
   assert.equal(createProjectedSlashCommandAction('/events').frame.method, 'session.events.subscribe');
   assert.equal(createProjectedSlashCommandAction('/exit').frame.method, 'session.close');
+  assert.equal(createProjectedSlashCommandAction('/tool').frame.params.command, '/tool');
+  assert.equal(createProjectedSlashCommandAction('/queue clear').frame.params.command, '/queue');
+  assert.equal(createProjectedSlashCommandAction('exit').frame.method, 'session.close');
 });
 
 test('startup event renders operator-facing runtime summary rows', () => {

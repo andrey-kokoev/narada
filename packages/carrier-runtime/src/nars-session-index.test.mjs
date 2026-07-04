@@ -67,6 +67,8 @@ test('writeNarsSessionStartedIndex writes per-session record and aggregate index
 
     assert.equal(result.record.schema, 'narada.nars.session_index_record.v1');
     assert.equal(result.record.session_id, event.session_id);
+    assert.equal(result.record.runtime_session_id, event.session_id);
+    assert.equal(result.record.nars_session_id, event.session_id);
     assert.equal(result.record.carrier_session_id, event.session_id);
     assert.equal(result.record.agent_id, 'sonar.resident');
     assert.equal(result.record.site_id, 'sonar');
@@ -92,6 +94,8 @@ test('writeNarsSessionStartedIndex writes per-session record and aggregate index
     assert.equal(aggregate.schema, 'narada.nars.session_index.v1');
     assert.equal(aggregate.sessions.length, 1);
     assert.equal(aggregate.sessions[0].session_id, event.session_id);
+    assert.equal(aggregate.sessions[0].runtime_session_id, event.session_id);
+    assert.equal(aggregate.sessions[0].nars_session_id, event.session_id);
     assert.equal(aggregate.sessions[0].record_path, result.paths.record_path);
     assert.equal(aggregate.sessions[0].authority_runtime_host, 'local');
     assert.equal(aggregate.sessions[0].authority_epoch, 1);
@@ -133,10 +137,10 @@ test('writeNarsSessionStartedIndex preserves explicit authority host and transit
   }
 });
 
-test('rebuildNarsSessionIndex projects legacy records without authority metadata as unknown legacy', () => {
+test('rebuildNarsSessionIndex projects records without authority metadata as unknown authority metadata', () => {
   const siteRoot = makeTempSiteRoot();
   try {
-    const sessionId = 'carrier_legacy_authority_unknown';
+    const sessionId = 'carrier_unknown_authority_metadata';
     const sessionDir = dirname(sessionPath(siteRoot, sessionId));
     mkdirSync(sessionDir, { recursive: true });
     writeFileSync(join(sessionDir, 'session-index-record.json'), `${JSON.stringify({
@@ -154,7 +158,7 @@ test('rebuildNarsSessionIndex projects legacy records without authority metadata
     }, null, 2)}\n`, 'utf8');
 
     const rebuilt = rebuildNarsSessionIndex({ sessionsRoot: dirname(sessionDir), siteRoot });
-    assert.equal(rebuilt.sessions[0].authority_runtime_host, NARS_SESSION_AUTHORITY_RUNTIME_HOST.UNKNOWN_LEGACY);
+    assert.equal(rebuilt.sessions[0].authority_runtime_host, NARS_SESSION_AUTHORITY_RUNTIME_HOST.UNKNOWN_AUTHORITY_METADATA);
     assert.equal(rebuilt.sessions[0].authority_epoch, null);
     assert.equal(rebuilt.sessions[0].authority_runtime_id, null);
   } finally {

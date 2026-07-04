@@ -1,4 +1,5 @@
-export const NARS_COMMAND_METHOD = 'carrier.command.execute';
+export const NARS_COMMAND_METHOD = 'session.command.execute';
+export const LEGACY_CARRIER_COMMAND_METHOD = 'carrier.command.execute';
 
 export const NARS_CLIENT_PROJECTION_VERBOSITY_LEVELS = Object.freeze([
   'conversation',
@@ -7,7 +8,7 @@ export const NARS_CLIENT_PROJECTION_VERBOSITY_LEVELS = Object.freeze([
   'raw',
 ]);
 
-export const NARS_CLIENT_PROJECTION_DEFAULT_VERBOSITY = 'operations';
+export const NARS_CLIENT_PROJECTION_DEFAULT_VERBOSITY = 'conversation';
 
 export const NARS_CLIENT_PROJECTION_VERBOSITY_RANK = Object.freeze({
   conversation: 0,
@@ -31,12 +32,13 @@ export const AGENT_WEB_UI_NARS_METHOD_LIST = Object.freeze([
   'observer.mute',
   'observer.unmute',
   NARS_COMMAND_METHOD,
+  LEGACY_CARRIER_COMMAND_METHOD,
   'conversation.interrupt',
   'conversation.steer',
   'session.close',
 ]);
 
-export const AGENT_WEB_UI_CARRIER_COMMANDS = Object.freeze([
+export const AGENT_WEB_UI_SESSION_COMMANDS = Object.freeze([
   '/goal',
   '/stats',
   '/model',
@@ -48,10 +50,12 @@ export const AGENT_WEB_UI_CARRIER_COMMANDS = Object.freeze([
   '/queue',
 ]);
 
+export const AGENT_WEB_UI_CARRIER_COMMANDS = AGENT_WEB_UI_SESSION_COMMANDS;
+
 export const AGENT_WEB_UI_HELP_LINES = Object.freeze([
   'Commands',
   '/help, /clear, /status, /health, /events, /recovery, /ops, /interrupt, /tools, /queue, /goal, /model, /thinking, /exit',
-  'Ordinary text is submitted as conversation.send when idle and conversation.enqueue during active turns. Use /interrupt or explicit JSON for interruptive steering.',
+  'Ordinary text is submitted as conversation.send when idle and conversation.steer during active turns. Press Tab in agent-web-ui to queue with conversation.enqueue.',
 ]);
 
 export const NARS_CLIENT_EVENT_TONES = Object.freeze({
@@ -268,7 +272,11 @@ export function buildAgentWebUiOperatorInputAction(text, options = {}) {
   if (!content.startsWith('/')) {
     return {
       kind: 'frame',
-      frame: options.activeTurn ? buildAgentWebUiConversationEnqueueFrame(content, options) : buildAgentWebUiConversationSendFrame(content, options),
+      frame: options.deliveryMode === 'enqueue'
+        ? buildAgentWebUiConversationEnqueueFrame(content, options)
+        : options.activeTurn
+          ? buildAgentWebUiConversationSteerFrame(content, options)
+          : buildAgentWebUiConversationSendFrame(content, options),
     };
   }
   if (lower.startsWith('/json ')) {
@@ -291,7 +299,7 @@ export function buildAgentWebUiOperatorInputAction(text, options = {}) {
   if (command === '/observers') return { kind: 'frame', frame: { id: options.id ?? requestIdForCommand('observers'), method: 'observers.status', params: {} } };
   if (command === '/observer' && value === 'mute') return { kind: 'frame', frame: { id: options.id ?? requestIdForCommand('observer-mute'), method: 'observer.mute', params: {} } };
   if (command === '/observer' && value === 'unmute') return { kind: 'frame', frame: { id: options.id ?? requestIdForCommand('observer-unmute'), method: 'observer.unmute', params: {} } };
-  if (AGENT_WEB_UI_CARRIER_COMMANDS.includes(command)) return { kind: 'frame', frame: commandFrame(command, value) };
+  if (AGENT_WEB_UI_SESSION_COMMANDS.includes(command)) return { kind: 'frame', frame: commandFrame(command, value) };
   if (command === '/observer') return { kind: 'message', message: 'Usage: /observer mute|unmute' };
   return { kind: 'message', message: `Unknown command: ${command}. Type /help.` };
 }
@@ -326,7 +334,7 @@ export function classifyNarsClientEventProjection(projection) {
   if (kind === 'authority_session_revoked' || kind === 'projection_revoked') return 'diagnostics';
   if (kind === 'carrier_diagnostic_recorded' || kind === 'mcp_runtime_fault') return 'diagnostics';
   if (kind === 'tool_call' || kind === 'tool_result' || kind === 'turn_failed') return 'operations';
-  if (kind === 'session_artifact_registered' || kind === 'session_artifact_read') return 'operations';
+  if (kind === 'session_artifact_registered' || kind === 'session_artifact_read') return 'conversation';
   if (kind === 'conversation_enqueue_requested' || kind === 'input_queued_for_turn_boundary' || kind === 'input_admitted_to_turn' || kind === 'input_dropped_by_operator' || kind === 'input_abandoned_on_session_end' || kind === 'input_completed') return 'operations';
   if (kind === 'session_health') return isRoutineHealthyNarsSessionHealth(event) ? 'diagnostics' : 'operations';
   if (kind?.startsWith?.('authority_source_') || kind?.startsWith?.('authority_target_')) return 'operations';
@@ -385,8 +393,8 @@ function eventSummary(event, kind) {
   if (kind === 'authority_session_revoked') return event.code ?? 'session_revoked';
   if (kind === 'projection_revoked') return event.code ?? 'projection_revoked';
   if (kind === 'session_events_subscription_started') return `${event.replay_count ?? 0} replayed event(s)`;
-  if (kind === 'session_artifact_registered') return event.artifact?.title ?? event.artifact?.artifact_id ?? 'artifact registered';
-  if (kind === 'session_artifact_read') return event.artifact?.title ?? event.artifact?.artifact_id ?? 'artifact';
+  if (kind === 'session_artifact_registered') return artifactSummary(event, 'artifact registered');
+  if (kind === 'session_artifact_read') return artifactSummary(event, 'artifact');
   if (kind === 'session_health') return `${event.status ?? 'health'} · ${event.agent_id ?? 'agent'} · ${event.session_id ?? 'session'}`;
   if (kind === 'mcp_runtime_fault' || kind === 'carrier_diagnostic_recorded') return diagnosticSummary(event, kind);
   if (kind === 'turn_complete') return event.terminal_state ?? 'turn complete';
@@ -408,6 +416,13 @@ function diagnosticSummary(event, kind) {
     return `MCP runtime fault ${server}:${tool}${error ? ` ${error}` : ''}`;
   }
   return event?.message ?? event?.diagnostic_code ?? kind;
+}
+
+function artifactSummary(event, fallbackText) {
+  const artifact = event?.artifact && typeof event.artifact === 'object' ? event.artifact : null;
+  const artifactRef = buildNarsArtifactRefPart(artifact ?? {});
+  const title = artifact?.title ?? artifact?.artifact_id ?? fallbackText;
+  return artifactRef ? [{ type: 'text', text: String(title) }, artifactRef] : String(title);
 }
 
 export function projectNarsClientEvent(message) {

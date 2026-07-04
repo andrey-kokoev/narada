@@ -25,6 +25,10 @@ test('provider registry exposes carrier-level defaults and support states', () =
   assert.equal(registry.providers['kimi-api'].credential_requirement.secret_ref, 'narada/provider/kimi-api/api-key');
   assert.deepEqual(registry.providers['kimi-api'].credential_requirement.env_names, ['KIMI_API_KEY']);
   assert.equal(registry.providers['openai-api'].credential_secret_ref, 'narada/provider/openai-api/api-key');
+  assert.equal(registry.providers['deepseek-api'].support_state, PROVIDER_SUPPORT_STATES.VERIFIED_SUPPORTED);
+  assert.equal(registry.providers['openrouter-api'].credential_secret_ref, 'narada/provider/openrouter-api/api-key');
+  assert.equal(registry.providers['openrouter-api'].credential_requirement.kind, PROVIDER_CREDENTIAL_REQUIREMENT_KINDS.API_KEY_SECRET);
+  assert.deepEqual(registry.providers['openrouter-api'].credential_requirement.env_names, ['OPENROUTER_API_KEY']);
   assert.equal(registry.providers['codex-subscription'].credential_secret_ref, undefined);
   assert.equal(registry.providers['codex-subscription'].credential_requirement.kind, PROVIDER_CREDENTIAL_REQUIREMENT_KINDS.LOCAL_CODEX_SUBSCRIPTION);
 });
@@ -62,6 +66,15 @@ test('provider environment uses provider-specific env precedence', () => {
     UNUSED_API_KEY: 'generic-key',
   });
   assert.equal(noGenericFallback.apiKey, '');
+
+  const openrouter = providerEnvironment('openrouter-api', metadata, {
+    OPENROUTER_BASE_URL: 'https://openrouter.example/api/',
+    OPENROUTER_MODEL: 'openrouter/test-model',
+    OPENROUTER_API_KEY: 'openrouter-native-key',
+  });
+  assert.equal(openrouter.baseUrl, 'https://openrouter.example/api/');
+  assert.equal(openrouter.model, 'openrouter/test-model');
+  assert.equal(openrouter.apiKey, 'openrouter-native-key');
 });
 
 test('provider adapter contract lists admitted carrier providers', () => {
@@ -74,6 +87,7 @@ test('provider adapter contract lists admitted carrier providers', () => {
     'openai-api',
     'anthropic-api',
     'deepseek-api',
+    'openrouter-api',
   ]);
 });
 

@@ -1,7 +1,7 @@
 import { request as httpRequest } from 'node:http';
 import { request as httpsRequest } from 'node:https';
-import { existsSync, mkdirSync, readFileSync, appendFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { existsSync, mkdirSync, readFileSync, appendFileSync, readdirSync, statSync, copyFileSync, rmSync } from 'node:fs';
+import { dirname, join, relative, resolve } from 'node:path';
 import {
   classifyCarrierActionRequest,
   createAndWriteCarrierActionAdmission,
@@ -11,6 +11,7 @@ import {
 import { resolveToolMetadata } from '@narada2/carrier-action-admission/tool-metadata';
 import { codexCommand as resolveCodexCommand } from '@narada2/carrier-provider-support/codex-subscription-command';
 import { AiProcessInvocationRefusalError, spawnAiProcessInvocation } from '@narada2/carrier-provider-support/ai-process-invocation';
+import { commandRecords, resolveCommandInput } from '../../carrier-command-contract/src/carrier-command-contract.mjs';
 import {
   classifyCarrierControlRequest,
   classifyCarrierInputAdmission,
@@ -124,11 +125,14 @@ export function createCarrierRuntimeDependencies({ runtimeContext = {}, env = pr
   const authorityRuntimeHost = runtimeContext.authorityRuntimeHost ?? env.NARADA_AUTHORITY_RUNTIME_HOST ?? 'local';
   const operatorSurfaceKind = runtimeContext.operatorSurfaceKind ?? env.NARADA_OPERATOR_SURFACE_KIND ?? 'agent-cli';
   const intelligenceProvider = runtimeContext.intelligenceProvider ?? env.NARADA_INTELLIGENCE_PROVIDER ?? 'codex-subscription';
-  const providerEnvironmentValues = providerEnvironment(intelligenceProvider, PROVIDER_METADATA);
+  const providerEnvironmentValues = providerEnvironment(intelligenceProvider, PROVIDER_METADATA, env);
   const providerSettings = {
+    provider: intelligenceProvider,
     model: runtimeContext.providerSettings?.model ?? providerEnvironmentValues.model,
     thinking: runtimeContext.providerSettings?.thinking ?? env.NARADA_AI_THINKING ?? env.NARADA_THINKING_LEVEL ?? 'medium',
     stream: runtimeContext.providerSettings?.stream !== false,
+    openrouterSiteUrl: runtimeContext.providerSettings?.openrouterSiteUrl ?? env.OPENROUTER_SITE_URL ?? env.OPENROUTER_HTTP_REFERER ?? null,
+    openrouterTitle: runtimeContext.providerSettings?.openrouterTitle ?? env.OPENROUTER_APP_NAME ?? env.OPENROUTER_X_TITLE ?? null,
     siteRoot,
   };
   configureProviderAdapterContext({
@@ -137,6 +141,8 @@ export function createCarrierRuntimeDependencies({ runtimeContext = {}, env = pr
     baseUrl: providerEnvironmentValues.baseUrl,
     model: providerSettings.model,
     thinking: providerSettings.thinking,
+    openrouterSiteUrl: providerSettings.openrouterSiteUrl,
+    openrouterTitle: providerSettings.openrouterTitle,
     siteRoot,
   });
 
@@ -539,6 +545,113 @@ function serverEventsRead({ requestId, params = {}, context = {} }) {
   };
 }
 
+function isWithinPath(parent, child) {
+  const rel = relative(resolve(parent), resolve(child));
+  return rel === '' || (rel && !rel.startsWith('..') && !rel.startsWith('/') && !rel.startsWith('\\'));
+}
+
+function sessionSyncTargetPath({ target, siteRoot }) {
+  const targetText = String(target ?? '').trim();
+  if (!targetText) throw new Error('session_sync_target_required');
+  const resolvedTarget = resolve(siteRoot, targetText);
+  if (!isWithinPath(siteRoot, resolvedTarget)) throw new Error('session_sync_target_outside_site_root');
+  return resolvedTarget;
+}
+
+function listSyncFiles(root) {
+  if (!existsSync(root)) return [];
+  const files = [];
+  const walk = (directory, prefix = '') => {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      const relativePath = prefix ? `${prefix}/${entry.name}` : entry.name;
+      const absolutePath = join(directory, entry.name);
+      if (entry.isDirectory()) {
+        walk(absolutePath, relativePath);
+        continue;
+      }
+      if (entry.isFile()) files.push(relativePath);
+    }
+  };
+  walk(root);
+  return files.sort();
+}
+
+function copySyncTree({ sourceRoot, targetRoot, dryRun = false, deleteExtraneous = false }) {
+  const sourceFiles = listSyncFiles(sourceRoot);
+  const targetFiles = listSyncFiles(targetRoot);
+  let copied = 0;
+  let skipped = 0;
+  let deleted = 0;
+  const targetFileSet = new Set(targetFiles);
+  for (const relativePath of sourceFiles) {
+    const sourcePath = join(sourceRoot, relativePath);
+    const targetPath = join(targetRoot, relativePath);
+    const sourceStat = statSync(sourcePath);
+    const targetExists = existsSync(targetPath);
+    const shouldCopy = !targetExists || statSync(targetPath).size !== sourceStat.size || statSync(targetPath).mtimeMs < sourceStat.mtimeMs;
+    if (!shouldCopy) {
+      skipped += 1;
+      continue;
+    }
+    copied += 1;
+    if (!dryRun) {
+      mkdirSync(dirname(targetPath), { recursive: true });
+      copyFileSync(sourcePath, targetPath);
+    }
+  }
+  if (deleteExtraneous) {
+    for (const relativePath of targetFileSet) {
+      if (sourceFiles.includes(relativePath)) continue;
+      deleted += 1;
+      if (!dryRun) rmSync(join(targetRoot, relativePath), { force: true });
+    }
+  }
+  return { copied, skipped, deleted, source_file_count: sourceFiles.length, target_file_count: targetFiles.length };
+}
+
+function syncSessionDirectory({ requestId, params = {}, context = {}, startedAt = new Date() }) {
+  const direction = String(params.direction ?? 'upload').trim().toLowerCase();
+  if (!['upload', 'download', 'bidirectional'].includes(direction)) throw new Error(`session_sync_direction_unsupported:${direction}`);
+  const target = params.target ?? params.session_sync_target ?? params.sessionSyncTarget ?? null;
+  const dryRun = Boolean(params.dry_run ?? params.dryRun ?? false);
+  const deleteExtraneous = Boolean(params.delete ?? params.delete_extraneous ?? false);
+  const sessionDir = dirname(String(context.sessionPath ?? ''));
+  if (!context.siteRoot) throw new Error('session_sync_site_root_required');
+  if (!context.sessionPath) throw new Error('session_sync_session_path_required');
+  const targetRoot = sessionSyncTargetPath({ target, siteRoot: context.siteRoot });
+  const runs = [];
+  if (direction === 'upload' || direction === 'bidirectional') {
+    runs.push(copySyncTree({ sourceRoot: sessionDir, targetRoot, dryRun, deleteExtraneous }));
+  }
+  if (direction === 'download' || direction === 'bidirectional') {
+    runs.push(copySyncTree({ sourceRoot: targetRoot, targetRoot: sessionDir, dryRun, deleteExtraneous: false }));
+  }
+  const completedAt = new Date();
+  const totals = runs.reduce((acc, item) => ({
+    copied: acc.copied + item.copied,
+    skipped: acc.skipped + item.skipped,
+    deleted: acc.deleted + item.deleted,
+    source_file_count: acc.source_file_count + item.source_file_count,
+    target_file_count: acc.target_file_count + item.target_file_count,
+  }), { copied: 0, skipped: 0, deleted: 0, source_file_count: 0, target_file_count: 0 });
+  return {
+    request_id: requestId,
+    transport: 'jsonl_stdio',
+    event: 'session_sync',
+    direction,
+    target,
+    target_path: targetRoot,
+    mode: dryRun ? 'dry-run' : 'apply',
+    success: true,
+    conflicts: 0,
+    ...totals,
+    requested_at: startedAt.toISOString(),
+    completed_at: completedAt.toISOString(),
+    duration_ms: completedAt.getTime() - startedAt.getTime(),
+    message: `session sync ${dryRun ? 'planned' : 'completed'}`,
+  };
+}
+
 function serverOperations({ requestId, state, mcpServers, mcpPreflightArtifact, context = {} }) {
   const mcpStatus = createMcpStatusSnapshot(mcpServers);
   return {
@@ -917,29 +1030,22 @@ async function handleServerRequest(request, context) {
   if (request?.method === 'session.sync') {
     const requestId = request?.id ?? null;
     const params = request?.params ?? {};
-    const direction = String(params.direction ?? 'upload');
-    const target = params.target ?? params.session_sync_target ?? params.sessionSyncTarget ?? null;
-    const dryRun = params.dry_run ?? params.dryRun ?? false;
     const startedAt = new Date();
+    const target = params.target ?? params.session_sync_target ?? params.sessionSyncTarget ?? null;
+    const direction = String(params.direction ?? 'upload');
+    const dryRun = Boolean(params.dry_run ?? params.dryRun ?? false);
     noteSessionActivity(state, 'session_sync_requested');
     context.appendSessionRecord?.({ event: 'session_sync_requested', request_id: requestId, method: 'session.sync', transport: 'jsonl_stdio', operation_status: 'requested', requested_at: startedAt.toISOString(), target, direction, dry_run: Boolean(dryRun) });
-    const completedAt = new Date();
-    const payload = {
-      request_id: requestId,
-      transport: 'jsonl_stdio',
-      event: 'session_sync',
-      direction,
-      target,
-      mode: dryRun ? 'dry-run' : 'apply',
-      success: false,
-      copied: 0,
-      skipped: 0,
-      conflicts: 0,
-      deleted: 0,
-      message: 'session sync is not implemented by carrier-runtime yet',
-    };
-    context.appendSessionRecord?.({ event: 'session_sync_completed', request_id: requestId, method: 'session.sync', transport: 'jsonl_stdio', operation_status: 'failed', requested_at: startedAt.toISOString(), completed_at: completedAt.toISOString(), duration_ms: completedAt.getTime() - startedAt.getTime(), target, direction, dry_run: Boolean(dryRun) });
-    emit('session_sync', payload);
+    try {
+      const payload = syncSessionDirectory({ requestId, params, context, startedAt });
+      context.appendSessionRecord?.({ event: 'session_sync_completed', request_id: requestId, method: 'session.sync', transport: 'jsonl_stdio', operation_status: 'completed', requested_at: startedAt.toISOString(), completed_at: payload.completed_at, duration_ms: payload.duration_ms, target, direction, dry_run: Boolean(dryRun), copied: payload.copied, skipped: payload.skipped, deleted: payload.deleted });
+      emit('session_sync', payload);
+    } catch (error) {
+      const completedAt = new Date();
+      const message = error instanceof Error ? error.message : String(error);
+      context.appendSessionRecord?.({ event: 'session_sync_completed', request_id: requestId, method: 'session.sync', transport: 'jsonl_stdio', operation_status: 'failed', requested_at: startedAt.toISOString(), completed_at: completedAt.toISOString(), duration_ms: completedAt.getTime() - startedAt.getTime(), target, direction, dry_run: Boolean(dryRun), error: message });
+      emit('session_sync', { request_id: requestId, transport: 'jsonl_stdio', event: 'session_sync', direction, target, mode: dryRun ? 'dry-run' : 'apply', success: false, copied: 0, skipped: 0, conflicts: 0, deleted: 0, message });
+    }
     return;
   }
   const controlRequest = classifyCarrierControlRequest(request);
@@ -1159,35 +1265,58 @@ async function handleServerRequest(request, context) {
     if (controlRequest.method_kind === 'session_command_execute' || controlRequest.method_kind === 'carrier_command_execute') {
       const command = String(request?.params?.command ?? '').trim().toLowerCase();
       const value = String(request?.params?.value ?? '').trim();
+      const resolvedCommand = resolveCommandInput(command, value);
+      const commandName = resolvedCommand?.name ?? null;
+      const commandArgument = resolvedCommand?.argument || value;
       noteSessionActivity(state, 'carrier_command_requested');
-      if (command === '/model') {
-        if (value) state.sessionSettings.model = value;
+      if (commandName === 'help') {
+        emit('carrier_command_result', serverCommandMessage({ requestId, command: command || '/help', message: 'Carrier command contract.', fields: { commands: commandRecords() } }));
+        return;
+      }
+      if (commandName === 'status') {
+        emit('carrier_command_result', serverCommandMessage({ requestId, command, message: 'Session status.', fields: { session_status: serverStatus({ requestId, state, allTools, mcpServers, mcpPreflightArtifact, context }) } }));
+        return;
+      }
+      if (commandName === 'stats') {
+        emit('carrier_command_result', serverCommandMessage({ requestId, command, message: 'Session statistics.', fields: { session_activity: createSessionActivitySnapshot(state), operator_input_queue: inputQueueStatus(state) } }));
+        return;
+      }
+      if (commandName === 'model') {
+        if (commandArgument) state.sessionSettings.model = commandArgument;
         emit('carrier_command_result', serverCommandMessage({ requestId, command, message: `Model set to ${state.sessionSettings.model}.`, fields: { model: state.sessionSettings.model } }));
         return;
       }
-      if (command === '/thinking') {
-        if (value) state.sessionSettings.thinking = normalizeThinkingLevel(value);
+      if (commandName === 'thinking') {
+        if (commandArgument) state.sessionSettings.thinking = normalizeThinkingLevel(commandArgument);
         emit('carrier_command_result', serverCommandMessage({ requestId, command, message: `Thinking set to ${state.sessionSettings.thinking}.`, fields: { thinking: state.sessionSettings.thinking } }));
         return;
       }
-      if (command === '/tool-output' || command === '/tool-outputs') {
-        if (value) state.displaySettings.toolOutputs = !['off', 'false', '0', 'hidden'].includes(value.toLowerCase());
+      if (commandName === 'tool_output') {
+        if (commandArgument) state.displaySettings.toolOutputs = !['off', 'false', '0', 'hidden'].includes(commandArgument.toLowerCase());
         emit('carrier_command_result', serverCommandMessage({ requestId, command, message: `Tool outputs ${state.displaySettings.toolOutputs ? 'shown' : 'hidden'}.`, fields: { tool_outputs: state.displaySettings.toolOutputs ? 'shown' : 'hidden' } }));
         return;
       }
-      if (command === '/goal') {
-        state.sessionSettings.goal = createCarrierGoalState(value, 'active');
+      if (commandName === 'goal') {
+        state.sessionSettings.goal = createCarrierGoalState(commandArgument, 'active');
         emit('carrier_command_result', serverCommandMessage({ requestId, command, message: state.sessionSettings.goal.value ? `Carrier session goal set: ${state.sessionSettings.goal.value}` : 'No carrier session goal is set.', fields: { goal: state.sessionSettings.goal.value || null, goal_status: state.sessionSettings.goal.status } }));
         return;
       }
-      if (command === '/tools' || command === '/tool') {
+      if (commandName === 'tools') {
         emit('carrier_command_result', serverCommandMessage({ requestId, command, message: 'MCP tool catalog.', fields: { tools: mcpToolCatalogEntries(mcpServers) } }));
         return;
       }
-      if (command === '/queue') {
-        const action = value.split(/\s+/).filter(Boolean)[0] ?? '';
+      if (commandName === 'observers') {
+        emit('carrier_command_result', serverCommandMessage({ requestId, command, message: 'Observer posture.', fields: { observer_status: observerServerStatus({ requestId, state }) } }));
+        return;
+      }
+      if (commandName === 'observer_mute' || commandName === 'observer_unmute') {
+        state.displaySettings.observerMuted = commandName === 'observer_mute';
+        emit('carrier_command_result', serverCommandMessage({ requestId, command, message: `Visible observer interjections are ${state.displaySettings.observerMuted ? 'muted' : 'shown'} for this session.`, fields: { observer_muted: state.displaySettings.observerMuted } }));
+        return;
+      }
+      if (commandName === 'queue_show' || commandName === 'queue_clear' || commandName === 'queue_drop') {
         const queue = inputQueueStatus(state);
-        if (!action) {
+        if (commandName === 'queue_show') {
           emit('carrier_command_result', serverCommandMessage({
             requestId,
             command,
@@ -1196,7 +1325,7 @@ async function handleServerRequest(request, context) {
           }));
           return;
         }
-        if (action === 'clear') {
+        if (commandName === 'queue_clear') {
           const dropped = state.inputQueue?.clearOperatorInput?.() ?? [];
           emit('carrier_command_result', serverCommandMessage({
             requestId,
@@ -1206,8 +1335,8 @@ async function handleServerRequest(request, context) {
           }));
           return;
         }
-        if (action === 'drop') {
-          const index = Number(value.split(/\s+/).filter(Boolean)[1] ?? 1);
+        if (commandName === 'queue_drop') {
+          const index = Number(commandArgument.split(/\s+/).filter(Boolean)[0] ?? 1);
           const dropped = Number.isInteger(index) && index > 0 ? state.inputQueue?.dropOperatorInput?.(index) : null;
           emit('carrier_command_result', serverCommandMessage({
             requestId,
@@ -1218,6 +1347,17 @@ async function handleServerRequest(request, context) {
           }));
           return;
         }
+      }
+      if (commandName === 'clear') {
+        emit('carrier_command_result', serverCommandMessage({ requestId, command, message: 'Clear is a terminal projection command; runtime state is unchanged.', fields: { projection_local: true } }));
+        return;
+      }
+      if (commandName === 'exit') {
+        state.closed = true;
+        if (state.activeTurn) requestTurnInterrupt(state.activeTurn);
+        noteSessionActivity(state, 'session_closed', new Date().toISOString(), 'closed');
+        emit('session_closed', { ...serverStatus({ requestId, state, allTools, mcpServers, mcpPreflightArtifact, context }), terminal_state: 'closed' });
+        return;
       }
       emit('carrier_command_result', serverCommandMessage({ requestId, command: command || 'unknown', terminalState: 'unsupported', message: `Unsupported command: ${command || '<missing>'}` }));
       return;

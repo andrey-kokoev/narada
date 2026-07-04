@@ -28,8 +28,8 @@
       "primary": "/stats",
       "aliases": [],
       "argument": "args",
-      "effect": "show_local_codex_transcript_statistics",
-      "help": "Show local Codex transcript statistics"
+      "effect": "show_session_activity_statistics",
+      "help": "Show NARS session activity statistics"
     },
     {
       "name": "model",

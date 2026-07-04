@@ -7,7 +7,7 @@ import {
 } from '../../carrier-provider-contract/src/carrier-provider-contract.mjs';
 import { REQUEST_ADAPTERS } from './provider-adapters.mjs';
 
-function resolveProviderAdapter(provider, metadata = loadProviderMetadata().providers, adapters = REQUEST_ADAPTERS) {
+function resolveProviderAdapter(provider, metadata = loadProviderMetadata(), adapters = REQUEST_ADAPTERS) {
   const providerMetadata = metadata[provider];
   if (!providerMetadata) {
     throw new Error(`Unsupported intelligence provider: ${provider}`);

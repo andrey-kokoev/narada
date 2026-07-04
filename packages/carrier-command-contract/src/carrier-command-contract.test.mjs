@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { commandRecords, commandTokens, loadCommandContract } from './carrier-command-contract.mjs';
+import { commandRecords, commandTokens, loadCommandContract, resolveCommandInput } from './carrier-command-contract.mjs';
 
 test('command contract exposes carrier command vocabulary', () => {
   const contract = loadCommandContract();
@@ -48,4 +48,15 @@ test('command contract exposes carrier command vocabulary', () => {
   const goal = commandRecords(contract).find((command) => command.name === 'goal');
   assert.equal(goal.argument, 'text|pause|resume|clear');
   assert.equal(goal.effect, 'show_set_pause_resume_or_clear_carrier_goal');
+});
+
+test('command resolver handles aliases and multi-word commands', () => {
+  assert.equal(resolveCommandInput('/tool', '')?.name, 'tools');
+  assert.equal(resolveCommandInput('/queue', 'clear')?.name, 'queue_clear');
+  const drop = resolveCommandInput('/queue', 'drop 2');
+  assert.equal(drop?.name, 'queue_drop');
+  assert.equal(drop.argument, '2');
+  assert.equal(resolveCommandInput('/model', 'GPT-5.5')?.argument, 'GPT-5.5');
+  assert.equal(resolveCommandInput('exit', '')?.name, 'exit');
+  assert.equal(resolveCommandInput('/missing', ''), null);
 });

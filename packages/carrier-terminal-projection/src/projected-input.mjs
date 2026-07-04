@@ -1,3 +1,5 @@
+import { commandRecords, resolveCommandInput } from '../../carrier-command-contract/src/carrier-command-contract.mjs';
+
 function shellLikeWords(value) {
   const words = [];
   const pattern = /"([^"]*)"|'([^']*)'|(\S+)/g;
@@ -56,7 +58,7 @@ function opsSyncFrame(value = '') {
 function commandFrame(command, value = '') {
   return {
     id: requestIdForCommand(command.replace(/^\//, '').replace(/[^a-z0-9]+/g, '-')),
-    method: 'carrier.command.execute',
+    method: 'session.command.execute',
     params: { command, value },
   };
 }
@@ -113,25 +115,26 @@ export function createProjectedSlashCommandAction(line) {
   const trimmed = String(line ?? '').trim();
   if (!trimmed) return null;
   const lower = trimmed.toLowerCase();
-  if (lower === 'exit' || lower === '/exit' || lower === '/quit') {
+  const resolvedCommand = resolveCommandInput(trimmed, '');
+  if (resolvedCommand?.name === 'exit') {
     return { kind: 'frame', frame: { id: requestIdForCommand('exit'), method: 'session.close', params: {} } };
   }
   if (!trimmed.startsWith('/')) return null;
   const [rawCommand, ...rest] = trimmed.split(/\s+/);
   const command = rawCommand.toLowerCase();
   const value = rest.join(' ').trim();
-  if (command === '/help') return { kind: 'local_help' };
-  if (command === '/clear') return { kind: 'clear' };
+  if (resolvedCommand?.name === 'help') return { kind: 'local_help' };
+  if (resolvedCommand?.name === 'clear') return { kind: 'clear' };
   if (command === '/status') return { kind: 'frame', frame: { id: requestIdForCommand('status'), method: 'session.status', params: {} } };
   if (command === '/health') return { kind: 'frame', frame: { id: requestIdForCommand('health'), method: 'session.health', params: {} } };
   if (command === '/events') return { kind: 'frame', frame: { id: requestIdForCommand('events'), method: 'session.events.subscribe', params: { include_replay: true, max_replay: 20 } } };
   if (command === '/recovery') return { kind: 'frame', frame: { id: requestIdForCommand('recovery'), method: 'session.recovery', params: {} } };
   if (command === '/ops') return { kind: 'frame', frame: opsSyncFrame(value) ?? { id: requestIdForCommand('ops'), method: 'session.operations', params: {} } };
-  if (command === '/observers') return { kind: 'frame', frame: { id: requestIdForCommand('observers'), method: 'observers.status', params: {} } };
-  if (command === '/observer' && value === 'mute') return { kind: 'frame', frame: { id: requestIdForCommand('observer-mute'), method: 'observer.mute', params: {} } };
-  if (command === '/observer' && value === 'unmute') return { kind: 'frame', frame: { id: requestIdForCommand('observer-unmute'), method: 'observer.unmute', params: {} } };
-  const carrierCommands = new Set(['/goal', '/stats', '/model', '/thinking', '/tool-output', '/tool-outputs', '/tools', '/tool', '/queue']);
-  if (carrierCommands.has(command)) {
+  if (resolvedCommand?.name === 'observers') return { kind: 'frame', frame: { id: requestIdForCommand('observers'), method: 'observers.status', params: {} } };
+  if (resolvedCommand?.name === 'observer_mute') return { kind: 'frame', frame: { id: requestIdForCommand('observer-mute'), method: 'observer.mute', params: {} } };
+  if (resolvedCommand?.name === 'observer_unmute') return { kind: 'frame', frame: { id: requestIdForCommand('observer-unmute'), method: 'observer.unmute', params: {} } };
+  const carrierCommandNames = new Set(['goal', 'stats', 'model', 'thinking', 'tool_output', 'tools', 'queue_show', 'queue_clear', 'queue_drop']);
+  if (resolvedCommand && carrierCommandNames.has(resolvedCommand.name)) {
     return { kind: 'frame', frame: commandFrame(command, value) };
   }
   if (command === '/observer') return { kind: 'message', message: 'Usage: /observer mute|unmute' };
@@ -139,31 +142,8 @@ export function createProjectedSlashCommandAction(line) {
 }
 
 export function projectedHelpText() {
-  return [
-    'Commands',
-    '',
-    '/help                 Show commands',
-    '/status               Show session state',
-    '/health               Show runtime health',
-    '/events               Show recent event subscription replay',
-    '/recovery             Show recovery workflow',
-    '/goal [text|pause|resume|clear] Show, set, pause, resume, or clear carrier goal',
-    '/stats [args]         Show local Codex transcript statistics',
-    '/model <name>         Set model for later turns',
-    '/thinking <level>     none, low, medium, high',
-    '/tool-output [state]  Toggle displayed tool call outputs (on, off, toggle)',
-    '/ops                  Show operation workflow summary',
-    '/tools [filter]       Show discovered MCP tools and input schemas',
-    '/observers            Show observer posture',
-    '/observer mute        Mute visible observer interjections',
-    '/observer unmute      Unmute visible observer interjections',
-    '/queue                Show queued carrier input',
-    '/queue clear          Clear queued operator input',
-    '/queue drop <index>   Drop one queued operator input item',
-    '/clear                Clear terminal display',
-    '/exit                 Save and quit',
-    '/json <frame>         Send explicit JSONL control frame',
-  ].join('\n');
+  const rows = commandRecords().map((command) => `${command.primary.padEnd(21)} ${command.help}`);
+  return ['Commands', '', ...rows, '/health'.padEnd(21) + ' Show runtime health', '/events'.padEnd(21) + ' Show recent event subscription replay', '/recovery'.padEnd(21) + ' Show recovery workflow', '/ops'.padEnd(21) + ' Show operation workflow summary', '/json <frame>'.padEnd(21) + ' Send explicit JSONL control frame'].join('\n');
 }
 
 export function createOperatorConversationFrame(line) {

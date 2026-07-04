@@ -3,6 +3,8 @@ export const NARADA_AGENT_RUNTIME_SERVER_KIND: 'narada-agent-runtime-server';
 export const NARADA_AGENT_RUNTIME_SERVER_ALIAS: 'nars';
 export const ADMITTED_CARRIER_KINDS: readonly string[];
 export const ADMITTED_OPERATOR_SURFACE_KINDS: readonly string[];
+export const OPERATOR_SURFACE_RUNTIME_SELECTION_SCHEMA: 'narada.operator_surface_runtime_selection.v1';
+export const LEGACY_CARRIER_RUNTIME_SELECTION_SCHEMA: 'narada.carrier_runtime_selection.v1';
 
 export interface RuntimeSelectionOptions {
   carrierValue?: string | null;
@@ -15,10 +17,12 @@ export interface RuntimeSelectionOptions {
 }
 
 export interface AcceptedCarrierRuntimeSelection {
-  schema: 'narada.carrier_runtime_selection.v1';
+  schema: 'narada.operator_surface_runtime_selection.v1';
+  legacy_schema: 'narada.carrier_runtime_selection.v1';
   status: 'accepted';
   operator_surface_kind: string;
   runtime_host_kind: string;
+  launch_operator_surface_kind: string;
   carrier_kind: string;
   runtime_substrate_kind: string;
   runtime_contract_schema?: string;

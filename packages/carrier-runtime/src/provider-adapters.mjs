@@ -1,5 +1,6 @@
 import { copyFileSync, existsSync, mkdirSync, statSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { codexAuthHome } from '@narada2/carrier-provider-support/codex-subscription-auth';
 import { codexMcpEnvVarNames } from '../../mcp-fabric/src/mcp-fabric.mjs';
 function stripAnsi(value) {
   return String(value ?? '').replace(/\u001b\[[0-?]*[ -/]*[@-~]/g, '');
@@ -14,14 +15,14 @@ const CODEX_AUTH_FILE_NAMES = Object.freeze([
   'session.json',
   'sessions.json',
 ]);
-const CODEX_AUTH_HOME_ENV = 'NARADA_CODEX_AUTH_HOME';
-
 const providerAdapterContext = {
   provider: process.env.NARADA_INTELLIGENCE_PROVIDER ?? 'codex-subscription',
   apiKey: '',
   baseUrl: 'https://api.openai.com',
   model: process.env.CODEX_MODEL ?? process.env.NARADA_CODEX_MODEL ?? null,
   thinking: process.env.NARADA_AI_THINKING ?? process.env.NARADA_THINKING_LEVEL ?? 'medium',
+  openrouterSiteUrl: process.env.OPENROUTER_SITE_URL ?? process.env.OPENROUTER_HTTP_REFERER ?? null,
+  openrouterTitle: process.env.OPENROUTER_APP_NAME ?? process.env.OPENROUTER_X_TITLE ?? null,
   siteRoot: process.cwd(),
   nativeMcpTools: parseBooleanEnv(process.env.NARADA_CODEX_NATIVE_MCP_TOOLS, true),
   sessionDir: process.cwd(),
@@ -237,7 +238,7 @@ function extractJsonObject(text) {
 }
 
 function buildOpenAiChatRequest(messages, tools, options = {}) {
-  const { baseUrl = providerAdapterContext.baseUrl, model = providerAdapterContext.model, apiKey = providerAdapterContext.apiKey, thinking = providerAdapterContext.thinking, provider = providerAdapterContext.provider } = options;
+  const { baseUrl = providerAdapterContext.baseUrl, model = providerAdapterContext.model, apiKey = providerAdapterContext.apiKey, thinking = providerAdapterContext.thinking, provider = providerAdapterContext.provider, openrouterSiteUrl = providerAdapterContext.openrouterSiteUrl, openrouterTitle = providerAdapterContext.openrouterTitle } = options;
   const isKimiProvider = provider === 'kimi-api' || provider === 'kimi-code-api';
   const body = {
     model,
@@ -260,6 +261,15 @@ function buildOpenAiChatRequest(messages, tools, options = {}) {
   };
   if (provider === 'kimi-code-api') {
     headers['User-Agent'] = 'KimiCLI/1.0';
+  }
+  if (provider === 'openrouter-api') {
+    if (openrouterSiteUrl) headers['HTTP-Referer'] = String(openrouterSiteUrl);
+    if (openrouterTitle) headers['X-Title'] = String(openrouterTitle);
+    body.metadata = {
+      ...(body.metadata ?? {}),
+      narada_provider: 'openrouter-api',
+      narada_model: model,
+    };
   }
   return {
     url: new URL('v1/chat/completions', baseUrl),
@@ -358,10 +368,9 @@ function toAnthropicTool(tool) {
     input_schema: fn.parameters ?? { type: 'object', properties: {} },
   };
 }
-
 function parseAnthropicMessagesResponse(response) {
   const content = Array.isArray(response.content) ? response.content : [];
-  const text = content.filter((item) => item?.type === 'text').map((item) => item.text ?? '').join('');
+  const text = joinAssistantTextParts(content.filter((item) => item?.type === 'text').map((item) => item.text ?? ''));
   const toolCalls = content
     .filter((item) => item?.type === 'tool_use')
     .map((item) => ({
@@ -383,6 +392,101 @@ function parseAnthropicMessagesResponse(response) {
       finish_reason: toolCalls.length > 0 ? 'tool_calls' : response.stop_reason ?? null,
     }],
     usage: response.usage,
+  };
+}
+
+function joinAssistantTextParts(parts) {
+  return parts.map((part) => String(part ?? '')).filter((part) => part.trim()).reduce((content, part) => appendAssistantTextPart(content, part), '');
+}
+
+function appendAssistantTextPart(content, text) {
+  const prior = String(content ?? '');
+  const next = String(text ?? '');
+  if (!prior) return next.replace(/^\s+/, '');
+  if (!next) return prior;
+  if (next.startsWith(prior)) return next;
+  if (prior.endsWith(next)) return prior;
+  const left = prior.replace(/\s+$/, '');
+  const right = next.replace(/^\s+/, '');
+  if (!left) return right;
+  if (!right) return left;
+  return `${left}\n\n${right}`;
+}
+
+function assistantAppend(content, text, { forceBoundary = false } = {}) {
+  const prior = String(content ?? '');
+  const next = String(text ?? '');
+  if (!next) return { content: prior, appendText: '' };
+  if (next.startsWith(prior)) {
+    const appendText = next.slice(prior.length);
+    return { content: next, appendText };
+  }
+  if (!forceBoundary || !prior.trim()) {
+    return { content: prior + next, appendText: next };
+  }
+  const joined = appendAssistantTextPart(prior, next);
+  return { content: joined, appendText: joined.slice(prior.length) };
+}
+
+function codexExecEventTextPart(event) {
+  if (event?.type === 'item.delta' || event?.type === 'item.updated') {
+    if (typeof event.delta === 'string') return { kind: 'delta', text: event.delta, itemKey: codexExecEventItemKey(event), itemType: event.item?.type ?? null };
+    if (typeof event.text_delta === 'string') return { kind: 'delta', text: event.text_delta, itemKey: codexExecEventItemKey(event), itemType: event.item?.type ?? null };
+    if (typeof event.item?.delta === 'string') return { kind: 'delta', text: event.item.delta, itemKey: codexExecEventItemKey(event), itemType: event.item?.type ?? null };
+    if (typeof event.item?.text_delta === 'string') return { kind: 'delta', text: event.item.text_delta, itemKey: codexExecEventItemKey(event), itemType: event.item?.type ?? null };
+  }
+  if (event?.type !== 'item.completed') return null;
+  const item = event.item;
+  if (item?.type === 'agent_message' && typeof item.text === 'string') return { kind: 'completed_agent_message', text: item.text, itemKey: codexExecEventItemKey(event), itemType: item.type };
+  return null;
+}
+
+function codexExecEventItemKey(event) {
+  const item = event?.item;
+  return item?.id ?? event?.item_id ?? event?.id ?? null;
+}
+
+function createCodexExecTextAccumulator(content = '') {
+  return {
+    content: String(content ?? ''),
+    itemTextByKey: new Map(),
+    completedAgentMessageKeys: new Set(),
+    lastTextItemKey: null,
+  };
+}
+
+function accumulateCodexExecEvent(state, event) {
+  const accumulator = state ?? createCodexExecTextAccumulator();
+  const part = codexExecEventTextPart(event);
+  if (!part || !part.text) return codexExecAccumulationResult(accumulator, '');
+  const itemKey = part.itemKey ? String(part.itemKey) : null;
+  let text = part.text;
+  if (itemKey && accumulator.itemTextByKey.has(itemKey) && text.startsWith(accumulator.itemTextByKey.get(itemKey))) {
+    text = text.slice(accumulator.itemTextByKey.get(itemKey).length);
+  } else if (part.kind === 'completed_agent_message' && accumulator.content && text.startsWith(accumulator.content)) {
+    text = text.slice(accumulator.content.length);
+  }
+  if (part.kind === 'completed_agent_message' && itemKey && accumulator.completedAgentMessageKeys.has(itemKey)) {
+    return codexExecAccumulationResult(accumulator, '');
+  }
+  const forceBoundary = Boolean(accumulator.content.trim() && part.kind === 'completed_agent_message' && (!itemKey || (accumulator.lastTextItemKey && accumulator.lastTextItemKey !== itemKey)) && text.trim());
+  const appended = assistantAppend(accumulator.content, text, { forceBoundary });
+  accumulator.content = appended.content;
+  if (itemKey) {
+    const priorItemText = accumulator.itemTextByKey.get(itemKey) ?? '';
+    accumulator.itemTextByKey.set(itemKey, priorItemText + text);
+    accumulator.lastTextItemKey = itemKey;
+    if (part.kind === 'completed_agent_message') accumulator.completedAgentMessageKeys.add(itemKey);
+  }
+  return codexExecAccumulationResult(accumulator, appended.appendText);
+}
+
+function codexExecAccumulationResult(state, appendText) {
+  return {
+    state,
+    content: state.content,
+    appendText,
+    suppressStreaming: isPotentialNaradaToolCallText(state.content) || !!parseNaradaToolCall(state.content),
   };
 }
 
@@ -419,7 +523,6 @@ function codexExecPrompt(request) {
     prompt,
   ].join('\n');
 }
-
 function parseCodexExecJsonLine(line) {
   try {
     return JSON.parse(stripAnsi(String(line)));
@@ -448,41 +551,19 @@ function codexExecMcpToolEventSummary(event) {
 }
 
 function codexExecEventText(event) {
-  if (event?.type === 'item.delta' || event?.type === 'item.updated') {
-    if (typeof event.delta === 'string') return event.delta;
-    if (typeof event.text_delta === 'string') return event.text_delta;
-    if (typeof event.item?.delta === 'string') return event.item.delta;
-    if (typeof event.item?.text_delta === 'string') return event.item.text_delta;
-  }
-  if (event?.type !== 'item.completed') return '';
-  const item = event.item;
-  if (item?.type === 'agent_message' && typeof item.text === 'string') return item.text;
-  return '';
+  return codexExecEventTextPart(event)?.text ?? '';
 }
 
 function accumulateCodexExecText(content, text) {
-  const appendText = content && text.startsWith(content) ? text.slice(content.length) : text;
-  const nextContent = content + appendText;
-  return {
-    content: nextContent,
-    appendText,
-    suppressStreaming: isPotentialNaradaToolCallText(nextContent) || !!parseNaradaToolCall(nextContent),
-  };
-}
-
-function defaultUserCodexHome() {
-  const userRoot = process.env.USERPROFILE || process.env.HOME;
-  return userRoot ? join(userRoot, '.codex') : null;
+  const state = createCodexExecTextAccumulator(content);
+  const appended = assistantAppend(state.content, text);
+  state.content = appended.content;
+  return codexExecAccumulationResult(state, appended.appendText);
 }
 
 function defaultCodexAuthHome() {
-  const explicit = process.env[CODEX_AUTH_HOME_ENV];
-  if (explicit) return explicit;
-  const userHome = defaultUserCodexHome();
-  if (userHome) return userHome;
-  return process.env.CODEX_HOME || null;
+  return codexAuthHome({ processEnv: process.env });
 }
-
 function projectCodexAuthFiles(sourceHome, targetHome) {
   if (!sourceHome) return;
   const resolvedSource = resolve(sourceHome);
@@ -603,6 +684,7 @@ function formatCompactJsonSchema(schema, { limit = 1200 } = {}) {
 
 export {
   REQUEST_ADAPTERS,
+  accumulateCodexExecEvent,
   accumulateCodexExecText,
   buildAnthropicMessagesRequest,
   buildCodexExecArgs,
@@ -619,7 +701,9 @@ export {
   codexExecPrompt,
   codexRequestMcpServers,
   configureProviderAdapterContext,
+  createCodexExecTextAccumulator,
   isPotentialNaradaToolCallText,
+  joinAssistantTextParts,
   parseAnthropicMessagesResponse,
   parseCodexExecJsonLine,
   parseCodexMcpResponse,

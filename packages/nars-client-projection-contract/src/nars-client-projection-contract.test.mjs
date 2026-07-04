@@ -5,6 +5,7 @@ import {
   NARS_CLIENT_PROJECTION_DEFAULT_VERBOSITY,
   NARS_CLIENT_PROJECTION_REGISTRY,
   NARS_CLIENT_PROJECTION_VERBOSITY_LEVELS,
+  LEGACY_CARRIER_COMMAND_METHOD,
   NARS_COMMAND_METHOD,
   buildAgentWebUiConversationEnqueueFrame,
   buildAgentWebUiConversationSendFrame,
@@ -23,7 +24,8 @@ import {
 } from './nars-client-projection-contract.mjs';
 
 test('NARS client projection contract owns attach commands and web UI capabilities', () => {
-  assert.equal(NARS_COMMAND_METHOD, 'carrier.command.execute');
+  assert.equal(NARS_COMMAND_METHOD, 'session.command.execute');
+  assert.equal(LEGACY_CARRIER_COMMAND_METHOD, 'carrier.command.execute');
   assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('conversation.send'), true);
   assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('conversation.enqueue'), true);
   assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('conversation.interrupt'), true);
@@ -40,10 +42,10 @@ test('NARS client projection contract owns attach commands and web UI capabiliti
     protocol: '{"id":"events-1","method":"session.events.subscribe","params":{"include_replay":true,"max_replay":20}}',
     operator_input_protocol: '{"id":"input-1","method":"conversation.send","params":{"message":"<operator message>","source":"agent-web-ui"}}',
     queued_operator_input_protocol: '{"id":"input-2","method":"conversation.enqueue","params":{"message":"<operator message>","source":"agent-web-ui"}}',
-    slash_command_protocol: '{"id":"command-1","method":"carrier.command.execute","params":{"command":"/status","value":""}}',
+    slash_command_protocol: '{"id":"command-1","method":"session.command.execute","params":{"command":"/status","value":""}}',
   });
-  assert.equal(NARS_CLIENT_PROJECTION_REGISTRY.default_verbosity, 'operations');
-  assert.equal(NARS_CLIENT_PROJECTION_DEFAULT_VERBOSITY, 'operations');
+  assert.equal(NARS_CLIENT_PROJECTION_REGISTRY.default_verbosity, 'conversation');
+  assert.equal(NARS_CLIENT_PROJECTION_DEFAULT_VERBOSITY, 'conversation');
   assert.deepEqual(NARS_CLIENT_PROJECTION_VERBOSITY_LEVELS, ['conversation', 'operations', 'diagnostics', 'raw']);
 });
 
@@ -74,10 +76,15 @@ test('NARS client projection contract owns web UI operator input projection', ()
     method: 'conversation.enqueue',
     params: { message: 'run after this', source: 'agent-web-ui', active_turn_id: 'turn_2' },
   });
-  assert.deepEqual(buildAgentWebUiOperatorInputAction('change course', { id: 'enqueue-2', activeTurn: true, activeTurnId: 'turn_2' }).frame, {
+  assert.deepEqual(buildAgentWebUiOperatorInputAction('change course', { id: 'steer-2', activeTurn: true, activeTurnId: 'turn_2' }).frame, {
+    id: 'steer-2',
+    method: 'conversation.steer',
+    params: { message: 'change course', source: 'agent-web-ui', active_turn_id: 'turn_2' },
+  });
+  assert.deepEqual(buildAgentWebUiOperatorInputAction('run after this', { id: 'enqueue-2', activeTurn: true, activeTurnId: 'turn_2', deliveryMode: 'enqueue' }).frame, {
     id: 'enqueue-2',
     method: 'conversation.enqueue',
-    params: { message: 'change course', source: 'agent-web-ui', active_turn_id: 'turn_2' },
+    params: { message: 'run after this', source: 'agent-web-ui', active_turn_id: 'turn_2' },
   });
   assert.equal(buildAgentWebUiOperatorInputAction('/help').kind, 'local_help');
   assert.equal(buildAgentWebUiOperatorInputAction('/clear').kind, 'local_clear');
@@ -87,10 +94,11 @@ test('NARS client projection contract owns web UI operator input projection', ()
   assert.equal(buildAgentWebUiOperatorInputAction('/recovery', { id: 'recovery-1' }).frame.method, 'session.recovery');
   assert.equal(buildAgentWebUiOperatorInputAction('/ops', { id: 'ops-1' }).frame.method, 'session.operations');
   assert.equal(buildAgentWebUiOperatorInputAction('/interrupt', { id: 'interrupt-1' }).frame.method, 'conversation.interrupt');
-  assert.equal(buildAgentWebUiOperatorInputAction('/tools mcp', { id: 'tools-1' }).frame.method, 'carrier.command.execute');
+  assert.equal(buildAgentWebUiOperatorInputAction('/tools mcp', { id: 'tools-1' }).frame.method, 'session.command.execute');
   assert.deepEqual(buildAgentWebUiOperatorInputAction('/observer mute', { id: 'mute-1' }).frame, { id: 'mute-1', method: 'observer.mute', params: {} });
   assert.equal(buildAgentWebUiOperatorInputAction('/observer').message, 'Usage: /observer mute|unmute');
   assert.match(buildAgentWebUiHelpText(), /conversation\.enqueue/);
+  assert.equal(isAgentWebUiNarsMethod('session.command.execute'), true);
   assert.equal(isAgentWebUiNarsMethod('carrier.command.execute'), true);
   assert.equal(isAgentWebUiNarsMethod('command.execute'), false);
   assert.equal(isAgentWebUiProtocolFrame({ id: 'ok', method: 'conversation.send', params: {} }), true);
@@ -145,6 +153,13 @@ test('NARS client projection contract owns shared event rendering vocabulary', (
     summary: 'queued for next turn',
     event: { event: 'conversation_enqueue_requested', request_id: 'req_1', delivery_semantics: 'queued for next turn' },
     renderKey: 'operator-input-queued:req_1',
+  });
+  assert.deepEqual(projectNarsClientEvent({ event: 'session_artifact_registered', artifact: { artifact_id: 'art_1', kind: 'html', title: 'Preview', render_hint: 'inline' } }), {
+    kind: 'session_artifact_registered',
+    label: 'Artifact registered',
+    tone: 'status',
+    summary: [{ type: 'text', text: 'Preview' }, { type: 'artifact_ref', artifact_id: 'art_1', kind: 'html', title: 'Preview', render_hint: 'inline' }],
+    event: { event: 'session_artifact_registered', artifact: { artifact_id: 'art_1', kind: 'html', title: 'Preview', render_hint: 'inline' } },
   });
   assert.deepEqual(projectNarsClientEvent({
     event: 'authority_source_write_refused',

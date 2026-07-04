@@ -1,10 +1,12 @@
-export const NARS_COMMAND_METHOD: 'carrier.command.execute';
+export const NARS_COMMAND_METHOD: 'session.command.execute';
+export const LEGACY_CARRIER_COMMAND_METHOD: 'carrier.command.execute';
 export const NARS_CLIENT_PROJECTION_VERBOSITY_LEVELS: readonly ['conversation', 'operations', 'diagnostics', 'raw'];
 export type NarsClientProjectionVerbosity = typeof NARS_CLIENT_PROJECTION_VERBOSITY_LEVELS[number];
 export type NarsClientProjectionClass = 'conversation' | 'operations' | 'diagnostics' | 'raw';
 export const NARS_CLIENT_PROJECTION_DEFAULT_VERBOSITY: NarsClientProjectionVerbosity;
 export const NARS_CLIENT_PROJECTION_VERBOSITY_RANK: Readonly<Record<NarsClientProjectionVerbosity, number>>;
 export const AGENT_WEB_UI_NARS_METHOD_LIST: readonly string[];
+export const AGENT_WEB_UI_SESSION_COMMANDS: readonly string[];
 export const AGENT_WEB_UI_CARRIER_COMMANDS: readonly string[];
 export const AGENT_WEB_UI_HELP_LINES: readonly string[];
 export const NARS_CLIENT_EVENT_TONES: Readonly<Record<string, string>>;

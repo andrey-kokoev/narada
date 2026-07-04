@@ -1,4 +1,4 @@
-import { NARS_CLIENT_PROJECTION_DEFAULT_VERBOSITY, normalizeNarsClientProjectionVerbosity, projectNarsClientEvent, shouldProjectNarsClientProjection } from '@narada2/nars-client-projection-contract';
+import { normalizeNarsClientProjectionVerbosity, projectNarsClientEvent, shouldProjectNarsClientProjection } from '@narada2/nars-client-projection-contract';
 import { createTerminalStyle, formatTerminalMessageBlockLines } from './terminal-style.mjs';
 import {
   createMarkdownStreamState,
@@ -13,6 +13,8 @@ import {
   wrapIndentedLines,
   wrapTerminalLine,
 } from './terminal-text.mjs';
+
+const TERMINAL_PROJECTION_DEFAULT_VERBOSITY = 'operations';
 
 function withStreamBoundary(state, rendered) {
   if (state?.streamOpen && !state.streamAtLineStart) {
@@ -240,7 +242,7 @@ function formatHostCommandBlock(event, state, style) {
   const bodyStyle = terminalState === 'completed' ? (value) => value : style.warn;
   const wrapped = wrapIndentedLines(lines.join('\n'), { indent: '', columns: terminalColumns(state) - 2 });
   const block = formatTerminalMessageBlockLines({
-    label: 'carrier host',
+    label: 'runtime host',
     lines: wrapped,
     style,
     labelStyle: style.tool,
@@ -306,7 +308,7 @@ export function renderOperatorEvent(event, state = {}) {
     return withStreamBoundary(state, formatHostCommandBlock(event, state, style));
   }
   applyTurnLifecycleState(event, state);
-  const projectionVerbosity = normalizeNarsClientProjectionVerbosity(state.projectionVerbosity ?? state.verbosity ?? NARS_CLIENT_PROJECTION_DEFAULT_VERBOSITY);
+  const projectionVerbosity = normalizeNarsClientProjectionVerbosity(state.projectionVerbosity ?? state.verbosity ?? TERMINAL_PROJECTION_DEFAULT_VERBOSITY);
   if (!shouldProjectNarsClientProjection(projectedEvent, { verbosity: projectionVerbosity })) return [];
   switch (event.event) {
     case 'session_started':

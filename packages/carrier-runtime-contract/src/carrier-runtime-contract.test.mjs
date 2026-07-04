@@ -30,7 +30,10 @@ test('agent-web-ui is an admitted NARS operator surface and launch carrier', () 
     runtimeContractSchema: contract.schema,
   });
   assert.equal(accepted.status, 'accepted');
+  assert.equal(accepted.schema, 'narada.operator_surface_runtime_selection.v1');
+  assert.equal(accepted.legacy_schema, 'narada.carrier_runtime_selection.v1');
   assert.equal(accepted.operator_surface_kind, 'agent-web-ui');
+  assert.equal(accepted.launch_operator_surface_kind, 'agent-web-ui');
   assert.equal(accepted.carrier_kind, 'agent-web-ui');
   assert.equal(accepted.runtime_host_kind, 'narada-agent-runtime-server');
   assert.equal(accepted.runtime_substrate_kind, 'narada-agent-runtime-server');
@@ -78,8 +81,11 @@ test('carrier runtime selection keeps agent-cli carrier separate from runtime se
     runtimeContractSchema: contract.schema,
   });
   assert.equal(accepted.status, 'accepted');
+  assert.equal(accepted.schema, 'narada.operator_surface_runtime_selection.v1');
+  assert.equal(accepted.legacy_schema, 'narada.carrier_runtime_selection.v1');
   assert.equal(accepted.operator_surface_kind, 'agent-cli');
   assert.equal(accepted.runtime_host_kind, 'narada-agent-runtime-server');
+  assert.equal(accepted.launch_operator_surface_kind, 'agent-cli');
   assert.equal(accepted.carrier_kind, 'agent-cli');
   assert.equal(accepted.runtime_substrate_kind, 'narada-agent-runtime-server');
 
@@ -101,7 +107,9 @@ test('operator surface is the explicit primitive while carrier remains a legacy 
     runtimeContractSchema: contract.schema,
   });
   assert.equal(accepted.status, 'accepted');
+  assert.equal(accepted.schema, 'narada.operator_surface_runtime_selection.v1');
   assert.equal(accepted.operator_surface_kind, 'agent-cli');
+  assert.equal(accepted.launch_operator_surface_kind, 'agent-cli');
   assert.equal(accepted.runtime_host_kind, 'narada-agent-runtime-server');
   assert.equal(accepted.carrier_kind, 'agent-cli');
   assert.equal(accepted.runtime_substrate_kind, 'narada-agent-runtime-server');
@@ -116,7 +124,9 @@ test('operator surface is the explicit primitive while carrier remains a legacy 
     runtimeContractSchema: contract.schema,
   });
   assert.equal(overridden.status, 'accepted');
+  assert.equal(overridden.schema, 'narada.operator_surface_runtime_selection.v1');
   assert.equal(overridden.operator_surface_kind, 'agent-web-ui');
+  assert.equal(overridden.launch_operator_surface_kind, 'agent-web-ui');
   assert.equal(overridden.carrier_kind, 'agent-web-ui');
   assert.equal(overridden.operator_surface_source_field, 'operator_surface');
   assert.equal(overridden.carrier_source_field, 'carrier');
@@ -134,6 +144,7 @@ test('nars is a runtime input alias for narada-agent-runtime-server', () => {
     runtimeContractSchema: contract.schema,
   });
   assert.equal(accepted.status, 'accepted');
+  assert.equal(accepted.schema, 'narada.operator_surface_runtime_selection.v1');
   assert.equal(accepted.carrier_kind, 'agent-cli');
   assert.equal(accepted.runtime_substrate_kind, 'narada-agent-runtime-server');
   assert.equal(accepted.runtime_source_field, 'runtime');

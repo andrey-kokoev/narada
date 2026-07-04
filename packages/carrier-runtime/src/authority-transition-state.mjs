@@ -339,8 +339,8 @@ function normalizeOptionalObject(value) {
   return value && typeof value === 'object' && !Array.isArray(value) ? value : null;
 }
 
-function normalizeAuthorityRuntimeHostKind(value, fallback = null) {
-  return value === 'local' || value === 'cloudflare-host' ? value : fallback;
+function normalizeAuthorityRuntimeHostKind(value, defaultValue = null) {
+  return value === 'local' || value === 'cloudflare-host' ? value : defaultValue;
 }
 
 function authorityTargetPlanRefusal(reasonCode, failedInvariant, reason) {

@@ -12,7 +12,8 @@
     "kimi-code-api",
     "openai-api",
     "anthropic-api",
-    "deepseek-api"
+    "deepseek-api",
+    "openrouter-api"
   ],
   "scripted_provider_adapter_kind": "scripted_provider_adapter",
   "production_provider_adapter_kind": "codex_subscription_adapter",

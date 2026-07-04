@@ -1,4 +1,8 @@
 export {
+  codexAuthHome,
+} from './codex-subscription-auth.mjs';
+
+export {
   codexCommand,
   findCommandOnPath,
   parseJsonArrayEnv,
