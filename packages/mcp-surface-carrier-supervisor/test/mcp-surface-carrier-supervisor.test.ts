@@ -56,11 +56,11 @@ describe('MCP surface carrier supervisor status projection', () => {
 
     const status = projectMcpSurfaceCarrierStatus({
       ...staleSurfaceFixture,
-      deniedActionsRequested: ['process_kill', 'native_shell_fallback'],
+      deniedActionsRequested: ['process_kill', 'direct_native_shell_path_refused'],
       sourcePaths: findings.map((finding) => finding.path),
     });
     expect(status.reasons).toContain('denied_source_inputs_present');
     expect(status.reasons).toContain('denied_runtime_actions_requested');
-    expect(status.deniedActionsRequested).toEqual(['process_kill', 'native_shell_fallback']);
+    expect(status.deniedActionsRequested).toEqual(['process_kill', 'direct_native_shell_path_refused']);
   });
 });

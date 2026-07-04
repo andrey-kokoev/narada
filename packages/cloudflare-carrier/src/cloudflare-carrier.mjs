@@ -28,6 +28,7 @@ const MUTATING_OPERATIONS = new Set([
   'directive.emit',
   'directive.heartbeat.emit',
   'carrier.input.deliver',
+  'session.command.execute',
   'carrier.command.execute',
   'carrier.interrupt',
   'session.close',
@@ -39,6 +40,7 @@ const SUPPORTED_OPERATIONS = new Set([
   'directive.emit',
   'directive.heartbeat.emit',
   'carrier.input.deliver',
+  'session.command.execute',
   'carrier.command.execute',
   'carrier.interrupt',
   'session.events.read',
@@ -282,6 +284,8 @@ export class CloudflareCarrierSession {
         });
       case 'carrier.input.deliver':
         return this.#deliverInput(request);
+      case 'session.command.execute':
+        return this.#executeCommand(request);
       case 'carrier.command.execute':
         return this.#executeCommand(request);
       case 'carrier.interrupt':

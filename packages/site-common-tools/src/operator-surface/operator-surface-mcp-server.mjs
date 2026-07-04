@@ -1563,7 +1563,7 @@ function operatorSurfaceProjectIdentityRegistry(args) {
     identity_law: {
       role_metadata_is_naming_authority: false,
       windows_terminal_is_naming_authority: false,
-      fallback_identity_inference_allowed: false,
+      implicit_identity_inference_allowed: false,
     },
     identities,
     sites,
@@ -3048,7 +3048,7 @@ async function operatorKomorebiStop(args) {
       mutation: 'none',
       planned_action: 'komorebic_stop_then_postcheck',
       precheck_state: preState,
-      rationale: 'Explicit operator shutdown requests can use this governed MCP path; routine agents should not use raw shell fallback.',
+      rationale: 'Explicit operator shutdown requests can use this governed MCP path; routine agents must not use a raw shell path.',
     });
   }
 
@@ -3601,7 +3601,7 @@ function getStaticRosterAgent(agentId) {
       capabilities: Array.isArray(agent.capabilities) ? agent.capabilities : [],
       status: agent.status ?? null,
       operator_identity: agent.operator_identity ?? null,
-      roster_source: 'static_roster_config_fallback',
+      roster_source: 'static_roster_config_source',
     };
   } catch {
     return null;

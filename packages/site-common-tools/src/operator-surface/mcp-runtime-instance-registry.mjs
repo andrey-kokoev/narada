@@ -668,7 +668,7 @@ function classifyMissingCarrierAction({ restartState, ownership, verification })
 }
 
 function buildSupervisorRefusals({ transportType, runtimeKind, ownership, restartState }) {
-  const refusals = ['native_shell_fallback'];
+  const refusals = ['direct_native_shell_path_refused'];
   if (transportType === 'stdio' || runtimeKind?.includes('stdio')) refusals.push('self_restart_over_stdio');
   if (restartState === 'restart_requested') refusals.push('treat_restart_request_as_restart');
   if (ownership.restart_semantics === 'carrier_session_restart_required') refusals.push('carrier_mutation_from_read_only_status_surface');

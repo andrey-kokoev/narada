@@ -21,7 +21,7 @@ export type CapabilityLifecycleState =
 export type DeniedSupervisorAction =
   | 'process_kill'
   | 'stdio_self_restart'
-  | 'native_shell_fallback'
+  | 'direct_native_shell_path_refused'
   | 'live_carrier_restart'
   | 'live_rebind'
   | 'runtime_registry_mutation';
