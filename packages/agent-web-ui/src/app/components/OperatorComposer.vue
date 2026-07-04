@@ -3,7 +3,7 @@ import { nextTick, onMounted, ref } from 'vue';
 
 const draft = defineModel<string>({ required: true });
 defineProps<{ disabled?: boolean; disabledReason?: string }>();
-const emit = defineEmits<{ submit: [] }>();
+const emit = defineEmits<{ submit: [deliveryMode?: 'default' | 'enqueue'] }>();
 const inputRef = ref<HTMLTextAreaElement | null>(null);
 
 onMounted(async () => {
@@ -12,14 +12,19 @@ onMounted(async () => {
 });
 
 function handleKeydown(event: KeyboardEvent) {
+  if (event.key === 'Tab') {
+    event.preventDefault();
+    emit('submit', 'enqueue');
+    return;
+  }
   if (event.key !== 'Enter' || event.shiftKey) return;
   event.preventDefault();
-  emit('submit');
+  emit('submit', 'default');
 }
 </script>
 
 <template>
-  <form id="operator-form" class="composer" aria-label="Operator input" @submit.prevent="emit('submit')">
+  <form id="operator-form" class="composer" aria-label="Operator input" @submit.prevent="emit('submit', 'default')">
     <textarea
       id="operator-input"
       ref="inputRef"
@@ -27,7 +32,7 @@ function handleKeydown(event: KeyboardEvent) {
       rows="3"
       autocomplete="off"
       spellcheck="true"
-      placeholder="Enter to submit. Shift+Enter for new line"
+      placeholder="Enter to steer. Tab to queue. Shift+Enter for new line"
       :disabled="disabled"
       @keydown="handleKeydown"
     />

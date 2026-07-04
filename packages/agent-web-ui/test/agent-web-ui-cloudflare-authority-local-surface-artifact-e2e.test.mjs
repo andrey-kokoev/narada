@@ -111,7 +111,7 @@ test('local agent-web-ui submits to Cloudflare-hosted NARS authority and renders
   let page = null;
   try {
     page = await openCdpPage({ browserPath, url: localWeb.url, userDataPrefix: 'narada-cf-authority-local-surface-artifact-' });
-    const initialReplay = await waitForPageText(page, 'narada.cloudflare.e2e / cloudflare.resident', 15000);
+    const initialReplay = await waitForPageText(page, 'cloudflare.resident', 15000);
     assert.equal(initialReplay.found, true, JSON.stringify(initialReplay));
 
     const submitted = await page.evaluate(String.raw`(async () => {
@@ -226,7 +226,7 @@ test('hosted Cloudflare web UI submits to Cloudflare-hosted NARS authority and r
   let page = null;
   try {
     page = await openCdpPage({ browserPath, url: `${workerBaseUrl}/`, userDataPrefix: 'narada-cf-authority-hosted-surface-artifact-' });
-    const initialReplay = await waitForPageText(page, 'narada.cloudflare.e2e / cloudflare.resident', 15000);
+    const initialReplay = await waitForPageText(page, 'cloudflare.resident', 15000);
     assert.equal(initialReplay.found, true, JSON.stringify(initialReplay));
 
     const submitted = await page.evaluate(String.raw`(async () => {

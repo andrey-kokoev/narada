@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nextTick, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import EventRow from './EventRow.vue';
 import type { AgentActivityState } from '../composables/useAgentActivity';
 import type { ProjectionVerbosity } from '../composables/useProjectionVerbosity';
@@ -14,11 +14,19 @@ const props = defineProps<{
 
 const scroller = ref<HTMLElement | null>(null);
 const stickToBottom = ref(true);
+const renderedRowRevision = computed(() => props.rows.map((row) => `${row.key}:${row.kind}:${summaryLength(row.summary)}`).join('|'));
+
+function summaryLength(summary: unknown): number {
+  if (typeof summary === 'string') return summary.length;
+  if (Array.isArray(summary)) return summary.length;
+  if (summary === null || summary === undefined) return 0;
+  return String(summary).length;
+}
 
 function updateScrollState() {
   const element = scroller.value;
   if (!element) return;
-  stickToBottom.value = element.scrollHeight - element.scrollTop - element.clientHeight < 180;
+  stickToBottom.value = element.scrollHeight - element.scrollTop - element.clientHeight <= 96;
 }
 
 function scrollToBottom() {
@@ -34,14 +42,13 @@ function forceScrollToBottom() {
     scrollToBottom();
     window.requestAnimationFrame(() => {
       scrollToBottom();
-      window.setTimeout(scrollToBottom, 120);
     });
   });
 }
 
 onMounted(() => nextTick(scrollToBottom));
 
-watch(() => [props.rows.length, props.agentActivity.active, props.agentActivity.state], () => {
+watch(renderedRowRevision, () => {
   const shouldFollow = stickToBottom.value;
   nextTick(() => {
     if (shouldFollow) scrollToBottom();

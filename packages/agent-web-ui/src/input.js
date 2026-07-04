@@ -14,12 +14,13 @@ export const buildConversationSendFrame = buildAgentWebUiConversationSendFrame;
 export const buildConversationEnqueueFrame = buildAgentWebUiConversationEnqueueFrame;
 export const buildConversationSteerFrame = buildAgentWebUiConversationSteerFrame;
 
-export function sendOperatorMessage(socketOrConnection, text, documentRef = document) {
+export function sendOperatorMessage(socketOrConnection, text, documentRef = document, deliveryMode = 'default') {
   const connection = socketOrConnection?.getSocket ? socketOrConnection : null;
   const socket = connection ? connection.getSocket() : socketOrConnection;
   const action = buildOperatorInputAction(text, {
     activeTurn: Boolean(connection?.activeTurnId),
     activeTurnId: connection?.activeTurnId,
+    ...(deliveryMode === 'enqueue' ? { deliveryMode: 'enqueue' } : {}),
   });
   if (!action) return false;
   if (action.kind === 'local_help') {
@@ -82,5 +83,10 @@ export function bindComposer(connection, documentRef = document) {
   form.addEventListener('submit', (event) => {
     event.preventDefault();
     if (sendOperatorMessage(connection, input.value, documentRef)) input.value = '';
+  });
+  input.addEventListener?.('keydown', (event) => {
+    if (event.key !== 'Tab') return;
+    event.preventDefault();
+    if (sendOperatorMessage(connection, input.value, documentRef, 'enqueue')) input.value = '';
   });
 }

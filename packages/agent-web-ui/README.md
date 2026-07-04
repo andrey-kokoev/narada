@@ -78,7 +78,8 @@ The web UI allowlist contains these NARS WebSocket methods:
 - `observers.status`
 - `observer.mute`
 - `observer.unmute`
-- `carrier.command.execute`
+- `session.command.execute`
+- `carrier.command.execute` (legacy alias)
 - `conversation.interrupt`
 - `conversation.steer`
 - `session.close`

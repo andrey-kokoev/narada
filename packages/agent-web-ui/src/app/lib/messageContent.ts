@@ -117,7 +117,7 @@ function normalizeTextPart(content: string): string {
 }
 
 function textRenderKind(content: string): MessageRenderKind {
-  return /(`[^`]+`|\*\*[^*]+\*\*|__[^_]+__|^\s*>\s+|^\s*#{1,6}\s+|^\s*\|.+\|\s*$|(?:^|\n)\s*\|?\s*:?-{3,}:?\s*\||(?:^|\n)\s*[-*+]\s+|(?:^|\n)\s*\d+\.\s+)/m.test(content) ? 'markdown' : 'plain_text';
+  return /(`[^`]+`|\*\*[^*]+\*\*|__[^_]+__|^\s*>\s+|^\s*#{1,6}\s+|^\s*\|.+\|\s*$|(?:^|\n)\s*\|?\s*:?-{3,}:?\s*\||(?:^|\n)\s*-{3,}\s*(?=\n|$)|(?:^|\n)\s*[-*+]\s+|(?:^|\n)\s*\d+\.\s+)/m.test(content) ? 'markdown' : 'plain_text';
 }
 
 function renderKindForFence(language: string, content: string): MessageRenderKind {

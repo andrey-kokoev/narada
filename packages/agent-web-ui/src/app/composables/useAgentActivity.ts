@@ -19,7 +19,7 @@ export const IDLE_ACTIVITY: AgentActivityState = {
   startedAtMs: null,
 };
 
-export function useAgentActivity(events: unknown[] | Ref<unknown[]>) {
+export function useAgentActivity(events: unknown[] | Ref<unknown[]>, healthBody?: Ref<Record<string, unknown> | null>) {
   const now = ref(Date.now());
   let timer: ReturnType<typeof setInterval> | null = null;
   onMounted(() => {
@@ -33,7 +33,10 @@ export function useAgentActivity(events: unknown[] | Ref<unknown[]>) {
 
   const activity = computed<AgentActivityState>(() => {
     const sourceEvents = Array.isArray(events) ? events : events.value;
-    return normalizeActivity(createSessionProjection(sourceEvents ?? [], { nowMs: now.value }).activity);
+    return reconcileActivityWithHealth(
+      normalizeActivity(createSessionProjection(sourceEvents ?? [], { nowMs: now.value }).activity),
+      healthBody?.value ?? null,
+    );
   });
   return { activity };
 }
@@ -45,4 +48,11 @@ export function accumulateActivity(events: unknown[], nowMs = Date.now()): Agent
 function normalizeActivity(value: AgentActivityState): AgentActivityState {
   if (!value?.active) return { ...IDLE_ACTIVITY };
   return value;
+}
+
+function reconcileActivityWithHealth(activity: AgentActivityState, health: Record<string, unknown> | null): AgentActivityState {
+  if (!activity.active || !health) return activity;
+  const activeTurnState = typeof health.active_turn_state === 'string' ? health.active_turn_state : null;
+  if (activeTurnState && activeTurnState !== 'running') return { ...IDLE_ACTIVITY };
+  return activity;
 }

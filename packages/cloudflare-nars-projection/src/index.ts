@@ -29,6 +29,7 @@ export const CLOUDFLARE_NARS_INPUT_METHODS = [
   'observers.status',
   'observer.mute',
   'observer.unmute',
+  'session.command.execute',
   'carrier.command.execute',
   'session.close',
 ] as const;

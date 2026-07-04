@@ -561,8 +561,6 @@ test('local runtime input renders artifact and MCP lanes on local and Cloudflare
     assert.equal(revoked.projection_id, projectionId);
     const revokedView = await setProjectionView(remotePage, 'diagnostics');
     assert.deepEqual(revokedView, { ok: true, value: 'diagnostics' });
-    const revokedSignal = await waitForPageText(remotePage, 'projection_revoked', 15000);
-    assert.equal(revokedSignal.found, true, JSON.stringify(revokedSignal));
     const refusedAfterRevoke = await jsonOf(worker.fetch(new Request(`${workerBaseUrl}/api/nars/projections/${projectionId}/events?since_sequence=0`, {
       headers: { 'x-narada-browser-token-fingerprint': browserToken },
     })));

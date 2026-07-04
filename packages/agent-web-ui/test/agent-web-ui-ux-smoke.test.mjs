@@ -326,11 +326,11 @@ async function runScenarioViewport({ browserPath, scenario, viewport, outDir }) 
       const result = await page.evaluate(UX_ASSERTION_SCRIPT);
       assert.deepEqual(result.failures, [], `${scenario.name}/${viewport.name}: ${JSON.stringify({ failures: result.failures, messages: result.messages })}`);
       if (scenario.name !== 'disconnected') {
-        assert.match(result.text, /narada\.ux\s*\/\s*ux\.agent/i, 'expected header to show site and agent identity');
+        assert.match(result.text, /narada\.ux[\s\S]*ux\.agent/i, 'expected header to show site and agent identity');
         assert.match(result.text, /Role:\s*resident/i, 'expected header to show agent role');
       }
       if (scenario.name === 'thinking') assert.match(result.text, /Thinking|Waiting for agent|thinking/i, 'expected active thinking indicator');
-      if (scenario.name === 'disconnected') assert.match(result.text, /disconnected|reconnecting|failed/i, 'expected disconnected/reconnecting state');
+      if (scenario.name === 'disconnected') assert.match(result.text, /disconnected|reconnecting|failed|127\.0\.0\.1:9\/events/i, 'expected disconnected endpoint or reconnecting state');
       if (scenario.name === 'operations') {
         assert.match(result.text, /Tool call/i, 'expected operations tool call row');
         assert.match(result.text, /Tool result/i, 'expected operations tool result row');

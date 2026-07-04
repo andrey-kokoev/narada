@@ -14,10 +14,13 @@ export interface AuthorityTransitionInputPolicy {
   authority_locator_ref?: string | null;
 }
 
-export function submitOperatorInput(text: string, connection: NarsClientConnection | null, authorityTransition: AuthorityTransitionInputPolicy | null = null): OperatorInputResult {
+export type OperatorInputDeliveryMode = 'default' | 'enqueue';
+
+export function submitOperatorInput(text: string, connection: NarsClientConnection | null, authorityTransition: AuthorityTransitionInputPolicy | null = null, deliveryMode: OperatorInputDeliveryMode = 'default'): OperatorInputResult {
   const action = buildAgentWebUiOperatorInputAction(text, {
     activeTurn: Boolean(connection?.activeTurnId),
     activeTurnId: connection?.activeTurnId,
+    ...(deliveryMode === 'enqueue' ? { deliveryMode: 'enqueue' } : {}),
   });
   if (!action) return { handled: false, shouldClearDraft: false };
   if (action.kind === 'local_help') {
