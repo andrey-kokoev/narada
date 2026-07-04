@@ -213,6 +213,7 @@ The protocol should support at least:
 | `session.events.subscribe` | Subscribe to live runtime events with optional replay. |
 | `session.events.read` | Page durable `events.jsonl` history. |
 | `session.resume` | Reattach automation to an existing durable session. |
+| `session.sync` | Copy the bound session directory to or from an explicit Site-local sync target. |
 | `session.close` | Close or hand off the session with terminal evidence. |
 | `session.operations` | Inspect operation, request, MCP, queue, and handoff posture. |
 | `session.recovery` | Inspect recovery recommendations and handoff commands. |

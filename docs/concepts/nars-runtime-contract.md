@@ -103,11 +103,14 @@ Core request methods:
 | `session.recovery` | Inspect the current recovery recommendation and recovery handoffs. |
 | `session.operations` | Inspect active operation posture, request posture, MCP posture, and handoffs. |
 | `session.resume` | Reattach to an existing session handle. |
+| `session.sync` | Copy the bound session directory to or from an explicit Site-local sync target, with dry-run and bounded delete support. |
 | `session.close` | Close or hand off a session with terminal evidence. |
 | `session.command.execute` | Execute a slash/operator command through the carrier command contract. |
 | `carrier.command.execute` | Legacy alias for `session.command.execute`. |
 | `session.artifacts.register` | Register a session-scoped artifact from an admitted local path. |
 | `session.artifacts.read` | Read public artifact metadata or the artifact index. |
+
+`session.sync` is a local session-evidence synchronization primitive, not remote authority transfer. Relative targets resolve under the bound Site root; targets outside the Site root are refused. `upload` copies from the current session directory to the target, `download` copies from the target into the current session directory, and `bidirectional` performs both bounded passes. `delete` only removes extra files from the target during upload; it does not delete local session files during bidirectional/download recovery.
 
 The current runtime also exposes authority-transition and observer-control methods through `@narada2/carrier-protocol`: `authority.source.status`, `authority.source.drain`, `authority.source.seal`, `authority.target.status`, `authority.target.prepare`, `authority.target.activate`, `observers.status`, `observer.mute`, and `observer.unmute`.
 
