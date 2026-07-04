@@ -28,6 +28,14 @@ test('NARS event log reader pages events.jsonl by sequence and filters', () => {
     assert.equal(forward.cursor.after_sequence, 3);
     assert.equal(forward.corrupt_line_count, 1);
 
+    const sequencePreferred = readNarsEventLogPage({
+      eventsPath,
+      afterSequence: 1,
+      sinceTimestamp: '2026-06-23T00:00:02.500Z',
+      limit: 2,
+    });
+    assert.deepEqual(sequencePreferred.events.map((event) => event.event_sequence), [2, 3]);
+
     const backward = readNarsEventLogPage({ eventsPath, beforeSequence: 4, direction: 'backward', limit: 2 });
     assert.deepEqual(backward.events.map((event) => event.event_sequence), [2, 3]);
     assert.equal(backward.has_more, true);

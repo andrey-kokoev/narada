@@ -32,7 +32,8 @@ export function readNarsEventLogPage({
   const boundedLimit = boundedPositiveInteger(limit, DEFAULT_LIMIT, MAX_LIMIT);
   const requestedDirection = direction ?? (beforeSequence == null ? 'forward' : 'backward');
   const allEvents = readNarsEventLog(eventsPath);
-  const filtered = allEvents.events.filter((event) => eventInPageWindow(event, { afterSequence, beforeSequence, sinceTimestamp }) && eventMatchesNarsFilters(event, filters));
+  const effectiveSinceTimestamp = hasSequenceCursor(afterSequence) ? null : sinceTimestamp;
+  const filtered = allEvents.events.filter((event) => eventInPageWindow(event, { afterSequence, beforeSequence, sinceTimestamp: effectiveSinceTimestamp }) && eventMatchesNarsFilters(event, filters));
   let events;
   let hasMore = false;
   if (requestedDirection === 'backward') {
@@ -96,13 +97,17 @@ function eventInPageWindow(event, { afterSequence, beforeSequence, sinceTimestam
   return true;
 }
 
+function hasSequenceCursor(value) {
+  return Number.isFinite(optionalInteger(value));
+}
+
 function optionalInteger(value) {
   if (value === null || value === undefined || value === '') return null;
   return Number.parseInt(String(value), 10);
 }
 
-function boundedPositiveInteger(value, fallback, max) {
+function boundedPositiveInteger(value, defaultValue, max) {
   const parsed = Number.parseInt(String(value), 10);
-  if (!Number.isFinite(parsed) || parsed < 0) return fallback;
+  if (!Number.isFinite(parsed) || parsed < 0) return defaultValue;
   return Math.min(parsed, max);
 }
