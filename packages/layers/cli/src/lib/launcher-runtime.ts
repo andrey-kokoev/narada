@@ -13,12 +13,16 @@ export interface LaunchResultSummary {
   status?: string;
   agent_start_event?: string;
   identity?: string;
+  operator_surface_kind?: string;
+  runtime_host_kind?: string;
   carrier_kind?: string;
   runtime?: string;
   runtime_substrate_kind?: string;
   site_root?: string;
   target_site_root?: string;
   session_site_root?: string;
+  runtime_session_id?: string;
+  nars_session_id?: string;
   carrier_session_id?: string;
   control_path?: string;
   control_path_exists?: boolean;
@@ -54,6 +58,7 @@ export interface CarrierStatusOptions {
 
 export interface AgentStartOptions {
   siteRoot: string;
+  targetSiteId?: string;
   workspaceRoot?: string;
   agent: string;
   carrier?: string;
@@ -165,6 +170,8 @@ interface LaunchResultRecord {
   status?: unknown;
   agent_start_event?: unknown;
   identity?: unknown;
+  operator_surface_kind?: unknown;
+  runtime_host_kind?: unknown;
   carrier_kind?: unknown;
   runtime?: unknown;
   runtime_substrate_kind?: unknown;
@@ -173,11 +180,18 @@ interface LaunchResultRecord {
   launch_source?: unknown;
   expires_at?: unknown;
   nars_launch?: {
+    session_id?: unknown;
+    runtime_session_id?: unknown;
+    nars_session_id?: unknown;
+    operator_surface_kind?: unknown;
+    runtime_host_kind?: unknown;
     control_path?: unknown;
     session_path?: unknown;
   };
   required_environment?: {
     NARADA_AGENT_ID?: unknown;
+    NARADA_RUNTIME_SESSION_ID?: unknown;
+    NARADA_NARS_SESSION_ID?: unknown;
     NARADA_CARRIER_SESSION_ID?: unknown;
     NARADA_SITE_ROOT?: unknown;
   };
@@ -260,7 +274,7 @@ export function runAgentStartCommand(options: AgentStartOptions): AgentStartComm
     siteRoot,
     '--site-root',
     siteRoot,
-    '--carrier',
+    '--operator-surface',
     options.carrier ?? options.runtime,
     '--runtime',
     options.runtime,
@@ -269,6 +283,7 @@ export function runAgentStartCommand(options: AgentStartOptions): AgentStartComm
     '--json-output-file',
     resultPath,
   ];
+  if (options.targetSiteId) args.push('--target-site-id', options.targetSiteId);
   if (!inheritedInteractiveExec) args.push('--json');
   if (options.intelligenceProvider) args.push('--intelligence-provider', options.intelligenceProvider);
   if (options.mcpScope) args.push('--mcp-scope', options.mcpScope);
@@ -295,6 +310,7 @@ export function runAgentStartCommand(options: AgentStartOptions): AgentStartComm
 
   const executionEnv = {
     NARADA_TARGET_SITE_ROOT: siteRoot,
+    ...(options.targetSiteId ? { NARADA_TARGET_SITE_ID: options.targetSiteId } : {}),
     NARADA_LAUNCH_REGISTRY_SITE_ROOT: siteRoot,
     NARADA_LAUNCH_REGISTRY_WORKSPACE_ROOT: workspaceRoot,
     NARADA_AGENT_ID: options.agent,
@@ -622,6 +638,16 @@ function readLaunchResult(path: string): LaunchResultSummary | null {
     const stats = statSync(path);
     const record = JSON.parse(readFileSync(path, 'utf8')) as LaunchResultRecord;
     const carrierSessionRegistration = record.carrier_actions?.carrier_session_registration;
+    const runtimeSessionId = stringValue(
+      record.nars_launch?.runtime_session_id
+        ?? record.nars_launch?.session_id
+        ?? record.required_environment?.NARADA_RUNTIME_SESSION_ID,
+    );
+    const narsSessionId = stringValue(
+      record.nars_launch?.nars_session_id
+        ?? record.nars_launch?.session_id
+        ?? record.required_environment?.NARADA_NARS_SESSION_ID,
+    );
     const carrierSessionId = stringValue(
       record.carrier_session?.carrier_session_id
         ?? carrierSessionRegistration?.carrier_session_id
@@ -655,12 +681,16 @@ function readLaunchResult(path: string): LaunchResultSummary | null {
       status: stringValue(record.status),
       agent_start_event: stringValue(record.agent_start_event),
       identity: stringValue(record.identity ?? record.required_environment?.NARADA_AGENT_ID),
+      operator_surface_kind: stringValue(record.operator_surface_kind ?? record.nars_launch?.operator_surface_kind ?? record.carrier_kind),
+      runtime_host_kind: stringValue(record.runtime_host_kind ?? record.nars_launch?.runtime_host_kind ?? record.runtime_substrate_kind ?? record.runtime),
       carrier_kind: stringValue(record.carrier_kind),
       runtime: stringValue(record.runtime),
       runtime_substrate_kind: stringValue(record.runtime_substrate_kind),
       site_root: stringValue(record.required_environment?.NARADA_SITE_ROOT),
       target_site_root: stringValue(record.target_site_root),
       session_site_root: stringValue(record.session_site_root),
+      runtime_session_id: runtimeSessionId,
+      nars_session_id: narsSessionId,
       carrier_session_id: carrierSessionId,
       control_path: controlPath,
       control_path_exists: controlPath ? existsSync(controlPath) : false,

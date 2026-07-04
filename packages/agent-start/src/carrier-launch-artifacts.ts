@@ -91,6 +91,8 @@ export function materializeCarrierSessionRecord({
   const record = {
     schema: 'narada.pc_runtime.carrier_session.v0',
     session_id: carrierSessionId,
+    runtime_session_id: carrierSessionId,
+    nars_session_id: carrier === 'agent-cli' || carrier === 'agent-web-ui' ? carrierSessionId : null,
     carrier_session_id: carrierSessionId,
     status: dryRun ? 'planned' : 'registered',
     declared_agent_identity: identity,
@@ -120,11 +122,11 @@ export function materializeCarrierSessionRecord({
       class: 'operator_manual_only_with_handle',
       handle: carrierSessionId,
       authority_owner: 'pc_site_runtime',
-      semantics: 'Restart this launcher-bound carrier session through the operator-visible launch surface or explicit operator action.',
+      semantics: 'Restart this launcher-bound runtime session through the operator-visible launch surface or explicit operator action.',
     },
     authority_basis: {
       kind: 'agent_launch_path',
-      summary: 'Carrier session registration materialized by start-agent before spawning the substrate child.',
+      summary: 'Runtime session registration materialized by start-agent before spawning the runtime child.',
     },
   };
 
@@ -136,9 +138,13 @@ export function materializeCarrierSessionRecord({
     schema: 'narada.pc_runtime.carrier_session.registration.v0',
     status: dryRun ? 'planned' : 'registered',
     session_id: carrierSessionId,
+    runtime_session_id: carrierSessionId,
+    nars_session_id: carrier === 'agent-cli' || carrier === 'agent-web-ui' ? carrierSessionId : null,
     carrier_session_id: carrierSessionId,
     record_path: recordPath,
     environment: {
+      NARADA_RUNTIME_SESSION_ID: carrierSessionId,
+      ...(carrier === 'agent-cli' || carrier === 'agent-web-ui' ? { NARADA_NARS_SESSION_ID: carrierSessionId } : {}),
       NARADA_CARRIER_SESSION_ID: carrierSessionId,
     },
     record,

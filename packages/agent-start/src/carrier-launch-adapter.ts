@@ -317,6 +317,7 @@ export function buildCarrierEnvironmentProjection({
   environmentSiteRoot,
   workspaceRoot,
   dbPath,
+  siteConfig = null,
 }) {
   const commonEnvironment = {
     ...carrierEnvironment,
@@ -330,6 +331,7 @@ export function buildCarrierEnvironmentProjection({
     NARADA_SITE_ROOT: environmentSiteRoot,
     NARADA_WORKSPACE_ROOT: workspaceRoot,
     NARADA_AGENT_CONTEXT_DB: dbPath,
+    ...(siteConfig ? { NARADA_SITE_CONFIG: JSON.stringify(siteConfig) } : {}),
   };
   return {
     requiredEnvironment: redactEnvironmentForOutput({
@@ -360,7 +362,10 @@ export function buildNarsLaunchPacket(carrierName, {
   return {
     schema: 'narada.agent_start.nars_launch.v1',
     session_id: sessionId,
+    runtime_session_id: sessionId,
+    nars_session_id: sessionId,
     ...(targetSiteId ? { site_id: targetSiteId } : {}),
+    runtime_host_kind: 'narada-agent-runtime-server',
     carrier_runtime_kind: 'narada-agent-runtime-server',
     launch_operator_surface_kind: carrierName,
     operator_surface_kind: carrierName,

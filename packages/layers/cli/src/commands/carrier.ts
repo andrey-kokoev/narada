@@ -11,6 +11,7 @@ import { defaultRuntimeForCarrier } from '@narada2/carrier-runtime-contract/carr
 export interface CarrierCommandOptions {
   siteRoot?: string;
   site?: string;
+  targetSiteId?: string;
   workspaceRoot?: string;
   agent?: string;
   carrier?: string;
@@ -62,7 +63,7 @@ export async function carrierControlPathCommand(
     exitCode: status.latest?.control_path ? ExitCode.SUCCESS : ExitCode.INVALID_CONFIG,
     result: formattedResult(
       result,
-      status.latest?.control_path ?? `No carrier control path found for ${status.site_root}`,
+      status.latest?.control_path ?? `No runtime control path found for ${status.site_root}`,
       options.format ?? 'auto',
     ),
   };
@@ -102,7 +103,7 @@ export async function carrierReadinessCommand(
       result,
       ready
         ? `ready: ${status.latest?.carrier_session_id ?? status.latest?.agent_start_event ?? status.site_root}`
-        : `not ready: no live carrier evidence for ${status.site_root}`,
+        : `not ready: no live runtime evidence for ${status.site_root}`,
       options.format ?? 'auto',
     ),
   };
@@ -124,13 +125,17 @@ export async function carrierStartCommand(
   });
   if (existing.latest?.control_path_exists && existing.latest.parent_process_alive !== false) {
     const result = {
-      schema: 'narada.carrier.start_result.v0',
+      schema: 'narada.operator_surface.runtime_start_result.v1',
       status: 'already_running',
       mutation_performed: false,
       site_root: siteRoot,
       agent,
+      operator_surface_kind: carrier,
+      runtime_host_kind: runtime,
+      operator_surface: carrier,
       carrier,
       runtime,
+      operator_surface_status: existing,
       carrier_status: existing,
     };
     return {
@@ -140,6 +145,7 @@ export async function carrierStartCommand(
   }
   const start = runAgentStartCommand({
     siteRoot,
+    targetSiteId: options.targetSiteId,
     workspaceRoot: options.workspaceRoot,
     agent,
     carrier,
@@ -152,22 +158,33 @@ export async function carrierStartCommand(
     enableNativeShell: options.enableNativeShell,
     launchSource: 'narada operator-surface start',
   });
+  const parsedAgentStart = start.parsed_result as {
+    target_site_id?: unknown;
+    launcher_contracts?: {
+      launch_result_artifact?: unknown;
+      operator_projection_open_request?: unknown;
+    };
+  } | null | undefined;
   const result = {
-    schema: 'narada.carrier.start_result.v0',
+    schema: 'narada.operator_surface.runtime_start_result.v1',
     status: start.status,
     mutation_performed: start.mutation_performed,
     site_root: siteRoot,
     workspace_root: options.workspaceRoot ?? null,
     agent,
+    operator_surface_kind: carrier,
+    runtime_host_kind: runtime,
+    target_site_id: typeof parsedAgentStart?.target_site_id === 'string' ? parsedAgentStart.target_site_id : options.targetSiteId ?? null,
+    operator_surface: carrier,
     carrier,
     runtime,
     intelligence_provider: options.intelligenceProvider ?? null,
     mcp_scope: options.mcpScope ?? 'all',
     mode: options.exec ? 'exec' : options.materializeOnly ? 'materialize_only' : 'dry_run',
     agent_start: start,
-    launcher_contracts: (start.parsed_result as { launcher_contracts?: unknown } | null | undefined)?.launcher_contracts ?? null,
-    launch_result_artifact: (start.parsed_result as { launcher_contracts?: { launch_result_artifact?: unknown } } | null | undefined)?.launcher_contracts?.launch_result_artifact ?? null,
-    operator_projection_open_request: (start.parsed_result as { launcher_contracts?: { operator_projection_open_request?: unknown } } | null | undefined)?.launcher_contracts?.operator_projection_open_request ?? null,
+    launcher_contracts: parsedAgentStart?.launcher_contracts ?? null,
+    launch_result_artifact: parsedAgentStart?.launcher_contracts?.launch_result_artifact ?? null,
+    operator_projection_open_request: parsedAgentStart?.launcher_contracts?.operator_projection_open_request ?? null,
   };
   return {
     exitCode: start.status === 'success' ? ExitCode.SUCCESS : ExitCode.GENERAL_ERROR,
@@ -229,7 +246,7 @@ export async function carrierReloadCommand(
     };
     return {
       exitCode: restart.exitCode,
-      result: formattedResult(result, `carrier reload ${result.status}`, options.format ?? 'auto'),
+      result: formattedResult(result, `runtime reload ${result.status}`, options.format ?? 'auto'),
     };
   }
   const result = unsupportedCarrierLifecycle('reload', siteRoot, agent, carrier, runtime);
@@ -254,7 +271,7 @@ function unsupportedCarrierLifecycle(
     agent,
     carrier,
     runtime,
-    reason: `Carrier ${action} is not wired for carrier ${carrier}.`,
+    reason: `Runtime ${action} is not wired for operator surface ${carrier}.`,
   };
 }
 
@@ -276,13 +293,13 @@ function requireAgent(options: CarrierCommandOptions): string {
 
 function formatCarrierStatus(status: ReturnType<typeof getCarrierStatus>): string {
   if (!status.latest) {
-    return `No carrier launch result found for ${status.site_root}`;
+    return `No runtime launch result found for ${status.site_root}`;
   }
   return [
-    `carrier: ${status.latest.carrier_session_id ?? 'unknown'}`,
+    `session: ${status.latest.nars_session_id ?? status.latest.runtime_session_id ?? status.latest.carrier_session_id ?? 'unknown'}`,
     `identity: ${status.latest.identity ?? 'unknown'}`,
-    `carrier: ${status.latest.carrier_kind ?? 'unknown'}`,
-    `runtime: ${status.latest.runtime_substrate_kind ?? status.latest.runtime ?? 'unknown'}`,
+    `operator_surface: ${status.latest.operator_surface_kind ?? status.latest.carrier_kind ?? 'unknown'}`,
+    `runtime_host: ${status.latest.runtime_host_kind ?? status.latest.runtime_substrate_kind ?? status.latest.runtime ?? 'unknown'}`,
     `control: ${status.latest.control_path ?? 'missing'}${status.latest.control_path_exists ? ' (exists)' : ''}`,
     `parent_alive: ${String(status.latest.parent_process_alive)}`,
   ].join('\n');

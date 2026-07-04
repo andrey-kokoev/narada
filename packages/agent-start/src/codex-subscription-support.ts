@@ -1,9 +1,9 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { delimiter, join } from 'node:path';
 import { runAiProcessInvocationSync } from '@narada2/carrier-provider-support/ai-process-invocation';
+import { codexAuthHome as sharedCodexAuthHome } from '@narada2/carrier-provider-support/codex-subscription-auth';
 import { codexCommand } from '@narada2/carrier-provider-support/codex-subscription-command';
 import { spawnSync as defaultSpawnSync } from 'node:child_process';
-import { homedir } from 'node:os';
 
 export const CODEX_SUBSCRIPTION_PREFLIGHT_ENV = 'NARADA_CODEX_SUBSCRIPTION_PREFLIGHT';
 export const CODEX_SUBSCRIPTION_PREFLIGHT_TIMEOUT_MS = 60000;
@@ -24,9 +24,7 @@ export function codexPreflightCommand(processEnv = process.env, processPlatform 
   return codexCommand({ processEnv, platform: processPlatform, exists: existsSync });
 }
 export function codexAuthHome(processEnv = process.env) {
-  if (processEnv.NARADA_CODEX_AUTH_HOME) return processEnv.NARADA_CODEX_AUTH_HOME;
-  const userRoot = processEnv.USERPROFILE || processEnv.HOME || homedir();
-  return userRoot ? join(userRoot, '.codex') : null;
+  return sharedCodexAuthHome({ processEnv });
 }
 
 export function codexSubscriptionPreflightEnv(processEnv = process.env) {
@@ -43,6 +41,7 @@ export function codexSubscriptionPreflight(provider, {
   processEnv = process.env,
   processPlatform = process.platform,
   sessionSiteRoot,
+  userSiteRoot,
   dryRun = false,
   spawnSync = defaultSpawnSync,
   now = Date.now,
@@ -69,7 +68,7 @@ export function codexSubscriptionPreflight(provider, {
   }
   const command = codexPreflightCommand(processEnv, processPlatform);
   const cacheKey = codexSubscriptionPreflightCacheKey({ provider, processEnv, command });
-  const cached = codexSubscriptionPreflightCacheRead({ sessionSiteRoot, cacheKey, now: now(), processEnv });
+  const cached = codexSubscriptionPreflightCacheRead({ userSiteRoot, sessionSiteRoot, cacheKey, now: now(), processEnv });
   if (!codexSubscriptionPreflightForced(processEnv) && cached) return cached;
   progressStream?.write?.(`Checking ${provider} local Codex subscription auth...\n`);
   const prompt = 'Return exactly: ok';
@@ -113,7 +112,7 @@ export function codexSubscriptionPreflight(provider, {
     timeout_ms: CODEX_SUBSCRIPTION_PREFLIGHT_TIMEOUT_MS,
     ai_process_invocation: result.aiProcessInvocation ?? null,
   };
-  if (preflight.ok) codexSubscriptionPreflightCacheWrite({ sessionSiteRoot, cacheKey, preflight, now: now(), processEnv });
+  if (preflight.ok) codexSubscriptionPreflightCacheWrite({ userSiteRoot, sessionSiteRoot, cacheKey, preflight, now: now(), processEnv });
   return preflight;
 }
 
@@ -123,9 +122,15 @@ function codexSubscriptionPreflightCacheTtlMs(processEnv = process.env) {
   return CODEX_SUBSCRIPTION_PREFLIGHT_CACHE_TTL_MS;
 }
 
-function codexSubscriptionPreflightCachePath(sessionSiteRoot) {
-  if (!sessionSiteRoot) return null;
-  return join(sessionSiteRoot, '.ai', 'runtime', 'codex-subscription-preflight-cache.json');
+function codexSubscriptionPreflightCacheRoot({ userSiteRoot, sessionSiteRoot }) {
+  return userSiteRoot ?? sessionSiteRoot ?? null;
+}
+
+function codexSubscriptionPreflightCachePath({ userSiteRoot, sessionSiteRoot }) {
+  const cacheRoot = codexSubscriptionPreflightCacheRoot({ userSiteRoot, sessionSiteRoot });
+  if (!cacheRoot) return null;
+  if (userSiteRoot) return join(cacheRoot, '.narada', 'runtime', 'provider-auth-cache', 'codex-subscription-preflight-cache.json');
+  return join(cacheRoot, '.ai', 'runtime', 'codex-subscription-preflight-cache.json');
 }
 
 function codexSubscriptionPreflightCacheKey({ provider, processEnv, command }) {
@@ -138,10 +143,10 @@ function codexSubscriptionPreflightCacheKey({ provider, processEnv, command }) {
   ].join('\u0000');
 }
 
-function codexSubscriptionPreflightCacheRead({ sessionSiteRoot, cacheKey, now, processEnv }) {
+function codexSubscriptionPreflightCacheRead({ userSiteRoot, sessionSiteRoot, cacheKey, now, processEnv }) {
   const ttlMs = codexSubscriptionPreflightCacheTtlMs(processEnv);
   if (ttlMs <= 0) return null;
-  const cachePath = codexSubscriptionPreflightCachePath(sessionSiteRoot);
+  const cachePath = codexSubscriptionPreflightCachePath({ userSiteRoot, sessionSiteRoot });
   if (!cachePath || !existsSync(cachePath)) return null;
   try {
     const cache = JSON.parse(readFileSync(cachePath, 'utf8'));
@@ -155,6 +160,7 @@ function codexSubscriptionPreflightCacheRead({ sessionSiteRoot, cacheKey, now, p
       command: entry.command ?? 'codex exec --json',
       cache: {
         status: 'hit',
+        locus: userSiteRoot ? 'user-site' : 'session-site',
         checked_at: entry.checked_at ?? null,
         age_ms: now - entry.checked_at_ms,
         ttl_ms: ttlMs,
@@ -167,13 +173,16 @@ function codexSubscriptionPreflightCacheRead({ sessionSiteRoot, cacheKey, now, p
   }
 }
 
-function codexSubscriptionPreflightCacheWrite({ sessionSiteRoot, cacheKey, preflight, now, processEnv }) {
+function codexSubscriptionPreflightCacheWrite({ userSiteRoot, sessionSiteRoot, cacheKey, preflight, now, processEnv }) {
   const ttlMs = codexSubscriptionPreflightCacheTtlMs(processEnv);
   if (ttlMs <= 0) return;
-  const cachePath = codexSubscriptionPreflightCachePath(sessionSiteRoot);
+  const cachePath = codexSubscriptionPreflightCachePath({ userSiteRoot, sessionSiteRoot });
   if (!cachePath) return;
   try {
-    const cacheDir = join(sessionSiteRoot, '.ai', 'runtime');
+    const cacheRoot = codexSubscriptionPreflightCacheRoot({ userSiteRoot, sessionSiteRoot });
+    const cacheDir = userSiteRoot
+      ? join(cacheRoot, '.narada', 'runtime', 'provider-auth-cache')
+      : join(cacheRoot, '.ai', 'runtime');
     mkdirSync(cacheDir, { recursive: true });
     let cache = { schema: 'narada.codex_subscription.preflight_cache.v1', entries: {} };
     if (existsSync(cachePath)) {
@@ -200,7 +209,7 @@ export function codexContextIsolationStatus({ exec = false, dryRun = false } = {
     code: exec && !dryRun ? 'codex_fresh_launcher_bound' : 'codex_fresh_launch_planned',
     runtime: 'codex',
     runtime_substrate_kind: 'codex',
-    reason: 'Narada can start a fresh Codex carrier with a bound agent identity and MCP-only posture. Exact resume proof remains a separate unadmitted boundary.',
+    reason: 'Narada can start a fresh Codex runtime with a bound agent identity and MCP-only posture. Exact resume proof remains a separate unadmitted boundary.',
     operator_message: 'Use launcher-started fresh Codex sessions for bound identity. Do not use codex resume --last, ambient picker selection, or manual session selection as authority.',
     safe_action: 'For continuation, resume only by an exact Codex session id after Narada has admitted and verified that session evidence.',
     forbidden_resume_modes: ['codex resume --last', 'ambient picker selection', 'manual session selection as authority'],

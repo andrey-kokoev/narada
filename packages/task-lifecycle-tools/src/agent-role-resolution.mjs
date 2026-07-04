@@ -69,9 +69,9 @@ export function resolveAgentRoleWithDiagnostics(store, siteRoot, agentId) {
     diagnostics.role_binding = buildAgentRoleBindingProjection({
       agentId,
       role: staticRole,
-      source: 'static_roster_config_fallback',
+      source: 'static_roster_config_source',
     });
-    diagnostics.source = 'static_roster_config_fallback';
+    diagnostics.source = 'static_roster_config_source';
     diagnostics.remediation = 'Run task lifecycle roster sync or restart stale lifecycle surfaces so SQL agent_roster imports authored roster identity config.';
     return diagnostics;
   }

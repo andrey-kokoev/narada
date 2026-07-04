@@ -45,6 +45,25 @@ function run(extraArgs = [], extraEnv = {}) {
   });
 }
 
+function writeAllowedRootMcpServerFile(siteRoot, fileName, serverName, allowedRoots, injectionScope = 'local_site') {
+  mkdirSync(join(siteRoot, '.ai'), { recursive: true });
+  mkdirSync(join(siteRoot, '.ai', 'mcp'), { recursive: true });
+  copyFileSync(join(naradaProperRoot, '.ai', 'task-lifecycle.db'), join(siteRoot, '.ai', 'task-lifecycle.db'));
+  writeFileSync(join(siteRoot, '.ai', 'mcp', fileName), JSON.stringify({
+    mcpServers: {
+      [serverName]: {
+        transport: 'stdio',
+        command: 'node',
+        args: allowedRoots.flatMap((root) => ['--allowed-root', root]),
+        tools: ['agent_context_startup_sequence'],
+        target_site_root: '{site_root}',
+        injection_scope: injectionScope,
+        narada_scope: { injection_scope: injectionScope },
+      },
+    },
+  }, null, 2), 'utf8');
+}
+
 function writeMinimalMcpFabric(siteRoot, serverName, injectionScope = 'local_site') {
   mkdirSync(join(siteRoot, '.ai'), { recursive: true });
   mkdirSync(join(siteRoot, '.ai', 'mcp'), { recursive: true });
@@ -140,6 +159,8 @@ test('McpScope none projects an explicit empty fabric and no effective loci', ()
   assert.deepEqual(output.mcp_scope.requested_loci, []);
   assert.deepEqual(output.mcp_scope.effective_loci, []);
   assert.deepEqual(output.mcp_fabric.server_names, []);
+  assert.deepEqual(output.site_config.allowed_roots, []);
+  assert.equal(output.required_environment.NARADA_SITE_CONFIG.includes('narada.nars.site_config.v1'), true);
   assert.equal(output.mcp_scope.enforcement.inherited_codex_home_allowed, false);
   assert.deepEqual(output.mcp_scope.enforcement.projected_server_names, []);
 });
@@ -162,6 +183,25 @@ test('McpScope user-site loads only explicit User Site MCP fabric', () => {
   assert.deepEqual(output.mcp_scope.effective_loci, ['user-site']);
   assert.deepEqual(output.mcp_fabric.server_names, ['narada-user-only']);
   assert.equal(output.mcp_fabric.server_names.includes('narada-target-only'), false);
+});
+
+test('site config projection advertises allowed roots from admitted MCP fabric', () => {
+  const targetRoot = mkdtempSync(join(tmpdir(), 'narada-agent-start-site-config-'));
+  const allowedA = join(targetRoot, 'workspace');
+  const allowedB = join(targetRoot, 'shared');
+  const normalizedAllowedA = allowedA.replaceAll('\\', '/');
+  const normalizedAllowedB = allowedB.replaceAll('\\', '/');
+  writeAllowedRootMcpServerFile(targetRoot, 'narada-allowed-roots.json', 'narada-allowed-roots', [allowedA, allowedB, allowedA]);
+
+  const output = runOk([
+    '--carrier', 'agent-web-ui',
+    '--runtime', 'narada-agent-runtime-server',
+    '--target-site-root', targetRoot,
+    '--mcp-scope', 'local-site',
+  ]);
+  assert.equal(output.site_config.schema, 'narada.nars.site_config.v1');
+  assert.deepEqual(output.site_config.allowed_roots, [normalizedAllowedA, normalizedAllowedB]);
+  assert.equal(output.required_environment.NARADA_SITE_CONFIG.includes(normalizedAllowedA), true);
 });
 
 test('McpScope host loads only explicit Host MCP fabric', () => {
@@ -247,9 +287,32 @@ test('db option materializes the requested agent-context db path', () => {
 
 test('nars runtime alias materializes the canonical runtime server kind', () => {
   const output = runOk(['--carrier', 'agent-cli', '--runtime', 'nars', '--mcp-scope', 'none']);
+  assert.equal(output.operator_surface_kind, 'agent-cli');
+  assert.equal(output.runtime_host_kind, 'narada-agent-runtime-server');
   assert.equal(output.runtime_substrate_kind, 'narada-agent-runtime-server');
+  assert.equal(output.runtime_resolution.schema, 'narada.operator_surface_runtime_selection.v1');
+  assert.equal(output.runtime_resolution.legacy_schema, 'narada.carrier_runtime_selection.v1');
+  assert.equal(output.runtime_resolution.launch_operator_surface_kind, 'agent-cli');
   assert.equal(output.nars_launch.carrier_runtime_kind, 'narada-agent-runtime-server');
   assert.equal(output.carrier_session.record.carrier_runtime_kind, 'narada-agent-runtime-server');
+});
+
+test('operator-surface option is the canonical surface selector', () => {
+  const output = runOk(['--operator-surface', 'agent-cli', '--runtime', 'nars', '--mcp-scope', 'none']);
+  assert.equal(output.operator_surface_kind, 'agent-cli');
+  assert.equal(output.runtime_host_kind, 'narada-agent-runtime-server');
+  assert.equal(output.runtime_resolution.operator_surface_kind, 'agent-cli');
+  assert.equal(output.runtime_resolution.carrier_kind, 'agent-cli');
+  assert.equal(output.runtime_resolution.operator_surface_source_field, 'operator_surface');
+  assert.equal(output.runtime_resolution.carrier_source_field, 'operator_surface');
+});
+
+test('operator-surface and legacy carrier options must agree when both are supplied', () => {
+  const result = runFailed(['--operator-surface', 'agent-cli', '--carrier', 'codex', '--runtime', 'narada-agent-runtime-server']);
+  const refusal = JSON.parse(result.stdout);
+  assert.equal(refusal.reason_code, 'operator_surface_carrier_conflict');
+  assert.equal(refusal.candidate_operator_surface_kind, 'agent-cli');
+  assert.equal(refusal.candidate_carrier_kind, 'codex');
 });
 
 test('target site id is carried through dry-run output', () => {
@@ -470,6 +533,9 @@ test('agent-cli exec launches package bin through node, not PowerShell', () => {
   assert.equal(output.exec_command.includes('pwsh'), false);
   assert.equal(output.nars_launch.command, process.execPath);
   assert.equal(output.nars_launch.session_id, sessionId);
+  assert.equal(output.nars_launch.runtime_session_id, sessionId);
+  assert.equal(output.nars_launch.nars_session_id, sessionId);
+  assert.equal(output.nars_launch.runtime_host_kind, 'narada-agent-runtime-server');
   assert.equal(output.nars_launch.carrier_runtime_kind, 'narada-agent-runtime-server');
   assert.equal(output.nars_launch.launch_operator_surface_kind, 'agent-cli');
   assert.equal(output.nars_launch.operator_surface_kind, 'agent-cli');
@@ -483,16 +549,27 @@ test('agent-cli exec launches package bin through node, not PowerShell', () => {
   assert.equal(output.nars_launch.control_transport, 'jsonl_sideband_file');
   assert.equal(output.nars_launch.reads_only_target_site_mcp_fabric, true);
   assert.equal(output.nars_launch.user_site_mcp_injected, false);
+  assert.equal(output.operator_surface_kind, 'agent-cli');
+  assert.equal(output.runtime_host_kind, 'narada-agent-runtime-server');
   assert.equal(output.carrier_kind, 'agent-cli');
   assert.equal(output.runtime_substrate_kind, 'narada-agent-runtime-server');
+  assert.equal(output.runtime_resolution.schema, 'narada.operator_surface_runtime_selection.v1');
+  assert.equal(output.runtime_resolution.legacy_schema, 'narada.carrier_runtime_selection.v1');
+  assert.equal(output.runtime_resolution.operator_surface_kind, 'agent-cli');
+  assert.equal(output.runtime_resolution.launch_operator_surface_kind, 'agent-cli');
+  assert.equal(output.runtime_resolution.runtime_host_kind, 'narada-agent-runtime-server');
   assert.equal(output.nars_events.attach_commands.registry_schema, 'narada.nars.client_projection_registry.v1');
   assert.equal(output.nars_events.attach_commands.agent_cli, 'narada-agent-cli --attach <session_started.event_endpoint>');
   assert.equal(output.nars_events.attach_commands.agent_tui, 'agent-tui --attach <session_started.event_endpoint>');
   assert.equal(output.nars_events.attach_commands.agent_web_ui, 'narada-agent-web-ui --event-endpoint <session_started.event_endpoint> --health-endpoint <session_started.health_endpoint>');
   assert.match(output.nars_events.attach_commands.operator_input_protocol, /conversation\.send/);
-  assert.match(output.nars_events.attach_commands.slash_command_protocol, /carrier\.command\.execute/);
+  assert.match(output.nars_events.attach_commands.slash_command_protocol, /session\.command\.execute/);
   assert.equal(output.carrier_session.record.carrier_runtime_kind, 'narada-agent-runtime-server');
   assert.equal(output.carrier_session.session_id, sessionId);
+  assert.equal(output.carrier_session.runtime_session_id, sessionId);
+  assert.equal(output.carrier_session.nars_session_id, sessionId);
+  assert.equal(output.carrier_session.record.runtime_session_id, sessionId);
+  assert.equal(output.carrier_session.record.nars_session_id, sessionId);
   assert.equal(output.carrier_session.record.session_id, sessionId);
   assert.equal(output.carrier_session.record.launch_operator_surface_kind, 'agent-cli');
   assert.equal(output.carrier_session.record.operator_surface_kind, 'agent-cli');
@@ -517,11 +594,21 @@ test('agent-web-ui exec launches NARS runtime server as first-class operator sur
   assert.equal(output.exec_command.startsWith(process.execPath), true);
   assert.equal(output.nars_launch.command, process.execPath);
   assert.equal(output.nars_launch.session_id, sessionId);
+  assert.equal(output.nars_launch.runtime_session_id, sessionId);
+  assert.equal(output.nars_launch.nars_session_id, sessionId);
+  assert.equal(output.nars_launch.runtime_host_kind, 'narada-agent-runtime-server');
   assert.equal(output.nars_launch.carrier_runtime_kind, 'narada-agent-runtime-server');
   assert.equal(output.nars_launch.launch_operator_surface_kind, 'agent-web-ui');
   assert.equal(output.nars_launch.operator_surface_kind, 'agent-web-ui');
+  assert.equal(output.operator_surface_kind, 'agent-web-ui');
+  assert.equal(output.runtime_host_kind, 'narada-agent-runtime-server');
   assert.equal(output.carrier_kind, 'agent-web-ui');
   assert.equal(output.runtime_substrate_kind, 'narada-agent-runtime-server');
+  assert.equal(output.runtime_resolution.schema, 'narada.operator_surface_runtime_selection.v1');
+  assert.equal(output.runtime_resolution.legacy_schema, 'narada.carrier_runtime_selection.v1');
+  assert.equal(output.runtime_resolution.operator_surface_kind, 'agent-web-ui');
+  assert.equal(output.runtime_resolution.launch_operator_surface_kind, 'agent-web-ui');
+  assert.equal(output.runtime_resolution.runtime_host_kind, 'narada-agent-runtime-server');
   assert.equal(output.nars_events.attach_commands.agent_web_ui, 'narada-agent-web-ui --event-endpoint <session_started.event_endpoint> --health-endpoint <session_started.health_endpoint>');
   assert.equal(output.carrier_session.record.carrier_runtime_kind, 'narada-agent-runtime-server');
   assert.equal(output.carrier_session.record.launch_operator_surface_kind, 'agent-web-ui');
@@ -543,6 +630,8 @@ test('agent-cli dry-run records event-id propagation residual at runtime-server 
   const output = runOk(['--carrier', 'agent-cli', '--runtime', 'narada-agent-runtime-server', '--exec']);
   const sessionId = output.carrier_session.carrier_session_id;
   assert.equal(output.required_environment.NARADA_AGENT_ID, identity);
+  assert.equal(output.required_environment.NARADA_RUNTIME_SESSION_ID, sessionId);
+  assert.equal(output.required_environment.NARADA_NARS_SESSION_ID, sessionId);
   assert.equal(output.required_environment.NARADA_CARRIER_SESSION_ID, sessionId);
   assert.equal(output.agent_start_event, undefined);
   assert.equal(output.required_environment.NARADA_AGENT_START_EVENT_ID, undefined);

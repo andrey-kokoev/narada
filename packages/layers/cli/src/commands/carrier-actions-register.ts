@@ -9,11 +9,11 @@ import { emitCommandResult, resolveCommandFormat } from '../lib/cli-output.js';
 export function registerCarrierActionsCommands(program: Command): void {
   const carrierActionsCmd = program
     .command('carrier-actions')
-    .description('Read-only Carrier Action Admission evidence inspection');
+    .description('Read-only runtime action admission evidence inspection');
 
   carrierActionsCmd
     .command('list')
-    .description('List Carrier Action Admission decisions')
+    .description('List runtime action admission decisions')
     .option('--decision <decision>', 'Filter by decision')
     .option('--limit <n>', 'Maximum decisions', '50')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
@@ -32,7 +32,7 @@ export function registerCarrierActionsCommands(program: Command): void {
 
   carrierActionsCmd
     .command('show <request-id>')
-    .description('Show one Carrier Action Admission decision')
+    .description('Show one runtime action admission decision')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
     .action(directCommandAction<[string, Record<string, unknown>]>({

@@ -45,17 +45,21 @@ function tempSite(): string {
   return dir;
 }
 
-function writeSession(siteRoot: string, sessionId = 'carrier_cli_test'): void {
+function writeSession(siteRoot: string, sessionId = 'carrier_cli_test', options: { agentId?: string; siteId?: string } = {}): void {
+  const agentId = options.agentId ?? 'sonar.resident';
+  const siteId = options.siteId ?? 'sonar';
   const sessionDir = resolveNaradaSitePaths({ siteRoot, sessionId }).narsSessionDir!;
   mkdirSync(sessionDir, { recursive: true });
   writeFileSync(join(sessionDir, 'session-index-record.json'), `${JSON.stringify({
     schema: 'narada.nars.session_index_record.v1',
     session_id: sessionId,
+    runtime_session_id: sessionId,
+    nars_session_id: sessionId,
     carrier_session_id: sessionId,
     derived_from_event: 'session_started',
     projection_generated_at: '2026-06-23T00:00:00.000Z',
-    agent_id: 'sonar.resident',
-    site_id: 'sonar',
+    agent_id: agentId,
+    site_id: siteId,
     site_id_source: 'session_started',
     site_root: siteRoot,
     runtime_kind: 'narada-agent-runtime-server',
@@ -91,7 +95,7 @@ function writeSession(siteRoot: string, sessionId = 'carrier_cli_test'): void {
     attached_projections: null,
     attached_projections_status: 'not_tracked',
     attach_commands: {
-      agent_cli: 'narada-agent-cli --identity sonar.resident --session carrier_cli_test --attach',
+      agent_cli: `narada-agent-cli --identity ${agentId} --session ${sessionId} --attach`,
       agent_web_ui: 'narada-agent-web-ui --event-endpoint ws://127.0.0.1:12345/events --health-endpoint http://127.0.0.1:12346/health',
     },
   }, null, 2)}\n`, 'utf8');
@@ -162,6 +166,8 @@ describe('nars CLI commands', () => {
     expect(body.sessions).toHaveLength(1);
     expect(body.sessions[0]).toMatchObject({
       session_id: 'carrier_cli_test',
+      runtime_session_id: 'carrier_cli_test',
+      nars_session_id: 'carrier_cli_test',
       agent_id: 'sonar.resident',
       display_state: 'starting_or_degraded',
     });
@@ -328,7 +334,7 @@ describe('nars CLI commands', () => {
     expect(result.exitCode).toBe(ExitCode.INVALID_CONFIG);
     expect(result.result).toMatchObject({
       status: 'refused',
-      source_authority_runtime_host: 'unknown_legacy',
+      source_authority_runtime_host: 'unknown_authority_metadata',
       source_authority_epoch: null,
       transition_record_candidate: null,
       recommended_next_action: 'repair_refusals_and_rerun_plan',
@@ -421,6 +427,71 @@ describe('nars CLI commands', () => {
     });
   });
 
+  it('plans direct agent-web-ui attachment for a role alias inside an explicit Site root', async () => {
+    const workspaceRoot = tempSite();
+    const siteRoot = join(workspaceRoot, '.narada');
+    mkdirSync(siteRoot, { recursive: true });
+    writeSession(siteRoot, 'carrier_staccato', { agentId: 'narada-staccato.resident', siteId: 'staccato' });
+
+    const result = await agentWebUiAttachCommand({
+      siteRoot,
+      agent: 'resident',
+      dryRun: true,
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      schema: 'narada.agent_web_ui.attach_plan.v1',
+      status: 'planned',
+      session_id: 'carrier_staccato',
+      site_id: null,
+      event_endpoint: 'ws://127.0.0.1:12345/events',
+    });
+  });
+
+  it('refuses role-alias agent-web-ui discovery when multiple identities match', async () => {
+    const siteRoot = tempSite();
+    writeSession(siteRoot, 'carrier_a', { agentId: 'narada-alpha.resident', siteId: 'alpha' });
+    writeSession(siteRoot, 'carrier_b', { agentId: 'narada-beta.resident', siteId: 'beta' });
+
+    const result = await agentWebUiAttachCommand({
+      siteRoot,
+      agent: 'resident',
+      dryRun: true,
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.INVALID_CONFIG);
+    expect(result.result).toMatchObject({
+      schema: 'narada.agent_web_ui.attach_refusal.v1',
+      reason: 'nars_session_ambiguous_for_agent',
+      agent_id: 'resident',
+    });
+    const body = result.result as { candidates: Array<Record<string, unknown>> };
+    expect(body.candidates.map((candidate) => candidate.session_id)).toEqual(expect.arrayContaining(['carrier_a', 'carrier_b']));
+  });
+
+  it('returns candidate sessions when agent-web-ui discovery finds the Site but not the requested agent', async () => {
+    const siteRoot = tempSite();
+    writeSession(siteRoot, 'carrier_architect', { agentId: 'sonar.architect', siteId: 'sonar' });
+
+    const result = await agentWebUiAttachCommand({
+      siteRoot,
+      agent: 'sonar.resident',
+      dryRun: true,
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.INVALID_CONFIG);
+    expect(result.result).toMatchObject({
+      schema: 'narada.agent_web_ui.attach_refusal.v1',
+      reason: 'nars_session_not_found_for_agent',
+      agent_id: 'sonar.resident',
+      candidates: [expect.objectContaining({ session_id: 'carrier_architect', agent_id: 'sonar.architect' })],
+    });
+  });
+
   it('ignores stale matching sessions during direct agent-web-ui discovery', async () => {
     const siteRoot = tempSite();
     writeSession(siteRoot, 'carrier_fresh');
@@ -492,7 +563,7 @@ describe('nars CLI commands', () => {
     });
 
     expect(result.exitCode).toBe(ExitCode.SUCCESS);
-    expect(probes).toBe(3);
+    expect(probes).toBe(2);
     expect(progress).toContain('agent-web-ui: waiting up to 2s for a healthy NARS session for sonar.resident');
     expect(progress).toContain('agent-web-ui: found NARS session carrier_cli_test');
     expect(progress).toContain('agent-web-ui: resolving attach endpoints for carrier_cli_test');

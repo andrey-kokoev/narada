@@ -52,14 +52,14 @@ export function spawnCarrierProcessAndExit({ command, args, cwd, env, spawnOptio
       console.error(`[FAIL] ai_process_invocation_refused: ${error.admission.reason}`);
       if (error.admission.artifact_path) console.error(`artifact: ${error.admission.artifact_path}`);
     } else {
-      console.error(`[FAIL] Failed to spawn carrier process: ${error instanceof Error ? error.message : String(error)}`);
+      console.error(`[FAIL] Failed to spawn runtime process: ${error instanceof Error ? error.message : String(error)}`);
     }
     onExit(1);
     return;
   }
 
   child.on('error', (err) => {
-    console.error(`[FAIL] Failed to spawn carrier process: ${err.message}`);
+    console.error(`[FAIL] Failed to spawn runtime process: ${err.message}`);
     onExit(1);
   });
 

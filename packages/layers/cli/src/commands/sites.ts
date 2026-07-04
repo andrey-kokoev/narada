@@ -1218,7 +1218,7 @@ function formatCreateSitePresetsHuman(catalog: CreateSitePresetsCatalogResult): 
   lines.push(
     '',
     'Boundary: package/template selection does not grant live capability, import source runtime state, mutate private MCP client config, or mutate real Windows profile state outside target Site artifacts.',
-    'Use --format json for descriptor details and live-carrier commands.',
+    'Use --format json for descriptor details and live runtime commands.',
   );
   return lines;
 }
@@ -3208,7 +3208,7 @@ const SHARED_SITE_PACKAGES = [
   },
   {
     package_name: '@narada2/mcp-transport',
-    source_locus: fileURLToPath(new URL('../../../../../../mcp-surfaces/packages/mcp-transport', import.meta.url)),
+    source_locus: fileURLToPath(new URL('../../../../../../mcp-surfaces/packages/shared/mcp-transport', import.meta.url)),
   },
   {
     package_name: '@narada2/task-governance-core',

@@ -29,6 +29,7 @@ export function registerOperatorSurfaceCommands(program: Command): void {
     .description('Start or plan an Operator Surface through the canonical agent-start runtime adapter')
     .option('--site-root <path>', 'Target Site root')
     .option('--site <path>', 'Alias for --site-root')
+    .option('--target-site-id <id>', 'Logical Narada Site id for launch metadata')
     .option('--workspace-root <path>', 'Workspace root for the launched surface')
     .option('--agent <id>', 'Agent identity')
     .option('--operator-surface <surface>', 'Operator Surface to launch')
@@ -48,6 +49,7 @@ export function registerOperatorSurfaceCommands(program: Command): void {
       invocation: (surface, opts) => carrierStartCommand({
         siteRoot: opts.siteRoot as string | undefined,
         site: opts.site as string | undefined,
+        targetSiteId: opts.targetSiteId as string | undefined,
         workspaceRoot: opts.workspaceRoot as string | undefined,
         agent: opts.agent as string | undefined,
         carrier: (opts.operatorSurface as string | undefined) ?? surface,

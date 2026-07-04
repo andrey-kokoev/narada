@@ -26,6 +26,27 @@ interface ResolvedAttachSession {
   reason: string | null;
 }
 
+interface AttachSessionCandidate {
+  session_id: string | null;
+  agent_id: string | null;
+  site_id: string | null;
+  site_root: string | null;
+  display_state: string | null;
+  terminal_state: string | null;
+  health_status: string | null;
+  started_at: string | null;
+}
+
+class AttachSessionDiscoveryError extends Error {
+  constructor(
+    message: string,
+    readonly reason: 'nars_session_not_found_for_agent' | 'nars_session_ambiguous_for_agent' | 'session_discovery_failed',
+    readonly candidates: AttachSessionCandidate[] = [],
+  ) {
+    super(message);
+  }
+}
+
 type ProgressReporter = (line: string) => void;
 
 async function resolveAttachSessionId(options: AgentWebUiAttachOptions, context: CommandContext, progress: ProgressReporter): Promise<ResolvedAttachSession> {
@@ -46,7 +67,7 @@ async function resolveAttachSessionId(options: AgentWebUiAttachOptions, context:
       return resolved;
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
-      if (!lastError.message.startsWith('nars_session_not_found_for_agent:') || Date.now() - startedAt >= timeoutMs) break;
+      if (!(lastError instanceof AttachSessionDiscoveryError) || lastError.reason !== 'nars_session_not_found_for_agent' || Date.now() - startedAt >= timeoutMs) break;
       if (!options.dryRun && Date.now() >= nextProgressAt) {
         progress(`agent-web-ui: still waiting for ${agentId} NARS session health`);
         nextProgressAt = Date.now() + 5000;
@@ -54,7 +75,7 @@ async function resolveAttachSessionId(options: AgentWebUiAttachOptions, context:
       await delay(1000);
     }
   } while (Date.now() - startedAt < timeoutMs);
-  throw lastError ?? new Error(`nars_session_not_found_for_agent: ${agentId}`);
+  throw lastError ?? new AttachSessionDiscoveryError(`nars_session_not_found_for_agent: ${agentId}`, 'nars_session_not_found_for_agent');
 }
 
 async function discoverAttachSessionIdOnce(options: AgentWebUiAttachOptions, context: CommandContext, agentId: string): Promise<ResolvedAttachSession> {
@@ -67,23 +88,91 @@ async function discoverAttachSessionIdOnce(options: AgentWebUiAttachOptions, con
     format: 'json',
     launchRegistryPath: options.launchRegistryPath,
   }, context);
-  if (sessionsResult.exitCode !== ExitCode.SUCCESS) return { sessionId: '', reason: 'session_discovery_failed' };
+  if (sessionsResult.exitCode !== ExitCode.SUCCESS) {
+    throw new AttachSessionDiscoveryError(`session_discovery_failed: ${agentId}`, 'session_discovery_failed');
+  }
   const body = sessionsResult.result as { sessions?: Array<Record<string, unknown>> };
-  const matches = (body.sessions ?? []).filter((session) => {
+  const candidates = body.sessions ?? [];
+  const matches = candidates.filter((session) => {
     const candidateAgent = stringField(session, 'agent_id');
     const sessionId = stringField(session, 'session_id') ?? stringField(session, 'carrier_session_id');
     const displayState = stringField(session, 'display_state');
     const terminalState = stringField(session, 'terminal_state');
-    return candidateAgent === agentId
+    return agentIdMatchesSession(agentId, session)
       && Boolean(sessionId)
-      && isDiscoverableAttachSessionState(displayState, { requireActive: options.dryRun !== true })
+      && isDiscoverableAttachSessionState(displayState, { requireActive: options.dryRun !== true && !(Number(options.waitForSessionMs ?? 0) > 0) })
       && (!terminalState || terminalState === 'running');
   });
-  if (matches.length === 0) throw new Error(`nars_session_not_found_for_agent: ${agentId}`);
+  if (matches.length === 0) {
+    throw new AttachSessionDiscoveryError(
+      `nars_session_not_found_for_agent: ${agentId}`,
+      'nars_session_not_found_for_agent',
+      candidates.map(toAttachSessionCandidate),
+    );
+  }
+  const ambiguityGroups = distinctAttachIdentityGroups(matches);
+  if (ambiguityGroups.size > 1) {
+    throw new AttachSessionDiscoveryError(
+      `nars_session_ambiguous_for_agent: ${agentId}: ${Array.from(ambiguityGroups).join(', ')}`,
+      'nars_session_ambiguous_for_agent',
+      matches.map(toAttachSessionCandidate),
+    );
+  }
   const selected = matches.sort(compareSessionsNewestFirst)[0];
   const sessionId = stringField(selected, 'session_id') ?? stringField(selected, 'carrier_session_id');
-  if (!sessionId) throw new Error(`nars_session_not_found_for_agent: ${agentId}`);
+  if (!sessionId) throw new AttachSessionDiscoveryError(`nars_session_not_found_for_agent: ${agentId}`, 'nars_session_not_found_for_agent', candidates.map(toAttachSessionCandidate));
   return { sessionId, reason: 'discovered_by_agent' };
+}
+
+function agentIdMatchesSession(requestedAgentId: string, session: Record<string, unknown>): boolean {
+  const candidateAgent = stringField(session, 'agent_id');
+  if (!candidateAgent) return false;
+  if (candidateAgent === requestedAgentId) return true;
+  const requestedRole = roleSegment(requestedAgentId);
+  const candidateRole = roleSegment(candidateAgent);
+  if (!requestedRole || requestedRole !== candidateRole) return false;
+  const requestedSite = siteSegment(requestedAgentId);
+  const candidateSite = stringField(session, 'site_id') ?? siteSegment(candidateAgent);
+  if (requestedSite && candidateSite) return normalizeSiteToken(requestedSite) === normalizeSiteToken(candidateSite);
+  return !requestedAgentId.includes('.');
+}
+
+function distinctAttachIdentityGroups(sessions: Record<string, unknown>[]): Set<string> {
+  return new Set(sessions.map((session) => [
+    normalizeSiteToken(stringField(session, 'site_id') ?? siteSegment(stringField(session, 'agent_id') ?? '') ?? ''),
+    stringField(session, 'agent_id') ?? roleSegment(stringField(session, 'agent_id') ?? '') ?? '',
+  ].join('/')));
+}
+
+function roleSegment(agentId: string | null): string | null {
+  if (!agentId) return null;
+  const parts = agentId.split('.').filter(Boolean);
+  return parts.length > 1 ? parts[parts.length - 1] : agentId;
+}
+
+function siteSegment(agentId: string | null): string | null {
+  if (!agentId || !agentId.includes('.')) return null;
+  return agentId.split('.')[0] ?? null;
+}
+
+function normalizeSiteToken(value: string): string {
+  const lower = value.toLowerCase();
+  if (lower.startsWith('narada-')) return lower.slice('narada-'.length);
+  if (lower.startsWith('narada.')) return lower.slice('narada.'.length);
+  return lower;
+}
+
+function toAttachSessionCandidate(session: Record<string, unknown>): AttachSessionCandidate {
+  return {
+    session_id: stringField(session, 'session_id') ?? stringField(session, 'carrier_session_id'),
+    agent_id: stringField(session, 'agent_id'),
+    site_id: stringField(session, 'site_id'),
+    site_root: stringField(session, 'site_root'),
+    display_state: stringField(session, 'display_state'),
+    terminal_state: stringField(session, 'terminal_state'),
+    health_status: stringField(session, 'health_status'),
+    started_at: stringField(session, 'started_at'),
+  };
 }
 
 function isDiscoverableAttachSessionState(displayState: string | null, options: { requireActive: boolean }): boolean {
@@ -195,15 +284,18 @@ function buildDiscoveryFailure(args: {
   siteRoot: string | null | undefined;
   siteId: string | null | undefined;
   waitMs: number;
+  reason?: string;
+  candidates?: AttachSessionCandidate[];
 }) {
   return {
     schema: 'narada.agent_web_ui.attach_refusal.v1',
     status: 'refused',
-    reason: 'nars_session_not_found_for_agent',
+    reason: args.reason ?? 'nars_session_not_found_for_agent',
     agent_id: args.agentId,
     site_root: args.siteRoot ?? null,
     site_id: args.siteId ?? null,
     wait_ms: args.waitMs,
+    candidates: args.candidates ?? [],
     required_next_step: 'Start the NARS runtime host for this agent, or pass --session <id> for an existing healthy session.',
   };
 }
@@ -226,8 +318,17 @@ function formatDiscoveryFailure(failure: ReturnType<typeof buildDiscoveryFailure
     `  Agent   ${failure.agent_id ?? 'unknown'}`,
     `  Site    ${failure.site_id ?? failure.site_root ?? 'unknown'}`,
     `  Wait    ${Math.ceil((failure.wait_ms ?? 0) / 1000)}s`,
+    ...formatCandidateLines(failure.candidates),
     `  Next    ${failure.required_next_step}`,
   ].join('\n');
+}
+
+function formatCandidateLines(candidates: AttachSessionCandidate[]): string[] {
+  if (!Array.isArray(candidates) || candidates.length === 0) return [];
+  return [
+    '  Candidates:',
+    ...candidates.slice(0, 8).map((candidate) => `    ${candidate.session_id ?? 'unknown'} ${candidate.agent_id ?? 'unknown'} ${candidate.site_id ?? candidate.site_root ?? 'unknown'} ${candidate.display_state ?? 'unknown'} ${candidate.health_status ?? 'unknown'}`),
+  ];
 }
 
 export interface AgentWebUiAttachPlan {
@@ -262,12 +363,14 @@ export async function agentWebUiAttachCommand(
     resolvedSession = await resolveAttachSessionId(options, context, progress);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    if (!message.startsWith('nars_session_not_found_for_agent:')) throw error;
+    if (!(error instanceof AttachSessionDiscoveryError)) throw error;
     const failure = buildDiscoveryFailure({
       agentId: options.agent?.trim() || null,
       siteRoot: options.siteRoot,
       siteId: options.site,
       waitMs: Math.max(0, Math.trunc(options.waitForSessionMs ?? 0)),
+      reason: error.reason,
+      candidates: error.candidates,
     });
     return {
       exitCode: ExitCode.INVALID_CONFIG,

@@ -662,7 +662,7 @@ async function readVisibleLabelEvidenceStrict(cwd: string): Promise<{
     status: 'error',
     reason: 'operator_surface_visible_labels_schema_mismatch',
     path,
-    repair_guidance: 'Use narada operator-surface inspect compact or update the carrier wrapper to emit { "labels": [...] }; do not Select-Object a guessed labels property from raw overlay JSON.',
+    repair_guidance: 'Use narada operator-surface inspect compact or update the operator-surface wrapper to emit { "labels": [...] }; do not Select-Object a guessed labels property from raw overlay JSON.',
   };
 }
 
@@ -1555,7 +1555,7 @@ export async function operatorSurfaceAgentInstantiateCommand(
       command: labelVerificationCommand,
       expected_identity_id: identityName,
       expected_identity_name: identityName,
-      authority_boundary: 'labels are carrier projections; identity registry remains durable authority',
+      authority_boundary: 'labels are operator-surface projections; identity registry remains durable authority',
     };
     const aliasReadiness = {
       status: 'ready',

@@ -180,7 +180,7 @@ export function makeOperatorSurfaceLabel(
         label: identity.label,
         authority: 'projection_from_site_identity_record',
       },
-      authority_boundary: 'identity_id is Site authority; identity_name is a Windows carrier projection field',
+      authority_boundary: 'identity_id is Site authority; identity_name is a Windows operator-surface projection field',
     },
     authority_limits: identity.authority_limits,
   };

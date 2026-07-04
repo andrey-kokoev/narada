@@ -17,13 +17,13 @@ export function registerLauncherCommands(program: Command): void {
     .option('--site <site...>', 'Site filter')
     .option('--config-path <path...>', 'One or more launch registry files')
     .option('--registry-path <path>', 'Launch registry path')
-    .option('--carrier <carrier>', 'Legacy alias for --operator-surface')
-    .option('--operator-surface <surface>', 'Override operator/client surface; preferred replacement for --carrier')
+    .option('--operator-surface <surface>', 'Override operator/client surface')
     .option('--runtime <runtime>', 'Override runtime implementation')
     .option('--intelligence-provider <provider>', 'NARS operator-surface intelligence provider')
     .option('--mcp-scope <scope>', 'MCP injection scope: all|host|user-site|local-site|none', 'all')
     .option('--cloudflare-api-base-url <url>', 'Default Cloudflare NARS projection Worker URL for agent-web-ui publish controls')
     .option('--interactive-selection', 'Interactively select Site, Role, Operator Surface, Runtime, and applicable Intelligence Provider before planning', false)
+    .option('--interactive-selection-ui', 'Use a local browser page for interactive launch selection before planning', false)
     .option('--default-interactive-selection', 'Use interactive selection when no selection flags are supplied', false)
     .option('--result-path <path>', 'Write the workspace plan JSON to a file')
     .option('--suppress-result-output', 'Do not print the final result envelope after writing --result-path', false)
@@ -50,13 +50,13 @@ export function registerLauncherCommands(program: Command): void {
         site: opts.site as string[] | undefined,
         configPath: opts.configPath as string[] | undefined,
         registryPath: opts.registryPath as string | undefined,
-        carrier: opts.carrier as string | undefined,
         operatorSurface: opts.operatorSurface as string | undefined,
         runtime: opts.runtime as string | undefined,
         intelligenceProvider: opts.intelligenceProvider as string | undefined,
         mcpScope: opts.mcpScope as string | undefined,
         cloudflareApiBaseUrl: opts.cloudflareApiBaseUrl as string | undefined,
         interactiveSelection: opts.interactiveSelection as boolean | undefined,
+        interactiveSelectionUi: opts.interactiveSelectionUi as boolean | undefined,
         defaultInteractiveSelection: opts.defaultInteractiveSelection as boolean | undefined,
         resultPath: opts.resultPath as string | undefined,
         suppressResultOutput: opts.suppressResultOutput as boolean | undefined,
@@ -77,13 +77,13 @@ export function registerLauncherCommands(program: Command): void {
     .option('--site <site...>', 'Site filter')
     .option('--config-path <path...>', 'One or more launch registry files')
     .option('--registry-path <path>', 'Launch registry path')
-    .option('--carrier <carrier>', 'Legacy alias for --operator-surface')
-    .option('--operator-surface <surface>', 'Override operator/client surface; preferred replacement for --carrier')
+    .option('--operator-surface <surface>', 'Override operator/client surface')
     .option('--runtime <runtime>', 'Override runtime implementation')
     .option('--intelligence-provider <provider>', 'NARS operator-surface intelligence provider')
     .option('--mcp-scope <scope>', 'MCP injection scope: all|host|user-site|local-site|none', 'all')
     .option('--cloudflare-api-base-url <url>', 'Default Cloudflare NARS projection Worker URL for agent-web-ui publish controls')
     .option('--interactive-selection', 'Interactively select Site, Role, Operator Surface, Runtime, and applicable Intelligence Provider before launching', false)
+    .option('--interactive-selection-ui', 'Use a local browser page for interactive launch selection before launching', false)
     .option('--default-interactive-selection', 'Use interactive selection when no selection flags are supplied', false)
     .option('--result-path <path>', 'Write the workspace plan JSON to a file')
     .option('--suppress-result-output', 'Do not print the final result envelope after writing --result-path', false)
@@ -110,13 +110,13 @@ export function registerLauncherCommands(program: Command): void {
         site: opts.site as string[] | undefined,
         configPath: opts.configPath as string[] | undefined,
         registryPath: opts.registryPath as string | undefined,
-        carrier: opts.carrier as string | undefined,
         operatorSurface: opts.operatorSurface as string | undefined,
         runtime: opts.runtime as string | undefined,
         intelligenceProvider: opts.intelligenceProvider as string | undefined,
         mcpScope: opts.mcpScope as string | undefined,
         cloudflareApiBaseUrl: opts.cloudflareApiBaseUrl as string | undefined,
         interactiveSelection: opts.interactiveSelection as boolean | undefined,
+        interactiveSelectionUi: opts.interactiveSelectionUi as boolean | undefined,
         defaultInteractiveSelection: opts.defaultInteractiveSelection as boolean | undefined,
         resultPath: opts.resultPath as string | undefined,
         suppressResultOutput: opts.suppressResultOutput as boolean | undefined,

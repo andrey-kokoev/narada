@@ -172,14 +172,16 @@ test('codex subscription preflight refuses duplicate AiProcessInvocation before 
   }
 });
 
-test('codex subscription support caches successful live auth preflight briefly', () => {
+test('codex subscription support caches successful live auth preflight in User Site state briefly', () => {
   const calls = [];
   const progress = [];
   const siteRoot = mkdtempSync(join(tmpdir(), 'narada-codex-preflight-cache-'));
+  const userSiteRoot = mkdtempSync(join(tmpdir(), 'narada-user-site-codex-preflight-cache-'));
   const options = {
     processEnv: { USERPROFILE: 'C:/Users/Andrey', CODEX_MODEL: 'gpt-5.5' },
     processPlatform: 'linux',
     sessionSiteRoot: siteRoot,
+    userSiteRoot,
     dryRun: false,
     now: () => 1000,
     spawnSync(command, args, spawnOptions) {
@@ -197,11 +199,13 @@ test('codex subscription support caches successful live auth preflight briefly',
     assert.equal(calls.length, 1);
     assert.equal(progress.length, 1);
     assert.match(progress[0], /Checking codex-subscription local Codex subscription auth/);
-    assert.equal(second.cache.path, join(siteRoot, '.ai', 'runtime', 'codex-subscription-preflight-cache.json'));
+    assert.equal(second.cache.locus, 'user-site');
+    assert.equal(second.cache.path, join(userSiteRoot, '.narada', 'runtime', 'provider-auth-cache', 'codex-subscription-preflight-cache.json'));
     assert.equal(existsSync(second.cache.path), true);
-    assert.equal(existsSync(join(siteRoot, '.narada', '.ai', 'runtime', 'codex-subscription-preflight-cache.json')), false);
+    assert.equal(existsSync(join(siteRoot, '.ai', 'runtime', 'codex-subscription-preflight-cache.json')), false);
   } finally {
     rmSync(siteRoot, { recursive: true, force: true });
+    rmSync(userSiteRoot, { recursive: true, force: true });
   }
 });
 

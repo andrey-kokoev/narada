@@ -101,6 +101,8 @@ function toCommandSession(session: Record<string, unknown>, siteResolution: Reso
   const heartbeat = session.heartbeat && typeof session.heartbeat === 'object' ? session.heartbeat as Record<string, unknown> : null;
   return {
     session_id: session.session_id,
+    runtime_session_id: session.runtime_session_id,
+    nars_session_id: session.nars_session_id,
     carrier_session_id: session.carrier_session_id,
     site_root: siteResolution.site_root,
     site_root_source: siteResolution.source,

@@ -14,7 +14,7 @@
  * with NARADA_AGENT_ID and NARADA_AGENT_START_EVENT_ID in the environment.
  *
  * Usage:
- *   narada-agent-start <identity> [--carrier <carrier>] [--runtime <runtime>] [--db <path>] [--json] [--dry-run] [--exec] [--wait] [--yolo] [--enable-native-shell] [--target-site-id <site-id>] [--target-site-root <path>]
+ *   narada-agent-start <identity> [--operator-surface <surface>] [--carrier <legacy-carrier>] [--runtime <runtime>] [--db <path>] [--json] [--dry-run] [--exec] [--wait] [--yolo] [--enable-native-shell] [--target-site-id <site-id>] [--target-site-root <path>]
  */
 
 import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
@@ -68,46 +68,14 @@ import {
   providerCredentialRefusal as buildProviderCredentialRefusal,
 } from './provider-credential-projection.ts';
 import { spawnCarrierProcessAndExit, waitForEnterBeforeCarrier } from './carrier-process-launch.ts';
+import { canonicalJson, identityToken, mcpScopeLoci, normalizeMcpScope, parseArgs } from './launcher-cli-contract.ts';
+import { buildLauncherContracts, buildRuntimeHealthPosture, startupCommandFromSequence } from './launch-result-contracts.ts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const packageRootDir = join(__dirname, '..');
 const naradaProperRoot = join(packageRootDir, '..', '..');
 
 const SITE_ENV_BINDINGS = new Map();
-
-function parseArgs(argv) {
-  const result = {};
-  let i = 0;
-  if (argv.length > 0 && !argv[0].startsWith('--')) {
-    result.identity = argv[0];
-    i = 1;
-  }
-  for (; i < argv.length; i++) {
-    const arg = argv[i];
-    if (!arg.startsWith('--')) continue;
-
-    const key = arg.slice(2).replace(/-/g, '_');
-    if (i + 1 < argv.length && !argv[i + 1].startsWith('--')) {
-      result[key] = argv[i + 1];
-      i++;
-    } else {
-      result[key] = true;
-    }
-  }
-  return result;
-}
-
-function canonicalJson(value) {
-  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
-  if (value && typeof value === 'object') {
-    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(',')}}`;
-  }
-  return JSON.stringify(value);
-}
-
-function identityToken(identity) {
-  return String(identity).replace(/[^A-Za-z0-9]+/g, '_');
-}
 
 const args = parseArgs(process.argv.slice(2));
 const identity = args.identity;
@@ -136,10 +104,26 @@ const agentContextSessionStartPath = explicitAgentContextSessionStartPath && exi
 const { writeJsonFile } = await import(pathToFileURL(join(commonToolsRoot, 'incubation', 'write-file-utf8.mjs')));
 const { beginCodexSessionAdmission, getCodexSessionAdmission, materializeAgentSessionStart } = await import(pathToFileURL(agentContextSessionStartPath));
 const { McpFabricError, loadSiteMcpFabric, mcpServerNames, projectFabricForAgentTui, projectFabricForClaudeCode, projectFabricForCodex } = await import(pathToFileURL(join(NARADA_PROPER_ROOT, 'packages', 'mcp-fabric', 'src', 'mcp-fabric.mjs')));
-const carrierInput = args.carrier ?? null;
 const runtimeInput = args.runtime ?? null;
 const jsonOutput = !!args.json;
 const jsonOutputFile = args.json_output_file ? resolve(String(args.json_output_file)) : null;
+const operatorSurfaceInput = args.operator_surface ?? null;
+const legacyCarrierInput = args.carrier ?? null;
+if (operatorSurfaceInput && legacyCarrierInput && String(operatorSurfaceInput) !== String(legacyCarrierInput)) {
+  const refusal = {
+    schema: 'narada.operator_surface_runtime_selection.v1',
+    status: 'refused',
+    reason_code: 'operator_surface_carrier_conflict',
+    candidate_operator_surface_kind: String(operatorSurfaceInput),
+    candidate_carrier_kind: String(legacyCarrierInput),
+    reason: 'Canonical --operator-surface and legacy --carrier must agree when both are provided.',
+    required_next_step: 'Use --operator-surface <surface> for new launches, or keep --carrier only for compatibility callers.',
+  };
+  if (jsonOutput) await writeStdout(`${JSON.stringify(refusal, null, 2)}\n`);
+  else console.error(`[FAIL] ${refusal.reason_code}: ${refusal.reason}`);
+  process.exit(1);
+}
+const carrierInput = operatorSurfaceInput ?? legacyCarrierInput;
 const execFlag = !!args.exec;
 const dryRun = !!args.dry_run;
 const waitFlag = !!args.wait || process.env.NARADA_AGENT_START_WAIT === '1';
@@ -154,6 +138,7 @@ const showAdmission = args.show_admission ?? null;
 const targetSiteId = args.target_site_id ?? process.env.NARADA_TARGET_SITE_ID ?? null;
 const targetSiteRoot = args.target_site_root ?? process.env.NARADA_TARGET_SITE_ROOT ?? null;
 const sessionSiteRoot = targetSiteRoot ?? rootDir;
+const userSiteRoot = resolveUserSiteRoot();
 loadSiteEnvFiles(sessionSiteRoot, { siteNaradaRoot, processEnv: process.env, siteEnvBindings: SITE_ENV_BINDINGS });
 const dbPath = args.db ?? join(sessionSiteRoot, '.ai', 'state', 'agent-context.sqlite');
 const require = createRequire(import.meta.url);
@@ -179,20 +164,6 @@ const ADMITTED_TOOL_FABRIC_ADAPTER_KINDS = Object.freeze([
   'opencode-native-mcp',
   'ambient-carrier-tools',
 ]);
-
-function normalizeMcpScope(value) {
-  const normalized = String(value ?? 'all').trim().toLowerCase();
-  if (ADMITTED_MCP_SCOPES.includes(normalized)) return normalized;
-  throw new Error(`mcp_scope_not_admitted: ${normalized}. Admitted scopes: ${ADMITTED_MCP_SCOPES.join(', ')}`);
-}
-
-function mcpScopeLoci(scope) {
-  if (scope === 'none') return [];
-  if (scope === 'host') return ['host'];
-  if (scope === 'user-site') return ['user-site'];
-  if (scope === 'local-site') return ['local-site'];
-  return ['host', 'user-site', 'local-site'];
-}
 
 function naradaPackageRoot(packageName) {
   return naradaPackages.packageRoot(packageName);
@@ -279,6 +250,7 @@ function codexSubscriptionPreflight(provider) {
     processEnv: process.env,
     processPlatform: process.platform,
     sessionSiteRoot,
+    userSiteRoot,
     dryRun,
   });
 }
@@ -368,7 +340,8 @@ async function loadAgentStartRenderer() {
 }
 
 const runtimeResolution = resolveCarrierRuntimeSelection({
-  carrierValue: carrierInput,
+  carrierValue: legacyCarrierInput,
+  operatorSurfaceValue: operatorSurfaceInput,
   runtimeValue: runtimeInput,
   admittedRuntimeSubstrateKinds: ADMITTED_RUNTIME_SUBSTRATE_KINDS,
   runtimeContractSchema: RUNTIME_CONTRACT_SCHEMA,
@@ -391,7 +364,7 @@ if (intelligenceProviderResolution?.status === 'refused') {
 }
 
 if (!identity) {
-  console.error('Usage: node start-agent.mjs <identity> [--carrier <carrier>] [--runtime <runtime>] [--db <path>] [--json] [--dry-run] [--exec] [--wait] [--yolo] [--enable-native-shell] [--target-site-id <site-id>] [--target-site-root <path>]');
+  console.error('Usage: node start-agent.mjs <identity> [--operator-surface <surface>] [--carrier <legacy-carrier>] [--runtime <runtime>] [--db <path>] [--json] [--dry-run] [--exec] [--wait] [--yolo] [--enable-native-shell] [--target-site-id <site-id>] [--target-site-root <path>]');
   process.exit(1);
 }
 
@@ -510,7 +483,7 @@ function materializeCarrierSessionRecord({ identity, carrier, runtime, startResu
     startResult,
     dryRun,
     pcSiteRoot,
-    userSiteRoot: rootDir,
+    userSiteRoot,
     runtimeContractSchema: RUNTIME_CONTRACT_SCHEMA,
     launchSource,
     workspace: process.cwd(),
@@ -801,7 +774,7 @@ function codexMcpScopeProjection() {
       scope: mcpScope,
       carrier,
       inherited_user_config_possible: false,
-      evidence: 'This carrier adapter receives MCP servers from the launcher-selected Site fabric path instead of reading Codex global config.',
+      evidence: 'This runtime adapter receives MCP servers from the launcher-selected Site fabric path instead of reading Codex global config.',
     };
   }
   const sessionKey = carrierSessionRegistration.carrier_session_id ?? startResult.agent_start_event;
@@ -829,8 +802,39 @@ function mcpToolApprovalStatus() {
   if (carrier !== 'codex') return null;
   return mcpToolApprovalPacket({
     approved: codexMcpServerNames(),
-    note: 'Approves configured Narada MCP tool calls at the Codex carrier layer. Native Codex shell_tool remains disabled by default; shell execution still goes through the policy-aware Narada shell MCP.',
+    note: 'Approves configured Narada MCP tool calls at the Codex runtime adapter layer. Native Codex shell_tool remains disabled by default; shell execution still goes through the policy-aware Narada shell MCP.',
   });
+}
+
+function uniqueStrings(values) {
+  return [...new Set(values.filter((value) => typeof value === 'string' && value.trim()).map((value) => String(value)))];
+}
+
+function mcpAllowedRootsFromFabric(fabric) {
+  const roots = [];
+  for (const server of Object.values(fabric?.servers ?? {})) {
+    const args = Array.isArray(server?.args) ? server.args : [];
+    for (let index = 0; index < args.length; index += 1) {
+      if (args[index] !== '--allowed-root' || index + 1 >= args.length) continue;
+      roots.push(String(args[index + 1]));
+      index += 1;
+    }
+  }
+  return uniqueStrings(roots);
+}
+
+function siteConfigProjection() {
+  return {
+    schema: 'narada.nars.site_config.v1',
+    site_id: targetSiteId,
+    site_root: sessionSiteRoot,
+    narada_root: siteNaradaRoot(sessionSiteRoot),
+    workspace_root: process.cwd(),
+    pc_site_root: pcSiteRoot,
+    mcp_scope: mcpScope,
+    mcp_loci: mcpScopeResolution?.loaded_loci ?? [],
+    allowed_roots: mcpAllowedRootsFromFabric(mcpFabric),
+  };
 }
 
 function buildSpawnArgs(carrierName, identity, carrierSessionRegistration = null) {
@@ -871,209 +875,6 @@ function codexMcpRegistrationStatus(identity, eventId) {
     identity_source: 'carrier_process_environment',
     required_config: 'Stable Codex MCP server entries must whitelist NARADA_AGENT_ID, NARADA_AGENT_START_EVENT_ID, NARADA_CARRIER_SESSION_ID, NARADA_SITE_ROOT, and NARADA_AGENT_CONTEXT_DB via env_vars.',
     mutation_policy: 'Agent startup must not run codex mcp remove/add or write session identity into global config.',
-  };
-}
-
-function startupCommandFromSequence(startupSequence = []) {
-  const firstStep = startupSequence[0];
-  if (!firstStep?.tool) return null;
-  return {
-    name: firstStep.tool,
-    arguments: firstStep.arguments ?? {},
-    display: `${firstStep.tool}(${JSON.stringify(firstStep.arguments ?? {})})`,
-  };
-}
-
-function buildLaunchResultArtifact(result) {
-  const sessionId = result.carrier_session?.carrier_session_id
-    ?? result.carrier_actions?.carrier_session_registration?.carrier_session_id
-    ?? null;
-  const artifactPath = result.launch_result_path
-    ?? (result.session_site_root && result.agent_start_event
-      ? join(result.session_site_root, '.ai', 'runtime', 'agent-start-results', `${result.agent_start_event}.result.json`)
-      : null);
-  return {
-    schema: 'narada.launch_result_artifact.v0',
-    status: result.exec && result.agent_start_event ? 'materialized' : 'planned',
-    artifact_path: artifactPath,
-    schema_ref: result.schema ?? 'narada.agent_start.result.v0',
-    owner_site_root: result.session_site_root ?? result.target_site_root ?? null,
-    carrier_session_id: sessionId,
-    agent_start_event_id: result.agent_start_event ?? null,
-    lifecycle: {
-      retention: 'site_owned',
-      replayable: Boolean(result.agent_start_event),
-      result_file_only: Boolean(result.launch_result_path),
-    },
-    inspector_commands: sessionId ? {
-      session_read: `narada-agent-cli --identity ${result.identity} --session ${sessionId} --session-read`,
-      session_operations: `narada-agent-cli --identity ${result.identity} --session ${sessionId} --session-operations`,
-      session_events: `narada-agent-cli --identity ${result.identity} --session ${sessionId} --session-events --session-events-filter all --session-events-count 20`,
-    } : null,
-    failure_reference: result.status && result.status !== 'success'
-      ? {
-          status: result.status,
-          reason_code: result.reason_code ?? null,
-          reason: result.reason ?? null,
-        }
-      : null,
-  };
-}
-
-function buildRuntimeHealthPosture(result) {
-  const health = result.nars_health ?? null;
-  const events = result.nars_events ?? null;
-  if (!health && !events) return null;
-
-  const summarizeEndpointStatus = (endpoint, availableAtLaunch) => {
-    if (endpoint) return 'materialized';
-    if (availableAtLaunch) return 'pending';
-    return 'projected';
-  };
-
-  return {
-    schema: 'narada.runtime_health_posture.v0',
-    carrier_kind: result.carrier_kind ?? null,
-    runtime_substrate_kind: result.runtime_substrate_kind ?? null,
-    status: result.exec && !result.dry_run ? 'projected_for_runtime' : 'projected_for_launch',
-    dimensions: {
-      health: health ? {
-        status: summarizeEndpointStatus(health.endpoint ?? null, health.endpoint_available_at_launch_materialization),
-        method: health.method ?? null,
-        http_path: health.http_path ?? null,
-        discovery_field: health.discovery_field ?? null,
-        endpoint: health.endpoint ?? null,
-      } : null,
-      events: events ? {
-        status: summarizeEndpointStatus(events.endpoint ?? null, events.endpoint_available_at_launch_materialization),
-        method: events.method ?? null,
-        transport_kind: events.transport_kind ?? null,
-        websocket_path: events.websocket_path ?? null,
-        discovery_field: events.discovery_field ?? null,
-        endpoint: events.endpoint ?? null,
-        supports_replay: Boolean(events.supports_replay),
-        locality: events.locality ?? null,
-      } : null,
-    },
-    projection: {
-      operator_surface_kind: result.carrier_kind ?? null,
-      chat_spam_reduction: true,
-      summary: 'compact_health_projection',
-    },
-  };
-}
-
-function buildLauncherContracts(result) {
-  const runtimeHostKind = result.runtime_substrate_kind ?? result.runtime ?? null;
-  const operatorSurfaceKind = result.nars_launch?.operator_surface_kind ?? result.carrier_kind ?? null;
-  const launchResultArtifact = buildLaunchResultArtifact(result);
-  const runtimeHealthPosture = buildRuntimeHealthPosture(result);
-  const carrierCompatibility = {
-    schema: 'narada.launcher_carrier_compatibility.v0',
-    carrier_kind: result.carrier_kind ?? null,
-    preferred_operator_surface_kind: operatorSurfaceKind,
-    preferred_runtime_host_kind: runtimeHostKind,
-    legacy_aliases: {
-      carrier: 'operator_surface_kind',
-      runtime: 'runtime_substrate_kind',
-      carrier_kind: 'operator_surface_kind',
-      runtime_substrate_kind: 'runtime_host_kind',
-    },
-  };
-  return {
-    schema: 'narada.launcher_contract_bundle.v0',
-    carrier_compatibility: carrierCompatibility,
-    authority_runtime_host_selection: {
-      schema: 'narada.authority_runtime_host_selection.v0',
-      carrier_kind: result.carrier_kind ?? null,
-      operator_surface_kind: operatorSurfaceKind,
-      runtime_host_kind: runtimeHostKind,
-      runtime_substrate_kind: result.runtime_substrate_kind ?? null,
-      runtime_contract_schema: result.runtime_contract_schema ?? null,
-      selection_source: result.runtime_resolution ?? null,
-    },
-    operator_surface_attachment: {
-      schema: 'narada.operator_surface_attachment.v0',
-      carrier_kind: result.carrier_kind ?? null,
-      operator_surface_kind: operatorSurfaceKind,
-      runtime_host_kind: runtimeHostKind,
-      tool_fabric_adapter_kind: result.tool_fabric_adapter_kind ?? null,
-      tool_fabric_source: result.tool_fabric_adapter?.tool_fabric_source ?? null,
-      launch_operator_surface_kind: result.nars_launch?.launch_operator_surface_kind ?? null,
-      attachment_commands: result.nars_launch?.attach_commands ?? null,
-    },
-    runtime_health_posture: runtimeHealthPosture,
-    mcp_fabric_injection_plan: result.mcp_scope ? {
-      schema: 'narada.mcp_fabric_injection_plan.v0',
-      requested_scope: result.mcp_scope.requested ?? null,
-      requested_loci: result.mcp_scope.requested_loci ?? [],
-      admitted_loci: result.mcp_scope.resolution?.loaded_loci ?? [],
-      missing_loci: result.mcp_scope.missing_loci ?? [],
-      injected_server_names: result.mcp_fabric?.server_names ?? [],
-      injected_locus_fabrics: result.mcp_fabric?.locus_fabrics ?? [],
-      isolation: result.mcp_scope.enforcement ? {
-        status: result.mcp_scope.enforcement.status ?? 'planned',
-        codex_home: result.mcp_scope.enforcement.codex_home ?? null,
-        config_path: result.mcp_scope.enforcement.config_path ?? null,
-        inherited_codex_home_allowed: result.mcp_scope.enforcement.inherited_codex_home_allowed ?? null,
-      } : null,
-    } : null,
-    launch_selection_session: {
-      schema: 'narada.launch_selection_session.v0',
-      carrier_kind: result.carrier_kind ?? null,
-      runtime: result.runtime ?? null,
-      runtime_substrate_kind: result.runtime_substrate_kind ?? null,
-      intelligence_provider: result.intelligence_provider ?? null,
-      mcp_scope: result.mcp_scope?.requested ?? null,
-      target_site_root: result.target_site_root ?? null,
-      session_site_root: result.session_site_root ?? null,
-      exec: Boolean(result.exec),
-      dry_run: result.exec === false,
-      wait: Boolean(result.wait),
-      open_request: result.operator_projection_open_request ?? null,
-      launch_result_artifact_path: launchResultArtifact.artifact_path,
-    },
-    intelligence_provider_readiness_check: result.intelligence_provider_resolution ? {
-      schema: 'narada.intelligence_provider_readiness_check.v0',
-      intelligence_provider: result.intelligence_provider ?? null,
-      status: result.intelligence_provider_resolution.status === 'refused'
-        ? 'blocked'
-        : result.intelligence_provider_resolution.credential_present === false
-          ? 'blocked'
-          : 'ready',
-      request_adapter: result.intelligence_provider_resolution.request_adapter ?? null,
-      credential_requirement_kind: result.intelligence_provider_resolution.credential_requirement_kind ?? null,
-      credential_requirement: result.intelligence_provider_resolution.credential_requirement ?? null,
-      credential_present: result.intelligence_provider_resolution.credential_present ?? null,
-      credential_source: result.intelligence_provider_resolution.credential_source ?? null,
-      required_next_step: result.intelligence_provider_resolution.required_next_step ?? null,
-    } : null,
-    operator_terminal_projection_plan: result.nars_launch ? {
-      schema: 'narada.operator_terminal_projection_plan.v0',
-      terminal_kind: result.nars_launch.launch_operator_surface_kind ?? result.carrier_kind ?? null,
-      operator_surface_kind: operatorSurfaceKind,
-      runtime_host_kind: runtimeHostKind,
-      command: result.exec_command ?? null,
-      raw_runtime_args: result.runtime_args ?? null,
-      session_dir: result.nars_launch.session_dir ?? null,
-      control_path: result.nars_launch.control_path ?? null,
-      session_path: result.nars_launch.session_path ?? null,
-      wait_for_enter: Boolean(result.wait),
-      hide_shell: Boolean(result.exec),
-    } : null,
-    launch_result_artifact: launchResultArtifact,
-    operator_projection_open_request: result.operator_projection_open_request ?? null,
-    launch_failure_rendering: result.status && result.status !== 'success' ? {
-      schema: 'narada.launch_failure_rendering.v0',
-      status: result.status,
-      reason_code: result.reason_code ?? result.status,
-      summary: result.reason ?? result.error ?? 'launcher_failure',
-      retryable: Boolean(result.retryable ?? false),
-      mutation_performed: Boolean(result.mutation_performed ?? false),
-      result_path: result.launch_result_path ?? null,
-      repair_command: result.recovery_primary_command ?? result.required_next_step_command ?? null,
-      diagnostics: result.native_shell_exception ?? result.mcp_tool_approval ?? null,
-    } : null,
   };
 }
 
@@ -1230,6 +1031,7 @@ const runtimeEnvironment = carrierSpecificEnvironment(carrier, {
   defaultClaudeCodeCommand: DEFAULT_CLAUDE_CODE_COMMAND,
   defaultClaudeCodeModel: DEFAULT_CLAUDE_CODE_MODEL,
 });
+const siteConfig = siteConfigProjection();
 const { requiredEnvironment, wouldSetEnvironment } = buildCarrierEnvironmentProjection({
   carrierName: carrier,
   startResult,
@@ -1244,6 +1046,7 @@ const { requiredEnvironment, wouldSetEnvironment } = buildCarrierEnvironmentProj
   environmentSiteRoot,
   workspaceRoot,
   dbPath,
+  siteConfig,
 });
 const narsLaunch = buildNarsLaunchPacket(carrier, {
   processExecPath: process.execPath,
@@ -1258,12 +1061,15 @@ const output = {
   ...startResult,
   schema: 'narada.agent_start.result.v0',
   runtime_contract_schema: RUNTIME_CONTRACT_SCHEMA,
+  operator_surface_kind: carrier,
+  runtime_host_kind: runtime,
   carrier_kind: carrier,
   runtime_substrate_kind: runtime,
   target_site_id: targetSiteId,
   target_site_root: targetSiteRoot,
   session_site_root: sessionSiteRoot,
   pc_site_root: pcSiteRoot,
+  site_config: siteConfig,
   site_tools_root: candidateSiteToolsRoot,
   launch_source: launchSource,
   wait: waitFlag,
@@ -1384,6 +1190,7 @@ const processEnvironment = {
   NARADA_SITE_ROOT: environmentSiteRoot,
   NARADA_WORKSPACE_ROOT: workspaceRoot,
   NARADA_AGENT_CONTEXT_DB: dbPath,
+  NARADA_SITE_CONFIG: JSON.stringify(siteConfig),
   ...agentTuiEnvironment,
   ...(codexMcpScope.status === 'materialized' ? { CODEX_HOME: codexMcpScope.codex_home, CODEX_CONFIG_DIR: codexMcpScope.codex_home } : {}),
 };
