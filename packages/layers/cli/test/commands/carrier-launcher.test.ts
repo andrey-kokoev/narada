@@ -23,7 +23,7 @@ import {
 import { getSchedulerSiteDaemonStatus, runAgentStartCommand } from '../../src/lib/launcher-runtime.js';
 import type { CommandContext } from '../../src/lib/command-wrapper.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
-import { registerCarrierCommands } from '../../src/commands/carrier-register.js';
+import { registerOperatorSurfaceCommands } from '../../src/commands/operator-surface-register.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const naradaProperRoot = resolve(__dirname, '..', '..', '..', '..', '..');
@@ -119,15 +119,13 @@ afterEach(async () => {
 });
 
 describe('carrier launcher CLI commands', () => {
-  it('presents carrier CLI as a compatibility surface in operator-facing help', () => {
+  it('admits target site id on the canonical operator-surface runtime start command', () => {
     const program = new Command();
-    registerCarrierCommands(program);
-    const carrier = program.commands.find((command) => command.name() === 'carrier');
-    expect(carrier?.description()).toBe('Compatibility runtime launch/session commands; prefer operator-surface runtime start for new NARS launches');
-    const start = carrier?.commands.find((command) => command.name() === 'start');
-    expect(start?.description()).toBe('Compatibility alias for operator-surface runtime start');
-    expect(start?.helpInformation()).toContain('Compatibility alias for operator surface');
-    expect(start?.helpInformation()).not.toContain('Carrier/operator surface');
+    registerOperatorSurfaceCommands(program);
+    const operatorSurface = program.commands.find((command) => command.name() === 'operator-surface');
+    const runtime = operatorSurface?.commands.find((command) => command.name() === 'runtime');
+    const start = runtime?.commands.find((command) => command.name() === 'start');
+    expect(start?.helpInformation()).toContain('--target-site-id <id>');
   });
 
   it('reads latest carrier launch result and control path evidence', async () => {
@@ -219,7 +217,8 @@ describe('carrier launcher CLI commands', () => {
     expect(start.exitCode).toBe(ExitCode.GENERAL_ERROR);
     expect((start.result as { mutation_performed: boolean }).mutation_performed).toBe(false);
     expect((start.result as { status: string }).status).toBe('not_available');
-    expect((start.result as { agent_start: { command: string[] } }).agent_start.command).toContain('--carrier');
+    expect((start.result as { agent_start: { command: string[] } }).agent_start.command).toContain('--operator-surface');
+    expect((start.result as { agent_start: { command: string[] } }).agent_start.command).not.toContain('--carrier');
 
     const siteLoop = await siteLoopStatusCommand({
       siteRoot,
@@ -256,6 +255,7 @@ describe('carrier launcher CLI commands', () => {
     try {
       start = await carrierStartCommand({
         siteRoot,
+        targetSiteId: 'narada-proper',
         workspaceRoot,
         agent: 'narada.architect',
         carrier: 'agent-cli',
@@ -271,9 +271,16 @@ describe('carrier launcher CLI commands', () => {
     expect(start.exitCode, JSON.stringify(start.result)).toBe(ExitCode.SUCCESS);
     expect((start.result as { workspace_root: string }).workspace_root).toBe(workspaceRoot);
     expect((start.result as { intelligence_provider: string }).intelligence_provider).toBe('codex-subscription');
+    expect((start.result as { operator_surface_kind: string }).operator_surface_kind).toBe('agent-cli');
+    expect((start.result as { runtime_host_kind: string }).runtime_host_kind).toBe('narada-agent-runtime-server');
+    expect((start.result as { target_site_id: string }).target_site_id).toBe('narada-proper');
     const agentStart = (start.result as { agent_start: { command: string[]; result_handoff: string; parsed_result: unknown } }).agent_start;
     expect(agentStart.command).toContain(agentStartPath);
+    expect(agentStart.command).toContain('--operator-surface');
+    expect(agentStart.command).not.toContain('--carrier');
     expect(agentStart.command).toContain('--json-output-file');
+    expect(agentStart.command).toContain('--target-site-id');
+    expect(agentStart.command).toContain('narada-proper');
     expect(agentStart.command).toContain('--intelligence-provider');
     expect(agentStart.command).toContain('codex-subscription');
     expect(agentStart.result_handoff).toBe('json_output_file');

@@ -32,7 +32,6 @@ import { registerObservationCommands } from './commands/observation-register.js'
 import { registerOpsKitCommands } from './commands/ops-kit-register.js';
 import { registerInboxCommands } from './commands/inbox-register.js';
 import { registerAdmissionCommands } from './commands/admission-register.js';
-import { registerCarrierCommands } from './commands/carrier-register.js';
 import { registerNarsCommands } from './commands/nars-register.js';
 import { registerAgentWebUiCommands } from './commands/agent-web-ui-register.js';
 import { registerCarrierActionsCommands } from './commands/carrier-actions-register.js';
@@ -122,7 +121,6 @@ registerPostureCommands(program);
 registerObservationCommands(program);
 registerInboxCommands(program);
 registerAdmissionCommands(program);
-registerCarrierCommands(program);
 registerNarsCommands(program);
 registerAgentWebUiCommands(program);
 registerCarrierActionsCommands(program);

@@ -2,9 +2,11 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { readFile, writeFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 import { startOperatorTerminal } from '@narada2/process-launch-posture';
+import { executeOperatorProjectionOpenRequest } from '@narada2/process-launch-posture';
 import { join, resolve } from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
+import { createServer, type IncomingMessage, type ServerResponse, type Server } from 'node:http';
 import * as prompts from '@clack/prompts';
 import { commandResultError, type CommandContext } from '../lib/command-wrapper.js';
 import { formattedResult, type CliFormat } from '../lib/cli-output.js';
@@ -14,6 +16,7 @@ import {
   defaultRuntimeForCarrier,
   resolveCarrierRuntimeSelection,
 } from '@narada2/carrier-runtime-contract/carrier-runtime-selection';
+import { explainMcpCommand as explainMcpAuthorityCommand } from './launcher-mcp-authority.js';
 
 const requireFromLauncherCommand = createRequire(import.meta.url);
 const providerRegistry = loadProviderRegistry();
@@ -124,13 +127,13 @@ export interface WorkspaceLaunchPlanOptions {
   site?: string[];
   configPath?: string[];
   registryPath?: string;
-  carrier?: string;
   operatorSurface?: string;
   runtime?: string;
   intelligenceProvider?: string;
   mcpScope?: string;
   cloudflareApiBaseUrl?: string;
   interactiveSelection?: boolean;
+  interactiveSelectionUi?: boolean;
   defaultInteractiveSelection?: boolean;
   resultPath?: string;
   suppressResultOutput?: boolean;
@@ -141,9 +144,9 @@ export interface WorkspaceLaunchPlanOptions {
   format?: CliFormat;
 }
 
-function resolveWorkspaceCarrierRuntimeSelection(carrier: string | undefined, operatorSurface: string | undefined, runtime: string): { carrier_kind: string; operator_surface_kind: string; runtime_substrate_kind: string; runtime_host_kind: string } {
+function resolveWorkspaceCarrierRuntimeSelection(operatorSurface: string | undefined, runtime: string): { carrier_kind: string; operator_surface_kind: string; runtime_substrate_kind: string; runtime_host_kind: string } {
   const selection = resolveCarrierRuntimeSelection({
-    carrierValue: carrier,
+    carrierValue: operatorSurface,
     operatorSurfaceValue: operatorSurface,
     runtimeValue: runtime,
     admittedRuntimeSubstrateKinds: ['kimi', 'codex', 'narada-agent-runtime-server', 'pi', 'claude-code', 'opencode'],
@@ -365,34 +368,9 @@ function sameStringSet(left: string[], right: string[]): boolean {
 
 export async function explainMcpCommand(
   options: ExplainMcpOptions,
-  _context: CommandContext,
+  context: CommandContext,
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
-  const siteResolution = await resolveExplainSiteRoot(options);
-  const siteRoot = siteResolution.site_root;
-  const fabric = readRuntimeMcpFabric(siteRoot, options.server ?? null);
-  const projection = readProjectionRegistration(siteRoot, options.server ?? null);
-  const comparison = compareProjectionToRuntimeFabric(fabric.servers, projection.servers);
-  const fabricFiles = Array.isArray(fabric.files) ? fabric.files.filter(isRecord) : [];
-  const result = {
-    schema: 'narada.launcher.mcp_authority_explanation.v1',
-    status: comparison.security_sensitive_mismatch_count === 0 ? 'coherent' : 'projection_drift',
-    mutation_performed: false,
-    site: siteResolution,
-    authority_boundary: {
-      runtime_authoritative_fabric: fabric.mcp_dir,
-      runtime_authoritative_files: fabricFiles.map((file) => file.path),
-      projection_registration: projection.path,
-      projection_runtime_authoritative: false,
-      rule: 'For launcher/NARS runtime behavior, .ai/mcp/*.json is authoritative. .narada/capabilities/mcp-registration.json is a registry/projection and must not be used as runtime evidence unless the launch artifact names it.',
-    },
-    runtime_fabric: fabric,
-    projection_registration: projection,
-    comparison,
-  };
-  return {
-    exitCode: ExitCode.SUCCESS,
-    result: formattedResult(result, renderExplainMcpHuman(result), options.format ?? 'auto'),
-  };
+  return explainMcpAuthorityCommand(options, context);
 }
 
 export interface ExplainMcpOptions {
@@ -454,6 +432,10 @@ export interface WorkspaceLaunchRecord {
 export interface WorkspaceLaunchAgentPlan extends WorkspaceLaunchRecord {
   operator_surface_kind: string;
   runtime_host_kind: string;
+  launch_operator_surface: string;
+  launch_operator_surfaces: string[];
+  launch_runtime_host: string;
+  launch_runtime_hosts: string[];
   launch_carrier: string;
   launch_runtime: string;
   launch_carriers: string[];
@@ -484,23 +466,28 @@ export async function workspaceLaunchPlanCommand(
     for (const plan of plans) {
       const smoke = await carrierStartCommand({
         siteRoot: plan.site_root,
+        targetSiteId: plan.site,
         workspaceRoot: plan.workspace_root ?? undefined,
         agent: plan.agent,
         carrier: plan.launch_carrier,
+        runtime: plan.launch_runtime_host,
         intelligenceProvider: plan.intelligence_provider ?? undefined,
         mcpScope: plan.mcp_scope,
         dryRun: true,
         enableNativeShell: plan.enable_native_shell,
         format: 'json',
       }, context);
+      const operatorSurfaceRuntimeStart = smoke.result;
       agents.push({
         agent: plan.agent,
         site: plan.site,
+        operator_surface: plan.launch_operator_surface,
         carrier: plan.launch_carrier,
         runtime: plan.launch_runtime,
         status: smoke.exitCode === ExitCode.SUCCESS ? 'passed' : 'failed',
         plan,
-        carrier_start: smoke.result,
+        operator_surface_runtime_start: operatorSurfaceRuntimeStart,
+        operator_surface_start: operatorSurfaceRuntimeStart,
       });
     }
     const failed = agents.filter((agent) => agent.status !== 'passed');
@@ -537,7 +524,8 @@ export async function workspaceLaunchPlanCommand(
     status: 'planned',
     mutation_performed: false,
     mode,
-    interactive_selection: resolvedOptions.interactiveSelection === true,
+    interactive_selection: resolvedOptions.interactiveSelection === true || resolvedOptions.interactiveSelectionUi === true,
+    interactive_selection_surface: resolvedOptions.interactiveSelectionUi === true ? 'browser' : (resolvedOptions.interactiveSelection === true ? 'terminal' : null),
     count: plans.length,
     windows_terminal_invoked: false,
     registry_paths: registryPaths,
@@ -611,28 +599,17 @@ async function resolveInteractiveSelectionOptions(
   records: WorkspaceLaunchRecord[],
   options: WorkspaceLaunchPlanOptions,
 ): Promise<WorkspaceLaunchPlanOptions> {
+  if (options.interactiveSelectionUi) return resolveInteractiveSelectionUiOptions(records, options);
   if (!options.interactiveSelection) return options;
   if (!process.stdin.isTTY || !process.stdout.isTTY) {
     throw new Error('interactive_selection_requires_tty: --interactive-selection requires an interactive terminal');
   }
 
   const siteChoices = unique(records.map((record) => record.site));
-  const carrierChoices = unique([
-    'registry default',
-    ...records.map((record) => record.carrier),
-    'agent-cli',
-    'agent-web-ui',
-    'codex',
-    'kimi',
-    'pi',
-    'claude-code',
-    'opencode',
-  ]);
   const runtimeChoices = unique([
     'registry default',
     ...records.map((record) => record.runtime),
     'narada-agent-runtime-server',
-    'nars',
     'codex',
     'kimi',
     'pi',
@@ -660,14 +637,34 @@ async function resolveInteractiveSelectionOptions(
   });
   if (prompts.isCancel(selectedRoles)) throw new Error('interactive_selection_cancelled');
 
+  const selectedRoleValues = selectedRoles as string[];
+  const selectedRecords = selectLaunchRecords(records, {
+    ...options,
+    all: true,
+    site: selectedSiteValues,
+    role: selectedRoleValues,
+  });
+  const carrierChoices = unique([
+    'registry default',
+    ...selectedRecords.map((record) => record.carrier),
+    'agent-cli',
+    'agent-web-ui',
+    'codex',
+    'kimi',
+    'pi',
+    'claude-code',
+    'opencode',
+  ]);
+  const registryDefaultSurfaceLabel = registryDefaultOperatorSurfaceLabel(selectedRecords);
+
   const selectedCarriers = await prompts.multiselect({
     message: 'Select Operator Surface(s)',
     options: carrierChoices.map((carrier) => ({
       value: carrier,
-      label: carrier,
+      label: carrier === 'registry default' ? registryDefaultSurfaceLabel : carrier,
       hint: carrier === 'registry default' ? 'use each registry entry value' : undefined,
     })),
-    initialValues: initialOperatorSurfaceValues(carrierChoices, options.operatorSurface ?? options.carrier),
+    initialValues: initialOperatorSurfaceValues(carrierChoices, options.operatorSurface),
     required: true,
   });
   if (prompts.isCancel(selectedCarriers)) throw new Error('interactive_selection_cancelled');
@@ -683,18 +680,10 @@ async function resolveInteractiveSelectionOptions(
   });
   if (prompts.isCancel(selectedRuntime)) throw new Error('interactive_selection_cancelled');
 
-  const selectedRoleValues = selectedRoles as string[];
   const selectedCarrierValues = normalizeInteractiveOperatorSurfaceValues(selectedCarriers as string[]);
   const providerOperatorSurface = selectedCarrierValues.includes('agent-cli') ? 'agent-cli' : (selectedCarrierValues[0] ?? 'registry default');
-  const selectedRecords = selectLaunchRecords(records, {
-    ...options,
-    all: true,
-    site: selectedSiteValues,
-    role: selectedRoleValues,
-  });
   const selectedProvider = await selectInteractiveIntelligenceProvider({
     records: selectedRecords,
-    carrier: undefined,
     operatorSurface: providerOperatorSurface,
     runtime: selectedRuntime as string,
     current: options.intelligenceProvider,
@@ -705,11 +694,272 @@ async function resolveInteractiveSelectionOptions(
     all: false,
     site: selectedSiteValues,
     role: selectedRoleValues,
-    carrier: selectedCarrierValues.includes('registry default') ? undefined : selectedCarrierValues.join(','),
-    operatorSurface: undefined,
+    operatorSurface: selectedCarrierValues.includes('registry default') ? undefined : selectedCarrierValues.join(','),
     runtime: selectedRuntime === 'registry default' ? undefined : selectedRuntime,
     intelligenceProvider: selectedProvider === 'registry default' ? undefined : selectedProvider,
   };
+}
+
+async function resolveInteractiveSelectionUiOptions(
+  records: WorkspaceLaunchRecord[],
+  options: WorkspaceLaunchPlanOptions,
+): Promise<WorkspaceLaunchPlanOptions> {
+  const selection = await runWorkspaceLaunchSelectionUi(records, options);
+  return {
+    ...options,
+    all: false,
+    site: selection.site,
+    role: selection.role,
+    operatorSurface: selection.operatorSurface.includes('registry default') ? undefined : selection.operatorSurface.join(','),
+    runtime: selection.runtime === 'registry default' ? undefined : selection.runtime,
+    intelligenceProvider: selection.intelligenceProvider === 'registry default' ? undefined : selection.intelligenceProvider,
+  };
+}
+
+interface WorkspaceLaunchBrowserSelection {
+  site: string[];
+  role: string[];
+  operatorSurface: string[];
+  runtime: string;
+  intelligenceProvider: string;
+}
+
+async function runWorkspaceLaunchSelectionUi(
+  records: WorkspaceLaunchRecord[],
+  options: WorkspaceLaunchPlanOptions,
+): Promise<WorkspaceLaunchBrowserSelection> {
+  const host = '127.0.0.1';
+  const port = 0;
+  let server: Server | null = null;
+  let settled = false;
+
+  const pageModel = buildWorkspaceLaunchSelectionUiModel(records, options);
+  const html = buildWorkspaceLaunchSelectionHtml(pageModel);
+
+  function jsonResponse(res: ServerResponse, status: number, payload: unknown): void {
+    const body = JSON.stringify(payload);
+    res.writeHead(status, { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) });
+    res.end(body);
+  }
+
+  async function readBody(req: IncomingMessage): Promise<string> {
+    const chunks: Buffer[] = [];
+    for await (const chunk of req) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    return Buffer.concat(chunks).toString('utf8');
+  }
+
+  const selectionPromise = new Promise<WorkspaceLaunchBrowserSelection>((resolveSelection, rejectSelection) => {
+    server = createServer((req, res) => {
+      void (async () => {
+        const url = new URL(req.url ?? '/', `http://${req.headers.host ?? `${host}:0`}`);
+        if (req.method === 'GET' && url.pathname === '/') {
+          res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Content-Length': Buffer.byteLength(html) });
+          res.end(html);
+          return;
+        }
+        if (req.method === 'POST' && url.pathname === '/submit') {
+          const payload = JSON.parse(await readBody(req)) as Partial<WorkspaceLaunchBrowserSelection>;
+          const selection = normalizeWorkspaceLaunchBrowserSelection(payload);
+          settled = true;
+          jsonResponse(res, 200, { status: 'accepted' });
+          resolveSelection(selection);
+          return;
+        }
+        if (req.method === 'POST' && url.pathname === '/cancel') {
+          settled = true;
+          jsonResponse(res, 200, { status: 'cancelled' });
+          rejectSelection(new Error('interactive_selection_cancelled'));
+          return;
+        }
+        jsonResponse(res, 404, { error: 'not_found' });
+      })().catch((error) => {
+        if (!res.headersSent) jsonResponse(res, 500, { error: error instanceof Error ? error.message : String(error) });
+      });
+    });
+    server.on('error', rejectSelection);
+  });
+
+  const url = await new Promise<string>((resolveUrl, rejectUrl) => {
+    server!.listen(port, host, () => {
+      const address = server!.address();
+      const actualPort = typeof address === 'object' && address !== null ? address.port : port;
+      resolveUrl(`http://${host}:${actualPort}`);
+    });
+    server!.on('error', rejectUrl);
+  });
+
+  console.log(`Narada launcher selection UI: ${url}`);
+  await executeOperatorProjectionOpenRequest({
+    projection_kind: 'browser_url',
+    target_ref: url,
+    purpose: 'workspace_launch_interactive_selection_ui',
+    caller: { package: '@narada2/cli', command: 'launcher workspace-launch', module: 'commands/launcher' },
+    mode: 'execute',
+    policy: { allow_visible_host_effect: true },
+  });
+
+  try {
+    return await Promise.race([
+      selectionPromise,
+      new Promise<WorkspaceLaunchBrowserSelection>((_, rejectTimeout) => {
+        setTimeout(() => {
+          if (!settled) rejectTimeout(new Error('interactive_selection_ui_timeout'));
+        }, 10 * 60 * 1000);
+      }),
+    ]);
+  } finally {
+    await new Promise<void>((resolveClose) => server?.close(() => resolveClose()) ?? resolveClose());
+  }
+}
+
+function normalizeWorkspaceLaunchBrowserSelection(payload: Partial<WorkspaceLaunchBrowserSelection>): WorkspaceLaunchBrowserSelection {
+  const site = stringArray(payload.site).filter(Boolean);
+  const role = stringArray(payload.role).filter(Boolean);
+  const operatorSurface = normalizeInteractiveOperatorSurfaceValues(stringArray(payload.operatorSurface).filter(Boolean));
+  const runtime = nonEmpty(payload.runtime) ?? 'registry default';
+  const intelligenceProvider = nonEmpty(payload.intelligenceProvider) ?? 'registry default';
+  if (site.length === 0) throw new Error('interactive_selection_ui_site_required');
+  if (role.length === 0) throw new Error('interactive_selection_ui_role_required');
+  if (operatorSurface.length === 0) throw new Error('interactive_selection_ui_operator_surface_required');
+  return { site, role, operatorSurface, runtime, intelligenceProvider };
+}
+
+function buildWorkspaceLaunchSelectionUiModel(records: WorkspaceLaunchRecord[], options: WorkspaceLaunchPlanOptions): Record<string, unknown> {
+  const siteChoices = unique(records.map((record) => record.site));
+  const initialSites = nonEmptyStringArray(options.site);
+  const effectiveSites = initialSites.length > 0 ? initialSites : (siteChoices[0] ? [siteChoices[0]] : []);
+  const roleChoices = roleChoicesForSelectedSites(records, effectiveSites);
+  const initialRoles = initialRoleValuesForInteractiveSelection(roleChoices, options.role);
+  const effectiveRoles = initialRoles.length > 0 ? initialRoles : (roleChoices[0] ? [roleChoices[0]] : []);
+  const selectedRecords = selectLaunchRecords(records, { ...options, all: true, site: effectiveSites, role: effectiveRoles });
+  const operatorSurfaceChoices = unique([
+    'registry default',
+    ...selectedRecords.map((record) => record.carrier),
+    'agent-cli',
+    'agent-web-ui',
+    'codex',
+    'kimi',
+    'pi',
+    'claude-code',
+    'opencode',
+  ]);
+  const runtimeChoices = unique([
+    'registry default',
+    ...records.map((record) => record.runtime),
+    'narada-agent-runtime-server',
+    'codex',
+    'kimi',
+    'pi',
+    'claude-code',
+    'opencode',
+  ]);
+  return {
+    records,
+    siteChoices,
+    initialSites: effectiveSites,
+    initialRoles: effectiveRoles,
+    initialOperatorSurfaces: initialOperatorSurfaceValues(operatorSurfaceChoices, options.operatorSurface),
+    initialRuntime: options.runtime ?? 'registry default',
+    initialIntelligenceProvider: options.intelligenceProvider ?? 'registry default',
+    providerChoices: intelligenceProviderChoices(),
+  };
+}
+
+function buildWorkspaceLaunchSelectionHtml(model: Record<string, unknown>): string {
+  const json = JSON.stringify(model).replace(/</g, '\\u003c');
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Narada Workspace Launch</title>
+  <style>
+    :root { color-scheme: light dark; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    body { margin: 0; background: Canvas; color: CanvasText; }
+    main { max-width: 880px; margin: 0 auto; padding: 28px; }
+    h1 { font-size: 22px; margin: 0 0 20px; }
+    fieldset { border: 1px solid color-mix(in srgb, CanvasText 18%, transparent); border-radius: 8px; margin: 0 0 18px; padding: 14px 16px; }
+    legend { padding: 0 6px; font-weight: 650; }
+    label { display: flex; gap: 10px; align-items: center; padding: 7px 0; }
+    select { width: min(100%, 420px); padding: 8px; }
+    .actions { display: flex; gap: 12px; margin-top: 22px; }
+    button { padding: 9px 14px; border-radius: 7px; border: 1px solid color-mix(in srgb, CanvasText 25%, transparent); background: ButtonFace; color: ButtonText; cursor: pointer; }
+    button.primary { background: Highlight; color: HighlightText; border-color: Highlight; }
+    .hint { color: color-mix(in srgb, CanvasText 68%, transparent); font-size: 13px; margin-top: 4px; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Narada Workspace Launch</h1>
+    <form id="form">
+      <fieldset><legend>Sites</legend><div id="sites"></div></fieldset>
+      <fieldset><legend>Roles</legend><div id="roles"></div></fieldset>
+      <fieldset><legend>Operator Surfaces</legend><div id="surfaces"></div><div class="hint">Explicit choices override registry default.</div></fieldset>
+      <fieldset><legend>Runtime</legend><select id="runtime"></select></fieldset>
+      <fieldset><legend>Intelligence Provider</legend><select id="provider"></select></fieldset>
+      <div class="actions"><button class="primary" type="submit">Launch</button><button id="cancel" type="button">Cancel</button></div>
+    </form>
+  </main>
+  <script>
+    const model = ${json};
+    const unique = values => [...new Set(values.filter(Boolean))];
+    const selectedSites = new Set(model.initialSites || []);
+    const selectedRoles = new Set(model.initialRoles || []);
+    const selectedSurfaces = new Set(model.initialOperatorSurfaces || ['registry default']);
+    const recordsForSites = () => model.records.filter(r => selectedSites.has(r.site));
+    const recordsForSitesRoles = () => recordsForSites().filter(r => selectedRoles.has(r.role));
+    function checkbox(container, value, checked, onChange, label = value) {
+      const row = document.createElement('label');
+      const input = document.createElement('input');
+      input.type = 'checkbox'; input.value = value; input.checked = checked;
+      input.addEventListener('change', () => onChange(input));
+      row.append(input, document.createTextNode(label)); container.append(row);
+    }
+    function renderSites() {
+      const el = document.getElementById('sites'); el.textContent = '';
+      model.siteChoices.forEach(site => checkbox(el, site, selectedSites.has(site), input => { input.checked ? selectedSites.add(site) : selectedSites.delete(site); renderRoles(); renderSurfaces(); }));
+    }
+    function renderRoles() {
+      const choices = unique(recordsForSites().map(r => r.role));
+      for (const role of [...selectedRoles]) if (!choices.includes(role)) selectedRoles.delete(role);
+      if (selectedRoles.size === 0 && choices.includes('resident')) selectedRoles.add('resident');
+      const el = document.getElementById('roles'); el.textContent = '';
+      choices.forEach(role => checkbox(el, role, selectedRoles.has(role), input => { input.checked ? selectedRoles.add(role) : selectedRoles.delete(role); renderSurfaces(); }));
+    }
+    function renderSurfaces() {
+      const records = recordsForSitesRoles();
+      const defaults = unique(records.map(r => r.operator_surface));
+      const choices = unique(['registry default', ...records.map(r => r.carrier), 'agent-cli', 'agent-web-ui', 'codex', 'kimi', 'pi', 'claude-code', 'opencode']);
+      const el = document.getElementById('surfaces'); el.textContent = '';
+      choices.forEach(surface => {
+        const label = surface === 'registry default' && defaults.length ? 'registry default (' + defaults.join(', ') + ')' : surface;
+        checkbox(el, surface, selectedSurfaces.has(surface), input => { input.checked ? selectedSurfaces.add(surface) : selectedSurfaces.delete(surface); }, label);
+      });
+    }
+    function renderSelect(id, values, selected) {
+      const el = document.getElementById(id); el.textContent = '';
+      values.forEach(value => { const option = document.createElement('option'); option.value = value; option.textContent = value; option.selected = value === selected; el.append(option); });
+    }
+    renderSites(); renderRoles(); renderSurfaces();
+    renderSelect('runtime', unique(['registry default', ...model.records.map(r => r.runtime), 'narada-agent-runtime-server', 'codex', 'kimi', 'pi', 'claude-code', 'opencode']), model.initialRuntime || 'registry default');
+    renderSelect('provider', (model.providerChoices || []).map(choice => choice.value), model.initialIntelligenceProvider || 'registry default');
+    document.getElementById('form').addEventListener('submit', async event => {
+      event.preventDefault();
+      const operatorSurface = [...selectedSurfaces];
+      const explicit = operatorSurface.filter(value => value !== 'registry default');
+      const payload = { site: [...selectedSites], role: [...selectedRoles], operatorSurface: explicit.length ? explicit : operatorSurface, runtime: document.getElementById('runtime').value, intelligenceProvider: document.getElementById('provider').value };
+      const response = await fetch('/submit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      if (response.ok) document.body.innerHTML = '<main><h1>Selection submitted</h1><p>You can return to the terminal.</p></main>';
+    });
+    document.getElementById('cancel').addEventListener('click', async () => { await fetch('/cancel', { method: 'POST' }); document.body.innerHTML = '<main><h1>Cancelled</h1></main>'; });
+  </script>
+</body>
+</html>`;
+}
+
+export function registryDefaultOperatorSurfaceLabel(records: WorkspaceLaunchRecord[]): string {
+  const defaults = unique(records.map((record) => record.operator_surface).filter(Boolean));
+  return defaults.length > 0 ? `registry default (${defaults.join(', ')})` : 'registry default';
 }
 
 export function initialOperatorSurfaceValues(choices: string[], current?: string): string[] {
@@ -720,24 +970,24 @@ export function initialOperatorSurfaceValues(choices: string[], current?: string
 
 export function normalizeInteractiveOperatorSurfaceValues(values: string[]): string[] {
   const normalized = unique(values);
+  const explicit = normalized.filter((value) => value !== 'registry default');
+  if (explicit.length > 0) return explicit;
   if (normalized.includes('registry default')) return ['registry default'];
   return normalized;
 }
 
 async function selectInteractiveIntelligenceProvider({
   records,
-  carrier,
   operatorSurface,
   runtime,
   current,
 }: {
   records: WorkspaceLaunchRecord[];
-  carrier?: string;
   operatorSurface: string;
   runtime: string;
   current?: string;
 }): Promise<string | undefined> {
-  const choices = intelligenceProviderChoicesForLaunchSelection({ records, carrier, operatorSurface, runtime });
+  const choices = intelligenceProviderChoicesForLaunchSelection({ records, operatorSurface, runtime });
   if (choices.length <= 1) return undefined;
   const selectedProvider = await prompts.select({
     message: 'Select Intelligence Provider',
@@ -754,19 +1004,16 @@ async function selectInteractiveIntelligenceProvider({
 
 export function intelligenceProviderChoicesForLaunchSelection({
   records,
-  carrier,
   operatorSurface,
   runtime,
 }: {
   records: WorkspaceLaunchRecord[];
-  carrier?: string;
   operatorSurface: string;
   runtime: string;
 }): Array<{ value: string; label: string; hint?: string }> {
   const narsSurfaceRecords = records.filter((record) => {
     const selection = resolveWorkspaceCarrierRuntimeSelection(
-      carrier ?? record.carrier,
-      operatorSurface === 'registry default' ? undefined : operatorSurface,
+      operatorSurface === 'registry default' ? record.operator_surface : operatorSurface,
       runtime === 'registry default' ? record.runtime : runtime,
     );
     return selection.carrier_kind === 'agent-cli' || selection.carrier_kind === 'agent-web-ui';
@@ -898,7 +1145,7 @@ function normalizeAgentRecord(registry: RawLaunchRegistry, agent: RawAgentRecord
   const launcher = nonEmpty(agent.Launcher) ?? nonEmpty(registry.Launcher);
   const launcherPath = nonEmpty(agent.LauncherPath) ?? nonEmpty(registry.LauncherPath)
     ?? (launcher ? join(naradaRoot, launcher) : join(naradaRoot, 'narada-andrey.ps1'));
-  const operatorSurface = nonEmpty(agent.OperatorSurface) ?? nonEmpty(registry.OperatorSurface) ?? nonEmpty(agent.Carrier) ?? nonEmpty(registry.Carrier) ?? 'codex';
+  const operatorSurface = nonEmpty(agent.OperatorSurface) ?? nonEmpty(registry.OperatorSurface) ?? 'codex';
   const carrier = operatorSurface;
   const runtime = nonEmpty(agent.Runtime) ?? nonEmpty(registry.Runtime) ?? defaultRuntimeForCarrier(carrier);
   return {
@@ -967,12 +1214,11 @@ function recordMatchesSiteSelectors(record: WorkspaceLaunchRecord, siteSelectors
 }
 
 function buildAgentPlan(record: WorkspaceLaunchRecord, options: WorkspaceLaunchPlanOptions): WorkspaceLaunchAgentPlan {
-  const operatorSurfaceInput = options.operatorSurface;
-  const carrierInput = options.carrier ?? record.operator_surface ?? record.carrier;
-  const launchCarriers = operatorSurfaceInput ? normalizeCarrierList(operatorSurfaceInput) : normalizeCarrierList(carrierInput);
-  const primaryCarrierInput = launchCarriers.includes('agent-cli') ? 'agent-cli' : launchCarriers[0] ?? carrierInput;
+  const operatorSurfaceInput = options.operatorSurface ?? record.operator_surface;
+  const launchCarriers = normalizeCarrierList(operatorSurfaceInput);
+  const primaryCarrierInput = launchCarriers.includes('agent-cli') ? 'agent-cli' : launchCarriers[0] ?? operatorSurfaceInput;
   const runtimeInput = options.runtime ?? record.runtime;
-  const carrierRuntimeSelection = resolveWorkspaceCarrierRuntimeSelection(primaryCarrierInput, operatorSurfaceInput, runtimeInput);
+  const carrierRuntimeSelection = resolveWorkspaceCarrierRuntimeSelection(primaryCarrierInput, runtimeInput);
   const launchCarrier = carrierRuntimeSelection.carrier_kind;
   const operatorSurfaceKind = carrierRuntimeSelection.operator_surface_kind;
   const launchRuntime = carrierRuntimeSelection.runtime_substrate_kind;
@@ -996,6 +1242,7 @@ function buildAgentPlan(record: WorkspaceLaunchRecord, options: WorkspaceLaunchP
     'start', launchCarrier,
     '--site-root', record.site_root,
     '--agent', record.agent,
+    '--target-site-id', record.site,
     '--runtime', launchRuntime,
     '--exec',
   ];
@@ -1029,6 +1276,7 @@ function buildAgentPlan(record: WorkspaceLaunchRecord, options: WorkspaceLaunchP
     'narada', 'operator-surface', 'runtime', 'start', launchCarrier,
     '--site-root', record.site_root,
     '--agent', record.agent,
+    '--target-site-id', record.site,
     '--runtime', launchRuntime,
     '--dry-run',
     '--format', 'json',
@@ -1043,8 +1291,14 @@ function buildAgentPlan(record: WorkspaceLaunchRecord, options: WorkspaceLaunchP
 
   return {
     ...record,
+    operator_surface: operatorSurfaceKind,
+    carrier: launchCarrier,
     operator_surface_kind: operatorSurfaceKind,
     runtime_host_kind: runtimeHostKind,
+    launch_operator_surface: launchCarrier,
+    launch_operator_surfaces: launchCarriers,
+    launch_runtime_host: runtimeHostKind,
+    launch_runtime_hosts: [runtimeHostKind],
     launch_carrier: launchCarrier,
     launch_runtime: launchRuntime,
     launch_carriers: launchCarriers,
