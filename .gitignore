@@ -12,6 +12,7 @@ coverage/
 *.temp
 config.json
 .history
+codex-home/
 .ai/metrics/
 .ai/agents/roster.json
 .ai/publications/

@@ -13,7 +13,7 @@ packages:
   - '../mcp-surfaces/packages/structured-command-mcp'
   - '../mcp-surfaces/packages/mailbox-mcp'
   - '../mcp-surfaces/packages/graph-mail-mcp'
-  - '../mcp-surfaces/packages/mcp-transport'
+  - '../mcp-surfaces/packages/shared/mcp-transport'
   - '../mcp-surfaces/packages/task-governance-core'
   - '../agent-cli'
   - '../agent-tui'
