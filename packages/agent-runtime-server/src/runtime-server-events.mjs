@@ -2,6 +2,33 @@ function isSessionLifecycleEvent(event) {
   return event?.event === 'session_started' || event?.event === 'session_status' || event?.event === 'session_closed';
 }
 
+function formatAgentWebUiLaunchCommand(event) {
+  const eventEndpoint = event?.event_endpoint ? String(event.event_endpoint) : null;
+  if (!eventEndpoint) return null;
+  const parts = ['narada-agent-web-ui', '--event-endpoint', eventEndpoint];
+  const healthEndpoint = event?.health_endpoint ? String(event.health_endpoint) : null;
+  if (healthEndpoint) parts.push('--health-endpoint', healthEndpoint);
+  return parts.join(' ');
+}
+
+export function formatHostStatusEvent(event) {
+  if (!event || event.event !== 'session_started') return [];
+  const launchCommand = formatAgentWebUiLaunchCommand(event);
+  return [
+    `agent-runtime-server: ${event.agent_id ?? 'unknown'}`,
+    `  Session ${event.session_id ?? 'unknown'}`,
+    `  Surface ${event.operator_surface_kind ?? event.launch_operator_surface_kind ?? 'unknown'}`,
+    `  Provider ${event.provider ?? 'unknown'}`,
+    `  Model    ${event.model ?? 'unknown'}`,
+    `  MCP      ${event.mcp_server_count ?? 0} servers, ${event.mcp_operational_state ?? 'unknown'}`,
+    `  Health   ${event.health_endpoint ?? 'not configured'}`,
+    `  Events   ${event.event_endpoint ?? 'not configured'}`,
+    launchCommand
+      ? `  Launch   ${launchCommand}`
+      : '  Input    attach an operator surface such as agent-web-ui',
+  ];
+}
+
 export function formatStartupMcpSummary(event) {
   if (!event || event.event !== 'session_started') return null;
   if (event.mcp_operational_state === 'healthy') return null;
