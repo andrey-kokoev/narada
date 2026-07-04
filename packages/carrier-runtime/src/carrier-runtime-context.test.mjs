@@ -31,6 +31,7 @@ test('buildCarrierRuntimePaths computes canonical paths from siteRoot and sessio
 });
 
 test('createCarrierRuntimeContext leaves codex model unset without explicit model env', () => {
+  const siteRoot = makeTempSiteRoot();
   const originalCodeModel = process.env.CODEX_MODEL;
   const originalNaradaModel = process.env.NARADA_CODEX_MODEL;
   delete process.env.CODEX_MODEL;
@@ -39,9 +40,11 @@ test('createCarrierRuntimeContext leaves codex model unset without explicit mode
     const ctx = createCarrierRuntimeContext({
       identity: 'narada.test',
       session: 'test-session',
+      siteRoot,
     });
     assert.equal(ctx.providerSettings.model, null);
   } finally {
+    cleanupTempSiteRoot(siteRoot);
     if (originalCodeModel !== undefined) process.env.CODEX_MODEL = originalCodeModel;
     else delete process.env.CODEX_MODEL;
     if (originalNaradaModel !== undefined) process.env.NARADA_CODEX_MODEL = originalNaradaModel;
@@ -61,8 +64,16 @@ test('buildCarrierRuntimePaths uses .narada directly when siteRoot basename is .
 });
 
 test('createCarrierRuntimeContext requires identity and session', () => {
-  assert.throws(() => createCarrierRuntimeContext({}), /identity is required/);
-  assert.throws(() => createCarrierRuntimeContext({ identity: 'narada.test' }), /session is required/);
+  const originalSiteRoot = process.env.NARADA_SITE_ROOT;
+  delete process.env.NARADA_SITE_ROOT;
+  try {
+    assert.throws(() => createCarrierRuntimeContext({}), /identity is required/);
+    assert.throws(() => createCarrierRuntimeContext({ identity: 'narada.test' }), /session is required/);
+    assert.throws(() => createCarrierRuntimeContext({ identity: 'narada.test', session: 'test-session' }), /siteRoot is required/);
+  } finally {
+    if (originalSiteRoot !== undefined) process.env.NARADA_SITE_ROOT = originalSiteRoot;
+    else delete process.env.NARADA_SITE_ROOT;
+  }
 });
 
 test('createCarrierRuntimeContext constructs without importing agent-cli globals', () => {
@@ -103,6 +114,17 @@ test('createCarrierRuntimeContext constructs without importing agent-cli globals
     assert.equal(ctx.operationHeartbeatDirectiveInitialDelayMs, 5000);
     assert.equal(ctx.healthUrl, 'http://127.0.0.1:9000/health');
     assert.equal(ctx.eventStreamUrl, 'ws://127.0.0.1:9001/events');
+    assert.deepEqual(ctx.siteConfig, {
+      schema: 'narada.nars.site_config.v1',
+      site_id: 'narada-test-site',
+      site_root: siteRoot,
+      narada_root: join(siteRoot, '.narada'),
+      workspace_root: null,
+      pc_site_root: null,
+      mcp_scope: null,
+      mcp_loci: [],
+      allowed_roots: [],
+    });
 
     assert.equal(ctx.sessionPath, join(siteRoot, '.narada', 'crew', 'nars-sessions', 'test-session', 'session.jsonl'));
     assert.equal(ctx.eventsPath, join(siteRoot, '.narada', 'crew', 'nars-sessions', 'test-session', 'events.jsonl'));
@@ -110,6 +132,41 @@ test('createCarrierRuntimeContext constructs without importing agent-cli globals
     assert.equal(Object.isFrozen(ctx), true);
     assert.equal(Object.isFrozen(ctx.providerSettings), true);
     assert.equal(Object.isFrozen(ctx.displaySettings), true);
+    assert.equal(Object.isFrozen(ctx.siteConfig), true);
+  } finally {
+    cleanupTempSiteRoot(siteRoot);
+  }
+});
+
+test('createCarrierRuntimeContext carries normalized site config from explicit input', () => {
+  const siteRoot = makeTempSiteRoot();
+  try {
+    const ctx = createCarrierRuntimeContext({
+      identity: 'narada.test',
+      session: 'test-session',
+      siteRoot,
+      siteConfig: {
+        site_id: 'narada.custom',
+        site_root: siteRoot,
+        narada_root: join(siteRoot, '.narada'),
+        workspace_root: join(siteRoot, '..'),
+        pc_site_root: 'C:/ProgramData/Narada/sites/pc/test',
+        mcp_scope: 'local-site',
+        mcp_loci: ['local-site', 'local-site'],
+        allowed_roots: [siteRoot, siteRoot, 'D:/code/narada'],
+      },
+    });
+    assert.deepEqual(ctx.siteConfig, {
+      schema: 'narada.nars.site_config.v1',
+      site_id: 'narada.custom',
+      site_root: siteRoot,
+      narada_root: join(siteRoot, '.narada'),
+      workspace_root: join(siteRoot, '..'),
+      pc_site_root: 'C:/ProgramData/Narada/sites/pc/test',
+      mcp_scope: 'local-site',
+      mcp_loci: ['local-site'],
+      allowed_roots: [siteRoot, 'D:/code/narada'],
+    });
   } finally {
     cleanupTempSiteRoot(siteRoot);
   }
@@ -119,6 +176,7 @@ test('createCarrierRuntimeContext uses provided explicit paths when both session
   const ctx = createCarrierRuntimeContext({
     identity: 'narada.test',
     session: 'test-session',
+    siteRoot: '/custom/site-root',
     sessionPath: '/custom/session.jsonl',
     eventsPath: '/custom/events.jsonl',
   });

@@ -362,10 +362,10 @@ test('WebSocket /events subscribes with replay and forwards protocol frames', as
     const inputFrame = JSON.parse(written.trim().split(/\r?\n/).at(-1));
     assert.equal(inputFrame.method, 'conversation.send');
     assert.deepEqual(inputFrame.params, { message: 'run startup sequence', source: 'agent-web-ui' });
-    client.sendJson({ id: 'tools-1', method: 'carrier.command.execute', params: { command: '/tools', value: 'mcp' } });
+    client.sendJson({ id: 'tools-1', method: 'session.command.execute', params: { command: '/tools', value: 'mcp' } });
     await waitForWrittenFrameCount(3);
     const slashFrame = JSON.parse(written.trim().split(/\r?\n/).at(-1));
-    assert.equal(slashFrame.method, 'carrier.command.execute');
+    assert.equal(slashFrame.method, 'session.command.execute');
     assert.deepEqual(slashFrame.params, { command: '/tools', value: 'mcp' });
   } finally {
     client.close();
@@ -516,6 +516,23 @@ test('lifecycle binding is derived from runtime args before session bind', () =>
   });
 });
 
+test('lifecycle binding refuses missing or contradictory launch binding', () => {
+  assert.throws(
+    () => lifecycleBindingFromArgs(['--identity', 'narada.test'], { NARADA_SITE_ROOT: 'D:/code/narada.test' }),
+    /missing_nars_binding:session_id/,
+  );
+  assert.throws(
+    () => lifecycleBindingFromArgs(['--identity', 'narada.test', '--session', 'runtime-package-test'], {}),
+    /missing_nars_binding:site_root/,
+  );
+  assert.throws(
+    () => lifecycleBindingFromArgs(['--identity', 'narada.test', '--session', 'runtime-package-test', '--site-root', 'D:/code/one'], {
+      NARADA_SITE_ROOT: 'D:/code/two',
+    }),
+    /contradictory_nars_binding:site_root/,
+  );
+});
+
 test('HTTP /health projects native session.health response', async () => {
   const childStdin = new PassThrough();
   let written = '';
@@ -652,6 +669,8 @@ test('narada-owned entrypoint runs the carrier runtime in process', async () => 
     child.stdout.on('data', (chunk) => { stdout += chunk; });
     child.stderr.on('data', (chunk) => { stderr += chunk; });
     child.stdin.write(`${JSON.stringify({ id: 'status-1', method: 'session.status', params: {} })}\n`);
+    child.stdin.write(`${JSON.stringify({ id: 'resume-1', method: 'session.resume', params: {} })}\n`);
+    child.stdin.write(`${JSON.stringify({ id: 'resume-wrong', method: 'session.resume', params: { session_id: 'other-session' } })}\n`);
     child.stdin.write(`${JSON.stringify({ id: 'close-1', method: 'session.close', params: {} })}\n`);
     child.stdin.end();
     const exitCode = await new Promise((resolveExit) => child.on('exit', resolveExit));
@@ -672,8 +691,10 @@ test('narada-owned entrypoint runs the carrier runtime in process', async () => 
     assert.equal(events[0].attach_commands.agent_tui, `agent-tui --attach ${events[0].event_endpoint}`);
     assert.equal(events[0].attach_commands.agent_web_ui, `narada-agent-web-ui --event-endpoint ${events[0].event_endpoint} --health-endpoint ${events[0].health_endpoint}`);
     assert.match(events[0].attach_commands.operator_input_protocol, /conversation\.send/);
-    assert.match(events[0].attach_commands.slash_command_protocol, /carrier\.command\.execute/);
+    assert.match(events[0].attach_commands.slash_command_protocol, /session\.command\.execute/);
     assert.equal(events.some((event) => event.event === 'session_status' && event.request_id === 'status-1'), true);
+    assert.equal(events.some((event) => event.event === 'session_resume' && event.request_id === 'resume-1'), true);
+    assert.equal(events.some((event) => event.event === 'error' && event.request_id === 'resume-wrong' && event.code === 'session_mismatch'), true);
     assert.equal(events.some((event) => event.event === 'session_closed' && event.request_id === 'close-1'), true);
     assert.equal(stderr.includes('Fatal error'), false);
   } finally {

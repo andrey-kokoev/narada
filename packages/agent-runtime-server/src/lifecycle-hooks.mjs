@@ -90,13 +90,27 @@ export async function dispatchNarsLifecycleHooksForEvent(dispatcher, event) {
 export function lifecycleBindingFromArgs(args = [], env = process.env) {
   const valueAfter = (flag) => {
     const index = args.indexOf(flag);
-    return index >= 0 ? args[index + 1] : undefined;
+    const value = index >= 0 ? args[index + 1] : undefined;
+    return typeof value === 'string' && value.trim() && !value.startsWith('--') ? value.trim() : undefined;
   };
+  const bindRequired = ({ name, flag, envName }) => {
+    const argvValue = valueAfter(flag);
+    const envValue = typeof env[envName] === 'string' && env[envName].trim() ? env[envName].trim() : undefined;
+    if (argvValue && envValue && argvValue !== envValue) {
+      throw new Error(`contradictory_nars_binding:${name}`);
+    }
+    const value = argvValue ?? envValue;
+    if (!value) throw new Error(`missing_nars_binding:${name}`);
+    return value;
+  };
+  const agentId = bindRequired({ name: 'agent_id', flag: '--identity', envName: 'NARADA_AGENT_ID' });
+  const sessionId = bindRequired({ name: 'session_id', flag: '--session', envName: 'NARADA_CARRIER_SESSION_ID' });
+  const siteRoot = bindRequired({ name: 'site_root', flag: '--site-root', envName: 'NARADA_SITE_ROOT' });
   return {
-    agent_id: valueAfter('--identity') ?? env.NARADA_AGENT_ID ?? 'unknown-agent',
-    session_id: valueAfter('--session') ?? env.NARADA_CARRIER_SESSION_ID ?? 'unknown-session',
+    agent_id: agentId,
+    session_id: sessionId,
     metadata: {
-      site_root: valueAfter('--site-root') ?? env.NARADA_SITE_ROOT ?? null,
+      site_root: siteRoot,
       agent_start_event_id: env.NARADA_AGENT_START_EVENT_ID ?? null,
     },
   };

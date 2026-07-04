@@ -68,12 +68,15 @@ Each Site stores NARS session evidence under:
 ```text
 <siteAuthorityRoot>/crew/nars-sessions/<session-id>/
   control.jsonl
+  operator-input-queue.json
   session.jsonl
   events.jsonl
   heartbeat.json
   session-index-record.json
   artifacts/index.json
 ```
+
+`control.jsonl` is the canonical path reserved by `@narada2/site-paths` for admitted control-sideband records (`narsControlSidebandPath`; legacy alias `narsControlPath`). The current runtime persists durable queued operator input in `operator-input-queue.json` (`narsOperatorInputQueuePath`); docs and readers must not assume queued input is recoverable from `control.jsonl` alone.
 
 The aggregate index lives at:
 
@@ -141,7 +144,7 @@ Assistant messages reference artifacts as structured parts:
 {
   "event": "assistant_message",
   "content": [
-    { "type": "markdown", "text": "Here is the generated report:" },
+    { "type": "text", "text": "Here is the generated report:" },
     {
       "type": "artifact_ref",
       "artifact_id": "art_...",
@@ -305,6 +308,12 @@ narada agent-web-ui attach --site sonar --session carrier_...
 ```
 
 The implemented discovery path reads Site-local indexes, overlays per-session records, classifies display state, and can resolve a concrete attach command for a chosen projection. The Site can be selected by explicit root with `--site-root`, by registered Site id with `--site`, or omitted to enumerate known Sites from the User Site launch registry, falling back to the local Site registry when the launch registry has no entries. CLI session-list output is a bounded summary projection, with `--limit` controlling how many sessions are printed. Use `narada nars attach-command` to inspect attach mechanics, and use `narada agent-web-ui attach` to start the browser projection directly. The lower-level discovery API remains the full Site-local view.
+
+Projection attach by agent id is an index lookup, not a string-appending path heuristic. The attach command may match the exact `agent_id` recorded in the session index, or a role alias such as `resident` when the discovery scope already narrows the Site. If a role alias matches multiple distinct indexed agent identities, the command must refuse as ambiguous and return candidate sessions instead of choosing the newest unrelated identity. Multiple sessions for the same indexed identity remain ordered newest-first.
+
+Attach refusals should be concise for humans and structured for tools. When no matching session is found but the selected Site has indexed sessions, the refusal should include bounded candidate summaries (`session_id`, `agent_id`, `site_id`/`site_root`, display state, health status, and start time) plus the next action: start the runtime host for that agent or pass an explicit `--session <id>`.
+
+Both workspace-style roots such as `D:/code/narada.sonar` and embedded `.narada` roots such as `D:/code/narada.staccato/.narada` are valid `siteRoot` values. Callers must pass the authority root they were given through the resolver and let `@narada2/site-paths` derive `narsSessionsRoot`; they must not append `.narada` again.
 
 The selector should prefer active sessions, then recently closed sessions useful for recovery. It should show Site, agent id, role, started time, liveness state, and launch surface.
 

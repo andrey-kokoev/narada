@@ -264,6 +264,7 @@ export const NARS_SESSION_EVENT_KINDS = Object.freeze([
   'session_started',
   'session_status',
   'session_health',
+  'session_resume',
   'session_closed',
   'runtime_error',
 ]);
@@ -312,6 +313,7 @@ export const NARS_EVENT_TO_LIFECYCLE_HOOKS = Object.freeze({
   session_started: Object.freeze(['afterSessionStarted']),
   session_status: Object.freeze(['afterSessionStatus']),
   session_health: Object.freeze(['afterSessionStatus']),
+  session_resume: Object.freeze(['afterSessionStatus']),
   session_closed: Object.freeze(['beforeSessionClose', 'afterSessionClosed']),
   directive_received: Object.freeze(['beforeDirectiveAccept']),
   directive_carrier_accepted_recorded: Object.freeze(['afterDirectiveAccepted']),
@@ -331,8 +333,11 @@ export const CARRIER_CONTROL_METHODS = Object.freeze([
   'session.health',
   'session.events.subscribe',
   'session.events.read',
+  'session.artifacts.register',
+  'session.artifacts.read',
   'session.recovery',
   'session.operations',
+  'session.resume',
   'preflight.recovery',
   'session.sync',
   'session.close',
@@ -342,13 +347,15 @@ export const CARRIER_CONTROL_METHODS = Object.freeze([
   'conversation.send',
   'system_directive.deliver',
   'carrier.input.deliver',
+  'session.command.execute',
   'carrier.command.execute',
   'observers.status',
   'observer.mute',
   'observer.unmute',
 ]);
 
-export const NARS_COMMAND_METHOD = 'carrier.command.execute';
+export const NARS_COMMAND_METHOD = 'session.command.execute';
+export const LEGACY_CARRIER_COMMAND_METHOD = 'carrier.command.execute';
 
 const RFC3339_UTC_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 const ID_PREFIXES = Object.freeze({
@@ -463,8 +470,11 @@ export function classifyCarrierControlRequest(request = {}) {
   if (method === 'session.health') return { ...base, method_kind: 'session_health', allowed_when_closed: true, concurrent_allowed: true };
   if (method === 'session.events.subscribe') return { ...base, method_kind: 'session_events_subscribe', allowed_when_closed: true, concurrent_allowed: true };
   if (method === 'session.events.read') return { ...base, method_kind: 'session_events_read', allowed_when_closed: true, concurrent_allowed: true };
+  if (method === 'session.artifacts.register') return { ...base, method_kind: 'session_artifacts_register' };
+  if (method === 'session.artifacts.read') return { ...base, method_kind: 'session_artifacts_read', allowed_when_closed: true, concurrent_allowed: true };
   if (method === 'session.recovery') return { ...base, method_kind: 'session_recovery' };
   if (method === 'session.operations') return { ...base, method_kind: 'session_operations' };
+  if (method === 'session.resume') return { ...base, method_kind: 'session_resume', allowed_when_closed: true, concurrent_allowed: true };
   if (method === 'preflight.recovery') return { ...base, method_kind: 'preflight_recovery' };
   if (method === 'session.sync') return { ...base, method_kind: 'session_sync' };
   if (method === 'session.close') return { ...base, method_kind: 'session_close', allowed_when_closed: true };
@@ -483,7 +493,10 @@ export function classifyCarrierControlRequest(request = {}) {
   if (method === 'observer.mute') return { ...base, method_kind: 'observer_set_muted', observer_action: 'mute' };
   if (method === 'observer.unmute') return { ...base, method_kind: 'observer_set_muted', observer_action: 'unmute' };
   if (method === NARS_COMMAND_METHOD) {
-    return { ...base, method_kind: 'carrier_command_execute' };
+    return { ...base, method_kind: 'session_command_execute' };
+  }
+  if (method === LEGACY_CARRIER_COMMAND_METHOD) {
+    return { ...base, method_kind: 'session_command_execute', legacy_method: LEGACY_CARRIER_COMMAND_METHOD };
   }
   return {
     ...base,

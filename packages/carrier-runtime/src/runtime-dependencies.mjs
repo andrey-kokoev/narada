@@ -20,14 +20,14 @@ import {
 } from '@narada2/carrier-protocol';
 import {
   REQUEST_ADAPTERS,
-  accumulateCodexExecText,
+  accumulateCodexExecEvent,
   buildCodexExecArgs,
   buildCodexSubprocessEnv,
-  codexExecEventText,
   codexExecMcpToolEventSummary,
   codexExecPrompt,
   codexRequestMcpServers,
   configureProviderAdapterContext,
+  createCodexExecTextAccumulator,
   isPotentialNaradaToolCallText,
   parseAnthropicMessagesResponse,
   parseCodexExecJsonLine,
@@ -77,6 +77,41 @@ import {
   prepareTargetAuthority,
   sealSourceAuthority,
 } from './authority-transition-state.mjs';
+import { agentInstructionChain, loadRolePrompt } from './agent-instructions.mjs';
+import { loadSession } from './session-records.mjs';
+import {
+  createMcpPreflightArtifactSnapshot,
+  readMcpPreflightArtifact,
+  recordMcpPreflightArtifactLinkage,
+} from './mcp-preflight-artifacts.mjs';
+import {
+  carrierGoalStatusLabel,
+  createCarrierGoalState,
+  messagesWithCarrierGoal,
+  normalizeCarrierGoalState,
+} from './carrier-goal-utils.mjs';
+import {
+  classifyRequestIssueOutcome,
+  createOperationalPostureSnapshot,
+  createSessionActivitySnapshot,
+  mcpServerSummaryEntries,
+  sessionHandoffs,
+  summarizeCounts,
+  summarizeRequestPosture,
+} from './session-status-snapshots.mjs';
+import {
+  codexCliSpawnError,
+  codexCommand,
+  extractOutputRef,
+  isAbortError,
+  parseJson,
+  randomId,
+  summarizeToolResult,
+  stringifySummary,
+  terminateChildProcess,
+} from './runtime-tail-utils.mjs';
+
+export { agentInstructionChain, loadRolePrompt, loadSession, createMcpPreflightArtifactSnapshot, readMcpPreflightArtifact, recordMcpPreflightArtifactLinkage, messagesWithCarrierGoal, carrierGoalStatusLabel, createCarrierGoalState, normalizeCarrierGoalState, createSessionActivitySnapshot, createOperationalPostureSnapshot, classifyRequestIssueOutcome, summarizeRequestPosture, sessionHandoffs, summarizeCounts, mcpServerSummaryEntries, summarizeToolResult, extractOutputRef, stringifySummary, parseJson, isAbortError, randomId, codexCliSpawnError, terminateChildProcess };
 
 const PROVIDER_METADATA = loadProviderMetadata();
 
@@ -87,6 +122,7 @@ export function createCarrierRuntimeDependencies({ runtimeContext = {}, env = pr
   const sessionPath = runtimeContext.sessionPath;
   const eventsPath = runtimeContext.eventsPath;
   const authorityRuntimeHost = runtimeContext.authorityRuntimeHost ?? env.NARADA_AUTHORITY_RUNTIME_HOST ?? 'local';
+  const operatorSurfaceKind = runtimeContext.operatorSurfaceKind ?? env.NARADA_OPERATOR_SURFACE_KIND ?? 'agent-cli';
   const intelligenceProvider = runtimeContext.intelligenceProvider ?? env.NARADA_INTELLIGENCE_PROVIDER ?? 'codex-subscription';
   const providerEnvironmentValues = providerEnvironment(intelligenceProvider, PROVIDER_METADATA);
   const providerSettings = {
@@ -121,7 +157,7 @@ export function createCarrierRuntimeDependencies({ runtimeContext = {}, env = pr
     recordMcpPreflightArtifactLinkage: ({ emit, preflightArtifact } = {}) => recordMcpPreflightArtifactLinkage({ emit, preflightArtifact, appendSessionRecord }),
     recordMcpStartupFailures: (mcpServers, options = {}) => recordMcpStartupFailures(mcpServers, { ...options, appendSessionRecord }),
     createOperationHeartbeatDirectiveEmitter,
-    handleServerRequestLine: (line, context) => handleServerRequestLine(line, { ...context, identity, session, siteRoot, sessionPath, eventsPath, authorityRuntimeHost, appendSessionRecord, providerSettings, narsDelegatedAuthorityHandoff: runtimeContext.narsDelegatedAuthorityHandoff ?? null }),
+    handleServerRequestLine: (line, context) => handleServerRequestLine(line, { ...context, identity, session, siteRoot, sessionPath, eventsPath, siteConfig: runtimeContext.siteConfig ?? null, authorityRuntimeHost, operatorSurfaceKind, appendSessionRecord, providerSettings, narsDelegatedAuthorityHandoff: runtimeContext.narsDelegatedAuthorityHandoff ?? null }),
     appendSessionRecord,
     sessionEventEntry: (event, payload) => ({ event, ...payload, timestamp: new Date().toISOString() }),
     carrierSessionEventEntry,
@@ -478,7 +514,7 @@ function serverEventsSubscription({ requestId, params = {}, context = {} }) {
       last_sequence: lastEvent?.event_sequence ?? lastEvent?.sequence ?? null,
       next_sequence: currentEventSequence + 1,
     },
-    operator_input_queue: inputQueueStatus(state),
+    operator_input_queue: inputQueueStatus(context.state),
     filters: params.filters && typeof params.filters === 'object' ? params.filters : {},
     live_stream: 'stdout_jsonl',
     close_semantics: 'request_scoped_replay_over_stdio; durable live subscriptions require websocket transport',
@@ -1120,7 +1156,7 @@ async function handleServerRequest(request, context) {
       emit('error', { request_id: requestId, code: controlRequest.error.code, message: controlRequest.error.message });
       return;
     }
-    if (controlRequest.method_kind === 'carrier_command_execute') {
+    if (controlRequest.method_kind === 'session_command_execute' || controlRequest.method_kind === 'carrier_command_execute') {
       const command = String(request?.params?.command ?? '').trim().toLowerCase();
       const value = String(request?.params?.value ?? '').trim();
       noteSessionActivity(state, 'carrier_command_requested');
@@ -1195,6 +1231,28 @@ async function handleServerRequest(request, context) {
     if (controlRequest.method_kind === 'session_health') {
       noteSessionActivity(state, 'session_health_requested');
       emit('session_health', serverHealth({ requestId, state, allTools, mcpServers, mcpPreflightArtifact, context }));
+      return;
+    }
+    if (controlRequest.method_kind === 'session_resume') {
+      noteSessionActivity(state, 'session_resume_requested');
+      recordWorkflowRequest(context, 'session_resume_requested', { requestId, method: request?.method ?? 'session.resume' });
+      const requestedSessionId = request?.params?.session_id ?? request?.params?.sessionId ?? request?.params?.carrier_session_id ?? null;
+      if (requestedSessionId && requestedSessionId !== context.session) {
+        emit('error', {
+          request_id: requestId,
+          code: 'session_mismatch',
+          message: 'session.resume requested a different session id than this runtime owns.',
+          requested_session_id: requestedSessionId,
+          session_id: context.session,
+        });
+        return;
+      }
+      emit('session_resume', {
+        ...serverStatus({ requestId, state, allTools, mcpServers, mcpPreflightArtifact, context }),
+        event: 'session_resume',
+        resumed_session_id: context.session,
+        terminal_state: state.closed ? 'closed' : 'completed',
+      });
       return;
     }
     if (controlRequest.method_kind === 'session_events_subscribe') {
@@ -1386,7 +1444,7 @@ function sendCodexExecJsonRequest(request, settings = {}) {
     let stdoutBuffer = '';
     let stderr = '';
     let threadId = request.arguments?.threadId ?? null;
-    let content = '';
+    let textState = createCodexExecTextAccumulator();
     let streamed = false;
     const abortChild = () => processOwner.terminateTree('codex_subscription_abort');
     settings.abortSignal?.addEventListener?.('abort', abortChild, { once: true });
@@ -1403,10 +1461,9 @@ function sendCodexExecJsonRequest(request, settings = {}) {
         settings.emit?.('provider_event', { provider: 'codex-subscription', event });
         handleCodexExecMcpToolEvent(event, settings);
         if (event.type === 'thread.started' && typeof event.thread_id === 'string') threadId = event.thread_id;
-        const text = codexExecEventText(event);
-        const accumulated = accumulateCodexExecText(content, text);
+        const accumulated = accumulateCodexExecEvent(textState, event);
         const { appendText, suppressStreaming } = accumulated;
-        content = accumulated.content;
+        textState = accumulated.state;
         if (appendText && !suppressStreaming) {
           streamed = true;
           settings.emit?.('assistant_message_stream', { turn_id: settings.turn?.turnId ?? null, content: appendText });
@@ -1420,12 +1477,21 @@ function sendCodexExecJsonRequest(request, settings = {}) {
       if (settings.abortSignal?.aborted) return rejectRequest(new Error('agent_cli_interrupt_requested'));
       if (stdoutBuffer.trim()) {
         const event = parseCodexExecJsonLine(stdoutBuffer.trim());
-        if (event?.type === 'thread.started' && typeof event.thread_id === 'string') threadId = event.thread_id;
-        const text = event ? codexExecEventText(event) : '';
-        content = accumulateCodexExecText(content, text).content;
+        if (event) {
+          settings.emit?.('provider_event', { provider: 'codex-subscription', event });
+          handleCodexExecMcpToolEvent(event, settings);
+          if (event.type === 'thread.started' && typeof event.thread_id === 'string') threadId = event.thread_id;
+          const accumulated = accumulateCodexExecEvent(textState, event);
+          const { appendText, suppressStreaming } = accumulated;
+          textState = accumulated.state;
+          if (appendText && !suppressStreaming) {
+            streamed = true;
+            settings.emit?.('assistant_message_stream', { turn_id: settings.turn?.turnId ?? null, content: appendText });
+          }
+        }
       }
       if (code !== 0) return rejectRequest(new Error(`codex exec --json failed with exit ${code}${stderr.trim() ? `; ${stderr.trim().slice(0, 1000)}` : ''}`));
-      resolveRequest({ threadId, content, streaming_rendered: streamed });
+      resolveRequest({ threadId, content: textState.content, streaming_rendered: streamed });
     });
   });
 }
@@ -1451,7 +1517,7 @@ function sendCodexExecJsonBufferedRequest(request, settings = {}) {
     let stdout = '';
     let stderr = '';
     let threadId = request.arguments?.threadId ?? null;
-    let content = '';
+    let textState = createCodexExecTextAccumulator();
     const abortChild = () => processOwner.terminateTree('codex_subscription_abort');
     settings.abortSignal?.addEventListener?.('abort', abortChild, { once: true });
     child.stdout.setEncoding('utf8');
@@ -1469,9 +1535,9 @@ function sendCodexExecJsonBufferedRequest(request, settings = {}) {
         if (!event) continue;
         handleCodexExecMcpToolEvent(event, settings);
         if (event.type === 'thread.started' && typeof event.thread_id === 'string') threadId = event.thread_id;
-        content += codexExecEventText(event);
+        textState = accumulateCodexExecEvent(textState, event).state;
       }
-      resolveRequest({ threadId, content, streaming_rendered: false });
+      resolveRequest({ threadId, content: textState.content, streaming_rendered: false });
     });
   });
 }
@@ -1496,6 +1562,7 @@ export function serverStatus({ requestId, state, allTools, mcpServers, mcpPrefli
     request_id: requestId,
     transport: 'jsonl_stdio',
     provider: context.providerSettings?.provider ?? process.env.NARADA_INTELLIGENCE_PROVIDER ?? 'codex-subscription',
+    site_config: context.siteConfig ?? null,
     model: carrierSessionSettings.model,
     thinking: carrierSessionSettings.thinking,
     stream: carrierSessionSettings.stream,
@@ -1530,26 +1597,35 @@ export function serverStatus({ requestId, state, allTools, mcpServers, mcpPrefli
 
 function serverHealth({ requestId, state, allTools, mcpServers, mcpPreflightArtifact, context = {} }) {
   const status = serverStatus({ requestId, state, allTools, mcpServers, mcpPreflightArtifact, context });
+  const generatedAt = new Date().toISOString();
   const degraded = status.operational_posture !== 'healthy';
+  const operatorSurfaceKind = context.operatorSurfaceKind ?? 'agent-cli';
+  const heartbeat = readHeartbeatHealth({ sessionPath: context.sessionPath, now: generatedAt });
   return {
     schema: 'narada.nars.health.v1',
     event: 'session_health',
     request_id: requestId,
-    status: degraded ? 'degraded' : 'healthy',
+    status: state?.closed ? 'closing' : degraded ? 'degraded' : 'healthy',
+    generated_at: generatedAt,
     agent_id: context.identity,
     session_id: context.session,
     site_root: context.siteRoot,
+    site_config: status.site_config,
     runtime: 'narada-agent-runtime-server',
+    runtime_mode: 'server',
     runtime_substrate: 'narada-agent-runtime-server',
     runtime_substrate_kind: 'narada-agent-runtime-server',
-    carrier_kind: 'agent-cli',
-    launch_operator_surface_kind: 'agent-cli',
-    operator_surface_kind: 'agent-cli',
+    carrier_kind: operatorSurfaceKind,
+    launch_operator_surface_kind: operatorSurfaceKind,
+    operator_surface_kind: operatorSurfaceKind,
+    started_at: state?.startedAt ?? null,
     delegated_authority_handoff: status.delegated_authority_handoff,
     delegated_authority_ref: status.delegated_authority_ref,
     provider: status.provider,
     model: status.model,
     thinking: status.thinking,
+    active_turn_state: status.active_turn_state,
+    active_turn_id: status.active_turn_id,
     mcp: {
       operational_state: status.mcp_operational_state,
       server_count: status.mcp_server_count,
@@ -1557,21 +1633,51 @@ function serverHealth({ requestId, state, allTools, mcpServers, mcpPreflightArti
       runtime_fault_count: status.mcp_runtime_fault_count,
       servers: status.mcp_servers,
     },
-    heartbeat: {
-      freshness: 'fresh',
-      last_seen_at: new Date().toISOString(),
+    heartbeat,
+    activity: {
+      last_event_kind: state?.lastEventKind ?? null,
+      last_event_at: state?.lastEventAt ?? null,
+      active_turn_state: status.active_turn_state,
+      active_turn_id: status.active_turn_id,
+      last_terminal_state: state?.lastTerminalState ?? null,
     },
     posture: {
       request_posture: status.request_posture,
       operational_posture: status.operational_posture,
       operational_posture_display: status.operational_posture_display,
     },
+    recommended_action: status.recovery_kind === 'no_recovery' ? 'review_session_summary' : status.recovery_kind,
+    recommended_command: status.recommended_command ?? status.handoffs?.session_read ?? null,
     authority_transition: status.authority_transition,
     authority_transition_state: status.authority_transition_state,
-    source_write_admission: status.source_write_admission,
+    source_write_admission: status.source_write_admission ?? status.authority_transition_source?.source_write_admission ?? null,
     authority_transition_source: status.authority_transition_source,
     handoffs: status.handoffs,
   };
+}
+
+function readHeartbeatHealth({ sessionPath, now = new Date().toISOString() } = {}) {
+  const heartbeatPath = sessionPath ? join(dirname(String(sessionPath)), 'heartbeat.json') : null;
+  const heartbeat = readJsonFile(heartbeatPath);
+  const lastWrittenAt = heartbeat?.heartbeat_at ?? heartbeat?.last_written_at ?? heartbeat?.last_seen_at ?? null;
+  const lastMs = lastWrittenAt ? Date.parse(String(lastWrittenAt)) : NaN;
+  const nowMs = Date.parse(String(now));
+  const ageMs = Number.isFinite(lastMs) && Number.isFinite(nowMs) ? Math.max(0, nowMs - lastMs) : null;
+  return {
+    path: heartbeatPath,
+    last_written_at: lastWrittenAt,
+    age_ms: ageMs,
+    freshness: heartbeat ? 'fresh' : 'missing',
+  };
+}
+
+function readJsonFile(path) {
+  try {
+    if (!path || !existsSync(path)) return null;
+    return JSON.parse(readFileSync(path, 'utf8'));
+  } catch {
+    return null;
+  }
 }
 
 function emitServerEvent(output, event, { appendEventRecord } = {}) {
@@ -1586,54 +1692,6 @@ function nextEventSequence() {
   return currentEventSequence;
 }
 
-export function loadRolePrompt(identityName, siteRoot) {
-  return agentInstructionsPrompt(agentInstructionChain(siteRoot));
-}
-
-export function agentInstructionChain(siteRoot) {
-  if (!siteRoot) return [];
-  const normalizedSiteRoot = resolve(siteRoot);
-  const ancestorDirs = [];
-  let current = normalizedSiteRoot;
-  while (true) {
-    ancestorDirs.push(current);
-    const parent = dirname(current);
-    if (parent === current) break;
-    current = parent;
-  }
-
-  const candidates = [
-    ...ancestorDirs.reverse().map((directory) => join(directory, 'AGENTS.md')),
-    join(normalizedSiteRoot, '.narada', 'AGENTS.md'),
-  ];
-  const seen = new Set();
-  return candidates.filter((candidate) => {
-    const path = resolve(candidate);
-    if (seen.has(path) || !existsSync(path)) return false;
-    seen.add(path);
-    return true;
-  });
-}
-
-function agentInstructionsPrompt(paths) {
-  return paths.map((path) => [
-    `# AGENTS.md authority: ${path}`,
-    readFileSync(path, 'utf8'),
-  ].join('\n\n')).join('\n\n');
-}
-
-function loadSession(path) {
-  if (!path || !existsSync(path)) return [];
-  return readFileSync(path, 'utf8').split(/\r?\n/).filter(Boolean).flatMap((line) => {
-    try {
-      const entry = JSON.parse(line);
-      return entry.role ? [entry] : [];
-    } catch {
-      return [];
-    }
-  });
-}
-
 function closeMcpServers(mcpServers) {
   for (const server of Object.values(mcpServers)) if (server.process && !server.process.killed) server.process.kill();
 }
@@ -1644,94 +1702,6 @@ function recordMcpStartupFailures(mcpServers, { emit = null, appendSessionRecord
     emit?.('carrier_diagnostic_recorded', payload);
     appendSessionRecord?.(carrierSessionEventEntry('carrier_diagnostic_recorded', payload));
   }
-}
-
-export function recordMcpPreflightArtifactLinkage({ emit, preflightArtifact, appendSessionRecord = null, sessionPath = null } = {}) {
-  if (!preflightArtifact) return null;
-  const payload = {
-    artifact_path: preflightArtifact.artifact_path ?? preflightArtifact.path ?? null,
-    generated_at: preflightArtifact.generated_at ?? null,
-    recommended_action: preflightArtifact.recommended_action ?? null,
-    recommended_action_display: preflightArtifact.recommended_action_display ?? null,
-    recommended_command: preflightArtifact.recommended_command ?? null,
-    recovery_kind: preflightArtifact.recovery_kind ?? null,
-    recovery_kind_display: preflightArtifact.recovery_kind_display ?? null,
-    recovery_primary_command: preflightArtifact.recovery_primary_command ?? null,
-    recovery_followup_command: preflightArtifact.recovery_followup_command ?? null,
-    handoffs: preflightArtifact.handoffs ?? null,
-  };
-  emit?.('mcp_preflight_artifact_linked', payload);
-  const record = { event: 'mcp_preflight_artifact_linked', ...payload, timestamp: new Date().toISOString() };
-  appendSessionRecord?.(record);
-  appendJsonlRecord(sessionPath, record);
-  return payload;
-}
-
-function readMcpPreflightArtifact({ artifactDir, session, identity, siteRoot } = {}) {
-  const candidateDir = artifactDir ?? join(siteRoot, '.narada', 'runtime', 'agent-cli', 'mcp-preflight');
-  const candidates = [
-    session ? join(candidateDir, `${session}.json`) : null,
-    identity ? join(candidateDir, `${identity}.json`) : null,
-  ].filter(Boolean);
-  for (const path of candidates) {
-    if (!existsSync(path)) continue;
-    try {
-      const artifact = JSON.parse(readFileSync(path, 'utf8'));
-      return normalizeMcpPreflightArtifact({ ...artifact, artifact_path: path, path }, { identity, session });
-    } catch {
-      return null;
-    }
-  }
-  return null;
-}
-
-function normalizeMcpPreflightArtifact(artifact, { identity, session } = {}) {
-  const operationalState = artifact.mcp_operational_state ?? artifact.operational_state ?? null;
-  const startupFailures = Number(artifact.mcp_startup_failure_count ?? 0);
-  const runtimeFaults = Number(artifact.mcp_runtime_fault_count ?? 0);
-  const healthy = operationalState === 'healthy' && startupFailures === 0 && runtimeFaults === 0;
-  const recommendedAction = artifact.recommended_action ?? (healthy ? 'start_session' : 'review_startup_diagnostics');
-  const recoveryKind = artifact.recovery_kind ?? (healthy ? 'no_recovery' : 'startup_diagnostic_review');
-  return {
-    ...artifact,
-    recommended_action: recommendedAction,
-    recommended_action_display: artifact.recommended_action_display ?? recommendedAction.replaceAll('_', ' '),
-    recommended_command: artifact.recommended_command ?? null,
-    recovery_kind: recoveryKind,
-    recovery_kind_display: artifact.recovery_kind_display ?? recoveryKind.replaceAll('_', ' '),
-    recovery_primary_command: artifact.recovery_primary_command ?? null,
-    recovery_followup_command: artifact.recovery_followup_command ?? null,
-    handoffs: artifact.handoffs ?? preflightHandoffs({ identity, session }),
-  };
-}
-
-function preflightHandoffs({ identity, session } = {}) {
-  if (!identity || !session) return null;
-  const prefix = `narada-agent-cli --identity ${identity} --session ${session}`;
-  return {
-    mcp_preflight_read: `${prefix} --mcp-preflight-read`,
-    mcp_preflight_read_json: `${prefix} --mcp-preflight-read-json`,
-    mcp_preflight_diagnostics: `${prefix} --mcp-preflight-diagnostics --mcp-preflight-diagnostics-filter all`,
-    mcp_preflight_diagnostics_json: `${prefix} --mcp-preflight-diagnostics-json --mcp-preflight-diagnostics-filter all`,
-  };
-}
-
-function createMcpPreflightArtifactSnapshot(preflightArtifact) {
-  return {
-    mcp_preflight_artifact_path: preflightArtifact?.artifact_path ?? preflightArtifact?.path ?? null,
-    mcp_preflight_artifact_generated_at: preflightArtifact?.generated_at ?? null,
-    mcp_preflight_operational_state: preflightArtifact?.mcp_operational_state ?? preflightArtifact?.operational_state ?? null,
-    mcp_preflight_startup_failure_summary: preflightArtifact?.mcp_startup_failure_summary ?? preflightArtifact?.startup_failure_summary ?? null,
-    mcp_preflight_runtime_fault_summary: preflightArtifact?.mcp_runtime_fault_summary ?? preflightArtifact?.runtime_fault_summary ?? null,
-    mcp_preflight_recommended_action: preflightArtifact?.recommended_action ?? null,
-    mcp_preflight_recommended_action_display: preflightArtifact?.recommended_action_display ?? null,
-    mcp_preflight_recommended_command: preflightArtifact?.recommended_command ?? null,
-    mcp_preflight_recovery_kind: preflightArtifact?.recovery_kind ?? null,
-    mcp_preflight_recovery_kind_display: preflightArtifact?.recovery_kind_display ?? null,
-    mcp_preflight_recovery_primary_command: preflightArtifact?.recovery_primary_command ?? null,
-    mcp_preflight_recovery_followup_command: preflightArtifact?.recovery_followup_command ?? null,
-    mcp_preflight_handoffs: preflightArtifact?.handoffs ?? null,
-  };
 }
 
 function noteSessionActivity(state, eventKind, occurredAt = new Date().toISOString(), terminalState = null) {
@@ -1747,86 +1717,6 @@ function recordSessionRequestIssue(state, issueCode) {
   state.requestIssueCounts[issueCode] = Number(state.requestIssueCounts[issueCode] ?? 0) + 1;
   const outcomeCode = classifyRequestIssueOutcome(issueCode);
   state.requestOutcomeCounts[outcomeCode] = Number(state.requestOutcomeCounts[outcomeCode] ?? 0) + 1;
-}
-
-function createSessionActivitySnapshot(state = {}) {
-  const requestOutcomeCounts = state.requestOutcomeCounts ?? {};
-  const requestIssueCounts = state.requestIssueCounts ?? {};
-  const requestPosture = summarizeRequestPosture(requestOutcomeCounts);
-  return {
-    session_event_count: Number(state.sessionEventCount ?? 0),
-    last_event_kind: state.lastEventKind ?? null,
-    last_event_at: state.lastEventAt ?? null,
-    last_terminal_state: state.lastTerminalState ?? null,
-    ...requestPosture,
-    request_outcome_counts: requestOutcomeCounts,
-    request_outcome_summary: summarizeCounts(requestOutcomeCounts),
-    request_issue_counts: requestIssueCounts,
-    request_issue_summary: summarizeCounts(requestIssueCounts),
-  };
-}
-
-function createOperationalPostureSnapshot({ state = {}, mcpOperationalState = 'unknown' } = {}) {
-  const requestPosture = summarizeRequestPosture(state.requestOutcomeCounts ?? {}).request_posture;
-  let posture = 'healthy';
-  if (mcpOperationalState === 'runtime_faulted') posture = 'mcp_runtime_faulted';
-  else if (mcpOperationalState === 'startup_degraded') posture = 'mcp_startup_degraded';
-  else if (requestPosture === 'runtime_failures') posture = 'request_runtime_failures';
-  else if (requestPosture === 'invalid_control_traffic') posture = 'request_invalid_control_traffic';
-  else if (requestPosture === 'closed_session_retries') posture = 'request_closed_session_retries';
-  else if (state.closed) posture = 'closed';
-  return {
-    operational_posture: posture,
-    operational_posture_display: posture === 'healthy' ? 'healthy' : `${posture} [mcp=${mcpOperationalState}; request=${requestPosture}; lifecycle=${state.closed ? 'closed' : 'none'}]`,
-    recommended_action: requestPosture === 'invalid_control_traffic' ? 'review_invalid_control_traffic' : state.closed ? 'session_closed' : 'review_session_summary',
-    recommended_action_display: requestPosture === 'invalid_control_traffic' ? 'review invalid control traffic' : state.closed ? 'session closed' : 'review session summary',
-  };
-}
-
-function classifyRequestIssueOutcome(issueCode) {
-  if (issueCode === 'invalid_json' || issueCode === 'invalid_request' || issueCode === 'message_required') return 'invalid_request';
-  if (issueCode === 'session_closed') return 'rejected_closed';
-  if (issueCode === 'request_dispatch_failed') return 'dispatch_failure';
-  return 'request_error';
-}
-
-function summarizeRequestPosture(requestOutcomeCounts = {}) {
-  const counts = {
-    invalid_control_traffic: Number(requestOutcomeCounts.invalid_request ?? 0),
-    closed_session_retries: Number(requestOutcomeCounts.rejected_closed ?? 0),
-    runtime_failures: Number(requestOutcomeCounts.dispatch_failure ?? 0) + Number(requestOutcomeCounts.request_runtime_failure ?? 0) + Number(requestOutcomeCounts.request_error ?? 0),
-  };
-  const total = Object.values(counts).reduce((sum, count) => sum + count, 0);
-  if (total === 0) return { request_outcome_total: 0, request_posture: 'clean', request_posture_display: 'clean' };
-  const order = ['runtime_failures', 'invalid_control_traffic', 'closed_session_retries'];
-  const [requestPosture] = order.map((key) => [key, counts[key]]).sort((left, right) => right[1] - left[1] || order.indexOf(left[0]) - order.indexOf(right[0]))[0];
-  return { request_outcome_total: total, request_posture: requestPosture, request_posture_display: `${requestPosture} (${total})` };
-}
-
-function sessionHandoffs({ identity, session, eventCount = 20 } = {}) {
-  if (!identity || !session) return {};
-  const base = `narada-agent-cli --identity ${identity} --session ${session}`;
-  return {
-    session_operations: `${base} --session-operations`,
-    session_operations_json: `${base} --session-operations-json`,
-    session_read: `${base} --session-read`,
-    session_read_json: `${base} --session-read-json`,
-    session_recovery: `${base} --session-recovery`,
-    session_recovery_json: `${base} --session-recovery-json`,
-    session_events: `${base} --session-events --session-events-filter all --session-events-count ${eventCount}`,
-    session_events_issues: `${base} --session-events --session-events-filter issues --session-events-count ${eventCount}`,
-    session_events_diagnostics: `${base} --session-events --session-events-filter diagnostics --session-events-count ${eventCount}`,
-  };
-}
-
-function summarizeCounts(counts = {}) {
-  const entries = Object.entries(counts).filter(([, value]) => Number(value ?? 0) > 0);
-  if (entries.length === 0) return '0';
-  return entries.map(([key, value]) => `${key}:${value}`).join(', ');
-}
-
-function mcpServerSummaryEntries(mcpServers) {
-  return Object.entries(mcpServers ?? {}).map(([server_name, server]) => ({ server_name, tool_count: server.tools?.length ?? 0, operational_state: 'healthy' }));
 }
 
 function createOperationHeartbeatDirectiveEmitter({ inputQueue, intervalMs = 60000, initialDelayMs = 60000 } = {}) {
@@ -1883,84 +1773,12 @@ function appendJsonlRecord(path, entry) {
   appendFileSync(path, `${JSON.stringify(entry)}\n`, 'utf8');
 }
 
-export function messagesWithCarrierGoal(messages, goal = null) {
-  const normalized = normalizeCarrierGoalState(goal);
-  if (!normalized.value || normalized.status !== 'active') return messages;
-  const goalMessage = { role: 'system', content: `Active carrier session goal: ${normalized.value}\nUse this as the persistent task target and completion criterion while it remains active.` };
-  const insertAt = messages.findIndex((message) => message.role !== 'system');
-  return insertAt === -1 ? [...messages, goalMessage] : [...messages.slice(0, insertAt), goalMessage, ...messages.slice(insertAt)];
-}
-
 export function assertApiKeyConfigured(provider, apiKey, providerMetadata = PROVIDER_METADATA) {
   if (provider === 'codex-subscription') return;
   if (apiKey) return;
   const credentialEnvNames = providerMetadata[provider]?.credential_env_names ?? [];
   const credentialHint = credentialEnvNames.length > 0 ? credentialEnvNames.join(' or ') : 'the provider-specific API key environment variable';
   throw new Error(`Missing API key for ${provider}. Set ${credentialHint}.`);
-}
-
-function normalizeCarrierGoalState(goal) {
-  if (goal && typeof goal === 'object') return createCarrierGoalState(goal.value ?? '', goal.status ?? 'active');
-  return createCarrierGoalState(goal ?? '');
-}
-
-function createCarrierGoalState(value = '', status = 'active') {
-  const normalized = String(value ?? '').replace(/\s+/g, ' ').trim();
-  return { value: normalized, status: normalized ? (String(status).toLowerCase() === 'paused' ? 'paused' : 'active') : 'unset' };
-}
-
-function carrierGoalStatusLabel(goal) {
-  const normalized = normalizeCarrierGoalState(goal);
-  if (!normalized.value) return 'not set';
-  return `${normalized.value} (${normalized.status})`;
-}
-
-function summarizeToolResult(value, limit = 500) {
-  const text = typeof value === 'string' ? value : JSON.stringify(value ?? null);
-  return text.length > limit ? `${text.slice(0, limit - 3)}...` : text;
-}
-
-function extractOutputRef(content) {
-  try {
-    const parsed = JSON.parse(content);
-    return parsed.output_ref ?? null;
-  } catch {
-    return null;
-  }
-}
-
-function stringifySummary(value) {
-  try { return JSON.stringify(value); } catch { return String(value); }
-}
-
-function parseJson(text) {
-  try { return JSON.parse(text); } catch { return {}; }
-}
-
-function isAbortError(error) {
-  const message = error instanceof Error ? error.message : String(error ?? '');
-  return message.includes('abort') || message.includes('interrupt_requested');
-}
-
-function randomId() {
-  return `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
-}
-function codexCommand() {
-  return resolveCodexCommand({ processEnv: process.env, platform: process.platform, exists: existsSync });
-}
-
-function codexCliSpawnError(error, command) {
-  const message = error instanceof Error ? error.message : String(error);
-  const code = error && typeof error === 'object' ? error.code : null;
-  if (code === 'ENOENT') {
-    return new Error(`codex_cli_unresolved: failed to start ${command.command}. Install Codex CLI, expose it on PATH, or set NARADA_CODEX_EXEC_COMMAND/NARADA_CODEX_COMMAND. Original error: ${message}`);
-  }
-  return error instanceof Error ? error : new Error(message);
-}
-
-function terminateChildProcess(child) {
-  if (!child || child.killed) return;
-  child.kill();
 }
 
 function recordCarrierDiagnostic(level, message, { appendSessionRecord, ...extra } = {}) {

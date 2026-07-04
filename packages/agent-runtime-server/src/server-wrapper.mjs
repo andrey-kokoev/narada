@@ -1,22 +1,13 @@
-import { createHash } from 'node:crypto';
-import { appendFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { PassThrough } from 'node:stream';
 import { createCarrierRuntimeContext } from '@narada2/carrier-runtime/carrier-runtime-context';
 import { createCarrierRuntimeDependencies } from '@narada2/carrier-runtime/runtime-dependencies';
-import { readNarsEventLogPage } from '@narada2/carrier-runtime/nars-event-log';
-import {
-  publicNarsArtifactRecord,
-  readNarsArtifact,
-  readNarsArtifactContent,
-  readNarsArtifactIndex,
-  registerNarsArtifact,
-} from '@narada2/carrier-runtime/nars-artifacts';
 import { runCarrierServerMode } from '@narada2/carrier-runtime/server-mode';
 import { createProjectedTerminalBridge } from '@narada2/carrier-terminal-projection/projected-terminal';
 import {
   formatPreflightWorkflowEvent,
   formatPreflightWorkflowSummary,
+  formatHostStatusEvent,
   formatRuntimeMcpFaultEvent,
   formatRuntimeMcpFaultSummary,
   formatSessionOperationsEvent,
@@ -34,39 +25,12 @@ import {
   lifecycleBindingFromArgs,
   lifecycleHookFailureLine,
 } from './lifecycle-hooks.mjs';
+import { startEventStreamProjection, parseEventStreamOptions } from './runtime-server-event-stream.mjs';
+import { createEventHub } from './runtime-server-event-hub.mjs';
+import { createDelegatedAuthorityHandoff } from './runtime-server-authority.mjs';
+import { handleArtifactHttpRequest } from './runtime-server-artifacts.mjs';
 
-function websocketAcceptValue(key) {
-  return createHash('sha1')
-    .update(`${key}258EAFA5-E914-47DA-95CA-C5AB0DC85B11`)
-    .digest('base64');
-}
-
-export function formatHostStatusEvent(event) {
-  if (!event || event.event !== 'session_started') return [];
-  const launchCommand = formatAgentWebUiLaunchCommand(event);
-  return [
-    `agent-runtime-server: ${event.agent_id ?? 'unknown'}`,
-    `  Session ${event.session_id ?? 'unknown'}`,
-    `  Surface ${event.operator_surface_kind ?? event.launch_operator_surface_kind ?? 'unknown'}`,
-    `  Provider ${event.provider ?? 'unknown'}`,
-    `  Model    ${event.model ?? 'unknown'}`,
-    `  MCP      ${event.mcp_server_count ?? 0} servers, ${event.mcp_operational_state ?? 'unknown'}`,
-    `  Health   ${event.health_endpoint ?? 'not configured'}`,
-    `  Events   ${event.event_endpoint ?? 'not configured'}`,
-    launchCommand
-      ? `  Launch   ${launchCommand}`
-      : '  Input    attach an operator surface such as agent-web-ui',
-  ];
-}
-
-function formatAgentWebUiLaunchCommand(event) {
-  const eventEndpoint = event?.event_endpoint ? String(event.event_endpoint) : null;
-  if (!eventEndpoint) return null;
-  const parts = ['narada-agent-web-ui', '--event-endpoint', eventEndpoint];
-  const healthEndpoint = event?.health_endpoint ? String(event.health_endpoint) : null;
-  if (healthEndpoint) parts.push('--health-endpoint', healthEndpoint);
-  return parts.join(' ');
-}
+export { formatHostStatusEvent } from './runtime-server-events.mjs';
 
 function valueAfterFlag(args, flag) {
   const index = args.indexOf(flag);
@@ -125,253 +89,11 @@ function decodeWebSocketFrames(buffer) {
   return { frames, rest: buffer.subarray(offset) };
 }
 
-function startEventStreamProjection({ childStdin, eventHub, host, port, eventsPath = null }) {
-  const server = createServer((request, response) => {
-    response.writeHead(426, { 'content-type': 'application/json' });
-    response.end(`${JSON.stringify({ error: 'upgrade_required', transport: 'websocket', path: '/events' })}\n`);
-  });
-  server.on('upgrade', (request, socket) => {
-    if (request.url?.split('?')[0] !== '/events') {
-      socket.end('HTTP/1.1 404 Not Found\r\n\r\n');
-      return;
-    }
-    const key = request.headers['sec-websocket-key'];
-    if (!key) {
-      socket.end('HTTP/1.1 400 Bad Request\r\n\r\n');
-      return;
-    }
-    socket.write([
-      'HTTP/1.1 101 Switching Protocols',
-      'Upgrade: websocket',
-      'Connection: Upgrade',
-      `Sec-WebSocket-Accept: ${websocketAcceptValue(String(key))}`,
-      '',
-      '',
-    ].join('\r\n'));
-    const send = (payload) => socket.write(encodeWebSocketTextFrame(JSON.stringify(payload)));
-    const subscriptions = new Set();
-    let pending = Buffer.alloc(0);
-    send({ schema: 'narada.nars.websocket.v1', event: 'websocket_connected', transport: 'websocket', cursor: eventHub.cursor() });
-    socket.on('data', (chunk) => {
-      pending = Buffer.concat([pending, chunk]);
-      const decoded = decodeWebSocketFrames(pending);
-      pending = decoded.rest;
-      for (const frame of decoded.frames) {
-        if (frame.opcode === 0x8) {
-          socket.end();
-          return;
-        }
-        if (frame.opcode !== 0x1) continue;
-        let message;
-        try {
-          message = JSON.parse(frame.text);
-        } catch (error) {
-          send({ schema: 'narada.nars.websocket.error.v1', event: 'websocket_error', code: 'invalid_json', message: error instanceof Error ? error.message : String(error) });
-          continue;
-        }
-        if (message.method === 'session.events.subscribe') {
-          const params = message.params ?? {};
-          const filters = params.filters && typeof params.filters === 'object' ? params.filters : {};
-          const subscriptionId = params.subscription_id ?? `sub_${message.id ?? Date.now()}`;
-          const subscription = eventHub.subscribe({ subscriptionId, filters, send });
-          subscriptions.add(subscription);
-          const replayPage = params.include_replay === false || !eventsPath ? null : readNarsEventLogPage({
-            eventsPath,
-            afterSequence: params.since_sequence,
-            sinceTimestamp: params.since_timestamp,
-            filters,
-            limit: params.max_replay ?? 100,
-          });
-          const replay = replayPage ? replayPage.events : eventHub.replayFor({
-            sinceSequence: params.since_sequence,
-            sinceTimestamp: params.since_timestamp,
-            filters,
-            maxReplay: params.max_replay ?? 100,
-          });
-          send({
-            schema: 'narada.nars.events.subscription.v1',
-            event: 'session_events_subscription_started',
-            request_id: message.id ?? null,
-            subscription_id: subscriptionId,
-            transport: 'websocket',
-            replay_count: replay.length,
-            replay_source: replayPage ? replayPage.source : 'memory_event_hub',
-            cursor: replayPage?.cursor ?? eventHub.cursor(),
-            filters,
-          });
-          for (const event of replay) {
-            send({ schema: 'narada.nars.events.envelope.v1', event: 'session_event', subscription_id: subscriptionId, cursor: { sequence: event.event_sequence, next_sequence: event.event_sequence + 1 }, payload: event });
-          }
-          continue;
-        }
-        if (message.method === 'session.events.read') {
-          const params = message.params ?? {};
-          send({
-            ...readNarsEventLogPage({
-              eventsPath,
-              afterSequence: params.after_sequence ?? params.since_sequence,
-              beforeSequence: params.before_sequence,
-              sinceTimestamp: params.since_timestamp,
-              filters: params.filters,
-              limit: params.limit ?? params.max_replay ?? 100,
-              direction: params.direction,
-            }),
-            event: 'session_events_read',
-            request_id: message.id ?? null,
-            transport: 'websocket',
-          });
-          continue;
-        }
-        const stdin = typeof childStdin === 'function' ? childStdin() : childStdin;
-        if (!stdin?.writable) {
-          send({ schema: 'narada.nars.websocket.error.v1', event: 'websocket_error', request_id: message.id ?? null, code: 'child_stdin_unavailable' });
-          continue;
-        }
-        stdin.write(`${JSON.stringify(message)}\n`);
-      }
-    });
-    socket.on('close', () => {
-      for (const subscription of subscriptions) subscription.unsubscribe();
-      subscriptions.clear();
-    });
-    socket.on('error', () => {
-      for (const subscription of subscriptions) subscription.unsubscribe();
-      subscriptions.clear();
-    });
-  });
-  return new Promise((resolve, reject) => {
-    server.once('error', reject);
-    server.listen(port, host, () => {
-      server.off('error', reject);
-      const address = server.address();
-      const boundPort = typeof address === 'object' && address ? address.port : port;
-      resolve({ server, url: `ws://${host}:${boundPort}/events` });
-    });
-  });
-}
-
-function parseEventStreamOptions(args, env = process.env) {
-  const forwardedArgs = [];
-  let enabled = env.NARADA_AGENT_RUNTIME_EVENTS_ENABLED !== '0';
-  let host = env.NARADA_AGENT_RUNTIME_EVENTS_HOST || '127.0.0.1';
-  let port = Number.parseInt(env.NARADA_AGENT_RUNTIME_EVENTS_PORT || '0', 10);
-  for (let index = 0; index < args.length; index += 1) {
-    const arg = args[index];
-    if (arg === '--no-events') {
-      enabled = false;
-      continue;
-    }
-    if (arg === '--event-host') {
-      host = args[index + 1] || host;
-      index += 1;
-      continue;
-    }
-    if (arg === '--event-port') {
-      port = Number.parseInt(args[index + 1] || '0', 10);
-      index += 1;
-      continue;
-    }
-    forwardedArgs.push(arg);
-  }
-  return {
-    forwardedArgs,
-    events: {
-      enabled,
-      host,
-      port: Number.isFinite(port) && port >= 0 ? port : 0,
-    },
-  };
-}
-
 async function loadRuntimeDependencies(runtimeContext = {}) {
   const runtimeDependencies = createCarrierRuntimeDependencies({ runtimeContext });
   return {
     ...runtimeDependencies,
     createProjectedTerminalBridge,
-  };
-}
-
-function eventMatchesFilters(event, filters = {}) {
-  if (!filters || typeof filters !== 'object') return true;
-  const eventKind = event.event ?? event.event_kind ?? null;
-  const kinds = Array.isArray(filters.event_kinds) ? filters.event_kinds : Array.isArray(filters.kinds) ? filters.kinds : null;
-  if (kinds && !kinds.includes(eventKind)) return false;
-  const families = Array.isArray(filters.families) ? filters.families : null;
-  if (families?.length) {
-    const family = String(eventKind ?? '').startsWith('session_') ? 'session' : 'turn';
-    if (!families.includes(family)) return false;
-  }
-  if (filters.request_id && event.request_id !== filters.request_id) return false;
-  if (filters.turn_id && event.turn_id !== filters.turn_id) return false;
-  return true;
-}
-
-function createEventHub({ maxBuffer = 1000 } = {}) {
-  const buffer = [];
-  const subscribers = new Map();
-  let sequence = 0;
-  const replayFor = ({ sinceSequence = null, sinceTimestamp = null, filters = {}, maxReplay = 100 } = {}) => {
-    const sinceSeq = sinceSequence == null ? null : Number.parseInt(String(sinceSequence), 10);
-    const sinceTime = sinceTimestamp ? Date.parse(String(sinceTimestamp)) : null;
-    const replayLimit = Math.max(0, Math.min(Number.parseInt(String(maxReplay), 10) || 0, maxBuffer));
-    return buffer.filter((event) => {
-      if (Number.isFinite(sinceSeq) && Number(event.event_sequence ?? event.sequence ?? 0) <= sinceSeq) return false;
-      if (Number.isFinite(sinceTime)) {
-        const eventTime = Date.parse(String(event.timestamp ?? event.generated_at ?? ''));
-        if (Number.isFinite(eventTime) && eventTime <= sinceTime) return false;
-      }
-      return eventMatchesFilters(event, filters);
-    }).slice(-replayLimit);
-  };
-  return {
-    publish(event) {
-      if (!event || typeof event !== 'object') return null;
-      const existingSequence = Number(event.event_sequence ?? event.sequence);
-      let assignedSequence;
-      if (Number.isFinite(existingSequence) && existingSequence > sequence) {
-        sequence = existingSequence;
-        assignedSequence = existingSequence;
-      } else {
-        sequence += 1;
-        assignedSequence = sequence;
-      }
-      const sequencedEvent = {
-        ...event,
-        event_sequence: assignedSequence,
-        sequence: assignedSequence,
-      };
-      buffer.push(sequencedEvent);
-      while (buffer.length > maxBuffer) buffer.shift();
-      for (const [subscriptionId, subscriber] of subscribers.entries()) {
-        if (!eventMatchesFilters(sequencedEvent, subscriber.filters)) continue;
-        try {
-          subscriber.send({
-            schema: 'narada.nars.events.envelope.v1',
-            event: 'session_event',
-            subscription_id: subscriptionId,
-            cursor: { sequence: sequencedEvent.event_sequence, next_sequence: sequencedEvent.event_sequence + 1 },
-            payload: sequencedEvent,
-          });
-        } catch {
-          subscribers.delete(subscriptionId);
-        }
-      }
-      return sequencedEvent;
-    },
-    subscribe({ subscriptionId = `sub_${Date.now()}_${subscribers.size + 1}`, filters = {}, send }) {
-      subscribers.set(subscriptionId, { filters, send });
-      return {
-        subscriptionId,
-        unsubscribe: () => subscribers.delete(subscriptionId),
-      };
-    },
-    replayFor,
-    cursor() {
-      return { last_sequence: sequence || null, next_sequence: sequence + 1 };
-    },
-    subscriberCount() {
-      return subscribers.size;
-    },
   };
 }
 
@@ -408,178 +130,14 @@ function parseHealthOptions(args, env = process.env) {
   };
 }
 
-function argValue(args = [], name) {
-  const index = args.indexOf(name);
-  if (index === -1) return null;
-  const value = args[index + 1];
-  return typeof value === 'string' && value.length > 0 && !value.startsWith('--') ? value : null;
-}
-
-function authorityModeFromArgs(args = [], env = process.env) {
-  const value = argValue(args, '--authority') ?? env.NARADA_AUTHORITY_MODE ?? env.NARADA_DELEGATED_AUTHORITY_MODE ?? null;
+function parseSiteConfigEnv(value) {
   if (!value) return null;
-  const normalized = String(value).trim().toLowerCase();
-  return ['read', 'write', 'command', 'mutation', 'mutating'].includes(normalized) ? normalized : null;
-}
-
-function delegatedAuthorityRef({ args = [], env = process.env, binding } = {}) {
-  const explicit = env.NARADA_AUTHORITY_REF ?? env.NARADA_DELEGATED_AUTHORITY_REF ?? null;
-  if (explicit) return explicit;
-  const authorityMode = authorityModeFromArgs(args, env);
-  if (!authorityMode || authorityMode === 'read') return null;
-  const sessionId = binding?.session_id ?? argValue(args, '--session') ?? env.NARADA_CARRIER_SESSION_ID ?? 'unknown-session';
-  return `nars-delegated:${authorityMode}:${sessionId}`;
-}
-
-function createDelegatedAuthorityHandoff({ args = [], env = process.env, generatedAt = new Date().toISOString() } = {}) {
-  const binding = lifecycleBindingFromArgs(args, env);
-  const authorityMode = authorityModeFromArgs(args, env);
-  return {
-    schema: 'narada.nars.delegated_authority_handoff.v1',
-    crossing_regime: 'nars_runtime_server_to_carrier_substrate',
-    source: {
-      package: '@narada2/agent-runtime-server',
-      entrypoint: 'narada-agent-runtime-server',
-    },
-    target: {
-      package: '@narada2/carrier-runtime',
-      mode: 'in-process',
-    },
-    generated_at: generatedAt,
-    agent_id: binding.agent_id,
-    session_id: binding.session_id,
-    authority_ref: delegatedAuthorityRef({ args, env, binding }),
-    authority_mode: authorityMode,
-    evidence: {
-      site_root: binding.metadata.site_root ?? null,
-      agent_start_event_id: binding.metadata.agent_start_event_id ?? null,
-      codex_admission_id: env.NARADA_CODEX_ADMISSION_ID ?? null,
-      authority_source: (env.NARADA_AUTHORITY_REF ?? env.NARADA_DELEGATED_AUTHORITY_REF) ? 'env_ref' : authorityMode ? 'argv_authority' : null,
-    },
-  };
-}
-
-function sendJsonResponse(response, statusCode, payload) {
-  response.writeHead(statusCode, { 'content-type': 'application/json; charset=utf-8' });
-  response.end(`${JSON.stringify(payload)}\n`);
-}
-
-async function readRequestJson(request) {
-  let body = '';
-  for await (const chunk of request) body += String(chunk);
-  if (!body.trim()) return {};
-  return JSON.parse(body);
-}
-
-function artifactHttpError(response, error) {
-  const code = error?.code ?? 'artifact_error';
-  const status = code === 'artifact_not_found' || code === 'artifact_content_missing' ? 404 : code === 'artifact_path_outside_admitted_roots' ? 403 : 400;
-  sendJsonResponse(response, status, { schema: 'narada.nars.artifact_error.v1', error: code, message: error instanceof Error ? error.message : String(error), details: error?.details ?? null });
-}
-
-async function handleArtifactHttpRequest({ request, response, runtimeContext }) {
-  const url = new URL(request.url ?? '/', 'http://127.0.0.1');
-  const match = url.pathname.match(/^\/sessions\/([^/]+)\/artifacts(?:\/([^/]+)(?:\/(content|message))?)?$/);
-  if (!match) return false;
-  const sessionId = decodeURIComponent(match[1]);
-  const artifactId = match[2] ? decodeURIComponent(match[2]) : null;
-  const content = match[3] === 'content';
-  const message = match[3] === 'message';
-  if (sessionId !== runtimeContext.session) {
-    sendJsonResponse(response, 404, { schema: 'narada.nars.artifact_error.v1', error: 'session_not_found', message: 'Artifact session does not match this NARS runtime.' });
-    return true;
-  }
   try {
-    if (request.method === 'POST' && !artifactId && !content && !message) {
-      const params = await readRequestJson(request);
-      const registered = registerNarsArtifact({
-        sessionPath: runtimeContext.sessionPath,
-        sessionId: runtimeContext.session,
-        agentId: runtimeContext.identity,
-        siteRoot: runtimeContext.siteRoot,
-        sourcePath: params.source_path ?? params.path,
-        kind: params.kind,
-        title: params.title,
-        contentType: params.content_type,
-        renderHint: params.render_hint,
-        accessScope: params.access?.scope ?? params.access_scope,
-      });
-      sendJsonResponse(response, 201, { schema: 'narada.nars.artifact_registered.v1', artifact: registered.public_record });
-      return true;
-    }
-    if (request.method === 'POST' && artifactId && message) {
-      const params = await readRequestJson(request);
-      const artifact = publicNarsArtifactRecord(readNarsArtifact({ sessionPath: runtimeContext.sessionPath, artifactId }));
-      const messageEvent = buildArtifactAssistantMessageEvent({ runtimeContext, artifact, params });
-      const published = publishRuntimeEvent({ eventHub: runtimeContext.eventHub, runtimeContext, event: messageEvent });
-      sendJsonResponse(response, 201, {
-        schema: 'narada.nars.artifact_message_presented.v1',
-        status: 'presented',
-        artifact,
-        event: published,
-        message_part: artifactMessagePartFromRecord(artifact, params),
-      });
-      return true;
-    }
-    if (request.method !== 'GET') {
-      sendJsonResponse(response, 405, { error: 'method_not_allowed' });
-      return true;
-    }
-    if (!artifactId) {
-      sendJsonResponse(response, 200, readNarsArtifactIndex({ sessionPath: runtimeContext.sessionPath }));
-      return true;
-    }
-    if (!content) {
-      sendJsonResponse(response, 200, { schema: 'narada.nars.artifact_read.v1', artifact: publicNarsArtifactRecord(readNarsArtifact({ sessionPath: runtimeContext.sessionPath, artifactId })) });
-      return true;
-    }
-    const artifactContent = readNarsArtifactContent({ sessionPath: runtimeContext.sessionPath, artifactId });
-    response.writeHead(200, { 'content-type': artifactContent.content_type, ...artifactContent.headers });
-    response.end(artifactContent.content);
-    return true;
-  } catch (error) {
-    artifactHttpError(response, error);
-    return true;
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch {
+    return null;
   }
-}
-
-function buildArtifactAssistantMessageEvent({ runtimeContext, artifact, params = {} }) {
-  const messagePart = artifactMessagePartFromRecord(artifact, params);
-  const text = optionalText(params.text) ?? optionalText(params.message) ?? `Artifact ready: ${messagePart.title ?? messagePart.artifact_id}`;
-  return {
-    event: 'assistant_message',
-    event_family: 'turn',
-    agent_id: runtimeContext.identity,
-    session_id: runtimeContext.session,
-    request_id: optionalText(params.request_id) ?? `artifact_present_${messagePart.artifact_id}`,
-    timestamp: new Date().toISOString(),
-    source: 'nars_artifact_presentation',
-    content: [
-      { type: 'text', text },
-      messagePart,
-    ],
-    artifact_id: messagePart.artifact_id,
-  };
-}
-
-function artifactMessagePartFromRecord(artifact, params = {}) {
-  return {
-    type: 'artifact_ref',
-    artifact_id: String(artifact.artifact_id ?? artifact.id),
-    ...(artifact.kind || params.kind ? { kind: String(artifact.kind ?? params.kind) } : {}),
-    ...(artifact.title || params.title ? { title: String(artifact.title ?? params.title) } : {}),
-    ...(artifact.render_hint || params.render_hint ? { render_hint: String(artifact.render_hint ?? params.render_hint) } : { render_hint: 'inline' }),
-  };
-}
-
-function publishRuntimeEvent({ eventHub, runtimeContext, event }) {
-  const published = eventHub?.publish(event) ?? event;
-  if (runtimeContext.eventsPath) appendFileSync(runtimeContext.eventsPath, `${JSON.stringify(published)}\n`, 'utf8');
-  return published;
-}
-
-function optionalText(value) {
-  return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
 
 function startHealthProjection({ childStdin, host, port, timeoutMs = 2000, runtimeContext }) {
@@ -705,7 +263,8 @@ async function main() {
   const preliminaryRuntimeContext = createCarrierRuntimeContext({
     identity: lifecycleBinding.agent_id,
     session: lifecycleBinding.session_id,
-    siteRoot: process.env.NARADA_SITE_ROOT,
+    siteRoot: lifecycleBinding.metadata.site_root,
+    siteConfig: parseSiteConfigEnv(process.env.NARADA_SITE_CONFIG),
     operatorSurfaceKind,
   });
   if (parsedHealth.health.enabled) {
@@ -733,7 +292,8 @@ async function main() {
   const runtimeContext = createCarrierRuntimeContext({
     identity: lifecycleBinding.agent_id,
     session: lifecycleBinding.session_id,
-    siteRoot: process.env.NARADA_SITE_ROOT,
+    siteRoot: lifecycleBinding.metadata.site_root,
+    siteConfig: parseSiteConfigEnv(process.env.NARADA_SITE_CONFIG),
     operatorSurfaceKind,
     intelligenceProvider: process.env.NARADA_INTELLIGENCE_PROVIDER,
     narsDelegatedAuthorityHandoff: delegatedAuthorityHandoff,

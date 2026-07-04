@@ -8,7 +8,7 @@ import { resolveNaradaSitePaths } from '@narada2/site-paths';
  */
 export function buildCarrierRuntimePaths(siteRoot, session) {
   const paths = resolveNaradaSitePaths({
-    siteRoot: siteRoot ?? process.env.NARADA_SITE_ROOT ?? process.cwd(),
+    siteRoot,
     sessionId: session,
   });
   return {
@@ -27,7 +27,7 @@ export function buildCarrierRuntimePaths(siteRoot, session) {
  * @param {object} options
  * @param {string} options.identity
  * @param {string} options.session
- * @param {string} [options.siteRoot]
+ * @param {string} options.siteRoot Site root. Required unless `NARADA_SITE_ROOT` is set.
  * @param {string} [options.siteId]
  * @param {string} [options.naradaDir]
  * @param {string} [options.sessionPath]
@@ -41,6 +41,7 @@ export function buildCarrierRuntimePaths(siteRoot, session) {
  * @param {number} [options.operationHeartbeatDirectiveInitialDelayMs]
  * @param {string|null} [options.healthUrl]
  * @param {string|null} [options.eventStreamUrl]
+ * @param {object|null} [options.siteConfig]
  * @param {string} [options.operatorSurfaceKind]
  * @param {string} [options.authorityRuntimeHost]
  * @returns {CarrierRuntimeContext}
@@ -62,22 +63,33 @@ export function createCarrierRuntimeContext({
   operationHeartbeatDirectiveInitialDelayMs = 60000,
   healthUrl = null,
   eventStreamUrl = null,
+  siteConfig = null,
   operatorSurfaceKind = process.env.NARADA_OPERATOR_SURFACE_KIND ?? 'agent-cli',
   authorityRuntimeHost = process.env.NARADA_AUTHORITY_RUNTIME_HOST ?? 'local',
 } = {}) {
   if (!identity) throw new TypeError('identity is required');
   if (!session) throw new TypeError('session is required');
+  const resolvedSiteRoot = siteRoot ?? process.env.NARADA_SITE_ROOT;
+  if (!resolvedSiteRoot) throw new TypeError('siteRoot is required');
 
   const paths = sessionPath && eventsPath
     ? { naradaDir: naradaDir ?? null, sessionDir: null, sessionPath, eventsPath }
-    : buildCarrierRuntimePaths(siteRoot, session);
+    : buildCarrierRuntimePaths(resolvedSiteRoot, session);
+  const resolvedNaradaDir = naradaDir ?? paths.naradaDir;
+  const resolvedSiteId = siteId ?? process.env.NARADA_SITE_ID ?? null;
+  const resolvedSiteConfig = normalizeSiteConfig(siteConfig ?? parseSiteConfigEnv(process.env.NARADA_SITE_CONFIG), {
+    siteId: resolvedSiteId,
+    siteRoot: resolvedSiteRoot,
+    naradaDir: resolvedNaradaDir,
+    workspaceRoot: process.env.NARADA_WORKSPACE_ROOT ?? null,
+  });
 
   return Object.freeze({
     identity,
     session,
-    siteRoot: siteRoot ?? process.env.NARADA_SITE_ROOT ?? process.cwd(),
-    siteId: siteId ?? process.env.NARADA_SITE_ID ?? null,
-    naradaDir: naradaDir ?? paths.naradaDir,
+    siteRoot: resolvedSiteRoot,
+    siteId: resolvedSiteId,
+    naradaDir: resolvedNaradaDir,
     sessionPath: paths.sessionPath,
     eventsPath: paths.eventsPath,
     intelligenceProvider,
@@ -99,6 +111,38 @@ export function createCarrierRuntimeContext({
     operationHeartbeatDirectiveInitialDelayMs,
     healthUrl,
     eventStreamUrl,
+    siteConfig: Object.freeze(resolvedSiteConfig),
   });
+}
+
+function parseSiteConfigEnv(value) {
+  if (!value) return null;
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function normalizeStringArray(value) {
+  return Array.isArray(value)
+    ? [...new Set(value.filter((entry) => typeof entry === 'string' && entry.trim()).map((entry) => String(entry)))]
+    : [];
+}
+
+function normalizeSiteConfig(config, defaults) {
+  const record = config && typeof config === 'object' ? config : {};
+  return {
+    schema: 'narada.nars.site_config.v1',
+    site_id: typeof record.site_id === 'string' && record.site_id ? record.site_id : defaults.siteId,
+    site_root: typeof record.site_root === 'string' && record.site_root ? record.site_root : defaults.siteRoot,
+    narada_root: typeof record.narada_root === 'string' && record.narada_root ? record.narada_root : defaults.naradaDir,
+    workspace_root: typeof record.workspace_root === 'string' && record.workspace_root ? record.workspace_root : defaults.workspaceRoot,
+    pc_site_root: typeof record.pc_site_root === 'string' && record.pc_site_root ? record.pc_site_root : null,
+    mcp_scope: typeof record.mcp_scope === 'string' && record.mcp_scope ? record.mcp_scope : null,
+    mcp_loci: normalizeStringArray(record.mcp_loci),
+    allowed_roots: normalizeStringArray(record.allowed_roots),
+  };
 }
 

@@ -207,9 +207,18 @@ The protocol should support at least:
 | `conversation.send` | Append one automation/user turn and run the agent loop until the turn is complete or blocked. |
 | `conversation.enqueue` | Accept ordinary operator input for FIFO admission after the active turn without interrupting it. |
 | `conversation.interrupt` | Request bounded interruption of an active turn. |
+| `conversation.steer` | Interrupt an active turn and admit operator steering as the next queued turn. |
 | `session.status` | Inspect identity, readiness, active turn, tool posture, and blockers. |
+| `session.health` | Return the stable runtime health probe shape. |
+| `session.events.subscribe` | Subscribe to live runtime events with optional replay. |
+| `session.events.read` | Page durable `events.jsonl` history. |
 | `session.resume` | Reattach automation to an existing durable session. |
 | `session.close` | Close or hand off the session with terminal evidence. |
+| `session.operations` | Inspect operation, request, MCP, queue, and handoff posture. |
+| `session.recovery` | Inspect recovery recommendations and handoff commands. |
+| `session.command.execute` | Execute an admitted slash/operator command through the runtime protocol. |
+| `session.artifacts.register` | Register a session-scoped artifact from an admitted local path. |
+| `session.artifacts.read` | Read public artifact metadata or the session artifact index. |
 
 The protocol may be transported over stdio, named pipe, local HTTP, WebSocket, or another local transport. The transport is an embodiment detail. The event and authority contract is the invariant.
 

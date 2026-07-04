@@ -17,9 +17,13 @@ function maybeSessionPaths(narsSessionsRoot, sessionId) {
   if (sessionId === undefined || sessionId === null || String(sessionId).trim().length === 0) return {};
   const normalizedSessionId = String(sessionId).trim();
   const narsSessionDir = join(narsSessionsRoot, normalizedSessionId);
+  const narsControlSidebandPath = join(narsSessionDir, 'control.jsonl');
+  const narsOperatorInputQueuePath = join(narsSessionDir, 'operator-input-queue.json');
   return {
     narsSessionDir,
-    narsControlPath: join(narsSessionDir, 'control.jsonl'),
+    narsControlSidebandPath,
+    narsOperatorInputQueuePath,
+    narsControlPath: narsControlSidebandPath,
     narsSessionPath: join(narsSessionDir, 'session.jsonl'),
     narsEventsPath: join(narsSessionDir, 'events.jsonl'),
     narsHeartbeatPath: join(narsSessionDir, 'heartbeat.json'),

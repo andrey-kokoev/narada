@@ -68,6 +68,8 @@ Required launch inputs:
 | `--site-root` | Site root whose MCP fabric and authority surfaces are mounted. |
 | provider/model env | Already resolved by `agent-start`; NARS consumes, not discovers, provider selection. |
 
+The runtime wrapper accepts the same identity/session/Site binding from `NARADA_AGENT_ID`, `NARADA_CARRIER_SESSION_ID`, and `NARADA_SITE_ROOT` when launch materialization projects those values through the environment. If argv and environment both provide a binding value, they must agree.
+
 Required runtime environment, when available:
 
 | Variable | Meaning |
@@ -86,20 +88,28 @@ NARS must not silently substitute a different Site, identity, or MCP fabric from
 
 The stable protocol is a request/event contract. The transport may be JSONL stdio, named pipe, local HTTP, WebSocket, or another local transport.
 
-Minimum request methods:
+Core request methods:
 
 | Method | Purpose |
 | --- | --- |
 | `conversation.send` | Submit one operator/automation turn and run until terminal state. |
+| `conversation.enqueue` | Queue ordinary operator input for FIFO admission after the active turn. |
 | `conversation.interrupt` | Request bounded interruption of an active turn. |
+| `conversation.steer` | Interrupt an active turn and admit steering as the next queued turn. |
 | `session.status` | Inspect identity, readiness, active turn, MCP posture, and blockers. |
 | `session.health` | Return the stable runtime health probe shape used by local health transports. |
 | `session.events.subscribe` | Attach to the runtime event stream with replay, filters, and cursor semantics. |
+| `session.events.read` | Page durable `events.jsonl` history with sequence/timestamp filters. |
 | `session.recovery` | Inspect the current recovery recommendation and recovery handoffs. |
 | `session.operations` | Inspect active operation posture, request posture, MCP posture, and handoffs. |
 | `session.resume` | Reattach to an existing session handle. |
 | `session.close` | Close or hand off a session with terminal evidence. |
-| `carrier.command.execute` | Execute a slash/operator command through the carrier command contract. |
+| `session.command.execute` | Execute a slash/operator command through the carrier command contract. |
+| `carrier.command.execute` | Legacy alias for `session.command.execute`. |
+| `session.artifacts.register` | Register a session-scoped artifact from an admitted local path. |
+| `session.artifacts.read` | Read public artifact metadata or the artifact index. |
+
+The current runtime also exposes authority-transition and observer-control methods through `@narada2/carrier-protocol`: `authority.source.status`, `authority.source.drain`, `authority.source.seal`, `authority.target.status`, `authority.target.prepare`, `authority.target.activate`, `observers.status`, `observer.mute`, and `observer.unmute`.
 
 Human terminal input is not raw JSONL. A terminal attached to NARS is a projection of the protocol: ordinary lines become `conversation.send` when idle and `conversation.enqueue` during active turns, slash commands become protocol frames such as `carrier.command.execute` or direct session methods, and status/help affordances render from runtime state.
 
@@ -118,6 +128,30 @@ Runtime dependency construction is owned by `@narada2/carrier-runtime/runtime-de
 ### Runtime Ownership Guard
 
 The former `agent-cli` runtime-server adapter has been removed. Reintroduction requires an explicit migration document and tests proving it does not make `agent-cli` an owner of runtime/provider/MCP hosting.
+
+### Current Ownership Audit
+
+| Area | Current owner | Classification | Evidence | Residual risk |
+| --- | --- | --- | --- | --- |
+| Stable runtime binary | `@narada2/agent-runtime-server` | already correctly owned | package exports only `narada-agent-runtime-server`; tests assert no `agent-runtime-server` alias and no `@narada2/agent-cli` dependency | low |
+| Runtime wrapper, health, events, lifecycle hooks, artifacts | `@narada2/agent-runtime-server` | already correctly owned | `server-wrapper.mjs` owns health/event projections and lifecycle dispatch; package metadata names NARS responsibilities | low |
+| Provider and MCP runtime internals | `@narada2/carrier-runtime` behind NARS | already correctly owned by current package split | `agent-runtime-server` delegates dependency construction to `@narada2/carrier-runtime/runtime-dependencies` | medium: eventual extraction may move internals under NARS, but current contract says carrier-runtime is implementation owner |
+| Terminal rendering and operator input projection | `@narada2/agent-cli` plus `@narada2/carrier-terminal-projection` | intentionally client-specific | NARS creates projected terminal bridge only when `operator_surface=agent-cli`; raw JSONL and web surfaces bypass terminal projection | low |
+| Web projection | `@narada2/agent-web-ui` | already correctly owned | package metadata declares web projection ownership and excludes runtime dependency construction/provider execution/MCP hosting | low |
+| Launch planning and selector UX | `@narada2/cli` with User Site PowerShell shim | already correctly owned | workspace launcher invokes Narada CLI; PS1 shim owns Windows convenience only | low |
+| Direct `agent-cli` runtime/server mode | none; removed | already correctly owned | `agent-cli` reports that non-server conversation runtime has been removed; NARS is the runtime path | low |
+| `agent-cli` preflight/session utilities importing `@narada2/carrier-runtime` | `agent-cli` compatibility utilities | compatibility shim needing extraction or narrowing | separate `D:/code/agent-cli` repo still depends on `@narada2/carrier-runtime` and imports provider/MCP runtime helpers for utility/preflight paths | medium: keep out of conversation runtime; extract if these utilities start hosting MCP/provider state for active turns |
+
+Fast verification should use focused package tests:
+
+- `pnpm --filter @narada2/agent-runtime-server test`
+- `pnpm --filter @narada2/agent-runtime-server typecheck`
+- `pnpm --filter @narada2/agent-start test`
+- `node --test packages/layers/cli/test/integration/operator-launch-journey.test.mjs`
+
+Browser/E2E projection tests and full recursive repo tests are not default fast evidence. They must stay behind explicit selectors such as `@narada2/agent-web-ui test:browser`, `test:all`, or root broad test commands with a declared reason and timeout budget.
+
+Residual launch-option risk: the launcher tests are representative, not a full Cartesian product. Coverage should prioritize alias normalization, mutually exclusive legacy/modern options, multi-surface launch, site/role filtering, provider selection/preflight, and stale-dist behavior. Full Cartesian coverage is not practical unless a generated pairwise matrix with bounded cases is introduced.
 
 ## Session Discovery And Attachment Index
 
@@ -677,7 +711,7 @@ The runtime-server tests cover a hook throwing an error containing a secret-like
 
 Known convergence arrows from the current implementation:
 
-- keep moving runtime-specific launch branches out of `narada-agent-start.ts` into carrier launch adapters;
+- keep moving runtime-specific launch branches out of `narada-agent-start.ts` into runtime launch adapters;
 - keep moving provider and credential logic into focused `agent-start` modules;
 - make `@narada2/carrier-command-contract` the single source for command parser/help/dispatch metadata;
 - keep `@narada2/agent-runtime-server` as the package authority for server entrypoints and `@narada2/carrier-runtime` as the package authority for carrier execution;

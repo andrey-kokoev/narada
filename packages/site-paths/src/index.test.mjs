@@ -17,7 +17,9 @@ test('resolves workspace-style sonar Site root to Site authority root', () => {
   assert.equal(paths.siteAuthorityRoot, resolve('D:/code/narada.sonar/.narada'));
   assert.equal(paths.narsSessionsRoot, resolve('D:/code/narada.sonar/.narada/crew/nars-sessions'));
   assert.equal(paths.narsSessionDir, resolve('D:/code/narada.sonar/.narada/crew/nars-sessions/carrier_1'));
+  assert.equal(paths.narsControlSidebandPath, join(paths.narsSessionDir, 'control.jsonl'));
   assert.equal(paths.narsControlPath, join(paths.narsSessionDir, 'control.jsonl'));
+  assert.equal(paths.narsOperatorInputQueuePath, join(paths.narsSessionDir, 'operator-input-queue.json'));
   assert.equal(paths.narsEventsPath, join(paths.narsSessionDir, 'events.jsonl'));
 });
 
