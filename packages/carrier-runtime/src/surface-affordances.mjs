@@ -8,6 +8,12 @@ const INBOX_LIST_TOOL = 'inbox_list';
 const INBOX_NEXT_TOOL = 'inbox_next';
 const INBOX_SHOW_TOOL = 'inbox_show';
 const INBOX_DOCTOR_TOOL = 'inbox_doctor';
+const WORKER_RUNS_LIST_TOOL = 'worker_runs_list';
+const WORKER_DASHBOARD_TOOL = 'worker_dashboard_describe';
+const WORKER_RUN_STATUS_TOOL = 'worker_run_status';
+const DELEGATED_TASKS_LIST_TOOL = 'delegated_tasks_list';
+const DELEGATED_TASK_STATUS_TOOL = 'delegated_task_status';
+const DELEGATED_TASK_SUMMARY_TOOL = 'delegated_task_summary';
 const SCHEDULER_TASK_LIST_TOOL = 'scheduler_task_list';
 const SCHEDULER_TASK_SHOW_TOOL = 'scheduler_task_show';
 const SCHEDULER_TASK_HISTORY_TOOL = 'scheduler_task_history';
@@ -35,6 +41,46 @@ export function buildSopOperatorAffordance({ serverName, server = {}, source = '
     tools: {
       read: [SOP_TEMPLATE_TOOL, SOP_RUN_TOOL].filter((tool) => toolNames.has(tool)),
       doctor: toolNames.has(SOP_DOCTOR_TOOL) ? SOP_DOCTOR_TOOL : null,
+    },
+  };
+}
+
+function delegationAffordanceFromTools(serverName, server = {}) {
+  const toolNames = new Set((server?.tools ?? []).map((tool) => tool?.name).filter(Boolean));
+  const workerSurface = toolNames.has(WORKER_RUNS_LIST_TOOL) || toolNames.has(WORKER_DASHBOARD_TOOL) || toolNames.has(WORKER_RUN_STATUS_TOOL);
+  const taskSurface = toolNames.has(DELEGATED_TASKS_LIST_TOOL) || toolNames.has(DELEGATED_TASK_STATUS_TOOL);
+  if (!workerSurface && !taskSurface) return null;
+  return buildDelegationOperatorAffordance({ serverName, server, source: 'live_tool_inventory' });
+}
+
+export function buildDelegationOperatorAffordance({ serverName, server = {}, source = 'live_tool_inventory' } = {}) {
+  const toolNames = new Set((server?.tools ?? []).map((tool) => tool?.name).filter(Boolean));
+  return {
+    schema: 'narada.mcp_surface.operator_affordance.v1',
+    surface_kind: 'delegation',
+    surface_id: stringField(server?.config, 'surface_id') ?? `${serverName}:delegation`,
+    server_name: serverName,
+    source,
+    renderer: 'delegation_work',
+    title: 'Delegation',
+    panel: {
+      kind: 'delegation_work',
+      title: 'Delegation',
+      summary_method: 'session.delegation.summary',
+      sections: ['posture', 'worker_runs', 'delegated_tasks'],
+    },
+    actions: {
+      read: ['refresh', toolNames.has(WORKER_RUN_STATUS_TOOL) ? 'open_worker_run' : null, toolNames.has(DELEGATED_TASK_STATUS_TOOL) ? 'open_delegated_task' : null].filter(Boolean),
+      candidate_write: [
+        toolNames.has('worker_run') ? 'start_worker_run' : null,
+        toolNames.has('worker_run_reap') ? 'reap_worker_run' : null,
+        toolNames.has('delegated_task_run') ? 'start_delegated_task' : null,
+        toolNames.has('delegated_task_cancel') ? 'cancel_delegated_task' : null,
+      ].filter(Boolean),
+    },
+    tools: {
+      read: [WORKER_RUNS_LIST_TOOL, WORKER_DASHBOARD_TOOL, WORKER_RUN_STATUS_TOOL, DELEGATED_TASKS_LIST_TOOL, DELEGATED_TASK_STATUS_TOOL, DELEGATED_TASK_SUMMARY_TOOL].filter((tool) => toolNames.has(tool)),
+      write: ['worker_run', 'worker_run_reap', 'delegated_task_run', 'delegated_task_cancel'].filter((tool) => toolNames.has(tool)),
     },
   };
 }
@@ -201,6 +247,16 @@ export function buildMcpSurfaceAffordanceProjection(mcpServers = {}) {
       seen.add(key);
       seenSurfaceKinds.add(surfaceKindKey);
       items.push(normalized);
+    }
+    const delegation = delegationAffordanceFromTools(serverName, server);
+    if (delegation) {
+      const key = affordanceKey(delegation);
+      const surfaceKindKey = affordanceSurfaceKindKey(delegation);
+      if (!seen.has(key) && !seenSurfaceKinds.has(surfaceKindKey)) {
+        seen.add(key);
+        seenSurfaceKinds.add(surfaceKindKey);
+        items.push(delegation);
+      }
     }
     const sop = sopAffordanceFromTools(serverName, server);
     if (sop) {

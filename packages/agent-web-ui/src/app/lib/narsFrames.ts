@@ -10,6 +10,10 @@ export function buildInboxSummaryRequestFrame() {
   return contract.buildAgentWebUiInboxSummaryFrame();
 }
 
+export function buildDelegationSummaryRequestFrame() {
+  return contract.buildAgentWebUiDelegationSummaryFrame();
+}
+
 export function buildMailboxSummaryRequestFrame() {
   return contract.buildAgentWebUiMailboxSummaryFrame();
 }

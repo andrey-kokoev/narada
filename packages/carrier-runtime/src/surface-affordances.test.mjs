@@ -65,6 +65,34 @@ test('surface affordance projection advertises inbox panel from inbox MCP invent
   assert.equal(projection.items[0].tools.doctor, 'inbox_doctor');
 });
 
+test('surface affordance projection advertises delegation panel from worker and delegated-task MCP inventory', () => {
+  const projection = buildMcpSurfaceAffordanceProjection({
+    'narada-test-worker-delegation': {
+      tools: [
+        { name: 'worker_runs_list' },
+        { name: 'worker_dashboard_describe' },
+        { name: 'worker_run_status' },
+        { name: 'worker_run' },
+      ],
+      config: { surface_id: 'test.worker-delegation' },
+    },
+    'narada-test-delegated-task': {
+      tools: [
+        { name: 'delegated_tasks_list' },
+        { name: 'delegated_task_status' },
+        { name: 'delegated_task_run' },
+      ],
+      config: { surface_id: 'test.delegated-task' },
+    },
+  });
+
+  const delegationPanels = projection.items.filter((item) => item.surface_kind === 'delegation');
+  assert.equal(delegationPanels.length, 2);
+  assert.equal(delegationPanels[0].panel.summary_method, 'session.delegation.summary');
+  assert.deepEqual(delegationPanels[0].tools.read, ['worker_runs_list', 'worker_dashboard_describe', 'worker_run_status']);
+  assert.deepEqual(delegationPanels[1].tools.read, ['delegated_tasks_list', 'delegated_task_status']);
+});
+
 test('surface affordance projection advertises task lifecycle panel from task lifecycle MCP inventory', () => {
   const projection = buildMcpSurfaceAffordanceProjection({
     'narada-test-task-lifecycle': {

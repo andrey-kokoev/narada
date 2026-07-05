@@ -25,6 +25,7 @@ export const AGENT_WEB_UI_NARS_METHOD_LIST = Object.freeze([
   'session.surface.affordances',
   'session.sop.summary',
   'session.inbox.summary',
+  'session.delegation.summary',
   'session.mailbox.summary',
   'session.scheduler.summary',
   'session.task_lifecycle.summary',
@@ -228,6 +229,18 @@ export function buildAgentWebUiInboxSummaryFrame(options = {}) {
       limit: Number.isFinite(options.limit) ? options.limit : 20,
       status: typeof options.status === 'string' && options.status ? options.status : 'received',
       ...(typeof options.targetRole === 'string' && options.targetRole ? { target_role: options.targetRole } : {}),
+    },
+  };
+}
+
+export function buildAgentWebUiDelegationSummaryFrame(options = {}) {
+  return {
+    id: options.id ?? `agent-web-ui-delegation-summary-${Date.now()}`,
+    method: 'session.delegation.summary',
+    params: {
+      worker_limit: Number.isFinite(options.workerLimit) ? options.workerLimit : 20,
+      task_limit: Number.isFinite(options.taskLimit) ? options.taskLimit : 20,
+      include_terminal: options.includeTerminal !== false,
     },
   };
 }

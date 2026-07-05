@@ -78,7 +78,7 @@ import {
   prepareTargetAuthority,
   sealSourceAuthority,
 } from './authority-transition-state.mjs';
-import { buildInboxOperatorAffordance, buildMailboxOperatorAffordance, buildMcpSurfaceAffordanceProjection, buildSchedulerOperatorAffordance, buildSopOperatorAffordance, buildTaskLifecycleOperatorAffordance } from './surface-affordances.mjs';
+import { buildDelegationOperatorAffordance, buildInboxOperatorAffordance, buildMailboxOperatorAffordance, buildMcpSurfaceAffordanceProjection, buildSchedulerOperatorAffordance, buildSopOperatorAffordance, buildTaskLifecycleOperatorAffordance } from './surface-affordances.mjs';
 import { agentInstructionChain, loadRolePrompt } from './agent-instructions.mjs';
 import { loadSession } from './session-records.mjs';
 import {
@@ -270,6 +270,144 @@ function normalizeInboxEnvelope(envelope) {
     created_at: stringValue(record.created_at) ?? null,
     updated_at: stringValue(record.updated_at) ?? null,
   };
+}
+
+function findWorkerDelegationServerBinding(mcpServers = {}) {
+  for (const [serverName, server] of Object.entries(mcpServers)) {
+    const toolNames = new Set((server?.tools ?? []).map((tool) => tool?.name).filter(Boolean));
+    if (toolNames.has('worker_runs_list') || toolNames.has('worker_dashboard_describe') || toolNames.has('worker_run_status')) return { serverName, server, toolNames };
+  }
+  return null;
+}
+
+function findDelegatedTaskServerBinding(mcpServers = {}) {
+  for (const [serverName, server] of Object.entries(mcpServers)) {
+    const toolNames = new Set((server?.tools ?? []).map((tool) => tool?.name).filter(Boolean));
+    if (toolNames.has('delegated_tasks_list') || toolNames.has('delegated_task_status')) return { serverName, server, toolNames };
+  }
+  return null;
+}
+
+async function serverDelegationSummary({ requestId, params = {}, context = {} }) {
+  const workerBinding = findWorkerDelegationServerBinding(context.mcpServers ?? {});
+  const taskBinding = findDelegatedTaskServerBinding(context.mcpServers ?? {});
+  const workerLimit = clampInteger(params.worker_limit ?? params.workerLimit, 20, 1, 100);
+  const taskLimit = clampInteger(params.task_limit ?? params.taskLimit, 20, 1, 100);
+  const includeTerminal = params.include_terminal ?? params.includeTerminal ?? true;
+  const errors = [];
+  const payload = {
+    schema: 'narada.nars.delegation_summary.v1',
+    event: 'session_delegation_summary',
+    request_id: requestId,
+    transport: 'jsonl_stdio',
+    status: workerBinding || taskBinding ? 'ok' : 'unavailable',
+    worker_server_name: workerBinding?.serverName ?? null,
+    delegated_task_server_name: taskBinding?.serverName ?? null,
+    affordance_contract: delegationAffordanceContract(workerBinding, taskBinding),
+    posture: { active: 0, queued: 0, terminal: 0, failed: 0, blocked: 0, stale: 0, total: 0 },
+    workers: { items: [], count: 0, dashboard: null },
+    delegated_tasks: { items: [], count: 0 },
+    errors,
+  };
+  if (!workerBinding && !taskBinding) {
+    errors.push({ code: 'delegation_mcp_unavailable', message: 'No worker-delegation or delegated-task MCP server is available.' });
+    return payload;
+  }
+  if (workerBinding?.toolNames.has('worker_runs_list')) {
+    const runsList = await readDelegationTool(workerBinding, 'worker_runs_list', { limit: workerLimit, include_running: true, include_completed: includeTerminal }, errors);
+    payload.workers = normalizeWorkerRunCollection(runsList);
+  }
+  if (workerBinding?.toolNames.has('worker_dashboard_describe')) {
+    const dashboard = await readDelegationTool(workerBinding, 'worker_dashboard_describe', { mode: 'all_active', limit: workerLimit, include_terminal: false }, errors);
+    payload.workers.dashboard = objectValue(dashboard?.dashboard) ?? null;
+    payload.posture = mergeDelegationPosture(payload.posture, objectValue(dashboard?.counts));
+  }
+  if (taskBinding?.toolNames.has('delegated_tasks_list')) {
+    const activeTasks = await readDelegationTool(taskBinding, 'delegated_tasks_list', { limit: taskLimit, view: 'active_queue', site_scope: 'current_site' }, errors);
+    payload.delegated_tasks = normalizeDelegatedTaskCollection(activeTasks);
+  }
+  payload.posture = summarizeDelegationPosture(payload);
+  if (errors.length) payload.status = payload.workers.count || payload.delegated_tasks.count ? 'partial' : 'error';
+  return payload;
+}
+
+function delegationAffordanceContract(workerBinding, taskBinding) {
+  const primary = workerBinding ?? taskBinding;
+  if (!primary) return buildDelegationOperatorAffordance({ serverName: 'delegation', server: { tools: [] }, source: 'nars_delegation_summary' });
+  const tools = [...(workerBinding?.server?.tools ?? []), ...(taskBinding?.server?.tools ?? [])];
+  return {
+    ...buildDelegationOperatorAffordance({ serverName: primary.serverName, server: { tools, config: primary.server?.config ?? taskBinding?.server?.config ?? {} }, source: 'nars_delegation_summary' }),
+    schema: 'narada.nars.delegation_operator_affordance_contract.v1',
+    server_names: [workerBinding?.serverName, taskBinding?.serverName].filter(Boolean),
+  };
+}
+
+function normalizeWorkerRunCollection(value) {
+  const record = objectValue(value) ?? {};
+  const sourceItems = Array.isArray(record.runs) ? record.runs : Array.isArray(record.items) ? record.items : [];
+  const items = sourceItems.map(normalizeWorkerRunItem).filter(Boolean);
+  return { items, count: numberValue(record.count) ?? items.length, dashboard: null };
+}
+
+function normalizeWorkerRunItem(value) {
+  const record = objectValue(value);
+  if (!record) return null;
+  return {
+    run_id: stringValue(record.run_id) ?? null,
+    status: stringValue(record.status) ?? null,
+    instruction: stringValue(record.instruction) ?? stringValue(record.summary) ?? null,
+    cwd: stringValue(record.cwd) ?? stringValue(record.working_directory) ?? null,
+    runtime: stringValue(record.runtime) ?? null,
+    worker_session_id: stringValue(record.worker_session_id) ?? null,
+    started_at: stringValue(record.started_at) ?? null,
+    finished_at: stringValue(record.finished_at) ?? null,
+    error: stringValue(record.error) ?? stringValue(record.error_classification) ?? null,
+  };
+}
+
+function normalizeDelegatedTaskCollection(value) {
+  const record = objectValue(value) ?? {};
+  const sourceItems = Array.isArray(record.tasks) ? record.tasks : Array.isArray(record.items) ? record.items : [];
+  const items = sourceItems.map(normalizeDelegatedTaskItem).filter(Boolean);
+  return { items, count: numberValue(record.count) ?? items.length };
+}
+
+function normalizeDelegatedTaskItem(value) {
+  const record = objectValue(value);
+  if (!record) return null;
+  return {
+    task_id: stringValue(record.task_id) ?? null,
+    status: stringValue(record.status) ?? null,
+    objective: stringValue(record.objective) ?? stringValue(record.title) ?? null,
+    owner_site_id: stringValue(record.owner_site_id) ?? null,
+    active_run_ids: Array.isArray(record.active_run_ids) ? record.active_run_ids.filter((item) => typeof item === 'string') : [],
+    updated_at: stringValue(record.updated_at) ?? null,
+    created_at: stringValue(record.created_at) ?? null,
+  };
+}
+
+function summarizeDelegationPosture(payload) {
+  const workerItems = payload.workers.items ?? [];
+  const taskItems = payload.delegated_tasks.items ?? [];
+  const statuses = [...workerItems, ...taskItems].map((item) => String(item.status ?? 'unknown'));
+  return mergeDelegationPosture(payload.posture, {
+    total: statuses.length,
+    active: statuses.filter((status) => ['running', 'active', 'claimed', 'in_progress'].includes(status)).length,
+    queued: statuses.filter((status) => ['queued', 'pending', 'ready'].includes(status)).length,
+    terminal: statuses.filter((status) => ['completed', 'done', 'cancelled', 'failed', 'blocked', 'completed_with_errors'].includes(status)).length,
+    failed: statuses.filter((status) => ['failed', 'completed_with_errors', 'error'].includes(status)).length,
+    blocked: statuses.filter((status) => status === 'blocked').length,
+    stale: statuses.filter((status) => status === 'stale').length,
+  });
+}
+
+function mergeDelegationPosture(base, overlay) {
+  const result = { ...base };
+  for (const key of ['active', 'queued', 'terminal', 'failed', 'blocked', 'stale', 'total']) {
+    const value = numberValue(overlay?.[key]);
+    if (value !== null) result[key] = Math.max(numberValue(result[key]) ?? 0, value);
+  }
+  return result;
 }
 
 function findTaskLifecycleServerBinding(mcpServers = {}) {
@@ -1174,6 +1312,28 @@ async function handleServerRequestLine(line, context) {
     }
     return;
   }
+  if (request?.method === 'session.delegation.summary') {
+    const requestId = request?.id ?? null;
+    noteSessionActivity(context.state, 'session_delegation_summary_requested');
+    recordWorkflowRequest(context, 'session_delegation_summary_requested', { requestId, method: 'session.delegation.summary' });
+    try {
+      context.emit('session_delegation_summary', await serverDelegationSummary({ requestId, params: request?.params ?? {}, context }));
+    } catch (error) {
+      context.emit('session_delegation_summary', {
+        schema: 'narada.nars.delegation_summary.v1',
+        event: 'session_delegation_summary',
+        request_id: requestId,
+        transport: 'jsonl_stdio',
+        status: 'error',
+        error: error instanceof Error ? error.message : String(error),
+        posture: { active: 0, queued: 0, terminal: 0, failed: 0, blocked: 0, stale: 0, total: 0 },
+        workers: { items: [], count: 0, dashboard: null },
+        delegated_tasks: { items: [], count: 0 },
+        errors: [],
+      });
+    }
+    return;
+  }
   if (request?.method === 'session.scheduler.summary') {
     const requestId = request?.id ?? null;
     noteSessionActivity(context.state, 'session_scheduler_summary_requested');
@@ -1697,6 +1857,20 @@ async function readInboxTool(binding, name, args, errors) {
     return result.structuredContent ?? parseJson(result.content?.[0]?.text ?? '') ?? null;
   } catch (error) {
     errors.push({ code: 'inbox_tool_failed', tool: name, message: error instanceof Error ? error.message : String(error) });
+    return null;
+  }
+}
+
+async function readDelegationTool(binding, name, args, errors) {
+  if (!binding.toolNames.has(name)) {
+    errors.push({ code: 'delegation_tool_unavailable', tool: name, message: `${name} is not available on ${binding.serverName}.` });
+    return null;
+  }
+  try {
+    const result = await sendMcpRequest(binding.server, { jsonrpc: '2.0', id: randomId(), method: 'tools/call', params: { name, arguments: args } });
+    return result.structuredContent ?? parseJson(result.content?.[0]?.text ?? '') ?? null;
+  } catch (error) {
+    errors.push({ code: 'delegation_tool_failed', tool: name, message: error instanceof Error ? error.message : String(error) });
     return null;
   }
 }

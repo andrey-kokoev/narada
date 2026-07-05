@@ -617,6 +617,83 @@ test('server mode projects inbox summary as an operator-facing DTO', async () =>
   }
 });
 
+test('server mode projects delegation summary from worker and delegated-task MCPs', async () => {
+  const siteRoot = tempRoot('carrier-delegation-summary-test-');
+  try {
+    const input = new PassThrough();
+    const output = new PassThrough();
+    const events = [];
+    let outputBuffer = '';
+    output.setEncoding('utf8');
+    output.on('data', (chunk) => {
+      outputBuffer += chunk;
+      const lines = outputBuffer.split(/\r?\n/);
+      outputBuffer = lines.pop() ?? '';
+      for (const line of lines) {
+        if (line.trim()) events.push(JSON.parse(line));
+      }
+    });
+
+    const sessionId = 'carrier_20260705054000_delegation';
+    const sitePaths = resolveNaradaSitePaths({ siteRoot, sessionId });
+    const sessionDir = sitePaths.narsSessionDir;
+    const runtimeContext = {
+      identity: 'sonar.resident',
+      session: sessionId,
+      siteRoot,
+      sessionPath: join(sessionDir, 'session.jsonl'),
+      eventsPath: join(sessionDir, 'events.jsonl'),
+      providerSettings: { stream: false },
+    };
+    const { dependencies } = createCarrierRuntimeDependencies({ runtimeContext });
+    const fakeWorkerServer = {
+      tools: [{ name: 'worker_runs_list' }, { name: 'worker_dashboard_describe' }, { name: 'worker_run_status' }],
+      async send(request) {
+        const name = request.params?.name;
+        if (name === 'worker_runs_list') return { result: { structuredContent: { count: 1, runs: [{ run_id: 'run_1', status: 'running', instruction: 'research slice', runtime: 'narada-agent-runtime-server', worker_session_id: 'carrier_child' }] } } };
+        if (name === 'worker_dashboard_describe') return { result: { structuredContent: { counts: { total: 1, active: 1, terminal: 0, failed: 0 }, dashboard: { kind: 'read_only_dashboard_descriptor' } } } };
+        return { error: { message: `unexpected worker tool ${name}` } };
+      },
+    };
+    const fakeTaskServer = {
+      tools: [{ name: 'delegated_tasks_list' }, { name: 'delegated_task_status' }],
+      async send(request) {
+        const name = request.params?.name;
+        if (name === 'delegated_tasks_list') return { result: { structuredContent: { count: 1, tasks: [{ task_id: 'dtask_1', status: 'running', objective: 'implement panel', owner_site_id: 'narada.sonar', active_run_ids: ['run_1'] }] } } };
+        return { error: { message: `unexpected task tool ${name}` } };
+      },
+    };
+
+    input.write(`${JSON.stringify({ id: 'delegation-summary-1', method: 'session.delegation.summary', params: { worker_limit: 5, task_limit: 5 } })}\n`);
+    input.end();
+    await runCarrierServerMode({
+      input,
+      output,
+      callChatApiFn: async () => ({ choices: [{ message: { role: 'assistant', content: 'unused' } }] }),
+      runtimeContext,
+      dependencies: {
+        ...dependencies,
+        discoverAndStartMcpServers: async () => ({ 'narada-test-worker-delegation': fakeWorkerServer, 'narada-test-delegated-task': fakeTaskServer }),
+        closeMcpServers: () => {},
+        readMcpPreflightArtifact: () => null,
+      },
+    });
+
+    const summary = events.find((event) => event.event === 'session_delegation_summary');
+    assert.equal(summary?.schema, 'narada.nars.delegation_summary.v1');
+    assert.equal(summary.worker_server_name, 'narada-test-worker-delegation');
+    assert.equal(summary.delegated_task_server_name, 'narada-test-delegated-task');
+    assert.equal(summary.affordance_contract?.panel?.summary_method, 'session.delegation.summary');
+    assert.equal(summary.workers.count, 1);
+    assert.equal(summary.workers.items[0].run_id, 'run_1');
+    assert.equal(summary.delegated_tasks.count, 1);
+    assert.equal(summary.delegated_tasks.items[0].task_id, 'dtask_1');
+    assert.equal(summary.posture.active, 2);
+  } finally {
+    removeTempDir(siteRoot);
+  }
+});
+
 test('server mode projects task lifecycle summary as an operator-facing DTO', async () => {
   const siteRoot = tempRoot('carrier-task-lifecycle-summary-test-');
   try {

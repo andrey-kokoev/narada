@@ -773,7 +773,7 @@ test('CLI args and client config keep runtime authority outside the web package'
     protocolHealthMethod: 'session.health',
     maxReplay: 100,
     operatorInput: true,
-    admittedMethods: ['session.events.subscribe', 'session.events.read', 'session.artifacts.register', 'session.artifacts.read', 'session.surface.affordances', 'session.sop.summary', 'session.inbox.summary', 'session.mailbox.summary', 'session.scheduler.summary', 'session.task_lifecycle.summary', 'conversation.send', 'conversation.enqueue', 'session.status', 'session.health', 'session.recovery', 'session.operations', 'observers.status', 'observer.mute', 'observer.unmute', 'session.command.execute', 'carrier.command.execute', 'conversation.interrupt', 'conversation.steer', 'session.close'],
+    admittedMethods: ['session.events.subscribe', 'session.events.read', 'session.artifacts.register', 'session.artifacts.read', 'session.surface.affordances', 'session.sop.summary', 'session.inbox.summary', 'session.delegation.summary', 'session.mailbox.summary', 'session.scheduler.summary', 'session.task_lifecycle.summary', 'conversation.send', 'conversation.enqueue', 'session.status', 'session.health', 'session.recovery', 'session.operations', 'observers.status', 'observer.mute', 'observer.unmute', 'session.command.execute', 'carrier.command.execute', 'conversation.interrupt', 'conversation.steer', 'session.close'],
   });
 });
 

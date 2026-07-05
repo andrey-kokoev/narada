@@ -11,6 +11,7 @@ import {
   buildAgentWebUiConversationEnqueueFrame,
   buildAgentWebUiConversationSendFrame,
   buildAgentWebUiConversationSteerFrame,
+  buildAgentWebUiDelegationSummaryFrame,
   buildAgentWebUiEventsReadFrame,
   buildAgentWebUiHelpText,
   buildAgentWebUiInboxSummaryFrame,
@@ -43,6 +44,7 @@ test('NARS client projection contract owns attach commands and web UI capabiliti
   assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('session.surface.affordances'), true);
   assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('session.sop.summary'), true);
   assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('session.inbox.summary'), true);
+  assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('session.delegation.summary'), true);
   assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('session.mailbox.summary'), true);
   assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('session.scheduler.summary'), true);
   assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('session.task_lifecycle.summary'), true);
@@ -84,6 +86,11 @@ test('NARS client projection contract owns web UI operator input projection', ()
     id: 'inbox-1',
     method: 'session.inbox.summary',
     params: { limit: 7, status: 'received', target_role: 'architect' },
+  });
+  assert.deepEqual(buildAgentWebUiDelegationSummaryFrame({ id: 'delegation-1', workerLimit: 4, taskLimit: 6, includeTerminal: false }), {
+    id: 'delegation-1',
+    method: 'session.delegation.summary',
+    params: { worker_limit: 4, task_limit: 6, include_terminal: false },
   });
   assert.deepEqual(buildAgentWebUiMailboxSummaryFrame({ id: 'mailbox-1', accountLimit: 3, messageLimit: 8, query: 'ops' }), {
     id: 'mailbox-1',

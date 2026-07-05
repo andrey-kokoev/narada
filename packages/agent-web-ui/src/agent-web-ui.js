@@ -1,6 +1,7 @@
 import {
   AGENT_WEB_UI_NARS_METHOD_LIST,
   AGENT_WEB_UI_NARS_METHODS,
+  buildAgentWebUiDelegationSummaryFrame as buildDelegationSummaryRequestFrame,
   buildAgentWebUiEventsReadFrame as buildEventsReadFrame,
   buildAgentWebUiInboxSummaryFrame as buildInboxSummaryRequestFrame,
   buildAgentWebUiMailboxSummaryFrame as buildMailboxSummaryRequestFrame,
@@ -46,6 +47,7 @@ export {
   normalizeNarsClientProjectionVerbosity,
   projectRuntimeEvent,
   shouldRenderRuntimeEvent,
+  buildDelegationSummaryRequestFrame,
   buildInboxSummaryRequestFrame,
   buildConversationEnqueueFrame,
   buildEventsReadFrame,
