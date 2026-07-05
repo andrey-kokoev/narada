@@ -2,7 +2,7 @@
 
 This document defines the target shape for NARS client projection semantics. It exists to prevent `agent-cli`, `agent-web-ui`, Cloudflare projection surfaces, and future clients from independently deciding what a NARS event means to an operator.
 
-MCP-specific panel projection rules are defined in [`mcp-specific-operator-panels.md`](mcp-specific-operator-panels.md). SOP is the reference workflow implementation of that pattern; Synced Email is the reference read-only synced-record implementation.
+MCP-specific panel projection rules are defined in [`mcp-specific-operator-panels.md`](mcp-specific-operator-panels.md). SOP is the reference workflow implementation of that pattern; Synced Email is the reference read-only synced-record implementation. Graph Mail is explicitly not a first-wave standalone browser panel because its live read and mutation authority share one sensitive surface.
 
 ## Objective
 
@@ -213,6 +213,25 @@ When a read-only `mailbox-mcp` surface is mounted, NARS may emit or answer a syn
 ```
 
 Message items should expose display-safe fields such as `message_id`, `mailbox_id`, `folder`, `thread_id`, `subject`, `from`, `received_at`, `unread`, `importance`, `categories`, `preview`, and `attachment_count`. The synced email panel is read-only: mail send, draft, delete, or move actions belong to explicit Graph/mail authority surfaces, not to the mailbox projection.
+
+### Graph Mail Boundary
+
+Graph Mail projections are not admitted into `agent-web-ui` as a generic panel in the first wave.
+
+Reasons:
+
+- `graph-mail-mcp` owns live mailbox reads and live mutations in the same authority surface.
+- Synced Email already provides the safe read-only operator mailbox view through `mailbox-mcp`.
+- Browser projection must not blur synced records with live Microsoft Graph authority.
+- Message bodies, draft mutation, send, discard, move/delete, and attachment mutation require explicit NARS protocol methods and policy checks before any browser affordance can exist.
+
+Allowed current posture:
+
+- Graph Mail may be used by agents through MCP under existing authority rules.
+- Agent Web UI may show outcomes as ordinary assistant messages or artifacts when NARS emits them through canonical lifecycle events.
+- No `session.graph_mail.summary` method is admitted yet.
+
+Future posture, if warranted, must be narrow and named for the exact safe domain, for example `session.graph_mail.draft_status.summary`. It must expose bounded metadata only and must not include body content or mutation controls by default.
 
 ### Scheduler Summary
 

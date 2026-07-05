@@ -6,6 +6,8 @@ MCP-specific operator panels are read-oriented projections of authority MCP surf
 
 SOP is the reference workflow implementation. Synced Email is the reference read-only synced-record implementation over `mailbox-mcp`. Together they prove the pattern for future panels such as task lifecycle, scheduler, artifacts, or richer mail views.
 
+Graph Mail is intentionally not a first-wave standalone browser panel. It is a live Microsoft Graph authority surface with read tools and high-impact mutation tools on the same MCP boundary. First-wave mail UI remains Synced Email unless a narrower Graph Mail projection is explicitly admitted.
+
 ## Target Shape
 
 The pattern has four layers:
@@ -85,6 +87,16 @@ For Synced Email:
 | `refresh` | Read projection request through `session.mailbox.summary`. |
 | `open_message` / `open_thread` | Local panel expansion or future read-only detail request. |
 | mail send, draft, delete, move | Out of scope for `mailbox-mcp`; these belong to explicit Graph/mail authority paths, not the read-only synced mailbox panel. |
+
+For Graph Mail:
+
+| Action | Current posture |
+| --- | --- |
+| `graph_mail_doctor` | Safe diagnostic read, but not enough to justify a standalone panel. |
+| `graph_mail_query`, `graph_mail_message_show`, `graph_mail_attachment_list`, `graph_mail_attachment_get` | Live Graph reads; first-wave browser projection is deferred because these can expose live mailbox content and should not be confused with synced records. |
+| draft create/reply/update/discard/send and attachment add/upload/delete | Out of scope for browser panels. These require explicit authority flows and must not be introduced through a generic MCP panel. |
+
+Decision: Graph Mail remains behind explicit agent/NARS authority flows and may be linked contextually from Synced Email only as a future admitted read-only detail projection. The safe future candidate is a narrow `session.graph_mail.draft_status.summary` or `session.graph_mail.live_read.summary` that exposes bounded metadata only, never raw message bodies or send/delete actions by default.
 
 For Scheduler:
 
@@ -214,3 +226,19 @@ The preferred order is:
 3. Client-side guessing: not allowed for load-bearing panels.
 
 The browser may choose layout and visual treatment, but it must not decide that an MCP surface exists or infer authority from tool names by itself.
+
+## Boundary Decisions
+
+### Graph Mail
+
+Graph Mail MCP currently combines live reads (`graph_mail_query`, `graph_mail_message_show`, attachment list/get) with live mailbox mutations (draft create/reply/update/discard/send and attachment add/upload/delete). That makes a generic browser panel unsafe for the first wave: it would blur read-only synced mailbox state with live Graph authority, and it would invite accidental exposure of message bodies or mutation controls.
+
+First-wave decision:
+
+- no standalone Graph Mail panel in `agent-web-ui`;
+- no Graph Mail browser mutation path;
+- no body-content projection through Graph Mail by default;
+- Synced Email remains the operator mail panel for read-only mailbox state;
+- future Graph Mail UI must be a separate, narrow, NARS-admitted projection with an explicit method name and tests for redaction, bounded fields, and mutation absence.
+
+Potential follow-up task if/when needed: add a read-only Graph Mail draft/status projection that exposes only mailbox id, draft/message id, subject, timestamp, recipient counts, attachment counts, and policy posture, with no body content and no send/discard/update controls.
