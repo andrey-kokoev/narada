@@ -255,10 +255,13 @@ test('server mode projects SOP summary as an operator-facing DTO', async () => {
       async send(request) {
         const name = request.params?.name;
         if (name === 'sop_template_list') {
-          return { result: { structuredContent: { items: [{ sop_id: 'daily-briefing', version: 2, title: 'Daily briefing', status: 'active', steps: [{ id: 'review', executor: 'operator', blocking: true, title: 'Review draft' }] }], count: 1 } } };
+          return { result: { structuredContent: { items: [{ sop_id: 'daily-briefing', version: 2, title: 'Daily briefing', description: 'Prepare and review the daily update.', status: 'active', trigger_kind: 'manual', steps: [{ id: 'compose', executor: 'agent', blocking: false, title: 'Compose draft', instructions: 'Use current evidence.' }, { id: 'review', executor: 'operator', blocking: true, title: 'Review draft', depends_on: ['compose'] }] }], count: 1 } } };
         }
         if (name === 'sop_run_list') {
-          return { result: { structuredContent: { items: [{ run_id: 'run_1', sop_id: 'daily-briefing', sop_version: 2, sop_title: 'Daily briefing', status: 'awaiting_confirmation', next_awaits_confirmation: true, step_states: [{ step_id: 'review', executor: 'operator', blocking: true, title: 'Review draft', status: 'running' }] }], count: 1 } } };
+          return { result: { structuredContent: { items: [
+            { run_id: 'run_1', sop_id: 'daily-briefing', sop_version: 2, sop_title: 'Daily briefing', status: 'awaiting_confirmation', next_awaits_confirmation: true, started_at: '2026-07-05T03:00:00.000Z', updated_at: '2026-07-05T03:03:00.000Z', step_states: [{ step_id: 'compose', executor: 'agent', blocking: false, title: 'Compose draft', status: 'completed', completed_at: '2026-07-05T03:02:00.000Z', result: { summary: 'Draft body written.' } }, { step_id: 'review', executor: 'operator', blocking: true, title: 'Review draft', status: 'running', started_at: '2026-07-05T03:03:00.000Z' }] },
+            { run_id: 'run_0', sop_id: 'daily-briefing', sop_version: 2, sop_title: 'Daily briefing', status: 'completed', next_awaits_confirmation: false, completed_at: '2026-07-04T03:05:00.000Z', step_states: [{ step_id: 'review', executor: 'operator', blocking: true, title: 'Review draft', status: 'completed', completed_at: '2026-07-04T03:05:00.000Z', result: { receipt_id: 'receipt_1' } }] },
+          ], count: 2 } } };
         }
         if (name === 'sop_doctor') {
           return { result: { structuredContent: { status: 'ok', server_name: 'narada-test-sop' } } };
@@ -286,11 +289,18 @@ test('server mode projects SOP summary as an operator-facing DTO', async () => {
     assert.equal(summary?.schema, 'narada.nars.sop_summary.v1');
     assert.equal(summary.server_name, 'narada-test-sop');
     assert.equal(summary.affordance_contract?.panel?.sections.includes('active_run'), true);
-    assert.equal(summary.templates.items[0].step_count, 1);
+    assert.equal(summary.affordance_contract?.actions?.read.includes('open_run'), true);
+    assert.equal(summary.affordance_contract?.actions?.run.includes('confirm_operator_step'), true);
+    assert.equal(summary.templates.items[0].step_count, 2);
+    assert.equal(summary.templates.items[0].description, 'Prepare and review the daily update.');
+    assert.deepEqual(summary.templates.items[0].steps[1].depends_on, ['compose']);
     assert.equal(summary.active_run.run_id, 'run_1');
+    assert.equal(summary.active_run.started_at, '2026-07-05T03:00:00.000Z');
+    assert.equal(summary.active_run.step_timeline[0].result.summary, 'Draft body written.');
     assert.equal(summary.active_run.next_step.step_id, 'review');
     assert.deepEqual(summary.active_run.available_actions, ['open_run', 'refresh_run', 'cancel_run', 'confirm_operator_step']);
-    assert.equal(summary.recent_runs.count, 1);
+    assert.equal(summary.recent_runs.count, 2);
+    assert.deepEqual(summary.recent_runs.items[1].available_actions, ['open_run']);
   } finally {
     removeTempDir(siteRoot);
   }

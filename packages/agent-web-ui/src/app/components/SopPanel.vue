@@ -55,6 +55,14 @@ function runStatusLine(run: Record<string, unknown>): string {
   ].filter(Boolean).join(' · ');
 }
 
+function runMetaLine(run: Record<string, unknown>): string {
+  return [
+    textField(run, 'started_at') ? `started ${textField(run, 'started_at')}` : null,
+    textField(run, 'updated_at') ? `updated ${textField(run, 'updated_at')}` : null,
+    textField(run, 'completed_at') ? `completed ${textField(run, 'completed_at')}` : null,
+  ].filter(Boolean).join(' · ');
+}
+
 function nextStepSummary(run: Record<string, unknown> | null): string {
   if (!run) return '';
   const next = run.next_step;
@@ -87,6 +95,14 @@ function arrayField(record: Record<string, unknown>, ...fields: string[]): Recor
   return [];
 }
 
+function stringArrayField(record: Record<string, unknown>, ...fields: string[]): string[] {
+  for (const field of fields) {
+    const value = record[field];
+    if (Array.isArray(value)) return value.filter((item): item is string => typeof item === 'string' && Boolean(item));
+  }
+  return [];
+}
+
 function templateKey(template: Record<string, unknown>): string {
   return `template:${textField(template, 'sop_id')}:${textField(template, 'version')}`;
 }
@@ -106,8 +122,18 @@ function stepMeta(step: Record<string, unknown>): string {
     textField(step, 'executor'),
     textField(step, 'status'),
     textField(step, 'blocking') === 'true' ? 'blocking' : null,
+    textField(step, 'started_at') ? `started ${textField(step, 'started_at')}` : null,
+    textField(step, 'completed_at') ? `completed ${textField(step, 'completed_at')}` : null,
   ].filter(Boolean);
   return parts.join(' · ');
+}
+
+function stepResultSummary(step: Record<string, unknown>): string {
+  if (textField(step, 'error_message')) return `Error: ${textField(step, 'error_message')}`;
+  const result = step.result;
+  if (!result || typeof result !== 'object' || Array.isArray(result)) return '';
+  const record = result as Record<string, unknown>;
+  return textField(record, 'summary', 'status', 'receipt_id', 'artifact_ref');
 }
 
 async function copyDiagnostics() {
@@ -168,6 +194,7 @@ async function copyDiagnostics() {
                 <article v-if="activeRun" class="sop-active-run">
                   <strong>{{ textField(activeRun, 'sop_title') || textField(activeRun, 'sop_id') }}</strong>
                   <span>{{ runStatusLine(activeRun) }}</span>
+                  <span v-if="runMetaLine(activeRun)">{{ runMetaLine(activeRun) }}</span>
                   <span v-if="nextStepSummary(activeRun)">Next: {{ nextStepSummary(activeRun) }}</span>
                   <div v-if="actionList(activeRun).length" class="sop-action-list" aria-label="Available SOP actions">
                     <span v-for="action in actionList(activeRun)" :key="action">{{ actionLabel(action) }}</span>
@@ -183,6 +210,7 @@ async function copyDiagnostics() {
                       <span class="mcp-server-main">
                         <strong>{{ textField(template, 'title') || textField(template, 'sop_id') }}</strong>
                         <span>{{ textField(template, 'sop_id') }} · v{{ textField(template, 'version') }} · {{ textField(template, 'status') }}</span>
+                        <span v-if="textField(template, 'description')">{{ textField(template, 'description') }}</span>
                       </span>
                       <span class="mcp-server-tools-count">{{ textField(template, 'step_count') || arrayField(template, 'steps').length }} steps</span>
                       <span class="mcp-server-chevron" aria-hidden="true">{{ isExpanded(templateKey(template)) ? '−' : '+' }}</span>
@@ -191,6 +219,7 @@ async function copyDiagnostics() {
                       <li v-for="step in arrayField(template, 'steps')" :key="textField(step, 'id', 'step_id') || stepTitle(step)" class="mcp-tool-row sop-step-row">
                         <strong>{{ stepTitle(step) }}</strong>
                         <span v-if="stepMeta(step)">{{ stepMeta(step) }}</span>
+                        <span v-if="stringArrayField(step, 'depends_on').length">Depends on {{ stringArrayField(step, 'depends_on').join(', ') }}</span>
                         <span v-if="textField(step, 'instructions')">{{ textField(step, 'instructions') }}</span>
                       </li>
                     </ol>
@@ -206,6 +235,8 @@ async function copyDiagnostics() {
                       <span class="mcp-server-main">
                         <strong>{{ textField(run, 'sop_title') || textField(run, 'sop_id') }}</strong>
                         <span>{{ runStatusLine(run) }}</span>
+                        <span v-if="runMetaLine(run)">{{ runMetaLine(run) }}</span>
+                        <span v-if="nextStepSummary(run)">Next: {{ nextStepSummary(run) }}</span>
                       </span>
                       <span class="mcp-server-tools-count">{{ textField(run, 'step_count') || arrayField(run, 'step_timeline', 'step_states').length }} steps</span>
                       <span class="mcp-server-chevron" aria-hidden="true">{{ isExpanded(runKey(run)) ? '−' : '+' }}</span>
@@ -214,6 +245,7 @@ async function copyDiagnostics() {
                       <li v-for="step in arrayField(run, 'step_timeline', 'step_states')" :key="textField(step, 'id', 'step_id') || stepTitle(step)" class="mcp-tool-row sop-step-row">
                         <strong>{{ stepTitle(step) }}</strong>
                         <span v-if="stepMeta(step)">{{ stepMeta(step) }}</span>
+                        <span v-if="stepResultSummary(step)">{{ stepResultSummary(step) }}</span>
                       </li>
                     </ol>
                     <div v-if="isExpanded(runKey(run)) && actionList(run).length" class="sop-action-list sop-action-list-expanded" aria-label="Available SOP actions">

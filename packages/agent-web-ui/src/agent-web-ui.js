@@ -2,6 +2,8 @@ import {
   AGENT_WEB_UI_NARS_METHOD_LIST,
   AGENT_WEB_UI_NARS_METHODS,
   buildAgentWebUiEventsReadFrame as buildEventsReadFrame,
+  buildAgentWebUiSopSummaryFrame as buildSopSummaryRequestFrame,
+  buildAgentWebUiSurfaceAffordancesFrame as buildSurfaceAffordancesRequestFrame,
   isAgentWebUiNarsMethod,
   isAgentWebUiProtocolFrame,
 } from '@narada2/nars-client-projection-contract';
@@ -45,6 +47,8 @@ export {
   buildConversationSendFrame,
   buildConversationSteerFrame,
   buildOperatorInputAction,
+  buildSopSummaryRequestFrame,
+  buildSurfaceAffordancesRequestFrame,
   buildSubscribeFrame,
   reconnectDelayForAttempt,
   readInjectedConfig,

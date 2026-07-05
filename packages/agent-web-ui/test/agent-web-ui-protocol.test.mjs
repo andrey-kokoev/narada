@@ -7,6 +7,8 @@ import {
   buildConversationSteerFrame,
   buildEventsReadFrame,
   buildOperatorInputAction,
+  buildSopSummaryRequestFrame,
+  buildSurfaceAffordancesRequestFrame,
   buildSubscribeFrame,
   isAgentWebUiNarsMethod,
   isAgentWebUiProtocolFrame,
@@ -21,6 +23,15 @@ test('agent-web-ui emits admitted NARS methods for event attach and operator inp
   const readPage = buildEventsReadFrame({ id: 'read-1', beforeSequence: 50, direction: 'backward', limit: 25 });
   assert.deepEqual(readPage, { id: 'read-1', method: 'session.events.read', params: { limit: 25, before_sequence: 50, direction: 'backward' } });
   assert.equal(isAgentWebUiProtocolFrame(readPage), true);
+
+  assert.deepEqual(buildSopSummaryRequestFrame({ id: 'sop-1', templateLimit: 10, runLimit: 5, includeTerminal: false }), {
+    id: 'sop-1',
+    method: 'session.sop.summary',
+    params: { template_limit: 10, run_limit: 5, include_terminal: false },
+  });
+  assert.equal(isAgentWebUiProtocolFrame(buildSopSummaryRequestFrame()), true);
+  assert.deepEqual(buildSurfaceAffordancesRequestFrame({ id: 'surface-1' }), { id: 'surface-1', method: 'session.surface.affordances', params: {} });
+  assert.equal(isAgentWebUiProtocolFrame(buildSurfaceAffordancesRequestFrame()), true);
 
   const input = buildConversationSendFrame('run startup sequence', { id: 'input-1' });
   assert.deepEqual(input, {

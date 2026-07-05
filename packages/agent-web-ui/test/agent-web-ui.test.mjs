@@ -237,9 +237,12 @@ test('Vue operator components expose composer without hidden privileged controls
   assert.match(sopPanel, /summary\.recentRuns\.items/);
   assert.match(sopPanel, /available_actions/);
   assert.match(sopPanel, /actionLabel/);
+  assert.match(sopPanel, /runMetaLine/);
+  assert.match(sopPanel, /stepResultSummary/);
   assert.match(sopPanel, /step_timeline/);
   assert.match(sopPanel, /arrayField\(template, 'steps'\)/);
   assert.match(sopPanel, /arrayField\(run, 'step_timeline', 'step_states'\)/);
+  assert.match(sopPanel, /textField\(template, 'description'\)/);
   assert.match(mcpInventory, /mergeHealthInventoryWithEventTools/);
   assert.match(mcpInventory, /server\.tools\.length \? server\.tools : eventToolsByServer\.get\(server\.serverName\)/);
   assert.match(mcpInventory, /arrayField\(mcp, 'tools'\)/);
