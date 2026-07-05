@@ -33,6 +33,7 @@ import {
   startAgentWebUiServer,
 } from '../src/server.js';
 import { createSessionProjection } from '../src/session-projection.js';
+import { summarizeSessionIdentity } from '../src/session-identity.js';
 import {
   createEventHub,
   startEventStreamProjection,
@@ -248,6 +249,64 @@ test('Vue operator components expose composer without hidden privileged controls
   assert.match(statusBoxSelector, /aria-label="Choose status boxes"/);
   assert.match(statusBoxSelector, /status-box-selector-icon/);
   assert.doesNotMatch(statusBoxSelector, />Boxes<\/span>/);
+});
+
+test('session identity projection prefers explicit Site id for workspace-root Site bindings', () => {
+  const summary = summarizeSessionIdentity([
+    {
+      event: 'session_started',
+      site_id: 'narada.sonar',
+      agent_id: 'resident',
+      role: 'resident',
+      session_id: 'carrier_workspace_root',
+      site_root: 'D:/code/narada.sonar',
+    },
+    {
+      event: 'session_health',
+      status: 'healthy',
+      site_id: 'narada.sonar',
+      agent_id: 'resident',
+      role: 'resident',
+      session_id: 'carrier_workspace_root',
+    },
+  ]);
+
+  assert.deepEqual(summary, {
+    siteId: 'narada.sonar',
+    agentId: 'resident',
+    role: 'resident',
+    sessionId: 'carrier_workspace_root',
+    title: 'narada.sonar / resident',
+    subtitle: 'Role: resident · Browser projection attached to one NARS runtime.',
+  });
+});
+
+test('session identity projection keeps embedded-authority roots out of display authority', () => {
+  const summary = summarizeSessionIdentity([
+    {
+      event: 'session_started',
+      agent_id: 'narada-staccato.resident',
+      role: 'resident',
+      session_id: 'carrier_embedded_authority',
+      site_root: 'D:/code/narada.staccato/.narada',
+    },
+    {
+      event: 'session_health',
+      status: 'healthy',
+      agent_id: 'narada-staccato.resident',
+      role: 'resident',
+      session_id: 'carrier_embedded_authority',
+    },
+  ]);
+
+  assert.deepEqual(summary, {
+    siteId: null,
+    agentId: 'narada-staccato.resident',
+    role: 'resident',
+    sessionId: 'carrier_embedded_authority',
+    title: 'narada-staccato.resident',
+    subtitle: 'Role: resident · Browser projection attached to one NARS runtime.',
+  });
 });
 
 test('Vue layout smoke covers shell, status, event list, composer, and event tone styles', async () => {
