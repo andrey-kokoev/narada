@@ -12,6 +12,7 @@ const props = defineProps<{
   artifactTransport: string | null;
   healthBody: Record<string, unknown> | null;
   authorityTransition: Record<string, unknown> | null;
+  hasInboxMcp: boolean;
   hasSopMcp: boolean;
   hasMailboxMcp: boolean;
   hasSchedulerMcp: boolean;
@@ -19,6 +20,7 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{
   'open-mcp-panel': [];
+  'open-inbox-panel': [];
   'open-sop-panel': [];
   'open-mailbox-panel': [];
   'open-scheduler-panel': [];
@@ -68,6 +70,11 @@ function endpointHost(value: string | null): string | null {
 function openMcpPanel() {
   open.value = false;
   emit('open-mcp-panel');
+}
+
+function openInboxPanel() {
+  open.value = false;
+  emit('open-inbox-panel');
 }
 
 function openSopPanel() {
@@ -146,6 +153,10 @@ function openTaskLifecyclePanel() {
               <div>
                 <dt>Tool Surfaces (MCP)</dt>
                 <dd><button type="button" class="site-info-inline-action" @click="openMcpPanel">Open panel</button></dd>
+              </div>
+              <div v-if="hasInboxMcp">
+                <dt>Inbox</dt>
+                <dd><button type="button" class="site-info-inline-action" @click="openInboxPanel">Open panel</button></dd>
               </div>
               <div v-if="hasSopMcp">
                 <dt>SOP</dt>

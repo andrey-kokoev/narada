@@ -41,6 +41,30 @@ test('surface affordance projection advertises SOP panel from live MCP tool inve
   });
 });
 
+test('surface affordance projection advertises inbox panel from inbox MCP inventory', () => {
+  const projection = buildMcpSurfaceAffordanceProjection({
+    'narada-test-inbox': {
+      tools: [
+        { name: 'inbox_list' },
+        { name: 'inbox_next' },
+        { name: 'inbox_show' },
+        { name: 'inbox_doctor' },
+        { name: 'inbox_acknowledge' },
+        { name: 'inbox_dismiss' },
+      ],
+      config: { surface_id: 'test.inbox' },
+    },
+  });
+
+  assert.equal(projection.count, 1);
+  assert.equal(projection.items[0].surface_kind, 'inbox');
+  assert.equal(projection.items[0].panel.summary_method, 'session.inbox.summary');
+  assert.deepEqual(projection.items[0].actions.read, ['refresh', 'open_envelope']);
+  assert.deepEqual(projection.items[0].actions.candidate_write, ['acknowledge_envelope', 'dismiss_envelope']);
+  assert.deepEqual(projection.items[0].tools.read, ['inbox_list', 'inbox_next', 'inbox_show']);
+  assert.equal(projection.items[0].tools.doctor, 'inbox_doctor');
+});
+
 test('surface affordance projection advertises task lifecycle panel from task lifecycle MCP inventory', () => {
   const projection = buildMcpSurfaceAffordanceProjection({
     'narada-test-task-lifecycle': {

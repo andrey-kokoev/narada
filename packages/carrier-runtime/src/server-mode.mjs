@@ -413,6 +413,7 @@ export function isConcurrentServerRequestLine(line) {
     if (request?.method === 'session.health') return true;
     if (request?.method === 'session.events.subscribe') return true;
     if (request?.method === 'session.sop.summary') return true;
+    if (request?.method === 'session.inbox.summary') return true;
     if (request?.method === 'session.mailbox.summary') return true;
     if (request?.method === 'session.scheduler.summary') return true;
     if (request?.method === 'session.task_lifecycle.summary') return true;

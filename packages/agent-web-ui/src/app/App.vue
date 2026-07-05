@@ -4,6 +4,7 @@ import NarsSessionShell from './components/NarsSessionShell.vue';
 import { useAgentActivity } from './composables/useAgentActivity';
 import { useCloudflareProjection, type ProjectionControlConfig } from './composables/useCloudflareProjection';
 import { useHealthStatus } from './composables/useHealthStatus';
+import { useInboxSummary } from './composables/useInboxSummary';
 import { useMailboxSummary } from './composables/useMailboxSummary';
 import { useMcpInventory } from './composables/useMcpInventory';
 import { useNarsConnection } from './composables/useNarsConnection';
@@ -17,7 +18,7 @@ import { useSopSummary } from './composables/useSopSummary';
 import { useSurfaceAffordances } from './composables/useSurfaceAffordances';
 import { useTaskLifecycleSummary } from './composables/useTaskLifecycleSummary';
 import { ArtifactRenderingConfigKey } from './lib/artifactConfig';
-import { buildMailboxSummaryRequestFrame, buildSchedulerSummaryRequestFrame, buildSopSummaryRequestFrame, buildSurfaceAffordancesRequestFrame, buildTaskLifecycleSummaryRequestFrame } from './lib/narsFrames';
+import { buildInboxSummaryRequestFrame, buildMailboxSummaryRequestFrame, buildSchedulerSummaryRequestFrame, buildSopSummaryRequestFrame, buildSurfaceAffordancesRequestFrame, buildTaskLifecycleSummaryRequestFrame } from './lib/narsFrames';
 
 interface AgentWebUiConfig {
   eventEndpoint: string | null;
@@ -49,6 +50,7 @@ const connection = useNarsConnection(
 const events = useNarsEvents(retained.events, projection.verbosity, health.identity);
 const agentActivity = useAgentActivity(retained.events, health.body);
 const mcpInventory = useMcpInventory(retained.events, health.body);
+const inboxSummary = useInboxSummary(retained.events);
 const mailboxSummary = useMailboxSummary(retained.events);
 const schedulerSummary = useSchedulerSummary(retained.events);
 const sopSummary = useSopSummary(retained.events);
@@ -70,6 +72,10 @@ function interruptModel() {
 
 function requestSopSummary() {
   connection.connection.value?.sendFrame(buildSopSummaryRequestFrame());
+}
+
+function requestInboxSummary() {
+  connection.connection.value?.sendFrame(buildInboxSummaryRequestFrame());
 }
 
 function requestMailboxSummary() {
@@ -112,6 +118,7 @@ function requestSurfaceAffordances() {
     :active-turn-id="connection.activeTurnId.value"
     :mcp-inventory="mcpInventory.inventory.value"
     :surface-affordances="surfaceAffordances.summary.value"
+    :inbox-summary="inboxSummary.summary.value"
     :mailbox-summary="mailboxSummary.summary.value"
     :scheduler-summary="schedulerSummary.summary.value"
     :sop-summary="sopSummary.summary.value"
@@ -126,6 +133,7 @@ function requestSurfaceAffordances() {
     @edit-queued="input.editQueued"
     @remove-queued="input.dropQueued($event.index)"
     @steer-queued="input.steerQueuedNow"
+    @request-inbox-summary="requestInboxSummary"
     @request-mailbox-summary="requestMailboxSummary"
     @request-scheduler-summary="requestSchedulerSummary"
     @request-sop-summary="requestSopSummary"

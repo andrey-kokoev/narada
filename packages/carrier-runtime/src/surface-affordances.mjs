@@ -4,6 +4,10 @@ const SOP_DOCTOR_TOOL = 'sop_doctor';
 const MAILBOX_ACCOUNTS_TOOL = 'mailbox_accounts_list';
 const MAILBOX_MESSAGES_TOOL = 'mailbox_messages_list';
 const MAILBOX_DOCTOR_TOOL = 'mailbox_doctor';
+const INBOX_LIST_TOOL = 'inbox_list';
+const INBOX_NEXT_TOOL = 'inbox_next';
+const INBOX_SHOW_TOOL = 'inbox_show';
+const INBOX_DOCTOR_TOOL = 'inbox_doctor';
 const SCHEDULER_TASK_LIST_TOOL = 'scheduler_task_list';
 const SCHEDULER_TASK_SHOW_TOOL = 'scheduler_task_show';
 const SCHEDULER_TASK_HISTORY_TOOL = 'scheduler_task_history';
@@ -31,6 +35,45 @@ export function buildSopOperatorAffordance({ serverName, server = {}, source = '
     tools: {
       read: [SOP_TEMPLATE_TOOL, SOP_RUN_TOOL].filter((tool) => toolNames.has(tool)),
       doctor: toolNames.has(SOP_DOCTOR_TOOL) ? SOP_DOCTOR_TOOL : null,
+    },
+  };
+}
+
+function inboxAffordanceFromTools(serverName, server = {}) {
+  const toolNames = new Set((server?.tools ?? []).map((tool) => tool?.name).filter(Boolean));
+  if (!toolNames.has(INBOX_LIST_TOOL) && !toolNames.has(INBOX_NEXT_TOOL)) return null;
+  return buildInboxOperatorAffordance({ serverName, server, source: 'live_tool_inventory' });
+}
+
+export function buildInboxOperatorAffordance({ serverName, server = {}, source = 'live_tool_inventory' } = {}) {
+  const toolNames = new Set((server?.tools ?? []).map((tool) => tool?.name).filter(Boolean));
+  return {
+    schema: 'narada.mcp_surface.operator_affordance.v1',
+    surface_kind: 'inbox',
+    surface_id: stringField(server?.config, 'surface_id') ?? `${serverName}:inbox`,
+    server_name: serverName,
+    source,
+    renderer: 'inbox_envelopes',
+    title: 'Inbox',
+    panel: {
+      kind: 'inbox_envelopes',
+      title: 'Inbox',
+      summary_method: 'session.inbox.summary',
+      sections: ['next', 'envelopes', 'doctor'],
+    },
+    actions: {
+      read: ['refresh', toolNames.has(INBOX_SHOW_TOOL) ? 'open_envelope' : null].filter(Boolean),
+      candidate_write: [
+        toolNames.has('inbox_acknowledge') ? 'acknowledge_envelope' : null,
+        toolNames.has('inbox_dismiss') ? 'dismiss_envelope' : null,
+        toolNames.has('inbox_promote_capa') ? 'promote_capa' : null,
+        toolNames.has('inbox_submit') ? 'submit_envelope' : null,
+      ].filter(Boolean),
+    },
+    tools: {
+      read: [INBOX_LIST_TOOL, INBOX_NEXT_TOOL, INBOX_SHOW_TOOL].filter((tool) => toolNames.has(tool)),
+      doctor: toolNames.has(INBOX_DOCTOR_TOOL) ? INBOX_DOCTOR_TOOL : null,
+      write: ['inbox_acknowledge', 'inbox_dismiss', 'inbox_promote_capa', 'inbox_submit'].filter((tool) => toolNames.has(tool)),
     },
   };
 }
@@ -147,44 +190,65 @@ export function buildMailboxOperatorAffordance({ serverName, server = {}, source
 export function buildMcpSurfaceAffordanceProjection(mcpServers = {}) {
   const items = [];
   const seen = new Set();
+  const seenSurfaceKinds = new Set();
   for (const [serverName, server] of Object.entries(mcpServers ?? {})) {
     for (const { affordance, source } of configuredAffordances(serverName, server)) {
       const normalized = normalizeAffordance(serverName, server, affordance, source);
       if (!normalized) continue;
       const key = affordanceKey(normalized);
-      if (seen.has(key)) continue;
+      const surfaceKindKey = affordanceSurfaceKindKey(normalized);
+      if (seen.has(key) || seenSurfaceKinds.has(surfaceKindKey)) continue;
       seen.add(key);
+      seenSurfaceKinds.add(surfaceKindKey);
       items.push(normalized);
     }
     const sop = sopAffordanceFromTools(serverName, server);
     if (sop) {
       const key = affordanceKey(sop);
-      if (!seen.has(key)) {
+      const surfaceKindKey = affordanceSurfaceKindKey(sop);
+      if (!seen.has(key) && !seenSurfaceKinds.has(surfaceKindKey)) {
         seen.add(key);
+        seenSurfaceKinds.add(surfaceKindKey);
         items.push(sop);
       }
     }
     const mailbox = mailboxAffordanceFromTools(serverName, server);
     if (mailbox) {
       const key = affordanceKey(mailbox);
-      if (!seen.has(key)) {
+      const surfaceKindKey = affordanceSurfaceKindKey(mailbox);
+      if (!seen.has(key) && !seenSurfaceKinds.has(surfaceKindKey)) {
         seen.add(key);
+        seenSurfaceKinds.add(surfaceKindKey);
         items.push(mailbox);
+      }
+    }
+    const inbox = inboxAffordanceFromTools(serverName, server);
+    if (inbox) {
+      const key = affordanceKey(inbox);
+      const surfaceKindKey = affordanceSurfaceKindKey(inbox);
+      if (!seen.has(key) && !seenSurfaceKinds.has(surfaceKindKey)) {
+        seen.add(key);
+        seenSurfaceKinds.add(surfaceKindKey);
+        items.push(inbox);
       }
     }
     const scheduler = schedulerAffordanceFromTools(serverName, server);
     if (scheduler) {
       const key = affordanceKey(scheduler);
-      if (!seen.has(key)) {
+      const surfaceKindKey = affordanceSurfaceKindKey(scheduler);
+      if (!seen.has(key) && !seenSurfaceKinds.has(surfaceKindKey)) {
         seen.add(key);
+        seenSurfaceKinds.add(surfaceKindKey);
         items.push(scheduler);
       }
     }
     const taskLifecycle = taskLifecycleAffordanceFromTools(serverName, server);
     if (taskLifecycle) {
       const key = affordanceKey(taskLifecycle);
-      if (!seen.has(key)) {
+      const surfaceKindKey = affordanceSurfaceKindKey(taskLifecycle);
+      if (!seen.has(key) && !seenSurfaceKinds.has(surfaceKindKey)) {
         seen.add(key);
+        seenSurfaceKinds.add(surfaceKindKey);
         items.push(taskLifecycle);
       }
     }
@@ -267,6 +331,10 @@ function sopOperatorActions(toolNames) {
 
 function affordanceKey(affordance) {
   return `${affordance.server_name}:${affordance.surface_kind}:${affordance.renderer}`;
+}
+
+function affordanceSurfaceKindKey(affordance) {
+  return `${affordance.server_name}:${affordance.surface_kind}`;
 }
 
 function objectField(record, field) {

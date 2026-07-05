@@ -535,6 +535,88 @@ test('server mode projects scheduler summary as an operator-facing DTO', async (
   }
 });
 
+test('server mode projects inbox summary as an operator-facing DTO', async () => {
+  const siteRoot = tempRoot('carrier-inbox-summary-test-');
+  try {
+    const input = new PassThrough();
+    const output = new PassThrough();
+    const events = [];
+    let outputBuffer = '';
+    output.setEncoding('utf8');
+    output.on('data', (chunk) => {
+      outputBuffer += chunk;
+      const lines = outputBuffer.split(/\r?\n/);
+      outputBuffer = lines.pop() ?? '';
+      for (const line of lines) {
+        if (line.trim()) events.push(JSON.parse(line));
+      }
+    });
+
+    const sessionId = 'carrier_20260705051500_inbox';
+    const sitePaths = resolveNaradaSitePaths({ siteRoot, sessionId });
+    const sessionDir = sitePaths.narsSessionDir;
+    const runtimeContext = {
+      identity: 'sonar.resident',
+      session: sessionId,
+      siteRoot,
+      sessionPath: join(sessionDir, 'session.jsonl'),
+      eventsPath: join(sessionDir, 'events.jsonl'),
+      providerSettings: { stream: false },
+    };
+    const { dependencies } = createCarrierRuntimeDependencies({ runtimeContext });
+    const fakeInboxServer = {
+      tools: [
+        { name: 'inbox_list' },
+        { name: 'inbox_next' },
+        { name: 'inbox_show' },
+        { name: 'inbox_doctor' },
+        { name: 'inbox_acknowledge' },
+        { name: 'inbox_dismiss' },
+      ],
+      async send(request) {
+        const name = request.params?.name;
+        if (name === 'inbox_list') {
+          return { result: { structuredContent: { count: 1, envelopes: [{ envelope_id: 'env_1', status: 'received', kind: 'observation', action: 'review', title: 'Check provider liveness', target_role: 'architect', severity: 'medium' }] } } };
+        }
+        if (name === 'inbox_next') {
+          return { result: { structuredContent: { status: 'ok', envelope: { envelope_id: 'env_1', status: 'received', title: 'Check provider liveness' } } } };
+        }
+        if (name === 'inbox_doctor') {
+          return { result: { structuredContent: { status: 'ok', indexed_count: 1, invalid_count: 0 } } };
+        }
+        return { error: { message: `unexpected tool ${name}` } };
+      },
+    };
+
+    input.write(`${JSON.stringify({ id: 'inbox-summary-1', method: 'session.inbox.summary', params: { limit: 5, status: 'received' } })}\n`);
+    input.end();
+    await runCarrierServerMode({
+      input,
+      output,
+      callChatApiFn: async () => ({ choices: [{ message: { role: 'assistant', content: 'unused' } }] }),
+      runtimeContext,
+      dependencies: {
+        ...dependencies,
+        discoverAndStartMcpServers: async () => ({ 'narada-test-inbox': fakeInboxServer }),
+        closeMcpServers: () => {},
+        readMcpPreflightArtifact: () => null,
+      },
+    });
+
+    const summary = events.find((event) => event.event === 'session_inbox_summary');
+    assert.equal(summary?.schema, 'narada.nars.inbox_summary.v1');
+    assert.equal(summary.server_name, 'narada-test-inbox');
+    assert.equal(summary.affordance_contract?.panel?.summary_method, 'session.inbox.summary');
+    assert.deepEqual(summary.affordance_contract?.actions?.candidate_write, ['acknowledge_envelope', 'dismiss_envelope']);
+    assert.equal(summary.envelopes.count, 1);
+    assert.equal(summary.envelopes.items[0].envelope_id, 'env_1');
+    assert.equal(summary.next_envelope.envelope_id, 'env_1');
+    assert.equal(summary.doctor.indexed_count, 1);
+  } finally {
+    removeTempDir(siteRoot);
+  }
+});
+
 test('server mode projects task lifecycle summary as an operator-facing DTO', async () => {
   const siteRoot = tempRoot('carrier-task-lifecycle-summary-test-');
   try {

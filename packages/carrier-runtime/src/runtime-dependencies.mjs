@@ -78,7 +78,7 @@ import {
   prepareTargetAuthority,
   sealSourceAuthority,
 } from './authority-transition-state.mjs';
-import { buildMailboxOperatorAffordance, buildMcpSurfaceAffordanceProjection, buildSchedulerOperatorAffordance, buildSopOperatorAffordance, buildTaskLifecycleOperatorAffordance } from './surface-affordances.mjs';
+import { buildInboxOperatorAffordance, buildMailboxOperatorAffordance, buildMcpSurfaceAffordanceProjection, buildSchedulerOperatorAffordance, buildSopOperatorAffordance, buildTaskLifecycleOperatorAffordance } from './surface-affordances.mjs';
 import { agentInstructionChain, loadRolePrompt } from './agent-instructions.mjs';
 import { loadSession } from './session-records.mjs';
 import {
@@ -196,6 +196,79 @@ export function createCarrierRuntimeDependencies({ runtimeContext = {}, env = pr
       session,
     }),
     dependencies,
+  };
+}
+
+function findInboxServerBinding(mcpServers = {}) {
+  for (const [serverName, server] of Object.entries(mcpServers)) {
+    const toolNames = new Set((server?.tools ?? []).map((tool) => tool?.name).filter(Boolean));
+    if (toolNames.has('inbox_list') || toolNames.has('inbox_next')) return { serverName, server, toolNames };
+  }
+  return null;
+}
+
+async function serverInboxSummary({ requestId, params = {}, context = {} }) {
+  const binding = findInboxServerBinding(context.mcpServers ?? {});
+  const limit = clampInteger(params.limit, 20, 1, 100);
+  const status = stringValue(params.status) ?? 'received';
+  const targetRole = stringValue(params.target_role) ?? stringValue(params.targetRole) ?? undefined;
+  const payload = {
+    schema: 'narada.nars.inbox_summary.v1',
+    event: 'session_inbox_summary',
+    request_id: requestId,
+    transport: 'jsonl_stdio',
+    status: binding ? 'ok' : 'unavailable',
+    server_name: binding?.serverName ?? null,
+    affordance_contract: inboxAffordanceContract(binding),
+    envelopes: { items: [], count: 0 },
+    next_envelope: null,
+    doctor: null,
+    errors: [],
+  };
+  if (!binding) {
+    payload.errors.push({ code: 'inbox_mcp_unavailable', message: 'No site inbox MCP server with inbox read tools is available.' });
+    return payload;
+  }
+  if (binding.toolNames.has('inbox_list')) {
+    payload.envelopes = normalizeInboxEnvelopeCollection(await readInboxTool(binding, 'inbox_list', { limit, status, target_role: targetRole }, payload.errors));
+  }
+  if (binding.toolNames.has('inbox_next')) {
+    const nextEnvelope = await readInboxTool(binding, 'inbox_next', { target_role: targetRole }, payload.errors);
+    payload.next_envelope = objectValue(nextEnvelope?.envelope) ? normalizeInboxEnvelope(nextEnvelope.envelope) : null;
+  }
+  payload.doctor = binding.toolNames.has('inbox_doctor') ? await readInboxTool(binding, 'inbox_doctor', {}, payload.errors) ?? null : null;
+  if (payload.errors.length) payload.status = payload.envelopes.count || payload.next_envelope ? 'partial' : 'error';
+  return payload;
+}
+
+function inboxAffordanceContract(binding) {
+  if (!binding) return buildInboxOperatorAffordance({ serverName: 'inbox', server: { tools: [] }, source: 'nars_inbox_summary' });
+  return {
+    ...buildInboxOperatorAffordance({ serverName: binding.serverName, server: binding.server, source: 'nars_inbox_summary' }),
+    schema: 'narada.nars.inbox_operator_affordance_contract.v1',
+  };
+}
+
+function normalizeInboxEnvelopeCollection(collection) {
+  const raw = objectValue(collection) ?? {};
+  const sourceItems = Array.isArray(raw.envelopes) ? raw.envelopes : Array.isArray(raw.items) ? raw.items : [];
+  const items = sourceItems.map(normalizeInboxEnvelope).filter(Boolean);
+  return { ...raw, items, count: numberValue(raw.count) ?? items.length };
+}
+
+function normalizeInboxEnvelope(envelope) {
+  const record = objectValue(envelope);
+  if (!record) return null;
+  return {
+    envelope_id: stringValue(record.envelope_id) ?? stringValue(record.envelopeId) ?? null,
+    status: stringValue(record.status) ?? null,
+    kind: stringValue(record.kind) ?? null,
+    action: stringValue(record.action) ?? null,
+    title: stringValue(record.title) ?? stringValue(record.summary) ?? '(untitled envelope)',
+    target_role: stringValue(record.target_role) ?? null,
+    severity: stringValue(record.severity) ?? null,
+    created_at: stringValue(record.created_at) ?? null,
+    updated_at: stringValue(record.updated_at) ?? null,
   };
 }
 
@@ -1079,6 +1152,28 @@ async function handleServerRequestLine(line, context) {
     }
     return;
   }
+  if (request?.method === 'session.inbox.summary') {
+    const requestId = request?.id ?? null;
+    noteSessionActivity(context.state, 'session_inbox_summary_requested');
+    recordWorkflowRequest(context, 'session_inbox_summary_requested', { requestId, method: 'session.inbox.summary' });
+    try {
+      context.emit('session_inbox_summary', await serverInboxSummary({ requestId, params: request?.params ?? {}, context }));
+    } catch (error) {
+      context.emit('session_inbox_summary', {
+        schema: 'narada.nars.inbox_summary.v1',
+        event: 'session_inbox_summary',
+        request_id: requestId,
+        transport: 'jsonl_stdio',
+        status: 'error',
+        error: error instanceof Error ? error.message : String(error),
+        envelopes: { items: [], count: 0 },
+        next_envelope: null,
+        doctor: null,
+        errors: [],
+      });
+    }
+    return;
+  }
   if (request?.method === 'session.scheduler.summary') {
     const requestId = request?.id ?? null;
     noteSessionActivity(context.state, 'session_scheduler_summary_requested');
@@ -1588,6 +1683,20 @@ async function readMailboxTool(binding, name, args, errors) {
     return result.structuredContent ?? parseJson(result.content?.[0]?.text ?? '') ?? null;
   } catch (error) {
     errors.push({ code: 'mailbox_tool_failed', tool: name, message: error instanceof Error ? error.message : String(error) });
+    return null;
+  }
+}
+
+async function readInboxTool(binding, name, args, errors) {
+  if (!binding.toolNames.has(name)) {
+    errors.push({ code: 'inbox_tool_unavailable', tool: name, message: `${name} is not available on ${binding.serverName}.` });
+    return null;
+  }
+  try {
+    const result = await sendMcpRequest(binding.server, { jsonrpc: '2.0', id: randomId(), method: 'tools/call', params: { name, arguments: args } });
+    return result.structuredContent ?? parseJson(result.content?.[0]?.text ?? '') ?? null;
+  } catch (error) {
+    errors.push({ code: 'inbox_tool_failed', tool: name, message: error instanceof Error ? error.message : String(error) });
     return null;
   }
 }

@@ -6,6 +6,7 @@ import {
   buildConversationSendFrame,
   buildConversationSteerFrame,
   buildEventsReadFrame,
+  buildInboxSummaryRequestFrame,
   buildMailboxSummaryRequestFrame,
   buildOperatorInputAction,
   buildSchedulerSummaryRequestFrame,
@@ -33,6 +34,12 @@ test('agent-web-ui emits admitted NARS methods for event attach and operator inp
     params: { template_limit: 10, run_limit: 5, include_terminal: false },
   });
   assert.equal(isAgentWebUiProtocolFrame(buildSopSummaryRequestFrame()), true);
+  assert.deepEqual(buildInboxSummaryRequestFrame({ id: 'inbox-1', limit: 7, status: 'received', targetRole: 'architect' }), {
+    id: 'inbox-1',
+    method: 'session.inbox.summary',
+    params: { limit: 7, status: 'received', target_role: 'architect' },
+  });
+  assert.equal(isAgentWebUiProtocolFrame(buildInboxSummaryRequestFrame()), true);
   assert.deepEqual(buildMailboxSummaryRequestFrame({ id: 'mailbox-1', accountLimit: 3, messageLimit: 8, query: 'ops' }), {
     id: 'mailbox-1',
     method: 'session.mailbox.summary',

@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue';
 import ConversationTranscript from './ConversationTranscript.vue';
 import CopyableText from './CopyableText.vue';
+import InboxPanel from './InboxPanel.vue';
 import MailboxPanel from './MailboxPanel.vue';
 import McpServerPanel from './McpServerPanel.vue';
 import OperatorComposer from './OperatorComposer.vue';
@@ -14,6 +15,7 @@ import TaskLifecyclePanel from './TaskLifecyclePanel.vue';
 import type { AgentActivityState } from '../composables/useAgentActivity';
 import type { useCloudflareProjection } from '../composables/useCloudflareProjection';
 import type { HealthIntelligenceSummary } from '../composables/useHealthStatus';
+import type { InboxSummary } from '../composables/useInboxSummary';
 import type { McpInventorySummary } from '../composables/useMcpInventory';
 import type { MailboxSummary } from '../composables/useMailboxSummary';
 import type { OperatorQueueItem } from '../composables/useOperatorInput';
@@ -46,6 +48,7 @@ const props = defineProps<{
   activeTurnId: string | boolean | null;
   mcpInventory: McpInventorySummary;
   surfaceAffordances: SurfaceAffordanceSummary;
+  inboxSummary: InboxSummary;
   mailboxSummary: MailboxSummary;
   schedulerSummary: SchedulerSummary;
   sopSummary: SopSummary;
@@ -64,6 +67,7 @@ const emit = defineEmits<{
   'remove-queued': [item: OperatorQueueItem];
   'steer-queued': [item: OperatorQueueItem];
   'request-sop-summary': [];
+  'request-inbox-summary': [];
   'request-mailbox-summary': [];
   'request-scheduler-summary': [];
   'request-surface-affordances': [];
@@ -72,6 +76,7 @@ const emit = defineEmits<{
 const STATUS_ROW_OPEN_STORAGE_KEY = 'narada:agent-web-ui:status-row-open.v1';
 const statusRowOpen = ref(loadBooleanPreference(STATUS_ROW_OPEN_STORAGE_KEY, true));
 const mcpPanelOpen = ref(false);
+const inboxPanelOpen = ref(false);
 const mailboxPanelOpen = ref(false);
 const schedulerPanelOpen = ref(false);
 const sopPanelOpen = ref(false);
@@ -80,6 +85,8 @@ const titleSiteLabel = computed(() => props.sessionIdentity.siteId ?? sitePartFr
 const titleAgentLabel = computed(() => props.sessionIdentity.siteId ? props.sessionIdentity.agentId : agentPartFromAgentId(props.sessionIdentity.agentId));
 const sopAffordance = computed(() => props.surfaceAffordances.items.find((item) => item.surfaceKind === 'sop') ?? null);
 const hasSopSurface = computed(() => Boolean(sopAffordance.value));
+const inboxAffordance = computed(() => props.surfaceAffordances.items.find((item) => item.surfaceKind === 'inbox') ?? null);
+const hasInboxSurface = computed(() => Boolean(inboxAffordance.value));
 const mailboxAffordance = computed(() => props.surfaceAffordances.items.find((item) => item.surfaceKind === 'mailbox') ?? null);
 const hasMailboxSurface = computed(() => Boolean(mailboxAffordance.value));
 const schedulerAffordance = computed(() => props.surfaceAffordances.items.find((item) => item.surfaceKind === 'scheduler') ?? null);
@@ -140,11 +147,13 @@ function agentPartFromAgentId(agentId: string | null): string | null {
                 :artifact-transport="artifactTransport"
                 :health-body="healthBody"
                 :authority-transition="authorityTransition"
+                :has-inbox-mcp="hasInboxSurface"
                 :has-sop-mcp="hasSopSurface"
                 :has-mailbox-mcp="hasMailboxSurface"
                 :has-scheduler-mcp="hasSchedulerSurface"
                 :has-task-lifecycle-mcp="hasTaskLifecycleSurface"
                 @open-mcp-panel="mcpPanelOpen = true"
+                @open-inbox-panel="inboxPanelOpen = true"
                 @open-sop-panel="sopPanelOpen = true"
                 @open-mailbox-panel="mailboxPanelOpen = true"
                 @open-scheduler-panel="schedulerPanelOpen = true"
@@ -160,6 +169,7 @@ function agentPartFromAgentId(agentId: string | null): string | null {
       </div>
       <div class="shell-header-actions">
         <McpServerPanel v-model:open="mcpPanelOpen" :inventory="mcpInventory" />
+        <InboxPanel v-model:open="inboxPanelOpen" :available="hasInboxSurface" :summary="inboxSummary" @refresh="emit('request-inbox-summary')" />
         <MailboxPanel v-model:open="mailboxPanelOpen" :available="hasMailboxSurface" :summary="mailboxSummary" @refresh="emit('request-mailbox-summary')" />
         <SchedulerPanel v-model:open="schedulerPanelOpen" :available="hasSchedulerSurface" :summary="schedulerSummary" @refresh="emit('request-scheduler-summary')" />
         <TaskLifecyclePanel v-model:open="taskLifecyclePanelOpen" :available="hasTaskLifecycleSurface" :summary="taskLifecycleSummary" @refresh="emit('request-task-lifecycle-summary')" />
