@@ -19,6 +19,8 @@ import {
   authorityTransitionStatePathFromSessionPath,
   readAuthorityTransitionSourceState,
 } from './authority-transition-state.mjs';
+import { mcpToolCatalogEntries as defaultMcpToolCatalogEntries } from './session-status-snapshots.mjs';
+import { buildMcpSurfaceAffordanceProjection } from './surface-affordances.mjs';
 
 export async function runCarrierServerMode({
   input = process.stdin,
@@ -71,6 +73,7 @@ export async function runCarrierServerMode({
     createSessionActivitySnapshot,
     createOperationalPostureSnapshot,
     mcpServerSummaryEntries,
+    mcpToolCatalogEntries = defaultMcpToolCatalogEntries,
     normalizeCarrierGoalState,
     carrierGoalStatusLabel,
     recordCarrierDiagnostic = () => {},
@@ -86,6 +89,7 @@ export async function runCarrierServerMode({
   const mcpServers = applyWorkerMcpProjection(await discoverAndStartMcpServers(siteRoot));
   const allTools = aggregateTools(mcpServers);
   const mcpStatus = createMcpStatusSnapshot(mcpServers);
+  const surfaceAffordances = buildMcpSurfaceAffordanceProjection(mcpServers);
   const mcpPreflightArtifact = readMcpPreflightArtifact();
   const mcpPreflightSnapshot = createMcpPreflightArtifactSnapshot(mcpPreflightArtifact);
   const rolePrompt = loadRolePrompt(identity, siteRoot);
@@ -248,7 +252,9 @@ export async function runCarrierServerMode({
       activation_id: state.authorityTransition.activation_id ?? null,
     },
     tool_count: allTools.length,
+    mcp_tools: mcpToolCatalogEntries(mcpServers),
     mcp_servers: mcpServerSummaryEntries(mcpServers),
+    surface_affordances: surfaceAffordances,
     tool_outputs: displaySettings.toolOutputs ? 'shown' : 'hidden',
     approvals: 'disabled',
     help: '/help',
@@ -406,6 +412,8 @@ export function isConcurrentServerRequestLine(line) {
     if (request?.method === 'conversation.interrupt') return true;
     if (request?.method === 'session.health') return true;
     if (request?.method === 'session.events.subscribe') return true;
+    if (request?.method === 'session.sop.summary') return true;
+    if (request?.method === 'session.surface.affordances') return true;
     if (request?.method === 'session.operations') return false;
     if (request?.method === 'session.recovery') return false;
     if (request?.method === 'session.sync') return false;

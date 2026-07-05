@@ -32,7 +32,7 @@
     "start": "node ./bin/narada-agent-web-ui.mjs",
     "build": "vite build",
     "test": "node --test --test-skip-pattern \"browser screenshot smoke renders the served shell\" test/agent-web-ui.test.mjs test/agent-web-ui-projection.test.mjs test/agent-web-ui-protocol.test.mjs",
-    "test:browser": "node --test test/agent-web-ui.test.mjs test/agent-web-ui-cloudflare-authority-local-surface-artifact-e2e.test.mjs test/agent-web-ui-cloudflare-html-artifact-e2e.test.mjs test/agent-web-ui-local-submit-html-artifact-cloudflare-e2e.test.mjs test/agent-web-ui-ux-smoke.test.mjs",
+    "test:browser": "node --test test/agent-web-ui.test.mjs test/agent-web-ui-panels-e2e.test.mjs test/agent-web-ui-cloudflare-authority-local-surface-artifact-e2e.test.mjs test/agent-web-ui-cloudflare-html-artifact-e2e.test.mjs test/agent-web-ui-local-submit-html-artifact-cloudflare-e2e.test.mjs test/agent-web-ui-ux-smoke.test.mjs",
     "test:all": "node --test test/*.test.mjs",
     "typecheck": "vue-tsc --noEmit -p tsconfig.json"
   },

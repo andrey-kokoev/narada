@@ -12,9 +12,11 @@ const props = defineProps<{
   artifactTransport: string | null;
   healthBody: Record<string, unknown> | null;
   authorityTransition: Record<string, unknown> | null;
+  hasSopMcp: boolean;
 }>();
 const emit = defineEmits<{
   'open-mcp-panel': [];
+  'open-sop-panel': [];
 }>();
 
 const open = ref(false);
@@ -60,6 +62,11 @@ function endpointHost(value: string | null): string | null {
 function openMcpPanel() {
   open.value = false;
   emit('open-mcp-panel');
+}
+
+function openSopPanel() {
+  open.value = false;
+  emit('open-sop-panel');
 }
 </script>
 
@@ -118,6 +125,10 @@ function openMcpPanel() {
               <div>
                 <dt>Tool Surfaces (MCP)</dt>
                 <dd><button type="button" class="site-info-inline-action" @click="openMcpPanel">Open panel</button></dd>
+              </div>
+              <div v-if="hasSopMcp">
+                <dt>SOP</dt>
+                <dd><button type="button" class="site-info-inline-action" @click="openSopPanel">Open panel</button></dd>
               </div>
               <div>
                 <dt>Observed endpoint hosts</dt>

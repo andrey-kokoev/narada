@@ -77,3 +77,18 @@ export function summarizeCounts(counts = {}) {
 export function mcpServerSummaryEntries(mcpServers) {
   return Object.entries(mcpServers ?? {}).map(([server_name, server]) => ({ server_name, tool_count: server.tools?.length ?? 0, operational_state: 'healthy' }));
 }
+
+export function mcpToolCatalogEntries(mcpServers = {}) {
+  const entries = [];
+  for (const [serverName, server] of Object.entries(mcpServers ?? {})) {
+    for (const tool of server.tools ?? []) {
+      entries.push({
+        server_name: serverName,
+        tool_name: tool.name,
+        description: tool.description ?? '',
+        input_schema: tool.inputSchema ?? { type: 'object', properties: {} },
+      });
+    }
+  }
+  return entries;
+}

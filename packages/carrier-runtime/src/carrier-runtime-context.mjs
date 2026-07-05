@@ -1,3 +1,5 @@
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
 import { resolveNaradaSitePaths } from '@narada2/site-paths';
 
 /**
@@ -133,6 +135,7 @@ function normalizeStringArray(value) {
 
 function normalizeSiteConfig(config, defaults) {
   const record = config && typeof config === 'object' ? config : {};
+  const discoveredAllowedRoots = discoverAllowedRootsFromSite(defaults);
   return {
     schema: 'narada.nars.site_config.v1',
     site_id: typeof record.site_id === 'string' && record.site_id ? record.site_id : defaults.siteId,
@@ -142,7 +145,58 @@ function normalizeSiteConfig(config, defaults) {
     pc_site_root: typeof record.pc_site_root === 'string' && record.pc_site_root ? record.pc_site_root : null,
     mcp_scope: typeof record.mcp_scope === 'string' && record.mcp_scope ? record.mcp_scope : null,
     mcp_loci: normalizeStringArray(record.mcp_loci),
-    allowed_roots: normalizeStringArray(record.allowed_roots),
+    allowed_roots: normalizeStringArray([
+      ...normalizeStringArray(record.allowed_roots),
+      ...discoveredAllowedRoots,
+    ]),
   };
+}
+
+function discoverAllowedRootsFromSite({ siteRoot, naradaDir }) {
+  return normalizeStringArray([
+    ...readSiteAllowedRoots(naradaDir),
+    ...readMcpFabricAllowedRoots(join(siteRoot, '.ai', 'mcp')),
+    ...(naradaDir && naradaDir !== siteRoot ? readMcpFabricAllowedRoots(join(naradaDir, '.ai', 'mcp')) : []),
+  ]);
+}
+
+function readSiteAllowedRoots(naradaDir) {
+  if (!naradaDir) return [];
+  const record = readJsonFile(join(naradaDir, 'allowed-roots.json'));
+  if (!record || typeof record !== 'object') return [];
+  return normalizeStringArray([
+    ...normalizeStringArray(record.allowed_roots),
+    ...normalizeStringArray(record.extra_allowed_roots),
+  ]);
+}
+
+function readMcpFabricAllowedRoots(mcpDir) {
+  if (!mcpDir || !existsSync(mcpDir)) return [];
+  const roots = [];
+  for (const entry of readdirSync(mcpDir, { withFileTypes: true })) {
+    if (!entry.isFile() || !entry.name.endsWith('.json')) continue;
+    const record = readJsonFile(join(mcpDir, entry.name));
+    const servers = record?.mcpServers ?? record?.servers ?? {};
+    if (!servers || typeof servers !== 'object') continue;
+    for (const server of Object.values(servers)) {
+      const args = Array.isArray(server?.args) ? server.args : [];
+      for (let index = 0; index < args.length; index += 1) {
+        if (args[index] !== '--allowed-root' || index + 1 >= args.length) continue;
+        roots.push(String(args[index + 1]));
+        index += 1;
+      }
+    }
+  }
+  return normalizeStringArray(roots);
+}
+
+function readJsonFile(path) {
+  try {
+    if (!existsSync(path)) return null;
+    const parsed = JSON.parse(readFileSync(path, 'utf8'));
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch {
+    return null;
+  }
 }
 

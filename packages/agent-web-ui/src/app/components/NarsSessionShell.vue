@@ -7,6 +7,7 @@ import OperatorComposer from './OperatorComposer.vue';
 import OperatorQueuePanel from './OperatorQueuePanel.vue';
 import SessionStatusBar from './SessionStatusBar.vue';
 import SiteInfoPanel from './SiteInfoPanel.vue';
+import SopPanel from './SopPanel.vue';
 import type { AgentActivityState } from '../composables/useAgentActivity';
 import type { useCloudflareProjection } from '../composables/useCloudflareProjection';
 import type { HealthIntelligenceSummary } from '../composables/useHealthStatus';
@@ -14,6 +15,8 @@ import type { McpInventorySummary } from '../composables/useMcpInventory';
 import type { OperatorQueueItem } from '../composables/useOperatorInput';
 import type { ProjectionVerbosity } from '../composables/useProjectionVerbosity';
 import type { SessionIdentitySummary } from '../composables/useNarsEvents';
+import type { SopSummary } from '../composables/useSopSummary';
+import type { SurfaceAffordanceSummary } from '../composables/useSurfaceAffordances';
 import type { ProjectedEventRow } from '../lib/eventProjection';
 
 const props = defineProps<{
@@ -36,6 +39,8 @@ const props = defineProps<{
   operatorQueueItems: OperatorQueueItem[];
   activeTurnId: string | boolean | null;
   mcpInventory: McpInventorySummary;
+  surfaceAffordances: SurfaceAffordanceSummary;
+  sopSummary: SopSummary;
   authorityTransition: Record<string, unknown> | null;
   cloudflareProjection: ReturnType<typeof useCloudflareProjection>;
   followLatestRevision: number;
@@ -45,16 +50,30 @@ const emit = defineEmits<{
   'update:verbosity': [value: ProjectionVerbosity];
   'publish-cloudflare': [cloudflareApiBaseUrl: string];
   submit: [deliveryMode?: 'default' | 'enqueue'];
+  interrupt: [];
   'edit-queued': [item: OperatorQueueItem];
   'remove-queued': [item: OperatorQueueItem];
   'steer-queued': [item: OperatorQueueItem];
+  'request-sop-summary': [];
+  'request-surface-affordances': [];
 }>();
 const STATUS_ROW_OPEN_STORAGE_KEY = 'narada:agent-web-ui:status-row-open.v1';
 const statusRowOpen = ref(loadBooleanPreference(STATUS_ROW_OPEN_STORAGE_KEY, true));
 const mcpPanelOpen = ref(false);
+const sopPanelOpen = ref(false);
 const titleSiteLabel = computed(() => props.sessionIdentity.siteId ?? sitePartFromAgentId(props.sessionIdentity.agentId));
 const titleAgentLabel = computed(() => props.sessionIdentity.siteId ? props.sessionIdentity.agentId : agentPartFromAgentId(props.sessionIdentity.agentId));
+const sopAffordance = computed(() => props.surfaceAffordances.items.find((item) => item.surfaceKind === 'sop') ?? null);
+const hasSopSurface = computed(() => Boolean(sopAffordance.value));
+const canInterruptModel = computed(() => (
+  Boolean(props.activeTurnId)
+  && props.agentActivity.active === true
+  && (props.agentActivity.state === 'thinking' || props.agentActivity.state === 'streaming')
+));
 watch(statusRowOpen, (value) => persistBooleanPreference(STATUS_ROW_OPEN_STORAGE_KEY, value));
+watch(mcpPanelOpen, (value) => {
+  if (value) emit('request-surface-affordances');
+});
 
 function loadBooleanPreference(key: string, fallback: boolean): boolean {
   if (typeof window === 'undefined') return fallback;
@@ -100,7 +119,9 @@ function agentPartFromAgentId(agentId: string | null): string | null {
                 :artifact-transport="artifactTransport"
                 :health-body="healthBody"
                 :authority-transition="authorityTransition"
+                :has-sop-mcp="hasSopSurface"
                 @open-mcp-panel="mcpPanelOpen = true"
+                @open-sop-panel="sopPanelOpen = true"
               />
               <span v-if="titleAgentLabel" class="site-title-separator">.</span>
               <span v-if="titleAgentLabel">{{ titleAgentLabel }}</span>
@@ -112,6 +133,7 @@ function agentPartFromAgentId(agentId: string | null): string | null {
       </div>
       <div class="shell-header-actions">
         <McpServerPanel v-model:open="mcpPanelOpen" :inventory="mcpInventory" />
+        <SopPanel v-model:open="sopPanelOpen" :available="hasSopSurface" :summary="sopSummary" @refresh="emit('request-sop-summary')" />
         <div class="session-chip" :data-state="healthText.split(' ')[0]">
           <span class="chip-dot" aria-hidden="true"></span>
           <span>{{ healthText.split(' · ')[0] }}</span>
@@ -168,6 +190,6 @@ function agentPartFromAgentId(agentId: string | null): string | null {
     </section>
     <ConversationTranscript :rows="rows" :verbosity="verbosity" :agent-activity="agentActivity" :follow-latest-revision="followLatestRevision" />
     <OperatorQueuePanel :items="operatorQueueItems" :active-turn-id="activeTurnId" @edit="emit('edit-queued', $event)" @remove="emit('remove-queued', $event)" @steer="emit('steer-queued', $event)" />
-    <OperatorComposer v-model="draft" :disabled="authorityTransition?.input_policy === 'disabled_source_sealed'" disabled-reason="Source authority is sealed. Reattach to the target authority before sending." @submit="emit('submit', $event)" />
+    <OperatorComposer v-model="draft" :disabled="authorityTransition?.input_policy === 'disabled_source_sealed'" :can-interrupt="canInterruptModel" disabled-reason="Source authority is sealed. Reattach to the target authority before sending." @submit="emit('submit', $event)" @interrupt="emit('interrupt')" />
   </main>
 </template>

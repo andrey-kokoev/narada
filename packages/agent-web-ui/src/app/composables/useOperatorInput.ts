@@ -30,6 +30,16 @@ export function useOperatorInput(connection: ShallowRef<NarsClientConnection | n
     return connection.value?.sendFrame(action.frame) ?? false;
   }
 
+  function interrupt(): boolean {
+    const action = buildAgentWebUiOperatorInputAction('/interrupt', { id: `agent-web-ui-interrupt-${Date.now()}` });
+    if (!action || action.kind !== 'frame') return false;
+    const frame = action.frame as { id?: string; method?: string };
+    const sent = connection.value?.sendFrame(frame) ?? false;
+    if (sent) retain({ event: 'operator_input_submitted', request_id: frame.id, content: frame.method });
+    else retain({ event: 'web_ui_input_not_sent', message: 'event stream is not open' });
+    return sent;
+  }
+
   function editQueued(item: OperatorQueueItem): boolean {
     draft.value = item.content;
     return dropQueued(item.index);
@@ -49,5 +59,5 @@ export function useOperatorInput(connection: ShallowRef<NarsClientConnection | n
     });
   }
 
-  return { draft, submit, dropQueued, editQueued, steerQueuedNow };
+  return { draft, submit, interrupt, dropQueued, editQueued, steerQueuedNow };
 }

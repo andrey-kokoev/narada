@@ -78,6 +78,7 @@ import {
   prepareTargetAuthority,
   sealSourceAuthority,
 } from './authority-transition-state.mjs';
+import { buildMcpSurfaceAffordanceProjection, buildSopOperatorAffordance } from './surface-affordances.mjs';
 import { agentInstructionChain, loadRolePrompt } from './agent-instructions.mjs';
 import { loadSession } from './session-records.mjs';
 import {
@@ -96,6 +97,7 @@ import {
   createOperationalPostureSnapshot,
   createSessionActivitySnapshot,
   mcpServerSummaryEntries,
+  mcpToolCatalogEntries,
   sessionHandoffs,
   summarizeCounts,
   summarizeRequestPosture,
@@ -112,7 +114,7 @@ import {
   terminateChildProcess,
 } from './runtime-tail-utils.mjs';
 
-export { agentInstructionChain, loadRolePrompt, loadSession, createMcpPreflightArtifactSnapshot, readMcpPreflightArtifact, recordMcpPreflightArtifactLinkage, messagesWithCarrierGoal, carrierGoalStatusLabel, createCarrierGoalState, normalizeCarrierGoalState, createSessionActivitySnapshot, createOperationalPostureSnapshot, classifyRequestIssueOutcome, summarizeRequestPosture, sessionHandoffs, summarizeCounts, mcpServerSummaryEntries, summarizeToolResult, extractOutputRef, stringifySummary, parseJson, isAbortError, randomId, codexCliSpawnError, terminateChildProcess };
+export { agentInstructionChain, loadRolePrompt, loadSession, createMcpPreflightArtifactSnapshot, readMcpPreflightArtifact, recordMcpPreflightArtifactLinkage, messagesWithCarrierGoal, carrierGoalStatusLabel, createCarrierGoalState, normalizeCarrierGoalState, createSessionActivitySnapshot, createOperationalPostureSnapshot, classifyRequestIssueOutcome, summarizeRequestPosture, sessionHandoffs, summarizeCounts, mcpServerSummaryEntries, mcpToolCatalogEntries, summarizeToolResult, extractOutputRef, stringifySummary, parseJson, isAbortError, randomId, codexCliSpawnError, terminateChildProcess };
 
 const PROVIDER_METADATA = loadProviderMetadata();
 
@@ -175,6 +177,7 @@ export function createCarrierRuntimeDependencies({ runtimeContext = {}, env = pr
     createSessionActivitySnapshot,
     createOperationalPostureSnapshot,
     mcpServerSummaryEntries,
+    mcpToolCatalogEntries,
     normalizeCarrierGoalState,
     carrierGoalStatusLabel,
     recordCarrierDiagnostic: (level, message, extra = {}) => recordCarrierDiagnostic(level, message, { ...extra, appendSessionRecord }),
@@ -445,16 +448,6 @@ function serverCommandMessage({ requestId, command, message, terminalState = 'co
     message,
     ...(fields ? { fields } : {}),
   };
-}
-
-function mcpToolCatalogEntries(mcpServers = {}) {
-  const entries = [];
-  for (const [serverName, server] of Object.entries(mcpServers ?? {})) {
-    for (const tool of server.tools ?? []) {
-      entries.push({ server_name: serverName, tool_name: tool.name, description: tool.description ?? '', input_schema: tool.inputSchema ?? { type: 'object', properties: {} } });
-    }
-  }
-  return entries;
 }
 
 function normalizeThinkingLevel(value) {
@@ -962,6 +955,33 @@ async function handleServerRequestLine(line, context) {
     }
     return;
   }
+  if (request?.method === 'session.sop.summary') {
+    const requestId = request?.id ?? null;
+    noteSessionActivity(context.state, 'session_sop_summary_requested');
+    recordWorkflowRequest(context, 'session_sop_summary_requested', { requestId, method: 'session.sop.summary' });
+    try {
+      context.emit('session_sop_summary', await serverSopSummary({ requestId, params: request?.params ?? {}, context }));
+    } catch (error) {
+      context.emit('session_sop_summary', {
+        schema: 'narada.nars.sop_summary.v1',
+        event: 'session_sop_summary',
+        request_id: requestId,
+        transport: 'jsonl_stdio',
+        status: 'error',
+        error: error instanceof Error ? error.message : String(error),
+        templates: { items: [], count: 0 },
+        runs: { items: [], count: 0 },
+      });
+    }
+    return;
+  }
+  if (request?.method === 'session.surface.affordances') {
+    const requestId = request?.id ?? null;
+    noteSessionActivity(context.state, 'session_surface_affordances_requested');
+    recordWorkflowRequest(context, 'session_surface_affordances_requested', { requestId, method: 'session.surface.affordances' });
+    context.emit('session_surface_affordances', serverSurfaceAffordances({ requestId, context }));
+    return;
+  }
   await handleServerRequest(request, context);
 }
 
@@ -1001,6 +1021,219 @@ function serverArtifactRead({ requestId, params = {}, context = {} }) {
     transport: 'jsonl_stdio',
     artifact,
   };
+}
+
+async function serverSopSummary({ requestId, params = {}, context = {} }) {
+  const binding = findSopServerBinding(context.mcpServers ?? {});
+  const templateLimit = clampInteger(params.template_limit ?? params.templateLimit, 50, 1, 100);
+  const runLimit = clampInteger(params.run_limit ?? params.runLimit, 50, 1, 100);
+  const includeTerminal = params.include_terminal ?? params.includeTerminal ?? true;
+  const payload = {
+    schema: 'narada.nars.sop_summary.v1',
+    event: 'session_sop_summary',
+    request_id: requestId,
+    transport: 'jsonl_stdio',
+    status: binding ? 'ok' : 'unavailable',
+    server_name: binding?.serverName ?? null,
+    affordance_contract: sopAffordanceContract(binding),
+    templates: { items: [], count: 0 },
+    runs: { items: [], count: 0 },
+    active_run: null,
+    recent_runs: { items: [], count: 0 },
+    doctor: null,
+    errors: [],
+  };
+  if (!binding) {
+    payload.errors.push({ code: 'sop_mcp_unavailable', message: 'No site SOP MCP server with SOP read tools is available.' });
+    return payload;
+  }
+  payload.templates = await readSopTool(binding, 'sop_template_list', { limit: templateLimit }, payload.errors) ?? payload.templates;
+  payload.runs = await readSopTool(binding, 'sop_run_list', { limit: runLimit, include_terminal: Boolean(includeTerminal) }, payload.errors) ?? payload.runs;
+  payload.doctor = await readSopTool(binding, 'sop_doctor', {}, payload.errors) ?? null;
+  payload.templates = normalizeSopTemplateCollection(payload.templates);
+  payload.runs = normalizeSopRunCollection(payload.runs, binding);
+  payload.active_run = selectActiveSopRun(payload.runs.items);
+  payload.recent_runs = { items: payload.runs.items, count: payload.runs.count };
+  if (payload.errors.length) payload.status = payload.templates.count || payload.runs.count ? 'partial' : 'error';
+  return payload;
+}
+
+function sopAffordanceContract(binding) {
+  if (!binding) return buildSopOperatorAffordance({ serverName: 'sop', server: { tools: [] }, source: 'nars_sop_summary' });
+  return {
+    ...buildSopOperatorAffordance({ serverName: binding.serverName, server: binding.server, source: 'nars_sop_summary' }),
+    schema: 'narada.nars.sop_operator_affordance_contract.v1',
+  };
+}
+
+function normalizeSopTemplateCollection(collection) {
+  const raw = objectValue(collection) ?? {};
+  const items = Array.isArray(raw.items) ? raw.items.map(normalizeSopTemplate).filter(Boolean) : [];
+  return { ...raw, items, count: numberValue(raw.count) ?? items.length };
+}
+
+function normalizeSopTemplate(template) {
+  const record = objectValue(template);
+  if (!record) return null;
+  const steps = arrayOfObjects(record.steps).map(normalizeSopStepDefinition).filter(Boolean);
+  return {
+    ...record,
+    sop_id: stringValue(record.sop_id) ?? '',
+    version: numberValue(record.version) ?? null,
+    title: stringValue(record.title) ?? stringValue(record.sop_id) ?? 'Untitled SOP',
+    status: stringValue(record.status) ?? 'unknown',
+    description: stringValue(record.description) ?? '',
+    trigger_kind: stringValue(record.trigger_kind) ?? null,
+    steps,
+    step_count: steps.length,
+  };
+}
+
+function normalizeSopStepDefinition(step) {
+  const record = objectValue(step);
+  if (!record) return null;
+  return {
+    ...record,
+    id: stringValue(record.id) ?? stringValue(record.step_id) ?? '',
+    step_id: stringValue(record.step_id) ?? stringValue(record.id) ?? '',
+    title: stringValue(record.title) ?? stringValue(record.id) ?? stringValue(record.step_id) ?? 'Untitled step',
+    executor: stringValue(record.executor) ?? 'unknown',
+    status: stringValue(record.status) ?? null,
+    blocking: booleanValue(record.blocking),
+    instructions: stringValue(record.instructions) ?? '',
+    depends_on: stringArrayValue(record.depends_on),
+  };
+}
+
+function normalizeSopRunCollection(collection, binding) {
+  const raw = objectValue(collection) ?? {};
+  const items = Array.isArray(raw.items) ? raw.items.map((run) => normalizeSopRun(run, binding)).filter(Boolean) : [];
+  return { ...raw, items, count: numberValue(raw.count) ?? items.length };
+}
+
+function normalizeSopRun(run, binding) {
+  const record = objectValue(run);
+  if (!record) return null;
+  const stepTimeline = arrayOfObjects(record.step_states).map(normalizeSopStepState).filter(Boolean);
+  const nextStep = objectValue(record.next_step) ? normalizeSopStepState(record.next_step) : stepTimeline.find((step) => step.status === 'running') ?? stepTimeline.find((step) => step.status === 'pending') ?? null;
+  const status = stringValue(record.status) ?? 'unknown';
+  const normalized = {
+    ...record,
+    run_id: stringValue(record.run_id) ?? '',
+    sop_id: stringValue(record.sop_id) ?? '',
+    sop_version: numberValue(record.sop_version) ?? null,
+    sop_title: stringValue(record.sop_title) ?? stringValue(record.sop_id) ?? 'Untitled SOP run',
+    status,
+    step_states: stepTimeline,
+    step_timeline: stepTimeline,
+    step_count: stepTimeline.length,
+    next_step: nextStep,
+    next_awaits_confirmation: booleanValue(record.next_awaits_confirmation),
+    available_actions: [],
+  };
+  normalized.available_actions = availableSopRunActions(normalized, binding);
+  return normalized;
+}
+
+function normalizeSopStepState(step) {
+  const record = normalizeSopStepDefinition(step);
+  if (!record) return null;
+  return {
+    ...record,
+    status: stringValue(record.status) ?? 'unknown',
+    started_at: stringValue(record.started_at) ?? null,
+    completed_at: stringValue(record.completed_at) ?? null,
+    child_run_id: stringValue(record.child_run_id) ?? null,
+    result: objectValue(record.result) ?? {},
+    error_message: stringValue(record.error_message) ?? null,
+  };
+}
+
+function availableSopRunActions(run, binding) {
+  const toolNames = binding?.toolNames ?? new Set();
+  const actions = ['open_run'];
+  if (!isTerminalSopRun(run.status)) {
+    if (toolNames.has('sop_run_refresh')) actions.push('refresh_run');
+    if (toolNames.has('sop_run_cancel')) actions.push('cancel_run');
+    if (toolNames.has('sop_run_advance')) actions.push(run.next_awaits_confirmation ? 'confirm_operator_step' : 'advance_run');
+  }
+  return actions;
+}
+
+function selectActiveSopRun(runs = []) {
+  const priority = new Map([
+    ['awaiting_confirmation', 0],
+    ['running', 1],
+    ['pending', 2],
+  ]);
+  return runs
+    .filter((run) => !isTerminalSopRun(run?.status))
+    .sort((left, right) => (priority.get(String(left.status)) ?? 10) - (priority.get(String(right.status)) ?? 10))[0] ?? null;
+}
+
+function isTerminalSopRun(status) {
+  return ['completed', 'failed', 'cancelled'].includes(String(status ?? ''));
+}
+
+function objectValue(value) {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value : null;
+}
+
+function arrayOfObjects(value) {
+  return Array.isArray(value) ? value.filter((item) => item && typeof item === 'object' && !Array.isArray(item)) : [];
+}
+
+function stringValue(value) {
+  return typeof value === 'string' && value ? value : null;
+}
+
+function numberValue(value) {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function booleanValue(value) {
+  return value === true;
+}
+
+function stringArrayValue(value) {
+  return Array.isArray(value) ? value.filter((item) => typeof item === 'string' && item) : [];
+}
+
+function serverSurfaceAffordances({ requestId, context = {} }) {
+  return {
+    event: 'session_surface_affordances',
+    request_id: requestId,
+    transport: 'jsonl_stdio',
+    ...buildMcpSurfaceAffordanceProjection(context.mcpServers ?? {}),
+  };
+}
+
+function findSopServerBinding(mcpServers = {}) {
+  for (const [serverName, server] of Object.entries(mcpServers)) {
+    const toolNames = new Set((server?.tools ?? []).map((tool) => tool?.name).filter(Boolean));
+    if (toolNames.has('sop_template_list') || toolNames.has('sop_run_list')) return { serverName, server, toolNames };
+  }
+  return null;
+}
+
+async function readSopTool(binding, name, args, errors) {
+  if (!binding.toolNames.has(name)) {
+    errors.push({ code: 'sop_tool_unavailable', tool: name, message: `${name} is not available on ${binding.serverName}.` });
+    return null;
+  }
+  try {
+    const result = await sendMcpRequest(binding.server, { jsonrpc: '2.0', id: randomId(), method: 'tools/call', params: { name, arguments: args } });
+    return result.structuredContent ?? parseJson(result.content?.[0]?.text ?? '') ?? null;
+  } catch (error) {
+    errors.push({ code: 'sop_tool_failed', tool: name, message: error instanceof Error ? error.message : String(error) });
+    return null;
+  }
+}
+
+function clampInteger(value, fallback, min, max) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return fallback;
+  return Math.max(min, Math.min(max, Math.trunc(number)));
 }
 
 async function handleServerRequest(request, context) {
@@ -1697,6 +1930,7 @@ export function serverStatus({ requestId, state, allTools, mcpServers, mcpPrefli
   const carrierSessionSettings = state?.sessionSettings ?? {};
   const goal = normalizeCarrierGoalState(carrierSessionSettings.goal);
   const mcpStatus = createMcpStatusSnapshot(mcpServers);
+  const surfaceAffordances = buildMcpSurfaceAffordanceProjection(mcpServers);
   const handoffs = sessionHandoffs({ identity: context.identity, session: context.session });
   return {
     request_id: requestId,
@@ -1720,8 +1954,9 @@ export function serverStatus({ requestId, state, allTools, mcpServers, mcpPrefli
     ...createSessionActivitySnapshot(state),
     ...createOperationalPostureSnapshot({ state, mcpOperationalState: mcpStatus.mcp_operational_state }),
     tool_count: allTools.length,
-    mcp_tools: allTools,
+    mcp_tools: mcpToolCatalogEntries(mcpServers),
     mcp_servers: mcpServerSummaryEntries(mcpServers),
+    surface_affordances: surfaceAffordances,
     delegated_authority_handoff: context.narsDelegatedAuthorityHandoff ?? context.delegatedAuthorityHandoff ?? null,
     delegated_authority_ref: (context.narsDelegatedAuthorityHandoff ?? context.delegatedAuthorityHandoff)?.authority_ref ?? null,
     handoffs,
@@ -1773,6 +2008,7 @@ function serverHealth({ requestId, state, allTools, mcpServers, mcpPreflightArti
       runtime_fault_count: status.mcp_runtime_fault_count,
       servers: status.mcp_servers,
     },
+    surface_affordances: status.surface_affordances,
     heartbeat,
     activity: {
       last_event_kind: state?.lastEventKind ?? null,

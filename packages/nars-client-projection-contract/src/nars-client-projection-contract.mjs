@@ -22,6 +22,8 @@ export const AGENT_WEB_UI_NARS_METHOD_LIST = Object.freeze([
   'session.events.read',
   'session.artifacts.register',
   'session.artifacts.read',
+  'session.surface.affordances',
+  'session.sop.summary',
   'conversation.send',
   'conversation.enqueue',
   'session.status',
@@ -47,13 +49,6 @@ export const AGENT_WEB_UI_SESSION_COMMANDS = Object.freeze([
   '/tool-outputs',
   '/tools',
   '/tool',
-  '/queue',
-]);
-
-export const AGENT_WEB_UI_CARRIER_COMMANDS = AGENT_WEB_UI_SESSION_COMMANDS;
-
-export const AGENT_WEB_UI_HELP_LINES = Object.freeze([
-  'Commands',
   '/help, /clear, /status, /health, /events, /recovery, /ops, /interrupt, /tools, /queue, /goal, /model, /thinking, /exit',
   'Ordinary text is submitted as conversation.send when idle and conversation.steer during active turns. Press Tab in agent-web-ui to queue with conversation.enqueue.',
 ]);
@@ -197,8 +192,24 @@ export function buildAgentWebUiEventsReadFrame(options = {}) {
   };
 }
 
-export function buildAgentWebUiHelpText() {
-  return AGENT_WEB_UI_HELP_LINES.join('\n');
+export function buildAgentWebUiSopSummaryFrame(options = {}) {
+  return {
+    id: options.id ?? `agent-web-ui-sop-summary-${Date.now()}`,
+    method: 'session.sop.summary',
+    params: {
+      template_limit: Number.isFinite(options.templateLimit) ? options.templateLimit : 50,
+      run_limit: Number.isFinite(options.runLimit) ? options.runLimit : 50,
+      include_terminal: options.includeTerminal !== false,
+    },
+  };
+}
+
+export function buildAgentWebUiSurfaceAffordancesFrame(options = {}) {
+  return {
+    id: options.id ?? `agent-web-ui-surface-affordances-${Date.now()}`,
+    method: 'session.surface.affordances',
+    params: {},
+  };
 }
 
 function requestIdForCommand(command) {
@@ -260,14 +271,177 @@ export function isAgentWebUiProtocolFrame(frame) {
   return Boolean(frame && typeof frame === 'object' && isAgentWebUiNarsMethod(frame.method));
 }
 
+function localCommand(id, slash, options = {}) {
+  return Object.freeze({
+    id,
+    slash,
+    kind: options.kind ?? 'local_ui',
+    group: options.group ?? 'local',
+    title: options.title ?? slash,
+    description: options.description ?? '',
+    aliases: Object.freeze(options.aliases ?? []),
+    keywords: Object.freeze(options.keywords ?? []),
+    usage: options.usage ?? slash,
+    palette: Object.freeze({ visible: options.visible !== false, rank: options.rank ?? 500, danger: options.danger === true }),
+    buildAction: options.buildAction,
+  });
+}
+
+function frameCommand(id, slash, method, options = {}) {
+  return localCommand(id, slash, {
+    ...options,
+    kind: options.kind ?? 'nars_protocol',
+    group: options.group ?? 'session',
+    buildAction: (input, context = {}) => ({
+      kind: 'frame',
+      frame: { id: context.id ?? requestIdForCommand(id), method, params: options.params ?? {} },
+    }),
+  });
+}
+
+function sessionCommand(id, slash, options = {}) {
+  return localCommand(id, slash, {
+    ...options,
+    kind: 'nars_session_command',
+    group: options.group ?? 'session',
+    buildAction: (input) => ({ kind: 'frame', frame: commandFrame(slash, input.value) }),
+  });
+}
+
+export const AGENT_WEB_UI_COMMANDS = Object.freeze([
+  localCommand('help', '/help', {
+    title: 'Show commands',
+    description: 'Show Agent Web UI commands grouped by operator intent.',
+    group: 'local',
+    rank: 10,
+    buildAction: () => ({ kind: 'local_help' }),
+  }),
+  localCommand('clear', '/clear', {
+    title: 'Clear local view',
+    description: 'Clear the browser projection without mutating the NARS session.',
+    group: 'local',
+    rank: 20,
+    buildAction: () => ({ kind: 'local_clear' }),
+  }),
+  frameCommand('status', '/status', 'session.status', { title: 'Show session status', description: 'Request the current NARS session status.', group: 'session', rank: 100 }),
+  frameCommand('health', '/health', 'session.health', { title: 'Check health', description: 'Request current runtime and MCP health.', group: 'session', rank: 110 }),
+  localCommand('events', '/events', {
+    kind: 'nars_protocol',
+    title: 'Replay recent events',
+    description: 'Subscribe with a short replay of recent session events.',
+    group: 'diagnostics',
+    rank: 120,
+    buildAction: (input, context = {}) => ({ kind: 'frame', frame: buildAgentWebUiSubscribeFrame({ id: context.id ?? requestIdForCommand('events'), maxReplay: 20, includeReplay: true }) }),
+  }),
+  frameCommand('recovery', '/recovery', 'session.recovery', { title: 'Show recovery workflow', description: 'Request recovery information for the current session.', group: 'diagnostics', rank: 130 }),
+  frameCommand('ops', '/ops', 'session.operations', { title: 'Show operations', description: 'Request operator workflow and session operation information.', group: 'diagnostics', rank: 140 }),
+  frameCommand('observers', '/observers', 'observers.status', { title: 'Show observers', description: 'Request observer posture.', group: 'diagnostics', rank: 150 }),
+  localCommand('observer', '/observer', {
+    kind: 'nars_protocol',
+    title: 'Mute or unmute observers',
+    description: 'Use /observer mute or /observer unmute.',
+    group: 'settings',
+    usage: '/observer mute|unmute',
+    keywords: ['mute', 'unmute'],
+    rank: 160,
+    buildAction: (input, context = {}) => {
+      if (input.value === 'mute') return { kind: 'frame', frame: { id: context.id ?? requestIdForCommand('observer-mute'), method: 'observer.mute', params: {} } };
+      if (input.value === 'unmute') return { kind: 'frame', frame: { id: context.id ?? requestIdForCommand('observer-unmute'), method: 'observer.unmute', params: {} } };
+      return { kind: 'message', message: 'Usage: /observer mute|unmute' };
+    },
+  }),
+  frameCommand('interrupt', '/interrupt', 'conversation.interrupt', { title: 'Interrupt response', description: 'Ask NARS to interrupt the active model turn.', group: 'conversation', rank: 200, danger: true }),
+  frameCommand('exit', '/exit', 'session.close', { title: 'Close session', description: 'Close this NARS session.', aliases: ['/quit'], group: 'session', rank: 900, danger: true }),
+  localCommand('json', '/json', {
+    kind: 'raw_protocol_frame',
+    title: 'Send JSON frame',
+    description: 'Send an admitted raw protocol frame. Advanced escape hatch.',
+    group: 'advanced',
+    usage: '/json {"id":"...","method":"...","params":{}}',
+    keywords: ['raw', 'frame', 'protocol'],
+    rank: 1000,
+    buildAction: (input) => {
+      if (!input.value) return { kind: 'message', message: 'Usage: /json <protocol frame JSON>' };
+      try {
+        const frame = JSON.parse(input.value);
+        return isAgentWebUiProtocolFrame(frame) ? { kind: 'frame', frame } : { kind: 'message', message: 'JSON frame method is not admitted for agent-web-ui.' };
+      } catch (error) {
+        return { kind: 'message', message: `Invalid JSON frame: ${error instanceof Error ? error.message : String(error)}` };
+      }
+    },
+  }),
+  sessionCommand('goal', '/goal', { title: 'Goal command', description: 'Run the NARS-compatible goal session command.', group: 'conversation', rank: 300 }),
+  sessionCommand('stats', '/stats', { title: 'Stats command', description: 'Run the NARS-compatible stats session command.', group: 'diagnostics', rank: 310 }),
+  sessionCommand('model', '/model', { title: 'Model command', description: 'Run the NARS-compatible model session command.', group: 'settings', rank: 320 }),
+  sessionCommand('thinking', '/thinking', { title: 'Thinking command', description: 'Run the NARS-compatible thinking session command.', group: 'settings', rank: 330 }),
+  sessionCommand('tool-output', '/tool-output', { title: 'Tool output command', description: 'Run the NARS-compatible tool-output session command.', aliases: ['/tool-outputs'], group: 'settings', rank: 340 }),
+  sessionCommand('tools', '/tools', { title: 'Tools command', description: 'Run the NARS-compatible tools session command.', aliases: ['/tool'], group: 'diagnostics', rank: 350 }),
+  sessionCommand('queue', '/queue', { title: 'Queue command', description: 'Run the NARS-compatible queue session command.', group: 'conversation', rank: 360 }),
+]);
+
+export const AGENT_WEB_UI_COMMAND_GROUP_LABELS = Object.freeze({
+  conversation: 'Conversation control',
+  session: 'Session state',
+  diagnostics: 'Diagnostics',
+  settings: 'Settings',
+  local: 'Local UI',
+  advanced: 'Advanced',
+});
+
+const COMMAND_GROUP_ORDER = Object.freeze(['conversation', 'session', 'diagnostics', 'settings', 'local', 'advanced']);
+
+export const AGENT_WEB_UI_HELP_LINES = Object.freeze([
+  'Commands',
+  ...COMMAND_GROUP_ORDER.flatMap((group) => {
+    const commands = AGENT_WEB_UI_COMMANDS.filter((command) => command.group === group && command.palette.visible !== false);
+    if (!commands.length) return [];
+    return [AGENT_WEB_UI_COMMAND_GROUP_LABELS[group] ?? group, commands.map((command) => command.usage ?? command.slash).join(', ')];
+  }),
+  'Ordinary text is submitted as conversation.send when idle and conversation.steer during active turns. Press Tab in agent-web-ui to queue with conversation.enqueue.',
+]);
+
+export function buildAgentWebUiHelpText() {
+  return AGENT_WEB_UI_HELP_LINES.join('\n');
+}
+
+export function findAgentWebUiCommand(rawCommand) {
+  const command = String(rawCommand ?? '').trim().toLowerCase();
+  if (!command) return null;
+  return AGENT_WEB_UI_COMMANDS.find((entry) => entry.slash === command || entry.aliases.includes(command)) ?? null;
+}
+
+export function filterAgentWebUiCommands(query = '') {
+  const normalized = String(query ?? '').trim().toLowerCase().replace(/^\//, '');
+  const commands = AGENT_WEB_UI_COMMANDS.filter((entry) => entry.palette.visible !== false);
+  if (!normalized) return [...commands].sort(compareAgentWebUiCommands);
+  return commands
+    .map((entry) => ({ entry, score: agentWebUiCommandMatchScore(entry, normalized) }))
+    .filter((candidate) => candidate.score >= 0)
+    .sort((left, right) => left.score - right.score || compareAgentWebUiCommands(left.entry, right.entry))
+    .map((candidate) => candidate.entry);
+}
+
+function compareAgentWebUiCommands(left, right) {
+  return (left.palette.rank ?? 500) - (right.palette.rank ?? 500) || left.slash.localeCompare(right.slash);
+}
+
+function agentWebUiCommandMatchScore(entry, query) {
+  const terms = [entry.slash, ...entry.aliases, entry.title, entry.description, entry.group, ...(entry.keywords ?? [])].map((term) => String(term).toLowerCase().replace(/^\//, ''));
+  let best = -1;
+  for (const term of terms) {
+    if (term === query) best = best < 0 ? 0 : Math.min(best, 0);
+    else if (term.startsWith(query)) best = best < 0 ? 1 : Math.min(best, 1);
+    else if (term.includes(query)) best = best < 0 ? 2 : Math.min(best, 2);
+  }
+  return best;
+}
+
 export function buildAgentWebUiOperatorInputAction(text, options = {}) {
   const content = String(text ?? '').trim();
   if (!content) return null;
   const lower = content.toLowerCase();
-  if (lower === '/help') return { kind: 'local_help' };
-  if (lower === '/clear') return { kind: 'local_clear' };
   if (lower === 'exit' || lower === '/exit' || lower === '/quit') {
-    return { kind: 'frame', frame: { id: options.id ?? requestIdForCommand('exit'), method: 'session.close', params: {} } };
+    return findAgentWebUiCommand('/exit').buildAction({ raw: content, command: '/exit', value: '' }, options);
   }
   if (!content.startsWith('/')) {
     return {
@@ -279,28 +453,11 @@ export function buildAgentWebUiOperatorInputAction(text, options = {}) {
           : buildAgentWebUiConversationSendFrame(content, options),
     };
   }
-  if (lower.startsWith('/json ')) {
-    try {
-      const frame = JSON.parse(content.slice('/json '.length));
-      return isAgentWebUiProtocolFrame(frame) ? { kind: 'frame', frame } : { kind: 'message', message: 'JSON frame method is not admitted for agent-web-ui.' };
-    } catch (error) {
-      return { kind: 'message', message: `Invalid JSON frame: ${error instanceof Error ? error.message : String(error)}` };
-    }
-  }
   const [rawCommand, ...rest] = content.split(/\s+/);
   const command = rawCommand.toLowerCase();
   const value = rest.join(' ').trim();
-  if (command === '/status') return { kind: 'frame', frame: { id: options.id ?? requestIdForCommand('status'), method: 'session.status', params: {} } };
-  if (command === '/health') return { kind: 'frame', frame: { id: options.id ?? requestIdForCommand('health'), method: 'session.health', params: {} } };
-  if (command === '/events') return { kind: 'frame', frame: buildAgentWebUiSubscribeFrame({ id: options.id ?? requestIdForCommand('events'), maxReplay: 20, includeReplay: true }) };
-  if (command === '/recovery') return { kind: 'frame', frame: { id: options.id ?? requestIdForCommand('recovery'), method: 'session.recovery', params: {} } };
-  if (command === '/ops') return { kind: 'frame', frame: { id: options.id ?? requestIdForCommand('ops'), method: 'session.operations', params: {} } };
-  if (command === '/interrupt') return { kind: 'frame', frame: { id: options.id ?? requestIdForCommand('interrupt'), method: 'conversation.interrupt', params: {} } };
-  if (command === '/observers') return { kind: 'frame', frame: { id: options.id ?? requestIdForCommand('observers'), method: 'observers.status', params: {} } };
-  if (command === '/observer' && value === 'mute') return { kind: 'frame', frame: { id: options.id ?? requestIdForCommand('observer-mute'), method: 'observer.mute', params: {} } };
-  if (command === '/observer' && value === 'unmute') return { kind: 'frame', frame: { id: options.id ?? requestIdForCommand('observer-unmute'), method: 'observer.unmute', params: {} } };
-  if (AGENT_WEB_UI_SESSION_COMMANDS.includes(command)) return { kind: 'frame', frame: commandFrame(command, value) };
-  if (command === '/observer') return { kind: 'message', message: 'Usage: /observer mute|unmute' };
+  const entry = findAgentWebUiCommand(command);
+  if (entry) return entry.buildAction({ raw: content, command: entry.slash, enteredCommand: command, value }, options);
   return { kind: 'message', message: `Unknown command: ${command}. Type /help.` };
 }
 

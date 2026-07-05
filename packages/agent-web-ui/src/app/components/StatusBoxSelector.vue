@@ -31,9 +31,14 @@ const filteredBoxes = computed(() => {
 
 <template>
   <div class="status-box-selector-shell">
-    <button type="button" class="status-box-selector-trigger" :aria-expanded="open" aria-controls="status-box-selector-panel" @click="open = !open">
-      <span class="label">Boxes</span>
-      <span>{{ boxCountLabel }}</span>
+    <button type="button" class="status-box-selector-trigger" :aria-expanded="open" aria-controls="status-box-selector-panel" :title="`Status boxes: ${boxCountLabel} visible`" aria-label="Choose status boxes" @click="open = !open">
+      <span class="status-box-selector-icon" aria-hidden="true">
+        <span></span>
+        <span></span>
+        <span></span>
+        <span></span>
+      </span>
+      <span class="status-box-selector-count" aria-hidden="true">{{ boxCountLabel }}</span>
     </button>
     <Teleport to="body">
       <Transition name="mcp-drawer">

@@ -60,7 +60,12 @@ test('server mode executes a provider-requested MCP tool through real fabric and
     });
 
     assert.equal(providerCalls.length, 2);
-    assert.equal(events.some((event) => event.event === 'session_started' && event.mcp_server_count === 1 && event.mcp_operational_state === 'healthy'), true);
+    const sessionStarted = events.find((event) => event.event === 'session_started');
+    assert.equal(sessionStarted?.mcp_server_count, 1);
+    assert.equal(sessionStarted?.mcp_operational_state, 'healthy');
+    assert.deepEqual(sessionStarted?.mcp_tools?.map((tool) => ({ server_name: tool.server_name, tool_name: tool.tool_name })), [
+      { server_name: 'narada-fixture', tool_name: 'fixture_read' },
+    ]);
     const toolCall = events.find((event) => event.event === 'tool_call' && event.tool === 'fixture_read');
     assert.ok(toolCall, JSON.stringify(events));
     assert.equal(toolCall.decision, 'read_only_admitted');
@@ -209,6 +214,88 @@ test('server mode writes NARS session index record on startup', async () => {
   }
 });
 
+test('server mode projects SOP summary as an operator-facing DTO', async () => {
+  const siteRoot = tempRoot('carrier-sop-summary-test-');
+  try {
+    const input = new PassThrough();
+    const output = new PassThrough();
+    const events = [];
+    let outputBuffer = '';
+    output.setEncoding('utf8');
+    output.on('data', (chunk) => {
+      outputBuffer += chunk;
+      const lines = outputBuffer.split(/\r?\n/);
+      outputBuffer = lines.pop() ?? '';
+      for (const line of lines) {
+        if (line.trim()) events.push(JSON.parse(line));
+      }
+    });
+
+    const sessionId = 'carrier_20260623001500_sop';
+    const sitePaths = resolveNaradaSitePaths({ siteRoot, sessionId });
+    const sessionDir = sitePaths.narsSessionDir;
+    const runtimeContext = {
+      identity: 'sonar.resident',
+      session: sessionId,
+      siteRoot,
+      sessionPath: join(sessionDir, 'session.jsonl'),
+      eventsPath: join(sessionDir, 'events.jsonl'),
+      providerSettings: { stream: false },
+    };
+    const { dependencies } = createCarrierRuntimeDependencies({ runtimeContext });
+    const fakeSopServer = {
+      tools: [
+        { name: 'sop_template_list' },
+        { name: 'sop_run_list' },
+        { name: 'sop_run_refresh' },
+        { name: 'sop_run_advance' },
+        { name: 'sop_run_cancel' },
+        { name: 'sop_doctor' },
+      ],
+      async send(request) {
+        const name = request.params?.name;
+        if (name === 'sop_template_list') {
+          return { result: { structuredContent: { items: [{ sop_id: 'daily-briefing', version: 2, title: 'Daily briefing', status: 'active', steps: [{ id: 'review', executor: 'operator', blocking: true, title: 'Review draft' }] }], count: 1 } } };
+        }
+        if (name === 'sop_run_list') {
+          return { result: { structuredContent: { items: [{ run_id: 'run_1', sop_id: 'daily-briefing', sop_version: 2, sop_title: 'Daily briefing', status: 'awaiting_confirmation', next_awaits_confirmation: true, step_states: [{ step_id: 'review', executor: 'operator', blocking: true, title: 'Review draft', status: 'running' }] }], count: 1 } } };
+        }
+        if (name === 'sop_doctor') {
+          return { result: { structuredContent: { status: 'ok', server_name: 'narada-test-sop' } } };
+        }
+        return { error: { message: `unexpected tool ${name}` } };
+      },
+    };
+
+    input.write(`${JSON.stringify({ id: 'sop-summary-1', method: 'session.sop.summary' })}\n`);
+    input.end();
+    await runCarrierServerMode({
+      input,
+      output,
+      callChatApiFn: async () => ({ choices: [{ message: { role: 'assistant', content: 'unused' } }] }),
+      runtimeContext,
+      dependencies: {
+        ...dependencies,
+        discoverAndStartMcpServers: async () => ({ 'narada-test-sop': fakeSopServer }),
+        closeMcpServers: () => {},
+        readMcpPreflightArtifact: () => null,
+      },
+    });
+
+    const summary = events.find((event) => event.event === 'session_sop_summary');
+    assert.equal(summary?.schema, 'narada.nars.sop_summary.v1');
+    assert.equal(summary.server_name, 'narada-test-sop');
+    assert.equal(summary.affordance_contract?.panel?.sections.includes('active_run'), true);
+    assert.equal(summary.templates.items[0].step_count, 1);
+    assert.equal(summary.active_run.run_id, 'run_1');
+    assert.equal(summary.active_run.next_step.step_id, 'review');
+    assert.deepEqual(summary.active_run.available_actions, ['open_run', 'refresh_run', 'cancel_run', 'confirm_operator_step']);
+    assert.equal(summary.recent_runs.count, 1);
+  } finally {
+    removeTempDir(siteRoot);
+  }
+});
+
 test('server mode health and event subscription match NARS runtime contract shape', async () => {
   const siteRoot = tempRoot('carrier-health-subscribe-test-');
   try {
@@ -269,6 +356,8 @@ test('server mode health and event subscription match NARS runtime contract shap
     assert.equal(health.heartbeat?.freshness, 'fresh');
     assert.equal(Number.isInteger(health.heartbeat?.age_ms), true);
     assert.equal(health.activity?.active_turn_state, 'idle');
+    assert.equal(health.surface_affordances?.schema, 'narada.nars.surface_affordances.v1');
+    assert.equal(health.surface_affordances?.count, 0);
     assert.equal(health.recommended_action, 'review_session_summary');
     assert.equal(typeof health.recommended_command, 'string');
 

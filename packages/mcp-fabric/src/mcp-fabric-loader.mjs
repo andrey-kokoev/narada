@@ -218,8 +218,22 @@ function normalizeServerConfig(serverName, rawServer, siteRoot) {
     ...(rawServer.restart_owner ? { restart_owner: String(rawServer.restart_owner) } : {}),
     ...(rawServer.bound_into_site ? { bound_into_site: String(rawServer.bound_into_site) } : {}),
     ...(rawServer.narada_scope && typeof rawServer.narada_scope === 'object' ? { narada_scope: rawServer.narada_scope } : {}),
+    ...surfaceAffordanceFields(rawServer),
     ...(Number.isFinite(Number(rawServer.startup_timeout_sec)) ? { startup_timeout_sec: Number(rawServer.startup_timeout_sec) } : {}),
   };
+}
+
+function surfaceAffordanceFields(rawServer) {
+  const fields = {};
+  if (Array.isArray(rawServer.operator_affordances)) fields.operator_affordances = rawServer.operator_affordances.filter(objectValue);
+  if (Array.isArray(rawServer.surface_affordances)) fields.surface_affordances = rawServer.surface_affordances.filter(objectValue);
+  if (rawServer.operator_affordance && typeof rawServer.operator_affordance === 'object') fields.operator_affordance = rawServer.operator_affordance;
+  if (rawServer.presentation && typeof rawServer.presentation === 'object') fields.presentation = rawServer.presentation;
+  return fields;
+}
+
+function objectValue(value) {
+  return value && typeof value === 'object' && !Array.isArray(value);
 }
 
 function loadedSourceFiles(sources) {

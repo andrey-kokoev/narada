@@ -11,7 +11,10 @@ import { useOperatorInput } from './composables/useOperatorInput';
 import { useOperatorQueue } from './composables/useOperatorQueue';
 import { useProjectionVerbosity } from './composables/useProjectionVerbosity';
 import { useRetainedEvents } from './composables/useRetainedEvents';
+import { useSopSummary } from './composables/useSopSummary';
+import { useSurfaceAffordances } from './composables/useSurfaceAffordances';
 import { ArtifactRenderingConfigKey } from './lib/artifactConfig';
+import { buildSopSummaryRequestFrame, buildSurfaceAffordancesRequestFrame } from './lib/narsFrames';
 
 interface AgentWebUiConfig {
   eventEndpoint: string | null;
@@ -43,6 +46,8 @@ const connection = useNarsConnection(
 const events = useNarsEvents(retained.events, projection.verbosity, health.identity);
 const agentActivity = useAgentActivity(retained.events, health.body);
 const mcpInventory = useMcpInventory(retained.events, health.body);
+const sopSummary = useSopSummary(retained.events);
+const surfaceAffordances = useSurfaceAffordances(retained.events, health.body);
 const operatorQueue = useOperatorQueue(health.body);
 const cloudflareProjection = useCloudflareProjection(props.config.projectionControl?.cloudflare ?? null);
 const input = useOperatorInput(connection.connection, retained.retain, retained.clear, props.config.authorityTransition ?? null);
@@ -51,6 +56,18 @@ const followLatestRevision = ref(0);
 
 function submitOperatorDraft(deliveryMode: 'default' | 'enqueue' = 'default') {
   if (input.submit(deliveryMode)) followLatestRevision.value += 1;
+}
+
+function interruptModel() {
+  if (input.interrupt()) followLatestRevision.value += 1;
+}
+
+function requestSopSummary() {
+  connection.connection.value?.sendFrame(buildSopSummaryRequestFrame());
+}
+
+function requestSurfaceAffordances() {
+  connection.connection.value?.sendFrame(buildSurfaceAffordancesRequestFrame());
 }
 </script>
 
@@ -76,14 +93,19 @@ function submitOperatorDraft(deliveryMode: 'default' | 'enqueue' = 'default') {
     :operator-queue-items="operatorQueue.items.value"
     :active-turn-id="connection.activeTurnId.value"
     :mcp-inventory="mcpInventory.inventory.value"
+    :surface-affordances="surfaceAffordances.summary.value"
+    :sop-summary="sopSummary.summary.value"
     :authority-transition="config.authorityTransition ?? null"
     :cloudflare-projection="cloudflareProjection"
     :follow-latest-revision="followLatestRevision"
     @update:verbosity="projection.setVerbosity"
     @publish-cloudflare="cloudflareProjection.publish"
     @submit="submitOperatorDraft"
+    @interrupt="interruptModel"
     @edit-queued="input.editQueued"
     @remove-queued="input.dropQueued($event.index)"
     @steer-queued="input.steerQueuedNow"
+    @request-sop-summary="requestSopSummary"
+    @request-surface-affordances="requestSurfaceAffordances"
   />
 </template>

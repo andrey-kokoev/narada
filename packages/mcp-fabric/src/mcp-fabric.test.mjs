@@ -54,6 +54,33 @@ try {
   rmSync(containedSite, { recursive: true, force: true });
 }
 
+const affordanceSite = mkdtempSync(join(tmpdir(), 'narada-mcp-fabric-affordance-'));
+mkdirSync(join(affordanceSite, '.ai', 'mcp'), { recursive: true });
+try {
+  writeFileSync(join(affordanceSite, '.ai', 'mcp', 'affordance-mcp.json'), `${JSON.stringify({
+    mcpServers: {
+      'narada-affordance': {
+        command: 'node',
+        args: ['server.mjs'],
+        surface_id: 'affordance.surface',
+        operator_affordances: [{
+          surface_kind: 'sop',
+          title: 'SOP',
+          panel: { kind: 'catalog_and_runs', summary_method: 'session.sop.summary', sections: ['templates', 'runs'] },
+        }],
+      },
+    },
+  }, null, 2)}\n`, 'utf8');
+  const affordanceFabric = loadSiteMcpFabric(affordanceSite, { required: true });
+  assert.deepEqual(affordanceFabric.servers['narada-affordance'].operator_affordances, [{
+    surface_kind: 'sop',
+    title: 'SOP',
+    panel: { kind: 'catalog_and_runs', summary_method: 'session.sop.summary', sections: ['templates', 'runs'] },
+  }]);
+} finally {
+  rmSync(affordanceSite, { recursive: true, force: true });
+}
+
 const emptySite = mkdtempSync(join(tmpdir(), 'narada-mcp-fabric-empty-'));
 mkdirSync(join(emptySite, '.ai', 'mcp'), { recursive: true });
 try {

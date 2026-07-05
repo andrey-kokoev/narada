@@ -827,10 +827,10 @@ function normalizeWorkspaceLaunchBrowserSelection(payload: Partial<WorkspaceLaun
 function buildWorkspaceLaunchSelectionUiModel(records: WorkspaceLaunchRecord[], options: WorkspaceLaunchPlanOptions): Record<string, unknown> {
   const siteChoices = unique(records.map((record) => record.site));
   const initialSites = nonEmptyStringArray(options.site);
-  const effectiveSites = initialSites.length > 0 ? initialSites : (siteChoices[0] ? [siteChoices[0]] : []);
+  const effectiveSites = initialSites;
   const roleChoices = roleChoicesForSelectedSites(records, effectiveSites);
   const initialRoles = initialRoleValuesForInteractiveSelection(roleChoices, options.role);
-  const effectiveRoles = initialRoles.length > 0 ? initialRoles : (roleChoices[0] ? [roleChoices[0]] : []);
+  const effectiveRoles = initialRoles;
   const selectedRecords = selectLaunchRecords(records, { ...options, all: true, site: effectiveSites, role: effectiveRoles });
   const operatorSurfaceChoices = unique([
     'registry default',
@@ -862,6 +862,13 @@ function buildWorkspaceLaunchSelectionUiModel(records: WorkspaceLaunchRecord[], 
     initialRuntime: options.runtime ?? 'registry default',
     initialIntelligenceProvider: options.intelligenceProvider ?? 'registry default',
     providerChoices: intelligenceProviderChoices(),
+    explicitSelection: {
+      site: initialSites.length > 0,
+      role: nonEmptyStringArray(options.role).length > 0,
+      operatorSurface: normalizeInteractiveOperatorSurfaceValues(options.operatorSurface ? options.operatorSurface.split(',') : []).length > 0,
+      runtime: !!options.runtime,
+      intelligenceProvider: !!options.intelligenceProvider,
+    },
   };
 }
 
@@ -902,12 +909,29 @@ function buildWorkspaceLaunchSelectionHtml(model: Record<string, unknown>): stri
   </main>
   <script>
     const model = ${json};
+    const storageKey = 'narada.workspaceLaunch.selection.v1';
+    const remembered = readRememberedSelection();
     const unique = values => [...new Set(values.filter(Boolean))];
-    const selectedSites = new Set(model.initialSites || []);
-    const selectedRoles = new Set(model.initialRoles || []);
-    const selectedSurfaces = new Set(model.initialOperatorSurfaces || ['registry default']);
+    const explicit = model.explicitSelection || {};
+    const validSites = new Set(model.siteChoices || []);
+    const initialSites = explicit.site ? (model.initialSites || []) : filterRemembered(remembered.site, validSites);
+    const selectedSites = new Set(initialSites);
+    const selectedRoles = new Set(explicit.role ? (model.initialRoles || []) : (remembered.role || []));
+    const selectedSurfaces = new Set(explicit.operatorSurface ? (model.initialOperatorSurfaces || ['registry default']) : (remembered.operatorSurface || model.initialOperatorSurfaces || ['registry default']));
     const recordsForSites = () => model.records.filter(r => selectedSites.has(r.site));
     const recordsForSitesRoles = () => recordsForSites().filter(r => selectedRoles.has(r.role));
+    function readRememberedSelection() {
+      try {
+        const parsed = JSON.parse(localStorage.getItem(storageKey) || 'null');
+        return parsed && typeof parsed === 'object' ? parsed : {};
+      } catch { return {}; }
+    }
+    function filterRemembered(values, allowed) {
+      return Array.isArray(values) ? values.filter(value => allowed.has(value)) : [];
+    }
+    function rememberSelection(payload) {
+      try { localStorage.setItem(storageKey, JSON.stringify(payload)); } catch {}
+    }
     function checkbox(container, value, checked, onChange, label = value) {
       const row = document.createElement('label');
       const input = document.createElement('input');
@@ -941,13 +965,18 @@ function buildWorkspaceLaunchSelectionHtml(model: Record<string, unknown>): stri
       values.forEach(value => { const option = document.createElement('option'); option.value = value; option.textContent = value; option.selected = value === selected; el.append(option); });
     }
     renderSites(); renderRoles(); renderSurfaces();
-    renderSelect('runtime', unique(['registry default', ...model.records.map(r => r.runtime), 'narada-agent-runtime-server', 'codex', 'kimi', 'pi', 'claude-code', 'opencode']), model.initialRuntime || 'registry default');
-    renderSelect('provider', (model.providerChoices || []).map(choice => choice.value), model.initialIntelligenceProvider || 'registry default');
+    const runtimeChoices = unique(['registry default', ...model.records.map(r => r.runtime), 'narada-agent-runtime-server', 'codex', 'kimi', 'pi', 'claude-code', 'opencode']);
+    const providerChoices = (model.providerChoices || []).map(choice => choice.value);
+    const rememberedRuntime = runtimeChoices.includes(remembered.runtime) ? remembered.runtime : 'registry default';
+    const rememberedProvider = providerChoices.includes(remembered.intelligenceProvider) ? remembered.intelligenceProvider : 'registry default';
+    renderSelect('runtime', runtimeChoices, explicit.runtime ? (model.initialRuntime || 'registry default') : rememberedRuntime);
+    renderSelect('provider', providerChoices, explicit.intelligenceProvider ? (model.initialIntelligenceProvider || 'registry default') : rememberedProvider);
     document.getElementById('form').addEventListener('submit', async event => {
       event.preventDefault();
       const operatorSurface = [...selectedSurfaces];
       const explicit = operatorSurface.filter(value => value !== 'registry default');
       const payload = { site: [...selectedSites], role: [...selectedRoles], operatorSurface: explicit.length ? explicit : operatorSurface, runtime: document.getElementById('runtime').value, intelligenceProvider: document.getElementById('provider').value };
+      rememberSelection(payload);
       const response = await fetch('/submit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       if (response.ok) document.body.innerHTML = '<main><h1>Selection submitted</h1><p>You can return to the terminal.</p></main>';
     });

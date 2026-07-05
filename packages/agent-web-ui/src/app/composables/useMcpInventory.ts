@@ -26,8 +26,10 @@ export interface McpInventorySummary {
 export function useMcpInventory(events: unknown[], healthBody: Ref<Record<string, unknown> | null>) {
   const inventory = computed<McpInventorySummary>(() => {
     const health = inventoryFromHealth(healthBody.value);
-    if (health.source !== 'none') return health;
-    return inventoryFromEvents(events);
+    const event = inventoryFromEvents(events);
+    if (health.source === 'none') return event;
+    if (event.source === 'none') return health;
+    return mergeHealthInventoryWithEventTools(health, event);
   });
   return { inventory };
 }
@@ -35,7 +37,8 @@ export function useMcpInventory(events: unknown[], healthBody: Ref<Record<string
 function inventoryFromHealth(body: Record<string, unknown> | null): McpInventorySummary {
   if (!body) return emptyInventory();
   const mcp = objectField(body, 'mcp');
-  const toolMap = toolsByServer(arrayField(body, 'mcp_tools'));
+  const rawTools = arrayField(body, 'mcp_tools').length ? arrayField(body, 'mcp_tools') : arrayField(mcp, 'tools');
+  const toolMap = toolsByServer(rawTools);
   const servers = arrayField(mcp, 'servers').map((entry) => normalizeServerEntry(entry, 'health', toolMap)).filter(Boolean) as McpServerInventoryEntry[];
   const serverCount = numberField(mcp, 'server_count') ?? numberField(body, 'mcp_server_count') ?? (servers.length ? servers.length : null);
   const operationalState = stringField(mcp, 'operational_state') ?? stringField(body, 'mcp_operational_state');
@@ -48,6 +51,19 @@ function inventoryFromHealth(body: Record<string, unknown> | null): McpInventory
     servers,
     source: 'health',
   };
+}
+
+function mergeHealthInventoryWithEventTools(health: McpInventorySummary, event: McpInventorySummary): McpInventorySummary {
+  const eventToolsByServer = new Map(event.servers.map((server) => [server.serverName, server.tools]));
+  const servers = health.servers.map((server) => ({
+    ...server,
+    tools: server.tools.length ? server.tools : eventToolsByServer.get(server.serverName) ?? [],
+  }));
+  const healthServerNames = new Set(servers.map((server) => server.serverName));
+  for (const server of event.servers) {
+    if (!healthServerNames.has(server.serverName)) servers.push(server);
+  }
+  return { ...health, servers };
 }
 
 function inventoryFromEvents(events: unknown[]): McpInventorySummary {

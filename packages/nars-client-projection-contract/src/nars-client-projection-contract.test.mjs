@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  AGENT_WEB_UI_COMMANDS,
   AGENT_WEB_UI_NARS_METHOD_LIST,
   NARS_CLIENT_PROJECTION_DEFAULT_VERBOSITY,
   NARS_CLIENT_PROJECTION_REGISTRY,
@@ -13,9 +14,13 @@ import {
   buildAgentWebUiEventsReadFrame,
   buildAgentWebUiHelpText,
   buildAgentWebUiOperatorInputAction,
+  buildAgentWebUiSopSummaryFrame,
+  buildAgentWebUiSurfaceAffordancesFrame,
   buildAgentWebUiSubscribeFrame,
   buildNarsAttachCommands,
   classifyNarsClientEventProjection,
+  filterAgentWebUiCommands,
+  findAgentWebUiCommand,
   isAgentWebUiNarsMethod,
   isAgentWebUiProtocolFrame,
   projectNarsClientEvent,
@@ -31,6 +36,8 @@ test('NARS client projection contract owns attach commands and web UI capabiliti
   assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('conversation.interrupt'), true);
   assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('conversation.steer'), true);
   assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('session.events.read'), true);
+  assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('session.surface.affordances'), true);
+  assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('session.sop.summary'), true);
   assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('command.execute'), false);
   assert.equal(NARS_CLIENT_PROJECTION_REGISTRY.clients.agent_web_ui.admitted_methods, AGENT_WEB_UI_NARS_METHOD_LIST);
   assert.equal(NARS_CLIENT_PROJECTION_REGISTRY.clients.agent_tui.attach_template, 'agent-tui --attach <event_endpoint>');
@@ -59,6 +66,16 @@ test('NARS client projection contract owns web UI operator input projection', ()
     id: 'events-read-1',
     method: 'session.events.read',
     params: { limit: 25, before_sequence: 50, direction: 'backward' },
+  });
+  assert.deepEqual(buildAgentWebUiSopSummaryFrame({ id: 'sop-1', templateLimit: 10, runLimit: 5, includeTerminal: false }), {
+    id: 'sop-1',
+    method: 'session.sop.summary',
+    params: { template_limit: 10, run_limit: 5, include_terminal: false },
+  });
+  assert.deepEqual(buildAgentWebUiSurfaceAffordancesFrame({ id: 'affordances-1' }), {
+    id: 'affordances-1',
+    method: 'session.surface.affordances',
+    params: {},
   });
   assert.deepEqual(buildAgentWebUiConversationSendFrame('run startup sequence', { id: 'input-1' }), {
     id: 'input-1',
@@ -104,6 +121,21 @@ test('NARS client projection contract owns web UI operator input projection', ()
   assert.equal(isAgentWebUiProtocolFrame({ id: 'ok', method: 'conversation.send', params: {} }), true);
   assert.equal(isAgentWebUiProtocolFrame({ id: 'read', method: 'session.events.read', params: {} }), true);
   assert.equal(isAgentWebUiProtocolFrame({ id: 'blocked', method: 'session.sync', params: {} }), false);
+});
+
+test('Agent Web UI commands are first-class static registry entries', () => {
+  const slashes = AGENT_WEB_UI_COMMANDS.map((command) => command.slash);
+  assert.equal(slashes.includes('/help'), true);
+  assert.equal(slashes.includes('/status'), true);
+  assert.equal(slashes.includes('/json'), true);
+  assert.equal(findAgentWebUiCommand('/quit').id, 'exit');
+  assert.equal(findAgentWebUiCommand('/tool').id, 'tools');
+  assert.equal(findAgentWebUiCommand('/missing'), null);
+  assert.equal(filterAgentWebUiCommands('stat')[0].slash, '/status');
+  assert.equal(filterAgentWebUiCommands('mute').some((command) => command.slash === '/observer'), true);
+  assert.match(buildAgentWebUiHelpText(), /Conversation control/);
+  assert.match(buildAgentWebUiHelpText(), /\/observer mute\|unmute/);
+  assert.equal(buildAgentWebUiOperatorInputAction('/json').message, 'Usage: /json <protocol frame JSON>');
 });
 
 test('NARS client projection contract owns shared event rendering vocabulary', () => {

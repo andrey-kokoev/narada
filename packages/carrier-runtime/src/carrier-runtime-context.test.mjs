@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -167,6 +167,41 @@ test('createCarrierRuntimeContext carries normalized site config from explicit i
       mcp_loci: ['local-site'],
       allowed_roots: [siteRoot, 'D:/code/narada'],
     });
+  } finally {
+    cleanupTempSiteRoot(siteRoot);
+  }
+});
+
+test('createCarrierRuntimeContext advertises site allowed roots from site config and MCP fabric fallback', () => {
+  const siteRoot = makeTempSiteRoot();
+  try {
+    const naradaDir = join(siteRoot, '.narada');
+    mkdirSync(join(siteRoot, '.ai', 'mcp'), { recursive: true });
+    mkdirSync(naradaDir, { recursive: true });
+    writeFileSync(join(naradaDir, 'allowed-roots.json'), JSON.stringify({
+      schema: 'narada.site.allowed_roots.v1',
+      extra_allowed_roots: ['D:/code/narada'],
+    }), 'utf8');
+    writeFileSync(join(siteRoot, '.ai', 'mcp', 'site-mcp.json'), JSON.stringify({
+      mcpServers: {
+        'narada-test-filesystem': {
+          command: 'node',
+          args: ['server.mjs', '--allowed-root', siteRoot, '--allowed-root', 'D:/code/product'],
+        },
+      },
+    }), 'utf8');
+
+    const ctx = createCarrierRuntimeContext({
+      identity: 'narada.test',
+      session: 'test-session',
+      siteRoot,
+    });
+
+    assert.deepEqual(ctx.siteConfig.allowed_roots, [
+      'D:/code/narada',
+      siteRoot,
+      'D:/code/product',
+    ]);
   } finally {
     cleanupTempSiteRoot(siteRoot);
   }

@@ -176,10 +176,78 @@ async function captureHeadlessScreenshot({ browserPath, url, screenshotPath }) {
 }
 test('Vue operator components expose composer without hidden privileged controls', async () => {
   const composer = await readFile(new URL('../src/app/components/OperatorComposer.vue', import.meta.url), 'utf8');
+  const statusBoxSelector = await readFile(new URL('../src/app/components/StatusBoxSelector.vue', import.meta.url), 'utf8');
+  const shell = await readFile(new URL('../src/app/components/NarsSessionShell.vue', import.meta.url), 'utf8');
+  const input = await readFile(new URL('../src/app/composables/useOperatorInput.ts', import.meta.url), 'utf8');
+  const app = await readFile(new URL('../src/app/App.vue', import.meta.url), 'utf8');
+  const siteInfo = await readFile(new URL('../src/app/components/SiteInfoPanel.vue', import.meta.url), 'utf8');
+  const sopPanel = await readFile(new URL('../src/app/components/SopPanel.vue', import.meta.url), 'utf8');
+  const mcpInventory = await readFile(new URL('../src/app/composables/useMcpInventory.ts', import.meta.url), 'utf8');
+  const surfaceAffordances = await readFile(new URL('../src/app/composables/useSurfaceAffordances.ts', import.meta.url), 'utf8');
+  const narsFrames = await readFile(new URL('../src/app/lib/narsFrames.ts', import.meta.url), 'utf8');
 
   assert.match(composer, /@keydown="handleKeydown"/);
+  assert.match(composer, /filterAgentWebUiCommands/);
+  assert.match(composer, /commandPaletteOpen/);
+  assert.match(composer, /role="listbox"/);
+  assert.match(composer, /role="option"/);
+  assert.match(composer, /acceptSelectedCommand/);
+  assert.match(composer, /event\.key === 'Escape'[\s\S]*commandPaletteOpen\.value/);
   assert.match(composer, /event\.key !== 'Enter' \|\| event\.shiftKey/);
+  assert.match(composer, /Press Esc again to interrupt the model/);
+  assert.match(composer, /Esc to interrupt/);
+  assert.match(composer, /canInterrupt\?: boolean/);
+  assert.match(composer, /!props\.canInterrupt/);
+  assert.match(composer, /watch\(\(\) => props\.canInterrupt/);
+  assert.match(composer, /interruptCountdown\.value = 3/);
+  assert.match(composer, /setTimeout\(\(\) => \{/);
+  assert.match(composer, /emit\('interrupt'\)/);
+  assert.match(shell, /@interrupt="emit\('interrupt'\)"/);
+  assert.match(shell, /const canInterruptModel = computed/);
+  assert.match(shell, /Boolean\(props\.activeTurnId\)/);
+  assert.match(shell, /props\.agentActivity\.state === 'thinking' \|\| props\.agentActivity\.state === 'streaming'/);
+  assert.match(shell, /:can-interrupt="canInterruptModel"/);
+  assert.match(app, /@interrupt="interruptModel"/);
+  assert.match(input, /buildAgentWebUiOperatorInputAction\('\/interrupt'/);
+  assert.match(app, /buildSopSummaryRequestFrame/);
+  assert.match(app, /buildSurfaceAffordancesRequestFrame/);
+  assert.match(narsFrames, /buildAgentWebUiSopSummaryFrame/);
+  assert.match(narsFrames, /buildAgentWebUiSurfaceAffordancesFrame/);
+  assert.match(shell, /import SopPanel/);
+  assert.match(shell, /const sopPanelOpen = ref\(false\)/);
+  assert.doesNotMatch(shell, /const sopServer = computed/);
+  assert.match(shell, /const sopAffordance = computed/);
+  assert.match(shell, /const hasSopSurface = computed/);
+  assert.match(shell, /Boolean\(sopAffordance\.value\)/);
+  assert.match(shell, /sopSummary: SopSummary/);
+  assert.match(shell, /surfaceAffordances: SurfaceAffordanceSummary/);
+  assert.match(shell, /<SopPanel v-model:open="sopPanelOpen" :available="hasSopSurface" :summary="sopSummary"/);
+  assert.match(shell, /@refresh="emit\('request-sop-summary'\)"/);
+  assert.match(shell, /:has-sop-mcp="hasSopSurface"/);
+  assert.match(app, /useSopSummary\(retained\.events\)/);
+  assert.match(app, /useSurfaceAffordances\(retained\.events, health\.body\)/);
+  assert.match(siteInfo, /hasSopMcp: boolean/);
+  assert.match(siteInfo, /v-if="hasSopMcp"/);
+  assert.match(siteInfo, /@click="openSopPanel"/);
+  assert.match(sopPanel, /v-if="available"/);
+  assert.match(sopPanel, /summary: SopSummary/);
+  assert.match(sopPanel, /activeRun = computed/);
+  assert.match(sopPanel, /summary\.templates\.items/);
+  assert.match(sopPanel, /summary\.recentRuns\.items/);
+  assert.match(sopPanel, /available_actions/);
+  assert.match(sopPanel, /actionLabel/);
+  assert.match(sopPanel, /step_timeline/);
+  assert.match(sopPanel, /arrayField\(template, 'steps'\)/);
+  assert.match(sopPanel, /arrayField\(run, 'step_timeline', 'step_states'\)/);
+  assert.match(mcpInventory, /mergeHealthInventoryWithEventTools/);
+  assert.match(mcpInventory, /server\.tools\.length \? server\.tools : eventToolsByServer\.get\(server\.serverName\)/);
+  assert.match(mcpInventory, /arrayField\(mcp, 'tools'\)/);
+  assert.match(surfaceAffordances, /session_surface_affordances/);
+  assert.match(surfaceAffordances, /stringField\(record, 'surface_kind'\)/);
   assert.doesNotMatch(composer, /command\.execute|conversation\.interrupt/i);
+  assert.match(statusBoxSelector, /aria-label="Choose status boxes"/);
+  assert.match(statusBoxSelector, /status-box-selector-icon/);
+  assert.doesNotMatch(statusBoxSelector, />Boxes<\/span>/);
 });
 
 test('Vue layout smoke covers shell, status, event list, composer, and event tone styles', async () => {
@@ -207,6 +275,10 @@ test('Vue layout smoke covers shell, status, event list, composer, and event ton
   assert.match(app, /useAgentActivity\(retained\.events, health\.body\)/);
   assert.match(activity, /active_turn_state/);
   assert.match(status, /narada:agent-web-ui:status-boxes\.v1/);
+  assert.match(css, /\.status-box-selector-shell[\s\S]*?position: absolute/);
+  assert.match(css, /\.status-box-selector-shell[\s\S]*?top: 42px/);
+  assert.match(css, /\.status-box-selector-trigger[\s\S]*?width: 26px/);
+  assert.match(css, /\.status-box-selector-icon/);
   assert.doesNotMatch(status, /narada\.agent-web-ui\.status-boxes\.v1/);
   assert.match(status, /projection-publish-stack/);
   assert.match(status, /projection-status-label/);
@@ -569,7 +641,7 @@ test('CLI args and client config keep runtime authority outside the web package'
     protocolHealthMethod: 'session.health',
     maxReplay: 100,
     operatorInput: true,
-    admittedMethods: ['session.events.subscribe', 'session.events.read', 'session.artifacts.register', 'session.artifacts.read', 'conversation.send', 'conversation.enqueue', 'session.status', 'session.health', 'session.recovery', 'session.operations', 'observers.status', 'observer.mute', 'observer.unmute', 'session.command.execute', 'carrier.command.execute', 'conversation.interrupt', 'conversation.steer', 'session.close'],
+    admittedMethods: ['session.events.subscribe', 'session.events.read', 'session.artifacts.register', 'session.artifacts.read', 'session.surface.affordances', 'session.sop.summary', 'conversation.send', 'conversation.enqueue', 'session.status', 'session.health', 'session.recovery', 'session.operations', 'observers.status', 'observer.mute', 'observer.unmute', 'session.command.execute', 'carrier.command.execute', 'conversation.interrupt', 'conversation.steer', 'session.close'],
   });
 });
 
