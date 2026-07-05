@@ -50,6 +50,37 @@ Therefore a panel should reflect the MCP surface's own domain read commands, but
 | Panel rendering | Agent web UI | `SopPanel.vue`, `MailboxPanel.vue`, `SchedulerPanel.vue`, `TaskLifecyclePanel.vue`. |
 | Contract docs/tests | Shared packages | Runtime DTO tests and web UI rendering tests. |
 
+## Implemented Panel Inventory
+
+This table is the current load-bearing inventory for first-party operator panels. It is intended to make drift visible: every implemented panel should have a NARS request method, a NARS event, an authority read source, and focused tests.
+
+| Operator panel | NARS summary method | Summary event | Authority read source | Runtime test posture | Web UI test posture |
+| --- | --- | --- | --- | --- | --- |
+| SOP | `session.sop.summary` | `session_sop_summary` | SOP MCP template/run list tools through the mounted MCP binding | `server-mode-mcp.test.mjs` covers summary emission and DTO shape | `agent-web-ui.test.mjs`, `agent-web-ui-protocol.test.mjs`, and panel e2e coverage assert request wiring and rendering |
+| Synced Email / Mailbox | `session.mailbox.summary` | `session_mailbox_summary` | `mailbox-mcp` account/message read tools through the mounted MCP binding | `server-mode-mcp.test.mjs` covers normal and missing optional doctor behavior | `agent-web-ui.test.mjs` and `agent-web-ui-protocol.test.mjs` assert request wiring and read-only panel rendering |
+| Scheduler | `session.scheduler.summary` | `session_scheduler_summary` | Scheduler MCP task/history read tools through the mounted MCP binding | `server-mode-mcp.test.mjs` covers summary emission and DTO shape | `agent-web-ui.test.mjs` and `agent-web-ui-protocol.test.mjs` assert request wiring and read-only panel rendering |
+| Task Lifecycle | `session.task_lifecycle.summary` | `session_task_lifecycle_summary` | Task Lifecycle MCP list/obligation/read tools through the mounted MCP binding | `server-mode-mcp.test.mjs` covers summary emission and DTO shape | `agent-web-ui.test.mjs` and `agent-web-ui-protocol.test.mjs` assert request wiring and read-only panel rendering |
+| Inbox | `session.inbox.summary` | `session_inbox_summary` | Inbox MCP envelope read tools through the mounted MCP binding | `server-mode-mcp.test.mjs` covers summary emission and DTO shape | `agent-web-ui.test.mjs` and `agent-web-ui-protocol.test.mjs` assert request wiring and read-only panel rendering |
+| Delegation | `session.delegation.summary` | `session_delegation_summary` | Delegation MCP worker/task read tools through the mounted MCP binding | `server-mode-mcp.test.mjs` covers summary emission and DTO shape | `agent-web-ui.test.mjs` and `agent-web-ui-protocol.test.mjs` assert request wiring and read-only panel rendering |
+| Git | `session.git.summary` | `session_git_summary` | Git MCP status/log read tools through the mounted MCP binding | `server-mode-mcp.test.mjs` covers summary emission and DTO shape | `agent-web-ui.test.mjs` and `agent-web-ui-protocol.test.mjs` assert request wiring and read-only panel rendering |
+| Surface Feedback | `session.surface_feedback.summary` | `session_surface_feedback_summary` | Surface Feedback MCP list/stats read tools through the mounted MCP binding | `server-mode-mcp.test.mjs` covers summary emission and DTO shape | `agent-web-ui.test.mjs` and `agent-web-ui-protocol.test.mjs` assert request wiring and read-only panel rendering |
+| Artifacts | `session.artifacts.summary` | `session_artifacts_summary` | NARS session artifact index, because artifacts are NARS-owned rather than MCP-surface-owned | `server-mode-mcp.test.mjs` covers summary emission and DTO shape | `agent-web-ui.test.mjs` and `agent-web-ui-protocol.test.mjs` assert request wiring and read-only panel rendering |
+
+The Artifacts row is the deliberate exception to the MCP-authority pattern: it uses the same UI projection contract, but its authority source is the NARS session artifact index instead of a mounted MCP surface.
+
+## Non-Panel Surface Boundaries
+
+Not every MCP surface should become an operator panel. First-wave panels are for bounded read-side summaries. Surfaces that primarily expose command execution, broad filesystem access, live mailbox mutation, or low-level diagnostics should stay behind explicit agent/NARS authority flows until a narrower read projection is admitted.
+
+| Surface family | Current panel posture | Rationale |
+| --- | --- | --- |
+| Local filesystem | No generic file browser panel | A generic browser file panel would turn broad filesystem authority into UI authority. Specific outputs should appear as artifacts, Site metadata, or domain panels. |
+| Structured command / shell | No generic command-runner panel | Command execution needs explicit authority, admission, and audit semantics. A browser panel may show bounded diagnostics later, but not arbitrary execution controls. |
+| Speech | No standalone first-wave panel | Speech is an operator interaction capability and preference surface. It belongs in Site/agent preferences before it needs a dedicated MCP read panel. |
+| Site ops / site probe | Covered by Site info and health posture for now | These are low-level diagnostics. A future Site Diagnostics panel should use a narrow NARS summary method, not raw tool output. |
+| MCP loader / registrar / site coherence / Cloudflare carrier | No generic panel by default | These are administrative or deployment authority surfaces. Any UI must be explicit, narrow, and separately admitted. |
+| Graph Mail | No standalone first-wave panel | Live Graph reads and mutations share a surface. Use Synced Email for read-only mail state; add only narrow Graph projections when explicitly admitted. |
+
 ## DTO Rules
 
 MCP-specific summary DTOs must be display-safe and stable enough for clients to render without knowing raw MCP internals.
