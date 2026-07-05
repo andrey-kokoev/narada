@@ -16,6 +16,7 @@ const props = defineProps<{
   hasGitMcp: boolean;
   hasInboxMcp: boolean;
   hasSopMcp: boolean;
+  hasSurfaceFeedbackMcp: boolean;
   hasMailboxMcp: boolean;
   hasSchedulerMcp: boolean;
   hasTaskLifecycleMcp: boolean;
@@ -26,6 +27,7 @@ const emit = defineEmits<{
   'open-git-panel': [];
   'open-inbox-panel': [];
   'open-sop-panel': [];
+  'open-surface-feedback-panel': [];
   'open-mailbox-panel': [];
   'open-scheduler-panel': [];
   'open-task-lifecycle-panel': [];
@@ -94,6 +96,11 @@ function openGitPanel() {
 function openSopPanel() {
   open.value = false;
   emit('open-sop-panel');
+}
+
+function openSurfaceFeedbackPanel() {
+  open.value = false;
+  emit('open-surface-feedback-panel');
 }
 
 function openMailboxPanel() {
@@ -183,6 +190,10 @@ function openTaskLifecyclePanel() {
               <div v-if="hasSopMcp">
                 <dt>SOP</dt>
                 <dd><button type="button" class="site-info-inline-action" @click="openSopPanel">Open panel</button></dd>
+              </div>
+              <div v-if="hasSurfaceFeedbackMcp">
+                <dt>Feedback</dt>
+                <dd><button type="button" class="site-info-inline-action" @click="openSurfaceFeedbackPanel">Open panel</button></dd>
               </div>
               <div v-if="hasMailboxMcp">
                 <dt>Synced Email</dt>

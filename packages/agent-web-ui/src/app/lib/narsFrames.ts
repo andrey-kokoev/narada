@@ -33,3 +33,7 @@ export function buildTaskLifecycleSummaryRequestFrame() {
 export function buildSurfaceAffordancesRequestFrame() {
   return contract.buildAgentWebUiSurfaceAffordancesFrame();
 }
+
+export function buildSurfaceFeedbackSummaryRequestFrame() {
+  return contract.buildAgentWebUiSurfaceFeedbackSummaryFrame();
+}

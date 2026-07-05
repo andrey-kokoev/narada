@@ -118,6 +118,30 @@ test('surface affordance projection advertises git panel from git MCP inventory'
   assert.deepEqual(projection.items[0].tools.read, ['git_status', 'git_changed_summary', 'git_log', 'git_policy_inspect']);
 });
 
+test('surface affordance projection advertises surface feedback panel from feedback MCP inventory', () => {
+  const projection = buildMcpSurfaceAffordanceProjection({
+    'narada-test-surface-feedback': {
+      tools: [
+        { name: 'surface_feedback_list' },
+        { name: 'surface_feedback_stats' },
+        { name: 'surface_feedback_show' },
+        { name: 'surface_feedback_doctor' },
+        { name: 'surface_feedback_submit' },
+        { name: 'surface_feedback_update_status' },
+      ],
+      config: { surface_id: 'test.surface-feedback' },
+    },
+  });
+
+  assert.equal(projection.count, 1);
+  assert.equal(projection.items[0].surface_kind, 'surface_feedback');
+  assert.equal(projection.items[0].panel.summary_method, 'session.surface_feedback.summary');
+  assert.deepEqual(projection.items[0].actions.read, ['refresh', 'open_feedback']);
+  assert.deepEqual(projection.items[0].actions.candidate_write, ['submit_feedback', 'update_status']);
+  assert.deepEqual(projection.items[0].tools.read, ['surface_feedback_list', 'surface_feedback_stats', 'surface_feedback_show']);
+  assert.equal(projection.items[0].tools.doctor, 'surface_feedback_doctor');
+});
+
 test('surface affordance projection advertises task lifecycle panel from task lifecycle MCP inventory', () => {
   const projection = buildMcpSurfaceAffordanceProjection({
     'narada-test-task-lifecycle': {

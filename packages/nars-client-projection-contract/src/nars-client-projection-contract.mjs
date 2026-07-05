@@ -27,6 +27,7 @@ export const AGENT_WEB_UI_NARS_METHOD_LIST = Object.freeze([
   'session.inbox.summary',
   'session.delegation.summary',
   'session.git.summary',
+  'session.surface_feedback.summary',
   'session.mailbox.summary',
   'session.scheduler.summary',
   'session.task_lifecycle.summary',
@@ -253,6 +254,20 @@ export function buildAgentWebUiGitSummaryFrame(options = {}) {
     params: {
       changed_limit: Number.isFinite(options.changedLimit) ? options.changedLimit : 25,
       log_limit: Number.isFinite(options.logLimit) ? options.logLimit : 5,
+    },
+  };
+}
+
+export function buildAgentWebUiSurfaceFeedbackSummaryFrame(options = {}) {
+  return {
+    id: options.id ?? `agent-web-ui-surface-feedback-summary-${Date.now()}`,
+    method: 'session.surface_feedback.summary',
+    params: {
+      limit: Number.isFinite(options.limit) ? options.limit : 25,
+      offset: Number.isFinite(options.offset) ? options.offset : 0,
+      ...(typeof options.status === 'string' && options.status ? { status: options.status } : {}),
+      ...(typeof options.kind === 'string' && options.kind ? { kind: options.kind } : {}),
+      ...(typeof options.surfaceId === 'string' && options.surfaceId ? { surface_id: options.surfaceId } : {}),
     },
   };
 }

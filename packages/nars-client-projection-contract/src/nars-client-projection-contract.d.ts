@@ -50,6 +50,7 @@ export function buildAgentWebUiSopSummaryFrame(options?: object): object;
 export function buildAgentWebUiInboxSummaryFrame(options?: object): object;
 export function buildAgentWebUiDelegationSummaryFrame(options?: object): object;
 export function buildAgentWebUiGitSummaryFrame(options?: object): object;
+export function buildAgentWebUiSurfaceFeedbackSummaryFrame(options?: object): object;
 export function buildAgentWebUiMailboxSummaryFrame(options?: object): object;
 export function buildAgentWebUiSchedulerSummaryFrame(options?: object): object;
 export function buildAgentWebUiTaskLifecycleSummaryFrame(options?: object): object;

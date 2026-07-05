@@ -796,6 +796,75 @@ test('server mode projects git summary as an operator-facing DTO', async () => {
   }
 });
 
+test('server mode projects surface feedback summary as an operator-facing DTO', async () => {
+  const siteRoot = tempRoot('carrier-surface-feedback-summary-test-');
+  try {
+    const input = new PassThrough();
+    const output = new PassThrough();
+    const events = [];
+    let outputBuffer = '';
+    output.setEncoding('utf8');
+    output.on('data', (chunk) => {
+      outputBuffer += chunk;
+      const lines = outputBuffer.split(/\r?\n/);
+      outputBuffer = lines.pop() ?? '';
+      for (const line of lines) {
+        if (line.trim()) events.push(JSON.parse(line));
+      }
+    });
+
+    const sessionId = 'carrier_20260705050000_feedback';
+    const sitePaths = resolveNaradaSitePaths({ siteRoot, sessionId });
+    const sessionDir = sitePaths.narsSessionDir;
+    const runtimeContext = {
+      identity: 'sonar.resident',
+      session: sessionId,
+      siteRoot,
+      sessionPath: join(sessionDir, 'session.jsonl'),
+      eventsPath: join(sessionDir, 'events.jsonl'),
+      providerSettings: { stream: false },
+    };
+    const { dependencies } = createCarrierRuntimeDependencies({ runtimeContext });
+    const fakeFeedbackServer = {
+      tools: [{ name: 'surface_feedback_list' }, { name: 'surface_feedback_stats' }, { name: 'surface_feedback_doctor' }],
+      async send(request) {
+        const name = request.params?.name;
+        if (name === 'surface_feedback_stats') return { result: { structuredContent: { total: 2, by_surface: { scheduler: 1, git: 1 }, by_kind: { gap: 1, improvement: 1 }, by_status: { submitted: 1, routed: 1 } } } };
+        if (name === 'surface_feedback_list') return { result: { structuredContent: { count: 1, limit: 5, offset: 0, items: [{ feedback_id: 'sfb_1', surface_id: 'scheduler', submitter_site_id: 'narada-sonar', submitter_principal: 'codex', kind: 'gap', summary: 'Need schedule topology view', status: 'submitted', created_at: '2026-07-05T00:00:00Z', updated_at: '2026-07-05T00:00:00Z' }] } } };
+        if (name === 'surface_feedback_doctor') return { result: { structuredContent: { schema: 'narada.surface_feedback.doctor.v1', status: 'ok', storage_posture: 'canonical_feedback_root', total_feedback_entries: 2 } } };
+        return { error: { message: `unexpected feedback tool ${name}` } };
+      },
+    };
+
+    input.write(`${JSON.stringify({ id: 'feedback-summary-1', method: 'session.surface_feedback.summary', params: { limit: 5 } })}\n`);
+    input.end();
+    await runCarrierServerMode({
+      input,
+      output,
+      callChatApiFn: async () => ({ choices: [{ message: { role: 'assistant', content: 'unused' } }] }),
+      runtimeContext,
+      dependencies: {
+        ...dependencies,
+        discoverAndStartMcpServers: async () => ({ 'narada-test-surface-feedback': fakeFeedbackServer }),
+        closeMcpServers: () => {},
+        readMcpPreflightArtifact: () => null,
+      },
+    });
+
+    const summary = events.find((event) => event.event === 'session_surface_feedback_summary');
+    assert.equal(summary?.schema, 'narada.nars.surface_feedback_summary.v1');
+    assert.equal(summary.server_name, 'narada-test-surface-feedback');
+    assert.equal(summary.affordance_contract?.panel?.summary_method, 'session.surface_feedback.summary');
+    assert.equal(summary.stats.total, 2);
+    assert.equal(summary.stats.by_status.submitted, 1);
+    assert.equal(summary.feedback.count, 1);
+    assert.equal(summary.feedback.items[0].feedback_id, 'sfb_1');
+    assert.equal(summary.doctor.storage_posture, 'canonical_feedback_root');
+  } finally {
+    removeTempDir(siteRoot);
+  }
+});
+
 test('server mode projects task lifecycle summary as an operator-facing DTO', async () => {
   const siteRoot = tempRoot('carrier-task-lifecycle-summary-test-');
   try {

@@ -13,6 +13,7 @@ import SchedulerPanel from './SchedulerPanel.vue';
 import SessionStatusBar from './SessionStatusBar.vue';
 import SiteInfoPanel from './SiteInfoPanel.vue';
 import SopPanel from './SopPanel.vue';
+import SurfaceFeedbackPanel from './SurfaceFeedbackPanel.vue';
 import TaskLifecyclePanel from './TaskLifecyclePanel.vue';
 import type { AgentActivityState } from '../composables/useAgentActivity';
 import type { useCloudflareProjection } from '../composables/useCloudflareProjection';
@@ -28,6 +29,7 @@ import type { SchedulerSummary } from '../composables/useSchedulerSummary';
 import type { SessionIdentitySummary } from '../composables/useNarsEvents';
 import type { SopSummary } from '../composables/useSopSummary';
 import type { SurfaceAffordanceSummary } from '../composables/useSurfaceAffordances';
+import type { SurfaceFeedbackSummary } from '../composables/useSurfaceFeedbackSummary';
 import type { TaskLifecycleSummary } from '../composables/useTaskLifecycleSummary';
 import type { ProjectedEventRow } from '../lib/eventProjection';
 
@@ -58,6 +60,7 @@ const props = defineProps<{
   mailboxSummary: MailboxSummary;
   schedulerSummary: SchedulerSummary;
   sopSummary: SopSummary;
+  surfaceFeedbackSummary: SurfaceFeedbackSummary;
   taskLifecycleSummary: TaskLifecycleSummary;
   authorityTransition: Record<string, unknown> | null;
   cloudflareProjection: ReturnType<typeof useCloudflareProjection>;
@@ -79,6 +82,7 @@ const emit = defineEmits<{
   'request-mailbox-summary': [];
   'request-scheduler-summary': [];
   'request-surface-affordances': [];
+  'request-surface-feedback-summary': [];
   'request-task-lifecycle-summary': [];
 }>();
 const STATUS_ROW_OPEN_STORAGE_KEY = 'narada:agent-web-ui:status-row-open.v1';
@@ -90,11 +94,14 @@ const inboxPanelOpen = ref(false);
 const mailboxPanelOpen = ref(false);
 const schedulerPanelOpen = ref(false);
 const sopPanelOpen = ref(false);
+const surfaceFeedbackPanelOpen = ref(false);
 const taskLifecyclePanelOpen = ref(false);
 const titleSiteLabel = computed(() => props.sessionIdentity.siteId ?? sitePartFromAgentId(props.sessionIdentity.agentId));
 const titleAgentLabel = computed(() => props.sessionIdentity.siteId ? props.sessionIdentity.agentId : agentPartFromAgentId(props.sessionIdentity.agentId));
 const sopAffordance = computed(() => props.surfaceAffordances.items.find((item) => item.surfaceKind === 'sop') ?? null);
 const hasSopSurface = computed(() => Boolean(sopAffordance.value));
+const surfaceFeedbackAffordance = computed(() => props.surfaceAffordances.items.find((item) => item.surfaceKind === 'surface_feedback') ?? null);
+const hasSurfaceFeedbackSurface = computed(() => Boolean(surfaceFeedbackAffordance.value));
 const delegationAffordance = computed(() => props.surfaceAffordances.items.find((item) => item.surfaceKind === 'delegation') ?? null);
 const hasDelegationSurface = computed(() => Boolean(delegationAffordance.value));
 const gitAffordance = computed(() => props.surfaceAffordances.items.find((item) => item.surfaceKind === 'git') ?? null);
@@ -165,6 +172,7 @@ function agentPartFromAgentId(agentId: string | null): string | null {
                 :has-git-mcp="hasGitSurface"
                 :has-inbox-mcp="hasInboxSurface"
                 :has-sop-mcp="hasSopSurface"
+                :has-surface-feedback-mcp="hasSurfaceFeedbackSurface"
                 :has-mailbox-mcp="hasMailboxSurface"
                 :has-scheduler-mcp="hasSchedulerSurface"
                 :has-task-lifecycle-mcp="hasTaskLifecycleSurface"
@@ -173,6 +181,7 @@ function agentPartFromAgentId(agentId: string | null): string | null {
                 @open-git-panel="gitPanelOpen = true"
                 @open-inbox-panel="inboxPanelOpen = true"
                 @open-sop-panel="sopPanelOpen = true"
+                @open-surface-feedback-panel="surfaceFeedbackPanelOpen = true"
                 @open-mailbox-panel="mailboxPanelOpen = true"
                 @open-scheduler-panel="schedulerPanelOpen = true"
                 @open-task-lifecycle-panel="taskLifecyclePanelOpen = true"
@@ -194,6 +203,7 @@ function agentPartFromAgentId(agentId: string | null): string | null {
         <SchedulerPanel v-model:open="schedulerPanelOpen" :available="hasSchedulerSurface" :summary="schedulerSummary" @refresh="emit('request-scheduler-summary')" />
         <TaskLifecyclePanel v-model:open="taskLifecyclePanelOpen" :available="hasTaskLifecycleSurface" :summary="taskLifecycleSummary" @refresh="emit('request-task-lifecycle-summary')" />
         <SopPanel v-model:open="sopPanelOpen" :available="hasSopSurface" :summary="sopSummary" @refresh="emit('request-sop-summary')" />
+        <SurfaceFeedbackPanel v-model:open="surfaceFeedbackPanelOpen" :available="hasSurfaceFeedbackSurface" :summary="surfaceFeedbackSummary" @refresh="emit('request-surface-feedback-summary')" />
         <div class="session-chip" :data-state="healthText.split(' ')[0]">
           <span class="chip-dot" aria-hidden="true"></span>
           <span>{{ healthText.split(' · ')[0] }}</span>

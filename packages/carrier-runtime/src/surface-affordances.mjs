@@ -18,6 +18,10 @@ const GIT_STATUS_TOOL = 'git_status';
 const GIT_CHANGED_SUMMARY_TOOL = 'git_changed_summary';
 const GIT_LOG_TOOL = 'git_log';
 const GIT_POLICY_TOOL = 'git_policy_inspect';
+const SURFACE_FEEDBACK_LIST_TOOL = 'surface_feedback_list';
+const SURFACE_FEEDBACK_STATS_TOOL = 'surface_feedback_stats';
+const SURFACE_FEEDBACK_DOCTOR_TOOL = 'surface_feedback_doctor';
+const SURFACE_FEEDBACK_SHOW_TOOL = 'surface_feedback_show';
 const SCHEDULER_TASK_LIST_TOOL = 'scheduler_task_list';
 const SCHEDULER_TASK_SHOW_TOOL = 'scheduler_task_show';
 const SCHEDULER_TASK_HISTORY_TOOL = 'scheduler_task_history';
@@ -122,6 +126,43 @@ export function buildGitOperatorAffordance({ serverName, server = {}, source = '
     tools: {
       read: [GIT_STATUS_TOOL, GIT_CHANGED_SUMMARY_TOOL, GIT_LOG_TOOL, GIT_POLICY_TOOL].filter((tool) => toolNames.has(tool)),
       write: ['git_add', 'git_unstage', 'git_commit', 'git_push'].filter((tool) => toolNames.has(tool)),
+    },
+  };
+}
+
+function surfaceFeedbackAffordanceFromTools(serverName, server = {}) {
+  const toolNames = new Set((server?.tools ?? []).map((tool) => tool?.name).filter(Boolean));
+  if (!toolNames.has(SURFACE_FEEDBACK_LIST_TOOL) && !toolNames.has(SURFACE_FEEDBACK_STATS_TOOL)) return null;
+  return buildSurfaceFeedbackOperatorAffordance({ serverName, server, source: 'live_tool_inventory' });
+}
+
+export function buildSurfaceFeedbackOperatorAffordance({ serverName, server = {}, source = 'live_tool_inventory' } = {}) {
+  const toolNames = new Set((server?.tools ?? []).map((tool) => tool?.name).filter(Boolean));
+  return {
+    schema: 'narada.mcp_surface.operator_affordance.v1',
+    surface_kind: 'surface_feedback',
+    surface_id: stringField(server?.config, 'surface_id') ?? `${serverName}:surface_feedback`,
+    server_name: serverName,
+    source,
+    renderer: 'surface_feedback_backlog',
+    title: 'Feedback',
+    panel: {
+      kind: 'surface_feedback_backlog',
+      title: 'Feedback',
+      summary_method: 'session.surface_feedback.summary',
+      sections: ['posture', 'counts', 'recent_feedback'],
+    },
+    actions: {
+      read: ['refresh', toolNames.has(SURFACE_FEEDBACK_SHOW_TOOL) ? 'open_feedback' : null].filter(Boolean),
+      candidate_write: [
+        toolNames.has('surface_feedback_submit') ? 'submit_feedback' : null,
+        toolNames.has('surface_feedback_update_status') ? 'update_status' : null,
+      ].filter(Boolean),
+    },
+    tools: {
+      read: [SURFACE_FEEDBACK_LIST_TOOL, SURFACE_FEEDBACK_STATS_TOOL, SURFACE_FEEDBACK_SHOW_TOOL].filter((tool) => toolNames.has(tool)),
+      doctor: toolNames.has(SURFACE_FEEDBACK_DOCTOR_TOOL) ? SURFACE_FEEDBACK_DOCTOR_TOOL : null,
+      write: ['surface_feedback_submit', 'surface_feedback_update_status', 'surface_feedback_update_status_batch'].filter((tool) => toolNames.has(tool)),
     },
   };
 }
@@ -307,6 +348,16 @@ export function buildMcpSurfaceAffordanceProjection(mcpServers = {}) {
         seen.add(key);
         seenSurfaceKinds.add(surfaceKindKey);
         items.push(git);
+      }
+    }
+    const surfaceFeedback = surfaceFeedbackAffordanceFromTools(serverName, server);
+    if (surfaceFeedback) {
+      const key = affordanceKey(surfaceFeedback);
+      const surfaceKindKey = affordanceSurfaceKindKey(surfaceFeedback);
+      if (!seen.has(key) && !seenSurfaceKinds.has(surfaceKindKey)) {
+        seen.add(key);
+        seenSurfaceKinds.add(surfaceKindKey);
+        items.push(surfaceFeedback);
       }
     }
     const sop = sopAffordanceFromTools(serverName, server);

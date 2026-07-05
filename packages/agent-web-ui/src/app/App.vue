@@ -18,9 +18,10 @@ import { useRetainedEvents } from './composables/useRetainedEvents';
 import { useSchedulerSummary } from './composables/useSchedulerSummary';
 import { useSopSummary } from './composables/useSopSummary';
 import { useSurfaceAffordances } from './composables/useSurfaceAffordances';
+import { useSurfaceFeedbackSummary } from './composables/useSurfaceFeedbackSummary';
 import { useTaskLifecycleSummary } from './composables/useTaskLifecycleSummary';
 import { ArtifactRenderingConfigKey } from './lib/artifactConfig';
-import { buildDelegationSummaryRequestFrame, buildGitSummaryRequestFrame, buildInboxSummaryRequestFrame, buildMailboxSummaryRequestFrame, buildSchedulerSummaryRequestFrame, buildSopSummaryRequestFrame, buildSurfaceAffordancesRequestFrame, buildTaskLifecycleSummaryRequestFrame } from './lib/narsFrames';
+import { buildDelegationSummaryRequestFrame, buildGitSummaryRequestFrame, buildInboxSummaryRequestFrame, buildMailboxSummaryRequestFrame, buildSchedulerSummaryRequestFrame, buildSopSummaryRequestFrame, buildSurfaceAffordancesRequestFrame, buildSurfaceFeedbackSummaryRequestFrame, buildTaskLifecycleSummaryRequestFrame } from './lib/narsFrames';
 
 interface AgentWebUiConfig {
   eventEndpoint: string | null;
@@ -58,6 +59,7 @@ const inboxSummary = useInboxSummary(retained.events);
 const mailboxSummary = useMailboxSummary(retained.events);
 const schedulerSummary = useSchedulerSummary(retained.events);
 const sopSummary = useSopSummary(retained.events);
+const surfaceFeedbackSummary = useSurfaceFeedbackSummary(retained.events);
 const taskLifecycleSummary = useTaskLifecycleSummary(retained.events);
 const surfaceAffordances = useSurfaceAffordances(retained.events, health.body);
 const operatorQueue = useOperatorQueue(health.body);
@@ -105,6 +107,10 @@ function requestTaskLifecycleSummary() {
 function requestSurfaceAffordances() {
   connection.connection.value?.sendFrame(buildSurfaceAffordancesRequestFrame());
 }
+
+function requestSurfaceFeedbackSummary() {
+  connection.connection.value?.sendFrame(buildSurfaceFeedbackSummaryRequestFrame());
+}
 </script>
 
 <template>
@@ -136,6 +142,7 @@ function requestSurfaceAffordances() {
     :mailbox-summary="mailboxSummary.summary.value"
     :scheduler-summary="schedulerSummary.summary.value"
     :sop-summary="sopSummary.summary.value"
+    :surface-feedback-summary="surfaceFeedbackSummary.summary.value"
     :task-lifecycle-summary="taskLifecycleSummary.summary.value"
     :authority-transition="config.authorityTransition ?? null"
     :cloudflare-projection="cloudflareProjection"
@@ -155,5 +162,6 @@ function requestSurfaceAffordances() {
     @request-sop-summary="requestSopSummary"
     @request-task-lifecycle-summary="requestTaskLifecycleSummary"
     @request-surface-affordances="requestSurfaceAffordances"
+    @request-surface-feedback-summary="requestSurfaceFeedbackSummary"
   />
 </template>

@@ -10,6 +10,7 @@ import {
   buildAgentWebUiTaskLifecycleSummaryFrame as buildTaskLifecycleSummaryRequestFrame,
   buildAgentWebUiSopSummaryFrame as buildSopSummaryRequestFrame,
   buildAgentWebUiSurfaceAffordancesFrame as buildSurfaceAffordancesRequestFrame,
+  buildAgentWebUiSurfaceFeedbackSummaryFrame as buildSurfaceFeedbackSummaryRequestFrame,
   isAgentWebUiNarsMethod,
   isAgentWebUiProtocolFrame,
 } from '@narada2/nars-client-projection-contract';
@@ -61,6 +62,7 @@ export {
   buildOperatorInputAction,
   buildSopSummaryRequestFrame,
   buildSurfaceAffordancesRequestFrame,
+  buildSurfaceFeedbackSummaryRequestFrame,
   buildSubscribeFrame,
   reconnectDelayForAttempt,
   readInjectedConfig,

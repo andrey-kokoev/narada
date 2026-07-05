@@ -14,6 +14,7 @@ import {
   buildSchedulerSummaryRequestFrame,
   buildSopSummaryRequestFrame,
   buildSurfaceAffordancesRequestFrame,
+  buildSurfaceFeedbackSummaryRequestFrame,
   buildTaskLifecycleSummaryRequestFrame,
   buildSubscribeFrame,
   isAgentWebUiNarsMethod,
@@ -54,6 +55,12 @@ test('agent-web-ui emits admitted NARS methods for event attach and operator inp
     params: { changed_limit: 9, log_limit: 2 },
   });
   assert.equal(isAgentWebUiProtocolFrame(buildGitSummaryRequestFrame()), true);
+  assert.deepEqual(buildSurfaceFeedbackSummaryRequestFrame({ id: 'feedback-1', limit: 7, status: 'submitted', kind: 'gap', surfaceId: 'scheduler' }), {
+    id: 'feedback-1',
+    method: 'session.surface_feedback.summary',
+    params: { limit: 7, offset: 0, status: 'submitted', kind: 'gap', surface_id: 'scheduler' },
+  });
+  assert.equal(isAgentWebUiProtocolFrame(buildSurfaceFeedbackSummaryRequestFrame()), true);
   assert.deepEqual(buildMailboxSummaryRequestFrame({ id: 'mailbox-1', accountLimit: 3, messageLimit: 8, query: 'ops' }), {
     id: 'mailbox-1',
     method: 'session.mailbox.summary',

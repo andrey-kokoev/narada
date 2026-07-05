@@ -78,7 +78,7 @@ import {
   prepareTargetAuthority,
   sealSourceAuthority,
 } from './authority-transition-state.mjs';
-import { buildDelegationOperatorAffordance, buildGitOperatorAffordance, buildInboxOperatorAffordance, buildMailboxOperatorAffordance, buildMcpSurfaceAffordanceProjection, buildSchedulerOperatorAffordance, buildSopOperatorAffordance, buildTaskLifecycleOperatorAffordance } from './surface-affordances.mjs';
+import { buildDelegationOperatorAffordance, buildGitOperatorAffordance, buildInboxOperatorAffordance, buildMailboxOperatorAffordance, buildMcpSurfaceAffordanceProjection, buildSchedulerOperatorAffordance, buildSopOperatorAffordance, buildSurfaceFeedbackOperatorAffordance, buildTaskLifecycleOperatorAffordance } from './surface-affordances.mjs';
 import { agentInstructionChain, loadRolePrompt } from './agent-instructions.mjs';
 import { loadSession } from './session-records.mjs';
 import {
@@ -551,6 +551,93 @@ function normalizeGitRecentCommits(log) {
 
 function arrayLength(value) {
   return Array.isArray(value) ? value.length : 0;
+}
+
+function findSurfaceFeedbackServerBinding(mcpServers = {}) {
+  for (const [serverName, server] of Object.entries(mcpServers)) {
+    const toolNames = new Set((server?.tools ?? []).map((tool) => tool?.name).filter(Boolean));
+    if (toolNames.has('surface_feedback_list') || toolNames.has('surface_feedback_stats')) return { serverName, server, toolNames };
+  }
+  return null;
+}
+
+async function serverSurfaceFeedbackSummary({ requestId, params = {}, context = {} }) {
+  const binding = findSurfaceFeedbackServerBinding(context.mcpServers ?? {});
+  const limit = clampInteger(params.limit, 25, 1, 100);
+  const offset = clampInteger(params.offset, 0, 0, 10000);
+  const args = {
+    limit,
+    offset,
+    ...(stringValue(params.surface_id) ? { surface_id: stringValue(params.surface_id) } : {}),
+    ...(stringValue(params.status) ? { status: stringValue(params.status) } : {}),
+    ...(stringValue(params.kind) ? { kind: stringValue(params.kind) } : {}),
+  };
+  const errors = [];
+  const payload = {
+    schema: 'narada.nars.surface_feedback_summary.v1',
+    event: 'session_surface_feedback_summary',
+    request_id: requestId,
+    transport: 'jsonl_stdio',
+    status: binding ? 'ok' : 'unavailable',
+    server_name: binding?.serverName ?? null,
+    affordance_contract: surfaceFeedbackAffordanceContract(binding),
+    stats: { total: 0, by_surface: {}, by_kind: {}, by_status: {} },
+    feedback: { items: [], count: 0, limit, offset },
+    doctor: null,
+    errors,
+  };
+  if (!binding) {
+    errors.push({ code: 'surface_feedback_mcp_unavailable', message: 'No site surface-feedback MCP server with read tools is available.' });
+    return payload;
+  }
+  if (binding.toolNames.has('surface_feedback_stats')) payload.stats = normalizeSurfaceFeedbackStats(await readSurfaceFeedbackTool(binding, 'surface_feedback_stats', {}, errors));
+  if (binding.toolNames.has('surface_feedback_list')) payload.feedback = normalizeSurfaceFeedbackCollection(await readSurfaceFeedbackTool(binding, 'surface_feedback_list', args, errors), limit, offset);
+  payload.doctor = binding.toolNames.has('surface_feedback_doctor') ? await readSurfaceFeedbackTool(binding, 'surface_feedback_doctor', {}, errors) ?? null : null;
+  if (errors.length) payload.status = payload.feedback.count || payload.stats.total ? 'partial' : 'error';
+  return payload;
+}
+
+function surfaceFeedbackAffordanceContract(binding) {
+  if (!binding) return buildSurfaceFeedbackOperatorAffordance({ serverName: 'surface-feedback', server: { tools: [] }, source: 'nars_surface_feedback_summary' });
+  return {
+    ...buildSurfaceFeedbackOperatorAffordance({ serverName: binding.serverName, server: binding.server, source: 'nars_surface_feedback_summary' }),
+    schema: 'narada.nars.surface_feedback_operator_affordance_contract.v1',
+  };
+}
+
+function normalizeSurfaceFeedbackStats(value) {
+  const record = objectValue(value) ?? {};
+  return {
+    total: numberValue(record.total) ?? 0,
+    by_surface: objectValue(record.by_surface) ?? {},
+    by_kind: objectValue(record.by_kind) ?? {},
+    by_status: objectValue(record.by_status) ?? {},
+    store: objectValue(record.store) ?? null,
+  };
+}
+
+function normalizeSurfaceFeedbackCollection(value, limit, offset) {
+  const record = objectValue(value) ?? {};
+  const items = arrayOfObjects(record.items).map(normalizeSurfaceFeedbackItem).filter(Boolean);
+  return { items, count: numberValue(record.count) ?? items.length, limit: numberValue(record.limit) ?? limit, offset: numberValue(record.offset) ?? offset, store: objectValue(record.store) ?? null };
+}
+
+function normalizeSurfaceFeedbackItem(value) {
+  const record = objectValue(value);
+  if (!record) return null;
+  return {
+    feedback_id: stringValue(record.feedback_id) ?? null,
+    surface_id: stringValue(record.surface_id) ?? null,
+    submitter_site_id: stringValue(record.submitter_site_id) ?? null,
+    submitter_principal: stringValue(record.submitter_principal) ?? null,
+    kind: stringValue(record.kind) ?? null,
+    summary: stringValue(record.summary) ?? null,
+    status: stringValue(record.status) ?? null,
+    resolution_note: stringValue(record.resolution_note) ?? null,
+    resolved_by: stringValue(record.resolved_by) ?? null,
+    created_at: stringValue(record.created_at) ?? null,
+    updated_at: stringValue(record.updated_at) ?? null,
+  };
 }
 
 function findTaskLifecycleServerBinding(mcpServers = {}) {
@@ -1500,6 +1587,28 @@ async function handleServerRequestLine(line, context) {
     }
     return;
   }
+  if (request?.method === 'session.surface_feedback.summary') {
+    const requestId = request?.id ?? null;
+    noteSessionActivity(context.state, 'session_surface_feedback_summary_requested');
+    recordWorkflowRequest(context, 'session_surface_feedback_summary_requested', { requestId, method: 'session.surface_feedback.summary' });
+    try {
+      context.emit('session_surface_feedback_summary', await serverSurfaceFeedbackSummary({ requestId, params: request?.params ?? {}, context }));
+    } catch (error) {
+      context.emit('session_surface_feedback_summary', {
+        schema: 'narada.nars.surface_feedback_summary.v1',
+        event: 'session_surface_feedback_summary',
+        request_id: requestId,
+        transport: 'jsonl_stdio',
+        status: 'error',
+        error: error instanceof Error ? error.message : String(error),
+        stats: { total: 0, by_surface: {}, by_kind: {}, by_status: {} },
+        feedback: { items: [], count: 0, limit: 25, offset: 0 },
+        doctor: null,
+        errors: [],
+      });
+    }
+    return;
+  }
   if (request?.method === 'session.scheduler.summary') {
     const requestId = request?.id ?? null;
     noteSessionActivity(context.state, 'session_scheduler_summary_requested');
@@ -2051,6 +2160,20 @@ async function readGitTool(binding, name, args, errors) {
     return result.structuredContent ?? parseJson(result.content?.[0]?.text ?? '') ?? null;
   } catch (error) {
     errors.push({ code: 'git_tool_failed', tool: name, message: error instanceof Error ? error.message : String(error) });
+    return null;
+  }
+}
+
+async function readSurfaceFeedbackTool(binding, name, args, errors) {
+  if (!binding.toolNames.has(name)) {
+    errors.push({ code: 'surface_feedback_tool_unavailable', tool: name, message: `${name} is not available on ${binding.serverName}.` });
+    return null;
+  }
+  try {
+    const result = await sendMcpRequest(binding.server, { jsonrpc: '2.0', id: randomId(), method: 'tools/call', params: { name, arguments: args } });
+    return result.structuredContent ?? parseJson(result.content?.[0]?.text ?? '') ?? null;
+  } catch (error) {
+    errors.push({ code: 'surface_feedback_tool_failed', tool: name, message: error instanceof Error ? error.message : String(error) });
     return null;
   }
 }
