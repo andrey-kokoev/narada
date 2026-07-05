@@ -214,6 +214,24 @@ When a read-only `mailbox-mcp` surface is mounted, NARS may emit or answer a syn
 
 Message items should expose display-safe fields such as `message_id`, `mailbox_id`, `folder`, `thread_id`, `subject`, `from`, `received_at`, `unread`, `importance`, `categories`, `preview`, and `attachment_count`. The synced email panel is read-only: mail send, draft, delete, or move actions belong to explicit Graph/mail authority surfaces, not to the mailbox projection.
 
+### Scheduler Summary
+
+When a scheduler MCP surface is mounted, NARS may emit or answer a scheduler summary projection:
+
+```json
+{
+  "event": "session_scheduler_summary",
+  "status": "ok",
+  "server_name": "narada-sonar-scheduler",
+  "affordance_contract": { "schema": "narada.nars.scheduler_operator_affordance_contract.v1" },
+  "tasks": { "count": 2, "items": [] },
+  "posture": { "total": 2, "ready": 1, "running": 0, "disabled": 1, "unknown": 0 },
+  "errors": []
+}
+```
+
+Task items should expose display-safe fields such as `task_name`, `title`, `status`, `schedule`, `next_run`, `last_run`, `last_result`, `command`, `history`, and `available_actions`. Scheduler mutating actions such as run, enable, disable, or delete are candidate actions only until NARS owns admitted protocol methods for them.
+
 ## Stream Semantics
 
 Stream fragments and provider text telemetry are progress signals, not durable conversation rows.

@@ -4,6 +4,9 @@ const SOP_DOCTOR_TOOL = 'sop_doctor';
 const MAILBOX_ACCOUNTS_TOOL = 'mailbox_accounts_list';
 const MAILBOX_MESSAGES_TOOL = 'mailbox_messages_list';
 const MAILBOX_DOCTOR_TOOL = 'mailbox_doctor';
+const SCHEDULER_TASK_LIST_TOOL = 'scheduler_task_list';
+const SCHEDULER_TASK_SHOW_TOOL = 'scheduler_task_show';
+const SCHEDULER_TASK_HISTORY_TOOL = 'scheduler_task_history';
 
 export function buildSopOperatorAffordance({ serverName, server = {}, source = 'live_tool_inventory' } = {}) {
   const toolNames = new Set((server?.tools ?? []).map((tool) => tool?.name).filter(Boolean));
@@ -25,6 +28,44 @@ export function buildSopOperatorAffordance({ serverName, server = {}, source = '
     tools: {
       read: [SOP_TEMPLATE_TOOL, SOP_RUN_TOOL].filter((tool) => toolNames.has(tool)),
       doctor: toolNames.has(SOP_DOCTOR_TOOL) ? SOP_DOCTOR_TOOL : null,
+    },
+  };
+}
+
+function schedulerAffordanceFromTools(serverName, server = {}) {
+  const toolNames = new Set((server?.tools ?? []).map((tool) => tool?.name).filter(Boolean));
+  if (!toolNames.has(SCHEDULER_TASK_LIST_TOOL) && !toolNames.has(SCHEDULER_TASK_SHOW_TOOL)) return null;
+  return buildSchedulerOperatorAffordance({ serverName, server, source: 'live_tool_inventory' });
+}
+
+export function buildSchedulerOperatorAffordance({ serverName, server = {}, source = 'live_tool_inventory' } = {}) {
+  const toolNames = new Set((server?.tools ?? []).map((tool) => tool?.name).filter(Boolean));
+  return {
+    schema: 'narada.mcp_surface.operator_affordance.v1',
+    surface_kind: 'scheduler',
+    surface_id: stringField(server?.config, 'surface_id') ?? `${serverName}:scheduler`,
+    server_name: serverName,
+    source,
+    renderer: 'scheduler_tasks',
+    title: 'Scheduler',
+    panel: {
+      kind: 'scheduler_tasks',
+      title: 'Scheduler',
+      summary_method: 'session.scheduler.summary',
+      sections: ['posture', 'tasks', 'history'],
+    },
+    actions: {
+      read: ['refresh', 'open_task'],
+      candidate_write: [
+        toolNames.has('scheduler_task_run') ? 'run_now' : null,
+        toolNames.has('scheduler_task_enable') ? 'enable_task' : null,
+        toolNames.has('scheduler_task_disable') ? 'disable_task' : null,
+        toolNames.has('scheduler_task_delete') ? 'delete_task' : null,
+      ].filter(Boolean),
+    },
+    tools: {
+      read: [SCHEDULER_TASK_LIST_TOOL, SCHEDULER_TASK_SHOW_TOOL, SCHEDULER_TASK_HISTORY_TOOL].filter((tool) => toolNames.has(tool)),
+      write: ['scheduler_task_run', 'scheduler_task_enable', 'scheduler_task_disable', 'scheduler_task_delete'].filter((tool) => toolNames.has(tool)),
     },
   };
 }
@@ -88,6 +129,14 @@ export function buildMcpSurfaceAffordanceProjection(mcpServers = {}) {
       if (!seen.has(key)) {
         seen.add(key);
         items.push(mailbox);
+      }
+    }
+    const scheduler = schedulerAffordanceFromTools(serverName, server);
+    if (scheduler) {
+      const key = affordanceKey(scheduler);
+      if (!seen.has(key)) {
+        seen.add(key);
+        items.push(scheduler);
       }
     }
   }

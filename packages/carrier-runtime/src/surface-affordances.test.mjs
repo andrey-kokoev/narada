@@ -79,6 +79,46 @@ test('surface affordance projection advertises synced email panel from mailbox M
   });
 });
 
+test('surface affordance projection advertises scheduler panel from scheduler MCP inventory', () => {
+  const projection = buildMcpSurfaceAffordanceProjection({
+    'narada-test-scheduler': {
+      tools: [
+        { name: 'scheduler_task_list' },
+        { name: 'scheduler_task_show' },
+        { name: 'scheduler_task_history' },
+        { name: 'scheduler_task_run' },
+        { name: 'scheduler_task_disable' },
+      ],
+      config: { surface_id: 'test.scheduler' },
+    },
+  });
+
+  assert.equal(projection.count, 1);
+  assert.deepEqual(projection.items[0], {
+    schema: 'narada.mcp_surface.operator_affordance.v1',
+    surface_kind: 'scheduler',
+    surface_id: 'test.scheduler',
+    server_name: 'narada-test-scheduler',
+    source: 'live_tool_inventory',
+    renderer: 'scheduler_tasks',
+    title: 'Scheduler',
+    panel: {
+      kind: 'scheduler_tasks',
+      title: 'Scheduler',
+      summary_method: 'session.scheduler.summary',
+      sections: ['posture', 'tasks', 'history'],
+    },
+    actions: {
+      read: ['refresh', 'open_task'],
+      candidate_write: ['run_now', 'disable_task'],
+    },
+    tools: {
+      read: ['scheduler_task_list', 'scheduler_task_show', 'scheduler_task_history'],
+      write: ['scheduler_task_run', 'scheduler_task_disable'],
+    },
+  });
+});
+
 test('surface affordance projection admits static MCP surface presentation metadata', () => {
   const projection = buildMcpSurfaceAffordanceProjection({
     'narada-test-inbox': {

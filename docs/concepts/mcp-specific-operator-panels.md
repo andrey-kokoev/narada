@@ -23,12 +23,12 @@ The browser asks NARS for a summary, not for direct MCP calls. NARS uses the mou
 
 | Piece | Owner | Example |
 | --- | --- | --- |
-| Surface detection | NARS / carrier runtime | Detect SOP by `sop_template_list` or `sop_run_list`; detect synced email by `mailbox_accounts_list` or `mailbox_messages_list`. |
+| Surface detection | NARS / carrier runtime | Detect SOP by `sop_template_list` or `sop_run_list`; detect synced email by `mailbox_accounts_list` or `mailbox_messages_list`; detect scheduler by `scheduler_task_list` or `scheduler_task_show`. |
 | Affordance declaration | NARS projection over MCP metadata | `session.surface.affordances` with panel sections and available action names. |
-| Summary method | NARS protocol | `session.sop.summary`, `session.mailbox.summary`. |
-| Summary event | NARS event stream | `session_sop_summary`, `session_mailbox_summary`. |
+| Summary method | NARS protocol | `session.sop.summary`, `session.mailbox.summary`, `session.scheduler.summary`. |
+| Summary event | NARS event stream | `session_sop_summary`, `session_mailbox_summary`, `session_scheduler_summary`. |
 | Client consumption | Agent web UI | `useSopSummary` reads the latest summary event. |
-| Panel rendering | Agent web UI | `SopPanel.vue`, `MailboxPanel.vue`. |
+| Panel rendering | Agent web UI | `SopPanel.vue`, `MailboxPanel.vue`, `SchedulerPanel.vue`. |
 | Contract docs/tests | Shared packages | Runtime DTO tests and web UI rendering tests. |
 
 ## DTO Rules
@@ -68,6 +68,14 @@ For Synced Email:
 | `refresh` | Read projection request through `session.mailbox.summary`. |
 | `open_message` / `open_thread` | Local panel expansion or future read-only detail request. |
 | mail send, draft, delete, move | Out of scope for `mailbox-mcp`; these belong to explicit Graph/mail authority paths, not the read-only synced mailbox panel. |
+
+For Scheduler:
+
+| Action | Current posture |
+| --- | --- |
+| `refresh` | Read projection request through `session.scheduler.summary`. |
+| `open_task` / `open_history` | Local panel expansion or future read-only detail request. |
+| `run_now`, `enable_task`, `disable_task`, `delete_task` | Candidate mutations only; require explicit NARS admission before execution. |
 
 ## Reference Acceptance Criteria
 

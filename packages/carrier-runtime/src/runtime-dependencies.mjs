@@ -78,7 +78,7 @@ import {
   prepareTargetAuthority,
   sealSourceAuthority,
 } from './authority-transition-state.mjs';
-import { buildMailboxOperatorAffordance, buildMcpSurfaceAffordanceProjection, buildSopOperatorAffordance } from './surface-affordances.mjs';
+import { buildMailboxOperatorAffordance, buildMcpSurfaceAffordanceProjection, buildSchedulerOperatorAffordance, buildSopOperatorAffordance } from './surface-affordances.mjs';
 import { agentInstructionChain, loadRolePrompt } from './agent-instructions.mjs';
 import { loadSession } from './session-records.mjs';
 import {
@@ -995,6 +995,27 @@ async function handleServerRequestLine(line, context) {
     }
     return;
   }
+  if (request?.method === 'session.scheduler.summary') {
+    const requestId = request?.id ?? null;
+    noteSessionActivity(context.state, 'session_scheduler_summary_requested');
+    recordWorkflowRequest(context, 'session_scheduler_summary_requested', { requestId, method: 'session.scheduler.summary' });
+    try {
+      context.emit('session_scheduler_summary', await serverSchedulerSummary({ requestId, params: request?.params ?? {}, context }));
+    } catch (error) {
+      context.emit('session_scheduler_summary', {
+        schema: 'narada.nars.scheduler_summary.v1',
+        event: 'session_scheduler_summary',
+        request_id: requestId,
+        transport: 'jsonl_stdio',
+        status: 'error',
+        error: error instanceof Error ? error.message : String(error),
+        tasks: { items: [], count: 0 },
+        posture: { total: 0, ready: 0, running: 0, disabled: 0, unknown: 0 },
+        errors: [],
+      });
+    }
+    return;
+  }
   if (request?.method === 'session.surface.affordances') {
     const requestId = request?.id ?? null;
     noteSessionActivity(context.state, 'session_surface_affordances_requested');
@@ -1125,6 +1146,91 @@ function mailboxAffordanceContract(binding) {
     ...buildMailboxOperatorAffordance({ serverName: binding.serverName, server: binding.server, source: 'nars_mailbox_summary' }),
     schema: 'narada.nars.mailbox_operator_affordance_contract.v1',
   };
+}
+
+async function serverSchedulerSummary({ requestId, params = {}, context = {} }) {
+  const binding = findSchedulerServerBinding(context.mcpServers ?? {});
+  const taskLimit = clampInteger(params.task_limit ?? params.taskLimit, 25, 1, 100);
+  const historyLimit = clampInteger(params.history_limit ?? params.historyLimit, 5, 1, 25);
+  const folder = stringValue(params.folder) ?? undefined;
+  const payload = {
+    schema: 'narada.nars.scheduler_summary.v1',
+    event: 'session_scheduler_summary',
+    request_id: requestId,
+    transport: 'jsonl_stdio',
+    status: binding ? 'ok' : 'unavailable',
+    server_name: binding?.serverName ?? null,
+    affordance_contract: schedulerAffordanceContract(binding),
+    tasks: { items: [], count: 0 },
+    posture: { total: 0, ready: 0, running: 0, disabled: 0, unknown: 0 },
+    errors: [],
+  };
+  if (!binding) {
+    payload.errors.push({ code: 'scheduler_mcp_unavailable', message: 'No site scheduler MCP server with scheduler read tools is available.' });
+    return payload;
+  }
+  payload.tasks = await readSchedulerTool(binding, 'scheduler_task_list', { limit: taskLimit, folder }, payload.errors) ?? payload.tasks;
+  payload.tasks = normalizeSchedulerTaskCollection(payload.tasks, binding, historyLimit);
+  payload.posture = summarizeSchedulerPosture(payload.tasks.items);
+  if (payload.errors.length) payload.status = payload.tasks.count ? 'partial' : 'error';
+  return payload;
+}
+
+function schedulerAffordanceContract(binding) {
+  if (!binding) return buildSchedulerOperatorAffordance({ serverName: 'scheduler', server: { tools: [] }, source: 'nars_scheduler_summary' });
+  return {
+    ...buildSchedulerOperatorAffordance({ serverName: binding.serverName, server: binding.server, source: 'nars_scheduler_summary' }),
+    schema: 'narada.nars.scheduler_operator_affordance_contract.v1',
+  };
+}
+
+function normalizeSchedulerTaskCollection(collection, binding, historyLimit) {
+  const raw = objectValue(collection) ?? {};
+  const sourceItems = Array.isArray(raw.tasks) ? raw.tasks : Array.isArray(raw.items) ? raw.items : [];
+  const items = sourceItems.map((task) => normalizeSchedulerTask(task, binding, historyLimit)).filter(Boolean);
+  return { ...raw, items, count: numberValue(raw.count) ?? items.length };
+}
+
+function normalizeSchedulerTask(task, binding, historyLimit) {
+  const record = objectValue(task);
+  if (!record) return null;
+  const taskName = stringValue(record.task_name) ?? stringValue(record.name) ?? '';
+  return {
+    ...record,
+    task_name: taskName,
+    title: stringValue(record.title) ?? (taskName || 'Scheduled task'),
+    status: stringValue(record.status) ?? 'unknown',
+    schedule: stringValue(record.schedule) ?? null,
+    next_run: stringValue(record.next_run) ?? null,
+    last_run: stringValue(record.last_run) ?? null,
+    last_result: stringValue(record.last_result) ?? null,
+    command: stringValue(record.command) ?? null,
+    history: { items: [], count: 0, limit: historyLimit, available: binding?.toolNames?.has('scheduler_task_history') === true },
+    available_actions: availableSchedulerTaskActions(binding),
+  };
+}
+
+function summarizeSchedulerPosture(tasks = []) {
+  const posture = { total: tasks.length, ready: 0, running: 0, disabled: 0, unknown: 0 };
+  for (const task of tasks) {
+    const status = String(task?.status ?? '').toLowerCase();
+    if (status.includes('ready')) posture.ready += 1;
+    else if (status.includes('running')) posture.running += 1;
+    else if (status.includes('disabled')) posture.disabled += 1;
+    else posture.unknown += 1;
+  }
+  return posture;
+}
+
+function availableSchedulerTaskActions(binding) {
+  const toolNames = binding?.toolNames ?? new Set();
+  return [
+    'open_task',
+    toolNames.has('scheduler_task_history') ? 'open_history' : null,
+    toolNames.has('scheduler_task_run') ? 'candidate_run_now' : null,
+    toolNames.has('scheduler_task_enable') ? 'candidate_enable_task' : null,
+    toolNames.has('scheduler_task_disable') ? 'candidate_disable_task' : null,
+  ].filter(Boolean);
 }
 
 function normalizeMailboxAccountCollection(collection) {
@@ -1343,6 +1449,14 @@ function findMailboxServerBinding(mcpServers = {}) {
   return null;
 }
 
+function findSchedulerServerBinding(mcpServers = {}) {
+  for (const [serverName, server] of Object.entries(mcpServers)) {
+    const toolNames = new Set((server?.tools ?? []).map((tool) => tool?.name).filter(Boolean));
+    if (toolNames.has('scheduler_task_list') || toolNames.has('scheduler_task_show')) return { serverName, server, toolNames };
+  }
+  return null;
+}
+
 async function readSopTool(binding, name, args, errors) {
   if (!binding.toolNames.has(name)) {
     errors.push({ code: 'sop_tool_unavailable', tool: name, message: `${name} is not available on ${binding.serverName}.` });
@@ -1367,6 +1481,20 @@ async function readMailboxTool(binding, name, args, errors) {
     return result.structuredContent ?? parseJson(result.content?.[0]?.text ?? '') ?? null;
   } catch (error) {
     errors.push({ code: 'mailbox_tool_failed', tool: name, message: error instanceof Error ? error.message : String(error) });
+    return null;
+  }
+}
+
+async function readSchedulerTool(binding, name, args, errors) {
+  if (!binding.toolNames.has(name)) {
+    errors.push({ code: 'scheduler_tool_unavailable', tool: name, message: `${name} is not available on ${binding.serverName}.` });
+    return null;
+  }
+  try {
+    const result = await sendMcpRequest(binding.server, { jsonrpc: '2.0', id: randomId(), method: 'tools/call', params: { name, arguments: args } });
+    return result.structuredContent ?? parseJson(result.content?.[0]?.text ?? '') ?? null;
+  } catch (error) {
+    errors.push({ code: 'scheduler_tool_failed', tool: name, message: error instanceof Error ? error.message : String(error) });
     return null;
   }
 }

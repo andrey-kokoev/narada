@@ -14,11 +14,13 @@ const props = defineProps<{
   authorityTransition: Record<string, unknown> | null;
   hasSopMcp: boolean;
   hasMailboxMcp: boolean;
+  hasSchedulerMcp: boolean;
 }>();
 const emit = defineEmits<{
   'open-mcp-panel': [];
   'open-sop-panel': [];
   'open-mailbox-panel': [];
+  'open-scheduler-panel': [];
 }>();
 
 const open = ref(false);
@@ -74,6 +76,11 @@ function openSopPanel() {
 function openMailboxPanel() {
   open.value = false;
   emit('open-mailbox-panel');
+}
+
+function openSchedulerPanel() {
+  open.value = false;
+  emit('open-scheduler-panel');
 }
 </script>
 
@@ -140,6 +147,10 @@ function openMailboxPanel() {
               <div v-if="hasMailboxMcp">
                 <dt>Synced Email</dt>
                 <dd><button type="button" class="site-info-inline-action" @click="openMailboxPanel">Open panel</button></dd>
+              </div>
+              <div v-if="hasSchedulerMcp">
+                <dt>Scheduler</dt>
+                <dd><button type="button" class="site-info-inline-action" @click="openSchedulerPanel">Open panel</button></dd>
               </div>
               <div>
                 <dt>Observed endpoint hosts</dt>

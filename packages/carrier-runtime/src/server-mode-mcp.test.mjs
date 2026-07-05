@@ -454,6 +454,87 @@ test('server mode treats mailbox doctor as optional for synced mailbox summaries
   }
 });
 
+test('server mode projects scheduler summary as an operator-facing DTO', async () => {
+  const siteRoot = tempRoot('carrier-scheduler-summary-test-');
+  try {
+    const input = new PassThrough();
+    const output = new PassThrough();
+    const events = [];
+    let outputBuffer = '';
+    output.setEncoding('utf8');
+    output.on('data', (chunk) => {
+      outputBuffer += chunk;
+      const lines = outputBuffer.split(/\r?\n/);
+      outputBuffer = lines.pop() ?? '';
+      for (const line of lines) {
+        if (line.trim()) events.push(JSON.parse(line));
+      }
+    });
+
+    const sessionId = 'carrier_20260705044500_scheduler';
+    const sitePaths = resolveNaradaSitePaths({ siteRoot, sessionId });
+    const sessionDir = sitePaths.narsSessionDir;
+    const runtimeContext = {
+      identity: 'sonar.resident',
+      session: sessionId,
+      siteRoot,
+      sessionPath: join(sessionDir, 'session.jsonl'),
+      eventsPath: join(sessionDir, 'events.jsonl'),
+      providerSettings: { stream: false },
+    };
+    const { dependencies } = createCarrierRuntimeDependencies({ runtimeContext });
+    const fakeSchedulerServer = {
+      tools: [
+        { name: 'scheduler_task_list' },
+        { name: 'scheduler_task_show' },
+        { name: 'scheduler_task_history' },
+        { name: 'scheduler_task_run' },
+        { name: 'scheduler_task_disable' },
+      ],
+      async send(request) {
+        const name = request.params?.name;
+        if (name === 'scheduler_task_list') {
+          return { result: { structuredContent: { items: [
+            { task_name: '\\Narada\\ProviderLiveness', status: 'Ready', schedule: 'Daily', next_run: '2026-07-05 05:00:00', last_run: '2026-07-05 04:00:00', last_result: '0', command: 'pwsh -File check-provider.ps1' },
+            { task_name: '\\Narada\\SiteContinuity', status: 'Disabled', schedule: 'Hourly', next_run: 'N/A', last_run: '2026-07-05 03:00:00', last_result: '1', command: 'pwsh -File sync-site.ps1' },
+          ], count: 2 } } };
+        }
+        return { error: { message: `unexpected tool ${name}` } };
+      },
+    };
+
+    input.write(`${JSON.stringify({ id: 'scheduler-summary-1', method: 'session.scheduler.summary', params: { task_limit: 10, history_limit: 2 } })}\n`);
+    input.end();
+    await runCarrierServerMode({
+      input,
+      output,
+      callChatApiFn: async () => ({ choices: [{ message: { role: 'assistant', content: 'unused' } }] }),
+      runtimeContext,
+      dependencies: {
+        ...dependencies,
+        discoverAndStartMcpServers: async () => ({ 'narada-test-scheduler': fakeSchedulerServer }),
+        closeMcpServers: () => {},
+        readMcpPreflightArtifact: () => null,
+      },
+    });
+
+    const summary = events.find((event) => event.event === 'session_scheduler_summary');
+    assert.equal(summary?.schema, 'narada.nars.scheduler_summary.v1');
+    assert.equal(summary.server_name, 'narada-test-scheduler');
+    assert.equal(summary.affordance_contract?.panel?.summary_method, 'session.scheduler.summary');
+    assert.deepEqual(summary.affordance_contract?.actions?.read, ['refresh', 'open_task']);
+    assert.deepEqual(summary.affordance_contract?.actions?.candidate_write, ['run_now', 'disable_task']);
+    assert.equal(summary.tasks.count, 2);
+    assert.equal(summary.tasks.items[0].task_name, '\\Narada\\ProviderLiveness');
+    assert.deepEqual(summary.tasks.items[0].available_actions, ['open_task', 'open_history', 'candidate_run_now', 'candidate_disable_task']);
+    assert.equal(summary.posture.total, 2);
+    assert.equal(summary.posture.ready, 1);
+    assert.equal(summary.posture.disabled, 1);
+  } finally {
+    removeTempDir(siteRoot);
+  }
+});
+
 test('server mode health and event subscription match NARS runtime contract shape', async () => {
   const siteRoot = tempRoot('carrier-health-subscribe-test-');
   try {

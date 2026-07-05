@@ -8,6 +8,7 @@ import {
   buildEventsReadFrame,
   buildMailboxSummaryRequestFrame,
   buildOperatorInputAction,
+  buildSchedulerSummaryRequestFrame,
   buildSopSummaryRequestFrame,
   buildSurfaceAffordancesRequestFrame,
   buildSubscribeFrame,
@@ -37,6 +38,12 @@ test('agent-web-ui emits admitted NARS methods for event attach and operator inp
     params: { account_limit: 3, message_limit: 8, query: 'ops' },
   });
   assert.equal(isAgentWebUiProtocolFrame(buildMailboxSummaryRequestFrame()), true);
+  assert.deepEqual(buildSchedulerSummaryRequestFrame({ id: 'scheduler-1', taskLimit: 6, historyLimit: 2, folder: '\\Narada' }), {
+    id: 'scheduler-1',
+    method: 'session.scheduler.summary',
+    params: { task_limit: 6, history_limit: 2, folder: '\\Narada' },
+  });
+  assert.equal(isAgentWebUiProtocolFrame(buildSchedulerSummaryRequestFrame()), true);
   assert.deepEqual(buildSurfaceAffordancesRequestFrame({ id: 'surface-1' }), { id: 'surface-1', method: 'session.surface.affordances', params: {} });
   assert.equal(isAgentWebUiProtocolFrame(buildSurfaceAffordancesRequestFrame()), true);
 

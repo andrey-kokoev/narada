@@ -12,10 +12,11 @@ import { useOperatorInput } from './composables/useOperatorInput';
 import { useOperatorQueue } from './composables/useOperatorQueue';
 import { useProjectionVerbosity } from './composables/useProjectionVerbosity';
 import { useRetainedEvents } from './composables/useRetainedEvents';
+import { useSchedulerSummary } from './composables/useSchedulerSummary';
 import { useSopSummary } from './composables/useSopSummary';
 import { useSurfaceAffordances } from './composables/useSurfaceAffordances';
 import { ArtifactRenderingConfigKey } from './lib/artifactConfig';
-import { buildMailboxSummaryRequestFrame, buildSopSummaryRequestFrame, buildSurfaceAffordancesRequestFrame } from './lib/narsFrames';
+import { buildMailboxSummaryRequestFrame, buildSchedulerSummaryRequestFrame, buildSopSummaryRequestFrame, buildSurfaceAffordancesRequestFrame } from './lib/narsFrames';
 
 interface AgentWebUiConfig {
   eventEndpoint: string | null;
@@ -48,6 +49,7 @@ const events = useNarsEvents(retained.events, projection.verbosity, health.ident
 const agentActivity = useAgentActivity(retained.events, health.body);
 const mcpInventory = useMcpInventory(retained.events, health.body);
 const mailboxSummary = useMailboxSummary(retained.events);
+const schedulerSummary = useSchedulerSummary(retained.events);
 const sopSummary = useSopSummary(retained.events);
 const surfaceAffordances = useSurfaceAffordances(retained.events, health.body);
 const operatorQueue = useOperatorQueue(health.body);
@@ -70,6 +72,10 @@ function requestSopSummary() {
 
 function requestMailboxSummary() {
   connection.connection.value?.sendFrame(buildMailboxSummaryRequestFrame());
+}
+
+function requestSchedulerSummary() {
+  connection.connection.value?.sendFrame(buildSchedulerSummaryRequestFrame());
 }
 
 function requestSurfaceAffordances() {
@@ -101,6 +107,7 @@ function requestSurfaceAffordances() {
     :mcp-inventory="mcpInventory.inventory.value"
     :surface-affordances="surfaceAffordances.summary.value"
     :mailbox-summary="mailboxSummary.summary.value"
+    :scheduler-summary="schedulerSummary.summary.value"
     :sop-summary="sopSummary.summary.value"
     :authority-transition="config.authorityTransition ?? null"
     :cloudflare-projection="cloudflareProjection"
@@ -113,6 +120,7 @@ function requestSurfaceAffordances() {
     @remove-queued="input.dropQueued($event.index)"
     @steer-queued="input.steerQueuedNow"
     @request-mailbox-summary="requestMailboxSummary"
+    @request-scheduler-summary="requestSchedulerSummary"
     @request-sop-summary="requestSopSummary"
     @request-surface-affordances="requestSurfaceAffordances"
   />

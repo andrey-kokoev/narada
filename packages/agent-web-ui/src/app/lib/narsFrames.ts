@@ -10,6 +10,10 @@ export function buildMailboxSummaryRequestFrame() {
   return contract.buildAgentWebUiMailboxSummaryFrame();
 }
 
+export function buildSchedulerSummaryRequestFrame() {
+  return contract.buildAgentWebUiSchedulerSummaryFrame();
+}
+
 export function buildSurfaceAffordancesRequestFrame() {
   return contract.buildAgentWebUiSurfaceAffordancesFrame();
 }

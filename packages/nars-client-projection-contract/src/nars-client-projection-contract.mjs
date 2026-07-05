@@ -25,6 +25,7 @@ export const AGENT_WEB_UI_NARS_METHOD_LIST = Object.freeze([
   'session.surface.affordances',
   'session.sop.summary',
   'session.mailbox.summary',
+  'session.scheduler.summary',
   'conversation.send',
   'conversation.enqueue',
   'session.status',
@@ -213,6 +214,18 @@ export function buildAgentWebUiMailboxSummaryFrame(options = {}) {
       account_limit: Number.isFinite(options.accountLimit) ? options.accountLimit : 20,
       message_limit: Number.isFinite(options.messageLimit) ? options.messageLimit : 25,
       ...(typeof options.query === 'string' && options.query ? { query: options.query } : {}),
+    },
+  };
+}
+
+export function buildAgentWebUiSchedulerSummaryFrame(options = {}) {
+  return {
+    id: options.id ?? `agent-web-ui-scheduler-summary-${Date.now()}`,
+    method: 'session.scheduler.summary',
+    params: {
+      task_limit: Number.isFinite(options.taskLimit) ? options.taskLimit : 25,
+      history_limit: Number.isFinite(options.historyLimit) ? options.historyLimit : 5,
+      ...(typeof options.folder === 'string' && options.folder ? { folder: options.folder } : {}),
     },
   };
 }

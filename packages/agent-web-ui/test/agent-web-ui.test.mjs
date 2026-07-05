@@ -183,6 +183,7 @@ test('Vue operator components expose composer without hidden privileged controls
   const app = await readFile(new URL('../src/app/App.vue', import.meta.url), 'utf8');
   const siteInfo = await readFile(new URL('../src/app/components/SiteInfoPanel.vue', import.meta.url), 'utf8');
   const mailboxPanel = await readFile(new URL('../src/app/components/MailboxPanel.vue', import.meta.url), 'utf8');
+  const schedulerPanel = await readFile(new URL('../src/app/components/SchedulerPanel.vue', import.meta.url), 'utf8');
   const sopPanel = await readFile(new URL('../src/app/components/SopPanel.vue', import.meta.url), 'utf8');
   const mcpInventory = await readFile(new URL('../src/app/composables/useMcpInventory.ts', import.meta.url), 'utf8');
   const surfaceAffordances = await readFile(new URL('../src/app/composables/useSurfaceAffordances.ts', import.meta.url), 'utf8');
@@ -212,46 +213,66 @@ test('Vue operator components expose composer without hidden privileged controls
   assert.match(app, /@interrupt="interruptModel"/);
   assert.match(input, /buildAgentWebUiOperatorInputAction\('\/interrupt'/);
   assert.match(app, /buildMailboxSummaryRequestFrame/);
+  assert.match(app, /buildSchedulerSummaryRequestFrame/);
   assert.match(app, /buildSopSummaryRequestFrame/);
   assert.match(app, /buildSurfaceAffordancesRequestFrame/);
   assert.match(narsFrames, /buildAgentWebUiMailboxSummaryFrame/);
+  assert.match(narsFrames, /buildAgentWebUiSchedulerSummaryFrame/);
   assert.match(narsFrames, /buildAgentWebUiSopSummaryFrame/);
   assert.match(narsFrames, /buildAgentWebUiSurfaceAffordancesFrame/);
   assert.match(shell, /import SopPanel/);
   assert.match(shell, /import MailboxPanel/);
+  assert.match(shell, /import SchedulerPanel/);
   assert.match(shell, /const sopPanelOpen = ref\(false\)/);
   assert.match(shell, /const mailboxPanelOpen = ref\(false\)/);
+  assert.match(shell, /const schedulerPanelOpen = ref\(false\)/);
   assert.doesNotMatch(shell, /const sopServer = computed/);
   assert.match(shell, /const sopAffordance = computed/);
   assert.match(shell, /const hasSopSurface = computed/);
   assert.match(shell, /const mailboxAffordance = computed/);
   assert.match(shell, /const hasMailboxSurface = computed/);
+  assert.match(shell, /const schedulerAffordance = computed/);
+  assert.match(shell, /const hasSchedulerSurface = computed/);
   assert.match(shell, /Boolean\(sopAffordance\.value\)/);
   assert.match(shell, /Boolean\(mailboxAffordance\.value\)/);
+  assert.match(shell, /Boolean\(schedulerAffordance\.value\)/);
   assert.match(shell, /mailboxSummary: MailboxSummary/);
+  assert.match(shell, /schedulerSummary: SchedulerSummary/);
   assert.match(shell, /sopSummary: SopSummary/);
   assert.match(shell, /surfaceAffordances: SurfaceAffordanceSummary/);
   assert.match(shell, /<SopPanel v-model:open="sopPanelOpen" :available="hasSopSurface" :summary="sopSummary"/);
   assert.match(shell, /<MailboxPanel v-model:open="mailboxPanelOpen" :available="hasMailboxSurface" :summary="mailboxSummary"/);
+  assert.match(shell, /<SchedulerPanel v-model:open="schedulerPanelOpen" :available="hasSchedulerSurface" :summary="schedulerSummary"/);
   assert.match(shell, /@refresh="emit\('request-sop-summary'\)"/);
   assert.match(shell, /@refresh="emit\('request-mailbox-summary'\)"/);
+  assert.match(shell, /@refresh="emit\('request-scheduler-summary'\)"/);
   assert.match(shell, /:has-sop-mcp="hasSopSurface"/);
   assert.match(shell, /:has-mailbox-mcp="hasMailboxSurface"/);
+  assert.match(shell, /:has-scheduler-mcp="hasSchedulerSurface"/);
   assert.match(app, /useMailboxSummary\(retained\.events\)/);
+  assert.match(app, /useSchedulerSummary\(retained\.events\)/);
   assert.match(app, /useSopSummary\(retained\.events\)/);
   assert.match(app, /useSurfaceAffordances\(retained\.events, health\.body\)/);
   assert.match(siteInfo, /hasSopMcp: boolean/);
   assert.match(siteInfo, /hasMailboxMcp: boolean/);
+  assert.match(siteInfo, /hasSchedulerMcp: boolean/);
   assert.match(siteInfo, /v-if="hasSopMcp"/);
   assert.match(siteInfo, /v-if="hasMailboxMcp"/);
+  assert.match(siteInfo, /v-if="hasSchedulerMcp"/);
   assert.match(siteInfo, /@click="openSopPanel"/);
   assert.match(siteInfo, /@click="openMailboxPanel"/);
+  assert.match(siteInfo, /@click="openSchedulerPanel"/);
   assert.match(mailboxPanel, /v-if="available"/);
   assert.match(mailboxPanel, /summary: MailboxSummary/);
   assert.match(mailboxPanel, /mailbox_accounts|Accounts|Recent messages/);
   assert.match(mailboxPanel, /summary\.accounts\.items/);
   assert.match(mailboxPanel, /summary\.messages\.items/);
   assert.match(mailboxPanel, /Synced Email/);
+  assert.match(schedulerPanel, /v-if="available"/);
+  assert.match(schedulerPanel, /summary: SchedulerSummary/);
+  assert.match(schedulerPanel, /Scheduler/);
+  assert.match(schedulerPanel, /summary\.tasks\.items/);
+  assert.match(schedulerPanel, /candidateActions/);
   assert.match(sopPanel, /v-if="available"/);
   assert.match(sopPanel, /summary: SopSummary/);
   assert.match(sopPanel, /activeRun = computed/);
@@ -725,7 +746,7 @@ test('CLI args and client config keep runtime authority outside the web package'
     protocolHealthMethod: 'session.health',
     maxReplay: 100,
     operatorInput: true,
-    admittedMethods: ['session.events.subscribe', 'session.events.read', 'session.artifacts.register', 'session.artifacts.read', 'session.surface.affordances', 'session.sop.summary', 'session.mailbox.summary', 'conversation.send', 'conversation.enqueue', 'session.status', 'session.health', 'session.recovery', 'session.operations', 'observers.status', 'observer.mute', 'observer.unmute', 'session.command.execute', 'carrier.command.execute', 'conversation.interrupt', 'conversation.steer', 'session.close'],
+    admittedMethods: ['session.events.subscribe', 'session.events.read', 'session.artifacts.register', 'session.artifacts.read', 'session.surface.affordances', 'session.sop.summary', 'session.mailbox.summary', 'session.scheduler.summary', 'conversation.send', 'conversation.enqueue', 'session.status', 'session.health', 'session.recovery', 'session.operations', 'observers.status', 'observer.mute', 'observer.unmute', 'session.command.execute', 'carrier.command.execute', 'conversation.interrupt', 'conversation.steer', 'session.close'],
   });
 });
 
