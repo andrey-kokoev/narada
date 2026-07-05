@@ -78,7 +78,7 @@ import {
   prepareTargetAuthority,
   sealSourceAuthority,
 } from './authority-transition-state.mjs';
-import { buildMcpSurfaceAffordanceProjection, buildSopOperatorAffordance } from './surface-affordances.mjs';
+import { buildMailboxOperatorAffordance, buildMcpSurfaceAffordanceProjection, buildSopOperatorAffordance } from './surface-affordances.mjs';
 import { agentInstructionChain, loadRolePrompt } from './agent-instructions.mjs';
 import { loadSession } from './session-records.mjs';
 import {
@@ -975,6 +975,26 @@ async function handleServerRequestLine(line, context) {
     }
     return;
   }
+  if (request?.method === 'session.mailbox.summary') {
+    const requestId = request?.id ?? null;
+    noteSessionActivity(context.state, 'session_mailbox_summary_requested');
+    recordWorkflowRequest(context, 'session_mailbox_summary_requested', { requestId, method: 'session.mailbox.summary' });
+    try {
+      context.emit('session_mailbox_summary', await serverMailboxSummary({ requestId, params: request?.params ?? {}, context }));
+    } catch (error) {
+      context.emit('session_mailbox_summary', {
+        schema: 'narada.nars.mailbox_summary.v1',
+        event: 'session_mailbox_summary',
+        request_id: requestId,
+        transport: 'jsonl_stdio',
+        status: 'error',
+        error: error instanceof Error ? error.message : String(error),
+        accounts: { items: [], count: 0 },
+        messages: { items: [], count: 0 },
+      });
+    }
+    return;
+  }
   if (request?.method === 'session.surface.affordances') {
     const requestId = request?.id ?? null;
     noteSessionActivity(context.state, 'session_surface_affordances_requested');
@@ -1064,6 +1084,105 @@ function sopAffordanceContract(binding) {
     ...buildSopOperatorAffordance({ serverName: binding.serverName, server: binding.server, source: 'nars_sop_summary' }),
     schema: 'narada.nars.sop_operator_affordance_contract.v1',
   };
+}
+
+async function serverMailboxSummary({ requestId, params = {}, context = {} }) {
+  const binding = findMailboxServerBinding(context.mcpServers ?? {});
+  const accountLimit = clampInteger(params.account_limit ?? params.accountLimit, 20, 1, 100);
+  const messageLimit = clampInteger(params.message_limit ?? params.messageLimit, 25, 1, 100);
+  const query = stringValue(params.query) ?? undefined;
+  const payload = {
+    schema: 'narada.nars.mailbox_summary.v1',
+    event: 'session_mailbox_summary',
+    request_id: requestId,
+    transport: 'jsonl_stdio',
+    status: binding ? 'ok' : 'unavailable',
+    server_name: binding?.serverName ?? null,
+    affordance_contract: mailboxAffordanceContract(binding),
+    accounts: { items: [], count: 0 },
+    messages: { items: [], count: 0 },
+    unread: { count: 0 },
+    doctor: null,
+    errors: [],
+  };
+  if (!binding) {
+    payload.errors.push({ code: 'mailbox_mcp_unavailable', message: 'No site mailbox MCP server with synced mailbox read tools is available.' });
+    return payload;
+  }
+  payload.accounts = await readMailboxTool(binding, 'mailbox_accounts_list', { limit: accountLimit }, payload.errors) ?? payload.accounts;
+  payload.messages = await readMailboxTool(binding, 'mailbox_messages_list', { limit: messageLimit, query }, payload.errors) ?? payload.messages;
+  payload.doctor = await readMailboxTool(binding, 'mailbox_doctor', {}, payload.errors) ?? null;
+  payload.accounts = normalizeMailboxAccountCollection(payload.accounts);
+  payload.messages = normalizeMailboxMessageCollection(payload.messages);
+  payload.unread = summarizeMailboxUnread(payload.accounts, payload.messages);
+  if (payload.errors.length) payload.status = payload.accounts.count || payload.messages.count ? 'partial' : 'error';
+  return payload;
+}
+
+function mailboxAffordanceContract(binding) {
+  if (!binding) return buildMailboxOperatorAffordance({ serverName: 'mailbox', server: { tools: [] }, source: 'nars_mailbox_summary' });
+  return {
+    ...buildMailboxOperatorAffordance({ serverName: binding.serverName, server: binding.server, source: 'nars_mailbox_summary' }),
+    schema: 'narada.nars.mailbox_operator_affordance_contract.v1',
+  };
+}
+
+function normalizeMailboxAccountCollection(collection) {
+  const raw = objectValue(collection) ?? {};
+  const items = Array.isArray(raw.accounts)
+    ? raw.accounts.map(normalizeMailboxAccount).filter(Boolean)
+    : Array.isArray(raw.items) ? raw.items.map(normalizeMailboxAccount).filter(Boolean) : [];
+  return { ...raw, items, count: numberValue(raw.count) ?? items.length };
+}
+
+function normalizeMailboxAccount(account) {
+  const record = objectValue(account);
+  if (!record) return null;
+  const id = stringValue(record.mailbox_id) ?? stringValue(record.account_id) ?? stringValue(record.address) ?? stringValue(record.email) ?? '';
+  return {
+    ...record,
+    mailbox_id: id,
+    label: stringValue(record.display_name) ?? stringValue(record.name) ?? stringValue(record.address) ?? (id || 'Mailbox'),
+    message_count: numberValue(record.message_count) ?? numberValue(record.messages_count) ?? null,
+    unread_count: numberValue(record.unread_count) ?? null,
+    latest_received_at: stringValue(record.latest_received_at) ?? stringValue(record.latest_message_at) ?? null,
+  };
+}
+
+function normalizeMailboxMessageCollection(collection) {
+  const raw = objectValue(collection) ?? {};
+  const items = Array.isArray(raw.messages)
+    ? raw.messages.map(normalizeMailboxMessage).filter(Boolean)
+    : Array.isArray(raw.items) ? raw.items.map(normalizeMailboxMessage).filter(Boolean) : [];
+  return { ...raw, items, count: numberValue(raw.count) ?? items.length };
+}
+
+function normalizeMailboxMessage(message) {
+  const record = objectValue(message);
+  if (!record) return null;
+  const attachments = Array.isArray(record.attachments) ? record.attachments : [];
+  return {
+    ...record,
+    message_id: stringValue(record.message_id) ?? stringValue(record.id) ?? '',
+    mailbox_id: stringValue(record.mailbox_id) ?? '',
+    folder: stringValue(record.folder) ?? null,
+    thread_id: stringValue(record.thread_id) ?? null,
+    subject: stringValue(record.subject) ?? '(no subject)',
+    from: stringValue(record.from) ?? null,
+    received_at: stringValue(record.received_at) ?? null,
+    sent_at: stringValue(record.sent_at) ?? null,
+    unread: booleanValue(record.unread),
+    importance: stringValue(record.importance) ?? null,
+    categories: stringArrayValue(record.categories),
+    preview: stringValue(record.preview) ?? null,
+    attachment_count: numberValue(record.attachment_count) ?? attachments.length,
+  };
+}
+
+function summarizeMailboxUnread(accounts, messages) {
+  const accountUnread = accounts.items.reduce((total, account) => total + (numberValue(account.unread_count) ?? 0), 0);
+  const messageUnread = messages.items.filter((message) => message.unread === true).length;
+  return { count: accountUnread || messageUnread };
 }
 
 function normalizeSopTemplateCollection(collection) {
@@ -1216,6 +1335,14 @@ function findSopServerBinding(mcpServers = {}) {
   return null;
 }
 
+function findMailboxServerBinding(mcpServers = {}) {
+  for (const [serverName, server] of Object.entries(mcpServers)) {
+    const toolNames = new Set((server?.tools ?? []).map((tool) => tool?.name).filter(Boolean));
+    if (toolNames.has('mailbox_accounts_list') || toolNames.has('mailbox_messages_list')) return { serverName, server, toolNames };
+  }
+  return null;
+}
+
 async function readSopTool(binding, name, args, errors) {
   if (!binding.toolNames.has(name)) {
     errors.push({ code: 'sop_tool_unavailable', tool: name, message: `${name} is not available on ${binding.serverName}.` });
@@ -1226,6 +1353,20 @@ async function readSopTool(binding, name, args, errors) {
     return result.structuredContent ?? parseJson(result.content?.[0]?.text ?? '') ?? null;
   } catch (error) {
     errors.push({ code: 'sop_tool_failed', tool: name, message: error instanceof Error ? error.message : String(error) });
+    return null;
+  }
+}
+
+async function readMailboxTool(binding, name, args, errors) {
+  if (!binding.toolNames.has(name)) {
+    errors.push({ code: 'mailbox_tool_unavailable', tool: name, message: `${name} is not available on ${binding.serverName}.` });
+    return null;
+  }
+  try {
+    const result = await sendMcpRequest(binding.server, { jsonrpc: '2.0', id: randomId(), method: 'tools/call', params: { name, arguments: args } });
+    return result.structuredContent ?? parseJson(result.content?.[0]?.text ?? '') ?? null;
+  } catch (error) {
+    errors.push({ code: 'mailbox_tool_failed', tool: name, message: error instanceof Error ? error.message : String(error) });
     return null;
   }
 }

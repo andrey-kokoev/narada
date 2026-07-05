@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue';
 import ConversationTranscript from './ConversationTranscript.vue';
 import CopyableText from './CopyableText.vue';
+import MailboxPanel from './MailboxPanel.vue';
 import McpServerPanel from './McpServerPanel.vue';
 import OperatorComposer from './OperatorComposer.vue';
 import OperatorQueuePanel from './OperatorQueuePanel.vue';
@@ -12,6 +13,7 @@ import type { AgentActivityState } from '../composables/useAgentActivity';
 import type { useCloudflareProjection } from '../composables/useCloudflareProjection';
 import type { HealthIntelligenceSummary } from '../composables/useHealthStatus';
 import type { McpInventorySummary } from '../composables/useMcpInventory';
+import type { MailboxSummary } from '../composables/useMailboxSummary';
 import type { OperatorQueueItem } from '../composables/useOperatorInput';
 import type { ProjectionVerbosity } from '../composables/useProjectionVerbosity';
 import type { SessionIdentitySummary } from '../composables/useNarsEvents';
@@ -40,6 +42,7 @@ const props = defineProps<{
   activeTurnId: string | boolean | null;
   mcpInventory: McpInventorySummary;
   surfaceAffordances: SurfaceAffordanceSummary;
+  mailboxSummary: MailboxSummary;
   sopSummary: SopSummary;
   authorityTransition: Record<string, unknown> | null;
   cloudflareProjection: ReturnType<typeof useCloudflareProjection>;
@@ -55,16 +58,20 @@ const emit = defineEmits<{
   'remove-queued': [item: OperatorQueueItem];
   'steer-queued': [item: OperatorQueueItem];
   'request-sop-summary': [];
+  'request-mailbox-summary': [];
   'request-surface-affordances': [];
 }>();
 const STATUS_ROW_OPEN_STORAGE_KEY = 'narada:agent-web-ui:status-row-open.v1';
 const statusRowOpen = ref(loadBooleanPreference(STATUS_ROW_OPEN_STORAGE_KEY, true));
 const mcpPanelOpen = ref(false);
+const mailboxPanelOpen = ref(false);
 const sopPanelOpen = ref(false);
 const titleSiteLabel = computed(() => props.sessionIdentity.siteId ?? sitePartFromAgentId(props.sessionIdentity.agentId));
 const titleAgentLabel = computed(() => props.sessionIdentity.siteId ? props.sessionIdentity.agentId : agentPartFromAgentId(props.sessionIdentity.agentId));
 const sopAffordance = computed(() => props.surfaceAffordances.items.find((item) => item.surfaceKind === 'sop') ?? null);
 const hasSopSurface = computed(() => Boolean(sopAffordance.value));
+const mailboxAffordance = computed(() => props.surfaceAffordances.items.find((item) => item.surfaceKind === 'mailbox') ?? null);
+const hasMailboxSurface = computed(() => Boolean(mailboxAffordance.value));
 const canInterruptModel = computed(() => (
   Boolean(props.activeTurnId)
   && props.agentActivity.active === true
@@ -120,8 +127,10 @@ function agentPartFromAgentId(agentId: string | null): string | null {
                 :health-body="healthBody"
                 :authority-transition="authorityTransition"
                 :has-sop-mcp="hasSopSurface"
+                :has-mailbox-mcp="hasMailboxSurface"
                 @open-mcp-panel="mcpPanelOpen = true"
                 @open-sop-panel="sopPanelOpen = true"
+                @open-mailbox-panel="mailboxPanelOpen = true"
               />
               <span v-if="titleAgentLabel" class="site-title-separator">.</span>
               <span v-if="titleAgentLabel">{{ titleAgentLabel }}</span>
@@ -133,6 +142,7 @@ function agentPartFromAgentId(agentId: string | null): string | null {
       </div>
       <div class="shell-header-actions">
         <McpServerPanel v-model:open="mcpPanelOpen" :inventory="mcpInventory" />
+        <MailboxPanel v-model:open="mailboxPanelOpen" :available="hasMailboxSurface" :summary="mailboxSummary" @refresh="emit('request-mailbox-summary')" />
         <SopPanel v-model:open="sopPanelOpen" :available="hasSopSurface" :summary="sopSummary" @refresh="emit('request-sop-summary')" />
         <div class="session-chip" :data-state="healthText.split(' ')[0]">
           <span class="chip-dot" aria-hidden="true"></span>

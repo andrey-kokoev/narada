@@ -41,6 +41,44 @@ test('surface affordance projection advertises SOP panel from live MCP tool inve
   });
 });
 
+test('surface affordance projection advertises synced email panel from mailbox MCP inventory', () => {
+  const projection = buildMcpSurfaceAffordanceProjection({
+    'narada-test-mailbox': {
+      tools: [
+        { name: 'mailbox_accounts_list' },
+        { name: 'mailbox_messages_list' },
+        { name: 'mailbox_doctor' },
+      ],
+      config: { surface_id: 'test.mailbox' },
+    },
+  });
+
+  assert.equal(projection.count, 1);
+  assert.deepEqual(projection.items[0], {
+    schema: 'narada.mcp_surface.operator_affordance.v1',
+    surface_kind: 'mailbox',
+    surface_id: 'test.mailbox',
+    server_name: 'narada-test-mailbox',
+    source: 'live_tool_inventory',
+    renderer: 'synced_email_accounts_and_messages',
+    title: 'Synced Email',
+    panel: {
+      kind: 'synced_email_accounts_and_messages',
+      title: 'Synced Email',
+      summary_method: 'session.mailbox.summary',
+      sections: ['sync_health', 'accounts', 'recent_messages'],
+    },
+    actions: {
+      read: ['refresh', 'open_message', 'open_thread'],
+      write: [],
+    },
+    tools: {
+      read: ['mailbox_accounts_list', 'mailbox_messages_list'],
+      doctor: 'mailbox_doctor',
+    },
+  });
+});
+
 test('surface affordance projection admits static MCP surface presentation metadata', () => {
   const projection = buildMcpSurfaceAffordanceProjection({
     'narada-test-inbox': {

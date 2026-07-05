@@ -1,6 +1,9 @@
 const SOP_TEMPLATE_TOOL = 'sop_template_list';
 const SOP_RUN_TOOL = 'sop_run_list';
 const SOP_DOCTOR_TOOL = 'sop_doctor';
+const MAILBOX_ACCOUNTS_TOOL = 'mailbox_accounts_list';
+const MAILBOX_MESSAGES_TOOL = 'mailbox_messages_list';
+const MAILBOX_DOCTOR_TOOL = 'mailbox_doctor';
 
 export function buildSopOperatorAffordance({ serverName, server = {}, source = 'live_tool_inventory' } = {}) {
   const toolNames = new Set((server?.tools ?? []).map((tool) => tool?.name).filter(Boolean));
@@ -26,6 +29,39 @@ export function buildSopOperatorAffordance({ serverName, server = {}, source = '
   };
 }
 
+function mailboxAffordanceFromTools(serverName, server = {}) {
+  const toolNames = new Set((server?.tools ?? []).map((tool) => tool?.name).filter(Boolean));
+  if (!toolNames.has(MAILBOX_ACCOUNTS_TOOL) && !toolNames.has(MAILBOX_MESSAGES_TOOL)) return null;
+  return buildMailboxOperatorAffordance({ serverName, server, source: 'live_tool_inventory' });
+}
+
+export function buildMailboxOperatorAffordance({ serverName, server = {}, source = 'live_tool_inventory' } = {}) {
+  const toolNames = new Set((server?.tools ?? []).map((tool) => tool?.name).filter(Boolean));
+  return {
+    schema: 'narada.mcp_surface.operator_affordance.v1',
+    surface_kind: 'mailbox',
+    surface_id: stringField(server?.config, 'surface_id') ?? `${serverName}:mailbox`,
+    server_name: serverName,
+    source,
+    renderer: 'synced_email_accounts_and_messages',
+    title: 'Synced Email',
+    panel: {
+      kind: 'synced_email_accounts_and_messages',
+      title: 'Synced Email',
+      summary_method: 'session.mailbox.summary',
+      sections: ['sync_health', 'accounts', 'recent_messages'],
+    },
+    actions: {
+      read: ['refresh', 'open_message', 'open_thread'],
+      write: [],
+    },
+    tools: {
+      read: [MAILBOX_ACCOUNTS_TOOL, MAILBOX_MESSAGES_TOOL].filter((tool) => toolNames.has(tool)),
+      doctor: toolNames.has(MAILBOX_DOCTOR_TOOL) ? MAILBOX_DOCTOR_TOOL : null,
+    },
+  };
+}
+
 export function buildMcpSurfaceAffordanceProjection(mcpServers = {}) {
   const items = [];
   const seen = new Set();
@@ -44,6 +80,14 @@ export function buildMcpSurfaceAffordanceProjection(mcpServers = {}) {
       if (!seen.has(key)) {
         seen.add(key);
         items.push(sop);
+      }
+    }
+    const mailbox = mailboxAffordanceFromTools(serverName, server);
+    if (mailbox) {
+      const key = affordanceKey(mailbox);
+      if (!seen.has(key)) {
+        seen.add(key);
+        items.push(mailbox);
       }
     }
   }

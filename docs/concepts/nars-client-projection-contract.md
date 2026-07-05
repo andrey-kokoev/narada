@@ -169,7 +169,7 @@ Shape:
 }
 ```
 
-Clients may use this to decide whether to show panels such as MCP or SOP. Mutating actions still require a NARS protocol request and the relevant authority surface; the affordance object only says what the surface can represent.
+Clients may use this to decide whether to show panels such as MCP, SOP, or Synced Email. Mutating actions still require a NARS protocol request and the relevant authority surface; the affordance object only says what the surface can represent.
 
 ### SOP Summary
 
@@ -193,6 +193,26 @@ When a SOP MCP surface is mounted, NARS may emit or answer a SOP summary project
 Run items should expose display-safe fields such as `run_id`, `sop_id`, `title`, `status`, `started_at`, `updated_at`, `next_step`, `step_timeline`, and `available_actions`. `available_actions` means actions the projection can offer for this run shape; it is not final authority to mutate. Each action must still be admitted by NARS and the SOP MCP.
 
 The SOP panel should render SOP templates and run state from SOP MCP data, not from the list of MCP tool names. Tool names only establish whether a SOP surface exists and which runtime actions can be represented.
+
+### Synced Email Summary
+
+When a read-only `mailbox-mcp` surface is mounted, NARS may emit or answer a synced mailbox summary projection:
+
+```json
+{
+  "event": "session_mailbox_summary",
+  "status": "ok",
+  "server_name": "narada-sonar-mailbox",
+  "affordance_contract": { "schema": "narada.nars.mailbox_operator_affordance_contract.v1" },
+  "accounts": { "count": 1, "items": [] },
+  "messages": { "count": 25, "items": [] },
+  "unread": { "count": 4 },
+  "doctor": null,
+  "errors": []
+}
+```
+
+Message items should expose display-safe fields such as `message_id`, `mailbox_id`, `folder`, `thread_id`, `subject`, `from`, `received_at`, `unread`, `importance`, `categories`, `preview`, and `attachment_count`. The synced email panel is read-only: mail send, draft, delete, or move actions belong to explicit Graph/mail authority surfaces, not to the mailbox projection.
 
 ## Stream Semantics
 

@@ -4,6 +4,7 @@ import NarsSessionShell from './components/NarsSessionShell.vue';
 import { useAgentActivity } from './composables/useAgentActivity';
 import { useCloudflareProjection, type ProjectionControlConfig } from './composables/useCloudflareProjection';
 import { useHealthStatus } from './composables/useHealthStatus';
+import { useMailboxSummary } from './composables/useMailboxSummary';
 import { useMcpInventory } from './composables/useMcpInventory';
 import { useNarsConnection } from './composables/useNarsConnection';
 import { useNarsEvents } from './composables/useNarsEvents';
@@ -14,7 +15,7 @@ import { useRetainedEvents } from './composables/useRetainedEvents';
 import { useSopSummary } from './composables/useSopSummary';
 import { useSurfaceAffordances } from './composables/useSurfaceAffordances';
 import { ArtifactRenderingConfigKey } from './lib/artifactConfig';
-import { buildSopSummaryRequestFrame, buildSurfaceAffordancesRequestFrame } from './lib/narsFrames';
+import { buildMailboxSummaryRequestFrame, buildSopSummaryRequestFrame, buildSurfaceAffordancesRequestFrame } from './lib/narsFrames';
 
 interface AgentWebUiConfig {
   eventEndpoint: string | null;
@@ -46,6 +47,7 @@ const connection = useNarsConnection(
 const events = useNarsEvents(retained.events, projection.verbosity, health.identity);
 const agentActivity = useAgentActivity(retained.events, health.body);
 const mcpInventory = useMcpInventory(retained.events, health.body);
+const mailboxSummary = useMailboxSummary(retained.events);
 const sopSummary = useSopSummary(retained.events);
 const surfaceAffordances = useSurfaceAffordances(retained.events, health.body);
 const operatorQueue = useOperatorQueue(health.body);
@@ -64,6 +66,10 @@ function interruptModel() {
 
 function requestSopSummary() {
   connection.connection.value?.sendFrame(buildSopSummaryRequestFrame());
+}
+
+function requestMailboxSummary() {
+  connection.connection.value?.sendFrame(buildMailboxSummaryRequestFrame());
 }
 
 function requestSurfaceAffordances() {
@@ -94,6 +100,7 @@ function requestSurfaceAffordances() {
     :active-turn-id="connection.activeTurnId.value"
     :mcp-inventory="mcpInventory.inventory.value"
     :surface-affordances="surfaceAffordances.summary.value"
+    :mailbox-summary="mailboxSummary.summary.value"
     :sop-summary="sopSummary.summary.value"
     :authority-transition="config.authorityTransition ?? null"
     :cloudflare-projection="cloudflareProjection"
@@ -105,6 +112,7 @@ function requestSurfaceAffordances() {
     @edit-queued="input.editQueued"
     @remove-queued="input.dropQueued($event.index)"
     @steer-queued="input.steerQueuedNow"
+    @request-mailbox-summary="requestMailboxSummary"
     @request-sop-summary="requestSopSummary"
     @request-surface-affordances="requestSurfaceAffordances"
   />

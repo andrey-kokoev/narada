@@ -4,7 +4,7 @@
 
 MCP-specific operator panels are read-oriented projections of authority MCP surfaces into operator UIs such as `agent-web-ui`. They make a surface understandable without turning the browser into the authority or making raw MCP tools the UI contract.
 
-SOP is the reference implementation. It proves the pattern for future panels such as mail, task lifecycle, scheduler, or artifacts.
+SOP is the reference workflow implementation. Synced Email is the reference read-only synced-record implementation over `mailbox-mcp`. Together they prove the pattern for future panels such as task lifecycle, scheduler, artifacts, or richer mail views.
 
 ## Target Shape
 
@@ -23,12 +23,12 @@ The browser asks NARS for a summary, not for direct MCP calls. NARS uses the mou
 
 | Piece | Owner | Example |
 | --- | --- | --- |
-| Surface detection | NARS / carrier runtime | Detect SOP by `sop_template_list` or `sop_run_list`. |
+| Surface detection | NARS / carrier runtime | Detect SOP by `sop_template_list` or `sop_run_list`; detect synced email by `mailbox_accounts_list` or `mailbox_messages_list`. |
 | Affordance declaration | NARS projection over MCP metadata | `session.surface.affordances` with panel sections and available action names. |
-| Summary method | NARS protocol | `session.sop.summary`. |
-| Summary event | NARS event stream | `session_sop_summary`. |
+| Summary method | NARS protocol | `session.sop.summary`, `session.mailbox.summary`. |
+| Summary event | NARS event stream | `session_sop_summary`, `session_mailbox_summary`. |
 | Client consumption | Agent web UI | `useSopSummary` reads the latest summary event. |
-| Panel rendering | Agent web UI | `SopPanel.vue`. |
+| Panel rendering | Agent web UI | `SopPanel.vue`, `MailboxPanel.vue`. |
 | Contract docs/tests | Shared packages | Runtime DTO tests and web UI rendering tests. |
 
 ## DTO Rules
@@ -60,6 +60,14 @@ For SOP:
 | `confirm_operator_step` | Candidate mutation; requires NARS admission before execution. |
 | `advance_run` | Candidate mutation; requires NARS admission before execution. |
 | `cancel_run` | Candidate mutation; requires NARS admission and warning posture. |
+
+For Synced Email:
+
+| Action | Current posture |
+| --- | --- |
+| `refresh` | Read projection request through `session.mailbox.summary`. |
+| `open_message` / `open_thread` | Local panel expansion or future read-only detail request. |
+| mail send, draft, delete, move | Out of scope for `mailbox-mcp`; these belong to explicit Graph/mail authority paths, not the read-only synced mailbox panel. |
 
 ## Reference Acceptance Criteria
 

@@ -13,6 +13,7 @@ import {
   buildAgentWebUiConversationSteerFrame,
   buildAgentWebUiEventsReadFrame,
   buildAgentWebUiHelpText,
+  buildAgentWebUiMailboxSummaryFrame,
   buildAgentWebUiOperatorInputAction,
   buildAgentWebUiSopSummaryFrame,
   buildAgentWebUiSurfaceAffordancesFrame,
@@ -38,6 +39,7 @@ test('NARS client projection contract owns attach commands and web UI capabiliti
   assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('session.events.read'), true);
   assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('session.surface.affordances'), true);
   assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('session.sop.summary'), true);
+  assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('session.mailbox.summary'), true);
   assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('command.execute'), false);
   assert.equal(NARS_CLIENT_PROJECTION_REGISTRY.clients.agent_web_ui.admitted_methods, AGENT_WEB_UI_NARS_METHOD_LIST);
   assert.equal(NARS_CLIENT_PROJECTION_REGISTRY.clients.agent_tui.attach_template, 'agent-tui --attach <event_endpoint>');
@@ -71,6 +73,11 @@ test('NARS client projection contract owns web UI operator input projection', ()
     id: 'sop-1',
     method: 'session.sop.summary',
     params: { template_limit: 10, run_limit: 5, include_terminal: false },
+  });
+  assert.deepEqual(buildAgentWebUiMailboxSummaryFrame({ id: 'mailbox-1', accountLimit: 3, messageLimit: 8, query: 'ops' }), {
+    id: 'mailbox-1',
+    method: 'session.mailbox.summary',
+    params: { account_limit: 3, message_limit: 8, query: 'ops' },
   });
   assert.deepEqual(buildAgentWebUiSurfaceAffordancesFrame({ id: 'affordances-1' }), {
     id: 'affordances-1',

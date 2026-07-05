@@ -306,6 +306,87 @@ test('server mode projects SOP summary as an operator-facing DTO', async () => {
   }
 });
 
+test('server mode projects synced mailbox summary as an operator-facing DTO', async () => {
+  const siteRoot = tempRoot('carrier-mailbox-summary-test-');
+  try {
+    const input = new PassThrough();
+    const output = new PassThrough();
+    const events = [];
+    let outputBuffer = '';
+    output.setEncoding('utf8');
+    output.on('data', (chunk) => {
+      outputBuffer += chunk;
+      const lines = outputBuffer.split(/\r?\n/);
+      outputBuffer = lines.pop() ?? '';
+      for (const line of lines) {
+        if (line.trim()) events.push(JSON.parse(line));
+      }
+    });
+
+    const sessionId = 'carrier_20260705033000_mailbox';
+    const sitePaths = resolveNaradaSitePaths({ siteRoot, sessionId });
+    const sessionDir = sitePaths.narsSessionDir;
+    const runtimeContext = {
+      identity: 'sonar.resident',
+      session: sessionId,
+      siteRoot,
+      sessionPath: join(sessionDir, 'session.jsonl'),
+      eventsPath: join(sessionDir, 'events.jsonl'),
+      providerSettings: { stream: false },
+    };
+    const { dependencies } = createCarrierRuntimeDependencies({ runtimeContext });
+    const fakeMailboxServer = {
+      tools: [
+        { name: 'mailbox_accounts_list' },
+        { name: 'mailbox_messages_list' },
+        { name: 'mailbox_doctor' },
+      ],
+      async send(request) {
+        const name = request.params?.name;
+        if (name === 'mailbox_accounts_list') {
+          return { result: { structuredContent: { accounts: [{ mailbox_id: 'support@example.test', display_name: 'Support', message_count: 3, unread_count: 1, latest_received_at: '2026-07-05T03:10:00.000Z' }], count: 1 } } };
+        }
+        if (name === 'mailbox_messages_list') {
+          return { result: { structuredContent: { messages: [{ message_id: 'msg_1', mailbox_id: 'support@example.test', folder: 'Inbox', thread_id: 'thread_1', subject: 'Webhook delay', from: 'ops@example.test', received_at: '2026-07-05T03:10:00.000Z', unread: true, importance: 'normal', categories: ['ops'], preview: 'Latest webhook delay is normal.', attachments: [{ name: 'chart.png' }] }], count: 1 } } };
+        }
+        if (name === 'mailbox_doctor') {
+          return { result: { structuredContent: { status: 'ok', message_count: 3, invalid_count: 0 } } };
+        }
+        return { error: { message: `unexpected tool ${name}` } };
+      },
+    };
+
+    input.write(`${JSON.stringify({ id: 'mailbox-summary-1', method: 'session.mailbox.summary' })}\n`);
+    input.end();
+    await runCarrierServerMode({
+      input,
+      output,
+      callChatApiFn: async () => ({ choices: [{ message: { role: 'assistant', content: 'unused' } }] }),
+      runtimeContext,
+      dependencies: {
+        ...dependencies,
+        discoverAndStartMcpServers: async () => ({ 'narada-test-mailbox': fakeMailboxServer }),
+        closeMcpServers: () => {},
+        readMcpPreflightArtifact: () => null,
+      },
+    });
+
+    const summary = events.find((event) => event.event === 'session_mailbox_summary');
+    assert.equal(summary?.schema, 'narada.nars.mailbox_summary.v1');
+    assert.equal(summary.server_name, 'narada-test-mailbox');
+    assert.equal(summary.affordance_contract?.panel?.summary_method, 'session.mailbox.summary');
+    assert.deepEqual(summary.affordance_contract?.actions?.write, []);
+    assert.equal(summary.accounts.items[0].label, 'Support');
+    assert.equal(summary.messages.items[0].subject, 'Webhook delay');
+    assert.equal(summary.messages.items[0].attachment_count, 1);
+    assert.deepEqual(summary.messages.items[0].categories, ['ops']);
+    assert.equal(summary.unread.count, 1);
+    assert.equal(summary.doctor.status, 'ok');
+  } finally {
+    removeTempDir(siteRoot);
+  }
+});
+
 test('server mode health and event subscription match NARS runtime contract shape', async () => {
   const siteRoot = tempRoot('carrier-health-subscribe-test-');
   try {

@@ -24,6 +24,7 @@ export const AGENT_WEB_UI_NARS_METHOD_LIST = Object.freeze([
   'session.artifacts.read',
   'session.surface.affordances',
   'session.sop.summary',
+  'session.mailbox.summary',
   'conversation.send',
   'conversation.enqueue',
   'session.status',
@@ -200,6 +201,18 @@ export function buildAgentWebUiSopSummaryFrame(options = {}) {
       template_limit: Number.isFinite(options.templateLimit) ? options.templateLimit : 50,
       run_limit: Number.isFinite(options.runLimit) ? options.runLimit : 50,
       include_terminal: options.includeTerminal !== false,
+    },
+  };
+}
+
+export function buildAgentWebUiMailboxSummaryFrame(options = {}) {
+  return {
+    id: options.id ?? `agent-web-ui-mailbox-summary-${Date.now()}`,
+    method: 'session.mailbox.summary',
+    params: {
+      account_limit: Number.isFinite(options.accountLimit) ? options.accountLimit : 20,
+      message_limit: Number.isFinite(options.messageLimit) ? options.messageLimit : 25,
+      ...(typeof options.query === 'string' && options.query ? { query: options.query } : {}),
     },
   };
 }

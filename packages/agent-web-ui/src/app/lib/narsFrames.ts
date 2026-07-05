@@ -6,6 +6,10 @@ export function buildSopSummaryRequestFrame() {
   return contract.buildAgentWebUiSopSummaryFrame();
 }
 
+export function buildMailboxSummaryRequestFrame() {
+  return contract.buildAgentWebUiMailboxSummaryFrame();
+}
+
 export function buildSurfaceAffordancesRequestFrame() {
   return contract.buildAgentWebUiSurfaceAffordancesFrame();
 }
