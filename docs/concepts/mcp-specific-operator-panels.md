@@ -91,3 +91,93 @@ When adding another MCP panel, start from a read-only summary. Do not begin with
 - tests cover both runtime source and client projection.
 
 Only then add mutation-specific protocol methods.
+
+## Naming Conventions
+
+Use the same names across protocol, event stream, runtime helpers, composables, and components. This keeps new panels searchable and avoids client-specific vocabulary.
+
+| Concept | Convention | Example |
+| --- | --- | --- |
+| Surface kind | lower-case domain noun | `sop`, `mailbox`, `scheduler` |
+| Summary method | `session.<surface>.summary` | `session.mailbox.summary` |
+| Summary event | `session_<surface>_summary` | `session_mailbox_summary` |
+| Summary schema | `narada.nars.<surface>_summary.v1` | `narada.nars.mailbox_summary.v1` |
+| Affordance contract schema | `narada.nars.<surface>_operator_affordance_contract.v1` | `narada.nars.mailbox_operator_affordance_contract.v1` |
+| Runtime summary function | `server<Surface>Summary` | `serverMailboxSummary` |
+| Runtime binding finder | `find<Surface>ServerBinding` | `findMailboxServerBinding` |
+| Client composable | `use<Surface>Summary` | `useMailboxSummary` |
+| Client panel | `<Surface>Panel.vue` | `MailboxPanel.vue` |
+| Request frame builder | `buildAgentWebUi<Surface>SummaryFrame` | `buildAgentWebUiMailboxSummaryFrame` |
+
+Use the MCP surface name when it is already the durable domain noun. The `mailbox-mcp` projection is rendered to operators as "Synced Email", but its protocol surface remains `mailbox`.
+
+## Implementation Checklist
+
+For a new MCP-specific panel, touch these places deliberately:
+
+1. `packages/nars-client-projection-contract/src/nars-client-projection-contract.mjs`
+   Add the admitted `session.<surface>.summary` method and frame builder.
+2. `packages/nars-client-projection-contract/src/nars-client-projection-contract.d.ts`
+   Export the frame builder for TypeScript consumers.
+3. `packages/nars-client-projection-contract/src/nars-client-projection-contract.test.mjs`
+   Assert the method is admitted and the frame builder shape is stable.
+4. `packages/carrier-runtime/src/surface-affordances.mjs`
+   Detect the surface from explicit MCP metadata or a temporary live tool inventory inference.
+5. `packages/carrier-runtime/src/surface-affordances.test.mjs`
+   Assert the generated affordance includes `surface_kind`, `panel.summary_method`, `actions`, and `tools`.
+6. `packages/carrier-runtime/src/runtime-dependencies.mjs`
+   Handle the summary request, call MCP tools through the mounted runtime fabric, normalize the DTO, and emit the summary event.
+7. `packages/carrier-runtime/src/server-mode-mcp.test.mjs`
+   Assert the emitted DTO shape, including normal, empty/unavailable, and optional-tool behavior where relevant.
+8. `packages/agent-web-ui/src/agent-web-ui.js` and `packages/agent-web-ui/src/app/lib/narsFrames.ts`
+   Re-export and wrap the new request frame.
+9. `packages/agent-web-ui/src/app/composables/use<Surface>Summary.ts`
+   Read the latest summary event and normalize defensive defaults for the UI.
+10. `packages/agent-web-ui/src/app/components/<Surface>Panel.vue`
+    Render the read-only panel. Do not call MCP or mutate authority from the browser.
+11. `packages/agent-web-ui/src/app/App.vue`, `NarsSessionShell.vue`, and `SiteInfoPanel.vue`
+    Wire the panel, trigger, refresh event, and Site-panel link.
+12. `packages/agent-web-ui/test/agent-web-ui.test.mjs` and `agent-web-ui-protocol.test.mjs`
+    Assert panel wiring and request frame admission.
+13. `docs/concepts/nars-client-projection-contract.md` and this document
+    Document the summary payload, action posture, and any boundary decisions.
+
+Focused verification should normally include the projection-contract test/typecheck, carrier-runtime test/typecheck, and agent-web-ui test/typecheck. Run the agent-web-ui build when the panel changes browser-rendered code.
+
+## Worked Third-Panel Example
+
+Suppose adding a read-only scheduler panel.
+
+1. Detect the MCP surface by `scheduler_task_list` or an explicit `operator_affordance` advertised by the scheduler MCP.
+2. Add `session.scheduler.summary` and emit `session_scheduler_summary`.
+3. Normalize a DTO such as:
+
+```json
+{
+  "schema": "narada.nars.scheduler_summary.v1",
+  "event": "session_scheduler_summary",
+  "status": "ok",
+  "server_name": "narada-sonar-scheduler",
+  "tasks": { "count": 3, "items": [] },
+  "errors": []
+}
+```
+
+4. Render `SchedulerPanel.vue` from the summary event. Initial actions should be `refresh` and local `open_task` only.
+5. Treat enable/disable/delete as candidate mutations until NARS owns explicit admitted protocol methods for those operations.
+
+This example is intentionally read-only. Its purpose is to prove discoverability, DTO stability, and rendering before adding mutating workflow.
+
+## Affordance Metadata Source
+
+Long term, MCP-specific UI affordances should be declared by the MCP surface when the surface has a stable operator presentation contract. NARS should project that declaration, validate it, and fill in runtime facts such as mounted server name and available tools.
+
+Live tool inventory inference is acceptable as a compatibility bridge for existing surfaces. It should be conservative, tested, and easy to remove once the MCP advertises explicit `operator_affordance` or `surface_affordance` metadata.
+
+The preferred order is:
+
+1. Explicit MCP server config or tool annotations: stable source of panel intent.
+2. NARS compatibility inference from known tool names: temporary bridge for known first-party surfaces.
+3. Client-side guessing: not allowed for load-bearing panels.
+
+The browser may choose layout and visual treatment, but it must not decide that an MCP surface exists or infer authority from tool names by itself.

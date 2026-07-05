@@ -2,7 +2,7 @@
 
 This document defines the target shape for NARS client projection semantics. It exists to prevent `agent-cli`, `agent-web-ui`, Cloudflare projection surfaces, and future clients from independently deciding what a NARS event means to an operator.
 
-MCP-specific panel projection rules are defined in [`mcp-specific-operator-panels.md`](mcp-specific-operator-panels.md). SOP is the reference implementation of that pattern.
+MCP-specific panel projection rules are defined in [`mcp-specific-operator-panels.md`](mcp-specific-operator-panels.md). SOP is the reference workflow implementation of that pattern; Synced Email is the reference read-only synced-record implementation.
 
 ## Objective
 
