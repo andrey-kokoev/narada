@@ -17,7 +17,24 @@ MCP authority surface
   -> client panel renderer
 ```
 
-The browser asks NARS for a summary, not for direct MCP calls. NARS uses the mounted Site MCP fabric, normalizes the result into a stable DTO, emits a session event, and the client renders that event.
+The browser asks NARS for a summary, not for direct MCP calls. NARS crosses into the mounted Site MCP fabric through its admitted runtime boundary, normalizes the result into a stable DTO, emits a session event, and the client renders that event.
+
+No participant treats another authority zone as an internal library. Even when the implementation is local process IPC or an in-process helper, the architectural shape is an admitted crossing:
+
+```text
+Operator UI zone
+  -> admitted UI/NARS request
+NARS session/runtime zone
+  -> admitted NARS/MCP-fabric crossing
+MCP surface authority zone
+  -> surface-owned read command
+NARS session/runtime zone
+  -> normalized projection event/DTO
+Operator UI zone
+  -> render
+```
+
+Therefore a panel should reflect the MCP surface's own domain read commands, but only through NARS-owned projection methods. The UI must not call MCP directly, and NARS must not invent parallel domain readers when the MCP surface already owns the domain command.
 
 ## Required Pieces
 
@@ -49,7 +66,7 @@ Rules:
 
 Read actions may be represented by immediate UI controls when they only request another NARS summary or reveal already projected details.
 
-Mutating actions must not call MCP directly from the browser. They require a NARS protocol method and authority-surface admission. The UI can display the action only as a candidate until that admission path exists.
+Mutating actions must not call MCP directly from the browser or bypass the owning authority zone. They require a NARS protocol method, an admitted NARS/MCP crossing, and explicit authority-surface admission. The UI can display the action only as a candidate until that admission path exists. Observation panels should remain read-oriented by default.
 
 For SOP:
 
