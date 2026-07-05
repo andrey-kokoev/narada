@@ -1111,7 +1111,7 @@ async function serverMailboxSummary({ requestId, params = {}, context = {} }) {
   }
   payload.accounts = await readMailboxTool(binding, 'mailbox_accounts_list', { limit: accountLimit }, payload.errors) ?? payload.accounts;
   payload.messages = await readMailboxTool(binding, 'mailbox_messages_list', { limit: messageLimit, query }, payload.errors) ?? payload.messages;
-  payload.doctor = await readMailboxTool(binding, 'mailbox_doctor', {}, payload.errors) ?? null;
+  payload.doctor = binding.toolNames.has('mailbox_doctor') ? await readMailboxTool(binding, 'mailbox_doctor', {}, payload.errors) ?? null : null;
   payload.accounts = normalizeMailboxAccountCollection(payload.accounts);
   payload.messages = normalizeMailboxMessageCollection(payload.messages);
   payload.unread = summarizeMailboxUnread(payload.accounts, payload.messages);

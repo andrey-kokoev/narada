@@ -387,6 +387,73 @@ test('server mode projects synced mailbox summary as an operator-facing DTO', as
   }
 });
 
+test('server mode treats mailbox doctor as optional for synced mailbox summaries', async () => {
+  const siteRoot = tempRoot('carrier-mailbox-summary-no-doctor-test-');
+  try {
+    const input = new PassThrough();
+    const output = new PassThrough();
+    const events = [];
+    let outputBuffer = '';
+    output.setEncoding('utf8');
+    output.on('data', (chunk) => {
+      outputBuffer += chunk;
+      const lines = outputBuffer.split(/\r?\n/);
+      outputBuffer = lines.pop() ?? '';
+      for (const line of lines) {
+        if (line.trim()) events.push(JSON.parse(line));
+      }
+    });
+
+    const sessionId = 'carrier_20260705043000_mailbox_no_doctor';
+    const sitePaths = resolveNaradaSitePaths({ siteRoot, sessionId });
+    const sessionDir = sitePaths.narsSessionDir;
+    const runtimeContext = {
+      identity: 'sonar.resident',
+      session: sessionId,
+      siteRoot,
+      sessionPath: join(sessionDir, 'session.jsonl'),
+      eventsPath: join(sessionDir, 'events.jsonl'),
+      providerSettings: { stream: false },
+    };
+    const { dependencies } = createCarrierRuntimeDependencies({ runtimeContext });
+    const fakeMailboxServer = {
+      tools: [
+        { name: 'mailbox_accounts_list' },
+        { name: 'mailbox_messages_list' },
+      ],
+      async send(request) {
+        const name = request.params?.name;
+        if (name === 'mailbox_accounts_list') return { result: { structuredContent: { accounts: [], count: 0 } } };
+        if (name === 'mailbox_messages_list') return { result: { structuredContent: { messages: [], count: 0 } } };
+        return { error: { message: `unexpected tool ${name}` } };
+      },
+    };
+
+    input.write(`${JSON.stringify({ id: 'mailbox-summary-no-doctor-1', method: 'session.mailbox.summary' })}\n`);
+    input.end();
+    await runCarrierServerMode({
+      input,
+      output,
+      callChatApiFn: async () => ({ choices: [{ message: { role: 'assistant', content: 'unused' } }] }),
+      runtimeContext,
+      dependencies: {
+        ...dependencies,
+        discoverAndStartMcpServers: async () => ({ 'narada-test-mailbox': fakeMailboxServer }),
+        closeMcpServers: () => {},
+        readMcpPreflightArtifact: () => null,
+      },
+    });
+
+    const summary = events.find((event) => event.event === 'session_mailbox_summary');
+    assert.equal(summary?.status, 'ok');
+    assert.equal(summary.doctor, null);
+    assert.deepEqual(summary.errors, []);
+    assert.equal(summary.affordance_contract?.tools?.doctor, null);
+  } finally {
+    removeTempDir(siteRoot);
+  }
+});
+
 test('server mode health and event subscription match NARS runtime contract shape', async () => {
   const siteRoot = tempRoot('carrier-health-subscribe-test-');
   try {
