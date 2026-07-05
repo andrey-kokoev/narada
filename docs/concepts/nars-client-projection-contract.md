@@ -81,6 +81,117 @@ Views are cumulative by operator usefulness, not by source transport.
 
 Routine healthy state samples should not pollute normal views. Degraded health and errors must remain visible in operations or diagnostics according to severity.
 
+## Session Identity Projection
+
+Client surfaces must display the session identity from NARS evidence, not from path guesses or surface launch arguments.
+
+Identity sources, in priority order for display:
+
+1. Current `session.health` or HTTP health payload fields: `site_id`, `agent_id`, `role`, `session_id`.
+2. Durable NARS events: `session_started`, `session_health`, and lifecycle records carrying the same fields.
+3. Startup hydration payloads such as `whoami.identity`, `whoami.role`, and checkpoint `site_id`.
+4. A dotted `agent_id` display fallback, used only when no explicit `site_id` exists.
+
+Cross-Site compatibility rule:
+
+- Workspace-style Sites such as `D:/code/narada.sonar` and embedded authority roots such as `D:/code/narada.staccato/.narada` are both valid Site bindings.
+- Client projections must not append `.narada`, trim `.narada`, or infer Site identity from path shape.
+- When `site_id` is present, display should prefer `site_id.agent_id` or an equivalent prominent Site/agent split.
+- When `site_id` is absent, a dotted `agent_id` such as `narada-staccato.resident` may be split for display only; it must not become discovery or attach authority.
+
+## Runtime Projection Payloads
+
+NARS exposes several operator-facing projection payloads. They are not chat messages and should not be rendered as conversation rows unless the shared event projection contract classifies them as conversation.
+
+### Health And Status
+
+`session.health` and the local HTTP health projection carry the current runtime status. Client surfaces may poll this payload and use it to hydrate header/status display.
+
+Important fields:
+
+| Field | Meaning |
+|---|---|
+| `status` | Runtime health state, for example `healthy` or an error/degraded state. |
+| `site_id` | Explicit Site id when launch/runtime projected one. |
+| `agent_id` | Bound agent identity. |
+| `role` | Bound role when known. |
+| `session_id` | NARS session id. Existing values may still be shaped as `carrier_...`. |
+| `provider`, `model`, `thinking` | Intelligence provider/model/reasoning posture chosen before runtime execution. |
+| `mcp` | Structured MCP fabric posture, including server list and fault counts. |
+| `mcp_tools` | Optional tool catalog entries keyed by `server_name`. |
+
+The health payload is the preferred source for status boxes, identity chips, intelligence provider display, and MCP inventory freshness. It is not the source of historical conversation.
+
+### MCP Inventory
+
+MCP inventory is a projection over the mounted Site fabric. Clients should normalize both health payloads and session events into the same shape:
+
+```json
+{
+  "operational_state": "healthy",
+  "server_count": 15,
+  "startup_failure_count": 0,
+  "runtime_fault_count": 0,
+  "servers": [
+    { "server_name": "narada-sonar-sop", "operational_state": "healthy", "tool_count": 18 }
+  ],
+  "tools": [
+    { "server_name": "narada-sonar-sop", "tool_name": "sop_run_list", "description": "..." }
+  ]
+}
+```
+
+If health has server posture and events have tool names, clients may merge them by `server_name`. Missing tool names should be shown as unknown inventory, not as evidence that the MCP has no tools.
+
+### Surface Affordances
+
+Surface affordances describe how a mounted MCP surface wants to appear to an operator projection. They are declarative UI hints, not permission grants.
+
+Shape:
+
+```json
+{
+  "schema": "narada.mcp_surface.operator_affordance.v1",
+  "surface_kind": "sop",
+  "server_name": "narada-sonar-sop",
+  "panel": {
+    "kind": "sop",
+    "title": "SOP",
+    "sections": ["active_run", "templates", "recent_runs", "run_steps"]
+  },
+  "actions": {
+    "read": ["refresh", "open_template", "open_run"],
+    "run": ["start_run", "advance_run", "confirm_operator_step", "cancel_run"]
+  },
+  "tools": ["sop_template_list", "sop_run_list"]
+}
+```
+
+Clients may use this to decide whether to show panels such as MCP or SOP. Mutating actions still require a NARS protocol request and the relevant authority surface; the affordance object only says what the surface can represent.
+
+### SOP Summary
+
+When a SOP MCP surface is mounted, NARS may emit or answer a SOP summary projection:
+
+```json
+{
+  "event": "session_sop_summary",
+  "status": "ok",
+  "server_name": "narada-sonar-sop",
+  "affordance_contract": { "schema": "narada.nars.sop_operator_affordance_contract.v1" },
+  "templates": { "count": 2, "items": [] },
+  "runs": { "count": 3, "items": [] },
+  "active_run": null,
+  "recent_runs": { "count": 3, "items": [] },
+  "doctor": null,
+  "errors": []
+}
+```
+
+Run items should expose display-safe fields such as `run_id`, `sop_id`, `title`, `status`, `started_at`, `updated_at`, `next_step`, `step_timeline`, and `available_actions`. `available_actions` means actions the projection can offer for this run shape; it is not final authority to mutate. Each action must still be admitted by NARS and the SOP MCP.
+
+The SOP panel should render SOP templates and run state from SOP MCP data, not from the list of MCP tool names. Tool names only establish whether a SOP surface exists and which runtime actions can be represented.
+
 ## Stream Semantics
 
 Stream fragments and provider text telemetry are progress signals, not durable conversation rows.
