@@ -14,6 +14,10 @@ export function buildDelegationSummaryRequestFrame() {
   return contract.buildAgentWebUiDelegationSummaryFrame();
 }
 
+export function buildGitSummaryRequestFrame() {
+  return contract.buildAgentWebUiGitSummaryFrame();
+}
+
 export function buildMailboxSummaryRequestFrame() {
   return contract.buildAgentWebUiMailboxSummaryFrame();
 }

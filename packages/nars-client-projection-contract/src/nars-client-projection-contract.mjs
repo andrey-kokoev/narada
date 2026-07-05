@@ -26,6 +26,7 @@ export const AGENT_WEB_UI_NARS_METHOD_LIST = Object.freeze([
   'session.sop.summary',
   'session.inbox.summary',
   'session.delegation.summary',
+  'session.git.summary',
   'session.mailbox.summary',
   'session.scheduler.summary',
   'session.task_lifecycle.summary',
@@ -241,6 +242,17 @@ export function buildAgentWebUiDelegationSummaryFrame(options = {}) {
       worker_limit: Number.isFinite(options.workerLimit) ? options.workerLimit : 20,
       task_limit: Number.isFinite(options.taskLimit) ? options.taskLimit : 20,
       include_terminal: options.includeTerminal !== false,
+    },
+  };
+}
+
+export function buildAgentWebUiGitSummaryFrame(options = {}) {
+  return {
+    id: options.id ?? `agent-web-ui-git-summary-${Date.now()}`,
+    method: 'session.git.summary',
+    params: {
+      changed_limit: Number.isFinite(options.changedLimit) ? options.changedLimit : 25,
+      log_limit: Number.isFinite(options.logLimit) ? options.logLimit : 5,
     },
   };
 }

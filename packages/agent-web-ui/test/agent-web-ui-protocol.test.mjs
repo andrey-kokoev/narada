@@ -7,6 +7,7 @@ import {
   buildConversationSteerFrame,
   buildDelegationSummaryRequestFrame,
   buildEventsReadFrame,
+  buildGitSummaryRequestFrame,
   buildInboxSummaryRequestFrame,
   buildMailboxSummaryRequestFrame,
   buildOperatorInputAction,
@@ -47,6 +48,12 @@ test('agent-web-ui emits admitted NARS methods for event attach and operator inp
     params: { worker_limit: 4, task_limit: 6, include_terminal: false },
   });
   assert.equal(isAgentWebUiProtocolFrame(buildDelegationSummaryRequestFrame()), true);
+  assert.deepEqual(buildGitSummaryRequestFrame({ id: 'git-1', changedLimit: 9, logLimit: 2 }), {
+    id: 'git-1',
+    method: 'session.git.summary',
+    params: { changed_limit: 9, log_limit: 2 },
+  });
+  assert.equal(isAgentWebUiProtocolFrame(buildGitSummaryRequestFrame()), true);
   assert.deepEqual(buildMailboxSummaryRequestFrame({ id: 'mailbox-1', accountLimit: 3, messageLimit: 8, query: 'ops' }), {
     id: 'mailbox-1',
     method: 'session.mailbox.summary',

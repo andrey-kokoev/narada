@@ -78,7 +78,7 @@ import {
   prepareTargetAuthority,
   sealSourceAuthority,
 } from './authority-transition-state.mjs';
-import { buildDelegationOperatorAffordance, buildInboxOperatorAffordance, buildMailboxOperatorAffordance, buildMcpSurfaceAffordanceProjection, buildSchedulerOperatorAffordance, buildSopOperatorAffordance, buildTaskLifecycleOperatorAffordance } from './surface-affordances.mjs';
+import { buildDelegationOperatorAffordance, buildGitOperatorAffordance, buildInboxOperatorAffordance, buildMailboxOperatorAffordance, buildMcpSurfaceAffordanceProjection, buildSchedulerOperatorAffordance, buildSopOperatorAffordance, buildTaskLifecycleOperatorAffordance } from './surface-affordances.mjs';
 import { agentInstructionChain, loadRolePrompt } from './agent-instructions.mjs';
 import { loadSession } from './session-records.mjs';
 import {
@@ -408,6 +408,149 @@ function mergeDelegationPosture(base, overlay) {
     if (value !== null) result[key] = Math.max(numberValue(result[key]) ?? 0, value);
   }
   return result;
+}
+
+function findGitServerBinding(mcpServers = {}) {
+  for (const [serverName, server] of Object.entries(mcpServers)) {
+    const toolNames = new Set((server?.tools ?? []).map((tool) => tool?.name).filter(Boolean));
+    if (toolNames.has('git_status') || toolNames.has('git_changed_summary')) return { serverName, server, toolNames };
+  }
+  return null;
+}
+
+async function serverGitSummary({ requestId, params = {}, context = {} }) {
+  const binding = findGitServerBinding(context.mcpServers ?? {});
+  const workingDirectory = stringValue(params.working_directory) ?? stringValue(params.workingDirectory) ?? stringValue(context.workspaceRoot) ?? stringValue(context.workspace_root) ?? stringValue(context.siteRoot) ?? null;
+  const changedLimit = clampInteger(params.changed_limit ?? params.changedLimit, 25, 1, 100);
+  const logLimit = clampInteger(params.log_limit ?? params.logLimit, 5, 0, 25);
+  const errors = [];
+  const payload = {
+    schema: 'narada.nars.git_summary.v1',
+    event: 'session_git_summary',
+    request_id: requestId,
+    transport: 'jsonl_stdio',
+    status: binding ? 'ok' : 'unavailable',
+    server_name: binding?.serverName ?? null,
+    affordance_contract: gitAffordanceContract(binding),
+    repository: null,
+    counts: { tracked_changed: 0, staged: 0, unstaged: 0, untracked: 0, conflicts: 0 },
+    changed_files: { items: [], count: 0, truncated: false },
+    recent_commits: { items: [], count: 0 },
+    errors,
+  };
+  if (!binding) {
+    errors.push({ code: 'git_mcp_unavailable', message: 'No site git MCP server with read tools is available.' });
+    return payload;
+  }
+  const args = workingDirectory ? { working_directory: workingDirectory } : {};
+  const status = binding.toolNames.has('git_status') ? await readGitTool(binding, 'git_status', args, errors) : null;
+  const changedSummary = binding.toolNames.has('git_changed_summary') ? await readGitTool(binding, 'git_changed_summary', { ...args, untracked_sample_limit: changedLimit }, errors) : null;
+  const log = binding.toolNames.has('git_log') && logLimit > 0 ? await readGitTool(binding, 'git_log', { ...args, limit: logLimit }, errors) : null;
+  payload.repository = normalizeGitRepository(status, workingDirectory);
+  payload.counts = normalizeGitCounts(status, changedSummary);
+  payload.changed_files = normalizeGitChangedFiles(status, changedSummary, changedLimit);
+  payload.recent_commits = normalizeGitRecentCommits(log);
+  if (errors.length) payload.status = payload.repository || payload.changed_files.count || payload.recent_commits.count ? 'partial' : 'error';
+  return payload;
+}
+
+function gitAffordanceContract(binding) {
+  if (!binding) return buildGitOperatorAffordance({ serverName: 'git', server: { tools: [] }, source: 'nars_git_summary' });
+  return {
+    ...buildGitOperatorAffordance({ serverName: binding.serverName, server: binding.server, source: 'nars_git_summary' }),
+    schema: 'narada.nars.git_operator_affordance_contract.v1',
+  };
+}
+
+function normalizeGitRepository(status, fallbackWorkingDirectory) {
+  const record = objectValue(status);
+  if (!record && !fallbackWorkingDirectory) return null;
+  return {
+    working_directory: stringValue(record?.working_directory) ?? fallbackWorkingDirectory ?? null,
+    repository_root: stringValue(record?.repository_root) ?? null,
+    branch: stringValue(record?.branch) ?? null,
+    upstream: stringValue(record?.upstream) ?? null,
+    ahead: numberValue(record?.ahead),
+    behind: numberValue(record?.behind),
+    clean: record?.clean === true,
+    detached: record?.detached === true,
+    push_target: objectValue(record?.push_target),
+  };
+}
+
+function normalizeGitCounts(status, changedSummary) {
+  const statusRecord = objectValue(status) ?? {};
+  const summaryRecord = objectValue(changedSummary) ?? {};
+  const statusEntries = Array.isArray(statusRecord.status_entries) ? statusRecord.status_entries.map(objectValue).filter(Boolean) : [];
+  return {
+    tracked_changed: numberValue(summaryRecord.tracked_changed_count) ?? statusEntries.filter((entry) => entry?.untracked !== true).length,
+    staged: numberValue(summaryRecord.staged_count) ?? arrayLength(statusRecord.staged),
+    unstaged: numberValue(summaryRecord.unstaged_count) ?? arrayLength(statusRecord.unstaged),
+    untracked: numberValue(summaryRecord.untracked_count) ?? arrayLength(statusRecord.untracked),
+    conflicts: numberValue(summaryRecord.conflict_count) ?? arrayLength(statusRecord.conflicts),
+  };
+}
+
+function normalizeGitChangedFiles(status, changedSummary, limit) {
+  const entries = [];
+  const seen = new Set();
+  for (const raw of arrayOfObjects(status?.status_entries)) {
+    const item = normalizeGitStatusEntry(raw);
+    if (!item || seen.has(item.path)) continue;
+    seen.add(item.path);
+    entries.push(item);
+  }
+  addGitPathRows(entries, seen, changedSummary?.staged_paths, 'staged');
+  addGitPathRows(entries, seen, changedSummary?.unstaged_paths, 'unstaged');
+  addGitPathRows(entries, seen, changedSummary?.tracked_changed_paths, 'changed');
+  addGitPathRows(entries, seen, changedSummary?.conflict_paths, 'conflict');
+  for (const group of arrayOfObjects(changedSummary?.untracked_groups)) {
+    addGitPathRows(entries, seen, group.paths ?? group.samples ?? group.sample_paths, 'untracked');
+  }
+  const bounded = entries.slice(0, limit);
+  return { items: bounded, count: entries.length, truncated: entries.length > bounded.length };
+}
+
+function normalizeGitStatusEntry(record) {
+  const path = stringValue(record.path) ?? stringValue(record.display_path);
+  if (!path) return null;
+  const staged = record.staged === true || stringValue(record.x) !== null && stringValue(record.x) !== ' ';
+  const unstaged = record.unstaged === true || stringValue(record.y) !== null && stringValue(record.y) !== ' ';
+  const untracked = record.untracked === true;
+  const conflict = record.conflict === true;
+  return {
+    path,
+    display_path: stringValue(record.display_path) ?? path,
+    status: conflict ? 'conflict' : untracked ? 'untracked' : staged && unstaged ? 'staged+unstaged' : staged ? 'staged' : unstaged ? 'unstaged' : 'changed',
+    staged,
+    unstaged,
+    untracked,
+    conflict,
+  };
+}
+
+function addGitPathRows(entries, seen, paths, status) {
+  for (const path of stringArrayValue(paths)) {
+    if (seen.has(path)) continue;
+    seen.add(path);
+    entries.push({ path, display_path: path, status, staged: status === 'staged', unstaged: status === 'unstaged', untracked: status === 'untracked', conflict: status === 'conflict' });
+  }
+}
+
+function normalizeGitRecentCommits(log) {
+  const record = objectValue(log) ?? {};
+  const items = arrayOfObjects(record.commits).map((commit) => ({
+    hash: stringValue(commit.hash) ?? null,
+    short_hash: stringValue(commit.short_hash) ?? null,
+    subject: stringValue(commit.subject) ?? null,
+    author_name: stringValue(commit.author_name) ?? null,
+    author_date: stringValue(commit.author_date) ?? null,
+  }));
+  return { items, count: numberValue(record.returned) ?? items.length };
+}
+
+function arrayLength(value) {
+  return Array.isArray(value) ? value.length : 0;
 }
 
 function findTaskLifecycleServerBinding(mcpServers = {}) {
@@ -1334,6 +1477,29 @@ async function handleServerRequestLine(line, context) {
     }
     return;
   }
+  if (request?.method === 'session.git.summary') {
+    const requestId = request?.id ?? null;
+    noteSessionActivity(context.state, 'session_git_summary_requested');
+    recordWorkflowRequest(context, 'session_git_summary_requested', { requestId, method: 'session.git.summary' });
+    try {
+      context.emit('session_git_summary', await serverGitSummary({ requestId, params: request?.params ?? {}, context }));
+    } catch (error) {
+      context.emit('session_git_summary', {
+        schema: 'narada.nars.git_summary.v1',
+        event: 'session_git_summary',
+        request_id: requestId,
+        transport: 'jsonl_stdio',
+        status: 'error',
+        error: error instanceof Error ? error.message : String(error),
+        repository: null,
+        counts: { tracked_changed: 0, staged: 0, unstaged: 0, untracked: 0, conflicts: 0 },
+        changed_files: { items: [], count: 0, truncated: false },
+        recent_commits: { items: [], count: 0 },
+        errors: [],
+      });
+    }
+    return;
+  }
   if (request?.method === 'session.scheduler.summary') {
     const requestId = request?.id ?? null;
     noteSessionActivity(context.state, 'session_scheduler_summary_requested');
@@ -1871,6 +2037,20 @@ async function readDelegationTool(binding, name, args, errors) {
     return result.structuredContent ?? parseJson(result.content?.[0]?.text ?? '') ?? null;
   } catch (error) {
     errors.push({ code: 'delegation_tool_failed', tool: name, message: error instanceof Error ? error.message : String(error) });
+    return null;
+  }
+}
+
+async function readGitTool(binding, name, args, errors) {
+  if (!binding.toolNames.has(name)) {
+    errors.push({ code: 'git_tool_unavailable', tool: name, message: `${name} is not available on ${binding.serverName}.` });
+    return null;
+  }
+  try {
+    const result = await sendMcpRequest(binding.server, { jsonrpc: '2.0', id: randomId(), method: 'tools/call', params: { name, arguments: args } });
+    return result.structuredContent ?? parseJson(result.content?.[0]?.text ?? '') ?? null;
+  } catch (error) {
+    errors.push({ code: 'git_tool_failed', tool: name, message: error instanceof Error ? error.message : String(error) });
     return null;
   }
 }

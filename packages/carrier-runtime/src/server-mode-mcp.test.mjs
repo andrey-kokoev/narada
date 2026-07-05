@@ -694,6 +694,108 @@ test('server mode projects delegation summary from worker and delegated-task MCP
   }
 });
 
+test('server mode projects git summary as an operator-facing DTO', async () => {
+  const siteRoot = tempRoot('carrier-git-summary-test-');
+  try {
+    const input = new PassThrough();
+    const output = new PassThrough();
+    const events = [];
+    let outputBuffer = '';
+    output.setEncoding('utf8');
+    output.on('data', (chunk) => {
+      outputBuffer += chunk;
+      const lines = outputBuffer.split(/\r?\n/);
+      outputBuffer = lines.pop() ?? '';
+      for (const line of lines) {
+        if (line.trim()) events.push(JSON.parse(line));
+      }
+    });
+
+    const sessionId = 'carrier_20260705050000_git';
+    const sitePaths = resolveNaradaSitePaths({ siteRoot, sessionId });
+    const sessionDir = sitePaths.narsSessionDir;
+    const runtimeContext = {
+      identity: 'sonar.resident',
+      session: sessionId,
+      siteRoot,
+      sessionPath: join(sessionDir, 'session.jsonl'),
+      eventsPath: join(sessionDir, 'events.jsonl'),
+      providerSettings: { stream: false },
+    };
+    const { dependencies } = createCarrierRuntimeDependencies({ runtimeContext });
+    const fakeGitServer = {
+      tools: [{ name: 'git_status' }, { name: 'git_changed_summary' }, { name: 'git_log' }],
+      async send(request) {
+        const name = request.params?.name;
+        if (name === 'git_status') return { result: { structuredContent: {
+          schema: 'narada.git.status.v1',
+          status: 'ok',
+          working_directory: siteRoot,
+          repository_root: siteRoot,
+          branch: 'main',
+          upstream: 'origin/main',
+          ahead: 1,
+          behind: 0,
+          clean: false,
+          status_entries: [{ path: 'src/app.ts', display_path: 'src/app.ts', staged: false, unstaged: true, untracked: false, conflict: false, x: ' ', y: 'M' }],
+          staged: [],
+          unstaged: ['src/app.ts'],
+          untracked: [],
+          conflicts: [],
+        } } };
+        if (name === 'git_changed_summary') return { result: { structuredContent: {
+          schema: 'narada.git.changed_summary.v1',
+          status: 'ok',
+          tracked_changed_count: 1,
+          staged_count: 0,
+          unstaged_count: 1,
+          untracked_count: 0,
+          conflict_count: 0,
+          tracked_changed_paths: ['src/app.ts'],
+          unstaged_paths: ['src/app.ts'],
+        } } };
+        if (name === 'git_log') return { result: { structuredContent: {
+          schema: 'narada.git.log.v1',
+          status: 'ok',
+          returned: 1,
+          commits: [{ hash: 'abcdef123456', short_hash: 'abcdef1', author_name: 'Andrey', author_date: '2026-07-05T00:00:00Z', subject: 'Add panel' }],
+        } } };
+        return { error: { message: `unexpected git tool ${name}` } };
+      },
+    };
+
+    input.write(`${JSON.stringify({ id: 'git-summary-1', method: 'session.git.summary', params: { changed_limit: 5, log_limit: 3 } })}\n`);
+    input.end();
+    await runCarrierServerMode({
+      input,
+      output,
+      callChatApiFn: async () => ({ choices: [{ message: { role: 'assistant', content: 'unused' } }] }),
+      runtimeContext,
+      dependencies: {
+        ...dependencies,
+        discoverAndStartMcpServers: async () => ({ 'narada-test-git': fakeGitServer }),
+        closeMcpServers: () => {},
+        readMcpPreflightArtifact: () => null,
+      },
+    });
+
+    const summary = events.find((event) => event.event === 'session_git_summary');
+    assert.equal(summary?.schema, 'narada.nars.git_summary.v1');
+    assert.equal(summary.server_name, 'narada-test-git');
+    assert.equal(summary.affordance_contract?.panel?.summary_method, 'session.git.summary');
+    assert.equal(summary.repository.branch, 'main');
+    assert.equal(summary.repository.upstream, 'origin/main');
+    assert.equal(summary.counts.unstaged, 1);
+    assert.equal(summary.changed_files.count, 1);
+    assert.equal(summary.changed_files.items[0].path, 'src/app.ts');
+    assert.equal(summary.changed_files.items[0].status, 'unstaged');
+    assert.equal(summary.recent_commits.count, 1);
+    assert.equal(summary.recent_commits.items[0].short_hash, 'abcdef1');
+  } finally {
+    removeTempDir(siteRoot);
+  }
+});
+
 test('server mode projects task lifecycle summary as an operator-facing DTO', async () => {
   const siteRoot = tempRoot('carrier-task-lifecycle-summary-test-');
   try {

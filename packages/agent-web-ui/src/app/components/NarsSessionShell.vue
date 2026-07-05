@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue';
 import ConversationTranscript from './ConversationTranscript.vue';
 import CopyableText from './CopyableText.vue';
 import DelegationPanel from './DelegationPanel.vue';
+import GitPanel from './GitPanel.vue';
 import InboxPanel from './InboxPanel.vue';
 import MailboxPanel from './MailboxPanel.vue';
 import McpServerPanel from './McpServerPanel.vue';
@@ -17,6 +18,7 @@ import type { AgentActivityState } from '../composables/useAgentActivity';
 import type { useCloudflareProjection } from '../composables/useCloudflareProjection';
 import type { HealthIntelligenceSummary } from '../composables/useHealthStatus';
 import type { DelegationSummary } from '../composables/useDelegationSummary';
+import type { GitSummary } from '../composables/useGitSummary';
 import type { InboxSummary } from '../composables/useInboxSummary';
 import type { McpInventorySummary } from '../composables/useMcpInventory';
 import type { MailboxSummary } from '../composables/useMailboxSummary';
@@ -51,6 +53,7 @@ const props = defineProps<{
   mcpInventory: McpInventorySummary;
   surfaceAffordances: SurfaceAffordanceSummary;
   delegationSummary: DelegationSummary;
+  gitSummary: GitSummary;
   inboxSummary: InboxSummary;
   mailboxSummary: MailboxSummary;
   schedulerSummary: SchedulerSummary;
@@ -71,6 +74,7 @@ const emit = defineEmits<{
   'steer-queued': [item: OperatorQueueItem];
   'request-sop-summary': [];
   'request-delegation-summary': [];
+  'request-git-summary': [];
   'request-inbox-summary': [];
   'request-mailbox-summary': [];
   'request-scheduler-summary': [];
@@ -81,6 +85,7 @@ const STATUS_ROW_OPEN_STORAGE_KEY = 'narada:agent-web-ui:status-row-open.v1';
 const statusRowOpen = ref(loadBooleanPreference(STATUS_ROW_OPEN_STORAGE_KEY, true));
 const mcpPanelOpen = ref(false);
 const delegationPanelOpen = ref(false);
+const gitPanelOpen = ref(false);
 const inboxPanelOpen = ref(false);
 const mailboxPanelOpen = ref(false);
 const schedulerPanelOpen = ref(false);
@@ -92,6 +97,8 @@ const sopAffordance = computed(() => props.surfaceAffordances.items.find((item) 
 const hasSopSurface = computed(() => Boolean(sopAffordance.value));
 const delegationAffordance = computed(() => props.surfaceAffordances.items.find((item) => item.surfaceKind === 'delegation') ?? null);
 const hasDelegationSurface = computed(() => Boolean(delegationAffordance.value));
+const gitAffordance = computed(() => props.surfaceAffordances.items.find((item) => item.surfaceKind === 'git') ?? null);
+const hasGitSurface = computed(() => Boolean(gitAffordance.value));
 const inboxAffordance = computed(() => props.surfaceAffordances.items.find((item) => item.surfaceKind === 'inbox') ?? null);
 const hasInboxSurface = computed(() => Boolean(inboxAffordance.value));
 const mailboxAffordance = computed(() => props.surfaceAffordances.items.find((item) => item.surfaceKind === 'mailbox') ?? null);
@@ -155,6 +162,7 @@ function agentPartFromAgentId(agentId: string | null): string | null {
                 :health-body="healthBody"
                 :authority-transition="authorityTransition"
                 :has-delegation-mcp="hasDelegationSurface"
+                :has-git-mcp="hasGitSurface"
                 :has-inbox-mcp="hasInboxSurface"
                 :has-sop-mcp="hasSopSurface"
                 :has-mailbox-mcp="hasMailboxSurface"
@@ -162,6 +170,7 @@ function agentPartFromAgentId(agentId: string | null): string | null {
                 :has-task-lifecycle-mcp="hasTaskLifecycleSurface"
                 @open-mcp-panel="mcpPanelOpen = true"
                 @open-delegation-panel="delegationPanelOpen = true"
+                @open-git-panel="gitPanelOpen = true"
                 @open-inbox-panel="inboxPanelOpen = true"
                 @open-sop-panel="sopPanelOpen = true"
                 @open-mailbox-panel="mailboxPanelOpen = true"
@@ -179,6 +188,7 @@ function agentPartFromAgentId(agentId: string | null): string | null {
       <div class="shell-header-actions">
         <McpServerPanel v-model:open="mcpPanelOpen" :inventory="mcpInventory" />
         <DelegationPanel v-model:open="delegationPanelOpen" :available="hasDelegationSurface" :summary="delegationSummary" @refresh="emit('request-delegation-summary')" />
+        <GitPanel v-model:open="gitPanelOpen" :available="hasGitSurface" :summary="gitSummary" @refresh="emit('request-git-summary')" />
         <InboxPanel v-model:open="inboxPanelOpen" :available="hasInboxSurface" :summary="inboxSummary" @refresh="emit('request-inbox-summary')" />
         <MailboxPanel v-model:open="mailboxPanelOpen" :available="hasMailboxSurface" :summary="mailboxSummary" @refresh="emit('request-mailbox-summary')" />
         <SchedulerPanel v-model:open="schedulerPanelOpen" :available="hasSchedulerSurface" :summary="schedulerSummary" @refresh="emit('request-scheduler-summary')" />

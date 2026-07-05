@@ -93,6 +93,31 @@ test('surface affordance projection advertises delegation panel from worker and 
   assert.deepEqual(delegationPanels[1].tools.read, ['delegated_tasks_list', 'delegated_task_status']);
 });
 
+test('surface affordance projection advertises git panel from git MCP inventory', () => {
+  const projection = buildMcpSurfaceAffordanceProjection({
+    'narada-test-git': {
+      tools: [
+        { name: 'git_status' },
+        { name: 'git_changed_summary' },
+        { name: 'git_log' },
+        { name: 'git_policy_inspect' },
+        { name: 'git_add' },
+        { name: 'git_commit' },
+        { name: 'git_push' },
+      ],
+      config: { surface_id: 'test.git' },
+    },
+  });
+
+  assert.equal(projection.count, 1);
+  assert.equal(projection.items[0].surface_kind, 'git');
+  assert.equal(projection.items[0].panel.summary_method, 'session.git.summary');
+  assert.deepEqual(projection.items[0].panel.sections, ['repository', 'changed_files', 'recent_commits']);
+  assert.deepEqual(projection.items[0].actions.read, ['refresh', 'recent_commits']);
+  assert.deepEqual(projection.items[0].actions.candidate_write, ['stage_paths', 'commit_staged', 'push_branch']);
+  assert.deepEqual(projection.items[0].tools.read, ['git_status', 'git_changed_summary', 'git_log', 'git_policy_inspect']);
+});
+
 test('surface affordance projection advertises task lifecycle panel from task lifecycle MCP inventory', () => {
   const projection = buildMcpSurfaceAffordanceProjection({
     'narada-test-task-lifecycle': {

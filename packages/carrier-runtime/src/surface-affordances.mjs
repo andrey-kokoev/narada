@@ -14,6 +14,10 @@ const WORKER_RUN_STATUS_TOOL = 'worker_run_status';
 const DELEGATED_TASKS_LIST_TOOL = 'delegated_tasks_list';
 const DELEGATED_TASK_STATUS_TOOL = 'delegated_task_status';
 const DELEGATED_TASK_SUMMARY_TOOL = 'delegated_task_summary';
+const GIT_STATUS_TOOL = 'git_status';
+const GIT_CHANGED_SUMMARY_TOOL = 'git_changed_summary';
+const GIT_LOG_TOOL = 'git_log';
+const GIT_POLICY_TOOL = 'git_policy_inspect';
 const SCHEDULER_TASK_LIST_TOOL = 'scheduler_task_list';
 const SCHEDULER_TASK_SHOW_TOOL = 'scheduler_task_show';
 const SCHEDULER_TASK_HISTORY_TOOL = 'scheduler_task_history';
@@ -81,6 +85,43 @@ export function buildDelegationOperatorAffordance({ serverName, server = {}, sou
     tools: {
       read: [WORKER_RUNS_LIST_TOOL, WORKER_DASHBOARD_TOOL, WORKER_RUN_STATUS_TOOL, DELEGATED_TASKS_LIST_TOOL, DELEGATED_TASK_STATUS_TOOL, DELEGATED_TASK_SUMMARY_TOOL].filter((tool) => toolNames.has(tool)),
       write: ['worker_run', 'worker_run_reap', 'delegated_task_run', 'delegated_task_cancel'].filter((tool) => toolNames.has(tool)),
+    },
+  };
+}
+
+function gitAffordanceFromTools(serverName, server = {}) {
+  const toolNames = new Set((server?.tools ?? []).map((tool) => tool?.name).filter(Boolean));
+  if (!toolNames.has(GIT_STATUS_TOOL) && !toolNames.has(GIT_CHANGED_SUMMARY_TOOL)) return null;
+  return buildGitOperatorAffordance({ serverName, server, source: 'live_tool_inventory' });
+}
+
+export function buildGitOperatorAffordance({ serverName, server = {}, source = 'live_tool_inventory' } = {}) {
+  const toolNames = new Set((server?.tools ?? []).map((tool) => tool?.name).filter(Boolean));
+  return {
+    schema: 'narada.mcp_surface.operator_affordance.v1',
+    surface_kind: 'git',
+    surface_id: stringField(server?.config, 'surface_id') ?? `${serverName}:git`,
+    server_name: serverName,
+    source,
+    renderer: 'git_worktree_posture',
+    title: 'Git',
+    panel: {
+      kind: 'git_worktree_posture',
+      title: 'Git',
+      summary_method: 'session.git.summary',
+      sections: ['repository', 'changed_files', 'recent_commits'],
+    },
+    actions: {
+      read: ['refresh', toolNames.has(GIT_LOG_TOOL) ? 'recent_commits' : null].filter(Boolean),
+      candidate_write: [
+        toolNames.has('git_add') ? 'stage_paths' : null,
+        toolNames.has('git_commit') ? 'commit_staged' : null,
+        toolNames.has('git_push') ? 'push_branch' : null,
+      ].filter(Boolean),
+    },
+    tools: {
+      read: [GIT_STATUS_TOOL, GIT_CHANGED_SUMMARY_TOOL, GIT_LOG_TOOL, GIT_POLICY_TOOL].filter((tool) => toolNames.has(tool)),
+      write: ['git_add', 'git_unstage', 'git_commit', 'git_push'].filter((tool) => toolNames.has(tool)),
     },
   };
 }
@@ -256,6 +297,16 @@ export function buildMcpSurfaceAffordanceProjection(mcpServers = {}) {
         seen.add(key);
         seenSurfaceKinds.add(surfaceKindKey);
         items.push(delegation);
+      }
+    }
+    const git = gitAffordanceFromTools(serverName, server);
+    if (git) {
+      const key = affordanceKey(git);
+      const surfaceKindKey = affordanceSurfaceKindKey(git);
+      if (!seen.has(key) && !seenSurfaceKinds.has(surfaceKindKey)) {
+        seen.add(key);
+        seenSurfaceKinds.add(surfaceKindKey);
+        items.push(git);
       }
     }
     const sop = sopAffordanceFromTools(serverName, server);

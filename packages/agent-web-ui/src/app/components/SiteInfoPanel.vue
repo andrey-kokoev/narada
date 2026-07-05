@@ -13,6 +13,7 @@ const props = defineProps<{
   healthBody: Record<string, unknown> | null;
   authorityTransition: Record<string, unknown> | null;
   hasDelegationMcp: boolean;
+  hasGitMcp: boolean;
   hasInboxMcp: boolean;
   hasSopMcp: boolean;
   hasMailboxMcp: boolean;
@@ -22,6 +23,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   'open-mcp-panel': [];
   'open-delegation-panel': [];
+  'open-git-panel': [];
   'open-inbox-panel': [];
   'open-sop-panel': [];
   'open-mailbox-panel': [];
@@ -82,6 +84,11 @@ function openInboxPanel() {
 function openDelegationPanel() {
   open.value = false;
   emit('open-delegation-panel');
+}
+
+function openGitPanel() {
+  open.value = false;
+  emit('open-git-panel');
 }
 
 function openSopPanel() {
@@ -164,6 +171,10 @@ function openTaskLifecyclePanel() {
               <div v-if="hasDelegationMcp">
                 <dt>Delegation</dt>
                 <dd><button type="button" class="site-info-inline-action" @click="openDelegationPanel">Open panel</button></dd>
+              </div>
+              <div v-if="hasGitMcp">
+                <dt>Git</dt>
+                <dd><button type="button" class="site-info-inline-action" @click="openGitPanel">Open panel</button></dd>
               </div>
               <div v-if="hasInboxMcp">
                 <dt>Inbox</dt>
