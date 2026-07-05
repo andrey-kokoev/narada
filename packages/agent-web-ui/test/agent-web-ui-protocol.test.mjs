@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  buildArtifactsSummaryRequestFrame,
   buildConversationEnqueueFrame,
   buildConversationSendFrame,
   buildConversationSteerFrame,
@@ -55,6 +56,12 @@ test('agent-web-ui emits admitted NARS methods for event attach and operator inp
     params: { changed_limit: 9, log_limit: 2 },
   });
   assert.equal(isAgentWebUiProtocolFrame(buildGitSummaryRequestFrame()), true);
+  assert.deepEqual(buildArtifactsSummaryRequestFrame({ id: 'artifacts-1', limit: 5, offset: 2, kind: 'html' }), {
+    id: 'artifacts-1',
+    method: 'session.artifacts.summary',
+    params: { limit: 5, offset: 2, kind: 'html' },
+  });
+  assert.equal(isAgentWebUiProtocolFrame(buildArtifactsSummaryRequestFrame()), true);
   assert.deepEqual(buildSurfaceFeedbackSummaryRequestFrame({ id: 'feedback-1', limit: 7, status: 'submitted', kind: 'gap', surfaceId: 'scheduler' }), {
     id: 'feedback-1',
     method: 'session.surface_feedback.summary',

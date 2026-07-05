@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
+import ArtifactsPanel from './ArtifactsPanel.vue';
 import ConversationTranscript from './ConversationTranscript.vue';
 import CopyableText from './CopyableText.vue';
 import DelegationPanel from './DelegationPanel.vue';
@@ -16,6 +17,7 @@ import SopPanel from './SopPanel.vue';
 import SurfaceFeedbackPanel from './SurfaceFeedbackPanel.vue';
 import TaskLifecyclePanel from './TaskLifecyclePanel.vue';
 import type { AgentActivityState } from '../composables/useAgentActivity';
+import type { ArtifactsSummary } from '../composables/useArtifactsSummary';
 import type { useCloudflareProjection } from '../composables/useCloudflareProjection';
 import type { HealthIntelligenceSummary } from '../composables/useHealthStatus';
 import type { DelegationSummary } from '../composables/useDelegationSummary';
@@ -54,6 +56,7 @@ const props = defineProps<{
   activeTurnId: string | boolean | null;
   mcpInventory: McpInventorySummary;
   surfaceAffordances: SurfaceAffordanceSummary;
+  artifactsSummary: ArtifactsSummary;
   delegationSummary: DelegationSummary;
   gitSummary: GitSummary;
   inboxSummary: InboxSummary;
@@ -75,6 +78,7 @@ const emit = defineEmits<{
   'edit-queued': [item: OperatorQueueItem];
   'remove-queued': [item: OperatorQueueItem];
   'steer-queued': [item: OperatorQueueItem];
+  'request-artifacts-summary': [];
   'request-sop-summary': [];
   'request-delegation-summary': [];
   'request-git-summary': [];
@@ -87,6 +91,7 @@ const emit = defineEmits<{
 }>();
 const STATUS_ROW_OPEN_STORAGE_KEY = 'narada:agent-web-ui:status-row-open.v1';
 const statusRowOpen = ref(loadBooleanPreference(STATUS_ROW_OPEN_STORAGE_KEY, true));
+const artifactsPanelOpen = ref(false);
 const mcpPanelOpen = ref(false);
 const delegationPanelOpen = ref(false);
 const gitPanelOpen = ref(false);
@@ -98,6 +103,7 @@ const surfaceFeedbackPanelOpen = ref(false);
 const taskLifecyclePanelOpen = ref(false);
 const titleSiteLabel = computed(() => props.sessionIdentity.siteId ?? sitePartFromAgentId(props.sessionIdentity.agentId));
 const titleAgentLabel = computed(() => props.sessionIdentity.siteId ? props.sessionIdentity.agentId : agentPartFromAgentId(props.sessionIdentity.agentId));
+const hasArtifactsSurface = computed(() => Boolean(props.artifactBasePath));
 const sopAffordance = computed(() => props.surfaceAffordances.items.find((item) => item.surfaceKind === 'sop') ?? null);
 const hasSopSurface = computed(() => Boolean(sopAffordance.value));
 const surfaceFeedbackAffordance = computed(() => props.surfaceAffordances.items.find((item) => item.surfaceKind === 'surface_feedback') ?? null);
@@ -168,6 +174,7 @@ function agentPartFromAgentId(agentId: string | null): string | null {
                 :artifact-transport="artifactTransport"
                 :health-body="healthBody"
                 :authority-transition="authorityTransition"
+                :has-artifacts="hasArtifactsSurface"
                 :has-delegation-mcp="hasDelegationSurface"
                 :has-git-mcp="hasGitSurface"
                 :has-inbox-mcp="hasInboxSurface"
@@ -177,6 +184,7 @@ function agentPartFromAgentId(agentId: string | null): string | null {
                 :has-scheduler-mcp="hasSchedulerSurface"
                 :has-task-lifecycle-mcp="hasTaskLifecycleSurface"
                 @open-mcp-panel="mcpPanelOpen = true"
+                @open-artifacts-panel="artifactsPanelOpen = true"
                 @open-delegation-panel="delegationPanelOpen = true"
                 @open-git-panel="gitPanelOpen = true"
                 @open-inbox-panel="inboxPanelOpen = true"
@@ -195,6 +203,7 @@ function agentPartFromAgentId(agentId: string | null): string | null {
         </div>
       </div>
       <div class="shell-header-actions">
+        <ArtifactsPanel v-model:open="artifactsPanelOpen" :available="hasArtifactsSurface" :summary="artifactsSummary" @refresh="emit('request-artifacts-summary')" />
         <McpServerPanel v-model:open="mcpPanelOpen" :inventory="mcpInventory" />
         <DelegationPanel v-model:open="delegationPanelOpen" :available="hasDelegationSurface" :summary="delegationSummary" @refresh="emit('request-delegation-summary')" />
         <GitPanel v-model:open="gitPanelOpen" :available="hasGitSurface" :summary="gitSummary" @refresh="emit('request-git-summary')" />

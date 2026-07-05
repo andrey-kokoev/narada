@@ -2,6 +2,7 @@
 import { provide, ref } from 'vue';
 import NarsSessionShell from './components/NarsSessionShell.vue';
 import { useAgentActivity } from './composables/useAgentActivity';
+import { useArtifactsSummary } from './composables/useArtifactsSummary';
 import { useCloudflareProjection, type ProjectionControlConfig } from './composables/useCloudflareProjection';
 import { useDelegationSummary } from './composables/useDelegationSummary';
 import { useGitSummary } from './composables/useGitSummary';
@@ -21,7 +22,7 @@ import { useSurfaceAffordances } from './composables/useSurfaceAffordances';
 import { useSurfaceFeedbackSummary } from './composables/useSurfaceFeedbackSummary';
 import { useTaskLifecycleSummary } from './composables/useTaskLifecycleSummary';
 import { ArtifactRenderingConfigKey } from './lib/artifactConfig';
-import { buildDelegationSummaryRequestFrame, buildGitSummaryRequestFrame, buildInboxSummaryRequestFrame, buildMailboxSummaryRequestFrame, buildSchedulerSummaryRequestFrame, buildSopSummaryRequestFrame, buildSurfaceAffordancesRequestFrame, buildSurfaceFeedbackSummaryRequestFrame, buildTaskLifecycleSummaryRequestFrame } from './lib/narsFrames';
+import { buildArtifactsSummaryRequestFrame, buildDelegationSummaryRequestFrame, buildGitSummaryRequestFrame, buildInboxSummaryRequestFrame, buildMailboxSummaryRequestFrame, buildSchedulerSummaryRequestFrame, buildSopSummaryRequestFrame, buildSurfaceAffordancesRequestFrame, buildSurfaceFeedbackSummaryRequestFrame, buildTaskLifecycleSummaryRequestFrame } from './lib/narsFrames';
 
 interface AgentWebUiConfig {
   eventEndpoint: string | null;
@@ -53,6 +54,7 @@ const connection = useNarsConnection(
 const events = useNarsEvents(retained.events, projection.verbosity, health.identity);
 const agentActivity = useAgentActivity(retained.events, health.body);
 const mcpInventory = useMcpInventory(retained.events, health.body);
+const artifactsSummary = useArtifactsSummary(retained.events);
 const delegationSummary = useDelegationSummary(retained.events);
 const gitSummary = useGitSummary(retained.events);
 const inboxSummary = useInboxSummary(retained.events);
@@ -90,6 +92,10 @@ function requestDelegationSummary() {
 
 function requestGitSummary() {
   connection.connection.value?.sendFrame(buildGitSummaryRequestFrame());
+}
+
+function requestArtifactsSummary() {
+  connection.connection.value?.sendFrame(buildArtifactsSummaryRequestFrame());
 }
 
 function requestMailboxSummary() {
@@ -136,6 +142,7 @@ function requestSurfaceFeedbackSummary() {
     :active-turn-id="connection.activeTurnId.value"
     :mcp-inventory="mcpInventory.inventory.value"
     :surface-affordances="surfaceAffordances.summary.value"
+    :artifacts-summary="artifactsSummary.summary.value"
     :delegation-summary="delegationSummary.summary.value"
     :git-summary="gitSummary.summary.value"
     :inbox-summary="inboxSummary.summary.value"
@@ -154,6 +161,7 @@ function requestSurfaceFeedbackSummary() {
     @edit-queued="input.editQueued"
     @remove-queued="input.dropQueued($event.index)"
     @steer-queued="input.steerQueuedNow"
+    @request-artifacts-summary="requestArtifactsSummary"
     @request-delegation-summary="requestDelegationSummary"
     @request-git-summary="requestGitSummary"
     @request-inbox-summary="requestInboxSummary"

@@ -1480,6 +1480,26 @@ async function handleServerRequestLine(line, context) {
     }
     return;
   }
+  if (request?.method === 'session.artifacts.summary') {
+    const requestId = request?.id ?? null;
+    noteSessionActivity(context.state, 'session_artifacts_summary_requested');
+    recordWorkflowRequest(context, 'session_artifacts_summary_requested', { requestId, method: 'session.artifacts.summary' });
+    try {
+      context.emit('session_artifacts_summary', serverArtifactsSummary({ requestId, params: request?.params ?? {}, context }));
+    } catch (error) {
+      context.emit('session_artifacts_summary', {
+        schema: 'narada.nars.artifacts_summary.v1',
+        event: 'session_artifacts_summary',
+        request_id: requestId,
+        transport: 'jsonl_stdio',
+        status: 'error',
+        error: error instanceof Error ? error.message : String(error),
+        artifacts: { items: [], count: 0, total: 0, limit: 25, offset: 0, truncated: false },
+        counts: { by_kind: {}, by_state: {} },
+      });
+    }
+    return;
+  }
   if (request?.method === 'session.sop.summary') {
     const requestId = request?.id ?? null;
     noteSessionActivity(context.state, 'session_sop_summary_requested');
@@ -1699,6 +1719,65 @@ function serverArtifactRead({ requestId, params = {}, context = {} }) {
     transport: 'jsonl_stdio',
     artifact,
   };
+}
+
+function serverArtifactsSummary({ requestId, params = {}, context = {} }) {
+  const limit = clampInteger(params.limit, 25, 1, 100);
+  const offset = clampInteger(params.offset, 0, 0, 100000);
+  const kindFilter = typeof params.kind === 'string' && params.kind ? params.kind : null;
+  const index = publicNarsArtifactIndex(readNarsArtifactIndex({ sessionPath: context.sessionPath }));
+  const allItems = Array.isArray(index.artifacts) ? index.artifacts : [];
+  const filteredItems = kindFilter ? allItems.filter((item) => item?.kind === kindFilter) : allItems;
+  const sortedItems = [...filteredItems].sort((a, b) => String(b?.created_at ?? '').localeCompare(String(a?.created_at ?? '')));
+  const pageItems = sortedItems.slice(offset, offset + limit).map((item) => normalizeArtifactSummaryItem(item, context));
+  return {
+    schema: 'narada.nars.artifacts_summary.v1',
+    event: 'session_artifacts_summary',
+    request_id: requestId,
+    transport: 'jsonl_stdio',
+    status: 'ok',
+    session_id: context.session ?? index.session_id ?? null,
+    agent_id: context.identity ?? index.agent_id ?? null,
+    generated_at: index.generated_at ?? new Date().toISOString(),
+    artifacts: {
+      items: pageItems,
+      count: filteredItems.length,
+      total: allItems.length,
+      limit,
+      offset,
+      truncated: offset + limit < filteredItems.length,
+    },
+    counts: {
+      by_kind: countBy(allItems, (item) => item?.kind ?? 'unknown'),
+      by_state: countBy(allItems, (item) => item?.lifecycle?.state ?? 'unknown'),
+    },
+    filters: { kind: kindFilter },
+  };
+}
+
+function normalizeArtifactSummaryItem(item, context = {}) {
+  const artifactId = item?.artifact_id ?? null;
+  return {
+    artifact_id: artifactId,
+    kind: item?.kind ?? null,
+    title: item?.title ?? artifactId,
+    content_type: item?.content_type ?? null,
+    created_at: item?.created_at ?? null,
+    lifecycle_state: item?.lifecycle?.state ?? null,
+    render_preference: item?.render?.preferred ?? null,
+    access_scope: item?.access?.scope ?? null,
+    artifact_url: artifactId && context.session ? `/sessions/${encodeURIComponent(context.session)}/artifacts/${encodeURIComponent(artifactId)}` : null,
+    content_url: artifactId && context.session ? `/sessions/${encodeURIComponent(context.session)}/artifacts/${encodeURIComponent(artifactId)}/content` : null,
+  };
+}
+
+function countBy(items, keyFn) {
+  const counts = {};
+  for (const item of Array.isArray(items) ? items : []) {
+    const key = String(keyFn(item) || 'unknown');
+    counts[key] = (counts[key] ?? 0) + 1;
+  }
+  return counts;
 }
 
 async function serverSopSummary({ requestId, params = {}, context = {} }) {

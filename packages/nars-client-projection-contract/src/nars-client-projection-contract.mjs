@@ -22,6 +22,7 @@ export const AGENT_WEB_UI_NARS_METHOD_LIST = Object.freeze([
   'session.events.read',
   'session.artifacts.register',
   'session.artifacts.read',
+  'session.artifacts.summary',
   'session.surface.affordances',
   'session.sop.summary',
   'session.inbox.summary',
@@ -254,6 +255,18 @@ export function buildAgentWebUiGitSummaryFrame(options = {}) {
     params: {
       changed_limit: Number.isFinite(options.changedLimit) ? options.changedLimit : 25,
       log_limit: Number.isFinite(options.logLimit) ? options.logLimit : 5,
+    },
+  };
+}
+
+export function buildAgentWebUiArtifactsSummaryFrame(options = {}) {
+  return {
+    id: options.id ?? `agent-web-ui-artifacts-summary-${Date.now()}`,
+    method: 'session.artifacts.summary',
+    params: {
+      limit: Number.isFinite(options.limit) ? options.limit : 25,
+      offset: Number.isFinite(options.offset) ? options.offset : 0,
+      ...(typeof options.kind === 'string' && options.kind ? { kind: options.kind } : {}),
     },
   };
 }

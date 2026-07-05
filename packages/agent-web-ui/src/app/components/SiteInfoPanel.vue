@@ -12,6 +12,7 @@ const props = defineProps<{
   artifactTransport: string | null;
   healthBody: Record<string, unknown> | null;
   authorityTransition: Record<string, unknown> | null;
+  hasArtifacts: boolean;
   hasDelegationMcp: boolean;
   hasGitMcp: boolean;
   hasInboxMcp: boolean;
@@ -23,6 +24,7 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{
   'open-mcp-panel': [];
+  'open-artifacts-panel': [];
   'open-delegation-panel': [];
   'open-git-panel': [];
   'open-inbox-panel': [];
@@ -76,6 +78,11 @@ function endpointHost(value: string | null): string | null {
 function openMcpPanel() {
   open.value = false;
   emit('open-mcp-panel');
+}
+
+function openArtifactsPanel() {
+  open.value = false;
+  emit('open-artifacts-panel');
 }
 
 function openInboxPanel() {
@@ -166,6 +173,10 @@ function openTaskLifecyclePanel() {
               <div>
                 <dt>Artifacts</dt>
                 <dd>{{ artifactTransport ?? 'not configured' }}<template v-if="artifactBasePath"> · {{ artifactBasePath }}</template></dd>
+              </div>
+              <div v-if="hasArtifacts">
+                <dt>Artifact Index</dt>
+                <dd><button type="button" class="site-info-inline-action" @click="openArtifactsPanel">Open panel</button></dd>
               </div>
               <div>
                 <dt>Authority</dt>

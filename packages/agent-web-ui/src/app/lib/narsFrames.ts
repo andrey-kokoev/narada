@@ -18,6 +18,10 @@ export function buildGitSummaryRequestFrame() {
   return contract.buildAgentWebUiGitSummaryFrame();
 }
 
+export function buildArtifactsSummaryRequestFrame() {
+  return contract.buildAgentWebUiArtifactsSummaryFrame();
+}
+
 export function buildMailboxSummaryRequestFrame() {
   return contract.buildAgentWebUiMailboxSummaryFrame();
 }

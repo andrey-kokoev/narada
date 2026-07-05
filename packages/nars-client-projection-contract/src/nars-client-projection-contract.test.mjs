@@ -8,6 +8,7 @@ import {
   NARS_CLIENT_PROJECTION_VERBOSITY_LEVELS,
   LEGACY_CARRIER_COMMAND_METHOD,
   NARS_COMMAND_METHOD,
+  buildAgentWebUiArtifactsSummaryFrame,
   buildAgentWebUiConversationEnqueueFrame,
   buildAgentWebUiConversationSendFrame,
   buildAgentWebUiConversationSteerFrame,
@@ -43,6 +44,7 @@ test('NARS client projection contract owns attach commands and web UI capabiliti
   assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('conversation.interrupt'), true);
   assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('conversation.steer'), true);
   assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('session.events.read'), true);
+  assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('session.artifacts.summary'), true);
   assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('session.surface.affordances'), true);
   assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('session.sop.summary'), true);
   assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('session.inbox.summary'), true);
@@ -100,6 +102,11 @@ test('NARS client projection contract owns web UI operator input projection', ()
     id: 'git-1',
     method: 'session.git.summary',
     params: { changed_limit: 9, log_limit: 2 },
+  });
+  assert.deepEqual(buildAgentWebUiArtifactsSummaryFrame({ id: 'artifacts-1', limit: 5, offset: 2, kind: 'html' }), {
+    id: 'artifacts-1',
+    method: 'session.artifacts.summary',
+    params: { limit: 5, offset: 2, kind: 'html' },
   });
   assert.deepEqual(buildAgentWebUiSurfaceFeedbackSummaryFrame({ id: 'feedback-1', limit: 7, status: 'submitted', kind: 'gap', surfaceId: 'scheduler' }), {
     id: 'feedback-1',

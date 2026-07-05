@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { existsSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { PassThrough } from 'node:stream';
 import test from 'node:test';
 import { join } from 'node:path';
@@ -791,6 +791,71 @@ test('server mode projects git summary as an operator-facing DTO', async () => {
     assert.equal(summary.changed_files.items[0].status, 'unstaged');
     assert.equal(summary.recent_commits.count, 1);
     assert.equal(summary.recent_commits.items[0].short_hash, 'abcdef1');
+  } finally {
+    removeTempDir(siteRoot);
+  }
+});
+
+test('server mode projects artifact summary as an operator-facing DTO', async () => {
+  const siteRoot = tempRoot('carrier-artifacts-summary-test-');
+  try {
+    const input = new PassThrough();
+    const output = new PassThrough();
+    const events = [];
+    let outputBuffer = '';
+    output.setEncoding('utf8');
+    output.on('data', (chunk) => {
+      outputBuffer += chunk;
+      const lines = outputBuffer.split(/\r?\n/);
+      outputBuffer = lines.pop() ?? '';
+      for (const line of lines) {
+        if (line.trim()) events.push(JSON.parse(line));
+      }
+    });
+
+    const sessionId = 'carrier_20260705050000_artifacts';
+    const sitePaths = resolveNaradaSitePaths({ siteRoot, sessionId });
+    const sessionDir = sitePaths.narsSessionDir;
+    mkdirSync(sessionDir, { recursive: true });
+    const sourcePath = join(sessionDir, 'artifact-source.html');
+    writeFileSync(sourcePath, '<!doctype html><p>Artifact summary</p>', 'utf8');
+    const runtimeContext = {
+      identity: 'sonar.resident',
+      session: sessionId,
+      siteRoot,
+      sessionPath: join(sessionDir, 'session.jsonl'),
+      eventsPath: join(sessionDir, 'events.jsonl'),
+      providerSettings: { stream: false },
+    };
+    const { dependencies } = createCarrierRuntimeDependencies({ runtimeContext });
+
+    input.write(`${JSON.stringify({ id: 'artifact-register-1', method: 'session.artifacts.register', params: { source_path: sourcePath, kind: 'html', title: 'Artifact Summary Preview' } })}\n`);
+    input.write(`${JSON.stringify({ id: 'artifacts-summary-1', method: 'session.artifacts.summary', params: { limit: 5 } })}\n`);
+    input.end();
+    await runCarrierServerMode({
+      input,
+      output,
+      callChatApiFn: async () => ({ choices: [{ message: { role: 'assistant', content: 'unused' } }] }),
+      runtimeContext,
+      dependencies: {
+        ...dependencies,
+        discoverAndStartMcpServers: async () => ({}),
+        closeMcpServers: () => {},
+        readMcpPreflightArtifact: () => null,
+      },
+    });
+
+    const summary = events.find((event) => event.event === 'session_artifacts_summary');
+    assert.equal(summary?.schema, 'narada.nars.artifacts_summary.v1');
+    assert.equal(summary.status, 'ok');
+    assert.equal(summary.session_id, sessionId);
+    assert.equal(summary.artifacts.total, 1);
+    assert.equal(summary.artifacts.count, 1);
+    assert.equal(summary.artifacts.items[0].title, 'Artifact Summary Preview');
+    assert.equal(summary.artifacts.items[0].kind, 'html');
+    assert.equal(summary.counts.by_kind.html, 1);
+    assert.equal(summary.counts.by_state.active, 1);
+    assert.match(summary.artifacts.items[0].content_url, /\/content$/);
   } finally {
     removeTempDir(siteRoot);
   }
