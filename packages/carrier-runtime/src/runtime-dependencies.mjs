@@ -78,7 +78,7 @@ import {
   prepareTargetAuthority,
   sealSourceAuthority,
 } from './authority-transition-state.mjs';
-import { buildMailboxOperatorAffordance, buildMcpSurfaceAffordanceProjection, buildSchedulerOperatorAffordance, buildSopOperatorAffordance } from './surface-affordances.mjs';
+import { buildMailboxOperatorAffordance, buildMcpSurfaceAffordanceProjection, buildSchedulerOperatorAffordance, buildSopOperatorAffordance, buildTaskLifecycleOperatorAffordance } from './surface-affordances.mjs';
 import { agentInstructionChain, loadRolePrompt } from './agent-instructions.mjs';
 import { loadSession } from './session-records.mjs';
 import {
@@ -196,6 +196,90 @@ export function createCarrierRuntimeDependencies({ runtimeContext = {}, env = pr
       session,
     }),
     dependencies,
+  };
+}
+
+function findTaskLifecycleServerBinding(mcpServers = {}) {
+  for (const [serverName, server] of Object.entries(mcpServers)) {
+    const toolNames = new Set((server?.tools ?? []).map((tool) => tool?.name).filter(Boolean));
+    if (toolNames.has('task_lifecycle_workboard_snapshot') || toolNames.has('task_lifecycle_obligations')) return { serverName, server, toolNames };
+  }
+  return null;
+}
+
+async function serverTaskLifecycleSummary({ requestId, params = {}, context = {} }) {
+  const binding = findTaskLifecycleServerBinding(context.mcpServers ?? {});
+  const agentId = stringValue(params.agent_id) ?? stringValue(params.agentId) ?? context.identity ?? null;
+  const limit = clampInteger(params.limit, 8, 1, 25);
+  const includeObligations = params.include_obligations ?? params.includeObligations ?? true;
+  const payload = {
+    schema: 'narada.nars.task_lifecycle_summary.v1',
+    event: 'session_task_lifecycle_summary',
+    request_id: requestId,
+    transport: 'jsonl_stdio',
+    status: binding ? 'ok' : 'unavailable',
+    server_name: binding?.serverName ?? null,
+    agent_id: agentId,
+    affordance_contract: taskLifecycleAffordanceContract(binding),
+    workboard: null,
+    recommendation: null,
+    counts: {},
+    in_progress: { items: [], count: 0 },
+    pending_reviews: { items: [], count: 0 },
+    obligations: { items: [], count: 0 },
+    errors: [],
+  };
+  if (!binding) {
+    payload.errors.push({ code: 'task_lifecycle_mcp_unavailable', message: 'No site task lifecycle MCP server with workboard read tools is available.' });
+    return payload;
+  }
+  if (!agentId) {
+    payload.status = 'error';
+    payload.errors.push({ code: 'task_lifecycle_agent_id_unavailable', message: 'Task lifecycle summary requires a session agent id.' });
+    return payload;
+  }
+  const workboard = await readTaskLifecycleTool(binding, 'task_lifecycle_workboard_snapshot', { agent_id: agentId, limit }, payload.errors);
+  payload.workboard = objectValue(workboard) ?? null;
+  payload.recommendation = objectValue(payload.workboard?.recommendation) ?? null;
+  payload.counts = objectValue(payload.workboard?.counts) ?? objectValue(payload.workboard?.response_counts) ?? {};
+  payload.in_progress = normalizeTaskLifecycleCollection(payload.workboard?.my_in_progress ?? payload.workboard?.in_progress);
+  payload.pending_reviews = normalizeTaskLifecycleCollection(payload.workboard?.pending_reviews ?? payload.workboard?.my_review_obligations);
+  if (includeObligations) {
+    const obligations = await readTaskLifecycleTool(binding, 'task_lifecycle_obligations', { agent_id: agentId, status: 'open' }, payload.errors);
+    payload.obligations = normalizeTaskLifecycleCollection(obligations?.obligations ?? obligations?.items ?? obligations);
+  }
+  if (payload.errors.length) payload.status = payload.workboard || payload.obligations.count ? 'partial' : 'error';
+  return payload;
+}
+
+function taskLifecycleAffordanceContract(binding) {
+  if (!binding) return buildTaskLifecycleOperatorAffordance({ serverName: 'task-lifecycle', server: { tools: [] }, source: 'nars_task_lifecycle_summary' });
+  return {
+    ...buildTaskLifecycleOperatorAffordance({ serverName: binding.serverName, server: binding.server, source: 'nars_task_lifecycle_summary' }),
+    schema: 'narada.nars.task_lifecycle_operator_affordance_contract.v1',
+  };
+}
+
+function normalizeTaskLifecycleCollection(value) {
+  const items = Array.isArray(value)
+    ? value.map(normalizeTaskLifecycleItem).filter(Boolean)
+    : Array.isArray(value?.items) ? value.items.map(normalizeTaskLifecycleItem).filter(Boolean) : [];
+  return { items, count: numberValue(value?.count) ?? items.length };
+}
+
+function normalizeTaskLifecycleItem(value) {
+  const record = objectValue(value);
+  if (!record) return null;
+  return {
+    task_number: numberValue(record.task_number) ?? null,
+    task_id: stringValue(record.task_id) ?? null,
+    title: stringValue(record.title) ?? '(untitled task)',
+    status: stringValue(record.status) ?? null,
+    assigned_agent: stringValue(record.assigned_agent) ?? null,
+    target_role: stringValue(record.target_role) ?? null,
+    updated_at: stringValue(record.updated_at) ?? null,
+    obligation_id: stringValue(record.obligation_id) ?? null,
+    kind: stringValue(record.kind) ?? null,
   };
 }
 
@@ -1016,6 +1100,29 @@ async function handleServerRequestLine(line, context) {
     }
     return;
   }
+  if (request?.method === 'session.task_lifecycle.summary') {
+    const requestId = request?.id ?? null;
+    noteSessionActivity(context.state, 'session_task_lifecycle_summary_requested');
+    recordWorkflowRequest(context, 'session_task_lifecycle_summary_requested', { requestId, method: 'session.task_lifecycle.summary' });
+    try {
+      context.emit('session_task_lifecycle_summary', await serverTaskLifecycleSummary({ requestId, params: request?.params ?? {}, context }));
+    } catch (error) {
+      context.emit('session_task_lifecycle_summary', {
+        schema: 'narada.nars.task_lifecycle_summary.v1',
+        event: 'session_task_lifecycle_summary',
+        request_id: requestId,
+        transport: 'jsonl_stdio',
+        status: 'error',
+        error: error instanceof Error ? error.message : String(error),
+        workboard: null,
+        recommendation: null,
+        counts: {},
+        obligations: { items: [], count: 0 },
+        errors: [],
+      });
+    }
+    return;
+  }
   if (request?.method === 'session.surface.affordances') {
     const requestId = request?.id ?? null;
     noteSessionActivity(context.state, 'session_surface_affordances_requested');
@@ -1495,6 +1602,20 @@ async function readSchedulerTool(binding, name, args, errors) {
     return result.structuredContent ?? parseJson(result.content?.[0]?.text ?? '') ?? null;
   } catch (error) {
     errors.push({ code: 'scheduler_tool_failed', tool: name, message: error instanceof Error ? error.message : String(error) });
+    return null;
+  }
+}
+
+async function readTaskLifecycleTool(binding, name, args, errors) {
+  if (!binding.toolNames.has(name)) {
+    errors.push({ code: 'task_lifecycle_tool_unavailable', tool: name, message: `${name} is not available on ${binding.serverName}.` });
+    return null;
+  }
+  try {
+    const result = await sendMcpRequest(binding.server, { jsonrpc: '2.0', id: randomId(), method: 'tools/call', params: { name, arguments: args } });
+    return result.structuredContent ?? parseJson(result.content?.[0]?.text ?? '') ?? null;
+  } catch (error) {
+    errors.push({ code: 'task_lifecycle_tool_failed', tool: name, message: error instanceof Error ? error.message : String(error) });
     return null;
   }
 }
@@ -2198,17 +2319,19 @@ function handleCodexExecMcpToolEvent(event, settings = {}) {
 export function serverStatus({ requestId, state, allTools, mcpServers, mcpPreflightArtifact, context = {} }) {
   const carrierSessionSettings = state?.sessionSettings ?? {};
   const goal = normalizeCarrierGoalState(carrierSessionSettings.goal);
+  const intelligence = effectiveIntelligenceSettings({ sessionSettings: carrierSessionSettings, providerSettings: context.providerSettings });
   const mcpStatus = createMcpStatusSnapshot(mcpServers);
   const surfaceAffordances = buildMcpSurfaceAffordanceProjection(mcpServers);
   const handoffs = sessionHandoffs({ identity: context.identity, session: context.session });
   return {
     request_id: requestId,
     transport: 'jsonl_stdio',
-    provider: context.providerSettings?.provider ?? process.env.NARADA_INTELLIGENCE_PROVIDER ?? 'codex-subscription',
+    intelligence,
+    provider: intelligence.provider,
     site_config: context.siteConfig ?? null,
-    model: carrierSessionSettings.model,
-    thinking: carrierSessionSettings.thinking,
-    stream: carrierSessionSettings.stream,
+    model: intelligence.model,
+    thinking: intelligence.thinking,
+    stream: intelligence.stream,
     goal: goal.value || null,
     goal_status: goal.status,
     goal_display: carrierGoalStatusLabel(goal),
@@ -2239,6 +2362,23 @@ export function serverStatus({ requestId, state, allTools, mcpServers, mcpPrefli
   };
 }
 
+function effectiveIntelligenceSettings({ sessionSettings = {}, providerSettings = {} } = {}) {
+  return {
+    provider: stringOrNull(sessionSettings.provider) ?? stringOrNull(providerSettings.provider) ?? stringOrNull(process.env.NARADA_INTELLIGENCE_PROVIDER) ?? 'codex-subscription',
+    model: stringOrNull(sessionSettings.model) ?? stringOrNull(providerSettings.model) ?? null,
+    thinking: stringOrNull(sessionSettings.thinking) ?? stringOrNull(providerSettings.thinking) ?? stringOrNull(process.env.NARADA_AI_THINKING) ?? stringOrNull(process.env.NARADA_THINKING_LEVEL) ?? 'medium',
+    stream: booleanOrNull(sessionSettings.stream) ?? booleanOrNull(providerSettings.stream) ?? null,
+  };
+}
+
+function stringOrNull(value) {
+  return typeof value === 'string' && value ? value : null;
+}
+
+function booleanOrNull(value) {
+  return typeof value === 'boolean' ? value : null;
+}
+
 function serverHealth({ requestId, state, allTools, mcpServers, mcpPreflightArtifact, context = {} }) {
   const status = serverStatus({ requestId, state, allTools, mcpServers, mcpPreflightArtifact, context });
   const generatedAt = new Date().toISOString();
@@ -2265,6 +2405,7 @@ function serverHealth({ requestId, state, allTools, mcpServers, mcpPreflightArti
     started_at: state?.startedAt ?? null,
     delegated_authority_handoff: status.delegated_authority_handoff,
     delegated_authority_ref: status.delegated_authority_ref,
+    intelligence: status.intelligence,
     provider: status.provider,
     model: status.model,
     thinking: status.thinking,

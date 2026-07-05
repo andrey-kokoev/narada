@@ -14,6 +14,10 @@ export function buildSchedulerSummaryRequestFrame() {
   return contract.buildAgentWebUiSchedulerSummaryFrame();
 }
 
+export function buildTaskLifecycleSummaryRequestFrame() {
+  return contract.buildAgentWebUiTaskLifecycleSummaryFrame();
+}
+
 export function buildSurfaceAffordancesRequestFrame() {
   return contract.buildAgentWebUiSurfaceAffordancesFrame();
 }

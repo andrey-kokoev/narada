@@ -18,6 +18,7 @@ import {
   buildAgentWebUiSchedulerSummaryFrame,
   buildAgentWebUiSopSummaryFrame,
   buildAgentWebUiSurfaceAffordancesFrame,
+  buildAgentWebUiTaskLifecycleSummaryFrame,
   buildAgentWebUiSubscribeFrame,
   buildNarsAttachCommands,
   classifyNarsClientEventProjection,
@@ -42,6 +43,7 @@ test('NARS client projection contract owns attach commands and web UI capabiliti
   assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('session.sop.summary'), true);
   assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('session.mailbox.summary'), true);
   assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('session.scheduler.summary'), true);
+  assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('session.task_lifecycle.summary'), true);
   assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('command.execute'), false);
   assert.equal(NARS_CLIENT_PROJECTION_REGISTRY.clients.agent_web_ui.admitted_methods, AGENT_WEB_UI_NARS_METHOD_LIST);
   assert.equal(NARS_CLIENT_PROJECTION_REGISTRY.clients.agent_tui.attach_template, 'agent-tui --attach <event_endpoint>');
@@ -85,6 +87,11 @@ test('NARS client projection contract owns web UI operator input projection', ()
     id: 'scheduler-1',
     method: 'session.scheduler.summary',
     params: { task_limit: 4, history_limit: 2, folder: '\\Narada' },
+  });
+  assert.deepEqual(buildAgentWebUiTaskLifecycleSummaryFrame({ id: 'tasks-1', agentId: 'sonar.resident', limit: 5, includeObligations: false }), {
+    id: 'tasks-1',
+    method: 'session.task_lifecycle.summary',
+    params: { agent_id: 'sonar.resident', limit: 5, include_obligations: false },
   });
   assert.deepEqual(buildAgentWebUiSurfaceAffordancesFrame({ id: 'affordances-1' }), {
     id: 'affordances-1',

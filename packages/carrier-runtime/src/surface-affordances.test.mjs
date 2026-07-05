@@ -41,6 +41,46 @@ test('surface affordance projection advertises SOP panel from live MCP tool inve
   });
 });
 
+test('surface affordance projection advertises task lifecycle panel from task lifecycle MCP inventory', () => {
+  const projection = buildMcpSurfaceAffordanceProjection({
+    'narada-test-task-lifecycle': {
+      tools: [
+        { name: 'task_lifecycle_workboard_snapshot' },
+        { name: 'task_lifecycle_obligations' },
+        { name: 'task_lifecycle_search' },
+        { name: 'task_lifecycle_claim' },
+        { name: 'task_lifecycle_finish' },
+      ],
+      config: { surface_id: 'test.task_lifecycle' },
+    },
+  });
+
+  assert.equal(projection.count, 1);
+  assert.deepEqual(projection.items[0], {
+    schema: 'narada.mcp_surface.operator_affordance.v1',
+    surface_kind: 'task_lifecycle',
+    surface_id: 'test.task_lifecycle',
+    server_name: 'narada-test-task-lifecycle',
+    source: 'live_tool_inventory',
+    renderer: 'task_lifecycle_workboard',
+    title: 'Tasks',
+    panel: {
+      kind: 'task_lifecycle_workboard',
+      title: 'Tasks',
+      summary_method: 'session.task_lifecycle.summary',
+      sections: ['recommendation', 'in_progress', 'reviews', 'obligations'],
+    },
+    actions: {
+      read: ['refresh', 'open_task', 'search_tasks'],
+      candidate_write: ['claim_task', 'finish_task'],
+    },
+    tools: {
+      read: ['task_lifecycle_workboard_snapshot', 'task_lifecycle_obligations', 'task_lifecycle_search'],
+      write: ['task_lifecycle_claim', 'task_lifecycle_finish'],
+    },
+  });
+});
+
 test('surface affordance projection advertises synced email panel from mailbox MCP inventory', () => {
   const projection = buildMcpSurfaceAffordanceProjection({
     'narada-test-mailbox': {

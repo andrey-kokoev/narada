@@ -15,12 +15,14 @@ const props = defineProps<{
   hasSopMcp: boolean;
   hasMailboxMcp: boolean;
   hasSchedulerMcp: boolean;
+  hasTaskLifecycleMcp: boolean;
 }>();
 const emit = defineEmits<{
   'open-mcp-panel': [];
   'open-sop-panel': [];
   'open-mailbox-panel': [];
   'open-scheduler-panel': [];
+  'open-task-lifecycle-panel': [];
 }>();
 
 const open = ref(false);
@@ -81,6 +83,11 @@ function openMailboxPanel() {
 function openSchedulerPanel() {
   open.value = false;
   emit('open-scheduler-panel');
+}
+
+function openTaskLifecyclePanel() {
+  open.value = false;
+  emit('open-task-lifecycle-panel');
 }
 </script>
 
@@ -151,6 +158,10 @@ function openSchedulerPanel() {
               <div v-if="hasSchedulerMcp">
                 <dt>Scheduler</dt>
                 <dd><button type="button" class="site-info-inline-action" @click="openSchedulerPanel">Open panel</button></dd>
+              </div>
+              <div v-if="hasTaskLifecycleMcp">
+                <dt>Tasks</dt>
+                <dd><button type="button" class="site-info-inline-action" @click="openTaskLifecyclePanel">Open panel</button></dd>
               </div>
               <div>
                 <dt>Observed endpoint hosts</dt>

@@ -7,6 +7,9 @@ const MAILBOX_DOCTOR_TOOL = 'mailbox_doctor';
 const SCHEDULER_TASK_LIST_TOOL = 'scheduler_task_list';
 const SCHEDULER_TASK_SHOW_TOOL = 'scheduler_task_show';
 const SCHEDULER_TASK_HISTORY_TOOL = 'scheduler_task_history';
+const TASK_LIFECYCLE_WORKBOARD_TOOL = 'task_lifecycle_workboard_snapshot';
+const TASK_LIFECYCLE_OBLIGATIONS_TOOL = 'task_lifecycle_obligations';
+const TASK_LIFECYCLE_SEARCH_TOOL = 'task_lifecycle_search';
 
 export function buildSopOperatorAffordance({ serverName, server = {}, source = 'live_tool_inventory' } = {}) {
   const toolNames = new Set((server?.tools ?? []).map((tool) => tool?.name).filter(Boolean));
@@ -28,6 +31,44 @@ export function buildSopOperatorAffordance({ serverName, server = {}, source = '
     tools: {
       read: [SOP_TEMPLATE_TOOL, SOP_RUN_TOOL].filter((tool) => toolNames.has(tool)),
       doctor: toolNames.has(SOP_DOCTOR_TOOL) ? SOP_DOCTOR_TOOL : null,
+    },
+  };
+}
+
+function taskLifecycleAffordanceFromTools(serverName, server = {}) {
+  const toolNames = new Set((server?.tools ?? []).map((tool) => tool?.name).filter(Boolean));
+  if (!toolNames.has(TASK_LIFECYCLE_WORKBOARD_TOOL) && !toolNames.has(TASK_LIFECYCLE_OBLIGATIONS_TOOL)) return null;
+  return buildTaskLifecycleOperatorAffordance({ serverName, server, source: 'live_tool_inventory' });
+}
+
+export function buildTaskLifecycleOperatorAffordance({ serverName, server = {}, source = 'live_tool_inventory' } = {}) {
+  const toolNames = new Set((server?.tools ?? []).map((tool) => tool?.name).filter(Boolean));
+  return {
+    schema: 'narada.mcp_surface.operator_affordance.v1',
+    surface_kind: 'task_lifecycle',
+    surface_id: stringField(server?.config, 'surface_id') ?? `${serverName}:task_lifecycle`,
+    server_name: serverName,
+    source,
+    renderer: 'task_lifecycle_workboard',
+    title: 'Tasks',
+    panel: {
+      kind: 'task_lifecycle_workboard',
+      title: 'Tasks',
+      summary_method: 'session.task_lifecycle.summary',
+      sections: ['recommendation', 'in_progress', 'reviews', 'obligations'],
+    },
+    actions: {
+      read: ['refresh', 'open_task', toolNames.has(TASK_LIFECYCLE_SEARCH_TOOL) ? 'search_tasks' : null].filter(Boolean),
+      candidate_write: [
+        toolNames.has('task_lifecycle_claim') ? 'claim_task' : null,
+        toolNames.has('task_lifecycle_finish') ? 'finish_task' : null,
+        toolNames.has('task_lifecycle_close') ? 'close_task' : null,
+        toolNames.has('task_lifecycle_defer') ? 'defer_task' : null,
+      ].filter(Boolean),
+    },
+    tools: {
+      read: [TASK_LIFECYCLE_WORKBOARD_TOOL, TASK_LIFECYCLE_OBLIGATIONS_TOOL, TASK_LIFECYCLE_SEARCH_TOOL, 'task_lifecycle_inspect'].filter((tool) => toolNames.has(tool)),
+      write: ['task_lifecycle_claim', 'task_lifecycle_finish', 'task_lifecycle_close', 'task_lifecycle_defer'].filter((tool) => toolNames.has(tool)),
     },
   };
 }
@@ -137,6 +178,14 @@ export function buildMcpSurfaceAffordanceProjection(mcpServers = {}) {
       if (!seen.has(key)) {
         seen.add(key);
         items.push(scheduler);
+      }
+    }
+    const taskLifecycle = taskLifecycleAffordanceFromTools(serverName, server);
+    if (taskLifecycle) {
+      const key = affordanceKey(taskLifecycle);
+      if (!seen.has(key)) {
+        seen.add(key);
+        items.push(taskLifecycle);
       }
     }
   }

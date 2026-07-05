@@ -15,8 +15,9 @@ import { useRetainedEvents } from './composables/useRetainedEvents';
 import { useSchedulerSummary } from './composables/useSchedulerSummary';
 import { useSopSummary } from './composables/useSopSummary';
 import { useSurfaceAffordances } from './composables/useSurfaceAffordances';
+import { useTaskLifecycleSummary } from './composables/useTaskLifecycleSummary';
 import { ArtifactRenderingConfigKey } from './lib/artifactConfig';
-import { buildMailboxSummaryRequestFrame, buildSchedulerSummaryRequestFrame, buildSopSummaryRequestFrame, buildSurfaceAffordancesRequestFrame } from './lib/narsFrames';
+import { buildMailboxSummaryRequestFrame, buildSchedulerSummaryRequestFrame, buildSopSummaryRequestFrame, buildSurfaceAffordancesRequestFrame, buildTaskLifecycleSummaryRequestFrame } from './lib/narsFrames';
 
 interface AgentWebUiConfig {
   eventEndpoint: string | null;
@@ -51,6 +52,7 @@ const mcpInventory = useMcpInventory(retained.events, health.body);
 const mailboxSummary = useMailboxSummary(retained.events);
 const schedulerSummary = useSchedulerSummary(retained.events);
 const sopSummary = useSopSummary(retained.events);
+const taskLifecycleSummary = useTaskLifecycleSummary(retained.events);
 const surfaceAffordances = useSurfaceAffordances(retained.events, health.body);
 const operatorQueue = useOperatorQueue(health.body);
 const cloudflareProjection = useCloudflareProjection(props.config.projectionControl?.cloudflare ?? null);
@@ -76,6 +78,10 @@ function requestMailboxSummary() {
 
 function requestSchedulerSummary() {
   connection.connection.value?.sendFrame(buildSchedulerSummaryRequestFrame());
+}
+
+function requestTaskLifecycleSummary() {
+  connection.connection.value?.sendFrame(buildTaskLifecycleSummaryRequestFrame());
 }
 
 function requestSurfaceAffordances() {
@@ -109,6 +115,7 @@ function requestSurfaceAffordances() {
     :mailbox-summary="mailboxSummary.summary.value"
     :scheduler-summary="schedulerSummary.summary.value"
     :sop-summary="sopSummary.summary.value"
+    :task-lifecycle-summary="taskLifecycleSummary.summary.value"
     :authority-transition="config.authorityTransition ?? null"
     :cloudflare-projection="cloudflareProjection"
     :follow-latest-revision="followLatestRevision"
@@ -122,6 +129,7 @@ function requestSurfaceAffordances() {
     @request-mailbox-summary="requestMailboxSummary"
     @request-scheduler-summary="requestSchedulerSummary"
     @request-sop-summary="requestSopSummary"
+    @request-task-lifecycle-summary="requestTaskLifecycleSummary"
     @request-surface-affordances="requestSurfaceAffordances"
   />
 </template>

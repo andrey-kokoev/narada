@@ -34,7 +34,7 @@ test('server mode executes a provider-requested MCP tool through real fabric and
       siteRoot,
       sessionPath: join(sessionDir, 'session.jsonl'),
       eventsPath: join(sessionDir, 'events.jsonl'),
-      providerSettings: { stream: false },
+      providerSettings: { provider: 'codex-subscription', model: 'gpt-5.5', thinking: 'medium', stream: false },
     };
     const { dependencies } = createCarrierRuntimeDependencies({ runtimeContext });
     const providerCalls = [];
@@ -535,6 +535,94 @@ test('server mode projects scheduler summary as an operator-facing DTO', async (
   }
 });
 
+test('server mode projects task lifecycle summary as an operator-facing DTO', async () => {
+  const siteRoot = tempRoot('carrier-task-lifecycle-summary-test-');
+  try {
+    const input = new PassThrough();
+    const output = new PassThrough();
+    const events = [];
+    let outputBuffer = '';
+    output.setEncoding('utf8');
+    output.on('data', (chunk) => {
+      outputBuffer += chunk;
+      const lines = outputBuffer.split(/\r?\n/);
+      outputBuffer = lines.pop() ?? '';
+      for (const line of lines) {
+        if (line.trim()) events.push(JSON.parse(line));
+      }
+    });
+
+    const sessionId = 'carrier_20260705050000_tasks';
+    const sitePaths = resolveNaradaSitePaths({ siteRoot, sessionId });
+    const sessionDir = sitePaths.narsSessionDir;
+    const runtimeContext = {
+      identity: 'sonar.resident',
+      session: sessionId,
+      siteRoot,
+      sessionPath: join(sessionDir, 'session.jsonl'),
+      eventsPath: join(sessionDir, 'events.jsonl'),
+      providerSettings: { stream: false },
+    };
+    const { dependencies } = createCarrierRuntimeDependencies({ runtimeContext });
+    const fakeTaskLifecycleServer = {
+      tools: [
+        { name: 'task_lifecycle_workboard_snapshot' },
+        { name: 'task_lifecycle_obligations' },
+        { name: 'task_lifecycle_search' },
+        { name: 'task_lifecycle_claim' },
+        { name: 'task_lifecycle_finish' },
+      ],
+      async send(request) {
+        const name = request.params?.name;
+        if (name === 'task_lifecycle_workboard_snapshot') {
+          return { result: { structuredContent: {
+            recommendation: { action: 'continue', reason: 'active task claimed' },
+            counts: { in_progress: 1, pending_reviews: 2, deferred: 3 },
+            my_in_progress: [{ task_number: 1804, task_id: 'task-1804', title: 'Add Task Lifecycle MCP operator panel', status: 'claimed', assigned_agent: 'sonar.resident', updated_at: '2026-07-05T05:00:00Z' }],
+            pending_reviews: [{ task_number: 1811, task_id: 'task-1811', title: 'Review scheduler panel', status: 'awaiting_dependencies', target_role: 'reviewer' }],
+          } } };
+        }
+        if (name === 'task_lifecycle_obligations') {
+          return { result: { structuredContent: { obligations: [{ obligation_id: 'obl_1', task_number: 1811, task_id: 'task-1811', title: 'Review scheduler panel', status: 'open', kind: 'review' }], count: 1 } } };
+        }
+        return { error: { message: `unexpected tool ${name}` } };
+      },
+    };
+
+    input.write(`${JSON.stringify({ id: 'tasks-summary-1', method: 'session.task_lifecycle.summary', params: { limit: 5 } })}\n`);
+    input.end();
+    await runCarrierServerMode({
+      input,
+      output,
+      callChatApiFn: async () => ({ choices: [{ message: { role: 'assistant', content: 'unused' } }] }),
+      runtimeContext,
+      dependencies: {
+        ...dependencies,
+        discoverAndStartMcpServers: async () => ({ 'narada-test-task-lifecycle': fakeTaskLifecycleServer }),
+        closeMcpServers: () => {},
+        readMcpPreflightArtifact: () => null,
+      },
+    });
+
+    const summary = events.find((event) => event.event === 'session_task_lifecycle_summary');
+    assert.equal(summary?.schema, 'narada.nars.task_lifecycle_summary.v1');
+    assert.equal(summary.server_name, 'narada-test-task-lifecycle');
+    assert.equal(summary.agent_id, 'sonar.resident');
+    assert.equal(summary.affordance_contract?.panel?.summary_method, 'session.task_lifecycle.summary');
+    assert.deepEqual(summary.affordance_contract?.actions?.read, ['refresh', 'open_task', 'search_tasks']);
+    assert.deepEqual(summary.affordance_contract?.actions?.candidate_write, ['claim_task', 'finish_task']);
+    assert.equal(summary.recommendation.action, 'continue');
+    assert.equal(summary.counts.in_progress, 1);
+    assert.equal(summary.in_progress.count, 1);
+    assert.equal(summary.in_progress.items[0].task_number, 1804);
+    assert.equal(summary.pending_reviews.count, 1);
+    assert.equal(summary.obligations.count, 1);
+    assert.equal(summary.obligations.items[0].obligation_id, 'obl_1');
+  } finally {
+    removeTempDir(siteRoot);
+  }
+});
+
 test('server mode health and event subscription match NARS runtime contract shape', async () => {
   const siteRoot = tempRoot('carrier-health-subscribe-test-');
   try {
@@ -589,6 +677,10 @@ test('server mode health and event subscription match NARS runtime contract shap
     assert.equal(health?.schema, 'narada.nars.health.v1');
     assert.equal(health.runtime_mode, 'server');
     assert.equal(health.launch_operator_surface_kind, 'agent-web-ui');
+    assert.deepEqual(health.intelligence, { provider: 'codex-subscription', model: 'gpt-5.5', thinking: 'medium', stream: false });
+    assert.equal(health.provider, 'codex-subscription');
+    assert.equal(health.model, 'gpt-5.5');
+    assert.equal(health.thinking, 'medium');
     assert.equal(typeof health.generated_at, 'string');
     assert.equal(typeof health.started_at, 'string');
     assert.equal(health.heartbeat?.path, join(sessionDir, 'heartbeat.json'));

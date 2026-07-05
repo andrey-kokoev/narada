@@ -232,6 +232,28 @@ When a scheduler MCP surface is mounted, NARS may emit or answer a scheduler sum
 
 Task items should expose display-safe fields such as `task_name`, `title`, `status`, `schedule`, `next_run`, `last_run`, `last_result`, `command`, `history`, and `available_actions`. Scheduler mutating actions such as run, enable, disable, or delete are candidate actions only until NARS owns admitted protocol methods for them.
 
+### Task Lifecycle Summary
+
+When a task lifecycle MCP surface is mounted, NARS may emit or answer a workboard-oriented task summary projection:
+
+```json
+{
+  "event": "session_task_lifecycle_summary",
+  "status": "ok",
+  "server_name": "narada-sonar-task-lifecycle",
+  "agent_id": "resident",
+  "affordance_contract": { "schema": "narada.nars.task_lifecycle_operator_affordance_contract.v1" },
+  "recommendation": { "action": "continue", "reason": "active task claimed" },
+  "counts": { "in_progress": 1, "pending_reviews": 2 },
+  "in_progress": { "count": 1, "items": [] },
+  "pending_reviews": { "count": 2, "items": [] },
+  "obligations": { "count": 0, "items": [] },
+  "errors": []
+}
+```
+
+The task lifecycle panel is read-only by default. Task mutation tools such as claim, finish, close, and defer are projected as candidate actions until NARS owns explicit admitted protocol methods for those operations.
+
 ## Stream Semantics
 
 Stream fragments and provider text telemetry are progress signals, not durable conversation rows.

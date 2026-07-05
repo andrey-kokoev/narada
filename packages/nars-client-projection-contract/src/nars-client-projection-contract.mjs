@@ -26,6 +26,7 @@ export const AGENT_WEB_UI_NARS_METHOD_LIST = Object.freeze([
   'session.sop.summary',
   'session.mailbox.summary',
   'session.scheduler.summary',
+  'session.task_lifecycle.summary',
   'conversation.send',
   'conversation.enqueue',
   'session.status',
@@ -227,6 +228,19 @@ export function buildAgentWebUiSchedulerSummaryFrame(options = {}) {
       history_limit: Number.isFinite(options.historyLimit) ? options.historyLimit : 5,
       ...(typeof options.folder === 'string' && options.folder ? { folder: options.folder } : {}),
     },
+  };
+}
+
+export function buildAgentWebUiTaskLifecycleSummaryFrame(options = {}) {
+  const params = {
+    limit: Number.isFinite(options.limit) ? options.limit : 8,
+    include_obligations: options.includeObligations !== false,
+  };
+  if (typeof options.agentId === 'string' && options.agentId) params.agent_id = options.agentId;
+  return {
+    id: options.id ?? `agent-web-ui-task-lifecycle-summary-${Date.now()}`,
+    method: 'session.task_lifecycle.summary',
+    params,
   };
 }
 

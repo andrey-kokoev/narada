@@ -49,6 +49,7 @@ export function buildAgentWebUiSurfaceAffordancesFrame(options?: object): object
 export function buildAgentWebUiSopSummaryFrame(options?: object): object;
 export function buildAgentWebUiMailboxSummaryFrame(options?: object): object;
 export function buildAgentWebUiSchedulerSummaryFrame(options?: object): object;
+export function buildAgentWebUiTaskLifecycleSummaryFrame(options?: object): object;
 export function buildAgentWebUiHelpText(): string;
 export function buildAgentWebUiConversationSendFrame(text: unknown, options?: object): object | null;
 export function buildAgentWebUiConversationSteerFrame(text: unknown, options?: object): object | null;

@@ -11,6 +11,7 @@ import {
   buildSchedulerSummaryRequestFrame,
   buildSopSummaryRequestFrame,
   buildSurfaceAffordancesRequestFrame,
+  buildTaskLifecycleSummaryRequestFrame,
   buildSubscribeFrame,
   isAgentWebUiNarsMethod,
   isAgentWebUiProtocolFrame,
@@ -44,6 +45,12 @@ test('agent-web-ui emits admitted NARS methods for event attach and operator inp
     params: { task_limit: 6, history_limit: 2, folder: '\\Narada' },
   });
   assert.equal(isAgentWebUiProtocolFrame(buildSchedulerSummaryRequestFrame()), true);
+  assert.deepEqual(buildTaskLifecycleSummaryRequestFrame({ id: 'tasks-1', agentId: 'sonar.resident', limit: 5 }), {
+    id: 'tasks-1',
+    method: 'session.task_lifecycle.summary',
+    params: { agent_id: 'sonar.resident', limit: 5, include_obligations: true },
+  });
+  assert.equal(isAgentWebUiProtocolFrame(buildTaskLifecycleSummaryRequestFrame()), true);
   assert.deepEqual(buildSurfaceAffordancesRequestFrame({ id: 'surface-1' }), { id: 'surface-1', method: 'session.surface.affordances', params: {} });
   assert.equal(isAgentWebUiProtocolFrame(buildSurfaceAffordancesRequestFrame()), true);
 
