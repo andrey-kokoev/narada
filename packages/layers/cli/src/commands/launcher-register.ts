@@ -57,6 +57,7 @@ export function registerLauncherCommands(program: Command): void {
         cloudflareApiBaseUrl: opts.cloudflareApiBaseUrl as string | undefined,
         interactiveSelection: opts.interactiveSelection as boolean | undefined,
         interactiveSelectionUi: opts.interactiveSelectionUi as boolean | undefined,
+        launcherOutput: opts.launcherOutput as string[] | undefined,
         defaultInteractiveSelection: opts.defaultInteractiveSelection as boolean | undefined,
         resultPath: opts.resultPath as string | undefined,
         suppressResultOutput: opts.suppressResultOutput as boolean | undefined,
@@ -84,6 +85,7 @@ export function registerLauncherCommands(program: Command): void {
     .option('--cloudflare-api-base-url <url>', 'Default Cloudflare NARS projection Worker URL for agent-web-ui publish controls')
     .option('--interactive-selection', 'Interactively select Site, Role, Operator Surface, Runtime, and applicable Intelligence Provider before launching', false)
     .option('--interactive-selection-ui', 'Use a local browser page for interactive launch selection before launching', false)
+    .option('--launcher-output <projection...>', 'Terminal launcher output projections: summary|events|commands|json|quiet')
     .option('--default-interactive-selection', 'Use interactive selection when no selection flags are supplied', false)
     .option('--result-path <path>', 'Write the workspace plan JSON to a file')
     .option('--suppress-result-output', 'Do not print the final result envelope after writing --result-path', false)

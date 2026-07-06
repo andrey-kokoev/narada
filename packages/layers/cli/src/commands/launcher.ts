@@ -152,6 +152,7 @@ export interface WorkspaceLaunchPlanOptions {
   cloudflareApiBaseUrl?: string;
   interactiveSelection?: boolean;
   interactiveSelectionUi?: boolean;
+  launcherOutput?: string[];
   defaultInteractiveSelection?: boolean;
   resultPath?: string;
   suppressResultOutput?: boolean;
@@ -163,6 +164,7 @@ export interface WorkspaceLaunchPlanOptions {
 }
 
 type WorkspaceLaunchAttemptStatus = 'queued' | 'planning' | 'launching' | 'launched' | 'failed' | 'forgotten';
+type WorkspaceLauncherOutputProjection = 'summary' | 'events' | 'commands' | 'json' | 'quiet';
 
 interface WorkspaceLaunchLegacyCarrierCompatibility {
   schema: 'narada.workspace_launch.legacy_carrier_compatibility.v1';
@@ -465,6 +467,44 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function stringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.map((entry) => String(entry)) : [];
+}
+
+function normalizeLauncherOutput(value: unknown, options: WorkspaceLaunchPlanOptions): WorkspaceLauncherOutputProjection[] {
+  const raw = stringArray(value).flatMap((entry) => entry.split(',')).map((entry) => entry.trim().toLowerCase()).filter(Boolean);
+  const selected = raw.length > 0 ? raw : (options.interactiveSelectionUi ? ['summary', 'events'] : []);
+  const admitted = new Set<WorkspaceLauncherOutputProjection>(['summary', 'events', 'commands', 'json', 'quiet']);
+  const projections = unique(selected).map((entry) => {
+    if (!admitted.has(entry as WorkspaceLauncherOutputProjection)) {
+      throw new Error(`launcher_output_not_admitted: ${entry}. Admitted values: summary, events, commands, json, quiet`);
+    }
+    return entry as WorkspaceLauncherOutputProjection;
+  });
+  return projections.includes('quiet') ? ['quiet'] : projections;
+}
+
+function launcherOutputHas(outputs: WorkspaceLauncherOutputProjection[], projection: WorkspaceLauncherOutputProjection): boolean {
+  return !outputs.includes('quiet') && outputs.includes(projection);
+}
+
+function writeLauncherOutput(outputs: WorkspaceLauncherOutputProjection[], event: Record<string, unknown>, human: string): void {
+  if (outputs.includes('quiet')) return;
+  if (launcherOutputHas(outputs, 'json')) console.log(JSON.stringify(event));
+  if (launcherOutputHas(outputs, 'events')) console.log(human);
+}
+
+function formatWorkspaceLaunchSelection(selection: WorkspaceLaunchBrowserSelection): string {
+  return `${selection.site.join(',') || '*'} / ${selection.role.join(',') || '*'} / ${selection.operatorSurface.join(',') || 'registry default'} / ${selection.runtime} / ${selection.intelligenceProvider}`;
+}
+
+function formatWorkspaceLaunchCommand(args: string[]): string {
+  return args.map((arg) => /\s/.test(arg) ? `'${arg.replace(/'/g, "''")}'` : arg).join(' ');
+}
+
+function writeWorkspaceLaunchCommandOutput(outputs: WorkspaceLauncherOutputProjection[], attempt: WorkspaceLaunchAttemptRecord): void {
+  if (!launcherOutputHas(outputs, 'commands')) return;
+  for (const handoff of attempt.handoffs) {
+    if (handoff.argv_redacted.length > 0) console.log(`[launcher:command] ${formatWorkspaceLaunchCommand(handoff.argv_redacted)}`);
+  }
 }
 
 function legacyCarrierCompatibility(): WorkspaceLaunchLegacyCarrierCompatibility {
@@ -1096,6 +1136,7 @@ async function runPersistentWorkspaceLaunchSelectionUi(
   let settled = false;
   let launchCount = 0;
   const registryPaths = resolveRegistryPaths(options);
+  const launcherOutputs = normalizeLauncherOutput(options.launcherOutput, options);
   const recoveredAttempts = await loadRecoveredWorkspaceLaunchAttempts(registryPaths);
   const attempts: WorkspaceLaunchAttemptRecord[] = [...recoveredAttempts];
   launchCount = attempts.filter((attempt) => attempt.status === 'launched').length;
@@ -1139,6 +1180,12 @@ async function runPersistentWorkspaceLaunchSelectionUi(
       diagnostic: null,
     };
     attempts.push(attempt);
+    writeLauncherOutput(launcherOutputs, {
+      schema: 'narada.workspace_launch.terminal_event.v1',
+      event: 'selection_submitted',
+      launch_attempt_id: attempt.launch_attempt_id,
+      selection,
+    }, `[launcher] selection submitted: ${formatWorkspaceLaunchSelection(selection)}`);
     attempt.status = 'planning';
     attempt.result_summary = 'Planning workspace launch.';
     attempt.updated_at = new Date().toISOString();
@@ -1158,6 +1205,14 @@ async function runPersistentWorkspaceLaunchSelectionUi(
       attempt.updated_at = new Date().toISOString();
       if (success) launchCount += 1;
       await persistWorkspaceLaunchDashboardState(persistenceDir, uiSession, attempts);
+      writeLauncherOutput(launcherOutputs, {
+        schema: 'narada.workspace_launch.terminal_event.v1',
+        event: success ? 'launch_handed_off' : 'launch_failed',
+        launch_attempt_id: attempt.launch_attempt_id,
+        status: attempt.status,
+        result_path: attempt.plan_result_path,
+      }, `[launcher] ${success ? 'handed off' : 'failed'}: ${attempt.result_summary}${attempt.plan_result_path ? ` result=${attempt.plan_result_path}` : ''}`);
+      writeWorkspaceLaunchCommandOutput(launcherOutputs, attempt);
       return attempt;
     } catch (error) {
       attempt.status = 'failed';
@@ -1167,6 +1222,12 @@ async function runPersistentWorkspaceLaunchSelectionUi(
       attempt.diagnostic = { error: attempt.result_summary };
       attempt.updated_at = new Date().toISOString();
       await persistWorkspaceLaunchDashboardState(persistenceDir, uiSession, attempts);
+      writeLauncherOutput(launcherOutputs, {
+        schema: 'narada.workspace_launch.terminal_event.v1',
+        event: 'launch_failed',
+        launch_attempt_id: attempt.launch_attempt_id,
+        error: attempt.result_summary,
+      }, `[launcher] failed: ${attempt.result_summary}`);
       return attempt;
     }
   };
@@ -2042,6 +2103,7 @@ function buildWorkspaceLaunchSelectionHtml(model: Record<string, unknown>, optio
     const selectedRoles = new Set(explicit.role ? (model.initialRoles || []) : (remembered.role || []));
     const selectedSurfaces = new Set(explicit.operatorSurface ? (model.initialOperatorSurfaces || ['registry default']) : (remembered.operatorSurface || model.initialOperatorSurfaces || ['registry default']));
     let currentSelectorModel = model.selectorModel || {};
+    let selectorRefreshSequence = 0;
     if (currentSelectorModel.selected) {
       if (!explicit.runtime && remembered.runtime) currentSelectorModel.selected.runtime = remembered.runtime;
       if (!explicit.intelligenceProvider && remembered.intelligenceProvider) currentSelectorModel.selected.intelligenceProvider = remembered.intelligenceProvider;
@@ -2094,15 +2156,24 @@ function buildWorkspaceLaunchSelectionHtml(model: Record<string, unknown>, optio
       const selectedValue = values.has(selected) ? selected : 'registry default';
       (options || []).forEach(choice => { const option = document.createElement('option'); option.value = choice.value; option.textContent = choice.label; if (choice.hint) option.title = choice.hint; option.selected = choice.value === selectedValue; el.append(option); });
     }
+    function currentSelectValue(id) {
+      const el = document.getElementById(id);
+      return el && el.value ? el.value : null;
+    }
     function selectorPayload() {
       return { site: [...selectedSites], role: [...selectedRoles], operatorSurface: [...selectedSurfaces], runtime: document.getElementById('runtime').value || currentSelectorModel.selected?.runtime || 'registry default', intelligenceProvider: document.getElementById('provider').value || currentSelectorModel.selected?.intelligenceProvider || 'registry default' };
     }
     async function refreshSelectorControls() {
-      const response = await fetch('/selector-model', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(selectorPayload()) });
+      const requestSequence = ++selectorRefreshSequence;
+      const requested = selectorPayload();
+      const response = await fetch('/selector-model', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(requested) });
+      if (requestSequence !== selectorRefreshSequence) return;
       if (response.ok) currentSelectorModel = await response.json();
+      const runtimeSelection = currentSelectValue('runtime') || requested.runtime || currentSelectorModel.selected?.runtime || 'registry default';
+      const providerSelection = currentSelectValue('provider') || requested.intelligenceProvider || currentSelectorModel.selected?.intelligenceProvider || 'registry default';
       renderSurfaces(currentSelectorModel.operatorSurfaceOptions || []);
-      renderSelect('runtime', currentSelectorModel.runtimeOptions || [], currentSelectorModel.selected?.runtime || 'registry default');
-      renderSelect('provider', currentSelectorModel.intelligenceProviderOptions || [], currentSelectorModel.selected?.intelligenceProvider || 'registry default');
+      renderSelect('runtime', currentSelectorModel.runtimeOptions || [], runtimeSelection);
+      renderSelect('provider', currentSelectorModel.intelligenceProviderOptions || [], providerSelection);
     }
     function statusLabel(value) {
       return String(value || '').replace(/_/g, ' ');
