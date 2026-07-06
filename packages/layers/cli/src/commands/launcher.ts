@@ -2543,7 +2543,10 @@ function buildAgentPlan(record: WorkspaceLaunchRecord, options: WorkspaceLaunchP
   const enableNativeShell = options.enableNativeShell === true || record.enable_native_shell;
   const mcpScope = normalizeMcpScope(options.mcpScope ?? record.mcp_scope ?? undefined);
   const waitForEnter = options.noWaitForEnterBeforeExec !== true && launchCarriers[0] !== 'agent-web-ui';
-  const intelligenceProvider = launchCarrier === 'agent-cli' || launchCarrier === 'agent-web-ui' ? (options.intelligenceProvider ?? null) : null;
+  const isNarsOperatorSurface = launchCarrier === 'agent-cli' || launchCarrier === 'agent-web-ui';
+  const intelligenceProvider = isNarsOperatorSurface
+    ? (options.intelligenceProvider ?? providerRegistry.default_provider ?? null)
+    : null;
   const cloudflareApiBaseUrl = options.cloudflareApiBaseUrl?.trim()
     || process.env.NARADA_CLOUDFLARE_NARS_PROJECTION_URL
     || process.env.CLOUDFLARE_NARS_PROJECTION_URL

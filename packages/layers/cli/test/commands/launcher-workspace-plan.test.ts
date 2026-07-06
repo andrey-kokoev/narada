@@ -866,6 +866,25 @@ describe('launcher workspace planning', () => {
     expect(smartScheduling?.smoke_command).not.toContain('--intelligence-provider');
   });
 
+  it('materializes registry default intelligence provider for NARS operator-surface launch plans', async () => {
+    const registryPath = await tempRegistry();
+    const plan = await workspaceLaunchPlanCommand({
+      registryPath,
+      agent: ['sonar.resident'],
+      operatorSurface: 'agent-web-ui',
+      runtime: 'narada-agent-runtime-server',
+      format: 'json',
+    }, createMockContext());
+
+    expect(plan.exitCode).toBe(ExitCode.SUCCESS);
+    const result = plan.result as { selected_agents: Array<{ intelligence_provider: string | null; wt_args: string[]; smoke_command: string[] }> };
+    const selected = result.selected_agents[0];
+    expect(selected.intelligence_provider).toBe('kimi-code-api');
+    expect(selected.wt_args.join(' ')).toContain('--intelligence-provider');
+    expect(selected.wt_args.join(' ')).toContain('kimi-code-api');
+    expect(selected.smoke_command).toContain('kimi-code-api');
+  });
+
   it('fences nars as a compatibility alias for narada-agent-runtime-server', async () => {
     const registryPath = await tempRegistry();
     const plan = await workspaceLaunchPlanCommand({
