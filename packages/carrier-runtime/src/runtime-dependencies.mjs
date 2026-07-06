@@ -78,8 +78,8 @@ import {
   prepareTargetAuthority,
   sealSourceAuthority,
 } from './authority-transition-state.mjs';
-import { serverAffordanceActionRequest } from './affordance-actions.mjs';
-import { buildDelegationOperatorAffordance, buildGitOperatorAffordance, buildInboxOperatorAffordance, buildMailboxOperatorAffordance, buildMcpSurfaceAffordanceProjection, buildSchedulerOperatorAffordance, buildSopOperatorAffordance, buildSurfaceFeedbackOperatorAffordance, buildTaskLifecycleOperatorAffordance } from './surface-affordances.mjs';
+import { serverAffordanceActionCancel, serverAffordanceActionConfirm, serverAffordanceActionRequest } from './affordance-actions.mjs';
+import { buildDelegationOperatorAffordance, buildGitOperatorAffordance, buildInboxOperatorAffordance, buildMailboxOperatorAffordance, buildNarsSurfaceAffordanceProjection, buildSchedulerOperatorAffordance, buildSopOperatorAffordance, buildSurfaceFeedbackOperatorAffordance, buildTaskLifecycleOperatorAffordance } from './surface-affordances.mjs';
 import { agentInstructionChain, loadRolePrompt } from './agent-instructions.mjs';
 import { loadSession } from './session-records.mjs';
 import {
@@ -166,7 +166,7 @@ export function createCarrierRuntimeDependencies({ runtimeContext = {}, env = pr
     recordMcpPreflightArtifactLinkage: ({ emit, preflightArtifact } = {}) => recordMcpPreflightArtifactLinkage({ emit, preflightArtifact, appendSessionRecord }),
     recordMcpStartupFailures: (mcpServers, options = {}) => recordMcpStartupFailures(mcpServers, { ...options, appendSessionRecord }),
     createOperationHeartbeatDirectiveEmitter,
-    handleServerRequestLine: (line, context) => handleServerRequestLine(line, { ...context, identity, session, siteRoot, sessionPath, eventsPath, siteConfig: runtimeContext.siteConfig ?? null, authorityRuntimeHost, operatorSurfaceKind, appendSessionRecord, providerSettings, narsDelegatedAuthorityHandoff: runtimeContext.narsDelegatedAuthorityHandoff ?? null }),
+    handleServerRequestLine: (line, context) => handleServerRequestLine(line, { ...context, identity, session, siteRoot, sessionPath, eventsPath, siteConfig: runtimeContext.siteConfig ?? null, authorityRuntimeHost, operatorSurfaceKind, appendSessionRecord, providerSettings, effectiveIntelligence: () => effectiveIntelligenceSettings({ sessionSettings: context?.state?.sessionSettings, providerSettings }), narsDelegatedAuthorityHandoff: runtimeContext.narsDelegatedAuthorityHandoff ?? null }),
     appendSessionRecord,
     sessionEventEntry: (event, payload) => ({ event, ...payload, timestamp: new Date().toISOString() }),
     carrierSessionEventEntry,
@@ -197,6 +197,14 @@ export function createCarrierRuntimeDependencies({ runtimeContext = {}, env = pr
       session,
     }),
     dependencies,
+  };
+}
+
+function effectiveTurnProviderSettings({ state, providerSettings = {} } = {}) {
+  return {
+    ...providerSettings,
+    ...effectiveIntelligenceSettings({ sessionSettings: state?.sessionSettings, providerSettings }),
+    goal: state?.sessionSettings?.goal ?? providerSettings.goal,
   };
 }
 
@@ -1259,7 +1267,7 @@ async function runServerInputEvent({ requestId, state, messages, allTools, mcpSe
     });
     return { terminal_state: 'completed_without_provider' };
   }
-  return runServerConversationTurn({ requestId, state, messages, allTools, mcpServers, emit, callChatApiFn, input, directiveId, identity, session, siteRoot, sessionPath, appendSessionRecord, providerSettings });
+  return runServerConversationTurn({ requestId, state, messages, allTools, mcpServers, emit, callChatApiFn, input, directiveId, identity, session, siteRoot, sessionPath, appendSessionRecord, providerSettings: effectiveTurnProviderSettings({ state, providerSettings }) });
 }
 
 async function runServerConversationTurn({ requestId, state, messages, allTools, mcpServers, emit, callChatApiFn, input, directiveId = null, identity, session, siteRoot, appendSessionRecord, providerSettings }) {
@@ -1686,6 +1694,24 @@ async function handleServerRequestLine(line, context) {
     noteSessionActivity(context.state, 'session_affordance_action_requested');
     recordWorkflowRequest(context, 'session_affordance_action_requested', { requestId, method: 'session.affordance.action.request' });
     const event = await serverAffordanceActionRequest({ requestId, params: request?.params ?? {}, context });
+    context.emit(event.event, event);
+    if (event.terminal_state === 'refused') context.appendSessionRecord?.({ ...event, completed_at: new Date().toISOString() });
+    return;
+  }
+  if (request?.method === 'session.affordance.action.confirm') {
+    const requestId = request?.id ?? null;
+    noteSessionActivity(context.state, 'session_affordance_action_confirm_requested');
+    recordWorkflowRequest(context, 'session_affordance_action_confirm_requested', { requestId, method: 'session.affordance.action.confirm' });
+    const event = await serverAffordanceActionConfirm({ requestId, params: request?.params ?? {}, context });
+    context.emit(event.event, event);
+    if (event.terminal_state === 'refused') context.appendSessionRecord?.({ ...event, completed_at: new Date().toISOString() });
+    return;
+  }
+  if (request?.method === 'session.affordance.action.cancel') {
+    const requestId = request?.id ?? null;
+    noteSessionActivity(context.state, 'session_affordance_action_cancel_requested');
+    recordWorkflowRequest(context, 'session_affordance_action_cancel_requested', { requestId, method: 'session.affordance.action.cancel' });
+    const event = serverAffordanceActionCancel({ requestId, params: request?.params ?? {}, context });
     context.emit(event.event, event);
     if (event.terminal_state === 'refused') context.appendSessionRecord?.({ ...event, completed_at: new Date().toISOString() });
     return;
@@ -2155,7 +2181,10 @@ function serverSurfaceAffordances({ requestId, context = {} }) {
     event: 'session_surface_affordances',
     request_id: requestId,
     transport: 'jsonl_stdio',
-    ...buildMcpSurfaceAffordanceProjection(context.mcpServers ?? {}),
+    ...buildNarsSurfaceAffordanceProjection({
+      mcpServers: context.mcpServers ?? {},
+      intelligence: context.effectiveIntelligence?.() ?? effectiveIntelligenceSettings({ sessionSettings: context.state?.sessionSettings, providerSettings: context.providerSettings }),
+    }),
   };
 }
 
@@ -2996,7 +3025,7 @@ export function serverStatus({ requestId, state, allTools, mcpServers, mcpPrefli
   const goal = normalizeCarrierGoalState(carrierSessionSettings.goal);
   const intelligence = effectiveIntelligenceSettings({ sessionSettings: carrierSessionSettings, providerSettings: context.providerSettings });
   const mcpStatus = createMcpStatusSnapshot(mcpServers);
-  const surfaceAffordances = buildMcpSurfaceAffordanceProjection(mcpServers);
+  const surfaceAffordances = buildNarsSurfaceAffordanceProjection({ mcpServers, intelligence });
   const handoffs = sessionHandoffs({ identity: context.identity, session: context.session });
   return {
     request_id: requestId,

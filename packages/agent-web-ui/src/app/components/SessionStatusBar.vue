@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import ProjectionVerbositySelect from './ProjectionVerbositySelect.vue';
 import StatusBoxSelector, { type StatusBoxSelectorItem } from './StatusBoxSelector.vue';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
@@ -8,6 +8,7 @@ import type { useCloudflareProjection } from '../composables/useCloudflareProjec
 import type { HealthIntelligenceSummary } from '../composables/useHealthStatus';
 import type { ProjectionVerbosity } from '../composables/useProjectionVerbosity';
 import type { SessionIdentitySummary } from '../composables/useNarsEvents';
+import type { SurfaceAffordanceSummary } from '../composables/useSurfaceAffordances';
 
 const props = defineProps<{
   eventEndpoint: string | null;
@@ -22,14 +23,18 @@ const props = defineProps<{
   verbosityLevels: readonly ProjectionVerbosity[];
   agentActivity: AgentActivityState;
   authorityTransition: Record<string, unknown> | null;
+  surfaceAffordances: SurfaceAffordanceSummary;
   cloudflareProjection: ReturnType<typeof useCloudflareProjection>;
 }>();
 const emit = defineEmits<{
   'update:verbosity': [value: ProjectionVerbosity];
   'publish-cloudflare': [cloudflareApiBaseUrl: string];
+  'request-affordance-action': [request: { surfaceId: string; actionId: string; args: Record<string, unknown> }];
 }>();
 const cloudflareApiBaseUrl = ref(props.cloudflareProjection.defaultApiBaseUrl.value);
 const copyLabel = ref('Copy');
+const pendingModel = ref<string | null>(null);
+const pendingThinking = ref<string | null>(null);
 const STATUS_BOX_STORAGE_KEY = 'narada:agent-web-ui:status-boxes.v2';
 const DEFAULT_STATUS_BOX_IDS = ['events', 'health', 'intelligence', 'authority', 'view', 'cloudflare'] as const;
 type StatusBoxId = typeof DEFAULT_STATUS_BOX_IDS[number];
@@ -127,6 +132,67 @@ const statusTooltips = {
   view: 'Projection level for the event feed: conversation, operations, diagnostics, or raw.',
   cloudflare: 'Optional remote browser projection for exposing this local NARS session through a Cloudflare Worker.',
 };
+
+const intelligenceAffordance = computed(() => props.surfaceAffordances.items.find((item) => item.surfaceKind === 'intelligence') ?? null);
+const intelligenceActions = computed(() => actionList(intelligenceAffordance.value?.raw));
+const setModelAction = computed(() => intelligenceActions.value.find((action) => action.id === 'set_model') ?? null);
+const setThinkingAction = computed(() => intelligenceActions.value.find((action) => action.id === 'set_thinking') ?? null);
+const thinkingChoices = computed(() => {
+  const choices = objectField(objectField(setThinkingAction.value?.raw, 'args'), 'thinking')?.choices;
+  const values = Array.isArray(choices) ? choices.filter((choice): choice is string => typeof choice === 'string' && choice.length > 0) : [];
+  return values.length ? values : ['none', 'low', 'medium', 'high', 'xhigh'];
+});
+const modelInputValue = computed(() => pendingModel.value ?? props.intelligence.model ?? '');
+const thinkingInputValue = computed(() => pendingThinking.value ?? props.intelligence.thinking ?? 'medium');
+
+watch(() => props.intelligence.model, (model) => {
+  if (pendingModel.value && pendingModel.value === model) pendingModel.value = null;
+});
+
+watch(() => props.intelligence.thinking, (thinking) => {
+  if (pendingThinking.value && pendingThinking.value === thinking) pendingThinking.value = null;
+});
+
+function requestModelChange(event: Event) {
+  const surfaceId = intelligenceAffordance.value?.surfaceId;
+  const actionId = setModelAction.value?.id;
+  const model = (event.target as HTMLInputElement | null)?.value.trim() ?? '';
+  if (!surfaceId || !actionId || !model || model === props.intelligence.model) return;
+  pendingModel.value = model;
+  emit('request-affordance-action', { surfaceId, actionId, args: { model } });
+}
+
+function requestThinkingChange(event: Event) {
+  const surfaceId = intelligenceAffordance.value?.surfaceId;
+  const actionId = setThinkingAction.value?.id;
+  const thinking = (event.target as HTMLSelectElement | null)?.value.trim() ?? '';
+  if (!surfaceId || !actionId || !thinking || thinking === props.intelligence.thinking) return;
+  pendingThinking.value = thinking;
+  emit('request-affordance-action', { surfaceId, actionId, args: { thinking } });
+}
+
+function actionList(record: Record<string, unknown> | null | undefined): { id: string; raw: Record<string, unknown> }[] {
+  const actions = arrayField(objectField(record, 'affordance_document'), 'actions');
+  return actions
+    .map((action) => ({ id: stringField(action, 'id'), raw: action }))
+    .filter((action): action is { id: string; raw: Record<string, unknown> } => Boolean(action.id));
+}
+
+function objectField(record: unknown, field: string): Record<string, unknown> | null {
+  if (!record || typeof record !== 'object' || Array.isArray(record)) return null;
+  const value = (record as Record<string, unknown>)[field];
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null;
+}
+
+function arrayField(record: Record<string, unknown> | null, field: string): Record<string, unknown>[] {
+  const value = record?.[field];
+  return Array.isArray(value) ? value.filter((item): item is Record<string, unknown> => Boolean(item && typeof item === 'object' && !Array.isArray(item))) : [];
+}
+
+function stringField(record: Record<string, unknown>, field: string): string | null {
+  const value = record[field];
+  return typeof value === 'string' && value ? value : null;
+}
 </script>
 
 <template>
@@ -155,20 +221,44 @@ const statusTooltips = {
 
       <Tooltip v-if="isStatusBoxVisible('intelligence')">
         <TooltipTrigger as-child>
-          <div>
+          <div class="intelligence-status-box">
             <span class="label">Intelligence</span>
             <span>{{ intelligence.provider ?? 'provider unknown' }}</span>
-            <span v-if="intelligence.model || intelligence.thinking" class="status-token-line status-secondary-token-line">
-              <template v-if="intelligence.model">
+            <span class="status-token-line status-secondary-token-line intelligence-control-line">
+              <template v-if="setModelAction">
+                <input
+                  class="intelligence-model-input"
+                  :value="modelInputValue"
+                  placeholder="model"
+                  aria-label="Model"
+                  @change="requestModelChange"
+                  @click.stop
+                  @keydown.stop
+                />
+              </template>
+              <template v-else-if="intelligence.model">
                 <span>{{ intelligence.model }}</span>
               </template>
-              <template v-if="intelligence.model && intelligence.thinking">
+              <template v-if="(setModelAction || intelligence.model) && (setThinkingAction || intelligence.thinking)">
                 <span class="session-token-separator">·</span>
               </template>
-              <template v-if="intelligence.thinking">
+              <template v-if="setThinkingAction">
+                <select
+                  class="intelligence-thinking-select"
+                  :value="thinkingInputValue"
+                  aria-label="Thinking level"
+                  @change="requestThinkingChange"
+                  @click.stop
+                  @keydown.stop
+                >
+                  <option v-for="choice in thinkingChoices" :key="choice" :value="choice">{{ choice }}</option>
+                </select>
+              </template>
+              <template v-else-if="intelligence.thinking">
                 <span>{{ intelligence.thinking }}</span>
               </template>
             </span>
+            <span v-if="pendingModel || pendingThinking" class="retention-note">change requested</span>
           </div>
         </TooltipTrigger>
         <TooltipContent side="bottom" align="start">{{ statusTooltips.intelligence }}</TooltipContent>

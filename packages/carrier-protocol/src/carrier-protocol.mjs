@@ -356,6 +356,8 @@ export const CARRIER_CONTROL_METHODS = Object.freeze([
 
 export const NARS_COMMAND_METHOD = 'session.command.execute';
 export const LEGACY_CARRIER_COMMAND_METHOD = 'carrier.command.execute';
+export const NARS_AFFORDANCE_ACTION_CONFIRM_METHOD = 'session.affordance.action.confirm';
+export const NARS_AFFORDANCE_ACTION_CANCEL_METHOD = 'session.affordance.action.cancel';
 
 const RFC3339_UTC_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 const ID_PREFIXES = Object.freeze({
@@ -492,6 +494,8 @@ export function classifyCarrierControlRequest(request = {}) {
   if (method === 'observers.status') return { ...base, method_kind: 'observers_status' };
   if (method === 'observer.mute') return { ...base, method_kind: 'observer_set_muted', observer_action: 'mute' };
   if (method === 'observer.unmute') return { ...base, method_kind: 'observer_set_muted', observer_action: 'unmute' };
+  if (method === NARS_AFFORDANCE_ACTION_CONFIRM_METHOD) return { ...base, method_kind: 'session_affordance_action_confirm', concurrent_allowed: true };
+  if (method === NARS_AFFORDANCE_ACTION_CANCEL_METHOD) return { ...base, method_kind: 'session_affordance_action_cancel', concurrent_allowed: true };
   if (method === NARS_COMMAND_METHOD) {
     return { ...base, method_kind: 'session_command_execute' };
   }

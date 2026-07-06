@@ -382,6 +382,10 @@ assert.equal(classifyCarrierControlRequest({ id: 'steer-1', method: 'conversatio
 assert.equal(classifyCarrierControlRequest({ id: 'steer-1', method: 'conversation.steer' }).concurrent_allowed, true);
 assert.equal(classifyCarrierControlRequest({ id: 'enqueue-1', method: 'conversation.enqueue' }).method_kind, 'conversation_enqueue');
 assert.equal(classifyCarrierControlRequest({ id: 'enqueue-1', method: 'conversation.enqueue' }).concurrent_allowed, true);
+assert.equal(classifyCarrierControlRequest({ id: 'affordance-confirm-1', method: 'session.affordance.action.confirm' }).method_kind, 'session_affordance_action_confirm');
+assert.equal(classifyCarrierControlRequest({ id: 'affordance-confirm-1', method: 'session.affordance.action.confirm' }).concurrent_allowed, true);
+assert.equal(classifyCarrierControlRequest({ id: 'affordance-cancel-1', method: 'session.affordance.action.cancel' }).method_kind, 'session_affordance_action_cancel');
+assert.equal(classifyCarrierControlRequest({ id: 'affordance-cancel-1', method: 'session.affordance.action.cancel' }).concurrent_allowed, true);
 assert.deepEqual(classifyCarrierControlRequest({ id: 'command-1', method: 'session.command.execute' }), {
   request_id: 'command-1',
   method: 'session.command.execute',
@@ -1368,4 +1372,3 @@ assert.match(thrownMessage(() => createSessionEvent({ ...sessionBase, event_kind
 
 assert.equal(isTerminalTurnState('completed'), true);
 assert.equal(isTerminalTurnState('active'), false);
-

@@ -6,6 +6,8 @@ import { join } from 'node:path';
 
 import {
   NARS_AFFORDANCE_ACTION_EVENTS,
+  NARS_AFFORDANCE_ACTION_CANCEL_METHOD,
+  NARS_AFFORDANCE_ACTION_CONFIRM_METHOD,
   NARS_AFFORDANCE_ACTION_REFUSAL_CODES,
   NARS_AFFORDANCE_ACTION_REQUEST_METHOD,
 } from '@narada2/nars-client-projection-contract';
@@ -204,6 +206,67 @@ test('server mode executes read-only generic affordance actions through MCP fabr
   }
 });
 
+test('server mode executes runtime intelligence affordance actions and health reflects the session override', async () => {
+  const siteRoot = tempRoot('carrier-runtime-intelligence-affordance-test-');
+  try {
+    const input = new PassThrough();
+    const output = new PassThrough();
+    const events = [];
+    let outputBuffer = '';
+    output.setEncoding('utf8');
+    output.on('data', (chunk) => {
+      outputBuffer += chunk;
+      const lines = outputBuffer.split(/\r?\n/);
+      outputBuffer = lines.pop() ?? '';
+      for (const line of lines) {
+        if (line.trim()) events.push(JSON.parse(line));
+      }
+    });
+
+    const sessionDir = resolveNaradaSitePaths({ siteRoot, sessionId: 'session_runtime_intelligence_affordance' }).narsSessionDir;
+    const runtimeContext = {
+      identity: 'agent.test',
+      session: 'session_runtime_intelligence_affordance',
+      siteRoot,
+      sessionPath: join(sessionDir, 'session.jsonl'),
+      eventsPath: join(sessionDir, 'events.jsonl'),
+      providerSettings: { provider: 'codex-subscription', model: 'gpt-5.5', thinking: 'medium', stream: false },
+    };
+    const { dependencies } = createCarrierRuntimeDependencies({ runtimeContext });
+    input.write(`${JSON.stringify({ id: 'set-model-1', method: NARS_AFFORDANCE_ACTION_REQUEST_METHOD, params: { surface_id: 'nars.runtime.intelligence', action_id: 'set_model', args: { model: 'gpt-5.6' } } })}\n`);
+    input.write(`${JSON.stringify({ id: 'set-thinking-1', method: NARS_AFFORDANCE_ACTION_REQUEST_METHOD, params: { surface_id: 'nars.runtime.intelligence', action_id: 'set_thinking', args: { thinking: 'high' } } })}\n`);
+
+    const runtimePromise = runCarrierServerMode({
+      input,
+      output,
+      callChatApiFn: async () => ({ choices: [{ message: { role: 'assistant', content: 'unused' } }] }),
+      runtimeContext,
+      dependencies: {
+        ...dependencies,
+        discoverAndStartMcpServers: async () => ({}),
+        closeMcpServers: () => {},
+        readMcpPreflightArtifact: () => null,
+      },
+    });
+
+    await waitFor(() => events.filter((event) => event.event === NARS_AFFORDANCE_ACTION_EVENTS.result).length === 2, { timeoutMs: 2000 });
+    input.write(`${JSON.stringify({ id: 'health-after-intelligence-actions', method: 'session.health' })}\n`);
+    input.end();
+    await runtimePromise;
+
+    const results = events.filter((event) => event.event === NARS_AFFORDANCE_ACTION_EVENTS.result);
+    assert.equal(results.length, 2, JSON.stringify(events));
+    assert.equal(results[0].result.intelligence.model, 'gpt-5.6');
+    assert.equal(results[1].result.intelligence.thinking, 'high');
+    const health = events.find((event) => event.event === 'session_health' && event.request_id === 'health-after-intelligence-actions');
+    assert.equal(health?.intelligence?.model, 'gpt-5.6');
+    assert.equal(health?.intelligence?.thinking, 'high');
+    assert.equal(health?.surface_affordances?.items?.some((item) => item.surface_kind === 'intelligence'), true);
+  } finally {
+    removeTempDir(siteRoot);
+  }
+});
+
 test('server mode refuses unsafe generic affordance actions before MCP tool execution', async () => {
   const siteRoot = tempRoot('carrier-mcp-affordance-refusal-test-');
   try {
@@ -247,8 +310,132 @@ test('server mode refuses unsafe generic affordance actions before MCP tool exec
     });
 
     const confirmation = events.find((event) => event.event === NARS_AFFORDANCE_ACTION_EVENTS.confirmationRequired);
-    assert.equal(confirmation?.terminal_state, 'refused', JSON.stringify(events));
+    assert.equal(confirmation?.terminal_state, 'awaiting_confirmation', JSON.stringify(events));
+    assert.equal(confirmation?.status, 'confirmation_required');
+    assert.match(confirmation?.confirmation_id ?? '', /^affordance-confirm-/);
     assert.equal(confirmation?.code, NARS_AFFORDANCE_ACTION_REFUSAL_CODES.confirmationRequired);
+    assert.equal(events.some((event) => event.event === NARS_AFFORDANCE_ACTION_EVENTS.result), false);
+    assert.equal(events.some((event) => event.event === 'tool_call' && event.tool === 'fixture_read'), false);
+  } finally {
+    removeTempDir(siteRoot);
+  }
+});
+
+test('server mode confirms unsafe affordance actions before executing the MCP tool', async () => {
+  const siteRoot = tempRoot('carrier-mcp-affordance-confirm-test-');
+  try {
+    writeFixtureMcpSurface(siteRoot);
+    const input = new PassThrough();
+    const output = new PassThrough();
+    const events = [];
+    let outputBuffer = '';
+    let confirmSent = false;
+    output.setEncoding('utf8');
+    output.on('data', (chunk) => {
+      outputBuffer += chunk;
+      const lines = outputBuffer.split(/\r?\n/);
+      outputBuffer = lines.pop() ?? '';
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        const event = JSON.parse(line);
+        events.push(event);
+        if (event.event === NARS_AFFORDANCE_ACTION_EVENTS.confirmationRequired && event.confirmation_id && !confirmSent) {
+          confirmSent = true;
+          input.write(`${JSON.stringify({ id: 'confirm-1', method: NARS_AFFORDANCE_ACTION_CONFIRM_METHOD, params: { confirmation_id: event.confirmation_id } })}\n`);
+        }
+        if (event.event === NARS_AFFORDANCE_ACTION_EVENTS.result && event.confirmation_id) input.end();
+      }
+    });
+
+    const sessionDir = resolveNaradaSitePaths({ siteRoot, sessionId: 'session_mcp_affordance_confirm' }).narsSessionDir;
+    const runtimeContext = {
+      identity: 'agent.test',
+      session: 'session_mcp_affordance_confirm',
+      siteRoot,
+      sessionPath: join(sessionDir, 'session.jsonl'),
+      eventsPath: join(sessionDir, 'events.jsonl'),
+      providerSettings: { provider: 'codex-subscription', model: 'gpt-5.5', thinking: 'medium', stream: false },
+    };
+    const { dependencies } = createCarrierRuntimeDependencies({ runtimeContext });
+    input.write(`${JSON.stringify({ id: 'action-confirmable', method: NARS_AFFORDANCE_ACTION_REQUEST_METHOD, params: { surface_id: 'fixture.surface', action_id: 'mutate', args: { topic: 'confirmed' } } })}\n`);
+
+    await runCarrierServerMode({
+      input,
+      output,
+      callChatApiFn: async () => ({ choices: [{ message: { role: 'assistant', content: 'unused' } }] }),
+      runtimeContext,
+      dependencies: {
+        ...dependencies,
+        readMcpPreflightArtifact: () => null,
+      },
+    });
+
+    const confirmation = events.find((event) => event.event === NARS_AFFORDANCE_ACTION_EVENTS.confirmationRequired);
+    const confirmed = events.find((event) => event.event === NARS_AFFORDANCE_ACTION_EVENTS.confirmed);
+    const result = events.find((event) => event.event === NARS_AFFORDANCE_ACTION_EVENTS.result && event.confirmation_id);
+    assert.equal(confirmed?.confirmation_id, confirmation?.confirmation_id);
+    assert.equal(result?.confirmation_id, confirmation?.confirmation_id);
+    assert.equal(result?.status, 'ok', JSON.stringify(events));
+    assert.equal(result?.tool_name, 'fixture_read');
+    assert.equal(result?.result?.topic, 'confirmed');
+  } finally {
+    removeTempDir(siteRoot);
+  }
+});
+
+test('server mode cancels unsafe affordance action confirmations without executing the MCP tool', async () => {
+  const siteRoot = tempRoot('carrier-mcp-affordance-cancel-test-');
+  try {
+    writeFixtureMcpSurface(siteRoot);
+    const input = new PassThrough();
+    const output = new PassThrough();
+    const events = [];
+    let outputBuffer = '';
+    let cancelSent = false;
+    output.setEncoding('utf8');
+    output.on('data', (chunk) => {
+      outputBuffer += chunk;
+      const lines = outputBuffer.split(/\r?\n/);
+      outputBuffer = lines.pop() ?? '';
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        const event = JSON.parse(line);
+        events.push(event);
+        if (event.event === NARS_AFFORDANCE_ACTION_EVENTS.confirmationRequired && event.confirmation_id && !cancelSent) {
+          cancelSent = true;
+          input.write(`${JSON.stringify({ id: 'cancel-1', method: NARS_AFFORDANCE_ACTION_CANCEL_METHOD, params: { confirmation_id: event.confirmation_id, reason: 'test_cancelled' } })}\n`);
+        }
+        if (event.event === NARS_AFFORDANCE_ACTION_EVENTS.cancelled) input.end();
+      }
+    });
+
+    const sessionDir = resolveNaradaSitePaths({ siteRoot, sessionId: 'session_mcp_affordance_cancel' }).narsSessionDir;
+    const runtimeContext = {
+      identity: 'agent.test',
+      session: 'session_mcp_affordance_cancel',
+      siteRoot,
+      sessionPath: join(sessionDir, 'session.jsonl'),
+      eventsPath: join(sessionDir, 'events.jsonl'),
+      providerSettings: { provider: 'codex-subscription', model: 'gpt-5.5', thinking: 'medium', stream: false },
+    };
+    const { dependencies } = createCarrierRuntimeDependencies({ runtimeContext });
+    input.write(`${JSON.stringify({ id: 'action-cancellable', method: NARS_AFFORDANCE_ACTION_REQUEST_METHOD, params: { surface_id: 'fixture.surface', action_id: 'mutate', args: { topic: 'cancelled' } } })}\n`);
+
+    await runCarrierServerMode({
+      input,
+      output,
+      callChatApiFn: async () => ({ choices: [{ message: { role: 'assistant', content: 'unused' } }] }),
+      runtimeContext,
+      dependencies: {
+        ...dependencies,
+        readMcpPreflightArtifact: () => null,
+      },
+    });
+
+    const confirmation = events.find((event) => event.event === NARS_AFFORDANCE_ACTION_EVENTS.confirmationRequired);
+    const cancelled = events.find((event) => event.event === NARS_AFFORDANCE_ACTION_EVENTS.cancelled);
+    assert.equal(cancelled?.confirmation_id, confirmation?.confirmation_id);
+    assert.equal(cancelled?.reason, 'test_cancelled');
     assert.equal(events.some((event) => event.event === NARS_AFFORDANCE_ACTION_EVENTS.result), false);
     assert.equal(events.some((event) => event.event === 'tool_call' && event.tool === 'fixture_read'), false);
   } finally {
@@ -1253,7 +1440,8 @@ test('server mode health and event subscription match NARS runtime contract shap
     assert.deepEqual(health.mcp_tools, []);
     assert.deepEqual(health.mcp?.tools, []);
     assert.equal(health.surface_affordances?.schema, 'narada.nars.surface_affordances.v1');
-    assert.equal(health.surface_affordances?.count, 0);
+    assert.equal(health.surface_affordances?.count, 1);
+    assert.equal(health.surface_affordances?.items?.[0]?.surface_kind, 'intelligence');
     assert.equal(health.recommended_action, 'review_session_summary');
     assert.equal(typeof health.recommended_command, 'string');
 

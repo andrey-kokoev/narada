@@ -20,7 +20,7 @@ import {
   readAuthorityTransitionSourceState,
 } from './authority-transition-state.mjs';
 import { mcpToolCatalogEntries as defaultMcpToolCatalogEntries } from './session-status-snapshots.mjs';
-import { buildMcpSurfaceAffordanceProjection } from './surface-affordances.mjs';
+import { buildNarsSurfaceAffordanceProjection } from './surface-affordances.mjs';
 
 export async function runCarrierServerMode({
   input = process.stdin,
@@ -90,7 +90,7 @@ export async function runCarrierServerMode({
   const mcpServers = applyWorkerMcpProjection(await discoverAndStartMcpServers(siteRoot));
   const allTools = aggregateTools(mcpServers);
   const mcpStatus = createMcpStatusSnapshot(mcpServers);
-  const surfaceAffordances = buildMcpSurfaceAffordanceProjection(mcpServers);
+  const surfaceAffordances = buildNarsSurfaceAffordanceProjection({ mcpServers, intelligence: providerSettings });
   const mcpPreflightArtifact = readMcpPreflightArtifact();
   const mcpPreflightSnapshot = createMcpPreflightArtifactSnapshot(mcpPreflightArtifact);
   const rolePrompt = loadRolePrompt(identity, siteRoot);

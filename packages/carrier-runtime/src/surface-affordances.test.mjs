@@ -1,6 +1,26 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { buildMcpSurfaceAffordanceProjection } from './surface-affordances.mjs';
+import { buildMcpSurfaceAffordanceProjection, buildNarsSurfaceAffordanceProjection } from './surface-affordances.mjs';
+
+test('NARS surface affordance projection advertises runtime intelligence controls', () => {
+  const projection = buildNarsSurfaceAffordanceProjection({
+    mcpServers: {},
+    intelligence: { provider: 'codex-subscription', model: 'gpt-5.5', thinking: 'medium' },
+  });
+
+  assert.equal(projection.schema, 'narada.nars.surface_affordances.v1');
+  assert.equal(projection.count, 1);
+  const item = projection.items[0];
+  assert.equal(item.surface_kind, 'intelligence');
+  assert.equal(item.surface_id, 'nars.runtime.intelligence');
+  assert.equal(item.renderer, 'runtime_intelligence_controls');
+  assert.deepEqual(item.actions.configure, ['set_model', 'set_thinking']);
+  assert.deepEqual(item.controls.thinking.choices.map((choice) => choice.value), ['none', 'low', 'medium', 'high', 'xhigh']);
+  assert.deepEqual(item.affordance_document.actions.map((action) => ({ id: action.id, target: action.target })), [
+    { id: 'set_model', target: { kind: 'runtime', operation: 'set_model' } },
+    { id: 'set_thinking', target: { kind: 'runtime', operation: 'set_thinking' } },
+  ]);
+});
 
 test('surface affordance projection advertises SOP panel from live MCP tool inventory', () => {
   const projection = buildMcpSurfaceAffordanceProjection({

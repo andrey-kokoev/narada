@@ -10,6 +10,8 @@ import {
   NARS_AFFORDANCE_ACTION_POSTURES,
   NARS_AFFORDANCE_ACTION_REFUSAL_CODES,
   LEGACY_CARRIER_COMMAND_METHOD,
+  NARS_AFFORDANCE_ACTION_CANCEL_METHOD,
+  NARS_AFFORDANCE_ACTION_CONFIRM_METHOD,
   NARS_AFFORDANCE_ACTION_REQUEST_METHOD,
   NARS_COMMAND_METHOD,
   buildAgentWebUiAffordanceActionRequestFrame,
@@ -32,6 +34,8 @@ import {
   buildAgentWebUiSubscribeFrame,
   buildNarsAttachCommands,
   buildNarsAffordanceActionConfirmationRequiredEvent,
+  buildNarsAffordanceActionConfirmedEvent,
+  buildNarsAffordanceActionCancelledEvent,
   buildNarsAffordanceActionFailureEvent,
   buildNarsAffordanceActionRefusalEvent,
   buildNarsAffordanceActionRequestedEvent,
@@ -57,6 +61,8 @@ test('NARS client projection contract owns attach commands and web UI capabiliti
   assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('session.artifacts.summary'), true);
   assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('session.surface.affordances'), true);
   assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes(NARS_AFFORDANCE_ACTION_REQUEST_METHOD), true);
+  assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes(NARS_AFFORDANCE_ACTION_CONFIRM_METHOD), true);
+  assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes(NARS_AFFORDANCE_ACTION_CANCEL_METHOD), true);
   assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('session.sop.summary'), true);
   assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('session.inbox.summary'), true);
   assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('session.delegation.summary'), true);
@@ -85,11 +91,15 @@ test('NARS client projection contract owns attach commands and web UI capabiliti
 
 test('NARS client projection contract owns affordance action request and event vocabulary', () => {
   assert.equal(NARS_AFFORDANCE_ACTION_REQUEST_METHOD, 'session.affordance.action.request');
+  assert.equal(NARS_AFFORDANCE_ACTION_CONFIRM_METHOD, 'session.affordance.action.confirm');
+  assert.equal(NARS_AFFORDANCE_ACTION_CANCEL_METHOD, 'session.affordance.action.cancel');
   assert.deepEqual(NARS_AFFORDANCE_ACTION_EVENTS, {
     requested: 'session_affordance_action_requested',
     result: 'session_affordance_action_result',
     refused: 'session_affordance_action_refused',
     confirmationRequired: 'session_affordance_confirmation_required',
+    confirmed: 'session_affordance_action_confirmed',
+    cancelled: 'session_affordance_action_cancelled',
   });
   assert.equal(NARS_AFFORDANCE_ACTION_POSTURES.readOnlyOrIdempotent, 'read_only_or_idempotent');
   assert.equal(NARS_AFFORDANCE_ACTION_REFUSAL_CODES.confirmationRequired, 'affordance_action_confirmation_required');
@@ -187,13 +197,14 @@ test('NARS client projection contract owns affordance action request and event v
     code: NARS_AFFORDANCE_ACTION_REFUSAL_CODES.confirmationRequired,
     message: 'confirm',
     posture: NARS_AFFORDANCE_ACTION_POSTURES.confirmationRequired,
+    confirmationId: 'confirm-1',
   }), {
     schema: 'narada.nars.affordance_action_confirmation_required.v1',
     event: NARS_AFFORDANCE_ACTION_EVENTS.confirmationRequired,
     request_id: 'req-1',
     transport: 'jsonl_stdio',
-    terminal_state: 'refused',
-    status: 'refused',
+    terminal_state: 'awaiting_confirmation',
+    status: 'confirmation_required',
     surface_id: 'fixture.surface',
     action_id: 'mutate',
     server_name: null,
@@ -202,6 +213,44 @@ test('NARS client projection contract owns affordance action request and event v
     code: NARS_AFFORDANCE_ACTION_REFUSAL_CODES.confirmationRequired,
     message: 'confirm',
     posture: NARS_AFFORDANCE_ACTION_POSTURES.confirmationRequired,
+    confirmation_id: 'confirm-1',
+    expires_at: null,
+  });
+
+  assert.deepEqual(buildNarsAffordanceActionConfirmedEvent({
+    requestId: 'req-2',
+    confirmationId: 'confirm-1',
+    surfaceId: 'fixture.surface',
+    actionId: 'mutate',
+  }), {
+    schema: 'narada.nars.affordance_action_confirmed.v1',
+    event: NARS_AFFORDANCE_ACTION_EVENTS.confirmed,
+    request_id: 'req-2',
+    transport: 'jsonl_stdio',
+    terminal_state: 'confirmed',
+    status: 'confirmed',
+    confirmation_id: 'confirm-1',
+    surface_id: 'fixture.surface',
+    action_id: 'mutate',
+  });
+
+  assert.deepEqual(buildNarsAffordanceActionCancelledEvent({
+    requestId: 'req-3',
+    confirmationId: 'confirm-1',
+    surfaceId: 'fixture.surface',
+    actionId: 'mutate',
+    reason: 'operator_cancelled',
+  }), {
+    schema: 'narada.nars.affordance_action_cancelled.v1',
+    event: NARS_AFFORDANCE_ACTION_EVENTS.cancelled,
+    request_id: 'req-3',
+    transport: 'jsonl_stdio',
+    terminal_state: 'cancelled',
+    status: 'cancelled',
+    confirmation_id: 'confirm-1',
+    surface_id: 'fixture.surface',
+    action_id: 'mutate',
+    reason: 'operator_cancelled',
   });
 });
 

@@ -815,7 +815,7 @@ test('CLI args and client config keep runtime authority outside the web package'
     protocolHealthMethod: 'session.health',
     maxReplay: 100,
     operatorInput: true,
-    admittedMethods: ['session.events.subscribe', 'session.events.read', 'session.artifacts.register', 'session.artifacts.read', 'session.artifacts.summary', 'session.surface.affordances', 'session.affordance.action.request', 'session.sop.summary', 'session.inbox.summary', 'session.delegation.summary', 'session.git.summary', 'session.surface_feedback.summary', 'session.mailbox.summary', 'session.scheduler.summary', 'session.task_lifecycle.summary', 'conversation.send', 'conversation.enqueue', 'session.status', 'session.health', 'session.recovery', 'session.operations', 'observers.status', 'observer.mute', 'observer.unmute', 'session.command.execute', 'carrier.command.execute', 'conversation.interrupt', 'conversation.steer', 'session.close'],
+    admittedMethods: ['session.events.subscribe', 'session.events.read', 'session.artifacts.register', 'session.artifacts.read', 'session.artifacts.summary', 'session.surface.affordances', 'session.affordance.action.request', 'session.affordance.action.confirm', 'session.affordance.action.cancel', 'session.sop.summary', 'session.inbox.summary', 'session.delegation.summary', 'session.git.summary', 'session.surface_feedback.summary', 'session.mailbox.summary', 'session.scheduler.summary', 'session.task_lifecycle.summary', 'conversation.send', 'conversation.enqueue', 'session.status', 'session.health', 'session.recovery', 'session.operations', 'observers.status', 'observer.mute', 'observer.unmute', 'session.command.execute', 'carrier.command.execute', 'conversation.interrupt', 'conversation.steer', 'session.close'],
   });
 });
 

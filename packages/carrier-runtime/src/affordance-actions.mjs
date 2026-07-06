@@ -3,13 +3,15 @@ import {
   NARS_AFFORDANCE_ACTION_POSTURES,
   NARS_AFFORDANCE_ACTION_REFUSAL_CODES,
   buildNarsAffordanceActionConfirmationRequiredEvent,
+  buildNarsAffordanceActionConfirmedEvent,
+  buildNarsAffordanceActionCancelledEvent,
   buildNarsAffordanceActionFailureEvent,
   buildNarsAffordanceActionRefusalEvent,
   buildNarsAffordanceActionRequestedEvent,
   buildNarsAffordanceActionResultEvent,
 } from '@narada2/nars-client-projection-contract';
 import { sendMcpRequest } from './mcp-runtime.mjs';
-import { buildMcpSurfaceAffordanceProjection } from './surface-affordances.mjs';
+import { buildNarsSurfaceAffordanceProjection } from './surface-affordances.mjs';
 import { parseJson, randomId } from './runtime-tail-utils.mjs';
 
 export async function serverAffordanceActionRequest({ requestId, params = {}, context = {} }) {
@@ -29,7 +31,10 @@ export async function serverAffordanceActionRequest({ requestId, params = {}, co
     return affordanceActionRefusal({ requestId, surfaceId, actionId, clientCorrelationId, code: NARS_AFFORDANCE_ACTION_REFUSAL_CODES.requiredIdentity, message: 'session.affordance.action.request requires params.surface_id and params.action_id.' });
   }
 
-  const projection = buildMcpSurfaceAffordanceProjection(context.mcpServers ?? {});
+  const projection = buildNarsSurfaceAffordanceProjection({
+    mcpServers: context.mcpServers ?? {},
+    intelligence: context.effectiveIntelligence?.() ?? {},
+  });
   const surface = projection.items.find((item) => item.surface_id === surfaceId) ?? null;
   if (!surface) {
     return affordanceActionRefusal({ requestId, surfaceId, actionId, clientCorrelationId, code: NARS_AFFORDANCE_ACTION_REFUSAL_CODES.surfaceNotFound, message: `No live surface affordance was found for ${surfaceId}.` });
@@ -40,10 +45,40 @@ export async function serverAffordanceActionRequest({ requestId, params = {}, co
   }
   const target = objectValue(action.target);
   if (target?.kind !== 'tool') {
-    return affordanceActionRefusal({ requestId, surfaceId, actionId, clientCorrelationId, code: NARS_AFFORDANCE_ACTION_REFUSAL_CODES.targetNotExecutable, message: 'Only tool-target affordance actions can execute through this boundary.', serverName: surface.server_name });
+    if (target?.kind !== 'runtime') {
+      return affordanceActionRefusal({ requestId, surfaceId, actionId, clientCorrelationId, code: NARS_AFFORDANCE_ACTION_REFUSAL_CODES.targetNotExecutable, message: 'Only tool-target and runtime-target affordance actions can execute through this boundary.', serverName: surface.server_name });
+    }
   }
   const posture = classifyAffordanceActionPosture(action);
   if (posture !== NARS_AFFORDANCE_ACTION_POSTURES.readOnlyOrIdempotent) {
+    if (posture === NARS_AFFORDANCE_ACTION_POSTURES.confirmationRequired) {
+      const confirmationId = `affordance-confirm-${randomId()}`;
+      pendingAffordanceConfirmations(context).set(confirmationId, {
+        confirmation_id: confirmationId,
+        request_id: requestId,
+        surface_id: surfaceId,
+        action_id: actionId,
+        client_correlation_id: clientCorrelationId,
+        server_name: surface.server_name,
+        action,
+        target,
+        args,
+        created_at: new Date().toISOString(),
+      });
+      const event = buildNarsAffordanceActionConfirmationRequiredEvent({
+        requestId,
+        surfaceId,
+        actionId,
+        clientCorrelationId,
+        code: NARS_AFFORDANCE_ACTION_REFUSAL_CODES.confirmationRequired,
+        message: 'This affordance action requires explicit confirmation before execution.',
+        serverName: surface.server_name,
+        posture,
+        confirmationId,
+      });
+      context.appendSessionRecord?.({ ...event, operation_status: 'awaiting_confirmation', requested_at: new Date().toISOString() });
+      return event;
+    }
     const options = {
       requestId,
       surfaceId,
@@ -56,11 +91,78 @@ export async function serverAffordanceActionRequest({ requestId, params = {}, co
       serverName: surface.server_name,
       posture,
     };
-    return posture === NARS_AFFORDANCE_ACTION_POSTURES.confirmationRequired
-      ? buildNarsAffordanceActionConfirmationRequiredEvent(options)
-      : affordanceActionRefusal(options);
+    return affordanceActionRefusal(options);
   }
-  const serverName = surface.server_name;
+  return executeAffordanceAction({ requestId, surfaceId, actionId, clientCorrelationId, serverName: surface.server_name, action, target, args, context });
+}
+
+export async function serverAffordanceActionConfirm({ requestId, params = {}, context = {} }) {
+  const confirmationId = stringValue(params.confirmation_id) ?? stringValue(params.confirmationId);
+  const pending = confirmationId ? pendingAffordanceConfirmations(context).get(confirmationId) ?? null : null;
+  if (!confirmationId || !pending) {
+    return affordanceActionRefusal({
+      requestId,
+      surfaceId: null,
+      actionId: null,
+      code: NARS_AFFORDANCE_ACTION_REFUSAL_CODES.confirmationNotFound,
+      message: confirmationId
+        ? `No pending affordance action confirmation was found for ${confirmationId}.`
+        : 'session.affordance.action.confirm requires params.confirmation_id.',
+    });
+  }
+  pendingAffordanceConfirmations(context).delete(confirmationId);
+  const confirmed = buildNarsAffordanceActionConfirmedEvent({
+    requestId,
+    confirmationId,
+    surfaceId: pending.surface_id,
+    actionId: pending.action_id,
+  });
+  context.emit?.(NARS_AFFORDANCE_ACTION_EVENTS.confirmed, confirmed);
+  context.appendSessionRecord?.({ ...confirmed, completed_at: new Date().toISOString() });
+  return executeAffordanceAction({
+    requestId,
+    surfaceId: pending.surface_id,
+    actionId: pending.action_id,
+    clientCorrelationId: pending.client_correlation_id,
+    serverName: pending.server_name,
+    action: pending.action,
+    target: pending.target,
+    args: pending.args,
+    context,
+    confirmationId,
+  });
+}
+
+export function serverAffordanceActionCancel({ requestId, params = {}, context = {} }) {
+  const confirmationId = stringValue(params.confirmation_id) ?? stringValue(params.confirmationId);
+  const pending = confirmationId ? pendingAffordanceConfirmations(context).get(confirmationId) ?? null : null;
+  if (!confirmationId || !pending) {
+    return affordanceActionRefusal({
+      requestId,
+      surfaceId: null,
+      actionId: null,
+      code: NARS_AFFORDANCE_ACTION_REFUSAL_CODES.confirmationNotFound,
+      message: confirmationId
+        ? `No pending affordance action confirmation was found for ${confirmationId}.`
+        : 'session.affordance.action.cancel requires params.confirmation_id.',
+    });
+  }
+  pendingAffordanceConfirmations(context).delete(confirmationId);
+  const event = buildNarsAffordanceActionCancelledEvent({
+    requestId,
+    confirmationId,
+    surfaceId: pending.surface_id,
+    actionId: pending.action_id,
+    reason: stringValue(params.reason) ?? 'operator_cancelled',
+  });
+  context.appendSessionRecord?.({ ...event, completed_at: new Date().toISOString() });
+  return event;
+}
+
+async function executeAffordanceAction({ requestId, surfaceId, actionId, clientCorrelationId = null, serverName = null, action, target, args = {}, context = {}, confirmationId = null }) {
+  if (target?.kind === 'runtime') {
+    return executeRuntimeAffordanceAction({ requestId, surfaceId, actionId, clientCorrelationId, target, args, context, confirmationId });
+  }
   const server = context.mcpServers?.[serverName] ?? null;
   if (!server) {
     return affordanceActionRefusal({ requestId, surfaceId, actionId, clientCorrelationId, code: NARS_AFFORDANCE_ACTION_REFUSAL_CODES.serverUnavailable, message: `MCP server ${serverName ?? '<unknown>'} is not available.`, serverName });
@@ -81,13 +183,62 @@ export async function serverAffordanceActionRequest({ requestId, params = {}, co
       clientCorrelationId,
       result: result.structuredContent ?? parseJson(result.content?.[0]?.text ?? '') ?? result,
     });
+    if (confirmationId) event.confirmation_id = confirmationId;
     context.appendSessionRecord?.({ ...event, completed_at: new Date().toISOString() });
     return event;
   } catch (error) {
     const event = buildNarsAffordanceActionFailureEvent({ requestId, surfaceId, actionId, serverName, toolName, clientCorrelationId, error });
+    if (confirmationId) event.confirmation_id = confirmationId;
     context.appendSessionRecord?.({ ...event, completed_at: new Date().toISOString() });
     return event;
   }
+}
+
+function executeRuntimeAffordanceAction({ requestId, surfaceId, actionId, clientCorrelationId = null, target, args = {}, context = {}, confirmationId = null }) {
+  const operation = stringValue(target.operation);
+  const sessionSettings = context.state?.sessionSettings;
+  if (!sessionSettings) {
+    return affordanceActionRefusal({ requestId, surfaceId, actionId, clientCorrelationId, code: NARS_AFFORDANCE_ACTION_REFUSAL_CODES.serverUnavailable, message: 'Runtime session settings are not available for this affordance action.' });
+  }
+  if (operation === 'set_model') {
+    const model = stringValue(args.model) ?? stringValue(args.value);
+    if (!model) {
+      return affordanceActionRefusal({ requestId, surfaceId, actionId, clientCorrelationId, code: NARS_AFFORDANCE_ACTION_REFUSAL_CODES.requiredIdentity, message: 'set_model requires args.model.' });
+    }
+    sessionSettings.model = model;
+  } else if (operation === 'set_thinking') {
+    sessionSettings.thinking = normalizeThinkingLevel(stringValue(args.thinking) ?? stringValue(args.value));
+  } else {
+    return affordanceActionRefusal({ requestId, surfaceId, actionId, clientCorrelationId, code: NARS_AFFORDANCE_ACTION_REFUSAL_CODES.actionNotFound, message: `Unsupported runtime affordance operation: ${operation ?? '<missing>'}.` });
+  }
+  const result = {
+    status: 'ok',
+    operation,
+    intelligence: {
+      provider: stringValue(sessionSettings.provider) ?? stringValue(context.providerSettings?.provider),
+      model: stringValue(sessionSettings.model) ?? stringValue(context.providerSettings?.model),
+      thinking: stringValue(sessionSettings.thinking) ?? stringValue(context.providerSettings?.thinking) ?? 'medium',
+      stream: typeof sessionSettings.stream === 'boolean' ? sessionSettings.stream : typeof context.providerSettings?.stream === 'boolean' ? context.providerSettings.stream : null,
+    },
+  };
+  const event = buildNarsAffordanceActionResultEvent({
+    requestId,
+    surfaceId,
+    actionId,
+    serverName: null,
+    toolName: null,
+    clientCorrelationId,
+    result,
+  });
+  if (confirmationId) event.confirmation_id = confirmationId;
+  context.appendSessionRecord?.({ ...event, completed_at: new Date().toISOString() });
+  return event;
+}
+
+function normalizeThinkingLevel(value) {
+  const normalized = String(value ?? 'medium').trim().toLowerCase();
+  if (['none', 'low', 'medium', 'high', 'xhigh'].includes(normalized)) return normalized;
+  return 'medium';
 }
 
 function findAffordanceAction(surface, actionId) {
@@ -106,6 +257,14 @@ function classifyAffordanceActionPosture(action) {
 
 function affordanceActionRefusal({ requestId, surfaceId, actionId, clientCorrelationId = null, code, message, serverName = null, toolName = null, posture = null }) {
   return buildNarsAffordanceActionRefusalEvent({ requestId, surfaceId, actionId, clientCorrelationId, code, message, serverName, toolName, posture });
+}
+
+function pendingAffordanceConfirmations(context = {}) {
+  if (!context.state) context.state = {};
+  if (!(context.state.affordanceActionConfirmations instanceof Map)) {
+    context.state.affordanceActionConfirmations = new Map();
+  }
+  return context.state.affordanceActionConfirmations;
 }
 
 function objectValue(value) {

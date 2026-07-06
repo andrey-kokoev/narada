@@ -1,11 +1,15 @@
 export const NARS_COMMAND_METHOD: 'session.command.execute';
 export const LEGACY_CARRIER_COMMAND_METHOD: 'carrier.command.execute';
 export const NARS_AFFORDANCE_ACTION_REQUEST_METHOD: 'session.affordance.action.request';
+export const NARS_AFFORDANCE_ACTION_CONFIRM_METHOD: 'session.affordance.action.confirm';
+export const NARS_AFFORDANCE_ACTION_CANCEL_METHOD: 'session.affordance.action.cancel';
 export const NARS_AFFORDANCE_ACTION_EVENTS: Readonly<{
   requested: 'session_affordance_action_requested';
   result: 'session_affordance_action_result';
   refused: 'session_affordance_action_refused';
   confirmationRequired: 'session_affordance_confirmation_required';
+  confirmed: 'session_affordance_action_confirmed';
+  cancelled: 'session_affordance_action_cancelled';
 }>;
 export const NARS_AFFORDANCE_ACTION_SCHEMAS: Readonly<Record<string, string>>;
 export const NARS_AFFORDANCE_ACTION_POSTURES: Readonly<{
@@ -66,6 +70,8 @@ export function buildNarsAffordanceActionResultEvent(input?: object): object;
 export function buildNarsAffordanceActionFailureEvent(input?: object): object;
 export function buildNarsAffordanceActionRefusalEvent(input?: object): object;
 export function buildNarsAffordanceActionConfirmationRequiredEvent(input?: object): object;
+export function buildNarsAffordanceActionConfirmedEvent(input?: object): object;
+export function buildNarsAffordanceActionCancelledEvent(input?: object): object;
 export function buildAgentWebUiSopSummaryFrame(options?: object): object;
 export function buildAgentWebUiInboxSummaryFrame(options?: object): object;
 export function buildAgentWebUiDelegationSummaryFrame(options?: object): object;

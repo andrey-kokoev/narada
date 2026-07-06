@@ -445,9 +445,11 @@ function agentPartFromAgentId(agentId: string | null): string | null {
         :verbosity-levels="verbosityLevels"
         :agent-activity="agentActivity"
         :authority-transition="authorityTransition"
+        :surface-affordances="surfaceAffordances"
         :cloudflare-projection="cloudflareProjection"
         @update:verbosity="emit('update:verbosity', $event)"
         @publish-cloudflare="emit('publish-cloudflare', $event)"
+        @request-affordance-action="emit('request-affordance-action', $event)"
       />
     </section>
     <ConversationTranscript :rows="rows" :verbosity="verbosity" :agent-activity="agentActivity" :follow-latest-revision="followLatestRevision" />

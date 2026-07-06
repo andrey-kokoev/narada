@@ -3,12 +3,16 @@ import { agentIdentityDisplay, agentIdentityGroupKey } from '@narada2/agent-iden
 export const NARS_COMMAND_METHOD = 'session.command.execute';
 export const LEGACY_CARRIER_COMMAND_METHOD = 'carrier.command.execute';
 export const NARS_AFFORDANCE_ACTION_REQUEST_METHOD = 'session.affordance.action.request';
+export const NARS_AFFORDANCE_ACTION_CONFIRM_METHOD = 'session.affordance.action.confirm';
+export const NARS_AFFORDANCE_ACTION_CANCEL_METHOD = 'session.affordance.action.cancel';
 
 export const NARS_AFFORDANCE_ACTION_EVENTS = Object.freeze({
   requested: 'session_affordance_action_requested',
   result: 'session_affordance_action_result',
   refused: 'session_affordance_action_refused',
   confirmationRequired: 'session_affordance_confirmation_required',
+  confirmed: 'session_affordance_action_confirmed',
+  cancelled: 'session_affordance_action_cancelled',
 });
 
 export const NARS_AFFORDANCE_ACTION_SCHEMAS = Object.freeze({
@@ -16,6 +20,8 @@ export const NARS_AFFORDANCE_ACTION_SCHEMAS = Object.freeze({
   result: 'narada.nars.affordance_action_result.v1',
   refusal: 'narada.nars.affordance_action_refusal.v1',
   confirmationRequired: 'narada.nars.affordance_action_confirmation_required.v1',
+  confirmed: 'narada.nars.affordance_action_confirmed.v1',
+  cancelled: 'narada.nars.affordance_action_cancelled.v1',
 });
 
 export const NARS_AFFORDANCE_ACTION_POSTURES = Object.freeze({
@@ -33,6 +39,7 @@ export const NARS_AFFORDANCE_ACTION_REFUSAL_CODES = Object.freeze({
   notReadOnly: 'affordance_action_not_read_only',
   serverUnavailable: 'surface_mcp_server_unavailable',
   toolUnavailable: 'surface_affordance_tool_unavailable',
+  confirmationNotFound: 'affordance_action_confirmation_not_found',
 });
 
 export const NARS_CLIENT_PROJECTION_VERBOSITY_LEVELS = Object.freeze([
@@ -59,6 +66,8 @@ export const AGENT_WEB_UI_NARS_METHOD_LIST = Object.freeze([
   'session.artifacts.summary',
   'session.surface.affordances',
   NARS_AFFORDANCE_ACTION_REQUEST_METHOD,
+  NARS_AFFORDANCE_ACTION_CONFIRM_METHOD,
+  NARS_AFFORDANCE_ACTION_CANCEL_METHOD,
   'session.sop.summary',
   'session.inbox.summary',
   'session.delegation.summary',
@@ -131,6 +140,8 @@ export const NARS_CLIENT_EVENT_LABELS = Object.freeze({
   [NARS_AFFORDANCE_ACTION_EVENTS.result]: 'Affordance result',
   [NARS_AFFORDANCE_ACTION_EVENTS.refused]: 'Affordance refused',
   [NARS_AFFORDANCE_ACTION_EVENTS.confirmationRequired]: 'Confirmation required',
+  [NARS_AFFORDANCE_ACTION_EVENTS.confirmed]: 'Affordance confirmed',
+  [NARS_AFFORDANCE_ACTION_EVENTS.cancelled]: 'Affordance cancelled',
   session_recovery: 'Recovery',
   session_operations: 'Operations',
   observers_status: 'Observers',
@@ -445,6 +456,39 @@ export function buildNarsAffordanceActionConfirmationRequiredEvent(options = {})
     ...event,
     schema: NARS_AFFORDANCE_ACTION_SCHEMAS.confirmationRequired,
     event: NARS_AFFORDANCE_ACTION_EVENTS.confirmationRequired,
+    terminal_state: 'awaiting_confirmation',
+    status: 'confirmation_required',
+    confirmation_id: options.confirmation_id ?? options.confirmationId ?? null,
+    expires_at: options.expires_at ?? options.expiresAt ?? null,
+  };
+}
+
+export function buildNarsAffordanceActionConfirmedEvent({ requestId, request_id, confirmationId, confirmation_id, surfaceId = null, surface_id = null, actionId = null, action_id = null } = {}) {
+  return {
+    schema: NARS_AFFORDANCE_ACTION_SCHEMAS.confirmed,
+    event: NARS_AFFORDANCE_ACTION_EVENTS.confirmed,
+    request_id: request_id ?? requestId ?? null,
+    transport: 'jsonl_stdio',
+    terminal_state: 'confirmed',
+    status: 'confirmed',
+    confirmation_id: confirmation_id ?? confirmationId ?? null,
+    surface_id: surface_id ?? surfaceId,
+    action_id: action_id ?? actionId,
+  };
+}
+
+export function buildNarsAffordanceActionCancelledEvent({ requestId, request_id, confirmationId, confirmation_id, surfaceId = null, surface_id = null, actionId = null, action_id = null, reason = null } = {}) {
+  return {
+    schema: NARS_AFFORDANCE_ACTION_SCHEMAS.cancelled,
+    event: NARS_AFFORDANCE_ACTION_EVENTS.cancelled,
+    request_id: request_id ?? requestId ?? null,
+    transport: 'jsonl_stdio',
+    terminal_state: 'cancelled',
+    status: 'cancelled',
+    confirmation_id: confirmation_id ?? confirmationId ?? null,
+    surface_id: surface_id ?? surfaceId,
+    action_id: action_id ?? actionId,
+    reason,
   };
 }
 

@@ -29,6 +29,70 @@ const TASK_LIFECYCLE_WORKBOARD_TOOL = 'task_lifecycle_workboard_snapshot';
 const TASK_LIFECYCLE_OBLIGATIONS_TOOL = 'task_lifecycle_obligations';
 const TASK_LIFECYCLE_SEARCH_TOOL = 'task_lifecycle_search';
 const MCP_AFFORDANCES_SCHEMA = 'narada.mcp_affordances.v1';
+const THINKING_LEVELS = ['none', 'low', 'medium', 'high', 'xhigh'];
+
+export function buildRuntimeIntelligenceOperatorAffordance({ intelligence = {}, source = 'nars_runtime' } = {}) {
+  return {
+    schema: 'narada.mcp_surface.operator_affordance.v1',
+    surface_kind: 'intelligence',
+    surface_id: 'nars.runtime.intelligence',
+    server_name: null,
+    source,
+    renderer: 'runtime_intelligence_controls',
+    title: 'Intelligence',
+    panel: {
+      kind: 'runtime_intelligence_controls',
+      title: 'Intelligence',
+      summary_method: 'session.health',
+      sections: ['provider', 'model', 'thinking'],
+    },
+    actions: {
+      read: ['refresh'],
+      configure: ['set_model', 'set_thinking'],
+    },
+    controls: {
+      provider: { kind: 'readonly', value: stringField(intelligence, 'provider') },
+      model: { kind: 'text', value: stringField(intelligence, 'model'), placeholder: 'Model name' },
+      thinking: { kind: 'select', value: stringField(intelligence, 'thinking') ?? 'medium', choices: THINKING_LEVELS.map((value) => ({ value, label: value })) },
+    },
+    affordance_document: {
+      schema: MCP_AFFORDANCES_SCHEMA,
+      surface_id: 'nars.runtime.intelligence',
+      title: 'Intelligence',
+      panels: [
+        { id: 'runtime_intelligence_controls', title: 'Intelligence', priority: 10 },
+      ],
+      actions: [
+        {
+          id: 'set_model',
+          label: 'Set model',
+          intent: 'configure',
+          idempotent: true,
+          target: { kind: 'runtime', operation: 'set_model' },
+          args: { model: { kind: 'string', required: true } },
+        },
+        {
+          id: 'set_thinking',
+          label: 'Set thinking',
+          intent: 'configure',
+          idempotent: true,
+          target: { kind: 'runtime', operation: 'set_thinking' },
+          args: { thinking: { kind: 'enum', required: true, choices: THINKING_LEVELS } },
+        },
+      ],
+    },
+  };
+}
+
+export function buildNarsSurfaceAffordanceProjection({ mcpServers = {}, intelligence = {} } = {}) {
+  const mcpProjection = buildMcpSurfaceAffordanceProjection(mcpServers);
+  const intelligenceAffordance = buildRuntimeIntelligenceOperatorAffordance({ intelligence });
+  return {
+    ...mcpProjection,
+    count: mcpProjection.items.length + 1,
+    items: [intelligenceAffordance, ...mcpProjection.items],
+  };
+}
 
 export function buildSopOperatorAffordance({ serverName, server = {}, source = 'live_tool_inventory' } = {}) {
   const toolNames = new Set((server?.tools ?? []).map((tool) => tool?.name).filter(Boolean));
