@@ -318,11 +318,12 @@ export function buildMailboxOperatorAffordance({ serverName, server = {}, source
 
 export function buildMcpSurfaceAffordanceProjection(mcpServers = {}) {
   const items = [];
+  const validationErrors = [];
   const seen = new Set();
   const seenSurfaceKinds = new Set();
   for (const [serverName, server] of Object.entries(mcpServers ?? {})) {
     for (const { affordance, source } of configuredAffordances(serverName, server)) {
-      const normalized = normalizeAffordance(serverName, server, affordance, source);
+      const normalized = normalizeAffordance(serverName, server, affordance, source, validationErrors);
       if (!normalized) continue;
       const key = affordanceKey(normalized);
       const surfaceKindKey = affordanceSurfaceKindKey(normalized);
@@ -417,6 +418,8 @@ export function buildMcpSurfaceAffordanceProjection(mcpServers = {}) {
     source: 'nars_runtime_mcp_inventory',
     count: items.length,
     items,
+    validation_error_count: validationErrors.length,
+    validation_errors: validationErrors,
   };
 }
 
@@ -446,9 +449,9 @@ function toolAdvertisedAffordances(server = {}) {
   return values;
 }
 
-function normalizeAffordance(serverName, server, affordance, source) {
+function normalizeAffordance(serverName, server, affordance, source, validationErrors = []) {
   if (!affordance || typeof affordance !== 'object') return null;
-  if (affordance.schema === MCP_AFFORDANCES_SCHEMA) return normalizeMcpAffordanceDocument(serverName, server, affordance, source);
+  if (affordance.schema === MCP_AFFORDANCES_SCHEMA) return normalizeMcpAffordanceDocument(serverName, server, affordance, source, validationErrors);
   const surfaceKind = stringField(affordance, 'surface_kind') ?? stringField(affordance, 'kind');
   if (!surfaceKind) return null;
   const panel = objectField(affordance, 'panel') ?? {};
@@ -471,7 +474,19 @@ function normalizeAffordance(serverName, server, affordance, source) {
   };
 }
 
-function normalizeMcpAffordanceDocument(serverName, server, affordance, source) {
+function normalizeMcpAffordanceDocument(serverName, server, affordance, source, validationErrors = []) {
+  const validation = validateMcpAffordanceDocument(affordance);
+  if (validation.errors.length > 0) {
+    validationErrors.push({
+      schema: 'narada.nars.surface_affordance_validation_error.v1',
+      code: 'invalid_mcp_affordance_document',
+      server_name: serverName,
+      source,
+      surface_id: stringField(affordance, 'surface_id') ?? stringField(server?.config, 'surface_id') ?? null,
+      errors: validation.errors,
+    });
+    return null;
+  }
   const surfaceId = stringField(affordance, 'surface_id') ?? stringField(server?.config, 'surface_id');
   if (!surfaceId) return null;
   const panels = arrayField(affordance.panels);
@@ -507,6 +522,86 @@ function normalizeMcpAffordanceDocument(serverName, server, affordance, source) 
     },
     affordance_document: affordance,
   };
+}
+
+function validateMcpAffordanceDocument(affordance) {
+  const errors = [];
+  if (!affordance || typeof affordance !== 'object' || Array.isArray(affordance)) {
+    return { ok: false, errors: [{ path: '$', code: 'document_object_required', message: 'Affordance document must be an object.' }] };
+  }
+  if (affordance.schema !== MCP_AFFORDANCES_SCHEMA) {
+    errors.push({ path: 'schema', code: 'schema_unsupported', message: `Expected ${MCP_AFFORDANCES_SCHEMA}.` });
+  }
+  if (!stringField(affordance, 'surface_id')) {
+    errors.push({ path: 'surface_id', code: 'string_required', message: 'surface_id must be a non-empty string.' });
+  }
+  if (!Array.isArray(affordance.panels)) {
+    errors.push({ path: 'panels', code: 'array_required', message: 'panels must be an array.' });
+  }
+  if (affordance.actions !== undefined && !Array.isArray(affordance.actions)) {
+    errors.push({ path: 'actions', code: 'array_required', message: 'actions must be an array when present.' });
+  }
+
+  const actionIds = new Set();
+  const duplicateActionIds = new Set();
+  for (const [index, action] of (Array.isArray(affordance.actions) ? affordance.actions : []).entries()) {
+    if (!action || typeof action !== 'object' || Array.isArray(action)) {
+      errors.push({ path: `actions[${index}]`, code: 'object_required', message: 'Each action must be an object.' });
+      continue;
+    }
+    const actionId = stringField(action, 'id');
+    if (!actionId) {
+      errors.push({ path: `actions[${index}].id`, code: 'string_required', message: 'Action id must be a non-empty string.' });
+    } else if (actionIds.has(actionId)) {
+      duplicateActionIds.add(actionId);
+    } else {
+      actionIds.add(actionId);
+    }
+    const target = objectField(action, 'target');
+    if (action.target !== undefined && !target) {
+      errors.push({ path: `actions[${index}].target`, code: 'object_required', message: 'Action target must be an object when present.' });
+    }
+    if (target && !stringField(target, 'kind')) {
+      errors.push({ path: `actions[${index}].target.kind`, code: 'string_required', message: 'Action target kind must be a non-empty string.' });
+    }
+    if (target?.kind === 'tool' && !stringField(target, 'tool')) {
+      errors.push({ path: `actions[${index}].target.tool`, code: 'string_required', message: 'Tool targets must declare target.tool.' });
+    }
+    for (const booleanField of ['read_only', 'idempotent', 'destructive', 'confirmation_required', 'requires_confirmation']) {
+      if (action[booleanField] !== undefined && typeof action[booleanField] !== 'boolean') {
+        errors.push({ path: `actions[${index}].${booleanField}`, code: 'boolean_required', message: `${booleanField} must be boolean when present.` });
+      }
+    }
+    if (action.danger_level !== undefined && !['low', 'medium', 'high'].includes(action.danger_level)) {
+      errors.push({ path: `actions[${index}].danger_level`, code: 'enum_invalid', message: 'danger_level must be low, medium, or high when present.' });
+    }
+  }
+  for (const actionId of duplicateActionIds) {
+    errors.push({ path: 'actions', code: 'duplicate_action_id', message: `Duplicate action id: ${actionId}.` });
+  }
+
+  for (const [index, panel] of (Array.isArray(affordance.panels) ? affordance.panels : []).entries()) {
+    if (!panel || typeof panel !== 'object' || Array.isArray(panel)) {
+      errors.push({ path: `panels[${index}]`, code: 'object_required', message: 'Each panel must be an object.' });
+      continue;
+    }
+    if (!stringField(panel, 'id')) {
+      errors.push({ path: `panels[${index}].id`, code: 'string_required', message: 'Panel id must be a non-empty string.' });
+    }
+    if (panel.actions !== undefined && !Array.isArray(panel.actions)) {
+      errors.push({ path: `panels[${index}].actions`, code: 'array_required', message: 'Panel actions must be an array of action ids when present.' });
+      continue;
+    }
+    for (const [actionIndex, actionRef] of (Array.isArray(panel.actions) ? panel.actions : []).entries()) {
+      if (typeof actionRef !== 'string' || !actionRef) {
+        errors.push({ path: `panels[${index}].actions[${actionIndex}]`, code: 'string_required', message: 'Panel action references must be non-empty strings.' });
+      } else if (Array.isArray(affordance.actions) && !actionIds.has(actionRef)) {
+        errors.push({ path: `panels[${index}].actions[${actionIndex}]`, code: 'unknown_action_reference', message: `Panel references unknown action id: ${actionRef}.` });
+      }
+    }
+  }
+
+  return { ok: errors.length === 0, errors };
 }
 
 function surfaceKindFromAffordanceDocument(surfaceId, serverName) {

@@ -362,6 +362,7 @@ test('surface affordance projection adapts shared MCP affordance documents', () 
   });
 
   assert.equal(projection.count, 1);
+  assert.equal(projection.validation_error_count, 0);
   assert.equal(projection.items[0].schema, 'narada.mcp_surface.operator_affordance.v1');
   assert.equal(projection.items[0].surface_kind, 'site_loop');
   assert.equal(projection.items[0].renderer, 'generic_mcp_affordance');
@@ -372,4 +373,44 @@ test('surface affordance projection adapts shared MCP affordance documents', () 
   assert.deepEqual(projection.items[0].tools.read, ['site_loop_health']);
   assert.deepEqual(projection.items[0].tools.write, ['site_loop_start']);
   assert.equal(projection.items[0].affordance_document.schema, 'narada.mcp_affordances.v1');
+});
+
+test('surface affordance projection refuses malformed shared MCP affordance documents with diagnostics', () => {
+  const projection = buildMcpSurfaceAffordanceProjection({
+    'narada-test-broken': {
+      tools: [],
+      config: {
+        surface_affordances: [{
+          schema: 'narada.mcp_affordances.v1',
+          title: 'Broken',
+          panels: [
+            { id: 'controls', actions: ['missing_action'] },
+          ],
+          actions: [
+            {
+              id: 'broken_action',
+              label: 'Broken action',
+              read_only: 'yes',
+              danger_level: 'extreme',
+              target: { kind: 'tool' },
+            },
+          ],
+        }],
+      },
+    },
+  });
+
+  assert.equal(projection.count, 0);
+  assert.equal(projection.validation_error_count, 1);
+  assert.equal(projection.validation_errors[0].schema, 'narada.nars.surface_affordance_validation_error.v1');
+  assert.equal(projection.validation_errors[0].code, 'invalid_mcp_affordance_document');
+  assert.equal(projection.validation_errors[0].server_name, 'narada-test-broken');
+  assert.equal(projection.validation_errors[0].surface_id, null);
+  assert.deepEqual(projection.validation_errors[0].errors.map((error) => error.code), [
+    'string_required',
+    'string_required',
+    'boolean_required',
+    'enum_invalid',
+    'unknown_action_reference',
+  ]);
 });
