@@ -6,6 +6,9 @@ import {
   NARS_CLIENT_PROJECTION_DEFAULT_VERBOSITY,
   NARS_CLIENT_PROJECTION_REGISTRY,
   NARS_CLIENT_PROJECTION_VERBOSITY_LEVELS,
+  NARS_AFFORDANCE_ACTION_EVENTS,
+  NARS_AFFORDANCE_ACTION_POSTURES,
+  NARS_AFFORDANCE_ACTION_REFUSAL_CODES,
   LEGACY_CARRIER_COMMAND_METHOD,
   NARS_AFFORDANCE_ACTION_REQUEST_METHOD,
   NARS_COMMAND_METHOD,
@@ -28,6 +31,11 @@ import {
   buildAgentWebUiTaskLifecycleSummaryFrame,
   buildAgentWebUiSubscribeFrame,
   buildNarsAttachCommands,
+  buildNarsAffordanceActionConfirmationRequiredEvent,
+  buildNarsAffordanceActionFailureEvent,
+  buildNarsAffordanceActionRefusalEvent,
+  buildNarsAffordanceActionRequestedEvent,
+  buildNarsAffordanceActionResultEvent,
   classifyNarsClientEventProjection,
   filterAgentWebUiCommands,
   findAgentWebUiCommand,
@@ -73,6 +81,128 @@ test('NARS client projection contract owns attach commands and web UI capabiliti
   assert.equal(NARS_CLIENT_PROJECTION_REGISTRY.default_verbosity, 'conversation');
   assert.equal(NARS_CLIENT_PROJECTION_DEFAULT_VERBOSITY, 'conversation');
   assert.deepEqual(NARS_CLIENT_PROJECTION_VERBOSITY_LEVELS, ['conversation', 'operations', 'diagnostics', 'raw']);
+});
+
+test('NARS client projection contract owns affordance action request and event vocabulary', () => {
+  assert.equal(NARS_AFFORDANCE_ACTION_REQUEST_METHOD, 'session.affordance.action.request');
+  assert.deepEqual(NARS_AFFORDANCE_ACTION_EVENTS, {
+    requested: 'session_affordance_action_requested',
+    result: 'session_affordance_action_result',
+    refused: 'session_affordance_action_refused',
+    confirmationRequired: 'session_affordance_confirmation_required',
+  });
+  assert.equal(NARS_AFFORDANCE_ACTION_POSTURES.readOnlyOrIdempotent, 'read_only_or_idempotent');
+  assert.equal(NARS_AFFORDANCE_ACTION_REFUSAL_CODES.confirmationRequired, 'affordance_action_confirmation_required');
+  assert.equal(NARS_AFFORDANCE_ACTION_REFUSAL_CODES.notReadOnly, 'affordance_action_not_read_only');
+
+  assert.deepEqual(buildAgentWebUiAffordanceActionRequestFrame({
+    surfaceId: 'fixture.surface',
+    actionId: 'refresh',
+    args: { topic: 'status' },
+    clientCorrelationId: 'ui-1',
+  }, { id: 'action-1' }), {
+    id: 'action-1',
+    method: NARS_AFFORDANCE_ACTION_REQUEST_METHOD,
+    params: {
+      surface_id: 'fixture.surface',
+      action_id: 'refresh',
+      args: { topic: 'status' },
+      client_correlation_id: 'ui-1',
+    },
+  });
+
+  assert.deepEqual(buildNarsAffordanceActionRequestedEvent({
+    requestId: 'req-1',
+    surfaceId: 'fixture.surface',
+    actionId: 'refresh',
+    clientCorrelationId: 'ui-1',
+  }), {
+    schema: 'narada.nars.affordance_action_request.v1',
+    event: NARS_AFFORDANCE_ACTION_EVENTS.requested,
+    request_id: 'req-1',
+    transport: 'jsonl_stdio',
+    surface_id: 'fixture.surface',
+    action_id: 'refresh',
+    client_correlation_id: 'ui-1',
+  });
+
+  assert.deepEqual(buildNarsAffordanceActionResultEvent({
+    requestId: 'req-1',
+    surfaceId: 'fixture.surface',
+    actionId: 'refresh',
+    serverName: 'fixture-server',
+    toolName: 'fixture_read',
+    clientCorrelationId: 'ui-1',
+    result: { ok: true },
+  }), {
+    schema: 'narada.nars.affordance_action_result.v1',
+    event: NARS_AFFORDANCE_ACTION_EVENTS.result,
+    request_id: 'req-1',
+    transport: 'jsonl_stdio',
+    terminal_state: 'completed',
+    status: 'ok',
+    surface_id: 'fixture.surface',
+    action_id: 'refresh',
+    server_name: 'fixture-server',
+    tool_name: 'fixture_read',
+    client_correlation_id: 'ui-1',
+    result: { ok: true },
+  });
+
+  assert.deepEqual(buildNarsAffordanceActionFailureEvent({
+    requestId: 'req-1',
+    surfaceId: 'fixture.surface',
+    actionId: 'refresh',
+    serverName: 'fixture-server',
+    toolName: 'fixture_read',
+    error: new Error('boom'),
+  }), {
+    schema: 'narada.nars.affordance_action_result.v1',
+    event: NARS_AFFORDANCE_ACTION_EVENTS.result,
+    request_id: 'req-1',
+    transport: 'jsonl_stdio',
+    terminal_state: 'failed',
+    status: 'error',
+    surface_id: 'fixture.surface',
+    action_id: 'refresh',
+    server_name: 'fixture-server',
+    tool_name: 'fixture_read',
+    client_correlation_id: null,
+    error: 'boom',
+  });
+
+  assert.equal(buildNarsAffordanceActionRefusalEvent({
+    requestId: 'req-1',
+    surfaceId: 'fixture.surface',
+    actionId: 'mutate',
+    code: NARS_AFFORDANCE_ACTION_REFUSAL_CODES.notReadOnly,
+    message: 'blocked',
+    posture: NARS_AFFORDANCE_ACTION_POSTURES.unsafe,
+  }).event, NARS_AFFORDANCE_ACTION_EVENTS.refused);
+
+  assert.deepEqual(buildNarsAffordanceActionConfirmationRequiredEvent({
+    requestId: 'req-1',
+    surfaceId: 'fixture.surface',
+    actionId: 'mutate',
+    code: NARS_AFFORDANCE_ACTION_REFUSAL_CODES.confirmationRequired,
+    message: 'confirm',
+    posture: NARS_AFFORDANCE_ACTION_POSTURES.confirmationRequired,
+  }), {
+    schema: 'narada.nars.affordance_action_confirmation_required.v1',
+    event: NARS_AFFORDANCE_ACTION_EVENTS.confirmationRequired,
+    request_id: 'req-1',
+    transport: 'jsonl_stdio',
+    terminal_state: 'refused',
+    status: 'refused',
+    surface_id: 'fixture.surface',
+    action_id: 'mutate',
+    server_name: null,
+    tool_name: null,
+    client_correlation_id: null,
+    code: NARS_AFFORDANCE_ACTION_REFUSAL_CODES.confirmationRequired,
+    message: 'confirm',
+    posture: NARS_AFFORDANCE_ACTION_POSTURES.confirmationRequired,
+  });
 });
 
 test('NARS client projection contract owns web UI operator input projection', () => {

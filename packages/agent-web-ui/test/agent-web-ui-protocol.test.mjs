@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import { NARS_AFFORDANCE_ACTION_REQUEST_METHOD } from '@narada2/nars-client-projection-contract';
 import {
   buildAffordanceActionRequestFrame,
   buildArtifactsSummaryRequestFrame,
@@ -91,7 +92,7 @@ test('agent-web-ui emits admitted NARS methods for event attach and operator inp
   assert.equal(isAgentWebUiProtocolFrame(buildSurfaceAffordancesRequestFrame()), true);
   assert.deepEqual(buildAffordanceActionRequestFrame({ surfaceId: 'fixture.surface', actionId: 'refresh', args: { topic: 'status' } }, { id: 'action-1' }), {
     id: 'action-1',
-    method: 'session.affordance.action.request',
+    method: NARS_AFFORDANCE_ACTION_REQUEST_METHOD,
     params: { surface_id: 'fixture.surface', action_id: 'refresh', args: { topic: 'status' } },
   });
   assert.equal(isAgentWebUiProtocolFrame(buildAffordanceActionRequestFrame({ surfaceId: 'fixture.surface', actionId: 'refresh' })), true);

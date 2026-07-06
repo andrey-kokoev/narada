@@ -1,3 +1,13 @@
+import {
+  NARS_AFFORDANCE_ACTION_EVENTS,
+  NARS_AFFORDANCE_ACTION_POSTURES,
+  NARS_AFFORDANCE_ACTION_REFUSAL_CODES,
+  buildNarsAffordanceActionConfirmationRequiredEvent,
+  buildNarsAffordanceActionFailureEvent,
+  buildNarsAffordanceActionRefusalEvent,
+  buildNarsAffordanceActionRequestedEvent,
+  buildNarsAffordanceActionResultEvent,
+} from '@narada2/nars-client-projection-contract';
 import { sendMcpRequest } from './mcp-runtime.mjs';
 import { buildMcpSurfaceAffordanceProjection } from './surface-affordances.mjs';
 import { parseJson, randomId } from './runtime-tail-utils.mjs';
@@ -7,95 +17,74 @@ export async function serverAffordanceActionRequest({ requestId, params = {}, co
   const actionId = stringValue(params.action_id) ?? stringValue(params.actionId);
   const clientCorrelationId = stringValue(params.client_correlation_id) ?? stringValue(params.clientCorrelationId);
   const args = objectValue(params.args) ?? {};
-  const requested = {
-    schema: 'narada.nars.affordance_action_request.v1',
-    event: 'session_affordance_action_requested',
-    request_id: requestId,
-    transport: 'jsonl_stdio',
-    surface_id: surfaceId,
-    action_id: actionId,
-    client_correlation_id: clientCorrelationId,
-  };
-  context.emit('session_affordance_action_requested', requested);
+  const requested = buildNarsAffordanceActionRequestedEvent({
+    requestId,
+    surfaceId,
+    actionId,
+    clientCorrelationId,
+  });
+  context.emit(NARS_AFFORDANCE_ACTION_EVENTS.requested, requested);
   context.appendSessionRecord?.({ ...requested, operation_status: 'requested', requested_at: new Date().toISOString() });
   if (!surfaceId || !actionId) {
-    return affordanceActionRefusal({ requestId, surfaceId, actionId, clientCorrelationId, code: 'surface_id_and_action_id_required', message: 'session.affordance.action.request requires params.surface_id and params.action_id.' });
+    return affordanceActionRefusal({ requestId, surfaceId, actionId, clientCorrelationId, code: NARS_AFFORDANCE_ACTION_REFUSAL_CODES.requiredIdentity, message: 'session.affordance.action.request requires params.surface_id and params.action_id.' });
   }
 
   const projection = buildMcpSurfaceAffordanceProjection(context.mcpServers ?? {});
   const surface = projection.items.find((item) => item.surface_id === surfaceId) ?? null;
   if (!surface) {
-    return affordanceActionRefusal({ requestId, surfaceId, actionId, clientCorrelationId, code: 'surface_affordance_not_found', message: `No live surface affordance was found for ${surfaceId}.` });
+    return affordanceActionRefusal({ requestId, surfaceId, actionId, clientCorrelationId, code: NARS_AFFORDANCE_ACTION_REFUSAL_CODES.surfaceNotFound, message: `No live surface affordance was found for ${surfaceId}.` });
   }
   const action = findAffordanceAction(surface, actionId);
   if (!action) {
-    return affordanceActionRefusal({ requestId, surfaceId, actionId, clientCorrelationId, code: 'surface_affordance_action_not_found', message: `No live affordance action was found for ${surfaceId}/${actionId}.`, serverName: surface.server_name });
+    return affordanceActionRefusal({ requestId, surfaceId, actionId, clientCorrelationId, code: NARS_AFFORDANCE_ACTION_REFUSAL_CODES.actionNotFound, message: `No live affordance action was found for ${surfaceId}/${actionId}.`, serverName: surface.server_name });
   }
   const target = objectValue(action.target);
   if (target?.kind !== 'tool') {
-    return affordanceActionRefusal({ requestId, surfaceId, actionId, clientCorrelationId, code: 'affordance_action_target_not_executable', message: 'Only tool-target affordance actions can execute through this boundary.', serverName: surface.server_name });
+    return affordanceActionRefusal({ requestId, surfaceId, actionId, clientCorrelationId, code: NARS_AFFORDANCE_ACTION_REFUSAL_CODES.targetNotExecutable, message: 'Only tool-target affordance actions can execute through this boundary.', serverName: surface.server_name });
   }
   const posture = classifyAffordanceActionPosture(action);
-  if (posture !== 'read_only_or_idempotent') {
-    const event = affordanceActionRefusal({
+  if (posture !== NARS_AFFORDANCE_ACTION_POSTURES.readOnlyOrIdempotent) {
+    const options = {
       requestId,
       surfaceId,
       actionId,
       clientCorrelationId,
-      code: posture === 'confirmation_required' ? 'affordance_action_confirmation_required' : 'affordance_action_not_read_only',
-      message: posture === 'confirmation_required'
+      code: posture === NARS_AFFORDANCE_ACTION_POSTURES.confirmationRequired ? NARS_AFFORDANCE_ACTION_REFUSAL_CODES.confirmationRequired : NARS_AFFORDANCE_ACTION_REFUSAL_CODES.notReadOnly,
+      message: posture === NARS_AFFORDANCE_ACTION_POSTURES.confirmationRequired
         ? 'This affordance action requires an explicit confirmation flow before execution.'
         : 'This affordance action is not declared read-only or idempotent, so runtime refused execution.',
       serverName: surface.server_name,
       posture,
-    });
-    event.event = posture === 'confirmation_required' ? 'session_affordance_confirmation_required' : event.event;
-    event.schema = posture === 'confirmation_required' ? 'narada.nars.affordance_action_confirmation_required.v1' : event.schema;
-    return event;
+    };
+    return posture === NARS_AFFORDANCE_ACTION_POSTURES.confirmationRequired
+      ? buildNarsAffordanceActionConfirmationRequiredEvent(options)
+      : affordanceActionRefusal(options);
   }
   const serverName = surface.server_name;
   const server = context.mcpServers?.[serverName] ?? null;
   if (!server) {
-    return affordanceActionRefusal({ requestId, surfaceId, actionId, clientCorrelationId, code: 'surface_mcp_server_unavailable', message: `MCP server ${serverName ?? '<unknown>'} is not available.`, serverName });
+    return affordanceActionRefusal({ requestId, surfaceId, actionId, clientCorrelationId, code: NARS_AFFORDANCE_ACTION_REFUSAL_CODES.serverUnavailable, message: `MCP server ${serverName ?? '<unknown>'} is not available.`, serverName });
   }
   const toolName = stringValue(target.tool);
   const toolNames = new Set((server.tools ?? []).map((tool) => tool?.name).filter(Boolean));
   if (!toolName || !toolNames.has(toolName)) {
-    return affordanceActionRefusal({ requestId, surfaceId, actionId, clientCorrelationId, code: 'surface_affordance_tool_unavailable', message: `Tool target ${toolName ?? '<missing>'} is not available on ${serverName}.`, serverName, toolName });
+    return affordanceActionRefusal({ requestId, surfaceId, actionId, clientCorrelationId, code: NARS_AFFORDANCE_ACTION_REFUSAL_CODES.toolUnavailable, message: `Tool target ${toolName ?? '<missing>'} is not available on ${serverName}.`, serverName, toolName });
   }
   try {
     const result = await sendMcpRequest(server, { jsonrpc: '2.0', id: randomId(), method: 'tools/call', params: { name: toolName, arguments: args } });
-    const event = {
-      schema: 'narada.nars.affordance_action_result.v1',
-      event: 'session_affordance_action_result',
-      request_id: requestId,
-      transport: 'jsonl_stdio',
-      terminal_state: 'completed',
-      status: 'ok',
-      surface_id: surfaceId,
-      action_id: actionId,
-      server_name: serverName,
-      tool_name: toolName,
-      client_correlation_id: clientCorrelationId,
+    const event = buildNarsAffordanceActionResultEvent({
+      requestId,
+      surfaceId,
+      actionId,
+      serverName,
+      toolName,
+      clientCorrelationId,
       result: result.structuredContent ?? parseJson(result.content?.[0]?.text ?? '') ?? result,
-    };
+    });
     context.appendSessionRecord?.({ ...event, completed_at: new Date().toISOString() });
     return event;
   } catch (error) {
-    const event = {
-      schema: 'narada.nars.affordance_action_result.v1',
-      event: 'session_affordance_action_result',
-      request_id: requestId,
-      transport: 'jsonl_stdio',
-      terminal_state: 'failed',
-      status: 'error',
-      surface_id: surfaceId,
-      action_id: actionId,
-      server_name: serverName,
-      tool_name: toolName,
-      client_correlation_id: clientCorrelationId,
-      error: error instanceof Error ? error.message : String(error),
-    };
+    const event = buildNarsAffordanceActionFailureEvent({ requestId, surfaceId, actionId, serverName, toolName, clientCorrelationId, error });
     context.appendSessionRecord?.({ ...event, completed_at: new Date().toISOString() });
     return event;
   }
@@ -109,29 +98,14 @@ function findAffordanceAction(surface, actionId) {
 }
 
 function classifyAffordanceActionPosture(action) {
-  if (booleanValue(action.confirmation_required) || booleanValue(action.requires_confirmation)) return 'confirmation_required';
-  if (booleanValue(action.destructive) || stringValue(action.danger_level) === 'high') return 'unsafe';
-  if (booleanValue(action.read_only) || booleanValue(action.idempotent)) return 'read_only_or_idempotent';
-  return 'unsafe';
+  if (booleanValue(action.confirmation_required) || booleanValue(action.requires_confirmation)) return NARS_AFFORDANCE_ACTION_POSTURES.confirmationRequired;
+  if (booleanValue(action.destructive) || stringValue(action.danger_level) === 'high') return NARS_AFFORDANCE_ACTION_POSTURES.unsafe;
+  if (booleanValue(action.read_only) || booleanValue(action.idempotent)) return NARS_AFFORDANCE_ACTION_POSTURES.readOnlyOrIdempotent;
+  return NARS_AFFORDANCE_ACTION_POSTURES.unsafe;
 }
 
 function affordanceActionRefusal({ requestId, surfaceId, actionId, clientCorrelationId = null, code, message, serverName = null, toolName = null, posture = null }) {
-  return {
-    schema: 'narada.nars.affordance_action_refusal.v1',
-    event: 'session_affordance_action_refused',
-    request_id: requestId,
-    transport: 'jsonl_stdio',
-    terminal_state: 'refused',
-    status: 'refused',
-    surface_id: surfaceId,
-    action_id: actionId,
-    server_name: serverName,
-    tool_name: toolName,
-    client_correlation_id: clientCorrelationId,
-    code,
-    message,
-    ...(posture ? { posture } : {}),
-  };
+  return buildNarsAffordanceActionRefusalEvent({ requestId, surfaceId, actionId, clientCorrelationId, code, message, serverName, toolName, posture });
 }
 
 function objectValue(value) {

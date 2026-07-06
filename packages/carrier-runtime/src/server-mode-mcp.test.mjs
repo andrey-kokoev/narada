@@ -4,6 +4,11 @@ import { PassThrough } from 'node:stream';
 import test from 'node:test';
 import { join } from 'node:path';
 
+import {
+  NARS_AFFORDANCE_ACTION_EVENTS,
+  NARS_AFFORDANCE_ACTION_REFUSAL_CODES,
+  NARS_AFFORDANCE_ACTION_REQUEST_METHOD,
+} from '@narada2/nars-client-projection-contract';
 import { resolveNaradaSitePaths } from '@narada2/site-paths';
 import { createCarrierRuntimeDependencies } from './runtime-dependencies.mjs';
 import { runCarrierServerMode } from './server-mode.mjs';
@@ -170,7 +175,7 @@ test('server mode executes read-only generic affordance actions through MCP fabr
       providerSettings: { provider: 'codex-subscription', model: 'gpt-5.5', thinking: 'medium', stream: false },
     };
     const { dependencies } = createCarrierRuntimeDependencies({ runtimeContext });
-    input.write(`${JSON.stringify({ id: 'action-1', method: 'session.affordance.action.request', params: { surface_id: 'fixture.surface', action_id: 'refresh', args: { topic: 'affordance' }, client_correlation_id: 'ui-1' } })}\n`);
+    input.write(`${JSON.stringify({ id: 'action-1', method: NARS_AFFORDANCE_ACTION_REQUEST_METHOD, params: { surface_id: 'fixture.surface', action_id: 'refresh', args: { topic: 'affordance' }, client_correlation_id: 'ui-1' } })}\n`);
     input.end();
 
     await runCarrierServerMode({
@@ -184,16 +189,16 @@ test('server mode executes read-only generic affordance actions through MCP fabr
       },
     });
 
-    const requested = events.find((event) => event.event === 'session_affordance_action_requested');
+    const requested = events.find((event) => event.event === NARS_AFFORDANCE_ACTION_EVENTS.requested);
     assert.equal(requested?.surface_id, 'fixture.surface');
     assert.equal(requested?.action_id, 'refresh');
-    const result = events.find((event) => event.event === 'session_affordance_action_result');
+    const result = events.find((event) => event.event === NARS_AFFORDANCE_ACTION_EVENTS.result);
     assert.equal(result?.status, 'ok', JSON.stringify(events));
     assert.equal(result?.tool_name, 'fixture_read');
     assert.equal(result?.result?.topic, 'affordance');
     const sessionRecords = readJsonl(join(sessionDir, 'session.jsonl'));
-    assert.equal(sessionRecords.some((record) => record.event === 'session_affordance_action_requested'), true);
-    assert.equal(sessionRecords.some((record) => record.event === 'session_affordance_action_result' && record.status === 'ok'), true);
+    assert.equal(sessionRecords.some((record) => record.event === NARS_AFFORDANCE_ACTION_EVENTS.requested), true);
+    assert.equal(sessionRecords.some((record) => record.event === NARS_AFFORDANCE_ACTION_EVENTS.result && record.status === 'ok'), true);
   } finally {
     removeTempDir(siteRoot);
   }
@@ -227,7 +232,7 @@ test('server mode refuses unsafe generic affordance actions before MCP tool exec
       providerSettings: { provider: 'codex-subscription', model: 'gpt-5.5', thinking: 'medium', stream: false },
     };
     const { dependencies } = createCarrierRuntimeDependencies({ runtimeContext });
-    input.write(`${JSON.stringify({ id: 'action-2', method: 'session.affordance.action.request', params: { surface_id: 'fixture.surface', action_id: 'mutate', args: { topic: 'blocked' } } })}\n`);
+    input.write(`${JSON.stringify({ id: 'action-2', method: NARS_AFFORDANCE_ACTION_REQUEST_METHOD, params: { surface_id: 'fixture.surface', action_id: 'mutate', args: { topic: 'blocked' } } })}\n`);
     input.end();
 
     await runCarrierServerMode({
@@ -241,10 +246,10 @@ test('server mode refuses unsafe generic affordance actions before MCP tool exec
       },
     });
 
-    const confirmation = events.find((event) => event.event === 'session_affordance_confirmation_required');
+    const confirmation = events.find((event) => event.event === NARS_AFFORDANCE_ACTION_EVENTS.confirmationRequired);
     assert.equal(confirmation?.terminal_state, 'refused', JSON.stringify(events));
-    assert.equal(confirmation?.code, 'affordance_action_confirmation_required');
-    assert.equal(events.some((event) => event.event === 'session_affordance_action_result'), false);
+    assert.equal(confirmation?.code, NARS_AFFORDANCE_ACTION_REFUSAL_CODES.confirmationRequired);
+    assert.equal(events.some((event) => event.event === NARS_AFFORDANCE_ACTION_EVENTS.result), false);
     assert.equal(events.some((event) => event.event === 'tool_call' && event.tool === 'fixture_read'), false);
   } finally {
     removeTempDir(siteRoot);
