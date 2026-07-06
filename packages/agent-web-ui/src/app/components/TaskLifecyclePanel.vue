@@ -5,6 +5,7 @@ import type { TaskLifecycleSummary } from '../composables/useTaskLifecycleSummar
 const props = defineProps<{
   available: boolean;
   summary: TaskLifecycleSummary;
+  triggerless?: boolean;
 }>();
 const emit = defineEmits<{
   refresh: [];
@@ -88,12 +89,13 @@ async function copyDiagnostics() {
 </script>
 
 <template>
-  <div v-if="available" class="task-lifecycle-panel-shell">
-    <button type="button" class="mcp-panel-trigger task-lifecycle-panel-trigger" :aria-expanded="open" aria-controls="task-lifecycle-panel" @click="open = !open">
+  <div v-if="available && !triggerless" class="task-lifecycle-panel-shell">
+    <button v-if="!triggerless" type="button" class="mcp-panel-trigger task-lifecycle-panel-trigger" :aria-expanded="open" aria-controls="task-lifecycle-panel" @click="open = !open">
       <span class="chip-dot" aria-hidden="true"></span>
       <span>{{ taskLifecycleLabel }}</span>
     </button>
-    <Teleport to="body">
+  </div>
+  <Teleport v-if="available" to="body">
       <Transition name="mcp-drawer">
         <div v-if="open" class="mcp-drawer-layer" role="presentation">
           <button type="button" class="mcp-drawer-backdrop" aria-label="Close Tasks panel" @click="open = false"></button>
@@ -146,6 +148,5 @@ async function copyDiagnostics() {
           </aside>
         </div>
       </Transition>
-    </Teleport>
-  </div>
+  </Teleport>
 </template>

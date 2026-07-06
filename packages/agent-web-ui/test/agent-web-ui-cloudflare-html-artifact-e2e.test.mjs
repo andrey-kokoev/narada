@@ -1,12 +1,18 @@
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
-import { rm } from 'node:fs/promises';
+import { spawn } from 'node:child_process';
+import { existsSync, mkdirSync, mkdtempSync, statSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { PassThrough } from 'node:stream';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 import { createCloudflareNarsProjectionWorker } from '@narada2/cloudflare-nars-projection/worker';
 import { resolveNaradaSitePaths } from '@narada2/site-paths';
+import { createEventHub, startHealthProjection, startEventStreamProjection } from '@narada2/agent-runtime-server';
+import { createCarrierRuntimeDependencies } from '../../carrier-runtime/src/runtime-dependencies.mjs';
+import { runCarrierServerMode } from '../../carrier-runtime/src/server-mode.mjs';
+import { removeTempDir, waitFor } from '../../carrier-runtime/src/server-mode-test-helpers.mjs';
 import {
   registerProjectionRemotely,
   startLocalProjectionBridgeOnce,
@@ -20,16 +26,15 @@ import {
 } from '../../cloudflare-nars-projection/scripts/lib/browser-smoke.mjs';
 
 const now = '2026-07-01T12:00:00.000Z';
+const speechMcpMain = fileURLToPath(new URL('../../../../mcp-surfaces/packages/speech-mcp/dist/src/main.js', import.meta.url));
 
-function createLocalNarsSiteWithHtmlArtifact() {
-  const siteRoot = mkdtempSync(join(tmpdir(), 'narada-web-ui-html-artifact-e2e-'));
+async function createRealNarsSiteWithHtmlArtifact() {
+  const siteRoot = mkdtempSync(join(tmpdir(), 'narada-web-ui-real-html-artifact-e2e-'));
   const sessionId = 'carrier_html_artifact_e2e';
   const sitePaths = resolveNaradaSitePaths({ siteRoot, sessionId });
   const sessionDir = sitePaths.narsSessionDir;
-  const artifactsDir = join(sessionDir, 'artifacts');
-  mkdirSync(artifactsDir, { recursive: true });
-
-  const htmlPath = join(artifactsDir, 'preview.html');
+  mkdirSync(sessionDir, { recursive: true });
+  const htmlPath = join(siteRoot, 'preview.html');
   writeFileSync(htmlPath, [
     '<!doctype html>',
     '<html lang="en">',
@@ -38,82 +43,89 @@ function createLocalNarsSiteWithHtmlArtifact() {
     '</body>',
     '</html>',
   ].join(''), 'utf8');
+  const audioPath = join(siteRoot, 'spoken.wav');
+  assert.ok(existsSync(speechMcpMain), `expected built speech-mcp at ${speechMcpMain}; run pnpm --dir D:/code/mcp-surfaces --filter @narada2/speech-mcp build`);
+  const speech = await callLiveSpeechMcp({
+    siteRoot,
+    outputPath: audioPath,
+    text: 'Narada Cloudflare speech audio projection end to end test.',
+  });
+  assert.equal(speech.status, 'spoken');
+  assert.equal(speech.provider, 'sapi');
+  assert.equal(speech.retained_audio?.path, audioPath);
+  assert.equal(speech.retained_audio?.content_type, 'audio/wav');
+  assert.equal(existsSync(audioPath), true);
+  assert.ok(statSync(audioPath).size > 44, 'expected speech MCP to retain a non-empty WAV file');
 
-  const eventsPath = join(sessionDir, 'events.jsonl');
-  const sessionPath = join(sessionDir, 'session.jsonl');
-  writeFileSync(sessionPath, '');
-  writeFileSync(eventsPath, [
-    JSON.stringify({
-      event: 'session_started',
-      event_sequence: 1,
-      agent_id: 'resident',
-      session_id: sessionId,
-      site_id: 'narada.e2e',
-      timestamp: now,
-    }),
-    JSON.stringify({
-      event: 'assistant_message',
-      event_sequence: 2,
-      agent_id: 'resident',
-      session_id: sessionId,
-      timestamp: now,
-      request_id: 'artifact_present_art_html',
-      source: 'nars_artifact_presentation',
-      content: [
-        { type: 'text', text: 'Here is the HTML artifact from local NARS.' },
-        {
-          type: 'artifact_ref',
-          artifact_id: 'art_html',
-          kind: 'html',
-          title: 'Remote HTML Preview',
-          render_hint: 'inline',
-        },
-      ],
-    }),
-  ].join('\n'));
-
-  writeFileSync(join(artifactsDir, 'index.json'), `${JSON.stringify({
-    schema: 'narada.nars.artifact_index.v1',
-    session_id: sessionId,
-    artifacts: [{
-      schema: 'narada.nars.artifact_record.v1',
-      artifact_id: 'art_html',
-      session_id: sessionId,
-      agent_id: 'resident',
-      kind: 'html',
-      title: 'Remote HTML Preview',
-      source_path: htmlPath,
-      content_type: 'text/html; charset=utf-8',
-      created_at: now,
-      access: { scope: 'session', token_required: false },
-      render: {
-        preferred: 'inline',
-        sandbox: { allow_scripts: true, allow_top_navigation: false },
-      },
-      lifecycle: { state: 'active', owner: 'nars-session' },
-    }],
-  }, null, 2)}\n`, 'utf8');
-
-  const recordPath = join(sessionDir, 'session-index-record.json');
-  writeFileSync(recordPath, `${JSON.stringify({
-    schema: 'narada.nars.session_index_record.v1',
-    session_id: sessionId,
-    carrier_session_id: sessionId,
-    agent_id: 'resident',
-    site_id: 'narada.e2e',
-    site_root: siteRoot,
-    events_path: eventsPath,
-    session_path: sessionPath,
-    health_endpoint: 'http://127.0.0.1:9/health',
-  }, null, 2)}\n`, 'utf8');
-
-  writeFileSync(join(sitePaths.narsSessionsRoot, 'index.json'), `${JSON.stringify({
-    schema: 'narada.nars.session_index.v1',
-    site_root: siteRoot,
-    sessions: [{ session_id: sessionId, carrier_session_id: sessionId, record_path: recordPath }],
-  }, null, 2)}\n`, 'utf8');
-
-  return { siteRoot, sessionId };
+  const runtimeInput = new PassThrough();
+  const runtimeOutput = new PassThrough();
+  const eventHub = createEventHub();
+  const events = [];
+  let outputBuffer = '';
+  let runtimePromise = null;
+  let healthProjection = null;
+  let eventProjection = null;
+  const baseRuntimeContext = {
+    identity: 'resident',
+    session: sessionId,
+    siteRoot,
+    siteId: 'narada.e2e',
+    operatorSurfaceKind: 'agent-web-ui',
+    sessionPath: join(sessionDir, 'session.jsonl'),
+    eventsPath: join(sessionDir, 'events.jsonl'),
+    intelligenceProvider: 'codex-subscription',
+    providerSettings: { provider: 'codex-subscription', model: 'gpt-5.5', thinking: 'medium', stream: false },
+  };
+  healthProjection = await startHealthProjection({ childStdin: () => runtimeInput, host: '127.0.0.1', port: 0, runtimeContext: { ...baseRuntimeContext, eventHub } });
+  eventProjection = await startEventStreamProjection({ childStdin: () => runtimeInput, eventHub, host: '127.0.0.1', port: 0, eventsPath: baseRuntimeContext.eventsPath });
+  const runtimeContext = { ...baseRuntimeContext, healthUrl: healthProjection.url, eventStreamUrl: eventProjection.url };
+  const { dependencies } = createCarrierRuntimeDependencies({ runtimeContext });
+  runtimeOutput.setEncoding('utf8');
+  runtimeOutput.on('data', (chunk) => {
+    outputBuffer += chunk;
+    const lines = outputBuffer.split(/\r?\n/);
+    outputBuffer = lines.pop() ?? '';
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      const event = JSON.parse(line);
+      events.push(event);
+      healthProjection?.observe(event);
+      eventHub.publish(event);
+    }
+  });
+  runtimePromise = runCarrierServerMode({
+    input: runtimeInput,
+    output: runtimeOutput,
+    callChatApiFn: async () => ({ choices: [{ message: { role: 'assistant', content: 'unused' } }] }),
+    runtimeContext,
+    dependencies: { ...dependencies, readMcpPreflightArtifact: () => null },
+  });
+  await waitFor(() => events.some((event) => event.event === 'session_started'), { timeoutMs: 2000 });
+  runtimeInput.write(`${JSON.stringify({ id: 'artifact-register-1', method: 'session.artifacts.register', params: { source_path: htmlPath, kind: 'html', title: 'Remote HTML Preview', render_hint: 'inline', content_type: 'text/html; charset=utf-8' } })}\n`);
+  await waitFor(() => events.some((event) => event.event === 'session_artifact_registered' && event.artifact?.title === 'Remote HTML Preview'), { timeoutMs: 2000 });
+  const registeredArtifact = events.find((event) => event.event === 'session_artifact_registered' && event.artifact?.title === 'Remote HTML Preview')?.artifact;
+  runtimeInput.write(`${JSON.stringify({ id: 'artifact-register-audio-1', method: 'session.artifacts.register', params: { source_path: audioPath, kind: 'audio', title: 'Remote Audio Briefing', render_hint: 'inline' } })}\n`);
+  await waitFor(() => events.some((event) => event.event === 'session_artifact_registered' && event.artifact?.title === 'Remote Audio Briefing'), { timeoutMs: 2000 });
+  const registeredAudioArtifact = events.find((event) => event.event === 'session_artifact_registered' && event.artifact?.title === 'Remote Audio Briefing')?.artifact;
+  const presentedAudioResponse = await fetch(new URL(`/sessions/${sessionId}/artifacts/${registeredAudioArtifact?.artifact_id}/message`, healthProjection.url), {
+    method: 'POST',
+    body: JSON.stringify({ text: 'Spoken version is ready.' }),
+  });
+  assert.equal(presentedAudioResponse.status, 201);
+  return {
+    siteRoot,
+    sessionId,
+    artifactId: registeredArtifact?.artifact_id,
+    audioArtifactId: registeredAudioArtifact?.artifact_id,
+    audioPath,
+    async close() {
+      runtimeInput.end();
+      if (runtimePromise) await Promise.race([runtimePromise, new Promise((resolve) => setTimeout(resolve, 1000))]);
+      healthProjection?.server.close();
+      eventProjection?.server.close();
+      removeTempDir(siteRoot);
+    },
+  };
 }
 
 function listen(server, host = '127.0.0.1') {
@@ -169,11 +181,77 @@ async function workerFetch(worker, url, init = {}) {
   return worker.fetch(new Request(url, init));
 }
 
+async function callLiveSpeechMcp({ siteRoot, outputPath, text }) {
+  const child = spawn(process.execPath, [speechMcpMain], {
+    cwd: dirname(speechMcpMain),
+    env: {
+      ...process.env,
+      NARADA_SITE_ROOT: siteRoot,
+      NARADA_WORKSPACE_ROOT: siteRoot,
+      NARADA_SPEECH_ANNOUNCE_SPEAKER: 'false',
+    },
+    stdio: ['pipe', 'pipe', 'pipe'],
+    windowsHide: true,
+  });
+  child.stdout.setEncoding('utf8');
+  child.stderr.setEncoding('utf8');
+  let stdout = '';
+  let stderr = '';
+  let settled = false;
+  const responsePromise = new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      reject(new Error(`speech_mcp_timeout: stdout=${stdout.slice(-1000)} stderr=${stderr.slice(-1000)}`));
+      try { child.kill(); } catch { /* already exited */ }
+    }, 45000);
+    child.stderr.on('data', (chunk) => { stderr += chunk; });
+    child.stdout.on('data', (chunk) => {
+      stdout += chunk;
+      const lines = stdout.split(/\r?\n/);
+      stdout = lines.pop() ?? '';
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        settled = true;
+        clearTimeout(timeout);
+        resolve(JSON.parse(line));
+      }
+    });
+    child.once('error', (error) => {
+      clearTimeout(timeout);
+      reject(error);
+    });
+    child.once('close', (code) => {
+      if (settled) return;
+      clearTimeout(timeout);
+      reject(new Error(`speech_mcp_exited_before_response:${code}: stdout=${stdout.slice(-1000)} stderr=${stderr.slice(-1000)}`));
+    });
+  });
+  child.stdin.write(`${JSON.stringify({
+    jsonrpc: '2.0',
+    id: 1,
+    method: 'tools/call',
+    params: {
+      name: 'speech_speak',
+      arguments: {
+        text,
+        provider: 'sapi',
+        announce_speaker: false,
+        output_path: outputPath,
+      },
+    },
+  })}\n`);
+  const response = await responsePromise;
+  child.stdin.end();
+  try { child.kill(); } catch { /* already closed */ }
+  if (response.error) throw new Error(`speech_mcp_error: ${JSON.stringify(response.error)}`);
+  return response.result.structuredContent;
+}
+
 test('hosted Cloudflare projection web UI renders explicitly admitted local NARS HTML artifact', async () => {
   const browserPath = findHeadlessBrowser();
   assert.ok(browserPath, 'expected an installed Chromium-family browser for hosted artifact E2E');
 
-  const { siteRoot, sessionId } = createLocalNarsSiteWithHtmlArtifact();
+  const localNars = await createRealNarsSiteWithHtmlArtifact();
+  const { siteRoot, sessionId, artifactId, audioArtifactId, audioPath } = localNars;
   const projectionId = 'proj_html_artifact_e2e';
   const worker = createCloudflareNarsProjectionWorker({ now: () => now });
   const envRef = { current: {} };
@@ -208,7 +286,7 @@ test('hosted Cloudflare projection web UI renders explicitly admitted local NARS
       cloudflare_api_base_url: workerBaseUrl,
       artifact_projection_policy: {
         content: 'explicit_artifacts',
-        explicit_artifact_ids: ['art_html'],
+        explicit_artifact_ids: [artifactId, audioArtifactId],
         html: { mode: 'explicit_artifacts', sandbox: 'nars_default_strict' },
         redact_local_paths: true,
       },
@@ -226,19 +304,26 @@ test('hosted Cloudflare projection web UI renders explicitly admitted local NARS
       now,
     });
     assert.equal(bridge.status, 'connected');
-    assert.equal(bridge.projected_artifact_metadata_count, 1);
-    assert.equal(bridge.projected_artifact_content_count, 1);
+    assert.equal(bridge.projected_artifact_metadata_count, 2);
+    assert.equal(bridge.projected_artifact_content_count, 2);
 
-    const artifactResponse = await workerFetch(worker, `${workerBaseUrl}/api/nars/projections/${projectionId}/artifacts/art_html/content`, {
+    const artifactResponse = await workerFetch(worker, `${workerBaseUrl}/api/nars/projections/${projectionId}/artifacts/${encodeURIComponent(artifactId)}/content`, {
       headers: { 'x-narada-browser-token-fingerprint': browserToken },
     });
     assert.equal(artifactResponse.status, 200);
     assert.match(await artifactResponse.text(), /Local NARS HTML artifact rendered through remote surface/);
+    const audioArtifactResponse = await workerFetch(worker, `${workerBaseUrl}/api/nars/projections/${projectionId}/artifacts/${encodeURIComponent(audioArtifactId)}/content`, {
+      headers: { 'x-narada-browser-token-fingerprint': browserToken },
+    });
+    assert.equal(audioArtifactResponse.status, 200);
+    assert.equal(audioArtifactResponse.headers.get('content-type'), 'audio/wav');
+    assert.equal(Buffer.from(await audioArtifactResponse.arrayBuffer()).byteLength, statSync(audioPath).size);
 
     const hostedUrl = `${workerBaseUrl}/?cloudflare_projection_id=${encodeURIComponent(projectionId)}&cloudflare_api_base_url=${encodeURIComponent(workerBaseUrl)}&cloudflare_browser_token=${encodeURIComponent(browserToken)}`;
     page = await openCdpPage({ browserPath, url: hostedUrl, userDataPrefix: 'narada-agent-web-ui-html-artifact-e2e-' });
     assert.equal((await waitForPageText(page, 'Browser projection attached', 15000)).found, true);
     assert.equal((await waitForPageText(page, 'Remote HTML Preview', 15000)).found, true);
+    assert.equal((await waitForPageText(page, 'Remote Audio Briefing', 15000)).found, true);
     const iframe = await waitForPageTextWithAction(
       page,
       'Remote HTML Preview',
@@ -247,7 +332,7 @@ test('hosted Cloudflare projection web UI renders explicitly admitted local NARS
     );
     assert.equal(iframe.found, true);
     const iframeSrc = await page.evaluate('document.querySelector("iframe.artifact-html-preview")?.src ?? ""');
-    assert.match(iframeSrc, /\/api\/nars\/projections\/proj_html_artifact_e2e\/artifacts\/art_html\/content/);
+    assert.equal(iframeSrc.includes(`/api/nars/projections/proj_html_artifact_e2e/artifacts/${encodeURIComponent(artifactId)}/content`), true);
     const iframeMarkup = await page.evaluate('document.querySelector("iframe.artifact-html-preview")?.outerHTML ?? ""');
     assert.match(iframeMarkup, /artifact-html-preview/);
     const iframeBox = await page.evaluate(`(() => {
@@ -258,19 +343,36 @@ test('hosted Cloudflare projection web UI renders explicitly admitted local NARS
     })()`);
     assert.ok(iframeBox?.width > 100 && iframeBox?.height > 80, JSON.stringify({ iframeMarkup, iframeBox }));
     const iframeNetwork = await page.waitForNetworkResponse(
-      (entry) => String(entry.url ?? '').includes('/api/nars/projections/proj_html_artifact_e2e/artifacts/art_html/content'),
+      (entry) => String(entry.url ?? '').includes(`/api/nars/projections/proj_html_artifact_e2e/artifacts/${encodeURIComponent(artifactId)}/content`),
       5000,
     );
     assert.equal(iframeNetwork.found, true, JSON.stringify({ iframeMarkup, iframeNetwork }));
     assert.equal(iframeNetwork.status, 200, JSON.stringify(iframeNetwork));
-    const servedIframe = servedResponses.find((entry) => entry.url.includes('/api/nars/projections/proj_html_artifact_e2e/artifacts/art_html/content'));
+    const servedIframe = servedResponses.find((entry) => entry.url.includes(`/api/nars/projections/proj_html_artifact_e2e/artifacts/${encodeURIComponent(artifactId)}/content`));
     assert.ok(servedIframe, JSON.stringify(servedResponses.map((entry) => ({ url: entry.url, status: entry.status, content_type: entry.content_type }))));
     assert.equal(servedIframe.status, 200);
     assert.match(servedIframe.body, /Local NARS HTML artifact rendered through remote surface/);
+    const audio = await waitForPageTextWithAction(
+      page,
+      'Remote Audio Briefing',
+      15000,
+      async () => page.evaluate('Boolean(document.querySelector("audio.artifact-audio-preview[controls]"))'),
+    );
+    assert.equal(audio.found, true);
+    const audioSrc = await page.evaluate('document.querySelector("audio.artifact-audio-preview")?.src ?? ""');
+    assert.equal(audioSrc.includes(`/api/nars/projections/proj_html_artifact_e2e/artifacts/${encodeURIComponent(audioArtifactId)}/content`), true);
+    const browserAudioResponse = await page.evaluate(`(async () => {
+      const src = ${JSON.stringify(audioSrc)};
+      const response = await fetch(src);
+      return { status: response.status, contentType: response.headers.get('content-type'), byteLength: (await response.arrayBuffer()).byteLength };
+    })()`);
+    assert.equal(browserAudioResponse.status, 200, JSON.stringify(browserAudioResponse));
+    assert.equal(browserAudioResponse.contentType, 'audio/wav');
+    assert.equal(browserAudioResponse.byteLength, statSync(audioPath).size);
   } finally {
     if (page) await page.close();
     await closeServer(assetServerResult.server);
     await closeServer(workerServer);
-    await rm(siteRoot, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+    await localNars.close();
   }
 });

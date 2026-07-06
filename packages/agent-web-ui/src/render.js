@@ -97,6 +97,13 @@ function createArtifactReferenceCard(part, documentRef, context = {}) {
     frame.src = contentPath;
     frame.title = String(part.title ?? artifactId);
     card.append(frame);
+  } else if (String(part.kind ?? '') === 'audio' && contentPath) {
+    const audio = documentRef.createElement('audio');
+    audio.className = 'artifact-audio-preview';
+    audio.controls = true;
+    audio.preload = 'metadata';
+    audio.src = contentPath;
+    card.append(audio);
   } else {
     const status = documentRef.createElement('p');
     status.className = 'artifact-status';

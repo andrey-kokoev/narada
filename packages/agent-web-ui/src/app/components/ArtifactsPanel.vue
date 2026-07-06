@@ -5,6 +5,7 @@ import type { ArtifactsSummary } from '../composables/useArtifactsSummary';
 const props = defineProps<{
   available: boolean;
   summary: ArtifactsSummary;
+  triggerless?: boolean;
 }>();
 const emit = defineEmits<{
   refresh: [];
@@ -81,12 +82,13 @@ async function copyDiagnostics() {
 </script>
 
 <template>
-  <div v-if="available" class="artifacts-panel-shell">
-    <button type="button" class="mcp-panel-trigger artifacts-panel-trigger" :aria-expanded="open" aria-controls="artifacts-panel" @click="open = !open">
+  <div v-if="available && !triggerless" class="artifacts-panel-shell">
+    <button v-if="!triggerless" type="button" class="mcp-panel-trigger artifacts-panel-trigger" :aria-expanded="open" aria-controls="artifacts-panel" @click="open = !open">
       <span class="chip-dot" aria-hidden="true"></span>
       <span>{{ artifactsLabel }}</span>
     </button>
-    <Teleport to="body">
+  </div>
+  <Teleport v-if="available" to="body">
       <Transition name="mcp-drawer">
         <div v-if="open" class="mcp-drawer-layer" role="presentation">
           <button type="button" class="mcp-drawer-backdrop" aria-label="Close Artifacts panel" @click="open = false"></button>
@@ -139,6 +141,5 @@ async function copyDiagnostics() {
           </aside>
         </div>
       </Transition>
-    </Teleport>
-  </div>
+  </Teleport>
 </template>

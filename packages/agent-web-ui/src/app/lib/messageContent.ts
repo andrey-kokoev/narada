@@ -1,3 +1,5 @@
+import { renderOperatorValue } from '@narada2/agent-identity';
+
 export type MessageRenderKind = 'plain_text' | 'markdown' | 'code_block' | 'mermaid_diagram' | 'json_block' | 'artifact_ref';
 
 export interface ArtifactRefContent {
@@ -42,7 +44,7 @@ function parseStructuredMessageContent(content: unknown[]): MessageRenderPart[] 
       ordinal += 1;
       continue;
     }
-    ordinal = appendTextPart(parts, JSON.stringify(typed, null, 2), ordinal);
+    ordinal = appendTextPart(parts, renderOperatorValue(typed, { mode: 'block' }), ordinal);
   }
   return parts;
 }

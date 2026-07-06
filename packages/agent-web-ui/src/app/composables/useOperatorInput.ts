@@ -1,6 +1,6 @@
 import { ref, type ShallowRef } from 'vue';
 import { buildAgentWebUiOperatorInputAction } from '@narada2/nars-client-projection-contract';
-import { submitOperatorInput, type AuthorityTransitionInputPolicy, type OperatorInputDeliveryMode } from '../../protocol/operatorInput';
+import { submitOperatorConversationText, submitOperatorInput, type AuthorityTransitionInputPolicy, type OperatorInputDeliveryMode } from '../../protocol/operatorInput';
 import type { NarsClientConnection } from '../../protocol/narsClient';
 
 export interface OperatorQueueItem {
@@ -14,14 +14,30 @@ export interface OperatorQueueItem {
 
 export function useOperatorInput(connection: ShallowRef<NarsClientConnection | null>, retain: (event: unknown) => void, clearEvents: () => void, authorityTransition: AuthorityTransitionInputPolicy | null = null) {
   const draft = ref('');
-  function submit(deliveryMode: OperatorInputDeliveryMode = 'default') {
-    const result = submitOperatorInput(draft.value, connection.value, authorityTransition, deliveryMode);
+  function handleResult(result: ReturnType<typeof submitOperatorInput>, clearDraft = true): boolean {
     if (result.localEvent) {
       if ((result.localEvent as { event?: string }).event === 'agent_web_ui_clear_requested') clearEvents();
       else retain(result.localEvent);
     }
-    if (result.shouldClearDraft) draft.value = '';
+    if (clearDraft && result.shouldClearDraft) draft.value = '';
     return result.handled;
+  }
+
+  function submit(deliveryMode: OperatorInputDeliveryMode = 'default') {
+    return handleResult(submitOperatorInput(draft.value, connection.value, authorityTransition, deliveryMode));
+  }
+
+  function submitText(text: string, deliveryMode: OperatorInputDeliveryMode = 'default') {
+    return handleResult(submitOperatorInput(text, connection.value, authorityTransition, deliveryMode), false);
+  }
+
+  function submitConversationText(text: string, deliveryMode: OperatorInputDeliveryMode = 'default') {
+    return handleResult(submitOperatorConversationText(text, connection.value, authorityTransition, deliveryMode), false);
+  }
+
+  function retainLocal(event: unknown): boolean {
+    retain(event);
+    return true;
   }
 
   function dropQueued(index: number): boolean {
@@ -59,5 +75,5 @@ export function useOperatorInput(connection: ShallowRef<NarsClientConnection | n
     });
   }
 
-  return { draft, submit, interrupt, dropQueued, editQueued, steerQueuedNow };
+  return { draft, submit, submitText, submitConversationText, retainLocal, interrupt, dropQueued, editQueued, steerQueuedNow };
 }

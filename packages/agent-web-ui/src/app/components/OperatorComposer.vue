@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { filterAgentWebUiCommands, type AgentWebUiCommand } from '@narada2/nars-client-projection-contract';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import type { OperatorSnippet } from '../composables/useOperatorSnippets';
 
 const draft = defineModel<string>({ required: true });
-const props = defineProps<{ disabled?: boolean; disabledReason?: string; canInterrupt?: boolean }>();
-const emit = defineEmits<{ submit: [deliveryMode?: 'default' | 'enqueue']; interrupt: [] }>();
+const props = defineProps<{ disabled?: boolean; disabledReason?: string; canInterrupt?: boolean; operatorSnippets?: OperatorSnippet[] }>();
+const emit = defineEmits<{ submit: [deliveryMode?: 'default' | 'enqueue']; 'run-snippet': [snippet: OperatorSnippet, deliveryMode?: 'default' | 'enqueue']; interrupt: [] }>();
 const inputRef = ref<HTMLTextAreaElement | null>(null);
 const interruptArmed = ref(false);
 const interruptModalVisible = ref(false);
@@ -20,7 +21,36 @@ const commandQuery = computed(() => {
   return draft.value.slice(1).split(/\s+/)[0] ?? '';
 });
 const commandPaletteOpen = computed(() => draft.value.startsWith('/') && draft.value !== commandPaletteDismissedFor.value && !props.disabled);
-const commandResults = computed<AgentWebUiCommand[]>(() => filterAgentWebUiCommands(commandQuery.value).slice(0, 8));
+type PaletteEntry =
+  | { kind: 'command'; command: AgentWebUiCommand; id: string; slash: string; title: string; description: string; meta: string; danger: boolean }
+  | { kind: 'snippet'; snippet: OperatorSnippet; deliveryMode: 'default' | 'enqueue'; id: string; slash: string; title: string; description: string; meta: string; danger: false };
+
+const commandResults = computed<PaletteEntry[]>(() => {
+  const commands: PaletteEntry[] = filterAgentWebUiCommands(commandQuery.value).map((command) => ({
+    kind: 'command',
+    command,
+    id: command.id,
+    slash: command.slash,
+    title: command.title,
+    description: command.description,
+    meta: command.group,
+    danger: command.palette.danger,
+  }));
+  const snippetVerb = currentSnippetVerb();
+  const snippetResults = filterSnippetResults(commandQuery.value).map((snippet) => ({
+    kind: 'snippet' as const,
+    snippet,
+    deliveryMode: snippetVerb === 'enqueue' ? 'enqueue' as const : 'default' as const,
+    id: `snippet-${snippet.id}`,
+    slash: `/snippet ${snippetVerb} ${snippet.name}`,
+    title: snippet.name,
+    description: snippet.body.slice(0, 120),
+    meta: [snippet.pinned ? 'pinned' : 'snippet', snippetVerb === 'enqueue' ? 'queue' : 'run', snippet.last_used_at ? `used ${snippet.use_count ?? 0}` : null].filter(Boolean).join(' / '),
+    danger: false as const,
+  }));
+  const snippetRunMode = /^\/snippet\s+(run|send|enqueue)\s+/i.test(draft.value.trim());
+  return (snippetRunMode ? [...snippetResults, ...commands] : [...commands, ...snippetResults]).slice(0, 8);
+});
 
 watch(commandResults, (commands) => {
   if (!commands.length || selectedCommandIndex.value >= commands.length) selectedCommandIndex.value = 0;
@@ -72,6 +102,13 @@ function handleKeydown(event: KeyboardEvent) {
   emit('submit', 'default');
 }
 
+function currentSnippetVerb(): 'run' | 'send' | 'enqueue' {
+  const match = /^\/snippet\s+(run|send|enqueue)\b/i.exec(draft.value.trim());
+  const verb = match?.[1]?.toLowerCase();
+  if (verb === 'send' || verb === 'enqueue') return verb;
+  return 'run';
+}
+
 function handleGlobalKeydown(event: KeyboardEvent) {
   if (event.key !== 'Escape' || event.defaultPrevented || props.disabled || !props.canInterrupt || commandPaletteOpen.value) return;
   event.preventDefault();
@@ -119,9 +156,25 @@ function moveCommandSelection(delta: number) {
 }
 
 function acceptSelectedCommand(submitWhenComplete: boolean) {
-  const command = commandResults.value[selectedCommandIndex.value] ?? commandResults.value[0];
-  if (!command) return;
-  acceptCommand(command, submitWhenComplete);
+  const entry = commandResults.value[selectedCommandIndex.value] ?? commandResults.value[0];
+  if (!entry) return;
+  acceptPaletteEntry(entry, submitWhenComplete);
+}
+
+function acceptPaletteEntry(entry: PaletteEntry, submitWhenComplete = false) {
+  if (entry.kind === 'snippet') {
+    if (submitWhenComplete) {
+      emit('run-snippet', entry.snippet, entry.deliveryMode);
+      commandPaletteDismissedFor.value = draft.value;
+      return;
+    }
+    draft.value = entry.slash;
+    commandPaletteDismissedFor.value = draft.value;
+    selectedCommandIndex.value = 0;
+    nextTick(() => inputRef.value?.focus());
+    return;
+  }
+  acceptCommand(entry.command, submitWhenComplete);
 }
 
 function acceptCommand(command: AgentWebUiCommand, submitWhenComplete = false) {
@@ -137,6 +190,28 @@ function acceptCommand(command: AgentWebUiCommand, submitWhenComplete = false) {
   selectedCommandIndex.value = 0;
   nextTick(() => inputRef.value?.focus());
 }
+
+function filterSnippetResults(query: string): OperatorSnippet[] {
+  const normalized = query.trim().toLowerCase();
+  const snippets = props.operatorSnippets ?? [];
+  const [, ...terms] = draft.value.trim().split(/\s+/);
+  const snippetCommand = normalized.startsWith('snip');
+  const search = snippetCommand
+    ? terms.join(' ').replace(/^(run|send|enqueue|search)\s+/i, '').trim().toLowerCase()
+    : normalized;
+  if (!snippetCommand && !search) return [];
+  return snippets
+    .filter((snippet) => !search || snippet.name.includes(search) || snippet.body.toLowerCase().includes(search))
+    .sort(compareSnippets);
+}
+
+function compareSnippets(left: OperatorSnippet, right: OperatorSnippet): number {
+  if (Boolean(left.pinned) !== Boolean(right.pinned)) return left.pinned ? -1 : 1;
+  const leftUsed = left.last_used_at ?? '';
+  const rightUsed = right.last_used_at ?? '';
+  if (leftUsed !== rightUsed) return rightUsed.localeCompare(leftUsed);
+  return left.name.localeCompare(right.name);
+}
 </script>
 
 <template>
@@ -150,22 +225,24 @@ function acceptCommand(command: AgentWebUiCommand, submitWhenComplete = false) {
         aria-label="Agent Web UI commands"
       >
         <button
-          v-for="(command, index) in commandResults"
-          :id="`command-option-${command.id}`"
-          :key="command.id"
+          v-for="(entry, index) in commandResults"
+          :id="`command-option-${entry.id}`"
+          :key="entry.id"
           type="button"
           class="command-option"
-          :class="{ 'command-option-active': index === selectedCommandIndex, 'command-option-danger': command.palette.danger }"
+          :class="{ 'command-option-active': index === selectedCommandIndex, 'command-option-danger': entry.danger, 'command-option-snippet': entry.kind === 'snippet' }"
           role="option"
           :aria-selected="index === selectedCommandIndex"
           @mouseenter="selectedCommandIndex = index"
-          @click="acceptCommand(command, false)"
+          @click="acceptPaletteEntry(entry, false)"
         >
           <span class="command-option-main">
-            <code>{{ command.slash }}</code>
-            <strong>{{ command.title }}</strong>
+            <code>{{ entry.slash }}</code>
+            <span v-if="entry.kind === 'snippet'" class="command-option-badge">Snippet</span>
+            <strong>{{ entry.title }}</strong>
           </span>
-          <span class="command-option-detail">{{ command.description }}</span>
+          <span class="command-option-detail">{{ entry.description }}</span>
+          <span class="command-option-meta">{{ entry.meta }}</span>
         </button>
         <p v-if="!commandResults.length" class="command-empty">No matching command</p>
       </div>

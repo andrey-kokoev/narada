@@ -146,9 +146,10 @@ async function openCdpPage({ browserPath, url, viewport, workDir }) {
     '--hide-scrollbars',
     '--remote-debugging-port=0',
     `--user-data-dir=${userDataDir}`,
+    '--window-position=-32000,-32000',
     `--window-size=${viewport.width},${viewport.height}`,
     url,
-  ], { stdio: ['ignore', 'ignore', 'pipe'] });
+  ], { stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true });
 
   const browserWsUrl = await new Promise((resolve, reject) => {
     let stderr = '';
@@ -318,6 +319,18 @@ async function runScenarioViewport({ browserPath, scenario, viewport, outDir }) 
       }
       publishEvents();
       await new Promise((resolve) => setTimeout(resolve, 500));
+      if (scenario.name === 'snippets') {
+        await page.evaluate(String.raw`(() => {
+          const input = document.querySelector('#operator-input');
+          const form = document.querySelector('#operator-form');
+          input.value = '/snippet save "ux drawer" First reusable operator instruction for screenshot coverage';
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+          form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+        })()`);
+        await new Promise((resolve) => setTimeout(resolve, 250));
+        await page.evaluate("document.querySelector('.operator-snippet-trigger')?.click()");
+        await new Promise((resolve) => setTimeout(resolve, 250));
+      }
       const screenshotPath = join(outDir, `${scenario.name}-${viewport.name}.png`);
       await page.screenshot(screenshotPath);
       const screenshot = await readFile(screenshotPath);
@@ -356,6 +369,10 @@ async function runScenarioViewport({ browserPath, scenario, viewport, outDir }) 
         const submitScroll = await page.evaluate(SUBMIT_SCROLL_ASSERTION_SCRIPT);
         assert.equal(submitScroll.ok, true, `${scenario.name}/${viewport.name}: expected submit to scroll transcript to bottom: ${JSON.stringify(submitScroll)}`);
       }
+      if (scenario.name === 'snippets') {
+        assert.match(result.text, /Snippets[\s\S]*Browser\/operator local saved inputs/i, 'expected snippets drawer to be visible');
+        assert.match(result.text, /ux-drawer[\s\S]*First reusable operator instruction/i, 'expected saved snippet to render in drawer');
+      }
       return screenshotPath;
     } finally {
       await page.close();
@@ -371,6 +388,7 @@ test('agent-web-ui UX smoke matrix has no obvious layout regressions', async () 
   await mkdir(outDir, { recursive: true });
   const scenarios = [
     { name: 'normal' },
+    { name: 'snippets' },
     { name: 'thinking' },
     { name: 'disconnected' },
     { name: 'markdown' },

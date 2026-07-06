@@ -6,6 +6,28 @@ export interface RetainedEventState {
   maxEvents: number;
 }
 
+function sameRuntimeEventIdentity(left: unknown, right: unknown): boolean {
+  const leftEvent = unwrapRetainedEvent(left);
+  const rightEvent = unwrapRetainedEvent(right);
+  return eventIdentity(leftEvent) === eventIdentity(rightEvent);
+}
+
+function unwrapRetainedEvent(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object') return null;
+  const record = value as Record<string, unknown>;
+  const payload = record.event === 'session_event' && record.payload && typeof record.payload === 'object'
+    ? record.payload
+    : record;
+  return payload && typeof payload === 'object' ? payload as Record<string, unknown> : null;
+}
+
+function eventIdentity(event: Record<string, unknown> | null): string {
+  if (!event) return 'null';
+  const kind = String(event.event ?? event.event_kind ?? 'unknown');
+  const requestId = event.request_id ?? event.input_event_id ?? event.turn_id ?? event.artifact_id ?? null;
+  return `${kind}:${requestId ?? JSON.stringify(event)}`;
+}
+
 export function createRetainedEventState(maxEvents = 500): RetainedEventState {
   return { events: [], droppedCount: 0, maxEvents };
 }
@@ -17,7 +39,7 @@ export function retainEvent(state: RetainedEventState, event: unknown): void {
     trimRetainedEvents(state);
     return;
   }
-  const existingIndex = state.events.findIndex((retained) => sequenceFromRuntimeMessage(retained) === sequence);
+  const existingIndex = state.events.findIndex((retained) => sequenceFromRuntimeMessage(retained) === sequence && sameRuntimeEventIdentity(retained, event));
   if (existingIndex !== -1) {
     state.events.splice(existingIndex, 1, event);
     return;

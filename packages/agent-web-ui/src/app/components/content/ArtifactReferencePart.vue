@@ -27,7 +27,9 @@ const metadataUrl = computed(() => artifactMetadataPath(config, props.sessionId,
 const contentUrl = computed(() => artifactContentPath(config, props.sessionId, artifactId.value));
 const title = computed(() => String(metadata.value?.title ?? props.artifact?.title ?? artifactId.value));
 const kind = computed(() => String(metadata.value?.kind ?? props.artifact?.kind ?? 'artifact'));
+const contentType = computed(() => String(metadata.value?.content_type ?? metadata.value?.contentType ?? ''));
 const canPreviewHtml = computed(() => kind.value === 'html' && Boolean(contentUrl.value) && status.value === 'ready');
+const canPreviewAudio = computed(() => (kind.value === 'audio' || contentType.value.toLowerCase().startsWith('audio/')) && Boolean(contentUrl.value) && status.value === 'ready');
 
 onMounted(() => {
   void refreshArtifact();
@@ -88,6 +90,13 @@ async function copyUrl() {
       :src="contentUrl ?? undefined"
       :title="title"
     ></iframe>
+    <audio
+      v-else-if="canPreviewAudio && !collapsed"
+      class="artifact-audio-preview"
+      controls
+      preload="metadata"
+      :src="contentUrl ?? undefined"
+    ></audio>
     <p v-else-if="status === 'ready' && !collapsed" class="artifact-status">Preview is not available for this artifact type. Use Open to view it.</p>
   </section>
 </template>

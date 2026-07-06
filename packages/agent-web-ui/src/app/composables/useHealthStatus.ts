@@ -44,11 +44,7 @@ export function useHealthStatus(options: HealthStatusOptions) {
         role: stringField(parsed, 'role'),
         sessionId: stringField(parsed, 'session_id'),
       };
-      intelligence.value = {
-        provider: stringField(parsed, 'provider'),
-        model: stringField(parsed, 'model'),
-        thinking: stringField(parsed, 'thinking'),
-      };
+      intelligence.value = healthIntelligence(parsed);
       text.value = healthStatusText(parsed, response.status);
     } catch (error) {
       body.value = null;
@@ -81,4 +77,19 @@ function stringField(record: unknown, field: string): string | null {
   if (!record || typeof record !== 'object') return null;
   const value = (record as Record<string, unknown>)[field];
   return typeof value === 'string' && value ? value : null;
+}
+
+function objectField(record: unknown, field: string): Record<string, unknown> | null {
+  if (!record || typeof record !== 'object') return null;
+  const value = (record as Record<string, unknown>)[field];
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null;
+}
+
+function healthIntelligence(record: Record<string, unknown>): HealthIntelligenceSummary {
+  const intelligence = objectField(record, 'intelligence');
+  return {
+    provider: stringField(intelligence, 'provider') ?? stringField(record, 'provider'),
+    model: stringField(intelligence, 'model') ?? stringField(record, 'model'),
+    thinking: stringField(intelligence, 'thinking') ?? stringField(record, 'thinking'),
+  };
 }

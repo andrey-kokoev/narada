@@ -32,11 +32,14 @@
     "start": "node ./bin/narada-agent-web-ui.mjs",
     "build": "vite build",
     "test": "node --test --test-skip-pattern \"browser screenshot smoke renders the served shell\" test/agent-web-ui.test.mjs test/agent-web-ui-projection.test.mjs test/agent-web-ui-protocol.test.mjs",
-    "test:browser": "node --test test/agent-web-ui.test.mjs test/agent-web-ui-panels-e2e.test.mjs test/agent-web-ui-cloudflare-authority-local-surface-artifact-e2e.test.mjs test/agent-web-ui-cloudflare-html-artifact-e2e.test.mjs test/agent-web-ui-local-submit-html-artifact-cloudflare-e2e.test.mjs test/agent-web-ui-ux-smoke.test.mjs",
+    "test:browser": "node --test test/agent-web-ui.test.mjs test/agent-web-ui-panels-e2e.test.mjs test/agent-web-ui-cloudflare-authority-local-surface-artifact-e2e.test.mjs test/agent-web-ui-cloudflare-html-artifact-e2e.test.mjs test/agent-web-ui-local-submit-html-artifact-cloudflare-e2e.test.mjs test/agent-web-ui-live-slash-cross-surface-e2e.test.mjs test/agent-web-ui-ux-smoke.test.mjs",
+    "test:live:speech-audio": "node --test test/agent-web-ui-live-speech-audio-projection-e2e.mjs",
+    "test:live:launcher-affordance": "node test/live-launcher-affordance-e2e.mjs",
     "test:all": "node --test test/*.test.mjs",
     "typecheck": "vue-tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
+    "@narada2/agent-identity": "workspace:*",
     "@narada2/cloudflare-nars-projection": "workspace:*",
     "@narada2/nars-client-projection-contract": "workspace:*",
     "@narada2/site-paths": "workspace:*",
@@ -50,6 +53,7 @@
     "vue": "^3.5.0"
   },
   "devDependencies": {
+    "@narada2/agent-cli": "workspace:*",
     "@narada2/agent-runtime-server": "workspace:*",
     "@tailwindcss/vite": "^4.1.18",
     "@types/markdown-it": "^14.1.2",

@@ -39,6 +39,9 @@ import {
   startEventStreamProjection,
   startHealthProjection,
 } from '@narada2/agent-runtime-server/test-fixtures';
+import { createCarrierRuntimeDependencies } from '../../carrier-runtime/src/runtime-dependencies.mjs';
+import { runCarrierServerMode } from '../../carrier-runtime/src/server-mode.mjs';
+import { removeTempDir, tempRoot, waitFor, writeFixtureMcpSurface } from '../../carrier-runtime/src/server-mode-test-helpers.mjs';
 import { createCloudflareNarsProjectionWorker } from '@narada2/cloudflare-nars-projection/worker';
 import { registerProjectionRemotely, startLocalProjectionBridgeOnce, deliverRemoteProjectionInputsOnce } from '@narada2/cloudflare-nars-projection/node';
 import { appendEvent } from '../src/render.js';
@@ -98,6 +101,75 @@ function createFakeAgentWebUiElements() {
 function textOfNode(node) {
   if (!node) return '';
   return `${node.textContent ?? ''}${(node.children ?? []).map(textOfNode).join('')}`;
+}
+
+async function withRealNarsWebServer(fn) {
+  const siteRoot = tempRoot('agent-web-ui-config-real-nars-');
+  const runtimeInput = new PassThrough();
+  const runtimeOutput = new PassThrough();
+  const eventHub = createEventHub();
+  const events = [];
+  const providerCalls = [];
+  let outputBuffer = '';
+  let runtimePromise = null;
+  let healthProjection = null;
+  let eventProjection = null;
+  try {
+    writeFixtureMcpSurface(siteRoot);
+    const sessionId = 'session_web_ui_config_real_nars';
+    const sessionDir = resolveNaradaSitePaths({ siteRoot, sessionId }).narsSessionDir;
+    const baseRuntimeContext = {
+      identity: 'narada.test',
+      session: sessionId,
+      siteRoot,
+      siteId: 'narada.fixture',
+      operatorSurfaceKind: 'agent-web-ui',
+      sessionPath: join(sessionDir, 'session.jsonl'),
+      eventsPath: join(sessionDir, 'events.jsonl'),
+      intelligenceProvider: 'codex-subscription',
+      providerSettings: { provider: 'codex-subscription', model: 'gpt-5.5', thinking: 'medium', stream: false },
+    };
+    healthProjection = await startHealthProjection({ childStdin: () => runtimeInput, host: '127.0.0.1', port: 0, runtimeContext: { ...baseRuntimeContext, eventHub } });
+    eventProjection = await startEventStreamProjection({ childStdin: () => runtimeInput, eventHub, host: '127.0.0.1', port: 0, eventsPath: baseRuntimeContext.eventsPath });
+    const runtimeContext = { ...baseRuntimeContext, healthUrl: healthProjection.url, eventStreamUrl: eventProjection.url };
+    const { dependencies } = createCarrierRuntimeDependencies({ runtimeContext });
+    runtimeOutput.setEncoding('utf8');
+    runtimeOutput.on('data', (chunk) => {
+      outputBuffer += chunk;
+      const lines = outputBuffer.split(/\r?\n/);
+      outputBuffer = lines.pop() ?? '';
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        const event = JSON.parse(line);
+        events.push(event);
+        healthProjection?.observe(event);
+        eventHub.publish(event);
+      }
+    });
+    runtimePromise = runCarrierServerMode({
+      input: runtimeInput,
+      output: runtimeOutput,
+      callChatApiFn: async (messages, tools) => {
+        providerCalls.push({ messages, tools });
+        return { choices: [{ message: { role: 'assistant', content: 'Real NARS fixture response.' } }] };
+      },
+      runtimeContext,
+      dependencies: { ...dependencies, readMcpPreflightArtifact: () => null },
+    });
+    await waitFor(() => events.some((event) => event.event === 'session_started'), { timeoutMs: 2000 });
+    const web = await startAgentWebUiServer({ host: '127.0.0.1', port: 0, eventEndpoint: eventProjection.url, healthEndpoint: healthProjection.url });
+    try {
+      return await fn({ web, eventProjection, healthProjection, events, providerCalls });
+    } finally {
+      web.server.close();
+    }
+  } finally {
+    runtimeInput.end();
+    if (runtimePromise) await Promise.race([runtimePromise, new Promise((resolve) => setTimeout(resolve, 1000))]);
+    healthProjection?.server.close();
+    eventProjection?.server.close();
+    removeTempDir(siteRoot);
+  }
 }
 
 function createLocalProjectionSite() {
@@ -175,6 +247,25 @@ async function captureHeadlessScreenshot({ browserPath, url, screenshotPath }) {
     });
   });
 }
+test('default package test script remains non-browser and non-e2e', async () => {
+  const packageJson = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
+  const defaultTest = packageJson.scripts?.test;
+  assert.equal(typeof defaultTest, 'string');
+  const testFiles = defaultTest.match(/test\/\S+\.test\.mjs/g) ?? [];
+  const forbidden = testFiles.filter((file) => (
+    /-e2e\.test\.mjs$/.test(file)
+    || /(?:browser|ux-smoke)\.test\.mjs$/.test(file)
+  ));
+  assert.deepEqual(forbidden, [], `default test must stay non-browser; move these to test:browser or test:all: ${forbidden.join(', ')}`);
+});
+
+test('agent-web-ui README documents the remaining peer gap ledger', async () => {
+  const readme = await readFile(new URL('../README.md', import.meta.url), 'utf8');
+  assert.match(readme, /## Follow-Up Ledger/);
+  assert.match(readme, /endpoint-driven in this package/);
+  assert.match(readme, /launcher\/session discovery outside this package/);
+});
+
 test('Vue operator components expose composer without hidden privileged controls', async () => {
   const composer = await readFile(new URL('../src/app/components/OperatorComposer.vue', import.meta.url), 'utf8');
   const statusBoxSelector = await readFile(new URL('../src/app/components/StatusBoxSelector.vue', import.meta.url), 'utf8');
@@ -185,7 +276,10 @@ test('Vue operator components expose composer without hidden privileged controls
   const mailboxPanel = await readFile(new URL('../src/app/components/MailboxPanel.vue', import.meta.url), 'utf8');
   const schedulerPanel = await readFile(new URL('../src/app/components/SchedulerPanel.vue', import.meta.url), 'utf8');
   const taskLifecyclePanel = await readFile(new URL('../src/app/components/TaskLifecyclePanel.vue', import.meta.url), 'utf8');
+  const genericAffordancePanel = await readFile(new URL('../src/app/components/GenericAffordancePanel.vue', import.meta.url), 'utf8');
   const sopPanel = await readFile(new URL('../src/app/components/SopPanel.vue', import.meta.url), 'utf8');
+  const mcpPanel = await readFile(new URL('../src/app/components/McpServerPanel.vue', import.meta.url), 'utf8');
+  const surfaceNavigator = await readFile(new URL('../src/app/components/SurfaceNavigator.vue', import.meta.url), 'utf8');
   const mcpInventory = await readFile(new URL('../src/app/composables/useMcpInventory.ts', import.meta.url), 'utf8');
   const surfaceAffordances = await readFile(new URL('../src/app/composables/useSurfaceAffordances.ts', import.meta.url), 'utf8');
   const narsFrames = await readFile(new URL('../src/app/lib/narsFrames.ts', import.meta.url), 'utf8');
@@ -217,7 +311,6 @@ test('Vue operator components expose composer without hidden privileged controls
   assert.match(app, /buildSchedulerSummaryRequestFrame/);
   assert.match(app, /buildTaskLifecycleSummaryRequestFrame/);
   assert.match(app, /buildSopSummaryRequestFrame/);
-  assert.match(app, /buildSurfaceAffordancesRequestFrame/);
   assert.match(narsFrames, /buildAgentWebUiMailboxSummaryFrame/);
   assert.match(narsFrames, /buildAgentWebUiSchedulerSummaryFrame/);
   assert.match(narsFrames, /buildAgentWebUiTaskLifecycleSummaryFrame/);
@@ -227,8 +320,13 @@ test('Vue operator components expose composer without hidden privileged controls
   assert.match(shell, /import MailboxPanel/);
   assert.match(shell, /import SchedulerPanel/);
   assert.match(shell, /import TaskLifecyclePanel/);
+  assert.match(shell, /import SurfaceNavigator/);
+  assert.match(shell, /import GenericAffordancePanel/);
   assert.match(shell, /const sopPanelOpen = ref\(false\)/);
+  assert.match(shell, /const genericAffordancePanelOpen = ref\(false\)/);
+  assert.match(shell, /const selectedGenericAffordanceKey = ref<string \| null>\(null\)/);
   assert.match(shell, /const mailboxPanelOpen = ref\(false\)/);
+  assert.match(shell, /const surfaceNavigatorOpen = ref\(false\)/);
   assert.match(shell, /const schedulerPanelOpen = ref\(false\)/);
   assert.match(shell, /const taskLifecyclePanelOpen = ref\(false\)/);
   assert.doesNotMatch(shell, /const sopServer = computed/);
@@ -240,6 +338,9 @@ test('Vue operator components expose composer without hidden privileged controls
   assert.match(shell, /const hasSchedulerSurface = computed/);
   assert.match(shell, /const taskLifecycleAffordance = computed/);
   assert.match(shell, /const hasTaskLifecycleSurface = computed/);
+  assert.match(shell, /const genericAffordances = computed/);
+  assert.match(shell, /renderer === 'generic_mcp_affordance'/);
+  assert.match(shell, /const genericSurfaceNavigatorItems = computed/);
   assert.match(shell, /Boolean\(sopAffordance\.value\)/);
   assert.match(shell, /Boolean\(mailboxAffordance\.value\)/);
   assert.match(shell, /Boolean\(schedulerAffordance\.value\)/);
@@ -249,53 +350,59 @@ test('Vue operator components expose composer without hidden privileged controls
   assert.match(shell, /sopSummary: SopSummary/);
   assert.match(shell, /taskLifecycleSummary: TaskLifecycleSummary/);
   assert.match(shell, /surfaceAffordances: SurfaceAffordanceSummary/);
-  assert.match(shell, /<SopPanel v-model:open="sopPanelOpen" :available="hasSopSurface" :summary="sopSummary"/);
-  assert.match(shell, /<MailboxPanel v-model:open="mailboxPanelOpen" :available="hasMailboxSurface" :summary="mailboxSummary"/);
-  assert.match(shell, /<SchedulerPanel v-model:open="schedulerPanelOpen" :available="hasSchedulerSurface" :summary="schedulerSummary"/);
-  assert.match(shell, /<TaskLifecyclePanel v-model:open="taskLifecyclePanelOpen" :available="hasTaskLifecycleSurface" :summary="taskLifecycleSummary"/);
+  assert.match(shell, /const surfaceGroups = computed/);
+  assert.match(shell, /function openSurfacePanel\(surfaceKind: string\)/);
+  assert.match(shell, /surfaceKind === 'mcp'/);
+  assert.match(shell, /surfaceKind\.startsWith\('generic:'\)/);
+  assert.match(shell, /function genericSurfaceKey/);
+  assert.match(shell, /@open-surface-panel="openSurfacePanel"/);
+  assert.match(shell, /:surface-affordances="surfaceAffordances"/);
+  assert.match(shell, /<SurfaceNavigator v-model:open="surfaceNavigatorOpen" :groups="surfaceGroups" @open="openSurfacePanel"/);
+  assert.match(shell, /<GenericAffordancePanel v-model:open="genericAffordancePanelOpen" triggerless :item="selectedGenericAffordance"/);
+  assert.match(shell, /<SopPanel v-model:open="sopPanelOpen" triggerless :available="hasSopSurface" :summary="sopSummary"/);
+  assert.match(shell, /<MailboxPanel v-model:open="mailboxPanelOpen" triggerless :available="hasMailboxSurface" :summary="mailboxSummary"/);
+  assert.match(shell, /<SchedulerPanel v-model:open="schedulerPanelOpen" triggerless :available="hasSchedulerSurface" :summary="schedulerSummary"/);
+  assert.match(shell, /<TaskLifecyclePanel v-model:open="taskLifecyclePanelOpen" triggerless :available="hasTaskLifecycleSurface" :summary="taskLifecycleSummary"/);
   assert.match(shell, /@refresh="emit\('request-sop-summary'\)"/);
   assert.match(shell, /@refresh="emit\('request-mailbox-summary'\)"/);
   assert.match(shell, /@refresh="emit\('request-scheduler-summary'\)"/);
   assert.match(shell, /@refresh="emit\('request-task-lifecycle-summary'\)"/);
-  assert.match(shell, /:has-sop-mcp="hasSopSurface"/);
-  assert.match(shell, /:has-mailbox-mcp="hasMailboxSurface"/);
-  assert.match(shell, /:has-scheduler-mcp="hasSchedulerSurface"/);
-  assert.match(shell, /:has-task-lifecycle-mcp="hasTaskLifecycleSurface"/);
+  assert.match(shell, /@open-surface-navigator="surfaceNavigatorOpen = true"/);
+  const headerStart = shell.indexOf('<div class="shell-header-actions">');
+  const headerEnd = shell.indexOf('</header>', headerStart);
+  const headerActions = shell.slice(headerStart, headerEnd);
+  assert.match(headerActions, /<SurfaceNavigator/);
+  for (const panel of ['ArtifactsPanel', 'McpServerPanel', 'GenericAffordancePanel', 'DelegationPanel', 'GitPanel', 'InboxPanel', 'MailboxPanel', 'SchedulerPanel', 'TaskLifecyclePanel', 'SopPanel', 'SurfaceFeedbackPanel']) {
+    assert.doesNotMatch(headerActions, new RegExp(`<${panel}\\b`));
+  }
   assert.match(app, /useMailboxSummary\(retained\.events\)/);
   assert.match(app, /useSchedulerSummary\(retained\.events\)/);
   assert.match(app, /useSopSummary\(retained\.events\)/);
   assert.match(app, /useTaskLifecycleSummary\(retained\.events\)/);
   assert.match(app, /useSurfaceAffordances\(retained\.events, health\.body\)/);
-  assert.match(siteInfo, /hasSopMcp: boolean/);
-  assert.match(siteInfo, /hasMailboxMcp: boolean/);
-  assert.match(siteInfo, /hasSchedulerMcp: boolean/);
-  assert.match(siteInfo, /hasTaskLifecycleMcp: boolean/);
-  assert.match(siteInfo, /v-if="hasSopMcp"/);
-  assert.match(siteInfo, /v-if="hasMailboxMcp"/);
-  assert.match(siteInfo, /v-if="hasSchedulerMcp"/);
-  assert.match(siteInfo, /v-if="hasTaskLifecycleMcp"/);
-  assert.match(siteInfo, /@click="openSopPanel"/);
-  assert.match(siteInfo, /@click="openMailboxPanel"/);
-  assert.match(siteInfo, /@click="openSchedulerPanel"/);
-  assert.match(siteInfo, /@click="openTaskLifecyclePanel"/);
-  assert.match(mailboxPanel, /v-if="available"/);
+  assert.match(siteInfo, /'open-surface-navigator': \[\]/);
+  assert.match(siteInfo, /function openSurfaceNavigator/);
+  assert.match(siteInfo, /@click="openSurfaceNavigator"/);
+  assert.doesNotMatch(siteInfo, /openSopPanel|openMailboxPanel|openSchedulerPanel|openTaskLifecyclePanel|openArtifactsPanel|openDelegationPanel|openGitPanel|openInboxPanel|openSurfaceFeedbackPanel/);
+  assert.doesNotMatch(siteInfo, /hasSopMcp: boolean|hasMailboxMcp: boolean|hasSchedulerMcp: boolean|hasTaskLifecycleMcp: boolean/);
+  assert.match(mailboxPanel, /v-if="available && !triggerless"/);
   assert.match(mailboxPanel, /summary: MailboxSummary/);
   assert.match(mailboxPanel, /mailbox_accounts|Accounts|Recent messages/);
   assert.match(mailboxPanel, /summary\.accounts\.items/);
   assert.match(mailboxPanel, /summary\.messages\.items/);
   assert.match(mailboxPanel, /Synced Email/);
-  assert.match(schedulerPanel, /v-if="available"/);
+  assert.match(schedulerPanel, /v-if="available && !triggerless"/);
   assert.match(schedulerPanel, /summary: SchedulerSummary/);
   assert.match(schedulerPanel, /Scheduler/);
   assert.match(schedulerPanel, /summary\.tasks\.items/);
   assert.match(schedulerPanel, /candidateActions/);
-  assert.match(taskLifecyclePanel, /v-if="available"/);
+  assert.match(taskLifecyclePanel, /v-if="available && !triggerless"/);
   assert.match(taskLifecyclePanel, /summary: TaskLifecycleSummary/);
   assert.match(taskLifecyclePanel, /Tasks/);
   assert.match(taskLifecyclePanel, /summary\.inProgress/);
   assert.match(taskLifecyclePanel, /summary\.pendingReviews/);
   assert.match(taskLifecyclePanel, /summary\.obligations/);
-  assert.match(sopPanel, /v-if="available"/);
+  assert.match(sopPanel, /v-if="available && !triggerless"/);
   assert.match(sopPanel, /summary: SopSummary/);
   assert.match(sopPanel, /activeRun = computed/);
   assert.match(sopPanel, /summary\.templates\.items/);
@@ -303,11 +410,29 @@ test('Vue operator components expose composer without hidden privileged controls
   assert.match(sopPanel, /available_actions/);
   assert.match(sopPanel, /actionLabel/);
   assert.match(sopPanel, /runMetaLine/);
+  assert.match(surfaceNavigator, /Observation panels attached to this NARS session/);
+  assert.match(surfaceNavigator, /defineModel<boolean>\('open'/);
+  assert.match(surfaceNavigator, /searchInput\.value\?\.focus/);
+  assert.match(surfaceNavigator, /event\.key !== 'Escape'/);
+  assert.match(surfaceNavigator, /surface-navigator-trigger/);
+  assert.match(surfaceNavigator, /Filter surfaces/);
   assert.match(sopPanel, /stepResultSummary/);
   assert.match(sopPanel, /step_timeline/);
   assert.match(sopPanel, /arrayField\(template, 'steps'\)/);
   assert.match(sopPanel, /arrayField\(run, 'step_timeline', 'step_states'\)/);
   assert.match(sopPanel, /textField\(template, 'description'\)/);
+  assert.match(mcpPanel, /surfaceAffordances: SurfaceAffordanceSummary/);
+  assert.match(mcpPanel, /'open-surface-panel': \[surfaceKind: string\]/);
+  assert.match(mcpPanel, /panelAffordanceForServer/);
+  assert.match(mcpPanel, /isPanelAffordance/);
+  assert.match(mcpPanel, /surfacePanelKey/);
+  assert.match(mcpPanel, /renderer === 'generic_mcp_affordance'/);
+  assert.match(mcpPanel, /mcp-server-panel-action/);
+  assert.match(mcpPanel, /isPanelSurfaceKind/);
+  assert.match(genericAffordancePanel, /affordance_document/);
+  assert.match(genericAffordancePanel, /panelActions/);
+  assert.match(genericAffordancePanel, /targetLabel/);
+  assert.match(genericAffordancePanel, /danger_level/);
   assert.match(mcpInventory, /mergeHealthInventoryWithEventTools/);
   assert.match(mcpInventory, /server\.tools\.length \? server\.tools : eventToolsByServer\.get\(server\.serverName\)/);
   assert.match(mcpInventory, /arrayField\(mcp, 'tools'\)/);
@@ -344,7 +469,7 @@ test('session identity projection prefers explicit Site id for workspace-root Si
     agentId: 'resident',
     role: 'resident',
     sessionId: 'carrier_workspace_root',
-    title: 'narada.sonar / resident',
+    title: 'narada.sonar.resident',
     subtitle: 'Role: resident · Browser projection attached to one NARS runtime.',
   });
 });
@@ -631,128 +756,45 @@ test('package server serves browser-loadable modules without workspace bare impo
 });
 
 test('served web UI config attaches to live NARS health and event projections', async () => {
-  const childStdin = new PassThrough();
-  childStdin.setEncoding('utf8');
-  const childFrames = [];
-  let stdinBuffer = '';
-  let healthProjection = null;
-  const waiters = [];
-  const notifyWaiters = () => {
-    for (let index = waiters.length - 1; index >= 0; index -= 1) {
-      const waiter = waiters[index];
-      if (waiter.predicate()) {
-        waiters.splice(index, 1);
-        waiter.resolve();
+  await withRealNarsWebServer(async ({ web, eventProjection, healthProjection, events, providerCalls }) => {
+    const client = await connectWebSocket(eventProjection.url);
+    try {
+      const html = await fetch(web.url).then((response) => response.text());
+      const config = readInjectedBrowserConfig(html);
+      assert.equal(config.eventEndpoint, eventProjection.url);
+      assert.equal(config.healthEndpoint, '/api/health');
+      assert.equal(config.healthTransport, 'http-proxy');
+      assert.equal(config.artifactBasePath, '/api/nars');
+      assert.equal(config.protocolHealthMethod, 'session.health');
+      assert.equal(config.operatorInput, true);
+      assert.equal(config.admittedMethods.includes('conversation.send'), true);
+      assert.equal(config.admittedMethods.includes('conversation.interrupt'), true);
+
+      const health = await fetch(new URL('/api/health', web.url)).then((response) => response.json());
+      assert.equal(health.status, 'healthy');
+      assert.equal(health.session_id, 'session_web_ui_config_real_nars');
+      assert.equal(health.intelligence.model, 'gpt-5.5');
+      assert.equal(health.mcp_tools.some((tool) => tool.server_name === 'narada-fixture' && tool.tool_name === 'fixture_read'), true);
+
+      assert.equal((await client.nextJson()).event, 'websocket_connected');
+      client.sendJson({ id: 'events-1', method: 'session.events.subscribe', params: { include_replay: true, max_replay: 10 } });
+      const subscribed = await client.nextJson();
+      assert.equal(subscribed.event, 'session_events_subscription_started');
+      let replayedSessionStarted = null;
+      for (let index = 0; index < subscribed.replay_count; index += 1) {
+        const replay = await client.nextJson();
+        if (replay.event === 'session_event' && replay.payload?.event === 'session_started') replayedSessionStarted = replay;
       }
+      assert.equal(replayedSessionStarted?.payload?.event, 'session_started');
+
+      client.sendJson({ id: 'input-1', method: 'conversation.send', params: { message: 'run startup sequence', source: 'agent-web-ui' } });
+      await waitFor(() => providerCalls.length === 1, { timeoutMs: 2000 });
+      assert.equal(providerCalls[0].messages.some((message) => message.role === 'user' && /run startup sequence/.test(message.content)), true);
+      await waitFor(() => events.some((event) => event.event === 'assistant_message' && event.content === 'Real NARS fixture response.'), { timeoutMs: 2000 });
+    } finally {
+      client.close();
     }
-  };
-  const waitForFrame = (predicate) => {
-    if (predicate()) return Promise.resolve();
-    return new Promise((resolve) => waiters.push({ predicate, resolve }));
-  };
-  childStdin.on('data', (chunk) => {
-    stdinBuffer += chunk;
-    const lines = stdinBuffer.split(/\r?\n/);
-    stdinBuffer = lines.pop() ?? '';
-    for (const line of lines) {
-      if (!line.trim()) continue;
-      const frame = JSON.parse(line);
-      childFrames.push(frame);
-      if (frame.method === 'session.health') {
-        healthProjection?.observe({
-          event: 'session_health',
-          request_id: frame.id,
-          status: 'healthy',
-          agent_id: 'narada.test',
-          session_id: 'carrier_test',
-          intelligence: { provider: 'codex-subscription', model: 'gpt-5.5', thinking: 'medium', stream: false },
-          provider: 'codex-subscription',
-          model: 'legacy-model-should-not-win',
-          thinking: 'legacy-thinking-should-not-win',
-        });
-      }
-    }
-    notifyWaiters();
   });
-
-  const eventHub = createEventHub();
-  eventHub.publish({ event: 'session_started', agent_id: 'narada.test', session_id: 'carrier_test' });
-  const eventProjection = await startEventStreamProjection({ childStdin, eventHub, host: '127.0.0.1', port: 0 });
-  healthProjection = await startHealthProjection({ childStdin, host: '127.0.0.1', port: 0 });
-  const web = await startAgentWebUiServer({ host: '127.0.0.1', port: 0, eventEndpoint: eventProjection.url, healthEndpoint: healthProjection.url });
-  const client = await connectWebSocket(eventProjection.url);
-  try {
-    const html = await fetch(web.url).then((response) => response.text());
-    const config = readInjectedBrowserConfig(html);
-    assert.equal(config.eventEndpoint, eventProjection.url);
-    assert.equal(config.healthEndpoint, '/api/health');
-    assert.equal(config.healthTransport, 'http-proxy');
-    assert.equal(config.artifactBasePath, '/api/nars');
-    assert.equal(config.protocolHealthMethod, 'session.health');
-    assert.equal(config.operatorInput, true);
-    assert.equal(config.admittedMethods.includes('conversation.send'), true);
-    assert.equal(config.admittedMethods.includes('conversation.interrupt'), true);
-
-    const health = await fetch(new URL('/api/health', web.url)).then((response) => response.json());
-    assert.equal(health.status, 'healthy');
-    assert.equal(health.session_id, 'carrier_test');
-    assert.equal(health.intelligence.model, 'gpt-5.5');
-    assert.equal(childFrames.some((frame) => frame.method === 'session.health'), true);
-
-    assert.equal((await client.nextJson()).event, 'websocket_connected');
-    client.sendJson({ id: 'events-1', method: 'session.events.subscribe', params: { include_replay: true, max_replay: 10 } });
-    const subscribed = await client.nextJson();
-    assert.equal(subscribed.event, 'session_events_subscription_started');
-    assert.equal(subscribed.replay_count, 1);
-    const replay = await client.nextJson();
-    assert.equal(replay.event, 'session_event');
-    assert.equal(replay.payload.event, 'session_started');
-
-    client.sendJson({ id: 'input-1', method: 'conversation.send', params: { message: 'run startup sequence', source: 'agent-web-ui' } });
-    await waitForFrame(() => childFrames.some((frame) => frame.id === 'input-1'));
-    assert.deepEqual(childFrames.find((frame) => frame.id === 'input-1'), {
-      id: 'input-1',
-      method: 'conversation.send',
-      params: { message: 'run startup sequence', source: 'agent-web-ui' },
-    });
-
-    client.sendJson({ id: 'enqueue-1', method: 'conversation.enqueue', params: { message: 'after current turn', source: 'agent-web-ui', active_turn_id: 'turn_ws' } });
-    await waitForFrame(() => childFrames.some((frame) => frame.id === 'enqueue-1'));
-    assert.deepEqual(childFrames.find((frame) => frame.id === 'enqueue-1'), {
-      id: 'enqueue-1',
-      method: 'conversation.enqueue',
-      params: { message: 'after current turn', source: 'agent-web-ui', active_turn_id: 'turn_ws' },
-    });
-
-    client.sendJson({ id: 'steer-1', method: 'conversation.steer', params: { message: 'steer now', source: 'agent-web-ui', active_turn_id: 'turn_ws' } });
-    await waitForFrame(() => childFrames.some((frame) => frame.id === 'steer-1'));
-    assert.deepEqual(childFrames.find((frame) => frame.id === 'steer-1'), {
-      id: 'steer-1',
-      method: 'conversation.steer',
-      params: { message: 'steer now', source: 'agent-web-ui', active_turn_id: 'turn_ws' },
-    });
-
-    client.sendJson({ id: 'interrupt-1', method: 'conversation.interrupt', params: {} });
-    await waitForFrame(() => childFrames.some((frame) => frame.id === 'interrupt-1'));
-    assert.equal(childFrames.find((frame) => frame.id === 'interrupt-1').method, 'conversation.interrupt');
-
-    for (const [id, method, params] of [
-      ['status-1', 'session.status', {}],
-      ['recovery-1', 'session.recovery', {}],
-      ['ops-1', 'session.operations', {}],
-      ['tools-1', 'session.command.execute', { command: '/tools', value: 'mcp' }],
-      ['close-1', 'session.close', {}],
-    ]) {
-      client.sendJson({ id, method, params });
-      await waitForFrame(() => childFrames.some((frame) => frame.id === id));
-      assert.deepEqual(childFrames.find((frame) => frame.id === id), { id, method, params });
-    }
-  } finally {
-    client.close();
-    web.server.close();
-    eventProjection.server.close();
-    healthProjection.server.close();
-  }
 });
 test('CLI args and client config keep runtime authority outside the web package', () => {
   const options = parseAgentWebUiArgs(['--event-endpoint', 'ws://nars/events', '--health-endpoint', 'http://nars/health', '--port', '4888']);

@@ -126,9 +126,14 @@ test('agent-web-ui emits admitted NARS methods for event attach and operator inp
   assert.equal(buildOperatorInputAction('/ops', { id: 'ops-1' }).frame.method, 'session.operations');
   assert.equal(buildOperatorInputAction('/interrupt', { id: 'interrupt-1' }).frame.method, 'conversation.interrupt');
   assert.equal(buildOperatorInputAction('/tools mcp', { id: 'tools-1' }).frame.method, 'session.command.execute');
+  assert.equal(buildOperatorInputAction('/snippet save launch run startup sequence').kind, 'snippet_command');
+  assert.equal(buildOperatorInputAction('/snippet save launch run startup sequence').value, 'save launch run startup sequence');
   assert.deepEqual(buildOperatorInputAction('/observer mute', { id: 'mute-1' }).frame, { id: 'mute-1', method: 'observer.mute', params: {} });
   assert.equal(buildOperatorInputAction('/clear').kind, 'local_clear');
   assert.equal(buildOperatorInputAction('/help').kind, 'local_help');
+  assert.equal(buildOperatorInputAction('/json {"id":"status-raw","method":"session.status","params":{}}').frame.method, 'session.status');
+  assert.equal(buildOperatorInputAction('/json {"id":"bad","method":"bad.method","params":{}}').message, 'JSON frame method is not admitted for agent-web-ui.');
+  assert.equal(buildOperatorInputAction('/does-not-exist').message, 'Unknown command: /does-not-exist. Type /help.');
 
   for (const method of ['command.execute', 'session.sync']) {
     assert.equal(isAgentWebUiNarsMethod(method), false, method);

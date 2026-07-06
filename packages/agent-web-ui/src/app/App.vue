@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { provide, ref } from 'vue';
+import { provide, ref, watch } from 'vue';
 import NarsSessionShell from './components/NarsSessionShell.vue';
 import { useAgentActivity } from './composables/useAgentActivity';
 import { useArtifactsSummary } from './composables/useArtifactsSummary';
@@ -14,6 +14,7 @@ import { useNarsConnection } from './composables/useNarsConnection';
 import { useNarsEvents } from './composables/useNarsEvents';
 import { useOperatorInput } from './composables/useOperatorInput';
 import { useOperatorQueue } from './composables/useOperatorQueue';
+import { useOperatorSnippets, type OperatorSnippet } from './composables/useOperatorSnippets';
 import { useProjectionVerbosity } from './composables/useProjectionVerbosity';
 import { useRetainedEvents } from './composables/useRetainedEvents';
 import { useSchedulerSummary } from './composables/useSchedulerSummary';
@@ -65,13 +66,82 @@ const surfaceFeedbackSummary = useSurfaceFeedbackSummary(retained.events);
 const taskLifecycleSummary = useTaskLifecycleSummary(retained.events);
 const surfaceAffordances = useSurfaceAffordances(retained.events, health.body);
 const operatorQueue = useOperatorQueue(health.body);
+const operatorSnippets = useOperatorSnippets();
 const cloudflareProjection = useCloudflareProjection(props.config.projectionControl?.cloudflare ?? null);
 const input = useOperatorInput(connection.connection, retained.retain, retained.clear, props.config.authorityTransition ?? null);
 const draft = input.draft;
 const followLatestRevision = ref(0);
+const surfaceAffordancesRequested = ref(false);
+
+watch(connection.streamText, (status) => {
+  if (surfaceAffordancesRequested.value || status !== 'connected') return;
+  surfaceAffordancesRequested.value = connection.connection.value?.sendFrame(buildSurfaceAffordancesRequestFrame()) ?? false;
+}, { immediate: true });
 
 function submitOperatorDraft(deliveryMode: 'default' | 'enqueue' = 'default') {
+  if (draft.value.trim().toLowerCase().startsWith('/snippet')) {
+    const action = operatorSnippets.handleSnippetCommand(draft.value.trim().replace(/^\/snippet\s*/i, ''));
+    if (action.kind === 'local_event') {
+      input.retainLocal(action.event);
+      draft.value = '';
+      followLatestRevision.value += 1;
+      return;
+    }
+    if (action.kind === 'run') {
+      if (input.submitConversationText(action.snippet.body, action.deliveryMode ?? deliveryMode)) {
+        operatorSnippets.markSnippetUsed(action.snippet.name);
+        retainSnippetRunEvent(action.snippet, action.deliveryMode ?? deliveryMode);
+        draft.value = '';
+        followLatestRevision.value += 1;
+      }
+      return;
+    }
+  }
   if (input.submit(deliveryMode)) followLatestRevision.value += 1;
+}
+
+function runOperatorSnippet(snippet: OperatorSnippet, deliveryMode: 'default' | 'enqueue' = 'default') {
+  if (input.submitConversationText(snippet.body, deliveryMode)) {
+    operatorSnippets.markSnippetUsed(snippet.name);
+    retainSnippetRunEvent(snippet, deliveryMode);
+    followLatestRevision.value += 1;
+  }
+}
+
+function fillOperatorSnippet(snippet: OperatorSnippet) {
+  draft.value = snippet.body;
+  input.retainLocal(operatorSnippets.commandEvent(`Filled composer with snippet: ${snippet.name}`, { snippet_name: snippet.name }));
+  followLatestRevision.value += 1;
+}
+
+function saveOperatorSnippet(name: string, body: string, mode: 'save' | 'edit') {
+  input.retainLocal(operatorSnippets.saveSnippet(name, body, mode));
+  followLatestRevision.value += 1;
+}
+
+function renameOperatorSnippet(oldName: string, newName: string, body: string) {
+  input.retainLocal(operatorSnippets.renameSnippet(oldName, newName, body));
+  followLatestRevision.value += 1;
+}
+
+function deleteOperatorSnippet(name: string) {
+  input.retainLocal(operatorSnippets.deleteSnippet(name));
+  followLatestRevision.value += 1;
+}
+
+function pinOperatorSnippet(name: string) {
+  input.retainLocal(operatorSnippets.togglePinned(name));
+  followLatestRevision.value += 1;
+}
+
+function importOperatorSnippets(json: string) {
+  input.retainLocal(operatorSnippets.importSnippetsJson(json));
+  followLatestRevision.value += 1;
+}
+
+function retainSnippetRunEvent(snippet: OperatorSnippet, deliveryMode: 'default' | 'enqueue') {
+  const verb = deliveryMode === 'enqueue' ? 'Queued' : 'Ran';
+  input.retainLocal(operatorSnippets.commandEvent(`${verb} snippet: ${snippet.name}`, { snippet_name: snippet.name, delivery_mode: deliveryMode }));
 }
 
 function interruptModel() {
@@ -110,10 +180,6 @@ function requestTaskLifecycleSummary() {
   connection.connection.value?.sendFrame(buildTaskLifecycleSummaryRequestFrame());
 }
 
-function requestSurfaceAffordances() {
-  connection.connection.value?.sendFrame(buildSurfaceAffordancesRequestFrame());
-}
-
 function requestSurfaceFeedbackSummary() {
   connection.connection.value?.sendFrame(buildSurfaceFeedbackSummaryRequestFrame());
 }
@@ -139,6 +205,8 @@ function requestSurfaceFeedbackSummary() {
     :session-identity="events.sessionIdentity.value"
     :agent-activity="agentActivity.activity.value"
     :operator-queue-items="operatorQueue.items.value"
+    :operator-snippets="operatorSnippets.snippets.value"
+    :operator-snippets-export-json="operatorSnippets.exportSnippetsJson()"
     :active-turn-id="connection.activeTurnId.value"
     :mcp-inventory="mcpInventory.inventory.value"
     :surface-affordances="surfaceAffordances.summary.value"
@@ -157,6 +225,13 @@ function requestSurfaceFeedbackSummary() {
     @update:verbosity="projection.setVerbosity"
     @publish-cloudflare="cloudflareProjection.publish"
     @submit="submitOperatorDraft"
+    @run-snippet="runOperatorSnippet"
+    @save-snippet="saveOperatorSnippet"
+    @rename-snippet="renameOperatorSnippet"
+    @delete-snippet="deleteOperatorSnippet"
+    @pin-snippet="pinOperatorSnippet"
+    @import-snippets="importOperatorSnippets"
+    @fill-snippet="fillOperatorSnippet"
     @interrupt="interruptModel"
     @edit-queued="input.editQueued"
     @remove-queued="input.dropQueued($event.index)"
@@ -169,7 +244,6 @@ function requestSurfaceFeedbackSummary() {
     @request-scheduler-summary="requestSchedulerSummary"
     @request-sop-summary="requestSopSummary"
     @request-task-lifecycle-summary="requestTaskLifecycleSummary"
-    @request-surface-affordances="requestSurfaceAffordances"
     @request-surface-feedback-summary="requestSurfaceFeedbackSummary"
   />
 </template>

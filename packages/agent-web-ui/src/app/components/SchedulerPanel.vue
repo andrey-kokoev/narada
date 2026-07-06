@@ -5,6 +5,7 @@ import type { SchedulerSummary } from '../composables/useSchedulerSummary';
 const props = defineProps<{
   available: boolean;
   summary: SchedulerSummary;
+  triggerless?: boolean;
 }>();
 const emit = defineEmits<{
   refresh: [];
@@ -75,12 +76,13 @@ async function copyDiagnostics() {
 </script>
 
 <template>
-  <div v-if="available" class="scheduler-panel-shell">
-    <button type="button" class="mcp-panel-trigger scheduler-panel-trigger" :aria-expanded="open" aria-controls="scheduler-panel" @click="open = !open">
+  <div v-if="available && !triggerless" class="scheduler-panel-shell">
+    <button v-if="!triggerless" type="button" class="mcp-panel-trigger scheduler-panel-trigger" :aria-expanded="open" aria-controls="scheduler-panel" @click="open = !open">
       <span class="chip-dot" aria-hidden="true"></span>
       <span>{{ schedulerLabel }}</span>
     </button>
-    <Teleport to="body">
+  </div>
+  <Teleport v-if="available" to="body">
       <Transition name="mcp-drawer">
         <div v-if="open" class="mcp-drawer-layer" role="presentation">
           <button type="button" class="mcp-drawer-backdrop" aria-label="Close Scheduler panel" @click="open = false"></button>
@@ -129,6 +131,5 @@ async function copyDiagnostics() {
           </aside>
         </div>
       </Transition>
-    </Teleport>
-  </div>
+  </Teleport>
 </template>

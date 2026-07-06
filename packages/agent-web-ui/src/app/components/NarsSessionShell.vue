@@ -4,16 +4,19 @@ import ArtifactsPanel from './ArtifactsPanel.vue';
 import ConversationTranscript from './ConversationTranscript.vue';
 import CopyableText from './CopyableText.vue';
 import DelegationPanel from './DelegationPanel.vue';
+import GenericAffordancePanel from './GenericAffordancePanel.vue';
 import GitPanel from './GitPanel.vue';
 import InboxPanel from './InboxPanel.vue';
 import MailboxPanel from './MailboxPanel.vue';
 import McpServerPanel from './McpServerPanel.vue';
 import OperatorComposer from './OperatorComposer.vue';
 import OperatorQueuePanel from './OperatorQueuePanel.vue';
+import OperatorSnippetPanel from './OperatorSnippetPanel.vue';
 import SchedulerPanel from './SchedulerPanel.vue';
 import SessionStatusBar from './SessionStatusBar.vue';
 import SiteInfoPanel from './SiteInfoPanel.vue';
 import SopPanel from './SopPanel.vue';
+import SurfaceNavigator from './SurfaceNavigator.vue';
 import SurfaceFeedbackPanel from './SurfaceFeedbackPanel.vue';
 import TaskLifecyclePanel from './TaskLifecyclePanel.vue';
 import type { AgentActivityState } from '../composables/useAgentActivity';
@@ -26,6 +29,7 @@ import type { InboxSummary } from '../composables/useInboxSummary';
 import type { McpInventorySummary } from '../composables/useMcpInventory';
 import type { MailboxSummary } from '../composables/useMailboxSummary';
 import type { OperatorQueueItem } from '../composables/useOperatorInput';
+import type { OperatorSnippet } from '../composables/useOperatorSnippets';
 import type { ProjectionVerbosity } from '../composables/useProjectionVerbosity';
 import type { SchedulerSummary } from '../composables/useSchedulerSummary';
 import type { SessionIdentitySummary } from '../composables/useNarsEvents';
@@ -53,6 +57,8 @@ const props = defineProps<{
   sessionIdentity: SessionIdentitySummary;
   agentActivity: AgentActivityState;
   operatorQueueItems: OperatorQueueItem[];
+  operatorSnippets: OperatorSnippet[];
+  operatorSnippetsExportJson: string;
   activeTurnId: string | boolean | null;
   mcpInventory: McpInventorySummary;
   surfaceAffordances: SurfaceAffordanceSummary;
@@ -74,6 +80,13 @@ const emit = defineEmits<{
   'update:verbosity': [value: ProjectionVerbosity];
   'publish-cloudflare': [cloudflareApiBaseUrl: string];
   submit: [deliveryMode?: 'default' | 'enqueue'];
+  'run-snippet': [snippet: OperatorSnippet, deliveryMode?: 'default' | 'enqueue'];
+  'save-snippet': [name: string, body: string, mode: 'save' | 'edit'];
+  'rename-snippet': [oldName: string, newName: string, body: string];
+  'delete-snippet': [name: string];
+  'pin-snippet': [name: string];
+  'import-snippets': [json: string];
+  'fill-snippet': [snippet: OperatorSnippet];
   interrupt: [];
   'edit-queued': [item: OperatorQueueItem];
   'remove-queued': [item: OperatorQueueItem];
@@ -85,7 +98,6 @@ const emit = defineEmits<{
   'request-inbox-summary': [];
   'request-mailbox-summary': [];
   'request-scheduler-summary': [];
-  'request-surface-affordances': [];
   'request-surface-feedback-summary': [];
   'request-task-lifecycle-summary': [];
 }>();
@@ -93,6 +105,10 @@ const STATUS_ROW_OPEN_STORAGE_KEY = 'narada:agent-web-ui:status-row-open.v1';
 const statusRowOpen = ref(loadBooleanPreference(STATUS_ROW_OPEN_STORAGE_KEY, true));
 const artifactsPanelOpen = ref(false);
 const mcpPanelOpen = ref(false);
+const snippetPanelOpen = ref(false);
+const surfaceNavigatorOpen = ref(false);
+const genericAffordancePanelOpen = ref(false);
+const selectedGenericAffordanceKey = ref<string | null>(null);
 const delegationPanelOpen = ref(false);
 const gitPanelOpen = ref(false);
 const inboxPanelOpen = ref(false);
@@ -120,15 +136,87 @@ const schedulerAffordance = computed(() => props.surfaceAffordances.items.find((
 const hasSchedulerSurface = computed(() => Boolean(schedulerAffordance.value));
 const taskLifecycleAffordance = computed(() => props.surfaceAffordances.items.find((item) => item.surfaceKind === 'task_lifecycle') ?? null);
 const hasTaskLifecycleSurface = computed(() => Boolean(taskLifecycleAffordance.value));
+const genericAffordances = computed(() => props.surfaceAffordances.items.filter((item) => item.renderer === 'generic_mcp_affordance'));
+const selectedGenericAffordance = computed(() => genericAffordances.value.find((item) => genericSurfaceKey(item) === selectedGenericAffordanceKey.value) ?? genericAffordances.value[0] ?? null);
+const genericSurfaceNavigatorItems = computed(() => genericAffordances.value.map((item) => ({
+  key: genericSurfaceKey(item),
+  label: item.title,
+  detail: item.serverName ?? item.surfaceKind,
+  available: true,
+})));
 const canInterruptModel = computed(() => (
   Boolean(props.activeTurnId)
   && props.agentActivity.active === true
   && (props.agentActivity.state === 'thinking' || props.agentActivity.state === 'streaming')
 ));
+const surfaceGroups = computed(() => [
+  {
+    title: 'Runtime',
+    items: [
+      {
+        key: 'mcp',
+        label: 'Tool Surfaces (MCP)',
+        detail: `${props.mcpInventory.serverCount ?? props.mcpInventory.servers.length} ${props.mcpInventory.operationalState ?? 'unknown'}`,
+        available: true,
+      },
+    ],
+  },
+  {
+    title: 'Declared MCP',
+    items: genericSurfaceNavigatorItems.value,
+  },
+  {
+    title: 'Work',
+    items: [
+      { key: 'task_lifecycle', label: 'Tasks', detail: props.taskLifecycleSummary.status, available: hasTaskLifecycleSurface.value },
+      { key: 'delegation', label: 'Delegation', detail: `${props.delegationSummary.status} · ${props.delegationSummary.workers.count + props.delegationSummary.delegatedTasks.count} visible`, available: hasDelegationSurface.value },
+      { key: 'sop', label: 'SOP', detail: `${props.sopSummary.status} · ${props.sopSummary.templates.count} templates`, available: hasSopSurface.value },
+      { key: 'scheduler', label: 'Scheduler', detail: `${props.schedulerSummary.status} · ${props.schedulerSummary.tasks.count} tasks`, available: hasSchedulerSurface.value },
+    ],
+  },
+  {
+    title: 'State',
+    items: [
+      { key: 'git', label: 'Git', detail: `${props.gitSummary.status} · ${props.gitSummary.changedFiles.count} changed`, available: hasGitSurface.value },
+      { key: 'artifacts', label: 'Artifacts', detail: `${props.artifactsSummary.status} · ${props.artifactsSummary.artifacts.total} total`, available: hasArtifactsSurface.value },
+    ],
+  },
+  {
+    title: 'Communication',
+    items: [
+      { key: 'inbox', label: 'Inbox', detail: `${props.inboxSummary.status} · ${props.inboxSummary.envelopes.count} received`, available: hasInboxSurface.value },
+      { key: 'mailbox', label: 'Synced Email', detail: `${props.mailboxSummary.status} · ${props.mailboxSummary.messages.count} messages`, available: hasMailboxSurface.value },
+    ],
+  },
+  {
+    title: 'Feedback',
+    items: [
+      { key: 'surface_feedback', label: 'Surface Feedback', detail: props.surfaceFeedbackSummary.status, available: hasSurfaceFeedbackSurface.value },
+    ],
+  },
+]);
 watch(statusRowOpen, (value) => persistBooleanPreference(STATUS_ROW_OPEN_STORAGE_KEY, value));
-watch(mcpPanelOpen, (value) => {
-  if (value) emit('request-surface-affordances');
-});
+
+function openSurfacePanel(surfaceKind: string) {
+  if (surfaceKind === 'mcp') mcpPanelOpen.value = true;
+  else if (surfaceKind.startsWith('generic:')) {
+    selectedGenericAffordanceKey.value = surfaceKind;
+    genericAffordancePanelOpen.value = true;
+  }
+  else if (surfaceKind === 'artifacts') artifactsPanelOpen.value = true;
+  else if (surfaceKind === 'delegation') delegationPanelOpen.value = true;
+  else if (surfaceKind === 'git') gitPanelOpen.value = true;
+  else if (surfaceKind === 'inbox') inboxPanelOpen.value = true;
+  else if (surfaceKind === 'mailbox') mailboxPanelOpen.value = true;
+  else if (surfaceKind === 'scheduler') schedulerPanelOpen.value = true;
+  else if (surfaceKind === 'sop') sopPanelOpen.value = true;
+  else if (surfaceKind === 'surface_feedback') surfaceFeedbackPanelOpen.value = true;
+  else if (surfaceKind === 'task_lifecycle') taskLifecyclePanelOpen.value = true;
+}
+
+function genericSurfaceKey(item: { surfaceId: string | null; serverName: string | null; surfaceKind: string }): string {
+  return `generic:${item.surfaceId ?? item.serverName ?? item.surfaceKind}`;
+}
 
 function loadBooleanPreference(key: string, fallback: boolean): boolean {
   if (typeof window === 'undefined') return fallback;
@@ -174,25 +262,8 @@ function agentPartFromAgentId(agentId: string | null): string | null {
                 :artifact-transport="artifactTransport"
                 :health-body="healthBody"
                 :authority-transition="authorityTransition"
-                :has-artifacts="hasArtifactsSurface"
-                :has-delegation-mcp="hasDelegationSurface"
-                :has-git-mcp="hasGitSurface"
-                :has-inbox-mcp="hasInboxSurface"
-                :has-sop-mcp="hasSopSurface"
-                :has-surface-feedback-mcp="hasSurfaceFeedbackSurface"
-                :has-mailbox-mcp="hasMailboxSurface"
-                :has-scheduler-mcp="hasSchedulerSurface"
-                :has-task-lifecycle-mcp="hasTaskLifecycleSurface"
                 @open-mcp-panel="mcpPanelOpen = true"
-                @open-artifacts-panel="artifactsPanelOpen = true"
-                @open-delegation-panel="delegationPanelOpen = true"
-                @open-git-panel="gitPanelOpen = true"
-                @open-inbox-panel="inboxPanelOpen = true"
-                @open-sop-panel="sopPanelOpen = true"
-                @open-surface-feedback-panel="surfaceFeedbackPanelOpen = true"
-                @open-mailbox-panel="mailboxPanelOpen = true"
-                @open-scheduler-panel="schedulerPanelOpen = true"
-                @open-task-lifecycle-panel="taskLifecyclePanelOpen = true"
+                @open-surface-navigator="surfaceNavigatorOpen = true"
               />
               <span v-if="titleAgentLabel" class="site-title-separator">.</span>
               <span v-if="titleAgentLabel">{{ titleAgentLabel }}</span>
@@ -203,16 +274,8 @@ function agentPartFromAgentId(agentId: string | null): string | null {
         </div>
       </div>
       <div class="shell-header-actions">
-        <ArtifactsPanel v-model:open="artifactsPanelOpen" :available="hasArtifactsSurface" :summary="artifactsSummary" @refresh="emit('request-artifacts-summary')" />
-        <McpServerPanel v-model:open="mcpPanelOpen" :inventory="mcpInventory" />
-        <DelegationPanel v-model:open="delegationPanelOpen" :available="hasDelegationSurface" :summary="delegationSummary" @refresh="emit('request-delegation-summary')" />
-        <GitPanel v-model:open="gitPanelOpen" :available="hasGitSurface" :summary="gitSummary" @refresh="emit('request-git-summary')" />
-        <InboxPanel v-model:open="inboxPanelOpen" :available="hasInboxSurface" :summary="inboxSummary" @refresh="emit('request-inbox-summary')" />
-        <MailboxPanel v-model:open="mailboxPanelOpen" :available="hasMailboxSurface" :summary="mailboxSummary" @refresh="emit('request-mailbox-summary')" />
-        <SchedulerPanel v-model:open="schedulerPanelOpen" :available="hasSchedulerSurface" :summary="schedulerSummary" @refresh="emit('request-scheduler-summary')" />
-        <TaskLifecyclePanel v-model:open="taskLifecyclePanelOpen" :available="hasTaskLifecycleSurface" :summary="taskLifecycleSummary" @refresh="emit('request-task-lifecycle-summary')" />
-        <SopPanel v-model:open="sopPanelOpen" :available="hasSopSurface" :summary="sopSummary" @refresh="emit('request-sop-summary')" />
-        <SurfaceFeedbackPanel v-model:open="surfaceFeedbackPanelOpen" :available="hasSurfaceFeedbackSurface" :summary="surfaceFeedbackSummary" @refresh="emit('request-surface-feedback-summary')" />
+        <OperatorSnippetPanel v-model:open="snippetPanelOpen" :snippets="operatorSnippets" :export-json="operatorSnippetsExportJson" @run="(snippet, mode) => emit('run-snippet', snippet, mode)" @save="(name, body, mode) => emit('save-snippet', name, body, mode)" @rename="(oldName, newName, body) => emit('rename-snippet', oldName, newName, body)" @delete="emit('delete-snippet', $event)" @pin="emit('pin-snippet', $event)" @import="emit('import-snippets', $event)" @fill="emit('fill-snippet', $event)" />
+        <SurfaceNavigator v-model:open="surfaceNavigatorOpen" :groups="surfaceGroups" @open="openSurfacePanel" />
         <div class="session-chip" :data-state="healthText.split(' ')[0]">
           <span class="chip-dot" aria-hidden="true"></span>
           <span>{{ healthText.split(' · ')[0] }}</span>
@@ -238,6 +301,17 @@ function agentPartFromAgentId(agentId: string | null): string | null {
         </button>
       </div>
     </header>
+    <ArtifactsPanel v-model:open="artifactsPanelOpen" triggerless :available="hasArtifactsSurface" :summary="artifactsSummary" @refresh="emit('request-artifacts-summary')" />
+    <McpServerPanel v-model:open="mcpPanelOpen" triggerless :inventory="mcpInventory" :surface-affordances="surfaceAffordances" @open-surface-panel="openSurfacePanel" />
+    <GenericAffordancePanel v-model:open="genericAffordancePanelOpen" triggerless :item="selectedGenericAffordance" />
+    <DelegationPanel v-model:open="delegationPanelOpen" triggerless :available="hasDelegationSurface" :summary="delegationSummary" @refresh="emit('request-delegation-summary')" />
+    <GitPanel v-model:open="gitPanelOpen" triggerless :available="hasGitSurface" :summary="gitSummary" @refresh="emit('request-git-summary')" />
+    <InboxPanel v-model:open="inboxPanelOpen" triggerless :available="hasInboxSurface" :summary="inboxSummary" @refresh="emit('request-inbox-summary')" />
+    <MailboxPanel v-model:open="mailboxPanelOpen" triggerless :available="hasMailboxSurface" :summary="mailboxSummary" @refresh="emit('request-mailbox-summary')" />
+    <SchedulerPanel v-model:open="schedulerPanelOpen" triggerless :available="hasSchedulerSurface" :summary="schedulerSummary" @refresh="emit('request-scheduler-summary')" />
+    <TaskLifecyclePanel v-model:open="taskLifecyclePanelOpen" triggerless :available="hasTaskLifecycleSurface" :summary="taskLifecycleSummary" @refresh="emit('request-task-lifecycle-summary')" />
+    <SopPanel v-model:open="sopPanelOpen" triggerless :available="hasSopSurface" :summary="sopSummary" @refresh="emit('request-sop-summary')" />
+    <SurfaceFeedbackPanel v-model:open="surfaceFeedbackPanelOpen" triggerless :available="hasSurfaceFeedbackSurface" :summary="surfaceFeedbackSummary" @refresh="emit('request-surface-feedback-summary')" />
     <section v-if="statusRowOpen" class="status-row-shell" aria-label="Session status row">
       <button
         type="button"
@@ -269,6 +343,6 @@ function agentPartFromAgentId(agentId: string | null): string | null {
     </section>
     <ConversationTranscript :rows="rows" :verbosity="verbosity" :agent-activity="agentActivity" :follow-latest-revision="followLatestRevision" />
     <OperatorQueuePanel :items="operatorQueueItems" :active-turn-id="activeTurnId" @edit="emit('edit-queued', $event)" @remove="emit('remove-queued', $event)" @steer="emit('steer-queued', $event)" />
-    <OperatorComposer v-model="draft" :disabled="authorityTransition?.input_policy === 'disabled_source_sealed'" :can-interrupt="canInterruptModel" disabled-reason="Source authority is sealed. Reattach to the target authority before sending." @submit="emit('submit', $event)" @interrupt="emit('interrupt')" />
+    <OperatorComposer v-model="draft" :operator-snippets="operatorSnippets" :disabled="authorityTransition?.input_policy === 'disabled_source_sealed'" :can-interrupt="canInterruptModel" disabled-reason="Source authority is sealed. Reattach to the target authority before sending." @submit="emit('submit', $event)" @run-snippet="(snippet, mode) => emit('run-snippet', snippet, mode)" @interrupt="emit('interrupt')" />
   </main>
 </template>

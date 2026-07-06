@@ -12,27 +12,10 @@ const props = defineProps<{
   artifactTransport: string | null;
   healthBody: Record<string, unknown> | null;
   authorityTransition: Record<string, unknown> | null;
-  hasArtifacts: boolean;
-  hasDelegationMcp: boolean;
-  hasGitMcp: boolean;
-  hasInboxMcp: boolean;
-  hasSopMcp: boolean;
-  hasSurfaceFeedbackMcp: boolean;
-  hasMailboxMcp: boolean;
-  hasSchedulerMcp: boolean;
-  hasTaskLifecycleMcp: boolean;
 }>();
 const emit = defineEmits<{
   'open-mcp-panel': [];
-  'open-artifacts-panel': [];
-  'open-delegation-panel': [];
-  'open-git-panel': [];
-  'open-inbox-panel': [];
-  'open-sop-panel': [];
-  'open-surface-feedback-panel': [];
-  'open-mailbox-panel': [];
-  'open-scheduler-panel': [];
-  'open-task-lifecycle-panel': [];
+  'open-surface-navigator': [];
 }>();
 
 const open = ref(false);
@@ -80,49 +63,9 @@ function openMcpPanel() {
   emit('open-mcp-panel');
 }
 
-function openArtifactsPanel() {
+function openSurfaceNavigator() {
   open.value = false;
-  emit('open-artifacts-panel');
-}
-
-function openInboxPanel() {
-  open.value = false;
-  emit('open-inbox-panel');
-}
-
-function openDelegationPanel() {
-  open.value = false;
-  emit('open-delegation-panel');
-}
-
-function openGitPanel() {
-  open.value = false;
-  emit('open-git-panel');
-}
-
-function openSopPanel() {
-  open.value = false;
-  emit('open-sop-panel');
-}
-
-function openSurfaceFeedbackPanel() {
-  open.value = false;
-  emit('open-surface-feedback-panel');
-}
-
-function openMailboxPanel() {
-  open.value = false;
-  emit('open-mailbox-panel');
-}
-
-function openSchedulerPanel() {
-  open.value = false;
-  emit('open-scheduler-panel');
-}
-
-function openTaskLifecyclePanel() {
-  open.value = false;
-  emit('open-task-lifecycle-panel');
+  emit('open-surface-navigator');
 }
 </script>
 
@@ -174,49 +117,17 @@ function openTaskLifecyclePanel() {
                 <dt>Artifacts</dt>
                 <dd>{{ artifactTransport ?? 'not configured' }}<template v-if="artifactBasePath"> · {{ artifactBasePath }}</template></dd>
               </div>
-              <div v-if="hasArtifacts">
-                <dt>Artifact Index</dt>
-                <dd><button type="button" class="site-info-inline-action" @click="openArtifactsPanel">Open panel</button></dd>
-              </div>
               <div>
                 <dt>Authority</dt>
                 <dd>{{ authorityState }} · writes {{ writeAdmission }}</dd>
               </div>
               <div>
+                <dt>Surfaces</dt>
+                <dd><button type="button" class="site-info-inline-action" @click="openSurfaceNavigator">Open navigator</button></dd>
+              </div>
+              <div>
                 <dt>Tool Surfaces (MCP)</dt>
                 <dd><button type="button" class="site-info-inline-action" @click="openMcpPanel">Open panel</button></dd>
-              </div>
-              <div v-if="hasDelegationMcp">
-                <dt>Delegation</dt>
-                <dd><button type="button" class="site-info-inline-action" @click="openDelegationPanel">Open panel</button></dd>
-              </div>
-              <div v-if="hasGitMcp">
-                <dt>Git</dt>
-                <dd><button type="button" class="site-info-inline-action" @click="openGitPanel">Open panel</button></dd>
-              </div>
-              <div v-if="hasInboxMcp">
-                <dt>Inbox</dt>
-                <dd><button type="button" class="site-info-inline-action" @click="openInboxPanel">Open panel</button></dd>
-              </div>
-              <div v-if="hasSopMcp">
-                <dt>SOP</dt>
-                <dd><button type="button" class="site-info-inline-action" @click="openSopPanel">Open panel</button></dd>
-              </div>
-              <div v-if="hasSurfaceFeedbackMcp">
-                <dt>Feedback</dt>
-                <dd><button type="button" class="site-info-inline-action" @click="openSurfaceFeedbackPanel">Open panel</button></dd>
-              </div>
-              <div v-if="hasMailboxMcp">
-                <dt>Synced Email</dt>
-                <dd><button type="button" class="site-info-inline-action" @click="openMailboxPanel">Open panel</button></dd>
-              </div>
-              <div v-if="hasSchedulerMcp">
-                <dt>Scheduler</dt>
-                <dd><button type="button" class="site-info-inline-action" @click="openSchedulerPanel">Open panel</button></dd>
-              </div>
-              <div v-if="hasTaskLifecycleMcp">
-                <dt>Tasks</dt>
-                <dd><button type="button" class="site-info-inline-action" @click="openTaskLifecyclePanel">Open panel</button></dd>
               </div>
               <div>
                 <dt>Observed endpoint hosts</dt>

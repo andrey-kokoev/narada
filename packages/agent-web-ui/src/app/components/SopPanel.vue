@@ -5,6 +5,7 @@ import type { SopSummary } from '../composables/useSopSummary';
 const props = defineProps<{
   available: boolean;
   summary: SopSummary;
+  triggerless?: boolean;
 }>();
 const emit = defineEmits<{
   refresh: [];
@@ -149,12 +150,13 @@ async function copyDiagnostics() {
 </script>
 
 <template>
-  <div v-if="available" class="sop-panel-shell">
-    <button type="button" class="mcp-panel-trigger sop-panel-trigger" :aria-expanded="open" aria-controls="sop-panel" @click="open = !open">
+  <div v-if="available && !triggerless" class="sop-panel-shell">
+    <button v-if="!triggerless" type="button" class="mcp-panel-trigger sop-panel-trigger" :aria-expanded="open" aria-controls="sop-panel" @click="open = !open">
       <span class="chip-dot" aria-hidden="true"></span>
       <span>{{ sopLabel }}</span>
     </button>
-    <Teleport to="body">
+  </div>
+  <Teleport v-if="available" to="body">
       <Transition name="mcp-drawer">
         <div v-if="open" class="mcp-drawer-layer" role="presentation">
           <button type="button" class="mcp-drawer-backdrop" aria-label="Close SOP panel" @click="open = false"></button>
@@ -260,6 +262,5 @@ async function copyDiagnostics() {
           </aside>
         </div>
       </Transition>
-    </Teleport>
-  </div>
+  </Teleport>
 </template>

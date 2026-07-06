@@ -14,6 +14,7 @@ import {
   normalizeProjectedSummary,
   repairCollapsedAssistantBoundaries,
 } from './session-projection-boundaries.js';
+import { agentIdentityGroupKey } from '@narada2/agent-identity';
 
 export function createSessionProjection(events = [], options = {}) {
   const projection = {
@@ -90,6 +91,7 @@ function createRowProjectionState() {
 function projectMessageRow(message, options, state) {
   let projection = projectRuntimeEvent(message);
   if (!shouldRenderRuntimeProjection(projection, options)) return null;
+  // Primary path: contract-provided render keys carry the identity contract.
   const key = projection.renderKey ?? projectionIdentityKey(message, projection) ?? `event:${state.renderedByKey.size}`;
   if (projection.kind === 'assistant_message_stream') {
     const previous = state.renderedByKey.get(key)?.streamContent ?? '';
@@ -136,6 +138,7 @@ function projectionIdentityKey(event, projection) {
 }
 
 function duplicateAssistantMessageKey(row, state) {
+  // Compatibility fallback only: render keys should already dedupe the primary path.
   if (row.kind !== 'assistant_message') return null;
   const summary = normalizeAssistantText(row.summary);
   if (!summary) return null;
@@ -158,6 +161,7 @@ function assistantMessageIdentity(event) {
 }
 
 function duplicateOperatorMessageKey(row, state) {
+  // Compatibility fallback only: render keys should already dedupe the primary path.
   if (!isOperatorMessageRow(row)) return null;
   const summary = normalizeAssistantText(row.summary);
   if (!summary) return null;
@@ -221,13 +225,13 @@ function sameAssistantScope(a, b) {
 function eventScope(value) {
   if (!value || typeof value !== 'object') return { agentId: null, sessionId: null };
   return {
-    agentId: value.agent_id ?? value.agentId ?? null,
+    agentId: agentIdentityGroupKey(value.agent_identity_ref, value.agent_id ?? value.agentId ?? null, value.site_id ?? value.siteId ?? null),
     sessionId: value.session_id ?? value.sessionId ?? null,
   };
 }
 
 function agentLabel(event, suffix) {
-  const agentId = typeof event.agent_id === 'string' && event.agent_id ? event.agent_id : 'Agent';
+  const agentId = agentIdentityGroupKey(event?.agent_identity_ref, event?.agent_id ?? event?.agentId ?? null, event?.site_id ?? event?.siteId ?? null);
   return `${agentId} ${suffix}`;
 }
 

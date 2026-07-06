@@ -1,4 +1,5 @@
 import { unwrapRuntimeEvent } from './runtime-events.js';
+import { agentIdentityDisplay } from '@narada2/agent-identity';
 
 export const IDLE_ACTIVITY = Object.freeze({
   active: false,
@@ -27,7 +28,7 @@ export function reduceHealthState(state, message) {
   if (!event || typeof event !== 'object' || event.event !== 'session_health') return;
   const status = String(event.status ?? 'unknown');
   state.status = status;
-  state.agentId = event.agent_id ?? state.agentId;
+  state.agentId = eventAgentDisplay(event) ?? state.agentId;
   state.sessionId = event.session_id ?? state.sessionId;
   state.lastSeenAt = event.timestamp ?? new Date().toISOString();
   state.lastEvent = event;
@@ -132,8 +133,12 @@ function clearActivity(state, event) {
 }
 
 function agentLabel(event, suffix) {
-  const agentId = typeof event.agent_id === 'string' && event.agent_id ? event.agent_id : 'Agent';
+  const agentId = eventAgentDisplay(event) ?? 'Agent';
   return `${agentId} ${suffix}`;
+}
+
+function eventAgentDisplay(event) {
+  return agentIdentityDisplay(event?.agent_identity_ref, event?.agent_id ?? event?.agentId ?? null);
 }
 
 function providerDetail(event) {

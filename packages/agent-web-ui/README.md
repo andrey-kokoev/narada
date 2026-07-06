@@ -4,6 +4,8 @@ Browser operator surface for one NARS session.
 
 This package is a client surface. It does not construct runtime dependencies, host MCP fabric, or execute provider turns. It attaches to a NARS event endpoint and health endpoint, subscribes with `session.events.subscribe`, renders session status plus the live event transcript, submits ordinary operator messages as `conversation.send` when idle and `conversation.enqueue` during active turns, and projects slash-command input into NARS protocol frames.
 
+The shared slash-command model is documented in `docs/concepts/nars-client-projection-contract.md#operator-slash-command-projection`. This package owns browser palette rendering and local browser effects; it does not own the NARS command vocabulary or runtime command dispatch.
+
 The browser shell is Vue 3 + Vite. Components are Narada-native and styled in the shadcn-vue spirit: small explicit primitives over Narada concepts such as NARS session status, projection verbosity, transcript rows, diagnostics, raw event details, and operator input. NARS protocol projection remains framework-neutral.
 
 ## Run
@@ -26,6 +28,11 @@ pnpm --filter @narada2/agent-web-ui start -- --event-endpoint ws://127.0.0.1:123
 The command prints a local URL. Open that URL in a browser to observe and message the session.
 
 The authoritative session discovery/index mechanics are documented in `docs/concepts/nars-runtime-contract.md` under `Session Discovery And Attachment Index`.
+
+## Follow-Up Ledger
+
+- Attach UX remains endpoint-driven in this package: it can bind to a known NARS event endpoint and health endpoint, but it still relies on launcher/session discovery outside this package.
+- First-class browser session discovery and selection stays a launcher responsibility, so this package remains a peer projection rather than a session router.
 
 ## Cloudflare Projection Shell
 
