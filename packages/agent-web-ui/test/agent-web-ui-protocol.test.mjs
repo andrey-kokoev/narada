@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  buildAffordanceActionRequestFrame,
   buildArtifactsSummaryRequestFrame,
   buildConversationEnqueueFrame,
   buildConversationSendFrame,
@@ -88,6 +89,12 @@ test('agent-web-ui emits admitted NARS methods for event attach and operator inp
   assert.equal(isAgentWebUiProtocolFrame(buildTaskLifecycleSummaryRequestFrame()), true);
   assert.deepEqual(buildSurfaceAffordancesRequestFrame({ id: 'surface-1' }), { id: 'surface-1', method: 'session.surface.affordances', params: {} });
   assert.equal(isAgentWebUiProtocolFrame(buildSurfaceAffordancesRequestFrame()), true);
+  assert.deepEqual(buildAffordanceActionRequestFrame({ surfaceId: 'fixture.surface', actionId: 'refresh', args: { topic: 'status' } }, { id: 'action-1' }), {
+    id: 'action-1',
+    method: 'session.affordance.action.request',
+    params: { surface_id: 'fixture.surface', action_id: 'refresh', args: { topic: 'status' } },
+  });
+  assert.equal(isAgentWebUiProtocolFrame(buildAffordanceActionRequestFrame({ surfaceId: 'fixture.surface', actionId: 'refresh' })), true);
 
   const input = buildConversationSendFrame('run startup sequence', { id: 'input-1' });
   assert.deepEqual(input, {

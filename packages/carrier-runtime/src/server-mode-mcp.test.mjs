@@ -142,6 +142,115 @@ test('server mode health advertises MCP tool catalog for web UI inventory', asyn
   }
 });
 
+test('server mode executes read-only generic affordance actions through MCP fabric', async () => {
+  const siteRoot = tempRoot('carrier-mcp-affordance-action-test-');
+  try {
+    writeFixtureMcpSurface(siteRoot);
+    const input = new PassThrough();
+    const output = new PassThrough();
+    const events = [];
+    let outputBuffer = '';
+    output.setEncoding('utf8');
+    output.on('data', (chunk) => {
+      outputBuffer += chunk;
+      const lines = outputBuffer.split(/\r?\n/);
+      outputBuffer = lines.pop() ?? '';
+      for (const line of lines) {
+        if (line.trim()) events.push(JSON.parse(line));
+      }
+    });
+
+    const sessionDir = resolveNaradaSitePaths({ siteRoot, sessionId: 'session_mcp_affordance_action' }).narsSessionDir;
+    const runtimeContext = {
+      identity: 'agent.test',
+      session: 'session_mcp_affordance_action',
+      siteRoot,
+      sessionPath: join(sessionDir, 'session.jsonl'),
+      eventsPath: join(sessionDir, 'events.jsonl'),
+      providerSettings: { provider: 'codex-subscription', model: 'gpt-5.5', thinking: 'medium', stream: false },
+    };
+    const { dependencies } = createCarrierRuntimeDependencies({ runtimeContext });
+    input.write(`${JSON.stringify({ id: 'action-1', method: 'session.affordance.action.request', params: { surface_id: 'fixture.surface', action_id: 'refresh', args: { topic: 'affordance' }, client_correlation_id: 'ui-1' } })}\n`);
+    input.end();
+
+    await runCarrierServerMode({
+      input,
+      output,
+      callChatApiFn: async () => ({ choices: [{ message: { role: 'assistant', content: 'unused' } }] }),
+      runtimeContext,
+      dependencies: {
+        ...dependencies,
+        readMcpPreflightArtifact: () => null,
+      },
+    });
+
+    const requested = events.find((event) => event.event === 'session_affordance_action_requested');
+    assert.equal(requested?.surface_id, 'fixture.surface');
+    assert.equal(requested?.action_id, 'refresh');
+    const result = events.find((event) => event.event === 'session_affordance_action_result');
+    assert.equal(result?.status, 'ok', JSON.stringify(events));
+    assert.equal(result?.tool_name, 'fixture_read');
+    assert.equal(result?.result?.topic, 'affordance');
+    const sessionRecords = readJsonl(join(sessionDir, 'session.jsonl'));
+    assert.equal(sessionRecords.some((record) => record.event === 'session_affordance_action_requested'), true);
+    assert.equal(sessionRecords.some((record) => record.event === 'session_affordance_action_result' && record.status === 'ok'), true);
+  } finally {
+    removeTempDir(siteRoot);
+  }
+});
+
+test('server mode refuses unsafe generic affordance actions before MCP tool execution', async () => {
+  const siteRoot = tempRoot('carrier-mcp-affordance-refusal-test-');
+  try {
+    writeFixtureMcpSurface(siteRoot);
+    const input = new PassThrough();
+    const output = new PassThrough();
+    const events = [];
+    let outputBuffer = '';
+    output.setEncoding('utf8');
+    output.on('data', (chunk) => {
+      outputBuffer += chunk;
+      const lines = outputBuffer.split(/\r?\n/);
+      outputBuffer = lines.pop() ?? '';
+      for (const line of lines) {
+        if (line.trim()) events.push(JSON.parse(line));
+      }
+    });
+
+    const sessionDir = resolveNaradaSitePaths({ siteRoot, sessionId: 'session_mcp_affordance_refusal' }).narsSessionDir;
+    const runtimeContext = {
+      identity: 'agent.test',
+      session: 'session_mcp_affordance_refusal',
+      siteRoot,
+      sessionPath: join(sessionDir, 'session.jsonl'),
+      eventsPath: join(sessionDir, 'events.jsonl'),
+      providerSettings: { provider: 'codex-subscription', model: 'gpt-5.5', thinking: 'medium', stream: false },
+    };
+    const { dependencies } = createCarrierRuntimeDependencies({ runtimeContext });
+    input.write(`${JSON.stringify({ id: 'action-2', method: 'session.affordance.action.request', params: { surface_id: 'fixture.surface', action_id: 'mutate', args: { topic: 'blocked' } } })}\n`);
+    input.end();
+
+    await runCarrierServerMode({
+      input,
+      output,
+      callChatApiFn: async () => ({ choices: [{ message: { role: 'assistant', content: 'unused' } }] }),
+      runtimeContext,
+      dependencies: {
+        ...dependencies,
+        readMcpPreflightArtifact: () => null,
+      },
+    });
+
+    const confirmation = events.find((event) => event.event === 'session_affordance_confirmation_required');
+    assert.equal(confirmation?.terminal_state, 'refused', JSON.stringify(events));
+    assert.equal(confirmation?.code, 'affordance_action_confirmation_required');
+    assert.equal(events.some((event) => event.event === 'session_affordance_action_result'), false);
+    assert.equal(events.some((event) => event.event === 'tool_call' && event.tool === 'fixture_read'), false);
+  } finally {
+    removeTempDir(siteRoot);
+  }
+});
+
 test('server mode emits MCP runtime diagnostics when a real fabric tool call fails', async () => {
   const siteRoot = tempRoot('carrier-mcp-failure-e2e-test-');
   try {

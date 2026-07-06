@@ -23,7 +23,7 @@ import { useSurfaceAffordances } from './composables/useSurfaceAffordances';
 import { useSurfaceFeedbackSummary } from './composables/useSurfaceFeedbackSummary';
 import { useTaskLifecycleSummary } from './composables/useTaskLifecycleSummary';
 import { ArtifactRenderingConfigKey } from './lib/artifactConfig';
-import { buildArtifactsSummaryRequestFrame, buildDelegationSummaryRequestFrame, buildGitSummaryRequestFrame, buildInboxSummaryRequestFrame, buildMailboxSummaryRequestFrame, buildSchedulerSummaryRequestFrame, buildSopSummaryRequestFrame, buildSurfaceAffordancesRequestFrame, buildSurfaceFeedbackSummaryRequestFrame, buildTaskLifecycleSummaryRequestFrame } from './lib/narsFrames';
+import { buildAffordanceActionRequestFrame, buildArtifactsSummaryRequestFrame, buildDelegationSummaryRequestFrame, buildGitSummaryRequestFrame, buildInboxSummaryRequestFrame, buildMailboxSummaryRequestFrame, buildSchedulerSummaryRequestFrame, buildSopSummaryRequestFrame, buildSurfaceAffordancesRequestFrame, buildSurfaceFeedbackSummaryRequestFrame, buildTaskLifecycleSummaryRequestFrame } from './lib/narsFrames';
 
 interface AgentWebUiConfig {
   eventEndpoint: string | null;
@@ -183,6 +183,11 @@ function requestTaskLifecycleSummary() {
 function requestSurfaceFeedbackSummary() {
   connection.connection.value?.sendFrame(buildSurfaceFeedbackSummaryRequestFrame());
 }
+
+function requestAffordanceAction(request: { surfaceId: string; actionId: string; args: Record<string, unknown> }) {
+  const frame = buildAffordanceActionRequestFrame({ surfaceId: request.surfaceId, actionId: request.actionId, args: request.args });
+  if (frame) connection.connection.value?.sendFrame(frame);
+}
 </script>
 
 <template>
@@ -245,5 +250,6 @@ function requestSurfaceFeedbackSummary() {
     @request-sop-summary="requestSopSummary"
     @request-task-lifecycle-summary="requestTaskLifecycleSummary"
     @request-surface-feedback-summary="requestSurfaceFeedbackSummary"
+    @request-affordance-action="requestAffordanceAction"
   />
 </template>

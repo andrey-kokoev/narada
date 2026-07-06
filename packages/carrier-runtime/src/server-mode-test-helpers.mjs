@@ -86,6 +86,36 @@ process.stdin.on('data', (chunk) => {
         args: ['{site_root}/tools/fixture-mcp.mjs'],
         surface_id: 'fixture.surface',
         target_site_root: '{site_root}',
+        surface_affordances: [{
+          schema: 'narada.mcp_affordances.v1',
+          surface_id: 'fixture.surface',
+          title: 'Fixture Surface',
+          panels: [{
+            id: 'fixture',
+            title: 'Fixture',
+            priority: 1,
+            actions: ['refresh', 'mutate'],
+          }],
+          actions: [
+            {
+              id: 'refresh',
+              label: 'Refresh fixture',
+              intent: 'refresh',
+              read_only: true,
+              danger_level: 'low',
+              target: { kind: 'tool', tool: 'fixture_read' },
+            },
+            {
+              id: 'mutate',
+              label: 'Mutate fixture',
+              intent: 'mutate',
+              read_only: false,
+              confirmation_required: true,
+              danger_level: 'high',
+              target: { kind: 'tool', tool: 'fixture_read' },
+            },
+          ],
+        }],
       },
     },
   }, null, 2)}\n`, 'utf8');

@@ -6,6 +6,9 @@ const props = defineProps<{
   item: SurfaceAffordanceItem | null;
   triggerless?: boolean;
 }>();
+const emit = defineEmits<{
+  action: [request: { surfaceId: string; actionId: string; args: Record<string, unknown> }];
+}>();
 
 const open = defineModel<boolean>('open', { default: false });
 
@@ -38,6 +41,20 @@ function actionMeta(action: Record<string, unknown>): string {
     stringField(action, 'danger_level'),
     targetLabel(target),
   ].filter(Boolean).join(' · ');
+}
+
+function canRequestAction(action: Record<string, unknown>): boolean {
+  const target = objectField(action, 'target');
+  if (target?.kind !== 'tool') return false;
+  if (action.destructive === true || action.danger_level === 'high' || action.confirmation_required === true || action.requires_confirmation === true) return false;
+  return action.read_only === true || action.idempotent === true;
+}
+
+function requestAction(action: Record<string, unknown>) {
+  const surfaceId = props.item?.surfaceId;
+  const actionId = stringField(action, 'id');
+  if (!surfaceId || !actionId || !canRequestAction(action)) return;
+  emit('action', { surfaceId, actionId, args: {} });
 }
 
 function targetLabel(target: Record<string, unknown> | null): string | null {
@@ -129,7 +146,10 @@ function stringField(record: unknown, field: string): string | null {
             </dl>
             <ol v-if="panelActions(panel).length" class="mcp-tool-list">
               <li v-for="action in panelActions(panel)" :key="String(action.id)" class="mcp-tool-row">
-                <strong>{{ actionLabel(action) }}</strong>
+                <button v-if="canRequestAction(action)" type="button" class="mcp-panel-close" @click="requestAction(action)">
+                  {{ actionLabel(action) }}
+                </button>
+                <strong v-else>{{ actionLabel(action) }}</strong>
                 <span v-if="actionMeta(action)">{{ actionMeta(action) }}</span>
                 <span v-if="stringField(action, 'description')">{{ stringField(action, 'description') }}</span>
               </li>

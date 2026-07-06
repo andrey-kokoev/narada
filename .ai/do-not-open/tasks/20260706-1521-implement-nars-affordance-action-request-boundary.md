@@ -1,6 +1,6 @@
 ---
 task_number: 1521
-status: opened
+status: closed
 created_at: 2026-07-06
 ---
 
@@ -51,16 +51,26 @@ Grounding references:
 
 ## Execution Notes
 
-No implementation yet.
+- Added `session.affordance.action.request` to the Agent Web UI NARS admitted method list.
+- Added `buildAgentWebUiAffordanceActionRequestFrame`, which normalizes `surface_id`, `action_id`, optional structured `args`, and optional client correlation id.
+- Added carrier runtime handling beside `session.surface.affordances`.
+- Runtime now resolves live `session.surface_affordances`, validates `surface_id` and `action_id`, and admits only generic affordance document actions with `target.kind: "tool"` plus `read_only: true` or `idempotent: true`.
+- Runtime refuses unknown, stale, unavailable, non-tool, unsafe, destructive, high-danger, or confirmation-required actions before any MCP call.
+- Runtime emits `session_affordance_action_requested`, `session_affordance_action_result`, `session_affordance_action_refused`, and `session_affordance_confirmation_required` events.
+- `GenericAffordancePanel` now renders read-only/idempotent tool actions as executable controls and emits a typed action request upward.
+- `App.vue` sends the request through the existing NARS connection using the contract-owned frame builder.
+- Extended fixture MCP config with a generic affordance document so the runtime tests cover real MCP fabric execution and pre-execution refusal.
 
 ## Verification
 
 Recommended focused verification:
 
-- `pnpm --filter @narada2/nars-client-projection-contract test`
-- `pnpm --filter @narada2/carrier-runtime test`
-- `pnpm --filter @narada2/agent-web-ui test`
-- `pnpm --filter @narada2/agent-web-ui typecheck`
+- Passed: `pnpm --filter @narada2/nars-client-projection-contract test`
+- Passed: `node --test packages\agent-web-ui\test\agent-web-ui-protocol.test.mjs`
+- Passed: `node --test packages\carrier-runtime\src\server-mode-mcp.test.mjs`
+- Passed: `pnpm --filter @narada2/carrier-runtime test -- --test-name-pattern "affordance actions"`
+- Passed: `pnpm --filter @narada2/agent-web-ui typecheck`
+- Passed: `pnpm --filter @narada2/agent-web-ui test`
 
 ## Acceptance Criteria
 
@@ -70,3 +80,5 @@ Recommended focused verification:
 - Runtime refuses or requires confirmation for mutating, destructive, high-danger, or confirmation-required actions without invoking the target MCP tool.
 - AgentWebUI sends a NARS protocol frame from `GenericAffordancePanel`; it does not call MCP directly.
 - Focused tests cover contract, runtime, and WebUI wiring.
+
+All acceptance criteria are met by the implementation and verification above.

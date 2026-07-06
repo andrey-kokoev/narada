@@ -7,7 +7,9 @@ import {
   NARS_CLIENT_PROJECTION_REGISTRY,
   NARS_CLIENT_PROJECTION_VERBOSITY_LEVELS,
   LEGACY_CARRIER_COMMAND_METHOD,
+  NARS_AFFORDANCE_ACTION_REQUEST_METHOD,
   NARS_COMMAND_METHOD,
+  buildAgentWebUiAffordanceActionRequestFrame,
   buildAgentWebUiArtifactsSummaryFrame,
   buildAgentWebUiConversationEnqueueFrame,
   buildAgentWebUiConversationSendFrame,
@@ -46,6 +48,7 @@ test('NARS client projection contract owns attach commands and web UI capabiliti
   assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('session.events.read'), true);
   assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('session.artifacts.summary'), true);
   assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('session.surface.affordances'), true);
+  assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes(NARS_AFFORDANCE_ACTION_REQUEST_METHOD), true);
   assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('session.sop.summary'), true);
   assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('session.inbox.summary'), true);
   assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('session.delegation.summary'), true);
@@ -133,6 +136,12 @@ test('NARS client projection contract owns web UI operator input projection', ()
     method: 'session.surface.affordances',
     params: {},
   });
+  assert.deepEqual(buildAgentWebUiAffordanceActionRequestFrame({ surfaceId: 'fixture.surface', actionId: 'refresh', args: { topic: 'status' }, clientCorrelationId: 'ui-1' }, { id: 'affordance-action-1' }), {
+    id: 'affordance-action-1',
+    method: 'session.affordance.action.request',
+    params: { surface_id: 'fixture.surface', action_id: 'refresh', args: { topic: 'status' }, client_correlation_id: 'ui-1' },
+  });
+  assert.equal(buildAgentWebUiAffordanceActionRequestFrame({ surfaceId: '', actionId: 'refresh' }), null);
   assert.deepEqual(buildAgentWebUiConversationSendFrame('run startup sequence', { id: 'input-1' }), {
     id: 'input-1',
     method: 'conversation.send',

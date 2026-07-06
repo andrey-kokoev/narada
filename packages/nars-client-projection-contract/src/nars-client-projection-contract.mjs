@@ -2,6 +2,7 @@ import { agentIdentityDisplay, agentIdentityGroupKey } from '@narada2/agent-iden
 
 export const NARS_COMMAND_METHOD = 'session.command.execute';
 export const LEGACY_CARRIER_COMMAND_METHOD = 'carrier.command.execute';
+export const NARS_AFFORDANCE_ACTION_REQUEST_METHOD = 'session.affordance.action.request';
 
 export const NARS_CLIENT_PROJECTION_VERBOSITY_LEVELS = Object.freeze([
   'conversation',
@@ -26,6 +27,7 @@ export const AGENT_WEB_UI_NARS_METHOD_LIST = Object.freeze([
   'session.artifacts.read',
   'session.artifacts.summary',
   'session.surface.affordances',
+  NARS_AFFORDANCE_ACTION_REQUEST_METHOD,
   'session.sop.summary',
   'session.inbox.summary',
   'session.delegation.summary',
@@ -94,6 +96,10 @@ export const NARS_CLIENT_EVENT_LABELS = Object.freeze({
   authority_session_revoked: 'Session revoked',
   projection_revoked: 'Projection revoked',
   session_status: 'Status',
+  session_affordance_action_requested: 'Affordance action',
+  session_affordance_action_result: 'Affordance result',
+  session_affordance_action_refused: 'Affordance refused',
+  session_affordance_confirmation_required: 'Confirmation required',
   session_recovery: 'Recovery',
   session_operations: 'Operations',
   observers_status: 'Observers',
@@ -318,6 +324,23 @@ export function buildAgentWebUiSurfaceAffordancesFrame(options = {}) {
     id: options.id ?? `agent-web-ui-surface-affordances-${Date.now()}`,
     method: 'session.surface.affordances',
     params: {},
+  };
+}
+
+export function buildAgentWebUiAffordanceActionRequestFrame({ surfaceId, surface_id, actionId, action_id, args = {}, clientCorrelationId, client_correlation_id } = {}, options = {}) {
+  const normalizedSurfaceId = String(surface_id ?? surfaceId ?? '').trim();
+  const normalizedActionId = String(action_id ?? actionId ?? '').trim();
+  if (!normalizedSurfaceId || !normalizedActionId) return null;
+  const normalizedArgs = args && typeof args === 'object' && !Array.isArray(args) ? args : {};
+  return {
+    id: options.id ?? `agent-web-ui-affordance-action-${normalizedSurfaceId.replace(/[^a-z0-9]+/gi, '-')}-${normalizedActionId.replace(/[^a-z0-9]+/gi, '-')}-${Date.now()}`,
+    method: NARS_AFFORDANCE_ACTION_REQUEST_METHOD,
+    params: {
+      surface_id: normalizedSurfaceId,
+      action_id: normalizedActionId,
+      args: normalizedArgs,
+      ...(client_correlation_id ?? clientCorrelationId ? { client_correlation_id: String(client_correlation_id ?? clientCorrelationId) } : {}),
+    },
   };
 }
 

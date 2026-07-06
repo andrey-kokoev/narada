@@ -100,6 +100,7 @@ const emit = defineEmits<{
   'request-scheduler-summary': [];
   'request-surface-feedback-summary': [];
   'request-task-lifecycle-summary': [];
+  'request-affordance-action': [request: { surfaceId: string; actionId: string; args: Record<string, unknown> }];
 }>();
 const STATUS_ROW_OPEN_STORAGE_KEY = 'narada:agent-web-ui:status-row-open.v1';
 const statusRowOpen = ref(loadBooleanPreference(STATUS_ROW_OPEN_STORAGE_KEY, true));
@@ -303,7 +304,7 @@ function agentPartFromAgentId(agentId: string | null): string | null {
     </header>
     <ArtifactsPanel v-model:open="artifactsPanelOpen" triggerless :available="hasArtifactsSurface" :summary="artifactsSummary" @refresh="emit('request-artifacts-summary')" />
     <McpServerPanel v-model:open="mcpPanelOpen" triggerless :inventory="mcpInventory" :surface-affordances="surfaceAffordances" @open-surface-panel="openSurfacePanel" />
-    <GenericAffordancePanel v-model:open="genericAffordancePanelOpen" triggerless :item="selectedGenericAffordance" />
+    <GenericAffordancePanel v-model:open="genericAffordancePanelOpen" triggerless :item="selectedGenericAffordance" @action="emit('request-affordance-action', $event)" />
     <DelegationPanel v-model:open="delegationPanelOpen" triggerless :available="hasDelegationSurface" :summary="delegationSummary" @refresh="emit('request-delegation-summary')" />
     <GitPanel v-model:open="gitPanelOpen" triggerless :available="hasGitSurface" :summary="gitSummary" @refresh="emit('request-git-summary')" />
     <InboxPanel v-model:open="inboxPanelOpen" triggerless :available="hasInboxSurface" :summary="inboxSummary" @refresh="emit('request-inbox-summary')" />
