@@ -5,6 +5,7 @@ import {
   getCarrierControlPath,
   getCarrierStatus,
   runAgentStartCommand,
+  writeOperatorProjectionLaunchBinding,
 } from '../lib/launcher-runtime.js';
 import { defaultRuntimeForCarrier } from '@narada2/carrier-runtime-contract/carrier-runtime-selection';
 import { agentIdentityDisplay } from '@narada2/agent-identity';
@@ -25,6 +26,7 @@ export interface CarrierCommandOptions {
   exec?: boolean;
   wait?: boolean;
   enableNativeShell?: boolean;
+  launchBindingPath?: string;
   format?: CliFormat;
 }
 
@@ -125,6 +127,19 @@ export async function carrierStartCommand(
     runtime,
   });
   if (existing.latest?.control_path_exists && existing.latest.parent_process_alive !== false) {
+    writeOperatorProjectionLaunchBinding(options.launchBindingPath, {
+      status: 'ready',
+      siteRoot,
+      workspaceRoot: options.workspaceRoot ?? siteRoot,
+      agent,
+      operatorSurfaceKind: carrier,
+      runtimeHostKind: runtime,
+      intelligenceProvider: options.intelligenceProvider ?? null,
+      narsSessionId: existing.latest.nars_session_id ?? existing.latest.runtime_session_id ?? existing.latest.carrier_session_id ?? null,
+      runtimeSessionId: existing.latest.runtime_session_id ?? null,
+      carrierSessionId: existing.latest.carrier_session_id ?? null,
+      reason: 'already_running',
+    });
     const result = {
       schema: 'narada.operator_surface.runtime_start_result.v1',
       status: 'already_running',
@@ -158,6 +173,7 @@ export async function carrierStartCommand(
     wait: options.wait,
     enableNativeShell: options.enableNativeShell,
     launchSource: 'narada operator-surface start',
+    launchBindingPath: options.launchBindingPath,
   });
   const parsedAgentStart = start.parsed_result as {
     target_site_id?: unknown;

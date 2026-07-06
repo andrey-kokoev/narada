@@ -626,6 +626,7 @@ export interface WorkspaceLaunchAgentPlan extends WorkspaceLaunchRecord {
   mcp_scope: string;
   wt_args: string[];
   smoke_command: string[];
+  operator_projection_launch_binding: Record<string, unknown> | null;
   operator_projection_open_requests: Array<Record<string, unknown>>;
   legacy_carrier_compatibility: WorkspaceLaunchLegacyCarrierCompatibility;
 }
@@ -2552,6 +2553,9 @@ function buildAgentPlan(record: WorkspaceLaunchRecord, options: WorkspaceLaunchP
     || process.env.CLOUDFLARE_NARS_PROJECTION_URL
     || null;
   const naradaProper = resolve(process.env.NARADA_PROPER_ROOT ?? 'D:/code/narada');
+  const launchBindingPath = launchCarriers.includes('agent-web-ui')
+    ? operatorProjectionLaunchBindingPath(record)
+    : null;
   const operatorSurfaceStartCommand = [
     'pnpm',
     '--dir', naradaProper,
@@ -2570,6 +2574,7 @@ function buildAgentPlan(record: WorkspaceLaunchRecord, options: WorkspaceLaunchP
   if (enableNativeShell) operatorSurfaceStartCommand.push('--enable-native-shell');
   if (intelligenceProvider) operatorSurfaceStartCommand.push('--intelligence-provider', intelligenceProvider);
   operatorSurfaceStartCommand.push('--mcp-scope', mcpScope);
+  if (launchBindingPath) operatorSurfaceStartCommand.push('--launch-binding', launchBindingPath);
   if (waitForEnter) operatorSurfaceStartCommand.push('--wait');
 
   const base = [
@@ -2583,13 +2588,13 @@ function buildAgentPlan(record: WorkspaceLaunchRecord, options: WorkspaceLaunchP
   ];
   const wtArgs = [...base];
   if (launchCarrier === 'agent-web-ui') {
-    wtArgs.push(';', ...agentWebUiAttachWtArgs(record, naradaProper, cloudflareApiBaseUrl));
+    wtArgs.push(';', ...agentWebUiAttachWtArgs(record, naradaProper, cloudflareApiBaseUrl, launchBindingPath));
   }
   for (const extraCarrier of launchCarriers.filter((carrier) => carrier !== launchCarrier)) {
     if (extraCarrier !== 'agent-web-ui') {
       throw new Error(`unsupported_multi_carrier_projection: ${extraCarrier}`);
     }
-    wtArgs.push(';', ...agentWebUiAttachWtArgs(record, naradaProper, cloudflareApiBaseUrl));
+    wtArgs.push(';', ...agentWebUiAttachWtArgs(record, naradaProper, cloudflareApiBaseUrl, launchBindingPath));
   }
 
   const smokeCommand = [
@@ -2605,6 +2610,7 @@ function buildAgentPlan(record: WorkspaceLaunchRecord, options: WorkspaceLaunchP
   if (intelligenceProvider) smokeCommand.push('--intelligence-provider', intelligenceProvider);
   if (enableNativeShell) smokeCommand.push('--enable-native-shell');
   smokeCommand.push('--mcp-scope', mcpScope);
+  if (launchBindingPath) smokeCommand.push('--launch-binding', launchBindingPath);
   const operatorProjectionOpenRequests = launchCarriers.includes('agent-web-ui')
     ? [plannedAgentWebUiProjectionOpenRequest(record)]
     : [];
@@ -2629,6 +2635,13 @@ function buildAgentPlan(record: WorkspaceLaunchRecord, options: WorkspaceLaunchP
     enable_native_shell: enableNativeShell,
     wt_args: wtArgs,
     smoke_command: smokeCommand,
+    operator_projection_launch_binding: launchBindingPath
+      ? {
+          schema: 'narada.operator_projection_launch_binding_ref.v1',
+          path: launchBindingPath,
+          exact_attach_required: true,
+        }
+      : null,
     operator_projection_open_requests: operatorProjectionOpenRequests,
   };
 }
@@ -2641,7 +2654,18 @@ function normalizeCarrierList(value: string | undefined): string[] {
   return unique(carriers.length > 0 ? carriers : ['agent-cli']);
 }
 
-function agentWebUiAttachWtArgs(record: WorkspaceLaunchRecord, naradaProper: string, cloudflareApiBaseUrl: string | null): string[] {
+function operatorProjectionLaunchBindingPath(record: WorkspaceLaunchRecord): string {
+  const root = record.workspace_root ?? record.narada_root;
+  const stamp = new Date().toISOString().replace(/[^0-9A-Za-z]+/g, '');
+  const name = `${stamp}-${safePathToken(record.site)}-${safePathToken(record.role)}-${randomUUID()}.json`;
+  return join(root, '.ai', 'runtime', 'operator-projection-launch-bindings', name);
+}
+
+function safePathToken(value: string): string {
+  return value.replace(/[^0-9A-Za-z_.-]+/g, '-').replace(/^-+|-+$/g, '') || 'unknown';
+}
+
+function agentWebUiAttachWtArgs(record: WorkspaceLaunchRecord, naradaProper: string, cloudflareApiBaseUrl: string | null, launchBindingPath: string | null): string[] {
   const agentDisplay = agentIdentityDisplay(record.agent_identity_ref, record.agent);
   const attachCommand = [
     'pnpm',
@@ -2651,12 +2675,12 @@ function agentWebUiAttachWtArgs(record: WorkspaceLaunchRecord, naradaProper: str
     'agent-web-ui',
     'attach',
     '--site-root', record.site_root,
-    '--agent', record.agent,
+    ...(launchBindingPath ? ['--launch-binding', launchBindingPath] : ['--agent', record.agent]),
     '--wait-for-session-ms', '60000',
     '--open',
   ];
   if (cloudflareApiBaseUrl) attachCommand.push('--cloudflare-api-base-url', cloudflareApiBaseUrl);
-  const prelude = `Write-Host ${quotePowerShellArgument(`agent-web-ui: waiting for ${agentDisplay} NARS session, then starting browser projection`)}`;
+  const prelude = `Write-Host ${quotePowerShellArgument(`agent-web-ui: waiting for ${agentDisplay} launch binding, then starting browser projection`)}`;
   return [
     'new-tab',
     '--title', `${record.title} Web UI`,

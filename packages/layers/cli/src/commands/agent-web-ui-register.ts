@@ -14,6 +14,7 @@ export function registerAgentWebUiCommands(program: Command): void {
     .description('Start agent-web-ui attached to a discovered NARS session')
     .option('--session <id>', 'NARS session id')
     .option('--agent <id>', 'Agent identity used to discover the live NARS session when --session is omitted')
+    .option('--launch-binding <path>', 'Exact operator projection launch binding to wait on before attaching')
     .option('--site-root <path>', 'Target Site root')
     .option('--site <id>', 'Registered Site id')
     .option('--host <host>', 'Host to bind to', '127.0.0.1')
@@ -30,6 +31,7 @@ export function registerAgentWebUiCommands(program: Command): void {
       const result = await agentWebUiAttachCommand({
         session: opts.session as string | undefined,
         agent: opts.agent as string | undefined,
+        launchBindingPath: opts.launchBinding as string | undefined,
         siteRoot: opts.siteRoot as string | undefined,
         site: opts.site as string | undefined,
         host: opts.host as string | undefined,

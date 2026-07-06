@@ -1,4 +1,5 @@
 import type { CommandContext } from '../lib/command-wrapper.js';
+import { readFile } from 'node:fs/promises';
 import { executeOperatorProjectionOpenRequest } from '@narada2/process-launch-posture';
 import { agentIdentityDisplay, agentIdentityGroupKey, agentIdentityRefMatchesRequest, normalizeSiteToken, roleSegment, siteSegment } from '@narada2/agent-identity';
 import { formattedResult, type CliFormat } from '../lib/cli-output.js';
@@ -16,10 +17,74 @@ export interface AgentWebUiAttachOptions {
   allowStaleSession?: boolean;
   healthTimeoutMs?: number;
   waitForSessionMs?: number;
+  launchBindingPath?: string;
   format?: CliFormat;
   launchRegistryPath?: string;
   open?: boolean;
   cloudflareApiBaseUrl?: string;
+}
+
+async function resolveAttachSessionIdFromLaunchBinding(options: AgentWebUiAttachOptions, progress: ProgressReporter): Promise<ResolvedAttachSession> {
+  const bindingPath = options.launchBindingPath?.trim();
+  if (!bindingPath) throw new Error('launch_binding_required');
+  const startedAt = Date.now();
+  const timeoutMs = Math.max(0, Math.trunc(options.waitForSessionMs ?? 0));
+  if (!options.dryRun) {
+    progress(timeoutMs > 0
+      ? `agent-web-ui: waiting up to ${Math.ceil(timeoutMs / 1000)}s for launch binding`
+      : 'agent-web-ui: reading launch binding');
+  }
+  let nextProgressAt = startedAt + 5000;
+  let lastReason = 'launch_binding_unresolved';
+  do {
+    const binding = await readJsonRecord(bindingPath);
+    const directSession = sessionIdFromRecord(binding);
+    if (directSession) {
+      if (!options.dryRun) progress(`agent-web-ui: launch binding resolved NARS session ${directSession}`);
+      return { sessionId: directSession, reason: 'launch_binding' };
+    }
+    const resultPath = stringField(binding, 'agent_start_result_file') ?? stringField(binding, 'result_file');
+    if (resultPath) {
+      const result = await readJsonRecord(resultPath);
+      const resultSession = sessionIdFromRecord(result);
+      if (resultSession) {
+        if (!options.dryRun) progress(`agent-web-ui: launch result resolved NARS session ${resultSession}`);
+        return { sessionId: resultSession, reason: 'launch_binding_result_file' };
+      }
+      if (stringField(result, 'status') === 'failed') lastReason = 'agent_start_failed';
+    }
+    if (stringField(binding, 'status') === 'failed') lastReason = stringField(binding, 'reason') ?? 'launch_binding_failed';
+    if (timeoutMs <= 0 || Date.now() - startedAt >= timeoutMs || lastReason !== 'launch_binding_unresolved') break;
+    if (!options.dryRun && Date.now() >= nextProgressAt) {
+      progress('agent-web-ui: still waiting for launch binding result');
+      nextProgressAt = Date.now() + 5000;
+    }
+    await delay(1000);
+  } while (Date.now() - startedAt < timeoutMs);
+  throw new AttachSessionDiscoveryError(`launch_binding_unresolved: ${lastReason}: ${bindingPath}`, 'launch_binding_unresolved');
+}
+
+async function readJsonRecord(path: string): Promise<Record<string, unknown> | null> {
+  try {
+    const parsed = JSON.parse(await readFile(path, 'utf8'));
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : null;
+  } catch {
+    return null;
+  }
+}
+
+function sessionIdFromRecord(record: Record<string, unknown> | null): string | null {
+  if (!record) return null;
+  const narsLaunch = objectField(record, 'nars_launch');
+  const requiredEnvironment = objectField(record, 'required_environment');
+  return stringField(record, 'nars_session_id')
+    ?? stringField(record, 'runtime_session_id')
+    ?? stringField(record, 'session_id')
+    ?? stringField(narsLaunch, 'nars_session_id')
+    ?? stringField(narsLaunch, 'session_id')
+    ?? stringField(requiredEnvironment, 'NARADA_NARS_SESSION_ID')
+    ?? stringField(requiredEnvironment, 'NARADA_RUNTIME_SESSION_ID')
+    ?? stringField(requiredEnvironment, 'NARADA_CARRIER_SESSION_ID');
 }
 
 interface ResolvedAttachSession {
@@ -42,7 +107,7 @@ interface AttachSessionCandidate {
 class AttachSessionDiscoveryError extends Error {
   constructor(
     message: string,
-    readonly reason: 'nars_session_not_found_for_agent' | 'nars_session_ambiguous_for_agent' | 'session_discovery_failed',
+    readonly reason: 'nars_session_not_found_for_agent' | 'nars_session_ambiguous_for_agent' | 'session_discovery_failed' | 'launch_binding_unresolved',
     readonly candidates: AttachSessionCandidate[] = [],
   ) {
     super(message);
@@ -53,6 +118,7 @@ type ProgressReporter = (line: string) => void;
 
 async function resolveAttachSessionId(options: AgentWebUiAttachOptions, context: CommandContext, progress: ProgressReporter): Promise<ResolvedAttachSession> {
   if (options.session) return { sessionId: options.session, reason: null };
+  if (options.launchBindingPath) return resolveAttachSessionIdFromLaunchBinding(options, progress);
   const agentId = options.agent?.trim();
   if (!agentId) throw new Error('nars_session_required: pass --session <session-id> or --agent <agent-id>');
   const startedAt = Date.now();
@@ -385,14 +451,7 @@ export async function agentWebUiAttachCommand(
   }
   const sessionId = resolvedSession.sessionId;
   if (!options.dryRun) progress(`agent-web-ui: resolving attach endpoints for ${sessionId}`);
-  const resolved = await narsAttachCommandCommand({
-    session: sessionId,
-    site: options.site,
-    siteRoot: options.siteRoot,
-    surface: 'agent-web-ui',
-    format: 'json',
-    launchRegistryPath: options.launchRegistryPath,
-  }, context);
+  const resolved = await resolveAttachEndpointsWithWait({ sessionId, options, context, progress });
   if (resolved.exitCode !== ExitCode.SUCCESS) return resolved;
   const attach = resolved.result as {
     command?: string;
@@ -493,6 +552,38 @@ export async function agentWebUiAttachCommand(
     exitCode: ExitCode.SUCCESS,
     result: formattedResult(plan, formatPlan(plan), options.format ?? 'auto'),
   };
+}
+
+async function resolveAttachEndpointsWithWait(args: {
+  sessionId: string;
+  options: AgentWebUiAttachOptions;
+  context: CommandContext;
+  progress: ProgressReporter;
+}): Promise<{ exitCode: ExitCode; result: unknown }> {
+  const startedAt = Date.now();
+  const timeoutMs = Math.max(0, Math.trunc(args.options.waitForSessionMs ?? 0));
+  let nextProgressAt = startedAt + 5000;
+  let last = await resolveAttachEndpointsOnce(args.sessionId, args.options, args.context);
+  while (last.exitCode !== ExitCode.SUCCESS && timeoutMs > 0 && Date.now() - startedAt < timeoutMs) {
+    if (!args.options.dryRun && Date.now() >= nextProgressAt) {
+      args.progress(`agent-web-ui: still waiting for NARS attach endpoints for ${args.sessionId}`);
+      nextProgressAt = Date.now() + 5000;
+    }
+    await delay(1000);
+    last = await resolveAttachEndpointsOnce(args.sessionId, args.options, args.context);
+  }
+  return last;
+}
+
+async function resolveAttachEndpointsOnce(sessionId: string, options: AgentWebUiAttachOptions, context: CommandContext): Promise<{ exitCode: ExitCode; result: unknown }> {
+  return narsAttachCommandCommand({
+    session: sessionId,
+    site: options.site,
+    siteRoot: options.siteRoot,
+    surface: 'agent-web-ui',
+    format: 'json',
+    launchRegistryPath: options.launchRegistryPath,
+  }, context);
 }
 
 async function buildAgentWebUiOpenRequest(args: {

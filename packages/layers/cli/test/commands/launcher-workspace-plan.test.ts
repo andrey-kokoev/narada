@@ -333,7 +333,7 @@ describe('launcher workspace planning', () => {
     }, createMockContext());
 
     expect(plan.exitCode).toBe(ExitCode.SUCCESS);
-    const result = plan.result as { selected_agents: Array<{ launch_operator_surfaces: string[]; launch_runtime_host: string; launch_runtime_hosts: string[]; launch_carriers: string[]; legacy_carrier_compatibility: unknown; wt_args: string[]; operator_projection_open_requests: Array<Record<string, unknown>> }>; wt_args: string[] };
+    const result = plan.result as { selected_agents: Array<{ launch_operator_surfaces: string[]; launch_runtime_host: string; launch_runtime_hosts: string[]; launch_carriers: string[]; legacy_carrier_compatibility: unknown; wt_args: string[]; smoke_command: string[]; operator_projection_launch_binding: { path: string; exact_attach_required: boolean }; operator_projection_open_requests: Array<Record<string, unknown>> }>; wt_args: string[] };
     const agent = result.selected_agents[0];
     expect(agent.launch_operator_surfaces).toEqual(['agent-cli', 'agent-web-ui']);
     expect(agent.launch_runtime_host).toBe('narada-agent-runtime-server');
@@ -355,12 +355,17 @@ describe('launcher workspace planning', () => {
     expect(commandText).toContain("'operator-surface' 'runtime' 'start' 'agent-cli'");
     expect(commandText).toContain("'--target-site-id' 'sonar'");
     expect(commandText).toContain("'--runtime' 'narada-agent-runtime-server'");
-    expect(commandText).toContain('agent-web-ui: waiting for sonar.resident NARS session, then starting browser projection');
+    expect(commandText).toContain('agent-web-ui: waiting for sonar.resident launch binding, then starting browser projection');
     expect(commandText).toContain("'agent-web-ui' 'attach'");
-    expect(commandText).toContain("'--agent' 'sonar.resident'");
+    expect(commandText).toContain("'--launch-binding'");
+    expect(webUiCommandText).not.toContain("'--agent' 'sonar.resident'");
     expect(commandText).toContain("'--wait-for-session-ms' '60000'");
     expect(commandText).toContain("'--open'");
     expect(commandText).toContain("'--cloudflare-api-base-url' 'https://projection.example.test'");
+    expect(commandText).toContain("'--launch-binding'");
+    expect(agent.smoke_command).toContain('--launch-binding');
+    expect(agent.operator_projection_launch_binding.exact_attach_required).toBe(true);
+    expect(agent.operator_projection_launch_binding.path).toContain('operator-projection-launch-bindings');
     expect(webUiCommandText).not.toContain(';');
     expect(webUiCommandText).toContain('\n& ');
     expect(result.wt_args.filter((arg) => arg === ';')).toHaveLength(1);
@@ -404,9 +409,11 @@ describe('launcher workspace planning', () => {
     expect(agent.agent).toBe('resident');
     expect(agent.agent_identity_ref.canonical_agent_id).toBe('sonar.resident');
     const commandText = agent.wt_args.join(' ');
-    expect(commandText).toContain('agent-web-ui: waiting for sonar.resident NARS session, then starting browser projection');
-    expect(commandText).toContain("'--agent' 'resident'");
-    expect(commandText).not.toContain('waiting for resident NARS session');
+    const webUiCommandText = agent.wt_args[agent.wt_args.lastIndexOf('-Command') + 1];
+    expect(commandText).toContain('agent-web-ui: waiting for sonar.resident launch binding, then starting browser projection');
+    expect(commandText).toContain("'--launch-binding'");
+    expect(webUiCommandText).not.toContain("'--agent' 'resident'");
+    expect(commandText).not.toContain('waiting for resident launch binding');
   });
 
   it('accepts operator surface as the explicit replacement for carrier', async () => {

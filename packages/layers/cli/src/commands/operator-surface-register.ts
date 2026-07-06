@@ -41,6 +41,7 @@ export function registerOperatorSurfaceCommands(program: Command): void {
     .option('--exec', 'Spawn the runtime process after materializing launch artifacts', false)
     .option('--wait', 'Wait for an operator keypress before spawning the runtime', false)
     .option('--enable-native-shell', 'Break-glass: do not disable Codex native shell_tool', false)
+    .option('--launch-binding <path>', 'Write an exact operator projection launch binding for sibling surfaces')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
     .action(directCommandAction<[string | undefined, Record<string, unknown>]>({
       command: 'operator-surface runtime start',
@@ -61,6 +62,7 @@ export function registerOperatorSurfaceCommands(program: Command): void {
         exec: opts.exec as boolean | undefined,
         wait: opts.wait as boolean | undefined,
         enableNativeShell: opts.enableNativeShell as boolean | undefined,
+        launchBindingPath: opts.launchBinding as string | undefined,
         format: resolveCommandFormat(opts.format, 'auto'),
       }, silentCommandContext()),
     }));

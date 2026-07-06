@@ -1,4 +1,4 @@
-import { accessSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { accessSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { basename, dirname, join, parse, resolve } from 'node:path';
 import { createRequire } from 'node:module';
@@ -37,6 +37,50 @@ export interface LaunchResultSummary {
   expires_at?: string;
 }
 
+export function writeOperatorProjectionLaunchBinding(path: string | undefined, args: {
+  status: OperatorProjectionLaunchBinding['status'];
+  siteRoot: string;
+  workspaceRoot: string;
+  agent: string;
+  operatorSurfaceKind?: string;
+  runtimeHostKind: string;
+  intelligenceProvider?: string | null;
+  agentStartResultFile?: string;
+  narsSessionId?: string | null;
+  runtimeSessionId?: string | null;
+  carrierSessionId?: string | null;
+  reason?: string | null;
+}): void {
+  if (!path) return;
+  const now = new Date().toISOString();
+  let createdAt = now;
+  try {
+    const previous = tryReadJsonFile(path) as { created_at?: unknown } | null;
+    if (typeof previous?.created_at === 'string') createdAt = previous.created_at;
+  } catch {
+    // Keep binding writes best-effort; launch itself remains authoritative.
+  }
+  const binding: OperatorProjectionLaunchBinding = {
+    schema: 'narada.operator_projection_launch_binding.v1',
+    status: args.status,
+    created_at: createdAt,
+    updated_at: now,
+    site_root: args.siteRoot,
+    workspace_root: args.workspaceRoot,
+    agent: args.agent,
+    operator_surface_kind: args.operatorSurfaceKind,
+    runtime_host_kind: args.runtimeHostKind,
+    intelligence_provider: args.intelligenceProvider ?? null,
+    agent_start_result_file: args.agentStartResultFile,
+    nars_session_id: args.narsSessionId ?? null,
+    runtime_session_id: args.runtimeSessionId ?? null,
+    carrier_session_id: args.carrierSessionId ?? null,
+    reason: args.reason ?? null,
+  };
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, `${JSON.stringify(binding, null, 2)}\n`, 'utf8');
+}
+
 function tryReadJsonFile(path: string): unknown {
   try {
     if (!existsSync(path)) return null;
@@ -72,6 +116,25 @@ export interface AgentStartOptions {
   wait?: boolean;
   enableNativeShell?: boolean;
   launchSource?: string;
+  launchBindingPath?: string;
+}
+
+export interface OperatorProjectionLaunchBinding {
+  schema: 'narada.operator_projection_launch_binding.v1';
+  status: 'waiting_for_agent_start' | 'ready' | 'failed';
+  created_at: string;
+  updated_at: string;
+  site_root: string;
+  workspace_root: string;
+  agent: string;
+  operator_surface_kind?: string;
+  runtime_host_kind: string;
+  intelligence_provider?: string | null;
+  agent_start_result_file?: string;
+  nars_session_id?: string | null;
+  runtime_session_id?: string | null;
+  carrier_session_id?: string | null;
+  reason?: string | null;
 }
 
 export interface AgentStartCommandResult {
@@ -267,6 +330,16 @@ export function runAgentStartCommand(options: AgentStartOptions): AgentStartComm
   const resultDir = join(workspaceRoot, '.ai', 'runtime', 'agent-start-command-results', `${Date.now()}-${Math.random().toString(16).slice(2)}`);
   mkdirSync(resultDir, { recursive: true });
   const resultPath = join(resultDir, 'result.json');
+  writeOperatorProjectionLaunchBinding(options.launchBindingPath, {
+    status: 'waiting_for_agent_start',
+    siteRoot,
+    workspaceRoot,
+    agent: options.agent,
+    operatorSurfaceKind: options.carrier ?? options.runtime,
+    runtimeHostKind: options.runtime,
+    intelligenceProvider: options.intelligenceProvider ?? null,
+    agentStartResultFile: resultPath,
+  });
   const inheritedInteractiveExec = options.exec === true && options.dryRun !== true;
   const args = [
     '--import',
@@ -323,6 +396,21 @@ export function runAgentStartCommand(options: AgentStartOptions): AgentStartComm
     ? runProcessInherited(process.execPath, args, workspaceRoot, executionEnv)
     : runProcess(process.execPath, args, workspaceRoot, executionEnv);
   const parsed = tryReadJsonFile(resultPath);
+  const parsedRecord = parsed as LaunchResultRecord | null;
+  writeOperatorProjectionLaunchBinding(options.launchBindingPath, {
+    status: execution.status === 'success' ? 'ready' : 'failed',
+    siteRoot,
+    workspaceRoot,
+    agent: options.agent,
+    operatorSurfaceKind: options.carrier ?? options.runtime,
+    runtimeHostKind: options.runtime,
+    intelligenceProvider: options.intelligenceProvider ?? null,
+    agentStartResultFile: resultPath,
+    narsSessionId: stringValue(parsedRecord?.nars_launch?.nars_session_id ?? parsedRecord?.nars_launch?.session_id ?? parsedRecord?.required_environment?.NARADA_NARS_SESSION_ID),
+    runtimeSessionId: stringValue(parsedRecord?.nars_launch?.runtime_session_id ?? parsedRecord?.nars_launch?.session_id ?? parsedRecord?.required_environment?.NARADA_RUNTIME_SESSION_ID),
+    carrierSessionId: stringValue(parsedRecord?.carrier_session?.carrier_session_id ?? parsedRecord?.required_environment?.NARADA_CARRIER_SESSION_ID),
+    reason: execution.status === 'success' ? null : 'agent_start_failed',
+  });
   return {
     schema: 'narada.agent_start.command_result.v0',
     status: execution.status,

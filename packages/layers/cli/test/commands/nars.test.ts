@@ -756,6 +756,88 @@ describe('nars CLI commands', () => {
     vi.unstubAllGlobals();
   });
 
+  it('attaches agent-web-ui to the exact launch binding session instead of discovering by agent', async () => {
+    const siteRoot = tempSite();
+    writeSession(siteRoot, 'carrier_old', { agentId: 'sonar.resident' });
+    writeSession(siteRoot, 'carrier_bound', { agentId: 'sonar.resident' });
+    const launchRegistryPath = writeLaunchRegistry(siteRoot);
+    const bindingPath = join(siteRoot, '.ai', 'runtime', 'operator-projection-launch-bindings', 'test-binding.json');
+    const resultPath = join(siteRoot, '.ai', 'runtime', 'operator-projection-launch-bindings', 'agent-start-result.json');
+    mkdirSync(join(siteRoot, '.ai', 'runtime', 'operator-projection-launch-bindings'), { recursive: true });
+    writeFileSync(resultPath, `${JSON.stringify({
+      schema: 'narada.agent_start.result.v1',
+      status: 'success',
+      nars_launch: { nars_session_id: 'carrier_bound' },
+      required_environment: { NARADA_NARS_SESSION_ID: 'carrier_bound' },
+    }, null, 2)}\n`, 'utf8');
+    writeFileSync(bindingPath, `${JSON.stringify({
+      schema: 'narada.operator_projection_launch_binding.v1',
+      status: 'waiting_for_agent_start',
+      agent: 'sonar.resident',
+      agent_start_result_file: resultPath,
+    }, null, 2)}\n`, 'utf8');
+    const progress: string[] = [];
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true })));
+
+    const result = await agentWebUiAttachCommand({
+      launchRegistryPath,
+      siteRoot,
+      launchBindingPath: bindingPath,
+      agent: 'sonar.resident',
+      waitForSessionMs: 1000,
+      open: false,
+    }, createMockContext(), {
+      progress: (line) => progress.push(line),
+      startAgentWebUiServer: async ({ sessionId }) => ({ url: `http://127.0.0.1/${sessionId}` }),
+    });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(progress).toContain('agent-web-ui: launch result resolved NARS session carrier_bound');
+    expect(result.result).toMatchObject({
+      status: 'started',
+      session_id: 'carrier_bound',
+      url: 'http://127.0.0.1/carrier_bound',
+    });
+    vi.unstubAllGlobals();
+  });
+
+  it('waits for attach endpoints after launch binding resolves before the session index exists', async () => {
+    const siteRoot = tempSite();
+    const launchRegistryPath = writeLaunchRegistry(siteRoot);
+    const bindingDir = join(siteRoot, '.ai', 'runtime', 'operator-projection-launch-bindings');
+    const bindingPath = join(bindingDir, 'test-binding-race.json');
+    mkdirSync(bindingDir, { recursive: true });
+    writeFileSync(bindingPath, `${JSON.stringify({
+      schema: 'narada.operator_projection_launch_binding.v1',
+      status: 'ready',
+      agent: 'sonar.resident',
+      nars_session_id: 'carrier_late_index',
+    }, null, 2)}\n`, 'utf8');
+    const progress: string[] = [];
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true })));
+    setTimeout(() => writeSession(siteRoot, 'carrier_late_index', { agentId: 'sonar.resident' }), 25);
+
+    const result = await agentWebUiAttachCommand({
+      launchRegistryPath,
+      siteRoot,
+      launchBindingPath: bindingPath,
+      waitForSessionMs: 1500,
+      open: false,
+    }, createMockContext(), {
+      progress: (line) => progress.push(line),
+      startAgentWebUiServer: async ({ sessionId }) => ({ url: `http://127.0.0.1/${sessionId}` }),
+    });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(progress).toContain('agent-web-ui: launch binding resolved NARS session carrier_late_index');
+    expect(result.result).toMatchObject({
+      status: 'started',
+      session_id: 'carrier_late_index',
+      url: 'http://127.0.0.1/carrier_late_index',
+    });
+    vi.unstubAllGlobals();
+  });
+
   it('opens the browser by default after starting agent-web-ui attachment', async () => {
     const siteRoot = tempSite();
     writeSession(siteRoot);
