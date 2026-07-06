@@ -109,12 +109,37 @@ Core request methods:
 | `carrier.command.execute` | Legacy alias for `session.command.execute`. |
 | `session.artifacts.register` | Register a session-scoped artifact from an admitted local path. |
 | `session.artifacts.read` | Read public artifact metadata or the artifact index. |
+| `session.surface.affordances` | Project live MCP operator affordances for the bound session. |
+| `session.affordance.action.request` | Request execution of a declared MCP surface affordance action through NARS. |
 
 `session.sync` is a local session-evidence synchronization primitive, not remote authority transfer. Relative targets resolve under the bound Site root; targets outside the Site root are refused. `upload` copies from the current session directory to the target, `download` copies from the target into the current session directory, and `bidirectional` performs both bounded passes. `delete` only removes extra files from the target during upload; it does not delete local session files during bidirectional/download recovery.
 
 The current runtime also exposes authority-transition and observer-control methods through `@narada2/carrier-protocol`: `authority.source.status`, `authority.source.drain`, `authority.source.seal`, `authority.target.status`, `authority.target.prepare`, `authority.target.activate`, `observers.status`, `observer.mute`, and `observer.unmute`.
 
 Human terminal input is not raw JSONL. A terminal attached to NARS is a projection of the protocol: ordinary lines become `conversation.send` when idle and `conversation.enqueue` during active turns, slash commands become protocol frames such as `session.command.execute` or direct session methods, and status/help affordances render from runtime state. `carrier.command.execute` remains a legacy alias for compatibility.
+
+### Affordance Action Requests
+
+Browser and terminal projections may render MCP surface affordances, but they must not call MCP tools directly. A projected control requests action through NARS:
+
+```json
+{
+  "id": "agent-web-ui-affordance-action-20260706T000000Z",
+  "method": "session.affordance.action.request",
+  "params": {
+    "surface_id": "fixture.surface",
+    "action_id": "refresh",
+    "args": {},
+    "client_correlation_id": "optional-ui-ref"
+  }
+}
+```
+
+The runtime resolves the current `session.surface_affordances` projection, proves the surface and action are still live, and then applies admission checks before invoking any MCP tool. The affordance declaration is not an authority grant.
+
+The first implemented slice executes only generic affordance actions whose target is a MCP tool and whose declaration is `read_only: true` or `idempotent: true`. Mutating, destructive, high-danger, confirmation-required, disabled, unknown, or non-tool actions return `session_affordance_action_refused` or `session_affordance_confirmation_required`; they must not call the tool. Admitted calls still execute through the MCP fabric authority, not through browser code, prompt text, or carrier-specific shortcuts.
+
+Relevant event names are `session_affordance_action_requested`, `session_affordance_action_result`, `session_affordance_action_refused`, and `session_affordance_confirmation_required`.
 
 ## Client And Runtime Split
 

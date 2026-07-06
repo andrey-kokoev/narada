@@ -234,6 +234,10 @@ Shape:
 
 Clients may use this to decide whether to show panels such as MCP, SOP, or Synced Email. Mutating actions still require a NARS protocol request and the relevant authority surface; the affordance object only says what the surface can represent.
 
+When a client renders an affordance action, it sends `session.affordance.action.request` through the NARS protocol. It must not invoke MCP directly, synthesize broad shell commands, or treat the affordance declaration as final authority. `@narada2/nars-client-projection-contract` owns the admitted client method and frame builder so browser, terminal, and future projections share the same request shape.
+
+Action arguments must be structured JSON. Runtime results and refusals are projected back through shared event vocabulary, including `session_affordance_action_result`, `session_affordance_action_refused`, and `session_affordance_confirmation_required`.
+
 ### SOP Summary
 
 When a SOP MCP surface is mounted, NARS may emit or answer a SOP summary projection:

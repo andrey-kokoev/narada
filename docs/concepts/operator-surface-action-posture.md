@@ -126,6 +126,12 @@ Operator Surface Action Posture answers: "Should this action appear in this surf
 
 Both are required. A control can be a valid implemented tool and still be barred from the primary work-action row.
 
+## NARS Affordance Action Requests
+
+`session.affordance.action.request` is the runtime admission path for projected MCP surface actions. Action posture decides whether a control belongs in the visible surface tier; runtime admission decides whether the requested action may execute now.
+
+The first admitted runtime slice is intentionally narrow: a generic MCP affordance action may execute only when it targets a tool and is declared `read_only` or `idempotent`. Diagnostic or secondary read actions may be rendered as support controls when their posture allows it. Repair, destructive, high-danger, mutating, or confirmation-required actions require an explicit confirmation/admission flow; until that flow exists, refusal or confirmation-required is the correct runtime outcome.
+
 ## Product Rule
 
 ```text
