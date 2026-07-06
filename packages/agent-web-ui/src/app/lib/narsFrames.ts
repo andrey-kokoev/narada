@@ -42,6 +42,14 @@ export function buildAffordanceActionRequestFrame(input: Record<string, unknown>
   return contract.buildAgentWebUiAffordanceActionRequestFrame(input, options);
 }
 
+export function buildAffordanceActionConfirmFrame(input: Record<string, unknown>, options: Record<string, unknown> = {}) {
+  return contract.buildAgentWebUiAffordanceActionConfirmFrame(input, options);
+}
+
+export function buildAffordanceActionCancelFrame(input: Record<string, unknown>, options: Record<string, unknown> = {}) {
+  return contract.buildAgentWebUiAffordanceActionCancelFrame(input, options);
+}
+
 export function buildSurfaceFeedbackSummaryRequestFrame() {
   return contract.buildAgentWebUiSurfaceFeedbackSummaryFrame();
 }

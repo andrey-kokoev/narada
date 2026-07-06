@@ -32,6 +32,9 @@ const MCP_AFFORDANCES_SCHEMA = 'narada.mcp_affordances.v1';
 const THINKING_LEVELS = ['none', 'low', 'medium', 'high', 'xhigh'];
 
 export function buildRuntimeIntelligenceOperatorAffordance({ intelligence = {}, source = 'nars_runtime' } = {}) {
+  const availableModels = stringArrayField(intelligence, 'available_models');
+  const currentModel = stringField(intelligence, 'model');
+  const modelChoices = uniqueStrings([currentModel, ...availableModels].filter(Boolean));
   return {
     schema: 'narada.mcp_surface.operator_affordance.v1',
     surface_kind: 'intelligence',
@@ -52,7 +55,12 @@ export function buildRuntimeIntelligenceOperatorAffordance({ intelligence = {}, 
     },
     controls: {
       provider: { kind: 'readonly', value: stringField(intelligence, 'provider') },
-      model: { kind: 'text', value: stringField(intelligence, 'model'), placeholder: 'Model name' },
+      model: {
+        kind: modelChoices.length ? 'select' : 'text',
+        value: currentModel,
+        placeholder: 'Model name',
+        choices: modelChoices.map((value) => ({ value, label: value })),
+      },
       thinking: { kind: 'select', value: stringField(intelligence, 'thinking') ?? 'medium', choices: THINKING_LEVELS.map((value) => ({ value, label: value })) },
     },
     affordance_document: {
@@ -69,7 +77,7 @@ export function buildRuntimeIntelligenceOperatorAffordance({ intelligence = {}, 
           intent: 'configure',
           idempotent: true,
           target: { kind: 'runtime', operation: 'set_model' },
-          args: { model: { kind: 'string', required: true } },
+          args: { model: { kind: modelChoices.length ? 'enum' : 'string', required: true, choices: modelChoices } },
         },
         {
           id: 'set_thinking',
@@ -739,4 +747,13 @@ function arrayField(value) {
 
 function stringArray(value) {
   return Array.isArray(value) ? value.filter((item) => typeof item === 'string' && item) : [];
+}
+
+function stringArrayField(record, field) {
+  if (!record || typeof record !== 'object') return [];
+  return stringArray(record[field]);
+}
+
+function uniqueStrings(values) {
+  return [...new Set(values.filter((value) => typeof value === 'string' && value))];
 }

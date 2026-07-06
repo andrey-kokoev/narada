@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { NARS_AFFORDANCE_ACTION_REQUEST_METHOD } from '@narada2/nars-client-projection-contract';
+import { NARS_AFFORDANCE_ACTION_CANCEL_METHOD, NARS_AFFORDANCE_ACTION_CONFIRM_METHOD, NARS_AFFORDANCE_ACTION_REQUEST_METHOD } from '@narada2/nars-client-projection-contract';
 import {
+  buildAffordanceActionCancelFrame,
+  buildAffordanceActionConfirmFrame,
   buildAffordanceActionRequestFrame,
   buildArtifactsSummaryRequestFrame,
   buildConversationEnqueueFrame,
@@ -96,6 +98,18 @@ test('agent-web-ui emits admitted NARS methods for event attach and operator inp
     params: { surface_id: 'fixture.surface', action_id: 'refresh', args: { topic: 'status' } },
   });
   assert.equal(isAgentWebUiProtocolFrame(buildAffordanceActionRequestFrame({ surfaceId: 'fixture.surface', actionId: 'refresh' })), true);
+  assert.deepEqual(buildAffordanceActionConfirmFrame({ confirmationId: 'confirm-1' }, { id: 'confirm-1-frame' }), {
+    id: 'confirm-1-frame',
+    method: NARS_AFFORDANCE_ACTION_CONFIRM_METHOD,
+    params: { confirmation_id: 'confirm-1' },
+  });
+  assert.equal(isAgentWebUiProtocolFrame(buildAffordanceActionConfirmFrame({ confirmationId: 'confirm-1' })), true);
+  assert.deepEqual(buildAffordanceActionCancelFrame({ confirmationId: 'confirm-1', reason: 'operator_declined' }, { id: 'cancel-1-frame' }), {
+    id: 'cancel-1-frame',
+    method: NARS_AFFORDANCE_ACTION_CANCEL_METHOD,
+    params: { confirmation_id: 'confirm-1', reason: 'operator_declined' },
+  });
+  assert.equal(isAgentWebUiProtocolFrame(buildAffordanceActionCancelFrame({ confirmationId: 'confirm-1' })), true);
 
   const input = buildConversationSendFrame('run startup sequence', { id: 'input-1' });
   assert.deepEqual(input, {

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
+import AffordanceConfirmationPanel from './AffordanceConfirmationPanel.vue';
 import ArtifactsPanel from './ArtifactsPanel.vue';
 import ConversationTranscript from './ConversationTranscript.vue';
 import CopyableText from './CopyableText.vue';
@@ -22,6 +23,7 @@ import SurfaceFeedbackPanel from './SurfaceFeedbackPanel.vue';
 import TaskLifecyclePanel from './TaskLifecyclePanel.vue';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import type { AgentActivityState } from '../composables/useAgentActivity';
+import type { AffordanceConfirmationItem } from '../composables/useAffordanceConfirmations';
 import type { ArtifactsSummary } from '../composables/useArtifactsSummary';
 import type { useCloudflareProjection } from '../composables/useCloudflareProjection';
 import type { HealthIntelligenceSummary } from '../composables/useHealthStatus';
@@ -58,6 +60,7 @@ const props = defineProps<{
   rows: ProjectedEventRow[];
   sessionIdentity: SessionIdentitySummary;
   agentActivity: AgentActivityState;
+  affordanceConfirmations: AffordanceConfirmationItem[];
   operatorQueueItems: OperatorQueueItem[];
   operatorSnippets: OperatorSnippet[];
   operatorSnippetsExportJson: string;
@@ -103,6 +106,8 @@ const emit = defineEmits<{
   'request-surface-feedback-summary': [];
   'request-task-lifecycle-summary': [];
   'request-affordance-action': [request: { surfaceId: string; actionId: string; args: Record<string, unknown> }];
+  'confirm-affordance-action': [item: AffordanceConfirmationItem];
+  'cancel-affordance-action': [item: AffordanceConfirmationItem];
 }>();
 const STATUS_ROW_OPEN_STORAGE_KEY = 'narada:agent-web-ui:status-row-open.v1';
 const HEADER_ITEM_STORAGE_KEY = 'narada:agent-web-ui:header-items.v1';
@@ -453,6 +458,7 @@ function agentPartFromAgentId(agentId: string | null): string | null {
       />
     </section>
     <ConversationTranscript :rows="rows" :verbosity="verbosity" :agent-activity="agentActivity" :follow-latest-revision="followLatestRevision" />
+    <AffordanceConfirmationPanel :items="affordanceConfirmations" @confirm="emit('confirm-affordance-action', $event)" @cancel="emit('cancel-affordance-action', $event)" />
     <OperatorQueuePanel :items="operatorQueueItems" :active-turn-id="activeTurnId" @edit="emit('edit-queued', $event)" @remove="emit('remove-queued', $event)" @steer="emit('steer-queued', $event)" />
     <OperatorComposer v-model="draft" :operator-snippets="operatorSnippets" :disabled="authorityTransition?.input_policy === 'disabled_source_sealed'" :can-interrupt="canInterruptModel" disabled-reason="Source authority is sealed. Reattach to the target authority before sending." @submit="emit('submit', $event)" @run-snippet="(snippet, mode) => emit('run-snippet', snippet, mode)" @interrupt="emit('interrupt')" />
   </main>

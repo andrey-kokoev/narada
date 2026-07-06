@@ -42,7 +42,10 @@ export function providerEnvironment(provider, metadata = loadProviderMetadata(),
   const baseUrl = firstEnvValue(providerDefault.base_url_env_names, env) ?? providerDefault.base_url;
   const model = firstEnvValue(providerDefault.model_env_names, env) ?? providerDefault.default_model;
   const apiKey = firstEnvValue(providerDefault.credential_env_names, env) ?? '';
-  return { providerDefault, baseUrl, model, apiKey };
+  const availableModels = Array.isArray(providerDefault.available_models)
+    ? providerDefault.available_models.filter((value) => typeof value === 'string' && value)
+    : [];
+  return { providerDefault, baseUrl, model, apiKey, availableModels };
 }
 
 export function admittedProviderNames(contract = loadProviderAdapterContract()) {

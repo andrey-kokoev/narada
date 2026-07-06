@@ -1427,7 +1427,7 @@ test('server mode health and event subscription match NARS runtime contract shap
     assert.equal(health?.schema, 'narada.nars.health.v1');
     assert.equal(health.runtime_mode, 'server');
     assert.equal(health.launch_operator_surface_kind, 'agent-web-ui');
-    assert.deepEqual(health.intelligence, { provider: 'codex-subscription', model: 'gpt-5.5', thinking: 'medium', stream: false });
+    assert.deepEqual(health.intelligence, { provider: 'codex-subscription', model: 'gpt-5.5', available_models: ['gpt-5.5'], thinking: 'medium', stream: false });
     assert.equal(health.provider, 'codex-subscription');
     assert.equal(health.model, 'gpt-5.5');
     assert.equal(health.thinking, 'medium');

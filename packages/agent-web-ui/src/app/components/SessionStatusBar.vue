@@ -142,6 +142,12 @@ const thinkingChoices = computed(() => {
   const values = Array.isArray(choices) ? choices.filter((choice): choice is string => typeof choice === 'string' && choice.length > 0) : [];
   return values.length ? values : ['none', 'low', 'medium', 'high', 'xhigh'];
 });
+const modelChoices = computed(() => {
+  const choices = objectField(objectField(setModelAction.value?.raw, 'args'), 'model')?.choices;
+  const values = Array.isArray(choices) ? choices.filter((choice): choice is string => typeof choice === 'string' && choice.length > 0) : [];
+  const current = props.intelligence.model;
+  return [...new Set([current, ...values].filter((value): value is string => typeof value === 'string' && value.length > 0))];
+});
 const modelInputValue = computed(() => pendingModel.value ?? props.intelligence.model ?? '');
 const thinkingInputValue = computed(() => pendingThinking.value ?? props.intelligence.thinking ?? 'medium');
 
@@ -156,7 +162,7 @@ watch(() => props.intelligence.thinking, (thinking) => {
 function requestModelChange(event: Event) {
   const surfaceId = intelligenceAffordance.value?.surfaceId;
   const actionId = setModelAction.value?.id;
-  const model = (event.target as HTMLInputElement | null)?.value.trim() ?? '';
+  const model = (event.target as HTMLInputElement | HTMLSelectElement | null)?.value.trim() ?? '';
   if (!surfaceId || !actionId || !model || model === props.intelligence.model) return;
   pendingModel.value = model;
   emit('request-affordance-action', { surfaceId, actionId, args: { model } });
@@ -226,7 +232,19 @@ function stringField(record: Record<string, unknown>, field: string): string | n
             <span>{{ intelligence.provider ?? 'provider unknown' }}</span>
             <span class="status-token-line status-secondary-token-line intelligence-control-line">
               <template v-if="setModelAction">
+                <select
+                  v-if="modelChoices.length"
+                  class="intelligence-model-select"
+                  :value="modelInputValue"
+                  aria-label="Model"
+                  @change="requestModelChange"
+                  @click.stop
+                  @keydown.stop
+                >
+                  <option v-for="choice in modelChoices" :key="choice" :value="choice">{{ choice }}</option>
+                </select>
                 <input
+                  v-else
                   class="intelligence-model-input"
                   :value="modelInputValue"
                   placeholder="model"

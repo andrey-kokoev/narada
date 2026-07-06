@@ -31,6 +31,10 @@ test('provider registry exposes carrier-level defaults and support states', () =
   assert.deepEqual(registry.providers['openrouter-api'].credential_requirement.env_names, ['OPENROUTER_API_KEY']);
   assert.equal(registry.providers['codex-subscription'].credential_secret_ref, undefined);
   assert.equal(registry.providers['codex-subscription'].credential_requirement.kind, PROVIDER_CREDENTIAL_REQUIREMENT_KINDS.LOCAL_CODEX_SUBSCRIPTION);
+  for (const [provider, metadata] of Object.entries(registry.providers)) {
+    assert.equal(Array.isArray(metadata.available_models), true, `${provider} must advertise available_models`);
+    assert.equal(metadata.available_models.includes(metadata.default_model), true, `${provider} available_models must include default_model`);
+  }
 });
 
 test('provider environment uses provider-specific env precedence', () => {
@@ -48,6 +52,7 @@ test('provider environment uses provider-specific env precedence', () => {
   assert.equal(kimi.baseUrl, 'https://kimi.example');
   assert.equal(kimi.model, 'kimi-custom');
   assert.equal(kimi.apiKey, 'kimi-native-key');
+  assert.deepEqual(kimi.availableModels, ['kimi-k2.7']);
 
   const kimiCode = providerEnvironment('kimi-code-api', metadata, {
     KIMI_CODE_API_KEY: 'kimi-code-native-key',

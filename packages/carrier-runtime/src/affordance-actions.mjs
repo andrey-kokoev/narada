@@ -217,6 +217,7 @@ function executeRuntimeAffordanceAction({ requestId, surfaceId, actionId, client
     intelligence: {
       provider: stringValue(sessionSettings.provider) ?? stringValue(context.providerSettings?.provider),
       model: stringValue(sessionSettings.model) ?? stringValue(context.providerSettings?.model),
+      available_models: stringArray(context.providerSettings?.availableModels ?? context.providerSettings?.available_models),
       thinking: stringValue(sessionSettings.thinking) ?? stringValue(context.providerSettings?.thinking) ?? 'medium',
       stream: typeof sessionSettings.stream === 'boolean' ? sessionSettings.stream : typeof context.providerSettings?.stream === 'boolean' ? context.providerSettings.stream : null,
     },
@@ -281,4 +282,8 @@ function booleanValue(value) {
 
 function stringValue(value) {
   return typeof value === 'string' && value ? value : null;
+}
+
+function stringArray(value) {
+  return Array.isArray(value) ? value.filter((item) => typeof item === 'string' && item) : [];
 }

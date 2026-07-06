@@ -132,6 +132,7 @@ export function createCarrierRuntimeDependencies({ runtimeContext = {}, env = pr
   const providerSettings = {
     provider: intelligenceProvider,
     model: runtimeContext.providerSettings?.model ?? providerEnvironmentValues.model,
+    availableModels: runtimeContext.providerSettings?.availableModels ?? providerEnvironmentValues.availableModels ?? [],
     thinking: runtimeContext.providerSettings?.thinking ?? env.NARADA_AI_THINKING ?? env.NARADA_THINKING_LEVEL ?? 'medium',
     stream: runtimeContext.providerSettings?.stream !== false,
     openrouterSiteUrl: runtimeContext.providerSettings?.openrouterSiteUrl ?? env.OPENROUTER_SITE_URL ?? env.OPENROUTER_HTTP_REFERER ?? null,
@@ -3070,6 +3071,7 @@ function effectiveIntelligenceSettings({ sessionSettings = {}, providerSettings 
   return {
     provider: stringOrNull(sessionSettings.provider) ?? stringOrNull(providerSettings.provider) ?? stringOrNull(process.env.NARADA_INTELLIGENCE_PROVIDER) ?? 'codex-subscription',
     model: stringOrNull(sessionSettings.model) ?? stringOrNull(providerSettings.model) ?? null,
+    available_models: stringArrayOrEmpty(providerSettings.availableModels ?? providerSettings.available_models),
     thinking: stringOrNull(sessionSettings.thinking) ?? stringOrNull(providerSettings.thinking) ?? stringOrNull(process.env.NARADA_AI_THINKING) ?? stringOrNull(process.env.NARADA_THINKING_LEVEL) ?? 'medium',
     stream: booleanOrNull(sessionSettings.stream) ?? booleanOrNull(providerSettings.stream) ?? null,
   };
@@ -3081,6 +3083,10 @@ function stringOrNull(value) {
 
 function booleanOrNull(value) {
   return typeof value === 'boolean' ? value : null;
+}
+
+function stringArrayOrEmpty(value) {
+  return Array.isArray(value) ? value.filter((item) => typeof item === 'string' && item) : [];
 }
 
 function serverHealth({ requestId, state, allTools, mcpServers, mcpPreflightArtifact, context = {} }) {

@@ -2,6 +2,7 @@
 import { provide, ref, watch } from 'vue';
 import NarsSessionShell from './components/NarsSessionShell.vue';
 import { useAgentActivity } from './composables/useAgentActivity';
+import { useAffordanceConfirmations, type AffordanceConfirmationItem } from './composables/useAffordanceConfirmations';
 import { useArtifactsSummary } from './composables/useArtifactsSummary';
 import { useCloudflareProjection, type ProjectionControlConfig } from './composables/useCloudflareProjection';
 import { useDelegationSummary } from './composables/useDelegationSummary';
@@ -23,7 +24,7 @@ import { useSurfaceAffordances } from './composables/useSurfaceAffordances';
 import { useSurfaceFeedbackSummary } from './composables/useSurfaceFeedbackSummary';
 import { useTaskLifecycleSummary } from './composables/useTaskLifecycleSummary';
 import { ArtifactRenderingConfigKey } from './lib/artifactConfig';
-import { buildAffordanceActionRequestFrame, buildArtifactsSummaryRequestFrame, buildDelegationSummaryRequestFrame, buildGitSummaryRequestFrame, buildInboxSummaryRequestFrame, buildMailboxSummaryRequestFrame, buildSchedulerSummaryRequestFrame, buildSopSummaryRequestFrame, buildSurfaceAffordancesRequestFrame, buildSurfaceFeedbackSummaryRequestFrame, buildTaskLifecycleSummaryRequestFrame } from './lib/narsFrames';
+import { buildAffordanceActionCancelFrame, buildAffordanceActionConfirmFrame, buildAffordanceActionRequestFrame, buildArtifactsSummaryRequestFrame, buildDelegationSummaryRequestFrame, buildGitSummaryRequestFrame, buildInboxSummaryRequestFrame, buildMailboxSummaryRequestFrame, buildSchedulerSummaryRequestFrame, buildSopSummaryRequestFrame, buildSurfaceAffordancesRequestFrame, buildSurfaceFeedbackSummaryRequestFrame, buildTaskLifecycleSummaryRequestFrame } from './lib/narsFrames';
 
 interface AgentWebUiConfig {
   eventEndpoint: string | null;
@@ -54,6 +55,7 @@ const connection = useNarsConnection(
 );
 const events = useNarsEvents(retained.events, projection.verbosity, health.identity);
 const agentActivity = useAgentActivity(retained.events, health.body);
+const affordanceConfirmations = useAffordanceConfirmations(retained.events);
 const mcpInventory = useMcpInventory(retained.events, health.body);
 const artifactsSummary = useArtifactsSummary(retained.events);
 const delegationSummary = useDelegationSummary(retained.events);
@@ -188,6 +190,16 @@ function requestAffordanceAction(request: { surfaceId: string; actionId: string;
   const frame = buildAffordanceActionRequestFrame({ surfaceId: request.surfaceId, actionId: request.actionId, args: request.args });
   if (frame) connection.connection.value?.sendFrame(frame);
 }
+
+function confirmAffordanceAction(item: AffordanceConfirmationItem) {
+  const frame = buildAffordanceActionConfirmFrame({ confirmationId: item.confirmationId });
+  if (frame) connection.connection.value?.sendFrame(frame);
+}
+
+function cancelAffordanceAction(item: AffordanceConfirmationItem) {
+  const frame = buildAffordanceActionCancelFrame({ confirmationId: item.confirmationId });
+  if (frame) connection.connection.value?.sendFrame(frame);
+}
 </script>
 
 <template>
@@ -209,6 +221,7 @@ function requestAffordanceAction(request: { surfaceId: string; actionId: string;
     :rows="events.rows.value"
     :session-identity="events.sessionIdentity.value"
     :agent-activity="agentActivity.activity.value"
+    :affordance-confirmations="affordanceConfirmations.items.value"
     :operator-queue-items="operatorQueue.items.value"
     :operator-snippets="operatorSnippets.snippets.value"
     :operator-snippets-export-json="operatorSnippets.exportSnippetsJson()"
@@ -251,5 +264,7 @@ function requestAffordanceAction(request: { surfaceId: string; actionId: string;
     @request-task-lifecycle-summary="requestTaskLifecycleSummary"
     @request-surface-feedback-summary="requestSurfaceFeedbackSummary"
     @request-affordance-action="requestAffordanceAction"
+    @confirm-affordance-action="confirmAffordanceAction"
+    @cancel-affordance-action="cancelAffordanceAction"
   />
 </template>

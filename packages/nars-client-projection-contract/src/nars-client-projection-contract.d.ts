@@ -65,6 +65,8 @@ export function buildAgentWebUiConversationEnqueueFrame(text: unknown, options?:
 export function buildAgentWebUiEventsReadFrame(options?: object): object;
 export function buildAgentWebUiSurfaceAffordancesFrame(options?: object): object;
 export function buildAgentWebUiAffordanceActionRequestFrame(input?: object, options?: object): object | null;
+export function buildAgentWebUiAffordanceActionConfirmFrame(input?: object, options?: object): object | null;
+export function buildAgentWebUiAffordanceActionCancelFrame(input?: object, options?: object): object | null;
 export function buildNarsAffordanceActionRequestedEvent(input?: object): object;
 export function buildNarsAffordanceActionResultEvent(input?: object): object;
 export function buildNarsAffordanceActionFailureEvent(input?: object): object;

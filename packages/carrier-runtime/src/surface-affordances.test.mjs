@@ -5,7 +5,7 @@ import { buildMcpSurfaceAffordanceProjection, buildNarsSurfaceAffordanceProjecti
 test('NARS surface affordance projection advertises runtime intelligence controls', () => {
   const projection = buildNarsSurfaceAffordanceProjection({
     mcpServers: {},
-    intelligence: { provider: 'codex-subscription', model: 'gpt-5.5', thinking: 'medium' },
+    intelligence: { provider: 'codex-subscription', model: 'gpt-5.5', available_models: ['gpt-5.5', 'gpt-5.6'], thinking: 'medium' },
   });
 
   assert.equal(projection.schema, 'narada.nars.surface_affordances.v1');
@@ -15,6 +15,7 @@ test('NARS surface affordance projection advertises runtime intelligence control
   assert.equal(item.surface_id, 'nars.runtime.intelligence');
   assert.equal(item.renderer, 'runtime_intelligence_controls');
   assert.deepEqual(item.actions.configure, ['set_model', 'set_thinking']);
+  assert.deepEqual(item.controls.model.choices.map((choice) => choice.value), ['gpt-5.5', 'gpt-5.6']);
   assert.deepEqual(item.controls.thinking.choices.map((choice) => choice.value), ['none', 'low', 'medium', 'high', 'xhigh']);
   assert.deepEqual(item.affordance_document.actions.map((action) => ({ id: action.id, target: action.target })), [
     { id: 'set_model', target: { kind: 'runtime', operation: 'set_model' } },

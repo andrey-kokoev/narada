@@ -386,6 +386,31 @@ export function buildAgentWebUiAffordanceActionRequestFrame({ surfaceId, surface
   };
 }
 
+export function buildAgentWebUiAffordanceActionConfirmFrame({ confirmationId, confirmation_id } = {}, options = {}) {
+  const normalizedConfirmationId = String(confirmation_id ?? confirmationId ?? '').trim();
+  if (!normalizedConfirmationId) return null;
+  return {
+    id: options.id ?? `agent-web-ui-affordance-confirm-${normalizedConfirmationId.replace(/[^a-z0-9]+/gi, '-')}-${Date.now()}`,
+    method: NARS_AFFORDANCE_ACTION_CONFIRM_METHOD,
+    params: {
+      confirmation_id: normalizedConfirmationId,
+    },
+  };
+}
+
+export function buildAgentWebUiAffordanceActionCancelFrame({ confirmationId, confirmation_id, reason = 'operator_cancelled' } = {}, options = {}) {
+  const normalizedConfirmationId = String(confirmation_id ?? confirmationId ?? '').trim();
+  if (!normalizedConfirmationId) return null;
+  return {
+    id: options.id ?? `agent-web-ui-affordance-cancel-${normalizedConfirmationId.replace(/[^a-z0-9]+/gi, '-')}-${Date.now()}`,
+    method: NARS_AFFORDANCE_ACTION_CANCEL_METHOD,
+    params: {
+      confirmation_id: normalizedConfirmationId,
+      reason: String(reason ?? 'operator_cancelled'),
+    },
+  };
+}
+
 export function buildNarsAffordanceActionRequestedEvent({ requestId, request_id, surfaceId, surface_id, actionId, action_id, clientCorrelationId = null, client_correlation_id = null } = {}) {
   return {
     schema: NARS_AFFORDANCE_ACTION_SCHEMAS.request,

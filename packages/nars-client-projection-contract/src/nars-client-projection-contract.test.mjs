@@ -14,6 +14,8 @@ import {
   NARS_AFFORDANCE_ACTION_CONFIRM_METHOD,
   NARS_AFFORDANCE_ACTION_REQUEST_METHOD,
   NARS_COMMAND_METHOD,
+  buildAgentWebUiAffordanceActionCancelFrame,
+  buildAgentWebUiAffordanceActionConfirmFrame,
   buildAgentWebUiAffordanceActionRequestFrame,
   buildAgentWebUiArtifactsSummaryFrame,
   buildAgentWebUiConversationEnqueueFrame,
@@ -119,6 +121,16 @@ test('NARS client projection contract owns affordance action request and event v
       args: { topic: 'status' },
       client_correlation_id: 'ui-1',
     },
+  });
+  assert.deepEqual(buildAgentWebUiAffordanceActionConfirmFrame({ confirmationId: 'confirm-1' }, { id: 'confirm-frame-1' }), {
+    id: 'confirm-frame-1',
+    method: NARS_AFFORDANCE_ACTION_CONFIRM_METHOD,
+    params: { confirmation_id: 'confirm-1' },
+  });
+  assert.deepEqual(buildAgentWebUiAffordanceActionCancelFrame({ confirmationId: 'confirm-1', reason: 'operator_declined' }, { id: 'cancel-frame-1' }), {
+    id: 'cancel-frame-1',
+    method: NARS_AFFORDANCE_ACTION_CANCEL_METHOD,
+    params: { confirmation_id: 'confirm-1', reason: 'operator_declined' },
   });
 
   assert.deepEqual(buildNarsAffordanceActionRequestedEvent({
