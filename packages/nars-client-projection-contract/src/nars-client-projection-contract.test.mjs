@@ -35,6 +35,7 @@ import {
   buildAgentWebUiTaskLifecycleSummaryFrame,
   buildAgentWebUiSubscribeFrame,
   buildNarsAttachCommands,
+  buildNarsIntentRefPart,
   buildNarsAffordanceActionConfirmationRequiredEvent,
   buildNarsAffordanceActionConfirmedEvent,
   buildNarsAffordanceActionCancelledEvent,
@@ -89,6 +90,31 @@ test('NARS client projection contract owns attach commands and web UI capabiliti
   assert.equal(NARS_CLIENT_PROJECTION_REGISTRY.default_verbosity, 'conversation');
   assert.equal(NARS_CLIENT_PROJECTION_DEFAULT_VERBOSITY, 'conversation');
   assert.deepEqual(NARS_CLIENT_PROJECTION_VERBOSITY_LEVELS, ['conversation', 'operations', 'diagnostics', 'raw']);
+});
+
+test('NARS client projection contract owns canonical intent references', () => {
+  assert.deepEqual(buildNarsIntentRefPart({
+    intent: 'entity_number:dismiss',
+    label: 'Dismiss',
+    description: 'Dismiss the selected entity number row.',
+    target: 'entity_number',
+    action: 'dismiss',
+    args: { entity_number: 4 },
+  }), {
+    type: 'intent_ref',
+    intent: 'entity_number:dismiss',
+    label: 'Dismiss',
+    description: 'Dismiss the selected entity number row.',
+    target: 'entity_number',
+    action: 'dismiss',
+    args: { entity_number: 4 },
+  });
+  assert.deepEqual(buildNarsIntentRefPart({ intentRef: 'queue:publish', label: 'Publish' }), {
+    type: 'intent_ref',
+    intent: 'queue:publish',
+    label: 'Publish',
+  });
+  assert.equal(buildNarsIntentRefPart({}), null);
 });
 
 test('NARS client projection contract owns affordance action request and event vocabulary', () => {
@@ -459,6 +485,14 @@ test('NARS client projection contract owns shared event rendering vocabulary', (
     tone: 'session',
     summary: 'turn_1',
     event: { event: 'turn_started', turn_id: 'turn_1' },
+    renderKey: 'turn:turn_1',
+  });
+  assert.deepEqual(projectNarsClientEvent({ event: 'turn_failed', turn_id: 'turn_1', error: { message: 'provider schema rejected' } }), {
+    kind: 'turn_failed',
+    label: 'Turn failed',
+    tone: 'error',
+    summary: 'provider schema rejected',
+    event: { event: 'turn_failed', turn_id: 'turn_1', error: { message: 'provider schema rejected' } },
     renderKey: 'turn:turn_1',
   });
   assert.deepEqual(projectNarsClientEvent({ event: 'mcp_runtime_fault', server_name: 'narada-site', tool_name: 'fixture_fail', error_code: 'fixture_mcp_forced_failure' }), {

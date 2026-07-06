@@ -63,6 +63,49 @@ test('openrouter request shaping preserves provider and configured model identit
   assert.equal(request.headers['X-Title'], 'Narada Test');
 });
 
+test('kimi OpenAI-compatible requests normalize anyOf tool schema type placement', () => {
+  const tool = {
+    type: 'function',
+    function: {
+      name: 'fixture_tool',
+      description: 'fixture',
+      parameters: {
+        type: 'object',
+        anyOf: [
+          { properties: { value: { type: 'string' } }, required: ['value'] },
+          { type: 'object', properties: { count: { type: 'number' } }, required: ['count'] },
+        ],
+      },
+    },
+  };
+  const request = buildOpenAiChatRequest(
+    [{ role: 'user', content: 'hello' }],
+    [tool],
+    { provider: 'kimi-code-api', baseUrl: 'https://api.kimi.com/coding/', model: 'kimi-k2.7', apiKey: 'test-key' },
+  );
+  const parameters = request.body.tools[0].function.parameters;
+  assert.equal(parameters.type, 'object');
+  assert.equal(parameters.anyOf, undefined);
+  assert.deepEqual(Object.keys(parameters.properties).sort(), ['count', 'value']);
+  assert.equal(tool.function.parameters.type, 'object');
+});
+
+test('non-kimi OpenAI-compatible requests preserve original tool schema', () => {
+  const tool = {
+    type: 'function',
+    function: {
+      name: 'fixture_tool',
+      parameters: { type: 'object', anyOf: [{ properties: { value: { type: 'string' } } }] },
+    },
+  };
+  const request = buildOpenAiChatRequest(
+    [{ role: 'user', content: 'hello' }],
+    [tool],
+    { provider: 'openai-api', baseUrl: 'https://api.openai.com/', model: 'gpt-test', apiKey: 'test-key' },
+  );
+  assert.equal(request.body.tools[0].function.parameters, tool.function.parameters);
+});
+
 test('api-key providers refuse missing credentials before transport', async () => {
   for (const [provider, keyName] of [['kimi-code-api', 'KIMI_CODE_API_KEY'], ['deepseek-api', 'DEEPSEEK_API_KEY'], ['openrouter-api', 'OPENROUTER_API_KEY']]) {
     const { callChatApiFn } = createCarrierRuntimeDependencies({

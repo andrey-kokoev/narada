@@ -221,6 +221,29 @@ export function buildNarsArtifactRefPart({ artifactId, artifact_id, kind = null,
   };
 }
 
+export function buildNarsIntentRefPart({
+  intent,
+  intentRef,
+  intent_ref,
+  label = null,
+  description = null,
+  target = null,
+  action = null,
+  args = null,
+} = {}) {
+  const token = intent_ref ?? intentRef ?? intent;
+  if (!token) return null;
+  return {
+    type: 'intent_ref',
+    intent: String(token),
+    ...(label ? { label: String(label) } : {}),
+    ...(description ? { description: String(description) } : {}),
+    ...(target ? { target: String(target) } : {}),
+    ...(action ? { action: String(action) } : {}),
+    ...(args && typeof args === 'object' && !Array.isArray(args) ? { args } : {}),
+  };
+}
+
 export function buildAgentWebUiConversationEnqueueFrame(text, options = {}) {
   const message = String(text ?? '').trim();
   if (!message) return null;
@@ -870,6 +893,7 @@ function eventSummary(event, kind) {
   if (kind === 'session_health') return `${event.status ?? 'health'} · ${eventAgentDisplay(event)} · ${event.session_id ?? 'session'}`;
   if (kind === 'mcp_runtime_fault' || kind === 'carrier_diagnostic_recorded') return diagnosticSummary(event, kind);
   if (kind === 'turn_complete') return event.terminal_state ?? 'turn complete';
+  if (kind === 'turn_failed') return errorSummary(event) ?? event.terminal_state ?? 'turn failed';
   if (kind === 'turn_started') return event.turn_id ?? 'turn started';
   if (kind === 'conversation_enqueue_requested') return event.delivery_semantics ?? 'queued for next turn';
   if (kind?.startsWith?.('authority_source_') || kind?.startsWith?.('authority_target_')) return authorityTransitionSummary(event, kind);
@@ -878,6 +902,27 @@ function eventSummary(event, kind) {
   if (typeof event?.message === 'string') return event.message;
   if (typeof event?.content === 'string') return event.content;
   return '';
+}
+
+function errorSummary(event) {
+  if (!event || typeof event !== 'object') return null;
+  for (const field of ['error_summary', 'error', 'message', 'reason', 'code']) {
+    const value = event[field];
+    if (typeof value === 'string' && value.trim()) return value;
+  }
+  const error = event.error;
+  if (error && typeof error === 'object') {
+    for (const field of ['message', 'summary', 'reason', 'code', 'type']) {
+      const value = error[field];
+      if (typeof value === 'string' && value.trim()) return value;
+    }
+    try {
+      return JSON.stringify(error);
+    } catch {
+      return null;
+    }
+  }
+  return null;
 }
 
 function diagnosticSummary(event, kind) {

@@ -22,8 +22,10 @@ const TERMINAL_EVENTS = new Set([
 
 export function useAffordanceConfirmations(events: unknown[]) {
   const items = computed<AffordanceConfirmationItem[]>(() => {
+    const snapshot = Array.from(events);
+    snapshot.length;
     const pending = new Map<string, AffordanceConfirmationItem>();
-    for (const message of events) {
+    for (const message of snapshot) {
       const event = objectValue(unwrapRuntimeEvent(message) ?? message);
       if (!event) continue;
       const eventName = stringField(event, 'event');

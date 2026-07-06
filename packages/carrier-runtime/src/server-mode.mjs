@@ -21,6 +21,7 @@ import {
 } from './authority-transition-state.mjs';
 import { mcpToolCatalogEntries as defaultMcpToolCatalogEntries } from './session-status-snapshots.mjs';
 import { buildNarsSurfaceAffordanceProjection } from './surface-affordances.mjs';
+import { runtimeAuthorityPostureFromHandoff } from './runtime-authority-posture.mjs';
 
 export async function runCarrierServerMode({
   input = process.stdin,
@@ -90,7 +91,8 @@ export async function runCarrierServerMode({
   const mcpServers = applyWorkerMcpProjection(await discoverAndStartMcpServers(siteRoot));
   const allTools = aggregateTools(mcpServers);
   const mcpStatus = createMcpStatusSnapshot(mcpServers);
-  const surfaceAffordances = buildNarsSurfaceAffordanceProjection({ mcpServers, intelligence: providerSettings });
+  const runtimeAuthorityPosture = runtimeAuthorityPostureFromHandoff(narsDelegatedAuthorityHandoff);
+  const surfaceAffordances = buildNarsSurfaceAffordanceProjection({ mcpServers, intelligence: providerSettings, runtimeAuthorityPosture });
   const mcpPreflightArtifact = readMcpPreflightArtifact();
   const mcpPreflightSnapshot = createMcpPreflightArtifactSnapshot(mcpPreflightArtifact);
   const rolePrompt = loadRolePrompt(identity, siteRoot);
@@ -182,6 +184,7 @@ export async function runCarrierServerMode({
         siteRoot,
         sessionPath,
         providerSettings: state.sessionSettings,
+        delegatedAuthorityHandoff: narsDelegatedAuthorityHandoff,
       });
     },
     appendSessionFn: appendQueueSessionRecord,
@@ -268,6 +271,8 @@ export async function runCarrierServerMode({
     attach_commands: buildNarsAttachCommands({ eventEndpoint: eventStreamUrl, healthEndpoint: healthUrl }),
     delegated_authority_handoff: narsDelegatedAuthorityHandoff,
     delegated_authority_ref: narsDelegatedAuthorityHandoff?.authority_ref ?? null,
+    runtime_authority_posture: runtimeAuthorityPosture,
+    authority_mode: runtimeAuthorityPosture.authority_mode,
     session_path: sessionPath,
     events_path: eventsPath,
   });

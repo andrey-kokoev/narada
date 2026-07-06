@@ -1869,6 +1869,49 @@ select {
   font: 12px/1.4 var(--mono);
 }
 
+.intent-ref-part,
+.markdown-intent-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 22px;
+  border: 1px solid var(--button-border);
+  border-radius: 999px;
+  padding: 1px 8px;
+  background: color-mix(in srgb, var(--surface-muted) 78%, transparent);
+  color: var(--text);
+  font: 12px/1.35 var(--mono);
+  cursor: pointer;
+  vertical-align: baseline;
+}
+
+.intent-ref-part:hover,
+.markdown-intent-button:hover {
+  background: var(--button-hover-bg);
+  color: var(--button-text);
+}
+
+.intent-ref-part[data-status='copied'],
+.markdown-intent-button[data-status='copied'] {
+  border-color: var(--success-border, var(--button-border));
+  background: color-mix(in srgb, var(--success-bg, var(--button-hover-bg)) 35%, transparent);
+}
+
+.intent-ref-part[data-status='failed'],
+.markdown-intent-button[data-status='failed'] {
+  border-color: var(--error-border);
+  background: color-mix(in srgb, var(--error-bg, var(--surface)) 18%, transparent);
+}
+
+.intent-ref-label {
+  font-weight: 700;
+}
+
+.intent-ref-token {
+  color: var(--soft);
+  font-size: 11px;
+}
+
 .code-block-part {
   margin: 0;
   overflow: hidden;

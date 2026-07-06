@@ -576,6 +576,12 @@ test('agent-cli exec launches package bin through node, not PowerShell', () => {
   assert.equal(output.carrier_session.record.session_id, sessionId);
   assert.equal(output.carrier_session.record.launch_operator_surface_kind, 'agent-cli');
   assert.equal(output.carrier_session.record.operator_surface_kind, 'agent-cli');
+  assert.deepEqual(output.runtime_authority_selection, {
+    schema: 'narada.runtime_authority_selection.v1',
+    requested: 'auto',
+    effective: 'write',
+    source: 'default',
+  });
   assert.equal(output.runtime_args[0].endsWith('agent-runtime-server.mjs'), true);
   assert.deepEqual(output.runtime_args.slice(1), [
     '--identity',
@@ -586,6 +592,8 @@ test('agent-cli exec launches package bin through node, not PowerShell', () => {
     naradaProperRoot,
     '--operator-surface',
     'agent-cli',
+    '--authority',
+    'write',
   ]);
   assert.equal(output.runtime_args.includes('--control-jsonl'), false);
   assert.equal(output.runtime_args.includes('--session-jsonl'), false);
@@ -616,6 +624,12 @@ test('agent-web-ui exec launches NARS runtime server as first-class operator sur
   assert.equal(output.carrier_session.record.carrier_runtime_kind, 'narada-agent-runtime-server');
   assert.equal(output.carrier_session.record.launch_operator_surface_kind, 'agent-web-ui');
   assert.equal(output.carrier_session.record.operator_surface_kind, 'agent-web-ui');
+  assert.deepEqual(output.runtime_authority_selection, {
+    schema: 'narada.runtime_authority_selection.v1',
+    requested: 'auto',
+    effective: 'write',
+    source: 'default',
+  });
   assert.equal(output.runtime_args[0].endsWith('agent-runtime-server.mjs'), true);
   assert.deepEqual(output.runtime_args.slice(1), [
     '--identity',
@@ -626,6 +640,8 @@ test('agent-web-ui exec launches NARS runtime server as first-class operator sur
     naradaProperRoot,
     '--operator-surface',
     'agent-web-ui',
+    '--authority',
+    'write',
   ]);
 });
 

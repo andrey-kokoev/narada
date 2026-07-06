@@ -1,6 +1,6 @@
 import { renderOperatorValue } from '@narada2/agent-identity';
 
-export type MessageRenderKind = 'plain_text' | 'markdown' | 'code_block' | 'mermaid_diagram' | 'json_block' | 'artifact_ref';
+export type MessageRenderKind = 'plain_text' | 'markdown' | 'code_block' | 'mermaid_diagram' | 'json_block' | 'artifact_ref' | 'intent_ref';
 
 export interface ArtifactRefContent {
   type: 'artifact_ref';
@@ -8,6 +8,16 @@ export interface ArtifactRefContent {
   kind?: string;
   title?: string;
   render_hint?: string;
+}
+
+export interface IntentRefContent {
+  type: 'intent_ref';
+  intent: string;
+  label?: string;
+  description?: string;
+  target?: string;
+  action?: string;
+  args?: Record<string, unknown>;
 }
 
 function parseStructuredMessageContent(content: unknown[]): MessageRenderPart[] {
@@ -35,6 +45,24 @@ function parseStructuredMessageContent(content: unknown[]): MessageRenderPart[] 
       ordinal += 1;
       continue;
     }
+    if (typed.type === 'intent_ref' && typeof typed.intent === 'string' && typed.intent.trim()) {
+      parts.push({
+        kind: 'intent_ref',
+        content: typed.label ? String(typed.label) : typed.intent,
+        intent: {
+          type: 'intent_ref',
+          intent: typed.intent.trim(),
+          ...(typed.label ? { label: String(typed.label) } : {}),
+          ...(typed.description ? { description: String(typed.description) } : {}),
+          ...(typed.target ? { target: String(typed.target) } : {}),
+          ...(typed.action ? { action: String(typed.action) } : {}),
+          ...(typed.args && typeof typed.args === 'object' && !Array.isArray(typed.args) ? { args: typed.args as Record<string, unknown> } : {}),
+        },
+        ordinal,
+      });
+      ordinal += 1;
+      continue;
+    }
     if ((typed.type === 'markdown' || typed.type === 'text') && typeof typed.text === 'string') {
       ordinal = appendTextPart(parts, typed.text, ordinal);
       continue;
@@ -53,6 +81,7 @@ export interface MessageRenderPart {
   kind: MessageRenderKind;
   content: string;
   artifact?: ArtifactRefContent;
+  intent?: IntentRefContent;
   language?: string;
   ordinal: number;
 }

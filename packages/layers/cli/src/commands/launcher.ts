@@ -39,6 +39,12 @@ function normalizeMcpScope(value: string | undefined): string {
   throw new Error(`mcp_scope_not_admitted: ${normalized}. Admitted scopes: all, host, user-site, local-site, none`);
 }
 
+function normalizeRuntimeAuthority(value: string | undefined | null): string {
+  const normalized = String(value ?? 'auto').trim().toLowerCase();
+  if (['auto', 'read', 'write'].includes(normalized)) return normalized;
+  throw new Error(`runtime_authority_not_admitted: ${normalized}. Admitted values: auto, read, write`);
+}
+
 function loadProviderAdapters(): ProviderAdapters {
   let adaptersPath: string;
   try {
@@ -83,6 +89,7 @@ function fallbackProviderRegistryForTests(): ProviderRegistry {
       'anthropic-api': { meaning: 'Anthropic API via the Anthropic Messages API.', support_state: 'verified_supported' },
       'codex-subscription': { meaning: 'Local Codex CLI subscription auth via codex mcp-server; no OpenAI API key or API billing path.', support_state: 'verified_supported' },
       'deepseek-api': { meaning: 'DeepSeek API via OpenAI-compatible chat completions.', support_state: 'verified_supported' },
+      'glm-api': { meaning: 'GLM API via OpenAI-compatible chat completions.', support_state: 'verified_supported' },
       'kimi-api': { meaning: 'Kimi/Moonshot API via OpenAI-compatible chat completions.', support_state: 'verified_supported' },
       'kimi-code-api': { meaning: 'Kimi Code API via OpenAI-compatible chat completions; uses KIMI_CODE_API_KEY against api.kimi.com/coding/v1.', support_state: 'verified_supported' },
       'openai-api': { meaning: 'OpenAI API via OpenAI-compatible chat completions.', support_state: 'verified_supported' },
@@ -147,6 +154,7 @@ export interface WorkspaceLaunchPlanOptions {
   registryPath?: string;
   operatorSurface?: string;
   runtime?: string;
+  authority?: string;
   intelligenceProvider?: string;
   mcpScope?: string;
   cloudflareApiBaseUrl?: string;
@@ -572,6 +580,7 @@ interface RawLaunchRegistry {
   OperatorSurface?: string;
   Carrier?: string;
   Runtime?: string;
+  Authority?: string;
   McpScope?: string;
   Agents?: RawAgentRecord[] | RawAgentRecord;
 }
@@ -589,6 +598,7 @@ interface RawAgentRecord {
   OperatorSurface?: string;
   Carrier?: string;
   Runtime?: string;
+  Authority?: string;
   McpScope?: string;
   EnableNativeShell?: boolean;
 }
@@ -606,6 +616,7 @@ export interface WorkspaceLaunchRecord {
   operator_surface: string;
   carrier: string;
   runtime: string;
+  authority: string | null;
   enable_native_shell: boolean;
   mcp_scope: string | null;
   config_path: string;
@@ -622,6 +633,7 @@ export interface WorkspaceLaunchAgentPlan extends WorkspaceLaunchRecord {
   launch_runtime: string;
   launch_carriers: string[];
   intelligence_provider: string | null;
+  authority: string | null;
   wait_for_enter_before_exec: boolean;
   mcp_scope: string;
   wt_args: string[];
@@ -655,6 +667,7 @@ export async function workspaceLaunchPlanCommand(
         agent: plan.agent,
         carrier: plan.launch_carrier,
         runtime: plan.launch_runtime_host,
+        authority: plan.authority ?? undefined,
         intelligenceProvider: plan.intelligence_provider ?? undefined,
         mcpScope: plan.mcp_scope,
         dryRun: true,
@@ -2463,6 +2476,7 @@ function normalizeAgentRecord(registry: RawLaunchRegistry, agent: RawAgentRecord
   const operatorSurface = nonEmpty(agent.OperatorSurface) ?? nonEmpty(registry.OperatorSurface) ?? 'codex';
   const carrier = operatorSurface;
   const runtime = nonEmpty(agent.Runtime) ?? nonEmpty(registry.Runtime) ?? defaultRuntimeForCarrier(carrier);
+  const authority = nonEmpty(agent.Authority) ?? nonEmpty(registry.Authority) ?? null;
   const role = nonEmpty(agent.Role) ?? (agentId.split('.').at(-1) ?? agentId).replace(/\d+$/, '');
   const agentIdentityRef = buildAgentIdentityRef(agentId, role, explicitSite);
   return {
@@ -2478,6 +2492,7 @@ function normalizeAgentRecord(registry: RawLaunchRegistry, agent: RawAgentRecord
     operator_surface: operatorSurface,
     carrier,
     runtime,
+    authority,
     enable_native_shell: agent.EnableNativeShell === true,
     mcp_scope: nonEmpty(agent.McpScope) ?? nonEmpty(registry.McpScope) ?? null,
     config_path: configPath,
@@ -2543,6 +2558,7 @@ function buildAgentPlan(record: WorkspaceLaunchRecord, options: WorkspaceLaunchP
   const runtimeHostKind = carrierRuntimeSelection.runtime_host_kind;
   const enableNativeShell = options.enableNativeShell === true || record.enable_native_shell;
   const mcpScope = normalizeMcpScope(options.mcpScope ?? record.mcp_scope ?? undefined);
+  const authority = normalizeRuntimeAuthority(options.authority ?? record.authority ?? undefined);
   const waitForEnter = options.noWaitForEnterBeforeExec !== true && launchCarriers[0] !== 'agent-web-ui';
   const isNarsOperatorSurface = launchCarrier === 'agent-cli' || launchCarrier === 'agent-web-ui';
   const intelligenceProvider = isNarsOperatorSurface
@@ -2572,6 +2588,7 @@ function buildAgentPlan(record: WorkspaceLaunchRecord, options: WorkspaceLaunchP
   ];
   if (record.workspace_root) operatorSurfaceStartCommand.push('--workspace-root', record.workspace_root);
   if (enableNativeShell) operatorSurfaceStartCommand.push('--enable-native-shell');
+  operatorSurfaceStartCommand.push('--authority', authority);
   if (intelligenceProvider) operatorSurfaceStartCommand.push('--intelligence-provider', intelligenceProvider);
   operatorSurfaceStartCommand.push('--mcp-scope', mcpScope);
   if (launchBindingPath) operatorSurfaceStartCommand.push('--launch-binding', launchBindingPath);
@@ -2607,6 +2624,7 @@ function buildAgentPlan(record: WorkspaceLaunchRecord, options: WorkspaceLaunchP
     '--format', 'json',
   ];
   if (record.workspace_root) smokeCommand.push('--workspace-root', record.workspace_root);
+  smokeCommand.push('--authority', authority);
   if (intelligenceProvider) smokeCommand.push('--intelligence-provider', intelligenceProvider);
   if (enableNativeShell) smokeCommand.push('--enable-native-shell');
   smokeCommand.push('--mcp-scope', mcpScope);
@@ -2630,6 +2648,7 @@ function buildAgentPlan(record: WorkspaceLaunchRecord, options: WorkspaceLaunchP
     launch_carriers: launchCarriers,
     legacy_carrier_compatibility: legacyCarrierCompatibility(),
     intelligence_provider: intelligenceProvider,
+    authority,
     wait_for_enter_before_exec: waitForEnter,
     mcp_scope: mcpScope,
     enable_native_shell: enableNativeShell,

@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 import CodeBlockPart from './CodeBlockPart.vue';
 import ArtifactReferencePart from './ArtifactReferencePart.vue';
+import IntentRefPart from './IntentRefPart.vue';
 import JsonBlockPart from './JsonBlockPart.vue';
 import MarkdownTextPart from './MarkdownTextPart.vue';
 import MermaidDiagramPart from './MermaidDiagramPart.vue';
@@ -15,6 +16,7 @@ const CONTENT_RENDERERS = {
   markdown: MarkdownTextPart,
   code_block: CodeBlockPart,
   artifact_ref: ArtifactReferencePart,
+  intent_ref: IntentRefPart,
   mermaid_diagram: MermaidDiagramPart,
   json_block: JsonBlockPart,
 } as const;
@@ -32,6 +34,7 @@ function rendererFor(part: MessageRenderPart) {
       :key="`${part.ordinal}:${part.kind}`"
       :content="part.content"
       :artifact="part.artifact"
+      :intent="part.kind === 'intent_ref' ? part.intent : undefined"
       :session-id="props.sessionId"
       :language="part.language"
       :ordinal="part.ordinal"

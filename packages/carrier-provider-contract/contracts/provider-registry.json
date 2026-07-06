@@ -20,7 +20,7 @@
       "meaning": "OpenAI API via OpenAI-compatible chat completions.",
       "base_url": "https://api.openai.com",
       "default_model": "gpt-5.5",
-      "available_models": ["gpt-5.5"],
+      "available_models": ["gpt-5.5", "gpt-5.4", "gpt-5.4-mini", "gpt-5.4-nano"],
       "adapter_kind": "openai-compatible-chat-completions",
       "support_state": "verified_supported",
       "base_url_env_names": ["OPENAI_BASE_URL"],
@@ -36,8 +36,8 @@
     "kimi-api": {
       "meaning": "Kimi/Moonshot API via OpenAI-compatible chat completions.",
       "base_url": "https://api.moonshot.ai",
-      "default_model": "kimi-k2.7",
-      "available_models": ["kimi-k2.7"],
+      "default_model": "kimi-k2.6",
+      "available_models": ["kimi-k2.6", "kimi-k2.7"],
       "adapter_kind": "openai-compatible-chat-completions",
       "support_state": "verified_supported",
       "base_url_env_names": ["KIMI_API_BASE_URL"],
@@ -54,7 +54,7 @@
       "meaning": "Kimi Code API via OpenAI-compatible chat completions; uses KIMI_CODE_API_KEY against api.kimi.com/coding/v1.",
       "base_url": "https://api.kimi.com/coding/",
       "default_model": "kimi-k2.7",
-      "available_models": ["kimi-k2.7"],
+      "available_models": ["kimi-k2.6", "kimi-k2.7"],
       "adapter_kind": "openai-compatible-chat-completions",
       "support_state": "verified_supported",
       "base_url_env_names": ["KIMI_CODE_API_BASE_URL"],
@@ -87,8 +87,8 @@
     "deepseek-api": {
       "meaning": "DeepSeek API via OpenAI-compatible chat completions.",
       "base_url": "https://api.deepseek.com",
-      "default_model": "deepseek-v4-flash",
-      "available_models": ["deepseek-v4-flash"],
+      "default_model": "deepseek-chat",
+      "available_models": ["deepseek-chat", "deepseek-reasoner", "deepseek-v3.2-exp", "deepseek-v3.1-terminus"],
       "adapter_kind": "openai-compatible-chat-completions",
       "support_state": "verified_supported",
       "base_url_env_names": ["DEEPSEEK_API_BASE_URL"],
@@ -99,6 +99,23 @@
         "kind": "api_key_secret",
         "secret_ref": "narada/provider/deepseek-api/api-key",
         "env_names": ["DEEPSEEK_API_KEY"]
+      }
+    },
+    "glm-api": {
+      "meaning": "GLM API via OpenAI-compatible chat completions.",
+      "base_url": "https://open.bigmodel.cn/api/paas/v4/",
+      "default_model": "GLM-5.2",
+      "available_models": ["GLM-5.2", "GLM-5V-Turbo", "GLM-5.1", "GLM-5", "GLM-5-Turbo", "GLM-4.7", "GLM-4.6"],
+      "adapter_kind": "openai-compatible-chat-completions",
+      "support_state": "verified_supported",
+      "base_url_env_names": ["GLM_API_BASE_URL"],
+      "model_env_names": ["GLM_MODEL"],
+      "credential_env_names": ["GLM_API_KEY"],
+      "credential_secret_ref": "narada/provider/glm-api/api-key",
+      "credential_requirement": {
+        "kind": "api_key_secret",
+        "secret_ref": "narada/provider/glm-api/api-key",
+        "env_names": ["GLM_API_KEY"]
       }
     },
     "openrouter-api": {

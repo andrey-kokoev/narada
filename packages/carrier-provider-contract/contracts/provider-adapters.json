@@ -13,6 +13,7 @@
     "openai-api",
     "anthropic-api",
     "deepseek-api",
+    "glm-api",
     "openrouter-api"
   ],
   "scripted_provider_adapter_kind": "scripted_provider_adapter",

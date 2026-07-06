@@ -26,6 +26,7 @@ test('provider registry exposes carrier-level defaults and support states', () =
   assert.deepEqual(registry.providers['kimi-api'].credential_requirement.env_names, ['KIMI_API_KEY']);
   assert.equal(registry.providers['openai-api'].credential_secret_ref, 'narada/provider/openai-api/api-key');
   assert.equal(registry.providers['deepseek-api'].support_state, PROVIDER_SUPPORT_STATES.VERIFIED_SUPPORTED);
+  assert.equal(registry.providers['glm-api'].support_state, PROVIDER_SUPPORT_STATES.VERIFIED_SUPPORTED);
   assert.equal(registry.providers['openrouter-api'].credential_secret_ref, 'narada/provider/openrouter-api/api-key');
   assert.equal(registry.providers['openrouter-api'].credential_requirement.kind, PROVIDER_CREDENTIAL_REQUIREMENT_KINDS.API_KEY_SECRET);
   assert.deepEqual(registry.providers['openrouter-api'].credential_requirement.env_names, ['OPENROUTER_API_KEY']);
@@ -52,7 +53,7 @@ test('provider environment uses provider-specific env precedence', () => {
   assert.equal(kimi.baseUrl, 'https://kimi.example');
   assert.equal(kimi.model, 'kimi-custom');
   assert.equal(kimi.apiKey, 'kimi-native-key');
-  assert.deepEqual(kimi.availableModels, ['kimi-k2.7']);
+  assert.deepEqual(kimi.availableModels, ['kimi-k2.6', 'kimi-k2.7']);
 
   const kimiCode = providerEnvironment('kimi-code-api', metadata, {
     KIMI_CODE_API_KEY: 'kimi-code-native-key',
@@ -61,6 +62,16 @@ test('provider environment uses provider-specific env precedence', () => {
   assert.equal(kimiCode.baseUrl, 'https://api.kimi.com/coding/');
   assert.equal(kimiCode.model, 'kimi-k2.7');
   assert.equal(kimiCode.apiKey, 'kimi-code-native-key');
+
+  const glm = providerEnvironment('glm-api', metadata, {
+    GLM_API_KEY: 'glm-native-key',
+    GLM_MODEL: 'GLM-5.2',
+  });
+
+  assert.equal(glm.baseUrl, 'https://open.bigmodel.cn/api/paas/v4/');
+  assert.equal(glm.model, 'GLM-5.2');
+  assert.equal(glm.apiKey, 'glm-native-key');
+  assert.deepEqual(glm.availableModels, ['GLM-5.2', 'GLM-5V-Turbo', 'GLM-5.1', 'GLM-5', 'GLM-5-Turbo', 'GLM-4.7', 'GLM-4.6']);
 
   const openai = providerEnvironment('openai-api', metadata, {
     OPENAI_API_KEY: 'openai-native-key',
@@ -92,6 +103,7 @@ test('provider adapter contract lists admitted carrier providers', () => {
     'openai-api',
     'anthropic-api',
     'deepseek-api',
+    'glm-api',
     'openrouter-api',
   ]);
 });

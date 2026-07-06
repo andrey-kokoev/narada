@@ -44,6 +44,7 @@ export function writeOperatorProjectionLaunchBinding(path: string | undefined, a
   agent: string;
   operatorSurfaceKind?: string;
   runtimeHostKind: string;
+  authority?: string | null;
   intelligenceProvider?: string | null;
   agentStartResultFile?: string;
   narsSessionId?: string | null;
@@ -70,6 +71,7 @@ export function writeOperatorProjectionLaunchBinding(path: string | undefined, a
     agent: args.agent,
     operator_surface_kind: args.operatorSurfaceKind,
     runtime_host_kind: args.runtimeHostKind,
+    authority: args.authority ?? null,
     intelligence_provider: args.intelligenceProvider ?? null,
     agent_start_result_file: args.agentStartResultFile,
     nars_session_id: args.narsSessionId ?? null,
@@ -109,6 +111,7 @@ export interface AgentStartOptions {
   agent: string;
   carrier?: string;
   runtime: string;
+  authority?: string;
   intelligenceProvider?: string;
   mcpScope?: string;
   dryRun?: boolean;
@@ -129,6 +132,7 @@ export interface OperatorProjectionLaunchBinding {
   agent: string;
   operator_surface_kind?: string;
   runtime_host_kind: string;
+  authority?: string | null;
   intelligence_provider?: string | null;
   agent_start_result_file?: string;
   nars_session_id?: string | null;
@@ -337,6 +341,7 @@ export function runAgentStartCommand(options: AgentStartOptions): AgentStartComm
     agent: options.agent,
     operatorSurfaceKind: options.carrier ?? options.runtime,
     runtimeHostKind: options.runtime,
+    authority: options.authority ?? null,
     intelligenceProvider: options.intelligenceProvider ?? null,
     agentStartResultFile: resultPath,
   });
@@ -361,6 +366,7 @@ export function runAgentStartCommand(options: AgentStartOptions): AgentStartComm
   ];
   if (options.targetSiteId) args.push('--target-site-id', options.targetSiteId);
   if (!inheritedInteractiveExec) args.push('--json');
+  if (options.authority) args.push('--authority', options.authority);
   if (options.intelligenceProvider) args.push('--intelligence-provider', options.intelligenceProvider);
   if (options.mcpScope) args.push('--mcp-scope', options.mcpScope);
   if (options.dryRun) args.push('--dry-run');

@@ -131,6 +131,7 @@ export function buildCarrierSpawnArgs(carrierName, {
   piModel,
   claudeCodeMcpConfig,
   claudeCodeModel,
+  runtimeAuthority,
 }) {
   if (carrierName === 'codex') {
     const args = [
@@ -160,6 +161,8 @@ export function buildCarrierSpawnArgs(carrierName, {
       sessionSiteRoot,
       '--operator-surface',
       carrierName,
+      '--authority',
+      runtimeAuthority ?? 'read',
     ];
   }
 

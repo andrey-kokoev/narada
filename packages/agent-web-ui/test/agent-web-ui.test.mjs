@@ -618,10 +618,12 @@ test('Vue message content renderer has typed parts, inline code, and lazy Mermai
   const projectionSelect = await readFile(new URL('../src/app/components/ProjectionVerbositySelect.vue', import.meta.url), 'utf8');
   const messageContent = await readFile(new URL('../src/app/components/content/MessageContent.vue', import.meta.url), 'utf8');
   const markdownPart = await readFile(new URL('../src/app/components/content/MarkdownTextPart.vue', import.meta.url), 'utf8');
+  const intentPart = await readFile(new URL('../src/app/components/content/IntentRefPart.vue', import.meta.url), 'utf8');
   const mermaidPart = await readFile(new URL('../src/app/components/content/MermaidDiagramPart.vue', import.meta.url), 'utf8');
   const renderedFrame = await readFile(new URL('../src/app/components/content/RenderedPartFrame.vue', import.meta.url), 'utf8');
   const parser = await readFile(new URL('../src/app/lib/messageContent.ts', import.meta.url), 'utf8');
   const css = await readFile(new URL('../src/agent-web-ui.css', import.meta.url), 'utf8');
+  const readme = await readFile(new URL('../README.md', import.meta.url), 'utf8');
 
   assert.match(eventRow, /<MessageContent :content="row\.summary"/);
   assert.match(eventRow, /event-view-\$\{props\.verbosity\}/);
@@ -632,15 +634,22 @@ test('Vue message content renderer has typed parts, inline code, and lazy Mermai
   assert.match(messageContent, /parseMessageContent/);
   assert.match(parser, /normalizeTextPart/);
   assert.match(parser, /markdown\|md/);
-  for (const renderKind of ['plain_text', 'markdown', 'code_block', 'mermaid_diagram', 'json_block']) {
+  for (const renderKind of ['plain_text', 'markdown', 'code_block', 'mermaid_diagram', 'json_block', 'intent_ref']) {
     assert.equal(messageContent.includes(renderKind), true, renderKind);
     assert.equal(parser.includes(renderKind), true, renderKind);
   }
+  assert.match(messageContent, /IntentRefPart/);
+  assert.match(intentPart, /intent-ref-part/);
+  assert.match(intentPart, /clipboard/);
   assert.match(markdownPart, /MarkdownIt/);
   assert.match(markdownPart, /RenderedPartFrame/);
   assert.match(markdownPart, /html: false/);
   assert.match(markdownPart, /linkify: true/);
   assert.match(markdownPart, /v-html="renderedMarkdown"/);
+  assert.match(markdownPart, /handleMarkdownClick/);
+  assert.match(markdownPart, /markdown-intent-button/);
+  assert.match(markdownPart, /data-intent/);
+  assert.match(markdownPart, /intentFromLink/);
   assert.match(renderedFrame, /activeView = ref<'render' \| 'code'>\('render'\)/);
   assert.match(renderedFrame, /copySource/);
   assert.match(renderedFrame, /class="rendered-part-copy"/);
@@ -652,6 +661,9 @@ test('Vue message content renderer has typed parts, inline code, and lazy Mermai
   assert.match(css, /\.rendered-part-tab[\s\S]*?text-align: left/);
   assert.match(css, /\.rendered-part-code pre[\s\S]*?white-space: pre-wrap/);
   assert.match(css, /\.rendered-part-copy[\s\S]*?cursor: pointer/);
+  assert.match(css, /\.intent-ref-part/);
+  assert.match(css, /\.markdown-intent-button/);
+  assert.match(css, /data-status='copied'/);
   assert.equal(parser.includes('(?:^|\\n)\\s*[-*+]\\s+'), true);
   assert.match(mermaidPart, /import\('mermaid'\)/);
   assert.match(mermaidPart, /nextMermaidInstanceId/);
@@ -668,6 +680,9 @@ test('Vue message content renderer has typed parts, inline code, and lazy Mermai
   for (const cssSelector of ['.message-content', '.inline-code-token', '.code-block-part', '.json-block-part', '.rendered-part-frame', '.rendered-part-tab', '.mermaid-diagram']) {
     assert.equal(css.includes(cssSelector), true, cssSelector);
   }
+  assert.match(readme, /intent_ref/);
+  assert.match(readme, /intent:/);
+  assert.match(readme, /narada-intent:/);
 });
 
 test('browser screenshot smoke renders the served shell', async () => {

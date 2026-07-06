@@ -86,6 +86,35 @@ test('surface affordance projection advertises inbox panel from inbox MCP invent
   assert.equal(projection.items[0].tools.doctor, 'inbox_doctor');
 });
 
+test('NARS surface affordances project write admission from runtime authority posture', () => {
+  const mcpServers = {
+    'narada-test-inbox': {
+      tools: [
+        { name: 'inbox_list' },
+        { name: 'inbox_acknowledge' },
+      ],
+      config: { surface_id: 'test.inbox' },
+    },
+  };
+  const readOnlyProjection = buildNarsSurfaceAffordanceProjection({
+    mcpServers,
+    runtimeAuthorityPosture: { mode: 'read_only', reason: 'delegated_authority_ref_missing', authority_ref: null },
+  });
+  const readOnlyInbox = readOnlyProjection.items.find((item) => item.surface_kind === 'inbox');
+  assert.deepEqual(readOnlyInbox.actions.candidate_write, ['acknowledge_envelope']);
+  assert.deepEqual(readOnlyInbox.actions.admitted_write, []);
+  assert.deepEqual(readOnlyInbox.actions.withheld_write, ['acknowledge_envelope']);
+
+  const writeProjection = buildNarsSurfaceAffordanceProjection({
+    mcpServers,
+    runtimeAuthorityPosture: { mode: 'write_delegated', reason: 'delegated_authority_handoff', authority_ref: 'auth_1' },
+  });
+  const writeInbox = writeProjection.items.find((item) => item.surface_kind === 'inbox');
+  assert.deepEqual(writeInbox.actions.admitted_write, ['acknowledge_envelope']);
+  assert.deepEqual(writeInbox.actions.withheld_write, []);
+  assert.equal(writeInbox.authority_posture.mode, 'write_delegated');
+});
+
 test('surface affordance projection advertises delegation panel from worker and delegated-task MCP inventory', () => {
   const projection = buildMcpSurfaceAffordanceProjection({
     'narada-test-worker-delegation': {

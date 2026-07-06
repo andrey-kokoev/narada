@@ -92,13 +92,39 @@ export function buildRuntimeIntelligenceOperatorAffordance({ intelligence = {}, 
   };
 }
 
-export function buildNarsSurfaceAffordanceProjection({ mcpServers = {}, intelligence = {} } = {}) {
+export function buildNarsSurfaceAffordanceProjection({ mcpServers = {}, intelligence = {}, runtimeAuthorityPosture = null } = {}) {
   const mcpProjection = buildMcpSurfaceAffordanceProjection(mcpServers);
   const intelligenceAffordance = buildRuntimeIntelligenceOperatorAffordance({ intelligence });
+  const items = mcpProjection.items.map((item) => projectRuntimeAuthorityPosture(item, runtimeAuthorityPosture));
   return {
     ...mcpProjection,
     count: mcpProjection.items.length + 1,
-    items: [intelligenceAffordance, ...mcpProjection.items],
+    runtime_authority_posture: runtimeAuthorityPosture,
+    items: [intelligenceAffordance, ...items],
+  };
+}
+
+function projectRuntimeAuthorityPosture(item, runtimeAuthorityPosture) {
+  const writeLikeActions = uniqueStrings([
+    ...stringArrayField(item.actions, 'candidate_write'),
+    ...stringArrayField(item.actions, 'run'),
+    ...stringArrayField(item.actions, 'write'),
+  ]);
+  if (!writeLikeActions.length) return item;
+  const writeAdmitted = ['write_delegated', 'write_partial'].includes(runtimeAuthorityPosture?.mode);
+  return {
+    ...item,
+    authority_posture: runtimeAuthorityPosture ? {
+      mode: runtimeAuthorityPosture.mode,
+      reason: runtimeAuthorityPosture.reason,
+      authority_ref: runtimeAuthorityPosture.authority_ref,
+    } : null,
+    actions: {
+      ...item.actions,
+      candidate_write: writeLikeActions,
+      admitted_write: writeAdmitted ? writeLikeActions : [],
+      withheld_write: writeAdmitted ? [] : writeLikeActions,
+    },
   };
 }
 

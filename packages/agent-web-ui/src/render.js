@@ -50,6 +50,10 @@ function appendStructuredSummaryContent(container, parts, documentRef, context =
       container.append(createArtifactReferenceCard(part, documentRef, context));
       continue;
     }
+    if (part?.type === 'intent_ref' && typeof part.intent === 'string' && part.intent.trim()) {
+      container.append(createIntentReferenceButton(part, documentRef));
+      continue;
+    }
     if ((part?.type === 'markdown' || part?.type === 'text') && typeof part.text === 'string') {
       appendSummaryContent(container, part.text, documentRef, context);
       continue;
@@ -172,7 +176,7 @@ function stripMarkdownHint(value) {
 function looksLikeMarkdown(value) {
   const text = stripMarkdownHint(value);
   return text !== normalizeRenderableText(value)
-    || /(`[^`]+`|\*\*[^*]+\*\*|__[^_]+__|^\s*>\s+|^\s*#{1,6}\s+|^\s*\|.+\|\s*$|\n\s*\|?\s*:?-{3,}:?\s*\||\n\s*[-*+]\s+|\n\s*\d+\.\s+)/m.test(text);
+    || /(`[^`]+`|\[[^\]]+\]\([^)]+\)|\*\*[^*]+\*\*|__[^_]+__|^\s*>\s+|^\s*#{1,6}\s+|^\s*\|.+\|\s*$|\n\s*\|?\s*:?-{3,}:?\s*\||\n\s*[-*+]\s+|\n\s*\d+\.\s+)/m.test(text);
 }
 
 function appendSummaryContent(container, value, documentRef, context = {}) {
@@ -250,6 +254,33 @@ function createRenderedMarkdownFrame(markdownText, documentRef) {
   figure.append(renderPanel, codePanel, tabs);
   return figure;
 }
+
+function createIntentReferenceButton(part, documentRef) {
+  const button = documentRef.createElement('button');
+  button.type = 'button';
+  button.className = 'message-part intent-ref-part';
+  button.dataset.intent = String(part.intent);
+  button.title = [part.description, part.intent].filter(Boolean).join(' · ');
+  const label = documentRef.createElement('span');
+  label.className = 'intent-ref-label';
+  label.textContent = String(part.label ?? part.intent);
+  const token = documentRef.createElement('span');
+  token.className = 'intent-ref-token';
+  token.textContent = String(part.intent);
+  button.append(label, token);
+  button.addEventListener?.('click', async () => {
+    try {
+      await globalThis.navigator?.clipboard?.writeText?.(String(part.intent));
+      button.dataset.status = 'copied';
+    } catch {
+      button.dataset.status = 'failed';
+    }
+    globalThis.setTimeout?.(() => {
+      delete button.dataset.status;
+    }, 1200);
+  });
+  return button;
+}
 function createRenderedPartTab(label, active, documentRef) {
   const button = documentRef.createElement('button');
   button.type = 'button';
@@ -318,7 +349,7 @@ function renderMarkdownToDom(markdownText, documentRef) {
 }
 
 function appendInlineMarkdown(parent, text, documentRef) {
-  const segments = String(text ?? '').split(/(`[^`]+`)/g).filter((segment) => segment.length > 0);
+  const segments = String(text ?? '').split(/(`[^`]+`|\[[^\]]+\]\([^)]+\))/g).filter((segment) => segment.length > 0);
   for (const segment of segments) {
     if (/^`[^`]+`$/.test(segment)) {
       const code = documentRef.createElement('code');
@@ -326,8 +357,56 @@ function appendInlineMarkdown(parent, text, documentRef) {
       parent.append(code);
       continue;
     }
+    if (/^\[[^\]]+\]\([^)]+\)$/.test(segment)) {
+      parent.append(createInlineMarkdownLink(segment, documentRef));
+      continue;
+    }
     parent.append(documentRef.createTextNode(segment));
   }
+}
+
+function createInlineMarkdownLink(segment, documentRef) {
+  const match = segment.match(/^\[([^\]]+)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)$/);
+  if (!match) return documentRef.createTextNode(segment);
+  const label = match[1] ?? '';
+  const href = match[2] ?? '';
+  const title = match[3] ?? '';
+  const intent = intentFromHref(href);
+  if (intent) return createMarkdownIntentButton({ intent, label, title }, documentRef);
+  const link = documentRef.createElement('a');
+  link.href = href;
+  link.target = '_blank';
+  link.rel = 'noreferrer';
+  if (title) link.title = title;
+  link.textContent = label || href;
+  return link;
+}
+
+function createMarkdownIntentButton({ intent, label, title }, documentRef) {
+  const button = documentRef.createElement('button');
+  button.type = 'button';
+  button.className = 'message-part markdown-intent-button';
+  button.dataset.intent = intent;
+  if (title) button.title = title;
+  button.append(documentRef.createTextNode(label || intent));
+  button.addEventListener?.('click', async () => {
+    try {
+      await globalThis.navigator?.clipboard?.writeText?.(intent);
+      button.dataset.status = 'copied';
+    } catch {
+      button.dataset.status = 'failed';
+    }
+    globalThis.setTimeout?.(() => {
+      delete button.dataset.status;
+    }, 1200);
+  });
+  return button;
+}
+
+function intentFromHref(href) {
+  const value = String(href ?? '').trim();
+  const intent = value.match(/^(?:narada-)?intent:(.+)$/i)?.[1]?.trim() ?? '';
+  return intent || null;
 }
 
 function tryParseMarkdownTable(lines, startIndex, documentRef) {

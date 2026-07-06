@@ -176,7 +176,7 @@ test('session command execution uses the shared command contract aliases', async
     assert.equal(results.some((event) => event.request_id === 'model-override' && event.fields?.model === 'gpt-override'), true);
     assert.equal(results.some((event) => event.request_id === 'thinking-override' && event.fields?.thinking === 'high'), true);
     const status = results.find((event) => event.request_id === 'status-after-override')?.fields?.session_status;
-    assert.deepEqual(status?.intelligence, { provider: 'codex-subscription', model: 'gpt-override', thinking: 'high', stream: false });
+    assert.deepEqual(status?.intelligence, { provider: 'codex-subscription', model: 'gpt-override', available_models: ['gpt-5.5'], thinking: 'high', stream: false });
     assert.equal(status?.model, 'gpt-override');
     assert.equal(status?.thinking, 'high');
   } finally {

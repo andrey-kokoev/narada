@@ -84,6 +84,12 @@ export function buildRuntimeHealthPosture(result) {
         supports_replay: Boolean(events.supports_replay),
         locality: events.locality ?? null,
       } : null,
+      authority: result.runtime_authority_selection ? {
+        status: result.runtime_authority_selection.effective === 'write' ? 'write_delegated' : 'read_only',
+        requested: result.runtime_authority_selection.requested ?? null,
+        effective: result.runtime_authority_selection.effective ?? null,
+        source: result.runtime_authority_selection.source ?? null,
+      } : null,
     },
     projection: {
       operator_surface_kind: result.carrier_kind ?? null,
@@ -151,6 +157,7 @@ export function buildLauncherContracts(result) {
       carrier_kind: result.carrier_kind ?? null,
       runtime: result.runtime ?? null,
       runtime_substrate_kind: result.runtime_substrate_kind ?? null,
+      runtime_authority_selection: result.runtime_authority_selection ?? null,
       intelligence_provider: result.intelligence_provider ?? null,
       mcp_scope: result.mcp_scope?.requested ?? null,
       target_site_root: result.target_site_root ?? null,
@@ -202,4 +209,3 @@ export function buildLauncherContracts(result) {
     } : null,
   };
 }
-

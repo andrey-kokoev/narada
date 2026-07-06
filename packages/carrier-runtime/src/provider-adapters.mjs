@@ -240,11 +240,12 @@ function extractJsonObject(text) {
 function buildOpenAiChatRequest(messages, tools, options = {}) {
   const { baseUrl = providerAdapterContext.baseUrl, model = providerAdapterContext.model, apiKey = providerAdapterContext.apiKey, thinking = providerAdapterContext.thinking, provider = providerAdapterContext.provider, openrouterSiteUrl = providerAdapterContext.openrouterSiteUrl, openrouterTitle = providerAdapterContext.openrouterTitle } = options;
   const isKimiProvider = provider === 'kimi-api' || provider === 'kimi-code-api';
+  const requestTools = normalizeOpenAiCompatibleTools(tools, { provider });
   const body = {
     model,
     messages: cleanOpenAiMessages(messages),
-    tools: tools.length > 0 ? tools : undefined,
-    tool_choice: tools.length > 0 ? 'auto' : undefined,
+    tools: requestTools.length > 0 ? requestTools : undefined,
+    tool_choice: requestTools.length > 0 ? 'auto' : undefined,
     temperature: isKimiProvider ? 1 : 0.2,
   };
   const effort = reasoningEffort(thinking);
@@ -276,6 +277,58 @@ function buildOpenAiChatRequest(messages, tools, options = {}) {
     body,
     headers,
   };
+}
+
+function normalizeOpenAiCompatibleTools(tools = [], { provider = providerAdapterContext.provider } = {}) {
+  if (!Array.isArray(tools) || tools.length === 0) return [];
+  if (provider !== 'kimi-api' && provider !== 'kimi-code-api') return tools;
+  return tools.map((tool) => {
+    const fn = tool?.function;
+    if (!fn || typeof fn !== 'object') return tool;
+    return {
+      ...tool,
+      function: {
+        ...fn,
+        parameters: normalizeKimiToolParameters(fn.parameters ?? { type: 'object', properties: {} }),
+      },
+    };
+  });
+}
+
+function normalizeKimiToolParameters(schema) {
+  const normalized = normalizeKimiJsonSchema(schema);
+  if (!normalized || typeof normalized !== 'object' || Array.isArray(normalized)) return { type: 'object', properties: {} };
+  if (Array.isArray(normalized.anyOf)) return flattenKimiRootAnyOf(normalized);
+  return { ...normalized, type: 'object' };
+}
+
+function flattenKimiRootAnyOf(schema) {
+  const properties = { ...(schema.properties && typeof schema.properties === 'object' && !Array.isArray(schema.properties) ? schema.properties : {}) };
+  for (const branch of schema.anyOf) {
+    if (!branch || typeof branch !== 'object' || Array.isArray(branch)) continue;
+    if (branch.properties && typeof branch.properties === 'object' && !Array.isArray(branch.properties)) Object.assign(properties, branch.properties);
+  }
+  const { anyOf, oneOf, allOf, type, required, ...rest } = schema;
+  return {
+    ...rest,
+    type: 'object',
+    properties,
+  };
+}
+
+function normalizeKimiJsonSchema(schema) {
+  if (Array.isArray(schema)) return schema.map((item) => normalizeKimiJsonSchema(item));
+  if (!schema || typeof schema !== 'object') return schema;
+  const normalized = Object.fromEntries(Object.entries(schema).map(([key, value]) => [key, normalizeKimiJsonSchema(value)]));
+  if (Array.isArray(normalized.anyOf) && normalized.type !== undefined) {
+    const parentType = normalized.type;
+    delete normalized.type;
+    normalized.anyOf = normalized.anyOf.map((item) => {
+      if (!item || typeof item !== 'object' || Array.isArray(item) || item.type !== undefined) return item;
+      return { type: parentType, ...item };
+    });
+  }
+  return normalized;
 }
 
 function cleanOpenAiMessages(messages) {

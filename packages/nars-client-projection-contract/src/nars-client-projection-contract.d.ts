@@ -61,6 +61,7 @@ export interface NarsClientProjection {
 
 export function isAgentWebUiNarsMethod(method: unknown): boolean;
 export function buildNarsArtifactRefPart(input?: object): object | null;
+export function buildNarsIntentRefPart(input?: object): object | null;
 export function buildAgentWebUiConversationEnqueueFrame(text: unknown, options?: object): object | null;
 export function buildAgentWebUiEventsReadFrame(options?: object): object;
 export function buildAgentWebUiSurfaceAffordancesFrame(options?: object): object;

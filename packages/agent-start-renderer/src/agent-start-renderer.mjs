@@ -122,6 +122,10 @@ export function formatAgentStartResult(result, options = {}) {
   if (canonicalSessionId) {
     launchSummaryLines.push(line('nars_session_id', canonicalSessionId, colorEnabled));
   }
+  if (result.runtime_authority_selection) {
+    const selection = result.runtime_authority_selection;
+    launchSummaryLines.push(line('runtime_authority', `${selection.effective ?? '<unknown>'} (requested ${selection.requested ?? '<unknown>'})`, colorEnabled));
+  }
   lines.push(...section('launch_summary', launchSummaryLines, colorEnabled));
 
   if (result.capability_policy) {

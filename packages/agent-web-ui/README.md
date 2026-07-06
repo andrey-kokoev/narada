@@ -6,6 +6,8 @@ This package is a client surface. It does not construct runtime dependencies, ho
 
 The shared slash-command model is documented in `docs/concepts/nars-client-projection-contract.md#operator-slash-command-projection`. This package owns browser palette rendering and local browser effects; it does not own the NARS command vocabulary or runtime command dispatch.
 
+Message content keeps prose and operator affordances separate. Canonical renderable content parts are `text`, `markdown`, `code`, `artifact_ref`, and `intent_ref`. `intent_ref` is a structured action hint, not hidden prose, and the browser shell renders it as a clickable intent button that copies the intent token for reuse. The canonical builder for that shape lives in `buildNarsIntentRefPart` from `@narada2/nars-client-projection-contract`. For compatibility, markdown links that use the narrow `intent:` or `narada-intent:` scheme are rendered as the same button affordance inside markdown tables and paragraphs. This is a compatibility bridge, not the canonical content shape.
+
 The browser shell is Vue 3 + Vite. Components are Narada-native and styled in the shadcn-vue spirit: small explicit primitives over Narada concepts such as NARS session status, projection verbosity, transcript rows, diagnostics, raw event details, and operator input. NARS protocol projection remains framework-neutral.
 
 ## Run

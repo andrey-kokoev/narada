@@ -11,6 +11,7 @@ test('formats agent-start preamble with redacted API keys and startup sequence',
     runtime: 'narada-agent-runtime-server',
     runtime_substrate_kind: 'narada-agent-runtime-server',
     resume_command: 'agent-cli',
+    runtime_authority_selection: { requested: 'auto', effective: 'write', source: 'default' },
     capability_policy: {
       direct_substrate_script_execution: 'forbidden',
       script_execution_surface: 'mcp_only',
@@ -73,6 +74,7 @@ test('formats agent-start preamble with redacted API keys and startup sequence',
   assert.match(text, /agent_start_event: evt_1/);
   assert.match(text, /identity: site\.builder/);
   assert.match(text, /nars_session_id: carrier_runtime_1/);
+  assert.match(text, /runtime_authority: write \(requested auto\)/);
   assert.match(text, /legacy_compatibility_environment:/);
   assert.match(text, /NARADA_CARRIER_SESSION_ID=carrier_runtime_1/);
   assert.match(text, /KIMI_API_KEY=<set>/);

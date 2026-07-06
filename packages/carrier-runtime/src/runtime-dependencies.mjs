@@ -80,6 +80,7 @@ import {
 } from './authority-transition-state.mjs';
 import { serverAffordanceActionCancel, serverAffordanceActionConfirm, serverAffordanceActionRequest } from './affordance-actions.mjs';
 import { buildDelegationOperatorAffordance, buildGitOperatorAffordance, buildInboxOperatorAffordance, buildMailboxOperatorAffordance, buildNarsSurfaceAffordanceProjection, buildSchedulerOperatorAffordance, buildSopOperatorAffordance, buildSurfaceFeedbackOperatorAffordance, buildTaskLifecycleOperatorAffordance } from './surface-affordances.mjs';
+import { runtimeAuthorityPostureFromHandoff } from './runtime-authority-posture.mjs';
 import { agentInstructionChain, loadRolePrompt } from './agent-instructions.mjs';
 import { loadSession } from './session-records.mjs';
 import {
@@ -1243,7 +1244,7 @@ function recordWorkflowRequest(context = {}, event, { requestId = null, method =
   });
 }
 
-async function runServerInputEvent({ requestId, state, messages, allTools, mcpServers, emit, callChatApiFn, input, directiveId = null, identity, session, siteRoot, sessionPath, appendSessionRecord, providerSettings }) {
+async function runServerInputEvent({ requestId, state, messages, allTools, mcpServers, emit, callChatApiFn, input, directiveId = null, identity, session, siteRoot, sessionPath, appendSessionRecord, providerSettings, delegatedAuthorityHandoff = null }) {
   const runtimeAdmission = classifyCarrierInputAdmission(input);
   if (isObserverInputEvent(input) && runtimeAdmission.complete_without_provider) {
     noteSessionActivity(state, 'observer_input_complete', new Date().toISOString(), 'completed_without_provider');
@@ -1268,10 +1269,10 @@ async function runServerInputEvent({ requestId, state, messages, allTools, mcpSe
     });
     return { terminal_state: 'completed_without_provider' };
   }
-  return runServerConversationTurn({ requestId, state, messages, allTools, mcpServers, emit, callChatApiFn, input, directiveId, identity, session, siteRoot, sessionPath, appendSessionRecord, providerSettings: effectiveTurnProviderSettings({ state, providerSettings }) });
+  return runServerConversationTurn({ requestId, state, messages, allTools, mcpServers, emit, callChatApiFn, input, directiveId, identity, session, siteRoot, sessionPath, appendSessionRecord, providerSettings: effectiveTurnProviderSettings({ state, providerSettings }), delegatedAuthorityHandoff });
 }
 
-async function runServerConversationTurn({ requestId, state, messages, allTools, mcpServers, emit, callChatApiFn, input, directiveId = null, identity, session, siteRoot, appendSessionRecord, providerSettings }) {
+async function runServerConversationTurn({ requestId, state, messages, allTools, mcpServers, emit, callChatApiFn, input, directiveId = null, identity, session, siteRoot, appendSessionRecord, providerSettings, delegatedAuthorityHandoff = null }) {
   const turnId = `turn_${randomId()}`;
   const turn = createTurn(turnId, requestId);
   const record = normalizeInputRecord(input);
@@ -1301,6 +1302,7 @@ async function runServerConversationTurn({ requestId, state, messages, allTools,
       siteRoot,
       appendSessionRecord,
       providerSettings,
+      delegatedAuthorityHandoff,
     });
     const terminalState = turn.interruptRequested ? 'interrupted' : (result?.terminal_state ?? 'completed');
     emit(terminalState === 'failed' ? 'turn_failed' : 'turn_complete', {
@@ -2178,13 +2180,16 @@ function stringArrayValue(value) {
 }
 
 function serverSurfaceAffordances({ requestId, context = {} }) {
+  const runtimeAuthorityPosture = runtimeAuthorityPostureFromHandoff(context.narsDelegatedAuthorityHandoff ?? context.delegatedAuthorityHandoff ?? null);
   return {
     event: 'session_surface_affordances',
     request_id: requestId,
     transport: 'jsonl_stdio',
+    runtime_authority_posture: runtimeAuthorityPosture,
     ...buildNarsSurfaceAffordanceProjection({
       mcpServers: context.mcpServers ?? {},
       intelligence: context.effectiveIntelligence?.() ?? effectiveIntelligenceSettings({ sessionSettings: context.state?.sessionSettings, providerSettings: context.providerSettings }),
+      runtimeAuthorityPosture,
     }),
   };
 }
@@ -3026,7 +3031,9 @@ export function serverStatus({ requestId, state, allTools, mcpServers, mcpPrefli
   const goal = normalizeCarrierGoalState(carrierSessionSettings.goal);
   const intelligence = effectiveIntelligenceSettings({ sessionSettings: carrierSessionSettings, providerSettings: context.providerSettings });
   const mcpStatus = createMcpStatusSnapshot(mcpServers);
-  const surfaceAffordances = buildNarsSurfaceAffordanceProjection({ mcpServers, intelligence });
+  const delegatedAuthorityHandoff = context.narsDelegatedAuthorityHandoff ?? context.delegatedAuthorityHandoff ?? null;
+  const runtimeAuthorityPosture = runtimeAuthorityPostureFromHandoff(delegatedAuthorityHandoff);
+  const surfaceAffordances = buildNarsSurfaceAffordanceProjection({ mcpServers, intelligence, runtimeAuthorityPosture });
   const handoffs = sessionHandoffs({ identity: context.identity, session: context.session });
   return {
     request_id: requestId,
@@ -3054,8 +3061,10 @@ export function serverStatus({ requestId, state, allTools, mcpServers, mcpPrefli
     mcp_tools: mcpToolCatalogEntries(mcpServers),
     mcp_servers: mcpServerSummaryEntries(mcpServers),
     surface_affordances: surfaceAffordances,
-    delegated_authority_handoff: context.narsDelegatedAuthorityHandoff ?? context.delegatedAuthorityHandoff ?? null,
-    delegated_authority_ref: (context.narsDelegatedAuthorityHandoff ?? context.delegatedAuthorityHandoff)?.authority_ref ?? null,
+    delegated_authority_handoff: delegatedAuthorityHandoff,
+    delegated_authority_ref: delegatedAuthorityHandoff?.authority_ref ?? null,
+    runtime_authority_posture: runtimeAuthorityPosture,
+    authority_mode: runtimeAuthorityPosture.authority_mode,
     handoffs,
     recommended_command: handoffs.session_read ?? null,
     recovery_kind: createSessionActivitySnapshot(state).request_posture === 'invalid_control_traffic' ? 'invalid_control_review' : 'no_recovery',
@@ -3115,6 +3124,8 @@ function serverHealth({ requestId, state, allTools, mcpServers, mcpPreflightArti
     started_at: state?.startedAt ?? null,
     delegated_authority_handoff: status.delegated_authority_handoff,
     delegated_authority_ref: status.delegated_authority_ref,
+    runtime_authority_posture: status.runtime_authority_posture,
+    authority_mode: status.authority_mode,
     intelligence: status.intelligence,
     provider: status.provider,
     model: status.model,

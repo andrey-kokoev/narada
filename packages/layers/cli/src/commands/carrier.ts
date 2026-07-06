@@ -18,6 +18,7 @@ export interface CarrierCommandOptions {
   agent?: string;
   carrier?: string;
   runtime?: string;
+  authority?: string;
   intelligenceProvider?: string;
   mcpScope?: string;
   timeout?: number;
@@ -134,6 +135,7 @@ export async function carrierStartCommand(
       agent,
       operatorSurfaceKind: carrier,
       runtimeHostKind: runtime,
+      authority: options.authority ?? null,
       intelligenceProvider: options.intelligenceProvider ?? null,
       narsSessionId: existing.latest.nars_session_id ?? existing.latest.runtime_session_id ?? existing.latest.carrier_session_id ?? null,
       runtimeSessionId: existing.latest.runtime_session_id ?? null,
@@ -166,6 +168,7 @@ export async function carrierStartCommand(
     agent,
     carrier,
     runtime,
+    authority: options.authority,
     intelligenceProvider: options.intelligenceProvider,
     mcpScope: options.mcpScope,
     dryRun: options.dryRun ?? (!options.materializeOnly && !options.exec),
@@ -195,6 +198,7 @@ export async function carrierStartCommand(
     operator_surface: carrier,
     carrier,
     runtime,
+    authority: options.authority ?? null,
     intelligence_provider: options.intelligenceProvider ?? null,
     mcp_scope: options.mcpScope ?? 'all',
     mode: options.exec ? 'exec' : options.materializeOnly ? 'materialize_only' : 'dry_run',

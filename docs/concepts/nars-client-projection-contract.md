@@ -118,6 +118,61 @@ Provider events are not canonical conversation. This includes nested provider ev
 
 Those events may describe what the provider streamed or completed, but the operator-facing conversation row is the lifecycle `assistant_message` emitted by NARS.
 
+## Message Content And Intent Affordances
+
+Projected rows may contain structured content parts instead of a single opaque string. The contract treats message content as presentation-neutral payload, and clients decide how to render each part. This applies to the `summary` field of projected rows, not just chat rows; a row may still be classified as `conversation`, `operations`, or `diagnostics` while carrying structured content.
+
+Supported content part types at the projection boundary are:
+
+- `text` or `markdown` - narrative content, including markdown tables and code fences;
+- `code` - preformatted code or raw payload text;
+- `artifact_ref` - a reference card for a registered artifact;
+- `intent_ref` - a structured operator affordance that names an intent and may carry label, description, target, action, and structured arguments.
+
+`intent_ref` is the canonical structured affordance shape. It is not hidden prose, and it is not a provider prompt. Clients may render it as a button, chip, or similar operator control. Clicking an `intent_ref` is a local reuse affordance unless a client explicitly documents a different local behavior; it does not itself imply NARS execution. In the current browser projection, the reuse action is copy-to-clipboard.
+
+Producers should construct canonical intent references with the shared contract helper `buildNarsIntentRefPart` from `@narada2/nars-client-projection-contract` rather than inventing an ad hoc shape.
+
+Compatibility bridge:
+
+- When markdown contains a link with the narrow `intent:` or `narada-intent:` scheme, clients may render that link as the same intent affordance control.
+- The current agent-web-ui renderer and legacy DOM renderer both honor this compatibility bridge.
+- Ordinary HTTP/HTTPS links remain ordinary links.
+- The markdown bridge exists for compatibility and operator ergonomics; it is not the canonical message-content shape.
+
+The target invariant is:
+
+- prose stays prose;
+- actions stay typed;
+- a renderer may decorate or place the affordance, but it must not have to infer action intent from arbitrary prose.
+
+### Intent Reference Schema
+
+Canonical intent references should follow this shape:
+
+```json
+{
+  "type": "intent_ref",
+  "intent": "entity_number:dismiss",
+  "label": "Dismiss",
+  "description": "Dismiss the selected entity number row.",
+  "target": "entity_number",
+  "action": "dismiss",
+  "args": {
+    "entity_number": 4
+  }
+}
+```
+
+Field rules:
+
+- `intent` is required and is the stable token the operator may reuse.
+- `label` is optional and is the human-facing text.
+- `description` is optional and explains the effect in one sentence.
+- `target` and `action` are optional structural hints for clients that want to group or display commands.
+- `args` is optional structured JSON and must remain machine-readable.
+- Clients must not infer semantics from the label alone.
+
 ## Event Classes
 
 Projection class controls default visibility.

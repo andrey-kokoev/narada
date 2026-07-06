@@ -104,6 +104,32 @@ function publishScenarioEvents(eventHub, scenario) {
     eventHub.publish({ ...base, event: 'assistant_message', request_id: 'input_raw', content: 'Startup sequence completed.' });
     return;
   }
+  if (scenario === 'confirmation') {
+    eventHub.publish({ ...base, event: 'operator_input_submitted', request_id: 'input_confirm', content: 'Run unsafe affordance actions' });
+    eventHub.publish({
+      ...base,
+      event: 'session_affordance_confirmation_required',
+      request_id: 'unsafe_action_1',
+      confirmation_id: 'confirm-browser-1',
+      surface_id: 'fixture.filesystem',
+      action_id: 'delete_temp_output',
+      terminal_state: 'awaiting_confirmation',
+      status: 'confirmation_required',
+      message: 'This affordance action requires explicit confirmation before execution.',
+    });
+    eventHub.publish({
+      ...base,
+      event: 'session_affordance_confirmation_required',
+      request_id: 'unsafe_action_2',
+      confirmation_id: 'confirm-browser-2',
+      surface_id: 'fixture.mail',
+      action_id: 'send_draft',
+      terminal_state: 'awaiting_confirmation',
+      status: 'confirmation_required',
+      message: 'Sending a draft requires operator confirmation.',
+    });
+    return;
+  }
   eventHub.publish({ ...base, event: 'operator_input_submitted', request_id: 'input_normal', content: 'Run startup sequence' });
   eventHub.publish({ ...base, event: 'tool_call', request_id: 'input_normal', tool_name: 'narada-sonar-agent-context.agent_context_startup_sequence' });
   eventHub.publish({ ...base, event: 'tool_result', request_id: 'input_normal', tool_name: 'narada-sonar-agent-context.agent_context_startup_sequence', status: 'ok' });
@@ -123,12 +149,28 @@ async function withScenarioServer(scenario, fn) {
   }
 
   const childStdin = new PassThrough();
+  const inputFrames = [];
+  let inputBuffer = '';
+  childStdin.setEncoding('utf8');
+  childStdin.on('data', (chunk) => {
+    inputBuffer += String(chunk);
+    const lines = inputBuffer.split(/\r?\n/);
+    inputBuffer = lines.pop() ?? '';
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      try {
+        inputFrames.push(JSON.parse(line));
+      } catch {
+        inputFrames.push({ parse_error: line });
+      }
+    }
+  });
   const eventHub = createEventHub();
   const eventProjection = await startEventStreamProjection({ childStdin, eventHub, host: '127.0.0.1', port: 0 });
   return withHealthServer(async (healthUrl) => {
     const web = await startAgentWebUiServer({ host: '127.0.0.1', port: 0, eventEndpoint: eventProjection.url, healthEndpoint: healthUrl });
     try {
-      return await fn(web.url, () => publishScenarioEvents(eventHub, scenario));
+      return await fn(web.url, () => publishScenarioEvents(eventHub, scenario), inputFrames);
     } finally {
       web.server.close();
       eventProjection.server.close();
@@ -310,7 +352,7 @@ const SUBMIT_SCROLL_ASSERTION_SCRIPT = String.raw`(async () => {
 })()`;
 
 async function runScenarioViewport({ browserPath, scenario, viewport, outDir }) {
-  return withScenarioServer(scenario.name, async (url, publishEvents = () => {}) => {
+  return withScenarioServer(scenario.name, async (url, publishEvents = () => {}, inputFrames = []) => {
     const page = await openCdpPage({ browserPath, url, viewport, workDir: outDir });
     try {
       if (scenario.view) {
@@ -343,6 +385,41 @@ async function runScenarioViewport({ browserPath, scenario, viewport, outDir }) 
         await new Promise((resolve) => setTimeout(resolve, 250));
         await page.evaluate("document.querySelector('.operator-snippet-trigger')?.click()");
         await new Promise((resolve) => setTimeout(resolve, 250));
+      }
+      if (scenario.name === 'confirmation') {
+        const actionResult = await page.evaluate(String.raw`(async () => {
+          let panel = null;
+          let items = [];
+          const started = Date.now();
+          while (Date.now() - started < 3000) {
+            panel = document.querySelector('.affordance-confirmations');
+            items = [...document.querySelectorAll('.affordance-confirmation-item')];
+            if (panel && items.length >= 2) break;
+            await new Promise((resolve) => setTimeout(resolve, 100));
+          }
+          const textBefore = document.body.textContent;
+          const confirm = items[0]?.querySelector('.affordance-confirmation-confirm');
+          const cancel = items[1]?.querySelector('.affordance-confirmation-cancel');
+          confirm?.click();
+          cancel?.click();
+          await new Promise((resolve) => setTimeout(resolve, 300));
+          return {
+            panelVisible: Boolean(panel && panel.getBoundingClientRect().height > 0),
+            itemCount: items.length,
+            textBefore,
+            confirmText: confirm?.textContent ?? null,
+            cancelText: cancel?.textContent ?? null,
+          };
+        })()`);
+        assert.equal(actionResult.panelVisible, true, `${scenario.name}/${viewport.name}: expected confirmation panel to be visible: ${actionResult.textBefore}`);
+        assert.equal(actionResult.itemCount, 2, `${scenario.name}/${viewport.name}: expected two pending confirmations: ${actionResult.textBefore}`);
+        assert.match(actionResult.textBefore, /Confirmation Required[\s\S]*fixture\.filesystem \/ delete_temp_output/i);
+        assert.match(actionResult.textBefore, /fixture\.mail \/ send_draft/i);
+        assert.match(actionResult.confirmText ?? '', /Confirm/);
+        assert.match(actionResult.cancelText ?? '', /Cancel/);
+        await new Promise((resolve) => setTimeout(resolve, 250));
+        assert.ok(inputFrames.some((frame) => frame.method === 'session.affordance.action.confirm' && frame.params?.confirmation_id === 'confirm-browser-1'), `${scenario.name}/${viewport.name}: expected confirm frame, got ${JSON.stringify(inputFrames)}`);
+        assert.ok(inputFrames.some((frame) => frame.method === 'session.affordance.action.cancel' && frame.params?.confirmation_id === 'confirm-browser-2'), `${scenario.name}/${viewport.name}: expected cancel frame, got ${JSON.stringify(inputFrames)}`);
       }
       const screenshotPath = join(outDir, `${scenario.name}-${viewport.name}.png`);
       await page.screenshot(screenshotPath);
@@ -386,6 +463,10 @@ async function runScenarioViewport({ browserPath, scenario, viewport, outDir }) 
         assert.match(result.text, /Snippets[\s\S]*Browser\/operator local saved inputs/i, 'expected snippets drawer to be visible');
         assert.match(result.text, /ux-drawer[\s\S]*First reusable operator instruction/i, 'expected saved snippet to render in drawer');
       }
+      if (scenario.name === 'confirmation') {
+        assert.match(result.text, /Confirmation Required[\s\S]*fixture\.filesystem \/ delete_temp_output/i, 'expected confirmation panel to show filesystem action');
+        assert.match(result.text, /fixture\.mail \/ send_draft/i, 'expected confirmation panel to show mail action');
+      }
       return screenshotPath;
     } finally {
       await page.close();
@@ -405,6 +486,7 @@ test('agent-web-ui UX smoke matrix has no obvious layout regressions', async () 
     { name: 'thinking' },
     { name: 'disconnected' },
     { name: 'markdown' },
+    { name: 'confirmation' },
     { name: 'operations', view: 'operations' },
     { name: 'diagnostics', view: 'diagnostics' },
     { name: 'raw', view: 'raw' },

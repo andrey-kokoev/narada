@@ -14,7 +14,7 @@
  * with NARADA_AGENT_ID and NARADA_AGENT_START_EVENT_ID in the environment.
  *
  * Usage:
- *   narada-agent-start <identity> [--operator-surface <surface>] [--carrier <legacy-carrier>] [--runtime <runtime>] [--db <path>] [--json] [--dry-run] [--exec] [--wait] [--yolo] [--enable-native-shell] [--target-site-id <site-id>] [--target-site-root <path>]
+ *   narada-agent-start <identity> [--operator-surface <surface>] [--carrier <legacy-carrier>] [--runtime <runtime>] [--authority <auto|read|write>] [--db <path>] [--json] [--dry-run] [--exec] [--wait] [--yolo] [--enable-native-shell] [--target-site-id <site-id>] [--target-site-root <path>]
  */
 
 import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
@@ -247,6 +247,23 @@ function normalizeIntelligenceProvider(value, carrierName, inputSource = { sourc
   });
 }
 
+function resolveRuntimeAuthority(value, carrierName) {
+  const normalized = String(value ?? process.env.NARADA_RUNTIME_AUTHORITY ?? 'auto').trim().toLowerCase();
+  if (!['auto', 'read', 'write'].includes(normalized)) {
+    throw new Error(`runtime_authority_not_admitted: ${normalized}. Admitted values: auto, read, write`);
+  }
+  const narsOperatorSurface = carrierName === AGENT_CLI_CARRIER_KIND || carrierName === 'agent-web-ui';
+  const effective = normalized === 'auto'
+    ? (narsOperatorSurface ? 'write' : 'read')
+    : normalized;
+  return {
+    schema: 'narada.runtime_authority_selection.v1',
+    requested: normalized,
+    effective,
+    source: value ? 'launch_argument' : process.env.NARADA_RUNTIME_AUTHORITY ? 'environment' : 'default',
+  };
+}
+
 function codexSubscriptionPreflight(provider) {
   return runCodexSubscriptionPreflight(provider, {
     processEnv: process.env,
@@ -353,6 +370,7 @@ if (runtimeResolution.status === 'refused') {
 }
 const runtime = runtimeResolution.runtime_substrate_kind;
 const carrier = runtimeResolution.carrier_kind;
+const runtimeAuthoritySelection = resolveRuntimeAuthority(args.authority, carrier);
 const intelligenceProviderArgInput = args.intelligence_provider ?? null;
 const intelligenceProviderEnvInput = carrier === AGENT_CLI_CARRIER_KIND || carrier === 'agent-web-ui' ? process.env.NARADA_INTELLIGENCE_PROVIDER : null;
 const intelligenceProviderInput = intelligenceProviderArgInput ?? intelligenceProviderEnvInput ?? null;
@@ -366,7 +384,7 @@ if (intelligenceProviderResolution?.status === 'refused') {
 }
 
 if (!identity) {
-  console.error('Usage: node start-agent.mjs <identity> [--operator-surface <surface>] [--carrier <legacy-carrier>] [--runtime <runtime>] [--db <path>] [--json] [--dry-run] [--exec] [--wait] [--yolo] [--enable-native-shell] [--target-site-id <site-id>] [--target-site-root <path>]');
+  console.error('Usage: node start-agent.mjs <identity> [--operator-surface <surface>] [--carrier <legacy-carrier>] [--runtime <runtime>] [--authority <auto|read|write>] [--db <path>] [--json] [--dry-run] [--exec] [--wait] [--yolo] [--enable-native-shell] [--target-site-id <site-id>] [--target-site-root <path>]');
   process.exit(1);
 }
 
@@ -864,6 +882,7 @@ function buildSpawnArgs(carrierName, identity, carrierSessionRegistration = null
     piModel: process.env.NARADA_PI_MODEL ?? DEFAULT_PI_MODEL,
     claudeCodeMcpConfig,
     claudeCodeModel: process.env.NARADA_CLAUDE_CODE_MODEL ?? DEFAULT_CLAUDE_CODE_MODEL,
+    runtimeAuthority: runtimeAuthoritySelection.effective,
   });
 }
 
@@ -1012,7 +1031,10 @@ if (carrier !== 'kimi' && carrier !== 'opencode') {
 const spawnArgs = buildSpawnArgs(carrier, identity, carrierSessionRegistration);
 const toolFabricAdapter = resolveToolFabricAdapter(carrier, runtime);
 const execCommand = [resolveCarrierExecutableCommand(carrier), ...spawnArgs.map(shellQuote)].join(' ');
-const carrierEnvironment = carrierSessionRegistration.environment ?? {};
+const carrierEnvironment = {
+  ...(carrierSessionRegistration.environment ?? {}),
+  NARADA_RUNTIME_AUTHORITY: runtimeAuthoritySelection.effective,
+};
 const agentTuiEnvironment = agentTuiTerminalEnvironment();
 const mcpProviderCredentialEnv = mcpProviderCredentialEnvironment();
 const codexMcpScope = codexMcpScopeProjection();
@@ -1104,6 +1126,7 @@ const output = {
     resolution: mcpScopeResolution,
     enforcement: codexMcpScope,
   },
+  runtime_authority_selection: runtimeAuthoritySelection,
   intelligence_provider_contract_schema: INTELLIGENCE_PROVIDER_CONTRACT_SCHEMA,
   intelligence_provider: intelligenceProviderOutputResolution?.intelligence_provider ?? null,
   intelligence_provider_resolution: intelligenceProviderOutputResolution,

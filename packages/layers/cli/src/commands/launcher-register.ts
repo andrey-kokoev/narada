@@ -19,6 +19,7 @@ export function registerLauncherCommands(program: Command): void {
     .option('--registry-path <path>', 'Launch registry path')
     .option('--operator-surface <surface>', 'Override operator/client surface')
     .option('--runtime <runtime>', 'Override runtime implementation')
+    .option('--authority <mode>', 'Runtime mutation authority posture: auto|read|write', 'auto')
     .option('--intelligence-provider <provider>', 'NARS operator-surface intelligence provider')
     .option('--mcp-scope <scope>', 'MCP injection scope: all|host|user-site|local-site|none', 'all')
     .option('--cloudflare-api-base-url <url>', 'Default Cloudflare NARS projection Worker URL for agent-web-ui publish controls')
@@ -52,6 +53,7 @@ export function registerLauncherCommands(program: Command): void {
         registryPath: opts.registryPath as string | undefined,
         operatorSurface: opts.operatorSurface as string | undefined,
         runtime: opts.runtime as string | undefined,
+        authority: opts.authority as string | undefined,
         intelligenceProvider: opts.intelligenceProvider as string | undefined,
         mcpScope: opts.mcpScope as string | undefined,
         cloudflareApiBaseUrl: opts.cloudflareApiBaseUrl as string | undefined,
@@ -80,6 +82,7 @@ export function registerLauncherCommands(program: Command): void {
     .option('--registry-path <path>', 'Launch registry path')
     .option('--operator-surface <surface>', 'Override operator/client surface')
     .option('--runtime <runtime>', 'Override runtime implementation')
+    .option('--authority <mode>', 'Runtime mutation authority posture: auto|read|write', 'auto')
     .option('--intelligence-provider <provider>', 'NARS operator-surface intelligence provider')
     .option('--mcp-scope <scope>', 'MCP injection scope: all|host|user-site|local-site|none', 'all')
     .option('--cloudflare-api-base-url <url>', 'Default Cloudflare NARS projection Worker URL for agent-web-ui publish controls')
@@ -114,6 +117,7 @@ export function registerLauncherCommands(program: Command): void {
         registryPath: opts.registryPath as string | undefined,
         operatorSurface: opts.operatorSurface as string | undefined,
         runtime: opts.runtime as string | undefined,
+        authority: opts.authority as string | undefined,
         intelligenceProvider: opts.intelligenceProvider as string | undefined,
         mcpScope: opts.mcpScope as string | undefined,
         cloudflareApiBaseUrl: opts.cloudflareApiBaseUrl as string | undefined,
