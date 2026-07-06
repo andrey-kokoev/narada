@@ -6,6 +6,7 @@ import {
   NARS_AUTHORITY_RUNTIME_HOST_TRANSITION_STATES,
   NARS_AUTHORITY_RUNTIME_SOURCE_WRITE_ADMISSIONS,
 } from '@narada2/carrier-protocol';
+import { buildAgentIdentityRef, normalizeAgentIdentityRef } from '@narada2/agent-identity';
 import { narsSessionsRootFromSiteRoot as resolveNarsSessionsRootFromSiteRoot } from '@narada2/site-paths';
 
 export const NARS_SESSION_INDEX_RECORD_SCHEMA = 'narada.nars.session_index_record.v1';
@@ -210,6 +211,9 @@ function buildSessionIndexRecord({ sessionStartedEvent, sessionPath, siteRoot, p
     NARS_SESSION_AUTHORITY_RUNTIME_HOST.LOCAL,
   );
   const authorityEpoch = normalizeAuthorityEpoch(sessionStartedEvent.authority_epoch, 1);
+  const siteId = sessionStartedEvent.site_id ?? inferSiteId({ siteRoot: resolvedSiteRoot, agentId: sessionStartedEvent.agent_id });
+  const agentIdentityRef = normalizeAgentIdentityRef(sessionStartedEvent.agent_identity_ref)
+    ?? (sessionStartedEvent.agent_id ? buildAgentIdentityRef(sessionStartedEvent.agent_id, sessionStartedEvent.role ?? null, siteId) : null);
   return {
     schema: NARS_SESSION_INDEX_RECORD_SCHEMA,
     session_id: sessionId,
@@ -219,7 +223,8 @@ function buildSessionIndexRecord({ sessionStartedEvent, sessionPath, siteRoot, p
     derived_from_event: 'session_started',
     projection_generated_at: generatedAt,
     agent_id: sessionStartedEvent.agent_id ?? null,
-    site_id: sessionStartedEvent.site_id ?? inferSiteId({ siteRoot: resolvedSiteRoot, agentId: sessionStartedEvent.agent_id }),
+    agent_identity_ref: agentIdentityRef,
+    site_id: siteId,
     site_id_source: sessionStartedEvent.site_id
       ? NARS_SESSION_SITE_ID_SOURCE.SESSION_STARTED
       : NARS_SESSION_SITE_ID_SOURCE.DERIVED_FROM_SITE_ROOT_OR_AGENT_ID,
@@ -258,6 +263,7 @@ function toAggregateEntry(record) {
     nars_session_id: record.nars_session_id ?? record.session_id,
     carrier_session_id: record.carrier_session_id ?? record.session_id,
     agent_id: record.agent_id ?? null,
+    agent_identity_ref: normalizeAgentIdentityRef(record.agent_identity_ref),
     site_id: record.site_id ?? null,
     site_id_source: record.site_id_source ?? null,
     session_dir: record.session_dir,

@@ -65,6 +65,10 @@ importers:
       '@narada2/mcp-fabric':
         specifier: workspace:*
         version: link:../narada/packages/mcp-fabric
+    devDependencies:
+      '@narada2/agent-runtime-server':
+        specifier: workspace:*
+        version: link:../narada/packages/agent-runtime-server
 
   ../agent-tui: {}
 
@@ -74,29 +78,37 @@ importers:
     dependencies:
       '@narada2/mcp-transport':
         specifier: workspace:*
-        version: link:../mcp-transport
+        version: link:../shared/mcp-transport
 
-  ../mcp-surfaces/packages/graph-mail-mcp: {}
+  ../mcp-surfaces/packages/graph-mail-mcp:
+    dependencies:
+      '@narada2/mcp-telemetry':
+        specifier: workspace:*
+        version: link:../shared/mcp-telemetry
 
   ../mcp-surfaces/packages/local-filesystem-mcp:
     dependencies:
       '@narada2/mcp-transport':
         specifier: workspace:*
-        version: link:../mcp-transport
+        version: link:../shared/mcp-transport
 
   ../mcp-surfaces/packages/mailbox-mcp: {}
 
-  ../mcp-surfaces/packages/mcp-transport: {}
+  ../mcp-surfaces/packages/shared/mcp-telemetry: {}
 
   ../mcp-surfaces/packages/shared/mcp-transport: {}
 
-  ../mcp-surfaces/packages/structured-command-mcp: {}
+  ../mcp-surfaces/packages/structured-command-mcp:
+    dependencies:
+      '@narada2/mcp-telemetry':
+        specifier: workspace:*
+        version: link:../shared/mcp-telemetry
 
   ../mcp-surfaces/packages/task-lifecycle-mcp:
     dependencies:
       '@narada2/mcp-transport':
         specifier: workspace:*
-        version: link:../mcp-transport
+        version: link:../shared/mcp-transport
       '@narada2/task-governance-core':
         specifier: workspace:*
         version: link:../../../narada-core/packages/task-governance-core
@@ -111,7 +123,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^1.0.0
-        version: 1.6.1(@types/node@22.19.19)(lightningcss@1.32.0)
+        version: 1.6.1(@types/node@22.19.19)(lightningcss@1.32.0)(stylus@0.57.0)
 
   packages/agent-context-memory:
     devDependencies:
@@ -127,6 +139,9 @@ importers:
 
   packages/agent-context-tools:
     dependencies:
+      '@narada2/agent-identity':
+        specifier: workspace:*
+        version: link:../agent-identity
       '@narada2/agent-start-bootstrap':
         specifier: workspace:*
         version: link:../agent-start-bootstrap
@@ -134,8 +149,13 @@ importers:
         specifier: workspace:*
         version: link:../../../mcp-surfaces/packages/task-lifecycle-mcp
 
+  packages/agent-identity: {}
+
   packages/agent-runtime-server:
     dependencies:
+      '@narada2/agent-identity':
+        specifier: workspace:*
+        version: link:../agent-identity
       '@narada2/carrier-protocol':
         specifier: workspace:*
         version: link:../carrier-protocol
@@ -154,6 +174,9 @@ importers:
       '@narada2/agent-context-mcp':
         specifier: workspace:*
         version: link:../../../mcp-surfaces/packages/agent-context-mcp
+      '@narada2/agent-identity':
+        specifier: workspace:*
+        version: link:../agent-identity
       '@narada2/agent-runtime-server':
         specifier: workspace:*
         version: link:../agent-runtime-server
@@ -175,10 +198,17 @@ importers:
 
   packages/agent-start-bootstrap: {}
 
-  packages/agent-start-renderer: {}
+  packages/agent-start-renderer:
+    dependencies:
+      '@narada2/agent-identity':
+        specifier: workspace:*
+        version: link:../agent-identity
 
   packages/agent-web-ui:
     dependencies:
+      '@narada2/agent-identity':
+        specifier: workspace:*
+        version: link:../agent-identity
       '@narada2/cloudflare-nars-projection':
         specifier: workspace:*
         version: link:../cloudflare-nars-projection
@@ -213,6 +243,9 @@ importers:
         specifier: ^3.5.0
         version: 3.5.39(typescript@5.9.3)
     devDependencies:
+      '@narada2/agent-cli':
+        specifier: workspace:*
+        version: link:../../../agent-cli
       '@narada2/agent-runtime-server':
         specifier: workspace:*
         version: link:../agent-runtime-server
@@ -262,6 +295,9 @@ importers:
 
   packages/carrier-runtime:
     dependencies:
+      '@narada2/agent-identity':
+        specifier: workspace:*
+        version: link:../agent-identity
       '@narada2/carrier-action-admission':
         specifier: workspace:*
         version: link:../carrier-action-admission
@@ -291,6 +327,15 @@ importers:
 
   packages/carrier-terminal-projection:
     dependencies:
+      '@narada2/agent-identity':
+        specifier: workspace:*
+        version: link:../agent-identity
+      '@narada2/carrier-command-contract':
+        specifier: workspace:*
+        version: link:../carrier-command-contract
+      '@narada2/carrier-protocol':
+        specifier: workspace:*
+        version: link:../carrier-protocol
       '@narada2/nars-client-projection-contract':
         specifier: workspace:*
         version: link:../nars-client-projection-contract
@@ -394,6 +439,9 @@ importers:
       '@narada2/agent-context-memory':
         specifier: workspace:*
         version: link:../../agent-context-memory
+      '@narada2/agent-identity':
+        specifier: workspace:*
+        version: link:../../agent-identity
       '@narada2/agent-web-ui':
         specifier: workspace:*
         version: link:../../agent-web-ui
@@ -464,6 +512,9 @@ importers:
         specifier: ^11.1.0
         version: 11.1.0
     devDependencies:
+      '@playwright/test':
+        specifier: ^1.61.1
+        version: 1.61.1
       '@types/cli-progress':
         specifier: ^3.11.6
         version: 3.11.6
@@ -606,7 +657,11 @@ importers:
         specifier: ^1.0.0
         version: 1.6.1(@types/node@20.19.39)(lightningcss@1.32.0)(stylus@0.57.0)
 
-  packages/nars-client-projection-contract: {}
+  packages/nars-client-projection-contract:
+    dependencies:
+      '@narada2/agent-identity':
+        specifier: workspace:*
+        version: link:../agent-identity
 
   packages/operator-surface-carriers: {}
 
@@ -1774,6 +1829,11 @@ packages:
   '@pkgjs/parseargs@0.11.0':
     resolution: {integrity: sha512-+1VkjdD0QBLPodGrJUeqarH8VAIvQODIbwh9XpP5Syisf7YoQgsJKPNFoqqLQlu+VQ/tVSshMR6loPMn8U+dPg==}
     engines: {node: '>=14'}
+
+  '@playwright/test@1.61.1':
+    resolution: {integrity: sha512-8nKv6+0RJSL9FE4jYOEGXnPeM/Hg12qZpmqzZjRh3qM0Y7c3z1mrOTfFLids72RDQYVh9WpLEfR5WdpNX4fkig==}
+    engines: {node: '>=18'}
+    hasBin: true
 
   '@rolldown/binding-android-arm64@1.1.3':
     resolution: {integrity: sha512-DT6Z3PhvioeHMvxo+xHc3KtqggrI7CCTXCmC2h/5zUlp5jVitv7XEy+9q5/7v8IolhlioawpMo8Kg0EEBy7J0g==}
@@ -3265,6 +3325,11 @@ packages:
   fs.realpath@1.0.0:
     resolution: {integrity: sha512-OO0pH2lK6a0hZnAdau5ItzHPI6pUlvI7jMVnxUQRtw4owF2wk8lOSabtGDCTP4Ggrg2MbGnWO9X8K1t4+fGMDw==}
 
+  fsevents@2.3.2:
+    resolution: {integrity: sha512-xiqMQR4xAeHTuB9uWm+fFRcIOgKBMiOBP+eXiyT7jsgVCq1bkVygt00oASowB7EdtpOHaaPgKt812P9ab+DDKA==}
+    engines: {node: ^8.16.0 || ^10.6.0 || >=11.0.0}
+    os: [darwin]
+
   fsevents@2.3.3:
     resolution: {integrity: sha512-5xoDfX+fL7faATnagmWPpbFtwh/R77WmMMqqHGS65C3vvB0YHrgF+B1YmZ3441tMj5n63k0212XNoJwzlhffQw==}
     engines: {node: ^8.16.0 || ^10.6.0 || >=11.0.0}
@@ -4138,6 +4203,16 @@ packages:
   pkg-up@3.1.0:
     resolution: {integrity: sha512-nDywThFk1i4BQK4twPQ6TA4RT8bDY96yeuCVBWL3ePARCiEKDRSrNGbFIgUJpLp+XeIR65v8ra7WuJOFUBtkMA==}
     engines: {node: '>=8'}
+
+  playwright-core@1.61.1:
+    resolution: {integrity: sha512-h7Qlt6m4REp25qvIdvbDtVmD4LqVXfpRxhORv9L0jzETM05p4fuPJ3dKyuSXQxDSbXnmS79HAgi9589lGSpLkg==}
+    engines: {node: '>=18'}
+    hasBin: true
+
+  playwright@1.61.1:
+    resolution: {integrity: sha512-DWnY5o3YbLWK4GovuAVwpqL+1VwGNdUGrRr++8j8PtQQzvAVZUIMjKQ90fY689sEJZJBbZVw1rXaOKSTitkzPQ==}
+    engines: {node: '>=18'}
+    hasBin: true
 
   points-on-curve@0.2.0:
     resolution: {integrity: sha512-0mYKnYYe9ZcqMCWhUjItv/oHjvgEsfKvnUTg8sAtnHr3GVy7rGkXCb6d5cSyqrWqL4k81b9CPg3urd+T7aop3A==}
@@ -5744,6 +5819,10 @@ snapshots:
   '@pkgjs/parseargs@0.11.0':
     optional: true
 
+  '@playwright/test@1.61.1':
+    dependencies:
+      playwright: 1.61.1
+
   '@rolldown/binding-android-arm64@1.1.3':
     optional: true
 
@@ -7263,6 +7342,9 @@ snapshots:
 
   fs.realpath@1.0.0: {}
 
+  fsevents@2.3.2:
+    optional: true
+
   fsevents@2.3.3:
     optional: true
 
@@ -8050,6 +8132,14 @@ snapshots:
     dependencies:
       find-up: 3.0.0
 
+  playwright-core@1.61.1: {}
+
+  playwright@1.61.1:
+    dependencies:
+      playwright-core: 1.61.1
+    optionalDependencies:
+      fsevents: 2.3.2
+
   points-on-curve@0.2.0: {}
 
   points-on-path@0.2.1:
@@ -8647,24 +8737,6 @@ snapshots:
       - supports-color
       - terser
 
-  vite-node@1.6.1(@types/node@22.19.19)(lightningcss@1.32.0):
-    dependencies:
-      cac: 6.7.14
-      debug: 4.4.3
-      pathe: 1.1.2
-      picocolors: 1.1.1
-      vite: 5.4.21(@types/node@22.19.19)(lightningcss@1.32.0)
-    transitivePeerDependencies:
-      - '@types/node'
-      - less
-      - lightningcss
-      - sass
-      - sass-embedded
-      - stylus
-      - sugarss
-      - supports-color
-      - terser
-
   vite-node@1.6.1(@types/node@22.19.19)(lightningcss@1.32.0)(stylus@0.57.0):
     dependencies:
       cac: 6.7.14
@@ -8693,16 +8765,6 @@ snapshots:
       fsevents: 2.3.3
       lightningcss: 1.32.0
       stylus: 0.57.0
-
-  vite@5.4.21(@types/node@22.19.19)(lightningcss@1.32.0):
-    dependencies:
-      esbuild: 0.21.5
-      postcss: 8.5.16
-      rollup: 4.60.1
-    optionalDependencies:
-      '@types/node': 22.19.19
-      fsevents: 2.3.3
-      lightningcss: 1.32.0
 
   vite@5.4.21(@types/node@22.19.19)(lightningcss@1.32.0)(stylus@0.57.0):
     dependencies:
@@ -8754,40 +8816,6 @@ snapshots:
       why-is-node-running: 2.3.0
     optionalDependencies:
       '@types/node': 20.19.39
-    transitivePeerDependencies:
-      - less
-      - lightningcss
-      - sass
-      - sass-embedded
-      - stylus
-      - sugarss
-      - supports-color
-      - terser
-
-  vitest@1.6.1(@types/node@22.19.19)(lightningcss@1.32.0):
-    dependencies:
-      '@vitest/expect': 1.6.1
-      '@vitest/runner': 1.6.1
-      '@vitest/snapshot': 1.6.1
-      '@vitest/spy': 1.6.1
-      '@vitest/utils': 1.6.1
-      acorn-walk: 8.3.5
-      chai: 4.5.0
-      debug: 4.4.3
-      execa: 8.0.1
-      local-pkg: 0.5.1
-      magic-string: 0.30.21
-      pathe: 1.1.2
-      picocolors: 1.1.1
-      std-env: 3.10.0
-      strip-literal: 2.1.1
-      tinybench: 2.9.0
-      tinypool: 0.8.4
-      vite: 5.4.21(@types/node@22.19.19)(lightningcss@1.32.0)
-      vite-node: 1.6.1(@types/node@22.19.19)(lightningcss@1.32.0)
-      why-is-node-running: 2.3.0
-    optionalDependencies:
-      '@types/node': 22.19.19
     transitivePeerDependencies:
       - less
       - lightningcss

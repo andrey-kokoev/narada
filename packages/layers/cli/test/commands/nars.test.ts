@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { resolveNaradaSitePaths } from '@narada2/site-paths';
 import { agentWebUiAttachCommand } from '../../src/commands/agent-web-ui.js';
-import { narsAttachCommandCommand, narsAuthorityTransitionPlanCommand, narsSessionsCommand } from '../../src/commands/nars.js';
+import { narsAttachCommandCommand, narsAuthorityTransitionExecuteCommand, narsAuthorityTransitionPlanCommand, narsSessionsCommand } from '../../src/commands/nars.js';
 import type { CommandContext } from '../../src/lib/command-wrapper.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
 
@@ -39,17 +39,59 @@ function createMockContext(): CommandContext {
 
 const tempDirs: string[] = [];
 
+function defaultRuntimeMcpServers(siteId = 'sonar'): Record<string, Record<string, unknown>> {
+  const prefix = `narada-${siteId}`;
+  return {
+    [`${prefix}-agent-context`]: { command: 'node', args: ['agent-context-mcp.mjs'] },
+    [`${prefix}-task-lifecycle`]: { command: 'node', args: ['task-lifecycle-mcp.mjs'] },
+    [`${prefix}-inbox`]: { command: 'node', args: ['inbox-mcp.mjs'] },
+    [`${prefix}-site-ops`]: { command: 'node', args: ['site-ops-mcp.mjs'] },
+    [`${prefix}-mailbox`]: { command: 'node', args: ['mailbox-mcp.mjs'] },
+    [`${prefix}-graph-mail`]: { command: 'node', args: ['graph-mail-mcp.mjs'] },
+    [`${prefix}-git`]: { command: 'node', args: ['git-mcp.mjs', '--allowed-root', siteId] },
+    [`${prefix}-local-filesystem`]: { command: 'node', args: ['local-filesystem-mcp.mjs', '--allowed-root', siteId] },
+    [`${prefix}-structured-command`]: { command: 'node', args: ['structured-command-mcp.mjs', '--allowed-root', siteId] },
+    [`${prefix}-worker-delegation`]: { command: 'node', args: ['worker-delegation-mcp.mjs'] },
+    [`${prefix}-sop`]: { command: 'node', args: ['sop-mcp.mjs'] },
+    [`${prefix}-scheduler`]: { command: 'node', args: ['scheduler-mcp.mjs'] },
+    [`${prefix}-surface-feedback`]: { command: 'node', args: ['surface-feedback-mcp.mjs'] },
+    [`${prefix}-delegated-task`]: { command: 'node', args: ['delegated-task-mcp.mjs'] },
+    [`${prefix}-speech`]: { command: 'node', args: ['speech-mcp.mjs'] },
+  };
+}
+
+function writeRuntimeMcpFabric(siteRoot: string, siteId = 'sonar'): void {
+  const mcpDir = join(siteRoot, '.ai', 'mcp');
+  mkdirSync(mcpDir, { recursive: true });
+  writeFileSync(join(mcpDir, 'runtime.json'), `${JSON.stringify({
+    schema: 'narada.launcher.runtime_mcp_fabric_summary.v1',
+    mcpServers: defaultRuntimeMcpServers(siteId),
+  }, null, 2)}\n`, 'utf8');
+}
+
+function writeProjectionRegistration(siteRoot: string, serverNames: string[]): string {
+  const projectionDir = join(siteRoot, '.narada', 'capabilities');
+  mkdirSync(projectionDir, { recursive: true });
+  const path = join(projectionDir, 'mcp-registration.json');
+  writeFileSync(path, `${JSON.stringify({
+    schema: 'narada.launcher.mcp_projection_registration.v1',
+    mcp_servers: serverNames.map((name) => ({ name, command: 'node', args: ['projection.mjs'] })),
+  }, null, 2)}\n`, 'utf8');
+  return path;
+}
+
 function tempSite(): string {
   const dir = mkdtempSync(join(tmpdir(), 'narada-nars-cli-'));
   tempDirs.push(dir);
   return dir;
 }
 
-function writeSession(siteRoot: string, sessionId = 'carrier_cli_test', options: { agentId?: string; siteId?: string } = {}): void {
+function writeSession(siteRoot: string, sessionId = 'carrier_cli_test', options: { agentId?: string; siteId?: string; agentIdentityRef?: Record<string, unknown> } = {}): void {
   const agentId = options.agentId ?? 'sonar.resident';
   const siteId = options.siteId ?? 'sonar';
   const sessionDir = resolveNaradaSitePaths({ siteRoot, sessionId }).narsSessionDir!;
   mkdirSync(sessionDir, { recursive: true });
+  writeRuntimeMcpFabric(siteRoot, siteId);
   writeFileSync(join(sessionDir, 'session-index-record.json'), `${JSON.stringify({
     schema: 'narada.nars.session_index_record.v1',
     session_id: sessionId,
@@ -59,6 +101,7 @@ function writeSession(siteRoot: string, sessionId = 'carrier_cli_test', options:
     derived_from_event: 'session_started',
     projection_generated_at: '2026-06-23T00:00:00.000Z',
     agent_id: agentId,
+    agent_identity_ref: options.agentIdentityRef ?? null,
     site_id: siteId,
     site_id_source: 'session_started',
     site_root: siteRoot,
@@ -215,7 +258,7 @@ describe('nars CLI commands', () => {
       target_authority_epoch: 4,
       recommended_next_action: 'run_feasibility_checks_before_execute',
     });
-    const body = result.result as { transition_record_candidate: Record<string, unknown>; warnings: Array<Record<string, unknown>> };
+    const body = result.result as { transition_record_candidate: Record<string, unknown>; warnings: Array<Record<string, unknown>>; mcp_compatibility_report: Record<string, unknown> };
     expect(body.transition_record_candidate).toMatchObject({
       schema: 'narada.nars.authority_runtime_host_transition.v1',
       state: 'proposed',
@@ -223,7 +266,7 @@ describe('nars CLI commands', () => {
       target_authority_runtime: { host_kind: 'cloudflare-host', authority_epoch: 4 },
       handoff: {
         event_log: { source_last_sequence: 120, target_first_sequence: 121 },
-        mcp_fabric: { status: 'compatible' },
+        mcp_fabric: { status: 'degraded_explicit' },
       },
       fencing: {
         source_write_admission: 'active',
@@ -231,6 +274,124 @@ describe('nars CLI commands', () => {
       },
     });
     expect(body.warnings[0]).toMatchObject({ code: 'read_only_planner_slice' });
+    expect(body.mcp_compatibility_report).toMatchObject({
+      schema: 'narada.nars.authority_runtime_host_transition_mcp_compatibility.v1',
+      status: 'degraded_explicit',
+      explicit_operator_acceptance: { required: true, mode: 'required_before_execute' },
+      launch_time_projection: { status: 'missing' },
+    });
+  });
+
+  it('plans a compatible authority transition when the target host is local and the source host is Cloudflare-host', async () => {
+    const siteRoot = tempSite();
+    writeSession(siteRoot, 'carrier_compatible_transition');
+    const recordPath = resolveNaradaSitePaths({ siteRoot, sessionId: 'carrier_compatible_transition' }).narsSessionIndexRecordPath!;
+    const record = JSON.parse(readFileSync(recordPath, 'utf8'));
+    record.authority_runtime_host = 'cloudflare-host';
+    record.authority_epoch = 7;
+    record.authority_runtime_id = 'auth_cloudflare-host_carrier_compatible_transition';
+    record.authority_transition_feasibility.target_health_by_host.local = { status: 'healthy' };
+    writeFileSync(recordPath, `${JSON.stringify(record, null, 2)}\n`, 'utf8');
+    writeProjectionRegistration(siteRoot, ['narada-sonar-agent-context', 'narada-sonar-task-lifecycle']);
+
+    const result = await narsAuthorityTransitionPlanCommand({
+      siteRoot,
+      session: 'carrier_compatible_transition',
+      targetHost: 'local',
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      status: 'feasible',
+      source_authority_runtime_host: 'cloudflare-host',
+      target_authority_runtime_host: 'local',
+      mcp_compatibility_report: {
+        status: 'compatible',
+        explicit_operator_acceptance: { required: false, mode: 'not_required' },
+        projection_alignment: { server_name_sets_match: false },
+      },
+    });
+  });
+
+  it('refuses authority transition planning when the MCP fabric compatibility report is incompatible', async () => {
+    const siteRoot = tempSite();
+    writeSession(siteRoot, 'carrier_incompatible_report');
+    rmSync(join(siteRoot, '.ai'), { recursive: true, force: true });
+
+    const result = await narsAuthorityTransitionPlanCommand({
+      siteRoot,
+      session: 'carrier_incompatible_report',
+      targetHost: 'cloudflare-host',
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.INVALID_CONFIG);
+    expect(result.result).toMatchObject({
+      status: 'refused',
+      mcp_compatibility_report: { status: 'incompatible' },
+      transition_record_candidate: null,
+    });
+    const body = result.result as { refusals: Array<Record<string, unknown>>; checks: Array<Record<string, unknown>> };
+    expect(body.refusals.map((entry) => entry.reason_code)).toContain('mcp_fabric_incompatible_report');
+    expect(body.checks.find((entry) => entry.name === 'mcp_compatibility_report')).toMatchObject({ status: 'refused' });
+  });
+
+  it('prepares the next governed transition slice and writes authority transition state', async () => {
+    const siteRoot = tempSite();
+    writeSession(siteRoot, 'carrier_execute_prepare');
+
+    const result = await narsAuthorityTransitionExecuteCommand({
+      siteRoot,
+      session: 'carrier_execute_prepare',
+      targetHost: 'cloudflare-host',
+      step: 'prepare-target',
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      schema: 'narada.nars.authority_runtime_host_transition_execute.v1',
+      status: 'prepared',
+      mutation_performed: true,
+      step: 'prepare-target',
+      transition_state: { authority_transition_state: 'preparing_target' },
+      mcp_compatibility_report: { status: 'degraded_explicit' },
+    });
+
+    const sessionDir = resolveNaradaSitePaths({ siteRoot, sessionId: 'carrier_execute_prepare' }).narsSessionDir!;
+    const transitionStatePath = join(sessionDir, 'authority-transition-state.json');
+    const transitionState = JSON.parse(readFileSync(transitionStatePath, 'utf8')) as Record<string, unknown>;
+    const sessionRecord = JSON.parse(readFileSync(resolveNaradaSitePaths({ siteRoot, sessionId: 'carrier_execute_prepare' }).narsSessionIndexRecordPath!, 'utf8')) as Record<string, unknown>;
+
+    expect(transitionState).toMatchObject({
+      schema: 'narada.nars.authority_transition_source_state.v1',
+      authority_transition_state: 'preparing_target',
+      target_write_admission: 'not_before_source_seal',
+    });
+    expect(sessionRecord).toMatchObject({
+      authority_transition_state: 'preparing_target',
+    });
+  });
+
+  it('refuses unsupported authority-transition execute steps', async () => {
+    const siteRoot = tempSite();
+    writeSession(siteRoot, 'carrier_execute_refusal');
+
+    const result = await narsAuthorityTransitionExecuteCommand({
+      siteRoot,
+      session: 'carrier_execute_refusal',
+      targetHost: 'cloudflare-host',
+      step: 'activate-target',
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.INVALID_CONFIG);
+    expect(result.result).toMatchObject({
+      status: 'refused',
+      reason: 'unsupported_execute_step',
+      recommended_next_action: 'rerun with --step prepare-target',
+    });
   });
 
   it('refuses authority transition planning when required feasibility checks fail', async () => {
@@ -474,13 +635,23 @@ describe('nars CLI commands', () => {
 
   it('returns candidate sessions when agent-web-ui discovery finds the Site but not the requested agent', async () => {
     const siteRoot = tempSite();
-    writeSession(siteRoot, 'carrier_architect', { agentId: 'sonar.architect', siteId: 'sonar' });
+    writeSession(siteRoot, 'carrier_architect', {
+      agentId: 'architect',
+      siteId: 'sonar',
+      agentIdentityRef: {
+        schema: 'narada.agent_identity_ref.v1',
+        site_id: 'sonar',
+        local_agent_id: 'architect',
+        canonical_agent_id: 'sonar.architect',
+        source_agent_id: 'architect',
+      },
+    });
 
     const result = await agentWebUiAttachCommand({
       siteRoot,
       agent: 'sonar.resident',
       dryRun: true,
-      format: 'json',
+      format: 'human',
     }, createMockContext());
 
     expect(result.exitCode).toBe(ExitCode.INVALID_CONFIG);
@@ -488,8 +659,11 @@ describe('nars CLI commands', () => {
       schema: 'narada.agent_web_ui.attach_refusal.v1',
       reason: 'nars_session_not_found_for_agent',
       agent_id: 'sonar.resident',
-      candidates: [expect.objectContaining({ session_id: 'carrier_architect', agent_id: 'sonar.architect' })],
+      candidates: [expect.objectContaining({ session_id: 'carrier_architect', agent_id: 'architect' })],
     });
+    expect((result.result as { _formatted?: string })._formatted).toContain('Candidates:');
+    expect((result.result as { _formatted?: string })._formatted).toContain('session_id | identity | health | started_at | next_command');
+    expect((result.result as { _formatted?: string })._formatted).toContain('carrier_architect | sonar.architect | not_checked | 2026-06-23T00:00:00.000Z | agent-web-ui attach --session carrier_architect --allow-stale-session');
   });
 
   it('ignores stale matching sessions during direct agent-web-ui discovery', async () => {
@@ -523,6 +697,7 @@ describe('nars CLI commands', () => {
       launchRegistryPath,
       agent: 'sonar.resident',
       waitForSessionMs: 1,
+      format: 'human',
     }, createMockContext(), {
       progress: (line) => progress.push(line),
     });
@@ -536,6 +711,8 @@ describe('nars CLI commands', () => {
       agent_id: 'sonar.resident',
       wait_ms: 1,
     });
+    expect((result.result as { _formatted?: string })._formatted).toContain('agent-web-ui attach refused: nars_session_not_found_for_agent');
+    expect((result.result as { _formatted?: string })._formatted).toContain('Next    Start the NARS runtime host for this agent, or pass --session <id> for an existing healthy session.');
   });
 
   it('waits for health availability before starting agent-web-ui attachment', async () => {

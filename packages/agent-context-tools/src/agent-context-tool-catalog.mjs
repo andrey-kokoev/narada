@@ -2,7 +2,7 @@ import { listCommandTools, listOutputTools, listPayloadTools } from '../../site-
 
 export const STARTUP_TOOL_INLINE_LIMIT = 100_000;
 export const PERMISSIVE_OBJECT_OUTPUT_SCHEMA = { type: 'object', additionalProperties: true };
-export const STARTUP_TOOL_NAMES = new Set(['agent_context_hydrate_current', 'agent_context_startup_sequence']);
+export const STARTUP_TOOL_NAMES = new Set(['agent_context_whoami', 'agent_context_hydrate_current', 'agent_context_startup_sequence']);
 
 export const EXPECTED_TOOL_GROUPS = {
   core: ['agent_context_doctor', 'agent_context_whoami', 'agent_context_hydrate_current', 'agent_context_startup_sequence', 'startup_sequence', 'agent_context_restart', 'agent_context_pause'],

@@ -26,6 +26,9 @@
     "./package.json": "./package.json"
   },
   "types": "./src/nars-client-projection-contract.d.ts",
+  "dependencies": {
+    "@narada2/agent-identity": "workspace:*"
+  },
   "scripts": {
     "test": "node --test src/*.test.mjs",
     "typecheck": "tsc --noEmit --allowJs --checkJs false src/nars-client-projection-contract.mjs"

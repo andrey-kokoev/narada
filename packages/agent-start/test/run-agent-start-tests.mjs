@@ -7,6 +7,12 @@ const packageRoot = resolve(__dirname, '..');
 
 await runProcessTests([
   {
+    label: 'agent-start-tsx-transform-syntax',
+    args: ['--import', 'tsx', '--check', 'src/narada-agent-start.ts'],
+    cwd: packageRoot,
+    timeoutMs: 8000,
+  },
+  {
     label: 'verify-launcher-bin-syntax',
     args: ['--check', 'bin/verify-registered-site-launchers.mjs'],
     cwd: packageRoot,
@@ -21,6 +27,12 @@ await runProcessTests([
   {
     label: 'provider-module-contract',
     args: ['--import', 'tsx', '--test', 'test/provider-module-contract.test.mjs'],
+    cwd: packageRoot,
+    timeoutMs: 8000,
+  },
+  {
+    label: 'carrier-process-launch-contract',
+    args: ['--import', 'tsx', '--test', 'test/carrier-process-launch.test.mjs'],
     cwd: packageRoot,
     timeoutMs: 8000,
   },

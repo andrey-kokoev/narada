@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 import { existsSync, readFileSync } from 'node:fs';
-import { spawnSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { buildAgentIdentityRef } from '@narada2/agent-identity';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 if (process.argv.includes('--help') || process.argv.includes('-h')) {
-  console.log(`Usage: narada-agent-start-verify-launchers --registry <agents.psd1> --start-agent <Start-NaradaAgent.ps1> --runtime-policy <policy> [--agent <agent>] [--site <site>] [--record-offset <n>] [--record-limit <n>] [--launch-timeout-ms <n>]
+  console.log(`Usage: narada-agent-start-verify-launchers --registry <agents.psd1> --start-agent <Start-NaradaAgent.ps1> --runtime-policy <policy> [--agent <agent>] [--site <site>] [--record-offset <n>] [--record-limit <n>] [--launch-timeout-ms <n>] [--jobs <n>] [--retries <n>] [--progress]
 
 Policies:
   default-only           Verify each selected record's registered Carrier/Runtime.
@@ -20,7 +21,12 @@ Filters:
 Sharding:
   --record-offset <n>    Skip n selected records after filters. Default: 0.
   --record-limit <n>     Verify at most n selected records after offset.
-  --launch-timeout-ms <n> Per-launch dry-run timeout. Default: 8500.
+  --launch-timeout-ms <n> Per-launch dry-run timeout. Default: 30000.
+  --jobs <n>             Concurrent dry-run launch checks. Default: 1.
+  --retries <n>          Retry transient dry-run process/JSON handoff failures. Default: 1.
+
+Diagnostics:
+  --progress             Emit bounded human progress lines to stderr; final stdout remains JSON.
 `);
   process.exit(0);
 }
@@ -34,7 +40,14 @@ const agentFilters = argValues('--agent');
 const siteFilters = argValues('--site');
 const recordOffset = optionalNonnegativeIntegerArg('--record-offset', 0);
 const recordLimit = optionalPositiveIntegerArg('--record-limit');
-const launchTimeoutMs = optionalPositiveIntegerArg('--launch-timeout-ms') ?? 8500;
+const launchTimeoutMs = optionalPositiveIntegerArg('--launch-timeout-ms') ?? 30000;
+const jobs = optionalPositiveIntegerArg('--jobs') ?? 1;
+const retries = optionalNonnegativeIntegerArg('--retries', 1);
+const progressEnabled = process.argv.includes('--progress');
+
+function progress(message) {
+  if (progressEnabled) process.stderr.write(`${message}\n`);
+}
 
 function argValue(name) {
   const index = process.argv.indexOf(name);
@@ -94,6 +107,54 @@ function siteId(record) {
   return record.Site ?? record.Agent?.replace(/\.(architect|builder2?|resident|Kevin|Bob|Robin)$/u, '');
 }
 
+function roleId(record) {
+  return record.Role ?? record.Agent?.split('.').at(-1)?.replace(/\d+$/u, '') ?? null;
+}
+
+function expectedAgentIdentityRef(record) {
+  return buildAgentIdentityRef(record.Agent, roleId(record), record.Site ?? null);
+}
+
+function scanRegistryIdentityShape(record) {
+  const failures = [];
+  if (!record.Agent) return [{ reason: 'registry_required_field_missing', field: 'Agent' }];
+  if (!record.Agent.includes('.') && !record.Site) failures.push({ reason: 'site_local_agent_missing_site' });
+  let identityRef = null;
+  try {
+    identityRef = expectedAgentIdentityRef(record);
+  } catch (error) {
+    failures.push({ reason: 'agent_identity_ref_derivation_failed', error: String(error?.message ?? error) });
+    return failures;
+  }
+  if (!identityRef?.site_id) failures.push({ reason: 'agent_identity_ref_unscoped', expected_site: record.Site ?? null });
+  if (identityRef.display !== identityRef.canonical_agent_id) failures.push({ reason: 'agent_identity_display_not_canonical', display: identityRef.display, canonical_agent_id: identityRef.canonical_agent_id });
+  if (record.Role && identityRef.role !== record.Role) failures.push({ reason: 'agent_identity_role_mismatch', expected: record.Role, actual: identityRef.role });
+  return failures;
+}
+
+function recordCarrier(record) {
+  return record.OperatorSurface ?? record.Carrier ?? null;
+}
+
+function stableJson(value) {
+  return JSON.stringify(value, Object.keys(value ?? {}).sort());
+}
+
+function identityRefForComparison(value, { includeRole = true } = {}) {
+  if (!value || typeof value !== 'object') return value ?? null;
+  const comparable = {
+    schema: value.schema,
+    site_id: value.site_id ?? null,
+    local_agent_id: value.local_agent_id ?? null,
+    canonical_agent_id: value.canonical_agent_id ?? null,
+    display: value.display ?? null,
+    source_agent_id: value.source_agent_id ?? null,
+    scope: value.scope ?? null,
+  };
+  if (includeRole) comparable.role = value.role ?? null;
+  return comparable;
+}
+
 function parseRegistry(text) {
   const records = [];
   let current = null;
@@ -109,7 +170,7 @@ function parseRegistry(text) {
       current = null;
       continue;
     }
-    const value = line.match(/^(Agent|Title|Site|NaradaRoot|WorkspaceRoot|SiteRoot|Launcher|LauncherPath|Carrier|Runtime)\s*=\s*['"]([^'"]+)['"]/);
+    const value = line.match(/^(Agent|Role|Title|Site|NaradaRoot|WorkspaceRoot|SiteRoot|Launcher|LauncherPath|Carrier|OperatorSurface|Runtime)\s*=\s*['"]([^'"]+)['"]/);
     if (value) current[value[1]] = value[2];
   }
   return records.filter((record) => record.Agent && record.NaradaRoot);
@@ -130,18 +191,47 @@ function dryRunLaunch(record, carrier, runtime) {
     '-Runtime', runtime,
     '-DryRun',
   ];
+  if (record.Site) args.push('-TargetSiteId', record.Site);
   if (record.WorkspaceRoot) args.push('-WorkspaceRoot', record.WorkspaceRoot);
-  const result = spawnSync('pwsh', args, {
-    cwd: record.WorkspaceRoot,
-    encoding: 'utf8',
-    env: {
-      ...process.env,
-      NARADA_PROPER_ROOT: naradaProperRoot,
-    },
-    timeout: launchTimeoutMs,
-    windowsHide: true,
+  return spawnDryRunProcess({ record, carrier, runtime, args });
+}
+
+function spawnDryRunProcess({ record, carrier, runtime, args }) {
+  return new Promise((resolveLaunch) => {
+    let stdout = '';
+    let stderr = '';
+    let settled = false;
+    const child = spawn('pwsh', args, {
+      cwd: record.WorkspaceRoot,
+      env: {
+        ...process.env,
+        NARADA_PROPER_ROOT: naradaProperRoot,
+      },
+      windowsHide: true,
+    });
+    const timeout = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      child.kill();
+      resolveLaunch({ carrier, runtime, args, status: null, stdout, stderr, error: `timed_out_after_${launchTimeoutMs}ms` });
+    }, launchTimeoutMs);
+    child.stdout?.setEncoding('utf8');
+    child.stderr?.setEncoding('utf8');
+    child.stdout?.on('data', (chunk) => { stdout += chunk; });
+    child.stderr?.on('data', (chunk) => { stderr += chunk; });
+    child.on('error', (error) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      resolveLaunch({ carrier, runtime, args, status: null, stdout, stderr, error: String(error.message ?? error) });
+    });
+    child.on('close', (status) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      resolveLaunch({ carrier, runtime, args, status, stdout, stderr, error: null });
+    });
   });
-  return { carrier, runtime, args, status: result.status, stdout: result.stdout ?? '', stderr: result.stderr ?? '', error: result.error ? String(result.error.message ?? result.error) : null };
 }
 
 function parseJsonOutput(output) {
@@ -154,7 +244,7 @@ function parseJsonOutput(output) {
 
 function expectedAdapter(carrier, runtime) {
   if (carrier === 'codex') return 'codex-native-mcp';
-  if (carrier === 'agent-cli') return 'narada-agent-runtime-server-mcp-client';
+  if (carrier === 'agent-cli' || carrier === 'agent-web-ui') return 'narada-agent-runtime-server-mcp-client';
   if (carrier === 'agent-tui') return 'narada-agent-tui-terminal-interactive-loop';
   if (carrier === 'pi') return 'pi-extension-mcp-bridge';
   if (carrier === 'claude-code') return 'claude-code-native-mcp';
@@ -170,6 +260,9 @@ function validateLaunch(record, carrier, runtime, launch) {
 
   if (launch.status === 'refused') failures.push({ reason: 'launch_refused', refusals: launch.refusals ?? launch.reason ?? null });
   if (launch.identity !== record.Agent) failures.push({ reason: 'identity_mismatch', expected: record.Agent, actual: launch.identity });
+  const expectedIdentityRef = expectedAgentIdentityRef(record);
+  const compareRole = Boolean(record.Role);
+  if (stableJson(identityRefForComparison(launch.agent_identity_ref, { includeRole: compareRole })) !== stableJson(identityRefForComparison(expectedIdentityRef, { includeRole: compareRole }))) failures.push({ reason: 'agent_identity_ref_mismatch', expected: expectedIdentityRef, actual: launch.agent_identity_ref ?? null, compared_role: compareRole });
   if (launch.carrier_kind !== carrier) failures.push({ reason: 'carrier_mismatch', expected: carrier, actual: launch.carrier_kind });
   if (launch.runtime !== runtime) failures.push({ reason: 'runtime_mismatch', expected: runtime, actual: launch.runtime });
   if (!pathsEqual(env.NARADA_SITE_ROOT, expectedSiteRoot)) failures.push({ reason: 'site_root_mismatch', expected: expectedSiteRoot, actual: env.NARADA_SITE_ROOT });
@@ -238,6 +331,8 @@ const shard = {
   record_offset: recordOffset,
   record_limit: recordLimit,
   launch_timeout_ms: launchTimeoutMs,
+  jobs,
+  retries,
 };
 if (filteredRecords.length === 0) fail('launcher_verification_filter_matched_no_records', {
   registry_path: registryPath,
@@ -255,41 +350,97 @@ if (records.length === 0) fail('launcher_verification_shard_matched_no_records',
 });
 const checked = [];
 const failures = [];
+const launchTasks = [];
+let plannedLaunches = 0;
+let launchedCount = 0;
 
-function runDryRunAndRecord(record, carrier, runtime) {
-  const dryRun = dryRunLaunch(record, carrier, runtime);
-  if (dryRun.status !== 0) {
-    failures.push({ agent: record.Agent, carrier, runtime, reason: 'dry_run_process_failed', status: dryRun.status, error: dryRun.error, stderr: dryRun.stderr.trim(), stdout: dryRun.stdout.trim() });
-    return;
-  }
-
-  let launch;
-  try {
-    launch = parseJsonOutput(dryRun.stdout);
-  } catch (error) {
-    failures.push({ agent: record.Agent, carrier, runtime, reason: 'dry_run_json_parse_failed', error: String(error.message ?? error), stdout: dryRun.stdout.trim(), stderr: dryRun.stderr.trim() });
-    return;
-  }
-  const launchFailures = validateLaunch(record, carrier, runtime, launch);
-  for (const launchFailure of launchFailures) failures.push({ agent: record.Agent, carrier, runtime, ...launchFailure });
-  checked.push({ agent: record.Agent, carrier, runtime });
+function plannedLaunchCountForRecord(record) {
+  const carrier = recordCarrier(record);
+  if (!carrier || !record.Runtime || !record.SiteRoot || !record.WorkspaceRoot) return 0;
+  let count = 0;
+  if (runtimePolicy !== 'agent-tui-only') count += 1;
+  if ((runtimePolicy === 'default-and-agent-tui' || runtimePolicy === 'agent-tui-only') && carrier !== 'agent-tui') count += 1;
+  return count;
 }
+
+function enqueueDryRun(record, carrier, runtime) {
+  launchTasks.push({ index: launchTasks.length, record, carrier, runtime });
+}
+
+function dryRunAttemptFailure(task, dryRun) {
+  if (dryRun.status !== 0) {
+    return { agent: task.record.Agent, carrier: task.carrier, runtime: task.runtime, reason: 'dry_run_process_failed', status: dryRun.status, error: dryRun.error, stderr: dryRun.stderr.trim(), stdout: dryRun.stdout.trim() };
+  }
+  try {
+    return { launch: parseJsonOutput(dryRun.stdout) };
+  } catch (error) {
+    return { agent: task.record.Agent, carrier: task.carrier, runtime: task.runtime, reason: 'dry_run_json_parse_failed', error: String(error.message ?? error), stdout: dryRun.stdout.trim(), stderr: dryRun.stderr.trim() };
+  }
+}
+
+async function runDryRunTask(task) {
+  launchedCount += 1;
+  progress(`launcher-verifier: [${launchedCount}/${plannedLaunches}] ${task.record.Agent} carrier=${task.carrier} runtime=${task.runtime}`);
+  let attemptResult = null;
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    const dryRun = await dryRunLaunch(task.record, task.carrier, task.runtime);
+    attemptResult = dryRunAttemptFailure(task, dryRun);
+    if (attemptResult.launch) break;
+    if (attempt < retries) progress(`launcher-verifier: retry ${attempt + 1}/${retries} ${task.record.Agent} reason=${attemptResult.reason}`);
+  }
+  const taskFailures = [];
+  if (!attemptResult?.launch) {
+    taskFailures.push(attemptResult);
+    return { index: task.index, checked: null, failures: taskFailures };
+  }
+  const launchFailures = validateLaunch(task.record, task.carrier, task.runtime, attemptResult.launch);
+  for (const launchFailure of launchFailures) taskFailures.push({ agent: task.record.Agent, carrier: task.carrier, runtime: task.runtime, ...launchFailure });
+  return { index: task.index, checked: { agent: task.record.Agent, carrier: task.carrier, runtime: task.runtime }, failures: taskFailures };
+}
+
+async function runLaunchTasksWithJobs(tasks, jobCount) {
+  const results = [];
+  let nextIndex = 0;
+  const workerCount = Math.min(jobCount, Math.max(tasks.length, 1));
+  await Promise.all(Array.from({ length: workerCount }, async () => {
+    while (nextIndex < tasks.length) {
+      const task = tasks[nextIndex];
+      nextIndex += 1;
+      results.push(await runDryRunTask(task));
+    }
+  }));
+  return results.sort((left, right) => left.index - right.index);
+}
+
+plannedLaunches = records.reduce((total, record) => total + plannedLaunchCountForRecord(record), 0);
+progress(`launcher-verifier: selected ${records.length}/${filteredRecords.length} records; planned launches=${plannedLaunches}; policy=${runtimePolicy}; jobs=${jobs}; retries=${retries}`);
 
 for (const record of records) {
+  const carrier = recordCarrier(record);
+  for (const identityFailure of scanRegistryIdentityShape(record)) failures.push({ agent: record.Agent, ...identityFailure });
   for (const shapeFailure of scanLauncherShape(record)) failures.push({ agent: record.Agent, ...shapeFailure });
-  for (const field of ['Carrier', 'Runtime', 'SiteRoot', 'WorkspaceRoot']) {
+  for (const field of ['Runtime', 'SiteRoot', 'WorkspaceRoot']) {
     if (!record[field]) failures.push({ agent: record.Agent, reason: 'registry_required_field_missing', field });
   }
-  if (!record.Carrier || !record.Runtime || !record.SiteRoot || !record.WorkspaceRoot) continue;
+  if (!carrier) failures.push({ agent: record.Agent, reason: 'registry_required_field_missing', field: 'OperatorSurface' });
+  if (!carrier || !record.Runtime || !record.SiteRoot || !record.WorkspaceRoot) continue;
 
   if (runtimePolicy !== 'agent-tui-only') {
-    runDryRunAndRecord(record, record.Carrier, record.Runtime);
+    enqueueDryRun(record, carrier, record.Runtime);
   }
 
-  if ((runtimePolicy === 'default-and-agent-tui' || runtimePolicy === 'agent-tui-only') && record.Carrier !== 'agent-tui') {
-    runDryRunAndRecord(record, 'agent-tui', 'agent-tui');
+  if ((runtimePolicy === 'default-and-agent-tui' || runtimePolicy === 'agent-tui-only') && carrier !== 'agent-tui') {
+    enqueueDryRun(record, 'agent-tui', 'agent-tui');
   }
 }
+
+const taskResults = await runLaunchTasksWithJobs(launchTasks, jobs);
+for (const taskResult of taskResults) {
+  if (taskResult.checked) checked.push(taskResult.checked);
+  for (const failure of taskResult.failures) failures.push(failure);
+}
+
+progress(`launcher-verifier: checked launches=${checked.length}; failures=${failures.length}`);
 
 if (failures.length > 0) fail('launcher_verification_failed', {
   registry_path: registryPath,

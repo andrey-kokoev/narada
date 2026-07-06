@@ -4,6 +4,7 @@ import {
   narsLifecycleHooksForEvent,
   validateNarsLifecycleHookPayload,
 } from '@narada2/carrier-protocol';
+import { buildAgentIdentityRef } from '@narada2/agent-identity';
 
 const SECRET_PATTERN = /(api[_-]?key|token|secret|password|authorization)\s*[:=]\s*[^\s,;]+/giu;
 
@@ -57,6 +58,7 @@ export async function dispatchNarsLifecycleHook(dispatcher, hook, payloadInput =
           hook,
           hook_kind: payload.hook_kind,
           agent_id: payload.agent_id,
+          ...(payload.agent_identity_ref === undefined ? {} : { agent_identity_ref: payload.agent_identity_ref }),
           session_id: payload.session_id,
           request_id: payload.request_id ?? null,
           turn_id: payload.turn_id ?? null,
@@ -106,8 +108,19 @@ export function lifecycleBindingFromArgs(args = [], env = process.env) {
   const agentId = bindRequired({ name: 'agent_id', flag: '--identity', envName: 'NARADA_AGENT_ID' });
   const sessionId = bindRequired({ name: 'session_id', flag: '--session', envName: 'NARADA_CARRIER_SESSION_ID' });
   const siteRoot = bindRequired({ name: 'site_root', flag: '--site-root', envName: 'NARADA_SITE_ROOT' });
+  let agentIdentityRef = null;
+  if (typeof env.NARADA_AGENT_IDENTITY_REF === 'string' && env.NARADA_AGENT_IDENTITY_REF.trim()) {
+    try {
+      const parsed = JSON.parse(env.NARADA_AGENT_IDENTITY_REF);
+      agentIdentityRef = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
+    } catch {
+      agentIdentityRef = null;
+    }
+  }
+  agentIdentityRef ??= buildAgentIdentityRef(agentId, env.NARADA_AGENT_ROLE ?? null, env.NARADA_SITE_ID ?? null);
   return {
     agent_id: agentId,
+    ...(agentIdentityRef ? { agent_identity_ref: agentIdentityRef } : {}),
     session_id: sessionId,
     metadata: {
       site_root: siteRoot,

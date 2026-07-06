@@ -263,6 +263,21 @@ narada backup-ls -i backup.tar.gz
 narada backup-ls -i backup.tar.gz --detailed
 ```
 
+## Launcher Acceptance Smoke
+
+Use the bounded acceptance command for the main launcher/NARS/web-ui path:
+
+```bash
+pnpm --filter @narada2/cli test:launcher-acceptance
+```
+
+This single command runs the authoritative launcher journey checks in a serialized sequence:
+
+- `test/integration/operator-launch-journey.test.mjs`
+- `test/integration/workspace-selection-ui-e2e.test.mjs`
+
+It covers workspace selection, launcher planning, NARS session discovery, agent-cli attach, agent-web-ui attach, canonical identity/session labeling, and the launch/session regressions that previously showed up as stale dist/source-hash mismatches or broken projection handoff paths.
+
 ## Global Options
 
 All commands support these global options:

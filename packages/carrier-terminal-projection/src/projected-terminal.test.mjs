@@ -3,6 +3,7 @@ import { PassThrough } from 'node:stream';
 import test from 'node:test';
 import {
   bracketedPasteControlSequences,
+  createExplicitJsonControlFrame,
   createOperatorStyle,
   createProjectedTerminalBridge,
   createProjectedSlashCommandAction,
@@ -10,7 +11,7 @@ import {
   renderOperatorEvent,
   styleInlineCode,
 } from './projected-terminal.mjs';
-import { countReadlineSubmissionsForPaste, createBracketedPasteComposer } from './projected-input.mjs';
+import { countReadlineSubmissionsForPaste, createBracketedPasteComposer, projectedHelpText } from './projected-input.mjs';
 
 test('projected slash commands produce NARS protocol frames', () => {
   assert.equal(createProjectedSlashCommandAction('/help').kind, 'local_help');
@@ -18,10 +19,14 @@ test('projected slash commands produce NARS protocol frames', () => {
   assert.equal(createProjectedSlashCommandAction('/status').frame.method, 'session.status');
   assert.equal(createProjectedSlashCommandAction('/health').frame.method, 'session.health');
   assert.equal(createProjectedSlashCommandAction('/events').frame.method, 'session.events.subscribe');
+  assert.equal(createProjectedSlashCommandAction('/interrupt').frame.method, 'conversation.interrupt');
   assert.equal(createProjectedSlashCommandAction('/exit').frame.method, 'session.close');
   assert.equal(createProjectedSlashCommandAction('/tool').frame.params.command, '/tool');
   assert.equal(createProjectedSlashCommandAction('/queue clear').frame.params.command, '/queue');
   assert.equal(createProjectedSlashCommandAction('exit').frame.method, 'session.close');
+  assert.equal(createExplicitJsonControlFrame('/json {"id":"status-1","method":"session.status","params":{}}').frame.method, 'session.status');
+  assert.equal(createExplicitJsonControlFrame('/json {"id":"bad-1","method":"bad.method","params":{}}').error, '/json Unsupported method: bad.method');
+  assert.match(projectedHelpText(), /\/interrupt\s+Interrupt active response/);
 });
 
 test('startup event renders operator-facing runtime summary rows', () => {
@@ -83,6 +88,10 @@ test('operator event rendering keeps session status distinct from health', () =>
     request_outcome_summary: '0',
   }, { timestamps: false });
   assert.deepEqual(rendered, ['agent-cli: status healthy; requests 0']);
+});
+
+test('operator event rendering shows session sync operation results', () => {
+  assert.deepEqual(renderOperatorEvent({ event: 'session_sync', success: true, direction: 'upload', target: 'D:/tmp/session-sync' }, { timestamps: false }), ['agent-cli: session sync succeeded; upload D:/tmp/session-sync']);
 });
 
 test('operator event rendering suppresses routine healthy session health polling', () => {

@@ -28,6 +28,7 @@ const SCHEDULER_TASK_HISTORY_TOOL = 'scheduler_task_history';
 const TASK_LIFECYCLE_WORKBOARD_TOOL = 'task_lifecycle_workboard_snapshot';
 const TASK_LIFECYCLE_OBLIGATIONS_TOOL = 'task_lifecycle_obligations';
 const TASK_LIFECYCLE_SEARCH_TOOL = 'task_lifecycle_search';
+const MCP_AFFORDANCES_SCHEMA = 'narada.mcp_affordances.v1';
 
 export function buildSopOperatorAffordance({ serverName, server = {}, source = 'live_tool_inventory' } = {}) {
   const toolNames = new Set((server?.tools ?? []).map((tool) => tool?.name).filter(Boolean));
@@ -447,6 +448,7 @@ function toolAdvertisedAffordances(server = {}) {
 
 function normalizeAffordance(serverName, server, affordance, source) {
   if (!affordance || typeof affordance !== 'object') return null;
+  if (affordance.schema === MCP_AFFORDANCES_SCHEMA) return normalizeMcpAffordanceDocument(serverName, server, affordance, source);
   const surfaceKind = stringField(affordance, 'surface_kind') ?? stringField(affordance, 'kind');
   if (!surfaceKind) return null;
   const panel = objectField(affordance, 'panel') ?? {};
@@ -467,6 +469,65 @@ function normalizeAffordance(serverName, server, affordance, source) {
     ...(objectField(affordance, 'actions') ? { actions: objectField(affordance, 'actions') } : {}),
     ...(objectField(affordance, 'tools') ? { tools: objectField(affordance, 'tools') } : {}),
   };
+}
+
+function normalizeMcpAffordanceDocument(serverName, server, affordance, source) {
+  const surfaceId = stringField(affordance, 'surface_id') ?? stringField(server?.config, 'surface_id');
+  if (!surfaceId) return null;
+  const panels = arrayField(affordance.panels);
+  const primaryPanel = panels
+    .slice()
+    .sort((left, right) => numericField(left, 'priority') - numericField(right, 'priority'))[0] ?? {};
+  const surfaceKind = surfaceKindFromAffordanceDocument(surfaceId, serverName);
+  const title = stringField(affordance, 'title') ?? stringField(primaryPanel, 'title') ?? surfaceKind.toUpperCase();
+  const actions = arrayField(affordance.actions);
+  const sortedPanels = panels.slice().sort((left, right) => numericField(left, 'priority') - numericField(right, 'priority'));
+  return {
+    schema: 'narada.mcp_surface.operator_affordance.v1',
+    surface_kind: surfaceKind,
+    surface_id: surfaceId,
+    server_name: serverName,
+    source,
+    renderer: 'generic_mcp_affordance',
+    title,
+    panel: {
+      kind: 'generic_mcp_affordance',
+      title,
+      summary_method: null,
+      sections: sortedPanels.map((panel) => stringField(panel, 'id')).filter(Boolean),
+    },
+    actions: {
+      read: actionLabels(actions, (action) => action.read_only === true || action.intent === 'inspect' || action.intent === 'refresh' || action.intent === 'open'),
+      candidate_write: actionLabels(actions, (action) => action.read_only !== true && action.destructive !== true),
+      destructive: actionLabels(actions, (action) => action.destructive === true || action.danger_level === 'high'),
+    },
+    tools: {
+      read: toolTargets(actions, (action) => action.read_only === true),
+      write: toolTargets(actions, (action) => action.read_only !== true),
+    },
+    affordance_document: affordance,
+  };
+}
+
+function surfaceKindFromAffordanceDocument(surfaceId, serverName) {
+  const value = String(surfaceId || serverName || 'surface')
+    .split(/[.:/\\]/)
+    .filter(Boolean)
+    .at(-1) ?? 'surface';
+  return value.replace(/-mcp$/i, '').replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g, '').toLowerCase() || 'surface';
+}
+
+function actionLabels(actions, predicate) {
+  return actions.filter(predicate).map((action) => stringField(action, 'label') ?? stringField(action, 'id')).filter(Boolean);
+}
+
+function toolTargets(actions, predicate) {
+  return actions
+    .filter(predicate)
+    .map((action) => objectField(action, 'target'))
+    .filter((target) => target?.kind === 'tool')
+    .map((target) => stringField(target, 'tool'))
+    .filter(Boolean);
 }
 
 function sopAffordanceFromTools(serverName, server = {}) {
@@ -505,6 +566,12 @@ function stringField(record, field) {
   if (!record || typeof record !== 'object') return null;
   const value = record[field];
   return typeof value === 'string' && value ? value : null;
+}
+
+function numericField(record, field) {
+  if (!record || typeof record !== 'object') return Number.MAX_SAFE_INTEGER;
+  const value = record[field];
+  return Number.isFinite(value) ? value : Number.MAX_SAFE_INTEGER;
 }
 
 function arrayField(value) {

@@ -819,10 +819,6 @@ describe('operator-surface commands', () => {
         carrier_fields_are_projection: true,
         windows_identity_name_source: 'identity_id',
       },
-      projection_compatibility: {
-        status: 'pass',
-        carrier: 'windows_focused_window_binding',
-      },
       labels: [{
         identity_id: 'narada-proper-builder',
         identity_name: 'narada-proper-builder',
@@ -870,7 +866,7 @@ describe('operator-surface commands', () => {
     expect(labels.result).toMatchObject({
       status: 'error',
       mutation_performed: false,
-      reason: 'operator_surface_identity_registry_incompatible_with_carrier_projection',
+      reason: 'operator_surface_identity_registry_not_projectable_to_carrier',
       projection_boundary: {
         carrier_fields_are_projection: true,
         windows_identity_name_source: 'identity_id',

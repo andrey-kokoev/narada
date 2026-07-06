@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { buildAgentIdentityRef } from '@narada2/agent-identity';
 import { resolveNaradaSitePaths } from '@narada2/site-paths';
 
 /**
@@ -79,6 +80,7 @@ export function createCarrierRuntimeContext({
     : buildCarrierRuntimePaths(resolvedSiteRoot, session);
   const resolvedNaradaDir = naradaDir ?? paths.naradaDir;
   const resolvedSiteId = siteId ?? process.env.NARADA_SITE_ID ?? null;
+  const agentIdentityRef = buildAgentIdentityRef(identity, process.env.NARADA_AGENT_ROLE ?? null, resolvedSiteId);
   const resolvedSiteConfig = normalizeSiteConfig(siteConfig ?? parseSiteConfigEnv(process.env.NARADA_SITE_CONFIG), {
     siteId: resolvedSiteId,
     siteRoot: resolvedSiteRoot,
@@ -88,6 +90,7 @@ export function createCarrierRuntimeContext({
 
   return Object.freeze({
     identity,
+    agentIdentityRef,
     session,
     siteRoot: resolvedSiteRoot,
     siteId: resolvedSiteId,

@@ -39,7 +39,7 @@ export type ProjectionLifecycleState = 'active' | 'suspended' | 'revoked' | 'exp
 export type CredentialKind = 'bridge' | 'browser';
 export type ProjectionCachePolicy = 'short_bounded' | 'durable_archive';
 export type ProjectionEventPolicyMode = 'conversation' | 'operator' | 'diagnostic' | 'raw';
-export type ArtifactKind = 'html' | 'markdown' | 'image' | 'json' | 'text';
+export type ArtifactKind = 'html' | 'markdown' | 'image' | 'audio' | 'json' | 'text';
 export type ArtifactProjectionContentMode = 'none' | 'metadata_only' | 'selected_kinds' | 'explicit_artifacts';
 export type CloudflareNarsAuthorityExecutionMode = 'cloudflare_runtime_tool_adapter';
 export type CloudflareMcpLocus = 'cloudflare-host' | 'cloudflare-account-or-user' | 'cloudflare-site' | 'session-native';
@@ -286,7 +286,7 @@ function normalizeArtifactContentMode(value: unknown, fallback: ArtifactProjecti
 }
 
 function normalizeArtifactKind(value: unknown): ArtifactKind | null {
-  if (value === 'html' || value === 'markdown' || value === 'image' || value === 'json' || value === 'text') return value;
+  if (value === 'html' || value === 'markdown' || value === 'image' || value === 'audio' || value === 'json' || value === 'text') return value;
   return null;
 }
 
@@ -310,6 +310,7 @@ function artifactContentAllowed(policy: ArtifactProjectionPolicy, artifactId: st
 function contentTypeForArtifactKind(kind: ArtifactKind): string {
   if (kind === 'html') return 'text/html; charset=utf-8';
   if (kind === 'markdown') return 'text/markdown; charset=utf-8';
+  if (kind === 'audio') return 'audio/wav';
   if (kind === 'json') return 'application/json; charset=utf-8';
   if (kind === 'text') return 'text/plain; charset=utf-8';
   return 'application/octet-stream';
@@ -327,6 +328,7 @@ function strengthenArtifactHeaders(kind: ArtifactKind, headers: Record<string, s
   const next = { ...headers };
   next['x-narada-artifact-id'] = metadata.artifact_id;
   next['x-narada-artifact-kind'] = kind;
+  if (!next['content-type']) next['content-type'] = metadata.content_type;
   if (kind === 'html' && !next['content-security-policy']) {
     next['content-security-policy'] = "sandbox allow-scripts allow-forms; default-src 'self' data: blob:; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'none'; base-uri 'none'; form-action 'none'";
   }
@@ -850,7 +852,7 @@ export function createCloudflareNarsAuthorityService(options: {
         created_by: 'cloudflare_nars_authority.artifact_mcp_adapter',
         creation_input_id: args.input_id?.trim() || `artifact_register_${safeToken(now)}`,
         access: { scope: 'session', token_required: false },
-        render: { preferred: kind === 'html' || kind === 'markdown' || kind === 'image' ? 'inline' : 'download' },
+        render: { preferred: kind === 'html' || kind === 'markdown' || kind === 'image' || kind === 'audio' ? 'inline' : 'download' },
         lifecycle: { state: 'active', owner: 'cloudflare-nars-authority' },
       };
       artifacts.set(args.session_id, [...(artifacts.get(args.session_id) ?? []).filter((entry) => entry.artifact_id !== artifact.artifact_id), artifact]);

@@ -390,6 +390,24 @@ describe('artifact projection and cache', () => {
     expect(oversize).toMatchObject({ ok: false, code: 'artifact_content_too_large' });
   });
 
+  test('content policy admits explicitly selected audio artifacts with media content type', () => {
+    const audio = projectNarsArtifactContentForCloudflare({
+      projection_id: 'proj_1',
+      site_id: 'narada.sonar',
+      nars_session_id: 'carrier_123',
+      policy: { content: 'explicit_artifacts', explicit_artifact_ids: ['art_audio'] },
+      artifact: { artifact_id: 'art_audio', kind: 'audio', lifecycle: { state: 'active' } },
+      content: new TextEncoder().encode('RIFF____WAVEfmt data'),
+      projected_at: now,
+    });
+    expect(audio.ok).toBe(true);
+    if (audio.ok) {
+      expect(audio.content.kind).toBe('audio');
+      expect(audio.content.content_type).toBe('audio/wav');
+      expect(audio.content.headers['content-type']).toBe('audio/wav');
+    }
+  });
+
   test('artifact cache reads metadata and content independently', () => {
     const cache = createArtifactProjectionCache();
     const metadata = projectNarsArtifactMetadataForCloudflare({ projection_id: 'proj_1', site_id: 'site', nars_session_id: 's1', artifact: { artifact_id: 'art_1', kind: 'json', lifecycle: { state: 'active' } }, projected_at: now });

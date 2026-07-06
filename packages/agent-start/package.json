@@ -5,6 +5,7 @@
   "private": true,
   "dependencies": {
     "@narada2/agent-context-mcp": "workspace:*",
+    "@narada2/agent-identity": "workspace:*",
     "@narada2/agent-runtime-server": "workspace:*",
     "@narada2/carrier-runtime-contract": "workspace:*",
     "@narada2/carrier-protocol": "workspace:*",
@@ -22,6 +23,7 @@
     "./package.json": "./package.json"
   },
   "scripts": {
+    "syntaxcheck": "node --import tsx --check src/narada-agent-start.ts && node --check bin/verify-registered-site-launchers.mjs",
     "test": "node test/run-agent-start-tests.mjs",
     "test:launcher-contract": "node test/run-launcher-registry-contract-shards.mjs",
     "verify": "node bin/verify-registered-site-launchers.mjs",

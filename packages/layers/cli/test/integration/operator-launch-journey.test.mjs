@@ -16,6 +16,16 @@ function parseJsonOutput(stdout) {
   return JSON.parse(text.slice(start));
 }
 
+function assertLegacyCarrierCompatibility(value) {
+  assert.equal(value?.schema, 'narada.workspace_launch.legacy_carrier_compatibility.v1');
+  assert.equal(value?.status, 'compatibility_fields_present');
+  assert.equal(value?.replacement_fields?.carrier, 'operator_surface');
+  assert.equal(value?.replacement_fields?.launch_carrier, 'launch_operator_surface');
+  assert.equal(value?.replacement_fields?.launch_carriers, 'launch_operator_surfaces');
+  assert.equal(value?.replacement_fields?.launch_runtime, 'launch_runtime_host');
+  assert.equal(value?.removal_policy, 'remove_after_consumers_migrate');
+}
+
 test('operator launch journey dry-run maps one agent to agent-cli and agent-web-ui sibling projections', { skip: !existsSync(workspaceLauncher) }, () => {
   const result = spawnSync('pwsh', [
     '-File', workspaceLauncher,
@@ -46,7 +56,9 @@ test('operator launch journey dry-run maps one agent to agent-cli and agent-web-
   assert.equal(plan.launcher_execution_owner, 'narada-cli');
   assert.equal(plan.selected_agents.length, 1);
 
+  assertLegacyCarrierCompatibility(plan.compatibility);
   const agent = plan.selected_agents[0];
+  assertLegacyCarrierCompatibility(agent.legacy_carrier_compatibility);
   assert.deepEqual(agent.launch_carriers, ['agent-cli', 'agent-web-ui']);
   assert.equal(agent.launch_carrier, 'agent-cli');
   assert.equal(agent.launch_runtime, 'narada-agent-runtime-server');
@@ -82,7 +94,9 @@ test('operator launch journey dry-run admits agent-web-ui as the primary NARS la
 
   assert.equal(result.status, 0, `stderr:\n${result.stderr}\nstdout:\n${result.stdout}`);
   const plan = parseJsonOutput(result.stdout);
+  assertLegacyCarrierCompatibility(plan.compatibility);
   const agent = plan.selected_agents[0];
+  assertLegacyCarrierCompatibility(agent.legacy_carrier_compatibility);
   assert.deepEqual(agent.launch_carriers, ['agent-web-ui']);
   assert.equal(agent.launch_carrier, 'agent-web-ui');
   assert.equal(agent.launch_runtime, 'narada-agent-runtime-server');

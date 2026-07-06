@@ -23,6 +23,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { homedir } from 'node:os';
+import { buildAgentIdentityRef } from '@narada2/agent-identity';
 import { buildNarsAttachCommands } from '@narada2/nars-client-projection-contract';
 import {
   ADMITTED_CARRIER_KINDS,
@@ -46,6 +47,7 @@ import {
   resolveToolFabricAdapter as resolveCarrierToolFabricAdapter,
   carrierSpawnOptions,
   shellQuote,
+  stripCodexSubscriptionOpenAIEnvironment,
 } from './carrier-launch-adapter.ts';
 import { createNaradaPackageResolver } from './narada-package-resolver.ts';
 import {
@@ -1032,6 +1034,7 @@ const runtimeEnvironment = carrierSpecificEnvironment(carrier, {
   defaultClaudeCodeModel: DEFAULT_CLAUDE_CODE_MODEL,
 });
 const siteConfig = siteConfigProjection();
+const agentIdentityRef = buildAgentIdentityRef(identity, startResult.role, targetSiteId);
 const { requiredEnvironment, wouldSetEnvironment } = buildCarrierEnvironmentProjection({
   carrierName: carrier,
   startResult,
@@ -1060,6 +1063,7 @@ const narsLaunch = buildNarsLaunchPacket(carrier, {
 const output = {
   ...startResult,
   schema: 'narada.agent_start.result.v0',
+  agent_identity_ref: agentIdentityRef,
   runtime_contract_schema: RUNTIME_CONTRACT_SCHEMA,
   operator_surface_kind: carrier,
   runtime_host_kind: runtime,
@@ -1160,6 +1164,7 @@ if (!execFlag || dryRun) {
 if (waitFlag) {
   await waitForEnterBeforeCarrier({
     agentId: identity,
+    agentIdentityRef,
     carrierName: runtime === 'narada-agent-runtime-server' ? 'agent-runtime-server' : carrier,
     writeStdout,
     loadAgentStartRenderer,
@@ -1194,6 +1199,9 @@ const processEnvironment = {
   ...agentTuiEnvironment,
   ...(codexMcpScope.status === 'materialized' ? { CODEX_HOME: codexMcpScope.codex_home, CODEX_CONFIG_DIR: codexMcpScope.codex_home } : {}),
 };
+const launchEnvironment = intelligenceProviderResolution?.intelligence_provider === 'codex-subscription'
+  ? stripCodexSubscriptionOpenAIEnvironment(processEnvironment)
+  : processEnvironment;
 const aiProcessInvocation = carrier === 'codex'
   ? {
       adapterKind: 'codex',
@@ -1211,7 +1219,7 @@ spawnCarrierProcessAndExit({
   command: spawnCommand,
   args: spawnCommandArgs,
   cwd: process.cwd(),
-  env: processEnvironment,
+  env: launchEnvironment,
   spawnOptions: carrierSpawnOptions(carrier),
   aiProcessInvocation,
 });

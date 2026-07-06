@@ -1,4 +1,5 @@
 import { normalizeNarsClientProjectionVerbosity, projectNarsClientEvent, shouldProjectNarsClientProjection } from '@narada2/nars-client-projection-contract';
+import { agentIdentityDisplay, agentIdentityRefMatchesRequest, renderOperatorValue } from '@narada2/agent-identity';
 import { createTerminalStyle, formatTerminalMessageBlockLines } from './terminal-style.mjs';
 import {
   createMarkdownStreamState,
@@ -63,17 +64,23 @@ export function projectedAgentId(state) {
 }
 
 function agentLabel(event, style) {
-  return style.agent(event.agent_id ?? 'agent');
+  return style.agent(eventAgentDisplay(event, 'agent'));
 }
 
 export function assistantEmissionHeader(state, style, fallbackLabel = 'assistant') {
   return `${style.agent(fallbackLabel)}${style.muted(':')}`;
 }
 
+function eventAgentDisplay(event, fallbackLabel = 'agent') {
+  return agentIdentityDisplay(event?.agent_identity_ref, event?.agent_id ?? fallbackLabel) ?? fallbackLabel;
+}
+
 function consumeLocalThinkingForEvent(state, event) {
   if (!state.localThinkingRendered) return false;
   const expectedAgentId = state.localThinkingAgentId ?? projectedAgentId(state);
-  if ((event.agent_id ?? expectedAgentId) !== expectedAgentId) return false;
+  if (event?.agent_identity_ref) {
+    if (!agentIdentityRefMatchesRequest(event.agent_identity_ref, expectedAgentId)) return false;
+  } else if ((event.agent_id ?? expectedAgentId) !== expectedAgentId) return false;
   state.localThinkingRendered = false;
   state.localThinkingAgentId = null;
   return true;
@@ -147,24 +154,9 @@ function summarizeToolResult(event) {
 }
 
 function formatEventValue(value, { limit = 500 } = {}) {
-  if (value === null || value === undefined) return '';
-  if (typeof value === 'string') return value;
-  if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') return String(value);
-  if (value instanceof Error) return value.message || value.name || String(value);
-  if (typeof value === 'object') {
-    const message = typeof value.message === 'string' ? value.message : null;
-    const code = typeof value.code === 'string' || typeof value.code === 'number' ? String(value.code) : null;
-    const error = typeof value.error === 'string' ? value.error : null;
-    const summary = [code, message ?? error].filter(Boolean).join(': ');
-    if (summary) return summary;
-    try {
-      const compact = JSON.stringify(value);
-      return compact.length > limit ? `${compact.slice(0, Math.max(0, limit - 3))}...` : compact;
-    } catch {
-      return Object.prototype.toString.call(value);
-    }
-  }
-  return String(value);
+  const rendered = renderOperatorValue(value, { limit, mode: 'inline' });
+  if (!rendered) return '';
+  return rendered.length > limit ? `${rendered.slice(0, Math.max(0, limit - 3))}...` : rendered;
 }
 
 function terminalAssistantContent(content) {
@@ -179,7 +171,7 @@ function terminalAssistantContent(content) {
       return `[${title}${kind} artifact]`;
     }
     if (part.type === 'code') return String(part.text ?? '');
-    return formatEventValue(part);
+    return renderOperatorValue(part, { mode: 'inline' });
   }).filter(Boolean).join('\n\n');
 }
 
@@ -254,7 +246,9 @@ function formatHostCommandBlock(event, state, style) {
 
 function startupRows(event) {
   const rows = [
-    ['Identity', event.agent_id ?? '<unknown>'],
+    ['Identity', eventAgentDisplay(event, '<unknown>')],
+    ...(event.agent_identity_ref?.local_agent_id && event.agent_identity_ref.local_agent_id !== eventAgentDisplay(event, '<unknown>') ? [['Local agent', event.agent_identity_ref.local_agent_id]] : []),
+    ...(event.agent_identity_ref?.site_id ? [['Site', event.agent_identity_ref.site_id]] : []),
     ['Session', event.session_id ?? '<unknown>'],
     ['Provider', event.provider ?? '<unknown>'],
     ['Model', event.model ?? '<unknown>'],
@@ -356,7 +350,7 @@ export function renderOperatorEvent(event, state = {}) {
     }
     case 'directive_received':
       if (!event.turn_id) return [];
-      return withStreamBoundary(state, [routeLine({ label: `operator directive -> ${event.agent_id ?? 'agent'}`, body: 'accepted directive', labelStyle: style.operatorDirective, state, style })]);
+      return withStreamBoundary(state, [routeLine({ label: `operator directive -> ${eventAgentDisplay(event, 'agent')}`, body: 'accepted directive', labelStyle: style.operatorDirective, state, style })]);
     case 'directive_complete':
       if (!event.turn_id) return [];
       return withStreamBoundary(state, [routeLine({ label: 'agent-cli', body: `directive ${event.terminal_state ?? 'complete'}`, labelStyle: style.label, bodyStyle: event.terminal_state === 'failed' ? style.error : style.muted, state, style })]);
@@ -364,7 +358,7 @@ export function renderOperatorEvent(event, state = {}) {
       state.activeTurnId = event.turn_id ?? true;
       if (consumeLocalThinkingForEvent(state, event)) return withStreamBoundary(state, []);
       markThinkingRendered(state, event.agent_id ?? projectedAgentId(state));
-      return withStreamBoundary(state, [`${assistantEmissionHeader(state, style, event.agent_id ?? 'agent')} thinking...`]);
+      return withStreamBoundary(state, [`${assistantEmissionHeader(state, style, eventAgentDisplay(event, 'agent'))} thinking...`]);
     case 'assistant_message_stream': {
       const thinkingClear = clearRenderedThinking(state);
       const content = String(event.content ?? '');
@@ -373,7 +367,7 @@ export function renderOperatorEvent(event, state = {}) {
       if (event.turn_id) state.streamedTurns.add(event.turn_id);
       state.streamedContentByTurn.set(turnKey, `${state.streamedContentByTurn.get(turnKey) ?? ''}${content}`);
       if (!state.streamMarkdownStateByTurn.has(turnKey)) state.streamMarkdownStateByTurn.set(turnKey, createMarkdownStreamState());
-      const prefix = state.streamOpen && state.openStreamTurnKey === turnKey ? '' : `${assistantEmissionHeader(state, style, event.agent_id ?? 'assistant')}\n  `;
+      const prefix = state.streamOpen && state.openStreamTurnKey === turnKey ? '' : `${assistantEmissionHeader(state, style, eventAgentDisplay(event, 'assistant'))}\n  `;
       const bodyWidth = terminalColumns(state) - 2;
       const shouldHardWrap = stripAnsi(content).length > bodyWidth;
       const markdownContent = renderMarkdownStreamChunk(content, state.streamMarkdownStateByTurn.get(turnKey), style);
@@ -397,21 +391,21 @@ export function renderOperatorEvent(event, state = {}) {
       const renderedContent = renderMarkdownForProjectedTerminal(content, style);
       const lines = wrapIndentedLines(renderedContent, { indent: '', columns: terminalColumns(state) - 2 });
       if (streamedContent) return [...thinkingClear, ...withStreamBoundary(state, lines.map((line) => `  ${line}`))];
-      const block = formatTerminalMessageBlockLines({ label: event.agent_id ?? 'assistant', lines, style, labelStyle: style.agent, bodyStyle: (value) => value });
+      const block = formatTerminalMessageBlockLines({ label: eventAgentDisplay(event, 'assistant'), lines, style, labelStyle: style.agent, bodyStyle: (value) => value });
       appendSuffixToLastLine(block, timestampSuffix(state, style));
       return [...thinkingClear, ...withStreamBoundary(state, block)];
     }
     case 'tool_call': {
       if (state.toolOutputs === 'hidden') return withRenderedThinkingCleared(state, []);
       const tool = toolDisplayName(event);
-      return withRenderedThinkingCleared(state, routedBodyLines({ label: `${event.agent_id ?? 'agent'} -> agent-cli`, body: `${tool}${summarizeToolCall(event)}`, labelStyle: () => `${agentLabel(event, style)} ${style.muted('->')} ${style.tool('agent-cli')}`, bodyStyle: style.muted, state, style }));
+      return withRenderedThinkingCleared(state, routedBodyLines({ label: `${eventAgentDisplay(event, 'agent')} -> agent-cli`, body: `${tool}${summarizeToolCall(event)}`, labelStyle: () => `${agentLabel(event, style)} ${style.muted('->')} ${style.tool('agent-cli')}`, bodyStyle: style.muted, state, style }));
     }
     case 'tool_result': {
       if (state.toolOutputs === 'hidden') return withRenderedThinkingCleared(state, []);
       const status = String(event.status ?? '').toLowerCase();
       const normal = !status || ['success', 'complete', 'completed', 'ok'].includes(status);
       const levelStyle = normal ? style.muted : status === 'error' ? style.error : style.warn;
-      return withRenderedThinkingCleared(state, routedBodyLines({ label: `agent-cli -> ${event.agent_id ?? 'agent'}`, body: `${toolDisplayName(event)} ${summarizeToolResult(event)}`, labelStyle: () => `${style.tool('agent-cli')} ${style.muted('->')} ${agentLabel(event, style)}`, bodyStyle: levelStyle, state, style }));
+      return withRenderedThinkingCleared(state, routedBodyLines({ label: `agent-cli -> ${eventAgentDisplay(event, 'agent')}`, body: `${toolDisplayName(event)} ${summarizeToolResult(event)}`, labelStyle: () => `${style.tool('agent-cli')} ${style.muted('->')} ${agentLabel(event, style)}`, bodyStyle: levelStyle, state, style }));
     }
     case 'turn_complete':
       if (!event.turn_id || state.activeTurnId === event.turn_id) state.activeTurnId = null;

@@ -88,6 +88,60 @@ test('server mode executes a provider-requested MCP tool through real fabric and
   }
 });
 
+test('server mode health advertises MCP tool catalog for web UI inventory', async () => {
+  const siteRoot = tempRoot('carrier-mcp-health-catalog-test-');
+  try {
+    writeFixtureMcpSurface(siteRoot);
+    const input = new PassThrough();
+    const output = new PassThrough();
+    const events = [];
+    let outputBuffer = '';
+    output.setEncoding('utf8');
+    output.on('data', (chunk) => {
+      outputBuffer += chunk;
+      const lines = outputBuffer.split(/\r?\n/);
+      outputBuffer = lines.pop() ?? '';
+      for (const line of lines) {
+        if (line.trim()) events.push(JSON.parse(line));
+      }
+    });
+
+    const sessionDir = resolveNaradaSitePaths({ siteRoot, sessionId: 'session_mcp_health_catalog' }).narsSessionDir;
+    const runtimeContext = {
+      identity: 'agent.test',
+      session: 'session_mcp_health_catalog',
+      siteRoot,
+      sessionPath: join(sessionDir, 'session.jsonl'),
+      eventsPath: join(sessionDir, 'events.jsonl'),
+      providerSettings: { provider: 'codex-subscription', model: 'gpt-5.5', thinking: 'medium', stream: false },
+    };
+    const { dependencies } = createCarrierRuntimeDependencies({ runtimeContext });
+    input.write(`${JSON.stringify({ id: 'health-catalog-1', method: 'session.health' })}\n`);
+    input.end();
+
+    await runCarrierServerMode({
+      input,
+      output,
+      callChatApiFn: async () => ({ choices: [{ message: { role: 'assistant', content: 'unused' } }] }),
+      runtimeContext,
+      dependencies: {
+        ...dependencies,
+        readMcpPreflightArtifact: () => null,
+      },
+    });
+
+    const health = events.find((event) => event.event === 'session_health');
+    assert.deepEqual(health?.mcp_tools?.map((tool) => ({ server_name: tool.server_name, tool_name: tool.tool_name })), [
+      { server_name: 'narada-fixture', tool_name: 'fixture_read' },
+    ]);
+    assert.deepEqual(health?.mcp?.tools?.map((tool) => ({ server_name: tool.server_name, tool_name: tool.tool_name })), [
+      { server_name: 'narada-fixture', tool_name: 'fixture_read' },
+    ]);
+  } finally {
+    removeTempDir(siteRoot);
+  }
+});
+
 test('server mode emits MCP runtime diagnostics when a real fabric tool call fails', async () => {
   const siteRoot = tempRoot('carrier-mcp-failure-e2e-test-');
   try {
@@ -1082,6 +1136,8 @@ test('server mode health and event subscription match NARS runtime contract shap
     assert.equal(health.heartbeat?.freshness, 'fresh');
     assert.equal(Number.isInteger(health.heartbeat?.age_ms), true);
     assert.equal(health.activity?.active_turn_state, 'idle');
+    assert.deepEqual(health.mcp_tools, []);
+    assert.deepEqual(health.mcp?.tools, []);
     assert.equal(health.surface_affordances?.schema, 'narada.nars.surface_affordances.v1');
     assert.equal(health.surface_affordances?.count, 0);
     assert.equal(health.recommended_action, 'review_session_summary');

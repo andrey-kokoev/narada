@@ -163,6 +163,13 @@ assert.deepEqual(narsLifecycleHooksForEvent({ event: 'session_closed' }), ['befo
 const hookPayload = createNarsLifecycleHookPayload({
   hook: 'onToolResult',
   agent_id: 'sonar.resident',
+  agent_identity_ref: {
+    schema: 'narada.agent_identity_ref.v1',
+    site_id: 'sonar',
+    local_agent_id: 'resident',
+    canonical_agent_id: 'sonar.resident',
+    source_agent_id: 'resident',
+  },
   session_id: 'carrier_test',
   request_id: 'input_test',
   turn_id: 'turn_test',
@@ -172,12 +179,20 @@ const hookPayload = createNarsLifecycleHookPayload({
 });
 assert.equal(hookPayload.schema, NARS_LIFECYCLE_HOOK_SCHEMA);
 assert.equal(hookPayload.hook_kind, 'turn');
+assert.equal(hookPayload.agent_identity_ref.canonical_agent_id, 'sonar.resident');
 assert.deepEqual(validateNarsLifecycleHookPayload(hookPayload), []);
 assert.deepEqual(narsLifecycleHookPayloadFromEvent({
   hook: 'onRuntimeError',
   event: {
     event: 'error',
     agent_id: 'sonar.resident',
+    agent_identity_ref: {
+      schema: 'narada.agent_identity_ref.v1',
+      site_id: 'sonar',
+      local_agent_id: 'resident',
+      canonical_agent_id: 'sonar.resident',
+      source_agent_id: 'resident',
+    },
     session_id: 'carrier_test',
     request_id: 'input_test',
     timestamp: '2026-06-23T00:00:01.000Z',
@@ -189,6 +204,13 @@ assert.deepEqual(narsLifecycleHookPayloadFromEvent({
   hook: 'onRuntimeError',
   hook_kind: 'turn',
   agent_id: 'sonar.resident',
+  agent_identity_ref: {
+    schema: 'narada.agent_identity_ref.v1',
+    site_id: 'sonar',
+    local_agent_id: 'resident',
+    canonical_agent_id: 'sonar.resident',
+    source_agent_id: 'resident',
+  },
   session_id: 'carrier_test',
   timestamp: '2026-06-23T00:00:01.000Z',
   event_kind: 'runtime_error',
@@ -197,6 +219,13 @@ assert.deepEqual(narsLifecycleHookPayloadFromEvent({
   source_event: {
     event: 'error',
     agent_id: 'sonar.resident',
+    agent_identity_ref: {
+      schema: 'narada.agent_identity_ref.v1',
+      site_id: 'sonar',
+      local_agent_id: 'resident',
+      canonical_agent_id: 'sonar.resident',
+      source_agent_id: 'resident',
+    },
     session_id: 'carrier_test',
     request_id: 'input_test',
     timestamp: '2026-06-23T00:00:01.000Z',
@@ -204,6 +233,13 @@ assert.deepEqual(narsLifecycleHookPayloadFromEvent({
     message: 'provider failed',
   },
 });
+assert.match(thrownMessage(() => createNarsLifecycleHookPayload({
+  hook: 'onToolCall',
+  agent_id: 'sonar.resident',
+  agent_identity_ref: 'sonar.resident',
+  session_id: 'carrier_test',
+  timestamp: '2026-06-23T00:00:00.000Z',
+})), /invalid_agent_identity_ref/);
 assert.match(thrownMessage(() => createNarsLifecycleHookPayload({
   hook: 'onToolCall',
   agent_id: 'sonar.resident',

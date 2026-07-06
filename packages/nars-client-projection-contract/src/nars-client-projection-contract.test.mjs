@@ -192,6 +192,9 @@ test('Agent Web UI commands are first-class static registry entries', () => {
   assert.match(buildAgentWebUiHelpText(), /Conversation control/);
   assert.match(buildAgentWebUiHelpText(), /\/observer mute\|unmute/);
   assert.equal(buildAgentWebUiOperatorInputAction('/json').message, 'Usage: /json <protocol frame JSON>');
+  assert.equal(buildAgentWebUiOperatorInputAction('/json {"id":"status-raw","method":"session.status","params":{}}').frame.method, 'session.status');
+  assert.equal(buildAgentWebUiOperatorInputAction('/json {"id":"bad","method":"bad.method","params":{}}').message, 'JSON frame method is not admitted for agent-web-ui.');
+  assert.equal(buildAgentWebUiOperatorInputAction('/does-not-exist').message, 'Unknown command: /does-not-exist. Type /help.');
 });
 
 test('NARS client projection contract owns shared event rendering vocabulary', () => {
@@ -202,12 +205,61 @@ test('NARS client projection contract owns shared event rendering vocabulary', (
     summary: 'hello',
     event: { event: 'assistant_message', content: 'hello' },
   });
-  assert.deepEqual(projectNarsClientEvent({ event: 'tool_result', tool_name: 'narada-site.whoami', status: 'ok' }), {
+  assert.deepEqual(projectNarsClientEvent({ event: 'assistant_message_stream', request_id: 'input_1', turn_id: 'turn_1', content: 'partial' }), {
+    kind: 'assistant_message_stream',
+    label: 'Agent',
+    tone: 'assistant',
+    summary: 'partial',
+    event: { event: 'assistant_message_stream', request_id: 'input_1', turn_id: 'turn_1', content: 'partial' },
+    renderKey: 'assistant:input_1',
+  });
+  assert.deepEqual(projectNarsClientEvent({ event: 'assistant_message', request_id: 'input_1', turn_id: 'turn_1', content: 'final' }), {
+    kind: 'assistant_message',
+    label: 'Agent',
+    tone: 'assistant',
+    summary: 'final',
+    event: { event: 'assistant_message', request_id: 'input_1', turn_id: 'turn_1', content: 'final' },
+    renderKey: 'assistant:input_1',
+  });
+  assert.deepEqual(projectNarsClientEvent({ event: 'operator_input_submitted', request_id: 'input_1', content: 'run startup sequence' }), {
+    kind: 'operator_input_submitted',
+    label: 'Operator input',
+    tone: 'local',
+    summary: 'run startup sequence',
+    event: { event: 'operator_input_submitted', request_id: 'input_1', content: 'run startup sequence' },
+    renderKey: 'operator:input_1',
+  });
+  assert.deepEqual(projectNarsClientEvent({ event: 'tool_result', request_id: 'input_1', tool_name: 'narada-site.whoami', status: 'ok' }), {
     kind: 'tool_result',
     label: 'Tool result',
     tone: 'tool',
     summary: 'narada-site.whoami ok',
-    event: { event: 'tool_result', tool_name: 'narada-site.whoami', status: 'ok' },
+    event: { event: 'tool_result', request_id: 'input_1', tool_name: 'narada-site.whoami', status: 'ok' },
+    renderKey: 'tool:tool_result:input_1',
+  });
+  assert.deepEqual(projectNarsClientEvent({ event: 'tool_result', request_id: 'input_2', tool: 'fixture_read', status: 'ok' }), {
+    kind: 'tool_result',
+    label: 'Tool result',
+    tone: 'tool',
+    summary: 'fixture_read ok',
+    event: { event: 'tool_result', request_id: 'input_2', tool: 'fixture_read', status: 'ok' },
+    renderKey: 'tool:tool_result:input_2',
+  });
+  assert.deepEqual(projectNarsClientEvent({ event: 'tool_call', request_id: 'input_1', tool_name: 'narada-site.whoami' }), {
+    kind: 'tool_call',
+    label: 'Tool call',
+    tone: 'tool',
+    summary: 'narada-site.whoami',
+    event: { event: 'tool_call', request_id: 'input_1', tool_name: 'narada-site.whoami' },
+    renderKey: 'tool:tool_call:input_1',
+  });
+  assert.deepEqual(projectNarsClientEvent({ event: 'turn_started', turn_id: 'turn_1' }), {
+    kind: 'turn_started',
+    label: 'Turn started',
+    tone: 'session',
+    summary: 'turn_1',
+    event: { event: 'turn_started', turn_id: 'turn_1' },
+    renderKey: 'turn:turn_1',
   });
   assert.deepEqual(projectNarsClientEvent({ event: 'mcp_runtime_fault', server_name: 'narada-site', tool_name: 'fixture_fail', error_code: 'fixture_mcp_forced_failure' }), {
     kind: 'mcp_runtime_fault',
@@ -218,6 +270,13 @@ test('NARS client projection contract owns shared event rendering vocabulary', (
   });
   assert.equal(projectNarsClientEvent({ event: 'error', message: 'bad' }).tone, 'error');
   assert.equal(projectNarsClientEvent({ event: 'session_health', status: 'healthy', agent_id: 'narada.test', session_id: 'carrier_test' }).summary, 'healthy · narada.test · carrier_test');
+  assert.equal(projectNarsClientEvent({
+    event: 'session_health',
+    status: 'healthy',
+    agent_id: 'resident',
+    agent_identity_ref: { schema: 'narada.agent_identity_ref.v1', site_id: 'sonar', local_agent_id: 'resident', canonical_agent_id: 'sonar.resident' },
+    session_id: 'carrier_test',
+  }).summary, 'healthy · sonar.resident · carrier_test');
   assert.deepEqual(projectNarsClientEvent({ event: 'authority_session_revoked', session_id: 'cf_session_1', code: 'session_revoked' }), {
     kind: 'authority_session_revoked',
     label: 'Session revoked',
@@ -288,6 +347,7 @@ test('NARS client projection verbosity filters shared event classes', () => {
   const routineHealth = { event: 'session_health', status: 'healthy', mcp_operational_state: 'healthy', mcp_startup_failure_count: 0, mcp_runtime_fault_count: 0 };
   const unhealthy = { event: 'session_health', status: 'degraded', mcp_operational_state: 'degraded', mcp_startup_failure_count: 1, mcp_runtime_fault_count: 0 };
   const sessionStarted = { event: 'session_started', agent_id: 'resident', session_id: 'carrier_test' };
+  const sessionSync = { event: 'session_sync', success: true };
   const assistant = { event: 'assistant_message', content: 'hello' };
   const toolCall = { event: 'tool_call', tool_name: 'narada-site.whoami' };
   const toolResult = { event: 'tool_result', tool_name: 'narada-site.whoami', status: 'ok' };
@@ -297,6 +357,8 @@ test('NARS client projection verbosity filters shared event classes', () => {
   assert.equal(shouldProjectNarsClientEvent(assistant, { verbosity: 'conversation' }), true);
   assert.equal(shouldProjectNarsClientEvent(sessionStarted, { verbosity: 'conversation' }), false);
   assert.equal(shouldProjectNarsClientEvent(sessionStarted, { verbosity: 'operations' }), true);
+  assert.equal(classifyNarsClientEventProjection(projectNarsClientEvent(sessionSync)), 'operations');
+  assert.equal(shouldProjectNarsClientEvent(sessionSync, { verbosity: 'operations' }), true);
   assert.equal(shouldProjectNarsClientEvent(toolCall, { verbosity: 'conversation' }), false);
   assert.equal(shouldProjectNarsClientEvent(toolResult, { verbosity: 'conversation' }), false);
   assert.equal(shouldProjectNarsClientEvent(toolCall, { verbosity: 'operations' }), true);
@@ -331,6 +393,7 @@ test('NARS client projection contract classifies nested provider events without 
   const providerAgent = {
     event_sequence: 2,
     agent_id: 'resident',
+    agent_identity_ref: { schema: 'narada.agent_identity_ref.v1', site_id: 'sonar', local_agent_id: 'resident', canonical_agent_id: 'sonar.resident' },
     session_id: 'carrier_test',
     event: { type: 'item.completed', item: { id: 'provider_intro', type: 'agent_message', text: 'I am checking context first.' } },
   };
@@ -340,7 +403,7 @@ test('NARS client projection contract classifies nested provider events without 
   assert.equal(projectedAgent.label, 'Provider message');
   assert.equal(projectedAgent.tone, 'assistant');
   assert.equal(projectedAgent.summary, 'I am checking context first.');
-  assert.equal(projectedAgent.renderKey, 'provider-agent-message:provider-item:resident:carrier_test:provider_intro');
+  assert.equal(projectedAgent.renderKey, 'provider-agent-message:provider-item:sonar/sonar.resident:carrier_test:provider_intro');
   assert.equal(classifyNarsClientEventProjection(projectedAgent), 'diagnostics');
   assert.equal(shouldProjectNarsClientProjection(projectedAgent, { verbosity: 'conversation' }), false);
   assert.equal(shouldProjectNarsClientProjection(projectedAgent, { verbosity: 'operations' }), false);

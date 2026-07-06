@@ -4,6 +4,7 @@ import { AiProcessInvocationRefusalError, spawnAiProcessInvocation } from '@nara
 
 export async function waitForEnterBeforeCarrier({
   agentId,
+  agentIdentityRef = null,
   carrierName,
   stdin = process.stdin,
   stdout = process.stdout,
@@ -17,7 +18,7 @@ export async function waitForEnterBeforeCarrier({
   const rl = createInterface({ input: stdin, output: stdout });
   try {
     const { formatAgentStartWaitPrompt } = await loadAgentStartRenderer();
-    await rl.question(formatAgentStartWaitPrompt(agentId, carrierName));
+    await rl.question(formatAgentStartWaitPrompt(agentId, carrierName, { agentIdentityRef }));
   } finally {
     rl.close();
   }

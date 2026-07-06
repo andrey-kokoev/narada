@@ -9,7 +9,7 @@ export const AGENT_WEB_UI_NARS_METHOD_LIST: readonly string[];
 export const AGENT_WEB_UI_SESSION_COMMANDS: readonly string[];
 export const AGENT_WEB_UI_CARRIER_COMMANDS: readonly string[];
 export type AgentWebUiCommandKind = 'local_ui' | 'nars_protocol' | 'nars_session_command' | 'raw_protocol_frame';
-export type AgentWebUiCommandGroup = 'conversation' | 'session' | 'diagnostics' | 'settings' | 'local' | 'advanced';
+export type AgentWebUiCommandGroup = 'conversation' | 'session' | 'diagnostics' | 'settings' | 'snippets' | 'local' | 'advanced';
 export interface AgentWebUiCommand {
   id: string;
   slash: `/${string}`;

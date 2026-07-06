@@ -7,6 +7,7 @@ import {
   runAgentStartCommand,
 } from '../lib/launcher-runtime.js';
 import { defaultRuntimeForCarrier } from '@narada2/carrier-runtime-contract/carrier-runtime-selection';
+import { agentIdentityDisplay } from '@narada2/agent-identity';
 
 export interface CarrierCommandOptions {
   siteRoot?: string;
@@ -295,9 +296,10 @@ function formatCarrierStatus(status: ReturnType<typeof getCarrierStatus>): strin
   if (!status.latest) {
     return `No runtime launch result found for ${status.site_root}`;
   }
+  const displayIdentity = agentIdentityDisplay(status.latest.agent_identity_ref, status.latest.identity) ?? 'unknown';
   return [
     `session: ${status.latest.nars_session_id ?? status.latest.runtime_session_id ?? status.latest.carrier_session_id ?? 'unknown'}`,
-    `identity: ${status.latest.identity ?? 'unknown'}`,
+    `identity: ${displayIdentity}`,
     `operator_surface: ${status.latest.operator_surface_kind ?? status.latest.carrier_kind ?? 'unknown'}`,
     `runtime_host: ${status.latest.runtime_host_kind ?? status.latest.runtime_substrate_kind ?? status.latest.runtime ?? 'unknown'}`,
     `control: ${status.latest.control_path ?? 'missing'}${status.latest.control_path_exists ? ' (exists)' : ''}`,

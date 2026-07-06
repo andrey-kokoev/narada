@@ -1,5 +1,6 @@
 import type { CommandContext } from '../lib/command-wrapper.js';
 import { executeOperatorProjectionOpenRequest } from '@narada2/process-launch-posture';
+import { agentIdentityDisplay, agentIdentityGroupKey, agentIdentityRefMatchesRequest, normalizeSiteToken, roleSegment, siteSegment } from '@narada2/agent-identity';
 import { formattedResult, type CliFormat } from '../lib/cli-output.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { narsAttachCommandCommand, narsSessionsCommand } from './nars.js';
@@ -29,6 +30,7 @@ interface ResolvedAttachSession {
 interface AttachSessionCandidate {
   session_id: string | null;
   agent_id: string | null;
+  agent_identity_ref: unknown;
   site_id: string | null;
   site_root: string | null;
   display_state: string | null;
@@ -125,6 +127,8 @@ async function discoverAttachSessionIdOnce(options: AgentWebUiAttachOptions, con
 }
 
 function agentIdMatchesSession(requestedAgentId: string, session: Record<string, unknown>): boolean {
+  const identityRef = objectField(session, 'agent_identity_ref');
+  if (identityRef && agentIdentityRefMatchesRequest(identityRef, requestedAgentId)) return true;
   const candidateAgent = stringField(session, 'agent_id');
   if (!candidateAgent) return false;
   if (candidateAgent === requestedAgentId) return true;
@@ -138,34 +142,18 @@ function agentIdMatchesSession(requestedAgentId: string, session: Record<string,
 }
 
 function distinctAttachIdentityGroups(sessions: Record<string, unknown>[]): Set<string> {
-  return new Set(sessions.map((session) => [
-    normalizeSiteToken(stringField(session, 'site_id') ?? siteSegment(stringField(session, 'agent_id') ?? '') ?? ''),
-    stringField(session, 'agent_id') ?? roleSegment(stringField(session, 'agent_id') ?? '') ?? '',
-  ].join('/')));
-}
-
-function roleSegment(agentId: string | null): string | null {
-  if (!agentId) return null;
-  const parts = agentId.split('.').filter(Boolean);
-  return parts.length > 1 ? parts[parts.length - 1] : agentId;
-}
-
-function siteSegment(agentId: string | null): string | null {
-  if (!agentId || !agentId.includes('.')) return null;
-  return agentId.split('.')[0] ?? null;
-}
-
-function normalizeSiteToken(value: string): string {
-  const lower = value.toLowerCase();
-  if (lower.startsWith('narada-')) return lower.slice('narada-'.length);
-  if (lower.startsWith('narada.')) return lower.slice('narada.'.length);
-  return lower;
+  return new Set(sessions.map((session) => agentIdentityGroupKey(
+    objectField(session, 'agent_identity_ref'),
+    stringField(session, 'agent_id'),
+    stringField(session, 'site_id'),
+  )));
 }
 
 function toAttachSessionCandidate(session: Record<string, unknown>): AttachSessionCandidate {
   return {
     session_id: stringField(session, 'session_id') ?? stringField(session, 'carrier_session_id'),
     agent_id: stringField(session, 'agent_id'),
+    agent_identity_ref: objectField(session, 'agent_identity_ref'),
     site_id: stringField(session, 'site_id'),
     site_root: stringField(session, 'site_root'),
     display_state: stringField(session, 'display_state'),
@@ -327,8 +315,26 @@ function formatCandidateLines(candidates: AttachSessionCandidate[]): string[] {
   if (!Array.isArray(candidates) || candidates.length === 0) return [];
   return [
     '  Candidates:',
-    ...candidates.slice(0, 8).map((candidate) => `    ${candidate.session_id ?? 'unknown'} ${candidate.agent_id ?? 'unknown'} ${candidate.site_id ?? candidate.site_root ?? 'unknown'} ${candidate.display_state ?? 'unknown'} ${candidate.health_status ?? 'unknown'}`),
+    '    session_id | identity | health | started_at | next_command',
+    ...candidates.slice(0, 8).map((candidate) => {
+      const sessionId = candidate.session_id ?? 'unknown';
+      const identity = agentIdentityDisplay(candidate.agent_identity_ref, candidate.agent_id) ?? 'unknown';
+      const health = candidate.health_status ?? candidate.display_state ?? candidate.terminal_state ?? 'unknown';
+      const startedAt = candidate.started_at ?? 'unknown';
+      const nextCommand = candidateNextCommand(candidate);
+      return `    ${sessionId} | ${identity} | ${health} | ${startedAt} | ${nextCommand}`;
+    }),
   ];
+}
+
+function candidateNextCommand(candidate: AttachSessionCandidate): string {
+  if (!candidate.session_id) return 'agent-web-ui attach --session <unknown>';
+  const command = [`agent-web-ui attach`, `--session ${candidate.session_id}`];
+  const health = candidate.health_status ?? candidate.display_state ?? candidate.terminal_state ?? null;
+  if (health && health !== 'healthy' && health !== 'active' && health !== 'starting_or_degraded') {
+    command.push('--allow-stale-session');
+  }
+  return command.join(' ');
 }
 
 export interface AgentWebUiAttachPlan {

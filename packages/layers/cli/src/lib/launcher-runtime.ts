@@ -3,6 +3,7 @@ import { spawnSync } from 'node:child_process';
 import { basename, dirname, join, parse, resolve } from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { agentIdentityRefMatchesRequest } from '@narada2/agent-identity';
 
 const requireFromLauncherRuntime = createRequire(import.meta.url);
 
@@ -13,6 +14,7 @@ export interface LaunchResultSummary {
   status?: string;
   agent_start_event?: string;
   identity?: string;
+  agent_identity_ref?: unknown;
   operator_surface_kind?: string;
   runtime_host_kind?: string;
   carrier_kind?: string;
@@ -170,6 +172,7 @@ interface LaunchResultRecord {
   status?: unknown;
   agent_start_event?: unknown;
   identity?: unknown;
+  agent_identity_ref?: unknown;
   operator_surface_kind?: unknown;
   runtime_host_kind?: unknown;
   carrier_kind?: unknown;
@@ -225,7 +228,7 @@ export function getCarrierStatus(options: CarrierStatusOptions): CarrierStatusRe
   const launchResultsDir = join(siteRoot, '.ai', 'runtime', 'agent-start-results');
   const allSummaries = readLaunchResults(launchResultsDir);
   const summaries = allSummaries
-    .filter((summary) => !options.agent || summary.identity === options.agent)
+    .filter((summary) => !options.agent || summary.identity === options.agent || agentIdentityRefMatchesRequest(summary.agent_identity_ref, options.agent))
     .filter((summary) => !options.carrier || summary.carrier_kind === options.carrier)
     .filter((summary) => {
       if (!options.runtime) return true;
@@ -681,6 +684,7 @@ function readLaunchResult(path: string): LaunchResultSummary | null {
       status: stringValue(record.status),
       agent_start_event: stringValue(record.agent_start_event),
       identity: stringValue(record.identity ?? record.required_environment?.NARADA_AGENT_ID),
+      agent_identity_ref: objectValue(record.agent_identity_ref),
       operator_surface_kind: stringValue(record.operator_surface_kind ?? record.nars_launch?.operator_surface_kind ?? record.carrier_kind),
       runtime_host_kind: stringValue(record.runtime_host_kind ?? record.nars_launch?.runtime_host_kind ?? record.runtime_substrate_kind ?? record.runtime),
       carrier_kind: stringValue(record.carrier_kind),
@@ -737,6 +741,10 @@ function isProcessAlive(pid: number): boolean {
 
 function stringValue(value: unknown): string | undefined {
   return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
+function objectValue(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
 }
 
 function numberValue(value: unknown): number | undefined {

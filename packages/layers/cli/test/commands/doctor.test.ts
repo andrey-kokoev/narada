@@ -368,6 +368,7 @@ describe('doctor command', () => {
     const freshnessDetail = freshness?.detail.replaceAll('\\', '/');
     expect(freshnessDetail).toContain('packages/layers/cli/src/main.ts is newer than dist');
     expect(freshnessDetail).toContain('packages/layers/cli/dist/main.js');
+    expect(report.checks.find((check) => check.name === 'package-build-posture')?.detail).toContain('repair=pnpm --filter @narada2/cli build && pnpm run narada:install-shim');
     expect(report.checks.find((check) => check.name === 'governance-commands-allowed')?.status).toBe('pass');
     expect(report.cli_execution_posture).toMatchObject({
       governance_commands_allowed: true,
@@ -433,6 +434,7 @@ describe('doctor command', () => {
     expect(report.checks.find((check) => check.name === 'dependencies-installed')?.remediation).toContain('pnpm install');
     expect(report.checks.find((check) => check.name === 'dependencies-installed')?.remediation_args).toEqual(['pnpm', 'install']);
     expect(report.checks.find((check) => check.name === 'cli-built')?.remediation).toContain('pnpm -r build');
+    expect(report.checks.find((check) => check.name === 'package-build-posture')?.detail).toContain('repair=pnpm --filter @narada2/cli build && pnpm run narada:install-shim');
     expect(report.checks.find((check) => check.name === 'package-build-posture')?.remediation).toContain('pnpm --filter @narada2/cli build');
     expect(report.repair_plan).toContainEqual({
       check: 'dependencies-installed',

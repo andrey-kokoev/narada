@@ -186,7 +186,13 @@ test('runtime event helpers are exported from the canonical runtime-server helpe
 test('agent-web-ui launch host renderer does not present agent-cli projection text', () => {
   const rendered = formatHostStatusEvent({
     event: 'session_started',
-    agent_id: 'narada.test',
+    agent_id: 'resident',
+    agent_identity_ref: {
+      schema: 'narada.agent_identity_ref.v1',
+      site_id: 'sonar',
+      local_agent_id: 'resident',
+      canonical_agent_id: 'sonar.resident',
+    },
     session_id: 'runtime-web-ui-host-test',
     operator_surface_kind: 'agent-web-ui',
     provider: 'codex-subscription',
@@ -196,7 +202,8 @@ test('agent-web-ui launch host renderer does not present agent-cli projection te
     health_endpoint: 'http://127.0.0.1:12345/health',
     event_endpoint: 'ws://127.0.0.1:12346/events',
   }).join('\n');
-  assert.match(rendered, /agent-runtime-server: narada\.test/);
+  assert.match(rendered, /agent-runtime-server: sonar\.resident/);
+  assert.doesNotMatch(rendered, /agent-runtime-server: resident/);
   assert.match(rendered, /Surface agent-web-ui/);
   assert.match(rendered, /Launch   narada-agent-web-ui --event-endpoint ws:\/\/127\.0\.0\.1:12346\/events --health-endpoint http:\/\/127\.0\.0\.1:12345\/health/);
   assert.equal(rendered.includes('agent-cli:'), false);
@@ -258,6 +265,20 @@ test('runtime server creates a governed delegated authority handoff for the carr
       authority_source: 'env_ref',
     },
   });
+});
+
+test('lifecycle binding derives site-qualified identity ref for role-local launch identity', () => {
+  const binding = lifecycleBindingFromArgs(['--identity', 'resident', '--session', 'runtime-package-test'], {
+    NARADA_SITE_ROOT: 'D:/code/narada.sonar',
+    NARADA_SITE_ID: 'sonar',
+    NARADA_AGENT_ROLE: 'resident',
+    NARADA_AGENT_START_EVENT_ID: 'evt_test',
+  });
+  assert.equal(binding.agent_identity_ref.schema, 'narada.agent_identity_ref.v1');
+  assert.equal(binding.agent_identity_ref.site_id, 'sonar');
+  assert.equal(binding.agent_identity_ref.local_agent_id, 'resident');
+  assert.equal(binding.agent_identity_ref.canonical_agent_id, 'sonar.resident');
+  assert.equal(binding.agent_identity_ref.source_agent_id, 'resident');
 });
 
 test('runtime server derives delegated write authority from worker argv when no env authority ref exists', () => {
@@ -405,10 +426,17 @@ test('wrapper event helpers preserve the existing runtime-server event contract'
 });
 
 test('wrapper status snapshots keep the wrapper schema stable', () => {
+  const agentIdentityRef = {
+    schema: 'narada.agent_identity_ref.v1',
+    site_id: 'sonar',
+    local_agent_id: 'resident',
+    canonical_agent_id: 'sonar.resident',
+  };
   const snapshot = formatWrapperStatusEvent({
     event: 'session_status',
     request_id: 'status-1',
-    agent_id: 'narada.test',
+    agent_id: 'resident',
+    agent_identity_ref: agentIdentityRef,
     session_id: 'runtime-package-test',
     request_posture: 'clean',
     operational_posture: 'healthy',
@@ -418,7 +446,8 @@ test('wrapper status snapshots keep the wrapper schema stable', () => {
   assert.equal(snapshot.event, 'session_status_snapshot');
   assert.equal(snapshot.source_event, 'session_status');
   assert.equal(snapshot.request_id, 'status-1');
-  assert.equal(snapshot.agent_id, 'narada.test');
+  assert.equal(snapshot.agent_id, 'resident');
+  assert.deepEqual(snapshot.agent_identity_ref, agentIdentityRef);
   assert.equal(snapshot.session_id, 'runtime-package-test');
   assert.equal(snapshot.request_posture, 'clean');
   assert.equal(snapshot.operational_posture, 'healthy');
@@ -427,6 +456,14 @@ test('wrapper status snapshots keep the wrapper schema stable', () => {
 
 test('lifecycle dispatcher maps NARS events to ordered hook calls', async () => {
   const observed = [];
+  const payloads = [];
+  const agentIdentityRef = {
+    schema: 'narada.agent_identity_ref.v1',
+    site_id: 'sonar',
+    local_agent_id: 'resident',
+    canonical_agent_id: 'sonar.resident',
+    source_agent_id: 'resident',
+  };
   const handler = {};
   for (const hook of [
     'beforeSessionBind',
@@ -441,7 +478,10 @@ test('lifecycle dispatcher maps NARS events to ordered hook calls', async () => 
     'beforeSessionClose',
     'afterSessionClosed',
   ]) {
-    handler[hook] = (payload) => observed.push(`${hook}:${payload.event_kind ?? 'manual'}`);
+    handler[hook] = (payload) => {
+      observed.push(`${hook}:${payload.event_kind ?? 'manual'}`);
+      payloads.push(payload);
+    };
   }
   const dispatcher = createNarsLifecycleHookDispatcher({ hooks: [handler], clock: () => '2026-06-23T00:00:00.000Z' });
   await dispatchNarsLifecycleHook(dispatcher, 'beforeSessionBind', {
@@ -449,7 +489,8 @@ test('lifecycle dispatcher maps NARS events to ordered hook calls', async () => 
     session_id: 'runtime-package-test',
   });
   const baseEvent = {
-    agent_id: 'narada.test',
+    agent_id: 'resident',
+    agent_identity_ref: agentIdentityRef,
     session_id: 'runtime-package-test',
     request_id: 'input_test',
     turn_id: 'turn_test',
@@ -481,6 +522,8 @@ test('lifecycle dispatcher maps NARS events to ordered hook calls', async () => 
     'beforeSessionClose:session_closed',
     'afterSessionClosed:session_closed',
   ]);
+  assert.equal(payloads[1].agent_id, 'resident');
+  assert.deepEqual(payloads[1].agent_identity_ref, agentIdentityRef);
 });
 
 test('lifecycle dispatcher reports bounded redacted hook failures', async () => {
@@ -490,7 +533,14 @@ test('lifecycle dispatcher reports bounded redacted hook failures', async () => 
   });
   const result = await dispatchNarsLifecycleHooksForEvent(dispatcher, {
     event: 'tool_call',
-    agent_id: 'narada.test',
+    agent_id: 'resident',
+    agent_identity_ref: {
+      schema: 'narada.agent_identity_ref.v1',
+      site_id: 'sonar',
+      local_agent_id: 'resident',
+      canonical_agent_id: 'sonar.resident',
+      source_agent_id: 'resident',
+    },
     session_id: 'runtime-package-test',
     request_id: 'input_test',
     turn_id: 'turn_test',
@@ -498,22 +548,32 @@ test('lifecycle dispatcher reports bounded redacted hook failures', async () => 
   });
   assert.equal(result.failures.length, 1);
   assert.equal(result.failures[0].code, 'nars_lifecycle_hook_failed');
+  assert.equal(result.failures[0].agent_identity_ref.canonical_agent_id, 'sonar.resident');
   assert.equal(result.failures[0].error.message.includes('abc123'), false);
   assert.equal(result.failures[0].error.message.includes('<redacted>'), true);
 });
 
 test('lifecycle binding is derived from runtime args before session bind', () => {
-  assert.deepEqual(lifecycleBindingFromArgs(['--identity', 'narada.test', '--session', 'runtime-package-test'], {
+  const binding = lifecycleBindingFromArgs(['--identity', 'narada.test', '--session', 'runtime-package-test'], {
     NARADA_SITE_ROOT: 'D:/code/narada.test',
     NARADA_AGENT_START_EVENT_ID: 'evt_test',
-  }), {
+  });
+  assert.deepEqual({
+    ...binding,
+    agent_identity_ref: undefined,
+  }, {
     agent_id: 'narada.test',
+    agent_identity_ref: undefined,
     session_id: 'runtime-package-test',
     metadata: {
       site_root: 'D:/code/narada.test',
       agent_start_event_id: 'evt_test',
     },
   });
+  assert.equal(binding.agent_identity_ref.schema, 'narada.agent_identity_ref.v1');
+  assert.equal(binding.agent_identity_ref.local_agent_id, 'test');
+  assert.equal(binding.agent_identity_ref.canonical_agent_id, 'narada.test');
+  assert.equal(binding.agent_identity_ref.source_agent_id, 'narada.test');
 });
 
 test('lifecycle binding refuses missing or contradictory launch binding', () => {
@@ -579,7 +639,7 @@ test('HTTP /health projects native session.health response', async () => {
   }
 });
 
-test('HTTP artifact endpoints register and serve session-scoped HTML artifacts', async () => {
+test('HTTP artifact endpoints register and serve session-scoped HTML and audio artifacts', async () => {
   const siteRoot = mkdtempSync(join(tmpdir(), 'narada-runtime-artifact-http-'));
   const sessionPath = resolveNaradaSitePaths({ siteRoot, sessionId: 'carrier_artifact_http' }).narsSessionPath;
   const eventsPath = join(dirname(sessionPath), 'events.jsonl');
@@ -637,6 +697,36 @@ test('HTTP artifact endpoints register and serve session-scoped HTML artifacts',
     assert.equal(eventHub.replayFor({ filters: { event_kinds: ['assistant_message'] }, maxReplay: 10 }).at(-1).artifact_id, artifactId);
     const durableEvents = readFileSync(eventsPath, 'utf8').trim().split(/\r?\n/).map((line) => JSON.parse(line));
     assert.equal(durableEvents.at(-1).artifact_id, artifactId);
+
+    const audioPath = join(dirname(sessionPath), 'spoken.wav');
+    writeFileSync(audioPath, Buffer.from('RIFF____WAVEfmt data'));
+    const audioRegisteredResponse = await fetch(new URL('/sessions/carrier_artifact_http/artifacts', projection.url), {
+      method: 'POST',
+      body: JSON.stringify({ source_path: audioPath, kind: 'audio', title: 'Spoken briefing' }),
+    });
+    assert.equal(audioRegisteredResponse.status, 201);
+    const audioRegistered = await audioRegisteredResponse.json();
+    assert.equal(audioRegistered.artifact.kind, 'audio');
+    assert.equal(audioRegistered.artifact.content_type, 'audio/wav');
+    assert.equal(audioRegistered.artifact.source_path, undefined);
+    assert.equal(audioRegistered.artifact.render.media_controls, true);
+    const audioArtifactId = audioRegistered.artifact.artifact_id;
+
+    const audioContentResponse = await fetch(new URL(`/sessions/carrier_artifact_http/artifacts/${audioArtifactId}/content`, projection.url));
+    assert.equal(audioContentResponse.headers.get('content-type'), 'audio/wav');
+    assert.equal(audioContentResponse.headers.has('content-security-policy'), false);
+    assert.equal(Buffer.from(await audioContentResponse.arrayBuffer()).toString('utf8'), 'RIFF____WAVEfmt data');
+
+    const audioPresentedResponse = await fetch(new URL(`/sessions/carrier_artifact_http/artifacts/${audioArtifactId}/message`, projection.url), {
+      method: 'POST',
+      body: JSON.stringify({ text: 'Spoken version is ready.' }),
+    });
+    assert.equal(audioPresentedResponse.status, 201);
+    const audioPresented = await audioPresentedResponse.json();
+    assert.deepEqual(audioPresented.event.content, [
+      { type: 'text', text: 'Spoken version is ready.' },
+      { type: 'artifact_ref', artifact_id: audioArtifactId, kind: 'audio', title: 'Spoken briefing', render_hint: 'inline' },
+    ]);
   } finally {
     projection.server.close();
     rmSync(siteRoot, { recursive: true, force: true });

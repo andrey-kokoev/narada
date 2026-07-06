@@ -1,5 +1,25 @@
+import { agentIdentityDisplay } from '@narada2/agent-identity';
+
 function isSessionLifecycleEvent(event) {
   return event?.event === 'session_started' || event?.event === 'session_status' || event?.event === 'session_closed';
+}
+
+function eventAgentDisplay(event) {
+  return agentIdentityDisplay(event?.agent_identity_ref, stringField(event, 'agent_id') ?? 'unknown') ?? 'unknown';
+}
+
+function stringField(record, field) {
+  if (!record || typeof record !== 'object') return null;
+  const value = record[field];
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+function identityProjectionFields(event) {
+  const fields = {
+    agent_id: event?.agent_id ?? null,
+  };
+  if (event?.agent_identity_ref && typeof event.agent_identity_ref === 'object') fields.agent_identity_ref = event.agent_identity_ref;
+  return fields;
 }
 
 function formatAgentWebUiLaunchCommand(event) {
@@ -15,7 +35,7 @@ export function formatHostStatusEvent(event) {
   if (!event || event.event !== 'session_started') return [];
   const launchCommand = formatAgentWebUiLaunchCommand(event);
   return [
-    `agent-runtime-server: ${event.agent_id ?? 'unknown'}`,
+    `agent-runtime-server: ${eventAgentDisplay(event)}`,
     `  Session ${event.session_id ?? 'unknown'}`,
     `  Surface ${event.operator_surface_kind ?? event.launch_operator_surface_kind ?? 'unknown'}`,
     `  Provider ${event.provider ?? 'unknown'}`,
@@ -49,7 +69,7 @@ export function formatStartupMcpEvent(event) {
     schema: 'narada.agent_runtime_server.wrapper_event.v1',
     event: 'mcp_startup_status',
     timestamp: event.timestamp ?? new Date().toISOString(),
-    agent_id: event.agent_id ?? null,
+    ...identityProjectionFields(event),
     session_id: event.session_id ?? null,
     mcp_operational_state: event.mcp_operational_state ?? null,
     mcp_startup_failure_count: event.mcp_startup_failure_count ?? 0,
@@ -75,7 +95,7 @@ export function formatRuntimeMcpFaultEvent(event) {
     schema: 'narada.agent_runtime_server.wrapper_event.v1',
     event: 'mcp_runtime_fault',
     timestamp: event.timestamp ?? new Date().toISOString(),
-    agent_id: event.agent_id ?? null,
+    ...identityProjectionFields(event),
     session_id: event.session_id ?? null,
     diagnostic_code: event.diagnostic_code,
     server_name: event.server_name ?? 'unknown',
@@ -108,7 +128,7 @@ export function formatSessionWorkflowEvent(event) {
     timestamp: event.timestamp ?? new Date().toISOString(),
     source_event: event.event,
     request_id: event.request_id ?? null,
-    agent_id: event.agent_id ?? null,
+    ...identityProjectionFields(event),
     session_id: event.session_id ?? null,
     operational_posture: event.operational_posture ?? null,
     operational_posture_display: event.operational_posture_display ?? null,
@@ -131,7 +151,7 @@ export function formatSessionOperationsEvent(event) {
     timestamp: event.timestamp ?? new Date().toISOString(),
     source_event: event.event,
     request_id: event.request_id ?? null,
-    agent_id: event.agent_id ?? null,
+    ...identityProjectionFields(event),
     session_id: event.session_id ?? null,
     terminal_state: event.terminal_state ?? null,
     active_turn_state: event.active_turn_state ?? null,
@@ -177,7 +197,7 @@ export function formatPreflightWorkflowEvent(event) {
     timestamp: event.timestamp ?? new Date().toISOString(),
     source_event: event.event,
     request_id: event.request_id ?? null,
-    agent_id: event.agent_id ?? null,
+    ...identityProjectionFields(event),
     session_id: event.session_id ?? null,
     mcp_preflight_operational_state: event.mcp_preflight_operational_state ?? null,
     mcp_preflight_recommended_action: event.mcp_preflight_recommended_action ?? null,
@@ -200,7 +220,7 @@ export function formatWrapperStatusEvent(event) {
     source_event: event.event,
     request_id: event.request_id ?? null,
     terminal_state: event.terminal_state ?? null,
-    agent_id: event.agent_id ?? null,
+    ...identityProjectionFields(event),
     session_id: event.session_id ?? null,
     active_turn_state: event.active_turn_state ?? null,
     active_turn_id: event.active_turn_id ?? null,

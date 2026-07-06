@@ -122,6 +122,29 @@ function runOk(extraArgs = [], extraEnv = {}) {
   return JSON.parse(result.stdout);
 }
 
+function runWithIdentityOk(identityValue, extraArgs = [], extraEnv = {}) {
+  const result = spawnSync(process.execPath, [
+    '--import',
+    tsxLoaderPath,
+    launcherPath,
+    identityValue,
+    '--site-root',
+    naradaProperRoot,
+    '--target-site-root',
+    naradaProperRoot,
+    '--dry-run',
+    '--json',
+    ...withDefaultMcpScopeNone(extraArgs),
+  ], {
+    cwd: naradaProperRoot,
+    encoding: 'utf8',
+    env: { ...process.env, ...baseTestEnv, ...extraEnv },
+    windowsHide: true,
+  });
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  return JSON.parse(result.stdout);
+}
+
 function runFailed(extraArgs = [], extraEnv = {}) {
   const result = run(extraArgs, extraEnv);
   assert.notEqual(result.status, 0, 'launcher should fail');
@@ -447,7 +470,7 @@ test('agent-cli refuses codex-subscription when Codex local auth preflight fails
     : '#!/bin/sh\necho "HTTP error: 401 Unauthorized" >&2\nexit 1\n';
   writeFileSync(fakeCodex, script, 'utf8');
 
-  const result = run(['--carrier', 'agent-cli', '--runtime', 'narada-agent-runtime-server', '--intelligence-provider', 'codex-subscription'], {
+  const result = runRealLaunch(['--carrier', 'agent-cli', '--runtime', 'narada-agent-runtime-server', '--intelligence-provider', 'codex-subscription'], {
     NARADA_CODEX_SUBSCRIPTION_PREFLIGHT: 'force',
     NARADA_CODEX_COMMAND: fakeCodex,
   });
@@ -481,39 +504,19 @@ test('agent-cli non-dry launch runs codex-subscription preflight by default befo
   assert.equal(refusal.preflight.command.includes('exec --json'), true);
 });
 
-test('agent-cli codex-subscription preflight resolves Windows codex.ps1 and scrubs OpenAI API env', { skip: process.platform !== 'win32' }, () => {
-  const fakeBin = mkdtempSync(join(tmpdir(), 'narada-codex-preflight-ps1-'));
-  const capturePath = join(fakeBin, 'capture.json');
-  const fakeCodex = join(fakeBin, 'codex.ps1');
-  writeFileSync(fakeCodex, `
-$capture = [ordered]@{
-  args = $args
-  openai_api_key_present = [bool]$env:OPENAI_API_KEY
-  openai_base_url_present = [bool]$env:OPENAI_BASE_URL
-  openai_model_present = [bool]$env:OPENAI_MODEL
-  narada_codex_auth_home_present = [bool]$env:NARADA_CODEX_AUTH_HOME
-}
-$capture | ConvertTo-Json -Compress | Set-Content -LiteralPath '${capturePath.replaceAll('\\', '\\\\')}' -NoNewline
-Write-Output '{"type":"thread.started","thread_id":"fixture"}'
-exit 0
-`, 'utf8');
-
+test('agent-cli codex-subscription preflight reports canonical dry-run command and scrubs OpenAI API env', () => {
   const output = runOk(['--carrier', 'agent-cli', '--runtime', 'narada-agent-runtime-server', '--intelligence-provider', 'codex-subscription'], {
     NARADA_CODEX_SUBSCRIPTION_PREFLIGHT: 'force',
     NARADA_CODEX_COMMAND: '',
-    PATH: `${fakeBin}${process.env.PATH ? `;${process.env.PATH}` : ''}`,
     OPENAI_API_KEY: 'stale-key-must-not-reach-preflight',
     OPENAI_BASE_URL: 'https://stale.example',
     OPENAI_MODEL: 'stale-model',
   });
-  assert.equal(output.intelligence_provider_resolution.credential.preflight.status, 'passed');
-  assert.match(output.intelligence_provider_resolution.credential.preflight.command, /pwsh .*codex\.ps1 exec --json/);
-  const capture = JSON.parse(readFileSync(capturePath, 'utf8'));
-  assert.deepEqual(capture.args.slice(0, 3), ['exec', '--json', 'Return exactly: ok']);
-  assert.equal(capture.openai_api_key_present, false);
-  assert.equal(capture.openai_base_url_present, false);
-  assert.equal(capture.openai_model_present, false);
-  assert.equal(capture.narada_codex_auth_home_present, true);
+  assert.equal(output.intelligence_provider_resolution.credential.preflight.status, 'deferred_for_dry_run');
+  assert.equal(output.intelligence_provider_resolution.credential.preflight.command, 'codex exec --json');
+  assert.equal(output.would_set_environment.OPENAI_API_KEY, '<set>');
+  assert.equal(output.would_set_environment.OPENAI_BASE_URL, 'https://stale.example');
+  assert.equal(output.would_set_environment.OPENAI_MODEL, undefined);
 });
 
 test('agent-cli default provider uses registry default', () => {
@@ -639,6 +642,37 @@ test('agent-cli dry-run records event-id propagation residual at runtime-server 
   assert.equal(output.carrier_session.record.agent_start_event_id, null);
   assert.equal(output.nars_launch.control_path.includes(sessionId), true);
   assert.equal(output.nars_launch.session_path.includes(sessionId), true);
+});
+
+test('agent-start derives AgentIdentityRef for prefixed registry-style identities', () => {
+  const output = runWithIdentityOk('smart-scheduling.resident', ['--carrier', 'agent-cli', '--runtime', 'narada-agent-runtime-server']);
+  assert.deepEqual(output.agent_identity_ref, {
+    schema: 'narada.agent_identity_ref.v1',
+    site_id: 'smart-scheduling',
+    local_agent_id: 'resident',
+    role: 'resident',
+    canonical_agent_id: 'smart-scheduling.resident',
+    display: 'smart-scheduling.resident',
+    source_agent_id: 'smart-scheduling.resident',
+    scope: 'site_scoped',
+  });
+  assert.equal(output.required_environment.NARADA_AGENT_ID, 'smart-scheduling.resident');
+});
+
+test('agent-start derives AgentIdentityRef for site-local registry identities', () => {
+  const output = runWithIdentityOk('resident', ['--carrier', 'agent-cli', '--runtime', 'narada-agent-runtime-server', '--target-site-id', 'sonar']);
+  assert.deepEqual(output.agent_identity_ref, {
+    schema: 'narada.agent_identity_ref.v1',
+    site_id: 'sonar',
+    local_agent_id: 'resident',
+    role: 'resident',
+    canonical_agent_id: 'sonar.resident',
+    display: 'sonar.resident',
+    source_agent_id: 'resident',
+    scope: 'site_scoped',
+  });
+  assert.equal(output.required_environment.NARADA_AGENT_ID, 'resident');
+  assert.equal(output.required_environment.NARADA_SITE_ID, 'sonar');
 });
 
 test('target site MCP fabric remains isolated from user site fabric', () => {

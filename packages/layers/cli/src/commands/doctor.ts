@@ -351,22 +351,23 @@ async function doctorBootstrap(
   });
 
   const freshness = await inspectCliDistFreshness(root, cliMain);
+  const distRepairCommand = 'pnpm --filter @narada2/cli build && pnpm run narada:install-shim';
   checks.push({
     name: 'cli-dist-freshness',
     status: freshness.fresh === null ? 'warn' : freshness.fresh ? 'pass' : strictMode ? 'fail' : 'warn',
     detail: freshness.detail,
-    remediation: freshness.fresh === true ? undefined : 'Run `pnpm --filter @narada2/cli build && pnpm run narada:install-shim`.',
-    remediation_command: freshness.fresh === true ? undefined : 'pnpm --filter @narada2/cli build && pnpm run narada:install-shim',
+    remediation: freshness.fresh === true ? undefined : 'Run `' + distRepairCommand + '`.',
+    remediation_command: freshness.fresh === true ? undefined : distRepairCommand,
     remediation_args: freshness.fresh === true ? undefined : ['pnpm', '--filter', '@narada2/cli', 'build'],
   });
   checks.push({
     name: 'package-build-posture',
     status: cliMainExists && freshness.fresh !== false ? 'pass' : strictMode && freshness.fresh === false ? 'fail' : 'warn',
     detail: cliMainExists
-      ? `@narada2/cli dist=${cliMain}; freshness=${freshness.fresh === null ? 'unknown' : freshness.fresh ? 'fresh' : 'stale'}`
-      : '@narada2/cli dist missing',
-    remediation: cliMainExists && freshness.fresh !== false ? undefined : 'Run `pnpm --filter @narada2/cli build`.',
-    remediation_command: cliMainExists && freshness.fresh !== false ? undefined : 'pnpm --filter @narada2/cli build',
+      ? `@narada2/cli dist=${cliMain}; freshness=${freshness.fresh === null ? 'unknown' : freshness.fresh ? 'fresh' : 'stale'}${freshness.fresh === false ? `; repair=${distRepairCommand}` : ''}`
+      : `@narada2/cli dist missing; repair=${distRepairCommand}`,
+    remediation: cliMainExists && freshness.fresh !== false ? undefined : 'Run `' + distRepairCommand + '`.',
+    remediation_command: cliMainExists && freshness.fresh !== false ? undefined : distRepairCommand,
     remediation_args: cliMainExists && freshness.fresh !== false ? undefined : ['pnpm', '--filter', '@narada2/cli', 'build'],
   });
   checks.push({

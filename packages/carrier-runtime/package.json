@@ -25,7 +25,10 @@
     "./nars-event-log": "./src/nars-event-log.mjs",
     "./nars-artifacts": "./src/nars-artifacts.mjs",
     "./nars-session-index": "./src/nars-session-index.mjs",
-    "./authority-transition-state": "./src/authority-transition-state.mjs",
+    "./authority-transition-state": {
+      "types": "./src/authority-transition-state.d.ts",
+      "default": "./src/authority-transition-state.mjs"
+    },
     "./package.json": "./package.json"
   },
   "scripts": {
@@ -33,6 +36,7 @@
     "typecheck": "tsc --noEmit --allowJs --checkJs false src/index.mjs src/provider-adapters.mjs src/provider-resolution.mjs src/mcp-runtime.mjs src/process-supervisor.mjs src/server-mode.mjs src/input-queue.mjs src/runtime-dependencies.mjs src/carrier-runtime-context.mjs src/nars-event-log.mjs src/nars-artifacts.mjs src/nars-session-index.mjs src/operator-input-queue-state.mjs src/authority-transition-state.mjs"
   },
   "dependencies": {
+    "@narada2/agent-identity": "workspace:*",
     "@narada2/carrier-action-admission": "workspace:*",
     "@narada2/carrier-protocol": "workspace:*",
     "@narada2/carrier-provider-contract": "workspace:*",

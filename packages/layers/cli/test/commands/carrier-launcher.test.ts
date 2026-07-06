@@ -65,6 +65,15 @@ async function writeLaunchResult(siteRoot: string, name: string, identity: strin
     status: 'materialized',
     agent_start_event: name,
     identity,
+    agent_identity_ref: identity === 'resident'
+      ? {
+        schema: 'narada.agent_identity_ref.v1',
+        site_id: 'sonar',
+        local_agent_id: 'resident',
+        canonical_agent_id: 'sonar.resident',
+        source_agent_id: 'resident',
+      }
+      : undefined,
     carrier_kind: 'agent-cli',
     runtime: 'narada-agent-runtime-server',
     runtime_substrate_kind: 'narada-agent-runtime-server',
@@ -150,6 +159,21 @@ describe('carrier launcher CLI commands', () => {
 
     expect(control.exitCode).toBe(ExitCode.SUCCESS);
     expect((control.result as { control_path: string }).control_path).toBe(controlPath);
+  });
+
+  it('renders carrier status identity through agent identity ref when available', async () => {
+    const siteRoot = await tempSite();
+    await writeLaunchResult(siteRoot, 'evt-test', 'resident');
+
+    const status = await carrierStatusCommand({
+      siteRoot,
+      agent: 'sonar.resident',
+      format: 'text',
+    }, createMockContext());
+
+    expect(status.exitCode).toBe(ExitCode.SUCCESS);
+    expect((status.result as { _formatted: string })._formatted).toContain('identity: sonar.resident');
+    expect((status.result as { _formatted: string })._formatted).not.toContain('identity: resident');
   });
 
   it('returns bounded readiness from live parent process evidence', async () => {

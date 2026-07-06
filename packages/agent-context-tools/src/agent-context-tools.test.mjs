@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
 import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -9,6 +10,95 @@ import { enforceAgentPathPolicy, resolveAgentPathPolicy } from './path-policy.mj
 import Database, { DEFAULT_BUSY_TIMEOUT_MS } from './sqlite-database.mjs';
 
 const root = dirname(fileURLToPath(import.meta.url));
+
+test('agent context startup tools expose canonical agent identity ref', async () => {
+  const siteRoot = await mkdtemp(join(tmpdir(), 'narada-agent-context-identity-ref-'));
+  try {
+    const responses = await callAgentContextMcp({
+      siteRoot,
+      env: {
+        NARADA_AGENT_ID: 'resident',
+        NARADA_SITE_ID: 'sonar',
+        NARADA_AGENT_CONTEXT_DB: join(siteRoot, '.ai', 'state', 'agent-context.sqlite'),
+      },
+      calls: [
+        { id: 1, name: 'agent_context_whoami', arguments: {} },
+        { id: 2, name: 'agent_context_startup_sequence', arguments: {} },
+      ],
+    });
+
+    const whoami = toolResultValue(responses.get(1));
+    assert.equal(whoami.identity, 'resident');
+    assert.match(whoami.message, /Session identity is sonar\.resident/);
+    assert.doesNotMatch(whoami.message, /Session identity is resident/);
+    assert.deepEqual(whoami.agent_identity_ref, {
+      schema: 'narada.agent_identity_ref.v1',
+      site_id: 'sonar',
+      local_agent_id: 'resident',
+      role: 'resident',
+      canonical_agent_id: 'sonar.resident',
+      display: 'sonar.resident',
+      source_agent_id: 'resident',
+      scope: 'site_scoped',
+    });
+
+    const startup = toolResultValue(responses.get(2));
+    assert.equal(startup.identity, 'resident');
+    assert.equal(startup.agent_identity_ref.display, 'sonar.resident');
+    assert.equal(startup.agent_identity_ref.source_agent_id, 'resident');
+    assert.equal(startup.verified_badge.agent_identity_ref.display, 'sonar.resident');
+  } finally {
+    await rm(siteRoot, { recursive: true, force: true });
+  }
+});
+
+function callAgentContextMcp({ siteRoot, env, calls }) {
+  return new Promise((resolvePromise, rejectPromise) => {
+    const child = spawn(process.execPath, [join(root, 'agent-context-mcp-server.mjs'), '--site-root', siteRoot], {
+      cwd: siteRoot,
+      env: { ...process.env, ...env },
+      stdio: ['pipe', 'pipe', 'pipe'],
+      windowsHide: true,
+    });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.setEncoding('utf8');
+    child.stderr.setEncoding('utf8');
+    child.stdout.on('data', (chunk) => { stdout += chunk; });
+    child.stderr.on('data', (chunk) => { stderr += chunk; });
+    child.on('error', rejectPromise);
+    child.on('close', (code) => {
+      if (code !== 0) {
+        rejectPromise(new Error(`agent_context_mcp_exited_${code}: ${stderr}`));
+        return;
+      }
+      try {
+        const parsed = stdout.trim().split(/\r?\n/u).filter(Boolean).map((line) => JSON.parse(line));
+        resolvePromise(new Map(parsed.map((response) => [response.id, response])));
+      } catch (error) {
+        rejectPromise(new Error(`agent_context_mcp_response_parse_failed: ${error.message}; stdout=${stdout}; stderr=${stderr}`));
+      }
+    });
+
+    for (const call of calls) {
+      child.stdin.write(`${JSON.stringify({
+        jsonrpc: '2.0',
+        id: call.id,
+        method: 'tools/call',
+        params: { name: call.name, arguments: call.arguments ?? {} },
+      })}\n`);
+    }
+    child.stdin.end();
+  });
+}
+
+function toolResultValue(response) {
+  assert.equal(Boolean(response?.error), false, response?.error?.message ?? 'tool response error');
+  if (response?.result?.structuredContent) return response.result.structuredContent;
+  const text = response?.result?.content?.find((entry) => entry?.type === 'text')?.text;
+  assert.equal(typeof text, 'string');
+  return JSON.parse(text);
+}
 
 test('agent context tool package owns site agent-context scripts', async () => {
   const files = (await readdir(root)).filter((name) => name.endsWith('.mjs'));

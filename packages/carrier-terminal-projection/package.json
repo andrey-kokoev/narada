@@ -26,6 +26,9 @@
     "./package.json": "./package.json"
   },
   "dependencies": {
+    "@narada2/agent-identity": "workspace:*",
+    "@narada2/carrier-command-contract": "workspace:*",
+    "@narada2/carrier-protocol": "workspace:*",
     "@narada2/nars-client-projection-contract": "workspace:*"
   },
   "scripts": {

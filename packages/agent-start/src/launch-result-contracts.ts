@@ -98,6 +98,15 @@ export function buildLauncherContracts(result) {
   const operatorSurfaceKind = result.nars_launch?.operator_surface_kind ?? result.carrier_kind ?? null;
   const launchResultArtifact = buildLaunchResultArtifact(result);
   const runtimeHealthPosture = buildRuntimeHealthPosture(result);
+  const intelligenceProviderPreflight = result.intelligence_provider_resolution?.credential?.preflight ?? result.intelligence_provider_resolution?.preflight ?? null;
+  const intelligenceProviderPreflightStatus = intelligenceProviderPreflight?.status ?? null;
+  const intelligenceProviderReadinessStatus = result.intelligence_provider_resolution ? (
+    result.intelligence_provider_resolution.status === 'refused' || result.intelligence_provider_resolution.credential_present === false
+      ? 'blocked'
+      : intelligenceProviderPreflightStatus === 'passed_cached'
+        ? 'ready_cached'
+        : 'ready_fresh'
+  ) : null;
   return {
     schema: 'narada.launcher_contract_bundle.v0',
     authority_runtime_host_selection: {
@@ -155,11 +164,9 @@ export function buildLauncherContracts(result) {
     intelligence_provider_readiness_check: result.intelligence_provider_resolution ? {
       schema: 'narada.intelligence_provider_readiness_check.v0',
       intelligence_provider: result.intelligence_provider ?? null,
-      status: result.intelligence_provider_resolution.status === 'refused'
-        ? 'blocked'
-        : result.intelligence_provider_resolution.credential_present === false
-          ? 'blocked'
-          : 'ready',
+      status: intelligenceProviderReadinessStatus,
+      check_kind: intelligenceProviderPreflightStatus === 'passed_cached' ? 'cached' : intelligenceProviderPreflightStatus ? 'fresh' : null,
+      preflight_status: intelligenceProviderPreflightStatus,
       request_adapter: result.intelligence_provider_resolution.request_adapter ?? null,
       credential_requirement_kind: result.intelligence_provider_resolution.credential_requirement_kind ?? null,
       credential_requirement: result.intelligence_provider_resolution.credential_requirement ?? null,

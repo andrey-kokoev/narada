@@ -6,6 +6,7 @@ import {
   readNarsArtifactIndex,
   registerNarsArtifact,
 } from '@narada2/carrier-runtime/nars-artifacts';
+import { readNarsEventLog } from '@narada2/carrier-runtime/nars-event-log';
 
 function sendJsonResponse(response, statusCode, payload) {
   response.writeHead(statusCode, { 'content-type': 'application/json; charset=utf-8' });
@@ -121,9 +122,21 @@ function artifactMessagePartFromRecord(artifact, params = {}) {
 }
 
 function publishRuntimeEvent({ eventHub, runtimeContext, event }) {
-  const published = eventHub?.publish(event) ?? event;
+  const sequencedEvent = withNextEventLogSequence(event, runtimeContext.eventsPath);
+  const published = eventHub?.publish(sequencedEvent) ?? sequencedEvent;
   if (runtimeContext.eventsPath) appendFileSync(runtimeContext.eventsPath, `${JSON.stringify(published)}\n`, 'utf8');
   return published;
+}
+
+function withNextEventLogSequence(event, eventsPath) {
+  if (!eventsPath) return event;
+  const currentSequence = Number(event?.event_sequence ?? event?.sequence);
+  const maxSequence = readNarsEventLog(eventsPath).events.reduce((max, entry, index) => {
+    const sequence = Number(entry?.event_sequence ?? entry?.sequence);
+    return Math.max(max, Number.isFinite(sequence) ? sequence : index + 1);
+  }, 0);
+  if (Number.isFinite(currentSequence) && currentSequence > maxSequence) return event;
+  return { ...event, event_sequence: maxSequence + 1, sequence: maxSequence + 1 };
 }
 
 function optionalText(value) {

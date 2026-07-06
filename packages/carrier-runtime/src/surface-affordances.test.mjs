@@ -321,3 +321,55 @@ test('surface affordance projection admits live MCP tool-list affordance metadat
   assert.equal(projection.items[0].source, 'mcp_tool_list');
   assert.equal(projection.items[0].panel.summary_method, 'session.artifacts.read');
 });
+
+test('surface affordance projection adapts shared MCP affordance documents', () => {
+  const projection = buildMcpSurfaceAffordanceProjection({
+    'narada-test-site-loop': {
+      tools: [],
+      config: {
+        surface_affordances: [{
+          schema: 'narada.mcp_affordances.v1',
+          surface_id: 'narada-test.site-loop',
+          generated_at: '2026-07-06T00:00:00.000Z',
+          title: 'Site Loop',
+          audience: ['operator'],
+          panels: [
+            { id: 'diagnostics', title: 'Diagnostics', kind: 'diagnostics', priority: 20, actions: ['show_health'] },
+            { id: 'controls', title: 'Controls', kind: 'controls', priority: 10, actions: ['start_loop'] },
+          ],
+          actions: [
+            {
+              id: 'show_health',
+              label: 'Show health',
+              intent: 'inspect',
+              kind: 'tool_call',
+              target: { kind: 'tool', tool: 'site_loop_health' },
+              read_only: true,
+            },
+            {
+              id: 'start_loop',
+              label: 'Start loop',
+              intent: 'run',
+              kind: 'tool_call',
+              target: { kind: 'tool', tool: 'site_loop_start' },
+              danger_level: 'high',
+              destructive: true,
+            },
+          ],
+        }],
+      },
+    },
+  });
+
+  assert.equal(projection.count, 1);
+  assert.equal(projection.items[0].schema, 'narada.mcp_surface.operator_affordance.v1');
+  assert.equal(projection.items[0].surface_kind, 'site_loop');
+  assert.equal(projection.items[0].renderer, 'generic_mcp_affordance');
+  assert.equal(projection.items[0].title, 'Site Loop');
+  assert.deepEqual(projection.items[0].panel.sections, ['controls', 'diagnostics']);
+  assert.deepEqual(projection.items[0].actions.read, ['Show health']);
+  assert.deepEqual(projection.items[0].actions.destructive, ['Start loop']);
+  assert.deepEqual(projection.items[0].tools.read, ['site_loop_health']);
+  assert.deepEqual(projection.items[0].tools.write, ['site_loop_start']);
+  assert.equal(projection.items[0].affordance_document.schema, 'narada.mcp_affordances.v1');
+});

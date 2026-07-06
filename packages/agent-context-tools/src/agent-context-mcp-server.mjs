@@ -35,6 +35,7 @@ import { dirname, join, resolve } from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { setTimeout as sleep } from 'node:timers/promises';
+import { agentIdentityDisplay, buildAgentIdentityRef } from '@narada2/agent-identity';
 import { buildReground, formatMarkdown } from './doctrinal-reground.mjs';
 import * as hydrationService from './agent-context-hydration-service.mjs';
 import * as inquirySpaceService from './inquiry-space-service.mjs';
@@ -45,6 +46,7 @@ import {
   PERMISSIVE_OBJECT_OUTPUT_SCHEMA,
   STARTUP_TOOL_INLINE_LIMIT,
   STARTUP_TOOL_NAMES,
+  TOOLS,
   startupSequenceInputSchema,
 } from './agent-context-tool-catalog.mjs';
 import {
@@ -713,6 +715,7 @@ function agentContextHydrateCurrent(toolArgs) {
   }
 
   const agentId = whoami.identity;
+  const agentIdentityRef = whoami.agent_identity_ref ?? buildAgentIdentityRef(agentId, whoami.role, process.env.NARADA_SITE_ID || null);
   const eventId = process.env.NARADA_AGENT_START_EVENT_ID || null;
   const rehydrate = safeCall(() => agentContextRehydrate({ agent_id: agentId }));
   const checkpoint = rehydrate.ok ? rehydrate.value : { status: 'error', message: rehydrate.error };
@@ -817,6 +820,7 @@ function agentContextHydrateCurrent(toolArgs) {
     schema: 'narada.agent_context.hydrate_current.v0',
     hydrated_at: hydratedAt,
     identity: agentId,
+    agent_identity_ref: agentIdentityRef,
     role: whoami.role,
     role_binding: whoami.role_binding ?? null,
     confidence: whoami.confidence,
@@ -825,6 +829,7 @@ function agentContextHydrateCurrent(toolArgs) {
     whoami,
     verified_badge: {
       agent_id: agentId,
+      agent_identity_ref: agentIdentityRef,
       role: whoami.role,
       role_binding: whoami.role_binding ?? null,
       identity_source: whoami.source,
@@ -999,6 +1004,7 @@ function compactHydratePayload(fullPayload, rawEvidenceRefs, { outputMode }) {
     raw_evidence_policy: 'large_runtime_evidence_is_ref_backed_unless_output_debug_or_include_raw_evidence',
     hydrated_at: fullPayload.hydrated_at,
     identity: fullPayload.identity,
+    agent_identity_ref: fullPayload.agent_identity_ref,
     role: fullPayload.role,
     role_binding: fullPayload.role_binding,
     confidence: fullPayload.confidence,
@@ -1055,6 +1061,7 @@ function compactHydratePayload(fullPayload, rawEvidenceRefs, { outputMode }) {
       raw_evidence_policy: compact.raw_evidence_policy,
       hydrated_at: compact.hydrated_at,
       identity: compact.identity,
+      agent_identity_ref: compact.agent_identity_ref,
       role: compact.role,
       verified_badge: compact.verified_badge,
       checkpoint: compact.checkpoint,
@@ -5150,9 +5157,12 @@ function agentContextWhoami(toolArgs) {
   if (envIdentity) {
     const roleBindingResolution = resolveRoleBindingFromRoster(envIdentity);
     const role = roleBindingResolution.role;
+    const agentIdentityRef = buildAgentIdentityRef(envIdentity, role, process.env.NARADA_SITE_ID || null);
+    const displayIdentity = agentIdentityDisplay(agentIdentityRef, envIdentity) ?? envIdentity;
     return {
       status: 'ok',
       identity: envIdentity,
+      agent_identity_ref: agentIdentityRef,
       role,
       role_binding: roleBindingResolution.role_binding,
       role_source: roleBindingResolution.role_binding ? 'agent_roster' : 'unresolved',
@@ -5160,7 +5170,7 @@ function agentContextWhoami(toolArgs) {
       confidence: 'high',
       source: 'NARADA_AGENT_ID',
       hint_match: hint ? envIdentity === hint : null,
-      message: `Session identity is ${envIdentity} (${role ?? 'role unresolved'}) from environment variable.`,
+      message: `Session identity is ${displayIdentity} (${role ?? 'role unresolved'}) from environment variable.`,
     };
   }
 
@@ -5173,9 +5183,12 @@ function agentContextWhoami(toolArgs) {
       if (checkpoint?.agent_id) {
         const rosterRoleBinding = resolveRoleBindingFromRoster(checkpoint.agent_id);
         const role = rosterRoleBinding.role ?? inferRoleFromIdentity(checkpoint.agent_id);
+        const agentIdentityRef = buildAgentIdentityRef(checkpoint.agent_id, role, process.env.NARADA_SITE_ID || null);
+        const displayIdentity = agentIdentityDisplay(agentIdentityRef, checkpoint.agent_id) ?? checkpoint.agent_id;
         return {
           status: 'ok',
           identity: checkpoint.agent_id,
+          agent_identity_ref: agentIdentityRef,
           role,
           role_binding: rosterRoleBinding.role_binding,
           role_source: rosterRoleBinding.role_binding ? 'agent_roster' : 'identity_inference_non_authoritative',
@@ -5184,7 +5197,7 @@ function agentContextWhoami(toolArgs) {
           source: 'latest_checkpoint',
           checkpoint_at: checkpoint.checkpoint_at,
           hint_match: hint ? checkpoint.agent_id === hint : null,
-          message: `Session identity is likely ${checkpoint.agent_id} (${role}) from most recent checkpoint.`,
+          message: `Session identity is likely ${displayIdentity} (${role}) from most recent checkpoint.`,
         };
       }
     } catch {
@@ -5201,9 +5214,12 @@ function agentContextWhoami(toolArgs) {
       if (event?.identity_id) {
         const rosterRoleBinding = resolveRoleBindingFromRoster(event.identity_id);
         const role = rosterRoleBinding.role ?? inferRoleFromIdentity(event.identity_id);
+        const agentIdentityRef = buildAgentIdentityRef(event.identity_id, role, process.env.NARADA_SITE_ID || null);
+        const displayIdentity = agentIdentityDisplay(agentIdentityRef, event.identity_id) ?? event.identity_id;
         return {
           status: 'ok',
           identity: event.identity_id,
+          agent_identity_ref: agentIdentityRef,
           role,
           role_binding: rosterRoleBinding.role_binding,
           role_source: rosterRoleBinding.role_binding ? 'agent_roster' : 'identity_inference_non_authoritative',
@@ -5212,7 +5228,7 @@ function agentContextWhoami(toolArgs) {
           source: 'latest_start_event',
           event_at: event.created_at,
           hint_match: hint ? event.identity_id === hint : null,
-          message: `Session identity is likely ${event.identity_id} (${role}) from most recent agent start event.`,
+          message: `Session identity is likely ${displayIdentity} (${role}) from most recent agent start event.`,
         };
       }
     } catch {

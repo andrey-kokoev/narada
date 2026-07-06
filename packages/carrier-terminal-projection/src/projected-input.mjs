@@ -1,4 +1,5 @@
-import { commandRecords, resolveCommandInput } from '../../carrier-command-contract/src/carrier-command-contract.mjs';
+import { commandRecords, resolveCommandInput } from '@narada2/carrier-command-contract';
+import { classifyCarrierControlRequest } from '@narada2/carrier-protocol';
 
 function shellLikeWords(value) {
   const words = [];
@@ -63,6 +64,23 @@ function commandFrame(command, value = '') {
   };
 }
 
+const TERMINAL_LOCAL_COMMAND_NAMES = new Set(['help', 'clear']);
+const TERMINAL_CONTRACT_DIRECT_COMMANDS = new Set(['status', 'observers', 'observer_mute', 'observer_unmute', 'exit']);
+const TERMINAL_SESSION_COMMAND_NAMES = new Set(commandRecords()
+  .filter((command) => !TERMINAL_LOCAL_COMMAND_NAMES.has(command.name) && !TERMINAL_CONTRACT_DIRECT_COMMANDS.has(command.name))
+  .map((command) => command.name));
+
+const TERMINAL_PROTOCOL_COMMANDS = Object.freeze([
+  Object.freeze({ primary: '/health', help: 'Show runtime health', buildFrame: () => ({ id: requestIdForCommand('health'), method: 'session.health', params: {} }) }),
+  Object.freeze({ primary: '/events', help: 'Show recent event subscription replay', buildFrame: () => ({ id: requestIdForCommand('events'), method: 'session.events.subscribe', params: { include_replay: true, max_replay: 20 } }) }),
+  Object.freeze({ primary: '/recovery', help: 'Show recovery workflow', buildFrame: () => ({ id: requestIdForCommand('recovery'), method: 'session.recovery', params: {} }) }),
+  Object.freeze({ primary: '/ops', help: 'Show operation workflow summary', buildFrame: (value) => opsSyncFrame(value) ?? { id: requestIdForCommand('ops'), method: 'session.operations', params: {} } }),
+  Object.freeze({ primary: '/interrupt', help: 'Interrupt active response', buildFrame: () => ({ id: requestIdForCommand('interrupt'), method: 'conversation.interrupt', params: {} }) }),
+]);
+
+const TERMINAL_PROTOCOL_COMMANDS_BY_PRIMARY = new Map(TERMINAL_PROTOCOL_COMMANDS.map((command) => [command.primary, command]));
+const TERMINAL_RAW_JSON_COMMAND = Object.freeze({ slash: '/json', primary: '/json <frame>', help: 'Send explicit JSONL control frame' });
+
 export const BRACKETED_PASTE_START = '\x1b[200~';
 export const BRACKETED_PASTE_END = '\x1b[201~';
 
@@ -114,7 +132,6 @@ export function createBracketedPasteComposer({ onPaste = () => {}, onSuppressLin
 export function createProjectedSlashCommandAction(line) {
   const trimmed = String(line ?? '').trim();
   if (!trimmed) return null;
-  const lower = trimmed.toLowerCase();
   const resolvedCommand = resolveCommandInput(trimmed, '');
   if (resolvedCommand?.name === 'exit') {
     return { kind: 'frame', frame: { id: requestIdForCommand('exit'), method: 'session.close', params: {} } };
@@ -125,16 +142,13 @@ export function createProjectedSlashCommandAction(line) {
   const value = rest.join(' ').trim();
   if (resolvedCommand?.name === 'help') return { kind: 'local_help' };
   if (resolvedCommand?.name === 'clear') return { kind: 'clear' };
-  if (command === '/status') return { kind: 'frame', frame: { id: requestIdForCommand('status'), method: 'session.status', params: {} } };
-  if (command === '/health') return { kind: 'frame', frame: { id: requestIdForCommand('health'), method: 'session.health', params: {} } };
-  if (command === '/events') return { kind: 'frame', frame: { id: requestIdForCommand('events'), method: 'session.events.subscribe', params: { include_replay: true, max_replay: 20 } } };
-  if (command === '/recovery') return { kind: 'frame', frame: { id: requestIdForCommand('recovery'), method: 'session.recovery', params: {} } };
-  if (command === '/ops') return { kind: 'frame', frame: opsSyncFrame(value) ?? { id: requestIdForCommand('ops'), method: 'session.operations', params: {} } };
+  if (resolvedCommand?.name === 'status') return { kind: 'frame', frame: { id: requestIdForCommand('status'), method: 'session.status', params: {} } };
+  const protocolCommand = TERMINAL_PROTOCOL_COMMANDS_BY_PRIMARY.get(command);
+  if (protocolCommand) return { kind: 'frame', frame: protocolCommand.buildFrame(value) };
   if (resolvedCommand?.name === 'observers') return { kind: 'frame', frame: { id: requestIdForCommand('observers'), method: 'observers.status', params: {} } };
   if (resolvedCommand?.name === 'observer_mute') return { kind: 'frame', frame: { id: requestIdForCommand('observer-mute'), method: 'observer.mute', params: {} } };
   if (resolvedCommand?.name === 'observer_unmute') return { kind: 'frame', frame: { id: requestIdForCommand('observer-unmute'), method: 'observer.unmute', params: {} } };
-  const carrierCommandNames = new Set(['goal', 'stats', 'model', 'thinking', 'tool_output', 'tools', 'queue_show', 'queue_clear', 'queue_drop']);
-  if (resolvedCommand && carrierCommandNames.has(resolvedCommand.name)) {
+  if (resolvedCommand && TERMINAL_SESSION_COMMAND_NAMES.has(resolvedCommand.name)) {
     return { kind: 'frame', frame: commandFrame(command, value) };
   }
   if (command === '/observer') return { kind: 'message', message: 'Usage: /observer mute|unmute' };
@@ -143,7 +157,8 @@ export function createProjectedSlashCommandAction(line) {
 
 export function projectedHelpText() {
   const rows = commandRecords().map((command) => `${command.primary.padEnd(21)} ${command.help}`);
-  return ['Commands', '', ...rows, '/health'.padEnd(21) + ' Show runtime health', '/events'.padEnd(21) + ' Show recent event subscription replay', '/recovery'.padEnd(21) + ' Show recovery workflow', '/ops'.padEnd(21) + ' Show operation workflow summary', '/json <frame>'.padEnd(21) + ' Send explicit JSONL control frame'].join('\n');
+  const protocolRows = TERMINAL_PROTOCOL_COMMANDS.map((command) => `${command.primary.padEnd(21)} ${command.help}`);
+  return ['Commands', '', ...rows, ...protocolRows, `${TERMINAL_RAW_JSON_COMMAND.primary.padEnd(21)} ${TERMINAL_RAW_JSON_COMMAND.help}`].join('\n');
 }
 
 export function createOperatorConversationFrame(line) {
@@ -196,7 +211,7 @@ export function createOperatorSteeringFrame(line) {
 
 export function createExplicitJsonControlFrame(line) {
   const text = String(line ?? '');
-  const match = text.match(/^\s*\/json(?:\s+(.+))?$/s);
+  const match = text.match(new RegExp(`^\\s*${TERMINAL_RAW_JSON_COMMAND.slash.replace('/', '\\/')}(?:\\s+(.+))?$`, 's'));
   if (!match) return null;
   const payload = match[1]?.trim();
   if (!payload) return { error: 'usage: /json <control-frame-json>' };
@@ -205,6 +220,8 @@ export function createExplicitJsonControlFrame(line) {
     if (!frame || typeof frame !== 'object' || Array.isArray(frame)) {
       return { error: '/json payload must be a JSON object control frame' };
     }
+    const admission = classifyCarrierControlRequest(frame);
+    if (admission.error) return { error: `/json ${admission.error.message}` };
     return { frame };
   } catch (error) {
     return { error: `/json invalid JSON: ${error instanceof Error ? error.message : String(error)}` };

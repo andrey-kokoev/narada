@@ -298,6 +298,14 @@ export function redactEnvironmentForOutput(env = {}) {
   ]));
 }
 
+export function stripCodexSubscriptionOpenAIEnvironment(env = {}) {
+  const scrubbed = { ...env };
+  delete scrubbed.OPENAI_API_KEY;
+  delete scrubbed.OPENAI_BASE_URL;
+  delete scrubbed.OPENAI_MODEL;
+  return scrubbed;
+}
+
 function shouldRedactEnvironmentValue(key, value) {
   if (!value) return false;
   return /(_API_KEY|_TOKEN|_SECRET|PASSWORD|CREDENTIAL)/i.test(String(key));
@@ -319,13 +327,24 @@ export function buildCarrierEnvironmentProjection({
   dbPath,
   siteConfig = null,
 }) {
+  const shouldStripOpenAIEnvironment = intelligenceProviderEnv.NARADA_INTELLIGENCE_PROVIDER === 'codex-subscription';
+  const projectedCarrierEnvironment = shouldStripOpenAIEnvironment
+    ? stripCodexSubscriptionOpenAIEnvironment(carrierEnvironment)
+    : carrierEnvironment;
+  const projectedStartRequiredEnvironment = shouldStripOpenAIEnvironment
+    ? stripCodexSubscriptionOpenAIEnvironment(startResult.required_environment ?? {})
+    : (startResult.required_environment ?? {});
+  const projectedStartWouldSetEnvironment = shouldStripOpenAIEnvironment
+    ? stripCodexSubscriptionOpenAIEnvironment(startResult.would_set_environment ?? {})
+    : (startResult.would_set_environment ?? {});
   const commonEnvironment = {
-    ...carrierEnvironment,
+    ...projectedCarrierEnvironment,
     ...intelligenceProviderEnv,
     ...mcpProviderCredentialEnv,
     ...agentTuiEnvironment,
     ...runtimeEnvironment,
     NARADA_AGENT_ID: identity,
+    ...(startResult.role ? { NARADA_AGENT_ROLE: startResult.role } : {}),
     NARADA_AGENT_START_EVENT_ID: agentStartEventId,
     ...(targetSiteId ? { NARADA_SITE_ID: targetSiteId } : {}),
     NARADA_SITE_ROOT: environmentSiteRoot,
@@ -335,12 +354,12 @@ export function buildCarrierEnvironmentProjection({
   };
   return {
     requiredEnvironment: redactEnvironmentForOutput({
-      ...(startResult.required_environment ?? {}),
+      ...projectedStartRequiredEnvironment,
       ...commonEnvironment,
     }),
     wouldSetEnvironment: startResult.would_set_environment
       ? redactEnvironmentForOutput({
-        ...startResult.would_set_environment,
+        ...projectedStartWouldSetEnvironment,
         ...commonEnvironment,
       })
       : startResult.would_set_environment,

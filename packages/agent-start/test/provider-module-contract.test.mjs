@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { dirname, join, normalize, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -115,7 +115,7 @@ test('codex subscription support runs live auth preflight for non-dry launch by 
     stderr: { write() {} },
   });
   try {
-    assert.equal(preflight.status, 'passed');
+    assert.equal(preflight.status, 'passed_fresh');
     assert.equal(preflight.ok, true);
     assert.equal(calls.length, 1);
     assert.deepEqual(calls[0].args.slice(-3, -1), ['exec', '--json']);
@@ -193,13 +193,14 @@ test('codex subscription support caches successful live auth preflight in User S
   try {
     const first = codexSupport.codexSubscriptionPreflight('codex-subscription', options);
     const second = codexSupport.codexSubscriptionPreflight('codex-subscription', { ...options, now: () => 2000 });
-    assert.equal(first.status, 'passed');
+    assert.equal(first.status, 'passed_fresh');
     assert.equal(second.status, 'passed_cached');
     assert.equal(second.cache.status, 'hit');
     assert.equal(calls.length, 1);
     assert.equal(progress.length, 1);
     assert.match(progress[0], /Checking codex-subscription local Codex subscription auth/);
     assert.equal(second.cache.locus, 'user-site');
+    assert.equal(normalize(second.cache.auth_home), normalize('C:/Users/Andrey/.codex'));
     assert.equal(second.cache.path, join(userSiteRoot, '.narada', 'runtime', 'provider-auth-cache', 'codex-subscription-preflight-cache.json'));
     assert.equal(existsSync(second.cache.path), true);
     assert.equal(existsSync(join(siteRoot, '.ai', 'runtime', 'codex-subscription-preflight-cache.json')), false);
@@ -209,7 +210,7 @@ test('codex subscription support caches successful live auth preflight in User S
   }
 });
 
-test('codex subscription support force mode bypasses successful cache', () => {
+test('codex subscription support refresh mode bypasses successful cache', () => {
   const calls = [];
   const siteRoot = mkdtempSync(join(tmpdir(), 'narada-codex-preflight-force-'));
   const baseOptions = {
@@ -225,15 +226,105 @@ test('codex subscription support force mode bypasses successful cache', () => {
     progressStream: { write() {} },
   };
   try {
-    assert.equal(codexSupport.codexSubscriptionPreflight('codex-subscription', baseOptions).status, 'passed');
+    assert.equal(codexSupport.codexSubscriptionPreflight('codex-subscription', baseOptions).status, 'passed_fresh');
     assert.equal(codexSupport.codexSubscriptionPreflight('codex-subscription', {
       ...baseOptions,
-      processEnv: { USERPROFILE: 'C:/Users/Andrey', NARADA_CODEX_SUBSCRIPTION_PREFLIGHT: 'force' },
+      processEnv: { USERPROFILE: 'C:/Users/Andrey', NARADA_CODEX_SUBSCRIPTION_PREFLIGHT: 'refresh' },
       now: () => 2000,
-    }).status, 'passed');
+    }).status, 'passed_fresh');
     assert.equal(calls.length, 2);
   } finally {
     rmSync(siteRoot, { recursive: true, force: true });
+  }
+});
+
+test('codex subscription support invalidates cache when the codex command identity changes', () => {
+  const calls = [];
+  const siteRoot = mkdtempSync(join(tmpdir(), 'narada-codex-preflight-command-'));
+  const userSiteRoot = mkdtempSync(join(tmpdir(), 'narada-user-site-codex-preflight-command-'));
+  const options = {
+    processEnv: {
+      USERPROFILE: 'C:/Users/Andrey',
+      NARADA_CODEX_AUTH_HOME: join(userSiteRoot, '.codex-auth'),
+      NARADA_CODEX_COMMAND: 'codex-one',
+      NARADA_CODEX_CLI_VERSION: '1.0.0',
+    },
+    processPlatform: 'linux',
+    sessionSiteRoot: siteRoot,
+    userSiteRoot,
+    dryRun: false,
+    now: () => 1000,
+    spawnSync(command, args, spawnOptions) {
+      calls.push({ command, args, options: spawnOptions });
+      return { status: 0, stdout: '{"event":"ok"}\n', stderr: '', signal: null, error: null };
+    },
+    progressStream: { write() {} },
+  };
+  mkdirSync(options.processEnv.NARADA_CODEX_AUTH_HOME, { recursive: true });
+  try {
+    const first = codexSupport.codexSubscriptionPreflight('codex-subscription', options);
+    const second = codexSupport.codexSubscriptionPreflight('codex-subscription', {
+      ...options,
+      processEnv: {
+        ...options.processEnv,
+        NARADA_CODEX_COMMAND: 'codex-two',
+        NARADA_CODEX_CLI_VERSION: '2.0.0',
+      },
+      now: () => 2000,
+    });
+    assert.equal(first.status, 'passed_fresh');
+    assert.equal(second.status, 'passed_fresh');
+    assert.equal(calls.length, 2);
+    assert.equal(second.cache.status, 'miss');
+  } finally {
+    rmSync(siteRoot, { recursive: true, force: true });
+    rmSync(userSiteRoot, { recursive: true, force: true });
+  }
+});
+
+test('codex subscription support refuses cached readiness when auth home disappears', () => {
+  const calls = [];
+  const siteRoot = mkdtempSync(join(tmpdir(), 'narada-codex-preflight-auth-missing-'));
+  const userSiteRoot = mkdtempSync(join(tmpdir(), 'narada-user-site-codex-preflight-auth-missing-'));
+  const authHome = join(userSiteRoot, '.codex-auth');
+  const options = {
+    processEnv: {
+      USERPROFILE: 'C:/Users/Andrey',
+      NARADA_CODEX_AUTH_HOME: authHome,
+      NARADA_CODEX_COMMAND: 'codex',
+      NARADA_CODEX_CLI_VERSION: '1.0.0',
+    },
+    processPlatform: 'linux',
+    sessionSiteRoot: siteRoot,
+    userSiteRoot,
+    dryRun: false,
+    now: () => 1000,
+    spawnSync(command, args, spawnOptions) {
+      calls.push({ command, args, options: spawnOptions });
+      return { status: 0, stdout: '{"event":"ok"}\n', stderr: '', signal: null, error: null };
+    },
+    progressStream: { write() {} },
+  };
+  mkdirSync(authHome, { recursive: true });
+  try {
+    const first = codexSupport.codexSubscriptionPreflight('codex-subscription', options);
+    rmSync(authHome, { recursive: true, force: true });
+    const second = codexSupport.codexSubscriptionPreflight('codex-subscription', {
+      ...options,
+      now: () => 2000,
+      spawnSync() {
+        calls.push('second-spawn');
+        return { status: 1, stdout: '', stderr: 'missing auth', signal: null, error: null };
+      },
+    });
+    assert.equal(first.status, 'passed_fresh');
+    assert.equal(second.status, 'failed_missing_auth_home');
+    assert.equal(second.ok, false);
+    assert.equal(calls.length, 1);
+    assert.equal(second.cache.status, 'auth_missing');
+  } finally {
+    rmSync(siteRoot, { recursive: true, force: true });
+    rmSync(userSiteRoot, { recursive: true, force: true });
   }
 });
 

@@ -174,6 +174,8 @@ test('registered launcher verifier documents sharding filters', () => {
   assert.match(result.stdout, /--record-offset <n>/);
   assert.match(result.stdout, /--record-limit <n>/);
   assert.match(result.stdout, /--launch-timeout-ms <n>/);
+  assert.match(result.stdout, /--jobs <n>/);
+  assert.match(result.stdout, /--retries <n>/);
   assert.match(result.stdout, /agent-tui-only/);
 });
 
@@ -234,10 +236,24 @@ test('registered launcher verifier exercises the PowerShell dry-run handoff', { 
       '  [string]$WorkspaceRoot,',
       '  [switch]$DryRun',
       ')',
+      "$segments = $Agent -split '\\.'",
+      "$siteId = if ($segments.Length -gt 1) { ($segments[0..($segments.Length - 2)] -join '.') } else { $null }",
+      '$localAgentId = if ($segments.Length -gt 1) { $segments[-1] } else { $Agent }',
+      "$role = $localAgentId -replace '\\d+$', ''",
       '$result = @{',
       '  schema = "narada.agent_start.result.v0"',
       '  status = "dry_run"',
       '  identity = $Agent',
+      '  agent_identity_ref = @{',
+      '    schema = "narada.agent_identity_ref.v1"',
+      '    site_id = $siteId',
+      '    local_agent_id = $localAgentId',
+      '    role = $role',
+      '    canonical_agent_id = if ($siteId) { "$siteId.$localAgentId" } else { $localAgentId }',
+      '    display = if ($siteId) { "$siteId.$localAgentId" } else { $localAgentId }',
+      '    source_agent_id = $Agent',
+      '    scope = if ($siteId) { "site_scoped" } else { "unscoped" }',
+      '  }',
       '  carrier_kind = $Carrier',
       '  runtime = $Runtime',
       '  tool_fabric_adapter_kind = "narada-agent-runtime-server-mcp-client"',
@@ -276,7 +292,7 @@ test('registered launcher verifier exercises the PowerShell dry-run handoff', { 
     assert.equal(output.checked_launches, 1);
     assert.equal(output.runtime_policy, 'default-only');
     assert.deepEqual(output.filters.agents, ['narada-test.resident']);
-    assert.deepEqual(output.shard, { record_offset: 0, record_limit: null, launch_timeout_ms: 8500 });
+    assert.deepEqual(output.shard, { record_offset: 0, record_limit: null, launch_timeout_ms: 30000, jobs: 1, retries: 1 });
 
     const shard = spawnHiddenSync(process.execPath, [
       join(packageRoot, 'bin', 'verify-registered-site-launchers.mjs'),
@@ -303,7 +319,37 @@ test('registered launcher verifier exercises the PowerShell dry-run handoff', { 
     assert.equal(shardOutput.filtered_records, 2);
     assert.equal(shardOutput.selected_records, 1);
     assert.equal(shardOutput.checked_launches, 1);
-    assert.deepEqual(shardOutput.shard, { record_offset: 1, record_limit: 1, launch_timeout_ms: 8500 });
+    assert.deepEqual(shardOutput.shard, { record_offset: 1, record_limit: 1, launch_timeout_ms: 30000, jobs: 1, retries: 1 });
+
+    const progressShard = spawnHiddenSync(process.execPath, [
+      join(packageRoot, 'bin', 'verify-registered-site-launchers.mjs'),
+      '--registry',
+      registryPath,
+      '--start-agent',
+      startAgentPath,
+      '--runtime-policy',
+      'default-only',
+      '--record-offset',
+      '0',
+      '--record-limit',
+      '1',
+      '--jobs',
+      '2',
+      '--progress',
+    ], {
+      cwd: workspaceRoot,
+      encoding: 'utf8',
+      env: { ...process.env, NARADA_PROPER_ROOT: naradaProperRoot },
+    });
+
+    assert.equal(progressShard.status, 0, progressShard.stderr || progressShard.stdout);
+    const progressOutput = JSON.parse(progressShard.stdout);
+    assert.equal(progressOutput.status, 'ok');
+    assert.equal(progressOutput.checked_launches, 1);
+    assert.deepEqual(progressOutput.shard, { record_offset: 0, record_limit: 1, launch_timeout_ms: 30000, jobs: 2, retries: 1 });
+    assert.match(progressShard.stderr, /launcher-verifier: selected 1\/2 records; planned launches=1; policy=default-only; jobs=2; retries=1/);
+    assert.match(progressShard.stderr, /launcher-verifier: \[1\/1\] narada-test\.resident carrier=agent-cli runtime=narada-agent-runtime-server/);
+    assert.match(progressShard.stderr, /launcher-verifier: checked launches=1; failures=0/);
 
     const emptyShard = spawnHiddenSync(process.execPath, [
       join(packageRoot, 'bin', 'verify-registered-site-launchers.mjs'),
@@ -326,7 +372,7 @@ test('registered launcher verifier exercises the PowerShell dry-run handoff', { 
     const emptyShardOutput = JSON.parse(emptyShard.stderr);
     assert.equal(emptyShardOutput.reason, 'launcher_verification_shard_matched_no_records');
     assert.equal(emptyShardOutput.filtered_records, 2);
-    assert.deepEqual(emptyShardOutput.shard, { record_offset: 2, record_limit: 1, launch_timeout_ms: 8500 });
+    assert.deepEqual(emptyShardOutput.shard, { record_offset: 2, record_limit: 1, launch_timeout_ms: 30000, jobs: 1, retries: 1 });
 
     const noMatch = spawnHiddenSync(process.execPath, [
       join(packageRoot, 'bin', 'verify-registered-site-launchers.mjs'),
@@ -369,6 +415,44 @@ test('registered launcher verifier exercises the PowerShell dry-run handoff', { 
     const staleForkOutput = JSON.parse(staleFork.stderr);
     assert.equal(staleForkOutput.reason, 'launcher_verification_failed');
     assert.equal(staleForkOutput.failures[0].reason, 'site_owns_forked_start_agent_implementation');
+
+    const siteLocalMissingSiteRegistryPath = join(tempRoot, 'agents-site-local-missing-site.psd1');
+    writeFileSync(siteLocalMissingSiteRegistryPath, [
+      '@{',
+      '  Agents = @(',
+      '    @{',
+      '      Agent = "resident"',
+      '      Title = "Unscoped Resident"',
+      `      NaradaRoot = "${naradaRoot.replaceAll('\\', '\\\\')}"`,
+      `      WorkspaceRoot = "${workspaceRoot.replaceAll('\\', '\\\\')}"`,
+      `      SiteRoot = "${siteRoot.replaceAll('\\', '\\\\')}"`,
+      '      Launcher = "narada-test.ps1"',
+      '      Carrier = "agent-cli"',
+      '      Runtime = "narada-agent-runtime-server"',
+      '    }',
+      '  )',
+      '}',
+      '',
+    ].join('\n'), 'utf8');
+
+    const siteLocalMissingSite = spawnHiddenSync(process.execPath, [
+      join(packageRoot, 'bin', 'verify-registered-site-launchers.mjs'),
+      '--registry',
+      siteLocalMissingSiteRegistryPath,
+      '--start-agent',
+      startAgentPath,
+      '--runtime-policy',
+      'default-only',
+    ], {
+      cwd: workspaceRoot,
+      encoding: 'utf8',
+      env: { ...process.env, NARADA_PROPER_ROOT: naradaProperRoot },
+    });
+    assert.equal(siteLocalMissingSite.status, 1, siteLocalMissingSite.stdout || siteLocalMissingSite.stderr);
+    const siteLocalMissingSiteOutput = JSON.parse(siteLocalMissingSite.stderr);
+    assert.equal(siteLocalMissingSiteOutput.reason, 'launcher_verification_failed');
+    assert.equal(siteLocalMissingSiteOutput.failures.some((failure) => failure.reason === 'site_local_agent_missing_site'), true);
+    assert.equal(siteLocalMissingSiteOutput.failures.some((failure) => failure.reason === 'agent_identity_ref_unscoped'), true);
   } finally {
     rmSync(tempRoot, { recursive: true, force: true });
   }

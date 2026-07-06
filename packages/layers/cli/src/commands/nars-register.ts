@@ -1,7 +1,7 @@
 import type { Command } from 'commander';
 import { directCommandAction, silentCommandContext } from '../lib/command-wrapper.js';
 import { emitCommandResult, resolveCommandFormat } from '../lib/cli-output.js';
-import { narsAttachCommandCommand, narsAuthorityTransitionPlanCommand, narsSessionsCommand } from './nars.js';
+import { narsAttachCommandCommand, narsAuthorityTransitionExecuteCommand, narsAuthorityTransitionPlanCommand, narsSessionsCommand } from './nars.js';
 import { narsProjectionBridgeRunCommand, narsProjectionBridgeStartCommand, narsProjectionRegisterCommand } from './nars-projection.js';
 
 export function registerNarsCommands(program: Command): void {
@@ -107,6 +107,29 @@ export function registerNarsCommands(program: Command): void {
         dryRun: opts.dryRun as boolean | undefined,
         format: resolveCommandFormat(opts.format, 'auto'),
       }),
+    }));
+
+  authorityTransition
+    .command('execute')
+    .description('Prepare the next governed NARS authority transition slice after a feasible plan')
+    .requiredOption('--session <id>', 'Concrete NARS session id')
+    .requiredOption('--target-host <host-kind>', 'Target authority host kind: local|cloudflare-host')
+    .option('--step <step>', 'Execute step: prepare-target', 'prepare-target')
+    .option('--site-root <path>', 'Target Site root')
+    .option('--site <id>', 'Registered Site id')
+    .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
+    .action(directCommandAction<[Record<string, unknown>]>({
+      command: 'nars authority-transition execute',
+      emit: emitCommandResult,
+      format: (opts: Record<string, unknown>) => opts.format,
+      invocation: (opts) => narsAuthorityTransitionExecuteCommand({
+        siteRoot: opts.siteRoot as string | undefined,
+        site: opts.site as string | undefined,
+        session: opts.session as string | undefined,
+        targetHost: opts.targetHost as string | undefined,
+        step: opts.step as string | undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
+      }, silentCommandContext()),
     }));
 
   projection

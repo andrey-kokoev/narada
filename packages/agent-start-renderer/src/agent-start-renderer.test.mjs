@@ -29,6 +29,14 @@ test('formats agent-start preamble with redacted API keys and startup sequence',
     },
     required_environment: {
       NARADA_AGENT_ID: 'site.builder',
+      NARADA_RUNTIME_SESSION_ID: 'carrier_runtime_1',
+      NARADA_NARS_SESSION_ID: 'carrier_runtime_1',
+      NARADA_CARRIER_SESSION_ID: 'carrier_runtime_1',
+      NARADA_SITE_CONFIG: JSON.stringify({
+        schema: 'narada.nars.site_config.v1',
+        mcp_scope: 'all',
+        mcp_loci: ['user-site', 'local-site'],
+      }),
       KIMI_API_KEY: 'secret',
     },
     startup_command: { name: 'agent_context_startup_sequence', arguments: {}, display: 'agent_context_startup_sequence({})' },
@@ -64,9 +72,13 @@ test('formats agent-start preamble with redacted API keys and startup sequence',
 
   assert.match(text, /agent_start_event: evt_1/);
   assert.match(text, /identity: site\.builder/);
+  assert.match(text, /nars_session_id: carrier_runtime_1/);
+  assert.match(text, /legacy_compatibility_environment:/);
+  assert.match(text, /NARADA_CARRIER_SESSION_ID=carrier_runtime_1/);
   assert.match(text, /KIMI_API_KEY=<set>/);
   assert.doesNotMatch(text, /secret/);
   assert.match(text, /mcp_fabric:/);
+  assert.match(text, /scope_policy=scope=all; loci=user-site, local-site/);
   assert.match(text, /launcher_contracts:/);
   assert.match(text, /launch_result_artifact=/);
   assert.match(text, /operator_projection_open_request=/);
@@ -82,9 +94,119 @@ test('formats agent-start preamble with redacted API keys and startup sequence',
   assert.match(text, /server_count=2/);
   assert.match(text, /narada-site-agent-context/);
   assert.match(text, /narada-site-local-filesystem/);
-  assert.match(text, /startup_command: agent_context_startup_sequence\(\{\}\)/);
+  assert.match(text, /launch_summary:/);
+  assert.match(text, /startup_command:\n\s+command: agent_context_startup_sequence\(\{\}\)/);
   assert.match(text, /agent_context_startup_sequence \{\}/);
   assert.match(text, /agent_start_result_end: evt_1/);
+});
+
+test('formats structured MCP skipped entries without object-object leakage', () => {
+  const text = formatAgentStartResult({
+    agent_start_event: 'evt_2',
+    identity: 'site.builder',
+    role: 'builder',
+    runtime: 'narada-agent-runtime-server',
+    mcp_fabric: {
+      source: 'mcp-scope:all',
+      site_root: 'D:/code/site',
+      files: ['local-site:narada-site-mcp.json'],
+      server_names: ['narada-site-agent-context'],
+      skipped: [
+        { locus: 'user-site', server_name: 'narada-user-local-duplicate', reason: 'injection_scope_not_requested' },
+      ],
+    },
+    required_environment: {},
+    startup_sequence: [],
+  }, { colorEnabled: false });
+
+  assert.match(text, /skipped_count=1/);
+  assert.match(text, /locus=user-site; server=narada-user-local-duplicate; reason=injection_scope_not_requested/);
+  assert.doesNotMatch(text, /\[object Object\]/);
+});
+
+test('renders canonical identity projection for site-local agent ids', () => {
+  const text = formatAgentStartResult({
+    agent_start_event: 'evt_identity_site_local',
+    identity: 'resident',
+    agent_identity_ref: {
+      schema: 'narada.agent_identity_ref.v1',
+      site_id: 'sonar',
+      local_agent_id: 'resident',
+      role: 'resident',
+      canonical_agent_id: 'sonar.resident',
+      display: 'sonar.resident',
+      source_agent_id: 'resident',
+      scope: 'site_scoped',
+    },
+    role: 'resident',
+    runtime: 'narada-agent-runtime-server',
+    required_environment: { NARADA_AGENT_ID: 'resident', NARADA_SITE_ID: 'sonar' },
+    startup_sequence: [],
+  }, { colorEnabled: false });
+
+  assert.match(text, /identity: sonar\.resident/);
+  assert.match(text, /local_agent_id: resident/);
+  assert.match(text, /site_id: sonar/);
+  assert.doesNotMatch(text, /identity: resident/);
+});
+
+test('renders canonical identity projection for prefixed agent ids', () => {
+  const text = formatAgentStartResult({
+    agent_start_event: 'evt_identity_prefixed',
+    identity: 'smart-scheduling.resident',
+    agent_identity_ref: {
+      schema: 'narada.agent_identity_ref.v1',
+      site_id: 'smart-scheduling',
+      local_agent_id: 'resident',
+      role: 'resident',
+      canonical_agent_id: 'smart-scheduling.resident',
+      display: 'smart-scheduling.resident',
+      source_agent_id: 'smart-scheduling.resident',
+      scope: 'site_scoped',
+    },
+    role: 'resident',
+    runtime: 'narada-agent-runtime-server',
+    required_environment: { NARADA_AGENT_ID: 'smart-scheduling.resident' },
+    startup_sequence: [],
+  }, { colorEnabled: false });
+
+  assert.match(text, /identity: smart-scheduling\.resident/);
+  assert.match(text, /local_agent_id: resident/);
+  assert.match(text, /site_id: smart-scheduling/);
+});
+
+test('formats wait prompt with canonical identity projection for site-local agent ids', () => {
+  const text = formatAgentStartWaitPrompt('resident', 'agent-runtime-server', {
+    agentIdentityRef: {
+      schema: 'narada.agent_identity_ref.v1',
+      site_id: 'sonar',
+      local_agent_id: 'resident',
+      role: 'resident',
+      canonical_agent_id: 'sonar.resident',
+      display: 'sonar.resident',
+      source_agent_id: 'resident',
+      scope: 'site_scoped',
+    },
+  });
+
+  assert.equal(text, 'Press Enter to start agent-runtime-server for sonar.resident...');
+});
+
+test('formats launch failure rendering without duplicate status text', () => {
+  const text = formatAgentStartResult({
+    agent_start_event: 'evt_3',
+    identity: 'site.builder',
+    role: 'builder',
+    runtime: 'narada-agent-runtime-server',
+    required_environment: {},
+    launcher_contracts: {
+      launch_failure_rendering: { status: 'materialized', reason_code: 'materialized' },
+    },
+    startup_sequence: [],
+  }, { colorEnabled: false });
+
+  assert.match(text, /launch_failure_rendering=materialized/);
+  assert.doesNotMatch(text, /launch_failure_rendering=materialized materialized/);
 });
 
 test('formats wait prompt', () => {

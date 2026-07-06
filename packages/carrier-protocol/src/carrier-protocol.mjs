@@ -383,7 +383,7 @@ export const CARRIER_PROTOCOL_SCHEMAS = Object.freeze({
   nars_lifecycle_hook: Object.freeze({
     schema: NARS_LIFECYCLE_HOOK_SCHEMA,
     required: Object.freeze(['schema', 'hook', 'hook_kind', 'agent_id', 'session_id', 'timestamp']),
-    optional: Object.freeze(['event_kind', 'request_id', 'turn_id', 'directive_id', 'terminal_state', 'error', 'metadata', 'source_event']),
+    optional: Object.freeze(['agent_identity_ref', 'event_kind', 'request_id', 'turn_id', 'directive_id', 'terminal_state', 'error', 'metadata', 'source_event']),
   }),
   nars_authority_runtime_host_transition: Object.freeze({
     schema: NARS_AUTHORITY_RUNTIME_HOST_TRANSITION_SCHEMA,
@@ -1923,6 +1923,7 @@ export function narsLifecycleHooksForEvent(event) {
 export function createNarsLifecycleHookPayload({
   hook,
   agent_id,
+  agent_identity_ref = undefined,
   session_id,
   request_id = undefined,
   turn_id = undefined,
@@ -1940,6 +1941,7 @@ export function createNarsLifecycleHookPayload({
     hook,
     hook_kind: narsLifecycleHookKind(hook),
     agent_id,
+    ...(agent_identity_ref === undefined ? {} : { agent_identity_ref }),
     session_id,
     timestamp,
     ...(normalizedEventKind === undefined ? {} : { event_kind: normalizedEventKind }),
@@ -1960,6 +1962,7 @@ export function narsLifecycleHookPayloadFromEvent({ hook, event, timestamp = now
   return createNarsLifecycleHookPayload({
     hook,
     agent_id: event?.agent_id,
+    agent_identity_ref: event?.agent_identity_ref,
     session_id: event?.session_id,
     request_id: event?.request_id,
     turn_id: event?.turn_id,
@@ -1986,6 +1989,7 @@ export function validateNarsLifecycleHookPayload(payload) {
   for (const field of ['agent_id', 'session_id']) {
     if (typeof payload[field] !== 'string' || payload[field].length === 0) errors.push(`invalid_${field}`);
   }
+  if (payload.agent_identity_ref !== undefined && payload.agent_identity_ref !== null && !isObject(payload.agent_identity_ref)) errors.push('invalid_agent_identity_ref');
   if (!isRfc3339Utc(payload.timestamp)) errors.push('invalid_timestamp');
   if (payload.event_kind !== undefined && !isNarsRuntimeEventKind(payload.event_kind)) errors.push(`invalid_event_kind:${String(payload.event_kind)}`);
   for (const field of ['request_id', 'turn_id', 'directive_id', 'terminal_state']) {

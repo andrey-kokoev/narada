@@ -1,3 +1,5 @@
+import { agentIdentityDisplay, agentIdentityGroupKey } from '@narada2/agent-identity';
+
 export const NARS_COMMAND_METHOD = 'session.command.execute';
 export const LEGACY_CARRIER_COMMAND_METHOD = 'carrier.command.execute';
 
@@ -74,6 +76,7 @@ export const NARS_CLIENT_EVENT_TONES = Object.freeze({
 
 export const NARS_CLIENT_EVENT_LABELS = Object.freeze({
   assistant_message: 'Agent',
+  assistant_message_stream: 'Agent',
   user_message: 'Operator',
   tool_call: 'Tool call',
   tool_result: 'Tool result',
@@ -483,6 +486,15 @@ export const AGENT_WEB_UI_COMMANDS = Object.freeze([
   sessionCommand('tool-output', '/tool-output', { title: 'Tool output command', description: 'Run the NARS-compatible tool-output session command.', aliases: ['/tool-outputs'], group: 'settings', rank: 340 }),
   sessionCommand('tools', '/tools', { title: 'Tools command', description: 'Run the NARS-compatible tools session command.', aliases: ['/tool'], group: 'diagnostics', rank: 350 }),
   sessionCommand('queue', '/queue', { title: 'Queue command', description: 'Run the NARS-compatible queue session command.', group: 'conversation', rank: 360 }),
+  localCommand('snippet', '/snippet', {
+    title: 'Snippet library',
+    description: 'Save, edit, delete, search, or run local operator snippets.',
+    group: 'snippets',
+    usage: '/snippet save|edit|delete|search|run',
+    keywords: ['macro', 'saved command', 'prompt', 'short text'],
+    rank: 370,
+    buildAction: (input) => ({ kind: 'snippet_command', value: input.value, raw: input.raw }),
+  }),
 ]);
 
 export const AGENT_WEB_UI_COMMAND_GROUP_LABELS = Object.freeze({
@@ -490,11 +502,12 @@ export const AGENT_WEB_UI_COMMAND_GROUP_LABELS = Object.freeze({
   session: 'Session state',
   diagnostics: 'Diagnostics',
   settings: 'Settings',
+  snippets: 'Operator snippets',
   local: 'Local UI',
   advanced: 'Advanced',
 });
 
-const COMMAND_GROUP_ORDER = Object.freeze(['conversation', 'session', 'diagnostics', 'settings', 'local', 'advanced']);
+const COMMAND_GROUP_ORDER = Object.freeze(['conversation', 'session', 'diagnostics', 'settings', 'snippets', 'local', 'advanced']);
 
 export const AGENT_WEB_UI_HELP_LINES = Object.freeze([
   'Commands',
@@ -601,7 +614,7 @@ export function classifyNarsClientEventProjection(projection) {
   if (kind === 'conversation_enqueue_requested' || kind === 'input_queued_for_turn_boundary' || kind === 'input_admitted_to_turn' || kind === 'input_dropped_by_operator' || kind === 'input_abandoned_on_session_end' || kind === 'input_completed') return 'operations';
   if (kind === 'session_health') return isRoutineHealthyNarsSessionHealth(event) ? 'diagnostics' : 'operations';
   if (kind?.startsWith?.('authority_source_') || kind?.startsWith?.('authority_target_')) return 'operations';
-  if (kind === 'session_started' || kind === 'session_closed' || kind === 'session_status' || kind === 'session_recovery' || kind === 'session_operations' || kind === 'observer_status' || kind === 'observers_status' || kind === 'carrier_command_result') return 'operations';
+  if (kind === 'session_started' || kind === 'session_closed' || kind === 'session_status' || kind === 'session_recovery' || kind === 'session_operations' || kind === 'session_sync' || kind === 'observer_status' || kind === 'observers_status' || kind === 'carrier_command_result') return 'operations';
   if (kind === 'turn_started' || kind === 'turn_complete' || kind === 'directive_received' || kind === 'directive_receipt_recorded' || kind === 'directive_carrier_accepted_recorded' || kind === 'directive_complete' || kind === 'session_events_subscription_started' || kind === 'websocket_connected') return 'diagnostics';
   if (kind?.startsWith?.('provider_')) return 'diagnostics';
   return 'raw';
@@ -632,7 +645,7 @@ export function shouldProjectNarsClientEvent(message, options = {}) {
 }
 
 function eventTone(kind) {
-  if (kind === 'assistant_message' || kind === 'provider_agent_message') return NARS_CLIENT_EVENT_TONES.assistant;
+  if (kind === 'assistant_message' || kind === 'assistant_message_stream' || kind === 'provider_agent_message') return NARS_CLIENT_EVENT_TONES.assistant;
   if (kind === 'user_message') return NARS_CLIENT_EVENT_TONES.operator;
   if (kind === 'tool_call' || kind === 'tool_result') return NARS_CLIENT_EVENT_TONES.tool;
   if (kind === 'session_artifact_registered' || kind === 'session_artifact_read') return NARS_CLIENT_EVENT_TONES.status;
@@ -650,15 +663,15 @@ function eventSummary(event, kind) {
   if (kind === 'assistant_message') return event.content ?? event.message ?? 'assistant message';
   if (kind === 'provider_agent_message') return event.provider_event?.item?.text ?? event.event?.item?.text ?? 'provider agent message';
   if (kind === 'user_message') return event.content ?? event.message ?? 'operator message';
-  if (kind === 'tool_call') return event.tool_name ?? event.name ?? 'tool call';
-  if (kind === 'tool_result') return `${event.tool_name ?? event.name ?? 'tool result'}${event.status ? ` ${event.status}` : ''}`;
-  if (kind === 'session_started') return `${event.agent_id ?? 'agent'} / ${event.session_id ?? 'session'}`;
+  if (kind === 'tool_call') return event.tool_name ?? event.tool ?? event.name ?? 'tool call';
+  if (kind === 'tool_result') return `${event.tool_name ?? event.tool ?? event.name ?? 'tool result'}${event.status ? ` ${event.status}` : ''}`;
+  if (kind === 'session_started') return `${eventAgentDisplay(event)} / ${event.session_id ?? 'session'}`;
   if (kind === 'authority_session_revoked') return event.code ?? 'session_revoked';
   if (kind === 'projection_revoked') return event.code ?? 'projection_revoked';
   if (kind === 'session_events_subscription_started') return `${event.replay_count ?? 0} replayed event(s)`;
   if (kind === 'session_artifact_registered') return artifactSummary(event, 'artifact registered');
   if (kind === 'session_artifact_read') return artifactSummary(event, 'artifact');
-  if (kind === 'session_health') return `${event.status ?? 'health'} · ${event.agent_id ?? 'agent'} · ${event.session_id ?? 'session'}`;
+  if (kind === 'session_health') return `${event.status ?? 'health'} · ${eventAgentDisplay(event)} · ${event.session_id ?? 'session'}`;
   if (kind === 'mcp_runtime_fault' || kind === 'carrier_diagnostic_recorded') return diagnosticSummary(event, kind);
   if (kind === 'turn_complete') return event.terminal_state ?? 'turn complete';
   if (kind === 'turn_started') return event.turn_id ?? 'turn started';
@@ -674,7 +687,7 @@ function eventSummary(event, kind) {
 function diagnosticSummary(event, kind) {
   if (kind === 'mcp_runtime_fault' || event?.diagnostic_code === 'mcp_runtime_fault') {
     const server = event.server_name ?? 'unknown';
-    const tool = event.tool_name ?? '<missing>';
+    const tool = event.tool_name ?? event.tool ?? '<missing>';
     const error = event.error_code ?? event.error ?? event.message ?? null;
     return `MCP runtime fault ${server}:${tool}${error ? ` ${error}` : ''}`;
   }
@@ -695,7 +708,7 @@ export function projectNarsClientEvent(message) {
   const kind = event?.event ?? 'unknown';
   const label = NARS_CLIENT_EVENT_LABELS[kind] ?? kind;
   const summary = eventSummary(event, kind);
-  const renderKey = genericRenderKey(event, kind);
+  const renderKey = eventRenderKey(event, kind) ?? genericRenderKey(event, kind);
   return {
     kind,
     label,
@@ -704,6 +717,38 @@ export function projectNarsClientEvent(message) {
     event,
     ...(renderKey ? { renderKey } : {}),
   };
+}
+
+function eventRenderKey(event, kind) {
+  if (!event || typeof event !== 'object') return null;
+  if (kind === 'assistant_message' || kind === 'assistant_message_stream') {
+    const requestId = event.request_id ?? event.requestId ?? null;
+    const turnId = event.turn_id ?? event.turnId ?? null;
+    if (requestId) return `assistant:${requestId}`;
+    if (turnId) return `assistant-turn:${turnId}`;
+    return sequenceRenderKey(event);
+  }
+  if (kind === 'user_message' || kind === 'operator_input_submitted') {
+    const requestId = event.request_id ?? event.requestId ?? null;
+    const turnId = event.turn_id ?? event.turnId ?? null;
+    if (requestId) return `operator:${requestId}`;
+    if (turnId) return `operator-turn:${turnId}`;
+    return sequenceRenderKey(event);
+  }
+  if (kind === 'tool_call' || kind === 'tool_result') {
+    const requestId = event.request_id ?? event.requestId ?? null;
+    const turnId = event.turn_id ?? event.turnId ?? null;
+    if (requestId) return `tool:${kind}:${requestId}`;
+    if (turnId) return `tool-turn:${kind}:${turnId}`;
+    return sequenceRenderKey(event);
+  }
+  if (kind === 'turn_started' || kind === 'turn_complete' || kind === 'turn_failed') {
+    const turnId = event.turn_id ?? event.turnId ?? null;
+    if (turnId) return `turn:${turnId}`;
+    return sequenceRenderKey(event);
+  }
+  if (kind === 'session_health') return sequenceRenderKey(event);
+  return null;
 }
 
 function genericRenderKey(event, kind) {
@@ -766,7 +811,28 @@ function projection({ kind, class: eventClass = null, label, tone, summary, even
 function providerItemRenderKey(event, item, prefix) {
   const itemId = item?.id ?? null;
   if (!itemId) return sequenceRenderKey(event);
-  return `${prefix}:provider-item:${event?.agent_id ?? 'agent'}:${event?.session_id ?? 'session'}:${itemId}`;
+  return `${prefix}:provider-item:${eventAgentGroupKey(event)}:${event?.session_id ?? 'session'}:${itemId}`;
+}
+
+function eventAgentDisplay(event) {
+  return agentIdentityDisplay(
+    event?.agent_identity_ref,
+    stringField(event, 'agent_id') ?? stringField(event, 'agentId') ?? 'agent',
+  ) ?? 'agent';
+}
+
+function eventAgentGroupKey(event) {
+  return agentIdentityGroupKey(
+    event?.agent_identity_ref,
+    stringField(event, 'agent_id') ?? stringField(event, 'agentId') ?? 'unknown',
+    stringField(event, 'site_id') ?? stringField(event, 'siteId') ?? null,
+  );
+}
+
+function stringField(record, field) {
+  if (!record || typeof record !== 'object') return null;
+  const value = record[field];
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
 
 function sequenceRenderKey(event) {

@@ -33,6 +33,7 @@ export async function runCarrierServerMode({
   const ctx = createCarrierRuntimeContext(runtimeContext ?? config);
   const {
     identity,
+    agentIdentityRef,
     session,
     siteId,
     siteRoot,
@@ -120,6 +121,7 @@ export async function runCarrierServerMode({
       event,
       ...(isNarsRuntimeEventKind(lifecycleEvent) ? { lifecycle_event: lifecycleEvent } : {}),
       agent_id: identity,
+      agent_identity_ref: agentIdentityRef,
       session_id: session,
       timestamp: new Date().toISOString(),
       ...payload,
@@ -210,6 +212,7 @@ export async function runCarrierServerMode({
     path: sessionPath ? join(dirname(sessionPath), 'heartbeat.json') : null,
     session,
     identity,
+    agent_identity_ref: agentIdentityRef,
     runtime: 'narada-agent-runtime-server',
     carrier_kind: launchOperatorSurfaceKind,
     launch_operator_surface_kind: launchOperatorSurfaceKind,
@@ -228,6 +231,7 @@ export async function runCarrierServerMode({
     launch_operator_surface_kind: launchOperatorSurfaceKind,
     operator_surface_kind: launchOperatorSurfaceKind,
     mode: 'server',
+    agent_identity_ref: agentIdentityRef,
     site_id: siteId,
     site_root: siteRoot,
     site_config: siteConfig,

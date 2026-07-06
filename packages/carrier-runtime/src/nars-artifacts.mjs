@@ -6,12 +6,19 @@ export const NARS_ARTIFACT_RECORD_SCHEMA = 'narada.nars.artifact_record.v1';
 export const NARS_ARTIFACT_INDEX_SCHEMA = 'narada.nars.artifact_index.v1';
 export const NARS_ARTIFACT_PUBLIC_SCHEMA = 'narada.nars.artifact_public.v1';
 
-const SUPPORTED_KINDS = new Set(['html', 'markdown', 'image', 'json', 'text']);
+const SUPPORTED_KINDS = new Set(['html', 'markdown', 'image', 'json', 'text', 'audio']);
 const CONTENT_TYPES = new Map([
   ['html', 'text/html; charset=utf-8'],
   ['markdown', 'text/markdown; charset=utf-8'],
   ['json', 'application/json; charset=utf-8'],
   ['text', 'text/plain; charset=utf-8'],
+  ['audio', 'audio/wav'],
+]);
+const AUDIO_CONTENT_TYPES = new Map([
+  ['.wav', 'audio/wav'],
+  ['.mp3', 'audio/mpeg'],
+  ['.ogg', 'audio/ogg'],
+  ['.m4a', 'audio/mp4'],
 ]);
 const EXTENSION_KIND = new Map([
   ['.html', 'html'],
@@ -20,11 +27,21 @@ const EXTENSION_KIND = new Map([
   ['.markdown', 'markdown'],
   ['.json', 'json'],
   ['.txt', 'text'],
+  ['.wav', 'audio'],
+  ['.mp3', 'audio'],
+  ['.ogg', 'audio'],
+  ['.m4a', 'audio'],
 ]);
 
 export function narsArtifactsRootFromSessionPath(sessionPath) {
   if (!sessionPath) throw new Error('session_path_required');
   return join(dirname(String(sessionPath)), 'artifacts');
+}
+
+function audioContentTypeForPath(path) {
+  const lower = String(path ?? '').toLowerCase();
+  const extension = lower.match(/\.[^.\\/]+$/)?.[0] ?? '';
+  return AUDIO_CONTENT_TYPES.get(extension) ?? contentTypeForKind('audio');
 }
 
 export function registerNarsArtifact({
@@ -53,7 +70,7 @@ export function registerNarsArtifact({
   }
   const artifactKind = normalizeArtifactKind(kind ?? inferKindFromPath(resolvedSourcePath));
   if (!SUPPORTED_KINDS.has(artifactKind)) throw artifactError('artifact_kind_unsupported', `Unsupported artifact kind: ${artifactKind}`);
-  const effectiveContentType = validateArtifactContentType({ kind: artifactKind, contentType });
+  const effectiveContentType = validateArtifactContentType({ kind: artifactKind, contentType, sourcePath: resolvedSourcePath });
   const record = {
     schema: NARS_ARTIFACT_RECORD_SCHEMA,
     artifact_id: `art_${compactTimestamp(now)}_${randomUUID().replace(/-/g, '').slice(0, 10)}`,
@@ -71,6 +88,7 @@ export function registerNarsArtifact({
     render: {
       preferred: renderHint === 'link' ? 'link' : 'inline',
       sandbox: artifactKind === 'html' ? defaultHtmlSandboxPolicy() : null,
+      ...(artifactKind === 'audio' ? { media_controls: true } : {}),
     },
     lifecycle: {
       state: 'active',
@@ -123,7 +141,7 @@ export function readNarsArtifactContent({ sessionPath, artifactId } = {}) {
   return {
     record,
     content: readFileSync(sourcePath),
-    content_type: contentTypeForKind(record.kind),
+    content_type: contentTypeForRecord(record),
     headers: artifactContentHeaders(record),
   };
 }
@@ -137,7 +155,7 @@ export function publicNarsArtifactRecord(record) {
     agent_id: record.agent_id ?? null,
     kind: record.kind,
     title: record.title ?? null,
-    content_type: contentTypeForKind(record.kind),
+    content_type: contentTypeForRecord(record),
     created_at: record.created_at ?? null,
     access: record.access ?? { scope: 'session', token_required: false },
     render: record.render ?? { preferred: 'inline' },
@@ -214,8 +232,14 @@ function contentTypeForKind(kind) {
   return CONTENT_TYPES.get(kind) ?? 'application/octet-stream';
 }
 
-function validateArtifactContentType({ kind, contentType }) {
-  const expected = contentTypeForKind(kind);
+function contentTypeForRecord(record) {
+  if (record?.content_type) return String(record.content_type);
+  if (record?.kind === 'audio') return audioContentTypeForPath(record.source_path);
+  return contentTypeForKind(record?.kind);
+}
+
+function validateArtifactContentType({ kind, contentType, sourcePath }) {
+  const expected = kind === 'audio' ? audioContentTypeForPath(sourcePath) : contentTypeForKind(kind);
   if (!contentType) return expected;
   const supplied = String(contentType).trim().toLowerCase();
   if (supplied !== expected.toLowerCase()) {

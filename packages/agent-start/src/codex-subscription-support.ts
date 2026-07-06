@@ -9,10 +9,11 @@ export const CODEX_SUBSCRIPTION_PREFLIGHT_ENV = 'NARADA_CODEX_SUBSCRIPTION_PREFL
 export const CODEX_SUBSCRIPTION_PREFLIGHT_TIMEOUT_MS = 60000;
 export const CODEX_SUBSCRIPTION_PREFLIGHT_CACHE_TTL_MS = 15 * 60 * 1000;
 export const CODEX_SUBSCRIPTION_PREFLIGHT_CACHE_TTL_ENV = 'NARADA_CODEX_SUBSCRIPTION_PREFLIGHT_CACHE_TTL_MS';
+export const CODEX_SUBSCRIPTION_PREFLIGHT_REFRESH_VALUES = Object.freeze(['force', 'refresh', 'refetch']);
 
 export function codexSubscriptionPreflightForced(processEnv = process.env) {
   const mode = String(processEnv[CODEX_SUBSCRIPTION_PREFLIGHT_ENV] ?? '').trim().toLowerCase();
-  return mode === 'force';
+  return CODEX_SUBSCRIPTION_PREFLIGHT_REFRESH_VALUES.includes(mode);
 }
 
 export function codexSubscriptionPreflightDeferred(processEnv = process.env) {
@@ -48,8 +49,10 @@ export function codexSubscriptionPreflight(provider, {
   progressStream = process.stderr,
 } = {}) {
   const mode = String(processEnv[CODEX_SUBSCRIPTION_PREFLIGHT_ENV] ?? '').trim().toLowerCase();
-  const shouldRunLiveProbe = codexSubscriptionPreflightForced(processEnv) || (!dryRun && !codexSubscriptionPreflightDeferred(processEnv));
-  if (!shouldRunLiveProbe) {
+  const authHome = codexAuthHome(processEnv);
+  const authHomeExists = codexSubscriptionAuthAvailable(processEnv);
+  const refreshRequested = codexSubscriptionPreflightForced(processEnv);
+  if (dryRun || codexSubscriptionPreflightDeferred(processEnv)) {
     const status = dryRun
       ? 'deferred_for_dry_run'
       : 'deferred_by_operator_policy';
@@ -68,8 +71,29 @@ export function codexSubscriptionPreflight(provider, {
   }
   const command = codexPreflightCommand(processEnv, processPlatform);
   const cacheKey = codexSubscriptionPreflightCacheKey({ provider, processEnv, command });
-  const cached = codexSubscriptionPreflightCacheRead({ userSiteRoot, sessionSiteRoot, cacheKey, now: now(), processEnv });
-  if (!codexSubscriptionPreflightForced(processEnv) && cached) return cached;
+  let cacheContext = { status: refreshRequested ? 'refresh_requested' : 'miss' };
+  if (authHomeExists) {
+    const cached = codexSubscriptionPreflightCacheRead({ userSiteRoot, cacheKey, now: now(), processEnv, authHome });
+    if (!refreshRequested && cached?.status === 'passed_cached') return cached;
+    if (cached?.cache && cacheContext.status !== 'refresh_requested') cacheContext = cached.cache;
+  } else {
+    cacheContext.status = 'auth_missing';
+    cacheContext.auth_home = authHome;
+  }
+  if (!authHomeExists) {
+    return {
+      schema: 'narada.codex_subscription.preflight.v1',
+      status: 'failed_missing_auth_home',
+      ok: false,
+      provider,
+      command: `${command.command} ${[...command.prefixArgs, 'exec', '--json'].join(' ')}`,
+      mode: mode || 'default',
+      environment_variable: CODEX_SUBSCRIPTION_PREFLIGHT_ENV,
+      cache: cacheContext,
+      reason: 'The local Codex auth home is missing, so readiness cannot be cached or confirmed.',
+      required_next_step: 'Run codex login or restore the local Codex auth home, then retry the launcher.',
+    };
+  }
   progressStream?.write?.(`Checking ${provider} local Codex subscription auth...\n`);
   const prompt = 'Return exactly: ok';
   const argv = [...command.prefixArgs, 'exec', '--json', prompt];
@@ -99,7 +123,7 @@ export function codexSubscriptionPreflight(provider, {
   const unauthorized = /401\s+Unauthorized|Unauthorized/i.test(combined);
   const preflight = {
     schema: 'narada.codex_subscription.preflight.v1',
-    status: result.status === 0 ? 'passed' : unauthorized ? 'failed_unauthorized' : 'failed',
+    status: result.status === 0 ? 'passed_fresh' : unauthorized ? 'failed_unauthorized' : 'failed',
     ok: result.status === 0,
     provider,
     command: `${command.command} ${[...command.prefixArgs, 'exec', '--json'].join(' ')}`,
@@ -111,6 +135,14 @@ export function codexSubscriptionPreflight(provider, {
     stderr_first_line: stderrText.split(/\r?\n/).find((line) => line.trim()) ?? '',
     timeout_ms: CODEX_SUBSCRIPTION_PREFLIGHT_TIMEOUT_MS,
     ai_process_invocation: result.aiProcessInvocation ?? null,
+    cache: {
+      status: refreshRequested ? 'refresh_requested' : cacheContext.status,
+      auth_home: authHome,
+      auth_home_exists: authHomeExists,
+      cli_version: codexSubscriptionCliVersion(processEnv),
+      command_identity: codexSubscriptionCommandIdentity(command, processEnv),
+      path: codexSubscriptionPreflightCachePath({ userSiteRoot }),
+    },
   };
   if (preflight.ok) codexSubscriptionPreflightCacheWrite({ userSiteRoot, sessionSiteRoot, cacheKey, preflight, now: now(), processEnv });
   return preflight;
@@ -122,36 +154,74 @@ function codexSubscriptionPreflightCacheTtlMs(processEnv = process.env) {
   return CODEX_SUBSCRIPTION_PREFLIGHT_CACHE_TTL_MS;
 }
 
-function codexSubscriptionPreflightCacheRoot({ userSiteRoot, sessionSiteRoot }) {
-  return userSiteRoot ?? sessionSiteRoot ?? null;
+function codexSubscriptionCliVersion(processEnv = process.env) {
+  return optionalEnvironmentValue('NARADA_CODEX_CLI_VERSION', processEnv)
+    ?? optionalEnvironmentValue('CODEX_CLI_VERSION', processEnv)
+    ?? optionalEnvironmentValue('CODEX_VERSION', processEnv)
+    ?? null;
 }
 
-function codexSubscriptionPreflightCachePath({ userSiteRoot, sessionSiteRoot }) {
-  const cacheRoot = codexSubscriptionPreflightCacheRoot({ userSiteRoot, sessionSiteRoot });
-  if (!cacheRoot) return null;
-  if (userSiteRoot) return join(cacheRoot, '.narada', 'runtime', 'provider-auth-cache', 'codex-subscription-preflight-cache.json');
-  return join(cacheRoot, '.ai', 'runtime', 'codex-subscription-preflight-cache.json');
+function codexSubscriptionAuthAvailable(processEnv = process.env) {
+  const authHome = codexAuthHome(processEnv);
+  return Boolean(authHome && existsSync(authHome));
+}
+
+function codexSubscriptionCommandIdentity(command, processEnv = process.env) {
+  return [
+    command.command,
+    command.source ?? 'default',
+    ...(command.prefixArgs ?? []),
+    codexSubscriptionCliVersion(processEnv) ?? '',
+  ].join('\u0000');
+}
+
+function codexSubscriptionPreflightCachePath({ userSiteRoot }) {
+  if (!userSiteRoot) return null;
+  return join(userSiteRoot, '.narada', 'runtime', 'provider-auth-cache', 'codex-subscription-preflight-cache.json');
 }
 
 function codexSubscriptionPreflightCacheKey({ provider, processEnv, command }) {
   return [
     provider,
     command.command,
+    command.source ?? '',
     ...(command.prefixArgs ?? []),
     codexAuthHome(processEnv) ?? '',
     processEnv.CODEX_MODEL ?? '',
+    codexSubscriptionCliVersion(processEnv) ?? '',
   ].join('\u0000');
 }
 
-function codexSubscriptionPreflightCacheRead({ userSiteRoot, sessionSiteRoot, cacheKey, now, processEnv }) {
+function codexSubscriptionPreflightCacheRead({ userSiteRoot, cacheKey, now, processEnv, authHome }) {
   const ttlMs = codexSubscriptionPreflightCacheTtlMs(processEnv);
   if (ttlMs <= 0) return null;
-  const cachePath = codexSubscriptionPreflightCachePath({ userSiteRoot, sessionSiteRoot });
+  const cachePath = codexSubscriptionPreflightCachePath({ userSiteRoot });
   if (!cachePath || !existsSync(cachePath)) return null;
   try {
     const cache = JSON.parse(readFileSync(cachePath, 'utf8'));
     const entry = cache.entries?.[cacheKey];
-    if (!entry?.ok || !entry.checked_at_ms || now - entry.checked_at_ms > ttlMs) return null;
+    if (!entry) return null;
+    if (!entry.ok || !entry.checked_at_ms) return { cache: { status: 'stale', path: cachePath, ttl_ms: ttlMs } };
+    if (now - entry.checked_at_ms > ttlMs) {
+      return {
+        cache: {
+          status: 'stale',
+          path: cachePath,
+          ttl_ms: ttlMs,
+          age_ms: now - entry.checked_at_ms,
+        },
+      };
+    }
+    if (authHome && !existsSync(authHome)) {
+      return {
+        cache: {
+          status: 'auth_missing',
+          path: cachePath,
+          ttl_ms: ttlMs,
+          auth_home: authHome,
+        },
+      };
+    }
     return {
       schema: 'narada.codex_subscription.preflight.v1',
       status: 'passed_cached',
@@ -160,11 +230,14 @@ function codexSubscriptionPreflightCacheRead({ userSiteRoot, sessionSiteRoot, ca
       command: entry.command ?? 'codex exec --json',
       cache: {
         status: 'hit',
-        locus: userSiteRoot ? 'user-site' : 'session-site',
+        locus: 'user-site',
         checked_at: entry.checked_at ?? null,
         age_ms: now - entry.checked_at_ms,
         ttl_ms: ttlMs,
         path: cachePath,
+        auth_home: entry.auth_home ?? authHome ?? null,
+        cli_version: entry.cli_version ?? codexSubscriptionCliVersion(processEnv),
+        command_identity: entry.command_identity ?? codexSubscriptionCommandIdentity({ command: entry.command?.split?.(' ')?.[0] ?? 'codex', source: entry.command_source ?? 'default', prefixArgs: entry.prefix_args ?? [] }, processEnv),
       },
       timeout_ms: CODEX_SUBSCRIPTION_PREFLIGHT_TIMEOUT_MS,
     };
@@ -176,13 +249,10 @@ function codexSubscriptionPreflightCacheRead({ userSiteRoot, sessionSiteRoot, ca
 function codexSubscriptionPreflightCacheWrite({ userSiteRoot, sessionSiteRoot, cacheKey, preflight, now, processEnv }) {
   const ttlMs = codexSubscriptionPreflightCacheTtlMs(processEnv);
   if (ttlMs <= 0) return;
-  const cachePath = codexSubscriptionPreflightCachePath({ userSiteRoot, sessionSiteRoot });
+  const cachePath = codexSubscriptionPreflightCachePath({ userSiteRoot });
   if (!cachePath) return;
   try {
-    const cacheRoot = codexSubscriptionPreflightCacheRoot({ userSiteRoot, sessionSiteRoot });
-    const cacheDir = userSiteRoot
-      ? join(cacheRoot, '.narada', 'runtime', 'provider-auth-cache')
-      : join(cacheRoot, '.ai', 'runtime');
+    const cacheDir = join(userSiteRoot, '.narada', 'runtime', 'provider-auth-cache');
     mkdirSync(cacheDir, { recursive: true });
     let cache = { schema: 'narada.codex_subscription.preflight_cache.v1', entries: {} };
     if (existsSync(cachePath)) {
@@ -194,6 +264,11 @@ function codexSubscriptionPreflightCacheWrite({ userSiteRoot, sessionSiteRoot, c
       ok: true,
       provider: preflight.provider,
       command: preflight.command,
+      command_identity: preflight.cache?.command_identity ?? codexSubscriptionCommandIdentity({ command: preflight.command?.split?.(' ')?.[0] ?? 'codex', source: 'live', prefixArgs: [] }, processEnv),
+      command_source: preflight.cache?.command_identity ? 'cached' : 'live',
+      prefix_args: preflight.cache?.command_identity ? [] : [...(preflight.cache?.prefix_args ?? [])],
+      auth_home: preflight.cache?.auth_home ?? codexAuthHome(processEnv) ?? null,
+      cli_version: preflight.cache?.cli_version ?? codexSubscriptionCliVersion(processEnv) ?? null,
       checked_at: new Date(now).toISOString(),
       checked_at_ms: now,
     };

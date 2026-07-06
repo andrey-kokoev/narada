@@ -7,6 +7,9 @@
     ".": "./src/agent-start-renderer.mjs",
     "./package.json": "./package.json"
   },
+  "dependencies": {
+    "@narada2/agent-identity": "workspace:*"
+  },
   "scripts": {
     "test": "node --test src/agent-start-renderer.test.mjs",
     "typecheck": "tsc --noEmit --allowJs --checkJs false src/agent-start-renderer.mjs"

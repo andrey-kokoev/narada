@@ -36,7 +36,7 @@ test('server mode seeds intelligence with full applicable AGENTS authority chain
       siteRoot,
       sessionPath: join(siteRoot, 'session.jsonl'),
       eventsPath: join(siteRoot, 'events.jsonl'),
-      providerSettings: { stream: false },
+      providerSettings: { provider: 'codex-subscription', model: 'gpt-start', thinking: 'medium', stream: false },
     };
     const { dependencies } = createCarrierRuntimeDependencies({ runtimeContext });
     const running = runCarrierServerMode({
@@ -163,13 +163,22 @@ test('session command execution uses the shared command contract aliases', async
 
     input.write(`${JSON.stringify({ id: 'tool-alias', method: 'session.command.execute', params: { command: '/tool', value: '' } })}\n`);
     input.write(`${JSON.stringify({ id: 'queue-clear', method: 'session.command.execute', params: { command: '/queue', value: 'clear' } })}\n`);
+    input.write(`${JSON.stringify({ id: 'model-override', method: 'session.command.execute', params: { command: '/model', value: 'gpt-override' } })}\n`);
+    input.write(`${JSON.stringify({ id: 'thinking-override', method: 'session.command.execute', params: { command: '/thinking', value: 'high' } })}\n`);
+    input.write(`${JSON.stringify({ id: 'status-after-override', method: 'session.command.execute', params: { command: '/status', value: '' } })}\n`);
     input.end();
     await running;
 
     const results = events.filter((event) => event.event === 'carrier_command_result');
-    assert.equal(results.length, 2);
+    assert.equal(results.length, 5);
     assert.equal(results.some((event) => event.request_id === 'tool-alias' && event.terminal_state === 'completed'), true);
     assert.equal(results.some((event) => event.request_id === 'queue-clear' && /Cleared 0 queued/.test(event.message)), true);
+    assert.equal(results.some((event) => event.request_id === 'model-override' && event.fields?.model === 'gpt-override'), true);
+    assert.equal(results.some((event) => event.request_id === 'thinking-override' && event.fields?.thinking === 'high'), true);
+    const status = results.find((event) => event.request_id === 'status-after-override')?.fields?.session_status;
+    assert.deepEqual(status?.intelligence, { provider: 'codex-subscription', model: 'gpt-override', thinking: 'high', stream: false });
+    assert.equal(status?.model, 'gpt-override');
+    assert.equal(status?.thinking, 'high');
   } finally {
     removeTempDir(siteRoot);
   }
