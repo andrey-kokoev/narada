@@ -56,6 +56,15 @@
       "posture": "agent_context_mcp_tools_runtime"
     },
     {
+      "package": "@narada2/agent-identity",
+      "path": "packages/agent-identity",
+      "roles": [
+        "descriptor_contract",
+        "domain_model"
+      ],
+      "posture": "agent_identity_projection_contract"
+    },
+    {
       "package": "@narada2/agent-runtime-server",
       "path": "packages/agent-runtime-server",
       "roles": [
@@ -217,6 +226,15 @@
       "posture": "cloudflare_carrier_runtime"
     },
     {
+      "package": "@narada2/cloudflare-nars-projection",
+      "path": "packages/cloudflare-nars-projection",
+      "roles": [
+        "runtime_authority",
+        "descriptor_contract"
+      ],
+      "posture": "cloudflare_nars_projection_runtime_and_contract"
+    },
+    {
       "package": "@narada2/cloudflare-site",
       "path": "packages/sites/cloudflare",
       "roles": [
@@ -232,6 +250,15 @@
         "platform_template"
       ],
       "posture": "cloudflare_site_registry_runtime"
+    },
+    {
+      "package": "@narada2/concepts",
+      "path": "packages/domains/concepts",
+      "roles": [
+        "domain_model",
+        "descriptor_contract"
+      ],
+      "posture": "semantic_registry_entry_model"
     },
     {
       "package": "@narada2/control-plane",
@@ -373,6 +400,14 @@
       "posture": "fixture_and_ops_model"
     },
     {
+      "package": "@narada2/process-launch-posture",
+      "path": "packages/process-launch-posture",
+      "roles": [
+        "descriptor_contract"
+      ],
+      "posture": "process_launch_posture_contracts"
+    },
+    {
       "package": "@narada2/search",
       "path": "packages/verticals/search",
       "roles": [
@@ -446,6 +481,14 @@
         "runtime_authority"
       ],
       "posture": "site_operational_dashboard_surface"
+    },
+    {
+      "package": "@narada2/site-paths",
+      "path": "packages/site-paths",
+      "roles": [
+        "descriptor_contract"
+      ],
+      "posture": "site_path_semantics_contracts"
     },
     {
       "package": "@narada2/site-registry-cloudflare",

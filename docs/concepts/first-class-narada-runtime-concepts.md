@@ -27,6 +27,7 @@ Current implementation posture:
 - Per-session records, heartbeat files, event logs, and aggregate indexes are named as discovery projections rather than runtime authority.
 - Attach semantics are endpoint-based at the low level and discovery-based through Narada CLI at higher levels.
 - Liveness authority comes from `/health` or `session.health`, not from `status_hint`, terminal windows, or ambient process guesses.
+- Launch result renderers should surface `NARADA_NARS_SESSION_ID` first, then `NARADA_RUNTIME_SESSION_ID`, and keep `NARADA_CARRIER_SESSION_ID` fenced under explicit legacy compatibility.
 
 Remaining implementation work:
 
@@ -70,6 +71,37 @@ Acceptance coverage:
 - Operator surfaces are documented as peer projections of one NARS session.
 - Attach/discovery failure semantics are stated as endpoint/session/health problems, not terminal ownership problems.
 - Multi-surface launch belongs to NARS session attach semantics, not to separate runtime ownership.
+
+## 1550A - Launcher Legacy Carrier Compatibility Boundary
+
+CL: 0.991
+
+First-class object: explicit compatibility descriptor for legacy `carrier` vocabulary in workspace launch plans.
+
+Authority contracts:
+
+- `C:/Users/Andrey/Narada/docs/operator/agent-start.md`
+- `packages/layers/cli/src/commands/launcher.ts`
+
+Current implementation posture:
+
+- Workspace launch plans expose canonical `operator_surface`, `operator_surface_kind`, `launch_operator_surface`, `launch_operator_surfaces`, `runtime_host_kind`, `launch_runtime_host`, and `launch_runtime_hosts` fields.
+- Legacy `carrier`, `launch_carrier`, `launch_carriers`, and `launch_runtime` remain in JSON output only as compatibility fields for existing callers.
+- Any workspace-plan output carrying those legacy fields also carries `legacy_carrier_compatibility` on each selected agent and aggregate `compatibility` on the result.
+- Smoke output also carries `legacy_carrier_compatibility` beside outer smoke-agent `carrier`/`runtime` fields, plus the nested plan descriptor, so compatibility is explicit at every JSON object level that still exposes the deprecated vocabulary.
+- The compatibility descriptor names the canonical replacements and the `remove_after_consumers_migrate` policy.
+
+Remaining implementation work:
+
+- Migrate downstream consumers from `carrier`/`launch_carrier*` to `operator_surface`/`launch_operator_surface*`.
+- Avoid renaming unrelated Site live-carrier concepts; those are a different use of the word `carrier`.
+- Remove compatibility aliases only after consumers and fixtures no longer rely on them.
+
+Acceptance coverage:
+
+- `packages/layers/cli/test/commands/launcher-workspace-plan.test.ts` requires compatibility descriptors for plan and smoke outputs.
+- `packages/layers/cli/test/integration/operator-launch-journey.test.mjs` requires the descriptor through the PowerShell wrapper dry-run path.
+- Operator docs state the replacement fields and the descriptor requirement.
 
 ## 1551 - Event Projection And Rendering Policy
 
@@ -590,6 +622,37 @@ Acceptance coverage:
 - The Site Operating Loop docs are linked as the authority surface.
 - Runtime host, loop definition, watch definition, and Loop Run remain separate objects.
 - Trigger admission and step execution remain runtime responsibilities, not definition responsibilities.
+
+## 1710 - LauncherSessionDashboard
+
+CL: 0.99
+
+First-class object: the persistent browser dashboard session opened by `workspace-launch --interactive-selection-ui`, distinct from a single launch attempt, a process handoff, a NARS session, or an operator projection.
+
+Authority contracts:
+
+- [`launcher-session-dashboard.md`](launcher-session-dashboard.md)
+- [`process-launch-posture.md`](../architecture/process-launch-posture.md)
+- [`nars-session-management.md`](nars-session-management.md)
+- [`nars-client-projection-contract.md`](nars-client-projection-contract.md)
+
+Current implementation posture:
+
+- The launcher already has a persistent browser selection page that can submit multiple launches over time.
+- The current page renders in-memory launch-attempt rows, handoff evidence, live-probed NARS session-index runtime observations, admitted safe actions (`Recheck`, `Retry`, `Forget`), and projection handoff actions for attachable sessions.
+- A Playwright-backed E2E proves the multi-submit page remains available after one launch, records handoff/dashboard rows, writes User Site runtime dashboard files, reloads compatible persisted dashboard rows after restart, prunes old dashboard sessions under bounded retention, hides stop actions without authority, supports `Forget`, executes projection handoffs from session-authority attach commands, records projection observations, admits `Stop Runtime` only through an existing NARS control path, verifies healthy state through a live health endpoint, and exits after cancel.
+
+Future authority extensions:
+
+- If a future projection authority exposes attach/detach lifecycle ownership beyond terminal handoff evidence, the dashboard may add owned projection observations and `Stop Projection` admission through that authority.
+- Raw process killing remains outside ordinary Launcher Session Dashboard UX.
+
+Acceptance coverage:
+
+- Launcher dashboard is named as a first-class object separate from launch attempts and NARS sessions.
+- The dashboard may show what it launched, handed off, discovered, owns, and can stop.
+- The dashboard must not infer process ownership from Windows Terminal handoff alone.
+- Stop actions are lifecycle requests against runtime/projection authority, not unscoped process kills.
 
 ## 1709 - ProjectionTopology
 

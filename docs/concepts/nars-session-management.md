@@ -48,6 +48,14 @@ Current launch materialization still creates ids shaped like `carrier_...` and e
 
 Do not introduce `carrier_session_index` or make clients infer that `carrier_` means the session is owned by `agent-cli`.
 
+For launch results and renderer output, treat the session env field order as canonical-first compatibility-second:
+
+1. `NARADA_NARS_SESSION_ID` is the canonical session env field when a NARS session id is available.
+2. `NARADA_RUNTIME_SESSION_ID` remains a compatibility fallback for older runtime surfaces that have not adopted the NARS name yet.
+3. `NARADA_CARRIER_SESSION_ID` is legacy-only compatibility and should appear only in explicit compatibility sections, not as the primary operator-facing session label.
+
+Renderers should surface the canonical session field first, then show any legacy compatibility alias as a fenced compatibility block.
+
 ## Site-Local Storage
 
 NARS session storage is derived from the Site authority root, not by clients appending path strings ad hoc. The canonical resolver is `@narada2/site-paths` and its `resolveNaradaSitePaths` API.
@@ -138,7 +146,7 @@ POST /sessions/:sessionId/artifacts/:artifactId/message
 GET  /sessions/:sessionId/artifacts/:artifactId/content
 ```
 
-The current implementation admits artifact source paths only under the Site root or the current session directory. HTML content is served with `text/html` and a restrictive sandbox Content-Security-Policy. Missing, stale, unsupported, or unadmitted artifacts return structured JSON errors instead of blank panels.
+The current implementation admits artifact source paths only under the Site root or the current session directory. HTML content is served with `text/html` and a restrictive sandbox Content-Security-Policy. Audio artifacts are admitted as `kind: "audio"` with standard browser media content types such as `audio/wav`, `audio/mpeg`, `audio/ogg`, and `audio/mp4`; browser clients render them as explicit operator-controlled playback controls. Missing, stale, unsupported, or unadmitted artifacts return structured JSON errors instead of blank panels.
 
 Assistant messages reference artifacts as structured parts:
 

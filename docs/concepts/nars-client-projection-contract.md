@@ -29,6 +29,69 @@ Client packages own only medium-specific rendering:
 
 Cloudflare may filter and redact, but it must filter by the shared projection class rather than by its own regex event classifier.
 
+## Operator Slash Command Projection
+
+Slash commands are deterministic operator-control input. They are not prompts to the provider and must never be silently reclassified as ordinary conversation text merely because a surface does not recognize them.
+
+A NARS client projection must classify operator input in this order:
+
+1. Empty input produces no protocol request.
+2. Non-slash input follows that surface's ordinary conversation delivery policy.
+3. Slash-prefixed input enters command mode.
+4. A known command produces either a local projection action or a NARS protocol frame.
+5. An unknown command produces a local validation message or a structured unsupported-command event; it is not sent to the model.
+
+`exit` without a slash is the only intentionally admitted bare-word compatibility command and resolves to `/exit`.
+
+### Command Strata
+
+| Stratum | Meaning | Current examples | Target owner |
+|---|---|---|---|
+| Projection-local commands | Affect only the attached client projection. | `/help`, `/clear` | client projection contract plus surface renderer |
+| Direct NARS protocol commands | Map to stable NARS request methods. | `/status`, `/health`, `/events`, `/recovery`, `/ops`, `/observers`, `/observer mute`, `/observer unmute`, `/interrupt`, `/exit` | `@narada2/nars-client-projection-contract` for client action shape; `@narada2/agent-runtime-server`/carrier substrate for method handling |
+| Session command pass-through | Compatibility commands executed by the NARS session command endpoint. | `/goal`, `/stats`, `/model`, `/thinking`, `/tool-output`, `/tools`, `/queue` | `@narada2/carrier-command-contract` for vocabulary; NARS runtime for execution |
+| Raw protocol escape hatch | Explicit advanced frame submission after client-side admission. | `/json {"id":"...","method":"...","params":{}}` | client projection contract allowlist plus NARS protocol admission |
+
+`session.command.execute` is the target request method for session command pass-through. `carrier.command.execute` is a legacy alias that runtimes may continue to admit for compatibility, but new documentation and client examples should prefer `session.command.execute`.
+
+Host execution commands are a separate family. `! <command>` is an agent-cli carrier-host execution request with host side effects, admission, and evidence. It is not a slash command and must stay distinct in parsers, event vocabulary, docs, and tests.
+
+### Current Source Tables
+
+The current codebase intentionally has two command inventories because client projection commands and carrier session commands have different jobs:
+
+| Inventory | Location | Owns | Does not own |
+|---|---|---|---|
+| Agent Web UI command registry | `packages/nars-client-projection-contract/src/nars-client-projection-contract.mjs` as `AGENT_WEB_UI_COMMANDS` | Browser/web command palette entries, help grouping, local actions, admitted web protocol frames, aliases, palette metadata. | Server-side carrier command execution. |
+| Carrier command contract | `packages/carrier-command-contract/contracts/commands.json` | Session command vocabulary, aliases, argument labels, effects, and resolver behavior for pass-through commands. | Browser palette metadata or direct NARS protocol commands such as `/health` and `/events`. |
+| Terminal projected input | `packages/carrier-terminal-projection/src/projected-input.mjs` | Terminal parsing of operator input into NARS frames, terminal-local actions, prompt behavior, bracketed paste handling, and terminal help projection. | Provider execution or server-side command effects. |
+| Web UI operator input | `packages/agent-web-ui/src/protocol/operatorInput.ts` and Vue composer components | Browser submit behavior, palette rendering, local help/clear events, and delivery-mode UI. | Shared command semantics or NARS method admission. |
+| Runtime command dispatch | carrier substrate behind NARS, currently `packages/carrier-runtime/src/runtime-dependencies.mjs` | Execution of `session.command.execute` and legacy `carrier.command.execute`, emitting `carrier_command_result`. | Client palette/help rendering. |
+
+This split is the current transitional shape. The target invariant is not "one parser everywhere"; it is that each surface consumes an explicit registry for its role, and all overlapping commands have documented projection/execution ownership.
+
+### Documentation Target
+
+The durable documentation shape is:
+
+1. This document owns the shared slash-command model, command strata, source-table map, and drift rules for all NARS clients.
+2. [`nars-runtime-contract.md`](nars-runtime-contract.md) owns the protocol methods and states that slash commands are runtime/client control, not provider prompts.
+3. [`../architecture/agent-web-ui-command-ux.md`](../architecture/agent-web-ui-command-ux.md) owns the browser-specific command palette, keyboard, accessibility, and static-registry UX target.
+4. Package READMEs own short operator usage and links back to this contract; they should not duplicate the full command table.
+5. Tests own executable proof that each surface maps commands to the intended local action or protocol frame.
+
+When adding or changing a slash command, update the owning inventory first, then update docs and tests in the same change. At minimum, verify the affected source table, parser, help/palette output, protocol frame, runtime handling if applicable, and unknown-command behavior.
+
+### Drift Rules
+
+- Help output must be generated from the same inventory used by the parser for that surface.
+- Unknown slash commands must remain explicit validation failures or unsupported-command events.
+- A command visible in a palette or help screen must either execute, route to an admitted NARS method, or say that it is unavailable.
+- Direct NARS methods belong in the NARS protocol contract before becoming first-class slash commands.
+- Session command pass-through belongs in `@narada2/carrier-command-contract` before clients advertise it as a pass-through command.
+- Local projection commands must not mutate NARS session state except through an explicit protocol frame.
+- Web, terminal, and future TUI surfaces may render differently, but must not disagree on the protocol method or local/server boundary for the same command.
+
 ## Canonical Conversation Rule
 
 Canonical conversation comes from NARS lifecycle events, not provider telemetry.

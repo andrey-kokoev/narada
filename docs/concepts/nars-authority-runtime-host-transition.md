@@ -167,7 +167,7 @@ Minimum record:
 | Active turn | Complete, interrupt, abandon with evidence, or refuse transition. |
 | Artifacts | Registry transfer/projection, admitted content policy, and no public source paths. |
 | Health | Source health until seal; target health after activation. |
-| MCP fabric | Exact compatibility or explicit degraded contract. |
+| MCP fabric | Exact compatibility or explicit degraded contract, with runtime `./.ai/mcp/*.json` inventory and launch-time projection inventory named separately. |
 | Provider state | Unsupported until provider-capable authority transition is defined. |
 | Secrets | Capability refs only; no secret material in transition records. |
 | Surfaces | Reattach through discovery; surfaces do not carry authority. |

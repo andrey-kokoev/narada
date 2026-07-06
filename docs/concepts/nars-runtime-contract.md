@@ -114,7 +114,7 @@ Core request methods:
 
 The current runtime also exposes authority-transition and observer-control methods through `@narada2/carrier-protocol`: `authority.source.status`, `authority.source.drain`, `authority.source.seal`, `authority.target.status`, `authority.target.prepare`, `authority.target.activate`, `observers.status`, `observer.mute`, and `observer.unmute`.
 
-Human terminal input is not raw JSONL. A terminal attached to NARS is a projection of the protocol: ordinary lines become `conversation.send` when idle and `conversation.enqueue` during active turns, slash commands become protocol frames such as `carrier.command.execute` or direct session methods, and status/help affordances render from runtime state.
+Human terminal input is not raw JSONL. A terminal attached to NARS is a projection of the protocol: ordinary lines become `conversation.send` when idle and `conversation.enqueue` during active turns, slash commands become protocol frames such as `session.command.execute` or direct session methods, and status/help affordances render from runtime state. `carrier.command.execute` remains a legacy alias for compatibility.
 
 ## Client And Runtime Split
 
@@ -122,7 +122,7 @@ NARS is the runtime owner. `@narada2/agent-runtime-server` owns session binding,
 
 In Runtime Projection Graph terms, NARS is an `authority_runtime`; attached clients and remote browser embodiments are `projection_surface` nodes unless a separate authority transfer explicitly says otherwise.
 
-`@narada2/agent-cli`, `agent-tui`, and `@narada2/agent-web-ui` are peer clients/projections over the NARS protocol. Their durable responsibilities are terminal/UI input handling, human-readable event rendering, local command affordances, and explicit attach/resume UX. In attach mode, ordinary operator text becomes `conversation.send` when idle and `conversation.enqueue` during active turns; slash commands become protocol frames such as `carrier.command.execute`, `session.status`, `session.health`, `session.events.subscribe`, `session.recovery`, `session.operations`, `conversation.interrupt`, and `session.close`; incoming event envelopes are rendered through the client projection. The current `@narada2/agent-web-ui` slice subscribes with `session.events.subscribe`, reads ambient browser status through the local HTTP `/api/health` proxy, admits ordinary operator text as `conversation.send` when idle and `conversation.enqueue` during active turns, and projects slash commands, including `/health` as `session.health`, into the same NARS protocol surface. Runtime hosting, provider turn execution, and MCP hosting remain outside the web package.
+`@narada2/agent-cli`, `agent-tui`, and `@narada2/agent-web-ui` are peer clients/projections over the NARS protocol. Their durable responsibilities are terminal/UI input handling, human-readable event rendering, local command affordances, and explicit attach/resume UX. In attach mode, ordinary operator text becomes `conversation.send` when idle and `conversation.enqueue` during active turns; slash commands become protocol frames such as `session.command.execute`, `session.status`, `session.health`, `session.events.subscribe`, `session.recovery`, `session.operations`, `conversation.interrupt`, and `session.close`; incoming event envelopes are rendered through the client projection. The current `@narada2/agent-web-ui` slice subscribes with `session.events.subscribe`, reads ambient browser status through the local HTTP `/api/health` proxy, admits ordinary operator text as `conversation.send` when idle and `conversation.enqueue` during active turns, and projects slash commands, including `/health` as `session.health`, into the same NARS protocol surface. Runtime hosting, provider turn execution, and MCP hosting remain outside the web package.
 
 Client projection metadata is centralized in `@narada2/nars-client-projection-contract`. Launchers and carrier runtime use it for attach command materialization; web UI uses it for admitted NARS methods, operator input command projection, shared event rendering vocabulary, and help text. The same session may be attached by peer clients with `narada-agent-cli --attach <event_endpoint>`, `agent-tui --attach <event_endpoint>`, or `narada-agent-web-ui --event-endpoint <event_endpoint> --health-endpoint <health_endpoint>`. `@narada2/carrier-protocol` remains the carrier protocol vocabulary/classification owner and must not grow client attach command strings or client-specific projection registries.
 
@@ -438,7 +438,7 @@ The response schema is `narada.nars.events.read.v1` with `event: "session_events
 
 Backpressure is local-runtime policy. The minimum contract is deterministic bounded buffering: slow subscribers may be dropped or receive a structured error, but must not block the carrier event loop or corrupt durable `events.jsonl`. Reconnect uses the last acknowledged `cursor.sequence` as `since_sequence`; clients should tolerate idempotent replay of the last seen event and de-duplicate by sequence.
 
-WebSocket `ws://127.0.0.1:<port>/events` is the first durable co-presence projection. It is local-bound by default, sends `session.events.subscribe` acknowledgements and event envelopes over the socket, and accepts ordinary NARS protocol frames such as `session.status`, `session.health`, `session.recovery`, `session.operations`, `conversation.send`, `conversation.enqueue`, `conversation.interrupt`, `carrier.command.execute`, and `session.close` by forwarding them into the same runtime session. It must not synthesize a second provider/carrier runtime and must not fall back to ambient global MCP or Codex configuration.
+WebSocket `ws://127.0.0.1:<port>/events` is the first durable co-presence projection. It is local-bound by default, sends `session.events.subscribe` acknowledgements and event envelopes over the socket, and accepts ordinary NARS protocol frames such as `session.status`, `session.health`, `session.recovery`, `session.operations`, `conversation.send`, `conversation.enqueue`, `conversation.interrupt`, `session.command.execute`, and `session.close` by forwarding them into the same runtime session. It must not synthesize a second provider/carrier runtime and must not fall back to ambient global MCP or Codex configuration.
 
 Raw stdout JSONL is a single-process projection. Durable `events.jsonl` remains the readback/recovery log. Lifecycle hooks remain callbacks correlated with events; they are not the event subscription authority and must not replace `session.events.subscribe` for client co-presence.
 
@@ -559,7 +559,7 @@ Implementation tasks derive directly from this contract: extend `@narada2/carrie
 
 ## Command Contract
 
-Slash and operator commands are runtime commands, not provider prompts.
+Slash and operator commands are runtime/client control commands, not provider prompts. The shared client-projection command model, source tables, and drift rules are documented in [`nars-client-projection-contract.md#operator-slash-command-projection`](nars-client-projection-contract.md#operator-slash-command-projection).
 
 Examples:
 

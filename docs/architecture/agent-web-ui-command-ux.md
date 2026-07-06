@@ -6,6 +6,8 @@ Make Agent Web UI commands first-class static objects so the slash palette, pars
 
 This document describes the static target. Dynamic command discovery from NARS is out of scope for the first implementation pass.
 
+This is the browser-specific UX target. The shared slash-command documentation authority is [`../concepts/nars-client-projection-contract.md`](../concepts/nars-client-projection-contract.md#operator-slash-command-projection), which defines command strata, source tables, direct NARS protocol commands, session command pass-through, and drift rules across `agent-cli`, `agent-web-ui`, terminal projection, and future clients.
+
 ## Current Shape
 
 The Web UI can submit operator text and some slash-like inputs, but command behavior is not first-class. Parsing currently lives as hard-coded branches in the client projection contract, while the Vue input surface only discovers command meaning at submit time.
@@ -129,6 +131,49 @@ Help output should group commands by operator intent, not by implementation kind
 
 Hidden or advanced commands should appear only when the operator asks for advanced help, or when the UI is in an advanced mode.
 
+## Operator Snippet Scope
+
+`/snippet` entries are operator-local saved text commands. The current persistence key is intentionally scoped to the Agent Web UI browser/operator surface, not to a Narada Site, NARS session, or workspace:
+
+```text
+narada:agent-web-ui:operator-snippets.v1
+```
+
+This means snippets follow the browser profile and origin used by the operator. They can be reused across Sites that are operated through the same Agent Web UI origin. That behavior is deliberate for the current implementation: snippets are personal operator conveniences, not Site authority, shared team configuration, or session state.
+
+If snippets later become Site-owned or team-shared assets, that should be a new storage contract rather than an implicit change to this browser-local key.
+
+## Operator Snippet UX
+
+Snippets are first-class Agent Web UI operator affordances, with slash commands as the fast path.
+
+The palette should surface snippets when the operator searches by snippet name or body, not only when the query starts with `/snippet`. Selecting a snippet from the palette runs or queues the stored body directly as conversation input; it must not reparse a slash-prefixed snippet body as a slash command.
+
+The Snippets drawer is the management surface for browser/operator-local snippets. It should support:
+
+- searching saved snippets by name or body
+- creating a snippet without composing `/snippet save ...` by hand
+- editing or renaming the full snippet body
+- inspecting the full saved body before use
+- running or queuing a saved snippet
+- filling the composer with a snippet body for manual edits before send
+- copying a snippet body
+- pinning snippets and sorting pinned/recently used snippets first
+- tracking use count and last-used timestamps
+- deleting a saved snippet with an immediate undo affordance
+- exporting and importing browser-local snippets as JSON
+
+The drawer should expose clear empty states for both no snippets and no search matches. It should show name-normalization feedback before save, character/line counts for multi-line bodies, and keyboard affordances such as `Ctrl+Enter` to save and `Esc` to close.
+
+Slash commands remain available for efficient keyboard use:
+
+- `/snippet save <name> <text>`
+- `/snippet edit <name> <text>`
+- `/snippet delete <name>`
+- `/snippet search [query]`
+- `/snippet run <name>`
+- `/snippet enqueue <name>`
+
 ## Initial Static Inventory
 
 The first static inventory should include the commands already implied by Agent CLI and Web UI behavior:
@@ -136,11 +181,13 @@ The first static inventory should include the commands already implied by Agent 
 - `/help`
 - `/status`
 - `/health`
+- `/events`
 - `/recovery`
 - `/ops`
 - `/observers`
 - `/observer mute`
 - `/observer unmute`
+- `/interrupt`
 - `/clear`
 - `/exit`
 - `/json <frame>`
@@ -158,7 +205,7 @@ Commands that are not yet implemented in projected server mode should still be e
 
 `packages/nars-client-projection-contract`
 
-Owns command definitions, parsing, action construction, validation, help generation, and unit tests for protocol behavior.
+Owns Agent Web UI command definitions, parsing, action construction, validation, help generation, and unit tests for browser/web protocol behavior. Shared cross-client slash-command doctrine lives in `docs/concepts/nars-client-projection-contract.md`; this architecture note is the web palette implementation target.
 
 `packages/agent-web-ui`
 

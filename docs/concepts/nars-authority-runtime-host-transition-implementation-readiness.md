@@ -134,6 +134,28 @@ Abort is valid only before `target_active`. After target activation, moving back
 | Secrets | `capability_refs_only` | capability/secret ref availability, no secret value |
 | Surfaces | `reattach_through_authority_locator` | stale endpoint and target locator messages |
 
+### MCP Fabric Compatibility Report
+
+The planner and execute slice should emit a structured compatibility report that makes the fabric inventory and the launch-time projection visible at the same time. The report should include:
+
+- `runtime_fabric`: inventory from Site-local `./.ai/mcp/*.json`
+- `launch_time_projection`: inventory from `./.narada/capabilities/mcp-registration.json` when present
+- `projection_alignment`: coarse comparison of runtime and projection server-name sets
+- `required_servers`: servers the target host expects as hard requirements
+- `optional_servers`: servers that may be absent without immediate refusal
+- `unavailable_servers`: servers that are missing on the target host
+- `substitutes`: explicit substitute surface or behavior for each unavailable server
+- `degraded_behaviors`: the exact operator-visible degradations introduced by the target host
+- `explicit_operator_acceptance`: whether the degraded contract requires an operator acknowledgement before execute
+
+Host-equivalence limits:
+
+- `local` and `cloudflare-host` are not interchangeable just because both can host a session.
+- Local-only surfaces such as filesystem mutation, git mutation, structured command execution, and dynamic MCP loading must be named as unavailable or substituted when the target host is Cloudflare-hosted.
+- `compatible` means the transition can proceed without a degraded contract.
+- `degraded_explicit` means the transition can proceed only if the operator-facing output names the missing surfaces and their substitutes.
+- `incompatible` means the target host cannot be used for the transition slice.
+
 ## Local-To-Cloudflare Synthetic E2E Plan
 
 Phases:

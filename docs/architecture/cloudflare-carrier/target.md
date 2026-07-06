@@ -202,12 +202,12 @@ The first HTTP/WebSocket control surface should be narrow and protocol-shaped:
 | `session.start` | Create or bind a Cloudflare Carrier Session. |
 | `session.status` | Read carrier status and compact runtime state. |
 | `carrier.input.deliver` | Deliver a normalized or normalizable carrier input event. |
-| `carrier.command.execute` | Execute a carrier command such as goal, observers, or queue. |
+| `session.command.execute` | Execute a carrier/session command such as goal, observers, or queue. |
 | `carrier.interrupt` | Request interruption of an active turn. |
 | `session.events.read` | Read ordered session events by sequence/cursor. |
 | `session.close` | Close the bounded carrier session with closeout evidence. |
 
-The public API may use HTTP routes, WebSocket messages, or both. The semantic operation names above are the contract-facing shape; route names are transport mechanics.
+The public API may use HTTP routes, WebSocket messages, or both. The semantic operation names above are the contract-facing shape; route names are transport mechanics. `carrier.command.execute` is only a legacy compatibility alias for `session.command.execute`.
 
 Every mutating operation must be idempotency-aware. A request should carry a request id or event id that lets the Durable Object avoid duplicate evidence when clients retry after disconnects.
 

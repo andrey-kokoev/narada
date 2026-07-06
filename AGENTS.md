@@ -594,6 +594,7 @@ When proposing changes that touch public types, docs, or package surfaces, verif
 | [`docs/concepts/capa-operation.md`](docs/concepts/capa-operation.md) | Corrective/preventive action | Handling recurrence-risk incidents |
 | [`docs/concepts/agent-carrier.md`](docs/concepts/agent-carrier.md) | Agent Carrier concept and launch packet contract | Understanding how carriers embody agents without owning authority |
 | [`docs/concepts/nars-runtime-contract.md`](docs/concepts/nars-runtime-contract.md) | NARS runtime contract | Implementing or verifying runtime-server package authority, canonical entrypoint, compatibility shims, lifecycle hooks, and carrier adapters |
+| [`docs/concepts/launcher-session-dashboard.md`](docs/concepts/launcher-session-dashboard.md) | Launcher Session Dashboard target | Implementing or verifying persistent browser launcher UI, launch-attempt records, handoff evidence, runtime/projection observations, and lifecycle actions |
 | [`docs/concepts/site-operating-loop-runtime-contract.md`](docs/concepts/site-operating-loop-runtime-contract.md) | Site Operating Loop runtime contract | Implementing or verifying generic Site loop runtime hosting, triggers, control, event subscription, and Site-owned loop module boundaries |
 | [`docs/concepts/reactor-pattern.md`](docs/concepts/reactor-pattern.md) | Reactor pattern for chat/agent reactions | Designing a component that evaluates facts and proposes effects |
 
