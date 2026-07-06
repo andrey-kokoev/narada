@@ -4,6 +4,37 @@ export const NARS_COMMAND_METHOD = 'session.command.execute';
 export const LEGACY_CARRIER_COMMAND_METHOD = 'carrier.command.execute';
 export const NARS_AFFORDANCE_ACTION_REQUEST_METHOD = 'session.affordance.action.request';
 
+export const NARS_AFFORDANCE_ACTION_EVENTS = Object.freeze({
+  requested: 'session_affordance_action_requested',
+  result: 'session_affordance_action_result',
+  refused: 'session_affordance_action_refused',
+  confirmationRequired: 'session_affordance_confirmation_required',
+});
+
+export const NARS_AFFORDANCE_ACTION_SCHEMAS = Object.freeze({
+  request: 'narada.nars.affordance_action_request.v1',
+  result: 'narada.nars.affordance_action_result.v1',
+  refusal: 'narada.nars.affordance_action_refusal.v1',
+  confirmationRequired: 'narada.nars.affordance_action_confirmation_required.v1',
+});
+
+export const NARS_AFFORDANCE_ACTION_POSTURES = Object.freeze({
+  confirmationRequired: 'confirmation_required',
+  readOnlyOrIdempotent: 'read_only_or_idempotent',
+  unsafe: 'unsafe',
+});
+
+export const NARS_AFFORDANCE_ACTION_REFUSAL_CODES = Object.freeze({
+  requiredIdentity: 'surface_id_and_action_id_required',
+  surfaceNotFound: 'surface_affordance_not_found',
+  actionNotFound: 'surface_affordance_action_not_found',
+  targetNotExecutable: 'affordance_action_target_not_executable',
+  confirmationRequired: 'affordance_action_confirmation_required',
+  notReadOnly: 'affordance_action_not_read_only',
+  serverUnavailable: 'surface_mcp_server_unavailable',
+  toolUnavailable: 'surface_affordance_tool_unavailable',
+});
+
 export const NARS_CLIENT_PROJECTION_VERBOSITY_LEVELS = Object.freeze([
   'conversation',
   'operations',
@@ -96,10 +127,10 @@ export const NARS_CLIENT_EVENT_LABELS = Object.freeze({
   authority_session_revoked: 'Session revoked',
   projection_revoked: 'Projection revoked',
   session_status: 'Status',
-  session_affordance_action_requested: 'Affordance action',
-  session_affordance_action_result: 'Affordance result',
-  session_affordance_action_refused: 'Affordance refused',
-  session_affordance_confirmation_required: 'Confirmation required',
+  [NARS_AFFORDANCE_ACTION_EVENTS.requested]: 'Affordance action',
+  [NARS_AFFORDANCE_ACTION_EVENTS.result]: 'Affordance result',
+  [NARS_AFFORDANCE_ACTION_EVENTS.refused]: 'Affordance refused',
+  [NARS_AFFORDANCE_ACTION_EVENTS.confirmationRequired]: 'Confirmation required',
   session_recovery: 'Recovery',
   session_operations: 'Operations',
   observers_status: 'Observers',
@@ -341,6 +372,79 @@ export function buildAgentWebUiAffordanceActionRequestFrame({ surfaceId, surface
       args: normalizedArgs,
       ...(client_correlation_id ?? clientCorrelationId ? { client_correlation_id: String(client_correlation_id ?? clientCorrelationId) } : {}),
     },
+  };
+}
+
+export function buildNarsAffordanceActionRequestedEvent({ requestId, request_id, surfaceId, surface_id, actionId, action_id, clientCorrelationId = null, client_correlation_id = null } = {}) {
+  return {
+    schema: NARS_AFFORDANCE_ACTION_SCHEMAS.request,
+    event: NARS_AFFORDANCE_ACTION_EVENTS.requested,
+    request_id: request_id ?? requestId ?? null,
+    transport: 'jsonl_stdio',
+    surface_id: surface_id ?? surfaceId ?? null,
+    action_id: action_id ?? actionId ?? null,
+    client_correlation_id: client_correlation_id ?? clientCorrelationId ?? null,
+  };
+}
+
+export function buildNarsAffordanceActionResultEvent({ requestId, request_id, surfaceId, surface_id, actionId, action_id, serverName, server_name, toolName, tool_name, clientCorrelationId = null, client_correlation_id = null, result = null, status = 'ok', terminalState, terminal_state } = {}) {
+  return {
+    schema: NARS_AFFORDANCE_ACTION_SCHEMAS.result,
+    event: NARS_AFFORDANCE_ACTION_EVENTS.result,
+    request_id: request_id ?? requestId ?? null,
+    transport: 'jsonl_stdio',
+    terminal_state: terminal_state ?? terminalState ?? (status === 'ok' ? 'completed' : 'failed'),
+    status,
+    surface_id: surface_id ?? surfaceId ?? null,
+    action_id: action_id ?? actionId ?? null,
+    server_name: server_name ?? serverName ?? null,
+    tool_name: tool_name ?? toolName ?? null,
+    client_correlation_id: client_correlation_id ?? clientCorrelationId ?? null,
+    result,
+  };
+}
+
+export function buildNarsAffordanceActionFailureEvent({ requestId, request_id, surfaceId, surface_id, actionId, action_id, serverName, server_name, toolName, tool_name, clientCorrelationId = null, client_correlation_id = null, error } = {}) {
+  const event = buildNarsAffordanceActionResultEvent({
+    request_id: request_id ?? requestId ?? null,
+    surface_id: surface_id ?? surfaceId ?? null,
+    action_id: action_id ?? actionId ?? null,
+    server_name: server_name ?? serverName ?? null,
+    tool_name: tool_name ?? toolName ?? null,
+    client_correlation_id: client_correlation_id ?? clientCorrelationId ?? null,
+    status: 'error',
+    terminal_state: 'failed',
+  });
+  delete event.result;
+  event.error = error instanceof Error ? error.message : String(error ?? 'unknown_error');
+  return event;
+}
+
+export function buildNarsAffordanceActionRefusalEvent({ requestId, request_id, surfaceId, surface_id, actionId, action_id, clientCorrelationId = null, client_correlation_id = null, code, message, serverName = null, server_name = null, toolName = null, tool_name = null, posture = null } = {}) {
+  return {
+    schema: NARS_AFFORDANCE_ACTION_SCHEMAS.refusal,
+    event: NARS_AFFORDANCE_ACTION_EVENTS.refused,
+    request_id: request_id ?? requestId ?? null,
+    transport: 'jsonl_stdio',
+    terminal_state: 'refused',
+    status: 'refused',
+    surface_id: surface_id ?? surfaceId ?? null,
+    action_id: action_id ?? actionId ?? null,
+    server_name: server_name ?? serverName ?? null,
+    tool_name: tool_name ?? toolName ?? null,
+    client_correlation_id: client_correlation_id ?? clientCorrelationId ?? null,
+    code,
+    message,
+    ...(posture ? { posture } : {}),
+  };
+}
+
+export function buildNarsAffordanceActionConfirmationRequiredEvent(options = {}) {
+  const event = buildNarsAffordanceActionRefusalEvent(options);
+  return {
+    ...event,
+    schema: NARS_AFFORDANCE_ACTION_SCHEMAS.confirmationRequired,
+    event: NARS_AFFORDANCE_ACTION_EVENTS.confirmationRequired,
   };
 }
 

@@ -1,5 +1,19 @@
 export const NARS_COMMAND_METHOD: 'session.command.execute';
 export const LEGACY_CARRIER_COMMAND_METHOD: 'carrier.command.execute';
+export const NARS_AFFORDANCE_ACTION_REQUEST_METHOD: 'session.affordance.action.request';
+export const NARS_AFFORDANCE_ACTION_EVENTS: Readonly<{
+  requested: 'session_affordance_action_requested';
+  result: 'session_affordance_action_result';
+  refused: 'session_affordance_action_refused';
+  confirmationRequired: 'session_affordance_confirmation_required';
+}>;
+export const NARS_AFFORDANCE_ACTION_SCHEMAS: Readonly<Record<string, string>>;
+export const NARS_AFFORDANCE_ACTION_POSTURES: Readonly<{
+  confirmationRequired: 'confirmation_required';
+  readOnlyOrIdempotent: 'read_only_or_idempotent';
+  unsafe: 'unsafe';
+}>;
+export const NARS_AFFORDANCE_ACTION_REFUSAL_CODES: Readonly<Record<string, string>>;
 export const NARS_CLIENT_PROJECTION_VERBOSITY_LEVELS: readonly ['conversation', 'operations', 'diagnostics', 'raw'];
 export type NarsClientProjectionVerbosity = typeof NARS_CLIENT_PROJECTION_VERBOSITY_LEVELS[number];
 export type NarsClientProjectionClass = 'conversation' | 'operations' | 'diagnostics' | 'raw';
@@ -46,6 +60,12 @@ export function buildNarsArtifactRefPart(input?: object): object | null;
 export function buildAgentWebUiConversationEnqueueFrame(text: unknown, options?: object): object | null;
 export function buildAgentWebUiEventsReadFrame(options?: object): object;
 export function buildAgentWebUiSurfaceAffordancesFrame(options?: object): object;
+export function buildAgentWebUiAffordanceActionRequestFrame(input?: object, options?: object): object | null;
+export function buildNarsAffordanceActionRequestedEvent(input?: object): object;
+export function buildNarsAffordanceActionResultEvent(input?: object): object;
+export function buildNarsAffordanceActionFailureEvent(input?: object): object;
+export function buildNarsAffordanceActionRefusalEvent(input?: object): object;
+export function buildNarsAffordanceActionConfirmationRequiredEvent(input?: object): object;
 export function buildAgentWebUiSopSummaryFrame(options?: object): object;
 export function buildAgentWebUiInboxSummaryFrame(options?: object): object;
 export function buildAgentWebUiDelegationSummaryFrame(options?: object): object;
