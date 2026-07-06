@@ -328,6 +328,19 @@ async function runScenarioViewport({ browserPath, scenario, viewport, outDir }) 
           form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
         })()`);
         await new Promise((resolve) => setTimeout(resolve, 250));
+        await page.evaluate(String.raw`(() => {
+          const headerSelector = document.querySelector('.shell-header .status-box-selector-trigger');
+          headerSelector?.click();
+        })()`);
+        await new Promise((resolve) => setTimeout(resolve, 250));
+        await page.evaluate(String.raw`(() => {
+          const rows = [...document.querySelectorAll('.status-box-selector-item')];
+          const snippetsRow = rows.find((row) => row.textContent?.includes('Snippets'));
+          const checkbox = snippetsRow?.querySelector('input[type="checkbox"]');
+          if (checkbox && !checkbox.checked) checkbox.click();
+          document.querySelector('.mcp-panel-close')?.click();
+        })()`);
+        await new Promise((resolve) => setTimeout(resolve, 250));
         await page.evaluate("document.querySelector('.operator-snippet-trigger')?.click()");
         await new Promise((resolve) => setTimeout(resolve, 250));
       }

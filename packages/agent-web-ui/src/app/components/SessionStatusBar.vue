@@ -30,9 +30,10 @@ const emit = defineEmits<{
 }>();
 const cloudflareApiBaseUrl = ref(props.cloudflareProjection.defaultApiBaseUrl.value);
 const copyLabel = ref('Copy');
-const STATUS_BOX_STORAGE_KEY = 'narada:agent-web-ui:status-boxes.v1';
+const STATUS_BOX_STORAGE_KEY = 'narada:agent-web-ui:status-boxes.v2';
 const DEFAULT_STATUS_BOX_IDS = ['events', 'health', 'intelligence', 'authority', 'view', 'cloudflare'] as const;
 type StatusBoxId = typeof DEFAULT_STATUS_BOX_IDS[number];
+const DEFAULT_VISIBLE_STATUS_BOX_IDS: readonly StatusBoxId[] = ['intelligence', 'authority', 'view', 'cloudflare'];
 const statusBoxDefinitions: Record<StatusBoxId, Omit<StatusBoxSelectorItem, 'visible'>> = {
   events: { id: 'events', label: 'Events', description: 'NARS event stream endpoint used by this browser.' },
   health: { id: 'health', label: 'Health', description: 'HTTP health endpoint used to poll the runtime.' },
@@ -60,15 +61,15 @@ async function copyRemoteUrl(url: string) {
 }
 
 function loadStatusBoxIds(): Set<StatusBoxId> {
-  if (typeof window === 'undefined') return new Set(DEFAULT_STATUS_BOX_IDS);
+  if (typeof window === 'undefined') return new Set(DEFAULT_VISIBLE_STATUS_BOX_IDS);
   try {
     const parsed = JSON.parse(window.localStorage.getItem(STATUS_BOX_STORAGE_KEY) ?? 'null') as unknown;
-    if (!Array.isArray(parsed)) return new Set(DEFAULT_STATUS_BOX_IDS);
+    if (!Array.isArray(parsed)) return new Set(DEFAULT_VISIBLE_STATUS_BOX_IDS);
     const allowed = new Set(DEFAULT_STATUS_BOX_IDS);
     const loaded = parsed.filter((id): id is StatusBoxId => typeof id === 'string' && allowed.has(id as StatusBoxId));
-    return loaded.length ? new Set(loaded) : new Set(DEFAULT_STATUS_BOX_IDS);
+    return loaded.length ? new Set(loaded) : new Set(DEFAULT_VISIBLE_STATUS_BOX_IDS);
   } catch {
-    return new Set(DEFAULT_STATUS_BOX_IDS);
+    return new Set(DEFAULT_VISIBLE_STATUS_BOX_IDS);
   }
 }
 
@@ -91,7 +92,7 @@ function toggleStatusBox(id: string) {
 }
 
 function resetStatusBoxes() {
-  const next = new Set(DEFAULT_STATUS_BOX_IDS);
+  const next = new Set(DEFAULT_VISIBLE_STATUS_BOX_IDS);
   visibleStatusBoxIds.value = next;
   persistStatusBoxIds(next);
 }
@@ -224,7 +225,17 @@ const statusTooltips = {
         <TooltipContent side="bottom" align="start">{{ statusTooltips.cloudflare }}</TooltipContent>
       </Tooltip>
 
-      <StatusBoxSelector :boxes="statusBoxSelectorItems" @toggle="toggleStatusBox" @reset="resetStatusBoxes" />
+      <StatusBoxSelector
+        :boxes="statusBoxSelectorItems"
+        panel-id="status-row-box-selector-panel"
+        trigger-label="Status boxes"
+        title="Status Boxes"
+        description="Select which boxes are shown in the session status row."
+        panel-aria-label="Status row boxes"
+        empty-text="No matching status boxes."
+        @toggle="toggleStatusBox"
+        @reset="resetStatusBoxes"
+      />
     </section>
   </TooltipProvider>
 </template>

@@ -439,7 +439,7 @@ test('Vue operator components expose composer without hidden privileged controls
   assert.match(surfaceAffordances, /session_surface_affordances/);
   assert.match(surfaceAffordances, /stringField\(record, 'surface_kind'\)/);
   assert.doesNotMatch(composer, /command\.execute|conversation\.interrupt/i);
-  assert.match(statusBoxSelector, /aria-label="Choose status boxes"/);
+  assert.match(statusBoxSelector, /:aria-label="`Choose \$\{props\.triggerLabel \?\? 'boxes'\}`"/);
   assert.match(statusBoxSelector, /status-box-selector-icon/);
   assert.doesNotMatch(statusBoxSelector, />Boxes<\/span>/);
 });
@@ -526,7 +526,7 @@ test('Vue layout smoke covers shell, status, event list, composer, and event ton
   assert.match(shell, /narada:agent-web-ui:status-row-open\.v1/);
   assert.match(app, /useAgentActivity\(retained\.events, health\.body\)/);
   assert.match(activity, /active_turn_state/);
-  assert.match(status, /narada:agent-web-ui:status-boxes\.v1/);
+  assert.match(status, /narada:agent-web-ui:status-boxes\.v2/);
   assert.match(css, /\.status-box-selector-shell[\s\S]*?position: absolute/);
   assert.match(css, /\.status-box-selector-shell[\s\S]*?top: 42px/);
   assert.match(css, /\.status-box-selector-trigger[\s\S]*?width: 26px/);

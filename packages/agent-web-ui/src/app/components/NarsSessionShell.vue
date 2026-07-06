@@ -16,9 +16,11 @@ import SchedulerPanel from './SchedulerPanel.vue';
 import SessionStatusBar from './SessionStatusBar.vue';
 import SiteInfoPanel from './SiteInfoPanel.vue';
 import SopPanel from './SopPanel.vue';
+import StatusBoxSelector, { type StatusBoxSelectorItem } from './StatusBoxSelector.vue';
 import SurfaceNavigator from './SurfaceNavigator.vue';
 import SurfaceFeedbackPanel from './SurfaceFeedbackPanel.vue';
 import TaskLifecyclePanel from './TaskLifecyclePanel.vue';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import type { AgentActivityState } from '../composables/useAgentActivity';
 import type { ArtifactsSummary } from '../composables/useArtifactsSummary';
 import type { useCloudflareProjection } from '../composables/useCloudflareProjection';
@@ -103,7 +105,12 @@ const emit = defineEmits<{
   'request-affordance-action': [request: { surfaceId: string; actionId: string; args: Record<string, unknown> }];
 }>();
 const STATUS_ROW_OPEN_STORAGE_KEY = 'narada:agent-web-ui:status-row-open.v1';
+const HEADER_ITEM_STORAGE_KEY = 'narada:agent-web-ui:header-items.v1';
+const HEADER_ITEM_IDS = ['identity', 'snippets', 'surfaces', 'session', 'status_toggle'] as const;
+type HeaderItemId = typeof HEADER_ITEM_IDS[number];
+const DEFAULT_VISIBLE_HEADER_ITEM_IDS: readonly HeaderItemId[] = ['identity', 'surfaces', 'session', 'status_toggle'];
 const statusRowOpen = ref(loadBooleanPreference(STATUS_ROW_OPEN_STORAGE_KEY, true));
+const visibleHeaderItemIds = ref(loadHeaderItemIds());
 const artifactsPanelOpen = ref(false);
 const mcpPanelOpen = ref(false);
 const snippetPanelOpen = ref(false);
@@ -150,6 +157,7 @@ const canInterruptModel = computed(() => (
   && props.agentActivity.active === true
   && (props.agentActivity.state === 'thinking' || props.agentActivity.state === 'streaming')
 ));
+const sessionChipStreamText = computed(() => props.streamText && props.streamText !== 'connected' ? props.streamText : null);
 const surfaceGroups = computed(() => [
   {
     title: 'Runtime',
@@ -196,7 +204,27 @@ const surfaceGroups = computed(() => [
     ],
   },
 ]);
+const headerItemDefinitions: Record<HeaderItemId, Omit<StatusBoxSelectorItem, 'visible'>> = {
+  identity: { id: 'identity', label: 'Identity', description: 'Site and agent identity title for this session.', required: true },
+  snippets: { id: 'snippets', label: 'Snippets', description: 'Browser-local reusable operator inputs.' },
+  surfaces: { id: 'surfaces', label: 'Surfaces', description: 'Navigation drawer for MCP-backed operator panels.' },
+  session: { id: 'session', label: 'Session', description: 'Health, agent identity, and session ID chip.' },
+  status_toggle: { id: 'status_toggle', label: 'Status Toggle', description: 'Button that expands the status box row after it is collapsed.' },
+};
+const headerItemSelectorItems = computed(() => HEADER_ITEM_IDS.map((id) => ({
+  ...headerItemDefinitions[id],
+  visible: isHeaderItemVisible(id),
+})));
+const headerTooltips = {
+  identity: 'Current Narada Site and agent identity. Click the site name to inspect site-level configuration.',
+  snippets: 'Open browser-local reusable operator inputs. Hidden by default to keep the main header quiet.',
+  surfaces: 'Open operator panels backed by NARS and available MCP surfaces.',
+  session: 'Current runtime health, event-stream posture, copyable agent identity, and NARS session ID.',
+  status_toggle: 'Expand or collapse the status box row.',
+  header_selector: 'Choose which controls appear in the first row.',
+};
 watch(statusRowOpen, (value) => persistBooleanPreference(STATUS_ROW_OPEN_STORAGE_KEY, value));
+watch(visibleHeaderItemIds, (value) => persistHeaderItemIds(value));
 
 function openSurfacePanel(surfaceKind: string) {
   if (surfaceKind === 'mcp') mcpPanelOpen.value = true;
@@ -232,6 +260,40 @@ function persistBooleanPreference(key: string, value: boolean) {
   window.localStorage.setItem(key, String(value));
 }
 
+function loadHeaderItemIds(): Set<HeaderItemId> {
+  if (typeof window === 'undefined') return new Set(DEFAULT_VISIBLE_HEADER_ITEM_IDS);
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(HEADER_ITEM_STORAGE_KEY) ?? 'null') as unknown;
+    if (!Array.isArray(parsed)) return new Set(DEFAULT_VISIBLE_HEADER_ITEM_IDS);
+    const allowed = new Set(HEADER_ITEM_IDS);
+    const loaded = parsed.filter((id): id is HeaderItemId => typeof id === 'string' && allowed.has(id as HeaderItemId));
+    return loaded.length ? new Set(loaded) : new Set(DEFAULT_VISIBLE_HEADER_ITEM_IDS);
+  } catch {
+    return new Set(DEFAULT_VISIBLE_HEADER_ITEM_IDS);
+  }
+}
+
+function persistHeaderItemIds(ids: Set<HeaderItemId>) {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(HEADER_ITEM_STORAGE_KEY, JSON.stringify([...ids]));
+}
+
+function isHeaderItemVisible(id: HeaderItemId): boolean {
+  return visibleHeaderItemIds.value.has(id) || headerItemDefinitions[id].required === true;
+}
+
+function toggleHeaderItem(id: string) {
+  if (!HEADER_ITEM_IDS.includes(id as HeaderItemId) || headerItemDefinitions[id as HeaderItemId].required) return;
+  const next = new Set(visibleHeaderItemIds.value);
+  if (next.has(id as HeaderItemId)) next.delete(id as HeaderItemId);
+  else next.add(id as HeaderItemId);
+  visibleHeaderItemIds.value = next;
+}
+
+function resetHeaderItems() {
+  visibleHeaderItemIds.value = new Set(DEFAULT_VISIBLE_HEADER_ITEM_IDS);
+}
+
 function sitePartFromAgentId(agentId: string | null): string | null {
   if (!agentId?.includes('.')) return null;
   return agentId.split('.')[0] || null;
@@ -246,62 +308,108 @@ function agentPartFromAgentId(agentId: string | null): string | null {
 
 <template>
   <main class="shell" :class="{ 'shell-status-open': statusRowOpen }" aria-label="Narada Agent Web UI">
-    <header class="shell-header">
-      <div class="brand-lockup">
-        <span class="brand-mark" aria-hidden="true">N</span>
-        <div>
-          <h1>
-            <template v-if="titleSiteLabel">
-              <SiteInfoPanel
-                :site-label="titleSiteLabel"
-                :agent-label="titleAgentLabel"
-                :event-endpoint="eventEndpoint"
-                :health-endpoint="healthEndpoint"
-                :health-transport="healthTransport"
-                :input-endpoint="inputEndpoint"
-                :artifact-base-path="artifactBasePath"
-                :artifact-transport="artifactTransport"
-                :health-body="healthBody"
-                :authority-transition="authorityTransition"
-                @open-mcp-panel="mcpPanelOpen = true"
-                @open-surface-navigator="surfaceNavigatorOpen = true"
+    <TooltipProvider :delay-duration="250">
+      <header class="shell-header">
+        <Tooltip v-if="isHeaderItemVisible('identity')">
+          <TooltipTrigger as-child>
+            <div class="brand-lockup">
+              <span class="brand-mark" aria-hidden="true">N</span>
+              <div>
+                <h1>
+                  <template v-if="titleSiteLabel">
+                    <SiteInfoPanel
+                      :site-label="titleSiteLabel"
+                      :agent-label="titleAgentLabel"
+                      :event-endpoint="eventEndpoint"
+                      :health-endpoint="healthEndpoint"
+                      :health-transport="healthTransport"
+                      :input-endpoint="inputEndpoint"
+                      :artifact-base-path="artifactBasePath"
+                      :artifact-transport="artifactTransport"
+                      :health-body="healthBody"
+                      :authority-transition="authorityTransition"
+                      @open-mcp-panel="mcpPanelOpen = true"
+                      @open-surface-navigator="surfaceNavigatorOpen = true"
+                    />
+                    <span v-if="titleAgentLabel" class="site-title-separator">.</span>
+                    <span v-if="titleAgentLabel">{{ titleAgentLabel }}</span>
+                  </template>
+                  <template v-else>{{ sessionIdentity.title }}</template>
+                </h1>
+                <p>{{ sessionIdentity.subtitle }}</p>
+              </div>
+            </div>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" align="start">{{ headerTooltips.identity }}</TooltipContent>
+        </Tooltip>
+        <div class="shell-header-actions">
+          <Tooltip v-if="isHeaderItemVisible('snippets')">
+            <TooltipTrigger as-child>
+              <OperatorSnippetPanel v-model:open="snippetPanelOpen" :snippets="operatorSnippets" :export-json="operatorSnippetsExportJson" @run="(snippet, mode) => emit('run-snippet', snippet, mode)" @save="(name, body, mode) => emit('save-snippet', name, body, mode)" @rename="(oldName, newName, body) => emit('rename-snippet', oldName, newName, body)" @delete="emit('delete-snippet', $event)" @pin="emit('pin-snippet', $event)" @import="emit('import-snippets', $event)" @fill="emit('fill-snippet', $event)" />
+            </TooltipTrigger>
+            <TooltipContent side="bottom" align="end">{{ headerTooltips.snippets }}</TooltipContent>
+          </Tooltip>
+          <Tooltip v-if="isHeaderItemVisible('surfaces')">
+            <TooltipTrigger as-child>
+              <SurfaceNavigator v-model:open="surfaceNavigatorOpen" :groups="surfaceGroups" @open="openSurfacePanel" />
+            </TooltipTrigger>
+            <TooltipContent side="bottom" align="end">{{ headerTooltips.surfaces }}</TooltipContent>
+          </Tooltip>
+          <Tooltip v-if="isHeaderItemVisible('session')">
+            <TooltipTrigger as-child>
+              <div class="session-chip" :data-state="healthText.split(' ')[0]">
+                <span class="chip-dot" aria-hidden="true"></span>
+                <span>{{ healthText.split(' · ')[0] }}</span>
+                <template v-if="sessionChipStreamText">
+                  <span class="session-token-separator">·</span>
+                  <span>{{ sessionChipStreamText }}</span>
+                </template>
+                <template v-if="sessionIdentity.agentId">
+                  <span class="session-token-separator">·</span>
+                  <CopyableText :text="sessionIdentity.agentId" class-name="session-chip-copy">{{ sessionIdentity.agentId }}</CopyableText>
+                </template>
+                <template v-if="sessionIdentity.sessionId">
+                  <span class="session-token-separator">·</span>
+                  <CopyableText :text="sessionIdentity.sessionId" class-name="session-chip-copy">{{ sessionIdentity.sessionId }}</CopyableText>
+                </template>
+              </div>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" align="end">{{ headerTooltips.session }}</TooltipContent>
+          </Tooltip>
+          <Tooltip v-if="!statusRowOpen && isHeaderItemVisible('status_toggle')">
+            <TooltipTrigger as-child>
+              <button
+                type="button"
+                class="status-row-collapse-toggle status-row-collapse-toggle-header"
+                :aria-expanded="statusRowOpen"
+                aria-label="Expand status boxes"
+                @click="statusRowOpen = true"
+              >
+                <span aria-hidden="true">v</span>
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" align="end">{{ headerTooltips.status_toggle }}</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger as-child>
+              <StatusBoxSelector
+                :boxes="headerItemSelectorItems"
+                panel-id="header-item-selector-panel"
+                trigger-label="Header items"
+                title="Header Items"
+                description="Select which controls are shown in the first row."
+                panel-aria-label="Header row items"
+                empty-text="No matching header items."
+                search-placeholder="Filter header items"
+                @toggle="toggleHeaderItem"
+                @reset="resetHeaderItems"
               />
-              <span v-if="titleAgentLabel" class="site-title-separator">.</span>
-              <span v-if="titleAgentLabel">{{ titleAgentLabel }}</span>
-            </template>
-            <template v-else>{{ sessionIdentity.title }}</template>
-          </h1>
-          <p>{{ sessionIdentity.subtitle }}</p>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" align="end">{{ headerTooltips.header_selector }}</TooltipContent>
+          </Tooltip>
         </div>
-      </div>
-      <div class="shell-header-actions">
-        <OperatorSnippetPanel v-model:open="snippetPanelOpen" :snippets="operatorSnippets" :export-json="operatorSnippetsExportJson" @run="(snippet, mode) => emit('run-snippet', snippet, mode)" @save="(name, body, mode) => emit('save-snippet', name, body, mode)" @rename="(oldName, newName, body) => emit('rename-snippet', oldName, newName, body)" @delete="emit('delete-snippet', $event)" @pin="emit('pin-snippet', $event)" @import="emit('import-snippets', $event)" @fill="emit('fill-snippet', $event)" />
-        <SurfaceNavigator v-model:open="surfaceNavigatorOpen" :groups="surfaceGroups" @open="openSurfacePanel" />
-        <div class="session-chip" :data-state="healthText.split(' ')[0]">
-          <span class="chip-dot" aria-hidden="true"></span>
-          <span>{{ healthText.split(' · ')[0] }}</span>
-          <template v-if="sessionIdentity.agentId">
-            <span class="session-token-separator">·</span>
-            <CopyableText :text="sessionIdentity.agentId" class-name="session-chip-copy">{{ sessionIdentity.agentId }}</CopyableText>
-          </template>
-          <template v-if="sessionIdentity.sessionId">
-            <span class="session-token-separator">·</span>
-            <CopyableText :text="sessionIdentity.sessionId" class-name="session-chip-copy">{{ sessionIdentity.sessionId }}</CopyableText>
-          </template>
-        </div>
-        <button
-          v-if="!statusRowOpen"
-          type="button"
-          class="status-row-collapse-toggle status-row-collapse-toggle-header"
-          :aria-expanded="statusRowOpen"
-          aria-label="Expand status boxes"
-          title="Expand status boxes"
-          @click="statusRowOpen = true"
-        >
-          <span aria-hidden="true">v</span>
-        </button>
-      </div>
-    </header>
+      </header>
+    </TooltipProvider>
     <ArtifactsPanel v-model:open="artifactsPanelOpen" triggerless :available="hasArtifactsSurface" :summary="artifactsSummary" @refresh="emit('request-artifacts-summary')" />
     <McpServerPanel v-model:open="mcpPanelOpen" triggerless :inventory="mcpInventory" :surface-affordances="surfaceAffordances" @open-surface-panel="openSurfacePanel" />
     <GenericAffordancePanel v-model:open="genericAffordancePanelOpen" triggerless :item="selectedGenericAffordance" @action="emit('request-affordance-action', $event)" />

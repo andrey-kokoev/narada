@@ -11,6 +11,13 @@ export interface StatusBoxSelectorItem {
 
 const props = defineProps<{
   boxes: StatusBoxSelectorItem[];
+  panelId?: string;
+  title?: string;
+  description?: string;
+  triggerLabel?: string;
+  panelAriaLabel?: string;
+  emptyText?: string;
+  searchPlaceholder?: string;
 }>();
 const emit = defineEmits<{
   toggle: [id: string];
@@ -21,6 +28,11 @@ const open = ref(false);
 const searchText = ref('');
 const visibleCount = computed(() => props.boxes.filter((box) => box.visible).length);
 const boxCountLabel = computed(() => `${visibleCount.value}/${props.boxes.length}`);
+const panelId = computed(() => props.panelId ?? 'status-box-selector-panel');
+const title = computed(() => props.title ?? 'Status Boxes');
+const description = computed(() => props.description ?? 'Select which boxes are shown in the session status row.');
+const triggerTitle = computed(() => `${props.triggerLabel ?? 'Boxes'}: ${boxCountLabel.value} visible`);
+const closeLabel = computed(() => `Close ${title.value.toLowerCase()}`);
 const showSearch = computed(() => props.boxes.length >= 5);
 const filteredBoxes = computed(() => {
   const query = searchText.value.trim().toLowerCase();
@@ -31,7 +43,7 @@ const filteredBoxes = computed(() => {
 
 <template>
   <div class="status-box-selector-shell">
-    <button type="button" class="status-box-selector-trigger" :aria-expanded="open" aria-controls="status-box-selector-panel" :title="`Status boxes: ${boxCountLabel} visible`" aria-label="Choose status boxes" @click="open = !open">
+    <button type="button" class="status-box-selector-trigger" :aria-expanded="open" :aria-controls="panelId" :title="triggerTitle" :aria-label="`Choose ${props.triggerLabel ?? 'boxes'}`" @click="open = !open">
       <span class="status-box-selector-icon" aria-hidden="true">
         <span></span>
         <span></span>
@@ -43,19 +55,19 @@ const filteredBoxes = computed(() => {
     <Teleport to="body">
       <Transition name="mcp-drawer">
         <div v-if="open" class="mcp-drawer-layer" role="presentation">
-          <button type="button" class="mcp-drawer-backdrop" aria-label="Close status box selector" @click="open = false"></button>
-          <aside id="status-box-selector-panel" class="mcp-panel status-box-selector-panel" aria-label="Status row boxes">
+          <button type="button" class="mcp-drawer-backdrop" :aria-label="closeLabel" @click="open = false"></button>
+          <aside :id="panelId" class="mcp-panel status-box-selector-panel" :aria-label="props.panelAriaLabel ?? title">
             <header class="mcp-panel-header">
               <div>
-                <h2>Status Boxes</h2>
-                <p>Select which boxes are shown in the session status row.</p>
+                <h2>{{ title }}</h2>
+                <p>{{ description }}</p>
               </div>
-              <button type="button" class="mcp-panel-close" aria-label="Close status box selector" @click="open = false">Close</button>
+              <button type="button" class="mcp-panel-close" :aria-label="closeLabel" @click="open = false">Close</button>
             </header>
             <div class="status-box-selector-actions">
               <label v-if="showSearch" class="mcp-panel-search">
                 <span>Search</span>
-                <input v-model="searchText" type="search" autocomplete="off" spellcheck="false" placeholder="Filter boxes" />
+                <input v-model="searchText" type="search" autocomplete="off" spellcheck="false" :placeholder="props.searchPlaceholder ?? 'Filter boxes'" />
               </label>
               <span>{{ boxCountLabel }} visible</span>
               <button type="button" @click="emit('reset')">Reset</button>
@@ -71,7 +83,7 @@ const filteredBoxes = computed(() => {
                 </label>
               </li>
             </ol>
-            <p v-if="!filteredBoxes.length" class="mcp-panel-empty">No matching status boxes.</p>
+            <p v-if="!filteredBoxes.length" class="mcp-panel-empty">{{ props.emptyText ?? 'No matching boxes.' }}</p>
           </aside>
         </div>
       </Transition>
