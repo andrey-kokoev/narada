@@ -968,12 +968,22 @@ describe('launcher workspace planning', () => {
       role: ['resident'],
     }, rememberedSelection);
     expect(filtered).toMatchObject({
+      rememberedSelectionSemantics: {
+        role: 'form_defaults_only',
+        binds_runtime_session: false,
+        binds_carrier_session: false,
+        binds_launch_session: false,
+        launch_submission: 'always_creates_new_launch_session',
+      },
       initialSites: ['sonar'],
       initialRoles: ['resident'],
       initialOperatorSurfaces: ['registry default'],
       initialRuntime: 'registry default',
       initialIntelligenceProvider: 'registry default',
     });
+    expect(filtered).not.toHaveProperty('rememberedSessionId');
+    expect(filtered).not.toHaveProperty('rememberedCarrierSessionId');
+    expect(filtered).not.toHaveProperty('rememberedLaunchSessionId');
 
     const explicit = buildWorkspaceLaunchSelectionUiModel(sonarOnlyRecords, {
       site: ['sonar'],

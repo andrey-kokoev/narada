@@ -62,6 +62,7 @@
     "@narada2/control-plane": "workspace:*",
     "@narada2/intent-zones": "workspace:*",
     "@narada2/linux-site": "workspace:*",
+    "@narada2/launch-process-ownership": "workspace:*",
     "@narada2/macos-site": "workspace:*",
     "@narada2/ops-kit": "workspace:*",
     "@narada2/process-launch-posture": "workspace:*",

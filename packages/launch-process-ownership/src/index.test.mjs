@@ -8,6 +8,30 @@ test('derives stable launch session ids from materialized launch tokens', () => 
   assert.equal(launchSessionIdFromToken(''), null);
 });
 
+test('requires pid for session-owned runtime process cleanup evidence', () => {
+  const ownership = buildLaunchProcessOwnership({
+    launchSessionId: 'launch_runtime',
+    processRole: 'runtime_server',
+    siteRoot: 'D:/code/site',
+    workspaceRoot: 'D:/code/site',
+    createdByPid: 10,
+  });
+  assert.equal(ownership.evidence_status, 'partial');
+  assert.deepEqual(ownership.validation_errors, ['session_owned_pid_missing']);
+});
+
+test('allows workspace launch plan evidence without a process pid', () => {
+  const ownership = buildLaunchProcessOwnership({
+    launchSessionId: 'launch_plan',
+    processRole: 'workspace_launch_plan',
+    siteRoot: 'D:/code/site',
+    workspaceRoot: 'D:/code/site',
+    createdByPid: 10,
+  });
+  assert.equal(ownership.evidence_status, 'complete');
+  assert.deepEqual(ownership.validation_errors, []);
+});
+
 test('builds session-owned cleanup ownership evidence', () => {
   const ownership = buildLaunchProcessOwnership({
     launchSessionId: 'launch_fixture',

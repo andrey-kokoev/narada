@@ -1,11 +1,10 @@
 import { accessSync, closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
-import { spawnSync } from 'node:child_process';
 import { basename, dirname, join, parse, resolve } from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { agentIdentityRefMatchesRequest } from '@narada2/agent-identity';
-import { spawnHiddenPostureProcess } from '@narada2/process-launch-posture';
-import { buildLaunchProcessOwnership, launchSessionIdFromToken, type LaunchProcessOwnership } from '../../../../launch-process-ownership/src/index.mjs';
+import { runGovernedCommandSync, spawnHiddenPostureProcess, startOperatorTerminal } from '@narada2/process-launch-posture';
+import { buildLaunchProcessOwnership, launchSessionIdFromToken, type LaunchProcessOwnership } from '@narada2/launch-process-ownership';
 
 const requireFromLauncherRuntime = createRequire(import.meta.url);
 
@@ -544,7 +543,7 @@ export function queryWindowsScheduledTask(taskName: string): unknown {
     '  exit 1',
     '}',
   ].join('; ');
-  const result = spawnSync('powershell.exe', [
+  const result = runGovernedCommandSync('powershell.exe', [
     '-NoProfile',
     '-NonInteractive',
     '-ExecutionPolicy',
@@ -564,9 +563,9 @@ export function queryWindowsScheduledTask(taskName: string): unknown {
   if (result.status === 2) return null;
   if (result.error) throw result.error;
   if (result.status !== 0) {
-    throw new Error((result.stderr || result.stdout || `scheduler_query_failed:${result.status}`).trim());
+    throw new Error(String(result.stderr || result.stdout || `scheduler_query_failed:${result.status}`).trim());
   }
-  const stdout = result.stdout.trim();
+  const stdout = String(result.stdout ?? '').trim();
   return stdout ? JSON.parse(stdout) : null;
 }
 
@@ -978,7 +977,7 @@ function runProcess(
   cwd: string,
   env: Record<string, string> = {},
 ): CommandExecutionResult {
-  const result = spawnSync(command, args, {
+  const result = runGovernedCommandSync(command, args, {
     cwd,
     encoding: 'utf8',
     timeout: 120_000,
@@ -1074,11 +1073,10 @@ function runProcessInherited(
   cwd: string,
   env: Record<string, string> = {},
 ): CommandExecutionResult {
-  const result = spawnSync(command, args, {
+  const launch = startOperatorTerminal(command, args, {
     cwd,
     stdio: 'inherit',
     timeout: 0,
-    windowsHide: false,
     env: {
       ...process.env,
       NODE_OPTIONS: appendNodeOption(process.env.NODE_OPTIONS, '--disable-warning=ExperimentalWarning'),
@@ -1086,6 +1084,7 @@ function runProcessInherited(
       ...env,
     },
   });
+  const result = launch.result;
   const exitCode = result.status ?? (result.error ? 1 : 0);
   return {
     status: exitCode === 0 ? 'success' : 'failed',

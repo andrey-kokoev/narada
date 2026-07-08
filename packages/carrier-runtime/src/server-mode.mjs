@@ -22,7 +22,7 @@ import {
 import { mcpToolCatalogEntries as defaultMcpToolCatalogEntries } from './session-status-snapshots.mjs';
 import { buildNarsSurfaceAffordanceProjection } from './surface-affordances.mjs';
 import { runtimeAuthorityPostureFromHandoff } from './runtime-authority-posture.mjs';
-import { buildLaunchProcessOwnershipEvidence } from '../../launch-process-ownership/src/index.mjs';
+import { buildLaunchProcessOwnershipEvidence } from '@narada2/launch-process-ownership';
 
 export async function runCarrierServerMode({
   input = process.stdin,

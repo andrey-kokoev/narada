@@ -7,6 +7,7 @@ const PROCESS_ROLE_VALUES = new Set([
   'operator_projection',
   'helper',
 ]);
+const SESSION_OWNED_PID_REQUIRED_ROLES = new Set(['runtime_server', 'mcp_child', 'helper']);
 
 export function launchSessionIdFromToken(token) {
   if (!token) return null;
@@ -18,10 +19,12 @@ export function buildLaunchProcessOwnership(args = {}) {
   const launchSessionId = normalizeOptionalString(args.launchSessionId ?? args.launch_session_id);
   const ownership = normalizeOwnership(args.ownership ?? 'session_owned');
   const processRole = normalizeProcessRole(args.processRole ?? args.process_role);
+  const pid = normalizeOptionalInteger(args.pid);
   const validationErrors = [
     ...(ownership === 'unknown' ? ['ownership_unknown_or_invalid'] : []),
     ...(processRole === 'unknown' ? ['process_role_unknown_or_invalid'] : []),
     ...(launchSessionId ? [] : ['launch_session_id_missing']),
+    ...(ownership === 'session_owned' && SESSION_OWNED_PID_REQUIRED_ROLES.has(processRole) && pid === null ? ['session_owned_pid_missing'] : []),
   ];
   return {
     schema: 'narada.launch_process_ownership.v1',
@@ -34,7 +37,7 @@ export function buildLaunchProcessOwnership(args = {}) {
     launch_supervisor_pid: normalizeOptionalInteger(args.launchSupervisorPid ?? args.launch_supervisor_pid),
     cleanup_policy: ownership === 'session_owned' ? 'terminate_with_launch_session' : null,
     transfer_policy: ownership === 'session_owned' ? 'explicit_only' : null,
-    ...(normalizeOptionalInteger(args.pid) !== null ? { pid: normalizeOptionalInteger(args.pid) } : {}),
+    ...(pid !== null ? { pid } : {}),
     ...(normalizeOptionalString(args.parentProcessRole ?? args.parent_process_role) ? { parent_process_role: normalizeOptionalString(args.parentProcessRole ?? args.parent_process_role) } : {}),
     ...(normalizeOptionalString(args.serverName ?? args.server_name) ? { server_name: normalizeOptionalString(args.serverName ?? args.server_name) } : {}),
     evidence_status: validationErrors.length === 0 ? 'complete' : 'partial',

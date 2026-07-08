@@ -41,6 +41,7 @@
     "@narada2/carrier-protocol": "workspace:*",
     "@narada2/carrier-provider-contract": "workspace:*",
     "@narada2/carrier-provider-support": "workspace:*",
+    "@narada2/launch-process-ownership": "workspace:*",
     "@narada2/mcp-fabric": "workspace:*",
     "@narada2/nars-client-projection-contract": "workspace:*",
     "@narada2/site-paths": "workspace:*",

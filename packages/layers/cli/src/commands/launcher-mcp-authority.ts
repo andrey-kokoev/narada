@@ -1,8 +1,8 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
+import { runGovernedCommandSync } from '@narada2/process-launch-posture';
 import { commandResultError, type CommandContext } from '../lib/command-wrapper.js';
 import { formattedResult, type CliFormat } from '../lib/cli-output.js';
 import { ExitCode } from '../lib/exit-codes.js';
@@ -380,7 +380,7 @@ function readPowerShellDataFile(path: string): RawLaunchRegistry {
     '$data = Import-PowerShellDataFile -Path $path',
     '$data | ConvertTo-Json -Depth 20 -Compress',
   ].join('; ');
-  const result = spawnSync('pwsh', ['-NoProfile', '-NonInteractive', '-Command', script], {
+  const result = runGovernedCommandSync('pwsh', ['-NoProfile', '-NonInteractive', '-Command', script], {
     encoding: 'utf8',
     timeout: 30_000,
     windowsHide: true,

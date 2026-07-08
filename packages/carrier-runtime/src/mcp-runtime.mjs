@@ -1,6 +1,6 @@
 import { spawnHiddenPostureProcess } from '@narada2/process-launch-posture';
-import { loadSiteMcpFabric, projectServerEnvironment } from '../../mcp-fabric/src/mcp-fabric.mjs';
-import { buildLaunchProcessOwnershipEvidence, normalizeOptionalString } from '../../launch-process-ownership/src/index.mjs';
+import { loadSiteMcpFabric, projectServerEnvironment } from '@narada2/mcp-fabric';
+import { buildLaunchProcessOwnershipEvidence, normalizeOptionalString } from '@narada2/launch-process-ownership';
 
 const CHILD_PROCESS_ENV_ALLOWLIST = Object.freeze([
   'PATH',

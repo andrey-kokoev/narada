@@ -72,7 +72,11 @@ importers:
 
   ../agent-tui: {}
 
-  ../mcp-surfaces/packages/agent-context-mcp: {}
+  ../mcp-surfaces/packages/agent-context-mcp:
+    dependencies:
+      '@narada2/mcp-transport':
+        specifier: workspace:*
+        version: link:../shared/mcp-transport
 
   ../mcp-surfaces/packages/git-mcp:
     dependencies:
@@ -85,6 +89,9 @@ importers:
       '@narada2/mcp-telemetry':
         specifier: workspace:*
         version: link:../shared/mcp-telemetry
+      '@narada2/mcp-transport':
+        specifier: workspace:*
+        version: link:../shared/mcp-transport
 
   ../mcp-surfaces/packages/local-filesystem-mcp:
     dependencies:
@@ -92,7 +99,11 @@ importers:
         specifier: workspace:*
         version: link:../shared/mcp-transport
 
-  ../mcp-surfaces/packages/mailbox-mcp: {}
+  ../mcp-surfaces/packages/mailbox-mcp:
+    dependencies:
+      '@narada2/mcp-transport':
+        specifier: workspace:*
+        version: link:../shared/mcp-transport
 
   ../mcp-surfaces/packages/shared/mcp-telemetry: {}
 
@@ -313,6 +324,9 @@ importers:
       '@narada2/carrier-provider-support':
         specifier: workspace:*
         version: link:../carrier-provider-support
+      '@narada2/launch-process-ownership':
+        specifier: workspace:*
+        version: link:../launch-process-ownership
       '@narada2/mcp-fabric':
         specifier: workspace:*
         version: link:../mcp-fabric
@@ -434,6 +448,8 @@ importers:
         specifier: ^1.0.0
         version: 1.6.1(@types/node@20.19.39)(lightningcss@1.32.0)(stylus@0.57.0)
 
+  packages/launch-process-ownership: {}
+
   packages/layers/cli:
     dependencies:
       '@clack/prompts':
@@ -475,6 +491,9 @@ importers:
       '@narada2/intent-zones':
         specifier: workspace:*
         version: link:../../intent-zones
+      '@narada2/launch-process-ownership':
+        specifier: workspace:*
+        version: link:../../launch-process-ownership
       '@narada2/linux-site':
         specifier: workspace:*
         version: link:../../sites/linux

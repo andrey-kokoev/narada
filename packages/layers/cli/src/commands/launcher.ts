@@ -1,9 +1,9 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { appendFile, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
-import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { startOperatorTerminal } from '@narada2/process-launch-posture';
 import { executeOperatorProjectionOpenRequest } from '@narada2/process-launch-posture';
+import { runGovernedCommandSync } from '@narada2/process-launch-posture';
 import { dirname, join, resolve } from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
@@ -13,7 +13,7 @@ import { agentIdentityDisplay, buildAgentIdentityRefV2, resolveAgentIdentityRef,
 import { commandResultError, type CommandContext } from '../lib/command-wrapper.js';
 import { formattedResult, type CliFormat } from '../lib/cli-output.js';
 import { ExitCode } from '../lib/exit-codes.js';
-import { buildLaunchProcessOwnership, launchSessionIdFromToken } from '../../../../launch-process-ownership/src/index.mjs';
+import { buildLaunchProcessOwnership, launchSessionIdFromToken } from '@narada2/launch-process-ownership';
 import { carrierStartCommand } from './carrier.js';
 import {
   defaultRuntimeForCarrier,
@@ -2090,7 +2090,7 @@ async function workspaceLaunchRequestStaleSessionCleanup(session: Record<string,
 function workspaceLaunchTerminateStaleProcessTree(pid: number): void {
   try {
     if (process.platform === 'win32') {
-      spawnSync('taskkill', ['/PID', String(pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' });
+      runGovernedCommandSync('taskkill', ['/PID', String(pid), '/T', '/F'], { stdio: 'ignore' });
       return;
     }
     process.kill(pid, 'SIGTERM');
@@ -2407,6 +2407,14 @@ export function buildWorkspaceLaunchSelectionUiModel(
     records,
     siteChoices,
     rememberedSelection,
+    rememberedSelectionSemantics: {
+      schema: 'narada.workspace_launch.remembered_selection_semantics.v1',
+      role: 'form_defaults_only',
+      binds_runtime_session: false,
+      binds_carrier_session: false,
+      binds_launch_session: false,
+      launch_submission: 'always_creates_new_launch_session',
+    },
     initialSites: resolvedSelection.site,
     initialRoles: resolvedSelection.role,
     initialOperatorSurfaces: resolvedSelection.operatorSurface,
@@ -2802,7 +2810,7 @@ function readPowerShellDataFile(path: string): RawLaunchRegistry {
     '$data = Import-PowerShellDataFile -Path $path',
     '$data | ConvertTo-Json -Depth 20 -Compress',
   ].join('; ');
-  const result = spawnSync('pwsh', ['-NoProfile', '-NonInteractive', '-Command', script], {
+  const result = runGovernedCommandSync('pwsh', ['-NoProfile', '-NonInteractive', '-Command', script], {
     encoding: 'utf8',
     timeout: 30_000,
     windowsHide: true,

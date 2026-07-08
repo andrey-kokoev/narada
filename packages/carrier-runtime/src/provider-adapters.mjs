@@ -1,7 +1,7 @@
 import { copyFileSync, existsSync, mkdirSync, statSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { codexAuthHome } from '@narada2/carrier-provider-support/codex-subscription-auth';
-import { codexMcpEnvVarNames } from '../../mcp-fabric/src/mcp-fabric.mjs';
+import { codexMcpEnvVarNames } from '@narada2/mcp-fabric';
 function stripAnsi(value) {
   return String(value ?? '').replace(/\u001b\[[0-?]*[ -/]*[@-~]/g, '');
 }
