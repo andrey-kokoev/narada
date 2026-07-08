@@ -98,6 +98,11 @@ export interface HiddenPostureOptions extends SpawnOptions {
   spawnImpl?: typeof import('node:child_process').spawn;
 }
 
+export interface HiddenPostureSyncOptions extends SpawnSyncOptions {
+  platform?: NodeJS.Platform;
+  spawnSyncImpl?: typeof import('node:child_process').spawnSync;
+}
+
 export function browserOpenCommand(target: string, options?: { platform?: NodeJS.Platform }): {
   posture: 'browser_open';
   command: string;
@@ -131,6 +136,12 @@ export function spawnProviderSubprocess(command: string, args?: string[], option
 export function spawnMcpServer(command: string, args?: string[], options?: HiddenPostureOptions): ChildProcess;
 
 export function runGovernedCommand(command: string, args?: string[], options?: HiddenPostureOptions): ChildProcess;
+
+export function runHiddenPostureCommandSync(command: string, args: string[], options: HiddenPostureSyncOptions & {
+  posture: Exclude<ProcessLaunchPosture, 'operator_terminal' | 'elevated_or_operator_prompt'>;
+}): SpawnSyncReturns<Buffer>;
+
+export function runGovernedCommandSync(command: string, args?: string[], options?: HiddenPostureSyncOptions): SpawnSyncReturns<Buffer>;
 
 export function spawnTestChild(command: string, args?: string[], options?: HiddenPostureOptions): ChildProcess;
 

@@ -48,6 +48,20 @@ function runGovernedCommand(command, args = [], options = {}) {
   return spawnHiddenPostureProcess(command, args, { ...options, posture: 'governed_command_execution' });
 }
 
+function runHiddenPostureCommandSync(command, args = [], options = {}) {
+  const { posture, spawnSyncImpl = spawnSync, platform = process.platform, ...restOptions } = options;
+  if (!HIDDEN_POSTURES.has(posture)) throw new Error(`hidden_process_posture_required: ${posture ?? 'missing'}`);
+  const normalized = normalizeHiddenCommand(command, args, { platform });
+  return spawnSyncImpl(normalized.command, normalized.args, {
+    ...restOptions,
+    windowsHide: true,
+  });
+}
+
+function runGovernedCommandSync(command, args = [], options = {}) {
+  return runHiddenPostureCommandSync(command, args, { ...options, posture: 'governed_command_execution' });
+}
+
 function spawnTestChild(command, args = [], options = {}) {
   return spawnHiddenPostureProcess(command, args, { ...options, posture: 'test_child' });
 }
@@ -229,6 +243,8 @@ export {
   normalizeHiddenCommand,
   openBrowserUrl,
   runGovernedCommand,
+  runGovernedCommandSync,
+  runHiddenPostureCommandSync,
   spawnMcpServer,
   spawnProviderSubprocess,
   startOperatorTerminal,

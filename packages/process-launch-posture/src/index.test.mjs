@@ -9,6 +9,7 @@ import {
   normalizeHiddenCommand,
   openBrowserUrl,
   runGovernedCommand,
+  runGovernedCommandSync,
   spawnHiddenPostureProcess,
   spawnMcpServer,
   spawnProviderSubprocess,
@@ -23,6 +24,22 @@ test('browserOpenCommand uses hidden helper-compatible Windows command', () => {
     command: 'cmd.exe',
     args: ['/c', 'start', '', 'http://127.0.0.1:3000'],
   });
+});
+
+test('runGovernedCommandSync forces hidden synchronous execution posture', () => {
+  let observed = null;
+  const result = runGovernedCommandSync('pwsh', ['-NoProfile'], {
+    encoding: 'utf8',
+    spawnSyncImpl: (command, args, options) => {
+      observed = { command, args, options };
+      return { status: 0, signal: null, output: [], pid: 3, stdout: '', stderr: '' };
+    },
+  });
+
+  assert.equal(result.status, 0);
+  assert.equal(observed.command, 'pwsh');
+  assert.deepEqual(observed.args, ['-NoProfile']);
+  assert.equal(observed.options.windowsHide, true);
 });
 
 test('named hidden posture wrappers set their posture centrally', () => {

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { dirname, join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -59,6 +60,16 @@ function normalizedRelative(path) {
   return relative(repoRoot, path).split(sep).join('/');
 }
 
+function stableFindingId(file, api, lines, index) {
+  const context = lines
+    .slice(Math.max(0, index - 2), Math.min(lines.length, index + 3))
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join('\n');
+  const fingerprint = createHash('sha256').update(`${file}\n${api}\n${context}`).digest('hex').slice(0, 16);
+  return `${file}:${api}:${fingerprint}`;
+}
+
 function walk(directory, files = []) {
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
     if (entry.isDirectory()) {
@@ -103,7 +114,7 @@ function scan() {
         if (rule.api === 'child_process.exec' && /^\s*exec\s*\([^)]*\)\s*\{/.test(text)) continue;
         const annotation = annotationFor(lines, lineIndex);
         findings.push({
-          id: `${file}:${lineIndex + 1}:${rule.api}`,
+          id: stableFindingId(file, rule.api, lines, lineIndex),
           file,
           line: lineIndex + 1,
           api: rule.api,
@@ -137,8 +148,9 @@ const findings = scan();
 
 if (updateBaseline) {
   const baseline = {
-    schema: 'narada.process_launch_posture.baseline.v1',
+    schema: 'narada.process_launch_posture.baseline.v2',
     generated_at: new Date().toISOString(),
+    id_basis: 'file + child-process api + local source context sha256/16; line is metadata only',
     note: 'Migration baseline for raw process launch sites. New sites must use @narada2/process-launch-posture wrappers or be intentionally added here.',
     entries: findings.map(baselineEntry),
   };
