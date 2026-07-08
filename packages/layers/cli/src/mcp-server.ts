@@ -1,7 +1,7 @@
-import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, resolve } from 'node:path';
+import { execFileGovernedSync } from '@narada2/process-launch-posture';
 import {
   buildCheckpointDescriptor,
   buildHydrationRequestDescriptor,
@@ -1245,11 +1245,11 @@ const SITE_TASK_LIFECYCLE_SCHEMA = [
 ];
 
 function sqlite(dbPath: string, sql: string): void {
-  execFileSync('sqlite3.exe', ['-cmd', '.timeout 5000', dbPath, sql], { stdio: 'pipe' });
+  execFileGovernedSync('sqlite3.exe', ['-cmd', '.timeout 5000', dbPath, sql], { stdio: 'pipe' });
 }
 
 function sqliteJson(dbPath: string, sql: string): unknown[] {
-  const output = execFileSync('sqlite3.exe', ['-cmd', '.timeout 5000', '-json', dbPath, sql], { encoding: 'utf8' });
+  const output = execFileGovernedSync('sqlite3.exe', ['-cmd', '.timeout 5000', '-json', dbPath, sql], { encoding: 'utf8' }) as string;
   return output.trim().length > 0 ? JSON.parse(output) as unknown[] : [];
 }
 

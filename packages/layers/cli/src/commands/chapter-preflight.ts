@@ -5,16 +5,13 @@
  * especially repository publication authority.
  */
 
-import { execFile } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { access, unlink, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { promisify } from 'node:util';
+import { execFileGoverned } from '@narada2/process-launch-posture';
 import { formattedResult } from '../lib/cli-output.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { scanTasksByRange } from '../lib/task-governance.js';
-
-const execFileAsync = promisify(execFile);
 
 export interface ChapterPreflightOptions {
   range: string;
@@ -54,8 +51,8 @@ function parseRange(range: string): ParsedRange | null {
 }
 
 async function runGit(cwd: string, args: string[]): Promise<string> {
-  const { stdout } = await execFileAsync('git', args, { cwd, windowsHide: true });
-  return stdout.trim();
+  const { stdout } = await execFileGoverned('git', args, { cwd, encoding: 'utf8' });
+  return String(stdout).trim();
 }
 
 async function checkGitMetadataWritable(gitDir: string): Promise<{ ok: true } | { ok: false; error: string }> {

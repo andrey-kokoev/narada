@@ -1,6 +1,6 @@
-import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { isAbsolute, relative, resolve } from 'node:path';
+import { execFileGovernedSync } from '@narada2/process-launch-posture';
 import {
   findTaskFile,
   listReportsForTask,
@@ -27,11 +27,11 @@ function gitExecutable(): string {
 }
 
 function runGit(repoRoot: string, args: string[]): string {
-  const output = execFileSync(gitExecutable(), args, {
+  const output = execFileGovernedSync(gitExecutable(), args, {
     cwd: repoRoot,
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
-  });
+  }) as string;
   return output.replace(/\r?\n$/, '');
 }
 

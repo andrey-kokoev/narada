@@ -6,11 +6,10 @@
 
 import { lstat, mkdir, readFile, readdir, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
-import { execFile } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { basename, delimiter, dirname, join, posix, resolve, win32 } from 'node:path';
 import { hostname } from 'node:os';
-import { promisify } from 'node:util';
+import { execFileGoverned } from '@narada2/process-launch-posture';
 import { createHash, randomUUID } from 'node:crypto';
 import * as p from '@clack/prompts';
 import type { CommandContext } from '../lib/command-wrapper.js';
@@ -35,8 +34,6 @@ import {
   selectCreateSiteTemplate,
   type CreateSitePackageDescriptor,
 } from '../lib/create-site-template-catalog.js';
-
-const execFileAsync = promisify(execFile);
 
 export interface SitesOptions {
   format?: string;
@@ -1696,10 +1693,11 @@ export async function sitesLiveCarrierCommand(
 
   const args = buildLiveCarrierArgs(options);
   try {
-    const { stdout } = await execFileAsync(process.execPath, [siteLiveCarrierToolPath(), ...args], {
+    const { stdout } = await execFileGoverned(process.execPath, [siteLiveCarrierToolPath(), ...args], {
+      encoding: 'utf8',
       maxBuffer: 1024 * 1024,
     });
-    const result = JSON.parse(stdout) as { status?: string };
+    const result = JSON.parse(String(stdout)) as { status?: string };
     return {
       exitCode: result.status === 'refused' ? ExitCode.INVALID_CONFIG : ExitCode.SUCCESS,
       result,
@@ -4329,13 +4327,13 @@ function normalizeGitRemoteUrl(url: string): string {
 }
 
 async function runGit(siteRoot: string, args: string[]): Promise<string> {
-  const { stdout } = await execFileAsync('git', args, { cwd: siteRoot, windowsHide: true });
-  return stdout.trim();
+  const { stdout } = await execFileGoverned('git', args, { cwd: siteRoot, encoding: 'utf8' });
+  return String(stdout).trim();
 }
 
 async function runGh(args: string[]): Promise<string> {
-  const { stdout } = await execFileAsync('gh', args, { windowsHide: true });
-  return stdout.trim();
+  const { stdout } = await execFileGoverned('gh', args, { encoding: 'utf8' });
+  return String(stdout).trim();
 }
 
 async function sitesClientDoctorCommand(

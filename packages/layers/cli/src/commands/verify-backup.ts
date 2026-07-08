@@ -8,7 +8,7 @@ import { createHash, createDecipheriv } from 'node:crypto';
 import { dirname, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { pipeline } from 'node:stream/promises';
-import { spawn } from 'node:child_process';
+import { runGovernedCommand } from '@narada2/process-launch-posture';
 import type { CommandContext } from '../lib/command-wrapper.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
@@ -52,7 +52,7 @@ async function calculateChecksum(filePath: string): Promise<string> {
 async function listTarContents(archivePath: string, gzip: boolean): Promise<string[]> {
   return new Promise((resolve, reject) => {
     const args = ['-t', ...(gzip ? ['-z'] : []), '-f', archivePath];
-    const tar = spawn('tar', args, { stdio: ['pipe', 'pipe', 'pipe'] });
+    const tar = runGovernedCommand('tar', args, { stdio: ['pipe', 'pipe', 'pipe'] });
     
     let stdout = '';
     let stderr = '';
@@ -90,7 +90,7 @@ async function extractTarArchive(
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const args = ['-x', ...(gzip ? ['-z'] : []), '-f', archivePath, '-C', targetDir];
-    const tar = spawn('tar', args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    const tar = runGovernedCommand('tar', args, { stdio: ['ignore', 'pipe', 'pipe'] });
     
     let stderr = '';
     tar.stderr?.on('data', (data) => {

@@ -1,4 +1,4 @@
-import type { ChildProcess, SpawnOptions, SpawnSyncOptions, SpawnSyncReturns, StdioOptions } from 'node:child_process';
+import type { ChildProcess, ExecFileOptions, ExecFileSyncOptions, ExecSyncOptions, SpawnOptions, SpawnSyncOptions, SpawnSyncReturns, StdioOptions } from 'node:child_process';
 
 export type ProcessLaunchPosture =
   | 'operator_terminal'
@@ -103,6 +103,14 @@ export interface HiddenPostureSyncOptions extends SpawnSyncOptions {
   spawnSyncImpl?: typeof import('node:child_process').spawnSync;
 }
 
+export interface HiddenPostureExecFileOptions extends ExecFileOptions {
+  platform?: NodeJS.Platform;
+}
+
+export interface HiddenPostureExecFileSyncOptions extends ExecFileSyncOptions {
+  platform?: NodeJS.Platform;
+}
+
 export function browserOpenCommand(target: string, options?: { platform?: NodeJS.Platform }): {
   posture: 'browser_open';
   command: string;
@@ -142,6 +150,20 @@ export function runHiddenPostureCommandSync(command: string, args: string[], opt
 }): SpawnSyncReturns<Buffer>;
 
 export function runGovernedCommandSync(command: string, args?: string[], options?: HiddenPostureSyncOptions): SpawnSyncReturns<Buffer>;
+
+export function execFileHiddenPosture(command: string, args: string[], options: HiddenPostureExecFileOptions & {
+  posture: Exclude<ProcessLaunchPosture, 'operator_terminal' | 'elevated_or_operator_prompt'>;
+}): Promise<{ stdout: string | Buffer; stderr: string | Buffer }>;
+
+export function execFileGoverned(command: string, args?: string[], options?: HiddenPostureExecFileOptions): Promise<{ stdout: string | Buffer; stderr: string | Buffer }>;
+
+export function execFileHiddenPostureSync(command: string, args: string[], options: HiddenPostureExecFileSyncOptions & {
+  posture: Exclude<ProcessLaunchPosture, 'operator_terminal' | 'elevated_or_operator_prompt'>;
+}): string | Buffer;
+
+export function execFileGovernedSync(command: string, args?: string[], options?: HiddenPostureExecFileSyncOptions): string | Buffer;
+
+export function execGovernedSync(command: string, options?: ExecSyncOptions): string | Buffer;
 
 export function spawnTestChild(command: string, args?: string[], options?: HiddenPostureOptions): ChildProcess;
 

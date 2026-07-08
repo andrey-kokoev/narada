@@ -5,10 +5,10 @@
  * result, and inspect/list command runs without emitting unbounded output.
  */
 
-import { spawn } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { runGovernedCommand } from '@narada2/process-launch-posture';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
 import { openTaskLifecycleStore, type TaskLifecycleStore } from '../lib/task-lifecycle-store.js';
@@ -178,8 +178,8 @@ function executeCommand(argv: string[], options: { cwd: string; timeoutMs: numbe
   return new Promise((done) => {
     const started = Date.now();
     const child = options.shell
-      ? spawn(argv[0]!, { cwd: options.cwd, shell: true, stdio: ['ignore', 'pipe', 'pipe'] })
-      : spawn(argv[0]!, argv.slice(1), { cwd: options.cwd, shell: false, stdio: ['ignore', 'pipe', 'pipe'] });
+      ? runGovernedCommand(argv[0]!, [], { cwd: options.cwd, shell: true, stdio: ['ignore', 'pipe', 'pipe'] })
+      : runGovernedCommand(argv[0]!, argv.slice(1), { cwd: options.cwd, shell: false, stdio: ['ignore', 'pipe', 'pipe'] });
 
     let stdout = '';
     let stderr = '';

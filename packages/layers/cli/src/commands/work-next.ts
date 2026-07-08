@@ -6,7 +6,7 @@
  */
 
 import { resolve } from 'node:path';
-import { execFileSync } from 'node:child_process';
+import { execFileGovernedSync } from '@narada2/process-launch-posture';
 import { formattedResult, type CliFormat } from '../lib/cli-output.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import {
@@ -405,11 +405,11 @@ function currentChangedFiles(cwd: string): string[] {
 
 function gitLines(cwd: string, args: string[]): string[] {
   try {
-    return execFileSync(process.env.NARADA_GIT_BINARY ?? (process.platform === 'win32' ? 'git' : '/usr/bin/git'), args, {
+    return (execFileGovernedSync(process.env.NARADA_GIT_BINARY ?? (process.platform === 'win32' ? 'git' : '/usr/bin/git'), args, {
       cwd,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
-    }).split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+    }) as string).split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
   } catch {
     return [];
   }

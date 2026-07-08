@@ -5,6 +5,7 @@ import {
   browserOpenCommand,
   createOperatorProjectionOpenRequest,
   admitOperatorProjectionOpenRequest,
+  execFileGovernedSync,
   executeOperatorProjectionOpenRequest,
   normalizeHiddenCommand,
   openBrowserUrl,
@@ -40,6 +41,15 @@ test('runGovernedCommandSync forces hidden synchronous execution posture', () =>
   assert.equal(observed.command, 'pwsh');
   assert.deepEqual(observed.args, ['-NoProfile']);
   assert.equal(observed.options.windowsHide, true);
+});
+
+test('execFileGovernedSync returns captured stdout through governed posture', () => {
+  const output = execFileGovernedSync(process.execPath, ['-e', 'process.stdout.write("ok")'], {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+
+  assert.equal(output, 'ok');
 });
 
 test('named hidden posture wrappers set their posture centrally', () => {

@@ -1,8 +1,8 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { execFileSync } from 'node:child_process';
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import { access, mkdir, readFile, readdir, stat, writeFile, unlink } from 'node:fs/promises';
 import { basename, dirname, extname, join, relative, resolve } from 'node:path';
+import { execFileGovernedSync } from '@narada2/process-launch-posture';
 import {
   type InboxAuthorityLevel,
   type InboxEnvelope,
@@ -2567,22 +2567,22 @@ async function refreshInboxFromExports(
 
 function git(cwd: string, args: string[]): string | null {
   try {
-    return execFileSync('git', args, {
+    return (execFileGovernedSync('git', args, {
       cwd,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
-    }).trim();
+    }) as string).trim();
   } catch {
     return null;
   }
 }
 
 function runGit(cwd: string, args: string[]): string {
-  return execFileSync('git', args, {
+  return (execFileGovernedSync('git', args, {
     cwd,
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
-  }).trim();
+  }) as string).trim();
 }
 
 async function withInboxStoreAsync(

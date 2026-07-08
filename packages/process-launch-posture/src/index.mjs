@@ -1,4 +1,4 @@
-import { spawn, spawnSync } from 'node:child_process';
+import { execFile, execFileSync, execSync, spawn, spawnSync } from 'node:child_process';
 
 const HIDDEN_POSTURES = new Set([
   'browser_open',
@@ -60,6 +60,51 @@ function runHiddenPostureCommandSync(command, args = [], options = {}) {
 
 function runGovernedCommandSync(command, args = [], options = {}) {
   return runHiddenPostureCommandSync(command, args, { ...options, posture: 'governed_command_execution' });
+}
+
+function execFileHiddenPosture(command, args = [], options = {}) {
+  const { posture, platform = process.platform, ...restOptions } = options;
+  if (!HIDDEN_POSTURES.has(posture)) throw new Error(`hidden_process_posture_required: ${posture ?? 'missing'}`);
+  const normalized = normalizeHiddenCommand(command, args, { platform });
+  return new Promise((resolve, reject) => {
+    execFile(normalized.command, normalized.args, {
+      ...restOptions,
+      windowsHide: true,
+    }, (error, stdout, stderr) => {
+      if (error) {
+        error.stdout = stdout;
+        error.stderr = stderr;
+        reject(error);
+        return;
+      }
+      resolve({ stdout, stderr });
+    });
+  });
+}
+
+function execFileGoverned(command, args = [], options = {}) {
+  return execFileHiddenPosture(command, args, { ...options, posture: 'governed_command_execution' });
+}
+
+function execFileHiddenPostureSync(command, args = [], options = {}) {
+  const { posture, platform = process.platform, ...restOptions } = options;
+  if (!HIDDEN_POSTURES.has(posture)) throw new Error(`hidden_process_posture_required: ${posture ?? 'missing'}`);
+  const normalized = normalizeHiddenCommand(command, args, { platform });
+  return execFileSync(normalized.command, normalized.args, {
+    ...restOptions,
+    windowsHide: true,
+  });
+}
+
+function execFileGovernedSync(command, args = [], options = {}) {
+  return execFileHiddenPostureSync(command, args, { ...options, posture: 'governed_command_execution' });
+}
+
+function execGovernedSync(command, options = {}) {
+  return execSync(command, {
+    ...options,
+    windowsHide: true,
+  });
 }
 
 function spawnTestChild(command, args = [], options = {}) {
@@ -240,6 +285,11 @@ export {
   createOperatorProjectionOpenRequest,
   admitOperatorProjectionOpenRequest,
   executeOperatorProjectionOpenRequest,
+  execFileGoverned,
+  execFileGovernedSync,
+  execFileHiddenPosture,
+  execFileHiddenPostureSync,
+  execGovernedSync,
   normalizeHiddenCommand,
   openBrowserUrl,
   runGovernedCommand,

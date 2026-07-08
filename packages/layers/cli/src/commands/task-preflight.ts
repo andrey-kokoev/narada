@@ -1,7 +1,7 @@
 import { existsSync, readdirSync } from 'node:fs';
-import { execFileSync } from 'node:child_process';
 import { join, resolve } from 'node:path';
 import { scanMaxTaskNumber } from '@narada2/task-governance-core/task-governance';
+import { execFileGovernedSync } from '@narada2/process-launch-posture';
 import { ExitCode } from '../lib/exit-codes.js';
 import { formattedResult, type CliFormat } from '../lib/cli-output.js';
 import { openTaskLifecycleStore } from '../lib/task-lifecycle-store.js';
@@ -168,11 +168,11 @@ function taskNumbers(rows: Array<{ task_number: number | null }>): number[] {
 
 function readGitDirtyState(cwd: string): TaskPreflightResult['dirty_state'] {
   try {
-    const stdout = execFileSync('git', ['status', '--short'], {
+    const stdout = execFileGovernedSync('git', ['status', '--short'], {
       cwd,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
-    });
+    }) as string;
     const entries = stdout
       .split('\n')
       .map((line) => line.trimEnd())

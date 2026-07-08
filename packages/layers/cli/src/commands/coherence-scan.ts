@@ -1,8 +1,8 @@
-import { execFileSync } from 'node:child_process';
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { execFileGovernedSync } from '@narada2/process-launch-posture';
 import { SqliteInboxStore, type InboxEnvelope, type InboxEnvelopeKind } from '@narada2/control-plane';
 import { formattedResult, type CliFormat } from '../lib/cli-output.js';
 import { ExitCode } from '../lib/exit-codes.js';
@@ -593,11 +593,11 @@ function hasOpenEnvelopeForFinding(store: SqliteInboxStore, finding: CoherenceFi
 
 function git(cwd: string, args: string[]): string | null {
   try {
-    return execFileSync('git', args, {
+    return (execFileGovernedSync('git', args, {
       cwd,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
-    }).trim();
+    }) as string).trim();
   } catch {
     return null;
   }
@@ -609,11 +609,11 @@ function gitLines(cwd: string, args: string[]): string[] {
 
 function gitPorcelainChangedFiles(cwd: string): string[] {
   try {
-    const paths = execFileSync('git', ['status', '--porcelain'], {
+    const paths = (execFileGovernedSync('git', ['status', '--porcelain'], {
       cwd,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
-    })
+    }) as string)
       .split(/\r?\n/)
       .map((line) => line.slice(3).trim())
       .filter(Boolean);
@@ -625,11 +625,11 @@ function gitPorcelainChangedFiles(cwd: string): string[] {
 
 function hasGitChanges(cwd: string, paths: string[]): boolean {
   try {
-    return execFileSync('git', ['status', '--porcelain', '--', ...paths], {
+    return (execFileGovernedSync('git', ['status', '--porcelain', '--', ...paths], {
       cwd,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
-    }).trim().length > 0;
+    }) as string).trim().length > 0;
   } catch {
     return false;
   }

@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
-import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
+import { execFileGovernedSync } from '@narada2/process-launch-posture';
 import {
   findTaskFile,
   getActiveAssignment,
@@ -82,11 +82,11 @@ function repairId(findingIdValue: string): string {
 
 function gitLines(cwd: string, args: string[]): string[] {
   try {
-    return execFileSync('git', args, {
+    return (execFileGovernedSync('git', args, {
       cwd,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
-    }).split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+    }) as string).split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
   } catch {
     return [];
   }

@@ -7,9 +7,9 @@
  * For canonical task verification, use `narada test-run run` instead.
  */
 
-import { execSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
+import { execGovernedSync } from '@narada2/process-launch-posture';
 import { ExitCode } from '../lib/exit-codes.js';
 import type { CommandContext } from '../lib/command-wrapper.js';
 import { checkCommandPolicy, classifyCommandScope } from '../lib/verify-policy.js';
@@ -75,7 +75,7 @@ export async function verifyRunCommand(
 
   try {
     if (scope === 'verify') {
-      execSync('pnpm verify', { cwd: repoRoot, stdio: 'inherit' });
+      execGovernedSync('pnpm verify', { cwd: repoRoot, stdio: 'inherit' });
       return {
         exitCode: ExitCode.SUCCESS,
         result: { status: 'ok', command, scope, routed_through: 'pnpm verify' },
@@ -83,7 +83,7 @@ export async function verifyRunCommand(
     }
 
     // Focused test command: route through pnpm test:focused
-    execSync(`pnpm test:focused "${command}"`, { cwd: repoRoot, stdio: 'inherit' });
+    execGovernedSync(`pnpm test:focused "${command}"`, { cwd: repoRoot, stdio: 'inherit' });
     return {
       exitCode: ExitCode.SUCCESS,
       result: { status: 'ok', command, scope, routed_through: 'pnpm test:focused' },

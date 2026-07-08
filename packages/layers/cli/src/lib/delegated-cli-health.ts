@@ -1,6 +1,6 @@
-import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { execFileGovernedSync } from '@narada2/process-launch-posture';
 
 export type DelegatedCliFailureKind =
   | 'missing_config'
@@ -136,12 +136,12 @@ function inspectScript(siteRoot: string, scriptName: string, command: string, en
   }
 
   try {
-    const output = execFileSync(process.execPath, [resolvedEntrypoint, '--version'], {
+    const output = (execFileGovernedSync(process.execPath, [resolvedEntrypoint, '--version'], {
       cwd: siteRoot,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
       timeout: 5000,
-    }).trim();
+    }) as string).trim();
     return {
       script_name: scriptName,
       command,
@@ -188,13 +188,13 @@ function inspectContract(siteRoot: string, contract: DelegatedCliInvocationContr
   }
 
   try {
-    const output = execFileSync(contract.command, ['--version'], {
+    const output = (execFileGovernedSync(contract.command, ['--version'], {
       cwd: resolve(siteRoot, contract.cwd),
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
       timeout: 5000,
       shell: contract.shell !== 'direct',
-    }).trim();
+    }) as string).trim();
     return {
       script_name: 'narada.delegated_cli_embodiment',
       command: contract.command,

@@ -2,8 +2,8 @@ import { cpSync, existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, relative, resolve } from 'node:path';
-import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
+import { execFileGovernedSync } from '@narada2/process-launch-posture';
 import { ExitCode } from '../lib/exit-codes.js';
 import { formattedResult, type CliFormat } from '../lib/cli-output.js';
 import { openTaskLifecycleStore, type TaskLifecycleStore } from '../lib/task-lifecycle-store.js';
@@ -60,12 +60,12 @@ function gitExecutable(): string {
 
 function runGit(repoRoot: string, args: string[], gitDir?: string): string {
   const env = gitDir ? { ...process.env, GIT_DIR: gitDir, GIT_WORK_TREE: repoRoot } : process.env;
-  return execFileSync(gitExecutable(), args, {
+  return (execFileGovernedSync(gitExecutable(), args, {
     cwd: repoRoot,
     env,
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
-  }).trim();
+  }) as string).trim();
 }
 
 function gitDirWritable(repoRoot: string): boolean {

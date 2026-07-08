@@ -7,7 +7,7 @@ import { mkdir, readFile, readdir, stat, writeFile, rm, mkdtemp } from 'node:fs/
 import { dirname, join, relative, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createHash, randomBytes, createCipheriv } from 'node:crypto';
-import { spawn } from 'node:child_process';
+import { runGovernedCommand } from '@narada2/process-launch-posture';
 import { pipeline } from 'node:stream/promises';
 import type { CommandContext } from '../lib/command-wrapper.js';
 import { ExitCode } from '../lib/exit-codes.js';
@@ -139,7 +139,7 @@ async function createTarArchive(
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const args = ['-c', ...(gzip ? ['-z'] : []), '-f', outputPath, '-C', sourceDir, ...files];
-    const tar = spawn('tar', args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    const tar = runGovernedCommand('tar', args, { stdio: ['ignore', 'pipe', 'pipe'] });
     
     let stderr = '';
     tar.stderr?.on('data', (data) => {

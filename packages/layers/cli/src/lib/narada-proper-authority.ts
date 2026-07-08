@@ -1,6 +1,6 @@
-import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { execFileGovernedSync } from '@narada2/process-launch-posture';
 import { ExitCode } from './exit-codes.js';
 
 export type SiteEmbodimentRole = 'authority' | 'read_only_forwarding' | 'read_only' | 'forwarding';
@@ -295,11 +295,11 @@ function samePath(a: string, b: string): boolean {
 
 function git(cwd: string, args: string[]): string | null {
   try {
-    const output = execFileSync(gitBinary(), args, {
+    const output = (execFileGovernedSync(gitBinary(), args, {
       cwd,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
-    }).trim();
+    }) as string).trim();
     return output || null;
   } catch {
     return null;
