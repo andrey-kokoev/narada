@@ -50,7 +50,6 @@
     {
       "name": "tool_output",
       "primary": "/tool-output",
-      "aliases": ["/tool-outputs"],
       "argument": "on|off|toggle|status",
       "effect": "configure_displayed_tool_call_outputs",
       "help": "Toggle displayed tool call outputs"
@@ -58,7 +57,6 @@
     {
       "name": "tools",
       "primary": "/tools",
-      "aliases": ["/tool"],
       "argument": "filter",
       "effect": "show_discovered_mcp_tools",
       "help": "Show discovered MCP tools and input schemas"
@@ -116,7 +114,6 @@
     {
       "name": "exit",
       "primary": "/exit",
-      "aliases": ["/quit", "exit"],
       "effect": "save_and_quit",
       "help": "Save and quit"
     }

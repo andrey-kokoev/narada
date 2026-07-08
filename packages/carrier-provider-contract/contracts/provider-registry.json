@@ -21,6 +21,11 @@
       "base_url": "https://api.openai.com",
       "default_model": "gpt-5.5",
       "available_models": ["gpt-5.5", "gpt-5.4", "gpt-5.4-mini", "gpt-5.4-nano"],
+      "cognition_defaults": {
+        "low": { "model": "gpt-5.4-mini", "reasoning_effort": "low" },
+        "medium": { "model": "gpt-5.5", "reasoning_effort": "medium" },
+        "high": { "model": "gpt-5.5", "reasoning_effort": "high" }
+      },
       "adapter_kind": "openai-compatible-chat-completions",
       "support_state": "verified_supported",
       "base_url_env_names": ["OPENAI_BASE_URL"],
@@ -38,6 +43,11 @@
       "base_url": "https://api.moonshot.ai",
       "default_model": "kimi-k2.6",
       "available_models": ["kimi-k2.6", "kimi-k2.7"],
+      "cognition_defaults": {
+        "low": { "model": "kimi-k2.6", "reasoning_effort": "low" },
+        "medium": { "model": "kimi-k2.6", "reasoning_effort": "medium" },
+        "high": { "model": "kimi-k2.7", "reasoning_effort": "high" }
+      },
       "adapter_kind": "openai-compatible-chat-completions",
       "support_state": "verified_supported",
       "base_url_env_names": ["KIMI_API_BASE_URL"],
@@ -55,6 +65,11 @@
       "base_url": "https://api.kimi.com/coding/",
       "default_model": "kimi-k2.7",
       "available_models": ["kimi-k2.6", "kimi-k2.7"],
+      "cognition_defaults": {
+        "low": { "model": "kimi-k2.6", "reasoning_effort": "low" },
+        "medium": { "model": "kimi-k2.7", "reasoning_effort": "medium" },
+        "high": { "model": "kimi-k2.7", "reasoning_effort": "high" }
+      },
       "adapter_kind": "openai-compatible-chat-completions",
       "support_state": "verified_supported",
       "base_url_env_names": ["KIMI_CODE_API_BASE_URL"],
@@ -72,6 +87,11 @@
       "base_url": "https://api.anthropic.com",
       "default_model": "claude-sonnet-4.6",
       "available_models": ["claude-sonnet-4.6"],
+      "cognition_defaults": {
+        "low": { "model": "claude-sonnet-4.6", "reasoning_effort": "low" },
+        "medium": { "model": "claude-sonnet-4.6", "reasoning_effort": "medium" },
+        "high": { "model": "claude-sonnet-4.6", "reasoning_effort": "high" }
+      },
       "adapter_kind": "anthropic-messages",
       "support_state": "verified_supported",
       "base_url_env_names": ["ANTHROPIC_BASE_URL"],
@@ -89,6 +109,11 @@
       "base_url": "https://api.deepseek.com",
       "default_model": "deepseek-chat",
       "available_models": ["deepseek-chat", "deepseek-reasoner", "deepseek-v3.2-exp", "deepseek-v3.1-terminus"],
+      "cognition_defaults": {
+        "low": { "model": "deepseek-chat", "reasoning_effort": "low" },
+        "medium": { "model": "deepseek-chat", "reasoning_effort": "medium" },
+        "high": { "model": "deepseek-reasoner", "reasoning_effort": "high" }
+      },
       "adapter_kind": "openai-compatible-chat-completions",
       "support_state": "verified_supported",
       "base_url_env_names": ["DEEPSEEK_API_BASE_URL"],
@@ -106,6 +131,11 @@
       "base_url": "https://open.bigmodel.cn/api/paas/v4/",
       "default_model": "GLM-5.2",
       "available_models": ["GLM-5.2", "GLM-5V-Turbo", "GLM-5.1", "GLM-5", "GLM-5-Turbo", "GLM-4.7", "GLM-4.6"],
+      "cognition_defaults": {
+        "low": { "model": "GLM-5-Turbo", "reasoning_effort": "low" },
+        "medium": { "model": "GLM-5.2", "reasoning_effort": "medium" },
+        "high": { "model": "GLM-5.2", "reasoning_effort": "high" }
+      },
       "adapter_kind": "openai-compatible-chat-completions",
       "support_state": "verified_supported",
       "base_url_env_names": ["GLM_API_BASE_URL"],
@@ -123,6 +153,11 @@
       "base_url": "https://openrouter.ai/api/",
       "default_model": "openai/gpt-5.5",
       "available_models": ["openai/gpt-5.5"],
+      "cognition_defaults": {
+        "low": { "model": "openai/gpt-5.5", "reasoning_effort": "low" },
+        "medium": { "model": "openai/gpt-5.5", "reasoning_effort": "medium" },
+        "high": { "model": "openai/gpt-5.5", "reasoning_effort": "high" }
+      },
       "adapter_kind": "openai-compatible-chat-completions",
       "support_state": "verified_supported",
       "base_url_env_names": ["OPENROUTER_BASE_URL", "OPENROUTER_API_BASE_URL"],
@@ -140,6 +175,11 @@
       "base_url": "codex://local-subscription",
       "default_model": "gpt-5.5",
       "available_models": ["gpt-5.5"],
+      "cognition_defaults": {
+        "low": { "model": "gpt-5.5", "reasoning_effort": "low" },
+        "medium": { "model": "gpt-5.5", "reasoning_effort": "medium" },
+        "high": { "model": "gpt-5.5", "reasoning_effort": "high" }
+      },
       "adapter_kind": "codex-mcp-server",
       "support_state": "verified_supported",
       "base_url_env_names": [],

@@ -21,6 +21,47 @@ function tempSite(prefix = 'narada-action-admission-') {
   return mkdtempSync(join(tmpdir(), prefix));
 }
 
+function governedMutationMetadata(family, authorityOwner) {
+  return {
+    read_only: false,
+    family,
+    authority_owner: authorityOwner,
+    source: 'surface_registry',
+    reason: 'test_registry_mutating_tool',
+  };
+}
+
+function stripEchoedToolName(value) {
+  return JSON.parse(JSON.stringify(value, (key, entry) => (
+    key === 'tool_name' || key === 'declared_tool' ? '<tool>' : entry
+  )));
+}
+
+function assertToolNameDoesNotClassifyAuthority({ metadata, args = {}, label }) {
+  const suspiciousNames = [
+    'task_lifecycle_claim',
+    'fs_write_file',
+    'execute_command',
+    'scheduler_task_run',
+    'graph_mail_send',
+    'token_refresh',
+    'auth_secret_password_write',
+    'anything_doctor',
+  ];
+  const neutral = stripEchoedToolName(classifyCarrierActionRequest('neutral_tool', args, {
+    ...(metadata ? { toolMetadata: metadata } : {}),
+  }));
+  for (const toolName of suspiciousNames) {
+    assert.deepEqual(
+      stripEchoedToolName(classifyCarrierActionRequest(toolName, args, {
+        ...(metadata ? { toolMetadata: metadata } : {}),
+      })),
+      neutral,
+      `${label}: ${toolName}`,
+    );
+  }
+}
+
 const classificationCases = JSON.parse(readFileSync(new URL('../fixtures/classification-cases.json', import.meta.url), 'utf8'));
 assert.equal(classificationCases.schema, 'narada.carrier_action_admission.classification_cases.v1');
 for (const entry of classificationCases.cases) {
@@ -42,27 +83,65 @@ assert.equal(
   'car_act_carrier_1_turn_2_call_3_96eb77b053683f8a',
 );
 
-assert.deepEqual(classifyCarrierActionRequest('task_lifecycle_claim', { task_number: 1228 }), {
-  family: 'task_lifecycle_mutation',
-  authority_owner: 'task_governance_service',
-  decision: 'routed',
-  reason: 'task_lifecycle_mutation_requires_canonical_task_authority',
-  secret_findings: [],
-  classifier_source: 'closed_name_pattern',
+assertToolNameDoesNotClassifyAuthority({
+  label: 'missing metadata refuses independently of tool spelling',
 });
-assert.equal(classifyCarrierActionRequest('agent_context_startup_sequence', {}).decision, 'read_only_admitted');
+assertToolNameDoesNotClassifyAuthority({
+  label: 'read-only registry metadata admits independently of tool spelling',
+  metadata: { read_only: true, source: 'surface_registry', reason: 'surface_registry_read_only_tool' },
+});
+assertToolNameDoesNotClassifyAuthority({
+  label: 'surface mutation registry metadata admits independently of tool spelling',
+  metadata: {
+    read_only: false,
+    family: 'unknown_action_family',
+    authority_owner: null,
+    source: 'surface_registry',
+    reason: 'surface_registry_mutating_tool',
+  },
+});
+assertToolNameDoesNotClassifyAuthority({
+  label: 'registry refusal refuses independently of tool spelling',
+  metadata: {
+    read_only: false,
+    refused: true,
+    source: 'surface_registry',
+    reason: 'surface_registry_tool_not_declared',
+  },
+});
+assert.equal(classifyCarrierActionRequest('refresh_token', {}, {
+  toolMetadata: { read_only: true, source: 'surface_registry', reason: 'surface_registry_read_only_tool' },
+}).decision, 'read_only_admitted');
+assert.equal(classifyCarrierActionRequest('normal_tool', { api_key: 'x' }, {
+  toolMetadata: { read_only: true, source: 'surface_registry', reason: 'surface_registry_read_only_tool' },
+}).decision, 'refused');
+
+assert.deepEqual(classifyCarrierActionRequest('task_lifecycle_claim', { task_number: 1228 }), {
+  family: 'unknown_action_family',
+  authority_owner: null,
+  decision: 'refused',
+  reason: 'tool_without_authoritative_metadata',
+  secret_findings: [],
+  classifier_source: 'unmetadataed_tool',
+});
+assert.equal(classifyCarrierActionRequest('agent_context_startup_sequence', {}).decision, 'refused');
 const taskShowReadOnlyMetadata = classifyCarrierActionRequest('task_lifecycle_show', { task_number: 1318 }, {
   toolMetadata: { read_only: true, source: 'surface_registry', reason: 'surface_registry_read_only_tool' },
 });
 assert.equal(taskShowReadOnlyMetadata.decision, 'read_only_admitted');
 assert.equal(taskShowReadOnlyMetadata.reason, 'surface_registry_read_only_tool');
+const taskDoctorReadOnlyMetadata = classifyCarrierActionRequest('task_lifecycle_doctor', {}, {
+  toolMetadata: { read_only: true, source: 'surface_registry', reason: 'surface_registry_read_only_tool' },
+});
+assert.equal(taskDoctorReadOnlyMetadata.decision, 'read_only_admitted');
+assert.equal(taskDoctorReadOnlyMetadata.reason, 'surface_registry_read_only_tool');
 assert.equal(classifyCarrierActionRequest('startup_sequence', {}).decision, 'refused');
-assert.equal(classifyCarrierActionRequest('fs_read_file', {}).decision, 'read_only_admitted');
-assert.equal(classifyCarrierActionRequest('fs_glob_search', {}).decision, 'read_only_admitted');
-assert.equal(classifyCarrierActionRequest('fs_grep_search', {}).decision, 'read_only_admitted');
+assert.equal(classifyCarrierActionRequest('fs_read_file', {}).decision, 'refused');
+assert.equal(classifyCarrierActionRequest('fs_glob_search', {}).decision, 'refused');
+assert.equal(classifyCarrierActionRequest('fs_grep_search', {}).decision, 'refused');
 const sourcePathRead = classifyCarrierActionRequest('fs_read_file', { path: 'packages/task-lifecycle-mcp/src/mcp-freshness-service.ts' });
-assert.equal(sourcePathRead.decision, 'read_only_admitted');
-assert.equal(sourcePathRead.reason, 'closed_name_pattern_read_only_tool');
+assert.equal(sourcePathRead.decision, 'refused');
+assert.equal(sourcePathRead.reason, 'tool_without_authoritative_metadata');
 assert.equal(classifyCarrierActionRequest('read_file', {}).decision, 'refused');
 assert.equal(classifyCarrierActionRequest('glob_search', {}).decision, 'refused');
 assert.equal(classifyCarrierActionRequest('grep_search', {}).decision, 'refused');
@@ -73,16 +152,13 @@ assert.equal(classifyCarrierActionRequest('unknown_registry_read', {}, {
 const misdeclaredTaskClaim = classifyCarrierActionRequest('narada_task_claim', {}, {
   toolMetadata: { read_only: true, source: 'surface_registry', reason: 'misdeclared_registry_read' },
 });
-assert.equal(misdeclaredTaskClaim.decision, 'routed');
-assert.equal(misdeclaredTaskClaim.family, 'task_lifecycle_mutation');
-assert.equal(misdeclaredTaskClaim.reason, 'read_only_metadata_conflicts_with_task_lifecycle_mutation');
-assert.equal(misdeclaredTaskClaim.metadata_conflict.metadata_reason, 'misdeclared_registry_read');
+assert.equal(misdeclaredTaskClaim.decision, 'read_only_admitted');
+assert.equal(misdeclaredTaskClaim.reason, 'misdeclared_registry_read');
 const misdeclaredShellRun = classifyCarrierActionRequest('shell_run', {}, {
   toolMetadata: { read_only: true, source: 'surface_registry', reason: 'misdeclared_registry_read' },
 });
-assert.equal(misdeclaredShellRun.decision, 'refused');
-assert.equal(misdeclaredShellRun.family, 'command');
-assert.equal(misdeclaredShellRun.reason, 'read_only_metadata_conflicts_with_command');
+assert.equal(misdeclaredShellRun.decision, 'read_only_admitted');
+assert.equal(misdeclaredShellRun.reason, 'misdeclared_registry_read');
 assert.equal(classifyCarrierActionRequest('unknown_registry_task', {}, {
   toolMetadata: {
     read_only: false,
@@ -92,6 +168,48 @@ assert.equal(classifyCarrierActionRequest('unknown_registry_task', {}, {
     reason: 'test_registry_task',
   },
 }).classifier_source, 'surface_registry');
+const registrySchedulerRun = classifyCarrierActionRequest('scheduler_task_run', { task_name: 'Narada-Sonar-Daemon' }, {
+  toolMetadata: {
+    name: 'scheduler_task_run',
+    read_only: false,
+    family: 'unknown_action_family',
+    authority_owner: null,
+    source: 'surface_registry',
+    surface_id: 'narada-sonar-scheduler.local',
+    server_name: 'narada-sonar-scheduler',
+    generated_file: 'narada-sonar-scheduler-mcp.json',
+    reason: 'surface_registry_mutating_tool',
+  },
+});
+assert.equal(registrySchedulerRun.family, 'mcp_surface_governed_mutation');
+assert.equal(registrySchedulerRun.decision, 'mcp_surface_tool_admitted');
+assert.equal(registrySchedulerRun.carrier_mutation_admitted, true);
+assert.equal(registrySchedulerRun.reason, 'surface_registry_declared_mutating_tool_admitted');
+assert.equal(registrySchedulerRun.surface_registry.surface_id, 'narada-sonar-scheduler.local');
+const registrySchedulerRequest = createCarrierActionRequest({
+  agentId: 'narada.test',
+  carrierSessionId: 'carrier_scheduler',
+  turnId: 'turn_scheduler',
+  toolCallId: 'call_scheduler',
+  toolName: 'scheduler_task_run',
+  args: { task_name: 'Narada-Sonar-Daemon' },
+  siteRoot: workspaceRoot,
+  toolMetadata: {
+    name: 'scheduler_task_run',
+    read_only: false,
+    family: 'unknown_action_family',
+    authority_owner: null,
+    source: 'surface_registry',
+    surface_id: 'narada-sonar-scheduler.local',
+    server_name: 'narada-sonar-scheduler',
+    generated_file: 'narada-sonar-scheduler-mcp.json',
+    reason: 'surface_registry_mutating_tool',
+  },
+});
+const registrySchedulerDecision = decideCarrierActionRequest(registrySchedulerRequest);
+assert.equal(registrySchedulerDecision.decision, 'mcp_surface_tool_admitted');
+assert.equal(registrySchedulerDecision.carrier_mutation_admitted, true);
+assert.equal(registrySchedulerRequest.requested_action.surface_registry.server_name, 'narada-sonar-scheduler');
 const registryUnlisted = classifyCarrierActionRequest('fs_read_file', {}, {
   toolMetadata: {
     name: 'fs_read_file',
@@ -111,8 +229,8 @@ assert.equal(registryUnlisted.registry_diagnostics.server_name, 'site-filesystem
 assert.equal(registryUnlisted.registry_diagnostics.surface_id, 'surface.filesystem');
 assert.equal(registryUnlisted.registry_diagnostics.registry_source, 'D:/site/.narada/capabilities/mcp-surfaces.json');
 assert.equal(registryUnlisted.registry_diagnostics.generated_file, 'site-filesystem-mcp.json');
-assert.equal(registryUnlisted.registry_diagnostics.candidate_registry_patch.classification, 'add_to_read_only_tools');
-assert.equal(registryUnlisted.registry_diagnostics.candidate_registry_patch.target_contract_field, 'tool_contract.read_only_tools');
+assert.equal(registryUnlisted.registry_diagnostics.candidate_registry_patch.classification, 'manual_review_required');
+assert.equal(registryUnlisted.registry_diagnostics.candidate_registry_patch.target_contract_field, null);
 const resolvedRegistryUnlisted = resolveToolMetadata({
   toolName: 'narada_inbox_submit',
   server: {
@@ -142,18 +260,18 @@ const registryUnlistedRequest = createCarrierActionRequest({
 assert.equal(registryUnlistedRequest.requested_action.registry_diagnostics.server_name, 'site-inbox');
 assert.equal(registryUnlistedRequest.requested_action.registry_diagnostics.surface_id, 'surface.inbox');
 assert.equal(registryUnlistedRequest.requested_action.registry_diagnostics.generated_file, 'site-inbox-mcp.json');
-assert.equal(registryUnlistedRequest.requested_action.registry_diagnostics.candidate_registry_patch.classification, 'add_to_mutating_tools');
-assert.equal(registryUnlistedRequest.requested_action.classifier_metadata.registry_patch_candidate.classification, 'add_to_mutating_tools');
-assert.equal(classifyCarrierActionRequest('inbox_submit', {}).authority_owner, 'canonical_inbox_service');
-assert.equal(classifyCarrierActionRequest('outbox_send', {}).authority_owner, 'canonical_outbox_service');
+assert.equal(registryUnlistedRequest.requested_action.registry_diagnostics.candidate_registry_patch.classification, 'manual_review_required');
+assert.equal(registryUnlistedRequest.requested_action.classifier_metadata.registry_patch_candidate.classification, 'manual_review_required');
+assert.equal(classifyCarrierActionRequest('inbox_submit', {}).authority_owner, null);
+assert.equal(classifyCarrierActionRequest('outbox_send', {}).authority_owner, null);
 assert.equal(classifyCarrierActionRequest('outbox_send', {}).decision, 'refused');
-assert.equal(classifyCarrierActionRequest('command_request_create', {}).decision, 'routed');
+assert.equal(classifyCarrierActionRequest('command_request_create', {}).decision, 'refused');
 assert.equal(classifyCarrierActionRequest('shell_run', {}).decision, 'refused');
-assert.equal(classifyCarrierActionRequest('write_file', {}).family, 'site_file_mutation');
-assert.equal(classifyCarrierActionRequest('write_file', {}).decision, 'routed');
-assert.equal(classifyCarrierActionRequest('execute_command', {}).family, 'command');
-assert.equal(classifyCarrierActionRequest('execute_command', {}).decision, 'routed');
-assert.equal(classifyCarrierActionRequest('unknown_mutate', {}).reason, 'unknown_non_read_only_tool_family');
+assert.equal(classifyCarrierActionRequest('write_file', {}).family, 'unknown_action_family');
+assert.equal(classifyCarrierActionRequest('write_file', {}).decision, 'refused');
+assert.equal(classifyCarrierActionRequest('execute_command', {}).family, 'unknown_action_family');
+assert.equal(classifyCarrierActionRequest('execute_command', {}).decision, 'refused');
+assert.equal(classifyCarrierActionRequest('unknown_mutate', {}).reason, 'tool_without_authoritative_metadata');
 
 const delegatedWriteHandoff = {
   schema: 'narada.nars.delegated_authority_handoff.v1',
@@ -163,13 +281,14 @@ const delegatedWriteHandoff = {
   authority_mode: 'write',
   allowed_action_families: ['site_file_mutation', 'task_lifecycle_mutation', 'command'],
 };
-for (const [toolName, expectedFamily] of [
-  ['write_file', 'site_file_mutation'],
-  ['task_lifecycle_claim', 'task_lifecycle_mutation'],
-  ['execute_command', 'command'],
+for (const [toolName, expectedFamily, authorityOwner] of [
+  ['write_file', 'site_file_mutation', 'target_site_file_authority'],
+  ['task_lifecycle_claim', 'task_lifecycle_mutation', 'task_governance_service'],
+  ['execute_command', 'command', 'command_execution_intent_service'],
 ]) {
   const classification = classifyCarrierActionRequest(toolName, { id: 'value omitted' }, {
     delegatedAuthorityHandoff: delegatedWriteHandoff,
+    toolMetadata: governedMutationMetadata(expectedFamily, authorityOwner),
   });
   assert.equal(classification.family, expectedFamily);
   assert.equal(classification.decision, 'delegated_mutation_admitted');
@@ -178,6 +297,7 @@ for (const [toolName, expectedFamily] of [
 }
 const readOnlyUnderWrite = classifyCarrierActionRequest('fs_read_file', { path: 'README.md' }, {
   delegatedAuthorityHandoff: delegatedWriteHandoff,
+  toolMetadata: { read_only: true, source: 'surface_registry', reason: 'surface_registry_read_only_tool' },
 });
 assert.equal(readOnlyUnderWrite.decision, 'read_only_admitted');
 assert.equal(readOnlyUnderWrite.carrier_mutation_admitted, undefined);
@@ -218,13 +338,14 @@ const request = createCarrierActionRequest({
   toolName: 'task_lifecycle_claim',
   args: { task_number: 1228, body: 'raw body must not persist' },
   siteRoot: workspaceRoot,
+  toolMetadata: governedMutationMetadata('task_lifecycle_mutation', 'task_governance_service'),
 });
 assert.equal(request.schema, 'narada.carrier_action_request.v0');
 assert.equal(request.request_id, 'car_act_carrier_1_turn_1_call_1_1146f7c42f5da5f6');
 assert.equal(request.classifier_version, 'carrier_action_admission.metadata_aware_policy.v1');
 assert.equal(request.requested_action.argument_summary.shape, 'object');
-assert.equal(request.requested_action.classification_reason, 'task_lifecycle_mutation_requires_canonical_task_authority');
-assert.equal(request.requested_action.classifier_source, 'closed_name_pattern');
+assert.equal(request.requested_action.classification_reason, 'test_registry_mutating_tool');
+assert.equal(request.requested_action.classifier_source, 'surface_registry');
 assert.deepEqual(request.requested_action.argument_summary.keys, ['body', 'task_number']);
 assert.equal('args' in request.requested_action, false);
 
@@ -236,6 +357,7 @@ const { path, decision } = createAndWriteCarrierActionAdmission({
   toolName: 'task_lifecycle_claim',
   args: { task_number: 1228, body: 'raw body must not persist' },
   siteRoot: workspaceRoot,
+  toolMetadata: governedMutationMetadata('task_lifecycle_mutation', 'task_governance_service'),
 });
 const evidenceText = readFileSync(path, 'utf8');
 const persisted = JSON.parse(evidenceText);
@@ -244,7 +366,7 @@ assert.equal(existsSync(decision.candidate_ref), true);
 assert.equal(basename(path), `${request.request_id}.json`);
 assert.equal(decision.schema, 'narada.carrier_action_admission_decision.v0');
 assert.equal(decision.decision, 'routed');
-assert.equal(decision.reason, 'task_lifecycle_mutation_requires_canonical_task_authority');
+assert.equal(decision.reason, 'test_registry_mutating_tool');
 assert.equal(decision.classifier_version, 'carrier_action_admission.metadata_aware_policy.v1');
 assert.equal(decision.policy_version, 'carrier_action_admission.delegated_governed_mutations.v1');
 assert.match(decision.created_at, /T/);
@@ -284,6 +406,7 @@ const commandWrite = createAndWriteCarrierActionAdmission({
   toolName: 'command_request_create',
   args: { command: 'pnpm test', reason: 'values must not persist' },
   siteRoot: workspaceRoot,
+  toolMetadata: governedMutationMetadata('command', 'command_execution_intent_service'),
 });
 assert.equal(commandWrite.decision.decision, 'routed');
 assert.equal(JSON.parse(readFileSync(commandWrite.decision.candidate_ref, 'utf8')).schema, 'narada.carrier_action_candidate.command.v1');
@@ -297,6 +420,7 @@ const readOnlyWrite = createAndWriteCarrierActionAdmission({
   toolName: 'agent_context_startup_sequence',
   args: {},
   siteRoot: workspaceRoot,
+  toolMetadata: { read_only: true, source: 'surface_registry', reason: 'surface_registry_read_only_tool' },
 });
 assert.equal(readOnlyWrite.decision.decision, 'read_only_admitted');
 assert.equal(readOnlyWrite.decision.candidate_ref, null);
@@ -310,6 +434,7 @@ const delegatedWrite = createAndWriteCarrierActionAdmission({
   args: { path: 'safe.txt', content: 'raw mutation payload must not persist' },
   siteRoot: workspaceRoot,
   delegatedAuthorityHandoff: delegatedWriteHandoff,
+  toolMetadata: governedMutationMetadata('site_file_mutation', 'target_site_file_authority'),
 });
 const delegatedWriteText = readFileSync(delegatedWrite.path, 'utf8');
 assert.equal(delegatedWrite.decision.decision, 'delegated_mutation_admitted');
@@ -327,6 +452,7 @@ const delegatedDecisionRequest = createCarrierActionRequest({
   args: { command: 'raw command must not persist' },
   siteRoot: workspaceRoot,
   delegatedAuthorityHandoff: delegatedWriteHandoff,
+  toolMetadata: governedMutationMetadata('command', 'command_execution_intent_service'),
 });
 const delegatedDecision = decideCarrierActionRequest(delegatedDecisionRequest);
 assert.equal(delegatedDecision.decision, 'delegated_mutation_admitted');
@@ -352,4 +478,3 @@ const invalidShow = showCarrierActionDecision(workspaceRoot, '..\\outside');
 assert.equal(invalidShow.status, 'invalid_request_id');
 
 rmSync(workspaceRoot, { recursive: true, force: true });
-

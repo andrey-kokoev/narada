@@ -2,26 +2,26 @@
   "schema": "narada.carrier_action_admission.classification_cases.v1",
   "cases": [
     {
-      "name": "startup_read_only",
+      "name": "startup_without_registry_refused",
       "tool_name": "agent_context_startup_sequence",
       "arguments": {},
-      "expected_decision": "read_only_admitted",
-      "expected_reason": "closed_name_pattern_read_only_tool"
+      "expected_decision": "refused",
+      "expected_reason": "tool_without_authoritative_metadata"
     },
     {
       "name": "startup_alias_refused",
       "tool_name": "startup_sequence",
       "arguments": {},
       "expected_decision": "refused",
-      "expected_reason": "unknown_non_read_only_tool_family"
+      "expected_reason": "tool_without_authoritative_metadata"
     },
     {
-      "name": "task_lifecycle_mutation_routed",
+      "name": "task_lifecycle_without_metadata_refused",
       "tool_name": "task_lifecycle_claim",
       "arguments": { "task_number": 1228 },
-      "expected_decision": "routed",
-      "expected_reason": "task_lifecycle_mutation_requires_canonical_task_authority",
-      "expected_family": "task_lifecycle_mutation"
+      "expected_decision": "refused",
+      "expected_reason": "tool_without_authoritative_metadata",
+      "expected_family": "unknown_action_family"
     },
     {
       "name": "secret_payload_refused",

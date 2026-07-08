@@ -396,17 +396,7 @@ assert.deepEqual(classifyCarrierControlRequest({ id: 'command-1', method: 'sessi
   error: null,
   method_kind: 'session_command_execute',
 });
-assert.deepEqual(classifyCarrierControlRequest({ id: 'legacy-command-1', method: 'carrier.command.execute' }), {
-  request_id: 'legacy-command-1',
-  method: 'carrier.command.execute',
-  concurrent_allowed: false,
-  allowed_when_closed: false,
-  native_control_input: false,
-  observer_action: null,
-  error: null,
-  method_kind: 'session_command_execute',
-  legacy_method: 'carrier.command.execute',
-});
+assert.equal(classifyCarrierControlRequest({ id: 'legacy-command-1', method: 'carrier.command.execute' }).error?.code, 'unsupported_method');
 assert.equal(classifyCarrierControlRequest({ id: 'old-command-1', method: 'agent-cli.command' }).error?.code, 'unsupported_method');
 assert.deepEqual(classifyCarrierControlRequest({ id: 'observer-mute-1', method: 'observer.mute' }), {
   request_id: 'observer-mute-1',

@@ -1,7 +1,6 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
-import { NAME_PATTERN_MUTATING_TOOLS, NAME_PATTERN_READ_ONLY_TOOLS } from './tool-metadata.mjs';
 import {
   actionAdmissionDir,
   listCarrierActionDecisions,
@@ -101,55 +100,26 @@ function registryToolNotDeclaredDiagnostics(toolName, metadata) {
 }
 
 function candidateRegistryPatchClassification(toolName, metadata) {
-  const inferred = namePatternRegistryPatchClassification(toolName);
   const surfaceId = stringFieldOrNull(metadata.surface_id);
   const registrySource = stringFieldOrNull(metadata.registry_source);
   const generatedFile = stringFieldOrNull(metadata.generated_file);
   const serverName = stringFieldOrNull(metadata.server_name);
   return {
     schema: 'narada.carrier_action.registry_patch_candidate.v1',
-    classification: inferred.classification,
-    confidence: inferred.confidence,
+    classification: 'manual_review_required',
+    confidence: 'low',
     tool_name: toolName,
     surface_id: surfaceId,
     server_name: serverName,
     registry_source: registrySource,
     generated_file: generatedFile,
-    target_contract_field: inferred.target_contract_field,
-    recommended_action: registryPatchRecommendedAction(inferred, { surfaceId, registrySource, generatedFile, serverName }),
-  };
-}
-
-function namePatternRegistryPatchClassification(toolName) {
-  if (NAME_PATTERN_READ_ONLY_TOOLS.has(toolName)) {
-    return {
-      classification: 'add_to_read_only_tools',
-      target_contract_field: 'tool_contract.read_only_tools',
-      confidence: 'high',
-    };
-  }
-  if (NAME_PATTERN_MUTATING_TOOLS.has(toolName) || normalizeActionFamily(toolName)) {
-    return {
-      classification: 'add_to_mutating_tools',
-      target_contract_field: 'tool_contract.mutating_tools',
-      confidence: 'medium',
-    };
-  }
-  return {
-    classification: 'manual_review_required',
     target_contract_field: null,
-    confidence: 'low',
+    recommended_action: registryPatchRecommendedAction(),
   };
 }
 
-function registryPatchRecommendedAction(inferred, { surfaceId, registrySource, generatedFile, serverName }) {
-  if (!inferred.target_contract_field) {
-    return 'Review the live MCP tool and update the authoritative surface registry contract only after assigning its authority family.';
-  }
-  const target = surfaceId ? `surface ${surfaceId}` : serverName ? `server ${serverName}` : 'the matching surface';
-  const source = registrySource ? ` in ${registrySource}` : '';
-  const generated = generatedFile ? `, then regenerate ${generatedFile}` : '';
-  return `Add this tool to ${inferred.target_contract_field} for ${target}${source}${generated}.`;
+function registryPatchRecommendedAction() {
+  return 'Review the live MCP tool and update the authoritative surface registry contract only after assigning its authority family.';
 }
 
 function stringFieldOrNull(value) {
@@ -194,7 +164,7 @@ function argumentSummary(args = {}) {
 function classifyCarrierActionRequest(toolName, args = {}, options = {}) {
   const secretFindingDetails = inspectPayloadForSecretFindings(args);
   const secretFindings = [...new Set(secretFindingDetails.map((finding) => finding.path))];
-  if (secretFindings.length > 0 || credentialLikeTool(toolName)) {
+  if (secretFindings.length > 0) {
     return {
       family: 'credential_access',
       authority_owner: 'capability_secret_authority',
@@ -213,7 +183,6 @@ function classifyCarrierActionRequest(toolName, args = {}, options = {}) {
     options,
   );
   const metadata = normalizeToolMetadata(options.toolMetadata);
-  const mutationNameConflict = knownMutationNameClassification(toolName);
   if (options.toolAvailable === false) {
     return {
       family: 'missing_mcp_tool',
@@ -226,18 +195,6 @@ function classifyCarrierActionRequest(toolName, args = {}, options = {}) {
   }
 
   if (metadata?.read_only === true) {
-    if (mutationNameConflict) {
-      return {
-        ...mutationNameConflict,
-        reason: `read_only_metadata_conflicts_with_${mutationNameConflict.family}`,
-        classifier_source: metadata.source ?? 'tool_metadata_name_conflict',
-        metadata_conflict: {
-          read_only: true,
-          metadata_reason: metadata.reason ?? null,
-          metadata_source: metadata.source ?? null,
-        },
-      };
-    }
     return {
       ...readOnlyClassification(metadata.reason ?? 'tool_catalog_metadata_read_only'),
       classifier_source: metadata.source ?? 'tool_metadata',
@@ -250,7 +207,24 @@ function classifyCarrierActionRequest(toolName, args = {}, options = {}) {
         classifier_source: metadata.source ?? 'tool_metadata',
       };
     }
-    const metadataFamily = normalizeActionFamily(metadata.family ?? metadata.authority_class ?? toolName);
+    if (metadata.source === 'surface_registry' && metadata.reason === 'surface_registry_mutating_tool') {
+      return {
+        family: 'mcp_surface_governed_mutation',
+        authority_owner: metadata.authority_owner ?? 'target_site_mcp_surface',
+        decision: 'mcp_surface_tool_admitted',
+        reason: 'surface_registry_declared_mutating_tool_admitted',
+        carrier_mutation_admitted: true,
+        secret_findings: [],
+        classifier_source: metadata.source,
+        surface_registry: {
+          surface_id: metadata.surface_id ?? null,
+          server_name: metadata.server_name ?? null,
+          generated_file: metadata.generated_file ?? null,
+          declared_tool: toolName,
+        },
+      };
+    }
+    const metadataFamily = normalizeActionFamily(metadata.family ?? metadata.authority_class);
     if (metadataFamily) {
       return withDelegatedAuthority({
         ...familyClassification(metadataFamily, metadata.reason ?? 'tool_catalog_metadata_non_read_only'),
@@ -269,72 +243,7 @@ function classifyCarrierActionRequest(toolName, args = {}, options = {}) {
     };
   }
 
-  if (NAME_PATTERN_READ_ONLY_TOOLS.has(toolName)) {
-    return {
-      ...readOnlyClassification('closed_name_pattern_read_only_tool'),
-      classifier_source: 'closed_name_pattern',
-    };
-  }
-  if (NAME_PATTERN_MUTATING_TOOLS.has(toolName)) {
-    const family = normalizeActionFamily(toolName);
-    if (family) return withDelegatedAuthority({ ...familyClassification(family, 'closed_name_pattern_mutating_tool'), classifier_source: 'closed_name_pattern' });
-    return { ...refusedClassification('unsupported_mutating_tool_family', 'narada_proper_authority'), classifier_source: 'closed_name_pattern' };
-  }
-
-  if (isCommandIntentTool(toolName)) {
-    return withDelegatedAuthority({ ...familyClassification('command', 'command_intent_request_requires_admission'), classifier_source: 'closed_name_pattern' });
-  }
-  if (isExecuteCommandTool(toolName)) {
-    return withDelegatedAuthority({ ...familyClassification('command', 'command_execution_requires_delegated_authority'), classifier_source: 'closed_name_pattern' });
-  }
-  if (isRawCommandTool(toolName)) {
-    return { ...refusedClassification('raw_command_execution_refused', 'command_execution_intent_service', 'command'), classifier_source: 'closed_name_pattern' };
-  }
-  if (isFileMutationTool(toolName)) {
-    return withDelegatedAuthority({ ...familyClassification('site_file_mutation', 'site_file_mutation_requires_delegated_authority'), classifier_source: 'closed_name_pattern' });
-  }
-  if (/^task_lifecycle_/i.test(toolName)) {
-    return withDelegatedAuthority({ ...familyClassification('task_lifecycle_mutation', 'task_lifecycle_mutation_requires_canonical_task_authority'), classifier_source: 'closed_name_pattern' });
-  }
-  if (/^(inbox_|narada_inbox_)/i.test(toolName)) {
-    return withDelegatedAuthority({ ...familyClassification('inbox_admission', 'inbox_mutation_requires_canonical_inbox_authority'), classifier_source: 'closed_name_pattern' });
-  }
-  if (isOutboxOrPublicationTool(toolName)) {
-    return {
-      family: 'outbox_publication',
-      authority_owner: 'canonical_outbox_service',
-      decision: 'refused',
-      reason: 'family_not_supported_in_v1_slice',
-      secret_findings: [],
-      classifier_source: 'closed_name_pattern',
-    };
-  }
-  return { ...refusedClassification('unknown_non_read_only_tool_family', null, 'unknown_action_family'), classifier_source: metadata?.source ?? 'closed_name_pattern' };
-}
-
-function knownMutationNameClassification(toolName) {
-  if (NAME_PATTERN_READ_ONLY_TOOLS.has(toolName)) return null;
-  if (NAME_PATTERN_MUTATING_TOOLS.has(toolName)) {
-    const family = normalizeActionFamily(toolName);
-    if (family) return familyClassification(family, 'closed_name_pattern_mutating_tool');
-    return refusedClassification('unsupported_mutating_tool_family', 'narada_proper_authority');
-  }
-  if (isCommandIntentTool(toolName)) return familyClassification('command', 'command_intent_request_requires_admission');
-  if (isExecuteCommandTool(toolName)) return familyClassification('command', 'command_execution_requires_delegated_authority');
-  if (isRawCommandTool(toolName)) return refusedClassification('raw_command_execution_refused', 'command_execution_intent_service', 'command');
-  if (isFileMutationTool(toolName)) return familyClassification('site_file_mutation', 'site_file_mutation_requires_delegated_authority');
-  if (/^task_lifecycle_/i.test(toolName)) return familyClassification('task_lifecycle_mutation', 'task_lifecycle_mutation_requires_canonical_task_authority');
-  if (/^(inbox_|narada_inbox_)/i.test(toolName)) return familyClassification('inbox_admission', 'inbox_mutation_requires_canonical_inbox_authority');
-  if (isOutboxOrPublicationTool(toolName)) {
-    return {
-      family: 'outbox_publication',
-      authority_owner: 'canonical_outbox_service',
-      decision: 'refused',
-      reason: 'family_not_supported_in_v1_slice',
-      secret_findings: [],
-    };
-  }
-  return null;
+  return { ...refusedClassification('tool_without_authoritative_metadata', null, 'unknown_action_family'), classifier_source: metadata?.source ?? 'unmetadataed_tool' };
 }
 
 function normalizeToolMetadata(metadata) {
@@ -402,12 +311,12 @@ function familyClassification(family, reason) {
 }
 
 function normalizeActionFamily(value) {
-  const text = String(value ?? '');
-  if (/task_lifecycle|task_work|narada_task|admit_task|materialize_task/i.test(text)) return 'task_lifecycle_mutation';
-  if (/inbox|envelope/i.test(text)) return 'inbox_admission';
-  if (/^command$|command_request|command_intent|execute_command/i.test(text)) return 'command';
-  if (/site_file_mutation|write_file|fs_write_file|file_write|filesystem_write/i.test(text)) return 'site_file_mutation';
-  if (/outbox|publication|mail_|email_|draft|send|reply/i.test(text)) return 'outbox_publication';
+  const text = String(value ?? '').toLowerCase();
+  if (text === 'task_lifecycle_mutation') return 'task_lifecycle_mutation';
+  if (text === 'inbox_admission') return 'inbox_admission';
+  if (text === 'command') return 'command';
+  if (text === 'site_file_mutation') return 'site_file_mutation';
+  if (text === 'outbox_publication') return 'outbox_publication';
   return null;
 }
 
@@ -419,30 +328,6 @@ function refusedClassification(reason, authorityOwner = null, family = 'unknown_
     reason,
     secret_findings: [],
   };
-}
-
-function credentialLikeTool(toolName) {
-  return /(credential|secret|token|password|api[_-]?key|auth)/i.test(toolName);
-}
-
-function isCommandIntentTool(toolName) {
-  return /^(command_request|command_intent)(_|$)/i.test(toolName);
-}
-
-function isRawCommandTool(toolName) {
-  return /^(shell|native|exec|process)(_|$)/i.test(toolName) || /(^|_)(shell|command|exec|process)(_run|_start|$)/i.test(toolName);
-}
-
-function isExecuteCommandTool(toolName) {
-  return /(^|_)(execute_command|command_execute)($|_)/i.test(toolName);
-}
-
-function isFileMutationTool(toolName) {
-  return /(^|_)(write_file|fs_write_file|file_write|filesystem_write)($|_)/i.test(toolName);
-}
-
-function isOutboxOrPublicationTool(toolName) {
-  return /^(outbox_|mail_|email_|publication_)/i.test(toolName) || /(^|_)(draft|send|reply|publish|publication)(_send|$)/i.test(toolName);
 }
 
 function applyDelegatedAuthorityAdmission(classification, toolName, options = {}) {
@@ -575,9 +460,10 @@ function createCarrierActionRequest({
       payload_secret_diagnostics: classification.secret_diagnostics ?? [],
       safe_remediation: classification.remediation ?? null,
       registry_diagnostics: classification.registry_diagnostics ?? null,
+      surface_registry: classification.surface_registry ?? null,
       raw_arguments_recorded: false,
       raw_secret_values_recorded: false,
-      classifier_source: classification.classifier_source ?? 'closed_name_pattern',
+      classifier_source: classification.classifier_source ?? 'unmetadataed_tool',
       classifier_metadata: classifierMetadataSummary(toolMetadata),
       delegated_authority: classification.delegated_authority ?? null,
     },
@@ -647,6 +533,14 @@ function decisionForClassification(classification) {
       authority_owner: 'capability_secret_authority',
     };
   }
+  if (classification.family === 'mcp_surface_governed_mutation') {
+    return {
+      decision: 'mcp_surface_tool_admitted',
+      reason: classification.reason ?? 'surface_registry_declared_mutating_tool_admitted',
+      authority_owner: classification.authority_owner ?? 'target_site_mcp_surface',
+      carrier_mutation_admitted: true,
+    };
+  }
   if (['task_lifecycle_mutation', 'inbox_admission', 'command'].includes(classification.family)) {
     if (classification.delegated_authority?.admitted === true) {
       return {
@@ -686,7 +580,7 @@ function decisionForClassification(classification) {
   }
   return {
     decision: 'refused',
-    reason: classification.reason ?? 'unknown_non_read_only_tool_family',
+    reason: classification.reason ?? 'tool_without_authoritative_metadata',
     authority_owner: classification.authority_owner ?? null,
   };
 }

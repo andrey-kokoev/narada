@@ -2,7 +2,17 @@
 
 Shared carrier provider/admission contracts for Narada carrier surfaces.
 
-This package owns provider registry metadata, provider support states, default provider selection, provider environment projection, and provider adapter admission contract fixtures consumed by carrier implementations such as `agent-cli`, `agent-tui`, and Codex-as-carrier.
+This package owns provider registry metadata, provider support states, default provider selection, provider environment projection, provider cognition defaults, and provider adapter admission contract fixtures consumed by carrier implementations such as `agent-cli`, `agent-tui`, and Codex-as-carrier.
+
+## Provider Registry Contract
+
+The authoritative registry is `contracts/provider-registry.json`. Each provider entry declares:
+
+- `default_model` and `available_models`.
+- `cognition_defaults.low|medium|high`, each with `model` and `reasoning_effort`.
+- adapter kind, support state, base URL/model/credential environment names, and credential requirement.
+
+`cognition_defaults` is the durable source used by worker-delegation and delegated-task surfaces when launching `narada-agent-runtime-server` workers. Every cognition default model must be present in that provider's `available_models`; the package tests enforce this so registry drift is caught where the contract lives.
 
 ## Verified Runtime Providers
 

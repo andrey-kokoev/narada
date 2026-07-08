@@ -35,6 +35,12 @@ test('provider registry exposes carrier-level defaults and support states', () =
   for (const [provider, metadata] of Object.entries(registry.providers)) {
     assert.equal(Array.isArray(metadata.available_models), true, `${provider} must advertise available_models`);
     assert.equal(metadata.available_models.includes(metadata.default_model), true, `${provider} available_models must include default_model`);
+    for (const cognition of ['low', 'medium', 'high']) {
+      const defaults = metadata.cognition_defaults?.[cognition];
+      assert.equal(typeof defaults?.model, 'string', `${provider} ${cognition} cognition default must set model`);
+      assert.equal(typeof defaults?.reasoning_effort, 'string', `${provider} ${cognition} cognition default must set reasoning_effort`);
+      assert.equal(metadata.available_models.includes(defaults.model), true, `${provider} ${cognition} cognition model must be available`);
+    }
   }
 });
 

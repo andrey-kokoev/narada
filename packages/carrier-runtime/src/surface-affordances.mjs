@@ -1,4 +1,6 @@
 const SOP_TEMPLATE_TOOL = 'sop_template_list';
+import { ADMITTED_INTELLIGENCE_PROVIDERS, resolveIntelligenceProviderChoices } from './intelligence-provider-policy.mjs';
+
 const SOP_RUN_TOOL = 'sop_run_list';
 const SOP_DOCTOR_TOOL = 'sop_doctor';
 const MAILBOX_ACCOUNTS_TOOL = 'mailbox_accounts_list';
@@ -33,8 +35,14 @@ const THINKING_LEVELS = ['none', 'low', 'medium', 'high', 'xhigh'];
 
 export function buildRuntimeIntelligenceOperatorAffordance({ intelligence = {}, source = 'nars_runtime' } = {}) {
   const availableModels = stringArrayField(intelligence, 'available_models');
+  const availableProviders = stringArrayField(intelligence, 'available_providers');
   const currentModel = stringField(intelligence, 'model');
+  const currentProvider = stringField(intelligence, 'provider');
   const modelChoices = uniqueStrings([currentModel, ...availableModels].filter(Boolean));
+  const providerChoices = resolveIntelligenceProviderChoices({
+    currentProvider,
+    availableProviders: availableProviders.length ? availableProviders : ADMITTED_INTELLIGENCE_PROVIDERS,
+  });
   return {
     schema: 'narada.mcp_surface.operator_affordance.v1',
     surface_kind: 'intelligence',
@@ -51,10 +59,15 @@ export function buildRuntimeIntelligenceOperatorAffordance({ intelligence = {}, 
     },
     actions: {
       read: ['refresh'],
-      configure: ['set_model', 'set_thinking'],
+      configure: ['set_provider', 'set_model', 'set_thinking'],
     },
     controls: {
-      provider: { kind: 'readonly', value: stringField(intelligence, 'provider') },
+      provider: {
+        kind: providerChoices.length ? 'select' : 'text',
+        value: currentProvider,
+        placeholder: 'Provider name',
+        choices: providerChoices.map((value) => ({ value, label: value })),
+      },
       model: {
         kind: modelChoices.length ? 'select' : 'text',
         value: currentModel,
@@ -71,6 +84,14 @@ export function buildRuntimeIntelligenceOperatorAffordance({ intelligence = {}, 
         { id: 'runtime_intelligence_controls', title: 'Intelligence', priority: 10 },
       ],
       actions: [
+        {
+          id: 'set_provider',
+          label: 'Set provider',
+          intent: 'configure',
+          idempotent: true,
+          target: { kind: 'runtime', operation: 'set_provider' },
+          args: { provider: { kind: providerChoices.length ? 'enum' : 'string', required: true, choices: providerChoices } },
+        },
         {
           id: 'set_model',
           label: 'Set model',

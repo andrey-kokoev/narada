@@ -12,6 +12,12 @@ import {
 } from '@narada2/nars-client-projection-contract';
 import { sendMcpRequest } from './mcp-runtime.mjs';
 import { buildNarsSurfaceAffordanceProjection } from './surface-affordances.mjs';
+import {
+  ADMITTED_INTELLIGENCE_PROVIDERS,
+  hasConfiguredIntelligenceProviderAuth,
+  isAdmittedIntelligenceProvider,
+  normalizeIntelligenceProvider,
+} from './intelligence-provider-policy.mjs';
 import { parseJson, randomId } from './runtime-tail-utils.mjs';
 
 export async function serverAffordanceActionRequest({ requestId, params = {}, context = {} }) {
@@ -194,18 +200,33 @@ async function executeAffordanceAction({ requestId, surfaceId, actionId, clientC
   }
 }
 
-function executeRuntimeAffordanceAction({ requestId, surfaceId, actionId, clientCorrelationId = null, target, args = {}, context = {}, confirmationId = null }) {
+export function executeRuntimeAffordanceAction({ requestId, surfaceId, actionId, clientCorrelationId = null, target, args = {}, context = {}, confirmationId = null }) {
   const operation = stringValue(target.operation);
   const sessionSettings = context.state?.sessionSettings;
   if (!sessionSettings) {
     return affordanceActionRefusal({ requestId, surfaceId, actionId, clientCorrelationId, code: NARS_AFFORDANCE_ACTION_REFUSAL_CODES.serverUnavailable, message: 'Runtime session settings are not available for this affordance action.' });
   }
+  const currentProvider = normalizeIntelligenceProvider(sessionSettings.provider) ?? normalizeIntelligenceProvider(context.providerSettings?.provider) ?? normalizeIntelligenceProvider(process.env.NARADA_INTELLIGENCE_PROVIDER) ?? 'codex-subscription';
   if (operation === 'set_model') {
     const model = stringValue(args.model) ?? stringValue(args.value);
     if (!model) {
       return affordanceActionRefusal({ requestId, surfaceId, actionId, clientCorrelationId, code: NARS_AFFORDANCE_ACTION_REFUSAL_CODES.requiredIdentity, message: 'set_model requires args.model.' });
     }
     sessionSettings.model = model;
+  } else if (operation === 'set_provider') {
+    const provider = normalizeIntelligenceProvider(stringValue(args.provider) ?? stringValue(args.value));
+    if (!provider) {
+      return affordanceActionRefusal({ requestId, surfaceId, actionId, clientCorrelationId, code: NARS_AFFORDANCE_ACTION_REFUSAL_CODES.requiredIdentity, message: 'set_provider requires args.provider.' });
+    }
+    if (provider !== currentProvider) {
+      if (!isAdmittedIntelligenceProvider(provider)) {
+        return affordanceActionRefusal({ requestId, surfaceId, actionId, clientCorrelationId, code: NARS_AFFORDANCE_ACTION_REFUSAL_CODES.targetNotExecutable, message: `Provider ${provider} is not admitted for this runtime.` });
+      }
+      if (!hasConfiguredIntelligenceProviderAuth(provider, context.env ?? process.env)) {
+        return affordanceActionRefusal({ requestId, surfaceId, actionId, clientCorrelationId, code: NARS_AFFORDANCE_ACTION_REFUSAL_CODES.targetNotExecutable, message: `Provider ${provider} is admitted but required auth is not configured.` });
+      }
+      sessionSettings.provider = provider;
+    }
   } else if (operation === 'set_thinking') {
     sessionSettings.thinking = normalizeThinkingLevel(stringValue(args.thinking) ?? stringValue(args.value));
   } else {
@@ -215,9 +236,10 @@ function executeRuntimeAffordanceAction({ requestId, surfaceId, actionId, client
     status: 'ok',
     operation,
     intelligence: {
-      provider: stringValue(sessionSettings.provider) ?? stringValue(context.providerSettings?.provider),
+      provider: stringValue(sessionSettings.provider) ?? stringValue(context.providerSettings?.provider) ?? currentProvider,
       model: stringValue(sessionSettings.model) ?? stringValue(context.providerSettings?.model),
       available_models: stringArray(context.providerSettings?.availableModels ?? context.providerSettings?.available_models),
+      available_providers: stringArray(context.providerSettings?.availableProviders ?? context.providerSettings?.available_providers ?? ADMITTED_INTELLIGENCE_PROVIDERS),
       thinking: stringValue(sessionSettings.thinking) ?? stringValue(context.providerSettings?.thinking) ?? 'medium',
       stream: typeof sessionSettings.stream === 'boolean' ? sessionSettings.stream : typeof context.providerSettings?.stream === 'boolean' ? context.providerSettings.stream : null,
     },

@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import test from 'node:test';
 
 import { resolveNaradaSitePaths } from '@narada2/site-paths';
+import { ADMITTED_INTELLIGENCE_PROVIDERS } from './intelligence-provider-policy.mjs';
 import { createCarrierRuntimeDependencies } from './runtime-dependencies.mjs';
 import { runCarrierServerMode } from './server-mode.mjs';
 import { activateTargetAuthority, planTargetAuthorityTransition, prepareTargetAuthority, sealSourceAuthority } from './authority-transition-state.mjs';
@@ -176,7 +177,7 @@ test('session command execution uses the shared command contract aliases', async
     assert.equal(results.some((event) => event.request_id === 'model-override' && event.fields?.model === 'gpt-override'), true);
     assert.equal(results.some((event) => event.request_id === 'thinking-override' && event.fields?.thinking === 'high'), true);
     const status = results.find((event) => event.request_id === 'status-after-override')?.fields?.session_status;
-    assert.deepEqual(status?.intelligence, { provider: 'codex-subscription', model: 'gpt-override', available_models: ['gpt-5.5'], thinking: 'high', stream: false });
+    assert.deepEqual(status?.intelligence, { provider: 'codex-subscription', model: 'gpt-override', available_models: ['gpt-5.5'], available_providers: ADMITTED_INTELLIGENCE_PROVIDERS, thinking: 'high', stream: false });
     assert.equal(status?.model, 'gpt-override');
     assert.equal(status?.thinking, 'high');
   } finally {

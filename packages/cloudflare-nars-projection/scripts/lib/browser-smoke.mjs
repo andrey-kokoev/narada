@@ -6,6 +6,8 @@ import { join } from 'node:path';
 
 export function findHeadlessBrowser() {
   return [
+    'C:/Program Files/Google/Chrome/Application/chrome-headless-shell.exe',
+    'C:/Program Files (x86)/Google/Chrome/Application/chrome-headless-shell.exe',
     'C:/Program Files/Microsoft/Edge/Application/msedge.exe',
     'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
     'C:/Program Files/Google/Chrome/Application/chrome.exe',
@@ -13,17 +15,47 @@ export function findHeadlessBrowser() {
   ].find((path) => existsSync(path)) ?? null;
 }
 
-export async function openCdpPage({ browserPath, url, userDataPrefix = 'narada-browser-smoke-' }) {
-  const userDataDir = mkdtempSync(join(tmpdir(), userDataPrefix));
-  const child = spawn(browserPath, [
+export function buildHeadlessBrowserArgs({ userDataDir, url = 'about:blank', width = 1100, height = 800 } = {}) {
+  if (!userDataDir) throw new Error('userDataDir is required');
+  return [
     '--headless=new',
     '--disable-gpu',
+    '--disable-software-rasterizer',
     '--no-sandbox',
+    '--hide-scrollbars',
+    '--mute-audio',
+    '--no-first-run',
+    '--no-default-browser-check',
+    '--disable-search-engine-choice-screen',
+    '--disable-background-networking',
+    '--disable-background-timer-throttling',
+    '--disable-backgrounding-occluded-windows',
+    '--disable-breakpad',
+    '--disable-client-side-phishing-detection',
+    '--disable-component-update',
+    '--disable-crash-reporter',
+    '--disable-default-apps',
+    '--disable-domain-reliability',
+    '--disable-extensions',
+    '--disable-features=Translate,BackForwardCache,AcceptCHFrame,MediaRouter,OptimizationHints,OptimizationGuideModelDownloading,AutofillServerCommunication,CalculateNativeWinOcclusion',
+    '--disable-popup-blocking',
+    '--disable-prompt-on-repost',
+    '--disable-renderer-backgrounding',
+    '--disable-sync',
+    '--force-color-profile=srgb',
+    '--metrics-recording-only',
+    '--password-store=basic',
     '--remote-debugging-port=0',
     `--user-data-dir=${userDataDir}`,
-    '--window-size=1100,800',
+    '--window-position=-32000,-32000',
+    `--window-size=${width},${height}`,
     url,
-  ], { stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true });
+  ];
+}
+
+export async function openCdpPage({ browserPath, url, userDataPrefix = 'narada-browser-smoke-', viewport = { width: 1100, height: 800 } }) {
+  const userDataDir = mkdtempSync(join(tmpdir(), userDataPrefix));
+  const child = spawn(browserPath, buildHeadlessBrowserArgs({ userDataDir, url, width: viewport.width, height: viewport.height }), { stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true });
 
   const browserWsUrl = await new Promise((resolve, reject) => {
     let stderr = '';

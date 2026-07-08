@@ -348,14 +348,12 @@ export const CARRIER_CONTROL_METHODS = Object.freeze([
   'system_directive.deliver',
   'carrier.input.deliver',
   'session.command.execute',
-  'carrier.command.execute',
   'observers.status',
   'observer.mute',
   'observer.unmute',
 ]);
 
 export const NARS_COMMAND_METHOD = 'session.command.execute';
-export const LEGACY_CARRIER_COMMAND_METHOD = 'carrier.command.execute';
 export const NARS_AFFORDANCE_ACTION_CONFIRM_METHOD = 'session.affordance.action.confirm';
 export const NARS_AFFORDANCE_ACTION_CANCEL_METHOD = 'session.affordance.action.cancel';
 
@@ -498,9 +496,6 @@ export function classifyCarrierControlRequest(request = {}) {
   if (method === NARS_AFFORDANCE_ACTION_CANCEL_METHOD) return { ...base, method_kind: 'session_affordance_action_cancel', concurrent_allowed: true };
   if (method === NARS_COMMAND_METHOD) {
     return { ...base, method_kind: 'session_command_execute' };
-  }
-  if (method === LEGACY_CARRIER_COMMAND_METHOD) {
-    return { ...base, method_kind: 'session_command_execute', legacy_method: LEGACY_CARRIER_COMMAND_METHOD };
   }
   return {
     ...base,
