@@ -7,6 +7,7 @@
     "package_role": "agent_identity_projection_contract",
     "owns": [
       "agent_identity_ref_derivation",
+      "agent_identity_ref_v2_resolution",
       "canonical_agent_display_identity",
       "operator_renderable_value_contract"
     ]

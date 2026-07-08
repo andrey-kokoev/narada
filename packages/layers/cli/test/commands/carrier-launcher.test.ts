@@ -20,7 +20,7 @@ import {
   schedulerSiteDaemonInstallCommand,
   schedulerSiteDaemonStatusCommand,
 } from '../../src/commands/scheduler.js';
-import { getSchedulerSiteDaemonStatus, runAgentStartCommand } from '../../src/lib/launcher-runtime.js';
+import { classifyAgentStartLaunchBindingStatus, getSchedulerSiteDaemonStatus, runAgentStartCommand, shouldDetachAgentStartProcess } from '../../src/lib/launcher-runtime.js';
 import type { CommandContext } from '../../src/lib/command-wrapper.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
 import { registerOperatorSurfaceCommands } from '../../src/commands/operator-surface-register.js';
@@ -67,11 +67,13 @@ async function writeLaunchResult(siteRoot: string, name: string, identity: strin
     identity,
     agent_identity_ref: identity === 'resident'
       ? {
-        schema: 'narada.agent_identity_ref.v1',
-        site_id: 'sonar',
+        schema: 'narada.agent_identity_ref.v2',
+        identity_scope: { kind: 'narada_site', site_id: 'sonar' },
         local_agent_id: 'resident',
+        role: 'resident',
         canonical_agent_id: 'sonar.resident',
-        source_agent_id: 'resident',
+        display: 'sonar.resident',
+        legacy_agent_id: 'resident',
       }
       : undefined,
     carrier_kind: 'agent-cli',
@@ -254,6 +256,40 @@ describe('carrier launcher CLI commands', () => {
     expect((siteLoop.result as { site_command: { status: string } }).site_command.status).toBe('not_available');
   });
 
+  it('starts a fresh operator-surface session by default even when an old matching session is live', async () => {
+    const siteRoot = await tempSite();
+    await writeLaunchResult(siteRoot, 'evt_old_live', 'sonar.resident');
+
+    const start = await carrierStartCommand({
+      siteRoot,
+      agent: 'sonar.resident',
+      carrier: 'agent-cli',
+      dryRun: true,
+      format: 'json',
+    }, createMockContext());
+
+    expect((start.result as { status: string }).status).not.toBe('already_running');
+    expect((start.result as { mutation_performed: boolean }).mutation_performed).toBe(false);
+    expect((start.result as { agent_start?: { command?: string[] } }).agent_start?.command).toContain('--operator-surface');
+  });
+
+  it('can explicitly reuse an already-running operator-surface session for diagnostic attachment', async () => {
+    const siteRoot = await tempSite();
+    await writeLaunchResult(siteRoot, 'evt_old_live', 'sonar.resident');
+
+    const start = await carrierStartCommand({
+      siteRoot,
+      agent: 'sonar.resident',
+      carrier: 'agent-cli',
+      reuseExistingSession: true,
+      format: 'json',
+    }, createMockContext());
+
+    expect(start.exitCode).toBe(ExitCode.SUCCESS);
+    expect((start.result as { status: string }).status).toBe('already_running');
+    expect((start.result as { mutation_performed: boolean }).mutation_performed).toBe(false);
+  });
+
   it('requires explicit agent identity for carrier start', async () => {
     const siteRoot = await tempSite();
 
@@ -343,6 +379,37 @@ describe('carrier launcher CLI commands', () => {
     expect(captured.status).toBe('not_available');
     expect(captured.command).toContain('--json-output-file');
     expect(captured.command).toContain('--json');
+  });
+
+  it('treats materialized NARS handoff as ready even when wrapper execution reports failure', () => {
+    const status = classifyAgentStartLaunchBindingStatus('failed', {
+      schema: 'narada.agent_start.result.v1',
+      status: 'materialized',
+      nars_launch: {
+        nars_session_id: 'carrier_materialized',
+      },
+    });
+
+    expect(status).toEqual({ status: 'ready', reason: null });
+  });
+
+  it('detaches long-lived NARS operator-surface exec launches unless wait requests inherited control', () => {
+    expect(shouldDetachAgentStartProcess({
+      exec: true,
+      carrier: 'agent-web-ui',
+      runtime: 'narada-agent-runtime-server',
+    })).toBe(true);
+    expect(shouldDetachAgentStartProcess({
+      exec: true,
+      wait: true,
+      carrier: 'agent-web-ui',
+      runtime: 'narada-agent-runtime-server',
+    })).toBe(false);
+    expect(shouldDetachAgentStartProcess({
+      exec: true,
+      carrier: 'codex',
+      runtime: 'codex',
+    })).toBe(false);
   });
 
   it('routes non-agent-cli carrier requests through canonical agent-start instead of the Site hardcoded launcher', async () => {

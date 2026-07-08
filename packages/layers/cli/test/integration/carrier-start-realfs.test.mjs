@@ -39,6 +39,20 @@ test('carrier start dry-run uses real filesystem result-file handoff', async () 
     const persisted = JSON.parse(readFileSync(resultFile, 'utf8'));
     assert.equal(persisted.carrier_kind, 'agent-cli');
     assert.equal(persisted.runtime_substrate_kind, 'narada-agent-runtime-server');
+
+    const human = await carrierStartCommand({
+      siteRoot: naradaProperRoot,
+      workspaceRoot: naradaProperRoot,
+      agent: 'narada.architect',
+      carrier: 'agent-cli',
+      intelligenceProvider: 'codex-subscription',
+      dryRun: true,
+      format: 'human',
+    }, {});
+
+    assert.equal(human.exitCode, ExitCode.SUCCESS, JSON.stringify(human.result));
+    assert.match(human.result._formatted, /^Narada operator surface start success: agent-cli \/ narada-agent-runtime-server\. Result: /);
+    assert.doesNotMatch(human.result._formatted, /narada\.operator_surface\.runtime_start_result\.v1/);
   } finally {
     if (previousNaradaProperRoot === undefined) delete process.env.NARADA_PROPER_ROOT;
     else process.env.NARADA_PROPER_ROOT = previousNaradaProperRoot;

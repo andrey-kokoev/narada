@@ -27,7 +27,9 @@ export interface CarrierCommandOptions {
   exec?: boolean;
   wait?: boolean;
   enableNativeShell?: boolean;
+  reuseExistingSession?: boolean;
   launchBindingPath?: string;
+  launchSessionId?: string;
   format?: CliFormat;
 }
 
@@ -127,7 +129,7 @@ export async function carrierStartCommand(
     carrier,
     runtime,
   });
-  if (existing.latest?.control_path_exists && existing.latest.parent_process_alive !== false) {
+  if (options.reuseExistingSession === true && existing.latest?.control_path_exists && existing.latest.parent_process_alive !== false) {
     writeOperatorProjectionLaunchBinding(options.launchBindingPath, {
       status: 'ready',
       siteRoot,
@@ -177,6 +179,7 @@ export async function carrierStartCommand(
     enableNativeShell: options.enableNativeShell,
     launchSource: 'narada operator-surface start',
     launchBindingPath: options.launchBindingPath,
+    launchSessionId: options.launchSessionId,
   });
   const parsedAgentStart = start.parsed_result as {
     target_site_id?: unknown;
@@ -209,8 +212,41 @@ export async function carrierStartCommand(
   };
   return {
     exitCode: start.status === 'success' ? ExitCode.SUCCESS : ExitCode.GENERAL_ERROR,
-    result: formattedResult(result, `operator-surface start ${start.status}`, options.format ?? 'auto'),
+    result: formattedResult(result, formatOperatorSurfaceRuntimeStartResult(result), options.format ?? 'auto'),
   };
+}
+
+function formatOperatorSurfaceRuntimeStartResult(result: {
+  status: unknown;
+  operator_surface_kind: unknown;
+  runtime_host_kind: unknown;
+  launch_result_artifact: unknown;
+  agent_start: unknown;
+}): string {
+  const status = typeof result.status === 'string' ? result.status : 'unknown';
+  const operatorSurface = typeof result.operator_surface_kind === 'string'
+    ? result.operator_surface_kind
+    : 'operator-surface';
+  const runtimeHost = typeof result.runtime_host_kind === 'string'
+    ? result.runtime_host_kind
+    : 'runtime';
+  const resultPath = extractLaunchResultPath(result);
+  const prefix = `Narada operator surface start ${status}: ${operatorSurface} / ${runtimeHost}`;
+  return resultPath ? `${prefix}. Result: ${resultPath}` : prefix;
+}
+
+function extractLaunchResultPath(result: { launch_result_artifact: unknown; agent_start: unknown }): string | null {
+  const artifact = result.launch_result_artifact;
+  if (artifact && typeof artifact === 'object') {
+    const artifactPath = (artifact as { artifact_path?: unknown }).artifact_path;
+    if (typeof artifactPath === 'string' && artifactPath.length > 0) return artifactPath;
+  }
+  const agentStart = result.agent_start;
+  if (agentStart && typeof agentStart === 'object') {
+    const resultFile = (agentStart as { result_file?: unknown }).result_file;
+    if (typeof resultFile === 'string' && resultFile.length > 0) return resultFile;
+  }
+  return null;
 }
 
 export async function carrierRestartCommand(

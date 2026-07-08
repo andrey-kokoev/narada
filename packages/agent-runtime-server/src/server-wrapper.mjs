@@ -39,6 +39,16 @@ function valueAfterFlag(args, flag) {
   return value && !String(value).startsWith('--') ? String(value) : null;
 }
 
+function agentIdentitySiteId(agentIdentityRef) {
+  if (!agentIdentityRef || typeof agentIdentityRef !== 'object') return null;
+  const siteId = typeof agentIdentityRef.site_id === 'string' && agentIdentityRef.site_id.trim() ? agentIdentityRef.site_id.trim() : null;
+  if (siteId) return siteId;
+  const identityScopeSiteId = agentIdentityRef.identity_scope && typeof agentIdentityRef.identity_scope === 'object'
+    ? agentIdentityRef.identity_scope.site_id
+    : null;
+  return typeof identityScopeSiteId === 'string' && identityScopeSiteId.trim() ? identityScopeSiteId.trim() : null;
+}
+
 function encodeWebSocketTextFrame(payload) {
   const body = Buffer.from(String(payload), 'utf8');
   if (body.length < 126) return Buffer.concat([Buffer.from([0x81, body.length]), body]);
@@ -140,6 +150,21 @@ function parseSiteConfigEnv(value) {
   }
 }
 
+function compactHealthForHttp(health) {
+  if (!health || typeof health !== 'object') return health;
+  const {
+    mcp_tools: _mcpTools,
+    operator_affordances: _operatorAffordances,
+    affordance_document: _affordanceDocument,
+    ...compact
+  } = health;
+  if (health.mcp && typeof health.mcp === 'object') {
+    const { tools: _tools, ...mcp } = health.mcp;
+    compact.mcp = mcp;
+  }
+  return compact;
+}
+
 function startHealthProjection({ childStdin, host, port, timeoutMs = 2000, runtimeContext }) {
   const pending = new Map();
   let sequence = 0;
@@ -160,15 +185,17 @@ function startHealthProjection({ childStdin, host, port, timeoutMs = 2000, runti
   });
   const server = createServer(async (request, response) => {
     if (await handleArtifactHttpRequest({ request, response, runtimeContext })) return;
-    if (request.method !== 'GET' || request.url?.split('?')[0] !== '/health') {
+    const url = new URL(request.url ?? '/', `http://${request.headers.host ?? `${host}:${port}`}`);
+    if (request.method !== 'GET' || url.pathname !== '/health') {
       response.writeHead(404, { 'content-type': 'application/json' });
       response.end(`${JSON.stringify({ error: 'not_found' })}\n`);
       return;
     }
     try {
       const health = await requestHealth();
+      const responseHealth = url.searchParams.get('detail') === 'full' ? health : compactHealthForHttp(health);
       response.writeHead(health.status === 'unhealthy' ? 503 : 200, { 'content-type': 'application/json' });
-      response.end(`${JSON.stringify(health)}\n`);
+      response.end(`${JSON.stringify(responseHealth)}\n`);
     } catch (error) {
       response.writeHead(503, { 'content-type': 'application/json' });
       response.end(`${JSON.stringify({ schema: 'narada.nars.health.v1', status: 'unhealthy', error: error instanceof Error ? error.message : String(error) })}\n`);
@@ -262,8 +289,10 @@ async function main() {
   const runtimeOutput = new PassThrough();
   const preliminaryRuntimeContext = createCarrierRuntimeContext({
     identity: lifecycleBinding.agent_id,
+    agentIdentityRef: lifecycleBinding.agent_identity_ref,
     session: lifecycleBinding.session_id,
     siteRoot: lifecycleBinding.metadata.site_root,
+    siteId: agentIdentitySiteId(lifecycleBinding.agent_identity_ref) ?? process.env.NARADA_SITE_ID ?? null,
     siteConfig: parseSiteConfigEnv(process.env.NARADA_SITE_CONFIG),
     operatorSurfaceKind,
   });
@@ -291,8 +320,10 @@ async function main() {
 
   const runtimeContext = createCarrierRuntimeContext({
     identity: lifecycleBinding.agent_id,
+    agentIdentityRef: lifecycleBinding.agent_identity_ref,
     session: lifecycleBinding.session_id,
     siteRoot: lifecycleBinding.metadata.site_root,
+    siteId: agentIdentitySiteId(lifecycleBinding.agent_identity_ref) ?? process.env.NARADA_SITE_ID ?? null,
     siteConfig: parseSiteConfigEnv(process.env.NARADA_SITE_CONFIG),
     operatorSurfaceKind,
     intelligenceProvider: process.env.NARADA_INTELLIGENCE_PROVIDER,

@@ -203,7 +203,7 @@ assert.deepEqual(projectServerEnvironment(fabric.servers['narada-fixture'], {
   FIXTURE_STATIC: 'yes',
 });
 assert.equal(fabric.servers['narada-fixture'].registry_tools.fixture_read.read_only, true);
-assert.equal(fabric.servers['narada-fixture'].registry_tools.task_lifecycle_claim.family, 'task_lifecycle_mutation');
+assert.equal(fabric.servers['narada-fixture'].registry_tools.task_lifecycle_claim.family, 'mcp_surface_governed_mutation');
 assert.equal(fabric.servers['narada-fixture'].registry_tools.fixture_refused.refused, true);
 assert.equal(fabric.servers['narada-fixture'].registry_metadata_authoritative, true);
 const agentTuiProjection = projectFabricForAgentTui(fabric, { NARADA_AGENT_ID: 'narada.test' });
@@ -332,9 +332,9 @@ writeFileSync(join(legacyRegistrySite, '.narada', 'capabilities', 'mcp-surfaces.
 
 const legacyFabric = loadSiteMcpFabric(legacyRegistrySite, { required: true });
 assert.deepEqual(mcpServerNames(legacyFabric), ['narada-legacy']);
-assert.equal(legacyFabric.servers['narada-legacy'].registry_tools.agent_context_hydrate_current.read_only, true);
-assert.equal(legacyFabric.servers['narada-legacy'].registry_tools['agent_context_memory.record_checkpoint'].read_only, false);
-assert.equal(legacyFabric.servers['narada-legacy'].registry_tools.custom_registered_effect.read_only, false);
+assert.equal(legacyFabric.servers['narada-legacy'].registry_tools.agent_context_hydrate_current.read_only, null);
+assert.equal(legacyFabric.servers['narada-legacy'].registry_tools['agent_context_memory.record_checkpoint'].read_only, null);
+assert.equal(legacyFabric.servers['narada-legacy'].registry_tools.custom_registered_effect.read_only, null);
 assert.equal(legacyFabric.servers['narada-legacy'].registry_metadata_authoritative, true);
 assert.equal(legacyFabric.registry_validation.status, 'mismatch');
 assert.equal(legacyFabric.registry_validation.missing[0].surface_id, 'stale.surface');

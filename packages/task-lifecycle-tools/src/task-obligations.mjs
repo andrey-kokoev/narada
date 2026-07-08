@@ -2,6 +2,7 @@ import { enforceMcpGuard } from './mcp-guard.mjs';
 enforceMcpGuard(process.argv);
 
 import { openTaskLifecycleStore } from '@narada2/task-governance/task-lifecycle-store';
+import { buildAgentIdentityRefV2, resolveAgentIdentityRef } from '@narada2/agent-identity';
 import { resolveAgentRoleWithDiagnostics } from './agent-role-resolution.mjs';
 
 const cwd = process.argv[2] || process.cwd();
@@ -31,6 +32,20 @@ const { args } = parseArgs(process.argv);
 
 const store = openTaskLifecycleStore(cwd);
 
+function buildSourceAgentIdentityRef(sourceAgentId) {
+  const resolved = resolveAgentIdentityRef(sourceAgentId, { role: sourceAgentId });
+  if (resolved.status === 'resolved') return resolved.value;
+  const localAgentId = String(sourceAgentId || 'unknown').split('.').filter(Boolean).at(-1) || 'unknown';
+  return buildAgentIdentityRefV2({
+    identity_scope: { kind: 'unscoped' },
+    local_agent_id: localAgentId,
+    role: localAgentId,
+    canonical_agent_id: String(sourceAgentId || localAgentId),
+    display: String(sourceAgentId || localAgentId),
+    legacy_agent_id: String(sourceAgentId || localAgentId),
+  });
+}
+
 let exitCode = 0;
 MAIN: try {
   if (args.list) {
@@ -56,6 +71,7 @@ MAIN: try {
         target_agent_id: o.target_agent_id,
         target_role: o.target_role,
         source_agent_id: o.source_agent_id,
+        source_agent_identity_ref: o.source_agent_id ? buildSourceAgentIdentityRef(o.source_agent_id) : null,
         created_at: o.created_at,
         updated_at: o.updated_at,
       };
@@ -99,6 +115,7 @@ MAIN: try {
       source_kind: 'manual_cli',
       source_ref: 'task-obligations',
       source_agent_id: args.source_agent || null,
+      source_agent_identity_ref: args.source_agent ? buildSourceAgentIdentityRef(args.source_agent) : null,
       target_agent_id: args.target_agent || null,
       target_role: args.target_role || null,
       target_ref: args.target_ref || 'manual',
@@ -106,7 +123,7 @@ MAIN: try {
       status: args.status || 'open',
       task_id: lifecycle.task_id,
       task_number: taskNumber,
-      evidence_json: JSON.stringify({ created_by: 'task-obligations', reason: args.reason || null }),
+      evidence_json: JSON.stringify({ created_by: 'task-obligations', reason: args.reason || null, source_agent_identity_ref: args.source_agent ? buildSourceAgentIdentityRef(args.source_agent) : null }),
       consumption_rule_json: JSON.stringify({ consume_on: ['task_review', 'task_defer', 'delegation', 'rejection', 'completion'] }),
       created_at: now,
       updated_at: now,
@@ -123,6 +140,7 @@ MAIN: try {
       kind,
       target_agent_id: args.target_agent || null,
       target_role: args.target_role || null,
+      source_agent_identity_ref: args.source_agent ? buildSourceAgentIdentityRef(args.source_agent) : null,
     }, null, 2));
     break MAIN;
   }
@@ -146,6 +164,7 @@ MAIN: try {
       target_agent_id: args.target_agent || existing.target_agent_id,
       target_role: args.target_role || existing.target_role,
       target_ref: args.target_ref || existing.target_ref || 'routed',
+      source_agent_identity_ref: existing.source_agent_id ? buildSourceAgentIdentityRef(existing.source_agent_id) : null,
       updated_at: now,
     });
     console.log(JSON.stringify({
@@ -156,6 +175,7 @@ MAIN: try {
       previous_target_role: existing.target_role,
       new_target_agent_id: args.target_agent || existing.target_agent_id,
       new_target_role: args.target_role || existing.target_role,
+      source_agent_identity_ref: existing.source_agent_id ? buildSourceAgentIdentityRef(existing.source_agent_id) : null,
     }, null, 2));
     break MAIN;
   }

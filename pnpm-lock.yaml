@@ -249,6 +249,9 @@ importers:
       '@narada2/agent-runtime-server':
         specifier: workspace:*
         version: link:../agent-runtime-server
+      '@playwright/test':
+        specifier: ^1.61.1
+        version: 1.61.1
       '@tailwindcss/vite':
         specifier: ^4.1.18
         version: 4.3.2(vite@8.1.1(@types/node@22.19.19)(esbuild@0.27.7)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.21.0))

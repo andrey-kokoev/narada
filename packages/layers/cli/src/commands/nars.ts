@@ -188,8 +188,11 @@ export async function narsAuthorityTransitionExecuteCommand(
   const transitionRecordCandidate = isRecord(plan.transition_record_candidate)
     ? (() => {
       const candidate = plan.transition_record_candidate as Record<string, unknown>;
-      const handoff = isRecord(candidate.handoff) ? candidate.handoff as Record<string, unknown> : {};
-      const mcpFabric = isRecord(handoff.mcp_fabric) ? handoff.mcp_fabric as Record<string, unknown> : {};
+      const handoff: Record<string, unknown> = isRecord(candidate.handoff) ? candidate.handoff : {};
+      const mcpFabric: Record<string, unknown> = isRecord(handoff.mcp_fabric) ? handoff.mcp_fabric : {};
+      const compatibilityReport = isRecord(plan.mcp_compatibility_report)
+        ? (plan.mcp_compatibility_report as Record<string, unknown>)
+        : null;
       return {
         ...candidate,
         state: 'preparing_target',
@@ -200,7 +203,7 @@ export async function narsAuthorityTransitionExecuteCommand(
           mcp_fabric: {
             ...mcpFabric,
             compatibility_report: plan.mcp_compatibility_report ?? null,
-            status: (isRecord(plan.mcp_compatibility_report) ? plan.mcp_compatibility_report.status : null) ?? mcpFabric.status ?? 'unknown',
+            status: asNonEmptyString(compatibilityReport?.status) ?? asNonEmptyString(mcpFabric.status) ?? 'unknown',
           },
         },
       };
@@ -746,7 +749,7 @@ function readProjectionRegistration(siteRoot: string | null): Record<string, unk
   const entries = Array.isArray(data.mcp_servers) ? data.mcp_servers : [];
   const servers: Record<string, unknown> = {};
   for (const entry of entries) {
-    const record = isRecord(entry) ? entry : {};
+    const record: Record<string, unknown> = isRecord(entry) ? entry : {};
     const name = typeof record.name === 'string' ? record.name : null;
     if (!name) continue;
     servers[name] = summarizeMcpServer(record);

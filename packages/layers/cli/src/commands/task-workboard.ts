@@ -4,6 +4,7 @@ import { ExitCode } from '../lib/exit-codes.js';
 import { formattedResult, type CliFormat } from '../lib/cli-output.js';
 import { openTaskLifecycleStore, type TaskLifecycleRow, type TaskSpecRow } from '../lib/task-lifecycle-store.js';
 import { classifyTaskHandoffActionability, type TaskHandoffActionability } from '../lib/task-actionability.js';
+import { buildAgentIdentityRefV2, resolveAgentIdentityRef, type AgentIdentityRefV2 } from '@narada2/agent-identity';
 
 export interface TaskWorkboardOptions {
   cwd?: string;
@@ -31,6 +32,7 @@ type WorkboardReviewObligation = {
   title: string | null;
   report_id: string | null;
   source_agent_id: string | null;
+  source_agent_identity_ref: AgentIdentityRefV2 | null;
   target_agent_id: string | null;
   target_role: string | null;
   command: string | null;
@@ -79,6 +81,21 @@ export interface TaskWorkboard {
 const ACTIVE_STATUSES = new Set(['claimed', 'needs_continuation', 'in_review']);
 const DEFERRED_STATUSES = new Set(['deferred']);
 const TERMINAL_REVIEW_OBLIGATION_TASK_STATUSES = new Set(['closed', 'confirmed']);
+
+function buildSourceAgentIdentityRef(sourceAgentId: string | null) {
+  if (!sourceAgentId) return null;
+  const resolved = resolveAgentIdentityRef(sourceAgentId, { role: sourceAgentId });
+  if (resolved.status === 'resolved') return resolved.value;
+  const localAgentId = sourceAgentId.split('.').filter(Boolean).at(-1) || sourceAgentId;
+  return buildAgentIdentityRefV2({
+    identity_scope: { kind: 'unscoped' },
+    local_agent_id: localAgentId,
+    role: localAgentId,
+    canonical_agent_id: sourceAgentId,
+    display: sourceAgentId,
+    legacy_agent_id: sourceAgentId,
+  });
+}
 
 export async function taskWorkboardCommand(
   options: TaskWorkboardOptions,
@@ -178,6 +195,7 @@ function listMyReviewObligations(
         title: spec ? titleForSpec(spec, obligation.task_id ?? obligation.obligation_id) : null,
         report_id: typeof consumptionRule.report_id === 'string' ? consumptionRule.report_id : reportIdFromSourceRef(obligation.source_ref),
         source_agent_id: obligation.source_agent_id,
+        source_agent_identity_ref: buildSourceAgentIdentityRef(obligation.source_agent_id),
         target_agent_id: obligation.target_agent_id,
         target_role: obligation.target_role,
         command: typeof consumptionRule.review_command === 'string'

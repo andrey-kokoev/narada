@@ -28,6 +28,7 @@ import { createFormatter } from '../lib/formatter.js';
 import { parseTaskSpecFromMarkdown } from '../lib/task-spec.js';
 import { agentAddressResolutionPublic, resolveAgentAddress, type AgentAddressResolution } from '../lib/agent-address.js';
 import { classifyTaskHandoffActionability } from '../lib/task-actionability.js';
+import { buildAgentIdentityRefV2, resolveAgentIdentityRef } from '@narada2/agent-identity';
 
 export interface TaskPeekNextOptions {
   agent: string;
@@ -67,6 +68,21 @@ function normalizeTaskStatus(value: unknown): TaskStatus {
   return typeof value === 'string' && VALID_TASK_STATUSES.has(value as TaskStatus)
     ? value as TaskStatus
     : 'opened';
+}
+
+function buildSourceAgentIdentityRef(sourceAgentId: string | null) {
+  if (!sourceAgentId) return null;
+  const resolved = resolveAgentIdentityRef(sourceAgentId, { role: sourceAgentId });
+  if (resolved.status === 'resolved') return resolved.value;
+  const localAgentId = sourceAgentId.split('.').filter(Boolean).at(-1) || sourceAgentId;
+  return buildAgentIdentityRefV2({
+    identity_scope: { kind: 'unscoped' },
+    local_agent_id: localAgentId,
+    role: localAgentId,
+    canonical_agent_id: sourceAgentId,
+    display: sourceAgentId,
+    legacy_agent_id: sourceAgentId,
+  });
 }
 
 function agentNotFoundResult(agent: string, action: NextTaskAction, resolution?: AgentAddressResolution): { status: 'error'; reason: 'agent_not_in_roster' | 'agent_address_ambiguous'; agent: string; agent_id: string; requested_agent: string; resolved_agent: null; agent_address_resolution?: Record<string, unknown>; action: NextTaskAction; primary: null; error: string; repair_command: string; next_step: string } {
@@ -213,6 +229,7 @@ function directedObligationWork(
     source_kind: obligation.source_kind,
     source_ref: obligation.source_ref,
     source_agent_id: obligation.source_agent_id,
+    source_agent_identity_ref: buildSourceAgentIdentityRef(obligation.source_agent_id),
     target_agent_id: obligation.target_agent_id,
     target_role: obligation.target_role,
     target_ref: obligation.target_ref,

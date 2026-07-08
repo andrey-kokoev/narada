@@ -188,10 +188,13 @@ test('agent-web-ui launch host renderer does not present agent-cli projection te
     event: 'session_started',
     agent_id: 'resident',
     agent_identity_ref: {
-      schema: 'narada.agent_identity_ref.v1',
-      site_id: 'sonar',
+      schema: 'narada.agent_identity_ref.v2',
+      identity_scope: { kind: 'narada_site', site_id: 'sonar' },
       local_agent_id: 'resident',
+      role: 'resident',
       canonical_agent_id: 'sonar.resident',
+      display: 'sonar.resident',
+      legacy_agent_id: 'resident',
     },
     session_id: 'runtime-web-ui-host-test',
     operator_surface_kind: 'agent-web-ui',
@@ -255,6 +258,15 @@ test('runtime server creates a governed delegated authority handoff for the carr
     },
     generated_at: '2026-06-23T00:00:00.000Z',
     agent_id: 'narada.test',
+    agent_identity_ref: {
+      schema: 'narada.agent_identity_ref.v2',
+      identity_scope: { kind: 'narada_site', site_id: 'narada' },
+      local_agent_id: 'test',
+      role: 'test',
+      canonical_agent_id: 'narada.test',
+      display: 'narada.test',
+      legacy_agent_id: 'narada.test',
+    },
     session_id: 'runtime-package-test',
     authority_ref: 'task:1328',
     authority_mode: null,
@@ -274,11 +286,11 @@ test('lifecycle binding derives site-qualified identity ref for role-local launc
     NARADA_AGENT_ROLE: 'resident',
     NARADA_AGENT_START_EVENT_ID: 'evt_test',
   });
-  assert.equal(binding.agent_identity_ref.schema, 'narada.agent_identity_ref.v1');
-  assert.equal(binding.agent_identity_ref.site_id, 'sonar');
+  assert.equal(binding.agent_identity_ref.schema, 'narada.agent_identity_ref.v2');
+  assert.equal(binding.agent_identity_ref.identity_scope.site_id, 'sonar');
   assert.equal(binding.agent_identity_ref.local_agent_id, 'resident');
   assert.equal(binding.agent_identity_ref.canonical_agent_id, 'sonar.resident');
-  assert.equal(binding.agent_identity_ref.source_agent_id, 'resident');
+  assert.equal(binding.agent_identity_ref.legacy_agent_id, 'resident');
 });
 
 test('runtime server derives delegated write authority from worker argv when no env authority ref exists', () => {
@@ -302,6 +314,15 @@ test('runtime server derives delegated write authority from worker argv when no 
     },
     generated_at: '2026-06-23T00:00:00.000Z',
     agent_id: 'narada.test',
+    agent_identity_ref: {
+      schema: 'narada.agent_identity_ref.v2',
+      identity_scope: { kind: 'narada_site', site_id: 'narada' },
+      local_agent_id: 'test',
+      role: 'test',
+      canonical_agent_id: 'narada.test',
+      display: 'narada.test',
+      legacy_agent_id: 'narada.test',
+    },
     session_id: 'runtime-package-test',
     authority_ref: 'nars-delegated:write:runtime-package-test',
     authority_mode: 'write',
@@ -427,10 +448,12 @@ test('wrapper event helpers preserve the existing runtime-server event contract'
 
 test('wrapper status snapshots keep the wrapper schema stable', () => {
   const agentIdentityRef = {
-    schema: 'narada.agent_identity_ref.v1',
-    site_id: 'sonar',
+    schema: 'narada.agent_identity_ref.v2',
+    identity_scope: { kind: 'narada_site', site_id: 'sonar' },
     local_agent_id: 'resident',
+    role: 'resident',
     canonical_agent_id: 'sonar.resident',
+    display: 'sonar.resident',
   };
   const snapshot = formatWrapperStatusEvent({
     event: 'session_status',
@@ -458,11 +481,13 @@ test('lifecycle dispatcher maps NARS events to ordered hook calls', async () => 
   const observed = [];
   const payloads = [];
   const agentIdentityRef = {
-    schema: 'narada.agent_identity_ref.v1',
-    site_id: 'sonar',
+    schema: 'narada.agent_identity_ref.v2',
+    identity_scope: { kind: 'narada_site', site_id: 'sonar' },
     local_agent_id: 'resident',
+    role: 'resident',
     canonical_agent_id: 'sonar.resident',
-    source_agent_id: 'resident',
+    display: 'sonar.resident',
+    legacy_agent_id: 'resident',
   };
   const handler = {};
   for (const hook of [
@@ -535,11 +560,13 @@ test('lifecycle dispatcher reports bounded redacted hook failures', async () => 
     event: 'tool_call',
     agent_id: 'resident',
     agent_identity_ref: {
-      schema: 'narada.agent_identity_ref.v1',
-      site_id: 'sonar',
+      schema: 'narada.agent_identity_ref.v2',
+      identity_scope: { kind: 'narada_site', site_id: 'sonar' },
       local_agent_id: 'resident',
+      role: 'resident',
       canonical_agent_id: 'sonar.resident',
-      source_agent_id: 'resident',
+      display: 'sonar.resident',
+      legacy_agent_id: 'resident',
     },
     session_id: 'runtime-package-test',
     request_id: 'input_test',
@@ -560,20 +587,28 @@ test('lifecycle binding is derived from runtime args before session bind', () =>
   });
   assert.deepEqual({
     ...binding,
-    agent_identity_ref: undefined,
   }, {
     agent_id: 'narada.test',
-    agent_identity_ref: undefined,
+    agent_identity_ref: {
+      schema: 'narada.agent_identity_ref.v2',
+      identity_scope: { kind: 'narada_site', site_id: 'narada' },
+      local_agent_id: 'test',
+      role: 'test',
+      canonical_agent_id: 'narada.test',
+      display: 'narada.test',
+      legacy_agent_id: 'narada.test',
+    },
     session_id: 'runtime-package-test',
     metadata: {
       site_root: 'D:/code/narada.test',
       agent_start_event_id: 'evt_test',
     },
   });
-  assert.equal(binding.agent_identity_ref.schema, 'narada.agent_identity_ref.v1');
+  assert.equal(binding.agent_identity_ref.schema, 'narada.agent_identity_ref.v2');
+  assert.equal(binding.agent_identity_ref.identity_scope.site_id, 'narada');
   assert.equal(binding.agent_identity_ref.local_agent_id, 'test');
   assert.equal(binding.agent_identity_ref.canonical_agent_id, 'narada.test');
-  assert.equal(binding.agent_identity_ref.source_agent_id, 'narada.test');
+  assert.equal(binding.agent_identity_ref.legacy_agent_id, 'narada.test');
 });
 
 test('lifecycle binding refuses missing or contradictory launch binding', () => {
@@ -593,7 +628,7 @@ test('lifecycle binding refuses missing or contradictory launch binding', () => 
   );
 });
 
-test('HTTP /health projects native session.health response', async () => {
+test('HTTP /health projects compact native session.health response by default', async () => {
   const childStdin = new PassThrough();
   let written = '';
   childStdin.setEncoding('utf8');
@@ -627,6 +662,12 @@ test('HTTP /health projects native session.health response', async () => {
       status: 'healthy',
       agent_id: 'narada.test',
       session_id: 'runtime-package-test',
+      mcp_tools: [{ server_name: 'test', tool_name: 'large_tool_schema' }],
+      mcp: {
+        operational_state: 'healthy',
+        server_count: 1,
+        tools: [{ server_name: 'test', tool_name: 'large_tool_schema' }],
+      },
     });
     const response = await responsePromise;
     assert.equal(response.statusCode, 200);
@@ -634,6 +675,57 @@ test('HTTP /health projects native session.health response', async () => {
     assert.equal(body.schema, 'narada.nars.health.v1');
     assert.equal(body.status, 'healthy');
     assert.equal(body.agent_id, 'narada.test');
+    assert.equal(body.mcp_tools, undefined);
+    assert.equal(body.mcp.tools, undefined);
+    assert.equal(body.mcp.server_count, 1);
+  } finally {
+    projection.server.close();
+  }
+});
+
+test('HTTP /health?detail=full preserves native session.health diagnostic payload', async () => {
+  const childStdin = new PassThrough();
+  let written = '';
+  childStdin.setEncoding('utf8');
+  childStdin.on('data', (chunk) => { written += chunk; });
+  const waitForFrame = () => new Promise((resolve) => {
+    if (written.trim()) {
+      resolve();
+      return;
+    }
+    childStdin.once('data', () => resolve());
+  });
+  const projection = await startHealthProjection({ childStdin, host: '127.0.0.1', port: 0, timeoutMs: 1000 });
+  try {
+    const responsePromise = new Promise((resolve, reject) => {
+      const request = httpRequest(`${projection.url}?detail=full`, (response) => {
+        let body = '';
+        response.setEncoding('utf8');
+        response.on('data', (chunk) => { body += chunk; });
+        response.on('end', () => resolve({ statusCode: response.statusCode, body }));
+      });
+      request.on('error', reject);
+      request.end();
+    });
+    await waitForFrame();
+    const frame = JSON.parse(written.trim());
+    projection.observe({
+      event: 'session_health',
+      request_id: frame.id,
+      schema: 'narada.nars.health.v1',
+      status: 'healthy',
+      mcp_tools: [{ server_name: 'test', tool_name: 'large_tool_schema' }],
+      mcp: {
+        operational_state: 'healthy',
+        server_count: 1,
+        tools: [{ server_name: 'test', tool_name: 'large_tool_schema' }],
+      },
+    });
+    const response = await responsePromise;
+    assert.equal(response.statusCode, 200);
+    const body = JSON.parse(response.body);
+    assert.equal(body.mcp_tools.length, 1);
+    assert.equal(body.mcp.tools.length, 1);
   } finally {
     projection.server.close();
   }
@@ -648,6 +740,15 @@ test('HTTP artifact endpoints register and serve session-scoped HTML and audio a
   writeFileSync(sourcePath, '<!doctype html><h1>NARS Artifact</h1>', 'utf8');
   const childStdin = new PassThrough();
   const eventHub = createEventHub();
+  const agentIdentityRef = {
+    schema: 'narada.agent_identity_ref.v2',
+    identity_scope: { kind: 'narada_site', site_id: 'carrier_artifact_http' },
+    local_agent_id: 'resident',
+    role: 'resident',
+    canonical_agent_id: 'carrier_artifact_http.resident',
+    display: 'carrier_artifact_http.resident',
+    legacy_agent_id: 'resident',
+  };
   const projection = await startHealthProjection({
     childStdin,
     host: '127.0.0.1',
@@ -655,6 +756,7 @@ test('HTTP artifact endpoints register and serve session-scoped HTML and audio a
     timeoutMs: 1000,
     runtimeContext: {
       identity: 'resident',
+      agentIdentityRef,
       session: 'carrier_artifact_http',
       siteRoot,
       sessionPath,
@@ -690,6 +792,7 @@ test('HTTP artifact endpoints register and serve session-scoped HTML and audio a
     const presented = await presentedResponse.json();
     assert.equal(presented.status, 'presented');
     assert.equal(presented.event.event, 'assistant_message');
+    assert.deepEqual(presented.event.agent_identity_ref, agentIdentityRef);
     assert.deepEqual(presented.event.content, [
       { type: 'text', text: 'Here is the artifact.' },
       { type: 'artifact_ref', artifact_id: artifactId, kind: 'html', title: 'Artifact report', render_hint: 'inline' },
@@ -773,6 +876,7 @@ test('narada-owned entrypoint runs the carrier runtime in process', async () => 
     assert.equal(events[0].delegated_authority_handoff?.target?.package, '@narada2/carrier-runtime');
     assert.equal(events[0].delegated_authority_handoff?.target?.mode, 'in-process');
     assert.equal(events[0].delegated_authority_handoff?.agent_id, 'narada.test');
+    assert.equal(events[0].delegated_authority_handoff?.agent_identity_ref?.schema, 'narada.agent_identity_ref.v2');
     assert.equal(events[0].delegated_authority_handoff?.session_id, 'runtime-package-test');
     assert.equal(events[0].delegated_authority_ref, 'task:1328');
     assert.match(events[0].health_endpoint, /^http:\/\/127\.0\.0\.1:\d+\/health$/);

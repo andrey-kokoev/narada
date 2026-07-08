@@ -447,6 +447,15 @@ describe('task-next surfaces', () => {
           target_agent_id: null,
           target_role: 'implementer',
           target_ref: null,
+          source_agent_identity_ref: {
+            schema: 'narada.agent_identity_ref.v2',
+            identity_scope: { kind: 'unscoped' },
+            local_agent_id: 'architect',
+            role: 'architect',
+            canonical_agent_id: 'architect',
+            display: 'architect',
+            legacy_agent_id: 'architect',
+          },
           selection_reason: 'open_directed_obligation_addressed_to_agent',
         },
         directed_obligation: {

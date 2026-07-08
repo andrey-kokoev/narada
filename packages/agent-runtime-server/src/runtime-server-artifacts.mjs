@@ -99,6 +99,7 @@ function buildArtifactAssistantMessageEvent({ runtimeContext, artifact, params =
     event: 'assistant_message',
     event_family: 'turn',
     agent_id: runtimeContext.identity,
+    agent_identity_ref: runtimeContext.agentIdentityRef ?? null,
     session_id: runtimeContext.session,
     request_id: optionalText(params.request_id) ?? `artifact_present_${messagePart.artifact_id}`,
     timestamp: new Date().toISOString(),

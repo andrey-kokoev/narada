@@ -639,11 +639,13 @@ describe('nars CLI commands', () => {
       agentId: 'architect',
       siteId: 'sonar',
       agentIdentityRef: {
-        schema: 'narada.agent_identity_ref.v1',
-        site_id: 'sonar',
+        schema: 'narada.agent_identity_ref.v2',
+        identity_scope: { kind: 'narada_site', site_id: 'sonar' },
         local_agent_id: 'architect',
+        role: 'architect',
         canonical_agent_id: 'sonar.architect',
-        source_agent_id: 'architect',
+        display: 'sonar.architect',
+        legacy_agent_id: 'architect',
       },
     });
 
@@ -663,7 +665,7 @@ describe('nars CLI commands', () => {
     });
     expect((result.result as { _formatted?: string })._formatted).toContain('Candidates:');
     expect((result.result as { _formatted?: string })._formatted).toContain('session_id | identity | health | started_at | next_command');
-    expect((result.result as { _formatted?: string })._formatted).toContain('carrier_architect | sonar.architect | not_checked | 2026-06-23T00:00:00.000Z | agent-web-ui attach --session carrier_architect --allow-stale-session');
+    expect((result.result as { _formatted?: string })._formatted).toContain('carrier_architect | sonar.architect | not_checked | 2026-06-23T00:00:00.000Z | agent-web-ui attach --session carrier_architect --inspect-stale-session');
   });
 
   it('ignores stale matching sessions during direct agent-web-ui discovery', async () => {
@@ -772,7 +774,8 @@ describe('nars CLI commands', () => {
     }, null, 2)}\n`, 'utf8');
     writeFileSync(bindingPath, `${JSON.stringify({
       schema: 'narada.operator_projection_launch_binding.v1',
-      status: 'waiting_for_agent_start',
+      status: 'ready',
+      updated_at: new Date().toISOString(),
       agent: 'sonar.resident',
       agent_start_result_file: resultPath,
     }, null, 2)}\n`, 'utf8');
@@ -801,6 +804,74 @@ describe('nars CLI commands', () => {
     vi.unstubAllGlobals();
   });
 
+  it('does not attach agent-web-ui from stale ready launch binding content before a fresh launch transition', async () => {
+    const siteRoot = tempSite();
+    writeSession(siteRoot, 'carrier_old', { agentId: 'sonar.resident' });
+    writeSession(siteRoot, 'carrier_fresh', { agentId: 'sonar.resident' });
+    const launchRegistryPath = writeLaunchRegistry(siteRoot);
+    const bindingDir = join(siteRoot, '.ai', 'runtime', 'operator-projection-launch-bindings');
+    const bindingPath = join(bindingDir, 'reused-binding.json');
+    const oldResultPath = join(bindingDir, 'old-agent-start-result.json');
+    const freshResultPath = join(bindingDir, 'fresh-agent-start-result.json');
+    mkdirSync(bindingDir, { recursive: true });
+    writeFileSync(oldResultPath, `${JSON.stringify({
+      schema: 'narada.agent_start.result.v1',
+      status: 'success',
+      nars_launch: { nars_session_id: 'carrier_old' },
+    }, null, 2)}\n`, 'utf8');
+    writeFileSync(freshResultPath, `${JSON.stringify({
+      schema: 'narada.agent_start.result.v1',
+      status: 'success',
+      nars_launch: { nars_session_id: 'carrier_fresh' },
+    }, null, 2)}\n`, 'utf8');
+    writeFileSync(bindingPath, `${JSON.stringify({
+      schema: 'narada.operator_projection_launch_binding.v1',
+      status: 'ready',
+      updated_at: '2026-01-01T00:00:00.000Z',
+      agent: 'sonar.resident',
+      agent_start_result_file: oldResultPath,
+      nars_session_id: 'carrier_old',
+    }, null, 2)}\n`, 'utf8');
+    setTimeout(() => writeFileSync(bindingPath, `${JSON.stringify({
+      schema: 'narada.operator_projection_launch_binding.v1',
+      status: 'waiting_for_agent_start',
+      updated_at: new Date().toISOString(),
+      agent: 'sonar.resident',
+      agent_start_result_file: freshResultPath,
+    }, null, 2)}\n`, 'utf8'), 25);
+    setTimeout(() => writeFileSync(bindingPath, `${JSON.stringify({
+      schema: 'narada.operator_projection_launch_binding.v1',
+      status: 'ready',
+      updated_at: new Date().toISOString(),
+      agent: 'sonar.resident',
+      agent_start_result_file: freshResultPath,
+      nars_session_id: 'carrier_fresh',
+    }, null, 2)}\n`, 'utf8'), 75);
+    const progress: string[] = [];
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true })));
+
+    const result = await agentWebUiAttachCommand({
+      launchRegistryPath,
+      siteRoot,
+      launchBindingPath: bindingPath,
+      agent: 'sonar.resident',
+      waitForSessionMs: 1500,
+      open: false,
+    }, createMockContext(), {
+      progress: (line) => progress.push(line),
+      startAgentWebUiServer: async ({ sessionId }) => ({ url: `http://127.0.0.1/${sessionId}` }),
+    });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(progress).toContain('agent-web-ui: launch binding resolved NARS session carrier_fresh');
+    expect(result.result).toMatchObject({
+      status: 'started',
+      session_id: 'carrier_fresh',
+      url: 'http://127.0.0.1/carrier_fresh',
+    });
+    vi.unstubAllGlobals();
+  });
+
   it('waits for attach endpoints after launch binding resolves before the session index exists', async () => {
     const siteRoot = tempSite();
     const launchRegistryPath = writeLaunchRegistry(siteRoot);
@@ -810,6 +881,7 @@ describe('nars CLI commands', () => {
     writeFileSync(bindingPath, `${JSON.stringify({
       schema: 'narada.operator_projection_launch_binding.v1',
       status: 'ready',
+      updated_at: new Date().toISOString(),
       agent: 'sonar.resident',
       nars_session_id: 'carrier_late_index',
     }, null, 2)}\n`, 'utf8');
@@ -1023,11 +1095,11 @@ describe('nars CLI commands', () => {
       status: 'refused',
       reason: 'terminal_state_closed',
       session_id: 'carrier_closed_test',
-      override: '--allow-stale-session',
+      override: '--inspect-stale-session',
     });
   });
 
-  it('allows explicit stale agent-web-ui attachment override for diagnostics', async () => {
+  it('allows explicit stale agent-web-ui inspection for diagnostics', async () => {
     const siteRoot = tempSite();
     writeClosedSession(siteRoot);
     const launchRegistryPath = writeLaunchRegistry(siteRoot);
@@ -1037,7 +1109,7 @@ describe('nars CLI commands', () => {
       launchRegistryPath,
       site: 'sonar',
       session: 'carrier_closed_test',
-      allowStaleSession: true,
+      inspectStaleSession: true,
       format: 'json',
     }, createMockContext(), { startAgentWebUiServer, openUrl: vi.fn(async () => undefined) });
 

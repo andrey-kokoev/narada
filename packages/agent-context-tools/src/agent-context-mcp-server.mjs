@@ -35,7 +35,11 @@ import { dirname, join, resolve } from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { setTimeout as sleep } from 'node:timers/promises';
-import { agentIdentityDisplay, buildAgentIdentityRef } from '@narada2/agent-identity';
+import {
+  agentIdentityDisplay,
+  buildAgentIdentityRefV2,
+  resolveAgentIdentityRef,
+} from '@narada2/agent-identity';
 import { buildReground, formatMarkdown } from './doctrinal-reground.mjs';
 import * as hydrationService from './agent-context-hydration-service.mjs';
 import * as inquirySpaceService from './inquiry-space-service.mjs';
@@ -715,7 +719,17 @@ function agentContextHydrateCurrent(toolArgs) {
   }
 
   const agentId = whoami.identity;
-  const agentIdentityRef = whoami.agent_identity_ref ?? buildAgentIdentityRef(agentId, whoami.role, process.env.NARADA_SITE_ID || null);
+  const agentIdentityRef = whoami.agent_identity_ref ?? resolveAgentIdentityRef(agentId, {
+    site_id: process.env.NARADA_SITE_ID || null,
+    role: whoami.role,
+  }).value ?? buildAgentIdentityRefV2({
+    identity_scope: process.env.NARADA_SITE_ID
+      ? { kind: 'narada_site', site_id: process.env.NARADA_SITE_ID }
+      : { kind: 'unscoped' },
+    local_agent_id: agentId,
+    role: whoami.role,
+    legacy_agent_id: agentId,
+  });
   const eventId = process.env.NARADA_AGENT_START_EVENT_ID || null;
   const rehydrate = safeCall(() => agentContextRehydrate({ agent_id: agentId }));
   const checkpoint = rehydrate.ok ? rehydrate.value : { status: 'error', message: rehydrate.error };
@@ -5157,7 +5171,17 @@ function agentContextWhoami(toolArgs) {
   if (envIdentity) {
     const roleBindingResolution = resolveRoleBindingFromRoster(envIdentity);
     const role = roleBindingResolution.role;
-    const agentIdentityRef = buildAgentIdentityRef(envIdentity, role, process.env.NARADA_SITE_ID || null);
+    const agentIdentityRef = resolveAgentIdentityRef(envIdentity, {
+      site_id: process.env.NARADA_SITE_ID || null,
+      role,
+    }).value ?? buildAgentIdentityRefV2({
+      identity_scope: process.env.NARADA_SITE_ID
+        ? { kind: 'narada_site', site_id: process.env.NARADA_SITE_ID }
+        : { kind: 'unscoped' },
+      local_agent_id: envIdentity,
+      role,
+      legacy_agent_id: envIdentity,
+    });
     const displayIdentity = agentIdentityDisplay(agentIdentityRef, envIdentity) ?? envIdentity;
     return {
       status: 'ok',
@@ -5183,7 +5207,17 @@ function agentContextWhoami(toolArgs) {
       if (checkpoint?.agent_id) {
         const rosterRoleBinding = resolveRoleBindingFromRoster(checkpoint.agent_id);
         const role = rosterRoleBinding.role ?? inferRoleFromIdentity(checkpoint.agent_id);
-        const agentIdentityRef = buildAgentIdentityRef(checkpoint.agent_id, role, process.env.NARADA_SITE_ID || null);
+        const agentIdentityRef = resolveAgentIdentityRef(checkpoint.agent_id, {
+          site_id: process.env.NARADA_SITE_ID || null,
+          role,
+        }).value ?? buildAgentIdentityRefV2({
+          identity_scope: process.env.NARADA_SITE_ID
+            ? { kind: 'narada_site', site_id: process.env.NARADA_SITE_ID }
+            : { kind: 'unscoped' },
+          local_agent_id: checkpoint.agent_id,
+          role,
+          legacy_agent_id: checkpoint.agent_id,
+        });
         const displayIdentity = agentIdentityDisplay(agentIdentityRef, checkpoint.agent_id) ?? checkpoint.agent_id;
         return {
           status: 'ok',
@@ -5214,7 +5248,17 @@ function agentContextWhoami(toolArgs) {
       if (event?.identity_id) {
         const rosterRoleBinding = resolveRoleBindingFromRoster(event.identity_id);
         const role = rosterRoleBinding.role ?? inferRoleFromIdentity(event.identity_id);
-        const agentIdentityRef = buildAgentIdentityRef(event.identity_id, role, process.env.NARADA_SITE_ID || null);
+        const agentIdentityRef = resolveAgentIdentityRef(event.identity_id, {
+          site_id: process.env.NARADA_SITE_ID || null,
+          role,
+        }).value ?? buildAgentIdentityRefV2({
+          identity_scope: process.env.NARADA_SITE_ID
+            ? { kind: 'narada_site', site_id: process.env.NARADA_SITE_ID }
+            : { kind: 'unscoped' },
+          local_agent_id: event.identity_id,
+          role,
+          legacy_agent_id: event.identity_id,
+        });
         const displayIdentity = agentIdentityDisplay(agentIdentityRef, event.identity_id) ?? event.identity_id;
         return {
           status: 'ok',

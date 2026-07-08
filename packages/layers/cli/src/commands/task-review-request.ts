@@ -13,6 +13,7 @@ import {
   openTaskLifecycleStore,
   type TaskLifecycleStore,
 } from '../lib/task-lifecycle-store.js';
+import { buildAgentIdentityRefV2, resolveAgentIdentityRef } from '@narada2/agent-identity';
 import {
   captureTaskLifecycleEvidenceState,
   writeTaskLifecycleMutationEvidence,
@@ -38,6 +39,20 @@ function reviewTargetIdPart(target: { target_agent_id: string | null; target_rol
 
 function reviewCommandAgentPlaceholder(target: { target_agent_id: string | null; target_role: string | null }): string {
   return target.target_agent_id ?? `<${target.target_role ?? 'reviewer'}-agent>`;
+}
+
+function buildSourceAgentIdentityRef(sourceAgentId: string) {
+  const resolved = resolveAgentIdentityRef(sourceAgentId, { role: sourceAgentId });
+  if (resolved.status === 'resolved') return resolved.value;
+  const localAgentId = sourceAgentId.split('.').filter(Boolean).at(-1) || sourceAgentId;
+  return buildAgentIdentityRefV2({
+    identity_scope: { kind: 'unscoped' },
+    local_agent_id: localAgentId,
+    role: localAgentId,
+    canonical_agent_id: sourceAgentId,
+    display: sourceAgentId,
+    legacy_agent_id: sourceAgentId,
+  });
 }
 
 function selectReport(reports: WorkResultReport[], reportId?: string): WorkResultReport | null {
@@ -136,6 +151,7 @@ export async function taskReviewRequestCommand(
         task_number: taskNumber,
         report_id: report.report_id,
         review_target: target,
+        source_agent_identity_ref: buildSourceAgentIdentityRef(options.agent),
       };
       if (fmt.getFormat() === 'json') return { exitCode: ExitCode.SUCCESS, result };
       fmt.message(`Review request already exists for task ${options.taskNumber}: ${existing.obligation_id}`, 'success');
@@ -144,6 +160,7 @@ export async function taskReviewRequestCommand(
 
     const spec = store.getTaskSpecByNumber(taskNumber) ?? store.getTaskSpec(taskFile.taskId);
     const now = new Date().toISOString();
+    const sourceAgentIdentityRef = buildSourceAgentIdentityRef(options.agent);
     store.upsertDirectedObligation({
       obligation_id: obligationId,
       source_kind: 'task_report',
@@ -166,6 +183,7 @@ export async function taskReviewRequestCommand(
         residuals: report.known_residuals,
         requested_target: target.requested,
         target_resolution: target.resolution,
+        source_agent_identity_ref: sourceAgentIdentityRef,
       }),
       consumption_rule_json: JSON.stringify({
         consume_on: ['task_review', 'task_defer', 'delegation', 'rejection', 'completion'],
@@ -186,6 +204,7 @@ export async function taskReviewRequestCommand(
       task_number: taskNumber,
       report_id: report.report_id,
       review_target: target,
+      source_agent_identity_ref: sourceAgentIdentityRef,
       review_command: `narada task review ${options.taskNumber} --agent ${reviewCommandAgentPlaceholder(target)} --verdict accepted --report ${report.report_id}`,
     };
     await writeTaskLifecycleMutationEvidence({

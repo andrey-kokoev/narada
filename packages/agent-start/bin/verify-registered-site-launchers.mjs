@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { buildAgentIdentityRef } from '@narada2/agent-identity';
+import { buildAgentIdentityRefV2, resolveAgentIdentityRef } from '@narada2/agent-identity';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 if (process.argv.includes('--help') || process.argv.includes('-h')) {
@@ -112,7 +112,12 @@ function roleId(record) {
 }
 
 function expectedAgentIdentityRef(record) {
-  return buildAgentIdentityRef(record.Agent, roleId(record), record.Site ?? null);
+  return resolveAgentIdentityRef(record.Agent, { site_id: record.Site ?? null, role: roleId(record) }).value ?? buildAgentIdentityRefV2({
+    identity_scope: record.Site ? { kind: 'narada_site', site_id: record.Site } : { kind: 'unscoped' },
+    local_agent_id: record.Agent.split('.').at(-1) ?? record.Agent,
+    role: roleId(record),
+    legacy_agent_id: record.Agent,
+  });
 }
 
 function scanRegistryIdentityShape(record) {

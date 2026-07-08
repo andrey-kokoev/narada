@@ -16,6 +16,7 @@ import {
   operatorSurfaceIdentityAddCommand,
   operatorSurfaceIdentityAdmitTaskAuthorityCommand,
 } from '../../src/commands/operator-surface.js';
+import { taskReviewRequestCommand } from '../../src/commands/task-review-request.js';
 import { taskReviewCommand } from '../../src/commands/task-review.js';
 import type { CommandContext } from '../../src/lib/command-wrapper.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
@@ -237,6 +238,28 @@ describe('task review command', () => {
     } finally {
       obligationStore.db.close();
     }
+
+    const request = await taskReviewRequestCommand({
+      taskNumber: '999',
+      agent: 'worker',
+      reviewer: 'architect',
+      cwd: tempDir,
+      format: 'json',
+    });
+
+    expect(request.exitCode).toBe(ExitCode.SUCCESS);
+    expect(request.result).toMatchObject({
+      status: 'success',
+      source_agent_identity_ref: {
+        schema: 'narada.agent_identity_ref.v2',
+        identity_scope: { kind: 'unscoped' },
+        local_agent_id: 'worker',
+        role: 'worker',
+        canonical_agent_id: 'worker',
+        display: 'worker',
+        legacy_agent_id: 'worker',
+      },
+    });
 
     const result = await taskReviewCommand({
       taskNumber: '999',

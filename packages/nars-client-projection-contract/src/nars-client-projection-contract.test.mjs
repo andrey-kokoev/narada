@@ -3,13 +3,14 @@ import test from 'node:test';
 import {
   AGENT_WEB_UI_COMMANDS,
   AGENT_WEB_UI_NARS_METHOD_LIST,
+  AGENT_WEB_UI_SNIPPET_ACTIONS,
+  AGENT_WEB_UI_SNIPPET_USAGE,
   NARS_CLIENT_PROJECTION_DEFAULT_VERBOSITY,
   NARS_CLIENT_PROJECTION_REGISTRY,
   NARS_CLIENT_PROJECTION_VERBOSITY_LEVELS,
   NARS_AFFORDANCE_ACTION_EVENTS,
   NARS_AFFORDANCE_ACTION_POSTURES,
   NARS_AFFORDANCE_ACTION_REFUSAL_CODES,
-  LEGACY_CARRIER_COMMAND_METHOD,
   NARS_AFFORDANCE_ACTION_CANCEL_METHOD,
   NARS_AFFORDANCE_ACTION_CONFIRM_METHOD,
   NARS_AFFORDANCE_ACTION_REQUEST_METHOD,
@@ -45,9 +46,14 @@ import {
   buildNarsAffordanceActionResultEvent,
   classifyNarsClientEventProjection,
   filterAgentWebUiCommands,
+  filterAgentWebUiSnippetActions,
   findAgentWebUiCommand,
+  findAgentWebUiSnippetAction,
   isAgentWebUiNarsMethod,
   isAgentWebUiProtocolFrame,
+  isAgentWebUiSnippetManagementAction,
+  isAgentWebUiSnippetSelectionAction,
+  parseAgentWebUiSnippetCommand,
   projectNarsClientEvent,
   shouldProjectNarsClientEvent,
   shouldProjectNarsClientProjection,
@@ -55,7 +61,6 @@ import {
 
 test('NARS client projection contract owns attach commands and web UI capabilities', () => {
   assert.equal(NARS_COMMAND_METHOD, 'session.command.execute');
-  assert.equal(LEGACY_CARRIER_COMMAND_METHOD, 'carrier.command.execute');
   assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('conversation.send'), true);
   assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('conversation.enqueue'), true);
   assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('conversation.interrupt'), true);
@@ -75,6 +80,7 @@ test('NARS client projection contract owns attach commands and web UI capabiliti
   assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('session.scheduler.summary'), true);
   assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('session.task_lifecycle.summary'), true);
   assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('command.execute'), false);
+  assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('carrier.command.execute'), false);
   assert.equal(NARS_CLIENT_PROJECTION_REGISTRY.clients.agent_web_ui.admitted_methods, AGENT_WEB_UI_NARS_METHOD_LIST);
   assert.equal(NARS_CLIENT_PROJECTION_REGISTRY.clients.agent_tui.attach_template, 'agent-tui --attach <event_endpoint>');
   assert.deepEqual(buildNarsAttachCommands({ eventEndpoint: 'ws://127.0.0.1/events', healthEndpoint: 'http://127.0.0.1/health' }), {
@@ -394,11 +400,19 @@ test('NARS client projection contract owns web UI operator input projection', ()
   assert.equal(buildAgentWebUiOperatorInputAction('/ops', { id: 'ops-1' }).frame.method, 'session.operations');
   assert.equal(buildAgentWebUiOperatorInputAction('/interrupt', { id: 'interrupt-1' }).frame.method, 'conversation.interrupt');
   assert.equal(buildAgentWebUiOperatorInputAction('/tools mcp', { id: 'tools-1' }).frame.method, 'session.command.execute');
+  assert.equal(buildAgentWebUiOperatorInputAction('/tool', { id: 'tool-1' }).message, 'Unknown command: /tool. Type /help.');
+  assert.equal(buildAgentWebUiOperatorInputAction('/tool-outputs', { id: 'tool-output-1' }).message, 'Unknown command: /tool-outputs. Type /help.');
+  assert.equal(buildAgentWebUiOperatorInputAction('/queue clear', { id: 'queue-1' }).frame.params.command, '/queue');
   assert.deepEqual(buildAgentWebUiOperatorInputAction('/observer mute', { id: 'mute-1' }).frame, { id: 'mute-1', method: 'observer.mute', params: {} });
   assert.equal(buildAgentWebUiOperatorInputAction('/observer').message, 'Usage: /observer mute|unmute');
-  assert.match(buildAgentWebUiHelpText(), /conversation\.enqueue/);
+  assert.equal(buildAgentWebUiOperatorInputAction('/snippet save launch run startup sequence').kind, 'snippet_command');
+  assert.equal(buildAgentWebUiOperatorInputAction('/snippets launch').kind, 'snippet_panel_command');
+  assert.equal(buildAgentWebUiOperatorInputAction('/quit', { id: 'quit-1' }).message, 'Unknown command: /quit. Type /help.');
+  assert.equal(buildAgentWebUiOperatorInputAction('/exit', { id: 'exit-1' }).frame.method, 'session.close');
+  assert.equal(buildAgentWebUiOperatorInputAction('exit', { id: 'exit-2' }).frame.method, 'conversation.send');
+  assert.equal(buildAgentWebUiOperatorInputAction('/snippety').message, 'Unknown command: /snippety. Type /help.');
   assert.equal(isAgentWebUiNarsMethod('session.command.execute'), true);
-  assert.equal(isAgentWebUiNarsMethod('carrier.command.execute'), true);
+  assert.equal(isAgentWebUiNarsMethod('carrier.command.execute'), false);
   assert.equal(isAgentWebUiNarsMethod('command.execute'), false);
   assert.equal(isAgentWebUiProtocolFrame({ id: 'ok', method: 'conversation.send', params: {} }), true);
   assert.equal(isAgentWebUiProtocolFrame({ id: 'read', method: 'session.events.read', params: {} }), true);
@@ -408,10 +422,13 @@ test('NARS client projection contract owns web UI operator input projection', ()
 test('Agent Web UI commands are first-class static registry entries', () => {
   const slashes = AGENT_WEB_UI_COMMANDS.map((command) => command.slash);
   assert.equal(slashes.includes('/help'), true);
-  assert.equal(slashes.includes('/status'), true);
-  assert.equal(slashes.includes('/json'), true);
-  assert.equal(findAgentWebUiCommand('/quit').id, 'exit');
-  assert.equal(findAgentWebUiCommand('/tool').id, 'tools');
+  assert.equal(filterAgentWebUiCommands('stat')[0].slash, '/status');
+  assert.equal(filterAgentWebUiCommands('snippet').some((command) => command.slash === '/snippets'), true);
+  assert.equal(filterAgentWebUiCommands('snippets')[0].slash, '/snippets');
+  assert.equal(filterAgentWebUiCommands('mute').some((command) => command.slash === '/observer'), true);
+  assert.equal(findAgentWebUiCommand('/quit'), null);
+  assert.equal(findAgentWebUiCommand('/tool'), null);
+  assert.equal(findAgentWebUiCommand('/queue').id, 'queue');
   assert.equal(findAgentWebUiCommand('/missing'), null);
   assert.equal(filterAgentWebUiCommands('stat')[0].slash, '/status');
   assert.equal(filterAgentWebUiCommands('mute').some((command) => command.slash === '/observer'), true);
@@ -421,6 +438,38 @@ test('Agent Web UI commands are first-class static registry entries', () => {
   assert.equal(buildAgentWebUiOperatorInputAction('/json {"id":"status-raw","method":"session.status","params":{}}').frame.method, 'session.status');
   assert.equal(buildAgentWebUiOperatorInputAction('/json {"id":"bad","method":"bad.method","params":{}}').message, 'JSON frame method is not admitted for agent-web-ui.');
   assert.equal(buildAgentWebUiOperatorInputAction('/does-not-exist').message, 'Unknown command: /does-not-exist. Type /help.');
+});
+
+test('Agent Web UI snippet command grammar is shared and canonical', () => {
+  assert.equal(AGENT_WEB_UI_SNIPPET_USAGE, '/snippet run|enqueue|search|save|edit|delete');
+  assert.equal(AGENT_WEB_UI_SNIPPET_ACTIONS.some((action) => action.id === 'run' && action.verbs.includes('send')), false);
+  assert.equal(AGENT_WEB_UI_SNIPPET_ACTIONS.some((action) => action.id === 'delete' && action.verbs.includes('remove')), false);
+  assert.equal(findAgentWebUiSnippetAction('search').id, 'search');
+  assert.equal(findAgentWebUiSnippetAction('search').slash, '/snippet search');
+  assert.equal(findAgentWebUiSnippetAction('search').completion, '/snippet search ');
+  assert.equal(findAgentWebUiSnippetAction(''), null);
+  assert.equal(findAgentWebUiSnippetAction('send'), null);
+  assert.equal(findAgentWebUiSnippetAction('remove'), null);
+  assert.equal(findAgentWebUiSnippetAction('missing'), null);
+  assert.equal(filterAgentWebUiSnippetActions('que')[0].id, 'enqueue');
+  assert.deepEqual(parseAgentWebUiSnippetCommand('enqueue launch now'), {
+    action: findAgentWebUiSnippetAction('enqueue'),
+    verb: 'enqueue',
+    rawVerb: 'enqueue',
+    remainder: 'launch now',
+    recognized: true,
+  });
+  assert.deepEqual(parseAgentWebUiSnippetCommand(''), {
+    action: null,
+    verb: '',
+    rawVerb: '',
+    remainder: '',
+    recognized: false,
+  });
+  assert.equal(isAgentWebUiSnippetSelectionAction('send'), false);
+  assert.equal(isAgentWebUiSnippetSelectionAction('search'), false);
+  assert.equal(isAgentWebUiSnippetManagementAction('search'), false);
+  assert.equal(isAgentWebUiSnippetManagementAction('run'), false);
 });
 
 test('NARS client projection contract owns shared event rendering vocabulary', () => {

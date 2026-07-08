@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { agentIdentityRefMatchesRequest, buildAgentIdentityRef, renderOperatorObjectSummary, renderOperatorValue } from './index.mjs';
+import { agentIdentityRefMatchesRequest, buildAgentIdentityRef, buildAgentIdentityRefV2, normalizeAgentIdentityRef, normalizeAgentIdentityRefV2, renderOperatorObjectSummary, renderOperatorValue, resolveAgentIdentityRef } from './index.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const packageRoot = dirname(__dirname);
@@ -49,6 +49,66 @@ test('matches exact, canonical, and scoped local requests', () => {
   assert.equal(agentIdentityRefMatchesRequest(ref, 'resident'), true);
   assert.equal(agentIdentityRefMatchesRequest(ref, 'sonar.resident'), true);
   assert.equal(agentIdentityRefMatchesRequest(ref, 'smart-scheduling.resident'), false);
+});
+
+test('builds v2 identity refs with explicit identity scope', () => {
+  assert.deepEqual(buildAgentIdentityRefV2({
+    identity_scope: { kind: 'narada_site', site_id: 'smart-scheduling' },
+    local_agent_id: 'resident',
+    role: 'resident',
+    legacy_agent_id: 'smart-scheduling.resident',
+  }), {
+    schema: 'narada.agent_identity_ref.v2',
+    identity_scope: { kind: 'narada_site', site_id: 'smart-scheduling' },
+    local_agent_id: 'resident',
+    role: 'resident',
+    canonical_agent_id: 'smart-scheduling.resident',
+    display: 'smart-scheduling.resident',
+    legacy_agent_id: 'smart-scheduling.resident',
+  });
+});
+
+test('resolves prefixed legacy agent id into v2 identity ref', () => {
+  const resolved = resolveAgentIdentityRef('smart-scheduling.resident', { role: 'resident' });
+  assert.equal(resolved.status, 'resolved');
+  assert.deepEqual(resolved.value, {
+    schema: 'narada.agent_identity_ref.v2',
+    identity_scope: { kind: 'narada_site', site_id: 'smart-scheduling' },
+    local_agent_id: 'resident',
+    role: 'resident',
+    canonical_agent_id: 'smart-scheduling.resident',
+    display: 'smart-scheduling.resident',
+    legacy_agent_id: 'smart-scheduling.resident',
+  });
+  assert.equal(resolved.provenance.some((entry) => entry.kind === 'legacy_scalar_consumed'), true);
+});
+
+test('resolves local legacy agent id only with site context', () => {
+  const resolved = resolveAgentIdentityRef('resident', { site_id: 'sonar', role: 'resident' });
+  assert.equal(resolved.status, 'resolved');
+  assert.deepEqual(resolved.value.identity_scope, { kind: 'narada_site', site_id: 'sonar' });
+  assert.equal(resolved.value.local_agent_id, 'resident');
+  assert.equal(resolved.value.canonical_agent_id, 'sonar.resident');
+  assert.equal(resolved.value.legacy_agent_id, 'resident');
+  assert.equal(resolveAgentIdentityRef('resident').code, 'identity_scope_required');
+});
+
+test('resolves v1 object and current v2 object through explicit resolver', () => {
+  const v1 = buildAgentIdentityRef('resident', 'resident', 'sonar');
+  const resolvedV1 = resolveAgentIdentityRef(v1);
+  assert.equal(resolvedV1.status, 'resolved');
+  assert.equal(resolvedV1.value.schema, 'narada.agent_identity_ref.v2');
+  assert.equal(resolvedV1.value.legacy_agent_id, 'resident');
+  assert.equal(resolvedV1.value.canonical_agent_id, 'sonar.resident');
+  assert.deepEqual(normalizeAgentIdentityRef(resolvedV1.value), v1);
+  assert.deepEqual(normalizeAgentIdentityRefV2(v1), resolvedV1.value);
+  assert.deepEqual(normalizeAgentIdentityRefV2(resolvedV1.value), resolvedV1.value);
+  assert.deepEqual(normalizeAgentIdentityRefV2(resolvedV1.value).identity_scope, { kind: 'narada_site', site_id: 'sonar' });
+  assert.deepEqual(normalizeAgentIdentityRefV2(resolvedV1.value).display, 'sonar.resident');
+
+  const current = buildAgentIdentityRefV2({ identity_scope: { kind: 'narada_site', site_id: 'sonar' }, local_agent_id: 'resident' });
+  assert.deepEqual(resolveAgentIdentityRef(current).value, current);
+  assert.deepEqual(normalizeAgentIdentityRefV2(current), current);
 });
 
 test('agent identity display has one source implementation', () => {

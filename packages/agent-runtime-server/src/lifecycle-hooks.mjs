@@ -4,7 +4,7 @@ import {
   narsLifecycleHooksForEvent,
   validateNarsLifecycleHookPayload,
 } from '@narada2/carrier-protocol';
-import { buildAgentIdentityRef } from '@narada2/agent-identity';
+import { buildAgentIdentityRefV2, resolveAgentIdentityRef } from '@narada2/agent-identity';
 
 const SECRET_PATTERN = /(api[_-]?key|token|secret|password|authorization)\s*[:=]\s*[^\s,;]+/giu;
 
@@ -117,7 +117,18 @@ export function lifecycleBindingFromArgs(args = [], env = process.env) {
       agentIdentityRef = null;
     }
   }
-  agentIdentityRef ??= buildAgentIdentityRef(agentId, env.NARADA_AGENT_ROLE ?? null, env.NARADA_SITE_ID ?? null);
+  const resolvedAgentIdentityRef = resolveAgentIdentityRef(agentIdentityRef ?? agentId, {
+    role: env.NARADA_AGENT_ROLE ?? null,
+    site_id: env.NARADA_SITE_ID ?? null,
+  });
+  agentIdentityRef = resolvedAgentIdentityRef.status === 'resolved'
+    ? resolvedAgentIdentityRef.value
+    : buildAgentIdentityRefV2({
+      identity_scope: { kind: 'unscoped' },
+      local_agent_id: agentId,
+      role: env.NARADA_AGENT_ROLE ?? agentId,
+      legacy_agent_id: agentId,
+    });
   return {
     agent_id: agentId,
     ...(agentIdentityRef ? { agent_identity_ref: agentIdentityRef } : {}),

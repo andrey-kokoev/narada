@@ -1,4 +1,5 @@
 export const AGENT_IDENTITY_REF_SCHEMA = 'narada.agent_identity_ref.v1';
+export const AGENT_IDENTITY_REF_V2_SCHEMA = 'narada.agent_identity_ref.v2';
 
 export function buildAgentIdentityRef(identityValue, roleValue = null, explicitSiteId = null) {
   const sourceAgentId = normalizeRequiredString(identityValue, 'identity');
@@ -23,6 +24,79 @@ export function buildAgentIdentityRef(identityValue, roleValue = null, explicitS
   };
 }
 
+export function buildAgentIdentityRefV2(input = {}) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) throw new TypeError('agent_identity_ref_v2_input_required');
+  const scope = normalizeIdentityScope(input.identity_scope ?? (input.site_id ? { kind: 'narada_site', site_id: input.site_id } : null));
+  const localAgentId = normalizeRequiredString(input.local_agent_id, 'local_agent_id');
+  const role = normalizeOptionalString(input.role) ?? localAgentId;
+  const canonicalAgentId = normalizeOptionalString(input.canonical_agent_id)
+    ?? (scope.kind === 'narada_site' ? `${scope.site_id}.${localAgentId}` : localAgentId);
+  const legacyAgentId = normalizeOptionalString(input.legacy_agent_id ?? input.source_agent_id);
+  return {
+    schema: AGENT_IDENTITY_REF_V2_SCHEMA,
+    identity_scope: scope,
+    local_agent_id: localAgentId,
+    role,
+    canonical_agent_id: canonicalAgentId,
+    display: normalizeOptionalString(input.display) ?? canonicalAgentId,
+    ...(legacyAgentId ? { legacy_agent_id: legacyAgentId } : {}),
+  };
+}
+
+export function resolveAgentIdentityRef(input, context = {}) {
+  const targetVersion = normalizeOptionalString(context.target_version ?? context.targetVersion) ?? AGENT_IDENTITY_REF_V2_SCHEMA;
+  if (targetVersion !== AGENT_IDENTITY_REF_V2_SCHEMA && targetVersion !== 'v2') {
+    return refusedIdentityResolution('unsupported_target_version', `Unsupported target identity version: ${targetVersion}`);
+  }
+
+  const contextSiteId = normalizeOptionalString(context.site_id ?? context.siteId);
+  const contextRole = normalizeOptionalString(context.role);
+  const contextAgentId = normalizeOptionalString(context.agent_id ?? context.agentId);
+  const source = extractIdentityInput(input, contextAgentId);
+  if (source.status !== 'ok') return source;
+
+  const value = source.value;
+  if (value && typeof value === 'object' && !Array.isArray(value) && value.schema === AGENT_IDENTITY_REF_V2_SCHEMA) {
+    try {
+      return resolvedIdentityResolution(buildAgentIdentityRefV2(value), [{ kind: 'copied_current_shape', field: 'agent_identity_ref' }]);
+    } catch (error) {
+      return refusedIdentityResolution('invalid_current_shape', error?.message ?? 'Invalid current identity shape');
+    }
+  }
+
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    const siteId = normalizeOptionalString(value.site_id) ?? contextSiteId;
+    const localAgentId = normalizeOptionalString(value.local_agent_id) ?? roleSegment(value.source_agent_id ?? value.canonical_agent_id ?? value.agent_id);
+    if (!localAgentId) return refusedIdentityResolution('local_agent_id_required', 'Cannot resolve agent identity without local_agent_id or legacy agent_id.');
+    if (!siteId) return refusedIdentityResolution('identity_scope_required', `Cannot resolve ${localAgentId} without site_id or identity_scope context.`);
+    return resolvedIdentityResolution(buildAgentIdentityRefV2({
+      identity_scope: { kind: 'narada_site', site_id: siteId },
+      local_agent_id: localAgentId,
+      role: normalizeOptionalString(value.role) ?? contextRole ?? localAgentId,
+      canonical_agent_id: normalizeOptionalString(value.canonical_agent_id) ?? `${siteId}.${localAgentId}`,
+      display: normalizeOptionalString(value.display),
+      legacy_agent_id: normalizeOptionalString(value.source_agent_id ?? value.agent_id),
+    }), provenanceForObject(value, siteId === contextSiteId));
+  }
+
+  const legacyAgentId = normalizeOptionalString(value);
+  if (!legacyAgentId) return refusedIdentityResolution('identity_input_required', 'Cannot resolve an empty agent identity input.');
+  const legacySiteId = siteSegment(legacyAgentId);
+  const localAgentId = roleSegment(legacyAgentId);
+  if (!localAgentId) return refusedIdentityResolution('local_agent_id_required', `Cannot resolve local id from ${legacyAgentId}.`);
+  const siteId = legacySiteId ?? contextSiteId;
+  if (!siteId) return refusedIdentityResolution('identity_scope_required', `Cannot resolve ${legacyAgentId} without site_id context.`);
+  return resolvedIdentityResolution(buildAgentIdentityRefV2({
+    identity_scope: { kind: 'narada_site', site_id: siteId },
+    local_agent_id: localAgentId,
+    role: contextRole ?? localAgentId,
+    legacy_agent_id: legacyAgentId,
+  }), [
+    { kind: 'legacy_scalar_consumed', field: 'agent_id', value: legacyAgentId },
+    ...(legacySiteId ? [{ kind: 'inferred_from_legacy_scalar', field: 'identity_scope.site_id', value: legacySiteId }] : [{ kind: 'context_consumed', field: 'site_id', value: siteId }]),
+  ]);
+}
+
 export function agentIdentityDisplay(identityRef, fallback = null) {
   if (identityRef && typeof identityRef === 'object') {
     return normalizeOptionalString(identityRef.display)
@@ -36,6 +110,19 @@ export function agentIdentityDisplay(identityRef, fallback = null) {
 
 export function normalizeAgentIdentityRef(value) {
   if (!value || typeof value !== 'object') return null;
+  if (value.schema === AGENT_IDENTITY_REF_V2_SCHEMA) {
+    try {
+      const scope = normalizeIdentityScope(value.identity_scope ?? (value.site_id ? { kind: 'narada_site', site_id: value.site_id } : { kind: 'unscoped' }));
+      const siteId = scope.kind === 'narada_site' ? scope.site_id : null;
+      const sourceAgentId = normalizeOptionalString(value.legacy_agent_id)
+        ?? normalizeOptionalString(value.canonical_agent_id)
+        ?? normalizeOptionalString(value.local_agent_id);
+      if (!sourceAgentId) return null;
+      return buildAgentIdentityRef(sourceAgentId, normalizeOptionalString(value.role), siteId);
+    } catch {
+      return null;
+    }
+  }
   const sourceAgentId = normalizeOptionalString(value.source_agent_id)
     ?? normalizeOptionalString(value.local_agent_id)
     ?? normalizeOptionalString(value.canonical_agent_id);
@@ -45,6 +132,11 @@ export function normalizeAgentIdentityRef(value) {
     normalizeOptionalString(value.role),
     normalizeOptionalString(value.site_id),
   );
+}
+
+export function normalizeAgentIdentityRefV2(value, context = {}) {
+  const resolved = resolveAgentIdentityRef(value, context);
+  return resolved.status === 'resolved' ? resolved.value : null;
 }
 
 export function agentIdentityRefMatchesRequest(identityRef, requestedAgentId) {
@@ -138,6 +230,37 @@ export function normalizeSiteToken(value) {
   if (lower.startsWith('narada-')) return lower.slice('narada-'.length);
   if (lower.startsWith('narada.')) return lower.slice('narada.'.length);
   return lower;
+}
+
+function normalizeIdentityScope(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new TypeError('identity_scope_required');
+  const kind = normalizeRequiredString(value.kind, 'identity_scope.kind');
+  if (kind === 'narada_site') {
+    return { kind, site_id: normalizeRequiredString(value.site_id, 'identity_scope.site_id') };
+  }
+  if (kind === 'unscoped') return { kind };
+  throw new TypeError(`unsupported_identity_scope_kind:${kind}`);
+}
+
+function extractIdentityInput(input, fallbackAgentId) {
+  if (input !== null && input !== undefined) return { status: 'ok', value: input };
+  if (fallbackAgentId) return { status: 'ok', value: fallbackAgentId };
+  return refusedIdentityResolution('identity_input_required', 'Cannot resolve missing agent identity input.');
+}
+
+function provenanceForObject(value, usedContextSite) {
+  const provenance = [{ kind: 'legacy_object_consumed', field: value.schema === AGENT_IDENTITY_REF_SCHEMA ? 'agent_identity_ref.v1' : 'agent_identity_ref' }];
+  if (usedContextSite) provenance.push({ kind: 'context_consumed', field: 'site_id' });
+  if (value.source_agent_id || value.agent_id) provenance.push({ kind: 'legacy_scalar_consumed', field: value.source_agent_id ? 'source_agent_id' : 'agent_id', value: value.source_agent_id ?? value.agent_id });
+  return provenance;
+}
+
+function resolvedIdentityResolution(value, provenance) {
+  return { status: 'resolved', value, provenance };
+}
+
+function refusedIdentityResolution(code, message) {
+  return { status: 'refused', code, message };
 }
 
 function normalizeRequiredString(value, field) {

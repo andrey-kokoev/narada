@@ -33,6 +33,7 @@ import { operatorSurfaceTaskAuthorityRepair } from '../lib/operator-surface-task
 import { parseTaskSpecFromMarkdown } from '../lib/task-spec.js';
 import { checkLawAdmission } from '../lib/law-sync.js';
 import { evaluateSiteQualification, qualificationBlocksGovernedWork } from '../lib/site-qualification.js';
+import { buildAgentIdentityRefV2, resolveAgentIdentityRef } from '@narada2/agent-identity';
 
 export interface WorkNextOptions {
   agent?: string;
@@ -88,6 +89,21 @@ interface PendingReviewWork {
   projection_admission?: Record<string, unknown> | null;
   source_facts?: Record<string, unknown>;
   skip_policy?: Record<string, unknown> | null;
+}
+
+function buildSourceAgentIdentityRef(sourceAgentId: string | null) {
+  if (!sourceAgentId) return null;
+  const resolved = resolveAgentIdentityRef(sourceAgentId, { role: sourceAgentId });
+  if (resolved.status === 'resolved') return resolved.value;
+  const localAgentId = sourceAgentId.split('.').filter(Boolean).at(-1) || sourceAgentId;
+  return buildAgentIdentityRefV2({
+    identity_scope: { kind: 'unscoped' },
+    local_agent_id: localAgentId,
+    role: localAgentId,
+    canonical_agent_id: sourceAgentId,
+    display: sourceAgentId,
+    legacy_agent_id: sourceAgentId,
+  });
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -599,6 +615,7 @@ function findDirectedObligationWork(cwd: string, agentId: string, role?: string 
       source_kind: obligation.source_kind,
       source_ref: obligation.source_ref,
       source_agent_id: obligation.source_agent_id,
+      source_agent_identity_ref: buildSourceAgentIdentityRef(obligation.source_agent_id),
       target_agent_id: obligation.target_agent_id,
       target_role: obligation.target_role,
       target_ref: obligation.target_ref,

@@ -15,6 +15,7 @@ export interface AgentWebUiAttachOptions {
   port?: number;
   dryRun?: boolean;
   allowStaleSession?: boolean;
+  inspectStaleSession?: boolean;
   healthTimeoutMs?: number;
   waitForSessionMs?: number;
   launchBindingPath?: string;
@@ -24,10 +25,15 @@ export interface AgentWebUiAttachOptions {
   cloudflareApiBaseUrl?: string;
 }
 
+function allowsStaleSessionInspection(options: AgentWebUiAttachOptions): boolean {
+  return options.inspectStaleSession === true || options.allowStaleSession === true;
+}
+
 async function resolveAttachSessionIdFromLaunchBinding(options: AgentWebUiAttachOptions, progress: ProgressReporter): Promise<ResolvedAttachSession> {
   const bindingPath = options.launchBindingPath?.trim();
   if (!bindingPath) throw new Error('launch_binding_required');
   const startedAt = Date.now();
+  let observedCurrentLaunchStart = false;
   const timeoutMs = Math.max(0, Math.trunc(options.waitForSessionMs ?? 0));
   if (!options.dryRun) {
     progress(timeoutMs > 0
@@ -38,13 +44,15 @@ async function resolveAttachSessionIdFromLaunchBinding(options: AgentWebUiAttach
   let lastReason = 'launch_binding_unresolved';
   do {
     const binding = await readJsonRecord(bindingPath);
+    if (isCurrentLaunchBindingStart(binding, startedAt)) observedCurrentLaunchStart = true;
+    const readyBinding = isAttachableLaunchBinding(binding, { startedAt, observedCurrentLaunchStart });
     const directSession = sessionIdFromRecord(binding);
-    if (directSession) {
+    if (directSession && readyBinding) {
       if (!options.dryRun) progress(`agent-web-ui: launch binding resolved NARS session ${directSession}`);
       return { sessionId: directSession, reason: 'launch_binding' };
     }
     const resultPath = stringField(binding, 'agent_start_result_file') ?? stringField(binding, 'result_file');
-    if (resultPath) {
+    if (resultPath && readyBinding) {
       const result = await readJsonRecord(resultPath);
       const resultSession = sessionIdFromRecord(result);
       if (resultSession) {
@@ -53,7 +61,7 @@ async function resolveAttachSessionIdFromLaunchBinding(options: AgentWebUiAttach
       }
       if (stringField(result, 'status') === 'failed') lastReason = 'agent_start_failed';
     }
-    if (stringField(binding, 'status') === 'failed') lastReason = stringField(binding, 'reason') ?? 'launch_binding_failed';
+    if (isCurrentLaunchBindingFailure(binding, { startedAt, observedCurrentLaunchStart })) lastReason = stringField(binding, 'reason') ?? 'launch_binding_failed';
     if (timeoutMs <= 0 || Date.now() - startedAt >= timeoutMs || lastReason !== 'launch_binding_unresolved') break;
     if (!options.dryRun && Date.now() >= nextProgressAt) {
       progress('agent-web-ui: still waiting for launch binding result');
@@ -62,6 +70,32 @@ async function resolveAttachSessionIdFromLaunchBinding(options: AgentWebUiAttach
     await delay(1000);
   } while (Date.now() - startedAt < timeoutMs);
   throw new AttachSessionDiscoveryError(`launch_binding_unresolved: ${lastReason}: ${bindingPath}`, 'launch_binding_unresolved');
+}
+
+function isCurrentLaunchBindingStart(binding: Record<string, unknown> | null, startedAt: number): boolean {
+  if (stringField(binding, 'status') !== 'waiting_for_agent_start') return false;
+  return bindingUpdatedAtMs(binding) >= startedAt - 10000;
+}
+
+function isAttachableLaunchBinding(binding: Record<string, unknown> | null, args: { startedAt: number; observedCurrentLaunchStart: boolean }): boolean {
+  if (!binding) return false;
+  if (stringField(binding, 'status') !== 'ready') return false;
+  if (args.observedCurrentLaunchStart) return true;
+  return bindingUpdatedAtMs(binding) >= args.startedAt - 10000;
+}
+
+function isCurrentLaunchBindingFailure(binding: Record<string, unknown> | null, args: { startedAt: number; observedCurrentLaunchStart: boolean }): boolean {
+  if (!binding) return false;
+  if (stringField(binding, 'status') !== 'failed') return false;
+  if (args.observedCurrentLaunchStart) return true;
+  return bindingUpdatedAtMs(binding) >= args.startedAt - 10000;
+}
+
+function bindingUpdatedAtMs(binding: Record<string, unknown> | null): number {
+  const updatedAt = stringField(binding, 'updated_at');
+  if (!updatedAt) return 0;
+  const parsed = Date.parse(updatedAt);
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 async function readJsonRecord(path: string): Promise<Record<string, unknown> | null> {
@@ -328,7 +362,7 @@ function buildFailure(args: {
     health_status: args.attachability.health_status,
     host: args.host,
     port: args.port,
-    override: '--allow-stale-session',
+    override: '--inspect-stale-session',
     authority_transition: authorityTransitionSnapshot(args.attach.session),
   };
 }
@@ -398,7 +432,7 @@ function candidateNextCommand(candidate: AttachSessionCandidate): string {
   const command = [`agent-web-ui attach`, `--session ${candidate.session_id}`];
   const health = candidate.health_status ?? candidate.display_state ?? candidate.terminal_state ?? null;
   if (health && health !== 'healthy' && health !== 'active' && health !== 'starting_or_degraded') {
-    command.push('--allow-stale-session');
+    command.push('--inspect-stale-session');
   }
   return command.join(' ');
 }
@@ -493,7 +527,7 @@ export async function agentWebUiAttachCommand(
     waitMs: options.waitForSessionMs ?? 0,
     progress,
   });
-  if (!options.allowStaleSession && attachability.status !== 'attachable') {
+  if (!allowsStaleSessionInspection(options) && attachability.status !== 'attachable') {
     const failure = buildFailure({ sessionId, attach, eventEndpoint, healthEndpoint, host, port, attachability });
     return {
       exitCode: ExitCode.INVALID_CONFIG,

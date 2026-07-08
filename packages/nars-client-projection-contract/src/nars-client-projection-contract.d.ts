@@ -1,5 +1,4 @@
 export const NARS_COMMAND_METHOD: 'session.command.execute';
-export const LEGACY_CARRIER_COMMAND_METHOD: 'carrier.command.execute';
 export const NARS_AFFORDANCE_ACTION_REQUEST_METHOD: 'session.affordance.action.request';
 export const NARS_AFFORDANCE_ACTION_CONFIRM_METHOD: 'session.affordance.action.confirm';
 export const NARS_AFFORDANCE_ACTION_CANCEL_METHOD: 'session.affordance.action.cancel';
@@ -41,7 +40,31 @@ export interface AgentWebUiCommand {
   palette: Readonly<{ visible: boolean; rank: number; danger: boolean }>;
   buildAction(input: object, context?: object): object;
 }
+export type AgentWebUiSnippetActionMode = 'select' | 'panel' | 'write' | 'delete';
+export type AgentWebUiSnippetDeliveryMode = 'default' | 'enqueue';
+export interface AgentWebUiSnippetAction {
+  id: string;
+  verbs: readonly string[];
+  slash: `/${string}`;
+  title: string;
+  description: string;
+  meta: string;
+  completion: string;
+  mode: AgentWebUiSnippetActionMode;
+  deliveryMode?: AgentWebUiSnippetDeliveryMode;
+  immediate?: boolean;
+  rank: number;
+}
+export interface AgentWebUiSnippetCommandParse {
+  action: AgentWebUiSnippetAction | null;
+  verb: string;
+  rawVerb: string;
+  remainder: string;
+  recognized: boolean;
+}
 export const AGENT_WEB_UI_COMMANDS: readonly AgentWebUiCommand[];
+export const AGENT_WEB_UI_SNIPPET_USAGE: string;
+export const AGENT_WEB_UI_SNIPPET_ACTIONS: readonly AgentWebUiSnippetAction[];
 export const AGENT_WEB_UI_COMMAND_GROUP_LABELS: Readonly<Record<AgentWebUiCommandGroup, string>>;
 export const AGENT_WEB_UI_HELP_LINES: readonly string[];
 export const NARS_CLIENT_EVENT_TONES: Readonly<Record<string, string>>;
@@ -91,6 +114,11 @@ export function buildAgentWebUiSubscribeFrame(options?: object): object;
 export function isAgentWebUiProtocolFrame(frame: unknown): boolean;
 export function findAgentWebUiCommand(rawCommand: unknown): AgentWebUiCommand | null;
 export function filterAgentWebUiCommands(query?: unknown): AgentWebUiCommand[];
+export function findAgentWebUiSnippetAction(rawVerb?: unknown): AgentWebUiSnippetAction | null;
+export function filterAgentWebUiSnippetActions(query?: unknown): AgentWebUiSnippetAction[];
+export function isAgentWebUiSnippetSelectionAction(rawVerb?: unknown): boolean;
+export function isAgentWebUiSnippetManagementAction(rawVerb?: unknown): boolean;
+export function parseAgentWebUiSnippetCommand(value?: unknown): AgentWebUiSnippetCommandParse;
 export function buildAgentWebUiOperatorInputAction(text: unknown, options?: object): object | null;
 export function unwrapNarsClientEvent(message: unknown): any;
 export function normalizeNarsClientProjectionVerbosity(verbosity?: unknown): NarsClientProjectionVerbosity;

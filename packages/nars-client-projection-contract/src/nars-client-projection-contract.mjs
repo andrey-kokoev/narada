@@ -1,7 +1,6 @@
 import { agentIdentityDisplay, agentIdentityGroupKey } from '@narada2/agent-identity';
 
 export const NARS_COMMAND_METHOD = 'session.command.execute';
-export const LEGACY_CARRIER_COMMAND_METHOD = 'carrier.command.execute';
 export const NARS_AFFORDANCE_ACTION_REQUEST_METHOD = 'session.affordance.action.request';
 export const NARS_AFFORDANCE_ACTION_CONFIRM_METHOD = 'session.affordance.action.confirm';
 export const NARS_AFFORDANCE_ACTION_CANCEL_METHOD = 'session.affordance.action.cancel';
@@ -86,7 +85,6 @@ export const AGENT_WEB_UI_NARS_METHOD_LIST = Object.freeze([
   'observer.mute',
   'observer.unmute',
   NARS_COMMAND_METHOD,
-  LEGACY_CARRIER_COMMAND_METHOD,
   'conversation.interrupt',
   'conversation.steer',
   'session.close',
@@ -98,9 +96,7 @@ export const AGENT_WEB_UI_SESSION_COMMANDS = Object.freeze([
   '/model',
   '/thinking',
   '/tool-output',
-  '/tool-outputs',
   '/tools',
-  '/tool',
   '/help, /clear, /status, /health, /events, /recovery, /ops, /interrupt, /tools, /queue, /goal, /model, /thinking, /exit',
   'Ordinary text is submitted as conversation.send when idle and conversation.steer during active turns. Press Tab in agent-web-ui to queue with conversation.enqueue.',
 ]);
@@ -636,6 +632,58 @@ function sessionCommand(id, slash, options = {}) {
   });
 }
 
+export const AGENT_WEB_UI_SNIPPET_USAGE = '/snippet run|enqueue|search|save|edit|delete';
+
+export const AGENT_WEB_UI_SNIPPET_ACTIONS = Object.freeze([
+  Object.freeze({ id: 'run', verbs: Object.freeze(['run']), slash: '/snippet run', title: 'Run snippet', description: 'Choose a saved snippet and send it now.', meta: 'snippet action', completion: '/snippet run ', mode: 'select', deliveryMode: 'default', rank: 10 }),
+  Object.freeze({ id: 'enqueue', verbs: Object.freeze(['enqueue']), slash: '/snippet enqueue', title: 'Queue snippet', description: 'Choose a saved snippet and queue it for the next turn.', meta: 'snippet action', completion: '/snippet enqueue ', mode: 'select', deliveryMode: 'enqueue', rank: 20 }),
+  Object.freeze({ id: 'search', verbs: Object.freeze(['search']), slash: '/snippet search', title: 'Search snippets', description: 'Open the snippets drawer and search panel.', meta: 'snippet action', completion: '/snippet search ', mode: 'panel', immediate: true, rank: 30 }),
+  Object.freeze({ id: 'save', verbs: Object.freeze(['save']), slash: '/snippet save', title: 'Save snippet', description: 'Save the following text as a browser-local snippet.', meta: 'snippet action', completion: '/snippet save ', mode: 'write', rank: 40 }),
+  Object.freeze({ id: 'edit', verbs: Object.freeze(['edit']), slash: '/snippet edit', title: 'Edit snippet', description: 'Replace a saved snippet body by name.', meta: 'snippet action', completion: '/snippet edit ', mode: 'write', rank: 50 }),
+  Object.freeze({ id: 'delete', verbs: Object.freeze(['delete']), slash: '/snippet delete', title: 'Delete snippet', description: 'Delete a saved snippet by name.', meta: 'snippet action', completion: '/snippet delete ', mode: 'delete', rank: 60 }),
+]);
+
+export function findAgentWebUiSnippetAction(rawVerb = '') {
+  const verb = String(rawVerb ?? '').trim().toLowerCase();
+  return AGENT_WEB_UI_SNIPPET_ACTIONS.find((action) => action.id === verb || action.verbs.includes(verb)) ?? null;
+}
+
+export function filterAgentWebUiSnippetActions(query = '') {
+  const normalized = String(query ?? '').trim().toLowerCase();
+  const actions = normalized
+    ? AGENT_WEB_UI_SNIPPET_ACTIONS.filter((action) => (
+      action.id.includes(normalized)
+      || action.verbs.some((verb) => verb && verb.includes(normalized))
+      || action.slash.includes(normalized)
+      || action.title.toLowerCase().includes(normalized)
+      || action.description.toLowerCase().includes(normalized)
+    ))
+    : AGENT_WEB_UI_SNIPPET_ACTIONS;
+  return [...actions].sort((left, right) => left.rank - right.rank);
+}
+
+export function isAgentWebUiSnippetSelectionAction(rawVerb = '') {
+  return findAgentWebUiSnippetAction(rawVerb)?.mode === 'select';
+}
+
+export function isAgentWebUiSnippetManagementAction(rawVerb = '') {
+  const action = findAgentWebUiSnippetAction(rawVerb);
+  return Boolean(action && (action.mode === 'write' || action.mode === 'delete'));
+}
+
+export function parseAgentWebUiSnippetCommand(value = '') {
+  const trimmed = String(value ?? '').trim();
+  const [rawVerb = '', ...terms] = trimmed ? trimmed.split(/\s+/) : [''];
+  const action = findAgentWebUiSnippetAction(rawVerb);
+  return {
+    action,
+    verb: action?.id ?? rawVerb.toLowerCase(),
+    rawVerb: rawVerb.toLowerCase(),
+    remainder: terms.join(' ').trim(),
+    recognized: Boolean(action),
+  };
+}
+
 export const AGENT_WEB_UI_COMMANDS = Object.freeze([
   localCommand('help', '/help', {
     title: 'Show commands',
@@ -679,7 +727,7 @@ export const AGENT_WEB_UI_COMMANDS = Object.freeze([
     },
   }),
   frameCommand('interrupt', '/interrupt', 'conversation.interrupt', { title: 'Interrupt response', description: 'Ask NARS to interrupt the active model turn.', group: 'conversation', rank: 200, danger: true }),
-  frameCommand('exit', '/exit', 'session.close', { title: 'Close session', description: 'Close this NARS session.', aliases: ['/quit'], group: 'session', rank: 900, danger: true }),
+  frameCommand('exit', '/exit', 'session.close', { title: 'Close session', description: 'Close this NARS session.', group: 'session', rank: 900, danger: true }),
   localCommand('json', '/json', {
     kind: 'raw_protocol_frame',
     title: 'Send JSON frame',
@@ -699,20 +747,29 @@ export const AGENT_WEB_UI_COMMANDS = Object.freeze([
     },
   }),
   sessionCommand('goal', '/goal', { title: 'Goal command', description: 'Run the NARS-compatible goal session command.', group: 'conversation', rank: 300 }),
+  sessionCommand('queue', '/queue', { title: 'Queue command', description: 'Run the NARS-compatible operator input queue command.', group: 'conversation', rank: 305 }),
   sessionCommand('stats', '/stats', { title: 'Stats command', description: 'Run the NARS-compatible stats session command.', group: 'diagnostics', rank: 310 }),
   sessionCommand('model', '/model', { title: 'Model command', description: 'Run the NARS-compatible model session command.', group: 'settings', rank: 320 }),
   sessionCommand('thinking', '/thinking', { title: 'Thinking command', description: 'Run the NARS-compatible thinking session command.', group: 'settings', rank: 330 }),
-  sessionCommand('tool-output', '/tool-output', { title: 'Tool output command', description: 'Run the NARS-compatible tool-output session command.', aliases: ['/tool-outputs'], group: 'settings', rank: 340 }),
-  sessionCommand('tools', '/tools', { title: 'Tools command', description: 'Run the NARS-compatible tools session command.', aliases: ['/tool'], group: 'diagnostics', rank: 350 }),
-  sessionCommand('queue', '/queue', { title: 'Queue command', description: 'Run the NARS-compatible queue session command.', group: 'conversation', rank: 360 }),
+  sessionCommand('tool-output', '/tool-output', { title: 'Tool output command', description: 'Run the NARS-compatible tool-output session command.', group: 'settings', rank: 340 }),
+  sessionCommand('tools', '/tools', { title: 'Tools command', description: 'Run the NARS-compatible tools session command.', group: 'diagnostics', rank: 350 }),
   localCommand('snippet', '/snippet', {
-    title: 'Snippet library',
+    title: 'Snippet command',
     description: 'Save, edit, delete, search, or run local operator snippets.',
     group: 'snippets',
-    usage: '/snippet save|edit|delete|search|run',
+    usage: AGENT_WEB_UI_SNIPPET_USAGE,
     keywords: ['macro', 'saved command', 'prompt', 'short text'],
     rank: 370,
     buildAction: (input) => ({ kind: 'snippet_command', value: input.value, raw: input.raw }),
+  }),
+  localCommand('snippets', '/snippets', {
+    title: 'Open snippets',
+    description: 'Open the local snippet search and management panel.',
+    group: 'snippets',
+    usage: '/snippets [query]',
+    keywords: ['library', 'macro', 'saved command', 'prompt', 'search snippets'],
+    rank: 371,
+    buildAction: (input) => ({ kind: 'snippet_panel_command', value: input.value, raw: input.raw }),
   }),
 ]);
 
@@ -764,12 +821,18 @@ function compareAgentWebUiCommands(left, right) {
 }
 
 function agentWebUiCommandMatchScore(entry, query) {
-  const terms = [entry.slash, ...entry.aliases, entry.title, entry.description, entry.group, ...(entry.keywords ?? [])].map((term) => String(term).toLowerCase().replace(/^\//, ''));
+  const commandTerms = [entry.slash, ...entry.aliases].map((term) => String(term).toLowerCase().replace(/^\//, ''));
+  const metadataTerms = [entry.title, entry.description, entry.group, ...(entry.keywords ?? [])].map((term) => String(term).toLowerCase());
   let best = -1;
-  for (const term of terms) {
+  for (const term of commandTerms) {
     if (term === query) best = best < 0 ? 0 : Math.min(best, 0);
     else if (term.startsWith(query)) best = best < 0 ? 1 : Math.min(best, 1);
     else if (term.includes(query)) best = best < 0 ? 2 : Math.min(best, 2);
+  }
+  for (const term of metadataTerms) {
+    if (term === query) best = best < 0 ? 3 : Math.min(best, 3);
+    else if (term.startsWith(query)) best = best < 0 ? 4 : Math.min(best, 4);
+    else if (term.includes(query)) best = best < 0 ? 5 : Math.min(best, 5);
   }
   return best;
 }
@@ -778,7 +841,7 @@ export function buildAgentWebUiOperatorInputAction(text, options = {}) {
   const content = String(text ?? '').trim();
   if (!content) return null;
   const lower = content.toLowerCase();
-  if (lower === 'exit' || lower === '/exit' || lower === '/quit') {
+  if (lower === '/exit') {
     return findAgentWebUiCommand('/exit').buildAction({ raw: content, command: '/exit', value: '' }, options);
   }
   if (!content.startsWith('/')) {

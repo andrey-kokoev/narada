@@ -20,7 +20,8 @@ export function registerAgentWebUiCommands(program: Command): void {
     .option('--host <host>', 'Host to bind to', '127.0.0.1')
     .option('--port <port>', 'Port to bind to (0 for ephemeral)', '0')
     .option('--dry-run', 'Resolve attachment without starting the web UI', false)
-    .option('--allow-stale-session', 'Attach even when the discovered NARS session is closed or unhealthy', false)
+    .option('--inspect-stale-session', 'Open AgentWebUI in diagnostic mode for a closed, unhealthy, or superseded NARS session', false)
+    .option('--allow-stale-session', 'Deprecated alias for --inspect-stale-session', false)
     .option('--open', 'Open the web UI in the default browser after startup', true)
     .option('--no-open', 'Do not open the web UI in the default browser after startup', false)
     .option('--health-timeout-ms <ms>', 'Health probe timeout before refusing live attach', '500')
@@ -38,6 +39,7 @@ export function registerAgentWebUiCommands(program: Command): void {
         port: opts.port ? Number(opts.port) : undefined,
         dryRun: opts.dryRun as boolean | undefined,
         allowStaleSession: opts.allowStaleSession as boolean | undefined,
+        inspectStaleSession: opts.inspectStaleSession as boolean | undefined,
         open: opts.open as boolean | undefined,
         healthTimeoutMs: opts.healthTimeoutMs ? Number(opts.healthTimeoutMs) : undefined,
         waitForSessionMs: opts.waitForSessionMs ? Number(opts.waitForSessionMs) : undefined,

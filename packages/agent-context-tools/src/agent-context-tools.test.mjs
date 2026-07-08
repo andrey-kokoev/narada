@@ -32,20 +32,19 @@ test('agent context startup tools expose canonical agent identity ref', async ()
     assert.match(whoami.message, /Session identity is sonar\.resident/);
     assert.doesNotMatch(whoami.message, /Session identity is resident/);
     assert.deepEqual(whoami.agent_identity_ref, {
-      schema: 'narada.agent_identity_ref.v1',
-      site_id: 'sonar',
+      schema: 'narada.agent_identity_ref.v2',
+      identity_scope: { kind: 'narada_site', site_id: 'sonar' },
       local_agent_id: 'resident',
       role: 'resident',
       canonical_agent_id: 'sonar.resident',
       display: 'sonar.resident',
-      source_agent_id: 'resident',
-      scope: 'site_scoped',
+      legacy_agent_id: 'resident',
     });
 
     const startup = toolResultValue(responses.get(2));
     assert.equal(startup.identity, 'resident');
     assert.equal(startup.agent_identity_ref.display, 'sonar.resident');
-    assert.equal(startup.agent_identity_ref.source_agent_id, 'resident');
+    assert.equal(startup.agent_identity_ref.legacy_agent_id, 'resident');
     assert.equal(startup.verified_badge.agent_identity_ref.display, 'sonar.resident');
   } finally {
     await rm(siteRoot, { recursive: true, force: true });
