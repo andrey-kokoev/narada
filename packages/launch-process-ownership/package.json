@@ -1,0 +1,26 @@
+{
+  "name": "@narada2/launch-process-ownership",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "narada": {
+    "package_role": "launch_process_ownership_contract",
+    "owns": [
+      "launch_process_ownership_schema",
+      "launch_session_id_derivation",
+      "session_owned_process_cleanup_policy"
+    ]
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "import": "./src/index.mjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "types": "./src/index.d.ts",
+  "scripts": {
+    "test": "node --test src/*.test.mjs",
+    "typecheck": "tsc --noEmit --allowJs --checkJs false src/index.mjs"
+  }
+}

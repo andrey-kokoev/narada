@@ -13,7 +13,7 @@ import { agentIdentityDisplay, buildAgentIdentityRefV2, resolveAgentIdentityRef,
 import { commandResultError, type CommandContext } from '../lib/command-wrapper.js';
 import { formattedResult, type CliFormat } from '../lib/cli-output.js';
 import { ExitCode } from '../lib/exit-codes.js';
-import { buildLaunchProcessOwnership, launchSessionIdFromToken } from '../lib/launch-process-ownership.js';
+import { buildLaunchProcessOwnership, launchSessionIdFromToken } from '../../../../launch-process-ownership/src/index.mjs';
 import { carrierStartCommand } from './carrier.js';
 import {
   defaultRuntimeForCarrier,
@@ -32,6 +32,31 @@ interface ProviderRegistry {
     meaning?: string;
     support_state?: string;
   }>;
+}
+
+export async function workspaceLaunchReapStaleSessionOwnedDescendants(
+  selection: WorkspaceLaunchBrowserSelection,
+  records: WorkspaceLaunchRecord[],
+): Promise<{ scanned: number; cleanup_requested: number }> {
+  const siteRoots = workspaceLaunchSiteRootsForSelection(selection, records);
+  const attempted = new Set<string>();
+  let scanned = 0;
+  for (const siteRoot of siteRoots) {
+    try {
+      const discovery = discoverNarsSessions({ siteRoot });
+      for (const session of discovery.sessions) {
+        const normalized = { ...session, site_root: session.site_root ?? siteRoot };
+        scanned += 1;
+        if (!workspaceLaunchSessionMatchesSelection(normalized, selection)) continue;
+        if (!workspaceLaunchSessionOwnedCleanupAllowed(normalized)) continue;
+        if (!workspaceLaunchSessionIsTerminalForCleanup(normalized)) continue;
+        await workspaceLaunchRequestStaleSessionCleanup(normalized, attempted);
+      }
+    } catch {
+      // Reaper preflight is best-effort; unreadable indexes must not block a fresh launch.
+    }
+  }
+  return { scanned, cleanup_requested: attempted.size };
 }
 
 function normalizeMcpScope(value: string | undefined): string {
@@ -1229,6 +1254,7 @@ async function runPersistentWorkspaceLaunchSelectionUi(
     attempt.result_summary = 'Planning workspace launch.';
     attempt.updated_at = new Date().toISOString();
     try {
+      await workspaceLaunchReapStaleSessionOwnedDescendants(selection, records);
       attempt.status = 'launching';
       attempt.result_summary = 'Executing host handoff.';
       attempt.updated_at = new Date().toISOString();
@@ -2019,11 +2045,20 @@ function workspaceLaunchSessionOwnership(session: Record<string, unknown>): Reco
 
 function workspaceLaunchSessionIsStaleSessionOwnedCandidate(session: Record<string, unknown>, expectedLaunchSessionIds: Set<string>): boolean {
   if (expectedLaunchSessionIds.size === 0) return false;
-  const ownership = workspaceLaunchSessionOwnership(session);
-  if (!ownership || ownership.ownership !== 'session_owned') return false;
-  if (ownership.cleanup_policy !== 'terminate_with_launch_session') return false;
+  if (!workspaceLaunchSessionOwnedCleanupAllowed(session)) return false;
   const launchSessionId = workspaceLaunchSessionLaunchSessionId(session);
   return launchSessionId !== null && !expectedLaunchSessionIds.has(launchSessionId);
+}
+
+function workspaceLaunchSessionOwnedCleanupAllowed(session: Record<string, unknown>): boolean {
+  const ownership = workspaceLaunchSessionOwnership(session);
+  return Boolean(ownership && ownership.ownership === 'session_owned' && ownership.cleanup_policy === 'terminate_with_launch_session');
+}
+
+function workspaceLaunchSessionIsTerminalForCleanup(session: Record<string, unknown>): boolean {
+  const displayState = workspaceLaunchString(session.display_state);
+  const terminalState = workspaceLaunchString(session.terminal_state);
+  return terminalState === 'closed' || displayState === 'closed';
 }
 
 async function workspaceLaunchRequestStaleSessionCleanup(session: Record<string, unknown>, attempted: Set<string>): Promise<void> {

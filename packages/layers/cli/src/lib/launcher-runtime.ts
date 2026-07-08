@@ -5,7 +5,7 @@ import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { agentIdentityRefMatchesRequest } from '@narada2/agent-identity';
 import { spawnHiddenPostureProcess } from '@narada2/process-launch-posture';
-import { buildLaunchProcessOwnership, launchSessionIdFromToken, type LaunchProcessOwnership } from './launch-process-ownership.js';
+import { buildLaunchProcessOwnership, launchSessionIdFromToken, type LaunchProcessOwnership } from '../../../../launch-process-ownership/src/index.mjs';
 
 const requireFromLauncherRuntime = createRequire(import.meta.url);
 

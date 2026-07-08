@@ -44,7 +44,7 @@
   "code_refs": [
     "packages/layers/cli/src/commands/launcher.ts",
     "packages/layers/cli/src/lib/launcher-runtime.ts",
-    "packages/layers/cli/src/lib/launch-process-ownership.ts",
+    "packages/launch-process-ownership/src/index.mjs",
     "packages/carrier-runtime/src/mcp-runtime.mjs",
     "packages/carrier-runtime/src/runtime-dependencies.mjs",
     "packages/carrier-runtime/src/server-mode.mjs",
@@ -61,9 +61,7 @@
   "counterexamples": [
     "A User Site host-level MCP surface reused across naked carrier launches is host-owned, not session-owned by a Sonar launch."
   ],
-  "open_questions": [
-    "Should host-level cleanup eventually move from launcher-local stale-session cleanup into a durable host supervisor for closed launch sessions?"
-  ],
+  "open_questions": [],
   "confidence": {
     "cl": 0.98,
     "basis": "Observed stale Sonar MCP process demonstrated that process reachability and freshness need explicit launch ownership evidence."

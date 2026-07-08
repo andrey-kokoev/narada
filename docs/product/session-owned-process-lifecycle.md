@@ -65,13 +65,18 @@ Before starting a new Site launch session, the launcher should inspect existing 
 
 New launches must not silently attach to an old session-owned MCP process merely because it is reachable. Reachability is not freshness, authority, or lifecycle ownership.
 
+The workspace launcher implements this in two places:
+
+- preflight reaping closes terminal same-selection `session_owned` sessions before handoff;
+- launch observation closes/terminates same-selection `session_owned` sessions whose `launch_session_id` conflicts with the newly expected launch IDs.
+
 Workspace launch attempts must persist their expected `launch_session_id` values and use them for every later dashboard recheck. A recheck that only matches by Site, role, or runtime is not authoritative; it can rediscover an old reachable carrier and mistake it for the launch being observed.
 
-When a new launch observes a same Site/role session with a different `launch_session_id`, it may cleanup that existing process only if the existing record is explicitly `session_owned` and has `cleanup_policy: terminate_with_launch_session`. The launcher should request graceful `session.close` through the session control path when available, then terminate the recorded process tree when PID evidence exists. Unclassified or host/shared processes must not be killed by this path.
+When a new launch observes a same Site/role session with a different `launch_session_id`, it may cleanup that existing process only if the existing record is explicitly `session_owned` and has `cleanup_policy: terminate_with_launch_session`. The launcher requests graceful `session.close` through the session control path when available, then terminates the recorded process tree when PID evidence exists. Unclassified or host/shared processes must not be killed by this path.
 
 ## Schema Ownership
 
-The ownership stamp schema is part of Narada's launch authority boundary and should be maintained as a single semantic contract across TypeScript CLI code and JavaScript runtime code. If the implementation is split across language/package boundaries, tests must prove the emitted schema name, ownership classes, process roles, cleanup policy, transfer policy, and validation semantics stay equivalent.
+The ownership stamp schema is part of Narada's launch authority boundary and is maintained by `@narada2/launch-process-ownership`. CLI and runtime code must import that package rather than keeping local schema builders.
 
 ## Freshness Rule
 

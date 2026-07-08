@@ -2,7 +2,7 @@ import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { createServer, type Server } from 'node:http';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { buildWorkspaceLaunchSelectionHtml, buildWorkspaceLaunchSelectionUiModel, explainMcpCommand, hasWorkspaceLaunchSelectionIntent, initialOperatorSurfaceValues, initialRoleValuesForInteractiveSelection, intelligenceProviderChoices, intelligenceProviderChoicesForLaunchSelection, listenWorkspaceLaunchUiServer, normalizeInteractiveOperatorSurfaceValues, readWorkspaceLaunchRememberedSelection, registryDefaultIntelligenceProviderLabel, registryDefaultOperatorSurfaceLabel, registryDefaultRuntimeLabel, resolveWorkspaceLaunchUiPortPolicy, roleChoicesForSelectedSites, workspaceLaunchCommand, workspaceLaunchPlanCommand, workspaceLaunchRuntimeObservations, workspaceLaunchSelectorModel, writeWorkspaceLaunchRememberedSelection, type WorkspaceLaunchBrowserSelection, type WorkspaceLaunchRecord } from '../../src/commands/launcher.js';
+import { buildWorkspaceLaunchSelectionHtml, buildWorkspaceLaunchSelectionUiModel, explainMcpCommand, hasWorkspaceLaunchSelectionIntent, initialOperatorSurfaceValues, initialRoleValuesForInteractiveSelection, intelligenceProviderChoices, intelligenceProviderChoicesForLaunchSelection, listenWorkspaceLaunchUiServer, normalizeInteractiveOperatorSurfaceValues, readWorkspaceLaunchRememberedSelection, registryDefaultIntelligenceProviderLabel, registryDefaultOperatorSurfaceLabel, registryDefaultRuntimeLabel, resolveWorkspaceLaunchUiPortPolicy, roleChoicesForSelectedSites, workspaceLaunchCommand, workspaceLaunchPlanCommand, workspaceLaunchReapStaleSessionOwnedDescendants, workspaceLaunchRuntimeObservations, workspaceLaunchSelectorModel, writeWorkspaceLaunchRememberedSelection, type WorkspaceLaunchBrowserSelection, type WorkspaceLaunchRecord } from '../../src/commands/launcher.js';
 import type { CommandContext } from '../../src/lib/command-wrapper.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
 
@@ -1140,6 +1140,73 @@ describe('launcher workspace planning', () => {
       observations = await workspaceLaunchRuntimeObservations('wla_ambiguous', selection, records);
       expect(observations[0]).toMatchObject({ health: 'ambiguous', ownership_posture: 'not_yet_observed' });
     });
+  });
+
+  it('preflight reaps terminal session-owned descendants for the selected site and role', async () => {
+    const records = [
+      {
+        agent: 'sonar.resident',
+        title: 'Sonar Resident',
+        role: 'resident',
+        site: 'sonar',
+        narada_root: 'D:/code/narada.sonar',
+        site_root: 'D:/code/narada.sonar',
+        workspace_root: 'D:/code/narada.sonar',
+        launcher_path: 'D:/code/narada.sonar/narada-sonar.ps1',
+        operator_surface: 'agent-cli',
+        carrier: 'agent-cli',
+        runtime: 'narada-agent-runtime-server',
+        enable_native_shell: false,
+        mcp_scope: 'all',
+        config_path: 'registry.json',
+      },
+    ] as WorkspaceLaunchRecord[];
+    const selection: WorkspaceLaunchBrowserSelection = {
+      site: ['sonar'],
+      role: ['resident'],
+      operatorSurface: ['agent-cli'],
+      runtime: 'narada-agent-runtime-server',
+      intelligenceProvider: 'registry default',
+    };
+    const staleSessionDir = join(process.cwd(), '.ai', 'tmp-tests', `preflight-stale-session-${Date.now()}-${Math.random().toString(16).slice(2)}`);
+    tempDirs.push(staleSessionDir);
+    await mkdir(staleSessionDir, { recursive: true });
+    const staleControlPath = join(staleSessionDir, 'control.jsonl');
+    await writeFile(staleControlPath, '', 'utf8');
+    discoverNarsSessionsMock.mockImplementation(() => ({ sessions: [
+      {
+        session_id: 'carrier_closed_owned_launch',
+        agent_id: 'sonar.resident',
+        site_id: 'sonar',
+        site_root: 'D:/code/narada.sonar',
+        display_state: 'closed',
+        terminal_state: 'closed',
+        control_path: staleControlPath,
+        process_ownership: {
+          launch_session_id: 'launch_old_owned',
+          ownership: 'session_owned',
+          cleanup_policy: 'terminate_with_launch_session',
+        },
+      },
+      {
+        session_id: 'carrier_closed_host_owned_launch',
+        agent_id: 'sonar.resident',
+        site_id: 'sonar',
+        site_root: 'D:/code/narada.sonar',
+        display_state: 'closed',
+        terminal_state: 'closed',
+        process_ownership: {
+          launch_session_id: 'launch_host_owned',
+          ownership: 'host_owned',
+        },
+      },
+    ] }));
+
+    const result = await workspaceLaunchReapStaleSessionOwnedDescendants(selection, records);
+    expect(result).toEqual({ scanned: 2, cleanup_requested: 1 });
+    const staleControl = await readFile(staleControlPath, 'utf8');
+    expect(staleControl).toContain('session.close');
+    expect(staleControl).toContain('stale_session_owned_launch_session_superseded');
   });
 
   it('offers registry default plus verified intelligence providers for interactive selection', () => {
