@@ -16,6 +16,7 @@ const CONTENT_TYPES = new Map([
   ['.js', 'text/javascript; charset=utf-8'],
   ['.mjs', 'text/javascript; charset=utf-8'],
   ['.css', 'text/css; charset=utf-8'],
+  ['.svg', 'image/svg+xml; charset=utf-8'],
 ]);
 const BROWSER_IMPORT_REWRITES = new Map([
   ['@narada2/nars-client-projection-contract', './vendor/nars-client-projection-contract.js'],
@@ -384,7 +385,9 @@ export function createAgentWebUiServer(options, deps = {}) {
         return;
       }
       try {
-        const upstream = await fetch(options.healthEndpoint, { method: 'GET' });
+        const upstreamUrl = new URL(options.healthEndpoint);
+        upstreamUrl.search = url.search;
+        const upstream = await fetch(upstreamUrl, { method: 'GET' });
         const body = await upstream.text();
         response.writeHead(upstream.status, { 'content-type': upstream.headers.get('content-type') ?? 'application/json; charset=utf-8' });
         response.end(body);

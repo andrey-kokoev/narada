@@ -12,9 +12,25 @@ import {
   NARS_AFFORDANCE_ACTION_REQUEST_METHOD,
 } from '@narada2/nars-client-projection-contract';
 import { resolveNaradaSitePaths } from '@narada2/site-paths';
+import { ADMITTED_INTELLIGENCE_PROVIDERS } from './intelligence-provider-policy.mjs';
+import { attachMcpStartupFailures, createMcpStatusSnapshot, rememberMcpRuntimeDiagnostic } from './mcp-runtime.mjs';
 import { createCarrierRuntimeDependencies } from './runtime-dependencies.mjs';
 import { runCarrierServerMode } from './server-mode.mjs';
 import { readJson, readJsonl, removeTempDir, tempRoot, writeFixtureMcpSurface, waitFor } from './server-mode-test-helpers.mjs';
+
+test('MCP runtime diagnostics do not degrade server operational state', () => {
+  const mcpServers = attachMcpStartupFailures([], []);
+  rememberMcpRuntimeDiagnostic(mcpServers, {
+    server_name: 'narada-fixture',
+    tool_name: 'fixture_slow_read',
+    error: 'MCP request timeout after 15000ms',
+    occurred_at: '2026-07-08T20:10:00.000Z',
+  });
+  const status = createMcpStatusSnapshot(mcpServers);
+  assert.equal(status.mcp_operational_state, 'healthy');
+  assert.equal(status.mcp_runtime_fault_count, 1);
+  assert.match(status.mcp_runtime_fault_summary, /narada-fixture:fixture_slow_read/);
+});
 
 test('server mode executes a provider-requested MCP tool through real fabric and records evidence', async () => {
   const siteRoot = tempRoot('carrier-mcp-e2e-test-');
@@ -90,6 +106,62 @@ test('server mode executes a provider-requested MCP tool through real fabric and
     assert.equal(durableToolResult?.payload?.tool_name, 'fixture_read');
     assert.equal(durableToolResult?.payload?.status, 'ok');
     assert.match(durableToolResult?.payload?.result_summary, /mcp-e2e/);
+  } finally {
+    removeTempDir(siteRoot);
+  }
+});
+
+test('server mode publishes attachable session evidence before MCP startup completes', async () => {
+  const siteRoot = tempRoot('carrier-mcp-early-session-test-');
+  try {
+    const input = new PassThrough();
+    const output = new PassThrough();
+    output.resume();
+
+    const sessionDir = resolveNaradaSitePaths({ siteRoot, sessionId: 'session_mcp_slow_start' }).narsSessionDir;
+    const runtimeContext = {
+      identity: 'agent.test',
+      session: 'session_mcp_slow_start',
+      siteRoot,
+      sessionPath: join(sessionDir, 'session.jsonl'),
+      eventsPath: join(sessionDir, 'events.jsonl'),
+      providerSettings: { provider: 'codex-subscription', model: 'gpt-5.5', thinking: 'medium', stream: false },
+      healthUrl: 'http://127.0.0.1:1234/health',
+      eventStreamUrl: 'ws://127.0.0.1:1235/events',
+    };
+    const { dependencies } = createCarrierRuntimeDependencies({ runtimeContext });
+    let unblockMcpStartup;
+    const mcpStartupBlocked = new Promise((resolve) => {
+      unblockMcpStartup = resolve;
+    });
+    const running = runCarrierServerMode({
+      input,
+      output,
+      callChatApiFn: async () => ({ choices: [{ message: { role: 'assistant', content: 'ok' } }] }),
+      runtimeContext,
+      dependencies: {
+        ...dependencies,
+        discoverAndStartMcpServers: async () => {
+          await mcpStartupBlocked;
+          return {};
+        },
+      },
+    });
+
+    const indexRecordPath = join(sessionDir, 'session-index-record.json');
+    const heartbeatPath = join(sessionDir, 'heartbeat.json');
+    await waitFor(() => existsSync(indexRecordPath) && existsSync(heartbeatPath));
+    const record = readJson(indexRecordPath);
+    const heartbeat = readJson(heartbeatPath);
+    assert.equal(record.session_id, 'session_mcp_slow_start');
+    assert.equal(record.status_hint, 'alive');
+    assert.equal(record.health_endpoint, 'http://127.0.0.1:1234/health');
+    assert.equal(record.event_endpoint, 'ws://127.0.0.1:1235/events');
+    assert.equal(heartbeat.status, 'alive');
+
+    unblockMcpStartup();
+    input.end();
+    await running;
   } finally {
     removeTempDir(siteRoot);
   }
@@ -515,7 +587,16 @@ test('server mode writes NARS session index record on startup', async () => {
     const sitePaths = resolveNaradaSitePaths({ siteRoot, sessionId });
     const sessionDir = sitePaths.narsSessionDir;
     const runtimeContext = {
-      identity: 'sonar.resident',
+      identity: 'resident',
+      agentIdentityRef: {
+        schema: 'narada.agent_identity_ref.v2',
+        identity_scope: { kind: 'narada_site', site_id: 'sonar' },
+        local_agent_id: 'resident',
+        role: 'resident',
+        canonical_agent_id: 'sonar.resident',
+        display: 'sonar.resident',
+        legacy_agent_id: 'resident',
+      },
       session: sessionId,
       siteId: 'sonar',
       siteRoot,
@@ -551,6 +632,9 @@ test('server mode writes NARS session index record on startup', async () => {
     assert.equal(record.runtime_session_id, sessionId);
     assert.equal(record.nars_session_id, sessionId);
     assert.equal(record.agent_id, 'sonar.resident');
+    assert.equal(record.agent_identity_ref?.identity_scope?.site_id, 'sonar');
+    assert.equal(record.agent_identity_ref?.local_agent_id, 'resident');
+    assert.equal(record.agent_identity_ref?.canonical_agent_id, 'sonar.resident');
     assert.equal(record.site_id, 'sonar');
     assert.equal(record.site_id_source, 'session_started');
     assert.equal(record.launch_operator_surface_kind, 'agent-web-ui');
@@ -564,6 +648,132 @@ test('server mode writes NARS session index record on startup', async () => {
     assert.equal(aggregate.sessions[0].runtime_session_id, sessionId);
     assert.equal(aggregate.sessions[0].nars_session_id, sessionId);
     assert.equal(aggregate.sessions[0].terminal_state, 'closed');
+    const sessionStarted = readJsonl(join(sessionDir, 'events.jsonl')).find((event) => event.event === 'session_started');
+    assert.equal(sessionStarted.agent_id, 'sonar.resident');
+    assert.equal(sessionStarted.site_id, 'sonar');
+    assert.equal(sessionStarted.agent_identity_ref?.identity_scope?.site_id, 'sonar');
+    assert.equal(sessionStarted.agent_identity_ref?.local_agent_id, 'resident');
+    assert.equal(sessionStarted.agent_identity_ref?.canonical_agent_id, 'sonar.resident');
+  } finally {
+    removeTempDir(siteRoot);
+  }
+});
+
+test('server mode emits canonical agent id for turn events when identity ref is site-scoped', async () => {
+  const siteRoot = tempRoot('carrier-canonical-agent-events-test-');
+  try {
+    const input = new PassThrough();
+    const output = new PassThrough();
+    const events = [];
+    let outputBuffer = '';
+    output.setEncoding('utf8');
+    output.on('data', (chunk) => {
+      outputBuffer += chunk;
+      const lines = outputBuffer.split(/\r?\n/);
+      outputBuffer = lines.pop() ?? '';
+      for (const line of lines) {
+        if (line.trim()) events.push(JSON.parse(line));
+      }
+    });
+
+    const sessionId = 'carrier_20260708000000_canonical_agent';
+    const sessionDir = resolveNaradaSitePaths({ siteRoot, sessionId }).narsSessionDir;
+    const runtimeContext = {
+      identity: 'resident',
+      agentIdentityRef: {
+        schema: 'narada.agent_identity_ref.v2',
+        identity_scope: { kind: 'narada_site', site_id: 'sonar' },
+        local_agent_id: 'resident',
+        role: 'resident',
+        canonical_agent_id: 'sonar.resident',
+        display: 'sonar.resident',
+        legacy_agent_id: 'resident',
+      },
+      session: sessionId,
+      siteId: 'sonar',
+      siteRoot,
+      sessionPath: join(sessionDir, 'session.jsonl'),
+      eventsPath: join(sessionDir, 'events.jsonl'),
+      providerSettings: { provider: 'codex-subscription', model: 'gpt-5.5', thinking: 'medium', stream: false },
+    };
+    const { dependencies } = createCarrierRuntimeDependencies({ runtimeContext });
+    input.write(`${JSON.stringify({ id: 'canonical-agent-input', method: 'conversation.send', params: { message: 'hello', source: 'programmatic_operator' } })}\n`);
+    input.end();
+    await runCarrierServerMode({
+      input,
+      output,
+      callChatApiFn: async () => ({ choices: [{ message: { role: 'assistant', content: 'hello back' } }] }),
+      runtimeContext,
+      dependencies: {
+        ...dependencies,
+        discoverAndStartMcpServers: async () => ({}),
+        closeMcpServers: () => {},
+        readMcpPreflightArtifact: () => null,
+      },
+    });
+
+    assert.equal(events.some((event) => event.event === 'user_message'), true);
+    assert.equal(events.some((event) => event.event === 'assistant_message'), true);
+    assert.deepEqual([...new Set(events.filter((event) => event.agent_id).map((event) => event.agent_id))], ['sonar.resident']);
+    assert.equal(events.every((event) => event.agent_identity_ref?.canonical_agent_id === 'sonar.resident'), true);
+  } finally {
+    removeTempDir(siteRoot);
+  }
+});
+
+test('server mode lifts legacy agent identity ref shape into a structured session index record', async () => {
+  const siteRoot = tempRoot('carrier-index-legacy-identity-test-');
+  try {
+    const input = new PassThrough();
+    const output = new PassThrough();
+    output.resume();
+    const sessionId = 'carrier_20260623002000_legacy_identity';
+    const sitePaths = resolveNaradaSitePaths({ siteRoot, sessionId });
+    const sessionDir = sitePaths.narsSessionDir;
+    const runtimeContext = {
+      identity: 'resident',
+      agentIdentityRef: {
+        schema: 'narada.agent_identity_ref.v1',
+        site_id: 'sonar',
+        local_agent_id: 'resident',
+        role: 'resident',
+        canonical_agent_id: 'sonar.resident',
+        display: 'sonar.resident',
+        source_agent_id: 'resident',
+        scope: 'site_scoped',
+      },
+      session: sessionId,
+      siteId: 'sonar',
+      siteRoot,
+      sessionPath: join(sessionDir, 'session.jsonl'),
+      eventsPath: join(sessionDir, 'events.jsonl'),
+      healthUrl: 'http://127.0.0.1:12346/health',
+      eventStreamUrl: 'ws://127.0.0.1:12345/events',
+      operatorSurfaceKind: 'agent-web-ui',
+      providerSettings: { stream: false },
+    };
+    const { dependencies } = createCarrierRuntimeDependencies({ runtimeContext });
+    input.end();
+    await runCarrierServerMode({
+      input,
+      output,
+      callChatApiFn: async () => ({ choices: [{ message: { role: 'assistant', content: 'unused' } }] }),
+      runtimeContext,
+      dependencies: {
+        ...dependencies,
+        discoverAndStartMcpServers: async () => ({}),
+        closeMcpServers: () => {},
+        readMcpPreflightArtifact: () => null,
+      },
+    });
+
+    const record = readJson(join(sessionDir, 'session-index-record.json'));
+    assert.equal(record.agent_id, 'sonar.resident');
+    assert.equal(record.agent_identity_ref?.schema, 'narada.agent_identity_ref.v2');
+    assert.equal(record.agent_identity_ref?.identity_scope?.site_id, 'sonar');
+    assert.equal(record.agent_identity_ref?.local_agent_id, 'resident');
+    assert.equal(record.agent_identity_ref?.canonical_agent_id, 'sonar.resident');
+    assert.equal(record.agent_identity_ref?.legacy_agent_id, 'resident');
   } finally {
     removeTempDir(siteRoot);
   }
@@ -1394,7 +1604,16 @@ test('server mode health and event subscription match NARS runtime contract shap
     const sitePaths = resolveNaradaSitePaths({ siteRoot, sessionId });
     const sessionDir = sitePaths.narsSessionDir;
     const runtimeContext = {
-      identity: 'sonar.resident',
+      identity: 'resident',
+      agentIdentityRef: {
+        schema: 'narada.agent_identity_ref.v2',
+        identity_scope: { kind: 'narada_site', site_id: 'sonar' },
+        local_agent_id: 'resident',
+        role: 'resident',
+        canonical_agent_id: 'sonar.resident',
+        display: 'sonar.resident',
+        legacy_agent_id: 'resident',
+      },
       session: sessionId,
       siteId: 'sonar',
       siteRoot,
@@ -1425,9 +1644,13 @@ test('server mode health and event subscription match NARS runtime contract shap
 
     const health = events.find((event) => event.event === 'session_health');
     assert.equal(health?.schema, 'narada.nars.health.v1');
+    assert.equal(health.agent_id, 'sonar.resident');
+    assert.equal(health.agent_identity_ref?.identity_scope?.site_id, 'sonar');
+    assert.equal(health.agent_identity_ref?.canonical_agent_id, 'sonar.resident');
+    assert.equal(health.site_id, 'sonar');
     assert.equal(health.runtime_mode, 'server');
     assert.equal(health.launch_operator_surface_kind, 'agent-web-ui');
-    assert.deepEqual(health.intelligence, { provider: 'codex-subscription', model: 'gpt-5.5', available_models: ['gpt-5.5'], thinking: 'medium', stream: false });
+    assert.deepEqual(health.intelligence, { provider: 'codex-subscription', model: 'gpt-5.5', available_models: ['gpt-5.5'], available_providers: ADMITTED_INTELLIGENCE_PROVIDERS, thinking: 'medium', stream: false });
     assert.equal(health.provider, 'codex-subscription');
     assert.equal(health.model, 'gpt-5.5');
     assert.equal(health.thinking, 'medium');

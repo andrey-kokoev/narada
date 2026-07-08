@@ -35,12 +35,26 @@ export function summarizeSessionIdentity(events = [], fallback = undefined) {
       siteId = stringField(nested, 'site_id') ?? siteId;
     }
   }
-  const fallbackTitle = agentId && agentId.includes('.') ? agentId : [siteId, agentId].filter(Boolean).join('.') || agentId;
+  const displayAgentId = identityRef ? agentIdentityDisplay(identityRef, agentId) : null;
+  const resolvedAgentId = displayAgentId ?? agentId;
+  const fallbackTitle = resolvedAgentId && resolvedAgentId.includes('.') ? resolvedAgentId : [siteId, resolvedAgentId].filter(Boolean).join('.') || resolvedAgentId;
   const title = agentIdentityDisplay(identityRef, fallbackTitle) || 'Narada Session';
   const subtitleParts = [];
   if (role) subtitleParts.push(`Role: ${role}`);
   subtitleParts.push('Browser projection attached to one NARS runtime.');
-  return { siteId, agentId, role, sessionId, title, subtitle: subtitleParts.join(' · ') };
+  return { siteId, agentId: resolvedAgentId, role, sessionId, title, subtitle: subtitleParts.join(' · ') };
+}
+
+/**
+ * @param {{ siteId?: string | null, agentId?: string | null } | undefined} identity
+ * @returns {{ siteLabel: string | null, agentLabel: string | null }}
+ */
+export function summarizeSessionTitleParts(identity = undefined) {
+  const agentId = typeof identity?.agentId === 'string' && identity.agentId ? identity.agentId : null;
+  return {
+    siteLabel: typeof identity?.siteId === 'string' && identity.siteId ? identity.siteId : sitePartFromAgentId(agentId),
+    agentLabel: agentPartFromAgentId(agentId),
+  };
 }
 
 function objectField(record, field) {
@@ -53,4 +67,14 @@ function stringField(record, field) {
   if (!record || typeof record !== 'object') return null;
   const value = record[field];
   return typeof value === 'string' && value ? value : null;
+}
+
+function sitePartFromAgentId(agentId) {
+  if (!agentId || !agentId.includes('.')) return null;
+  return agentId.split('.').slice(0, -1).join('.') || null;
+}
+
+function agentPartFromAgentId(agentId) {
+  if (!agentId) return null;
+  return agentId.includes('.') ? agentId.split('.').at(-1) || null : agentId;
 }

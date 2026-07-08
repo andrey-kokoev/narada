@@ -54,6 +54,9 @@ export async function runCarrierServerMode({
     authorityRuntimeHost = 'local',
   } = ctx;
   const launchOperatorSurfaceKind = operatorSurfaceKind || 'agent-cli';
+  const sessionAgentId = typeof agentIdentityRef?.canonical_agent_id === 'string' && agentIdentityRef.canonical_agent_id
+    ? agentIdentityRef.canonical_agent_id
+    : identity;
   const {
     discoverAndStartMcpServers,
     applyWorkerMcpProjection = (mcpServers) => mcpServers,
@@ -88,10 +91,70 @@ export async function runCarrierServerMode({
     onOperationHeartbeatDirectiveStopped = () => {},
   } = dependencies ?? {};
 
-  const mcpServers = applyWorkerMcpProjection(await discoverAndStartMcpServers(siteRoot));
+  const runtimeAuthorityPosture = runtimeAuthorityPostureFromHandoff(narsDelegatedAuthorityHandoff);
+  const earlyStartedAt = new Date();
+  writeNarsSessionStartedIndex({
+    sessionStartedEvent: {
+      event: 'session_started',
+      agent_id: sessionAgentId,
+      agent_identity_ref: agentIdentityRef,
+      session_id: session,
+      runtime_session_id: session,
+      nars_session_id: session,
+      carrier_session_id: session,
+      runtime: 'narada-agent-runtime-server',
+      runtime_substrate_kind: 'narada-agent-runtime-server',
+      carrier_kind: launchOperatorSurfaceKind,
+      launch_operator_surface_kind: launchOperatorSurfaceKind,
+      operator_surface_kind: launchOperatorSurfaceKind,
+      mode: 'server',
+      site_id: siteId,
+      site_root: siteRoot,
+      authority_runtime_host: authorityRuntimeHost,
+      health_endpoint: healthUrl,
+      event_endpoint: eventStreamUrl,
+      websocket_endpoint: eventStreamUrl,
+      attach_commands: buildNarsAttachCommands({ eventEndpoint: eventStreamUrl, healthEndpoint: healthUrl }),
+      runtime_authority_posture: runtimeAuthorityPosture,
+      authority_mode: runtimeAuthorityPosture.authority_mode,
+      session_path: sessionPath,
+      events_path: eventsPath,
+      timestamp: earlyStartedAt.toISOString(),
+      started_at: earlyStartedAt.toISOString(),
+    },
+    sessionPath,
+    siteRoot,
+    now: earlyStartedAt,
+  });
+  const heartbeat = startCarrierHeartbeat({
+    path: sessionPath ? join(dirname(sessionPath), 'heartbeat.json') : null,
+    session,
+    identity: sessionAgentId,
+    agent_identity_ref: agentIdentityRef,
+    runtime: 'narada-agent-runtime-server',
+    carrier_kind: launchOperatorSurfaceKind,
+    launch_operator_surface_kind: launchOperatorSurfaceKind,
+    operator_surface_kind: launchOperatorSurfaceKind,
+    mode: 'server',
+    sessionDir: sessionPath ? dirname(sessionPath) : null,
+  });
+
+  let mcpServers;
+  try {
+    mcpServers = applyWorkerMcpProjection(await discoverAndStartMcpServers(siteRoot));
+  } catch (error) {
+    heartbeat.stop?.('closed');
+    markNarsSessionIndexClosed({
+      sessionPath,
+      siteRoot,
+      terminalState: 'closed',
+      terminalReason: 'mcp_startup_failed',
+      closedAt: new Date().toISOString(),
+    });
+    throw error;
+  }
   const allTools = aggregateTools(mcpServers);
   const mcpStatus = createMcpStatusSnapshot(mcpServers);
-  const runtimeAuthorityPosture = runtimeAuthorityPostureFromHandoff(narsDelegatedAuthorityHandoff);
   const surfaceAffordances = buildNarsSurfaceAffordanceProjection({ mcpServers, intelligence: providerSettings, runtimeAuthorityPosture });
   const mcpPreflightArtifact = readMcpPreflightArtifact();
   const mcpPreflightSnapshot = createMcpPreflightArtifactSnapshot(mcpPreflightArtifact);
@@ -122,12 +185,14 @@ export async function runCarrierServerMode({
     const envelope = {
       event,
       ...(isNarsRuntimeEventKind(lifecycleEvent) ? { lifecycle_event: lifecycleEvent } : {}),
-      agent_id: identity,
+      agent_id: sessionAgentId,
       agent_identity_ref: agentIdentityRef,
       session_id: session,
       timestamp: new Date().toISOString(),
       ...payload,
     };
+    envelope.agent_id = sessionAgentId;
+    envelope.agent_identity_ref = agentIdentityRef;
     const result = emitServerEvent(output, envelope);
     if (event === 'session_started') {
       writeNarsSessionStartedIndex({ sessionStartedEvent: envelope, sessionPath, siteRoot });
@@ -211,20 +276,8 @@ export async function runCarrierServerMode({
   }
 
   noteSessionActivity(state, 'session_started', state.startedAt);
-  const heartbeat = startCarrierHeartbeat({
-    path: sessionPath ? join(dirname(sessionPath), 'heartbeat.json') : null,
-    session,
-    identity,
-    agent_identity_ref: agentIdentityRef,
-    runtime: 'narada-agent-runtime-server',
-    carrier_kind: launchOperatorSurfaceKind,
-    launch_operator_surface_kind: launchOperatorSurfaceKind,
-    operator_surface_kind: launchOperatorSurfaceKind,
-    mode: 'server',
-    sessionDir: sessionPath ? dirname(sessionPath) : null,
-  });
-
   emit('session_started', {
+    agent_id: sessionAgentId,
     transport: 'jsonl_stdio',
     runtime_session_id: session,
     nars_session_id: session,

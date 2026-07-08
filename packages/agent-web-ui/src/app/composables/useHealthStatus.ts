@@ -1,4 +1,5 @@
 import { onBeforeUnmount, ref } from 'vue';
+import { agentIdentityDisplay } from '@narada2/agent-identity';
 
 export interface HealthIdentitySummary {
   siteId: string | null;
@@ -38,9 +39,10 @@ export function useHealthStatus(options: HealthStatusOptions) {
       const parsedValue = await response.json() as unknown;
       const parsed = parsedValue && typeof parsedValue === 'object' && !Array.isArray(parsedValue) ? parsedValue as Record<string, unknown> : {};
       body.value = parsed;
+      const displayAgentId = agentIdentityDisplay(objectField(parsed, 'agent_identity_ref'), stringField(parsed, 'agent_id'));
       identity.value = {
         siteId: stringField(parsed, 'site_id'),
-        agentId: stringField(parsed, 'agent_id'),
+        agentId: displayAgentId,
         role: stringField(parsed, 'role'),
         sessionId: stringField(parsed, 'session_id'),
       };
@@ -64,7 +66,7 @@ export function useHealthStatus(options: HealthStatusOptions) {
 function healthStatusText(body: Record<string, unknown>, httpStatus: number): string {
   const status = String(body.status ?? httpStatus);
   const code = stringField(body, 'code');
-  const agentId = stringField(body, 'agent_id') ?? 'agent';
+  const agentId = agentIdentityDisplay(objectField(body, 'agent_identity_ref'), stringField(body, 'agent_id')) ?? 'agent';
   const sessionId = stringField(body, 'session_id') ?? 'session';
   return [status, code, agentId, sessionId].filter(Boolean).join(' · ');
 }

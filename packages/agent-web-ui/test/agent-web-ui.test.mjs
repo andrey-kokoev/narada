@@ -1,14 +1,12 @@
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
 import { once } from 'node:events';
-import { appendFileSync, existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
-import { mkdir, readFile, rm, stat } from 'node:fs/promises';
+import { appendFileSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { readFile, readdir } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
 import test from 'node:test';
 import { tmpdir } from 'node:os';
-import { fileURLToPath } from 'node:url';
 import postcss from 'postcss';
 import { resolveNaradaSitePaths } from '@narada2/site-paths';
 import {
@@ -33,7 +31,7 @@ import {
   startAgentWebUiServer,
 } from '../src/server.js';
 import { createSessionProjection } from '../src/session-projection.js';
-import { summarizeSessionIdentity } from '../src/session-identity.js';
+import { summarizeSessionIdentity, summarizeSessionTitleParts } from '../src/session-identity.js';
 import {
   createEventHub,
   startEventStreamProjection,
@@ -45,6 +43,13 @@ import { removeTempDir, tempRoot, waitFor, writeFixtureMcpSurface } from '../../
 import { createCloudflareNarsProjectionWorker } from '@narada2/cloudflare-nars-projection/worker';
 import { registerProjectionRemotely, startLocalProjectionBridgeOnce, deliverRemoteProjectionInputsOnce } from '@narada2/cloudflare-nars-projection/node';
 import { appendEvent } from '../src/render.js';
+import {
+  applyManagedFavicon,
+  extractFaviconCandidatesFromHealth,
+  isSafeFaviconHref,
+  NARADA_DEFAULT_FAVICON,
+  resolveFaviconDescriptor,
+} from '../src/app/composables/useResolvedFavicon.js';
 
 async function connectWebSocket(url) {
   assert.equal(typeof WebSocket, 'function');
@@ -101,6 +106,28 @@ function createFakeAgentWebUiElements() {
 function textOfNode(node) {
   if (!node) return '';
   return `${node.textContent ?? ''}${(node.children ?? []).map(textOfNode).join('')}`;
+}
+
+function createFakeDocument() {
+  const links = [];
+  class FakeLink {
+    constructor() { this.attributes = new Map(); }
+    setAttribute(name, value) { this.attributes.set(name, String(value)); }
+    removeAttribute(name) { this.attributes.delete(name); }
+    getAttribute(name) { return this.attributes.get(name) ?? null; }
+  }
+  return {
+    links,
+    head: { appendChild(node) { links.push(node); } },
+    createElement(name) {
+      assert.equal(name, 'link');
+      return new FakeLink();
+    },
+    querySelector(selector) {
+      assert.equal(selector, 'link[data-narada-managed-favicon="true"]');
+      return links.find((link) => link.getAttribute('data-narada-managed-favicon') === 'true') ?? null;
+    },
+  };
 }
 
 async function withRealNarsWebServer(fn) {
@@ -208,55 +235,70 @@ function readInjectedBrowserConfig(html) {
   return JSON.parse(match[1]);
 }
 
-function findHeadlessBrowser() {
-  return [
-    'C:/Program Files/Microsoft/Edge/Application/msedge.exe',
-    'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
-    'C:/Program Files/Google/Chrome/Application/chrome.exe',
-    'C:/Program Files (x86)/Google/Chrome/Application/chrome.exe',
-  ].find((path) => existsSync(path)) ?? null;
-}
-
-async function captureHeadlessScreenshot({ browserPath, url, screenshotPath }) {
-  await new Promise((resolve, reject) => {
-    const child = spawn(browserPath, [
-      '--headless=new',
-      '--disable-gpu',
-      '--no-sandbox',
-      '--hide-scrollbars',
-      '--window-size=900,700',
-      `--screenshot=${screenshotPath}`,
-      url,
-    ], { stdio: ['ignore', 'ignore', 'pipe'] });
-    let stderr = '';
-    const timeout = setTimeout(() => {
-      child.kill();
-      reject(new Error('headless_browser_screenshot_timeout'));
-    }, 20000);
-    child.stderr.on('data', (chunk) => {
-      stderr += String(chunk);
-    });
-    child.on('error', (error) => {
-      clearTimeout(timeout);
-      reject(error);
-    });
-    child.on('exit', (code) => {
-      clearTimeout(timeout);
-      if (code === 0) resolve();
-      else reject(new Error(`headless_browser_screenshot_failed:${code}:${stderr.slice(0, 500)}`));
-    });
-  });
-}
 test('default package test script remains non-browser and non-e2e', async () => {
   const packageJson = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
   const defaultTest = packageJson.scripts?.test;
   assert.equal(typeof defaultTest, 'string');
+  assert.doesNotMatch(defaultTest, /--test-skip-pattern/);
   const testFiles = defaultTest.match(/test\/\S+\.test\.mjs/g) ?? [];
   const forbidden = testFiles.filter((file) => (
     /-e2e\.test\.mjs$/.test(file)
     || /(?:browser|ux-smoke)\.test\.mjs$/.test(file)
   ));
   assert.deepEqual(forbidden, [], `default test must stay non-browser; move these to test:browser or test:all: ${forbidden.join(', ')}`);
+});
+
+test('ordinary Agent Web UI browser UX tests stay Playwright-owned', async () => {
+  const packageJson = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
+  const testFiles = await readdir(new URL('../test/', import.meta.url));
+  const legacyRawBrowserTests = [
+    'agent-web-ui-live-slash-cross-surface-e2e.test.mjs',
+    'agent-web-ui-panels-e2e.test.mjs',
+    'agent-web-ui-ux-smoke.test.mjs',
+  ];
+  assert.deepEqual(testFiles.filter((file) => legacyRawBrowserTests.includes(file)), []);
+  assert.equal(packageJson.scripts?.['test:browser'], 'pnpm run test:e2e');
+  assert.match(packageJson.scripts?.['test:e2e'] ?? '', /playwright test/);
+  assert.match(packageJson.scripts?.['test:live:slash-commands'] ?? '', /playwright test test\/e2e\/live-slash-smoke\.spec\.js/);
+  assert.doesNotMatch(packageJson.scripts?.['test:live:slash-commands'] ?? '', /agent-web-ui-local-submit-html-artifact-cloudflare-e2e/);
+  assert.match(packageJson.scripts?.['test:browser:cdp'] ?? '', /agent-web-ui-cloudflare-authority-local-surface-artifact-e2e\.test\.mjs/);
+  assert.match(packageJson.scripts?.['test:browser:cdp'] ?? '', /agent-web-ui-cloudflare-html-artifact-e2e\.test\.mjs/);
+  assert.match(packageJson.scripts?.['test:browser:cdp'] ?? '', /agent-web-ui-local-submit-html-artifact-cloudflare-e2e\.test\.mjs/);
+});
+
+test('favicon resolver applies ordered safe descriptors and manages one head link', () => {
+  const health = {
+    agent_identity_ref: { icon: { href: 'https://example.com/agent.svg', type: 'image/svg+xml' } },
+    site_config: { favicon: { href: '/site.svg', sizes: 'any' } },
+  };
+  const candidates = extractFaviconCandidatesFromHealth(health);
+
+  assert.equal(resolveFaviconDescriptor({ tab: './tab.svg', ...candidates })?.href, './tab.svg');
+  assert.equal(resolveFaviconDescriptor({ tab: null, ...candidates })?.href, 'https://example.com/agent.svg');
+  assert.equal(resolveFaviconDescriptor({ tab: null, agentIdentity: null, siteConfig: candidates.siteConfig })?.href, '/site.svg');
+  assert.equal(resolveFaviconDescriptor({ tab: null, agentIdentity: null, siteConfig: null })?.href, NARADA_DEFAULT_FAVICON.href);
+  assert.equal(resolveFaviconDescriptor({ tab: { href: 'javascript:alert(1)' }, agentIdentity: 'data:image/svg+xml,%3Csvg/%3E', siteConfig: '/site.svg' })?.source, 'agent_identity');
+  assert.equal(isSafeFaviconHref('http://example.com/icon.svg'), false);
+
+  const documentRef = createFakeDocument();
+  const first = applyManagedFavicon(resolveFaviconDescriptor({ tab: './tab.svg', ...candidates }), documentRef);
+  const second = applyManagedFavicon(resolveFaviconDescriptor({ tab: null, ...candidates }), documentRef);
+  assert.equal(documentRef.links.length, 1);
+  assert.equal(first, second);
+  assert.equal(second.getAttribute('rel'), 'icon');
+  assert.equal(second.getAttribute('href'), 'https://example.com/agent.svg');
+  assert.equal(second.getAttribute('type'), 'image/svg+xml');
+  assert.equal(second.getAttribute('data-narada-favicon-source'), 'agent_identity');
+});
+
+test('agent-web-ui entrypoints include Narada favicon fallback links', async () => {
+  const viteIndex = await readFile(new URL('../src/index.html', import.meta.url), 'utf8');
+  const compatIndex = await readFile(new URL('../src/compat-index.html', import.meta.url), 'utf8');
+  const favicon = await readFile(new URL('../src/narada-favicon.svg', import.meta.url), 'utf8');
+  for (const html of [viteIndex, compatIndex]) {
+    assert.match(html, /<link rel="icon" href="\.\/narada-favicon\.svg" type="image\/svg\+xml" sizes="any">/);
+  }
+  assert.match(favicon, /<svg/);
 });
 
 test('agent-web-ui README documents the remaining peer gap ledger', async () => {
@@ -268,6 +310,16 @@ test('agent-web-ui README documents the remaining peer gap ledger', async () => 
 
 test('Vue operator components expose composer without hidden privileged controls', async () => {
   const composer = await readFile(new URL('../src/app/components/OperatorComposer.vue', import.meta.url), 'utf8');
+  const commandPalette = await readFile(new URL('../src/app/composables/useOperatorCommandPalette.ts', import.meta.url), 'utf8');
+  const commandController = await readFile(new URL('../src/app/lib/operatorCommandController.ts', import.meta.url), 'utf8');
+  const commandPaletteComponent = await readFile(new URL('../src/app/components/OperatorCommandPalette.vue', import.meta.url), 'utf8');
+  const commandUiIndex = await readFile(new URL('../src/app/components/ui/command/index.ts', import.meta.url), 'utf8');
+  const commandItem = await readFile(new URL('../src/app/components/ui/command/CommandItem.vue', import.meta.url), 'utf8');
+  const commandList = await readFile(new URL('../src/app/components/ui/command/CommandList.vue', import.meta.url), 'utf8');
+  const commandEmpty = await readFile(new URL('../src/app/components/ui/command/CommandEmpty.vue', import.meta.url), 'utf8');
+  const interruptPrompt = await readFile(new URL('../src/app/composables/useOperatorInterruptPrompt.ts', import.meta.url), 'utf8');
+  const snippets = await readFile(new URL('../src/app/composables/useOperatorSnippets.ts', import.meta.url), 'utf8');
+  const slashSnippetE2e = await readFile(new URL('../test/e2e/slash-snippets.spec.js', import.meta.url), 'utf8');
   const statusBoxSelector = await readFile(new URL('../src/app/components/StatusBoxSelector.vue', import.meta.url), 'utf8');
   const shell = await readFile(new URL('../src/app/components/NarsSessionShell.vue', import.meta.url), 'utf8');
   const input = await readFile(new URL('../src/app/composables/useOperatorInput.ts', import.meta.url), 'utf8');
@@ -285,26 +337,79 @@ test('Vue operator components expose composer without hidden privileged controls
   const narsFrames = await readFile(new URL('../src/app/lib/narsFrames.ts', import.meta.url), 'utf8');
 
   assert.match(composer, /@keydown="handleKeydown"/);
-  assert.match(composer, /filterAgentWebUiCommands/);
+  assert.match(composer, /useOperatorCommandPalette/);
+  assert.match(composer, /import OperatorCommandPalette/);
+  assert.match(commandPalette, /buildOperatorCommandPaletteEntries/);
+  assert.match(commandPalette, /buildOperatorCommandPaletteView/);
+  assert.match(commandPalette, /acceptOperatorCommandPaletteEntry/);
+  assert.doesNotMatch(commandPalette, /filterAgentWebUiCommands/);
+  assert.doesNotMatch(commandPalette, /filterAgentWebUiSnippetActions/);
+  assert.match(commandController, /filterAgentWebUiCommands/);
+  assert.match(commandController, /filterAgentWebUiSnippetActions/);
+  assert.match(commandController, /parseAgentWebUiSnippetCommand/);
+  assert.match(commandController, /title: 'Snippets'/);
+  assert.match(commandController, /'Snippet queue' : 'Snippet run'/);
+  assert.match(commandController, /No saved snippets yet/);
+  assert.match(commandController, /Backspace to snippet actions/);
+  assert.match(commandController, /emptyHint:/);
+  assert.match(commandController, /OPERATOR_COMMAND_PALETTE_SECTION_LABELS/);
+  assert.match(commandController, /action\.id === 'delete'/);
+  assert.match(commandController, /choose snippet to delete/);
+  assert.match(commandController, /entry\.kind === 'snippet'/);
+  assert.match(commandController, /command\.id === 'snippet'[\s\S]*draft: '\/snippet '/);
+  assert.match(commandPaletteComponent, /from '.\/ui\/command'/);
+  assert.match(commandPaletteComponent, /command-palette-header/);
+  assert.match(commandPaletteComponent, /command-section/);
+  assert.match(commandPaletteComponent, /role="group"/);
+  assert.match(commandPaletteComponent, /agent-web-ui-command-palette-list/);
+  assert.match(commandPaletteComponent, /operatorCommandPaletteEntrySection/);
+  assert.match(commandPaletteComponent, /view\.emptyText/);
+  assert.match(commandPaletteComponent, /view\.emptyHint/);
+  assert.match(commandPaletteComponent, /view\.hint/);
+  assert.doesNotMatch(commandPaletteComponent, /entries\.length \? view\.hint : view\.emptyHint/);
+  assert.match(composer, /aria-haspopup="listbox"/);
+  assert.match(composer, /aria-controls="agent-web-ui-command-palette-list"/);
+  assert.match(commandList, /listId/);
+  assert.match(commandItem, /role="option"/);
+  assert.match(commandItem, /tabindex="-1"/);
+  assert.doesNotMatch(commandItem, /<button/);
+  assert.match(commandEmpty, /role="option"/);
+  assert.match(commandEmpty, /aria-disabled="true"/);
+  assert.match(commandList, /role="listbox"/);
+  assert.match(commandUiIndex, /CommandList/);
+  assert.doesNotMatch(commandPalette, /SNIPPET_SELECTION_ACTIONS/);
+  assert.doesNotMatch(commandPalette, /SNIPPET_MANAGEMENT_ACTIONS/);
+  assert.match(snippets, /parseAgentWebUiSnippetCommand/);
+  assert.match(slashSnippetE2e, /AGENT_WEB_UI_SNIPPET_ACTIONS/);
+  assert.match(slashSnippetE2e, /snippet slash grammar is registry-driven across actions and aliases/);
+  assert.doesNotMatch(slashSnippetE2e, /WebSocketImpl: createRecordingWebSocketClass/);
   assert.match(composer, /commandPaletteOpen/);
-  assert.match(composer, /role="listbox"/);
-  assert.match(composer, /role="option"/);
-  assert.match(composer, /acceptSelectedCommand/);
-  assert.match(composer, /event\.key === 'Escape'[\s\S]*commandPaletteOpen\.value/);
+  assert.doesNotMatch(composer, /role="listbox"/);
+  assert.doesNotMatch(composer, /role="option"/);
+  assert.match(commandPaletteComponent, /CommandList/);
+  assert.match(commandPalette, /acceptSelectedCommand/);
+  assert.match(commandPalette, /event\.key === 'Escape'[\s\S]*commandPaletteDismissedFor\.value/);
   assert.match(composer, /event\.key !== 'Enter' \|\| event\.shiftKey/);
+  assert.match(composer, /useOperatorInterruptPrompt/);
+  assert.doesNotMatch(composer, /setInterval\(/);
+  assert.match(interruptPrompt, /commandPaletteOpen\.value/);
   assert.match(composer, /Press Esc again to interrupt the model/);
   assert.match(composer, /Esc to interrupt/);
   assert.match(composer, /canInterrupt\?: boolean/);
-  assert.match(composer, /!props\.canInterrupt/);
-  assert.match(composer, /watch\(\(\) => props\.canInterrupt/);
-  assert.match(composer, /interruptCountdown\.value = 3/);
-  assert.match(composer, /setTimeout\(\(\) => \{/);
-  assert.match(composer, /emit\('interrupt'\)/);
+  assert.match(composer, /const canInterrupt = computed\(\(\) => Boolean\(props\.canInterrupt\)\)/);
+  assert.match(interruptPrompt, /!options\.canInterrupt\.value/);
+  assert.match(interruptPrompt, /watch\(options\.canInterrupt/);
+  assert.match(interruptPrompt, /interruptCountdown\.value = 3/);
+  assert.match(interruptPrompt, /setTimeout\(\(\) => \{/);
+  assert.match(interruptPrompt, /options\.interrupt\(\)/);
   assert.match(shell, /@interrupt="emit\('interrupt'\)"/);
   assert.match(shell, /const canInterruptModel = computed/);
   assert.match(shell, /Boolean\(props\.activeTurnId\)/);
   assert.match(shell, /props\.agentActivity\.state === 'thinking' \|\| props\.agentActivity\.state === 'streaming'/);
+  assert.match(shell, /const canSteerActiveTurn = computed\(\(\) => canInterruptModel\.value\)/);
+  assert.match(shell, /:can-steer-active-turn="canSteerActiveTurn"/);
   assert.match(shell, /:can-interrupt="canInterruptModel"/);
+  assert.match(input, /canSteerActiveTurn\(\)/);
   assert.match(app, /@interrupt="interruptModel"/);
   assert.match(input, /buildAgentWebUiOperatorInputAction\('\/interrupt'/);
   assert.match(app, /buildMailboxSummaryRequestFrame/);
@@ -441,7 +546,11 @@ test('Vue operator components expose composer without hidden privileged controls
   assert.doesNotMatch(composer, /command\.execute|conversation\.interrupt/i);
   assert.match(statusBoxSelector, /:aria-label="`Choose \$\{props\.triggerLabel \?\? 'boxes'\}`"/);
   assert.match(statusBoxSelector, /status-box-selector-icon/);
+  assert.match(statusBoxSelector, /data-placement/);
+  assert.match(statusBoxSelector, /<\/button>\s*<span class="status-box-selector-count" aria-hidden="true">\{\{ boxCountLabel \}\}<\/span>/);
   assert.doesNotMatch(statusBoxSelector, />Boxes<\/span>/);
+  assert.match(shell, /summarizeSessionTitleParts\(props\.sessionIdentity\)/);
+  assert.match(shell, /placement="inline"/);
 });
 
 test('session identity projection prefers explicit Site id for workspace-root Site bindings', () => {
@@ -472,6 +581,7 @@ test('session identity projection prefers explicit Site id for workspace-root Si
     title: 'narada.sonar.resident',
     subtitle: 'Role: resident · Browser projection attached to one NARS runtime.',
   });
+  assert.deepEqual(summarizeSessionTitleParts(summary), { siteLabel: 'narada.sonar', agentLabel: 'resident' });
 });
 
 test('session identity projection keeps embedded-authority roots out of display authority', () => {
@@ -499,6 +609,62 @@ test('session identity projection keeps embedded-authority roots out of display 
     sessionId: 'carrier_embedded_authority',
     title: 'narada-staccato.resident',
     subtitle: 'Role: resident · Browser projection attached to one NARS runtime.',
+  });
+  assert.deepEqual(summarizeSessionTitleParts(summary), { siteLabel: 'narada-staccato', agentLabel: 'resident' });
+});
+
+test('session identity projection keeps canonical identity stable across mixed local and canonical event ids', () => {
+  const identityRef = {
+    schema: 'narada.agent_identity_ref.v2',
+    identity_scope: { kind: 'narada_site', site_id: 'sonar' },
+    local_agent_id: 'resident',
+    role: 'resident',
+    canonical_agent_id: 'sonar.resident',
+    display: 'sonar.resident',
+    legacy_agent_id: 'resident',
+  };
+  const summary = summarizeSessionIdentity([
+    {
+      event: 'session_started',
+      site_id: 'sonar',
+      agent_id: 'sonar.resident',
+      agent_identity_ref: identityRef,
+      role: 'resident',
+      session_id: 'carrier_mixed_identity',
+    },
+    {
+      event: 'input_event_started',
+      site_id: 'sonar',
+      agent_id: 'resident',
+      agent_identity_ref: identityRef,
+      role: 'resident',
+      session_id: 'carrier_mixed_identity',
+    },
+    {
+      event: 'session_health',
+      site_id: 'sonar',
+      agent_id: 'sonar.resident',
+      agent_identity_ref: identityRef,
+      role: 'resident',
+      session_id: 'carrier_mixed_identity',
+    },
+  ]);
+
+  assert.deepEqual(summary, {
+    siteId: 'sonar',
+    agentId: 'sonar.resident',
+    role: 'resident',
+    sessionId: 'carrier_mixed_identity',
+    title: 'sonar.resident',
+    subtitle: 'Role: resident · Browser projection attached to one NARS runtime.',
+  });
+  assert.deepEqual(summarizeSessionTitleParts(summary), { siteLabel: 'sonar', agentLabel: 'resident' });
+});
+
+test('session title parts do not duplicate an explicit Site id when agent id is canonical', () => {
+  assert.deepEqual(summarizeSessionTitleParts({ siteId: 'sonar', agentId: 'sonar.resident' }), {
+    siteLabel: 'sonar',
+    agentLabel: 'resident',
   });
 });
 
@@ -536,6 +702,8 @@ test('Vue layout smoke covers shell, status, event list, composer, and event ton
   assert.match(status, /projection-status-label/);
   const queuePanel = await readFile(new URL('../src/app/components/OperatorQueuePanel.vue', import.meta.url), 'utf8');
   assert.match(queuePanel, /narada:agent-web-ui:operator-queue-open\.v1/);
+  assert.match(queuePanel, /canSteerActiveTurn: boolean/);
+  assert.match(queuePanel, /!activeTurnId \|\| !canSteerActiveTurn/);
   assert.match(transcript, /followLatestRevision/);
   assert.match(transcript, /nextTick\(scrollToBottom\)/);
   assert.match(status, /verbosity === 'diagnostics' \|\| verbosity === 'raw'/);
@@ -616,6 +784,9 @@ function locationLabel(node) {
 test('Vue message content renderer has typed parts, inline code, and lazy Mermaid fallback', async () => {
   const eventRow = await readFile(new URL('../src/app/components/EventRow.vue', import.meta.url), 'utf8');
   const projectionSelect = await readFile(new URL('../src/app/components/ProjectionVerbositySelect.vue', import.meta.url), 'utf8');
+  const app = await readFile(new URL('../src/app/App.vue', import.meta.url), 'utf8');
+  const shell = await readFile(new URL('../src/app/components/NarsSessionShell.vue', import.meta.url), 'utf8');
+  const transcript = await readFile(new URL('../src/app/components/ConversationTranscript.vue', import.meta.url), 'utf8');
   const messageContent = await readFile(new URL('../src/app/components/content/MessageContent.vue', import.meta.url), 'utf8');
   const markdownPart = await readFile(new URL('../src/app/components/content/MarkdownTextPart.vue', import.meta.url), 'utf8');
   const intentPart = await readFile(new URL('../src/app/components/content/IntentRefPart.vue', import.meta.url), 'utf8');
@@ -639,8 +810,10 @@ test('Vue message content renderer has typed parts, inline code, and lazy Mermai
     assert.equal(parser.includes(renderKind), true, renderKind);
   }
   assert.match(messageContent, /IntentRefPart/);
+  assert.match(messageContent, /'intent-selected'/);
   assert.match(intentPart, /intent-ref-part/);
-  assert.match(intentPart, /clipboard/);
+  assert.match(intentPart, /stageIntent/);
+  assert.match(intentPart, /emit\('intent-selected', intent\)/);
   assert.match(markdownPart, /MarkdownIt/);
   assert.match(markdownPart, /RenderedPartFrame/);
   assert.match(markdownPart, /html: false/);
@@ -650,6 +823,12 @@ test('Vue message content renderer has typed parts, inline code, and lazy Mermai
   assert.match(markdownPart, /markdown-intent-button/);
   assert.match(markdownPart, /data-intent/);
   assert.match(markdownPart, /intentFromLink/);
+  assert.match(markdownPart, /emit\('intent-selected', intent\)/);
+  assert.match(transcript, /@intent-selected="emit\('intent-selected', \$event\)"/);
+  assert.match(shell, /@intent-selected="emit\('intent-selected', \$event\)"/);
+  assert.match(app, /function fillIntentRef/);
+  assert.match(app, /draft\.value = normalized/);
+  assert.match(app, /#operator-input/);
   assert.match(renderedFrame, /activeView = ref<'render' \| 'code'>\('render'\)/);
   assert.match(renderedFrame, /copySource/);
   assert.match(renderedFrame, /class="rendered-part-copy"/);
@@ -663,7 +842,7 @@ test('Vue message content renderer has typed parts, inline code, and lazy Mermai
   assert.match(css, /\.rendered-part-copy[\s\S]*?cursor: pointer/);
   assert.match(css, /\.intent-ref-part/);
   assert.match(css, /\.markdown-intent-button/);
-  assert.match(css, /data-status='copied'/);
+  assert.match(css, /data-status='staged'/);
   assert.equal(parser.includes('(?:^|\\n)\\s*[-*+]\\s+'), true);
   assert.match(mermaidPart, /import\('mermaid'\)/);
   assert.match(mermaidPart, /nextMermaidInstanceId/);
@@ -683,25 +862,6 @@ test('Vue message content renderer has typed parts, inline code, and lazy Mermai
   assert.match(readme, /intent_ref/);
   assert.match(readme, /intent:/);
   assert.match(readme, /narada-intent:/);
-});
-
-test('browser screenshot smoke renders the served shell', async () => {
-  const browserPath = findHeadlessBrowser();
-  assert.ok(browserPath, 'expected an installed Chromium-family browser for screenshot smoke');
-  const tmpDir = new URL('../.tmp-tests/agent-web-ui-screenshot/', import.meta.url);
-  const screenshotUrl = new URL('shell.png', tmpDir);
-  await rm(tmpDir, { recursive: true, force: true });
-  await mkdir(tmpDir, { recursive: true });
-  const web = await startAgentWebUiServer({ host: '127.0.0.1', port: 0, eventEndpoint: null, healthEndpoint: null });
-  try {
-    await captureHeadlessScreenshot({ browserPath, url: web.url, screenshotPath: fileURLToPath(screenshotUrl) });
-    const screenshot = await readFile(screenshotUrl);
-    assert.deepEqual([...screenshot.subarray(0, 8)], [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
-    assert.ok((await stat(screenshotUrl)).size > 5000, 'expected non-empty rendered PNG screenshot');
-  } finally {
-    web.server.close();
-    await rm(tmpDir, { recursive: true, force: true });
-  }
 });
 
 test('package server injects operator-capable config and proxies health with GET only', async () => {
@@ -735,7 +895,11 @@ test('package server injects operator-capable config and proxies health with GET
     assert.match(index, /"operatorInput":true/);
     assert.match(index, /"conversation.send"/);
     assert.match(index, /"session.command.execute"/);
-    assert.match(index, /"carrier.command.execute"/);
+    assert.doesNotMatch(index, /"carrier.command.execute"/);
+
+    const faviconResponse = await fetch(new URL('/narada-favicon.svg', web.url));
+    assert.equal(faviconResponse.headers.get('content-type'), 'image/svg+xml; charset=utf-8');
+    assert.match(await faviconResponse.text(), /<svg/);
 
     const health = await fetch(new URL('/api/health', web.url)).then((response) => response.json());
     assert.equal(health.status, 'healthy');
@@ -789,7 +953,11 @@ test('served web UI config attaches to live NARS health and event projections', 
       assert.equal(health.status, 'healthy');
       assert.equal(health.session_id, 'session_web_ui_config_real_nars');
       assert.equal(health.intelligence.model, 'gpt-5.5');
-      assert.equal(health.mcp_tools.some((tool) => tool.server_name === 'narada-fixture' && tool.tool_name === 'fixture_read'), true);
+      assert.equal(health.mcp_tools, undefined);
+      assert.equal(health.mcp?.tools, undefined);
+      const fullHealth = await fetch(new URL('/api/health?detail=full', web.url)).then((response) => response.json());
+      assert.equal(fullHealth.mcp_tools.some((tool) => tool.server_name === 'narada-fixture' && tool.tool_name === 'fixture_read'), true);
+      assert.equal(fullHealth.mcp.tools.some((tool) => tool.server_name === 'narada-fixture' && tool.tool_name === 'fixture_read'), true);
 
       assert.equal((await client.nextJson()).event, 'websocket_connected');
       client.sendJson({ id: 'events-1', method: 'session.events.subscribe', params: { include_replay: true, max_replay: 10 } });
@@ -830,7 +998,7 @@ test('CLI args and client config keep runtime authority outside the web package'
     protocolHealthMethod: 'session.health',
     maxReplay: 100,
     operatorInput: true,
-    admittedMethods: ['session.events.subscribe', 'session.events.read', 'session.artifacts.register', 'session.artifacts.read', 'session.artifacts.summary', 'session.surface.affordances', 'session.affordance.action.request', 'session.affordance.action.confirm', 'session.affordance.action.cancel', 'session.sop.summary', 'session.inbox.summary', 'session.delegation.summary', 'session.git.summary', 'session.surface_feedback.summary', 'session.mailbox.summary', 'session.scheduler.summary', 'session.task_lifecycle.summary', 'conversation.send', 'conversation.enqueue', 'session.status', 'session.health', 'session.recovery', 'session.operations', 'observers.status', 'observer.mute', 'observer.unmute', 'session.command.execute', 'carrier.command.execute', 'conversation.interrupt', 'conversation.steer', 'session.close'],
+    admittedMethods: ['session.events.subscribe', 'session.events.read', 'session.artifacts.register', 'session.artifacts.read', 'session.artifacts.summary', 'session.surface.affordances', 'session.affordance.action.request', 'session.affordance.action.confirm', 'session.affordance.action.cancel', 'session.sop.summary', 'session.inbox.summary', 'session.delegation.summary', 'session.git.summary', 'session.surface_feedback.summary', 'session.mailbox.summary', 'session.scheduler.summary', 'session.task_lifecycle.summary', 'conversation.send', 'conversation.enqueue', 'session.status', 'session.health', 'session.recovery', 'session.operations', 'observers.status', 'observer.mute', 'observer.unmute', 'session.command.execute', 'conversation.interrupt', 'conversation.steer', 'session.close'],
   });
 });
 
