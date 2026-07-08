@@ -10,6 +10,7 @@ import PlainTextPart from './PlainTextPart.vue';
 import { parseMessageContent, type MessageRenderPart } from '../../lib/messageContent';
 
 const props = defineProps<{ content: unknown; sessionId?: string | null }>();
+const emit = defineEmits<{ 'intent-selected': [intent: string] }>();
 const parts = computed(() => parseMessageContent(props.content));
 const CONTENT_RENDERERS = {
   plain_text: PlainTextPart,
@@ -38,6 +39,7 @@ function rendererFor(part: MessageRenderPart) {
       :session-id="props.sessionId"
       :language="part.language"
       :ordinal="part.ordinal"
+      @intent-selected="emit('intent-selected', $event)"
     />
   </div>
 </template>

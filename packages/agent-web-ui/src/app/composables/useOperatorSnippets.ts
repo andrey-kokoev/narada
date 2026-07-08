@@ -1,3 +1,4 @@
+import { AGENT_WEB_UI_SNIPPET_USAGE, parseAgentWebUiSnippetCommand } from '@narada2/nars-client-projection-contract';
 import { computed, ref } from 'vue';
 
 export interface OperatorSnippet {
@@ -9,6 +10,27 @@ export interface OperatorSnippet {
   pinned?: boolean;
   last_used_at?: string | null;
   use_count?: number;
+}
+
+export interface OperatorSnippetCommandEvent {
+  event: 'agent_web_ui_message';
+  message: string;
+  ok: boolean;
+  snippet_name?: string;
+  previous_snippet_name?: string;
+  snippet_count?: number;
+  delivery_mode?: OperatorSnippetDeliveryMode;
+}
+
+export interface OperatorSnippetFeedback {
+  id: number;
+  event: OperatorSnippetCommandEvent;
+}
+
+export interface OperatorSnippetOpenRequest {
+  id: number;
+  query?: string;
+  mode?: 'list' | 'create';
 }
 
 export type OperatorSnippetDeliveryMode = 'default' | 'enqueue';
@@ -83,8 +105,8 @@ function parseName(value: string): string {
   return normalizeName(match?.[1] ?? match?.[2] ?? match?.[3] ?? '');
 }
 
-function commandMessage(message: string, fields: Record<string, unknown> = {}) {
-  return { event: 'agent_web_ui_message', message, ...fields };
+function commandMessage(message: string, fields: Partial<OperatorSnippetCommandEvent> = {}): OperatorSnippetCommandEvent {
+  return { event: 'agent_web_ui_message', ok: fields.ok ?? false, message, ...fields };
 }
 
 export function useOperatorSnippets() {
@@ -103,7 +125,18 @@ export function useOperatorSnippets() {
       : [...snippets.value, { id: snippetIdForName(normalizedName), name: normalizedName, body: text, created_at: timestamp, updated_at: timestamp, pinned: false, last_used_at: null, use_count: 0 }];
     if (!persistSnippets(next)) return commandMessage('Snippet storage is unavailable; snippet was not saved.');
     snippets.value = next;
-    return commandMessage(`${existing ? 'Updated' : 'Saved'} snippet: ${normalizedName}`, { snippet_name: normalizedName });
+    return commandMessage(`${existing ? 'Updated' : 'Saved'} snippet: ${normalizedName}`, { ok: true, snippet_name: normalizedName });
+  }
+
+  function restoreSnippet(snippet: OperatorSnippet) {
+    const restored = normalizeEntry(snippet as unknown as Record<string, unknown>);
+    if (!restored) return commandMessage('Deleted snippet could not be restored.');
+    const existing = snippets.value.find((entry) => entry.name === restored.name) ?? null;
+    if (existing) return commandMessage(`Snippet already exists: ${restored.name}`);
+    const next = [...snippets.value, restored];
+    if (!persistSnippets(next)) return commandMessage('Snippet storage is unavailable; snippet was not restored.');
+    snippets.value = next;
+    return commandMessage(`Restored snippet: ${restored.name}`, { ok: true, snippet_name: restored.name });
   }
 
   function deleteSnippet(name: string) {
@@ -114,7 +147,7 @@ export function useOperatorSnippets() {
     if (next.length === before) return commandMessage(`Snippet not found: ${normalizedName}`);
     if (!persistSnippets(next)) return commandMessage('Snippet storage is unavailable; snippet was not deleted.');
     snippets.value = next;
-    return commandMessage(`Deleted snippet: ${normalizedName}`, { snippet_name: normalizedName });
+    return commandMessage(`Deleted snippet: ${normalizedName}`, { ok: true, snippet_name: normalizedName });
   }
 
   function renameSnippet(oldName: string, newName: string, body: string) {
@@ -132,7 +165,7 @@ export function useOperatorSnippets() {
       : entry);
     if (!persistSnippets(next)) return commandMessage('Snippet storage is unavailable; snippet was not renamed.');
     snippets.value = next;
-    return commandMessage(`Renamed snippet: ${normalizedOldName} -> ${normalizedNewName}`, { snippet_name: normalizedNewName, previous_snippet_name: normalizedOldName });
+    return commandMessage(`Renamed snippet: ${normalizedOldName} -> ${normalizedNewName}`, { ok: true, snippet_name: normalizedNewName, previous_snippet_name: normalizedOldName });
   }
 
   function togglePinned(name: string) {
@@ -142,7 +175,7 @@ export function useOperatorSnippets() {
     const next = snippets.value.map((entry) => entry.name === normalizedName ? { ...entry, pinned: !entry.pinned, updated_at: nowIso() } : entry);
     if (!persistSnippets(next)) return commandMessage('Snippet storage is unavailable; pin state was not saved.');
     snippets.value = next;
-    return commandMessage(`${existing.pinned ? 'Unpinned' : 'Pinned'} snippet: ${normalizedName}`, { snippet_name: normalizedName });
+    return commandMessage(`${existing.pinned ? 'Unpinned' : 'Pinned'} snippet: ${normalizedName}`, { ok: true, snippet_name: normalizedName });
   }
 
   function markSnippetUsed(name: string) {
@@ -165,11 +198,20 @@ export function useOperatorSnippets() {
         .filter((entry): entry is OperatorSnippet => Boolean(entry));
       if (!imported.length) return commandMessage('No valid snippets found in import JSON.');
       const merged = new Map(snippets.value.map((entry) => [entry.name, entry]));
-      for (const entry of imported) merged.set(entry.name, { ...(merged.get(entry.name) ?? entry), ...entry });
+      for (const entry of imported) {
+        const existing = merged.get(entry.name) ?? null;
+        merged.set(entry.name, existing ? {
+          ...entry,
+          created_at: existing.created_at,
+          pinned: existing.pinned,
+          last_used_at: existing.last_used_at,
+          use_count: existing.use_count,
+        } : entry);
+      }
       const next = [...merged.values()];
       if (!persistSnippets(next)) return commandMessage('Snippet storage is unavailable; import was not saved.');
       snippets.value = next;
-      return commandMessage(`Imported ${imported.length} snippet(s).`, { snippet_count: imported.length });
+      return commandMessage(`Imported ${imported.length} snippet(s).`, { ok: true, snippet_count: imported.length });
     } catch (error) {
       return commandMessage(`Invalid snippet import JSON: ${error instanceof Error ? error.message : String(error)}`);
     }
@@ -183,7 +225,7 @@ export function useOperatorSnippets() {
     const summary = matches.length
       ? matches.map((entry) => `${entry.name}: ${entry.body.slice(0, 90)}`).join('\n')
       : 'No matching snippets.';
-    return commandMessage(summary, { snippet_count: matches.length });
+    return commandMessage(summary, { ok: true, snippet_count: matches.length });
   }
 
   function findSnippet(name: string): OperatorSnippet | null {
@@ -192,31 +234,32 @@ export function useOperatorSnippets() {
   }
 
   function handleSnippetCommand(value: string) {
-    const [verb = '', ...rest] = String(value ?? '').trim().split(/\s+/);
-    const remainder = rest.join(' ').trim();
-    if (verb === 'save' || verb === 'edit') {
+    const parsedCommand = parseAgentWebUiSnippetCommand(value);
+    const action = parsedCommand.action;
+    const remainder = parsedCommand.remainder;
+    if (action?.id === 'save' || action?.id === 'edit') {
       const parsed = parseNameAndBody(remainder);
-      return { kind: 'local_event' as const, event: saveSnippet(parsed.name, parsed.body, verb) };
+      return { kind: 'local_event' as const, event: saveSnippet(parsed.name, parsed.body, action.id) };
     }
-    if (verb === 'delete' || verb === 'remove') return { kind: 'local_event' as const, event: deleteSnippet(parseName(remainder)) };
-    if (verb === 'search' || verb === 'list' || verb === '') return { kind: 'local_event' as const, event: searchSnippets(remainder) };
-    if (verb === 'run' || verb === 'send' || verb === 'enqueue') {
+    if (action?.id === 'delete') return { kind: 'local_event' as const, event: deleteSnippet(parseName(remainder)) };
+    if (action?.id === 'search') return { kind: 'local_event' as const, event: searchSnippets(remainder) };
+    if (action?.mode === 'select') {
       const snippet = findSnippet(parseName(remainder));
       if (!snippet) return { kind: 'local_event' as const, event: commandMessage(`Snippet not found: ${parseName(remainder) || '<missing>'}`) };
-      return { kind: 'run' as const, snippet, deliveryMode: verb === 'enqueue' ? 'enqueue' as const : 'default' as const };
+      return { kind: 'run' as const, snippet, deliveryMode: action.deliveryMode === 'enqueue' ? 'enqueue' as const : 'default' as const };
     }
-    return { kind: 'local_event' as const, event: commandMessage('Usage: /snippet save|edit|delete|search|run|enqueue') };
+    return { kind: 'local_event' as const, event: commandMessage(`Usage: ${AGENT_WEB_UI_SNIPPET_USAGE}`) };
   }
 
-  function commandEvent(message: string, fields: Record<string, unknown> = {}) {
-    return commandMessage(message, fields);
+  function commandEvent(message: string, fields: Partial<OperatorSnippetCommandEvent> = {}) {
+    return commandMessage(message, { ok: true, ...fields });
   }
 
   function exportSnippetsJson(): string {
     return JSON.stringify({ schema: 'narada.agent_web_ui.operator_snippets.v1', snippets: sortedSnippets.value }, null, 2);
   }
 
-  return { snippets: sortedSnippets, handleSnippetCommand, findSnippet, searchSnippets, saveSnippet, deleteSnippet, renameSnippet, togglePinned, markSnippetUsed, importSnippetsJson, exportSnippetsJson, commandEvent };
+  return { snippets: sortedSnippets, handleSnippetCommand, findSnippet, searchSnippets, saveSnippet, restoreSnippet, deleteSnippet, renameSnippet, togglePinned, markSnippetUsed, importSnippetsJson, exportSnippetsJson, commandEvent };
 }
 
 function compareSnippets(left: OperatorSnippet, right: OperatorSnippet): number {

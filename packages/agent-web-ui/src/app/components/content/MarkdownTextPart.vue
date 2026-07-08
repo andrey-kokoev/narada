@@ -8,6 +8,7 @@ const props = defineProps<{
   language?: string;
   ordinal?: number;
 }>();
+const emit = defineEmits<{ 'intent-selected': [intent: string] }>();
 
 const markdown = new MarkdownIt('default', {
   html: false,
@@ -49,12 +50,11 @@ function handleMarkdownClick(event: MouseEvent) {
   if (!intent) return;
   event.preventDefault();
   event.stopPropagation();
-  void navigator.clipboard.writeText(intent)
-    .then(() => flashIntent(button, 'copied'))
-    .catch(() => flashIntent(button, 'failed'));
+  emit('intent-selected', intent);
+  flashIntent(button, 'staged');
 }
 
-function flashIntent(button: HTMLElement, status: 'copied' | 'failed') {
+function flashIntent(button: HTMLElement, status: 'staged') {
   button.dataset.status = status;
   window.setTimeout(() => {
     if (button.dataset.status === status) delete button.dataset.status;

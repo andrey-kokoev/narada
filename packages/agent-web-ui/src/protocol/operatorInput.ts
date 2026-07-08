@@ -16,9 +16,10 @@ export interface AuthorityTransitionInputPolicy {
 
 export type OperatorInputDeliveryMode = 'default' | 'enqueue';
 
-export function submitOperatorInput(text: string, connection: NarsClientConnection | null, authorityTransition: AuthorityTransitionInputPolicy | null = null, deliveryMode: OperatorInputDeliveryMode = 'default'): OperatorInputResult {
+export function submitOperatorInput(text: string, connection: NarsClientConnection | null, authorityTransition: AuthorityTransitionInputPolicy | null = null, deliveryMode: OperatorInputDeliveryMode = 'default', canSteerActiveTurn: boolean | null = null): OperatorInputResult {
+  const activeTurn = canSteerActiveTurn ?? Boolean(connection?.activeTurnId);
   const action = buildAgentWebUiOperatorInputAction(text, {
-    activeTurn: Boolean(connection?.activeTurnId),
+    activeTurn,
     activeTurnId: connection?.activeTurnId,
     ...(deliveryMode === 'enqueue' ? { deliveryMode: 'enqueue' } : {}),
   });
@@ -34,6 +35,9 @@ export function submitOperatorInput(text: string, connection: NarsClientConnecti
   }
   if (action.kind === 'snippet_command') {
     return { handled: false, shouldClearDraft: false, localEvent: { event: 'agent_web_ui_message', message: 'Snippet commands are handled by the Agent Web UI composer.' } };
+  }
+  if (action.kind === 'snippet_panel_command') {
+    return { handled: false, shouldClearDraft: false, localEvent: { event: 'agent_web_ui_message', message: 'Open snippets from the Agent Web UI composer with /snippets.' } };
   }
   if (authorityTransitionRefusesInput(action.frame, authorityTransition)) {
     return {

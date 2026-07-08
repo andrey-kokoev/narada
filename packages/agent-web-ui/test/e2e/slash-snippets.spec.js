@@ -137,6 +137,15 @@ test.describe('agent-web-ui slash and snippet palette', () => {
       await submitOperatorInputText(page, '/snippet save "palette sample" Run from snippet submenu');
       await expect(page.getByText(/Saved snippet: palette-sample/)).toBeVisible();
 
+      await submitOperatorInputText(page, '/snippet');
+      await expect(page.locator('#operator-input')).toHaveValue('/snippet ');
+      await expect(page.locator('#agent-web-ui-command-palette')).toBeVisible();
+      await expect(page.locator('#agent-web-ui-command-palette .command-palette-header')).toContainText('Snippets');
+      await expect(page.locator('#agent-web-ui-command-palette .command-palette-header')).toContainText('Choose what to do');
+      await expect(page.locator('#agent-web-ui-command-palette .command-section h3').first()).toHaveText('Actions');
+      await expect(page.locator('.command-option-active code')).toHaveText('/snippet run');
+      await expect(page.getByText(/Usage: \/snippet/)).toHaveCount(0);
+
       await page.locator('#operator-input').focus();
       await setComposerDraft(page, '/snip');
       await expect(page.locator('#agent-web-ui-command-palette')).toBeVisible();
@@ -146,6 +155,7 @@ test.describe('agent-web-ui slash and snippet palette', () => {
 
       await page.keyboard.press('Enter');
       await expect(page.locator('#operator-input')).toHaveValue('/snippet run ');
+      await expect(page.locator('#agent-web-ui-command-palette .command-palette-header')).toContainText('Snippet run');
 
       await setComposerDraft(page, '/snippet run palette');
       await expect(page.locator('.command-option-active code')).toHaveText('/snippet run palette-sample');
@@ -156,7 +166,35 @@ test.describe('agent-web-ui slash and snippet palette', () => {
         5_000,
         () => ({ events: runtime.events.slice(runFromIndex).map((event) => ({ event: event.event, content: event.content, message: event.message, method: event.method })) }),
       );
+      await expect(page.locator('#operator-input')).toHaveValue('');
       await expect(page.getByText(/Ran snippet: palette-sample/)).toBeVisible();
+
+      await page.locator('#operator-input').focus();
+      await setComposerDraft(page, '/snippet run palette');
+      await expect(page.locator('.command-option-active code')).toHaveText('/snippet run palette-sample');
+      const clickRunFromIndex = runtime.events.length;
+      await page.locator('.command-option-active').click();
+      await waitFor(
+        () => runtime.events.slice(clickRunFromIndex).some((event) => event.event === 'user_message' && /Run from snippet submenu/.test(event.content ?? event.message ?? '')),
+        5_000,
+        () => ({ events: runtime.events.slice(clickRunFromIndex).map((event) => ({ event: event.event, content: event.content, message: event.message, method: event.method })) }),
+      );
+      await expect(page.locator('#operator-input')).toHaveValue('');
+      await expect(page.getByText(/Ran snippet: palette-sample/).last()).toBeVisible();
+
+      await page.locator('#operator-input').focus();
+      await setComposerDraft(page, '/snippet enqueue palette');
+      await expect(page.locator('.command-option-active code')).toHaveText('/snippet enqueue palette-sample');
+      const clickQueueFromIndex = runtime.events.length;
+      await page.locator('.command-option-active').click();
+      await waitFor(
+        () => runtime.events.slice(clickQueueFromIndex).some((event) => event.event === 'conversation_enqueue_requested')
+          && runtime.events.slice(clickQueueFromIndex).some((event) => event.event === 'user_message' && /Run from snippet submenu/.test(event.content ?? event.message ?? '')),
+        5_000,
+        () => ({ events: runtime.events.slice(clickQueueFromIndex).map((event) => ({ event: event.event, content: event.content, message: event.message, method: event.method })) }),
+      );
+      await expect(page.locator('#operator-input')).toHaveValue('');
+      await expect(page.getByText(/Queued snippet: palette-sample/).last()).toBeVisible();
 
       await page.locator('#operator-input').focus();
       await setComposerDraft(page, '/snippets');
@@ -194,6 +232,9 @@ test.describe('agent-web-ui slash and snippet palette', () => {
         await expect(page.locator('#agent-web-ui-command-palette')).toBeVisible();
         await expect.poll(() => visibleCommandPaletteSlashes(page)).toContain(action.slash);
       }
+      await setComposerDraft(page, '/snippet del');
+      await expect(page.locator('#agent-web-ui-command-palette .command-option-danger code')).toHaveText('/snippet delete');
+      await expect(page.locator('#agent-web-ui-command-palette .command-option-danger')).toContainText('choose snippet to delete');
 
       await submitOperatorInputText(page, '/snippet save registry-run Registry run body');
       await expect(page.getByText(/Saved snippet: registry-run/)).toBeVisible();
@@ -202,9 +243,22 @@ test.describe('agent-web-ui slash and snippet palette', () => {
 
       const searchAction = AGENT_WEB_UI_SNIPPET_ACTIONS.find((action) => action.id === 'search');
       for (const verb of searchAction.verbs) {
-        await submitOperatorInputText(page, verb ? `/snippet ${verb} registry-run` : '/snippet registry-run');
-        await expect(page.getByText(/registry-run: Registry run body/).last()).toBeVisible();
+        await submitOperatorInputText(page, `/snippet ${verb} registry-run`);
+        await expect(page.locator('#operator-snippet-panel')).toBeVisible();
+        await expect(page.locator('#operator-snippet-panel')).toContainText('registry-run');
+        await page.locator('#operator-snippet-panel .mcp-panel-close').click();
+        await expect(page.locator('#operator-snippet-panel')).toHaveCount(0);
       }
+
+      await page.locator('#operator-input').focus();
+      await setComposerDraft(page, '/snippet search registry-run');
+      await expect(page.locator('#agent-web-ui-command-palette')).toBeVisible();
+      await expect(page.locator('.command-option-active code')).toHaveText('/snippet search');
+      await page.keyboard.press('Enter');
+      await expect(page.locator('#operator-snippet-panel')).toBeVisible();
+      await expect(page.locator('#operator-snippet-panel')).toContainText('registry-run');
+      await page.locator('#operator-snippet-panel .mcp-panel-close').click();
+      await expect(page.locator('#operator-snippet-panel')).toHaveCount(0);
 
       const editAction = AGENT_WEB_UI_SNIPPET_ACTIONS.find((action) => action.id === 'edit');
       for (const verb of editAction.verbs) {
@@ -249,7 +303,81 @@ test.describe('agent-web-ui slash and snippet palette', () => {
       }
 
       await submitOperatorInputText(page, '/snippet unknown-action registry-run');
-      await expect(page.getByText(/Usage: \/snippet save\|edit\|delete\|search\|run\|enqueue/).last()).toBeVisible();
+      await expect(page.getByText(/Usage: \/snippet run\|enqueue\|search\|save\|edit\|delete/).last()).toBeVisible();
+    } finally {
+      await page.close().catch(() => {});
+      await runtime.close();
+    }
+  });
+
+  test('command palette keeps mobile layout and listbox semantics coherent for long snippet rows', async ({ page }) => {
+    const runtime = await startSharedRuntime();
+    try {
+      await page.setViewportSize({ width: 390, height: 800 });
+      await page.goto(runtime.localWeb.url);
+      await expect(page.locator('#operator-input')).toBeVisible();
+      await clearOperatorSnippets(page);
+
+      await setComposerDraft(page, '/snippet run missing');
+      await expect(page.locator('#agent-web-ui-command-palette')).toBeVisible();
+      await expect(page.locator('#agent-web-ui-command-palette .command-palette-header')).toContainText('Enter runs the highlighted snippet');
+      await expect(page.locator('#agent-web-ui-command-palette .command-empty')).toContainText('Backspace to snippet actions');
+
+      await submitOperatorInputText(page, '/snippet save "extremely long saved snippet name for mobile palette wrapping" This is a deliberately long saved input body that should be visually clamped inside the command palette row instead of forcing horizontal overflow across the mobile viewport.');
+      await expect(page.getByText(/Saved snippet: extremely-long-saved-snippet-name-for-mobile-palette-wrapping/)).toBeVisible();
+
+      await setComposerDraft(page, '/snippet run extremely');
+      await expect(page.locator('#agent-web-ui-command-palette')).toBeVisible();
+      await expect(page.locator('.command-option-active code')).toContainText('/snippet run extremely-long-saved-snippet-name-for-mobile-palette-wrapping');
+
+      const uxState = await page.evaluate(() => {
+        const input = document.querySelector('#operator-input');
+        const list = document.querySelector('#agent-web-ui-command-palette-list');
+        const activeId = input?.getAttribute('aria-activedescendant');
+        const active = activeId ? document.getElementById(activeId) : null;
+        const palette = document.querySelector('#agent-web-ui-command-palette');
+        const header = document.querySelector('#agent-web-ui-command-palette .command-palette-header');
+        const code = document.querySelector('.command-option-active code');
+        const detail = document.querySelector('.command-option-active .command-option-detail');
+        const optionButtons = document.querySelectorAll('#agent-web-ui-command-palette [role="option"] button, #agent-web-ui-command-palette button[role="option"]');
+        const paletteRect = palette?.getBoundingClientRect();
+        const codeRect = code?.getBoundingClientRect();
+        const detailStyle = detail ? window.getComputedStyle(detail) : null;
+        const headerStyle = header ? window.getComputedStyle(header) : null;
+        return {
+          inputRole: input?.getAttribute('role'),
+          expanded: input?.getAttribute('aria-expanded'),
+          controlsExists: Boolean(input?.getAttribute('aria-controls') && document.getElementById(input.getAttribute('aria-controls'))),
+          listRole: list?.getAttribute('role'),
+          activeRole: active?.getAttribute('role'),
+          activeTag: active?.tagName,
+          optionButtonCount: optionButtons.length,
+          paletteLeft: paletteRect?.left ?? null,
+          paletteRight: paletteRect?.right ?? null,
+          viewportWidth: window.innerWidth,
+          headerDirection: headerStyle?.flexDirection ?? null,
+          codeClientWidth: code?.clientWidth ?? null,
+          codeScrollWidth: code?.scrollWidth ?? null,
+          codeWidth: codeRect?.width ?? null,
+          lineClamp: detailStyle?.webkitLineClamp ?? null,
+        };
+      });
+
+      expect(uxState).toMatchObject({
+        inputRole: 'combobox',
+        expanded: 'true',
+        controlsExists: true,
+        listRole: 'listbox',
+        activeRole: 'option',
+        activeTag: 'DIV',
+        optionButtonCount: 0,
+        headerDirection: 'column',
+        lineClamp: '2',
+      });
+      expect(uxState.paletteLeft).toBeGreaterThanOrEqual(0);
+      expect(uxState.paletteRight).toBeLessThanOrEqual(uxState.viewportWidth);
+      expect(uxState.codeWidth).toBeLessThanOrEqual(uxState.viewportWidth - 20);
+      expect(uxState.codeScrollWidth).toBeGreaterThan(uxState.codeClientWidth);
     } finally {
       await page.close().catch(() => {});
       await runtime.close();

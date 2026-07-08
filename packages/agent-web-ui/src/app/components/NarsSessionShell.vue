@@ -22,6 +22,7 @@ import SurfaceNavigator from './SurfaceNavigator.vue';
 import SurfaceFeedbackPanel from './SurfaceFeedbackPanel.vue';
 import TaskLifecyclePanel from './TaskLifecyclePanel.vue';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
+import { summarizeSessionTitleParts } from '../../session-identity.js';
 import type { AgentActivityState } from '../composables/useAgentActivity';
 import type { AffordanceConfirmationItem } from '../composables/useAffordanceConfirmations';
 import type { ArtifactsSummary } from '../composables/useArtifactsSummary';
@@ -33,7 +34,7 @@ import type { InboxSummary } from '../composables/useInboxSummary';
 import type { McpInventorySummary } from '../composables/useMcpInventory';
 import type { MailboxSummary } from '../composables/useMailboxSummary';
 import type { OperatorQueueItem } from '../composables/useOperatorInput';
-import type { OperatorSnippet } from '../composables/useOperatorSnippets';
+import type { OperatorSnippet, OperatorSnippetFeedback, OperatorSnippetOpenRequest } from '../composables/useOperatorSnippets';
 import type { ProjectionVerbosity } from '../composables/useProjectionVerbosity';
 import type { SchedulerSummary } from '../composables/useSchedulerSummary';
 import type { SessionIdentitySummary } from '../composables/useNarsEvents';
@@ -64,6 +65,8 @@ const props = defineProps<{
   operatorQueueItems: OperatorQueueItem[];
   operatorSnippets: OperatorSnippet[];
   operatorSnippetsExportJson: string;
+  operatorSnippetFeedback: OperatorSnippetFeedback | null;
+  operatorSnippetOpenRequest: OperatorSnippetOpenRequest | null;
   activeTurnId: string | boolean | null;
   mcpInventory: McpInventorySummary;
   surfaceAffordances: SurfaceAffordanceSummary;
@@ -87,6 +90,7 @@ const emit = defineEmits<{
   submit: [deliveryMode?: 'default' | 'enqueue'];
   'run-snippet': [snippet: OperatorSnippet, deliveryMode?: 'default' | 'enqueue'];
   'save-snippet': [name: string, body: string, mode: 'save' | 'edit'];
+  'restore-snippet': [snippet: OperatorSnippet];
   'rename-snippet': [oldName: string, newName: string, body: string];
   'delete-snippet': [name: string];
   'pin-snippet': [name: string];
@@ -108,6 +112,7 @@ const emit = defineEmits<{
   'request-affordance-action': [request: { surfaceId: string; actionId: string; args: Record<string, unknown> }];
   'confirm-affordance-action': [item: AffordanceConfirmationItem];
   'cancel-affordance-action': [item: AffordanceConfirmationItem];
+  'intent-selected': [intent: string];
 }>();
 const STATUS_ROW_OPEN_STORAGE_KEY = 'narada:agent-web-ui:status-row-open.v1';
 const HEADER_ITEM_STORAGE_KEY = 'narada:agent-web-ui:header-items.v1';
@@ -130,8 +135,9 @@ const schedulerPanelOpen = ref(false);
 const sopPanelOpen = ref(false);
 const surfaceFeedbackPanelOpen = ref(false);
 const taskLifecyclePanelOpen = ref(false);
-const titleSiteLabel = computed(() => props.sessionIdentity.siteId ?? sitePartFromAgentId(props.sessionIdentity.agentId));
-const titleAgentLabel = computed(() => props.sessionIdentity.siteId ? props.sessionIdentity.agentId : agentPartFromAgentId(props.sessionIdentity.agentId));
+const titleParts = computed(() => summarizeSessionTitleParts(props.sessionIdentity));
+const titleSiteLabel = computed(() => titleParts.value.siteLabel);
+const titleAgentLabel = computed(() => titleParts.value.agentLabel);
 const hasArtifactsSurface = computed(() => Boolean(props.artifactBasePath));
 const sopAffordance = computed(() => props.surfaceAffordances.items.find((item) => item.surfaceKind === 'sop') ?? null);
 const hasSopSurface = computed(() => Boolean(sopAffordance.value));
@@ -162,6 +168,7 @@ const canInterruptModel = computed(() => (
   && props.agentActivity.active === true
   && (props.agentActivity.state === 'thinking' || props.agentActivity.state === 'streaming')
 ));
+const canSteerActiveTurn = computed(() => canInterruptModel.value);
 const sessionChipStreamText = computed(() => props.streamText && props.streamText !== 'connected' ? props.streamText : null);
 const surfaceGroups = computed(() => [
   {
@@ -230,6 +237,9 @@ const headerTooltips = {
 };
 watch(statusRowOpen, (value) => persistBooleanPreference(STATUS_ROW_OPEN_STORAGE_KEY, value));
 watch(visibleHeaderItemIds, (value) => persistHeaderItemIds(value));
+watch(() => props.operatorSnippetOpenRequest, (request) => {
+  if (request) snippetPanelOpen.value = true;
+});
 
 function openSurfacePanel(surfaceKind: string) {
   if (surfaceKind === 'mcp') mcpPanelOpen.value = true;
@@ -299,16 +309,6 @@ function resetHeaderItems() {
   visibleHeaderItemIds.value = new Set(DEFAULT_VISIBLE_HEADER_ITEM_IDS);
 }
 
-function sitePartFromAgentId(agentId: string | null): string | null {
-  if (!agentId?.includes('.')) return null;
-  return agentId.split('.')[0] || null;
-}
-
-function agentPartFromAgentId(agentId: string | null): string | null {
-  if (!agentId) return null;
-  if (!agentId.includes('.')) return agentId;
-  return agentId.split('.').slice(1).join('.') || null;
-}
 </script>
 
 <template>
@@ -350,7 +350,7 @@ function agentPartFromAgentId(agentId: string | null): string | null {
         <div class="shell-header-actions">
           <Tooltip v-if="isHeaderItemVisible('snippets')">
             <TooltipTrigger as-child>
-              <OperatorSnippetPanel v-model:open="snippetPanelOpen" :snippets="operatorSnippets" :export-json="operatorSnippetsExportJson" @run="(snippet, mode) => emit('run-snippet', snippet, mode)" @save="(name, body, mode) => emit('save-snippet', name, body, mode)" @rename="(oldName, newName, body) => emit('rename-snippet', oldName, newName, body)" @delete="emit('delete-snippet', $event)" @pin="emit('pin-snippet', $event)" @import="emit('import-snippets', $event)" @fill="emit('fill-snippet', $event)" />
+              <OperatorSnippetPanel v-model:open="snippetPanelOpen" :snippets="operatorSnippets" :export-json="operatorSnippetsExportJson" :feedback="operatorSnippetFeedback" :open-request="operatorSnippetOpenRequest" @run="(snippet, mode) => emit('run-snippet', snippet, mode)" @save="(name, body, mode) => emit('save-snippet', name, body, mode)" @restore="emit('restore-snippet', $event)" @rename="(oldName, newName, body) => emit('rename-snippet', oldName, newName, body)" @delete="emit('delete-snippet', $event)" @pin="emit('pin-snippet', $event)" @import="emit('import-snippets', $event)" @fill="emit('fill-snippet', $event)" />
             </TooltipTrigger>
             <TooltipContent side="bottom" align="end">{{ headerTooltips.snippets }}</TooltipContent>
           </Tooltip>
@@ -406,6 +406,7 @@ function agentPartFromAgentId(agentId: string | null): string | null {
                 panel-aria-label="Header row items"
                 empty-text="No matching header items."
                 search-placeholder="Filter header items"
+                placement="inline"
                 @toggle="toggleHeaderItem"
                 @reset="resetHeaderItems"
               />
@@ -415,6 +416,23 @@ function agentPartFromAgentId(agentId: string | null): string | null {
         </div>
       </header>
     </TooltipProvider>
+    <OperatorSnippetPanel
+      v-if="!isHeaderItemVisible('snippets')"
+      v-model:open="snippetPanelOpen"
+      triggerless
+      :snippets="operatorSnippets"
+      :export-json="operatorSnippetsExportJson"
+      :feedback="operatorSnippetFeedback"
+      :open-request="operatorSnippetOpenRequest"
+      @run="(snippet, mode) => emit('run-snippet', snippet, mode)"
+      @save="(name, body, mode) => emit('save-snippet', name, body, mode)"
+      @restore="emit('restore-snippet', $event)"
+      @rename="(oldName, newName, body) => emit('rename-snippet', oldName, newName, body)"
+      @delete="emit('delete-snippet', $event)"
+      @pin="emit('pin-snippet', $event)"
+      @import="emit('import-snippets', $event)"
+      @fill="emit('fill-snippet', $event)"
+    />
     <ArtifactsPanel v-model:open="artifactsPanelOpen" triggerless :available="hasArtifactsSurface" :summary="artifactsSummary" @refresh="emit('request-artifacts-summary')" />
     <McpServerPanel v-model:open="mcpPanelOpen" triggerless :inventory="mcpInventory" :surface-affordances="surfaceAffordances" @open-surface-panel="openSurfacePanel" />
     <GenericAffordancePanel v-model:open="genericAffordancePanelOpen" triggerless :item="selectedGenericAffordance" @action="emit('request-affordance-action', $event)" />
@@ -457,9 +475,9 @@ function agentPartFromAgentId(agentId: string | null): string | null {
         @request-affordance-action="emit('request-affordance-action', $event)"
       />
     </section>
-    <ConversationTranscript :rows="rows" :verbosity="verbosity" :agent-activity="agentActivity" :follow-latest-revision="followLatestRevision" />
+    <ConversationTranscript :rows="rows" :verbosity="verbosity" :agent-activity="agentActivity" :follow-latest-revision="followLatestRevision" @intent-selected="emit('intent-selected', $event)" />
     <AffordanceConfirmationPanel :items="affordanceConfirmations" @confirm="emit('confirm-affordance-action', $event)" @cancel="emit('cancel-affordance-action', $event)" />
-    <OperatorQueuePanel :items="operatorQueueItems" :active-turn-id="activeTurnId" @edit="emit('edit-queued', $event)" @remove="emit('remove-queued', $event)" @steer="emit('steer-queued', $event)" />
+    <OperatorQueuePanel :items="operatorQueueItems" :active-turn-id="activeTurnId" :can-steer-active-turn="canSteerActiveTurn" @edit="emit('edit-queued', $event)" @remove="emit('remove-queued', $event)" @steer="emit('steer-queued', $event)" />
     <OperatorComposer v-model="draft" :operator-snippets="operatorSnippets" :disabled="authorityTransition?.input_policy === 'disabled_source_sealed'" :can-interrupt="canInterruptModel" disabled-reason="Source authority is sealed. Reattach to the target authority before sending." @submit="emit('submit', $event)" @run-snippet="(snippet, mode) => emit('run-snippet', snippet, mode)" @interrupt="emit('interrupt')" />
   </main>
 </template>

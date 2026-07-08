@@ -33,6 +33,7 @@ const emit = defineEmits<{
 }>();
 const cloudflareApiBaseUrl = ref(props.cloudflareProjection.defaultApiBaseUrl.value);
 const copyLabel = ref('Copy');
+const pendingProvider = ref<string | null>(null);
 const pendingModel = ref<string | null>(null);
 const pendingThinking = ref<string | null>(null);
 const STATUS_BOX_STORAGE_KEY = 'narada:agent-web-ui:status-boxes.v2';
@@ -135,8 +136,18 @@ const statusTooltips = {
 
 const intelligenceAffordance = computed(() => props.surfaceAffordances.items.find((item) => item.surfaceKind === 'intelligence') ?? null);
 const intelligenceActions = computed(() => actionList(intelligenceAffordance.value?.raw));
+const setProviderAction = computed(() => intelligenceActions.value.find((action) => action.id === 'set_provider') ?? null);
 const setModelAction = computed(() => intelligenceActions.value.find((action) => action.id === 'set_model') ?? null);
 const setThinkingAction = computed(() => intelligenceActions.value.find((action) => action.id === 'set_thinking') ?? null);
+const providerActionId = computed(() => setProviderAction.value?.id ?? 'set_provider');
+const modelActionId = computed(() => setModelAction.value?.id ?? 'set_model');
+const thinkingActionId = computed(() => setThinkingAction.value?.id ?? 'set_thinking');
+const providerChoices = computed(() => {
+  const choices = objectField(objectField(setProviderAction.value?.raw, 'args'), 'provider')?.choices;
+  const values = Array.isArray(choices) ? choices.filter((choice): choice is string => typeof choice === 'string' && choice.length > 0) : [];
+  const current = props.intelligence.provider;
+  return [...new Set([current, ...values].filter((value): value is string => typeof value === 'string' && value.length > 0))];
+});
 const thinkingChoices = computed(() => {
   const choices = objectField(objectField(setThinkingAction.value?.raw, 'args'), 'thinking')?.choices;
   const values = Array.isArray(choices) ? choices.filter((choice): choice is string => typeof choice === 'string' && choice.length > 0) : [];
@@ -148,8 +159,13 @@ const modelChoices = computed(() => {
   const current = props.intelligence.model;
   return [...new Set([current, ...values].filter((value): value is string => typeof value === 'string' && value.length > 0))];
 });
+const providerInputValue = computed(() => pendingProvider.value ?? props.intelligence.provider ?? '');
 const modelInputValue = computed(() => pendingModel.value ?? props.intelligence.model ?? '');
 const thinkingInputValue = computed(() => pendingThinking.value ?? props.intelligence.thinking ?? 'medium');
+
+watch(() => props.intelligence.provider, (provider) => {
+  if (pendingProvider.value && pendingProvider.value === provider) pendingProvider.value = null;
+});
 
 watch(() => props.intelligence.model, (model) => {
   if (pendingModel.value && pendingModel.value === model) pendingModel.value = null;
@@ -159,9 +175,18 @@ watch(() => props.intelligence.thinking, (thinking) => {
   if (pendingThinking.value && pendingThinking.value === thinking) pendingThinking.value = null;
 });
 
+function requestProviderChange(event: Event) {
+  const surfaceId = intelligenceAffordance.value?.surfaceId;
+  const actionId = providerActionId.value;
+  const provider = (event.target as HTMLInputElement | HTMLSelectElement | null)?.value.trim() ?? '';
+  if (!surfaceId || !actionId || !provider || provider === props.intelligence.provider) return;
+  pendingProvider.value = provider;
+  emit('request-affordance-action', { surfaceId, actionId, args: { provider } });
+}
+
 function requestModelChange(event: Event) {
   const surfaceId = intelligenceAffordance.value?.surfaceId;
-  const actionId = setModelAction.value?.id;
+  const actionId = modelActionId.value;
   const model = (event.target as HTMLInputElement | HTMLSelectElement | null)?.value.trim() ?? '';
   if (!surfaceId || !actionId || !model || model === props.intelligence.model) return;
   pendingModel.value = model;
@@ -170,7 +195,7 @@ function requestModelChange(event: Event) {
 
 function requestThinkingChange(event: Event) {
   const surfaceId = intelligenceAffordance.value?.surfaceId;
-  const actionId = setThinkingAction.value?.id;
+  const actionId = thinkingActionId.value;
   const thinking = (event.target as HTMLSelectElement | null)?.value.trim() ?? '';
   if (!surfaceId || !actionId || !thinking || thinking === props.intelligence.thinking) return;
   pendingThinking.value = thinking;
@@ -229,49 +254,63 @@ function stringField(record: Record<string, unknown>, field: string): string | n
         <TooltipTrigger as-child>
           <div class="intelligence-status-box">
             <span class="label">Intelligence</span>
-            <span>{{ intelligence.provider ?? 'provider unknown' }}</span>
+            <select
+              v-if="providerChoices.length"
+              class="intelligence-provider-select"
+              :value="providerInputValue"
+              aria-label="Provider"
+              @change="requestProviderChange"
+              @click.stop
+              @keydown.stop
+            >
+              <option v-for="choice in providerChoices" :key="choice" :value="choice">{{ choice }}</option>
+            </select>
+            <input
+              v-else
+              class="intelligence-provider-input"
+              :value="providerInputValue"
+              placeholder="Provider name"
+              aria-label="Provider"
+              @change="requestProviderChange"
+              @click.stop
+              @keydown.stop
+            >
             <span class="status-token-line status-secondary-token-line intelligence-control-line">
-              <template v-if="setModelAction">
-                <select
-                  v-if="modelChoices.length"
-                  class="intelligence-model-select"
-                  :value="modelInputValue"
-                  aria-label="Model"
-                  @change="requestModelChange"
-                  @click.stop
-                  @keydown.stop
-                >
-                  <option v-for="choice in modelChoices" :key="choice" :value="choice">{{ choice }}</option>
-                </select>
-                <input
-                  v-else
-                  class="intelligence-model-input"
-                  :value="modelInputValue"
-                  placeholder="model"
-                  aria-label="Model"
-                  @change="requestModelChange"
-                  @click.stop
-                  @keydown.stop
-                />
-              </template>
-              <template v-else-if="intelligence.model">
-                <span>{{ intelligence.model }}</span>
-              </template>
-              <template v-if="(setModelAction || intelligence.model) && (setThinkingAction || intelligence.thinking)">
+              <select
+                v-if="modelChoices.length"
+                class="intelligence-model-select"
+                :value="modelInputValue"
+                aria-label="Model"
+                @change="requestModelChange"
+                @click.stop
+                @keydown.stop
+              >
+                <option v-for="choice in modelChoices" :key="choice" :value="choice">{{ choice }}</option>
+              </select>
+              <input
+                v-else
+                class="intelligence-model-input"
+                :value="modelInputValue"
+                placeholder="model"
+                aria-label="Model"
+                @change="requestModelChange"
+                @click.stop
+                @keydown.stop
+              />
+              <template v-if="modelChoices.length && thinkingChoices.length">
                 <span class="session-token-separator">·</span>
               </template>
-              <template v-if="setThinkingAction">
-                <select
-                  class="intelligence-thinking-select"
-                  :value="thinkingInputValue"
-                  aria-label="Thinking level"
-                  @change="requestThinkingChange"
-                  @click.stop
-                  @keydown.stop
-                >
-                  <option v-for="choice in thinkingChoices" :key="choice" :value="choice">{{ choice }}</option>
-                </select>
-              </template>
+              <select
+                v-if="thinkingChoices.length"
+                class="intelligence-thinking-select"
+                :value="thinkingInputValue"
+                aria-label="Thinking level"
+                @change="requestThinkingChange"
+                @click.stop
+                @keydown.stop
+              >
+                <option v-for="choice in thinkingChoices" :key="choice" :value="choice">{{ choice }}</option>
+              </select>
               <template v-else-if="intelligence.thinking">
                 <span>{{ intelligence.thinking }}</span>
               </template>

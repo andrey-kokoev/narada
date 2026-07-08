@@ -18,6 +18,7 @@ const props = defineProps<{
   panelAriaLabel?: string;
   emptyText?: string;
   searchPlaceholder?: string;
+  placement?: 'status-row' | 'inline';
 }>();
 const emit = defineEmits<{
   toggle: [id: string];
@@ -42,7 +43,7 @@ const filteredBoxes = computed(() => {
 </script>
 
 <template>
-  <div class="status-box-selector-shell">
+  <div class="status-box-selector-shell" :data-placement="props.placement ?? 'status-row'">
     <button type="button" class="status-box-selector-trigger" :aria-expanded="open" :aria-controls="panelId" :title="triggerTitle" :aria-label="`Choose ${props.triggerLabel ?? 'boxes'}`" @click="open = !open">
       <span class="status-box-selector-icon" aria-hidden="true">
         <span></span>
@@ -50,8 +51,8 @@ const filteredBoxes = computed(() => {
         <span></span>
         <span></span>
       </span>
-      <span class="status-box-selector-count" aria-hidden="true">{{ boxCountLabel }}</span>
     </button>
+    <span class="status-box-selector-count" aria-hidden="true">{{ boxCountLabel }}</span>
     <Teleport to="body">
       <Transition name="mcp-drawer">
         <div v-if="open" class="mcp-drawer-layer" role="presentation">

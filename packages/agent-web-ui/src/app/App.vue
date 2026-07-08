@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { provide, ref, watch } from 'vue';
+import { computed, nextTick, provide, ref, watch } from 'vue';
 import NarsSessionShell from './components/NarsSessionShell.vue';
 import { useAgentActivity } from './composables/useAgentActivity';
 import { useAffordanceConfirmations, type AffordanceConfirmationItem } from './composables/useAffordanceConfirmations';
@@ -15,9 +15,10 @@ import { useNarsConnection } from './composables/useNarsConnection';
 import { useNarsEvents } from './composables/useNarsEvents';
 import { useOperatorInput } from './composables/useOperatorInput';
 import { useOperatorQueue } from './composables/useOperatorQueue';
-import { useOperatorSnippets, type OperatorSnippet } from './composables/useOperatorSnippets';
+import { useOperatorSnippets, type OperatorSnippet, type OperatorSnippetCommandEvent, type OperatorSnippetFeedback, type OperatorSnippetOpenRequest } from './composables/useOperatorSnippets';
 import { useProjectionVerbosity } from './composables/useProjectionVerbosity';
 import { useRetainedEvents } from './composables/useRetainedEvents';
+import { useResolvedFavicon } from './composables/useResolvedFavicon.js';
 import { useSchedulerSummary } from './composables/useSchedulerSummary';
 import { useSopSummary } from './composables/useSopSummary';
 import { useSurfaceAffordances } from './composables/useSurfaceAffordances';
@@ -70,10 +71,19 @@ const surfaceAffordances = useSurfaceAffordances(retained.events, health.body);
 const operatorQueue = useOperatorQueue(health.body);
 const operatorSnippets = useOperatorSnippets();
 const cloudflareProjection = useCloudflareProjection(props.config.projectionControl?.cloudflare ?? null);
-const input = useOperatorInput(connection.connection, retained.retain, retained.clear, props.config.authorityTransition ?? null);
+const canSteerActiveTurn = computed(() => (
+  Boolean(connection.activeTurnId.value)
+  && agentActivity.activity.value.active === true
+  && (agentActivity.activity.value.state === 'thinking' || agentActivity.activity.value.state === 'streaming')
+));
+const input = useOperatorInput(connection.connection, retained.retain, retained.clear, props.config.authorityTransition ?? null, () => canSteerActiveTurn.value);
 const draft = input.draft;
 const followLatestRevision = ref(0);
 const surfaceAffordancesRequested = ref(false);
+const operatorSnippetFeedback = ref<OperatorSnippetFeedback | null>(null);
+const operatorSnippetOpenRequest = ref<OperatorSnippetOpenRequest | null>(null);
+const faviconOverride = ref(null);
+useResolvedFavicon({ tabOverride: faviconOverride, healthBody: health.body });
 
 watch(connection.streamText, (status) => {
   if (surfaceAffordancesRequested.value || status !== 'connected') return;
@@ -81,10 +91,30 @@ watch(connection.streamText, (status) => {
 }, { immediate: true });
 
 function submitOperatorDraft(deliveryMode: 'default' | 'enqueue' = 'default') {
-  if (draft.value.trim().toLowerCase().startsWith('/snippet')) {
-    const action = operatorSnippets.handleSnippetCommand(draft.value.trim().replace(/^\/snippet\s*/i, ''));
+  const trimmedDraft = draft.value.trim();
+  const snippetsMatch = /^\/snippets(?:\s+([\s\S]+))?$/i.exec(trimmedDraft);
+  if (snippetsMatch) {
+    openOperatorSnippets(snippetsMatch[1] ?? '', 'list');
+    draft.value = '';
+    followLatestRevision.value += 1;
+    return;
+  }
+  if (/^\/snippet\s*$/i.test(trimmedDraft)) {
+    draft.value = '/snippet ';
+    followLatestRevision.value += 1;
+    return;
+  }
+  const snippetSearchMatch = /^\/snippet\s+search(?:\s+([\s\S]+))?$/i.exec(trimmedDraft);
+  if (snippetSearchMatch) {
+    openOperatorSnippets(snippetSearchMatch[1] ?? '', 'list');
+    draft.value = '';
+    followLatestRevision.value += 1;
+    return;
+  }
+  if (/^\/snippet(?:\s|$)/i.test(trimmedDraft)) {
+    const action = operatorSnippets.handleSnippetCommand(trimmedDraft.replace(/^\/snippet\s*/i, ''));
     if (action.kind === 'local_event') {
-      input.retainLocal(action.event);
+      retainSnippetEvent(action.event);
       draft.value = '';
       followLatestRevision.value += 1;
       return;
@@ -102,48 +132,76 @@ function submitOperatorDraft(deliveryMode: 'default' | 'enqueue' = 'default') {
   if (input.submit(deliveryMode)) followLatestRevision.value += 1;
 }
 
+function openOperatorSnippets(query = '', mode: 'list' | 'create' = 'list') {
+  operatorSnippetOpenRequest.value = { id: Date.now(), query: query.trim(), mode };
+  retainSnippetEvent(operatorSnippets.commandEvent(query.trim() ? `Opened snippets for: ${query.trim()}` : 'Opened snippets.', { ok: true }));
+}
+
+function retainSnippetEvent(event: OperatorSnippetCommandEvent) {
+  input.retainLocal(event);
+  operatorSnippetFeedback.value = { id: Date.now(), event };
+}
+
 function runOperatorSnippet(snippet: OperatorSnippet, deliveryMode: 'default' | 'enqueue' = 'default') {
   if (input.submitConversationText(snippet.body, deliveryMode)) {
     operatorSnippets.markSnippetUsed(snippet.name);
     retainSnippetRunEvent(snippet, deliveryMode);
+    draft.value = '';
     followLatestRevision.value += 1;
   }
 }
 
 function fillOperatorSnippet(snippet: OperatorSnippet) {
   draft.value = snippet.body;
-  input.retainLocal(operatorSnippets.commandEvent(`Filled composer with snippet: ${snippet.name}`, { snippet_name: snippet.name }));
+  retainSnippetEvent(operatorSnippets.commandEvent(`Filled composer with snippet: ${snippet.name}`, { snippet_name: snippet.name }));
   followLatestRevision.value += 1;
 }
 
 function saveOperatorSnippet(name: string, body: string, mode: 'save' | 'edit') {
-  input.retainLocal(operatorSnippets.saveSnippet(name, body, mode));
+  retainSnippetEvent(operatorSnippets.saveSnippet(name, body, mode));
+  followLatestRevision.value += 1;
+}
+
+function restoreOperatorSnippet(snippet: OperatorSnippet) {
+  retainSnippetEvent(operatorSnippets.restoreSnippet(snippet));
   followLatestRevision.value += 1;
 }
 
 function renameOperatorSnippet(oldName: string, newName: string, body: string) {
-  input.retainLocal(operatorSnippets.renameSnippet(oldName, newName, body));
+  retainSnippetEvent(operatorSnippets.renameSnippet(oldName, newName, body));
   followLatestRevision.value += 1;
 }
 
 function deleteOperatorSnippet(name: string) {
-  input.retainLocal(operatorSnippets.deleteSnippet(name));
+  retainSnippetEvent(operatorSnippets.deleteSnippet(name));
   followLatestRevision.value += 1;
 }
 
 function pinOperatorSnippet(name: string) {
-  input.retainLocal(operatorSnippets.togglePinned(name));
+  retainSnippetEvent(operatorSnippets.togglePinned(name));
   followLatestRevision.value += 1;
 }
 
 function importOperatorSnippets(json: string) {
-  input.retainLocal(operatorSnippets.importSnippetsJson(json));
+  retainSnippetEvent(operatorSnippets.importSnippetsJson(json));
   followLatestRevision.value += 1;
 }
 
 function retainSnippetRunEvent(snippet: OperatorSnippet, deliveryMode: 'default' | 'enqueue') {
   const verb = deliveryMode === 'enqueue' ? 'Queued' : 'Ran';
-  input.retainLocal(operatorSnippets.commandEvent(`${verb} snippet: ${snippet.name}`, { snippet_name: snippet.name, delivery_mode: deliveryMode }));
+  retainSnippetEvent(operatorSnippets.commandEvent(`${verb} snippet: ${snippet.name}`, { snippet_name: snippet.name, delivery_mode: deliveryMode }));
+}
+function fillIntentRef(intentText: string) {
+  const normalized = intentText.trim();
+  if (!normalized) return;
+  draft.value = normalized;
+  input.retainLocal({ event: 'agent_web_ui_message', message: 'Filled composer with intent affordance.', intent: normalized });
+  followLatestRevision.value += 1;
+  nextTick(() => {
+    const inputElement = document.querySelector<HTMLTextAreaElement>('#operator-input');
+    inputElement?.focus();
+    inputElement?.setSelectionRange(inputElement.value.length, inputElement.value.length);
+  });
 }
 
 function interruptModel() {
@@ -188,7 +246,10 @@ function requestSurfaceFeedbackSummary() {
 
 function requestAffordanceAction(request: { surfaceId: string; actionId: string; args: Record<string, unknown> }) {
   const frame = buildAffordanceActionRequestFrame({ surfaceId: request.surfaceId, actionId: request.actionId, args: request.args });
-  if (frame) connection.connection.value?.sendFrame(frame);
+  if (frame) {
+    connection.connection.value?.sendFrame(frame);
+    void health.refresh();
+  }
 }
 
 function confirmAffordanceAction(item: AffordanceConfirmationItem) {
@@ -225,6 +286,8 @@ function cancelAffordanceAction(item: AffordanceConfirmationItem) {
     :operator-queue-items="operatorQueue.items.value"
     :operator-snippets="operatorSnippets.snippets.value"
     :operator-snippets-export-json="operatorSnippets.exportSnippetsJson()"
+    :operator-snippet-feedback="operatorSnippetFeedback"
+    :operator-snippet-open-request="operatorSnippetOpenRequest"
     :active-turn-id="connection.activeTurnId.value"
     :mcp-inventory="mcpInventory.inventory.value"
     :surface-affordances="surfaceAffordances.summary.value"
@@ -245,6 +308,7 @@ function cancelAffordanceAction(item: AffordanceConfirmationItem) {
     @submit="submitOperatorDraft"
     @run-snippet="runOperatorSnippet"
     @save-snippet="saveOperatorSnippet"
+    @restore-snippet="restoreOperatorSnippet"
     @rename-snippet="renameOperatorSnippet"
     @delete-snippet="deleteOperatorSnippet"
     @pin-snippet="pinOperatorSnippet"
@@ -266,5 +330,6 @@ function cancelAffordanceAction(item: AffordanceConfirmationItem) {
     @request-affordance-action="requestAffordanceAction"
     @confirm-affordance-action="confirmAffordanceAction"
     @cancel-affordance-action="cancelAffordanceAction"
+    @intent-selected="fillIntentRef"
   />
 </template>

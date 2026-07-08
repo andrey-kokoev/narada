@@ -12,7 +12,7 @@ export interface OperatorQueueItem {
   created_at: string | null;
 }
 
-export function useOperatorInput(connection: ShallowRef<NarsClientConnection | null>, retain: (event: unknown) => void, clearEvents: () => void, authorityTransition: AuthorityTransitionInputPolicy | null = null) {
+export function useOperatorInput(connection: ShallowRef<NarsClientConnection | null>, retain: (event: unknown) => void, clearEvents: () => void, authorityTransition: AuthorityTransitionInputPolicy | null = null, canSteerActiveTurn: () => boolean = () => Boolean(connection.value?.activeTurnId)) {
   const draft = ref('');
   function handleResult(result: ReturnType<typeof submitOperatorInput>, clearDraft = true): boolean {
     if (result.localEvent) {
@@ -24,11 +24,11 @@ export function useOperatorInput(connection: ShallowRef<NarsClientConnection | n
   }
 
   function submit(deliveryMode: OperatorInputDeliveryMode = 'default') {
-    return handleResult(submitOperatorInput(draft.value, connection.value, authorityTransition, deliveryMode));
+    return handleResult(submitOperatorInput(draft.value, connection.value, authorityTransition, deliveryMode, canSteerActiveTurn()));
   }
 
   function submitText(text: string, deliveryMode: OperatorInputDeliveryMode = 'default') {
-    return handleResult(submitOperatorInput(text, connection.value, authorityTransition, deliveryMode), false);
+    return handleResult(submitOperatorInput(text, connection.value, authorityTransition, deliveryMode, canSteerActiveTurn()), false);
   }
 
   function submitConversationText(text: string, deliveryMode: OperatorInputDeliveryMode = 'default') {
@@ -62,7 +62,7 @@ export function useOperatorInput(connection: ShallowRef<NarsClientConnection | n
   }
 
   function steerQueuedNow(item: OperatorQueueItem): boolean {
-    if (!connection.value?.activeTurnId) return false;
+    if (!canSteerActiveTurn() || !connection.value?.activeTurnId) return false;
     if (!dropQueued(item.index)) return false;
     return connection.value.sendFrame({
       id: `agent-web-ui-steer-queued-${Date.now()}`,

@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
@@ -6,7 +6,7 @@ import { createEventHub, startEventStreamProjection, startHealthProjection } fro
 import { createCarrierRuntimeContext } from '../../../carrier-runtime/src/carrier-runtime-context.mjs';
 import { createCarrierRuntimeDependencies } from '../../../carrier-runtime/src/runtime-dependencies.mjs';
 import { runCarrierServerMode } from '../../../carrier-runtime/src/server-mode.mjs';
-import { writeFixtureMcpSurface } from '../../../carrier-runtime/src/server-mode-test-helpers.mjs';
+import { removeTempDir, writeFixtureMcpSurface } from '../../../carrier-runtime/src/server-mode-test-helpers.mjs';
 import { startAgentWebUiServer } from '../../src/server.js';
 
 export function waitFor(predicate, timeoutMs, evidence = () => ({})) {
@@ -146,7 +146,7 @@ export async function startSharedRuntime() {
         if (value === undefined) delete process.env[key];
         else process.env[key] = value;
       }
-      rmSync(siteRoot, { recursive: true, force: true });
+      removeTempDir(siteRoot);
     },
   };
 }

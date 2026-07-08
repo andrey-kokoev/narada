@@ -11,6 +11,7 @@ const props = defineProps<{
   agentActivity: AgentActivityState;
   followLatestRevision: number;
 }>();
+const emit = defineEmits<{ 'intent-selected': [intent: string] }>();
 
 const scroller = ref<HTMLElement | null>(null);
 const stickToBottom = ref(true);
@@ -64,7 +65,7 @@ watch(() => props.followLatestRevision, () => {
 <template>
   <div ref="scroller" class="events-scroll" @scroll="updateScrollState">
     <ol id="events" class="events" aria-label="NARS session events">
-      <EventRow v-for="row in rows" :key="row.key" :row="row" :verbosity="verbosity" />
+      <EventRow v-for="row in rows" :key="row.key" :row="row" :verbosity="verbosity" @intent-selected="emit('intent-selected', $event)" />
       <li
         v-if="agentActivity.active && (verbosity === 'conversation' || verbosity === 'operations')"
         class="event event-agent-activity event-tone-assistant"

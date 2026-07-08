@@ -54,6 +54,10 @@ export function createActivityAccumulator() {
     detail: null,
     activeTurnId: null,
     activeToolIds: new Set(),
+    toolCallCount: 0,
+    toolResultCount: 0,
+    toolFailureCount: 0,
+    latestToolName: null,
   };
 }
 
@@ -66,6 +70,8 @@ export function applyActivityEvent(state, message) {
   if (event.event === 'turn_started') return Object.assign(startActivity(state, 'thinking', timestampMs, agentLabel(event, 'is thinking...'), providerDetail(event)), { activeTurnId: event.turn_id ?? true });
   if (event.event === 'assistant_message_stream') return startActivity(state, 'streaming', timestampMs, agentLabel(event, 'is responding...'), null);
   if (event.event === 'session_health') return applyHealthActivityEvent(state, event);
+  if (event.event === 'tool_call') return applyTopLevelToolCallActivity(state, event, timestampMs);
+  if (event.event === 'tool_result') return applyTopLevelToolResultActivity(state, event, timestampMs);
   if (event.event === 'assistant_message' || event.event === 'turn_complete' || event.event === 'turn_interrupted' || event.event === 'directive_complete' || event.event === 'session_closed') return clearActivity(state, event);
   if (event.event === 'turn_failed') return startActivity(state, 'failed', timestampMs, 'Turn failed', terminalDetail(event));
   const providerEvent = event.event;
@@ -98,7 +104,8 @@ function applyProviderActivityEvent(state, providerEvent, envelope, timestampMs)
     const item = objectField(providerEvent, 'item');
     if (item?.type === 'mcp_tool_call') {
       if (item.id) state.activeToolIds.add(String(item.id));
-      return startActivity(state, 'tool', timestampMs, 'Using tool...', toolDetail(item));
+      recordToolCall(state, toolDetail(item));
+      return startActivity(state, 'tool', timestampMs, agentLabel(envelope, 'is using tools...'), toolProgressDetail(state));
     }
     if (item?.type === 'agent_message') return startActivity(state, 'streaming', timestampMs, agentLabel(envelope, 'is responding...'), null);
   }
@@ -107,10 +114,63 @@ function applyProviderActivityEvent(state, providerEvent, envelope, timestampMs)
     if (item?.type === 'agent_message') return clearActivity(state, envelope);
     if (item?.type === 'mcp_tool_call') {
       if (item.id) state.activeToolIds.delete(String(item.id));
-      if (state.activeToolIds.size === 0) return startActivity(state, 'thinking', timestampMs, agentLabel(envelope, 'is thinking...'), providerDetail(envelope));
+      recordToolResult(state, toolDetail(item), Boolean(item.error));
+      if (state.activeToolIds.size === 0) return startActivity(state, 'thinking', timestampMs, agentLabel(envelope, 'is thinking...'), toolProgressDetail(state) ?? providerDetail(envelope));
+      return startActivity(state, 'tool', timestampMs, agentLabel(envelope, 'is using tools...'), toolProgressDetail(state));
     }
   }
   return state;
+}
+
+function applyTopLevelToolCallActivity(state, event, timestampMs) {
+  recordToolCall(state, topLevelToolName(event));
+  return startActivity(state, 'tool', timestampMs, agentLabel(event, 'is using tools...'), toolProgressDetail(state));
+}
+
+function applyTopLevelToolResultActivity(state, event, timestampMs) {
+  recordToolResult(state, topLevelToolName(event), topLevelToolFailed(event));
+  const activeCount = activeToolCount(state);
+  if (activeCount > 0) return startActivity(state, 'tool', timestampMs, agentLabel(event, 'is using tools...'), toolProgressDetail(state));
+  return startActivity(state, 'thinking', timestampMs, agentLabel(event, 'is thinking...'), toolProgressDetail(state));
+}
+
+function recordToolCall(state, toolName) {
+  state.toolCallCount += 1;
+  if (toolName) state.latestToolName = toolName;
+}
+
+function recordToolResult(state, toolName, failed) {
+  state.toolResultCount += 1;
+  if (failed) state.toolFailureCount += 1;
+  if (toolName) state.latestToolName = toolName;
+}
+
+function toolProgressDetail(state) {
+  if (!state.toolCallCount && !state.toolResultCount) return null;
+  const parts = [`${state.toolCallCount} called`, `${state.toolResultCount} completed`];
+  const activeCount = activeToolCount(state);
+  if (activeCount > 0) parts.push(`${activeCount} running`);
+  if (state.toolFailureCount > 0) parts.push(`${state.toolFailureCount} failed`);
+  if (state.latestToolName) parts.push(`latest ${state.latestToolName}`);
+  return `tools: ${parts.join(' · ')}`;
+}
+
+function activeToolCount(state) {
+  return Math.max(state.activeToolIds.size, state.toolCallCount - state.toolResultCount, 0);
+}
+
+function topLevelToolName(event) {
+  const direct = event.tool_name ?? event.tool;
+  if (typeof direct === 'string' && direct) return direct;
+  const server = typeof event.server === 'string' && event.server ? event.server : null;
+  const tool = typeof event.tool === 'string' && event.tool ? event.tool : null;
+  return [server, tool].filter(Boolean).join('.') || null;
+}
+
+function topLevelToolFailed(event) {
+  if (event.error) return true;
+  const status = typeof event.status === 'string' ? event.status.toLowerCase() : '';
+  return status === 'failed' || status === 'error';
 }
 
 function startActivity(state, nextState, timestampMs, label, detail) {
@@ -129,6 +189,10 @@ function clearActivity(state, event) {
   state.detail = null;
   state.activeTurnId = null;
   state.activeToolIds.clear();
+  state.toolCallCount = 0;
+  state.toolResultCount = 0;
+  state.toolFailureCount = 0;
+  state.latestToolName = null;
   return state;
 }
 

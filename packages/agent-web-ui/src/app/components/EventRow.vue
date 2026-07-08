@@ -8,6 +8,7 @@ const props = defineProps<{
   row: ProjectedEventRow;
   verbosity: ProjectionVerbosity;
 }>();
+const emit = defineEmits<{ 'intent-selected': [intent: string] }>();
 
 function eventClass(row: ProjectedEventRow) {
   return [
@@ -33,7 +34,7 @@ function sessionIdFor(row: ProjectedEventRow): string | null {
       <span v-if="verbosity !== 'conversation'" class="event-kind">{{ row.kind }}</span>
     </div>
     <div class="event-detail">
-      <MessageContent :content="row.summary" :session-id="sessionIdFor(row)" />
+      <MessageContent :content="row.summary" :session-id="sessionIdFor(row)" @intent-selected="emit('intent-selected', $event)" />
       <RawEventDrawer v-if="verbosity === 'raw'" :event="row.event" />
     </div>
   </li>

@@ -5,6 +5,7 @@ import type { OperatorQueueItem } from '../composables/useOperatorInput';
 const props = defineProps<{
   items: OperatorQueueItem[];
   activeTurnId: string | boolean | null;
+  canSteerActiveTurn: boolean;
 }>();
 const emit = defineEmits<{
   edit: [item: OperatorQueueItem];
@@ -48,7 +49,7 @@ function persistBooleanPreference(key: string, value: boolean) {
         <div class="operator-queue-actions">
           <button type="button" @click="emit('edit', item)">Edit</button>
           <button type="button" @click="emit('remove', item)">Remove</button>
-          <button type="button" :disabled="!activeTurnId" @click="emit('steer', item)">Send now to steer</button>
+          <button type="button" :disabled="!activeTurnId || !canSteerActiveTurn" @click="emit('steer', item)">Send now to steer</button>
         </div>
       </li>
     </ol>

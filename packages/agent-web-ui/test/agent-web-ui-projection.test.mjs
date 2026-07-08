@@ -356,6 +356,31 @@ test('DOM renderer replaces local operator submit echo with canonical user messa
   assert.equal(rows[0].dataset.eventKind, 'user_message');
 });
 
+test('conversation projection keeps chat compact while activity summarizes top-level tool progress', () => {
+  const base = { agent_id: 'resident', session_id: 'carrier_test', timestamp: '2026-07-08T20:49:39.000Z', provider: 'codex-subscription' };
+  const events = [
+    { ...base, event: 'user_message', request_id: 'input_tools', content: 'finish task 473' },
+    { ...base, event: 'turn_started', request_id: 'input_tools', turn_id: 'turn_tools' },
+    { ...base, event: 'assistant_message', request_id: 'input_tools', turn_id: 'turn_tools', content: 'I will restart the MCP and run diagnostics.' },
+    { ...base, event: 'tool_call', request_id: 'input_tools', tool_name: 'narada-sonar-task-lifecycle.task_lifecycle_restart' },
+    { ...base, event: 'tool_result', request_id: 'input_tools', tool_name: 'narada-sonar-task-lifecycle.task_lifecycle_restart', status: 'ok' },
+    { ...base, event: 'tool_call', request_id: 'input_tools', tool_name: 'narada-sonar-task-lifecycle.task_lifecycle_doctor' },
+    { ...base, event: 'tool_result', request_id: 'input_tools', tool_name: 'narada-sonar-task-lifecycle.task_lifecycle_doctor', status: 'error' },
+  ];
+  const projection = createSessionProjection(events, { verbosity: 'conversation', nowMs: Date.parse('2026-07-08T20:50:12.000Z') });
+  assert.equal(projection.rows.some((row) => row.kind === 'tool_call' || row.kind === 'tool_result'), false);
+  assert.equal(projection.activity.active, true);
+  assert.equal(projection.activity.state, 'thinking');
+  assert.match(projection.activity.label, /resident is thinking/);
+  assert.match(projection.activity.detail, /tools: 2 called · 2 completed · 1 failed · latest narada-sonar-task-lifecycle\.task_lifecycle_doctor/);
+
+  const completedProjection = createSessionProjection([
+    ...events,
+    { ...base, event: 'turn_complete', request_id: 'input_tools', turn_id: 'turn_tools', terminal_state: 'completed' },
+  ], { verbosity: 'conversation' });
+  assert.equal(completedProjection.activity.active, false);
+});
+
 test('session projection reduces routine health into state and clears completed tool activity', () => {
   const agentIdentityRef = {
     schema: 'narada.agent_identity_ref.v1',
