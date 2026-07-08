@@ -207,7 +207,7 @@ The first HTTP/WebSocket control surface should be narrow and protocol-shaped:
 | `session.events.read` | Read ordered session events by sequence/cursor. |
 | `session.close` | Close the bounded carrier session with closeout evidence. |
 
-The public API may use HTTP routes, WebSocket messages, or both. The semantic operation names above are the contract-facing shape; route names are transport mechanics. `carrier.command.execute` is only a legacy compatibility alias for `session.command.execute`.
+The public API may use HTTP routes, WebSocket messages, or both. The semantic operation names above are the contract-facing shape; route names are transport mechanics.
 
 Every mutating operation must be idempotency-aware. A request should carry a request id or event id that lets the Durable Object avoid duplicate evidence when clients retry after disconnects.
 

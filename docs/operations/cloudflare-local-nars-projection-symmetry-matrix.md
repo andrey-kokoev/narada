@@ -10,7 +10,7 @@ The checked-in tests already cover the core synthetic projection paths. This mat
 
 | Runtime origin | Surface origin | Coverage | Evidence |
 | --- | --- | --- | --- |
-| Local NARS runtime | Local browser surface | Covered. | `packages/agent-web-ui/test/agent-web-ui.test.mjs`, `packages/agent-web-ui/test/agent-web-ui-ux-smoke.test.mjs`, `packages/agent-web-ui/test/agent-web-ui-live-slash-cross-surface-e2e.test.mjs` |
+| Local NARS runtime | Local browser surface | Covered. | `packages/agent-web-ui/test/agent-web-ui.test.mjs`, `packages/agent-web-ui/test/e2e/ux-smoke.spec.js`, `packages/agent-web-ui/test/e2e/slash-snippets.spec.js`, `packages/agent-web-ui/test/e2e/panels.spec.js` |
 | Local NARS runtime | Cloudflare-hosted browser surface | Covered. | `packages/agent-web-ui/test/agent-web-ui-local-submit-html-artifact-cloudflare-e2e.test.mjs`, `packages/agent-web-ui/test/agent-web-ui-cloudflare-html-artifact-e2e.test.mjs` |
 | Cloudflare-origin authority/runtime | Local browser surface | Covered at service/projection level. | `packages/cloudflare-nars-projection/test/cloudflare-nars-projection.test.ts`, `packages/cloudflare-nars-projection/test/cloudflare-nars-projection-node.test.ts`, `packages/agent-web-ui/test/agent-web-ui.test.mjs` |
 | Cloudflare-origin authority/runtime | Cloudflare-hosted browser surface | Covered. | `packages/cloudflare-nars-projection/test/cloudflare-nars-projection.test.ts`, `packages/cloudflare-nars-projection/test/cloudflare-nars-projection-node.test.ts`, `docs/concepts/cloudflare-nars-web-projection.md` |

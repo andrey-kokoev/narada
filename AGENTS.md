@@ -279,6 +279,8 @@ This script (`scripts/control-plane-lint.ts`) scans `packages/layers/control-pla
 
 Past tense for predicates (`order_created`, not `create_order`). Specific verbs (`shipped`, `confirmed`, not `updated`). Stable once deployed.
 
+Names identify; they do not mean. String names may be used as stable identifiers for exact lookup, routing to explicitly declared objects, correlation, logging, and display. They must not be parsed to infer authority, capability, effect, domain, policy, type, or behavior. Put those semantics in explicit schema/config/registry metadata. See [`docs/concepts/names-identify-do-not-mean.md`](docs/concepts/names-identify-do-not-mean.md).
+
 ### Formatter configuration
 
 `packages/layers/control-plane/.oxfmtrc.jsonc`:

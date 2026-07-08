@@ -1,0 +1,51 @@
+{
+  "concept_id": "versioned_shape_resolver",
+  "canonical_name": "VersionedShapeResolver",
+  "short_definition": "The governed read-boundary adapter that lifts historical and current schema shapes into one current canonical shape with explicit provenance or refusal.",
+  "description": "VersionedShapeResolver names the schema-evolution pattern for long-lived Narada records. It accepts historical records, current records, partial payloads, and optional context, then resolves them into a target schema version or refuses ambiguity explicitly. It prevents history rewrites and silent guessing while allowing new writers to move to current structured schemas.",
+  "kind": "protocol",
+  "status": "draft",
+  "aliases": ["schema evolution adapter", "versioned shape adapter", "shape resolver", "schema cross-version transformation"],
+  "deprecated_aliases": [],
+  "anti_aliases": ["background migration", "display formatter", "silent compatibility shim", "generic parser"],
+  "boundaries": [
+    "Not a background migration that rewrites historical records by itself.",
+    "Not a display formatting helper.",
+    "Not permission to silently infer authority when context is insufficient.",
+    "Not a substitute for writer-side migration gates."
+  ],
+  "relations": [
+    { "kind": "depends_on", "concept_id": "concept_registry" },
+    { "kind": "complements", "concept_id": "compatibility_migration_contract" }
+  ],
+  "owner_surface": "Narada concept governance",
+  "authority": {
+    "kind": "task_and_doc_governance",
+    "ref": "docs/concepts/versioned-shape-resolver.md",
+    "notes": "The concept was promoted from agent identity migration discussion and documented as a broader Narada-proper pattern."
+  },
+  "schemas": ["docs/concepts/versioned-shape-resolver.md"],
+  "docs": [
+    "docs/concepts/versioned-shape-resolver.md",
+    "docs/concepts/agent-identity-rendering-hardening.md"
+  ],
+  "tasks": [],
+  "code_refs": [],
+  "tests": ["packages/domains/concepts/test/registry.test.ts"],
+  "examples": [
+    "Lift legacy { agent_id: 'smart-scheduling.resident' } into narada.agent_identity_ref.v2 with site scope, local_agent_id, role, legacy_agent_id, and canonical_agent_id.",
+    "Refuse legacy { agent_id: 'resident' } when no site_id or equivalent authority context is available."
+  ],
+  "counterexamples": [
+    "A script that rewrites every old task row in place without retaining legacy evidence.",
+    "A UI helper that only turns agent ids into display labels."
+  ],
+  "open_questions": [
+    "Should generic resolver runtime code live in a dedicated package or start as family-specific facades such as agent identity resolution?"
+  ],
+  "confidence": {
+    "cl": 0.98,
+    "basis": "The need recurs across agent identity, task lifecycle, session events, artifacts, launch results, MCP payloads, and Cloudflare projection payloads."
+  },
+  "reviewed_at": "2026-07-07T00:00:00.000Z"
+}

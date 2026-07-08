@@ -149,7 +149,7 @@ Snippets are first-class Agent Web UI operator affordances, with slash commands 
 
 The palette should surface snippets when the operator searches by snippet name or body, not only when the query starts with `/snippet`. Selecting a snippet from the top-level palette runs or queues the stored body directly as conversation input; it must not reparse a slash-prefixed snippet body as a slash command.
 
-The `/snippet` command opens a snippet-specific second-level selector rather than a flat command list. The first level offers snippet actions such as search, run, enqueue, save, edit, and delete. Selecting `run` or `enqueue` moves into snippet selection filtered by the following text. `/snippets [query]` remains the direct drawer/search command.
+The `/snippet` command opens a snippet-specific second-level selector rather than a flat command list. The first level offers snippet actions such as search, run, enqueue, save, edit, and delete. Selecting `run` or `enqueue` moves into snippet selection filtered by the following text. Selecting or submitting `search` opens the snippets drawer filtered by the following text. `/snippets [query]` remains the direct drawer/search shortcut.
 
 The Snippets drawer is the management surface for browser/operator-local snippets. It should support:
 
@@ -170,10 +170,10 @@ The drawer should expose clear empty states for both no snippets and no search m
 Slash commands remain available for efficient keyboard use. `/snippets [query]` opens the Snippets drawer directly, filtered by the optional query, even when the snippets header control is hidden by the operator's header preferences.
 
 - `/snippets [query]`
+- `/snippet search <query>`
 - `/snippet save <name> <text>`
 - `/snippet edit <name> <text>`
 - `/snippet delete <name>`
-- `/snippet search [query]`
 - `/snippet run <name>`
 - `/snippet enqueue <name>`
 

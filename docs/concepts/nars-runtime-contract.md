@@ -106,7 +106,6 @@ Core request methods:
 | `session.sync` | Copy the bound session directory to or from an explicit Site-local sync target, with dry-run and bounded delete support. |
 | `session.close` | Close or hand off a session with terminal evidence. |
 | `session.command.execute` | Execute a slash/operator command through the carrier command contract. |
-| `carrier.command.execute` | Legacy alias for `session.command.execute`. |
 | `session.artifacts.register` | Register a session-scoped artifact from an admitted local path. |
 | `session.artifacts.read` | Read public artifact metadata or the artifact index. |
 | `session.surface.affordances` | Project live MCP operator affordances for the bound session. |
@@ -116,7 +115,7 @@ Core request methods:
 
 The current runtime also exposes authority-transition and observer-control methods through `@narada2/carrier-protocol`: `authority.source.status`, `authority.source.drain`, `authority.source.seal`, `authority.target.status`, `authority.target.prepare`, `authority.target.activate`, `observers.status`, `observer.mute`, and `observer.unmute`.
 
-Human terminal input is not raw JSONL. A terminal attached to NARS is a projection of the protocol: ordinary lines become `conversation.send` when idle and `conversation.enqueue` during active turns, slash commands become protocol frames such as `session.command.execute` or direct session methods, and status/help affordances render from runtime state. `carrier.command.execute` remains a legacy alias for compatibility.
+Human terminal input is not raw JSONL. A terminal attached to NARS is a projection of the protocol: ordinary lines become `conversation.send` when idle and `conversation.enqueue` during active turns, slash commands become protocol frames such as `session.command.execute` or direct session methods, and status/help affordances render from runtime state.
 
 ### Affordance Action Requests
 

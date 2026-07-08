@@ -41,7 +41,7 @@ A NARS client projection must classify operator input in this order:
 4. A known command produces either a local projection action or a NARS protocol frame.
 5. An unknown command produces a local validation message or a structured unsupported-command event; it is not sent to the model.
 
-`exit` without a slash is the only intentionally admitted bare-word compatibility command and resolves to `/exit`.
+Non-slash input follows that surface's ordinary conversation delivery policy. Bare `exit` is not a session-close shortcut.
 
 ### Command Strata
 
@@ -49,10 +49,10 @@ A NARS client projection must classify operator input in this order:
 |---|---|---|---|
 | Projection-local commands | Affect only the attached client projection. | `/help`, `/clear` | client projection contract plus surface renderer |
 | Direct NARS protocol commands | Map to stable NARS request methods. | `/status`, `/health`, `/events`, `/recovery`, `/ops`, `/observers`, `/observer mute`, `/observer unmute`, `/interrupt`, `/exit` | `@narada2/nars-client-projection-contract` for client action shape; `@narada2/agent-runtime-server`/carrier substrate for method handling |
-| Session command pass-through | Compatibility commands executed by the NARS session command endpoint. | `/goal`, `/stats`, `/model`, `/thinking`, `/tool-output`, `/tools`, `/queue` | `@narada2/carrier-command-contract` for vocabulary; NARS runtime for execution |
+| Session command pass-through | Session commands executed by the NARS session command endpoint. | `/goal`, `/stats`, `/model`, `/thinking`, `/tool-output`, `/tools`, `/queue` | `@narada2/carrier-command-contract` for vocabulary; NARS runtime for execution |
 | Raw protocol escape hatch | Explicit advanced frame submission after client-side admission. | `/json {"id":"...","method":"...","params":{}}` | client projection contract allowlist plus NARS protocol admission |
 
-`session.command.execute` is the target request method for session command pass-through. `carrier.command.execute` is a legacy alias that runtimes may continue to admit for compatibility, but new documentation and client examples should prefer `session.command.execute`.
+`session.command.execute` is the target request method for session command pass-through.
 
 Host execution commands are a separate family. `! <command>` is an agent-cli carrier-host execution request with host side effects, admission, and evidence. It is not a slash command and must stay distinct in parsers, event vocabulary, docs, and tests.
 
@@ -66,7 +66,7 @@ The current codebase intentionally has two command inventories because client pr
 | Carrier command contract | `packages/carrier-command-contract/contracts/commands.json` | Session command vocabulary, aliases, argument labels, effects, and resolver behavior for pass-through commands. | Browser palette metadata or direct NARS protocol commands such as `/health` and `/events`. |
 | Terminal projected input | `packages/carrier-terminal-projection/src/projected-input.mjs` | Terminal parsing of operator input into NARS frames, terminal-local actions, prompt behavior, bracketed paste handling, and terminal help projection. | Provider execution or server-side command effects. |
 | Web UI operator input | `packages/agent-web-ui/src/protocol/operatorInput.ts` and Vue composer components | Browser submit behavior, palette rendering, local help/clear events, and delivery-mode UI. | Shared command semantics or NARS method admission. |
-| Runtime command dispatch | carrier substrate behind NARS, currently `packages/carrier-runtime/src/runtime-dependencies.mjs` | Execution of `session.command.execute` and legacy `carrier.command.execute`, emitting `carrier_command_result`. | Client palette/help rendering. |
+| Runtime command dispatch | carrier substrate behind NARS, currently `packages/carrier-runtime/src/runtime-dependencies.mjs` | Execution of `session.command.execute`, emitting `carrier_command_result`. | Client palette/help rendering. |
 
 This split is the current transitional shape. The target invariant is not "one parser everywhere"; it is that each surface consumes an explicit registry for its role, and all overlapping commands have documented projection/execution ownership.
 
@@ -129,7 +129,7 @@ Supported content part types at the projection boundary are:
 - `artifact_ref` - a reference card for a registered artifact;
 - `intent_ref` - a structured operator affordance that names an intent and may carry label, description, target, action, and structured arguments.
 
-`intent_ref` is the canonical structured affordance shape. It is not hidden prose, and it is not a provider prompt. Clients may render it as a button, chip, or similar operator control. Clicking an `intent_ref` is a local reuse affordance unless a client explicitly documents a different local behavior; it does not itself imply NARS execution. In the current browser projection, the reuse action is copy-to-clipboard.
+`intent_ref` is the canonical structured affordance shape. It is not hidden prose, and it is not a provider prompt. Clients may render it as a button, chip, or similar operator control. Clicking an `intent_ref` is a local reuse affordance unless a client explicitly documents a different local behavior; it does not itself imply NARS execution. In the current browser projection, the reuse action stages the intent token in the operator composer for explicit review and submission.
 
 Producers should construct canonical intent references with the shared contract helper `buildNarsIntentRefPart` from `@narada2/nars-client-projection-contract` rather than inventing an ad hoc shape.
 
