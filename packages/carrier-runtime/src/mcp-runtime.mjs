@@ -1,6 +1,6 @@
 import { spawnHiddenPostureProcess } from '@narada2/process-launch-posture';
 import { loadSiteMcpFabric, projectServerEnvironment } from '../../mcp-fabric/src/mcp-fabric.mjs';
-import { buildNamePatternToolMetadata } from '../../carrier-action-admission/src/tool-metadata.mjs';
+import { buildLaunchProcessOwnershipEvidence, normalizeOptionalString } from './launch-process-ownership.mjs';
 
 const CHILD_PROCESS_ENV_ALLOWLIST = Object.freeze([
   'PATH',
@@ -54,6 +54,10 @@ const CHILD_PROCESS_ENV_ALLOWLIST = Object.freeze([
   'DEEPSEEK_API_KEY',
   'DEEPSEEK_API_BASE_URL',
   'NARADA_WORKER_MCP_CONFIG',
+  'NARADA_LAUNCH_SESSION_ID',
+  'NARADA_PROCESS_OWNERSHIP',
+  'NARADA_PROCESS_ROLE',
+  'NARADA_CREATED_BY_PID',
 ]);
 const MCP_STARTUP_FAILURES_KEY = '__mcp_startup_failures';
 const MCP_RUNTIME_DIAGNOSTICS_KEY = '__mcp_runtime_diagnostics';
@@ -77,6 +81,32 @@ function buildChildProcessEnv(extra = {}, baseEnv = process.env) {
     if (baseEnv[key] !== undefined) env[key] = baseEnv[key];
   }
   return { ...env, ...extra, FORCE_COLOR: '0', NO_COLOR: '1' };
+}
+
+function mcpChildOwnershipEnvironment(ownershipContext = {}) {
+  const launchSessionId = normalizeOptionalString(ownershipContext.launch_session_id ?? ownershipContext.launchSessionId);
+  if (!launchSessionId) return {};
+  return {
+    NARADA_LAUNCH_SESSION_ID: launchSessionId,
+    NARADA_PROCESS_OWNERSHIP: 'session_owned',
+    NARADA_PROCESS_ROLE: 'mcp_child',
+    ...(ownershipContext.pid != null ? { NARADA_CREATED_BY_PID: String(ownershipContext.pid) } : {}),
+  };
+}
+
+function buildMcpChildOwnershipEvidence({ siteRoot, serverName, ownershipContext = {}, pid = null } = {}) {
+  const launchSessionId = normalizeOptionalString(ownershipContext.launch_session_id ?? ownershipContext.launchSessionId);
+  if (!launchSessionId) return null;
+  return buildLaunchProcessOwnershipEvidence({
+    launchSessionId,
+    ownership: 'session_owned',
+    processRole: 'mcp_child',
+    ownerSiteRoot: siteRoot,
+    createdByPid: ownershipContext.pid ?? ownershipContext.created_by_pid ?? ownershipContext.createdByPid,
+    parentProcessRole: ownershipContext.process_role ?? ownershipContext.processRole ?? null,
+    serverName,
+    pid,
+  });
 }
 
 function attachMcpStartupFailures(mcpServers, failures = []) {
@@ -144,10 +174,7 @@ function formatMcpRuntimeDiagnosticSummary(diagnostics) {
 
 function mcpOperationalState(mcpServers) {
   const startupFailures = getMcpStartupFailures(mcpServers);
-  const runtimeDiagnostics = getMcpRuntimeDiagnostics(mcpServers);
-  if (startupFailures.length === 0 && runtimeDiagnostics.length === 0) return 'healthy';
-  if (runtimeDiagnostics.length > 0) return 'runtime_faulted';
-  return 'startup_degraded';
+  return startupFailures.length === 0 ? 'healthy' : 'startup_degraded';
 }
 
 function createMcpStatusSnapshot(mcpServers) {
@@ -179,6 +206,13 @@ function mcpToolEffectAdmissionEvidence({ serverMode, admissionClassification, s
       authority_ref: admissionClassification.authority_owner ?? undefined,
     };
   }
+  if (admissionClassification.decision === 'mcp_surface_tool_admitted') {
+    return {
+      admission_action: 'admit',
+      admission_reason: 'surface_registry_declared_tool_effect_admitted',
+      authority_ref: admissionClassification.authority_owner ?? undefined,
+    };
+  }
   if (admissionClassification.decision === 'routed') {
     return {
       admission_action: 'deny',
@@ -203,15 +237,13 @@ function toolFailureRecovery(message) {
 }
 
 function classifyTool(name, args) {
-  const metadata = buildNamePatternToolMetadata(name);
-  if (metadata?.read_only === true) return 'auto';
   return 'prompt';
 }
 
 // ---------------------------------------------------------------------------
 // MCP Server Discovery & Management
 // ---------------------------------------------------------------------------
-async function discoverAndStartMcpServers(siteRoot) {
+async function discoverAndStartMcpServers(siteRoot, ownershipContext = {}) {
   const fabricRequired = isMcpFabricRequired();
   let fabric;
   try {
@@ -239,185 +271,7 @@ async function discoverAndStartMcpServers(siteRoot) {
   const failures = [];
   for (const [serverName, serverConfig] of Object.entries(fabric.servers)) {
     try {
-      const args = [...serverConfig.args];
-
-      const proc = spawnHiddenPostureProcess(serverConfig.command, args, {
-        posture: 'mcp_server',
-        cwd: siteRoot,
-        env: buildChildProcessEnv(projectServerEnvironment(serverConfig)),
-      });
-
-      let buffer = '';
-      const stdoutPollution = [];
-      const stderrDiagnostics = [];
-      let disconnectedError = null;
-      const pending = new Map();
-      const rejectPending = (error) => {
-        for (const request of pending.values()) {
-          clearTimeout(request.timeout);
-          request.reject(error);
-        }
-        pending.clear();
-      };
-      const markDisconnected = (error) => {
-        const normalizedError = error instanceof Error
-          ? error
-          : new Error(String(error ?? `MCP server ${serverName} disconnected`));
-        if (!disconnectedError) disconnectedError = normalizedError;
-        rejectPending(normalizedError);
-      };
-      proc.stdout.setEncoding('utf-8');
-      proc.stderr.setEncoding('utf-8');
-      proc.stderr.on('data', (d) => {
-        const msg = d.toString().trim();
-        if (shouldSuppressMcpStderr(msg)) return;
-        if (msg) stderrDiagnostics.push(msg.slice(0, 1000));
-        if (msg) process.stderr.write(`[${serverName}] ${msg}\n`);
-      });
-
-      proc.on('error', (error) => markDisconnected(error));
-      proc.on('exit', (code, signal) => {
-        markDisconnected(new Error(`MCP server ${serverName} exited${code === null ? '' : ` with code ${code}`}${signal ? ` signal ${signal}` : ''}`));
-      });
-      proc.stdin.on('error', (error) => markDisconnected(error));
-      proc.stdout.on('error', (error) => markDisconnected(error));
-      proc.stderr.on('error', (error) => markDisconnected(error));
-
-      proc.stdout.on('data', (chunk) => {
-        buffer += chunk;
-        const lines = buffer.split(/\r?\n/);
-        buffer = lines.pop() ?? '';
-        for (const line of lines) {
-          if (!line.trim()) continue;
-          try {
-            const msg = JSON.parse(line);
-            if (msg.id != null && pending.has(msg.id)) {
-              const request = pending.get(msg.id);
-              clearTimeout(request.timeout);
-              request.resolve(msg);
-              pending.delete(msg.id);
-            }
-          } catch {
-            stdoutPollution.push(line.slice(0, 1000));
-          }
-        }
-      });
-
-      const startupTimeoutMs = Math.max(1, Number(serverConfig.startup_timeout_sec ?? 10) * 1000);
-      const requestTimeoutMs = Math.max(1, Number(serverConfig.request_timeout_ms ?? 15000));
-      const send = (req, timeoutMs = requestTimeoutMs, timeoutCode = 'mcp_request_timeout', abortSignal = null) => new Promise((resolve, reject) => {
-        if (disconnectedError) {
-          reject(disconnectedError);
-          return;
-        }
-        if (abortSignal?.aborted) {
-          reject(new Error('agent_cli_interrupt_requested'));
-          return;
-        }
-        let settled = false;
-        const settle = (fn, value) => {
-          if (settled) return;
-          settled = true;
-          abortSignal?.removeEventListener?.('abort', onAbort);
-          fn(value);
-        };
-        const resolveWrapped = (value) => settle(resolve, value);
-        const rejectWrapped = (value) => settle(reject, value);
-        const onAbort = () => {
-          if (pending.has(req.id)) {
-            clearTimeout(timeout);
-            pending.delete(req.id);
-          }
-          rejectWrapped(new Error('agent_cli_interrupt_requested'));
-        };
-        abortSignal?.addEventListener('abort', onAbort, { once: true });
-        const timeout = setTimeout(() => {
-          if (pending.has(req.id)) {
-            pending.delete(req.id);
-            rejectWrapped(createMcpStartupError(timeoutCode, `MCP request timeout after ${timeoutMs}ms`, {
-              phase: req.method,
-              server_name: serverName,
-              timeout_ms: timeoutMs,
-              stdout_pollution: stdoutPollution,
-              stderr: stderrDiagnostics,
-            }));
-          }
-        }, timeoutMs);
-        pending.set(req.id, { resolve: resolveWrapped, reject: rejectWrapped, timeout });
-        try {
-          proc.stdin.write(`${JSON.stringify(req)}\n`, (error) => {
-            if (!error || !pending.has(req.id)) return;
-            const request = pending.get(req.id);
-            clearTimeout(request.timeout);
-            pending.delete(req.id);
-            markDisconnected(error);
-            request.reject(error);
-          });
-        } catch (error) {
-          if (pending.has(req.id)) {
-            const request = pending.get(req.id);
-            clearTimeout(request.timeout);
-            pending.delete(req.id);
-            request.reject(error);
-          }
-          markDisconnected(error);
-        }
-      });
-
-      // Initialize with timeout
-      let initResult, toolsResult;
-      try {
-        initResult = await send(
-          { jsonrpc: '2.0', id: randomId(), method: 'initialize', params: { protocolVersion: '2024-11-05' } },
-          startupTimeoutMs,
-          'mcp_startup_timeout',
-        );
-        toolsResult = await send(
-          { jsonrpc: '2.0', id: randomId(), method: 'tools/list', params: {} },
-          startupTimeoutMs,
-          'mcp_tool_hydration_timeout',
-        );
-      } catch (err) {
-        const failure = mcpStartupDiagnostic(err, {
-          code: 'mcp_server_startup_failed',
-          phase: 'initialize_or_tools_list',
-          server_name: serverName,
-          command: serverConfig.command,
-          args: serverConfig.args,
-          stdout_pollution: stdoutPollution,
-          stderr: stderrDiagnostics,
-        });
-        failures.push(failure);
-        console.error(`[carrier-runtime] Failed to initialize MCP server ${serverName}: ${failure.message}`);
-        await stopMcpStartupProcess(proc);
-        continue;
-      }
-
-      if (stdoutPollution.length > 0) {
-        const failure = {
-          schema: 'narada.agent_cli.mcp_startup_diagnostic.v0',
-          code: 'mcp_stdout_pollution',
-          message: `MCP server ${serverName} emitted non-JSON stdout during startup`,
-          phase: 'initialize_or_tools_list',
-          server_name: serverName,
-          stdout_pollution: stdoutPollution,
-          stderr: stderrDiagnostics,
-        };
-        failures.push(failure);
-        console.error(`[carrier-runtime] ${failure.message}`);
-        await stopMcpStartupProcess(proc);
-        continue;
-      }
-
-      servers[serverName] = {
-        process: proc,
-        send,
-        tools: toolsResult.result?.tools ?? [],
-        config: serverConfig,
-        registry_tools: serverConfig.registry_tools ?? {},
-        registry_source: serverConfig.registry_source ?? null,
-        registry_metadata_authoritative: serverConfig.registry_metadata_authoritative === true,
-      };
+      servers[serverName] = await createRuntimeMcpServer({ siteRoot, serverName, serverConfig, ownershipContext });
     } catch (err) {
       const failure = mcpStartupDiagnostic(err, {
         code: 'mcp_server_spawn_failed',
@@ -443,6 +297,248 @@ async function discoverAndStartMcpServers(siteRoot) {
   return servers;
 }
 
+async function createRuntimeMcpServer({ siteRoot, serverName, serverConfig, ownershipContext = {} }) {
+  const runtime = {
+    process: null,
+    send: null,
+    tools: [],
+    config: serverConfig,
+    registry_tools: serverConfig.registry_tools ?? {},
+    registry_source: serverConfig.registry_source ?? null,
+    registry_metadata_authoritative: serverConfig.registry_metadata_authoritative === true,
+    restart_count: 0,
+    ownership_context: ownershipContext,
+    last_disconnect_error: null,
+    last_restart_error: null,
+    restarting: null,
+    process_ownership: buildMcpChildOwnershipEvidence({ siteRoot, serverName, ownershipContext }),
+  };
+
+  await hydrateRuntimeMcpServer(runtime, { siteRoot, serverName, serverConfig, ownershipContext, reason: 'startup' });
+  return runtime;
+}
+
+async function hydrateRuntimeMcpServer(runtime, { siteRoot, serverName, serverConfig, ownershipContext = {}, reason }) {
+  const args = [...serverConfig.args];
+  const proc = spawnHiddenPostureProcess(serverConfig.command, args, {
+    posture: 'mcp_server',
+    cwd: siteRoot,
+    env: buildChildProcessEnv({
+      ...projectServerEnvironment(serverConfig),
+      ...mcpChildOwnershipEnvironment(ownershipContext),
+    }),
+  });
+  runtime.process_ownership = buildMcpChildOwnershipEvidence({ siteRoot, serverName, ownershipContext });
+
+  let buffer = '';
+  const stdoutPollution = [];
+  const stderrDiagnostics = [];
+  let disconnectedError = null;
+  const pending = new Map();
+  const startupTimeoutMs = Math.max(1, Number(serverConfig.startup_timeout_sec ?? 10) * 1000);
+  const requestTimeoutMs = Math.max(1, Number(serverConfig.request_timeout_ms ?? 15000));
+
+  const rejectPending = (error) => {
+    for (const request of pending.values()) {
+      clearTimeout(request.timeout);
+      request.reject(error);
+    }
+    pending.clear();
+  };
+  const markDisconnected = (error) => {
+    const normalizedError = error instanceof Error
+      ? error
+      : new Error(String(error ?? `MCP server ${serverName} disconnected`));
+    if (!disconnectedError) disconnectedError = normalizedError;
+    runtime.last_disconnect_error = {
+      message: normalizedError.message,
+      occurred_at: new Date().toISOString(),
+      reason,
+    };
+    rejectPending(normalizedError);
+  };
+
+  proc.stdout.setEncoding('utf-8');
+  proc.stderr.setEncoding('utf-8');
+  proc.stderr.on('data', (d) => {
+    const msg = d.toString().trim();
+    if (shouldSuppressMcpStderr(msg)) return;
+    if (msg) stderrDiagnostics.push(msg.slice(0, 1000));
+    if (msg) process.stderr.write(`[${serverName}] ${msg}\n`);
+  });
+
+  proc.on('error', (error) => markDisconnected(error));
+  proc.on('exit', (code, signal) => {
+    markDisconnected(new Error(`MCP server ${serverName} exited${code === null ? '' : ` with code ${code}`}${signal ? ` signal ${signal}` : ''}`));
+  });
+  proc.stdin.on('error', (error) => markDisconnected(error));
+  proc.stdout.on('error', (error) => markDisconnected(error));
+  proc.stderr.on('error', (error) => markDisconnected(error));
+
+  proc.stdout.on('data', (chunk) => {
+    buffer += chunk;
+    const drained = drainMcpStdoutMessages(buffer);
+    buffer = drained.rest;
+    for (const pollution of drained.stdoutPollution) stdoutPollution.push(pollution.slice(0, 1000));
+    for (const msg of drained.messages) {
+      if (msg.id != null && pending.has(msg.id)) {
+        const request = pending.get(msg.id);
+        clearTimeout(request.timeout);
+        request.resolve(msg);
+        pending.delete(msg.id);
+      }
+    }
+  });
+
+  const sendDirect = (req, timeoutMs = requestTimeoutMs, timeoutCode = 'mcp_request_timeout', abortSignal = null) => new Promise((resolve, reject) => {
+    if (disconnectedError) {
+      reject(disconnectedError);
+      return;
+    }
+    if (abortSignal?.aborted) {
+      reject(new Error('agent_cli_interrupt_requested'));
+      return;
+    }
+    let settled = false;
+    const settle = (fn, value) => {
+      if (settled) return;
+      settled = true;
+      abortSignal?.removeEventListener?.('abort', onAbort);
+      fn(value);
+    };
+    const resolveWrapped = (value) => settle(resolve, value);
+    const rejectWrapped = (value) => settle(reject, value);
+    const onAbort = () => {
+      if (pending.has(req.id)) {
+        clearTimeout(timeout);
+        pending.delete(req.id);
+      }
+      rejectWrapped(new Error('agent_cli_interrupt_requested'));
+    };
+    abortSignal?.addEventListener('abort', onAbort, { once: true });
+    const timeout = setTimeout(() => {
+      if (pending.has(req.id)) {
+        pending.delete(req.id);
+        rejectWrapped(createMcpStartupError(timeoutCode, `MCP request timeout after ${timeoutMs}ms`, {
+          phase: req.method,
+          server_name: serverName,
+          timeout_ms: timeoutMs,
+          stdout_pollution: stdoutPollution,
+          stderr: stderrDiagnostics,
+        }));
+      }
+    }, timeoutMs);
+    pending.set(req.id, { resolve: resolveWrapped, reject: rejectWrapped, timeout });
+    try {
+      proc.stdin.write(`${JSON.stringify(req)}\n`, (error) => {
+        if (!error || !pending.has(req.id)) return;
+        const request = pending.get(req.id);
+        clearTimeout(request.timeout);
+        pending.delete(req.id);
+        markDisconnected(error);
+        request.reject(error);
+      });
+    } catch (error) {
+      if (pending.has(req.id)) {
+        const request = pending.get(req.id);
+        clearTimeout(request.timeout);
+        pending.delete(req.id);
+        request.reject(error);
+      }
+      markDisconnected(error);
+    }
+  });
+
+  let toolsResult;
+  try {
+    await sendDirect(
+      { jsonrpc: '2.0', id: randomId(), method: 'initialize', params: { protocolVersion: '2024-11-05' } },
+      startupTimeoutMs,
+      'mcp_startup_timeout',
+    );
+    toolsResult = await sendDirect(
+      { jsonrpc: '2.0', id: randomId(), method: 'tools/list', params: {} },
+      startupTimeoutMs,
+      'mcp_tool_hydration_timeout',
+    );
+  } catch (err) {
+    const failure = mcpStartupDiagnostic(err, {
+      code: 'mcp_server_startup_failed',
+      phase: 'initialize_or_tools_list',
+      server_name: serverName,
+      command: serverConfig.command,
+      args: serverConfig.args,
+      stdout_pollution: stdoutPollution,
+      stderr: stderrDiagnostics,
+      restart_count: runtime.restart_count,
+      restart_reason: reason,
+    });
+    await stopMcpStartupProcess(proc);
+    const error = createMcpStartupError(failure.code, failure.message, failure);
+    error.diagnostic = failure;
+    throw error;
+  }
+
+  if (stdoutPollution.length > 0) {
+    const failure = {
+      schema: 'narada.agent_cli.mcp_startup_diagnostic.v0',
+      code: 'mcp_stdout_pollution',
+      message: `MCP server ${serverName} emitted non-JSON stdout during startup`,
+      phase: 'initialize_or_tools_list',
+      server_name: serverName,
+      stdout_pollution: stdoutPollution,
+      stderr: stderrDiagnostics,
+      restart_count: runtime.restart_count,
+      restart_reason: reason,
+    };
+    await stopMcpStartupProcess(proc);
+    const error = createMcpStartupError(failure.code, failure.message, failure);
+    error.diagnostic = failure;
+    throw error;
+  }
+
+  runtime.process = proc;
+  runtime.process_ownership = buildMcpChildOwnershipEvidence({
+    siteRoot,
+    serverName,
+    ownershipContext,
+    pid: runtime.process?.child?.pid ?? runtime.process?.pid ?? null,
+  });
+  runtime.tools = toolsResult.result?.tools ?? [];
+  runtime.send = async (req, timeoutMs = requestTimeoutMs, timeoutCode = 'mcp_request_timeout', abortSignal = null) => {
+    if (!disconnectedError) return sendDirect(req, timeoutMs, timeoutCode, abortSignal);
+    await restartRuntimeMcpServer(runtime, { siteRoot, serverName, serverConfig, ownershipContext: runtime.ownership_context, reason: `disconnected_before_request:${disconnectedError.message}` });
+    return runtime.send(req, timeoutMs, timeoutCode, abortSignal);
+  };
+  runtime.last_restart_error = null;
+  return runtime;
+}
+
+async function restartRuntimeMcpServer(runtime, { siteRoot, serverName, serverConfig, ownershipContext = {}, reason }) {
+  if (runtime.restarting) return runtime.restarting;
+  runtime.restarting = (async () => {
+    const previousProcess = runtime.process;
+    if (previousProcess && previousProcess.exitCode === null && previousProcess.signalCode === null) {
+      await stopMcpStartupProcess(previousProcess);
+    }
+    runtime.restart_count += 1;
+    try {
+      await hydrateRuntimeMcpServer(runtime, { siteRoot, serverName, serverConfig, ownershipContext, reason });
+    } catch (error) {
+      runtime.last_restart_error = {
+        message: error instanceof Error ? error.message : String(error),
+        occurred_at: new Date().toISOString(),
+        reason,
+        restart_count: runtime.restart_count,
+      };
+      throw error;
+    } finally {
+      runtime.restarting = null;
+    }
+  })();
+  return runtime.restarting;
+}
+
 function stopMcpStartupProcess(proc) {
   if (!proc || proc.exitCode !== null || proc.signalCode !== null) return Promise.resolve();
   return new Promise((resolveStop) => {
@@ -453,6 +549,56 @@ function stopMcpStartupProcess(proc) {
     });
     proc.kill();
   });
+}
+
+export function drainMcpStdoutMessages(input) {
+  let rest = String(input ?? '');
+  const messages = [];
+  const stdoutPollution = [];
+  while (rest.length > 0) {
+    const trimmedStart = rest.replace(/^\s+/, '');
+    if (trimmedStart.length !== rest.length) rest = trimmedStart;
+    if (rest.length === 0) break;
+
+    if (/^Content-Length:/i.test(rest)) {
+      const crlfHeaderEnd = rest.indexOf('\r\n\r\n');
+      const lfHeaderEnd = rest.indexOf('\n\n');
+      const headerEnd = crlfHeaderEnd !== -1 ? crlfHeaderEnd : lfHeaderEnd;
+      if (headerEnd === -1) break;
+      const separatorLength = crlfHeaderEnd !== -1 ? 4 : 2;
+      const header = rest.slice(0, headerEnd);
+      const match = /^Content-Length:\s*(\d+)\s*$/im.exec(header);
+      if (!match) {
+        stdoutPollution.push(header.slice(0, 1000));
+        rest = rest.slice(headerEnd + separatorLength);
+        continue;
+      }
+      const bodyLength = Number(match[1]);
+      const bodyStart = headerEnd + separatorLength;
+      const bodyEnd = bodyStart + bodyLength;
+      if (rest.length < bodyEnd) break;
+      const body = rest.slice(bodyStart, bodyEnd);
+      rest = rest.slice(bodyEnd);
+      try {
+        messages.push(JSON.parse(body));
+      } catch {
+        stdoutPollution.push(body.slice(0, 1000));
+      }
+      continue;
+    }
+
+    const lineEnd = rest.indexOf('\n');
+    if (lineEnd === -1) break;
+    const line = rest.slice(0, lineEnd).trim();
+    rest = rest.slice(lineEnd + 1);
+    if (!line) continue;
+    try {
+      messages.push(JSON.parse(line));
+    } catch {
+      stdoutPollution.push(line.slice(0, 1000));
+    }
+  }
+  return { messages, rest, stdoutPollution };
 }
 
 function isMcpFabricRequired() {

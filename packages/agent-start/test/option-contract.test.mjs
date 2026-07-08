@@ -7,6 +7,7 @@ import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createRequire } from 'node:module';
 import { resolveNaradaSitePaths } from '@narada2/site-paths';
+import { buildCarrierProcessEnvironment, carrierSpawnOptions } from '../src/carrier-launch-adapter.ts';
 
 const require = createRequire(import.meta.url);
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -174,6 +175,34 @@ test('launcher option contract consumes shared carrier runtime and provider cont
   assert.equal(sharedProviderContract.providers['kimi-api'].credential_requirement.kind, 'api_key_secret');
   assert.equal(sharedProviderContract.providers['codex-subscription'].credential_requirement.kind, 'local_codex_subscription');
   assert.equal(sharedProviderAdapterContract.production_provider_adapter_kind, 'codex_subscription_adapter');
+});
+
+test('agent-start restamps launch ownership for the runtime child process', () => {
+  const env = buildCarrierProcessEnvironment({
+    processEnvironment: {
+      NARADA_LAUNCH_SESSION_ID: 'launch_test_session',
+      NARADA_PROCESS_OWNERSHIP: 'session_owned',
+      NARADA_PROCESS_ROLE: 'runtime_start',
+      NARADA_CREATED_BY_PID: '111',
+    },
+    carrierName: 'agent-cli',
+    identity: 'sonar.resident',
+    role: 'resident',
+    agentStartEventId: 'evt-test',
+    carrierSessionId: 'carrier-test',
+    targetSiteId: 'sonar',
+    operatorSurfaceKind: 'agent-cli',
+    environmentSiteRoot: 'D:/code/narada.sonar',
+    workspaceRoot: 'D:/code/narada.sonar',
+    dbPath: 'D:/code/narada.sonar/.ai/state/agent-context.sqlite',
+    runtimeProcessCreatorPid: 222,
+    runtimeProcessRole: 'runtime_server',
+  });
+
+  assert.equal(env.NARADA_LAUNCH_SESSION_ID, 'launch_test_session');
+  assert.equal(env.NARADA_PROCESS_OWNERSHIP, 'session_owned');
+  assert.equal(env.NARADA_PROCESS_ROLE, 'runtime_server');
+  assert.equal(env.NARADA_CREATED_BY_PID, '222');
 });
 
 test('McpScope none projects an explicit empty fabric and no effective loci', () => {
@@ -645,6 +674,12 @@ test('agent-web-ui exec launches NARS runtime server as first-class operator sur
   ]);
 });
 
+test('carrier process spawn defaults suppress accidental Windows console windows', () => {
+  assert.deepEqual(carrierSpawnOptions('agent-cli'), { windowsHide: true });
+  assert.deepEqual(carrierSpawnOptions('agent-web-ui'), { windowsHide: true });
+  assert.deepEqual(carrierSpawnOptions('opencode'), { shell: false, windowsHide: true });
+});
+
 test('agent-cli dry-run records event-id propagation residual at runtime-server boundary', () => {
   const output = runOk(['--carrier', 'agent-cli', '--runtime', 'narada-agent-runtime-server', '--exec']);
   const sessionId = output.carrier_session.carrier_session_id;
@@ -663,14 +698,13 @@ test('agent-cli dry-run records event-id propagation residual at runtime-server 
 test('agent-start derives AgentIdentityRef for prefixed registry-style identities', () => {
   const output = runWithIdentityOk('smart-scheduling.resident', ['--carrier', 'agent-cli', '--runtime', 'narada-agent-runtime-server']);
   assert.deepEqual(output.agent_identity_ref, {
-    schema: 'narada.agent_identity_ref.v1',
-    site_id: 'smart-scheduling',
+    schema: 'narada.agent_identity_ref.v2',
+    identity_scope: { kind: 'narada_site', site_id: 'smart-scheduling' },
     local_agent_id: 'resident',
     role: 'resident',
     canonical_agent_id: 'smart-scheduling.resident',
     display: 'smart-scheduling.resident',
-    source_agent_id: 'smart-scheduling.resident',
-    scope: 'site_scoped',
+    legacy_agent_id: 'smart-scheduling.resident',
   });
   assert.equal(output.required_environment.NARADA_AGENT_ID, 'smart-scheduling.resident');
 });
@@ -678,17 +712,53 @@ test('agent-start derives AgentIdentityRef for prefixed registry-style identitie
 test('agent-start derives AgentIdentityRef for site-local registry identities', () => {
   const output = runWithIdentityOk('resident', ['--carrier', 'agent-cli', '--runtime', 'narada-agent-runtime-server', '--target-site-id', 'sonar']);
   assert.deepEqual(output.agent_identity_ref, {
-    schema: 'narada.agent_identity_ref.v1',
-    site_id: 'sonar',
+    schema: 'narada.agent_identity_ref.v2',
+    identity_scope: { kind: 'narada_site', site_id: 'sonar' },
     local_agent_id: 'resident',
     role: 'resident',
     canonical_agent_id: 'sonar.resident',
     display: 'sonar.resident',
-    source_agent_id: 'resident',
-    scope: 'site_scoped',
+    legacy_agent_id: 'resident',
   });
   assert.equal(output.required_environment.NARADA_AGENT_ID, 'resident');
   assert.equal(output.required_environment.NARADA_SITE_ID, 'sonar');
+});
+
+test('runtime spawn environment carries site-qualified identity binding losslessly', () => {
+  const agentIdentityRef = {
+    schema: 'narada.agent_identity_ref.v2',
+    identity_scope: { kind: 'narada_site', site_id: 'sonar' },
+    local_agent_id: 'resident',
+    role: 'resident',
+    canonical_agent_id: 'sonar.resident',
+    display: 'sonar.resident',
+    legacy_agent_id: 'resident',
+  };
+  const env = buildCarrierProcessEnvironment({
+    processEnvironment: { PATH: 'test-path' },
+    intelligenceProviderEnv: { NARADA_INTELLIGENCE_PROVIDER: 'kimi-code-api' },
+    mcpProviderCredentialEnv: { KIMI_CODE_API_KEY: 'test-key' },
+    runtimeEnvironment: { NARADA_AI_MODEL: 'kimi-k2.7' },
+    carrierName: 'agent-web-ui',
+    identity: 'resident',
+    role: 'resident',
+    agentStartEventId: 'evt_test',
+    carrierSessionId: 'carrier_test',
+    targetSiteId: 'sonar',
+    agentIdentityRef,
+    operatorSurfaceKind: 'agent-web-ui',
+    environmentSiteRoot: 'D:/code/narada.sonar',
+    workspaceRoot: 'D:/code/narada.sonar',
+    dbPath: 'D:/code/narada.sonar/.ai/state/agent-context.sqlite',
+    siteConfig: { schema: 'narada.nars.site_config.v1', site_id: 'sonar' },
+  });
+
+  assert.equal(env.NARADA_AGENT_ID, 'resident');
+  assert.equal(env.NARADA_AGENT_ROLE, 'resident');
+  assert.equal(env.NARADA_SITE_ID, 'sonar');
+  assert.equal(env.NARADA_OPERATOR_SURFACE_KIND, 'agent-web-ui');
+  assert.equal(env.NARADA_SITE_ROOT, 'D:/code/narada.sonar');
+  assert.deepEqual(JSON.parse(env.NARADA_AGENT_IDENTITY_REF), agentIdentityRef);
 });
 
 test('target site MCP fabric remains isolated from user site fabric', () => {

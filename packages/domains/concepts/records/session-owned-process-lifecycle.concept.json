@@ -1,0 +1,72 @@
+{
+  "concept_id": "session_owned_process_lifecycle",
+  "canonical_name": "SessionOwnedProcessLifecycle",
+  "short_definition": "The lifecycle contract that binds session-owned launcher descendants to the launch session that created them.",
+  "description": "A Site launch session owns the runtime, projection, MCP proxy, MCP child, and helper processes it creates unless a process is explicitly host-owned or transferred. Session-owned descendants must be terminated, reaped, or explicitly transferred when the launch session ends, and future launches must not treat stale reachable descendants as fresh authority.",
+  "kind": "lifecycle",
+  "status": "draft",
+  "aliases": [
+    "session-owned process",
+    "launch-owned process tree",
+    "launch session process ownership"
+  ],
+  "deprecated_aliases": [],
+  "anti_aliases": [
+    "ambient reusable MCP process",
+    "raw process ancestry as authority",
+    "stale reachable process as fresh surface"
+  ],
+  "boundaries": [
+    "This concept governs processes created by a launch session, not every host process.",
+    "Raw OS parentage is evidence but not the authority boundary by itself.",
+    "Host-owned User Site services and explicitly shared services are outside a local Site launch session unless transferred into it."
+  ],
+  "relations": [
+    { "kind": "refines", "concept_id": "nars_session_management" },
+    { "kind": "depends_on", "concept_id": "nars_runtime_contract" },
+    { "kind": "related_to", "concept_id": "surface_attachment" },
+    { "kind": "related_to", "concept_id": "runtime_health_posture" }
+  ],
+  "owner_surface": "Narada launcher/runtime architecture",
+  "authority": {
+    "kind": "documentation",
+    "ref": "docs/product/session-owned-process-lifecycle.md",
+    "notes": "Defines process ownership classes, evidence stamps, cleanup semantics, preflight behavior, and stale descendant failure mode."
+  },
+  "schemas": [
+    "narada.launch_process_ownership.v1"
+  ],
+  "docs": [
+    "docs/product/session-owned-process-lifecycle.md",
+    "docs/product/site-factorization.md"
+  ],
+  "tasks": [],
+  "code_refs": [
+    "packages/layers/cli/src/commands/launcher.ts",
+    "packages/layers/cli/src/lib/launcher-runtime.ts",
+    "packages/layers/cli/src/lib/launch-process-ownership.ts",
+    "packages/carrier-runtime/src/mcp-runtime.mjs",
+    "packages/carrier-runtime/src/runtime-dependencies.mjs",
+    "packages/carrier-runtime/src/server-mode.mjs",
+    "packages/carrier-runtime/src/nars-session-index.mjs"
+  ],
+  "tests": [
+    "packages/layers/cli/test/commands/launcher-workspace-plan.test.ts",
+    "packages/carrier-runtime/src/mcp-runtime.test.mjs",
+    "packages/carrier-runtime/src/nars-session-index.test.mjs"
+  ],
+  "examples": [
+    "A Sonar Site launch owns its NARS runtime server, agent-web-ui projection, and Site-scoped MCP child processes."
+  ],
+  "counterexamples": [
+    "A User Site host-level MCP surface reused across naked carrier launches is host-owned, not session-owned by a Sonar launch."
+  ],
+  "open_questions": [
+    "Should host-level cleanup eventually move from launcher-local stale-session cleanup into a durable host supervisor for closed launch sessions?"
+  ],
+  "confidence": {
+    "cl": 0.98,
+    "basis": "Observed stale Sonar MCP process demonstrated that process reachability and freshness need explicit launch ownership evidence."
+  },
+  "reviewed_at": "2026-07-08T21:00:00.000Z"
+}

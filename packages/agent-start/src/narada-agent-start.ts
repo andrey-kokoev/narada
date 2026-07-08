@@ -23,7 +23,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { homedir } from 'node:os';
-import { buildAgentIdentityRef } from '@narada2/agent-identity';
+import { buildAgentIdentityRefV2, resolveAgentIdentityRef } from '@narada2/agent-identity';
 import { buildNarsAttachCommands } from '@narada2/nars-client-projection-contract';
 import {
   ADMITTED_CARRIER_KINDS,
@@ -41,6 +41,8 @@ import {
 import {
   buildNarsLaunchPacket,
   buildCarrierEnvironmentProjection,
+  buildCarrierSpawnEnvironmentDelta,
+  buildCarrierProcessEnvironment,
   buildCarrierSpawnArgs,
   carrierSpecificEnvironment,
   resolveCarrierCommand,
@@ -900,7 +902,9 @@ function codexMcpRegistrationStatus(identity, eventId) {
 }
 
 function writeLaunchResult(result) {
-  return writeLaunchResultFile(result, { siteRoot: rootDir });
+  const path = writeLaunchResultFile(displayLaunchResult(result), { siteRoot: rootDir });
+  result.launch_result_path = path;
+  return path;
 }
 
 function writeStdout(payload) {
@@ -915,7 +919,7 @@ function writeStdout(payload) {
 async function printResult(result) {
   if (jsonOutputFile) {
     mkdirSync(dirname(jsonOutputFile), { recursive: true });
-    writeFileSync(jsonOutputFile, `${JSON.stringify(result, null, 2)}\n`, 'utf8');
+    writeFileSync(jsonOutputFile, `${JSON.stringify(displayLaunchResult(result), null, 2)}\n`, 'utf8');
   }
   if (jsonOutput) {
     const sentinel = result.exec && !dryRun && result.agent_start_event
@@ -931,6 +935,12 @@ async function printResult(result) {
     runtime,
     dryRun,
   }));
+}
+
+function displayLaunchResult(result) {
+  const display = { ...result };
+  delete display.spawn_environment_delta;
+  return display;
 }
 
 if (showAdmission) {
@@ -1056,7 +1066,18 @@ const runtimeEnvironment = carrierSpecificEnvironment(carrier, {
   defaultClaudeCodeModel: DEFAULT_CLAUDE_CODE_MODEL,
 });
 const siteConfig = siteConfigProjection();
-const agentIdentityRef = buildAgentIdentityRef(identity, startResult.role, targetSiteId);
+const resolvedAgentIdentityRef = resolveAgentIdentityRef(identity, {
+  role: startResult.role,
+  site_id: targetSiteId,
+});
+const agentIdentityRef = resolvedAgentIdentityRef.status === 'resolved'
+  ? resolvedAgentIdentityRef.value
+  : buildAgentIdentityRefV2({
+    identity_scope: { kind: 'unscoped' },
+    local_agent_id: identity,
+    role: startResult.role ?? identity,
+    legacy_agent_id: identity,
+  });
 const { requiredEnvironment, wouldSetEnvironment } = buildCarrierEnvironmentProjection({
   carrierName: carrier,
   startResult,
@@ -1072,6 +1093,31 @@ const { requiredEnvironment, wouldSetEnvironment } = buildCarrierEnvironmentProj
   workspaceRoot,
   dbPath,
   siteConfig,
+  runtimeProcessCreatorPid: process.pid,
+  runtimeProcessRole: 'runtime_server',
+});
+const spawnEnvironmentDelta = buildCarrierSpawnEnvironmentDelta({
+  carrierName: carrier,
+  startResult,
+  carrierEnvironment,
+  intelligenceProviderEnv,
+  mcpProviderCredentialEnv,
+  agentTuiEnvironment,
+  runtimeEnvironment,
+  identity,
+  role: startResult.role,
+  agentStartEventId: startResult.agent_start_event,
+  carrierSessionId: carrierSessionRegistration.carrier_session_id,
+  targetSiteId,
+  agentIdentityRef,
+  operatorSurfaceKind: carrier,
+  environmentSiteRoot,
+  workspaceRoot,
+  dbPath,
+  siteConfig,
+  codexMcpScope,
+  runtimeProcessCreatorPid: process.pid,
+  runtimeProcessRole: 'runtime_server',
 });
 const narsLaunch = buildNarsLaunchPacket(carrier, {
   processExecPath: process.execPath,
@@ -1130,8 +1176,12 @@ const output = {
   intelligence_provider_contract_schema: INTELLIGENCE_PROVIDER_CONTRACT_SCHEMA,
   intelligence_provider: intelligenceProviderOutputResolution?.intelligence_provider ?? null,
   intelligence_provider_resolution: intelligenceProviderOutputResolution,
+  display_environment: requiredEnvironment,
   required_environment: requiredEnvironment,
   would_set_environment: wouldSetEnvironment,
+  ...(process.env.NARADA_AGENT_START_EMIT_SPAWN_ENVIRONMENT_DELTA === '1'
+    ? { spawn_environment_delta: spawnEnvironmentDelta }
+    : {}),
   carrier_session: carrierSessionRegistration,
   starting_carrier_input: startingCarrierInputOutput(startingCarrierInput),
   exec: execFlag,
@@ -1206,22 +1256,26 @@ if (carrier === 'agent-cli' || carrier === 'agent-web-ui' || carrier === AGENT_T
 const isOpencodeWin32 = carrier === 'opencode' && process.platform === 'win32';
 const spawnCommand = isOpencodeWin32 ? 'cmd.exe' : resolveCarrierExecutableCommand(carrier);
 const spawnCommandArgs = isOpencodeWin32 ? ['/c', resolveCarrierExecutableCommand(carrier), ...spawnArgs] : spawnArgs;
-const processEnvironment = {
-  ...process.env,
-  ...intelligenceProviderEnv,
-  ...mcpProviderCredentialEnv,
-  ...(carrier === 'pi' ? {} : runtimeEnvironment),
-  NARADA_AGENT_ID: identity,
-  NARADA_AGENT_START_EVENT_ID: startResult.agent_start_event,
-  NARADA_CARRIER_SESSION_ID: carrierSessionRegistration.carrier_session_id,
-  NARADA_OPERATOR_SURFACE_KIND: carrier,
-  NARADA_SITE_ROOT: environmentSiteRoot,
-  NARADA_WORKSPACE_ROOT: workspaceRoot,
-  NARADA_AGENT_CONTEXT_DB: dbPath,
-  NARADA_SITE_CONFIG: JSON.stringify(siteConfig),
-  ...agentTuiEnvironment,
-  ...(codexMcpScope.status === 'materialized' ? { CODEX_HOME: codexMcpScope.codex_home, CODEX_CONFIG_DIR: codexMcpScope.codex_home } : {}),
-};
+const processEnvironment = buildCarrierProcessEnvironment({
+  processEnvironment: process.env,
+  intelligenceProviderEnv,
+  mcpProviderCredentialEnv,
+  runtimeEnvironment,
+  agentTuiEnvironment,
+  codexMcpScope,
+  carrierName: carrier,
+  identity,
+  role: startResult.role,
+  agentStartEventId: startResult.agent_start_event,
+  carrierSessionId: carrierSessionRegistration.carrier_session_id,
+  targetSiteId,
+  agentIdentityRef,
+  operatorSurfaceKind: carrier,
+  environmentSiteRoot,
+  workspaceRoot,
+  dbPath,
+  siteConfig,
+});
 const launchEnvironment = intelligenceProviderResolution?.intelligence_provider === 'codex-subscription'
   ? stripCodexSubscriptionOpenAIEnvironment(processEnvironment)
   : processEnvironment;

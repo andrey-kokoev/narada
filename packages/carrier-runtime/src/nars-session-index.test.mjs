@@ -57,7 +57,15 @@ function startedEvent(siteRoot, sessionId = 'carrier_20260623000000_test', times
 test('writeNarsSessionStartedIndex writes per-session record and aggregate index', () => {
   const siteRoot = makeTempSiteRoot();
   try {
-    const event = startedEvent(siteRoot);
+    const event = startedEvent(siteRoot, undefined, undefined, {
+      launch_session_id: 'launch_test_session',
+      process_ownership: {
+        schema: 'narada.launch_process_ownership.v1',
+        launch_session_id: 'launch_test_session',
+        ownership: 'session_owned',
+        process_role: 'runtime_server',
+      },
+    });
     const result = writeNarsSessionStartedIndex({
       sessionStartedEvent: event,
       sessionPath: event.session_path,
@@ -75,6 +83,9 @@ test('writeNarsSessionStartedIndex writes per-session record and aggregate index
     assert.equal(result.record.site_id_source, 'derived_from_site_root_or_agent_id');
     assert.equal(result.record.site_root, siteRoot);
     assert.equal(result.record.launch_operator_surface_kind, 'agent-cli');
+    assert.equal(result.record.launch_session_id, 'launch_test_session');
+    assert.equal(result.record.process_ownership?.ownership, 'session_owned');
+    assert.equal(result.record.process_ownership?.process_role, 'runtime_server');
     assert.equal(result.record.event_endpoint, event.event_endpoint);
     assert.equal(result.record.health_endpoint, event.health_endpoint);
     assert.equal(result.record.terminal_state, null);
@@ -96,6 +107,8 @@ test('writeNarsSessionStartedIndex writes per-session record and aggregate index
     assert.equal(aggregate.sessions[0].session_id, event.session_id);
     assert.equal(aggregate.sessions[0].runtime_session_id, event.session_id);
     assert.equal(aggregate.sessions[0].nars_session_id, event.session_id);
+    assert.equal(aggregate.sessions[0].launch_session_id, 'launch_test_session');
+    assert.equal(aggregate.sessions[0].process_ownership?.ownership, 'session_owned');
     assert.equal(aggregate.sessions[0].record_path, result.paths.record_path);
     assert.equal(aggregate.sessions[0].authority_runtime_host, 'local');
     assert.equal(aggregate.sessions[0].authority_epoch, 1);

@@ -1,7 +1,8 @@
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { createServer, type Server } from 'node:http';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { explainMcpCommand, hasWorkspaceLaunchSelectionIntent, initialOperatorSurfaceValues, initialRoleValuesForInteractiveSelection, intelligenceProviderChoices, intelligenceProviderChoicesForLaunchSelection, normalizeInteractiveOperatorSurfaceValues, registryDefaultIntelligenceProviderLabel, registryDefaultOperatorSurfaceLabel, registryDefaultRuntimeLabel, roleChoicesForSelectedSites, workspaceLaunchCommand, workspaceLaunchPlanCommand, workspaceLaunchRuntimeObservations, workspaceLaunchSelectorModel, type WorkspaceLaunchBrowserSelection, type WorkspaceLaunchRecord } from '../../src/commands/launcher.js';
+import { buildWorkspaceLaunchSelectionHtml, buildWorkspaceLaunchSelectionUiModel, explainMcpCommand, hasWorkspaceLaunchSelectionIntent, initialOperatorSurfaceValues, initialRoleValuesForInteractiveSelection, intelligenceProviderChoices, intelligenceProviderChoicesForLaunchSelection, listenWorkspaceLaunchUiServer, normalizeInteractiveOperatorSurfaceValues, readWorkspaceLaunchRememberedSelection, registryDefaultIntelligenceProviderLabel, registryDefaultOperatorSurfaceLabel, registryDefaultRuntimeLabel, resolveWorkspaceLaunchUiPortPolicy, roleChoicesForSelectedSites, workspaceLaunchCommand, workspaceLaunchPlanCommand, workspaceLaunchRuntimeObservations, workspaceLaunchSelectorModel, writeWorkspaceLaunchRememberedSelection, type WorkspaceLaunchBrowserSelection, type WorkspaceLaunchRecord } from '../../src/commands/launcher.js';
 import type { CommandContext } from '../../src/lib/command-wrapper.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
 
@@ -115,6 +116,161 @@ async function tempRegistry(): Promise<string> {
   return registry;
 }
 
+async function tempUserSiteRoot(): Promise<string> {
+  const dir = join(process.cwd(), '.ai', 'tmp-tests', `launcher-user-site-${Date.now()}-${Math.random().toString(16).slice(2)}`);
+  await mkdir(dir, { recursive: true });
+  tempDirs.push(dir);
+  return dir;
+}
+
+async function withTempUserSiteRoot<T>(fn: () => Promise<T>): Promise<T> {
+  const previous = process.env.NARADA_USER_SITE_ROOT;
+  const dir = await tempUserSiteRoot();
+  process.env.NARADA_USER_SITE_ROOT = dir;
+  try {
+    return await fn();
+  } finally {
+    if (previous === undefined) delete process.env.NARADA_USER_SITE_ROOT;
+    else process.env.NARADA_USER_SITE_ROOT = previous;
+  }
+}
+
+async function writeWorkspaceLaunchUiPolicy(root: string, policy: { port?: number; fallback?: boolean }): Promise<void> {
+  await mkdir(join(root, 'config', 'launch'), { recursive: true });
+  const lines = ['@{'];
+  if (policy.port !== undefined) lines.push(`  LauncherUiPort = ${policy.port}`);
+  if (policy.fallback !== undefined) lines.push(`  LauncherUiPortFallback = ${policy.fallback ? '$true' : '$false'}`);
+  lines.push('}');
+  await writeFile(join(root, 'config', 'launch', 'workspace-launch.psd1'), lines.join('\n'), 'utf8');
+}
+
+async function startOccupiedWorkspaceLaunchUiServer(): Promise<{ server: Server; port: number }> {
+  const server = createServer((req, res) => {
+    const url = new URL(req.url ?? '/', `http://${req.headers.host ?? '127.0.0.1:0'}`);
+    if (req.method === 'GET' && url.pathname === '/launches') {
+      const body = JSON.stringify({
+        schema: 'narada.workspace_launch.ui_session_state.v1',
+        ui_session: { ui_session_id: 'wls_test', status: 'open' },
+      });
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) });
+      res.end(body);
+      return;
+    }
+    if (req.method === 'GET' && url.pathname === '/') {
+      const body = '<html><body>Narada Workspace Launch</body></html>';
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Content-Length': Buffer.byteLength(body) });
+      res.end(body);
+      return;
+    }
+    res.writeHead(404, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'not_found' }));
+  });
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const address = server.address();
+  if (!address || typeof address === 'string') {
+    await new Promise<void>((resolve, reject) => server.close((error?: Error) => (error ? reject(error) : resolve())));
+    throw new Error('occupied_workspace_launch_ui_port_unavailable');
+  }
+  return { server, port: address.port };
+}
+
+async function closeServerIfRunning(server: Server): Promise<void> {
+  if (!server.listening) return;
+  await new Promise<void>((resolve) => server.close(() => resolve()));
+}
+
+async function startRememberedSelectionUiServer(port = 0): Promise<{ server: Server; url: string; port: number }> {
+  const records = launchSelectionFixtureRecords();
+  const server = createServer((req, res) => {
+    void (async () => {
+      const url = new URL(req.url ?? '/', `http://${req.headers.host ?? '127.0.0.1:0'}`);
+      if (req.method === 'GET' && url.pathname === '/') {
+        const model = buildWorkspaceLaunchSelectionUiModel(records, {}, await readWorkspaceLaunchRememberedSelection());
+        const body = buildWorkspaceLaunchSelectionHtml(model, { persistent: true });
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Content-Length': Buffer.byteLength(body) });
+        res.end(body);
+        return;
+      }
+      if (req.method === 'POST' && url.pathname === '/submit') {
+        const chunks: Buffer[] = [];
+        for await (const chunk of req) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+        await writeWorkspaceLaunchRememberedSelection(JSON.parse(Buffer.concat(chunks).toString('utf8')) as WorkspaceLaunchBrowserSelection);
+        const body = JSON.stringify({ status: 'accepted' });
+        res.writeHead(200, { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) });
+        res.end(body);
+        return;
+      }
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'not_found' }));
+    })().catch((error) => {
+      const body = JSON.stringify({ error: error instanceof Error ? error.message : String(error) });
+      res.writeHead(500, { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) });
+      res.end(body);
+    });
+  });
+  const result = await listenWorkspaceLaunchUiServer(server, '127.0.0.1', { port, fallbackToEphemeral: false, source: 'explicit' });
+  return { server, url: result.url, port: result.port };
+}
+
+function extractSelectionUiModel(html: string): Record<string, unknown> {
+  const match = html.match(/const model = JSON\.parse\(atob\('([^']+)'\)\);/);
+  if (!match) throw new Error('selection_ui_model_not_found');
+  return JSON.parse(Buffer.from(match[1], 'base64').toString('utf8')) as Record<string, unknown>;
+}
+
+function launchSelectionFixtureRecords(): WorkspaceLaunchRecord[] {
+  return [
+    {
+      agent: 'sonar.resident',
+      title: 'Sonar Resident',
+      role: 'resident',
+      site: 'sonar',
+      narada_root: 'D:/code/narada.sonar',
+      site_root: 'D:/code/narada.sonar',
+      workspace_root: 'D:/code/narada.sonar',
+      launcher_path: 'D:/code/narada.sonar/narada-sonar.ps1',
+      operator_surface: 'agent-cli',
+      carrier: 'agent-cli',
+      runtime: 'narada-agent-runtime-server',
+      enable_native_shell: false,
+      mcp_scope: 'all',
+      config_path: 'registry.json',
+    },
+    {
+      agent: 'sonar.architect',
+      title: 'Sonar Architect',
+      role: 'architect',
+      site: 'sonar',
+      narada_root: 'D:/code/narada.sonar',
+      site_root: 'D:/code/narada.sonar',
+      workspace_root: 'D:/code/narada.sonar',
+      launcher_path: 'D:/code/narada.sonar/narada-sonar.ps1',
+      operator_surface: 'agent-web-ui',
+      carrier: 'agent-web-ui',
+      runtime: 'narada-agent-runtime-server',
+      enable_native_shell: false,
+      mcp_scope: 'all',
+      config_path: 'registry.json',
+    },
+    {
+      agent: 'narada.architect',
+      title: 'Narada Architect',
+      role: 'architect',
+      site: 'narada',
+      narada_root: 'D:/code/narada',
+      site_root: 'D:/code/narada',
+      workspace_root: 'D:/code/narada',
+      launcher_path: 'D:/code/narada/narada.ps1',
+      operator_surface: 'codex',
+      carrier: 'codex',
+      runtime: 'codex',
+      enable_native_shell: false,
+      mcp_scope: 'all',
+      config_path: 'registry.json',
+    },
+  ] as WorkspaceLaunchRecord[];
+}
+
 function expectLegacyCarrierCompatibility(value: unknown): void {
   expect(value).toMatchObject({
     schema: 'narada.workspace_launch.legacy_carrier_compatibility.v1',
@@ -191,6 +347,8 @@ describe('launcher workspace planning', () => {
           replacement_fields: Record<string, string>;
         };
         intelligence_provider: string;
+        launch_session_id: string;
+        process_ownership: Record<string, unknown>;
         wt_args: string[];
         smoke_command: string[];
       }>;
@@ -219,6 +377,17 @@ describe('launcher workspace planning', () => {
     expectLegacyCarrierCompatibility(result.selected_agents[0].legacy_carrier_compatibility);
     expect(result.selected_agents[0].launch_runtime).toBe('narada-agent-runtime-server');
     expect(result.selected_agents[0].intelligence_provider).toBe('codex-subscription');
+    expect(result.selected_agents[0].launch_session_id).toMatch(/^launch_/);
+    expect(result.selected_agents[0].process_ownership).toMatchObject({
+      schema: 'narada.launch_process_ownership.v1',
+      launch_session_id: result.selected_agents[0].launch_session_id,
+      ownership: 'session_owned',
+      process_role: 'workspace_launch_plan',
+      cleanup_policy: 'terminate_with_launch_session',
+      transfer_policy: 'explicit_only',
+      evidence_status: 'complete',
+      validation_errors: [],
+    });
     expect(result.selected_agents[0].wt_args).toEqual(expect.arrayContaining([
       'pwsh',
       '-NoExit',
@@ -229,6 +398,7 @@ describe('launcher workspace planning', () => {
     expect(commandText).toContain("'agent-cli'");
     expect(commandText).toContain("'--runtime' 'narada-agent-runtime-server'");
     expect(commandText).toContain("'--workspace-root' 'D:/code/narada.sonar'");
+    expect(commandText).toContain("'--launch-session-id' '");
     expect(commandText).toContain("'--exec'");
     expect(commandText).toContain("'--wait'");
     expect(commandText).toContain("'--intelligence-provider' 'codex-subscription'");
@@ -244,6 +414,8 @@ describe('launcher workspace planning', () => {
       'sonar.resident',
       '--runtime',
       'narada-agent-runtime-server',
+      '--launch-session-id',
+      result.selected_agents[0].launch_session_id,
       '--dry-run',
     ]));
     expect(result.wt_args[0]).toBe('new-tab');
@@ -366,6 +538,17 @@ describe('launcher workspace planning', () => {
     expect(agent.smoke_command).toContain('--launch-binding');
     expect(agent.operator_projection_launch_binding.exact_attach_required).toBe(true);
     expect(agent.operator_projection_launch_binding.path).toContain('operator-projection-launch-bindings');
+    expect(agent.launch_session_id).toMatch(/^launch_/);
+    expect(agent.process_ownership).toMatchObject({
+      schema: 'narada.launch_process_ownership.v1',
+      launch_session_id: agent.launch_session_id,
+      ownership: 'session_owned',
+      process_role: 'workspace_launch_plan',
+      cleanup_policy: 'terminate_with_launch_session',
+      transfer_policy: 'explicit_only',
+      evidence_status: 'complete',
+      validation_errors: [],
+    });
     expect(webUiCommandText).not.toContain(';');
     expect(webUiCommandText).toContain('\n& ');
     expect(result.wt_args.filter((arg) => arg === ';')).toHaveLength(1);
@@ -410,6 +593,8 @@ describe('launcher workspace planning', () => {
     expect(agent.agent_identity_ref.canonical_agent_id).toBe('sonar.resident');
     const commandText = agent.wt_args.join(' ');
     const webUiCommandText = agent.wt_args[agent.wt_args.lastIndexOf('-Command') + 1];
+    expect(commandText).toContain('--title sonar.resident runtime');
+    expect(commandText).toContain('--title sonar.resident web ui');
     expect(commandText).toContain('agent-web-ui: waiting for sonar.resident launch binding, then starting browser projection');
     expect(commandText).toContain("'--launch-binding'");
     expect(webUiCommandText).not.toContain("'--agent' 'resident'");
@@ -690,6 +875,122 @@ describe('launcher workspace planning', () => {
     expect(model.runtimeOptions.map((option) => option.value)).toEqual(expect.arrayContaining(['registry default', 'narada-agent-runtime-server', 'codex']));
   });
 
+  it('hydrates InteractiveSelectionUI defaults from User Site persisted selection across fresh model builds', async () => {
+    await withTempUserSiteRoot(async () => {
+      const rememberedSelection: WorkspaceLaunchBrowserSelection = {
+        site: ['sonar'],
+        role: ['resident'],
+        operatorSurface: ['agent-cli'],
+        runtime: 'narada-agent-runtime-server',
+        intelligenceProvider: 'openai-api',
+      };
+
+      await writeWorkspaceLaunchRememberedSelection(rememberedSelection);
+      await expect(readWorkspaceLaunchRememberedSelection()).resolves.toEqual(rememberedSelection);
+
+      const model = buildWorkspaceLaunchSelectionUiModel(launchSelectionFixtureRecords(), {}, rememberedSelection);
+      expect(model).toMatchObject({
+        rememberedSelection,
+        initialSites: ['sonar'],
+        initialRoles: ['resident'],
+        initialOperatorSurfaces: ['agent-cli'],
+        initialRuntime: 'narada-agent-runtime-server',
+        initialIntelligenceProvider: 'openai-api',
+      });
+    });
+  });
+
+  it('hydrates InteractiveSelectionUI defaults across fresh server instances and different ports', async () => {
+    await withTempUserSiteRoot(async () => {
+      const selection: WorkspaceLaunchBrowserSelection = {
+        site: ['sonar'],
+        role: ['architect'],
+        operatorSurface: ['agent-web-ui'],
+        runtime: 'narada-agent-runtime-server',
+        intelligenceProvider: 'openai-api',
+      };
+
+      const first = await startRememberedSelectionUiServer(0);
+      const second = await startRememberedSelectionUiServer(0);
+      try {
+        expect(second.port).not.toBe(first.port);
+        const submit = await fetch(`${first.url}/submit`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(selection),
+        });
+        expect(submit.ok).toBe(true);
+
+        const page = await fetch(second.url);
+        expect(page.ok).toBe(true);
+        const html = await page.text();
+        expect(html).not.toContain('localStorage');
+        const model = extractSelectionUiModel(html);
+        expect(model).toMatchObject({
+          initialSites: ['sonar'],
+          initialRoles: ['architect'],
+          initialOperatorSurfaces: ['agent-web-ui'],
+          initialRuntime: 'narada-agent-runtime-server',
+          initialIntelligenceProvider: 'openai-api',
+        });
+
+        const explicitModel = buildWorkspaceLaunchSelectionUiModel(launchSelectionFixtureRecords(), {
+          site: ['sonar'],
+          role: ['resident'],
+          operatorSurface: 'agent-cli',
+        }, await readWorkspaceLaunchRememberedSelection());
+        expect(explicitModel).toMatchObject({
+          initialSites: ['sonar'],
+          initialRoles: ['resident'],
+          initialOperatorSurfaces: ['agent-cli'],
+          initialRuntime: 'narada-agent-runtime-server',
+          initialIntelligenceProvider: 'openai-api',
+        });
+      } finally {
+        await closeServerIfRunning(first.server);
+        await closeServerIfRunning(second.server);
+      }
+    });
+  });
+
+  it('filters stale remembered launcher values and preserves explicit per-dimension overrides', () => {
+    const rememberedSelection: WorkspaceLaunchBrowserSelection = {
+      site: ['stale-site'],
+      role: ['stale-role'],
+      operatorSurface: ['stale-surface'],
+      runtime: 'stale-runtime',
+      intelligenceProvider: 'stale-provider',
+    };
+
+    const sonarOnlyRecords = launchSelectionFixtureRecords().filter((record) => record.site === 'sonar');
+    const filtered = buildWorkspaceLaunchSelectionUiModel(sonarOnlyRecords, {
+      site: ['sonar'],
+      role: ['resident'],
+    }, rememberedSelection);
+    expect(filtered).toMatchObject({
+      initialSites: ['sonar'],
+      initialRoles: ['resident'],
+      initialOperatorSurfaces: ['registry default'],
+      initialRuntime: 'registry default',
+      initialIntelligenceProvider: 'registry default',
+    });
+
+    const explicit = buildWorkspaceLaunchSelectionUiModel(sonarOnlyRecords, {
+      site: ['sonar'],
+      role: ['architect'],
+      operatorSurface: 'agent-web-ui',
+      runtime: 'narada-agent-runtime-server',
+      intelligenceProvider: 'openai-api',
+    }, rememberedSelection);
+    expect(explicit).toMatchObject({
+      initialSites: ['sonar'],
+      initialRoles: ['architect'],
+      initialOperatorSurfaces: ['agent-web-ui'],
+      initialRuntime: 'narada-agent-runtime-server',
+      initialIntelligenceProvider: 'openai-api',
+    });
+  });
+
   it('normalizes interactive operator surface multiselect values', () => {
     const choices = ['registry default', 'agent-cli', 'agent-web-ui', 'codex'];
     expect(initialOperatorSurfaceValues(choices, undefined)).toEqual(['registry default']);
@@ -726,7 +1027,8 @@ describe('launcher workspace planning', () => {
     expect(agent.launch_carrier).toBe('agent-web-ui');
     expect(agent.launch_carriers).toEqual(['agent-web-ui']);
     const commandText = agent.wt_args.join(' ');
-    expect(commandText).toContain('resident Runtime');
+    expect(commandText).toContain('sonar.resident runtime');
+    expect(commandText).toContain('sonar.resident web ui');
     expect(commandText).toContain("'operator-surface' 'runtime' 'start' 'agent-web-ui'");
     expect(commandText).toContain("'--target-site-id' 'sonar'");
     expect(commandText).toContain("'agent-web-ui' 'attach'");
@@ -769,6 +1071,55 @@ describe('launcher workspace planning', () => {
       discoverNarsSessionsMock.mockImplementation(() => ({ sessions: [{ session_id: 'carrier_sonar_active', agent_id: 'sonar.resident', site_id: 'sonar', site_root: 'D:/code/narada.sonar', display_state: 'active', terminal_state: 'running' }] }));
       observations = await workspaceLaunchRuntimeObservations('wla_healthy', selection, records);
       expect(observations[0]).toMatchObject({ health: 'healthy', ownership_posture: 'owned_by_runtime_authority', session_id: 'carrier_sonar_active' });
+
+      discoverNarsSessionsMock.mockImplementation(() => ({ sessions: [{
+        session_id: 'carrier_old_launch',
+        agent_id: 'sonar.resident',
+        site_id: 'sonar',
+        site_root: 'D:/code/narada.sonar',
+        display_state: 'active',
+        terminal_state: 'running',
+        process_ownership: { launch_session_id: 'launch_old' },
+      }] }));
+      observations = await workspaceLaunchRuntimeObservations('wla_expected_missing', selection, records, ['launch_expected']);
+      expect(observations[0]).toMatchObject({ health: 'unowned', ownership_posture: 'observed_unowned' });
+
+      const staleSessionDir = join(process.cwd(), '.ai', 'tmp-tests', `stale-session-${Date.now()}-${Math.random().toString(16).slice(2)}`);
+      tempDirs.push(staleSessionDir);
+      await mkdir(staleSessionDir, { recursive: true });
+      const staleControlPath = join(staleSessionDir, 'control.jsonl');
+      await writeFile(staleControlPath, '', 'utf8');
+      discoverNarsSessionsMock.mockImplementation(() => ({ sessions: [{
+        session_id: 'carrier_old_owned_launch',
+        agent_id: 'sonar.resident',
+        site_id: 'sonar',
+        site_root: 'D:/code/narada.sonar',
+        display_state: 'active',
+        terminal_state: 'running',
+        control_path: staleControlPath,
+        process_ownership: {
+          launch_session_id: 'launch_old_owned',
+          ownership: 'session_owned',
+          cleanup_policy: 'terminate_with_launch_session',
+        },
+      }] }));
+      observations = await workspaceLaunchRuntimeObservations('wla_expected_stale_cleanup', selection, records, ['launch_expected']);
+      expect(observations[0]).toMatchObject({ health: 'unowned', ownership_posture: 'observed_unowned' });
+      const staleControl = await readFile(staleControlPath, 'utf8');
+      expect(staleControl).toContain('session.close');
+      expect(staleControl).toContain('stale_session_owned_launch_session_superseded');
+
+      discoverNarsSessionsMock.mockImplementation(() => ({ sessions: [{
+        session_id: 'carrier_expected_launch',
+        agent_id: 'sonar.resident',
+        site_id: 'sonar',
+        site_root: 'D:/code/narada.sonar',
+        display_state: 'active',
+        terminal_state: 'running',
+        process_ownership: { launch_session_id: 'launch_expected' },
+      }] }));
+      observations = await workspaceLaunchRuntimeObservations('wla_expected_present', selection, records, ['launch_expected']);
+      expect(observations[0]).toMatchObject({ health: 'healthy', session_id: 'carrier_expected_launch' });
 
       discoverNarsSessionsMock.mockImplementation(() => ({ sessions: [{ session_id: 'carrier_sonar_stale', agent_id: 'sonar.resident', site_id: 'sonar', site_root: 'D:/code/narada.sonar', display_state: 'stale', terminal_state: 'running' }] }));
       observations = await workspaceLaunchRuntimeObservations('wla_stale', selection, records);
@@ -1000,6 +1351,56 @@ describe('launcher workspace planning', () => {
       runtime: 'agent-cli',
       format: 'json',
     }, createMockContext())).rejects.toThrow(/runtime_carrier_conflation_refused/);
+  });
+
+  it('resolves a stable launcher UI port from defaults and User Site config', async () => {
+    await withTempUserSiteRoot(async () => {
+      expect(resolveWorkspaceLaunchUiPortPolicy({})).toMatchObject({
+        port: 47320,
+        fallbackToEphemeral: false,
+        source: 'default',
+      });
+
+      const root = process.env.NARADA_USER_SITE_ROOT as string;
+      await writeWorkspaceLaunchUiPolicy(root, { port: 48221, fallback: true });
+      expect(resolveWorkspaceLaunchUiPortPolicy({})).toMatchObject({
+        port: 48221,
+        fallbackToEphemeral: true,
+        source: 'config',
+      });
+      expect(resolveWorkspaceLaunchUiPortPolicy({ launcherUiPort: 49876, launcherUiPortFallback: false })).toMatchObject({
+        port: 49876,
+        fallbackToEphemeral: false,
+        source: 'explicit',
+      });
+    });
+  });
+
+  it('falls back or refuses explicitly when the preferred launcher UI port is occupied', async () => {
+    await withTempUserSiteRoot(async () => {
+      const occupied = await startOccupiedWorkspaceLaunchUiServer();
+      try {
+        const refusingServer = createServer();
+        await expect(listenWorkspaceLaunchUiServer(refusingServer, '127.0.0.1', {
+          port: occupied.port,
+          fallbackToEphemeral: false,
+          source: 'explicit',
+        })).rejects.toThrow(/launcher_ui_port_in_use/);
+        await closeServerIfRunning(refusingServer);
+
+        const fallbackServer = createServer();
+        const result = await listenWorkspaceLaunchUiServer(fallbackServer, '127.0.0.1', {
+          port: occupied.port,
+          fallbackToEphemeral: true,
+          source: 'explicit',
+        });
+        expect(result.fallback_used).toBe(true);
+        expect(result.port).not.toBe(occupied.port);
+        await closeServerIfRunning(fallbackServer);
+      } finally {
+        await closeServerIfRunning(occupied.server);
+      }
+    });
   });
 
   it('explains runtime MCP fabric as authoritative over capability projections', async () => {

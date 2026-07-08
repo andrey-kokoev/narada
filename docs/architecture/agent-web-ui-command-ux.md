@@ -22,7 +22,7 @@ That is enough for protocol routing, but not enough for a good operator UX:
 ## Target Invariants
 
 - Commands have one static source of truth: `AGENT_WEB_UI_COMMANDS`.
-- The parser and command palette both consume that registry.
+- The parser and command palette both consume that registry; snippet subcommand grammar lives beside it in `AGENT_WEB_UI_SNIPPET_ACTIONS`.
 - Vue components render and select commands; they do not own command semantics.
 - Unknown slash commands are handled explicitly and never silently become normal conversation.
 - Static command shape is versioned with the package and does not require a live NARS session to render the palette.
@@ -62,7 +62,7 @@ export interface AgentWebUiCommand {
   slash: `/${string}`;
   aliases?: `/${string}`[];
   kind: AgentWebUiCommandKind;
-  group: 'conversation' | 'session' | 'diagnostics' | 'settings' | 'local' | 'advanced';
+  group: 'conversation' | 'session' | 'diagnostics' | 'settings' | 'snippets' | 'local' | 'advanced';
   title: string;
   description: string;
   keywords?: string[];
@@ -147,7 +147,9 @@ If snippets later become Site-owned or team-shared assets, that should be a new 
 
 Snippets are first-class Agent Web UI operator affordances, with slash commands as the fast path.
 
-The palette should surface snippets when the operator searches by snippet name or body, not only when the query starts with `/snippet`. Selecting a snippet from the palette runs or queues the stored body directly as conversation input; it must not reparse a slash-prefixed snippet body as a slash command.
+The palette should surface snippets when the operator searches by snippet name or body, not only when the query starts with `/snippet`. Selecting a snippet from the top-level palette runs or queues the stored body directly as conversation input; it must not reparse a slash-prefixed snippet body as a slash command.
+
+The `/snippet` command opens a snippet-specific second-level selector rather than a flat command list. The first level offers snippet actions such as search, run, enqueue, save, edit, and delete. Selecting `run` or `enqueue` moves into snippet selection filtered by the following text. `/snippets [query]` remains the direct drawer/search command.
 
 The Snippets drawer is the management surface for browser/operator-local snippets. It should support:
 
@@ -165,8 +167,9 @@ The Snippets drawer is the management surface for browser/operator-local snippet
 
 The drawer should expose clear empty states for both no snippets and no search matches. It should show name-normalization feedback before save, character/line counts for multi-line bodies, and keyboard affordances such as `Ctrl+Enter` to save and `Esc` to close.
 
-Slash commands remain available for efficient keyboard use:
+Slash commands remain available for efficient keyboard use. `/snippets [query]` opens the Snippets drawer directly, filtered by the optional query, even when the snippets header control is hidden by the operator's header preferences.
 
+- `/snippets [query]`
 - `/snippet save <name> <text>`
 - `/snippet edit <name> <text>`
 - `/snippet delete <name>`
@@ -209,7 +212,15 @@ Owns Agent Web UI command definitions, parsing, action construction, validation,
 
 `packages/agent-web-ui`
 
-Owns palette rendering, keyboard interaction, local UI command effects, and browser-level accessibility tests.
+Owns palette rendering, keyboard interaction, local UI command effects, panel rendering, and browser-level accessibility tests. Browser E2E for ordinary Agent Web UI UX uses Playwright-managed browsers through `pnpm --filter @narada2/agent-web-ui test:e2e`; `pnpm --filter @narada2/agent-web-ui test:browser` is an alias for that path. `OperatorComposer.vue` should stay a thin render/wiring surface; command palette state lives in `useOperatorCommandPalette`, snippet CRUD/search/storage lives in `useOperatorSnippets`, and Esc interrupt prompt state lives in `useOperatorInterruptPrompt`.
+
+The browser test split is intentional:
+
+- Playwright fixture-backed browser E2E owns ordinary browser UX: slash commands, snippet palette/drawer behavior, viewport/layout smoke, markdown rendering, confirmation panels, and MCP/SOP panel rendering against fixture NARS surfaces. This tier must keep the browser, Agent Web UI server, WebSocket event projection, HTTP health projection, NARS server-mode protocol, and runtime event assertions real. It may use deterministic fixture providers, fixture MCPs, synthetic temp Site roots, and synthetic credentials only behind those real protocol boundaries.
+- Slash/snippet browser E2E should be registry-driven where possible. In particular, changes to `AGENT_WEB_UI_COMMANDS` or `AGENT_WEB_UI_SNIPPET_ACTIONS` should update or exercise the browser matrix rather than adding hand-picked duplicate cases.
+- Live-runtime smoke owns narrow proof that the same projection works against a real local NARS runtime and browser outside the Playwright fixture harness; the focused slash path is `pnpm --filter @narada2/agent-web-ui test:live:slash-commands`. That smoke still uses fixture provider/MCP seams where declared. It does not replace comprehensive fixture-backed E2E, and fixture-backed E2E does not prove live provider quality or external API behavior.
+- Raw CDP helpers are reserved for projection/protocol smoke where browser attachment, hosted Cloudflare projection, or artifact transport is the subject under test. They run only through the explicit `test:browser:cdp` path or live/projection-specific scripts.
+- New Agent Web UI browser UX tests should be added under `packages/agent-web-ui/test/e2e/*.spec.js`; do not add new ordinary UI coverage to raw CDP node-test files.
 
 `packages/carrier-runtime` and NARS packages
 
@@ -234,4 +245,3 @@ Own protocol endpoints and server-side command execution. They should not own br
 - `Escape` closes the palette before it triggers any interrupt or steer flow.
 - Existing commands keep producing the same protocol actions they produced before the registry refactor.
 - The feature works without a live NARS session because the initial command inventory is static.
-

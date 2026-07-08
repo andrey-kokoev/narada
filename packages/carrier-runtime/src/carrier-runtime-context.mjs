@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { buildAgentIdentityRef } from '@narada2/agent-identity';
+import { buildAgentIdentityRefV2, normalizeAgentIdentityRefV2, resolveAgentIdentityRef } from '@narada2/agent-identity';
 import { resolveNaradaSitePaths } from '@narada2/site-paths';
 
 /**
@@ -47,10 +47,15 @@ export function buildCarrierRuntimePaths(siteRoot, session) {
  * @param {object|null} [options.siteConfig]
  * @param {string} [options.operatorSurfaceKind]
  * @param {string} [options.authorityRuntimeHost]
+ * @param {string} [options.launchSessionId]
+ * @param {string} [options.processOwnership]
+ * @param {string} [options.processRole]
+ * @param {number|string} [options.createdByPid]
  * @returns {CarrierRuntimeContext}
  */
 export function createCarrierRuntimeContext({
   identity,
+  agentIdentityRef: inputAgentIdentityRef = null,
   session,
   siteRoot,
   siteId,
@@ -69,6 +74,10 @@ export function createCarrierRuntimeContext({
   siteConfig = null,
   operatorSurfaceKind = process.env.NARADA_OPERATOR_SURFACE_KIND ?? 'agent-cli',
   authorityRuntimeHost = process.env.NARADA_AUTHORITY_RUNTIME_HOST ?? 'local',
+  launchSessionId = process.env.NARADA_LAUNCH_SESSION_ID ?? null,
+  processOwnership = process.env.NARADA_PROCESS_OWNERSHIP ?? null,
+  processRole = process.env.NARADA_PROCESS_ROLE ?? null,
+  createdByPid = process.env.NARADA_CREATED_BY_PID ?? null,
 } = {}) {
   if (!identity) throw new TypeError('identity is required');
   if (!session) throw new TypeError('session is required');
@@ -80,7 +89,29 @@ export function createCarrierRuntimeContext({
     : buildCarrierRuntimePaths(resolvedSiteRoot, session);
   const resolvedNaradaDir = naradaDir ?? paths.naradaDir;
   const resolvedSiteId = siteId ?? process.env.NARADA_SITE_ID ?? null;
-  const agentIdentityRef = buildAgentIdentityRef(identity, process.env.NARADA_AGENT_ROLE ?? null, resolvedSiteId);
+  const resolvedIdentityRef = resolveAgentIdentityRef(identity, {
+    site_id: resolvedSiteId,
+    role: process.env.NARADA_AGENT_ROLE ?? null,
+  });
+  const agentIdentityRef = inputAgentIdentityRef && typeof inputAgentIdentityRef === 'object' && !Array.isArray(inputAgentIdentityRef)
+    ? normalizeAgentIdentityRefV2(inputAgentIdentityRef, {
+      site_id: resolvedSiteId,
+      role: process.env.NARADA_AGENT_ROLE ?? null,
+      agent_id: identity,
+    }) ?? buildAgentIdentityRefV2({
+      identity_scope: resolvedSiteId ? { kind: 'narada_site', site_id: resolvedSiteId } : { kind: 'unscoped' },
+      local_agent_id: identity,
+      role: process.env.NARADA_AGENT_ROLE ?? identity,
+      legacy_agent_id: identity,
+    })
+    : resolvedIdentityRef.status === 'resolved'
+      ? resolvedIdentityRef.value
+      : buildAgentIdentityRefV2({
+        identity_scope: resolvedSiteId ? { kind: 'narada_site', site_id: resolvedSiteId } : { kind: 'unscoped' },
+        local_agent_id: identity,
+        role: process.env.NARADA_AGENT_ROLE ?? identity,
+        legacy_agent_id: identity,
+      });
   const resolvedSiteConfig = normalizeSiteConfig(siteConfig ?? parseSiteConfigEnv(process.env.NARADA_SITE_CONFIG), {
     siteId: resolvedSiteId,
     siteRoot: resolvedSiteRoot,
@@ -100,6 +131,10 @@ export function createCarrierRuntimeContext({
     intelligenceProvider,
     operatorSurfaceKind,
     authorityRuntimeHost,
+    launchSessionId: normalizeOptionalString(launchSessionId),
+    processOwnership: normalizeOptionalString(processOwnership),
+    processRole: normalizeOptionalString(processRole),
+    createdByPid: normalizeOptionalInteger(createdByPid),
     providerSettings: Object.freeze({
       model: providerSettings.model ?? process.env.CODEX_MODEL ?? process.env.NARADA_CODEX_MODEL ?? null,
       thinking: providerSettings.thinking ?? process.env.NARADA_AI_THINKING ?? 'medium',
@@ -118,6 +153,16 @@ export function createCarrierRuntimeContext({
     eventStreamUrl,
     siteConfig: Object.freeze(resolvedSiteConfig),
   });
+}
+
+function normalizeOptionalString(value) {
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+function normalizeOptionalInteger(value) {
+  if (typeof value === 'number' && Number.isInteger(value)) return value;
+  if (typeof value === 'string' && /^\d+$/.test(value.trim())) return Number(value.trim());
+  return null;
 }
 
 function parseSiteConfigEnv(value) {

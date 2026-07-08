@@ -22,6 +22,7 @@ import {
 import { mcpToolCatalogEntries as defaultMcpToolCatalogEntries } from './session-status-snapshots.mjs';
 import { buildNarsSurfaceAffordanceProjection } from './surface-affordances.mjs';
 import { runtimeAuthorityPostureFromHandoff } from './runtime-authority-posture.mjs';
+import { buildLaunchProcessOwnershipEvidence } from './launch-process-ownership.mjs';
 
 export async function runCarrierServerMode({
   input = process.stdin,
@@ -52,11 +53,23 @@ export async function runCarrierServerMode({
     eventStreamUrl = null,
     operatorSurfaceKind = 'agent-cli',
     authorityRuntimeHost = 'local',
+    launchSessionId = null,
+    processOwnership = null,
+    processRole = null,
+    createdByPid = null,
   } = ctx;
   const launchOperatorSurfaceKind = operatorSurfaceKind || 'agent-cli';
   const sessionAgentId = typeof agentIdentityRef?.canonical_agent_id === 'string' && agentIdentityRef.canonical_agent_id
     ? agentIdentityRef.canonical_agent_id
     : identity;
+  const launchProcessOwnership = buildLaunchProcessOwnershipEvidence({
+    launchSessionId,
+    ownership: processOwnership,
+    processRole: processRole ?? 'runtime_server',
+    ownerSiteRoot: siteRoot,
+    createdByPid,
+    pid: process.pid,
+  });
   const {
     discoverAndStartMcpServers,
     applyWorkerMcpProjection = (mcpServers) => mcpServers,
@@ -115,6 +128,8 @@ export async function runCarrierServerMode({
       event_endpoint: eventStreamUrl,
       websocket_endpoint: eventStreamUrl,
       attach_commands: buildNarsAttachCommands({ eventEndpoint: eventStreamUrl, healthEndpoint: healthUrl }),
+      launch_session_id: launchSessionId,
+      process_ownership: launchProcessOwnership,
       runtime_authority_posture: runtimeAuthorityPosture,
       authority_mode: runtimeAuthorityPosture.authority_mode,
       session_path: sessionPath,
@@ -137,11 +152,13 @@ export async function runCarrierServerMode({
     operator_surface_kind: launchOperatorSurfaceKind,
     mode: 'server',
     sessionDir: sessionPath ? dirname(sessionPath) : null,
+    launch_session_id: launchSessionId,
+    process_ownership: launchProcessOwnership,
   });
 
   let mcpServers;
   try {
-    mcpServers = applyWorkerMcpProjection(await discoverAndStartMcpServers(siteRoot));
+    mcpServers = applyWorkerMcpProjection(await discoverAndStartMcpServers(siteRoot, launchProcessOwnership));
   } catch (error) {
     heartbeat.stop?.('closed');
     markNarsSessionIndexClosed({
@@ -322,6 +339,8 @@ export async function runCarrierServerMode({
     event_endpoint: eventStreamUrl,
     websocket_endpoint: eventStreamUrl,
     attach_commands: buildNarsAttachCommands({ eventEndpoint: eventStreamUrl, healthEndpoint: healthUrl }),
+    launch_session_id: launchSessionId,
+    process_ownership: launchProcessOwnership,
     delegated_authority_handoff: narsDelegatedAuthorityHandoff,
     delegated_authority_ref: narsDelegatedAuthorityHandoff?.authority_ref ?? null,
     runtime_authority_posture: runtimeAuthorityPosture,
@@ -431,7 +450,7 @@ function messagesWithRolePrompt(messages, rolePrompt) {
   return [{ role: 'system', content: rolePrompt }, ...history];
 }
 
-function startCarrierHeartbeat({ path, session, identity, runtime, carrier_kind, launch_operator_surface_kind, operator_surface_kind, mode, sessionDir, intervalMs = 5000 } = {}) {
+function startCarrierHeartbeat({ path, session, identity, runtime, carrier_kind, launch_operator_surface_kind, operator_surface_kind, mode, sessionDir, launch_session_id = null, process_ownership = null, intervalMs = 5000 } = {}) {
   if (!path) return { stop() {} };
   const startedAt = new Date().toISOString();
   const write = (status = 'alive') => {
@@ -451,6 +470,8 @@ function startCarrierHeartbeat({ path, session, identity, runtime, carrier_kind,
       operator_surface_kind,
       mode,
       pid: process.pid,
+      launch_session_id,
+      process_ownership,
       session_dir: sessionDir,
       carrier_session_dir: sessionDir,
       started_at: startedAt,

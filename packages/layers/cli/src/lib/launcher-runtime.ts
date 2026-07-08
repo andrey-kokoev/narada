@@ -1,9 +1,11 @@
-import { accessSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { accessSync, closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { basename, dirname, join, parse, resolve } from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { agentIdentityRefMatchesRequest } from '@narada2/agent-identity';
+import { spawnHiddenPostureProcess } from '@narada2/process-launch-posture';
+import { buildLaunchProcessOwnership, launchSessionIdFromToken, type LaunchProcessOwnership } from './launch-process-ownership.js';
 
 const requireFromLauncherRuntime = createRequire(import.meta.url);
 
@@ -50,6 +52,8 @@ export function writeOperatorProjectionLaunchBinding(path: string | undefined, a
   narsSessionId?: string | null;
   runtimeSessionId?: string | null;
   carrierSessionId?: string | null;
+  launchSessionId?: string | null;
+  processOwnership?: LaunchProcessOwnership | null;
   reason?: string | null;
 }): void {
   if (!path) return;
@@ -77,6 +81,8 @@ export function writeOperatorProjectionLaunchBinding(path: string | undefined, a
     nars_session_id: args.narsSessionId ?? null,
     runtime_session_id: args.runtimeSessionId ?? null,
     carrier_session_id: args.carrierSessionId ?? null,
+    launch_session_id: args.launchSessionId ?? null,
+    process_ownership: args.processOwnership ?? null,
     reason: args.reason ?? null,
   };
   mkdirSync(dirname(path), { recursive: true });
@@ -120,6 +126,7 @@ export interface AgentStartOptions {
   enableNativeShell?: boolean;
   launchSource?: string;
   launchBindingPath?: string;
+  launchSessionId?: string;
 }
 
 export interface OperatorProjectionLaunchBinding {
@@ -138,6 +145,8 @@ export interface OperatorProjectionLaunchBinding {
   nars_session_id?: string | null;
   runtime_session_id?: string | null;
   carrier_session_id?: string | null;
+  launch_session_id?: string | null;
+  process_ownership?: LaunchProcessOwnership | null;
   reason?: string | null;
 }
 
@@ -290,6 +299,27 @@ interface LaunchResultRecord {
   created_at?: unknown;
 }
 
+export function classifyAgentStartLaunchBindingStatus(
+  executionStatus: CommandExecutionResult['status'],
+  parsedRecord: LaunchResultRecord | null,
+): Pick<OperatorProjectionLaunchBinding, 'status' | 'reason'> {
+  const parsedStatus = stringValue(parsedRecord?.status)?.toLowerCase();
+  const hasNarsSession = Boolean(
+    stringValue(parsedRecord?.nars_launch?.nars_session_id ?? parsedRecord?.nars_launch?.session_id ?? parsedRecord?.required_environment?.NARADA_NARS_SESSION_ID),
+  );
+  if (hasNarsSession && (parsedStatus === 'materialized' || parsedStatus === 'success')) {
+    return { status: 'ready', reason: null };
+  }
+  if (executionStatus === 'success') return { status: 'ready', reason: null };
+  return { status: 'failed', reason: 'agent_start_failed' };
+}
+
+export function shouldDetachAgentStartProcess(options: Pick<AgentStartOptions, 'exec' | 'wait' | 'carrier' | 'runtime'>): boolean {
+  if (options.exec !== true || options.wait === true) return false;
+  if (options.runtime !== 'narada-agent-runtime-server') return false;
+  return options.carrier === 'agent-cli' || options.carrier === 'agent-web-ui';
+}
+
 export function getCarrierStatus(options: CarrierStatusOptions): CarrierStatusResult {
   const siteRoot = resolve(options.siteRoot);
   const launchResultsDir = join(siteRoot, '.ai', 'runtime', 'agent-start-results');
@@ -326,6 +356,10 @@ export function getCarrierControlPath(options: CarrierStatusOptions): CarrierSta
 export function runAgentStartCommand(options: AgentStartOptions): AgentStartCommandResult {
   const siteRoot = resolve(options.siteRoot);
   const workspaceRoot = options.workspaceRoot ? resolve(options.workspaceRoot) : naradaProperRoot();
+  const launchSessionId = options.launchSessionId ?? launchSessionIdFromToken(options.launchBindingPath?.split(/[\\/]/).pop());
+  const processOwnership = launchSessionId
+    ? buildLaunchProcessOwnership({ launchSessionId, siteRoot, workspaceRoot, processRole: 'runtime_start', createdByPid: process.pid })
+    : null;
   const resolvedAgentStart = resolveAgentStartEntrypoint(workspaceRoot);
   const siteRootAgentStart = join(siteRoot, 'packages', 'agent-start', 'src', 'narada-agent-start.ts');
   const agentStart = existsSync(resolvedAgentStart) || !existsSync(siteRootAgentStart)
@@ -344,6 +378,8 @@ export function runAgentStartCommand(options: AgentStartOptions): AgentStartComm
     authority: options.authority ?? null,
     intelligenceProvider: options.intelligenceProvider ?? null,
     agentStartResultFile: resultPath,
+    launchSessionId,
+    processOwnership,
   });
   const inheritedInteractiveExec = options.exec === true && options.dryRun !== true;
   const args = [
@@ -395,16 +431,25 @@ export function runAgentStartCommand(options: AgentStartOptions): AgentStartComm
     ...(options.targetSiteId ? { NARADA_TARGET_SITE_ID: options.targetSiteId } : {}),
     NARADA_LAUNCH_REGISTRY_SITE_ROOT: siteRoot,
     NARADA_LAUNCH_REGISTRY_WORKSPACE_ROOT: workspaceRoot,
+    ...(launchSessionId ? { NARADA_LAUNCH_SESSION_ID: launchSessionId } : {}),
+    ...(processOwnership ? {
+      NARADA_PROCESS_OWNERSHIP: processOwnership.ownership,
+      NARADA_PROCESS_ROLE: 'runtime_server',
+      NARADA_CREATED_BY_PID: String(processOwnership.created_by_pid ?? process.pid),
+    } : {}),
     NARADA_AGENT_ID: options.agent,
     ...(options.intelligenceProvider ? { NARADA_INTELLIGENCE_PROVIDER: options.intelligenceProvider } : {}),
   };
-  const execution = inheritedInteractiveExec
+  const execution = shouldDetachAgentStartProcess(options)
+    ? runProcessDetachedUntilJson(process.execPath, args, workspaceRoot, resultPath, executionEnv)
+    : inheritedInteractiveExec
     ? runProcessInherited(process.execPath, args, workspaceRoot, executionEnv)
     : runProcess(process.execPath, args, workspaceRoot, executionEnv);
   const parsed = tryReadJsonFile(resultPath);
   const parsedRecord = parsed as LaunchResultRecord | null;
+  const launchBindingStatus = classifyAgentStartLaunchBindingStatus(execution.status, parsedRecord);
   writeOperatorProjectionLaunchBinding(options.launchBindingPath, {
-    status: execution.status === 'success' ? 'ready' : 'failed',
+    status: launchBindingStatus.status,
     siteRoot,
     workspaceRoot,
     agent: options.agent,
@@ -415,7 +460,9 @@ export function runAgentStartCommand(options: AgentStartOptions): AgentStartComm
     narsSessionId: stringValue(parsedRecord?.nars_launch?.nars_session_id ?? parsedRecord?.nars_launch?.session_id ?? parsedRecord?.required_environment?.NARADA_NARS_SESSION_ID),
     runtimeSessionId: stringValue(parsedRecord?.nars_launch?.runtime_session_id ?? parsedRecord?.nars_launch?.session_id ?? parsedRecord?.required_environment?.NARADA_RUNTIME_SESSION_ID),
     carrierSessionId: stringValue(parsedRecord?.carrier_session?.carrier_session_id ?? parsedRecord?.required_environment?.NARADA_CARRIER_SESSION_ID),
-    reason: execution.status === 'success' ? null : 'agent_start_failed',
+    launchSessionId,
+    processOwnership,
+    reason: launchBindingStatus.reason,
   });
   return {
     schema: 'narada.agent_start.command_result.v0',
@@ -953,6 +1000,74 @@ function runProcess(
   };
 }
 
+function runProcessDetachedUntilJson(
+  command: string,
+  args: string[],
+  cwd: string,
+  resultPath: string,
+  env: Record<string, string> = {},
+  timeoutMs = 30_000,
+): CommandExecutionResult {
+  const logDir = dirname(resultPath);
+  mkdirSync(logDir, { recursive: true });
+  const stdoutPath = join(logDir, 'detached-stdout.log');
+  const stderrPath = join(logDir, 'detached-stderr.log');
+  let stdoutFd: number | null = null;
+  let stderrFd: number | null = null;
+  try {
+    stdoutFd = openSync(stdoutPath, 'a');
+    stderrFd = openSync(stderrPath, 'a');
+    const child = spawnHiddenPostureProcess(command, args, {
+      posture: 'provider_subprocess',
+      cwd,
+      detached: true,
+      stdio: ['ignore', stdoutFd, stderrFd],
+      env: {
+        ...process.env,
+        NODE_OPTIONS: appendNodeOption(process.env.NODE_OPTIONS, '--disable-warning=ExperimentalWarning'),
+        OUTPUT_FORMAT: 'json',
+        ...env,
+      },
+    });
+    child.unref();
+  } catch (error) {
+    if (stdoutFd !== null) closeSync(stdoutFd);
+    if (stderrFd !== null) closeSync(stderrFd);
+    return {
+      status: 'failed',
+      exit_code: 1,
+      stdout: '',
+      stderr: '',
+      error: error instanceof Error ? error.message : String(error),
+    };
+  } finally {
+    if (stdoutFd !== null) closeSync(stdoutFd);
+    if (stderrFd !== null) closeSync(stderrFd);
+  }
+
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < timeoutMs) {
+    const parsed = tryReadJsonFile(resultPath);
+    if (parsed && typeof parsed === 'object') {
+      return {
+        status: 'success',
+        exit_code: 0,
+        stdout: `detached_stdout=${stdoutPath}`,
+        stderr: `detached_stderr=${stderrPath}`,
+      };
+    }
+    sleepSync(100);
+  }
+  const stderrTail = readTextTail(stderrPath, 2000);
+  return {
+    status: 'failed',
+    exit_code: 1,
+    stdout: `detached_stdout=${stdoutPath}`,
+    stderr: `timed out waiting for agent-start JSON handoff: ${resultPath}\ndetached_stderr=${stderrPath}\n${stderrTail}`.trim(),
+    error: 'agent_start_handoff_timeout',
+  };
+}
+
 function runProcessInherited(
   command: string,
   args: string[],
@@ -979,6 +1094,20 @@ function runProcessInherited(
     stderr: '',
     error: result.error ? result.error.message : undefined,
   };
+}
+
+function sleepSync(ms: number): void {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+function readTextTail(path: string, maxChars: number): string {
+  try {
+    if (!existsSync(path)) return '';
+    const text = readFileSync(path, 'utf8');
+    return text.length > maxChars ? text.slice(text.length - maxChars) : text;
+  } catch {
+    return '';
+  }
 }
 
 function tryParseJson(value: string): unknown {

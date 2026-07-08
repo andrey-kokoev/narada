@@ -262,8 +262,8 @@ export function resolveCarrierCommand(carrierName, {
 }
 
 export function carrierSpawnOptions(carrierName) {
-  if (carrierName === 'opencode') return { shell: false };
-  return {};
+  if (carrierName === 'opencode') return { shell: false, windowsHide: true };
+  return { windowsHide: true };
 }
 
 export function carrierSpecificEnvironment(carrierName, {
@@ -368,6 +368,115 @@ export function buildCarrierEnvironmentProjection({
       : startResult.would_set_environment,
     runtimeEnvironment,
     carrierName,
+  };
+}
+
+export function buildCarrierSpawnEnvironmentDelta({
+  carrierName,
+  startResult,
+  carrierEnvironment = {},
+  intelligenceProviderEnv = {},
+  mcpProviderCredentialEnv = {},
+  agentTuiEnvironment = {},
+  runtimeEnvironment = {},
+  identity,
+  role,
+  agentStartEventId,
+  carrierSessionId,
+  targetSiteId,
+  agentIdentityRef,
+  operatorSurfaceKind,
+  environmentSiteRoot,
+  workspaceRoot,
+  dbPath,
+  siteConfig = null,
+  codexMcpScope = null,
+  runtimeProcessCreatorPid = null,
+  runtimeProcessRole = 'runtime_server',
+}) {
+  const processEnvironment = buildCarrierProcessEnvironment({
+    processEnvironment: {},
+    intelligenceProviderEnv,
+    mcpProviderCredentialEnv,
+    runtimeEnvironment,
+    agentTuiEnvironment,
+    codexMcpScope,
+    carrierName,
+    identity,
+    role,
+    agentStartEventId,
+    carrierSessionId,
+    targetSiteId,
+    agentIdentityRef,
+    operatorSurfaceKind,
+    environmentSiteRoot,
+    workspaceRoot,
+    dbPath,
+    siteConfig,
+    runtimeProcessCreatorPid,
+    runtimeProcessRole,
+  });
+  const shouldStripOpenAIEnvironment = intelligenceProviderEnv.NARADA_INTELLIGENCE_PROVIDER === 'codex-subscription';
+  const startRequiredEnvironment = shouldStripOpenAIEnvironment
+    ? stripCodexSubscriptionOpenAIEnvironment(startResult.required_environment ?? {})
+    : (startResult.required_environment ?? {});
+  return {
+    ...startRequiredEnvironment,
+    ...processEnvironment,
+  };
+}
+
+export function buildCarrierProcessEnvironment({
+  processEnvironment = process.env,
+  intelligenceProviderEnv = {},
+  mcpProviderCredentialEnv = {},
+  runtimeEnvironment = {},
+  agentTuiEnvironment = {},
+  codexMcpScope = null,
+  carrierName,
+  identity,
+  role,
+  agentStartEventId,
+  carrierSessionId,
+  targetSiteId,
+  agentIdentityRef,
+  operatorSurfaceKind,
+  environmentSiteRoot,
+  workspaceRoot,
+  dbPath,
+  siteConfig,
+  runtimeProcessCreatorPid = null,
+  runtimeProcessRole = null,
+}) {
+  return {
+    ...processEnvironment,
+    ...intelligenceProviderEnv,
+    ...mcpProviderCredentialEnv,
+    ...(carrierName === 'pi' ? {} : runtimeEnvironment),
+    NARADA_AGENT_ID: identity,
+    ...(role ? { NARADA_AGENT_ROLE: role } : {}),
+    NARADA_AGENT_START_EVENT_ID: agentStartEventId,
+    NARADA_CARRIER_SESSION_ID: carrierSessionId,
+    NARADA_OPERATOR_SURFACE_KIND: operatorSurfaceKind,
+    ...(targetSiteId ? { NARADA_SITE_ID: targetSiteId } : {}),
+    ...(agentIdentityRef ? { NARADA_AGENT_IDENTITY_REF: JSON.stringify(agentIdentityRef) } : {}),
+    NARADA_SITE_ROOT: environmentSiteRoot,
+    NARADA_WORKSPACE_ROOT: workspaceRoot,
+    NARADA_AGENT_CONTEXT_DB: dbPath,
+    ...(siteConfig ? { NARADA_SITE_CONFIG: JSON.stringify(siteConfig) } : {}),
+    ...runtimeProcessOwnershipEnvironment({ processEnvironment, runtimeProcessCreatorPid, runtimeProcessRole }),
+    ...agentTuiEnvironment,
+    ...(codexMcpScope?.status === 'materialized' ? { CODEX_HOME: codexMcpScope.codex_home, CODEX_CONFIG_DIR: codexMcpScope.codex_home } : {}),
+  };
+}
+
+function runtimeProcessOwnershipEnvironment({ processEnvironment, runtimeProcessCreatorPid, runtimeProcessRole }) {
+  if (!processEnvironment?.NARADA_LAUNCH_SESSION_ID) return {};
+  const createdByPid = Number.isInteger(runtimeProcessCreatorPid) ? String(runtimeProcessCreatorPid) : null;
+  return {
+    NARADA_PROCESS_OWNERSHIP: processEnvironment.NARADA_PROCESS_OWNERSHIP ?? 'session_owned',
+    NARADA_PROCESS_ROLE: runtimeProcessRole ?? processEnvironment.NARADA_PROCESS_ROLE ?? 'runtime_server',
+    ...(createdByPid ? { NARADA_CREATED_BY_PID: createdByPid } : {}),
   };
 }
 

@@ -3,8 +3,12 @@ import test from 'node:test';
 import {
   aggregateTools,
   applyWorkerMcpProjection,
+  discoverAndStartMcpServers,
+  drainMcpStdoutMessages,
   parseWorkerMcpProjectionConfig,
+  sendMcpRequest,
 } from './mcp-runtime.mjs';
+import { removeTempDir, tempRoot, waitFor, writeFixtureMcpSurface } from './server-mode-test-helpers.mjs';
 
 function tool(name) {
   return {
@@ -66,6 +70,16 @@ test('worker MCP projection scopes delegated worker tools below provider limits'
   assert.deepEqual(projected['narada-sonar-graph-mail'].tools, []);
 });
 
+test('MCP stdout parser accepts content-length frames and JSONL responses', () => {
+  const framed = JSON.stringify({ jsonrpc: '2.0', id: 'framed', result: { ok: true } });
+  const jsonl = JSON.stringify({ jsonrpc: '2.0', id: 'jsonl', result: { ok: true } });
+  const drained = drainMcpStdoutMessages(`Content-Length: ${Buffer.byteLength(framed)}\r\n\r\n${framed}${jsonl}\n`);
+
+  assert.deepEqual(drained.messages.map((message) => message.id), ['framed', 'jsonl']);
+  assert.equal(drained.rest, '');
+  assert.deepEqual(drained.stdoutPollution, []);
+});
+
 test('worker MCP projection admits explicit full mode unchanged', () => {
   const servers = fixtureServers();
   const projected = applyWorkerMcpProjection(servers, { native_mcp_mode: 'full' });
@@ -80,4 +94,54 @@ test('worker MCP projection supports server-qualified requested tool names', () 
     include_startup_tools: false,
   })));
   assert.deepEqual(aggregateTools(projected).map((item) => item.function.name), ['mailbox_messages_list']);
+});
+
+test('runtime MCP server restarts after child transport exits between requests', async () => {
+  const siteRoot = tempRoot('carrier-mcp-restart-test-');
+  let server;
+  try {
+    writeFixtureMcpSurface(siteRoot);
+    const servers = await discoverAndStartMcpServers(siteRoot, {
+      launch_session_id: 'launch_fixture_session',
+      process_role: 'runtime_server',
+      created_by_pid: process.pid,
+      pid: process.pid,
+    });
+    server = servers['narada-fixture'];
+    assert.ok(server);
+    assert.equal(server.process_ownership?.schema, 'narada.launch_process_ownership.v1');
+    assert.equal(server.process_ownership?.launch_session_id, 'launch_fixture_session');
+    assert.equal(server.process_ownership?.ownership, 'session_owned');
+    assert.equal(server.process_ownership?.process_role, 'mcp_child');
+    assert.equal(server.process_ownership?.parent_process_role, 'runtime_server');
+    assert.equal(server.process_ownership?.server_name, 'narada-fixture');
+    assert.equal(server.process_ownership?.created_by_pid, process.pid);
+    assert.equal(server.process_ownership?.evidence_status, 'complete');
+
+    const first = await sendMcpRequest(server, {
+      jsonrpc: '2.0',
+      id: 'fixture-first',
+      method: 'tools/call',
+      params: { name: 'fixture_read', arguments: { topic: 'first' } },
+    });
+    assert.match(first.content?.[0]?.text ?? '', /first/);
+    const firstPid = server.process?.child?.pid ?? server.process?.pid;
+
+    await waitFor(() => (server.process?.child?.exitCode ?? server.process?.exitCode) !== null || (server.process?.child?.signalCode ?? server.process?.signalCode) !== null, { timeoutMs: 1000 });
+
+    const second = await sendMcpRequest(server, {
+      jsonrpc: '2.0',
+      id: 'fixture-second',
+      method: 'tools/call',
+      params: { name: 'fixture_read', arguments: { topic: 'second' } },
+    });
+    assert.match(second.content?.[0]?.text ?? '', /second/);
+    assert.notEqual(server.process?.child?.pid ?? server.process?.pid, firstPid);
+    assert.equal(server.process_ownership?.pid, server.process?.child?.pid ?? server.process?.pid);
+    assert.equal(server.restart_count, 1);
+    assert.equal(server.last_restart_error, null);
+  } finally {
+    if (server?.process && (server.process.child?.exitCode ?? server.process.exitCode) === null && (server.process.child?.signalCode ?? server.process.signalCode) === null) server.process.kill();
+    removeTempDir(siteRoot);
+  }
 });

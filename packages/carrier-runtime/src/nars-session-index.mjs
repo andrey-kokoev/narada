@@ -6,7 +6,7 @@ import {
   NARS_AUTHORITY_RUNTIME_HOST_TRANSITION_STATES,
   NARS_AUTHORITY_RUNTIME_SOURCE_WRITE_ADMISSIONS,
 } from '@narada2/carrier-protocol';
-import { buildAgentIdentityRef, normalizeAgentIdentityRef } from '@narada2/agent-identity';
+import { buildAgentIdentityRefV2, normalizeAgentIdentityRefV2 } from '@narada2/agent-identity';
 import { narsSessionsRootFromSiteRoot as resolveNarsSessionsRootFromSiteRoot } from '@narada2/site-paths';
 
 export const NARS_SESSION_INDEX_RECORD_SCHEMA = 'narada.nars.session_index_record.v1';
@@ -212,8 +212,18 @@ function buildSessionIndexRecord({ sessionStartedEvent, sessionPath, siteRoot, p
   );
   const authorityEpoch = normalizeAuthorityEpoch(sessionStartedEvent.authority_epoch, 1);
   const siteId = sessionStartedEvent.site_id ?? inferSiteId({ siteRoot: resolvedSiteRoot, agentId: sessionStartedEvent.agent_id });
-  const agentIdentityRef = normalizeAgentIdentityRef(sessionStartedEvent.agent_identity_ref)
-    ?? (sessionStartedEvent.agent_id ? buildAgentIdentityRef(sessionStartedEvent.agent_id, sessionStartedEvent.role ?? null, siteId) : null);
+  const agentIdentityRef = normalizeAgentIdentityRefV2(sessionStartedEvent.agent_identity_ref, {
+    site_id: siteId,
+    role: sessionStartedEvent.role ?? null,
+    agent_id: sessionStartedEvent.agent_id ?? null,
+  }) ?? (sessionStartedEvent.agent_id
+    ? buildAgentIdentityRefV2({
+      identity_scope: siteId ? { kind: 'narada_site', site_id: siteId } : { kind: 'unscoped' },
+      local_agent_id: roleSegment(sessionStartedEvent.agent_id) ?? sessionStartedEvent.agent_id,
+      role: sessionStartedEvent.role ?? roleSegment(sessionStartedEvent.agent_id) ?? sessionStartedEvent.agent_id,
+      legacy_agent_id: sessionStartedEvent.agent_id,
+    })
+    : null);
   return {
     schema: NARS_SESSION_INDEX_RECORD_SCHEMA,
     session_id: sessionId,
@@ -237,6 +247,8 @@ function buildSessionIndexRecord({ sessionStartedEvent, sessionPath, siteRoot, p
     heartbeat_path: paths.heartbeat_path,
     event_endpoint: eventEndpoint,
     health_endpoint: healthEndpoint,
+    launch_session_id: normalizeOptionalString(sessionStartedEvent.launch_session_id),
+    process_ownership: normalizeOptionalRecord(sessionStartedEvent.process_ownership),
     started_at: sessionStartedEvent.started_at ?? sessionStartedEvent.timestamp ?? generatedAt,
     last_seen_at: generatedAt,
     terminal_state: sessionStartedEvent.terminal_state ?? null,
@@ -263,12 +275,18 @@ function toAggregateEntry(record) {
     nars_session_id: record.nars_session_id ?? record.session_id,
     carrier_session_id: record.carrier_session_id ?? record.session_id,
     agent_id: record.agent_id ?? null,
-    agent_identity_ref: normalizeAgentIdentityRef(record.agent_identity_ref),
+    agent_identity_ref: normalizeAgentIdentityRefV2(record.agent_identity_ref, {
+      site_id: record.site_id ?? null,
+      role: record.role ?? null,
+      agent_id: record.agent_id ?? null,
+    }),
     site_id: record.site_id ?? null,
     site_id_source: record.site_id_source ?? null,
     session_dir: record.session_dir,
     record_path: join(record.session_dir, 'session-index-record.json'),
     heartbeat_path: record.heartbeat_path ?? join(record.session_dir, 'heartbeat.json'),
+    launch_session_id: record.launch_session_id ?? null,
+    process_ownership: record.process_ownership ?? null,
     event_endpoint: record.event_endpoint ?? null,
     health_endpoint: record.health_endpoint ?? null,
     started_at: record.started_at ?? null,
@@ -299,6 +317,17 @@ function normalizeAuthorityEpoch(value, defaultValue) {
 
 function normalizeOptionalString(value) {
   return typeof value === 'string' && value.trim().length > 0 ? value : null;
+}
+
+function normalizeOptionalRecord(value) {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value : null;
+}
+
+function roleSegment(agentId) {
+  const value = normalizeOptionalString(agentId);
+  if (!value) return null;
+  const parts = value.split('.').filter(Boolean);
+  return parts.length > 1 ? parts.at(-1) : value;
 }
 
 function normalizeAuthorityTransitionState(value) {

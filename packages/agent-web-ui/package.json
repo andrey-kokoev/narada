@@ -31,12 +31,17 @@
   "scripts": {
     "start": "node ./bin/narada-agent-web-ui.mjs",
     "build": "vite build",
-    "test": "node --test --test-skip-pattern \"browser screenshot smoke renders the served shell\" test/agent-web-ui.test.mjs test/agent-web-ui-projection.test.mjs test/agent-web-ui-protocol.test.mjs",
-    "test:browser": "node --test test/agent-web-ui.test.mjs test/agent-web-ui-panels-e2e.test.mjs test/agent-web-ui-cloudflare-authority-local-surface-artifact-e2e.test.mjs test/agent-web-ui-cloudflare-html-artifact-e2e.test.mjs test/agent-web-ui-local-submit-html-artifact-cloudflare-e2e.test.mjs test/agent-web-ui-live-slash-cross-surface-e2e.test.mjs test/agent-web-ui-ux-smoke.test.mjs",
-    "test:live:speech-audio": "node --test test/agent-web-ui-live-speech-audio-projection-e2e.mjs",
+    "test": "node --test test/agent-web-ui.test.mjs test/agent-web-ui-projection.test.mjs test/agent-web-ui-protocol.test.mjs",
+    "test:browser": "pnpm run test:e2e",
+    "test:live:slash-commands": "pnpm run build && playwright test test/e2e/live-slash-smoke.spec.js",
+    "test:live:speech-audio": "pnpm run build && node --test test/agent-web-ui-live-speech-audio-projection-e2e.mjs",
     "test:live:launcher-affordance": "node test/live-launcher-affordance-e2e.mjs",
-    "test:all": "node --test test/*.test.mjs",
-    "typecheck": "vue-tsc --noEmit -p tsconfig.json"
+    "test:all": "pnpm run test && pnpm run test:e2e",
+    "typecheck": "vue-tsc --noEmit -p tsconfig.json",
+    "test:e2e": "pnpm run build && playwright test",
+    "test:e2e:headed": "pnpm run build && playwright test --headed",
+    "test:e2e:ui": "pnpm run build && playwright test --ui",
+    "test:browser:cdp": "pnpm run build && node --test test/agent-web-ui-cloudflare-authority-local-surface-artifact-e2e.test.mjs test/agent-web-ui-cloudflare-html-artifact-e2e.test.mjs test/agent-web-ui-local-submit-html-artifact-cloudflare-e2e.test.mjs"
   },
   "dependencies": {
     "@narada2/agent-identity": "workspace:*",
@@ -63,6 +68,7 @@
     "tailwindcss": "^4.1.18",
     "type-fest": "^4.41.0",
     "vite": "^8.1.1",
-    "vue-tsc": "^2.2.0"
+    "vue-tsc": "^2.2.0",
+    "@playwright/test": "^1.61.1"
   }
 }

@@ -78,6 +78,7 @@ import {
   prepareTargetAuthority,
   sealSourceAuthority,
 } from './authority-transition-state.mjs';
+import { ADMITTED_INTELLIGENCE_PROVIDERS } from './intelligence-provider-policy.mjs';
 import { serverAffordanceActionCancel, serverAffordanceActionConfirm, serverAffordanceActionRequest } from './affordance-actions.mjs';
 import { buildDelegationOperatorAffordance, buildGitOperatorAffordance, buildInboxOperatorAffordance, buildMailboxOperatorAffordance, buildNarsSurfaceAffordanceProjection, buildSchedulerOperatorAffordance, buildSopOperatorAffordance, buildSurfaceFeedbackOperatorAffordance, buildTaskLifecycleOperatorAffordance } from './surface-affordances.mjs';
 import { runtimeAuthorityPostureFromHandoff } from './runtime-authority-posture.mjs';
@@ -155,7 +156,13 @@ export function createCarrierRuntimeDependencies({ runtimeContext = {}, env = pr
   const appendEventRecord = (entry) => appendJsonlRecord(eventsPath, entry);
 
   const dependencies = {
-    discoverAndStartMcpServers,
+    discoverAndStartMcpServers: (root = siteRoot) => discoverAndStartMcpServers(root, {
+      launch_session_id: runtimeContext.launchSessionId ?? env.NARADA_LAUNCH_SESSION_ID ?? null,
+      ownership: runtimeContext.processOwnership ?? env.NARADA_PROCESS_OWNERSHIP ?? null,
+      process_role: runtimeContext.processRole ?? env.NARADA_PROCESS_ROLE ?? null,
+      created_by_pid: runtimeContext.createdByPid ?? env.NARADA_CREATED_BY_PID ?? null,
+      pid: process.pid,
+    }),
     applyWorkerMcpProjection: (mcpServers) => applyWorkerMcpProjection(mcpServers),
     aggregateTools,
     createMcpStatusSnapshot,
@@ -168,7 +175,7 @@ export function createCarrierRuntimeDependencies({ runtimeContext = {}, env = pr
     recordMcpPreflightArtifactLinkage: ({ emit, preflightArtifact } = {}) => recordMcpPreflightArtifactLinkage({ emit, preflightArtifact, appendSessionRecord }),
     recordMcpStartupFailures: (mcpServers, options = {}) => recordMcpStartupFailures(mcpServers, { ...options, appendSessionRecord }),
     createOperationHeartbeatDirectiveEmitter,
-    handleServerRequestLine: (line, context) => handleServerRequestLine(line, { ...context, identity, session, siteRoot, sessionPath, eventsPath, siteConfig: runtimeContext.siteConfig ?? null, authorityRuntimeHost, operatorSurfaceKind, appendSessionRecord, providerSettings, effectiveIntelligence: () => effectiveIntelligenceSettings({ sessionSettings: context?.state?.sessionSettings, providerSettings }), narsDelegatedAuthorityHandoff: runtimeContext.narsDelegatedAuthorityHandoff ?? null }),
+    handleServerRequestLine: (line, context) => handleServerRequestLine(line, { ...context, identity, agentIdentityRef: runtimeContext.agentIdentityRef ?? null, siteId: runtimeContext.siteId ?? null, session, siteRoot, sessionPath, eventsPath, siteConfig: runtimeContext.siteConfig ?? null, authorityRuntimeHost, operatorSurfaceKind, appendSessionRecord, providerSettings, effectiveIntelligence: () => effectiveIntelligenceSettings({ sessionSettings: context?.state?.sessionSettings, providerSettings }), narsDelegatedAuthorityHandoff: runtimeContext.narsDelegatedAuthorityHandoff ?? null }),
     appendSessionRecord,
     sessionEventEntry: (event, payload) => ({ event, ...payload, timestamp: new Date().toISOString() }),
     carrierSessionEventEntry,
@@ -1381,7 +1388,9 @@ export async function executeMcpTool(toolCall, mcpServers, _readlineInterface = 
     toolMetadata,
     delegatedAuthorityHandoff: options.delegatedAuthorityHandoff ?? null,
   });
-  const admitted = admission.decision === 'read_only_admitted' || admission.carrier_mutation_admitted === true;
+  const admitted = admission.decision === 'read_only_admitted'
+    || admission.decision === 'mcp_surface_tool_admitted'
+    || admission.carrier_mutation_admitted === true;
   options.emit?.('tool_call', {
     turn_id: options.turnId,
     tool: name,
@@ -3081,6 +3090,7 @@ function effectiveIntelligenceSettings({ sessionSettings = {}, providerSettings 
     provider: stringOrNull(sessionSettings.provider) ?? stringOrNull(providerSettings.provider) ?? stringOrNull(process.env.NARADA_INTELLIGENCE_PROVIDER) ?? 'codex-subscription',
     model: stringOrNull(sessionSettings.model) ?? stringOrNull(providerSettings.model) ?? null,
     available_models: stringArrayOrEmpty(providerSettings.availableModels ?? providerSettings.available_models),
+    available_providers: stringArrayOrEmpty(providerSettings.availableProviders ?? providerSettings.available_providers ?? ADMITTED_INTELLIGENCE_PROVIDERS),
     thinking: stringOrNull(sessionSettings.thinking) ?? stringOrNull(providerSettings.thinking) ?? stringOrNull(process.env.NARADA_AI_THINKING) ?? stringOrNull(process.env.NARADA_THINKING_LEVEL) ?? 'medium',
     stream: booleanOrNull(sessionSettings.stream) ?? booleanOrNull(providerSettings.stream) ?? null,
   };
@@ -3088,6 +3098,10 @@ function effectiveIntelligenceSettings({ sessionSettings = {}, providerSettings 
 
 function stringOrNull(value) {
   return typeof value === 'string' && value ? value : null;
+}
+
+function objectOrNull(value) {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value : null;
 }
 
 function booleanOrNull(value) {
@@ -3103,6 +3117,12 @@ function serverHealth({ requestId, state, allTools, mcpServers, mcpPreflightArti
   const generatedAt = new Date().toISOString();
   const degraded = status.operational_posture !== 'healthy';
   const operatorSurfaceKind = context.operatorSurfaceKind ?? 'agent-cli';
+  const agentIdentityRef = objectOrNull(context.agentIdentityRef);
+  const canonicalAgentId = stringOrNull(agentIdentityRef?.canonical_agent_id);
+  const siteId = stringOrNull(context.siteId)
+    ?? stringOrNull(agentIdentityRef?.site_id)
+    ?? stringOrNull(agentIdentityRef?.identity_scope?.site_id)
+    ?? null;
   const heartbeat = readHeartbeatHealth({ sessionPath: context.sessionPath, now: generatedAt });
   return {
     schema: 'narada.nars.health.v1',
@@ -3110,8 +3130,10 @@ function serverHealth({ requestId, state, allTools, mcpServers, mcpPreflightArti
     request_id: requestId,
     status: state?.closed ? 'closing' : degraded ? 'degraded' : 'healthy',
     generated_at: generatedAt,
-    agent_id: context.identity,
+    agent_id: canonicalAgentId ?? context.identity,
+    agent_identity_ref: agentIdentityRef,
     session_id: context.session,
+    site_id: siteId,
     site_root: context.siteRoot,
     site_config: status.site_config,
     runtime: 'narada-agent-runtime-server',
