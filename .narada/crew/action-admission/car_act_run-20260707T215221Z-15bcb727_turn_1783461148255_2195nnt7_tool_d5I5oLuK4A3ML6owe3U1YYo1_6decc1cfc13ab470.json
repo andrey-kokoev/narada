@@ -1,0 +1,69 @@
+{
+  "schema": "narada.carrier_action_admission_decision.v0",
+  "request_id": "car_act_run-20260707T215221Z-15bcb727_turn_1783461148255_2195nnt7_tool_d5I5oLuK4A3ML6owe3U1YYo1_6decc1cfc13ab470",
+  "created_at": "2026-07-07T21:52:56.863Z",
+  "classifier_version": "carrier_action_admission.metadata_aware_policy.v1",
+  "policy_version": "carrier_action_admission.delegated_governed_mutations.v1",
+  "decision": "refused",
+  "reason": "registered_live_tool_without_tool_contract_refused",
+  "authority_owner": null,
+  "carrier_mutation_admitted": false,
+  "candidate_ref": null,
+  "execution_attempt_ref": null,
+  "confirmation_ref": null,
+  "evidence_path": "D:\\code\\narada\\.narada\\crew\\action-admission\\car_act_run-20260707T215221Z-15bcb727_turn_1783461148255_2195nnt7_tool_d5I5oLuK4A3ML6owe3U1YYo1_6decc1cfc13ab470.json",
+  "remediation": null,
+  "request": {
+    "schema": "narada.carrier_action_request.v0",
+    "request_id": "car_act_run-20260707T215221Z-15bcb727_turn_1783461148255_2195nnt7_tool_d5I5oLuK4A3ML6owe3U1YYo1_6decc1cfc13ab470",
+    "classifier_version": "carrier_action_admission.metadata_aware_policy.v1",
+    "agent_id": "narada.architect",
+    "carrier_session_id": "run-20260707T215221Z-15bcb727",
+    "source": {
+      "kind": "agent_runtime_server_turn",
+      "turn_id": "turn_1783461148255_2195nnt7",
+      "tool_call_id": "tool_d5I5oLuK4A3ML6owe3U1YYo1"
+    },
+    "target_locus": {
+      "site_root": "D:\\code\\narada",
+      "authority_hint": null
+    },
+    "requested_action": {
+      "tool": "structured_command_execute",
+      "declared_family": "unknown_action_family",
+      "classification_reason": "registered_live_tool_without_tool_contract_refused",
+      "argument_summary": {
+        "shape": "object",
+        "keys": [
+          "args",
+          "command",
+          "expected_cost",
+          "test_scope",
+          "timeout_ms",
+          "working_directory"
+        ],
+        "values_omitted": true
+      },
+      "payload_secret_findings": [],
+      "payload_secret_diagnostics": [],
+      "safe_remediation": null,
+      "registry_diagnostics": null,
+      "surface_registry": null,
+      "raw_arguments_recorded": false,
+      "raw_secret_values_recorded": false,
+      "classifier_source": "surface_registry",
+      "classifier_metadata": {
+        "source": "surface_registry",
+        "surface_id": "narada-proper.surface.structured-command-mcp.v1",
+        "server_name": "narada-proper-structured-command",
+        "registry_source": "D:\\code\\narada\\.narada\\capabilities\\mcp-surfaces.json",
+        "generated_file": "narada-proper-mcp.json",
+        "registry_metadata_authoritative": true,
+        "live_tool_catalog_seen": true,
+        "available": true,
+        "registry_patch_candidate": null
+      },
+      "delegated_authority": null
+    }
+  }
+}

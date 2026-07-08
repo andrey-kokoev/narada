@@ -1,0 +1,100 @@
+{
+  "schema": "narada.carrier_action_admission_decision.v0",
+  "request_id": "car_act_run-20260707T215221Z-15bcb727_turn_1783461148255_2195nnt7_tool_vxSNk0mJ1f3yfLqzMLts011x_e99594d1974221d3",
+  "created_at": "2026-07-07T21:53:30.725Z",
+  "classifier_version": "carrier_action_admission.metadata_aware_policy.v1",
+  "policy_version": "carrier_action_admission.delegated_governed_mutations.v1",
+  "decision": "refused",
+  "reason": "surface_registry_tool_not_declared",
+  "authority_owner": null,
+  "carrier_mutation_admitted": false,
+  "candidate_ref": null,
+  "execution_attempt_ref": null,
+  "confirmation_ref": null,
+  "evidence_path": "D:\\code\\narada\\.narada\\crew\\action-admission\\car_act_run-20260707T215221Z-15bcb727_turn_1783461148255_2195nnt7_tool_vxSNk0mJ1f3yfLqzMLts011x_e99594d1974221d3.json",
+  "remediation": "Review the live MCP tool and update the authoritative surface registry contract only after assigning its authority family.",
+  "request": {
+    "schema": "narada.carrier_action_request.v0",
+    "request_id": "car_act_run-20260707T215221Z-15bcb727_turn_1783461148255_2195nnt7_tool_vxSNk0mJ1f3yfLqzMLts011x_e99594d1974221d3",
+    "classifier_version": "carrier_action_admission.metadata_aware_policy.v1",
+    "agent_id": "narada.architect",
+    "carrier_session_id": "run-20260707T215221Z-15bcb727",
+    "source": {
+      "kind": "agent_runtime_server_turn",
+      "turn_id": "turn_1783461148255_2195nnt7",
+      "tool_call_id": "tool_vxSNk0mJ1f3yfLqzMLts011x"
+    },
+    "target_locus": {
+      "site_root": "D:\\code\\narada",
+      "authority_hint": null
+    },
+    "requested_action": {
+      "tool": "git_changed_summary",
+      "declared_family": "unknown_action_family",
+      "classification_reason": "surface_registry_tool_not_declared",
+      "argument_summary": {
+        "shape": "object",
+        "keys": [
+          "expected_paths",
+          "pathspecs",
+          "untracked_sample_limit",
+          "working_directory"
+        ],
+        "values_omitted": true
+      },
+      "payload_secret_findings": [],
+      "payload_secret_diagnostics": [],
+      "safe_remediation": "Review the live MCP tool and update the authoritative surface registry contract only after assigning its authority family.",
+      "registry_diagnostics": {
+        "schema": "narada.carrier_action.registry_tool_not_declared_diagnostics.v1",
+        "status": "visible_tool_missing_from_surface_registry_contract",
+        "tool_name": "git_changed_summary",
+        "server_name": "narada-proper-git",
+        "surface_id": null,
+        "registry_source": "D:\\code\\narada\\.narada\\capabilities\\mcp-surfaces.json",
+        "generated_file": null,
+        "live_tool_catalog_seen": true,
+        "registry_metadata_authoritative": true,
+        "candidate_registry_patch": {
+          "schema": "narada.carrier_action.registry_patch_candidate.v1",
+          "classification": "manual_review_required",
+          "confidence": "low",
+          "tool_name": "git_changed_summary",
+          "surface_id": null,
+          "server_name": "narada-proper-git",
+          "registry_source": "D:\\code\\narada\\.narada\\capabilities\\mcp-surfaces.json",
+          "generated_file": null,
+          "target_contract_field": null,
+          "recommended_action": "Review the live MCP tool and update the authoritative surface registry contract only after assigning its authority family."
+        }
+      },
+      "surface_registry": null,
+      "raw_arguments_recorded": false,
+      "raw_secret_values_recorded": false,
+      "classifier_source": "surface_registry_unlisted",
+      "classifier_metadata": {
+        "source": "surface_registry_unlisted",
+        "surface_id": null,
+        "server_name": "narada-proper-git",
+        "registry_source": "D:\\code\\narada\\.narada\\capabilities\\mcp-surfaces.json",
+        "generated_file": null,
+        "registry_metadata_authoritative": true,
+        "live_tool_catalog_seen": true,
+        "available": true,
+        "registry_patch_candidate": {
+          "schema": "narada.carrier_action.registry_patch_candidate.v1",
+          "classification": "manual_review_required",
+          "confidence": "low",
+          "tool_name": "git_changed_summary",
+          "surface_id": null,
+          "server_name": "narada-proper-git",
+          "registry_source": "D:\\code\\narada\\.narada\\capabilities\\mcp-surfaces.json",
+          "generated_file": null,
+          "target_contract_field": null,
+          "recommended_action": "Review the live MCP tool and update the authoritative surface registry contract only after assigning its authority family."
+        }
+      },
+      "delegated_authority": null
+    }
+  }
+}
