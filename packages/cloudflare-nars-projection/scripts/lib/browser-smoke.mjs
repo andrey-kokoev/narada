@@ -1,8 +1,8 @@
-import { spawn } from 'node:child_process';
 import { existsSync, mkdtempSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { spawnHiddenPostureProcess } from '@narada2/process-launch-posture';
 
 export function findHeadlessBrowser() {
   return [
@@ -55,7 +55,7 @@ export function buildHeadlessBrowserArgs({ userDataDir, url = 'about:blank', wid
 
 export async function openCdpPage({ browserPath, url, userDataPrefix = 'narada-browser-smoke-', viewport = { width: 1100, height: 800 } }) {
   const userDataDir = mkdtempSync(join(tmpdir(), userDataPrefix));
-  const child = spawn(browserPath, buildHeadlessBrowserArgs({ userDataDir, url, width: viewport.width, height: viewport.height }), { stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true });
+  const child = spawnHiddenPostureProcess(browserPath, buildHeadlessBrowserArgs({ userDataDir, url, width: viewport.width, height: viewport.height }), { stdio: ['ignore', 'ignore', 'pipe'], posture: 'test_child' });
 
   const browserWsUrl = await new Promise((resolve, reject) => {
     let stderr = '';

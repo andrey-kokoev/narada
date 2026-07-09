@@ -20,7 +20,8 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@narada2/agent-context-memory": "workspace:*"
+    "@narada2/agent-context-memory": "workspace:*",
+    "@narada2/process-launch-posture": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",

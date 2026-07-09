@@ -1,12 +1,11 @@
-import { spawn } from 'node:child_process';
+import { spawnTestChild } from '@narada2/process-launch-posture';
 
 export function runProcessTest({ label, command = process.execPath, args, cwd, env = process.env, timeoutMs = 8500 }) {
   return new Promise((resolve) => {
-    const child = spawn(command, args, {
+    const child = spawnTestChild(command, args, {
       cwd,
       env,
       stdio: ['ignore', 'pipe', 'pipe'],
-      windowsHide: true,
     });
     const startedAt = performance.now();
     const stdoutChunks = [];

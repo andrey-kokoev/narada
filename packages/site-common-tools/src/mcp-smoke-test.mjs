@@ -7,9 +7,9 @@
  * Doctor tools are resolved from each registry surface's declared exposed_tools.
  */
 
-import { spawn } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { spawnTestChild } from '@narada2/process-launch-posture';
 
 const options = parseArgs(process.argv.slice(2));
 
@@ -52,10 +52,9 @@ async function testServer(serverName, serverConfig) {
   const responses = [];
   let stderr = '';
   try {
-    const child = spawn(serverConfig.command, serverConfig.args, {
+    const child = spawnTestChild(serverConfig.command, serverConfig.args, {
       cwd: process.cwd(),
       stdio: ['pipe', 'pipe', 'pipe'],
-      windowsHide: true,
       env: { ...process.env, FORCE_COLOR: '0', NO_COLOR: '1' },
     });
 

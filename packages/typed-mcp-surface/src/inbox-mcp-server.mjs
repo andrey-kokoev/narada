@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -7,6 +6,7 @@ import { appendAdmissionEvent, emitEnvelopeAdmitted, acknowledgeEnvelope, dismis
 import { validateRecoveryTruthfulnessPacket } from '../task-lifecycle/recovery-truthfulness-guard.mjs';
 import { INBOX_ENVELOPE_KINDS, assertKnownInboxEnvelopeKind } from '../inbox/envelope-kinds.mjs';
 import { isValidEnvelopeId } from '../inbox/inbox-index.mjs';
+import { runGovernedCommandSync } from '@narada2/process-launch-posture';
 import {
   attachPayloadSource,
   buildOutputRefToolContent,
@@ -510,10 +510,9 @@ function runCanonicalInboxCommand({ site, targetSiteRoot, naradaCli, commandArgs
   };
   if (dryRun) return base;
 
-  const result = spawnSync('node', commandArgs, {
+  const result = runGovernedCommandSync('node', commandArgs, {
     cwd: targetSiteRoot,
     encoding: 'utf8',
-    windowsHide: true,
     maxBuffer: 1024 * 1024,
   });
   const stdout = result.stdout ?? '';

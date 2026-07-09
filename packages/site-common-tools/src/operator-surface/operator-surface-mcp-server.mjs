@@ -1,9 +1,9 @@
 #!/usr/bin/env node
-import { spawn } from 'child_process';
 import { createHash } from 'crypto';
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'fs';
 import { dirname, resolve, join, relative } from 'path';
 import Database from '@narada2/sqlite';
+import { runGovernedCommand } from '@narada2/process-launch-posture';
 import { fileURLToPath } from 'url';
 import net from 'net';
 import {
@@ -3191,7 +3191,7 @@ function tools() {
 /* ─── PowerShell helper ─── */
 function spawnPwsh(args) {
   return new Promise((resolve, reject) => {
-    const child = spawn('pwsh', args, {
+    const child = runGovernedCommand('pwsh', args, {
       cwd: siteRoot,
       env: {
         ...process.env,
@@ -3218,9 +3218,8 @@ function spawnPwsh(args) {
 
 function spawnPwshBounded(args, { timeoutMs = 45000 } = {}) {
   return new Promise((resolve) => {
-    const child = spawn('pwsh', args, {
+    const child = runGovernedCommand('pwsh', args, {
       cwd: siteRoot,
-      windowsHide: true,
       env: {
         ...process.env,
         NARADA_YASB_SOURCE_ROOT: join(siteRoot, 'vendor', 'yasb'),
@@ -3242,9 +3241,8 @@ function spawnPwshBounded(args, { timeoutMs = 45000 } = {}) {
         // Best-effort cleanup; timeout diagnostics below keep the MCP surface responsive.
       }
       if (childPid) {
-        const killer = spawn('taskkill.exe', ['/PID', String(childPid), '/T', '/F'], {
+        const killer = runGovernedCommand('taskkill.exe', ['/PID', String(childPid), '/T', '/F'], {
           cwd: siteRoot,
-          windowsHide: true,
           stdio: 'ignore',
         });
         killer.unref();
@@ -3293,7 +3291,7 @@ function spawnPwshBounded(args, { timeoutMs = 45000 } = {}) {
 
 function spawnCapture(command, args, { timeoutMs = 2000, cwd = siteRoot } = {}) {
   return new Promise((resolve) => {
-    const child = spawn(command, args, { cwd, windowsHide: true });
+    const child = runGovernedCommand(command, args, { cwd });
     let settled = false;
     let stdout = '';
     let stderr = '';

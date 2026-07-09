@@ -20,7 +20,7 @@ import { admitTaskEvidence } from '@narada2/task-governance/evidence-admission';
 import { randomUUID } from 'crypto';
 import { relative, resolve, join } from 'path';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { spawn, spawnSync } from 'child_process';
+import { runGovernedCommandSync, spawnMcpServer } from '@narada2/process-launch-posture';
 import { pollInboxBridge, targetInboxEnvelope, readUnprocessedEnvelopes, evaluateEnvelopeSeverity } from './inbox-bridge.mjs';
 import { readAdmissionLog, resolveEnvelopeStatus } from '../inbox/admission-log.mjs';
 import { refreshInboxIndex } from '../inbox/inbox-index.mjs';
@@ -5111,7 +5111,7 @@ function stringArrayField(record, key) {
 }
 
 function detectGitChangedFiles(cwd) {
-  const result = spawnSync('git', ['diff', '--name-only', 'HEAD'], { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+  const result = runGovernedCommandSync('git', ['diff', '--name-only', 'HEAD'], { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
   if (result.status !== 0 || !result.stdout) return [];
   return result.stdout.split(/\r?\n/).map((line) => line.trim()).filter((line) => line.length > 0);
 }
@@ -6487,7 +6487,7 @@ async function testMcpTool(cwd, serverPath, toolName, toolArgs, options = {}) {
   const timeoutMs = timeoutSeconds * 1000;
 
   return new Promise((res, rej) => {
-    const proc = spawn(process.execPath, [fullServerPath, '--site-root', cwd], { cwd: existsSync(siteServerPath) ? cwd : process.cwd() });
+    const proc = spawnMcpServer(process.execPath, [fullServerPath, '--site-root', cwd], { cwd: existsSync(siteServerPath) ? cwd : process.cwd() });
     let out = '';
     let err = '';
     let settled = false;

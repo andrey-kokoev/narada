@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { existsSync, readdirSync, readFileSync, statSync } from 'fs';
 import { join, resolve } from 'path';
-import { spawnSync } from 'child_process';
+import { runGovernedCommandSync } from '@narada2/process-launch-posture';
 import { validateAgentExecutionPolicy } from '../site-config/agent-execution-policy.mjs';
 import { taskLifecycleReadinessPaths } from '../task-lifecycle-mcp-resolution.mjs';
 
@@ -47,7 +47,7 @@ if (args.json) {
 function registryValidation() {
   const script = join(siteRoot, 'tools', 'typed-mcp', 'validate-mcp-surface-registry.mjs');
   if (!existsSync(script)) return check('mcp_registry_validation', 'MCP registry validation', 'blocking', 'fail', { reason: 'validator_missing', path: script });
-  const run = spawnSync(process.execPath, [script], { cwd: siteRoot, encoding: 'utf8' });
+  const run = runGovernedCommandSync(process.execPath, [script], { cwd: siteRoot, encoding: 'utf8' });
   return check('mcp_registry_validation', 'MCP registry validation', 'blocking', run.status === 0 ? 'pass' : 'fail', {
     exit_code: run.status,
     stdout: run.stdout.trim(),
@@ -89,7 +89,7 @@ function inboxBacklog() {
 }
 
 function gitWorktree() {
-  const run = spawnSync('git', ['status', '--short'], { cwd: siteRoot, encoding: 'utf8' });
+  const run = runGovernedCommandSync('git', ['status', '--short'], { cwd: siteRoot, encoding: 'utf8' });
   if (run.status !== 0) return check('git_worktree', 'Git worktree status', 'blocking', 'fail', { exit_code: run.status, stderr: run.stderr.trim() });
   const files = run.stdout.split(/\r?\n/).filter(Boolean);
   return check('git_worktree', 'Git worktree status', 'advisory', files.length > 0 ? 'warn' : 'pass', {

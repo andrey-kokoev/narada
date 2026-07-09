@@ -1,13 +1,11 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
-import { execFile as execFileCallback } from 'node:child_process';
+import { execFileGoverned } from '@narada2/process-launch-posture';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { promisify } from 'node:util';
 
 import { resolveAuth } from './cloudflare-carrier-product-read.mjs';
 
-const execFile = promisify(execFileCallback);
 const scriptPath = fileURLToPath(import.meta.url);
 const scriptDir = dirname(scriptPath);
 const packageRoot = resolve(scriptDir, '..');
@@ -159,7 +157,7 @@ function hasConcreteSiteAndOperation(result) {
 }
 
 async function defaultRunNodeScript(args, options) {
-  const result = await execFile(process.execPath, args, {
+  const result = await execFileGoverned(process.execPath, args, {
     ...options,
     timeout: 120000,
     windowsHide: true,

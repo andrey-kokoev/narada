@@ -33,13 +33,13 @@ import Database from './sqlite-database.mjs';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
-import { spawnSync } from 'node:child_process';
 import { setTimeout as sleep } from 'node:timers/promises';
 import {
   agentIdentityDisplay,
   buildAgentIdentityRefV2,
   resolveAgentIdentityRef,
 } from '@narada2/agent-identity';
+import { runHiddenPostureCommandSync } from '@narada2/process-launch-posture';
 import { buildReground, formatMarkdown } from './doctrinal-reground.mjs';
 import * as hydrationService from './agent-context-hydration-service.mjs';
 import * as inquirySpaceService from './inquiry-space-service.mjs';
@@ -4644,11 +4644,12 @@ function callTaskLifecycleNextMcp({ agentId, limit, lastWorkboardCheckAt }) {
     },
   });
 
-  const proc = spawnSync(server.command, server.args, {
+  const proc = runHiddenPostureCommandSync(server.command, server.args, {
     cwd: siteRoot,
     input: `${init}\n${req}\n`,
     encoding: 'utf8',
     timeout: 30000,
+    posture: 'mcp_server',
     env: {
       ...process.env,
       NARADA_AGENT_ID: agentId,

@@ -33,7 +33,7 @@
  * See: `docs/02-architecture.md` § "Dual Recovery Model"
  */
 
-import { spawn } from "node:child_process";
+import { runGovernedCommand } from "@narada2/process-launch-posture";
 import type { IntentStore } from "../intent/store.js";
 import type { ProcessExecutionStore } from "./store.js";
 import type { ProcessRunPayload } from "./types.js";
@@ -232,7 +232,7 @@ export class ProcessExecutor {
 
   private runProcess(payload: ProcessRunPayload): Promise<{ exitCode: number | null; stdout: string; stderr: string }> {
     return new Promise((resolve, reject) => {
-      const child = spawn(payload.command, payload.args ?? [], {
+      const child = runGovernedCommand(payload.command, payload.args ?? [], {
         cwd: payload.cwd,
         env: payload.env ? { ...process.env, ...payload.env } : process.env,
         timeout: payload.timeout_ms ?? 300_000,

@@ -3,8 +3,8 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { spawnSync } from 'node:child_process';
 import { test } from 'node:test';
+import { runHiddenPostureCommandSync } from '@narada2/process-launch-posture';
 
 const packageRoot = new URL('..', import.meta.url);
 const cliPath = fileURLToPath(new URL('../bin/narada-site-loop.mjs', import.meta.url));
@@ -97,10 +97,11 @@ test('Site-owned loop fixture runs end-to-end through generic supervise surface'
 });
 
 function runCli(args, env) {
-  const child = spawnSync(process.execPath, [cliPath, ...args], {
+  const child = runHiddenPostureCommandSync(process.execPath, [cliPath, ...args], {
     cwd: packageRoot,
     env,
     encoding: 'utf8',
+    posture: 'test_child',
   });
   assert.equal(child.status, 0, child.stderr || child.stdout);
   return JSON.parse(child.stdout);

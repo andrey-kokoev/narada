@@ -1,6 +1,6 @@
 {
   "schema": "narada.process_launch_posture.baseline.v2",
-  "generated_at": "2026-07-08T22:54:41.719Z",
+  "generated_at": "2026-07-08T23:06:12.610Z",
   "id_basis": "file + child-process api + local source context sha256/16; line is metadata only",
   "note": "Migration baseline for raw process launch sites. New sites must use @narada2/process-launch-posture wrappers or be intentionally added here.",
   "entries": [
@@ -27,94 +27,6 @@
       "api": "child_process.spawn",
       "posture": "test_child",
       "text": "const child = spawn(process.execPath, ["
-    },
-    {
-      "id": "packages/agent-start/bin/verify-registered-site-launchers.mjs:child_process.spawn:0c9f2521d4f1571b",
-      "file": "packages/agent-start/bin/verify-registered-site-launchers.mjs",
-      "line": 209,
-      "api": "child_process.spawn",
-      "posture": "operator_terminal",
-      "text": "const child = spawn('pwsh', args, {"
-    },
-    {
-      "id": "packages/agent-start/src/carrier-process-launch.ts:child_process.spawn:2ba75217ea8ae879",
-      "file": "packages/agent-start/src/carrier-process-launch.ts",
-      "line": 49,
-      "api": "child_process.spawn",
-      "posture": "operator_terminal",
-      "text": "child = spawn(command, args, resolvedSpawnOptions);"
-    },
-    {
-      "id": "packages/agent-start/src/carrier-process-launch.ts:child_process.spawn:3ba04c4c738d8ae0",
-      "file": "packages/agent-start/src/carrier-process-launch.ts",
-      "line": 44,
-      "api": "child_process.spawn",
-      "posture": "operator_terminal",
-      "text": "spawnProcess: (spawnCommand, spawnArgs, options) => ({ child: spawn(spawnCommand, spawnArgs, options) }),"
-    },
-    {
-      "id": "packages/agent-start/src/provider-credential-projection.ts:child_process.spawnSync:40847a77f98f2a6f",
-      "file": "packages/agent-start/src/provider-credential-projection.ts",
-      "line": 62,
-      "api": "child_process.spawnSync",
-      "posture": "provider_subprocess",
-      "text": "const result = spawnSync('pwsh', ['-NoProfile', '-NonInteractive', '-Command', lookupScript], {"
-    },
-    {
-      "id": "packages/agent-start/test/agent-start-dry-run-smoke.test.mjs:child_process.spawnSync:2687c9ebbf69fdb4",
-      "file": "packages/agent-start/test/agent-start-dry-run-smoke.test.mjs",
-      "line": 23,
-      "api": "child_process.spawnSync",
-      "posture": "test_child",
-      "text": "const result = spawnSync(process.execPath, ["
-    },
-    {
-      "id": "packages/agent-start/test/helpers/process-test-runner.mjs:child_process.spawn:bbc246b15060162a",
-      "file": "packages/agent-start/test/helpers/process-test-runner.mjs",
-      "line": 5,
-      "api": "child_process.spawn",
-      "posture": "test_child",
-      "text": "const child = spawn(command, args, {"
-    },
-    {
-      "id": "packages/agent-start/test/launcher-registry-contract.test.mjs:child_process.spawnSync:e7bee3c973256cc0",
-      "file": "packages/agent-start/test/launcher-registry-contract.test.mjs",
-      "line": 32,
-      "api": "child_process.spawnSync",
-      "posture": "test_child",
-      "text": "return spawnSync(command, args, { windowsHide: true, ...options });"
-    },
-    {
-      "id": "packages/agent-start/test/option-contract.test.mjs:child_process.spawnSync:002f1ce357f3d646",
-      "file": "packages/agent-start/test/option-contract.test.mjs",
-      "line": 108,
-      "api": "child_process.spawnSync",
-      "posture": "test_child",
-      "text": "return spawnSync(process.execPath, [...argsWithoutDryRun, ...withDefaultMcpScopeNone(extraArgs)], {"
-    },
-    {
-      "id": "packages/agent-start/test/option-contract.test.mjs:child_process.spawnSync:139f2676627b7071",
-      "file": "packages/agent-start/test/option-contract.test.mjs",
-      "line": 127,
-      "api": "child_process.spawnSync",
-      "posture": "test_child",
-      "text": "const result = spawnSync(process.execPath, ["
-    },
-    {
-      "id": "packages/agent-start/test/option-contract.test.mjs:child_process.spawnSync:76be4cdb71371b37",
-      "file": "packages/agent-start/test/option-contract.test.mjs",
-      "line": 41,
-      "api": "child_process.spawnSync",
-      "posture": "test_child",
-      "text": "return spawnSync(process.execPath, [...baseArgs, ...withDefaultMcpScopeNone(extraArgs)], {"
-    },
-    {
-      "id": "packages/agent-start/test/option-contract.test.mjs:child_process.spawnSync:f2080e39c430c783",
-      "file": "packages/agent-start/test/option-contract.test.mjs",
-      "line": 1046,
-      "api": "child_process.spawnSync",
-      "posture": "test_child",
-      "text": "const result = spawnSync(process.execPath, ["
     },
     {
       "id": "packages/agent-start/test/provider-module-contract.test.mjs:child_process.spawnSync:260cba6339b915a5",

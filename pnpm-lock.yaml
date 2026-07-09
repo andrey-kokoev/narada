@@ -156,6 +156,9 @@ importers:
       '@narada2/agent-start-bootstrap':
         specifier: workspace:*
         version: link:../agent-start-bootstrap
+      '@narada2/process-launch-posture':
+        specifier: workspace:*
+        version: link:../process-launch-posture
       '@narada2/task-lifecycle-mcp':
         specifier: workspace:*
         version: link:../../../mcp-surfaces/packages/task-lifecycle-mcp
@@ -176,6 +179,9 @@ importers:
       '@narada2/carrier-terminal-projection':
         specifier: workspace:*
         version: link:../carrier-terminal-projection
+      '@narada2/process-launch-posture':
+        specifier: workspace:*
+        version: link:../process-launch-posture
       '@narada2/site-paths':
         specifier: workspace:*
         version: link:../site-paths
@@ -203,6 +209,9 @@ importers:
       '@narada2/nars-client-projection-contract':
         specifier: workspace:*
         version: link:../nars-client-projection-contract
+      '@narada2/process-launch-posture':
+        specifier: workspace:*
+        version: link:../process-launch-posture
       '@narada2/site-paths':
         specifier: workspace:*
         version: link:../site-paths
@@ -260,6 +269,9 @@ importers:
       '@narada2/agent-runtime-server':
         specifier: workspace:*
         version: link:../agent-runtime-server
+      '@narada2/process-launch-posture':
+        specifier: workspace:*
+        version: link:../process-launch-posture
       '@playwright/test':
         specifier: ^1.61.1
         version: 1.61.1
@@ -301,7 +313,11 @@ importers:
 
   packages/carrier-provider-contract: {}
 
-  packages/carrier-provider-support: {}
+  packages/carrier-provider-support:
+    dependencies:
+      '@narada2/process-launch-posture':
+        specifier: workspace:*
+        version: link:../process-launch-posture
 
   packages/carrier-rendering-contract: {}
 
@@ -368,6 +384,9 @@ importers:
       '@narada2/cloudflare-site-registry':
         specifier: workspace:*
         version: link:../cloudflare-site-registry
+      '@narada2/process-launch-posture':
+        specifier: workspace:*
+        version: link:../process-launch-posture
       '@narada2/site-authority-map':
         specifier: workspace:*
         version: link:../site-authority-map
@@ -380,6 +399,9 @@ importers:
       '@narada2/nars-client-projection-contract':
         specifier: workspace:*
         version: link:../nars-client-projection-contract
+      '@narada2/process-launch-posture':
+        specifier: workspace:*
+        version: link:../process-launch-posture
       '@narada2/site-paths':
         specifier: workspace:*
         version: link:../site-paths
@@ -561,6 +583,9 @@ importers:
       '@narada2/charters':
         specifier: workspace:*
         version: link:../../domains/charters
+      '@narada2/process-launch-posture':
+        specifier: workspace:*
+        version: link:../../process-launch-posture
       zod:
         specifier: ^3.22.0
         version: 3.25.76
@@ -628,6 +653,9 @@ importers:
       '@narada2/mcp-transport':
         specifier: workspace:*
         version: link:../../../mcp-surfaces/packages/shared/mcp-transport
+      '@narada2/process-launch-posture':
+        specifier: workspace:*
+        version: link:../process-launch-posture
     devDependencies:
       '@types/node':
         specifier: ^20.10.0
@@ -668,6 +696,9 @@ importers:
       '@narada2/agent-context-memory':
         specifier: workspace:*
         version: link:../agent-context-memory
+      '@narada2/process-launch-posture':
+        specifier: workspace:*
+        version: link:../process-launch-posture
     devDependencies:
       '@types/node':
         specifier: ^20.10.0
@@ -685,7 +716,11 @@ importers:
         specifier: workspace:*
         version: link:../agent-identity
 
-  packages/operator-surface-carriers: {}
+  packages/operator-surface-carriers:
+    dependencies:
+      '@narada2/process-launch-posture':
+        specifier: workspace:*
+        version: link:../process-launch-posture
 
   packages/ops-kit:
     dependencies:
@@ -721,6 +756,9 @@ importers:
       '@narada2/mcp-transport':
         specifier: workspace:*
         version: link:../../../mcp-surfaces/packages/shared/mcp-transport
+      '@narada2/process-launch-posture':
+        specifier: workspace:*
+        version: link:../process-launch-posture
       '@narada2/sqlite':
         specifier: workspace:*
         version: link:../sqlite
@@ -763,7 +801,11 @@ importers:
         specifier: ^1.0.0
         version: 1.6.1(@types/node@20.19.39)(lightningcss@1.32.0)(stylus@0.57.0)
 
-  packages/site-operating-loop: {}
+  packages/site-operating-loop:
+    dependencies:
+      '@narada2/process-launch-posture':
+        specifier: workspace:*
+        version: link:../process-launch-posture
 
   packages/site-operational-dashboard:
     devDependencies:
@@ -781,6 +823,9 @@ importers:
 
   packages/site-registry-cloudflare:
     dependencies:
+      '@narada2/process-launch-posture':
+        specifier: workspace:*
+        version: link:../process-launch-posture
       '@narada2/site-config':
         specifier: workspace:*
         version: link:../site-config
@@ -856,6 +901,9 @@ importers:
       '@narada2/control-plane':
         specifier: workspace:*
         version: link:../../layers/control-plane
+      '@narada2/process-launch-posture':
+        specifier: workspace:*
+        version: link:../../process-launch-posture
       '@narada2/sqlite':
         specifier: workspace:*
         version: link:../../sqlite
@@ -906,6 +954,9 @@ importers:
       '@narada2/mcp-transport':
         specifier: workspace:*
         version: link:../../../mcp-surfaces/packages/shared/mcp-transport
+      '@narada2/process-launch-posture':
+        specifier: workspace:*
+        version: link:../process-launch-posture
       '@narada2/sqlite':
         specifier: workspace:*
         version: link:../sqlite
@@ -927,11 +978,18 @@ importers:
 
   packages/task-lifecycle-tools:
     dependencies:
+      '@narada2/process-launch-posture':
+        specifier: workspace:*
+        version: link:../process-launch-posture
       '@narada2/sqlite':
         specifier: workspace:*
         version: link:../sqlite
 
-  packages/typed-mcp-surface: {}
+  packages/typed-mcp-surface:
+    dependencies:
+      '@narada2/process-launch-posture':
+        specifier: workspace:*
+        version: link:../process-launch-posture
 
   packages/verticals/search:
     dependencies:

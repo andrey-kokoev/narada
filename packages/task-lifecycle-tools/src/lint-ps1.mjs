@@ -14,10 +14,10 @@
  *   1 — Error severity findings present (or invocation failure)
  */
 
-import { spawn } from 'child_process';
 import { resolve, relative, dirname } from 'path';
 import { existsSync } from 'fs';
 import { fileURLToPath } from 'url';
+import { runGovernedCommand } from '@narada2/process-launch-posture';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -37,7 +37,7 @@ const settingsPath = resolve(cwd, 'PSScriptAnalyzerSettings.psd1');
 
 function runPwsh(script) {
   return new Promise((res, rej) => {
-    const proc = spawn('pwsh', ['-NoProfile', '-Command', script], { cwd });
+    const proc = runGovernedCommand('pwsh', ['-NoProfile', '-Command', script], { cwd });
     let out = '';
     let err = '';
     proc.stdout.on('data', (d) => { out += d.toString(); });

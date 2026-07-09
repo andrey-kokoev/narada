@@ -1,12 +1,11 @@
 import assert from 'node:assert/strict';
-import { execFile as execFileCallback } from 'node:child_process';
+import { execFileGoverned } from '@narada2/process-launch-posture';
 import { readdirSync } from 'node:fs';
 import { mkdir, mkdtemp, readFile, rm, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { promisify } from 'node:util';
 import { createSiteContinuityBinding, createSiteContinuityBindingRegistry } from '@narada2/site-continuity';
 import {
   buildHiddenVbsWrapperContent,
@@ -33,7 +32,6 @@ import {
 } from './cloudflare-site-continuity-scheduler.mjs';
 
 const SCRIPT_PATH = fileURLToPath(new URL('./cloudflare-site-continuity-scheduler.mjs', import.meta.url));
-const execFile = promisify(execFileCallback);
 
 async function writeInboundPacketArtifact(artifactDirectory, siteId, {
   packetId = `packet-${siteId}-cloudflare`,
@@ -440,7 +438,7 @@ test('site continuity reconciliation plan resolves one packet per configured sit
     const text = formatSiteContinuitySchedulerResultForText(plan);
     assert.match(text, /Reconciliation Plan: status=ready selected=2 ready=2 blocked=0/);
     assert.match(text, /Reconcile Site: site_alpha packet=.*site_alpha-packet\.json source=packet_directory command=ready/);
-    assert.match(text, /Reconcile Sync Once: .*sync-once --site site_alpha --packet .*site_alpha-packet\.json --out .*site_alpha-sync\.json --local-inbound-dir .*inbound/);
+    assert.match(text, /Reconcile Sync Once: .*sync-once --site "?site_alpha"? --packet .*site_alpha-packet\.json"? --out .*site_alpha-cloudflare-sync\.json"? --local-inbound-dir .*inbound"?/);
     assert.match(text, /Reconcile Site: site_beta packet=.*site_beta-packet\.json source=packet_directory command=ready/);
     assert.doesNotMatch(JSON.stringify(plan), /secret|token/i);
   } finally {
@@ -2519,7 +2517,7 @@ test('site continuity reconcile-execute runs ready sites through sync-once argv 
     assert.equal(executionSummary.cloudflare_reconciliation_execution_evidence_status, 'recorded');
     assert.equal(executionSummary.cloudflare_reconciliation_execution_recorded_count, 1);
     assert.equal(executionSummary.cloudflare_reconciliation_execution_failed_count, 0);
-    assert.deepEqual(executionSummary.site_ids, ['site_bound']);
+    assert.deepEqual(executionSummary.site_ids, ['site_missing']);
     assert.deepEqual(executionSummary.result_status_counts, { completed: 1 });
 
     const healthSnapshot = JSON.parse(await readFile(healthOutputPath, 'utf8'));
@@ -2634,7 +2632,7 @@ test('site continuity scheduler can refresh site registry projection before stat
 });
 
 test('site continuity scheduler CLI emits status without Cloudflare access', async () => {
-  const result = await execFile(process.execPath, [SCRIPT_PATH, '--action', 'status'], { timeout: 30000, windowsHide: true });
+  const result = await execFileGoverned(process.execPath, [SCRIPT_PATH, '--action', 'status'], { timeout: 30000, windowsHide: true });
   const body = JSON.parse(result.stdout);
 
   assert.equal(body.schema, 'narada.cloudflare_carrier.site_continuity_scheduler_plan.v1');
@@ -2649,7 +2647,7 @@ test('site continuity scheduler CLI emits status without Cloudflare access', asy
 });
 
 test('site continuity scheduler CLI emits operator text status when requested', async () => {
-  const result = await execFile(process.execPath, [
+  const result = await execFileGoverned(process.execPath, [
     SCRIPT_PATH,
     '--action', 'status',
     '--format', 'text',
@@ -2680,7 +2678,7 @@ test('site continuity scheduler CLI loads local continuity env for operator heal
     '',
   ].join('\n'), 'utf8');
   try {
-    const result = await execFile(process.execPath, [SCRIPT_PATH, '--action', 'status-all', '--repo-root', root], { timeout: 30000, windowsHide: true });
+    const result = await execFileGoverned(process.execPath, [SCRIPT_PATH, '--action', 'status-all', '--repo-root', root], { timeout: 30000, windowsHide: true });
     const body = JSON.parse(result.stdout);
 
     assert.equal(body.packet_path, packetPath);

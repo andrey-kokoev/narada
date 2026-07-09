@@ -3,7 +3,11 @@ import { delimiter, join } from 'node:path';
 import { runAiProcessInvocationSync } from '@narada2/carrier-provider-support/ai-process-invocation';
 import { codexAuthHome as sharedCodexAuthHome } from '@narada2/carrier-provider-support/codex-subscription-auth';
 import { codexCommand } from '@narada2/carrier-provider-support/codex-subscription-command';
-import { spawnSync as defaultSpawnSync } from 'node:child_process';
+import { runHiddenPostureCommandSync } from '@narada2/process-launch-posture';
+
+function defaultSpawnSync(command, args, options) {
+  return runHiddenPostureCommandSync(command, args, { ...options, posture: 'provider_subprocess' });
+}
 
 export const CODEX_SUBSCRIPTION_PREFLIGHT_ENV = 'NARADA_CODEX_SUBSCRIPTION_PREFLIGHT';
 export const CODEX_SUBSCRIPTION_PREFLIGHT_TIMEOUT_MS = 60000;

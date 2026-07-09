@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { readFileSync } from "node:fs";
-import { spawnSync } from "node:child_process";
+import { runGovernedCommandSync } from "@narada2/process-launch-posture";
 import {
   planHostedTelemetryDeployPreflight,
   verifyHostedTelemetrySurface,
@@ -44,7 +44,7 @@ if (command === "preflight") {
     process.exitCode = 1;
   } else {
     const configPath = option("--config", "wrangler.jsonc");
-    const result = spawnSync("wrangler", ["deploy", "--config", configPath], {
+    const result = runGovernedCommandSync("wrangler", ["deploy", "--config", configPath], {
       stdio: "inherit",
       shell: process.platform === "win32",
     });

@@ -1,5 +1,4 @@
-import { spawnSync } from 'node:child_process';
-import { spawnHiddenPostureProcess } from '@narada2/process-launch-posture';
+import { runHiddenPostureCommandSync, spawnHiddenPostureProcess } from '@narada2/process-launch-posture';
 
 const ownedProcessRegistry = new Set();
 const cleanupTargets = new WeakSet();
@@ -12,7 +11,11 @@ function windowsProcessTreeKillArgs(pid) {
   return ['/PID', String(pid), '/T', '/F'];
 }
 
-function terminateWindowsProcessTree(pid, { spawnSyncFn = spawnSync } = {}) {
+function defaultHiddenSpawnSync(command, args, options) {
+  return runHiddenPostureCommandSync(command, args, { ...options, posture: 'governed_command_execution' });
+}
+
+function terminateWindowsProcessTree(pid, { spawnSyncFn = defaultHiddenSpawnSync } = {}) {
   if (!pid) return { attempted: false, status: null, error: 'missing_pid' };
   const result = spawnSyncFn('taskkill.exe', windowsProcessTreeKillArgs(pid), {
     stdio: 'ignore',
@@ -27,7 +30,7 @@ function terminateWindowsProcessTree(pid, { spawnSyncFn = spawnSync } = {}) {
 
 function createOwnedProcess(child, options = {}) {
   const platform = options.platform ?? process.platform;
-  const spawnSyncFn = options.spawnSyncFn ?? spawnSync;
+  const spawnSyncFn = options.spawnSyncFn ?? defaultHiddenSpawnSync;
   const owner = options.owner ?? 'carrier-runtime';
   const registry = options.registry ?? ownedProcessRegistry;
   const processTarget = options.processTarget ?? process;

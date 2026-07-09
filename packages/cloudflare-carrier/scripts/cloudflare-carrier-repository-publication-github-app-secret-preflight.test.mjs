@@ -1,17 +1,15 @@
 import assert from 'node:assert/strict';
-import { execFile as execFileCallback } from 'node:child_process';
+import { execFileGoverned } from '@narada2/process-launch-posture';
 import { join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { promisify } from 'node:util';
 
-const execFile = promisify(execFileCallback);
 const packageRoot = fileURLToPath(new URL('..', import.meta.url));
 const scriptPath = join(packageRoot, 'scripts', 'cloudflare-carrier-repository-publication-github-app-secret-preflight.mjs');
 const privateKey = '-----BEGIN PRIVATE KEY-----\\nredacted-test-key\\n-----END PRIVATE KEY-----';
 
 test('github app secret preflight accepts complete redacted source values', async () => {
-  const { stdout } = await execFile(
+  const { stdout } = await execFileGoverned(
     process.execPath,
     [scriptPath, '--app-id', '12345', '--installation-id', '67890', '--private-key', privateKey],
     { cwd: packageRoot, timeout: 30000, windowsHide: true },
@@ -29,7 +27,7 @@ test('github app secret preflight accepts complete redacted source values', asyn
 
 test('github app secret preflight reports invalid source shape without leaking values', async () => {
   await assert.rejects(
-    execFile(
+    execFileGoverned(
       process.execPath,
       [scriptPath, '--app-id', 'app-id', '--installation-id', 'installation-id', '--private-key', 'not-a-pem'],
       { cwd: packageRoot, timeout: 30000, windowsHide: true },

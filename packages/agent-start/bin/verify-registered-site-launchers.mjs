@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 import { existsSync, readFileSync } from 'node:fs';
-import { spawn } from 'node:child_process';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildAgentIdentityRefV2, resolveAgentIdentityRef } from '@narada2/agent-identity';
+import { runGovernedCommand } from '@narada2/process-launch-posture';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 if (process.argv.includes('--help') || process.argv.includes('-h')) {
@@ -131,7 +131,7 @@ function scanRegistryIdentityShape(record) {
     failures.push({ reason: 'agent_identity_ref_derivation_failed', error: String(error?.message ?? error) });
     return failures;
   }
-  if (!identityRef?.site_id) failures.push({ reason: 'agent_identity_ref_unscoped', expected_site: record.Site ?? null });
+  if (!identityRefSiteId(identityRef)) failures.push({ reason: 'agent_identity_ref_unscoped', expected_site: record.Site ?? null });
   if (identityRef.display !== identityRef.canonical_agent_id) failures.push({ reason: 'agent_identity_display_not_canonical', display: identityRef.display, canonical_agent_id: identityRef.canonical_agent_id });
   if (record.Role && identityRef.role !== record.Role) failures.push({ reason: 'agent_identity_role_mismatch', expected: record.Role, actual: identityRef.role });
   return failures;
@@ -149,15 +149,28 @@ function identityRefForComparison(value, { includeRole = true } = {}) {
   if (!value || typeof value !== 'object') return value ?? null;
   const comparable = {
     schema: value.schema,
-    site_id: value.site_id ?? null,
+    site_id: identityRefSiteId(value),
     local_agent_id: value.local_agent_id ?? null,
     canonical_agent_id: value.canonical_agent_id ?? null,
     display: value.display ?? null,
     source_agent_id: value.source_agent_id ?? null,
-    scope: value.scope ?? null,
+    scope: identityRefScope(value),
   };
   if (includeRole) comparable.role = value.role ?? null;
   return comparable;
+}
+
+function identityRefSiteId(value) {
+  if (!value || typeof value !== 'object') return null;
+  return value.site_id ?? value.identity_scope?.site_id ?? null;
+}
+
+function identityRefScope(value) {
+  if (!value || typeof value !== 'object') return null;
+  if (value.scope) return value.scope;
+  if (value.identity_scope?.kind === 'narada_site') return 'site_scoped';
+  if (value.identity_scope?.kind === 'unscoped') return 'unscoped';
+  return null;
 }
 
 function parseRegistry(text) {
@@ -206,13 +219,12 @@ function spawnDryRunProcess({ record, carrier, runtime, args }) {
     let stdout = '';
     let stderr = '';
     let settled = false;
-    const child = spawn('pwsh', args, {
+    const child = runGovernedCommand('pwsh', args, {
       cwd: record.WorkspaceRoot,
       env: {
         ...process.env,
         NARADA_PROPER_ROOT: naradaProperRoot,
       },
-      windowsHide: true,
     });
     const timeout = setTimeout(() => {
       if (settled) return;

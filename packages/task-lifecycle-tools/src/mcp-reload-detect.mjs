@@ -9,7 +9,7 @@
 
 import { readFileSync, existsSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { execSync } from 'node:child_process';
+import { execGovernedSync } from '@narada2/process-launch-posture';
 
 const cwd = resolve(process.argv[2] || process.cwd());
 const baselinePath = process.argv[3] || join(cwd, '.ai', 'tmp', 'mcp-baseline.json');
@@ -25,7 +25,7 @@ function getMcpSourceFiles() {
   const files = new Set();
   for (const glob of MCP_SOURCE_GLOBS) {
     try {
-      const out = execSync(`git ls-files ${glob}`, { cwd, encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] });
+      const out = execGovernedSync(`git ls-files ${glob}`, { cwd, encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] });
       out.split('\n').filter(l => l.trim()).forEach(f => files.add(join(cwd, f.trim())));
     } catch {
       // ignore

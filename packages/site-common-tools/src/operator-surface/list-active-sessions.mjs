@@ -8,9 +8,9 @@
  *   node tools/operator-surface/list-active-sessions.mjs [<site-root>]
  */
 
-import { execSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { execGovernedSync } from '@narada2/process-launch-posture';
 
 function parseArgs(argv) {
   const args = { siteRoot: process.cwd() };
@@ -78,10 +78,9 @@ function main() {
   // Query WMI for kimi.exe processes via WMIC CSV output
   let processes = [];
   try {
-    const output = execSync('wmic process where "name=\'kimi.exe\'" get ProcessId,CommandLine /format:csv', {
+    const output = execGovernedSync('wmic process where "name=\'kimi.exe\'" get ProcessId,CommandLine /format:csv', {
       encoding: 'utf8',
       timeout: 15000,
-      windowsHide: true,
     });
     // Parse CSV: Node,CommandLine,ProcessId
     // CommandLine may contain literal quotes; split by last comma for ProcessId

@@ -12,6 +12,9 @@
   "bin": {
     "narada-site-loop": "./dist/bin/narada-site-loop.mjs"
   },
+  "dependencies": {
+    "@narada2/process-launch-posture": "workspace:*"
+  },
   "exports": {
     ".": {
       "import": "./dist/site-loop-store.mjs"

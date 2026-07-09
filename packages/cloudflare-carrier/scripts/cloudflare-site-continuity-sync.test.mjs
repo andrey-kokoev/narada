@@ -1,12 +1,11 @@
 import assert from 'node:assert/strict';
-import { execFile as execFileCallback, spawn } from 'node:child_process';
+import { execFileGoverned, spawnTestChild } from '@narada2/process-launch-posture';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { promisify } from 'node:util';
 import {
   createSiteContinuityBinding,
   createSiteContinuityExchangePacket,
@@ -15,11 +14,10 @@ import {
 
 const SCRIPT_PATH = fileURLToPath(new URL('./cloudflare-site-continuity-sync.mjs', import.meta.url));
 const SCRIPT_CWD = fileURLToPath(new URL('..', import.meta.url));
-const execFile = promisify(execFileCallback);
 
 function runSync(args = [], { input = '', env = {} } = {}) {
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [SCRIPT_PATH, ...args], {
+    const child = spawnTestChild(process.execPath, [SCRIPT_PATH, ...args], {
       cwd: SCRIPT_CWD,
       env: {
         ...process.env,
@@ -949,6 +947,6 @@ async function createPublishableGitFixture() {
 }
 
 async function git(cwd, args) {
-  const result = await execFile('git', args, { cwd, timeout: 30000, windowsHide: true });
+  const result = await execFileGoverned('git', args, { cwd, timeout: 30000, windowsHide: true });
   return result;
 }

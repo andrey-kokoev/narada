@@ -1,12 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createRequire } from 'node:module';
 import { resolveNaradaSitePaths } from '@narada2/site-paths';
+import { runHiddenPostureCommandSync } from '@narada2/process-launch-posture';
 import { buildCarrierProcessEnvironment, carrierSpawnOptions } from '../src/carrier-launch-adapter.ts';
 
 const require = createRequire(import.meta.url);
@@ -38,11 +38,11 @@ const baseTestEnv = {
 };
 
 function run(extraArgs = [], extraEnv = {}) {
-  return spawnSync(process.execPath, [...baseArgs, ...withDefaultMcpScopeNone(extraArgs)], {
+  return runHiddenPostureCommandSync(process.execPath, [...baseArgs, ...withDefaultMcpScopeNone(extraArgs)], {
     cwd: naradaProperRoot,
     encoding: 'utf8',
     env: { ...process.env, ...baseTestEnv, ...extraEnv },
-    windowsHide: true,
+    posture: 'test_child',
   });
 }
 
@@ -105,11 +105,11 @@ function writeMinimalMcpServerFile(siteRoot, fileName, serverName, commandArg, i
 
 function runRealLaunch(extraArgs = [], extraEnv = {}) {
   const argsWithoutDryRun = baseArgs.filter((arg) => arg !== '--dry-run');
-  return spawnSync(process.execPath, [...argsWithoutDryRun, ...withDefaultMcpScopeNone(extraArgs)], {
+  return runHiddenPostureCommandSync(process.execPath, [...argsWithoutDryRun, ...withDefaultMcpScopeNone(extraArgs)], {
     cwd: naradaProperRoot,
     encoding: 'utf8',
     env: { ...process.env, ...baseTestEnv, ...extraEnv },
-    windowsHide: true,
+    posture: 'test_child',
   });
 }
 
@@ -124,7 +124,7 @@ function runOk(extraArgs = [], extraEnv = {}) {
 }
 
 function runWithIdentityOk(identityValue, extraArgs = [], extraEnv = {}) {
-  const result = spawnSync(process.execPath, [
+  const result = runHiddenPostureCommandSync(process.execPath, [
     '--import',
     tsxLoaderPath,
     launcherPath,
@@ -140,7 +140,7 @@ function runWithIdentityOk(identityValue, extraArgs = [], extraEnv = {}) {
     cwd: naradaProperRoot,
     encoding: 'utf8',
     env: { ...process.env, ...baseTestEnv, ...extraEnv },
-    windowsHide: true,
+    posture: 'test_child',
   });
   assert.equal(result.status, 0, result.stderr || result.stdout);
   return JSON.parse(result.stdout);
@@ -1043,7 +1043,7 @@ test('direct codex carrier exec records AiProcessInvocation launch and exit evid
   const fakeCodexScript = join(siteRoot, 'fake-codex.js');
   writeFileSync(fakeCodexScript, 'process.exit(0);\n', 'utf8');
 
-  const result = spawnSync(process.execPath, [
+  const result = runHiddenPostureCommandSync(process.execPath, [
     '--import',
     tsxLoaderPath,
     launcherPath,
@@ -1062,7 +1062,7 @@ test('direct codex carrier exec records AiProcessInvocation launch and exit evid
     cwd: siteRoot,
     encoding: 'utf8',
     env: { ...process.env, ...baseTestEnv, NARADA_CODEX_CLI_SCRIPT: fakeCodexScript },
-    windowsHide: true,
+    posture: 'test_child',
   });
 
   assert.equal(result.status, 0, result.stderr || result.stdout);

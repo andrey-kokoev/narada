@@ -3,18 +3,19 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { spawn, spawnSync } from 'node:child_process';
 import { once } from 'node:events';
 import { test } from 'node:test';
+import { runHiddenPostureCommandSync, spawnTestChild } from '@narada2/process-launch-posture';
 
 const packageRoot = new URL('..', import.meta.url);
 const cliPath = fileURLToPath(new URL('../bin/narada-site-loop.mjs', import.meta.url));
 const storePath = new URL('../src/site-loop-store.mjs', import.meta.url);
 
 test('CLI help does not require a store module', () => {
-  const child = spawnSync(process.execPath, [cliPath, 'help'], {
+  const child = runHiddenPostureCommandSync(process.execPath, [cliPath, 'help'], {
     cwd: packageRoot,
     encoding: 'utf8',
+    posture: 'test_child',
   });
 
   assert.equal(child.status, 0, child.stderr);
@@ -47,7 +48,7 @@ test('CLI supervise emits startup evidence before a forever runtime exits', asyn
       }
     `, 'utf8');
 
-    child = spawn(process.execPath, [
+    child = spawnTestChild(process.execPath, [
       cliPath,
       'supervise',
       '--store-module',
@@ -147,7 +148,7 @@ test('CLI run hosts one Site-provided runtime cycle', () => {
       }
     `, 'utf8');
 
-    const trigger = spawnSync(process.execPath, [
+    const trigger = runHiddenPostureCommandSync(process.execPath, [
       cliPath,
       'trigger',
       '--store-module',
@@ -163,13 +164,14 @@ test('CLI run hosts one Site-provided runtime cycle', () => {
     ], {
       cwd: packageRoot,
       encoding: 'utf8',
+      posture: 'test_child',
     });
 
     assert.equal(trigger.status, 0, trigger.stderr);
     const triggerResult = JSON.parse(trigger.stdout);
     assert.equal(triggerResult.status, 'pending');
 
-    const child = spawnSync(process.execPath, [
+    const child = runHiddenPostureCommandSync(process.execPath, [
       cliPath,
       'run',
       '--store-module',
@@ -182,6 +184,7 @@ test('CLI run hosts one Site-provided runtime cycle', () => {
     ], {
       cwd: packageRoot,
       encoding: 'utf8',
+      posture: 'test_child',
     });
 
     assert.equal(child.status, 0, child.stderr);
@@ -192,7 +195,7 @@ test('CLI run hosts one Site-provided runtime cycle', () => {
     assert.equal(parsed.cycles[0].run.steps[0].step_id, 'cli-cycle');
     assert.equal(parsed.cycles[0].run.steps[0].evidence.trigger_id, triggerResult.trigger_id);
 
-    const triggers = spawnSync(process.execPath, [
+    const triggers = runHiddenPostureCommandSync(process.execPath, [
       cliPath,
       'triggers',
       '--store-module',
@@ -202,13 +205,14 @@ test('CLI run hosts one Site-provided runtime cycle', () => {
     ], {
       cwd: packageRoot,
       encoding: 'utf8',
+      posture: 'test_child',
     });
 
     assert.equal(triggers.status, 0, triggers.stderr);
     const triggersResult = JSON.parse(triggers.stdout);
     assert.equal(triggersResult.triggers[0].status, 'completed');
 
-    const events = spawnSync(process.execPath, [
+    const events = runHiddenPostureCommandSync(process.execPath, [
       cliPath,
       'events',
       '--store-module',
@@ -218,6 +222,7 @@ test('CLI run hosts one Site-provided runtime cycle', () => {
     ], {
       cwd: packageRoot,
       encoding: 'utf8',
+      posture: 'test_child',
     });
 
     assert.equal(events.status, 0, events.stderr);
@@ -229,7 +234,7 @@ test('CLI run hosts one Site-provided runtime cycle', () => {
       'runtime_stopped',
     ]);
 
-    const health = spawnSync(process.execPath, [
+    const health = runHiddenPostureCommandSync(process.execPath, [
       cliPath,
       'health',
       '--store-module',
@@ -239,13 +244,14 @@ test('CLI run hosts one Site-provided runtime cycle', () => {
     ], {
       cwd: packageRoot,
       encoding: 'utf8',
+      posture: 'test_child',
     });
 
     assert.equal(health.status, 0, health.stderr);
     const healthResult = JSON.parse(health.stdout);
     assert.equal(healthResult.status, 'healthy');
 
-    const serve = spawnSync(process.execPath, [
+    const serve = runHiddenPostureCommandSync(process.execPath, [
       cliPath,
       'serve',
       '--store-module',
@@ -258,6 +264,7 @@ test('CLI run hosts one Site-provided runtime cycle', () => {
     ], {
       cwd: packageRoot,
       encoding: 'utf8',
+      posture: 'test_child',
     });
 
     assert.equal(serve.status, 0, serve.stderr);
@@ -265,7 +272,7 @@ test('CLI run hosts one Site-provided runtime cycle', () => {
     assert.equal(serveResult.status, 'listening');
     assert.match(serveResult.base_url, /^http:\/\/127\.0\.0\.1:\d+$/);
 
-    const supervise = spawnSync(process.execPath, [
+    const supervise = runHiddenPostureCommandSync(process.execPath, [
       cliPath,
       'supervise',
       '--store-module',
@@ -280,6 +287,7 @@ test('CLI run hosts one Site-provided runtime cycle', () => {
     ], {
       cwd: packageRoot,
       encoding: 'utf8',
+      posture: 'test_child',
     });
 
     assert.equal(supervise.status, 0, supervise.stderr);

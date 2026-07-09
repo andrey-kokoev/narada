@@ -5,5 +5,8 @@
   "type": "module",
   "scripts": {
     "test": "node --test src/operator-surface-carriers.test.mjs"
+  },
+  "dependencies": {
+    "@narada2/process-launch-posture": "workspace:*"
   }
 }

@@ -1,29 +1,30 @@
 import { describe, expect, it } from "vitest";
-import { execSync } from "node:child_process";
 import { resolve } from "node:path";
+import { runHiddenPostureCommandSync } from "@narada2/process-launch-posture";
+
+const packageRoot = resolve("..", "..", "..");
+const scriptPath = resolve(packageRoot, "scripts", "control-plane-lint.ts");
+
+function runLint(args: string[] = []): string {
+  const result = runHiddenPostureCommandSync(
+    process.platform === "win32" ? "npx.cmd" : "npx",
+    ["tsx", scriptPath, ...args],
+    { cwd: packageRoot, posture: "test_child" },
+  );
+  if (result.status !== 0) {
+    throw new Error(`control_plane_lint_failed:${result.status}:${String(result.stderr ?? "")}`);
+  }
+  return String(result.stdout ?? "");
+}
 
 describe("control-plane invariant lint", () => {
   it("passes with no mailbox leakage in control-plane modules", () => {
-    const scriptPath = resolve(
-      "..",
-      "..",
-      "..",
-      "scripts",
-      "control-plane-lint.ts",
-    );
-    const output = execSync(`npx tsx ${scriptPath}`, {
-      encoding: "utf8",
-      cwd: resolve("..", "..", ".."),
-    });
+    const output = runLint();
     expect(output).toContain("Control-plane lint passed");
   });
 
   it("has no stale allowlist entries", () => {
-    const scriptPath = resolve("..", "..", "..", "scripts", "control-plane-lint.ts");
-    const output = execSync(`npx tsx ${scriptPath} --stale`, {
-      encoding: "utf8",
-      cwd: resolve("..", "..", ".."),
-    });
+    const output = runLint(["--stale"]);
     const stale = JSON.parse(output.trim()) as Array<{
       file: string;
       pattern: string;
@@ -38,11 +39,7 @@ describe("control-plane invariant lint", () => {
   });
 
   it("allowlist does not grow without explicit justification", () => {
-    const scriptPath = resolve("..", "..", "..", "scripts", "control-plane-lint.ts");
-    const output = execSync(`npx tsx ${scriptPath} --stats`, {
-      encoding: "utf8",
-      cwd: resolve("..", "..", ".."),
-    });
+    const output = runLint(["--stats"]);
     const { fileKeys, patternCount } = JSON.parse(output.trim()) as {
       fileKeys: number;
       patternCount: number;
@@ -58,11 +55,7 @@ describe("control-plane invariant lint", () => {
   });
 
   it("only mail-compat-types.ts may use the wildcard allowlist", () => {
-    const scriptPath = resolve("..", "..", "..", "scripts", "control-plane-lint.ts");
-    const output = execSync(`npx tsx ${scriptPath} --wildcards`, {
-      encoding: "utf8",
-      cwd: resolve("..", "..", ".."),
-    });
+    const output = runLint(["--wildcards"]);
     const wildcardFiles = JSON.parse(output.trim()) as string[];
     expect(wildcardFiles).toEqual([]);
   });

@@ -10,24 +10,29 @@
 
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
-import { exec } from "node:child_process";
-import { promisify } from "node:util";
+import { execFileGoverned } from "@narada2/process-launch-posture";
 import { resolveSiteRoot } from "./path-utils.js";
 
-const execAsync = promisify(exec);
+type CredentialExec = (
+  command: string,
+  args?: string[],
+  options?: { timeout?: number },
+) => Promise<{ stdout: string | Buffer; stderr: string | Buffer }>;
+
+const execAsync: CredentialExec = execFileGoverned;
 
 /**
  * Internal hook for tests to inject a mock exec implementation.
  * @internal
  */
-let _testExecImpl: typeof execAsync | undefined;
+let _testExecImpl: CredentialExec | undefined;
 
-function getExecAsync(): typeof execAsync {
+function getExecAsync(): CredentialExec {
   return _testExecImpl ?? execAsync;
 }
 
 /** @internal */
-export function _setTestExecImpl(impl: typeof execAsync | undefined): void {
+export function _setTestExecImpl(impl: CredentialExec | undefined): void {
   _testExecImpl = impl;
 }
 
@@ -90,10 +95,11 @@ async function resolveFromKeychain(
   const service = keychainServiceName(siteId, secretName);
   try {
     const { stdout } = await getExecAsync()(
-      `security find-generic-password -s "${service.replace(/"/g, '\\"')}" -w`,
+      "security",
+      ["find-generic-password", "-s", service, "-w"],
       { timeout: 5_000 },
     );
-    const trimmed = stdout.trim();
+    const trimmed = String(stdout).trim();
     if (trimmed) return trimmed;
     return null;
   } catch {
@@ -176,7 +182,8 @@ export async function setupKeychainAccess(siteId: string): Promise<boolean> {
   const testService = `dev.narada.site.${siteId}.narada-setup-test`;
   try {
     await getExecAsync()(
-      `security find-generic-password -s "${testService.replace(/"/g, '\\"')}" -w`,
+      "security",
+      ["find-generic-password", "-s", testService, "-w"],
       { timeout: 5_000 },
     );
     return true;

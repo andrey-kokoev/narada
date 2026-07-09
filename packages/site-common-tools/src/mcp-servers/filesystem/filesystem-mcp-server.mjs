@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 import { readFileSync, writeFileSync, existsSync, mkdirSync, appendFileSync, readdirSync, statSync } from 'node:fs';
 import { resolve, relative, isAbsolute, sep, posix } from 'node:path';
-import { spawnSync } from 'node:child_process';
 import { glob } from 'node:fs/promises';
 import { createHash, randomUUID } from 'node:crypto';
+import { runGovernedCommandSync } from '@narada2/process-launch-posture';
 import { enforceAgentPathPolicy } from '../../agent-context/path-policy.mjs';
 import { buildOutputRefToolContent, listOutputTools, outputShow } from '../../mcp-payload-file.mjs';
 
@@ -315,7 +315,7 @@ function globSearch(args, root) {
   // Use PowerShell/Get-ChildItem for glob on Windows
   // Convert forward slashes to backslashes for the filter, but keep the path as-is
   const psPattern = pattern.replace(/\//g, '\\');
-  const result = spawnSync(
+  const result = runGovernedCommandSync(
     'pwsh.exe',
     ['-NoProfile', '-Command',
       `Get-ChildItem -LiteralPath "${directory}" -Filter "${psPattern}" -Recurse -File -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName`
@@ -336,7 +336,7 @@ function grepSearch(args, root) {
 
   if (!pattern) throw new Error('grep_requires_pattern');
 
-  const rg = spawnSync('rg', [
+  const rg = runGovernedCommandSync('rg', [
     pattern,
     searchPath,
     outputMode === 'files_with_matches' ? '-l' : outputMode === 'count_matches' ? '-c' : '',

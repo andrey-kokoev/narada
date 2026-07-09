@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { request as httpRequest } from 'node:http';
@@ -8,6 +7,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { PassThrough } from 'node:stream';
 import { fileURLToPath } from 'node:url';
+import { spawnTestChild } from '@narada2/process-launch-posture';
 import { resolveNaradaSitePaths } from '@narada2/site-paths';
 import * as canonicalRuntimeEvents from '../src/runtime-server-events.mjs';
 import {
@@ -841,7 +841,7 @@ test('narada-owned entrypoint runs the carrier runtime in process', async () => 
   mkdirSync(join(siteRoot, '.ai', 'mcp'), { recursive: true });
   try {
     const binPath = fileURLToPath(new URL('../bin/narada-agent-runtime-server.mjs', import.meta.url));
-    const child = spawn(process.execPath, [
+    const child = spawnTestChild(process.execPath, [
       binPath,
       '--raw-jsonl',
       '--identity', 'narada.test',

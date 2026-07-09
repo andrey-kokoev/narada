@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { spawnTestChild } from '@narada2/process-launch-posture';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
@@ -12,7 +12,7 @@ const SCRIPT_CWD = fileURLToPath(new URL('..', import.meta.url));
 
 function runRefresh(args = [], { env = {} } = {}) {
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [SCRIPT_PATH, ...args], {
+    const child = spawnTestChild(process.execPath, [SCRIPT_PATH, ...args], {
       cwd: SCRIPT_CWD,
       env: {
         ...process.env,

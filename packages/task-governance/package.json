@@ -117,6 +117,7 @@
     "@narada2/task-governance-core": "link:../../../narada-core/packages/task-governance-core",
     "@narada2/control-plane": "workspace:*",
     "@narada2/intent-zones": "workspace:*",
+    "@narada2/process-launch-posture": "workspace:*",
     "@narada2/sqlite": "workspace:*"
   },
   "devDependencies": {

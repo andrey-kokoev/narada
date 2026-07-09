@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-import { spawn, spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { relative, resolve } from 'node:path';
+import { runGovernedCommand, runGovernedCommandSync } from '@narada2/process-launch-posture';
 import { validateIdentityAgainstRoster } from '../../agent-context/session-start.mjs';
 import { enforceAgentPathPolicy } from '../../agent-context/path-policy.mjs';
 import {
@@ -1864,9 +1864,8 @@ function runGitSync(cwd, args) {
 }
 
 function runProcessSync(command, args, cwd) {
-  return spawnSync(command, args, {
+  return runGovernedCommandSync(command, args, {
     cwd,
-    windowsHide: true,
     encoding: null,
     env: { ...process.env, FORCE_COLOR: '0', NO_COLOR: '1' },
   });
@@ -1970,9 +1969,8 @@ function runShell(command, cwd, timeoutMs) {
       shellArgs = ['-NoProfile', '-Command', command];
     }
 
-    const child = spawn(shell, shellArgs, {
+    const child = runGovernedCommand(shell, shellArgs, {
       cwd,
-      windowsHide: true,
       env: { ...process.env, FORCE_COLOR: '0', NO_COLOR: '1' },
     });
 

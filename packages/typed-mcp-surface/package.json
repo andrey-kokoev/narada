@@ -17,5 +17,8 @@
   },
   "scripts": {
     "test": "node --test src/typed-mcp-surface.test.mjs"
+  },
+  "dependencies": {
+    "@narada2/process-launch-posture": "workspace:*"
   }
 }

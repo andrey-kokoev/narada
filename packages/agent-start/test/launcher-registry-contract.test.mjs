@@ -1,11 +1,11 @@
 import test from 'node:test';
-import{spawnSync}from'node:child_process';
 import assert from 'node:assert/strict';
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
+import { runHiddenPostureCommandSync } from '@narada2/process-launch-posture';
 
 const require = createRequire(import.meta.url);
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -29,7 +29,7 @@ const nonNaradaProperSites = Object.freeze([
 ]);
 
 function spawnHiddenSync(command, args, options = {}) {
-  return spawnSync(command, args, { windowsHide: true, ...options });
+  return runHiddenPostureCommandSync(command, args, { ...options, posture: 'test_child' });
 }
 
 function parseRegistry(text) {
@@ -245,14 +245,13 @@ test('registered launcher verifier exercises the PowerShell dry-run handoff', { 
       '  status = "dry_run"',
       '  identity = $Agent',
       '  agent_identity_ref = @{',
-      '    schema = "narada.agent_identity_ref.v1"',
-      '    site_id = $siteId',
+      '    schema = "narada.agent_identity_ref.v2"',
+      '    identity_scope = if ($siteId) { @{ kind = "narada_site"; site_id = $siteId } } else { @{ kind = "unscoped" } }',
       '    local_agent_id = $localAgentId',
       '    role = $role',
       '    canonical_agent_id = if ($siteId) { "$siteId.$localAgentId" } else { $localAgentId }',
       '    display = if ($siteId) { "$siteId.$localAgentId" } else { $localAgentId }',
-      '    source_agent_id = $Agent',
-      '    scope = if ($siteId) { "site_scoped" } else { "unscoped" }',
+      '    legacy_agent_id = $Agent',
       '  }',
       '  carrier_kind = $Carrier',
       '  runtime = $Runtime',

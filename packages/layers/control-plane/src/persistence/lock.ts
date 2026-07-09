@@ -7,6 +7,7 @@
 
 import { mkdir, rm, stat } from "node:fs/promises";
 import { join } from "node:path";
+import { execFileGoverned } from "@narada2/process-launch-posture";
 import { isWindows } from "../utils/platform.js";
 
 // Simple implementation that works on both platforms
@@ -94,10 +95,7 @@ export class FileLock {
 
           // Check if process exists (Windows-specific)
           try {
-            const { exec } = await import("node:child_process");
-            const { promisify } = await import("node:util");
-            const execAsync = promisify(exec);
-            await execAsync(`tasklist /FI "PID eq ${meta.pid}"`, {
+            await execFileGoverned("tasklist", ["/FI", `PID eq ${meta.pid}`], {
               windowsHide: true,
             });
             // Process exists, lock is not stale

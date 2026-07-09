@@ -1,9 +1,9 @@
 #!/usr/bin/env node
-import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { buildOutputRefToolContent } from '../../site-common-tools/compat/mcp-payload-file.legacy-site.mjs';
+import { runGovernedCommandSync } from '@narada2/process-launch-posture';
 
 const PROTOCOL_VERSION = '2024-11-05';
 const RETIRED_REASON = 'EE-MCP is retired on this Site and is not admitted in .narada/capabilities/mcp-surfaces.json.';
@@ -206,10 +206,9 @@ function executeCommand(args, site, surface, serverOptions) {
   };
   if (dryRun) return base;
 
-  const result = spawnSync('wsl.exe', ['-d', wslDistribution, '--', 'bash', '-lc', bashCommand], {
+  const result = runGovernedCommandSync('wsl.exe', ['-d', wslDistribution, '--', 'bash', '-lc', bashCommand], {
     cwd: site.site_root,
     encoding: 'utf8',
-    windowsHide: true,
     timeout: timeoutSeconds * 1000,
     maxBuffer: Math.max(outputLimitBytes * 4, 64 * 1024),
   });

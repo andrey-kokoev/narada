@@ -26,9 +26,9 @@ function makeInvocation(
   };
 }
 
-// Mock child_process so tests never invoke a real CLI
-vi.mock("node:child_process", () => ({
-  spawn: vi.fn(),
+// Mock the process posture helper so tests never invoke a real CLI.
+vi.mock("@narada2/process-launch-posture", () => ({
+  spawnProviderSubprocess: vi.fn(),
 }));
 
 // Mock fs and os for probeHealth
@@ -38,7 +38,7 @@ vi.mock("node:fs", () => ({
 
 import * as os from "node:os";
 
-import { spawn } from "node:child_process";
+import { spawnProviderSubprocess as spawn } from "@narada2/process-launch-posture";
 import { existsSync } from "node:fs";
 
 function mockSpawn(

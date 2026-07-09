@@ -5,6 +5,7 @@
   "type": "module",
   "dependencies": {
     "@narada2/mcp-transport": "workspace:*",
+    "@narada2/process-launch-posture": "workspace:*",
     "@narada2/sqlite": "workspace:*"
   },
   "engines": {

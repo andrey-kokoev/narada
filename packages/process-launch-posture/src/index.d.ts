@@ -132,6 +132,11 @@ export function executeOperatorProjectionOpenRequest(input?: OperatorProjectionO
 
 export function startOperatorTerminal(command: string, args?: string[], options?: OperatorTerminalOptions): OperatorTerminalResult;
 
+export function spawnOperatorTerminal(command: string, args?: string[], options?: SpawnOptions & {
+  spawnImpl?: typeof import('node:child_process').spawn;
+  stdio?: StdioOptions;
+}): ChildProcess;
+
 export function spawnHiddenPostureProcess(command: string, args: string[], options: SpawnOptions & {
   posture: Exclude<ProcessLaunchPosture, 'operator_terminal' | 'elevated_or_operator_prompt'>;
   platform?: NodeJS.Platform;

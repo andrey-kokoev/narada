@@ -1,6 +1,5 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
 import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -8,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { materializeAgentSessionStart, openAgentContextDb, validateIdentityAgainstRoster } from './session-start.mjs';
 import { enforceAgentPathPolicy, resolveAgentPathPolicy } from './path-policy.mjs';
 import Database, { DEFAULT_BUSY_TIMEOUT_MS } from './sqlite-database.mjs';
+import { spawnTestChild } from '@narada2/process-launch-posture';
 
 const root = dirname(fileURLToPath(import.meta.url));
 
@@ -53,11 +53,10 @@ test('agent context startup tools expose canonical agent identity ref', async ()
 
 function callAgentContextMcp({ siteRoot, env, calls }) {
   return new Promise((resolvePromise, rejectPromise) => {
-    const child = spawn(process.execPath, [join(root, 'agent-context-mcp-server.mjs'), '--site-root', siteRoot], {
+    const child = spawnTestChild(process.execPath, [join(root, 'agent-context-mcp-server.mjs'), '--site-root', siteRoot], {
       cwd: siteRoot,
       env: { ...process.env, ...env },
       stdio: ['pipe', 'pipe', 'pipe'],
-      windowsHide: true,
     });
     let stdout = '';
     let stderr = '';

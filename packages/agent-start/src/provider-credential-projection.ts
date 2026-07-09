@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process';
+import { runGovernedCommandSync } from '@narada2/process-launch-posture';
 
 export const PROVIDER_SECRET_STORE_MODE_ENV = 'NARADA_PROVIDER_SECRET_STORE';
 export const SECRET_MANAGEMENT_LOOKUP_TIMEOUT_MS = 5000;
@@ -59,10 +59,9 @@ export function providerCredentialFromSecretStore(secretRef, {
   timeoutMs = SECRET_MANAGEMENT_LOOKUP_TIMEOUT_MS,
 } = {}) {
   if (!secretRef || !providerSecretStoreEnabled(processEnv)) return null;
-  const result = spawnSync('pwsh', ['-NoProfile', '-NonInteractive', '-Command', lookupScript], {
+  const result = runGovernedCommandSync('pwsh', ['-NoProfile', '-NonInteractive', '-Command', lookupScript], {
     encoding: 'utf8',
     timeout: timeoutMs,
-    windowsHide: true,
     env: {
       ...processEnv,
       NARADA_SECRET_LOOKUP_NAME: secretRef,

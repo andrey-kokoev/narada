@@ -1,7 +1,7 @@
-import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { spawnHiddenPostureProcess } from '@narada2/process-launch-posture';
 import { resolveNaradaSitePaths } from '@narada2/site-paths';
 import {
   buildProjectionRegistrationPlan,
@@ -21,6 +21,8 @@ import {
 
 export const CLOUDFLARE_NARS_PROJECTION_STORE_SCHEMA = 'narada.cloudflare_nars_projection.store.v1';
 export const CLOUDFLARE_NARS_PROJECTION_PREFLIGHT_SCHEMA = 'narada.cloudflare_nars_projection.preflight.v1';
+
+type HiddenSpawnImpl = NonNullable<Parameters<typeof spawnHiddenPostureProcess>[2]['spawnImpl']>;
 
 export interface ProjectionStorePaths {
   projections_root: string;
@@ -453,7 +455,7 @@ export function startLocalProjectionBridgeRunProcess(args: {
   command?: string;
   cwd?: string;
   env?: NodeJS.ProcessEnv;
-  spawn_impl?: typeof spawn;
+  spawn_impl?: HiddenSpawnImpl;
 }) {
   const command = args.command ?? process.execPath;
   const argv = args.command ? [] : [resolveNaradaCliEntrypoint()];
@@ -470,12 +472,13 @@ export function startLocalProjectionBridgeRunProcess(args: {
   if (args.max_events != null) argv.push('--max-events', String(args.max_events));
   if (args.max_artifacts != null) argv.push('--max-artifacts', String(args.max_artifacts));
   if (args.poll_interval_ms != null) argv.push('--poll-interval-ms', String(args.poll_interval_ms));
-  const child = (args.spawn_impl ?? spawn)(command, argv, {
+  const child = spawnHiddenPostureProcess(command, argv, {
     cwd: args.cwd ?? args.site_root,
     detached: true,
     stdio: 'ignore',
-    windowsHide: true,
     env: args.env ?? process.env,
+    posture: 'governed_command_execution',
+    spawnImpl: args.spawn_impl,
   });
   child.on?.('error', () => {});
   child.unref?.();

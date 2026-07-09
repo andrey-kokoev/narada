@@ -297,6 +297,7 @@
     "@narada2/carrier-command-contract": "workspace:*",
     "@narada2/carrier-protocol": "workspace:*",
     "@narada2/cloudflare-site-registry": "workspace:*",
+    "@narada2/process-launch-posture": "workspace:*",
     "@narada2/site-authority-map": "workspace:*",
     "@narada2/site-continuity": "workspace:*"
   }

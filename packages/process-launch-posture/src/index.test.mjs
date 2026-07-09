@@ -13,6 +13,7 @@ import {
   runGovernedCommandSync,
   spawnHiddenPostureProcess,
   spawnMcpServer,
+  spawnOperatorTerminal,
   spawnProviderSubprocess,
   spawnTestChild,
   startElevatedOrOperatorPrompt,
@@ -25,6 +26,25 @@ test('browserOpenCommand uses hidden helper-compatible Windows command', () => {
     command: 'cmd.exe',
     args: ['/c', 'start', '', 'http://127.0.0.1:3000'],
   });
+});
+
+test('spawnOperatorTerminal keeps visible terminal posture explicit', () => {
+  let observed = null;
+  const child = new EventEmitter();
+  const result = spawnOperatorTerminal('node', ['x'], {
+    cwd: 'C:/tmp',
+    spawnImpl: (command, args, options) => {
+      observed = { command, args, options };
+      return child;
+    },
+  });
+
+  assert.equal(result, child);
+  assert.equal(observed.command, 'node');
+  assert.deepEqual(observed.args, ['x']);
+  assert.equal(observed.options.cwd, 'C:/tmp');
+  assert.equal(observed.options.stdio, 'inherit');
+  assert.equal(observed.options.windowsHide, false);
 });
 
 test('runGovernedCommandSync forces hidden synchronous execution posture', () => {

@@ -1,13 +1,11 @@
 #!/usr/bin/env node
-import { execFile as execFileCallback } from 'node:child_process';
+import { execFileGoverned } from '@narada2/process-launch-posture';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { stdin, stdout, stderr } from 'node:process';
-import { promisify } from 'node:util';
 import { classifySiteContinuityExchangePacket } from '../../site-continuity/src/site-continuity.mjs';
 import { authHeaders, resolveAuth } from './cloudflare-carrier-product-read.mjs';
 
-const execFile = promisify(execFileCallback);
 
 const args = process.argv.slice(2);
 const command = args[0] ?? 'help';
@@ -204,7 +202,7 @@ async function readGitState(repoPath) {
 
 async function runGit(repoPath, gitArgs) {
   try {
-    const result = await execFile('git', ['-C', repoPath, ...gitArgs], { timeout: 30000, windowsHide: true });
+    const result = await execFileGoverned('git', ['-C', repoPath, ...gitArgs], { timeout: 30000, windowsHide: true });
     return { ok: true, stdout: result.stdout, stderr: result.stderr };
   } catch (error) {
     return { ok: false, stdout: error.stdout ?? '', stderr: error.stderr ?? error.message };

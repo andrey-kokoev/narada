@@ -5,11 +5,12 @@
   "type": "module",
   "scripts": {
     "test": "node --test src/agent-context-tools.test.mjs",
-    "typecheck": "node --input-type=module -e \"import { readdirSync } from 'node:fs'; import { join } from 'node:path'; import { spawnSync } from 'node:child_process'; const files = readdirSync('src').filter((file) => file.endsWith('.mjs')).sort(); for (const file of files) { const result = spawnSync(process.execPath, ['--check', join('src', file)], { stdio: 'inherit' }); if (result.status !== 0) process.exit(result.status ?? 1); }\""
+    "typecheck": "node --input-type=module -e \"import { readdirSync } from 'node:fs'; import { join } from 'node:path'; import { runHiddenPostureCommandSync } from '@narada2/process-launch-posture'; const files = readdirSync('src').filter((file) => file.endsWith('.mjs')).sort(); for (const file of files) { const result = runHiddenPostureCommandSync(process.execPath, ['--check', join('src', file)], { stdio: 'inherit', posture: 'test_child' }); if (result.status !== 0) process.exit(result.status ?? 1); }\""
   },
   "dependencies": {
     "@narada2/agent-identity": "workspace:*",
     "@narada2/agent-start-bootstrap": "workspace:*",
+    "@narada2/process-launch-posture": "workspace:*",
     "@narada2/task-lifecycle-mcp": "workspace:*"
   }
 }

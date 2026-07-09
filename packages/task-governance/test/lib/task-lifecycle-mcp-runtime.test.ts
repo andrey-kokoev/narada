@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
-import { spawnSync } from 'node:child_process';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { runHiddenPostureCommandSync } from '@narada2/process-launch-posture';
 import { describe, expect, it } from 'vitest';
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
@@ -18,7 +18,7 @@ describe('task lifecycle MCP runtime cutover', () => {
 
   it('fails clearly when the stale runtime file is executed directly', () => {
     const runtimePath = resolve(packageRoot, 'runtime/task-lifecycle/task-mcp-server.mjs');
-    const result = spawnSync(process.execPath, [runtimePath], { encoding: 'utf8', timeout: 3000 });
+    const result = runHiddenPostureCommandSync(process.execPath, [runtimePath], { encoding: 'utf8', timeout: 3000, posture: 'test_child' });
 
     expect(result.status).toBe(64);
     expect(result.stderr).toContain('retired_task_lifecycle_mcp_entrypoint');

@@ -1,9 +1,8 @@
 #!/usr/bin/env node
-import { execFile as execFileCallback } from 'node:child_process';
+import { execFileGoverned } from '@narada2/process-launch-posture';
 import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
-import { promisify } from 'node:util';
 
 const DEFAULT_TASK_NAME = '\\Narada\\CloudflareProviderLivenessRefresh';
 const DEFAULT_INTERVAL_MINUTES = 2;
@@ -11,7 +10,6 @@ const DEFAULT_EXECUTION_TIMEOUT_MS = 30000;
 const DEFAULT_HIDDEN_WRAPPER_RELATIVE_PATH = '.narada/site-continuity/cloudflare-provider-liveness-refresh.hidden.vbs';
 const LIVE_SCHEDULER_TASK_ACTIONS = new Set(['install', 'disable', 'pause', 'resume', 'uninstall']);
 const LIVE_SCHEDULER_READ_ACTIONS = new Set(['status']);
-const execFile = promisify(execFileCallback);
 
 export function buildProviderLivenessSchedulerPlan({
   action = 'status',
@@ -157,7 +155,7 @@ async function executeProviderLivenessSchedulerSettingsPlan(plan, { execFileImpl
 
 export async function runProviderLivenessSchedulerAction(
   options = {},
-  { execFileImpl = execFile } = {},
+  { execFileImpl = execFileGoverned } = {},
 ) {
   const plan = buildProviderLivenessSchedulerPlan(options);
   if (options.dryRun === false && LIVE_SCHEDULER_TASK_ACTIONS.has(plan.action)) {
@@ -175,7 +173,7 @@ export async function runProviderLivenessSchedulerAction(
   return plan;
 }
 
-async function executeProviderLivenessSchedulerTaskPlan(plan, { execFileImpl = execFile, executionTimeoutMs = DEFAULT_EXECUTION_TIMEOUT_MS } = {}) {
+async function executeProviderLivenessSchedulerTaskPlan(plan, { execFileImpl = execFileGoverned, executionTimeoutMs = DEFAULT_EXECUTION_TIMEOUT_MS } = {}) {
   const scheduledTaskCommand = plan?.scheduled_task_command ?? [];
   const [command, ...args] = scheduledTaskCommand;
   const action = plan?.action ?? 'unknown';
@@ -246,7 +244,7 @@ async function executeProviderLivenessSchedulerTaskPlan(plan, { execFileImpl = e
   }
 }
 
-async function executeProviderLivenessSchedulerReadback(plan, { execFileImpl = execFile, executionTimeoutMs = DEFAULT_EXECUTION_TIMEOUT_MS } = {}) {
+async function executeProviderLivenessSchedulerReadback(plan, { execFileImpl = execFileGoverned, executionTimeoutMs = DEFAULT_EXECUTION_TIMEOUT_MS } = {}) {
   const scheduledTaskCommand = plan?.scheduled_task_command ?? [];
   const [command, ...args] = scheduledTaskCommand;
   const base = {

@@ -1,6 +1,6 @@
-import { spawnSync } from 'node:child_process';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { runGovernedCommandSync } from '@narada2/process-launch-posture';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -93,7 +93,7 @@ function requireValue(value, message) {
 }
 
 function runScript(scriptName, args) {
-  const result = spawnSync(process.execPath, [resolve(__dirname, scriptName), ...args], {
+  const result = runGovernedCommandSync(process.execPath, [resolve(__dirname, scriptName), ...args], {
     cwd: resolve(__dirname, '../..'),
     stdio: 'inherit',
   });

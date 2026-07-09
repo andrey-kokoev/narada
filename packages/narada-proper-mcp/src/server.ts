@@ -1,4 +1,3 @@
-import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { basename, dirname, relative, resolve } from 'node:path';
@@ -7,6 +6,7 @@ import {
   buildHydrationRequestDescriptor,
   findDeniedSourceImports,
 } from '@narada2/agent-context-memory';
+import { execFileGovernedSync } from '@narada2/process-launch-posture';
 import { cwd as processCwd, env as processEnv, stdin as defaultStdin, stdout as defaultStdout } from 'node:process';
 import {
   inboxDoctorCommand,
@@ -2787,12 +2787,13 @@ const SITE_TASK_LIFECYCLE_SCHEMA = [
 ];
 
 function sqlite(dbPath: string, sql: string): void {
-  execFileSync('sqlite3.exe', ['-cmd', '.timeout 5000', dbPath, sql], { stdio: 'pipe' });
+  execFileGovernedSync('sqlite3.exe', ['-cmd', '.timeout 5000', dbPath, sql], { stdio: 'pipe' });
 }
 
 function sqliteJson(dbPath: string, sql: string): unknown[] {
-  const output = execFileSync('sqlite3.exe', ['-cmd', '.timeout 5000', '-json', dbPath, sql], { encoding: 'utf8' });
-  return output.trim().length > 0 ? JSON.parse(output) as unknown[] : [];
+  const output = execFileGovernedSync('sqlite3.exe', ['-cmd', '.timeout 5000', '-json', dbPath, sql], { encoding: 'utf8' });
+  const text = String(output);
+  return text.trim().length > 0 ? JSON.parse(text) as unknown[] : [];
 }
 
 function sqlLiteral(value: string): string {

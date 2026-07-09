@@ -6,6 +6,7 @@
 
 import { readFile, writeFile, mkdir, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
+import { execFileGoverned } from '@narada2/process-launch-posture';
 import type { BenchmarkResult } from './framework.js';
 
 export interface Baseline {
@@ -34,8 +35,11 @@ const BASELINE_DIR = join(process.cwd(), '.benchmarks', 'baselines');
  */
 async function getGitCommit(): Promise<string> {
   try {
-    const { execSync } = await import('node:child_process');
-    return execSync('git rev-parse --short HEAD').toString().trim();
+    const result = await execFileGoverned('git', ['rev-parse', '--short', 'HEAD'], {
+      cwd: process.cwd(),
+      windowsHide: true,
+    });
+    return String(result.stdout).trim();
   } catch {
     return 'unknown';
   }

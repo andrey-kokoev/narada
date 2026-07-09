@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { runGovernedCommandSync } from '@narada2/process-launch-posture';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const siteRoot = resolve(__dirname, '../..');
@@ -157,7 +157,7 @@ function readFixtureProvider(fixturePath) {
 
 function graphPowerShellJson(command) {
   assertReadOnlyGraphCommand(command);
-  const result = spawnSync('pwsh', ['-NoProfile', '-Command', command], { cwd: siteRoot, encoding: 'utf8' });
+  const result = runGovernedCommandSync('pwsh', ['-NoProfile', '-Command', command], { cwd: siteRoot, encoding: 'utf8' });
   if (result.status !== 0) throw new Error(`graph_powershell_failed: ${result.stderr.trim()}`);
   const text = result.stdout.trim();
   if (!text) return [];

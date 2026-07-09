@@ -1,14 +1,12 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
-import { execFile as execFileCallback } from 'node:child_process';
+import { execFileGoverned } from '@narada2/process-launch-posture';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { promisify } from 'node:util';
 
 import { authHeaders, resolveAuth } from './cloudflare-carrier-product-read.mjs';
 
-const execFile = promisify(execFileCallback);
 const scriptPath = fileURLToPath(import.meta.url);
 const scriptDir = dirname(scriptPath);
 const repoRoot = resolve(scriptDir, '../../..');
@@ -292,7 +290,7 @@ async function postCarrier(config, body, fetchImpl) {
 }
 
 async function gitHeadSha(cwd) {
-  const result = await execFile('git', ['rev-parse', 'HEAD'], { cwd, timeout: 30000, windowsHide: true });
+  const result = await execFileGoverned('git', ['rev-parse', 'HEAD'], { cwd, timeout: 30000, windowsHide: true });
   return result.stdout.trim();
 }
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { runGovernedCommand } from '@narada2/process-launch-posture';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -99,7 +99,7 @@ export async function installGithubAppSecrets(config, secretWriter = putSecret) 
 export function putSecret({ secretName, value, configPath, packageRoot: cwd = packageRoot, redactions = [] }) {
   return new Promise((resolvePromise) => {
     const wrangler = wranglerInvocation();
-    const child = spawn(wrangler.command, [...wrangler.args, 'secret', 'put', secretName, '--config', configPath], {
+    const child = runGovernedCommand(wrangler.command, [...wrangler.args, 'secret', 'put', secretName, '--config', configPath], {
       cwd,
       windowsHide: true,
       stdio: ['pipe', 'pipe', 'pipe'],

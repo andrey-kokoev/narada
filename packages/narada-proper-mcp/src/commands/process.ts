@@ -1,6 +1,6 @@
-import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { delimiter, extname, join } from 'node:path';
+import { execFileGovernedSync } from '@narada2/process-launch-posture';
 import { ExitCode } from '../lib/exit-codes.js';
 
 export interface CommandEnvelope {
@@ -13,13 +13,13 @@ export function runNaradaJson(args: string[], cwd: string): CommandEnvelope {
   const invocation = localNaradaCliInvocation(cwd, env);
   const commandArgs = [...invocation.args, ...args, '--format', 'json'];
   try {
-    const output = execFileSync(invocation.command, commandArgs, {
+    const output = execFileGovernedSync(invocation.command, commandArgs, {
       cwd,
       env,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
     });
-    return { exitCode: ExitCode.SUCCESS, result: parseJsonOutput(output) };
+    return { exitCode: ExitCode.SUCCESS, result: parseJsonOutput(String(output)) };
   } catch (error) {
     const failed = error as { status?: number; stdout?: string; stderr?: string; message?: string };
     return {

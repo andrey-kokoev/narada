@@ -7,7 +7,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { execSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import type {
   CoordinatorStore,
@@ -55,7 +55,7 @@ describe("observability authority guardrails", () => {
   });
 
   it("observability queries contain no INSERT, UPDATE, or DELETE SQL statements", () => {
-    const source = execSync(`cat "${queriesPath}"`, { encoding: "utf8" });
+    const source = readFileSync(queriesPath, "utf8");
 
     // Extract all backtick SQL strings (rough heuristic)
     const sqlBlocks: string[] = [];
@@ -83,7 +83,7 @@ describe("observability authority guardrails", () => {
   });
 
   it("marks snapshot sources as authoritative, derived, or decorative", () => {
-    const source = execSync(`cat "${typesPath}"`, { encoding: "utf8" });
+    const source = readFileSync(typesPath, "utf8");
 
     // Key types should have @source annotations
     const expectedAnnotations = [

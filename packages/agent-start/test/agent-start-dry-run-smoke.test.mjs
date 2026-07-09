@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { runHiddenPostureCommandSync } from '@narada2/process-launch-posture';
 
 const require = createRequire(import.meta.url);
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -20,7 +20,7 @@ function parseJsonOutput(output) {
 }
 
 test('agent-start dry-run emits coherent agent-cli/NARS launch JSON', () => {
-  const result = spawnSync(process.execPath, [
+  const result = runHiddenPostureCommandSync(process.execPath, [
     '--import',
     tsxLoaderPath,
     resolve(packageRoot, 'src', 'narada-agent-start.ts'),
@@ -40,7 +40,7 @@ test('agent-start dry-run emits coherent agent-cli/NARS launch JSON', () => {
   ], {
     cwd: packageRoot,
     encoding: 'utf8',
-    windowsHide: true,
+    posture: 'test_child',
   });
 
   assert.equal(result.status, 0, result.stderr || result.stdout);

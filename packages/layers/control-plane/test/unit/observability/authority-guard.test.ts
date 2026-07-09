@@ -1,13 +1,27 @@
 import { describe, expect, it } from "vitest";
-import { execSync } from "node:child_process";
+import { readFileSync, readdirSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 
 const observabilityDir = resolve(process.cwd(), "src/observability");
 
+function tsFiles(dir: string): string[] {
+  const files: string[] = [];
+  for (const entry of readdirSync(dir)) {
+    const path = resolve(dir, entry);
+    const stat = statSync(path);
+    if (stat.isDirectory()) files.push(...tsFiles(path));
+    if (stat.isFile() && path.endsWith(".ts")) files.push(path);
+  }
+  return files;
+}
+
+function grepFiles(dir: string, pattern: RegExp): string[] {
+  return tsFiles(dir).filter((file) => pattern.test(readFileSync(file, "utf8")));
+}
+
 describe("observability authority guardrails", () => {
   it("has ts files to guard", () => {
-    const files = execSync(`find ${observabilityDir} -name "*.ts" -type f`, { encoding: "utf8" });
-    expect(files.trim().length).toBeGreaterThan(0);
+    expect(tsFiles(observabilityDir).length).toBeGreaterThan(0);
   });
 
   const forbiddenPatterns = [
@@ -37,11 +51,7 @@ describe("observability authority guardrails", () => {
 
   for (const { regex, description } of forbiddenPatterns) {
     it(`observability layer contains no ${description}`, () => {
-      const output = execSync(
-        `grep -rE "${regex}" ${observabilityDir} || true`,
-        { encoding: "utf8" },
-      );
-      expect(output.trim()).toBe("");
+      expect(grepFiles(observabilityDir, new RegExp(regex))).toEqual([]);
     });
   }
 
@@ -55,17 +65,19 @@ describe("observability authority guardrails", () => {
       "../facts/store.js",
     ];
     for (const mod of implementationModules) {
-      const output = execSync(
-        `grep -r "${mod}" ${observabilityDir} | grep -v "import type" || true`,
-        { encoding: "utf8" },
+      const offenders = tsFiles(observabilityDir).flatMap((file) =>
+        readFileSync(file, "utf8")
+          .split(/\r?\n/)
+          .filter((line) => line.includes(mod) && !line.includes("import type"))
+          .map((line) => `${file}:${line}`),
       );
-      expect(output.trim()).toBe("");
+      expect(offenders).toEqual([]);
     }
   });
 
   it("enforces read-only semantics through View type usage", () => {
     const queriesPath = resolve(observabilityDir, "queries.ts");
-    const content = execSync(`cat ${queriesPath}`, { encoding: "utf8" });
+    const content = readFileSync(queriesPath, "utf8");
 
     // All store parameters in queries.ts must use View types (or Pick of View types)
     const fullStoreTypeParams = [

@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { runHiddenPostureCommandSync } from '@narada2/process-launch-posture';
 
 const SCHEMA = 'narada.ai_process_invocation.v1';
 const SECRET_NAME = /(key|token|secret|password|credential|cookie|authorization)/i;
@@ -168,14 +169,19 @@ export function releaseAiProcessInvocationLease(admission, result = {}) {
   } catch { /* evidence failure must not mask process result */ }
 }
 
-export function runAiProcessInvocationSync(invocation, { spawnSync, spawnOptions = {}, ...admissionOptions } = {}) {
+function defaultAiProcessInvocationRunner(command, args, options) {
+  return runHiddenPostureCommandSync(command, args, { ...options, posture: 'provider_subprocess' });
+}
+
+export function runAiProcessInvocationSync(invocation, { runProcessSync, spawnSync, spawnOptions = {}, ...admissionOptions } = {}) {
   const admission = admitAiProcessInvocation(invocation, admissionOptions);
   if (!admission.admitted) {
     const error = new AiProcessInvocationRefusalError(admission);
     return { status: 1, signal: null, stdout: '', stderr: `${error.code}: ${admission.reason}\nArtifact: ${admission.artifact_path}\n`, error, aiProcessInvocation: admission };
   }
+  const runner = runProcessSync ?? spawnSync ?? defaultAiProcessInvocationRunner;
   try {
-    const result = spawnSync(invocation.command, invocation.argv ?? [], spawnOptions);
+    const result = runner(invocation.command, invocation.argv ?? [], spawnOptions);
     result.aiProcessInvocation = admission;
     releaseAiProcessInvocationLease(admission, result);
     return result;

@@ -1,6 +1,6 @@
-import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline/promises';
 import { AiProcessInvocationRefusalError, spawnAiProcessInvocation } from '@narada2/carrier-provider-support/ai-process-invocation';
+import { spawnOperatorTerminal } from '@narada2/process-launch-posture';
 
 export async function waitForEnterBeforeCarrier({
   agentId,
@@ -41,12 +41,12 @@ export function spawnCarrierProcessAndExit({ command, args, cwd, env, spawnOptio
         argv: args,
         env,
       }, {
-        spawnProcess: (spawnCommand, spawnArgs, options) => ({ child: spawn(spawnCommand, spawnArgs, options) }),
+        spawnProcess: (spawnCommand, spawnArgs, options) => ({ child: spawnOperatorTerminal(spawnCommand, spawnArgs, options) }),
         spawnOptions: resolvedSpawnOptions,
       });
       child = owner.child;
     } else {
-      child = spawn(command, args, resolvedSpawnOptions);
+      child = spawnOperatorTerminal(command, args, resolvedSpawnOptions);
     }
   } catch (error) {
     if (error instanceof AiProcessInvocationRefusalError) {

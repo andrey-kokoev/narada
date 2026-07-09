@@ -15,6 +15,17 @@ function browserOpenCommand(target, { platform = process.platform } = {}) {
   return { posture: 'browser_open', command: 'xdg-open', args: [target] };
 }
 
+function spawnOperatorTerminal(command, args = [], options = {}) {
+  if (!command || typeof command !== 'string') throw new Error('operator_terminal_command_required');
+  const { spawnImpl = spawn, ...spawnOptions } = options;
+  const stdio = spawnOptions.stdio ?? 'inherit';
+  return spawnImpl(command, args, {
+    ...spawnOptions,
+    stdio,
+    windowsHide: false,
+  });
+}
+
 function spawnHiddenPostureProcess(command, args, options = {}) {
   const { posture, spawnImpl = spawn, platform = process.platform, ...restOptions } = options;
   if (!HIDDEN_POSTURES.has(posture)) throw new Error(`hidden_process_posture_required: ${posture ?? 'missing'}`);
@@ -296,6 +307,7 @@ export {
   runGovernedCommandSync,
   runHiddenPostureCommandSync,
   spawnMcpServer,
+  spawnOperatorTerminal,
   spawnProviderSubprocess,
   startOperatorTerminal,
   startElevatedOrOperatorPrompt,

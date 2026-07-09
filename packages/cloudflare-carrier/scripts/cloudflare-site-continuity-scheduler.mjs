@@ -1,9 +1,8 @@
 #!/usr/bin/env node
-import { execFile as execFileCallback } from 'node:child_process';
+import { execFileGoverned } from '@narada2/process-launch-posture';
 import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
-import { promisify } from 'node:util';
 import { readCloudflareSiteRegistryLocalProjection } from '@narada2/cloudflare-site-registry/local-projection';
 import {
   SITE_CONTINUITY_EMBODIMENT_KINDS,
@@ -27,7 +26,6 @@ const DEFAULT_RECONCILE_EXECUTION_TIMEOUT_MS = 120000;
 const DEFAULT_HIDDEN_WRAPPER_RELATIVE_PATH = '.narada/site-continuity/cloudflare-site-continuity-sync.hidden.vbs';
 const LIVE_SCHEDULER_TASK_ACTIONS = new Set(['install', 'disable', 'pause', 'resume', 'uninstall']);
 const LIVE_SCHEDULER_READ_ACTIONS = new Set(['status', 'read-last', 'last', 'read-health-last', 'health-last', 'status-all', 'status-local', 'health', 'reconcile', 'reconcile-plan']);
-const execFile = promisify(execFileCallback);
 
 export function buildSiteContinuitySchedulerPlan({
   action = 'status',
@@ -328,7 +326,7 @@ async function executeSchedulerTaskReadback(
   {
     env = process.env,
     now = () => new Date().toISOString(),
-    execFileImpl = execFile,
+    execFileImpl = execFileGoverned,
     executionTimeoutMs = DEFAULT_RECONCILE_EXECUTION_TIMEOUT_MS,
     productReadSurface = readProductSurface,
     productReadAuth = null,
@@ -870,7 +868,7 @@ export async function runSiteContinuitySchedulerActionWithOptionalRefresh(
   {
     env = process.env,
     materializeSiteRegistryProjection = materializeCloudflareSiteRegistryProjection,
-    execFileImpl = execFile,
+    execFileImpl = execFileGoverned,
     productReadSurface = readProductSurface,
   } = {},
 ) {
@@ -1315,7 +1313,7 @@ function summarizeReconciliationExecutionForHealthSnapshot(result) {
   };
 }
 
-async function executeSchedulerTaskPlan(plan, { execFileImpl = execFile, executionTimeoutMs = DEFAULT_RECONCILE_EXECUTION_TIMEOUT_MS } = {}) {
+async function executeSchedulerTaskPlan(plan, { execFileImpl = execFileGoverned, executionTimeoutMs = DEFAULT_RECONCILE_EXECUTION_TIMEOUT_MS } = {}) {
   const scheduledTaskCommand = plan?.scheduled_task_command ?? [];
   const [command, ...args] = scheduledTaskCommand;
   const action = plan?.action ?? 'unknown';
@@ -1388,7 +1386,7 @@ async function executeSchedulerTaskPlan(plan, { execFileImpl = execFile, executi
 
 export async function executeSiteContinuityReconciliationPlan(
   plan,
-  { dryRun = true, executionTimeoutMs = DEFAULT_RECONCILE_EXECUTION_TIMEOUT_MS, execFileImpl = execFile, now = () => new Date().toISOString() } = {},
+  { dryRun = true, executionTimeoutMs = DEFAULT_RECONCILE_EXECUTION_TIMEOUT_MS, execFileImpl = execFileGoverned, now = () => new Date().toISOString() } = {},
 ) {
   const reconciliationPlan = plan?.reconciliation_plan ?? null;
   const selectedSites = reconciliationPlan?.selected_sites ?? [];
@@ -1511,7 +1509,7 @@ export async function executeSiteContinuityReconciliationPlan(
   }, { dryRun, now });
 }
 
-async function recordCloudflareReconciliationExecutionEvidence(result, plan, { execFileImpl = execFile, timeout = DEFAULT_RECONCILE_EXECUTION_TIMEOUT_MS } = {}) {
+async function recordCloudflareReconciliationExecutionEvidence(result, plan, { execFileImpl = execFileGoverned, timeout = DEFAULT_RECONCILE_EXECUTION_TIMEOUT_MS } = {}) {
   const artifactPath = result?.reconciliation_execution_artifact?.artifact_path ?? null;
   if (!artifactPath || result?.reconciliation_execution_artifact?.state !== 'written') {
     return { state: 'skipped', status: 'not_recorded', reason: 'reconciliation_execution_artifact_not_written' };

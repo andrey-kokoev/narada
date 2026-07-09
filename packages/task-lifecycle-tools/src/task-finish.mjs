@@ -9,7 +9,7 @@ import { validateFollowUpLedger } from './follow-up-ledger-validation.mjs';
 import { validateRecoveryTruthfulnessBody } from './recovery-truthfulness-guard.mjs';
 import { readFileSync, existsSync, unlinkSync, readdirSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { execSync } from 'node:child_process';
+import { execGovernedSync } from '@narada2/process-launch-posture';
 
 function parseArgs(argv) {
   const args = { positional: [], close: false };
@@ -138,7 +138,7 @@ function gatherCheckpointEnrichment(cwd, taskFile, changedFilesRaw) {
     if (changedFilesRaw) {
       enrichment.filesChanged = JSON.parse(changedFilesRaw);
     } else {
-      const gitDiff = execSync('git diff --name-only HEAD', { cwd, encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] });
+      const gitDiff = execGovernedSync('git diff --name-only HEAD', { cwd, encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] });
       enrichment.filesChanged = gitDiff.split('\n').filter(l => l.trim().length > 0);
     }
   } catch {
@@ -321,7 +321,7 @@ if (!verdict && !changedFiles && !parsed.noFilesChanged) {
   // Auto-detect from git diff before blocking
   let gitChangedFiles = [];
   try {
-    const gitDiff = execSync('git diff --name-only HEAD', { cwd, encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] });
+    const gitDiff = execGovernedSync('git diff --name-only HEAD', { cwd, encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] });
     gitChangedFiles = gitDiff.split('\n').filter(l => l.trim().length > 0);
   } catch {
     // ignore git errors

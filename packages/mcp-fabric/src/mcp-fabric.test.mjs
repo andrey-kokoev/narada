@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { runHiddenPostureCommandSync } from '@narada2/process-launch-posture';
 import {
   McpFabricError,
   loadSiteMcpFabric,
@@ -493,13 +493,13 @@ assert.equal(doctorReport.rows[0].tools_list_count, 2);
 const doctorTable = renderMcpFabricDoctorTable(doctorReport);
 assert.match(doctorTable, /file\s+server\s+command\s+paths\s+init\s+tools\s+first diagnostic/);
 assert.match(doctorTable, /doctor-mcp\.json\s+narada-doctor/);
-const doctorCli = spawnSync(process.execPath, [
+const doctorCli = runHiddenPostureCommandSync(process.execPath, [
   fileURLToPath(new URL('./mcp-fabric.mjs', import.meta.url)),
   '--site-root',
   doctorSite,
   '--timeout-ms',
   '1000',
-], { encoding: 'utf8' });
+], { encoding: 'utf8', posture: 'test_child' });
 assert.equal(doctorCli.status, 0, doctorCli.stderr);
 assert.match(doctorCli.stdout, /file\s+server\s+command\s+paths\s+init\s+tools\s+first diagnostic/);
 assert.match(doctorCli.stdout, /doctor-mcp\.json\s+narada-doctor/);

@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { runGovernedCommandSync } from '@narada2/process-launch-posture';
 import { validateSiteIdentityDocument } from '../site-config/validate-site-config.mjs';
 import { buildOutputRefToolContent } from '../mcp-payload-file.mjs';
 
@@ -394,11 +394,10 @@ function callSiteProbe(siteRoot, context) {
     { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: PROTOCOL_VERSION, capabilities: {}, clientInfo: { name: 'site-connectivity-mcp', version: SERVER_VERSION } } },
     { jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'site_probe', arguments: request } },
   ].map((frame) => JSON.stringify(frame)).join('\n') + '\n';
-  const result = spawnSync(process.execPath, [resolve(SOURCE_ROOT, SITE_PROBE_SERVER), '--site-root', siteRoot], {
+  const result = runGovernedCommandSync(process.execPath, [resolve(SOURCE_ROOT, SITE_PROBE_SERVER), '--site-root', siteRoot], {
     cwd: siteRoot,
     input: frames,
     encoding: 'utf8',
-    windowsHide: true,
     env: { ...process.env, FORCE_COLOR: '0', NO_COLOR: '1' },
   });
   if (result.error) throw result.error;

@@ -1,7 +1,6 @@
-import { execFile as execFileCallback } from "node:child_process";
-import { promisify } from "node:util";
+import { execFileGoverned } from "@narada2/process-launch-posture";
 
-const execFile = promisify(execFileCallback);
+type GraphTokenExecFile = typeof execFileGoverned;
 
 export interface GraphTokenProvider {
   getAccessToken(): Promise<string>;
@@ -146,19 +145,19 @@ export class ClientCredentialsTokenProvider implements GraphTokenProvider {
 export interface AzureCliTokenProviderOptions {
   tenantId?: string;
   timeoutMs?: number;
-  execFileImpl?: typeof execFile;
+  execFileImpl?: GraphTokenExecFile;
 }
 
 export class AzureCliTokenProvider implements GraphTokenProvider {
   private readonly tenantId?: string;
   private readonly timeoutMs: number;
-  private readonly execFileImpl: typeof execFile;
+  private readonly execFileImpl: GraphTokenExecFile;
   private cached?: CachedToken;
 
   constructor(opts: AzureCliTokenProviderOptions = {}) {
     this.tenantId = opts.tenantId;
     this.timeoutMs = opts.timeoutMs ?? 15_000;
-    this.execFileImpl = opts.execFileImpl ?? execFile;
+    this.execFileImpl = opts.execFileImpl ?? execFileGoverned;
   }
 
   private isCacheUsable(): boolean {
@@ -198,7 +197,7 @@ export class AzureCliTokenProvider implements GraphTokenProvider {
         windowsHide: true,
         maxBuffer: 1024 * 1024,
       });
-      stdout = result.stdout;
+      stdout = String(result.stdout);
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
       throw new Error(

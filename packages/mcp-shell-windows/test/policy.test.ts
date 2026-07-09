@@ -1,15 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { spawn } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { spawnTestChild } from '@narada2/process-launch-posture';
 import { buildWindowsShellEnvelope, decideWindowsShellPolicy } from '../src/index.js';
 import { resolveAgentPathPolicy } from '../support/path-policy.mjs';
 
 async function callShellServer(siteRoot: string, request: Record<string, unknown>) {
   const serverPath = fileURLToPath(new URL('../server.mjs', import.meta.url));
-  const child = spawn(process.execPath, [serverPath, '--site-root', siteRoot], { stdio: ['pipe', 'pipe', 'pipe'] });
+  const child = spawnTestChild(process.execPath, [serverPath, '--site-root', siteRoot], { stdio: ['pipe', 'pipe', 'pipe'] });
   let stdout = '';
   let stderr = '';
   const response = new Promise<Record<string, unknown>>((resolve, reject) => {

@@ -1,13 +1,11 @@
 import assert from 'node:assert/strict';
-import { execFile as execFileCallback } from 'node:child_process';
+import { execFileGoverned } from '@narada2/process-launch-posture';
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { promisify } from 'node:util';
 
-const execFile = promisify(execFileCallback);
 const packageRoot = fileURLToPath(new URL('..', import.meta.url));
 const packageJsonPath = join(packageRoot, 'package.json');
 
@@ -53,7 +51,7 @@ test('cloudflare carrier package scripts point at parseable local node scripts',
 
   for (const entry of scriptEntries) {
     assert.equal(existsSync(entry.scriptPath), true, `${entry.name} points at missing script ${entry.scriptPath}`);
-    await execFile(process.execPath, ['--check', entry.scriptPath], { cwd: packageRoot, timeout: 30000, windowsHide: true });
+    await execFileGoverned(process.execPath, ['--check', entry.scriptPath], { cwd: packageRoot, timeout: 30000, windowsHide: true });
   }
 });
 

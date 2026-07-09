@@ -33,6 +33,7 @@
     "deploy:live": "pnpm build && node scripts/hosted-telemetry-surface.mjs deploy --live --config wrangler.jsonc"
   },
   "dependencies": {
+    "@narada2/process-launch-posture": "workspace:*",
     "@narada2/site-config": "workspace:*",
     "@narada2/site-inbox": "workspace:*"
   },

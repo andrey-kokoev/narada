@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { isAbsolute, join, relative, resolve } from 'node:path';
+import { runGovernedCommandSync } from '@narada2/process-launch-posture';
 import { validateSiteIdentityDocument } from '../site-config/validate-site-config.mjs';
 import { buildOutputRefToolContent } from '../mcp-payload-file.mjs';
 
@@ -345,7 +345,7 @@ function declaredWorkspaceInboxFacadePaths(root, config) {
 function inspectGit(root, rootExists) {
   if (!rootExists) return { sync_posture: 'root_missing', status_summary: { status: 'not_available', reason: 'root_missing' } };
   if (!existsSync(join(root, '.git'))) return { sync_posture: 'not_git_repository', status_summary: { status: 'not_git_repository' } };
-  const result = spawnSync('git', ['status', '--porcelain=v1', '-b'], { cwd: root, encoding: 'utf8', windowsHide: true, env: { ...process.env, FORCE_COLOR: '0', NO_COLOR: '1' } });
+  const result = runGovernedCommandSync('git', ['status', '--porcelain=v1', '-b'], { cwd: root, encoding: 'utf8', env: { ...process.env, FORCE_COLOR: '0', NO_COLOR: '1' } });
   if (result.status !== 0) {
     return { sync_posture: 'git_status_error', status_summary: { status: 'error', stderr: result.stderr.trim() } };
   }

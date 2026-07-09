@@ -1,11 +1,10 @@
 import assert from 'node:assert/strict';
-import { execFile as execFileCallback } from 'node:child_process';
+import { execFileGoverned } from '@narada2/process-launch-posture';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { promisify } from 'node:util';
 import {
   buildHiddenVbsWrapperContent,
   buildProviderLivenessSchedulerPlan,
@@ -15,7 +14,6 @@ import {
 } from './cloudflare-carrier-provider-liveness-scheduler.mjs';
 
 const SCRIPT_PATH = fileURLToPath(new URL('./cloudflare-carrier-provider-liveness-scheduler.mjs', import.meta.url));
-const execFile = promisify(execFileCallback);
 
 test('provider liveness scheduler install plan is bounded and secret-free', async () => {
   const root = await mkdtemp(join(tmpdir(), 'narada-provider-liveness-scheduler-'));
@@ -155,7 +153,7 @@ test('provider liveness scheduler live install materializes hidden VBS wrapper a
 });
 
 test('provider liveness scheduler CLI emits status without Cloudflare access', async () => {
-  const result = await execFile(process.execPath, [SCRIPT_PATH, '--action', 'status'], { timeout: 30000, windowsHide: true });
+  const result = await execFileGoverned(process.execPath, [SCRIPT_PATH, '--action', 'status'], { timeout: 30000, windowsHide: true });
   const body = JSON.parse(result.stdout);
 
   assert.equal(body.schema, 'narada.cloudflare_carrier.provider_liveness_scheduler_plan.v1');
@@ -314,7 +312,7 @@ test('provider liveness scheduler text output summarizes operator posture', () =
 });
 
 test('provider liveness scheduler CLI emits operator text status', async () => {
-  const result = await execFile(process.execPath, [
+  const result = await execFileGoverned(process.execPath, [
     SCRIPT_PATH,
     '--action', 'status',
     '--format', 'text',

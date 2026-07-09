@@ -13,7 +13,7 @@
 
 import { readFileSync, existsSync } from 'fs';
 import { join, resolve, basename } from 'path';
-import { spawnSync } from 'child_process';
+import { runGovernedCommandSync } from '@narada2/process-launch-posture';
 
 function parseArgs(argv) {
   const args = {
@@ -82,7 +82,7 @@ function readWorkboard(args) {
 
   const scriptPath = join(args.userSiteRoot, 'tools', 'task-lifecycle', 'generate-workboard.mjs');
   if (existsSync(scriptPath)) {
-    const result = spawnSync(process.execPath, [scriptPath, args.userSiteRoot, String(args.limit), args.agent], {
+    const result = runGovernedCommandSync(process.execPath, [scriptPath, args.userSiteRoot, String(args.limit), args.agent], {
       encoding: 'utf8',
       timeout: 15000,
     });
@@ -120,7 +120,7 @@ function readDirectedObligations(args, workboard) {
   if (args.workboardFixturePath) psArgs.push('-WorkboardFixturePath', args.workboardFixturePath);
   else psArgs.push('-WorkboardJson', JSON.stringify(workboard));
 
-  const result = spawnSync('pwsh', psArgs, { encoding: 'utf8', timeout: 15000 });
+  const result = runGovernedCommandSync('pwsh', psArgs, { encoding: 'utf8', timeout: 15000 });
   if (result.status !== 0) {
     return { available: false, due_obligations: [], diagnostics: [{ kind: 'directed_obligation_read_failed', message: result.stderr }] };
   }
@@ -180,7 +180,7 @@ function readGitStatusLines(args) {
   if (args.gitStatusFixturePath) {
     return readFileSync(args.gitStatusFixturePath, 'utf8').split(/\r?\n/);
   }
-  const result = spawnSync('git', ['-C', args.userSiteRoot, 'status', '--porcelain=v1'], { encoding: 'utf8', timeout: 10000 });
+  const result = runGovernedCommandSync('git', ['-C', args.userSiteRoot, 'status', '--porcelain=v1'], { encoding: 'utf8', timeout: 10000 });
   if (result.status !== 0) throw new Error(`bounded_workloop_git_status_failed: ${result.stderr}`);
   return result.stdout.split(/\r?\n/);
 }

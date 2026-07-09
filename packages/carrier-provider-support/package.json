@@ -13,5 +13,8 @@
   "scripts": {
     "test": "node --test src/*.test.mjs",
     "typecheck": "tsc --noEmit --allowJs --checkJs false src/index.mjs src/codex-subscription-auth.mjs src/codex-subscription-command.mjs src/ai-process-invocation.mjs"
+  },
+  "dependencies": {
+    "@narada2/process-launch-posture": "workspace:*"
   }
 }

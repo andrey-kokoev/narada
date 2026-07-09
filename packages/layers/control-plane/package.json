@@ -60,6 +60,7 @@
   },
   "dependencies": {
     "@narada2/charters": "workspace:*",
+    "@narada2/process-launch-posture": "workspace:*",
     "zod": "^3.22.0"
   },
   "devDependencies": {

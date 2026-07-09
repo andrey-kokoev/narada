@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { runGovernedCommand } from '@narada2/process-launch-posture';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -79,7 +79,7 @@ export async function runRepositoryPublicationSecretPut(config, { secretWriter =
 export function putSecret({ secretName, tokenValue, configPath, packageRoot: cwd = packageRoot }) {
   return new Promise((resolvePromise) => {
     const pnpm = pnpmInvocation();
-    const child = spawn(pnpm.command, [...pnpm.args, 'exec', 'wrangler', 'secret', 'put', secretName, '--config', configPath], {
+    const child = runGovernedCommand(pnpm.command, [...pnpm.args, 'exec', 'wrangler', 'secret', 'put', secretName, '--config', configPath], {
       cwd,
       windowsHide: true,
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -125,7 +125,7 @@ function readTokenFile(tokenFilePath, root = repoRoot) {
 
 export function readGhAuthToken(cwd = repoRoot) {
   return new Promise((resolvePromise, reject) => {
-    const child = spawn('gh', ['auth', 'token'], {
+    const child = runGovernedCommand('gh', ['auth', 'token'], {
       cwd,
       windowsHide: true,
       stdio: ['ignore', 'pipe', 'pipe'],

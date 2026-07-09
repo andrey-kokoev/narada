@@ -31,6 +31,7 @@
     "smoke:authority-live": "pnpm run smoke:cloudflare-origin-live"
   },
   "dependencies": {
+    "@narada2/process-launch-posture": "workspace:*",
     "@narada2/nars-client-projection-contract": "workspace:*",
     "@narada2/site-paths": "workspace:*"
   },
