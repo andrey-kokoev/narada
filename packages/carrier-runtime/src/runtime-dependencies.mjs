@@ -3165,6 +3165,17 @@ function serverHealth({ requestId, state, allTools, mcpServers, mcpPreflightArti
     },
     surface_affordances: status.surface_affordances,
     heartbeat,
+    runtime_topology: buildRuntimeTopology({
+      context,
+      status,
+      state,
+      generatedAt,
+      heartbeat,
+      mcpServers: status.mcp_servers,
+      operatorSurfaceKind,
+      agentId: canonicalAgentId ?? context.identity,
+      siteId,
+    }),
     activity: {
       last_event_kind: state?.lastEventKind ?? null,
       last_event_at: state?.lastEventAt ?? null,
@@ -3184,6 +3195,62 @@ function serverHealth({ requestId, state, allTools, mcpServers, mcpPreflightArti
     source_write_admission: status.source_write_admission ?? status.authority_transition_source?.source_write_admission ?? null,
     authority_transition_source: status.authority_transition_source,
     handoffs: status.handoffs,
+  };
+}
+
+function buildRuntimeTopology({ context = {}, status = {}, state = {}, generatedAt, heartbeat = null, mcpServers = [], operatorSurfaceKind = null, agentId = null, siteId = null } = {}) {
+  const authorityTransition = status.authority_transition_source ?? status.authority_transition ?? null;
+  const processOwnership = context.processOwnership ?? null;
+  const staleSource = authorityTransition?.stale_source === true;
+  const children = Array.isArray(mcpServers)
+    ? mcpServers.map((server) => ({
+      kind: 'mcp_server',
+      id: stringOrNull(server?.server_name) ?? 'unknown',
+      label: stringOrNull(server?.server_name) ?? 'MCP server',
+      state: stringOrNull(server?.operational_state) ?? 'unknown',
+      pid: server?.process_ownership?.pid ?? null,
+      process_ownership: server?.process_ownership ?? null,
+      tool_count: typeof server?.tool_count === 'number' ? server.tool_count : null,
+    }))
+    : [];
+  return {
+    schema: 'narada.nars.runtime_topology.v1',
+    generated_at: generatedAt,
+    status: state?.closed ? 'closed' : staleSource ? 'stale' : status.operational_posture === 'healthy' ? 'live' : 'degraded',
+    site_id: siteId,
+    site_root: context.siteRoot ?? null,
+    agent_id: agentId,
+    session_id: context.session ?? null,
+    launch_session_id: context.launchSessionId ?? null,
+    runtime: {
+      kind: 'narada-agent-runtime-server',
+      mode: 'server',
+      pid: process.pid,
+      started_at: state?.startedAt ?? null,
+      operator_surface_kind: operatorSurfaceKind,
+      process_ownership: processOwnership,
+    },
+    authority: {
+      runtime_id: authorityTransition?.authority_runtime_id ?? null,
+      runtime_host: context.authorityRuntimeHost ?? 'local',
+      transition_state: status.authority_transition_state ?? authorityTransition?.authority_transition_state ?? null,
+      source_write_admission: status.source_write_admission ?? authorityTransition?.source_write_admission ?? null,
+      input_policy: authorityTransition?.input_policy ?? null,
+      stale_source: authorityTransition?.stale_source ?? null,
+      superseded_by_session_id: authorityTransition?.superseded_by_session_id ?? null,
+    },
+    endpoints: {
+      health: context.healthUrl ?? null,
+      event_stream: context.eventStreamUrl ?? null,
+    },
+    heartbeat,
+    mcp: {
+      operational_state: status.mcp_operational_state ?? null,
+      server_count: status.mcp_server_count ?? children.length,
+      startup_failure_count: status.mcp_startup_failure_count ?? 0,
+      runtime_fault_count: status.mcp_runtime_fault_count ?? 0,
+      children,
+    },
   };
 }
 

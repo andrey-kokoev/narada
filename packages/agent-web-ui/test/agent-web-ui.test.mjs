@@ -473,7 +473,10 @@ test('Vue operator components expose composer without hidden privileged controls
   assert.match(shell, /@refresh="emit\('request-scheduler-summary'\)"/);
   assert.match(shell, /@refresh="emit\('request-task-lifecycle-summary'\)"/);
   assert.match(shell, /@open-surface-navigator="surfaceNavigatorOpen = true"/);
-  const headerStart = shell.indexOf('<div class="shell-header-actions">');
+  assert.match(shell, /import BoxRowShell/);
+  assert.match(shell, /<BoxRowShell row-label="Narada session header" class-name="header-box-row">/);
+  assert.match(shell, /placement="row-control"/);
+  const headerStart = shell.indexOf('<BoxRowShell row-label="Narada session header"');
   const headerEnd = shell.indexOf('</header>', headerStart);
   const headerActions = shell.slice(headerStart, headerEnd);
   assert.match(headerActions, /<SurfaceNavigator/);
@@ -515,12 +518,12 @@ test('Vue operator components expose composer without hidden privileged controls
   assert.match(sopPanel, /available_actions/);
   assert.match(sopPanel, /actionLabel/);
   assert.match(sopPanel, /runMetaLine/);
-  assert.match(surfaceNavigator, /Observation panels attached to this NARS session/);
+  assert.match(surfaceNavigator, /Work, automation, and diagnostics available in this session/);
   assert.match(surfaceNavigator, /defineModel<boolean>\('open'/);
   assert.match(surfaceNavigator, /searchInput\.value\?\.focus/);
   assert.match(surfaceNavigator, /event\.key !== 'Escape'/);
   assert.match(surfaceNavigator, /surface-navigator-trigger/);
-  assert.match(surfaceNavigator, /Filter surfaces/);
+  assert.match(surfaceNavigator, /Filter panels/);
   assert.match(sopPanel, /stepResultSummary/);
   assert.match(sopPanel, /step_timeline/);
   assert.match(sopPanel, /arrayField\(template, 'steps'\)/);
@@ -547,10 +550,11 @@ test('Vue operator components expose composer without hidden privileged controls
   assert.match(statusBoxSelector, /:aria-label="`Choose \$\{props\.triggerLabel \?\? 'boxes'\}`"/);
   assert.match(statusBoxSelector, /status-box-selector-icon/);
   assert.match(statusBoxSelector, /data-placement/);
-  assert.match(statusBoxSelector, /<\/button>\s*<span class="status-box-selector-count" aria-hidden="true">\{\{ boxCountLabel \}\}<\/span>/);
+  assert.match(statusBoxSelector, /<span class="status-box-selector-count" aria-hidden="true">\{\{ boxCountLabel \}\}<\/span>\s*<\/button>/);
+  assert.doesNotMatch(statusBoxSelector, /<\/button>\s*<span class="status-box-selector-count"/);
   assert.doesNotMatch(statusBoxSelector, />Boxes<\/span>/);
   assert.match(shell, /summarizeSessionTitleParts\(props\.sessionIdentity\)/);
-  assert.match(shell, /placement="inline"/);
+  assert.match(shell, /placement="row-control"/);
 });
 
 test('session identity projection prefers explicit Site id for workspace-root Site bindings', () => {
@@ -692,9 +696,19 @@ test('Vue layout smoke covers shell, status, event list, composer, and event ton
   assert.match(shell, /narada:agent-web-ui:status-row-open\.v1/);
   assert.match(app, /useAgentActivity\(retained\.events, health\.body\)/);
   assert.match(activity, /active_turn_state/);
-  assert.match(status, /narada:agent-web-ui:status-boxes\.v2/);
-  assert.match(css, /\.status-box-selector-shell[\s\S]*?position: absolute/);
-  assert.match(css, /\.status-box-selector-shell[\s\S]*?top: 42px/);
+  assert.match(shell, /narada:agent-web-ui:header-items\.v2/);
+  assert.match(shell, /Connection: \{\{ runtimeTopology\.verdictLabel \}\}/);
+  assert.match(status, /narada:agent-web-ui:status-boxes\.v3/);
+  assert.match(status, /Authority Detail/);
+  assert.match(composer, /class="composer-target"/);
+  assert.match(status, /import BoxRowShell/);
+  assert.match(status, /<BoxRowShell row-label="Session status" class-name="status"/);
+  assert.match(status, /placement="row-control"/);
+  assert.match(css, /\.box-row-shell/);
+  assert.match(css, /\.box-row-controls/);
+  assert.match(css, /\.status-box-selector-shell\s*\{[^}]*position: relative/);
+  assert.match(css, /\.status-box-selector-trigger\s*\{[^}]*position: relative/);
+  assert.doesNotMatch(css, /\.status-box-selector-shell[\s\S]*?top: 42px/);
   assert.match(css, /\.status-box-selector-trigger[\s\S]*?width: 26px/);
   assert.match(css, /\.status-box-selector-icon/);
   assert.doesNotMatch(status, /narada\.agent-web-ui\.status-boxes\.v1/);

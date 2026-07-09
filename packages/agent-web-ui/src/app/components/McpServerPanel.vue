@@ -20,7 +20,7 @@ const expandedServers = ref(new Set<string>());
 const mcpLabel = computed(() => {
   const count = props.inventory.serverCount ?? props.inventory.servers.length;
   const state = props.inventory.operationalState ?? 'unknown';
-  return `Tool Surfaces (MCP): ${count} ${state}`;
+  return `MCP Catalog: ${count} ${state}`;
 });
 
 const sortedServers = computed(() => [...props.inventory.servers].sort((a, b) => a.serverName.localeCompare(b.serverName)));

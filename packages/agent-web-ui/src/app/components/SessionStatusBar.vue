@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
+import BoxRowShell from './BoxRowShell.vue';
 import ProjectionVerbositySelect from './ProjectionVerbositySelect.vue';
 import StatusBoxSelector, { type StatusBoxSelectorItem } from './StatusBoxSelector.vue';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
@@ -25,28 +26,30 @@ const props = defineProps<{
   authorityTransition: Record<string, unknown> | null;
   surfaceAffordances: SurfaceAffordanceSummary;
   cloudflareProjection: ReturnType<typeof useCloudflareProjection>;
+  collapsible?: boolean;
 }>();
 const emit = defineEmits<{
   'update:verbosity': [value: ProjectionVerbosity];
   'publish-cloudflare': [cloudflareApiBaseUrl: string];
   'request-affordance-action': [request: { surfaceId: string; actionId: string; args: Record<string, unknown> }];
+  collapse: [];
 }>();
 const cloudflareApiBaseUrl = ref(props.cloudflareProjection.defaultApiBaseUrl.value);
 const copyLabel = ref('Copy');
 const pendingProvider = ref<string | null>(null);
 const pendingModel = ref<string | null>(null);
 const pendingThinking = ref<string | null>(null);
-const STATUS_BOX_STORAGE_KEY = 'narada:agent-web-ui:status-boxes.v2';
+const STATUS_BOX_STORAGE_KEY = 'narada:agent-web-ui:status-boxes.v3';
 const DEFAULT_STATUS_BOX_IDS = ['events', 'health', 'intelligence', 'authority', 'view', 'cloudflare'] as const;
 type StatusBoxId = typeof DEFAULT_STATUS_BOX_IDS[number];
-const DEFAULT_VISIBLE_STATUS_BOX_IDS: readonly StatusBoxId[] = ['intelligence', 'authority', 'view', 'cloudflare'];
+const DEFAULT_VISIBLE_STATUS_BOX_IDS: readonly StatusBoxId[] = ['intelligence', 'view'];
 const statusBoxDefinitions: Record<StatusBoxId, Omit<StatusBoxSelectorItem, 'visible'>> = {
   events: { id: 'events', label: 'Events', description: 'NARS event stream endpoint used by this browser.' },
   health: { id: 'health', label: 'Health', description: 'HTTP health endpoint used to poll the runtime.' },
   intelligence: { id: 'intelligence', label: 'Intelligence', description: 'Provider, model, and thinking level.' },
-  authority: { id: 'authority', label: 'Authority', description: 'Write authority and stale-session posture.' },
+  authority: { id: 'authority', label: 'Authority Detail', description: 'Low-level write authority and stale-session posture.' },
   view: { id: 'view', label: 'View', description: 'Projection level for the event feed.' },
-  cloudflare: { id: 'cloudflare', label: 'Cloudflare', description: 'Remote browser projection controls.' },
+  cloudflare: { id: 'cloudflare', label: 'Cloudflare Projection', description: 'Optional remote browser projection controls.' },
 };
 const visibleStatusBoxIds = ref(loadStatusBoxIds());
 const availableStatusBoxIds = computed(() => DEFAULT_STATUS_BOX_IDS.filter((id) => id !== 'cloudflare' || props.cloudflareProjection.available.value));
@@ -129,7 +132,7 @@ const statusTooltips = {
   events: 'NARS event stream endpoint used by this browser to receive session events.',
   health: 'HTTP health endpoint used to poll current runtime state and identity.',
   intelligence: 'Active intelligence provider, model, and thinking level reported by NARS health.',
-  authority: 'Runtime authority for accepting operator writes. "local" means this browser is attached to the local NARS authority; "eN" is the authority epoch/version used to detect stale clients; "writes active" means operator input is currently admitted.',
+  authority: 'Low-level authority detail. Connection is the preferred operator-facing summary for whether this browser can send input.',
   view: 'Projection level for the event feed: conversation, operations, diagnostics, or raw.',
   cloudflare: 'Optional remote browser projection for exposing this local NARS session through a Cloudflare Worker.',
 };
@@ -228,7 +231,7 @@ function stringField(record: Record<string, unknown>, field: string): string | n
 
 <template>
   <TooltipProvider :delay-duration="250">
-    <section class="status" :class="{ 'status-has-projection-control': cloudflareProjection.available.value }" aria-label="Session status">
+    <BoxRowShell row-label="Session status" class-name="status" :class="{ 'status-has-projection-control': cloudflareProjection.available.value }">
       <Tooltip v-if="isStatusBoxVisible('events')">
         <TooltipTrigger as-child>
           <div>
@@ -347,7 +350,7 @@ function stringField(record: Record<string, unknown>, field: string): string | n
         <TooltipTrigger as-child>
           <div class="projection-control">
             <div class="projection-control-heading">
-              <label class="label" for="cloudflare-api-base-url">Cloudflare</label>
+              <label class="label" for="cloudflare-api-base-url">Projection</label>
               <span class="projection-status-label">{{ cloudflareProjection.statusText.value }}</span>
             </div>
             <div class="projection-control-row">
@@ -372,17 +375,31 @@ function stringField(record: Record<string, unknown>, field: string): string | n
         <TooltipContent side="bottom" align="start">{{ statusTooltips.cloudflare }}</TooltipContent>
       </Tooltip>
 
-      <StatusBoxSelector
-        :boxes="statusBoxSelectorItems"
-        panel-id="status-row-box-selector-panel"
-        trigger-label="Status boxes"
-        title="Status Boxes"
-        description="Select which boxes are shown in the session status row."
-        panel-aria-label="Status row boxes"
-        empty-text="No matching status boxes."
-        @toggle="toggleStatusBox"
-        @reset="resetStatusBoxes"
-      />
-    </section>
+      <template #controls>
+        <button
+          v-if="collapsible"
+          type="button"
+          class="status-row-collapse-toggle"
+          aria-expanded="true"
+          aria-label="Collapse status boxes"
+          title="Collapse status boxes"
+          @click="emit('collapse')"
+        >
+          <span aria-hidden="true">^</span>
+        </button>
+        <StatusBoxSelector
+          :boxes="statusBoxSelectorItems"
+          panel-id="status-row-box-selector-panel"
+          trigger-label="Status boxes"
+          title="Status Boxes"
+          description="Select which boxes are shown in the session status row."
+          panel-aria-label="Status row boxes"
+          empty-text="No matching status boxes."
+          placement="row-control"
+          @toggle="toggleStatusBox"
+          @reset="resetStatusBoxes"
+        />
+      </template>
+    </BoxRowShell>
   </TooltipProvider>
 </template>

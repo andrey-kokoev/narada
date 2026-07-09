@@ -172,7 +172,7 @@ async function withRealNarsFixtureServer(fn) {
       },
     });
     await waitFor(() => events.some((event) => event.event === 'session_started'), { timeoutMs: 2000 });
-    const directHealth = await fetch(healthProjection.url).then((response) => response.json());
+    const directHealth = await fetch(`${healthProjection.url}?detail=full`).then((response) => response.json());
     assert.equal(directHealth?.mcp_tools?.some((tool) => tool.server_name === 'narada-fixture' && tool.tool_name === 'fixture_read'), true);
     assert.equal(directHealth?.mcp_tools?.some((tool) => tool.server_name === 'narada-fixture-sop' && tool.tool_name === 'sop_template_list'), true);
     const directEvent = await readSessionStartedFromEventEndpoint(eventProjection.url);
@@ -207,11 +207,11 @@ const PANEL_ASSERTION_SCRIPT = String.raw`(async () => {
     return true;
   };
   const openSurface = async (label) => {
-    if (!await clickByText('.surface-navigator-trigger', 'Surfaces:')) return false;
+    if (!await clickByText('.surface-navigator-trigger', 'Panels:')) return false;
     return clickByText('#surface-navigator-panel .surface-navigator-row', label);
   };
 
-  await openSurface('Tool Surfaces (MCP)');
+  await openSurface('MCP Catalog');
   await clickByText('#mcp-server-panel .mcp-server-row', 'narada-fixture');
   if (!text().includes('fixture_read')) failures.push('missing_fixture_read_tool');
   document.querySelector('#mcp-server-panel .mcp-panel-close')?.click();
@@ -244,11 +244,11 @@ const FIXTURE_MCP_TOOL_CATALOG_ASSERTION_SCRIPT = String.raw`(async () => {
     return true;
   };
   const openSurface = async (label) => {
-    if (!await clickByText('.surface-navigator-trigger', 'Surfaces:')) return false;
+    if (!await clickByText('.surface-navigator-trigger', 'Panels:')) return false;
     return clickByText('#surface-navigator-panel .surface-navigator-row', label);
   };
 
-  await openSurface('Tool Surfaces (MCP)');
+  await openSurface('MCP Catalog');
   await clickByText('#mcp-server-panel .mcp-server-row', 'narada-fixture');
   if (!text().includes('fixture_read')) failures.push('missing_fixture_read_tool');
   if (text().includes('Tool names are not available in the current runtime inventory.')) failures.push('unexpected_tool_catalog_empty_message');

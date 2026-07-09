@@ -18,7 +18,7 @@ const props = defineProps<{
   panelAriaLabel?: string;
   emptyText?: string;
   searchPlaceholder?: string;
-  placement?: 'status-row' | 'inline';
+  placement?: 'status-row' | 'inline' | 'row-control';
 }>();
 const emit = defineEmits<{
   toggle: [id: string];
@@ -51,8 +51,8 @@ const filteredBoxes = computed(() => {
         <span></span>
         <span></span>
       </span>
+      <span class="status-box-selector-count" aria-hidden="true">{{ boxCountLabel }}</span>
     </button>
-    <span class="status-box-selector-count" aria-hidden="true">{{ boxCountLabel }}</span>
     <Teleport to="body">
       <Transition name="mcp-drawer">
         <div v-if="open" class="mcp-drawer-layer" role="presentation">

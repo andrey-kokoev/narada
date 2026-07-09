@@ -6,7 +6,7 @@ import { useOperatorInterruptPrompt } from '../composables/useOperatorInterruptP
 import type { OperatorSnippet, OperatorSnippetDeliveryMode } from '../composables/useOperatorSnippets';
 
 const draft = defineModel<string>({ required: true });
-const props = defineProps<{ disabled?: boolean; disabledReason?: string; canInterrupt?: boolean; operatorSnippets?: OperatorSnippet[] }>();
+const props = defineProps<{ disabled?: boolean; disabledReason?: string; canInterrupt?: boolean; operatorSnippets?: OperatorSnippet[]; targetLabel?: string; targetState?: string }>();
 const emit = defineEmits<{ submit: [deliveryMode?: OperatorSnippetDeliveryMode]; 'run-snippet': [snippet: OperatorSnippet, deliveryMode?: OperatorSnippetDeliveryMode]; interrupt: [] }>();
 const inputRef = ref<HTMLTextAreaElement | null>(null);
 
@@ -60,6 +60,13 @@ function handleKeydown(event: KeyboardEvent) {
 
 <template>
   <form id="operator-form" class="composer" aria-label="Operator input" @submit.prevent="emit('submit', 'default')">
+    <p class="composer-target" :data-state="disabled ? 'blocked' : 'active'">
+      <span>{{ disabled ? 'Input blocked' : 'Sending to' }}</span>
+      <strong>{{ props.targetLabel ?? 'current session' }}</strong>
+      <template v-if="props.targetState">
+        <span>· {{ props.targetState }}</span>
+      </template>
+    </p>
     <div class="composer-input-stack">
       <OperatorCommandPalette
         v-if="commandPaletteOpen"

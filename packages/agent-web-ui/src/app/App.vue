@@ -18,6 +18,7 @@ import { useOperatorQueue } from './composables/useOperatorQueue';
 import { useOperatorSnippets, type OperatorSnippet, type OperatorSnippetCommandEvent, type OperatorSnippetFeedback, type OperatorSnippetOpenRequest } from './composables/useOperatorSnippets';
 import { useProjectionVerbosity } from './composables/useProjectionVerbosity';
 import { useRetainedEvents } from './composables/useRetainedEvents';
+import { useRuntimeTopology } from './composables/useRuntimeTopology';
 import { useResolvedFavicon } from './composables/useResolvedFavicon.js';
 import { useSchedulerSummary } from './composables/useSchedulerSummary';
 import { useSopSummary } from './composables/useSopSummary';
@@ -68,6 +69,17 @@ const sopSummary = useSopSummary(retained.events);
 const surfaceFeedbackSummary = useSurfaceFeedbackSummary(retained.events);
 const taskLifecycleSummary = useTaskLifecycleSummary(retained.events);
 const surfaceAffordances = useSurfaceAffordances(retained.events, health.body);
+const runtimeTopology = useRuntimeTopology({
+  eventEndpoint: props.config.eventEndpoint,
+  healthEndpoint: props.config.healthEndpoint,
+  inputEndpoint: props.config.inputEndpoint ?? null,
+  streamText: connection.streamText,
+  healthText: health.text,
+  healthBody: health.body,
+  sessionIdentity: events.sessionIdentity,
+  authorityTransition: computed(() => props.config.authorityTransition ?? null),
+  mcpInventory: mcpInventory.inventory,
+});
 const operatorQueue = useOperatorQueue(health.body);
 const operatorSnippets = useOperatorSnippets();
 const cloudflareProjection = useCloudflareProjection(props.config.projectionControl?.cloudflare ?? null);
@@ -290,6 +302,7 @@ function cancelAffordanceAction(item: AffordanceConfirmationItem) {
     :operator-snippet-open-request="operatorSnippetOpenRequest"
     :active-turn-id="connection.activeTurnId.value"
     :mcp-inventory="mcpInventory.inventory.value"
+    :runtime-topology="runtimeTopology.topology.value"
     :surface-affordances="surfaceAffordances.summary.value"
     :artifacts-summary="artifactsSummary.summary.value"
     :delegation-summary="delegationSummary.summary.value"

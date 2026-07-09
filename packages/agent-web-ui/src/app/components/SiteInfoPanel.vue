@@ -126,7 +126,7 @@ function openSurfaceNavigator() {
                 <dd><button type="button" class="site-info-inline-action" @click="openSurfaceNavigator">Open navigator</button></dd>
               </div>
               <div>
-                <dt>Tool Surfaces (MCP)</dt>
+                <dt>MCP Catalog</dt>
                 <dd><button type="button" class="site-info-inline-action" @click="openMcpPanel">Open panel</button></dd>
               </div>
               <div>

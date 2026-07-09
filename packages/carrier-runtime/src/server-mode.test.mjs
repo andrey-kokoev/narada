@@ -124,7 +124,7 @@ test('session sync copies the session directory to a site-local target', async (
   }
 });
 
-test('session command execution uses the shared command contract aliases', async () => {
+test('session command execution uses the shared command contract commands', async () => {
   const siteRoot = mkdtempSync(join(tmpdir(), 'carrier-command-contract-test-'));
   try {
     const input = new PassThrough();
@@ -162,7 +162,7 @@ test('session command execution uses the shared command contract aliases', async
       },
     });
 
-    input.write(`${JSON.stringify({ id: 'tool-alias', method: 'session.command.execute', params: { command: '/tool', value: '' } })}\n`);
+    input.write(`${JSON.stringify({ id: 'tools-command', method: 'session.command.execute', params: { command: '/tools', value: '' } })}\n`);
     input.write(`${JSON.stringify({ id: 'queue-clear', method: 'session.command.execute', params: { command: '/queue', value: 'clear' } })}\n`);
     input.write(`${JSON.stringify({ id: 'model-override', method: 'session.command.execute', params: { command: '/model', value: 'gpt-override' } })}\n`);
     input.write(`${JSON.stringify({ id: 'thinking-override', method: 'session.command.execute', params: { command: '/thinking', value: 'high' } })}\n`);
@@ -172,7 +172,7 @@ test('session command execution uses the shared command contract aliases', async
 
     const results = events.filter((event) => event.event === 'carrier_command_result');
     assert.equal(results.length, 5);
-    assert.equal(results.some((event) => event.request_id === 'tool-alias' && event.terminal_state === 'completed'), true);
+    assert.equal(results.some((event) => event.request_id === 'tools-command' && event.terminal_state === 'completed'), true);
     assert.equal(results.some((event) => event.request_id === 'queue-clear' && /Cleared 0 queued/.test(event.message)), true);
     assert.equal(results.some((event) => event.request_id === 'model-override' && event.fields?.model === 'gpt-override'), true);
     assert.equal(results.some((event) => event.request_id === 'thinking-override' && event.fields?.thinking === 'high'), true);

@@ -216,6 +216,14 @@ test('server mode health advertises MCP tool catalog for web UI inventory', asyn
     assert.deepEqual(health?.mcp?.tools?.map((tool) => ({ server_name: tool.server_name, tool_name: tool.tool_name })), [
       { server_name: 'narada-fixture', tool_name: 'fixture_read' },
     ]);
+    assert.equal(health?.runtime_topology?.schema, 'narada.nars.runtime_topology.v1');
+    assert.equal(health?.runtime_topology?.status, 'live');
+    assert.equal(health?.runtime_topology?.session_id, 'session_mcp_health_catalog');
+    assert.equal(health?.runtime_topology?.runtime?.kind, 'narada-agent-runtime-server');
+    assert.equal(health?.runtime_topology?.authority?.runtime_host, 'local');
+    assert.equal(health?.runtime_topology?.authority?.runtime_id, null);
+    assert.equal(health?.runtime_topology?.mcp?.children?.[0]?.id, 'narada-fixture');
+    assert.equal(health?.runtime_topology?.mcp?.children?.[0]?.tool_count, 1);
   } finally {
     removeTempDir(siteRoot);
   }
