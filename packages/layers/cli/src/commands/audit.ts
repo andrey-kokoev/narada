@@ -4,6 +4,7 @@ import { stat } from 'node:fs/promises';
 import type { CommandContext } from '../lib/command-wrapper.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
+import { coordinatorDbPathForRoot } from '../lib/site-authority-paths.js';
 import { loadConfig, isMultiMailboxConfig, loadMultiMailboxConfig } from '@narada2/control-plane';
 
 export interface AuditOptions {
@@ -110,7 +111,7 @@ async function auditForScope(
   fmt: ReturnType<typeof createFormatter>,
   logger: CommandContext['logger'],
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
-  const dbPath = join(rootDir, '.narada', 'coordinator.db');
+  const dbPath = coordinatorDbPathForRoot(rootDir);
 
   try {
     const dbStat = await stat(dbPath);

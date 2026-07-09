@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import type { CommandContext } from '../lib/command-wrapper.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
+import { siteAuthorityRootForRoot } from '../lib/site-authority-paths.js';
 import { loadConfig, isMultiMailboxConfig, loadMultiMailboxConfig } from '@narada2/control-plane';
 import type { AllowedAction, RuntimePolicy, ScopeConfig } from '@narada2/control-plane';
 
@@ -92,7 +93,7 @@ async function deriveForScope(
   scope?: ScopeConfig,
   scopes?: ScopeConfig[],
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
-  const dbDir = join(rootDir, '.narada');
+  const dbDir = siteAuthorityRootForRoot(rootDir);
   const coordinatorDbPath = join(dbDir, 'coordinator.db');
   const factsDbPath = join(dbDir, 'facts.db');
 

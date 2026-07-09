@@ -3,6 +3,7 @@ import { access, readFile, stat } from 'node:fs/promises';
 import type { CommandContext } from '../lib/command-wrapper.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
+import { coordinatorDbPathForRoot } from '../lib/site-authority-paths.js';
 import { inspectAuthorityClonePosture } from '../lib/narada-proper-authority.js';
 import { loadConfig, isMultiMailboxConfig, loadMultiMailboxConfig, loadCharterEnv, loadEnvFile } from '@narada2/control-plane';
 import { CodexCharterRunner, MockCharterRunner, KimiCliCharterRunner, getRecoveryGuidance } from '@narada2/charters';
@@ -783,7 +784,7 @@ async function checkScope(
   }
 
   // 6. Failed work items (coordinator DB)
-  const dbPath = join(rootDir, '.narada', 'coordinator.db');
+  const dbPath = coordinatorDbPathForRoot(rootDir);
   try {
     const dbStat = await stat(dbPath);
     if (dbStat.isFile()) {

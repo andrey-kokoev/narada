@@ -11,6 +11,7 @@ import { join } from 'node:path';
 import type { CommandContext } from '../lib/command-wrapper.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
+import { coordinatorDbPathForRoot } from '../lib/site-authority-paths.js';
 import {
   loadConfig,
   isMultiMailboxConfig,
@@ -227,7 +228,7 @@ async function loadOpsReport(
   let stuckWorkRowCount = 0;
 
   for (const storageScope of storageScopes) {
-    const db = new Database(join(storageScope.rootDir, '.narada', 'coordinator.db'));
+    const db = new Database(coordinatorDbPathForRoot(storageScope.rootDir));
     try {
       const coordinatorStore = new SqliteCoordinatorStore({ db });
       const outboundStore = new SqliteOutboundStore({ db });

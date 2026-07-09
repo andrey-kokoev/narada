@@ -3,6 +3,7 @@ import { stat, readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { CommandContext } from '../lib/command-wrapper.js';
 import { ExitCode } from '../lib/exit-codes.js';
+import { coordinatorDbPathForRoot } from '../lib/site-authority-paths.js';
 import {
   loadConfig,
   isMultiMailboxConfig,
@@ -387,7 +388,7 @@ async function buildStatusReport(scopeId: string, rootDir: string): Promise<Stat
   };
 
   // Attempt to enrich with control-plane snapshot if coordinator.db exists
-  const dbPath = join(rootDir, '.narada', 'coordinator.db');
+  const dbPath = coordinatorDbPathForRoot(rootDir);
   try {
     const dbStat = await stat(dbPath);
     if (dbStat.isFile()) {

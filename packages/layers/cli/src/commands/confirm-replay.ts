@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import type { CommandContext } from '../lib/command-wrapper.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
+import { siteAuthorityRootForRoot } from '../lib/site-authority-paths.js';
 import { loadConfig, isMultiMailboxConfig, loadMultiMailboxConfig } from '@narada2/control-plane';
 
 export interface ConfirmReplayOptions {
@@ -122,7 +123,7 @@ async function replayForScope(
   logger: CommandContext['logger'],
   graphSource?: { user_id: string; base_url?: string },
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
-  const dbDir = join(rootDir, '.narada');
+  const dbDir = siteAuthorityRootForRoot(rootDir);
   const coordinatorDbPath = join(dbDir, 'coordinator.db');
 
   const {

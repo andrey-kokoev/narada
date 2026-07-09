@@ -2,6 +2,7 @@ import { resolve, join } from 'node:path';
 import type { CommandContext } from '../lib/command-wrapper.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
+import { coordinatorDbPathForRoot } from '../lib/site-authority-paths.js';
 import {
   loadConfig,
   isMultiMailboxConfig,
@@ -79,7 +80,7 @@ export async function retryAuthFailedCommand(
   const retried: Array<{ scope_id: string; outbound_id: string; to_status: string }> = [];
 
   for (let i = 0; i < scopeIds.length; i++) {
-    const dbPath = join(rootDirs[i]!, '.narada', 'coordinator.db');
+    const dbPath = coordinatorDbPathForRoot(rootDirs[i]!);
     let db: InstanceType<typeof Database> | null = null;
     try {
       db = new Database(dbPath);

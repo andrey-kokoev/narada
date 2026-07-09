@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import type { CommandContext } from '../lib/command-wrapper.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
+import { coordinatorDbPathForRoot } from '../lib/site-authority-paths.js';
 import {
   Database,
   loadConfig,
@@ -140,7 +141,7 @@ export async function approvePendingDecisionCommand(
   }
 
   for (const target of targets) {
-    const dbPath = join(target.rootDir, '.narada', 'coordinator.db');
+    const dbPath = coordinatorDbPathForRoot(target.rootDir);
     let db: InstanceType<typeof Database> | null = null;
     try {
       db = new Database(dbPath);
