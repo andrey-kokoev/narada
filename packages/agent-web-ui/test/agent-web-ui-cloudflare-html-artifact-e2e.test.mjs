@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, statSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
@@ -7,6 +6,7 @@ import { dirname, join } from 'node:path';
 import { PassThrough } from 'node:stream';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { spawnTestChild } from '@narada2/process-launch-posture';
 import { createCloudflareNarsProjectionWorker } from '@narada2/cloudflare-nars-projection/worker';
 import { resolveNaradaSitePaths } from '@narada2/site-paths';
 import { createEventHub, startHealthProjection, startEventStreamProjection } from '@narada2/agent-runtime-server';
@@ -182,7 +182,7 @@ async function workerFetch(worker, url, init = {}) {
 }
 
 async function callLiveSpeechMcp({ siteRoot, outputPath, text }) {
-  const child = spawn(process.execPath, [speechMcpMain], {
+  const child = spawnTestChild(process.execPath, [speechMcpMain], {
     cwd: dirname(speechMcpMain),
     env: {
       ...process.env,
@@ -191,7 +191,6 @@ async function callLiveSpeechMcp({ siteRoot, outputPath, text }) {
       NARADA_SPEECH_ANNOUNCE_SPEAKER: 'false',
     },
     stdio: ['pipe', 'pipe', 'pipe'],
-    windowsHide: true,
   });
   child.stdout.setEncoding('utf8');
   child.stderr.setEncoding('utf8');

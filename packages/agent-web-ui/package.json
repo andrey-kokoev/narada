@@ -60,6 +60,7 @@
   "devDependencies": {
     "@narada2/agent-cli": "workspace:*",
     "@narada2/agent-runtime-server": "workspace:*",
+    "@narada2/process-launch-posture": "workspace:*",
     "@tailwindcss/vite": "^4.1.18",
     "@types/markdown-it": "^14.1.2",
     "@vitejs/plugin-vue": "^6.0.7",

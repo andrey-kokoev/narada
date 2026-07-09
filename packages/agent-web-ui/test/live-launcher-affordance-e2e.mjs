@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { mkdir, rm } from 'node:fs/promises';
 import { basename, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { spawnTestChild } from '@narada2/process-launch-posture';
 
 const REPO_ROOT = fileURLToPath(new URL('../../..', import.meta.url));
 const DEFAULT_SITE_ROOT = 'D:\\code\\narada.sonar';
@@ -29,7 +29,7 @@ let page = null;
 
 try {
   console.log(`live-e2e: starting real operator-surface runtime for ${agentId}`);
-  runtimeProcess = spawn(process.execPath, [
+  runtimeProcess = spawnTestChild(process.execPath, [
     join(REPO_ROOT, 'packages', 'layers', 'cli', 'dist', 'main.js'),
     'operator-surface',
     'runtime',
@@ -45,7 +45,6 @@ try {
   ], {
     cwd: REPO_ROOT,
     stdio: ['ignore', 'pipe', 'pipe'],
-    windowsHide: true,
   });
   const runtimeOutput = collectProcessOutput(runtimeProcess);
 
@@ -60,7 +59,7 @@ try {
   assert.equal(health.status, 'healthy');
 
   console.log(`live-e2e: attaching real agent-web-ui to ${record.session_id}`);
-  webUiProcess = spawn(process.execPath, [
+  webUiProcess = spawnTestChild(process.execPath, [
     join(REPO_ROOT, 'packages', 'layers', 'cli', 'dist', 'main.js'),
     'agent-web-ui',
     'attach',
@@ -74,7 +73,6 @@ try {
   ], {
     cwd: REPO_ROOT,
     stdio: ['ignore', 'pipe', 'pipe'],
-    windowsHide: true,
   });
   const webUiOutput = collectProcessOutput(webUiProcess);
   const urlMatch = await waitForTextMatch(webUiOutput.all, /agent-web-ui:\s+(http:\/\/127\.0\.0\.1:\d+)/, { timeoutMs, label: 'agent_web_ui_url' });
@@ -215,7 +213,7 @@ function findHeadlessBrowser() {
 async function openCdpPage({ browserPath, url, workDir }) {
   const userDataDir = join(workDir, 'runtime', `agent-web-ui-live-e2e-profile-${Date.now()}-${Math.random().toString(16).slice(2)}`);
   await mkdir(userDataDir, { recursive: true });
-  const child = spawn(browserPath, [
+  const child = spawnTestChild(browserPath, [
     '--headless=new',
     '--disable-gpu',
     '--no-sandbox',
@@ -224,7 +222,7 @@ async function openCdpPage({ browserPath, url, workDir }) {
     '--window-position=-32000,-32000',
     '--window-size=1280,900',
     url,
-  ], { stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true });
+  ], { stdio: ['ignore', 'ignore', 'pipe'] });
 
   const browserWsUrl = await new Promise((resolvePromise, reject) => {
     let stderr = '';
