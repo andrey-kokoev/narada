@@ -4,6 +4,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { projectIntent } from '../lifecycle/project-onboarding-intent.mjs';
+import { siteControlRoot } from '../site-layout.mjs';
 
 const SCHEMA = 'narada.site_init.result.v0';
 
@@ -124,7 +125,7 @@ function projectionTargetsProjectMemory(siteConfigProposal) {
 
 function baseResult({ command, projectRoot, siteConfigProposal = null }) {
   const resolvedRoot = normalizePath(projectRoot);
-  const projectMemoryRoot = path.join(resolvedRoot, '.narada');
+  const projectMemoryRoot = siteControlRoot(resolvedRoot);
   return {
     schema: SCHEMA,
     command,

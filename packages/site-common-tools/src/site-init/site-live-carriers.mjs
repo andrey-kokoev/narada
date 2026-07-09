@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
+import { siteControlRoot } from '../site-layout.mjs';
 
 const CARRIER_SCHEMA = 'narada.site_live_carrier.result.v0';
 const LOCAL_DB_CARRIER_ID = 'site_local_db_init';
@@ -495,7 +496,7 @@ function buildWindowsProfilePlan(context, options) {
   }
   if (options.include_secrets === true) refusals.push('profile_secret_capture_refused');
   if (options.register_mcp === true) refusals.push('profile_carrier_must_not_register_mcp');
-  if (!sameOrParent(path.join(context.targetSiteRoot, '.narada', 'profile'), artifactPath)) {
+  if (!sameOrParent(path.join(siteControlRoot(context.targetSiteRoot), 'profile'), artifactPath)) {
     refusals.push('profile_artifact_path_outside_admitted_scope');
   }
   if (existing.status === 'json' && existing.value?.site_id && existing.value.site_id !== context.siteId) {
@@ -606,7 +607,7 @@ function validateSharedContext(context, options) {
   if (!context.authorityBasis) refusals.push('authority_basis_required');
   if (!isDirectory(context.targetSiteRoot)) refusals.push('target_site_root_not_found');
   if (isSuspiciousRoot(context.targetSiteRoot)) refusals.push('target_site_root_suspicious');
-  if (!isDirectory(path.join(context.targetSiteRoot, '.narada'))) refusals.push('target_site_seed_missing');
+  if (!isDirectory(siteControlRoot(context.targetSiteRoot))) refusals.push('target_site_seed_missing');
   if (context.sourceSiteRoot && sameOrParent(context.sourceSiteRoot, context.targetSiteRoot)) {
     refusals.push('source_site_root_must_not_enclose_target_site_root');
   }

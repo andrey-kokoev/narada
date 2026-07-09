@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { execFileGovernedSync } from '@narada2/process-launch-posture';
+import { siteAuthorityRootFromSiteRoot } from '@narada2/site-paths';
 import { ExitCode } from './exit-codes.js';
 
 export type SiteEmbodimentRole = 'authority' | 'read_only_forwarding' | 'read_only' | 'forwarding';
@@ -184,7 +185,7 @@ function readAuthorityCloneConfig(path: string): AuthorityCloneConfig | null {
 }
 
 function isTemporaryAuthorityAdmitted(root: string, config: AuthorityCloneConfig): boolean {
-  const siteConfigPath = join(root, '.narada', 'site.json');
+  const siteConfigPath = join(siteAuthorityRootFromSiteRoot(root), 'site.json');
   if (!existsSync(siteConfigPath)) return false;
   try {
     const siteConfig = JSON.parse(readFileSync(siteConfigPath, 'utf8')) as {

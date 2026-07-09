@@ -18,7 +18,7 @@
  */
 
 import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { join, dirname, resolve } from 'node:path';
+import { basename, join, dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
@@ -646,7 +646,12 @@ function mcpLocusRoot(locus) {
 }
 
 function missingFabricDirectory(root) {
-  return !existsSync(join(root, '.ai', 'mcp')) && !existsSync(join(root, '.narada', '.ai', 'mcp'));
+  return !existsSync(join(root, '.ai', 'mcp')) && !existsSync(join(siteControlRoot(root), '.ai', 'mcp'));
+}
+
+function siteControlRoot(siteRoot) {
+  const root = resolve(siteRoot);
+  return basename(root).toLowerCase() === '.narada' ? root : join(root, '.narada');
 }
 
 function emptyScopedMcpFabric() {

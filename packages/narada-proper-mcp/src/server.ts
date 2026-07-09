@@ -38,6 +38,11 @@ interface JsonRpcRequest {
   params?: unknown;
 }
 
+function siteControlRoot(siteRoot: string): string {
+  const root = resolve(siteRoot);
+  return basename(root).toLowerCase() === '.narada' ? root : resolve(root, '.narada');
+}
+
 interface McpTool {
   name: string;
   description: string;
@@ -1196,7 +1201,7 @@ class McpDirectiveStore {
   readonly authorizationPath: string;
 
   constructor(siteRoot: string) {
-    const root = resolve(siteRoot, '.narada', 'directives');
+    const root = resolve(siteControlRoot(siteRoot), 'directives');
     this.storePath = resolve(root, 'directives.json');
     this.eventLogPath = resolve(root, 'events.jsonl');
     this.authorizationPath = resolve(root, 'emission-authorizations.json');
@@ -2708,7 +2713,7 @@ function readAgentContextCheckpoint(args: { siteRoot: string; checkpointId: stri
 }
 
 function agentContextMemoryStorePath(siteRoot: string): string {
-  return resolve(siteRoot, '.narada', 'agent-context-memory', 'memory-store.json');
+  return resolve(siteControlRoot(siteRoot), 'agent-context-memory', 'memory-store.json');
 }
 
 function readAgentContextMemoryStore(siteRoot: string, siteId: string): AgentContextMemoryStore {
@@ -2731,7 +2736,7 @@ function readAgentContextMemoryStore(siteRoot: string, siteId: string): AgentCon
 
 function writeAgentContextMemoryStore(siteRoot: string, store: AgentContextMemoryStore): void {
   const storePath = agentContextMemoryStorePath(siteRoot);
-  mkdirSync(resolve(siteRoot, '.narada', 'agent-context-memory'), { recursive: true });
+  mkdirSync(resolve(siteControlRoot(siteRoot), 'agent-context-memory'), { recursive: true });
   writeFileSync(storePath, `${JSON.stringify(store, null, 2)}\n`, 'utf8');
 }
 

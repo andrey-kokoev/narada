@@ -1,4 +1,4 @@
-import { dirname, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { existsSync, readFileSync } from 'node:fs';
 
 export function loadRolePrompt(identityName, siteRoot) {
@@ -19,7 +19,7 @@ export function agentInstructionChain(siteRoot) {
 
   const candidates = [
     ...ancestorDirs.reverse().map((directory) => join(directory, 'AGENTS.md')),
-    join(normalizedSiteRoot, '.narada', 'AGENTS.md'),
+    join(siteControlRoot(normalizedSiteRoot), 'AGENTS.md'),
   ];
   const seen = new Set();
   return candidates.filter((candidate) => {
@@ -28,6 +28,11 @@ export function agentInstructionChain(siteRoot) {
     seen.add(path);
     return true;
   });
+}
+
+function siteControlRoot(siteRoot) {
+  const root = resolve(siteRoot);
+  return basename(root).toLowerCase() === '.narada' ? root : join(root, '.narada');
 }
 
 function agentInstructionsPrompt(paths) {

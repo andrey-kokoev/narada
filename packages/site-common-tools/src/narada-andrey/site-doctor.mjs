@@ -4,6 +4,7 @@ import { join, resolve } from 'path';
 import { runGovernedCommandSync } from '@narada2/process-launch-posture';
 import { validateAgentExecutionPolicy } from '../site-config/agent-execution-policy.mjs';
 import { taskLifecycleReadinessPaths } from '../task-lifecycle-mcp-resolution.mjs';
+import { siteControlRoot } from '../site-layout.mjs';
 
 const args = parseArgs(process.argv.slice(2));
 const siteRoot = resolve(args.siteRoot ?? process.cwd());
@@ -126,7 +127,7 @@ function agentContextReadiness() {
 }
 
 function mcpAvailability() {
-  const registryPath = join(siteRoot, '.narada', 'capabilities', 'mcp-surfaces.json');
+  const registryPath = join(siteControlRoot(siteRoot), 'capabilities', 'mcp-surfaces.json');
   if (!existsSync(registryPath)) return check('mcp_availability', 'Declared MCP surface entrypoints', 'blocking', 'fail', { registry_path: registryPath, reason: 'registry_missing' });
   const registry = JSON.parse(readFileSync(registryPath, 'utf8'));
   const surfaces = Array.isArray(registry.surfaces) ? registry.surfaces : [];

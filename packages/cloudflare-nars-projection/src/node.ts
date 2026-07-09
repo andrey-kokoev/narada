@@ -103,7 +103,7 @@ function readCookieHeader(path: string): string | null {
 }
 
 export function projectionStorePaths(siteRoot: string, projectionId: string): ProjectionStorePaths {
-  const root = join(requireNonEmpty(siteRoot, 'site_root'), '.narada', 'crew', 'nars-projections');
+  const root = join(resolveNaradaSitePaths({ siteRoot: requireNonEmpty(siteRoot, 'site_root') }).siteAuthorityRoot, 'crew', 'nars-projections');
   const projectionDir = join(root, safePathSegment(requireNonEmpty(projectionId, 'projection_id')));
   return {
     projections_root: root,

@@ -12,7 +12,7 @@ const check = args.check === true;
 const explicitCrossingSurfaceIds = new Set(asArray(args.allowCrossSiteMutationSurface));
 
 const carriers = carrier === 'all' ? ['kimi', 'codex'] : [carrier];
-const registry = readJson(join(siteRoot, '.narada', 'capabilities', 'mcp-surfaces.json'));
+const registry = readJson(join(siteControlRoot(siteRoot), 'capabilities', 'mcp-surfaces.json'));
 const siteIdResolution = resolveDeprecatedNaradaAndreySiteLocus(registry.site_id ?? 'narada-andrey', {
   resolvedSiteLocus: 'narada-user-site',
   resolutionBasis: 'carrier MCP config generated from the current User Site root',
@@ -49,6 +49,11 @@ const result = {
     intentional_exclusions: output.config.carrier_policy.intentional_exclusions,
   })),
 };
+
+function siteControlRoot(root) {
+  const normalized = resolve(root);
+  return basename(normalized).toLowerCase() === '.narada' ? normalized : join(normalized, '.narada');
+}
 
 let mismatch = false;
 for (const output of outputs) {

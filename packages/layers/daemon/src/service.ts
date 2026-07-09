@@ -3,7 +3,7 @@
  */
 
 import { readFile } from 'node:fs/promises';
-import { dirname, isAbsolute, resolve, join } from 'node:path';
+import { basename, dirname, isAbsolute, resolve, join } from 'node:path';
 import { mkdir } from 'node:fs/promises';
 import {
   loadConfig,
@@ -153,6 +153,11 @@ function deriveSiteRootFromConfigPath(configPath?: string): string {
     return resolve(configDir, "..", "..");
   }
   return process.cwd();
+}
+
+function siteControlRoot(siteRoot: string): string {
+  const root = resolve(siteRoot);
+  return basename(root).toLowerCase() === '.narada' ? root : join(root, '.narada');
 }
 
 function hasDraftReplyAction(output: import("@narada2/control-plane").CharterOutputEnvelope): boolean {
@@ -575,7 +580,7 @@ async function createDispatchContext(
       return dispatchDeps;
     }
 
-    const dbDir = join(rootDir, '.narada');
+    const dbDir = siteControlRoot(rootDir);
     await mkdir(dbDir, { recursive: true });
     const dbPath = join(dbDir, 'coordinator.db');
 
@@ -1524,7 +1529,7 @@ export async function createScopeService(
 
   const cursorStore = new FileCursorStore({ rootDir, scopeId: scope.scope_id });
   const applyLogStore = new FileApplyLogStore({ rootDir });
-  const factDbDir = join(rootDir, '.narada');
+  const factDbDir = siteControlRoot(rootDir);
   await mkdir(factDbDir, { recursive: true });
   const factDb = new Database(join(factDbDir, 'facts.db'));
   factDb.pragma('journal_mode = WAL');

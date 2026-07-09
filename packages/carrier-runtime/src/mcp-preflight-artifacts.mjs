@@ -1,5 +1,5 @@
 import { appendFileSync, existsSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { basename, join, resolve } from 'node:path';
 
 export function recordMcpPreflightArtifactLinkage({ emit, preflightArtifact, appendSessionRecord = null, sessionPath = null } = {}) {
   if (!preflightArtifact) return null;
@@ -23,7 +23,7 @@ export function recordMcpPreflightArtifactLinkage({ emit, preflightArtifact, app
 }
 
 export function readMcpPreflightArtifact({ artifactDir, session, identity, siteRoot } = {}) {
-  const candidateDir = artifactDir ?? join(siteRoot, '.narada', 'runtime', 'agent-cli', 'mcp-preflight');
+  const candidateDir = artifactDir ?? join(siteControlRoot(siteRoot), 'runtime', 'agent-cli', 'mcp-preflight');
   const candidates = [
     session ? join(candidateDir, `${session}.json`) : null,
     identity ? join(candidateDir, `${identity}.json`) : null,
@@ -38,6 +38,11 @@ export function readMcpPreflightArtifact({ artifactDir, session, identity, siteR
     }
   }
   return null;
+}
+
+function siteControlRoot(siteRoot) {
+  const root = resolve(siteRoot);
+  return basename(root).toLowerCase() === '.narada' ? root : join(root, '.narada');
 }
 
 export function normalizeMcpPreflightArtifact(artifact, { identity, session } = {}) {

@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { basename, join, resolve } from 'node:path';
 
 export const SITE_OPERATING_LOOP_POLICY_SCHEMA = 'narada.site_operating_loop.policy.v1';
 
@@ -36,7 +36,12 @@ export const DEFAULT_SITE_OPERATING_LOOP_POLICY = {
 };
 
 export function operatingLoopPolicyPath(cwd) {
-  return join(resolve(cwd), '.narada', 'capabilities', 'operating-loop-policy.json');
+  return join(siteControlRoot(cwd), 'capabilities', 'operating-loop-policy.json');
+}
+
+function siteControlRoot(siteRoot) {
+  const root = resolve(siteRoot);
+  return basename(root).toLowerCase() === '.narada' ? root : join(root, '.narada');
 }
 
 export function loadSiteOperatingLoopPolicy(cwd, options = {}) {

@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { delimiter, join } from 'node:path';
+import { basename, delimiter, join, resolve } from 'node:path';
 import { runAiProcessInvocationSync } from '@narada2/carrier-provider-support/ai-process-invocation';
 import { codexAuthHome as sharedCodexAuthHome } from '@narada2/carrier-provider-support/codex-subscription-auth';
 import { codexCommand } from '@narada2/carrier-provider-support/codex-subscription-command';
@@ -181,7 +181,12 @@ function codexSubscriptionCommandIdentity(command, processEnv = process.env) {
 
 function codexSubscriptionPreflightCachePath({ userSiteRoot }) {
   if (!userSiteRoot) return null;
-  return join(userSiteRoot, '.narada', 'runtime', 'provider-auth-cache', 'codex-subscription-preflight-cache.json');
+  return join(siteControlRoot(userSiteRoot), 'runtime', 'provider-auth-cache', 'codex-subscription-preflight-cache.json');
+}
+
+function siteControlRoot(siteRoot) {
+  const root = resolve(siteRoot);
+  return basename(root).toLowerCase() === '.narada' ? root : join(root, '.narada');
 }
 
 function codexSubscriptionPreflightCacheKey({ provider, processEnv, command }) {
@@ -256,7 +261,7 @@ function codexSubscriptionPreflightCacheWrite({ userSiteRoot, sessionSiteRoot, c
   const cachePath = codexSubscriptionPreflightCachePath({ userSiteRoot });
   if (!cachePath) return;
   try {
-    const cacheDir = join(userSiteRoot, '.narada', 'runtime', 'provider-auth-cache');
+    const cacheDir = join(siteControlRoot(userSiteRoot), 'runtime', 'provider-auth-cache');
     mkdirSync(cacheDir, { recursive: true });
     let cache = { schema: 'narada.codex_subscription.preflight_cache.v1', entries: {} };
     if (existsSync(cachePath)) {

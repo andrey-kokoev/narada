@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 
 export const MCP_PAYLOAD_MAX_INLINE_BYTES = 16 * 1024;
 export const MCP_OUTPUT_INLINE_LIMIT_BYTES = 8 * 1024;
@@ -19,7 +19,12 @@ export interface McpStoredRef {
 }
 
 function storeRoot(options: McpRefStoreOptions): string {
-  return resolve(options.siteRoot, '.narada', 'mcp-refs', options.namespace ?? 'narada-proper');
+  return resolve(siteControlRoot(options.siteRoot), 'mcp-refs', options.namespace ?? 'narada-proper');
+}
+
+function siteControlRoot(siteRoot: string): string {
+  const root = resolve(siteRoot);
+  return basename(root).toLowerCase() === '.narada' ? root : resolve(root, '.narada');
 }
 
 function stableJson(value: unknown): string {

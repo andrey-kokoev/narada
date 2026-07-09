@@ -1634,11 +1634,11 @@ export async function listenWorkspaceLaunchUiServer(server: Server, host: string
 }
 
 function workspaceLaunchUiSessionPersistenceRoot(): string {
-  return join(resolve(workspaceLaunchUserSiteRoot()), '.narada', 'runtime', 'workspace-launch-ui-sessions');
+  return join(siteAuthorityRootFromSiteRoot(workspaceLaunchUserSiteRoot()), 'runtime', 'workspace-launch-ui-sessions');
 }
 
 function workspaceLaunchRememberedSelectionRoot(): string {
-  return join(resolve(workspaceLaunchUserSiteRoot()), '.narada', 'runtime', 'workspace-launch-ui-state');
+  return join(siteAuthorityRootFromSiteRoot(workspaceLaunchUserSiteRoot()), 'runtime', 'workspace-launch-ui-state');
 }
 
 function workspaceLaunchRememberedSelectionPath(): string {

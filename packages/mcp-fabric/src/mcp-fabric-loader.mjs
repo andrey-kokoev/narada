@@ -142,7 +142,7 @@ export function loadSiteMcpFabric(siteRoot, options = {}) {
 
 function resolveSiteMcpFabricDirectory(siteRoot) {
   const primary = join(siteRoot, '.ai', 'mcp');
-  const contained = join(siteRoot, '.narada', '.ai', 'mcp');
+  const contained = join(siteControlRoot(siteRoot), '.ai', 'mcp');
   const candidates = [primary, contained];
   if (existsSync(primary)) {
     return { mcpDir: primary, source: '.ai/mcp', candidates };
@@ -375,4 +375,3 @@ function sortDeep(value) {
 function isMainModule() {
   return process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1];
 }
-

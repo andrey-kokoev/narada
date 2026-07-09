@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { basename, join, resolve } from 'node:path';
 
 const ROLE_ENFORCEMENT_VALUES = new Set(['off', 'warn', 'strict']);
 
@@ -35,7 +35,7 @@ export function resolveTaskRolePolicy({ siteRoot, taskSpec = null, env = process
     value: userSitePath ? readRoleEnforcementFromConfig(userSitePath) : null,
   });
 
-  const sitePath = siteRoot ? join(resolve(siteRoot), '.narada', 'site.json') : null;
+  const sitePath = siteRoot ? join(siteControlRoot(siteRoot), 'site.json') : null;
   appendConfigPolicy(chain, {
     scope: 'site',
     path: sitePath,
@@ -100,9 +100,14 @@ function resolveHostConfigPath(env) {
 
 function resolveUserSiteConfigPath(env) {
   const explicitRoot = env.NARADA_USER_SITE_ROOT || env.NARADA_USER_SITE;
-  if (explicitRoot) return join(resolve(explicitRoot), '.narada', 'site.json');
+  if (explicitRoot) return join(siteControlRoot(explicitRoot), 'site.json');
   if (env.USERPROFILE) return join(env.USERPROFILE, 'Narada', '.narada', 'site.json');
   return null;
+}
+
+function siteControlRoot(siteRoot) {
+  const root = resolve(siteRoot);
+  return basename(root).toLowerCase() === '.narada' ? root : join(root, '.narada');
 }
 
 function readRoleEnforcementFromConfig(path) {
