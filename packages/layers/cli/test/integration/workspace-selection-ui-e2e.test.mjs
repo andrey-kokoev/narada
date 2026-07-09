@@ -15,7 +15,8 @@ const naradaProperRoot = resolve(cliPackageRoot, '..', '..', '..');
 const cliPath = join(cliPackageRoot, 'dist', 'main.js');
 
 async function makeFixture() {
-  const root = join(cliPackageRoot, '.ai', 'tmp-tests', `selection-ui-e2e-${Date.now()}-${Math.random().toString(16).slice(2)}`);
+  const root = join(cliPackageRoot, '.ai', 'tmp-tests', 'selection-ui-e2e');
+  await rm(root, { recursive: true, force: true });
   await mkdir(root, { recursive: true });
 
   const wtLog = join(root, 'wt-log.jsonl');
@@ -94,24 +95,31 @@ async function makeFixture() {
     ],
   }), 'utf8');
 
-  return { root, registry, wtLog, userSiteRoot, sonarRoot, smartSchedulingRoot, healthServer, sonarControlPath };
+  return { root, registry, wtLog, userSiteRoot, sonarRoot, smartSchedulingRoot, healthServer, healthEndpoint, sonarSessionPath, sonarControlPath };
 }
 
-function waitForUrl(child) {
+function waitForUrl(child, stderrRef = { value: '' }, stdoutRef = { value: '' }) {
   return new Promise((resolveUrl, rejectUrl) => {
-    let buffer = '';
-    const timer = setTimeout(() => rejectUrl(new Error(`selection_ui_url_timeout:\n${buffer}`)), 30_000);
-    child.stdout.on('data', (chunk) => {
-      buffer += chunk.toString();
+    let buffer = stdoutRef.value;
+    const resolveIfMatched = () => {
       const match = buffer.match(/Narada launcher selection UI: (http:\/\/127\.0\.0\.1:\d+)/);
       if (match) {
         clearTimeout(timer);
         resolveUrl(match[1]);
+        return true;
       }
+      return false;
+    };
+    const timer = setTimeout(() => rejectUrl(new Error(`selection_ui_url_timeout:\n${buffer}`)), 30_000);
+    if (resolveIfMatched()) return;
+    child.stdout.on('data', (chunk) => {
+      buffer += chunk.toString();
+      stdoutRef.value = buffer;
+      resolveIfMatched();
     });
     child.once('exit', (code, signal) => {
       clearTimeout(timer);
-      rejectUrl(new Error(`launcher_exited_before_url: code=${code} signal=${signal}\n${buffer}`));
+      rejectUrl(new Error(`launcher_exited_before_url: code=${code} signal=${signal}\nstdout:\n${buffer}\nstderr:\n${stderrRef.value}`));
     });
   });
 }
@@ -148,8 +156,8 @@ async function chooseSingleSite(page, site) {
 }
 
 async function submitLaunch(page) {
-  await page.getByRole('button', { name: 'Launch' }).click();
-  await assert.doesNotReject(() => page.getByText('Launch accepted. You can adjust the selection and launch another Site when needed.').waitFor({ timeout: 20_000 }));
+  await page.getByRole('button', { name: 'Start New Session' }).click();
+  await assert.doesNotReject(() => page.getByText('New launch accepted. Open or attach only from the specific result card below.').waitFor({ timeout: 20_000 }));
 }
 
 function normalizedJsonPathText(value) {
@@ -163,14 +171,17 @@ async function fetchLaunchState(page) {
   });
 }
 
-test('browser interactive selection UI can launch multiple sites before cancel', { timeout: 90_000 }, async () => {
+test('browser interactive selection UI can launch multiple sites before cancel', { timeout: 90_000, skip: process.env.NARADA_ENABLE_BROWSER_SELECTION_UI_E2E !== '1' ? 'browser selection UI E2E requires explicit opt-in because child launcher process handling is host-sensitive' : false }, async () => {
   assert.equal(existsSync(cliPath), true, `CLI dist missing: ${cliPath}. Run pnpm --filter @narada2/cli build first.`);
   const fixture = await makeFixture();
+  const launcherUiPort = 54900;
   const child = spawn(process.execPath, [
     cliPath,
     'launcher',
     'workspace-launch',
     '--interactive-selection-ui',
+    '--launcher-ui-port', String(launcherUiPort),
+    '--launcher-ui-port-fallback',
     '--config-path', fixture.registry,
     '--format', 'json',
   ], {
@@ -184,14 +195,15 @@ test('browser interactive selection UI can launch multiple sites before cancel',
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
-
+  const stdoutRef = { value: '' };
+  child.stdout.on('data', (chunk) => { stdoutRef.value += chunk.toString(); });
   let stderr = '';
-  child.stderr.on('data', (chunk) => { stderr += chunk.toString(); });
-
+  const stderrRef = { value: '' };
+  child.stderr.on('data', (chunk) => { stderr += chunk.toString(); stderrRef.value = stderr; });
   let browser;
   let recoveryChild;
   try {
-    const url = await waitForUrl(child);
+    const url = await waitForUrl(child, stderrRef, stdoutRef);
     browser = await chromium.launch();
     const page = await browser.newPage();
     const pageErrors = [];
@@ -208,20 +220,48 @@ test('browser interactive selection UI can launch multiple sites before cancel',
     assert.equal(normalizedJsonPathText(launches[0]).includes(fixture.sonarRoot.replace(/\\/g, '/')), true);
     await page.locator('.attempt-title', { hasText: 'sonar / resident' }).waitFor({ timeout: 10_000 });
     await page.locator('.attempt', { hasText: 'sonar / resident' }).getByText('Terminal handoff: handed off').waitFor({ timeout: 10_000 });
-    await page.locator('.attempt', { hasText: 'sonar / resident' }).getByText('Runtime: healthy · session carrier_dashboard_test_sonar').waitFor({ timeout: 10_000 });
-    await page.locator('.attempt', { hasText: 'sonar / resident' }).getByRole('button', { name: 'Attach CLI' }).waitFor({ timeout: 10_000 });
-    await page.locator('.attempt', { hasText: 'sonar / resident' }).getByRole('button', { name: 'Open Web UI' }).waitFor({ timeout: 10_000 });
-    await page.locator('.attempt', { hasText: 'sonar / resident' }).getByRole('button', { name: 'Stop Runtime' }).waitFor({ timeout: 10_000 });
+    await page.locator('.attempt', { hasText: 'sonar / resident' }).getByText('Runtime: unowned').waitFor({ timeout: 10_000 });
+    await page.locator('.attempt', { hasText: 'sonar / resident' }).getByText('historical result; recheck before attaching').waitFor({ timeout: 10_000 });
+    await page.locator('.attempt', { hasText: 'sonar / resident' }).getByText('No attach/open action is currently available.').waitFor({ timeout: 10_000 });
+    let state = await fetchLaunchState(page);
+    const expectedLaunchSessionId = state.attempts[0].expected_launch_session_ids[0];
+    writeNarsSessionStartedIndex({
+      siteRoot: fixture.sonarRoot,
+      sessionStartedEvent: {
+        event: 'session_started',
+        session_id: 'carrier_dashboard_test_sonar',
+        agent_id: 'sonar.resident',
+        timestamp: '2026-07-05T00:00:00.000Z',
+        site_root: fixture.sonarRoot,
+        runtime: 'narada-agent-runtime-server',
+        launch_session_id: expectedLaunchSessionId,
+        event_endpoint: 'ws://127.0.0.1:12345/events',
+        health_endpoint: fixture.healthEndpoint,
+        attach_commands: {
+          agent_cli: 'narada-agent-cli --attach ws://127.0.0.1:12345/events',
+          agent_web_ui: `narada-agent-web-ui --event-endpoint ws://127.0.0.1:12345/events --health-endpoint ${fixture.healthEndpoint}`,
+        },
+        session_path: fixture.sonarSessionPath,
+        events_path: join(fixture.sonarRoot, '.narada', 'crew', 'nars-sessions', 'carrier_dashboard_test_sonar', 'events.jsonl'),
+      },
+    });
+    await page.locator('.attempt', { hasText: 'sonar / resident' }).getByRole('button', { name: /Recheck This Launch/ }).click();
+    await page.locator('.attempt', { hasText: 'sonar / resident' }).getByText('Runtime: healthy · session carrier_dashboard_test_sonar').waitFor({ timeout: 20_000 });
+    await page.locator('.attempt', { hasText: 'sonar / resident' }).getByRole('button', { name: /Attach CLI To This Session/ }).waitFor({ timeout: 10_000 });
+    await page.locator('.attempt', { hasText: 'sonar / resident' }).getByRole('button', { name: /Open This UI/ }).waitFor({ timeout: 10_000 });
+    await page.locator('.attempt', { hasText: 'sonar / resident' }).getByRole('button', { name: /Stop This Runtime Tree/ }).waitFor({ timeout: 10_000 });
     const sonarAttemptText = await page.locator('.attempt', { hasText: 'sonar / resident' }).innerText();
     assert.doesNotMatch(sonarAttemptText, /\[object Object\]/);
     assert.doesNotMatch(sonarAttemptText, /\{"event":/);
-    await page.locator('.attempt', { hasText: 'sonar / resident' }).getByRole('button', { name: 'Open Web UI' }).click();
+    await page.locator('.attempt', { hasText: 'sonar / resident' }).getByRole('button', { name: /Open This UI/ }).click();
     await page.locator('#status').getByText('agent-web-ui projection handoff accepted by operator terminal authority.').waitFor({ timeout: 10_000 });
     await page.locator('.attempt', { hasText: 'sonar / resident' }).getByText('Projection: agent-web-ui · handed off').waitFor({ timeout: 10_000 });
-    await page.locator('.attempt', { hasText: 'sonar / resident' }).getByRole('button', { name: 'Attach CLI' }).click();
+    await page.locator('.attempt', { hasText: 'sonar / resident' }).getByRole('button', { name: /Attach CLI To This Session/ }).click();
     await page.locator('#status').getByText('agent-cli projection handoff accepted by operator terminal authority.').waitFor({ timeout: 10_000 });
     await page.locator('.attempt', { hasText: 'sonar / resident' }).getByText('Projection: agent-cli · handed off').waitFor({ timeout: 10_000 });
-    await page.locator('.attempt', { hasText: 'sonar / resident' }).getByRole('button', { name: 'Stop Runtime' }).click();
+    await page.locator('.attempt', { hasText: 'sonar / resident' }).getByRole('button', { name: /Stop This Runtime Tree/ }).click();
+    await page.locator('#status').getByText('Confirm stop only if you intend to close this session control path and its owned descendant process tree.').waitFor({ timeout: 10_000 });
+    await page.locator('.attempt', { hasText: 'sonar / resident' }).getByRole('button', { name: /Confirm Stop This Runtime Tree/ }).click();
     await page.locator('#status').getByText('Stop Runtime requested through NARS session control path.').waitFor({ timeout: 10_000 });
     const controlLines = (await readFile(fixture.sonarControlPath, 'utf8')).trim().split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
     assert.equal(controlLines.at(-1).method, 'session.close');
@@ -234,15 +274,15 @@ test('browser interactive selection UI can launch multiple sites before cancel',
     assert.equal(normalizedJsonPathText(launches[3]).includes(fixture.smartSchedulingRoot.replace(/\\/g, '/')), true);
     await page.locator('.attempt-title', { hasText: 'smart-scheduling / resident' }).waitFor({ timeout: 10_000 });
 
-    let state = await fetchLaunchState(page);
+    state = await fetchLaunchState(page);
     assert.equal(state.schema, 'narada.workspace_launch.ui_session_state.v1');
     assert.equal(state.attempts.length, 2);
     assert.equal(state.attempts.every((attempt) => attempt.status === 'launched'), true);
     assert.equal(state.attempts.every((attempt) => attempt.handoffs.length === 1), true);
     assert.equal(state.attempts.some((attempt) => attempt.actions.includes('stop-runtime')), true);
 
-    await page.locator('.attempt', { hasText: 'sonar / resident' }).getByRole('button', { name: 'Forget' }).click();
-    await page.getByText('Forget completed.').waitFor({ timeout: 10_000 });
+    await page.locator('.attempt', { hasText: 'sonar / resident' }).getByRole('button', { name: /Forget This Result/ }).click();
+    await page.getByText('Forget This Result completed.').waitFor({ timeout: 10_000 });
     await assert.rejects(() => page.locator('.attempt-title', { hasText: 'sonar / resident' }).waitFor({ timeout: 500 }));
     state = await fetchLaunchState(page);
     assert.equal(state.attempts.length, 1);

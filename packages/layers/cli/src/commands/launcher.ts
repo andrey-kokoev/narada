@@ -838,6 +838,17 @@ async function captureWorkspaceLaunchTerminalInvocation(path: string, args: stri
   return { status: 0 };
 }
 
+function requestWorkspaceLaunchSelectionUiProjectionOpen(url: string): void {
+  void executeOperatorProjectionOpenRequest({
+    projection_kind: 'browser_url',
+    target_ref: url,
+    purpose: 'workspace_launch_interactive_selection_ui',
+    caller: { package: '@narada2/cli', command: 'launcher workspace-launch', module: 'commands/launcher' },
+    mode: 'execute',
+    policy: { allow_visible_host_effect: true },
+  }).catch(() => undefined);
+}
+
 async function runPersistentWorkspaceLaunchSelectionUiCommand(
   options: WorkspaceLaunchPlanOptions,
   context: CommandContext,
@@ -1163,14 +1174,7 @@ async function runWorkspaceLaunchSelectionUi(
   if (fallback_used) {
     console.log(`[launcher] preferred UI port ${portPolicy.port} was occupied; using ephemeral port ${port} instead.`);
   }
-  await executeOperatorProjectionOpenRequest({
-    projection_kind: 'browser_url',
-    target_ref: url,
-    purpose: 'workspace_launch_interactive_selection_ui',
-    caller: { package: '@narada2/cli', command: 'launcher workspace-launch', module: 'commands/launcher' },
-    mode: 'execute',
-    policy: { allow_visible_host_effect: true },
-  });
+  requestWorkspaceLaunchSelectionUiProjectionOpen(url);
 
   try {
     return await Promise.race([
@@ -1377,7 +1381,7 @@ async function runPersistentWorkspaceLaunchSelectionUi(
                 schema: 'narada.workspace_launch.action_refusal.v1',
                 status: 'refused',
                 reason_code: 'attach_command_not_available',
-                message: `${action === 'open-web-ui' ? 'Open Web UI' : 'Attach CLI'} requires a discovered attachable NARS session.`,
+                message: `${action === 'open-web-ui' ? 'Open This UI' : 'Attach CLI To This Session'} requires a discovered attachable NARS session for this launch result.`,
                 dashboard: dashboardState(),
               });
               return;
@@ -1443,14 +1447,7 @@ async function runPersistentWorkspaceLaunchSelectionUi(
   console.log('Selection UI will remain available for additional launches until you close it.');
   uiSession.url = url;
   await persistWorkspaceLaunchDashboardState(persistenceDir, uiSession, attempts);
-  await executeOperatorProjectionOpenRequest({
-    projection_kind: 'browser_url',
-    target_ref: url,
-    purpose: 'workspace_launch_interactive_selection_ui',
-    caller: { package: '@narada2/cli', command: 'launcher workspace-launch', module: 'commands/launcher' },
-    mode: 'execute',
-    policy: { allow_visible_host_effect: true },
-  });
+  requestWorkspaceLaunchSelectionUiProjectionOpen(url);
 
   try {
     const status = await Promise.race([
@@ -1789,10 +1786,12 @@ function workspaceLaunchResultSummary(result: unknown, success: boolean): string
 }
 
 function workspaceLaunchActionsForAttempt(attempt: WorkspaceLaunchAttemptRecord): string[] {
-  const actions = ['recheck', 'retry', 'forget'];
-  if (workspaceLaunchRuntimeStopControlPath(attempt)) actions.unshift('stop-runtime');
-  if (workspaceLaunchAttachCommandForAction(attempt, 'open-web-ui')) actions.unshift('open-web-ui');
-  if (workspaceLaunchAttachCommandForAction(attempt, 'attach-cli')) actions.unshift('attach-cli');
+  const actions = ['recheck'];
+  if (workspaceLaunchAttachCommandForAction(attempt, 'open-web-ui')) actions.push('open-web-ui');
+  if (workspaceLaunchAttachCommandForAction(attempt, 'attach-cli')) actions.push('attach-cli');
+  actions.push('retry');
+  if (workspaceLaunchRuntimeStopControlPath(attempt)) actions.push('stop-runtime');
+  actions.push('forget');
   return unique(actions);
 }
 
@@ -2453,6 +2452,10 @@ export function buildWorkspaceLaunchSelectionHtml(model: Record<string, unknown>
     button { padding: 9px 14px; border-radius: 7px; border: 1px solid color-mix(in srgb, CanvasText 25%, transparent); background: ButtonFace; color: ButtonText; cursor: pointer; }
     button.primary { background: Highlight; color: HighlightText; border-color: Highlight; }
     .hint { color: color-mix(in srgb, CanvasText 68%, transparent); font-size: 13px; margin-top: 4px; }
+    .stage-strip { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 0 0 20px; }
+    .stage-card { border: 1px solid color-mix(in srgb, CanvasText 18%, transparent); border-radius: 8px; padding: 10px 12px; background: color-mix(in srgb, CanvasText 3%, transparent); }
+    .stage-card strong { display: block; font-size: 13px; margin-bottom: 4px; }
+    .stage-card span { display: block; color: color-mix(in srgb, CanvasText 68%, transparent); font-size: 12px; line-height: 1.35; }
     #status { margin-top: 18px; padding: 12px 14px; border: 1px solid color-mix(in srgb, CanvasText 18%, transparent); border-radius: 8px; white-space: pre-wrap; }
     #status:empty { display: none; }
     .dashboard { margin-top: 30px; }
@@ -2463,27 +2466,42 @@ export function buildWorkspaceLaunchSelectionHtml(model: Record<string, unknown>
     .attempt-title { font-weight: 700; }
     .attempt-status { color: color-mix(in srgb, CanvasText 68%, transparent); font-size: 13px; }
     .attempt-meta, .attempt-line { color: color-mix(in srgb, CanvasText 78%, transparent); font-size: 13px; margin-top: 6px; }
+    .attempt-scope-note { color: color-mix(in srgb, CanvasText 72%, transparent); font-size: 12px; margin-top: 10px; border-left: 3px solid color-mix(in srgb, CanvasText 22%, transparent); padding-left: 9px; }
+    .attempt-stage-list { display: grid; gap: 6px; margin-top: 12px; }
+    .attempt-stage { display: grid; grid-template-columns: 116px minmax(0, 1fr); gap: 10px; align-items: baseline; border: 1px solid color-mix(in srgb, CanvasText 12%, transparent); border-radius: 6px; padding: 7px 9px; }
+    .attempt-stage-name { color: color-mix(in srgb, CanvasText 62%, transparent); font-size: 12px; font-weight: 650; }
+    .attempt-stage-value { min-width: 0; color: color-mix(in srgb, CanvasText 82%, transparent); font-size: 13px; overflow-wrap: anywhere; }
     .attempt-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
     .attempt-actions button { padding: 6px 10px; }
+    .attempt-actions button:disabled { cursor: not-allowed; opacity: 0.52; }
+    .attempt-actions button[data-group="danger"] { border-color: color-mix(in srgb, #c23535 48%, CanvasText 20%); }
+    .attempt-actions button[data-group="create"] { border-color: color-mix(in srgb, Highlight 46%, CanvasText 20%); }
     details { margin-top: 10px; }
     pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; background: color-mix(in srgb, CanvasText 5%, transparent); padding: 10px; border-radius: 6px; }
+    @media (max-width: 720px) { .stage-strip { grid-template-columns: 1fr; } .attempt header { display: grid; } .attempt-stage { grid-template-columns: 1fr; gap: 2px; } }
   </style>
 </head>
 <body>
   <main>
     <h1>Narada Workspace Launch</h1>
+    <section class="stage-strip" aria-label="Launch stages">
+      <div class="stage-card"><strong>1. Configure</strong><span>Choose the Site, role, runtime, surface, and model defaults for a fresh launch.</span></div>
+      <div class="stage-card"><strong>2. Start New</strong><span>Submitting the form creates a new launch attempt; it does not attach to an old session.</span></div>
+      <div class="stage-card"><strong>3. Attach Explicitly</strong><span>Use result-card actions only when you want to open or attach to that specific launched session.</span></div>
+    </section>
     <form id="form">
       <fieldset><legend>Sites</legend><div id="sites"></div></fieldset>
       <fieldset><legend>Roles</legend><div id="roles"></div></fieldset>
       <fieldset><legend>Operator Surfaces</legend><div id="surfaces"></div><div class="hint">Explicit choices override registry default.</div></fieldset>
       <fieldset><legend>Runtime</legend><select id="runtime"></select></fieldset>
       <fieldset><legend>Intelligence Provider</legend><select id="provider"></select></fieldset>
-      <div class="actions"><button class="primary" type="submit">Launch</button><button id="cancel" type="button">Cancel</button></div>
-      <div class="hint">${persistent ? 'This page stays open after launch; adjust the selection and launch another Site when needed.' : 'This page submits one launch selection and then returns control to the terminal.'}</div>
+      <div class="hint">Remembered selections are defaults only. They do not bind to any old launch, carrier, runtime, or conversation.</div>
+      <div class="actions"><button class="primary" type="submit">Start New Session</button><button id="cancel" type="button">Cancel</button></div>
+      <div class="hint">${persistent ? 'Form submission always creates a new launch session. Use launched-session actions below only when you explicitly want to open or attach to an existing result.' : 'This page submits one new launch session and then returns control to the terminal.'}</div>
       <div id="status" role="status" aria-live="polite"></div>
     </form>
     <section class="dashboard" aria-labelledby="launches-title">
-      <h2 id="launches-title">Launched</h2>
+      <h2 id="launches-title">Launch Results</h2>
       <div id="launches" class="attempt-list"><p class="hint">No launches yet.</p></div>
     </section>
   </main>
@@ -2561,9 +2579,47 @@ export function buildWorkspaceLaunchSelectionHtml(model: Record<string, unknown>
     function statusLabel(value) {
       return String(value || '').replace(/_/g, ' ');
     }
-    function actionLabel(value) {
-      const labels = { 'open-web-ui': 'Open Web UI', 'attach-cli': 'Attach CLI', 'stop-runtime': 'Stop Runtime', recheck: 'Recheck', retry: 'Retry', forget: 'Forget' };
+    function actionLabel(value, historical = false) {
+      const labels = {
+        'open-web-ui': historical ? 'Open Last Observed UI' : 'Open This UI',
+        'attach-cli': historical ? 'Attach Last Observed CLI' : 'Attach CLI To This Session',
+        'stop-runtime': 'Stop This Runtime Tree',
+        recheck: 'Recheck This Launch',
+        retry: 'Start Fresh From This Result',
+        forget: 'Forget This Result',
+      };
       return labels[value] || statusLabel(value);
+    }
+    function actionScope(value) {
+      const scopes = {
+        'open-web-ui': 'Opens the UI projection recorded for this launch result.',
+        'attach-cli': 'Prints or runs the attach path for this exact session.',
+        'stop-runtime': 'Requests stop through this session control path and its owned descendant process tree.',
+        recheck: 'Refreshes observations for this launch result only.',
+        retry: 'Creates a new launch attempt from this result selection, not from the current form; it does not resume this session.',
+        forget: 'Removes this result card from the launcher dashboard only.',
+      };
+      return scopes[value] || 'Runs this launch-result action.';
+    }
+    function actionGroup(value) {
+      if (value === 'recheck') return 'inspect';
+      if (value === 'open-web-ui' || value === 'attach-cli') return 'attach';
+      if (value === 'retry') return 'create';
+      if (value === 'stop-runtime') return 'danger';
+      return 'manage';
+    }
+    function formatAge(timestamp) {
+      if (!timestamp) return null;
+      const ms = Date.parse(timestamp);
+      if (!Number.isFinite(ms)) return timestamp;
+      const seconds = Math.max(0, Math.round((Date.now() - ms) / 1000));
+      if (seconds < 60) return seconds + 's ago';
+      const minutes = Math.round(seconds / 60);
+      if (minutes < 60) return minutes + 'm ago';
+      const hours = Math.round(minutes / 60);
+      if (hours < 48) return hours + 'h ago';
+      const days = Math.round(hours / 24);
+      return days + 'd ago';
     }
     function attemptTitle(attempt) {
       const selection = attempt.selection || {};
@@ -2572,6 +2628,53 @@ export function buildWorkspaceLaunchSelectionHtml(model: Record<string, unknown>
     function attemptMeta(attempt) {
       const selection = attempt.selection || {};
       return [(selection.operatorSurface || []).join(' + '), selection.runtime, selection.intelligenceProvider].filter(Boolean).join(' · ');
+    }
+    function attemptUpdatedAt(attempt) {
+      return attempt.updated_at || attempt.created_at || attempt.started_at || null;
+    }
+    function attemptIsHistorical(attempt) {
+      const observations = attempt.observations || [];
+      const projections = attempt.projections || [];
+      const liveish = observations.some(value => value && /ok|healthy|ready|busy|running|observed/i.test(String(value.health || '')))
+        || projections.some(value => value && /handed off|handed_off|planned/i.test(String(value.status || '')));
+      return !liveish;
+    }
+    function attemptHistoryStatus(attempt) {
+      const updatedAt = attemptUpdatedAt(attempt);
+      const age = formatAge(updatedAt);
+      const suffix = updatedAt ? ' · last updated ' + (age ? age + ' (' + updatedAt + ')' : updatedAt) : '';
+      if (!attemptIsHistorical(attempt)) return 'last observation recorded' + suffix;
+      return 'historical result; recheck before attaching' + suffix;
+    }
+    function firstStatus(entries, key) {
+      const entry = (entries || []).find(value => value && value[key]);
+      return entry ? statusLabel(entry[key]) : null;
+    }
+    function agentInputStageValue(attempt) {
+      const observation = (attempt.observations || []).find(value => value && (value.session_id || value.health));
+      if (!observation) return 'Not verified by this launcher result.';
+      const health = statusLabel(observation.health || 'observed');
+      if (/busy|active turn|thinking/i.test(health)) return 'Runtime observed, but current turn may still be active.';
+      if (/degraded|stale|unavailable|failed|closed/i.test(health)) return 'Runtime observed as ' + health + '; input readiness is not guaranteed.';
+      return 'Runtime observed as ' + health + '; use the opened UI to verify turn responsiveness.';
+    }
+    function attemptStageRows(attempt) {
+      const actions = new Set(attempt.actions || []);
+      const historical = attemptIsHistorical(attempt);
+      const runtimeHealth = firstStatus(attempt.observations, 'health');
+      const projectionStatus = firstStatus(attempt.projections, 'status');
+      const handoffStatus = firstStatus(attempt.handoffs, 'status');
+      const attachActions = [];
+      if (actions.has('open-web-ui')) attachActions.push(actionLabel('open-web-ui', historical));
+      if (actions.has('attach-cli')) attachActions.push(actionLabel('attach-cli', historical));
+      return [
+        { name: 'Configure', value: 'Selection recorded as launch input only.' },
+        { name: 'Start New', value: attempt.result_summary || statusLabel(attempt.status) || 'Launch attempt recorded.' },
+        { name: 'Process', value: runtimeHealth ? 'Observed ' + runtimeHealth : (handoffStatus ? 'Handoff ' + handoffStatus : 'No runtime observation yet.') },
+        { name: 'UI Projection', value: projectionStatus ? 'UI projection ' + projectionStatus : 'No UI projection observation yet.' },
+        { name: 'Agent Input', value: agentInputStageValue(attempt) },
+        { name: 'Attach/Open', value: attachActions.length ? 'Available actions: ' + attachActions.join(', ') : 'No attach/open action is currently available.' },
+      ];
     }
     function renderDashboard(state) {
       const el = document.getElementById('launches');
@@ -2587,7 +2690,16 @@ export function buildWorkspaceLaunchSelectionHtml(model: Record<string, unknown>
         const statusEl = document.createElement('div'); statusEl.className = 'attempt-status'; statusEl.textContent = statusLabel(attempt.status);
         header.append(title, statusEl); card.append(header);
         const meta = document.createElement('div'); meta.className = 'attempt-meta'; meta.textContent = attemptMeta(attempt); card.append(meta);
+        const history = document.createElement('div'); history.className = 'attempt-line'; history.textContent = attemptHistoryStatus(attempt); card.append(history);
         const summary = document.createElement('div'); summary.className = 'attempt-line'; summary.textContent = attempt.result_summary || ''; card.append(summary);
+        const stages = document.createElement('div'); stages.className = 'attempt-stage-list'; stages.setAttribute('aria-label', 'Launch transition stages');
+        for (const row of attemptStageRows(attempt)) {
+          const stage = document.createElement('div'); stage.className = 'attempt-stage';
+          const name = document.createElement('span'); name.className = 'attempt-stage-name'; name.textContent = row.name;
+          const value = document.createElement('span'); value.className = 'attempt-stage-value'; value.textContent = row.value;
+          stage.append(name, value); stages.append(stage);
+        }
+        card.append(stages);
         for (const handoff of attempt.handoffs || []) {
           const line = document.createElement('div'); line.className = 'attempt-line'; line.textContent = 'Terminal handoff: ' + statusLabel(handoff.status); card.append(line);
         }
@@ -2597,10 +2709,20 @@ export function buildWorkspaceLaunchSelectionHtml(model: Record<string, unknown>
         for (const projection of attempt.projections || []) {
           const line = document.createElement('div'); line.className = 'attempt-line'; line.textContent = 'Projection: ' + projection.projection_kind + ' · ' + statusLabel(projection.status); card.append(line);
         }
+        if ((attempt.actions || []).includes('stop-runtime')) {
+          const scope = document.createElement('div'); scope.className = 'attempt-scope-note'; scope.textContent = 'Stop scope: this session control path and its owned descendant process tree only.'; card.append(scope);
+        }
         const actions = document.createElement('div'); actions.className = 'attempt-actions';
+        const historical = attemptIsHistorical(attempt);
         for (const action of attempt.actions || []) {
           if (action === 'stop-projection' || action === 'kill-process') continue;
-          const button = document.createElement('button'); button.type = 'button'; button.dataset.action = action; button.dataset.launchAttemptId = attempt.launch_attempt_id; button.textContent = actionLabel(action); actions.append(button);
+          const button = document.createElement('button'); button.type = 'button'; button.dataset.action = action; button.dataset.launchAttemptId = attempt.launch_attempt_id; button.dataset.group = actionGroup(action); button.textContent = actionLabel(action, historical); button.title = actionScope(action); button.setAttribute('aria-label', actionLabel(action, historical) + '. ' + actionScope(action));
+          if (historical && (action === 'open-web-ui' || action === 'attach-cli')) {
+            button.disabled = true;
+            button.title = 'Recheck this launch before using last-observed attach actions.';
+            button.setAttribute('aria-label', actionLabel(action, true) + '. Disabled until Recheck This Launch refreshes this result.');
+          }
+          actions.append(button);
         }
         card.append(actions);
         const details = document.createElement('details');
@@ -2617,6 +2739,25 @@ export function buildWorkspaceLaunchSelectionHtml(model: Record<string, unknown>
     }
     async function runLaunchAction(action, launchAttemptId) {
       const status = document.getElementById('status');
+      if (action !== 'stop-runtime') {
+        for (const button of document.querySelectorAll('button[data-action="stop-runtime"]')) {
+          delete button.dataset.confirmStop;
+          button.textContent = actionLabel('stop-runtime');
+          button.title = actionScope('stop-runtime');
+          button.setAttribute('aria-label', actionLabel('stop-runtime') + '. ' + actionScope('stop-runtime'));
+        }
+      }
+      if (action === 'stop-runtime') {
+        const button = [...document.querySelectorAll('button[data-action="stop-runtime"]')].find(candidate => candidate.dataset.launchAttemptId === launchAttemptId);
+        if (button && button.dataset.confirmStop !== 'true') {
+          button.dataset.confirmStop = 'true';
+          button.textContent = 'Confirm Stop This Runtime Tree';
+          button.title = 'Second click confirms stopping this session control path and its owned descendant process tree.';
+          button.setAttribute('aria-label', 'Confirm Stop This Runtime Tree. Second click confirms stopping this session control path and its owned descendant process tree.');
+          status.textContent = 'Confirm stop only if you intend to close this session control path and its owned descendant process tree.';
+          return;
+        }
+      }
       status.textContent = actionLabel(action) + '...';
       const response = await fetch('/launches/' + encodeURIComponent(launchAttemptId) + '/' + encodeURIComponent(action), { method: 'POST' });
       const result = await response.json().catch(() => ({}));
@@ -2634,16 +2775,16 @@ export function buildWorkspaceLaunchSelectionHtml(model: Record<string, unknown>
       const explicit = operatorSurface.filter(value => value !== 'registry default');
       const payload = { site: [...selectedSites], role: [...selectedRoles], operatorSurface: explicit.length ? explicit : operatorSurface, runtime: document.getElementById('runtime').value, intelligenceProvider: document.getElementById('provider').value };
       if (submit) submit.disabled = true;
-      status.textContent = 'Launching selected workspace...';
+      status.textContent = 'Creating a fresh launch attempt. This does not attach to any previous session.';
       try {
         const response = await fetch('/submit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
         const result = await response.json().catch(() => ({}));
         if (response.ok) {
           status.textContent = persistent
-            ? 'Launch accepted. You can adjust the selection and launch another Site when needed.'
-            : 'Selection submitted. You can return to the terminal.';
+            ? 'New launch accepted. Open or attach only from the specific result card below.'
+            : 'New launch submitted. You can return to the terminal.';
           renderDashboard(result.dashboard || {});
-          if (!persistent) document.body.innerHTML = '<main><h1>Selection submitted</h1><p>You can return to the terminal.</p></main>';
+          if (!persistent) document.body.innerHTML = '<main><h1>New launch submitted</h1><p>You can return to the terminal.</p></main>';
         } else {
           status.textContent = 'Launch failed: ' + (result.error || result.status || response.statusText);
           if (result.dashboard) renderDashboard(result.dashboard);
