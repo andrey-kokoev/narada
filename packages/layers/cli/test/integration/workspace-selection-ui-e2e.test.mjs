@@ -254,7 +254,7 @@ test('browser interactive selection UI can launch multiple sites before cancel',
     assert.doesNotMatch(sonarAttemptText, /\[object Object\]/);
     assert.doesNotMatch(sonarAttemptText, /\{"event":/);
     await page.locator('.attempt', { hasText: 'sonar / resident' }).getByRole('button', { name: /Open This UI/ }).click();
-    await page.locator('#status').getByText('agent-web-ui projection handoff accepted by operator terminal authority.').waitFor({ timeout: 10_000 });
+    await page.locator('#status').getByText('agent-web-ui projection host started hidden; browser projection owns visible operator surface.').waitFor({ timeout: 10_000 });
     await page.locator('.attempt', { hasText: 'sonar / resident' }).getByText('Projection: agent-web-ui · handed off').waitFor({ timeout: 10_000 });
     await page.locator('.attempt', { hasText: 'sonar / resident' }).getByRole('button', { name: /Attach CLI To This Session/ }).click();
     await page.locator('#status').getByText('agent-cli projection handoff accepted by operator terminal authority.').waitFor({ timeout: 10_000 });

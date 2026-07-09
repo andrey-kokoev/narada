@@ -6,6 +6,7 @@ export type ProcessLaunchPosture =
   | 'provider_subprocess'
   | 'mcp_server'
   | 'governed_command_execution'
+  | 'operator_projection_host'
   | 'test_child'
   | 'elevated_or_operator_prompt';
 

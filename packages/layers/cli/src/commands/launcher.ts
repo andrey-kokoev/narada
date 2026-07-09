@@ -2,6 +2,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { appendFile, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { startOperatorTerminal } from '@narada2/process-launch-posture';
+import { spawnHiddenPostureProcess } from '@narada2/process-launch-posture';
 import { executeOperatorProjectionOpenRequest } from '@narada2/process-launch-posture';
 import { runGovernedCommandSync } from '@narada2/process-launch-posture';
 import { dirname, join, resolve } from 'node:path';
@@ -32,6 +33,39 @@ interface ProviderRegistry {
     meaning?: string;
     support_state?: string;
   }>;
+}
+
+async function workspaceLaunchStartHiddenProjectionHost(command: string, cwd: string): Promise<Record<string, unknown>> {
+  const hostCommand = process.platform === 'win32' ? 'pwsh' : 'sh';
+  const hostArgs = process.platform === 'win32'
+    ? ['-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', command]
+    : ['-lc', command];
+  const child = spawnHiddenPostureProcess(hostCommand, hostArgs, {
+    posture: 'operator_projection_host',
+    cwd,
+    detached: true,
+    stdio: 'ignore',
+    env: process.env,
+  });
+  await new Promise<void>((resolvePromise, rejectPromise) => {
+    child.once('error', rejectPromise);
+    child.once('spawn', () => resolvePromise());
+  });
+  child.unref();
+  return {
+    posture: 'operator_projection_host',
+    command: hostCommand,
+    args: redactWorkspaceLaunchArgv(hostArgs),
+    cwd,
+    detached: true,
+    stdio: 'ignore',
+    windowsHide: true,
+    pid: typeof child.pid === 'number' ? child.pid : null,
+  };
+}
+
+function redactWorkspaceLaunchCommand(command: string): string {
+  return redactWorkspaceLaunchArgv([command])[0] ?? '<redacted>';
 }
 
 export async function workspaceLaunchReapStaleSessionOwnedDescendants(
@@ -1851,6 +1885,40 @@ async function workspaceLaunchExecuteProjectionAction(
   const sessionId = workspaceLaunchProjectionSessionId(attempt);
   const title = `${projectionKind} ${sessionId ?? attempt.launch_attempt_id}`;
   const cwd = workspaceLaunchProjectionCwd(attempt) ?? process.cwd();
+  if (action === 'open-web-ui') {
+    try {
+      const host = await workspaceLaunchStartHiddenProjectionHost(command, cwd);
+      return {
+        schema: 'narada.workspace_launch.observed_projection.v1',
+        observation_id: workspaceLaunchId('wlp'),
+        launch_attempt_id: attempt.launch_attempt_id,
+        projection_kind: projectionKind,
+        session_id: sessionId,
+        status: 'handed_off',
+        command,
+        authority: 'nars_client_projection_contract',
+        ownership_posture: 'handoff_only',
+        observed_at: new Date().toISOString(),
+        message: `${projectionKind} projection host started hidden; browser projection owns visible operator surface.`,
+        diagnostic: { ...host, command: redactWorkspaceLaunchCommand(command) },
+      };
+    } catch (error) {
+      return {
+        schema: 'narada.workspace_launch.observed_projection.v1',
+        observation_id: workspaceLaunchId('wlp'),
+        launch_attempt_id: attempt.launch_attempt_id,
+        projection_kind: projectionKind,
+        session_id: sessionId,
+        status: 'failed',
+        command,
+        authority: 'nars_client_projection_contract',
+        ownership_posture: 'handoff_only',
+        observed_at: new Date().toISOString(),
+        message: error instanceof Error ? error.message : String(error),
+        diagnostic: { command: redactWorkspaceLaunchCommand(command) },
+      };
+    }
+  }
   const wtArgs = ['new-tab', '--title', title, '-d', cwd, 'pwsh', '-NoExit', '-Command', command];
   const effectiveWtArgs = process.env.WT_SESSION ? ['-w', '0', ...wtArgs] : wtArgs;
   const terminalCaptureLog = process.env.NARADA_WORKSPACE_LAUNCH_TERMINAL_LOG;

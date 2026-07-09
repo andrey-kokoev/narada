@@ -214,6 +214,22 @@ test('spawnHiddenPostureProcess refuses visible-only posture names', () => {
   assert.throws(() => spawnHiddenPostureProcess('node', ['--version'], { posture: 'operator_terminal' }), /hidden_process_posture_required/);
 });
 
+test('spawnHiddenPostureProcess admits hidden operator projection host posture', () => {
+  let observed = null;
+  const child = spawnHiddenPostureProcess('node', ['server.mjs'], {
+    posture: 'operator_projection_host',
+    spawnImpl: (command, args, options) => {
+      observed = { command, args, options };
+      return { once() {}, unref() {} };
+    },
+  });
+
+  assert.ok(child);
+  assert.equal(observed.command, 'node');
+  assert.deepEqual(observed.args, ['server.mjs']);
+  assert.equal(observed.options.windowsHide, true);
+});
+
 test('startOperatorTerminal makes visibility explicit', () => {
   let observed = null;
   const output = startOperatorTerminal('wt', ['new-tab'], {
