@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
+import BoxVisibilitySelector, { type BoxVisibilitySelectorItem } from './BoxVisibilitySelector.vue';
 import BoxRowShell from './BoxRowShell.vue';
 import ProjectionVerbositySelect from './ProjectionVerbositySelect.vue';
-import StatusBoxSelector, { type StatusBoxSelectorItem } from './StatusBoxSelector.vue';
+import { useBoxVisibilityPreference } from '../composables/useBoxVisibilityPreference';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import type { AgentActivityState } from '../composables/useAgentActivity';
 import type { useCloudflareProjection } from '../composables/useCloudflareProjection';
@@ -43,7 +44,7 @@ const STATUS_BOX_STORAGE_KEY = 'narada:agent-web-ui:status-boxes.v3';
 const DEFAULT_STATUS_BOX_IDS = ['events', 'health', 'intelligence', 'authority', 'view', 'cloudflare'] as const;
 type StatusBoxId = typeof DEFAULT_STATUS_BOX_IDS[number];
 const DEFAULT_VISIBLE_STATUS_BOX_IDS: readonly StatusBoxId[] = ['intelligence', 'view'];
-const statusBoxDefinitions: Record<StatusBoxId, Omit<StatusBoxSelectorItem, 'visible'>> = {
+const statusBoxDefinitions: Record<StatusBoxId, Omit<BoxVisibilitySelectorItem, 'visible'>> = {
   events: { id: 'events', label: 'Events', description: 'NARS event stream endpoint used by this browser.' },
   health: { id: 'health', label: 'Health', description: 'HTTP health endpoint used to poll the runtime.' },
   intelligence: { id: 'intelligence', label: 'Intelligence', description: 'Provider, model, and thinking level.' },
@@ -51,11 +52,16 @@ const statusBoxDefinitions: Record<StatusBoxId, Omit<StatusBoxSelectorItem, 'vis
   view: { id: 'view', label: 'View', description: 'Projection level for the event feed.' },
   cloudflare: { id: 'cloudflare', label: 'Cloudflare Projection', description: 'Optional remote browser projection controls.' },
 };
-const visibleStatusBoxIds = ref(loadStatusBoxIds());
 const availableStatusBoxIds = computed(() => DEFAULT_STATUS_BOX_IDS.filter((id) => id !== 'cloudflare' || props.cloudflareProjection.available.value));
+const statusBoxVisibility = useBoxVisibilityPreference({
+  storageKey: STATUS_BOX_STORAGE_KEY,
+  itemIds: DEFAULT_STATUS_BOX_IDS,
+  defaultVisibleIds: DEFAULT_VISIBLE_STATUS_BOX_IDS,
+  availableIds: availableStatusBoxIds,
+});
 const statusBoxSelectorItems = computed(() => availableStatusBoxIds.value.map((id) => ({
   ...statusBoxDefinitions[id],
-  visible: isStatusBoxVisible(id),
+  visible: statusBoxVisibility.isVisible(id),
 })));
 
 async function copyRemoteUrl(url: string) {
@@ -69,41 +75,16 @@ async function copyRemoteUrl(url: string) {
   }
 }
 
-function loadStatusBoxIds(): Set<StatusBoxId> {
-  if (typeof window === 'undefined') return new Set(DEFAULT_VISIBLE_STATUS_BOX_IDS);
-  try {
-    const parsed = JSON.parse(window.localStorage.getItem(STATUS_BOX_STORAGE_KEY) ?? 'null') as unknown;
-    if (!Array.isArray(parsed)) return new Set(DEFAULT_VISIBLE_STATUS_BOX_IDS);
-    const allowed = new Set(DEFAULT_STATUS_BOX_IDS);
-    const loaded = parsed.filter((id): id is StatusBoxId => typeof id === 'string' && allowed.has(id as StatusBoxId));
-    return loaded.length ? new Set(loaded) : new Set(DEFAULT_VISIBLE_STATUS_BOX_IDS);
-  } catch {
-    return new Set(DEFAULT_VISIBLE_STATUS_BOX_IDS);
-  }
-}
-
-function persistStatusBoxIds(ids: Set<StatusBoxId>) {
-  if (typeof window === 'undefined') return;
-  window.localStorage.setItem(STATUS_BOX_STORAGE_KEY, JSON.stringify([...ids]));
-}
-
 function isStatusBoxVisible(id: StatusBoxId): boolean {
-  return availableStatusBoxIds.value.includes(id) && visibleStatusBoxIds.value.has(id);
+  return statusBoxVisibility.isVisible(id);
 }
 
 function toggleStatusBox(id: string) {
-  if (!availableStatusBoxIds.value.includes(id as StatusBoxId)) return;
-  const next = new Set(visibleStatusBoxIds.value);
-  if (next.has(id as StatusBoxId)) next.delete(id as StatusBoxId);
-  else next.add(id as StatusBoxId);
-  visibleStatusBoxIds.value = next;
-  persistStatusBoxIds(next);
+  statusBoxVisibility.toggle(id);
 }
 
 function resetStatusBoxes() {
-  const next = new Set(DEFAULT_VISIBLE_STATUS_BOX_IDS);
-  visibleStatusBoxIds.value = next;
-  persistStatusBoxIds(next);
+  statusBoxVisibility.reset();
 }
 
 function authorityText(authority: Record<string, unknown> | null): string {
@@ -387,7 +368,7 @@ function stringField(record: Record<string, unknown>, field: string): string | n
         >
           <span aria-hidden="true">^</span>
         </button>
-        <StatusBoxSelector
+        <BoxVisibilitySelector
           :boxes="statusBoxSelectorItems"
           panel-id="status-row-box-selector-panel"
           trigger-label="Status boxes"

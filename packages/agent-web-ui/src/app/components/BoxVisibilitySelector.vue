@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 
-export interface StatusBoxSelectorItem {
+export interface BoxVisibilitySelectorItem {
   id: string;
   label: string;
   description: string;
@@ -10,7 +10,7 @@ export interface StatusBoxSelectorItem {
 }
 
 const props = defineProps<{
-  boxes: StatusBoxSelectorItem[];
+  boxes: BoxVisibilitySelectorItem[];
   panelId?: string;
   title?: string;
   description?: string;
@@ -29,9 +29,9 @@ const open = ref(false);
 const searchText = ref('');
 const visibleCount = computed(() => props.boxes.filter((box) => box.visible).length);
 const boxCountLabel = computed(() => `${visibleCount.value}/${props.boxes.length}`);
-const panelId = computed(() => props.panelId ?? 'status-box-selector-panel');
-const title = computed(() => props.title ?? 'Status Boxes');
-const description = computed(() => props.description ?? 'Select which boxes are shown in the session status row.');
+const panelId = computed(() => props.panelId ?? 'box-visibility-selector-panel');
+const title = computed(() => props.title ?? 'Boxes');
+const description = computed(() => props.description ?? 'Select which boxes are shown.');
 const triggerTitle = computed(() => `${props.triggerLabel ?? 'Boxes'}: ${boxCountLabel.value} visible`);
 const closeLabel = computed(() => `Close ${title.value.toLowerCase()}`);
 const showSearch = computed(() => props.boxes.length >= 5);
@@ -43,21 +43,21 @@ const filteredBoxes = computed(() => {
 </script>
 
 <template>
-  <div class="status-box-selector-shell" :data-placement="props.placement ?? 'status-row'">
-    <button type="button" class="status-box-selector-trigger" :aria-expanded="open" :aria-controls="panelId" :title="triggerTitle" :aria-label="`Choose ${props.triggerLabel ?? 'boxes'}`" @click="open = !open">
-      <span class="status-box-selector-icon" aria-hidden="true">
+  <div class="box-visibility-selector-shell" :data-placement="props.placement ?? 'status-row'">
+    <button type="button" class="box-visibility-selector-trigger" :aria-expanded="open" :aria-controls="panelId" :title="triggerTitle" :aria-label="`Choose ${props.triggerLabel ?? 'boxes'}`" @click="open = !open">
+      <span class="box-visibility-selector-icon" aria-hidden="true">
         <span></span>
         <span></span>
         <span></span>
         <span></span>
       </span>
-      <span class="status-box-selector-count" aria-hidden="true">{{ boxCountLabel }}</span>
+      <span class="box-visibility-selector-count" aria-hidden="true">{{ boxCountLabel }}</span>
     </button>
     <Teleport to="body">
       <Transition name="mcp-drawer">
         <div v-if="open" class="mcp-drawer-layer" role="presentation">
           <button type="button" class="mcp-drawer-backdrop" :aria-label="closeLabel" @click="open = false"></button>
-          <aside :id="panelId" class="mcp-panel status-box-selector-panel" :aria-label="props.panelAriaLabel ?? title">
+          <aside :id="panelId" class="mcp-panel box-visibility-selector-panel" :aria-label="props.panelAriaLabel ?? title">
             <header class="mcp-panel-header">
               <div>
                 <h2>{{ title }}</h2>
@@ -65,7 +65,7 @@ const filteredBoxes = computed(() => {
               </div>
               <button type="button" class="mcp-panel-close" :aria-label="closeLabel" @click="open = false">Close</button>
             </header>
-            <div class="status-box-selector-actions">
+            <div class="box-visibility-selector-actions">
               <label v-if="showSearch" class="mcp-panel-search">
                 <span>Search</span>
                 <input v-model="searchText" type="search" autocomplete="off" spellcheck="false" :placeholder="props.searchPlaceholder ?? 'Filter boxes'" />
@@ -73,8 +73,8 @@ const filteredBoxes = computed(() => {
               <span>{{ boxCountLabel }} visible</span>
               <button type="button" @click="emit('reset')">Reset</button>
             </div>
-            <ol class="status-box-selector-list">
-              <li v-for="box in filteredBoxes" :key="box.id" class="status-box-selector-item" :data-visible="box.visible">
+            <ol class="box-visibility-selector-list">
+              <li v-for="box in filteredBoxes" :key="box.id" class="box-visibility-selector-item" :data-visible="box.visible">
                 <label>
                   <input type="checkbox" :checked="box.visible" :disabled="box.required" @change="emit('toggle', box.id)" />
                   <span>

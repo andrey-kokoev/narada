@@ -19,12 +19,13 @@ import SchedulerPanel from './SchedulerPanel.vue';
 import SessionStatusBar from './SessionStatusBar.vue';
 import SiteInfoPanel from './SiteInfoPanel.vue';
 import SopPanel from './SopPanel.vue';
-import StatusBoxSelector, { type StatusBoxSelectorItem } from './StatusBoxSelector.vue';
+import BoxVisibilitySelector, { type BoxVisibilitySelectorItem } from './BoxVisibilitySelector.vue';
 import SurfaceNavigator from './SurfaceNavigator.vue';
 import SurfaceFeedbackPanel from './SurfaceFeedbackPanel.vue';
 import TaskLifecyclePanel from './TaskLifecyclePanel.vue';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import { summarizeSessionTitleParts } from '../../session-identity.js';
+import { useBoxVisibilityPreference } from '../composables/useBoxVisibilityPreference';
 import type { AgentActivityState } from '../composables/useAgentActivity';
 import type { AffordanceConfirmationItem } from '../composables/useAffordanceConfirmations';
 import type { ArtifactsSummary } from '../composables/useArtifactsSummary';
@@ -124,7 +125,12 @@ const HEADER_ITEM_IDS = ['identity', 'snippets', 'surfaces', 'runtime', 'session
 type HeaderItemId = typeof HEADER_ITEM_IDS[number];
 const DEFAULT_VISIBLE_HEADER_ITEM_IDS: readonly HeaderItemId[] = ['identity', 'surfaces', 'runtime', 'status_toggle'];
 const statusRowOpen = ref(loadBooleanPreference(STATUS_ROW_OPEN_STORAGE_KEY, true));
-const visibleHeaderItemIds = ref(loadHeaderItemIds());
+const headerVisibility = useBoxVisibilityPreference({
+  storageKey: HEADER_ITEM_STORAGE_KEY,
+  itemIds: HEADER_ITEM_IDS,
+  defaultVisibleIds: DEFAULT_VISIBLE_HEADER_ITEM_IDS,
+  requiredIds: ['identity'],
+});
 const artifactsPanelOpen = ref(false);
 const runtimeTopologyPanelOpen = ref(false);
 const mcpPanelOpen = ref(false);
@@ -238,7 +244,7 @@ const surfaceGroups = computed(() => [
     ],
   },
 ]);
-const headerItemDefinitions: Record<HeaderItemId, Omit<StatusBoxSelectorItem, 'visible'>> = {
+const headerItemDefinitions: Record<HeaderItemId, Omit<BoxVisibilitySelectorItem, 'visible'>> = {
   identity: { id: 'identity', label: 'Identity', description: 'Site and agent identity title for this session.', required: true },
   snippets: { id: 'snippets', label: 'Snippets', description: 'Browser-local reusable operator inputs.' },
   surfaces: { id: 'surfaces', label: 'Navigate', description: 'Navigation drawer for workflow and diagnostic panels.' },
@@ -260,7 +266,6 @@ const headerTooltips = {
   header_selector: 'Choose which controls appear in the first row.',
 };
 watch(statusRowOpen, (value) => persistBooleanPreference(STATUS_ROW_OPEN_STORAGE_KEY, value));
-watch(visibleHeaderItemIds, (value) => persistHeaderItemIds(value));
 watch(() => props.operatorSnippetOpenRequest, (request) => {
   if (request) snippetPanelOpen.value = true;
 });
@@ -305,38 +310,16 @@ function persistBooleanPreference(key: string, value: boolean) {
   window.localStorage.setItem(key, String(value));
 }
 
-function loadHeaderItemIds(): Set<HeaderItemId> {
-  if (typeof window === 'undefined') return new Set(DEFAULT_VISIBLE_HEADER_ITEM_IDS);
-  try {
-    const parsed = JSON.parse(window.localStorage.getItem(HEADER_ITEM_STORAGE_KEY) ?? 'null') as unknown;
-    if (!Array.isArray(parsed)) return new Set(DEFAULT_VISIBLE_HEADER_ITEM_IDS);
-    const allowed = new Set(HEADER_ITEM_IDS);
-    const loaded = parsed.filter((id): id is HeaderItemId => typeof id === 'string' && allowed.has(id as HeaderItemId));
-    return loaded.length ? new Set(loaded) : new Set(DEFAULT_VISIBLE_HEADER_ITEM_IDS);
-  } catch {
-    return new Set(DEFAULT_VISIBLE_HEADER_ITEM_IDS);
-  }
-}
-
-function persistHeaderItemIds(ids: Set<HeaderItemId>) {
-  if (typeof window === 'undefined') return;
-  window.localStorage.setItem(HEADER_ITEM_STORAGE_KEY, JSON.stringify([...ids]));
-}
-
 function isHeaderItemVisible(id: HeaderItemId): boolean {
-  return visibleHeaderItemIds.value.has(id) || headerItemDefinitions[id].required === true;
+  return headerVisibility.isVisible(id);
 }
 
 function toggleHeaderItem(id: string) {
-  if (!HEADER_ITEM_IDS.includes(id as HeaderItemId) || headerItemDefinitions[id as HeaderItemId].required) return;
-  const next = new Set(visibleHeaderItemIds.value);
-  if (next.has(id as HeaderItemId)) next.delete(id as HeaderItemId);
-  else next.add(id as HeaderItemId);
-  visibleHeaderItemIds.value = next;
+  headerVisibility.toggle(id);
 }
 
 function resetHeaderItems() {
-  visibleHeaderItemIds.value = new Set(DEFAULT_VISIBLE_HEADER_ITEM_IDS);
+  headerVisibility.reset();
 }
 
 </script>
@@ -449,7 +432,7 @@ function resetHeaderItems() {
           <template #controls>
             <Tooltip>
               <TooltipTrigger as-child>
-                <StatusBoxSelector
+                <BoxVisibilitySelector
                   :boxes="headerItemSelectorItems"
                   panel-id="header-item-selector-panel"
                   trigger-label="Header items"

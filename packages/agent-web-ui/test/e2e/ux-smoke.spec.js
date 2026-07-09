@@ -448,3 +448,63 @@ test('agent-web-ui transcript scroll authority preserves operator-controlled his
     assert.equal(followed.buttonVisible, false, `expected new-message affordance to clear after explicit follow: ${JSON.stringify(followed)}`);
   });
 });
+
+test('agent-web-ui operator footer selector hides and restores target and input boxes', async ({ page }) => {
+  await withScenarioServer('normal', async (url, publishEvents) => {
+    await page.setViewportSize({ width: 900, height: 560 });
+    await page.goto(url);
+    await page.waitForLoadState('domcontentloaded');
+    publishEvents();
+    await page.waitForSelector('#operator-input');
+    await page.locator('button[aria-label="Choose Operator footer items"]').click();
+    const clickFooterSelectorItem = async (label) => {
+      await page.evaluate((itemLabel) => {
+        const rows = [...document.querySelectorAll('#operator-footer-item-selector-panel .box-visibility-selector-item')];
+        const row = rows.find((entry) => entry.querySelector('strong')?.textContent?.trim() === itemLabel);
+        const checkbox = row?.querySelector('input[type="checkbox"]');
+        if (!(checkbox instanceof HTMLInputElement)) throw new Error(`missing_footer_selector_item:${itemLabel}`);
+        checkbox.click();
+      }, label);
+    };
+    await clickFooterSelectorItem('Target');
+    await page.waitForTimeout(150);
+    assert.equal(await page.locator('.composer-target').count(), 0, 'expected target box to hide');
+    assert.equal(await page.locator('#operator-input').count(), 1, 'expected input box to remain visible after hiding target');
+    await clickFooterSelectorItem('Operator Input');
+    await page.waitForTimeout(150);
+    assert.equal(await page.locator('#operator-input').count(), 0, 'expected input box to hide');
+    assert.equal(await page.locator('button[aria-label="Choose Operator footer items"]').count(), 1, 'expected selector to remain available when boxes are hidden');
+    await clickFooterSelectorItem('Operator Input');
+    await clickFooterSelectorItem('Target');
+    await page.waitForTimeout(150);
+    assert.equal(await page.locator('.composer-target').count(), 1, 'expected target box to restore');
+    assert.equal(await page.locator('#operator-input').count(), 1, 'expected input box to restore');
+    const stored = await page.evaluate(() => window.localStorage.getItem('narada:agent-web-ui:operator-footer-items.v1'));
+    assert.equal(stored, JSON.stringify(['target', 'input']), `expected footer selector state to persist in canonical order: ${stored}`);
+    await page.evaluate(() => window.localStorage.setItem('narada:agent-web-ui:operator-footer-items.v1', '[]'));
+    await page.reload();
+    await page.waitForLoadState('domcontentloaded');
+    assert.equal(await page.locator('.composer-target').count(), 0, 'expected persisted empty footer to hide target after reload');
+    assert.equal(await page.locator('#operator-input').count(), 0, 'expected persisted empty footer to hide input after reload');
+    await page.locator('button[aria-label="Choose Operator footer items"]').click();
+    await clickFooterSelectorItem('Operator Input');
+    await page.waitForSelector('#operator-input');
+    assert.equal(await page.locator('#operator-input').count(), 1, 'expected selector to recover input from persisted empty footer state');
+    await page.setViewportSize({ width: 360, height: 560 });
+    await page.waitForTimeout(150);
+    const mobileLayout = await page.evaluate(() => {
+      const form = document.querySelector('#operator-form');
+      const input = document.querySelector('#operator-input');
+      return {
+        bodyWidth: document.documentElement.clientWidth,
+        bodyScrollWidth: document.documentElement.scrollWidth,
+        formWidth: form?.getBoundingClientRect().width ?? 0,
+        inputWidth: input?.getBoundingClientRect().width ?? 0,
+        selectorVisible: Boolean(document.querySelector('button[aria-label="Choose Operator footer items"]')),
+      };
+    });
+    assert.equal(mobileLayout.selectorVisible, true, `expected selector to remain visible on mobile: ${JSON.stringify(mobileLayout)}`);
+    assert.ok(mobileLayout.inputWidth > 240, `expected mobile input to retain usable width: ${JSON.stringify(mobileLayout)}`);
+    assert.ok(mobileLayout.bodyScrollWidth <= mobileLayout.bodyWidth + 1, `expected no horizontal overflow in mobile footer: ${JSON.stringify(mobileLayout)}`);
+  });
+});

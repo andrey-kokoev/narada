@@ -9,6 +9,13 @@ export default defineConfig({
   build: {
     outDir: '../dist',
     emptyOutDir: true,
+    chunkSizeWarningLimit: 900,
+    rollupOptions: {
+      onwarn(warning, warn) {
+        if (warning.code === 'INVALID_ANNOTATION' && /@vueuse[\\/]core/.test(String(warning.id ?? ''))) return;
+        warn(warning);
+      },
+    },
   },
   resolve: {
     alias: {

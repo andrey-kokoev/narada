@@ -217,7 +217,7 @@
 .mcp-server-list,
 .mcp-tool-list,
 .runtime-topology-list,
-.status-box-selector-list,
+.box-visibility-selector-list,
 .events {
   margin: 0;
   list-style: none;
@@ -774,14 +774,14 @@
   font: 12px/1.35 var(--mono);
 }
 
-.status-box-selector-actions > span {
+.box-visibility-selector-actions > span {
   flex: 0 0 auto;
   padding-bottom: 7px;
 }
 
 .mcp-panel-close,
 .mcp-panel-actions button,
-.status-box-selector-actions button {
+.box-visibility-selector-actions button {
   border: 1px solid var(--line-strong);
   border-radius: 6px;
   background: var(--control-bg);
@@ -795,7 +795,7 @@
 }
 
 .mcp-panel-actions button,
-.status-box-selector-actions button {
+.box-visibility-selector-actions button {
   padding: 6px 9px;
 }
 
@@ -866,7 +866,7 @@
 }
 
 .mcp-panel-actions,
-.status-box-selector-actions {
+.box-visibility-selector-actions {
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
@@ -1351,7 +1351,7 @@ select {
   flex-basis: 260px;
 }
 
-.status-box-selector-shell {
+.box-visibility-selector-shell {
   position: relative;
   z-index: 2;
   display: inline-flex;
@@ -1362,13 +1362,13 @@ select {
   padding: 0;
 }
 
-.status-box-selector-shell[data-placement="inline"] .status-box-selector-trigger,
-.status-box-selector-shell[data-placement="row-control"] .status-box-selector-trigger {
+.box-visibility-selector-shell[data-placement="inline"] .box-visibility-selector-trigger,
+.box-visibility-selector-shell[data-placement="row-control"] .box-visibility-selector-trigger {
   width: 30px;
   height: 30px;
 }
 
-.status-box-selector-trigger {
+.box-visibility-selector-trigger {
   position: relative;
   display: grid;
   place-items: center;
@@ -1383,25 +1383,25 @@ select {
   cursor: pointer;
 }
 
-.status-box-selector-trigger:hover {
+.box-visibility-selector-trigger:hover {
   border-color: var(--accent);
   color: var(--text);
 }
 
-.status-box-selector-icon {
+.box-visibility-selector-icon {
   display: grid;
   grid-template-columns: repeat(2, 5px);
   gap: 3px;
 }
 
-.status-box-selector-icon span {
+.box-visibility-selector-icon span {
   width: 5px;
   height: 5px;
   border: 1px solid currentColor;
   border-radius: 1px;
 }
 
-.status-box-selector-count {
+.box-visibility-selector-count {
   position: absolute;
   top: -5px;
   right: -7px;
@@ -1416,18 +1416,18 @@ select {
   text-align: center;
 }
 
-.status-box-selector-panel {
+.box-visibility-selector-panel {
   grid-template-rows: auto auto minmax(0, 1fr);
 }
 
-.status-box-selector-actions {
+.box-visibility-selector-actions {
   border-bottom: 1px solid var(--line);
   color: var(--muted);
   font: 12px/1.35 var(--mono);
 }
 
 
-.status-box-selector-list {
+.box-visibility-selector-list {
   display: grid;
   align-content: start;
   gap: 8px;
@@ -1435,7 +1435,7 @@ select {
   padding: 14px 16px 16px;
 }
 
-.status-box-selector-item label {
+.box-visibility-selector-item label {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   gap: 10px;
@@ -1447,26 +1447,26 @@ select {
   cursor: pointer;
 }
 
-.status-box-selector-item label:hover {
+.box-visibility-selector-item label:hover {
   border-color: var(--line-strong);
 }
 
-.status-box-selector-item input {
+.box-visibility-selector-item input {
   margin-top: 2px;
 }
 
-.status-box-selector-item strong,
-.status-box-selector-item small {
+.box-visibility-selector-item strong,
+.box-visibility-selector-item small {
   display: block;
   min-width: 0;
 }
 
-.status-box-selector-item strong {
+.box-visibility-selector-item strong {
   color: var(--text);
   font: 700 13px/1.35 var(--sans);
 }
 
-.status-box-selector-item small {
+.box-visibility-selector-item small {
   margin-top: 3px;
   color: var(--muted);
   font: 12px/1.35 var(--mono);
@@ -2494,10 +2494,31 @@ select {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 10px;
+  align-items: stretch;
   padding: 14px 20px 18px;
   border-top: 1px solid var(--line);
   background: var(--surface);
   box-shadow: 0 -6px 20px var(--composer-shadow);
+}
+
+.composer-items {
+  display: grid;
+  min-width: 0;
+  gap: 10px;
+}
+
+.composer-controls {
+  display: flex;
+  align-items: start;
+  justify-content: end;
+  padding-top: 1px;
+}
+
+.composer-input-box {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  min-width: 0;
 }
 
 .composer textarea {
@@ -2513,7 +2534,6 @@ select {
 }
 
 .composer-target {
-  grid-column: 1 / -1;
   display: flex;
   align-items: center;
   gap: 7px;
@@ -2936,6 +2956,18 @@ select {
   .composer {
     grid-template-columns: 1fr;
     padding: 10px;
+  }
+
+  .composer-controls {
+    justify-content: end;
+  }
+
+  .composer-input-box {
+    grid-template-columns: 1fr;
+  }
+
+  .composer-input-box > button {
+    justify-self: end;
   }
 
   .command-palette {

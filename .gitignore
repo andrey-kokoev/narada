@@ -1,5 +1,6 @@
 node_modules/
 dist/
+packages/agent-web-ui/dist/
 test-results/
 data/*
 !data/.gitkeep
