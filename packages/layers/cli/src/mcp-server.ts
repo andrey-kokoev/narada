@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, resolve } from 'node:path';
 import { execFileGovernedSync } from '@narada2/process-launch-posture';
+import { siteAuthorityRootFromSiteRoot } from '@narada2/site-paths';
 import {
   buildCheckpointDescriptor,
   buildHydrationRequestDescriptor,
@@ -1164,9 +1165,8 @@ function readAgentContextCheckpoint(args: { siteRoot: string; checkpointId: stri
     packageExecutedSqliteMutation: false,
   };
 }
-
 function agentContextMemoryStorePath(siteRoot: string): string {
-  return resolve(siteRoot, '.narada', 'agent-context-memory', 'memory-store.json');
+  return resolve(siteAuthorityRootFromSiteRoot(siteRoot), 'agent-context-memory', 'memory-store.json');
 }
 
 function readAgentContextMemoryStore(siteRoot: string, siteId: string): AgentContextMemoryStore {
@@ -1189,7 +1189,7 @@ function readAgentContextMemoryStore(siteRoot: string, siteId: string): AgentCon
 
 function writeAgentContextMemoryStore(siteRoot: string, store: AgentContextMemoryStore): void {
   const storePath = agentContextMemoryStorePath(siteRoot);
-  mkdirSync(resolve(siteRoot, '.narada', 'agent-context-memory'), { recursive: true });
+  mkdirSync(resolve(siteAuthorityRootFromSiteRoot(siteRoot), 'agent-context-memory'), { recursive: true });
   writeFileSync(storePath, `${JSON.stringify(store, null, 2)}\n`, 'utf8');
 }
 

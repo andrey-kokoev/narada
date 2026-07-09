@@ -27,6 +27,7 @@ import {
 } from '../lib/site-relation-registry.js';
 import { inspectDelegatedCliHealth } from '../lib/delegated-cli-health.js';
 import { assessSiteReadiness } from '../lib/site-readiness.js';
+import { siteAuthorityRootFromSiteRoot } from '@narada2/site-paths';
 import {
   CREATE_SITE_SUPPORTED_PRESETS,
   expandCreateSitePackageDescriptorsFromPackages,
@@ -2383,6 +2384,7 @@ function minimalCreateSiteWrites(
   const createdAt = new Date().toISOString();
   const templateId = config.template_catalog?.template_id ?? 'narada-proper.templates.site.minimal.v0';
   const lineageEventId = `site-created-${randomUUID()}`;
+  const siteAuthorityRoot = siteAuthorityRootFromSiteRoot(siteRoot);
   const lineageEventRelativePath = join('.narada', 'lineage', 'events', `${lineageEventId}.json`);
   const lineageEventRef = `lineage:${lineageEventId}`;
   const siteJson = {
@@ -2392,7 +2394,7 @@ function minimalCreateSiteWrites(
     locus: authorityLocus,
     site_kind: siteKind,
     repo_root: siteRoot,
-    site_root: join(siteRoot, '.narada'),
+    site_root: siteAuthorityRoot,
     seed_state: 'greenfield_minimal_site_created',
     created_from: {
       kind: 'narada_proper_template_catalog',
@@ -2487,32 +2489,32 @@ function minimalCreateSiteWrites(
       content: renderMinimalSiteAgentsMd(siteId, siteKind, authorityLocus),
     },
     {
-      path: join(siteRoot, '.narada', 'site.json'),
-      dir: join(siteRoot, '.narada'),
+      path: join(siteAuthorityRoot, 'site.json'),
+      dir: siteAuthorityRoot,
       purpose: 'Site authority seed coordinates',
       content: `${JSON.stringify(siteJson, null, 2)}\n`,
     },
     {
-      path: join(siteRoot, '.narada', 'lineage', 'events', `${lineageEventId}.json`),
-      dir: join(siteRoot, '.narada', 'lineage', 'events'),
+      path: join(siteAuthorityRoot, 'lineage', 'events', `${lineageEventId}.json`),
+      dir: join(siteAuthorityRoot, 'lineage', 'events'),
       purpose: 'Append-only Site origin/build lineage event',
       content: `${JSON.stringify(lineageEvent, null, 2)}\n`,
     },
     {
-      path: join(siteRoot, '.narada', 'README.md'),
-      dir: join(siteRoot, '.narada'),
+      path: join(siteAuthorityRoot, 'README.md'),
+      dir: siteAuthorityRoot,
       purpose: 'Site-local Narada substrate orientation',
       content: renderMinimalNaradaReadme(siteId),
     },
     {
-      path: join(siteRoot, '.narada', 'admission', 'admission-ledger.jsonl'),
-      dir: join(siteRoot, '.narada', 'admission'),
+      path: join(siteAuthorityRoot, 'admission', 'admission-ledger.jsonl'),
+      dir: join(siteAuthorityRoot, 'admission'),
       purpose: 'Site-local admission ledger',
       content: `${JSON.stringify(ledgerEvent)}\n`,
     },
     {
-      path: join(siteRoot, '.narada', 'inbox', 'README.md'),
-      dir: join(siteRoot, '.narada', 'inbox'),
+      path: join(siteAuthorityRoot, 'inbox', 'README.md'),
+      dir: join(siteAuthorityRoot, 'inbox'),
       purpose: 'Site-local intake placeholder',
       content: renderMinimalInboxReadme(siteId),
     },
@@ -2520,8 +2522,8 @@ function minimalCreateSiteWrites(
   for (const descriptor of packageDescriptors.filter((entry) => entry.posture === 'descriptor_only')) {
     const safeName = descriptor.package_name.replace('@narada2/', '').replace(/[^a-z0-9_.-]/gi, '-');
     writes.push({
-      path: join(siteRoot, '.narada', 'admission', 'package-slices', `${safeName}.json`),
-      dir: join(siteRoot, '.narada', 'admission', 'package-slices'),
+      path: join(siteAuthorityRoot, 'admission', 'package-slices', `${safeName}.json`),
+      dir: join(siteAuthorityRoot, 'admission', 'package-slices'),
       purpose: `${descriptor.package_name} descriptor admission artifact`,
       content: `${JSON.stringify({
         schema: 'narada.create_site.package_slice_admission.v0',
@@ -2545,8 +2547,8 @@ function minimalCreateSiteWrites(
     for (const surface of mcpSurfaces) {
       const surfaceName = String(surface);
       writes.push({
-        path: join(siteRoot, '.narada', 'mcp', 'descriptors', `${surfaceName}.json`),
-        dir: join(siteRoot, '.narada', 'mcp', 'descriptors'),
+        path: join(siteAuthorityRoot, 'mcp', 'descriptors', `${surfaceName}.json`),
+        dir: join(siteAuthorityRoot, 'mcp', 'descriptors'),
         purpose: `${surfaceName} MCP descriptor`,
         content: `${JSON.stringify({
           schema: 'narada.create_site.mcp_descriptor.v0',
@@ -2561,8 +2563,8 @@ function minimalCreateSiteWrites(
   }
   if (config.capabilities?.policy === 'declare_required') {
     writes.push({
-      path: join(siteRoot, '.narada', 'capabilities', 'capability-policy.json'),
-      dir: join(siteRoot, '.narada', 'capabilities'),
+      path: join(siteAuthorityRoot, 'capabilities', 'capability-policy.json'),
+      dir: join(siteAuthorityRoot, 'capabilities'),
       purpose: 'Descriptor-only capability policy declaration',
       content: `${JSON.stringify({
         schema: 'narada.create_site.capability_policy.v0',
@@ -3262,9 +3264,10 @@ function containedSiteRootFromInput(root: string): string {
 }
 
 async function readSiteMaterialization(siteRoot: string): Promise<Record<string, unknown> | null> {
+  const siteAuthorityRoot = siteAuthorityRootFromSiteRoot(siteRoot);
   const candidates = [
     join(siteRoot, 'site-materialization.json'),
-    join(siteRoot, '.narada', 'site-materialization.json'),
+    join(siteAuthorityRoot, 'site-materialization.json'),
   ];
   for (const candidate of candidates) {
     if (!existsSync(candidate)) continue;

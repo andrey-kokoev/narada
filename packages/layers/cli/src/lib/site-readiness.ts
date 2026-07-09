@@ -3,6 +3,7 @@ import { join, resolve } from 'node:path';
 import { SqliteInboxStore } from '@narada2/control-plane';
 import { onboardingCascadeForSiteKind } from './onboarding-cascade.js';
 import { readOperatorSurfaceIdentities, type OperatorSurfaceIdentity } from './operator-surface-registry.js';
+import { siteAuthorityRootFromSiteRoot } from '@narada2/site-paths';
 
 export type SiteReadinessPosture =
   | 'site_absent'
@@ -136,11 +137,13 @@ function readJsonFile(path: string): Record<string, unknown> | null {
 }
 
 function readSiteConfig(siteRoot: string): Record<string, unknown> | null {
-  return readJsonFile(join(siteRoot, 'config.json')) ?? readJsonFile(join(siteRoot, '.narada', 'config.json'));
+  const authorityRoot = siteAuthorityRootFromSiteRoot(siteRoot);
+  return readJsonFile(join(siteRoot, 'config.json')) ?? readJsonFile(join(authorityRoot, 'config.json'));
 }
 
 function readSiteMaterialization(siteRoot: string): Record<string, unknown> | null {
-  return readJsonFile(join(siteRoot, 'site-materialization.json')) ?? readJsonFile(join(siteRoot, '.narada', 'site-materialization.json'));
+  const authorityRoot = siteAuthorityRootFromSiteRoot(siteRoot);
+  return readJsonFile(join(siteRoot, 'site-materialization.json')) ?? readJsonFile(join(authorityRoot, 'site-materialization.json'));
 }
 
 function objectField(source: Record<string, unknown> | null | undefined, key: string): Record<string, unknown> | null {

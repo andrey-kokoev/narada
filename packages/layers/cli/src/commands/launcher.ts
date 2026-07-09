@@ -11,6 +11,7 @@ import { fileURLToPath } from 'node:url';
 import { createServer, type IncomingMessage, type ServerResponse, type Server } from 'node:http';
 import * as prompts from '@clack/prompts';
 import { agentIdentityDisplay, buildAgentIdentityRefV2, resolveAgentIdentityRef, type AgentIdentityRefV2 } from '@narada2/agent-identity';
+import { siteAuthorityRootFromSiteRoot } from '@narada2/site-paths';
 import { commandResultError, type CommandContext } from '../lib/command-wrapper.js';
 import { formattedResult, type CliFormat } from '../lib/cli-output.js';
 import { ExitCode } from '../lib/exit-codes.js';
@@ -385,8 +386,16 @@ async function writeWorkspacePlanResult(path: string | undefined, result: unknow
   await writeFile(path, `${JSON.stringify(result, null, 2)}\n`, 'utf8');
 }
 
+function runtimeMcpFabricCandidateDirs(siteRoot: string): string[] {
+  const root = resolve(siteRoot);
+  const authorityRoot = siteAuthorityRootFromSiteRoot(root);
+  return authorityRoot === root
+    ? [join(root, '.ai', 'mcp')]
+    : [join(root, '.ai', 'mcp'), join(authorityRoot, '.ai', 'mcp')];
+}
+
 function readRuntimeMcpFabric(siteRoot: string, serverFilter: string | null): Record<string, unknown> {
-  const candidates = [join(siteRoot, '.ai', 'mcp'), join(siteRoot, '.narada', '.ai', 'mcp')];
+  const candidates = runtimeMcpFabricCandidateDirs(siteRoot);
   const mcpDir = candidates.find((candidate) => existsSync(candidate)) ?? candidates[0];
   const fileNames = existsSync(mcpDir)
     ? readdirSync(mcpDir).filter((name) => name.endsWith('.json')).sort((a, b) => a.localeCompare(b))
@@ -416,7 +425,7 @@ function readRuntimeMcpFabric(siteRoot: string, serverFilter: string | null): Re
 }
 
 function readProjectionRegistration(siteRoot: string, serverFilter: string | null): Record<string, unknown> {
-  const path = join(siteRoot, '.narada', 'capabilities', 'mcp-registration.json');
+  const path = join(siteAuthorityRootFromSiteRoot(siteRoot), 'capabilities', 'mcp-registration.json');
   if (!existsSync(path)) {
     return {
       schema: 'narada.launcher.mcp_projection_summary.v1',

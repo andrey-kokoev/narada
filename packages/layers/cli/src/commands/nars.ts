@@ -696,8 +696,10 @@ function readRuntimeMcpFabric(siteRoot: string | null): Record<string, unknown> 
       servers: {},
     };
   }
-
-  const candidateDirs = [join(resolvedSiteRoot, '.ai', 'mcp'), join(resolvedSiteRoot, '.narada', '.ai', 'mcp')];
+  const sitePaths = resolveNaradaSitePaths({ siteRoot: resolvedSiteRoot });
+  const candidateDirs = sitePaths.siteAuthorityRoot === resolve(resolvedSiteRoot)
+    ? [join(sitePaths.siteAuthorityRoot, '.ai', 'mcp')]
+    : [join(resolve(resolvedSiteRoot), '.ai', 'mcp'), join(sitePaths.siteAuthorityRoot, '.ai', 'mcp')];
   const mcpDirs = candidateDirs.filter((candidate) => existsSync(candidate));
   const scanDirs = mcpDirs.length > 0 ? mcpDirs : [candidateDirs[0]];
   const files: Array<Record<string, unknown>> = [];
@@ -941,5 +943,5 @@ function sameStringSet(left: string[], right: string[]): boolean {
 }
 
 function resolveProjectionTargetPath(siteRoot: string | null): string | null {
-  return siteRoot ? join(resolve(siteRoot), '.narada', 'capabilities', 'mcp-registration.json') : null;
+  return siteRoot ? join(resolveNaradaSitePaths({ siteRoot }).siteAuthorityRoot, 'capabilities', 'mcp-registration.json') : null;
 }
