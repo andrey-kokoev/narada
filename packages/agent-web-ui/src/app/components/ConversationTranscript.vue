@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import EventRow from './EventRow.vue';
 import type { AgentActivityState } from '../composables/useAgentActivity';
 import type { ProjectionVerbosity } from '../composables/useProjectionVerbosity';
@@ -13,9 +13,16 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{ 'intent-selected': [intent: string] }>();
 
+type ScrollAuthority = 'auto_follow' | 'operator_controlled' | 'force_follow_once';
+
 const scroller = ref<HTMLElement | null>(null);
-const stickToBottom = ref(true);
-const renderedRowRevision = computed(() => props.rows.map((row) => `${row.key}:${row.kind}:${summaryLength(row.summary)}`).join('|'));
+const scrollAuthority = ref<ScrollAuthority>('auto_follow');
+const hasUnseenRows = ref(false);
+const renderedRowRevision = computed(() => [
+  ...props.rows.map((row) => `${row.key}:${row.kind}:${summaryLength(row.summary)}`),
+  agentActivityRevision(),
+].filter(Boolean).join('|'));
+let scrollSettleTimer: number | null = null;
 
 function summaryLength(summary: unknown): number {
   if (typeof summary === 'string') return summary.length;
@@ -24,42 +31,74 @@ function summaryLength(summary: unknown): number {
   return String(summary).length;
 }
 
+function agentActivityRevision(): string {
+  if (!props.agentActivity.active || (props.verbosity !== 'conversation' && props.verbosity !== 'operations')) return '';
+  return `activity:${props.agentActivity.state}:${props.agentActivity.label}:${props.agentActivity.detail ?? ''}`;
+}
+
 function updateScrollState() {
   const element = scroller.value;
   if (!element) return;
-  stickToBottom.value = element.scrollHeight - element.scrollTop - element.clientHeight <= 96;
+  if (isAtBottom(element)) {
+    scrollAuthority.value = 'auto_follow';
+    hasUnseenRows.value = false;
+  } else {
+    scrollAuthority.value = 'operator_controlled';
+  }
 }
 
 function scrollToBottom() {
   const element = scroller.value;
-  if (!element) return;
+  if (!element || scrollAuthority.value === 'operator_controlled') return;
   element.scrollTop = element.scrollHeight;
   updateScrollState();
 }
 
-function forceScrollToBottom() {
-  stickToBottom.value = true;
+function scheduleScrollToBottom(authority: ScrollAuthority = scrollAuthority.value) {
+  if (authority === 'operator_controlled') return;
+  if (authority === 'force_follow_once') scrollAuthority.value = 'force_follow_once';
   nextTick(() => {
     scrollToBottom();
     window.requestAnimationFrame(() => {
       scrollToBottom();
+      window.requestAnimationFrame(() => {
+        scrollToBottom();
+      });
     });
+    if (scrollSettleTimer !== null) window.clearTimeout(scrollSettleTimer);
+    scrollSettleTimer = window.setTimeout(() => {
+      scrollSettleTimer = null;
+      scrollToBottom();
+    }, 75);
   });
 }
 
-onMounted(() => nextTick(scrollToBottom));
+function forceScrollToBottom() {
+  scheduleScrollToBottom('force_follow_once');
+}
+
+function isAtBottom(element: HTMLElement) {
+  return element.scrollHeight - element.scrollTop - element.clientHeight <= 96;
+}
+
+onMounted(() => scheduleScrollToBottom('force_follow_once'));
+
+onBeforeUnmount(() => {
+  if (scrollSettleTimer !== null) window.clearTimeout(scrollSettleTimer);
+});
 
 watch(renderedRowRevision, () => {
-  const shouldFollow = stickToBottom.value;
-  nextTick(() => {
-    if (shouldFollow) scrollToBottom();
-    else updateScrollState();
-  });
-});
+  if (scrollAuthority.value === 'operator_controlled') {
+    hasUnseenRows.value = true;
+    nextTick(updateScrollState);
+    return;
+  }
+  scheduleScrollToBottom(scrollAuthority.value);
+}, { flush: 'post' });
 
 watch(() => props.followLatestRevision, () => {
   forceScrollToBottom();
-});
+}, { flush: 'post' });
 </script>
 
 <template>
@@ -86,5 +125,14 @@ watch(() => props.followLatestRevision, () => {
         </div>
       </li>
     </ol>
+    <button
+      v-if="hasUnseenRows"
+      type="button"
+      class="new-messages-button"
+      aria-label="Show latest messages"
+      @click="forceScrollToBottom"
+    >
+      New messages
+    </button>
   </div>
 </template>

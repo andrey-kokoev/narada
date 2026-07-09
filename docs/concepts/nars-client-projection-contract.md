@@ -201,6 +201,34 @@ Views are cumulative by operator usefulness, not by source transport.
 
 Routine healthy state samples should not pollute normal views. Degraded health and errors must remain visible in operations or diagnostics according to severity.
 
+## Transcript Scroll Authority
+
+Client projections that render a scrollable transcript must make scroll authority explicit. Scroll position is either owned by the live projection or by the operator. It must not be a hidden tug-of-war between event arrival, layout changes, and user scrolling.
+
+The shared modes are:
+
+| Mode | Meaning | Client behavior |
+|---|---|---|
+| `auto_follow` | The live tail owns transcript scroll. | New visible rows and late layout growth keep the transcript at the bottom. |
+| `operator_controlled` | The operator has intentionally scrolled away from the live tail. | New visible rows do not move the transcript; the client should expose a small "new messages" affordance when practical. |
+| `force_follow_once` | An explicit operator or lifecycle action requested the live tail. | Scroll to bottom once after render/layout settles, then return to `auto_follow`. |
+
+Distance from bottom is evidence for changing modes, not the policy itself. A client may use a small bottom threshold to infer that the operator returned to the live tail, but the policy decision must be expressed as one of the modes above.
+
+Mode transitions:
+
+- On initial page load or projection attach, enter `force_follow_once`, then `auto_follow`.
+- When the operator submits input, selects a queued input to send now, changes to a live transcript view, or clicks a "latest" / "new messages" affordance, enter `force_follow_once`, then `auto_follow`.
+- When the operator scrolls upward away from the bottom threshold, enter `operator_controlled`.
+- When the operator scrolls back within the bottom threshold, enter `auto_follow`.
+- When a new visible conversation or operations row appears while in `auto_follow`, stay in `auto_follow` and scroll after render settles.
+- When new or changed visible transcript content appears while in `operator_controlled`, do not scroll; track the pending new-content state.
+- Hidden, folded, or routine state samples must not seize scroll authority.
+- Activity/status updates to an existing row obey the current mode: follow if already following, do not follow if operator-controlled.
+- Markdown, code, artifact iframe, image, or other late layout growth obeys the current mode: follow if following, preserve operator position if operator-controlled.
+
+Client surfaces may present different affordances, but must not disagree on the authority model. Browser surfaces should prefer a small explicit "New messages" control when `operator_controlled` receives visible content; terminal surfaces may instead preserve prompt position and report pending output through their normal prompt/status conventions.
+
 ## Session Identity Projection
 
 Client surfaces must display the session identity from NARS evidence, not from path guesses or surface launch arguments.

@@ -13,10 +13,10 @@ import { useMailboxSummary } from './composables/useMailboxSummary';
 import { useMcpInventory } from './composables/useMcpInventory';
 import { useNarsConnection } from './composables/useNarsConnection';
 import { useNarsEvents } from './composables/useNarsEvents';
-import { useOperatorInput } from './composables/useOperatorInput';
+import { useOperatorInput, type OperatorQueueItem } from './composables/useOperatorInput';
 import { useOperatorQueue } from './composables/useOperatorQueue';
 import { useOperatorSnippets, type OperatorSnippet, type OperatorSnippetCommandEvent, type OperatorSnippetFeedback, type OperatorSnippetOpenRequest } from './composables/useOperatorSnippets';
-import { useProjectionVerbosity } from './composables/useProjectionVerbosity';
+import { useProjectionVerbosity, type ProjectionVerbosity } from './composables/useProjectionVerbosity';
 import { useRetainedEvents } from './composables/useRetainedEvents';
 import { useRuntimeTopology } from './composables/useRuntimeTopology';
 import { useResolvedFavicon } from './composables/useResolvedFavicon.js';
@@ -97,6 +97,10 @@ const operatorSnippetOpenRequest = ref<OperatorSnippetOpenRequest | null>(null);
 const faviconOverride = ref(null);
 useResolvedFavicon({ tabOverride: faviconOverride, healthBody: health.body });
 
+function followLatestTranscript() {
+  followLatestRevision.value += 1;
+}
+
 watch(connection.streamText, (status) => {
   if (surfaceAffordancesRequested.value || status !== 'connected') return;
   surfaceAffordancesRequested.value = connection.connection.value?.sendFrame(buildSurfaceAffordancesRequestFrame()) ?? false;
@@ -108,19 +112,19 @@ function submitOperatorDraft(deliveryMode: 'default' | 'enqueue' = 'default') {
   if (snippetsMatch) {
     openOperatorSnippets(snippetsMatch[1] ?? '', 'list');
     draft.value = '';
-    followLatestRevision.value += 1;
+    followLatestTranscript();
     return;
   }
   if (/^\/snippet\s*$/i.test(trimmedDraft)) {
     draft.value = '/snippet ';
-    followLatestRevision.value += 1;
+    followLatestTranscript();
     return;
   }
   const snippetSearchMatch = /^\/snippet\s+search(?:\s+([\s\S]+))?$/i.exec(trimmedDraft);
   if (snippetSearchMatch) {
     openOperatorSnippets(snippetSearchMatch[1] ?? '', 'list');
     draft.value = '';
-    followLatestRevision.value += 1;
+    followLatestTranscript();
     return;
   }
   if (/^\/snippet(?:\s|$)/i.test(trimmedDraft)) {
@@ -128,7 +132,7 @@ function submitOperatorDraft(deliveryMode: 'default' | 'enqueue' = 'default') {
     if (action.kind === 'local_event') {
       retainSnippetEvent(action.event);
       draft.value = '';
-      followLatestRevision.value += 1;
+      followLatestTranscript();
       return;
     }
     if (action.kind === 'run') {
@@ -136,12 +140,22 @@ function submitOperatorDraft(deliveryMode: 'default' | 'enqueue' = 'default') {
         operatorSnippets.markSnippetUsed(action.snippet.name);
         retainSnippetRunEvent(action.snippet, action.deliveryMode ?? deliveryMode);
         draft.value = '';
-        followLatestRevision.value += 1;
+        followLatestTranscript();
       }
       return;
     }
   }
-  if (input.submit(deliveryMode)) followLatestRevision.value += 1;
+  if (input.submit(deliveryMode)) followLatestTranscript();
+}
+
+function setProjectionVerbosity(value: ProjectionVerbosity) {
+  projection.setVerbosity(value);
+  followLatestTranscript();
+}
+
+function steerQueuedNow(item: OperatorQueueItem) {
+  input.steerQueuedNow(item);
+  followLatestTranscript();
 }
 
 function openOperatorSnippets(query = '', mode: 'list' | 'create' = 'list') {
@@ -159,44 +173,44 @@ function runOperatorSnippet(snippet: OperatorSnippet, deliveryMode: 'default' | 
     operatorSnippets.markSnippetUsed(snippet.name);
     retainSnippetRunEvent(snippet, deliveryMode);
     draft.value = '';
-    followLatestRevision.value += 1;
+    followLatestTranscript();
   }
 }
 
 function fillOperatorSnippet(snippet: OperatorSnippet) {
   draft.value = snippet.body;
   retainSnippetEvent(operatorSnippets.commandEvent(`Filled composer with snippet: ${snippet.name}`, { snippet_name: snippet.name }));
-  followLatestRevision.value += 1;
+  followLatestTranscript();
 }
 
 function saveOperatorSnippet(name: string, body: string, mode: 'save' | 'edit') {
   retainSnippetEvent(operatorSnippets.saveSnippet(name, body, mode));
-  followLatestRevision.value += 1;
+  followLatestTranscript();
 }
 
 function restoreOperatorSnippet(snippet: OperatorSnippet) {
   retainSnippetEvent(operatorSnippets.restoreSnippet(snippet));
-  followLatestRevision.value += 1;
+  followLatestTranscript();
 }
 
 function renameOperatorSnippet(oldName: string, newName: string, body: string) {
   retainSnippetEvent(operatorSnippets.renameSnippet(oldName, newName, body));
-  followLatestRevision.value += 1;
+  followLatestTranscript();
 }
 
 function deleteOperatorSnippet(name: string) {
   retainSnippetEvent(operatorSnippets.deleteSnippet(name));
-  followLatestRevision.value += 1;
+  followLatestTranscript();
 }
 
 function pinOperatorSnippet(name: string) {
   retainSnippetEvent(operatorSnippets.togglePinned(name));
-  followLatestRevision.value += 1;
+  followLatestTranscript();
 }
 
 function importOperatorSnippets(json: string) {
   retainSnippetEvent(operatorSnippets.importSnippetsJson(json));
-  followLatestRevision.value += 1;
+  followLatestTranscript();
 }
 
 function retainSnippetRunEvent(snippet: OperatorSnippet, deliveryMode: 'default' | 'enqueue') {
@@ -208,7 +222,7 @@ function fillIntentRef(intentText: string) {
   if (!normalized) return;
   draft.value = normalized;
   input.retainLocal({ event: 'agent_web_ui_message', message: 'Filled composer with intent affordance.', intent: normalized });
-  followLatestRevision.value += 1;
+  followLatestTranscript();
   nextTick(() => {
     const inputElement = document.querySelector<HTMLTextAreaElement>('#operator-input');
     inputElement?.focus();
@@ -217,9 +231,8 @@ function fillIntentRef(intentText: string) {
 }
 
 function interruptModel() {
-  if (input.interrupt()) followLatestRevision.value += 1;
+  if (input.interrupt()) followLatestTranscript();
 }
-
 function requestSopSummary() {
   connection.connection.value?.sendFrame(buildSopSummaryRequestFrame());
 }
@@ -316,7 +329,7 @@ function cancelAffordanceAction(item: AffordanceConfirmationItem) {
     :authority-transition="config.authorityTransition ?? null"
     :cloudflare-projection="cloudflareProjection"
     :follow-latest-revision="followLatestRevision"
-    @update:verbosity="projection.setVerbosity"
+    @update:verbosity="setProjectionVerbosity"
     @publish-cloudflare="cloudflareProjection.publish"
     @submit="submitOperatorDraft"
     @run-snippet="runOperatorSnippet"
@@ -330,7 +343,7 @@ function cancelAffordanceAction(item: AffordanceConfirmationItem) {
     @interrupt="interruptModel"
     @edit-queued="input.editQueued"
     @remove-queued="input.dropQueued($event.index)"
-    @steer-queued="input.steerQueuedNow"
+    @steer-queued="steerQueuedNow"
     @request-artifacts-summary="requestArtifactsSummary"
     @request-delegation-summary="requestDelegationSummary"
     @request-git-summary="requestGitSummary"

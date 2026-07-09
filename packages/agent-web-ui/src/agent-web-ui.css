@@ -1846,6 +1846,29 @@ select {
   padding: 16px 20px 18px;
 }
 
+.new-messages-button {
+  position: sticky;
+  right: 20px;
+  bottom: 14px;
+  z-index: 3;
+  display: block;
+  width: max-content;
+  margin: -4px 20px 14px auto;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  padding: 6px 10px;
+  background: var(--control-bg);
+  color: var(--text);
+  box-shadow: 0 8px 24px var(--event-shadow);
+  font: 12px/1.2 var(--mono);
+  cursor: pointer;
+}
+
+.new-messages-button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 .event {
   display: grid;
   grid-template-columns: 210px minmax(0, 1fr);

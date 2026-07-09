@@ -156,7 +156,7 @@ async function withScenarioServer(scenario, fn) {
   return withHealthServer(async (healthUrl) => {
     const web = await startAgentWebUiServer({ host: '127.0.0.1', port: 0, eventEndpoint: eventProjection.url, healthEndpoint: healthUrl });
     try {
-      return await fn(web.url, () => publishScenarioEvents(eventHub, scenario), inputFrames);
+      return await fn(web.url, () => publishScenarioEvents(eventHub, scenario), inputFrames, eventHub);
     } finally {
       web.server.close();
       eventProjection.server.close();
@@ -394,4 +394,57 @@ test('agent-web-ui browser UX matrix has no obvious layout regressions', async (
     for (const viewport of viewports) screenshots.push(await runScenarioViewport({ page, scenario, viewport }));
   }
   assert.equal(screenshots.length, scenarios.length * viewports.length);
+});
+
+test('agent-web-ui transcript scroll authority preserves operator-controlled history until explicit follow', async ({ page }) => {
+  await withScenarioServer('normal', async (url, _publishEvents, _inputFrames, eventHub) => {
+    const base = { agent_id: 'ux.agent', session_id: 'ux_scroll', timestamp: new Date().toISOString(), provider: 'codex-subscription' };
+    const publishAssistant = (index, content) => eventHub.publish({ ...base, event: 'assistant_message', request_id: `scroll_${index}`, content });
+    await page.setViewportSize({ width: 900, height: 560 });
+    await page.goto(url);
+    await page.waitForLoadState('domcontentloaded');
+    eventHub.publish({ ...base, event: 'session_started', site_id: 'narada.ux', role: 'resident', model: 'gpt-5.5', mcp_server_count: 2, mcp_operational_state: 'healthy' });
+    for (let index = 0; index < 28; index += 1) {
+      publishAssistant(index, `Initial transcript row ${index}.\n\nThis row gives the transcript enough vertical height for scroll authority coverage.`);
+    }
+    await page.waitForFunction(() => document.querySelectorAll('#events > .event').length >= 20);
+    await page.evaluate(() => {
+      const scroller = document.querySelector('.events-scroll');
+      if (!scroller) throw new Error('missing_scroller');
+      scroller.scrollTop = 0;
+      scroller.dispatchEvent(new Event('scroll', { bubbles: true }));
+    });
+    await page.waitForTimeout(150);
+    const before = await page.evaluate(() => {
+      const scroller = document.querySelector('.events-scroll');
+      return { scrollTop: scroller?.scrollTop ?? null, scrollHeight: scroller?.scrollHeight ?? null, clientHeight: scroller?.clientHeight ?? null };
+    });
+    assert.equal(before.scrollTop, 0, `expected operator-controlled setup at top: ${JSON.stringify(before)}`);
+    publishAssistant(99, 'Late message while operator is reading history. The viewport must not jump to this live tail automatically.');
+    await page.waitForTimeout(500);
+    const held = await page.evaluate(() => {
+      const scroller = document.querySelector('.events-scroll');
+      const button = document.querySelector('.new-messages-button');
+      return {
+        scrollTop: scroller?.scrollTop ?? null,
+        distanceFromBottom: scroller ? scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight : null,
+        buttonText: button?.textContent?.trim() ?? null,
+        lateVisible: document.body.textContent.includes('Late message while operator is reading history'),
+      };
+    });
+    assert.equal(held.scrollTop, 0, `operator-controlled scroll should not jump on late content: ${JSON.stringify(held)}`);
+    assert.equal(held.buttonText, 'New messages', `expected new-message affordance while operator controls scroll: ${JSON.stringify(held)}`);
+    assert.ok((held.distanceFromBottom ?? 0) > 100, `expected viewport to remain away from live tail: ${JSON.stringify(held)}`);
+    await page.locator('.new-messages-button').click();
+    await page.waitForTimeout(350);
+    const followed = await page.evaluate(() => {
+      const scroller = document.querySelector('.events-scroll');
+      return {
+        distanceFromBottom: scroller ? scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight : null,
+        buttonVisible: Boolean(document.querySelector('.new-messages-button')),
+      };
+    });
+    assert.ok((followed.distanceFromBottom ?? Number.POSITIVE_INFINITY) < 4, `expected explicit follow to scroll to bottom: ${JSON.stringify(followed)}`);
+    assert.equal(followed.buttonVisible, false, `expected new-message affordance to clear after explicit follow: ${JSON.stringify(followed)}`);
+  });
 });
