@@ -16,17 +16,18 @@ const naradaProperRoot = resolve(cliPackageRoot, '..', '..', '..');
 const cliPath = join(cliPackageRoot, 'dist', 'main.js');
 
 async function makeFixture() {
-  const root = join(cliPackageRoot, '.ai', 'tmp-tests', 'selection-ui-e2e');
-  await rm(root, { recursive: true, force: true });
+  const root = join(cliPackageRoot, '.ai', 'tmp-tests', `selection-ui-e2e-${Date.now()}-${Math.random().toString(16).slice(2)}`);
   await mkdir(root, { recursive: true });
 
   const wtLog = join(root, 'wt-log.jsonl');
   const userSiteRoot = join(root, 'user-site');
   const sonarRoot = join(root, 'narada.sonar');
   const smartSchedulingRoot = join(root, 'smart-scheduling');
+  const naradaRoot = join(root, 'narada');
   await mkdir(userSiteRoot, { recursive: true });
   await mkdir(sonarRoot, { recursive: true });
   await mkdir(smartSchedulingRoot, { recursive: true });
+  await mkdir(naradaRoot, { recursive: true });
   const previousUserSiteRoot = process.env.NARADA_USER_SITE_ROOT;
   process.env.NARADA_USER_SITE_ROOT = userSiteRoot;
   const registryDb = await openRegistryDb(resolveRegistryDbPathByLocus({ authorityLocus: 'user', variant: 'native' }));
@@ -36,6 +37,16 @@ async function makeFixture() {
     siteId: 'sonar',
     variant: 'native',
     siteRoot: sonarRoot,
+    substrate: 'windows',
+    aimJson: null,
+    controlEndpoint: null,
+    lastSeenAt: registryTimestamp,
+    createdAt: registryTimestamp,
+  });
+  siteRegistry.registerSite({
+    siteId: 'narada',
+    variant: 'native',
+    siteRoot: naradaRoot,
     substrate: 'windows',
     aimJson: null,
     controlEndpoint: null,
@@ -111,6 +122,39 @@ async function makeFixture() {
         Runtime: 'narada-agent-runtime-server',
       },
       {
+        Agent: 'sonar.architect',
+        Role: 'architect',
+        Site: 'sonar',
+        NaradaRoot: sonarRoot,
+        SiteRoot: sonarRoot,
+        WorkspaceRoot: sonarRoot,
+        LauncherPath: join(sonarRoot, 'narada-sonar.ps1'),
+        OperatorSurface: 'agent-web-ui',
+        Runtime: 'narada-agent-runtime-server',
+      },
+      {
+        Agent: 'smart-scheduling.architect',
+        Role: 'architect',
+        Site: 'smart-scheduling',
+        NaradaRoot: smartSchedulingRoot,
+        SiteRoot: join(smartSchedulingRoot, '.narada'),
+        WorkspaceRoot: smartSchedulingRoot,
+        LauncherPath: join(smartSchedulingRoot, 'narada-smart-scheduling.ps1'),
+        OperatorSurface: 'agent-web-ui',
+        Runtime: 'narada-agent-runtime-server',
+      },
+      {
+        Agent: 'narada.architect',
+        Role: 'architect',
+        Site: 'narada',
+        NaradaRoot: naradaRoot,
+        SiteRoot: naradaRoot,
+        WorkspaceRoot: naradaRoot,
+        LauncherPath: join(naradaRoot, 'narada.ps1'),
+        OperatorSurface: 'codex',
+        Runtime: 'codex',
+      },
+      {
         Agent: 'smart-scheduling.resident',
         Role: 'resident',
         Site: 'smart-scheduling',
@@ -124,7 +168,36 @@ async function makeFixture() {
     ],
   }), 'utf8');
 
-  return { root, registry, wtLog, userSiteRoot, sonarRoot, smartSchedulingRoot, healthServer, healthEndpoint, sonarSessionPath, sonarControlPath };
+  return { root, registry, wtLog, userSiteRoot, sonarRoot, smartSchedulingRoot, naradaRoot, healthServer, healthEndpoint, sonarSessionPath, sonarControlPath };
+}
+
+async function startLauncherUi({ fixture, command = 'workspace-launch', port, extraArgs = [] }) {
+  const child = spawn(process.execPath, [
+    cliPath,
+    'launcher',
+    command,
+    '--interactive-selection-ui',
+    '--launcher-ui-port', String(port),
+    '--launcher-ui-port-fallback',
+    '--config-path', fixture.registry,
+    '--format', 'json',
+    ...extraArgs,
+  ], {
+    cwd: naradaProperRoot,
+    env: {
+      ...process.env,
+      NARADA_NO_BROWSER: '1',
+      NARADA_WORKSPACE_LAUNCH_TERMINAL_LOG: fixture.wtLog,
+      NARADA_WORKSPACE_LAUNCH_UI_SESSION_RETENTION: '1',
+      NARADA_USER_SITE_ROOT: fixture.userSiteRoot,
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  const stdoutRef = { value: '' };
+  const stderrRef = { value: '' };
+  child.stdout.on('data', (chunk) => { stdoutRef.value += chunk.toString(); });
+  child.stderr.on('data', (chunk) => { stderrRef.value += chunk.toString(); });
+  return { child, stdoutRef, stderrRef, url: await waitForUrl(child, stderrRef, stdoutRef) };
 }
 
 function waitForUrl(child, stderrRef = { value: '' }, stdoutRef = { value: '' }) {
@@ -178,14 +251,19 @@ function waitForExit(child) {
 }
 
 async function chooseSingleSite(page, site) {
-  for (const input of await page.locator('#sites input[type="checkbox"]').all()) {
+  const select = page.locator('#site-select');
+  if (await select.isVisible()) {
+    await select.selectOption(site);
+    return;
+  }
+  for (const input of await page.locator('#sites-multi input[type="checkbox"]').all()) {
     if (await input.isChecked()) await input.uncheck();
   }
-  await page.locator(`#sites input[value="${site}"]`).check();
+  await page.locator(`#sites-multi input[value="${site}"]`).check();
 }
 
 async function submitLaunch(page) {
-  await page.getByRole('button', { name: 'Start New Session' }).click();
+  await page.getByRole('button', { name: /Start .*Agent Launch/ }).click();
   await assert.doesNotReject(() => page.getByText('New launch accepted. Open or attach only from the specific result card below.').waitFor({ timeout: 20_000 }));
 }
 
@@ -239,9 +317,35 @@ test('browser interactive selection UI can launch multiple sites before cancel',
     page.on('pageerror', (error) => pageErrors.push(error.stack || error.message));
     await page.goto(url);
     await page.locator('#sites').waitFor({ state: 'attached', timeout: 10_000 });
-    if (await page.locator('#sites input[type="checkbox"]').count() === 0) {
-      assert.fail(`selection UI rendered no Sites; pageErrors=${pageErrors.join(' | ')}; body=${await page.locator('body').innerText()}`);
-    }
+    await page.locator('#site-select').waitFor({ state: 'visible', timeout: 10_000 });
+    await page.locator('#role-select').waitFor({ state: 'visible', timeout: 10_000 });
+    await page.locator('#surface-select').waitFor({ state: 'visible', timeout: 10_000 });
+    assert.equal(await page.locator('#sites-multi').isVisible(), false);
+    assert.equal(await page.locator('#roles-multi').isVisible(), false);
+    assert.equal(await page.locator('#surfaces-multi').isVisible(), false);
+    await page.getByLabel('Allow multi-site launch').check();
+    await page.locator('#sites-multi').waitFor({ state: 'visible', timeout: 10_000 });
+    await page.locator('#site-select').waitFor({ state: 'hidden', timeout: 10_000 });
+    await page.getByLabel('Allow multi-site launch').uncheck();
+    await page.locator('#site-select').waitFor({ state: 'visible', timeout: 10_000 });
+    await page.getByLabel('Allow multi-role launch').check();
+    await page.locator('#roles-multi').waitFor({ state: 'visible', timeout: 10_000 });
+    await page.locator('#role-select').waitFor({ state: 'hidden', timeout: 10_000 });
+    await page.getByLabel('Allow multi-role launch').uncheck();
+    await page.locator('#role-select').waitFor({ state: 'visible', timeout: 10_000 });
+    await page.getByLabel('Allow multiple operator surfaces').check();
+    await page.locator('#surfaces-multi').waitFor({ state: 'visible', timeout: 10_000 });
+    await page.locator('#surface-select').waitFor({ state: 'hidden', timeout: 10_000 });
+    await page.locator('#surfaces-multi input[value="agent-web-ui"]').check();
+    await page.locator('#surfaces-multi input[value="registry default"]').waitFor({ state: 'attached', timeout: 10_000 });
+    await page.waitForFunction(() => !document.querySelector('#surfaces-multi input[value="registry default"]')?.checked);
+    await page.locator('#surfaces-multi input[value="registry default"]').check();
+    await page.waitForFunction(() => !document.querySelector('#surfaces-multi input[value="agent-web-ui"]')?.checked);
+    await page.getByLabel('Allow multiple operator surfaces').uncheck();
+    await page.locator('#surface-select').waitFor({ state: 'visible', timeout: 10_000 });
+
+    await page.locator('#launch-scope-summary').getByText('1 agent · 1 runtime · 1 operator projection').waitFor({ timeout: 10_000 });
+    await page.locator('#launch-scope-agents').getByText('Agents: sonar.resident').waitFor({ timeout: 10_000 });
 
     await chooseSingleSite(page, 'sonar');
     await submitLaunch(page);
@@ -376,6 +480,134 @@ test('browser interactive selection UI can launch multiple sites before cancel',
     await browser?.close().catch(() => {});
     if (child.exitCode === null) child.kill();
     if (recoveryChild && recoveryChild.exitCode === null) recoveryChild.kill();
+    await new Promise((resolveClose) => fixture.healthServer.close(() => resolveClose()));
+    await rm(fixture.root, { recursive: true, force: true });
+  }
+});
+
+test('browser selector constrains dependent choices and refuses invalid submissions without mutation', { timeout: 60_000, skip: process.env.NARADA_ENABLE_BROWSER_SELECTION_UI_E2E !== '1' ? 'browser selection UI E2E requires explicit opt-in because child launcher process handling is host-sensitive' : false }, async () => {
+  const fixture = await makeFixture();
+  let browser;
+  let child;
+  try {
+    ({ child, url: fixture.url } = await startLauncherUi({ fixture, port: 54920 }));
+    browser = await chromium.launch();
+    const page = await browser.newPage();
+    await page.goto(fixture.url);
+    await page.locator('#site-select').waitFor({ state: 'visible', timeout: 10_000 });
+
+    const values = async (selector) => page.locator(selector + ' option').evaluateAll((options) => options.map((option) => option.value));
+    assert.deepEqual(await values('#surface-select'), ['registry default', 'agent-cli', 'agent-web-ui']);
+    assert.deepEqual(await values('#runtime'), ['registry default', 'narada-agent-runtime-server']);
+    assert.ok((await values('#provider')).length > 1, 'NARS selections expose admitted intelligence providers');
+
+    await chooseSingleSite(page, 'narada');
+    await page.locator('#role-select').selectOption('architect');
+    await page.waitForFunction(() => document.querySelector('#surface-select')?.value === 'registry default' && [...document.querySelectorAll('#surface-select option')].map((option) => option.value).join(',') === 'registry default,codex');
+    assert.deepEqual(await values('#runtime'), ['registry default', 'codex']);
+    assert.deepEqual(await values('#provider'), ['registry default']);
+
+    await chooseSingleSite(page, 'sonar');
+    await page.locator('#role-select').selectOption('resident');
+    await page.getByLabel('Allow multiple operator surfaces').check();
+    await page.locator('#surfaces-multi input[value="agent-web-ui"]').check();
+    await page.waitForFunction(() => !document.querySelector('#surfaces-multi input[value="registry default"]')?.checked);
+    const refusal = await page.evaluate(async () => {
+      const response = await fetch('/submit', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ site: ['sonar'], role: ['resident'], operatorSurface: ['codex', 'agent-web-ui'], runtime: 'registry default', intelligenceProvider: 'registry default' }),
+      });
+      return { status: response.status, body: await response.json() };
+    });
+    assert.equal(refusal.status, 500);
+    assert.match(refusal.body.error, /multiple_operator_surfaces_require_nars_projections/);
+    assert.equal((await fetchLaunchState(page)).attempts.length, 0, 'refused payload must not create a launch attempt');
+
+    await page.route('**/submit', async (route) => {
+      await route.fulfill({ status: 409, contentType: 'application/json', body: JSON.stringify({ error: 'selection_stale_retry' }) });
+    }, { times: 1 });
+    await page.getByRole('button', { name: /Start .*Agent Launch/ }).click();
+    await page.locator('#status').getByText('Launch failed: selection_stale_retry').waitFor({ timeout: 10_000 });
+    assert.equal((await fetchLaunchState(page)).attempts.length, 0, 'browser refusal presentation must not imply a successful mutation');
+
+    await page.getByRole('button', { name: 'Cancel' }).click();
+    await page.getByRole('heading', { name: 'Cancelled' }).waitFor({ timeout: 10_000 });
+    assert.deepEqual(await waitForExit(child), { code: 0, signal: null });
+  } finally {
+    await browser?.close().catch(() => {});
+    if (child?.exitCode === null) child.kill();
+    await new Promise((resolveClose) => fixture.healthServer.close(() => resolveClose()));
+    await rm(fixture.root, { recursive: true, force: true });
+  }
+});
+
+test('browser UI persists multi-mode, previews fanout, and the planning-only UI exits after submission', { timeout: 90_000, skip: process.env.NARADA_ENABLE_BROWSER_SELECTION_UI_E2E !== '1' ? 'browser selection UI E2E requires explicit opt-in because child launcher process handling is host-sensitive' : false }, async () => {
+  const fixture = await makeFixture();
+  let browser;
+  let launchChild;
+  let recoveryChild;
+  let planChild;
+  let cancelledPlanChild;
+  try {
+    const launch = await startLauncherUi({ fixture, port: 54930 });
+    launchChild = launch.child;
+    browser = await chromium.launch();
+    const page = await browser.newPage();
+    await page.goto(launch.url);
+    await page.locator('#site-select').waitFor({ state: 'visible', timeout: 10_000 });
+    await page.getByLabel('Allow multi-site launch').check();
+    await page.locator('#sites-multi input[value="smart-scheduling"]').check();
+    await page.getByLabel('Allow multi-role launch').check();
+    await page.locator('#roles-multi input[value="architect"]').check();
+    await page.locator('#launch-scope-summary').getByText('4 agents · 4 runtimes · 4 operator projections').waitFor({ timeout: 10_000 });
+    await page.locator('#launch-scope-agents').getByText('sonar.resident').waitFor({ timeout: 10_000 });
+    await page.locator('#launch-scope-agents').getByText('smart-scheduling.architect').waitFor({ timeout: 10_000 });
+    await submitLaunch(page);
+    const state = await fetchLaunchState(page);
+    assert.equal(state.attempts.length, 1);
+    assert.deepEqual(state.attempts[0].selection.site.sort(), ['smart-scheduling', 'sonar']);
+    assert.deepEqual(state.attempts[0].selection.role.sort(), ['architect', 'resident']);
+    assert.equal(state.attempts[0].diagnostic.selected_agents.length, 4, 'launch plan must match the visible four-agent fanout');
+    await page.getByRole('button', { name: 'Cancel' }).click();
+    assert.deepEqual(await waitForExit(launchChild), { code: 0, signal: null });
+
+    const recovery = await startLauncherUi({ fixture, port: 54931 });
+    recoveryChild = recovery.child;
+    const recoveryPage = await browser.newPage();
+    await recoveryPage.goto(recovery.url);
+    await recoveryPage.getByLabel('Allow multi-site launch').waitFor({ state: 'visible', timeout: 10_000 });
+    assert.equal(await recoveryPage.getByLabel('Allow multi-site launch').isChecked(), true);
+    assert.equal(await recoveryPage.getByLabel('Allow multi-role launch').isChecked(), true);
+    await recoveryPage.locator('#launch-scope-summary').getByText('4 agents · 4 runtimes · 4 operator projections').waitFor({ timeout: 10_000 });
+    await recoveryPage.getByRole('button', { name: 'Cancel' }).click();
+    assert.deepEqual(await waitForExit(recoveryChild), { code: 0, signal: null });
+
+    const plan = await startLauncherUi({ fixture, command: 'workspace-plan', port: 54932 });
+    planChild = plan.child;
+    const planPage = await browser.newPage();
+    await planPage.goto(plan.url);
+    if (await planPage.getByLabel('Allow multi-site launch').isChecked()) await planPage.getByLabel('Allow multi-site launch').uncheck();
+    if (await planPage.getByLabel('Allow multi-role launch').isChecked()) await planPage.getByLabel('Allow multi-role launch').uncheck();
+    await planPage.locator('#site-select').waitFor({ state: 'visible', timeout: 10_000 });
+    await chooseSingleSite(planPage, 'sonar');
+    await planPage.locator('#role-select').selectOption('resident');
+    await planPage.getByRole('button', { name: /Start .*Agent Launch/ }).click();
+    await planPage.getByRole('heading', { name: 'New launch submitted' }).waitFor({ timeout: 10_000 });
+    assert.deepEqual(await waitForExit(planChild), { code: 0, signal: null });
+
+    const terminalProjectionCountBeforeCancel = (await readWtLaunches(fixture.wtLog)).length;
+    const cancelledPlan = await startLauncherUi({ fixture, command: 'workspace-plan', port: 54933 });
+    cancelledPlanChild = cancelledPlan.child;
+    const cancelledPlanPage = await browser.newPage();
+    await cancelledPlanPage.goto(cancelledPlan.url);
+    await cancelledPlanPage.getByRole('button', { name: 'Cancel' }).click();
+    await cancelledPlanPage.getByRole('heading', { name: 'Cancelled' }).waitFor({ timeout: 10_000 });
+    const cancelledPlanExit = await waitForExit(cancelledPlanChild);
+    assert.notEqual(cancelledPlanExit.code, 0, 'planning-only cancellation must not be reported as a successful plan');
+    assert.equal((await readWtLaunches(fixture.wtLog)).length, terminalProjectionCountBeforeCancel, 'planning-only cancellation must not create a terminal projection');
+  } finally {
+    await browser?.close().catch(() => {});
+    for (const child of [launchChild, recoveryChild, planChild, cancelledPlanChild]) if (child?.exitCode === null) child.kill();
     await new Promise((resolveClose) => fixture.healthServer.close(() => resolveClose()));
     await rm(fixture.root, { recursive: true, force: true });
   }

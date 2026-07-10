@@ -19,6 +19,8 @@ import { buildLaunchProcessOwnership, launchSessionIdFromToken } from '@narada2/
 import { carrierStartCommand } from './carrier.js';
 import {
   defaultRuntimeForCarrier,
+  NARADA_AGENT_RUNTIME_SERVER_KIND,
+  normalizeRuntimeAlias,
   resolveCarrierRuntimeSelection,
 } from '@narada2/carrier-runtime-contract/carrier-runtime-selection';
 import { discoverNarsSessions } from '@narada2/carrier-runtime/nars-session-index';
@@ -28,6 +30,15 @@ import { defaultLaunchRegistryPath, listKnownSiteRootsForCli, type ResolvedSiteR
 const requireFromLauncherCommand = createRequire(import.meta.url);
 const providerRegistry = loadProviderRegistry();
 const providerAdapters = loadProviderAdapters();
+const ADMITTED_LAUNCH_RUNTIME_SUBSTRATE_KINDS = [
+  NARADA_AGENT_RUNTIME_SERVER_KIND,
+  'codex',
+  'kimi',
+  'pi',
+  'claude-code',
+  'opencode',
+] as const;
+const NARS_OPERATOR_SURFACE_KINDS = ['agent-cli', 'agent-web-ui'] as const;
 
 interface ProviderRegistry {
   default_provider?: string;
@@ -35,6 +46,69 @@ interface ProviderRegistry {
     meaning?: string;
     support_state?: string;
   }>;
+}
+
+interface WorkspaceLaunchCapabilityPair {
+  operatorSurface: string;
+  runtime: string;
+}
+
+function workspaceLaunchCapabilityPairs(records: WorkspaceLaunchRecord[]): WorkspaceLaunchCapabilityPair[] {
+  const candidates = records.flatMap((record) => {
+    const runtime = normalizeRuntimeAlias(record.runtime);
+    const pairs: WorkspaceLaunchCapabilityPair[] = [{ operatorSurface: record.carrier, runtime }];
+    if (runtime === NARADA_AGENT_RUNTIME_SERVER_KIND) {
+      for (const operatorSurface of NARS_OPERATOR_SURFACE_KINDS) pairs.push({ operatorSurface, runtime });
+    }
+    return pairs;
+  });
+  const admitted = new Map<string, WorkspaceLaunchCapabilityPair>();
+  for (const pair of candidates) {
+    try {
+      resolveWorkspaceCarrierRuntimeSelection(pair.operatorSurface, pair.runtime);
+      admitted.set(`${pair.operatorSurface}\u0000${pair.runtime}`, pair);
+    } catch {
+      // Registry records can be historical. Only expose launchable pairs.
+    }
+  }
+  return [...admitted.values()];
+}
+
+function workspaceLaunchCapabilityValues(
+  records: WorkspaceLaunchRecord[],
+  operatorSurfaces: string[] = [],
+  runtime?: string,
+): { operatorSurfaceValues: string[]; runtimeValues: string[] } {
+  const pairs = workspaceLaunchCapabilityPairs(records);
+  const explicitSurfaces = operatorSurfaces.filter((value) => value !== 'registry default');
+  const explicitRuntime = runtime && runtime !== 'registry default' ? normalizeRuntimeAlias(runtime) : null;
+  const filteredPairs = explicitRuntime
+    ? pairs.filter((pair) => pair.runtime === explicitRuntime)
+    : pairs;
+  const operatorSurfaceValues = unique(['registry default', ...filteredPairs.map((pair) => pair.operatorSurface)]);
+  const selectedSurfaces = explicitSurfaces.filter((surface) => operatorSurfaceValues.includes(surface));
+  const compatiblePairs = selectedSurfaces.length === 0
+    ? pairs
+    : pairs.filter((pair) => selectedSurfaces.every((surface) => pair.operatorSurface === surface || pairs.some((candidate) => candidate.operatorSurface === surface && candidate.runtime === pair.runtime)));
+  return {
+    operatorSurfaceValues,
+    runtimeValues: unique(['registry default', ...compatiblePairs.map((pair) => pair.runtime)]),
+  };
+}
+
+function workspaceLaunchSelectionMode(
+  raw: unknown,
+  selection: Pick<WorkspaceLaunchBrowserSelection, 'site' | 'role' | 'operatorSurface'>,
+): WorkspaceLaunchSelectionMode | undefined {
+  const source = isRecord(raw) ? raw : {};
+  const cardinality = (key: keyof WorkspaceLaunchSelectionMode, values: string[]): WorkspaceLaunchSelectionCardinality =>
+    values.length > 1 || source[key] === 'multiple' ? 'multiple' : 'single';
+  const mode = {
+    site: cardinality('site', selection.site),
+    role: cardinality('role', selection.role),
+    operatorSurface: cardinality('operatorSurface', selection.operatorSurface),
+  };
+  return mode.site === 'single' && mode.role === 'single' && mode.operatorSurface === 'single' && !isRecord(raw) ? undefined : mode;
 }
 
 function workspaceLaunchSessionIdentityRef(session: Record<string, unknown>): AgentIdentityRefV2 | null {
@@ -420,7 +494,7 @@ function resolveWorkspaceCarrierRuntimeSelection(operatorSurface: string | undef
     carrierValue: operatorSurface,
     operatorSurfaceValue: operatorSurface,
     runtimeValue: runtime,
-    admittedRuntimeSubstrateKinds: ['kimi', 'codex', 'narada-agent-runtime-server', 'pi', 'claude-code', 'opencode'],
+    admittedRuntimeSubstrateKinds: [...ADMITTED_LAUNCH_RUNTIME_SUBSTRATE_KINDS],
     runtimeContractSchema: 'narada.runtime_substrate_kind.v1',
   });
   if (selection.status === 'refused') {
@@ -1300,6 +1374,15 @@ interface WorkspaceLaunchBrowserSelection {
   operatorSurface: string[];
   runtime: string;
   intelligenceProvider: string;
+  selectionMode?: WorkspaceLaunchSelectionMode;
+}
+
+type WorkspaceLaunchSelectionCardinality = 'single' | 'multiple';
+
+interface WorkspaceLaunchSelectionMode {
+  site: WorkspaceLaunchSelectionCardinality;
+  role: WorkspaceLaunchSelectionCardinality;
+  operatorSurface: WorkspaceLaunchSelectionCardinality;
 }
 
 interface WorkspaceLaunchRememberedSelectionRecord {
@@ -1349,31 +1432,14 @@ export function workspaceLaunchSelectorModel(
   const requestedRoles = nonEmptyStringArray(selection.role).filter((role) => roleValues.includes(role));
   const selectedRoles = requestedRoles.length > 0 ? requestedRoles : initialRoleValuesForInteractiveSelection(roleValues);
   const selectedRecords = selectLaunchRecords(effectiveRecords, { all: true, site: selectedSites, role: selectedRoles });
-  const operatorSurfaceValues = unique([
-    'registry default',
-    ...selectedRecords.map((record) => record.carrier),
-    'agent-cli',
-    'agent-web-ui',
-    'codex',
-    'kimi',
-    'pi',
-    'claude-code',
-    'opencode',
-  ]);
-  const selectedOperatorSurfaces = initialOperatorSurfaceValues(operatorSurfaceValues, nonEmptyStringArray(selection.operatorSurface).join(','));
-  const runtimeValues = unique([
-    'registry default',
-    ...selectedRecords.map((record) => record.runtime),
-    'narada-agent-runtime-server',
-    'codex',
-    'kimi',
-    'pi',
-    'claude-code',
-    'opencode',
-  ]);
+  const capabilityValues = workspaceLaunchCapabilityValues(selectedRecords);
+  const selectedOperatorSurfaces = initialOperatorSurfaceValues(capabilityValues.operatorSurfaceValues, nonEmptyStringArray(selection.operatorSurface).join(','));
   const requestedRuntime = nonEmpty(selection.runtime);
-  const selectedRuntime = requestedRuntime && runtimeValues.includes(requestedRuntime) ? requestedRuntime : 'registry default';
-  const providerOperatorSurface = selectedOperatorSurfaces.includes('agent-cli') ? 'agent-cli' : (selectedOperatorSurfaces[0] ?? 'registry default');
+  const runtimeValues = workspaceLaunchCapabilityValues(selectedRecords, selectedOperatorSurfaces).runtimeValues;
+  const selectedRuntime = requestedRuntime && runtimeValues.includes(normalizeRuntimeAlias(requestedRuntime)) ? normalizeRuntimeAlias(requestedRuntime) : 'registry default';
+  const operatorSurfaceValues = workspaceLaunchCapabilityValues(selectedRecords, selectedOperatorSurfaces, selectedRuntime).operatorSurfaceValues;
+  const normalizedOperatorSurfaces = initialOperatorSurfaceValues(operatorSurfaceValues, selectedOperatorSurfaces.join(','));
+  const providerOperatorSurface = normalizedOperatorSurfaces.includes('agent-cli') ? 'agent-cli' : (normalizedOperatorSurfaces[0] ?? 'registry default');
   const intelligenceProviderOptions = intelligenceProviderChoicesForLaunchSelection({
     records: selectedRecords,
     operatorSurface: providerOperatorSurface,
@@ -1400,7 +1466,7 @@ export function workspaceLaunchSelectorModel(
     selected: {
       site: selectedSites,
       role: selectedRoles,
-      operatorSurface: selectedOperatorSurfaces,
+      operatorSurface: normalizedOperatorSurfaces,
       runtime: selectedRuntime,
       intelligenceProvider: selectedProvider,
     },
@@ -1914,10 +1980,11 @@ export async function readWorkspaceLaunchRememberedSelection(): Promise<Workspac
 export async function writeWorkspaceLaunchRememberedSelection(selection: WorkspaceLaunchBrowserSelection): Promise<void> {
   const path = workspaceLaunchRememberedSelectionPath();
   await mkdir(dirname(path), { recursive: true });
+  const normalizedSelection = normalizeWorkspaceLaunchBrowserSelection(selection);
   await writeJsonFile(path, {
     schema: 'narada.workspace_launch.remembered_selection.v1',
     updated_at: new Date().toISOString(),
-    selection,
+    selection: normalizedSelection,
   } satisfies WorkspaceLaunchRememberedSelectionRecord);
 }
 
@@ -2667,7 +2734,12 @@ function normalizeWorkspaceLaunchBrowserSelection(payload: Partial<WorkspaceLaun
   if (site.length === 0) throw new Error('interactive_selection_ui_site_required');
   if (role.length === 0) throw new Error('interactive_selection_ui_role_required');
   if (operatorSurface.length === 0) throw new Error('interactive_selection_ui_operator_surface_required');
-  return { site, role, operatorSurface, runtime, intelligenceProvider };
+  const explicitSurfaces = operatorSurface.filter((value) => value !== 'registry default');
+  if (explicitSurfaces.length > 1 && explicitSurfaces.some((value) => !NARS_OPERATOR_SURFACE_KINDS.includes(value as typeof NARS_OPERATOR_SURFACE_KINDS[number]))) {
+    throw new Error('interactive_selection_ui_multiple_operator_surfaces_require_nars_projections');
+  }
+  const selectionMode = workspaceLaunchSelectionMode(payload.selectionMode, { site, role, operatorSurface });
+  return { site, role, operatorSurface, runtime, intelligenceProvider, ...(selectionMode ? { selectionMode } : {}) };
 }
 
 function filterWorkspaceLaunchValues(values: string[] | undefined, allowed: string[]): string[] {
@@ -2693,37 +2765,18 @@ export function resolveWorkspaceLaunchBrowserSelection(
   const selectedRoles = nonEmptyStringArray(options.role).length > 0 ? requestedRoles : (rememberedRoles.length > 0 ? rememberedRoles : requestedRoles);
 
   const selectedRecords = selectLaunchRecords(effectiveRecords, { ...options, all: true, site: selectedSites, role: selectedRoles });
-  const operatorSurfaceChoices = unique([
-    'registry default',
-    ...selectedRecords.map((record) => record.carrier),
-    'agent-cli',
-    'agent-web-ui',
-    'codex',
-    'kimi',
-    'pi',
-    'claude-code',
-    'opencode',
-  ]);
-  const requestedOperatorSurfaces = initialOperatorSurfaceValues(operatorSurfaceChoices, options.operatorSurface);
-  const rememberedOperatorSurfaces = rememberedSelection ? initialOperatorSurfaceValues(operatorSurfaceChoices, rememberedSelection.operatorSurface.join(',')) : [];
+  const capabilityValues = workspaceLaunchCapabilityValues(selectedRecords);
+  const requestedOperatorSurfaces = initialOperatorSurfaceValues(capabilityValues.operatorSurfaceValues, options.operatorSurface);
+  const rememberedOperatorSurfaces = rememberedSelection ? initialOperatorSurfaceValues(capabilityValues.operatorSurfaceValues, rememberedSelection.operatorSurface.join(',')) : [];
   const selectedOperatorSurfaces = options.operatorSurface ? requestedOperatorSurfaces : (rememberedOperatorSurfaces.length > 0 ? rememberedOperatorSurfaces : requestedOperatorSurfaces);
 
-  const runtimeValues = unique([
-    'registry default',
-    ...selectedRecords.map((record) => record.runtime),
-    'narada-agent-runtime-server',
-    'codex',
-    'kimi',
-    'pi',
-    'claude-code',
-    'opencode',
-  ]);
+  const runtimeValues = workspaceLaunchCapabilityValues(selectedRecords, selectedOperatorSurfaces).runtimeValues;
   const requestedRuntime = nonEmpty(options.runtime);
-  const rememberedRuntime = rememberedSelection && nonEmpty(rememberedSelection.runtime) && runtimeValues.includes(rememberedSelection.runtime)
-    ? rememberedSelection.runtime
+  const rememberedRuntime = rememberedSelection && nonEmpty(rememberedSelection.runtime) && runtimeValues.includes(normalizeRuntimeAlias(rememberedSelection.runtime))
+    ? normalizeRuntimeAlias(rememberedSelection.runtime)
     : null;
   const selectedRuntime = requestedRuntime
-    ? (runtimeValues.includes(requestedRuntime) ? requestedRuntime : 'registry default')
+    ? (runtimeValues.includes(normalizeRuntimeAlias(requestedRuntime)) ? normalizeRuntimeAlias(requestedRuntime) : 'registry default')
     : (rememberedRuntime ?? (options.runtime ?? 'registry default'));
 
   const providerOperatorSurface = selectedOperatorSurfaces.includes('agent-cli') ? 'agent-cli' : (selectedOperatorSurfaces[0] ?? 'registry default');
@@ -2741,13 +2794,18 @@ export function resolveWorkspaceLaunchBrowserSelection(
     ? (providerValues.has(requestedProvider) ? requestedProvider : 'registry default')
     : (rememberedProvider ?? (options.intelligenceProvider ?? 'registry default'));
 
-  return {
+  const selection = {
     site: selectedSites,
     role: selectedRoles,
     operatorSurface: selectedOperatorSurfaces,
     runtime: selectedRuntime,
     intelligenceProvider: selectedProvider,
   };
+  const selectionMode = workspaceLaunchSelectionMode(
+    options.site || options.role || options.operatorSurface ? undefined : rememberedSelection?.selectionMode,
+    selection,
+  );
+  return { ...selection, ...(selectionMode ? { selectionMode } : {}) };
 }
 
 export function buildWorkspaceLaunchSelectionUiModel(
@@ -2758,19 +2816,7 @@ export function buildWorkspaceLaunchSelectionUiModel(
 ): Record<string, unknown> {
   const effectiveRecords = canonicalizeWorkspaceLaunchRecords(records, siteCatalog);
   const resolvedSelection = resolveWorkspaceLaunchBrowserSelection(effectiveRecords, options, rememberedSelection, siteCatalog);
-  const selectedRecords = selectLaunchRecords(effectiveRecords, { ...options, all: true, site: resolvedSelection.site, role: resolvedSelection.role });
   const siteChoices = unique(effectiveRecords.map((record) => record.site));
-  const operatorSurfaceChoices = unique([
-    'registry default',
-    ...selectedRecords.map((record) => record.carrier),
-    'agent-cli',
-    'agent-web-ui',
-    'codex',
-    'kimi',
-    'pi',
-    'claude-code',
-    'opencode',
-  ]);
   return {
     records: effectiveRecords,
     siteChoices,
@@ -2793,6 +2839,8 @@ export function buildWorkspaceLaunchSelectionUiModel(
     initialOperatorSurfaces: resolvedSelection.operatorSurface,
     initialRuntime: resolvedSelection.runtime,
     initialIntelligenceProvider: resolvedSelection.intelligenceProvider,
+    initialSelectionMode: resolvedSelection.selectionMode ?? { site: 'single', role: 'single', operatorSurface: 'single' },
+    narsOperatorSurfaceChoices: [...NARS_OPERATOR_SURFACE_KINDS],
     selectorModel: workspaceLaunchSelectorModel(effectiveRecords, resolvedSelection, siteCatalog),
     explicitSelection: {
       site: nonEmptyStringArray(options.site).length > 0,
@@ -2826,6 +2874,10 @@ export function buildWorkspaceLaunchSelectionHtml(model: Record<string, unknown>
     button { padding: 9px 14px; border-radius: 7px; border: 1px solid color-mix(in srgb, CanvasText 25%, transparent); background: ButtonFace; color: ButtonText; cursor: pointer; }
     button.primary { background: Highlight; color: HighlightText; border-color: Highlight; }
     .hint { color: color-mix(in srgb, CanvasText 68%, transparent); font-size: 13px; margin-top: 4px; }
+    .mode-toggle { font-weight: 550; margin-bottom: 6px; }
+    .launch-scope { margin: 2px 0 16px; padding: 10px 12px; border-left: 3px solid color-mix(in srgb, Highlight 60%, transparent); background: color-mix(in srgb, Highlight 6%, transparent); }
+    .launch-scope strong { display: block; font-size: 13px; }
+    [hidden] { display: none !important; }
     .stage-strip { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 0 0 20px; }
     .stage-card { border: 1px solid color-mix(in srgb, CanvasText 18%, transparent); border-radius: 8px; padding: 10px 12px; background: color-mix(in srgb, CanvasText 3%, transparent); }
     .stage-card strong { display: block; font-size: 13px; margin-bottom: 4px; }
@@ -2860,17 +2912,18 @@ export function buildWorkspaceLaunchSelectionHtml(model: Record<string, unknown>
     <h1>Narada Workspace Launch</h1>
     <section class="stage-strip" aria-label="Launch stages">
       <div class="stage-card"><strong>1. Configure</strong><span>Choose the Site, role, runtime, surface, and model defaults for a fresh launch.</span></div>
-      <div class="stage-card"><strong>2. Start New</strong><span>Submitting the form creates a new launch attempt; it does not attach to an old session.</span></div>
+      <div class="stage-card"><strong>2. Start</strong><span>Submitting creates a fresh launch attempt. It may start one runtime per selected agent; it never attaches to an old session.</span></div>
       <div class="stage-card"><strong>3. Attach Explicitly</strong><span>Use result-card actions only when you want to open or attach to that specific launched session.</span></div>
     </section>
     <form id="form">
-      <fieldset><legend>Sites</legend><div id="sites"></div></fieldset>
-      <fieldset><legend>Roles</legend><div id="roles"></div></fieldset>
-      <fieldset><legend>Operator Surfaces</legend><div id="surfaces"></div><div class="hint">Explicit choices override registry default.</div></fieldset>
+      <fieldset><legend>Site</legend><label class="mode-toggle"><input id="allow-multi-site" type="checkbox">Allow multi-site launch</label><div id="sites"><div id="site-single"></div><div id="sites-multi" hidden></div></div></fieldset>
+      <fieldset><legend>Role</legend><label class="mode-toggle"><input id="allow-multi-role" type="checkbox">Allow multi-role launch</label><div id="roles"><div id="role-single"></div><div id="roles-multi" hidden></div></div></fieldset>
+      <fieldset><legend>Operator Surface</legend><label class="mode-toggle"><input id="allow-multi-surface" type="checkbox">Allow multiple operator surfaces</label><div id="surfaces"><div id="surface-single"></div><div id="surfaces-multi" hidden></div></div><div class="hint">Explicit choices override registry default. Multiple surfaces are parallel projections of one NARS runtime.</div></fieldset>
       <fieldset><legend>Runtime</legend><select id="runtime"></select></fieldset>
       <fieldset><legend>Intelligence Provider</legend><select id="provider"></select></fieldset>
+      <section id="launch-scope" class="launch-scope" aria-live="polite"><strong id="launch-scope-summary"></strong><div id="launch-scope-agents" class="hint"></div></section>
       <div class="hint">Remembered selections are defaults only. They do not bind to any old launch, carrier, runtime, or conversation.</div>
-      <div class="actions"><button class="primary" type="submit">Start New Session</button><button id="cancel" type="button">Cancel</button></div>
+      <div class="actions"><button id="submit-launch" class="primary" type="submit">Start Selected Launches</button><button id="cancel" type="button">Cancel</button></div>
       <div class="hint">${persistent ? 'Form submission always creates a new launch session. Use launched-session actions below only when you explicitly want to open or attach to an existing result.' : 'This page submits one new launch session and then returns control to the terminal.'}</div>
       <div id="status" role="status" aria-live="polite"></div>
     </form>
@@ -2889,6 +2942,11 @@ export function buildWorkspaceLaunchSelectionHtml(model: Record<string, unknown>
     const selectedSites = new Set(initialSites);
     const selectedRoles = new Set(model.initialRoles || []);
     const selectedSurfaces = new Set(model.initialOperatorSurfaces || ['registry default']);
+    const initialSelectionMode = model.initialSelectionMode || {};
+    const narsOperatorSurfaceChoices = new Set(model.narsOperatorSurfaceChoices || ['agent-cli', 'agent-web-ui']);
+    let allowMultiSiteLaunch = initialSelectionMode.site === 'multiple' || selectedSites.size > 1;
+    let allowMultiRoleLaunch = initialSelectionMode.role === 'multiple' || selectedRoles.size > 1;
+    let allowMultiSurfaceLaunch = initialSelectionMode.operatorSurface === 'multiple' || selectedSurfaces.size > 1;
     let currentSelectorModel = model.selectorModel || {};
     let selectorRefreshSequence = 0;
     if (currentSelectorModel.selected) {
@@ -2904,26 +2962,161 @@ export function buildWorkspaceLaunchSelectionHtml(model: Record<string, unknown>
       input.addEventListener('change', () => onChange(input));
       row.append(input, document.createTextNode(label)); container.append(row);
     }
+    function coerceSingleSelection(set, choices, fallback) {
+      const selected = [...set].find(value => choices.includes(value)) || (choices.includes(fallback) ? fallback : choices[0]);
+      set.clear();
+      if (selected) set.add(selected);
+      return selected;
+    }
+    function renderSingleSelect(containerId, id, choices, selected, onChange, label) {
+      const container = document.getElementById(containerId);
+      container.textContent = '';
+      const select = document.createElement('select');
+      select.id = id;
+      select.setAttribute('aria-label', label);
+      for (const choice of choices) {
+        const option = document.createElement('option');
+        option.value = choice;
+        option.textContent = choice;
+        option.selected = choice === selected;
+        select.append(option);
+      }
+      select.addEventListener('change', () => onChange(select.value));
+      container.append(select);
+    }
     function renderSites() {
-      const el = document.getElementById('sites'); el.textContent = '';
-      model.siteChoices.forEach(site => checkbox(el, site, selectedSites.has(site), input => { input.checked ? selectedSites.add(site) : selectedSites.delete(site); renderRoles(); refreshSelectorControls().catch(() => {}); }));
+      const choices = unique(model.siteChoices || []);
+      const single = document.getElementById('site-single');
+      const multi = document.getElementById('sites-multi');
+      document.getElementById('allow-multi-site').checked = allowMultiSiteLaunch;
+      if (!allowMultiSiteLaunch) {
+        const selected = coerceSingleSelection(selectedSites, choices);
+        single.hidden = false;
+        multi.hidden = true;
+        renderSingleSelect('site-single', 'site-select', choices, selected, value => {
+          selectedSites.clear();
+          if (value) selectedSites.add(value);
+          renderRoles();
+          refreshSelectorControls().catch(() => {});
+        }, 'Site');
+        return;
+      }
+      for (const site of [...selectedSites]) if (!choices.includes(site)) selectedSites.delete(site);
+      if (selectedSites.size === 0 && choices[0]) selectedSites.add(choices[0]);
+      single.hidden = true;
+      multi.hidden = false;
+      multi.textContent = '';
+      choices.forEach(site => checkbox(multi, site, selectedSites.has(site), input => {
+        if (!input.checked && selectedSites.size <= 1) {
+          input.checked = true;
+          return;
+        }
+        input.checked ? selectedSites.add(site) : selectedSites.delete(site);
+        renderRoles();
+        refreshSelectorControls().catch(() => {});
+      }));
     }
     function renderRoles() {
       const choices = unique(recordsForSites().map(r => r.role));
       for (const role of [...selectedRoles]) if (!choices.includes(role)) selectedRoles.delete(role);
+      const single = document.getElementById('role-single');
+      const multi = document.getElementById('roles-multi');
+      document.getElementById('allow-multi-role').checked = allowMultiRoleLaunch;
+      if (!allowMultiRoleLaunch) {
+        const selected = coerceSingleSelection(selectedRoles, choices, 'resident');
+        single.hidden = false;
+        multi.hidden = true;
+        renderSingleSelect('role-single', 'role-select', choices, selected, value => {
+          selectedRoles.clear();
+          if (value) selectedRoles.add(value);
+          refreshSelectorControls().catch(() => {});
+        }, 'Role');
+        return;
+      }
       if (selectedRoles.size === 0 && choices.includes('resident')) selectedRoles.add('resident');
-      const el = document.getElementById('roles'); el.textContent = '';
-      choices.forEach(role => checkbox(el, role, selectedRoles.has(role), input => { input.checked ? selectedRoles.add(role) : selectedRoles.delete(role); refreshSelectorControls().catch(() => {}); }));
+      if (selectedRoles.size === 0 && choices[0]) selectedRoles.add(choices[0]);
+      single.hidden = true;
+      multi.hidden = false;
+      multi.textContent = '';
+      choices.forEach(role => checkbox(multi, role, selectedRoles.has(role), input => {
+        if (!input.checked && selectedRoles.size <= 1) {
+          input.checked = true;
+          return;
+        }
+        input.checked ? selectedRoles.add(role) : selectedRoles.delete(role);
+        refreshSelectorControls().catch(() => {});
+      }));
     }
     function syncSelectedSet(set, options, fallback) {
       const values = new Set((options || []).map(option => option.value));
       for (const value of [...set]) if (!values.has(value)) set.delete(value);
       if (set.size === 0 && values.has(fallback)) set.add(fallback);
     }
+    function renderSingleOptionSelect(containerId, id, options, selected, onChange, label) {
+      const container = document.getElementById(containerId);
+      container.textContent = '';
+      const select = document.createElement('select');
+      select.id = id;
+      select.setAttribute('aria-label', label);
+      for (const choice of options || []) {
+        const option = document.createElement('option');
+        option.value = choice.value;
+        option.textContent = choice.label;
+        if (choice.hint) option.title = choice.hint;
+        option.selected = choice.value === selected;
+        select.append(option);
+      }
+      select.addEventListener('change', () => onChange(select.value));
+      container.append(select);
+    }
     function renderSurfaces(options) {
       syncSelectedSet(selectedSurfaces, options, 'registry default');
-      const el = document.getElementById('surfaces'); el.textContent = '';
-      (options || []).forEach(option => checkbox(el, option.value, selectedSurfaces.has(option.value), input => { input.checked ? selectedSurfaces.add(option.value) : selectedSurfaces.delete(option.value); refreshSelectorControls().catch(() => {}); }, option.label));
+      const explicitSurfaces = [...selectedSurfaces].filter(value => value !== 'registry default');
+      if (explicitSurfaces.length > 0 && selectedSurfaces.has('registry default')) {
+        selectedSurfaces.clear();
+        explicitSurfaces.forEach(value => selectedSurfaces.add(value));
+      }
+      const single = document.getElementById('surface-single');
+      const multi = document.getElementById('surfaces-multi');
+      document.getElementById('allow-multi-surface').checked = allowMultiSurfaceLaunch;
+      if (!allowMultiSurfaceLaunch) {
+        const selected = [...selectedSurfaces][0] || (options || [])[0]?.value;
+        selectedSurfaces.clear();
+        if (selected) selectedSurfaces.add(selected);
+        single.hidden = false;
+        multi.hidden = true;
+        renderSingleOptionSelect('surface-single', 'surface-select', options || [], selected, value => {
+          selectedSurfaces.clear();
+          if (value) selectedSurfaces.add(value);
+          refreshSelectorControls().catch(() => {});
+        }, 'Operator Surface');
+        return;
+      }
+      if (selectedSurfaces.size === 0 && options?.[0]?.value) selectedSurfaces.add(options[0].value);
+      single.hidden = true;
+      multi.hidden = false;
+      multi.textContent = '';
+      (options || []).filter(option => option.value === 'registry default' || narsOperatorSurfaceChoices.has(option.value)).forEach(option => checkbox(multi, option.value, selectedSurfaces.has(option.value), input => {
+        if (option.value === 'registry default') {
+          if (input.checked) {
+            selectedSurfaces.clear();
+            selectedSurfaces.add('registry default');
+          } else {
+            input.checked = true;
+            return;
+          }
+          refreshSelectorControls().catch(() => {});
+          return;
+        }
+        if (!input.checked && selectedSurfaces.size <= 1) {
+          input.checked = true;
+          return;
+        }
+        selectedSurfaces.delete('registry default');
+        input.checked ? selectedSurfaces.add(option.value) : selectedSurfaces.delete(option.value);
+        if (selectedSurfaces.size === 0) selectedSurfaces.add('registry default');
+        refreshSelectorControls().catch(() => {});
+      }, option.label));
     }
     function renderSelect(id, options, selected) {
       const el = document.getElementById(id); el.textContent = '';
@@ -2936,7 +3129,17 @@ export function buildWorkspaceLaunchSelectionHtml(model: Record<string, unknown>
       return el && el.value ? el.value : null;
     }
     function selectorPayload() {
-      return { site: [...selectedSites], role: [...selectedRoles], operatorSurface: [...selectedSurfaces], runtime: document.getElementById('runtime').value || currentSelectorModel.selected?.runtime || 'registry default', intelligenceProvider: document.getElementById('provider').value || currentSelectorModel.selected?.intelligenceProvider || 'registry default' };
+      return { site: [...selectedSites], role: [...selectedRoles], operatorSurface: [...selectedSurfaces], runtime: document.getElementById('runtime').value || currentSelectorModel.selected?.runtime || 'registry default', intelligenceProvider: document.getElementById('provider').value || currentSelectorModel.selected?.intelligenceProvider || 'registry default', selectionMode: { site: allowMultiSiteLaunch ? 'multiple' : 'single', role: allowMultiRoleLaunch ? 'multiple' : 'single', operatorSurface: allowMultiSurfaceLaunch ? 'multiple' : 'single' } };
+    }
+    function renderLaunchScope() {
+      const records = recordsForSitesRoles();
+      const explicitSurfaces = [...selectedSurfaces].filter(value => value !== 'registry default');
+      const projections = records.length * Math.max(1, explicitSurfaces.length);
+      const plural = (count, noun) => count + ' ' + noun + (count === 1 ? '' : 's');
+      document.getElementById('launch-scope-summary').textContent = plural(records.length, 'agent') + ' · ' + plural(records.length, 'runtime') + ' · ' + plural(projections, 'operator projection');
+      const canonicalAgent = record => record.agent_identity_ref?.canonical_agent_id || (record.site && record.role ? record.site + '.' + record.role : record.agent);
+      document.getElementById('launch-scope-agents').textContent = records.length ? 'Agents: ' + unique(records.map(canonicalAgent)).join(', ') : 'No agents match this selection.';
+      document.getElementById('submit-launch').textContent = records.length ? 'Start ' + plural(records.length, 'Agent Launch') : 'Start Selected Launches';
     }
     async function refreshSelectorControls() {
       const requestSequence = ++selectorRefreshSequence;
@@ -2949,6 +3152,7 @@ export function buildWorkspaceLaunchSelectionHtml(model: Record<string, unknown>
       renderSurfaces(currentSelectorModel.operatorSurfaceOptions || []);
       renderSelect('runtime', currentSelectorModel.runtimeOptions || [], runtimeSelection);
       renderSelect('provider', currentSelectorModel.intelligenceProviderOptions || [], providerSelection);
+      renderLaunchScope();
     }
     function statusLabel(value) {
       return String(value || '').replace(/_/g, ' ');
@@ -3141,14 +3345,28 @@ export function buildWorkspaceLaunchSelectionHtml(model: Record<string, unknown>
         ? (result.message || actionLabel(action) + ' completed.') + (result.command ? String.fromCharCode(10) + result.command : '')
         : 'Action refused: ' + (result.message || result.reason_code || response.statusText);
     }
+    document.getElementById('allow-multi-site').addEventListener('change', event => {
+      allowMultiSiteLaunch = event.target.checked;
+      renderSites();
+      renderRoles();
+      refreshSelectorControls().catch(() => {});
+    });
+    document.getElementById('allow-multi-role').addEventListener('change', event => {
+      allowMultiRoleLaunch = event.target.checked;
+      renderSites();
+      renderRoles();
+      refreshSelectorControls().catch(() => {});
+    });
+    document.getElementById('allow-multi-surface').addEventListener('change', event => {
+      allowMultiSurfaceLaunch = event.target.checked;
+      refreshSelectorControls().catch(() => {});
+    });
     renderSites(); renderRoles(); refreshSelectorControls().catch(() => {});
     document.getElementById('form').addEventListener('submit', async event => {
       event.preventDefault();
       const status = document.getElementById('status');
       const submit = event.submitter || document.querySelector('button[type="submit"]');
-      const operatorSurface = [...selectedSurfaces];
-      const explicit = operatorSurface.filter(value => value !== 'registry default');
-      const payload = { site: [...selectedSites], role: [...selectedRoles], operatorSurface: explicit.length ? explicit : operatorSurface, runtime: document.getElementById('runtime').value, intelligenceProvider: document.getElementById('provider').value };
+      const payload = selectorPayload();
       if (submit) submit.disabled = true;
       status.textContent = 'Creating a fresh launch attempt. This does not attach to any previous session.';
       try {
@@ -3356,7 +3574,8 @@ function normalizeAgentRecord(registry: RawLaunchRegistry, agent: RawAgentRecord
   const workspaceRoot = nonEmpty(agent.WorkspaceRoot) ?? nonEmpty(registry.WorkspaceRoot) ?? null;
   const launcher = nonEmpty(agent.Launcher) ?? nonEmpty(registry.Launcher);
   const launcherPath = nonEmpty(agent.LauncherPath) ?? nonEmpty(registry.LauncherPath)
-    ?? (launcher ? join(naradaRoot, launcher) : join(naradaRoot, 'narada-andrey.ps1'));
+    ?? (launcher ? join(naradaRoot, launcher) : '');
+  if (!launcherPath) throw new Error(`launcher_path_missing: ${agentId} in ${configPath}`);
   const operatorSurface = nonEmpty(agent.OperatorSurface) ?? nonEmpty(registry.OperatorSurface) ?? 'codex';
   const carrier = operatorSurface;
   const runtime = nonEmpty(agent.Runtime) ?? nonEmpty(registry.Runtime) ?? defaultRuntimeForCarrier(carrier);

@@ -1216,6 +1216,57 @@ describe('launcher workspace planning', () => {
     });
   });
 
+  it('renders singular selection controls with explicit multi-selection opt-ins and launch scope', () => {
+    const model = buildWorkspaceLaunchSelectionUiModel(launchSelectionFixtureRecords(), {
+      site: ['sonar'],
+      role: ['resident'],
+    }, null);
+    const html = buildWorkspaceLaunchSelectionHtml(model, { persistent: true });
+
+    expect(html).toContain('<legend>Site</legend>');
+    expect(html).toContain('id="allow-multi-site"');
+    expect(html).toContain('Allow multi-site launch');
+    expect(html).toContain("'site-select'");
+    expect(html).toContain('id="sites-multi" hidden');
+    expect(html).toContain('<legend>Role</legend>');
+    expect(html).toContain('id="allow-multi-role"');
+    expect(html).toContain('Allow multi-role launch');
+    expect(html).toContain("'role-select'");
+    expect(html).toContain('id="roles-multi" hidden');
+    expect(html).toContain('<legend>Operator Surface</legend>');
+    expect(html).toContain('id="allow-multi-surface"');
+    expect(html).toContain('Allow multiple operator surfaces');
+    expect(html).toContain("'surface-select'");
+    expect(html).toContain('id="surfaces-multi" hidden');
+    expect(html).toContain('const initialSelectionMode = model.initialSelectionMode || {};');
+    expect(html).toContain('id="launch-scope-summary"');
+    expect(html).toContain('Start Selected Launches');
+  });
+
+  it('bounds surface and runtime choices to selected-record capabilities', () => {
+    const sonar = workspaceLaunchSelectorModel(launchSelectionFixtureRecords(), { site: ['sonar'], role: ['resident'] });
+    expect(sonar.operatorSurfaceOptions.map((option) => option.value)).toEqual(['registry default', 'agent-cli', 'agent-web-ui']);
+    expect(sonar.runtimeOptions.map((option) => option.value)).toEqual(['registry default', 'narada-agent-runtime-server']);
+
+    const narada = workspaceLaunchSelectorModel(launchSelectionFixtureRecords(), { site: ['narada'], role: ['architect'] });
+    expect(narada.operatorSurfaceOptions.map((option) => option.value)).toEqual(['registry default', 'codex']);
+    expect(narada.runtimeOptions.map((option) => option.value)).toEqual(['registry default', 'codex']);
+  });
+
+  it('persists explicit multi-selection mode even when each selection currently has one value', async () => {
+    await withTempUserSiteRoot(async () => {
+      const selection: WorkspaceLaunchBrowserSelection = {
+        site: ['sonar'], role: ['resident'], operatorSurface: ['agent-cli'], runtime: 'narada-agent-runtime-server', intelligenceProvider: 'registry default',
+        selectionMode: { site: 'multiple', role: 'single', operatorSurface: 'multiple' },
+      };
+      await writeWorkspaceLaunchRememberedSelection(selection);
+      await expect(readWorkspaceLaunchRememberedSelection()).resolves.toEqual(selection);
+      expect(buildWorkspaceLaunchSelectionUiModel(launchSelectionFixtureRecords(), {}, selection)).toMatchObject({
+        initialSelectionMode: selection.selectionMode,
+      });
+    });
+  });
+
   it('normalizes interactive operator surface multiselect values', () => {
     const choices = ['registry default', 'agent-cli', 'agent-web-ui', 'codex'];
     expect(initialOperatorSurfaceValues(choices, undefined)).toEqual(['registry default']);
