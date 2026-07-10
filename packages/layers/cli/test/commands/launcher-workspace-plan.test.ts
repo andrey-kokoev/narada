@@ -27,6 +27,10 @@ function createMockContext(): CommandContext {
   };
 }
 
+function titleValues(wtArgs: string[]): string[] {
+  return wtArgs.flatMap((arg, index) => arg === '--title' && typeof wtArgs[index + 1] === 'string' ? [wtArgs[index + 1]] : []);
+}
+
 async function tempSiteWithDivergentMcpAuthority(): Promise<string> {
   const dir = join(process.cwd(), '.ai', 'tmp-tests', `launcher-mcp-${Date.now()}-${Math.random().toString(16).slice(2)}`);
   await mkdir(join(dir, '.ai', 'mcp'), { recursive: true });
@@ -331,6 +335,7 @@ describe('launcher workspace planning', () => {
     const result = plan.result as {
       schema: string;
       mutation_performed: boolean;
+      wt_args_authority: string;
       selected_agents: Array<{
         agent: string;
         operator_surface_kind: string;
@@ -349,6 +354,10 @@ describe('launcher workspace planning', () => {
         intelligence_provider: string;
         launch_session_id: string;
         process_ownership: Record<string, unknown>;
+        wait_for_enter_before_exec: boolean;
+        runtime_start_execution_mode: string;
+        runtime_start_command: string[];
+        runtime_start_cwd: string;
         wt_args: string[];
         smoke_command: string[];
       }>;
@@ -362,6 +371,7 @@ describe('launcher workspace planning', () => {
     };
     expect(result.schema).toBe('narada.workspace_launch.plan.v1');
     expect(result.mutation_performed).toBe(false);
+    expect(result.wt_args_authority).toBe('compatibility_non_authoritative');
     expect(result.ownership.planner).toBe('narada-cli');
     expect(result.ownership.executor).toBe('narada-cli.workspace-launch');
     expectLegacyCarrierCompatibility(result.compatibility);
@@ -388,9 +398,24 @@ describe('launcher workspace planning', () => {
       evidence_status: 'complete',
       validation_errors: [],
     });
+    expect(result.selected_agents[0].wait_for_enter_before_exec).toBe(false);
+    expect(result.selected_agents[0].runtime_start_execution_mode).toBe('hidden_detached');
+    expect(result.selected_agents[0].runtime_start_command).toEqual(expect.arrayContaining([
+      'pnpm',
+      '--dir',
+      'D:\\code\\narada',
+      'exec',
+      'narada',
+      'operator-surface',
+      'runtime',
+      'start',
+      'agent-cli',
+      '--exec',
+    ]));
+    expect(result.selected_agents[0].runtime_start_cwd).toBe('D:/code/narada.sonar');
     expect(result.selected_agents[0].wt_args).toEqual(expect.arrayContaining([
       'pwsh',
-      '-NoExit',
+      '-NoProfile',
       '-Command',
     ]));
     const commandText = result.selected_agents[0].wt_args[result.selected_agents[0].wt_args.indexOf('-Command') + 1];
@@ -400,7 +425,7 @@ describe('launcher workspace planning', () => {
     expect(commandText).toContain("'--workspace-root' 'D:/code/narada.sonar'");
     expect(commandText).toContain("'--launch-session-id' '");
     expect(commandText).toContain("'--exec'");
-    expect(commandText).toContain("'--wait'");
+    expect(commandText).not.toContain("'--wait'");
     expect(commandText).toContain("'--intelligence-provider' 'codex-subscription'");
     expect(result.selected_agents[0].smoke_command).toEqual(expect.arrayContaining([
       'narada',
@@ -488,6 +513,126 @@ describe('launcher workspace planning', () => {
     expect(result.windows_terminal_invoked).toBe(false);
     expect(result.selected_agents.map((agent) => agent.agent)).toEqual(['sonar.resident']);
     expect(result.wt_args[0]).toBe('new-tab');
+  });
+
+  it('launches NARS runtime starts through hidden posture instead of Windows Terminal', async () => {
+    const registryPath = await tempRegistry();
+    const hiddenLog = join(tempDirs[0], 'hidden-runtime.jsonl');
+    const terminalLog = join(tempDirs[0], 'terminal.jsonl');
+    const resultPath = join(tempDirs[0], 'workspace-launch-result.json');
+    const previousHiddenLog = process.env.NARADA_WORKSPACE_LAUNCH_HIDDEN_RUNTIME_LOG;
+    const previousTerminalLog = process.env.NARADA_WORKSPACE_LAUNCH_TERMINAL_LOG;
+    process.env.NARADA_WORKSPACE_LAUNCH_HIDDEN_RUNTIME_LOG = hiddenLog;
+    process.env.NARADA_WORKSPACE_LAUNCH_TERMINAL_LOG = terminalLog;
+    try {
+      const launch = await workspaceLaunchCommand({
+        registryPath,
+        site: ['sonar'],
+        role: ['resident'],
+        operatorSurface: 'agent-cli',
+        runtime: 'narada-agent-runtime-server',
+        resultPath,
+        suppressResultOutput: true,
+        format: 'json',
+      }, createMockContext());
+
+      expect(launch.exitCode).toBe(ExitCode.SUCCESS);
+      const result = launch.result as {
+        schema: string;
+        status: string;
+        mode: string;
+        mutation_performed: boolean;
+        windows_terminal_invoked: boolean;
+        hidden_runtime_invoked: boolean;
+        hidden_runtime_launches: Array<{ posture: string; windowsHide: boolean }>;
+        launch_agents: Array<{ runtime_start_execution_mode: string }>;
+        selected_agents: Array<{ runtime_start_execution_mode: string }>;
+        selected_agents_authority: string;
+        wt_args?: string[];
+        legacy_terminal_plan: { authority: string; wt_args: string[] };
+      };
+      expect(result.schema).toBe('narada.workspace_launch.launch_result.v1');
+      expect(result.status).toBe('launched');
+      expect(result.mode).toBe('launch');
+      expect(result.mutation_performed).toBe(true);
+      expect(result.windows_terminal_invoked).toBe(false);
+      expect(result.hidden_runtime_invoked).toBe(true);
+      expect(result.wt_args).toBeUndefined();
+      expect(result.legacy_terminal_plan.authority).toBe('compatibility_non_authoritative');
+      expect(result.legacy_terminal_plan.wt_args[0]).toBe('new-tab');
+      expect(result.launch_agents).toEqual(result.selected_agents);
+      expect(result.selected_agents_authority).toBe('compatibility_plan_selection');
+      expect(result.selected_agents[0].runtime_start_execution_mode).toBe('hidden_detached');
+      expect(result.hidden_runtime_launches[0]).toMatchObject({ posture: 'agent_runtime_server', windowsHide: true });
+      const hiddenLogText = await readFile(hiddenLog, 'utf8');
+      expect(hiddenLogText).toContain('operator-surface');
+      const writtenResult = JSON.parse(await readFile(resultPath, 'utf8')) as typeof result;
+      expect(writtenResult).toEqual(result);
+      expect(writtenResult.schema).toBe('narada.workspace_launch.launch_result.v1');
+      expect(writtenResult.status).toBe('launched');
+      expect(writtenResult.mode).toBe('launch');
+      expect(writtenResult.mutation_performed).toBe(true);
+      expect(writtenResult.windows_terminal_invoked).toBe(false);
+      expect(writtenResult.hidden_runtime_invoked).toBe(true);
+      await expect(readFile(terminalLog, 'utf8')).rejects.toThrow();
+    } finally {
+      if (previousHiddenLog === undefined) delete process.env.NARADA_WORKSPACE_LAUNCH_HIDDEN_RUNTIME_LOG;
+      else process.env.NARADA_WORKSPACE_LAUNCH_HIDDEN_RUNTIME_LOG = previousHiddenLog;
+      if (previousTerminalLog === undefined) delete process.env.NARADA_WORKSPACE_LAUNCH_TERMINAL_LOG;
+      else process.env.NARADA_WORKSPACE_LAUNCH_TERMINAL_LOG = previousTerminalLog;
+    }
+  });
+
+  it('materializes terminal launch results with launch schema and non-overlapping invocation posture', async () => {
+    const registryPath = await tempRegistry();
+    const terminalLog = join(tempDirs[0], 'terminal-launch.jsonl');
+    const resultPath = join(tempDirs[0], 'terminal-launch-result.json');
+    const previousTerminalLog = process.env.NARADA_WORKSPACE_LAUNCH_TERMINAL_LOG;
+    process.env.NARADA_WORKSPACE_LAUNCH_TERMINAL_LOG = terminalLog;
+    try {
+      const launch = await workspaceLaunchCommand({
+        registryPath,
+        site: ['narada'],
+        role: ['architect'],
+        operatorSurface: 'codex',
+        runtime: 'codex',
+        resultPath,
+        suppressResultOutput: true,
+        format: 'json',
+      }, createMockContext());
+
+      expect(launch.exitCode).toBe(ExitCode.SUCCESS);
+      const result = launch.result as {
+        schema: string;
+        status: string;
+        mode: string;
+        mutation_performed: boolean;
+        windows_terminal_invoked: boolean;
+        hidden_runtime_invoked: boolean;
+        wt_exit_code: number;
+        wt_args?: string[];
+        legacy_terminal_plan: { authority: string; wt_args: string[] };
+      };
+      expect(result).toMatchObject({
+        schema: 'narada.workspace_launch.launch_result.v1',
+        status: 'launched',
+        mode: 'launch',
+        mutation_performed: true,
+        windows_terminal_invoked: true,
+        hidden_runtime_invoked: false,
+        wt_exit_code: 0,
+      });
+      expect(result.wt_args).toBeUndefined();
+      expect(result.legacy_terminal_plan.authority).toBe('compatibility_non_authoritative');
+      expect(result.legacy_terminal_plan.wt_args[0]).toBe('new-tab');
+      const writtenResult = JSON.parse(await readFile(resultPath, 'utf8')) as typeof result;
+      expect(writtenResult).toEqual(result);
+      const terminalLogText = await readFile(terminalLog, 'utf8');
+      expect(terminalLogText).toContain('new-tab');
+    } finally {
+      if (previousTerminalLog === undefined) delete process.env.NARADA_WORKSPACE_LAUNCH_TERMINAL_LOG;
+      else process.env.NARADA_WORKSPACE_LAUNCH_TERMINAL_LOG = previousTerminalLog;
+    }
   });
 
   it('plans agent-cli and agent-web-ui as sibling projections onto one NARS session', async () => {
@@ -593,12 +738,49 @@ describe('launcher workspace planning', () => {
     expect(agent.agent_identity_ref.canonical_agent_id).toBe('sonar.resident');
     const commandText = agent.wt_args.join(' ');
     const webUiCommandText = agent.wt_args[agent.wt_args.lastIndexOf('-Command') + 1];
-    expect(commandText).toContain('--title sonar.resident runtime');
-    expect(commandText).toContain('--title sonar.resident web ui');
+    expect(titleValues(agent.wt_args)).toEqual(['sonar.resident runtime', 'sonar.resident web ui']);
     expect(commandText).toContain('agent-web-ui: waiting for sonar.resident launch binding, then starting browser projection');
     expect(commandText).toContain("'--launch-binding'");
     expect(webUiCommandText).not.toContain("'--agent' 'resident'");
     expect(commandText).not.toContain('waiting for resident launch binding');
+  });
+
+  it('uses canonical identity in runtime and web-ui titles for prefixed agents', async () => {
+    const dir = join(process.cwd(), '.ai', 'tmp-tests', `launcher-prefixed-agent-${Date.now()}-${Math.random().toString(16).slice(2)}`);
+    await mkdir(dir, { recursive: true });
+    tempDirs.push(dir);
+    const registryPath = join(dir, 'agents.json');
+    await writeFile(registryPath, JSON.stringify({
+      NaradaRoot: 'D:/code/narada',
+      Agents: [{
+        Agent: 'smart-scheduling.resident',
+        Role: 'resident',
+        Title: 'Smart Scheduling Resident',
+        NaradaRoot: 'D:/code/smart-scheduling',
+        SiteRoot: 'D:/code/smart-scheduling/.narada',
+        WorkspaceRoot: 'D:/code/smart-scheduling',
+        OperatorSurface: 'agent-cli',
+        Runtime: 'narada-agent-runtime-server',
+      }],
+    }), 'utf8');
+
+    const plan = await workspaceLaunchPlanCommand({
+      registryPath,
+      all: true,
+      site: ['smart-scheduling'],
+      role: ['resident'],
+      operatorSurface: 'agent-cli,agent-web-ui',
+      runtime: 'narada-agent-runtime-server',
+      dryRun: true,
+      format: 'json',
+    }, createMockContext());
+
+    expect(plan.exitCode).toBe(ExitCode.SUCCESS);
+    const result = plan.result as { selected_agents: Array<{ agent: string; agent_identity_ref: { canonical_agent_id: string }; wt_args: string[] }> };
+    const agent = result.selected_agents[0];
+    expect(agent.agent).toBe('smart-scheduling.resident');
+    expect(agent.agent_identity_ref.canonical_agent_id).toBe('smart-scheduling.resident');
+    expect(titleValues(agent.wt_args)).toEqual(['smart-scheduling.resident runtime', 'smart-scheduling.resident web ui']);
   });
 
   it('accepts operator surface as the explicit replacement for carrier', async () => {
@@ -873,6 +1055,39 @@ describe('launcher workspace planning', () => {
     });
     expect(model.operatorSurfaceOptions.map((option) => option.value)).toEqual(expect.arrayContaining(['registry default', 'agent-cli', 'agent-web-ui', 'codex']));
     expect(model.runtimeOptions.map((option) => option.value)).toEqual(expect.arrayContaining(['registry default', 'narada-agent-runtime-server', 'codex']));
+  });
+
+  it('uses the Site Registry root identity for launcher Site choices', () => {
+    const records = [{
+      agent: 'narada.resident',
+      title: 'Narada Resident',
+      role: 'resident',
+      site: 'narada',
+      narada_root: 'D:/code/narada',
+      site_root: 'D:/code/narada',
+      workspace_root: 'D:/code/narada',
+      launcher_path: 'D:/code/narada/narada.ps1',
+      operator_surface: 'agent-cli',
+      carrier: 'agent-cli',
+      runtime: 'narada-agent-runtime-server',
+      enable_native_shell: false,
+      mcp_scope: 'all',
+      config_path: 'registry.json',
+    }] as WorkspaceLaunchRecord[];
+
+    const catalog = [{
+      site_id: 'narada-proper',
+      site_root: 'D:/code/narada',
+      source: 'site_registry' as const,
+    }];
+    const model = workspaceLaunchSelectorModel(records, { role: ['resident'] }, catalog);
+    const uiModel = buildWorkspaceLaunchSelectionUiModel(records, { role: ['resident'] }, null, catalog);
+
+    expect(model.siteOptions).toEqual([{ value: 'narada-proper', label: 'narada-proper' }]);
+    expect(model.selected.site).toEqual([]);
+    expect(uiModel.siteChoices).toEqual(['narada-proper']);
+    expect((uiModel.records as WorkspaceLaunchRecord[])[0]?.legacy_site).toBe('narada');
+    expect((uiModel.records as WorkspaceLaunchRecord[])[0]?.site).toBe('narada-proper');
   });
 
   it('hydrates InteractiveSelectionUI defaults from User Site persisted selection across fresh model builds', async () => {

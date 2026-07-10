@@ -8,6 +8,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from '@playwright/test';
 import { writeNarsSessionStartedIndex } from '@narada2/carrier-runtime/nars-session-index';
+import { SiteRegistry, openRegistryDb, resolveRegistryDbPathByLocus } from '@narada2/windows-site';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const cliPackageRoot = resolve(__dirname, '..', '..');
@@ -26,6 +27,34 @@ async function makeFixture() {
   await mkdir(userSiteRoot, { recursive: true });
   await mkdir(sonarRoot, { recursive: true });
   await mkdir(smartSchedulingRoot, { recursive: true });
+  const previousUserSiteRoot = process.env.NARADA_USER_SITE_ROOT;
+  process.env.NARADA_USER_SITE_ROOT = userSiteRoot;
+  const registryDb = await openRegistryDb(resolveRegistryDbPathByLocus({ authorityLocus: 'user', variant: 'native' }));
+  const siteRegistry = new SiteRegistry(registryDb);
+  const registryTimestamp = new Date().toISOString();
+  siteRegistry.registerSite({
+    siteId: 'sonar',
+    variant: 'native',
+    siteRoot: sonarRoot,
+    substrate: 'windows',
+    aimJson: null,
+    controlEndpoint: null,
+    lastSeenAt: registryTimestamp,
+    createdAt: registryTimestamp,
+  });
+  siteRegistry.registerSite({
+    siteId: 'smart-scheduling',
+    variant: 'native',
+    siteRoot: join(smartSchedulingRoot, '.narada'),
+    substrate: 'windows',
+    aimJson: null,
+    controlEndpoint: null,
+    lastSeenAt: registryTimestamp,
+    createdAt: registryTimestamp,
+  });
+  registryDb.close();
+  if (previousUserSiteRoot === undefined) delete process.env.NARADA_USER_SITE_ROOT;
+  else process.env.NARADA_USER_SITE_ROOT = previousUserSiteRoot;
   const sonarSessionDir = join(sonarRoot, '.narada', 'crew', 'nars-sessions', 'carrier_dashboard_test_sonar');
   const sonarSessionPath = join(sonarSessionDir, 'session.jsonl');
   const sonarControlPath = join(sonarSessionDir, 'control.jsonl');
@@ -216,10 +245,10 @@ test('browser interactive selection UI can launch multiple sites before cancel',
 
     await chooseSingleSite(page, 'sonar');
     await submitLaunch(page);
-    let launches = await waitForLaunchCount(fixture.wtLog, 1);
-    assert.equal(normalizedJsonPathText(launches[0]).includes(fixture.sonarRoot.replace(/\\/g, '/')), true);
+    let launches = await readWtLaunches(fixture.wtLog);
+    assert.equal(launches.length, 0, 'NARS runtime starts use the hidden runtime-host posture; terminal capture begins with explicit projections.');
+    await page.locator('.attempt', { hasText: 'sonar / resident' }).getByText('Hidden runtime handoff: handed off').waitFor({ timeout: 10_000 });
     await page.locator('.attempt-title', { hasText: 'sonar / resident' }).waitFor({ timeout: 10_000 });
-    await page.locator('.attempt', { hasText: 'sonar / resident' }).getByText('Terminal handoff: handed off').waitFor({ timeout: 10_000 });
     await page.locator('.attempt', { hasText: 'sonar / resident' }).getByText('Runtime: unowned').waitFor({ timeout: 10_000 });
     await page.locator('.attempt', { hasText: 'sonar / resident' }).getByText('historical result; recheck before attaching').waitFor({ timeout: 10_000 });
     await page.locator('.attempt', { hasText: 'sonar / resident' }).getByText('No attach/open action is currently available.').waitFor({ timeout: 10_000 });
@@ -258,6 +287,10 @@ test('browser interactive selection UI can launch multiple sites before cancel',
     await page.locator('.attempt', { hasText: 'sonar / resident' }).getByText('Projection: agent-web-ui · handed off').waitFor({ timeout: 10_000 });
     await page.locator('.attempt', { hasText: 'sonar / resident' }).getByRole('button', { name: /Attach CLI To This Session/ }).click();
     await page.locator('#status').getByText('agent-cli projection handoff accepted by operator terminal authority.').waitFor({ timeout: 10_000 });
+    const projectionLaunches = await readWtLaunches(fixture.wtLog);
+    assert.equal(projectionLaunches.some((args) => args.includes('sonar.resident runtime')), true);
+    assert.equal(projectionLaunches.some((args) => args.includes('sonar.resident runtime') && args.some((arg) => arg.includes('narada-agent-cli --attach'))), true);
+    assert.equal(projectionLaunches.some((args) => args.includes('agent-cli carrier_dashboard_test_sonar')), false);
     await page.locator('.attempt', { hasText: 'sonar / resident' }).getByText('Projection: agent-cli · handed off').waitFor({ timeout: 10_000 });
     await page.locator('.attempt', { hasText: 'sonar / resident' }).getByRole('button', { name: /Stop This Runtime Tree/ }).click();
     await page.locator('#status').getByText('Confirm stop only if you intend to close this session control path and its owned descendant process tree.').waitFor({ timeout: 10_000 });
@@ -268,10 +301,9 @@ test('browser interactive selection UI can launch multiple sites before cancel',
 
     await chooseSingleSite(page, 'smart-scheduling');
     await submitLaunch(page);
-    launches = await waitForLaunchCount(fixture.wtLog, 4);
-    assert.equal(normalizedJsonPathText(launches[1]).includes('narada-agent-web-ui --event-endpoint ws://127.0.0.1:12345/events'), true);
-    assert.equal(normalizedJsonPathText(launches[2]).includes('narada-agent-cli --attach ws://127.0.0.1:12345/events'), true);
-    assert.equal(normalizedJsonPathText(launches[3]).includes(fixture.smartSchedulingRoot.replace(/\\/g, '/')), true);
+    launches = await waitForLaunchCount(fixture.wtLog, 1);
+    assert.equal(launches.length, 1, 'only the explicit agent-cli projection uses a visible terminal handoff; web UI and NARS starts are hidden.');
+    await page.locator('.attempt', { hasText: 'smart-scheduling / resident' }).getByText('Hidden runtime handoff: handed off').waitFor({ timeout: 10_000 });
     await page.locator('.attempt-title', { hasText: 'smart-scheduling / resident' }).waitFor({ timeout: 10_000 });
 
     state = await fetchLaunchState(page);
@@ -296,7 +328,7 @@ test('browser interactive selection UI can launch multiple sites before cancel',
     assert.equal(existsSync(join(persistedDir, 'observations.jsonl')), true);
     assert.equal(existsSync(join(persistedDir, 'projections.jsonl')), true);
     launches = await readWtLaunches(fixture.wtLog);
-    assert.equal(launches.length, 4, 'forget must not mutate launched terminal handoffs or projection handoffs');
+    assert.equal(launches.length, 1, 'forget must not mutate the explicit terminal projection handoff.');
 
     await page.getByRole('button', { name: 'Cancel' }).click();
     await page.getByRole('heading', { name: 'Cancelled' }).waitFor({ timeout: 10_000 });
@@ -309,6 +341,8 @@ test('browser interactive selection UI can launch multiple sites before cancel',
       'launcher',
       'workspace-launch',
       '--interactive-selection-ui',
+      '--launcher-ui-port', String(launcherUiPort + 1),
+      '--launcher-ui-port-fallback',
       '--config-path', fixture.registry,
       '--format', 'json',
     ], {
