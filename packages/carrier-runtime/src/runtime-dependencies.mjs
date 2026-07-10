@@ -2,6 +2,7 @@ import { request as httpRequest } from 'node:http';
 import { request as httpsRequest } from 'node:https';
 import { existsSync, mkdirSync, readFileSync, appendFileSync, readdirSync, statSync, copyFileSync, rmSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
+import { buildLaunchProcessOwnershipEvidence } from '@narada2/launch-process-ownership';
 import {
   classifyCarrierActionRequest,
   createAndWriteCarrierActionAdmission,
@@ -142,6 +143,16 @@ export function createCarrierRuntimeDependencies({ runtimeContext = {}, env = pr
     openrouterTitle: runtimeContext.providerSettings?.openrouterTitle ?? env.OPENROUTER_APP_NAME ?? env.OPENROUTER_X_TITLE ?? null,
     siteRoot,
   };
+  const launchSessionId = runtimeContext.launchSessionId ?? env.NARADA_LAUNCH_SESSION_ID ?? null;
+  const runtimeProcessOwnership = buildLaunchProcessOwnershipEvidence({
+    launchSessionId,
+    ownership: runtimeContext.processOwnership ?? env.NARADA_PROCESS_OWNERSHIP ?? null,
+    processRole: runtimeContext.processRole ?? env.NARADA_PROCESS_ROLE ?? 'runtime_server',
+    ownerSiteRoot: siteRoot,
+    workspaceRoot: runtimeContext.siteConfig?.workspace_root ?? env.NARADA_WORKSPACE_ROOT ?? null,
+    createdByPid: runtimeContext.createdByPid ?? env.NARADA_CREATED_BY_PID ?? null,
+    pid: process.pid,
+  });
   configureProviderAdapterContext({
     provider: intelligenceProvider,
     apiKey: providerEnvironmentValues.apiKey,
@@ -158,7 +169,7 @@ export function createCarrierRuntimeDependencies({ runtimeContext = {}, env = pr
 
   const dependencies = {
     discoverAndStartMcpServers: (root = siteRoot) => discoverAndStartMcpServers(root, {
-      launch_session_id: runtimeContext.launchSessionId ?? env.NARADA_LAUNCH_SESSION_ID ?? null,
+      launch_session_id: launchSessionId,
       ownership: runtimeContext.processOwnership ?? env.NARADA_PROCESS_OWNERSHIP ?? null,
       process_role: runtimeContext.processRole ?? env.NARADA_PROCESS_ROLE ?? null,
       created_by_pid: runtimeContext.createdByPid ?? env.NARADA_CREATED_BY_PID ?? null,
@@ -177,7 +188,7 @@ export function createCarrierRuntimeDependencies({ runtimeContext = {}, env = pr
     recordMcpPreflightArtifactLinkage: ({ emit, preflightArtifact } = {}) => recordMcpPreflightArtifactLinkage({ emit, preflightArtifact, appendSessionRecord }),
     recordMcpStartupFailures: (mcpServers, options = {}) => recordMcpStartupFailures(mcpServers, { ...options, appendSessionRecord }),
     createOperationHeartbeatDirectiveEmitter,
-    handleServerRequestLine: (line, context) => handleServerRequestLine(line, { ...context, identity, agentIdentityRef: runtimeContext.agentIdentityRef ?? null, siteId: runtimeContext.siteId ?? null, session, siteRoot, sessionPath, eventsPath, siteConfig: runtimeContext.siteConfig ?? null, authorityRuntimeHost, operatorSurfaceKind, appendSessionRecord, providerSettings, effectiveIntelligence: () => effectiveIntelligenceSettings({ sessionSettings: context?.state?.sessionSettings, providerSettings }), narsDelegatedAuthorityHandoff: runtimeContext.narsDelegatedAuthorityHandoff ?? null }),
+    handleServerRequestLine: (line, context) => handleServerRequestLine(line, { ...context, identity, agentIdentityRef: runtimeContext.agentIdentityRef ?? null, siteId: runtimeContext.siteId ?? null, session, siteRoot, sessionPath, eventsPath, siteConfig: runtimeContext.siteConfig ?? null, launchSessionId, processOwnership: runtimeProcessOwnership, authorityRuntimeHost, operatorSurfaceKind, appendSessionRecord, providerSettings, effectiveIntelligence: () => effectiveIntelligenceSettings({ sessionSettings: context?.state?.sessionSettings, providerSettings }), narsDelegatedAuthorityHandoff: runtimeContext.narsDelegatedAuthorityHandoff ?? null }),
     appendSessionRecord,
     sessionEventEntry: (event, payload) => ({ event, ...payload, timestamp: new Date().toISOString() }),
     carrierSessionEventEntry,

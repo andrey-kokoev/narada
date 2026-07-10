@@ -190,6 +190,11 @@ test('server mode health advertises MCP tool catalog for web UI inventory', asyn
       identity: 'agent.test',
       session: 'session_mcp_health_catalog',
       siteRoot,
+      siteConfig: { workspace_root: siteRoot },
+      launchSessionId: 'launch_health_catalog',
+      processOwnership: 'session_owned',
+      processRole: 'runtime_server',
+      createdByPid: process.pid,
       sessionPath: join(sessionDir, 'session.jsonl'),
       eventsPath: join(sessionDir, 'events.jsonl'),
       providerSettings: { provider: 'codex-subscription', model: 'gpt-5.5', thinking: 'medium', stream: false },
@@ -219,11 +224,14 @@ test('server mode health advertises MCP tool catalog for web UI inventory', asyn
     assert.equal(health?.runtime_topology?.schema, 'narada.nars.runtime_topology.v1');
     assert.equal(health?.runtime_topology?.status, 'live');
     assert.equal(health?.runtime_topology?.session_id, 'session_mcp_health_catalog');
+    assert.equal(health?.runtime_topology?.launch_session_id, 'launch_health_catalog');
+    assert.equal(health?.runtime_topology?.runtime?.process_ownership?.workspace_root, siteRoot);
     assert.equal(health?.runtime_topology?.runtime?.kind, 'narada-agent-runtime-server');
     assert.equal(health?.runtime_topology?.authority?.runtime_host, 'local');
     assert.equal(health?.runtime_topology?.authority?.runtime_id, null);
     assert.equal(health?.runtime_topology?.mcp?.children?.[0]?.id, 'narada-fixture');
     assert.equal(health?.runtime_topology?.mcp?.children?.[0]?.tool_count, 1);
+    assert.equal(health?.runtime_topology?.mcp?.children?.[0]?.process_ownership?.workspace_root, siteRoot);
   } finally {
     removeTempDir(siteRoot);
   }
