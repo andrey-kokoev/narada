@@ -11,11 +11,15 @@
 import { createServer, type Server, type IncomingMessage, type ServerResponse } from 'http';
 import { openRegistry, createObservationFactory, createControlClientFactory } from '../lib/console-core.js';
 import { createConsoleServerRoutes, type RouteHandler } from './console-server-routes.js';
+import { createSiteRegistryReadModel, type SiteRegistryReadModel } from './site-registry-read-model.js';
+import { createRegistryMutationGateway, type RegistryMutationGateway } from './site-registry-management-gateway.js';
 
 export interface ConsoleServerConfig {
   port: number;
   host?: string;
   verbose?: boolean;
+  registryReadModel?: SiteRegistryReadModel;
+  registryMutationGateway?: RegistryMutationGateway;
 }
 
 export interface ConsoleServer {
@@ -37,6 +41,8 @@ export async function createConsoleServer(config: ConsoleServerConfig): Promise<
     registry,
     observationFactory,
     controlClientFactory,
+    registryReadModel: config.registryReadModel ?? createSiteRegistryReadModel(),
+    registryMutationGateway: config.registryMutationGateway ?? createRegistryMutationGateway(),
   };
 
   const routes = createConsoleServerRoutes(routeContext);

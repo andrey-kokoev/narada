@@ -588,6 +588,115 @@ describe('console server', () => {
     });
   });
 
+  describe('canonical Site Registry browser projection', () => {
+    it('serves the read-only page and delegates list, detail, and dry-run discovery through the registry read model', async () => {
+      const registryReadModel = {
+        list: vi.fn(async () => ({
+          exitCode: 0,
+          result: {
+            schema: 'narada.site_registry.management.v0',
+            status: 'success',
+            operation: 'list',
+            mutation_performed: false,
+            count: 1,
+            sites: [{
+              site_id: 'site-a',
+              site_root: 'D:/code/site-a',
+              variant: 'native',
+              substrate: 'windows',
+              lifecycle_status: 'active',
+              observation_status: 'present',
+              sources: [{ kind: 'manual', ref: 'test', observed_at: '2026-07-10T00:00:00Z' }],
+              aliases: [{ value: 'site-alias', source: 'legacy' }],
+              revision: 3,
+            }],
+          },
+        })),
+        show: vi.fn(async (reference: string) => ({
+          exitCode: 0,
+          result: {
+            schema: 'narada.site_registry.management.v0',
+            status: 'success',
+            operation: 'show',
+            mutation_performed: false,
+            site_id: 'site-a',
+            site: { site_id: 'site-a', aliases: [{ value: 'site-alias', source: 'legacy' }] },
+            conflicts: [],
+            next_actions: ['edit', 'retire'],
+            requested_reference: reference,
+          },
+        })),
+        discoverPlan: vi.fn(async (options: unknown) => ({
+          exitCode: 0,
+          result: {
+            schema: 'narada.site_registry.management.v0',
+            status: 'planned',
+            operation: 'discover',
+            mutation_performed: false,
+            options,
+          },
+        })),
+      };
+      const registryMutationGateway = {
+        plan: vi.fn(async (input: unknown) => ({ exitCode: 0, result: { status: 'planned', operation: 'retire', mutation_performed: false, before: { revision: 4 }, input } })),
+        apply: vi.fn(async (input: unknown) => ({ exitCode: 0, result: { status: 'applied', operation: 'retire', mutation_performed: true, input } })),
+      };
+      const server = await createConsoleServer({ port: 0, host: '127.0.0.1', registryReadModel, registryMutationGateway });
+      const url = await server.start();
+
+      const page = await fetch(`${url}/console/registry`);
+      expect(page.status).toBe(200);
+      expect(page.headers.get('content-type')).toContain('text/html');
+      await expect(page.text()).resolves.toContain('/console/registry/api/sites');
+
+      const list = await httpGet(`${url}/console/registry/api/sites`);
+      expect(list.status).toBe(200);
+      expect((list.body as { sites: Array<{ site_id: string }> }).sites[0]?.site_id).toBe('site-a');
+      expect(registryReadModel.list).toHaveBeenCalledOnce();
+
+      const detail = await httpGet(`${url}/console/registry/api/sites/site-alias`);
+      expect(detail.status).toBe(200);
+      expect(registryReadModel.show).toHaveBeenCalledWith('site-alias');
+
+      const discovery = await httpGet(`${url}/console/registry/api/discover-plan?source=filesystem&root=D%3A%2Fcode&actor=operator`);
+      expect(discovery.status).toBe(200);
+      expect(registryReadModel.discoverPlan).toHaveBeenCalledWith({ source: 'filesystem', root: 'D:/code', actor: 'operator' });
+      expect((discovery.body as { mutation_performed: boolean }).mutation_performed).toBe(false);
+
+      const previewResponse = await httpPost(`${url}/console/registry/api/operations/plan`, {
+        operation: 'retire',
+        reference: 'site-a',
+        reason: 'duplicate',
+        expected_revision: 4,
+      });
+      expect(previewResponse.status).toBe(200);
+      expect((previewResponse.body as { mutation_performed: boolean }).mutation_performed).toBe(false);
+      expect(registryMutationGateway.plan).toHaveBeenCalledWith({ operation: 'retire', reference: 'site-a', reason: 'duplicate', reAdmit: false, expectedRevision: 4 });
+
+      const unconfirmedApply = await httpPost(`${url}/console/registry/api/operations/apply`, {
+        operation: 'retire',
+        reference: 'site-a',
+        reason: 'duplicate',
+      });
+      expect(unconfirmedApply.status).toBe(400);
+      expect(registryMutationGateway.apply).not.toHaveBeenCalled();
+
+      const applyResponse = await httpPost(`${url}/console/registry/api/operations/apply`, {
+        operation: 'retire',
+        reference: 'site-a',
+        reason: 'duplicate',
+        expected_revision: 4,
+        confirm_apply: true,
+      });
+      expect(applyResponse.status).toBe(200);
+      expect((applyResponse.body as { mutation_performed: boolean }).mutation_performed).toBe(true);
+      expect(registryMutationGateway.apply).toHaveBeenCalledWith({ operation: 'retire', reference: 'site-a', reason: 'duplicate', reAdmit: false, expectedRevision: 4 });
+      const invalidDiscovery = await httpGet(`${url}/console/registry/api/discover-plan?source=invalid`);
+      expect(invalidDiscovery.status).toBe(400);
+      expect(registryReadModel.discoverPlan).toHaveBeenCalledTimes(1);
+      await server.stop();
+    });
+  });
   describe('CORS and safety', () => {
     it('allows localhost origin', async () => {
       const server = await createConsoleServer({ port: 0, host: '127.0.0.1' });

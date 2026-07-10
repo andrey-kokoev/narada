@@ -25,7 +25,7 @@ The console is **not**:
 - The kernel control plane — it does not open work items, create decisions, or execute effects.
 - A distributed fleet manager — it does not orchestrate Cycles across Sites.
 
-The console is an **operator surface** that aggregates read-only observation and routes audited control requests to Site-owned APIs.
+The console is an **operator surface** that aggregates read-only observation and routes audited control requests to Site-owned APIs. Registry management is a separate User Site read-model operation defined in section 3.1.
 
 ---
 
@@ -40,6 +40,7 @@ The **Site Registry** is a projection and routing inventory of Sites known to th
 | **Last-known health** | Cached health snapshot from the most recent observation query |
 | **Control endpoint routing** | URL or path to each Site's operator control surface |
 | **Audit log of routed requests** | Every control request routed through the console is logged here |
+| **Registry management history** | Add, edit, retire, restore, and purge operations are recorded with actor, reason, and before/after projection |
 
 The registry is **advisory and caching**. It does not hold authoritative Site state. If the registry is deleted, all Sites remain intact and can be rediscovered.
 
@@ -57,9 +58,139 @@ The registry must **never**:
 - Run Cycles or invoke effect workers
 - Become the source of truth for any Site's durable state
 
-If the console needs to mutate something, it routes an audited control request to the Site's own control surface and lets the Site handle it.
+If the console needs to mutate Site-owned state, it routes an audited control request to the Site's own control surface and lets the Site handle it. Registry read-model mutations follow the separate management contract in section 3.1.
 
 ---
+
+## 3.1 Registry Management Target Shape
+
+The operator needs to manage the registry itself, but registry management is a
+User Site read-model operation. It must not create, edit, or delete Site-owned
+files, coordinator state, configuration, or authority.
+
+This is the canonical contract. The existing `narada sites discover` and
+`remove` commands are transitional compatibility paths and delegate to this
+namespace rather than maintain a second registry behavior. `narada sites list`
+remains a read/health view, not a second registry mutation surface.
+
+### Explicit command boundary
+
+The target command namespace is:
+
+```text
+narada sites registry list
+narada sites registry show <site-id-or-alias>
+narada sites registry discover --dry-run [--source <source>] [--root <path>]
+narada sites registry discover --apply [--source <source>] [--root <path>]
+narada sites registry add --site-id <site-id> --root <path> [metadata options]
+narada sites registry edit <site-id-or-alias> [patch options]
+narada sites registry retire <site-id-or-alias> --reason <reason>
+narada sites registry restore <site-id-or-alias> --reason <reason>
+narada sites registry purge <site-id-or-alias> --confirm-site-id <site-id>
+```
+
+`sites create` and `sites init` remain Site materialization commands. `registry
+add` records an already-existing Site in the User Site catalog; it does not
+bootstrap the Site. `registry discover` is the bounded bulk reconciliation
+operation. It must never mutate records in dry-run mode.
+
+Every mutating command has an explicit `--dry-run` or `--apply` mode; apply is
+never implicit. `add` must identify its source, and `edit`, `retire`,
+`restore`, and `purge` require a reason. `purge` additionally requires the
+canonical Site ID confirmation shown in its preview. A dry-run result is the operator's
+preview; applying the same request must revalidate its revision and conflicts.
+
+Adding a retired record is refused unless the operator explicitly uses
+`--re-admit` with a reason. Discovery never uses that override; it reports the
+retired source for operator action.
+
+"Delete" is intentionally split into two operations:
+
+- **Retire** removes a Site from the active catalog while preserving a
+  tombstone, reason, provenance, and audit history. A later discovery must not
+  silently resurrect a retired record; it reports the source as an advisory
+  until the operator restores or explicitly re-admits it.
+- **Purge** permanently removes registry metadata only. It requires explicit
+  confirmation, is blocked when protected references exist, and never deletes
+  the Site root.
+
+The transitional `sites remove` command should converge on `retire`, not on
+hard deletion.
+
+### Registry record shape
+
+The active read model must expose enough information for an operator to decide
+what to do without opening the database:
+
+| Field | Meaning |
+| --- | --- |
+| `site_id` | Canonical stable identity. |
+| `site_root` or `control_endpoint` | Where the Site is reached. |
+| `variant` / `substrate` | Declared realization and platform. |
+| `sources` | One or more admitted source observations, each with a source kind and bounded reference. |
+| `aliases` | Non-canonical launch or legacy identities. |
+| `lifecycle_status` | `active` or `retired`; controls active catalog membership. |
+| `observation_status` | `unverified`, `present`, `stale`, `missing`, or `conflicted`; describes evidence, not lifecycle. |
+| `freshness` | Last discovery, validation, and health observation times. |
+| `health` | Last-known health posture and diagnostics. |
+| `revision` | Monotonic record revision for optimistic concurrency. |
+| `created_at` / `updated_at` | Registry record history bounds. |
+| `retired_at` / `retire_reason` | Tombstone data when retired. |
+
+No registry record contains raw credentials, coordinator state, task lifecycle
+rows, or private Site payloads.
+
+### Mutation invariants
+
+Every management operation must:
+
+1. reject a canonical Site ID that points to a different root without an
+   explicit conflict-resolution operation;
+2. reject a root that is already owned by another canonical Site instead of
+   silently creating a second identity;
+3. preserve aliases as aliases rather than replacing canonical identity;
+4. be idempotent when the requested state is already present;
+5. use a single registry transaction for the record change and its audit event;
+6. return the before/after projection, conflicts, and an audit reference; and
+7. leave Site-owned state untouched.
+
+`edit` is a patch operation. Changing `site_id` is not an ordinary edit; it is
+an explicit identity migration with a conflict preview and a separate audit
+record. Changing a root likewise requires an explicit preview because it can
+change which Site the operator reaches.
+
+### Operator interaction contract
+
+The normal workflow is:
+
+1. `list` gives a compact table of canonical ID, root, lifecycle status,
+   observation status, provenance, last seen, and aliases.
+2. `show` gives the complete record, provenance, freshness, conflicts, and
+   permitted next actions.
+3. `add`, `edit`, `retire`, `restore`, and `purge` first produce a bounded
+   operation preview; mutation requires an explicit apply/confirmation step.
+4. Every refusal states the violated invariant and the next admissible action.
+
+Human output is one human rendering only. JSON output is one structured result
+only, including errors. The common result envelope contains at least
+`status`, `operation`, `mutation_performed`, `registry_path`,
+`catalog_source`, `changes`, `conflicts`, and `audit_ref`.
+
+`discover --dry-run` must summarize `added`, `updated`, `unchanged`,
+`ignored`, `retired-source-present`, and `conflicted` entries before any apply
+step. This makes bulk discovery inspectable rather than an implicit mutation.
+
+### Browser relationship
+
+The browser operator console is a presentation and confirmation client for the
+same registry-management contract. Its loopback `/console/registry` page consumes
+only the `/console/registry/api/*` read-model routes, which return the same
+`narada.site_registry.management.v0` envelopes as the Site Lifecycle MCP command
+adapter. It must not write SQLite directly or invent
+browser-only CRUD semantics. A browser mutation must show the same preview,
+impact, conflict, confirmation, and audit information as the CLI. The browser
+may default to read-only views, but any future mutation control must use the
+same plan/apply boundary.
 
 ## 4. How It Preserves Site Authority
 
@@ -75,7 +206,7 @@ All observation paths are read-only. The console:
 
 ### 4.2 Audited Control Request Routing
 
-All mutation paths route through the Site's own control surface:
+All mutations of Site-owned state route through the Site's own control surface:
 
 ```
 Operator → Console CLI/UI → Control Request Router → Site Control API → Site Coordinator
@@ -101,7 +232,7 @@ The console does NOT decide whether the action is valid. The Site's control API 
 | **Location** | Runs inside a Site | Runs outside all Sites |
 | **Scope** | One Site | Multiple Sites |
 | **Authority** | Creates work, decisions, outbounds | Observes and routes; does not create |
-| **Mutation** | Direct writes to coordinator SQLite | Only via audited routing to Site APIs |
+| **Site-state mutation** | Direct writes to coordinator SQLite | Via audited routing to Site APIs; registry CRUD follows section 3.1 |
 | **Lifecycle** | Participates in Cycle advancement | No Cycle involvement |
 | **Required?** | Essential for Site function | Advisory; Sites work without it |
 
@@ -200,6 +331,10 @@ The router does NOT:
 - Mutate Site state directly
 - Retry failed requests automatically
 - Cache or assume success
+
+Registry add, edit, retire, restore, and purge operations are not Site-state
+control requests. They mutate only the User Site registry read model and must
+follow the preview, confirmation, conflict, and audit rules in section 3.1.
 
 ---
 
@@ -323,6 +458,12 @@ The server prints its bound URL on startup. `--port 0` binds to an ephemeral por
 
 | Method | Path | Behavior |
 |--------|------|----------|
+| GET | `/console/registry` | Read-only canonical Site Registry browser page |
+| GET | `/console/registry/api/sites` | Canonical registry list envelope (`narada.site_registry.management.v0`) |
+| GET | `/console/registry/api/sites/:reference` | Complete registry record and next actions envelope |
+| GET | `/console/registry/api/discover-plan` | Bounded dry-run discovery envelope; accepts `source`, `root`, and `actor` |
+| POST | `/console/registry/api/operations/plan` | Registry add/edit/retire/restore/purge preview using the canonical command envelope |
+| POST | `/console/registry/api/operations/apply` | Explicitly confirmed registry apply; revalidates command invariants, revision, and purge identity |
 | GET | `/console/sites` | List all registered Sites |
 | GET | `/console/sites/:site_id` | Site metadata + current health |
 | GET | `/console/health` | Cross-Site health aggregation |
@@ -362,4 +503,7 @@ Query parameters for bounded routes:
 | [`docs/product/unattended-operation-layer.md`](unattended-operation-layer.md) | Health, notification, and stuck-cycle semantics |
 | [`docs/deployment/windows-site-boundary-contract.md`](../deployment/windows-site-boundary-contract.md) | Windows Site authority boundaries the console must respect |
 | [`docs/deployment/windows-site-materialization.md`](../deployment/windows-site-materialization.md) | Windows Site directory and substrate conventions |
+| [`user-site-awareness-registry.md`](user-site-awareness-registry.md) | User Site awareness and authority separation |
+| [`site-registry-read-model.v0.md`](site-registry-read-model.v0.md) | Bounded read-model schema and future authority criteria |
+| [`site-registry-purge-posture.v0.md`](site-registry-purge-posture.v0.md) | Permanent registry deletion and retention posture |
 | [`AGENTS.md`](../../AGENTS.md) | Observation read-only and control surface separation invariants |

@@ -18,6 +18,9 @@ import type {
   SiteControlClientFactory,
 } from '@narada2/windows-site';
 import type { ConsoleControlRequest } from '@narada2/windows-site';
+import { renderSiteRegistryPage } from './console-site-registry-page.js';
+import type { SiteRegistryReadModel } from './site-registry-read-model.js';
+import type { RegistryMutationGateway, RegistryMutationInput, RegistryMutationOperation } from './site-registry-management-gateway.js';
 
 export interface RouteHandler {
   method: string;
@@ -34,6 +37,8 @@ export interface ConsoleServerRouteContext {
   registry: SiteRegistry;
   observationFactory: (site: RegisteredSite) => SiteObservationApi;
   controlClientFactory: SiteControlClientFactory;
+  registryReadModel: SiteRegistryReadModel;
+  registryMutationGateway: RegistryMutationGateway;
 }
 
 function jsonResponse(res: ServerResponse, status: number, payload: unknown): void {
@@ -42,6 +47,83 @@ function jsonResponse(res: ServerResponse, status: number, payload: unknown): vo
   res.end(body);
 }
 
+
+function htmlResponse(res: ServerResponse, status: number, body: string): void {
+  res.writeHead(status, { 'Content-Type': 'text/html; charset=utf-8', 'Content-Length': Buffer.byteLength(body) });
+  res.end(body);
+}
+
+function commandResponse(res: ServerResponse, command: { exitCode: number; result: unknown }): void {
+  const body = command.result as Record<string, unknown> | null;
+  const status = body?.status === 'refused' && (body.refusals as unknown[] | undefined)?.includes('site_not_found')
+    ? 404
+    : body?.status === 'conflict'
+      ? 409
+      : command.exitCode === 0
+        ? 200
+        : 400;
+  jsonResponse(res, status, command.result);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function optionalString(value: unknown): string | undefined {
+  return typeof value === 'string' ? value : undefined;
+}
+
+function optionalStringArray(value: unknown): string[] | undefined {
+  return Array.isArray(value) && value.every((item) => typeof item === 'string') ? value : undefined;
+}
+
+async function requestJson(req: IncomingMessage): Promise<Record<string, unknown> | null> {
+  let body = '';
+  for await (const chunk of req) {
+    body += chunk;
+    if (body.length > 65536) return null;
+  }
+  try {
+    const parsed: unknown = JSON.parse(body);
+    return isRecord(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function registryMutationInput(payload: Record<string, unknown>): RegistryMutationInput | null {
+  const operation = optionalString(payload.operation);
+  if (operation !== 'add' && operation !== 'edit' && operation !== 'retire' && operation !== 'restore' && operation !== 'purge') return null;
+  const expectedRevision = payload.expected_revision;
+  if (expectedRevision !== undefined && (!Number.isInteger(expectedRevision) || (expectedRevision as number) < 0)) return null;
+  return {
+    operation: operation as RegistryMutationOperation,
+    siteId: optionalString(payload.site_id),
+    reference: optionalString(payload.reference),
+    root: optionalString(payload.root),
+    variant: optionalString(payload.variant),
+    substrate: optionalString(payload.substrate),
+    aimJson: optionalString(payload.aim_json),
+    controlEndpoint: optionalString(payload.control_endpoint),
+    aliases: optionalStringArray(payload.aliases),
+    source: optionalString(payload.source),
+    sourceRef: optionalString(payload.source_ref),
+    reason: optionalString(payload.reason),
+    reAdmit: payload.re_admit === true,
+    actor: optionalString(payload.actor),
+    expectedRevision: expectedRevision as number | undefined,
+    confirmSiteId: optionalString(payload.confirm_site_id),
+  };
+}
+function registryQuery(searchParams: URLSearchParams): { source?: 'filesystem' | 'launch_registry' | 'all'; root?: string; actor?: string } | null {
+  const source = searchParams.get('source');
+  if (source !== null && source !== 'filesystem' && source !== 'launch_registry' && source !== 'all') return null;
+  return {
+    source: source ?? undefined,
+    root: searchParams.get('root') ?? undefined,
+    actor: searchParams.get('actor') ?? undefined,
+  };
+}
 function parseLimit(searchParams: URLSearchParams, defaultValue = 50, max = 1000): number {
   const raw = searchParams.get('limit');
   if (!raw) return defaultValue;
@@ -88,6 +170,97 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
       },
     },
 
+    // ── Canonical Site Registry management plan/apply boundary ──
+    {
+      method: 'POST',
+      pattern: /^\/console\/registry\/api\/operations\/plan$/,
+      handler: async (req, res) => {
+        const origin = req.headers.origin;
+        if (!setCorsHeaders(res, origin)) {
+          jsonResponse(res, 403, { error: 'Origin not allowed' });
+          return;
+        }
+        const payload = await requestJson(req);
+        const input = payload ? registryMutationInput(payload) : null;
+        if (!input) {
+          jsonResponse(res, 400, { error: 'Invalid registry management request' });
+          return;
+        }
+        commandResponse(res, await ctx.registryMutationGateway.plan(input));
+      },
+    },
+    {
+      method: 'POST',
+      pattern: /^\/console\/registry\/api\/operations\/apply$/,
+      handler: async (req, res) => {
+        const origin = req.headers.origin;
+        if (!setCorsHeaders(res, origin)) {
+          jsonResponse(res, 403, { error: 'Origin not allowed' });
+          return;
+        }
+        const payload = await requestJson(req);
+        const input = payload ? registryMutationInput(payload) : null;
+        if (!payload || !input || payload.confirm_apply !== true) {
+          jsonResponse(res, 400, { error: 'Confirmed registry management request required' });
+          return;
+        }
+        commandResponse(res, await ctx.registryMutationGateway.apply(input));
+      },
+    },
+    // ── Canonical Site Registry browser projection ──
+    {
+      method: 'GET',
+      pattern: /^\/console\/registry$/,
+      handler: async (_req, res) => {
+        const origin = _req.headers.origin;
+        if (!setCorsHeaders(res, origin)) {
+          jsonResponse(res, 403, { error: 'Origin not allowed' });
+          return;
+        }
+        htmlResponse(res, 200, renderSiteRegistryPage());
+      },
+    },
+    {
+      method: 'GET',
+      pattern: /^\/console\/registry\/api\/sites$/,
+      handler: async (_req, res) => {
+        const origin = _req.headers.origin;
+        if (!setCorsHeaders(res, origin)) {
+          jsonResponse(res, 403, { error: 'Origin not allowed' });
+          return;
+        }
+        commandResponse(res, await ctx.registryReadModel.list());
+      },
+    },
+    {
+      method: 'GET',
+      pattern: /^\/console\/registry\/api\/sites\/([^/]+)$/,
+      handler: async (_req, res, params) => {
+        const origin = _req.headers.origin;
+        if (!setCorsHeaders(res, origin)) {
+          jsonResponse(res, 403, { error: 'Origin not allowed' });
+          return;
+        }
+        commandResponse(res, await ctx.registryReadModel.show(decodeURIComponent(params[1]!)));
+      },
+    },
+    {
+      method: 'GET',
+      pattern: /^\/console\/registry\/api\/discover-plan$/,
+      handler: async (_req, res, _params, searchParams) => {
+        const origin = _req.headers.origin;
+        if (!setCorsHeaders(res, origin)) {
+          jsonResponse(res, 403, { error: 'Origin not allowed' });
+          return;
+        }
+        const query = registryQuery(searchParams);
+        if (!query) {
+          jsonResponse(res, 400, { error: 'Invalid registry discovery source' });
+          return;
+        }
+        commandResponse(res, await ctx.registryReadModel.discoverPlan(query));
+      },
+    },
     // ── Sites ──
     {
       method: 'GET',
