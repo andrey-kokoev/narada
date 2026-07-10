@@ -130,6 +130,26 @@ function createFakeDocument() {
   };
 }
 
+const AGENT_WEB_UI_CSS_MODULES = [
+  'styles/theme.css',
+  'styles/primitives.css',
+  'styles/operator-surfaces.css',
+  'styles/shell-and-navigation.css',
+  'styles/panels.css',
+  'styles/layout-and-status.css',
+  'styles/events-and-content.css',
+  'styles/composer.css',
+  'styles/responsive.css',
+  'styles/dark-mode.css',
+];
+
+async function readAgentWebUiCss() {
+  const sourceRoot = new URL('../src/', import.meta.url);
+  const entry = await readFile(new URL('agent-web-ui.css', sourceRoot), 'utf8');
+  const modules = await Promise.all(AGENT_WEB_UI_CSS_MODULES.map((modulePath) => readFile(new URL(modulePath, sourceRoot), 'utf8')));
+  return [entry, ...modules].join('\n');
+}
+
 async function withRealNarsWebServer(fn) {
   const siteRoot = tempRoot('agent-web-ui-config-real-nars-');
   const runtimeInput = new PassThrough();
@@ -672,6 +692,15 @@ test('session title parts do not duplicate an explicit Site id when agent id is 
   });
 });
 
+test('agent-web-ui CSS entry imports logical modules in cascade order', async () => {
+  const entry = await readFile(new URL('../src/agent-web-ui.css', import.meta.url), 'utf8');
+  assert.equal(entry, [
+    '@import "tailwindcss";',
+    ...AGENT_WEB_UI_CSS_MODULES.map((modulePath) => `@import "./${modulePath}";`),
+    '',
+  ].join('\n'));
+});
+
 test('Vue layout smoke covers shell, status, event list, composer, and event tone styles', async () => {
   const shell = await readFile(new URL('../src/app/components/NarsSessionShell.vue', import.meta.url), 'utf8');
   const app = await readFile(new URL('../src/app/App.vue', import.meta.url), 'utf8');
@@ -684,7 +713,7 @@ test('Vue layout smoke covers shell, status, event list, composer, and event ton
   const composer = await readFile(new URL('../src/app/components/OperatorComposer.vue', import.meta.url), 'utf8');
   const boxVisibilityPreference = await readFile(new URL('../src/app/composables/useBoxVisibilityPreference.ts', import.meta.url), 'utf8');
   const viteConfig = await readFile(new URL('../vite.config.mjs', import.meta.url), 'utf8');
-  const css = await readFile(new URL('../src/agent-web-ui.css', import.meta.url), 'utf8');
+  const css = await readAgentWebUiCss();
   for (const marker of ['class="shell"', '<SessionStatusBar', '<ConversationTranscript', '<OperatorComposer']) {
     assert.equal(shell.includes(marker), true, marker);
   }
@@ -723,8 +752,21 @@ test('Vue layout smoke covers shell, status, event list, composer, and event ton
   assert.match(status, /placement="row-control"/);
   assert.match(css, /\.box-row-shell/);
   assert.match(css, /\.box-row-controls/);
-  assert.match(css, /\.composer-items/);
-  assert.match(css, /\.composer-controls/);
+  assert.match(composer, /import BoxRowShell/);
+  assert.match(composer, /<BoxRowShell row-label="Operator input footer" class-name="operator-footer-row">/);
+  assert.match(composer, /class="composer-submit"/);
+  assert.match(composer, /class="composer-input-actions"/);
+  assert.ok(composer.indexOf('<BoxVisibilitySelector') < composer.indexOf('class="composer-submit"'));
+  assert.ok(composer.indexOf('class="composer-target"') < composer.indexOf('<BoxRowShell row-label="Operator input footer"'));
+  assert.ok(composer.indexOf('class="composer-input-box"') > composer.indexOf('<BoxRowShell row-label="Operator input footer"'));
+  assert.match(css, /\.operator-footer-row/);
+  assert.match(css, /\.operator-footer-row \{[^}]*grid-template-columns: minmax\(0, 1fr\);[^}]*gap: 0;/s);
+  assert.doesNotMatch(css, /\.box-row-shell-with-controls/);
+  assert.match(css, /\.composer-input-actions \{[^}]*flex-direction: column;[^}]*align-items: flex-end;[^}]*justify-content: space-between;/s);
+  assert.match(css, /\.composer-submit \{/);
+  assert.doesNotMatch(css, /\.composer button \{/);
+  assert.doesNotMatch(css, /\.composer-items/);
+  assert.doesNotMatch(css, /\.composer-controls/);
   assert.match(css, /\.composer-input-box/);
   assert.match(css, /\.box-visibility-selector-shell\s*\{[^}]*position: relative/);
   assert.match(css, /\.box-visibility-selector-trigger\s*\{[^}]*position: relative/);
@@ -767,7 +809,7 @@ test('Vue layout smoke covers shell, status, event list, composer, and event ton
 });
 
 test('agent-web-ui CSS enforces theme-token discipline for new color declarations', async () => {
-  const css = await readFile(new URL('../src/agent-web-ui.css', import.meta.url), 'utf8');
+  const css = await readAgentWebUiCss();
   const root = postcss.parse(css, { from: 'agent-web-ui.css' });
   const violations = rawColorDeclarationViolations(root);
   assert.deepEqual(violations, []);
@@ -839,7 +881,7 @@ test('Vue message content renderer has typed parts, inline code, and lazy Mermai
   const mermaidPart = await readFile(new URL('../src/app/components/content/MermaidDiagramPart.vue', import.meta.url), 'utf8');
   const renderedFrame = await readFile(new URL('../src/app/components/content/RenderedPartFrame.vue', import.meta.url), 'utf8');
   const parser = await readFile(new URL('../src/app/lib/messageContent.ts', import.meta.url), 'utf8');
-  const css = await readFile(new URL('../src/agent-web-ui.css', import.meta.url), 'utf8');
+  const css = await readAgentWebUiCss();
   const readme = await readFile(new URL('../README.md', import.meta.url), 'utf8');
 
   assert.match(eventRow, /<MessageContent :content="row\.summary"/);
