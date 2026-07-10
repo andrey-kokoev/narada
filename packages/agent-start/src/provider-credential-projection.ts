@@ -188,11 +188,16 @@ export function intelligenceProviderEnvironmentProjection(providerResolution, {
   const metadata = metadataByProvider[provider];
   const credential = resolveProviderCredential(provider, metadata, { processEnv, codexSubscriptionPreflight });
   const baseUrl = firstEnvironmentValue(metadata.base_url_env_names, processEnv) ?? metadata.base_url;
-  const model = firstEnvironmentValue(metadata.model_env_names, processEnv) ?? metadata.default_model;
+  const model = firstEnvironmentValue(metadata.model_env_names, processEnv) ?? providerResolution.default_model ?? metadata.default_model;
+  const thinking = firstEnvironmentValue(['NARADA_AI_THINKING', 'NARADA_THINKING_LEVEL'], processEnv)
+    ?? providerResolution.default_thinking
+    ?? metadata.default_thinking
+    ?? 'medium';
   const env = {
     NARADA_INTELLIGENCE_PROVIDER: provider,
     NARADA_AI_BASE_URL: baseUrl,
     NARADA_AI_MODEL: model,
+    NARADA_AI_THINKING: thinking,
   };
   const primaryBaseUrlEnv = metadata.base_url_env_names?.[0];
   if (primaryBaseUrlEnv) {

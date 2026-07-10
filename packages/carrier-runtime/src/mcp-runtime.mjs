@@ -102,6 +102,7 @@ function buildMcpChildOwnershipEvidence({ siteRoot, serverName, ownershipContext
     ownership: 'session_owned',
     processRole: 'mcp_child',
     ownerSiteRoot: siteRoot,
+    workspaceRoot: ownershipContext.workspace_root ?? ownershipContext.workspaceRoot ?? null,
     createdByPid: ownershipContext.pid ?? ownershipContext.created_by_pid ?? ownershipContext.createdByPid,
     parentProcessRole: ownershipContext.process_role ?? ownershipContext.processRole ?? null,
     serverName,

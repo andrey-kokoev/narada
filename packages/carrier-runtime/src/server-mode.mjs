@@ -67,6 +67,7 @@ export async function runCarrierServerMode({
     ownership: processOwnership,
     processRole: processRole ?? 'runtime_server',
     ownerSiteRoot: siteRoot,
+    workspaceRoot: siteConfig?.workspace_root ?? process.env.NARADA_WORKSPACE_ROOT ?? null,
     createdByPid,
     pid: process.pid,
   });

@@ -32,9 +32,13 @@ test('provider registry exposes carrier-level defaults and support states', () =
   assert.deepEqual(registry.providers['openrouter-api'].credential_requirement.env_names, ['OPENROUTER_API_KEY']);
   assert.equal(registry.providers['codex-subscription'].credential_secret_ref, undefined);
   assert.equal(registry.providers['codex-subscription'].credential_requirement.kind, PROVIDER_CREDENTIAL_REQUIREMENT_KINDS.LOCAL_CODEX_SUBSCRIPTION);
+  assert.equal(registry.providers['codex-subscription'].default_model, 'gpt-5.6-sol');
+  assert.equal(registry.providers['codex-subscription'].default_thinking, 'low');
+  assert.deepEqual(registry.providers['codex-subscription'].model_catalog, { kind: 'codex_local_cache', max_age_ms: 86400000 });
   for (const [provider, metadata] of Object.entries(registry.providers)) {
     assert.equal(Array.isArray(metadata.available_models), true, `${provider} must advertise available_models`);
     assert.equal(metadata.available_models.includes(metadata.default_model), true, `${provider} available_models must include default_model`);
+    assert.equal(['none', 'low', 'medium', 'high', 'xhigh'].includes(metadata.default_thinking ?? 'medium'), true, `${provider} default_thinking must be valid`);
     for (const cognition of ['low', 'medium', 'high']) {
       const defaults = metadata.cognition_defaults?.[cognition];
       assert.equal(typeof defaults?.model, 'string', `${provider} ${cognition} cognition default must set model`);

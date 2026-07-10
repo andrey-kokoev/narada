@@ -4,6 +4,7 @@ import {
   providerCredentialRequirement,
   redactProviderCredentialRequirement,
 } from './provider-credential-projection.ts';
+import { resolveCodexSubscriptionModelCatalog } from '@narada2/carrier-provider-support/codex-subscription-models';
 
 export const INTELLIGENCE_PROVIDER_CONTRACT_SCHEMA = 'narada.intelligence_provider.v1';
 
@@ -141,6 +142,7 @@ export function resolveIntelligenceProviderLaunch(value, carrierName, inputSourc
   admittedProviders,
   defaultProvider,
   schema = INTELLIGENCE_PROVIDER_CONTRACT_SCHEMA,
+  processEnv = process.env,
 } = {}) {
   const states = [];
   const pushState = (state, detail = {}) => states.push({ state, ...detail });
@@ -173,6 +175,20 @@ export function resolveIntelligenceProviderLaunch(value, carrierName, inputSourc
   pushState('carrier_supports_provider_selection', { carrier_kind: carrierName });
 
   const providerContract = metadataByProvider[provider];
+  const modelCatalog = provider === 'codex-subscription'
+    ? resolveCodexSubscriptionModelCatalog({
+      processEnv,
+      fallbackModels: providerContract.available_models,
+      maxAgeMs: Number(providerContract.model_catalog?.max_age_ms) || undefined,
+    })
+    : {
+      models: providerContract.available_models,
+      source: 'declared_registry',
+      observed_at: null,
+      cache_path: null,
+      max_age_ms: null,
+      fallback_reason: null,
+    };
   const credentialRequirement = providerCredentialRequirement(provider, providerContract);
   const support = resolveProviderSupportState(providerContract);
   if (!support.ready) {
@@ -188,7 +204,12 @@ export function resolveIntelligenceProviderLaunch(value, carrierName, inputSourc
     source_path: inputAbsent ? null : inputSource.source_path ?? null,
     request_adapter: providerContract.adapter_kind,
     support_state: support.state,
-    default_model: providerContract.default_model,
+    default_model: modelCatalog.models.includes(providerContract.default_model)
+      ? providerContract.default_model
+      : modelCatalog.models[0] ?? providerContract.default_model,
+    default_thinking: providerContract.default_thinking ?? 'medium',
+    available_models: modelCatalog.models,
+    model_catalog: modelCatalog,
     model_env: providerContract.model_env_names[0],
     api_base_url_env: providerContract.base_url_env_names[0],
     api_key_env: credentialRequirement.kind === 'api_key_secret' ? credentialRequirement.env_names[0] : undefined,

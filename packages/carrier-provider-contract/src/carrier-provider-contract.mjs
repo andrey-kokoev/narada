@@ -41,11 +41,12 @@ export function providerEnvironment(provider, metadata = loadProviderMetadata(),
   const providerDefault = resolveProviderMetadata(provider, metadata);
   const baseUrl = firstEnvValue(providerDefault.base_url_env_names, env) ?? providerDefault.base_url;
   const model = firstEnvValue(providerDefault.model_env_names, env) ?? providerDefault.default_model;
+  const thinking = env.NARADA_AI_THINKING ?? env.NARADA_THINKING_LEVEL ?? providerDefault.default_thinking ?? 'medium';
   const apiKey = firstEnvValue(providerDefault.credential_env_names, env) ?? '';
   const availableModels = Array.isArray(providerDefault.available_models)
     ? providerDefault.available_models.filter((value) => typeof value === 'string' && value)
     : [];
-  return { providerDefault, baseUrl, model, apiKey, availableModels };
+  return { providerDefault, baseUrl, model, thinking, apiKey, availableModels };
 }
 
 export function admittedProviderNames(contract = loadProviderAdapterContract()) {

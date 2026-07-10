@@ -8,11 +8,14 @@ This package owns provider registry metadata, provider support states, default p
 
 The authoritative registry is `contracts/provider-registry.json`. Each provider entry declares:
 
-- `default_model` and `available_models`.
+- `default_model`, `default_thinking` (optional; defaults to `medium`), and `available_models`.
 - `cognition_defaults.low|medium|high`, each with `model` and `reasoning_effort`.
 - adapter kind, support state, base URL/model/credential environment names, and credential requirement.
 
 `cognition_defaults` is the durable source used by worker-delegation and delegated-task surfaces when launching `narada-agent-runtime-server` workers. Every cognition default model must be present in that provider's `available_models`; the package tests enforce this so registry drift is caught where the contract lives.
+
+`available_models` is declared fallback policy, not proof of current account availability. Providers with a live account-local catalog, such as `codex-subscription`, may replace it at runtime and must expose catalog provenance.
+The optional `model_catalog` contract declares the observation mechanism and freshness policy. `codex_local_cache.max_age_ms` is the canonical freshness threshold for Codex subscription cache evidence.
 
 ## Verified Runtime Providers
 

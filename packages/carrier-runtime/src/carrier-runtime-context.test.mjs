@@ -30,7 +30,7 @@ test('buildCarrierRuntimePaths computes canonical paths from siteRoot and sessio
   }
 });
 
-test('createCarrierRuntimeContext leaves codex model unset without explicit model env', () => {
+test('createCarrierRuntimeContext resolves symmetric Codex model and thinking defaults', () => {
   const siteRoot = makeTempSiteRoot();
   const originalCodeModel = process.env.CODEX_MODEL;
   const originalNaradaModel = process.env.NARADA_CODEX_MODEL;
@@ -42,7 +42,10 @@ test('createCarrierRuntimeContext leaves codex model unset without explicit mode
       session: 'test-session',
       siteRoot,
     });
-    assert.equal(ctx.providerSettings.model, null);
+    assert.equal(ctx.providerSettings.model, 'gpt-5.6-sol');
+    assert.equal(ctx.providerSettings.thinking, 'low');
+    assert.equal(Array.isArray(ctx.providerSettings.availableModels), true);
+    assert.equal(['live_codex_cache', 'declared_registry_fallback'].includes(ctx.providerSettings.modelCatalog?.source), true);
   } finally {
     cleanupTempSiteRoot(siteRoot);
     if (originalCodeModel !== undefined) process.env.CODEX_MODEL = originalCodeModel;
@@ -234,4 +237,3 @@ test('createCarrierRuntimeContext uses env default for siteRoot when omitted', (
     else delete process.env.NARADA_SITE_ROOT;
   }
 });
-

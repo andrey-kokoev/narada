@@ -1,6 +1,7 @@
 export {
   codexAuthHome,
 } from './codex-subscription-auth.mjs';
+export { resolveCodexSubscriptionModelCatalog } from './codex-subscription-models.mjs';
 
 export {
   codexCommand,

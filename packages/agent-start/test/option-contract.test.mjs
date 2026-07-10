@@ -443,7 +443,9 @@ test('agent-cli accepts explicit intelligence provider and materializes provider
   assert.equal(output.intelligence_provider_resolution.credential_secret_ref, null);
   assert.deepEqual(output.intelligence_provider_resolution.credential_env_names, []);
   assert.equal(output.required_environment.NARADA_INTELLIGENCE_PROVIDER, 'codex-subscription');
-  assert.equal(output.required_environment.CODEX_MODEL, 'gpt-5.5');
+  assert.equal(output.required_environment.CODEX_MODEL, 'gpt-5.6-sol');
+  assert.equal(output.required_environment.NARADA_AI_THINKING, 'low');
+  assert.equal(['live_codex_cache', 'declared_registry_fallback'].includes(output.intelligence_provider_resolution.model_catalog.source), true);
 });
 
 test('agent-cli can resolve intelligence provider from target site env file', () => {
@@ -563,6 +565,16 @@ test('agent-cli exec launches package bin through node, not PowerShell', () => {
   const sessionId = output.carrier_session.carrier_session_id;
   assert.equal(output.exec_command.startsWith(process.execPath), true);
   assert.equal(output.exec_command.includes('pwsh'), false);
+  assert.equal(output.agent_start_execution_mode, 'hidden_detached');
+  assert.deepEqual(output.detach_refusal_reasons, []);
+  assert.equal(output.detach_decision.selected, true);
+  assert.equal(output.detach_decision.hidden_posture, 'agent_runtime_server');
+  assert.match(output.hidden_runtime_output_files.stdout_path, /agent-start-processes/);
+  assert.match(output.hidden_runtime_output_files.stderr_path, /agent-start-processes/);
+  assert.equal(output.launcher_contracts.launch_selection_session.agent_start_execution_mode, 'hidden_detached');
+  assert.deepEqual(output.launcher_contracts.launch_selection_session.hidden_runtime_output_files, output.hidden_runtime_output_files);
+  assert.equal(output.launcher_contracts.operator_terminal_projection_plan.hide_shell, true);
+  assert.deepEqual(output.launcher_contracts.operator_terminal_projection_plan.hidden_runtime_output_files, output.hidden_runtime_output_files);
   assert.equal(output.nars_launch.command, process.execPath);
   assert.equal(output.nars_launch.session_id, sessionId);
   assert.equal(output.nars_launch.runtime_session_id, sessionId);
@@ -632,6 +644,10 @@ test('agent-web-ui exec launches NARS runtime server as first-class operator sur
   const output = runOk(['--carrier', 'agent-web-ui', '--runtime', 'nars', '--exec']);
   const sessionId = output.carrier_session.carrier_session_id;
   assert.equal(output.exec_command.startsWith(process.execPath), true);
+  assert.equal(output.agent_start_execution_mode, 'hidden_detached');
+  assert.deepEqual(output.detach_refusal_reasons, []);
+  assert.equal(output.detach_decision.selected, true);
+  assert.match(output.hidden_runtime_output_files.stdout_path, /agent-start-processes/);
   assert.equal(output.nars_launch.command, process.execPath);
   assert.equal(output.nars_launch.session_id, sessionId);
   assert.equal(output.nars_launch.runtime_session_id, sessionId);
@@ -1021,6 +1037,20 @@ test('wait yolo and launch-source options are visible in dry-run output', () => 
   assert.equal(output.wait, true);
   assert.equal(output.yolo, true);
   assert.equal(output.launch_source, 'option-contract');
+});
+
+test('wait and explicit visible runtime terminal refuse hidden-detached posture', () => {
+  const output = runOk(['--carrier', 'agent-cli', '--runtime', 'narada-agent-runtime-server', '--exec', '--wait', '--visible-runtime-terminal']);
+  assert.equal(output.visible_runtime_terminal, true);
+  assert.equal(output.agent_start_execution_mode, 'visible_inherited');
+  assert.deepEqual(output.detach_refusal_reasons, [
+    'wait_requested',
+    'visible_runtime_terminal_requested',
+  ]);
+  assert.equal(output.hidden_runtime_output_files, null);
+  assert.equal(output.detach_decision.selected, false);
+  assert.equal(output.launcher_contracts.launch_selection_session.agent_start_execution_mode, 'visible_inherited');
+  assert.equal(output.launcher_contracts.operator_terminal_projection_plan.hide_shell, false);
 });
 
 test('show-admission returns an existing codex admission record', () => {

@@ -38,8 +38,8 @@ import {
 import {
   PROVIDER_SUPPORT_STATES,
   loadProviderMetadata,
-  providerEnvironment,
 } from './provider-resolution.mjs';
+import { resolveProviderRuntimeDefaults } from './provider-runtime-defaults.mjs';
 import {
   aggregateTools,
   applyWorkerMcpProjection,
@@ -130,12 +130,13 @@ export function createCarrierRuntimeDependencies({ runtimeContext = {}, env = pr
   const authorityRuntimeHost = runtimeContext.authorityRuntimeHost ?? env.NARADA_AUTHORITY_RUNTIME_HOST ?? 'local';
   const operatorSurfaceKind = runtimeContext.operatorSurfaceKind ?? env.NARADA_OPERATOR_SURFACE_KIND ?? 'agent-cli';
   const intelligenceProvider = runtimeContext.intelligenceProvider ?? env.NARADA_INTELLIGENCE_PROVIDER ?? 'codex-subscription';
-  const providerEnvironmentValues = providerEnvironment(intelligenceProvider, PROVIDER_METADATA, env);
+  const providerEnvironmentValues = resolveProviderRuntimeDefaults(intelligenceProvider, env);
   const providerSettings = {
     provider: intelligenceProvider,
     model: runtimeContext.providerSettings?.model ?? providerEnvironmentValues.model,
     availableModels: runtimeContext.providerSettings?.availableModels ?? providerEnvironmentValues.availableModels ?? [],
-    thinking: runtimeContext.providerSettings?.thinking ?? env.NARADA_AI_THINKING ?? env.NARADA_THINKING_LEVEL ?? 'medium',
+    modelCatalog: runtimeContext.providerSettings?.modelCatalog ?? providerEnvironmentValues.modelCatalog,
+    thinking: runtimeContext.providerSettings?.thinking ?? providerEnvironmentValues.thinking,
     stream: runtimeContext.providerSettings?.stream !== false,
     openrouterSiteUrl: runtimeContext.providerSettings?.openrouterSiteUrl ?? env.OPENROUTER_SITE_URL ?? env.OPENROUTER_HTTP_REFERER ?? null,
     openrouterTitle: runtimeContext.providerSettings?.openrouterTitle ?? env.OPENROUTER_APP_NAME ?? env.OPENROUTER_X_TITLE ?? null,
@@ -161,6 +162,7 @@ export function createCarrierRuntimeDependencies({ runtimeContext = {}, env = pr
       ownership: runtimeContext.processOwnership ?? env.NARADA_PROCESS_OWNERSHIP ?? null,
       process_role: runtimeContext.processRole ?? env.NARADA_PROCESS_ROLE ?? null,
       created_by_pid: runtimeContext.createdByPid ?? env.NARADA_CREATED_BY_PID ?? null,
+      workspace_root: runtimeContext.siteConfig?.workspace_root ?? env.NARADA_WORKSPACE_ROOT ?? null,
       pid: process.pid,
     }),
     applyWorkerMcpProjection: (mcpServers) => applyWorkerMcpProjection(mcpServers),
@@ -3090,6 +3092,7 @@ function effectiveIntelligenceSettings({ sessionSettings = {}, providerSettings 
     provider: stringOrNull(sessionSettings.provider) ?? stringOrNull(providerSettings.provider) ?? stringOrNull(process.env.NARADA_INTELLIGENCE_PROVIDER) ?? 'codex-subscription',
     model: stringOrNull(sessionSettings.model) ?? stringOrNull(providerSettings.model) ?? null,
     available_models: stringArrayOrEmpty(providerSettings.availableModels ?? providerSettings.available_models),
+    model_catalog: providerSettings.modelCatalog ?? providerSettings.model_catalog ?? null,
     available_providers: stringArrayOrEmpty(providerSettings.availableProviders ?? providerSettings.available_providers ?? ADMITTED_INTELLIGENCE_PROVIDERS),
     thinking: stringOrNull(sessionSettings.thinking) ?? stringOrNull(providerSettings.thinking) ?? stringOrNull(process.env.NARADA_AI_THINKING) ?? stringOrNull(process.env.NARADA_THINKING_LEVEL) ?? 'medium',
     stream: booleanOrNull(sessionSettings.stream) ?? booleanOrNull(providerSettings.stream) ?? null,
@@ -3200,7 +3203,13 @@ function serverHealth({ requestId, state, allTools, mcpServers, mcpPreflightArti
 
 function buildRuntimeTopology({ context = {}, status = {}, state = {}, generatedAt, heartbeat = null, mcpServers = [], operatorSurfaceKind = null, agentId = null, siteId = null } = {}) {
   const authorityTransition = status.authority_transition_source ?? status.authority_transition ?? null;
-  const processOwnership = context.processOwnership ?? null;
+  const rawProcessOwnership = context.processOwnership ?? heartbeat?.process_ownership ?? null;
+  const processOwnership = rawProcessOwnership && typeof rawProcessOwnership === 'object'
+    ? {
+      ...rawProcessOwnership,
+      workspace_root: rawProcessOwnership.workspace_root ?? context.siteConfig?.workspace_root ?? null,
+    }
+    : rawProcessOwnership;
   const staleSource = authorityTransition?.stale_source === true;
   const children = Array.isArray(mcpServers)
     ? mcpServers.map((server) => ({
@@ -3221,7 +3230,7 @@ function buildRuntimeTopology({ context = {}, status = {}, state = {}, generated
     site_root: context.siteRoot ?? null,
     agent_id: agentId,
     session_id: context.session ?? null,
-    launch_session_id: context.launchSessionId ?? null,
+    launch_session_id: context.launchSessionId ?? heartbeat?.launch_session_id ?? null,
     runtime: {
       kind: 'narada-agent-runtime-server',
       mode: 'server',

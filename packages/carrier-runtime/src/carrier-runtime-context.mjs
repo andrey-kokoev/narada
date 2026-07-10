@@ -2,6 +2,7 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { buildAgentIdentityRefV2, normalizeAgentIdentityRefV2, resolveAgentIdentityRef } from '@narada2/agent-identity';
 import { resolveNaradaSitePaths } from '@narada2/site-paths';
+import { resolveProviderRuntimeDefaults } from './provider-runtime-defaults.mjs';
 
 /**
  * Build canonical carrier runtime paths from siteRoot and session.
@@ -118,6 +119,11 @@ export function createCarrierRuntimeContext({
     naradaDir: resolvedNaradaDir,
     workspaceRoot: process.env.NARADA_WORKSPACE_ROOT ?? null,
   });
+  const providerDefaults = resolveProviderRuntimeDefaults(intelligenceProvider);
+  const resolvedLaunchSessionId = normalizeOptionalString(launchSessionId) ?? normalizeOptionalString(process.env.NARADA_LAUNCH_SESSION_ID);
+  const resolvedProcessOwnership = normalizeOptionalString(processOwnership) ?? normalizeOptionalString(process.env.NARADA_PROCESS_OWNERSHIP);
+  const resolvedProcessRole = normalizeOptionalString(processRole) ?? normalizeOptionalString(process.env.NARADA_PROCESS_ROLE);
+  const resolvedCreatedByPid = normalizeOptionalInteger(createdByPid) ?? normalizeOptionalInteger(process.env.NARADA_CREATED_BY_PID);
 
   return Object.freeze({
     identity,
@@ -131,13 +137,15 @@ export function createCarrierRuntimeContext({
     intelligenceProvider,
     operatorSurfaceKind,
     authorityRuntimeHost,
-    launchSessionId: normalizeOptionalString(launchSessionId),
-    processOwnership: normalizeOptionalString(processOwnership),
-    processRole: normalizeOptionalString(processRole),
-    createdByPid: normalizeOptionalInteger(createdByPid),
+    launchSessionId: resolvedLaunchSessionId,
+    processOwnership: resolvedProcessOwnership,
+    processRole: resolvedProcessRole,
+    createdByPid: resolvedCreatedByPid,
     providerSettings: Object.freeze({
-      model: providerSettings.model ?? process.env.CODEX_MODEL ?? process.env.NARADA_CODEX_MODEL ?? null,
-      thinking: providerSettings.thinking ?? process.env.NARADA_AI_THINKING ?? 'medium',
+      model: providerSettings.model ?? providerDefaults.model,
+      availableModels: providerSettings.availableModels ?? providerDefaults.availableModels,
+      modelCatalog: providerSettings.modelCatalog ?? providerDefaults.modelCatalog,
+      thinking: providerSettings.thinking ?? providerDefaults.thinking,
       stream: providerSettings.stream ?? true,
       goal: providerSettings.goal ?? null,
     }),
@@ -247,4 +255,3 @@ function readJsonFile(path) {
     return null;
   }
 }
-

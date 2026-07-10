@@ -177,7 +177,9 @@ test('session command execution uses the shared command contract commands', asyn
     assert.equal(results.some((event) => event.request_id === 'model-override' && event.fields?.model === 'gpt-override'), true);
     assert.equal(results.some((event) => event.request_id === 'thinking-override' && event.fields?.thinking === 'high'), true);
     const status = results.find((event) => event.request_id === 'status-after-override')?.fields?.session_status;
-    assert.deepEqual(status?.intelligence, { provider: 'codex-subscription', model: 'gpt-override', available_models: ['gpt-5.5'], available_providers: ADMITTED_INTELLIGENCE_PROVIDERS, thinking: 'high', stream: false });
+    const { model_catalog: modelCatalog, ...intelligence } = status?.intelligence ?? {};
+    assert.deepEqual(intelligence, { provider: 'codex-subscription', model: 'gpt-override', available_models: ['gpt-5.5', 'gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna', 'gpt-5.4', 'gpt-5.4-mini', 'gpt-5.3-codex-spark'], available_providers: ADMITTED_INTELLIGENCE_PROVIDERS, thinking: 'high', stream: false });
+    assert.equal(['live_codex_cache', 'declared_registry_fallback'].includes(modelCatalog?.source), true);
     assert.equal(status?.model, 'gpt-override');
     assert.equal(status?.thinking, 'high');
   } finally {
@@ -732,4 +734,3 @@ test('conversation.steer interrupts the active turn and becomes the next provide
     removeTempDir(siteRoot);
   }
 });
-

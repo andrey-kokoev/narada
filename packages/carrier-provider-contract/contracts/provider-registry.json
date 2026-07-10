@@ -173,10 +173,23 @@
     "codex-subscription": {
       "meaning": "Local Codex CLI subscription auth via codex mcp-server; no OpenAI API key or API billing path.",
       "base_url": "codex://local-subscription",
-      "default_model": "gpt-5.5",
-      "available_models": ["gpt-5.5"],
+      "default_model": "gpt-5.6-sol",
+      "default_thinking": "low",
+      "model_catalog": {
+        "kind": "codex_local_cache",
+        "max_age_ms": 86400000
+      },
+      "available_models": [
+        "gpt-5.5",
+        "gpt-5.6-sol",
+        "gpt-5.6-terra",
+        "gpt-5.6-luna",
+        "gpt-5.4",
+        "gpt-5.4-mini",
+        "gpt-5.3-codex-spark"
+      ],
       "cognition_defaults": {
-        "low": { "model": "gpt-5.5", "reasoning_effort": "low" },
+        "low": { "model": "gpt-5.6-sol", "reasoning_effort": "low" },
         "medium": { "model": "gpt-5.5", "reasoning_effort": "medium" },
         "high": { "model": "gpt-5.5", "reasoning_effort": "high" }
       },
