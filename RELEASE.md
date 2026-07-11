@@ -10,6 +10,11 @@ Current packages:
 - `@narada2/search`
 - `@narada2/charters`
 - `@narada2/ops-kit` (library only, no binary)
+- `@narada2/ui` (compiled renderer-neutral stylesheet)
+
+`config/npm-publication-packages.json` is the canonical publication package
+inventory. Release validation reads that manifest directly; this list is its
+operator-facing summary.
 
 ## Intended Split
 

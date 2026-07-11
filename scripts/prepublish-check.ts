@@ -6,7 +6,7 @@
  */
 
 import { execSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -17,7 +17,9 @@ interface CheckResult {
 }
 
 interface PackageManifest {
+  name: string;
   version: string;
+  private?: boolean;
   repository?: { url?: string };
   homepage?: string;
   bugs?: { url?: string };
@@ -28,13 +30,14 @@ interface PackageManifest {
 }
 
 const PACK_ONLY = process.argv.includes('--pack-only');
-const PACKAGES = [
-  'packages/layers/control-plane',
-  'packages/layers/cli',
-  'packages/layers/daemon',
-  'packages/verticals/search',
-  'packages/domains/charters',
-] as const;
+const PUBLICATION_MANIFEST_PATH = 'config/npm-publication-packages.json';
+const publicationManifest = JSON.parse(
+  readFileSync(PUBLICATION_MANIFEST_PATH, 'utf8'),
+) as {
+  schema: string;
+  packages: Array<{ name: string; path: string }>;
+};
+const PACKAGES = publicationManifest.packages.map(({ path }) => path);
 
 const colors = {
   reset: '\x1b[0m',
@@ -107,6 +110,10 @@ function runPackSmokeCheck(): CheckResult {
 
       if (pkgPath === 'packages/layers/cli') {
         const consumer = mkdtempSync(join(tmp, 'cli-consumer-'));
+        writeFileSync(
+          join(consumer, 'package.json'),
+          JSON.stringify({ name: 'narada-cli-pack-smoke', private: true }, null, 2),
+        );
         const install = runCommand(
           `pnpm add --prefer-offline --ignore-scripts ${JSON.stringify(join(tmp, after[0]))}`,
           consumer,
@@ -121,7 +128,7 @@ function runPackSmokeCheck(): CheckResult {
       }
     }
 
-    log('  ✓ All packages produced tarballs', 'green');
+    log('  ✓ All packages produced tarballs and the CLI installed in isolation', 'green');
     return { name: 'Pack smoke check', passed: true };
   } finally {
     rmSync(tmp, { recursive: true, force: true });
@@ -130,6 +137,27 @@ function runPackSmokeCheck(): CheckResult {
 
 function runChecks(): CheckResult[] {
   const checks: CheckResult[] = [];
+
+  log('\n📋 Checking canonical publication manifest...', 'blue');
+  const publicationManifestValid = publicationManifest.schema === 'narada.npm_publication_packages.v1'
+    && publicationManifest.packages.length > 0
+    && publicationManifest.packages.every(({ name, path }) => {
+      const manifest = packageJson(path);
+      return manifest.name === name && manifest.private !== true;
+    });
+  checks.push({
+    name: 'Canonical publication manifest is valid',
+    passed: publicationManifestValid,
+    error: publicationManifestValid
+      ? undefined
+      : `Invalid package identity or private package in ${PUBLICATION_MANIFEST_PATH}`,
+  });
+  log(
+    publicationManifestValid
+      ? '  ✓ Canonical publication package identities are valid'
+      : '  ✗ Canonical publication manifest is invalid',
+    publicationManifestValid ? 'green' : 'red',
+  );
 
   if (!PACK_ONLY) {
     log('\n📋 Running tests...', 'blue');
