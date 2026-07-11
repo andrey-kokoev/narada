@@ -7,11 +7,13 @@ import JsonBlockPart from './JsonBlockPart.vue';
 import MarkdownTextPart from './MarkdownTextPart.vue';
 import MermaidDiagramPart from './MermaidDiagramPart.vue';
 import PlainTextPart from './PlainTextPart.vue';
-import { parseMessageContent, type MessageRenderPart } from '../../lib/messageContent';
+import { buildMessageContentPipeline, rendererKeyFor } from '../../lib/contentPipeline';
+import type { MessageRenderKind, MessageRenderPart } from '../../lib/messageContent';
 
 const props = defineProps<{ content: unknown; sessionId?: string | null }>();
 const emit = defineEmits<{ 'intent-selected': [intent: string] }>();
-const parts = computed(() => parseMessageContent(props.content));
+const pipeline = computed(() => buildMessageContentPipeline(props.content));
+const parts = computed(() => pipeline.value.parts);
 const CONTENT_RENDERERS = {
   plain_text: PlainTextPart,
   markdown: MarkdownTextPart,
@@ -23,7 +25,7 @@ const CONTENT_RENDERERS = {
 } as const;
 
 function rendererFor(part: MessageRenderPart) {
-  return CONTENT_RENDERERS[part.kind] ?? PlainTextPart;
+  return CONTENT_RENDERERS[rendererKeyFor(part)] ?? PlainTextPart;
 }
 </script>
 

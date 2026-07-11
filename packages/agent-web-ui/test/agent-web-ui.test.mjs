@@ -399,6 +399,8 @@ test('Vue operator components expose composer without hidden privileged controls
   const sessionPanels = await readFile(new URL('../src/app/composables/useSessionPanels.ts', import.meta.url), 'utf8');
   const input = await readFile(new URL('../src/app/composables/useOperatorInput.ts', import.meta.url), 'utf8');
   const app = await readFile(new URL('../src/app/App.vue', import.meta.url), 'utf8');
+  const contentPipeline = await readFile(new URL('../src/app/lib/contentPipeline.ts', import.meta.url), 'utf8');
+  const messageContent = await readFile(new URL('../src/app/components/content/MessageContent.vue', import.meta.url), 'utf8');
   const sessionState = await readFile(new URL('../src/app/composables/useSessionState.ts', import.meta.url), 'utf8');
   const siteInfo = await readFile(new URL('../src/app/components/SiteInfoPanel.vue', import.meta.url), 'utf8');
   const mailboxPanel = await readFile(new URL('../src/app/components/MailboxPanel.vue', import.meta.url), 'utf8');
@@ -627,6 +629,12 @@ test('Vue operator components expose composer without hidden privileged controls
   assert.match(mcpInventory, /arrayField\(mcp, 'tools'\)/);
   assert.match(surfaceAffordances, /session_surface_affordances/);
   assert.match(surfaceAffordances, /stringField\(record, 'surface_kind'\)/);
+  assert.match(contentPipeline, /The browser content boundary/);
+  assert.match(contentPipeline, /MESSAGE_RENDERER_KINDS/);
+  assert.match(contentPipeline, /buildMessageContentPipeline/);
+  assert.match(contentPipeline, /rendererKeyFor/);
+  assert.match(messageContent, /buildMessageContentPipeline/);
+  assert.match(messageContent, /rendererKeyFor\(part\)/);
   assert.doesNotMatch(composer, /command\.execute|conversation\.interrupt/i);
   assert.match(boxVisibilitySelector, /:aria-label="`Choose \$\{props\.triggerLabel \?\? 'boxes'\}`"/);
   assert.match(boxVisibilitySelector, /box-visibility-selector-icon/);
@@ -981,7 +989,8 @@ test('Vue message content renderer has typed parts, inline code, and lazy Mermai
   assert.match(eventRow, /v-if="verbosity !== 'conversation'" class="event-kind"/);
   assert.match(projectionSelect, /conversation: 'Chat'/);
   assert.match(projectionSelect, /aria-label="View"/);
-  assert.match(messageContent, /parseMessageContent/);
+  assert.match(messageContent, /buildMessageContentPipeline/);
+  assert.match(messageContent, /rendererKeyFor/);
   assert.match(parser, /normalizeTextPart/);
   assert.match(parser, /markdown\|md/);
   for (const renderKind of ['plain_text', 'markdown', 'code_block', 'mermaid_diagram', 'json_block', 'intent_ref']) {
