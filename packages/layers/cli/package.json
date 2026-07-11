@@ -38,13 +38,15 @@
     "access": "public"
   },
   "scripts": {
+    "prebuild": "pnpm --filter @narada2/ui build",
     "build": "tsc && node scripts/write-build-manifest.mjs",
     "typecheck": "tsc --noEmit",
+    "pretest": "pnpm --filter @narada2/ui build",
     "test": "node scripts/run-vitest-quiet.mjs run --silent && pnpm run test:realfs",
     "test:launcher": "pnpm run build && node scripts/run-vitest-quiet.mjs run --silent test/commands/carrier-launcher.test.ts test/commands/launcher-workspace-plan.test.ts test/commands/nars.test.ts && pnpm run test:realfs",
     "test:launcher-acceptance": "pnpm run build && node --import tsx --test --test-concurrency=1 test/integration/operator-launch-journey.test.mjs test/integration/workspace-selection-ui-e2e.test.mjs",
     "test:operator-projection-open": "node scripts/run-vitest-quiet.mjs run --silent test/commands/nars.test.ts test/commands/launcher-workspace-plan.test.ts test/lib/browser-render.test.ts test/commands/task-graph.test.ts",
-    "test:realfs": "node --import tsx --test test/integration/*.test.mjs",
+    "test:realfs": "pnpm --filter @narada2/ui build && node --import tsx --test test/integration/*.test.mjs",
     "coverage": "vitest run --coverage"
   },
   "dependencies": {
@@ -72,6 +74,7 @@
     "@narada2/site-paths": "workspace:*",
     "@narada2/site-registry-cloudflare": "workspace:*",
     "@narada2/task-governance-core": "workspace:*",
+    "@narada2/ui": "workspace:*",
     "@narada2/windows-site": "workspace:*",
     "chalk": "^5.6.2",
     "cli-progress": "^3.12.0",

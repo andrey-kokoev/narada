@@ -1,0 +1,38 @@
+{
+  "name": "@narada2/ui-vue",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts",
+    "./components.css": "./src/components.css",
+    "./styles.css": "./src/styles.css",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "src",
+    "README.md",
+    "components.json"
+  ],
+  "scripts": {
+    "typecheck": "vue-tsc --noEmit -p tsconfig.json",
+    "pretest": "pnpm --filter @narada2/ui build",
+    "test": "pnpm run typecheck && vite build --config test/vite.config.mjs && node --test test/ui-vue.test.mjs"
+  },
+  "dependencies": {
+    "@narada2/ui": "workspace:*",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "reka-ui": "^2.8.0",
+    "tailwind-merge": "^3.4.0",
+    "vue": "^3.5.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.18",
+    "@vitejs/plugin-vue": "^6.0.7",
+    "shadcn-vue": "^2.4.3",
+    "tailwindcss": "^4.1.18",
+    "vite": "^8.1.1",
+    "vue-tsc": "^2.2.0"
+  }
+}

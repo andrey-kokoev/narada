@@ -27,8 +27,11 @@
     "./package.json": "./package.json"
   },
   "scripts": {
+    "prebuild": "pnpm --filter @narada2/ui build",
     "build": "vite build",
-    "test": "node --test test/agent-web-ui.test.mjs test/agent-web-ui-projection.test.mjs test/agent-web-ui-protocol.test.mjs",
+    "test": "node --test test/agent-web-ui.test.mjs test/agent-web-ui-projection.test.mjs test/agent-web-ui-protocol.test.mjs && pnpm run test:unit",
+    "test:unit": "vitest run --config vitest.config.mjs",
+    "test:unit:coverage": "vitest run --config vitest.config.mjs --coverage",
     "test:browser": "pnpm run test:e2e",
     "test:live:slash-commands": "pnpm run build && playwright test test/e2e/live-slash-smoke.spec.js",
     "test:live:speech-audio": "pnpm run build && node --test test/agent-web-ui-live-speech-audio-projection-e2e.mjs",
@@ -45,28 +48,30 @@
     "@narada2/cloudflare-nars-projection": "workspace:*",
     "@narada2/nars-client-projection-contract": "workspace:*",
     "@narada2/site-paths": "workspace:*",
-    "class-variance-authority": "^0.7.1",
-    "clsx": "^2.1.1",
+    "@narada2/ui": "workspace:*",
+    "@narada2/ui-vue": "workspace:*",
     "lucide-vue-next": "^0.563.0",
     "markdown-it": "^14.2.0",
     "mermaid": "^11.16.0",
-    "reka-ui": "^2.8.0",
-    "tailwind-merge": "^3.4.0",
     "vue": "^3.5.0"
   },
   "devDependencies": {
     "@narada2/agent-cli": "workspace:*",
     "@narada2/agent-runtime-server": "workspace:*",
     "@narada2/process-launch-posture": "workspace:*",
+    "@playwright/test": "^1.61.1",
     "@tailwindcss/vite": "^4.1.18",
     "@types/markdown-it": "^14.1.2",
     "@vitejs/plugin-vue": "^6.0.7",
+    "@vitest/coverage-v8": "^1.6.1",
+    "@vue/compiler-sfc": "^3.5.39",
+    "@vue/test-utils": "^2.4.11",
+    "jsdom": "^26.1.0",
     "postcss": "^8.5.16",
-    "shadcn-vue": "^2.4.3",
     "tailwindcss": "^4.1.18",
     "type-fest": "^4.41.0",
     "vite": "^8.1.1",
-    "vue-tsc": "^2.2.0",
-    "@playwright/test": "^1.61.1"
+    "vitest": "^1.6.1",
+    "vue-tsc": "^2.2.0"
   }
 }
