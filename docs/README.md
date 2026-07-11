@@ -18,12 +18,23 @@ Semantic and architecture-boundary concepts. These documents define how the syst
 - [`system.md`](concepts/system.md) — System architecture and data flow overview
 - [`mailbox-knowledge-model.md`](concepts/mailbox-knowledge-model.md) — Knowledge placement, proof vs knowledge, and playbook examples
 
+## `architecture/`
+
+Implementation-facing architecture and ownership contracts.
+
+- [`agent-web-ui-architecture.md`](architecture/agent-web-ui-architecture.md) — Agent Web UI layers, ownership boundaries, target source shape, and migration seams
+- [`agent-web-ui2-parity.md`](architecture/agent-web-ui2-parity.md) — Requirement-by-requirement production replacement matrix for Agent Web UI2
+- [`agent-web-ui-command-ux.md`](architecture/agent-web-ui-command-ux.md) — Browser command palette and slash-command UX target
+- [`nars-session-input-contract.md`](architecture/nars-session-input-contract.md) — NARS session input and operator command boundary
+
 ## `product/`
 
 User-facing product proofs, onboarding, operator loop, and runbooks. These are the documents an operator reads to understand what Narada does and how to use it.
 
 - [`bootstrap-contract.md`](product/bootstrap-contract.md) — Canonical intent-to-operation bootstrap path
-- [`first-time-operator-success-path.md`](product/first-time-operator-success-path.md) — First-time Operator path across Operation, Site, role, surface, intake, work-next, and readiness
+- [`first-time-operator-success-path.md`](product/first-time-operator-success-path.md) — Canonical first-time Windows/User Site onboarding plus the advanced operation path
+- [`cascading-onboarding.md`](product/cascading-onboarding.md) — Site capability and readiness cascade after structural bootstrap
+- [`inhabited-onboarding.md`](product/inhabited-onboarding.md) — Post-bootstrap proof that a Site can carry representative operations
 - [`agent-reconstruction-specification.md`](product/agent-reconstruction-specification.md) — Agent-readable reconstruction path for blocked/internal environments
 - [`site-bootstrap-contract.md`](product/site-bootstrap-contract.md) — Canonical Site first-run path (realization/runtime locus setup)
 - [`site-qualification-policy.md`](product/site-qualification-policy.md) — Site-level role/principal qualification and requalification policy
@@ -38,6 +49,16 @@ User-facing product proofs, onboarding, operator loop, and runbooks. These are t
 - [`operational-trial-setup-contract.md`](product/operational-trial-setup-contract.md) — Setup prerequisites and repo layout
 - [`day-2-mailbox-hardening.md`](product/day-2-mailbox-hardening.md) — Day-2 mailbox failure modes and hardening
 - [`mailbox-scenario-library.md`](product/mailbox-scenario-library.md) — Canonical conversational scenario basis
+
+## Onboarding Scope Map
+
+These terms describe different crossings and are not interchangeable:
+
+- **Personal User Site onboarding**: the first-time Windows path for starting one `resident` General assistant without creating project infrastructure. Start with [`first-time-operator-success-path.md`](product/first-time-operator-success-path.md#user-first-windows-onboarding-ux).
+- **Operation bootstrap**: declaring and preparing governed work in an ops repo. Start with [`bootstrap-contract.md`](product/bootstrap-contract.md).
+- **Site bootstrap**: creating an explicit runtime Site boundary for a project, client, PC, or other earned locus. Start with [`site-bootstrap-contract.md`](product/site-bootstrap-contract.md).
+- **Cascading onboarding**: recording progressively stronger Site capability and readiness layers. See [`cascading-onboarding.md`](product/cascading-onboarding.md).
+- **Inhabited onboarding**: proving that a bootstrapped Site can carry representative operations through its boundaries. See [`inhabited-onboarding.md`](product/inhabited-onboarding.md).
 
 ## `deployment/`
 

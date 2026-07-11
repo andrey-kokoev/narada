@@ -1,8 +1,8 @@
 # Narada Quickstart
 
-Three paths from zero to a running operation: show me, try safely, go live.
+Choose the route that matches your goal. A first-time Windows user who wants a personal assistant should start with the User Site path. The operation paths below are for declaring governed work.
 
-For the full bootstrap contract (artifact expectations, validation gates, and path diagrams), see [`docs/bootstrap-contract.md`](docs/bootstrap-contract.md).
+For the full bootstrap contract (artifact expectations, validation gates, and path diagrams), see [`docs/product/bootstrap-contract.md`](docs/product/bootstrap-contract.md).
 
 ## Install
 
@@ -19,9 +19,35 @@ pnpm install
 pnpm build
 ```
 
-## First-Run Paths
+## Personal User Site — first-time Windows path
 
-Narada offers three entry paths, ordered from safest to live. Each maps to the five-step bootstrap contract.
+This is the recommended starting point when you do not yet have a project, mailbox operation, or separate Site to configure.
+
+From PowerShell:
+
+```powershell
+Pwsh -File "$env:USERPROFILE\Narada\Start-NaradaWorkspace.ps1" -Onboarding
+```
+
+Or, from an installed CLI:
+
+```powershell
+narada onboarding start --platform windows --scope user-site --interactive
+```
+
+The path locates or creates the User Site, starts one `resident` General assistant, and opens the available operator surface. Send one human request, then verify the first-use proof:
+
+```powershell
+narada onboarding status --scope user-site
+```
+
+The status should show a healthy resident session, successful identity hydration, admitted operator input, and a useful or explicit no-work response. Role expansion is optional and requires explicit approval. Use `narada demo` instead when you want to explore without credentials or live setup.
+
+Detailed contract: [`docs/product/first-time-operator-success-path.md`](docs/product/first-time-operator-success-path.md#user-first-windows-onboarding-ux).
+
+## Operation Paths
+
+These paths are for shaping and running a governed operation. They are not prerequisites for the personal User Site path. Each maps to the five-step bootstrap contract.
 
 ### 1. Show me — zero setup
 
@@ -202,7 +228,7 @@ See [`docs/product/site-bootstrap-contract.md`](docs/product/site-bootstrap-cont
 
 ## What's Next
 
-- Read [`docs/bootstrap-contract.md`](docs/bootstrap-contract.md) for the canonical artifact and validation reference
+- Read [`docs/product/bootstrap-contract.md`](docs/product/bootstrap-contract.md) for the canonical artifact and validation reference
 - Read the [kernel lawbook](packages/layers/control-plane/docs/00-kernel.md) to understand the generalized architecture
 - Browse [AGENTS.md](AGENTS.md) for contributor navigation
 - Explore `.ai/do-not-open/tasks/` for design specs and future work

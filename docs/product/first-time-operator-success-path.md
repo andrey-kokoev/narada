@@ -2,7 +2,15 @@
 
 This is the canonical path for a first-time Operator to move from fresh materialization to usable Narada work without documentation spelunking.
 
-The path is deliberately explicit about authority-affecting crossings. Each crossing has a command family that should own the mutation or observation. Later ergonomics work should expose this path as one front door, but not hide the crossings.
+The path is deliberately explicit about authority-affecting crossings. Each crossing has a command family that should own the mutation or observation. The User Site onboarding path and the operation-specific path each have one front door; neither front door hides the crossings.
+
+## Choose the Path
+
+If you are a first-time Windows user who wants a personal assistant, go directly to [User-First Windows Onboarding UX](#user-first-windows-onboarding-ux). Its front door is the User Site resident-first path; you do not need to create an ops repo, Project Site, PC Site, or remote Site first.
+
+If you already have a User Site and want to declare or run governed work, use the [Full Operation Path](#full-operation-path). The operation path is intentionally more detailed because it covers intake, Site selection, role binding, work selection, and effect proof.
+
+The related terms have distinct scopes: **Personal User Site onboarding** starts one general assistant; **operation bootstrap** declares governed work; **Site bootstrap** creates an explicit runtime boundary; **cascading onboarding** records readiness layers; and **inhabited onboarding** proves representative operation through a Site.
 
 ## Substrate Evidence Boundary
 
@@ -14,7 +22,21 @@ First-time Operator guidance should therefore point new Operators to the Windows
 
 ## Success Definition
 
-A first-time Operator succeeds when they can:
+There are two valid success targets, and the simpler personal target is the default.
+
+### Personal User Site success
+
+A first-time Windows user succeeds when they can:
+
+1. start one healthy User Site `resident` assistant;
+2. see successful identity hydration;
+3. submit one human operator request;
+4. receive a useful or explicit no-work response; and
+5. read durable readiness evidence without inspecting raw runtime state.
+
+### Operation success
+
+An Operator taking the operation-specific path succeeds when they can:
 
 1. declare the work Aim as an Operation Specification;
 2. materialize or select the Site/runtime locus that will host the work;
@@ -25,7 +47,9 @@ A first-time Operator succeeds when they can:
 7. run one representative loop through readiness proof and trace;
 8. see residual blockers and next commands without reading raw SQLite, task files, or full lifecycle snapshots.
 
-## Canonical Path
+## Full Operation Path
+
+This is the complete operation-specific path after the Operator has a User Site and wants to declare or run a particular operation. It is not the default first-time User Site path described below.
 
 | Step | Operator intent | Governed crossing | Command family | Evidence |
 | --- | --- | --- | --- | --- |
@@ -64,9 +88,9 @@ Failures must return bounded repair commands instead of pushing the Operator tow
 | No admitted work | Return no-work reason with blockers | `narada task workboard --format json`, `narada work-next --format json` |
 | Deferred dependency | Require explicit unblock evidence | `narada task unblock <n> --agent <id> --evidence <text> --rationale <text>` |
 
-## Ergonomic Front Door
+## Operation-Specific Front Door
 
-The first-time Operator front door is:
+For an already selected Site and Operation, the operation-specific front door is:
 
 ```bash
 narada operator start --site <site-id-or-root> --operation <operation-id> --format json
@@ -87,6 +111,127 @@ pnpm --dir packages/layers/cli exec vitest run test/commands/operator.test.ts --
 ```
 
 Observed result for the onboarding proof: the fixture walks from an absent Site to a configured Site with missing role binding, then to a fully idle Site with a bound architect identity. It asserts bounded JSON fields, explicit blockers, precise unblock commands, governance coordinates, and final next-work guidance.
+
+## User-First Windows Onboarding UX
+
+Status: target UX contract with a CLI first slice implemented. The PowerShell handoff, resident-first launch, deterministic defaults, demo fallback, and NARS-backed first-use status projection exist; browser onboarding composition and explicit roster materialization remain surface-specific follow-up work.
+
+The default path is User Site first. A first-time user should become productive without creating a Project Site, naming a PC Site, registering a remote Site, or understanding the full Site topology.
+
+### Front Door
+
+Once the CLI is available, the canonical command is:
+
+```powershell
+narada onboarding start --platform windows --scope user-site --interactive
+```
+
+The one-time PowerShell bootstrapper may install or locate the CLI and create or locate the User Site, then hand off to this command. It must not own onboarding policy, runtime selection, MCP assembly, provider logic, or terminal orchestration.
+
+The installed Windows handoff is equivalent:
+
+```powershell
+Pwsh -File "$env:USERPROFILE\Narada\Start-NaradaWorkspace.ps1" -Onboarding
+```
+
+`-Onboarding` is the thin bootstrap path. Explicit Site, role, operator-surface, runtime, and provider selection remains on the advanced workspace launcher path.
+
+The first screen should ask only:
+
+1. `Where do you want to work?` — when only the User Site exists, preselect `Personal workspace` and do not present a Site decision. If other Sites are already known, expose `Choose another workspace` as a secondary action.
+2. `Start your assistant?` — primary action: `Start my assistant`. Show `General assistant` with technical role id `resident` as secondary detail.
+
+The screen should show the resolved defaults in a non-interactive summary:
+
+```text
+Workspace: Personal workspace
+Assistant: General assistant
+Surface: Browser (terminal fallback)
+Intelligence: Registry default (resolved provider)
+Local setup: Ready
+```
+
+Runtime host, operator surface, provider, MCP scope, and local execution details are available under `Advanced launch options`; they are not first-time decisions. Every displayed combination must come from the admitted capability matrix.
+
+### Default Resolution
+
+Default resolution is deterministic and visible:
+
+- use the User Site resident identity;
+- use the managed local execution host without asking the user to create a named PC Site;
+- prefer the best available operator surface, with browser projection first when available and terminal fallback otherwise;
+- prefer an already authenticated subscription or configured provider;
+- offer demo/no-provider mode when the user has not yet declared live work;
+- ask for one provider choice only when no usable default exists.
+
+The local execution host is machine-local infrastructure. It may have a durable PC-locus binding, but that binding is not presented as a required Site choice and never becomes User Site authority. Provider secrets remain in User Site SecretManagement/SecretStore state and never enter Site config, launch artifacts, logs, or chat.
+
+### First Useful Session
+
+The first launch creates exactly one `resident` identity for the selected User Site. The UI uses the human label `General assistant`; `resident` is secondary technical detail.
+
+The onboarding proof is complete only when the user sees:
+
+1. a healthy session;
+2. identity hydration succeeded;
+3. the input is ready;
+4. one operator message was admitted;
+5. one useful response or explicit no-work response; and
+6. durable readiness or checkpoint evidence.
+
+The first prompt should be human-facing, such as `What would you like to work on?`, not `startup_sequence {}` or an MCP tool name. Technical startup events remain available in diagnostics.
+
+After the Operator sends the first request, the bounded readiness readback is:
+
+```powershell
+narada onboarding status --scope user-site
+```
+
+The status command correlates the resident launch session binding with the Site-local NARS session index, probes `/health`, and reads a bounded tail of the session `events.jsonl` projection. It reports healthy session, identity hydration evidence from a successful startup tool result, input readiness, an operator-sourced admitted input, and a useful or explicit no-work response. It writes only non-secret readiness evidence to `.narada/runtime/onboarding/user-site-onboarding.json`; it never copies provider output or credentials into that artifact. A legacy state without an exact launch/session binding remains pending until the operator supplies `--session`.
+
+### Contextual Role Expansion
+
+After the first useful interaction, the CLI first slice may recommend role expansion when the current roster has no suitable
+planning or implementation role. The recommendation is gated by verified first use and is always an explicit operator choice.
+The CLI does not infer a Site policy or silently interpret the user's request as authorization; a surface that has those
+additional evidence sources may add them before presenting the same affordance.
+
+The recommendation is a single durable affordance, not a recurring chat interruption:
+
+> You are working in a resident-only workspace. Add planning and implementation roles?
+
+The primary actions are `Add recommended roles`, `Keep resident only`, and `Not now`. The UI may show `Planning (architect)` and `Implementation (builder)` as outcome-first labels. Adding roles always requires explicit Operator confirmation and produces a preview of the roster changes. `Not now` is remembered and suppresses repetition until the user asks for role expansion.
+
+The current CLI approval boundary is explicit and non-destructive:
+
+```powershell
+narada onboarding roles approve --scope user-site --confirm
+```
+
+It records the Operator's approval and a role preview in the User Site onboarding state, but does not silently mutate the launch registry or start additional roles. Roster materialization remains a separate governed crossing.
+
+The role progression is:
+
+```text
+user_site_ready
+  -> resident_session_ready
+  -> first_work_verified
+  -> role_posture_reviewed
+  -> optional architect/builder roster expansion
+```
+
+### Deferred Expansion
+
+After first-use verification, the user can explicitly expand into:
+
+- a Project Site when work becomes repository-specific;
+- a named PC Site when machine-local administration needs a user-visible boundary;
+- a remote or Cloudflare Site when authority must move across machines; or
+- a scheduled Site when unattended cycles are required.
+
+Each expansion is a separate, explained crossing. None is required for the User Site resident path.
+
+This UX is a projection over the existing launcher and runtime contracts, not a second launcher implementation. The full Site/role/surface/runtime/provider selector remains available as an advanced path for experienced Operators.
 
 ## Verification Rule
 

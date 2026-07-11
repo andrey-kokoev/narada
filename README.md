@@ -90,14 +90,42 @@ pnpm add @narada2/control-plane
 
 ## First-Run Paths
 
-Narada offers three entry paths, ordered from safest to live:
+There are two different first-run goals: becoming productive in a personal workspace, or declaring a governed operation.
+
+### Personal User Site — recommended for a first-time Windows user
+
+If you want a general assistant and do not yet have a project or operation to configure, start with the User Site. Do not create a Project Site or ops repo first.
+
+From PowerShell:
+
+```powershell
+Pwsh -File "$env:USERPROFILE\Narada\Start-NaradaWorkspace.ps1" -Onboarding
+```
+
+From an installed CLI:
+
+```powershell
+narada onboarding start --platform windows --scope user-site --interactive
+```
+
+This path locates or creates the personal User Site, starts one `resident` General assistant, and opens the available operator surface. After sending one human request, verify readiness with:
+
+```powershell
+narada onboarding status --scope user-site
+```
+
+See [`docs/product/first-time-operator-success-path.md`](docs/product/first-time-operator-success-path.md#user-first-windows-onboarding-ux) for the complete flow, expected evidence, provider readiness, and role-expansion boundary. Use `narada demo` when you want a no-credential introduction instead.
+
+### Other first-run paths
+
+These paths are for operation shaping or explicit Site administration, not for the simplest personal first use:
 
 | Path | Command | What it gives you |
 |------|---------|-------------------|
 | **Show me** | `narada demo` | Zero-setup taste with synthetic data. No credentials, no config, no files created. |
 | **Try safely** | `narada init-repo --demo ~/src/my-tryout` | A non-live trial repo with a mock-backed operation. Explore the full shaping workflow without touching any external system. |
 | **Go live** | `narada init-repo ~/src/my-ops` | A real ops repo. Declare a mailbox, add credentials, preflight, activate, and run. |
-| **Site bootstrap** | `narada sites init <id> --substrate <name>` | Create a runtime Site on your local machine (Windows, macOS, or Linux). Composes with operation bootstrap. |
+| **Site bootstrap** | `narada sites init <id> --substrate <name>` | Create an explicit runtime Site on your local machine (Windows, macOS, or Linux). Use after the personal path when a separate Site boundary is earned. |
 
 See [QUICKSTART.md](QUICKSTART.md) for the full gold-path guide.
 
@@ -107,6 +135,7 @@ Narada can be consumed as runnable software, reference doctrine, or an agent rec
 
 | Reader | Route | Start Here |
 | --- | --- | --- |
+| First-time Windows user | You want a general assistant without creating project infrastructure. | `Start-NaradaWorkspace.ps1 -Onboarding`, then [`docs/product/first-time-operator-success-path.md`](docs/product/first-time-operator-success-path.md#user-first-windows-onboarding-ux). |
 | Runnable evaluator | You can install packages and run local commands. | `narada demo`, then `narada init-repo --demo ~/src/my-tryout`. |
 | Live operator | You can provide credentials and run an operation. | `narada init-repo ~/src/my-ops`, then [`docs/product/bootstrap-contract.md`](docs/product/bootstrap-contract.md). |
 | Architect / doctrine reader | You cannot or do not want to run code yet. | [`docs/concepts/system.md`](docs/concepts/system.md), [`SEMANTICS.md`](SEMANTICS.md), [`packages/layers/control-plane/docs/00-kernel.md`](packages/layers/control-plane/docs/00-kernel.md). |
@@ -116,6 +145,14 @@ Narada can be consumed as runnable software, reference doctrine, or an agent rec
 If you cannot run this repo, do not treat package names or file layout as the essence of Narada. Preserve the invariants: governed crossings, zone authority, intelligence-authority separation, explicit admission, durable evidence, intent before execution, confirmation after execution, projections not authority, capability/secret separation, and Site factorization.
 
 ## CLI Commands
+
+### Personal User Site
+
+| Command | Description |
+|---------|-------------|
+| `onboarding start --platform windows --scope user-site --interactive` | Start the personal User Site resident-first onboarding path. |
+| `onboarding status --scope user-site` | Verify the launched resident session and first useful interaction. |
+| `onboarding roles approve --scope user-site --confirm` | Record explicit approval for recommended roles without silently materializing them. |
 
 ### Operation Shaping (ops-kit)
 
