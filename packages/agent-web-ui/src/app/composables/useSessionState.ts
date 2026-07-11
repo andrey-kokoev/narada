@@ -1,28 +1,49 @@
 import type { Ref } from 'vue';
+import { useHealthStatus } from './useHealthStatus';
+import { useNarsConnection, type NarsConnectionConfig } from './useNarsConnection';
 import { useNarsEvents, type SessionIdentitySummary } from './useNarsEvents';
-import type { HealthIdentitySummary } from './useHealthStatus';
 import type { ProjectionVerbosity } from './useProjectionVerbosity';
 import { useRetainedEvents } from './useRetainedEvents';
 
+export interface SessionStateConfig extends NarsConnectionConfig {
+  healthEndpoint: string | null;
+  maxRetainedEvents?: number;
+}
+
 /**
- * The browser-owned session boundary. Runtime events enter through this state
- * and all view projections are derived from its retained event sequence.
+ * The browser-owned session boundary. Runtime events, transport state, health,
+ * identity, active-turn state, bounded retention, and all view projections
+ * enter and leave through this controller.
  */
 export function useSessionState(
   verbosity: Ref<ProjectionVerbosity>,
-  healthIdentity?: Ref<HealthIdentitySummary>,
+  config: SessionStateConfig,
 ) {
-  const retained = useRetainedEvents();
-  const projection = useNarsEvents(retained.events, verbosity, healthIdentity);
+  const retained = useRetainedEvents(config.maxRetainedEvents);
+  const connection = useNarsConnection(
+    {
+      eventEndpoint: config.eventEndpoint,
+      healthEndpoint: config.healthEndpoint,
+      inputEndpoint: config.inputEndpoint,
+      browserToken: config.browserToken,
+      maxReplay: config.maxReplay,
+    },
+    retained.retain,
+    retained.retainMany,
+  );
+  const health = useHealthStatus({
+    endpoint: config.healthEndpoint,
+    browserToken: config.browserToken ?? null,
+    transport: connection.connection.value ?? undefined,
+  });
+  const projection = useNarsEvents(retained.events, verbosity, health.identity, health.body);
 
   return {
     ...retained,
     ...projection,
-  } satisfies ReturnType<typeof useRetainedEvents> & {
-    sessionIdentity: ReturnType<typeof useNarsEvents>['sessionIdentity'];
-    rows: ReturnType<typeof useNarsEvents>['rows'];
-    summarizedStateSampleCount: ReturnType<typeof useNarsEvents>['summarizedStateSampleCount'];
-    projection: ReturnType<typeof useNarsEvents>['projection'];
+    health,
+    connection,
+    streamText: connection.streamText,
   };
 }
 

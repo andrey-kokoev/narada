@@ -6,6 +6,12 @@ import { appendEvent } from '../src/render.js';
 import { refreshHttpHealthStatus } from '../src/health.js';
 import { createSessionProjection } from '../src/session-projection.js';
 import {
+  TURN_ACTIVITY_PHASES,
+  createTurnActivityState,
+  materializeTurnActivity,
+  reduceTurnActivity,
+} from '../src/session-projection-activity.js';
+import {
   projectRuntimeEvent,
   reconnectDelayForAttempt,
   resolveAttachConfig,
@@ -68,11 +74,64 @@ function createProjectionDocument({ withNarsConfig = false } = {}) {
   return { elements, documentRef };
 }
 
+function descendantsWithClass(node, className, matches = []) {
+  if (!node || typeof node !== 'object') return matches;
+  if (String(node.className ?? '').split(/\s+/).includes(className)) matches.push(node);
+  for (const child of node.children ?? []) descendantsWithClass(child, className, matches);
+  return matches;
+}
+
 test('event stream reconnect uses bounded backoff and visible disconnected duration', () => {
   assert.equal(reconnectDelayForAttempt(1), 1000);
   assert.equal(reconnectDelayForAttempt(2), 2000);
   assert.equal(reconnectDelayForAttempt(5), 10000);
   assert.equal(reconnectDelayForAttempt(20), 10000);
+});
+
+test('turn activity reducer exposes the canonical queued, thinking, tool, and idle phases', () => {
+  const state = createTurnActivityState();
+  reduceTurnActivity(state, { event: 'operator_input_submitted', timestamp: '2026-07-11T12:00:00.000Z' });
+  assert.equal(state.state, TURN_ACTIVITY_PHASES.QUEUED);
+  reduceTurnActivity(state, { event: 'turn_started', turn_id: 'turn-1', agent_id: 'resident', timestamp: '2026-07-11T12:00:01.000Z' });
+  assert.equal(state.state, TURN_ACTIVITY_PHASES.THINKING);
+  assert.equal(state.activeTurnId, 'turn-1');
+  reduceTurnActivity(state, { event: 'tool_call', tool_name: 'narada.test', timestamp: '2026-07-11T12:00:02.000Z' });
+  assert.equal(state.state, TURN_ACTIVITY_PHASES.TOOL);
+  reduceTurnActivity(state, { event: 'tool_result', tool_name: 'narada.test', status: 'ok', timestamp: '2026-07-11T12:00:03.000Z' });
+  assert.equal(state.state, TURN_ACTIVITY_PHASES.THINKING);
+  reduceTurnActivity(state, { event: 'turn_complete', turn_id: 'turn-1', timestamp: '2026-07-11T12:00:04.000Z' });
+  assert.deepEqual(materializeTurnActivity(state, Date.parse('2026-07-11T12:00:05.000Z')), {
+    active: false,
+    state: TURN_ACTIVITY_PHASES.IDLE,
+    label: 'Idle',
+    detail: null,
+    elapsedSeconds: 0,
+    startedAtMs: null,
+    activeTurnId: null,
+  });
+});
+
+test('session projection reconciles incomplete replay from the runtime health snapshot', () => {
+  const running = createSessionProjection([], {
+    nowMs: Date.parse('2026-07-11T12:01:05.000Z'),
+    healthSnapshot: {
+      active_turn_state: 'running',
+      active_turn_id: 'turn-health',
+      agent_id: 'resident',
+      provider: 'codex-subscription',
+      timestamp: '2026-07-11T12:01:00.000Z',
+    },
+  });
+  assert.equal(running.activity.active, true);
+  assert.equal(running.activity.state, TURN_ACTIVITY_PHASES.THINKING);
+  assert.equal(running.activity.activeTurnId, 'turn-health');
+
+  const idle = createSessionProjection([{ event: 'turn_started', turn_id: 'turn-stale', timestamp: '2026-07-11T12:00:00.000Z' }], {
+    nowMs: Date.parse('2026-07-11T12:01:05.000Z'),
+    healthSnapshot: { active_turn_state: 'idle' },
+  });
+  assert.equal(idle.activity.active, false);
+  assert.equal(idle.activity.activeTurnId, null);
 });
 
 test('HTTP health renderer prefers scoped agent identity ref for status text', async () => {
@@ -305,6 +364,26 @@ test('DOM renderer projects audio artifact references as explicit audio controls
   assert.equal(audio.controls, true);
   assert.equal(audio.preload, 'metadata');
   assert.equal(audio.src, '/sessions/sessions/carrier_test/artifacts/art_audio_1/content');
+});
+
+test('DOM compatibility renderer consumes canonical structured content kinds', () => {
+  const { elements, documentRef } = createProjectionDocument();
+  appendEvent({
+    event_sequence: 79,
+    sequence: 79,
+    event: 'assistant_message',
+    agent_id: 'resident',
+    session_id: 'carrier_test',
+    request_id: 'canonical_parts',
+    content: [
+      { type: 'code', language: 'mermaid', text: 'flowchart TD\n  A --> B' },
+      { type: 'intent_ref', intent: 'entity_number:dismiss', label: 'Dismiss' },
+    ],
+  }, documentRef, { verbosity: 'conversation' });
+  const row = elements.get('events').children.find((child) => child?.dataset?.eventKind === 'assistant_message');
+  assert.ok(row);
+  assert.equal(descendantsWithClass(row, 'message-code-mermaid_diagram').length, 1);
+  assert.equal(descendantsWithClass(row, 'intent-ref-part').length, 1);
 });
 
 test('conversation projection preserves canonical lifecycle content without punctuation boundary guessing', () => {

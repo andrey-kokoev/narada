@@ -1,11 +1,12 @@
 import { projectRuntimeEvent, sequenceFromRuntimeMessage, shouldRenderRuntimeProjection, unwrapRuntimeEvent } from './runtime-events.js';
 import {
   IDLE_ACTIVITY,
-  applyActivityEvent,
-  createActivityAccumulator,
+  createTurnActivityState,
   createInitialHealthState,
   isRoutineHealthySessionHealth,
-  materializeActivity,
+  materializeTurnActivity,
+  reconcileTurnActivityWithHealth,
+  reduceTurnActivity,
   reduceHealthState,
 } from './session-projection-activity.js';
 import {
@@ -25,7 +26,7 @@ export function createSessionProjection(events = [], options = {}) {
     droppedStateSampleCount: 0,
   };
   const rowState = createRowProjectionState();
-  const activityState = createActivityAccumulator();
+  const activityState = createTurnActivityState();
   for (const message of events) {
     projection.rawEvents.push(message);
     reduceHealthState(projection.health, message);
@@ -36,10 +37,11 @@ export function createSessionProjection(events = [], options = {}) {
       const row = projectMessageRow(message, options, rowState);
       if (row) projection.rows = materializedRows(rowState);
     }
-    applyActivityEvent(activityState, message);
+    reduceTurnActivity(activityState, message);
   }
+  reconcileTurnActivityWithHealth(activityState, options.healthSnapshot ?? null);
   projection.rows = materializedRows(rowState);
-  projection.activity = materializeActivity(activityState, options.nowMs ?? Date.now());
+  projection.activity = materializeTurnActivity(activityState, options.nowMs ?? Date.now());
   return projection;
 }
 

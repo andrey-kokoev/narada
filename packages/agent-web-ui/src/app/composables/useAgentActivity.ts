@@ -8,6 +8,7 @@ export interface AgentActivityState {
   detail: string | null;
   elapsedSeconds: number;
   startedAtMs: number | null;
+  activeTurnId: string | boolean | null;
 }
 
 export const IDLE_ACTIVITY: AgentActivityState = {
@@ -17,6 +18,7 @@ export const IDLE_ACTIVITY: AgentActivityState = {
   detail: null,
   elapsedSeconds: 0,
   startedAtMs: null,
+  activeTurnId: null,
 };
 
 export function useAgentActivity(events: unknown[] | Ref<unknown[]>, healthBody?: Ref<Record<string, unknown> | null>) {
@@ -34,7 +36,7 @@ export function useAgentActivity(events: unknown[] | Ref<unknown[]>, healthBody?
   const activity = computed<AgentActivityState>(() => {
     const sourceEvents = Array.isArray(events) ? events : events.value;
     return reconcileActivityWithHealth(
-      normalizeActivity(createSessionProjection(sourceEvents ?? [], { nowMs: now.value }).activity),
+      normalizeActivity(createSessionProjection(sourceEvents ?? [], { nowMs: now.value, healthSnapshot: healthBody?.value ?? null }).activity),
       healthBody?.value ?? null,
     );
   });

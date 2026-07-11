@@ -1,7 +1,10 @@
 import { ref, type ShallowRef } from 'vue';
-import { buildAgentWebUiOperatorInputAction } from '@narada2/nars-client-projection-contract';
+import { buildAgentWebUiConversationSteerFrame, buildAgentWebUiOperatorInputAction } from '@narada2/nars-client-projection-contract';
 import { submitOperatorConversationText, submitOperatorInput, type AuthorityTransitionInputPolicy, type OperatorInputDeliveryMode, type ProtocolMethodSupport, type SessionFrameSender } from '../../protocol/operatorInput';
 import type { NarsClientConnection } from '../../protocol/narsClient';
+import { toSessionProtocolFrame, type SessionProtocolFrame } from '../../protocol/sessionTransport';
+
+type ActiveTurnIdReader = () => string | boolean | null;
 
 export interface OperatorQueueItem {
   index: number;
@@ -12,7 +15,7 @@ export interface OperatorQueueItem {
   created_at: string | null;
 }
 
-export function useOperatorInput(connection: ShallowRef<NarsClientConnection | null>, retain: (event: unknown) => void, clearEvents: () => void, authorityTransition: AuthorityTransitionInputPolicy | null = null, canSteerActiveTurn: () => boolean = () => Boolean(connection.value?.activeTurnId), preferSessionCore = false, supportsProtocolMethod: ProtocolMethodSupport | null = null, sendFrame: SessionFrameSender | null = null) {
+export function useOperatorInput(connection: ShallowRef<NarsClientConnection | null>, retain: (event: unknown) => void, clearEvents: () => void, authorityTransition: AuthorityTransitionInputPolicy | null = null, canSteerActiveTurn: () => boolean = () => Boolean(connection.value?.activeTurnId), preferSessionCore = false, supportsProtocolMethod: ProtocolMethodSupport | null = null, sendFrame: SessionFrameSender | null = null, activeTurnIdReader: ActiveTurnIdReader = () => connection.value?.activeTurnId ?? null) {
   const draft = ref('');
   function handleResult(result: ReturnType<typeof submitOperatorInput>, clearDraft = true): boolean {
     if (result.localEvent) {
@@ -24,16 +27,16 @@ export function useOperatorInput(connection: ShallowRef<NarsClientConnection | n
   }
 
   function submit(deliveryMode: OperatorInputDeliveryMode = 'default') {
-    return handleResult(submitOperatorInput(draft.value, connection.value, authorityTransition, deliveryMode, canSteerActiveTurn(), supportsProtocolMethod, sendFrame));
+    return handleResult(submitOperatorInput(draft.value, connection.value, authorityTransition, deliveryMode, canSteerActiveTurn(), supportsProtocolMethod, sendFrame, activeTurnIdReader()));
   }
 
   function submitText(text: string, deliveryMode: OperatorInputDeliveryMode = 'default') {
-    return handleResult(submitOperatorInput(text, connection.value, authorityTransition, deliveryMode, canSteerActiveTurn(), supportsProtocolMethod, sendFrame), false);
+    return handleResult(submitOperatorInput(text, connection.value, authorityTransition, deliveryMode, canSteerActiveTurn(), supportsProtocolMethod, sendFrame, activeTurnIdReader()), false);
   }
 
   function submitConversationText(text: string, deliveryMode: OperatorInputDeliveryMode = 'default') {
     const result = preferSessionCore
-      ? submitOperatorInput(text, connection.value, authorityTransition, deliveryMode, canSteerActiveTurn(), supportsProtocolMethod, sendFrame)
+      ? submitOperatorInput(text, connection.value, authorityTransition, deliveryMode, canSteerActiveTurn(), supportsProtocolMethod, sendFrame, activeTurnIdReader())
       : submitOperatorConversationText(text, connection.value, authorityTransition, deliveryMode, supportsProtocolMethod, sendFrame);
     return handleResult(result, false);
   }
@@ -46,13 +49,16 @@ export function useOperatorInput(connection: ShallowRef<NarsClientConnection | n
   function dropQueued(index: number): boolean {
     const action = buildAgentWebUiOperatorInputAction(`/queue drop ${index}`);
     if (!action || action.kind !== 'frame') return false;
-    return sendFrame ? sendFrame(action.frame) : connection.value?.sendFrame(action.frame) ?? false;
+    const frame = toSessionProtocolFrame(action.frame);
+    if (!frame) return false;
+    return sendFrame ? sendFrame(frame) : connection.value?.sendFrame(frame) ?? false;
   }
 
   function interrupt(): boolean {
     const action = buildAgentWebUiOperatorInputAction('/interrupt', { id: `agent-web-ui-interrupt-${Date.now()}` });
     if (!action || action.kind !== 'frame') return false;
-    const frame = action.frame as { id?: string; method?: string };
+    const frame = toSessionProtocolFrame(action.frame);
+    if (!frame) return false;
     const sent = sendFrame ? sendFrame(frame) : connection.value?.sendFrame(frame) ?? false;
     if (sent) retain({ event: 'operator_input_submitted', request_id: frame.id, content: frame.method });
     else retain({ event: 'web_ui_input_not_sent', message: 'event stream is not open' });
@@ -65,18 +71,17 @@ export function useOperatorInput(connection: ShallowRef<NarsClientConnection | n
   }
 
   function steerQueuedNow(item: OperatorQueueItem): boolean {
-    if (!canSteerActiveTurn() || !connection.value?.activeTurnId) return false;
+    const currentConnection = connection.value;
+    const activeTurnId = activeTurnIdReader();
+    if (!currentConnection || !canSteerActiveTurn() || !activeTurnId) return false;
     if (!dropQueued(item.index)) return false;
-    const frame = {
+    const buildSteerFrame = buildAgentWebUiConversationSteerFrame as unknown as (text: string, options: Record<string, unknown>) => unknown;
+    const frame = toSessionProtocolFrame(buildSteerFrame(item.content, {
       id: `agent-web-ui-steer-queued-${Date.now()}`,
-      method: 'conversation.steer',
-      params: {
-        message: item.content.trim(),
-        source: 'agent-web-ui',
-        active_turn_id: connection.value.activeTurnId,
-      },
-    };
-    return sendFrame ? sendFrame(frame) : connection.value.sendFrame(frame);
+      activeTurnId,
+    }));
+    if (!frame) return false;
+    return sendFrame ? sendFrame(frame) : currentConnection.sendFrame(frame);
   }
 
   return { draft, submit, submitText, submitConversationText, retainLocal, interrupt, dropQueued, editQueued, steerQueuedNow };

@@ -1,17 +1,14 @@
 <script setup lang="ts">
 import { computed, nextTick, provide, ref, watch } from 'vue';
 import NarsSessionShell from './components/NarsSessionShell.vue';
-import { useAgentActivity } from './composables/useAgentActivity';
 import { useAffordanceConfirmations, type AffordanceConfirmationItem } from './composables/useAffordanceConfirmations';
 import { useArtifactsSummary } from './composables/useArtifactsSummary';
 import { useCloudflareProjection, type ProjectionControlConfig } from './composables/useCloudflareProjection';
 import { useDelegationSummary } from './composables/useDelegationSummary';
 import { useGitSummary } from './composables/useGitSummary';
-import { useHealthStatus } from './composables/useHealthStatus';
 import { useInboxSummary } from './composables/useInboxSummary';
 import { useMailboxSummary } from './composables/useMailboxSummary';
 import { useMcpInventory } from './composables/useMcpInventory';
-import { useNarsConnection } from './composables/useNarsConnection';
 import { useSessionState } from './composables/useSessionState';
 import { useSessionActions } from './composables/useSessionActions';
 import { useOperatorInput, type OperatorQueueItem } from './composables/useOperatorInput';
@@ -38,6 +35,7 @@ interface AgentWebUiConfig {
   artifactTransport?: string | null;
   projectionControl?: ProjectionControlConfig | null;
   authorityTransition?: Record<string, unknown> | null;
+  onboarding?: { mode: 'user-site' } | null;
   maxReplay?: number;
   admittedMethods?: readonly string[];
 }
@@ -51,17 +49,16 @@ provide(ArtifactRenderingConfigKey, {
   browserToken: props.config.browserToken ?? null,
 });
 const projection = useProjectionVerbosity();
-const health = useHealthStatus({ endpoint: props.config.healthEndpoint, browserToken: props.config.browserToken ?? null });
-const session = useSessionState(projection.verbosity, health.identity);
-const connection = useNarsConnection(
-  { eventEndpoint: props.config.eventEndpoint, inputEndpoint: props.config.inputEndpoint, browserToken: props.config.browserToken ?? null, maxReplay: props.config.maxReplay },
-  session.retain,
-  session.retainMany,
-);
-const sessionActions = useSessionActions(connection.connection, session.retain, supportsProtocolMethod);
-const agentActivity = useAgentActivity(session.events, health.body);
+const session = useSessionState(projection.verbosity, {
+  eventEndpoint: props.config.eventEndpoint,
+  healthEndpoint: props.config.healthEndpoint,
+  inputEndpoint: props.config.inputEndpoint,
+  browserToken: props.config.browserToken ?? null,
+  maxReplay: props.config.maxReplay,
+});
+const sessionActions = useSessionActions(session.connection.connection, session.retain, supportsProtocolMethod);
 const affordanceConfirmations = useAffordanceConfirmations(session.events);
-const mcpInventory = useMcpInventory(session.events, health.body);
+const mcpInventory = useMcpInventory(session.events, session.health.body);
 const artifactsSummary = useArtifactsSummary(session.events);
 const delegationSummary = useDelegationSummary(session.events);
 const gitSummary = useGitSummary(session.events);
@@ -71,40 +68,40 @@ const schedulerSummary = useSchedulerSummary(session.events);
 const sopSummary = useSopSummary(session.events);
 const surfaceFeedbackSummary = useSurfaceFeedbackSummary(session.events);
 const taskLifecycleSummary = useTaskLifecycleSummary(session.events);
-const surfaceAffordances = useSurfaceAffordances(session.events, health.body);
+const surfaceAffordances = useSurfaceAffordances(session.events, session.health.body);
 const runtimeTopology = useRuntimeTopology({
   eventEndpoint: props.config.eventEndpoint,
   healthEndpoint: props.config.healthEndpoint,
   inputEndpoint: props.config.inputEndpoint ?? null,
-  streamText: connection.streamText,
-  healthText: health.text,
-  healthBody: health.body,
+  streamText: session.streamText,
+  healthText: session.health.text,
+  healthBody: session.health.body,
   sessionIdentity: session.sessionIdentity,
   authorityTransition: computed(() => props.config.authorityTransition ?? null),
   mcpInventory: mcpInventory.inventory,
 });
-const operatorQueue = useOperatorQueue(health.body);
+const operatorQueue = useOperatorQueue(session.health.body);
 const operatorSnippets = useOperatorSnippets();
 const cloudflareProjection = useCloudflareProjection(props.config.projectionControl?.cloudflare ?? null);
 const canSteerActiveTurn = computed(() => (
-  Boolean(connection.activeTurnId.value)
-  && agentActivity.activity.value.active === true
-  && (agentActivity.activity.value.state === 'thinking' || agentActivity.activity.value.state === 'streaming')
+  Boolean(session.activeTurnId.value)
+  && session.activity.value.active === true
+  && (session.activity.value.state === 'thinking' || session.activity.value.state === 'streaming')
 ));
-const input = useOperatorInput(connection.connection, session.retain, session.clear, props.config.authorityTransition ?? null, () => canSteerActiveTurn.value, preferSessionCoreInput, supportsProtocolMethod, sessionActions.send);
+const input = useOperatorInput(session.connection.connection, session.retain, session.clear, props.config.authorityTransition ?? null, () => canSteerActiveTurn.value, preferSessionCoreInput, supportsProtocolMethod, sessionActions.send, () => session.activeTurnId.value);
 const draft = input.draft;
 const followLatestRevision = ref(0);
 const surfaceAffordancesRequested = ref(false);
 const operatorSnippetFeedback = ref<OperatorSnippetFeedback | null>(null);
 const operatorSnippetOpenRequest = ref<OperatorSnippetOpenRequest | null>(null);
 const faviconOverride = ref(null);
-useResolvedFavicon({ tabOverride: faviconOverride, healthBody: health.body });
+useResolvedFavicon({ tabOverride: faviconOverride, healthBody: session.health.body });
 
 function followLatestTranscript() {
   followLatestRevision.value += 1;
 }
 
-watch(connection.streamText, (status) => {
+watch(session.streamText, (status) => {
   if (surfaceAffordancesRequested.value || status !== 'connected' || !supportsProtocolMethod('session.surface.affordances')) return;
   surfaceAffordancesRequested.value = sessionActions.send(buildSurfaceAffordancesRequestFrame());
 }, { immediate: true });
@@ -277,7 +274,7 @@ function requestAffordanceAction(request: { surfaceId: string; actionId: string;
   const frame = buildAffordanceActionRequestFrame({ surfaceId: request.surfaceId, actionId: request.actionId, args: request.args });
   if (frame) {
     sessionActions.send(frame);
-    void health.refresh();
+    void session.health.refresh();
   }
 }
 
@@ -301,23 +298,24 @@ function cancelAffordanceAction(item: AffordanceConfirmationItem) {
     :input-endpoint="config.inputEndpoint ?? null"
     :artifact-base-path="config.artifactBasePath ?? null"
     :artifact-transport="config.artifactTransport ?? null"
-    :health-body="health.body.value"
-    :stream-text="connection.streamText.value"
-    :health-text="health.text.value"
-    :intelligence="health.intelligence.value"
+    :health-body="session.health.body.value"
+    :onboarding="config.onboarding?.mode === 'user-site'"
+    :stream-text="session.streamText.value"
+    :health-text="session.health.text.value"
+    :intelligence="session.health.intelligence.value"
     :summarized-state-sample-count="session.summarizedStateSampleCount.value"
     :verbosity="projection.verbosity.value"
     :verbosity-levels="projection.levels"
     :rows="session.rows.value"
     :session-identity="session.sessionIdentity.value"
-    :agent-activity="agentActivity.activity.value"
+    :agent-activity="session.activity.value"
     :affordance-confirmations="affordanceConfirmations.items.value"
     :operator-queue-items="operatorQueue.items.value"
     :operator-snippets="operatorSnippets.snippets.value"
     :operator-snippets-export-json="operatorSnippets.exportSnippetsJson()"
     :operator-snippet-feedback="operatorSnippetFeedback"
     :operator-snippet-open-request="operatorSnippetOpenRequest"
-    :active-turn-id="connection.activeTurnId.value"
+    :active-turn-id="session.activeTurnId.value"
     :mcp-inventory="mcpInventory.inventory.value"
     :runtime-topology="runtimeTopology.topology.value"
     :surface-affordances="surfaceAffordances.summary.value"
