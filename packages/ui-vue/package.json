@@ -3,6 +3,11 @@
   "version": "0.1.0",
   "type": "module",
   "private": true,
+  "narada": {
+    "package_role": "internal_vue_renderer_adapter",
+    "publication_posture": "workspace_only",
+    "source_export_posture": "intentional"
+  },
   "exports": {
     ".": "./src/index.ts",
     "./components.css": "./src/components.css",

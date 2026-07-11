@@ -251,9 +251,6 @@ importers:
       '@narada2/ui':
         specifier: workspace:*
         version: link:../ui
-      '@narada2/ui-vue':
-        specifier: workspace:*
-        version: link:../ui-vue
       lucide-vue-next:
         specifier: ^0.563.0
         version: 0.563.0(vue@3.5.39(typescript@5.9.3))
@@ -276,6 +273,9 @@ importers:
       '@narada2/process-launch-posture':
         specifier: workspace:*
         version: link:../process-launch-posture
+      '@narada2/ui-vue':
+        specifier: workspace:*
+        version: link:../ui-vue
       '@playwright/test':
         specifier: ^1.61.1
         version: 1.61.1

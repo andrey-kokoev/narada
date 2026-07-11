@@ -2,6 +2,12 @@
 
 Narada-owned Vue primitives built from shadcn-vue-generated source and Reka UI runtime primitives.
 
+This is an internal workspace package, not an independently published npm
+library. Its TypeScript and Vue source exports are intentional: Narada Vue
+applications compile them as part of their own renderer build. External or
+framework-neutral consumers use the public compiled stylesheet from
+`@narada2/ui` instead.
+
 Initial exported set:
 
 - `Tooltip`, `TooltipContent`, `TooltipProvider`, `TooltipTrigger`

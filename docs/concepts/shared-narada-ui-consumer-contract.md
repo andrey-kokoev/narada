@@ -44,10 +44,13 @@ behavior and must use shared semantic tokens.
 
 - source-owned wrappers for the explicit initial shadcn-vue primitive set;
 - Vue runtime adapters and `cn()`;
-- public component and component-style exports;
+- workspace component and component-style exports;
 - `components.json` generator metadata.
 
 The package may depend on `@narada2/ui` and Vue UI runtime dependencies.
+It is private and workspace-only; its source exports are intentionally compiled
+by Narada-owned Vue applications. It is not part of the external npm consumer
+contract.
 It must not absorb Agent Web UI session state, MCP domain components,
 application composables, or product-specific panels. shadcn-vue is a generator
 and maintenance input; it is not the consumer boundary for application code.

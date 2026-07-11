@@ -16,6 +16,17 @@ interface CheckResult {
   error?: string;
 }
 
+interface PackageManifest {
+  version: string;
+  repository?: { url?: string };
+  homepage?: string;
+  bugs?: { url?: string };
+  dependencies?: Record<string, string>;
+  peerDependencies?: Record<string, string>;
+  optionalDependencies?: Record<string, string>;
+  bundleDependencies?: string[];
+}
+
 const PACK_ONLY = process.argv.includes('--pack-only');
 const PACKAGES = [
   'packages/layers/control-plane',
@@ -46,7 +57,13 @@ function runCommand(command: string, cwd?: string): { success: boolean; output: 
     });
     return { success: true, output };
   } catch (error) {
-    const output = error instanceof Error && 'message' in error ? String(error.message) : String(error);
+    const record = error !== null && typeof error === 'object'
+      ? error as Record<string, unknown>
+      : {};
+    const output = [record.message, record.stdout, record.stderr]
+      .filter((value) => value !== undefined && value !== '')
+      .map(String)
+      .join('\n');
     return { success: false, output };
   }
 }
@@ -56,8 +73,8 @@ function validateSemver(version: string): boolean {
   return semverRegex.test(version);
 }
 
-function packageJson(pkgPath: string): any {
-  return JSON.parse(readFileSync(join(pkgPath, 'package.json'), 'utf8'));
+function packageJson(pkgPath: string): PackageManifest {
+  return JSON.parse(readFileSync(join(pkgPath, 'package.json'), 'utf8')) as PackageManifest;
 }
 
 function runPackSmokeCheck(): CheckResult {
@@ -67,7 +84,10 @@ function runPackSmokeCheck(): CheckResult {
   try {
     for (const pkgPath of PACKAGES) {
       const before = new Set(readdirSync(tmp));
-      const result = runCommand(`pnpm pack --pack-destination ${JSON.stringify(tmp)}`, pkgPath);
+      const packCommand = pkgPath === 'packages/layers/cli'
+        ? `pnpm --config.node-linker=hoisted pack --pack-destination ${JSON.stringify(tmp)}`
+        : `pnpm pack --pack-destination ${JSON.stringify(tmp)}`;
+      const result = runCommand(packCommand, pkgPath);
       if (!result.success) {
         return {
           name: 'Pack smoke check',
@@ -83,6 +103,21 @@ function runPackSmokeCheck(): CheckResult {
           passed: false,
           error: `Unexpected pack output for ${pkgPath}`,
         };
+      }
+
+      if (pkgPath === 'packages/layers/cli') {
+        const consumer = mkdtempSync(join(tmp, 'cli-consumer-'));
+        const install = runCommand(
+          `pnpm add --prefer-offline --ignore-scripts ${JSON.stringify(join(tmp, after[0]))}`,
+          consumer,
+        );
+        if (!install.success) {
+          return {
+            name: 'Pack smoke check',
+            passed: false,
+            error: `CLI tarball failed isolated installation: ${install.output.slice(-2000)}`,
+          };
+        }
       }
     }
 
@@ -195,6 +230,31 @@ function runChecks(): CheckResult[] {
     error: noFileDependencies ? undefined : 'file: dependencies found in publish surface',
   });
   if (noFileDependencies) log('  ✓ No file: publish dependencies found', 'green');
+
+  log('\n📋 Checking CLI runtime dependency closure...', 'blue');
+  const cliPackage = packageJson('packages/layers/cli');
+  const cliWorkspaceDependencies = Object.entries(cliPackage.dependencies ?? {})
+    .filter(([, version]) => typeof version === 'string' && version.startsWith('workspace:'))
+    .map(([name]) => name);
+  const cliBundledDependencies = new Set(
+    Array.isArray(cliPackage.bundleDependencies) ? cliPackage.bundleDependencies : [],
+  );
+  const unbundledCliWorkspaceDependencies = cliWorkspaceDependencies
+    .filter((name) => !cliBundledDependencies.has(name));
+  const cliClosureBundled = unbundledCliWorkspaceDependencies.length === 0;
+  checks.push({
+    name: 'CLI runtime dependency closure is distributable',
+    passed: cliClosureBundled,
+    error: cliClosureBundled
+      ? undefined
+      : `CLI has unbundled workspace runtime dependencies: ${unbundledCliWorkspaceDependencies.join(', ')}`,
+  });
+  log(
+    cliClosureBundled
+      ? '  ✓ CLI workspace runtime dependencies are bundled'
+      : '  ✗ CLI workspace runtime dependencies are not bundled',
+    cliClosureBundled ? 'green' : 'red',
+  );
 
   checks.push(runPackSmokeCheck());
   return checks;

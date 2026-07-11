@@ -7,11 +7,11 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     emptyOutDir: true,
-    lib: {
-      entry: fileURLToPath(new URL('./src/entry.ts', import.meta.url)),
-      formats: ['es'],
-      fileName: 'index',
-      cssFileName: 'styles',
+    rollupOptions: {
+      input: fileURLToPath(new URL('./src/styles.css', import.meta.url)),
+      output: {
+        assetFileNames: 'styles.css',
+      },
     },
   },
 });

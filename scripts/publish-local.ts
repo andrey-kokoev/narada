@@ -52,7 +52,7 @@ function main(): void {
   run('pnpm pack:check');
 
   console.log('\n==> Publish to npm');
-  run('changeset publish');
+  run('pnpm --config.node-linker=hoisted exec changeset publish');
 
   console.log('\nPublish complete. Commit the version bumps and generated changelog files.');
 }

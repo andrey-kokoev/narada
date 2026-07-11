@@ -26,6 +26,12 @@
     "./server": "./src/server.js",
     "./package.json": "./package.json"
   },
+  "files": [
+    "bin",
+    "dist",
+    "src",
+    "README.md"
+  ],
   "scripts": {
     "prebuild": "pnpm --filter @narada2/ui build",
     "build": "vite build",
@@ -49,7 +55,6 @@
     "@narada2/nars-client-projection-contract": "workspace:*",
     "@narada2/site-paths": "workspace:*",
     "@narada2/ui": "workspace:*",
-    "@narada2/ui-vue": "workspace:*",
     "lucide-vue-next": "^0.563.0",
     "markdown-it": "^14.2.0",
     "mermaid": "^11.16.0",
@@ -59,6 +64,7 @@
     "@narada2/agent-cli": "workspace:*",
     "@narada2/agent-runtime-server": "workspace:*",
     "@narada2/process-launch-posture": "workspace:*",
+    "@narada2/ui-vue": "workspace:*",
     "@playwright/test": "^1.61.1",
     "@tailwindcss/vite": "^4.1.18",
     "@types/markdown-it": "^14.1.2",

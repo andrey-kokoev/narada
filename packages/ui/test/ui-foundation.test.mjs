@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { access, readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -13,6 +13,7 @@ test('build publishes the shared stylesheet export', async () => {
   assert.match(css, /--surface:/);
   assert.match(css, /\.truncate/);
   assert.match(css, /prefers-color-scheme:dark/);
+  await assert.rejects(access(resolve(packageRoot, 'dist/index.js')));
 });
 
 test('plain HTML consumer references the package stylesheet', async () => {

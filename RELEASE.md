@@ -53,7 +53,7 @@ pnpm prepublish-check
 pnpm version-packages
 pnpm build
 pnpm pack:check
-changeset publish
+pnpm --config.node-linker=hoisted exec changeset publish
 ```
 
 ## Notes

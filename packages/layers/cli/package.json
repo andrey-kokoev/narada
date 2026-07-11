@@ -37,6 +37,33 @@
   "publishConfig": {
     "access": "public"
   },
+  "bundleDependencies": [
+    "@narada2/agent-context-memory",
+    "@narada2/agent-identity",
+    "@narada2/agent-web-ui",
+    "@narada2/carrier-provider-contract",
+    "@narada2/carrier-runtime-contract",
+    "@narada2/charters",
+    "@narada2/cloudflare-nars-projection",
+    "@narada2/cloudflare-site",
+    "@narada2/concepts",
+    "@narada2/control-plane",
+    "@narada2/intent-zones",
+    "@narada2/launch-process-ownership",
+    "@narada2/linux-site",
+    "@narada2/local-history",
+    "@narada2/macos-site",
+    "@narada2/nars-session-core",
+    "@narada2/ops-kit",
+    "@narada2/process-launch-posture",
+    "@narada2/search",
+    "@narada2/site-config",
+    "@narada2/site-paths",
+    "@narada2/site-registry-cloudflare",
+    "@narada2/task-governance-core",
+    "@narada2/ui",
+    "@narada2/windows-site"
+  ],
   "scripts": {
     "prebuild": "pnpm --filter @narada2/ui build",
     "build": "tsc && node scripts/write-build-manifest.mjs",
