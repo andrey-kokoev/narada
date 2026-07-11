@@ -190,8 +190,11 @@ function normalizeCommanderActionArgs<TArgs extends unknown[]>(args: TArgs): TAr
     typeof last === 'object' &&
     typeof (last as { opts?: unknown }).opts === 'function'
   ) {
-    const command = last as { opts: () => Record<string, unknown> };
-    const parsedOptions = withProcessArgvCwd(command.opts());
+    const command = last as {
+      opts: () => Record<string, unknown>;
+      optsWithGlobals?: () => Record<string, unknown>;
+    };
+    const parsedOptions = withProcessArgvCwd(command.optsWithGlobals?.() ?? command.opts());
     const maybeOptions = args[args.length - 2];
     if (
       maybeOptions &&

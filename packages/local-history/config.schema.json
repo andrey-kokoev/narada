@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://narada.dev/schemas/local-work-history-policy.v1.json",
+  "title": "Narada local work history policy",
+  "type": "object",
+  "required": [
+    "schema",
+    "enabled",
+    "owner_kind",
+    "owner_id",
+    "workspace_id",
+    "workspace_root",
+    "store_root",
+    "roots",
+    "exclusions",
+    "max_file_size_bytes",
+    "debounce_ms",
+    "stable_read_attempts",
+    "stable_read_delay_ms",
+    "retention_days",
+    "quota_bytes",
+    "privacy_posture"
+  ],
+  "properties": {
+    "schema": { "const": "narada.local_work_history.policy.v1" },
+    "enabled": { "type": "boolean" },
+    "owner_kind": { "enum": ["site", "user_site"] },
+    "owner_id": { "type": "string", "minLength": 1 },
+    "workspace_id": { "type": "string", "minLength": 1 },
+    "workspace_root": { "type": "string", "minLength": 1 },
+    "store_root": { "type": "string", "minLength": 1 },
+    "roots": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+    "exclusions": { "type": "array", "items": { "type": "string" } },
+    "max_file_size_bytes": { "type": "integer", "minimum": 1 },
+    "debounce_ms": { "type": "integer", "minimum": 0 },
+    "stable_read_attempts": { "type": "integer", "minimum": 1 },
+    "stable_read_delay_ms": { "type": "integer", "minimum": 0 },
+    "retention_days": { "type": "integer", "minimum": 1 },
+    "quota_bytes": { "type": "integer", "minimum": 1 },
+    "privacy_posture": { "enum": ["default_exclusions", "custom_exclusions"] }
+  },
+  "additionalProperties": false
+}

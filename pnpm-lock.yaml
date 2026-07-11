@@ -98,7 +98,11 @@ importers:
 
   ../mcp-surfaces/packages/shared/mcp-telemetry: {}
 
-  ../mcp-surfaces/packages/shared/mcp-transport: {}
+  ../mcp-surfaces/packages/shared/mcp-transport:
+    dependencies:
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
 
   ../mcp-surfaces/packages/structured-command-mcp:
     dependencies:
@@ -485,6 +489,9 @@ importers:
       '@narada2/linux-site':
         specifier: workspace:*
         version: link:../../sites/linux
+      '@narada2/local-history':
+        specifier: workspace:*
+        version: link:../../local-history
       '@narada2/macos-site':
         specifier: workspace:*
         version: link:../../sites/macos
@@ -605,6 +612,22 @@ importers:
       vitest:
         specifier: ^1.0.0
         version: 1.6.1(@types/node@20.19.39)(lightningcss@1.32.0)(stylus@0.57.0)
+
+  packages/local-history:
+    dependencies:
+      '@narada2/sqlite':
+        specifier: workspace:*
+        version: link:../sqlite
+    devDependencies:
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.19.19
+      typescript:
+        specifier: ^5.3.0
+        version: 5.9.3
+      vitest:
+        specifier: ^1.0.0
+        version: 1.6.1(@types/node@22.19.19)(lightningcss@1.32.0)(stylus@0.57.0)
 
   packages/mcp-fabric:
     dependencies:
@@ -5006,6 +5029,9 @@ packages:
   zod@3.25.76:
     resolution: {integrity: sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ==}
 
+  zod@4.4.3:
+    resolution: {integrity: sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ==}
+
 snapshots:
 
   '@ampproject/remapping@2.3.0':
@@ -9040,3 +9066,5 @@ snapshots:
       zod: 3.25.76
 
   zod@3.25.76: {}
+
+  zod@4.4.3: {}

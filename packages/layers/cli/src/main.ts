@@ -56,6 +56,8 @@ import { registerKbCommands } from './commands/kb-register.js';
 import { registerQualificationCommands } from './commands/qualification-register.js';
 import { registerSiteTelemetryCommands } from './commands/site-telemetry-register.js';
 import { registerSiteRegistryCommands } from './commands/site-registry-register.js';
+import { registerOnboardingCommands } from './commands/onboarding-register.js';
+import { registerHistoryCommands } from './commands/history-register.js';
 
 loadEnvFile('./.env');
 
@@ -105,6 +107,7 @@ registerPrincipalCommands(program);
 registerQualificationCommands(program);
 registerSiteTelemetryCommands(program);
 registerSiteRegistryCommands(program);
+registerOnboardingCommands(program);
 
 const taskCmd = program
   .command('task')
@@ -146,5 +149,6 @@ registerRederivationCommands(program);
 registerOutboundActionCommands(program);
 registerCrossingCommands(program);
 registerOpsKitCommands(program);
+registerHistoryCommands(program);
 
 program.parse();
