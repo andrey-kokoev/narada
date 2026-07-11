@@ -1,19 +1,27 @@
 import { createRequire } from 'node:module';
-import { spawn } from 'node:child_process';
-import { resolve } from 'node:path';
+import { spawn, spawnSync } from 'node:child_process';
+import { readFile, stat } from 'node:fs/promises';
+import { statSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import type { CommandContext } from '../lib/command-wrapper.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { formattedResult, type CliFormat } from '../lib/cli-output.js';
 import {
   buildSiteTarget,
   buildUserTarget,
+  DEFAULT_HISTORY_EXCLUSIONS,
   defaultPolicy,
   loadPolicy,
+  loadUserHistoryDefaults,
   LocalHistoryStore,
+  MANDATORY_HISTORY_EXCLUSIONS,
   runHistoryDaemon,
   stopHistoryDaemon,
+  userHistoryDefaultsPath,
   withHistoryOwnerLock,
   writePolicy,
+  type HistoryPrivacyPosture,
   type HistoryTarget,
   type LocalHistoryPolicy,
 } from '@narada2/local-history';
@@ -31,6 +39,10 @@ export interface HistoryOptions {
   retentionDays?: number;
   quotaBytes?: number;
   debounceMs?: number;
+  stableReadAttempts?: number;
+  stableReadDelayMs?: number;
+  privacyPosture?: HistoryPrivacyPosture;
+  replaceExclusions?: boolean;
   format?: CliFormat;
   path?: string;
   snapshot?: string;
@@ -45,14 +57,108 @@ export interface HistoryOptions {
   userProjectionRoot?: string;
 }
 
+async function projectMetadata(store: LocalHistoryStore, userSiteRoot: string): Promise<string> {
+  const projectionRoot = join(resolve(userSiteRoot), '.narada', 'runtime', 'local-history', 'projections');
+  const check = gitIgnoreCheck(projectionRoot);
+  if (!check.ignored) throw new Error(`local_history_projection_not_ignored: add ${check.display}/ to the User Site ignore policy before projecting history`);
+  return store.projectMetadata(userSiteRoot);
+}
+
+function assertHistoryArtifactsIgnored(target: HistoryTarget): void {
+  const storeCheck = gitIgnoreCheck(target.storeRoot);
+  const markerCheck = target.ownerKind === 'user_site'
+    ? gitIgnoreCheck(join(target.workspaceRoot, '.narada', 'local-history-workspace.json'))
+    : { ignored: true, display: '' };
+  const missing = [
+    ...(storeCheck.ignored ? [] : [`${storeCheck.display}/`]),
+    ...(markerCheck.ignored ? [] : [markerCheck.display]),
+  ];
+  if (missing.length > 0) throw new Error(`local_history_store_not_ignored: add ${missing.join(', ')} to the Site ignore policy before enabling history`);
+}
+
+function gitIgnoreCheck(path: string): { ignored: boolean; display: string } {
+  const gitRoot = findGitRoot(path);
+  if (!gitRoot) return { ignored: true, display: path };
+  const relativePath = relative(gitRoot, resolve(path)).replaceAll('\\', '/');
+  if (isAbsolute(relativePath) || relativePath === '..' || relativePath.startsWith('../')) return { ignored: true, display: path };
+  const candidates = [relativePath, `${relativePath}/`, `${relativePath}/history.sqlite`];
+  const ignored = candidates.some((candidate) => spawnSync('git', ['-C', gitRoot, 'check-ignore', '--quiet', '--', candidate], {
+    windowsHide: true,
+    stdio: 'ignore',
+  }).status === 0);
+  return { ignored, display: relativePath };
+}
+
+function findGitRoot(path: string): string | null {
+  let current = resolve(path);
+  while (true) {
+    const info = statSync(current, { throwIfNoEntry: false });
+    const directory = info?.isDirectory() ? current : dirname(current);
+    const probe = spawnSync('git', ['-C', directory, 'rev-parse', '--show-toplevel'], {
+      encoding: 'utf8',
+      windowsHide: true,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+    if (probe.status === 0 && typeof probe.stdout === 'string' && probe.stdout.trim()) return resolve(probe.stdout.trim());
+    const parent = dirname(directory);
+    if (parent === directory) return null;
+    current = parent;
+  }
+}
+
+async function policySeed(target: HistoryTarget, options: HistoryOptions): Promise<{
+  policy: LocalHistoryPolicy;
+  source: 'persisted_policy' | 'user_site_defaults' | 'package_defaults';
+  defaults_path: string | null;
+}> {
+  const current = await loadPolicy(target);
+  if (current) return { policy: current, source: 'persisted_policy', defaults_path: null };
+  const userSiteRoot = resolveUserSiteRoot(options);
+  const defaultsPath = userHistoryDefaultsPath(userSiteRoot);
+  const defaults = await loadUserHistoryDefaults(userSiteRoot);
+  return {
+    policy: defaultPolicy(target, defaults ?? {}),
+    source: defaults ? 'user_site_defaults' : 'package_defaults',
+    defaults_path: defaultsPath,
+  };
+}
+
+function resolveUserSiteRoot(options: HistoryOptions): string {
+  return resolve(options.userSiteRoot ?? process.env.NARADA_USER_SITE_ROOT ?? join(homedir(), 'Narada'));
+}
+
+function applyPolicyOptions(current: LocalHistoryPolicy, options: HistoryOptions, enabled: boolean): Partial<LocalHistoryPolicy> {
+  let exclusions = current.exclusions;
+  if (options.privacyPosture && options.privacyPosture !== current.privacy_posture) {
+    exclusions = options.privacyPosture === 'custom_exclusions'
+      ? exclusions.filter((pattern) => MANDATORY_HISTORY_EXCLUSIONS.includes(pattern))
+      : [...exclusions, ...DEFAULT_HISTORY_EXCLUSIONS];
+  }
+  if (options.replaceExclusions) exclusions = options.exclusions ?? [];
+  else if (options.exclusions && options.exclusions.length > 0) exclusions = [...exclusions, ...options.exclusions];
+  return {
+    ...current,
+    enabled,
+    roots: options.watchRoots && options.watchRoots.length > 0 ? options.watchRoots : current.roots,
+    exclusions,
+    max_file_size_bytes: options.maxFileSize ?? current.max_file_size_bytes,
+    retention_days: options.retentionDays ?? current.retention_days,
+    quota_bytes: options.quotaBytes ?? current.quota_bytes,
+    debounce_ms: options.debounceMs ?? current.debounce_ms,
+    stable_read_attempts: options.stableReadAttempts ?? current.stable_read_attempts,
+    stable_read_delay_ms: options.stableReadDelayMs ?? current.stable_read_delay_ms,
+    privacy_posture: options.privacyPosture ?? current.privacy_posture,
+  };
+}
+
 export async function historyStatusCommand(options: HistoryOptions, _context: CommandContext): Promise<Result> {
   const target = resolveTarget(options);
   const policy = await loadPolicy(target);
   if (!policy) return result('missing_policy', { target, policy: null }, options.format);
-  const store = await LocalHistoryStore.open({ target, policy });
+  const store = await LocalHistoryStore.open({ target, policy, readOnly: true });
   try {
     const status = await store.status();
-    const projection = options.userProjectionRoot ? await store.projectMetadata(options.userProjectionRoot) : null;
+    const projection = options.userProjectionRoot ? await projectMetadata(store, options.userProjectionRoot) : null;
     return result('success', { ...status, user_site_projection_path: projection }, options.format);
   } finally {
     store.close();
@@ -61,30 +167,29 @@ export async function historyStatusCommand(options: HistoryOptions, _context: Co
 
 export async function historyConfigureCommand(options: HistoryOptions, _context: CommandContext): Promise<Result> {
   const target = resolveTarget(options);
-  const current = await loadPolicy(target) ?? defaultPolicy(target);
-  const policy = await writePolicy(target, {
-    ...current,
-    enabled: current.enabled,
-    roots: options.watchRoots && options.watchRoots.length > 0 ? options.watchRoots : current.roots,
-    exclusions: options.exclusions && options.exclusions.length > 0 ? [...current.exclusions, ...options.exclusions] : current.exclusions,
-    max_file_size_bytes: options.maxFileSize ?? current.max_file_size_bytes,
-    retention_days: options.retentionDays ?? current.retention_days,
-    quota_bytes: options.quotaBytes ?? current.quota_bytes,
-    debounce_ms: options.debounceMs ?? current.debounce_ms,
-  });
-  return result('success', { policy, policy_path: target.policyPath, authority: target.ownerKind }, options.format);
+  const seed = await policySeed(target, options);
+  const policy = await writePolicy(target, applyPolicyOptions(seed.policy, options, seed.policy.enabled));
+  return result('success', {
+    policy,
+    policy_path: target.policyPath,
+    authority: target.ownerKind,
+    policy_defaults_source: seed.source,
+    policy_defaults_path: seed.defaults_path,
+  }, options.format);
 }
 
 export async function historyEnableCommand(options: HistoryOptions, _context: CommandContext): Promise<Result> {
   const target = resolveTarget(options);
-  const current = await loadPolicy(target) ?? defaultPolicy(target);
-  const policy = await writePolicy(target, {
-    ...current,
-    enabled: true,
-    roots: options.watchRoots && options.watchRoots.length > 0 ? options.watchRoots : current.roots,
-    exclusions: options.exclusions && options.exclusions.length > 0 ? [...current.exclusions, ...options.exclusions] : current.exclusions,
-  });
-  return result('success', { policy, policy_path: target.policyPath, store_root: target.storeRoot }, options.format);
+  assertHistoryArtifactsIgnored(target);
+  const seed = await policySeed(target, options);
+  const policy = await writePolicy(target, applyPolicyOptions(seed.policy, options, true));
+  return result('success', {
+    policy,
+    policy_path: target.policyPath,
+    store_root: target.storeRoot,
+    policy_defaults_source: seed.source,
+    policy_defaults_path: seed.defaults_path,
+  }, options.format);
 }
 
 export async function historyCaptureCommand(options: HistoryOptions, _context: CommandContext): Promise<Result> {
@@ -110,7 +215,15 @@ export async function historyStartCommand(options: HistoryOptions, _context: Com
     const args = [daemonModule, ...daemonArgs(target, options), ...(options.once ? ['--once'] : [])];
     const child = spawn(process.execPath, args, { detached: true, stdio: 'ignore', windowsHide: true });
     child.unref();
-    return result('started', { pid: child.pid ?? null, target, mode: 'background' }, options.format);
+    const readiness = await waitForDaemonReady(target, child);
+    if (readiness.error) throw new Error(readiness.error);
+    return result(readiness.ready ? 'started' : 'starting', {
+      pid: child.pid ?? null,
+      target,
+      mode: 'background',
+      ready: readiness.ready,
+      reason: readiness.reason ?? null,
+    }, options.format);
   }
   await runHistoryDaemon({ target, policy, once: options.once, poll_interval_ms: options.pollIntervalMs });
   return result('stopped', { target, mode: 'foreground', once: Boolean(options.once) }, options.format);
@@ -126,7 +239,7 @@ export async function historyListCommand(options: HistoryOptions, _context: Comm
   const { store } = await openEnabledStore(options);
   try {
     const files = store.listFiles(options.path);
-    const projection = options.userProjectionRoot ? await store.projectMetadata(options.userProjectionRoot) : null;
+    const projection = options.userProjectionRoot ? await projectMetadata(store, options.userProjectionRoot) : null;
     return result('success', { files, user_site_projection_path: projection }, options.format);
   } finally {
     store.close();
@@ -221,7 +334,7 @@ async function openEnabledStore(options: HistoryOptions): Promise<{ target: Hist
   const policy = await loadPolicy(target);
   if (!policy) throw new Error('local_history_policy_missing');
   if (!policy.enabled) throw new Error('local_history_disabled');
-  return { target, policy, store: await LocalHistoryStore.open({ target, policy }) };
+  return { target, policy, store: await LocalHistoryStore.open({ target, policy, readOnly: true }) };
 }
 
 async function loadEnabledPolicy(options: HistoryOptions): Promise<{ target: HistoryTarget; policy: LocalHistoryPolicy }> {
@@ -244,6 +357,47 @@ function resolveTarget(options: HistoryOptions): HistoryTarget {
 }
 
 function daemonArgs(target: HistoryTarget, options: HistoryOptions): string[] {
-  if (target.ownerKind === 'site') return ['--site-root', target.workspaceRoot, '--site-id', target.ownerId];
-  return ['--user-site-root', resolve(options.userSiteRoot as string), '--root', target.workspaceRoot];
+  const interval = options.pollIntervalMs === undefined ? [] : ['--poll-interval-ms', String(options.pollIntervalMs)];
+  if (target.ownerKind === 'site') return ['--site-root', target.workspaceRoot, '--site-id', target.ownerId, ...interval];
+  return ['--user-site-root', resolve(options.userSiteRoot as string), '--root', target.workspaceRoot, ...interval];
+}
+
+async function waitForDaemonReady(target: HistoryTarget, child: ReturnType<typeof spawn>, timeoutMs = 5000): Promise<{ ready: boolean; reason?: string; error?: string }> {
+  let exited = false;
+  let exitCode: number | null = null;
+  let childError: Error | null = null;
+  child.once('exit', (code) => {
+    exited = true;
+    exitCode = code;
+  });
+  child.once('error', (error) => {
+    exited = true;
+    childError = error instanceof Error ? error : new Error(String(error));
+  });
+  const daemonPath = resolve(target.storeRoot, 'daemon.json');
+  const healthPath = resolve(target.storeRoot, 'health.json');
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const daemon = await readJson(daemonPath);
+    const health = await readJson(healthPath);
+    if (daemon?.pid === child.pid && health?.state === 'running') return { ready: true };
+    if (exited) {
+      return {
+        ready: false,
+        reason: exitCode === 0 ? 'daemon_exited' : 'daemon_start_failed',
+        error: exitCode === 0 ? undefined : (childError ? String(childError) : `local_history_daemon_start_failed: ${exitCode}`),
+      };
+    }
+    await new Promise((resolvePromise) => setTimeout(resolvePromise, 50));
+  }
+  return { ready: false, reason: 'daemon_start_pending' };
+}
+
+async function readJson(path: string): Promise<Record<string, unknown> | null> {
+  try {
+    await stat(path);
+    return JSON.parse(await readFile(path, 'utf8')) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
 }

@@ -9,7 +9,8 @@
   "files": [
     "dist/",
     "README.md",
-    "config.schema.json"
+    "config.schema.json",
+    "defaults.schema.json"
   ],
   "exports": {
     ".": {

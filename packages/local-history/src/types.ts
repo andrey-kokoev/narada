@@ -1,6 +1,20 @@
 export type HistoryOwnerKind = 'site' | 'user_site';
 export type HistoryEventKind = 'create' | 'modify' | 'delete' | 'rename' | 'pre_restore' | 'restore';
 export type HistoryFileKind = 'text' | 'binary' | 'symlink' | 'reparse_point' | 'directory' | 'unknown';
+export type HistoryPrivacyPosture = 'default_exclusions' | 'custom_exclusions';
+
+export interface LocalHistoryPolicyDefaults {
+  schema: 'narada.local_work_history.defaults.v1';
+  roots?: string[];
+  exclusions?: string[];
+  max_file_size_bytes?: number;
+  debounce_ms?: number;
+  stable_read_attempts?: number;
+  stable_read_delay_ms?: number;
+  retention_days?: number;
+  quota_bytes?: number;
+  privacy_posture?: HistoryPrivacyPosture;
+}
 
 export interface LocalHistoryPolicy {
   schema: 'narada.local_work_history.policy.v1';
@@ -18,7 +32,7 @@ export interface LocalHistoryPolicy {
   stable_read_delay_ms: number;
   retention_days: number;
   quota_bytes: number;
-  privacy_posture: 'default_exclusions' | 'custom_exclusions';
+  privacy_posture: HistoryPrivacyPosture;
 }
 
 export interface HistoryTarget {
@@ -80,6 +94,7 @@ export interface HistoryStatus {
     snapshots: number;
     blobs: number;
     bytes: number;
+    logical_bytes: number;
     pinned_snapshots: number;
   };
 }

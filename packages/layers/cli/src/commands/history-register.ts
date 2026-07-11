@@ -22,8 +22,10 @@ export function registerHistoryCommands(program: Command): void {
   addTargetOptions(history);
 
   historySubcommand(history, 'status').description('Show policy, watcher, store, and retention status').option('--user-projection-root <path>', 'Write a metadata-only projection to a User Site').option('--format <fmt>', 'Output format: json|human|auto', 'auto').action(action('history status', historyStatusCommand));
-  historySubcommand(history, 'enable').description('Opt a Site or explicitly unregistered User root into local history').option('--watch-root <path>', 'Admitted workspace-relative root (repeatable)', collect, []).option('--exclude <pattern>', 'Additional exclusion pattern (repeatable)', collect, []).option('--format <fmt>', 'Output format: json|human|auto', 'auto').action(action('history enable', historyEnableCommand));
-  historySubcommand(history, 'configure').description('Update Site-owned local-history policy without changing enabled state').option('--watch-root <path>', 'Admitted workspace-relative root (repeatable)', collect, []).option('--exclude <pattern>', 'Exclusion pattern (repeatable)', collect, []).option('--max-file-size <bytes>', 'Maximum captured file size', parseNumber).option('--retention-days <days>', 'Snapshot retention period', parseNumber).option('--quota-bytes <bytes>', 'Snapshot quota', parseNumber).option('--debounce-ms <ms>', 'Stable-save debounce interval', parseNumber).option('--format <fmt>', 'Output format: json|human|auto', 'auto').action(action('history configure', historyConfigureCommand));
+  const enable = historySubcommand(history, 'enable').description('Opt a Site or explicitly unregistered User root into local history');
+  addPolicyOptions(enable).action(action('history enable', historyEnableCommand));
+  const configure = historySubcommand(history, 'configure').description('Update Site-owned local-history policy without changing enabled state');
+  addPolicyOptions(configure).action(action('history configure', historyConfigureCommand));
   historySubcommand(history, 'start').description('Run the separately supervised local-history process').option('--background', 'Detach the process and return its PID', false).option('--once', 'Scan once and exit', false).option('--poll-interval-ms <ms>', 'Polling interval', parseNumber).option('--format <fmt>', 'Output format: json|human|auto', 'auto').action(action('history start', historyStartCommand));
   historySubcommand(history, 'stop').description('Request graceful stop of the Site history process').option('--format <fmt>', 'Output format: json|human|auto', 'auto').action(action('history stop', historyStopCommand));
   historySubcommand(history, 'capture <path>').description('Capture one admitted file').option('--format <fmt>', 'Output format: json|human|auto', 'auto').action(actionWithPath('history capture', historyCaptureCommand));
@@ -37,6 +39,21 @@ export function registerHistoryCommands(program: Command): void {
 
 function addTargetOptions(command: Command): void {
   command.option('--site-root <path>', 'Owning Site workspace or .narada root').option('--site-id <id>', 'Owning Site id').option('--user-site-root <path>', 'User Site root for an explicitly unregistered workspace').option('--root <path>', 'Explicitly unregistered workspace root');
+}
+
+function addPolicyOptions(command: Command): Command {
+  return command
+    .option('--watch-root <path>', 'Admitted workspace-relative root (repeatable)', collect, [])
+    .option('--exclude <pattern>', 'Exclusion pattern (repeatable)', collect, [])
+    .option('--replace-exclusions', 'Replace configured additional exclusions; posture baseline remains', false)
+    .option('--max-file-size <bytes>', 'Maximum captured file size', parseNumber)
+    .option('--retention-days <days>', 'Snapshot retention period', parseNumber)
+    .option('--quota-bytes <bytes>', 'Snapshot quota', parseNumber)
+    .option('--debounce-ms <ms>', 'Stable-save debounce interval', parseNumber)
+    .option('--stable-read-attempts <count>', 'Stable-read attempts per capture', parseNumber)
+    .option('--stable-read-delay-ms <ms>', 'Delay between stable-read attempts', parseNumber)
+    .option('--privacy-posture <posture>', 'default_exclusions or custom_exclusions')
+    .option('--format <fmt>', 'Output format: json|human|auto', 'auto');
 }
 
 function historySubcommand(parent: Command, definition: string): Command {

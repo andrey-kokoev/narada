@@ -2,7 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, readFile, readdir, realpath, lstat, rename, rm, stat, unlink, writeFile } from 'node:fs/promises';
 import { dirname, join, relative, resolve } from 'node:path';
 import Database from '@narada2/sqlite';
-import { pathInsideWorkspace } from './policy.js';
+import { MANDATORY_HISTORY_EXCLUSIONS, pathInsideWorkspace, validatePolicy } from './policy.js';
 import type {
   CaptureResult,
   FileSnapshot,
@@ -23,6 +23,35 @@ export class LocalHistoryError extends Error {
     this.code = code;
   }
 
+}
+
+function isProcessAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function samePath(left: string, right: string): boolean {
+  return resolve(left).replace(/[\\/]$/, '').toLowerCase() === resolve(right).replace(/[\\/]$/, '').toLowerCase();
+}
+
+async function nearestExistingAncestor(path: string): Promise<string | null> {
+  let current = resolve(path);
+  while (true) {
+    if (await lstat(current).then(() => true).catch(() => false)) return current;
+    const parent = dirname(current);
+    if (samePath(parent, current)) return null;
+    current = parent;
+  }
+}
+
+function projectionFileName(ownerId: string): string {
+  const label = ownerId.replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 64) || 'site';
+  const digest = createHash('sha256').update(ownerId, 'utf8').digest('hex').slice(0, 16);
+  return `${label}-${digest}.json`;
 }
 
 interface StableRead {
@@ -50,6 +79,7 @@ interface StoredSnapshotRow {
 export interface LocalHistoryStoreOptions {
   target: HistoryTarget;
   policy: LocalHistoryPolicy;
+  readOnly?: boolean;
 }
 
 export interface HistoryDiff {
@@ -68,6 +98,7 @@ export class LocalHistoryStore {
   readonly blobRoot: string;
   readonly healthPath: string;
   private readonly db: Database;
+  private readonly observations = new Map<string, { token: string; first_seen_at: number; captured_token: string | null }>();
   private closed = false;
 
   private constructor(options: LocalHistoryStoreOptions, db: Database) {
@@ -80,10 +111,20 @@ export class LocalHistoryStore {
   }
 
   static async open(options: LocalHistoryStoreOptions): Promise<LocalHistoryStore> {
+    const policy = validatePolicy(options.policy, options.target);
+    const dbPath = join(options.target.storeRoot, 'history.sqlite');
+    if (options.readOnly) {
+      const databaseExists = await stat(dbPath).then(() => true).catch(() => false);
+      const database = databaseExists
+        ? new Database(dbPath, { readOnly: true, fileMustExist: true })
+        : new Database(':memory:');
+      const store = new LocalHistoryStore({ ...options, policy }, database);
+      if (!databaseExists) store.ensureSchema();
+      return store;
+    }
     await mkdir(options.target.storeRoot, { recursive: true });
     await mkdir(join(options.target.storeRoot, 'blobs', 'sha256'), { recursive: true });
-    const dbPath = join(options.target.storeRoot, 'history.sqlite');
-    const store = new LocalHistoryStore(options, new Database(dbPath));
+    const store = new LocalHistoryStore({ ...options, policy }, new Database(dbPath));
     store.ensureSchema();
     store.ensureWorkspace();
     return store;
@@ -98,16 +139,26 @@ export class LocalHistoryStore {
   async status(): Promise<HistoryStatus> {
     this.assertOpen();
     const health = await readJsonFileSafe<Record<string, unknown>>(this.healthPath);
+    const daemon = await readJsonFileSafe<Record<string, unknown>>(join(this.target.storeRoot, 'daemon.json'));
     const counts = this.db.prepare(`
       SELECT
         (SELECT count(*) FROM history_files) AS files,
         (SELECT count(*) FROM history_files WHERE active = 1) AS active_files,
         (SELECT count(*) FROM history_snapshots) AS snapshots,
         (SELECT count(*) FROM history_snapshots WHERE pinned = 1) AS pinned_snapshots,
-        (SELECT coalesce(sum(size_bytes), 0) FROM history_snapshots WHERE is_tombstone = 0) AS bytes
+        (SELECT coalesce(sum(size_bytes), 0) FROM history_snapshots WHERE is_tombstone = 0) AS logical_bytes
     `).get() as Record<string, unknown>;
     const blobRows = await listFilesSafe(this.blobRoot);
-    const watcherState = String(health?.state ?? 'not_started');
+    const storedBytes = await sumFileSizes(blobRows);
+    const recordedState = String(health?.state ?? 'not_started');
+    const healthPid = numberOrNull(health?.pid);
+    const daemonPid = numberOrNull(daemon?.pid);
+    const daemonLive = daemonPid !== null && isProcessAlive(daemonPid);
+    const staleRuntime = Boolean(daemon) && (!daemonLive || daemonPid !== healthPid);
+    const watcherState = staleRuntime || (recordedState === 'running' && !daemonLive) ? 'failed' : recordedState;
+    const watcherError = staleRuntime || (recordedState === 'running' && !daemonLive)
+      ? 'local_history_daemon_not_live'
+      : stringOrNull(health?.last_error);
     return {
       schema: 'narada.local_work_history.status.v1',
       status: this.policy.enabled ? 'enabled' : 'disabled',
@@ -120,18 +171,19 @@ export class LocalHistoryStore {
       policy: this.policy,
       watcher: {
         state: isWatcherState(watcherState) ? watcherState : 'unknown',
-        pid: numberOrNull(health?.pid),
+        pid: healthPid,
         started_at: stringOrNull(health?.started_at),
         last_scan_at: stringOrNull(health?.last_scan_at),
         last_capture_at: stringOrNull(health?.last_capture_at),
-        last_error: stringOrNull(health?.last_error),
+        last_error: watcherError,
       },
       counts: {
         files: Number(counts.files ?? 0),
         active_files: Number(counts.active_files ?? 0),
         snapshots: Number(counts.snapshots ?? 0),
         blobs: blobRows.length,
-        bytes: Number(counts.bytes ?? 0),
+        bytes: storedBytes,
+        logical_bytes: Number(counts.logical_bytes ?? 0),
         pinned_snapshots: Number(counts.pinned_snapshots ?? 0),
       },
     };
@@ -139,6 +191,7 @@ export class LocalHistoryStore {
 
   async captureFile(relativePath: string, eventKind: 'create' | 'modify' | 'delete' | 'rename' | 'pre_restore' | 'restore' = 'modify'): Promise<CaptureResult> {
     this.assertOpen();
+    this.assertEnabled();
     const normalized = normalizeRelativePath(relativePath);
     const admission = await this.admit(normalized);
     if (admission.status !== 'admitted') {
@@ -167,13 +220,14 @@ export class LocalHistoryStore {
     }
 
     const stable = await readStable(admission.path, this.policy);
-    if (!stable) return { status: 'skipped', relative_path: normalized, reason: 'unstable_read' };
-    if (existing?.last_hash === hashBuffer(stable.buffer)) {
+    if (!stable.value) return { status: 'skipped', relative_path: normalized, reason: stable.reason ?? 'unstable_read' };
+    const stableValue = stable.value;
+    if (existing?.last_hash === hashBuffer(stableValue.buffer)) {
       this.db.prepare('UPDATE history_files SET last_seen_at = ?, active = 1 WHERE file_id = ?').run(new Date().toISOString(), existing.file_id);
       return { status: 'deduplicated', file_id: existing.file_id, relative_path: normalized, content_hash: existing.last_hash };
     }
 
-    const contentHash = hashBuffer(stable.buffer);
+    const contentHash = hashBuffer(stableValue.buffer);
     const previousHash = existing?.last_hash ?? null;
     const fileId = existing?.file_id ?? `file_${randomUUID().replaceAll('-', '')}`;
     const snapshotId = `snap_${randomUUID().replaceAll('-', '')}`;
@@ -194,7 +248,7 @@ export class LocalHistoryStore {
       : null;
     const blobRelPath = join('blobs', 'sha256', contentHash.slice(0, 2), contentHash);
     const blobPath = join(this.target.storeRoot, blobRelPath);
-    await writeBlobOnce(blobPath, stable.buffer);
+    await writeBlobOnce(blobPath, stableValue.buffer);
     this.db.transaction(() => {
       this.db.prepare(`
         INSERT INTO history_files (file_id, workspace_id, relative_path, file_kind, active, last_hash, last_size_bytes, last_seen_at)
@@ -202,14 +256,14 @@ export class LocalHistoryStore {
         ON CONFLICT(workspace_id, relative_path) DO UPDATE SET
           active = 1, file_kind = excluded.file_kind, last_hash = excluded.last_hash,
           last_size_bytes = excluded.last_size_bytes, last_seen_at = excluded.last_seen_at
-      `).run(fileId, this.workspaceId(), normalized, stable.kind, contentHash, stable.size, now);
+      `).run(fileId, this.workspaceId(), normalized, stableValue.kind, contentHash, stableValue.size, now);
       const currentFile = this.getFileRow(normalized);
       const actualFileId = currentFile?.file_id ?? fileId;
       this.db.prepare(`
         INSERT INTO history_snapshots
           (snapshot_id, file_id, content_hash, blob_rel_path, size_bytes, captured_at, event_kind, is_tombstone, pinned, git_context_json, previous_hash)
         VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?)
-      `).run(snapshotId, actualFileId, contentHash, blobRelPath, stable.size, now, effectiveEventKind, gitContextJson, previousHash);
+      `).run(snapshotId, actualFileId, contentHash, blobRelPath, stableValue.size, now, effectiveEventKind, gitContextJson, previousHash);
       this.db.prepare(`
         INSERT INTO history_captures (capture_id, file_id, snapshot_id, event_kind, observed_at, stable, source_hash, previous_hash, git_context_json)
         VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?)
@@ -219,7 +273,11 @@ export class LocalHistoryStore {
     return { status: 'captured', file_id: fileId, snapshot_id: snapshotId, relative_path: normalized, content_hash: contentHash };
   }
 
-  async scanOnce(): Promise<{ scanned: number; captured: number; skipped: number }> {
+  async scanOnce(options: { debounce_ms?: number } = {}): Promise<{ scanned: number; captured: number; skipped: number }> {
+    this.assertOpen();
+    this.assertEnabled();
+    const debounceMs = Math.max(0, options.debounce_ms ?? 0);
+    const now = Date.now();
     const seen = new Set<string>();
     const discovered: string[] = [];
     let scanned = 0;
@@ -230,9 +288,33 @@ export class LocalHistoryStore {
       if (!pathInsideWorkspace(this.target.workspaceRoot, rootPath)) throw new LocalHistoryError('local_history_root_escape');
       await walkFiles(rootPath, async (path) => {
         const rel = normalizeRelativePath(relative(this.target.workspaceRoot, path));
+        if (pathInsideWorkspace(this.target.authorityRoot, path) || isExcluded(rel, this.policy.exclusions)) {
+          skipped += 1;
+          return;
+        }
+        const info = await stat(path).catch(() => null);
+        if (!info?.isFile()) {
+          skipped += 1;
+          return;
+        }
         seen.add(rel);
+        const token = `${info.size}:${info.mtimeMs}`;
+        const observation = this.observations.get(rel);
+        if (!observation || observation.token !== token) {
+          this.observations.set(rel, { token, first_seen_at: now, captured_token: null });
+          if (debounceMs > 0) return;
+        } else if (observation.captured_token === token) {
+          return;
+        } else if (now - observation.first_seen_at < debounceMs) {
+          return;
+        }
         discovered.push(rel);
         scanned += 1;
+      }, (path, isDirectory) => {
+        if (!isDirectory) return false;
+        if (pathInsideWorkspace(this.target.authorityRoot, path)) return true;
+        const rel = normalizeRelativePath(relative(this.target.workspaceRoot, path));
+        return isExcluded(rel, this.policy.exclusions);
       });
     }
     const activeRows = this.db.prepare('SELECT relative_path FROM history_files WHERE active = 1').all() as Array<{ relative_path: string }>;
@@ -246,6 +328,10 @@ export class LocalHistoryStore {
       const result = await this.captureFile(rel, 'modify');
       if (result.status === 'captured' || result.status === 'tombstone') captured += 1;
       if (result.status === 'skipped' || result.status === 'not_admitted') skipped += 1;
+      const observation = this.observations.get(rel);
+      if (observation && ['captured', 'deduplicated', 'tombstone'].includes(result.status)) {
+        observation.captured_token = observation.token;
+      }
     }
     return { scanned, captured, skipped };
   }
@@ -301,6 +387,7 @@ export class LocalHistoryStore {
   }
 
   async restore(snapshotId: string, options: { confirm: boolean; force: boolean }): Promise<RestoreResult> {
+    this.assertEnabled();
     const snapshot = this.getSnapshotRow(snapshotId);
     if (!snapshot) throw new LocalHistoryError('history_snapshot_not_found');
     if (!options.confirm) return { status: 'refused', snapshot_id: snapshotId, relative_path: snapshot.relative_path, stale: false, reason: 'explicit_confirmation_required' };
@@ -334,6 +421,7 @@ export class LocalHistoryStore {
   }
 
   pin(snapshotId: string, pinned = true): FileSnapshot {
+    this.assertEnabled();
     const row = this.getSnapshotRow(snapshotId);
     if (!row) throw new LocalHistoryError('history_snapshot_not_found');
     this.db.prepare('UPDATE history_snapshots SET pinned = ? WHERE snapshot_id = ?').run(pinned ? 1 : 0, snapshotId);
@@ -341,6 +429,7 @@ export class LocalHistoryStore {
   }
 
   async forget(snapshotId: string): Promise<{ status: string; snapshot_id: string; blob_deleted: boolean }> {
+    this.assertEnabled();
     const row = this.getSnapshotRow(snapshotId);
     if (!row) throw new LocalHistoryError('history_snapshot_not_found');
     if (row.pinned) throw new LocalHistoryError('history_snapshot_pinned');
@@ -356,9 +445,17 @@ export class LocalHistoryStore {
   }
 
   async projectMetadata(userSiteRoot: string): Promise<string> {
-    const projectionRoot = join(resolve(userSiteRoot), '.narada', 'runtime', 'local-history', 'projections');
+    const userRoot = resolve(userSiteRoot);
+    const projectionRoot = join(userRoot, '.narada', 'runtime', 'local-history', 'projections');
     await mkdir(projectionRoot, { recursive: true });
-    const path = join(projectionRoot, `${this.target.ownerId}.json`);
+    const canonicalUserRoot = await realpath(userRoot).catch(() => userRoot);
+    const canonicalProjectionRoot = await realpath(projectionRoot).catch(() => projectionRoot);
+    if (!pathInsideWorkspace(canonicalUserRoot, canonicalProjectionRoot)) {
+      throw new LocalHistoryError('local_history_projection_root_escape');
+    }
+    const path = join(projectionRoot, projectionFileName(this.target.workspaceId));
+    const existing = await lstat(path).catch(() => null);
+    if (existing?.isSymbolicLink()) throw new LocalHistoryError('local_history_projection_symlink_refused');
     const files = this.listFiles().map((file) => ({
       file_id: file.file_id,
       relative_path: file.relative_path,
@@ -367,7 +464,7 @@ export class LocalHistoryStore {
       last_seen_at: file.last_seen_at,
       snapshot_ids: file.snapshots.map((snapshot) => snapshot.snapshot_id),
     }));
-    await writeFile(path, `${JSON.stringify({
+    await writeJsonAtomic(path, {
       schema: 'narada.local_work_history.user_site_projection.v1',
       generated_at: new Date().toISOString(),
       owner_kind: this.target.ownerKind,
@@ -376,7 +473,7 @@ export class LocalHistoryStore {
       site_store_root: this.target.storeRoot,
       files,
       content_included: false,
-    }, null, 2)}\n`, 'utf8');
+    });
     return path;
   }
 
@@ -481,25 +578,45 @@ export class LocalHistoryStore {
     if (!pathInsideWorkspace(this.target.workspaceRoot, path)) return { status: 'refused', path, reason: 'path_outside_workspace' };
     const admittedRoot = this.policy.roots.some((root) => pathInsideWorkspace(resolve(this.target.workspaceRoot, root), path));
     if (!admittedRoot) return { status: 'refused', path, reason: 'path_outside_admitted_roots' };
-    if (matchesExclusion(relativePath, this.policy.exclusions)) return { status: 'refused', path, reason: 'path_excluded_by_policy' };
+    if (isExcluded(relativePath, this.policy.exclusions)) return { status: 'refused', path, reason: 'path_excluded_by_policy' };
+    const canonicalRoots = await this.canonicalRoots();
     try {
       const info = await lstat(path);
       if (info.isSymbolicLink()) return { status: 'refused', path, reason: 'symlink_or_reparse_point_refused' };
       if (!info.isFile()) return { status: 'refused', path, reason: 'not_a_regular_file' };
       const canonical = await realpath(path);
-      const canonicalRoots = await Promise.all(this.policy.roots.map(async (root) => realpath(resolve(this.target.workspaceRoot, root)).catch(() => resolve(this.target.workspaceRoot, root))));
+      if (!samePath(canonical, path)) return { status: 'refused', path, reason: 'symlink_or_reparse_point_refused' };
       if (!canonicalRoots.some((root) => pathInsideWorkspace(root, canonical))) return { status: 'refused', path, reason: 'canonical_path_outside_admitted_root' };
       return { status: 'admitted', path };
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        const ancestor = await nearestExistingAncestor(dirname(path));
+        if (!ancestor) return { status: 'refused', path, reason: 'missing_parent_path' };
+        const canonicalAncestor = await realpath(ancestor).catch(() => null);
+        if (!canonicalAncestor) return { status: 'refused', path, reason: 'canonical_parent_unavailable' };
+        if (!samePath(canonicalAncestor, ancestor)) return { status: 'refused', path, reason: 'symlink_or_reparse_point_refused' };
+        if (!canonicalRoots.some((root) => pathInsideWorkspace(root, canonicalAncestor))) {
+          return { status: 'refused', path, reason: 'canonical_path_outside_admitted_root' };
+        }
         return { status: 'admitted', path, missing: true };
       }
       throw error;
     }
   }
 
+  private async canonicalRoots(): Promise<string[]> {
+    return Promise.all(this.policy.roots.map(async (root) => {
+      const path = resolve(this.target.workspaceRoot, root);
+      return realpath(path).catch(() => path);
+    }));
+  }
+
   private assertOpen(): void {
     if (this.closed) throw new LocalHistoryError('history_store_closed');
+  }
+
+  private assertEnabled(): void {
+    if (!this.policy.enabled) throw new LocalHistoryError('local_history_disabled');
   }
 
   private async collectGarbage(): Promise<void> {
@@ -511,7 +628,15 @@ export class LocalHistoryStore {
       if (row.pinned || latest.has(`${row.file_id}|${row.captured_at}`)) continue;
       if (Date.parse(row.captured_at) < cutoff) await this.forget(row.snapshot_id).catch(() => undefined);
     }
-    const remainingRow = this.db.prepare('SELECT coalesce(sum(size_bytes), 0) AS bytes FROM history_snapshots WHERE is_tombstone = 0').get() as Record<string, unknown>;
+    const remainingRow = this.db.prepare(`
+      SELECT coalesce(sum(size_bytes), 0) AS bytes
+      FROM (
+        SELECT blob_rel_path, max(size_bytes) AS size_bytes
+        FROM history_snapshots
+        WHERE is_tombstone = 0 AND blob_rel_path IS NOT NULL
+        GROUP BY blob_rel_path
+      )
+    `).get() as Record<string, unknown>;
     let remainingBytes = Number(remainingRow.bytes ?? 0);
     if (remainingBytes <= this.policy.quota_bytes) return;
     const candidates = this.db.prepare('SELECT * FROM history_snapshots WHERE pinned = 0 ORDER BY captured_at ASC').all() as StoredSnapshotRow[];
@@ -519,29 +644,49 @@ export class LocalHistoryStore {
       if (remainingBytes <= this.policy.quota_bytes) break;
       if (latest.has(`${row.file_id}|${row.captured_at}`)) continue;
       const forgotten = await this.forget(row.snapshot_id).catch(() => null);
-      if (forgotten && !row.is_tombstone) remainingBytes -= Number(row.size_bytes ?? 0);
+      if (forgotten?.blob_deleted && !row.is_tombstone) remainingBytes -= Number(row.size_bytes ?? 0);
     }
   }
 }
 
 export async function writeHealth(path: string, health: Record<string, unknown>): Promise<void> {
-  await mkdir(dirname(path), { recursive: true });
-  await writeFile(path, `${JSON.stringify({ schema: 'narada.local_work_history.health.v1', ...health }, null, 2)}\n`, 'utf8');
+  await writeJsonAtomic(path, { schema: 'narada.local_work_history.health.v1', ...health });
 }
 
-async function readStable(path: string, policy: LocalHistoryPolicy): Promise<StableRead | null> {
+export async function writeJsonAtomic(path: string, value: unknown): Promise<void> {
+  await mkdir(dirname(path), { recursive: true });
+  const temporaryPath = `${path}.${randomUUID()}.tmp`;
+  try {
+    injectStorageFault('json_write');
+    await writeFile(temporaryPath, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
+    try {
+      injectStorageFault('json_rename');
+      await rename(temporaryPath, path);
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code !== 'EEXIST' && code !== 'EPERM') throw error;
+      await unlink(path).catch(() => undefined);
+      await rename(temporaryPath, path);
+    }
+  } catch (error) {
+    await unlink(temporaryPath).catch(() => undefined);
+    throw storageWriteError('json', path, error);
+  }
+}
+
+async function readStable(path: string, policy: LocalHistoryPolicy): Promise<{ value: StableRead | null; reason?: string }> {
   for (let attempt = 0; attempt < policy.stable_read_attempts; attempt += 1) {
     const before = await stat(path).catch(() => null);
-    if (!before || !before.isFile()) return null;
-    if (before.size > policy.max_file_size_bytes) return null;
+    if (!before || !before.isFile()) return { value: null, reason: 'file_missing' };
+    if (before.size > policy.max_file_size_bytes) return { value: null, reason: 'file_too_large' };
     const buffer = await readFile(path).catch(() => null);
     const after = await stat(path).catch(() => null);
     if (buffer && after && before.size === after.size && before.mtimeMs === after.mtimeMs) {
-      return { buffer, size: before.size, mtimeMs: before.mtimeMs, kind: looksBinary(buffer) ? 'binary' : 'text' };
+      return { value: { buffer, size: before.size, mtimeMs: before.mtimeMs, kind: looksBinary(buffer) ? 'binary' : 'text' } };
     }
     if (attempt + 1 < policy.stable_read_attempts && policy.stable_read_delay_ms > 0) await delay(policy.stable_read_delay_ms);
   }
-  return null;
+  return { value: null, reason: 'unstable_read' };
 }
 
 async function readCurrent(path: string): Promise<StableRead | null> {
@@ -551,9 +696,10 @@ async function readCurrent(path: string): Promise<StableRead | null> {
   return { buffer, size: before.size, mtimeMs: before.mtimeMs, kind: looksBinary(buffer) ? 'binary' : 'text' };
 }
 
-async function walkFiles(root: string, callback: (path: string) => Promise<void>): Promise<void> {
+async function walkFiles(root: string, callback: (path: string) => Promise<void>, shouldPrune?: (path: string, isDirectory: boolean) => boolean): Promise<void> {
   const info = await lstat(root).catch(() => null);
   if (!info || info.isSymbolicLink()) return;
+  if (shouldPrune?.(root, info.isDirectory())) return;
   if (info.isFile()) {
     await callback(root);
     return;
@@ -562,7 +708,10 @@ async function walkFiles(root: string, callback: (path: string) => Promise<void>
   for (const entry of await readdir(root, { withFileTypes: true })) {
     const path = join(root, entry.name);
     if (entry.isSymbolicLink()) continue;
-    if (entry.isDirectory()) await walkFiles(path, callback);
+    if (entry.isDirectory()) {
+      if (shouldPrune?.(path, true)) continue;
+      await walkFiles(path, callback, shouldPrune);
+    }
     else if (entry.isFile()) await callback(path);
   }
 }
@@ -576,13 +725,34 @@ async function writeBlobOnce(path: string, buffer: Buffer): Promise<void> {
   }
   await mkdir(dirname(path), { recursive: true });
   const temp = `${path}.${randomUUID()}.tmp`;
-  await writeFile(temp, buffer);
   try {
+    injectStorageFault('blob_write');
+    await writeFile(temp, buffer);
+    injectStorageFault('blob_rename');
     await rename(temp, path);
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
     await rm(temp, { force: true });
+    if ((error as NodeJS.ErrnoException).code === 'EEXIST') return;
+    throw storageWriteError('blob', path, error);
   }
+}
+
+function injectStorageFault(operation: 'json_write' | 'json_rename' | 'blob_write' | 'blob_rename'): void {
+  // This seam is intentionally process-local and test-only. It lets the built
+  // CLI E2E suite exercise OS-level write failures deterministically without
+  // making disk capacity or Windows ACL state part of the test environment.
+  if (process.env.NODE_ENV !== 'test') return;
+  const configuredFault = process.env.NARADA_LOCAL_HISTORY_TEST_IO_FAULT;
+  if (configuredFault !== operation && configuredFault !== `${operation}_eintr`) return;
+  const code = operation.endsWith('write') ? 'ENOSPC' : configuredFault?.endsWith('_eintr') ? 'EINTR' : 'EACCES';
+  const error = new Error(`local_history_test_io_fault: ${operation}`) as NodeJS.ErrnoException;
+  error.code = code;
+  throw error;
+}
+
+function storageWriteError(kind: 'json' | 'blob', path: string, error: unknown): LocalHistoryError {
+  const code = (error as NodeJS.ErrnoException).code ?? 'unknown';
+  return new LocalHistoryError('local_history_storage_write_failed', `local_history_storage_write_failed: ${kind}: ${path}: ${code}`);
 }
 
 async function listFilesSafe(path: string): Promise<string[]> {
@@ -596,6 +766,14 @@ async function listFilesSafe(path: string): Promise<string[]> {
   }
   await visit(path);
   return result;
+}
+
+async function sumFileSizes(paths: string[]): Promise<number> {
+  const sizes = await Promise.all(paths.map(async (path) => {
+    const info = await stat(path).catch(() => null);
+    return info?.isFile() ? info.size : 0;
+  }));
+  return sizes.reduce((total, size) => total + size, 0);
 }
 
 function parseSnapshot(row: StoredSnapshotRow): FileSnapshot {
@@ -622,6 +800,10 @@ function normalizeRelativePath(value: string): string {
 
 function matchesExclusion(path: string, patterns: string[]): boolean {
   return patterns.some((pattern) => globToRegExp(pattern).test(path));
+}
+
+function isExcluded(path: string, patterns: string[]): boolean {
+  return matchesExclusion(path, MANDATORY_HISTORY_EXCLUSIONS) || matchesExclusion(path, patterns);
 }
 
 function globToRegExp(pattern: string): RegExp {
@@ -673,6 +855,7 @@ async function readJsonFileSafe<T>(path: string): Promise<T | null> {
     return JSON.parse(await readFile(path, 'utf8')) as T;
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
-    return null;
+    if (error instanceof SyntaxError) throw new LocalHistoryError('local_history_metadata_corrupt', `local_history_metadata_corrupt: ${path}`);
+    throw error;
   }
 }
