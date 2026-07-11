@@ -23,7 +23,7 @@ import {
   normalizeRuntimeAlias,
   resolveCarrierRuntimeSelection,
 } from '@narada2/carrier-runtime-contract/carrier-runtime-selection';
-import { discoverNarsSessions } from '@narada2/carrier-runtime/nars-session-index';
+import { discoverNarsSessions } from '@narada2/nars-session-core/session-index';
 import { explainMcpCommand as explainMcpAuthorityCommand } from './launcher-mcp-authority.js';
 import { defaultLaunchRegistryPath, listKnownSiteRootsForCli, type ResolvedSiteRoot } from '../lib/site-root-resolver.js';
 
@@ -882,12 +882,12 @@ export interface WorkspaceLaunchAgentPlan extends WorkspaceLaunchRecord {
   legacy_carrier_compatibility: WorkspaceLaunchLegacyCarrierCompatibility;
 }
 
-interface WorkspaceLaunchRecordsLoad {
+export interface WorkspaceLaunchRecordsLoad {
   records: WorkspaceLaunchRecord[];
   siteCatalog: ResolvedSiteRoot[];
 }
 
-async function readWorkspaceLaunchRecords(options: WorkspaceLaunchPlanOptions): Promise<WorkspaceLaunchRecordsLoad> {
+export async function readWorkspaceLaunchRecords(options: WorkspaceLaunchPlanOptions): Promise<WorkspaceLaunchRecordsLoad> {
   const registryPaths = resolveRegistryPaths(options);
   const records = (await Promise.all(registryPaths.map(readLaunchRegistry))).flat();
   let siteCatalog: ResolvedSiteRoot[] = [];
@@ -3412,6 +3412,10 @@ export function registryDefaultRuntimeLabel(records: WorkspaceLaunchRecord[]): s
 
 export function registryDefaultIntelligenceProviderLabel(defaultProvider?: string): string {
   return defaultProvider ? `registry default (${defaultProvider})` : 'registry default';
+}
+
+export function registryDefaultIntelligenceProvider(): string {
+  return providerRegistry.default_provider ?? 'registry default';
 }
 
 export function initialOperatorSurfaceValues(choices: string[], current?: string): string[] {

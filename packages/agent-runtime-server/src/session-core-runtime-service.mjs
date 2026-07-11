@@ -112,6 +112,7 @@ export function createSessionCoreRuntimeService({ runtimeContext, callChatApiFn,
         return true;
       }
       if (request?.parse_error === 'invalid_json') throw new Error('invalid_json');
+      if (method !== 'session.submit') throw new Error('unsupported_session_control');
       if (requestContent(request) == null) throw new Error('unsupported_session_control');
       const result = await supervisor.dispatch(request);
       supervisor.core.appendEvent({

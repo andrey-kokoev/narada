@@ -23,7 +23,7 @@ Client surfaces render that projection in their own medium. They do not own even
 
 Client packages own only medium-specific rendering:
 
-- `@narada2/agent-web-ui` owns DOM/Vue layout, markdown rendering, artifact iframe rendering, input controls, and browser state.
+- `@narada2/agent-web-ui2` owns DOM/Vue layout, markdown rendering, artifact iframe rendering, input controls, and browser state.
 - `@narada2/carrier-terminal-projection` owns terminal formatting, colors, wrapping, and prompt behavior.
 - `@narada2/cloudflare-nars-projection` owns Cloudflare registration, bridge publication, redaction, bounded caches, credentials, and transport policy enforcement.
 
@@ -65,8 +65,8 @@ The current codebase intentionally has two command inventories because client pr
 | Agent Web UI command registry | `packages/nars-client-projection-contract/src/nars-client-projection-contract.mjs` as `AGENT_WEB_UI_COMMANDS` | Browser/web command palette entries, help grouping, local actions, admitted web protocol frames, aliases, palette metadata. | Server-side carrier command execution. |
 | Carrier command contract | `packages/carrier-command-contract/contracts/commands.json` | Session command vocabulary, aliases, argument labels, effects, and resolver behavior for pass-through commands. | Browser palette metadata or direct NARS protocol commands such as `/health` and `/events`. |
 | Terminal projected input | `packages/carrier-terminal-projection/src/projected-input.mjs` | Terminal parsing of operator input into NARS frames, terminal-local actions, prompt behavior, bracketed paste handling, and terminal help projection. | Provider execution or server-side command effects. |
-| Web UI operator input | `packages/agent-web-ui/src/protocol/operatorInput.ts` and Vue composer components | Browser submit behavior, palette rendering, local help/clear events, and delivery-mode UI. | Shared command semantics or NARS method admission. |
-| Runtime command dispatch | carrier substrate behind NARS, currently `packages/carrier-runtime/src/runtime-dependencies.mjs` | Execution of `session.command.execute`, emitting `carrier_command_result`. | Client palette/help rendering. |
+| Web UI operator input | `packages/agent-web-ui2/src/features/operator/operator-controller.ts` and `OperatorComposer.vue` | Browser submit behavior, palette rendering, local help/clear events, and delivery-mode UI. | Shared command semantics or NARS method admission. |
+| Session control dispatch | `packages/agent-runtime-server/src/session-core-runtime-service.mjs` | Admission and execution of `session.submit`, `session.health`, `session.events.subscribe`, `session.recovery`, `session.cancel`, and `session.close`. | Provider execution or client rendering. |
 
 This split is the current transitional shape. The target invariant is not "one parser everywhere"; it is that each surface consumes an explicit registry for its role, and all overlapping commands have documented projection/execution ownership.
 

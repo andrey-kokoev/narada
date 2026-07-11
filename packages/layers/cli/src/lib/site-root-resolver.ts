@@ -1,4 +1,4 @@
-import { resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 
@@ -9,20 +9,24 @@ export interface ResolvedSiteRoot {
 }
 
 export async function listKnownSiteRootsForCli(options: Pick<SiteRootOptions, 'launchRegistryPath'> = {}): Promise<ResolvedSiteRoot[]> {
-  const launchSites = listLaunchRegistrySites(options.launchRegistryPath);
-  if (launchSites.length > 0) return launchSites.sort((a, b) => String(a.site_id ?? '').localeCompare(String(b.site_id ?? '')));
   const byRoot = new Map<string, ResolvedSiteRoot>();
+  for (const site of listLaunchRegistrySites(options.launchRegistryPath)) {
+    if (!byRoot.has(site.site_root.toLowerCase())) byRoot.set(site.site_root.toLowerCase(), site);
+  }
   for (const site of await listLocalRegistrySites()) {
     if (!byRoot.has(site.site_root.toLowerCase())) byRoot.set(site.site_root.toLowerCase(), site);
   }
   return Array.from(byRoot.values()).sort((a, b) => String(a.site_id ?? '').localeCompare(String(b.site_id ?? '')));
 }
 
-function resolveFromLaunchRegistry(siteId: string, registryPath = defaultLaunchRegistryPath()): ResolvedSiteRoot | null {
-  return listLaunchRegistrySites(registryPath).find((candidate) => candidate.site_id === siteId) ?? null;
-}
-
-function listLaunchRegistrySites(registryPath = defaultLaunchRegistryPath()): ResolvedSiteRoot[] {
+/**
+ * Read launch records as a discovery input for an explicit registry refresh.
+ *
+ * This is deliberately separate from `listKnownSiteRootsForCli`: launch
+ * records describe how to start an agent, while the Site Registry is the
+ * canonical local catalog used for Site discovery and selection.
+ */
+export function listLaunchRegistrySites(registryPath = defaultLaunchRegistryPath()): ResolvedSiteRoot[] {
   if (!registryPath || !existsSync(registryPath)) return [];
   const records = parseLaunchRegistry(readFileSync(registryPath, 'utf8'));
   const bySiteRoot = new Map<string, ResolvedSiteRoot>();
@@ -59,7 +63,7 @@ async function listLocalRegistrySites(): Promise<ResolvedSiteRoot[]> {
   }
 }
 
-function defaultLaunchRegistryPath(): string {
+export function defaultLaunchRegistryPath(): string {
   const userProfileSiteRoot = process.env.USERPROFILE ? `${process.env.USERPROFILE}\\Narada` : null;
   const userSiteRoot = process.env.NARADA_USER_SITE_ROOT ?? userProfileSiteRoot;
   return resolve(userSiteRoot ?? `${homedir()}${process.platform === 'win32' ? '\\Narada' : '/Narada'}`, 'config', 'launch', 'agents.psd1');
@@ -86,6 +90,8 @@ function parseLaunchRegistry(content: string): Array<Record<string, string>> {
 }
 
 function inferSiteId(record: Record<string, string>): string | null {
+  const configuredSiteId = siteIdFromSiteRoot(record.SiteRoot ?? record.NaradaRoot);
+  if (configuredSiteId) return configuredSiteId;
   if (record.Site) return record.Site;
   const root = record.SiteRoot?.replace(/[\\/]+$/, '').split(/[\\/]/).pop() === '.narada'
     ? record.NaradaRoot
@@ -93,6 +99,33 @@ function inferSiteId(record: Record<string, string>): string | null {
   const name = root ? normalizeSiteName(root.replace(/[\\/]+$/, '').split(/[\\/]/).pop() ?? null) : null;
   if (name) return name;
   if (record.Agent?.includes('.')) return normalizeSiteName(record.Agent.split('.')[0] ?? null);
+  return null;
+}
+
+function siteIdFromSiteRoot(siteRoot: string | undefined): string | null {
+  if (!siteRoot) return null;
+  const resolvedRoot = resolve(siteRoot);
+  const configPaths = [
+    join(resolvedRoot, 'config.json'),
+    join(resolvedRoot, '.narada', 'config.json'),
+  ];
+  for (const configPath of configPaths) {
+    if (!existsSync(configPath)) continue;
+    try {
+      const config = JSON.parse(readFileSync(configPath, 'utf8')) as {
+        site_id?: unknown;
+        site?: { site_id?: unknown };
+      };
+      const siteId = typeof config.site_id === 'string'
+        ? config.site_id
+        : typeof config.site?.site_id === 'string'
+          ? config.site.site_id
+          : null;
+      if (siteId?.trim()) return siteId.trim();
+    } catch {
+      // Keep the launch-record identity fallback when a Site config is unreadable.
+    }
+  }
   return null;
 }
 
@@ -120,8 +153,9 @@ export async function resolveSiteRootForCli(options: SiteRootOptions): Promise<R
     };
   }
   if (!options.site) throw new Error('site_required: pass --site <site-id> or --site-root <path>');
-  const launchRegistryMatch = resolveFromLaunchRegistry(options.site, options.launchRegistryPath);
-  if (launchRegistryMatch) return launchRegistryMatch;
+  const launchSite = listLaunchRegistrySites(options.launchRegistryPath)
+    .find((candidate) => candidate.site_id === options.site);
+  if (launchSite) return launchSite;
   const registry = await openSiteRegistry();
   try {
     const site = registry.listSites().find((candidate: { siteId: string }) => candidate.siteId === options.site);
@@ -138,11 +172,11 @@ export async function resolveSiteRootForCli(options: SiteRootOptions): Promise<R
 
 async function openSiteRegistry(): Promise<{ listSites(): Array<{ siteId: string; siteRoot: string }>; close(): void }> {
   const {
-    resolveRegistryDbPath,
+    resolveRegistryDbPathByLocus,
     openRegistryDb,
     SiteRegistry,
   } = await import('@narada2/windows-site');
-  const dbPath = resolveRegistryDbPath();
+  const dbPath = resolveRegistryDbPathByLocus({ authorityLocus: 'user', variant: 'native' });
   const db = await openRegistryDb(dbPath);
   return new SiteRegistry(db);
 }

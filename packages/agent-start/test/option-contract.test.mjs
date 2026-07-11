@@ -305,6 +305,7 @@ test('McpScope all explicitly composes available Host, User Site, and local Site
   assert.ok(output.mcp_fabric.candidate_files.includes('user-site:narada-user-local-b.json'));
   assert.ok(output.mcp_fabric.skipped.some((entry) => entry.locus === 'user-site' && entry.server_name === 'narada-user-local-duplicate' && entry.reason === 'injection_scope_not_requested'));
   assert.equal(output.mcp_scope.resolution.enforcement, 'explicit_locus_composition');
+  assert.equal(output.mcp_registry_validation, 'diagnostic');
 });
 
 test('Codex McpScope none materializes isolated config with no MCP servers', () => {
@@ -390,6 +391,13 @@ test('agent-cli resolves provider credential from environment source and redacts
   assert.equal(output.intelligence_provider_resolution.credential_requirement.kind, 'api_key_secret');
   assert.equal(output.intelligence_provider_resolution.credential_secret_ref, 'narada/provider/kimi-api/api-key');
   assert.equal(output.intelligence_provider_resolution.credential.source_env, 'KIMI_API_KEY');
+  assert.equal(output.intelligence_provider_resolution.runtime_binding.schema, 'narada.carrier.provider_runtime_binding.v1');
+  assert.equal(output.intelligence_provider_resolution.runtime_binding.provider_id, 'kimi-api');
+  assert.equal(output.intelligence_provider_resolution.runtime_binding.base_url, 'https://api.moonshot.ai');
+  assert.match(output.intelligence_provider_resolution.runtime_binding.credential_fingerprint, /^sha256:[a-f0-9]{12}$/);
+  assert.equal(Object.hasOwn(output.intelligence_provider_resolution.runtime_binding, 'api_key'), false);
+  assert.equal(env.NARADA_INTELLIGENCE_PROVIDER, 'kimi-api');
+  assert.equal(env.NARADA_AI_API_KEY, '<set>');
   assert.equal(env.KIMI_API_KEY, '<set>');
   assert.doesNotMatch(JSON.stringify(output), /super-secret-test-key/);
 });
@@ -858,7 +866,7 @@ test('MCP registry mismatch fails closed before launch', () => {
     }],
   }, null, 2), 'utf8');
 
-  const result = runFailed(['--carrier', 'agent-cli', '--runtime', 'narada-agent-runtime-server', '--target-site-root', siteRoot, '--mcp-scope', 'local-site']);
+  const result = runFailed(['--carrier', 'agent-cli', '--runtime', 'narada-agent-runtime-server', '--target-site-root', siteRoot, '--mcp-scope', 'local-site', '--strict-mcp-registry']);
   const refusal = JSON.parse(result.stdout);
   assert.equal(refusal.reason_code, 'mcp_fabric_registry_mismatch');
   assert.equal(refusal.details.repair_plan.kind, 'registry_generated_file_mismatch');

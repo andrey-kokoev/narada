@@ -45,15 +45,15 @@
     "packages/layers/cli/src/commands/launcher.ts",
     "packages/layers/cli/src/lib/launcher-runtime.ts",
     "packages/launch-process-ownership/src/index.mjs",
-    "packages/carrier-runtime/src/mcp-runtime.mjs",
-    "packages/carrier-runtime/src/runtime-dependencies.mjs",
-    "packages/carrier-runtime/src/server-mode.mjs",
-    "packages/carrier-runtime/src/nars-session-index.mjs"
+    "packages/nars-capability-gateway/src/mcp-runtime.mjs",
+    "packages/agent-runtime-server/src/session-core-runtime-service.mjs",
+    "packages/agent-runtime-server/src/server-wrapper.mjs",
+    "packages/nars-session-core/src/session-index.mjs"
   ],
   "tests": [
     "packages/layers/cli/test/commands/launcher-workspace-plan.test.ts",
-    "packages/carrier-runtime/src/mcp-runtime.test.mjs",
-    "packages/carrier-runtime/src/nars-session-index.test.mjs"
+    "packages/nars-capability-gateway/src/mcp-runtime-e2e.test.mjs",
+    "packages/nars-session-core/src/authority-transition-state.test.mjs"
   ],
   "examples": [
     "A Sonar Site launch owns its NARS runtime server, agent-web-ui projection, and Site-scoped MCP child processes."

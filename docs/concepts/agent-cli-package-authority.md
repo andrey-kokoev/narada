@@ -33,8 +33,8 @@ not an admitted package bin.
 Provider metadata:
 
 ```text
-package: @narada2/agent-cli
-export:  ./intelligence-providers
+package: @narada2/carrier-provider-contract
+export:  ./provider-registry
 ```
 
 User sites and client sites may declare identities, roles, MCP fabric, policies,
@@ -42,7 +42,7 @@ prompts, directives, and runtime state. They must not own carrier implementation
 provider resolution, streaming behavior, slash commands, or directive sideband
 semantics.
 
-`C:\Users\Andrey\Narada` is the operator/user-site control surface. It may contain launchers, registry configuration, and operator affordances, but machine-addressable carrier execution delegates to Narada proper's packaged `narada-agent-runtime-server` entrypoint. The runtime server runs `@narada2/carrier-runtime` in-process; runtime dependencies are constructed by `@narada2/carrier-runtime/runtime-dependencies`, while `agent-cli` remains a client/projection package rather than a runtime helper source.
+`C:\Users\Andrey\Narada` is the operator/user-site control surface. It may contain launchers, registry configuration, and operator affordances, but machine-addressable carrier execution delegates to Narada proper's packaged `narada-agent-runtime-server` entrypoint. The runtime server uses `@narada2/carrier-runtime` only for stateless turn adaptation and constructs session control through `@narada2/nars-session-core`; `agent-cli` remains a client/projection package rather than a runtime helper source.
 
 Site-local `start-agent.mjs` files are no longer admitted compatibility shims. Agent startup authority is the packaged `@narada2/agent-start` TypeScript entrypoint, reached through the site PowerShell surface or package bin metadata.
 

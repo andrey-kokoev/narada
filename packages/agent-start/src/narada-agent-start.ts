@@ -14,7 +14,7 @@
  * with NARADA_AGENT_ID and NARADA_AGENT_START_EVENT_ID in the environment.
  *
  * Usage:
- *   narada-agent-start <identity> [--operator-surface <surface>] [--carrier <legacy-carrier>] [--runtime <runtime>] [--authority <auto|read|write>] [--db <path>] [--json] [--dry-run] [--exec] [--wait] [--yolo] [--enable-native-shell] [--target-site-id <site-id>] [--target-site-root <path>]
+ *   narada-agent-start <identity> [--operator-surface <surface>] [--carrier <legacy-carrier>] [--runtime <runtime>] [--authority <auto|read|write>] [--db <path>] [--json] [--dry-run] [--exec] [--wait] [--visible-runtime-terminal] [--yolo] [--enable-native-shell] [--strict-mcp-registry] [--target-site-id <site-id>] [--target-site-root <path>]
  */
 
 import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
@@ -71,7 +71,7 @@ import {
   mcpProviderCredentialEnvironment as projectMcpProviderCredentialEnvironment,
   providerCredentialRefusal as buildProviderCredentialRefusal,
 } from './provider-credential-projection.ts';
-import { spawnCarrierProcessAndExit, waitForEnterBeforeCarrier } from './carrier-process-launch.ts';
+import { resolveAgentStartExecutionPosture, spawnCarrierProcessAndExit, waitForEnterBeforeCarrier } from './carrier-process-launch.ts';
 import { canonicalJson, identityToken, mcpScopeLoci, normalizeMcpScope, parseArgs } from './launcher-cli-contract.ts';
 import { buildLauncherContracts, buildRuntimeHealthPosture, startupCommandFromSequence } from './launch-result-contracts.ts';
 
@@ -131,10 +131,12 @@ const carrierInput = operatorSurfaceInput ?? legacyCarrierInput;
 const execFlag = !!args.exec;
 const dryRun = !!args.dry_run;
 const waitFlag = !!args.wait || process.env.NARADA_AGENT_START_WAIT === '1';
+const visibleRuntimeTerminalFlag = !!args.visible_runtime_terminal;
 const yoloFlag = !!args.yolo;
 const enableNativeShellFlag = !!args.enable_native_shell;
 const ADMITTED_MCP_SCOPES = Object.freeze(['all', 'host', 'user-site', 'local-site', 'none']);
 const mcpScope = normalizeMcpScope(args.mcp_scope ?? process.env.NARADA_MCP_SCOPE ?? 'all');
+const strictMcpRegistry = !!args.strict_mcp_registry;
 const pcSiteRoot = args.pc_site_root ?? process.env.NARADA_PC_SITE_ROOT ?? 'C:/ProgramData/Narada/sites/pc/desktop-sunroom-2';
 const launchSource = args.launch_source ?? 'agent-start';
 const admitSessionFlag = !!args.admit_session;
@@ -386,14 +388,17 @@ if (intelligenceProviderResolution?.status === 'refused') {
 }
 
 if (!identity) {
-  console.error('Usage: node start-agent.mjs <identity> [--operator-surface <surface>] [--carrier <legacy-carrier>] [--runtime <runtime>] [--authority <auto|read|write>] [--db <path>] [--json] [--dry-run] [--exec] [--wait] [--yolo] [--enable-native-shell] [--target-site-id <site-id>] [--target-site-root <path>]');
+  console.error('Usage: node start-agent.mjs <identity> [--operator-surface <surface>] [--carrier <legacy-carrier>] [--runtime <runtime>] [--authority <auto|read|write>] [--db <path>] [--json] [--dry-run] [--exec] [--wait] [--visible-runtime-terminal] [--yolo] [--enable-native-shell] [--strict-mcp-registry] [--target-site-id <site-id>] [--target-site-root <path>]');
   process.exit(1);
 }
 
 const intelligenceProviderProjection = intelligenceProviderEnvironmentProjection(intelligenceProviderResolution);
 const intelligenceProviderEnv = intelligenceProviderProjection.env;
 const intelligenceProviderCredential = intelligenceProviderProjection.credential;
-const intelligenceProviderOutputResolution = annotateIntelligenceProviderCredential(intelligenceProviderResolution, intelligenceProviderCredential);
+const intelligenceProviderOutputResolution = {
+  ...annotateIntelligenceProviderCredential(intelligenceProviderResolution, intelligenceProviderCredential),
+  ...(intelligenceProviderProjection.runtime_binding ? { runtime_binding: intelligenceProviderProjection.runtime_binding } : {}),
+};
 if (intelligenceProviderCredential?.credential_required && !intelligenceProviderCredential.credential_present) {
   await failIntelligenceProviderRefusal(providerCredentialRefusal(intelligenceProviderOutputResolution, intelligenceProviderCredential));
 }
@@ -730,7 +735,7 @@ function loadScopedMcpFabric() {
       missingLoci.push({ locus, site_root: root, reason: 'mcp_fabric_missing_optional_for_all_scope' });
       continue;
     }
-    const fabric = loadSiteMcpFabric(root, { required, validateRegistry: required ? true : 'diagnostic', injectionScope: locus });
+    const fabric = loadSiteMcpFabric(root, { required, validateRegistry: strictMcpRegistry ? true : 'diagnostic', injectionScope: locus });
     if (Object.keys(fabric.servers ?? {}).length === 0) {
       missingLoci.push({ locus, site_root: root, reason: 'mcp_fabric_empty' });
       continue;
@@ -1046,6 +1051,19 @@ if (carrier !== 'kimi' && carrier !== 'opencode') {
 const spawnArgs = buildSpawnArgs(carrier, identity, carrierSessionRegistration);
 const toolFabricAdapter = resolveToolFabricAdapter(carrier, runtime);
 const execCommand = [resolveCarrierExecutableCommand(carrier), ...spawnArgs.map(shellQuote)].join(' ');
+const agentStartExecutionPosture = resolveAgentStartExecutionPosture({
+  runtime,
+  exec: execFlag,
+  wait: waitFlag,
+  visibleRuntimeTerminal: visibleRuntimeTerminalFlag,
+});
+const hiddenRuntimeOutputFiles = agentStartExecutionPosture.agent_start_execution_mode === 'hidden_detached'
+  ? {
+      schema: 'narada.agent_start.hidden_runtime_output_files.v1',
+      stdout_path: join(rootDir, '.ai', 'runtime', 'agent-start-processes', carrierSessionRegistration.carrier_session_id ?? identityToken(identity), 'stdout.log'),
+      stderr_path: join(rootDir, '.ai', 'runtime', 'agent-start-processes', carrierSessionRegistration.carrier_session_id ?? identityToken(identity), 'stderr.log'),
+    }
+  : null;
 const carrierEnvironment = {
   ...(carrierSessionRegistration.environment ?? {}),
   NARADA_RUNTIME_AUTHORITY: runtimeAuthoritySelection.effective,
@@ -1150,12 +1168,14 @@ const output = {
   site_tools_root: candidateSiteToolsRoot,
   launch_source: launchSource,
   wait: waitFlag,
+  visible_runtime_terminal: visibleRuntimeTerminalFlag,
   yolo: yoloFlag,
   runtime_resolution: runtimeResolution,
   tool_fabric_adapter_contract_schema: TOOL_FABRIC_ADAPTER_CONTRACT_SCHEMA,
   admitted_tool_fabric_adapter_kinds: [...ADMITTED_TOOL_FABRIC_ADAPTER_KINDS],
   tool_fabric_adapter: toolFabricAdapter,
   tool_fabric_adapter_kind: toolFabricAdapter.tool_fabric_adapter_kind,
+  mcp_registry_validation: strictMcpRegistry ? 'strict' : 'diagnostic',
   nars_launch: narsLaunch,
   mcp_fabric: mcpFabric ? {
     source: mcpFabric.source,
@@ -1174,6 +1194,7 @@ const output = {
     requested_loci: mcpScopeLoci(mcpScope),
     effective_loci: mcpScopeResolution?.loaded_loci ?? [],
     missing_loci: mcpScopeResolution?.missing_loci ?? [],
+    registry_validation: strictMcpRegistry ? 'strict' : 'diagnostic',
     resolution: mcpScopeResolution,
     enforcement: codexMcpScope,
   },
@@ -1190,6 +1211,10 @@ const output = {
   carrier_session: carrierSessionRegistration,
   starting_carrier_input: startingCarrierInputOutput(startingCarrierInput),
   exec: execFlag,
+  agent_start_execution_mode: agentStartExecutionPosture.agent_start_execution_mode,
+  detach_decision: agentStartExecutionPosture.detach_decision,
+  detach_refusal_reasons: agentStartExecutionPosture.detach_refusal_reasons,
+  hidden_runtime_output_files: hiddenRuntimeOutputFiles,
   carrier_actions: carrierActions,
   native_shell_exception: nativeShellExceptionStatus(),
   mcp_tool_approval: mcpToolApprovalStatus(),
@@ -1304,4 +1329,6 @@ spawnCarrierProcessAndExit({
   env: launchEnvironment,
   spawnOptions: carrierSpawnOptions(carrier),
   aiProcessInvocation,
+  executionMode: agentStartExecutionPosture.agent_start_execution_mode,
+  hiddenOutputFiles: hiddenRuntimeOutputFiles,
 });

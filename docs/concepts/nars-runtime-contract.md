@@ -26,7 +26,7 @@ narada-agent-runtime-server
 
 The stable runtime-server entrypoint belongs to `@narada2/agent-runtime-server` and binds each transport to one `@narada2/nars-session-core` supervisor. It invokes `@narada2/carrier-runtime` only as a stateless carrier turn adapter.
 
-Session discovery, health, and attachment schemas are public NARS contract even when their current implementation helpers still live in `@narada2/carrier-runtime` during extraction. Client code should depend on the NARS contract, not on carrier-runtime helper placement.
+Session discovery, health, and attachment schemas are public NARS contracts implemented by `@narada2/nars-session-core` and projected by `@narada2/agent-runtime-server`. Client code should depend on the NARS contract, not on internal helper placement.
 
 ## Layer Shape
 
@@ -142,7 +142,7 @@ In Runtime Projection Graph terms, NARS is an `authority_runtime`; attached clie
 
 Client projection metadata is centralized in `@narada2/nars-client-projection-contract`. Launchers and carrier runtime use it for attach command materialization; web UI uses it for admitted NARS methods, operator input command projection, shared event rendering vocabulary, and help text. The same session may be attached by peer clients with `narada-agent-cli --attach <event_endpoint>`, `agent-tui --attach <event_endpoint>`, or `narada-agent-web-ui --event-endpoint <event_endpoint> --health-endpoint <health_endpoint>`. `@narada2/carrier-protocol` remains the carrier protocol vocabulary/classification owner and must not grow client attach command strings or client-specific projection registries.
 
-Session control construction is owned by `@narada2/nars-session-core`; provider compatibility construction is isolated in `@narada2/nars-runtime-legacy-compat`, not in client packages. `agent-cli` must not expose runtime-server shims, `--server` delegation, or private carrier-substrate adapter flags; launchers resolve `narada-agent-runtime-server` from `@narada2/agent-runtime-server` directly.
+Session control construction is owned by `@narada2/nars-session-core`; provider execution is owned by `@narada2/nars-provider-runtime`, and capability transport is owned by `@narada2/nars-capability-gateway`. No compatibility package participates in the runtime path. `agent-cli` must not expose runtime-server shims, `--server` delegation, or private carrier-substrate adapter flags; launchers resolve `narada-agent-runtime-server` from `@narada2/agent-runtime-server` directly.
 
 ### Runtime Ownership Guard
 
@@ -154,12 +154,12 @@ The former `agent-cli` runtime-server adapter has been removed. Reintroduction r
 | --- | --- | --- | --- | --- |
 | Stable runtime binary | `@narada2/agent-runtime-server` | already correctly owned | package exports only `narada-agent-runtime-server`; tests assert no `agent-runtime-server` alias and no `@narada2/agent-cli` dependency | low |
 | Runtime wrapper, health, events, lifecycle hooks, artifacts | `@narada2/agent-runtime-server` | already correctly owned | `server-wrapper.mjs` owns health/event projections and lifecycle dispatch; package metadata names NARS responsibilities | low |
-| Provider compatibility and MCP gateway internals | `@narada2/nars-runtime-legacy-compat` and `@narada2/nars-capability-gateway` | explicit split | server delegates provider execution only to compatibility code and capability hosting to the gateway | medium: provider compatibility code still needs further extraction |
+| Provider execution and MCP gateway internals | `@narada2/nars-provider-runtime` and `@narada2/nars-capability-gateway` | explicit split | server delegates provider execution to provider-runtime and capability hosting to the gateway | current runtime ownership |
 | Terminal rendering and operator input projection | `@narada2/agent-cli` plus `@narada2/carrier-terminal-projection` | intentionally client-specific | NARS creates projected terminal bridge only when `operator_surface=agent-cli`; raw JSONL and web surfaces bypass terminal projection | low |
 | Web projection | `@narada2/agent-web-ui2` | correctly owned | package metadata declares web projection ownership and excludes runtime dependency construction/provider execution/MCP hosting | low |
 | Launch planning and selector UX | `@narada2/cli` with User Site PowerShell shim | already correctly owned | workspace launcher invokes Narada CLI; PS1 shim owns Windows convenience only | low |
 | Direct `agent-cli` runtime/server mode | none; removed | already correctly owned | `agent-cli` reports that non-server conversation runtime has been removed; NARS is the runtime path | low |
-| `agent-cli` preflight/session utilities importing `@narada2/carrier-runtime` | `agent-cli` compatibility utilities | compatibility shim needing extraction or narrowing | separate `D:/code/agent-cli` repo still depends on `@narada2/carrier-runtime` and imports provider/MCP runtime helpers for utility/preflight paths | medium: keep out of conversation runtime; extract if these utilities start hosting MCP/provider state for active turns |
+| `agent-cli` runtime ownership | `@narada2/agent-runtime-server` | correctly narrowed | separate `D:/code/agent-cli` is a client/projection package with no carrier-runtime, provider-runtime, or MCP-hosting dependency; it attaches to an existing NARS session | low |
 
 Fast verification should use focused package tests:
 

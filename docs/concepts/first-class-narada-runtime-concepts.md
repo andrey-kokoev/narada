@@ -26,13 +26,15 @@ Current implementation posture:
 - NARS session discovery has a dedicated Site-local storage contract under `.narada/crew/nars-sessions/<session-id>/`.
 - Per-session records, heartbeat files, event logs, and aggregate indexes are named as discovery projections rather than runtime authority.
 - Attach semantics are endpoint-based at the low level and discovery-based through Narada CLI at higher levels.
+- Workspace launcher result evidence distinguishes hidden runtime handoff from operator projection handoff; a hidden NARS start should not be described as a terminal handoff.
 - Liveness authority comes from `/health` or `session.health`, not from `status_hint`, terminal windows, or ambient process guesses.
 - Launch result renderers should surface `NARADA_NARS_SESSION_ID` first, then `NARADA_RUNTIME_SESSION_ID`, and keep `NARADA_CARRIER_SESSION_ID` fenced under explicit legacy compatibility.
+- Workspace launch starts NARS runtime hosts through hidden runtime posture when the runtime start is `hidden_detached`; operator terminals are projections, not the runtime ownership mechanism.
 
 Remaining implementation work:
 
 - Continue hardening stale and ambiguous session UX in attach commands.
-- Keep extraction boundaries clear while helpers still live partly under `@narada2/carrier-runtime`.
+- Keep the extraction boundaries explicit: session control is in session-core, provider execution is in provider-runtime, MCP hosting is in capability-gateway, and carrier-runtime is stateless.
 - Preserve compatibility fields such as `carrier_session_id` without letting clients infer that `carrier_` means `agent-cli` ownership.
 
 Acceptance coverage:
@@ -653,6 +655,13 @@ Acceptance coverage:
 - The dashboard may show what it launched, handed off, discovered, owns, and can stop.
 - The dashboard must not infer process ownership from Windows Terminal handoff alone.
 - Stop actions are lifecycle requests against runtime/projection authority, not unscoped process kills.
+
+Runtime-start posture:
+
+- `narada-agent-runtime-server` background starts are governed by [`Agent Runtime Start Posture`](../architecture/process-launch-posture.md#agent-runtime-start-posture).
+- For `runtime = narada-agent-runtime-server`, `exec = true`, and `wait != true`, the default execution mode is `hidden_detached` unless an explicit `visible_runtime_terminal` request is present.
+- Hidden runtime-start selection is independent of operator-surface or compatibility carrier naming. Operator-surface names may affect projection behavior; they must not decide whether the runtime host opens a terminal.
+- Launch results should expose `agent_start_execution_mode`, `detach_decision`, and `detach_refusal_reasons` so dashboard and operator diagnostics do not need to infer posture from process trees.
 
 ## 1709 - ProjectionTopology
 

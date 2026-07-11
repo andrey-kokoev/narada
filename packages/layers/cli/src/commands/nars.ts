@@ -2,8 +2,8 @@ import type { CommandContext } from '../lib/command-wrapper.js';
 import { formattedResult, type CliFormat } from '../lib/cli-output.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { agentIdentityDisplay } from '@narada2/agent-identity';
-import { prepareTargetAuthority, readAuthorityTransitionSourceState, authorityTransitionStatePathFromSessionPath } from '@narada2/carrier-runtime/authority-transition-state';
-import { discoverNarsSessions } from '@narada2/carrier-runtime/nars-session-index';
+import { prepareTargetAuthority, readAuthorityTransitionSourceState, authorityTransitionStatePathFromSessionPath } from '@narada2/nars-session-core/authority-transition-state';
+import { discoverNarsSessions } from '@narada2/nars-session-core/session-index';
 import { resolveNaradaSitePaths } from '@narada2/site-paths';
 import { listKnownSiteRootsForCli, resolveSiteRootForCli, type ResolvedSiteRoot } from '../lib/site-root-resolver.js';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
@@ -281,6 +281,7 @@ function toCommandSession(session: Record<string, unknown>, siteResolution: Reso
     site_id_source: session.site_id_source,
     runtime_kind: record?.runtime_kind ?? null,
     launch_operator_surface_kind: session.launch_operator_surface_kind,
+    launch_session_id: session.launch_session_id ?? record?.launch_session_id ?? null,
     started_at: session.started_at,
     last_seen_at: session.last_seen_at,
     terminal_state: session.terminal_state,

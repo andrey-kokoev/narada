@@ -7,7 +7,7 @@ import {
   NARS_AUTHORITY_RUNTIME_SOURCE_WRITE_ADMISSIONS,
   NARS_AUTHORITY_RUNTIME_TARGET_WRITE_ADMISSIONS,
 } from '@narada2/carrier-protocol';
-import { updateNarsSessionAuthorityTransitionState } from './nars-session-index.mjs';
+import { updateNarsSessionAuthorityTransitionState } from './session-index.mjs';
 
 export const NARS_AUTHORITY_TRANSITION_SOURCE_STATE_SCHEMA = 'narada.nars.authority_transition_source_state.v1';
 

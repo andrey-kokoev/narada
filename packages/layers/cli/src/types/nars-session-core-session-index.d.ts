@@ -1,4 +1,4 @@
-declare module '@narada2/carrier-runtime/nars-session-index' {
+declare module '@narada2/nars-session-core/session-index' {
   export function discoverNarsSessions(options: Record<string, unknown>): {
     schema: string;
     site_root: string | null;

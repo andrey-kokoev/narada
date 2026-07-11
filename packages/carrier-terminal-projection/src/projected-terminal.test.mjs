@@ -16,17 +16,17 @@ import { countReadlineSubmissionsForPaste, createBracketedPasteComposer, project
 test('projected slash commands produce NARS protocol frames', () => {
   assert.equal(createProjectedSlashCommandAction('/help').kind, 'local_help');
   assert.equal(createProjectedSlashCommandAction('/clear').kind, 'clear');
-  assert.equal(createProjectedSlashCommandAction('/status').frame.method, 'session.status');
+  assert.equal(createProjectedSlashCommandAction('/status').frame.method, 'session.health');
   assert.equal(createProjectedSlashCommandAction('/health').frame.method, 'session.health');
   assert.equal(createProjectedSlashCommandAction('/events').frame.method, 'session.events.subscribe');
-  assert.equal(createProjectedSlashCommandAction('/interrupt').frame.method, 'conversation.interrupt');
+  assert.equal(createProjectedSlashCommandAction('/interrupt').frame.method, 'session.cancel');
   assert.equal(createProjectedSlashCommandAction('/exit').frame.method, 'session.close');
-  assert.equal(createProjectedSlashCommandAction('/tool').frame.params.command, '/tool');
-  assert.equal(createProjectedSlashCommandAction('/queue clear').frame.params.command, '/queue');
+  assert.equal(createProjectedSlashCommandAction('/tool').kind, 'message');
+  assert.equal(createProjectedSlashCommandAction('/queue clear').kind, 'message');
   assert.equal(createProjectedSlashCommandAction('exit').frame.method, 'session.close');
-  assert.equal(createExplicitJsonControlFrame('/json {"id":"status-1","method":"session.status","params":{}}').frame.method, 'session.status');
-  assert.equal(createExplicitJsonControlFrame('/json {"id":"bad-1","method":"bad.method","params":{}}').error, '/json Unsupported method: bad.method');
-  assert.match(projectedHelpText(), /\/interrupt\s+Interrupt active response/);
+  assert.equal(createExplicitJsonControlFrame('/json {"id":"health-1","method":"session.health","params":{}}').frame.method, 'session.health');
+  assert.equal(createExplicitJsonControlFrame('/json {"id":"bad-1","method":"bad.method","params":{}}').error, '/json unsupported session-core method: bad.method');
+  assert.match(projectedHelpText(), /\/interrupt\s+Cancel the active request/);
 });
 
 test('startup event renders operator-facing runtime summary rows', () => {
@@ -215,8 +215,8 @@ test('projected terminal bridge inserts bracketed multiline paste and submits on
   bridge.close();
 
   assert.equal(frames.length, 1);
-  assert.equal(frames[0].method, 'conversation.send');
-  assert.equal(frames[0].params.message, pasted);
+  assert.equal(frames[0].method, 'session.submit');
+  assert.equal(frames[0].params.content, pasted);
 });
 
 test('projected terminal bridge keeps multiline slash-looking paste as draft until enter', async () => {
@@ -250,8 +250,8 @@ test('projected terminal bridge keeps multiline slash-looking paste as draft unt
   bridge.close();
 
   assert.equal(frames.length, 1);
-  assert.equal(frames[0].method, 'conversation.send');
-  assert.equal(frames[0].params.message, pasted);
+  assert.equal(frames[0].method, 'session.submit');
+  assert.equal(frames[0].params.content, pasted);
 });
 
 test('projected terminal bridge handles raw navigation escape sequences in draft', async () => {
@@ -352,8 +352,8 @@ test('projected terminal bridge enqueues ordinary input while a turn is active',
   bridge.close();
 
   assert.equal(frames.length, 2);
-  assert.equal(frames[0].method, 'conversation.enqueue');
-  assert.equal(frames[0].params.message, 'steer this turn');
-  assert.equal(frames[1].method, 'conversation.send');
-  assert.equal(frames[1].params.message, 'new turn');
+  assert.equal(frames[0].method, 'session.submit');
+  assert.equal(frames[0].params.content, 'steer this turn');
+  assert.equal(frames[1].method, 'session.submit');
+  assert.equal(frames[1].params.content, 'new turn');
 });

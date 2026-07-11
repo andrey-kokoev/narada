@@ -1,6 +1,6 @@
 # AGENTS.md - @narada2/carrier-runtime
 
-This package owns the in-process carrier substrate used by the Narada Agent Runtime Server (NARS).
+This package owns the stateless carrier turn adapter used by the Narada Agent Runtime Server (NARS).
 
 For the full concept and implementation contract, read:
 
@@ -10,24 +10,24 @@ For the full concept and implementation contract, read:
 
 ## Package Role
 
-`@narada2/carrier-runtime` is the NARS carrier runtime substrate. It is not the public NARS package authority.
+`@narada2/carrier-runtime` is a narrow carrier boundary. It is not the public NARS package authority and it is not a session, provider, MCP, or transport runtime.
 
-It owns current implementation placement for:
+It owns only:
 
-- provider runtime adapters;
-- MCP runtime fabric internals;
-- carrier server-mode loop;
-- runtime dependency construction;
-- session records, event logs, artifacts, and status helper machinery that have not yet been extracted;
-- authority transition support modules used by the runtime substrate.
+- the pure `runTurn(context, eventSink, toolGateway)` adapter;
+- carrier turn event normalization and bounded tool-loop behavior;
+- adapter-focused tests.
 
 The stable public runtime-server entrypoint belongs to `@narada2/agent-runtime-server`.
+Session control and durability belong to `@narada2/nars-session-core`; provider execution belongs to `@narada2/nars-provider-runtime`; MCP lifecycle and dispatch belong to `@narada2/nars-capability-gateway`.
 
 ## Boundary Rules
 
 Distinguish implementation placement from public contract ownership.
 
-Session discovery, health, attachment, status, event subscription, and protocol schemas are public NARS contract even when current helper code lives in this package during extraction. Client code should depend on the NARS contract and `@narada2/agent-runtime-server`, not on carrier-runtime helper placement.
+Session discovery, health, attachment, status, event subscription, and protocol schemas are public NARS contracts owned by session-core and the runtime server. Client code should depend on those contracts and `@narada2/agent-runtime-server`, never on carrier-runtime helper placement.
+
+The carrier adapter must remain stateless with respect to sessions. It must not write session files, construct MCP servers, resolve providers, supervise processes, own transport, or expose compatibility facades.
 
 Do not make this package responsible for:
 
@@ -44,8 +44,8 @@ Keep client projection metadata in `@narada2/nars-client-projection-contract`, c
 
 ## Editing Guidance
 
-Use this package for changes to provider invocation, MCP discovery/dispatch internals, runtime dependency wiring, server-mode execution, input queue handling, event/session/artifact helpers, and runtime substrate tests.
+Use this package only for changes to carrier-turn adaptation, injected provider-call/tool-gateway coordination, carrier event mapping, and adapter tests.
 
 If a change alters the public NARS protocol, session binding contract, health/status shape, attachment behavior, or package authority boundary, update the relevant concept docs and coordinate with `../agent-runtime-server` instead of hiding that contract change inside the carrier substrate.
 
-Preserve the invariant that the carrier may host execution, but authority remains in governed Narada structures.
+Preserve the invariant that the carrier adapter performs one injected turn and returns evidence; lifecycle authority remains in session-core and runtime-server structures.

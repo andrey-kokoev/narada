@@ -27,7 +27,9 @@ import {
 } from '../lib/site-relation-registry.js';
 import { inspectDelegatedCliHealth } from '../lib/delegated-cli-health.js';
 import { assessSiteReadiness } from '../lib/site-readiness.js';
+import type { RegistryManagementRequest } from '@narada2/windows-site';
 import { siteAuthorityRootFromSiteRoot } from '@narada2/site-paths';
+import { sitesRegistryStateCommand } from './site-registry-management.js';
 import {
   CREATE_SITE_SUPPORTED_PRESETS,
   expandCreateSitePackageDescriptorsFromPackages,
@@ -39,6 +41,10 @@ import {
 export interface SitesOptions {
   format?: string;
   verbose?: boolean;
+  reason?: string;
+  actor?: string;
+  apply?: boolean;
+  dryRun?: boolean;
 }
 
 export interface SitesTaskLifecycleInitOptions extends SitesOptions {
@@ -662,11 +668,11 @@ export async function sitesRelationExplainCommand(
 
 async function openRegistry() {
   const {
-    resolveRegistryDbPath,
+    resolveRegistryDbPathByLocus,
     openRegistryDb,
     SiteRegistry,
   } = await import('@narada2/windows-site');
-  const dbPath = resolveRegistryDbPath();
+  const dbPath = resolveRegistryDbPathByLocus({ authorityLocus: 'user', variant: 'native' });
   const db = await openRegistryDb(dbPath);
   return new SiteRegistry(db);
 }
@@ -781,76 +787,72 @@ export async function sitesListCommand(
 
 export async function sitesDiscoverCommand(
   options: SitesOptions,
-  _context: CommandContext,
+  context: CommandContext,
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
-  const fmt = createFormatter({ format: options.format as 'json' | 'human' | 'auto', verbose: options.verbose });
-  const registry = await openRegistry();
+  const { sitesRegistryDiscoverCommand } = await import('./site-registry-management.js');
+  const actor = options.actor ?? process.env.NARADA_AGENT_ID ?? 'operator';
+  const additionalCandidates: RegistryManagementRequest[] = [];
+  const compatibilityObservations: Array<Record<string, unknown>> = [];
+
   try {
-    const discovered: Array<{ siteId: string; variant: string }> = [];
-
-    for (const variant of ['native', 'wsl'] as const) {
-      try {
-        const sites = registry.discoverSites(variant);
-        for (const site of sites) {
-          discovered.push({ siteId: site.siteId, variant: site.variant });
-        }
-      } catch {
-        // Skip variants that fail to scan
-      }
+    const { discoverMacosSites } = await import('@narada2/macos-site');
+    for (const site of discoverMacosSites()) {
+      compatibilityObservations.push({
+        site_id: site.siteId,
+        variant: 'macos',
+        source: 'filesystem',
+        action: 'observed',
+        site_root: site.siteRoot,
+      });
     }
-
-    // Discover macOS sites
-    try {
-      const { discoverMacosSites } = await import('@narada2/macos-site');
-      const macosSites = discoverMacosSites();
-      for (const site of macosSites) {
-        if (!discovered.some((d) => d.siteId === site.siteId)) {
-          discovered.push({ siteId: site.siteId, variant: 'macos' });
-        }
-      }
-    } catch {
-      // macOS site package not available
-    }
-
-    // Discover Linux sites
-    try {
-      const { listAllSites } = await import('@narada2/linux-site');
-      const linuxSites = listAllSites();
-      for (const site of linuxSites) {
-        if (!discovered.some((d) => d.siteId === site.siteId)) {
-          const variant = site.mode === 'system' ? 'linux-system' : 'linux-user';
-          registry.registerSite({
-            siteId: site.siteId,
-            variant,
-            siteRoot: site.siteRoot,
-            substrate: 'linux',
-            aimJson: null,
-            controlEndpoint: null,
-            lastSeenAt: null,
-            createdAt: new Date().toISOString(),
-          });
-          discovered.push({ siteId: site.siteId, variant });
-        }
-      }
-    } catch {
-      // Linux site package not available
-    }
-
-    if (fmt.getFormat() === 'human') {
-      if (discovered.length === 0) {
-        fmt.message('No new Sites discovered.', 'info');
-      } else {
-        fmt.message(`Discovered ${discovered.length} Site(s):`, 'success');
-        for (const site of discovered) {
-          fmt.message(`  ${site.siteId} (${site.variant})`, 'info');
-        }
-      }
-    }
-
-    return { exitCode: ExitCode.SUCCESS, result: { status: 'success', discovered } };
-  } finally {
-    registry.close();
+  } catch {
+    // macOS site package is optional on Windows.
   }
+
+  try {
+    const { listAllSites } = await import('@narada2/linux-site');
+    for (const site of listAllSites()) {
+      additionalCandidates.push({
+        operation: 'add',
+        siteId: site.siteId,
+        actor,
+        siteRoot: site.siteRoot,
+        variant: site.mode === 'system' ? 'linux-system' : 'linux-user',
+        substrate: 'linux',
+        source: {
+          kind: 'filesystem',
+          ref: site.siteRoot,
+          observedAt: new Date().toISOString(),
+        },
+        apply: options.apply === true && options.dryRun !== true,
+      });
+    }
+  } catch {
+    // Linux site package is optional on Windows.
+  }
+
+  const result = await sitesRegistryDiscoverCommand({
+    source: 'all',
+    actor,
+    additionalCandidates,
+    apply: options.apply,
+    dryRun: options.dryRun,
+    format: (options.format ?? 'auto') as CliFormat,
+    verbose: options.verbose,
+  }, context);
+  if (result.result && typeof result.result === 'object' && !Array.isArray(result.result)) {
+    const payload = result.result as Record<string, unknown>;
+    const entries = Array.isArray(payload.entries) ? payload.entries : [];
+    return {
+      ...result,
+      result: {
+        ...payload,
+        discovered: [...entries, ...compatibilityObservations],
+        compatibility_observations: compatibilityObservations,
+      },
+    };
+  }
+  return result;
 }
 
 export async function sitesCreateCommand(
@@ -3145,27 +3147,17 @@ export async function sitesShowCommand(
 export async function sitesRemoveCommand(
   siteId: string,
   options: SitesOptions,
-  _context: CommandContext,
+  context: CommandContext,
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
-  const fmt = createFormatter({ format: options.format as 'json' | 'human' | 'auto', verbose: options.verbose });
-  const registry = await openRegistry();
-  try {
-    const removed = registry.removeSite(siteId);
-    if (!removed) {
-      return {
-        exitCode: ExitCode.GENERAL_ERROR,
-        result: { status: 'error', error: `Site not found: ${siteId}` },
-      };
-    }
-
-    if (fmt.getFormat() === 'human') {
-      fmt.message(`Removed ${siteId} from registry (Site files were NOT deleted).`, 'success');
-    }
-
-    return { exitCode: ExitCode.SUCCESS, result: { status: 'success', removed: siteId } };
-  } finally {
-    registry.close();
-  }
+  return sitesRegistryStateCommand('retire', {
+    reference: siteId,
+    reason: options.reason,
+    actor: options.actor,
+    apply: options.apply,
+    dryRun: options.dryRun,
+    format: (options.format ?? 'auto') as CliFormat,
+    verbose: options.verbose,
+  }, context);
 }
 
 // ---------------------------------------------------------------------------
@@ -3335,7 +3327,7 @@ function normalizeAgentCliWrapperTemplateText(text: string): string {
 }
 
 function agentCliWrapperTemplatePath(): string {
-  return fileURLToPath(new URL('../../../../../../agent-cli/templates/Start-AgentCliSession.ps1', import.meta.url));
+  return fileURLToPath(new URL('../../../../agent-runtime-server/templates/Start-AgentCliSession.ps1', import.meta.url));
 }
 
 function packageInstallPath(siteRoot: string, packageName: string): string {
@@ -3502,7 +3494,7 @@ async function inspectAgentCliWrapper(siteRoot: string): Promise<{
   const wrapperText = await readFile(wrapperPath, 'utf8');
   const normalizedWrapper = normalizeAgentCliWrapperTemplateText(wrapperText);
   const existingHash = sha256Text(normalizedWrapper);
-  const hasTemplateEvidence = wrapperText.includes('narada_template_source: @narada2/agent-cli')
+  const hasTemplateEvidence = wrapperText.includes('narada_template_source: @narada2/agent-runtime-server')
     && wrapperText.includes('narada_template_id:')
     && wrapperText.includes('narada_template_version:')
     && wrapperText.includes('narada_template_hash:');

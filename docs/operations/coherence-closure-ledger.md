@@ -27,7 +27,7 @@ Each row names the main invariant, the owning files, the best current proof, the
 ### 1815. Legacy session env vars
 
 - State: open; session env naming still needs a compatibility boundary.
-- Owning files: `packages/agent-start/src/narada-agent-start.ts`, `packages/carrier-runtime/src/server-mode.mjs`, `packages/carrier-runtime/src/carrier-runtime-context.mjs`, `Start-NaradaAgent.ps1`.
+- Owning files: `packages/agent-start/src/narada-agent-start.ts`, `packages/agent-runtime-server/src/server-wrapper.mjs`, `packages/agent-runtime-server/src/runtime-context.mjs`, `Start-NaradaAgent.ps1`.
 - Current evidence: the launch path already materializes session and agent identity context through runtime code instead of relying only on ad hoc shell variables.
 - Remaining gap: legacy and canonical env var names still need a single, documented compatibility story so launchers do not split on different env sources.
 - Next verification: `pnpm --filter @narada2/agent-start test` and `pnpm --filter @narada2/carrier-runtime test`.
@@ -38,7 +38,7 @@ Each row names the main invariant, the owning files, the best current proof, the
 - Owning files: `docs/concepts/agent-identity-rendering-hardening.md`, `packages/agent-identity/src/index.mjs`, `packages/agent-identity/src/index.test.mjs`, `packages/agent-start-renderer/src/agent-start-renderer.mjs`, `packages/agent-web-ui/src/session-identity.js`, `packages/agent-web-ui/src/session-projection-activity.js`, `packages/agent-web-ui/src/health.js`.
 - Current evidence: the draft doc states the raw `agent_id` vs canonical display invariant, and the rendering code has been moved toward `agent_identity_ref`-based display.
 - Remaining gap: prove the helper and all renderers actually prevent raw identity from leaking into operator-facing text when canonical identity is available.
-- Next verification: `pnpm --filter @narada2/agent-identity test`, `pnpm --filter @narada2/agent-start-renderer test`, `pnpm --filter @narada2/agent-web-ui test`.
+- Next verification: `pnpm --filter @narada2/agent-identity test`, `pnpm --filter @narada2/agent-start-renderer test`, `pnpm --filter @narada2/agent-web-ui2 test`.
 
 ### 1817. Layered launch output
 
@@ -67,7 +67,7 @@ Each row names the main invariant, the owning files, the best current proof, the
 ### 1820. Unified launch observation
 
 - State: open; launch observation needs a single operator-facing model across terminal, browser, and NARS session index.
-- Owning files: `packages/layers/cli/src/commands/launcher.ts`, `packages/carrier-runtime/src/nars-session-index.mjs`, `packages/agent-web-ui/src/session-projection.js`, `packages/agent-web-ui/src/session-projection-activity.js`.
+- Owning files: `packages/layers/cli/src/commands/launcher.ts`, `packages/nars-session-core/src/session-index.mjs`, `packages/agent-web-ui/src/session-projection.js`, `packages/agent-web-ui/src/session-projection-activity.js`.
 - Current evidence: the launcher draft now records handoff, runtime, and projection observation records separately, which is the right shape for a unified observation layer.
 - Remaining gap: verify that the same observation can be rediscovered and displayed after the launcher process restarts.
 - Next verification: `pnpm --filter @narada2/carrier-runtime test` plus the launcher dashboard e2e test.
@@ -86,7 +86,7 @@ Each row names the main invariant, the owning files, the best current proof, the
 - Owning files: `packages/agent-web-ui/src/session-projection.js`, `packages/agent-web-ui/src/session-projection-activity.js`, `packages/carrier-protocol/src/carrier-protocol.mjs`.
 - Current evidence: the projection reducers already normalize event shape and canonical identity display.
 - Remaining gap: prove that every relevant event lane uses the same normalization path rather than specialized one-off parsing.
-- Next verification: `pnpm --filter @narada2/agent-web-ui test`.
+- Next verification: `pnpm --filter @narada2/agent-web-ui2 test`.
 
 ### 1823. Event lanes
 
@@ -94,7 +94,7 @@ Each row names the main invariant, the owning files, the best current proof, the
 - Owning files: `packages/agent-web-ui/src/app/components/NarsSessionShell.vue`, `packages/agent-web-ui/src/app/components/SurfaceNavigator.vue`, `packages/agent-web-ui/src/app/App.vue`.
 - Current evidence: the browser UI already separates session, surface, and activity components instead of rendering one undifferentiated feed.
 - Remaining gap: show that those lanes remain distinct under projection attach, health updates, and conversational events.
-- Next verification: `pnpm --filter @narada2/agent-web-ui test` and the panel-focused UI e2e coverage.
+- Next verification: `pnpm --filter @narada2/agent-web-ui2 test` and the panel-focused UI e2e coverage.
 
 ### 1824. Web UI peer maturity
 
@@ -102,12 +102,12 @@ Each row names the main invariant, the owning files, the best current proof, the
 - Owning files: `packages/agent-web-ui/README.md`, `packages/agent-web-ui/src/agent-web-ui.css`, `packages/agent-web-ui/src/app/components/*.vue`, `packages/agent-web-ui/test/agent-web-ui-*.test.mjs`.
 - Current evidence: the UI package already has dedicated panel, projection, protocol, and UX smoke tests.
 - Remaining gap: prove the page behaves like a first-class projection peer rather than a thin transport viewer.
-- Next verification: `pnpm --filter @narada2/agent-web-ui test` and the launcher dashboard e2e once the same session is attached from the browser.
+- Next verification: `pnpm --filter @narada2/agent-web-ui2 test` and the launcher dashboard e2e once the same session is attached from the browser.
 
 ### 1825. Cloudflare / local symmetry
 
 - State: open; local and Cloudflare projection semantics still need one agreed coherence story.
-- Owning files: `docs/operations/cloudflare-local-nars-projection-symmetry-matrix.md`, `docs/architecture/cloudflare-carrier/target.md`, `packages/carrier-runtime/src/server-mode.mjs`, `packages/carrier-runtime/src/runtime-dependencies.mjs`, `D:/code/mcp-surfaces/packages/site-coherence-mcp/src/main.ts`.
+- Owning files: `docs/operations/cloudflare-local-nars-projection-symmetry-matrix.md`, `docs/architecture/cloudflare-carrier/target.md`, `packages/agent-runtime-server/src/server-wrapper.mjs`, `packages/nars-capability-gateway/src/mcp-runtime.mjs`, `D:/code/mcp-surfaces/packages/site-coherence-mcp/src/main.ts`.
 - Current evidence: the new symmetry matrix maps local/runtime and Cloudflare/runtime quadrants to the existing agent-web-ui and cloudflare-nars-projection tests, and the architecture doc plus site-coherence surface already describe the intended local-versus-Cloudflare comparison model.
 - Remaining gap: keep the matrix synchronized with future projection tests and document any additional asymmetry rather than blurring it into symmetry.
 - Next verification: the site coherence check for the relevant Site id plus the Cloudflare carrier projection smoke.
@@ -123,7 +123,7 @@ Each row names the main invariant, the owning files, the best current proof, the
 ### 1827. MCP fabric handoff
 
 - State: open; worker-facing MCP scope still needs to be bounded by the owning runtime, not by accidental process inheritance.
-- Owning files: `packages/agent-start/src/narada-agent-start.ts`, `packages/carrier-runtime/src/runtime-dependencies.mjs`, `packages/agent-context-tools/src/agent-context-mcp-server.mjs`.
+- Owning files: `packages/agent-start/src/narada-agent-start.ts`, `packages/agent-runtime-server/src/session-core-runtime-service.mjs`, `packages/agent-context-tools/src/agent-context-mcp-server.mjs`.
 - Current evidence: the runtime stack already separates discovery, projection, and session index responsibilities.
 - Remaining gap: the launcher and delegated worker flows still need explicit proof that MCP exposure is intentional and scoped.
 - Next verification: `pnpm --filter @narada2/carrier-runtime test` and the worker-delegation/launcher tests that cover scoped MCP startup.
@@ -176,7 +176,7 @@ Run the narrow tests that correspond to the changed slice, then update the row i
 - `pnpm --filter @narada2/agent-start-renderer test`
 - `pnpm --filter @narada2/carrier-terminal-projection test`
 - `pnpm --filter @narada2/nars-client-projection-contract test`
-- `pnpm --filter @narada2/agent-web-ui test`
+- `pnpm --filter @narada2/agent-web-ui2 test`
 - `pnpm --filter @narada2/carrier-runtime test`
 - `pnpm --filter @narada2/agent-start test`
 - launcher dashboard e2e: `packages/layers/cli/test/integration/workspace-selection-ui-e2e.test.mjs`

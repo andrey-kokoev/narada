@@ -485,11 +485,11 @@ Automated tests should use local/fake projection services and must not require l
 1. Build the browser shell and Worker package:
 
    ```text
-   pnpm --filter @narada2/agent-web-ui build
+   pnpm --filter @narada2/agent-web-ui2 build
    pnpm --filter @narada2/cloudflare-nars-projection build
    ```
 
-2. Deploy or preview the Cloudflare projection Worker from `packages/cloudflare-nars-projection`. Its `wrangler.toml` serves `../agent-web-ui/dist` through the Worker assets binding and keeps projection APIs under `/api/nars/projections/...`.
+2. Deploy or preview the Cloudflare projection Worker from `packages/cloudflare-nars-projection`. Its `wrangler.toml` serves `../agent-web-ui2/dist` through the Worker assets binding and keeps projection APIs under `/api/nars/projections/...`.
 3. Start or identify a concrete local NARS session for the target Site and agent.
 4. Register a projection intent and remote access record:
 
@@ -532,7 +532,7 @@ If Cloudflare registration or bridge connectivity is unavailable, the expected r
 - [`nars-runtime-contract.md`](nars-runtime-contract.md) owns the NARS protocol and event subscription contract.
 - [`operator-input-admission.md`](operator-input-admission.md) owns `send`, `enqueue`, and `steer` semantics.
 - [`nars-remote-projection-gateway.md`](nars-remote-projection-gateway.md) describes a narrower gateway/read-only slice and should be interpreted under this Cloudflare projection target.
-- `packages/carrier-runtime/src/nars-artifacts.mjs` is the current implementation authority for local NARS artifact registry records, public records, and content serving behavior until a separate concept document is introduced.
+- `packages/nars-session-core/src/artifacts.mjs` is the current implementation authority for local NARS artifact registry records; `packages/agent-runtime-server/src/server-wrapper.mjs` owns session-scoped artifact request handling.
 
 ## Locked Decisions
 

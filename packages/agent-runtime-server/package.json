@@ -28,6 +28,7 @@
     "./runtime-context": "./src/runtime-context.mjs",
     "./runtime-server-events": "./src/runtime-server-events.mjs",
     "./test-fixtures": "./src/test-fixtures.mjs",
+    "./agent-cli-windows-wrapper-template": "./templates/Start-AgentCliSession.ps1",
     "./package.json": "./package.json"
   },
   "scripts": {

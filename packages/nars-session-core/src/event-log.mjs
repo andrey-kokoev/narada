@@ -83,6 +83,29 @@ export function readNarsEventLog(eventsPath) {
   return { events, corruptLineCount };
 }
 
+export function readNarsEventLogTail(eventsPath, limit = MAX_LIMIT) {
+  if (!eventsPath || !existsSync(eventsPath)) return { events: [], corruptLineCount: 0 };
+  const boundedLimit = boundedPositiveInteger(limit, DEFAULT_LIMIT, MAX_LIMIT);
+  const events = [];
+  let corruptLineCount = 0;
+  // Keep parsed event memory bounded while preserving the newest evidence needed by
+  // readiness checks. The source text is streamed by the regexp iterator rather than
+  // materializing a second full array of lines.
+  for (const match of readFileSync(eventsPath, 'utf8').matchAll(/[^\r\n]+/g)) {
+    const line = match[0];
+    try {
+      const event = JSON.parse(line);
+      if (event && typeof event === 'object' && boundedLimit > 0) {
+        events.push(event);
+        if (events.length > boundedLimit) events.shift();
+      }
+    } catch {
+      corruptLineCount += 1;
+    }
+  }
+  return { events, corruptLineCount };
+}
+
 function eventInPageWindow(event, { afterSequence, beforeSequence, sinceTimestamp }) {
   const sequence = Number(event?.event_sequence ?? event?.sequence ?? 0);
   const after = optionalInteger(afterSequence);

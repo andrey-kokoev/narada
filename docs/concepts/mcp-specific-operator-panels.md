@@ -197,28 +197,28 @@ For a new MCP-specific panel, touch these places deliberately:
    Export the frame builder for TypeScript consumers.
 3. `packages/nars-client-projection-contract/src/nars-client-projection-contract.test.mjs`
    Assert the method is admitted and the frame builder shape is stable.
-4. `packages/carrier-runtime/src/surface-affordances.mjs`
+4. `packages/nars-capability-gateway/src/capability-gateway.mjs`
    Detect the surface from explicit MCP metadata or a temporary live tool inventory inference.
-5. `packages/carrier-runtime/src/surface-affordances.test.mjs`
+5. `packages/nars-capability-gateway/src/capability-gateway.test.mjs`
    Assert the generated affordance includes `surface_kind`, `panel.summary_method`, `actions`, and `tools`.
-6. `packages/carrier-runtime/src/runtime-dependencies.mjs`
+6. `packages/nars-capability-gateway/src/mcp-runtime.mjs`
    Handle the summary request, call MCP tools through the mounted runtime fabric, normalize the DTO, and emit the summary event.
-7. `packages/carrier-runtime/src/server-mode-mcp.test.mjs`
+7. `packages/nars-capability-gateway/src/mcp-runtime-e2e.test.mjs`
    Assert the emitted DTO shape, including normal, empty/unavailable, and optional-tool behavior where relevant.
-8. `packages/agent-web-ui/src/agent-web-ui.js` and `packages/agent-web-ui/src/app/lib/narsFrames.ts`
-   Re-export and wrap the new request frame.
-9. `packages/agent-web-ui/src/app/composables/use<Surface>Summary.ts`
+8. `packages/agent-web-ui2/src/session/controller.ts` and `packages/agent-web-ui2/src/features/panels/panel-registry.ts`
+   Send the admitted request frame and register the panel's surface kind.
+9. `packages/agent-web-ui2/src/features/panels/<surface>-summary.ts`
    Read the latest summary event and normalize defensive defaults for the UI.
-10. `packages/agent-web-ui/src/app/components/<Surface>Panel.vue`
+10. `packages/agent-web-ui2/src/features/panels/<Surface>Panel.vue`
     Render the read-only panel. Do not call MCP or mutate authority from the browser.
-11. `packages/agent-web-ui/src/app/App.vue`, `NarsSessionShell.vue`, and `SiteInfoPanel.vue`
+11. `packages/agent-web-ui2/src/features/panels/PanelHost.vue`, `AgentWebUiShell.vue`, and `SiteInfoPanel.vue`
     Wire the panel, trigger, refresh event, and Site-panel link.
-12. `packages/agent-web-ui/test/agent-web-ui.test.mjs` and `agent-web-ui-protocol.test.mjs`
-    Assert panel wiring and request frame admission.
+12. `packages/agent-web-ui2/test/panel-registry.test.mjs`, `projection.test.mjs`, and `test/e2e/transport-projection.spec.mjs`
+    Assert panel registration, summary projection, request-frame admission, and browser wiring.
 13. `docs/concepts/nars-client-projection-contract.md` and this document
     Document the summary payload, action posture, and any boundary decisions.
 
-Focused verification should normally include the projection-contract test/typecheck, carrier-runtime test/typecheck, and agent-web-ui test/typecheck. Run the agent-web-ui build when the panel changes browser-rendered code.
+Focused verification should normally include the projection-contract test/typecheck, carrier-runtime test/typecheck, and agent-web-ui2 test/typecheck. Run the agent-web-ui2 build when the panel changes browser-rendered code.
 
 ## Worked Third-Panel Example
 

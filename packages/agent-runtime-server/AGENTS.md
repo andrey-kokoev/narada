@@ -29,7 +29,7 @@ It binds transport and process lifetime to one `@narada2/nars-session-core` supe
 
 Distinguish public NARS ownership from current implementation placement.
 
-NARS owns the public session-control contract, transport binding, health/event projection, and process lifetime. `@narada2/nars-session-core` owns lifecycle transitions, durable events, artifacts, input queue state, health, and recovery. `@narada2/carrier-runtime` receives a pure turn context and returns turn evidence; it owns no session persistence. `@narada2/nars-provider-runtime` owns provider execution. `@narada2/nars-runtime-legacy-compat` is legacy protocol compatibility only and must not be used as the default server/control path.
+NARS owns the public session-control contract, transport binding, health/event projection, and process lifetime. `@narada2/nars-session-core` owns lifecycle transitions, durable events, artifacts, input queue state, health, recovery, session indexing, and authority transitions. `@narada2/carrier-runtime` receives a pure turn context and returns turn evidence; it owns no session persistence or compatibility surface. `@narada2/nars-provider-runtime` owns provider execution.
 
 Do not move the following into this package as private implementation internals unless the NARS contract and package split are deliberately changed:
 

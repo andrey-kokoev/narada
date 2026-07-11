@@ -12,6 +12,7 @@ const registrySites: Array<{ siteId: string; siteRoot: string }> = [];
 
 vi.mock('@narada2/windows-site', () => ({
   resolveRegistryDbPath: () => 'mock-registry.db',
+  resolveRegistryDbPathByLocus: () => 'mock-registry.db',
   openRegistryDb: vi.fn(async () => ({ close: vi.fn() })),
   SiteRegistry: class {
     listSites(): Array<{ siteId: string; siteRoot: string }> {
@@ -89,6 +90,10 @@ function tempSite(): string {
 function writeSession(siteRoot: string, sessionId = 'carrier_cli_test', options: { agentId?: string; siteId?: string; agentIdentityRef?: Record<string, unknown> } = {}): void {
   const agentId = options.agentId ?? 'sonar.resident';
   const siteId = options.siteId ?? 'sonar';
+  const registeredSiteIndex = registrySites.findIndex((site) => site.siteId === siteId || site.siteRoot === siteRoot);
+  const registeredSite = { siteId, siteRoot };
+  if (registeredSiteIndex >= 0) registrySites[registeredSiteIndex] = registeredSite;
+  else registrySites.push(registeredSite);
   const sessionDir = resolveNaradaSitePaths({ siteRoot, sessionId }).narsSessionDir!;
   mkdirSync(sessionDir, { recursive: true });
   writeRuntimeMcpFabric(siteRoot, siteId);

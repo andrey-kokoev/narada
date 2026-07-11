@@ -8,7 +8,7 @@ import { ExitCode } from '../../src/lib/exit-codes.js';
 
 const discoverNarsSessionsMock = vi.hoisted(() => vi.fn());
 
-vi.mock('@narada2/carrier-runtime/nars-session-index', () => ({
+vi.mock('@narada2/nars-session-core/session-index', () => ({
   discoverNarsSessions: discoverNarsSessionsMock,
 }));
 
@@ -114,6 +114,7 @@ async function tempRegistry(): Promise<string> {
         NaradaRoot: 'D:/code/narada',
         SiteRoot: 'D:/code/narada',
         WorkspaceRoot: 'D:/code/narada',
+        LauncherPath: 'D:/code/narada/narada.ps1',
       },
     ],
   }), 'utf8');
@@ -478,7 +479,7 @@ describe('launcher workspace planning', () => {
       SiteRoot: 'D:/code/narada',
       WorkspaceRoot: 'D:/code/narada',
       McpScope: 'none',
-      Agents: [{ Agent: 'narada.architect', Role: 'architect', Site: 'narada', OperatorSurface: 'codex', Runtime: 'codex' }],
+      Agents: [{ Agent: 'narada.architect', Role: 'architect', Site: 'narada', NaradaRoot: 'D:/code/narada', SiteRoot: 'D:/code/narada', WorkspaceRoot: 'D:/code/narada', LauncherPath: 'D:/code/narada/narada.ps1', OperatorSurface: 'codex', Runtime: 'codex' }],
     }), 'utf8');
 
     const plan = await workspaceLaunchPlanCommand({
@@ -714,6 +715,7 @@ describe('launcher workspace planning', () => {
           Agent: 'resident',
           Role: 'resident',
           Title: 'Sonar Resident',
+          LauncherPath: 'D:/code/narada.sonar/narada-sonar.ps1',
           OperatorSurface: 'agent-cli',
           Runtime: 'narada-agent-runtime-server',
         },
@@ -759,6 +761,7 @@ describe('launcher workspace planning', () => {
         NaradaRoot: 'D:/code/smart-scheduling',
         SiteRoot: 'D:/code/smart-scheduling/.narada',
         WorkspaceRoot: 'D:/code/smart-scheduling',
+        LauncherPath: 'D:/code/smart-scheduling/narada-smart-scheduling.ps1',
         OperatorSurface: 'agent-cli',
         Runtime: 'narada-agent-runtime-server',
       }],

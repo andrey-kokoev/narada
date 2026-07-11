@@ -25,13 +25,13 @@ The target does not require a global daemon. It requires durable Site-local proj
 | --- | --- |
 | Public session-management schema | NARS contract, documented under `docs/concepts/`. |
 | Runtime process binding and event emission | `@narada2/agent-runtime-server`. |
-| Current in-process helper implementation | `@narada2/carrier-runtime`, until extraction completes. |
+| Session state, indexing, and recovery implementation | `@narada2/nars-session-core`; transport binding and event projection remain in `@narada2/agent-runtime-server`. |
 | Launch materialization and initial session id | `@narada2/agent-start`. |
 | Client attach commands and projection capabilities | `@narada2/nars-client-projection-contract`. |
 | Terminal/browser/TUI rendering | Client projection packages. |
 | Known Site root enumeration | Narada CLI using User Site launch registry, known-site registry, explicit config, or explicit CLI arguments. |
 
-Client code must depend on NARS session-management schemas and endpoints, not on the current helper file placement inside `carrier-runtime`.
+Client code must depend on NARS session-management schemas and endpoints, not on internal helper file placement.
 
 ## Identity And Compatibility
 
@@ -329,7 +329,7 @@ The selector should prefer active sessions, then recently closed sessions useful
 
 ## Implementation Slices
 
-1. Add a NARS session-index helper that writes `session-index-record.json` from the `session_started` payload.
+1. Keep the NARS session-index helper in `@narada2/nars-session-core/src/session-index.mjs`, writing `session-index-record.json` from the `session_started` payload.
 2. Update the Site-local aggregate on `session_started` and `session_closed` only, with optional coalesced refresh after heartbeat.
 3. Keep heartbeat writes per-session and cheap.
 4. Add an index reader that falls back from aggregate to per-session records.
@@ -342,6 +342,6 @@ The selector should prefer active sessions, then recently closed sessions useful
 
 - Renaming physical session directories away from `carrier_...`.
 - Removing `NARADA_CARRIER_SESSION_ID`.
-- Moving all helper code out of `@narada2/carrier-runtime`.
+- Reintroducing session, provider, MCP, or transport helpers into `@narada2/carrier-runtime`.
 - Inferring attached clients from process lists or terminal windows.
 - Creating a global always-running discovery daemon.

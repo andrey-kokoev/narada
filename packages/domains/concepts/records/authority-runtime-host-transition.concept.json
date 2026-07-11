@@ -27,7 +27,7 @@
   "schemas": ["docs/concepts/nars-authority-runtime-host-transition.md"],
   "docs": ["docs/concepts/nars-authority-runtime-host-transition.md", "docs/concepts/narada-runtime-projection-graph.md"],
   "tasks": ["nars-authority-runtime-host-transition", "first-class-system-objects"],
-  "code_refs": ["packages/carrier-runtime/src/authority-transition-state.mjs"],
+  "code_refs": ["packages/nars-session-core/src/authority-transition-state.mjs"],
   "tests": [],
   "examples": ["local -> cloudflare-host authority rehome with fenced source writes"],
   "counterexamples": ["opening a second browser surface"],

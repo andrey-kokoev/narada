@@ -5,5 +5,6 @@ export * from './input-queue.mjs';
 export * from './operator-input-queue-state.mjs';
 export * from './session-status-snapshots.mjs';
 export * from './session-index.mjs';
+export * from './authority-transition-state.mjs';
 export * from './session-core.mjs';
 export * from './session-supervisor.mjs';
