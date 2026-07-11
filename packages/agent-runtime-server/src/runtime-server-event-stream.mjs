@@ -1,5 +1,6 @@
 import { createServer } from 'node:http';
 import { readNarsEventLogPage } from '@narada2/nars-session-core/event-log';
+import { isNarsSessionCoreMethod } from '@narada2/nars-session-core/session-control-contract';
 import { decodeWebSocketFrames, encodeWebSocketTextFrame, websocketAcceptValue } from './runtime-server-websocket.mjs';
 
 export function startEventStreamProjection({ childStdin, eventHub, host, port, eventsPath = null }) {
@@ -97,6 +98,16 @@ export function startEventStreamProjection({ childStdin, eventHub, host, port, e
             event: 'session_events_read',
             request_id: message.id ?? null,
             transport: 'websocket',
+          });
+          continue;
+        }
+        if (!isNarsSessionCoreMethod(message.method)) {
+          send({
+            schema: 'narada.nars.websocket.error.v1',
+            event: 'websocket_error',
+            request_id: message.id ?? null,
+            code: 'unsupported_session_control',
+            method: message.method ?? null,
           });
           continue;
         }

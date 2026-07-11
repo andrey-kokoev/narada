@@ -252,6 +252,7 @@ async function main() {
     siteId: agentIdentitySiteId(lifecycleBinding.agent_identity_ref) ?? process.env.NARADA_SITE_ID ?? null,
     siteConfig: parseSiteConfigEnv(process.env.NARADA_SITE_CONFIG),
     operatorSurfaceKind,
+    mcpScope: process.env.NARADA_MCP_SCOPE?.trim() || 'all',
   });
   if (parsedHealth.health.enabled) {
     healthRuntimeContext = { ...preliminaryRuntimeContext, eventHub };
@@ -288,6 +289,7 @@ async function main() {
     siteId: agentIdentitySiteId(lifecycleBinding.agent_identity_ref) ?? process.env.NARADA_SITE_ID ?? null,
     siteConfig: parseSiteConfigEnv(process.env.NARADA_SITE_CONFIG),
     operatorSurfaceKind,
+    mcpScope: process.env.NARADA_MCP_SCOPE?.trim() || 'all',
     intelligenceProvider: providerRuntimeBinding.provider_id,
     narsDelegatedAuthorityHandoff: delegatedAuthorityHandoff,
     providerSettings: {

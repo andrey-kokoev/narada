@@ -34,13 +34,21 @@ function formatAgentWebUiLaunchCommand(event) {
 export function formatHostStatusEvent(event) {
   if (!event || event.event !== 'session_started') return [];
   const launchCommand = formatAgentWebUiLaunchCommand(event);
+  const provider = event.provider ?? event.intelligence?.provider ?? 'unknown';
+  const model = event.model ?? event.intelligence?.model ?? 'unknown';
+  const mcpScope = event.mcp_scope ?? event.mcp?.scope ?? null;
+  const mcpState = event.mcp_operational_state ?? event.mcp?.operational_state ?? 'unknown';
+  const mcpCount = event.mcp_server_count ?? event.mcp?.server_count ?? null;
+  const mcpLine = mcpScope === 'none'
+    ? '  MCP      disabled (scope=none)'
+    : `  MCP      ${mcpCount ?? 'pending'} servers, ${mcpState}${mcpScope ? ` (scope=${mcpScope})` : ''}`;
   return [
     `agent-runtime-server: ${eventAgentDisplay(event)}`,
     `  Session ${event.session_id ?? 'unknown'}`,
     `  Surface ${event.operator_surface_kind ?? event.launch_operator_surface_kind ?? 'unknown'}`,
-    `  Provider ${event.provider ?? 'unknown'}`,
-    `  Model    ${event.model ?? 'unknown'}`,
-    `  MCP      ${event.mcp_server_count ?? 0} servers, ${event.mcp_operational_state ?? 'unknown'}`,
+    `  Provider ${provider}`,
+    `  Model    ${model}`,
+    mcpLine,
     `  Health   ${event.health_endpoint ?? 'not configured'}`,
     `  Events   ${event.event_endpoint ?? 'not configured'}`,
     launchCommand
