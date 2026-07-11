@@ -1,10 +1,20 @@
 #!/usr/bin/env node
 import { execSync } from 'node:child_process';
-import { readdirSync } from 'node:fs';
-import { assertPublicationReleaseSet } from './publication-release-set.js';
+import { mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import {
+  assertPublicationReleaseSet,
+  canonicalPublicationPackageNames,
+} from './publication-release-set.js';
 
-function run(command: string): void {
-  execSync(command, { stdio: 'inherit', encoding: 'utf8' });
+function run(command: string, environment: Record<string, string> = {}): void {
+  execSync(command, {
+    stdio: 'inherit',
+    encoding: 'utf8',
+    env: { ...process.env, ...environment },
+  });
 }
 
 function output(command: string): string {
@@ -39,8 +49,9 @@ function main(): void {
   }
 
   console.log(`found ${changesets.length} changeset(s)`);
+  let releasePackages: string[];
   try {
-    const releasePackages = assertPublicationReleaseSet();
+    releasePackages = assertPublicationReleaseSet();
     console.log(`canonical release set: ${releasePackages.join(', ')}`);
   } catch (error) {
     fail(error instanceof Error ? error.message : String(error));
@@ -59,7 +70,23 @@ function main(): void {
   run('pnpm pack:check');
 
   console.log('\n==> Publish to npm');
-  run('pnpm --config.node-linker=hoisted exec changeset publish');
+  const admissionRoot = mkdtempSync(join(tmpdir(), 'narada-publication-admission-'));
+  const admissionPath = join(admissionRoot, 'admission.json');
+  const admissionToken = randomUUID();
+  writeFileSync(admissionPath, JSON.stringify({
+    schema: 'narada.npm_publication_admission.v1',
+    token: admissionToken,
+    expires_at_ms: Date.now() + 30 * 60 * 1000,
+    packages: canonicalPublicationPackageNames(),
+  }));
+  try {
+    run('pnpm --config.node-linker=hoisted exec changeset publish', {
+      NARADA_PUBLICATION_ADMISSION_FILE: admissionPath,
+      NARADA_PUBLICATION_ADMISSION_TOKEN: admissionToken,
+    });
+  } finally {
+    rmSync(admissionRoot, { recursive: true, force: true });
+  }
 
   console.log('\nPublish complete. Commit the version bumps and generated changelog files.');
 }

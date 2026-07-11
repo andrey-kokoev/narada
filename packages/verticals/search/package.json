@@ -38,6 +38,7 @@
     "access": "public"
   },
   "scripts": {
+    "prepublishOnly": "node ../../../scripts/assert-publication-admission.js",
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests"

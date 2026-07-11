@@ -65,6 +65,7 @@
     "@narada2/windows-site"
   ],
   "scripts": {
+    "prepublishOnly": "node ../../../scripts/assert-publication-admission.js",
     "prebuild": "pnpm --filter @narada2/ui build",
     "build": "tsc && node scripts/write-build-manifest.mjs",
     "typecheck": "tsc --noEmit",

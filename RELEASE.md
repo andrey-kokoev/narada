@@ -16,6 +16,11 @@ Current packages:
 inventory. Release validation reads that manifest directly; this list is its
 operator-facing summary.
 
+Each canonical package has a `prepublishOnly` admission gate. Only
+`scripts/publish-local.ts` issues the short-lived, package-scoped grant consumed
+by that gate. Direct `changeset publish` and direct `npm publish` calls fail
+before publication.
+
 ## Intended Split
 
 - `narada`: public source repo and publish source of truth
@@ -59,7 +64,7 @@ pnpm prepublish-check
 pnpm version-packages
 pnpm build
 pnpm pack:check
-pnpm --config.node-linker=hoisted exec changeset publish
+pnpm release
 ```
 
 ## Notes

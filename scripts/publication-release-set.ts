@@ -48,12 +48,7 @@ export function validatePublicationReleaseSet(
 export function assertPublicationReleaseSet(
   repositoryRoot = process.cwd(),
 ): string[] {
-  const manifestPath = join(repositoryRoot, 'config', 'npm-publication-packages.json');
-  const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as PublicationManifest;
-  if (manifest.schema !== 'narada.npm_publication_packages.v1') {
-    throw new Error(`publication_manifest_schema_invalid: ${manifest.schema}`);
-  }
-
+  const allowedPackageNames = canonicalPublicationPackageNames(repositoryRoot);
   const changesetRoot = join(repositoryRoot, '.changeset');
   const changesets = readdirSync(changesetRoot)
     .filter((name) => name.endsWith('.md') && name.toLowerCase() !== 'readme.md')
@@ -61,8 +56,16 @@ export function assertPublicationReleaseSet(
       name,
       source: readFileSync(join(changesetRoot, name), 'utf8'),
     }));
-  return validatePublicationReleaseSet(
-    changesets,
-    new Set(manifest.packages.map(({ name }) => name)),
-  );
+  return validatePublicationReleaseSet(changesets, new Set(allowedPackageNames));
+}
+
+export function canonicalPublicationPackageNames(
+  repositoryRoot = process.cwd(),
+): string[] {
+  const manifestPath = join(repositoryRoot, 'config', 'npm-publication-packages.json');
+  const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as PublicationManifest;
+  if (manifest.schema !== 'narada.npm_publication_packages.v1') {
+    throw new Error(`publication_manifest_schema_invalid: ${manifest.schema}`);
+  }
+  return manifest.packages.map(({ name }) => name).sort();
 }
