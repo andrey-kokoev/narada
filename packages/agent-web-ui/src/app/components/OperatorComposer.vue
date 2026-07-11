@@ -173,3 +173,31 @@ function handleKeydown(event: KeyboardEvent) {
     </div>
   </Teleport>
 </template>
+
+<style scoped>
+.composer-delivery-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  grid-column: 1 / -1;
+  margin: -4px 0 0;
+  color: var(--muted);
+  font: 12px/1.35 var(--mono);
+}
+
+.composer-delivery-status[data-state="submitting"],
+.composer-delivery-status[data-state="accepted"],
+.composer-delivery-status[data-state="queued"],
+.composer-delivery-status[data-state="steering"] {
+  color: var(--accent);
+}
+
+.composer-delivery-status[data-state="rejected"],
+.composer-delivery-status[data-state="failed"] {
+  color: var(--danger);
+}
+
+.composer-delivery-status[data-state="completed"] {
+  color: var(--success, var(--muted));
+}
+</style>
