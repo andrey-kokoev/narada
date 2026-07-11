@@ -47,6 +47,8 @@ export async function startSessionCoreRuntime({
   responseContent = 'web-ui playwright test response',
   toolGateway = null,
   startWeb = true,
+  providerDelayMs = 0,
+  providerError = null,
 } = {}) {
   const siteRoot = mkdtempSync(join(tmpdir(), 'narada-agent-web-ui-session-core-'));
   const sessionPaths = resolveNaradaSitePaths({ siteRoot, sessionId });
@@ -102,6 +104,8 @@ export async function startSessionCoreRuntime({
       runtimeContext: runtimeWithEndpoints,
       callChatApiFn: async (messages, tools) => {
         providerCalls.push({ messages, tools });
+        if (providerDelayMs > 0) await new Promise((resolve) => setTimeout(resolve, providerDelayMs));
+        if (providerError) throw new Error(providerError);
         return {
           choices: [{ message: { role: 'assistant', content: responseContent } }],
           fixture: { messages, tools },

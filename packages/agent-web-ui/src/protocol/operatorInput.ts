@@ -63,6 +63,7 @@ export function submitOperatorInput(text: string, connection: NarsClientConnecti
         event: 'web_ui_input_not_sent',
         message: 'control is not admitted by the attached runtime',
         reason_code: 'unsupported_session_control',
+        request_id: frame.id,
         method: frame.method,
       },
     };
@@ -75,17 +76,19 @@ export function submitOperatorInput(text: string, connection: NarsClientConnecti
         event: 'web_ui_input_not_sent',
         message: 'source authority is sealed; reattach to target authority before sending conversation input',
         reason_code: 'source_authority_superseded',
+        request_id: frame.id,
+        method: frame.method,
         authority_transition: authorityTransition,
       },
     };
   }
   const sent = sendFrame ? sendFrame(frame) : connection?.sendFrame(frame) ?? false;
-  if (!sent) return { handled: false, shouldClearDraft: false, localEvent: { event: 'web_ui_input_not_sent', message: 'event stream is not open' } };
+  if (!sent) return { handled: false, shouldClearDraft: false, localEvent: { event: 'web_ui_input_not_sent', request_id: frame.id, method: frame.method, message: 'event stream is not open' } };
   if (frame.method === 'session.close') connection?.close?.();
   return {
     handled: true,
     shouldClearDraft: true,
-    localEvent: { event: 'operator_input_submitted', request_id: frame.id, content: frame.params?.message ?? frame.params?.command ?? frame.method },
+    localEvent: operatorInputSubmittedEvent(frame, deliveryMode),
   };
 }
 
@@ -102,6 +105,7 @@ export function submitOperatorConversationText(text: string, connection: NarsCli
         event: 'web_ui_input_not_sent',
         message: 'control is not admitted by the attached runtime',
         reason_code: 'unsupported_session_control',
+        request_id: frame.id,
         method: frame.method,
       },
     };
@@ -114,16 +118,18 @@ export function submitOperatorConversationText(text: string, connection: NarsCli
         event: 'web_ui_input_not_sent',
         message: 'source authority is sealed; reattach to target authority before sending conversation input',
         reason_code: 'source_authority_superseded',
+        request_id: frame.id,
+        method: frame.method,
         authority_transition: authorityTransition,
       },
     };
   }
   const sent = sendFrame ? sendFrame(frame) : connection?.sendFrame(frame) ?? false;
-  if (!sent) return { handled: false, shouldClearDraft: false, localEvent: { event: 'web_ui_input_not_sent', message: 'event stream is not open' } };
+  if (!sent) return { handled: false, shouldClearDraft: false, localEvent: { event: 'web_ui_input_not_sent', request_id: frame.id, method: frame.method, message: 'event stream is not open' } };
   return {
     handled: true,
     shouldClearDraft: true,
-    localEvent: { event: 'operator_input_submitted', request_id: frame.id, content: frame.params?.message },
+    localEvent: operatorInputSubmittedEvent(frame, deliveryMode),
   };
 }
 
@@ -141,4 +147,18 @@ function authorityTransitionRefusesInput(frame: { method?: string }, authorityTr
   if (!String(frame?.method ?? '').startsWith('conversation.')) return false;
   if (!authorityTransition) return false;
   return authorityTransition.input_policy === 'disabled_source_sealed' || authorityTransition.stale_source === true;
+}
+
+function operatorInputSubmittedEvent(frame: SessionProtocolFrame, operatorDeliveryMode: OperatorInputDeliveryMode) {
+  const params = frame.params && typeof frame.params === 'object' ? frame.params : {};
+  return {
+    event: 'operator_input_submitted',
+    request_id: frame.id,
+    method: frame.method,
+    content: params.message ?? params.content ?? params.command ?? frame.method,
+    source: params.source ?? null,
+    delivery_mode: params.delivery_mode ?? null,
+    operator_delivery_mode: operatorDeliveryMode,
+    active_turn_id: params.active_turn_id ?? null,
+  };
 }

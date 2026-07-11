@@ -41,11 +41,12 @@ That command runs `scripts/publish-local.ts` and performs the release in this or
 1. verifies the git worktree is clean
 2. verifies `npm whoami` succeeds
 3. verifies at least one `.changeset/*.md` file exists
-4. runs `pnpm prepublish-check`
-5. runs `pnpm version-packages`
-6. rebuilds packages
-7. runs `pnpm pack:check`
-8. runs `changeset publish`
+4. refuses changesets that name packages outside the canonical publication manifest
+5. runs `pnpm prepublish-check`
+6. runs `pnpm version-packages`
+7. rebuilds packages
+8. runs `pnpm pack:check`
+9. runs `changeset publish`
 
 If any step fails, publishing stops.
 

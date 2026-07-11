@@ -9,6 +9,7 @@ import { execSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { assertPublicationReleaseSet } from './publication-release-set.js';
 
 interface CheckResult {
   name: string;
@@ -137,6 +138,25 @@ function runPackSmokeCheck(): CheckResult {
 
 function runChecks(): CheckResult[] {
   const checks: CheckResult[] = [];
+
+  log('\n📋 Checking changeset publication boundary...', 'blue');
+  let releaseSetError: string | undefined;
+  try {
+    assertPublicationReleaseSet();
+  } catch (error) {
+    releaseSetError = error instanceof Error ? error.message : String(error);
+  }
+  checks.push({
+    name: 'Changeset release set is canonical',
+    passed: releaseSetError === undefined,
+    error: releaseSetError,
+  });
+  log(
+    releaseSetError === undefined
+      ? '  ✓ Changesets contain only canonical publication packages'
+      : `  ✗ ${releaseSetError}`,
+    releaseSetError === undefined ? 'green' : 'red',
+  );
 
   log('\n📋 Checking canonical publication manifest...', 'blue');
   const publicationManifestValid = publicationManifest.schema === 'narada.npm_publication_packages.v1'

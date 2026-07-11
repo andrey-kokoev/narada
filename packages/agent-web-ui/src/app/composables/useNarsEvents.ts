@@ -15,6 +15,24 @@ export interface SessionIdentitySummary {
   subtitle: string;
 }
 
+export interface OperatorInputDeliveryProjection {
+  phase: 'draft' | 'submitting' | 'accepted' | 'rejected' | 'queued' | 'steering' | 'completed' | 'failed';
+  requestId: string | null;
+  content: string | null;
+  method: string | null;
+  source: string | null;
+  deliveryMode: string | null;
+  activeTurnId: string | boolean | null;
+  acceptedAtMs: number | null;
+  startedAtMs: number | null;
+  terminalAtMs: number | null;
+  terminalState: string | null;
+  error: string | null;
+  history: string[];
+  label: string;
+  detail: string | null;
+}
+
 export function useNarsEvents(
   events: unknown[],
   verbosity: Ref<ProjectionVerbosity>,
@@ -41,9 +59,10 @@ export function useNarsEvents(
   const summarizedStateSampleCount = computed(() => projection.value.droppedStateSampleCount);
   const activity = computed<AgentActivityState>(() => projection.value.activity as AgentActivityState);
   const activeTurnId = computed(() => activity.value.activeTurnId ?? null);
+  const operatorDelivery = computed<OperatorInputDeliveryProjection>(() => projection.value.operatorDelivery as OperatorInputDeliveryProjection);
   const sessionIdentity = computed(() => {
     const snapshot = Array.from({ length: events.length }, (_, index) => events[index]);
     return summarizeProjectedSessionIdentity(snapshot, healthIdentity?.value) as SessionIdentitySummary;
   });
-  return { projection, rows, summarizedStateSampleCount, activity, activeTurnId, sessionIdentity };
+  return { projection, rows, summarizedStateSampleCount, activity, activeTurnId, operatorDelivery, sessionIdentity };
 }

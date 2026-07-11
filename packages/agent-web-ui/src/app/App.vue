@@ -308,6 +308,7 @@ function cancelAffordanceAction(item: AffordanceConfirmationItem) {
     :verbosity-levels="projection.levels"
     :rows="session.rows.value"
     :session-identity="session.sessionIdentity.value"
+    :operator-delivery="session.operatorDelivery.value"
     :agent-activity="session.activity.value"
     :affordance-confirmations="affordanceConfirmations.items.value"
     :operator-queue-items="operatorQueue.items.value"

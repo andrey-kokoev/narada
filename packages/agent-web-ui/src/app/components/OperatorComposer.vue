@@ -8,9 +8,10 @@ import { useOperatorCommandPalette } from '../composables/useOperatorCommandPale
 import { useOperatorInterruptPrompt } from '../composables/useOperatorInterruptPrompt';
 import { AGENT_WEB_UI_PREFERENCE_KEYS } from '../lib/browserPreferences.js';
 import type { OperatorSnippet, OperatorSnippetDeliveryMode } from '../composables/useOperatorSnippets';
+import type { OperatorInputDeliveryProjection } from '../composables/useNarsEvents';
 
 const draft = defineModel<string>({ required: true });
-const props = defineProps<{ disabled?: boolean; disabledReason?: string; canInterrupt?: boolean; operatorSnippets?: OperatorSnippet[]; targetLabel?: string; targetState?: string }>();
+const props = defineProps<{ disabled?: boolean; disabledReason?: string; canInterrupt?: boolean; operatorSnippets?: OperatorSnippet[]; targetLabel?: string; targetState?: string; operatorDelivery: OperatorInputDeliveryProjection }>();
 const emit = defineEmits<{ submit: [deliveryMode?: OperatorSnippetDeliveryMode]; 'run-snippet': [snippet: OperatorSnippet, deliveryMode?: OperatorSnippetDeliveryMode]; interrupt: [] }>();
 const inputRef = ref<HTMLTextAreaElement | null>(null);
 
@@ -90,7 +91,14 @@ function handleKeydown(event: KeyboardEvent) {
 </script>
 
 <template>
-  <form id="operator-form" class="composer" aria-label="Operator input" @submit.prevent="emit('submit', 'default')">
+  <form
+    id="operator-form"
+    class="composer"
+    aria-label="Operator input"
+    :data-operator-delivery-phase="props.operatorDelivery.phase"
+    :data-operator-delivery-request-id="props.operatorDelivery.requestId ?? undefined"
+    @submit.prevent="emit('submit', 'default')"
+  >
     <p v-if="footerVisibility.isVisible('target')" class="composer-target" :data-state="disabled ? 'blocked' : 'active'">
       <span>{{ disabled ? 'Input blocked' : 'Sending to' }}</span>
       <strong>{{ props.targetLabel ?? 'current session' }}</strong>
@@ -145,6 +153,15 @@ function handleKeydown(event: KeyboardEvent) {
         </div>
       </div>
     </BoxRowShell>
+    <p
+      v-if="props.operatorDelivery.phase !== 'draft'"
+      class="composer-delivery-status"
+      :data-state="props.operatorDelivery.phase"
+      aria-live="polite"
+    >
+      <strong>{{ props.operatorDelivery.label }}</strong>
+      <span v-if="props.operatorDelivery.detail">· {{ props.operatorDelivery.detail }}</span>
+    </p>
     <p v-if="disabled" class="composer-status">{{ disabledReason }}</p>
   </form>
   <Teleport to="body">

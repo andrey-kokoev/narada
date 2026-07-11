@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { execSync } from 'node:child_process';
 import { readdirSync } from 'node:fs';
+import { assertPublicationReleaseSet } from './publication-release-set.js';
 
 function run(command: string): void {
   execSync(command, { stdio: 'inherit', encoding: 'utf8' });
@@ -38,6 +39,12 @@ function main(): void {
   }
 
   console.log(`found ${changesets.length} changeset(s)`);
+  try {
+    const releasePackages = assertPublicationReleaseSet();
+    console.log(`canonical release set: ${releasePackages.join(', ')}`);
+  } catch (error) {
+    fail(error instanceof Error ? error.message : String(error));
+  }
 
   console.log('\n==> Prepublish checks');
   run('pnpm prepublish-check');

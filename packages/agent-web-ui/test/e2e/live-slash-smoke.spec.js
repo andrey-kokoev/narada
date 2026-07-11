@@ -143,4 +143,147 @@ test.describe('agent-web-ui live slash commands', () => {
       await runtime.close();
     }
   });
+
+  test('projects operator input delivery through NARS acknowledgment and turn completion', async ({ page }) => {
+    const runtime = await startSharedRuntime({ responseContent: 'operator delivery success' });
+
+    try {
+      await page.goto(runtime.localWeb.url);
+      const fromIndex = runtime.events.length;
+      await submitOperatorInputText(page, 'run startup sequence');
+
+      const queued = await waitForRuntimeEvent(
+        runtime,
+        fromIndex,
+        (event) => event.event === 'input_event_queued' && Boolean(event.request_id),
+        'operator_input_queued_timeout',
+      );
+      const started = await waitForRuntimeEvent(
+        runtime,
+        fromIndex,
+        (event) => event.event === 'input_event_started' && event.request_id === queued.request_id,
+        'operator_input_started_timeout',
+      );
+      const turnStarted = await waitForRuntimeEvent(
+        runtime,
+        fromIndex,
+        (event) => event.event === 'carrier_turn_started' && event.turn_id === queued.event_id,
+        'operator_turn_started_timeout',
+      );
+      const assistant = await waitForRuntimeEvent(
+        runtime,
+        fromIndex,
+        (event) => event.event === 'assistant_message' && event.turn_id === turnStarted.turn_id,
+        'operator_assistant_message_timeout',
+      );
+      const turnCompleted = await waitForRuntimeEvent(
+        runtime,
+        fromIndex,
+        (event) => event.event === 'carrier_turn_completed' && event.turn_id === turnStarted.turn_id,
+        'operator_turn_completed_timeout',
+      );
+      const inputCompleted = await waitForRuntimeEvent(
+        runtime,
+        fromIndex,
+        (event) => event.event === 'input_event_completed' && event.request_id === queued.request_id,
+        'operator_input_completed_timeout',
+      );
+      const response = await waitForRuntimeEvent(
+        runtime,
+        fromIndex,
+        (event) => event.event === 'session_control_response' && event.request_id === queued.request_id,
+        'operator_control_response_timeout',
+      );
+
+      expect(started.request_id).toBe(queued.request_id);
+      expect(assistant.content).toBe('operator delivery success');
+      expect(turnCompleted.turn_id).toBe(queued.event_id);
+      expect(inputCompleted.terminal_state).toBe('completed');
+      expect(response.terminal_state).toBe('completed');
+      await expect(page.locator('#operator-form')).toHaveAttribute('data-operator-delivery-phase', 'completed');
+      await expect(page.locator('#operator-form')).toHaveAttribute('data-operator-delivery-request-id', queued.request_id);
+      await expect(page.locator('.composer-delivery-status')).toContainText('Input delivered');
+    } finally {
+      await page.close().catch(() => {});
+      await runtime.close();
+    }
+  });
+
+  test('shows queued delivery while an earlier NARS turn is active', async ({ page }) => {
+    const runtime = await startSharedRuntime({ providerDelayMs: 800, responseContent: 'queued delivery response' });
+
+    try {
+      await page.goto(runtime.localWeb.url);
+      const firstFromIndex = runtime.events.length;
+      await submitOperatorInputText(page, 'first turn');
+      const firstTurn = await waitForRuntimeEvent(
+        runtime,
+        firstFromIndex,
+        (event) => event.event === 'carrier_turn_started',
+        'first_turn_started_timeout',
+      );
+
+      await page.locator('#operator-input').fill('second turn');
+      await page.locator('#operator-input').press('Tab');
+      const secondQueued = await waitForRuntimeEvent(
+        runtime,
+        firstFromIndex,
+        (event) => event.event === 'input_event_queued' && event.event_id !== firstTurn.turn_id && Boolean(event.request_id),
+        'second_input_queued_timeout',
+      );
+
+      await expect(page.locator('#operator-form')).toHaveAttribute('data-operator-delivery-phase', 'queued');
+      await expect(page.locator('#operator-form')).toHaveAttribute('data-operator-delivery-request-id', secondQueued.request_id);
+      await expect(page.locator('.composer-delivery-status')).toContainText('Queued for the next turn');
+
+      await waitForRuntimeEvent(
+        runtime,
+        firstFromIndex,
+        (event) => event.event === 'input_event_completed' && event.request_id === secondQueued.request_id,
+        'second_input_completed_timeout',
+        10_000,
+      );
+      await expect(page.locator('#operator-form')).toHaveAttribute('data-operator-delivery-phase', 'completed');
+    } finally {
+      await page.close().catch(() => {});
+      await runtime.close();
+    }
+  });
+
+  test('projects provider failure as failed input delivery after NARS rejection', async ({ page }) => {
+    const runtime = await startSharedRuntime({ providerError: 'fixture_provider_failure' });
+
+    try {
+      await page.goto(runtime.localWeb.url);
+      const fromIndex = runtime.events.length;
+      await submitOperatorInputText(page, 'run failing turn');
+      const queued = await waitForRuntimeEvent(
+        runtime,
+        fromIndex,
+        (event) => event.event === 'input_event_queued' && Boolean(event.request_id),
+        'failed_input_queued_timeout',
+      );
+      const failedTurn = await waitForRuntimeEvent(
+        runtime,
+        fromIndex,
+        (event) => event.event === 'carrier_turn_failed' && event.turn_id === queued.event_id,
+        'failed_turn_timeout',
+      );
+      const rejected = await waitForRuntimeEvent(
+        runtime,
+        fromIndex,
+        (event) => event.event === 'session_control_rejected' && event.request_id === queued.request_id,
+        'failed_control_rejection_timeout',
+      );
+
+      expect(failedTurn.error).toBe('fixture_provider_failure');
+      expect(rejected.code).toBe('request_dispatch_failed');
+      await expect(page.locator('#operator-form')).toHaveAttribute('data-operator-delivery-phase', 'failed');
+      await expect(page.locator('.composer-delivery-status')).toContainText('Input failed');
+      await expect(page.locator('.composer-delivery-status')).toContainText('fixture_provider_failure');
+    } finally {
+      await page.close().catch(() => {});
+      await runtime.close();
+    }
+  });
 });

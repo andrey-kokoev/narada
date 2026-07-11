@@ -16,6 +16,11 @@ import {
   repairCollapsedAssistantBoundaries,
 } from './session-projection-boundaries.js';
 import { agentIdentityGroupKey } from '@narada2/agent-identity';
+import {
+  createOperatorInputDeliveryState,
+  materializeOperatorInputDelivery,
+  reduceOperatorInputDelivery,
+} from './operator-input-delivery.js';
 
 export function createSessionProjection(events = [], options = {}) {
   const projection = {
@@ -23,10 +28,12 @@ export function createSessionProjection(events = [], options = {}) {
     rows: [],
     health: createInitialHealthState(),
     activity: { ...IDLE_ACTIVITY },
+    operatorDelivery: materializeOperatorInputDelivery(createOperatorInputDeliveryState(), options.nowMs ?? Date.now()),
     droppedStateSampleCount: 0,
   };
   const rowState = createRowProjectionState();
   const activityState = createTurnActivityState();
+  const operatorDeliveryState = createOperatorInputDeliveryState();
   for (const message of events) {
     projection.rawEvents.push(message);
     reduceHealthState(projection.health, message);
@@ -38,10 +45,12 @@ export function createSessionProjection(events = [], options = {}) {
       if (row) projection.rows = materializedRows(rowState);
     }
     reduceTurnActivity(activityState, message);
+    reduceOperatorInputDelivery(operatorDeliveryState, message);
   }
   reconcileTurnActivityWithHealth(activityState, options.healthSnapshot ?? null);
   projection.rows = materializedRows(rowState);
   projection.activity = materializeTurnActivity(activityState, options.nowMs ?? Date.now());
+  projection.operatorDelivery = materializeOperatorInputDelivery(operatorDeliveryState, options.nowMs ?? Date.now());
   return projection;
 }
 
