@@ -23,7 +23,7 @@ Client surfaces render that projection in their own medium. They do not own even
 
 Client packages own only medium-specific rendering:
 
-- `@narada2/agent-web-ui2` owns DOM/Vue layout, markdown rendering, artifact iframe rendering, input controls, and browser state.
+- `@narada2/agent-web-ui` owns DOM/Vue layout, markdown rendering, artifact iframe rendering, input controls, and browser state.
 - `@narada2/carrier-terminal-projection` owns terminal formatting, colors, wrapping, and prompt behavior.
 - `@narada2/cloudflare-nars-projection` owns Cloudflare registration, bridge publication, redaction, bounded caches, credentials, and transport policy enforcement.
 
@@ -48,11 +48,24 @@ Non-slash input follows that surface's ordinary conversation delivery policy. Ba
 | Stratum | Meaning | Current examples | Target owner |
 |---|---|---|---|
 | Projection-local commands | Affect only the attached client projection. | `/help`, `/clear` | client projection contract plus surface renderer |
-| Direct NARS protocol commands | Map to stable NARS request methods. | `/status`, `/health`, `/events`, `/recovery`, `/ops`, `/observers`, `/observer mute`, `/observer unmute`, `/interrupt`, `/exit` | `@narada2/nars-client-projection-contract` for client action shape; `@narada2/agent-runtime-server`/carrier substrate for method handling |
-| Session command pass-through | Session commands executed by the NARS session command endpoint. | `/goal`, `/stats`, `/model`, `/thinking`, `/tool-output`, `/tools`, `/queue` | `@narada2/carrier-command-contract` for vocabulary; NARS runtime for execution |
-| Raw protocol escape hatch | Explicit advanced frame submission after client-side admission. | `/json {"id":"...","method":"...","params":{}}` | client projection contract allowlist plus NARS protocol admission |
+| Direct NARS protocol commands | Map to stable local session-core methods. | `/status`, `/health`, `/events`, `/recovery`, `/interrupt`, `/exit` | `@narada2/nars-client-projection-contract` for client action shape; `@narada2/agent-runtime-server` for method handling |
+| Adapter-only commands | Retained for the Cloudflare/deprecated adapter vocabulary and refused by the local session-core transport. | `/ops`, `/observers`, `/observer mute`, `/observer unmute`, `/goal`, `/stats`, `/model`, `/thinking`, `/tool-output`, `/tools`, `/queue` | Explicit adapter only; no local runtime admission |
+| Raw protocol escape hatch | Explicit frame submission after local session-core admission. | `/json {"id":"...","method":"session.health","params":{}}` | client projection contract allowlist plus NARS protocol admission |
 
-`session.command.execute` is the target request method for session command pass-through.
+`session.command.execute` is legacy adapter vocabulary, not a local session-core method.
+
+The executable inventories are explicit: `NARS_SESSION_CORE_METHOD_LIST` and
+`AGENT_WEB_UI_NARS_METHOD_LIST` are the local allowlist, while
+`AGENT_WEB_UI_CLOUDFLARE_METHOD_LIST` is the separately named remote adapter
+allowlist. Panel and affordance builders may remain available for the remote
+adapter, but they must not be described as local runtime controls.
+
+The command registry carries the protocol methods required by each command.
+Browser surfaces filter palette/help entries through their transport's
+`supportsProtocolMethod` capability, and the operator controller refuses a
+frame again before sending it. The Cloudflare adapter uses
+`translateAgentWebUiFrameForCloudflare()` to translate narrow local frames to
+its endpoint vocabulary; local transports forward the original frame.
 
 Host execution commands are a separate family. `! <command>` is an agent-cli carrier-host execution request with host side effects, admission, and evidence. It is not a slash command and must stay distinct in parsers, event vocabulary, docs, and tests.
 
@@ -62,11 +75,11 @@ The current codebase intentionally has two command inventories because client pr
 
 | Inventory | Location | Owns | Does not own |
 |---|---|---|---|
-| Agent Web UI command registry | `packages/nars-client-projection-contract/src/nars-client-projection-contract.mjs` as `AGENT_WEB_UI_COMMANDS` | Browser/web command palette entries, help grouping, local actions, admitted web protocol frames, aliases, palette metadata. | Server-side carrier command execution. |
+| Agent Web UI command registry | `packages/nars-client-projection-contract/src/nars-client-projection-contract.mjs` as `AGENT_WEB_UI_COMMANDS` | Browser/web command palette entries, help grouping, local actions, and the separately named local/Cloudflare frame inventories. | Server-side carrier command execution. |
 | Carrier command contract | `packages/carrier-command-contract/contracts/commands.json` | Session command vocabulary, aliases, argument labels, effects, and resolver behavior for pass-through commands. | Browser palette metadata or direct NARS protocol commands such as `/health` and `/events`. |
 | Terminal projected input | `packages/carrier-terminal-projection/src/projected-input.mjs` | Terminal parsing of operator input into NARS frames, terminal-local actions, prompt behavior, bracketed paste handling, and terminal help projection. | Provider execution or server-side command effects. |
-| Web UI operator input | `packages/agent-web-ui2/src/features/operator/operator-controller.ts` and `OperatorComposer.vue` | Browser submit behavior, palette rendering, local help/clear events, and delivery-mode UI. | Shared command semantics or NARS method admission. |
-| Session control dispatch | `packages/agent-runtime-server/src/session-core-runtime-service.mjs` | Admission and execution of `session.submit`, `session.health`, `session.events.subscribe`, `session.recovery`, `session.cancel`, and `session.close`. | Provider execution or client rendering. |
+| Web UI operator input | `packages/agent-web-ui/src/app/components/OperatorComposer.vue` and command composables | Browser submit behavior, palette rendering, local help/clear events, and delivery-mode UI. | Shared command semantics or NARS method admission. |
+| Session control dispatch | `packages/agent-runtime-server/src/session-core-runtime-service.mjs` | Admission and execution of `session.submit`, `session.health`, `session.recovery`, `session.cancel`, and `session.close`; event subscription/read is owned by the event-stream transport. | Provider execution or client rendering. |
 
 This split is the current transitional shape. The target invariant is not "one parser everywhere"; it is that each surface consumes an explicit registry for its role, and all overlapping commands have documented projection/execution ownership.
 
@@ -317,7 +330,7 @@ Shape:
 
 Clients may use this to decide whether to show panels such as MCP, SOP, or Synced Email. Mutating actions still require a NARS protocol request and the relevant authority surface; the affordance object only says what the surface can represent.
 
-When a client renders an affordance action, it sends `session.affordance.action.request` through the NARS protocol. It must not invoke MCP directly, synthesize broad shell commands, or treat the affordance declaration as final authority. `@narada2/nars-client-projection-contract` owns the admitted client method and frame builder so browser, terminal, and future projections share the same request shape.
+When a client renders a deferred affordance action, it must not invoke MCP directly, synthesize broad shell commands, or treat the declaration as final authority. The affordance frame builders remain available for the explicitly named Cloudflare adapter, but `session.affordance.action.request` is not admitted by the local session-core contract until a runtime handler and boundary tests exist.
 
 Action arguments must be structured JSON. Runtime results and refusals are projected back through shared event vocabulary, including `session_affordance_action_result`, `session_affordance_action_refused`, and `session_affordance_confirmation_required`.
 

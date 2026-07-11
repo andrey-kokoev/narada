@@ -89,10 +89,10 @@ The SOP is complete only when the live authority and every active projection agr
 | --- | --- | --- |
 | `packages/carrier-terminal-projection/src/terminal-event-rendering.mjs` | `agent-cli` terminal projection. | Display and filter with identity ref; raw `agent_id` fallback only. |
 | `packages/nars-client-projection-contract/src/nars-client-projection-contract.mjs` | Shared client projection contract. | Session summaries and render keys use identity ref before raw `agent_id`. |
-| `packages/agent-web-ui2/src/domain/events.ts` | Browser event identity normalization. | Extract Site, agent, role, and session identity from canonical event and health fields before scalar fallbacks. |
-| `packages/agent-web-ui2/src/domain/session-store.ts` | Browser session identity retention. | Keep one normalized identity projection across replay, live events, and paged history. |
-| `packages/agent-web-ui2/src/session/activity.ts` | Browser activity labels. | Display normalized agent identity where health/activity events carry it. |
-| `packages/agent-web-ui2/src/features/status/StatusBar.vue` | Browser identity and health display. | Render Site, agent, role, session, and health from the normalized session snapshot. |
+| `packages/agent-web-ui/src/domain/events.ts` | Browser event identity normalization. | Extract Site, agent, role, and session identity from canonical event and health fields before scalar fallbacks. |
+| `packages/agent-web-ui/src/domain/session-store.ts` | Browser session identity retention. | Keep one normalized identity projection across replay, live events, and paged history. |
+| `packages/agent-web-ui/src/session/activity.ts` | Browser activity labels. | Display normalized agent identity where health/activity events carry it. |
+| `packages/agent-web-ui/src/features/status/StatusBar.vue` | Browser identity and health display. | Render Site, agent, role, session, and health from the normalized session snapshot. |
 
 ## Task Lifecycle Writes
 
@@ -134,7 +134,7 @@ The SOP is complete only when the live authority and every active projection agr
 | Agent-start option/registry tests | `pnpm --filter @narada2/agent-start test`; includes the transform/syntax gate plus dry-run, provider, registry, and option-contract shards. |
 | Terminal projection tests | `pnpm --filter @narada2/carrier-terminal-projection test` |
 | Shared client projection contract tests | `pnpm --filter @narada2/nars-client-projection-contract test`; proves shared NARS event summaries use canonical identity refs. |
-| Browser projection tests | `pnpm --filter @narada2/agent-web-ui2 test` |
+| Browser projection tests | `pnpm --filter @narada2/agent-web-ui test` |
 | Runtime wrapper tests | `pnpm --filter @narada2/agent-runtime-server test` |
 | Context startup/whoami MCP tests | `pnpm --filter @narada2/agent-context-tools test`; proves default startup summary and whoami both expose canonical `agent_identity_ref`. |
 | CLI attach/session tests | `node scripts/run-vitest-quiet.mjs run --silent test/commands/nars.test.ts` from `packages/layers/cli` |

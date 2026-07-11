@@ -10,14 +10,14 @@ The checked-in tests already cover the core synthetic projection paths. This mat
 
 | Runtime origin | Surface origin | Coverage | Evidence |
 | --- | --- | --- | --- |
-| Local NARS runtime | Local browser surface | Covered. | `packages/agent-web-ui/test/agent-web-ui.test.mjs`, `packages/agent-web-ui/test/e2e/ux-smoke.spec.js`, `packages/agent-web-ui/test/e2e/slash-snippets.spec.js`, `packages/agent-web-ui/test/e2e/panels.spec.js` |
-| Local NARS runtime | Cloudflare-hosted browser surface | Covered. | `packages/agent-web-ui/test/agent-web-ui-local-submit-html-artifact-cloudflare-e2e.test.mjs`, `packages/agent-web-ui/test/agent-web-ui-cloudflare-html-artifact-e2e.test.mjs` |
-| Cloudflare-origin authority/runtime | Local browser surface | Covered at service/projection level. | `packages/cloudflare-nars-projection/test/cloudflare-nars-projection.test.ts`, `packages/cloudflare-nars-projection/test/cloudflare-nars-projection-node.test.ts`, `packages/agent-web-ui/test/agent-web-ui.test.mjs` |
+| Local NARS runtime | Local browser surface | Covered. | `packages/agent-web-ui/test/e2e/transport-projection.spec.mjs`, `packages/agent-web-ui/test/transport.test.mjs`, `packages/agent-web-ui/test/local-host.test.mjs` |
+| Local NARS runtime | Cloudflare-hosted browser surface | Covered at transport/host level. | `packages/agent-web-ui/test/config.test.mjs`, `packages/agent-web-ui/test/transport.test.mjs`, `packages/cloudflare-nars-projection/test/cloudflare-nars-projection.test.ts` |
+| Cloudflare-origin authority/runtime | Local browser surface | Covered at service/projection level. | `packages/cloudflare-nars-projection/test/cloudflare-nars-projection.test.ts`, `packages/cloudflare-nars-projection/test/cloudflare-nars-projection-node.test.ts`, `packages/agent-web-ui/test/transport.test.mjs` |
 | Cloudflare-origin authority/runtime | Cloudflare-hosted browser surface | Covered. | `packages/cloudflare-nars-projection/test/cloudflare-nars-projection.test.ts`, `packages/cloudflare-nars-projection/test/cloudflare-nars-projection-node.test.ts`, `docs/concepts/cloudflare-nars-web-projection.md` |
 
 ## Coverage Notes
 
-- Local runtime to Cloudflare surface covers replay, live event delivery, operator input admission, artifact rendering, and revocation through the existing local-submit and hosted-artifact E2E tests.
+- Local runtime to Cloudflare surface covers endpoint derivation, replay/input transport, browser-token projection, asset hosting, and revocation through Agent Web UI transport/host tests plus the Cloudflare projection service tests.
 - Cloudflare-origin runtime to local browser surface covers event replay, input admission, health, and revocation at the synthetic authority/runtime level.
 - Cloudflare-origin runtime to Cloudflare-hosted browser surface is the hosted authority path documented in the Cloudflare projection target and exercised by the Cloudflare projection tests.
 
@@ -33,4 +33,3 @@ The checked-in tests already cover the core synthetic projection paths. This mat
 - [`Cloudflare NARS Web Projection`](../concepts/cloudflare-nars-web-projection.md)
 - [`NARS Remote Projection Gateway`](../concepts/nars-remote-projection-gateway.md)
 - [`Cloudflare Carrier Target`](../architecture/cloudflare-carrier/target.md)
-

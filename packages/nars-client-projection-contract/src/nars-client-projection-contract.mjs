@@ -1251,7 +1251,7 @@ export const NARS_CLIENT_PROJECTION_REGISTRY = Object.freeze({
     }),
     agent_web_ui: Object.freeze({
       id: 'agent_web_ui',
-      package: '@narada2/agent-web-ui2',
+      package: '@narada2/agent-web-ui',
       bin: 'narada-agent-web-ui',
       attach_template: 'narada-agent-web-ui --event-endpoint <event_endpoint> --health-endpoint <health_endpoint>',
       required_endpoints: Object.freeze(['event_endpoint', 'health_endpoint']),

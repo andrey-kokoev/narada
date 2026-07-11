@@ -26,7 +26,7 @@
   "schemas": ["docs/concepts/cloudflare-nars-web-projection.md"],
   "docs": ["docs/concepts/cloudflare-nars-web-projection.md", "docs/concepts/narada-runtime-projection-graph.md"],
   "tasks": ["1695", "first-class-system-objects"],
-  "code_refs": ["packages/cloudflare-nars-projection/src/projection.ts", "packages/agent-web-ui/src/render.js"],
+  "code_refs": ["packages/cloudflare-nars-projection/src/projection.ts", "packages/agent-web-ui/src/app/components/ArtifactReferencePart.vue"],
   "tests": ["packages/cloudflare-nars-projection/test/projection-live.test.mjs"],
   "examples": ["metadata-only, selected markdown/json/text kinds, remote rendering"],
   "counterexamples": ["replicate arbitrary local paths by default"],

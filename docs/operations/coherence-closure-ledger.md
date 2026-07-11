@@ -38,7 +38,7 @@ Each row names the main invariant, the owning files, the best current proof, the
 - Owning files: `docs/concepts/agent-identity-rendering-hardening.md`, `packages/agent-identity/src/index.mjs`, `packages/agent-identity/src/index.test.mjs`, `packages/agent-start-renderer/src/agent-start-renderer.mjs`, `packages/agent-web-ui/src/session-identity.js`, `packages/agent-web-ui/src/session-projection-activity.js`, `packages/agent-web-ui/src/health.js`.
 - Current evidence: the draft doc states the raw `agent_id` vs canonical display invariant, and the rendering code has been moved toward `agent_identity_ref`-based display.
 - Remaining gap: prove the helper and all renderers actually prevent raw identity from leaking into operator-facing text when canonical identity is available.
-- Next verification: `pnpm --filter @narada2/agent-identity test`, `pnpm --filter @narada2/agent-start-renderer test`, `pnpm --filter @narada2/agent-web-ui2 test`.
+- Next verification: `pnpm --filter @narada2/agent-identity test`, `pnpm --filter @narada2/agent-start-renderer test`, `pnpm --filter @narada2/agent-web-ui test`.
 
 ### 1817. Layered launch output
 
@@ -86,7 +86,7 @@ Each row names the main invariant, the owning files, the best current proof, the
 - Owning files: `packages/agent-web-ui/src/session-projection.js`, `packages/agent-web-ui/src/session-projection-activity.js`, `packages/carrier-protocol/src/carrier-protocol.mjs`.
 - Current evidence: the projection reducers already normalize event shape and canonical identity display.
 - Remaining gap: prove that every relevant event lane uses the same normalization path rather than specialized one-off parsing.
-- Next verification: `pnpm --filter @narada2/agent-web-ui2 test`.
+- Next verification: `pnpm --filter @narada2/agent-web-ui test`.
 
 ### 1823. Event lanes
 
@@ -94,7 +94,7 @@ Each row names the main invariant, the owning files, the best current proof, the
 - Owning files: `packages/agent-web-ui/src/app/components/NarsSessionShell.vue`, `packages/agent-web-ui/src/app/components/SurfaceNavigator.vue`, `packages/agent-web-ui/src/app/App.vue`.
 - Current evidence: the browser UI already separates session, surface, and activity components instead of rendering one undifferentiated feed.
 - Remaining gap: show that those lanes remain distinct under projection attach, health updates, and conversational events.
-- Next verification: `pnpm --filter @narada2/agent-web-ui2 test` and the panel-focused UI e2e coverage.
+- Next verification: `pnpm --filter @narada2/agent-web-ui test` and the panel-focused UI e2e coverage.
 
 ### 1824. Web UI peer maturity
 
@@ -102,7 +102,7 @@ Each row names the main invariant, the owning files, the best current proof, the
 - Owning files: `packages/agent-web-ui/README.md`, `packages/agent-web-ui/src/agent-web-ui.css`, `packages/agent-web-ui/src/app/components/*.vue`, `packages/agent-web-ui/test/agent-web-ui-*.test.mjs`.
 - Current evidence: the UI package already has dedicated panel, projection, protocol, and UX smoke tests.
 - Remaining gap: prove the page behaves like a first-class projection peer rather than a thin transport viewer.
-- Next verification: `pnpm --filter @narada2/agent-web-ui2 test` and the launcher dashboard e2e once the same session is attached from the browser.
+- Next verification: `pnpm --filter @narada2/agent-web-ui test` and the launcher dashboard e2e once the same session is attached from the browser.
 
 ### 1825. Cloudflare / local symmetry
 
@@ -176,7 +176,7 @@ Run the narrow tests that correspond to the changed slice, then update the row i
 - `pnpm --filter @narada2/agent-start-renderer test`
 - `pnpm --filter @narada2/carrier-terminal-projection test`
 - `pnpm --filter @narada2/nars-client-projection-contract test`
-- `pnpm --filter @narada2/agent-web-ui2 test`
+- `pnpm --filter @narada2/agent-web-ui test`
 - `pnpm --filter @narada2/carrier-runtime test`
 - `pnpm --filter @narada2/agent-start test`
 - launcher dashboard e2e: `packages/layers/cli/test/integration/workspace-selection-ui-e2e.test.mjs`

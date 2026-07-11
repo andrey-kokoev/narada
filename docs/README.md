@@ -23,7 +23,6 @@ Semantic and architecture-boundary concepts. These documents define how the syst
 Implementation-facing architecture and ownership contracts.
 
 - [`agent-web-ui-architecture.md`](architecture/agent-web-ui-architecture.md) — Agent Web UI layers, ownership boundaries, target source shape, and migration seams
-- [`agent-web-ui2-parity.md`](architecture/agent-web-ui2-parity.md) — Requirement-by-requirement production replacement matrix for Agent Web UI2
 - [`agent-web-ui-command-ux.md`](architecture/agent-web-ui-command-ux.md) — Browser command palette and slash-command UX target
 - [`nars-session-input-contract.md`](architecture/nars-session-input-contract.md) — NARS session input and operator command boundary
 

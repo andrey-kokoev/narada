@@ -535,7 +535,7 @@ export async function agentWebUiAttachCommand(
     };
   }
   progress(`agent-web-ui: starting local web UI for ${sessionId}`);
-  const startAgentWebUiServer = deps.startAgentWebUiServer ?? (await import('@narada2/agent-web-ui2/server')).startAgentWebUiServer;
+  const startAgentWebUiServer = deps.startAgentWebUiServer ?? (await import('@narada2/agent-web-ui/server')).startAgentWebUiServer;
   const started = await startAgentWebUiServer({
     host,
     port,

@@ -4,18 +4,22 @@
   "type": "module",
   "private": true,
   "narada": {
-    "package_role": "deprecated_migration_predecessor",
-    "replacement": "@narada2/agent-web-ui2",
-    "production_admission": "forbidden",
-    "owns": [],
+    "package_role": "production_web_ui",
+    "production_admission": "allowed",
+    "owns": [
+      "browser_session_transport",
+      "session_store_and_projection",
+      "vue_operator_surface_rendering",
+      "browser_operator_input_projection"
+    ],
     "does_not_own": [
       "runtime_dependency_construction",
       "provider_turn_execution",
       "mcp_fabric_hosting",
       "slash_command_execution"
     ],
-    "nars_protocol_methods_source": "@narada2/nars-client-projection-contract#AGENT_WEB_UI_CLOUDFLARE_METHOD_LIST",
-    "protocol_scope": "deprecated_cloudflare_adapter_only"
+    "nars_protocol_methods_source": "@narada2/nars-client-projection-contract",
+    "protocol_scope": "local_nars_and_cloudflare_projection"
   },
   "exports": {
     ".": "./src/agent-web-ui.js",

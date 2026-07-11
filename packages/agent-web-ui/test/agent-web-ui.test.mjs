@@ -373,12 +373,12 @@ test('agent-web-ui entrypoints include Narada favicon fallback links', async () 
   assert.match(favicon, /<svg/);
 });
 
-test('deprecated agent-web-ui README declares its adapter-only scope', async () => {
+test('production agent-web-ui README declares its production scope', async () => {
   const readme = await readFile(new URL('../README.md', import.meta.url), 'utf8');
-  assert.match(readme, /Deprecated migration predecessor/);
-  assert.match(readme, /@narada2\/agent-web-ui2/);
-  assert.match(readme, /Cloudflare projection/);
-  assert.match(readme, /does not publish the .*binary/);
+  assert.match(readme, /production Agent Web UI browser surface/);
+  assert.match(readme, /@narada2\/agent-web-ui\/server/);
+  assert.match(readme, /NARS remains the owner/);
+  assert.doesNotMatch(readme, /agent-web-ui2|Deprecated migration predecessor/);
 });
 
 test('Vue operator components expose composer without hidden privileged controls', async () => {

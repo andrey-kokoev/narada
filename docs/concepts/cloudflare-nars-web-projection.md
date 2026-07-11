@@ -10,7 +10,7 @@ The public browser-facing input contract is the narrow session-core contract:
 `session.submit`, `session.health`, `session.recovery`, `session.cancel`, and
 `session.close`. The implementation in `packages/cloudflare-nars-projection`
 may retain older `conversation.*` and status verbs internally, but those are
-adapter vocabulary only. `agent-web-ui2` translates narrow frames at the
+adapter vocabulary only. `agent-web-ui` translates narrow frames at the
 Cloudflare boundary; local session-core clients never send the older verbs.
 
 This document governs one concrete instance of the [`Narada Runtime Projection Graph`](narada-runtime-projection-graph.md). The older read-only gateway slice is described in [`nars-remote-projection-gateway.md`](nars-remote-projection-gateway.md). Local session discovery and event-log authority remain in [`nars-session-management.md`](nars-session-management.md) and [`nars-runtime-contract.md`](nars-runtime-contract.md). Operator input semantics remain in [`operator-input-admission.md`](operator-input-admission.md).
@@ -242,7 +242,7 @@ The first target binds one projection instance to one concrete NARS session. A h
 remote access record. The browser-facing contract remains the narrow
 session-core set: `session.submit`, `session.cancel`, and `session.close` for
 downward control, with health and recovery read through their dedicated
-projection endpoints. `agent-web-ui2` translates the narrow frames to the
+projection endpoints. `agent-web-ui` translates the narrow frames to the
 adapter methods listed by this policy. The policy must include
 `conversation.interrupt` and `session.close` when the browser is expected to
 support `/interrupt` and `/exit`.
@@ -513,11 +513,11 @@ Automated tests should use local/fake projection services and must not require l
 1. Build the browser shell and Worker package:
 
    ```text
-   pnpm --filter @narada2/agent-web-ui2 build
+   pnpm --filter @narada2/agent-web-ui build
    pnpm --filter @narada2/cloudflare-nars-projection build
    ```
 
-2. Deploy or preview the Cloudflare projection Worker from `packages/cloudflare-nars-projection`. Its `wrangler.toml` serves `../agent-web-ui2/dist` through the Worker assets binding and keeps projection APIs under `/api/nars/projections/...`.
+2. Deploy or preview the Cloudflare projection Worker from `packages/cloudflare-nars-projection`. Its `wrangler.toml` serves `../agent-web-ui/dist` through the Worker assets binding and keeps projection APIs under `/api/nars/projections/...`.
 3. Start or identify a concrete local NARS session for the target Site and agent.
 4. Register a projection intent and remote access record:
 

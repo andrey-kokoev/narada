@@ -140,7 +140,7 @@ Operational checklist:
 5. Verify event replay from local NARS to Cloudflare web UI.
 6. Verify artifact metadata projection.
 7. Verify artifact content projection under policy.
-8. Verify downward operator input through `conversation.send` and `conversation.enqueue`.
+8. Verify downward operator input through local `session.submit`; the Cloudflare adapter may translate it to `conversation.send` or `conversation.enqueue` at its remote endpoint boundary.
 9. Verify revocation blocks bridge/browser credentials.
 10. Run live smoke and save evidence.
 

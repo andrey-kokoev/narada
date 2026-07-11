@@ -116,7 +116,7 @@ NARS is the runtime owner. `@narada2/agent-runtime-server` owns session binding,
 
 In Runtime Projection Graph terms, NARS is an `authority_runtime`; attached clients and remote browser embodiments are `projection_surface` nodes unless a separate authority transfer explicitly says otherwise.
 
-`@narada2/agent-cli`, `agent-tui`, and `@narada2/agent-web-ui2` are peer projections over the NARS transport. Their responsibilities are terminal/UI input handling, event rendering, and explicit attach UX. Default clients submit text as `session.submit` and may read `session.health` or `session.recovery` and request `session.close`; unsupported historical methods must not be projected as available. Runtime hosting, provider turn execution, and MCP hosting remain outside client packages.
+`@narada2/agent-cli`, `agent-tui`, and `@narada2/agent-web-ui` are peer projections over the NARS transport. Their responsibilities are terminal/UI input handling, event rendering, and explicit attach UX. Default clients submit text as `session.submit` and may read `session.health` or `session.recovery` and request `session.close`; unsupported historical methods must not be projected as available. Runtime hosting, provider turn execution, and MCP hosting remain outside client packages.
 
 Client projection metadata is centralized in `@narada2/nars-client-projection-contract`. Launchers and carrier runtime use it for attach command materialization; web UI uses it for admitted NARS methods, operator input command projection, shared event rendering vocabulary, and help text. The same session may be attached by peer clients with `narada-agent-cli --attach <event_endpoint>`, `agent-tui --attach <event_endpoint>`, or `narada-agent-web-ui --event-endpoint <event_endpoint> --health-endpoint <health_endpoint>`. `@narada2/carrier-protocol` remains the carrier protocol vocabulary/classification owner and must not grow client attach command strings or client-specific projection registries.
 
@@ -134,7 +134,7 @@ The former `agent-cli` runtime-server adapter has been removed. Reintroduction r
 | Runtime wrapper, health, events, lifecycle hooks, artifacts | `@narada2/agent-runtime-server` | already correctly owned | `server-wrapper.mjs` owns health/event projections and lifecycle dispatch; package metadata names NARS responsibilities | low |
 | Provider execution and MCP gateway internals | `@narada2/nars-provider-runtime` and `@narada2/nars-capability-gateway` | explicit split | server delegates provider execution to provider-runtime and capability hosting to the gateway | current runtime ownership |
 | Terminal rendering and operator input projection | `@narada2/agent-cli` plus `@narada2/carrier-terminal-projection` | intentionally client-specific | NARS creates projected terminal bridge only when `operator_surface=agent-cli`; raw JSONL and web surfaces bypass terminal projection | low |
-| Web projection | `@narada2/agent-web-ui2` | correctly owned | package metadata declares web projection ownership and excludes runtime dependency construction/provider execution/MCP hosting | low |
+| Web projection | `@narada2/agent-web-ui` | correctly owned | package metadata declares web projection ownership and excludes runtime dependency construction/provider execution/MCP hosting | low |
 | Launch planning and selector UX | `@narada2/cli` with User Site PowerShell shim | already correctly owned | workspace launcher invokes Narada CLI; PS1 shim owns Windows convenience only | low |
 | Direct `agent-cli` runtime/server mode | none; removed | already correctly owned | `agent-cli` reports that non-server conversation runtime has been removed; NARS is the runtime path | low |
 | `agent-cli` runtime ownership | `@narada2/agent-runtime-server` | correctly narrowed | separate `D:/code/agent-cli` is a client/projection package with no carrier-runtime, provider-runtime, or MCP-hosting dependency; it attaches to an existing NARS session | low |
@@ -146,7 +146,7 @@ Fast verification should use focused package tests:
 - `pnpm --filter @narada2/agent-start test`
 - `node --test packages/layers/cli/test/integration/operator-launch-journey.test.mjs`
 
-Browser/E2E projection tests and full recursive repo tests are not default fast evidence. They must stay behind explicit selectors such as `@narada2/agent-web-ui2 test:browser`, `test:all`, or root broad test commands with a declared reason and timeout budget.
+Browser/E2E projection tests and full recursive repo tests are not default fast evidence. They must stay behind explicit selectors such as `@narada2/agent-web-ui test:browser`, `test:all`, or root broad test commands with a declared reason and timeout budget.
 
 Residual launch-option risk: the launcher tests are representative, not a full Cartesian product. Coverage should prioritize alias normalization, mutually exclusive legacy/modern options, multi-surface launch, site/role filtering, provider selection/preflight, and stale-dist behavior. Full Cartesian coverage is not practical unless a generated pairwise matrix with bounded cases is introduced.
 
