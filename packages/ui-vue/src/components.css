@@ -1,0 +1,45 @@
+@layer narada-vue-primitives {
+  .narada-tooltip-content {
+    z-index: 80;
+    max-width: min(340px, calc(100vw - 40px));
+    border: 1px solid var(--line-strong);
+    border-radius: 7px;
+    padding: 7px 9px;
+    background: var(--text);
+    color: var(--surface);
+    box-shadow: 0 10px 30px var(--drawer-shadow);
+    font: 12px/1.4 var(--sans);
+    overflow-wrap: anywhere;
+    white-space: normal;
+    animation: narada-tooltip-show 140ms ease-out;
+  }
+
+  .command-list {
+    display: grid;
+    gap: 2px;
+  }
+
+  .command-option {
+    display: block;
+    cursor: pointer;
+  }
+
+  .command-option:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
+
+  .command-option-active {
+    background: var(--surface-muted);
+  }
+
+  .command-empty {
+    margin: 0;
+    color: var(--muted);
+  }
+}
+
+@keyframes narada-tooltip-show {
+  from { opacity: 0; transform: scale(0.98); }
+  to { opacity: 1; transform: scale(1); }
+}

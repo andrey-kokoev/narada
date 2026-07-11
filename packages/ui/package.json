@@ -1,0 +1,26 @@
+{
+  "name": "@narada2/ui",
+  "version": "0.1.0",
+  "type": "module",
+  "publishConfig": {
+    "access": "public"
+  },
+  "exports": {
+    "./styles.css": "./dist/styles.css",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "prepack": "pnpm run build",
+    "build": "vite build",
+    "test": "pnpm run build && node --test test/ui-foundation.test.mjs test/consumer-contract.test.mjs"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.18",
+    "tailwindcss": "^4.1.18",
+    "vite": "^8.1.1"
+  }
+}
