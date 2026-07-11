@@ -12,6 +12,7 @@
       "artifact_registry",
       "operator_input_queue_state",
       "session_health_and_recovery_snapshots",
+      "turn_lifecycle_state",
       "session_registry_projection",
       "authority_transition_state"
     ],
@@ -35,11 +36,13 @@
     "./authority-transition-state": "./src/authority-transition-state.mjs",
     "./session-core": "./src/session-core.mjs",
     "./session-supervisor": "./src/session-supervisor.mjs",
+    "./turn-state": "./src/turn-state.mjs",
+    "./session-control-contract": "./src/session-control-contract.mjs",
     "./package.json": "./package.json"
   },
   "scripts": {
     "test": "node --test src/*.test.mjs",
-    "typecheck": "tsc --noEmit --allowJs --checkJs false src/index.mjs src/event-log.mjs src/event-hub.mjs src/artifacts.mjs src/input-queue.mjs src/operator-input-queue-state.mjs src/session-status-snapshots.mjs src/session-index.mjs src/authority-transition-state.mjs src/session-core.mjs src/session-supervisor.mjs"
+    "typecheck": "tsc --noEmit --allowJs --checkJs false src/index.mjs src/event-log.mjs src/event-hub.mjs src/artifacts.mjs src/input-queue.mjs src/operator-input-queue-state.mjs src/session-status-snapshots.mjs src/session-index.mjs src/authority-transition-state.mjs src/turn-state.mjs src/session-core.mjs src/session-supervisor.mjs src/session-control-contract.mjs"
   },
   "dependencies": {
     "@narada2/agent-identity": "workspace:*",

@@ -20,6 +20,7 @@ export function createNarsSessionSupervisor({
   if (!carrier || typeof carrier.runTurn !== 'function') throw new Error('nars_session_supervisor_carrier_required');
   let queue = null;
   let activeAbortController = null;
+  let activeTurnId = null;
   let cancelRequested = false;
   let recoveryDrain = null;
 
@@ -41,25 +42,65 @@ export function createNarsSessionSupervisor({
     };
   }
 
-  const eventSink = async (event) => core.appendEvent(eventRecord(event));
+  const eventSink = async (event) => {
+    const record = core.appendEvent(eventRecord(event));
+    core.observeTurnEvent(record);
+    return record;
+  };
+
   const drain = async (input) => {
-    activeAbortController = new AbortController();
-    if (cancelRequested) {
-      cancelRequested = false;
-      activeAbortController.abort();
+    const turnId = String(input.event_id);
+    const prepared = core.prepareTurn(turnId, { reason: 'queue_replay' });
+    if (prepared.action === 'already_completed' || prepared.action === 'terminal') {
+      return { terminal_state: prepared.turn.terminal_state, replay_skipped: true };
     }
+
+    core.transitionTurn(turnId, 'contextualized', { reason: 'input_admitted_to_turn' });
+    core.transitionTurn(turnId, 'evaluating', { reason: 'turn_context_ready' });
+    const controller = new AbortController();
+    activeAbortController = controller;
+    activeTurnId = turnId;
+    const preCancelled = cancelRequested;
+    cancelRequested = false;
+    if (preCancelled) controller.abort();
     try {
-      const result = await carrier.runTurn({ ...buildTurnContext(input), abortSignal: activeAbortController.signal }, eventSink, toolGateway);
-      return { terminal_state: 'completed', result };
+      const context = {
+        ...buildTurnContext(input),
+        turnId,
+        inputEventId: turnId,
+        abortSignal: controller.signal,
+      };
+      const result = await carrier.runTurn(context, eventSink, toolGateway);
+      const current = core.turn(turnId);
+      if (current && !['completed', 'blocked', 'interrupted', 'failed', 'refused'].includes(current.turn_state)) {
+        core.transitionTurn(turnId, 'reconciling', { reason: 'carrier_returned' });
+        core.transitionTurn(turnId, 'completed', { terminal_status: 'completed' });
+      }
+      const finalTurn = core.turn(turnId);
+      return { terminal_state: finalTurn?.terminal_state ?? 'completed', result };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const interrupted = controller.signal.aborted || /abort|cancel|interrupt/i.test(message);
+      const current = core.turn(turnId);
+      if (current && !['completed', 'blocked', 'interrupted', 'failed', 'refused'].includes(current.turn_state)) {
+        core.transitionTurn(turnId, interrupted ? 'interrupted' : 'failed', {
+          error: message,
+          terminal_status: interrupted ? 'interrupted' : 'failed',
+        });
+      }
+      throw error;
     } finally {
-      activeAbortController = null;
+      if (activeTurnId === turnId) {
+        activeTurnId = null;
+        activeAbortController = null;
+      }
     }
   };
 
   function start() {
     if (core.lifecycleState === 'starting') core.transition('ready', { supervisor: 'nars-session-core' });
     if (!queue) queue = core.createQueue({ drain });
-    if (queue.pendingCount > 0 && !recoveryDrain) {
+    if (queue.pendingCount > 0 && !recoveryDrain && core.lifecycleState === 'ready') {
       recoveryDrain = queue.drainUntilIdle().catch(async (error) => {
         await eventSink({ kind: 'session_recovery_drain_failed', error: error instanceof Error ? error.message : String(error) });
       });
@@ -70,7 +111,8 @@ export function createNarsSessionSupervisor({
   async function cancel(evidence = {}) {
     if (activeAbortController) activeAbortController.abort();
     else cancelRequested = true;
-    await eventSink({ kind: 'session_turn_cancel_requested', ...evidence });
+    await eventSink({ kind: 'session_turn_cancel_requested', turn_id: activeTurnId, ...evidence });
+    if (activeTurnId) await eventSink({ kind: 'interrupt_requested', turn_id: activeTurnId, ...evidence });
     return true;
   }
 
@@ -105,7 +147,10 @@ export function createNarsSessionSupervisor({
   async function submit(input) {
     if (core.lifecycleState !== 'ready') throw new Error(`nars_session_not_ready:${core.lifecycleState}`);
     if (!queue) start();
-    return queue.enqueue(input, { drain: true });
+    const queuedInput = input && typeof input === 'object'
+      ? { ...input, request_id: input.request_id ?? input.id ?? null }
+      : input;
+    return queue.enqueue(queuedInput, { drain: true });
   }
 
   function health() {
@@ -117,11 +162,29 @@ export function createNarsSessionSupervisor({
   }
 
   async function close(evidence = {}) {
-    if (core.lifecycleState === 'ready') core.transition('closing', evidence);
-    await toolGateway.close?.();
-    if (core.lifecycleState === 'closing') core.transition('closed', evidence);
+    if (core.lifecycleState === 'starting' || core.lifecycleState === 'ready') core.transition('closing', evidence);
+    try {
+      await toolGateway.close?.();
+      if (core.lifecycleState === 'closing') core.transition('closed', evidence);
+    } catch (error) {
+      if (core.lifecycleState === 'closing') {
+        core.transition('failed', { ...evidence, error: error instanceof Error ? error.message : String(error) });
+      }
+      throw error;
+    }
     return healthSnapshot('closed');
   }
 
-  return Object.freeze({ core, start, submit, dispatch, cancel, health, recovery, close, get recoveryDrain() { return recoveryDrain; } });
+  return Object.freeze({
+    core,
+    start,
+    submit,
+    dispatch,
+    cancel,
+    health,
+    recovery,
+    close,
+    get recoveryDrain() { return recoveryDrain; },
+    get activeTurnId() { return activeTurnId; },
+  });
 }

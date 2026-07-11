@@ -62,9 +62,12 @@ function parseRequest(line) {
 }
 
 function projectRuntimeHealth(snapshot, runtimeContext, toolGateway) {
-  const mcpOperationalState = snapshot.mcp_operational_state
-    ?? toolGateway.operationalState?.()
-    ?? 'unknown';
+  const mcpScope = runtimeContext.mcpScope ?? 'all';
+  const mcpOperationalState = mcpScope === 'none'
+    ? 'disabled'
+    : snapshot.mcp_operational_state
+      ?? toolGateway.operationalState?.()
+      ?? 'unknown';
   const lifecycleState = snapshot.lifecycle_state ?? 'starting';
   const status = lifecycleState === 'starting'
     ? 'starting'
@@ -93,8 +96,10 @@ function projectRuntimeHealth(snapshot, runtimeContext, toolGateway) {
       model: runtimeContext.providerSettings?.model ?? null,
     },
     mcp_operational_state: mcpOperationalState,
+    mcp_scope: mcpScope,
     mcp: {
       operational_state: mcpOperationalState,
+      scope: mcpScope,
       server_count: null,
       startup_failure_count: 0,
       runtime_fault_count: 0,
@@ -187,7 +192,6 @@ export function createSessionCoreRuntimeService({ runtimeContext, callChatApiFn,
         return false;
       }
       if (method === 'session.close') {
-        supervisor.core.appendEvent({ event: 'session_closed', request_id: requestId, terminal_state: 'closed' });
         await supervisor.close({ request_id: requestId, reason: 'control_request' });
         return true;
       }
@@ -237,6 +241,11 @@ export function createSessionCoreRuntimeService({ runtimeContext, callChatApiFn,
       session_path: runtimeContext.sessionPath ?? null,
       events_path: runtimeContext.eventsPath ?? null,
       operator_surface_kind: runtimeContext.operatorSurfaceKind ?? null,
+      provider: runtimeContext.intelligenceProvider ?? null,
+      model: runtimeContext.providerSettings?.model ?? null,
+      mcp_scope: runtimeContext.mcpScope ?? 'all',
+      mcp_server_count: runtimeContext.mcpScope === 'none' ? 0 : null,
+      mcp_operational_state: runtimeContext.mcpScope === 'none' ? 'disabled' : 'starting',
       delegated_authority_handoff: runtimeContext.narsDelegatedAuthorityHandoff ?? null,
       delegated_authority_ref: runtimeContext.narsDelegatedAuthorityHandoff?.authority_ref ?? null,
       health_endpoint: runtimeContext.healthUrl ?? null,

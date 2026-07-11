@@ -49,7 +49,7 @@ Load-bearing boundaries:
 | Launcher planner | Selecting agents, Sites, runtime choice, and launch packet validation. | Provider execution, conversation state, tool execution. |
 | `@narada2/agent-start` | Identity/session/event creation, Site MCP fabric validation, provider selection, credential projection, launch result materialization. | Runtime protocol, slash command semantics, provider turn loop. |
 | `@narada2/agent-runtime-server` | Stable machine-addressable session entrypoint, transport projection, and supervision of one session-core instance. | Session persistence internals, provider credentials, task truth, external effect authority. |
-| `@narada2/nars-session-core` | Session lifecycle, durable event journal, artifacts, input queue state, health, and recovery. | Provider turns, MCP transport, effect admission, client rendering. |
+| `@narada2/nars-session-core` | Session and turn lifecycle, durable event journal, artifacts, input queue state, health, and recovery. | Provider turns, MCP transport, effect admission, client rendering. |
 | `@narada2/nars-capability-gateway` | MCP hosting, explicit capability admission, and tool execution evidence. | Session lifecycle, provider turns, effect confirmation. |
 | `@narada2/nars-client-projection-contract` | Client projection capability sets, attach command registry, projection command method aliases, and shared operator command/help projection for NARS clients. | Carrier protocol schema validation, runtime session execution, or browser/terminal rendering. |
 | `@narada2/carrier-protocol` | Carrier request/event vocabulary, schema helpers, input admission classification, and runtime event classification. | Client attach command rendering or client-specific capability lists. |
@@ -109,6 +109,18 @@ Historical `conversation.*`, `session.status`, `session.operations`, observer, a
 Human terminal input is a projection of this contract. Ordinary lines become `session.submit` with `content`; active-turn queueing uses `delivery_mode: "admit_after_active_turn"` and `source: "operator_steering"`. `/status` maps to `session.health`, `/recovery` to `session.recovery`, `/interrupt` to `session.cancel`, `/events` to event subscription, and `/exit` to `session.close`. Unsupported historical commands remain local unavailable messages and are not sent.
 
 MCP surface affordances, provider-specific panels, authority transitions, observer controls, and session synchronization are deferred adapter capabilities. They must not be advertised as local session-core controls until an owning runtime handler and boundary tests exist.
+
+### Durable Turn Lifecycle
+
+`@narada2/nars-session-core` is authoritative for the durable turn FSM (`narada.nars.turn_state.v1`). Each accepted input is one `turn_id` and is persisted through this path:
+
+```text
+accepted -> contextualized -> evaluating
+  -> tool_requested -> tool_admitted -> executing -> reconciling -> evaluating
+  -> completed | blocked | interrupted | failed | refused
+```
+
+Tool stages may repeat. A refused tool may return to `evaluating`; a failed or interrupted turn may be retried only through an explicit `accepted` transition with an incremented attempt. Completed, blocked, and refused turns are terminal and are not replayed automatically. Every state change is appended as `turn_lifecycle_transition`; compatibility events such as `turn_started`, `turn_complete`, `turn_failed`, and `turn_interrupted` are projections of that durable record.
 
 ## Client And Runtime Split
 
@@ -342,7 +354,10 @@ The public response schema is `narada.nars.health.v1`:
   "activity": {
     "last_event_kind": "session_started",
     "last_event_at": "2026-07-10T00:00:00.000Z",
+    "active_turn_id": null,
     "active_turn_state": null,
+    "last_turn_id": null,
+    "last_turn_state": null,
     "last_terminal_state": null
   },
   "posture": {

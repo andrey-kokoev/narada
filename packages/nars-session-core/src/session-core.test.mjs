@@ -38,7 +38,7 @@ test('session core owns journal sequencing, queue persistence, artifacts, health
     assert.equal(core.lifecycleState, 'closed');
     assert.throws(() => core.appendEvent({ event: 'late_event' }), /nars_session_closed/);
     const persisted = readFileSync(eventsPath, 'utf8').trim().split(/\r?\n/).map((line) => JSON.parse(line));
-    assert.deepEqual(persisted.map((event) => event.event_sequence), [1, 2, 3, 4, 5, 6]);
+    assert.deepEqual(persisted.map((event) => event.event_sequence), [1, 2, 3, 4, 5, 6, 7, 8, 9]);
     const artifactEvent = persisted.find((event) => event.event === 'session_artifact_registered');
     assert.deepEqual(artifactEvent?.artifact, artifact.public_record);
     assert.equal(core.recoverySnapshot().artifacts.artifacts.length, 1);
@@ -111,9 +111,47 @@ test('recreated session core preserves queued input and continues durable event 
     await queue.enqueue({ content: 'resume me' });
     const second = createNarsSessionCore({ sessionId: 'recover-1', sessionPath, eventsPath, siteRoot: root });
     assert.equal(second.recoverySnapshot().operator_input_queue.pending_count, 1);
-    assert.equal(second.appendEvent({ event: 'recovery_observed' }).event_sequence, 3);
+    assert.equal(second.appendEvent({ event: 'recovery_observed' }).event_sequence, 5);
     const events = readFileSync(eventsPath, 'utf8').trim().split(/\r?\n/).map((line) => JSON.parse(line));
-    assert.deepEqual(events.map((event) => event.event_sequence), [1, 2, 3]);
+    assert.deepEqual(events.map((event) => event.event_sequence), [1, 2, 3, 4, 5]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('turn FSM persists metadata, rejects illegal transitions, and rehydrates its terminal state', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'nars-turn-fsm-'));
+  const sessionPath = join(root, 'session.json');
+  const eventsPath = join(root, 'events.jsonl');
+  try {
+    const first = createNarsSessionCore({
+      sessionId: 'turn-fsm-1',
+      agentId: 'agent-1',
+      sessionPath,
+      eventsPath,
+      siteRoot: root,
+    });
+    first.transition('ready');
+    const queue = first.createQueue({ drain: async () => ({ terminal_state: 'completed' }) });
+    await queue.enqueue({
+      event_id: 'input_turn_fsm_1',
+      content: 'inspect the durable turn',
+      metadata: { authority_posture: 'read_only' },
+    });
+    assert.equal(first.turn('input_turn_fsm_1').turn_state, 'accepted');
+    assert.equal(first.turn('input_turn_fsm_1').authority_posture, 'read_only');
+    assert.throws(() => first.transitionTurn('input_turn_fsm_1', 'completed'), /invalid_nars_turn_transition/);
+
+    for (const state of ['contextualized', 'evaluating', 'tool_requested', 'tool_admitted', 'executing', 'reconciling', 'completed']) {
+      first.transitionTurn('input_turn_fsm_1', state);
+    }
+    assert.deepEqual(first.healthSnapshot().active_turn_state, null);
+    assert.equal(first.recoverySnapshot().turns[0].terminal_state, 'completed');
+
+    const second = createNarsSessionCore({ sessionId: 'turn-fsm-1', agentId: 'agent-1', sessionPath, eventsPath, siteRoot: root });
+    assert.equal(second.turn('input_turn_fsm_1').turn_state, 'completed');
+    assert.equal(second.turn('input_turn_fsm_1').attempt, 1);
+    assert.equal(second.healthSnapshot().active_turn_id, null);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

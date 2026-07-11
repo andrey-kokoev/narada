@@ -388,7 +388,7 @@ test('spawned runtime recovers an in-flight queued turn exactly once after force
     second.stdin.end(`${JSON.stringify({ id: 'health-recovered', method: 'session.health' })}\n${JSON.stringify({ id: 'recovery-recovered', method: 'session.recovery' })}\n${JSON.stringify({ id: 'close-1', method: 'session.close' })}\n`);
     assert.equal(await new Promise((resolve) => second.on('exit', resolve)), 0);
     assert.equal(providerCalls, 2);
-    assert.equal((recoveredOutput.match(/carrier_turn_completed/g) ?? []).length, 1);
+    assert.equal((recoveredOutput.match(/"event":"carrier_turn_completed"/g) ?? []).length, 1);
     const recoveredEvents = secondStdout.trim().split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
     assert.equal(recoveredEvents.find((event) => event.event === 'session_health' && event.request_id === 'health-recovered')?.operator_input_queue?.pending_count, 0);
     assert.equal(recoveredEvents.find((event) => event.event === 'session_recovery' && event.request_id === 'recovery-recovered')?.operator_input_queue?.pending_count, 0);
@@ -687,6 +687,31 @@ test('agent-web-ui launch host renderer does not present agent-cli projection te
   assert.equal(rendered.includes('operator >'), false);
 });
 
+test('runtime host renderer projects resolved provider and explicit MCP scope', () => {
+  const rendered = formatHostStatusEvent({
+    event: 'session_started',
+    agent_id: 'resident',
+    agent_identity_ref: {
+      schema: 'narada.agent_identity_ref.v2',
+      identity_scope: { kind: 'narada_site', site_id: 'sonar' },
+      local_agent_id: 'resident',
+      role: 'resident',
+      display: 'sonar.resident',
+    },
+    session_id: 'runtime-web-ui-metadata-test',
+    operator_surface_kind: 'agent-web-ui',
+    provider: 'kimi-code-api',
+    model: 'kimi-k2.7',
+    mcp_scope: 'none',
+    mcp_server_count: 0,
+    mcp_operational_state: 'disabled',
+  }).join('\n');
+  assert.match(rendered, /Provider kimi-code-api/);
+  assert.match(rendered, /Model    kimi-k2\.7/);
+  assert.match(rendered, /MCP      disabled \(scope=none\)/);
+  assert.doesNotMatch(rendered, /unknown/);
+});
+
 function walkFiles(root) {
   const entries = [];
   for (const name of readdirSync(root)) {
@@ -871,19 +896,23 @@ test('WebSocket /events subscribes with replay and forwards protocol frames', as
     hub.publish({ event: 'assistant_message', request_id: 'input_1', content: 'hello' });
     const live = await client.nextJson();
     assert.equal(live.payload.event, 'assistant_message');
-    client.sendJson({ id: 'status-1', method: 'session.status', params: {} });
+    client.sendJson({ id: 'legacy-1', method: 'conversation.send', params: { message: 'legacy input' } });
+    const rejected = await client.nextJson();
+    assert.equal(rejected.event, 'websocket_error');
+    assert.equal(rejected.code, 'unsupported_session_control');
+    client.sendJson({ id: 'status-1', method: 'session.health', params: {} });
     await waitForWrittenFrameCount(1);
-    assert.equal(JSON.parse(written.trim().split(/\r?\n/).at(-1)).method, 'session.status');
-    client.sendJson({ id: 'input-1', method: 'conversation.send', params: { message: 'run startup sequence', source: 'agent-web-ui' } });
+    assert.equal(JSON.parse(written.trim().split(/\r?\n/).at(-1)).method, 'session.health');
+    client.sendJson({ id: 'input-1', method: 'session.submit', params: { content: 'run startup sequence', source: 'manual_operator' } });
     await waitForWrittenFrameCount(2);
     const inputFrame = JSON.parse(written.trim().split(/\r?\n/).at(-1));
-    assert.equal(inputFrame.method, 'conversation.send');
-    assert.deepEqual(inputFrame.params, { message: 'run startup sequence', source: 'agent-web-ui' });
-    client.sendJson({ id: 'tools-1', method: 'session.command.execute', params: { command: '/tools', value: 'mcp' } });
+    assert.equal(inputFrame.method, 'session.submit');
+    assert.deepEqual(inputFrame.params, { content: 'run startup sequence', source: 'manual_operator' });
+    client.sendJson({ id: 'recovery-1', method: 'session.recovery', params: {} });
     await waitForWrittenFrameCount(3);
-    const slashFrame = JSON.parse(written.trim().split(/\r?\n/).at(-1));
-    assert.equal(slashFrame.method, 'session.command.execute');
-    assert.deepEqual(slashFrame.params, { command: '/tools', value: 'mcp' });
+    const recoveryFrame = JSON.parse(written.trim().split(/\r?\n/).at(-1));
+    assert.equal(recoveryFrame.method, 'session.recovery');
+    assert.deepEqual(recoveryFrame.params, {});
   } finally {
     client.close();
     projection.server.close();
@@ -1373,6 +1402,9 @@ test('narada-owned entrypoint runs the session-core control runtime in process',
     const events = stdout.trim().split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
     assert.equal(events[0].event, 'session_started');
     assert.equal(events[0].agent_id, 'narada.test');
+    assert.equal(events[0].provider, 'codex-subscription');
+    assert.equal(events[0].mcp_scope, 'all');
+    assert.equal(events[0].mcp_operational_state, 'starting');
     assert.equal(events[0].delegated_authority_handoff?.schema, 'narada.nars.delegated_authority_handoff.v1');
     assert.equal(events[0].delegated_authority_handoff?.crossing_regime, 'nars_runtime_server_to_carrier_substrate');
     assert.equal(events[0].delegated_authority_handoff?.target?.package, '@narada2/carrier-runtime');

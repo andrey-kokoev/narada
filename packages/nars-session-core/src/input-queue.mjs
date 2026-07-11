@@ -124,6 +124,7 @@ export function createInputQueue({
   carrierSessionEventEntryFn = (event_kind, payload) => ({ event_kind, payload }),
   noteSessionActivityFn = () => {},
   recordObserverInputQueuedFn = () => {},
+  onInputAcceptedFn = () => {},
   onQueueStateChangedFn = () => {},
   initialPending = [],
   classifyInputRuntimeQueueAdmissionFn = () => ({ queue_events: [] }),
@@ -159,7 +160,10 @@ export function createInputQueue({
         source_kind: normalized.source_kind,
         authority_ref: normalized.authority_ref,
         directive_id: normalized.directive_id,
+        turn_id: normalized.event_id,
+        turn_state: 'accepted',
       }));
+      onInputAcceptedFn(normalized);
       recordObserverInputQueuedFn(normalized);
       const queueAdmission = classifyInputRuntimeQueueAdmissionFn(normalized, transcriptDisplaySettings, {
         activeTurn: state.running,
