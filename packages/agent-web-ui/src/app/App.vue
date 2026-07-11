@@ -13,6 +13,7 @@ import { useMailboxSummary } from './composables/useMailboxSummary';
 import { useMcpInventory } from './composables/useMcpInventory';
 import { useNarsConnection } from './composables/useNarsConnection';
 import { useSessionState } from './composables/useSessionState';
+import { useSessionActions } from './composables/useSessionActions';
 import { useOperatorInput, type OperatorQueueItem } from './composables/useOperatorInput';
 import { useOperatorQueue } from './composables/useOperatorQueue';
 import { useOperatorSnippets, type OperatorSnippet, type OperatorSnippetCommandEvent, type OperatorSnippetFeedback, type OperatorSnippetOpenRequest } from './composables/useOperatorSnippets';
@@ -57,6 +58,7 @@ const connection = useNarsConnection(
   session.retain,
   session.retainMany,
 );
+const sessionActions = useSessionActions(connection.connection, session.retain, supportsProtocolMethod);
 const agentActivity = useAgentActivity(session.events, health.body);
 const affordanceConfirmations = useAffordanceConfirmations(session.events);
 const mcpInventory = useMcpInventory(session.events, health.body);
@@ -89,7 +91,7 @@ const canSteerActiveTurn = computed(() => (
   && agentActivity.activity.value.active === true
   && (agentActivity.activity.value.state === 'thinking' || agentActivity.activity.value.state === 'streaming')
 ));
-const input = useOperatorInput(connection.connection, session.retain, session.clear, props.config.authorityTransition ?? null, () => canSteerActiveTurn.value, preferSessionCoreInput, supportsProtocolMethod);
+const input = useOperatorInput(connection.connection, session.retain, session.clear, props.config.authorityTransition ?? null, () => canSteerActiveTurn.value, preferSessionCoreInput, supportsProtocolMethod, sessionActions.send);
 const draft = input.draft;
 const followLatestRevision = ref(0);
 const surfaceAffordancesRequested = ref(false);
@@ -104,7 +106,7 @@ function followLatestTranscript() {
 
 watch(connection.streamText, (status) => {
   if (surfaceAffordancesRequested.value || status !== 'connected' || !supportsProtocolMethod('session.surface.affordances')) return;
-  surfaceAffordancesRequested.value = sendProtocolFrame(buildSurfaceAffordancesRequestFrame());
+  surfaceAffordancesRequested.value = sessionActions.send(buildSurfaceAffordancesRequestFrame());
 }, { immediate: true });
 
 function submitOperatorDraft(deliveryMode: 'default' | 'enqueue' = 'default') {
@@ -235,77 +237,58 @@ function interruptModel() {
   if (input.interrupt()) followLatestTranscript();
 }
 
-function sendProtocolFrame(frame: unknown): boolean {
-  const method = frame && typeof frame === 'object' && typeof (frame as { method?: unknown }).method === 'string'
-    ? (frame as { method: string }).method
-    : null;
-  if (!method) return false;
-  if (!supportsProtocolMethod(method)) {
-    session.retain({
-      event: 'web_ui_input_not_sent',
-      message: 'control is not admitted by the attached runtime',
-      reason_code: 'unsupported_session_control',
-      method,
-    });
-    return false;
-  }
-  const sent = connection.connection.value?.sendFrame(frame) ?? false;
-  if (!sent) session.retain({ event: 'web_ui_input_not_sent', message: 'event stream is not open', method });
-  return sent;
-}
-
 function requestSopSummary() {
-  sendProtocolFrame(buildSopSummaryRequestFrame());
+  sessionActions.send(buildSopSummaryRequestFrame());
 }
 
 function requestInboxSummary() {
-  sendProtocolFrame(buildInboxSummaryRequestFrame());
+  sessionActions.send(buildInboxSummaryRequestFrame());
 }
 
 function requestDelegationSummary() {
-  sendProtocolFrame(buildDelegationSummaryRequestFrame());
+  sessionActions.send(buildDelegationSummaryRequestFrame());
 }
 
 function requestGitSummary() {
-  sendProtocolFrame(buildGitSummaryRequestFrame());
+  sessionActions.send(buildGitSummaryRequestFrame());
 }
 
 function requestArtifactsSummary() {
-  sendProtocolFrame(buildArtifactsSummaryRequestFrame());
+  sessionActions.send(buildArtifactsSummaryRequestFrame());
 }
 
 function requestMailboxSummary() {
-  sendProtocolFrame(buildMailboxSummaryRequestFrame());
+  sessionActions.send(buildMailboxSummaryRequestFrame());
 }
 
 function requestSchedulerSummary() {
-  sendProtocolFrame(buildSchedulerSummaryRequestFrame());
+  sessionActions.send(buildSchedulerSummaryRequestFrame());
 }
 
 function requestTaskLifecycleSummary() {
-  sendProtocolFrame(buildTaskLifecycleSummaryRequestFrame());
+  sessionActions.send(buildTaskLifecycleSummaryRequestFrame());
 }
 
 function requestSurfaceFeedbackSummary() {
-  sendProtocolFrame(buildSurfaceFeedbackSummaryRequestFrame());
+  sessionActions.send(buildSurfaceFeedbackSummaryRequestFrame());
 }
 
 function requestAffordanceAction(request: { surfaceId: string; actionId: string; args: Record<string, unknown> }) {
   const frame = buildAffordanceActionRequestFrame({ surfaceId: request.surfaceId, actionId: request.actionId, args: request.args });
   if (frame) {
-    sendProtocolFrame(frame);
+    sessionActions.send(frame);
     void health.refresh();
   }
 }
 
 function confirmAffordanceAction(item: AffordanceConfirmationItem) {
   const frame = buildAffordanceActionConfirmFrame({ confirmationId: item.confirmationId });
-  if (frame) sendProtocolFrame(frame);
+  if (frame) sessionActions.send(frame);
 }
 
 function cancelAffordanceAction(item: AffordanceConfirmationItem) {
   const frame = buildAffordanceActionCancelFrame({ confirmationId: item.confirmationId });
-  if (frame) sendProtocolFrame(frame);
+  if (frame) sessionActions.send(frame);
 }
 </script>
 

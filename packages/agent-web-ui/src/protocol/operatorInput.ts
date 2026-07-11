@@ -16,8 +16,9 @@ export interface AuthorityTransitionInputPolicy {
 
 export type OperatorInputDeliveryMode = 'default' | 'enqueue';
 export type ProtocolMethodSupport = (method: string) => boolean;
+export type SessionFrameSender = (frame: unknown) => boolean;
 
-export function submitOperatorInput(text: string, connection: NarsClientConnection | null, authorityTransition: AuthorityTransitionInputPolicy | null = null, deliveryMode: OperatorInputDeliveryMode = 'default', canSteerActiveTurn: boolean | null = null, supportsProtocolMethod: ProtocolMethodSupport | null = null): OperatorInputResult {
+export function submitOperatorInput(text: string, connection: NarsClientConnection | null, authorityTransition: AuthorityTransitionInputPolicy | null = null, deliveryMode: OperatorInputDeliveryMode = 'default', canSteerActiveTurn: boolean | null = null, supportsProtocolMethod: ProtocolMethodSupport | null = null, sendFrame: SessionFrameSender | null = null): OperatorInputResult {
   const activeTurn = canSteerActiveTurn ?? Boolean(connection?.activeTurnId);
   const action = buildAgentWebUiOperatorInputAction(text, {
     activeTurn,
@@ -64,7 +65,7 @@ export function submitOperatorInput(text: string, connection: NarsClientConnecti
       },
     };
   }
-  const sent = connection?.sendFrame(action.frame) ?? false;
+  const sent = sendFrame ? sendFrame(action.frame) : connection?.sendFrame(action.frame) ?? false;
   if (!sent) return { handled: false, shouldClearDraft: false, localEvent: { event: 'web_ui_input_not_sent', message: 'event stream is not open' } };
   const frame = action.frame;
   if (frame.method === 'session.close') connection?.close?.();
@@ -75,7 +76,7 @@ export function submitOperatorInput(text: string, connection: NarsClientConnecti
   };
 }
 
-export function submitOperatorConversationText(text: string, connection: NarsClientConnection | null, authorityTransition: AuthorityTransitionInputPolicy | null = null, deliveryMode: OperatorInputDeliveryMode = 'default', supportsProtocolMethod: ProtocolMethodSupport | null = null): OperatorInputResult {
+export function submitOperatorConversationText(text: string, connection: NarsClientConnection | null, authorityTransition: AuthorityTransitionInputPolicy | null = null, deliveryMode: OperatorInputDeliveryMode = 'default', supportsProtocolMethod: ProtocolMethodSupport | null = null, sendFrame: SessionFrameSender | null = null): OperatorInputResult {
   const frame = deliveryMode === 'enqueue'
     ? buildConversationInputFrame('conversation.enqueue', text)
     : buildConversationInputFrame('conversation.send', text);
@@ -104,7 +105,7 @@ export function submitOperatorConversationText(text: string, connection: NarsCli
       },
     };
   }
-  const sent = connection?.sendFrame(frame) ?? false;
+  const sent = sendFrame ? sendFrame(frame) : connection?.sendFrame(frame) ?? false;
   if (!sent) return { handled: false, shouldClearDraft: false, localEvent: { event: 'web_ui_input_not_sent', message: 'event stream is not open' } };
   return {
     handled: true,

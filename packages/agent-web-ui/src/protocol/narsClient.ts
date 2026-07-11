@@ -1,6 +1,7 @@
-import { buildAgentWebUiEventsReadFrame, buildAgentWebUiSubscribeFrame, isAgentWebUiProtocolFrame } from '@narada2/nars-client-projection-contract';
+import { buildAgentWebUiEventsReadFrame, buildAgentWebUiSubscribeFrame, isAgentWebUiCloudflareProtocolFrame, translateAgentWebUiFrameForCloudflare } from '@narada2/nars-client-projection-contract';
 import { applyRuntimeEventToWebUiState, sequenceFromRuntimeMessage } from '../runtime-events.js';
 import { reconnectDelayForAttempt } from '../event-stream.js';
+import type { SessionTransport } from './sessionTransport';
 
 export interface NarsClientOptions {
   endpoint: string | null;
@@ -45,14 +46,7 @@ function cloudflareEventItemToRuntimeMessage(item: Record<string, unknown>): unk
   };
 }
 
-export interface NarsClientConnection {
-  readonly activeTurnId: string | boolean | null;
-  readonly lastSequence: number | null;
-  getSocket(): WebSocket | null;
-  sendFrame(frame: unknown): boolean;
-  readEventsPage(options: { beforeSequence?: number; afterSequence?: number; direction?: 'forward' | 'backward'; limit?: number }): boolean;
-  close(): void;
-}
+export interface NarsClientConnection extends SessionTransport {}
 
 export function createNarsClient(options: NarsClientOptions): NarsClientConnection {
   const WebSocketCtor = options.WebSocketCtor ?? globalThis.WebSocket;
@@ -73,7 +67,7 @@ export function createNarsClient(options: NarsClientOptions): NarsClientConnecti
     get lastSequence() { return state.lastSequence; },
     getSocket() { return state.socket; },
     sendFrame(frame: unknown) {
-      if (!isAgentWebUiProtocolFrame(frame)) throw new Error('unsupported_agent_web_ui_protocol_frame');
+      if (!isAgentWebUiCloudflareProtocolFrame(frame)) throw new Error('unsupported_agent_web_ui_protocol_frame');
       const socket = state.socket;
       const openState = WebSocketCtor.OPEN ?? 1;
       if (!socket || socket.readyState !== openState) return false;
@@ -219,13 +213,15 @@ export function createNarsClient(options: NarsClientOptions): NarsClientConnecti
       }
     };
     connection.sendFrame = (frame: unknown) => {
-      if (!isAgentWebUiProtocolFrame(frame)) throw new Error('unsupported_agent_web_ui_protocol_frame');
+      if (!isAgentWebUiCloudflareProtocolFrame(frame)) throw new Error('unsupported_agent_web_ui_protocol_frame');
       const protocolFrame = frame as { method: string; params?: Record<string, unknown>; id?: string };
+      const remoteFrame = translateAgentWebUiFrameForCloudflare(protocolFrame);
+      if (!remoteFrame) return false;
       if (!options.inputEndpoint) return false;
       fetchFn(options.inputEndpoint, {
         method: 'POST',
         headers: { 'content-type': 'application/json', ...projectionHeaders(options.browserToken) },
-        body: JSON.stringify({ method: protocolFrame.method, payload: protocolFrame.params ?? {}, request_id: protocolFrame.id }),
+        body: JSON.stringify({ method: remoteFrame.method, payload: remoteFrame.params ?? {}, request_id: protocolFrame.id }),
       }).then(async (response) => {
         const body = await response.json().catch(() => ({ event: 'projection_input_response', status: response.ok ? 'ok' : 'failed' }));
         options.onEvent?.({ event: 'projection_input_response', status: response.ok ? 'ok' : 'failed', ...body });

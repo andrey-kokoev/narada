@@ -776,6 +776,7 @@ test('Vue layout smoke covers shell, status, event list, composer, and event ton
   const status = await readFile(new URL('../src/app/components/SessionStatusBar.vue', import.meta.url), 'utf8');
   const activity = await readFile(new URL('../src/app/composables/useAgentActivity.ts', import.meta.url), 'utf8');
   const retainedEvents = await readFile(new URL('../src/app/composables/useRetainedEvents.ts', import.meta.url), 'utf8');
+  const sessionActions = await readFile(new URL('../src/app/composables/useSessionActions.ts', import.meta.url), 'utf8');
   const projectionVerbosity = await readFile(new URL('../src/app/composables/useProjectionVerbosity.ts', import.meta.url), 'utf8');
   const selectorComponent = await readFile(new URL('../src/app/components/ProjectionVerbositySelect.vue', import.meta.url), 'utf8');
   const composer = await readFile(new URL('../src/app/components/OperatorComposer.vue', import.meta.url), 'utf8');
@@ -796,6 +797,11 @@ test('Vue layout smoke covers shell, status, event list, composer, and event ton
   assert.match(shell, /follow-latest-revision="followLatestRevision"/);
   assert.match(shell, /narada:agent-web-ui:status-row-open\.v1/);
   assert.match(app, /useAgentActivity\(session\.events, health\.body\)/);
+  assert.match(app, /useSessionActions\(connection\.connection, session\.retain, supportsProtocolMethod\)/);
+  assert.match(app, /sessionActions\.send/);
+  assert.match(sessionActions, /invalid_session_action/);
+  assert.match(sessionActions, /unsupported_session_control/);
+  assert.match(sessionActions, /event stream is not open/);
   assert.match(activity, /active_turn_state/);
   assert.match(shell, /narada:agent-web-ui:header-items\.v2/);
   assert.match(shell, /Connection: \{\{ runtimeTopology\.verdictLabel \}\}/);
