@@ -31,6 +31,14 @@ import {
 } from './sites.js';
 import { siteImmuneScanCommand } from './site-immune-scan.js';
 import { siteMutationAuthorityPreflightCommand } from './site-mutation-authority-preflight.js';
+import {
+  sitesRegistryAddCommand,
+  sitesRegistryDiscoverCommand,
+  sitesRegistryEditCommand,
+  sitesRegistryListCommand,
+  sitesRegistryShowCommand,
+  sitesRegistryStateCommand,
+} from './site-registry-management.js';
 import { directCommandAction, silentCommandContext, wrapCommand } from '../lib/command-wrapper.js';
 import { emitCommandResult, emitFiniteCommandResult, emitFormatterBackedCommandResult, resolveCommandFormat } from '../lib/cli-output.js';
 
@@ -38,6 +46,191 @@ export function registerSitesCommands(program: Command): void {
   const sitesCmd = program
     .command('sites')
     .description('Discover and manage Narada Sites');
+
+  const registryCmd = sitesCmd
+    .command('registry')
+    .description('Manage the User Site registry read model without mutating Site-owned state');
+
+  registryCmd
+    .command('list')
+    .description('List canonical Site records, lifecycle, observation, provenance, and aliases')
+    .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
+    .option('-v, --verbose', 'Enable verbose output', false)
+    .action(directCommandAction<[Record<string, unknown>]>({
+      command: 'sites registry list',
+      emit: emitCommandResult,
+      format: (opts: Record<string, unknown>) => opts.format,
+      invocation: (opts) => sitesRegistryListCommand({
+        format: resolveCommandFormat(opts.format, 'auto'),
+        verbose: opts.verbose as boolean | undefined,
+      }, silentCommandContext({ verbose: !!opts.verbose })),
+    }));
+
+  registryCmd
+    .command('show <site-id-or-alias>')
+    .description('Show one Site record, management history, conflicts, and next actions')
+    .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
+    .option('-v, --verbose', 'Enable verbose output', false)
+    .action(directCommandAction<[string, Record<string, unknown>]>({
+      command: 'sites registry show',
+      emit: emitCommandResult,
+      format: (_reference: string, opts: Record<string, unknown>) => opts.format,
+      invocation: (reference, opts) => sitesRegistryShowCommand({
+        reference,
+        format: resolveCommandFormat(opts.format, 'auto'),
+        verbose: opts.verbose as boolean | undefined,
+      }, silentCommandContext({ verbose: !!opts.verbose })),
+    }));
+
+  registryCmd
+    .command('discover')
+    .description('Plan or apply bounded filesystem and launch-registry reconciliation')
+    .option('--source <source>', 'Discovery source: filesystem, launch_registry, or all', 'all')
+    .option('--root <path>', 'Restrict discovery to one Site root')
+    .option('--actor <id>', 'Operator or agent identity')
+    .option('--apply', 'Apply the planned registry changes', false)
+    .option('--dry-run', 'Explicitly request planning without mutation', false)
+    .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
+    .option('-v, --verbose', 'Enable verbose output', false)
+    .action(directCommandAction<[Record<string, unknown>]>({
+      command: 'sites registry discover',
+      emit: emitCommandResult,
+      format: (opts: Record<string, unknown>) => opts.format,
+      invocation: (opts) => sitesRegistryDiscoverCommand({
+        source: opts.source as 'filesystem' | 'launch_registry' | 'all' | undefined,
+        root: opts.root as string | undefined,
+        actor: opts.actor as string | undefined,
+        apply: opts.apply as boolean | undefined,
+        dryRun: opts.dryRun as boolean | undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
+        verbose: opts.verbose as boolean | undefined,
+      }, silentCommandContext({ verbose: !!opts.verbose })),
+    }));
+
+  registryCmd
+    .command('add')
+    .description('Plan or add one already-existing Site to the registry')
+    .requiredOption('--site-id <id>', 'Canonical Site id')
+    .requiredOption('--root <path>', 'Existing or expected Site root; files are never created')
+    .option('--variant <variant>', 'Site variant: native, wsl, cloudflare, linux-user, or linux-system', 'native')
+    .option('--substrate <substrate>', 'Declared substrate', 'windows')
+    .option('--aim-json <json>', 'Bounded JSON aim summary')
+    .option('--control-endpoint <endpoint>', 'Control endpoint reference')
+    .option('--alias <alias...>', 'Legacy or launch alias; repeatable')
+    .option('--source <source>', 'Source kind', 'manual')
+    .option('--source-ref <ref>', 'Bounded source reference')
+    .option('--reason <reason>', 'Reason when explicitly re-admitting a retired record')
+    .option('--re-admit', 'Explicitly re-admit a retired registry record', false)
+    .option('--actor <id>', 'Operator or agent identity')
+    .option('--apply', 'Apply the planned registry change', false)
+    .option('--dry-run', 'Explicitly request planning without mutation', false)
+    .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
+    .option('-v, --verbose', 'Enable verbose output', false)
+    .action(directCommandAction<[Record<string, unknown>]>({
+      command: 'sites registry add',
+      emit: emitCommandResult,
+      format: (opts: Record<string, unknown>) => opts.format,
+      invocation: (opts) => sitesRegistryAddCommand({
+        siteId: opts.siteId as string,
+        root: opts.root as string,
+        variant: opts.variant as string | undefined,
+        substrate: opts.substrate as string | undefined,
+        aimJson: opts.aimJson as string | undefined,
+        controlEndpoint: opts.controlEndpoint as string | undefined,
+        alias: opts.alias as string[] | undefined,
+        source: opts.source as string | undefined,
+        sourceRef: opts.sourceRef as string | undefined,
+        reason: opts.reason as string | undefined,
+        reAdmit: opts.reAdmit as boolean | undefined,
+        actor: opts.actor as string | undefined,
+        apply: opts.apply as boolean | undefined,
+        dryRun: opts.dryRun as boolean | undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
+        verbose: opts.verbose as boolean | undefined,
+      }, silentCommandContext({ verbose: !!opts.verbose })),
+    }));
+
+  registryCmd
+    .command('edit <site-id-or-alias>')
+    .description('Plan or patch one registry record without editing the Site')
+    .option('--root <path>', 'Replace the registered Site root')
+    .option('--variant <variant>', 'Replace the Site variant')
+    .option('--substrate <substrate>', 'Replace the declared substrate')
+    .option('--aim-json <json>', 'Replace the bounded JSON aim summary')
+    .option('--control-endpoint <endpoint>', 'Replace the control endpoint reference')
+    .option('--clear-aim-json', 'Clear the stored JSON aim summary', false)
+    .option('--clear-control-endpoint', 'Clear the stored control endpoint', false)
+    .option('--clear-aliases', 'Remove all stored aliases', false)
+    .option('--alias <alias...>', 'Add a legacy or launch alias')
+    .option('--source <source>', 'Append a source observation')
+    .option('--source-ref <ref>', 'Bounded source reference')
+    .requiredOption('--reason <reason>', 'Reason for the registry patch')
+    .option('--actor <id>', 'Operator or agent identity')
+    .option('--expected-revision <n>', 'Reject apply if the row revision changed')
+    .option('--apply', 'Apply the planned registry change', false)
+    .option('--dry-run', 'Explicitly request planning without mutation', false)
+    .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
+    .option('-v, --verbose', 'Enable verbose output', false)
+    .action(directCommandAction<[string, Record<string, unknown>]>({
+      command: 'sites registry edit',
+      emit: emitCommandResult,
+      format: (_reference: string, opts: Record<string, unknown>) => opts.format,
+      invocation: (reference, opts) => sitesRegistryEditCommand({
+        reference,
+        root: opts.root as string | undefined,
+        variant: opts.variant as string | undefined,
+        substrate: opts.substrate as string | undefined,
+        aimJson: opts.aimJson as string | undefined,
+        controlEndpoint: opts.controlEndpoint as string | undefined,
+        clearAimJson: opts.clearAimJson as boolean | undefined,
+        clearControlEndpoint: opts.clearControlEndpoint as boolean | undefined,
+        clearAliases: opts.clearAliases as boolean | undefined,
+        alias: opts.alias as string[] | undefined,
+        source: opts.source as string | undefined,
+        sourceRef: opts.sourceRef as string | undefined,
+        reason: opts.reason as string | undefined,
+        actor: opts.actor as string | undefined,
+        expectedRevision: opts.expectedRevision ? Number(opts.expectedRevision) : undefined,
+        apply: opts.apply as boolean | undefined,
+        dryRun: opts.dryRun as boolean | undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
+        verbose: opts.verbose as boolean | undefined,
+      }, silentCommandContext({ verbose: !!opts.verbose })),
+    }));
+
+  for (const [operation, description] of [
+    ['retire', 'Retire a Site record while preserving a reversible tombstone'],
+    ['restore', 'Restore a retired Site record to the active catalog'],
+    ['purge', 'Permanently remove retired registry metadata without deleting the Site root'],
+  ] as const) {
+    const command = registryCmd
+      .command(`${operation} <site-id-or-alias>`)
+      .description(description)
+      .requiredOption('--reason <reason>', 'Reason for the registry state change')
+      .option('--actor <id>', 'Operator or agent identity')
+      .option('--expected-revision <n>', 'Reject apply if the row revision changed')
+      .option('--confirm-site-id <id>', 'Required for purge; must equal the canonical Site id')
+      .option('--apply', 'Apply the planned registry change', false)
+      .option('--dry-run', 'Explicitly request planning without mutation', false)
+      .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
+      .option('-v, --verbose', 'Enable verbose output', false);
+    command.action(directCommandAction<[string, Record<string, unknown>]>({
+      command: `sites registry ${operation}`,
+      emit: emitCommandResult,
+      format: (_reference: string, opts: Record<string, unknown>) => opts.format,
+      invocation: (reference, opts) => sitesRegistryStateCommand(operation, {
+        reference,
+        reason: opts.reason as string | undefined,
+        actor: opts.actor as string | undefined,
+        expectedRevision: opts.expectedRevision ? Number(opts.expectedRevision) : undefined,
+        confirmSiteId: opts.confirmSiteId as string | undefined,
+        apply: opts.apply as boolean | undefined,
+        dryRun: opts.dryRun as boolean | undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
+        verbose: opts.verbose as boolean | undefined,
+      }, silentCommandContext({ verbose: !!opts.verbose })),
+    }));
+  }
 
   sitesCmd
     .command('setup')
@@ -197,11 +390,20 @@ export function registerSitesCommands(program: Command): void {
 
   sitesCmd
     .command('discover')
-    .description('Scan filesystem and refresh registry')
+    .description('Plan or apply canonical registry discovery')
+    .option('--actor <id>', 'Operator or agent identity')
+    .option('--apply', 'Apply discovery changes; without this flag only a preview is returned', false)
+    .option('--dry-run', 'Explicitly request planning without mutation', false)
     .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
     .option('-v, --verbose', 'Enable verbose output', false)
     .action(wrapCommand('sites-discover', (opts, ctx) =>
-      sitesDiscoverCommand({ format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto', verbose: opts.verbose }, ctx)));
+      sitesDiscoverCommand({
+        format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+        verbose: opts.verbose,
+        actor: opts.actor as string | undefined,
+        apply: opts.apply as boolean | undefined,
+        dryRun: opts.dryRun as boolean | undefined,
+      }, ctx)));
 
   const depsCmd = sitesCmd
     .command('deps')
@@ -601,13 +803,21 @@ export function registerSitesCommands(program: Command): void {
 
   sitesCmd
     .command('remove <site-id>')
-    .description('Remove a Site from the registry (does NOT delete Site files)')
+    .description('Deprecated alias for registry retire; does NOT delete Site files')
+    .requiredOption('--reason <reason>', 'Reason for retiring the registry record')
+    .option('--actor <id>', 'Operator or agent identity')
+    .option('--apply', 'Apply the retirement; without this flag only a preview is returned', false)
+    .option('--dry-run', 'Explicitly request planning without mutation', false)
     .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
     .option('-v, --verbose', 'Enable verbose output', false)
     .action(async (siteId: string, opts: Record<string, unknown>) => {
       const result = await sitesRemoveCommand(siteId, {
-        format: resolveCommandFormat(),
+        format: resolveCommandFormat(opts.format, 'auto'),
         verbose: opts.verbose as boolean | undefined,
+        reason: opts.reason as string,
+        actor: opts.actor as string | undefined,
+        apply: opts.apply as boolean | undefined,
+        dryRun: opts.dryRun as boolean | undefined,
       }, silentCommandContext({ verbose: !!opts.verbose }));
       emitFormatterBackedCommandResult(result, { format: opts.format });
     });

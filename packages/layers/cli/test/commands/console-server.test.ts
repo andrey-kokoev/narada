@@ -647,7 +647,27 @@ describe('console server', () => {
       const page = await fetch(`${url}/console/registry`);
       expect(page.status).toBe(200);
       expect(page.headers.get('content-type')).toContain('text/html');
-      await expect(page.text()).resolves.toContain('/console/registry/api/sites');
+      const pageHtml = await page.text();
+      expect(pageHtml).toContain('/console/registry/api/sites');
+      expect(pageHtml).toContain('existing-site');
+      expect(pageHtml).toContain('existing-site-search');
+      expect(pageHtml).toContain('Add a new Site');
+      expect(pageHtml).toContain('Type the Site ID to confirm purge');
+      expect(pageHtml).toContain('renderMutationPreview');
+      expect(pageHtml).toContain('renderDiscoveryPreview');
+      expect(pageHtml).toContain('Load draft');
+      expect(pageHtml).toContain('clear-control-endpoint');
+      expect(pageHtml).toContain('clear-aliases');
+      expect(pageHtml).toContain('clear-aim-json');
+      expect(pageHtml).toContain('required-marker');
+      expect(pageHtml).toContain('draft-state');
+      expect(pageHtml).toContain('confirmDiscardDraft');
+      expect(pageHtml).toContain('operationUnavailableMessage');
+      expect(pageHtml).toContain('No unsaved changes');
+      expect(pageHtml).toContain('Discard draft');
+      expect(pageHtml).toContain('[hidden] { display: none !important; }');
+      expect(pageHtml.match(/id="aim-json"/g)).toHaveLength(1);
+      expect(pageHtml).not.toContain('<label class="clear-toggle');
 
       const list = await httpGet(`${url}/console/registry/api/sites`);
       expect(list.status).toBe(200);
@@ -672,6 +692,25 @@ describe('console server', () => {
       expect(previewResponse.status).toBe(200);
       expect((previewResponse.body as { mutation_performed: boolean }).mutation_performed).toBe(false);
       expect(registryMutationGateway.plan).toHaveBeenCalledWith({ operation: 'retire', reference: 'site-a', reason: 'duplicate', reAdmit: false, expectedRevision: 4 });
+
+      const clearPreviewResponse = await httpPost(`${url}/console/registry/api/operations/plan`, {
+        operation: 'edit',
+        reference: 'site-a',
+        reason: 'remove obsolete metadata',
+        clear_aim_json: true,
+        clear_control_endpoint: true,
+        clear_aliases: true,
+      });
+      expect(clearPreviewResponse.status).toBe(200);
+      expect(registryMutationGateway.plan).toHaveBeenCalledWith({
+        operation: 'edit',
+        reference: 'site-a',
+        reason: 'remove obsolete metadata',
+        reAdmit: false,
+        clearAimJson: true,
+        clearControlEndpoint: true,
+        clearAliases: true,
+      });
 
       const unconfirmedApply = await httpPost(`${url}/console/registry/api/operations/apply`, {
         operation: 'retire',

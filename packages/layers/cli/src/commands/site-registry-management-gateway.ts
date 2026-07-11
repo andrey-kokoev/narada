@@ -17,6 +17,9 @@ export interface RegistryMutationInput {
   substrate?: string;
   aimJson?: string;
   controlEndpoint?: string;
+  clearAimJson?: boolean;
+  clearControlEndpoint?: boolean;
+  clearAliases?: boolean;
   aliases?: string[];
   source?: string;
   sourceRef?: string;
@@ -74,6 +77,9 @@ async function invoke(input: RegistryMutationInput, apply: boolean): Promise<Reg
       substrate: input.substrate,
       aimJson: input.aimJson,
       controlEndpoint: input.controlEndpoint,
+      clearAimJson: input.clearAimJson,
+      clearControlEndpoint: input.clearControlEndpoint,
+      clearAliases: input.clearAliases,
       alias: input.aliases,
       source: input.source,
       sourceRef: input.sourceRef,

@@ -296,6 +296,296 @@ describe("SiteRegistry", () => {
     });
   });
 
+  describe("registry management", () => {
+    it("previews without mutation and applies an auditable add", () => {
+      tempDir = mkdtempSync(join(tmpdir(), "registry-management-"));
+      const siteRoot = join(tempDir, "managed-site");
+      mkdirSync(siteRoot, { recursive: true });
+
+      const request = {
+        operation: "add" as const,
+        siteId: "managed-site",
+        actor: "test-operator",
+        siteRoot,
+        source: { kind: "manual", ref: "test", observedAt: "2026-07-10T12:00:00.000Z" },
+      };
+
+      const preview = registry.manageSite({ ...request, apply: false });
+      expect(preview.status).toBe("planned");
+      expect(preview.mutationPerformed).toBe(false);
+      expect(registry.getSite("managed-site")).toBeNull();
+
+      const applied = registry.manageSite({ ...request, apply: true });
+      expect(applied.status).toBe("applied");
+      expect(applied.mutationPerformed).toBe(true);
+      expect(applied.auditRef).toMatch(/^registry-management-/);
+      expect(applied.after?.observationStatus).toBe("present");
+      expect(registry.getManagementAuditRecords("managed-site")).toHaveLength(1);
+
+      const repeated = registry.manageSite({ ...request, apply: true });
+      expect(repeated.status).toBe("unchanged");
+      expect(repeated.mutationPerformed).toBe(false);
+      expect(registry.getManagementAuditRecords("managed-site")).toHaveLength(1);
+    });
+
+    it("supports explicit clearing of optional edit metadata", () => {
+      tempDir = mkdtempSync(join(tmpdir(), "registry-management-"));
+      const siteRoot = join(tempDir, "clearable-site");
+      mkdirSync(siteRoot, { recursive: true });
+      const source = { kind: "manual", ref: "test", observedAt: "2026-07-10T12:00:00.000Z" };
+
+      registry.manageSite({
+        operation: "add",
+        siteId: "clearable-site",
+        actor: "test-operator",
+        siteRoot,
+        source,
+        aimJson: JSON.stringify({ purpose: "temporary" }),
+        controlEndpoint: "https://example.invalid/control",
+        aliases: [{ value: "temporary-site", source: "manual" }],
+        apply: true,
+      });
+
+      const clearRequest = {
+        operation: "edit" as const,
+        siteId: "clearable-site",
+        actor: "test-operator",
+        reason: "remove obsolete optional metadata",
+        clearAimJson: true,
+        clearControlEndpoint: true,
+        clearAliases: true,
+      };
+      const preview = registry.manageSite({ ...clearRequest, apply: false });
+      expect(preview.status).toBe("planned");
+      expect(preview.after?.aimJson).toBeNull();
+      expect(preview.after?.controlEndpoint).toBeNull();
+      expect(preview.after?.aliases).toEqual([]);
+
+      const applied = registry.manageSite({ ...clearRequest, apply: true });
+      expect(applied.status).toBe("applied");
+      expect(applied.after?.aimJson).toBeNull();
+      expect(applied.after?.controlEndpoint).toBeNull();
+      expect(applied.after?.aliases).toEqual([]);
+
+      const conflictingRequest = registry.manageSite({
+        ...clearRequest,
+        aimJson: "{}",
+        apply: false,
+      });
+      expect(conflictingRequest.status).toBe("refused");
+      expect(conflictingRequest.refusals).toContain("clear_aim_json_with_value");
+    });
+
+    it("rejects duplicate roots and resolves aliases for edits", () => {
+      tempDir = mkdtempSync(join(tmpdir(), "registry-management-"));
+      const siteRoot = join(tempDir, "managed-site");
+      mkdirSync(siteRoot, { recursive: true });
+      const source = { kind: "manual", ref: "test", observedAt: "2026-07-10T12:00:00.000Z" };
+
+      registry.manageSite({
+        operation: "add",
+        siteId: "canonical-site",
+        actor: "test-operator",
+        siteRoot,
+        source,
+        aliases: [{ value: "legacy-site", source: "manual" }],
+        apply: true,
+      });
+
+      const aliasConflict = registry.manageSite({
+        operation: "add",
+        siteId: "alias-conflict-site",
+        actor: "test-operator",
+        siteRoot: join(tempDir, "alias-conflict-site"),
+        source,
+        aliases: [{ value: "canonical-site", source: "manual" }],
+        apply: true,
+      });
+      expect(aliasConflict.status).toBe("refused");
+      expect(aliasConflict.conflicts[0]?.code).toBe("alias_owned_by_other_site");
+
+      registry.manageSite({
+        operation: "add",
+        siteId: "other-site",
+        actor: "test-operator",
+        siteRoot: join(tempDir, "other-site"),
+        source,
+        apply: true,
+      });
+      const editAliasConflict = registry.manageSite({
+        operation: "edit",
+        siteId: "canonical-site",
+        actor: "test-operator",
+        aliases: [{ value: "other-site", source: "manual" }],
+        reason: "test alias collision",
+        apply: true,
+      });
+      expect(editAliasConflict.status).toBe("refused");
+      expect(editAliasConflict.conflicts[0]?.code).toBe("alias_owned_by_other_site");
+
+      const conflict = registry.manageSite({
+        operation: "add",
+        siteId: "second-site",
+        actor: "test-operator",
+        siteRoot,
+        source,
+        apply: true,
+      });
+      expect(conflict.status).toBe("refused");
+      expect(conflict.conflicts[0]?.code).toBe("root_owned_by_other_site");
+
+      const edited = registry.manageSite({
+        operation: "edit",
+        siteId: "legacy-site",
+        actor: "test-operator",
+        substrate: "windows-native",
+        reason: "normalize substrate metadata",
+        apply: true,
+      });
+      expect(edited.status).toBe("applied");
+      expect(edited.siteId).toBe("canonical-site");
+      expect(registry.getManagedSite("legacy-site")?.substrate).toBe("windows-native");
+    });
+
+    it("enforces revision checks and reversible retirement before purge", () => {
+      tempDir = mkdtempSync(join(tmpdir(), "registry-management-"));
+      const siteRoot = join(tempDir, "managed-site");
+      mkdirSync(siteRoot, { recursive: true });
+      const source = { kind: "manual", ref: "test", observedAt: "2026-07-10T12:00:00.000Z" };
+
+      const added = registry.manageSite({
+        operation: "add",
+        siteId: "managed-site",
+        actor: "test-operator",
+        siteRoot,
+        source,
+        apply: true,
+      });
+      const revision = added.after!.revision;
+
+      const activePurge = registry.manageSite({
+        operation: "purge",
+        siteId: "managed-site",
+        actor: "test-operator",
+        reason: "must be retired first",
+        confirmSiteId: "managed-site",
+        apply: false,
+      });
+      expect(activePurge.status).toBe("refused");
+      expect(activePurge.refusals).toContain("purge_requires_retired_site");
+
+      const stale = registry.manageSite({
+        operation: "edit",
+        siteId: "managed-site",
+        actor: "test-operator",
+        substrate: "stale-write",
+        reason: "stale revision test",
+        expectedRevision: revision - 1,
+        apply: true,
+      });
+      expect(stale.status).toBe("refused");
+      expect(stale.refusals[0]).toContain("revision_conflict");
+
+      const retired = registry.manageSite({
+        operation: "retire",
+        siteId: "managed-site",
+        actor: "test-operator",
+        reason: "test retirement",
+        apply: true,
+      });
+      expect(retired.after?.lifecycleStatus).toBe("retired");
+
+      const purgePreview = registry.manageSite({
+        operation: "purge",
+        siteId: "managed-site",
+        actor: "test-operator",
+        reason: "preview purge confirmation",
+        apply: false,
+      });
+      expect(purgePreview.status).toBe("planned");
+      expect(purgePreview.changes).toContain("record_purged");
+
+      const restored = registry.manageSite({
+        operation: "restore",
+        siteId: "managed-site",
+        actor: "test-operator",
+        reason: "test restore",
+        apply: true,
+      });
+      expect(restored.after?.lifecycleStatus).toBe("active");
+
+      const retiredAgain = registry.manageSite({
+        operation: "retire",
+        siteId: "managed-site",
+        actor: "test-operator",
+        reason: "prepare purge",
+        apply: true,
+      });
+      expect(retiredAgain.after?.lifecycleStatus).toBe("retired");
+
+      const purged = registry.manageSite({
+        operation: "purge",
+        siteId: "managed-site",
+        actor: "test-operator",
+        reason: "remove registry metadata",
+        confirmSiteId: "managed-site",
+        apply: true,
+      });
+      expect(purged.status).toBe("applied");
+      expect(registry.getSite("managed-site")).toBeNull();
+      expect(registry.getManagementAuditRecords("managed-site")).toHaveLength(6);
+      expect(existsSync(siteRoot)).toBe(true);
+    });
+
+    it("does not resurrect retired records during discovery and requires explicit re-admission", () => {
+      tempDir = mkdtempSync(join(tmpdir(), "registry-management-"));
+      const siteRoot = join(tempDir, "managed-site");
+      mkdirSync(siteRoot, { recursive: true });
+      const source = { kind: "filesystem", ref: siteRoot, observedAt: "2026-07-10T12:00:00.000Z" };
+
+      registry.manageSite({
+        operation: "add",
+        siteId: "managed-site",
+        actor: "test-operator",
+        siteRoot,
+        source,
+        apply: true,
+      });
+      registry.manageSite({
+        operation: "retire",
+        siteId: "managed-site",
+        actor: "test-operator",
+        reason: "retired for discovery test",
+        apply: true,
+      });
+
+      const rediscovered = registry.manageSite({
+        operation: "add",
+        siteId: "managed-site",
+        actor: "test-operator",
+        siteRoot,
+        source,
+        apply: true,
+      });
+      expect(rediscovered.status).toBe("refused");
+      expect(rediscovered.refusals).toContain("retired_record_requires_restore_or_re_admit");
+      expect(registry.getManagedSite("managed-site")?.lifecycleStatus).toBe("retired");
+
+      const readmitted = registry.manageSite({
+        operation: "add",
+        siteId: "managed-site",
+        actor: "test-operator",
+        siteRoot,
+        source,
+        reason: "operator confirmed re-admission",
+        reAdmit: true,
+        apply: true,
+      });
+      expect(readmitted.status).toBe("applied");
+      expect(readmitted.after?.lifecycleStatus).toBe("active");
+    });
+  });
+
   describe("discoverSites", () => {
     it("returns empty array when base dir does not exist", () => {
       const result = registry.discoverSites("wsl");
