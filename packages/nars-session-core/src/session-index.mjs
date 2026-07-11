@@ -35,6 +35,8 @@ export const NARS_SESSION_DISPLAY_STATE = Object.freeze({
 });
 
 const DEFAULT_HEARTBEAT_FRESH_MS = 30000;
+const SESSION_INDEX_MAINTENANCE = 'incremental_rebuildable_v1';
+const SESSION_INDEX_PENDING_FILE = '.nars-session-index-pending.json';
 
 export function narsSessionsRootFromSiteRoot(siteRoot) {
   if (!siteRoot) throw new Error('site_root_required');
@@ -118,10 +120,18 @@ export function writeNarsSessionStartedIndex({ sessionStartedEvent, sessionPath,
   const paths = narsSessionIndexPathsFromSessionPath(sessionPath ?? sessionStartedEvent?.session_path);
   if (!paths || !sessionStartedEvent) return null;
   const record = buildSessionIndexRecord({ sessionStartedEvent, sessionPath, siteRoot, paths, now });
-  mkdirSync(paths.session_dir, { recursive: true });
-  writeJson(paths.record_path, record);
-  const index = rebuildNarsSessionIndex({ sessionsRoot: dirname(paths.session_dir), siteRoot: record.site_root, generatedAt: now.toISOString() });
-  return { record, index, paths };
+  const sessionsRoot = dirname(paths.session_dir);
+  return withPendingIndexMutation(sessionsRoot, 'session_started', () => {
+    mkdirSync(paths.session_dir, { recursive: true });
+    writeJson(paths.record_path, record);
+    const index = upsertNarsSessionIndexEntryUnlocked({
+      sessionsRoot,
+      siteRoot: record.site_root,
+      entry: toAggregateEntry(record),
+      generatedAt: now.toISOString(),
+    });
+    return { record, index, paths };
+  });
 }
 
 export function markNarsSessionIndexClosed({ sessionPath, terminalState = 'closed', terminalReason = null, closedAt = new Date().toISOString(), siteRoot } = {}) {
@@ -138,9 +148,17 @@ export function markNarsSessionIndexClosed({ sessionPath, terminalState = 'close
     last_seen_at: closedAt,
     projection_generated_at: closedAt,
   };
-  writeJson(paths.record_path, next);
-  const index = rebuildNarsSessionIndex({ sessionsRoot: dirname(paths.session_dir), siteRoot: siteRoot ?? next.site_root, generatedAt: closedAt });
-  return { record: next, index, paths };
+  const sessionsRoot = dirname(paths.session_dir);
+  return withPendingIndexMutation(sessionsRoot, 'session_closed', () => {
+    writeJson(paths.record_path, next);
+    const index = upsertNarsSessionIndexEntryUnlocked({
+      sessionsRoot,
+      siteRoot: siteRoot ?? next.site_root,
+      entry: toAggregateEntry(next),
+      generatedAt: closedAt,
+    });
+    return { record: next, index, paths };
+  });
 }
 
 export function updateNarsSessionAuthorityTransitionState({ sessionPath, authorityTransitionState = null, sourceWriteAdmission = null, supersededBySessionId = undefined, authorityLocatorRef = undefined, updatedAt = new Date().toISOString(), siteRoot } = {}) {
@@ -157,9 +175,17 @@ export function updateNarsSessionAuthorityTransitionState({ sessionPath, authori
     last_seen_at: updatedAt,
     projection_generated_at: updatedAt,
   };
-  writeJson(paths.record_path, next);
-  const index = rebuildNarsSessionIndex({ sessionsRoot: dirname(paths.session_dir), siteRoot: siteRoot ?? next.site_root, generatedAt: updatedAt });
-  return { record: next, index, paths };
+  const sessionsRoot = dirname(paths.session_dir);
+  return withPendingIndexMutation(sessionsRoot, 'authority_transition_updated', () => {
+    writeJson(paths.record_path, next);
+    const index = upsertNarsSessionIndexEntryUnlocked({
+      sessionsRoot,
+      siteRoot: siteRoot ?? next.site_root,
+      entry: toAggregateEntry(next),
+      generatedAt: updatedAt,
+    });
+    return { record: next, index, paths };
+  });
 }
 
 export function readNarsSessionIndex({ sessionsRoot, siteRoot } = {}) {
@@ -168,24 +194,28 @@ export function readNarsSessionIndex({ sessionsRoot, siteRoot } = {}) {
   }
   const aggregatePath = join(sessionsRoot, 'index.json');
   const aggregate = readJson(aggregatePath);
-  const records = readSessionIndexRecords(sessionsRoot);
-  if (isValidAggregate(aggregate) && aggregateCoversSessionRecords(aggregate, records)) {
-    return overlayAggregateWithSessionRecords(aggregate, records);
+  if (isValidAggregate(aggregate) && isIncrementalAggregate(aggregate) && !existsSync(sessionIndexPendingPath(sessionsRoot))) {
+    return aggregate;
   }
   return rebuildNarsSessionIndex({ sessionsRoot, siteRoot });
 }
 
 export function rebuildNarsSessionIndex({ sessionsRoot, siteRoot, generatedAt = new Date().toISOString() } = {}) {
-  return withSessionIndexLock(sessionsRoot, () => {
-    const records = readSessionIndexRecords(sessionsRoot);
-    const inferredSiteRoot = siteRoot ?? records.find((record) => record.site_root)?.site_root ?? null;
-    const index = buildAggregateIndex({ siteRoot: inferredSiteRoot, sessions: records.map(toAggregateEntry), generatedAt });
-    if (sessionsRoot) {
-      mkdirSync(sessionsRoot, { recursive: true });
-      writeJson(join(sessionsRoot, 'index.json'), index);
-    }
-    return index;
-  });
+  return withPendingIndexMutation(sessionsRoot, 'rebuild', () => rebuildNarsSessionIndexUnlocked({
+    sessionsRoot,
+    siteRoot,
+    generatedAt,
+  }));
+}
+
+export function upsertNarsSessionIndexEntry({ sessionsRoot, siteRoot, entry, generatedAt = new Date().toISOString() } = {}) {
+  if (!sessionsRoot || !entry) return null;
+  return withPendingIndexMutation(sessionsRoot, 'entry_upsert', () => upsertNarsSessionIndexEntryUnlocked({
+    sessionsRoot,
+    siteRoot,
+    entry,
+    generatedAt,
+  }));
 }
 
 export function readSessionIndexRecords(sessionsRoot) {
@@ -196,6 +226,62 @@ export function readSessionIndexRecords(sessionsRoot) {
     .map((path) => readJson(path))
     .filter((record) => record?.schema === NARS_SESSION_INDEX_RECORD_SCHEMA)
     .sort((a, b) => String(b.started_at ?? '').localeCompare(String(a.started_at ?? '')));
+}
+
+function rebuildNarsSessionIndexUnlocked({ sessionsRoot, siteRoot, generatedAt }) {
+  const records = readSessionIndexRecords(sessionsRoot);
+  const inferredSiteRoot = siteRoot ?? records.find((record) => record.site_root)?.site_root ?? null;
+  const index = buildAggregateIndex({
+    siteRoot: inferredSiteRoot,
+    sessions: records.map(toAggregateEntry),
+    generatedAt,
+    maintenance: SESSION_INDEX_MAINTENANCE,
+  });
+  if (sessionsRoot) {
+    mkdirSync(sessionsRoot, { recursive: true });
+    writeJson(join(sessionsRoot, 'index.json'), index);
+  }
+  return index;
+}
+
+function upsertNarsSessionIndexEntryUnlocked({ sessionsRoot, siteRoot, entry, generatedAt }) {
+  const aggregatePath = join(sessionsRoot, 'index.json');
+  const aggregate = readJson(aggregatePath);
+  if (!isValidAggregate(aggregate) || !isIncrementalAggregate(aggregate)) {
+    return rebuildNarsSessionIndexUnlocked({ sessionsRoot, siteRoot, generatedAt });
+  }
+  const sessions = [
+    ...aggregate.sessions.filter((candidate) => candidate?.session_id !== entry.session_id),
+    entry,
+  ].sort((left, right) => String(right.started_at ?? '').localeCompare(String(left.started_at ?? '')));
+  const index = buildAggregateIndex({
+    siteRoot: siteRoot ?? aggregate.site_root ?? null,
+    sessions,
+    generatedAt,
+    maintenance: SESSION_INDEX_MAINTENANCE,
+  });
+  writeJson(aggregatePath, index);
+  return index;
+}
+
+function withPendingIndexMutation(sessionsRoot, operation, fn) {
+  if (!sessionsRoot) return fn();
+  return withSessionIndexLock(sessionsRoot, () => {
+    const pendingPath = sessionIndexPendingPath(sessionsRoot);
+    writeJson(pendingPath, {
+      schema: 'narada.nars.session_index_pending.v1',
+      operation,
+      sessions_root: sessionsRoot,
+      started_at: new Date().toISOString(),
+    });
+    const result = fn();
+    rmSync(pendingPath, { force: true });
+    return result;
+  });
+}
+
+function sessionIndexPendingPath(sessionsRoot) {
+  return join(dirname(sessionsRoot), SESSION_INDEX_PENDING_FILE);
 }
 
 function buildSessionIndexRecord({ sessionStartedEvent, sessionPath, siteRoot, paths, now }) {
@@ -340,11 +426,13 @@ function defaultAuthorityRuntimeId({ hostKind, sessionId }) {
   return `auth_${safeHostKind}_${safeSessionId}`;
 }
 
-function buildAggregateIndex({ siteRoot, sessions, generatedAt }) {
+function buildAggregateIndex({ siteRoot, sessions, generatedAt, maintenance = SESSION_INDEX_MAINTENANCE }) {
   return {
     schema: NARS_SESSION_INDEX_SCHEMA,
     site_root: siteRoot ?? null,
     generated_at: generatedAt,
+    maintenance,
+    session_count: sessions.length,
     sessions,
   };
 }
@@ -361,27 +449,17 @@ function isValidAggregate(value) {
   return value?.schema === NARS_SESSION_INDEX_SCHEMA && Array.isArray(value.sessions);
 }
 
-function aggregateCoversSessionRecords(aggregate, records) {
-  const indexed = new Set(aggregate.sessions.map((entry) => entry?.session_id).filter(Boolean));
-  return records.every((record) => indexed.has(record.session_id));
-}
-
-function overlayAggregateWithSessionRecords(aggregate, records) {
-  const recordsBySessionId = new Map(records.map((record) => [record.session_id, record]));
-  return {
-    ...aggregate,
-    sessions: aggregate.sessions
-      .map((entry) => recordsBySessionId.has(entry?.session_id) ? toAggregateEntry(recordsBySessionId.get(entry.session_id)) : entry)
-      .sort((a, b) => String(b.started_at ?? '').localeCompare(String(a.started_at ?? ''))),
-  };
+function isIncrementalAggregate(value) {
+  return value?.maintenance === SESSION_INDEX_MAINTENANCE
+    && value.session_count === value.sessions.length;
 }
 
 function withSessionIndexLock(sessionsRoot, fn) {
   if (!sessionsRoot) return fn();
   mkdirSync(sessionsRoot, { recursive: true });
-  const lockDir = join(sessionsRoot, '.index.lock');
-  const deadline = Date.now() + 2000;
-  const staleAfterMs = 5000;
+  const lockDir = join(dirname(sessionsRoot), '.nars-session-index.lock');
+  const deadline = Date.now() + 15000;
+  const staleAfterMs = 30000;
   while (true) {
     try {
       mkdirSync(lockDir);
@@ -446,5 +524,19 @@ function writeJson(path, value) {
   mkdirSync(dirname(path), { recursive: true });
   const tmpPath = `${path}.${process.pid}.${randomUUID()}.tmp`;
   writeFileSync(tmpPath, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
-  renameSync(tmpPath, path);
+  renameWithRetry(tmpPath, path);
+}
+
+function renameWithRetry(from, to) {
+  const retryableCodes = new Set(['EACCES', 'EBUSY', 'EPERM']);
+  const deadline = Date.now() + 5000;
+  while (true) {
+    try {
+      renameSync(from, to);
+      return;
+    } catch (error) {
+      if (!retryableCodes.has(error?.code) || Date.now() >= deadline) throw error;
+      sleepSync(25);
+    }
+  }
 }
