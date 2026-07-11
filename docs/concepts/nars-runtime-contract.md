@@ -50,7 +50,7 @@ Load-bearing boundaries:
 | `@narada2/agent-start` | Identity/session/event creation, Site MCP fabric validation, provider selection, credential projection, launch result materialization. | Runtime protocol, slash command semantics, provider turn loop. |
 | `@narada2/agent-runtime-server` | Stable machine-addressable session entrypoint, transport projection, and supervision of one session-core instance. | Session persistence internals, provider credentials, task truth, external effect authority. |
 | `@narada2/nars-session-core` | Session and turn lifecycle, durable event journal, artifacts, input queue state, health, and recovery. | Provider turns, MCP transport, effect admission, client rendering. |
-| `@narada2/nars-capability-gateway` | MCP hosting, explicit capability admission, and tool execution evidence. | Session lifecycle, provider turns, effect confirmation. |
+| `@narada2/nars-capability-gateway` | MCP hosting, gateway lifecycle, explicit capability admission, and tool execution lifecycle/evidence. | Session lifecycle, provider turns, effect confirmation. |
 | `@narada2/nars-client-projection-contract` | Client projection capability sets, attach command registry, projection command method aliases, and shared operator command/help projection for NARS clients. | Carrier protocol schema validation, runtime session execution, or browser/terminal rendering. |
 | `@narada2/carrier-protocol` | Carrier request/event vocabulary, schema helpers, input admission classification, and runtime event classification. | Client attach command rendering or client-specific capability lists. |
 | `@narada2/carrier-runtime` | Pure `runTurn(context, eventSink, toolGateway)` carrier adapter. | Session persistence, MCP hosting, public server protocol, launcher planning, or terminal-client attach/projection responsibilities. |
@@ -122,9 +122,31 @@ accepted -> contextualized -> evaluating
 
 Tool stages may repeat. A refused tool may return to `evaluating`; a failed or interrupted turn may be retried only through an explicit `accepted` transition with an incremented attempt. Completed, blocked, and refused turns are terminal and are not replayed automatically. Every state change is appended as `turn_lifecycle_transition`; compatibility events such as `turn_started`, `turn_complete`, `turn_failed`, and `turn_interrupted` are projections of that durable record.
 
+### Capability Gateway Lifecycle
+
+`@narada2/nars-capability-gateway` owns the MCP server and individual tool-attempt state machines. It does not own the session journal or provider turn state. Its gateway lifecycle is:
+
+```text
+idle -> starting -> healthy | degraded -> closing -> closed
+  \-> closed
+starting -> failed -> starting | closed
+closing -> failed -> starting | closed
+```
+
+`degraded` means the gateway started with one or more MCP startup failures and is exposed through the existing public operational value `startup_degraded`. `failed` is retryable until the gateway is explicitly closed; `closed` is terminal. Repeated concurrent starts share one startup operation, and close waits for an in-flight start before releasing server ownership.
+
+Each tool attempt has its own `execution_id` and follows:
+
+```text
+requested -> admitted -> executing -> completed | failed | interrupted
+     \-> refused
+```
+
+`requested`, `admitted`, and `executing` are non-terminal. `completed`, `refused`, `failed`, and `interrupted` are terminal for that execution id and cannot be replayed into another terminal state. Every transition emits `capability_gateway_lifecycle_transition` or `tool_execution_state_transition`; the existing `tool_execution_completed`, `tool_execution_refused`, `tool_execution_failed`, and `tool_execution_interrupted` events remain terminal compatibility evidence. `turn_id` and `input_event_id` correlate the attempt back to the session boundary, while the gateway remains the authority for tool transport and admission.
+
 ## Client And Runtime Split
 
-NARS is the runtime owner. `@narada2/agent-runtime-server` owns session binding, provider/carrier turn execution, MCP fabric hosting, tool dispatch, durable `events.jsonl`, status/health/event subscription state, and lifecycle hook dispatch. Client packages must not silently recreate those responsibilities.
+NARS is the runtime owner. `@narada2/agent-runtime-server` owns session binding, transport projection, durable `events.jsonl`, status/health/event subscription state, and lifecycle hook dispatch. `@narada2/nars-provider-runtime` owns provider turn execution, while `@narada2/nars-capability-gateway` owns MCP fabric hosting, tool dispatch, and tool admission. Client packages must not silently recreate those responsibilities.
 
 In Runtime Projection Graph terms, NARS is an `authority_runtime`; attached clients and remote browser embodiments are `projection_surface` nodes unless a separate authority transfer explicitly says otherwise.
 

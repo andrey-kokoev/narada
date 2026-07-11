@@ -99,6 +99,8 @@ test('session-core turn persists carrier and gateway evidence for a provider too
   assert.equal(invoked[0].toolName, 'fs_read_file');
   assert.deepEqual(invoked[0].arguments, { path: 'note.txt' });
   assert.equal(invoked[0].abortSignal instanceof AbortSignal, true);
+  assert.match(invoked[0].turnId, /^input_/);
+  assert.equal(invoked[0].inputEventId, invoked[0].turnId);
   assert.match(events, /carrier_tool_requested/);
   assert.match(events, /carrier_tool_completed/);
   assert.match(events, /session_control_response/);

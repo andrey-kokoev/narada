@@ -34,8 +34,15 @@ export async function runTurn(context = {}, eventSink = () => {}, toolGateway = 
         const toolName = toolCall.function?.name ?? toolCall.name;
         const args = parseToolArguments(toolCall.function?.arguments ?? toolCall.arguments);
         await eventSink({ kind: 'carrier_tool_requested', ...turn, tool_name: toolName, tool_call_id: toolCall.id ?? null });
-        const invocation = await toolGateway.invoke({ toolName, arguments: args, abortSignal: context.abortSignal ?? null });
+        const invocation = await toolGateway.invoke({
+          toolName,
+          arguments: args,
+          abortSignal: context.abortSignal ?? null,
+          turnId: context.turnId ?? null,
+          inputEventId: context.inputEventId ?? null,
+        });
         await eventSink({ kind: 'carrier_tool_completed', ...turn, tool_name: toolName, tool_call_id: toolCall.id ?? null, status: invocation?.status ?? 'unknown' });
+        if (invocation?.status === 'interrupted') throw new Error('carrier_tool_interrupted');
         messages.push({
           role: 'tool',
           tool_call_id: toolCall.id ?? toolName,

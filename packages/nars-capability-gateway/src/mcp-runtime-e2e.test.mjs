@@ -19,6 +19,10 @@ for (const mode of ['exit', 'timeout', 'malformed']) {
       const result = await gateway.invoke({ toolName: 'fixture_tool', arguments: {} });
       assert.equal(result.status, 'failed');
       assert.ok(evidence.some((event) => event.kind === 'tool_execution_failed'));
+      assert.deepEqual(
+        evidence.filter((event) => event.kind === 'tool_execution_state_transition').map((event) => event.execution_state),
+        ['requested', 'admitted', 'executing', 'failed'],
+      );
     } finally {
       await gateway.close(); rmSync(siteRoot, { recursive: true, force: true });
     }

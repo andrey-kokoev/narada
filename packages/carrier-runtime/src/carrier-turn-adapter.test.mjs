@@ -39,6 +39,7 @@ test('carrier turn adapter emits failure without converting provider errors into
 test('carrier turn adapter completes provider-requested tools through the injected gateway', async () => {
   const events = [];
   let calls = 0;
+  let invocation;
   const adapter = createCarrierTurnAdapter({
     callProvider: async ({ messages }) => {
       calls += 1;
@@ -50,11 +51,43 @@ test('carrier turn adapter completes provider-requested tools through the inject
     },
   });
   const result = await adapter.runTurn(
-    { turnId: 'turn-2', messages: [{ role: 'user', content: 'read x' }] },
+    { turnId: 'turn-2', inputEventId: 'input-2', messages: [{ role: 'user', content: 'read x' }] },
     async (event) => events.push(event),
-    { toolCatalog: () => [{ type: 'function', function: { name: 'fs_read_file' } }], invoke: async ({ toolName, arguments: args }) => ({ status: 'completed', toolName, args }) },
+    {
+      toolCatalog: () => [{ type: 'function', function: { name: 'fs_read_file' } }],
+      invoke: async (request) => {
+        invocation = request;
+        return { status: 'completed', toolName: request.toolName, args: request.arguments };
+      },
+    },
   );
   assert.equal(result.choices[0].message.content, 'done');
   assert.deepEqual(events.map((event) => event.kind), ['carrier_turn_started', 'carrier_tool_requested', 'carrier_tool_completed', 'assistant_message', 'carrier_turn_completed']);
   assert.equal(events.at(-2).content, 'done');
+  assert.equal(invocation.turnId, 'turn-2');
+  assert.equal(invocation.inputEventId, 'input-2');
+});
+
+test('carrier turn adapter aborts the turn after an interrupted tool attempt', async () => {
+  const events = [];
+  const adapter = createCarrierTurnAdapter({
+    callProvider: async () => ({
+      choices: [{ message: { role: 'assistant', tool_calls: [{ id: 'call-interrupt', function: { name: 'read', arguments: '{}' } }] } }],
+    }),
+  });
+
+  await assert.rejects(() => adapter.runTurn(
+    { turnId: 'turn-interrupted', inputEventId: 'input-interrupted' },
+    async (event) => events.push(event),
+    {
+      toolCatalog: () => [{ type: 'function', function: { name: 'read' } }],
+      invoke: async () => ({ status: 'interrupted', error: 'agent_cli_interrupt_requested' }),
+    },
+  ), /carrier_tool_interrupted/);
+  assert.deepEqual(events.map((event) => event.kind), [
+    'carrier_turn_started',
+    'carrier_tool_requested',
+    'carrier_tool_completed',
+    'carrier_turn_failed',
+  ]);
 });

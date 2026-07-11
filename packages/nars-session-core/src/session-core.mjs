@@ -216,7 +216,9 @@ export function createNarsSessionCore({
         break;
       case 'carrier_tool_completed': {
         const status = event.status ?? 'unknown';
-        if (status === 'blocked') {
+        if (status === 'interrupted') {
+          advance('interrupted', { tool_name: event.tool_name ?? null, reason: 'tool_interrupted', terminal_status: 'interrupted' });
+        } else if (status === 'blocked') {
           advance('blocked', { tool_name: event.tool_name ?? null, reason: 'tool_blocked' });
         } else if (status === 'refused') {
           advance('tool_refused', { tool_name: event.tool_name ?? null, reason: 'tool_refused' });

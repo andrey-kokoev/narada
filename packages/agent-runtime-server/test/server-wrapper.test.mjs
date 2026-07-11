@@ -468,6 +468,13 @@ test('spawned runtime executes a provider-requested tool through the site MCP ga
     assert.ok(events.some((event) => event.event === 'carrier_tool_completed' && event.tool_name === 'fixture_echo'));
     assert.ok(events.some((event) => event.event === 'carrier_tool_completed' && event.tool_name === 'fixture_artifact'));
     assert.ok(events.some((event) => event.event === 'tool_execution_completed' && event.tool_name === 'fixture_echo'));
+    const completedExecution = events.find((event) => event.event === 'tool_execution_completed' && event.tool_name === 'fixture_echo');
+    assert.match(completedExecution.turn_id, /^input_/);
+    assert.equal(completedExecution.input_event_id, completedExecution.turn_id);
+    assert.ok(events.some((event) => event.event === 'tool_execution_state_transition'
+      && event.execution_state === 'completed'
+      && event.execution_id === completedExecution.execution_id
+      && event.turn_id === completedExecution.turn_id));
     assert.ok(events.some((event) => event.event === 'session_artifact_registered' && event.artifact_id === registeredArtifact.artifact.artifact_id));
     assert.ok(events.some((event) => event.event === 'tool_execution_refused' && event.tool_name === 'fixture_denied'));
     assert.deepEqual(events.filter((event) => event.event === 'carrier_tool_completed').map((event) => event.tool_name), ['fixture_echo', 'fixture_artifact', 'fixture_denied']);

@@ -47,6 +47,25 @@ test('session core owns journal sequencing, queue persistence, artifacts, health
   }
 });
 
+test('session core treats an interrupted carrier tool as a terminal interrupted turn', () => {
+  const root = mkdtempSync(join(tmpdir(), 'nars-turn-tool-interrupt-'));
+  const sessionPath = join(root, 'session.json');
+  const eventsPath = join(root, 'events.jsonl');
+  try {
+    const core = createNarsSessionCore({ sessionId: 'turn-tool-interrupt-1', sessionPath, eventsPath, siteRoot: root });
+    core.transition('ready');
+    core.ensureTurn({ turn_id: 'turn-tool-interrupt-1', input_event_id: 'input-tool-interrupt-1' });
+    core.observeTurnEvent({ event: 'carrier_turn_started', turn_id: 'turn-tool-interrupt-1' });
+    core.observeTurnEvent({ event: 'carrier_tool_requested', turn_id: 'turn-tool-interrupt-1', tool_name: 'read' });
+    const record = core.observeTurnEvent({ event: 'carrier_tool_completed', turn_id: 'turn-tool-interrupt-1', status: 'interrupted', tool_name: 'read' });
+    assert.equal(record.turn_state, 'interrupted');
+    assert.equal(record.terminal_state, 'interrupted');
+    assert.equal(core.healthSnapshot().active_turn_id, null);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('provider completion without queue completion evidence leaves one durable replay', async () => {
   const root = mkdtempSync(join(tmpdir(), 'nars-session-crash-window-'));
   const sessionPath = join(root, 'session.json');
