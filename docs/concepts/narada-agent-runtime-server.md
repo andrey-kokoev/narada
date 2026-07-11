@@ -206,12 +206,14 @@ The protocol should support at least:
 | --- | --- |
 | `session.submit` or `content` | Submit one serialized automation/user turn. |
 | `session.health` | Return the stable runtime health probe shape. |
+| `session.events.subscribe` | Attach an event-stream consumer and optionally replay recent events. |
+| `session.events.read` | Read a bounded event page from the session journal. |
+| `session.cancel` | Request cancellation of active work. |
 | `session.close` | Close or hand off the session with terminal evidence. |
 | `session.recovery` | Inspect recovery recommendations and handoff commands. |
+| Artifact HTTP routes | Register, read, serve, or present session-scoped artifacts through `/sessions/:id/artifacts`, `/content`, and `/message`. |
 
-Event and artifact projections remain separately addressable transports. Historical conversation, resume, status, command, observer, and affordance methods are compatibility protocol only; the default runtime rejects them until they are reintroduced through explicit session-core contracts.
-| `session.artifacts.register` | Register a session-scoped artifact from an admitted local path. |
-| `session.artifacts.read` | Read public artifact metadata or the session artifact index. |
+Artifact registration and content delivery are HTTP projection routes, not session-core control frames. The runtime wrapper delegates artifact persistence to session-core and publishes durable artifact and presentation events for event-stream consumers. Historical conversation, resume, status, command, observer, and affordance methods are compatibility protocol only; the default runtime rejects them until they are reintroduced through explicit session-core contracts.
 
 The protocol may be transported over stdio, named pipe, local HTTP, WebSocket, or another local transport. The transport is an embodiment detail. The event and authority contract is the invariant.
 

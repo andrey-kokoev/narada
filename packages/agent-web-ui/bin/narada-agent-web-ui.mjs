@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { parseAgentWebUiArgs, startAgentWebUiServer } from '../src/server.js';
 
 function printHelp() {
-  console.log(`narada-agent-web-ui --event-endpoint <ws-url> [--health-endpoint <http-url>] [--host 127.0.0.1] [--port 0]\n\nCloudflare projection mode: narada-agent-web-ui --cloudflare-projection-id <id> --cloudflare-api-base-url <url>\nCloudflare authority mode: narada-agent-web-ui --cloudflare-authority-session-id <id> --cloudflare-api-base-url <url>\n\nStarts a browser operator surface over one NARS session. The web UI subscribes to events, submits ordinary text as conversation.send when idle and conversation.enqueue during active turns, and projects slash commands into NARS protocol frames. Browser status polling uses the local HTTP /api/health proxy or the Cloudflare projection/authority health endpoint.`);
+  console.log(`narada-agent-web-ui --event-endpoint <ws-url> [--health-endpoint <http-url>] [--host 127.0.0.1] [--port 0]\n\nCloudflare projection mode: narada-agent-web-ui --cloudflare-projection-id <id> --cloudflare-api-base-url <url>\nCloudflare authority mode: narada-agent-web-ui --cloudflare-authority-session-id <id> --cloudflare-api-base-url <url>\n\nStarts a browser operator surface over one NARS session. The web UI submits ordinary text with session.submit, queues active-turn text with delivery_mode=admit_after_active_turn, and uses session.cancel/session.close for slash controls. Cloudflare adapters translate these frames to their remote wire vocabulary. Browser status polling uses the local HTTP /api/health proxy or the Cloudflare projection/authority health endpoint.`);
 }
 
 async function main() {
@@ -20,7 +20,7 @@ async function main() {
   console.log(`agent-web-ui: ${result.url}`);
   console.log(`  Events  ${cloudflareAuthorityBase ? `${cloudflareAuthorityBase}/events/websocket` : cloudflareProjectionBase ? `${cloudflareProjectionBase}/events` : options.eventEndpoint ?? 'not configured'}`);
   console.log(`  Health  ${cloudflareAuthorityBase ? `${cloudflareAuthorityBase}/health` : cloudflareProjectionBase ? `${cloudflareProjectionBase}/health` : `${options.healthEndpoint ?? 'not configured'} via local /api/health`}`);
-  console.log('  Input   conversation.send/enqueue + slash commands');
+  console.log('  Input   session.submit/session.cancel/session.close; Cloudflare adapters translate as needed');
 }
 
 function isMainModule() {

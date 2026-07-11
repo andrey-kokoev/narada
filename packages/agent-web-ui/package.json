@@ -4,24 +4,18 @@
   "type": "module",
   "private": true,
   "narada": {
-    "package_role": "nars_web_client_projection",
-    "owns": [
-      "browser_event_stream_projection",
-      "read_only_session_status_projection",
-      "web_attachment_ux",
-      "vue_operator_surface_rendering",
-      "browser_operator_input_projection"
-    ],
+    "package_role": "deprecated_migration_predecessor",
+    "replacement": "@narada2/agent-web-ui2",
+    "production_admission": "forbidden",
+    "owns": [],
     "does_not_own": [
       "runtime_dependency_construction",
       "provider_turn_execution",
       "mcp_fabric_hosting",
       "slash_command_execution"
     ],
-    "nars_protocol_methods_source": "@narada2/nars-client-projection-contract#AGENT_WEB_UI_NARS_METHOD_LIST"
-  },
-  "bin": {
-    "narada-agent-web-ui": "./bin/narada-agent-web-ui.mjs"
+    "nars_protocol_methods_source": "@narada2/nars-client-projection-contract#AGENT_WEB_UI_CLOUDFLARE_METHOD_LIST",
+    "protocol_scope": "deprecated_cloudflare_adapter_only"
   },
   "exports": {
     ".": "./src/agent-web-ui.js",
@@ -29,7 +23,6 @@
     "./package.json": "./package.json"
   },
   "scripts": {
-    "start": "node ./bin/narada-agent-web-ui.mjs",
     "build": "vite build",
     "test": "node --test test/agent-web-ui.test.mjs test/agent-web-ui-projection.test.mjs test/agent-web-ui-protocol.test.mjs",
     "test:browser": "pnpm run test:e2e",

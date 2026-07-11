@@ -36,6 +36,7 @@ export function resolveAttachConfig(search = '', injectedConfig = {}) {
   const healthEndpoint = remoteConfig?.health_endpoint ?? value('health_endpoint', 'healthEndpoint', 'health');
   return {
     mode: remoteConfig?.mode ?? 'local_nars_projection',
+    ...(Array.isArray(injectedConfig.admittedMethods) ? { admittedMethods: [...injectedConfig.admittedMethods] } : {}),
     projectionId: cloudflareProjectionId,
     ...(cloudflareAuthoritySessionId ? { authoritySessionId: cloudflareAuthoritySessionId } : {}),
     cloudflareApiBaseUrl,

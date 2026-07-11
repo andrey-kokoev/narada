@@ -162,7 +162,7 @@ test.describe('agent-web-ui slash and snippet palette', () => {
       const runFromIndex = runtime.events.length;
       await page.keyboard.press('Enter');
       await waitFor(
-        () => runtime.events.slice(runFromIndex).some((event) => event.event === 'user_message' && /Run from snippet submenu/.test(event.content ?? event.message ?? '')),
+        () => runtime.events.slice(runFromIndex).some((event) => event.event === 'assistant_message' && event.content === 'web-ui playwright test response'),
         5_000,
         () => ({ events: runtime.events.slice(runFromIndex).map((event) => ({ event: event.event, content: event.content, message: event.message, method: event.method })) }),
       );
@@ -175,7 +175,7 @@ test.describe('agent-web-ui slash and snippet palette', () => {
       const clickRunFromIndex = runtime.events.length;
       await page.locator('.command-option-active').click();
       await waitFor(
-        () => runtime.events.slice(clickRunFromIndex).some((event) => event.event === 'user_message' && /Run from snippet submenu/.test(event.content ?? event.message ?? '')),
+        () => runtime.events.slice(clickRunFromIndex).some((event) => event.event === 'assistant_message' && event.content === 'web-ui playwright test response'),
         5_000,
         () => ({ events: runtime.events.slice(clickRunFromIndex).map((event) => ({ event: event.event, content: event.content, message: event.message, method: event.method })) }),
       );
@@ -188,8 +188,8 @@ test.describe('agent-web-ui slash and snippet palette', () => {
       const clickQueueFromIndex = runtime.events.length;
       await page.locator('.command-option-active').click();
       await waitFor(
-        () => runtime.events.slice(clickQueueFromIndex).some((event) => event.event === 'conversation_enqueue_requested')
-          && runtime.events.slice(clickQueueFromIndex).some((event) => event.event === 'user_message' && /Run from snippet submenu/.test(event.content ?? event.message ?? '')),
+        () => runtime.events.slice(clickQueueFromIndex).some((event) => event.event === 'input_event_completed')
+          && runtime.events.slice(clickQueueFromIndex).some((event) => event.event === 'assistant_message' && event.content === 'web-ui playwright test response'),
         5_000,
         () => ({ events: runtime.events.slice(clickQueueFromIndex).map((event) => ({ event: event.event, content: event.content, message: event.message, method: event.method })) }),
       );
@@ -271,7 +271,7 @@ test.describe('agent-web-ui slash and snippet palette', () => {
         const fromIndex = runtime.events.length;
         await submitOperatorInputText(page, `/snippet ${verb} registry-run`);
         await waitFor(
-          () => runtime.events.slice(fromIndex).some((event) => event.event === 'user_message' && /Registry run body edited by edit/.test(event.content ?? event.message ?? '')),
+          () => runtime.events.slice(fromIndex).some((event) => event.event === 'assistant_message' && event.content === 'web-ui playwright test response'),
           5_000,
           () => ({ verb, events: runtime.events.slice(fromIndex).map((event) => ({ event: event.event, content: event.content, message: event.message, method: event.method })) }),
         );
@@ -283,8 +283,8 @@ test.describe('agent-web-ui slash and snippet palette', () => {
         const fromIndex = runtime.events.length;
         await submitOperatorInputText(page, `/snippet ${verb} registry-run`);
         await waitFor(
-          () => runtime.events.slice(fromIndex).some((event) => event.event === 'conversation_enqueue_requested')
-            && runtime.events.slice(fromIndex).some((event) => event.event === 'user_message' && /Registry run body edited by edit/.test(event.content ?? event.message ?? '')),
+          () => runtime.events.slice(fromIndex).some((event) => event.event === 'input_event_completed')
+            && runtime.events.slice(fromIndex).some((event) => event.event === 'assistant_message' && event.content === 'web-ui playwright test response'),
           5_000,
           () => ({ verb, events: runtime.events.slice(fromIndex).map((event) => ({ event: event.event, content: event.content, message: event.message, method: event.method })) }),
         );

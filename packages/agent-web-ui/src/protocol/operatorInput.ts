@@ -15,8 +15,9 @@ export interface AuthorityTransitionInputPolicy {
 }
 
 export type OperatorInputDeliveryMode = 'default' | 'enqueue';
+export type ProtocolMethodSupport = (method: string) => boolean;
 
-export function submitOperatorInput(text: string, connection: NarsClientConnection | null, authorityTransition: AuthorityTransitionInputPolicy | null = null, deliveryMode: OperatorInputDeliveryMode = 'default', canSteerActiveTurn: boolean | null = null): OperatorInputResult {
+export function submitOperatorInput(text: string, connection: NarsClientConnection | null, authorityTransition: AuthorityTransitionInputPolicy | null = null, deliveryMode: OperatorInputDeliveryMode = 'default', canSteerActiveTurn: boolean | null = null, supportsProtocolMethod: ProtocolMethodSupport | null = null): OperatorInputResult {
   const activeTurn = canSteerActiveTurn ?? Boolean(connection?.activeTurnId);
   const action = buildAgentWebUiOperatorInputAction(text, {
     activeTurn,
@@ -38,6 +39,18 @@ export function submitOperatorInput(text: string, connection: NarsClientConnecti
   }
   if (action.kind === 'snippet_panel_command') {
     return { handled: false, shouldClearDraft: false, localEvent: { event: 'agent_web_ui_message', message: 'Open snippets from the Agent Web UI composer with /snippets.' } };
+  }
+  if (supportsProtocolMethod && !supportsProtocolMethod(String(action.frame.method ?? ''))) {
+    return {
+      handled: false,
+      shouldClearDraft: false,
+      localEvent: {
+        event: 'web_ui_input_not_sent',
+        message: 'control is not admitted by the attached runtime',
+        reason_code: 'unsupported_session_control',
+        method: action.frame.method,
+      },
+    };
   }
   if (authorityTransitionRefusesInput(action.frame, authorityTransition)) {
     return {
@@ -62,11 +75,23 @@ export function submitOperatorInput(text: string, connection: NarsClientConnecti
   };
 }
 
-export function submitOperatorConversationText(text: string, connection: NarsClientConnection | null, authorityTransition: AuthorityTransitionInputPolicy | null = null, deliveryMode: OperatorInputDeliveryMode = 'default'): OperatorInputResult {
+export function submitOperatorConversationText(text: string, connection: NarsClientConnection | null, authorityTransition: AuthorityTransitionInputPolicy | null = null, deliveryMode: OperatorInputDeliveryMode = 'default', supportsProtocolMethod: ProtocolMethodSupport | null = null): OperatorInputResult {
   const frame = deliveryMode === 'enqueue'
     ? buildConversationInputFrame('conversation.enqueue', text)
     : buildConversationInputFrame('conversation.send', text);
   if (!frame) return { handled: false, shouldClearDraft: false };
+  if (supportsProtocolMethod && !supportsProtocolMethod(frame.method)) {
+    return {
+      handled: false,
+      shouldClearDraft: false,
+      localEvent: {
+        event: 'web_ui_input_not_sent',
+        message: 'control is not admitted by the attached runtime',
+        reason_code: 'unsupported_session_control',
+        method: frame.method,
+      },
+    };
+  }
   if (authorityTransitionRefusesInput(frame, authorityTransition)) {
     return {
       handled: false,

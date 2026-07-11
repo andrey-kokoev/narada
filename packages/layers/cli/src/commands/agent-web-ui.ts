@@ -535,7 +535,7 @@ export async function agentWebUiAttachCommand(
     };
   }
   progress(`agent-web-ui: starting local web UI for ${sessionId}`);
-  const startAgentWebUiServer = deps.startAgentWebUiServer ?? (await import('@narada2/agent-web-ui/server')).startAgentWebUiServer;
+  const startAgentWebUiServer = deps.startAgentWebUiServer ?? (await import('@narada2/agent-web-ui2/server')).startAgentWebUiServer;
   const started = await startAgentWebUiServer({
     host,
     port,
@@ -704,7 +704,7 @@ function formatPlan(plan: AgentWebUiAttachPlan): string {
       `  Events  ${plan.event_endpoint}`,
       `  Health  ${plan.health_endpoint ?? 'not configured'} via local /api/health`,
       `  Authority ${formatAuthorityTransition(plan.authority_transition)}`,
-      '  Input   conversation.send/enqueue + slash commands',
+      '  Input   session.submit/session.cancel/session.close; Cloudflare adapters translate as needed',
     ].join('\n');
   }
   return [

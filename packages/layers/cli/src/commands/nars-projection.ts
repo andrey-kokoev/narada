@@ -158,8 +158,23 @@ function requireOption(value: string | undefined, name: string): string {
 }
 
 function normalizeInputVerbs(values: string[] | undefined) {
-  const raw = values?.length ? values : ['conversation.send', 'conversation.enqueue'];
-  return raw.flatMap((value) => String(value).split(',')).map((value) => value.trim()).filter(Boolean) as Array<'conversation.send' | 'conversation.enqueue' | 'conversation.steer'>;
+  const raw = values?.length ? values : ['conversation.send', 'conversation.enqueue', 'conversation.steer', 'conversation.interrupt', 'session.close'];
+  const aliases: Record<string, string[]> = {
+    send: ['conversation.send'],
+    enqueue: ['conversation.enqueue'],
+    steer: ['conversation.steer'],
+    interrupt: ['conversation.interrupt'],
+    close: ['session.close'],
+    'session.submit': ['conversation.send', 'conversation.enqueue'],
+    'session.cancel': ['conversation.interrupt'],
+    'session.close': ['session.close'],
+  };
+  return raw
+    .flatMap((value) => String(value).split(','))
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .flatMap((value) => aliases[value] ?? [value])
+    .filter((value, index, all) => all.indexOf(value) === index) as Array<'conversation.send' | 'conversation.enqueue' | 'conversation.steer' | 'conversation.interrupt' | 'session.close'>;
 }
 
 function normalizeCachePolicy(value: string | undefined): ProjectionCachePolicy {

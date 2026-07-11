@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { extname } from 'node:path';
 import { buildAgentWebUiCloudflareAuthorityConfig, buildAgentWebUiCloudflareProjectionConfig } from '@narada2/cloudflare-nars-projection';
 import { readProjectionRegistration, registerProjectionRemotely, startLocalProjectionBridgeOnce, startLocalProjectionBridgeRunProcess } from '@narada2/cloudflare-nars-projection/node';
-import { AGENT_WEB_UI_NARS_METHOD_LIST } from '@narada2/nars-client-projection-contract';
+import { AGENT_WEB_UI_CLOUDFLARE_METHOD_LIST, AGENT_WEB_UI_NARS_METHOD_LIST } from '@narada2/nars-client-projection-contract';
 
 const STATIC_ROOT = new URL('./', import.meta.url);
 const DIST_ROOT = new URL('../dist/', import.meta.url);
@@ -214,6 +214,7 @@ function hasLocalProjectionAuthority(options) {
 }
 
 export function buildClientConfig(options) {
+  const localAdmittedMethods = options.admittedMethods ?? AGENT_WEB_UI_NARS_METHOD_LIST;
   if (options.cloudflareAuthoritySessionId && options.cloudflareApiBaseUrl) {
     const config = buildAgentWebUiCloudflareAuthorityConfig({ session_id: options.cloudflareAuthoritySessionId, api_base_url: options.cloudflareApiBaseUrl });
     return {
@@ -231,7 +232,7 @@ export function buildClientConfig(options) {
       protocolHealthMethod: 'session.health',
       maxReplay: 100,
       operatorInput: true,
-      admittedMethods: [...AGENT_WEB_UI_NARS_METHOD_LIST],
+      admittedMethods: [...AGENT_WEB_UI_CLOUDFLARE_METHOD_LIST],
       authorityTransition: options.authorityTransition ?? null,
     };
   }
@@ -247,7 +248,7 @@ export function buildClientConfig(options) {
       protocolHealthMethod: 'session.health',
       maxReplay: 100,
       operatorInput: true,
-      admittedMethods: [...AGENT_WEB_UI_NARS_METHOD_LIST],
+      admittedMethods: [...AGENT_WEB_UI_CLOUDFLARE_METHOD_LIST],
       authorityTransition: options.authorityTransition ?? null,
     };
   }
@@ -268,7 +269,7 @@ export function buildClientConfig(options) {
     protocolHealthMethod: 'session.health',
     maxReplay: 100,
     operatorInput: true,
-    admittedMethods: [...AGENT_WEB_UI_NARS_METHOD_LIST],
+    admittedMethods: [...localAdmittedMethods],
     authorityTransition: options.authorityTransition ?? null,
   };
 }

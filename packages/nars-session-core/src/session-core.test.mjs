@@ -39,6 +39,8 @@ test('session core owns journal sequencing, queue persistence, artifacts, health
     assert.throws(() => core.appendEvent({ event: 'late_event' }), /nars_session_closed/);
     const persisted = readFileSync(eventsPath, 'utf8').trim().split(/\r?\n/).map((line) => JSON.parse(line));
     assert.deepEqual(persisted.map((event) => event.event_sequence), [1, 2, 3, 4, 5, 6]);
+    const artifactEvent = persisted.find((event) => event.event === 'session_artifact_registered');
+    assert.deepEqual(artifactEvent?.artifact, artifact.public_record);
     assert.equal(core.recoverySnapshot().artifacts.artifacts.length, 1);
   } finally {
     rmSync(siteRoot, { recursive: true, force: true });

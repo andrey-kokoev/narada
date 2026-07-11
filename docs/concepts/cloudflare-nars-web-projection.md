@@ -6,6 +6,13 @@ Cloudflare NARS Web Projection is the target shape for making a Cloudflare-hoste
 
 Local NARS remains the canonical runtime authority for the session, event log, artifact registry, artifact content, queue, turn lifecycle, tool activity, health, and operator input admission. Cloudflare hosts a remote projection embodiment: browser UI, remote access policy, bounded projection cache, event fanout, artifact cache, and input relay.
 
+The public browser-facing input contract is the narrow session-core contract:
+`session.submit`, `session.health`, `session.recovery`, `session.cancel`, and
+`session.close`. The implementation in `packages/cloudflare-nars-projection`
+may retain older `conversation.*` and status verbs internally, but those are
+adapter vocabulary only. `agent-web-ui2` translates narrow frames at the
+Cloudflare boundary; local session-core clients never send the older verbs.
+
 This document governs one concrete instance of the [`Narada Runtime Projection Graph`](narada-runtime-projection-graph.md). The older read-only gateway slice is described in [`nars-remote-projection-gateway.md`](nars-remote-projection-gateway.md). Local session discovery and event-log authority remain in [`nars-session-management.md`](nars-session-management.md) and [`nars-runtime-contract.md`](nars-runtime-contract.md). Operator input semantics remain in [`operator-input-admission.md`](operator-input-admission.md).
 
 ## Non-Goals
@@ -166,14 +173,14 @@ Running the command without `--live` is a safe planning mode. It does not mutate
 
 By default, the smoke is operator-readable. It prints each phase while it works, then summarizes the authority origin, authority runtime kind, Worker URL, synthetic session id, hosted web UI URL, WebSocket endpoint, check statuses, cleanup status, evidence path, latest evidence path, and evidence index path. For machine-readable output, pass `--format json`; the full evidence object is also written to disk.
 
-The smoke creates one synthetic Cloudflare-origin NARS authority session, checks service and session health, checks bounded replay, opens the authority WebSocket, admits one `conversation.send` input, observes synthetic user/assistant/turn completion events, checks the hosted web UI shell, revokes the session, and verifies post-revoke refusal for health, replay, and input.
+The smoke creates one synthetic Cloudflare-origin NARS authority session, checks service and session health, checks bounded replay, opens the authority WebSocket, admits one `session.submit` input, observes synthetic user/assistant/turn completion events, checks the hosted web UI shell, revokes the session, and verifies post-revoke refusal for health, replay, and input.
 
 Current evidence boundary:
 
 1. The service endpoint is deployed and can report projection service health.
 2. The Cloudflare authority runtime can create a synthetic session and emit canonical replayable events.
 3. The authority WebSocket can deliver replay plus live synthetic turn events to a non-browser observer.
-4. The authority input endpoint can admit an operator `conversation.send` envelope and emit the expected synthetic user, assistant, and completion events.
+4. The authority input endpoint can admit an operator `session.submit` envelope and emit the expected synthetic user, assistant, and completion events.
 5. Session revocation makes direct health, replay, and input APIs refuse with `session_revoked`.
 6. Hosted web UI evidence is compositional. `hosted_shell_check_kind: http_html_shell_only` proves only that the deployed Worker returns the web UI document for an authority-session URL. `hosted_web_ui_evidence.levels[]` records the ordered proof levels, and `strongest_hosted_web_ui_evidence: browser_level_authority_e2e` is the browser-level proof: it opens the deployed web UI in a real browser, verifies JavaScript boot and authority URL configuration, renders replay and live WebSocket events, submits operator input through the composer, renders the synthetic assistant response and turn completion without duplicate user/assistant messages, revokes the session, and verifies the UI reports revoked/disconnected state.
 
@@ -214,7 +221,13 @@ A projection instance is the central object:
     "max_content_bytes": 1048576,
     "html": "metadata_only"
   },
-  "operator_input_policy": ["conversation.send", "conversation.enqueue"],
+  "operator_input_policy": [
+    "conversation.send",
+    "conversation.enqueue",
+    "conversation.steer",
+    "conversation.interrupt",
+    "session.close"
+  ],
   "replica_cache_policy": "short_bounded",
   "created_by": "operator",
   "created_at": "2026-06-30T00:00:00.000Z",
@@ -224,6 +237,15 @@ A projection instance is the central object:
 ```
 
 The first target binds one projection instance to one concrete NARS session. A higher-level site or agent selector may help discover the active session, but the projection itself must resolve to a specific `nars_session_id`.
+
+`operator_input_policy` is the Cloudflare adapter wire policy stored on the
+remote access record. The browser-facing contract remains the narrow
+session-core set: `session.submit`, `session.cancel`, and `session.close` for
+downward control, with health and recovery read through their dedicated
+projection endpoints. `agent-web-ui2` translates the narrow frames to the
+adapter methods listed by this policy. The policy must include
+`conversation.interrupt` and `session.close` when the browser is expected to
+support `/interrupt` and `/exit`.
 
 ## Registry Split
 
@@ -374,15 +396,19 @@ Durable cloud archive is allowed only as an explicit switchable projection mode.
 
 ## Operator Input Flow
 
-Downward operator input uses explicit NARS admission verbs:
+Downward operator input uses the explicit NARS admission method:
 
 ```text
-conversation.send
-conversation.enqueue
-conversation.steer
+session.submit
 ```
 
-The browser sends an input envelope to Cloudflare. Cloudflare validates browser access and projection policy, forwards to the local bridge, and local NARS either admits or refuses it through the same protocol surface used by local clients.
+The browser constructs a `session.submit` envelope. The Cloudflare transport
+translates it to `conversation.send` or `conversation.enqueue` on the remote
+input endpoint, according to `delivery_mode`; `session.cancel` becomes
+`conversation.interrupt`, and `session.close` remains `session.close`. Cloudflare
+validates browser access and the adapter policy, then relays the admitted frame
+to the local bridge. Local NARS either admits or refuses the narrow frame
+through the same protocol surface used by local clients.
 
 The semantic acknowledgement point is NARS admission, not Cloudflare receipt and not bridge receipt. A remote UI may display intermediate states, but the point where the message becomes session-owned is the NARS acknowledgement.
 
@@ -392,7 +418,9 @@ Recommended visible states:
 sending -> delivered_to_projection -> delivered_to_bridge -> admitted_by_nars -> processed
 ```
 
-`conversation.steer` remains explicit and interruptive. `conversation.enqueue` remains non-interrupting and NARS-owned after acknowledgement.
+`session.submit` with `delivery_mode: admit_after_active_turn` is non-interrupting
+and NARS-owned after acknowledgement. Cancellation is a separate
+`session.cancel` control.
 
 ## Event Filtering Policy
 
@@ -539,7 +567,7 @@ If Cloudflare registration or bridge connectivity is unavailable, the expected r
 1. Projection registry is split: local projection intent plus Cloudflare remote access index.
 2. Projection instance lifetime is per concrete NARS session.
 3. Replica cache is short bounded by default; durable archive is explicit switchable mode.
-4. Downward input uses `conversation.send`, `conversation.enqueue`, and `conversation.steer`, policy-gated.
+4. Downward input uses `session.submit` (with optional `delivery_mode: admit_after_active_turn`), policy-gated.
 5. Bridge credential and browser access token are separate.
 6. Credential minting is two-phase registration.
 7. Bridge is a separate local process.

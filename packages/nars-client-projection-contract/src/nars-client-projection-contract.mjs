@@ -1,4 +1,7 @@
 import { agentIdentityDisplay, agentIdentityGroupKey } from '@narada2/agent-identity';
+import { NARS_SESSION_CORE_METHOD_LIST, NARS_SESSION_CORE_METHODS, isNarsSessionCoreMethod } from '@narada2/nars-session-core/session-control-contract';
+
+export { NARS_SESSION_CORE_METHOD_LIST, NARS_SESSION_CORE_METHODS, isNarsSessionCoreMethod };
 
 export const NARS_COMMAND_METHOD = 'session.command.execute';
 export const NARS_AFFORDANCE_ACTION_REQUEST_METHOD = 'session.affordance.action.request';
@@ -57,9 +60,13 @@ export const NARS_CLIENT_PROJECTION_VERBOSITY_RANK = Object.freeze({
   raw: 3,
 });
 
-export const AGENT_WEB_UI_NARS_METHOD_LIST = Object.freeze([
-  'session.events.subscribe',
-  'session.events.read',
+// These are the only controls admitted by the local session-core transport.
+// Event subscription/read are transport controls handled by the event stream.
+export const AGENT_WEB_UI_NARS_METHOD_LIST = NARS_SESSION_CORE_METHOD_LIST;
+
+// Retained only for the deprecated predecessor and the Cloudflare adapter.
+// These methods are not part of the local session-core control contract.
+export const AGENT_WEB_UI_LEGACY_METHOD_LIST = Object.freeze([
   'session.artifacts.register',
   'session.artifacts.read',
   'session.artifacts.summary',
@@ -78,8 +85,6 @@ export const AGENT_WEB_UI_NARS_METHOD_LIST = Object.freeze([
   'conversation.send',
   'conversation.enqueue',
   'session.status',
-  'session.health',
-  'session.recovery',
   'session.operations',
   'observers.status',
   'observer.mute',
@@ -87,7 +92,11 @@ export const AGENT_WEB_UI_NARS_METHOD_LIST = Object.freeze([
   NARS_COMMAND_METHOD,
   'conversation.interrupt',
   'conversation.steer',
-  'session.close',
+]);
+
+export const AGENT_WEB_UI_CLOUDFLARE_METHOD_LIST = Object.freeze([
+  ...NARS_SESSION_CORE_METHOD_LIST,
+  ...AGENT_WEB_UI_LEGACY_METHOD_LIST,
 ]);
 
 export const AGENT_WEB_UI_SESSION_COMMANDS = Object.freeze([
@@ -98,7 +107,7 @@ export const AGENT_WEB_UI_SESSION_COMMANDS = Object.freeze([
   '/tool-output',
   '/tools',
   '/help, /clear, /status, /health, /events, /recovery, /ops, /interrupt, /tools, /queue, /goal, /model, /thinking, /exit',
-  'Ordinary text is submitted as conversation.send when idle and conversation.steer during active turns. Press Tab in agent-web-ui to queue with conversation.enqueue.',
+  'Ordinary text is submitted with session.submit. Active-turn queueing uses delivery_mode=admit_after_active_turn.',
 ]);
 
 export const NARS_CLIENT_EVENT_TONES = Object.freeze({
@@ -166,9 +175,19 @@ export const NARS_CLIENT_EVENT_LABELS = Object.freeze({
 });
 
 export const AGENT_WEB_UI_NARS_METHODS = new Set(AGENT_WEB_UI_NARS_METHOD_LIST);
+export const AGENT_WEB_UI_LEGACY_METHODS = new Set(AGENT_WEB_UI_LEGACY_METHOD_LIST);
+export const AGENT_WEB_UI_CLOUDFLARE_METHODS = new Set(AGENT_WEB_UI_CLOUDFLARE_METHOD_LIST);
 
 export function isAgentWebUiNarsMethod(method) {
   return AGENT_WEB_UI_NARS_METHODS.has(method);
+}
+
+export function isAgentWebUiLegacyNarsMethod(method) {
+  return AGENT_WEB_UI_LEGACY_METHODS.has(method);
+}
+
+export function isAgentWebUiCloudflareMethod(method) {
+  return AGENT_WEB_UI_CLOUDFLARE_METHODS.has(method);
 }
 
 function authorityTransitionSummary(event, kind) {
@@ -245,10 +264,11 @@ export function buildAgentWebUiConversationEnqueueFrame(text, options = {}) {
   if (!message) return null;
   return {
     id: options.id ?? `agent-web-ui-enqueue-${Date.now()}`,
-    method: 'conversation.enqueue',
+    method: 'session.submit',
     params: {
-      message,
-      source: 'agent-web-ui',
+      content: message,
+      source: 'operator_steering',
+      delivery_mode: 'admit_after_active_turn',
       ...(options.activeTurnId ? { active_turn_id: options.activeTurnId } : {}),
     },
   };
@@ -553,10 +573,10 @@ export function buildAgentWebUiConversationSendFrame(text, options = {}) {
   if (!message) return null;
   return {
     id: options.id ?? `agent-web-ui-input-${Date.now()}`,
-    method: 'conversation.send',
+    method: 'session.submit',
     params: {
-      message,
-      source: 'agent-web-ui',
+      content: message,
+      source: 'manual_operator',
     },
   };
 }
@@ -566,10 +586,11 @@ export function buildAgentWebUiConversationSteerFrame(text, options = {}) {
   if (!message) return null;
   return {
     id: options.id ?? `agent-web-ui-steer-${Date.now()}`,
-    method: 'conversation.steer',
+    method: 'session.submit',
     params: {
-      message,
-      source: 'agent-web-ui',
+      content: message,
+      source: 'operator_steering',
+      delivery_mode: 'admit_after_active_turn',
       ...(options.activeTurnId ? { active_turn_id: options.activeTurnId } : {}),
     },
   };
@@ -591,8 +612,38 @@ export function buildAgentWebUiSubscribeFrame(options = {}) {
   };
 }
 
+export function isNarsSessionCoreProtocolFrame(frame) {
+  return Boolean(frame && typeof frame === 'object' && isNarsSessionCoreMethod(frame.method));
+}
+
+export function isAgentWebUiCloudflareProtocolFrame(frame) {
+  return Boolean(frame && typeof frame === 'object' && AGENT_WEB_UI_CLOUDFLARE_METHODS.has(frame.method));
+}
+
+// Deprecated agent-web-ui callers use the broad adapter vocabulary. New local
+// callers must use isNarsSessionCoreProtocolFrame instead.
 export function isAgentWebUiProtocolFrame(frame) {
-  return Boolean(frame && typeof frame === 'object' && isAgentWebUiNarsMethod(frame.method));
+  return isAgentWebUiCloudflareProtocolFrame(frame);
+}
+
+// Cloudflare retains its historical endpoint vocabulary. Translate only at
+// that adapter boundary; local transports must forward the original frame.
+export function translateAgentWebUiFrameForCloudflare(frame) {
+  if (!isAgentWebUiCloudflareProtocolFrame(frame)) return null;
+  const params = frame.params && typeof frame.params === 'object' ? frame.params : {};
+  if (frame.method === 'session.submit') {
+    return {
+      ...frame,
+      method: params.delivery_mode === 'admit_after_active_turn' ? 'conversation.enqueue' : 'conversation.send',
+      params: {
+        message: params.content ?? params.message ?? '',
+        source: params.source ?? 'agent-web-ui',
+        ...(params.active_turn_id ? { active_turn_id: params.active_turn_id } : {}),
+      },
+    };
+  }
+  if (frame.method === 'session.cancel') return { ...frame, method: 'conversation.interrupt', params };
+  return { ...frame, params };
 }
 
 function localCommand(id, slash, options = {}) {
@@ -606,6 +657,7 @@ function localCommand(id, slash, options = {}) {
     aliases: Object.freeze(options.aliases ?? []),
     keywords: Object.freeze(options.keywords ?? []),
     usage: options.usage ?? slash,
+    protocolMethods: Object.freeze(options.protocolMethods ?? []),
     palette: Object.freeze({ visible: options.visible !== false, rank: options.rank ?? 500, danger: options.danger === true }),
     buildAction: options.buildAction,
   });
@@ -614,6 +666,7 @@ function localCommand(id, slash, options = {}) {
 function frameCommand(id, slash, method, options = {}) {
   return localCommand(id, slash, {
     ...options,
+    protocolMethods: [method],
     kind: options.kind ?? 'nars_protocol',
     group: options.group ?? 'session',
     buildAction: (input, context = {}) => ({
@@ -626,6 +679,7 @@ function frameCommand(id, slash, method, options = {}) {
 function sessionCommand(id, slash, options = {}) {
   return localCommand(id, slash, {
     ...options,
+    protocolMethods: [NARS_COMMAND_METHOD],
     kind: 'nars_session_command',
     group: options.group ?? 'session',
     buildAction: (input) => ({ kind: 'frame', frame: commandFrame(slash, input.value) }),
@@ -699,13 +753,14 @@ export const AGENT_WEB_UI_COMMANDS = Object.freeze([
     rank: 20,
     buildAction: () => ({ kind: 'local_clear' }),
   }),
-  frameCommand('status', '/status', 'session.status', { title: 'Show session status', description: 'Request the current NARS session status.', group: 'session', rank: 100 }),
+  frameCommand('status', '/status', 'session.health', { title: 'Show session health', description: 'Request current runtime and MCP health.', group: 'session', rank: 100 }),
   frameCommand('health', '/health', 'session.health', { title: 'Check health', description: 'Request current runtime and MCP health.', group: 'session', rank: 110 }),
   localCommand('events', '/events', {
     kind: 'nars_protocol',
     title: 'Replay recent events',
     description: 'Subscribe with a short replay of recent session events.',
     group: 'diagnostics',
+    protocolMethods: ['session.events.subscribe'],
     rank: 120,
     buildAction: (input, context = {}) => ({ kind: 'frame', frame: buildAgentWebUiSubscribeFrame({ id: context.id ?? requestIdForCommand('events'), maxReplay: 20, includeReplay: true }) }),
   }),
@@ -717,6 +772,7 @@ export const AGENT_WEB_UI_COMMANDS = Object.freeze([
     title: 'Mute or unmute observers',
     description: 'Use /observer mute or /observer unmute.',
     group: 'settings',
+    protocolMethods: ['observer.mute', 'observer.unmute'],
     usage: '/observer mute|unmute',
     keywords: ['mute', 'unmute'],
     rank: 160,
@@ -726,7 +782,7 @@ export const AGENT_WEB_UI_COMMANDS = Object.freeze([
       return { kind: 'message', message: 'Usage: /observer mute|unmute' };
     },
   }),
-  frameCommand('interrupt', '/interrupt', 'conversation.interrupt', { title: 'Interrupt response', description: 'Ask NARS to interrupt the active model turn.', group: 'conversation', rank: 200, danger: true }),
+  frameCommand('interrupt', '/interrupt', 'session.cancel', { title: 'Interrupt response', description: 'Ask NARS to interrupt the active model turn.', group: 'conversation', rank: 200, danger: true }),
   frameCommand('exit', '/exit', 'session.close', { title: 'Close session', description: 'Close this NARS session.', group: 'session', rank: 900, danger: true }),
   localCommand('json', '/json', {
     kind: 'raw_protocol_frame',
@@ -740,7 +796,7 @@ export const AGENT_WEB_UI_COMMANDS = Object.freeze([
       if (!input.value) return { kind: 'message', message: 'Usage: /json <protocol frame JSON>' };
       try {
         const frame = JSON.parse(input.value);
-        return isAgentWebUiProtocolFrame(frame) ? { kind: 'frame', frame } : { kind: 'message', message: 'JSON frame method is not admitted for agent-web-ui.' };
+        return isNarsSessionCoreProtocolFrame(frame) ? { kind: 'frame', frame } : { kind: 'message', message: 'JSON frame method is not admitted by the local session-core contract.' };
       } catch (error) {
         return { kind: 'message', message: `Invalid JSON frame: ${error instanceof Error ? error.message : String(error)}` };
       }
@@ -792,11 +848,21 @@ export const AGENT_WEB_UI_HELP_LINES = Object.freeze([
     if (!commands.length) return [];
     return [AGENT_WEB_UI_COMMAND_GROUP_LABELS[group] ?? group, commands.map((command) => command.usage ?? command.slash).join(', ')];
   }),
-  'Ordinary text is submitted as conversation.send when idle and conversation.steer during active turns. Press Tab in agent-web-ui to queue with conversation.enqueue.',
+  'Ordinary text is submitted with session.submit. Active-turn queueing uses delivery_mode=admit_after_active_turn.',
 ]);
 
-export function buildAgentWebUiHelpText() {
-  return AGENT_WEB_UI_HELP_LINES.join('\n');
+export function buildAgentWebUiHelpText(options = {}) {
+  if (typeof options.supportsProtocolMethod !== 'function') return AGENT_WEB_UI_HELP_LINES.join('\n');
+  const commands = filterAgentWebUiCommands('', options);
+  return [
+    'Commands',
+    ...COMMAND_GROUP_ORDER.flatMap((group) => {
+      const groupCommands = commands.filter((command) => command.group === group);
+      if (!groupCommands.length) return [];
+      return [AGENT_WEB_UI_COMMAND_GROUP_LABELS[group] ?? group, groupCommands.map((command) => command.usage ?? command.slash).join(', ')];
+    }),
+    'Ordinary text is submitted with session.submit. Active-turn queueing uses delivery_mode=admit_after_active_turn.',
+  ].join('\n');
 }
 
 export function findAgentWebUiCommand(rawCommand) {
@@ -805,9 +871,14 @@ export function findAgentWebUiCommand(rawCommand) {
   return AGENT_WEB_UI_COMMANDS.find((entry) => entry.slash === command || entry.aliases.includes(command)) ?? null;
 }
 
-export function filterAgentWebUiCommands(query = '') {
+export function filterAgentWebUiCommands(query = '', options = {}) {
   const normalized = String(query ?? '').trim().toLowerCase().replace(/^\//, '');
-  const commands = AGENT_WEB_UI_COMMANDS.filter((entry) => entry.palette.visible !== false);
+  const commands = AGENT_WEB_UI_COMMANDS.filter((entry) => (
+    entry.palette.visible !== false
+    && (typeof options.supportsProtocolMethod !== 'function'
+      || entry.protocolMethods.length === 0
+      || entry.protocolMethods.some((method) => options.supportsProtocolMethod(method)))
+  ));
   if (!normalized) return [...commands].sort(compareAgentWebUiCommands);
   return commands
     .map((entry) => ({ entry, score: agentWebUiCommandMatchScore(entry, normalized) }))
@@ -1180,11 +1251,12 @@ export const NARS_CLIENT_PROJECTION_REGISTRY = Object.freeze({
     }),
     agent_web_ui: Object.freeze({
       id: 'agent_web_ui',
-      package: '@narada2/agent-web-ui',
+      package: '@narada2/agent-web-ui2',
       bin: 'narada-agent-web-ui',
       attach_template: 'narada-agent-web-ui --event-endpoint <event_endpoint> --health-endpoint <health_endpoint>',
       required_endpoints: Object.freeze(['event_endpoint', 'health_endpoint']),
       admitted_methods: AGENT_WEB_UI_NARS_METHOD_LIST,
+      adapter_methods: AGENT_WEB_UI_CLOUDFLARE_METHOD_LIST,
     }),
   }),
 });
@@ -1199,8 +1271,8 @@ export function buildNarsAttachCommands({ eventEndpoint = '<session_started.even
     agent_tui: `agent-tui --attach ${event}`,
     agent_web_ui: `narada-agent-web-ui --event-endpoint ${event}${agentWebUiHealth}`,
     protocol: '{"id":"events-1","method":"session.events.subscribe","params":{"include_replay":true,"max_replay":20}}',
-    operator_input_protocol: '{"id":"input-1","method":"conversation.send","params":{"message":"<operator message>","source":"agent-web-ui"}}',
-    queued_operator_input_protocol: '{"id":"input-2","method":"conversation.enqueue","params":{"message":"<operator message>","source":"agent-web-ui"}}',
-    slash_command_protocol: `{"id":"command-1","method":"${NARS_COMMAND_METHOD}","params":{"command":"/status","value":""}}`,
+    operator_input_protocol: '{"id":"input-1","method":"session.submit","params":{"content":"<operator message>","source":"manual_operator"}}',
+    queued_operator_input_protocol: '{"id":"input-2","method":"session.submit","params":{"content":"<operator message>","source":"operator_steering","delivery_mode":"admit_after_active_turn"}}',
+    slash_command_protocol: '{"id":"command-1","method":"session.health","params":{}}',
   };
 }

@@ -10,6 +10,12 @@ This concept separates three things that are easy to conflate:
 
 Once NARS acknowledges an operator input, the input is session state. It is not owned by agent-cli, agent-web-ui, or any other operator surface.
 
+The local NARS wire contract is deliberately narrow. Operator text enters through
+`session.submit`; explicit interruption uses `session.cancel`; session shutdown
+uses `session.close`. Carrier and Cloudflare adapters may expose older
+`conversation.*` names at their own boundary, but those names are translations,
+not local session-core controls.
+
 ## Admission Space
 
 The minimal admission space is:
@@ -25,11 +31,11 @@ The minimal admission space is:
 
 The current named constructors are projections over that space:
 
-| Constructor | Method | Semantics |
-|---|---|---|
-| `send` | `conversation.send` | Ordinary operator message admitted when the runtime can start a turn now. It does not interrupt an active turn. |
-| `enqueue` | `conversation.enqueue` | Ordinary operator message accepted for FIFO admission after the active turn. It does not interrupt. |
-| `steer` | `conversation.steer` | Explicit operator steering: interrupt the active turn and admit steering as the next turn input. |
+| Constructor | Local session-core frame | Adapter wire alias | Semantics |
+|---|---|---|---|
+| `send` | `session.submit` without `delivery_mode` | `conversation.send` | Ordinary operator message admitted when the runtime can start a turn now. It does not interrupt an active turn. |
+| `enqueue` | `session.submit` with `delivery_mode: admit_after_active_turn` | `conversation.enqueue` | Ordinary operator message accepted for FIFO admission after the active turn. It does not interrupt. |
+| `steer` | `session.cancel` followed by an explicit `session.submit` when an interruptive replacement is required | `conversation.steer` | Adapter-level atomic steering. Local session-core does not expose this older composite as one method. |
 
 `send`, `enqueue`, and `steer` are not arbitrary UI modes. They are named constructors for distinct semantic regions.
 
@@ -52,8 +58,8 @@ After NARS acknowledges it, it is NARS-owned admitted input. All attached surfac
 
 ## Current Implementation Posture
 
-NARS implements this split in protocol, runtime, and client projection code. `conversation.enqueue` is a first-class control method, maps to non-interrupting `admit_after_active_turn` delivery, and is distinct from `conversation.steer`.
+NARS implements this split in the session-core protocol, runtime, and client projection code. `session.submit` with `delivery_mode: admit_after_active_turn` is the durable, non-interrupting queue path. `session.cancel` is the explicit interruption path. `conversation.send`, `conversation.enqueue`, and `conversation.steer` remain carrier/Cloudflare adapter vocabulary and must be translated before crossing into local session-core.
 
 Pending operator input is persisted in an explicit queue state file beside the session records, currently `operator-input-queue.json` under the NARS session runtime directory. Session events remain audit/replay evidence; the queue state file is the recovery source for pending items. If an operator surface closes after NARS acknowledges an enqueue, the message remains NARS-owned and visible through status/events until it is admitted, dropped, abandoned, or completed.
 
-Operator surfaces use the same semantics: ordinary text is `conversation.send` when idle and `conversation.enqueue` during an active turn. Explicit interruptive intent must use `conversation.steer`, `/interrupt`, or an equivalent explicit protocol frame.
+Operator surfaces use the same semantics: ordinary text is `session.submit` when idle and `session.submit` with `delivery_mode: admit_after_active_turn` during an active turn. Explicit interruption uses `/interrupt` mapped to `session.cancel`. `/exit` maps to `session.close`. A Cloudflare or carrier adapter may translate those frames to its `conversation.*` wire vocabulary.

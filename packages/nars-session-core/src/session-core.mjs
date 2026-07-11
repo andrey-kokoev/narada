@@ -115,6 +115,7 @@ export function createNarsSessionCore({
       event: 'session_artifact_registered',
       artifact_id: registered.record.artifact_id,
       kind: registered.record.kind,
+      artifact: registered.public_record,
     });
     return registered;
   }
@@ -125,6 +126,7 @@ export function createNarsSessionCore({
       schema: 'narada.nars.session_core_health.v1',
       session_id: sessionId,
       lifecycle_state: state.lifecycle,
+      mcp_operational_state: mcpOperationalState,
       ...createSessionActivitySnapshot(state),
       ...createOperationalPostureSnapshot({ state: postureState, mcpOperationalState }),
       cursor: eventHub.cursor(),

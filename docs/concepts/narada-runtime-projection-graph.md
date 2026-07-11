@@ -186,7 +186,8 @@ Minimum graph record:
       "intent_route_id": "intent_cloudflare_to_local_nars_...",
       "origin_projection_surface_id": "surface_cloudflare_agent_web_ui_...",
       "target_authority_runtime_id": "auth_local_nars_...",
-      "admitted_methods": ["conversation.send", "conversation.enqueue"],
+      "admitted_methods": ["session.submit", "session.cancel", "session.close"],
+      "adapter_methods": ["conversation.send", "conversation.enqueue", "conversation.interrupt", "session.close"],
       "credential_refs": { "browser": "token_fingerprint:..." },
       "acknowledgement_authority": "target_authority_runtime"
     }

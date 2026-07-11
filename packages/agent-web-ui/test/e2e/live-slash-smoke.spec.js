@@ -83,13 +83,13 @@ test.describe('agent-web-ui live slash commands', () => {
       const runtimeCases = [
         {
           command: '/status',
-          kind: 'session_status',
+          kind: 'session_health',
           assertEvent(event) {
-            expect(event.event).toBe('session_status');
+            expect(event.event).toBe('session_health');
+            expect(event.schema).toBe('narada.nars.health.v1');
             expect(event.session_id).toBe('web-ui-playwright-e2e');
             expect(event.intelligence?.provider).toBe('codex-subscription');
             expect(event.intelligence?.model).toBe('gpt-5.5');
-            expect(event.intelligence?.thinking).toBe('medium');
           },
         },
         {
@@ -97,6 +97,7 @@ test.describe('agent-web-ui live slash commands', () => {
           kind: 'session_health',
           assertEvent(event) {
             expect(event.event).toBe('session_health');
+            expect(event.schema).toBe('narada.nars.health.v1');
             expect(event.session_id).toBe('web-ui-playwright-e2e');
           },
         },
@@ -109,139 +110,11 @@ test.describe('agent-web-ui live slash commands', () => {
           },
         },
         {
-          command: '/ops',
-          kind: 'session_operations',
-          assertEvent(event) {
-            expect(event.event).toBe('session_operations');
-            expect(event.session_id).toBe('web-ui-playwright-e2e');
-          },
-        },
-        {
-          command: '/observers',
-          kind: 'observer_status',
-          assertEvent(event) {
-            expect(event.event).toBe('observer_status');
-            expect(event.observer_muted).toBe(false);
-          },
-        },
-        {
-          command: '/observer mute',
-          kind: 'observer_status',
-          assertEvent(event) {
-            expect(event.event).toBe('observer_status');
-            expect(event.observer_muted).toBe(true);
-            expect(event.message ?? '').toMatch(/muted/);
-          },
-        },
-        {
-          command: '/observer unmute',
-          kind: 'observer_status',
-          assertEvent(event) {
-            expect(event.event).toBe('observer_status');
-            expect(event.observer_muted).toBe(false);
-            expect(event.message ?? '').toMatch(/shown/);
-          },
-        },
-        {
           command: '/interrupt',
-          kind: 'conversation_interrupt_requested',
+          kind: 'session_cancel',
           assertEvent(event) {
-            expect(event.event).toBe('conversation_interrupt_requested');
-            expect(event.method).toBe('conversation.interrupt');
-          },
-        },
-        {
-          command: '/json {"id":"slash-json-status","method":"session.status","params":{}}',
-          kind: 'session_status',
-          assertEvent(event) {
-            expect(event.event).toBe('session_status');
-            expect(event.request_id).toBe('slash-json-status');
-            expect(event.session_id).toBe('web-ui-playwright-e2e');
-          },
-        },
-        {
-          command: '/goal tighten slash coverage',
-          kind: 'carrier_command_result',
-          assertEvent(event) {
-            expect(event.event).toBe('carrier_command_result');
-            expect(event.command).toBe('/goal');
-            expect(event.fields?.goal).toBe('tighten slash coverage');
-          },
-        },
-        {
-          command: '/model gpt-browser-live-e2e',
-          kind: 'carrier_command_result',
-          assertEvent(event) {
-            expect(event.event).toBe('carrier_command_result');
-            expect(event.command).toBe('/model');
-            expect(event.fields?.model).toBe('gpt-browser-live-e2e');
-          },
-        },
-        {
-          command: '/thinking high',
-          kind: 'carrier_command_result',
-          assertEvent(event) {
-            expect(event.event).toBe('carrier_command_result');
-            expect(event.command).toBe('/thinking');
-            expect(event.fields?.thinking).toBe('high');
-          },
-        },
-        {
-          command: '/status',
-          kind: 'session_status',
-          assertEvent(event) {
-            expect(event.event).toBe('session_status');
-            expect(event.session_id).toBe('web-ui-playwright-e2e');
-            expect(event.intelligence?.model).toBe('gpt-browser-live-e2e');
-            expect(event.intelligence?.thinking).toBe('high');
-          },
-        },
-        {
-          command: '/tool-output off',
-          kind: 'carrier_command_result',
-          assertEvent(event) {
-            expect(event.event).toBe('carrier_command_result');
-            expect(event.command).toBe('/tool-output');
-            expect(event.fields?.tool_outputs).toBe('hidden');
-          },
-        },
-        {
-          command: '/tools',
-          kind: 'carrier_command_result',
-          assertEvent(event) {
-            expect(event.event).toBe('carrier_command_result');
-            expect(event.command).toBe('/tools');
-            expect(Array.isArray(event.fields?.tools)).toBe(true);
-            expect(event.fields.tools.some((tool) => tool.tool_name === 'fixture_read')).toBe(true);
-          },
-        },
-        {
-          command: '/queue',
-          kind: 'carrier_command_result',
-          assertEvent(event) {
-            expect(event.event).toBe('carrier_command_result');
-            expect(event.command).toBe('/queue');
-            expect(event.message ?? '').toMatch(/Queued operator input: 0 item\(s\)\./);
-            expect(event.fields?.operator_input_queue?.pendingCount).toBe(0);
-          },
-        },
-        {
-          command: '/queue clear',
-          kind: 'carrier_command_result',
-          assertEvent(event) {
-            expect(event.event).toBe('carrier_command_result');
-            expect(event.command).toBe('/queue');
-            expect(event.fields?.dropped_count).toBe(0);
-            expect(event.message ?? '').toMatch(/Cleared 0 queued operator input item\(s\)\./);
-          },
-        },
-        {
-          command: '/stats',
-          kind: 'carrier_command_result',
-          assertEvent(event) {
-            expect(event.event).toBe('carrier_command_result');
-            expect(event.command).toBe('/stats');
-            expect(event.message).toBe('Session statistics.');
+            expect(event.event).toBe('session_cancel');
+            expect(typeof event.cancelled).toBe('boolean');
           },
         },
         {

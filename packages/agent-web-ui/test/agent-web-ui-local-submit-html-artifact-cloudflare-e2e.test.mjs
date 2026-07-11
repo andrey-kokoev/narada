@@ -1,22 +1,16 @@
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { PassThrough } from 'node:stream';
 import test from 'node:test';
 import { createCloudflareNarsProjectionWorker } from '@narada2/cloudflare-nars-projection/worker';
-import { resolveNaradaSitePaths } from '@narada2/site-paths';
 import {
   deliverRemoteProjectionInputsOnce,
   registerProjectionRemotely,
   startLocalProjectionBridgeOnce,
 } from '@narada2/cloudflare-nars-projection/node';
-import { createEventHub, startHealthProjection, startEventStreamProjection } from '@narada2/agent-runtime-server';
-import { createCarrierRuntimeDependencies } from '../../carrier-runtime/src/runtime-dependencies.mjs';
-import { runCarrierServerMode } from '../../carrier-runtime/src/server-mode.mjs';
-import { removeTempDir, waitFor, writeFixtureMcpSurface } from '../../carrier-runtime/src/server-mode-test-helpers.mjs';
 import { startAgentWebUiServer } from '../src/server.js';
+import { startSessionCoreRuntime, waitFor } from './e2e/nars-runtime-fixture.mjs';
 import {
   findHeadlessBrowser,
   openCdpPage,
@@ -83,26 +77,6 @@ async function jsonOf(responsePromise) {
   return (await responsePromise).json();
 }
 
-async function waitForOrFail(predicate, label, evidence, options = {}) {
-  try {
-    await waitFor(predicate, options);
-  } catch (error) {
-    throw new Error(`${label}: ${JSON.stringify(evidence())}`, { cause: error });
-  }
-}
-
-async function renderedEventRows(page, kind = null) {
-  return page.evaluate(String.raw`((eventKind) => {
-    const rows = Array.from(document.querySelectorAll('[data-event-kind]'));
-    const filtered = eventKind ? rows.filter((row) => row.dataset.eventKind === eventKind) : rows;
-    return filtered.map((row) => ({
-      kind: row.dataset.eventKind ?? null,
-      text: row.textContent ?? '',
-      summary: row.querySelector('.event-summary')?.textContent ?? '',
-    }));
-  })(${JSON.stringify(kind)})`);
-}
-
 async function setProjectionView(page, value) {
   return page.evaluate(String.raw`((nextValue) => {
     const select = document.querySelector('#projection-verbosity');
@@ -113,99 +87,23 @@ async function setProjectionView(page, value) {
   })(${JSON.stringify(value)})`);
 }
 
-function createEmptyLocalNarsSite() {
-  const siteRoot = mkdtempSync(join(tmpdir(), 'narada-web-ui-local-submit-artifact-e2e-'));
-  const sessionId = 'nars_local_submit_html_artifact_e2e';
-  const sitePaths = resolveNaradaSitePaths({ siteRoot, sessionId });
-  const sessionDir = sitePaths.narsSessionDir;
-  const artifactsDir = join(sessionDir, 'artifacts');
-  mkdirSync(sessionDir, { recursive: true });
-
-  return { siteRoot, sessionId, sessionDir, artifactsDir, eventsPath: join(sessionDir, 'events.jsonl') };
-}
-
 async function startRealLocalNarsRuntime() {
-  const site = createEmptyLocalNarsSite();
-  writeFixtureMcpSurface(site.siteRoot);
-  const runtimeInput = new PassThrough();
-  const runtimeOutput = new PassThrough();
-  const eventHub = createEventHub();
-  const events = [];
-  const providerCalls = [];
-  let outputBuffer = '';
-  let runtimePromise = null;
-  let healthProjection = null;
-  let eventProjection = null;
-  const runtimeContext = {
+  const runtime = await startSessionCoreRuntime({
     identity: 'resident',
-    session: site.sessionId,
-    siteRoot: site.siteRoot,
+    sessionId: 'nars_local_submit_html_artifact_e2e',
     siteId: 'narada.e2e',
-    operatorSurfaceKind: 'agent-web-ui',
-    sessionPath: join(site.sessionDir, 'session.jsonl'),
-    eventsPath: site.eventsPath,
-    intelligenceProvider: 'codex-subscription',
-    providerSettings: { provider: 'codex-subscription', model: 'gpt-5.5', thinking: 'medium', stream: false },
-  };
-  healthProjection = await startHealthProjection({ childStdin: () => runtimeInput, host: '127.0.0.1', port: 0, runtimeContext: { ...runtimeContext, eventHub } });
-  eventProjection = await startEventStreamProjection({ childStdin: () => runtimeInput, eventHub, host: '127.0.0.1', port: 0, eventsPath: runtimeContext.eventsPath });
-  const fullRuntimeContext = { ...runtimeContext, healthUrl: healthProjection.url, eventStreamUrl: eventProjection.url };
-  const { dependencies } = createCarrierRuntimeDependencies({ runtimeContext: fullRuntimeContext });
-  runtimeOutput.setEncoding('utf8');
-  runtimeOutput.on('data', (chunk) => {
-    outputBuffer += chunk;
-    const lines = outputBuffer.split(/\r?\n/);
-    outputBuffer = lines.pop() ?? '';
-    for (const line of lines) {
-      if (!line.trim()) continue;
-      const event = JSON.parse(line);
-      events.push(event);
-      healthProjection?.observe(event);
-      eventHub.publish(event);
-    }
-  });
-  runtimePromise = runCarrierServerMode({
-    input: runtimeInput,
-    output: runtimeOutput,
-    callChatApiFn: async (messages, tools) => {
-      providerCalls.push({ messages, tools });
-      if (providerCalls.length === 1) {
-        assert.equal(tools.some((tool) => tool.function?.name === 'fixture_read'), true);
-        return { choices: [{ message: { role: 'assistant', content: null, tool_calls: [{ id: 'call_fixture_read', type: 'function', function: { name: 'fixture_read', arguments: JSON.stringify({ topic: 'local-submit-html-artifact' }) } }] } }] };
-      }
-      return { choices: [{ message: { role: 'assistant', content: 'Artifact request accepted by real NARS runtime.' } }] };
+    responseContent: 'Artifact request accepted by real NARS runtime.',
+    toolGateway: {
+      toolCatalog: async () => [],
+      invoke: async ({ toolName }) => ({ tool_name: toolName, content: 'fixture' }),
+      operationalState: () => 'healthy',
+      close() {},
     },
-    runtimeContext: fullRuntimeContext,
-    dependencies: { ...dependencies, readMcpPreflightArtifact: () => null },
-  });
-  await Promise.race([
-    waitForOrFail(
-      () => events.some((event) => event.event === 'session_started'),
-      'real_nars_session_started_timeout',
-      () => ({ events: events.map((event) => event.event), output_buffer: outputBuffer }),
-      { timeoutMs: 2000 },
-    ),
-    runtimePromise.then(() => {
-      throw new Error('runtime_exited_before_session_started');
-    }),
-  ]);
-  const localWeb = await startAgentWebUiServer({
-    host: '127.0.0.1',
-    port: 0,
-    eventEndpoint: eventProjection.url,
-    healthEndpoint: healthProjection.url,
   });
   return {
-    ...site,
-    localWeb,
-    eventProjection,
-    healthProjection,
-    events,
-    providerCalls,
+    ...runtime,
     async registerHtmlArtifact() {
-      const artifactIdBefore = events.filter((event) => event.event === 'session_artifact_registered').length;
-      const htmlPath = join(site.artifactsDir, 'local-submit-preview.html');
-      mkdirSync(site.artifactsDir, { recursive: true });
+      const htmlPath = join(runtime.siteRoot, 'local-submit-preview.html');
       writeFileSync(htmlPath, [
         '<!doctype html>',
         '<html lang="en">',
@@ -214,24 +112,18 @@ async function startRealLocalNarsRuntime() {
         '</body>',
         '</html>',
       ].join(''), 'utf8');
-      runtimeInput.write(`${JSON.stringify({ id: 'artifact-register-local-submit', method: 'session.artifacts.register', params: { source_path: htmlPath, kind: 'html', title: 'Local Submit HTML Preview', render_hint: 'inline', content_type: 'text/html; charset=utf-8' } })}\n`);
-      await waitForOrFail(
-        () => events.filter((event) => event.event === 'session_artifact_registered').length > artifactIdBefore || events.some((event) => event.event === 'error' && event.request_id === 'artifact-register-local-submit'),
-        'real_nars_artifact_register_timeout',
-        () => ({ events: events.map((event) => ({ event: event.event, request_id: event.request_id, code: event.code, message: event.message })) }),
-        { timeoutMs: 2000 },
-      );
-      const registerError = events.find((event) => event.event === 'error' && event.request_id === 'artifact-register-local-submit');
-      assert.equal(registerError, undefined, JSON.stringify(registerError));
-      return events.findLast((event) => event.event === 'session_artifact_registered')?.artifact;
-    },
-    async close() {
-      localWeb.server.close();
-      runtimeInput.end();
-      if (runtimePromise) await Promise.race([runtimePromise, new Promise((resolve) => setTimeout(resolve, 1000))]);
-      healthProjection?.server.close();
-      eventProjection?.server.close();
-      removeTempDir(site.siteRoot);
+      const response = await fetch(new URL(`/sessions/${runtime.sessionId}/artifacts`, runtime.healthProjection.url), {
+        method: 'POST',
+        body: JSON.stringify({
+          source_path: htmlPath,
+          kind: 'html',
+          title: 'Local Submit HTML Preview',
+          render_hint: 'inline',
+          content_type: 'text/html; charset=utf-8',
+        }),
+      });
+      assert.equal(response.status, 201);
+      return (await response.json()).artifact;
     },
   };
 }
@@ -281,20 +173,12 @@ test('local runtime input renders artifact and MCP lanes on local and Cloudflare
     })()`);
     assert.equal(submitted.ok, true, JSON.stringify(submitted));
 
-    await waitForOrFail(
-      () => localRuntime.providerCalls.length === 2,
-      'real_nars_provider_turn_timeout',
-      () => ({ provider_call_count: localRuntime.providerCalls.length, events: localRuntime.events.map((event) => ({ event: event.event, request_id: event.request_id, tool_name: event.tool_name, status: event.status, code: event.code })) }),
-      { timeoutMs: 10000 },
+    await waitFor(
+      () => localRuntime.providerCalls.length === 1,
+      10000,
+      () => ({ provider_call_count: localRuntime.providerCalls.length, events: localRuntime.events.map((event) => ({ event: event.event, request_id: event.request_id, status: event.status, code: event.code })) }),
     );
     assert.equal(localRuntime.providerCalls[0].messages.some((message) => message.role === 'user' && /Create an HTML artifact/.test(message.content)), true);
-    assert.equal(localRuntime.providerCalls[0].tools.some((tool) => tool.function?.name === 'fixture_read'), true);
-    await waitForOrFail(
-      () => localRuntime.events.some((event) => event.event === 'tool_result' && (event.tool_name === 'fixture_read' || event.tool === 'fixture_read') && event.status === 'ok'),
-      'real_nars_fixture_read_result_timeout',
-      () => ({ events: localRuntime.events.map((event) => ({ event: event.event, tool: event.tool, tool_name: event.tool_name, status: event.status, code: event.code })) }),
-      { timeoutMs: 2000 },
-    );
     const artifact = await localRuntime.registerHtmlArtifact();
     const artifactId = artifact.artifact_id;
     assert.ok(artifactId, JSON.stringify(artifact));
@@ -328,18 +212,6 @@ test('local runtime input renders artifact and MCP lanes on local and Cloudflare
 
     const localOperations = await setProjectionView(localPage, 'operations');
     assert.deepEqual(localOperations, { ok: true, value: 'operations' });
-    await waitForOrFail(
-      async () => (await renderedEventRows(localPage, 'tool_call')).some((row) => /fixture_read/.test(row.text)),
-      'local_operations_tool_call_render_timeout',
-      async () => ({ rows: await renderedEventRows(localPage) }),
-      { timeoutMs: 5000 },
-    );
-    await waitForOrFail(
-      async () => (await renderedEventRows(localPage, 'tool_result')).some((row) => /fixture_read/.test(row.text) && /ok|complete/i.test(row.text)),
-      'local_operations_tool_result_render_timeout',
-      async () => ({ rows: await renderedEventRows(localPage) }),
-      { timeoutMs: 5000 },
-    );
 
     const registration = await registerProjectionRemotely({
       site_id: 'narada.e2e',
@@ -403,7 +275,6 @@ test('local runtime input renders artifact and MCP lanes on local and Cloudflare
 
     const switchedToOperations = await setProjectionView(remotePage, 'operations');
     assert.deepEqual(switchedToOperations, { ok: true, value: 'operations' });
-    assert.equal((await waitForPageText(remotePage, 'Tool result', 15000)).found, true);
 
     const remoteSubmitted = await remotePage.evaluate(String.raw`(async () => {
       const input = document.querySelector('#operator-input');
@@ -436,7 +307,7 @@ test('local runtime input renders artifact and MCP lanes on local and Cloudflare
     assert.equal(delivery?.delivered_count, 1, JSON.stringify(delivery));
     assert.equal(admittedInputs.length, 1, JSON.stringify(admittedInputs));
     assert.equal(admittedInputs[0].method, 'conversation.send');
-    assert.deepEqual(admittedInputs[0].payload, { message: 'Remote Cloudflare surface message for local NARS admission', source: 'agent-web-ui' });
+    assert.deepEqual(admittedInputs[0].payload, { message: 'Remote Cloudflare surface message for local NARS admission', source: 'manual_operator' });
 
     const revoked = await jsonOf(worker.fetch(new Request(`${workerBaseUrl}/api/nars/projections/${projectionId}`, { method: 'DELETE' })));
     assert.equal(revoked.status, 'revoked');

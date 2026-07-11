@@ -3,6 +3,7 @@ import { createServer } from 'node:http';
 import { PassThrough } from 'node:stream';
 import { test } from '@playwright/test';
 import { createEventHub, startEventStreamProjection } from '@narada2/agent-runtime-server/test-fixtures';
+import { AGENT_WEB_UI_NARS_METHOD_LIST } from '@narada2/nars-client-projection-contract';
 import { startAgentWebUiServer } from '../../src/server.js';
 
 function listen(server, host = '127.0.0.1') {
@@ -131,6 +132,9 @@ async function withScenarioServer(scenario, fn) {
       } finally {
         web.server.close();
       }
+      if (scenario.name === 'confirmation') {
+        assert.match(result.text, /control is not admitted by the attached runtime/i, 'expected local rejection feedback for legacy affordance controls');
+      }
     });
   }
 
@@ -154,7 +158,7 @@ async function withScenarioServer(scenario, fn) {
   const eventHub = createEventHub();
   const eventProjection = await startEventStreamProjection({ childStdin, eventHub, host: '127.0.0.1', port: 0 });
   return withHealthServer(async (healthUrl) => {
-    const web = await startAgentWebUiServer({ host: '127.0.0.1', port: 0, eventEndpoint: eventProjection.url, healthEndpoint: healthUrl });
+    const web = await startAgentWebUiServer({ host: '127.0.0.1', port: 0, eventEndpoint: eventProjection.url, healthEndpoint: healthUrl, admittedMethods: [...AGENT_WEB_UI_NARS_METHOD_LIST] });
     try {
       return await fn(web.url, () => publishScenarioEvents(eventHub, scenario), inputFrames, eventHub);
     } finally {
@@ -305,8 +309,7 @@ async function runScenarioViewport({ page, scenario, viewport }) {
         assert.match(actionResult.confirmText ?? '', /Confirm/);
         assert.match(actionResult.cancelText ?? '', /Cancel/);
         await new Promise((resolve) => setTimeout(resolve, 250));
-        assert.ok(inputFrames.some((frame) => frame.method === 'session.affordance.action.confirm' && frame.params?.confirmation_id === 'confirm-browser-1'), `${scenario.name}/${viewport.name}: expected confirm frame, got ${JSON.stringify(inputFrames)}`);
-        assert.ok(inputFrames.some((frame) => frame.method === 'session.affordance.action.cancel' && frame.params?.confirmation_id === 'confirm-browser-2'), `${scenario.name}/${viewport.name}: expected cancel frame, got ${JSON.stringify(inputFrames)}`);
+        assert.deepEqual(inputFrames.filter((frame) => String(frame.method ?? '').startsWith('session.affordance.')), [], `${scenario.name}/${viewport.name}: local session-core transport must not receive legacy affordance frames`);
       }
       const screenshot = await page.screenshot({ fullPage: false });
       assert.deepEqual([...screenshot.subarray(0, 8)], [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], `${scenario.name}-${viewport.name}.png`);
@@ -456,6 +459,43 @@ test('agent-web-ui operator footer selector hides and restores target and input 
     await page.waitForLoadState('domcontentloaded');
     publishEvents();
     await page.waitForSelector('#operator-input');
+    const selectorLayout = await page.evaluate(() => {
+      const footerSelector = document.querySelector('button[aria-label="Choose Operator footer items"]');
+      const send = document.querySelector('.composer-submit');
+      const headerSelector = document.querySelector('button[aria-label="Choose Header items"]');
+      const statusSelector = document.querySelector('button[aria-label="Choose Status boxes"]');
+      const statusCollapse = document.querySelector('button[aria-label="Collapse status boxes"]');
+      const statusRow = document.querySelector('.box-row-shell.status');
+      const statusItems = document.querySelector('.status .box-row-items');
+      const footerRect = footerSelector?.getBoundingClientRect();
+      const sendRect = send?.getBoundingClientRect();
+      const statusSelectorRect = statusSelector?.getBoundingClientRect();
+      const statusCollapseRect = statusCollapse?.getBoundingClientRect();
+      const statusRowRect = statusRow?.getBoundingClientRect();
+      const statusItemsRect = statusItems?.getBoundingClientRect();
+      return {
+        footerRight: footerRect?.right ?? null,
+        footerBottom: footerRect?.bottom ?? null,
+        sendRight: sendRect?.right ?? null,
+        sendTop: sendRect?.top ?? null,
+        headerInRowControls: Boolean(headerSelector?.closest('.box-row-controls')),
+        statusInRowControls: Boolean(statusSelector?.closest('.box-row-controls')),
+        statusSelectorTop: statusSelectorRect?.top ?? null,
+        statusSelectorCenter: statusSelectorRect ? statusSelectorRect.left + statusSelectorRect.width / 2 : null,
+        statusCollapseBottom: statusCollapseRect?.bottom ?? null,
+        statusCollapseCenter: statusCollapseRect ? statusCollapseRect.left + statusCollapseRect.width / 2 : null,
+        statusRowTop: statusRowRect?.top ?? null,
+        statusItemsTop: statusItemsRect?.top ?? null,
+        statusCollapseTop: statusCollapseRect?.top ?? null,
+      };
+    });
+    assert.ok(Math.abs((selectorLayout.footerRight ?? 0) - (selectorLayout.sendRight ?? 100)) < 1, `expected footer selector and Send to share a right edge: ${JSON.stringify(selectorLayout)}`);
+    assert.ok((selectorLayout.footerBottom ?? Number.POSITIVE_INFINITY) <= (selectorLayout.sendTop ?? Number.NEGATIVE_INFINITY), `expected footer selector above Send: ${JSON.stringify(selectorLayout)}`);
+    assert.equal(selectorLayout.headerInRowControls, true, `expected header selector to retain shared row-control placement: ${JSON.stringify(selectorLayout)}`);
+    assert.equal(selectorLayout.statusInRowControls, true, `expected status selector to retain shared row-control placement: ${JSON.stringify(selectorLayout)}`);
+    assert.ok((selectorLayout.statusCollapseBottom ?? Number.POSITIVE_INFINITY) <= (selectorLayout.statusSelectorTop ?? Number.NEGATIVE_INFINITY), `expected Collapse above the status selector: ${JSON.stringify(selectorLayout)}`);
+    assert.ok(Math.abs((selectorLayout.statusCollapseCenter ?? 0) - (selectorLayout.statusSelectorCenter ?? 100)) < 1, `expected status controls to share a horizontal center: ${JSON.stringify(selectorLayout)}`);
+    assert.ok(Math.abs((selectorLayout.statusCollapseTop ?? 0) - (selectorLayout.statusItemsTop ?? 100)) < 1, `expected status controls to align to the status content top: ${JSON.stringify(selectorLayout)}`);
     await page.locator('button[aria-label="Choose Operator footer items"]').click();
     const clickFooterSelectorItem = async (label) => {
       await page.evaluate((itemLabel) => {

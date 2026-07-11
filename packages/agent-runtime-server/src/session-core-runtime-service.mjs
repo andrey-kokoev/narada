@@ -1,3 +1,6 @@
+import { existsSync, readFileSync } from 'node:fs';
+import { resolveNaradaSitePaths } from '@narada2/site-paths';
+import { writeNarsSessionStartedIndex } from '@narada2/nars-session-core/session-index';
 import { createRuntimeSessionBinding } from './runtime-session-binding.mjs';
 import { createNarsCapabilityGateway } from '@narada2/nars-capability-gateway/capability-gateway';
 
@@ -58,9 +61,82 @@ function parseRequest(line) {
   }
 }
 
+function projectRuntimeHealth(snapshot, runtimeContext, toolGateway) {
+  const mcpOperationalState = snapshot.mcp_operational_state
+    ?? toolGateway.operationalState?.()
+    ?? 'unknown';
+  const lifecycleState = snapshot.lifecycle_state ?? 'starting';
+  const status = lifecycleState === 'starting'
+    ? 'starting'
+    : lifecycleState === 'closing' || lifecycleState === 'closed'
+      ? 'closing'
+      : snapshot.operational_posture === 'healthy'
+        ? 'healthy'
+        : 'degraded';
+  const paths = resolveNaradaSitePaths({ siteRoot: runtimeContext.siteRoot, sessionId: runtimeContext.session });
+  const heartbeat = readHeartbeatProjection(paths.narsHeartbeatPath);
+  return {
+    ...snapshot,
+    schema: 'narada.nars.health.v1',
+    status,
+    generated_at: new Date().toISOString(),
+    agent_id: runtimeContext.identity ?? null,
+    session_id: snapshot.session_id ?? runtimeContext.session ?? null,
+    site_root: runtimeContext.siteRoot ?? null,
+    runtime: 'narada-agent-runtime-server',
+    runtime_mode: 'server',
+    health_endpoint: runtimeContext.healthUrl ?? null,
+    event_endpoint: runtimeContext.eventStreamUrl ?? null,
+    heartbeat,
+    intelligence: {
+      provider: runtimeContext.intelligenceProvider ?? null,
+      model: runtimeContext.providerSettings?.model ?? null,
+    },
+    mcp_operational_state: mcpOperationalState,
+    mcp: {
+      operational_state: mcpOperationalState,
+      server_count: null,
+      startup_failure_count: 0,
+      runtime_fault_count: 0,
+    },
+    activity: {
+      last_event_kind: snapshot.last_event_kind ?? null,
+      last_event_at: snapshot.last_event_at ?? null,
+      active_turn_state: snapshot.active_turn_state ?? null,
+      last_terminal_state: snapshot.last_terminal_state ?? null,
+    },
+    posture: {
+      request_posture: snapshot.request_posture ?? null,
+      operational_posture: snapshot.operational_posture ?? null,
+    },
+  };
+}
+
+function readHeartbeatProjection(path) {
+  if (!path || !existsSync(path)) {
+    return { path: path ?? null, last_written_at: null, age_ms: null, freshness: 'missing' };
+  }
+  try {
+    const heartbeat = JSON.parse(readFileSync(path, 'utf8'));
+    const lastWrittenAt = heartbeat?.last_written_at
+      ?? heartbeat?.timestamp
+      ?? heartbeat?.heartbeat_at
+      ?? null;
+    const parsedAt = lastWrittenAt ? Date.parse(lastWrittenAt) : Number.NaN;
+    return {
+      path,
+      last_written_at: lastWrittenAt,
+      age_ms: Number.isFinite(parsedAt) ? Math.max(0, Date.now() - parsedAt) : null,
+      freshness: 'unknown',
+    };
+  } catch {
+    return { path, last_written_at: null, age_ms: null, freshness: 'unknown' };
+  }
+}
+
 /**
  * Narrow JSONL control service. Session-core owns all durable session state;
- * the compatibility runtime supplies only the provider callable.
+ * the runtime server supplies only the provider callable and tool gateway.
  */
 export function createSessionCoreRuntimeService({ runtimeContext, callChatApiFn, toolGateway = null, admitCapability = null } = {}) {
   let supervisor = null;
@@ -94,7 +170,11 @@ export function createSessionCoreRuntimeService({ runtimeContext, callChatApiFn,
     const method = request?.method ?? (requestContent(request) != null ? 'session.submit' : null);
     try {
       if (method === 'session.health') {
-        await writer.write({ event: 'session_health', request_id: requestId, ...supervisor.health() });
+        await writer.write({
+          event: 'session_health',
+          request_id: requestId,
+          ...projectRuntimeHealth(supervisor.health(), runtimeContext, providerToolGateway),
+        });
         return false;
       }
       if (method === 'session.cancel') {
@@ -146,15 +226,26 @@ export function createSessionCoreRuntimeService({ runtimeContext, callChatApiFn,
       subscriptionId: 'runtime-jsonl',
       send: (envelope) => writer.write(envelope.payload),
     });
-    supervisor.core.appendEvent({
+    const sessionStartedEvent = supervisor.core.appendEvent({
       event: 'session_started',
       runtime: 'narada-agent-runtime-server',
       transport: 'jsonl_stdio',
       runtime_contract: 'nars_session_core_control.v1',
+      agent_identity_ref: runtimeContext.agentIdentityRef ?? null,
+      site_id: runtimeContext.siteId ?? null,
+      site_root: runtimeContext.siteRoot ?? null,
+      session_path: runtimeContext.sessionPath ?? null,
+      events_path: runtimeContext.eventsPath ?? null,
+      operator_surface_kind: runtimeContext.operatorSurfaceKind ?? null,
       delegated_authority_handoff: runtimeContext.narsDelegatedAuthorityHandoff ?? null,
       delegated_authority_ref: runtimeContext.narsDelegatedAuthorityHandoff?.authority_ref ?? null,
       health_endpoint: runtimeContext.healthUrl ?? null,
       event_endpoint: runtimeContext.eventStreamUrl ?? null,
+    });
+    writeNarsSessionStartedIndex({
+      sessionStartedEvent,
+      sessionPath: runtimeContext.sessionPath,
+      siteRoot: runtimeContext.siteRoot,
     });
     supervisor.start();
     input.setEncoding?.('utf8');

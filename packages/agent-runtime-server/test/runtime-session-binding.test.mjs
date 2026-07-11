@@ -44,7 +44,7 @@ test('session cancel aborts an active provider turn while close waits for settle
   assert.ok(events.some((event) => event.event === 'session_closed'));
 });
 
-test('session-core runtime service exposes only submit, health, recovery, and close controls', async () => {
+test('session-core runtime service rejects non-session controls and retains the narrow control boundary', async () => {
   const root = mkdtempSync(join(tmpdir(), 'session-core-runtime-service-'));
   const input = new PassThrough();
   const output = new PassThrough();

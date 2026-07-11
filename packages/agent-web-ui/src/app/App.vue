@@ -39,9 +39,12 @@ interface AgentWebUiConfig {
   projectionControl?: ProjectionControlConfig | null;
   authorityTransition?: Record<string, unknown> | null;
   maxReplay?: number;
+  admittedMethods?: readonly string[];
 }
 
 const props = defineProps<{ config: AgentWebUiConfig }>();
+const supportsProtocolMethod = (method: string) => !props.config.admittedMethods || props.config.admittedMethods.includes(method);
+const preferSessionCoreInput = supportsProtocolMethod('session.submit') && !supportsProtocolMethod('conversation.send');
 provide(ArtifactRenderingConfigKey, {
   artifactBasePath: props.config.artifactBasePath ?? null,
   artifactTransport: props.config.artifactTransport ?? null,
@@ -88,7 +91,7 @@ const canSteerActiveTurn = computed(() => (
   && agentActivity.activity.value.active === true
   && (agentActivity.activity.value.state === 'thinking' || agentActivity.activity.value.state === 'streaming')
 ));
-const input = useOperatorInput(connection.connection, retained.retain, retained.clear, props.config.authorityTransition ?? null, () => canSteerActiveTurn.value);
+const input = useOperatorInput(connection.connection, retained.retain, retained.clear, props.config.authorityTransition ?? null, () => canSteerActiveTurn.value, preferSessionCoreInput, supportsProtocolMethod);
 const draft = input.draft;
 const followLatestRevision = ref(0);
 const surfaceAffordancesRequested = ref(false);
@@ -102,8 +105,8 @@ function followLatestTranscript() {
 }
 
 watch(connection.streamText, (status) => {
-  if (surfaceAffordancesRequested.value || status !== 'connected') return;
-  surfaceAffordancesRequested.value = connection.connection.value?.sendFrame(buildSurfaceAffordancesRequestFrame()) ?? false;
+  if (surfaceAffordancesRequested.value || status !== 'connected' || !supportsProtocolMethod('session.surface.affordances')) return;
+  surfaceAffordancesRequested.value = sendProtocolFrame(buildSurfaceAffordancesRequestFrame());
 }, { immediate: true });
 
 function submitOperatorDraft(deliveryMode: 'default' | 'enqueue' = 'default') {
@@ -233,58 +236,78 @@ function fillIntentRef(intentText: string) {
 function interruptModel() {
   if (input.interrupt()) followLatestTranscript();
 }
+
+function sendProtocolFrame(frame: unknown): boolean {
+  const method = frame && typeof frame === 'object' && typeof (frame as { method?: unknown }).method === 'string'
+    ? (frame as { method: string }).method
+    : null;
+  if (!method) return false;
+  if (!supportsProtocolMethod(method)) {
+    retained.retain({
+      event: 'web_ui_input_not_sent',
+      message: 'control is not admitted by the attached runtime',
+      reason_code: 'unsupported_session_control',
+      method,
+    });
+    return false;
+  }
+  const sent = connection.connection.value?.sendFrame(frame) ?? false;
+  if (!sent) retained.retain({ event: 'web_ui_input_not_sent', message: 'event stream is not open', method });
+  return sent;
+}
+
 function requestSopSummary() {
-  connection.connection.value?.sendFrame(buildSopSummaryRequestFrame());
+  sendProtocolFrame(buildSopSummaryRequestFrame());
 }
 
 function requestInboxSummary() {
-  connection.connection.value?.sendFrame(buildInboxSummaryRequestFrame());
+  sendProtocolFrame(buildInboxSummaryRequestFrame());
 }
 
 function requestDelegationSummary() {
-  connection.connection.value?.sendFrame(buildDelegationSummaryRequestFrame());
+  sendProtocolFrame(buildDelegationSummaryRequestFrame());
 }
 
 function requestGitSummary() {
-  connection.connection.value?.sendFrame(buildGitSummaryRequestFrame());
+  sendProtocolFrame(buildGitSummaryRequestFrame());
 }
 
 function requestArtifactsSummary() {
-  connection.connection.value?.sendFrame(buildArtifactsSummaryRequestFrame());
+  sendProtocolFrame(buildArtifactsSummaryRequestFrame());
 }
 
 function requestMailboxSummary() {
-  connection.connection.value?.sendFrame(buildMailboxSummaryRequestFrame());
+  sendProtocolFrame(buildMailboxSummaryRequestFrame());
 }
 
 function requestSchedulerSummary() {
-  connection.connection.value?.sendFrame(buildSchedulerSummaryRequestFrame());
+  sendProtocolFrame(buildSchedulerSummaryRequestFrame());
 }
 
 function requestTaskLifecycleSummary() {
-  connection.connection.value?.sendFrame(buildTaskLifecycleSummaryRequestFrame());
+  sendProtocolFrame(buildTaskLifecycleSummaryRequestFrame());
 }
 
 function requestSurfaceFeedbackSummary() {
-  connection.connection.value?.sendFrame(buildSurfaceFeedbackSummaryRequestFrame());
+  sendProtocolFrame(buildSurfaceFeedbackSummaryRequestFrame());
 }
 
 function requestAffordanceAction(request: { surfaceId: string; actionId: string; args: Record<string, unknown> }) {
   const frame = buildAffordanceActionRequestFrame({ surfaceId: request.surfaceId, actionId: request.actionId, args: request.args });
   if (frame) {
-    connection.connection.value?.sendFrame(frame);
+    sendProtocolFrame(frame);
     void health.refresh();
   }
 }
 
 function confirmAffordanceAction(item: AffordanceConfirmationItem) {
   const frame = buildAffordanceActionConfirmFrame({ confirmationId: item.confirmationId });
-  if (frame) connection.connection.value?.sendFrame(frame);
+  if (frame) sendProtocolFrame(frame);
 }
 
 function cancelAffordanceAction(item: AffordanceConfirmationItem) {
   const frame = buildAffordanceActionCancelFrame({ confirmationId: item.confirmationId });
-  if (frame) connection.connection.value?.sendFrame(frame);
+  if (frame) sendProtocolFrame(frame);
 }
 </script>
 

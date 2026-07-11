@@ -4,6 +4,14 @@ Shared protocol types, constructors, fixtures, and validators for Narada interac
 
 This package is the executable contract behind carrier input, session event, provider output, observer, payload-ref, host-command, and tool/effect evidence semantics. It is UI-independent and may be used by `agent-cli`, `agent-tui`, Cloudflare carrier implementations, and future carriers.
 
+Carrier vocabulary is not the local session-core client contract. In particular,
+carrier and Cloudflare adapters may classify older conversation, observer,
+authority, and command verbs, while local clients must use the narrow
+`session.submit`, `session.health`, `session.recovery`, `session.cancel`, and
+`session.close` controls defined by `nars-session-core`. An adapter must
+translate at that boundary rather than making carrier vocabulary appear as
+local runtime admission.
+
 ## Boundary Ownership
 
 The protocol package owns vocabulary and validation for carrier evidence. Carrier implementations own host-specific mechanics such as terminal input, Durable Object storage, Worker routing, provider calls, and effect adapters.

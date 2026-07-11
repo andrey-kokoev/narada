@@ -69,7 +69,7 @@ export function registerNarsCommands(program: Command): void {
     .option('--site-root <path>', 'Local Site root')
     .option('--projection-id <id>', 'Stable projection id')
     .option('--event-policy <policy>', 'Event policy: conversation|operator|diagnostic|raw', 'operator')
-    .option('--input-verb <method...>', 'Allowed input verb(s); repeat or comma-separate values', ['conversation.send', 'conversation.enqueue'])
+    .option('--input-verb <method...>', 'Allowed Cloudflare adapter input verb(s); repeat or comma-separate values', ['conversation.send', 'conversation.enqueue', 'conversation.steer', 'conversation.interrupt', 'session.close'])
     .option('--cache-policy <policy>', 'Cache policy: short_bounded|durable_archive', 'short_bounded')
     .option('--artifact-content <mode>', 'Artifact content policy: metadata_only|selected_kinds|explicit_artifacts|none', 'metadata_only')
     .option('--artifact-kind <kind...>', 'Allowed artifact kind(s); repeat or comma-separate values', ['markdown', 'json', 'text'])

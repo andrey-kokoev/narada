@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
-import { appendFileSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { appendFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { readFile, readdir } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { join } from 'node:path';
@@ -30,6 +30,7 @@ import {
   parseAgentWebUiArgs,
   startAgentWebUiServer,
 } from '../src/server.js';
+import { AGENT_WEB_UI_NARS_METHOD_LIST } from '@narada2/nars-client-projection-contract';
 import { createSessionProjection } from '../src/session-projection.js';
 import { summarizeSessionIdentity, summarizeSessionTitleParts } from '../src/session-identity.js';
 import {
@@ -37,9 +38,7 @@ import {
   startEventStreamProjection,
   startHealthProjection,
 } from '@narada2/agent-runtime-server/test-fixtures';
-import { createCarrierRuntimeDependencies } from '../../carrier-runtime/src/runtime-dependencies.mjs';
-import { runCarrierServerMode } from '../../carrier-runtime/src/server-mode.mjs';
-import { removeTempDir, tempRoot, waitFor, writeFixtureMcpSurface } from '../../carrier-runtime/src/server-mode-test-helpers.mjs';
+import { createSessionCoreRuntimeService } from '@narada2/agent-runtime-server/session-core-runtime-service';
 import { createCloudflareNarsProjectionWorker } from '@narada2/cloudflare-nars-projection/worker';
 import { registerProjectionRemotely, startLocalProjectionBridgeOnce, deliverRemoteProjectionInputsOnce } from '@narada2/cloudflare-nars-projection/node';
 import { appendEvent } from '../src/render.js';
@@ -71,6 +70,18 @@ async function connectWebSocket(url) {
     },
     close() { socket.close(); },
   };
+}
+
+function rawCustomPropertyReferenceViolations(root) {
+  const declared = new Set();
+  const referenced = new Set();
+  root.walkDecls((declaration) => {
+    if (declaration.prop.startsWith('--')) declared.add(declaration.prop);
+    for (const match of declaration.value.matchAll(/var\((--[a-zA-Z0-9_-]+)/g)) {
+      referenced.add(match[1]);
+    }
+  });
+  return [...referenced].filter((token) => !declared.has(token)).sort();
 }
 
 function createFakeAgentWebUiElements() {
@@ -130,18 +141,21 @@ function createFakeDocument() {
   };
 }
 
-const AGENT_WEB_UI_CSS_MODULES = [
-  'styles/theme.css',
-  'styles/primitives.css',
-  'styles/operator-surfaces.css',
-  'styles/shell-and-navigation.css',
-  'styles/panels.css',
-  'styles/layout-and-status.css',
-  'styles/events-and-content.css',
-  'styles/composer.css',
-  'styles/responsive.css',
-  'styles/dark-mode.css',
+const AGENT_WEB_UI_CSS_IMPORTS = [
+  ['styles/theme.css', 'narada-theme'],
+  ['styles/base.css', 'narada-base'],
+  ['styles/primitives.css', 'narada-primitives'],
+  ['styles/operator-surfaces.css', 'narada-operator'],
+  ['styles/shell-and-navigation.css', 'narada-shell'],
+  ['styles/panels.css', 'narada-panels'],
+  ['styles/layout-and-status.css', 'narada-layout'],
+  ['styles/events-and-content.css', 'narada-content'],
+  ['styles/composer.css', 'narada-composer'],
+  ['styles/responsive.css', 'narada-responsive'],
+  ['styles/dark-theme.css', 'narada-dark-theme'],
+  ['styles/dark-overrides.css', 'narada-dark-overrides'],
 ];
+const AGENT_WEB_UI_CSS_MODULES = AGENT_WEB_UI_CSS_IMPORTS.map(([modulePath]) => modulePath);
 
 async function readAgentWebUiCss() {
   const sourceRoot = new URL('../src/', import.meta.url);
@@ -150,8 +164,17 @@ async function readAgentWebUiCss() {
   return [entry, ...modules].join('\n');
 }
 
+async function waitFor(predicate, { timeoutMs = 2000 } = {}) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (predicate()) return;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  throw new Error('condition_timeout');
+}
+
 async function withRealNarsWebServer(fn) {
-  const siteRoot = tempRoot('agent-web-ui-config-real-nars-');
+  const siteRoot = mkdtempSync(join(tmpdir(), 'agent-web-ui-config-real-nars-'));
   const runtimeInput = new PassThrough();
   const runtimeOutput = new PassThrough();
   const eventHub = createEventHub();
@@ -162,9 +185,9 @@ async function withRealNarsWebServer(fn) {
   let healthProjection = null;
   let eventProjection = null;
   try {
-    writeFixtureMcpSurface(siteRoot);
     const sessionId = 'session_web_ui_config_real_nars';
     const sessionDir = resolveNaradaSitePaths({ siteRoot, sessionId }).narsSessionDir;
+    mkdirSync(sessionDir, { recursive: true });
     const baseRuntimeContext = {
       identity: 'narada.test',
       session: sessionId,
@@ -176,10 +199,43 @@ async function withRealNarsWebServer(fn) {
       intelligenceProvider: 'codex-subscription',
       providerSettings: { provider: 'codex-subscription', model: 'gpt-5.5', thinking: 'medium', stream: false },
     };
-    healthProjection = await startHealthProjection({ childStdin: () => runtimeInput, host: '127.0.0.1', port: 0, runtimeContext: { ...baseRuntimeContext, eventHub } });
-    eventProjection = await startEventStreamProjection({ childStdin: () => runtimeInput, eventHub, host: '127.0.0.1', port: 0, eventsPath: baseRuntimeContext.eventsPath });
-    const runtimeContext = { ...baseRuntimeContext, healthUrl: healthProjection.url, eventStreamUrl: eventProjection.url };
-    const { dependencies } = createCarrierRuntimeDependencies({ runtimeContext });
+    healthProjection = await startHealthProjection({
+      childStdin: () => runtimeInput,
+      host: '127.0.0.1',
+      port: 0,
+      runtimeContext: { ...baseRuntimeContext, eventHub },
+    });
+    eventProjection = await startEventStreamProjection({
+      childStdin: () => runtimeInput,
+      eventHub,
+      host: '127.0.0.1',
+      port: 0,
+      eventsPath: baseRuntimeContext.eventsPath,
+    });
+    const runtimeContext = {
+      ...baseRuntimeContext,
+      healthUrl: healthProjection.url,
+      eventStreamUrl: eventProjection.url,
+    };
+    const service = createSessionCoreRuntimeService({
+      runtimeContext,
+      callChatApiFn: async (messages, tools) => {
+        providerCalls.push({ messages, tools });
+        return { choices: [{ message: { role: 'assistant', content: 'Real NARS fixture response.' } }] };
+      },
+      toolGateway: {
+        toolCatalog: async () => [{
+          type: 'function',
+          function: {
+            name: 'fixture_read',
+            parameters: { type: 'object', properties: {} },
+          },
+        }],
+        invoke: async ({ toolName }) => ({ tool_name: toolName, content: 'fixture' }),
+        operationalState: () => 'healthy',
+        close() {},
+      },
+    });
     runtimeOutput.setEncoding('utf8');
     runtimeOutput.on('data', (chunk) => {
       outputBuffer += chunk;
@@ -193,18 +249,14 @@ async function withRealNarsWebServer(fn) {
         eventHub.publish(event);
       }
     });
-    runtimePromise = runCarrierServerMode({
-      input: runtimeInput,
-      output: runtimeOutput,
-      callChatApiFn: async (messages, tools) => {
-        providerCalls.push({ messages, tools });
-        return { choices: [{ message: { role: 'assistant', content: 'Real NARS fixture response.' } }] };
-      },
-      runtimeContext,
-      dependencies: { ...dependencies, readMcpPreflightArtifact: () => null },
-    });
+    runtimePromise = service.run({ input: runtimeInput, output: runtimeOutput });
     await waitFor(() => events.some((event) => event.event === 'session_started'), { timeoutMs: 2000 });
-    const web = await startAgentWebUiServer({ host: '127.0.0.1', port: 0, eventEndpoint: eventProjection.url, healthEndpoint: healthProjection.url });
+    const web = await startAgentWebUiServer({
+      host: '127.0.0.1',
+      port: 0,
+      eventEndpoint: eventProjection.url,
+      healthEndpoint: healthProjection.url,
+    });
     try {
       return await fn({ web, eventProjection, healthProjection, events, providerCalls });
     } finally {
@@ -215,7 +267,7 @@ async function withRealNarsWebServer(fn) {
     if (runtimePromise) await Promise.race([runtimePromise, new Promise((resolve) => setTimeout(resolve, 1000))]);
     healthProjection?.server.close();
     eventProjection?.server.close();
-    removeTempDir(siteRoot);
+    rmSync(siteRoot, { recursive: true, force: true });
   }
 }
 
@@ -321,11 +373,12 @@ test('agent-web-ui entrypoints include Narada favicon fallback links', async () 
   assert.match(favicon, /<svg/);
 });
 
-test('agent-web-ui README documents the remaining peer gap ledger', async () => {
+test('deprecated agent-web-ui README declares its adapter-only scope', async () => {
   const readme = await readFile(new URL('../README.md', import.meta.url), 'utf8');
-  assert.match(readme, /## Follow-Up Ledger/);
-  assert.match(readme, /endpoint-driven in this package/);
-  assert.match(readme, /launcher\/session discovery outside this package/);
+  assert.match(readme, /Deprecated migration predecessor/);
+  assert.match(readme, /@narada2\/agent-web-ui2/);
+  assert.match(readme, /Cloudflare projection/);
+  assert.match(readme, /does not publish the .*binary/);
 });
 
 test('Vue operator components expose composer without hidden privileged controls', async () => {
@@ -696,7 +749,8 @@ test('agent-web-ui CSS entry imports logical modules in cascade order', async ()
   const entry = await readFile(new URL('../src/agent-web-ui.css', import.meta.url), 'utf8');
   assert.equal(entry, [
     '@import "tailwindcss";',
-    ...AGENT_WEB_UI_CSS_MODULES.map((modulePath) => `@import "./${modulePath}";`),
+    '@layer narada-theme, narada-base, narada-primitives, narada-operator, narada-shell, narada-panels, narada-layout, narada-content, narada-composer, narada-responsive, narada-dark-theme, narada-dark-overrides;',
+    ...AGENT_WEB_UI_CSS_IMPORTS.map(([modulePath, layer]) => '@import "./' + modulePath + '" layer(' + layer + ');'),
     '',
   ].join('\n'));
 });
@@ -714,6 +768,8 @@ test('Vue layout smoke covers shell, status, event list, composer, and event ton
   const boxVisibilityPreference = await readFile(new URL('../src/app/composables/useBoxVisibilityPreference.ts', import.meta.url), 'utf8');
   const viteConfig = await readFile(new URL('../vite.config.mjs', import.meta.url), 'utf8');
   const css = await readAgentWebUiCss();
+  assert.match(css, /--sans:\s*Inter/);
+  assert.match(css, /var\(--sans\)/);
   for (const marker of ['class="shell"', '<SessionStatusBar', '<ConversationTranscript', '<OperatorComposer']) {
     assert.equal(shell.includes(marker), true, marker);
   }
@@ -773,6 +829,12 @@ test('Vue layout smoke covers shell, status, event list, composer, and event ton
   assert.doesNotMatch(css, /\.box-visibility-selector-shell[\s\S]*?top: 42px/);
   assert.match(css, /\.box-visibility-selector-trigger[\s\S]*?width: 26px/);
   assert.match(css, /\.box-visibility-selector-icon/);
+  assert.match(css, /\.shell \.narada-list-reset\s*\{[^}]*list-style: none;/s);
+  assert.match(css, /\.shell \.event \.event-heading\s*\{/);
+  assert.match(css, /\.shell \.event \.message-markdown\s*\{/);
+  for (const eventDescendant of ['event-heading', 'event-label', 'event-kind', 'event-detail', 'event-summary', 'message-content', 'message-part', 'message-plain', 'message-markdown']) {
+    assert.doesNotMatch(css, new RegExp('^\\s*\\.' + eventDescendant + '\\s*\\{', 'm'), eventDescendant);
+  }
   assert.doesNotMatch(status, /narada\.agent-web-ui\.status-boxes\.v1/);
   assert.match(status, /projection-publish-stack/);
   assert.match(status, /projection-status-label/);
@@ -806,6 +868,10 @@ test('Vue layout smoke covers shell, status, event list, composer, and event ton
   for (const cssSelector of ['.shell', '.status', '.status select', '.events', '.events-scroll', '.composer', '.event-tone-assistant', '.event-tone-error']) {
     assert.equal(css.includes(cssSelector), true, cssSelector);
   }
+  for (const broadSelector of ['status', 'label', 'events', 'composer']) {
+    assert.doesNotMatch(css, new RegExp('^\\s*\\.' + broadSelector + '\\s*\\{', 'm'), broadSelector);
+    assert.match(css, new RegExp('\\.shell \\.' + broadSelector + '(?:\\s|[,{])'), broadSelector);
+  }
 });
 
 test('agent-web-ui CSS enforces theme-token discipline for new color declarations', async () => {
@@ -813,6 +879,9 @@ test('agent-web-ui CSS enforces theme-token discipline for new color declaration
   const root = postcss.parse(css, { from: 'agent-web-ui.css' });
   const violations = rawColorDeclarationViolations(root);
   assert.deepEqual(violations, []);
+
+  const missingCustomProperties = rawCustomPropertyReferenceViolations(root);
+  assert.deepEqual(missingCustomProperties, []);
 
   const lightTokens = rawColorTokensInRoot(root, { dark: false });
   const darkTokens = rawColorTokensInRoot(root, { dark: true });
@@ -882,7 +951,6 @@ test('Vue message content renderer has typed parts, inline code, and lazy Mermai
   const renderedFrame = await readFile(new URL('../src/app/components/content/RenderedPartFrame.vue', import.meta.url), 'utf8');
   const parser = await readFile(new URL('../src/app/lib/messageContent.ts', import.meta.url), 'utf8');
   const css = await readAgentWebUiCss();
-  const readme = await readFile(new URL('../README.md', import.meta.url), 'utf8');
 
   assert.match(eventRow, /<MessageContent :content="row\.summary"/);
   assert.match(eventRow, /event-view-\$\{props\.verbosity\}/);
@@ -947,9 +1015,6 @@ test('Vue message content renderer has typed parts, inline code, and lazy Mermai
   for (const cssSelector of ['.message-content', '.inline-code-token', '.code-block-part', '.json-block-part', '.rendered-part-frame', '.rendered-part-tab', '.mermaid-diagram']) {
     assert.equal(css.includes(cssSelector), true, cssSelector);
   }
-  assert.match(readme, /intent_ref/);
-  assert.match(readme, /intent:/);
-  assert.match(readme, /narada-intent:/);
 });
 
 test('package server injects operator-capable config and proxies health with GET only', async () => {
@@ -981,8 +1046,9 @@ test('package server injects operator-capable config and proxies health with GET
     assert.match(index, /"artifactBasePath":"\/api\/nars"/);
     assert.match(index, /"protocolHealthMethod":"session.health"/);
     assert.match(index, /"operatorInput":true/);
-    assert.match(index, /"conversation.send"/);
-    assert.match(index, /"session.command.execute"/);
+    assert.match(index, /"session.submit"/);
+    assert.doesNotMatch(index, /"conversation.send"/);
+    assert.doesNotMatch(index, /"session.command.execute"/);
     assert.doesNotMatch(index, /"carrier.command.execute"/);
 
     const faviconResponse = await fetch(new URL('/narada-favicon.svg', web.url));
@@ -1034,18 +1100,24 @@ test('served web UI config attaches to live NARS health and event projections', 
       assert.equal(config.artifactBasePath, '/api/nars');
       assert.equal(config.protocolHealthMethod, 'session.health');
       assert.equal(config.operatorInput, true);
-      assert.equal(config.admittedMethods.includes('conversation.send'), true);
-      assert.equal(config.admittedMethods.includes('conversation.interrupt'), true);
+      assert.equal(config.admittedMethods.includes('session.submit'), true);
+      assert.equal(config.admittedMethods.includes('conversation.send'), false);
+      assert.deepEqual(config.admittedMethods, [...AGENT_WEB_UI_NARS_METHOD_LIST]);
 
       const health = await fetch(new URL('/api/health', web.url)).then((response) => response.json());
+      assert.equal(health.schema, 'narada.nars.health.v1');
       assert.equal(health.status, 'healthy');
       assert.equal(health.session_id, 'session_web_ui_config_real_nars');
       assert.equal(health.intelligence.model, 'gpt-5.5');
+      assert.equal(health.operational_posture, 'healthy');
+      assert.equal(health.mcp_operational_state, 'healthy');
       assert.equal(health.mcp_tools, undefined);
       assert.equal(health.mcp?.tools, undefined);
       const fullHealth = await fetch(new URL('/api/health?detail=full', web.url)).then((response) => response.json());
-      assert.equal(fullHealth.mcp_tools.some((tool) => tool.server_name === 'narada-fixture' && tool.tool_name === 'fixture_read'), true);
-      assert.equal(fullHealth.mcp.tools.some((tool) => tool.server_name === 'narada-fixture' && tool.tool_name === 'fixture_read'), true);
+      assert.equal(fullHealth.schema, 'narada.nars.health.v1');
+      assert.equal(fullHealth.status, 'healthy');
+      assert.equal(fullHealth.mcp_tools, undefined);
+      assert.equal(fullHealth.mcp?.tools, undefined);
 
       assert.equal((await client.nextJson()).event, 'websocket_connected');
       client.sendJson({ id: 'events-1', method: 'session.events.subscribe', params: { include_replay: true, max_replay: 10 } });
@@ -1058,7 +1130,7 @@ test('served web UI config attaches to live NARS health and event projections', 
       }
       assert.equal(replayedSessionStarted?.payload?.event, 'session_started');
 
-      client.sendJson({ id: 'input-1', method: 'conversation.send', params: { message: 'run startup sequence', source: 'agent-web-ui' } });
+      client.sendJson({ id: 'input-1', method: 'session.submit', params: { content: 'run startup sequence', source: 'manual_operator' } });
       await waitFor(() => providerCalls.length === 1, { timeoutMs: 2000 });
       assert.equal(providerCalls[0].messages.some((message) => message.role === 'user' && /run startup sequence/.test(message.content)), true);
       await waitFor(() => events.some((event) => event.event === 'assistant_message' && event.content === 'Real NARS fixture response.'), { timeoutMs: 2000 });
@@ -1086,7 +1158,7 @@ test('CLI args and client config keep runtime authority outside the web package'
     protocolHealthMethod: 'session.health',
     maxReplay: 100,
     operatorInput: true,
-    admittedMethods: ['session.events.subscribe', 'session.events.read', 'session.artifacts.register', 'session.artifacts.read', 'session.artifacts.summary', 'session.surface.affordances', 'session.affordance.action.request', 'session.affordance.action.confirm', 'session.affordance.action.cancel', 'session.sop.summary', 'session.inbox.summary', 'session.delegation.summary', 'session.git.summary', 'session.surface_feedback.summary', 'session.mailbox.summary', 'session.scheduler.summary', 'session.task_lifecycle.summary', 'conversation.send', 'conversation.enqueue', 'session.status', 'session.health', 'session.recovery', 'session.operations', 'observers.status', 'observer.mute', 'observer.unmute', 'session.command.execute', 'conversation.interrupt', 'conversation.steer', 'session.close'],
+    admittedMethods: [...AGENT_WEB_UI_NARS_METHOD_LIST],
   });
 });
 

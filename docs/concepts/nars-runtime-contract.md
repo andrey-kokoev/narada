@@ -96,41 +96,19 @@ Current session-core control methods:
 
 | Method | Purpose |
 | --- | --- |
-| `session.submit` or a request with `content` | Submit one serialized operator/automation turn. |
+| `session.submit` | Submit one serialized operator/automation turn. The canonical payload field is `params.content`. |
 | `session.health` | Return the stable runtime health probe shape used by local health transports. |
 | `session.recovery` | Inspect the current recovery recommendation and recovery handoffs. |
-| `session.close` | Close or hand off a session with terminal evidence. |
+| `session.cancel` | Request cancellation of active work. |
+| `session.close` | Close a session with terminal evidence. |
 
-All other historical `conversation.*`, `session.*`, observer, authority-transition, and affordance methods belong to the legacy compatibility protocol and are rejected by the default session-core runtime. Event streaming and artifact HTTP endpoints are transport projections, not JSONL control methods.
+The local event-stream transport also admits `session.events.subscribe` and `session.events.read` for replay and live delivery. They are transport controls, not JSONL turn controls.
 
-`session.sync` is a local session-evidence synchronization primitive, not remote authority transfer. Relative targets resolve under the bound Site root; targets outside the Site root are refused. `upload` copies from the current session directory to the target, `download` copies from the target into the current session directory, and `bidirectional` performs both bounded passes. `delete` only removes extra files from the target during upload; it does not delete local session files during bidirectional/download recovery.
+Historical `conversation.*`, `session.status`, `session.operations`, observer, authority-transition, affordance, and panel-summary methods are not part of the local session-core contract. The default runtime rejects them. `@narada2/carrier-protocol` and the Cloudflare projection may retain that vocabulary at an explicitly named adapter boundary; such an adapter must translate to the narrow methods above before crossing into local session-core.
 
-The current runtime also exposes authority-transition and observer-control methods through `@narada2/carrier-protocol`: `authority.source.status`, `authority.source.drain`, `authority.source.seal`, `authority.target.status`, `authority.target.prepare`, `authority.target.activate`, `observers.status`, `observer.mute`, and `observer.unmute`.
+Human terminal input is a projection of this contract. Ordinary lines become `session.submit` with `content`; active-turn queueing uses `delivery_mode: "admit_after_active_turn"` and `source: "operator_steering"`. `/status` maps to `session.health`, `/recovery` to `session.recovery`, `/interrupt` to `session.cancel`, `/events` to event subscription, and `/exit` to `session.close`. Unsupported historical commands remain local unavailable messages and are not sent.
 
-Human terminal input is not raw JSONL. A terminal attached to NARS is a projection of the protocol: ordinary lines become `conversation.send` when idle and `conversation.enqueue` during active turns, slash commands become protocol frames such as `session.command.execute` or direct session methods, and status/help affordances render from runtime state.
-
-### Affordance Action Requests
-
-Browser and terminal projections may render MCP surface affordances, but they must not call MCP tools directly. A projected control requests action through NARS:
-
-```json
-{
-  "id": "agent-web-ui-affordance-action-20260706T000000Z",
-  "method": "session.affordance.action.request",
-  "params": {
-    "surface_id": "fixture.surface",
-    "action_id": "refresh",
-    "args": {},
-    "client_correlation_id": "optional-ui-ref"
-  }
-}
-```
-
-The runtime resolves the current `session.surface_affordances` projection, proves the surface and action are still live, and then applies admission checks before invoking any MCP tool. The affordance declaration is not an authority grant.
-
-The first implemented slice executes only generic affordance actions whose target is a MCP tool and whose declaration is `read_only: true` or `idempotent: true`. Mutating, destructive, high-danger, confirmation-required, disabled, unknown, or non-tool actions return `session_affordance_action_refused` or `session_affordance_confirmation_required`; they must not call the tool. Admitted calls still execute through the MCP fabric authority, not through browser code, prompt text, or carrier-specific shortcuts.
-
-Relevant event names are `session_affordance_action_requested`, `session_affordance_action_result`, `session_affordance_action_refused`, and `session_affordance_confirmation_required`.
+MCP surface affordances, provider-specific panels, authority transitions, observer controls, and session synchronization are deferred adapter capabilities. They must not be advertised as local session-core controls until an owning runtime handler and boundary tests exist.
 
 ## Client And Runtime Split
 
@@ -327,55 +305,64 @@ Tool events must preserve the distinction between request, admission/refusal, ex
 
 ## Runtime Health Contract
 
-NARS health is owned by `@narada2/agent-runtime-server`. Its authoritative method is `session.health`; HTTP `GET /health`, terminal `/status` summaries, and launcher discovery fields are projections of the same runtime health builder. Site/control-plane health endpoints remain separate surfaces with separate owners.
+NARS health is owned by `@narada2/agent-runtime-server`. Its authoritative method is `session.health`; HTTP `GET /health`, terminal summaries, and launcher discovery fields are projections of the same public runtime-health builder. Site/control-plane health endpoints remain separate surfaces with separate owners.
 
-`session.health` is the small local probe for runtime liveness and readiness. Richer durable diagnostics are exposed by `session.recovery`; historical `session.status` is not part of the default session-core control contract. `session.health` also does not replace `heartbeat.json`: the heartbeat file is durable on-disk evidence for crash/recovery observation, while `session.health` is a request/response projection of current runtime state.
+`session.health` is the small local probe for runtime liveness and readiness. The session-core supervisor owns the underlying lifecycle, queue, activity, and operational-posture fields; the runtime server projects those fields into the public NARS health schema. Richer durable diagnostics are exposed by `session.recovery`. `session.health` does not replace `heartbeat.json`: heartbeat is durable on-disk evidence for crash/recovery observation.
 
-The response schema is `narada.nars.health.v1`:
+The public response schema is `narada.nars.health.v1`:
 
 ```json
 {
   "schema": "narada.nars.health.v1",
   "status": "healthy",
-  "generated_at": "2026-06-23T00:00:00.000Z",
-  "agent_id": "sonar.resident",
-  "session_id": "carrier_...",
-  "site_root": "D:/code/narada.sonar",
+  "generated_at": "2026-07-10T00:00:00.000Z",
+  "agent_id": "narada.test",
+  "session_id": "session_...",
+  "site_root": "D:/code/narada.test",
   "runtime": "narada-agent-runtime-server",
   "runtime_mode": "server",
-  "started_at": "2026-06-23T00:00:00.000Z",
-  "heartbeat": {
-    "path": "D:/code/narada.sonar/.narada/crew/nars-sessions/carrier_.../heartbeat.json",
-    "last_written_at": "2026-06-23T00:00:00.000Z",
-    "age_ms": 250,
-    "freshness": "fresh"
-  },
+  "health_endpoint": "http://127.0.0.1:0/health",
+  "event_endpoint": "ws://127.0.0.1:0/events",
+  "lifecycle_state": "ready",
+  "operational_posture": "healthy",
+  "request_posture": "clean",
+  "mcp_operational_state": "healthy",
   "mcp": {
     "operational_state": "healthy",
-    "server_count": 15,
+    "server_count": null,
     "startup_failure_count": 0,
     "runtime_fault_count": 0
   },
+  "heartbeat": {
+    "path": "D:/code/narada.test/.narada/crew/nars-sessions/session_.../heartbeat.json",
+    "last_written_at": null,
+    "age_ms": null,
+    "freshness": "missing"
+  },
   "activity": {
-    "last_event_kind": "turn_complete",
-    "last_event_at": "2026-06-23T00:00:00.000Z",
+    "last_event_kind": "session_started",
+    "last_event_at": "2026-07-10T00:00:00.000Z",
     "active_turn_state": null,
-    "last_terminal_state": "completed"
+    "last_terminal_state": null
   },
   "posture": {
     "request_posture": "clean",
     "operational_posture": "healthy"
   },
-  "recommended_action": "review_session_summary",
-  "recommended_command": "narada-agent-cli --identity sonar.resident --session carrier_... --session-read"
+  "operator_input_queue": {
+    "running": false,
+    "pending_count": 0
+  }
 }
 ```
 
-Allowed `status` values are `starting`, `healthy`, `degraded`, `unhealthy`, and `closing`. `healthy` means the runtime accepted its binding, the session event loop is alive, MCP posture is usable, and heartbeat freshness is within the configured local threshold. `degraded` means the runtime can still answer and may accept some operations, but one or more posture components require attention, such as MCP startup/runtime faults or stale heartbeat evidence. `unhealthy` means the runtime cannot safely accept meaningful work, has lost required binding, or has a runtime-level fault that should drive recovery. `starting` and `closing` are bounded transition states.
+Allowed `status` values are `starting`, `healthy`, `degraded`, `unhealthy`, and `closing`. `healthy` means the runtime accepted its binding, the session event loop is alive, and the reported operational posture is healthy. `degraded` means the runtime can still answer but one or more posture components require attention. `unhealthy` is reserved for a failed health probe. `starting` and `closing` are bounded transition states.
 
-Heartbeat freshness is reported as `fresh`, `stale`, `missing`, or `unknown`. Implementations should compute it from one shared runtime helper so `session.health`, HTTP `/health`, and terminal/status projection agree. Freshness thresholds are local runtime policy, not Site law; if no threshold is configured, the response must report `unknown` rather than inventing authority.
+The public health response keeps session-core fields flat for compatibility with event consumers and also provides the nested `mcp`, `activity`, and `posture` summaries. The health projection does not expose MCP tool schemas; capability inventory belongs to the capability gateway and its explicit evidence/events.
 
-HTTP `GET /health` is a local-only projection of `session.health`. It should bind to loopback by default and must not expose provider credentials, raw MCP secrets, global Codex configuration, or external management operations. A non-2xx status is reserved for `unhealthy` runtime conditions defined above; `degraded` may still return 200 with a degraded body unless a caller explicitly requests readiness semantics.
+Heartbeat freshness is reported as `missing` when no heartbeat file exists and `unknown` when a file exists but no local freshness threshold is configured. Freshness thresholds are local runtime policy, not Site law.
+
+HTTP `GET /health` is a local-only projection of `session.health`. It binds to loopback by default and must not expose provider credentials, raw MCP secrets, global Codex configuration, or external management operations. A non-2xx status is reserved for `unhealthy` runtime conditions; `degraded` returns 200 unless a caller explicitly requests readiness semantics.
 
 NARS does not define a separate HTTP `GET /ready` endpoint yet. Readiness is a field in `session.health`/`/health` until a concrete supervisor or load-balancer contract needs a distinct endpoint.
 

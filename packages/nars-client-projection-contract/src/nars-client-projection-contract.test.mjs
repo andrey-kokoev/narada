@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   AGENT_WEB_UI_COMMANDS,
+  AGENT_WEB_UI_CLOUDFLARE_METHOD_LIST,
   AGENT_WEB_UI_NARS_METHOD_LIST,
   AGENT_WEB_UI_SNIPPET_ACTIONS,
   AGENT_WEB_UI_SNIPPET_USAGE,
@@ -50,7 +51,11 @@ import {
   findAgentWebUiCommand,
   findAgentWebUiSnippetAction,
   isAgentWebUiNarsMethod,
+  isAgentWebUiCloudflareProtocolFrame,
   isAgentWebUiProtocolFrame,
+  isNarsSessionCoreMethod,
+  isNarsSessionCoreProtocolFrame,
+  translateAgentWebUiFrameForCloudflare,
   isAgentWebUiSnippetManagementAction,
   isAgentWebUiSnippetSelectionAction,
   parseAgentWebUiSnippetCommand,
@@ -61,27 +66,24 @@ import {
 
 test('NARS client projection contract owns attach commands and web UI capabilities', () => {
   assert.equal(NARS_COMMAND_METHOD, 'session.command.execute');
-  assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('conversation.send'), true);
-  assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('conversation.enqueue'), true);
-  assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('conversation.interrupt'), true);
-  assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('conversation.steer'), true);
-  assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('session.events.read'), true);
-  assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('session.artifacts.summary'), true);
-  assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('session.surface.affordances'), true);
-  assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes(NARS_AFFORDANCE_ACTION_REQUEST_METHOD), true);
-  assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes(NARS_AFFORDANCE_ACTION_CONFIRM_METHOD), true);
-  assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes(NARS_AFFORDANCE_ACTION_CANCEL_METHOD), true);
-  assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('session.sop.summary'), true);
-  assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('session.inbox.summary'), true);
-  assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('session.delegation.summary'), true);
-  assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('session.git.summary'), true);
-  assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('session.surface_feedback.summary'), true);
-  assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('session.mailbox.summary'), true);
-  assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('session.scheduler.summary'), true);
-  assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('session.task_lifecycle.summary'), true);
+  assert.deepEqual(AGENT_WEB_UI_NARS_METHOD_LIST, [
+    'session.events.subscribe',
+    'session.events.read',
+    'session.submit',
+    'session.health',
+    'session.recovery',
+    'session.cancel',
+    'session.close',
+  ]);
+  assert.equal(AGENT_WEB_UI_CLOUDFLARE_METHOD_LIST.includes('conversation.send'), true);
+  assert.equal(AGENT_WEB_UI_CLOUDFLARE_METHOD_LIST.includes('session.surface.affordances'), true);
+  assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes(NARS_AFFORDANCE_ACTION_REQUEST_METHOD), false);
+  assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('session.sop.summary'), false);
+  assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('conversation.steer'), false);
   assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('command.execute'), false);
   assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('carrier.command.execute'), false);
   assert.equal(NARS_CLIENT_PROJECTION_REGISTRY.clients.agent_web_ui.admitted_methods, AGENT_WEB_UI_NARS_METHOD_LIST);
+  assert.equal(NARS_CLIENT_PROJECTION_REGISTRY.clients.agent_web_ui.adapter_methods, AGENT_WEB_UI_CLOUDFLARE_METHOD_LIST);
   assert.equal(NARS_CLIENT_PROJECTION_REGISTRY.clients.agent_tui.attach_template, 'agent-tui --attach <event_endpoint>');
   assert.deepEqual(buildNarsAttachCommands({ eventEndpoint: 'ws://127.0.0.1/events', healthEndpoint: 'http://127.0.0.1/health' }), {
     registry_schema: 'narada.nars.client_projection_registry.v1',
@@ -89,9 +91,9 @@ test('NARS client projection contract owns attach commands and web UI capabiliti
     agent_tui: 'agent-tui --attach ws://127.0.0.1/events',
     agent_web_ui: 'narada-agent-web-ui --event-endpoint ws://127.0.0.1/events --health-endpoint http://127.0.0.1/health',
     protocol: '{"id":"events-1","method":"session.events.subscribe","params":{"include_replay":true,"max_replay":20}}',
-    operator_input_protocol: '{"id":"input-1","method":"conversation.send","params":{"message":"<operator message>","source":"agent-web-ui"}}',
-    queued_operator_input_protocol: '{"id":"input-2","method":"conversation.enqueue","params":{"message":"<operator message>","source":"agent-web-ui"}}',
-    slash_command_protocol: '{"id":"command-1","method":"session.command.execute","params":{"command":"/status","value":""}}',
+    operator_input_protocol: '{"id":"input-1","method":"session.submit","params":{"content":"<operator message>","source":"manual_operator"}}',
+    queued_operator_input_protocol: '{"id":"input-2","method":"session.submit","params":{"content":"<operator message>","source":"operator_steering","delivery_mode":"admit_after_active_turn"}}',
+    slash_command_protocol: '{"id":"command-1","method":"session.health","params":{}}',
   });
   assert.equal(NARS_CLIENT_PROJECTION_REGISTRY.default_verbosity, 'conversation');
   assert.equal(NARS_CLIENT_PROJECTION_DEFAULT_VERBOSITY, 'conversation');
@@ -367,38 +369,38 @@ test('NARS client projection contract owns web UI operator input projection', ()
   assert.equal(buildAgentWebUiAffordanceActionRequestFrame({ surfaceId: '', actionId: 'refresh' }), null);
   assert.deepEqual(buildAgentWebUiConversationSendFrame('run startup sequence', { id: 'input-1' }), {
     id: 'input-1',
-    method: 'conversation.send',
-    params: { message: 'run startup sequence', source: 'agent-web-ui' },
+    method: 'session.submit',
+    params: { content: 'run startup sequence', source: 'manual_operator' },
   });
   assert.equal(buildAgentWebUiConversationSendFrame('   '), null);
   assert.deepEqual(buildAgentWebUiConversationSteerFrame('change course', { id: 'steer-1', activeTurnId: 'turn_1' }), {
     id: 'steer-1',
-    method: 'conversation.steer',
-    params: { message: 'change course', source: 'agent-web-ui', active_turn_id: 'turn_1' },
+    method: 'session.submit',
+    params: { content: 'change course', source: 'operator_steering', delivery_mode: 'admit_after_active_turn', active_turn_id: 'turn_1' },
   });
   assert.deepEqual(buildAgentWebUiConversationEnqueueFrame('run after this', { id: 'enqueue-1', activeTurnId: 'turn_2' }), {
     id: 'enqueue-1',
-    method: 'conversation.enqueue',
-    params: { message: 'run after this', source: 'agent-web-ui', active_turn_id: 'turn_2' },
+    method: 'session.submit',
+    params: { content: 'run after this', source: 'operator_steering', delivery_mode: 'admit_after_active_turn', active_turn_id: 'turn_2' },
   });
   assert.deepEqual(buildAgentWebUiOperatorInputAction('change course', { id: 'steer-2', activeTurn: true, activeTurnId: 'turn_2' }).frame, {
     id: 'steer-2',
-    method: 'conversation.steer',
-    params: { message: 'change course', source: 'agent-web-ui', active_turn_id: 'turn_2' },
+    method: 'session.submit',
+    params: { content: 'change course', source: 'operator_steering', delivery_mode: 'admit_after_active_turn', active_turn_id: 'turn_2' },
   });
   assert.deepEqual(buildAgentWebUiOperatorInputAction('run after this', { id: 'enqueue-2', activeTurn: true, activeTurnId: 'turn_2', deliveryMode: 'enqueue' }).frame, {
     id: 'enqueue-2',
-    method: 'conversation.enqueue',
-    params: { message: 'run after this', source: 'agent-web-ui', active_turn_id: 'turn_2' },
+    method: 'session.submit',
+    params: { content: 'run after this', source: 'operator_steering', delivery_mode: 'admit_after_active_turn', active_turn_id: 'turn_2' },
   });
   assert.equal(buildAgentWebUiOperatorInputAction('/help').kind, 'local_help');
   assert.equal(buildAgentWebUiOperatorInputAction('/clear').kind, 'local_clear');
-  assert.equal(buildAgentWebUiOperatorInputAction('/status', { id: 'status-1' }).frame.method, 'session.status');
+  assert.equal(buildAgentWebUiOperatorInputAction('/status', { id: 'status-1' }).frame.method, 'session.health');
   assert.equal(buildAgentWebUiOperatorInputAction('/health', { id: 'health-1' }).frame.method, 'session.health');
   assert.equal(buildAgentWebUiOperatorInputAction('/events', { id: 'events-2' }).frame.method, 'session.events.subscribe');
   assert.equal(buildAgentWebUiOperatorInputAction('/recovery', { id: 'recovery-1' }).frame.method, 'session.recovery');
   assert.equal(buildAgentWebUiOperatorInputAction('/ops', { id: 'ops-1' }).frame.method, 'session.operations');
-  assert.equal(buildAgentWebUiOperatorInputAction('/interrupt', { id: 'interrupt-1' }).frame.method, 'conversation.interrupt');
+  assert.equal(buildAgentWebUiOperatorInputAction('/interrupt', { id: 'interrupt-1' }).frame.method, 'session.cancel');
   assert.equal(buildAgentWebUiOperatorInputAction('/tools mcp', { id: 'tools-1' }).frame.method, 'session.command.execute');
   assert.equal(buildAgentWebUiOperatorInputAction('/tool', { id: 'tool-1' }).message, 'Unknown command: /tool. Type /help.');
   assert.equal(buildAgentWebUiOperatorInputAction('/tool-outputs', { id: 'tool-output-1' }).message, 'Unknown command: /tool-outputs. Type /help.');
@@ -409,14 +411,34 @@ test('NARS client projection contract owns web UI operator input projection', ()
   assert.equal(buildAgentWebUiOperatorInputAction('/snippets launch').kind, 'snippet_panel_command');
   assert.equal(buildAgentWebUiOperatorInputAction('/quit', { id: 'quit-1' }).message, 'Unknown command: /quit. Type /help.');
   assert.equal(buildAgentWebUiOperatorInputAction('/exit', { id: 'exit-1' }).frame.method, 'session.close');
-  assert.equal(buildAgentWebUiOperatorInputAction('exit', { id: 'exit-2' }).frame.method, 'conversation.send');
+  assert.equal(buildAgentWebUiOperatorInputAction('exit', { id: 'exit-2' }).frame.method, 'session.submit');
   assert.equal(buildAgentWebUiOperatorInputAction('/snippety').message, 'Unknown command: /snippety. Type /help.');
-  assert.equal(isAgentWebUiNarsMethod('session.command.execute'), true);
+  assert.equal(isAgentWebUiNarsMethod('session.command.execute'), false);
   assert.equal(isAgentWebUiNarsMethod('carrier.command.execute'), false);
   assert.equal(isAgentWebUiNarsMethod('command.execute'), false);
   assert.equal(isAgentWebUiProtocolFrame({ id: 'ok', method: 'conversation.send', params: {} }), true);
   assert.equal(isAgentWebUiProtocolFrame({ id: 'read', method: 'session.events.read', params: {} }), true);
   assert.equal(isAgentWebUiProtocolFrame({ id: 'blocked', method: 'session.sync', params: {} }), false);
+  assert.equal(isNarsSessionCoreMethod('session.submit'), true);
+  assert.equal(isNarsSessionCoreMethod('conversation.send'), false);
+  assert.equal(isNarsSessionCoreProtocolFrame({ id: 'local', method: 'session.submit', params: {} }), true);
+  assert.equal(isNarsSessionCoreProtocolFrame({ id: 'legacy', method: 'conversation.send', params: {} }), false);
+  assert.equal(isAgentWebUiCloudflareProtocolFrame({ id: 'adapter', method: 'conversation.send', params: {} }), true);
+  assert.deepEqual(translateAgentWebUiFrameForCloudflare({
+    id: 'input-1',
+    method: 'session.submit',
+    params: { content: 'run after this', source: 'operator_steering', delivery_mode: 'admit_after_active_turn', active_turn_id: 'turn-1' },
+  }), {
+    id: 'input-1',
+    method: 'conversation.enqueue',
+    params: { message: 'run after this', source: 'operator_steering', active_turn_id: 'turn-1' },
+  });
+  assert.deepEqual(translateAgentWebUiFrameForCloudflare({ id: 'health-1', method: 'session.health', params: {} }), {
+    id: 'health-1',
+    method: 'session.health',
+    params: {},
+  });
+  assert.equal(translateAgentWebUiFrameForCloudflare({ id: 'bad', method: 'session.sync', params: {} }), null);
 });
 
 test('Agent Web UI commands are first-class static registry entries', () => {
@@ -435,8 +457,14 @@ test('Agent Web UI commands are first-class static registry entries', () => {
   assert.match(buildAgentWebUiHelpText(), /Conversation control/);
   assert.match(buildAgentWebUiHelpText(), /\/observer mute\|unmute/);
   assert.equal(buildAgentWebUiOperatorInputAction('/json').message, 'Usage: /json <protocol frame JSON>');
-  assert.equal(buildAgentWebUiOperatorInputAction('/json {"id":"status-raw","method":"session.status","params":{}}').frame.method, 'session.status');
-  assert.equal(buildAgentWebUiOperatorInputAction('/json {"id":"bad","method":"bad.method","params":{}}').message, 'JSON frame method is not admitted for agent-web-ui.');
+  assert.equal(buildAgentWebUiOperatorInputAction('/json {"id":"status-raw","method":"session.health","params":{}}').frame.method, 'session.health');
+  assert.equal(buildAgentWebUiOperatorInputAction('/json {"id":"legacy","method":"session.status","params":{}}').message, 'JSON frame method is not admitted by the local session-core contract.');
+  const localCommands = filterAgentWebUiCommands('', { supportsProtocolMethod: isNarsSessionCoreMethod });
+  assert.equal(localCommands.some((command) => command.slash === '/status'), true);
+  assert.equal(localCommands.some((command) => command.slash === '/ops'), false);
+  assert.equal(localCommands.some((command) => command.slash === '/queue'), false);
+  assert.doesNotMatch(buildAgentWebUiHelpText({ supportsProtocolMethod: isNarsSessionCoreMethod }), /\/ops|\/queue|\/observer/);
+  assert.equal(buildAgentWebUiOperatorInputAction('/json {"id":"bad","method":"bad.method","params":{}}').message, 'JSON frame method is not admitted by the local session-core contract.');
   assert.equal(buildAgentWebUiOperatorInputAction('/does-not-exist').message, 'Unknown command: /does-not-exist. Type /help.');
 });
 

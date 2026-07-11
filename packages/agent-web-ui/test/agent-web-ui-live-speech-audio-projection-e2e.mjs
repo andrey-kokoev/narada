@@ -1,17 +1,11 @@
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, mkdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { PassThrough } from 'node:stream';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { spawnTestChild } from '@narada2/process-launch-posture';
-import { resolveNaradaSitePaths } from '@narada2/site-paths';
-import { createEventHub, startHealthProjection, startEventStreamProjection } from '@narada2/agent-runtime-server';
-import { createCarrierRuntimeDependencies } from '../../carrier-runtime/src/runtime-dependencies.mjs';
-import { runCarrierServerMode } from '../../carrier-runtime/src/server-mode.mjs';
-import { waitFor } from '../../carrier-runtime/src/server-mode-test-helpers.mjs';
 import { startAgentWebUiServer } from '../src/server.js';
+import { startSessionCoreRuntime } from './e2e/nars-runtime-fixture.mjs';
 import {
   findHeadlessBrowser,
   openCdpPage,
@@ -105,75 +99,13 @@ test('live speech MCP retained audio projects as a NARS audio artifact in agent-
 });
 
 async function startLiveNarsRuntime() {
-  const siteRoot = mkdtempSync(join(tmpdir(), 'narada-web-ui-live-speech-audio-e2e-'));
-  const sessionId = 'carrier_live_speech_audio_e2e';
-  const sitePaths = resolveNaradaSitePaths({ siteRoot, sessionId });
-  const sessionDir = sitePaths.narsSessionDir;
-  mkdirSync(sessionDir, { recursive: true });
-
-  const runtimeInput = new PassThrough();
-  const runtimeOutput = new PassThrough();
-  const eventHub = createEventHub();
-  const events = [];
-  let outputBuffer = '';
-  const runtimeContext = {
+  return startSessionCoreRuntime({
     identity: 'resident',
-    session: sessionId,
-    siteRoot,
+    sessionId: 'nars_live_speech_audio_e2e',
     siteId: 'narada.live-speech-audio-e2e',
-    operatorSurfaceKind: 'agent-web-ui',
-    sessionPath: join(sessionDir, 'session.jsonl'),
-    eventsPath: join(sessionDir, 'events.jsonl'),
-    intelligenceProvider: 'codex-subscription',
-    providerSettings: { provider: 'codex-subscription', model: 'gpt-5.5', thinking: 'medium', stream: false },
-  };
-  const healthProjection = await startHealthProjection({ childStdin: () => runtimeInput, host: '127.0.0.1', port: 0, runtimeContext: { ...runtimeContext, eventHub } });
-  const eventProjection = await startEventStreamProjection({ childStdin: () => runtimeInput, eventHub, host: '127.0.0.1', port: 0, eventsPath: runtimeContext.eventsPath });
-  const fullRuntimeContext = { ...runtimeContext, healthUrl: healthProjection.url, eventStreamUrl: eventProjection.url };
-  const { dependencies } = createCarrierRuntimeDependencies({ runtimeContext: fullRuntimeContext });
-  runtimeOutput.setEncoding('utf8');
-  runtimeOutput.on('data', (chunk) => {
-    outputBuffer += chunk;
-    const lines = outputBuffer.split(/\r?\n/);
-    outputBuffer = lines.pop() ?? '';
-    for (const line of lines) {
-      if (!line.trim()) continue;
-      const event = JSON.parse(line);
-      events.push(event);
-      healthProjection.observe(event);
-      eventHub.publish(event);
-    }
+    responseContent: 'unused',
+    startWeb: false,
   });
-  const runtimePromise = runCarrierServerMode({
-    input: runtimeInput,
-    output: runtimeOutput,
-    callChatApiFn: async () => ({ choices: [{ message: { role: 'assistant', content: 'unused' } }] }),
-    runtimeContext: fullRuntimeContext,
-    dependencies: { ...dependencies, readMcpPreflightArtifact: () => null },
-  });
-  await Promise.race([
-    waitFor(() => events.some((event) => event.event === 'session_started'), { timeoutMs: 2000 }),
-    runtimePromise.then(() => { throw new Error('runtime_exited_before_session_started'); }),
-  ]);
-  return {
-    siteRoot,
-    sessionId,
-    eventsPath: runtimeContext.eventsPath,
-    events,
-    healthProjection,
-    eventProjection,
-    localWeb: null,
-    async close() {
-      if (this.localWeb?.server) {
-        await new Promise((resolve) => this.localWeb.server.close(resolve));
-      }
-      runtimeInput.end();
-      await Promise.race([runtimePromise, new Promise((resolve) => setTimeout(resolve, 1000))]);
-      healthProjection.server.close();
-      eventProjection.server.close();
-      rmSync(siteRoot, { recursive: true, force: true });
-    },
-  };
 }
 
 async function callLiveSpeechMcp({ siteRoot, outputPath, text }) {
