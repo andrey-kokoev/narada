@@ -49,6 +49,7 @@ export function resolveAttachConfig(search = '', injectedConfig = {}) {
     artifactBasePath: remoteConfig?.artifact_base_path ?? value('artifact_base_path', 'artifactBasePath') ?? (healthEndpoint ? '/api/nars' : null),
     artifactTransport: cloudflareAuthorityConfig ? 'cloudflare-authority' : cloudflareConfig ? 'cloudflare-projection' : (value('artifact_transport', 'artifactTransport') ?? 'local-nars-proxy'),
     projectionControl: cloudflareConfig ? null : (injectedConfig.projectionControl ?? null),
+    ...(injectedConfig.onboarding?.mode === 'user-site' ? { onboarding: { mode: 'user-site' } } : {}),
     authorityTransition: normalizeAuthorityTransition(injectedConfig.authorityTransition ?? injectedConfig.authority_transition ?? null),
     protocolHealthMethod: value('protocol_health_method', 'protocolHealthMethod') ?? 'session.health',
     maxReplay: Number.parseInt(value('max_replay', 'maxReplay') ?? '100', 10) || 100,

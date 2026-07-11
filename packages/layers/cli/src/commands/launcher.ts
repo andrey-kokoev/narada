@@ -372,6 +372,7 @@ export interface WorkspaceLaunchPlanOptions {
   configPath?: string[];
   registryPath?: string;
   operatorSurface?: string;
+  onboarding?: boolean;
   runtime?: string;
   authority?: string;
   intelligenceProvider?: string;
@@ -866,6 +867,7 @@ export interface WorkspaceLaunchAgentPlan extends WorkspaceLaunchRecord {
   launch_carrier: string;
   launch_runtime: string;
   launch_carriers: string[];
+  onboarding_mode: 'user-site' | null;
   launch_session_id: string | null;
   process_ownership: Record<string, unknown> | null;
   intelligence_provider: string | null;
@@ -3673,6 +3675,7 @@ function buildAgentPlan(record: WorkspaceLaunchRecord, options: WorkspaceLaunchP
   const operatorSurfaceKind = carrierRuntimeSelection.operator_surface_kind;
   const launchRuntime = carrierRuntimeSelection.runtime_substrate_kind;
   const runtimeHostKind = carrierRuntimeSelection.runtime_host_kind;
+  const onboarding = options.onboarding === true;
   const enableNativeShell = options.enableNativeShell === true || record.enable_native_shell;
   const mcpScope = normalizeMcpScope(options.mcpScope ?? record.mcp_scope ?? undefined);
   const authority = normalizeRuntimeAuthority(options.authority ?? record.authority ?? undefined);
@@ -3741,13 +3744,13 @@ function buildAgentPlan(record: WorkspaceLaunchRecord, options: WorkspaceLaunchP
   ];
   const wtArgs = [...base];
   if (launchCarrier === 'agent-web-ui') {
-    wtArgs.push(';', ...agentWebUiAttachWtArgs(record, naradaProper, cloudflareApiBaseUrl, launchBindingPath));
+    wtArgs.push(';', ...agentWebUiAttachWtArgs(record, naradaProper, cloudflareApiBaseUrl, launchBindingPath, onboarding));
   }
   for (const extraCarrier of launchCarriers.filter((carrier) => carrier !== launchCarrier)) {
     if (extraCarrier !== 'agent-web-ui') {
       throw new Error(`unsupported_multi_carrier_projection: ${extraCarrier}`);
     }
-    wtArgs.push(';', ...agentWebUiAttachWtArgs(record, naradaProper, cloudflareApiBaseUrl, launchBindingPath));
+    wtArgs.push(';', ...agentWebUiAttachWtArgs(record, naradaProper, cloudflareApiBaseUrl, launchBindingPath, onboarding));
   }
 
   const smokeCommand = [
@@ -3783,6 +3786,7 @@ function buildAgentPlan(record: WorkspaceLaunchRecord, options: WorkspaceLaunchP
     launch_carrier: launchCarrier,
     launch_runtime: launchRuntime,
     launch_carriers: launchCarriers,
+    onboarding_mode: onboarding ? 'user-site' : null,
     launch_session_id: launchSessionId,
     process_ownership: processOwnership as Record<string, unknown> | null,
     legacy_carrier_compatibility: legacyCarrierCompatibility(),
@@ -3841,7 +3845,7 @@ function workspaceLaunchQualifiedAgentId(record: WorkspaceLaunchRecord): string 
   return record.agent.includes('.') || !siteId ? record.agent : `${siteId}.${localAgentId}`;
 }
 
-function agentWebUiAttachWtArgs(record: WorkspaceLaunchRecord, naradaProper: string, cloudflareApiBaseUrl: string | null, launchBindingPath: string | null): string[] {
+function agentWebUiAttachWtArgs(record: WorkspaceLaunchRecord, naradaProper: string, cloudflareApiBaseUrl: string | null, launchBindingPath: string | null, onboarding: boolean): string[] {
   const agentDisplay = workspaceLaunchQualifiedAgentId(record);
   const attachCommand = [
     'pnpm',
@@ -3855,6 +3859,7 @@ function agentWebUiAttachWtArgs(record: WorkspaceLaunchRecord, naradaProper: str
     '--wait-for-session-ms', '60000',
     '--open',
   ];
+  if (onboarding) attachCommand.push('--onboarding');
   if (cloudflareApiBaseUrl) attachCommand.push('--cloudflare-api-base-url', cloudflareApiBaseUrl);
   const prelude = `Write-Host ${quotePowerShellArgument(`agent-web-ui: waiting for ${agentDisplay} launch binding, then starting browser projection`)}`;
   return [

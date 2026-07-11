@@ -24,7 +24,7 @@ const BROWSER_IMPORT_REWRITES = new Map([
 ]);
 
 export function parseAgentWebUiArgs(args = []) {
-  const options = { host: '127.0.0.1', port: 0, eventEndpoint: null, healthEndpoint: null };
+  const options = { host: '127.0.0.1', port: 0, eventEndpoint: null, healthEndpoint: null, onboarding: false };
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
     if (arg === '--host') {
@@ -45,6 +45,10 @@ export function parseAgentWebUiArgs(args = []) {
     if (arg === '--health-endpoint') {
       options.healthEndpoint = args[index + 1] ?? null;
       index += 1;
+      continue;
+    }
+    if (arg === '--onboarding') {
+      options.onboarding = true;
       continue;
     }
     if (arg === '--cloudflare-projection-id' || arg === '--projection-id') {
@@ -213,6 +217,10 @@ function hasLocalProjectionAuthority(options) {
   return Boolean(options.sessionId && options.siteRoot && options.siteId);
 }
 
+function onboardingConfig(options) {
+  return options.onboarding === true ? { onboarding: { mode: 'user-site' } } : {};
+}
+
 export function buildClientConfig(options) {
   const localAdmittedMethods = options.admittedMethods ?? AGENT_WEB_UI_NARS_METHOD_LIST;
   if (options.cloudflareAuthoritySessionId && options.cloudflareApiBaseUrl) {
@@ -234,6 +242,7 @@ export function buildClientConfig(options) {
       operatorInput: true,
       admittedMethods: [...AGENT_WEB_UI_CLOUDFLARE_METHOD_LIST],
       authorityTransition: options.authorityTransition ?? null,
+      ...onboardingConfig(options),
     };
   }
   if (options.cloudflareProjectionId && options.cloudflareApiBaseUrl) {
@@ -250,6 +259,7 @@ export function buildClientConfig(options) {
       operatorInput: true,
       admittedMethods: [...AGENT_WEB_UI_CLOUDFLARE_METHOD_LIST],
       authorityTransition: options.authorityTransition ?? null,
+      ...onboardingConfig(options),
     };
   }
   return {
@@ -271,6 +281,7 @@ export function buildClientConfig(options) {
     operatorInput: true,
     admittedMethods: [...localAdmittedMethods],
     authorityTransition: options.authorityTransition ?? null,
+    ...onboardingConfig(options),
   };
 }
 

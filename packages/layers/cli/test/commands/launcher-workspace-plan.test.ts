@@ -1314,6 +1314,27 @@ describe('launcher workspace planning', () => {
     expect(commandText).not.toContain("'--wait'");
   });
 
+  it('propagates User Site onboarding mode only to the browser projection', async () => {
+    const registryPath = await tempRegistry();
+    const plan = await workspaceLaunchPlanCommand({
+      registryPath,
+      all: true,
+      site: ['sonar'],
+      role: ['resident'],
+      operatorSurface: 'agent-web-ui',
+      runtime: 'narada-agent-runtime-server',
+      onboarding: true,
+      dryRun: true,
+      format: 'json',
+    }, createMockContext());
+
+    expect(plan.exitCode).toBe(ExitCode.SUCCESS);
+    const result = plan.result as { selected_agents: Array<{ onboarding_mode: string | null; wt_args: string[] }> };
+    const agent = result.selected_agents[0];
+    expect(agent.onboarding_mode).toBe('user-site');
+    expect(agent.wt_args.join(' ')).toContain("'--onboarding'");
+  });
+
   it('classifies runtime observations as waiting, healthy, stale, failed, unowned, or ambiguous', async () => {
     const records = [
       {

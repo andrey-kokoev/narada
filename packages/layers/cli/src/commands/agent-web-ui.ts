@@ -22,6 +22,7 @@ export interface AgentWebUiAttachOptions {
   format?: CliFormat;
   launchRegistryPath?: string;
   open?: boolean;
+  onboarding?: boolean;
   cloudflareApiBaseUrl?: string;
 }
 
@@ -451,6 +452,7 @@ export interface AgentWebUiAttachPlan {
   url: string | null;
   command: string;
   authority_transition: AuthorityTransitionSnapshot;
+  onboarding_mode: 'user-site' | null;
   operator_projection_open_request?: Record<string, unknown>;
 }
 
@@ -458,7 +460,7 @@ export async function agentWebUiAttachCommand(
   options: AgentWebUiAttachOptions,
   context: CommandContext,
   deps: {
-    startAgentWebUiServer?: (options: { host: string; port: number; eventEndpoint: string; healthEndpoint: string | null; sessionId: string; siteRoot: string | null; siteId: string | null; agentId: string | null; authorityTransition?: AuthorityTransitionSnapshot; cloudflareApiBaseUrl: string | null }) => Promise<{ url: string; server?: { close?: () => void } }>;
+    startAgentWebUiServer?: (options: { host: string; port: number; eventEndpoint: string; healthEndpoint: string | null; sessionId: string; siteRoot: string | null; siteId: string | null; agentId: string | null; authorityTransition?: AuthorityTransitionSnapshot; onboarding?: boolean; cloudflareApiBaseUrl: string | null }) => Promise<{ url: string; server?: { close?: () => void } }>;
     openUrl?: (url: string) => Promise<void> | void;
     progress?: ProgressReporter;
   } = {},
@@ -510,6 +512,7 @@ export async function agentWebUiAttachCommand(
       port,
       url: null,
       session: attach.session,
+      onboarding: options.onboarding === true,
     });
     plan.operator_projection_open_request = await buildAgentWebUiOpenRequest({
       targetRef: null,
@@ -546,6 +549,7 @@ export async function agentWebUiAttachCommand(
     siteId: attach.site_id ?? stringField(attach.session, 'site_id') ?? options.site ?? null,
     agentId: options.agent?.trim() || stringField(attach.session, 'agent_id'),
     authorityTransition: authorityTransitionSnapshot(attach.session),
+    onboarding: options.onboarding === true,
     cloudflareApiBaseUrl: options.cloudflareApiBaseUrl?.trim()
       || process.env.NARADA_CLOUDFLARE_NARS_PROJECTION_URL
       || process.env.CLOUDFLARE_NARS_PROJECTION_URL
@@ -561,6 +565,7 @@ export async function agentWebUiAttachCommand(
     port,
     url: started.url,
     session: attach.session,
+    onboarding: options.onboarding === true,
   });
   const shouldOpen = options.open !== false;
   let operatorProjectionOpenRequest: Record<string, unknown> | undefined;
@@ -677,6 +682,7 @@ function buildPlan(args: {
   port: number;
   url: string | null;
   session?: Record<string, unknown> | null;
+  onboarding?: boolean;
 }): AgentWebUiAttachPlan {
   return {
     schema: 'narada.agent_web_ui.attach_plan.v1',
@@ -692,12 +698,13 @@ function buildPlan(args: {
     url: args.url,
     command: args.attach.command ?? `narada-agent-web-ui --event-endpoint ${args.eventEndpoint}${args.healthEndpoint ? ` --health-endpoint ${args.healthEndpoint}` : ''}`,
     authority_transition: authorityTransitionSnapshot(args.session),
+    onboarding_mode: args.onboarding ? 'user-site' : null,
   };
 }
 
 function formatPlan(plan: AgentWebUiAttachPlan): string {
   if (plan.status === 'started') {
-    return [
+    const lines = [
       `agent-web-ui: ${plan.url}`,
       `  Session ${plan.session_id}`,
       `  Site    ${plan.site_id ?? plan.site_root ?? 'unknown'}`,
@@ -705,7 +712,9 @@ function formatPlan(plan: AgentWebUiAttachPlan): string {
       `  Health  ${plan.health_endpoint ?? 'not configured'} via local /api/health`,
       `  Authority ${formatAuthorityTransition(plan.authority_transition)}`,
       '  Input   session.submit/session.cancel/session.close; Cloudflare adapters translate as needed',
-    ].join('\n');
+    ];
+    if (plan.onboarding_mode) lines.splice(1, 0, '  Mode    User Site onboarding');
+    return lines.join('\n');
   }
   return [
     'agent-web-ui attach plan',

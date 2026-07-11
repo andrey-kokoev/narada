@@ -114,7 +114,7 @@ Observed result for the onboarding proof: the fixture walks from an absent Site 
 
 ## User-First Windows Onboarding UX
 
-Status: target UX contract with a CLI first slice implemented. The PowerShell handoff, resident-first launch, deterministic defaults, demo fallback, and NARS-backed first-use status projection exist; browser onboarding composition and explicit roster materialization remain surface-specific follow-up work.
+Status: target UX contract with the CLI first slice and User Site browser onboarding composition implemented. The PowerShell handoff, resident-first launch, deterministic defaults, demo fallback, and NARS-backed first-use status projection exist; explicit roster materialization remains a separate governed crossing.
 
 The default path is User Site first. A first-time user should become productive without creating a Project Site, naming a PC Site, registering a remote Site, or understanding the full Site topology.
 
@@ -135,6 +135,13 @@ Pwsh -File "$env:USERPROFILE\Narada\Start-NaradaWorkspace.ps1" -Onboarding
 ```
 
 `-Onboarding` is the thin bootstrap path. Explicit Site, role, operator-surface, runtime, and provider selection remains on the advanced workspace launcher path.
+
+When the onboarding launch selects the browser surface, the launcher passes an explicit User Site onboarding mode into
+Agent Web UI. The browser then shows a compact first-use panel with the resolved workspace, `resident` General assistant,
+intelligence, Browser surface, and Resident runtime authority. Before the first request it offers human-facing starter
+intents; while a turn is active it shows that the assistant is working; after the first response it explains that resident
+is sufficient and offers a prefilled question about optional architect and builder roles. Technical details remain collapsed
+and the role prompt remains an operator decision rather than a roster mutation.
 
 The first screen should ask only:
 

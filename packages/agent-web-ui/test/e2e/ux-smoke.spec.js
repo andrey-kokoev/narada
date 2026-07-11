@@ -123,7 +123,7 @@ function publishScenarioEvents(eventHub, scenario) {
   eventHub.publish({ ...base, event: 'assistant_message', request_id: 'input_normal', content: 'Startup sequence completed.\n\nIdentity hydrated as `ux.agent`. Next action: await operator.' });
 }
 
-async function withScenarioServer(scenario, fn) {
+async function withScenarioServer(scenario, fn, options = {}) {
   if (scenario === 'disconnected') {
     return withHealthServer(async (healthUrl) => {
       const web = await startAgentWebUiServer({ host: '127.0.0.1', port: 0, eventEndpoint: 'ws://127.0.0.1:9/events', healthEndpoint: healthUrl });
@@ -158,7 +158,14 @@ async function withScenarioServer(scenario, fn) {
   const eventHub = createEventHub();
   const eventProjection = await startEventStreamProjection({ childStdin, eventHub, host: '127.0.0.1', port: 0 });
   return withHealthServer(async (healthUrl) => {
-    const web = await startAgentWebUiServer({ host: '127.0.0.1', port: 0, eventEndpoint: eventProjection.url, healthEndpoint: healthUrl, admittedMethods: [...AGENT_WEB_UI_NARS_METHOD_LIST] });
+    const web = await startAgentWebUiServer({
+      host: '127.0.0.1',
+      port: 0,
+      eventEndpoint: eventProjection.url,
+      healthEndpoint: healthUrl,
+      admittedMethods: [...AGENT_WEB_UI_NARS_METHOD_LIST],
+      ...(options.onboarding === true ? { onboarding: true } : {}),
+    });
     try {
       return await fn(web.url, () => publishScenarioEvents(eventHub, scenario), inputFrames, eventHub);
     } finally {
@@ -397,6 +404,35 @@ test('agent-web-ui browser UX matrix has no obvious layout regressions', async (
     for (const viewport of viewports) screenshots.push(await runScenarioViewport({ page, scenario, viewport }));
   }
   assert.equal(screenshots.length, scenarios.length * viewports.length);
+});
+
+test('agent-web-ui User Site onboarding makes the first-use path explicit', async ({ page }) => {
+  await withScenarioServer('normal', async (url, publishEvents) => {
+    await page.setViewportSize({ width: 900, height: 560 });
+    await page.goto(url);
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForSelector('.onboarding-panel[data-phase="ready"]');
+
+    const readyText = await page.locator('.onboarding-panel').textContent();
+    assert.match(readyText ?? '', /Welcome to your General assistant/);
+    assert.match(readyText ?? '', /No project setup is needed/);
+    assert.match(readyText ?? '', /Registry default|Resolved at launch/);
+    assert.match(readyText ?? '', /resident/);
+    assert.match(readyText ?? '', /Surface[\s\S]*Browser/);
+    assert.match(readyText ?? '', /Authority[\s\S]*Resident runtime[\s\S]*NARS/);
+
+    await page.getByRole('button', { name: 'Start with a request' }).click();
+    assert.equal(await page.locator('#operator-input').inputValue(), 'What would you like to work on?');
+    assert.equal(await page.locator('#operator-input').evaluate((element) => document.activeElement === element), true);
+
+    publishEvents();
+    await page.waitForSelector('.onboarding-panel[data-phase="complete"]');
+    const completeText = await page.locator('.onboarding-panel').textContent();
+    assert.match(completeText ?? '', /Resident is enough to begin/);
+    assert.match(completeText ?? '', /architect and builder roles/);
+    await page.getByRole('button', { name: 'Review optional roles' }).click();
+    assert.equal(await page.locator('#operator-input').inputValue(), 'What roles could I add later, and when would architect or builder help?');
+  }, { onboarding: true });
 });
 
 test('agent-web-ui transcript scroll authority preserves operator-controlled history until explicit follow', async ({ page }) => {
