@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   changesetPackageNames,
+  publicationAdmissionCommand,
   validatePublicationReleaseSet,
 } from './publication-release-set.js';
 
@@ -9,6 +10,17 @@ test('extracts package names from standard changeset frontmatter', () => {
   assert.deepEqual(
     changesetPackageNames('---\n"@narada2/cli": minor\n@narada2/ui: patch\n---\nBody\n', 'valid.md'),
     ['@narada2/cli', '@narada2/ui'],
+  );
+});
+
+test('derives the admission lifecycle command from package depth', () => {
+  assert.equal(
+    publicationAdmissionCommand('packages/ui'),
+    'node ../../scripts/assert-publication-admission.js',
+  );
+  assert.equal(
+    publicationAdmissionCommand('packages/layers/cli'),
+    'node ../../../scripts/assert-publication-admission.js',
   );
 });
 

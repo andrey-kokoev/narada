@@ -9,7 +9,10 @@ import { execSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { assertPublicationReleaseSet } from './publication-release-set.js';
+import {
+  assertPublicationReleaseSet,
+  publicationAdmissionCommand,
+} from './publication-release-set.js';
 
 interface CheckResult {
   name: string;
@@ -28,6 +31,7 @@ interface PackageManifest {
   peerDependencies?: Record<string, string>;
   optionalDependencies?: Record<string, string>;
   bundleDependencies?: string[];
+  scripts?: Record<string, string>;
 }
 
 const PACK_ONLY = process.argv.includes('--pack-only');
@@ -163,14 +167,16 @@ function runChecks(): CheckResult[] {
     && publicationManifest.packages.length > 0
     && publicationManifest.packages.every(({ name, path }) => {
       const manifest = packageJson(path);
-      return manifest.name === name && manifest.private !== true;
+      return manifest.name === name
+        && manifest.private !== true
+        && manifest.scripts?.prepublishOnly === publicationAdmissionCommand(path);
     });
   checks.push({
     name: 'Canonical publication manifest is valid',
     passed: publicationManifestValid,
     error: publicationManifestValid
       ? undefined
-      : `Invalid package identity or private package in ${PUBLICATION_MANIFEST_PATH}`,
+      : `Invalid package identity, public posture, or publication admission gate in ${PUBLICATION_MANIFEST_PATH}`,
   });
   log(
     publicationManifestValid

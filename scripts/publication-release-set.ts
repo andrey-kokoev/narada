@@ -1,9 +1,15 @@
 import { readFileSync, readdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 
 interface PublicationManifest {
   schema: string;
   packages: Array<{ name: string; path: string }>;
+}
+
+export function publicationAdmissionCommand(packagePath: string): string {
+  const guardPath = relative(packagePath, 'scripts/assert-publication-admission.js')
+    .replaceAll('\\', '/');
+  return `node ${guardPath}`;
 }
 
 export function changesetPackageNames(source: string, sourceName: string): string[] {
