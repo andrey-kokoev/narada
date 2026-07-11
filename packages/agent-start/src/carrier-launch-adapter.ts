@@ -329,6 +329,7 @@ export function buildCarrierEnvironmentProjection({
   workspaceRoot,
   dbPath,
   siteConfig = null,
+  mcpScope = null,
 }) {
   const shouldStripOpenAIEnvironment = intelligenceProviderEnv.NARADA_INTELLIGENCE_PROVIDER === 'codex-subscription';
   const projectedCarrierEnvironment = shouldStripOpenAIEnvironment
@@ -354,6 +355,7 @@ export function buildCarrierEnvironmentProjection({
     NARADA_WORKSPACE_ROOT: workspaceRoot,
     NARADA_AGENT_CONTEXT_DB: dbPath,
     ...(siteConfig ? { NARADA_SITE_CONFIG: JSON.stringify(siteConfig) } : {}),
+    ...((mcpScope ?? siteConfig?.mcp_scope) ? { NARADA_MCP_SCOPE: mcpScope ?? siteConfig.mcp_scope } : {}),
   };
   return {
     requiredEnvironment: redactEnvironmentForOutput({
@@ -391,6 +393,7 @@ export function buildCarrierSpawnEnvironmentDelta({
   dbPath,
   siteConfig = null,
   codexMcpScope = null,
+  mcpScope = null,
   runtimeProcessCreatorPid = null,
   runtimeProcessRole = 'runtime_server',
 }) {
@@ -413,6 +416,7 @@ export function buildCarrierSpawnEnvironmentDelta({
     workspaceRoot,
     dbPath,
     siteConfig,
+    mcpScope,
     runtimeProcessCreatorPid,
     runtimeProcessRole,
   });
@@ -445,6 +449,7 @@ export function buildCarrierProcessEnvironment({
   workspaceRoot,
   dbPath,
   siteConfig,
+  mcpScope,
   runtimeProcessCreatorPid = null,
   runtimeProcessRole = null,
 }) {
@@ -464,6 +469,7 @@ export function buildCarrierProcessEnvironment({
     NARADA_WORKSPACE_ROOT: workspaceRoot,
     NARADA_AGENT_CONTEXT_DB: dbPath,
     ...(siteConfig ? { NARADA_SITE_CONFIG: JSON.stringify(siteConfig) } : {}),
+    ...((mcpScope ?? siteConfig?.mcp_scope) ? { NARADA_MCP_SCOPE: mcpScope ?? siteConfig.mcp_scope } : {}),
     ...runtimeProcessOwnershipEnvironment({ processEnvironment, runtimeProcessCreatorPid, runtimeProcessRole }),
     ...agentTuiEnvironment,
     ...(codexMcpScope?.status === 'materialized' ? { CODEX_HOME: codexMcpScope.codex_home, CODEX_CONFIG_DIR: codexMcpScope.codex_home } : {}),

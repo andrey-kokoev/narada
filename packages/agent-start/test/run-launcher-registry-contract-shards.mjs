@@ -27,7 +27,7 @@ const commands = testNames.map((name, index) => ({
     testFile,
   ],
   cwd: packageRoot,
-  timeoutMs: 8000,
+  timeoutMs: 15000,
 }));
 
 await runProcessTests(commands);

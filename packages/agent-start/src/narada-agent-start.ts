@@ -1116,6 +1116,7 @@ const { requiredEnvironment, wouldSetEnvironment } = buildCarrierEnvironmentProj
   workspaceRoot,
   dbPath,
   siteConfig,
+  mcpScope,
   runtimeProcessCreatorPid: process.pid,
   runtimeProcessRole: 'runtime_server',
 });
@@ -1138,6 +1139,7 @@ const spawnEnvironmentDelta = buildCarrierSpawnEnvironmentDelta({
   workspaceRoot,
   dbPath,
   siteConfig,
+  mcpScope,
   codexMcpScope,
   runtimeProcessCreatorPid: process.pid,
   runtimeProcessRole: 'runtime_server',
@@ -1305,6 +1307,7 @@ const processEnvironment = buildCarrierProcessEnvironment({
   workspaceRoot,
   dbPath,
   siteConfig,
+  mcpScope,
 });
 const launchEnvironment = intelligenceProviderResolution?.intelligence_provider === 'codex-subscription'
   ? stripCodexSubscriptionOpenAIEnvironment(processEnvironment)

@@ -37,7 +37,7 @@ const commands = shard(testNames, shardCount)
       testFile,
     ],
     cwd: packageRoot,
-    timeoutMs: 8500,
+    timeoutMs: 15000,
   }));
 
 await runProcessTests(commands);

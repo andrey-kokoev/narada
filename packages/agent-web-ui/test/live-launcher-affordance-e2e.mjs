@@ -1,22 +1,60 @@
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
-import { mkdir, rm } from 'node:fs/promises';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { mkdtemp, mkdir, rm } from 'node:fs/promises';
+import { createServer } from 'node:http';
+import { tmpdir } from 'node:os';
 import { basename, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnTestChild } from '@narada2/process-launch-posture';
+
+const { readNarsSessionIndex } = await import('../../nars-session-core/src/session-index.mjs');
 
 const REPO_ROOT = fileURLToPath(new URL('../../..', import.meta.url));
 const DEFAULT_SITE_ROOT = 'D:\\code\\narada.sonar';
 
 const options = parseArgs(process.argv.slice(2));
-const siteRoot = resolve(options.siteRoot ?? DEFAULT_SITE_ROOT);
+const requestedSiteRoot = options.siteRoot ? resolve(options.siteRoot) : null;
+const siteRoot = requestedSiteRoot ?? await createEphemeralSiteRoot();
+const ownsSiteRoot = requestedSiteRoot === null;
 const siteId = options.siteId ?? inferSiteId(siteRoot);
 const agentId = options.agent ?? `${siteId}.live_e2e_${Date.now()}.resident`;
 const timeoutMs = Number(options.timeoutMs ?? 60_000);
 
 if (!existsSync(siteRoot)) {
   throw new Error(`site_root_not_found: ${siteRoot}`);
+}
+
+async function startFixtureProvider() {
+  const requests = [];
+  const server = createServer(async (request, response) => {
+    if (request.method !== 'POST' || request.url !== '/v1/chat/completions') {
+      response.writeHead(404, { 'content-type': 'application/json' });
+      response.end(JSON.stringify({ error: 'not_found' }));
+      return;
+    }
+    const chunks = [];
+    for await (const chunk of request) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    requests.push(JSON.parse(Buffer.concat(chunks).toString('utf8')));
+    response.writeHead(200, { 'content-type': 'application/json' });
+    response.end(JSON.stringify({ choices: [{ message: { role: 'assistant', content: 'Live launcher fixture response' } }] }));
+  });
+  await new Promise((resolvePromise, rejectPromise) => {
+    server.once('error', rejectPromise);
+    server.listen(0, '127.0.0.1', () => {
+      server.off('error', rejectPromise);
+      resolvePromise();
+    });
+  });
+  const address = server.address();
+  if (!address || typeof address === 'string') throw new Error('live_e2e_fixture_provider_address_missing');
+  return {
+    baseUrl: `http://127.0.0.1:${address.port}/`,
+    requests,
+    async close() {
+      await new Promise((resolvePromise) => server.close(() => resolvePromise()));
+    },
+  };
 }
 
 const browserPath = findHeadlessBrowser();
@@ -26,8 +64,10 @@ const startedAt = Date.now();
 let runtimeProcess = null;
 let webUiProcess = null;
 let page = null;
+let provider = null;
 
 try {
+  provider = await startFixtureProvider();
   console.log(`live-e2e: starting real operator-surface runtime for ${agentId}`);
   runtimeProcess = spawnTestChild(process.execPath, [
     join(REPO_ROOT, 'packages', 'layers', 'cli', 'dist', 'main.js'),
@@ -40,10 +80,22 @@ try {
     '--workspace-root', REPO_ROOT,
     '--agent', agentId,
     '--runtime', 'narada-agent-runtime-server',
+    '--intelligence-provider', 'kimi-code-api',
+    '--mcp-scope', 'none',
     '--exec',
     '--format', 'human',
   ], {
     cwd: REPO_ROOT,
+    env: {
+      ...process.env,
+      NARADA_INTELLIGENCE_PROVIDER: 'kimi-code-api',
+      NARADA_AI_API_KEY: 'live-e2e-fixture-key',
+      NARADA_AI_BASE_URL: provider.baseUrl,
+      NARADA_AI_MODEL: 'live-e2e-fixture-model',
+      KIMI_CODE_API_KEY: 'live-e2e-fixture-key',
+      KIMI_CODE_API_BASE_URL: provider.baseUrl,
+      KIMI_CODE_MODEL: 'live-e2e-fixture-model',
+    },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   const runtimeOutput = collectProcessOutput(runtimeProcess);
@@ -54,6 +106,14 @@ try {
   assert.equal(record.launch_operator_surface_kind, 'agent-web-ui');
   assert.match(record.event_endpoint, /^ws:\/\/127\.0\.0\.1:\d+\/events$/);
   assert.match(record.health_endpoint, /^http:\/\/127\.0\.0\.1:\d+\/health$/);
+  const startupEvent = await waitFor(() => readJsonlFile(record.events_path).find((event) => event.event === 'session_started'), {
+    timeoutMs,
+    label: 'runtime_start_event',
+  });
+  assert.equal(startupEvent.provider, 'kimi-code-api');
+  assert.equal(startupEvent.model, 'live-e2e-fixture-model');
+  assert.equal(startupEvent.mcp_scope, 'none');
+  assert.equal(startupEvent.mcp_operational_state, 'disabled');
 
   const health = await waitForHealthy(record.health_endpoint, timeoutMs);
   assert.equal(health.status, 'healthy');
@@ -69,6 +129,7 @@ try {
     '--port', '0',
     '--no-open',
     '--health-timeout-ms', '3000',
+    '--onboarding',
     '--format', 'human',
   ], {
     cwd: REPO_ROOT,
@@ -80,14 +141,23 @@ try {
 
   console.log(`live-e2e: opening browser projection ${webUrl}`);
   page = await openCdpPage({ browserPath, url: webUrl, workDir: siteRuntimeRoot(siteRoot) });
-  await waitFor(() => {
-    const events = readJsonlFile(record.events_path);
-    return events.some((event) => event.event === 'session_surface_affordances');
-  }, { timeoutMs, label: 'session_surface_affordances' });
+  await page.waitForExpression("document.querySelector('.onboarding-panel[data-phase=\\\"ready\\\"]') !== null", timeoutMs);
+  const onboardingText = await page.evaluate("document.querySelector('.onboarding-panel')?.textContent ?? ''");
+  assert.match(onboardingText, /Welcome to your General assistant/);
 
+  await page.evaluate(`(() => {
+    const input = document.querySelector('#operator-input');
+    const form = document.querySelector('#operator-form');
+    if (!input || !form) throw new Error('live_e2e_composer_not_found');
+    input.value = 'What can you help me with?';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    form.requestSubmit();
+    return true;
+  })()`);
+  await waitFor(() => readJsonlFile(record.events_path).some((event) => event.event === 'carrier_turn_completed'), { timeoutMs, label: 'first_assistant_turn' });
+  await page.waitForExpression("document.body.textContent.includes('Live launcher fixture response')", timeoutMs);
+  assert.equal(provider.requests.length, 1);
   const events = readJsonlFile(record.events_path);
-  const surfaceAffordances = events.find((event) => event.event === 'session_surface_affordances');
-  assert.match(surfaceAffordances.request_id, /^agent-web-ui-surface-affordances-/);
   const unsupported = events.filter((event) => event.event === 'error' && (
     event.code === 'unsupported_method'
     || String(event.message ?? '').includes('Unsupported method')
@@ -104,7 +174,7 @@ try {
     event_endpoint: record.event_endpoint,
     health_endpoint: record.health_endpoint,
     events_path: record.events_path,
-    surface_affordances_sequence: surfaceAffordances.sequence ?? surfaceAffordances.event_sequence ?? null,
+    first_turn_provider_request_count: provider.requests.length,
     elapsed_ms: Date.now() - startedAt,
   }, null, 2));
 } finally {
@@ -115,6 +185,14 @@ try {
     if (record?.event_endpoint) await closeNarsSession(record.event_endpoint);
   } catch {}
   if (runtimeProcess) await stopProcess(runtimeProcess);
+  if (provider) await provider.close();
+  if (ownsSiteRoot) await rm(siteRoot, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+}
+
+async function createEphemeralSiteRoot() {
+  const root = await mkdtemp(join(tmpdir(), 'narada-live-launcher-'));
+  await mkdir(join(root, '.narada', 'crew', 'nars-sessions'), { recursive: true });
+  return root;
 }
 
 function parseArgs(args) {
@@ -151,7 +229,7 @@ function sessionRoots(root) {
 
 async function waitForSessionRecord({ siteRoot, agentId, timeoutMs, runtimeProcess, runtimeOutput }) {
   return waitFor(() => {
-    if (runtimeProcess.exitCode !== null) {
+    if (runtimeProcess.exitCode !== null && runtimeProcess.exitCode !== 0) {
       throw new Error(`runtime_process_exited:${runtimeProcess.exitCode}:${runtimeOutput.all().slice(0, 4000)}`);
     }
     const record = findLatestSessionRecord(siteRoot, agentId);
@@ -163,14 +241,39 @@ function findLatestSessionRecord(siteRoot, agentId) {
   const records = [];
   for (const root of sessionRoots(siteRoot)) {
     if (!existsSync(root)) continue;
-    for (const entry of readdirSync(root, { withFileTypes: true })) {
+    let aggregate = null;
+    try {
+      aggregate = readNarsSessionIndex({ sessionsRoot: root, siteRoot });
+    } catch {}
+    if (Array.isArray(aggregate?.sessions)) {
+      for (const entry of aggregate.sessions) {
+        if (entry?.agent_id !== agentId) continue;
+        const recordPath = entry.record_path ?? (entry.session_dir ? join(entry.session_dir, 'session-index-record.json') : null);
+        if (!recordPath || !existsSync(recordPath)) continue;
+        try {
+          const record = readJsonFile(recordPath);
+          if (record?.agent_id === agentId) records.push(record);
+        } catch {}
+      }
+      if (records.length > 0) continue;
+    }
+    // Keep a bounded fallback for a partially written or legacy index. New sessions
+    // are the newest directories, so this remains useful without rescanning history.
+    const entries = readdirSync(root, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => ({
+        entry,
+        mtimeMs: statSync(join(root, entry.name)).mtimeMs,
+      }))
+      .sort((left, right) => right.mtimeMs - left.mtimeMs)
+      .slice(0, 128);
+    for (const { entry } of entries) {
       if (!entry.isDirectory()) continue;
       const recordPath = join(root, entry.name, 'session-index-record.json');
       if (!existsSync(recordPath)) continue;
       try {
         const record = readJsonFile(recordPath);
-        if (record.agent_id !== agentId) continue;
-        records.push(record);
+        if (record?.agent_id === agentId) records.push(record);
       } catch {}
     }
   }
@@ -269,6 +372,14 @@ async function openCdpPage({ browserPath, url, workDir }) {
   await send('Page.enable');
   await new Promise((resolvePromise) => setTimeout(resolvePromise, 900));
   return {
+    async evaluate(expression) {
+      const result = await send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true });
+      if (result?.exceptionDetails) throw new Error(`cdp_evaluate_failed:${JSON.stringify(result.exceptionDetails)}`);
+      return result?.result?.value;
+    },
+    async waitForExpression(expression, timeoutMs = 10_000) {
+      return waitFor(async () => this.evaluate(expression), { timeoutMs, label: 'cdp_expression' });
+    },
     async close() {
       try { await send('Browser.close'); } catch {}
       try { ws.close(); } catch {}
