@@ -20,13 +20,13 @@ import {
 import { resolveProviderAdapter } from './provider-resolution.mjs';
 import { createCarrierRuntimeDependencies } from './runtime-dependencies.mjs';
 
-const runtimeDependenciesSource = readFileSync(fileURLToPath(new URL('./runtime-dependencies.mjs', import.meta.url)), 'utf8');
-const runtimeTailUtilsSource = readFileSync(fileURLToPath(new URL('./runtime-tail-utils.mjs', import.meta.url)), 'utf8');
+const runtimeDependenciesSource = readFileSync(fileURLToPath(new URL('../../nars-runtime-legacy-compat/src/runtime-dependencies.mjs', import.meta.url)), 'utf8');
+const providerRuntimeTailUtilsSource = readFileSync(fileURLToPath(new URL('../../nars-provider-runtime/src/runtime-tail-utils.mjs', import.meta.url)), 'utf8');
 
 test('codex-subscription provider execution uses shared command resolver', () => {
   assert.match(runtimeDependenciesSource, /@narada2\/carrier-provider-support\/codex-subscription-command/);
-  assert.match(runtimeTailUtilsSource, /resolveCodexCommand\(/);
-  assert.match(runtimeTailUtilsSource, /NARADA_CODEX_EXEC_COMMAND\/NARADA_CODEX_COMMAND/);
+  assert.match(providerRuntimeTailUtilsSource, /resolveCodexCommand\(/);
+  assert.match(providerRuntimeTailUtilsSource, /NARADA_CODEX_EXEC_COMMAND\/NARADA_CODEX_COMMAND/);
   assert.doesNotMatch(runtimeDependenciesSource, /NARADA_CODEX_EXEC_COMMAND \?\? process\.env\.NARADA_CODEX_COMMAND \?\? process\.env\.CODEX_COMMAND \?\? 'codex'/);
 });
 

@@ -95,19 +95,22 @@ export function lifecycleBindingFromArgs(args = [], env = process.env) {
     const value = index >= 0 ? args[index + 1] : undefined;
     return typeof value === 'string' && value.trim() && !value.startsWith('--') ? value.trim() : undefined;
   };
-  const bindRequired = ({ name, flag, envName }) => {
+  const bindRequired = ({ name, flag, envNames }) => {
     const argvValue = valueAfter(flag);
-    const envValue = typeof env[envName] === 'string' && env[envName].trim() ? env[envName].trim() : undefined;
-    if (argvValue && envValue && argvValue !== envValue) {
+    const envValues = (envNames ?? [])
+      .map((envName) => typeof env[envName] === 'string' && env[envName].trim() ? env[envName].trim() : undefined)
+      .filter(Boolean);
+    const distinctEnvValues = [...new Set(envValues)];
+    if (distinctEnvValues.length > 1 || (argvValue && distinctEnvValues[0] && argvValue !== distinctEnvValues[0])) {
       throw new Error(`contradictory_nars_binding:${name}`);
     }
-    const value = argvValue ?? envValue;
+    const value = argvValue ?? distinctEnvValues[0];
     if (!value) throw new Error(`missing_nars_binding:${name}`);
     return value;
   };
-  const agentId = bindRequired({ name: 'agent_id', flag: '--identity', envName: 'NARADA_AGENT_ID' });
-  const sessionId = bindRequired({ name: 'session_id', flag: '--session', envName: 'NARADA_CARRIER_SESSION_ID' });
-  const siteRoot = bindRequired({ name: 'site_root', flag: '--site-root', envName: 'NARADA_SITE_ROOT' });
+  const agentId = bindRequired({ name: 'agent_id', flag: '--identity', envNames: ['NARADA_AGENT_ID'] });
+  const sessionId = bindRequired({ name: 'session_id', flag: '--session', envNames: ['NARADA_NARS_SESSION_ID', 'NARADA_RUNTIME_SESSION_ID', 'NARADA_CARRIER_SESSION_ID'] });
+  const siteRoot = bindRequired({ name: 'site_root', flag: '--site-root', envNames: ['NARADA_SITE_ROOT'] });
   let agentIdentityRef = null;
   if (typeof env.NARADA_AGENT_IDENTITY_REF === 'string' && env.NARADA_AGENT_IDENTITY_REF.trim()) {
     try {

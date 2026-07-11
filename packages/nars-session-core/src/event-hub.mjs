@@ -1,0 +1,61 @@
+import { eventMatchesNarsFilters } from './event-log.mjs';
+
+export function createNarsEventHub({ maxBuffer = 1000 } = {}) {
+  const buffer = [];
+  const subscribers = new Map();
+  let sequence = 0;
+  const replayFor = ({ sinceSequence = null, sinceTimestamp = null, filters = {}, maxReplay = 100 } = {}) => {
+    const sinceSeq = sinceSequence == null ? null : Number.parseInt(String(sinceSequence), 10);
+    const sinceTime = sinceTimestamp ? Date.parse(String(sinceTimestamp)) : null;
+    const parsedMaxReplay = Number.parseInt(String(maxReplay), 10);
+    const replayLimit = Math.max(0, Math.min(Number.isFinite(parsedMaxReplay) ? parsedMaxReplay : 100, maxBuffer));
+    const replay = buffer.filter((event) => {
+      if (Number.isFinite(sinceSeq) && Number(event.event_sequence ?? event.sequence ?? 0) <= sinceSeq) return false;
+      if (Number.isFinite(sinceTime)) {
+        const eventTime = Date.parse(String(event.timestamp ?? event.generated_at ?? ''));
+        if (Number.isFinite(eventTime) && eventTime <= sinceTime) return false;
+      }
+      return eventMatchesNarsFilters(event, filters);
+    });
+    return replayLimit === 0 ? [] : replay.slice(-replayLimit);
+  };
+  return {
+    publish(event) {
+      if (!event || typeof event !== 'object') return null;
+      const existingSequence = Number(event.event_sequence ?? event.sequence);
+      const assignedSequence = Number.isFinite(existingSequence) && existingSequence > sequence
+        ? existingSequence
+        : sequence + 1;
+      sequence = assignedSequence;
+      const sequencedEvent = { ...event, event_sequence: assignedSequence, sequence: assignedSequence };
+      buffer.push(sequencedEvent);
+      while (buffer.length > maxBuffer) buffer.shift();
+      for (const [subscriptionId, subscriber] of subscribers.entries()) {
+        if (!eventMatchesNarsFilters(sequencedEvent, subscriber.filters)) continue;
+        try {
+          subscriber.send({
+            schema: 'narada.nars.events.envelope.v1',
+            event: 'session_event',
+            subscription_id: subscriptionId,
+            cursor: { sequence: assignedSequence, next_sequence: assignedSequence + 1 },
+            payload: sequencedEvent,
+          });
+        } catch {
+          subscribers.delete(subscriptionId);
+        }
+      }
+      return sequencedEvent;
+    },
+    subscribe({ subscriptionId = `sub_${Date.now()}_${subscribers.size + 1}`, filters = {}, send }) {
+      subscribers.set(subscriptionId, { filters, send });
+      return { subscriptionId, unsubscribe: () => subscribers.delete(subscriptionId) };
+    },
+    replayFor,
+    cursor() {
+      return { last_sequence: sequence || null, next_sequence: sequence + 1 };
+    },
+    subscriberCount() {
+      return subscribers.size;
+    },
+  };
+}

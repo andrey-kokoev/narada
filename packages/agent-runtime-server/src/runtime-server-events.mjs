@@ -51,6 +51,7 @@ export function formatHostStatusEvent(event) {
 
 export function formatStartupMcpSummary(event) {
   if (!event || event.event !== 'session_started') return null;
+  if (event.mcp_operational_state == null) return null;
   if (event.mcp_operational_state === 'healthy') return null;
   const parts = [`MCP state=${event.mcp_operational_state}`];
   if (event.mcp_startup_failure_count > 0 && event.mcp_startup_failure_summary) {
@@ -64,6 +65,7 @@ export function formatStartupMcpSummary(event) {
 
 export function formatStartupMcpEvent(event) {
   if (!event || event.event !== 'session_started') return null;
+  if (event.mcp_operational_state == null) return null;
   if (event.mcp_operational_state === 'healthy') return null;
   return {
     schema: 'narada.agent_runtime_server.wrapper_event.v1',

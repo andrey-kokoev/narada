@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { once } from 'node:events';
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { request as httpRequest } from 'node:http';
+import { createServer, request as httpRequest } from 'node:http';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { PassThrough } from 'node:stream';
@@ -27,6 +27,22 @@ import {
 } from '../src/server-wrapper.mjs';
 
 const packageJson = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+
+function waitForOutput(child, predicate, timeoutMs = 5000) {
+  return new Promise((resolve, reject) => {
+    let text = '';
+    const timer = setTimeout(() => { cleanup(); reject(new Error(`output_timeout:${text.slice(-500)}`)); }, timeoutMs);
+    const onData = (chunk) => { text += String(chunk); if (predicate(text)) { cleanup(); resolve(text); } };
+    const cleanup = () => { clearTimeout(timer); child.stdout.off('data', onData); };
+    child.stdout.on('data', onData);
+  });
+}
+
+async function waitForCapturedOutput(child, readCaptured, predicate, timeoutMs = 5000) {
+  if (predicate(readCaptured())) return readCaptured();
+  await waitForOutput(child, () => predicate(readCaptured()), timeoutMs);
+  return readCaptured();
+}
 
 async function connectWebSocket(url) {
   assert.equal(typeof WebSocket, 'function');
@@ -58,14 +74,462 @@ test('package owns the Narada agent runtime server bins and exports', () => {
   assert.equal(packageJson.name, '@narada2/agent-runtime-server');
   assert.equal(packageJson.narada.package_role, 'nars_runtime_server');
   assert.equal(packageJson.narada.owns.includes('server_request_handling'), true);
+  assert.equal(packageJson.narada.owns.includes('session_binding'), true);
+  assert.equal(packageJson.narada.owns.includes('artifact_http_request_handling'), true);
+  assert.equal(packageJson.narada.owns.includes('attachment_contract'), true);
   assert.equal(packageJson.narada.carrier_substrate, '@narada2/carrier-runtime in-process');
-  assert.equal(packageJson.narada.runtime_dependency_owner.includes('@narada2/carrier-runtime/runtime-dependencies'), true);
+  assert.equal(packageJson.narada.runtime_dependency_owner.includes('nars-session-core owns session control'), true);
   assert.equal(packageJson.bin['narada-agent-runtime-server'], './bin/narada-agent-runtime-server.mjs');
   assert.equal(packageJson.bin['agent-runtime-server'], undefined);
   assert.equal(packageJson.exports['.'], './src/server-wrapper.mjs');
   assert.equal(packageJson.exports['./runtime-server-events'], './src/runtime-server-events.mjs');
   assert.equal(packageJson.dependencies['@narada2/agent-cli'], undefined);
   assert.equal(packageJson.dependencies['@narada2/carrier-terminal-projection'], 'workspace:*');
+});
+
+test('spawned runtime exposes active and completed FIFO queue state without provider overlap', { timeout: 10000 }, async () => {
+  const siteRoot = mkdtempSync(join(tmpdir(), 'narada-runtime-fifo-e2e-'));
+  let releaseFirst;
+  let markFirstRequest;
+  const firstRequest = new Promise((resolve) => { markFirstRequest = resolve; });
+  const providerOrder = [];
+  let providerCalls = 0;
+  const provider = createServer((request, response) => {
+    let body = '';
+    request.setEncoding('utf8');
+    request.on('data', (chunk) => { body += chunk; });
+    request.on('end', () => {
+      providerCalls += 1;
+      if (providerCalls === 1) markFirstRequest();
+      const parsed = JSON.parse(body);
+      providerOrder.push(parsed.messages.find((message) => message.role === 'user')?.content);
+      const complete = () => {
+        response.setHeader('content-type', 'application/json');
+        response.end(JSON.stringify({ choices: [{ message: { role: 'assistant', content: `done-${providerCalls}` } }] }));
+      };
+      if (providerCalls === 1) {
+        releaseFirst = complete;
+      } else complete();
+    });
+  });
+  await new Promise((resolve) => provider.listen(0, '127.0.0.1', resolve));
+  const address = provider.address();
+  try {
+    const binPath = fileURLToPath(new URL('../bin/narada-agent-runtime-server.mjs', import.meta.url));
+    const child = spawnTestChild(process.execPath, [binPath, '--raw-jsonl', '--identity', 'narada.test', '--session', 'fifo-e2e'], {
+      env: { ...process.env, NARADA_SITE_ROOT: siteRoot, NARADA_INTELLIGENCE_PROVIDER: 'openai-api', OPENAI_BASE_URL: `http://127.0.0.1:${address.port}/`, OPENAI_API_KEY: 'fifo-key' },
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    let stdout = '';
+    child.stdout.setEncoding('utf8'); child.stdout.on('data', (chunk) => { stdout += chunk; });
+    child.stdin.write(`${JSON.stringify({ id: 'turn-first', method: 'session.submit', params: { content: 'first' } })}\n${JSON.stringify({ id: 'turn-second', method: 'session.submit', params: { content: 'second' } })}\n${JSON.stringify({ id: 'health-active', method: 'session.health' })}\n${JSON.stringify({ id: 'recovery-active', method: 'session.recovery' })}\n`);
+    await firstRequest;
+    await waitForCapturedOutput(child, () => stdout, (text) => text.includes('health-active') && text.includes('recovery-active'));
+    assert.equal(providerCalls, 1);
+    const activeEvents = stdout.trim().split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
+    assert.equal(activeEvents.find((event) => event.event === 'session_health' && event.request_id === 'health-active')?.operator_input_queue?.pending_count, 2);
+    assert.equal(activeEvents.find((event) => event.event === 'session_recovery' && event.request_id === 'recovery-active')?.operator_input_queue?.pending_count, 2);
+    releaseFirst();
+    await waitForCapturedOutput(child, () => stdout, (text) => (text.match(/carrier_turn_completed/g) ?? []).length === 2);
+    child.stdin.end(`${JSON.stringify({ id: 'health-completed', method: 'session.health' })}\n${JSON.stringify({ id: 'recovery-completed', method: 'session.recovery' })}\n${JSON.stringify({ id: 'close-1', method: 'session.close' })}\n`);
+    assert.equal(await new Promise((resolve) => child.on('exit', resolve)), 0);
+    const events = stdout.trim().split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
+    assert.deepEqual(providerOrder, ['first', 'second']);
+    assert.equal(providerCalls, 2);
+    assert.equal(events.find((event) => event.event === 'session_health' && event.request_id === 'health-completed')?.operator_input_queue?.pending_count, 0);
+    assert.equal(events.find((event) => event.event === 'session_recovery' && event.request_id === 'recovery-completed')?.operator_input_queue?.pending_count, 0);
+  } finally {
+    await new Promise((resolve) => provider.close(resolve));
+    rmSync(siteRoot, { recursive: true, force: true });
+  }
+});
+
+test('spawned runtime exposes failed input as recoverable', async () => {
+  const siteRoot = mkdtempSync(join(tmpdir(), 'narada-runtime-failed-health-e2e-'));
+  const provider = createServer((_request, response) => {
+    response.statusCode = 500;
+    response.end('provider fixture failure');
+  });
+  await new Promise((resolve) => provider.listen(0, '127.0.0.1', resolve));
+  const address = provider.address();
+  try {
+    const binPath = fileURLToPath(new URL('../bin/narada-agent-runtime-server.mjs', import.meta.url));
+    const child = spawnTestChild(process.execPath, [binPath, '--raw-jsonl', '--identity', 'narada.test', '--session', 'failed-health-e2e'], {
+      env: { ...process.env, NARADA_SITE_ROOT: siteRoot, NARADA_INTELLIGENCE_PROVIDER: 'openai-api', OPENAI_BASE_URL: `http://127.0.0.1:${address.port}/`, OPENAI_API_KEY: 'failed-key' },
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    let stdout = '';
+    child.stdout.setEncoding('utf8'); child.stdout.on('data', (chunk) => { stdout += chunk; });
+    child.stdin.write(`${JSON.stringify({ id: 'turn-failed', method: 'session.submit', params: { content: 'fail' } })}\n`);
+    await waitForOutput(child, (text) => text.includes('session_control_rejected'));
+    child.stdin.end(`${JSON.stringify({ id: 'health-failed', method: 'session.health' })}\n${JSON.stringify({ id: 'recovery-failed', method: 'session.recovery' })}\n${JSON.stringify({ id: 'close-1', method: 'session.close' })}\n`);
+    assert.equal(await new Promise((resolve) => child.on('exit', resolve)), 0);
+    const events = stdout.trim().split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
+    const failedHealth = events.find((event) => event.event === 'session_health' && event.request_id === 'health-failed');
+    assert.equal(failedHealth?.operator_input_queue?.pending_count, 1);
+    assert.equal(failedHealth?.operational_posture, 'request_runtime_failures');
+    assert.equal(events.find((event) => event.event === 'session_recovery' && event.request_id === 'recovery-failed')?.operator_input_queue?.pending_count, 1);
+  } finally {
+    await new Promise((resolve) => provider.close(resolve));
+    rmSync(siteRoot, { recursive: true, force: true });
+  }
+});
+
+test('spawned runtime handles SIGINT and SIGTERM by closing active provider and MCP children', { timeout: 20000 }, async () => {
+  for (const signal of ['SIGINT', 'SIGTERM']) {
+    const siteRoot = mkdtempSync(join(tmpdir(), `narada-runtime-${signal.toLowerCase()}-e2e-`));
+    mkdirSync(join(siteRoot, '.ai', 'mcp'), { recursive: true });
+    const fixturePath = fileURLToPath(new URL('./fixtures/mcp-echo-server.mjs', import.meta.url));
+    writeFileSync(join(siteRoot, '.ai', 'mcp', 'fixture.json'), JSON.stringify({ mcpServers: { fixture: { command: process.execPath, args: [fixturePath], surface_id: 'fixture.surface' } } }), 'utf8');
+    let providerCalls = 0;
+    let markSecondRequest;
+    const secondRequest = new Promise((resolve) => { markSecondRequest = resolve; });
+    const provider = createServer((_request, response) => {
+      providerCalls += 1;
+      if (providerCalls === 1) {
+        response.setHeader('content-type', 'application/json');
+        response.end(JSON.stringify({ choices: [{ message: { role: 'assistant', tool_calls: [
+          { id: 'call-signal', function: { name: 'fixture_echo', arguments: '{"text":"signal"}' } },
+        ] } }] }));
+      } else markSecondRequest();
+    });
+    await new Promise((resolve) => provider.listen(0, '127.0.0.1', resolve));
+    const address = provider.address();
+    try {
+      const signalRelay = process.platform === 'win32';
+      const entrypoint = fileURLToPath(new URL(signalRelay ? './fixtures/signal-relay-runtime.mjs' : '../bin/narada-agent-runtime-server.mjs', import.meta.url));
+      const child = spawnTestChild(process.execPath, [entrypoint, '--raw-jsonl', '--identity', 'narada.test', '--session', `signal-${signal.toLowerCase()}`], {
+        env: { ...process.env, NARADA_SITE_ROOT: siteRoot, NARADA_INTELLIGENCE_PROVIDER: 'openai-api', OPENAI_BASE_URL: `http://127.0.0.1:${address.port}/`, OPENAI_API_KEY: 'signal-fixture-key' },
+        stdio: signalRelay ? ['pipe', 'pipe', 'pipe', 'ipc'] : ['pipe', 'pipe', 'pipe'],
+      });
+      let stdout = '';
+      let stderr = '';
+      child.stdout.setEncoding('utf8'); child.stdout.on('data', (chunk) => { stdout += chunk; });
+      child.stderr.setEncoding('utf8'); child.stderr.on('data', (chunk) => { stderr += chunk; });
+      child.stdin.write(`${JSON.stringify({ id: 'turn-signal', method: 'session.submit', params: { content: 'use tool then wait' } })}\n`);
+      await secondRequest;
+      const exited = once(child, 'exit');
+      if (signalRelay) child.send({ signal });
+      else assert.equal(child.kill(signal), true);
+      const [exitCode] = await exited;
+      assert.equal(exitCode, 0, `${signal}: ${stderr}`);
+      const events = stdout.trim().split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
+      assert.ok(events.some((event) => event.event === 'tool_execution_completed' && event.tool_name === 'fixture_echo'), signal);
+      assert.ok(events.some((event) => event.event === 'session_turn_cancel_requested'), signal);
+      assert.ok(events.some((event) => event.event === 'carrier_turn_failed' && /abort/i.test(event.error)), signal);
+      assert.ok(events.some((event) => event.event === 'session_closed' && event.request_id === `signal-close-${signal.toLowerCase()}`), signal);
+    } finally {
+      await new Promise((resolve) => provider.close(resolve));
+      rmSync(siteRoot, { recursive: true, force: true });
+    }
+  }
+});
+
+test('spawned runtime handles Codex subprocess success, malformed JSONL, and non-zero exit', async () => {
+  const fixturePath = fileURLToPath(new URL('./fixtures/codex-exec-fixture.mjs', import.meta.url));
+  for (const mode of ['success', 'malformed', 'exit']) {
+    const siteRoot = mkdtempSync(join(tmpdir(), `narada-codex-${mode}-e2e-`));
+    try {
+      const binPath = fileURLToPath(new URL('../bin/narada-agent-runtime-server.mjs', import.meta.url));
+      const child = spawnTestChild(process.execPath, [binPath, '--raw-jsonl', '--identity', 'narada.test', '--session', `codex-${mode}`], {
+        env: { ...process.env, NARADA_SITE_ROOT: siteRoot, NARADA_INTELLIGENCE_PROVIDER: 'codex-subscription', NARADA_CODEX_EXEC_COMMAND: process.execPath, NARADA_CODEX_EXEC_PREFIX_ARGS: JSON.stringify([fixturePath, mode]), CODEX_MODEL: 'fixture-codex' }, stdio: ['pipe', 'pipe', 'pipe'],
+      });
+      let stdout = ''; child.stdout.setEncoding('utf8'); child.stdout.on('data', (chunk) => { stdout += chunk; });
+      child.stdin.end(`${JSON.stringify({ id: 'turn-1', method: 'session.submit', params: { content: 'hello' } })}\n${JSON.stringify({ id: 'close-1', method: 'session.close' })}\n`);
+      assert.equal(await new Promise((resolve) => child.on('exit', resolve)), 0, mode);
+      const events = stdout.trim().split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
+      if (mode === 'success') assert.ok(events.some((event) => event.event === 'carrier_turn_completed'));
+      else assert.ok(events.some((event) => event.event === 'session_control_rejected' && event.request_id === 'turn-1'));
+    } finally {
+      rmSync(siteRoot, { recursive: true, force: true });
+    }
+  }
+});
+
+test('spawned runtime cancels a hanging Codex subprocess', async () => {
+  const siteRoot = mkdtempSync(join(tmpdir(), 'narada-codex-cancel-e2e-'));
+  const fixturePath = fileURLToPath(new URL('./fixtures/codex-exec-fixture.mjs', import.meta.url));
+  try {
+    const binPath = fileURLToPath(new URL('../bin/narada-agent-runtime-server.mjs', import.meta.url));
+    const child = spawnTestChild(process.execPath, [binPath, '--raw-jsonl', '--identity', 'narada.test', '--session', 'codex-cancel'], { env: { ...process.env, NARADA_SITE_ROOT: siteRoot, NARADA_INTELLIGENCE_PROVIDER: 'codex-subscription', NARADA_CODEX_EXEC_COMMAND: process.execPath, NARADA_CODEX_EXEC_PREFIX_ARGS: JSON.stringify([fixturePath, 'hang']), CODEX_MODEL: 'fixture-codex' }, stdio: ['pipe', 'pipe', 'pipe'] });
+    let stdout = ''; child.stdout.setEncoding('utf8'); child.stdout.on('data', (chunk) => { stdout += chunk; });
+    child.stdin.write(`${JSON.stringify({ id: 'turn-1', method: 'session.submit', params: { content: 'wait' } })}\n`);
+    await waitForOutput(child, (text) => text.includes('carrier_turn_started'));
+    child.stdin.write(`${JSON.stringify({ id: 'cancel-1', method: 'session.cancel' })}\n`);
+    await waitForCapturedOutput(child, () => stdout, (text) => text.includes('carrier_turn_failed'));
+    child.stdin.end(`${JSON.stringify({ id: 'health-cancelled', method: 'session.health' })}\n${JSON.stringify({ id: 'recovery-cancelled', method: 'session.recovery' })}\n${JSON.stringify({ id: 'close-1', method: 'session.close' })}\n`);
+    assert.equal(await new Promise((resolve) => child.on('exit', resolve)), 0);
+    const events = stdout.trim().split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
+    assert.ok(events.some((event) => event.event === 'session_cancel' && event.cancelled === true));
+    assert.ok(events.some((event) => event.event === 'carrier_turn_failed' && /abort/i.test(event.error)));
+    assert.equal(events.find((event) => event.event === 'session_health' && event.request_id === 'health-cancelled')?.operator_input_queue?.pending_count, 1);
+    assert.equal(events.find((event) => event.event === 'session_recovery' && event.request_id === 'recovery-cancelled')?.operator_input_queue?.pending_count, 1);
+  } finally {
+    rmSync(siteRoot, { recursive: true, force: true });
+  }
+});
+
+test('spawned runtime executes every HTTP provider adapter against local endpoints', async () => {
+  let expectedCredentialHeader = null;
+  let expectedCredentialValue = null;
+  const provider = createServer((request, response) => {
+    assert.equal(request.headers[expectedCredentialHeader], expectedCredentialValue);
+    response.setHeader('content-type', 'application/json');
+    response.end(JSON.stringify(request.url === '/v1/messages'
+      ? { content: [{ type: 'text', text: 'anthropic fixture' }], stop_reason: 'end_turn' }
+      : { choices: [{ message: { role: 'assistant', content: 'compatible fixture' } }] }));
+  });
+  await new Promise((resolve) => provider.listen(0, '127.0.0.1', resolve));
+  const address = provider.address();
+  const baseUrl = `http://127.0.0.1:${address.port}/`;
+  const cases = [
+    ['kimi-api', 'authorization', 'Bearer SECRET_SENTINEL_KIMI', { KIMI_API_KEY: 'SECRET_SENTINEL_KIMI', KIMI_API_BASE_URL: baseUrl, KIMI_MODEL: 'fixture-kimi' }],
+    ['kimi-code-api', 'authorization', 'Bearer SECRET_SENTINEL_KIMI_CODE', { KIMI_CODE_API_KEY: 'SECRET_SENTINEL_KIMI_CODE', KIMI_CODE_API_BASE_URL: baseUrl, KIMI_CODE_MODEL: 'fixture-kimi-code' }],
+    ['deepseek-api', 'authorization', 'Bearer SECRET_SENTINEL_DEEPSEEK', { DEEPSEEK_API_KEY: 'SECRET_SENTINEL_DEEPSEEK', DEEPSEEK_API_BASE_URL: baseUrl, DEEPSEEK_MODEL: 'fixture-deepseek' }],
+    ['openrouter-api', 'authorization', 'Bearer SECRET_SENTINEL_OPENROUTER', { OPENROUTER_API_KEY: 'SECRET_SENTINEL_OPENROUTER', OPENROUTER_BASE_URL: baseUrl, OPENROUTER_MODEL: 'fixture-openrouter' }],
+    ['anthropic-api', 'x-api-key', 'SECRET_SENTINEL_ANTHROPIC', { ANTHROPIC_API_KEY: 'SECRET_SENTINEL_ANTHROPIC', ANTHROPIC_BASE_URL: baseUrl, ANTHROPIC_MODEL: 'fixture-anthropic' }],
+  ];
+  try {
+    for (const [providerId, credentialHeader, credentialValue, providerEnv] of cases) {
+      expectedCredentialHeader = credentialHeader;
+      expectedCredentialValue = credentialValue;
+      const siteRoot = mkdtempSync(join(tmpdir(), `narada-${providerId}-e2e-`));
+      try {
+        const binPath = fileURLToPath(new URL('../bin/narada-agent-runtime-server.mjs', import.meta.url));
+        const child = spawnTestChild(process.execPath, [binPath, '--raw-jsonl', '--identity', 'narada.test', '--session', `${providerId}-e2e`], { env: {
+          ...process.env,
+          OPENAI_API_KEY: 'SECRET_SENTINEL_OPENAI_DECOY',
+          OPENAI_BASE_URL: 'http://127.0.0.1:1/decoy',
+          ...providerEnv,
+          NARADA_SITE_ROOT: siteRoot,
+          NARADA_INTELLIGENCE_PROVIDER: providerId,
+          NARADA_AI_API_KEY: String(credentialValue).replace(/^Bearer /, ''),
+          NARADA_AI_BASE_URL: baseUrl,
+        }, stdio: ['pipe', 'pipe', 'pipe'] });
+        let stdout = ''; let stderr = '';
+        child.stdout.setEncoding('utf8'); child.stdout.on('data', (chunk) => { stdout += chunk; });
+        child.stderr.setEncoding('utf8'); child.stderr.on('data', (chunk) => { stderr += chunk; });
+        child.stdin.end(`${JSON.stringify({ id: 'turn-1', method: 'session.submit', params: { content: 'hello' } })}\n${JSON.stringify({ id: 'close-1', method: 'session.close' })}\n`);
+        assert.equal(await new Promise((resolve) => child.on('exit', resolve)), 0, providerId);
+        const events = stdout.trim().split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
+        assert.ok(events.some((event) => event.event === 'carrier_turn_completed'), providerId);
+        const eventsPath = resolveNaradaSitePaths({ siteRoot, sessionId: `${providerId}-e2e` }).narsEventsPath;
+        const durableEvents = readFileSync(eventsPath, 'utf8');
+        const credential = String(credentialValue).replace(/^Bearer /, '');
+        for (const rendered of [stdout, stderr, durableEvents, JSON.stringify(events[0])]) {
+          assert.equal(rendered.includes(credential), false, `${providerId} leaked selected credential`);
+          assert.equal(rendered.includes('SECRET_SENTINEL_OPENAI_DECOY'), false, `${providerId} leaked decoy credential`);
+        }
+      } finally {
+        rmSync(siteRoot, { recursive: true, force: true });
+      }
+    }
+  } finally {
+    await new Promise((resolve) => provider.close(resolve));
+  }
+});
+
+test('spawned runtime cancels an in-flight provider request through JSONL control', async () => {
+  const siteRoot = mkdtempSync(join(tmpdir(), 'narada-runtime-cancel-e2e-'));
+  let requestReceived;
+  const received = new Promise((resolve) => { requestReceived = resolve; });
+  const provider = createServer(() => { requestReceived(); });
+  await new Promise((resolve) => provider.listen(0, '127.0.0.1', resolve));
+  const address = provider.address();
+  try {
+    const binPath = fileURLToPath(new URL('../bin/narada-agent-runtime-server.mjs', import.meta.url));
+    const child = spawnTestChild(process.execPath, [binPath, '--raw-jsonl', '--identity', 'narada.test', '--session', 'cancel-e2e'], {
+      env: { ...process.env, NARADA_SITE_ROOT: siteRoot, NARADA_INTELLIGENCE_PROVIDER: 'openai-api', OPENAI_BASE_URL: `http://127.0.0.1:${address.port}/`, OPENAI_API_KEY: 'fixture-key' }, stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    let stdout = ''; child.stdout.setEncoding('utf8'); child.stdout.on('data', (chunk) => { stdout += chunk; });
+    child.stdin.write(`${JSON.stringify({ id: 'turn-1', method: 'session.submit', params: { content: 'wait' } })}\n`);
+    await received;
+    child.stdin.write(`${JSON.stringify({ id: 'cancel-1', method: 'session.cancel' })}\n`);
+    await waitForOutput(child, (text) => text.includes('carrier_turn_failed'));
+    child.stdin.end(`${JSON.stringify({ id: 'health-cancelled', method: 'session.health' })}\n${JSON.stringify({ id: 'recovery-cancelled', method: 'session.recovery' })}\n${JSON.stringify({ id: 'close-1', method: 'session.close' })}\n`);
+    assert.equal(await new Promise((resolve) => child.on('exit', resolve)), 0);
+    const events = stdout.trim().split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
+    assert.ok(events.some((event) => event.event === 'session_cancel' && event.cancelled === true));
+    assert.ok(events.some((event) => event.event === 'carrier_turn_failed' && /abort/i.test(event.error)));
+  } finally {
+    await new Promise((resolve) => provider.close(resolve));
+    rmSync(siteRoot, { recursive: true, force: true });
+  }
+});
+
+test('spawned runtime recovers an in-flight queued turn exactly once after forced exit', async () => {
+  const siteRoot = mkdtempSync(join(tmpdir(), 'narada-runtime-recovery-e2e-'));
+  let recover = false; let providerCalls = 0;
+  let firstRequestReceived;
+  const firstRequest = new Promise((resolve) => { firstRequestReceived = resolve; });
+  const provider = createServer((_request, response) => {
+    providerCalls += 1;
+    if (!recover) { firstRequestReceived(); return; }
+    response.setHeader('content-type', 'application/json');
+    response.end(JSON.stringify({ choices: [{ message: { role: 'assistant', content: 'recovered' } }] }));
+  });
+  await new Promise((resolve) => provider.listen(0, '127.0.0.1', resolve));
+  const address = provider.address();
+  const binPath = fileURLToPath(new URL('../bin/narada-agent-runtime-server.mjs', import.meta.url));
+  const args = [binPath, '--raw-jsonl', '--identity', 'narada.test', '--session', 'recovery-e2e'];
+  const options = { env: { ...process.env, NARADA_SITE_ROOT: siteRoot, NARADA_INTELLIGENCE_PROVIDER: 'openai-api', OPENAI_BASE_URL: `http://127.0.0.1:${address.port}/`, OPENAI_API_KEY: 'fixture-key' }, stdio: ['pipe', 'pipe', 'pipe'] };
+  try {
+    const first = spawnTestChild(process.execPath, args, options);
+    first.stdin.write(`${JSON.stringify({ id: 'turn-1', method: 'session.submit', params: { content: 'recover me' } })}\n`);
+    await firstRequest;
+    const firstExit = once(first, 'exit');
+    first.kill();
+    await firstExit;
+    recover = true;
+    const second = spawnTestChild(process.execPath, args, options);
+    let secondStdout = '';
+    second.stdout.setEncoding('utf8'); second.stdout.on('data', (chunk) => { secondStdout += chunk; });
+    const recoveredOutput = await waitForOutput(second, (text) => text.includes('carrier_turn_completed'));
+    second.stdin.end(`${JSON.stringify({ id: 'health-recovered', method: 'session.health' })}\n${JSON.stringify({ id: 'recovery-recovered', method: 'session.recovery' })}\n${JSON.stringify({ id: 'close-1', method: 'session.close' })}\n`);
+    assert.equal(await new Promise((resolve) => second.on('exit', resolve)), 0);
+    assert.equal(providerCalls, 2);
+    assert.equal((recoveredOutput.match(/carrier_turn_completed/g) ?? []).length, 1);
+    const recoveredEvents = secondStdout.trim().split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
+    assert.equal(recoveredEvents.find((event) => event.event === 'session_health' && event.request_id === 'health-recovered')?.operator_input_queue?.pending_count, 0);
+    assert.equal(recoveredEvents.find((event) => event.event === 'session_recovery' && event.request_id === 'recovery-recovered')?.operator_input_queue?.pending_count, 0);
+  } finally {
+    await new Promise((resolve) => provider.close(resolve));
+    rmSync(siteRoot, { recursive: true, force: true });
+  }
+});
+
+test('spawned runtime records required MCP startup failure without calling the provider', async () => {
+  const siteRoot = mkdtempSync(join(tmpdir(), 'narada-runtime-mcp-failure-'));
+  mkdirSync(join(siteRoot, '.ai', 'mcp'), { recursive: true });
+  const fixturePath = fileURLToPath(new URL('./fixtures/mcp-exit-server.mjs', import.meta.url));
+  writeFileSync(join(siteRoot, '.ai', 'mcp', 'fixture.json'), JSON.stringify({ mcpServers: { broken: { command: process.execPath, args: [fixturePath], surface_id: 'broken.surface', startup_timeout_sec: 1 } } }), 'utf8');
+  try {
+    const binPath = fileURLToPath(new URL('../bin/narada-agent-runtime-server.mjs', import.meta.url));
+    const child = spawnTestChild(process.execPath, [binPath, '--raw-jsonl', '--identity', 'narada.test', '--session', 'mcp-failure'], {
+      env: { ...process.env, NARADA_SITE_ROOT: siteRoot, NARADA_INTELLIGENCE_PROVIDER: 'openai-api', OPENAI_BASE_URL: 'http://127.0.0.1:1/', OPENAI_API_KEY: 'unused', NARADA_AGENT_CLI_REQUIRE_MCP_FABRIC: '1' }, stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    let stdout = ''; child.stdout.setEncoding('utf8'); child.stdout.on('data', (chunk) => { stdout += chunk; });
+    child.stdin.end(`${JSON.stringify({ id: 'turn-1', method: 'session.submit', params: { content: 'hello' } })}\n${JSON.stringify({ id: 'close-1', method: 'session.close' })}\n`);
+    assert.equal(await new Promise((resolve) => child.on('exit', resolve)), 0);
+    const events = stdout.trim().split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
+    assert.ok(events.some((event) => event.event === 'session_control_rejected' && event.request_id === 'turn-1' && /MCP|mcp/i.test(event.error)));
+    assert.equal(events.some((event) => event.event === 'carrier_turn_started'), false);
+  } finally {
+    rmSync(siteRoot, { recursive: true, force: true });
+  }
+});
+
+test('spawned runtime executes a provider-requested tool through the site MCP gateway', async () => {
+  const siteRoot = mkdtempSync(join(tmpdir(), 'narada-runtime-mcp-e2e-'));
+  mkdirSync(join(siteRoot, '.ai', 'mcp'), { recursive: true });
+  const fixturePath = fileURLToPath(new URL('./fixtures/mcp-echo-server.mjs', import.meta.url));
+  const disconnectMarker = join(siteRoot, 'mcp-disconnected-once.txt');
+  const generatedArtifactPath = join(siteRoot, 'generated-by-mcp.html');
+  writeFileSync(join(siteRoot, '.ai', 'mcp', 'fixture.json'), JSON.stringify({ mcpServers: { fixture: { command: process.execPath, args: [fixturePath, disconnectMarker], surface_id: 'fixture.surface' } } }), 'utf8');
+  let providerCalls = 0;
+  const provider = createServer((_request, response) => {
+    providerCalls += 1;
+    response.setHeader('content-type', 'application/json');
+    response.end(JSON.stringify(providerCalls === 1
+      ? { choices: [{ message: { role: 'assistant', tool_calls: [
+        { id: 'call-1', function: { name: 'fixture_echo', arguments: '{"text":"hello"}' } },
+        { id: 'call-artifact', function: { name: 'fixture_artifact', arguments: JSON.stringify({ path: generatedArtifactPath, content: '<!doctype html><h1>Generated by MCP</h1>' }) } },
+        { id: 'call-2', function: { name: 'fixture_denied', arguments: '{}' } },
+      ] } }] }
+      : { choices: [{ message: { role: 'assistant', content: 'done' } }] }));
+  });
+  await new Promise((resolve) => provider.listen(0, '127.0.0.1', resolve));
+  const address = provider.address();
+  try {
+    const binPath = fileURLToPath(new URL('../bin/narada-agent-runtime-server.mjs', import.meta.url));
+    const child = spawnTestChild(process.execPath, [binPath, '--raw-jsonl', '--health-port', '0', '--identity', 'narada.test', '--session', 'mcp-e2e'], {
+      env: { ...process.env, NARADA_SITE_ROOT: siteRoot, NARADA_INTELLIGENCE_PROVIDER: 'openai-api', OPENAI_BASE_URL: `http://127.0.0.1:${address.port}/`, OPENAI_API_KEY: 'fixture-key', NARADA_DENIED_CAPABILITY_TOOLS: 'fixture_denied' }, stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    let stdout = '';
+    child.stdout.setEncoding('utf8'); child.stdout.on('data', (chunk) => { stdout += chunk; });
+    child.stdin.write(`${JSON.stringify({ id: 'turn-1', method: 'session.submit', params: { content: 'echo hello' } })}\n`);
+    await waitForOutput(child, (text) => text.includes('carrier_turn_completed'));
+    const started = stdout.trim().split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line)).find((event) => event.event === 'session_started');
+    assert.match(started.health_endpoint, /^http:\/\/127\.0\.0\.1:\d+\/health$/);
+    const artifactRegistration = await fetch(new URL('/sessions/mcp-e2e/artifacts', started.health_endpoint), {
+      method: 'POST',
+      body: JSON.stringify({ source_path: generatedArtifactPath, kind: 'html', title: 'MCP generated report' }),
+    });
+    assert.equal(artifactRegistration.status, 201);
+    const registeredArtifact = await artifactRegistration.json();
+    const artifactContent = await fetch(new URL(`/sessions/mcp-e2e/artifacts/${registeredArtifact.artifact.artifact_id}/content`, started.health_endpoint));
+    assert.equal(artifactContent.status, 200);
+    assert.match(await artifactContent.text(), /Generated by MCP/);
+    child.stdin.end(`${JSON.stringify({ id: 'close-1', method: 'session.close' })}\n`);
+    assert.equal(await new Promise((resolve) => child.on('exit', resolve)), 0);
+    const events = stdout.trim().split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
+    assert.equal(providerCalls, 2);
+    assert.equal(readFileSync(disconnectMarker, 'utf8'), 'disconnected-once');
+    assert.ok(events.some((event) => event.event === 'carrier_tool_completed' && event.tool_name === 'fixture_echo'));
+    assert.ok(events.some((event) => event.event === 'carrier_tool_completed' && event.tool_name === 'fixture_artifact'));
+    assert.ok(events.some((event) => event.event === 'tool_execution_completed' && event.tool_name === 'fixture_echo'));
+    assert.ok(events.some((event) => event.event === 'session_artifact_registered' && event.artifact_id === registeredArtifact.artifact.artifact_id));
+    assert.ok(events.some((event) => event.event === 'tool_execution_refused' && event.tool_name === 'fixture_denied'));
+    assert.deepEqual(events.filter((event) => event.event === 'carrier_tool_completed').map((event) => event.tool_name), ['fixture_echo', 'fixture_artifact', 'fixture_denied']);
+    const eventsPath = resolveNaradaSitePaths({ siteRoot, sessionId: 'mcp-e2e' }).narsEventsPath;
+    const projection = await startEventStreamProjection({ childStdin: new PassThrough(), eventHub: createEventHub(), host: '127.0.0.1', port: 0, eventsPath });
+    const client = await connectWebSocket(projection.url);
+    try {
+      await client.nextJson();
+      client.sendJson({ id: 'replay-1', method: 'session.events.subscribe', params: { include_replay: true, max_replay: 100 } });
+      const started = await client.nextJson();
+      assert.equal(started.replay_source, 'events_jsonl');
+      const replay = [];
+      for (let index = 0; index < started.replay_count; index += 1) replay.push((await client.nextJson()).payload);
+      assert.ok(replay.some((event) => event.event === 'tool_execution_completed' && event.tool_name === 'fixture_echo'));
+    } finally {
+      client.close(); projection.server.close();
+    }
+  } finally {
+    await new Promise((resolve) => provider.close(resolve));
+    rmSync(siteRoot, { recursive: true, force: true });
+  }
+});
+
+test('spawned runtime submits a turn through the configured local provider endpoint', async () => {
+  const siteRoot = mkdtempSync(join(tmpdir(), 'narada-runtime-provider-e2e-'));
+  const provider = createServer((request, response) => {
+    assert.equal(request.url, '/v1/chat/completions');
+    assert.equal(request.headers.authorization, 'Bearer fixture-key');
+    response.setHeader('content-type', 'application/json');
+    response.end(JSON.stringify({ choices: [{ message: { role: 'assistant', content: 'fixture response' } }] }));
+  });
+  await new Promise((resolve) => provider.listen(0, '127.0.0.1', resolve));
+  const address = provider.address();
+  try {
+    const binPath = fileURLToPath(new URL('../bin/narada-agent-runtime-server.mjs', import.meta.url));
+    const child = spawnTestChild(process.execPath, [binPath, '--raw-jsonl', '--identity', 'narada.test', '--session', 'provider-e2e'], {
+      env: { ...process.env, NARADA_SITE_ROOT: siteRoot, NARADA_INTELLIGENCE_PROVIDER: 'openai-api', OPENAI_BASE_URL: `http://127.0.0.1:${address.port}/`, OPENAI_API_KEY: 'fixture-key' },
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    let stdout = '';
+    child.stdout.setEncoding('utf8');
+    child.stdout.on('data', (chunk) => { stdout += chunk; });
+    child.stdin.write(`${JSON.stringify({ id: 'turn-1', method: 'session.submit', params: { content: 'hello' } })}\n`);
+    child.stdin.write(`${JSON.stringify({ id: 'close-1', method: 'session.close' })}\n`);
+    child.stdin.end();
+    assert.equal(await new Promise((resolve) => child.on('exit', resolve)), 0);
+    const events = stdout.trim().split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
+    assert.ok(events.some((event) => event.event === 'carrier_turn_completed'));
+    assert.ok(events.some((event) => event.event === 'session_control_response' && event.request_id === 'turn-1'));
+  } finally {
+    await new Promise((resolve) => provider.close(resolve));
+    rmSync(siteRoot, { recursive: true, force: true });
+  }
+});
+
+test('default server path does not construct the legacy server runtime or legacy context', () => {
+  const wrapperPath = new URL('../src/server-wrapper.mjs', import.meta.url);
+  const source = readFileSync(wrapperPath, 'utf8');
+  assert.equal(source.includes('createLegacyRuntimeService'), false);
+  assert.equal(source.includes('createCarrierRuntimeContext'), false);
+  assert.equal(source.includes('createLegacyProviderCall'), false);
+  assert.equal(source.includes('createProviderCall'), true);
 });
 
 test('WebSocket /events replays and reads durable events.jsonl beyond memory buffer', async () => {
@@ -96,6 +560,16 @@ test('WebSocket /events replays and reads durable events.jsonl beyond memory buf
       assert.equal(read.event, 'session_events_read');
       assert.equal(read.source, 'events_jsonl');
       assert.deepEqual(read.events.map((event) => event.event_sequence), [2, 3]);
+      const latestClient = await connectWebSocket(projection.url);
+      try {
+        await latestClient.nextJson();
+        latestClient.sendJson({ id: 'latest-1', method: 'session.events.subscribe', params: { include_replay: true, max_replay: 2 } });
+        const latestStarted = await latestClient.nextJson();
+        assert.equal(latestStarted.replay_count, 2);
+        assert.deepEqual([(await latestClient.nextJson()).payload.event_sequence, (await latestClient.nextJson()).payload.event_sequence], [3, 4]);
+      } finally {
+        latestClient.close();
+      }
     } finally {
       client.close();
       projection.server.close();
@@ -341,6 +815,7 @@ test('event hub supports replay, filtering, and bounded cursors', () => {
   hub.publish({ event: 'assistant_message', request_id: 'input_1', timestamp: '2026-06-23T00:00:01.000Z' });
   hub.publish({ event: 'tool_call', request_id: 'input_1', timestamp: '2026-06-23T00:00:02.000Z' });
   assert.deepEqual(hub.replayFor({ maxReplay: 10 }).map((event) => event.event), ['assistant_message', 'tool_call']);
+  assert.deepEqual(hub.replayFor({ maxReplay: 0 }), []);
   assert.deepEqual(hub.replayFor({ sinceSequence: 2 }).map((event) => event.event), ['tool_call']);
   assert.deepEqual(hub.replayFor({ filters: { event_kinds: ['assistant_message'] }, maxReplay: 10 }).map((event) => event.event), ['assistant_message']);
   assert.deepEqual(hub.cursor(), { last_sequence: 3, next_sequence: 4 });
@@ -444,6 +919,8 @@ test('wrapper event helpers preserve the existing runtime-server event contract'
     mcp_runtime_fault_summary: '0',
   });
   assert.equal(formatStartupMcpSummary({ event: 'session_started', mcp_operational_state: 'healthy' }), null);
+  assert.equal(formatStartupMcpSummary({ event: 'session_started' }), null);
+  assert.equal(formatStartupMcpEvent({ event: 'session_started' }), null);
 });
 
 test('wrapper status snapshots keep the wrapper schema stable', () => {
@@ -611,6 +1088,28 @@ test('lifecycle binding is derived from runtime args before session bind', () =>
   assert.equal(binding.agent_identity_ref.legacy_agent_id, 'narada.test');
 });
 
+test('lifecycle binding accepts canonical session environment aliases', () => {
+  const baseEnvironment = {
+    NARADA_AGENT_ID: 'narada.test',
+    NARADA_SITE_ROOT: 'D:/code/narada.test',
+  };
+  for (const sessionEnvironmentName of ['NARADA_NARS_SESSION_ID', 'NARADA_RUNTIME_SESSION_ID', 'NARADA_CARRIER_SESSION_ID']) {
+    const binding = lifecycleBindingFromArgs([], {
+      ...baseEnvironment,
+      [sessionEnvironmentName]: 'runtime-package-test',
+    });
+    assert.equal(binding.session_id, 'runtime-package-test');
+  }
+  assert.throws(
+    () => lifecycleBindingFromArgs([], {
+      ...baseEnvironment,
+      NARADA_NARS_SESSION_ID: 'runtime-package-test',
+      NARADA_CARRIER_SESSION_ID: 'different-session',
+    }),
+    /contradictory_nars_binding:session_id/,
+  );
+});
+
 test('lifecycle binding refuses missing or contradictory launch binding', () => {
   assert.throws(
     () => lifecycleBindingFromArgs(['--identity', 'narada.test'], { NARADA_SITE_ROOT: 'D:/code/narada.test' }),
@@ -773,6 +1272,9 @@ test('HTTP artifact endpoints register and serve session-scoped HTML and audio a
     const registered = await registeredResponse.json();
     assert.equal(registered.artifact.title, 'Artifact report');
     assert.equal(registered.artifact.source_path, undefined);
+    const malformedSessionResponse = await fetch(new URL('/sessions/%E0%A4%A/artifacts', projection.url));
+    assert.equal(malformedSessionResponse.status, 400);
+    assert.equal((await malformedSessionResponse.json()).schema, 'narada.nars.artifact_error.v1');
     const artifactId = registered.artifact.artifact_id;
 
     const metadata = await fetch(new URL(`/sessions/carrier_artifact_http/artifacts/${artifactId}`, projection.url)).then((response) => response.json());
@@ -836,7 +1338,7 @@ test('HTTP artifact endpoints register and serve session-scoped HTML and audio a
   }
 });
 
-test('narada-owned entrypoint runs the carrier runtime in process', async () => {
+test('narada-owned entrypoint runs the session-core control runtime in process', async () => {
   const siteRoot = mkdtempSync(join(tmpdir(), 'narada-agent-runtime-server-package-'));
   mkdirSync(join(siteRoot, '.ai', 'mcp'), { recursive: true });
   try {
@@ -861,9 +1363,9 @@ test('narada-owned entrypoint runs the carrier runtime in process', async () => 
     child.stderr.setEncoding('utf8');
     child.stdout.on('data', (chunk) => { stdout += chunk; });
     child.stderr.on('data', (chunk) => { stderr += chunk; });
-    child.stdin.write(`${JSON.stringify({ id: 'status-1', method: 'session.status', params: {} })}\n`);
-    child.stdin.write(`${JSON.stringify({ id: 'resume-1', method: 'session.resume', params: {} })}\n`);
-    child.stdin.write(`${JSON.stringify({ id: 'resume-wrong', method: 'session.resume', params: { session_id: 'other-session' } })}\n`);
+    child.stdin.write(`${JSON.stringify({ id: 'health-1', method: 'session.health', params: {} })}\n`);
+    child.stdin.write(`${JSON.stringify({ id: 'recovery-1', method: 'session.recovery', params: {} })}\n`);
+    child.stdin.write(`${JSON.stringify({ id: 'legacy-1', method: 'session.resume', params: {} })}\n`);
     child.stdin.write(`${JSON.stringify({ id: 'close-1', method: 'session.close', params: {} })}\n`);
     child.stdin.end();
     const exitCode = await new Promise((resolveExit) => child.on('exit', resolveExit));
@@ -881,14 +1383,9 @@ test('narada-owned entrypoint runs the carrier runtime in process', async () => 
     assert.equal(events[0].delegated_authority_ref, 'task:1328');
     assert.match(events[0].health_endpoint, /^http:\/\/127\.0\.0\.1:\d+\/health$/);
     assert.match(events[0].event_endpoint, /^ws:\/\/127\.0\.0\.1:\d+\/events$/);
-    assert.equal(events[0].attach_commands.agent_cli, `narada-agent-cli --attach ${events[0].event_endpoint}`);
-    assert.equal(events[0].attach_commands.agent_tui, `agent-tui --attach ${events[0].event_endpoint}`);
-    assert.equal(events[0].attach_commands.agent_web_ui, `narada-agent-web-ui --event-endpoint ${events[0].event_endpoint} --health-endpoint ${events[0].health_endpoint}`);
-    assert.match(events[0].attach_commands.operator_input_protocol, /conversation\.send/);
-    assert.match(events[0].attach_commands.slash_command_protocol, /session\.command\.execute/);
-    assert.equal(events.some((event) => event.event === 'session_status' && event.request_id === 'status-1'), true);
-    assert.equal(events.some((event) => event.event === 'session_resume' && event.request_id === 'resume-1'), true);
-    assert.equal(events.some((event) => event.event === 'error' && event.request_id === 'resume-wrong' && event.code === 'session_mismatch'), true);
+    assert.equal(events.some((event) => event.event === 'session_health' && event.request_id === 'health-1'), true);
+    assert.equal(events.some((event) => event.event === 'session_recovery' && event.request_id === 'recovery-1'), true);
+    assert.equal(events.some((event) => event.event === 'session_control_rejected' && event.request_id === 'legacy-1'), true);
     assert.equal(events.some((event) => event.event === 'session_closed' && event.request_id === 'close-1'), true);
     assert.equal(stderr.includes('Fatal error'), false);
   } finally {

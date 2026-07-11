@@ -4,13 +4,12 @@
   "private": true,
   "type": "module",
   "narada": {
-    "package_role": "nars_carrier_runtime_substrate",
+    "package_role": "nars_carrier_turn_adapter",
     "owns": [
-      "provider_runtime_adapters",
-      "mcp_runtime_fabric",
-      "carrier_server_mode",
-      "carrier_substrate_support_modules"
-    ]
+      "stateless_provider_turn_adapter",
+      "legacy_runtime_compatibility_facades"
+    ],
+    "does_not_own": ["session_persistence", "mcp_hosting", "transport_supervision"]
   },
   "exports": {
     ".": "./src/index.mjs",
@@ -18,6 +17,7 @@
     "./provider-adapters": "./src/provider-adapters.mjs",
     "./provider-resolution": "./src/provider-resolution.mjs",
     "./provider-runtime-defaults": "./src/provider-runtime-defaults.mjs",
+    "./carrier-turn-adapter": "./src/carrier-turn-adapter.mjs",
     "./mcp-runtime": "./src/mcp-runtime.mjs",
     "./process-supervisor": "./src/process-supervisor.mjs",
     "./server-mode": "./src/server-mode.mjs",
@@ -34,18 +34,9 @@
   },
   "scripts": {
     "test": "node --test src/*.test.mjs",
-    "typecheck": "tsc --noEmit --allowJs --checkJs false src/index.mjs src/provider-adapters.mjs src/provider-resolution.mjs src/provider-runtime-defaults.mjs src/mcp-runtime.mjs src/process-supervisor.mjs src/server-mode.mjs src/input-queue.mjs src/runtime-dependencies.mjs src/carrier-runtime-context.mjs src/nars-event-log.mjs src/nars-artifacts.mjs src/nars-session-index.mjs src/operator-input-queue-state.mjs src/authority-transition-state.mjs"
+    "typecheck": "tsc --noEmit --allowJs --checkJs false src/index.mjs src/provider-adapters.mjs src/provider-resolution.mjs src/provider-runtime-defaults.mjs src/carrier-turn-adapter.mjs src/mcp-runtime.mjs src/process-supervisor.mjs src/server-mode.mjs src/input-queue.mjs src/runtime-dependencies.mjs src/carrier-runtime-context.mjs src/nars-event-log.mjs src/nars-artifacts.mjs src/nars-session-index.mjs src/operator-input-queue-state.mjs src/authority-transition-state.mjs"
   },
   "dependencies": {
-    "@narada2/agent-identity": "workspace:*",
-    "@narada2/carrier-action-admission": "workspace:*",
-    "@narada2/carrier-protocol": "workspace:*",
-    "@narada2/carrier-provider-contract": "workspace:*",
-    "@narada2/carrier-provider-support": "workspace:*",
-    "@narada2/launch-process-ownership": "workspace:*",
-    "@narada2/mcp-fabric": "workspace:*",
-    "@narada2/nars-client-projection-contract": "workspace:*",
-    "@narada2/site-paths": "workspace:*",
-    "@narada2/process-launch-posture": "workspace:*"
+    "@narada2/nars-runtime-legacy-compat": "workspace:*"
   }
 }

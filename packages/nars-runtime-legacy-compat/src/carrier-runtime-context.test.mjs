@@ -87,7 +87,7 @@ test('createCarrierRuntimeContext constructs without importing agent-cli globals
       session: 'test-session',
       siteId: 'narada-test-site',
       siteRoot,
-      intelligenceProvider: 'openai',
+      intelligenceProvider: 'openai-api',
       providerSettings: { model: 'gpt-4', thinking: 'high', stream: false, goal: 'test-goal' },
       displaySettings: { toolOutputs: false, observerMuted: true },
       operationHeartbeatDirectiveEnabled: true,
@@ -101,7 +101,7 @@ test('createCarrierRuntimeContext constructs without importing agent-cli globals
     assert.equal(ctx.session, 'test-session');
     assert.equal(ctx.siteId, 'narada-test-site');
     assert.equal(ctx.siteRoot, siteRoot);
-    assert.equal(ctx.intelligenceProvider, 'openai');
+    assert.equal(ctx.intelligenceProvider, 'openai-api');
     assert.equal(ctx.narsDelegatedAuthorityHandoff, null);
 
     assert.equal(ctx.providerSettings.model, 'gpt-4');

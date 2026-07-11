@@ -1,9 +1,10 @@
 import { createServer } from 'node:http';
 import { PassThrough } from 'node:stream';
-import { createCarrierRuntimeContext } from '@narada2/carrier-runtime/carrier-runtime-context';
-import { createCarrierRuntimeDependencies } from '@narada2/carrier-runtime/runtime-dependencies';
-import { runCarrierServerMode } from '@narada2/carrier-runtime/server-mode';
+import { redactProviderRuntimeBinding, resolveProviderRuntimeBinding } from '@narada2/carrier-provider-contract';
+import { createProviderCall } from '@narada2/nars-provider-runtime/provider-call';
 import { createProjectedTerminalBridge } from '@narada2/carrier-terminal-projection/projected-terminal';
+import { createSessionCoreRuntimeService } from './session-core-runtime-service.mjs';
+import { createNarsRuntimeContext } from './runtime-context.mjs';
 import {
   formatPreflightWorkflowEvent,
   formatPreflightWorkflowSummary,
@@ -49,62 +50,15 @@ function agentIdentitySiteId(agentIdentityRef) {
   return typeof identityScopeSiteId === 'string' && identityScopeSiteId.trim() ? identityScopeSiteId.trim() : null;
 }
 
-function encodeWebSocketTextFrame(payload) {
-  const body = Buffer.from(String(payload), 'utf8');
-  if (body.length < 126) return Buffer.concat([Buffer.from([0x81, body.length]), body]);
-  if (body.length < 65536) {
-    const header = Buffer.alloc(4);
-    header[0] = 0x81;
-    header[1] = 126;
-    header.writeUInt16BE(body.length, 2);
-    return Buffer.concat([header, body]);
-  }
-  const header = Buffer.alloc(10);
-  header[0] = 0x81;
-  header[1] = 127;
-  header.writeBigUInt64BE(BigInt(body.length), 2);
-  return Buffer.concat([header, body]);
-}
-
-function decodeWebSocketFrames(buffer) {
-  const frames = [];
-  let offset = 0;
-  while (offset + 2 <= buffer.length) {
-    const first = buffer[offset];
-    const second = buffer[offset + 1];
-    const opcode = first & 0x0f;
-    const masked = (second & 0x80) !== 0;
-    let length = second & 0x7f;
-    let headerLength = 2;
-    if (length === 126) {
-      if (offset + 4 > buffer.length) break;
-      length = buffer.readUInt16BE(offset + 2);
-      headerLength = 4;
-    } else if (length === 127) {
-      if (offset + 10 > buffer.length) break;
-      length = Number(buffer.readBigUInt64BE(offset + 2));
-      headerLength = 10;
-    }
-    const maskLength = masked ? 4 : 0;
-    const frameEnd = offset + headerLength + maskLength + length;
-    if (frameEnd > buffer.length) break;
-    let payload = buffer.subarray(offset + headerLength + maskLength, frameEnd);
-    if (masked) {
-      const mask = buffer.subarray(offset + headerLength, offset + headerLength + 4);
-      payload = Buffer.from(payload.map((byte, index) => byte ^ mask[index % 4]));
-    }
-    frames.push({ opcode, text: payload.toString('utf8') });
-    offset = frameEnd;
-  }
-  return { frames, rest: buffer.subarray(offset) };
-}
-
 async function loadRuntimeDependencies(runtimeContext = {}) {
-  const runtimeDependencies = createCarrierRuntimeDependencies({ runtimeContext });
-  return {
-    ...runtimeDependencies,
-    createProjectedTerminalBridge,
-  };
+  const deniedTools = new Set(String(process.env.NARADA_DENIED_CAPABILITY_TOOLS ?? '').split(',').map((value) => value.trim()).filter(Boolean));
+  return createSessionCoreRuntimeService({
+    runtimeContext,
+    callChatApiFn: createProviderCall({ runtimeContext }),
+    admitCapability: ({ toolName }) => deniedTools.has(toolName)
+      ? { admitted: false, reason: 'denied_by_runtime_policy' }
+      : { admitted: true, reason: 'admitted_by_runtime_policy' },
+  });
 }
 
 function parseHealthOptions(args, env = process.env) {
@@ -165,10 +119,12 @@ function compactHealthForHttp(health) {
   return compact;
 }
 
-function startHealthProjection({ childStdin, host, port, timeoutMs = 2000, runtimeContext }) {
+function startHealthProjection({ childStdin, host, port, timeoutMs = 2000, runtimeContext, sessionSupervisor = null }) {
   const pending = new Map();
   let sequence = 0;
-  const requestHealth = () => new Promise((resolve, reject) => {
+  const requestHealth = sessionSupervisor
+    ? async () => sessionSupervisor.health()
+    : () => new Promise((resolve, reject) => {
     const stdin = typeof childStdin === 'function' ? childStdin() : childStdin;
     if (!stdin?.writable) {
       reject(new Error('child_stdin_unavailable'));
@@ -283,11 +239,12 @@ async function main() {
     process.exit(1);
   }
   let healthProjection = null;
+  let healthRuntimeContext = null;
   let eventStreamProjection = null;
   const eventHub = createEventHub();
   const runtimeInput = new PassThrough();
   const runtimeOutput = new PassThrough();
-  const preliminaryRuntimeContext = createCarrierRuntimeContext({
+  const preliminaryRuntimeContext = createNarsRuntimeContext({
     identity: lifecycleBinding.agent_id,
     agentIdentityRef: lifecycleBinding.agent_identity_ref,
     session: lifecycleBinding.session_id,
@@ -297,11 +254,12 @@ async function main() {
     operatorSurfaceKind,
   });
   if (parsedHealth.health.enabled) {
+    healthRuntimeContext = { ...preliminaryRuntimeContext, eventHub };
     healthProjection = await startHealthProjection({
       childStdin: () => runtimeInput,
       host: parsedHealth.health.host,
       port: parsedHealth.health.port,
-      runtimeContext: { ...preliminaryRuntimeContext, eventHub },
+      runtimeContext: healthRuntimeContext,
     });
     process.env.NARADA_HEALTH_URL = healthProjection.url;
   }
@@ -318,7 +276,11 @@ async function main() {
   }
   process.env.NARADA_NARS_AUTHORITY_HANDOFF = JSON.stringify(delegatedAuthorityHandoff);
 
-  const runtimeContext = createCarrierRuntimeContext({
+  const intelligenceProvider = process.env.NARADA_INTELLIGENCE_PROVIDER?.trim();
+  if (!intelligenceProvider) throw new Error('provider_runtime_provider_required');
+  const providerRuntimeBinding = resolveProviderRuntimeBinding(intelligenceProvider, { env: process.env });
+
+  const runtimeContext = createNarsRuntimeContext({
     identity: lifecycleBinding.agent_id,
     agentIdentityRef: lifecycleBinding.agent_identity_ref,
     session: lifecycleBinding.session_id,
@@ -326,12 +288,15 @@ async function main() {
     siteId: agentIdentitySiteId(lifecycleBinding.agent_identity_ref) ?? process.env.NARADA_SITE_ID ?? null,
     siteConfig: parseSiteConfigEnv(process.env.NARADA_SITE_CONFIG),
     operatorSurfaceKind,
-    intelligenceProvider: process.env.NARADA_INTELLIGENCE_PROVIDER,
+    intelligenceProvider: providerRuntimeBinding.provider_id,
     narsDelegatedAuthorityHandoff: delegatedAuthorityHandoff,
     providerSettings: {
-      model: process.env.NARADA_AI_MODEL ?? process.env.CODEX_MODEL,
-      thinking: process.env.NARADA_AI_THINKING,
+      model: providerRuntimeBinding.model,
+      thinking: providerRuntimeBinding.reasoning_effort,
       stream: process.env.NARADA_AGENT_CLI_STREAM !== '0',
+      baseUrl: providerRuntimeBinding.base_url,
+      apiKey: providerRuntimeBinding.api_key,
+      runtimeBinding: redactProviderRuntimeBinding(providerRuntimeBinding),
     },
     displaySettings: {
       toolOutputs: process.env.NARADA_AGENT_CLI_TOOL_OUTPUTS !== '0',
@@ -344,7 +309,28 @@ async function main() {
     eventsPath: preliminaryRuntimeContext.eventsPath,
     sessionPath: preliminaryRuntimeContext.sessionPath,
   });
-  const runtimeDependencies = await loadRuntimeDependencies(runtimeContext);
+  const runtimeService = await loadRuntimeDependencies(runtimeContext);
+  if (healthRuntimeContext) healthRuntimeContext.sessionCore = runtimeService.supervisor.core;
+  let shutdownSignal = null;
+  const requestGracefulShutdown = (signal) => {
+    if (shutdownSignal) return;
+    shutdownSignal = signal;
+    process.stdin.unpipe?.(runtimeInput);
+    if (runtimeInput.writableEnded || runtimeInput.destroyed) return;
+    runtimeInput.end(`${JSON.stringify({
+      id: `signal-cancel-${signal.toLowerCase()}`,
+      method: 'session.cancel',
+      params: { reason: 'process_signal', signal },
+    })}\n${JSON.stringify({
+      id: `signal-close-${signal.toLowerCase()}`,
+      method: 'session.close',
+      params: { reason: 'process_signal', signal },
+    })}\n`);
+  };
+  const onSigint = () => requestGracefulShutdown('SIGINT');
+  const onSigterm = () => requestGracefulShutdown('SIGTERM');
+  process.once('SIGINT', onSigint);
+  process.once('SIGTERM', onSigterm);
 
   const state = {
     startupSummaryPrinted: false,
@@ -357,7 +343,7 @@ async function main() {
   const useInteractiveTerminalProjection = !rawJsonl && operatorSurfaceKind === 'agent-cli';
 
   if (useInteractiveTerminalProjection) {
-    const projectedTerminal = runtimeDependencies.createProjectedTerminalBridge({
+    const projectedTerminal = createProjectedTerminalBridge({
       input: process.stdin,
       output: process.stdout,
       childStdin: runtimeInput,
@@ -404,25 +390,29 @@ async function main() {
     }
   });
 
+  let exitCode = 0;
   try {
-    await runCarrierServerMode({
+    await runtimeService.run({
       input: runtimeInput,
       output: runtimeOutput,
-      callChatApiFn: runtimeDependencies.callChatApiFn,
-      runtimeContext,
-      dependencies: runtimeDependencies.dependencies,
     });
-    healthProjection?.rejectAll(new Error('carrier_closed'));
-    healthProjection?.server.close();
-    eventStreamProjection?.server.close();
-    process.exit(0);
   } catch (error) {
+    exitCode = 1;
     healthProjection?.rejectAll(error);
-    healthProjection?.server.close();
-    eventStreamProjection?.server.close();
     console.error(`[agent-runtime-server] carrier runtime failed: ${error instanceof Error ? error.message : String(error)}`);
-    process.exit(1);
+  } finally {
+    process.off('SIGINT', onSigint);
+    process.off('SIGTERM', onSigterm);
+    healthProjection?.rejectAll(new Error('carrier_closed'));
+    await closeServer(healthProjection?.server);
+    await closeServer(eventStreamProjection?.server);
   }
+  process.exitCode = exitCode;
+}
+
+function closeServer(server) {
+  if (!server?.listening) return Promise.resolve();
+  return new Promise((resolve) => server.close(resolve));
 }
 
 export {

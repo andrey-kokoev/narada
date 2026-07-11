@@ -5,8 +5,8 @@ import {
   readNarsArtifactContent,
   readNarsArtifactIndex,
   registerNarsArtifact,
-} from '@narada2/carrier-runtime/nars-artifacts';
-import { readNarsEventLog } from '@narada2/carrier-runtime/nars-event-log';
+} from '@narada2/nars-session-core/artifacts';
+import { readNarsEventLog } from '@narada2/nars-session-core/event-log';
 
 function sendJsonResponse(response, statusCode, payload) {
   response.writeHead(statusCode, { 'content-type': 'application/json; charset=utf-8' });
@@ -30,18 +30,18 @@ export async function handleArtifactHttpRequest({ request, response, runtimeCont
   const url = new URL(request.url ?? '/', 'http://127.0.0.1');
   const match = url.pathname.match(/^\/sessions\/([^/]+)\/artifacts(?:\/([^/]+)(?:\/(content|message))?)?$/);
   if (!match) return false;
-  const sessionId = decodeURIComponent(match[1]);
-  const artifactId = match[2] ? decodeURIComponent(match[2]) : null;
   const content = match[3] === 'content';
   const message = match[3] === 'message';
-  if (sessionId !== runtimeContext.session) {
-    sendJsonResponse(response, 404, { schema: 'narada.nars.artifact_error.v1', error: 'session_not_found', message: 'Artifact session does not match this NARS runtime.' });
-    return true;
-  }
   try {
+    const sessionId = decodeURIComponent(match[1]);
+    const artifactId = match[2] ? decodeURIComponent(match[2]) : null;
+    if (sessionId !== runtimeContext.session) {
+      sendJsonResponse(response, 404, { schema: 'narada.nars.artifact_error.v1', error: 'session_not_found', message: 'Artifact session does not match this NARS runtime.' });
+      return true;
+    }
     if (request.method === 'POST' && !artifactId && !content && !message) {
       const params = await readRequestJson(request);
-      const registered = registerNarsArtifact({
+      const artifactOptions = {
         sessionPath: runtimeContext.sessionPath,
         sessionId: runtimeContext.session,
         agentId: runtimeContext.identity,
@@ -52,7 +52,10 @@ export async function handleArtifactHttpRequest({ request, response, runtimeCont
         contentType: params.content_type,
         renderHint: params.render_hint,
         accessScope: params.access?.scope ?? params.access_scope,
-      });
+      };
+      const registered = runtimeContext.sessionCore?.registerArtifact
+        ? runtimeContext.sessionCore.registerArtifact(artifactOptions)
+        : registerNarsArtifact(artifactOptions);
       sendJsonResponse(response, 201, { schema: 'narada.nars.artifact_registered.v1', artifact: registered.public_record });
       return true;
     }
@@ -123,6 +126,9 @@ function artifactMessagePartFromRecord(artifact, params = {}) {
 }
 
 function publishRuntimeEvent({ eventHub, runtimeContext, event }) {
+  if (runtimeContext.sessionCore?.appendEvent) {
+    return runtimeContext.sessionCore.appendEvent(event);
+  }
   const sequencedEvent = withNextEventLogSequence(event, runtimeContext.eventsPath);
   const published = eventHub?.publish(sequencedEvent) ?? sequencedEvent;
   if (runtimeContext.eventsPath) appendFileSync(runtimeContext.eventsPath, `${JSON.stringify(published)}\n`, 'utf8');

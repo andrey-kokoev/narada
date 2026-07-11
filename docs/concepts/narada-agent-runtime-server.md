@@ -182,12 +182,12 @@ It may use or expose these components. It must not become them.
 
 ## Protocol Shape
 
-The initial protocol should be small and event-oriented.
+The default session-core control protocol is deliberately small and event-oriented.
 
 Example request shape:
 
 ```json
-{"method":"conversation.send","params":{"message":"run startup sequence"}}
+{"method":"session.submit","params":{"content":"run startup sequence"}}
 ```
 
 Example event shapes:
@@ -204,20 +204,12 @@ The protocol should support at least:
 
 | Operation | Purpose |
 | --- | --- |
-| `conversation.send` | Append one automation/user turn and run the agent loop until the turn is complete or blocked. |
-| `conversation.enqueue` | Accept ordinary operator input for FIFO admission after the active turn without interrupting it. |
-| `conversation.interrupt` | Request bounded interruption of an active turn. |
-| `conversation.steer` | Interrupt an active turn and admit operator steering as the next queued turn. |
-| `session.status` | Inspect identity, readiness, active turn, tool posture, and blockers. |
+| `session.submit` or `content` | Submit one serialized automation/user turn. |
 | `session.health` | Return the stable runtime health probe shape. |
-| `session.events.subscribe` | Subscribe to live runtime events with optional replay. |
-| `session.events.read` | Page durable `events.jsonl` history. |
-| `session.resume` | Reattach automation to an existing durable session. |
-| `session.sync` | Copy the bound session directory to or from an explicit Site-local sync target. |
 | `session.close` | Close or hand off the session with terminal evidence. |
-| `session.operations` | Inspect operation, request, MCP, queue, and handoff posture. |
 | `session.recovery` | Inspect recovery recommendations and handoff commands. |
-| `session.command.execute` | Execute an admitted slash/operator command through the runtime protocol. |
+
+Event and artifact projections remain separately addressable transports. Historical conversation, resume, status, command, observer, and affordance methods are compatibility protocol only; the default runtime rejects them until they are reintroduced through explicit session-core contracts.
 | `session.artifacts.register` | Register a session-scoped artifact from an admitted local path. |
 | `session.artifacts.read` | Read public artifact metadata or the session artifact index. |
 

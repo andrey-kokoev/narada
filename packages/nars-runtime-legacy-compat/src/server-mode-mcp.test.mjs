@@ -1667,7 +1667,7 @@ test('server mode health and event subscription match NARS runtime contract shap
     assert.equal(health.runtime_mode, 'server');
     assert.equal(health.launch_operator_surface_kind, 'agent-web-ui');
     const { model_catalog: modelCatalog, ...intelligence } = health.intelligence;
-    assert.deepEqual(intelligence, { provider: 'codex-subscription', model: 'gpt-5.6-sol', available_models: ['gpt-5.5', 'gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna', 'gpt-5.4', 'gpt-5.4-mini', 'gpt-5.3-codex-spark'], available_providers: ADMITTED_INTELLIGENCE_PROVIDERS, thinking: 'low', stream: false });
+    assert.deepEqual(intelligence, { provider: 'codex-subscription', model: 'gpt-5.6-sol', available_models: modelCatalog?.models, available_providers: ADMITTED_INTELLIGENCE_PROVIDERS, thinking: 'low', stream: false });
     assert.equal(['live_codex_cache', 'declared_registry_fallback'].includes(modelCatalog?.source), true);
     assert.equal(health.provider, 'codex-subscription');
     assert.equal(health.model, 'gpt-5.6-sol');

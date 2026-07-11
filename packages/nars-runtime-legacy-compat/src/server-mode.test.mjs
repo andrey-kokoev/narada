@@ -71,6 +71,82 @@ test('server mode seeds intelligence with full applicable AGENTS authority chain
   }
 });
 
+test('server mode admits agent-originated carrier input without operator impersonation', async () => {
+  const siteRoot = mkdtempSync(join(tmpdir(), 'carrier-agent-input-test-'));
+  try {
+    const input = new PassThrough();
+    const output = new PassThrough();
+    const emitted = [];
+    let outputBuffer = '';
+    output.setEncoding('utf8');
+    output.on('data', (chunk) => {
+      outputBuffer += chunk;
+      const lines = outputBuffer.split(/\r?\n/);
+      outputBuffer = lines.pop() ?? '';
+      for (const line of lines) if (line.trim()) emitted.push(JSON.parse(line));
+    });
+    const sessionPath = join(siteRoot, 'session.jsonl');
+    const eventsPath = join(siteRoot, 'events.jsonl');
+    const runtimeContext = {
+      identity: 'resident',
+      session: 'session_agent_input_test',
+      siteRoot,
+      sessionPath,
+      eventsPath,
+      providerSettings: { provider: 'codex-subscription', model: 'gpt-test', thinking: 'low', stream: false },
+    };
+    const { dependencies } = createCarrierRuntimeDependencies({ runtimeContext });
+    const running = runCarrierServerMode({
+      input,
+      output,
+      callChatApiFn: async () => ({ choices: [{ message: { role: 'assistant', content: 'agent input accepted' } }] }),
+      runtimeContext,
+      dependencies: {
+        ...dependencies,
+        discoverAndStartMcpServers: async () => ({}),
+        closeMcpServers: () => {},
+        readMcpPreflightArtifact: () => null,
+      },
+    });
+    input.write(`${JSON.stringify({
+      id: 'agent-input-request',
+      method: 'carrier.input.deliver',
+      params: {
+        delivery_constructor: 'enqueue',
+        input: {
+          schema: 'narada.carrier.input_event.v1',
+          event_id: 'input_agent_input_test',
+          source_kind: 'agent',
+          source_id: 'sender.agent',
+          source: 'agent_control',
+          transport: 'carrier_server_api',
+          delivery_mode: 'admit_after_active_turn',
+          hold_condition: null,
+          content: 'continue the bounded investigation',
+          created_at: '2026-07-10T00:00:00.000Z',
+          authority_ref: 'nars-session-mcp:test-site:session_agent_input_test:1',
+          directive_id: 'dir_agent_input_test',
+          metadata: {
+            agent_control_input: true,
+            directive_provenance: { kind: 'agent_directive_surface' },
+          },
+        },
+      },
+    })}\n`);
+    input.end();
+    await running;
+    const queued = emitted.find((event) => event.event === 'input_event_queued');
+    const started = emitted.find((event) => event.event === 'input_event_started');
+    const completed = emitted.find((event) => event.event === 'input_event_completed');
+    assert.equal(queued.request_id, 'agent-input-request');
+    assert.equal(started.request_id, 'agent-input-request');
+    assert.equal(completed.request_id, 'agent-input-request');
+    assert.equal(emitted.some((event) => event.event === 'turn_complete' && event.source === 'operator'), false);
+  } finally {
+    removeTempDir(siteRoot);
+  }
+});
+
 test('session sync copies the session directory to a site-local target', async () => {
   const siteRoot = mkdtempSync(join(tmpdir(), 'carrier-session-sync-test-'));
   try {
@@ -178,7 +254,7 @@ test('session command execution uses the shared command contract commands', asyn
     assert.equal(results.some((event) => event.request_id === 'thinking-override' && event.fields?.thinking === 'high'), true);
     const status = results.find((event) => event.request_id === 'status-after-override')?.fields?.session_status;
     const { model_catalog: modelCatalog, ...intelligence } = status?.intelligence ?? {};
-    assert.deepEqual(intelligence, { provider: 'codex-subscription', model: 'gpt-override', available_models: ['gpt-5.5', 'gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna', 'gpt-5.4', 'gpt-5.4-mini', 'gpt-5.3-codex-spark'], available_providers: ADMITTED_INTELLIGENCE_PROVIDERS, thinking: 'high', stream: false });
+    assert.deepEqual(intelligence, { provider: 'codex-subscription', model: 'gpt-override', available_models: modelCatalog?.models, available_providers: ADMITTED_INTELLIGENCE_PROVIDERS, thinking: 'high', stream: false });
     assert.equal(['live_codex_cache', 'declared_registry_fallback'].includes(modelCatalog?.source), true);
     assert.equal(status?.model, 'gpt-override');
     assert.equal(status?.thinking, 'high');
@@ -730,6 +806,80 @@ test('conversation.steer interrupts the active turn and becomes the next provide
     assert.equal(events[steerEventIndex].delivery_semantics, 'interrupt_active_turn_then_admit_next_turn');
     assert.equal(steerEventIndex < interruptEventIndex, true);
     assert.equal(events.some((event) => event.event === 'turn_complete' && event.terminal_state === 'interrupted'), true);
+  } finally {
+    removeTempDir(siteRoot);
+  }
+});
+
+test('carrier input steer interrupts an active turn while preserving agent provenance', async () => {
+  const siteRoot = mkdtempSync(join(tmpdir(), 'carrier-agent-steer-test-'));
+  try {
+    const input = new PassThrough();
+    const output = new PassThrough();
+    const events = [];
+    let outputBuffer = '';
+    output.setEncoding('utf8');
+    output.on('data', (chunk) => {
+      outputBuffer += chunk;
+      const lines = outputBuffer.split(/\r?\n/);
+      outputBuffer = lines.pop() ?? '';
+      for (const line of lines) if (line.trim()) events.push(JSON.parse(line));
+    });
+    const providerCalls = [];
+    const callChatApiFn = async (messages, tools, settings) => {
+      providerCalls.push(messages.map((message) => ({ role: message.role, content: message.content })));
+      if (providerCalls.length === 1) {
+        await new Promise((resolve, reject) => settings.abortSignal?.addEventListener?.('abort', () => reject(new Error('aborted')), { once: true }));
+      }
+      return { choices: [{ message: { role: 'assistant', content: 'agent steering accepted' } }] };
+    };
+    const runtimeContext = {
+      identity: 'agent.test',
+      session: 'session_agent_steer_test',
+      siteRoot,
+      sessionPath: join(siteRoot, 'session.jsonl'),
+      eventsPath: join(siteRoot, 'events.jsonl'),
+      providerSettings: { stream: false },
+    };
+    const { dependencies } = createCarrierRuntimeDependencies({ runtimeContext });
+    const running = runCarrierServerMode({
+      input,
+      output,
+      callChatApiFn,
+      runtimeContext,
+      dependencies: { ...dependencies, discoverAndStartMcpServers: async () => ({}), closeMcpServers: () => {}, readMcpPreflightArtifact: () => null },
+    });
+    input.write(`${JSON.stringify({ id: 'first-agent-turn', method: 'conversation.send', params: { message: 'original request', source: 'programmatic_operator' } })}\n`);
+    await waitFor(() => events.some((event) => event.event === 'turn_started') && providerCalls.length === 1);
+    input.write(`${JSON.stringify({
+      id: 'agent-steer',
+      method: 'carrier.input.deliver',
+      params: {
+        delivery_constructor: 'steer',
+        input: {
+          schema: 'narada.carrier.input_event.v1',
+          event_id: 'input_agent_steer_test',
+          source_kind: 'agent',
+          source_id: 'sender.agent',
+          source: 'agent_control',
+          transport: 'carrier_server_api',
+          delivery_mode: 'admit_after_active_turn',
+          hold_condition: null,
+          content: 'change course',
+          created_at: '2026-07-10T00:00:00.000Z',
+          authority_ref: 'nars-session-mcp:test-site:session_agent_steer_test:1',
+          directive_id: 'dir_agent_steer_test',
+          metadata: { agent_control_input: true, directive_provenance: { kind: 'agent_directive_surface' } },
+        },
+      },
+    })}\n`);
+    input.end();
+    await running;
+    assert.equal(providerCalls.length, 2);
+    assert.equal(providerCalls[1].some((message) => message.role === 'user' && message.content === 'change course'), true);
+    assert.equal(events.some((event) => event.event === 'carrier_input_steer_requested' && event.source_kind === 'agent'), true);
+    assert.equal(events.some((event) => event.event === 'turn_interrupted' && event.reason === 'carrier_input_steering'), true);
+    assert.equal(events.some((event) => event.event === 'user_message' && event.source === 'agent_control'), true);
   } finally {
     removeTempDir(siteRoot);
   }

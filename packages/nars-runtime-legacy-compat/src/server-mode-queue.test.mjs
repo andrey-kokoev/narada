@@ -9,7 +9,7 @@ import { createCarrierRuntimeDependencies } from './runtime-dependencies.mjs';
 import { runCarrierServerMode } from './server-mode.mjs';
 import { readJson, removeTempDir, tempRoot, waitFor } from './server-mode-test-helpers.mjs';
 
-test('conversation.enqueue during an active turn queues without interrupting and persists queue state', async () => {
+test('conversation.enqueue during an active turn queues without interrupting and persists in-flight state', async () => {
   const siteRoot = tempRoot('carrier-enqueue-test-');
   try {
     const input = new PassThrough();
@@ -64,7 +64,12 @@ test('conversation.enqueue during an active turn queues without interrupting and
     await waitFor(() => events.some((event) => event.event === 'input_queued_for_turn_boundary'));
     const queuePath = join(sessionDir, 'operator-input-queue.json');
     assert.equal(existsSync(queuePath), true);
-    assert.equal(readJson(queuePath).pending_count, 1);
+    const activeQueueState = readJson(queuePath);
+    assert.equal(activeQueueState.pending_count, 2);
+    assert.deepEqual(
+      activeQueueState.pending.map((event) => event.content),
+      ['original request', 'run after active turn'],
+    );
     assert.equal(events.some((event) => event.event === 'turn_interrupted'), false);
 
     releaseFirst();

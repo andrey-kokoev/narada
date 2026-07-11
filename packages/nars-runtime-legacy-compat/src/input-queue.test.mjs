@@ -95,3 +95,19 @@ test('input queue can drop and clear generic queued operator input', async () =>
   assert.equal(queue.items()[0].content, 'system');
   assert.equal(sessionEvents.filter((entry) => entry.event_kind === 'input_dropped_by_operator').length, 2);
 });
+
+test('input queue preserves request correlation across admission and completion evidence', async () => {
+  const sessionEvents = [];
+  const queue = createInputQueue({
+    drain: async () => ({ terminal_state: 'completed' }),
+    appendSessionFn: (entry) => sessionEvents.push(entry),
+    carrierSessionEventEntryFn: (event_kind, payload) => ({ event_kind, payload }),
+    randomIdFn: () => 'request_correlation',
+  });
+  await queue.enqueue({ content: 'agent directive', source: 'agent_control', source_kind: 'agent', request_id: 'nars_input_request_1', metadata: { agent_control_input: true } });
+  await queue.drainUntilIdle();
+  const correlated = sessionEvents.filter((entry) => entry.request_id === 'nars_input_request_1' || entry.payload?.request_id === 'nars_input_request_1');
+  assert.ok(correlated.some((entry) => entry.event === 'input_event_queued'));
+  assert.ok(correlated.some((entry) => entry.event === 'input_event_started'));
+  assert.ok(correlated.some((entry) => entry.event === 'input_event_completed'));
+});

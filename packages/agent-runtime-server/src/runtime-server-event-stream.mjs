@@ -1,5 +1,5 @@
 import { createServer } from 'node:http';
-import { readNarsEventLogPage } from '@narada2/carrier-runtime/nars-event-log';
+import { readNarsEventLogPage } from '@narada2/nars-session-core/event-log';
 import { decodeWebSocketFrames, encodeWebSocketTextFrame, websocketAcceptValue } from './runtime-server-websocket.mjs';
 
 export function startEventStreamProjection({ childStdin, eventHub, host, port, eventsPath = null }) {
@@ -58,6 +58,7 @@ export function startEventStreamProjection({ childStdin, eventHub, host, port, e
             sinceTimestamp: params.since_timestamp,
             filters,
             limit: params.max_replay ?? 100,
+            direction: params.since_sequence != null || params.since_timestamp ? 'forward' : 'backward',
           });
           const replay = replayPage ? replayPage.events : eventHub.replayFor({
             sinceSequence: params.since_sequence,

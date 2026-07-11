@@ -1,0 +1,26 @@
+{
+  "name": "@narada2/nars-capability-gateway",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "narada": {
+    "package_role": "nars_capability_gateway",
+    "owns": ["mcp_server_lifecycle", "tool_catalog_projection", "tool_dispatch", "tool_admission_evidence"],
+    "does_not_own": ["session_journal", "provider_turn_execution", "operator_transport"]
+  },
+  "exports": {
+    ".": "./src/index.mjs",
+    "./mcp-runtime": "./src/mcp-runtime.mjs",
+    "./capability-gateway": "./src/capability-gateway.mjs",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "test": "node --test src/*.test.mjs",
+    "typecheck": "tsc --noEmit --allowJs --checkJs false src/index.mjs src/mcp-runtime.mjs src/capability-gateway.mjs"
+  },
+  "dependencies": {
+    "@narada2/launch-process-ownership": "workspace:*",
+    "@narada2/mcp-fabric": "workspace:*",
+    "@narada2/process-launch-posture": "workspace:*"
+  }
+}

@@ -23,18 +23,18 @@ It owns the public runtime-server contract for:
 - artifact HTTP request handling;
 - protocol-facing wrapper behavior around the carrier substrate.
 
-It executes the in-process carrier substrate through `@narada2/carrier-runtime`.
+It binds transport and process lifetime to one `@narada2/nars-session-core` supervisor. The in-process carrier is a stateless turn adapter; legacy provider code is compatibility-only support.
 
 ## Boundary Rules
 
 Distinguish public NARS ownership from current implementation placement.
 
-NARS owns the runtime responsibility for provider/carrier turn execution, MCP fabric hosting, tool dispatch, event evidence, health/status, and attachment. In the current package split, the provider/MCP/runtime-dependency internals are constructed in `@narada2/carrier-runtime` and wrapped here.
+NARS owns the public session-control contract, transport binding, health/event projection, and process lifetime. `@narada2/nars-session-core` owns lifecycle transitions, durable events, artifacts, input queue state, health, and recovery. `@narada2/carrier-runtime` receives a pure turn context and returns turn evidence; it owns no session persistence. `@narada2/nars-provider-runtime` owns provider execution. `@narada2/nars-runtime-legacy-compat` is legacy protocol compatibility only and must not be used as the default server/control path.
 
 Do not move the following into this package as private implementation internals unless the NARS contract and package split are deliberately changed:
 
 - provider adapter internals;
-- MCP server discovery or low-level tool dispatch internals;
+- MCP server discovery or low-level tool dispatch internals, which belong to `@narada2/nars-capability-gateway`;
 - provider credential resolution;
 - runtime dependency construction;
 - launcher planning or agent selection;
@@ -51,9 +51,9 @@ Those responsibilities belong to the packages and authority surfaces named in `.
 
 ## Editing Guidance
 
-Keep changes focused on the stable runtime-server wrapper: transport handling, health/status/event projection, lifecycle hooks, session handoff, artifact routing, and request routing into the carrier substrate.
+Keep changes focused on the stable runtime-server wrapper: transport handling, health/event projection, lifecycle hooks, session binding, artifact routing, and request routing into the session-core supervisor.
 
-When a change needs provider execution internals, MCP runtime behavior, session records, event logs, or runtime dependency construction, make the change in `../carrier-runtime` unless the NARS contract explicitly moves that implementation surface here.
+When a change needs provider execution internals, use `../nars-provider-runtime`; for MCP runtime behavior use `../nars-capability-gateway`; for session records and event logs use `../nars-session-core`. Do not reintroduce those concerns into the carrier adapter.
 
 If a change alters the public NARS protocol, session binding contract, health/status shape, attachment behavior, or package authority boundary, update the relevant concept docs in the same change.
 
