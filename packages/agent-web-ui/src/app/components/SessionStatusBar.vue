@@ -4,6 +4,7 @@ import BoxVisibilitySelector, { type BoxVisibilitySelectorItem } from './BoxVisi
 import BoxRowShell from './BoxRowShell.vue';
 import ProjectionVerbositySelect from './ProjectionVerbositySelect.vue';
 import { useBoxVisibilityPreference } from '../composables/useBoxVisibilityPreference';
+import { AGENT_WEB_UI_PREFERENCE_KEYS } from '../lib/browserPreferences.js';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import type { AgentActivityState } from '../composables/useAgentActivity';
 import type { useCloudflareProjection } from '../composables/useCloudflareProjection';
@@ -40,7 +41,7 @@ const copyLabel = ref('Copy');
 const pendingProvider = ref<string | null>(null);
 const pendingModel = ref<string | null>(null);
 const pendingThinking = ref<string | null>(null);
-const STATUS_BOX_STORAGE_KEY = 'narada:agent-web-ui:status-boxes.v3';
+const STATUS_BOX_STORAGE_KEY = AGENT_WEB_UI_PREFERENCE_KEYS.statusBoxes;
 const DEFAULT_STATUS_BOX_IDS = ['events', 'health', 'intelligence', 'authority', 'view', 'cloudflare'] as const;
 type StatusBoxId = typeof DEFAULT_STATUS_BOX_IDS[number];
 const DEFAULT_VISIBLE_STATUS_BOX_IDS: readonly StatusBoxId[] = ['intelligence', 'view'];
@@ -357,29 +358,31 @@ function stringField(record: Record<string, unknown>, field: string): string | n
       </Tooltip>
 
       <template #controls>
-        <button
-          v-if="collapsible"
-          type="button"
-          class="status-row-collapse-toggle"
-          aria-expanded="true"
-          aria-label="Collapse status boxes"
-          title="Collapse status boxes"
-          @click="emit('collapse')"
-        >
-          <span aria-hidden="true">^</span>
-        </button>
-        <BoxVisibilitySelector
-          :boxes="statusBoxSelectorItems"
-          panel-id="status-row-box-selector-panel"
-          trigger-label="Status boxes"
-          title="Status Boxes"
-          description="Select which boxes are shown in the session status row."
-          panel-aria-label="Status row boxes"
-          empty-text="No matching status boxes."
-          placement="row-control"
-          @toggle="toggleStatusBox"
-          @reset="resetStatusBoxes"
-        />
+        <div class="status-row-actions">
+          <button
+            v-if="collapsible"
+            type="button"
+            class="status-row-collapse-toggle"
+            aria-expanded="true"
+            aria-label="Collapse status boxes"
+            title="Collapse status boxes"
+            @click="emit('collapse')"
+          >
+            <span aria-hidden="true">^</span>
+          </button>
+          <BoxVisibilitySelector
+            :boxes="statusBoxSelectorItems"
+            panel-id="status-row-box-selector-panel"
+            trigger-label="Status boxes"
+            title="Status Boxes"
+            description="Select which boxes are shown in the session status row."
+            panel-aria-label="Status row boxes"
+            empty-text="No matching status boxes."
+            placement="row-control"
+            @toggle="toggleStatusBox"
+            @reset="resetStatusBoxes"
+          />
+        </div>
       </template>
     </BoxRowShell>
   </TooltipProvider>

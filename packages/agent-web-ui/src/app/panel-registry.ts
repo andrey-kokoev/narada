@@ -21,7 +21,6 @@ export interface SessionPanelCapabilityContext {
 export interface SessionPanelRegistration {
   id: SessionPanelId;
   label: string;
-  preferenceKey: string;
   unavailableMessage: string;
   isAvailable: (context: SessionPanelCapabilityContext) => boolean;
 }
@@ -32,7 +31,6 @@ const surfacePanel = (
 ): SessionPanelRegistration => ({
   id,
   label,
-  preferenceKey: `narada:agent-web-ui:panel:${id}:open.v1`,
   unavailableMessage: `${label} capability is not advertised by the attached runtime.`,
   isAvailable: (context) => context.surfaceKinds.includes(id),
 });
@@ -41,28 +39,24 @@ export const SESSION_PANEL_REGISTRY: readonly SessionPanelRegistration[] = [
   {
     id: 'runtime_topology',
     label: 'Connection',
-    preferenceKey: 'narada:agent-web-ui:panel:runtime-topology:open.v1',
     unavailableMessage: 'Runtime topology is not advertised by the attached runtime.',
     isAvailable: () => true,
   },
   {
     id: 'mcp',
     label: 'MCP Catalog',
-    preferenceKey: 'narada:agent-web-ui:panel:mcp:open.v1',
     unavailableMessage: 'MCP inventory is not advertised by the attached runtime.',
     isAvailable: () => true,
   },
   {
     id: 'generic_affordance',
     label: 'MCP Surface',
-    preferenceKey: 'narada:agent-web-ui:panel:generic-affordance:open.v1',
     unavailableMessage: 'No generic MCP surface affordances are advertised by the attached runtime.',
     isAvailable: (context) => context.genericAffordanceCount > 0,
   },
   {
     id: 'artifacts',
     label: 'Artifacts',
-    preferenceKey: 'narada:agent-web-ui:panel:artifacts:open.v1',
     unavailableMessage: 'Artifact access is not advertised by the attached runtime.',
     isAvailable: (context) => Boolean(context.artifactBasePath),
   },

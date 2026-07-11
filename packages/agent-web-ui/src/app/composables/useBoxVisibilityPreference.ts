@@ -1,4 +1,5 @@
 import { computed, ref, watch, type Ref } from 'vue';
+import { readJsonPreference, writeJsonPreference } from '../lib/browserPreferences.js';
 
 interface BoxVisibilityPreferenceOptions<TId extends string> {
   storageKey: string;
@@ -39,7 +40,7 @@ export function useBoxVisibilityPreference<TId extends string>(options: BoxVisib
 function loadVisibleIds<TId extends string>(options: BoxVisibilityPreferenceOptions<TId>): Set<TId> {
   if (typeof window === 'undefined') return new Set(options.defaultVisibleIds);
   try {
-    const parsed = JSON.parse(window.localStorage.getItem(options.storageKey) ?? 'null') as unknown;
+    const parsed = readJsonPreference(options.storageKey, null) as unknown;
     if (!Array.isArray(parsed)) return new Set(options.defaultVisibleIds);
     const allowed = new Set(options.itemIds);
     const loaded = parsed.filter((id): id is TId => typeof id === 'string' && allowed.has(id as TId));
@@ -53,5 +54,5 @@ function loadVisibleIds<TId extends string>(options: BoxVisibilityPreferenceOpti
 function persistVisibleIds<TId extends string>(options: BoxVisibilityPreferenceOptions<TId>, ids: Set<TId>) {
   if (typeof window === 'undefined') return;
   const orderedIds = options.itemIds.filter((id) => ids.has(id));
-  window.localStorage.setItem(options.storageKey, JSON.stringify(orderedIds));
+  writeJsonPreference(options.storageKey, orderedIds);
 }

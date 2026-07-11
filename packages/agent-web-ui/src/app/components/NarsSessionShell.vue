@@ -27,6 +27,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/t
 import { summarizeSessionTitleParts } from '../../session-identity.js';
 import { useBoxVisibilityPreference } from '../composables/useBoxVisibilityPreference';
 import { useSessionPanels } from '../composables/useSessionPanels';
+import { AGENT_WEB_UI_PREFERENCE_KEYS, readBooleanPreference, writeBooleanPreference } from '../lib/browserPreferences.js';
 import type { SessionPanelId } from '../panel-registry';
 import type { AgentActivityState } from '../composables/useAgentActivity';
 import type { AffordanceConfirmationItem } from '../composables/useAffordanceConfirmations';
@@ -121,8 +122,8 @@ const emit = defineEmits<{
   'cancel-affordance-action': [item: AffordanceConfirmationItem];
   'intent-selected': [intent: string];
 }>();
-const STATUS_ROW_OPEN_STORAGE_KEY = 'narada:agent-web-ui:status-row-open.v1';
-const HEADER_ITEM_STORAGE_KEY = 'narada:agent-web-ui:header-items.v2';
+const STATUS_ROW_OPEN_STORAGE_KEY = AGENT_WEB_UI_PREFERENCE_KEYS.statusRowOpen;
+const HEADER_ITEM_STORAGE_KEY = AGENT_WEB_UI_PREFERENCE_KEYS.headerItems;
 const HEADER_ITEM_IDS = ['identity', 'snippets', 'surfaces', 'runtime', 'session', 'status_toggle'] as const;
 type HeaderItemId = typeof HEADER_ITEM_IDS[number];
 const DEFAULT_VISIBLE_HEADER_ITEM_IDS: readonly HeaderItemId[] = ['identity', 'surfaces', 'runtime', 'status_toggle'];
@@ -267,15 +268,12 @@ function genericSurfaceKey(item: { surfaceId: string | null; serverName: string 
 
 function loadBooleanPreference(key: string, fallback: boolean): boolean {
   if (typeof window === 'undefined') return fallback;
-  const stored = window.localStorage.getItem(key);
-  if (stored === 'true') return true;
-  if (stored === 'false') return false;
-  return fallback;
+  return readBooleanPreference(key, fallback);
 }
 
 function persistBooleanPreference(key: string, value: boolean) {
   if (typeof window === 'undefined') return;
-  window.localStorage.setItem(key, String(value));
+  writeBooleanPreference(key, value);
 }
 
 function isHeaderItemVisible(id: HeaderItemId): boolean {

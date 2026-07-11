@@ -4,9 +4,10 @@ import {
   NARS_CLIENT_PROJECTION_DEFAULT_VERBOSITY,
   normalizeNarsClientProjectionVerbosity,
 } from '../../runtime-events.js';
+import { AGENT_WEB_UI_PREFERENCE_KEYS, readStringPreference, writeStringPreference } from '../lib/browserPreferences.js';
 
 export type ProjectionVerbosity = typeof NARS_CLIENT_PROJECTION_VERBOSITY_LEVELS[number];
-const PROJECTION_VERBOSITY_STORAGE_KEY = 'narada:agent-web-ui:projection-verbosity.v1';
+const PROJECTION_VERBOSITY_STORAGE_KEY = AGENT_WEB_UI_PREFERENCE_KEYS.projectionVerbosity;
 
 export function useProjectionVerbosity(initial = NARS_CLIENT_PROJECTION_DEFAULT_VERBOSITY) {
   const verbosity = ref(loadProjectionVerbosity(initial));
@@ -23,10 +24,10 @@ export function useProjectionVerbosity(initial = NARS_CLIENT_PROJECTION_DEFAULT_
 function loadProjectionVerbosity(fallback: string): ProjectionVerbosity {
   const normalizedFallback = normalizeNarsClientProjectionVerbosity(fallback) as ProjectionVerbosity;
   if (typeof window === 'undefined') return normalizedFallback;
-  return normalizeNarsClientProjectionVerbosity(window.localStorage.getItem(PROJECTION_VERBOSITY_STORAGE_KEY) ?? normalizedFallback) as ProjectionVerbosity;
+  return normalizeNarsClientProjectionVerbosity(readStringPreference(PROJECTION_VERBOSITY_STORAGE_KEY, normalizedFallback)) as ProjectionVerbosity;
 }
 
 function persistProjectionVerbosity(value: ProjectionVerbosity) {
   if (typeof window === 'undefined') return;
-  window.localStorage.setItem(PROJECTION_VERBOSITY_STORAGE_KEY, value);
+  writeStringPreference(PROJECTION_VERBOSITY_STORAGE_KEY, value);
 }

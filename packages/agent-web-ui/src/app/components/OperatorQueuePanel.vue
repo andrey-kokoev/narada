@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 import type { OperatorQueueItem } from '../composables/useOperatorInput';
+import { AGENT_WEB_UI_PREFERENCE_KEYS, readBooleanPreference, writeBooleanPreference } from '../lib/browserPreferences.js';
 
 const props = defineProps<{
   items: OperatorQueueItem[];
@@ -13,22 +14,19 @@ const emit = defineEmits<{
   steer: [item: OperatorQueueItem];
 }>();
 
-const OPERATOR_QUEUE_OPEN_STORAGE_KEY = 'narada:agent-web-ui:operator-queue-open.v1';
+const OPERATOR_QUEUE_OPEN_STORAGE_KEY = AGENT_WEB_UI_PREFERENCE_KEYS.operatorQueueOpen;
 const open = ref(loadBooleanPreference(OPERATOR_QUEUE_OPEN_STORAGE_KEY, true));
 const countLabel = computed(() => `${props.items.length} queued`);
 watch(open, (value) => persistBooleanPreference(OPERATOR_QUEUE_OPEN_STORAGE_KEY, value));
 
 function loadBooleanPreference(key: string, fallback: boolean): boolean {
   if (typeof window === 'undefined') return fallback;
-  const stored = window.localStorage.getItem(key);
-  if (stored === 'true') return true;
-  if (stored === 'false') return false;
-  return fallback;
+  return readBooleanPreference(key, fallback);
 }
 
 function persistBooleanPreference(key: string, value: boolean) {
   if (typeof window === 'undefined') return;
-  window.localStorage.setItem(key, String(value));
+  writeBooleanPreference(key, value);
 }
 </script>
 
@@ -38,7 +36,7 @@ function persistBooleanPreference(key: string, value: boolean) {
       <span>Queued Operator Instructions</span>
       <span>{{ countLabel }} · {{ open ? 'collapse' : 'expand' }}</span>
     </button>
-    <ol v-if="open" class="operator-queue-list">
+    <ol v-if="open" class="operator-queue-list narada-list-reset">
       <li v-for="item in items" :key="item.event_id ?? item.index" class="operator-queue-item">
         <p>{{ item.content }}</p>
         <div class="operator-queue-meta">

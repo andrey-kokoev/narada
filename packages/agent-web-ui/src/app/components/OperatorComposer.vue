@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref } from 'vue';
+import BoxRowShell from './BoxRowShell.vue';
 import BoxVisibilitySelector, { type BoxVisibilitySelectorItem } from './BoxVisibilitySelector.vue';
 import OperatorCommandPalette from './OperatorCommandPalette.vue';
 import { useBoxVisibilityPreference } from '../composables/useBoxVisibilityPreference';
 import { useOperatorCommandPalette } from '../composables/useOperatorCommandPalette';
 import { useOperatorInterruptPrompt } from '../composables/useOperatorInterruptPrompt';
+import { AGENT_WEB_UI_PREFERENCE_KEYS } from '../lib/browserPreferences.js';
 import type { OperatorSnippet, OperatorSnippetDeliveryMode } from '../composables/useOperatorSnippets';
 
 const draft = defineModel<string>({ required: true });
@@ -12,7 +14,7 @@ const props = defineProps<{ disabled?: boolean; disabledReason?: string; canInte
 const emit = defineEmits<{ submit: [deliveryMode?: OperatorSnippetDeliveryMode]; 'run-snippet': [snippet: OperatorSnippet, deliveryMode?: OperatorSnippetDeliveryMode]; interrupt: [] }>();
 const inputRef = ref<HTMLTextAreaElement | null>(null);
 
-const FOOTER_ITEM_STORAGE_KEY = 'narada:agent-web-ui:operator-footer-items.v1';
+const FOOTER_ITEM_STORAGE_KEY = AGENT_WEB_UI_PREFERENCE_KEYS.operatorFooterItems;
 const FOOTER_ITEM_IDS = ['target', 'input'] as const;
 type FooterItemId = typeof FOOTER_ITEM_IDS[number];
 const DEFAULT_VISIBLE_FOOTER_ITEM_IDS: readonly FooterItemId[] = ['target', 'input'];
@@ -89,16 +91,16 @@ function handleKeydown(event: KeyboardEvent) {
 
 <template>
   <form id="operator-form" class="composer" aria-label="Operator input" @submit.prevent="emit('submit', 'default')">
-    <div class="composer-items">
-      <p v-if="footerVisibility.isVisible('target')" class="composer-target" :data-state="disabled ? 'blocked' : 'active'">
-        <span>{{ disabled ? 'Input blocked' : 'Sending to' }}</span>
-        <strong>{{ props.targetLabel ?? 'current session' }}</strong>
-        <template v-if="props.targetState">
-          <span>· {{ props.targetState }}</span>
-        </template>
-      </p>
-      <div v-if="footerVisibility.isVisible('input')" class="composer-input-box">
-        <div class="composer-input-stack">
+    <p v-if="footerVisibility.isVisible('target')" class="composer-target" :data-state="disabled ? 'blocked' : 'active'">
+      <span>{{ disabled ? 'Input blocked' : 'Sending to' }}</span>
+      <strong>{{ props.targetLabel ?? 'current session' }}</strong>
+      <template v-if="props.targetState">
+        <span>· {{ props.targetState }}</span>
+      </template>
+    </p>
+    <BoxRowShell row-label="Operator input footer" class-name="operator-footer-row">
+      <div class="composer-input-box">
+        <div v-if="footerVisibility.isVisible('input')" class="composer-input-stack">
           <OperatorCommandPalette
             v-if="commandPaletteOpen"
             :entries="commandResults"
@@ -125,25 +127,25 @@ function handleKeydown(event: KeyboardEvent) {
             @keydown="handleKeydown"
           />
         </div>
-        <button type="submit" :disabled="disabled">Send</button>
+        <div class="composer-input-actions">
+          <BoxVisibilitySelector
+            :boxes="footerSelectorItems"
+            panel-id="operator-footer-item-selector-panel"
+            trigger-label="Operator footer items"
+            title="Operator Footer Items"
+            description="Select which controls are shown in the operator input row."
+            panel-aria-label="Operator footer items"
+            empty-text="No matching footer items."
+            search-placeholder="Filter footer items"
+            placement="inline"
+            @toggle="toggleFooterItem"
+            @reset="resetFooterItems"
+          />
+          <button v-if="footerVisibility.isVisible('input')" type="submit" class="composer-submit" :disabled="disabled">Send</button>
+        </div>
       </div>
-      <p v-if="disabled" class="composer-status">{{ disabledReason }}</p>
-    </div>
-    <div class="composer-controls" aria-label="Operator footer controls">
-      <BoxVisibilitySelector
-        :boxes="footerSelectorItems"
-        panel-id="operator-footer-item-selector-panel"
-        trigger-label="Operator footer items"
-        title="Operator Footer Items"
-        description="Select which controls are shown in the operator input row."
-        panel-aria-label="Operator footer items"
-        empty-text="No matching footer items."
-        search-placeholder="Filter footer items"
-        placement="row-control"
-        @toggle="toggleFooterItem"
-        @reset="resetFooterItems"
-      />
-    </div>
+    </BoxRowShell>
+    <p v-if="disabled" class="composer-status">{{ disabledReason }}</p>
   </form>
   <Teleport to="body">
     <div v-if="interruptModalVisible" class="interrupt-confirm-layer" role="presentation">

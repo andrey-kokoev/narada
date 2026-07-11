@@ -1,5 +1,6 @@
 import { AGENT_WEB_UI_SNIPPET_USAGE, parseAgentWebUiSnippetCommand } from '@narada2/nars-client-projection-contract';
 import { computed, ref } from 'vue';
+import { AGENT_WEB_UI_PREFERENCE_KEYS, readJsonPreference, writeJsonPreference } from '../lib/browserPreferences.js';
 
 export interface OperatorSnippet {
   id: string;
@@ -35,7 +36,7 @@ export interface OperatorSnippetOpenRequest {
 
 export type OperatorSnippetDeliveryMode = 'default' | 'enqueue';
 
-const STORAGE_KEY = 'narada:agent-web-ui:operator-snippets.v1';
+const STORAGE_KEY = AGENT_WEB_UI_PREFERENCE_KEYS.operatorSnippets;
 
 function nowIso(): string {
   return new Date().toISOString();
@@ -74,7 +75,7 @@ function normalizeEntry(entry: Record<string, unknown>, timestamp = nowIso()): O
 function readStoredSnippets(): OperatorSnippet[] {
   if (typeof window === 'undefined') return [];
   try {
-    const parsed = JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? '[]');
+    const parsed = readJsonPreference(STORAGE_KEY, []) as unknown;
     if (!Array.isArray(parsed)) return [];
     const entries = parsed.map((entry) => normalizeEntry(entry)).filter((entry): entry is OperatorSnippet => Boolean(entry));
     return [...new Map(entries.map((entry) => [entry.name, entry])).values()];
@@ -86,8 +87,7 @@ function readStoredSnippets(): OperatorSnippet[] {
 function persistSnippets(snippets: OperatorSnippet[]): boolean {
   if (typeof window === 'undefined') return true;
   try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(snippets));
-    return true;
+    return writeJsonPreference(STORAGE_KEY, snippets);
   } catch {
     return false;
   }

@@ -43,6 +43,13 @@ import { createCloudflareNarsProjectionWorker } from '@narada2/cloudflare-nars-p
 import { registerProjectionRemotely, startLocalProjectionBridgeOnce, deliverRemoteProjectionInputsOnce } from '@narada2/cloudflare-nars-projection/node';
 import { appendEvent } from '../src/render.js';
 import {
+  AGENT_WEB_UI_PREFERENCE_KEYS,
+  readBooleanPreference,
+  readJsonPreference,
+  writeBooleanPreference,
+  writeJsonPreference,
+} from '../src/app/lib/browserPreferences.js';
+import {
   applyManagedFavicon,
   extractFaviconCandidatesFromHealth,
   isSafeFaviconHref,
@@ -320,6 +327,23 @@ test('default package test script remains non-browser and non-e2e', async () => 
   assert.deepEqual(forbidden, [], `default test must stay non-browser; move these to test:browser or test:all: ${forbidden.join(', ')}`);
 });
 
+test('browser preferences hydrate through qualified feature-owned storage without session state', () => {
+  const values = new Map();
+  const storage = {
+    getItem(key) { return values.get(key) ?? null; },
+    setItem(key, value) { values.set(key, String(value)); },
+  };
+  const keys = Object.values(AGENT_WEB_UI_PREFERENCE_KEYS);
+
+  assert.equal(keys.every((key) => key.startsWith('narada:agent-web-ui:')), true);
+  assert.equal(writeBooleanPreference(AGENT_WEB_UI_PREFERENCE_KEYS.statusRowOpen, false, storage), true);
+  assert.equal(writeJsonPreference(AGENT_WEB_UI_PREFERENCE_KEYS.statusBoxes, ['intelligence', 'view'], storage), true);
+  assert.equal(readBooleanPreference(AGENT_WEB_UI_PREFERENCE_KEYS.statusRowOpen, true, storage), false);
+  assert.deepEqual(readJsonPreference(AGENT_WEB_UI_PREFERENCE_KEYS.statusBoxes, [], storage), ['intelligence', 'view']);
+  assert.equal(readBooleanPreference('narada:agent-web-ui:missing.v1', true, storage), true);
+  assert.deepEqual(readJsonPreference('narada:agent-web-ui:corrupt.v1', ['fallback'], { getItem: () => '{bad', setItem() {} }), ['fallback']);
+});
+
 test('ordinary Agent Web UI browser UX tests stay Playwright-owned', async () => {
   const packageJson = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
   const testFiles = await readdir(new URL('../test/', import.meta.url));
@@ -511,7 +535,8 @@ test('Vue operator components expose composer without hidden privileged controls
   assert.match(shell, /panels\.openGeneric\(surfaceKind\)/);
   assert.match(panelRegistry, /export type SessionPanelId/);
   assert.match(panelRegistry, /SESSION_PANEL_REGISTRY/);
-  assert.match(panelRegistry, /narada:agent-web-ui:panel:/);
+  assert.match(panelRegistry, /unavailableMessage/);
+  assert.doesNotMatch(panelRegistry, /localStorage|browserStorage/);
   assert.match(panelRegistry, /surfaceKinds\.includes\(id\)/);
   assert.match(panelRegistry, /genericAffordanceCount > 0/);
   assert.match(sessionPanels, /const state = reactive\(\{ \.\.\.initialOpenState \}\)/);
@@ -792,6 +817,7 @@ test('Vue layout smoke covers shell, status, event list, composer, and event ton
   const selectorComponent = await readFile(new URL('../src/app/components/ProjectionVerbositySelect.vue', import.meta.url), 'utf8');
   const composer = await readFile(new URL('../src/app/components/OperatorComposer.vue', import.meta.url), 'utf8');
   const boxVisibilityPreference = await readFile(new URL('../src/app/composables/useBoxVisibilityPreference.ts', import.meta.url), 'utf8');
+  const browserPreferences = await readFile(new URL('../src/app/lib/browserPreferences.js', import.meta.url), 'utf8');
   const viteConfig = await readFile(new URL('../vite.config.mjs', import.meta.url), 'utf8');
   const css = await readAgentWebUiCss();
   assert.match(css, /--sans:\s*Inter/);
@@ -806,7 +832,7 @@ test('Vue layout smoke covers shell, status, event list, composer, and event ton
   assert.match(shell, /\{\{ sessionIdentity\.title \}\}/);
   assert.match(shell, /\{\{ sessionIdentity\.subtitle \}\}/);
   assert.match(shell, /follow-latest-revision="followLatestRevision"/);
-  assert.match(shell, /narada:agent-web-ui:status-row-open\.v1/);
+  assert.match(shell, /AGENT_WEB_UI_PREFERENCE_KEYS\.statusRowOpen/);
   assert.match(app, /useAgentActivity\(session\.events, health\.body\)/);
   assert.match(app, /useSessionActions\(connection\.connection, session\.retain, supportsProtocolMethod\)/);
   assert.match(app, /sessionActions\.send/);
@@ -814,11 +840,11 @@ test('Vue layout smoke covers shell, status, event list, composer, and event ton
   assert.match(sessionActions, /unsupported_session_control/);
   assert.match(sessionActions, /event stream is not open/);
   assert.match(activity, /active_turn_state/);
-  assert.match(shell, /narada:agent-web-ui:header-items\.v2/);
+  assert.match(shell, /AGENT_WEB_UI_PREFERENCE_KEYS\.headerItems/);
   assert.match(shell, /Connection: \{\{ runtimeTopology\.verdictLabel \}\}/);
-  assert.match(status, /narada:agent-web-ui:status-boxes\.v3/);
+  assert.match(status, /AGENT_WEB_UI_PREFERENCE_KEYS\.statusBoxes/);
   assert.match(status, /Authority Detail/);
-  assert.match(composer, /narada:agent-web-ui:operator-footer-items\.v1/);
+  assert.match(composer, /AGENT_WEB_UI_PREFERENCE_KEYS\.operatorFooterItems/);
   assert.match(composer, /label: 'Target'/);
   assert.match(composer, /label: 'Operator Input'/);
   assert.match(composer, /useBoxVisibilityPreference\(\{[\s\S]*allowEmpty: true/);
@@ -826,6 +852,11 @@ test('Vue layout smoke covers shell, status, event list, composer, and event ton
   assert.match(shell, /useBoxVisibilityPreference\(\{/);
   assert.match(boxVisibilityPreference, /allowEmpty === true && parsed\.length === 0/);
   assert.match(boxVisibilityPreference, /const orderedIds = options\.itemIds\.filter\(\(id\) => ids\.has\(id\)\)/);
+  for (const key of ['projectionVerbosity', 'headerItems', 'statusBoxes', 'statusRowOpen', 'operatorFooterItems', 'operatorQueueOpen', 'operatorSnippets']) {
+    assert.match(browserPreferences, new RegExp(`${key}:`));
+  }
+  assert.match(browserPreferences, /function readJsonPreference/);
+  assert.match(browserPreferences, /function writeJsonPreference/);
   assert.match(viteConfig, /chunkSizeWarningLimit: 900/);
   assert.match(viteConfig, /warning\.code === 'INVALID_ANNOTATION'/);
   assert.match(viteConfig, /@vueuse/);
@@ -875,7 +906,7 @@ test('Vue layout smoke covers shell, status, event list, composer, and event ton
   assert.match(app, /function steerQueuedNow/);
   assert.match(app, /@steer-queued="steerQueuedNow"/);
   const queuePanel = await readFile(new URL('../src/app/components/OperatorQueuePanel.vue', import.meta.url), 'utf8');
-  assert.match(queuePanel, /narada:agent-web-ui:operator-queue-open\.v1/);
+  assert.match(queuePanel, /AGENT_WEB_UI_PREFERENCE_KEYS\.operatorQueueOpen/);
   assert.match(queuePanel, /canSteerActiveTurn: boolean/);
   assert.match(queuePanel, /!activeTurnId \|\| !canSteerActiveTurn/);
   assert.match(transcript, /followLatestRevision/);
