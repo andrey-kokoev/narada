@@ -22,5 +22,5 @@ export function useNarsEvents(events: unknown[], verbosity: Ref<ProjectionVerbos
     const snapshot = Array.from({ length: events.length }, (_, index) => events[index]);
     return summarizeProjectedSessionIdentity(snapshot, healthIdentity?.value) as SessionIdentitySummary;
   });
-  return { rows, summarizedStateSampleCount, sessionIdentity };
+  return { projection, rows, summarizedStateSampleCount, sessionIdentity };
 }

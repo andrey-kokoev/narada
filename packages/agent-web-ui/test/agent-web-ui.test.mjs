@@ -397,6 +397,7 @@ test('Vue operator components expose composer without hidden privileged controls
   const shell = await readFile(new URL('../src/app/components/NarsSessionShell.vue', import.meta.url), 'utf8');
   const input = await readFile(new URL('../src/app/composables/useOperatorInput.ts', import.meta.url), 'utf8');
   const app = await readFile(new URL('../src/app/App.vue', import.meta.url), 'utf8');
+  const sessionState = await readFile(new URL('../src/app/composables/useSessionState.ts', import.meta.url), 'utf8');
   const siteInfo = await readFile(new URL('../src/app/components/SiteInfoPanel.vue', import.meta.url), 'utf8');
   const mailboxPanel = await readFile(new URL('../src/app/components/MailboxPanel.vue', import.meta.url), 'utf8');
   const schedulerPanel = await readFile(new URL('../src/app/components/SchedulerPanel.vue', import.meta.url), 'utf8');
@@ -556,11 +557,15 @@ test('Vue operator components expose composer without hidden privileged controls
   for (const panel of ['ArtifactsPanel', 'McpServerPanel', 'GenericAffordancePanel', 'DelegationPanel', 'GitPanel', 'InboxPanel', 'MailboxPanel', 'SchedulerPanel', 'TaskLifecyclePanel', 'SopPanel', 'SurfaceFeedbackPanel']) {
     assert.doesNotMatch(headerActions, new RegExp(`<${panel}\\b`));
   }
-  assert.match(app, /useMailboxSummary\(retained\.events\)/);
-  assert.match(app, /useSchedulerSummary\(retained\.events\)/);
-  assert.match(app, /useSopSummary\(retained\.events\)/);
-  assert.match(app, /useTaskLifecycleSummary\(retained\.events\)/);
-  assert.match(app, /useSurfaceAffordances\(retained\.events, health\.body\)/);
+  assert.match(app, /useMailboxSummary\(session\.events\)/);
+  assert.match(app, /useSchedulerSummary\(session\.events\)/);
+  assert.match(app, /useSopSummary\(session\.events\)/);
+  assert.match(app, /useTaskLifecycleSummary\(session\.events\)/);
+  assert.match(app, /useSurfaceAffordances\(session\.events, health\.body\)/);
+  assert.match(app, /useSessionState\(projection\.verbosity, health\.identity\)/);
+  assert.doesNotMatch(app, /useRetainedEvents|useNarsEvents/);
+  assert.match(sessionState, /useRetainedEvents\(\)/);
+  assert.match(sessionState, /useNarsEvents\(retained\.events/);
   assert.match(siteInfo, /'open-surface-navigator': \[\]/);
   assert.match(siteInfo, /function openSurfaceNavigator/);
   assert.match(siteInfo, /@click="openSurfaceNavigator"/);
@@ -628,6 +633,15 @@ test('Vue operator components expose composer without hidden privileged controls
   assert.doesNotMatch(boxVisibilitySelector, />Boxes<\/span>/);
   assert.match(shell, /summarizeSessionTitleParts\(props\.sessionIdentity\)/);
   assert.match(shell, /placement="row-control"/);
+});
+
+test('session state boundary exposes retention and projection as one owner', async () => {
+  const sessionState = await readFile(new URL('../src/app/composables/useSessionState.ts', import.meta.url), 'utf8');
+  assert.match(sessionState, /The browser-owned session boundary/);
+  assert.match(sessionState, /const retained = useRetainedEvents\(\)/);
+  assert.match(sessionState, /const projection = useNarsEvents\(retained\.events/);
+  assert.match(sessionState, /\.\.\.retained/);
+  assert.match(sessionState, /\.\.\.projection/);
 });
 
 test('session identity projection prefers explicit Site id for workspace-root Site bindings', () => {
@@ -781,7 +795,7 @@ test('Vue layout smoke covers shell, status, event list, composer, and event ton
   assert.match(shell, /\{\{ sessionIdentity\.subtitle \}\}/);
   assert.match(shell, /follow-latest-revision="followLatestRevision"/);
   assert.match(shell, /narada:agent-web-ui:status-row-open\.v1/);
-  assert.match(app, /useAgentActivity\(retained\.events, health\.body\)/);
+  assert.match(app, /useAgentActivity\(session\.events, health\.body\)/);
   assert.match(activity, /active_turn_state/);
   assert.match(shell, /narada:agent-web-ui:header-items\.v2/);
   assert.match(shell, /Connection: \{\{ runtimeTopology\.verdictLabel \}\}/);

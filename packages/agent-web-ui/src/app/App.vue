@@ -12,12 +12,11 @@ import { useInboxSummary } from './composables/useInboxSummary';
 import { useMailboxSummary } from './composables/useMailboxSummary';
 import { useMcpInventory } from './composables/useMcpInventory';
 import { useNarsConnection } from './composables/useNarsConnection';
-import { useNarsEvents } from './composables/useNarsEvents';
+import { useSessionState } from './composables/useSessionState';
 import { useOperatorInput, type OperatorQueueItem } from './composables/useOperatorInput';
 import { useOperatorQueue } from './composables/useOperatorQueue';
 import { useOperatorSnippets, type OperatorSnippet, type OperatorSnippetCommandEvent, type OperatorSnippetFeedback, type OperatorSnippetOpenRequest } from './composables/useOperatorSnippets';
 import { useProjectionVerbosity, type ProjectionVerbosity } from './composables/useProjectionVerbosity';
-import { useRetainedEvents } from './composables/useRetainedEvents';
 import { useRuntimeTopology } from './composables/useRuntimeTopology';
 import { useResolvedFavicon } from './composables/useResolvedFavicon.js';
 import { useSchedulerSummary } from './composables/useSchedulerSummary';
@@ -50,28 +49,27 @@ provide(ArtifactRenderingConfigKey, {
   artifactTransport: props.config.artifactTransport ?? null,
   browserToken: props.config.browserToken ?? null,
 });
-const retained = useRetainedEvents();
 const projection = useProjectionVerbosity();
 const health = useHealthStatus({ endpoint: props.config.healthEndpoint, browserToken: props.config.browserToken ?? null });
+const session = useSessionState(projection.verbosity, health.identity);
 const connection = useNarsConnection(
   { eventEndpoint: props.config.eventEndpoint, inputEndpoint: props.config.inputEndpoint, browserToken: props.config.browserToken ?? null, maxReplay: props.config.maxReplay },
-  retained.retain,
-  retained.retainMany,
+  session.retain,
+  session.retainMany,
 );
-const events = useNarsEvents(retained.events, projection.verbosity, health.identity);
-const agentActivity = useAgentActivity(retained.events, health.body);
-const affordanceConfirmations = useAffordanceConfirmations(retained.events);
-const mcpInventory = useMcpInventory(retained.events, health.body);
-const artifactsSummary = useArtifactsSummary(retained.events);
-const delegationSummary = useDelegationSummary(retained.events);
-const gitSummary = useGitSummary(retained.events);
-const inboxSummary = useInboxSummary(retained.events);
-const mailboxSummary = useMailboxSummary(retained.events);
-const schedulerSummary = useSchedulerSummary(retained.events);
-const sopSummary = useSopSummary(retained.events);
-const surfaceFeedbackSummary = useSurfaceFeedbackSummary(retained.events);
-const taskLifecycleSummary = useTaskLifecycleSummary(retained.events);
-const surfaceAffordances = useSurfaceAffordances(retained.events, health.body);
+const agentActivity = useAgentActivity(session.events, health.body);
+const affordanceConfirmations = useAffordanceConfirmations(session.events);
+const mcpInventory = useMcpInventory(session.events, health.body);
+const artifactsSummary = useArtifactsSummary(session.events);
+const delegationSummary = useDelegationSummary(session.events);
+const gitSummary = useGitSummary(session.events);
+const inboxSummary = useInboxSummary(session.events);
+const mailboxSummary = useMailboxSummary(session.events);
+const schedulerSummary = useSchedulerSummary(session.events);
+const sopSummary = useSopSummary(session.events);
+const surfaceFeedbackSummary = useSurfaceFeedbackSummary(session.events);
+const taskLifecycleSummary = useTaskLifecycleSummary(session.events);
+const surfaceAffordances = useSurfaceAffordances(session.events, health.body);
 const runtimeTopology = useRuntimeTopology({
   eventEndpoint: props.config.eventEndpoint,
   healthEndpoint: props.config.healthEndpoint,
@@ -79,7 +77,7 @@ const runtimeTopology = useRuntimeTopology({
   streamText: connection.streamText,
   healthText: health.text,
   healthBody: health.body,
-  sessionIdentity: events.sessionIdentity,
+  sessionIdentity: session.sessionIdentity,
   authorityTransition: computed(() => props.config.authorityTransition ?? null),
   mcpInventory: mcpInventory.inventory,
 });
@@ -91,7 +89,7 @@ const canSteerActiveTurn = computed(() => (
   && agentActivity.activity.value.active === true
   && (agentActivity.activity.value.state === 'thinking' || agentActivity.activity.value.state === 'streaming')
 ));
-const input = useOperatorInput(connection.connection, retained.retain, retained.clear, props.config.authorityTransition ?? null, () => canSteerActiveTurn.value, preferSessionCoreInput, supportsProtocolMethod);
+const input = useOperatorInput(connection.connection, session.retain, session.clear, props.config.authorityTransition ?? null, () => canSteerActiveTurn.value, preferSessionCoreInput, supportsProtocolMethod);
 const draft = input.draft;
 const followLatestRevision = ref(0);
 const surfaceAffordancesRequested = ref(false);
@@ -243,7 +241,7 @@ function sendProtocolFrame(frame: unknown): boolean {
     : null;
   if (!method) return false;
   if (!supportsProtocolMethod(method)) {
-    retained.retain({
+    session.retain({
       event: 'web_ui_input_not_sent',
       message: 'control is not admitted by the attached runtime',
       reason_code: 'unsupported_session_control',
@@ -252,7 +250,7 @@ function sendProtocolFrame(frame: unknown): boolean {
     return false;
   }
   const sent = connection.connection.value?.sendFrame(frame) ?? false;
-  if (!sent) retained.retain({ event: 'web_ui_input_not_sent', message: 'event stream is not open', method });
+  if (!sent) session.retain({ event: 'web_ui_input_not_sent', message: 'event stream is not open', method });
   return sent;
 }
 
@@ -324,11 +322,11 @@ function cancelAffordanceAction(item: AffordanceConfirmationItem) {
     :stream-text="connection.streamText.value"
     :health-text="health.text.value"
     :intelligence="health.intelligence.value"
-    :summarized-state-sample-count="events.summarizedStateSampleCount.value"
+    :summarized-state-sample-count="session.summarizedStateSampleCount.value"
     :verbosity="projection.verbosity.value"
     :verbosity-levels="projection.levels"
-    :rows="events.rows.value"
-    :session-identity="events.sessionIdentity.value"
+    :rows="session.rows.value"
+    :session-identity="session.sessionIdentity.value"
     :agent-activity="agentActivity.activity.value"
     :affordance-confirmations="affordanceConfirmations.items.value"
     :operator-queue-items="operatorQueue.items.value"
