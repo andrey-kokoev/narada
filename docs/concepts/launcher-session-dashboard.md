@@ -69,6 +69,28 @@ It may display:
 
 It must not display guessed process ownership as fact. If a process, terminal tab, NARS session, or projection cannot be tied to explicit launcher/session evidence, it is `observed_unowned` or absent from the dashboard.
 
+## Implementation Boundary
+
+The browser renderer is the private `@narada2/workspace-launch-ui` package. It
+uses the shared `@narada2/ui` foundation and `@narada2/ui-vue` Vue/shadcn
+adapter. The package owns presentation, selection controls, dashboard
+rendering, and bounded browser requests only.
+
+`@narada2/cli` remains the authority for the HTTP server, selection
+normalization, launch planning, process handoff, persistence, runtime
+observation, and lifecycle actions. The renderer must not acquire those
+responsibilities. The existing endpoint contract remains:
+
+- `GET /` for the bootstrapped dashboard document;
+- `GET /launches` for the current session projection;
+- `POST /selector-model` for capability-dependent selector options;
+- `POST /submit` for a new launch attempt;
+- `POST /launches/<launch-attempt-id>/<action>` for admitted result actions;
+- `POST /cancel` to close the launcher UI session.
+
+The direct launcher URL remains a diagnostic endpoint until the Operator
+Router admits a launcher-session route keyed by `ui_session_id`.
+
 ## Dashboard Layers
 
 The page separates four layers. The separation is mandatory because each layer has a different authority.

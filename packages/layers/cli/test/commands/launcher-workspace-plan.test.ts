@@ -1,7 +1,8 @@
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { createServer, type Server } from 'node:http';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { vol } from 'memfs';
 import { buildWorkspaceLaunchSelectionHtml, buildWorkspaceLaunchSelectionUiModel, explainMcpCommand, hasWorkspaceLaunchSelectionIntent, initialOperatorSurfaceValues, initialRoleValuesForInteractiveSelection, intelligenceProviderChoices, intelligenceProviderChoicesForLaunchSelection, listenWorkspaceLaunchUiServer, normalizeInteractiveOperatorSurfaceValues, readWorkspaceLaunchRememberedSelection, registryDefaultIntelligenceProviderLabel, registryDefaultOperatorSurfaceLabel, registryDefaultRuntimeLabel, resolveWorkspaceLaunchUiPortPolicy, roleChoicesForSelectedSites, workspaceLaunchCommand, workspaceLaunchPlanCommand, workspaceLaunchReapStaleSessionOwnedDescendants, workspaceLaunchRuntimeObservations, workspaceLaunchSelectorModel, writeWorkspaceLaunchRememberedSelection, type WorkspaceLaunchBrowserSelection, type WorkspaceLaunchRecord } from '../../src/commands/launcher.js';
 import type { CommandContext } from '../../src/lib/command-wrapper.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
@@ -77,6 +78,12 @@ async function tempSiteWithDivergentMcpAuthority(): Promise<string> {
 }
 
 const tempDirs: string[] = [];
+
+beforeEach(() => {
+  vol.fromJSON({
+    'D:/code/narada/packages/workspace-launch-ui/dist/index.html': '<script type="application/json" id="narada-workspace-launch-bootstrap">__NARADA_WORKSPACE_LAUNCH_BOOTSTRAP__</script>',
+  });
+});
 
 async function tempRegistry(): Promise<string> {
   const dir = join(process.cwd(), '.ai', 'tmp-tests', `launcher-plan-${Date.now()}-${Math.random().toString(16).slice(2)}`);
@@ -218,6 +225,11 @@ async function startRememberedSelectionUiServer(port = 0): Promise<{ server: Ser
 }
 
 function extractSelectionUiModel(html: string): Record<string, unknown> {
+  const bootstrap = html.match(/id="narada-workspace-launch-bootstrap">([\s\S]*?)<\/script>/);
+  if (bootstrap) {
+    const parsed = JSON.parse(bootstrap[1] ?? '{}') as { model?: unknown };
+    return (parsed.model ?? {}) as Record<string, unknown>;
+  }
   const match = html.match(/const model = JSON\.parse\(atob\('([^']+)'\)\);/);
   if (!match) throw new Error('selection_ui_model_not_found');
   return JSON.parse(Buffer.from(match[1], 'base64').toString('utf8')) as Record<string, unknown>;
@@ -1226,24 +1238,12 @@ describe('launcher workspace planning', () => {
     }, null);
     const html = buildWorkspaceLaunchSelectionHtml(model, { persistent: true });
 
-    expect(html).toContain('<legend>Site</legend>');
-    expect(html).toContain('id="allow-multi-site"');
-    expect(html).toContain('Allow multi-site launch');
-    expect(html).toContain("'site-select'");
-    expect(html).toContain('id="sites-multi" hidden');
-    expect(html).toContain('<legend>Role</legend>');
-    expect(html).toContain('id="allow-multi-role"');
-    expect(html).toContain('Allow multi-role launch');
-    expect(html).toContain("'role-select'");
-    expect(html).toContain('id="roles-multi" hidden');
-    expect(html).toContain('<legend>Operator Surface</legend>');
-    expect(html).toContain('id="allow-multi-surface"');
-    expect(html).toContain('Allow multiple operator surfaces');
-    expect(html).toContain("'surface-select'");
-    expect(html).toContain('id="surfaces-multi" hidden');
-    expect(html).toContain('const initialSelectionMode = model.initialSelectionMode || {};');
-    expect(html).toContain('id="launch-scope-summary"');
-    expect(html).toContain('Start Selected Launches');
+    expect(html).toContain('id="narada-workspace-launch-bootstrap"');
+    expect(extractSelectionUiModel(html)).toMatchObject({
+      initialSites: ['sonar'],
+      initialRoles: ['resident'],
+      initialSelectionMode: { site: 'single', role: 'single', operatorSurface: 'single' },
+    });
   });
 
   it('bounds surface and runtime choices to selected-record capabilities', () => {

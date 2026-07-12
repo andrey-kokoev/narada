@@ -531,6 +531,9 @@ importers:
       '@narada2/windows-site':
         specifier: workspace:*
         version: link:../../sites/windows
+      '@narada2/workspace-launch-ui':
+        specifier: workspace:*
+        version: link:../../workspace-launch-ui
       chalk:
         specifier: ^5.6.2
         version: 5.6.2
@@ -1166,6 +1169,34 @@ importers:
       vitest:
         specifier: ^1.0.0
         version: 1.6.1(@types/node@20.19.39)(jsdom@26.1.0)(lightningcss@1.32.0)(stylus@0.57.0)
+
+  packages/workspace-launch-ui:
+    dependencies:
+      '@narada2/ui-vue':
+        specifier: workspace:*
+        version: link:../ui-vue
+      lucide-vue-next:
+        specifier: ^0.563.0
+        version: 0.563.0(vue@3.5.39(typescript@5.9.3))
+      vue:
+        specifier: ^3.5.0
+        version: 3.5.39(typescript@5.9.3)
+    devDependencies:
+      '@tailwindcss/vite':
+        specifier: ^4.1.18
+        version: 4.3.2(vite@8.1.1(@types/node@22.19.19)(esbuild@0.27.7)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.21.0))
+      '@vitejs/plugin-vue':
+        specifier: ^6.0.7
+        version: 6.0.7(vite@8.1.1(@types/node@22.19.19)(esbuild@0.27.7)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.21.0))(vue@3.5.39(typescript@5.9.3))
+      tailwindcss:
+        specifier: ^4.1.18
+        version: 4.3.2
+      vite:
+        specifier: ^8.1.1
+        version: 8.1.1(@types/node@22.19.19)(esbuild@0.27.7)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.21.0)
+      vue-tsc:
+        specifier: ^2.2.0
+        version: 2.2.12(typescript@5.9.3)
 
 packages:
 

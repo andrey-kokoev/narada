@@ -5,7 +5,7 @@ import { startOperatorTerminal } from '@narada2/process-launch-posture';
 import { spawnHiddenPostureProcess } from '@narada2/process-launch-posture';
 import { executeOperatorProjectionOpenRequest } from '@narada2/process-launch-posture';
 import { runGovernedCommandSync } from '@narada2/process-launch-posture';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, extname, join, resolve, sep } from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { createServer, type IncomingMessage, type ServerResponse, type Server } from 'node:http';
@@ -1510,6 +1510,14 @@ async function runWorkspaceLaunchSelectionUi(
           res.end(html);
           return;
         }
+        if (req.method === 'GET') {
+          const asset = readWorkspaceLaunchUiAsset(url.pathname);
+          if (asset) {
+            res.writeHead(200, { 'Content-Type': asset.contentType, 'Content-Length': asset.body.byteLength });
+            res.end(asset.body);
+            return;
+          }
+        }
         if (req.method === 'POST' && url.pathname === '/selector-model') {
           const payload = JSON.parse(await readBody(req)) as Partial<WorkspaceLaunchBrowserSelection>;
           jsonResponse(res, 200, workspaceLaunchSelectorModel(records, payload, siteCatalog));
@@ -1693,6 +1701,14 @@ async function runPersistentWorkspaceLaunchSelectionUi(
           res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Content-Length': Buffer.byteLength(html) });
           res.end(html);
           return;
+        }
+        if (req.method === 'GET') {
+          const asset = readWorkspaceLaunchUiAsset(url.pathname);
+          if (asset) {
+            res.writeHead(200, { 'Content-Type': asset.contentType, 'Content-Length': asset.body.byteLength });
+            res.end(asset.body);
+            return;
+          }
         }
         if (req.method === 'GET' && url.pathname === '/launches') {
           jsonResponse(res, 200, dashboardState());
@@ -2855,551 +2871,38 @@ export function buildWorkspaceLaunchSelectionUiModel(
 }
 
 export function buildWorkspaceLaunchSelectionHtml(model: Record<string, unknown>, options: { persistent?: boolean } = {}): string {
-  const modelJsonBase64 = Buffer.from(JSON.stringify(model), 'utf8').toString('base64');
-  const persistent = options.persistent === true;
-  return `<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Narada Workspace Launch</title>
-  <style>
-    :root { color-scheme: light dark; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-    body { margin: 0; background: Canvas; color: CanvasText; }
-    main { max-width: 880px; margin: 0 auto; padding: 28px; }
-    h1 { font-size: 22px; margin: 0 0 20px; }
-    fieldset { border: 1px solid color-mix(in srgb, CanvasText 18%, transparent); border-radius: 8px; margin: 0 0 18px; padding: 14px 16px; }
-    legend { padding: 0 6px; font-weight: 650; }
-    label { display: flex; gap: 10px; align-items: center; padding: 7px 0; }
-    select { width: min(100%, 420px); padding: 8px; }
-    .actions { display: flex; gap: 12px; margin-top: 22px; }
-    button { padding: 9px 14px; border-radius: 7px; border: 1px solid color-mix(in srgb, CanvasText 25%, transparent); background: ButtonFace; color: ButtonText; cursor: pointer; }
-    button.primary { background: Highlight; color: HighlightText; border-color: Highlight; }
-    .hint { color: color-mix(in srgb, CanvasText 68%, transparent); font-size: 13px; margin-top: 4px; }
-    .mode-toggle { font-weight: 550; margin-bottom: 6px; }
-    .launch-scope { margin: 2px 0 16px; padding: 10px 12px; border-left: 3px solid color-mix(in srgb, Highlight 60%, transparent); background: color-mix(in srgb, Highlight 6%, transparent); }
-    .launch-scope strong { display: block; font-size: 13px; }
-    [hidden] { display: none !important; }
-    .stage-strip { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 0 0 20px; }
-    .stage-card { border: 1px solid color-mix(in srgb, CanvasText 18%, transparent); border-radius: 8px; padding: 10px 12px; background: color-mix(in srgb, CanvasText 3%, transparent); }
-    .stage-card strong { display: block; font-size: 13px; margin-bottom: 4px; }
-    .stage-card span { display: block; color: color-mix(in srgb, CanvasText 68%, transparent); font-size: 12px; line-height: 1.35; }
-    #status { margin-top: 18px; padding: 12px 14px; border: 1px solid color-mix(in srgb, CanvasText 18%, transparent); border-radius: 8px; white-space: pre-wrap; }
-    #status:empty { display: none; }
-    .dashboard { margin-top: 30px; }
-    .dashboard h2 { font-size: 18px; margin: 0 0 12px; }
-    .attempt-list { display: grid; gap: 12px; }
-    .attempt { border: 1px solid color-mix(in srgb, CanvasText 18%, transparent); border-radius: 8px; padding: 14px 16px; }
-    .attempt header { display: flex; justify-content: space-between; gap: 16px; align-items: baseline; }
-    .attempt-title { font-weight: 700; }
-    .attempt-status { color: color-mix(in srgb, CanvasText 68%, transparent); font-size: 13px; }
-    .attempt-meta, .attempt-line { color: color-mix(in srgb, CanvasText 78%, transparent); font-size: 13px; margin-top: 6px; }
-    .attempt-scope-note { color: color-mix(in srgb, CanvasText 72%, transparent); font-size: 12px; margin-top: 10px; border-left: 3px solid color-mix(in srgb, CanvasText 22%, transparent); padding-left: 9px; }
-    .attempt-stage-list { display: grid; gap: 6px; margin-top: 12px; }
-    .attempt-stage { display: grid; grid-template-columns: 116px minmax(0, 1fr); gap: 10px; align-items: baseline; border: 1px solid color-mix(in srgb, CanvasText 12%, transparent); border-radius: 6px; padding: 7px 9px; }
-    .attempt-stage-name { color: color-mix(in srgb, CanvasText 62%, transparent); font-size: 12px; font-weight: 650; }
-    .attempt-stage-value { min-width: 0; color: color-mix(in srgb, CanvasText 82%, transparent); font-size: 13px; overflow-wrap: anywhere; }
-    .attempt-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
-    .attempt-actions button { padding: 6px 10px; }
-    .attempt-actions button:disabled { cursor: not-allowed; opacity: 0.52; }
-    .attempt-actions button[data-group="danger"] { border-color: color-mix(in srgb, #c23535 48%, CanvasText 20%); }
-    .attempt-actions button[data-group="create"] { border-color: color-mix(in srgb, Highlight 46%, CanvasText 20%); }
-    details { margin-top: 10px; }
-    pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; background: color-mix(in srgb, CanvasText 5%, transparent); padding: 10px; border-radius: 6px; }
-    @media (max-width: 720px) { .stage-strip { grid-template-columns: 1fr; } .attempt header { display: grid; } .attempt-stage { grid-template-columns: 1fr; gap: 2px; } }
-  </style>
-</head>
-<body>
-  <main>
-    <h1>Narada Workspace Launch</h1>
-    <section class="stage-strip" aria-label="Launch stages">
-      <div class="stage-card"><strong>1. Configure</strong><span>Choose the Site, role, runtime, surface, and model defaults for a fresh launch.</span></div>
-      <div class="stage-card"><strong>2. Start</strong><span>Submitting creates a fresh launch attempt. It may start one runtime per selected agent; it never attaches to an old session.</span></div>
-      <div class="stage-card"><strong>3. Attach Explicitly</strong><span>Use result-card actions only when you want to open or attach to that specific launched session.</span></div>
-    </section>
-    <form id="form">
-      <fieldset><legend>Site</legend><label class="mode-toggle"><input id="allow-multi-site" type="checkbox">Allow multi-site launch</label><div id="sites"><div id="site-single"></div><div id="sites-multi" hidden></div></div></fieldset>
-      <fieldset><legend>Role</legend><label class="mode-toggle"><input id="allow-multi-role" type="checkbox">Allow multi-role launch</label><div id="roles"><div id="role-single"></div><div id="roles-multi" hidden></div></div></fieldset>
-      <fieldset><legend>Operator Surface</legend><label class="mode-toggle"><input id="allow-multi-surface" type="checkbox">Allow multiple operator surfaces</label><div id="surfaces"><div id="surface-single"></div><div id="surfaces-multi" hidden></div></div><div class="hint">Explicit choices override registry default. Multiple surfaces are parallel projections of one NARS runtime.</div></fieldset>
-      <fieldset><legend>Runtime</legend><select id="runtime"></select></fieldset>
-      <fieldset><legend>Intelligence Provider</legend><select id="provider"></select></fieldset>
-      <section id="launch-scope" class="launch-scope" aria-live="polite"><strong id="launch-scope-summary"></strong><div id="launch-scope-agents" class="hint"></div></section>
-      <div class="hint">Remembered selections are defaults only. They do not bind to any old launch, carrier, runtime, or conversation.</div>
-      <div class="actions"><button id="submit-launch" class="primary" type="submit">Start Selected Launches</button><button id="cancel" type="button">Cancel</button></div>
-      <div class="hint">${persistent ? 'Form submission always creates a new launch session. Use launched-session actions below only when you explicitly want to open or attach to an existing result.' : 'This page submits one new launch session and then returns control to the terminal.'}</div>
-      <div id="status" role="status" aria-live="polite"></div>
-    </form>
-    <section class="dashboard" aria-labelledby="launches-title">
-      <h2 id="launches-title">Launch Results</h2>
-      <div id="launches" class="attempt-list"><p class="hint">No launches yet.</p></div>
-    </section>
-  </main>
-  <script>
-    const model = JSON.parse(atob('${modelJsonBase64}'));
-    const persistent = ${persistent ? 'true' : 'false'};
-    const unique = values => [...new Set(values.filter(Boolean))];
-    const explicit = model.explicitSelection || {};
-    const validSites = new Set(model.siteChoices || []);
-    const initialSites = model.initialSites || [];
-    const selectedSites = new Set(initialSites);
-    const selectedRoles = new Set(model.initialRoles || []);
-    const selectedSurfaces = new Set(model.initialOperatorSurfaces || ['registry default']);
-    const initialSelectionMode = model.initialSelectionMode || {};
-    const narsOperatorSurfaceChoices = new Set(model.narsOperatorSurfaceChoices || ['agent-cli', 'agent-web-ui']);
-    let allowMultiSiteLaunch = initialSelectionMode.site === 'multiple' || selectedSites.size > 1;
-    let allowMultiRoleLaunch = initialSelectionMode.role === 'multiple' || selectedRoles.size > 1;
-    let allowMultiSurfaceLaunch = initialSelectionMode.operatorSurface === 'multiple' || selectedSurfaces.size > 1;
-    let currentSelectorModel = model.selectorModel || {};
-    let selectorRefreshSequence = 0;
-    if (currentSelectorModel.selected) {
-      if (model.initialRuntime) currentSelectorModel.selected.runtime = model.initialRuntime;
-      if (model.initialIntelligenceProvider) currentSelectorModel.selected.intelligenceProvider = model.initialIntelligenceProvider;
-    }
-    const recordsForSites = () => model.records.filter(r => selectedSites.has(r.site));
-    const recordsForSitesRoles = () => recordsForSites().filter(r => selectedRoles.has(r.role));
-    function checkbox(container, value, checked, onChange, label = value) {
-      const row = document.createElement('label');
-      const input = document.createElement('input');
-      input.type = 'checkbox'; input.value = value; input.checked = checked;
-      input.addEventListener('change', () => onChange(input));
-      row.append(input, document.createTextNode(label)); container.append(row);
-    }
-    function coerceSingleSelection(set, choices, fallback) {
-      const selected = [...set].find(value => choices.includes(value)) || (choices.includes(fallback) ? fallback : choices[0]);
-      set.clear();
-      if (selected) set.add(selected);
-      return selected;
-    }
-    function renderSingleSelect(containerId, id, choices, selected, onChange, label) {
-      const container = document.getElementById(containerId);
-      container.textContent = '';
-      const select = document.createElement('select');
-      select.id = id;
-      select.setAttribute('aria-label', label);
-      for (const choice of choices) {
-        const option = document.createElement('option');
-        option.value = choice;
-        option.textContent = choice;
-        option.selected = choice === selected;
-        select.append(option);
-      }
-      select.addEventListener('change', () => onChange(select.value));
-      container.append(select);
-    }
-    function renderSites() {
-      const choices = unique(model.siteChoices || []);
-      const single = document.getElementById('site-single');
-      const multi = document.getElementById('sites-multi');
-      document.getElementById('allow-multi-site').checked = allowMultiSiteLaunch;
-      if (!allowMultiSiteLaunch) {
-        const selected = coerceSingleSelection(selectedSites, choices);
-        single.hidden = false;
-        multi.hidden = true;
-        renderSingleSelect('site-single', 'site-select', choices, selected, value => {
-          selectedSites.clear();
-          if (value) selectedSites.add(value);
-          renderRoles();
-          refreshSelectorControls().catch(() => {});
-        }, 'Site');
-        return;
-      }
-      for (const site of [...selectedSites]) if (!choices.includes(site)) selectedSites.delete(site);
-      if (selectedSites.size === 0 && choices[0]) selectedSites.add(choices[0]);
-      single.hidden = true;
-      multi.hidden = false;
-      multi.textContent = '';
-      choices.forEach(site => checkbox(multi, site, selectedSites.has(site), input => {
-        if (!input.checked && selectedSites.size <= 1) {
-          input.checked = true;
-          return;
-        }
-        input.checked ? selectedSites.add(site) : selectedSites.delete(site);
-        renderRoles();
-        refreshSelectorControls().catch(() => {});
-      }));
-    }
-    function renderRoles() {
-      const choices = unique(recordsForSites().map(r => r.role));
-      for (const role of [...selectedRoles]) if (!choices.includes(role)) selectedRoles.delete(role);
-      const single = document.getElementById('role-single');
-      const multi = document.getElementById('roles-multi');
-      document.getElementById('allow-multi-role').checked = allowMultiRoleLaunch;
-      if (!allowMultiRoleLaunch) {
-        const selected = coerceSingleSelection(selectedRoles, choices, 'resident');
-        single.hidden = false;
-        multi.hidden = true;
-        renderSingleSelect('role-single', 'role-select', choices, selected, value => {
-          selectedRoles.clear();
-          if (value) selectedRoles.add(value);
-          refreshSelectorControls().catch(() => {});
-        }, 'Role');
-        return;
-      }
-      if (selectedRoles.size === 0 && choices.includes('resident')) selectedRoles.add('resident');
-      if (selectedRoles.size === 0 && choices[0]) selectedRoles.add(choices[0]);
-      single.hidden = true;
-      multi.hidden = false;
-      multi.textContent = '';
-      choices.forEach(role => checkbox(multi, role, selectedRoles.has(role), input => {
-        if (!input.checked && selectedRoles.size <= 1) {
-          input.checked = true;
-          return;
-        }
-        input.checked ? selectedRoles.add(role) : selectedRoles.delete(role);
-        refreshSelectorControls().catch(() => {});
-      }));
-    }
-    function syncSelectedSet(set, options, fallback) {
-      const values = new Set((options || []).map(option => option.value));
-      for (const value of [...set]) if (!values.has(value)) set.delete(value);
-      if (set.size === 0 && values.has(fallback)) set.add(fallback);
-    }
-    function renderSingleOptionSelect(containerId, id, options, selected, onChange, label) {
-      const container = document.getElementById(containerId);
-      container.textContent = '';
-      const select = document.createElement('select');
-      select.id = id;
-      select.setAttribute('aria-label', label);
-      for (const choice of options || []) {
-        const option = document.createElement('option');
-        option.value = choice.value;
-        option.textContent = choice.label;
-        if (choice.hint) option.title = choice.hint;
-        option.selected = choice.value === selected;
-        select.append(option);
-      }
-      select.addEventListener('change', () => onChange(select.value));
-      container.append(select);
-    }
-    function renderSurfaces(options) {
-      syncSelectedSet(selectedSurfaces, options, 'registry default');
-      const explicitSurfaces = [...selectedSurfaces].filter(value => value !== 'registry default');
-      if (explicitSurfaces.length > 0 && selectedSurfaces.has('registry default')) {
-        selectedSurfaces.clear();
-        explicitSurfaces.forEach(value => selectedSurfaces.add(value));
-      }
-      const single = document.getElementById('surface-single');
-      const multi = document.getElementById('surfaces-multi');
-      document.getElementById('allow-multi-surface').checked = allowMultiSurfaceLaunch;
-      if (!allowMultiSurfaceLaunch) {
-        const selected = [...selectedSurfaces][0] || (options || [])[0]?.value;
-        selectedSurfaces.clear();
-        if (selected) selectedSurfaces.add(selected);
-        single.hidden = false;
-        multi.hidden = true;
-        renderSingleOptionSelect('surface-single', 'surface-select', options || [], selected, value => {
-          selectedSurfaces.clear();
-          if (value) selectedSurfaces.add(value);
-          refreshSelectorControls().catch(() => {});
-        }, 'Operator Surface');
-        return;
-      }
-      if (selectedSurfaces.size === 0 && options?.[0]?.value) selectedSurfaces.add(options[0].value);
-      single.hidden = true;
-      multi.hidden = false;
-      multi.textContent = '';
-      (options || []).filter(option => option.value === 'registry default' || narsOperatorSurfaceChoices.has(option.value)).forEach(option => checkbox(multi, option.value, selectedSurfaces.has(option.value), input => {
-        if (option.value === 'registry default') {
-          if (input.checked) {
-            selectedSurfaces.clear();
-            selectedSurfaces.add('registry default');
-          } else {
-            input.checked = true;
-            return;
-          }
-          refreshSelectorControls().catch(() => {});
-          return;
-        }
-        if (!input.checked && selectedSurfaces.size <= 1) {
-          input.checked = true;
-          return;
-        }
-        selectedSurfaces.delete('registry default');
-        input.checked ? selectedSurfaces.add(option.value) : selectedSurfaces.delete(option.value);
-        if (selectedSurfaces.size === 0) selectedSurfaces.add('registry default');
-        refreshSelectorControls().catch(() => {});
-      }, option.label));
-    }
-    function renderSelect(id, options, selected) {
-      const el = document.getElementById(id); el.textContent = '';
-      const values = new Set((options || []).map(option => option.value));
-      const selectedValue = values.has(selected) ? selected : 'registry default';
-      (options || []).forEach(choice => { const option = document.createElement('option'); option.value = choice.value; option.textContent = choice.label; if (choice.hint) option.title = choice.hint; option.selected = choice.value === selectedValue; el.append(option); });
-    }
-    function currentSelectValue(id) {
-      const el = document.getElementById(id);
-      return el && el.value ? el.value : null;
-    }
-    function selectorPayload() {
-      return { site: [...selectedSites], role: [...selectedRoles], operatorSurface: [...selectedSurfaces], runtime: document.getElementById('runtime').value || currentSelectorModel.selected?.runtime || 'registry default', intelligenceProvider: document.getElementById('provider').value || currentSelectorModel.selected?.intelligenceProvider || 'registry default', selectionMode: { site: allowMultiSiteLaunch ? 'multiple' : 'single', role: allowMultiRoleLaunch ? 'multiple' : 'single', operatorSurface: allowMultiSurfaceLaunch ? 'multiple' : 'single' } };
-    }
-    function renderLaunchScope() {
-      const records = recordsForSitesRoles();
-      const explicitSurfaces = [...selectedSurfaces].filter(value => value !== 'registry default');
-      const projections = records.length * Math.max(1, explicitSurfaces.length);
-      const plural = (count, noun) => count + ' ' + noun + (count === 1 ? '' : 's');
-      document.getElementById('launch-scope-summary').textContent = plural(records.length, 'agent') + ' · ' + plural(records.length, 'runtime') + ' · ' + plural(projections, 'operator projection');
-      const canonicalAgent = record => record.agent_identity_ref?.canonical_agent_id || (record.site && record.role ? record.site + '.' + record.role : record.agent);
-      document.getElementById('launch-scope-agents').textContent = records.length ? 'Agents: ' + unique(records.map(canonicalAgent)).join(', ') : 'No agents match this selection.';
-      document.getElementById('submit-launch').textContent = records.length ? 'Start ' + plural(records.length, 'Agent Launch') : 'Start Selected Launches';
-    }
-    async function refreshSelectorControls() {
-      const requestSequence = ++selectorRefreshSequence;
-      const requested = selectorPayload();
-      const response = await fetch('/selector-model', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(requested) });
-      if (requestSequence !== selectorRefreshSequence) return;
-      if (response.ok) currentSelectorModel = await response.json();
-      const runtimeSelection = currentSelectValue('runtime') || requested.runtime || currentSelectorModel.selected?.runtime || 'registry default';
-      const providerSelection = currentSelectValue('provider') || requested.intelligenceProvider || currentSelectorModel.selected?.intelligenceProvider || 'registry default';
-      renderSurfaces(currentSelectorModel.operatorSurfaceOptions || []);
-      renderSelect('runtime', currentSelectorModel.runtimeOptions || [], runtimeSelection);
-      renderSelect('provider', currentSelectorModel.intelligenceProviderOptions || [], providerSelection);
-      renderLaunchScope();
-    }
-    function statusLabel(value) {
-      return String(value || '').replace(/_/g, ' ');
-    }
-    function actionLabel(value, historical = false) {
-      const labels = {
-        'open-web-ui': historical ? 'Open Last Observed UI' : 'Open This UI',
-        'attach-cli': historical ? 'Attach Last Observed CLI' : 'Attach CLI To This Session',
-        'stop-runtime': 'Stop This Runtime Tree',
-        recheck: 'Recheck This Launch',
-        retry: 'Start Fresh From This Result',
-        forget: 'Forget This Result',
-      };
-      return labels[value] || statusLabel(value);
-    }
-    function actionScope(value) {
-      const scopes = {
-        'open-web-ui': 'Opens the UI projection recorded for this launch result.',
-        'attach-cli': 'Prints or runs the attach path for this exact session.',
-        'stop-runtime': 'Requests stop through this session control path and its owned descendant process tree.',
-        recheck: 'Refreshes observations for this launch result only.',
-        retry: 'Creates a new launch attempt from this result selection, not from the current form; it does not resume this session.',
-        forget: 'Removes this result card from the launcher dashboard only.',
-      };
-      return scopes[value] || 'Runs this launch-result action.';
-    }
-    function actionGroup(value) {
-      if (value === 'recheck') return 'inspect';
-      if (value === 'open-web-ui' || value === 'attach-cli') return 'attach';
-      if (value === 'retry') return 'create';
-      if (value === 'stop-runtime') return 'danger';
-      return 'manage';
-    }
-    function formatAge(timestamp) {
-      if (!timestamp) return null;
-      const ms = Date.parse(timestamp);
-      if (!Number.isFinite(ms)) return timestamp;
-      const seconds = Math.max(0, Math.round((Date.now() - ms) / 1000));
-      if (seconds < 60) return seconds + 's ago';
-      const minutes = Math.round(seconds / 60);
-      if (minutes < 60) return minutes + 'm ago';
-      const hours = Math.round(minutes / 60);
-      if (hours < 48) return hours + 'h ago';
-      const days = Math.round(hours / 24);
-      return days + 'd ago';
-    }
-    function attemptTitle(attempt) {
-      const selection = attempt.selection || {};
-      return (selection.site || []).join(', ') + ' / ' + (selection.role || []).join(', ');
-    }
-    function attemptMeta(attempt) {
-      const selection = attempt.selection || {};
-      return [(selection.operatorSurface || []).join(' + '), selection.runtime, selection.intelligenceProvider].filter(Boolean).join(' · ');
-    }
-    function attemptUpdatedAt(attempt) {
-      return attempt.updated_at || attempt.created_at || attempt.started_at || null;
-    }
-    function attemptIsHistorical(attempt) {
-      const observations = attempt.observations || [];
-      const projections = attempt.projections || [];
-      const liveish = observations.some(value => value && /ok|healthy|ready|busy|running|observed/i.test(String(value.health || '')))
-        || projections.some(value => value && /handed off|handed_off|planned/i.test(String(value.status || '')));
-      return !liveish;
-    }
-    function attemptHistoryStatus(attempt) {
-      const updatedAt = attemptUpdatedAt(attempt);
-      const age = formatAge(updatedAt);
-      const suffix = updatedAt ? ' · last updated ' + (age ? age + ' (' + updatedAt + ')' : updatedAt) : '';
-      if (!attemptIsHistorical(attempt)) return 'last observation recorded' + suffix;
-      return 'historical result; recheck before attaching' + suffix;
-    }
-    function firstStatus(entries, key) {
-      const entry = (entries || []).find(value => value && value[key]);
-      return entry ? statusLabel(entry[key]) : null;
-    }
-    function agentInputStageValue(attempt) {
-      const observation = (attempt.observations || []).find(value => value && (value.session_id || value.health));
-      if (!observation) return 'Not verified by this launcher result.';
-      const health = statusLabel(observation.health || 'observed');
-      if (/busy|active turn|thinking/i.test(health)) return 'Runtime observed, but current turn may still be active.';
-      if (/degraded|stale|unavailable|failed|closed/i.test(health)) return 'Runtime observed as ' + health + '; input readiness is not guaranteed.';
-      return 'Runtime observed as ' + health + '; use the opened UI to verify turn responsiveness.';
-    }
-    function attemptStageRows(attempt) {
-      const actions = new Set(attempt.actions || []);
-      const historical = attemptIsHistorical(attempt);
-      const runtimeHealth = firstStatus(attempt.observations, 'health');
-      const projectionStatus = firstStatus(attempt.projections, 'status');
-      const handoffStatus = firstStatus(attempt.handoffs, 'status');
-      const attachActions = [];
-      if (actions.has('open-web-ui')) attachActions.push(actionLabel('open-web-ui', historical));
-      if (actions.has('attach-cli')) attachActions.push(actionLabel('attach-cli', historical));
-      return [
-        { name: 'Configure', value: 'Selection recorded as launch input only.' },
-        { name: 'Start New', value: attempt.result_summary || statusLabel(attempt.status) || 'Launch attempt recorded.' },
-        { name: 'Process', value: runtimeHealth ? 'Observed ' + runtimeHealth : (handoffStatus ? 'Handoff ' + handoffStatus : 'No runtime observation yet.') },
-        { name: 'UI Projection', value: projectionStatus ? 'UI projection ' + projectionStatus : 'No UI projection observation yet.' },
-        { name: 'Agent Input', value: agentInputStageValue(attempt) },
-        { name: 'Attach/Open', value: attachActions.length ? 'Available actions: ' + attachActions.join(', ') : 'No attach/open action is currently available.' },
-      ];
-    }
-    function renderDashboard(state) {
-      const el = document.getElementById('launches');
-      const attempts = state && Array.isArray(state.attempts) ? state.attempts : [];
-      el.textContent = '';
-      if (attempts.length === 0) {
-        const empty = document.createElement('p'); empty.className = 'hint'; empty.textContent = 'No launches yet.'; el.append(empty); return;
-      }
-      for (const attempt of attempts) {
-        const card = document.createElement('article'); card.className = 'attempt'; card.dataset.launchAttemptId = attempt.launch_attempt_id;
-        const header = document.createElement('header');
-        const title = document.createElement('div'); title.className = 'attempt-title'; title.textContent = attemptTitle(attempt);
-        const statusEl = document.createElement('div'); statusEl.className = 'attempt-status'; statusEl.textContent = statusLabel(attempt.status);
-        header.append(title, statusEl); card.append(header);
-        const meta = document.createElement('div'); meta.className = 'attempt-meta'; meta.textContent = attemptMeta(attempt); card.append(meta);
-        const history = document.createElement('div'); history.className = 'attempt-line'; history.textContent = attemptHistoryStatus(attempt); card.append(history);
-        const summary = document.createElement('div'); summary.className = 'attempt-line'; summary.textContent = attempt.result_summary || ''; card.append(summary);
-        const stages = document.createElement('div'); stages.className = 'attempt-stage-list'; stages.setAttribute('aria-label', 'Launch transition stages');
-        for (const row of attemptStageRows(attempt)) {
-          const stage = document.createElement('div'); stage.className = 'attempt-stage';
-          const name = document.createElement('span'); name.className = 'attempt-stage-name'; name.textContent = row.name;
-          const value = document.createElement('span'); value.className = 'attempt-stage-value'; value.textContent = row.value;
-          stage.append(name, value); stages.append(stage);
-        }
-        card.append(stages);
-        for (const handoff of attempt.handoffs || []) {
-          const label = handoff.posture === 'hidden_runtime_host' ? 'Hidden runtime handoff' : 'Terminal handoff';
-          const line = document.createElement('div'); line.className = 'attempt-line'; line.textContent = label + ': ' + statusLabel(handoff.status); card.append(line);
-        }
-        for (const observation of attempt.observations || []) {
-          const line = document.createElement('div'); line.className = 'attempt-line'; line.textContent = 'Runtime: ' + statusLabel(observation.health) + (observation.session_id ? ' · session ' + observation.session_id : ''); card.append(line);
-        }
-        for (const projection of attempt.projections || []) {
-          const line = document.createElement('div'); line.className = 'attempt-line'; line.textContent = 'Projection: ' + projection.projection_kind + ' · ' + statusLabel(projection.status); card.append(line);
-        }
-        if ((attempt.actions || []).includes('stop-runtime')) {
-          const scope = document.createElement('div'); scope.className = 'attempt-scope-note'; scope.textContent = 'Stop scope: this session control path and its owned descendant process tree only.'; card.append(scope);
-        }
-        const actions = document.createElement('div'); actions.className = 'attempt-actions';
-        const historical = attemptIsHistorical(attempt);
-        for (const action of attempt.actions || []) {
-          if (action === 'stop-projection' || action === 'kill-process') continue;
-          const button = document.createElement('button'); button.type = 'button'; button.dataset.action = action; button.dataset.launchAttemptId = attempt.launch_attempt_id; button.dataset.group = actionGroup(action); button.textContent = actionLabel(action, historical); button.title = actionScope(action); button.setAttribute('aria-label', actionLabel(action, historical) + '. ' + actionScope(action));
-          if (historical && (action === 'open-web-ui' || action === 'attach-cli')) {
-            button.disabled = true;
-            button.title = 'Recheck this launch before using last-observed attach actions.';
-            button.setAttribute('aria-label', actionLabel(action, true) + '. Disabled until Recheck This Launch refreshes this result.');
-          }
-          actions.append(button);
-        }
-        card.append(actions);
-        const details = document.createElement('details');
-        const summaryEl = document.createElement('summary'); summaryEl.textContent = 'Details';
-        const pre = document.createElement('pre'); pre.textContent = JSON.stringify(attempt, null, 2);
-        details.append(summaryEl, pre); card.append(details);
-        el.append(card);
-      }
-    }
-    async function loadLaunches() {
-      const response = await fetch('/launches');
-      if (!response.ok) return;
-      renderDashboard(await response.json());
-    }
-    async function runLaunchAction(action, launchAttemptId) {
-      const status = document.getElementById('status');
-      if (action !== 'stop-runtime') {
-        for (const button of document.querySelectorAll('button[data-action="stop-runtime"]')) {
-          delete button.dataset.confirmStop;
-          button.textContent = actionLabel('stop-runtime');
-          button.title = actionScope('stop-runtime');
-          button.setAttribute('aria-label', actionLabel('stop-runtime') + '. ' + actionScope('stop-runtime'));
-        }
-      }
-      if (action === 'stop-runtime') {
-        const button = [...document.querySelectorAll('button[data-action="stop-runtime"]')].find(candidate => candidate.dataset.launchAttemptId === launchAttemptId);
-        if (button && button.dataset.confirmStop !== 'true') {
-          button.dataset.confirmStop = 'true';
-          button.textContent = 'Confirm Stop This Runtime Tree';
-          button.title = 'Second click confirms stopping this session control path and its owned descendant process tree.';
-          button.setAttribute('aria-label', 'Confirm Stop This Runtime Tree. Second click confirms stopping this session control path and its owned descendant process tree.');
-          status.textContent = 'Confirm stop only if you intend to close this session control path and its owned descendant process tree.';
-          return;
-        }
-      }
-      status.textContent = actionLabel(action) + '...';
-      const response = await fetch('/launches/' + encodeURIComponent(launchAttemptId) + '/' + encodeURIComponent(action), { method: 'POST' });
-      const result = await response.json().catch(() => ({}));
-      renderDashboard(result.dashboard || result);
-      status.textContent = response.ok
-        ? (result.message || actionLabel(action) + ' completed.') + (result.command ? String.fromCharCode(10) + result.command : '')
-        : 'Action refused: ' + (result.message || result.reason_code || response.statusText);
-    }
-    document.getElementById('allow-multi-site').addEventListener('change', event => {
-      allowMultiSiteLaunch = event.target.checked;
-      renderSites();
-      renderRoles();
-      refreshSelectorControls().catch(() => {});
-    });
-    document.getElementById('allow-multi-role').addEventListener('change', event => {
-      allowMultiRoleLaunch = event.target.checked;
-      renderSites();
-      renderRoles();
-      refreshSelectorControls().catch(() => {});
-    });
-    document.getElementById('allow-multi-surface').addEventListener('change', event => {
-      allowMultiSurfaceLaunch = event.target.checked;
-      refreshSelectorControls().catch(() => {});
-    });
-    renderSites(); renderRoles(); refreshSelectorControls().catch(() => {});
-    document.getElementById('form').addEventListener('submit', async event => {
-      event.preventDefault();
-      const status = document.getElementById('status');
-      const submit = event.submitter || document.querySelector('button[type="submit"]');
-      const payload = selectorPayload();
-      if (submit) submit.disabled = true;
-      status.textContent = 'Creating a fresh launch attempt. This does not attach to any previous session.';
-      try {
-        const response = await fetch('/submit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-        const result = await response.json().catch(() => ({}));
-        if (response.ok) {
-          status.textContent = persistent
-            ? 'New launch accepted. Open or attach only from the specific result card below.'
-            : 'New launch submitted. You can return to the terminal.';
-          renderDashboard(result.dashboard || {});
-          if (!persistent) document.body.innerHTML = '<main><h1>New launch submitted</h1><p>You can return to the terminal.</p></main>';
-        } else {
-          status.textContent = 'Launch failed: ' + (result.error || result.status || response.statusText);
-          if (result.dashboard) renderDashboard(result.dashboard);
-        }
-      } catch (error) {
-        status.textContent = 'Launch failed: ' + (error && error.message ? error.message : String(error));
-      } finally {
-        if (submit) submit.disabled = false;
-      }
-    });
-    document.getElementById('launches').addEventListener('click', async event => {
-      const button = event.target instanceof HTMLButtonElement ? event.target : null;
-      if (!button || !button.dataset.action || !button.dataset.launchAttemptId) return;
-      await runLaunchAction(button.dataset.action, button.dataset.launchAttemptId);
-    });
-    loadLaunches().catch(() => {});
-    document.getElementById('cancel').addEventListener('click', async () => { await fetch('/cancel', { method: 'POST' }); document.body.innerHTML = '<main><h1>Cancelled</h1></main>'; });
-  </script>
-</body>
-</html>`;
+  const templatePath = requireFromLauncherCommand.resolve('@narada2/workspace-launch-ui/dist/index.html');
+  const template = readFileSync(templatePath, 'utf8');
+  const bootstrap = JSON.stringify({
+    model,
+    persistent: options.persistent === true,
+  }).replace(/</g, '\\u003c');
+  const placeholder = '__NARADA_WORKSPACE_LAUNCH_BOOTSTRAP__';
+  if (!template.includes(placeholder)) {
+    throw new Error('workspace_launch_ui_bootstrap_placeholder_missing');
+  }
+  return template.replace(placeholder, bootstrap);
+}
+
+function readWorkspaceLaunchUiAsset(pathname: string): { body: Buffer; contentType: string } | null {
+  if (!pathname.startsWith('/assets/')) return null;
+  const relativePath = pathname.slice('/assets/'.length);
+  if (!relativePath || relativePath.includes('..') || !/^[A-Za-z0-9._/-]+$/.test(relativePath)) return null;
+  const indexPath = requireFromLauncherCommand.resolve('@narada2/workspace-launch-ui/dist/index.html');
+  const assetsRoot = resolve(dirname(indexPath), 'assets');
+  const assetPath = resolve(assetsRoot, relativePath);
+  if (assetPath !== assetsRoot && !assetPath.startsWith(`${assetsRoot}${sep}`)) return null;
+  try {
+    const extension = extname(assetPath).toLowerCase();
+    const contentType = extension === '.css'
+      ? 'text/css; charset=utf-8'
+      : extension === '.js'
+        ? 'text/javascript; charset=utf-8'
+        : 'application/octet-stream';
+    return { body: readFileSync(assetPath), contentType };
+  } catch {
+    return null;
+  }
 }
 
 export function registryDefaultOperatorSurfaceLabel(records: WorkspaceLaunchRecord[]): string {
