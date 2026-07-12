@@ -74,6 +74,7 @@ export interface UseSiteRegistryState {
   records: Ref<RegistrySiteRecord[]>;
   sites: Ref<SiteListProjection[]>;
   selectedSiteId: Ref<string | null>;
+  selectedRecord: Ref<RegistrySiteRecord | null>;
   selected: Ref<SiteDetailProjection | null>;
   loading: Ref<boolean>;
   loadingDetail: Ref<boolean>;
@@ -134,5 +135,5 @@ export function useSiteRegistry(client = createSiteRegistryClient()): UseSiteReg
 
   onMounted(() => { void load(); });
 
-  return { records, sites, selectedSiteId, selected, loading, loadingDetail, error, load, select, clearSelection };
+  return { records, sites, selectedSiteId, selectedRecord, selected, loading, loadingDetail, error, load, select, clearSelection };
 }

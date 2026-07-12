@@ -699,17 +699,14 @@ describe('console server', () => {
       const addPage = await fetch(`${url}/console/registry/add`);
       const addHtml = await addPage.text();
       expect(addPage.status, addHtml).toBe(200);
-      expect(addHtml).toContain('<body data-page-mode="add">');
-      expect(addHtml).toContain('<h1>Add Site</h1>');
-      expect(addHtml).toContain('body[data-page-mode="add"] #site-inventory-panel');
-      expect(addHtml).toContain('Register a Site that does not yet have a canonical registry record.');
+      expect(addHtml).toContain('<div id="app"></div>');
+      expect(addHtml).toContain('/console/registry/assets/');
 
       const managePage = await fetch(`${url}/console/registry/manage`);
       const manageHtml = await managePage.text();
       expect(managePage.status, manageHtml).toBe(200);
-      expect(manageHtml).toContain('<body data-page-mode="manage">');
-      expect(manageHtml).toContain('<h1>Registry Changes</h1>');
-      expect(manageHtml).toContain('body[data-page-mode="manage"] #site-inventory-panel');
+      expect(manageHtml).toContain('<div id="app"></div>');
+      expect(manageHtml).toContain('/console/registry/assets/');
 
       const list = await httpGet(`${url}/console/registry/api/sites`);
       expect(list.status).toBe(200);

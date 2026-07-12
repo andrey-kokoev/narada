@@ -14,7 +14,7 @@ The Operator Console Site Registry UI has one canonical domain model and one exp
 
 ## Serving Boundary
 
-The CLI serves the built Vue document at `/console/registry` and only admits bundle assets through the bounded `/console/registry/assets/:asset` route. The existing `/console/registry/add` and `/console/registry/manage` pages remain a transitional mutation surface until their workflows are migrated into the same UI package.
+The CLI serves the same built Vue document at `/console/registry`, `/console/registry/add`, and `/console/registry/manage`, and only admits bundle assets through the bounded `/console/registry/assets/:asset` route. The mutation page selects its initial mode from the request path; it does not create a second app.
 
 ## Invariants
 
@@ -26,4 +26,4 @@ The CLI serves the built Vue document at `/console/registry` and only admits bun
 
 ## Next Boundary
 
-The next coherent slice is to migrate add/manage into `@narada2/operator-console-ui`, reusing the typed mutation client and preserving the existing plan/apply and purge safeguards.
+The mutation slice is complete: add, edit, retire, restore, and purge drafts reuse the typed mutation client, pin expected revisions, preserve retired-record recovery, and keep plan/apply and purge confirmation visible in the UI while the server remains authoritative.

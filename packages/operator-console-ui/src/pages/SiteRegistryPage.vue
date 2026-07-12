@@ -22,7 +22,10 @@ onMounted(() => {
         <a class="icon-link" href="/" title="Back to Operator Workspace" aria-label="Back to Operator Workspace"><ArrowLeft :size="16" aria-hidden="true" /></a>
         <div><p class="eyebrow">Operator Console</p><h1>Sites</h1></div>
       </div>
-      <a class="action-link" href="/console/registry/add"><Plus :size="16" aria-hidden="true" />Add Site</a>
+      <nav class="console-actions" aria-label="Site Registry actions">
+        <a class="action-link" href="/console/registry/manage">Manage</a>
+        <a class="action-link" href="/console/registry/add"><Plus :size="16" aria-hidden="true" />Add Site</a>
+      </nav>
     </header>
     <main class="console-main">
       <div class="intro"><h2>Site Registry</h2><p>Inspect the canonical User Site inventory. Changes remain behind the plan and apply boundary.</p></div>
@@ -52,6 +55,7 @@ onMounted(() => {
 .icon-link { width: 34px; height: 34px; justify-content: center; border: 1px solid var(--line); border-radius: var(--radius); }
 .icon-link:hover, .action-link:hover { color: var(--operator); }
 .action-link { padding: 8px 11px; border: 1px solid var(--line); border-radius: var(--radius); font-size: 13px; }
+.console-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .console-main { max-width: 1240px; margin: 0 auto; padding: 24px 20px 40px; }
 .intro { margin-bottom: 20px; }
 .intro h2 { margin: 0; font-size: 16px; font-weight: 650; }

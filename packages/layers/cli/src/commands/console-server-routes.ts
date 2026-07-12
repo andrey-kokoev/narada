@@ -18,7 +18,6 @@ import type {
   SiteControlClientFactory,
 } from '@narada2/windows-site';
 import type { ConsoleControlRequest } from '@narada2/windows-site';
-import { renderSiteRegistryPage } from './console-site-registry-page.js';
 import type { SiteRegistryReadModel } from './site-registry-read-model.js';
 import type { RegistryMutationGateway, RegistryMutationInput, RegistryMutationOperation } from './site-registry-management-gateway.js';
 import { readOperatorConsoleUiAsset, readOperatorConsoleUiDocument } from './console-ui-assets.js';
@@ -246,7 +245,7 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
           jsonResponse(res, 403, { error: 'Origin not allowed' });
           return;
         }
-        htmlResponse(res, 200, renderSiteRegistryPage('add'));
+        htmlResponse(res, 200, readOperatorConsoleUiDocument());
       },
     },
     {
@@ -258,7 +257,7 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
           jsonResponse(res, 403, { error: 'Origin not allowed' });
           return;
         }
-        htmlResponse(res, 200, renderSiteRegistryPage('manage'));
+        htmlResponse(res, 200, readOperatorConsoleUiDocument());
       },
     },
     {

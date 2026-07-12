@@ -1,7 +1,12 @@
 <script setup lang="ts">
+import { Archive, Pencil, RotateCcw, Trash2 } from 'lucide-vue-next';
 import type { SiteDetailProjection } from '../projections';
 
-defineProps<{ site: SiteDetailProjection | null; loading: boolean }>();
+const props = defineProps<{ site: SiteDetailProjection | null; loading: boolean }>();
+
+function actionHref(actionId: string, siteId: string): string {
+  return '/console/registry/manage?site=' + encodeURIComponent(siteId) + '&operation=' + encodeURIComponent(actionId);
+}
 </script>
 
 <template>
@@ -18,6 +23,17 @@ defineProps<{ site: SiteDetailProjection | null; loading: boolean }>();
         </div>
         <span class="site-status" :data-tone="site.statusTone">{{ site.observation }}</span>
       </header>
+      <nav v-if="site.actions.some((action) => action.available)" class="detail-actions" aria-label="Selected Site actions">
+        <template v-for="action in site.actions" :key="action.id">
+          <a v-if="action.available" class="detail-action" :href="actionHref(action.id, site.siteId)">
+            <Pencil v-if="action.id === 'edit'" :size="14" aria-hidden="true" />
+            <Archive v-else-if="action.id === 'retire'" :size="14" aria-hidden="true" />
+            <RotateCcw v-else-if="action.id === 'restore'" :size="14" aria-hidden="true" />
+            <Trash2 v-else :size="14" aria-hidden="true" />
+            {{ action.label }}
+          </a>
+        </template>
+      </nav>
       <dl class="detail-grid">
         <dt>Root</dt><dd><code>{{ site.root }}</code></dd>
         <dt>Variant</dt><dd>{{ site.variant }} / {{ site.substrate }}</dd>
@@ -47,6 +63,9 @@ defineProps<{ site: SiteDetailProjection | null; loading: boolean }>();
 .site-status[data-tone="positive"] { color: var(--success, #18794e); }
 .site-status[data-tone="warning"] { color: var(--warning, #996500); }
 .site-status[data-tone="danger"] { color: var(--danger, #b42318); }
+.detail-actions { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; margin: 0 0 18px; }
+.detail-action { display: inline-flex; align-items: center; gap: 6px; padding: 6px 8px; border: 1px solid var(--line); border-radius: var(--radius); color: var(--text); font-size: 12px; text-decoration: none; }
+.detail-action:hover { border-color: var(--operator); background: var(--surface-muted); }
 .detail-grid { display: grid; grid-template-columns: 82px minmax(0, 1fr); gap: 8px 12px; margin: 0; font-size: 12px; }
 .detail-grid dt { color: var(--muted); }
 .detail-grid dd { min-width: 0; margin: 0; overflow-wrap: anywhere; }

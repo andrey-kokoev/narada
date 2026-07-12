@@ -506,6 +506,9 @@ The console does not introduce a second Site Registry domain.
 
 The browser boundary rejects malformed API data before projections run. UI projections are ephemeral view models: they are not persisted, do not grant authority, and do not replace the plan/apply gateway.
 
+- The Vue mutation page serves `/console/registry/add` and `/console/registry/manage`; it owns draft state and typed request construction while plan/apply, revision checks, lifecycle guards, and purge confirmation remain server-enforced.
+- Add, edit, retire, restore, and purge all use the same explicit preview-then-confirm workflow. A successful apply refreshes the canonical record and preserves the result for the operator.
+
 ## 13. Cross-References
 
 | Document | Relationship |
