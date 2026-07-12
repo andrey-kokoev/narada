@@ -1,6 +1,19 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
 import { cn } from '@narada2/ui-vue';
+import type {
+  WorkspaceLaunchAttempt as LaunchAttempt,
+  WorkspaceLaunchBootstrap as Bootstrap,
+  WorkspaceLaunchHandoff as Handoff,
+  WorkspaceLaunchModel as LauncherModel,
+  WorkspaceLaunchObservation as RuntimeObservation,
+  WorkspaceLaunchOption as LaunchOption,
+  WorkspaceLaunchProjection as ProjectionObservation,
+  WorkspaceLaunchRecord as LaunchRecord,
+  WorkspaceLaunchSelection as LaunchSelection,
+  WorkspaceLaunchSelectionMode as SelectionMode,
+  WorkspaceLaunchSelectorModel as SelectorModel,
+} from '@narada2/workspace-launch-ui/contract';
 import {
   ExternalLink,
   Play,
@@ -11,94 +24,6 @@ import {
   Trash2,
   X,
 } from 'lucide-vue-next';
-
-type SelectionCardinality = 'single' | 'multiple';
-
-interface SelectionMode {
-  site?: SelectionCardinality;
-  role?: SelectionCardinality;
-  operatorSurface?: SelectionCardinality;
-}
-
-interface LaunchOption {
-  value: string;
-  label: string;
-  hint?: string;
-}
-
-interface LaunchRecord {
-  site: string;
-  role: string;
-  agent: string;
-  runtime: string;
-  operatorSurface: string;
-  agentIdentityRef?: { canonicalAgentId?: string };
-}
-
-interface SelectorModel {
-  selected?: {
-    runtime?: string;
-    intelligenceProvider?: string;
-  };
-  operatorSurfaceOptions?: LaunchOption[];
-  runtimeOptions?: LaunchOption[];
-  intelligenceProviderOptions?: LaunchOption[];
-}
-
-interface LauncherModel {
-  records: LaunchRecord[];
-  siteChoices: string[];
-  initialSites: string[];
-  initialRoles: string[];
-  initialOperatorSurfaces: string[];
-  initialRuntime: string;
-  initialIntelligenceProvider: string;
-  initialSelectionMode: SelectionMode;
-  narsOperatorSurfaceChoices: string[];
-  selectorModel: SelectorModel;
-}
-
-interface LaunchSelection {
-  site: string[];
-  role: string[];
-  operatorSurface: string[];
-  runtime: string;
-  intelligenceProvider: string;
-  selectionMode: SelectionMode;
-}
-
-interface Handoff {
-  posture?: string;
-  status?: string;
-}
-
-interface RuntimeObservation {
-  health?: string;
-  sessionId?: string;
-}
-
-interface ProjectionObservation {
-  projectionKind?: string;
-  status?: string;
-}
-
-interface LaunchAttempt {
-  launchAttemptId: string;
-  selection: LaunchSelection;
-  status: string;
-  resultSummary: string;
-  updatedAt: string | null;
-  handoffs: Handoff[];
-  observations: RuntimeObservation[];
-  projections: ProjectionObservation[];
-  actions: string[];
-  raw: unknown;
-}
-
-interface Bootstrap {
-  model: LauncherModel;
-  persistent: boolean;
-}
 
 function objectValue(value: unknown): Record<string, unknown> {
   return typeof value === 'object' && value !== null ? value as Record<string, unknown> : {};
@@ -226,8 +151,9 @@ function parseAttempt(value: unknown): LaunchAttempt {
   };
 }
 
-function parseAttempts(value: unknown): LaunchAttempt[] {
+function parseAttempts(value: unknown): LaunchAttempt[] | null {
   const object = objectValue(value);
+  if (!Array.isArray(object.attempts)) return null;
   return arrayValue(object.attempts).map(parseAttempt).filter((attempt) => attempt.launchAttemptId);
 }
 
@@ -621,7 +547,7 @@ function actionIcon(action: string): typeof RefreshCw {
 
 function updateDashboard(value: unknown): void {
   const parsed = parseAttempts(value);
-  if (parsed.length > 0 || attempts.value.length === 0) attempts.value = parsed;
+  if (parsed) attempts.value = parsed;
 }
 
 async function loadLaunches(): Promise<void> {

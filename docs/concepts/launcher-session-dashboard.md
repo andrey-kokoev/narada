@@ -72,9 +72,12 @@ It must not display guessed process ownership as fact. If a process, terminal ta
 ## Implementation Boundary
 
 The browser renderer is the private `@narada2/workspace-launch-ui` package. It
-uses the shared `@narada2/ui` foundation and `@narada2/ui-vue` Vue/shadcn
-adapter. The package owns presentation, selection controls, dashboard
-rendering, and bounded browser requests only.
+uses the shared `@narada2/ui` foundation and the `@narada2/ui-vue` Vue
+adapter. Its native controls are intentionally semantic and are styled by the
+shared foundation; the adapter's generated shadcn-vue primitives remain
+available for controls that need richer behavior. The package owns
+presentation, selection controls, dashboard rendering, and bounded browser
+requests only.
 
 `@narada2/cli` remains the authority for the HTTP server, selection
 normalization, launch planning, process handoff, persistence, runtime

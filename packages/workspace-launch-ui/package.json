@@ -10,11 +10,13 @@
     "presentation_only": true
   },
   "exports": {
+    "./contract": "./src/contract.ts",
     "./dist/*": "./dist/*",
     "./package.json": "./package.json"
   },
   "files": [
-    "dist"
+    "dist",
+    "src/contract.ts"
   ],
   "scripts": {
     "prebuild": "pnpm --filter @narada2/ui build",

@@ -26,6 +26,11 @@ import {
 import { discoverNarsSessions } from '@narada2/nars-session-core/session-index';
 import { explainMcpCommand as explainMcpAuthorityCommand } from './launcher-mcp-authority.js';
 import { defaultLaunchRegistryPath, listKnownSiteRootsForCli, type ResolvedSiteRoot } from '../lib/site-root-resolver.js';
+import type {
+  WorkspaceLaunchSelectionCardinality,
+  WorkspaceLaunchSelection as WorkspaceLaunchBrowserSelection,
+  WorkspaceLaunchSelectionMode,
+} from '@narada2/workspace-launch-ui/contract';
 
 const requireFromLauncherCommand = createRequire(import.meta.url);
 const providerRegistry = loadProviderRegistry();
@@ -1368,23 +1373,6 @@ function workspaceLaunchOptionsFromBrowserSelection(
     runtime: selection.runtime === 'registry default' ? undefined : selection.runtime,
     intelligenceProvider: selection.intelligenceProvider === 'registry default' ? undefined : selection.intelligenceProvider,
   };
-}
-
-interface WorkspaceLaunchBrowserSelection {
-  site: string[];
-  role: string[];
-  operatorSurface: string[];
-  runtime: string;
-  intelligenceProvider: string;
-  selectionMode?: WorkspaceLaunchSelectionMode;
-}
-
-type WorkspaceLaunchSelectionCardinality = 'single' | 'multiple';
-
-interface WorkspaceLaunchSelectionMode {
-  site: WorkspaceLaunchSelectionCardinality;
-  role: WorkspaceLaunchSelectionCardinality;
-  operatorSurface: WorkspaceLaunchSelectionCardinality;
 }
 
 interface WorkspaceLaunchRememberedSelectionRecord {

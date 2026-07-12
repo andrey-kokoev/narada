@@ -7,7 +7,7 @@ import { createServer } from 'node:http';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from '@playwright/test';
-import { writeNarsSessionStartedIndex } from '@narada2/carrier-runtime/nars-session-index';
+import { writeNarsSessionStartedIndex } from '@narada2/nars-session-core/session-index';
 import { SiteRegistry, openRegistryDb, resolveRegistryDbPathByLocus } from '@narada2/windows-site';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -278,7 +278,7 @@ async function fetchLaunchState(page) {
   });
 }
 
-test('browser interactive selection UI can launch multiple sites before cancel', { timeout: 90_000, skip: process.env.NARADA_ENABLE_BROWSER_SELECTION_UI_E2E !== '1' ? 'browser selection UI E2E requires explicit opt-in because child launcher process handling is host-sensitive' : false }, async () => {
+test('browser interactive selection UI can launch multiple sites before cancel', { timeout: 90_000 }, async () => {
   assert.equal(existsSync(cliPath), true, `CLI dist missing: ${cliPath}. Run pnpm --filter @narada2/cli build first.`);
   const fixture = await makeFixture();
   const launcherUiPort = 54900;
@@ -470,6 +470,11 @@ test('browser interactive selection UI can launch multiple sites before cancel',
     assert.equal(recoveredState.attempts.length, 1);
     assert.equal(recoveredState.attempts[0].selection.site[0], 'smart-scheduling');
     assert.equal(recoveredState.attempts[0].status, 'launched');
+    await recoveryPage.locator('.attempt', { hasText: 'smart-scheduling / resident' }).getByRole('button', { name: /Forget This Result/ }).click();
+    await recoveryPage.getByText('Forget This Result completed.').waitFor({ timeout: 10_000 });
+    await recoveryPage.getByText('No launches yet.').waitFor({ timeout: 10_000 });
+    const emptyRecoveredState = await fetchLaunchState(recoveryPage);
+    assert.equal(emptyRecoveredState.attempts.length, 0);
     await recoveryPage.getByRole('button', { name: 'Cancel' }).click();
     await recoveryPage.getByRole('heading', { name: 'Cancelled' }).waitFor({ timeout: 10_000 });
     const recoveryExit = await waitForExit(recoveryChild);
@@ -485,7 +490,7 @@ test('browser interactive selection UI can launch multiple sites before cancel',
   }
 });
 
-test('browser selector constrains dependent choices and refuses invalid submissions without mutation', { timeout: 60_000, skip: process.env.NARADA_ENABLE_BROWSER_SELECTION_UI_E2E !== '1' ? 'browser selection UI E2E requires explicit opt-in because child launcher process handling is host-sensitive' : false }, async () => {
+test('browser selector constrains dependent choices and refuses invalid submissions without mutation', { timeout: 60_000 }, async () => {
   const fixture = await makeFixture();
   let browser;
   let child;
@@ -541,7 +546,7 @@ test('browser selector constrains dependent choices and refuses invalid submissi
   }
 });
 
-test('browser UI persists multi-mode, previews fanout, and the planning-only UI exits after submission', { timeout: 90_000, skip: process.env.NARADA_ENABLE_BROWSER_SELECTION_UI_E2E !== '1' ? 'browser selection UI E2E requires explicit opt-in because child launcher process handling is host-sensitive' : false }, async () => {
+test('browser UI persists multi-mode, previews fanout, and the planning-only UI exits after submission', { timeout: 90_000 }, async () => {
   const fixture = await makeFixture();
   let browser;
   let launchChild;
