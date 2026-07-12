@@ -13,7 +13,34 @@ import { homedir } from "node:os";
 import { readdirSync, existsSync, readFileSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import type { Database } from "@narada2/control-plane";
-import type { WindowsAuthorityLocus, WindowsSiteVariant, SiteVariant } from "./types.js";
+import type { WindowsAuthorityLocus, WindowsSiteVariant } from "./types.js";
+import type {
+  RegisteredSite,
+  RegistryAlias,
+  RegistryConflict,
+  RegistryLifecycleStatus,
+  RegistryManagementAuditRecord,
+  RegistryManagementOperation,
+  RegistryManagementRequest,
+  RegistryManagementResult,
+  RegistryObservationStatus,
+  RegistrySiteRecord,
+  RegistrySourceObservation,
+  SiteVariant,
+} from "@narada2/site-registry-contract";
+export type {
+  RegisteredSite,
+  RegistryAlias,
+  RegistryConflict,
+  RegistryLifecycleStatus,
+  RegistryManagementAuditRecord,
+  RegistryManagementOperation,
+  RegistryManagementRequest,
+  RegistryManagementResult,
+  RegistryObservationStatus,
+  RegistrySiteRecord,
+  RegistrySourceObservation,
+} from "@narada2/site-registry-contract";
 import {
   classifySiteContinuityExchangePacket,
   createSiteContinuityPacketId,
@@ -42,121 +69,6 @@ export interface SiteContinuityPacketImportResult {
   status: "imported" | "refused";
   decision: SiteContinuityDecision;
   packetRecord?: SiteContinuityPacketRecord;
-}
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-export interface RegisteredSite {
-  siteId: string;
-  variant: SiteVariant;
-  siteRoot: string;
-  substrate: string;
-  aimJson: string | null;
-  controlEndpoint: string | null;
-  lastSeenAt: string | null;
-  createdAt: string;
-  lifecycleStatus?: RegistryLifecycleStatus;
-  observationStatus?: RegistryObservationStatus;
-  sources?: RegistrySourceObservation[];
-  aliases?: RegistryAlias[];
-  revision?: number;
-  updatedAt?: string;
-  retiredAt?: string | null;
-  retireReason?: string | null;
-}
-
-export type RegistryLifecycleStatus = "active" | "retired";
-export type RegistryObservationStatus =
-  | "unverified"
-  | "present"
-  | "stale"
-  | "missing"
-  | "conflicted";
-
-export interface RegistrySourceObservation {
-  kind: string;
-  ref: string;
-  observedAt: string;
-}
-
-export interface RegistryAlias {
-  value: string;
-  source: string;
-}
-
-export interface RegistrySiteRecord extends RegisteredSite {
-  lifecycleStatus: RegistryLifecycleStatus;
-  observationStatus: RegistryObservationStatus;
-  sources: RegistrySourceObservation[];
-  aliases: RegistryAlias[];
-  revision: number;
-  updatedAt: string;
-  retiredAt: string | null;
-  retireReason: string | null;
-}
-
-export interface RegistryConflict {
-  code: string;
-  message: string;
-  siteId?: string;
-  siteRoot?: string;
-}
-
-export type RegistryManagementOperation =
-  | "add"
-  | "edit"
-  | "retire"
-  | "restore"
-  | "purge";
-
-export interface RegistryManagementRequest {
-  operation: RegistryManagementOperation;
-  siteId: string;
-  actor: string;
-  reason?: string;
-  siteRoot?: string;
-  variant?: SiteVariant;
-  substrate?: string;
-  aimJson?: string | null;
-  controlEndpoint?: string | null;
-  aliases?: RegistryAlias[];
-  clearAimJson?: boolean;
-  clearControlEndpoint?: boolean;
-  clearAliases?: boolean;
-  source?: RegistrySourceObservation;
-  sources?: RegistrySourceObservation[];
-  expectedRevision?: number;
-  confirmSiteId?: string;
-  reAdmit?: boolean;
-  apply?: boolean;
-}
-
-export interface RegistryManagementResult {
-  schema: "narada.site_registry.management.v0";
-  status: "planned" | "applied" | "unchanged" | "refused";
-  operation: RegistryManagementOperation;
-  mutationPerformed: boolean;
-  siteId: string;
-  before: RegistrySiteRecord | null;
-  after: RegistrySiteRecord | null;
-  changes: string[];
-  conflicts: RegistryConflict[];
-  refusals: string[];
-  auditRef: string | null;
-}
-
-export interface RegistryManagementAuditRecord {
-  eventId: string;
-  siteId: string;
-  operation: RegistryManagementOperation;
-  actor: string;
-  reason: string | null;
-  occurredAt: string;
-  beforeJson: string | null;
-  afterJson: string | null;
-  status: "applied" | "refused";
 }
 
 interface RegistrySiteRow {

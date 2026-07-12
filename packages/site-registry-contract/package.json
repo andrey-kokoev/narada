@@ -1,0 +1,28 @@
+{
+  "name": "@narada2/site-registry-contract",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "narada": {
+    "package_role": "shared_domain_and_wire_contract",
+    "surface": "site_registry",
+    "presentation_only": false,
+    "authority_owner": "@narada2/windows-site"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "src",
+    "README.md"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "node --import tsx --test test/index.test.ts"
+  },
+  "devDependencies": {
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.0"
+  }
+}

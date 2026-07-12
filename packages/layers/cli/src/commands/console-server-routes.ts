@@ -21,6 +21,7 @@ import type { ConsoleControlRequest } from '@narada2/windows-site';
 import { renderSiteRegistryPage } from './console-site-registry-page.js';
 import type { SiteRegistryReadModel } from './site-registry-read-model.js';
 import type { RegistryMutationGateway, RegistryMutationInput, RegistryMutationOperation } from './site-registry-management-gateway.js';
+import { readOperatorConsoleUiAsset, readOperatorConsoleUiDocument } from './console-ui-assets.js';
 
 export interface RouteHandler {
   method: string;
@@ -220,7 +221,44 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
           jsonResponse(res, 403, { error: 'Origin not allowed' });
           return;
         }
-        htmlResponse(res, 200, renderSiteRegistryPage());
+        htmlResponse(res, 200, readOperatorConsoleUiDocument());
+      },
+    },
+    {
+      method: 'GET',
+      pattern: /^\/console\/registry\/assets\/(.+)$/,
+      handler: async (_req, res, params) => {
+        const asset = readOperatorConsoleUiAsset(`/console/registry/assets/${params[1]!}`);
+        if (!asset) {
+          jsonResponse(res, 404, { error: 'Operator Console asset not found' });
+          return;
+        }
+        res.writeHead(200, { 'Content-Type': asset.contentType, 'Content-Length': asset.body.byteLength, 'Cache-Control': 'no-cache' });
+        res.end(asset.body);
+      },
+    },
+    {
+      method: 'GET',
+      pattern: /^\/console\/registry\/add$/,
+      handler: async (_req, res) => {
+        const origin = _req.headers.origin;
+        if (!setCorsHeaders(res, origin)) {
+          jsonResponse(res, 403, { error: 'Origin not allowed' });
+          return;
+        }
+        htmlResponse(res, 200, renderSiteRegistryPage('add'));
+      },
+    },
+    {
+      method: 'GET',
+      pattern: /^\/console\/registry\/manage$/,
+      handler: async (_req, res) => {
+        const origin = _req.headers.origin;
+        if (!setCorsHeaders(res, origin)) {
+          jsonResponse(res, 403, { error: 'Origin not allowed' });
+          return;
+        }
+        htmlResponse(res, 200, renderSiteRegistryPage('manage'));
       },
     },
     {

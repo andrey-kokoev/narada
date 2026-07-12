@@ -23,6 +23,7 @@
   },
   "dependencies": {
     "@narada2/control-plane": "workspace:*",
+    "@narada2/site-registry-contract": "workspace:*",
     "@narada2/site-continuity": "workspace:*",
     "@narada2/sqlite": "workspace:*"
   },

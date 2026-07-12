@@ -459,6 +459,7 @@ The server prints its bound URL on startup. `--port 0` binds to an ephemeral por
 | Method | Path | Behavior |
 |--------|------|----------|
 | GET | `/console/registry` | Read-only canonical Site Registry browser page |
+| GET | `/console/registry/assets/:asset` | Bounded static asset route for the Operator Console bundle |
 | GET | `/console/registry/api/sites` | Canonical registry list envelope (`narada.site_registry.management.v0`) |
 | GET | `/console/registry/api/sites/:reference` | Complete registry record and next actions envelope |
 | GET | `/console/registry/api/discover-plan` | Bounded dry-run discovery envelope; accepts `source`, `root`, and `actor` |
@@ -493,6 +494,17 @@ Query parameters for bounded routes:
 - Production auth hardening (Bearer token, OAuth, or mTLS) is deferred.
 - WebSocket/SSE live streaming is deferred.
 - Cross-site log aggregation from Site SQLite (not just registry audit) requires Site adapter enrichment.
+
+### 12.5 UI Contract Factorization
+
+The console does not introduce a second Site Registry domain.
+
+- `@narada2/site-registry-contract` is the browser-safe home of the existing canonical registry type vocabulary and the runtime parser for the snake_case HTTP/CLI envelopes.
+- `@narada2/windows-site` remains the durable registry implementation and authority owner; it re-exports the canonical types for existing callers.
+- `@narada2/operator-console-ui` derives `SiteListProjection`, `SiteTileProjection`, and `SiteDetailProjection` from canonical records. Its composables own fetch, selection, and plan/apply client state; components and pages own presentation only.
+- `@narada2/site-config` remains distinct. Its `SiteRegistryProjectionContract` and `SiteRegistryReadModel` describe awareness and event-derived read models, not durable User Site registry rows.
+
+The browser boundary rejects malformed API data before projections run. UI projections are ephemeral view models: they are not persisted, do not grant authority, and do not replace the plan/apply gateway.
 
 ## 13. Cross-References
 

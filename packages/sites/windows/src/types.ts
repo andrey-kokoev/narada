@@ -6,7 +6,7 @@ export type WindowsSiteVariant = "native" | "wsl";
 /**
  * All Site variants known to the registry, including remote substrates.
  */
-export type SiteVariant = WindowsSiteVariant | "cloudflare" | "linux-user" | "linux-system";
+export type { SiteVariant } from "@narada2/site-registry-contract";
 
 /**
  * Windows authority locus represented by a Site.

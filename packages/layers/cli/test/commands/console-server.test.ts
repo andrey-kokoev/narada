@@ -1,6 +1,9 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { createConsoleServer } from '../../src/commands/console-server.js';
 
+// The Registry page embeds a built package artifact; this test must read it from the real checkout.
+vi.unmock('node:fs');
+
 function createMockLogger() {
   return {
     debug: vi.fn(),
@@ -192,6 +195,36 @@ describe('console server', () => {
       const server = await createConsoleServer({ port: 0, host: '127.0.0.1' });
       await server.start();
       await expect(server.start()).rejects.toThrow('already started');
+      await server.stop();
+    });
+  });
+
+  describe('Operator Workspace ingress', () => {
+    it('serves a site-aware surface directory and does not mount the diagnostic Workbench', async () => {
+      const server = await createConsoleServer({ port: 0, host: '127.0.0.1' });
+      const url = await server.start();
+
+      const root = await fetch(url);
+      const rootHtml = await root.text();
+      expect(root.status, rootHtml).toBe(200);
+      expect(root.headers.get('content-type')).toContain('text/html');
+      expect(rootHtml).toContain('Operator Workspace');
+      expect(rootHtml).toContain('data-narada-surface="operator-workspace"');
+      expect(rootHtml).toContain('Direct diagnostic host');
+      expect(rootHtml).toContain('<h2>Available</h2>');
+      expect(rootHtml).toContain('class="status available"');
+      expect(rootHtml).toContain('data-surface-id="site-registry"');
+      expect(rootHtml).toContain('data-surface-id="site-operations"');
+      expect(rootHtml).toContain('data-surface-id="agent-sessions"');
+      expect(rootHtml).toContain('<h2>Not available yet</h2>');
+      expect(rootHtml).toContain('class="surface planned"');
+      expect(rootHtml).toContain('Select a Site in Site Registry');
+      expect(rootHtml).not.toContain('href="/sites/');
+      expect(rootHtml).not.toContain('data-surface-id="workbench"');
+      expect(rootHtml).not.toContain('href="/workbench"');
+
+      const workbench = await fetch(`${url}/workbench`);
+      expect(workbench.status).toBe(404);
       await server.stop();
     });
   });
@@ -645,29 +678,38 @@ describe('console server', () => {
       const url = await server.start();
 
       const page = await fetch(`${url}/console/registry`);
-      expect(page.status).toBe(200);
+      const pageBody = await page.text();
+      expect(page.status, pageBody).toBe(200);
       expect(page.headers.get('content-type')).toContain('text/html');
-      const pageHtml = await page.text();
-      expect(pageHtml).toContain('/console/registry/api/sites');
-      expect(pageHtml).toContain('existing-site');
-      expect(pageHtml).toContain('existing-site-search');
-      expect(pageHtml).toContain('Add a new Site');
-      expect(pageHtml).toContain('Type the Site ID to confirm purge');
-      expect(pageHtml).toContain('renderMutationPreview');
-      expect(pageHtml).toContain('renderDiscoveryPreview');
-      expect(pageHtml).toContain('Load draft');
-      expect(pageHtml).toContain('clear-control-endpoint');
-      expect(pageHtml).toContain('clear-aliases');
-      expect(pageHtml).toContain('clear-aim-json');
-      expect(pageHtml).toContain('required-marker');
-      expect(pageHtml).toContain('draft-state');
-      expect(pageHtml).toContain('confirmDiscardDraft');
-      expect(pageHtml).toContain('operationUnavailableMessage');
-      expect(pageHtml).toContain('No unsaved changes');
-      expect(pageHtml).toContain('Discard draft');
-      expect(pageHtml).toContain('[hidden] { display: none !important; }');
-      expect(pageHtml.match(/id="aim-json"/g)).toHaveLength(1);
-      expect(pageHtml).not.toContain('<label class="clear-toggle');
+      const pageHtml = pageBody;
+      expect(pageHtml).toContain('<div id="app"></div>');
+      expect(pageHtml).toContain('Operator Console - Sites');
+      expect(pageHtml).toContain('/console/registry/assets/');
+      expect(pageHtml).not.toContain('href="/workbench"');
+
+      const assetMatch = pageHtml.match(/src="([^"]+\.js)"/);
+      expect(assetMatch).not.toBeNull();
+      const asset = await fetch(`${url}${assetMatch?.[1] ?? ''}`);
+      expect(asset.status).toBe(200);
+      expect(asset.headers.get('content-type')).toContain('text/javascript');
+      const assetBody = await asset.text();
+      expect(assetBody).toContain('/console/registry/add');
+      expect(assetBody).toContain('/console/registry/api');
+
+      const addPage = await fetch(`${url}/console/registry/add`);
+      const addHtml = await addPage.text();
+      expect(addPage.status, addHtml).toBe(200);
+      expect(addHtml).toContain('<body data-page-mode="add">');
+      expect(addHtml).toContain('<h1>Add Site</h1>');
+      expect(addHtml).toContain('body[data-page-mode="add"] #site-inventory-panel');
+      expect(addHtml).toContain('Register a Site that does not yet have a canonical registry record.');
+
+      const managePage = await fetch(`${url}/console/registry/manage`);
+      const manageHtml = await managePage.text();
+      expect(managePage.status, manageHtml).toBe(200);
+      expect(manageHtml).toContain('<body data-page-mode="manage">');
+      expect(manageHtml).toContain('<h1>Registry Changes</h1>');
+      expect(manageHtml).toContain('body[data-page-mode="manage"] #site-inventory-panel');
 
       const list = await httpGet(`${url}/console/registry/api/sites`);
       expect(list.status).toBe(200);

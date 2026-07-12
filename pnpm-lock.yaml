@@ -504,6 +504,9 @@ importers:
       '@narada2/nars-session-core':
         specifier: workspace:*
         version: link:../../nars-session-core
+      '@narada2/operator-console-ui':
+        specifier: workspace:*
+        version: link:../../operator-console-ui
       '@narada2/ops-kit':
         specifier: workspace:*
         version: link:../../ops-kit
@@ -522,6 +525,9 @@ importers:
       '@narada2/site-registry-cloudflare':
         specifier: workspace:*
         version: link:../../site-registry-cloudflare
+      '@narada2/site-registry-contract':
+        specifier: workspace:*
+        version: link:../../site-registry-contract
       '@narada2/task-governance-core':
         specifier: workspace:*
         version: link:../../../../narada-core/packages/task-governance-core
@@ -765,6 +771,40 @@ importers:
         specifier: workspace:*
         version: link:../site-paths
 
+  packages/operator-console-ui:
+    dependencies:
+      '@narada2/site-registry-contract':
+        specifier: workspace:*
+        version: link:../site-registry-contract
+      '@narada2/ui-vue':
+        specifier: workspace:*
+        version: link:../ui-vue
+      lucide-vue-next:
+        specifier: ^0.563.0
+        version: 0.563.0(vue@3.5.39(typescript@5.9.3))
+      vue:
+        specifier: ^3.5.0
+        version: 3.5.39(typescript@5.9.3)
+    devDependencies:
+      '@tailwindcss/vite':
+        specifier: ^4.1.18
+        version: 4.3.2(vite@8.1.1(@types/node@22.19.19)(esbuild@0.27.7)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.21.0))
+      '@vitejs/plugin-vue':
+        specifier: ^6.0.7
+        version: 6.0.7(vite@8.1.1(@types/node@22.19.19)(esbuild@0.27.7)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.21.0))(vue@3.5.39(typescript@5.9.3))
+      tailwindcss:
+        specifier: ^4.1.18
+        version: 4.3.2
+      tsx:
+        specifier: ^4.7.0
+        version: 4.21.0
+      vite:
+        specifier: ^8.1.1
+        version: 8.1.1(@types/node@22.19.19)(esbuild@0.27.7)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.21.0)
+      vue-tsc:
+        specifier: ^2.2.0
+        version: 2.2.12(typescript@5.9.3)
+
   packages/operator-surface-carriers:
     dependencies:
       '@narada2/process-launch-posture':
@@ -892,6 +932,15 @@ importers:
         specifier: ^1.0.0
         version: 1.6.1(@types/node@22.19.19)(jsdom@26.1.0)(lightningcss@1.32.0)(stylus@0.57.0)
 
+  packages/site-registry-contract:
+    devDependencies:
+      tsx:
+        specifier: ^4.7.0
+        version: 4.21.0
+      typescript:
+        specifier: ^5.3.0
+        version: 5.9.3
+
   packages/site-task-lifecycle:
     devDependencies:
       '@types/node':
@@ -972,6 +1021,9 @@ importers:
       '@narada2/site-continuity':
         specifier: workspace:*
         version: link:../../site-continuity
+      '@narada2/site-registry-contract':
+        specifier: workspace:*
+        version: link:../../site-registry-contract
       '@narada2/sqlite':
         specifier: workspace:*
         version: link:../../sqlite
