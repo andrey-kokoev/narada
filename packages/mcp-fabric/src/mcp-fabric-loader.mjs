@@ -9,6 +9,7 @@ export function loadSiteMcpFabric(siteRoot, options = {}) {
   const required = options.required ?? false;
   const validateRegistry = options.validateRegistry ?? 'diagnostic';
   const injectionScopeFilter = normalizeInjectionScopeFilter(options.injectionScope ?? options.injection_scope ?? null);
+  const runtimeKindFilter = normalizeRuntimeKindFilter(options.runtimeKind ?? options.runtime_kind ?? null);
   const fabricDirectory = resolveSiteMcpFabricDirectory(siteRoot);
   const mcpDir = fabricDirectory.mcpDir;
   if (!existsSync(mcpDir)) {
@@ -35,16 +36,33 @@ export function loadSiteMcpFabric(siteRoot, options = {}) {
   const servers = {};
   const sources = {};
   const skipped = [];
+  const activeFiles = [];
   const surfaceRegistry = loadMcpSurfaceRegistry(siteRoot);
 
   for (const file of candidateFiles) {
     const path = join(mcpDir, file);
     const packet = parseJsonFile(path);
+    if (isRetiredEmptyMcpSidecar(packet)) {
+      skipped.push({ file, reason: 'retired_empty_sidecar' });
+      continue;
+    }
+    activeFiles.push(file);
     const serverEntries = Object.entries(packet.mcpServers ?? {});
     for (const [serverName, rawServer] of serverEntries) {
       const injectionScope = serverInjectionScope(rawServer);
       if (injectionScopeFilter && !injectionScopeFilter.has(injectionScope)) {
         skipped.push({ file, server_name: serverName, reason: 'injection_scope_not_requested', injection_scope: injectionScope });
+        continue;
+      }
+      const runtimeRequirements = serverRuntimeRequirements(rawServer);
+      if (!runtimeRequirementsMatch(runtimeRequirements, runtimeKindFilter)) {
+        skipped.push({
+          file,
+          server_name: serverName,
+          reason: 'runtime_kind_not_requested',
+          runtime_kind: runtimeKindFilter,
+          runtime_requirements: runtimeRequirements,
+        });
         continue;
       }
       const normalized = normalizeServerConfig(serverName, rawServer, siteRoot);
@@ -93,7 +111,8 @@ export function loadSiteMcpFabric(siteRoot, options = {}) {
     });
   }
 
-  if (required && Object.keys(servers).length === 0) {
+  const runtimeFilteredServerCount = skipped.filter((entry) => entry.reason === 'runtime_kind_not_requested').length;
+  if (required && Object.keys(servers).length === 0 && runtimeFilteredServerCount === 0) {
     throw new McpFabricError('mcp_fabric_empty', `No stdio MCP servers found in ${mcpDir}`, { siteRoot, mcpDir, files: candidateFiles });
   }
 
@@ -113,13 +132,14 @@ export function loadSiteMcpFabric(siteRoot, options = {}) {
     );
   }
 
-  const registryValidation = validateFabricAgainstRegistry(siteRoot, mcpDir, candidateFiles, servers);
+  const registryValidation = validateFabricAgainstRegistry(siteRoot, mcpDir, activeFiles, servers);
   if (validateRegistry === true && registryValidation.status === 'mismatch') {
     const details = {
       siteRoot,
       mcpDir,
       registryPath: registryValidation.registry_path,
       missing: registryValidation.missing,
+      unexpected: registryValidation.unexpected,
     };
     details.repair_plan = mcpFabricRepairPlan('mcp_fabric_registry_mismatch', details);
     throw new McpFabricError('mcp_fabric_registry_mismatch', `MCP fabric does not match registry ${normalize(registryValidation.registry_path)}`, details);
@@ -136,6 +156,7 @@ export function loadSiteMcpFabric(siteRoot, options = {}) {
     servers,
     sources,
     skipped,
+    runtime_kind: runtimeKindFilter,
     registry_validation: validateRegistry === false ? undefined : registryValidation,
   };
 }
@@ -164,6 +185,7 @@ function emptyFabric(siteRoot, mcpDir) {
     servers: {},
     sources: {},
     skipped: [],
+    runtime_kind: null,
   };
 }
 
@@ -194,6 +216,12 @@ function normalizeServerConfig(serverName, rawServer, siteRoot) {
     ? rawServer.args.map((arg) => normalizePortablePathText(String(arg).replaceAll('{site_root}', portableSiteRoot)))
     : [];
   const normalizedTargetSiteRoot = normalizePortablePathText(targetSiteRoot);
+  const runtimeRequirements = serverRuntimeRequirements(rawServer);
+  const selectedRuntimeKind = rawServer.surface_projection?.runtime_kind === 'nars' ? 'nars' : null;
+  const surfaceProjection = normalizeSurfaceProjection(rawServer, runtimeRequirements, selectedRuntimeKind);
+  const projectionId = typeof rawServer.projection_id === 'string'
+    ? rawServer.projection_id
+    : typeof surfaceProjection?.projection_id === 'string' ? surfaceProjection.projection_id : null;
   const pathPolicyViolation = firstServerPathPolicyViolation(serverName, siteRootResolved, args, normalizedTargetSiteRoot);
   if (pathPolicyViolation) {
     throw new McpFabricError(
@@ -210,6 +238,8 @@ function normalizeServerConfig(serverName, rawServer, siteRoot) {
     env_vars: Array.isArray(rawServer.env_vars) ? rawServer.env_vars.map(String) : [],
     ...rawServerToolList(rawServer),
     ...(rawServer.surface_id ? { surface_id: String(rawServer.surface_id) } : {}),
+    ...(projectionId ? { projection_id: projectionId } : {}),
+    ...(surfaceProjection ? { surface_projection: surfaceProjection } : {}),
     target_site_root: normalizedTargetSiteRoot,
     ...(rawServer.authority_posture ? { authority_posture: String(rawServer.authority_posture) } : {}),
     injection_scope: serverInjectionScope(rawServer),
@@ -218,6 +248,8 @@ function normalizeServerConfig(serverName, rawServer, siteRoot) {
     ...(rawServer.restart_owner ? { restart_owner: String(rawServer.restart_owner) } : {}),
     ...(rawServer.bound_into_site ? { bound_into_site: String(rawServer.bound_into_site) } : {}),
     ...(rawServer.narada_scope && typeof rawServer.narada_scope === 'object' ? { narada_scope: rawServer.narada_scope } : {}),
+    ...(runtimeRequirements.length > 0 ? { runtime_requirements: runtimeRequirements } : {}),
+    ...(selectedRuntimeKind ? { runtime_kind: selectedRuntimeKind } : {}),
     ...surfaceAffordanceFields(rawServer),
     ...(Number.isFinite(Number(rawServer.startup_timeout_sec)) ? { startup_timeout_sec: Number(rawServer.startup_timeout_sec) } : {}),
   };
@@ -230,6 +262,22 @@ function surfaceAffordanceFields(rawServer) {
   if (rawServer.operator_affordance && typeof rawServer.operator_affordance === 'object') fields.operator_affordance = rawServer.operator_affordance;
   if (rawServer.presentation && typeof rawServer.presentation === 'object') fields.presentation = rawServer.presentation;
   return fields;
+}
+
+function normalizeSurfaceProjection(rawServer, runtimeRequirements, selectedRuntimeKind) {
+  const rawProjection = rawServer?.surface_projection;
+  if (!rawProjection || typeof rawProjection !== 'object' || Array.isArray(rawProjection)) return null;
+  const projection = { ...rawProjection };
+  if (typeof rawServer.surface_id === 'string' && projection.surface_id === undefined) {
+    projection.surface_id = rawServer.surface_id;
+  }
+  if (!Array.isArray(projection.runtime_requirements) && runtimeRequirements.length > 0) {
+    projection.runtime_requirements = runtimeRequirements;
+  }
+  if (selectedRuntimeKind && projection.runtime_kind === undefined) {
+    projection.runtime_kind = selectedRuntimeKind;
+  }
+  return projection;
 }
 
 function objectValue(value) {
@@ -256,6 +304,22 @@ function normalizeInjectionScopeToken(value) {
   if (normalized === 'user_site') return 'user_site';
   if (normalized === 'local_site') return 'local_site';
   return null;
+}
+
+function normalizeRuntimeKindFilter(value) {
+  if (value === 'nars') return 'nars';
+  return null;
+}
+
+function serverRuntimeRequirements(rawServer) {
+  const projection = rawServer?.surface_projection;
+  if (!projection || typeof projection !== 'object' || Array.isArray(projection)) return [];
+  if (!Array.isArray(projection.runtime_requirements)) return [];
+  return projection.runtime_requirements.filter((value) => value === 'nars');
+}
+
+function runtimeRequirementsMatch(requirements, runtimeKind) {
+  return requirements.length === 0 || (runtimeKind !== null && requirements.includes(runtimeKind));
 }
 
 function firstServerPathPolicyViolation(serverName, siteRoot, args, targetSiteRoot) {
@@ -324,15 +388,26 @@ function validateFabricAgainstRegistry(siteRoot, mcpDir, files, servers) {
   }
 
   const presentFiles = new Set(files);
+  const expectedFiles = new Set(expectedSurfaces.map((surface) => surface.generated_file));
   const missing = expectedSurfaces.filter((surface) => {
     return !presentFiles.has(surface.generated_file);
   });
+  const unexpected = files
+    .filter((file) => !expectedFiles.has(file))
+    .map((file) => ({ generated_file: file }));
   return {
-    status: missing.length === 0 ? 'ok' : 'mismatch',
+    status: missing.length === 0 && unexpected.length === 0 ? 'ok' : 'mismatch',
     registry_path: registryPath,
     expected_count: expectedSurfaces.length,
     missing,
+    unexpected,
   };
+}
+
+function isRetiredEmptyMcpSidecar(packet) {
+  return Object.keys(packet?.mcpServers ?? {}).length === 0
+    && typeof packet?.description === 'string'
+    && /\bsidecar\b.*\bretired\b/i.test(packet.description);
 }
 
 function normalizeCommand(command) {

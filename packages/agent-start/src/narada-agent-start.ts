@@ -136,6 +136,7 @@ const yoloFlag = !!args.yolo;
 const enableNativeShellFlag = !!args.enable_native_shell;
 const ADMITTED_MCP_SCOPES = Object.freeze(['all', 'host', 'user-site', 'local-site', 'none']);
 const mcpScope = normalizeMcpScope(args.mcp_scope ?? process.env.NARADA_MCP_SCOPE ?? 'all');
+const mcpRuntimeKind = runtimeInput === 'nars' ? 'nars' : null;
 const strictMcpRegistry = !!args.strict_mcp_registry;
 const pcSiteRoot = args.pc_site_root ?? process.env.NARADA_PC_SITE_ROOT ?? 'C:/ProgramData/Narada/sites/pc/desktop-sunroom-2';
 const launchSource = args.launch_source ?? 'agent-start';
@@ -671,6 +672,7 @@ function emptyScopedMcpFabric() {
     servers: {},
     sources: {},
     skipped: [],
+    runtime_kind: mcpRuntimeKind,
     registry_validation: undefined,
     scope_loci: [],
     locus_fabrics: [],
@@ -735,9 +737,21 @@ function loadScopedMcpFabric() {
       missingLoci.push({ locus, site_root: root, reason: 'mcp_fabric_missing_optional_for_all_scope' });
       continue;
     }
-    const fabric = loadSiteMcpFabric(root, { required, validateRegistry: strictMcpRegistry ? true : 'diagnostic', injectionScope: locus });
+    const fabric = loadSiteMcpFabric(root, {
+      required,
+      validateRegistry: strictMcpRegistry ? true : 'diagnostic',
+      injectionScope: locus,
+      runtime_kind: mcpRuntimeKind,
+    });
     if (Object.keys(fabric.servers ?? {}).length === 0) {
-      missingLoci.push({ locus, site_root: root, reason: 'mcp_fabric_empty' });
+      const runtimeFiltered = (fabric.skipped ?? []).filter((entry) => entry.reason === 'runtime_kind_not_requested');
+      missingLoci.push({
+        locus,
+        site_root: root,
+        reason: runtimeFiltered.length > 0 ? 'mcp_fabric_runtime_filtered' : 'mcp_fabric_empty',
+        runtime_kind: mcpRuntimeKind,
+        ...(runtimeFiltered.length > 0 ? { runtime_filtered_server_count: runtimeFiltered.length } : {}),
+      });
       continue;
     }
     locusFabrics.push({ locus, root, fabric });
@@ -1186,12 +1200,14 @@ const output = {
     candidate_files: mcpFabric.candidate_files,
     server_names: mcpServerNames(mcpFabric),
     skipped: mcpFabric.skipped,
+    runtime_kind: mcpFabric.runtime_kind ?? mcpRuntimeKind,
     scope_loci: mcpFabric.scope_loci ?? ['local-site'],
     locus_fabrics: mcpFabric.locus_fabrics ?? [],
     missing_loci: mcpFabric.missing_loci ?? [],
   } : null,
   mcp_scope: {
     requested: mcpScope,
+    runtime_kind: mcpRuntimeKind,
     admitted_scopes: [...ADMITTED_MCP_SCOPES],
     requested_loci: mcpScopeLoci(mcpScope),
     effective_loci: mcpScopeResolution?.loaded_loci ?? [],

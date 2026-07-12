@@ -195,6 +195,7 @@ test('agent-start restamps launch ownership for the runtime child process', () =
     environmentSiteRoot: 'D:/code/narada.sonar',
     workspaceRoot: 'D:/code/narada.sonar',
     dbPath: 'D:/code/narada.sonar/.ai/state/agent-context.sqlite',
+    siteConfig: { mcp_scope: 'none' },
     runtimeProcessCreatorPid: 222,
     runtimeProcessRole: 'runtime_server',
   });
@@ -203,6 +204,7 @@ test('agent-start restamps launch ownership for the runtime child process', () =
   assert.equal(env.NARADA_PROCESS_OWNERSHIP, 'session_owned');
   assert.equal(env.NARADA_PROCESS_ROLE, 'runtime_server');
   assert.equal(env.NARADA_CREATED_BY_PID, '222');
+  assert.equal(env.NARADA_MCP_SCOPE, 'none');
 });
 
 test('McpScope none projects an explicit empty fabric and no effective loci', () => {
@@ -614,7 +616,7 @@ test('agent-cli exec launches package bin through node, not PowerShell', () => {
   assert.equal(output.nars_events.attach_commands.agent_cli, 'narada-agent-cli --attach <session_started.event_endpoint>');
   assert.equal(output.nars_events.attach_commands.agent_tui, 'agent-tui --attach <session_started.event_endpoint>');
   assert.equal(output.nars_events.attach_commands.agent_web_ui, 'narada-agent-web-ui --event-endpoint <session_started.event_endpoint> --health-endpoint <session_started.health_endpoint>');
-  assert.match(output.nars_events.attach_commands.operator_input_protocol, /conversation\.send/);
+  assert.match(output.nars_events.attach_commands.operator_input_protocol, /session\.submit/);
   assert.match(output.nars_events.attach_commands.slash_command_protocol, /session\.command\.execute/);
   assert.equal(output.carrier_session.record.carrier_runtime_kind, 'narada-agent-runtime-server');
   assert.equal(output.carrier_session.session_id, sessionId);
@@ -814,6 +816,62 @@ test('target site MCP fabric remains isolated from user site fabric', () => {
   assert.equal(output.nars_launch.user_site_mcp_injected, false);
   assert.equal(output.required_environment.NARADA_SITE_ROOT, siteRoot);
   assert.equal(output.runtime_args[output.runtime_args.indexOf('--site-root') + 1], siteRoot);
+});
+
+test('NARS runtime selects explicit runtime-affined Site MCP projection', () => {
+  const siteRoot = mkdtempSync(join(tmpdir(), 'narada-agent-start-nars-projection-'));
+  mkdirSync(join(siteRoot, '.ai'), { recursive: true });
+  mkdirSync(join(siteRoot, '.ai', 'mcp'), { recursive: true });
+  copyFileSync(join(naradaProperRoot, '.ai', 'task-lifecycle.db'), join(siteRoot, '.ai', 'task-lifecycle.db'));
+  writeFileSync(join(siteRoot, '.ai', 'mcp', 'runtime-projections.json'), JSON.stringify({
+    mcpServers: {
+      'narada-neutral': {
+        transport: 'stdio',
+        command: 'node',
+        args: ['--version'],
+        target_site_root: '{site_root}',
+        injection_scope: 'local_site',
+        narada_scope: { injection_scope: 'local_site' },
+      },
+      'narada-nars-session': {
+        transport: 'stdio',
+        command: 'node',
+        args: ['--version'],
+        tools: ['nars_session_guidance'],
+        target_site_root: '{site_root}',
+        surface_id: 'nars-session',
+        injection_scope: 'local_site',
+        narada_scope: { injection_scope: 'local_site' },
+        surface_projection: {
+          surface_id: 'nars-session',
+          projection_id: 'local-site-nars-runtime',
+          injection_scope: 'local_site',
+          runtime_requirements: ['nars'],
+          runtime_kind: 'nars',
+        },
+      },
+    },
+  }, null, 2), 'utf8');
+
+  const narsOutput = runOk([
+    '--operator-surface', 'agent-cli',
+    '--runtime', 'nars',
+    '--target-site-root', siteRoot,
+    '--mcp-scope', 'local-site',
+  ]);
+  assert.equal(narsOutput.runtime_substrate_kind, 'narada-agent-runtime-server');
+  assert.equal(narsOutput.mcp_fabric.runtime_kind, 'nars');
+  assert.deepEqual(narsOutput.mcp_fabric.server_names, ['narada-nars-session', 'narada-neutral']);
+  assert.equal(narsOutput.mcp_fabric.skipped.some((entry) => entry.reason === 'runtime_kind_not_requested'), false);
+
+  const nonNarsOutput = runOk([
+    '--operator-surface', 'codex',
+    '--runtime', 'codex',
+    '--target-site-root', siteRoot,
+    '--mcp-scope', 'local-site',
+  ]);
+  assert.deepEqual(nonNarsOutput.mcp_fabric.server_names, ['narada-neutral']);
+  assert.ok(nonNarsOutput.mcp_fabric.skipped.some((entry) => entry.server_name === 'narada-nars-session' && entry.reason === 'runtime_kind_not_requested'));
 });
 
 test('non-canonical target MCP server names are refused before carrier handoff', () => {
