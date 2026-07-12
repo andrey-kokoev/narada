@@ -907,16 +907,43 @@ test('WebSocket /events subscribes with replay and forwards protocol frames', as
     const rejected = await client.nextJson();
     assert.equal(rejected.event, 'websocket_error');
     assert.equal(rejected.code, 'unsupported_session_control');
-    client.sendJson({ id: 'status-1', method: 'session.health', params: {} });
+    client.sendJson({
+      id: 'carrier-input-1',
+      method: 'carrier.input.deliver',
+      params: {
+        input: {
+          schema: 'narada.carrier.input_event.v1',
+          event_id: 'input_carrier_1',
+          source_kind: 'operator',
+          source_id: 'nars-session-mcp.test',
+          transport: 'carrier_server_api',
+          delivery_mode: 'admit_for_current_turn',
+          hold_condition: null,
+          content: 'carrier input',
+          created_at: '2026-07-12T00:00:00.000Z',
+          authority_ref: null,
+          directive_id: null,
+          metadata: {},
+        },
+        delivery_constructor: 'send',
+      },
+    });
     await waitForWrittenFrameCount(1);
+    const carrierInputFrame = JSON.parse(written.trim().split(/\r?\n/).at(-1));
+    assert.equal(carrierInputFrame.method, 'session.submit');
+    assert.equal(carrierInputFrame.content, 'carrier input');
+    assert.equal(carrierInputFrame.event_id, 'input_carrier_1');
+    assert.equal(carrierInputFrame.carrier_input_method, 'carrier.input.deliver');
+    client.sendJson({ id: 'status-1', method: 'session.health', params: {} });
+    await waitForWrittenFrameCount(2);
     assert.equal(JSON.parse(written.trim().split(/\r?\n/).at(-1)).method, 'session.health');
     client.sendJson({ id: 'input-1', method: 'session.submit', params: { content: 'run startup sequence', source: 'manual_operator' } });
-    await waitForWrittenFrameCount(2);
+    await waitForWrittenFrameCount(3);
     const inputFrame = JSON.parse(written.trim().split(/\r?\n/).at(-1));
     assert.equal(inputFrame.method, 'session.submit');
     assert.deepEqual(inputFrame.params, { content: 'run startup sequence', source: 'manual_operator' });
     client.sendJson({ id: 'recovery-1', method: 'session.recovery', params: {} });
-    await waitForWrittenFrameCount(3);
+    await waitForWrittenFrameCount(4);
     const recoveryFrame = JSON.parse(written.trim().split(/\r?\n/).at(-1));
     assert.equal(recoveryFrame.method, 'session.recovery');
     assert.deepEqual(recoveryFrame.params, {});

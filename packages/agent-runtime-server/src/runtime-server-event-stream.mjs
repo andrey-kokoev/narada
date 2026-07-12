@@ -1,7 +1,44 @@
 import { createServer } from 'node:http';
+import { normalizeInputEvent } from '@narada2/carrier-protocol';
 import { readNarsEventLogPage } from '@narada2/nars-session-core/event-log';
 import { isNarsSessionCoreMethod } from '@narada2/nars-session-core/session-control-contract';
 import { decodeWebSocketFrames, encodeWebSocketTextFrame, websocketAcceptValue } from './runtime-server-websocket.mjs';
+
+export function translateCarrierInputDelivery(message) {
+  if (message?.method !== 'carrier.input.deliver') return { ok: true, request: message };
+  const rawInput = message?.params?.input;
+  if (!rawInput || typeof rawInput !== 'object' || Array.isArray(rawInput)) {
+    return { ok: false, code: 'invalid_carrier_input', message: 'carrier.input.deliver requires params.input.' };
+  }
+  try {
+    const input = normalizeInputEvent(rawInput);
+    return {
+      ok: true,
+      request: {
+        ...message,
+        method: 'session.submit',
+        content: input.content,
+        request_id: message.id ?? message.request_id ?? null,
+        event_id: input.event_id,
+        source_kind: input.source_kind,
+        source_id: input.source_id,
+        transport: input.transport,
+        delivery_mode: input.delivery_mode,
+        hold_condition: input.hold_condition,
+        authority_ref: input.authority_ref,
+        directive_id: input.directive_id,
+        metadata: input.metadata,
+        carrier_input_method: 'carrier.input.deliver',
+      },
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      code: 'invalid_carrier_input',
+      message: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
 
 export function startEventStreamProjection({ childStdin, eventHub, host, port, eventsPath = null }) {
   const server = createServer((request, response) => {
@@ -101,13 +138,25 @@ export function startEventStreamProjection({ childStdin, eventHub, host, port, e
           });
           continue;
         }
-        if (!isNarsSessionCoreMethod(message.method)) {
+        const translated = translateCarrierInputDelivery(message);
+        if (!translated.ok) {
+          send({
+            schema: 'narada.nars.websocket.error.v1',
+            event: 'websocket_error',
+            request_id: message.id ?? null,
+            code: translated.code,
+            message: translated.message,
+          });
+          continue;
+        }
+        const request = translated.request;
+        if (!isNarsSessionCoreMethod(request.method)) {
           send({
             schema: 'narada.nars.websocket.error.v1',
             event: 'websocket_error',
             request_id: message.id ?? null,
             code: 'unsupported_session_control',
-            method: message.method ?? null,
+            method: request.method ?? null,
           });
           continue;
         }
@@ -116,7 +165,7 @@ export function startEventStreamProjection({ childStdin, eventHub, host, port, e
           send({ schema: 'narada.nars.websocket.error.v1', event: 'websocket_error', request_id: message.id ?? null, code: 'child_stdin_unavailable' });
           continue;
         }
-        stdin.write(`${JSON.stringify(message)}\n`);
+        stdin.write(`${JSON.stringify(request)}\n`);
       }
     });
     socket.on('close', () => {

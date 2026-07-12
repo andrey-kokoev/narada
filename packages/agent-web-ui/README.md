@@ -22,6 +22,8 @@ Verification ownership:
 - `test/agent-web-ui.test.mjs` proves browser preference serialization, content and panel feature seams, package wiring, and bounded UI contracts.
 - `pnpm --filter @narada2/agent-web-ui test:e2e` is an explicit browser boundary suite; it builds first and is not part of the default test command.
 - `test:live:*` and `test:browser:cdp` are explicit live-smoke suites and require an operator-supplied runtime or projection.
+- `pnpm --filter @narada2/agent-web-ui test:live:delegated-task` is the controlled L5 launcher proof. It starts a real launcher/carrier/Site MCP fabric, delivers input through `nars-session-mcp`, exercises `delegated-task-mcp` and a worker carrier, and verifies durable task and worker evidence.
+- From the Narada repository root, the same proof is available as `pnpm test:agent-web-ui:live:delegated-task`.
 
 Browser-local preferences are owned by their feature and use the registry in
 `src/app/lib/browserPreferences.js`. They affect only browser presentation or
