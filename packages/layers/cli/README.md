@@ -278,6 +278,8 @@ This single command runs the authoritative launcher journey checks in a serializ
 
 It covers workspace selection, launcher planning, NARS session discovery, agent-cli attach, agent-web-ui attach, canonical identity/session labeling, and the launch/session regressions that previously showed up as stale dist/source-hash mismatches or broken projection handoff paths.
 
+The acceptance command builds the CLI and UI automatically. It requires a Windows host and an installed workspace (`pnpm install`), launches temporary child processes, and uses host filesystem paths, so run it from a normal host session rather than a restricted sandbox. If Playwright Chromium is not installed, run `pnpm exec playwright install chromium` once before the suite.
+
 ## Global Options
 
 All commands support these global options:

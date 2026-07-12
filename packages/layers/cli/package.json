@@ -62,6 +62,7 @@
     "@narada2/site-registry-cloudflare",
     "@narada2/task-governance-core",
     "@narada2/ui",
+    "@narada2/workspace-launch-contract",
     "@narada2/workspace-launch-ui",
     "@narada2/windows-site"
   ],
@@ -104,6 +105,7 @@
     "@narada2/site-registry-cloudflare": "workspace:*",
     "@narada2/task-governance-core": "workspace:*",
     "@narada2/ui": "workspace:*",
+    "@narada2/workspace-launch-contract": "workspace:*",
     "@narada2/workspace-launch-ui": "workspace:*",
     "@narada2/windows-site": "workspace:*",
     "chalk": "^5.6.2",

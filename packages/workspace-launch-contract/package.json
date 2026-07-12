@@ -1,0 +1,33 @@
+{
+  "name": "@narada2/workspace-launch-contract",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "narada": {
+    "package_role": "shared_wire_contract",
+    "surface": "launcher_session_dashboard",
+    "presentation_only": false,
+    "does_not_own": [
+      "launch_planning",
+      "browser_rendering",
+      "process_handoff",
+      "session_persistence"
+    ]
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "src",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node --import tsx --test test/index.test.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "devDependencies": {
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.0"
+  }
+}

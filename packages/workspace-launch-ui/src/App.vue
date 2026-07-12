@@ -1,19 +1,23 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
 import { cn } from '@narada2/ui-vue';
+import {
+  parseWorkspaceLaunchBootstrap,
+  parseWorkspaceLaunchDashboard,
+  parseWorkspaceLaunchSelectorModel,
+} from '@narada2/workspace-launch-contract';
 import type {
-  WorkspaceLaunchAttempt as LaunchAttempt,
-  WorkspaceLaunchBootstrap as Bootstrap,
-  WorkspaceLaunchHandoff as Handoff,
-  WorkspaceLaunchModel as LauncherModel,
-  WorkspaceLaunchObservation as RuntimeObservation,
-  WorkspaceLaunchOption as LaunchOption,
-  WorkspaceLaunchProjection as ProjectionObservation,
-  WorkspaceLaunchRecord as LaunchRecord,
-  WorkspaceLaunchSelection as LaunchSelection,
-  WorkspaceLaunchSelectionMode as SelectionMode,
-  WorkspaceLaunchSelectorModel as SelectorModel,
-} from '@narada2/workspace-launch-ui/contract';
+  WorkspaceLaunchOption,
+  WorkspaceLaunchSelection,
+  WorkspaceLaunchSelectionMode,
+  WorkspaceLaunchSelectorModel,
+  WorkspaceLaunchWireAttempt,
+  WorkspaceLaunchWireHandoff,
+  WorkspaceLaunchWireModel,
+  WorkspaceLaunchWireObservation,
+  WorkspaceLaunchWireProjection,
+  WorkspaceLaunchWireRecord,
+} from '@narada2/workspace-launch-contract';
 import {
   ExternalLink,
   Play,
@@ -24,6 +28,75 @@ import {
   Trash2,
   X,
 } from 'lucide-vue-next';
+
+type LaunchOption = WorkspaceLaunchOption;
+type LaunchSelection = WorkspaceLaunchSelection;
+type SelectionMode = WorkspaceLaunchSelectionMode;
+
+interface LaunchRecord {
+  site: string;
+  role: string;
+  agent: string;
+  runtime: string;
+  operatorSurface: string;
+  agentIdentityRef?: { canonicalAgentId: string };
+}
+
+interface SelectorModel {
+  selected: {
+    runtime?: string;
+    intelligenceProvider?: string;
+  };
+  operatorSurfaceOptions: LaunchOption[];
+  runtimeOptions: LaunchOption[];
+  intelligenceProviderOptions: LaunchOption[];
+}
+
+interface LauncherModel {
+  records: LaunchRecord[];
+  siteChoices: string[];
+  initialSites: string[];
+  initialRoles: string[];
+  initialOperatorSurfaces: string[];
+  initialRuntime: string;
+  initialIntelligenceProvider: string;
+  initialSelectionMode: SelectionMode;
+  narsOperatorSurfaceChoices: string[];
+  selectorModel: SelectorModel;
+}
+
+interface Bootstrap {
+  model: LauncherModel;
+  persistent: boolean;
+}
+
+interface Handoff {
+  posture?: string;
+  status?: string;
+}
+
+interface RuntimeObservation {
+  health?: string;
+  sessionId?: string | null;
+}
+
+interface ProjectionObservation {
+  projectionKind?: string;
+  status?: string;
+}
+
+interface LaunchAttempt {
+  launchAttemptId: string;
+  selection: LaunchSelection;
+  status: string;
+  resultSummary: string;
+  updatedAt: string | null;
+  handoffs: Handoff[];
+  observations: RuntimeObservation[];
+  projections: ProjectionObservation[];
+  actions: string[];
+  raw: unknown;
+}
 
 function objectValue(value: unknown): Record<string, unknown> {
   return typeof value === 'object' && value !== null ? value as Record<string, unknown> : {};
@@ -45,116 +118,98 @@ function unique(values: string[]): string[] {
   return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
 }
 
-function parseOption(value: unknown): LaunchOption {
-  const object = objectValue(value);
+function parseOption(value: WorkspaceLaunchOption): LaunchOption {
   return {
-    value: stringValue(object.value),
-    label: stringValue(object.label) || stringValue(object.value),
-    hint: stringValue(object.hint) || undefined,
+    value: value.value,
+    label: value.label,
+    hint: value.hint,
   };
 }
 
-function parseRecord(value: unknown): LaunchRecord {
-  const object = objectValue(value);
-  const identity = objectValue(object.agent_identity_ref);
+function parseRecord(value: WorkspaceLaunchWireRecord): LaunchRecord {
   return {
-    site: stringValue(object.site),
-    role: stringValue(object.role),
-    agent: stringValue(object.agent) || [stringValue(object.site), stringValue(object.role)].filter(Boolean).join('.'),
-    runtime: stringValue(object.runtime),
-    operatorSurface: stringValue(object.operator_surface),
-    agentIdentityRef: identity.canonical_agent_id
-      ? { canonicalAgentId: stringValue(identity.canonical_agent_id) }
+    site: value.site,
+    role: value.role,
+    agent: value.agent,
+    runtime: value.runtime,
+    operatorSurface: value.operator_surface,
+    agentIdentityRef: value.agent_identity_ref?.canonical_agent_id
+      ? { canonicalAgentId: value.agent_identity_ref.canonical_agent_id }
       : undefined,
   };
 }
 
-function parseSelectorModel(value: unknown): SelectorModel {
-  const object = objectValue(value);
-  const selected = objectValue(object.selected);
+function parseSelectorModel(value: WorkspaceLaunchSelectorModel): SelectorModel {
   return {
     selected: {
-      runtime: stringValue(selected.runtime) || undefined,
-      intelligenceProvider: stringValue(selected.intelligenceProvider) || undefined,
+      runtime: value.selected.runtime || undefined,
+      intelligenceProvider: value.selected.intelligenceProvider || undefined,
     },
-    operatorSurfaceOptions: arrayValue(object.operatorSurfaceOptions).map(parseOption).filter((option) => option.value),
-    runtimeOptions: arrayValue(object.runtimeOptions).map(parseOption).filter((option) => option.value),
-    intelligenceProviderOptions: arrayValue(object.intelligenceProviderOptions).map(parseOption).filter((option) => option.value),
+    operatorSurfaceOptions: value.operatorSurfaceOptions.map(parseOption),
+    runtimeOptions: value.runtimeOptions.map(parseOption),
+    intelligenceProviderOptions: value.intelligenceProviderOptions.map(parseOption),
   };
 }
 
-function parseModel(value: unknown): LauncherModel {
-  const object = objectValue(value);
+function parseModel(value: WorkspaceLaunchWireModel): LauncherModel {
   return {
-    records: arrayValue(object.records).map(parseRecord).filter((record) => record.site && record.role),
-    siteChoices: stringArray(object.siteChoices),
-    initialSites: stringArray(object.initialSites),
-    initialRoles: stringArray(object.initialRoles),
-    initialOperatorSurfaces: stringArray(object.initialOperatorSurfaces),
-    initialRuntime: stringValue(object.initialRuntime) || 'registry default',
-    initialIntelligenceProvider: stringValue(object.initialIntelligenceProvider) || 'registry default',
-    initialSelectionMode: objectValue(object.initialSelectionMode) as SelectionMode,
-    narsOperatorSurfaceChoices: stringArray(object.narsOperatorSurfaceChoices),
-    selectorModel: parseSelectorModel(object.selectorModel),
+    records: value.records.map(parseRecord),
+    siteChoices: value.siteChoices,
+    initialSites: value.initialSites,
+    initialRoles: value.initialRoles,
+    initialOperatorSurfaces: value.initialOperatorSurfaces,
+    initialRuntime: value.initialRuntime,
+    initialIntelligenceProvider: value.initialIntelligenceProvider,
+    initialSelectionMode: value.initialSelectionMode,
+    narsOperatorSurfaceChoices: value.narsOperatorSurfaceChoices,
+    selectorModel: parseSelectorModel(value.selectorModel),
   };
 }
 
 function parseBootstrap(): Bootstrap {
   const element = document.getElementById('narada-workspace-launch-bootstrap');
   if (!element) throw new Error('workspace_launch_bootstrap_missing');
-  const parsed = objectValue(JSON.parse(element.textContent || '{}') as unknown);
+  const parsed = parseWorkspaceLaunchBootstrap(JSON.parse(element.textContent || '{}') as unknown);
+  if (!parsed) throw new Error('workspace_launch_bootstrap_invalid');
   return {
     model: parseModel(parsed.model),
-    persistent: parsed.persistent === true,
+    persistent: parsed.persistent,
   };
 }
 
-function parseHandoff(value: unknown): Handoff {
-  const object = objectValue(value);
-  return { posture: stringValue(object.posture) || undefined, status: stringValue(object.status) || undefined };
+function parseHandoff(value: WorkspaceLaunchWireHandoff): Handoff {
+  return { posture: value.posture, status: value.status };
 }
 
-function parseObservation(value: unknown): RuntimeObservation {
-  const object = objectValue(value);
-  return { health: stringValue(object.health) || undefined, sessionId: stringValue(object.session_id) || undefined };
+function parseObservation(value: WorkspaceLaunchWireObservation): RuntimeObservation {
+  return { health: value.health, sessionId: value.session_id };
 }
 
-function parseProjection(value: unknown): ProjectionObservation {
-  const object = objectValue(value);
+function parseProjection(value: WorkspaceLaunchWireProjection): ProjectionObservation {
   return {
-    projectionKind: stringValue(object.projection_kind) || undefined,
-    status: stringValue(object.status) || undefined,
+    projectionKind: value.projection_kind,
+    status: value.status,
   };
 }
 
-function parseAttempt(value: unknown): LaunchAttempt {
-  const object = objectValue(value);
-  const selection = objectValue(object.selection);
+function parseAttempt(value: WorkspaceLaunchWireAttempt): LaunchAttempt {
   return {
-    launchAttemptId: stringValue(object.launch_attempt_id),
-    selection: {
-      site: stringArray(selection.site),
-      role: stringArray(selection.role),
-      operatorSurface: stringArray(selection.operatorSurface),
-      runtime: stringValue(selection.runtime),
-      intelligenceProvider: stringValue(selection.intelligenceProvider),
-      selectionMode: objectValue(selection.selectionMode) as SelectionMode,
-    },
-    status: stringValue(object.status),
-    resultSummary: stringValue(object.result_summary),
-    updatedAt: stringValue(object.updated_at) || stringValue(object.created_at) || stringValue(object.started_at) || null,
-    handoffs: arrayValue(object.handoffs).map(parseHandoff),
-    observations: arrayValue(object.observations).map(parseObservation),
-    projections: arrayValue(object.projections).map(parseProjection),
-    actions: stringArray(object.actions),
+    launchAttemptId: value.launch_attempt_id,
+    selection: value.selection,
+    status: value.status,
+    resultSummary: value.result_summary,
+    updatedAt: value.updated_at || value.created_at || value.started_at || null,
+    handoffs: value.handoffs?.map(parseHandoff) ?? [],
+    observations: value.observations?.map(parseObservation) ?? [],
+    projections: value.projections?.map(parseProjection) ?? [],
+    actions: value.actions ?? [],
     raw: value,
   };
 }
 
 function parseAttempts(value: unknown): LaunchAttempt[] | null {
-  const object = objectValue(value);
-  if (!Array.isArray(object.attempts)) return null;
-  return arrayValue(object.attempts).map(parseAttempt).filter((attempt) => attempt.launchAttemptId);
+  const parsed = parseWorkspaceLaunchDashboard(value);
+  return parsed ? parsed.attempts.map(parseAttempt) : null;
 }
 
 const bootstrap = parseBootstrap();
@@ -378,7 +433,10 @@ async function refreshSelectorControls(): Promise<void> {
       body: JSON.stringify(requested),
     });
     if (sequence !== refreshSequence.value) return;
-    if (response.ok) currentSelectorModel.value = parseSelectorModel(await response.json() as unknown);
+    if (response.ok) {
+      const parsed = parseWorkspaceLaunchSelectorModel(await response.json() as unknown);
+      if (parsed) currentSelectorModel.value = parseSelectorModel(parsed);
+    }
   } catch {
     return;
   }

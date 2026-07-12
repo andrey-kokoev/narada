@@ -13,6 +13,7 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"],
+      "@narada2/workspace-launch-contract": ["../workspace-launch-contract/src/index.ts"],
       "@narada2/ui-vue": ["../ui-vue/src/index.ts"],
       "@narada2/ui-vue/styles.css": ["../ui-vue/src/styles.css"],
       "@narada2/ui/styles.css": ["../ui/src/styles.css"]

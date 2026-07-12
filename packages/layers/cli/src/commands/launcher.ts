@@ -30,7 +30,9 @@ import type {
   WorkspaceLaunchSelectionCardinality,
   WorkspaceLaunchSelection as WorkspaceLaunchBrowserSelection,
   WorkspaceLaunchSelectionMode,
-} from '@narada2/workspace-launch-ui/contract';
+  WorkspaceLaunchOption as WorkspaceLaunchSelectorOptionContract,
+  WorkspaceLaunchSelectorModel as WorkspaceLaunchSelectorModelContract,
+} from '@narada2/workspace-launch-contract';
 
 const requireFromLauncherCommand = createRequire(import.meta.url);
 const providerRegistry = loadProviderRegistry();
@@ -1394,21 +1396,8 @@ interface WorkspaceLaunchUiPortPolicy {
   source: 'default' | 'config' | 'explicit';
 }
 
-export interface WorkspaceLaunchSelectorOption {
-  value: string;
-  label: string;
-  hint?: string;
-}
-
-export interface WorkspaceLaunchSelectorModel {
-  schema: 'narada.workspace_launch.selector_model.v1';
-  siteOptions: WorkspaceLaunchSelectorOption[];
-  roleOptions: WorkspaceLaunchSelectorOption[];
-  operatorSurfaceOptions: WorkspaceLaunchSelectorOption[];
-  runtimeOptions: WorkspaceLaunchSelectorOption[];
-  intelligenceProviderOptions: WorkspaceLaunchSelectorOption[];
-  selected: WorkspaceLaunchBrowserSelection;
-}
+export type WorkspaceLaunchSelectorOption = WorkspaceLaunchSelectorOptionContract;
+export type WorkspaceLaunchSelectorModel = WorkspaceLaunchSelectorModelContract;
 
 export function workspaceLaunchSelectorModel(
   records: WorkspaceLaunchRecord[],
