@@ -15,6 +15,7 @@ import {
   workspaceLaunchSelectorModel as workspaceLaunchSelectorModelDomain,
 } from './workspace-launch-selection.js';
 import { workspaceLaunchApplicationContext } from './workspace-launch-application-context.js';
+import { createWorkspaceLaunchAdmissionPolicy } from './workspace-launch-admission.js';
 import type { ResolvedSiteRoot } from '../lib/site-root-resolver.js';
 import type { WorkspaceLaunchSelection as WorkspaceLaunchBrowserSelection } from '@narada2/workspace-launch-contract';
 import type {
@@ -69,7 +70,13 @@ export function normalizeInteractiveOperatorSurfaceValues(values: string[]): str
 }
 
 export function intelligenceProviderChoices({ admittedProviders }: { admittedProviders?: string[] } = {}) {
-  return intelligenceProviderChoicesDomain({ ...workspaceLaunchApplicationContext().selectionContext, admittedProviders });
+  const admission = workspaceLaunchApplicationContext().selectionContext.admission;
+  return intelligenceProviderChoicesDomain({
+    ...workspaceLaunchApplicationContext().selectionContext,
+    admission: admittedProviders
+      ? createWorkspaceLaunchAdmissionPolicy({ providerRegistry: admission.providerRegistry, admittedProviders })
+      : admission,
+  });
 }
 
 export function intelligenceProviderChoicesForLaunchSelection(args: {

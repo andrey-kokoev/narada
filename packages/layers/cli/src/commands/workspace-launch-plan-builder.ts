@@ -35,7 +35,7 @@ export function buildAgentPlan(record: WorkspaceLaunchRecord, options: Workspace
   const launchOperatorSurfaces = normalizeOperatorSurfaceList(operatorSurfaceInput);
   const primaryOperatorSurfaceInput = launchOperatorSurfaces.includes('agent-cli') ? 'agent-cli' : launchOperatorSurfaces[0] ?? operatorSurfaceInput;
   const runtimeInput = options.runtime ?? record.runtime;
-  const runtimeSelection = context.resolveOperatorSurfaceRuntimeSelection(primaryOperatorSurfaceInput, runtimeInput);
+  const runtimeSelection = context.admission.resolveOperatorSurfaceRuntimeSelection(primaryOperatorSurfaceInput, runtimeInput);
   const launchOperatorSurface = runtimeSelection.operator_surface_kind;
   const operatorSurfaceKind = runtimeSelection.operator_surface_kind;
   const launchRuntime = runtimeSelection.runtime_substrate_kind;
@@ -47,7 +47,7 @@ export function buildAgentPlan(record: WorkspaceLaunchRecord, options: Workspace
   const isNarsRuntimeHost = runtimeHostKind === NARADA_AGENT_RUNTIME_SERVER_KIND;
   const waitForEnter = options.noWaitForEnterBeforeExec !== true && launchOperatorSurfaces[0] !== 'agent-web-ui' && !isNarsRuntimeHost;
   const intelligenceProvider = isNarsRuntimeHost
-    ? (options.intelligenceProvider ?? context.providerRegistry.default_provider ?? null)
+    ? (options.intelligenceProvider ?? context.admission.providerRegistry.default_provider ?? null)
     : null;
   const cloudflareApiBaseUrl = options.cloudflareApiBaseUrl?.trim()
     || process.env.NARADA_CLOUDFLARE_NARS_PROJECTION_URL
@@ -59,6 +59,9 @@ export function buildAgentPlan(record: WorkspaceLaunchRecord, options: Workspace
   const launchBindingPath = launchOperatorSurfaces.includes('agent-web-ui')
     ? operatorProjectionLaunchBindingPath(record, launchSessionToken)
     : null;
+  const runtimeWorkspaceRoot = isNarsRuntimeHost
+    ? naradaProper
+    : (record.workspace_root ?? record.narada_root);
   const processOwnership = launchSessionId
     ? buildLaunchProcessOwnership({
         launchSessionId,
@@ -76,7 +79,7 @@ export function buildAgentPlan(record: WorkspaceLaunchRecord, options: Workspace
     agent: record.agent,
     targetSiteId: record.site,
     runtime: launchRuntime,
-    workspaceRoot: record.workspace_root,
+    workspaceRoot: runtimeWorkspaceRoot,
     authority,
     intelligenceProvider,
     mcpScope,

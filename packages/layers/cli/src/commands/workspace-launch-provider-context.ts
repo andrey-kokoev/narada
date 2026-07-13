@@ -3,32 +3,13 @@ import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  ADMITTED_RUNTIME_SUBSTRATE_KINDS,
-  resolveCarrierRuntimeSelection,
-} from '@narada2/carrier-runtime-contract/carrier-runtime-selection';
-import { commandResultError } from '../lib/command-wrapper.js';
-
-export interface WorkspaceLaunchProviderRegistry {
-  default_provider?: string;
-  providers?: Record<string, {
-    meaning?: string;
-    support_state?: string;
-  }>;
-}
-
-export interface WorkspaceLaunchRuntimeSelection {
-  operator_surface_kind: string;
-  runtime_substrate_kind: string;
-  runtime_host_kind: string;
-}
+  createWorkspaceLaunchAdmissionPolicy,
+  type WorkspaceLaunchAdmissionPolicy,
+  type WorkspaceLaunchProviderRegistry,
+} from './workspace-launch-admission.js';
 
 export interface WorkspaceLaunchSelectionContext {
-  providerRegistry: WorkspaceLaunchProviderRegistry;
-  admittedProviders?: string[];
-  resolveOperatorSurfaceRuntimeSelection: (
-    operatorSurface: string | undefined,
-    runtime: string,
-  ) => WorkspaceLaunchRuntimeSelection;
+  admission: WorkspaceLaunchAdmissionPolicy;
 }
 
 const requireFromWorkspaceLaunchProviderContext = createRequire(import.meta.url);
@@ -118,44 +99,19 @@ function loadProviderAdapters(): ProviderAdapters {
   }
 }
 
-function resolveWorkspaceOperatorSurfaceRuntimeSelection(
-  operatorSurface: string | undefined,
-  runtime: string,
-): WorkspaceLaunchRuntimeSelection {
-  const selection = resolveCarrierRuntimeSelection({
-    carrierValue: operatorSurface,
-    operatorSurfaceValue: operatorSurface,
-    runtimeValue: runtime,
-    admittedRuntimeSubstrateKinds: [...ADMITTED_RUNTIME_SUBSTRATE_KINDS],
-    runtimeContractSchema: 'narada.runtime_substrate_kind.v1',
-  });
-  if (selection.status === 'refused') {
-    throw commandResultError({
-      status: 'error',
-      command: 'launcher workspace-plan',
-      error: selection.reason,
-      _formatted: `[FAIL] ${selection.reason_code}: ${selection.reason}`,
-      reason_code: selection.reason_code,
-      reason: selection.reason,
-      candidate_carrier_kind: selection.candidate_carrier_kind,
-      candidate_operator_surface_kind: selection.candidate_operator_surface_kind,
-      candidate_runtime_substrate_kind: selection.candidate_runtime_substrate_kind,
-      retryable: false,
-    }, selection.reason_code);
-  }
-  return {
-    operator_surface_kind: selection.operator_surface_kind,
-    runtime_substrate_kind: selection.runtime_substrate_kind,
-    runtime_host_kind: selection.runtime_host_kind,
-  };
-}
-
 export function createWorkspaceLaunchSelectionContext(): WorkspaceLaunchSelectionContext {
   const providerRegistry = loadProviderRegistry();
   const providerAdapters = loadProviderAdapters();
   return {
-    providerRegistry,
-    admittedProviders: providerAdapters.admitted_providers,
-    resolveOperatorSurfaceRuntimeSelection: resolveWorkspaceOperatorSurfaceRuntimeSelection,
+    admission: createWorkspaceLaunchAdmissionPolicy({
+      providerRegistry,
+      admittedProviders: providerAdapters.admitted_providers,
+    }),
   };
 }
+
+export type {
+  WorkspaceLaunchAdmissionPolicy,
+  WorkspaceLaunchProviderRegistry,
+  WorkspaceLaunchRuntimeSelection,
+} from './workspace-launch-admission.js';

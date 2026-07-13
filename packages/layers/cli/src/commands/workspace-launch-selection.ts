@@ -1,10 +1,5 @@
 import { resolve } from 'node:path';
 import { buildAgentIdentityRefV2 } from '@narada2/agent-identity';
-import {
-  NARADA_AGENT_RUNTIME_SERVER_KIND,
-  normalizeRuntimeAlias,
-  operatorSurfaceKindsForRuntimeHost,
-} from '@narada2/carrier-runtime-contract/carrier-runtime-selection';
 import type { ResolvedSiteRoot } from '../lib/site-root-resolver.js';
 import type {
   WorkspaceLaunchSelectionCardinality,
@@ -22,6 +17,11 @@ import type {
   WorkspaceLaunchProviderRegistry,
   WorkspaceLaunchSelectionContext,
 } from './workspace-launch-provider-context.js';
+import {
+  ADMITTED_NARS_OPERATOR_SURFACE_KINDS,
+  recordMatchesSiteSelectors,
+  roleChoicesForSelectedSites as roleChoicesForSelectedSitesDomain,
+} from './workspace-launch-admission.js';
 import {
   filterWorkspaceLaunchValues,
   initialOperatorSurfaceValues,
@@ -45,7 +45,7 @@ export type { WorkspaceLaunchProviderRegistry, WorkspaceLaunchSelectionContext }
 export type WorkspaceLaunchSelectorOption = WorkspaceLaunchSelectorOptionContract;
 export type WorkspaceLaunchSelectorModel = WorkspaceLaunchSelectorModelContract;
 
-const NARS_OPERATOR_SURFACE_KINDS = operatorSurfaceKindsForRuntimeHost(NARADA_AGENT_RUNTIME_SERVER_KIND);
+const NARS_OPERATOR_SURFACE_KINDS = ADMITTED_NARS_OPERATOR_SURFACE_KINDS;
 
 export function workspaceLaunchSelectionMode(
   raw: unknown,
@@ -97,17 +97,17 @@ function workspaceLaunchCapabilityPairs(
   context: WorkspaceLaunchSelectionContext,
 ): Array<{ operatorSurface: string; runtime: string }> {
   const candidates = records.flatMap((record) => {
-    const runtime = normalizeRuntimeAlias(record.runtime);
+    const runtime = context.admission.normalizeRuntimeAlias(record.runtime);
     const pairs: Array<{ operatorSurface: string; runtime: string }> = [{ operatorSurface: record.operator_surface, runtime }];
-    if (runtime === NARADA_AGENT_RUNTIME_SERVER_KIND) {
-      for (const operatorSurface of NARS_OPERATOR_SURFACE_KINDS) pairs.push({ operatorSurface, runtime });
+    if (runtime === context.admission.runtimeServerKind) {
+      for (const operatorSurface of context.admission.narsOperatorSurfaceKinds) pairs.push({ operatorSurface, runtime });
     }
     return pairs;
   });
   const admitted = new Map<string, { operatorSurface: string; runtime: string }>();
   for (const pair of candidates) {
     try {
-      context.resolveOperatorSurfaceRuntimeSelection(pair.operatorSurface, pair.runtime);
+      context.admission.resolveOperatorSurfaceRuntimeSelection(pair.operatorSurface, pair.runtime);
       admitted.set(`${pair.operatorSurface}\u0000${pair.runtime}`, pair);
     } catch {
       // Historical registry entries do not make an interactive option launchable.
@@ -124,7 +124,7 @@ function workspaceLaunchCapabilityValues(
 ): { operatorSurfaceValues: string[]; runtimeValues: string[] } {
   const pairs = workspaceLaunchCapabilityPairs(records, context);
   const explicitSurfaces = operatorSurfaces.filter((value) => value !== 'registry default');
-  const explicitRuntime = runtime && runtime !== 'registry default' ? normalizeRuntimeAlias(runtime) : null;
+  const explicitRuntime = runtime && runtime !== 'registry default' ? context.admission.normalizeRuntimeAlias(runtime) : null;
   const filteredPairs = explicitRuntime ? pairs.filter((pair) => pair.runtime === explicitRuntime) : pairs;
   const operatorSurfaceValues = unique(['registry default', ...filteredPairs.map((pair) => pair.operatorSurface)]);
   const selectedSurfaces = explicitSurfaces.filter((surface) => operatorSurfaceValues.includes(surface));
@@ -147,7 +147,7 @@ export function workspaceLaunchSelectorModel(
   const effectiveRecords = canonicalizeWorkspaceLaunchRecords(records, siteCatalog);
   const siteValues = unique(effectiveRecords.map((record) => record.site));
   const selectedSites = nonEmptyStringArray(selection.site).filter((site) => siteValues.includes(site));
-  const roleValues = roleChoicesForSelectedSites(effectiveRecords, selectedSites);
+  const roleValues = context.admission.roleChoicesForSelectedSites(effectiveRecords, selectedSites);
   const requestedRoles = nonEmptyStringArray(selection.role).filter((role) => roleValues.includes(role));
   const selectedRoles = requestedRoles.length > 0 ? requestedRoles : initialRoleValuesForInteractiveSelection(roleValues);
   const selectedRecords = selectLaunchRecords(effectiveRecords, { all: true, site: selectedSites, role: selectedRoles });
@@ -155,18 +155,17 @@ export function workspaceLaunchSelectorModel(
   const selectedOperatorSurfaces = initialOperatorSurfaceValues(capabilityValues.operatorSurfaceValues, nonEmptyStringArray(selection.operatorSurface).join(','));
   const requestedRuntime = nonEmpty(selection.runtime);
   const runtimeValues = workspaceLaunchCapabilityValues(selectedRecords, context, selectedOperatorSurfaces).runtimeValues;
-  const selectedRuntime = requestedRuntime && runtimeValues.includes(normalizeRuntimeAlias(requestedRuntime))
-    ? normalizeRuntimeAlias(requestedRuntime)
+  const selectedRuntime = requestedRuntime && runtimeValues.includes(context.admission.normalizeRuntimeAlias(requestedRuntime))
+    ? context.admission.normalizeRuntimeAlias(requestedRuntime)
     : 'registry default';
   const operatorSurfaceValues = workspaceLaunchCapabilityValues(selectedRecords, context, selectedOperatorSurfaces, selectedRuntime).operatorSurfaceValues;
   const normalizedOperatorSurfaces = initialOperatorSurfaceValues(operatorSurfaceValues, selectedOperatorSurfaces.join(','));
   const providerOperatorSurface = NARS_OPERATOR_SURFACE_KINDS.find((surface) => normalizedOperatorSurfaces.includes(surface))
     ?? (normalizedOperatorSurfaces[0] ?? 'registry default');
-  const intelligenceProviderOptions = intelligenceProviderChoicesForLaunchSelection({
+  const intelligenceProviderOptions = context.admission.intelligenceProviderChoicesForLaunchSelection({
     records: selectedRecords,
     operatorSurface: providerOperatorSurface,
     runtime: selectedRuntime,
-    context,
   });
   const providerValues = new Set(intelligenceProviderOptions.map((option) => option.value));
   const requestedProvider = nonEmpty(selection.intelligenceProvider);
@@ -234,7 +233,7 @@ export function resolveWorkspaceLaunchBrowserSelection(
     [],
   );
 
-  const roleChoices = roleChoicesForSelectedSites(effectiveRecords, selectedSites);
+  const roleChoices = context.admission.roleChoicesForSelectedSites(effectiveRecords, selectedSites);
   const requestedRoles = initialRoleValuesForInteractiveSelection(roleChoices, options.role);
   const rememberedRoles = rememberedSelection ? filterWorkspaceLaunchValues(rememberedSelection.role, roleChoices) : [];
   const selectedRoles = rememberedArraySelection(
@@ -262,11 +261,11 @@ export function resolveWorkspaceLaunchBrowserSelection(
   const runtimeValues = workspaceLaunchCapabilityValues(selectedRecords, context, selectedOperatorSurfaces).runtimeValues;
   const requestedRuntime = nonEmpty(options.runtime);
   const rememberedRuntime = rememberedSelection && nonEmpty(rememberedSelection.runtime)
-    && runtimeValues.includes(normalizeRuntimeAlias(rememberedSelection.runtime))
-    ? normalizeRuntimeAlias(rememberedSelection.runtime)
+    && runtimeValues.includes(context.admission.normalizeRuntimeAlias(rememberedSelection.runtime))
+    ? context.admission.normalizeRuntimeAlias(rememberedSelection.runtime)
     : null;
   const selectedRuntime = rememberedScalarSelection(
-    requestedRuntime ? normalizeRuntimeAlias(requestedRuntime) : null,
+    requestedRuntime ? context.admission.normalizeRuntimeAlias(requestedRuntime) : null,
     rememberedRuntime,
     runtimeValues,
     Boolean(options.runtime),
@@ -275,11 +274,10 @@ export function resolveWorkspaceLaunchBrowserSelection(
 
   const providerOperatorSurface = NARS_OPERATOR_SURFACE_KINDS.find((surface) => selectedOperatorSurfaces.includes(surface))
     ?? (selectedOperatorSurfaces[0] ?? 'registry default');
-  const intelligenceProviderOptions = intelligenceProviderChoicesForLaunchSelection({
+  const intelligenceProviderOptions = context.admission.intelligenceProviderChoicesForLaunchSelection({
     records: selectedRecords,
     operatorSurface: providerOperatorSurface,
     runtime: selectedRuntime,
-    context,
   });
   const providerValues = new Set(intelligenceProviderOptions.map((option) => option.value));
   const requestedProvider = nonEmpty(options.intelligenceProvider);
@@ -364,7 +362,7 @@ export function registryDefaultIntelligenceProviderLabel(defaultProvider?: strin
 }
 
 export function registryDefaultIntelligenceProvider(context: WorkspaceLaunchSelectionContext): string {
-  return context.providerRegistry.default_provider ?? 'registry default';
+  return context.admission.providerRegistry.default_provider ?? 'registry default';
 }
 
 export function intelligenceProviderChoicesForLaunchSelection({
@@ -378,40 +376,15 @@ export function intelligenceProviderChoicesForLaunchSelection({
   runtime: string;
   context: WorkspaceLaunchSelectionContext;
 }): Array<{ value: string; label: string; hint?: string }> {
-  const narsSurfaceRecords = records.filter((record) => {
-    const selection = context.resolveOperatorSurfaceRuntimeSelection(
-      operatorSurface === 'registry default' ? record.operator_surface : operatorSurface,
-      runtime === 'registry default' ? record.runtime : runtime,
-    );
-    return NARS_OPERATOR_SURFACE_KINDS.includes(selection.operator_surface_kind);
-  });
-  if (narsSurfaceRecords.length === 0) {
-    return [{ value: 'registry default', label: 'registry default', hint: 'no NARS operator-surface launches selected' }];
-  }
-  return intelligenceProviderChoices(context);
+  return context.admission.intelligenceProviderChoicesForLaunchSelection({ records, operatorSurface, runtime });
 }
 
 export function intelligenceProviderChoices(context: WorkspaceLaunchSelectionContext): Array<{ value: string; label: string; hint?: string }> {
-  const admitted = context.admittedProviders ? new Set(context.admittedProviders) : null;
-  const entries = Object.entries(context.providerRegistry.providers ?? {})
-    .filter(([, provider]) => provider.support_state === 'verified_supported')
-    .filter(([provider]) => !admitted || admitted.has(provider))
-    .map(([provider, metadata]) => ({ value: provider, label: provider, hint: metadata.meaning }))
-    .sort((a, b) => a.label.localeCompare(b.label));
-  return [
-    {
-      value: 'registry default',
-      label: registryDefaultIntelligenceProviderLabel(context.providerRegistry.default_provider),
-      hint: context.providerRegistry.default_provider
-        ? `use default provider ${context.providerRegistry.default_provider}`
-        : 'use launcher/provider defaults',
-    },
-    ...entries,
-  ];
+  return context.admission.intelligenceProviderChoices();
 }
 
 export function roleChoicesForSelectedSites(records: WorkspaceLaunchRecord[], siteSelectors: string[]): string[] {
-  return unique(records.filter((record) => recordMatchesSiteSelectors(record, siteSelectors)).map((record) => record.role));
+  return roleChoicesForSelectedSitesDomain(records, siteSelectors);
 }
 
 export function selectLaunchRecords(records: WorkspaceLaunchRecord[], options: WorkspaceLaunchPlanOptions): WorkspaceLaunchRecord[] {
@@ -448,12 +421,5 @@ export function selectLaunchRecords(records: WorkspaceLaunchRecord[], options: W
   return selected;
 }
 
-function recordMatchesSiteSelectors(record: WorkspaceLaunchRecord, siteSelectors: string[]): boolean {
-  const sites = new Set(siteSelectors.map((site) => site.toLowerCase()));
-  const aliases = [record.site, record.legacy_site, record.site.replace(/^narada-/, ''), record.agent.split('.')[0]]
-    .filter((value): value is string => typeof value === 'string' && value.length > 0)
-    .map((value) => value.toLowerCase());
-  return aliases.some((alias) => sites.has(alias));
-}
 
 

@@ -4,10 +4,10 @@ import { join, resolve } from 'node:path';
 import { runGovernedCommandSync } from '@narada2/process-launch-posture';
 import { buildAgentIdentityRefV2, resolveAgentIdentityRef } from '@narada2/agent-identity';
 import { defaultRuntimeForCarrier as defaultRuntimeForOperatorSurface } from '@narada2/carrier-runtime-contract/carrier-runtime-selection';
+import type { WorkspaceLaunchAdmissionPolicy } from './workspace-launch-admission.js';
 import {
   canonicalizeWorkspaceLaunchRecords as canonicalizeWorkspaceLaunchRecordsDomain,
   selectLaunchRecords as selectLaunchRecordsDomain,
-  type WorkspaceLaunchProviderRegistry,
 } from './workspace-launch-selection.js';
 import { defaultLaunchRegistryPath, listKnownSiteRootsForCli, type ResolvedSiteRoot } from '../lib/site-root-resolver.js';
 import type {
@@ -17,12 +17,7 @@ import type {
 } from './workspace-launch-types.js';
 
 export interface WorkspaceLaunchRegistryContext {
-  providerRegistry: WorkspaceLaunchProviderRegistry;
-  resolveOperatorSurfaceRuntimeSelection: (operatorSurface: string | undefined, runtime: string) => {
-    operator_surface_kind: string;
-    runtime_substrate_kind: string;
-    runtime_host_kind: string;
-  };
+  admission: WorkspaceLaunchAdmissionPolicy;
 }
 
 interface RawLaunchRegistry {

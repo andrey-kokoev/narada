@@ -8,7 +8,6 @@ import {
   initialRoleValuesForInteractiveSelection,
   normalizeInteractiveOperatorSurfaceValues,
   normalizeWorkspaceLaunchBrowserSelection,
-  roleChoicesForSelectedSites,
   workspaceLaunchSelectorModel,
 } from './workspace-launch-selection.js';
 import {
@@ -57,8 +56,7 @@ export function createWorkspaceLaunchRegistryContext(
   selectionContext: WorkspaceLaunchSelectionContext = createWorkspaceLaunchSelectionContext(),
 ): WorkspaceLaunchRegistryContext {
   return {
-    providerRegistry: selectionContext.providerRegistry,
-    resolveOperatorSurfaceRuntimeSelection: selectionContext.resolveOperatorSurfaceRuntimeSelection,
+    admission: selectionContext.admission,
   };
 }
 
@@ -72,7 +70,7 @@ export function createWorkspaceLaunchSelectionServices(
     normalizeWorkspaceLaunchBrowserSelection: (payload) => normalizeWorkspaceLaunchBrowserSelection(payload),
     buildWorkspaceLaunchSelectionUiModel: (records, options, rememberedSelection = null, siteCatalog = []) => buildWorkspaceLaunchSelectionUiModel(records, options, rememberedSelection, siteCatalog, selectionContext),
     normalizeInteractiveOperatorSurfaceValues: (values) => normalizeInteractiveOperatorSurfaceValues(values),
-    roleChoicesForSelectedSites: (records, siteSelectors) => roleChoicesForSelectedSites(records, siteSelectors),
+    roleChoicesForSelectedSites: (records, siteSelectors) => selectionContext.admission.roleChoicesForSelectedSites(records, siteSelectors),
     initialRoleValuesForInteractiveSelection: (roleChoices, explicitRoles) => initialRoleValuesForInteractiveSelection(roleChoices, explicitRoles),
   };
 }

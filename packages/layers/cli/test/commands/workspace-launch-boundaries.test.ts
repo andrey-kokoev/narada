@@ -42,6 +42,9 @@ describe('workspace launch module boundaries', () => {
     const executor = readFileSync(resolve(commandsRoot, 'workspace-launch-executor.ts'), 'utf8');
     const result = readFileSync(resolve(commandsRoot, 'workspace-launch-result.ts'), 'utf8');
     const selectionAdapters = readFileSync(resolve(commandsRoot, 'workspace-launch-selection-adapters.ts'), 'utf8');
+    const admission = readFileSync(resolve(commandsRoot, 'workspace-launch-admission.ts'), 'utf8');
+    const providerContext = readFileSync(resolve(commandsRoot, 'workspace-launch-provider-context.ts'), 'utf8');
+    const selection = readFileSync(resolve(commandsRoot, 'workspace-launch-selection.ts'), 'utf8');
 
     expect(application).toContain("from './workspace-launch-application-execution.js'");
     expect(applicationExecution).toContain("from './workspace-launch-command.js'");
@@ -60,5 +63,10 @@ describe('workspace launch module boundaries', () => {
     expect(executor).toContain("from './workspace-launch-result.js'");
     expect(command).not.toContain('startOperatorTerminal');
     expect(command).not.toContain('prompts.');
+    expect(admission).toContain('resolveCarrierRuntimeSelection');
+    expect(providerContext).toContain("from './workspace-launch-admission.js'");
+    expect(providerContext).not.toContain('resolveCarrierRuntimeSelection');
+    expect(selection).toContain("from './workspace-launch-admission.js'");
+    expect(selection).not.toContain('resolveCarrierRuntimeSelection');
   });
 });
