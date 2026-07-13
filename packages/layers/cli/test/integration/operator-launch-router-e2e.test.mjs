@@ -63,6 +63,7 @@ function spawnNode(args, env) {
     cwd: naradaProperRoot,
     env: { ...process.env, ...env },
     stdio: ['ignore', 'pipe', 'pipe'],
+    windowsHide: true,
   });
   const stdout = { value: '' };
   const stderr = { value: '' };
@@ -106,29 +107,35 @@ function waitForOutput(child, stdout, stderr, pattern, timeoutMs = 30_000) {
   });
 }
 
-async function waitForHealthy(url, timeoutMs = 30_000) {
+async function waitForConsoleProjection(url, output, timeoutMs = 30_000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     try {
-      const response = await fetch(`${url}/health`, { signal: AbortSignal.timeout(500) });
+      const response = await fetch(`${url}/routes`, { signal: AbortSignal.timeout(500) });
       if (response.ok) {
         const body = await response.json();
-        if (body.identity === 'narada.operator-console' && body.status === 'healthy') return body;
+        if (body.routes?.some((route) => route.route_id === 'operator-console' && route.state === 'healthy')) return body;
       }
     } catch {
       // The child may need several polling rounds to bind the Router and Console.
     }
     await new Promise((resolveWait) => setTimeout(resolveWait, 100));
   }
-  throw new Error(`operator_console_health_timeout:${url}`);
+  throw new Error(
+    `operator_console_health_timeout:${url}\nstdout:\n${output.stdout.value}\nstderr:\n${output.stderr.value}`,
+  );
 }
 
-async function waitForChildExit(child, timeoutMs = 15_000) {
+async function waitForChildExit(child, output, timeoutMs = 15_000) {
   if (child.exitCode !== null || child.signalCode !== null) return;
   await new Promise((resolveExit, rejectExit) => {
     const timer = setTimeout(() => {
       child.off('exit', onExit);
-      rejectExit(new Error('child_exit_timeout'));
+      rejectExit(new Error(
+        `child_exit_timeout: exit_code=${child.exitCode} signal=${child.signalCode}`
+        + `\nstdout:\n${output?.stdout?.value ?? ''}`
+        + `\nstderr:\n${output?.stderr?.value ?? ''}`
+      ));
     }, timeoutMs);
     const onExit = () => {
       clearTimeout(timer);
@@ -140,17 +147,29 @@ async function waitForChildExit(child, timeoutMs = 15_000) {
 
 async function stopChild(child) {
   if (!child || child.exitCode !== null || child.signalCode !== null) return;
-  child.kill('SIGTERM');
+  child.kill('SIGINT');
   try {
     await waitForChildExit(child);
   } catch (error) {
-    if (child.exitCode === null && child.signalCode === null) child.kill();
+    if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
     try {
-      await waitForChildExit(child, 5_000);
+      await waitForChildExit(child, undefined, 5_000);
     } catch {
       throw error;
     }
   }
+}
+
+async function stopProcessTree(child) {
+  if (process.platform !== 'win32' || !child?.pid) return;
+  const killer = spawn('taskkill', ['/PID', String(child.pid), '/T', '/F'], {
+    stdio: 'ignore',
+    windowsHide: true,
+  });
+  await new Promise((resolve) => {
+    killer.once('error', resolve);
+    killer.once('exit', resolve);
+  });
 }
 
 async function waitForUnavailable(url, timeoutMs = 10_000) {
@@ -175,7 +194,9 @@ test('real launcher browser journey stays on the stable Operator Router origin',
   const fixtureRoot = await mkdtemp(join(tmpdir(), 'narada-launcher-router-e2e-'));
   const userSiteRoot = join(fixtureRoot, 'user-site');
   const siteRoot = join(fixtureRoot, 'site');
+  const routerStateRoot = join(fixtureRoot, 'operator-router');
   const registryPath = join(fixtureRoot, 'agents.json');
+  const terminalLog = join(fixtureRoot, 'workspace-launch-terminal.jsonl');
   const routerPort = await reservePort();
   const launcherPort = await reservePort(new Set([routerPort]));
   await mkdir(userSiteRoot, { recursive: true });
@@ -196,17 +217,23 @@ test('real launcher browser journey stays on the stable Operator Router origin',
   }), 'utf8');
 
   const routerUrl = `http://127.0.0.1:${routerPort}`;
+  const childEnvironment = {
+    LOCALAPPDATA: fixtureRoot,
+    NARADA_OPERATOR_ROUTER_STATE_ROOT: routerStateRoot,
+    NARADA_USER_SITE_ROOT: userSiteRoot,
+    NARADA_WORKSPACE_LAUNCH_TERMINAL_LOG: terminalLog,
+  };
   const consoleProcess = spawnNode([
     cliPath,
     'console',
     'serve',
     '--host', '127.0.0.1',
     '--port', String(routerPort),
-  ], { NARADA_USER_SITE_ROOT: userSiteRoot });
+  ], childEnvironment);
   let launcherProcess;
   let browser;
   try {
-    await waitForHealthy(routerUrl);
+    await waitForConsoleProjection(routerUrl, { stdout: consoleProcess.stdout, stderr: consoleProcess.stderr });
 
     launcherProcess = spawnNode([
       cliPath,
@@ -214,11 +241,13 @@ test('real launcher browser journey stays on the stable Operator Router origin',
       'workspace-launch',
       '--interactive-selection-ui',
       '--launcher-ui-port', String(launcherPort),
+      '--launcher-ui-port-fallback',
+      '--operator-router-port', String(routerPort),
       '--config-path', registryPath,
       '--format', 'json',
     ], {
+      ...childEnvironment,
       NARADA_NO_BROWSER: '1',
-      NARADA_USER_SITE_ROOT: userSiteRoot,
       NARADA_WORKSPACE_LAUNCH_UI_SESSION_RETENTION: '1',
     });
 
@@ -252,11 +281,12 @@ test('real launcher browser journey stays on the stable Operator Router origin',
     await page.locator('#sites').waitFor({ state: 'attached', timeout: 15_000 });
     await page.getByRole('button', { name: 'Cancel' }).click();
     await page.getByRole('heading', { name: 'Cancelled' }).waitFor({ timeout: 15_000 });
-    await waitForChildExit(launcherProcess.child);
+    await waitForChildExit(launcherProcess.child, launcherProcess, 15_000);
     assert.equal(launcherProcess.child.exitCode, 0);
 
     const closedResponse = await fetch(stableUrl);
     assert.equal(closedResponse.status, 409);
+    await stopProcessTree(consoleProcess.child);
     await stopChild(consoleProcess.child);
     await waitForUnavailable(routerUrl);
   } finally {

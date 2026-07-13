@@ -201,6 +201,7 @@ function launcherProxyPathAllowed(method: string, path: string): boolean {
   if (method === 'POST') {
     return path === '/selector-model'
       || path === '/submit'
+      || path === '/cancel'
       || /^\/launches\/[^/]+\/(recheck|retry|forget|open-web-ui|attach-cli|stop-runtime|stop-projection)$/.test(path);
   }
   return false;

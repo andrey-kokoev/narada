@@ -409,6 +409,7 @@ export interface WorkspaceLaunchPlanOptions {
   interactiveSelectionUi?: boolean;
   launcherUiPort?: number;
   launcherUiPortFallback?: boolean;
+  operatorRouterPort?: number;
   launcherOutput?: string[];
   defaultInteractiveSelection?: boolean;
   resultPath?: string;
@@ -1615,9 +1616,13 @@ async function runWorkspaceLaunchSelectionUi(
   const pageModel = buildWorkspaceLaunchSelectionUiModel(records, options, rememberedSelection, siteCatalog);
   const html = buildWorkspaceLaunchSelectionHtml(pageModel);
 
-  function jsonResponse(res: ServerResponse, status: number, payload: unknown): void {
+  function jsonResponse(res: ServerResponse, status: number, payload: unknown, options: { close?: boolean } = {}): void {
     const body = JSON.stringify(payload);
-    res.writeHead(status, { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) });
+    res.writeHead(status, {
+      'Content-Type': 'application/json',
+      'Content-Length': Buffer.byteLength(body),
+      ...(options.close ? { Connection: 'close' } : {}),
+    });
     res.end(body);
   }
 
@@ -1807,9 +1812,13 @@ async function runPersistentWorkspaceLaunchSelectionUi(
     }
   };
 
-  function jsonResponse(res: ServerResponse, status: number, payload: unknown): void {
+  function jsonResponse(res: ServerResponse, status: number, payload: unknown, options: { close?: boolean } = {}): void {
     const body = JSON.stringify(payload);
-    res.writeHead(status, { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) });
+    res.writeHead(status, {
+      'Content-Type': 'application/json',
+      'Content-Length': Buffer.byteLength(body),
+      ...(options.close ? { Connection: 'close' } : {}),
+    });
     res.end(body);
   }
 
@@ -1939,7 +1948,7 @@ async function runPersistentWorkspaceLaunchSelectionUi(
           settled = true;
           uiSession.status = 'closed';
           await persistWorkspaceLaunchDashboardState(persistenceDir, uiSession, attempts);
-          jsonResponse(res, 200, { status: 'closed', launch_count: launchCount });
+          jsonResponse(res, 200, { status: 'closed', launch_count: launchCount }, { close: true });
           resolveClosed('cancelled');
           return;
         }
@@ -1957,6 +1966,7 @@ async function runPersistentWorkspaceLaunchSelectionUi(
     uiSessionId: uiSession.ui_session_id,
     directUrl: url,
     host,
+    port: options.operatorRouterPort,
   });
   console.log(`Narada launcher selection UI: ${ingress.url}`);
   if (fallback_used) {

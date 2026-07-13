@@ -171,11 +171,38 @@ export function registerConsoleCommands(program: Command): void {
         'Press Ctrl+C to stop',
       ]);
       const stopProjection = async (): Promise<void> => {
-        await routeSet?.stop();
-        await server.stop();
+        try {
+          await routeSet?.stop();
+        } finally {
+          try {
+            await server.stop();
+          } finally {
+            await stopOwnedOperatorRouter(router);
+          }
+        }
         exitLongLivedCommandSuccessfully();
       };
       process.once('SIGINT', stopProjection);
       process.once('SIGTERM', stopProjection);
     });
+}
+
+async function stopOwnedOperatorRouter(
+  router: Awaited<ReturnType<typeof ensureOperatorRouter>>,
+): Promise<void> {
+  if (router.ownership !== 'started' || !router.child || router.child.exitCode !== null) return;
+  const child = router.child;
+  child.kill();
+  await new Promise<void>((resolve) => {
+    if (child.exitCode !== null || child.signalCode !== null) {
+      resolve();
+      return;
+    }
+    const timer = setTimeout(resolve, 5_000);
+    timer.unref?.();
+    child.once('exit', () => {
+      clearTimeout(timer);
+      resolve();
+    });
+  });
 }
