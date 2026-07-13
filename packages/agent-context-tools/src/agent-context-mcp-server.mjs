@@ -107,6 +107,12 @@ import {
 } from '../../site-common-tools/src/site-locus-shim.mjs';
 import { taskLifecycleTools } from '../../task-lifecycle-tools/src/task-mcp-tool-registry.mjs';
 import { resolveTaskLifecycleMcpServer as resolveTaskLifecycleMcpServerForSite } from '../../site-common-tools/src/task-lifecycle-mcp-resolution.mjs';
+import {
+  AGENT_CONTEXT_MCP_SESSION_STATE_SCHEMA,
+  canTransitionAgentContextMcpSession,
+  createAgentContextMcpSession,
+  transitionAgentContextMcpSession,
+} from './agent-context-mcp-session-state.mjs';
 
 const PROTOCOL_VERSION = '2024-11-05';
 const SERVER_NAME = 'narada-andrey-agent-context-mcp';
@@ -127,6 +133,14 @@ function buildToolResult({ siteRoot, toolName, value, payloadSource, isError = f
     ...contentResult,
     structuredContent: attachPayloadSource(value, payloadSource),
   };
+}
+
+function inheritedNarsSessionEnvironment(env = process.env) {
+  for (const verificationSource of ['NARADA_NARS_SESSION_ID', 'NARADA_RUNTIME_SESSION_ID', 'NARADA_CARRIER_SESSION_ID']) {
+    const carrierSessionId = typeof env[verificationSource] === 'string' ? env[verificationSource].trim() : '';
+    if (carrierSessionId) return { carrierSessionId, verificationSource };
+  }
+  return { carrierSessionId: null, verificationSource: null };
 }
 
 function parseArgs(argv) {
@@ -240,6 +254,46 @@ function migrateCheckpointsToHistory(database) {
 }
 
 let mcpOutputMode = 'line';
+let mcpSession = createAgentContextMcpSession();
+
+function transitionMcpSession(nextState) {
+  mcpSession = transitionAgentContextMcpSession(mcpSession, nextState);
+  return mcpSession;
+}
+
+function failMcpSession() {
+  if (mcpSession.state === 'failed' || mcpSession.state === 'closed') return mcpSession;
+  if (canTransitionAgentContextMcpSession(mcpSession.state, 'failed')) {
+    return transitionMcpSession('failed');
+  }
+  return mcpSession;
+}
+
+function closeMcpSession() {
+  if (mcpSession.state !== 'closed') {
+    if (canTransitionAgentContextMcpSession(mcpSession.state, 'closing')) transitionMcpSession('closing');
+    if (canTransitionAgentContextMcpSession(mcpSession.state, 'closed')) transitionMcpSession('closed');
+  }
+  if (db) {
+    db.close();
+    db = null;
+  }
+  return mcpSession;
+}
+
+function mcpSessionEvidence() {
+  return {
+    schema: AGENT_CONTEXT_MCP_SESSION_STATE_SCHEMA,
+    state: mcpSession.state,
+    history: [...mcpSession.history],
+  };
+}
+
+function requireMcpSessionState(request, expectedState = 'serving') {
+  if (mcpSession.state === expectedState) return true;
+  sendError(request, -32002, `MCP session is not ${expectedState}: ${mcpSession.state}`);
+  return false;
+}
 
 function writeMcpFrame(response) {
   const body = JSON.stringify(response);
@@ -270,22 +324,47 @@ function sendError(request, code, message) {
 
 async function handleRequest(request) {
   if (request.method === 'initialize') {
+    if (!canTransitionAgentContextMcpSession(mcpSession.state, 'initializing')) {
+      sendError(request, -32600, `MCP session cannot initialize from ${mcpSession.state}`);
+      return;
+    }
+    transitionMcpSession('initializing');
     sendResponse(request, {
       protocolVersion: PROTOCOL_VERSION,
       capabilities: { tools: {} },
       serverInfo: { name: SERVER_NAME, version: SERVER_VERSION },
     });
+    transitionMcpSession('initialized');
     return;
   }
 
   if (request.method === 'tools/list') {
+    if (!requireMcpSessionState(request)) return;
     sendResponse(request, { tools: TOOLS });
     return;
   }
 
   if (request.method === 'notifications/initialized') {
+    if (mcpSession.state === 'initialized') {
+      transitionMcpSession('serving');
+    } else {
+      failMcpSession();
+    }
     return;
   }
+
+  if (request.method === 'shutdown') {
+    if (!canTransitionAgentContextMcpSession(mcpSession.state, 'closing')) {
+      sendError(request, -32002, `MCP session cannot shut down from ${mcpSession.state}`);
+      return;
+    }
+    transitionMcpSession('closing');
+    sendResponse(request, {});
+    closeMcpSession();
+    return;
+  }
+
+  if (!requireMcpSessionState(request)) return;
 
   if (request.method !== 'tools/call') {
     sendError(request, -32601, `Method not found: ${request.method}`);
@@ -553,6 +632,7 @@ function agentContextDoctor() {
       authority_state_relation: 'does not own authority; reads agent-start traces and writes durability checkpoints',
     },
     tool_surface_readiness: agentContextToolSurfaceReadiness(),
+    mcp_session: mcpSessionEvidence(),
   };
 }
 
@@ -3687,7 +3767,7 @@ function compactMcpRestartReadiness(freshness) {
 }
 
 function buildLocalMcpCarrierSessionBinding() {
-  const carrierSessionId = process.env.NARADA_CARRIER_SESSION_ID || null;
+  const { carrierSessionId, verificationSource } = inheritedNarsSessionEnvironment();
   if (!carrierSessionId) return null;
   const pcSiteRoot = process.env.NARADA_PC_SITE_ROOT || 'C:/ProgramData/Narada/sites/pc/desktop-sunroom-2';
   const recordPath = join(resolve(pcSiteRoot), 'runtime', 'carrier-sessions', `${carrierSessionId}.json`);
@@ -3696,13 +3776,13 @@ function buildLocalMcpCarrierSessionBinding() {
     schema: 'narada.pc_runtime.mcp_child_carrier_session_binding.v0',
     status: record && record.status !== 'unreadable' ? 'bound_to_parent_carrier_session' : 'carrier_session_record_missing',
     carrier_session_id: carrierSessionId,
-    verification_source: 'NARADA_CARRIER_SESSION_ID',
+    verification_source: verificationSource,
     parent_carrier_session_ref: {
       schema: 'narada.pc_runtime.parent_carrier_session_ref.v0',
       carrier_session_id: carrierSessionId,
       record_path: recordPath,
       record_status: record && record.status !== 'unreadable' ? 'found' : 'missing',
-      verification_source: 'NARADA_CARRIER_SESSION_ID',
+      verification_source: verificationSource,
     },
     record_summary: record && record.status !== 'unreadable'
       ? {
@@ -4068,7 +4148,7 @@ function buildMcpRestartDisposition(entry) {
       status: 'legacy_unbound_carrier_session',
       restart_disposition: 'missing_runtime_evidence',
       authority_owner: 'pc_site_runtime',
-      required_external_action: 'relaunch_through_registered_agent_start_path_to_inherit_NARADA_CARRIER_SESSION_ID',
+      required_external_action: 'relaunch_through_registered_agent_start_path_to_inherit_NARADA_NARS_SESSION_ID',
       terminal_blocker: true,
       reason: 'legacy_session_missing_verified_carrier_session_id',
       migration_guidance: entry?.carrier_session_binding?.migration_guidance ?? null,
@@ -5566,9 +5646,10 @@ function dispatchMcpRequest(raw) {
       writeMcpFrame({ jsonrpc: '2.0', id: request.id ?? null, error: { code: -32603, message: error.message } });
     });
   } catch (error) {
+    failMcpSession();
     writeMcpFrame({ jsonrpc: '2.0', id: null, error: { code: -32700, message: error.message } });
   }
 }
 process.stdin.on('end', () => {
-  if (db) db.close();
+  closeMcpSession();
 });

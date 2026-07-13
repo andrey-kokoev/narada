@@ -31,6 +31,12 @@ import type { RegistryManagementRequest } from '@narada2/windows-site';
 import { siteAuthorityRootFromSiteRoot } from '@narada2/site-paths';
 import { sitesRegistryStateCommand } from './site-registry-management.js';
 import {
+  createSiteRegistryBootstrapLifecycle,
+  lifecycleEvidence,
+  transitionSiteRegistryBootstrapLifecycle,
+  type SiteRegistryBootstrapLifecycle,
+} from './site-registry-bootstrap-lifecycle.js';
+import {
   CREATE_SITE_SUPPORTED_PRESETS,
   expandCreateSitePackageDescriptorsFromPackages,
   isCreateSiteSupportedPreset,
@@ -666,13 +672,13 @@ export async function sitesRelationExplainCommand(
   };
 }
 
-async function openRegistry() {
+async function openRegistry(registryDbPath?: string) {
   const {
     resolveRegistryDbPathByLocus,
     openRegistryDb,
     SiteRegistry,
   } = await import('@narada2/windows-site');
-  const dbPath = resolveRegistryDbPathByLocus({ authorityLocus: 'user', variant: 'native' });
+  const dbPath = registryDbPath ?? resolveRegistryDbPathByLocus({ authorityLocus: 'user', variant: 'native' });
   const db = await openRegistryDb(dbPath);
   return new SiteRegistry(db);
 }
@@ -4941,6 +4947,7 @@ export interface SitesInitOptions extends SitesOptions {
   authorityLocus?: string;
   sync?: string;
   executionSurface?: string;
+  registryDbPath?: string;
   dryRun?: boolean;
 }
 
@@ -5820,7 +5827,7 @@ export async function sitesInitCommand(
         }), 'utf8');
 
         // Register in Windows SiteRegistry
-        const registry = await openRegistry();
+        const registry = await openRegistry(options.registryDbPath);
         try {
           registry.registerSite({
             siteId,
@@ -5914,7 +5921,7 @@ export async function sitesInitCommand(
         }), 'utf8');
 
         // Register in SiteRegistry
-        const registry = await openRegistry();
+        const registry = await openRegistry(options.registryDbPath);
         try {
           registry.registerSite({
             siteId,
@@ -6423,6 +6430,13 @@ function siteInitError(result: unknown, fallback: string): string {
   return (result as { error?: string }).error ?? fallback;
 }
 
+function withBootstrapLifecycle<T extends Record<string, unknown>>(
+  result: T,
+  lifecycle: SiteRegistryBootstrapLifecycle,
+): T & ReturnType<typeof lifecycleEvidence> {
+  return { ...result, ...lifecycleEvidence(lifecycle) };
+}
+
 export async function sitesBootstrapWindowsCommand(
   options: SitesBootstrapWindowsOptions,
   context: CommandContext,
@@ -6451,12 +6465,15 @@ export async function sitesBootstrapWindowsCommand(
     dryRun: true,
     verbose: options.verbose,
   });
+  let lifecycle = createSiteRegistryBootstrapLifecycle();
+  lifecycle = transitionSiteRegistryBootstrapLifecycle(lifecycle, 'preflighted');
 
   const userPreflight = await sitesInitCommand(userSiteId, userInitOptions, context);
   if (userPreflight.exitCode !== ExitCode.SUCCESS) {
+    lifecycle = transitionSiteRegistryBootstrapLifecycle(lifecycle, 'refused');
     return {
       exitCode: userPreflight.exitCode,
-      result: {
+      result: withBootstrapLifecycle({
         status: 'error',
         phase: 'paired_preflight_user_site',
         mutation_performed: false,
@@ -6466,15 +6483,16 @@ export async function sitesBootstrapWindowsCommand(
           user: userPreflight.result,
           pc: null,
         },
-      },
+      }, lifecycle),
     };
   }
 
   const pcPreflight = await sitesInitCommand(pcSiteId, pcInitOptions, context);
   if (pcPreflight.exitCode !== ExitCode.SUCCESS) {
+    lifecycle = transitionSiteRegistryBootstrapLifecycle(lifecycle, 'refused');
     return {
       exitCode: pcPreflight.exitCode,
-      result: {
+      result: withBootstrapLifecycle({
         status: 'error',
         phase: 'paired_preflight_pc_site',
         mutation_performed: false,
@@ -6484,7 +6502,7 @@ export async function sitesBootstrapWindowsCommand(
           user: userPreflight.result,
           pc: pcPreflight.result,
         },
-      },
+      }, lifecycle),
     };
   }
 
@@ -6492,11 +6510,14 @@ export async function sitesBootstrapWindowsCommand(
   let pcResult = pcPreflight;
 
   if (execute) {
+    lifecycle = transitionSiteRegistryBootstrapLifecycle(lifecycle, 'planned');
+    lifecycle = transitionSiteRegistryBootstrapLifecycle(lifecycle, 'applying');
     userResult = await sitesInitCommand(userSiteId, { ...userInitOptions, dryRun: false }, context);
     if (userResult.exitCode !== ExitCode.SUCCESS) {
+      lifecycle = transitionSiteRegistryBootstrapLifecycle(lifecycle, 'failed');
       return {
         exitCode: userResult.exitCode,
-        result: {
+        result: withBootstrapLifecycle({
           status: 'error',
           phase: 'user_site_execute',
           mutation_performed: false,
@@ -6514,15 +6535,17 @@ export async function sitesBootstrapWindowsCommand(
             pc_site_created: false,
             evidence: 'User Site execution failed before paired bootstrap could create a confirmed pair.',
           },
-        },
+        }, lifecycle),
       };
     }
+    lifecycle = transitionSiteRegistryBootstrapLifecycle(lifecycle, 'user_site_created');
 
     pcResult = await sitesInitCommand(pcSiteId, { ...pcInitOptions, dryRun: false }, context);
     if (pcResult.exitCode !== ExitCode.SUCCESS) {
+      lifecycle = transitionSiteRegistryBootstrapLifecycle(lifecycle, 'partial');
       return {
         exitCode: pcResult.exitCode,
-        result: {
+        result: withBootstrapLifecycle({
           status: 'partial',
           phase: 'pc_site_execute',
           mutation_performed: true,
@@ -6546,12 +6569,17 @@ export async function sitesBootstrapWindowsCommand(
             pc_site_id: pcSiteId,
             evidence: 'User Site execute succeeded before PC Site execute failed.',
           },
-        },
+        }, lifecycle),
       };
     }
+    lifecycle = transitionSiteRegistryBootstrapLifecycle(lifecycle, 'pc_site_created');
+    lifecycle = transitionSiteRegistryBootstrapLifecycle(lifecycle, 'paired');
+    lifecycle = transitionSiteRegistryBootstrapLifecycle(lifecycle, 'verified');
+  } else {
+    lifecycle = transitionSiteRegistryBootstrapLifecycle(lifecycle, 'planned');
   }
 
-  const result = {
+  const result = withBootstrapLifecycle({
     status: execute ? 'success' : 'dry_run',
     mutation_performed: execute,
     plan_kind: 'paired_windows_user_pc_site_bootstrap',
@@ -6583,7 +6611,7 @@ export async function sitesBootstrapWindowsCommand(
       'narada doctor --bootstrap --format json',
       'narada operator-surface labels build --site <site-id-or-root> --format json',
     ],
-  };
+  }, lifecycle);
 
   if (fmt.getFormat() === 'human') {
     fmt.message(execute ? 'Bootstrapped paired Windows Sites' : 'Dry run - paired Windows Site bootstrap plan', 'success');

@@ -132,6 +132,39 @@ or `pending -> expired` / `pending -> rejected`. Only the owning coordinator
 mutation methods perform these transitions. The action executor enters
 `executing` before invoking the audited mutation.
 
+## Site-Live Carrier Operation
+
+Owner: `@narada2/site-common-tools`, `src/site-init/site-live-carriers.mjs`.
+
+Schema: `narada.site_live_carrier.lifecycle_state.v1`.
+
+Each carrier invocation follows `requested -> planning -> planned -> applying -> applied`.
+Verification and recovery are explicit branches from `planned`: `planned -> verifying -> verified` or `planned -> recovering -> recovered`. Authority refusal and failed execution are terminal outcomes. `plan`, `verify`, and `recover` remain read-only with respect to carrier artifacts. An apply records lifecycle transition evidence in `.narada/admission/live-carrier-audit.jsonl`.
+
+## Operator-Surface Carrier Claim
+
+Owner: `@narada2/operator-surface-carriers`, Windows glue scripts.
+
+Schema: `narada.operator_surface_carrier.lifecycle_state.v1`.
+
+New surface launch evidence follows `requested -> launching -> claim_written -> resolving -> resolved -> binding -> bound -> verified`. Resume follows `requested -> resuming -> verified` when one live binding is found. A missing, stale, or ambiguous claim/window is `failed` or `refused`; the launcher never treats a title as identity proof. Dry-run is `requested -> planning -> planned`. Claim, resolver, and launcher evidence carry state and history.
+
+## Agent-Context MCP Transport Session
+
+Owner: `@narada2/agent-context-tools`, `agent-context-mcp-server.mjs`.
+
+Schema: `narada.agent_context_mcp.session_state.v1`.
+
+The stdio protocol session follows `created -> initializing -> initialized -> serving -> closing -> closed`. Malformed input or protocol ordering failure enters `failed`; failed sessions may only close. `tools/list` and `tools/call` are admitted only in `serving`. The server exposes state and history through `agent_context_doctor`, and `shutdown` closes the session after acknowledging the request.
+
+## Site-Registry and Receiving-Site Bootstrap
+
+Owner: `@narada2/cli`, `site-registry-management.ts` and `sites.ts`.
+
+Schema: `narada.site_registry_bootstrap.lifecycle_state.v1`.
+
+Registry management uses `requested -> preflighted -> planned -> applying -> verified`, with explicit `advisory` and `refused` outcomes. Paired Windows receiving-site bootstrap uses `requested -> preflighted -> planned -> applying -> user_site_created -> pc_site_created -> paired -> verified`. If the User Site exists but PC creation is not confirmed, the lifecycle ends at `partial`; it is not reported as a successful pair. Preflight refusal, failed execution, and partial evidence are returned with lifecycle state and history while preserving the existing command status and repair guidance.
+
 ## Boundary Rules
 
 - Terminal states are contract-specific. Operator actions, confirmation challenges, and concept/protocol retirement states cannot be reopened; recoverable status projections such as `stale`, `blocked`, or a fabric load failure use their documented recovery path.

@@ -29,3 +29,12 @@ test('operator surface carrier package owns executable carrier scripts', async (
     assert.notEqual(text.trim(), '', `${script} has content`);
   }
 });
+
+test('operator surface carrier lifecycle declares claim, resolution, binding, and refusal paths', async () => {
+  const lifecyclePath = join(root, 'windows-glue', 'OperatorSurfaceCarrierLifecycle.ps1');
+  const lifecycle = await readFile(lifecyclePath, 'utf8');
+  for (const state of ['requested', 'claim_written', 'resolving', 'resolved', 'binding', 'bound', 'verified', 'refused', 'failed']) {
+    assert.match(lifecycle, new RegExp(`\\b${state}\\b`), `${state} is declared`);
+  }
+  assert.match(lifecycle, /invalid_operator_surface_carrier_transition/);
+});

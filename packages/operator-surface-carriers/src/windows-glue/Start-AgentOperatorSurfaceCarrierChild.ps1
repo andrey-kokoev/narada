@@ -18,6 +18,8 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+. (Join-Path $PSScriptRoot "OperatorSurfaceCarrierLifecycle.ps1")
+
 function Write-NaradaJsonFile {
     param(
         [string]$Path,
@@ -41,14 +43,17 @@ $claim = [ordered]@{
     runtime_substrate_kind = $Runtime
     carrier_kind = $Carrier
     claimed_at = (Get-Date -Format "o")
+    lifecycle_schema = $NaradaOperatorSurfaceCarrierLifecycleSchema
+    lifecycle_state = "claim_written"
+    lifecycle_history = @("requested", "launching", "claim_written")
     single_tab_invariant_asserted = $true
     title_used_as_identity_proof = $false
 }
 Write-NaradaJsonFile -Path $ClaimPath -Value $claim
 
-$launcher = Join-Path $UserSiteRoot "narada-andrey.ps1"
+$launcher = Join-Path $UserSiteRoot "andrey-user.ps1"
 if (-not (Test-Path -LiteralPath $launcher)) {
-    throw "narada_andrey_launcher_missing: $launcher"
+    throw "andrey_user_launcher_missing: $launcher"
 }
 
 & $launcher agent-start -Agent $IdentityName -Carrier $Carrier -Runtime $Runtime -Exec

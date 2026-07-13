@@ -18,6 +18,8 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+. (Join-Path $PSScriptRoot "OperatorSurfaceCarrierLifecycle.ps1")
+
 function ConvertFrom-NaradaJson {
     param([Parameter(ValueFromPipeline = $true)]$Json)
     begin { $chunks = New-Object System.Collections.Generic.List[string] }
@@ -86,6 +88,15 @@ function Show-NaradaLauncherSummary {
             $lines.Add(("{0}: launch resolution {1}" -f $shortName, $resolutionStatus))
         } else {
             $lines.Add(("{0}: no result" -f $shortName))
+        }
+    }
+
+    if ($null -eq $ensureExisting -and $EnsurePresent) {
+        if ($DryRun) {
+            $lifecycle = Move-NaradaOperatorSurfaceCarrierLifecycle -Lifecycle $lifecycle -To "planning"
+            $lifecycle = Move-NaradaOperatorSurfaceCarrierLifecycle -Lifecycle $lifecycle -To "planned"
+        } else {
+            $lifecycle = Move-NaradaOperatorSurfaceCarrierLifecycle -Lifecycle $lifecycle -To "launching"
         }
     }
 
@@ -319,6 +330,15 @@ foreach ($pair in @(Get-LaunchPairs)) {
     $beforePath = Join-Path $carrierRoot "before.json"
     $afterPath = Join-Path $carrierRoot "after.json"
     $claimPath = Join-Path $carrierRoot "claim.json"
+    $lifecycle = New-NaradaOperatorSurfaceCarrierLifecycle
+    if ($EnsurePresent) {
+        $lifecycle = Move-NaradaOperatorSurfaceCarrierLifecycle -Lifecycle $lifecycle -To "resuming"
+    } elseif ($DryRun) {
+        $lifecycle = Move-NaradaOperatorSurfaceCarrierLifecycle -Lifecycle $lifecycle -To "planning"
+        $lifecycle = Move-NaradaOperatorSurfaceCarrierLifecycle -Lifecycle $lifecycle -To "planned"
+    } else {
+        $lifecycle = Move-NaradaOperatorSurfaceCarrierLifecycle -Lifecycle $lifecycle -To "launching"
+    }
     $ensureExisting = $null
     if ($EnsurePresent -and $activeBindingsByIdentity.ContainsKey($identityName)) {
         $liveBindings = @()
@@ -343,6 +363,7 @@ foreach ($pair in @(Get-LaunchPairs)) {
                 evidence = $liveBindings[0].check.evidence
                 dead_binding_count = $deadBindings.Count
             }
+            $lifecycle = Move-NaradaOperatorSurfaceCarrierLifecycle -Lifecycle $lifecycle -To "verified"
         } elseif ($liveBindings.Count -gt 1) {
             $ensureExisting = [ordered]@{
                 status = "refused_ambiguous_live_bindings"
@@ -350,6 +371,7 @@ foreach ($pair in @(Get-LaunchPairs)) {
                 live_bindings = @($liveBindings)
                 dead_binding_count = $deadBindings.Count
             }
+            $lifecycle = Move-NaradaOperatorSurfaceCarrierLifecycle -Lifecycle $lifecycle -To "refused"
         }
     }
 
@@ -396,11 +418,26 @@ foreach ($pair in @(Get-LaunchPairs)) {
             ensure_present = $ensureExisting
             resolution = $null
             binding = $null
+            lifecycle_schema = $lifecycle.schema
+            lifecycle_state = $lifecycle.state
+            lifecycle_history = @($lifecycle.history)
         }
         continue
     }
 
-    if ($DryRun) { continue }
+    if ($DryRun) {
+        $results += [ordered]@{
+            identity_name = $identityName
+            carrier_id = $carrierId
+            ensure_present = $null
+            resolution = $null
+            binding = $null
+            lifecycle_schema = $lifecycle.schema
+            lifecycle_state = $lifecycle.state
+            lifecycle_history = @($lifecycle.history)
+        }
+        continue
+    }
 
     Write-NaradaJsonFile -Path $beforePath -Value (Get-WindowSnapshot)
     $argumentText = (@($arguments) | ForEach-Object { ConvertTo-WindowsCommandLineArgument ([string]$_) }) -join " "
@@ -408,9 +445,15 @@ foreach ($pair in @(Get-LaunchPairs)) {
     Start-Sleep -Milliseconds 1200
     Write-NaradaJsonFile -Path $afterPath -Value (Get-WindowSnapshot)
 
+    if (Test-Path -LiteralPath $claimPath) {
+        $lifecycle = Move-NaradaOperatorSurfaceCarrierLifecycle -Lifecycle $lifecycle -To "claim_written"
+        $lifecycle = Move-NaradaOperatorSurfaceCarrierLifecycle -Lifecycle $lifecycle -To "resolving"
+    }
     $resolution = & $resolver -CarrierId $carrierId -BeforeSnapshotPath $beforePath -AfterSnapshotPath $afterPath -ClaimPath $claimPath -PassThru | ConvertFrom-NaradaJson
     $binding = $null
     if ($resolution.status -eq "resolved") {
+        $lifecycle = Move-NaradaOperatorSurfaceCarrierLifecycle -Lifecycle $lifecycle -To "resolved"
+        $lifecycle = Move-NaradaOperatorSurfaceCarrierLifecycle -Lifecycle $lifecycle -To "binding"
         $binding = Invoke-OperatorSurfaceOneShot -ToolName "operator_surface_bind_agent" -RunRoot $carrierRoot -Arguments ([ordered]@{
             identity_name = $identityName
             hwnd = [int64]$resolution.resolved_window.hwnd
@@ -418,18 +461,48 @@ foreach ($pair in @(Get-LaunchPairs)) {
             assertion_method = "inhabited_carrier_claim_v0"
             liveness_policy = "live_hwnd_required"
         })
+        if ($binding.status -eq "bound") {
+            $lifecycle = Move-NaradaOperatorSurfaceCarrierLifecycle -Lifecycle $lifecycle -To "bound"
+            $lifecycle = Move-NaradaOperatorSurfaceCarrierLifecycle -Lifecycle $lifecycle -To "verified"
+        } else {
+            $lifecycle = Move-NaradaOperatorSurfaceCarrierLifecycle -Lifecycle $lifecycle -To "failed"
+        }
+    } elseif ($lifecycle.state -eq "resolving") {
+        $lifecycle = Move-NaradaOperatorSurfaceCarrierLifecycle -Lifecycle $lifecycle -To $(if ([string]$resolution.status -in @("claim_mismatch", "claim_policy_refused", "ambiguous_window")) { "refused" } else { "failed" })
+    } else {
+        $lifecycle = Move-NaradaOperatorSurfaceCarrierLifecycle -Lifecycle $lifecycle -To "failed"
     }
     $results += [ordered]@{
         identity_name = $identityName
         carrier_id = $carrierId
         resolution = $resolution
         binding = $binding
+        lifecycle_schema = $lifecycle.schema
+        lifecycle_state = $lifecycle.state
+        lifecycle_history = @($lifecycle.history)
     }
+}
+
+$lifecycleStates = @($results | ForEach-Object { [string]$_.lifecycle_state })
+$aggregateLifecycleState = if ($DryRun) {
+    "planned"
+} elseif ($lifecycleStates.Count -eq 0) {
+    "verified"
+} elseif ($lifecycleStates -contains "failed" -and ($lifecycleStates | Where-Object { $_ -eq "verified" }).Count -gt 0) {
+    "partial"
+} elseif ($lifecycleStates -contains "failed") {
+    "failed"
+} elseif ($lifecycleStates -contains "refused") {
+    "refused"
+} else {
+    "verified"
 }
 
 $launcherResult = [ordered]@{
     schema = "narada.operator_surfaces.codex_resume_launcher.v1"
     status = if ($DryRun) { "dry_run" } elseif ($EnsurePresent) { "ensured" } else { "launched" }
+    lifecycle_schema = $NaradaOperatorSurfaceCarrierLifecycleSchema
+    lifecycle_state = $aggregateLifecycleState
     dry_run = [bool]$DryRun
     runtime = $Runtime
     runtime_substrate_kind = $Runtime

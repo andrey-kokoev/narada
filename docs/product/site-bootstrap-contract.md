@@ -150,6 +150,16 @@ The paired command is two-phase:
 
 If PC Site execution fails after User Site creation, the command returns explicit `partial_state` evidence and repair guidance. It does not pretend the pair is complete.
 
+The command also returns `lifecycle_schema`, `lifecycle_state`, and
+`lifecycle_history` under `narada.site_registry_bootstrap.lifecycle_state.v1`.
+The normal dry-run state is `planned`; an executed pair reaches `verified` only
+after both Site creations and the `paired` boundary are confirmed. A User Site
+created before PC failure is `partial`, not `success`.
+
+Related registry management commands expose the same lifecycle evidence for
+their `planned`, `applied`, `advisory`, and `refused` outcomes. The complete
+state contract is [`Narada FSM Contracts`](../concepts/nars-fsm-contracts.md).
+
 Default identities:
 
 | Site | Default |

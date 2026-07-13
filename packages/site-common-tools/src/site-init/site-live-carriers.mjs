@@ -4,6 +4,10 @@ import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { siteControlRoot } from '../site-layout.mjs';
+import {
+  createSiteLiveCarrierLifecycle,
+  transitionSiteLiveCarrierLifecycle,
+} from './site-live-carrier-state.mjs';
 
 const CARRIER_SCHEMA = 'narada.site_live_carrier.result.v0';
 const LOCAL_DB_CARRIER_ID = 'site_local_db_init';
@@ -140,27 +144,59 @@ function siteLivePathDoctor(options = {}) {
 
 function runCarrier({ carrierId, mode, options, planBuilder, applier, verifier, recoverer }) {
   const context = buildContext(carrierId, mode, options);
+  let lifecycle = createSiteLiveCarrierLifecycle();
+  lifecycle = transitionSiteLiveCarrierLifecycle(lifecycle, 'planning');
   const refusals = validateSharedContext(context, options);
   const plan = planBuilder(context, options);
+  lifecycle = transitionSiteLiveCarrierLifecycle(lifecycle, 'planned');
   const result = baseResult(context, plan, refusals);
+  const withLifecycle = (value) => ({
+    ...value,
+    lifecycle_state: lifecycle.state,
+    lifecycle_history: lifecycle.history,
+  });
 
   if (result.refusals.length > 0) {
-    return { ...result, status: 'refused', recovery_hint: recoveryHint(carrierId, result.refusals) };
+    lifecycle = transitionSiteLiveCarrierLifecycle(lifecycle, 'refused');
+    return withLifecycle({ ...result, status: 'refused', recovery_hint: recoveryHint(carrierId, result.refusals) });
   }
-  if (mode === 'plan') return { ...result, status: 'planned' };
-  if (mode === 'verify') return verifier(context, plan, result);
-  if (mode === 'recover') return recoverer(context, plan, result);
+  if (mode === 'plan') return withLifecycle({ ...result, status: 'planned' });
+  if (mode === 'verify') {
+    lifecycle = transitionSiteLiveCarrierLifecycle(lifecycle, 'verifying');
+    const verified = verifier(context, plan, result);
+    lifecycle = transitionSiteLiveCarrierLifecycle(lifecycle, verified.status === 'verified' ? 'verified' : verified.status === 'refused' ? 'refused' : 'failed');
+    return withLifecycle(verified);
+  }
+  if (mode === 'recover') {
+    lifecycle = transitionSiteLiveCarrierLifecycle(lifecycle, 'recovering');
+    const recovered = recoverer(context, plan, result);
+    lifecycle = transitionSiteLiveCarrierLifecycle(lifecycle, recovered.status === 'recovered' ? 'recovered' : recovered.status === 'refused' ? 'refused' : 'failed');
+    return withLifecycle(recovered);
+  }
 
   if (mode === 'apply' && options.mutation_authorized !== true) {
-    return {
+    lifecycle = transitionSiteLiveCarrierLifecycle(lifecycle, 'refused');
+    return withLifecycle({
       ...result,
       status: 'refused',
       refusals: ['write_authority_missing: set mutation_authorized true under receiving-Site authority'],
       recovery_hint: 'Run plan first, then apply only from the receiving Site or receiving folder authority.',
-    };
+    });
   }
 
-  return applier(context, plan, result);
+  lifecycle = transitionSiteLiveCarrierLifecycle(lifecycle, 'applying');
+  const applied = applier(context, plan, result);
+  lifecycle = transitionSiteLiveCarrierLifecycle(lifecycle, applied.status === 'applied' ? 'applied' : applied.status === 'refused' ? 'refused' : 'failed');
+  if (mode === 'apply') {
+    appendAudit(context, {
+      carrier_id: carrierId,
+      event: 'lifecycle_transition',
+      status: applied.status,
+      lifecycle_state: lifecycle.state,
+      lifecycle_history: lifecycle.history,
+    });
+  }
+  return withLifecycle(applied);
 }
 
 function buildContext(carrierId, mode, options) {

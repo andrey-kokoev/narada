@@ -15,6 +15,6 @@
     "./task-lifecycle-mcp-resolution": "./src/task-lifecycle-mcp-resolution.mjs"
   },
   "scripts": {
-    "test": "node --test src/site-common-tools.test.mjs src/task-lifecycle-mcp-resolution.test.mjs"
+    "test": "node --test src/site-common-tools.test.mjs src/task-lifecycle-mcp-resolution.test.mjs src/site-init/site-live-carrier-state.test.mjs"
   }
 }

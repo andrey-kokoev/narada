@@ -93,6 +93,11 @@ The governed conversion boundary for requested effects is the [`Carrier Action A
 
 Session discovery, liveness, attachment, and recovery are specified in [`NARS Session Management`](nars-session-management.md).
 
+The agent-context MCP stdio transport has its own protocol-session FSM:
+`created -> initializing -> initialized -> serving -> closing -> closed`.
+`tools/list` and `tools/call` require `serving`, and the current state/history
+are exposed by `agent_context_doctor`. See [`Narada FSM Contracts`](nars-fsm-contracts.md).
+
 ## Required Properties
 
 A Narada Agent Runtime Server must:

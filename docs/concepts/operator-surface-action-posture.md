@@ -1,5 +1,10 @@
 # Operator Surface Action Posture
 
+The Windows operator-surface carrier lifecycle is defined in
+[`Narada FSM Contracts`](nars-fsm-contracts.md). Launcher, claim, resolver,
+and binding evidence use `narada.operator_surface_carrier.lifecycle_state.v1`;
+live HWND/class evidence is required and window titles are never identity proof.
+
 Operator Surface Action Posture classifies controls by the kind of work they present, not by the helper function, script, or command that implements them.
 
 It exists because a valid tool can still be wrong in the primary operator work surface. A diagnostic, repair, or intrusive platform mutation may be implemented and tested, but it should not appear beside primary work actions merely because it is available.

@@ -18,6 +18,11 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+. (Join-Path $PSScriptRoot "OperatorSurfaceCarrierLifecycle.ps1")
+
+$script:CarrierLifecycle = New-NaradaOperatorSurfaceCarrierLifecycle
+$script:CarrierLifecycle = Move-NaradaOperatorSurfaceCarrierLifecycle -Lifecycle $script:CarrierLifecycle -To "waiting_for_claim"
+
 function ConvertFrom-NaradaJson {
     param([Parameter(ValueFromPipeline = $true)]$Json)
     begin { $chunks = New-Object System.Collections.Generic.List[string] }
@@ -37,7 +42,12 @@ function Read-NaradaJsonFile {
 }
 
 function Complete-Result {
-    param([object]$Result)
+    param(
+        [object]$Result,
+        [Parameter(Mandatory = $true)][string]$FinalState
+    )
+    $script:CarrierLifecycle = Move-NaradaOperatorSurfaceCarrierLifecycle -Lifecycle $script:CarrierLifecycle -To $FinalState
+    $Result = Add-NaradaOperatorSurfaceCarrierLifecycleEvidence -Result $Result -Lifecycle $script:CarrierLifecycle
     $json = $Result | ConvertTo-Json -Depth 80
     if ($PassThru) {
         Write-Output $json
@@ -64,9 +74,12 @@ if ($null -eq $claim) {
         carrier_id = $CarrierId
         claim_path = $ClaimPath
         title_used_as_binding_proof = $false
-    })
+    }) "failed"
     return
 }
+
+$script:CarrierLifecycle = Move-NaradaOperatorSurfaceCarrierLifecycle -Lifecycle $script:CarrierLifecycle -To "claim_written"
+$script:CarrierLifecycle = Move-NaradaOperatorSurfaceCarrierLifecycle -Lifecycle $script:CarrierLifecycle -To "resolving"
 
 if ([string]$claim.schema -ne "narada.operator_surfaces.inhabited_carrier_claim.v0" -or [string]$claim.carrier_id -ne $CarrierId) {
     Complete-Result ([ordered]@{
@@ -76,7 +89,7 @@ if ([string]$claim.schema -ne "narada.operator_surfaces.inhabited_carrier_claim.
         claim_path = $ClaimPath
         claim = $claim
         title_used_as_binding_proof = $false
-    })
+    }) "refused"
     return
 }
 
@@ -88,7 +101,7 @@ if ($claim.single_tab_invariant_asserted -ne $true -or $claim.title_used_as_iden
         claim_path = $ClaimPath
         claim = $claim
         title_used_as_binding_proof = $false
-    })
+    }) "refused"
     return
 }
 
@@ -102,7 +115,7 @@ if (-not $SkipLiveClaimProcessCheck) {
             claim_path = $ClaimPath
             claim = $claim
             title_used_as_binding_proof = $false
-        })
+        }) "failed"
         return
     }
 }
@@ -117,7 +130,7 @@ if ($null -eq $before -or $null -eq $after) {
         before_snapshot_path = $BeforeSnapshotPath
         after_snapshot_path = $AfterSnapshotPath
         title_used_as_binding_proof = $false
-    })
+    }) "failed"
     return
 }
 
@@ -141,7 +154,7 @@ if ($newWindows.Count -eq 0) {
         carrier_id = $CarrierId
         claim = $claim
         title_used_as_binding_proof = $false
-    })
+    }) "failed"
     return
 }
 
@@ -153,7 +166,7 @@ if ($newWindows.Count -gt 1) {
         claim = $claim
         candidate_windows = @($newWindows)
         title_used_as_binding_proof = $false
-    })
+    }) "refused"
     return
 }
 
@@ -164,4 +177,4 @@ Complete-Result ([ordered]@{
     claim = $claim
     resolved_window = $newWindows[0]
     title_used_as_binding_proof = $false
-})
+}) "resolved"

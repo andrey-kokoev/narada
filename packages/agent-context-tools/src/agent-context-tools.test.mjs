@@ -78,6 +78,17 @@ function callAgentContextMcp({ siteRoot, env, calls }) {
       }
     });
 
+    child.stdin.write(`${JSON.stringify({
+      jsonrpc: '2.0',
+      id: 0,
+      method: 'initialize',
+      params: {
+        protocolVersion: '2024-11-05',
+        capabilities: {},
+        clientInfo: { name: 'agent-context-tools-test', version: '1.0.0' },
+      },
+    })}\n`);
+    child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' })}\n`);
     for (const call of calls) {
       child.stdin.write(`${JSON.stringify({
         jsonrpc: '2.0',
