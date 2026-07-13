@@ -86,6 +86,8 @@ Each Site stores NARS session evidence under:
 
 `control.jsonl` is the canonical path reserved by `@narada2/site-paths` for admitted control-sideband records (`narsControlSidebandPath`; legacy alias `narsControlPath`). The current runtime persists durable queued operator input in `operator-input-queue.json` (`narsOperatorInputQueuePath`); docs and readers must not assume queued input is recoverable from `control.jsonl` alone.
 
+`session.jsonl` is materialized with the launch record as a compatibility and attachment path. The current runtime does not append the durable session transcript there; `events.jsonl` is the authoritative ordered event journal.
+
 `session.sync` synchronizes this session directory as a unit. Targets are explicit Site-local paths, so sync cannot silently choose the process working directory or write outside the bound Site root. The operation emits `session_sync` evidence with copied/skipped/deleted counts and supports dry-run planning.
 
 The aggregate index lives at:
