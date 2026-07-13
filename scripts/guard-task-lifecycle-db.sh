@@ -34,16 +34,16 @@ if [[ ! -f "${DB_PATH}" ]]; then
   exit 0
 fi
 
-TMP_SNAPSHOT="$(mktemp)"
+TMP_SNAPSHOT="$(mktemp "${SNAPSHOT_PATH}.tmp.XXXXXX")"
 cleanup() {
   rm -f "${TMP_SNAPSHOT}"
 }
 trap cleanup EXIT
 
-if command -v narada >/dev/null 2>&1; then
+if command -v pnpm >/dev/null 2>&1 && [[ -x "node_modules/.bin/narada" ]]; then
+  NARADA_CMD=(pnpm exec narada)
+elif command -v narada >/dev/null 2>&1; then
   NARADA_CMD=(narada)
-elif [[ -x "node_modules/.bin/narada" ]]; then
-  NARADA_CMD=(pnpm narada)
 else
   echo "narada command unavailable; cannot verify task lifecycle snapshot freshness" >&2
   echo "Run: pnpm install && pnpm build" >&2

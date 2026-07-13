@@ -264,10 +264,7 @@ export function registerSitesCommands(program: Command): void {
         format: resolveCommandFormat(opts.format, 'auto'),
         verbose: opts.verbose as boolean | undefined,
       }, silentCommandContext({ verbose: !!opts.verbose }));
-      emitCommandResult(result.result, opts.format);
-      if (result.exitCode !== 0) {
-        process.exit(result.exitCode);
-      }
+      emitFiniteCommandResult(result, { format: opts.format });
     });
 
   sitesCmd
@@ -302,10 +299,7 @@ export function registerSitesCommands(program: Command): void {
         format: resolveCommandFormat(opts.format, 'auto'),
         verbose: opts.verbose as boolean | undefined,
       }, silentCommandContext({ verbose: !!opts.verbose }));
-      emitCommandResult(result.result, opts.format);
-      if (result.exitCode !== 0) {
-        process.exit(result.exitCode);
-      }
+      emitFiniteCommandResult(result, { format: opts.format });
     });
 
   sitesCmd
@@ -318,10 +312,7 @@ export function registerSitesCommands(program: Command): void {
         format: resolveCommandFormat(opts.format, 'auto'),
         verbose: opts.verbose as boolean | undefined,
       }, silentCommandContext({ verbose: !!opts.verbose }));
-      emitCommandResult(result.result, opts.format);
-      if (result.exitCode !== 0) {
-        process.exit(result.exitCode);
-      }
+      emitFiniteCommandResult(result, { format: opts.format });
     });
 
   sitesCmd
@@ -374,10 +365,7 @@ export function registerSitesCommands(program: Command): void {
         format: resolveCommandFormat(opts.format, 'auto'),
         verbose: opts.verbose as boolean | undefined,
       }, silentCommandContext({ verbose: !!opts.verbose }));
-      emitCommandResult(result.result, opts.format);
-      if (result.exitCode !== 0) {
-        process.exit(result.exitCode);
-      }
+      emitFiniteCommandResult(result, { format: opts.format });
     });
 
   sitesCmd
@@ -423,10 +411,7 @@ export function registerSitesCommands(program: Command): void {
         format: resolveCommandFormat(opts.format, 'auto'),
         verbose: opts.verbose as boolean | undefined,
       }, silentCommandContext({ verbose: !!opts.verbose }));
-      emitCommandResult(result.result, opts.format);
-      if (result.exitCode !== 0) {
-        process.exit(result.exitCode);
-      }
+      emitFiniteCommandResult(result, { format: opts.format });
     });
 
   const reconcileCmd = sitesCmd

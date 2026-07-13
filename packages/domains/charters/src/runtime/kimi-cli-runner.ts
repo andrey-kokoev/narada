@@ -158,6 +158,7 @@ export class KimiCliCharterRunner implements CharterRunner {
     return new Promise((resolve, reject) => {
       const child = spawnProviderSubprocess(cliPath, args, {
         stdio: ["pipe", "pipe", "pipe"],
+        windowsHide: true,
       });
 
       let stdout = "";

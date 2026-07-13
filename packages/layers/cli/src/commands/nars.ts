@@ -255,7 +255,7 @@ async function probeSelectedSessionsBySiteRoot(
 function findSessionInSites(siteResolutions: ResolvedSiteRoot[], sessionId: string): { siteResolution: ResolvedSiteRoot; session: Record<string, unknown> } | null {
   for (const siteResolution of siteResolutions) {
     const discovery = discoverNarsSessions({ siteRoot: siteResolution.site_root });
-    const session = discovery.sessions.find((candidate: Record<string, unknown>) => candidate.session_id === sessionId || candidate.carrier_session_id === sessionId);
+    const session = discovery.sessions.find((candidate) => candidate.session_id === sessionId || candidate.carrier_session_id === sessionId) as unknown as Record<string, unknown> | undefined;
     if (session) return { siteResolution, session };
   }
   return null;
@@ -530,7 +530,10 @@ export async function narsSessionsCommand(
     siteResolution,
     discovery: discoverNarsSessions({ siteRoot: siteResolution.site_root }),
   }));
-  const initialSessions = initialDiscoveries.flatMap(({ siteResolution, discovery }) => discovery.sessions.map((session: Record<string, unknown>) => ({ siteResolution, session })));
+  const initialSessions = initialDiscoveries.flatMap(({ siteResolution, discovery }) => discovery.sessions.map((session) => ({
+    siteResolution,
+    session: session as unknown as Record<string, unknown>,
+  })));
   const selected = initialSessions
     .sort((a, b) => String(b.session.started_at ?? '').localeCompare(String(a.session.started_at ?? '')))
     .slice(0, limit);
@@ -544,8 +547,11 @@ export async function narsSessionsCommand(
   const selectedKeys = new Set(selected.map(({ siteResolution, session }) => sessionKey(siteResolution.site_root, session)));
   const sessions = siteResolutions
     .flatMap((siteResolution) => (refreshedBySiteRoot.get(siteResolution.site_root)?.sessions ?? [])
-      .filter((session: Record<string, unknown>) => selectedKeys.has(sessionKey(siteResolution.site_root, session)))
-      .map((session: Record<string, unknown>) => ({ siteResolution, session })))
+      .filter((session) => selectedKeys.has(sessionKey(siteResolution.site_root, session as unknown as Record<string, unknown>)))
+      .map((session) => ({
+        siteResolution,
+        session: session as unknown as Record<string, unknown>,
+      })))
     .sort((a, b) => String(b.session.started_at ?? '').localeCompare(String(a.session.started_at ?? '')))
     .map(({ siteResolution, session }) => toCommandSession(session, siteResolution));
   const selectedSite = explicitSiteSelector && siteResolutions.length === 1 ? siteResolutions[0] : null;

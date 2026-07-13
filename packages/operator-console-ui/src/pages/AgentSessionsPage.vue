@@ -7,9 +7,9 @@ import { useAgentSessions } from '../agent-sessions/composables/useAgentSessions
 const sessions = useAgentSessions();
 const routeDirectory = useOperatorWorkspaceRouteDirectory();
 
-function sessionUrl(sessionId: string): string | null {
+function sessionUrl(sessionId: string): string | undefined {
   const directory = routeDirectory?.directory.value;
-  return directory ? findOperatorRouteTarget(directory, { kind: 'session', id: sessionId }) : null;
+  return directory ? findOperatorRouteTarget(directory, { kind: 'session', id: sessionId }) ?? undefined : undefined;
 }
 
 function formatTimestamp(value: string | null): string {

@@ -54,7 +54,9 @@ export function findOperatorRouteTarget(
 
 export type SiteRegistryNavigationKey = 'sites' | 'add' | 'manage';
 export type OperatorConsoleNavigationKey = OperatorSurfaceNavigationKey;
-export type OperatorConsoleNavItem = OperatorSurfaceNavItem;
+export interface OperatorConsoleNavItem extends Omit<OperatorSurfaceNavItem, 'key'> {
+  key: OperatorConsoleNavigationKey;
+}
 
 function normalizedPathname(pathname: string): string {
   const value = pathname.trim() || '/';
