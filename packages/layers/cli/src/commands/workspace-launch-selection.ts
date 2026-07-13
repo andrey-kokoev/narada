@@ -9,7 +9,7 @@ import type {
   WorkspaceLaunchOption as WorkspaceLaunchSelectorOptionContract,
   WorkspaceLaunchSelectorModel as WorkspaceLaunchSelectorModelContract,
 } from '@narada2/workspace-launch-contract';
-import type { WorkspaceLaunchPlanOptions, WorkspaceLaunchRecord } from './launcher.js';
+import type { WorkspaceLaunchPlanOptions, WorkspaceLaunchRecord } from './workspace-launch-types.js';
 
 export interface WorkspaceLaunchProviderRegistry {
   default_provider?: string;
