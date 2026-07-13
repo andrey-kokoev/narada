@@ -121,12 +121,26 @@ function requestHostIsLoopback(req: IncomingMessage): boolean {
   }
 }
 
-function requestOriginIsLoopback(req: IncomingMessage): boolean {
+function requestOriginIsSameLoopbackOrigin(req: IncomingMessage): boolean {
   const origin = headerValue(req.headers.origin);
   if (!origin) return true;
+  const host = headerValue(req.headers.host);
+  if (!host) return false;
   try {
+    const requestUrl = new URL(`http://${host}`);
     const parsed = new URL(origin);
-    return (parsed.protocol === 'http:' || parsed.protocol === 'https:') && isLoopbackHost(parsed.hostname);
+    const requestPort = parsed.port || (requestUrl.protocol === 'https:' ? '443' : '80');
+    const expectedPort = requestUrl.port || (requestUrl.protocol === 'https:' ? '443' : '80');
+    return parsed.protocol === requestUrl.protocol
+      && parsed.username.length === 0
+      && parsed.password.length === 0
+      && parsed.pathname === '/'
+      && parsed.search.length === 0
+      && parsed.hash.length === 0
+      && isLoopbackHost(parsed.hostname)
+      && isLoopbackHost(requestUrl.hostname)
+      && parsed.hostname === requestUrl.hostname
+      && requestPort === expectedPort;
   } catch {
     return false;
   }
@@ -670,7 +684,7 @@ export async function createOperatorRouterServer(config: Partial<OperatorRouterS
   }
 
   async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
-    if (!requestHostIsLoopback(req) || !requestOriginIsLoopback(req)) {
+    if (!requestHostIsLoopback(req) || !requestOriginIsSameLoopbackOrigin(req)) {
       jsonResponse(res, 421, { error: 'operator_router_host_or_origin_not_loopback' });
       return;
     }
@@ -722,7 +736,7 @@ export async function createOperatorRouterServer(config: Partial<OperatorRouterS
   }
 
   async function handleUpgrade(req: IncomingMessage, socket: Duplex, head: Buffer): Promise<void> {
-    if (req.method !== 'GET' || headerValue(req.headers.upgrade)?.toLowerCase() !== 'websocket' || !requestHostIsLoopback(req) || !requestOriginIsLoopback(req)) { socket.destroy(); return; }
+    if (req.method !== 'GET' || headerValue(req.headers.upgrade)?.toLowerCase() !== 'websocket' || !requestHostIsLoopback(req) || !requestOriginIsSameLoopbackOrigin(req)) { socket.destroy(); return; }
     let urlObject: URL;
     try {
       urlObject = new URL(req.url ?? '/', `http://${req.headers.host ?? `${resolved.host}:${resolved.port}`}`);
@@ -732,7 +746,7 @@ export async function createOperatorRouterServer(config: Partial<OperatorRouterS
     }
     if (!requestPathIsSafe(urlObject.pathname)) { socket.destroy(); return; }
     const route = findRoute(state.routes, urlObject.pathname);
-    if (!route || route.state === 'degraded' || !routeLeaseValid(route, nowFrom(resolved)) || !route.protocols.includes('websocket')) { socket.destroy(); return; }
+    if (!route || route.state === 'degraded' || !routeLeaseValid(route, nowFrom(resolved)) || !route.protocols.includes('websocket') || !route.methods.includes('GET')) { socket.destroy(); return; }
     const target = targetUrlForRequest(route, urlObject.pathname, urlObject.search, true);
     if (!target || (target.protocol !== 'ws:' && target.protocol !== 'wss:')) { socket.destroy(); return; }
     proxySocketRequest(socket, req, head, target, route.timeout_ms);

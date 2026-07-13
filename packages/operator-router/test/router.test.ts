@@ -72,6 +72,21 @@ test('route admission requires loopback targets and non-PID process identity', (
     ...routeInput('http://127.0.0.1:1', 'http://127.0.0.1:1/health'),
     site_id: 42 as never,
   }), /site_id_invalid/);
+  assert.throws(() => validateRouteRegistration({
+    ...routeInput('http://127.0.0.1:1', 'http://127.0.0.1:1/health'),
+    route_class: 'nars-artifact',
+  }), /route_class_backend_mismatch/);
+  assert.throws(() => validateRouteRegistration({
+    ...routeInput('http://127.0.0.1:1', 'http://127.0.0.1:1/health'),
+    route_class: 'site-operations',
+  }), /site_operation_reconstruction_required/);
+  assert.throws(() => validateRouteRegistration({
+    ...routeInput('http://127.0.0.1:1', 'http://127.0.0.1:1/health'),
+    session_id: null,
+  }), /agent_session_identity_required/);
+  assert.throws(() => validateRouteRegistration({
+    ...routeInput('http://user:password@127.0.0.1:1', 'http://127.0.0.1:1/health'),
+  }), /target_not_loopback/);
 });
 
 test('router fails closed on an unreadable singleton lock', async () => {
@@ -185,6 +200,10 @@ test('router registers, health-checks, proxies, projects, renews, and removes a 
     const originForwarded = await fetch(`${routerUrl}/sessions/demo/origin`, { headers: { origin: routerUrl } });
     assert.equal(originForwarded.status, 200);
     assert.equal(observedOrigin, routerUrl);
+    const foreignLoopbackOrigin = await fetch(`${routerUrl}/sessions/demo/origin`, {
+      headers: { origin: 'http://127.0.0.1:9' },
+    });
+    assert.equal(foreignLoopbackOrigin.status, 421);
     const headersForwarded = await fetch(`${routerUrl}/sessions/demo/headers`, {
       redirect: 'manual',
       headers: { 'x-csrf-token': 'csrf-demo' },

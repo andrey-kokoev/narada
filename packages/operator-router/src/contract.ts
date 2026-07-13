@@ -143,6 +143,9 @@ export function isLoopbackUrl(value: string, protocols: readonly string[] = ['ht
   try {
     const parsed = new URL(value);
     return protocols.includes(parsed.protocol)
+      && parsed.username.length === 0
+      && parsed.password.length === 0
+      && parsed.hash.length === 0
       && (parsed.hostname === '127.0.0.1' || parsed.hostname === 'localhost' || parsed.hostname === '::1' || parsed.hostname === '[::1]');
   } catch {
     return false;
@@ -228,12 +231,19 @@ function validateReconstruction(source: OperatorRouterReconstructionSource | nul
   if (source.site_root !== null && source.site_root !== undefined && typeof source.site_root !== 'string') throw new Error('operator_router_reconstruction_site_root_invalid');
   if (source.site_id !== null && source.site_id !== undefined && typeof source.site_id !== 'string') throw new Error('operator_router_reconstruction_site_id_invalid');
   if (source.session_id !== null && source.session_id !== undefined && typeof source.session_id !== 'string') throw new Error('operator_router_reconstruction_session_id_invalid');
-  return {
+  const normalized = {
     kind: source.kind,
     site_root: source.site_root ?? null,
     site_id: source.site_id ?? null,
     session_id: source.session_id ?? null,
   };
+  if (normalized.kind === 'nars-session' && (!normalized.site_root || !normalized.session_id)) {
+    throw new Error('operator_router_nars_session_reconstruction_identity_required');
+  }
+  if (normalized.kind === 'site-operation' && (!normalized.site_root || !normalized.site_id)) {
+    throw new Error('operator_router_site_operation_reconstruction_identity_required');
+  }
+  return normalized;
 }
 
 export function validateRouteRegistration(
@@ -245,6 +255,9 @@ export function validateRouteRegistration(
   if (typeof input.route_id !== 'string' || typeof input.public_path !== 'string' || typeof input.owner_id !== 'string') throw new Error('operator_router_registration_identity_invalid');
   const backendKind = input.backend_kind ?? 'http';
   if (backendKind !== 'http' && backendKind !== 'nars-artifact') throw new Error('operator_router_backend_kind_invalid');
+  if ((input.route_class === 'nars-artifact') !== (backendKind === 'nars-artifact')) {
+    throw new Error('operator_router_route_class_backend_mismatch');
+  }
   const publicPath = normalizePublicPath(input.public_path);
   const routeMode = input.route_mode ?? 'prefix';
   if (routeMode !== 'prefix' && routeMode !== 'exact') throw new Error('operator_router_route_mode_invalid');
@@ -261,8 +274,23 @@ export function validateRouteRegistration(
   if (protocols.includes('http') && backendKind === 'http' && !targetUrl) throw new Error('operator_router_target_url_required');
   if (protocols.includes('websocket') && !websocketTargetUrl) throw new Error('operator_router_websocket_target_required');
   if (backendKind === 'nars-artifact' && (protocols.length !== 1 || !protocols.includes('http'))) throw new Error('operator_router_artifact_protocol_invalid');
-  if (backendKind === 'nars-artifact' && (!input.reconstruction || input.reconstruction.kind !== 'nars-session')) {
+  const reconstruction = validateReconstruction(input.reconstruction);
+  if (backendKind === 'nars-artifact' && (!reconstruction || reconstruction.kind !== 'nars-session')) {
     throw new Error('operator_router_artifact_reconstruction_required');
+  }
+  if (input.route_class === 'site-operations' && (!reconstruction || reconstruction.kind !== 'site-operation')) {
+    throw new Error('operator_router_site_operation_reconstruction_required');
+  }
+  const siteId = normalizeNullableString(input.site_id, 'operator_router_site_id_invalid');
+  const sessionId = normalizeNullableString(input.session_id, 'operator_router_session_id_invalid');
+  if (input.route_class === 'agent-web-ui' && !sessionId) throw new Error('operator_router_agent_session_identity_required');
+  if (input.route_class === 'site-operations' && !siteId) throw new Error('operator_router_site_identity_required');
+  if (backendKind === 'nars-artifact' && !sessionId) throw new Error('operator_router_artifact_session_identity_required');
+  if (reconstruction && reconstruction.site_id !== null && siteId !== reconstruction.site_id) {
+    throw new Error('operator_router_site_identity_mismatch');
+  }
+  if (reconstruction && reconstruction.session_id !== null && sessionId !== reconstruction.session_id) {
+    throw new Error('operator_router_session_identity_mismatch');
   }
   const leaseMs = normalizeLeaseMs(input.lease_ms);
   const expires = new Date(now.getTime() + leaseMs).toISOString();
@@ -279,8 +307,8 @@ export function validateRouteRegistration(
     websocket_target_url: websocketTargetUrl,
     health_url: input.health_url ?? null,
     owner_id: ownerId,
-    site_id: normalizeNullableString(input.site_id, 'operator_router_site_id_invalid'),
-    session_id: normalizeNullableString(input.session_id, 'operator_router_session_id_invalid'),
+    site_id: siteId,
+    session_id: sessionId,
     process_evidence: validateProcessEvidence(input.process_evidence),
     protocols,
     methods,
@@ -290,7 +318,7 @@ export function validateRouteRegistration(
     state: 'healthy',
     last_health_at: null,
     last_health_error: null,
-    reconstruction: validateReconstruction(input.reconstruction),
+    reconstruction,
   };
 }
 
