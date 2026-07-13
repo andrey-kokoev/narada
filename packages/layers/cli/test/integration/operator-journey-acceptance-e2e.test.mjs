@@ -403,6 +403,7 @@ test('canonical operator journey remains usable through the stable Router', asyn
   let agentServer = null;
   let runtime = null;
   let browser = null;
+  let launcherProcess = null;
   try {
     const session = await seedSession(siteRoot);
     await seedRegistry(root, siteRoot);
@@ -580,6 +581,80 @@ test('canonical operator journey remains usable through the stable Router', asyn
     assert.equal(await agentPage.locator('body').innerText(), 'router journey artifact content\n');
     assertNoBackingUrl(await agentPage.content(), backingUrls);
 
+    const cliPackageRoot = fileURLToPath(new URL('../..', import.meta.url));
+    const cliEntrypoint = fileURLToPath(new URL('../../dist/main.js', import.meta.url));
+    const launcherPort = await reservePort();
+    const launcherRegistryPath = join(root, 'launcher-agents.json');
+    const launcherTerminalLog = join(root, 'workspace-launch-terminal.jsonl');
+    await writeFile(launcherRegistryPath, JSON.stringify({
+      Agents: [{
+        Agent: SITE_ID + '.resident',
+        Role: 'resident',
+        Site: SITE_ID,
+        NaradaRoot: siteRoot,
+        SiteRoot: siteRoot,
+        WorkspaceRoot: siteRoot,
+        LauncherPath: join(siteRoot, 'narada-router-journey.ps1'),
+        OperatorSurface: 'agent-web-ui',
+        Runtime: 'narada-agent-runtime-server',
+      }],
+    }), 'utf8');
+    let launcherStdout = '';
+    let launcherStderr = '';
+    launcherProcess = spawn(process.execPath, [
+      cliEntrypoint,
+      'launcher',
+      'workspace-launch',
+      '--interactive-selection-ui',
+      '--launcher-ui-port',
+      String(launcherPort),
+      '--launcher-ui-port-fallback',
+      '--operator-router-port',
+      String(routerPort),
+      '--config-path',
+      launcherRegistryPath,
+      '--format',
+      'json',
+    ], {
+      cwd: cliPackageRoot,
+      env: {
+        ...process.env,
+        NARADA_OPERATOR_ROUTER_STATE_ROOT: routerStateRoot,
+        NARADA_NO_BROWSER: '1',
+        NARADA_WORKSPACE_LAUNCH_TERMINAL_LOG: launcherTerminalLog,
+        NARADA_WORKSPACE_LAUNCH_UI_SESSION_RETENTION: '1',
+      },
+      stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true,
+    });
+    launcherProcess.stdout?.on('data', (chunk) => { launcherStdout += String(chunk); });
+    launcherProcess.stderr?.on('data', (chunk) => { launcherStderr += String(chunk); });
+    await waitForChildOutput(() => launcherStdout, 'Narada launcher selection UI: ', 15_000);
+    const launcherOutput = launcherStdout.match(/Narada launcher selection UI: (http:\/\/127\.0\.0\.1:\d+\/console\/launch\/sessions\/[^\r\n]+)/);
+    assert.ok(launcherOutput, `launcher output did not contain a stable URL\nstdout:\n${launcherStdout}\nstderr:\n${launcherStderr}`);
+    const launcherStableUrl = launcherOutput[1];
+    const launcherStable = new URL(launcherStableUrl);
+    assert.equal(launcherStable.origin, routerUrl);
+    assert.match(launcherStable.pathname, /^\/console\/launch\/sessions\/[^/]+$/);
+    assert.notEqual(launcherStable.port, String(launcherPort));
+    const launcherDirectResponse = await fetch('http://127.0.0.1:' + launcherPort + '/');
+    assert.equal(launcherDirectResponse.status, 200);
+    const launcherRoutes = await fetchJson(routerUrl + '/routes');
+    assert.equal(launcherRoutes.response.status, 200);
+    const launcherRoutesText = JSON.stringify(launcherRoutes.body);
+    assert.doesNotMatch(launcherRoutesText, /target_url|health_url/);
+    assert.doesNotMatch(launcherRoutesText, new RegExp('127\\.0\\.0\\.1:' + launcherPort));
+    await page.goto(launcherStableUrl, { waitUntil: 'domcontentloaded' });
+    await page.locator('#sites').waitFor({ state: 'attached', timeout: 15_000 });
+    assert.match(await page.locator('body').innerText(), /Agent Launcher/);
+    assertNoBackingUrl(await page.content(), [...backingUrls, 'http://127.0.0.1:' + launcherPort]);
+    await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await page.getByRole('heading', { name: 'Cancelled', exact: true }).waitFor({ timeout: 15_000 });
+    await waitForChildExit(launcherProcess, 15_000);
+    assert.equal(launcherProcess.exitCode, 0, `launcher exited unsuccessfully\nstdout:\n${launcherStdout}\nstderr:\n${launcherStderr}`);
+    const closedLauncherResponse = await fetch(launcherStableUrl);
+    assert.equal(closedLauncherResponse.status, 409);
+
     await agentPage.close();
     const stableRouterUrl = routerUrl;
     const stableRouterPort = Number(new URL(routerUrl).port);
@@ -619,6 +694,7 @@ test('canonical operator journey remains usable through the stable Router', asyn
     assertNoBackingUrl(await restartedAgentPage.content(), backingUrls);
   } finally {
     await browser?.close();
+    await stopChildProcess(launcherProcess).catch(() => undefined);
     await routeSet?.stop();
     await stopEnsuredRouter(routerOwner).catch(() => {
       if (routerOwner?.child && !routerOwner.child.killed) routerOwner.child.kill();

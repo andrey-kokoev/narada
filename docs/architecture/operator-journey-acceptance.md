@@ -3,15 +3,18 @@
 The canonical operator journey is accepted only when the operator can stay on
 one stable Operator Router origin while moving through the live projections:
 
-Router -> Workspace -> Registry -> Site Operations -> Agent Web UI -> artifact
+Router -> Workspace -> Registry -> Site Operations -> Agent Web UI -> artifact -> Launcher
 
 The acceptance suite has three complementary layers. The real-start test
 launches the compiled `narada console serve` command as a child process and
-verifies its stable Router projection. The launcher journey starts the real
-compiled `narada launcher workspace-launch --interactive-selection-ui` process
-alongside that Console, opens the returned browser page through the stable
-Router session path, and closes the session through the same path. The journey
-test starts the Router through the
+verifies its stable Router projection. The launcher journey test separately
+starts the real compiled `narada launcher workspace-launch` process with
+`--interactive-selection-ui` alongside that Console, opens the returned browser
+page through the stable Router session path, and closes the session through the
+same path. The canonical journey test also starts that real
+launcher against the already-running Router after artifact delivery, opens
+and cancels its session through the same browser origin, and only then tests
+Router restart. That test starts the Router through the
 production `ensureOperatorRouter` path, which exercises hidden detached
 ownership and same-port restart; it starts the real Console, Site Operations,
 and Agent Web UI servers in-process, seeds one User Site registry record and
@@ -34,11 +37,15 @@ The test records these acceptance properties as assertions:
   operator projection, serves Workspace and Registry through that origin, and
   leaves no backing target or health URL in the public route inventory; after
   the real child terminates, its Router projection is no longer healthy;
-- the real launcher process reports a session URL on the stable Router origin,
-  serves the browser UI through `/console/launch/sessions/<id>`, keeps its
-  direct localhost port out of public route metadata, and exits cleanly after
-  the operator cancels through the Router; the closed session no longer serves
-  launcher content;
+- the canonical journey's real launcher process reports a session URL on the
+  same stable Router origin used by Workspace, Registry, Site Operations,
+  Agent Web UI, and the artifact; it serves the browser UI through
+  `/console/launch/sessions/<id>`, keeps its direct localhost port out of
+  operator-facing output, and exits cleanly after the operator cancels through
+  that Router; the closed session no longer serves launcher content;
+- the separate launcher acceptance test repeats the real Console-plus-launcher
+  projection with an independently started Router, covering the launcher
+  process boundary without relying on the in-process journey fixture;
 - the Workspace route directory exposes Registry, Site Operations, and the
   session route from the live Router inventory;
 - Registry edit uses the canonical preview, explicit confirmation, and apply
@@ -65,11 +72,11 @@ acceptance test does not treat a direct owner URL as an operator surface.
 
 ## Residual report
 
-Status: accepted for the representative operator journey.
+Status: accepted for the representative continuous operator journey.
 
 Proven: hidden Router start and same-port restart, stable-origin navigation,
-live WebSocket and artifact delivery, governed registry mutation, CSRF
-boundaries, route reconstruction, and cleanup.
+live WebSocket and artifact delivery, real launcher projection and cancellation,
+governed registry mutation, CSRF boundaries, route reconstruction, and cleanup.
 
 Remaining by design: coverage uses one representative Site and one
 non-destructive registry metadata mutation. Other Site types and mutation
