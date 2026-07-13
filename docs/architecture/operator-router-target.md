@@ -193,7 +193,9 @@ direct diagnostic endpoints.
 
 - `@narada2/operator-router` owns the stable loopback listener, singleton lock,
   hidden detached startup, authenticated registration, finite leases, health
-  state, bounded HTTP/WebSocket forwarding, and redacted route inventory.
+  state, bounded HTTP/WebSocket forwarding, and redacted route inventory. Its
+  client rejects port `0`; only direct server construction may use port `0`,
+  and that path is diagnostic by contract.
 - `narada console serve` registers the Console projection at `/` and keeps
   `--port 0` as explicitly labeled diagnostic mode.
 - `narada agent-web-ui attach` defaults to the router, registers a session HTTP
@@ -262,15 +264,18 @@ direct diagnostic endpoints.
    projection. A future artifact owner may admit those outputs without adding
    a generic file route.
 6. Add Host, Origin, CSRF, route admission, loopback-target, and redaction
-   acceptance tests. **Partial:** route admission, redaction, HTTP, artifact,
-   and WebSocket coverage exists. Router Host validation is bound to the
-   actual listener port, Origin validation is enforced for same-origin
-   loopback requests and WebSocket upgrades, and CSRF tokens are transported
-   to the backend authority; broader mutation/CSRF acceptance remains an
-   owner-surface responsibility.
+   acceptance tests. **Mostly implemented at the Router boundary:** route
+   admission, redaction, HTTP method/body bounds, artifact, Host, and WebSocket
+   coverage exists. Router Host validation is bound to the actual listener
+   port, URL-like Host authorities are rejected, Origin validation is enforced
+   for same-origin loopback requests and WebSocket upgrades, and CSRF tokens
+   are transported to the backend authority. Browser mutation acceptance and
+   CSRF enforcement remain owner-surface responsibilities.
 7. Keep ephemeral commands as diagnostics and remove stable per-surface ports.
-   **In progress:** normal projection commands use the router and port 0 is
-   retained only as explicit diagnostic mode.
+   **Normal projection commands implemented:** Console, Agent Web UI, Site
+   Operations, and persistent launcher sessions use the Router; port 0 is
+   retained only as explicit diagnostic mode. Launcher/session route-directory
+   composition remains the next migration slice.
 
 ## Acceptance Invariants
 

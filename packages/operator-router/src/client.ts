@@ -100,6 +100,10 @@ function assertLoopbackHost(host: string): void {
   if (normalized !== '127.0.0.1' && normalized !== 'localhost' && normalized !== '::1') throw new Error('operator_router_host_not_loopback');
 }
 
+function assertOperatorRouterPort(port: number): void {
+  if (!Number.isInteger(port) || port < 1 || port > 65_535) throw new Error('operator_router_client_port_invalid');
+}
+
 export interface EnsureOperatorRouterResult {
   url: string;
   ownership: 'started' | 'attached';
@@ -214,6 +218,7 @@ export async function ensureOperatorRouter(options: EnsureOperatorRouterOptions 
   const host = options.host ?? '127.0.0.1';
   const port = options.port ?? DEFAULT_OPERATOR_ROUTER_PORT;
   assertLoopbackHost(host);
+  assertOperatorRouterPort(port);
   const stateRoot = options.state_root ?? defaultStateRoot();
   const url = baseUrl(host, port);
   const fetchFn = options.fetch_fn ?? fetch;

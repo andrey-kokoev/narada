@@ -120,7 +120,13 @@ function requestHostMatchesListener(req: IncomingMessage, expectedPort: number):
   if (!hostHeader) return false;
   try {
     const parsed = new URL(`http://${hostHeader}`);
-    return isLoopbackHost(parsed.hostname) && effectiveHttpPort(parsed) === String(expectedPort);
+    return parsed.username.length === 0
+      && parsed.password.length === 0
+      && parsed.pathname === '/'
+      && parsed.search.length === 0
+      && parsed.hash.length === 0
+      && isLoopbackHost(parsed.hostname)
+      && effectiveHttpPort(parsed) === String(expectedPort);
   } catch {
     return false;
   }

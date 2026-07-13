@@ -12,6 +12,7 @@ import {
   OPERATOR_ROUTER_IDENTITY,
   OPERATOR_ROUTER_ROUTES_SCHEMA,
   createOperatorRouterServer,
+  ensureOperatorRouter,
   inspectOperatorRouterRouteSet,
   registerOperatorRouteSet,
   registerOperatorRoute,
@@ -93,6 +94,54 @@ test('route admission requires loopback targets and non-PID process identity', (
   assert.throws(() => validateRouteRegistration({
     ...routeInput('http://user:password@127.0.0.1:1', 'http://127.0.0.1:1/health'),
   }), /target_not_loopback/);
+});
+
+test('router enforces admitted methods and bounded request bodies', async () => {
+  const stateRoot = await mkdtemp(join(tmpdir(), 'narada-operator-router-bounds-'));
+  let observedBody = '';
+  const upstream = createServer((req, res) => {
+    if (req.url === '/health') {
+      res.writeHead(200);
+      res.end('healthy');
+      return;
+    }
+    const chunks: Buffer[] = [];
+    req.on('data', (chunk: Buffer) => chunks.push(chunk));
+    req.on('end', () => {
+      observedBody = Buffer.concat(chunks).toString('utf8');
+      res.writeHead(200, { 'content-type': 'text/plain' });
+      res.end(`received:${observedBody}`);
+    });
+  });
+  const upstreamUrl = await listen(upstream);
+  const router = await createOperatorRouterServer({ host: '127.0.0.1', port: 0, state_root: stateRoot, health_interval_ms: 60_000 });
+  try {
+    const routerUrl = await router.start();
+    await registerOperatorRoute({ url: routerUrl, registration_token: router.getRegistrationToken() }, {
+      ...routeInput(upstreamUrl, `${upstreamUrl}/health`),
+      route_id: 'bounded-route',
+      public_path: '/bounded',
+      methods: ['GET', 'POST'],
+      max_body_bytes: 4,
+    });
+
+    const refusedMethod = await fetch(`${routerUrl}/bounded`, { method: 'PUT', body: 'x' });
+    assert.equal(refusedMethod.status, 405);
+    const oversized = await fetch(`${routerUrl}/bounded`, { method: 'POST', body: '12345' });
+    assert.equal(oversized.status, 413);
+    const accepted = await fetch(`${routerUrl}/bounded`, { method: 'POST', body: '1234' });
+    assert.equal(accepted.status, 200);
+    assert.equal(await accepted.text(), 'received:1234');
+    assert.equal(observedBody, '1234');
+  } finally {
+    await router.stop();
+    await close(upstream);
+    await rm(stateRoot, { recursive: true, force: true });
+  }
+});
+
+test('operator router client reserves port zero for diagnostic server construction', async () => {
+  await assert.rejects(() => ensureOperatorRouter({ port: 0 }), /operator_router_client_port_invalid/);
 });
 
 test('router fails closed on an unreadable singleton lock', async () => {
