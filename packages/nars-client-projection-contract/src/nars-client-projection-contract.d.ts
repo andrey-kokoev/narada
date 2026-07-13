@@ -22,6 +22,9 @@ export type NarsClientProjectionVerbosity = typeof NARS_CLIENT_PROJECTION_VERBOS
 export type NarsClientProjectionClass = 'conversation' | 'operations' | 'diagnostics' | 'raw';
 export const NARS_CLIENT_PROJECTION_DEFAULT_VERBOSITY: NarsClientProjectionVerbosity;
 export const NARS_CLIENT_PROJECTION_VERBOSITY_RANK: Readonly<Record<NarsClientProjectionVerbosity, number>>;
+export const NARS_RUNTIME_INTELLIGENCE_RECONFIGURE_METHOD: 'runtime.intelligence.reconfigure';
+export const NARS_RUNTIME_SERVER_METHOD_LIST: readonly string[];
+export const NARS_RUNTIME_SERVER_METHODS: ReadonlySet<string>;
 export const AGENT_WEB_UI_NARS_METHOD_LIST: readonly string[];
 export const AGENT_WEB_UI_SESSION_COMMANDS: readonly string[];
 export const AGENT_WEB_UI_CARRIER_COMMANDS: readonly string[];
@@ -37,6 +40,7 @@ export interface AgentWebUiCommand {
   description: string;
   keywords: readonly string[];
   usage: string;
+  protocolMethods: readonly string[];
   palette: Readonly<{ visible: boolean; rank: number; danger: boolean }>;
   buildAction(input: object, context?: object): object;
 }
@@ -83,11 +87,13 @@ export interface NarsClientProjection {
 }
 
 export function isAgentWebUiNarsMethod(method: unknown): boolean;
+export function isNarsRuntimeServerMethod(method: unknown): boolean;
 export function buildNarsArtifactRefPart(input?: object): object | null;
 export function buildNarsIntentRefPart(input?: object): object | null;
 export function buildAgentWebUiConversationEnqueueFrame(text: unknown, options?: object): object | null;
 export function buildAgentWebUiEventsReadFrame(options?: object): object;
 export function buildAgentWebUiSurfaceAffordancesFrame(options?: object): object;
+export function buildAgentWebUiIntelligenceReconfigureFrame(input?: object, options?: object): object | null;
 export function buildAgentWebUiAffordanceActionRequestFrame(input?: object, options?: object): object | null;
 export function buildAgentWebUiAffordanceActionConfirmFrame(input?: object, options?: object): object | null;
 export function buildAgentWebUiAffordanceActionCancelFrame(input?: object, options?: object): object | null;

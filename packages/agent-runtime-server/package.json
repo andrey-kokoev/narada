@@ -54,6 +54,7 @@
     "@narada2/carrier-terminal-projection": "workspace:*",
     "@narada2/launch-process-ownership": "workspace:*",
     "@narada2/nars-session-core": "workspace:*",
+    "@narada2/nars-runtime-contract": "workspace:*",
     "@narada2/nars-capability-gateway": "workspace:*",
     "@narada2/nars-provider-runtime": "workspace:*",
     "@narada2/process-launch-posture": "workspace:*",

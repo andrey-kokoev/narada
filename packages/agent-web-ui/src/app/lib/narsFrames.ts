@@ -1,4 +1,5 @@
 import * as NarsClientProjectionContract from '@narada2/nars-client-projection-contract';
+import { toSessionProtocolFrame, type SessionProtocolFrame } from '../../protocol/sessionTransport';
 
 const contract = NarsClientProjectionContract as unknown as Record<string, (...args: unknown[]) => unknown>;
 
@@ -36,6 +37,10 @@ export function buildTaskLifecycleSummaryRequestFrame() {
 
 export function buildSurfaceAffordancesRequestFrame() {
   return contract.buildAgentWebUiSurfaceAffordancesFrame();
+}
+
+export function buildIntelligenceReconfigureFrame(input: Record<string, unknown>, options: Record<string, unknown> = {}): SessionProtocolFrame | null {
+  return toSessionProtocolFrame(contract.buildAgentWebUiIntelligenceReconfigureFrame(input, options));
 }
 
 export function buildAffordanceActionRequestFrame(input: Record<string, unknown>, options: Record<string, unknown> = {}) {

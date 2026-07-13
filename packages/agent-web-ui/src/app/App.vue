@@ -23,7 +23,7 @@ import { useSurfaceAffordances } from './composables/useSurfaceAffordances';
 import { useSurfaceFeedbackSummary } from './composables/useSurfaceFeedbackSummary';
 import { useTaskLifecycleSummary } from './composables/useTaskLifecycleSummary';
 import { ArtifactRenderingConfigKey } from './lib/artifactConfig';
-import { buildAffordanceActionCancelFrame, buildAffordanceActionConfirmFrame, buildAffordanceActionRequestFrame, buildArtifactsSummaryRequestFrame, buildDelegationSummaryRequestFrame, buildGitSummaryRequestFrame, buildInboxSummaryRequestFrame, buildMailboxSummaryRequestFrame, buildSchedulerSummaryRequestFrame, buildSopSummaryRequestFrame, buildSurfaceAffordancesRequestFrame, buildSurfaceFeedbackSummaryRequestFrame, buildTaskLifecycleSummaryRequestFrame } from './lib/narsFrames';
+import { buildAffordanceActionCancelFrame, buildAffordanceActionConfirmFrame, buildAffordanceActionRequestFrame, buildArtifactsSummaryRequestFrame, buildDelegationSummaryRequestFrame, buildGitSummaryRequestFrame, buildInboxSummaryRequestFrame, buildIntelligenceReconfigureFrame, buildMailboxSummaryRequestFrame, buildSchedulerSummaryRequestFrame, buildSopSummaryRequestFrame, buildSurfaceAffordancesRequestFrame, buildSurfaceFeedbackSummaryRequestFrame, buildTaskLifecycleSummaryRequestFrame } from './lib/narsFrames';
 
 interface AgentWebUiConfig {
   eventEndpoint: string | null;
@@ -38,6 +38,14 @@ interface AgentWebUiConfig {
   onboarding?: { mode: 'user-site' } | null;
   maxReplay?: number;
   admittedMethods?: readonly string[];
+}
+
+function requestIntelligenceReconfiguration(change: { provider?: string; model?: string; thinking?: string }) {
+  const frame = buildIntelligenceReconfigureFrame(change);
+  if (frame) {
+    sessionActions.send(frame);
+    void session.health.refresh();
+  }
 }
 
 const props = defineProps<{ config: AgentWebUiConfig }>();
@@ -291,6 +299,7 @@ function cancelAffordanceAction(item: AffordanceConfirmationItem) {
 
 <template>
   <NarsSessionShell
+    :supports-protocol-method="supportsProtocolMethod"
     v-model:draft="draft"
     :event-endpoint="config.eventEndpoint"
     :health-endpoint="config.healthEndpoint"
@@ -357,6 +366,7 @@ function cancelAffordanceAction(item: AffordanceConfirmationItem) {
     @request-task-lifecycle-summary="requestTaskLifecycleSummary"
     @request-surface-feedback-summary="requestSurfaceFeedbackSummary"
     @request-affordance-action="requestAffordanceAction"
+    @request-intelligence-reconfiguration="requestIntelligenceReconfiguration"
     @confirm-affordance-action="confirmAffordanceAction"
     @cancel-affordance-action="cancelAffordanceAction"
     @intent-selected="fillIntentRef"

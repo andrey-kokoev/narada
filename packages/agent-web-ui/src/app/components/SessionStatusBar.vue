@@ -5,6 +5,7 @@ import BoxRowShell from './BoxRowShell.vue';
 import ProjectionVerbositySelect from './ProjectionVerbositySelect.vue';
 import { useBoxVisibilityPreference } from '../composables/useBoxVisibilityPreference';
 import { AGENT_WEB_UI_PREFERENCE_KEYS } from '../lib/browserPreferences.js';
+import { NARS_RUNTIME_INTELLIGENCE_RECONFIGURE_METHOD } from '@narada2/nars-client-projection-contract';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import type { AgentActivityState } from '../composables/useAgentActivity';
 import type { useCloudflareProjection } from '../composables/useCloudflareProjection';
@@ -27,6 +28,7 @@ const props = defineProps<{
   agentActivity: AgentActivityState;
   authorityTransition: Record<string, unknown> | null;
   surfaceAffordances: SurfaceAffordanceSummary;
+  supportsProtocolMethod: (method: string) => boolean;
   cloudflareProjection: ReturnType<typeof useCloudflareProjection>;
   collapsible?: boolean;
 }>();
@@ -34,6 +36,7 @@ const emit = defineEmits<{
   'update:verbosity': [value: ProjectionVerbosity];
   'publish-cloudflare': [cloudflareApiBaseUrl: string];
   'request-affordance-action': [request: { surfaceId: string; actionId: string; args: Record<string, unknown> }];
+  'request-intelligence-reconfiguration': [change: { provider?: string; model?: string; thinking?: string }];
   collapse: [];
 }>();
 const cloudflareApiBaseUrl = ref(props.cloudflareProjection.defaultApiBaseUrl.value);
@@ -160,31 +163,35 @@ watch(() => props.intelligence.thinking, (thinking) => {
   if (pendingThinking.value && pendingThinking.value === thinking) pendingThinking.value = null;
 });
 
-function requestProviderChange(event: Event) {
+function requestIntelligenceChange(args: { provider?: string; model?: string; thinking?: string }, actionId: string) {
   const surfaceId = intelligenceAffordance.value?.surfaceId;
-  const actionId = providerActionId.value;
+  if (props.supportsProtocolMethod(NARS_RUNTIME_INTELLIGENCE_RECONFIGURE_METHOD)) {
+    emit('request-intelligence-reconfiguration', args);
+    return;
+  }
+  if (!surfaceId) return;
+  emit('request-affordance-action', { surfaceId, actionId, args });
+}
+
+function requestProviderChange(event: Event) {
   const provider = (event.target as HTMLInputElement | HTMLSelectElement | null)?.value.trim() ?? '';
-  if (!surfaceId || !actionId || !provider || provider === props.intelligence.provider) return;
+  if (!provider || provider === props.intelligence.provider) return;
   pendingProvider.value = provider;
-  emit('request-affordance-action', { surfaceId, actionId, args: { provider } });
+  requestIntelligenceChange({ provider }, providerActionId.value);
 }
 
 function requestModelChange(event: Event) {
-  const surfaceId = intelligenceAffordance.value?.surfaceId;
-  const actionId = modelActionId.value;
   const model = (event.target as HTMLInputElement | HTMLSelectElement | null)?.value.trim() ?? '';
-  if (!surfaceId || !actionId || !model || model === props.intelligence.model) return;
+  if (!model || model === props.intelligence.model) return;
   pendingModel.value = model;
-  emit('request-affordance-action', { surfaceId, actionId, args: { model } });
+  requestIntelligenceChange({ model }, modelActionId.value);
 }
 
 function requestThinkingChange(event: Event) {
-  const surfaceId = intelligenceAffordance.value?.surfaceId;
-  const actionId = thinkingActionId.value;
   const thinking = (event.target as HTMLSelectElement | null)?.value.trim() ?? '';
-  if (!surfaceId || !actionId || !thinking || thinking === props.intelligence.thinking) return;
+  if (!thinking || thinking === props.intelligence.thinking) return;
   pendingThinking.value = thinking;
-  emit('request-affordance-action', { surfaceId, actionId, args: { thinking } });
+  requestIntelligenceChange({ thinking }, thinkingActionId.value);
 }
 
 function actionList(record: Record<string, unknown> | null | undefined): { id: string; raw: Record<string, unknown> }[] {
@@ -300,7 +307,7 @@ function stringField(record: Record<string, unknown>, field: string): string | n
                 <span>{{ intelligence.thinking }}</span>
               </template>
             </span>
-            <span v-if="pendingModel || pendingThinking" class="retention-note">change requested</span>
+            <span v-if="pendingProvider || pendingModel || pendingThinking" class="retention-note">change requested</span>
           </div>
         </TooltipTrigger>
         <TooltipContent side="bottom" align="start">{{ statusTooltips.intelligence }}</TooltipContent>

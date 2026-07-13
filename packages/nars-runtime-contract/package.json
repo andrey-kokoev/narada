@@ -1,0 +1,29 @@
+{
+  "name": "@narada2/nars-runtime-contract",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "narada": {
+    "package_role": "nars_runtime_contract",
+    "owns": [
+      "runtime_control_method_registry",
+      "runtime_intelligence_reconfiguration_request_schema"
+    ],
+    "does_not_own": [
+      "runtime_execution",
+      "provider_binding_resolution",
+      "client_rendering"
+    ]
+  },
+  "exports": {
+    ".": {
+      "types": "./src/nars-runtime-contract.d.ts",
+      "import": "./src/nars-runtime-contract.mjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "types": "./src/nars-runtime-contract.d.ts",
+  "scripts": {
+    "test": "node --test src/*.test.mjs"
+  }
+}

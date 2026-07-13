@@ -48,6 +48,7 @@ declare module '@narada2/nars-client-projection-contract' {
   export const AGENT_WEB_UI_COMMAND_GROUP_LABELS: Record<string, string>;
   export const AGENT_WEB_UI_NARS_METHOD_LIST: readonly string[];
   export const AGENT_WEB_UI_NARS_METHODS: Record<string, string>;
+  export const NARS_RUNTIME_INTELLIGENCE_RECONFIGURE_METHOD: 'runtime.intelligence.reconfigure';
   export const NARS_CLIENT_PROJECTION_DEFAULT_VERBOSITY: string;
   export const NARS_CLIENT_PROJECTION_VERBOSITY_LEVELS: readonly string[];
   export type NarsClientProjectionVerbosity = string;
@@ -56,6 +57,7 @@ declare module '@narada2/nars-client-projection-contract' {
   export function shouldProjectNarsClientProjection(projection: unknown, options?: object): boolean;
   export function unwrapNarsClientEvent(message: unknown): any;
   export function buildAgentWebUiEventsReadFrame(options?: object): any;
+  export function buildAgentWebUiIntelligenceReconfigureFrame(input?: object, options?: object): any;
   export function buildAgentWebUiSubscribeFrame(options?: object): any;
   export function buildAgentWebUiConversationSendFrame(message: string): any;
   export function buildAgentWebUiConversationSteerFrame(command: string): any;

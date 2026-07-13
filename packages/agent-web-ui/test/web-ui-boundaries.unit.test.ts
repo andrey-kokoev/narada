@@ -24,6 +24,7 @@ import {
 } from '../src/app/lib/browserPreferences.js';
 import { createNarsClient } from '../src/protocol/narsClient';
 import { useRuntimeTopology } from '../src/app/composables/useRuntimeTopology';
+import { buildIntelligenceReconfigureFrame } from '../src/app/lib/narsFrames';
 import type { SessionProtocolFrame, SessionTransport } from '../src/protocol/sessionTransport';
 
 describe('agent-web-ui runtime boundaries', () => {
@@ -42,6 +43,14 @@ describe('agent-web-ui runtime boundaries', () => {
     transitionNarsTransport(lifecycle, { type: 'close_requested' });
     transitionNarsTransport(lifecycle, { type: 'closed' });
     expect(lifecycle.phase).toBe('closed');
+  });
+
+  it('builds the Intelligence box action as a direct local runtime control', () => {
+    expect(buildIntelligenceReconfigureFrame({ model: 'next-model' }, { id: 'ui-reconfigure-1' })).toEqual({
+      id: 'ui-reconfigure-1',
+      method: 'runtime.intelligence.reconfigure',
+      params: { request_id: 'ui-reconfigure-1', model: 'next-model' },
+    });
   });
 
   it('projects the NARS control-input bridge into connection diagnostics', () => {

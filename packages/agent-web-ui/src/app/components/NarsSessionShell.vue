@@ -67,6 +67,7 @@ const props = defineProps<{
   verbosityLevels: readonly ProjectionVerbosity[];
   rows: ProjectedEventRow[];
   sessionIdentity: SessionIdentitySummary;
+  supportsProtocolMethod: (method: string) => boolean;
   agentActivity: AgentActivityState;
   affordanceConfirmations: AffordanceConfirmationItem[];
   operatorQueueItems: OperatorQueueItem[];
@@ -118,6 +119,7 @@ const emit = defineEmits<{
   'request-surface-feedback-summary': [];
   'request-task-lifecycle-summary': [];
   'request-affordance-action': [request: { surfaceId: string; actionId: string; args: Record<string, unknown> }];
+  'request-intelligence-reconfiguration': [change: { provider?: string; model?: string; thinking?: string }];
   'confirm-affordance-action': [item: AffordanceConfirmationItem];
   'cancel-affordance-action': [item: AffordanceConfirmationItem];
   'intent-selected': [intent: string];
@@ -462,11 +464,13 @@ function resetHeaderItems() {
         :agent-activity="agentActivity"
         :authority-transition="authorityTransition"
         :surface-affordances="surfaceAffordances"
+        :supports-protocol-method="supportsProtocolMethod"
         :cloudflare-projection="cloudflareProjection"
         collapsible
         @update:verbosity="emit('update:verbosity', $event)"
         @publish-cloudflare="emit('publish-cloudflare', $event)"
         @request-affordance-action="emit('request-affordance-action', $event)"
+        @request-intelligence-reconfiguration="emit('request-intelligence-reconfiguration', $event)"
         @collapse="statusRowOpen = false"
       />
     </section>

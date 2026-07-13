@@ -177,6 +177,9 @@ importers:
       '@narada2/carrier-terminal-projection':
         specifier: workspace:*
         version: link:../carrier-terminal-projection
+      '@narada2/launch-process-ownership':
+        specifier: workspace:*
+        version: link:../launch-process-ownership
       '@narada2/nars-capability-gateway':
         specifier: workspace:*
         version: link:../nars-capability-gateway
@@ -186,6 +189,9 @@ importers:
       '@narada2/nars-session-core':
         specifier: workspace:*
         version: link:../nars-session-core
+      '@narada2/nars-runtime-contract':
+        specifier: workspace:*
+        version: link:../nars-runtime-contract
       '@narada2/process-launch-posture':
         specifier: workspace:*
         version: link:../process-launch-posture
@@ -746,9 +752,14 @@ importers:
       '@narada2/agent-identity':
         specifier: workspace:*
         version: link:../agent-identity
+      '@narada2/nars-runtime-contract':
+        specifier: workspace:*
+        version: link:../nars-runtime-contract
       '@narada2/nars-session-core':
         specifier: workspace:*
         version: link:../nars-session-core
+
+  packages/nars-runtime-contract: {}
 
   packages/nars-provider-runtime:
     dependencies:

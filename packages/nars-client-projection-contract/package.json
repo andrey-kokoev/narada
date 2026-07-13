@@ -27,7 +27,9 @@
   },
   "types": "./src/nars-client-projection-contract.d.ts",
   "dependencies": {
-    "@narada2/agent-identity": "workspace:*"
+    "@narada2/agent-identity": "workspace:*",
+    "@narada2/nars-runtime-contract": "workspace:*",
+    "@narada2/nars-session-core": "workspace:*"
   },
   "scripts": {
     "test": "node --test src/*.test.mjs",

@@ -1,7 +1,20 @@
 import { agentIdentityDisplay, agentIdentityGroupKey } from '@narada2/agent-identity';
 import { NARS_SESSION_CORE_METHOD_LIST, NARS_SESSION_CORE_METHODS, isNarsSessionCoreMethod } from '@narada2/nars-session-core/session-control-contract';
+import {
+  NARS_RUNTIME_INTELLIGENCE_RECONFIGURE_METHOD,
+  NARS_RUNTIME_SERVER_METHOD_LIST,
+  NARS_RUNTIME_SERVER_METHODS,
+  buildNarsRuntimeIntelligenceReconfigureFrame,
+  isNarsRuntimeServerMethod,
+} from '@narada2/nars-runtime-contract';
 
 export { NARS_SESSION_CORE_METHOD_LIST, NARS_SESSION_CORE_METHODS, isNarsSessionCoreMethod };
+export {
+  NARS_RUNTIME_INTELLIGENCE_RECONFIGURE_METHOD,
+  NARS_RUNTIME_SERVER_METHOD_LIST,
+  NARS_RUNTIME_SERVER_METHODS,
+  isNarsRuntimeServerMethod,
+};
 
 export const NARS_COMMAND_METHOD = 'session.command.execute';
 export const NARS_AFFORDANCE_ACTION_REQUEST_METHOD = 'session.affordance.action.request';
@@ -60,9 +73,13 @@ export const NARS_CLIENT_PROJECTION_VERBOSITY_RANK = Object.freeze({
   raw: 3,
 });
 
-// These are the only controls admitted by the local session-core transport.
-// Event subscription/read are transport controls handled by the event stream.
-export const AGENT_WEB_UI_NARS_METHOD_LIST = NARS_SESSION_CORE_METHOD_LIST;
+// These are the controls admitted by the local NARS runtime transport.
+// Event subscription/read are transport controls handled by the event stream;
+// runtime controls are owned by the runtime server rather than session-core.
+export const AGENT_WEB_UI_NARS_METHOD_LIST = Object.freeze([
+  ...NARS_SESSION_CORE_METHOD_LIST,
+  ...NARS_RUNTIME_SERVER_METHOD_LIST,
+]);
 
 // Retained only for the deprecated predecessor and the Cloudflare adapter.
 // These methods are not part of the local session-core control contract.
@@ -410,6 +427,10 @@ export function buildAgentWebUiSurfaceAffordancesFrame(options = {}) {
     method: 'session.surface.affordances',
     params: {},
   };
+}
+
+export function buildAgentWebUiIntelligenceReconfigureFrame(input = {}, options = {}) {
+  return buildNarsRuntimeIntelligenceReconfigureFrame(input, options);
 }
 
 export function buildAgentWebUiAffordanceActionRequestFrame({ surfaceId, surface_id, actionId, action_id, args = {}, clientCorrelationId, client_correlation_id } = {}, options = {}) {

@@ -28,6 +28,7 @@ import {
   buildAgentWebUiGitSummaryFrame,
   buildAgentWebUiHelpText,
   buildAgentWebUiInboxSummaryFrame,
+  buildAgentWebUiIntelligenceReconfigureFrame,
   buildAgentWebUiMailboxSummaryFrame,
   buildAgentWebUiOperatorInputAction,
   buildAgentWebUiSchedulerSummaryFrame,
@@ -74,9 +75,11 @@ test('NARS client projection contract owns attach commands and web UI capabiliti
     'session.recovery',
     'session.cancel',
     'session.close',
+    'runtime.intelligence.reconfigure',
   ]);
   assert.equal(AGENT_WEB_UI_CLOUDFLARE_METHOD_LIST.includes('conversation.send'), true);
   assert.equal(AGENT_WEB_UI_CLOUDFLARE_METHOD_LIST.includes('session.surface.affordances'), true);
+  assert.equal(AGENT_WEB_UI_CLOUDFLARE_METHOD_LIST.includes('runtime.intelligence.reconfigure'), false);
   assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes(NARS_AFFORDANCE_ACTION_REQUEST_METHOD), false);
   assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('session.sop.summary'), false);
   assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('conversation.steer'), false);
@@ -98,6 +101,14 @@ test('NARS client projection contract owns attach commands and web UI capabiliti
   assert.equal(NARS_CLIENT_PROJECTION_REGISTRY.default_verbosity, 'conversation');
   assert.equal(NARS_CLIENT_PROJECTION_DEFAULT_VERBOSITY, 'conversation');
   assert.deepEqual(NARS_CLIENT_PROJECTION_VERBOSITY_LEVELS, ['conversation', 'operations', 'diagnostics', 'raw']);
+});
+
+test('NARS client projection contract builds the direct runtime intelligence control frame', () => {
+  assert.deepEqual(buildAgentWebUiIntelligenceReconfigureFrame({ model: 'next-model' }, { id: 'ui-reconfigure-1' }), {
+    id: 'ui-reconfigure-1',
+    method: 'runtime.intelligence.reconfigure',
+    params: { request_id: 'ui-reconfigure-1', model: 'next-model' },
+  });
 });
 
 test('NARS client projection contract owns canonical intent references', () => {
