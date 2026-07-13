@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import {
   primaryOperatorSurfaceRoute,
+  projectOperatorSurfaceNavigation,
   projectOperatorSurfaceCatalog,
   type OperatorSurfaceAvailabilityOverrides,
   type OperatorSurfaceProjection,
@@ -15,6 +16,14 @@ function sharedUiCss(): string {
   const cssPath = require.resolve('@narada2/ui/styles.css');
   sharedUiCssCache = readFileSync(cssPath, 'utf8').replace(/<\/style/gi, '<\\/style');
   return sharedUiCssCache;
+}
+
+function workspaceNavigation(options: OperatorWorkspacePageOptions): string {
+  const items = projectOperatorSurfaceNavigation({ availability: options.surfaceAvailability });
+  return [
+    '<a href="/" aria-current="page">Home</a>',
+    ...items.map((item) => `<a href="${escapeHtml(item.href)}">${escapeHtml(item.label)}</a>`),
+  ].join('');
 }
 
 export interface OperatorWorkspacePageOptions {
@@ -55,6 +64,7 @@ export function renderOperatorWorkspacePage(options: OperatorWorkspacePageOption
     : '<p class="empty">No surfaces are currently available.</p>';
   const unavailableMarkup = unavailableSurfaces.map(surfaceMarkup).join('');
   const plannedMarkup = plannedSurfaces.map(surfaceMarkup).join('');
+  const navigationMarkup = workspaceNavigation(options);
 
   return `<!doctype html>
 <html lang="en">
@@ -78,7 +88,7 @@ export function renderOperatorWorkspacePage(options: OperatorWorkspacePageOption
   </style>
 </head>
 <body data-narada-surface="operator-workspace">
-  <header class="bar"><div><h1>Operator Workspace</h1><p>Choose the next governed surface</p></div><nav class="workspace-nav" aria-label="Operator workspace"><a href="/" aria-current="page">Home</a><a href="/console/registry">Sites</a><a href="/console/launch">Launcher</a></nav><span class="posture">${escapeHtml(ingressLabel)}</span><div class="spacer"></div></header>
+  <header class="bar"><div><h1>Operator Workspace</h1><p>Choose the next governed surface</p></div><nav class="workspace-nav" aria-label="Operator workspace">${navigationMarkup}</nav><span class="posture">${escapeHtml(ingressLabel)}</span><div class="spacer"></div></header>
   <main>
     <div class="intro"><h2>Surfaces</h2><p>Only available surfaces are links. Future surfaces show their next valid handoff.</p></div>
     <section class="surface-section"><div class="section-head"><h2>Available</h2><p>Ready from this host</p></div><div class="surface-grid">${availableMarkup}</div></section>

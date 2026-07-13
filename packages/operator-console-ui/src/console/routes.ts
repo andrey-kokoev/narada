@@ -1,7 +1,7 @@
 import type { RegistryManagementOperation } from '@narada2/site-registry-contract';
 import {
   findOperatorSurfaceRoute,
-  operatorSurfaceDescriptors,
+  projectOperatorSurfaceNavigation,
   type OperatorSurfaceNavigationKey,
 } from '@narada2/operator-console-contract';
 import type { OperatorSurfaceNavItem } from '@narada2/ui-vue';
@@ -85,18 +85,10 @@ export function resolveOperatorConsoleRoute(
 export function operatorConsoleNavigation(
   current: OperatorConsoleNavigationKey,
 ): OperatorConsoleNavItem[] {
-  return operatorSurfaceDescriptors.flatMap((surface) => {
-    if (surface.defaultAvailability !== 'available') return [];
-    return surface.routes.flatMap((route) => {
-      if (!route.navigationKey) return [];
-      return [{
-        key: route.navigationKey,
-        label: route.label,
-        href: route.path,
-        current: current === route.navigationKey,
-      }];
-    });
-  });
+  return projectOperatorSurfaceNavigation().map((item) => ({
+    ...item,
+    current: current === item.key,
+  }));
 }
 
 export function siteRegistryNavigation(

@@ -19,6 +19,12 @@ export type OperatorSurfaceRouteKind = 'page' | 'workflow';
 
 export type OperatorSurfaceNavigationKey = 'sites' | 'add' | 'manage' | 'launcher' | 'sessions';
 
+export interface OperatorSurfaceNavigationItem {
+  key: OperatorSurfaceNavigationKey;
+  label: string;
+  href: string;
+}
+
 export type OperatorSessionDisplayState =
   | 'active'
   | 'starting_or_degraded'
@@ -202,6 +208,30 @@ export function primaryOperatorSurfaceRoute(
   descriptor: OperatorSurfaceDescriptor,
 ): OperatorSurfaceRouteDescriptor | undefined {
   return descriptor.routes[0];
+}
+
+export function operatorSurfaceRoutePath(
+  surfaceId: OperatorSurfaceId,
+  routeId: string,
+): string {
+  const descriptor = operatorSurfaceDescriptors.find((candidate) => candidate.id === surfaceId);
+  const route = descriptor?.routes.find((candidate) => candidate.id === routeId);
+  if (!route) {
+    throw new Error(`operator_surface_route_not_declared:${surfaceId}:${routeId}`);
+  }
+  return route.path;
+}
+
+export function projectOperatorSurfaceNavigation(
+  input: OperatorSurfaceCatalogProjectionInput = {},
+): OperatorSurfaceNavigationItem[] {
+  return projectOperatorSurfaceCatalog(input).flatMap((surface) => {
+    if (surface.availability !== 'available') return [];
+    return surface.routes.flatMap((route) => {
+      if (!route.navigationKey) return [];
+      return [{ key: route.navigationKey, label: route.label, href: route.path }];
+    });
+  });
 }
 
 export function findOperatorSurfaceRoute(

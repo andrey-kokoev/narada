@@ -22,6 +22,7 @@ import type { WorkspaceLaunchUiSession } from '@narada2/workspace-launch-contrac
 import type { SiteRegistryReadModel } from './site-registry-read-model.js';
 import type { RegistryMutationGateway, RegistryMutationInput, RegistryMutationOperation } from './site-registry-management-gateway.js';
 import type { AgentSessionReadModel } from './agent-session-read-model.js';
+import { operatorSurfaceRoutePath } from '@narada2/operator-console-contract';
 import {
   isWorkspaceLaunchUiSessionProxyable,
   readWorkspaceLaunchUiSessions,
@@ -39,6 +40,24 @@ export interface RouteHandler {
     params: RegExpExecArray,
     searchParams: URLSearchParams,
   ) => Promise<void>;
+}
+
+const OPERATOR_CONSOLE_REGISTRY_PATH = operatorSurfaceRoutePath('site-registry', 'sites');
+const OPERATOR_CONSOLE_REGISTRY_ADD_PATH = operatorSurfaceRoutePath('site-registry', 'add');
+const OPERATOR_CONSOLE_REGISTRY_MANAGE_PATH = operatorSurfaceRoutePath('site-registry', 'manage');
+const OPERATOR_CONSOLE_LAUNCH_PATH = operatorSurfaceRoutePath('launcher', 'launcher');
+const OPERATOR_CONSOLE_SESSIONS_PATH = operatorSurfaceRoutePath('agent-sessions', 'sessions');
+
+function regexEscape(value: string): string {
+  return value.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&');
+}
+
+function exactPathPattern(path: string): RegExp {
+  return new RegExp(`^${regexEscape(path)}$`);
+}
+
+function suffixPathPattern(path: string, suffix: string): RegExp {
+  return new RegExp(`^${regexEscape(path)}${suffix}`);
 }
 
 export interface ConsoleServerRouteContext {
@@ -327,7 +346,7 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
     // ── CLI-owned launcher routing surface ──
     {
       method: 'GET',
-      pattern: /^\/console\/launch$/,
+      pattern: exactPathPattern(OPERATOR_CONSOLE_LAUNCH_PATH),
       handler: async (_req, res) => {
         const origin = _req.headers.origin;
         if (!setCorsHeaders(res, origin)) {
@@ -339,7 +358,7 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
     },
     {
       method: 'GET',
-      pattern: /^\/console\/launch\/api\/sessions$/,
+      pattern: suffixPathPattern(OPERATOR_CONSOLE_LAUNCH_PATH, '/api/sessions$'),
       handler: async (_req, res) => {
         const origin = _req.headers.origin;
         if (!setCorsHeaders(res, origin)) {
@@ -354,7 +373,7 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
     },
     {
       method: 'GET',
-      pattern: /^\/console\/sessions$/,
+      pattern: exactPathPattern(OPERATOR_CONSOLE_SESSIONS_PATH),
       handler: async (_req, res) => {
         const origin = _req.headers.origin;
         if (!setCorsHeaders(res, origin)) {
@@ -366,7 +385,7 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
     },
     {
       method: 'GET',
-      pattern: /^\/console\/sessions\/api\/sessions$/,
+      pattern: suffixPathPattern(OPERATOR_CONSOLE_SESSIONS_PATH, '/api/sessions$'),
       handler: async (_req, res) => {
         const origin = _req.headers.origin;
         if (!setCorsHeaders(res, origin)) {
@@ -389,7 +408,7 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
     },
     {
       method: 'GET',
-      pattern: /^\/console\/launch\/sessions\/([^/]+)(\/.*)?$/,
+      pattern: suffixPathPattern(OPERATOR_CONSOLE_LAUNCH_PATH, '/sessions/([^/]+)(/.*)?$'),
       handler: async (req, res, params, searchParams) => {
         const origin = req.headers.origin;
         if (!setCorsHeaders(res, origin)) {
@@ -412,7 +431,7 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
     },
     {
       method: 'POST',
-      pattern: /^\/console\/launch\/sessions\/([^/]+)(\/.*)?$/,
+      pattern: suffixPathPattern(OPERATOR_CONSOLE_LAUNCH_PATH, '/sessions/([^/]+)(/.*)?$'),
       handler: async (req, res, params, searchParams) => {
         const origin = req.headers.origin;
         if (!setCorsHeaders(res, origin)) {
@@ -437,7 +456,7 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
     // ── Canonical Site Registry management plan/apply boundary ──
     {
       method: 'POST',
-      pattern: /^\/console\/registry\/api\/operations\/plan$/,
+      pattern: suffixPathPattern(OPERATOR_CONSOLE_REGISTRY_PATH, '/api/operations/plan$'),
       handler: async (req, res) => {
         const origin = req.headers.origin;
         if (!setCorsHeaders(res, origin)) {
@@ -455,7 +474,7 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
     },
     {
       method: 'POST',
-      pattern: /^\/console\/registry\/api\/operations\/apply$/,
+      pattern: suffixPathPattern(OPERATOR_CONSOLE_REGISTRY_PATH, '/api/operations/apply$'),
       handler: async (req, res) => {
         const origin = req.headers.origin;
         if (!setCorsHeaders(res, origin)) {
@@ -474,7 +493,7 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
     // ── Canonical Site Registry browser projection ──
     {
       method: 'GET',
-      pattern: /^\/console\/registry$/,
+      pattern: exactPathPattern(OPERATOR_CONSOLE_REGISTRY_PATH),
       handler: async (_req, res) => {
         const origin = _req.headers.origin;
         if (!setCorsHeaders(res, origin)) {
@@ -486,9 +505,9 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
     },
     {
       method: 'GET',
-      pattern: /^\/console\/registry\/assets\/(.+)$/,
+      pattern: suffixPathPattern(OPERATOR_CONSOLE_REGISTRY_PATH, '/assets/(.+)$'),
       handler: async (_req, res, params) => {
-        const asset = readOperatorConsoleUiAsset(`/console/registry/assets/${params[1]!}`);
+        const asset = readOperatorConsoleUiAsset(`${OPERATOR_CONSOLE_REGISTRY_PATH}/assets/${params[1]!}`);
         if (!asset) {
           jsonResponse(res, 404, { error: 'Operator Console asset not found' });
           return;
@@ -499,7 +518,7 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
     },
     {
       method: 'GET',
-      pattern: /^\/console\/registry\/add$/,
+      pattern: exactPathPattern(OPERATOR_CONSOLE_REGISTRY_ADD_PATH),
       handler: async (_req, res) => {
         const origin = _req.headers.origin;
         if (!setCorsHeaders(res, origin)) {
@@ -511,7 +530,7 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
     },
     {
       method: 'GET',
-      pattern: /^\/console\/registry\/manage$/,
+      pattern: exactPathPattern(OPERATOR_CONSOLE_REGISTRY_MANAGE_PATH),
       handler: async (_req, res) => {
         const origin = _req.headers.origin;
         if (!setCorsHeaders(res, origin)) {
@@ -523,7 +542,7 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
     },
     {
       method: 'GET',
-      pattern: /^\/console\/registry\/api\/sites$/,
+      pattern: suffixPathPattern(OPERATOR_CONSOLE_REGISTRY_PATH, '/api/sites$'),
       handler: async (_req, res) => {
         const origin = _req.headers.origin;
         if (!setCorsHeaders(res, origin)) {
@@ -535,7 +554,7 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
     },
     {
       method: 'GET',
-      pattern: /^\/console\/registry\/api\/sites\/([^/]+)$/,
+      pattern: suffixPathPattern(OPERATOR_CONSOLE_REGISTRY_PATH, '/api/sites/([^/]+)$'),
       handler: async (_req, res, params) => {
         const origin = _req.headers.origin;
         if (!setCorsHeaders(res, origin)) {
@@ -547,7 +566,7 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
     },
     {
       method: 'GET',
-      pattern: /^\/console\/registry\/api\/discover-plan$/,
+      pattern: suffixPathPattern(OPERATOR_CONSOLE_REGISTRY_PATH, '/api/discover-plan$'),
       handler: async (_req, res, _params, searchParams) => {
         const origin = _req.headers.origin;
         if (!setCorsHeaders(res, origin)) {

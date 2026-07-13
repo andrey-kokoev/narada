@@ -18,6 +18,7 @@ import type { WorkspaceLaunchUiSessionRecord } from './workspace-launch-session-
 import { createAgentSessionReadModel, type AgentSessionReadModel } from './agent-session-read-model.js';
 import {
   projectOperatorSurfaceCatalog,
+  operatorSurfaceRoutePath,
   type OperatorSurfaceAvailabilityOverrides,
 } from '@narada2/operator-console-contract';
 
@@ -26,6 +27,7 @@ export const OPERATOR_CONSOLE_IDENTITY = 'narada.operator-console';
 const OPERATOR_CONSOLE_HEALTH_SCHEMA = 'narada.operator_console.health.v1';
 const OPERATOR_CONSOLE_ROUTES_SCHEMA = 'narada.operator_console.routes.v1';
 const OPERATOR_CONSOLE_PROBE_TIMEOUT_MS = 800;
+const OPERATOR_CONSOLE_REGISTRY_PATH = operatorSurfaceRoutePath('site-registry', 'sites');
 
 export interface ConsoleServerConfig {
   port: number;
@@ -120,7 +122,7 @@ export async function createConsoleServer(config: ConsoleServerConfig): Promise<
   };
 
   const routes = createConsoleServerRoutes(routeContext);
-  const siteRegistryAvailable = routes.some((route) => route.method === 'GET' && route.pattern.test('/console/registry'));
+  const siteRegistryAvailable = routes.some((route) => route.method === 'GET' && route.pattern.test(OPERATOR_CONSOLE_REGISTRY_PATH));
   const surfaceAvailability: OperatorSurfaceAvailabilityOverrides = {
     'site-registry': siteRegistryAvailable ? 'available' : 'unavailable',
     launcher: 'available',
