@@ -1,7 +1,8 @@
 import type { Command } from 'commander';
 import { directCommandAction, silentCommandContext } from '../lib/command-wrapper.js';
 import { emitCommandResult, resolveCommandFormat } from '../lib/cli-output.js';
-import { explainMcpCommand, workspaceLaunchCommand, workspaceLaunchPlanCommand } from './launcher.js';
+import { explainMcpCommand } from './launcher.js';
+import { workspaceLaunchCommand, workspaceLaunchPlanCommand } from './workspace-launch-command.js';
 
 export function registerLauncherCommands(program: Command): void {
   const launcher = program
@@ -21,7 +22,7 @@ export function registerLauncherCommands(program: Command): void {
     .option('--runtime <runtime>', 'Override runtime implementation')
     .option('--authority <mode>', 'Runtime mutation authority posture: auto|read|write', 'auto')
     .option('--intelligence-provider <provider>', 'NARS operator-surface intelligence provider')
-    .option('--mcp-scope <scope>', 'MCP injection scope: all|host|user-site|local-site|none', 'all')
+    .option('--mcp-scope <scope>', 'Override MCP injection scope: all|host|user-site|local-site|none; otherwise use each registry entry')
     .option('--cloudflare-api-base-url <url>', 'Default Cloudflare NARS projection Worker URL for agent-web-ui publish controls')
     .option('--interactive-selection', 'Interactively select Site, Role, Operator Surface, Runtime, and applicable Intelligence Provider before planning', false)
     .option('--interactive-selection-ui', 'Use a local browser page for interactive launch selection before planning', false)
@@ -90,7 +91,7 @@ export function registerLauncherCommands(program: Command): void {
     .option('--runtime <runtime>', 'Override runtime implementation')
     .option('--authority <mode>', 'Runtime mutation authority posture: auto|read|write', 'auto')
     .option('--intelligence-provider <provider>', 'NARS operator-surface intelligence provider')
-    .option('--mcp-scope <scope>', 'MCP injection scope: all|host|user-site|local-site|none', 'all')
+    .option('--mcp-scope <scope>', 'Override MCP injection scope: all|host|user-site|local-site|none; otherwise use each registry entry')
     .option('--cloudflare-api-base-url <url>', 'Default Cloudflare NARS projection Worker URL for agent-web-ui publish controls')
     .option('--interactive-selection', 'Interactively select Site, Role, Operator Surface, Runtime, and applicable Intelligence Provider before launching', false)
     .option('--interactive-selection-ui', 'Use a local browser page for interactive launch selection before launching', false)

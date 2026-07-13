@@ -11,10 +11,10 @@ import { ExitCode } from '../lib/exit-codes.js';
 import {
   readWorkspaceLaunchRecords,
   registryDefaultIntelligenceProvider,
-  workspaceLaunchCommand,
   type WorkspaceLaunchPlanOptions,
   type WorkspaceLaunchRecord,
 } from './launcher.js';
+import { workspaceLaunchCommand } from './workspace-launch-command.js';
 import { narsSessionsCommand } from './nars.js';
 import type { CommandContext } from '../lib/command-wrapper.js';
 

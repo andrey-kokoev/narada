@@ -1,7 +1,6 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { appendFile, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
-import { startOperatorTerminal } from '@narada2/process-launch-posture';
 import { spawnHiddenPostureProcess } from '@narada2/process-launch-posture';
 import { executeOperatorProjectionOpenRequest } from '@narada2/process-launch-posture';
 import { runGovernedCommandSync } from '@narada2/process-launch-posture';
@@ -44,14 +43,57 @@ import {
   workspaceLaunchUserSiteRoot,
   type WorkspaceLaunchUiSessionRecord,
 } from './workspace-launch-session-store.js';
-import { buildWorkspaceLaunchSelectionHtml } from './launcher-selection-ui.js';
+import {
+  buildWorkspaceLaunchSelectionUiModel as buildWorkspaceLaunchSelectionUiModelDomain,
+  canonicalizeWorkspaceLaunchRecords as canonicalizeWorkspaceLaunchRecordsDomain,
+  initialOperatorSurfaceValues as initialOperatorSurfaceValuesDomain,
+  initialRoleValuesForInteractiveSelection as initialRoleValuesForInteractiveSelectionDomain,
+  intelligenceProviderChoices as intelligenceProviderChoicesDomain,
+  intelligenceProviderChoicesForLaunchSelection as intelligenceProviderChoicesForLaunchSelectionDomain,
+  normalizeInteractiveOperatorSurfaceValues as normalizeInteractiveOperatorSurfaceValuesDomain,
+  normalizeWorkspaceLaunchBrowserSelection as normalizeWorkspaceLaunchBrowserSelectionDomain,
+  registryDefaultIntelligenceProvider as registryDefaultIntelligenceProviderDomain,
+  registryDefaultIntelligenceProviderLabel as registryDefaultIntelligenceProviderLabelDomain,
+  registryDefaultOperatorSurfaceLabel as registryDefaultOperatorSurfaceLabelDomain,
+  registryDefaultRuntimeLabel as registryDefaultRuntimeLabelDomain,
+  resolveWorkspaceLaunchBrowserSelection as resolveWorkspaceLaunchBrowserSelectionDomain,
+  roleChoicesForSelectedSites as roleChoicesForSelectedSitesDomain,
+  selectLaunchRecords as selectLaunchRecordsDomain,
+  workspaceLaunchSelectionMode as workspaceLaunchSelectionModeDomain,
+  workspaceLaunchSelectorModel as workspaceLaunchSelectorModelDomain,
+  type WorkspaceLaunchSelectionContext,
+} from './workspace-launch-selection.js';
 import {
   closeWorkspaceLaunchUiServer,
   createWorkspaceLaunchUiServer,
-  listenWorkspaceLaunchUiServer,
   readWorkspaceLaunchUiAsset,
   type WorkspaceLaunchUiPortPolicy,
 } from './workspace-launch-ui-server.js';
+import {
+  loadRecoveredWorkspaceLaunchAttempts as loadRecoveredWorkspaceLaunchAttemptsStore,
+  normalizeWorkspaceLaunchAttemptRecord as normalizeWorkspaceLaunchAttemptRecordStore,
+  persistWorkspaceLaunchDashboardState as persistWorkspaceLaunchDashboardStateStore,
+  readWorkspaceLaunchRememberedSelection as readWorkspaceLaunchRememberedSelectionStore,
+  workspaceLaunchUiSessionPersistenceDir as workspaceLaunchUiSessionPersistenceDirStore,
+  writeWorkspaceLaunchRememberedSelection as writeWorkspaceLaunchRememberedSelectionStore,
+  type WorkspaceLaunchAttemptStoreContext,
+} from './workspace-launch-attempt-store.js';
+import {
+  captureWorkspaceLaunchTerminalInvocation as captureWorkspaceLaunchTerminalInvocationCommand,
+  workspaceLaunchCommand as workspaceLaunchCommandImpl,
+  workspaceLaunchPlanCommand as workspaceLaunchPlanCommandImpl,
+} from './workspace-launch-command.js';
+import {
+  workspaceLaunchActionsForAttempt as workspaceLaunchActionsForAttemptHandoff,
+  workspaceLaunchExecuteProjectionAction as workspaceLaunchExecuteProjectionActionHandoff,
+  workspaceLaunchExpectedSessionIds as workspaceLaunchExpectedSessionIdsHandoff,
+  workspaceLaunchFailedHandoff as workspaceLaunchFailedHandoffHandoff,
+  workspaceLaunchHandoffFromResult as workspaceLaunchHandoffFromResultHandoff,
+  workspaceLaunchRequestRuntimeStop as workspaceLaunchRequestRuntimeStopHandoff,
+  workspaceLaunchResultSummary as workspaceLaunchResultSummaryHandoff,
+  workspaceLaunchRuntimeObservations as workspaceLaunchRuntimeObservationsHandoff,
+} from './workspace-launch-handoff.js';
+import * as workspaceLaunchHandoff from './workspace-launch-handoff.js';
 import { defaultLaunchRegistryPath, listKnownSiteRootsForCli, type ResolvedSiteRoot } from '../lib/site-root-resolver.js';
 import type {
   WorkspaceLaunchSelectionCardinality,
@@ -60,9 +102,6 @@ import type {
   WorkspaceLaunchOption as WorkspaceLaunchSelectorOptionContract,
   WorkspaceLaunchSelectorModel as WorkspaceLaunchSelectorModelContract,
 } from '@narada2/workspace-launch-contract';
-
-export { buildWorkspaceLaunchSelectionHtml } from './launcher-selection-ui.js';
-export { listenWorkspaceLaunchUiServer } from './workspace-launch-ui-server.js';
 
 const requireFromLauncherCommand = createRequire(import.meta.url);
 const providerRegistry = loadProviderRegistry();
@@ -77,6 +116,14 @@ const ADMITTED_LAUNCH_RUNTIME_SUBSTRATE_KINDS = [
 ] as const;
 const NARS_OPERATOR_SURFACE_KINDS = ['agent-cli', 'agent-web-ui'] as const;
 
+function workspaceLaunchSelectionContext(): WorkspaceLaunchSelectionContext {
+  return {
+    providerRegistry,
+    admittedProviders: providerAdapters.admitted_providers,
+    resolveCarrierRuntimeSelection: resolveWorkspaceCarrierRuntimeSelection,
+  };
+}
+
 interface ProviderRegistry {
   default_provider?: string;
   providers?: Record<string, {
@@ -85,7 +132,7 @@ interface ProviderRegistry {
   }>;
 }
 
-function workspaceLaunchSiteRootsFromLaunchResult(result: unknown): string[] {
+export function workspaceLaunchSiteRootsFromLaunchResult(result: unknown): string[] {
   const resultRecord = isRecord(result) ? result : null;
   const selectedAgents = Array.isArray(resultRecord?.selected_agents) ? resultRecord.selected_agents : [];
   return selectedAgents
@@ -145,18 +192,10 @@ function workspaceLaunchSelectionMode(
   raw: unknown,
   selection: Pick<WorkspaceLaunchBrowserSelection, 'site' | 'role' | 'operatorSurface'>,
 ): WorkspaceLaunchSelectionMode | undefined {
-  const source = isRecord(raw) ? raw : {};
-  const cardinality = (key: keyof WorkspaceLaunchSelectionMode, values: string[]): WorkspaceLaunchSelectionCardinality =>
-    values.length > 1 || source[key] === 'multiple' ? 'multiple' : 'single';
-  const mode = {
-    site: cardinality('site', selection.site),
-    role: cardinality('role', selection.role),
-    operatorSurface: cardinality('operatorSurface', selection.operatorSurface),
-  };
-  return mode.site === 'single' && mode.role === 'single' && mode.operatorSurface === 'single' && !isRecord(raw) ? undefined : mode;
+  return workspaceLaunchSelectionModeDomain(raw, selection);
 }
 
-function workspaceLaunchSessionIdentityRef(session: Record<string, unknown>): AgentIdentityRefV2 | null {
+export function workspaceLaunchSessionIdentityRef(session: Record<string, unknown>): AgentIdentityRefV2 | null {
   const record = isRecord(session.record) ? session.record : null;
   const agentId = workspaceLaunchString(session.agent_id) ?? workspaceLaunchString(record?.agent_id);
   const siteId = workspaceLaunchString(session.site_id) ?? workspaceLaunchString(record?.site_id);
@@ -170,7 +209,7 @@ function workspaceLaunchSessionIdentityRef(session: Record<string, unknown>): Ag
   return null;
 }
 
-function workspaceLaunchProjectionQualifiedAgentId(attempt: WorkspaceLaunchAttemptRecord): string | null {
+export function workspaceLaunchProjectionQualifiedAgentId(attempt: WorkspaceLaunchAttemptRecord): string | null {
   const observation = attempt.observations.find((candidate) => candidate.agent_identity_ref || candidate.agent_id);
   const canonical = observation?.agent_identity_ref?.canonical_agent_id;
   if (typeof canonical === 'string' && canonical.trim()) return canonical.trim();
@@ -188,21 +227,21 @@ function workspaceLaunchProjectionQualifiedAgentId(attempt: WorkspaceLaunchAttem
   return selectedSite && selectedRole ? `${selectedSite}.${selectedRole}` : null;
 }
 
-function workspaceLaunchLegacyTerminalWtArgs(record: Record<string, unknown>): string[] {
+export function workspaceLaunchLegacyTerminalWtArgs(record: Record<string, unknown>): string[] {
   const topLevel = stringArray(record.wt_args);
   if (topLevel.length > 0) return topLevel;
   const legacyTerminalPlan = isRecord(record.legacy_terminal_plan) ? record.legacy_terminal_plan : null;
   return legacyTerminalPlan ? stringArray(legacyTerminalPlan.wt_args) : [];
 }
 
-async function workspaceLaunchStartHiddenRuntimeHost(commandArgs: string[], cwd: string): Promise<Record<string, unknown>> {
+export async function workspaceLaunchStartHiddenRuntimeHost(commandArgs: string[], cwd: string): Promise<Record<string, unknown>> {
   const captureLog = process.env.NARADA_WORKSPACE_LAUNCH_HIDDEN_RUNTIME_LOG;
   if (captureLog) {
-    await appendFile(captureLog, `${JSON.stringify({ command: redactWorkspaceLaunchArgv(commandArgs), cwd })}\n`, 'utf8');
+    await appendFile(captureLog, `${JSON.stringify({ command: workspaceLaunchHandoff.redactWorkspaceLaunchArgv(commandArgs), cwd })}\n`, 'utf8');
     return {
       posture: 'agent_runtime_server',
       command: 'capture',
-      args: redactWorkspaceLaunchArgv(commandArgs),
+      args: workspaceLaunchHandoff.redactWorkspaceLaunchArgv(commandArgs),
       cwd,
       detached: true,
       stdio: 'ignore',
@@ -211,16 +250,13 @@ async function workspaceLaunchStartHiddenRuntimeHost(commandArgs: string[], cwd:
       capture_log: captureLog,
     };
   }
-  const hostCommand = process.platform === 'win32' ? 'pwsh' : 'sh';
-  const hostArgs = process.platform === 'win32'
-    ? ['-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', toPowerShellCommand(commandArgs)]
-    : ['-lc', toShCommand(commandArgs)];
-  const child = spawnHiddenPostureProcess(hostCommand, hostArgs, {
+  const [command, ...args] = commandArgs;
+  if (!command) throw new Error('narada_workspace_plan_empty_hidden_runtime_command');
+  const child = spawnHiddenPostureProcess(command, args, {
     posture: 'agent_runtime_server',
     cwd,
     detached: true,
     stdio: 'ignore',
-    env: process.env,
   });
   await new Promise<void>((resolvePromise, rejectPromise) => {
     child.once('error', rejectPromise);
@@ -229,8 +265,8 @@ async function workspaceLaunchStartHiddenRuntimeHost(commandArgs: string[], cwd:
   child.unref();
   return {
     posture: 'agent_runtime_server',
-    command: hostCommand,
-    args: redactWorkspaceLaunchArgv(hostArgs),
+    command,
+    args: workspaceLaunchHandoff.redactWorkspaceLaunchArgv(args),
     cwd,
     detached: true,
     stdio: 'ignore',
@@ -239,7 +275,7 @@ async function workspaceLaunchStartHiddenRuntimeHost(commandArgs: string[], cwd:
   };
 }
 
-async function workspaceLaunchStartHiddenProjectionHost(command: string, cwd: string): Promise<Record<string, unknown>> {
+export async function workspaceLaunchStartHiddenProjectionHost(command: string, cwd: string): Promise<Record<string, unknown>> {
   const hostCommand = process.platform === 'win32' ? 'pwsh' : 'sh';
   const hostArgs = process.platform === 'win32'
     ? ['-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', command]
@@ -259,7 +295,7 @@ async function workspaceLaunchStartHiddenProjectionHost(command: string, cwd: st
   return {
     posture: 'operator_projection_host',
     command: hostCommand,
-    args: redactWorkspaceLaunchArgv(hostArgs),
+    args: workspaceLaunchHandoff.redactWorkspaceLaunchArgv(hostArgs),
     cwd,
     detached: true,
     stdio: 'ignore',
@@ -268,15 +304,15 @@ async function workspaceLaunchStartHiddenProjectionHost(command: string, cwd: st
   };
 }
 
-function redactWorkspaceLaunchCommand(command: string): string {
-  return redactWorkspaceLaunchArgv([command])[0] ?? '<redacted>';
+export function redactWorkspaceLaunchCommand(command: string): string {
+  return workspaceLaunchHandoff.redactWorkspaceLaunchArgv([command])[0] ?? '<redacted>';
 }
 
 export async function workspaceLaunchReapStaleSessionOwnedDescendants(
   selection: WorkspaceLaunchBrowserSelection,
   records: WorkspaceLaunchRecord[],
 ): Promise<{ scanned: number; cleanup_requested: number }> {
-  const siteRoots = workspaceLaunchSiteRootsForSelection(selection, records);
+  const siteRoots = workspaceLaunchHandoff.workspaceLaunchSiteRootsForSelection(selection, records);
   const attempted = new Set<string>();
   let scanned = 0;
   for (const siteRoot of siteRoots) {
@@ -285,10 +321,10 @@ export async function workspaceLaunchReapStaleSessionOwnedDescendants(
       for (const session of discovery.sessions) {
         const normalized = { ...session, site_root: session.site_root ?? siteRoot };
         scanned += 1;
-        if (!workspaceLaunchSessionMatchesSelection(normalized, selection)) continue;
-        if (!workspaceLaunchSessionOwnedCleanupAllowed(normalized)) continue;
-        if (!workspaceLaunchSessionIsTerminalForCleanup(normalized)) continue;
-        await workspaceLaunchRequestStaleSessionCleanup(normalized, attempted);
+        if (!workspaceLaunchHandoff.workspaceLaunchSessionMatchesSelection(normalized, selection)) continue;
+        if (!workspaceLaunchHandoff.workspaceLaunchSessionOwnedCleanupAllowed(normalized)) continue;
+        if (!workspaceLaunchHandoff.workspaceLaunchSessionIsTerminalForCleanup(normalized)) continue;
+        await workspaceLaunchHandoff.workspaceLaunchRequestStaleSessionCleanup(normalized, attempted);
       }
     } catch {
       // Reaper preflight is best-effort; unreadable indexes must not block a fresh launch.
@@ -361,7 +397,7 @@ function fallbackProviderRegistryForTests(): ProviderRegistry {
   };
 }
 
-interface WorkspaceLaunchProjectionObservationRecord {
+export interface WorkspaceLaunchProjectionObservationRecord {
   schema: 'narada.workspace_launch.observed_projection.v1';
   observation_id: string;
   launch_attempt_id: string;
@@ -440,7 +476,7 @@ export interface WorkspaceLaunchPlanOptions {
 }
 
 type WorkspaceLaunchAttemptStatus = 'queued' | 'planning' | 'launching' | 'launched' | 'failed' | 'forgotten';
-type WorkspaceLauncherOutputProjection = 'summary' | 'events' | 'commands' | 'json' | 'quiet';
+export type WorkspaceLauncherOutputProjection = 'summary' | 'events' | 'commands' | 'json' | 'quiet';
 
 interface WorkspaceLaunchLegacyCarrierCompatibility {
   schema: 'narada.workspace_launch.legacy_carrier_compatibility.v1';
@@ -460,7 +496,7 @@ interface WorkspaceLaunchLegacyCarrierCompatibility {
   removal_policy: 'remove_after_consumers_migrate';
 }
 
-interface WorkspaceLaunchHandoffRecord {
+export interface WorkspaceLaunchHandoffRecord {
   schema: 'narada.workspace_launch.handoff.v1';
   handoff_id: string;
   launch_attempt_id: string;
@@ -474,7 +510,7 @@ interface WorkspaceLaunchHandoffRecord {
   diagnostic_ref: string | null;
 }
 
-interface WorkspaceLaunchObservationRecord {
+export interface WorkspaceLaunchObservationRecord {
   schema: 'narada.workspace_launch.observed_runtime.v1';
   observation_id: string;
   launch_attempt_id: string;
@@ -490,13 +526,15 @@ interface WorkspaceLaunchObservationRecord {
   site_id?: string | null;
   agent_identity_ref?: AgentIdentityRefV2 | null;
   control_path?: string | null;
+  process_ownership?: Record<string, unknown> | null;
+  runtime_pid?: number | null;
   attach_commands?: {
     agent_web_ui?: string | null;
     agent_cli?: string | null;
   };
 }
 
-interface WorkspaceLaunchAttemptRecord {
+export interface WorkspaceLaunchAttemptRecord {
   schema: 'narada.workspace_launch.attempt.v1';
   launch_attempt_id: string;
   ui_session_id: string;
@@ -514,7 +552,7 @@ interface WorkspaceLaunchAttemptRecord {
   diagnostic: unknown;
 }
 
-interface WorkspaceLaunchDashboardState {
+export interface WorkspaceLaunchDashboardState {
   schema: 'narada.workspace_launch.ui_session_state.v1';
   ui_session: WorkspaceLaunchUiSessionRecord;
   attempts: WorkspaceLaunchAttemptRecord[];
@@ -575,7 +613,7 @@ async function resolveExplainSiteRoot(options: ExplainMcpOptions): Promise<Recor
   };
 }
 
-async function writeWorkspacePlanResult(path: string | undefined, result: unknown): Promise<void> {
+export async function writeWorkspacePlanResult(path: string | undefined, result: unknown): Promise<void> {
   if (!path) return;
   await writeFile(path, `${JSON.stringify(result, null, 2)}\n`, 'utf8');
 }
@@ -735,15 +773,15 @@ function asServerMap(value: unknown): Record<string, unknown> {
   return isRecord(value) ? value : {};
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
+export function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
 }
 
-function stringArray(value: unknown): string[] {
+export function stringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.map((entry) => String(entry)) : [];
 }
 
-function normalizeLauncherOutput(value: unknown, options: WorkspaceLaunchPlanOptions): WorkspaceLauncherOutputProjection[] {
+export function normalizeLauncherOutput(value: unknown, options: WorkspaceLaunchPlanOptions): WorkspaceLauncherOutputProjection[] {
   const raw = stringArray(value).flatMap((entry) => entry.split(',')).map((entry) => entry.trim().toLowerCase()).filter(Boolean);
   const selected = raw.length > 0 ? raw : (options.interactiveSelectionUi ? ['summary', 'events'] : []);
   const admitted = new Set<WorkspaceLauncherOutputProjection>(['summary', 'events', 'commands', 'json', 'quiet']);
@@ -760,13 +798,13 @@ function launcherOutputHas(outputs: WorkspaceLauncherOutputProjection[], project
   return !outputs.includes('quiet') && outputs.includes(projection);
 }
 
-function writeLauncherOutput(outputs: WorkspaceLauncherOutputProjection[], event: Record<string, unknown>, human: string): void {
+export function writeLauncherOutput(outputs: WorkspaceLauncherOutputProjection[], event: Record<string, unknown>, human: string): void {
   if (outputs.includes('quiet')) return;
   if (launcherOutputHas(outputs, 'json')) console.log(JSON.stringify(event));
   if (launcherOutputHas(outputs, 'events')) console.log(human);
 }
 
-function formatWorkspaceLaunchSelection(selection: WorkspaceLaunchBrowserSelection): string {
+export function formatWorkspaceLaunchSelection(selection: WorkspaceLaunchBrowserSelection): string {
   return `${selection.site.join(',') || '*'} / ${selection.role.join(',') || '*'} / ${selection.operatorSurface.join(',') || 'registry default'} / ${selection.runtime} / ${selection.intelligenceProvider}`;
 }
 
@@ -774,14 +812,14 @@ function formatWorkspaceLaunchCommand(args: string[]): string {
   return args.map((arg) => /\s/.test(arg) ? `'${arg.replace(/'/g, "''")}'` : arg).join(' ');
 }
 
-function writeWorkspaceLaunchCommandOutput(outputs: WorkspaceLauncherOutputProjection[], attempt: WorkspaceLaunchAttemptRecord): void {
+export function writeWorkspaceLaunchCommandOutput(outputs: WorkspaceLauncherOutputProjection[], attempt: WorkspaceLaunchAttemptRecord): void {
   if (!launcherOutputHas(outputs, 'commands')) return;
   for (const handoff of attempt.handoffs) {
     if (handoff.argv_redacted.length > 0) console.log(`[launcher:command] ${formatWorkspaceLaunchCommand(handoff.argv_redacted)}`);
   }
 }
 
-function legacyCarrierCompatibility(): WorkspaceLaunchLegacyCarrierCompatibility {
+export function legacyCarrierCompatibility(): WorkspaceLaunchLegacyCarrierCompatibility {
   return {
     schema: 'narada.workspace_launch.legacy_carrier_compatibility.v1',
     status: 'compatibility_fields_present',
@@ -907,6 +945,7 @@ export interface WorkspaceLaunchAgentPlan extends WorkspaceLaunchRecord {
   wait_for_enter_before_exec: boolean;
   runtime_start_execution_mode: 'hidden_detached' | 'operator_terminal';
   runtime_start_command: string[];
+  hidden_runtime_start_command: string[];
   runtime_start_cwd: string;
   mcp_scope: string;
   wt_args: string[];
@@ -941,33 +980,10 @@ function canonicalizeWorkspaceLaunchRecords(
   records: WorkspaceLaunchRecord[],
   siteCatalog: ResolvedSiteRoot[],
 ): WorkspaceLaunchRecord[] {
-  const byRoot = new Map(
-    siteCatalog
-      .filter((site): site is ResolvedSiteRoot & { site_id: string } => typeof site.site_id === 'string' && site.site_id.length > 0)
-      .map((site) => [resolve(site.site_root).toLowerCase(), site.site_id] as const),
-  );
-  if (byRoot.size === 0) return records;
-  return records.map((record) => {
-    const canonicalSiteId = byRoot.get(resolve(record.site_root).toLowerCase());
-    if (!canonicalSiteId || canonicalSiteId === record.site) return record;
-    const identityRef = record.agent_identity_ref
-      ? buildAgentIdentityRefV2({
-          identity_scope: { kind: 'narada_site', site_id: canonicalSiteId },
-          local_agent_id: record.agent_identity_ref.local_agent_id,
-          role: record.agent_identity_ref.role,
-          legacy_agent_id: record.agent_identity_ref.legacy_agent_id ?? record.agent,
-        })
-      : record.agent_identity_ref;
-    return {
-      ...record,
-      agent_identity_ref: identityRef,
-      site: canonicalSiteId,
-      legacy_site: record.legacy_site ?? record.site,
-    };
-  });
+  return canonicalizeWorkspaceLaunchRecordsDomain(records, siteCatalog);
 }
 
-function requireSiteCatalogForInteractiveSelection(
+export function requireSiteCatalogForInteractiveSelection(
   options: WorkspaceLaunchPlanOptions,
   siteCatalog: ResolvedSiteRoot[],
   records: WorkspaceLaunchRecord[],
@@ -985,258 +1001,22 @@ function requireSiteCatalogForInteractiveSelection(
   }
 }
 
-export async function workspaceLaunchPlanCommand(
-  options: WorkspaceLaunchPlanOptions,
-  context: CommandContext,
-): Promise<{ exitCode: ExitCode; result: unknown }> {
-  const normalizedOptions = normalizeWorkspaceLaunchPlanOptions(options);
-  const registryPaths = resolveRegistryPaths(normalizedOptions);
-  const loaded = await readWorkspaceLaunchRecords(normalizedOptions);
-  const records = loaded.records;
-  requireSiteCatalogForInteractiveSelection(normalizedOptions, loaded.siteCatalog, loaded.records);
-  const resolvedOptions = await resolveInteractiveSelectionOptions(records, normalizedOptions, loaded.siteCatalog);
-  const selected = selectLaunchRecords(records, resolvedOptions);
-  const plans = selected.map((record) => buildAgentPlan(record, resolvedOptions));
-  const wtArgs = plans.flatMap((plan, index) => [
-    ...(index === 0 ? [] : [';']),
-    ...plan.wt_args,
-  ]);
-  if (resolvedOptions.smoke) {
-    const agents = [];
-    for (const plan of plans) {
-      const smoke = await carrierStartCommand({
-        siteRoot: plan.site_root,
-        targetSiteId: plan.site,
-        workspaceRoot: plan.workspace_root ?? undefined,
-        agent: plan.agent,
-        carrier: plan.launch_carrier,
-        runtime: plan.launch_runtime_host,
-        authority: plan.authority ?? undefined,
-        intelligenceProvider: plan.intelligence_provider ?? undefined,
-        mcpScope: plan.mcp_scope,
-        dryRun: true,
-        enableNativeShell: plan.enable_native_shell,
-        format: 'json',
-      }, context);
-      const operatorSurfaceRuntimeStart = smoke.result;
-      agents.push({
-        agent: plan.agent,
-        site: plan.site,
-        operator_surface: plan.launch_operator_surface,
-        carrier: plan.launch_carrier,
-        runtime: plan.launch_runtime,
-        legacy_carrier_compatibility: legacyCarrierCompatibility(),
-        status: smoke.exitCode === ExitCode.SUCCESS ? 'passed' : 'failed',
-        plan,
-        operator_surface_runtime_start: operatorSurfaceRuntimeStart,
-        operator_surface_start: operatorSurfaceRuntimeStart,
-      });
-    }
-    const failed = agents.filter((agent) => agent.status !== 'passed');
-    const smokeResult = {
-      schema: 'narada.workspace_launch.smoke.v1',
-      status: failed.length === 0 ? 'passed' : 'failed',
-      mutation_performed: false,
-      count: agents.length,
-      windows_terminal_invoked: false,
-      mcp_initialization: {
-        status: 'not_executed_in_dry_run',
-        reason: 'Smoke mode calls operator-surface runtime start dry-run only; live MCP startup remains an execution probe.',
-      },
-      registry_paths: registryPaths,
-      agents,
-      compatibility: legacyCarrierCompatibility(),
-      ownership: {
-        planner: 'narada-cli',
-        smoke_aggregator: 'narada-cli',
-        executor: 'none',
-        migrated_from: 'Start-NaradaWorkspace.ps1 inline smoke aggregation',
-      },
-      ...(resolvedOptions.resultPath ? { result_path: resolvedOptions.resultPath } : {}),
-      ...(resolvedOptions.suppressResultOutput ? { suppress_result_output: true } : {}),
-    };
-    await writeWorkspacePlanResult(resolvedOptions.resultPath, smokeResult);
-    return {
-      exitCode: failed.length === 0 ? ExitCode.SUCCESS : ExitCode.GENERAL_ERROR,
-      result: formattedResult(smokeResult, `workspace smoke ${smokeResult.status}`, resolvedOptions.format ?? 'auto'),
-    };
-  }
-  const mode = resolvedOptions.smoke ? 'smoke' : resolvedOptions.dryRun ? 'dry_run' : 'plan';
-  const result = {
-    schema: 'narada.workspace_launch.plan.v1',
-    status: 'planned',
-    mutation_performed: false,
-    mode,
-    interactive_selection: resolvedOptions.interactiveSelection === true || resolvedOptions.interactiveSelectionUi === true,
-    interactive_selection_surface: resolvedOptions.interactiveSelectionUi === true ? 'browser' : (resolvedOptions.interactiveSelection === true ? 'terminal' : null),
-    count: plans.length,
-    windows_terminal_invoked: false,
-    registry_paths: registryPaths,
-    selected_agents: plans,
-    wt_args: wtArgs,
-    wt_args_authority: 'compatibility_non_authoritative',
-    compatibility: legacyCarrierCompatibility(),
-    ownership: {
-      planner: 'narada-cli',
-      executor: 'narada-cli.workspace-launch',
-      migrated_from: 'Start-NaradaWorkspace.ps1 inline registry/filter/wt planning',
-    },
-    ...(resolvedOptions.resultPath ? { result_path: resolvedOptions.resultPath } : {}),
-    ...(resolvedOptions.suppressResultOutput ? { suppress_result_output: true } : {}),
-  };
-  await writeWorkspacePlanResult(resolvedOptions.resultPath, result);
-
-  return {
-    exitCode: ExitCode.SUCCESS,
-    result: formattedResult(result, `planned ${plans.length} workspace launch(es)`, resolvedOptions.format ?? 'auto'),
-  };
-}
-
 export async function workspaceLaunchCommand(
   options: WorkspaceLaunchPlanOptions,
   context: CommandContext,
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
-  if (options.interactiveSelectionUi && !options.dryRun && !options.smoke) {
-    return runPersistentWorkspaceLaunchSelectionUiCommand(options, context);
-  }
-
-  const plan = await workspaceLaunchPlanCommand(options, context);
-  if (plan.exitCode !== ExitCode.SUCCESS || options.smoke) return plan;
-
-  const result = plan.result as Record<string, unknown>;
-  const wtArgs = stringArray(result.wt_args);
-  const selectedAgents = Array.isArray(result.selected_agents) ? result.selected_agents.filter(isRecord) : [];
-  const hiddenRuntimeAgents = selectedAgents.filter((agent) => agent.runtime_start_execution_mode === 'hidden_detached');
-  const operatorTerminalAgents = selectedAgents.filter((agent) => agent.runtime_start_execution_mode !== 'hidden_detached');
-  const projectionBearingAgents = selectedAgents.filter((agent) => Array.isArray(agent.operator_projection_open_requests) && agent.operator_projection_open_requests.length > 0);
-  const canUseHiddenRuntimeStart = selectedAgents.length > 0 && operatorTerminalAgents.length === 0 && projectionBearingAgents.length === 0;
-  if (!canUseHiddenRuntimeStart && wtArgs.length === 0) {
-    throw new Error('narada_workspace_plan_empty_wt_args');
-  }
-
-  if (options.dryRun) {
-    const dryRunResult = {
-      ...result,
-      mode: 'dry_run',
-      mutation_performed: false,
-      windows_terminal_invoked: false,
-      launcher_execution_owner: 'narada-cli',
-    };
-    return {
-      exitCode: ExitCode.SUCCESS,
-      result: formattedResult(dryRunResult, `planned ${result.count ?? 0} workspace launch(es)`, options.format ?? 'auto'),
-    };
-  }
-
-  if (canUseHiddenRuntimeStart) {
-    const hiddenLaunches = [];
-    for (const agent of hiddenRuntimeAgents) {
-      const runtimeStartCommand = stringArray(agent.runtime_start_command);
-      const runtimeStartCwd = workspaceLaunchString(agent.runtime_start_cwd) ?? process.cwd();
-      if (runtimeStartCommand.length === 0) throw new Error('narada_workspace_plan_empty_runtime_start_command');
-      hiddenLaunches.push(await workspaceLaunchStartHiddenRuntimeHost(runtimeStartCommand, runtimeStartCwd));
-    }
-    const launchResult = finalizeWorkspaceLaunchResult({
-      ...result,
-      windows_terminal_invoked: false,
-      hidden_runtime_invoked: true,
-      launcher_execution_owner: 'narada-cli',
-      hidden_runtime_launches: hiddenLaunches,
-    });
-    await writeWorkspacePlanResult(options.resultPath, launchResult);
-    return {
-      exitCode: ExitCode.SUCCESS,
-      result: formattedResult(launchResult, `launched ${result.count ?? 0} hidden runtime start(s)`, options.format ?? 'auto'),
-    };
-  }
-
-  const effectiveWtArgs = process.env.WT_SESSION ? ['-w', '0', ...wtArgs] : wtArgs;
-  const terminalCaptureLog = process.env.NARADA_WORKSPACE_LAUNCH_TERMINAL_LOG;
-  const launch = terminalCaptureLog
-    ? (await captureWorkspaceLaunchTerminalInvocation(terminalCaptureLog, effectiveWtArgs))
-    : startOperatorTerminal('wt', effectiveWtArgs).result;
-  if (launch.error) throw launch.error;
-  if (launch.status !== 0) {
-    throw new Error(`windows_terminal_launch_failed: wt exited ${launch.status ?? 'unknown'}`);
-  }
-
-  const launchResult = finalizeWorkspaceLaunchResult({
-    ...result,
-    windows_terminal_invoked: true,
-    hidden_runtime_invoked: false,
-    launcher_execution_owner: 'narada-cli',
-    wt_exit_code: launch.status ?? 0,
-  });
-  await writeWorkspacePlanResult(options.resultPath, launchResult);
-  return {
-    exitCode: ExitCode.SUCCESS,
-    result: formattedResult(launchResult, `launched ${result.count ?? 0} workspace launch(es)`, options.format ?? 'auto'),
-  };
+  return workspaceLaunchCommandImpl(options, context);
 }
 
-async function captureWorkspaceLaunchTerminalInvocation(path: string, args: string[]): Promise<{ status: number; error?: Error }> {
-  await appendFile(path, `${JSON.stringify(args)}\n`, 'utf8');
-  return { status: 0 };
+export async function captureWorkspaceLaunchTerminalInvocation(path: string, args: string[]): Promise<{ status: number; error?: Error }> {
+  return captureWorkspaceLaunchTerminalInvocationCommand(path, args);
 }
 
-function finalizeWorkspaceLaunchResult(result: Record<string, unknown>): Record<string, unknown> {
-  const selectedAgents = Array.isArray(result.selected_agents) ? result.selected_agents.filter(isRecord) : [];
-  const wtArgs = stringArray(result.wt_args);
-  const { wt_args: _wtArgs, wt_args_authority: _wtArgsAuthority, ...resultWithoutTopLevelTerminalPlan } = result;
-  const launchResult = {
-    ...resultWithoutTopLevelTerminalPlan,
-    schema: 'narada.workspace_launch.launch_result.v1',
-    status: 'launched',
-    mode: 'launch',
-    mutation_performed: true,
-    launch_agents: selectedAgents,
-    selected_agents_authority: 'compatibility_plan_selection',
-    ...(wtArgs.length > 0
-      ? {
-          legacy_terminal_plan: {
-            schema: 'narada.workspace_launch.legacy_terminal_plan.v1',
-            authority: 'compatibility_non_authoritative',
-            wt_args: wtArgs,
-          },
-        }
-      : {}),
-  };
-  assertWorkspaceLaunchResultInvariants(launchResult);
-  return launchResult;
-}
-
-function assertWorkspaceLaunchResultInvariants(result: Record<string, unknown>): void {
-  if (result.schema !== 'narada.workspace_launch.launch_result.v1') {
-    throw new Error(`workspace_launch_result_schema_invalid: ${String(result.schema ?? '')}`);
-  }
-  if (result.mode !== 'launch') {
-    throw new Error(`workspace_launch_result_mode_invalid: ${String(result.mode ?? '')}`);
-  }
-  if (result.status !== 'launched') {
-    throw new Error(`workspace_launch_result_status_invalid: ${String(result.status ?? '')}`);
-  }
-  if (result.mutation_performed !== true) {
-    throw new Error('workspace_launch_result_mutation_performed_required');
-  }
-  const windowsTerminalInvoked = result.windows_terminal_invoked === true;
-  const hiddenRuntimeInvoked = result.hidden_runtime_invoked === true;
-  if (windowsTerminalInvoked === hiddenRuntimeInvoked) {
-    throw new Error('workspace_launch_result_invocation_posture_ambiguous');
-  }
-  if (Array.isArray(result.wt_args)) {
-    throw new Error('workspace_launch_result_top_level_wt_args_forbidden');
-  }
-  const legacyTerminalPlan = isRecord(result.legacy_terminal_plan) ? result.legacy_terminal_plan : null;
-  if (legacyTerminalPlan && legacyTerminalPlan.authority !== 'compatibility_non_authoritative') {
-    throw new Error('workspace_launch_result_legacy_terminal_plan_authority_invalid');
-  }
-  if (!Array.isArray(result.launch_agents)) {
-    throw new Error('workspace_launch_result_launch_agents_required');
-  }
-  const selectedAgents = Array.isArray(result.selected_agents) ? result.selected_agents.filter(isRecord) : [];
-  if (hiddenRuntimeInvoked && selectedAgents.some((agent) => agent.runtime_start_execution_mode !== 'hidden_detached')) {
-    throw new Error('workspace_launch_result_hidden_runtime_requires_hidden_agent_modes');
-  }
+export async function workspaceLaunchPlanCommand(
+  options: WorkspaceLaunchPlanOptions,
+  context: CommandContext,
+): Promise<{ exitCode: ExitCode; result: unknown }> {
+  return workspaceLaunchPlanCommandImpl(options, context);
 }
 
 export interface WorkspaceLaunchUiIngress {
@@ -1377,7 +1157,7 @@ export async function resolveWorkspaceLaunchUiIngress(
   }
 }
 
-function requestWorkspaceLaunchSelectionUiProjectionOpen(url: string): void {
+export function requestWorkspaceLaunchSelectionUiProjectionOpen(url: string): void {
   void executeOperatorProjectionOpenRequest({
     projection_kind: 'browser_url',
     target_ref: url,
@@ -1386,163 +1166,6 @@ function requestWorkspaceLaunchSelectionUiProjectionOpen(url: string): void {
     mode: 'execute',
     policy: { allow_visible_host_effect: true },
   }).catch(() => undefined);
-}
-
-async function runPersistentWorkspaceLaunchSelectionUiCommand(
-  options: WorkspaceLaunchPlanOptions,
-  context: CommandContext,
-): Promise<{ exitCode: ExitCode; result: unknown }> {
-  const normalizedOptions = normalizeWorkspaceLaunchPlanOptions(options);
-  const registryPaths = resolveRegistryPaths(normalizedOptions);
-  const loaded = await readWorkspaceLaunchRecords(normalizedOptions);
-  requireSiteCatalogForInteractiveSelection(normalizedOptions, loaded.siteCatalog, loaded.records);
-  const session = await runPersistentWorkspaceLaunchSelectionUi(loaded.records, normalizedOptions, async (selection) => {
-    const selectionOptions = workspaceLaunchOptionsFromBrowserSelection(normalizedOptions, selection);
-    return workspaceLaunchCommand({
-      ...selectionOptions,
-      interactiveSelection: false,
-      interactiveSelectionUi: false,
-    }, context);
-  }, loaded.siteCatalog);
-
-  return {
-    exitCode: session.status === 'cancelled' ? ExitCode.SUCCESS : ExitCode.GENERAL_ERROR,
-    result: formattedResult({
-      schema: 'narada.workspace_launch.interactive_selection_ui_session.v1',
-      status: session.status,
-      mutation_performed: session.launch_count > 0,
-      url: session.url,
-      direct_url: session.direct_url,
-      router_url: session.router_url,
-      stable_url: session.stable_url,
-      ingress_mode: session.ingress_mode,
-      ingress_reason: session.reason,
-      launch_count: session.launch_count,
-      registry_paths: registryPaths,
-      ownership: {
-        planner: 'narada-cli',
-        executor: 'narada-cli.workspace-launch',
-        interactive_selection_surface: 'browser',
-      },
-    }, `workspace launch selection UI ${session.status}`, normalizedOptions.format ?? 'auto'),
-  };
-}
-
-async function resolveInteractiveSelectionOptions(
-  records: WorkspaceLaunchRecord[],
-  options: WorkspaceLaunchPlanOptions,
-  siteCatalog: ResolvedSiteRoot[] = [],
-): Promise<WorkspaceLaunchPlanOptions> {
-  if (options.interactiveSelectionUi) return resolveInteractiveSelectionUiOptions(records, options, siteCatalog);
-  if (!options.interactiveSelection) return options;
-  if (!process.stdin.isTTY || !process.stdout.isTTY) {
-    throw new Error('interactive_selection_requires_tty: --interactive-selection requires an interactive terminal');
-  }
-
-  const siteChoices = unique(records.map((record) => record.site));
-
-  const selectedSites = await prompts.multiselect({
-    message: 'Select Site(s)',
-    options: siteChoices.map((site) => ({ value: site, label: site })),
-    initialValues: options.site,
-    required: true,
-  });
-  if (prompts.isCancel(selectedSites)) throw new Error('interactive_selection_cancelled');
-
-  const selectedSiteValues = selectedSites as string[];
-  const roleChoices = roleChoicesForSelectedSites(records, selectedSiteValues);
-  const initialRoleValues = initialRoleValuesForInteractiveSelection(roleChoices, options.role);
-
-  const selectedRoles = await prompts.multiselect({
-    message: 'Select Role(s)',
-    options: roleChoices.map((role) => ({ value: role, label: role })),
-    initialValues: initialRoleValues.length > 0 ? initialRoleValues : undefined,
-    required: true,
-  });
-  if (prompts.isCancel(selectedRoles)) throw new Error('interactive_selection_cancelled');
-
-  const selectedRoleValues = selectedRoles as string[];
-  const selectedRecords = selectLaunchRecords(records, {
-    ...options,
-    all: true,
-    site: selectedSiteValues,
-    role: selectedRoleValues,
-  });
-  const selectorModel = workspaceLaunchSelectorModel(records, {
-    site: selectedSiteValues,
-    role: selectedRoleValues,
-    operatorSurface: options.operatorSurface ? normalizeCarrierList(options.operatorSurface) : undefined,
-    runtime: options.runtime ?? 'registry default',
-    intelligenceProvider: options.intelligenceProvider ?? 'registry default',
-  }, siteCatalog);
-
-  const selectedCarriers = await prompts.multiselect({
-    message: 'Select Operator Surface(s)',
-    options: selectorModel.operatorSurfaceOptions,
-    initialValues: selectorModel.selected.operatorSurface,
-    required: true,
-  });
-  if (prompts.isCancel(selectedCarriers)) throw new Error('interactive_selection_cancelled');
-
-  const selectedRuntime = await prompts.select({
-    message: 'Select Runtime',
-    options: selectorModel.runtimeOptions,
-    initialValue: selectorModel.selected.runtime,
-  });
-  if (prompts.isCancel(selectedRuntime)) throw new Error('interactive_selection_cancelled');
-
-  const selectedCarrierValues = normalizeInteractiveOperatorSurfaceValues(selectedCarriers as string[]);
-  const providerSelectorModel = workspaceLaunchSelectorModel(records, {
-    site: selectedSiteValues,
-    role: selectedRoleValues,
-    operatorSurface: selectedCarrierValues,
-    runtime: selectedRuntime as string,
-    intelligenceProvider: options.intelligenceProvider ?? 'registry default',
-  }, siteCatalog);
-  let selectedProvider: string | undefined;
-  if (providerSelectorModel.intelligenceProviderOptions.length > 1) {
-    const selectedProviderValue = await prompts.select({
-      message: 'Select Intelligence Provider',
-      options: providerSelectorModel.intelligenceProviderOptions,
-      initialValue: providerSelectorModel.selected.intelligenceProvider,
-    });
-    if (prompts.isCancel(selectedProviderValue)) throw new Error('interactive_selection_cancelled');
-    selectedProvider = selectedProviderValue as string;
-  }
-
-  return {
-    ...options,
-    all: false,
-    site: selectedSiteValues,
-    role: selectedRoleValues,
-    operatorSurface: selectedCarrierValues.includes('registry default') ? undefined : selectedCarrierValues.join(','),
-    runtime: selectedRuntime === 'registry default' ? undefined : selectedRuntime,
-    intelligenceProvider: selectedProvider === 'registry default' ? undefined : selectedProvider,
-  };
-}
-
-async function resolveInteractiveSelectionUiOptions(
-  records: WorkspaceLaunchRecord[],
-  options: WorkspaceLaunchPlanOptions,
-  siteCatalog: ResolvedSiteRoot[] = [],
-): Promise<WorkspaceLaunchPlanOptions> {
-  const selection = await runWorkspaceLaunchSelectionUi(records, options, siteCatalog);
-  return workspaceLaunchOptionsFromBrowserSelection(options, selection);
-}
-
-function workspaceLaunchOptionsFromBrowserSelection(
-  options: WorkspaceLaunchPlanOptions,
-  selection: WorkspaceLaunchBrowserSelection,
-): WorkspaceLaunchPlanOptions {
-  return {
-    ...options,
-    all: false,
-    site: selection.site,
-    role: selection.role,
-    operatorSurface: selection.operatorSurface.includes('registry default') ? undefined : selection.operatorSurface.join(','),
-    runtime: selection.runtime === 'registry default' ? undefined : selection.runtime,
-    intelligenceProvider: selection.intelligenceProvider === 'registry default' ? undefined : selection.intelligenceProvider,
-  };
 }
 
 interface WorkspaceLaunchRememberedSelectionRecord {
@@ -1566,399 +1189,10 @@ export function workspaceLaunchSelectorModel(
   selection: Partial<WorkspaceLaunchBrowserSelection> = {},
   siteCatalog: ResolvedSiteRoot[] = [],
 ): WorkspaceLaunchSelectorModel {
-  const effectiveRecords = canonicalizeWorkspaceLaunchRecords(records, siteCatalog);
-  const siteValues = unique(effectiveRecords.map((record) => record.site));
-  const selectedSites = nonEmptyStringArray(selection.site).filter((site) => siteValues.includes(site));
-  const roleValues = roleChoicesForSelectedSites(effectiveRecords, selectedSites);
-  const requestedRoles = nonEmptyStringArray(selection.role).filter((role) => roleValues.includes(role));
-  const selectedRoles = requestedRoles.length > 0 ? requestedRoles : initialRoleValuesForInteractiveSelection(roleValues);
-  const selectedRecords = selectLaunchRecords(effectiveRecords, { all: true, site: selectedSites, role: selectedRoles });
-  const capabilityValues = workspaceLaunchCapabilityValues(selectedRecords);
-  const selectedOperatorSurfaces = initialOperatorSurfaceValues(capabilityValues.operatorSurfaceValues, nonEmptyStringArray(selection.operatorSurface).join(','));
-  const requestedRuntime = nonEmpty(selection.runtime);
-  const runtimeValues = workspaceLaunchCapabilityValues(selectedRecords, selectedOperatorSurfaces).runtimeValues;
-  const selectedRuntime = requestedRuntime && runtimeValues.includes(normalizeRuntimeAlias(requestedRuntime)) ? normalizeRuntimeAlias(requestedRuntime) : 'registry default';
-  const operatorSurfaceValues = workspaceLaunchCapabilityValues(selectedRecords, selectedOperatorSurfaces, selectedRuntime).operatorSurfaceValues;
-  const normalizedOperatorSurfaces = initialOperatorSurfaceValues(operatorSurfaceValues, selectedOperatorSurfaces.join(','));
-  const providerOperatorSurface = normalizedOperatorSurfaces.includes('agent-cli') ? 'agent-cli' : (normalizedOperatorSurfaces[0] ?? 'registry default');
-  const intelligenceProviderOptions = intelligenceProviderChoicesForLaunchSelection({
-    records: selectedRecords,
-    operatorSurface: providerOperatorSurface,
-    runtime: selectedRuntime,
-  });
-  const providerValues = new Set(intelligenceProviderOptions.map((option) => option.value));
-  const requestedProvider = nonEmpty(selection.intelligenceProvider);
-  const selectedProvider = requestedProvider && providerValues.has(requestedProvider) ? requestedProvider : 'registry default';
-  return {
-    schema: 'narada.workspace_launch.selector_model.v1',
-    siteOptions: siteValues.map((site) => ({ value: site, label: site })),
-    roleOptions: roleValues.map((role) => ({ value: role, label: role })),
-    operatorSurfaceOptions: operatorSurfaceValues.map((surface) => ({
-      value: surface,
-      label: surface === 'registry default' ? registryDefaultOperatorSurfaceLabel(selectedRecords) : surface,
-      hint: surface === 'registry default' ? 'use each registry entry value' : undefined,
-    })),
-    runtimeOptions: runtimeValues.map((runtime) => ({
-      value: runtime,
-      label: runtime === 'registry default' ? registryDefaultRuntimeLabel(selectedRecords) : runtime,
-      hint: runtime === 'registry default' ? 'use each registry entry value' : undefined,
-    })),
-    intelligenceProviderOptions,
-    selected: {
-      site: selectedSites,
-      role: selectedRoles,
-      operatorSurface: normalizedOperatorSurfaces,
-      runtime: selectedRuntime,
-      intelligenceProvider: selectedProvider,
-    },
-  };
+  return workspaceLaunchSelectorModelDomain(records, selection, siteCatalog, workspaceLaunchSelectionContext());
 }
 
-async function runWorkspaceLaunchSelectionUi(
-  records: WorkspaceLaunchRecord[],
-  options: WorkspaceLaunchPlanOptions,
-  siteCatalog: ResolvedSiteRoot[] = [],
-): Promise<WorkspaceLaunchBrowserSelection> {
-  const host = '127.0.0.1';
-  let server: ReturnType<typeof createWorkspaceLaunchUiServer> | null = null;
-  let settled = false;
-  const portPolicy = resolveWorkspaceLaunchUiPortPolicy(options);
-
-  const rememberedSelection = await readWorkspaceLaunchRememberedSelection();
-  const pageModel = buildWorkspaceLaunchSelectionUiModel(records, options, rememberedSelection, siteCatalog);
-  const html = buildWorkspaceLaunchSelectionHtml(pageModel);
-
-  const selectionPromise = new Promise<WorkspaceLaunchBrowserSelection>((resolveSelection, rejectSelection) => {
-    server = createWorkspaceLaunchUiServer({
-      page: () => html,
-      asset: readWorkspaceLaunchUiAsset,
-      selectorModel: (payload) => workspaceLaunchSelectorModel(records, payload as Partial<WorkspaceLaunchBrowserSelection>, siteCatalog),
-      submit: async (payload) => {
-        const selection = normalizeWorkspaceLaunchBrowserSelection(payload as Partial<WorkspaceLaunchBrowserSelection>);
-        await writeWorkspaceLaunchRememberedSelection(selection);
-        settled = true;
-        return { status: 200, payload: { status: 'accepted' }, afterSend: () => resolveSelection(selection) };
-      },
-      cancel: async () => {
-        settled = true;
-        return {
-          status: 200,
-          payload: { status: 'cancelled' },
-          afterSend: () => rejectSelection(new Error('interactive_selection_cancelled')),
-        };
-      },
-    });
-    server.on('error', rejectSelection);
-  });
-
-  const { url, port, fallback_used } = await listenWorkspaceLaunchUiServer(server!, host, portPolicy);
-
-  console.log(`Narada launcher selection UI: ${url}`);
-  if (fallback_used) {
-    console.log(`[launcher] preferred UI port ${portPolicy.port} was occupied; using ephemeral port ${port} instead.`);
-  }
-  requestWorkspaceLaunchSelectionUiProjectionOpen(url);
-
-  try {
-    return await Promise.race([
-      selectionPromise,
-      new Promise<WorkspaceLaunchBrowserSelection>((_, rejectTimeout) => {
-        const timer = setTimeout(() => {
-          if (!settled) rejectTimeout(new Error('interactive_selection_ui_timeout'));
-        }, 10 * 60 * 1000);
-        timer.unref?.();
-      }),
-    ]);
-  } finally {
-    await closeWorkspaceLaunchUiServer(server);
-  }
-}
-
-async function runPersistentWorkspaceLaunchSelectionUi(
-  records: WorkspaceLaunchRecord[],
-  options: WorkspaceLaunchPlanOptions,
-  launchSelection: (selection: WorkspaceLaunchBrowserSelection) => Promise<{ exitCode: ExitCode; result: unknown }>,
-  siteCatalog: ResolvedSiteRoot[] = [],
-): Promise<WorkspaceLaunchUiIngress & { status: 'cancelled' | 'timeout'; launch_count: number }> {
-  const host = '127.0.0.1';
-  let server: ReturnType<typeof createWorkspaceLaunchUiServer> | null = null;
-  let settled = false;
-  let launchCount = 0;
-  const portPolicy = resolveWorkspaceLaunchUiPortPolicy(options);
-  const registryPaths = resolveRegistryPaths(options);
-  const launcherOutputs = normalizeLauncherOutput(options.launcherOutput, options);
-  const recoveredAttempts = await loadRecoveredWorkspaceLaunchAttempts(registryPaths);
-  const attempts: WorkspaceLaunchAttemptRecord[] = [...recoveredAttempts];
-  launchCount = attempts.filter((attempt) => attempt.status === 'launched').length;
-  const uiSession: WorkspaceLaunchUiSessionRecord = {
-    schema: 'narada.workspace_launch.ui_session.v1',
-    ui_session_id: workspaceLaunchId('wls'),
-    started_at: new Date().toISOString(),
-    status: 'open',
-    url: null,
-    registry_paths: registryPaths,
-    owner: { package: '@narada2/cli', command: 'launcher workspace-launch', surface: 'interactive-selection-ui' },
-  };
-  const persistenceDir = workspaceLaunchUiSessionPersistenceDir(uiSession.ui_session_id);
-
-  const rememberedSelection = await readWorkspaceLaunchRememberedSelection();
-  const pageModel = buildWorkspaceLaunchSelectionUiModel(records, options, rememberedSelection, siteCatalog);
-  const html = buildWorkspaceLaunchSelectionHtml(pageModel, { persistent: true });
-
-  const dashboardState = (): WorkspaceLaunchDashboardState => ({
-    schema: 'narada.workspace_launch.ui_session_state.v1',
-    ui_session: uiSession,
-    attempts: attempts.filter((attempt) => attempt.status !== 'forgotten'),
-    observed_unowned: [],
-    actions: ['submit', 'cancel'],
-  });
-
-  const runLaunchAttempt = async (selection: WorkspaceLaunchBrowserSelection): Promise<WorkspaceLaunchAttemptRecord> => {
-    const attempt: WorkspaceLaunchAttemptRecord = {
-      schema: 'narada.workspace_launch.attempt.v1',
-      launch_attempt_id: workspaceLaunchId('wla'),
-      ui_session_id: uiSession.ui_session_id,
-      expected_launch_session_ids: [],
-      submitted_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      selection,
-      status: 'queued',
-      result_summary: 'Launch queued.',
-      plan_result_path: null,
-      handoffs: [],
-      observations: [],
-      projections: [],
-      actions: ['recheck', 'forget'],
-      diagnostic: null,
-    };
-    attempts.push(attempt);
-    writeLauncherOutput(launcherOutputs, {
-      schema: 'narada.workspace_launch.terminal_event.v1',
-      event: 'selection_submitted',
-      launch_attempt_id: attempt.launch_attempt_id,
-      selection,
-    }, `[launcher] selection submitted: ${formatWorkspaceLaunchSelection(selection)}`);
-    attempt.status = 'planning';
-    attempt.result_summary = 'Planning workspace launch.';
-    attempt.updated_at = new Date().toISOString();
-    try {
-      await workspaceLaunchReapStaleSessionOwnedDescendants(selection, records);
-      attempt.status = 'launching';
-      attempt.result_summary = 'Executing host handoff.';
-      attempt.updated_at = new Date().toISOString();
-      const launch = await launchSelection(selection);
-      const success = launch.exitCode === ExitCode.SUCCESS;
-      attempt.status = success ? 'launched' : 'failed';
-      attempt.result_summary = workspaceLaunchResultSummary(launch.result, success);
-      attempt.plan_result_path = workspaceLaunchString(isRecord(launch.result) ? launch.result.result_path : null);
-      attempt.handoffs = [workspaceLaunchHandoffFromResult(attempt.launch_attempt_id, launch.result, success)];
-      attempt.expected_launch_session_ids = success ? workspaceLaunchExpectedSessionIds(launch.result) : [];
-      attempt.observations = success
-        ? await workspaceLaunchRuntimeObservations(
-          attempt.launch_attempt_id,
-          selection,
-          records,
-          attempt.expected_launch_session_ids,
-          workspaceLaunchSiteRootsFromLaunchResult(launch.result),
-        )
-        : [];
-      attempt.actions = success ? workspaceLaunchActionsForAttempt(attempt) : ['retry', 'forget'];
-      attempt.diagnostic = launch.result;
-      attempt.updated_at = new Date().toISOString();
-      if (success) launchCount += 1;
-      await persistWorkspaceLaunchDashboardState(persistenceDir, uiSession, attempts);
-      writeLauncherOutput(launcherOutputs, {
-        schema: 'narada.workspace_launch.terminal_event.v1',
-        event: success ? 'launch_handed_off' : 'launch_failed',
-        launch_attempt_id: attempt.launch_attempt_id,
-        status: attempt.status,
-        result_path: attempt.plan_result_path,
-      }, `[launcher] ${success ? 'handed off' : 'failed'}: ${attempt.result_summary}${attempt.plan_result_path ? ` result=${attempt.plan_result_path}` : ''}`);
-      writeWorkspaceLaunchCommandOutput(launcherOutputs, attempt);
-      return attempt;
-    } catch (error) {
-      attempt.status = 'failed';
-      attempt.result_summary = error instanceof Error ? error.message : String(error);
-      attempt.handoffs = [workspaceLaunchFailedHandoff(attempt.launch_attempt_id, error)];
-      attempt.actions = ['retry', 'forget'];
-      attempt.diagnostic = { error: attempt.result_summary };
-      attempt.updated_at = new Date().toISOString();
-      await persistWorkspaceLaunchDashboardState(persistenceDir, uiSession, attempts);
-      writeLauncherOutput(launcherOutputs, {
-        schema: 'narada.workspace_launch.terminal_event.v1',
-        event: 'launch_failed',
-        launch_attempt_id: attempt.launch_attempt_id,
-        error: attempt.result_summary,
-      }, `[launcher] failed: ${attempt.result_summary}`);
-      return attempt;
-    }
-  };
-
-  const closed = new Promise<'cancelled'>((resolveClosed, rejectClosed) => {
-    server = createWorkspaceLaunchUiServer({
-      page: () => html,
-      asset: readWorkspaceLaunchUiAsset,
-      dashboard: dashboardState,
-      selectorModel: (payload) => workspaceLaunchSelectorModel(records, payload as Partial<WorkspaceLaunchBrowserSelection>, siteCatalog),
-      submit: async (payload) => {
-        const selection = normalizeWorkspaceLaunchBrowserSelection(payload as Partial<WorkspaceLaunchBrowserSelection>);
-        await writeWorkspaceLaunchRememberedSelection(selection);
-        const attempt = await runLaunchAttempt(selection);
-        return {
-          status: attempt.status === 'launched' ? 200 : 500,
-          payload: {
-            schema: 'narada.workspace_launch.submit_result.v1',
-            status: attempt.status,
-            launch_count: launchCount,
-            attempt,
-            dashboard: dashboardState(),
-          },
-        };
-      },
-      action: async (launchAttemptId, action) => {
-        const attempt = attempts.find((candidate) => candidate.launch_attempt_id === launchAttemptId);
-        if (!attempt) {
-          return {
-            status: 404,
-            payload: {
-              schema: 'narada.workspace_launch.action_refusal.v1',
-              status: 'refused',
-              reason_code: 'launch_attempt_not_found',
-              message: `Launch attempt not found: ${launchAttemptId}`,
-            },
-          };
-        }
-        if (action === 'forget') {
-          attempt.status = 'forgotten';
-          attempt.updated_at = new Date().toISOString();
-          await persistWorkspaceLaunchDashboardState(persistenceDir, uiSession, attempts);
-          return { status: 200, payload: { schema: 'narada.workspace_launch.action_result.v1', status: 'forgotten', dashboard: dashboardState() } };
-        }
-        if (action === 'retry') {
-          const retryAttempt = await runLaunchAttempt(attempt.selection);
-          return {
-            status: retryAttempt.status === 'launched' ? 200 : 500,
-            payload: { schema: 'narada.workspace_launch.action_result.v1', status: retryAttempt.status, attempt: retryAttempt, dashboard: dashboardState() },
-          };
-        }
-        if (action === 'recheck') {
-          attempt.updated_at = new Date().toISOString();
-          attempt.observations = await workspaceLaunchRuntimeObservations(
-            attempt.launch_attempt_id,
-            attempt.selection,
-            records,
-            attempt.expected_launch_session_ids,
-            workspaceLaunchSiteRootsFromLaunchResult(attempt.diagnostic),
-          );
-          attempt.actions = workspaceLaunchActionsForAttempt(attempt);
-          await persistWorkspaceLaunchDashboardState(persistenceDir, uiSession, attempts);
-          return { status: 200, payload: { schema: 'narada.workspace_launch.action_result.v1', status: 'rechecked', attempt, dashboard: dashboardState() } };
-        }
-        if (action === 'open-web-ui' || action === 'attach-cli') {
-          const command = workspaceLaunchAttachCommandForAction(attempt, action);
-          if (!command) {
-            return {
-              status: 409,
-              payload: {
-                schema: 'narada.workspace_launch.action_refusal.v1',
-                status: 'refused',
-                reason_code: 'attach_command_not_available',
-                message: `${action === 'open-web-ui' ? 'Open This UI' : 'Attach CLI To This Session'} requires a discovered attachable NARS session for this launch result.`,
-                dashboard: dashboardState(),
-              },
-            };
-          }
-          const projection = await workspaceLaunchExecuteProjectionAction(attempt, action, command);
-          attempt.projections.push(projection);
-          attempt.updated_at = new Date().toISOString();
-          await persistWorkspaceLaunchDashboardState(persistenceDir, uiSession, attempts);
-          return {
-            status: 200,
-            payload: {
-              schema: 'narada.workspace_launch.action_result.v1',
-              status: projection.status,
-              action,
-              command,
-              projection,
-              message: projection.message,
-              dashboard: dashboardState(),
-            },
-          };
-        }
-        if (action === 'stop-runtime') {
-          const result = await workspaceLaunchRequestRuntimeStop(attempt);
-          if (result.status !== 'requested') return { status: 409, payload: { ...result, dashboard: dashboardState() } };
-          attempt.updated_at = new Date().toISOString();
-          attempt.actions = workspaceLaunchActionsForAttempt(attempt);
-          await persistWorkspaceLaunchDashboardState(persistenceDir, uiSession, attempts);
-          return { status: 200, payload: { ...result, dashboard: dashboardState() } };
-        }
-        return {
-          status: 409,
-          payload: {
-            schema: 'narada.workspace_launch.action_refusal.v1',
-            status: 'refused',
-            reason_code: 'projection_lifecycle_not_admitted',
-            message: 'Stop Projection requires admitted projection lifecycle authority.',
-            dashboard: dashboardState(),
-          },
-        };
-      },
-      cancel: async () => {
-        settled = true;
-        uiSession.status = 'closed';
-        await persistWorkspaceLaunchDashboardState(persistenceDir, uiSession, attempts);
-        return {
-          status: 200,
-          payload: { status: 'closed', launch_count: launchCount },
-          close: true,
-          afterSend: () => resolveClosed('cancelled'),
-        };
-      },
-    });
-    server.on('error', rejectClosed);
-  });
-  const { url, port, fallback_used } = await listenWorkspaceLaunchUiServer(server!, host, portPolicy);
-
-  const ingress = await resolveWorkspaceLaunchUiIngress({
-    uiSessionId: uiSession.ui_session_id,
-    directUrl: url,
-    host,
-    port: options.operatorRouterPort,
-  });
-  console.log(`Narada launcher selection UI: ${ingress.url}`);
-  if (fallback_used) {
-    console.log(`[launcher] preferred UI port ${portPolicy.port} was occupied; using ephemeral port ${port} instead.`);
-  }
-  if (ingress.ingress_mode === 'diagnostic') {
-    console.log(`[launcher] direct UI URL is diagnostic; Operator Console projection unavailable (${ingress.reason ?? 'unknown'}).`);
-  }
-  console.log('Selection UI will remain available for additional launches until you close it.');
-  uiSession.url = url;
-  await persistWorkspaceLaunchDashboardState(persistenceDir, uiSession, attempts);
-  requestWorkspaceLaunchSelectionUiProjectionOpen(ingress.url);
-
-  try {
-    const status = await Promise.race([
-      closed,
-      new Promise<'timeout'>((resolveTimeout) => {
-        const timer = setTimeout(() => {
-          if (!settled) {
-            uiSession.status = 'timeout';
-            resolveTimeout('timeout');
-          }
-        }, 8 * 60 * 60 * 1000);
-        timer.unref?.();
-      }),
-    ]);
-    await persistWorkspaceLaunchDashboardState(persistenceDir, uiSession, attempts);
-    return { ...ingress, status, launch_count: launchCount };
-  } finally {
-    await closeWorkspaceLaunchUiServer(server);
-  }
-}
-
-function workspaceLaunchId(prefix: string): string {
+export function workspaceLaunchId(prefix: string): string {
   return `${prefix}_${randomUUID().replace(/-/g, '').slice(0, 16)}`;
 }
 
@@ -2008,48 +1242,22 @@ export function resolveWorkspaceLaunchUiPortPolicy(options: WorkspaceLaunchPlanO
   return { port, fallbackToEphemeral, source };
 }
 
-function workspaceLaunchRememberedSelectionRoot(): string {
-  return join(siteAuthorityRootFromSiteRoot(workspaceLaunchUserSiteRoot()), 'runtime', 'workspace-launch-ui-state');
-}
-
-function workspaceLaunchRememberedSelectionPath(): string {
-  return join(workspaceLaunchRememberedSelectionRoot(), 'remembered-selection.json');
+function workspaceLaunchAttemptStoreContext(): WorkspaceLaunchAttemptStoreContext {
+  return {
+    expectedLaunchSessionIds: workspaceLaunchExpectedSessionIds,
+  };
 }
 
 export async function readWorkspaceLaunchRememberedSelection(): Promise<WorkspaceLaunchBrowserSelection | null> {
-  const path = workspaceLaunchRememberedSelectionPath();
-  const parsed = await readJsonFile(path);
-  return normalizeWorkspaceLaunchRememberedSelectionRecord(parsed)?.selection ?? null;
+  return readWorkspaceLaunchRememberedSelectionStore();
 }
 
 export async function writeWorkspaceLaunchRememberedSelection(selection: WorkspaceLaunchBrowserSelection): Promise<void> {
-  const path = workspaceLaunchRememberedSelectionPath();
-  await mkdir(dirname(path), { recursive: true });
-  const normalizedSelection = normalizeWorkspaceLaunchBrowserSelection(selection);
-  await writeJsonFile(path, {
-    schema: 'narada.workspace_launch.remembered_selection.v1',
-    updated_at: new Date().toISOString(),
-    selection: normalizedSelection,
-  } satisfies WorkspaceLaunchRememberedSelectionRecord);
-}
-
-function normalizeWorkspaceLaunchRememberedSelectionRecord(value: unknown): WorkspaceLaunchRememberedSelectionRecord | null {
-  if (!isRecord(value)) return null;
-  const rawSelection = isRecord(value.selection) ? value.selection : value;
-  try {
-    const selection = normalizeWorkspaceLaunchBrowserSelection(rawSelection as Partial<WorkspaceLaunchBrowserSelection>);
-    return {
-      schema: 'narada.workspace_launch.remembered_selection.v1',
-      updated_at: typeof value.updated_at === 'string' && value.updated_at ? value.updated_at : new Date(0).toISOString(),
-      selection,
-    };
-  } catch {
-    return null;
-  }
+  return writeWorkspaceLaunchRememberedSelectionStore(selection);
 }
 
 function workspaceLaunchUiSessionPersistenceDir(uiSessionId: string): string {
-  return join(workspaceLaunchUiSessionPersistenceRoot(), uiSessionId);
+  return workspaceLaunchUiSessionPersistenceDirStore(uiSessionId);
 }
 
 async function persistWorkspaceLaunchDashboardState(
@@ -2057,369 +1265,48 @@ async function persistWorkspaceLaunchDashboardState(
   uiSession: WorkspaceLaunchUiSessionRecord,
   attempts: WorkspaceLaunchAttemptRecord[],
 ): Promise<void> {
-  await mkdir(dir, { recursive: true });
-  await writeJsonFile(join(dir, 'session.json'), uiSession);
-  await writeJsonLinesFile(join(dir, 'attempts.jsonl'), attempts);
-  await writeJsonLinesFile(join(dir, 'handoffs.jsonl'), attempts.flatMap((attempt) => attempt.handoffs));
-  await writeJsonLinesFile(join(dir, 'observations.jsonl'), attempts.flatMap((attempt) => attempt.observations));
-  await writeJsonLinesFile(join(dir, 'projections.jsonl'), attempts.flatMap((attempt) => attempt.projections));
-  await pruneWorkspaceLaunchDashboardSessions(workspaceLaunchUiSessionPersistenceRoot());
-}
-
-async function writeJsonFile(path: string, value: unknown): Promise<void> {
-  await writeFile(path, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
-}
-
-async function writeJsonLinesFile(path: string, values: unknown[]): Promise<void> {
-  await writeFile(path, values.map((value) => JSON.stringify(value)).join('\n') + (values.length > 0 ? '\n' : ''), 'utf8');
+  return persistWorkspaceLaunchDashboardStateStore(dir, uiSession, attempts);
 }
 
 async function loadRecoveredWorkspaceLaunchAttempts(registryPaths: string[]): Promise<WorkspaceLaunchAttemptRecord[]> {
-  const root = workspaceLaunchUiSessionPersistenceRoot();
-  if (!existsSync(root)) return [];
-  const entries = await readdir(root, { withFileTypes: true }).catch(() => []);
-  const sessions = await Promise.all(entries
-    .filter((entry) => entry.isDirectory())
-    .map(async (entry) => {
-      const dir = join(root, entry.name);
-      const session = await readJsonFile(join(dir, 'session.json'));
-      if (!isWorkspaceLaunchUiSessionRecord(session)) return null;
-      if (!workspaceLaunchRegistryPathsCompatible(registryPaths, session.registry_paths)) return null;
-      const attempts = (await readJsonLinesFile(join(dir, 'attempts.jsonl')))
-        .map(normalizeWorkspaceLaunchAttemptRecord)
-        .filter((attempt): attempt is WorkspaceLaunchAttemptRecord => attempt !== null);
-      return { session, attempts };
-    }));
-  const compatible = sessions.filter((session): session is { session: WorkspaceLaunchUiSessionRecord; attempts: WorkspaceLaunchAttemptRecord[] } => session !== null);
-  compatible.sort((a, b) => b.session.started_at.localeCompare(a.session.started_at));
-  return compatible[0]?.attempts ?? [];
+  return loadRecoveredWorkspaceLaunchAttemptsStore(registryPaths, workspaceLaunchAttemptStoreContext());
 }
 
-async function readJsonFile(path: string): Promise<unknown> {
-  try {
-    return JSON.parse(await readFile(path, 'utf8'));
-  } catch {
-    return null;
-  }
-}
 
-async function readJsonLinesFile(path: string): Promise<unknown[]> {
-  try {
-    return (await readFile(path, 'utf8'))
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter(Boolean)
-      .map((line) => JSON.parse(line));
-  } catch {
-    return [];
-  }
-}
-
-function workspaceLaunchRegistryPathsCompatible(current: string[], saved: string[]): boolean {
-  const normalize = (value: string) => resolve(value).toLowerCase();
-  const currentSet = new Set(current.map(normalize));
-  const savedSet = new Set(saved.map(normalize));
-  if (currentSet.size !== savedSet.size) return false;
-  return [...currentSet].every((value) => savedSet.has(value));
-}
-
-async function pruneWorkspaceLaunchDashboardSessions(root: string): Promise<void> {
-  const keep = workspaceLaunchDashboardRetentionCount();
-  if (keep <= 0 || !existsSync(root)) return;
-  const entries = await readdir(root, { withFileTypes: true }).catch(() => []);
-  const sessions = await Promise.all(entries
-    .filter((entry) => entry.isDirectory())
-    .map(async (entry) => {
-      const dir = join(root, entry.name);
-      const session = await readJsonFile(join(dir, 'session.json'));
-      return isWorkspaceLaunchUiSessionRecord(session) ? { dir, started_at: session.started_at } : null;
-    }));
-  const ordered = sessions
-    .filter((session): session is { dir: string; started_at: string } => session !== null)
-    .sort((a, b) => b.started_at.localeCompare(a.started_at));
-  await Promise.all(ordered.slice(keep).map((session) => rm(session.dir, { recursive: true, force: true })));
-}
-
-function workspaceLaunchDashboardRetentionCount(): number {
-  const raw = process.env.NARADA_WORKSPACE_LAUNCH_UI_SESSION_RETENTION;
-  if (!raw) return 20;
-  const parsed = Number.parseInt(raw, 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 20;
-}
-
-function isWorkspaceLaunchAttemptRecord(value: unknown): value is WorkspaceLaunchAttemptRecord {
-  return isRecord(value)
-    && value.schema === 'narada.workspace_launch.attempt.v1'
-    && typeof value.launch_attempt_id === 'string'
-    && isRecord(value.selection)
-    && Array.isArray(value.handoffs)
-    && Array.isArray(value.observations)
-    && Array.isArray(value.actions);
-}
-
-function normalizeWorkspaceLaunchAttemptRecord(value: unknown): WorkspaceLaunchAttemptRecord | null {
-  if (!isWorkspaceLaunchAttemptRecord(value)) return null;
-  return {
-    ...value,
-    expected_launch_session_ids: Array.isArray(value.expected_launch_session_ids)
-      ? value.expected_launch_session_ids.map(workspaceLaunchString).filter((entry): entry is string => Boolean(entry))
-      : workspaceLaunchExpectedSessionIds(value.diagnostic),
-    projections: Array.isArray(value.projections) ? value.projections.filter(isWorkspaceLaunchProjectionObservationRecord) : [],
-  };
-}
-
-function isWorkspaceLaunchProjectionObservationRecord(value: unknown): value is WorkspaceLaunchProjectionObservationRecord {
-  return isRecord(value)
-    && value.schema === 'narada.workspace_launch.observed_projection.v1'
-    && typeof value.observation_id === 'string'
-    && typeof value.launch_attempt_id === 'string'
-    && (value.projection_kind === 'agent-web-ui' || value.projection_kind === 'agent-cli')
-    && (value.status === 'planned' || value.status === 'handed_off' || value.status === 'failed');
-}
-
-function workspaceLaunchString(value: unknown): string | null {
+export function workspaceLaunchString(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value : null;
 }
 
-function workspaceLaunchResultSummary(result: unknown, success: boolean): string {
-  if (!success) {
-    const error = isRecord(result) ? workspaceLaunchString(result.error) ?? workspaceLaunchString(result.reason) : null;
-    return error ?? 'Launch failed.';
-  }
-  const record = isRecord(result) ? result : {};
-  const count = typeof record.count === 'number' ? record.count : null;
-  if (count !== null) return `Launch accepted for ${count} workspace launch${count === 1 ? '' : 'es'}.`;
-  return 'Launch accepted.';
+export function workspaceLaunchResultSummary(result: unknown, success: boolean): string {
+  return workspaceLaunchResultSummaryHandoff(result, success);
 }
 
-function workspaceLaunchActionsForAttempt(attempt: WorkspaceLaunchAttemptRecord): string[] {
-  const actions = ['recheck'];
-  if (workspaceLaunchAttachCommandForAction(attempt, 'open-web-ui')) actions.push('open-web-ui');
-  if (workspaceLaunchAttachCommandForAction(attempt, 'attach-cli')) actions.push('attach-cli');
-  actions.push('retry');
-  if (workspaceLaunchRuntimeStopControlPath(attempt)) actions.push('stop-runtime');
-  actions.push('forget');
-  return unique(actions);
+export function workspaceLaunchActionsForAttempt(attempt: WorkspaceLaunchAttemptRecord): string[] {
+  return workspaceLaunchActionsForAttemptHandoff(attempt);
 }
 
-async function workspaceLaunchRequestRuntimeStop(attempt: WorkspaceLaunchAttemptRecord): Promise<Record<string, unknown>> {
-  const controlPath = workspaceLaunchRuntimeStopControlPath(attempt);
-  if (!controlPath) {
-    return {
-      schema: 'narada.workspace_launch.action_refusal.v1',
-      status: 'refused',
-      reason_code: 'runtime_lifecycle_not_admitted',
-      message: 'Stop Runtime requires an admitted NARS control path for this session.',
-    };
-  }
-  const requestId = workspaceLaunchId('stop_runtime');
-  const frame = {
-    id: requestId,
-    method: 'session.close',
-    params: {
-      source: 'launcher-session-dashboard',
-      launch_attempt_id: attempt.launch_attempt_id,
-    },
-  };
-  await appendFile(controlPath, `${JSON.stringify(frame)}\n`, 'utf8');
-  return {
-    schema: 'narada.workspace_launch.action_result.v1',
-    status: 'requested',
-    action: 'stop-runtime',
-    request_id: requestId,
-    control_path: controlPath,
-    message: 'Stop Runtime requested through NARS session control path.',
-  };
+export async function workspaceLaunchRequestRuntimeStop(attempt: WorkspaceLaunchAttemptRecord): Promise<Record<string, unknown>> {
+  return workspaceLaunchRequestRuntimeStopHandoff(attempt);
 }
 
-function workspaceLaunchRuntimeStopControlPath(attempt: WorkspaceLaunchAttemptRecord): string | null {
-  for (const observation of attempt.observations) {
-    if (observation.control_path && existsSync(observation.control_path)) return observation.control_path;
-  }
-  return null;
-}
-
-function workspaceLaunchAttachCommandForAction(attempt: WorkspaceLaunchAttemptRecord, action: string): string | null {
-  const commandKey = action === 'open-web-ui' ? 'agent_web_ui' : action === 'attach-cli' ? 'agent_cli' : null;
-  if (!commandKey) return null;
-  for (const observation of attempt.observations) {
-    const command = observation.attach_commands?.[commandKey];
-    if (command) return command;
-  }
-  return null;
-}
-
-async function workspaceLaunchExecuteProjectionAction(
+export async function workspaceLaunchExecuteProjectionAction(
   attempt: WorkspaceLaunchAttemptRecord,
   action: string,
   command: string,
 ): Promise<WorkspaceLaunchProjectionObservationRecord> {
-  const projectionKind = action === 'open-web-ui' ? 'agent-web-ui' : 'agent-cli';
-  const sessionId = workspaceLaunchProjectionSessionId(attempt);
-  const qualifiedAgentId = workspaceLaunchProjectionQualifiedAgentId(attempt);
-  const titleSuffix = qualifiedAgentId
-    ? (projectionKind === 'agent-web-ui' ? 'web ui' : 'runtime')
-    : (sessionId ?? attempt.launch_attempt_id);
-  const title = `${qualifiedAgentId ?? projectionKind} ${titleSuffix}`;
-  const cwd = workspaceLaunchProjectionCwd(attempt) ?? process.cwd();
-  if (action === 'open-web-ui') {
-    try {
-      const host = await workspaceLaunchStartHiddenProjectionHost(command, cwd);
-      return {
-        schema: 'narada.workspace_launch.observed_projection.v1',
-        observation_id: workspaceLaunchId('wlp'),
-        launch_attempt_id: attempt.launch_attempt_id,
-        projection_kind: projectionKind,
-        session_id: sessionId,
-        status: 'handed_off',
-        command,
-        authority: 'nars_client_projection_contract',
-        ownership_posture: 'handoff_only',
-        observed_at: new Date().toISOString(),
-        message: `${projectionKind} projection host started hidden; browser projection owns visible operator surface.`,
-        diagnostic: { ...host, command: redactWorkspaceLaunchCommand(command) },
-      };
-    } catch (error) {
-      return {
-        schema: 'narada.workspace_launch.observed_projection.v1',
-        observation_id: workspaceLaunchId('wlp'),
-        launch_attempt_id: attempt.launch_attempt_id,
-        projection_kind: projectionKind,
-        session_id: sessionId,
-        status: 'failed',
-        command,
-        authority: 'nars_client_projection_contract',
-        ownership_posture: 'handoff_only',
-        observed_at: new Date().toISOString(),
-        message: error instanceof Error ? error.message : String(error),
-        diagnostic: { command: redactWorkspaceLaunchCommand(command) },
-      };
-    }
-  }
-  const wtArgs = ['new-tab', '--title', title, '-d', cwd, 'pwsh', '-NoExit', '-Command', command];
-  const effectiveWtArgs = process.env.WT_SESSION ? ['-w', '0', ...wtArgs] : wtArgs;
-  const terminalCaptureLog = process.env.NARADA_WORKSPACE_LAUNCH_TERMINAL_LOG;
-  try {
-    const launch = terminalCaptureLog
-      ? (await captureWorkspaceLaunchTerminalInvocation(terminalCaptureLog, effectiveWtArgs))
-      : startOperatorTerminal('wt', effectiveWtArgs).result;
-    if (launch.error) throw launch.error;
-    if (launch.status !== 0) throw new Error(`projection_terminal_launch_failed: wt exited ${launch.status ?? 'unknown'}`);
-    return {
-      schema: 'narada.workspace_launch.observed_projection.v1',
-      observation_id: workspaceLaunchId('wlp'),
-      launch_attempt_id: attempt.launch_attempt_id,
-      projection_kind: projectionKind,
-      session_id: sessionId,
-      status: 'handed_off',
-      command,
-      authority: 'nars_client_projection_contract',
-      ownership_posture: 'handoff_only',
-      observed_at: new Date().toISOString(),
-      message: `${projectionKind} projection handoff accepted by operator terminal authority.`,
-      diagnostic: { wt_args: redactWorkspaceLaunchArgv(effectiveWtArgs), wt_exit_code: launch.status ?? 0 },
-    };
-  } catch (error) {
-    return {
-      schema: 'narada.workspace_launch.observed_projection.v1',
-      observation_id: workspaceLaunchId('wlp'),
-      launch_attempt_id: attempt.launch_attempt_id,
-      projection_kind: projectionKind,
-      session_id: sessionId,
-      status: 'failed',
-      command,
-      authority: 'nars_client_projection_contract',
-      ownership_posture: 'handoff_only',
-      observed_at: new Date().toISOString(),
-      message: error instanceof Error ? error.message : String(error),
-      diagnostic: { error: error instanceof Error ? error.message : String(error) },
-    };
-  }
+  return workspaceLaunchExecuteProjectionActionHandoff(attempt, action, command);
 }
 
-function workspaceLaunchProjectionSessionId(attempt: WorkspaceLaunchAttemptRecord): string | null {
-  for (const observation of attempt.observations) {
-    if (observation.session_id) return observation.session_id;
-  }
-  return null;
+export function workspaceLaunchHandoffFromResult(
+  launchAttemptId: string,
+  result: unknown,
+  success: boolean,
+): WorkspaceLaunchHandoffRecord {
+  return workspaceLaunchHandoffFromResultHandoff(launchAttemptId, result, success);
 }
 
-function workspaceLaunchProjectionCwd(attempt: WorkspaceLaunchAttemptRecord): string | null {
-  for (const observation of attempt.observations) {
-    if (observation.site_root) return observation.site_root;
-  }
-  for (const handoff of attempt.handoffs) {
-    if (handoff.cwd) return handoff.cwd;
-  }
-  return null;
-}
-
-function workspaceLaunchHandoffFromResult(launchAttemptId: string, result: unknown, success: boolean): WorkspaceLaunchHandoffRecord {
-  const record = isRecord(result) ? result : {};
-  const hiddenRuntimeLaunches = Array.isArray(record.hidden_runtime_launches) ? record.hidden_runtime_launches : [];
-  if (record.hidden_runtime_invoked === true || hiddenRuntimeLaunches.length > 0) {
-    const selectedAgents = Array.isArray(record.selected_agents) ? record.selected_agents.filter(isRecord) : [];
-    const firstAgent = selectedAgents.find((agent) => agent.runtime_start_execution_mode === 'hidden_detached') ?? selectedAgents[0];
-    return {
-      schema: 'narada.workspace_launch.handoff.v1',
-      handoff_id: workspaceLaunchId('wlh'),
-      launch_attempt_id: launchAttemptId,
-      posture: 'hidden_runtime_host',
-      status: success ? 'handed_off' : 'failed',
-      command: 'hidden_runtime_host',
-      argv_redacted: redactWorkspaceLaunchArgv(stringArray(firstAgent?.runtime_start_command)),
-      cwd: workspaceLaunchString(firstAgent?.runtime_start_cwd) ?? workspaceLaunchHandoffCwd(record),
-      exit_code: null,
-      ownership_posture: 'handoff_only',
-      diagnostic_ref: workspaceLaunchString(record.result_path),
-    };
-  }
-  const wtArgs = workspaceLaunchLegacyTerminalWtArgs(record);
-  return {
-    schema: 'narada.workspace_launch.handoff.v1',
-    handoff_id: workspaceLaunchId('wlh'),
-    launch_attempt_id: launchAttemptId,
-    posture: 'operator_terminal',
-    status: success ? 'handed_off' : 'failed',
-    command: wtArgs.length > 0 ? 'wt' : null,
-    argv_redacted: redactWorkspaceLaunchArgv(wtArgs),
-    cwd: workspaceLaunchHandoffCwd(record),
-    exit_code: typeof record.wt_exit_code === 'number' ? record.wt_exit_code : null,
-    ownership_posture: 'handoff_only',
-    diagnostic_ref: workspaceLaunchString(record.result_path),
-  };
-}
-
-function workspaceLaunchFailedHandoff(launchAttemptId: string, error: unknown): WorkspaceLaunchHandoffRecord {
-  return {
-    schema: 'narada.workspace_launch.handoff.v1',
-    handoff_id: workspaceLaunchId('wlh'),
-    launch_attempt_id: launchAttemptId,
-    posture: 'operator_terminal',
-    status: 'failed',
-    command: null,
-    argv_redacted: [],
-    cwd: null,
-    exit_code: null,
-    ownership_posture: 'handoff_only',
-    diagnostic_ref: error instanceof Error ? error.message : String(error),
-  };
-}
-
-function workspaceLaunchWaitingObservation(launchAttemptId: string, selection: WorkspaceLaunchBrowserSelection): WorkspaceLaunchObservationRecord {
-  return {
-    schema: 'narada.workspace_launch.observed_runtime.v1',
-    observation_id: workspaceLaunchId('wlr'),
-    launch_attempt_id: launchAttemptId,
-    kind: 'nars',
-    session_id: null,
-    site_root: null,
-    health: 'waiting',
-    authority: 'nars_session_management',
-    ownership_posture: 'not_yet_observed',
-    last_checked_at: new Date().toISOString(),
-    message: `Waiting for NARS session discovery for ${selection.site.join(', ')} / ${selection.role.join(', ')}.`,
-  };
+export function workspaceLaunchFailedHandoff(launchAttemptId: string, error: unknown): WorkspaceLaunchHandoffRecord {
+  return workspaceLaunchFailedHandoffHandoff(launchAttemptId, error);
 }
 
 export async function workspaceLaunchRuntimeObservations(
@@ -2429,355 +1316,22 @@ export async function workspaceLaunchRuntimeObservations(
   expectedLaunchSessionIds: string[] = [],
   launchSiteRoots: string[] = [],
 ): Promise<WorkspaceLaunchObservationRecord[]> {
-  const siteRoots = unique(
-    (launchSiteRoots.length > 0 ? launchSiteRoots : workspaceLaunchSiteRootsForSelection(selection, records))
-      .map((siteRoot) => resolve(siteRoot)),
+  return workspaceLaunchRuntimeObservationsHandoff(
+    launchAttemptId,
+    selection,
+    records,
+    expectedLaunchSessionIds,
+    launchSiteRoots,
   );
-  if (siteRoots.length === 0) return [workspaceLaunchWaitingObservation(launchAttemptId, selection)];
-  const expectedLaunchSessionIdSet = new Set(expectedLaunchSessionIds.map((value) => value.trim()).filter(Boolean));
-  const pollBudgetMs = workspaceLaunchRuntimeObservationPollBudgetMs();
-  const pollIntervalMs = workspaceLaunchRuntimeObservationPollIntervalMs();
-  const deadline = Date.now() + pollBudgetMs;
-  let sawDiscoveredSession = false;
-  const staleCleanupAttempted = new Set<string>();
-
-  while (true) {
-    const discoveredSessions: Record<string, unknown>[] = [];
-    const candidates: Record<string, unknown>[] = [];
-    for (const siteRoot of siteRoots) {
-      try {
-        const initialDiscovery = discoverNarsSessions({ siteRoot });
-        const healthBySessionId = await workspaceLaunchProbeHealthBySessionId(initialDiscovery.sessions);
-        const discovery = healthBySessionId.size > 0 ? discoverNarsSessions({ siteRoot, healthBySessionId }) : initialDiscovery;
-        for (const session of discovery.sessions) {
-          const normalized = { ...session, site_root: session.site_root ?? siteRoot };
-          discoveredSessions.push(normalized);
-          if (!workspaceLaunchSessionMatchesSelection(normalized, selection)) continue;
-          if (workspaceLaunchSessionMatchesExpectedLaunch(normalized, expectedLaunchSessionIdSet)) {
-            candidates.push(normalized);
-          } else if (workspaceLaunchSessionIsStaleSessionOwnedCandidate(normalized, expectedLaunchSessionIdSet)) {
-            await workspaceLaunchRequestStaleSessionCleanup(normalized, staleCleanupAttempted);
-          }
-        }
-      } catch {
-        // Missing or unreadable session indexes keep the launch in waiting state; they are not launch failures.
-      }
-    }
-    sawDiscoveredSession ||= discoveredSessions.length > 0;
-    if (candidates.length === 0) {
-      if (Date.now() >= deadline) break;
-      await workspaceLaunchObservationPause(Math.min(pollIntervalMs, Math.max(0, deadline - Date.now())));
-      continue;
-    }
-    const activeCandidates = candidates.filter((session) => {
-      const displayState = workspaceLaunchString(session.display_state);
-      const terminalState = workspaceLaunchString(session.terminal_state);
-      return terminalState !== 'closed' && (displayState === 'active' || displayState === 'starting_or_degraded' || displayState === 'stale');
-    });
-    const matched = activeCandidates.length > 0 ? activeCandidates : candidates;
-    if (matched.length > 1) return [workspaceLaunchAmbiguousObservation(launchAttemptId, selection, matched)];
-    return [workspaceLaunchObservationFromSession(launchAttemptId, matched[0])];
-  }
-  if (!sawDiscoveredSession) return [workspaceLaunchWaitingObservation(launchAttemptId, selection)];
-  return [workspaceLaunchUnownedObservation(launchAttemptId, selection)];
 }
 
-function workspaceLaunchExpectedSessionIds(result: unknown): string[] {
-  const resultRecord = isRecord(result) ? result : null;
-  const selectedAgents = Array.isArray(resultRecord?.selected_agents) ? resultRecord.selected_agents : [];
-  return selectedAgents
-    .map((agent) => isRecord(agent) ? workspaceLaunchString(agent.launch_session_id) : null)
-    .filter((value): value is string => Boolean(value));
+export function workspaceLaunchExpectedSessionIds(result: unknown): string[] {
+  return workspaceLaunchExpectedSessionIdsHandoff(result);
 }
 
-function workspaceLaunchSessionMatchesExpectedLaunch(session: Record<string, unknown>, expectedLaunchSessionIds: Set<string>): boolean {
-  if (expectedLaunchSessionIds.size === 0) return true;
-  const launchSessionId = workspaceLaunchSessionLaunchSessionId(session);
-  return launchSessionId !== null && expectedLaunchSessionIds.has(launchSessionId);
-}
 
-function workspaceLaunchSessionLaunchSessionId(session: Record<string, unknown>): string | null {
-  const record = isRecord(session.record) ? session.record : null;
-  const ownership = isRecord(session.process_ownership) ? session.process_ownership : isRecord(record?.process_ownership) ? record.process_ownership : null;
-  return workspaceLaunchString(session.launch_session_id)
-    ?? workspaceLaunchString(record?.launch_session_id)
-    ?? workspaceLaunchString(ownership?.launch_session_id);
-}
-
-function workspaceLaunchSessionOwnership(session: Record<string, unknown>): Record<string, unknown> | null {
-  const record = isRecord(session.record) ? session.record : null;
-  return isRecord(session.process_ownership) ? session.process_ownership : isRecord(record?.process_ownership) ? record.process_ownership : null;
-}
-
-function workspaceLaunchSessionIsStaleSessionOwnedCandidate(session: Record<string, unknown>, expectedLaunchSessionIds: Set<string>): boolean {
-  if (expectedLaunchSessionIds.size === 0) return false;
-  if (!workspaceLaunchSessionOwnedCleanupAllowed(session)) return false;
-  const launchSessionId = workspaceLaunchSessionLaunchSessionId(session);
-  return launchSessionId !== null && !expectedLaunchSessionIds.has(launchSessionId);
-}
-
-function workspaceLaunchSessionOwnedCleanupAllowed(session: Record<string, unknown>): boolean {
-  const ownership = workspaceLaunchSessionOwnership(session);
-  return Boolean(ownership && ownership.ownership === 'session_owned' && ownership.cleanup_policy === 'terminate_with_launch_session');
-}
-
-function workspaceLaunchSessionIsTerminalForCleanup(session: Record<string, unknown>): boolean {
-  const displayState = workspaceLaunchString(session.display_state);
-  const terminalState = workspaceLaunchString(session.terminal_state);
-  return terminalState === 'closed' || displayState === 'closed';
-}
-
-async function workspaceLaunchRequestStaleSessionCleanup(session: Record<string, unknown>, attempted: Set<string>): Promise<void> {
-  const sessionId = workspaceLaunchString(session.session_id) ?? workspaceLaunchString(session.carrier_session_id) ?? workspaceLaunchSessionLaunchSessionId(session);
-  if (!sessionId || attempted.has(sessionId)) return;
-  attempted.add(sessionId);
-  const controlPath = workspaceLaunchControlPathFromSession(session);
-  if (controlPath && existsSync(controlPath)) {
-    const frame = {
-      id: workspaceLaunchId('stale_cleanup'),
-      method: 'session.close',
-      params: {
-        source: 'launcher-session-owned-process-cleanup',
-        reason: 'stale_session_owned_launch_session_superseded',
-        stale_launch_session_id: workspaceLaunchSessionLaunchSessionId(session),
-      },
-    };
-    try {
-      await appendFile(controlPath, `${JSON.stringify(frame)}\n`, 'utf8');
-    } catch {
-      // Process-tree termination below is the hard cleanup fallback for session-owned stale runtime processes.
-    }
-  }
-  const ownership = workspaceLaunchSessionOwnership(session);
-  const pid = workspaceLaunchInteger(session.pid) ?? workspaceLaunchInteger(ownership?.pid);
-  if (pid && pid !== process.pid) workspaceLaunchTerminateStaleProcessTree(pid);
-}
-
-function workspaceLaunchTerminateStaleProcessTree(pid: number): void {
-  try {
-    if (process.platform === 'win32') {
-      runGovernedCommandSync('taskkill', ['/PID', String(pid), '/T', '/F'], { stdio: 'ignore' });
-      return;
-    }
-    process.kill(pid, 'SIGTERM');
-  } catch {
-    // Cleanup is best-effort; launch observation must not fail because an already-dead process raced cleanup.
-  }
-}
-
-function workspaceLaunchInteger(value: unknown): number | null {
-  if (typeof value === 'number' && Number.isInteger(value) && value > 0) return value;
-  if (typeof value === 'string' && /^\d+$/.test(value.trim())) return Number(value.trim());
-  return null;
-}
-
-async function workspaceLaunchProbeHealthBySessionId(sessions: Record<string, unknown>[]): Promise<Map<string, unknown>> {
-  const healthBySessionId = new Map<string, unknown>();
-  const pairs = await Promise.all(sessions.map(async (session) => {
-    const sessionId = workspaceLaunchString(session.session_id) ?? workspaceLaunchString(session.carrier_session_id);
-    if (!sessionId) return null;
-    const health = await workspaceLaunchProbeSessionHealth(session);
-    return health === null ? null : [sessionId, health] as const;
-  }));
-  for (const pair of pairs) {
-    if (pair !== null) healthBySessionId.set(pair[0], pair[1]);
-  }
-  return healthBySessionId;
-}
-
-async function workspaceLaunchProbeSessionHealth(session: Record<string, unknown>): Promise<unknown | null> {
-  const record = isRecord(session.record) ? session.record : null;
-  const endpoint = workspaceLaunchString(session.health_endpoint) ?? workspaceLaunchString(record?.health_endpoint);
-  if (!endpoint) return null;
-  let parsed: URL;
-  try {
-    parsed = new URL(endpoint);
-  } catch {
-    return null;
-  }
-  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 800);
-  try {
-    const response = await fetch(parsed, { signal: controller.signal });
-    const text = await response.text().catch(() => '');
-    if (!response.ok) return { ok: false, status: 'unhealthy', http_status: response.status };
-    if (text.trim()) {
-      try {
-        return JSON.parse(text);
-      } catch {
-        return { ok: true, status: 'healthy', text };
-      }
-    }
-    return { ok: true, status: 'healthy' };
-  } catch {
-    return null;
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-function workspaceLaunchSiteRootsForSelection(selection: WorkspaceLaunchBrowserSelection, records: WorkspaceLaunchRecord[]): string[] {
-  const selected = selectLaunchRecords(records, { all: true, site: selection.site, role: selection.role });
-  return unique(selected.map((record) => resolve(record.site_root)));
-}
-
-function workspaceLaunchSessionMatchesSelection(session: Record<string, unknown>, selection: WorkspaceLaunchBrowserSelection): boolean {
-  const roles = new Set(selection.role.map((role) => role.toLowerCase()));
-  const sites = new Set(selection.site.map((site) => normalizeWorkspaceLaunchSiteToken(site)));
-  const agentId = workspaceLaunchString(session.agent_id);
-  const role = agentId ? agentId.split('.').filter(Boolean).at(-1)?.toLowerCase() : null;
-  const siteId = workspaceLaunchString(session.site_id) ?? (agentId ? agentId.split('.')[0] : null);
-  if (roles.size > 0 && role && !roles.has(role)) return false;
-  if (sites.size > 0 && siteId && !sites.has(normalizeWorkspaceLaunchSiteToken(siteId))) return false;
-  return true;
-}
-
-function workspaceLaunchObservationFromSession(launchAttemptId: string, session: Record<string, unknown>): WorkspaceLaunchObservationRecord {
-  const health = workspaceLaunchHealthFromSession(session);
-  const attachCommands = workspaceLaunchAttachCommandsFromSession(session);
-  const controlPath = workspaceLaunchControlPathFromSession(session);
-  const record = isRecord(session.record) ? session.record : null;
-  const agentId = workspaceLaunchString(session.agent_id) ?? workspaceLaunchString(record?.agent_id);
-  const siteId = workspaceLaunchString(session.site_id) ?? workspaceLaunchString(record?.site_id);
-  return {
-    schema: 'narada.workspace_launch.observed_runtime.v1',
-    observation_id: workspaceLaunchId('wlr'),
-    launch_attempt_id: launchAttemptId,
-    kind: 'nars',
-    session_id: workspaceLaunchString(session.session_id) ?? workspaceLaunchString(session.carrier_session_id),
-    site_root: workspaceLaunchString(session.site_root),
-    health,
-    authority: 'nars_session_management',
-    ownership_posture: 'owned_by_runtime_authority',
-    last_checked_at: new Date().toISOString(),
-    message: `NARS session ${workspaceLaunchString(session.session_id) ?? workspaceLaunchString(session.carrier_session_id) ?? 'unknown'} is ${health}.`,
-    agent_id: agentId,
-    site_id: siteId,
-    agent_identity_ref: workspaceLaunchSessionIdentityRef(session),
-    control_path: controlPath,
-    attach_commands: attachCommands,
-  };
-}
-
-function workspaceLaunchControlPathFromSession(session: Record<string, unknown>): string | null {
-  const record = isRecord(session.record) ? session.record : null;
-  const direct = workspaceLaunchString(session.control_path) ?? workspaceLaunchString(record?.control_path);
-  if (direct) return direct;
-  const sessionPath = workspaceLaunchString(session.session_path) ?? workspaceLaunchString(record?.session_path);
-  return sessionPath ? join(dirname(sessionPath), 'control.jsonl') : null;
-}
-
-function workspaceLaunchAttachCommandsFromSession(session: Record<string, unknown>): WorkspaceLaunchObservationRecord['attach_commands'] {
-  const record = isRecord(session.record) ? session.record : null;
-  const recordedCommands = isRecord(record?.attach_commands) ? record.attach_commands : null;
-  const eventEndpoint = workspaceLaunchString(session.event_endpoint) ?? workspaceLaunchString(record?.event_endpoint);
-  const healthEndpoint = workspaceLaunchString(session.health_endpoint) ?? workspaceLaunchString(record?.health_endpoint);
-  return {
-    agent_web_ui: workspaceLaunchString(recordedCommands?.agent_web_ui)
-      ?? (eventEndpoint ? `narada-agent-web-ui --event-endpoint ${eventEndpoint}${healthEndpoint ? ` --health-endpoint ${healthEndpoint}` : ''}` : null),
-    agent_cli: workspaceLaunchString(recordedCommands?.agent_cli)
-      ?? (eventEndpoint ? `narada-agent-cli --attach ${eventEndpoint}` : null),
-  };
-}
-
-function workspaceLaunchAmbiguousObservation(launchAttemptId: string, selection: WorkspaceLaunchBrowserSelection, sessions: Record<string, unknown>[]): WorkspaceLaunchObservationRecord {
-  return {
-    schema: 'narada.workspace_launch.observed_runtime.v1',
-    observation_id: workspaceLaunchId('wlr'),
-    launch_attempt_id: launchAttemptId,
-    kind: 'nars',
-    session_id: null,
-    site_root: null,
-    health: 'ambiguous',
-    authority: 'nars_session_management',
-    ownership_posture: 'not_yet_observed',
-    last_checked_at: new Date().toISOString(),
-    message: `Found ${sessions.length} possible NARS sessions for ${selection.site.join(', ')} / ${selection.role.join(', ')}; operator selection is required before treating one as owned.`,
-  };
-}
-
-function workspaceLaunchHealthFromSession(session: Record<string, unknown>): WorkspaceLaunchObservationRecord['health'] {
-  const healthStatus = workspaceLaunchString(session.health_status);
-  if (healthStatus === 'healthy') return 'healthy';
-  const displayState = workspaceLaunchString(session.display_state);
-  if (displayState === 'stale') return 'stale';
-  if (displayState === 'closed' || workspaceLaunchString(session.terminal_state) === 'closed') return 'failed';
-  if (displayState === 'active') return 'healthy';
-  if (displayState === 'starting_or_degraded') return 'failed';
-  return 'failed';
-}
-
-function workspaceLaunchUnownedObservation(launchAttemptId: string, selection: WorkspaceLaunchBrowserSelection): WorkspaceLaunchObservationRecord {
-  return {
-    schema: 'narada.workspace_launch.observed_runtime.v1',
-    observation_id: workspaceLaunchId('wlr'),
-    launch_attempt_id: launchAttemptId,
-    kind: 'nars',
-    session_id: null,
-    site_root: null,
-    health: 'unowned',
-    authority: 'nars_session_management',
-    ownership_posture: 'observed_unowned',
-    last_checked_at: new Date().toISOString(),
-    message: `Found NARS sessions for ${selection.site.join(', ')} / ${selection.role.join(', ')} but none matched the requested selection.`,
-  };
-}
-
-function workspaceLaunchRuntimeObservationPollBudgetMs(): number {
-  const raw = process.env.NARADA_WORKSPACE_LAUNCH_OBSERVATION_POLL_MS;
-  const parsed = raw ? Number.parseInt(raw, 10) : NaN;
-  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 5000;
-}
-
-function workspaceLaunchRuntimeObservationPollIntervalMs(): number {
-  const raw = process.env.NARADA_WORKSPACE_LAUNCH_OBSERVATION_POLL_INTERVAL_MS;
-  const parsed = raw ? Number.parseInt(raw, 10) : NaN;
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 250;
-}
-
-async function workspaceLaunchObservationPause(ms: number): Promise<void> {
-  if (ms <= 0) return;
-  await new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function normalizeWorkspaceLaunchSiteToken(value: string): string {
-  return value.toLowerCase().replace(/^narada[-.]/, '').replace(/^narada/, '').replace(/^[-.]/, '');
-}
-
-function workspaceLaunchHandoffCwd(record: Record<string, unknown>): string | null {
-  const selectedAgents = Array.isArray(record.selected_agents) ? record.selected_agents : [];
-  const firstAgent = selectedAgents.find(isRecord);
-  return firstAgent ? workspaceLaunchString(firstAgent.workspace_root) ?? workspaceLaunchString(firstAgent.site_root) : null;
-}
-
-function redactWorkspaceLaunchArgv(args: string[]): string[] {
-  return args.map((arg) => {
-    if (/api[_-]?key|token|secret|password/i.test(arg)) return '<redacted>';
-    return arg;
-  });
-}
-
-function normalizeWorkspaceLaunchBrowserSelection(payload: Partial<WorkspaceLaunchBrowserSelection>): WorkspaceLaunchBrowserSelection {
-  const site = stringArray(payload.site).filter(Boolean);
-  const role = stringArray(payload.role).filter(Boolean);
-  const operatorSurface = normalizeInteractiveOperatorSurfaceValues(stringArray(payload.operatorSurface).filter(Boolean));
-  const runtime = nonEmpty(payload.runtime) ?? 'registry default';
-  const intelligenceProvider = nonEmpty(payload.intelligenceProvider) ?? 'registry default';
-  if (site.length === 0) throw new Error('interactive_selection_ui_site_required');
-  if (role.length === 0) throw new Error('interactive_selection_ui_role_required');
-  if (operatorSurface.length === 0) throw new Error('interactive_selection_ui_operator_surface_required');
-  const explicitSurfaces = operatorSurface.filter((value) => value !== 'registry default');
-  if (explicitSurfaces.length > 1 && explicitSurfaces.some((value) => !NARS_OPERATOR_SURFACE_KINDS.includes(value as typeof NARS_OPERATOR_SURFACE_KINDS[number]))) {
-    throw new Error('interactive_selection_ui_multiple_operator_surfaces_require_nars_projections');
-  }
-  const selectionMode = workspaceLaunchSelectionMode(payload.selectionMode, { site, role, operatorSurface });
-  return { site, role, operatorSurface, runtime, intelligenceProvider, ...(selectionMode ? { selectionMode } : {}) };
-}
-
-function filterWorkspaceLaunchValues(values: string[] | undefined, allowed: string[]): string[] {
-  const allowedSet = new Set(allowed.map((value) => value.toLowerCase()));
-  return unique(stringArray(values).filter((value) => allowedSet.has(value.toLowerCase())));
+export function normalizeWorkspaceLaunchBrowserSelection(payload: Partial<WorkspaceLaunchBrowserSelection>): WorkspaceLaunchBrowserSelection {
+  return normalizeWorkspaceLaunchBrowserSelectionDomain(payload);
 }
 
 export function resolveWorkspaceLaunchBrowserSelection(
@@ -2786,59 +1340,13 @@ export function resolveWorkspaceLaunchBrowserSelection(
   rememberedSelection: WorkspaceLaunchBrowserSelection | null,
   siteCatalog: ResolvedSiteRoot[] = [],
 ): WorkspaceLaunchBrowserSelection {
-  const effectiveRecords = canonicalizeWorkspaceLaunchRecords(records, siteCatalog);
-  const siteChoices = unique(effectiveRecords.map((record) => record.site));
-  const requestedSites = filterWorkspaceLaunchValues(options.site, siteChoices);
-  const rememberedSites = rememberedSelection ? filterWorkspaceLaunchValues(rememberedSelection.site, siteChoices) : [];
-  const selectedSites = requestedSites.length > 0 ? requestedSites : rememberedSites;
-
-  const roleChoices = roleChoicesForSelectedSites(effectiveRecords, selectedSites);
-  const requestedRoles = initialRoleValuesForInteractiveSelection(roleChoices, options.role);
-  const rememberedRoles = rememberedSelection ? filterWorkspaceLaunchValues(rememberedSelection.role, roleChoices) : [];
-  const selectedRoles = nonEmptyStringArray(options.role).length > 0 ? requestedRoles : (rememberedRoles.length > 0 ? rememberedRoles : requestedRoles);
-
-  const selectedRecords = selectLaunchRecords(effectiveRecords, { ...options, all: true, site: selectedSites, role: selectedRoles });
-  const capabilityValues = workspaceLaunchCapabilityValues(selectedRecords);
-  const requestedOperatorSurfaces = initialOperatorSurfaceValues(capabilityValues.operatorSurfaceValues, options.operatorSurface);
-  const rememberedOperatorSurfaces = rememberedSelection ? initialOperatorSurfaceValues(capabilityValues.operatorSurfaceValues, rememberedSelection.operatorSurface.join(',')) : [];
-  const selectedOperatorSurfaces = options.operatorSurface ? requestedOperatorSurfaces : (rememberedOperatorSurfaces.length > 0 ? rememberedOperatorSurfaces : requestedOperatorSurfaces);
-
-  const runtimeValues = workspaceLaunchCapabilityValues(selectedRecords, selectedOperatorSurfaces).runtimeValues;
-  const requestedRuntime = nonEmpty(options.runtime);
-  const rememberedRuntime = rememberedSelection && nonEmpty(rememberedSelection.runtime) && runtimeValues.includes(normalizeRuntimeAlias(rememberedSelection.runtime))
-    ? normalizeRuntimeAlias(rememberedSelection.runtime)
-    : null;
-  const selectedRuntime = requestedRuntime
-    ? (runtimeValues.includes(normalizeRuntimeAlias(requestedRuntime)) ? normalizeRuntimeAlias(requestedRuntime) : 'registry default')
-    : (rememberedRuntime ?? (options.runtime ?? 'registry default'));
-
-  const providerOperatorSurface = selectedOperatorSurfaces.includes('agent-cli') ? 'agent-cli' : (selectedOperatorSurfaces[0] ?? 'registry default');
-  const intelligenceProviderOptions = intelligenceProviderChoicesForLaunchSelection({
-    records: selectedRecords,
-    operatorSurface: providerOperatorSurface,
-    runtime: selectedRuntime,
-  });
-  const providerValues = new Set(intelligenceProviderOptions.map((option) => option.value));
-  const requestedProvider = nonEmpty(options.intelligenceProvider);
-  const rememberedProvider = rememberedSelection && nonEmpty(rememberedSelection.intelligenceProvider) && providerValues.has(rememberedSelection.intelligenceProvider)
-    ? rememberedSelection.intelligenceProvider
-    : null;
-  const selectedProvider = requestedProvider
-    ? (providerValues.has(requestedProvider) ? requestedProvider : 'registry default')
-    : (rememberedProvider ?? (options.intelligenceProvider ?? 'registry default'));
-
-  const selection = {
-    site: selectedSites,
-    role: selectedRoles,
-    operatorSurface: selectedOperatorSurfaces,
-    runtime: selectedRuntime,
-    intelligenceProvider: selectedProvider,
-  };
-  const selectionMode = workspaceLaunchSelectionMode(
-    options.site || options.role || options.operatorSurface ? undefined : rememberedSelection?.selectionMode,
-    selection,
+  return resolveWorkspaceLaunchBrowserSelectionDomain(
+    records,
+    options,
+    rememberedSelection,
+    siteCatalog,
+    workspaceLaunchSelectionContext(),
   );
-  return { ...selection, ...(selectionMode ? { selectionMode } : {}) };
 }
 
 export function buildWorkspaceLaunchSelectionUiModel(
@@ -2847,133 +1355,64 @@ export function buildWorkspaceLaunchSelectionUiModel(
   rememberedSelection: WorkspaceLaunchBrowserSelection | null = null,
   siteCatalog: ResolvedSiteRoot[] = [],
 ): Record<string, unknown> {
-  const effectiveRecords = canonicalizeWorkspaceLaunchRecords(records, siteCatalog);
-  const resolvedSelection = resolveWorkspaceLaunchBrowserSelection(effectiveRecords, options, rememberedSelection, siteCatalog);
-  const siteChoices = unique(effectiveRecords.map((record) => record.site));
-  return {
-    records: effectiveRecords,
-    siteChoices,
-    siteCatalog: siteCatalog.map((site) => ({
-      site_id: site.site_id,
-      site_root: site.site_root,
-      source: site.source,
-    })),
+  return buildWorkspaceLaunchSelectionUiModelDomain(
+    records,
+    options,
     rememberedSelection,
-    rememberedSelectionSemantics: {
-      schema: 'narada.workspace_launch.remembered_selection_semantics.v1',
-      role: 'form_defaults_only',
-      binds_runtime_session: false,
-      binds_carrier_session: false,
-      binds_launch_session: false,
-      launch_submission: 'always_creates_new_launch_session',
-    },
-    initialSites: resolvedSelection.site,
-    initialRoles: resolvedSelection.role,
-    initialOperatorSurfaces: resolvedSelection.operatorSurface,
-    initialRuntime: resolvedSelection.runtime,
-    initialIntelligenceProvider: resolvedSelection.intelligenceProvider,
-    initialSelectionMode: resolvedSelection.selectionMode ?? { site: 'single', role: 'single', operatorSurface: 'single' },
-    narsOperatorSurfaceChoices: [...NARS_OPERATOR_SURFACE_KINDS],
-    selectorModel: workspaceLaunchSelectorModel(effectiveRecords, resolvedSelection, siteCatalog),
-    explicitSelection: {
-      site: nonEmptyStringArray(options.site).length > 0,
-      role: nonEmptyStringArray(options.role).length > 0,
-      operatorSurface: normalizeInteractiveOperatorSurfaceValues(options.operatorSurface ? options.operatorSurface.split(',') : []).length > 0,
-      runtime: !!options.runtime,
-      intelligenceProvider: !!options.intelligenceProvider,
-    },
-  };
+    siteCatalog,
+    workspaceLaunchSelectionContext(),
+  );
 }
 
 export function registryDefaultOperatorSurfaceLabel(records: WorkspaceLaunchRecord[]): string {
-  const defaults = unique(records.map((record) => record.operator_surface).filter(Boolean));
-  return defaults.length > 0 ? `registry default (${defaults.join(', ')})` : 'registry default';
+  return registryDefaultOperatorSurfaceLabelDomain(records);
 }
 
 export function registryDefaultRuntimeLabel(records: WorkspaceLaunchRecord[]): string {
-  const defaults = unique(records.map((record) => record.runtime).filter(Boolean));
-  return defaults.length > 0 ? `registry default (${defaults.join(', ')})` : 'registry default';
+  return registryDefaultRuntimeLabelDomain(records);
 }
 
 export function registryDefaultIntelligenceProviderLabel(defaultProvider?: string): string {
-  return defaultProvider ? `registry default (${defaultProvider})` : 'registry default';
+  return registryDefaultIntelligenceProviderLabelDomain(defaultProvider);
 }
 
 export function registryDefaultIntelligenceProvider(): string {
-  return providerRegistry.default_provider ?? 'registry default';
+  return registryDefaultIntelligenceProviderDomain(workspaceLaunchSelectionContext());
 }
 
 export function initialOperatorSurfaceValues(choices: string[], current?: string): string[] {
-  if (!current) return ['registry default'];
-  const explicit = normalizeCarrierList(current).filter((value) => choices.some((choice) => choice.toLowerCase() === value.toLowerCase()));
-  return explicit.length > 0 ? explicit : ['registry default'];
+  return initialOperatorSurfaceValuesDomain(choices, current);
 }
 
 export function normalizeInteractiveOperatorSurfaceValues(values: string[]): string[] {
-  const normalized = unique(values);
-  const explicit = normalized.filter((value) => value !== 'registry default');
-  if (explicit.length > 0) return explicit;
-  if (normalized.includes('registry default')) return ['registry default'];
-  return normalized;
+  return normalizeInteractiveOperatorSurfaceValuesDomain(values);
 }
 
-export function intelligenceProviderChoicesForLaunchSelection({
-  records,
-  operatorSurface,
-  runtime,
-}: {
+export function intelligenceProviderChoicesForLaunchSelection(args: {
   records: WorkspaceLaunchRecord[];
   operatorSurface: string;
   runtime: string;
 }): Array<{ value: string; label: string; hint?: string }> {
-  const narsSurfaceRecords = records.filter((record) => {
-    const selection = resolveWorkspaceCarrierRuntimeSelection(
-      operatorSurface === 'registry default' ? record.operator_surface : operatorSurface,
-      runtime === 'registry default' ? record.runtime : runtime,
-    );
-    return selection.carrier_kind === 'agent-cli' || selection.carrier_kind === 'agent-web-ui';
-  });
-  if (narsSurfaceRecords.length === 0) {
-    return [{ value: 'registry default', label: 'registry default', hint: 'no NARS operator-surface launches selected' }];
-  }
-  return intelligenceProviderChoices({ admittedProviders: providerAdapters.admitted_providers });
+  return intelligenceProviderChoicesForLaunchSelectionDomain({ ...args, context: workspaceLaunchSelectionContext() });
 }
 
 export function intelligenceProviderChoices({ admittedProviders }: { admittedProviders?: string[] } = {}): Array<{ value: string; label: string; hint?: string }> {
-  const admitted = admittedProviders ? new Set(admittedProviders) : null;
-  const entries = Object.entries(providerRegistry.providers ?? {})
-    .filter(([, provider]) => provider.support_state === 'verified_supported')
-    .filter(([provider]) => !admitted || admitted.has(provider))
-    .map(([provider, metadata]) => ({
-      value: provider,
-      label: provider,
-      hint: metadata.meaning,
-    }))
-    .sort((a, b) => a.label.localeCompare(b.label));
-  return [
-    {
-      value: 'registry default',
-      label: registryDefaultIntelligenceProviderLabel(providerRegistry.default_provider),
-      hint: providerRegistry.default_provider ? `use default provider ${providerRegistry.default_provider}` : 'use launcher/provider defaults',
-    },
-    ...entries,
-  ];
+  const context: WorkspaceLaunchSelectionContext = {
+    ...workspaceLaunchSelectionContext(),
+    admittedProviders,
+  };
+  return intelligenceProviderChoicesDomain(context);
 }
 
 export function roleChoicesForSelectedSites(records: WorkspaceLaunchRecord[], siteSelectors: string[]): string[] {
-  return unique(records
-    .filter((record) => recordMatchesSiteSelectors(record, siteSelectors))
-    .map((record) => record.role));
+  return roleChoicesForSelectedSitesDomain(records, siteSelectors);
 }
 
 export function initialRoleValuesForInteractiveSelection(roleChoices: string[], explicitRoles?: string[]): string[] {
-  const explicitRoleValues = (explicitRoles ?? []).filter((role) => roleChoices.some((choice) => choice.toLowerCase() === role.toLowerCase()));
-  if (explicitRoleValues.length > 0) return explicitRoleValues;
-  const residentChoice = roleChoices.find((role) => role.toLowerCase() === 'resident');
-  return residentChoice ? [residentChoice] : [];
+  return initialRoleValuesForInteractiveSelectionDomain(roleChoices, explicitRoles);
 }
 
-function unique(values: string[]): string[] {
+export function unique(values: string[]): string[] {
   const seen = new Set<string>();
   const result: string[] = [];
   for (const value of values) {
@@ -2987,7 +1426,7 @@ function unique(values: string[]): string[] {
   return result;
 }
 
-function resolveRegistryPaths(options: WorkspaceLaunchPlanOptions): string[] {
+export function resolveRegistryPaths(options: WorkspaceLaunchPlanOptions): string[] {
   const configPaths = nonEmptyStringArray(options.configPath);
   const paths = configPaths.length > 0
     ? configPaths
@@ -3003,7 +1442,7 @@ export function hasWorkspaceLaunchSelectionIntent(options: WorkspaceLaunchPlanOp
     || nonEmptyStringArray(options.configPath).length > 0;
 }
 
-function normalizeWorkspaceLaunchPlanOptions(options: WorkspaceLaunchPlanOptions): WorkspaceLaunchPlanOptions {
+export function normalizeWorkspaceLaunchPlanOptions(options: WorkspaceLaunchPlanOptions): WorkspaceLaunchPlanOptions {
   const normalized: WorkspaceLaunchPlanOptions = {
     ...options,
     agent: nonEmptyStringArray(options.agent),
@@ -3100,55 +1539,11 @@ function normalizeAgentRecord(registry: RawLaunchRegistry, agent: RawAgentRecord
   };
 }
 
-function selectLaunchRecords(records: WorkspaceLaunchRecord[], options: WorkspaceLaunchPlanOptions): WorkspaceLaunchRecord[] {
-  let selected: WorkspaceLaunchRecord[];
-  const agentSelectors = nonEmptyStringArray(options.agent);
-  const roleSelectors = nonEmptyStringArray(options.role);
-  const siteSelectors = nonEmptyStringArray(options.site);
-  const configPathSelectors = nonEmptyStringArray(options.configPath);
-  const hasRoleSelector = roleSelectors.length > 0;
-  const hasSiteSelector = siteSelectors.length > 0;
-  const hasConfigPathSelector = configPathSelectors.length > 0;
-  if (agentSelectors.length > 0) {
-    selected = [];
-    for (const agent of agentSelectors) {
-      const matches = records.filter((record) => record.agent === agent);
-      if (matches.length === 0) throw new Error(`agent_not_found_in_launch_registry: ${agent}`);
-      if (matches.length > 1) throw new Error(`agent_duplicate_in_launch_registry: ${agent}`);
-      selected.push(matches[0]);
-    }
-  } else if (options.all || hasConfigPathSelector || hasRoleSelector || hasSiteSelector) {
-    selected = records;
-  } else {
-    throw new Error('launch_selection_required: specify --agent, --all, --site, --role, or --config-path');
-  }
-
-  if (hasRoleSelector) {
-    const roles = new Set(roleSelectors.map((role) => role.toLowerCase()));
-    selected = selected.filter((record) => roles.has(record.role.toLowerCase()));
-    if (selected.length === 0) throw new Error(`no_agents_match_role_filter: ${roleSelectors.join(', ')}`);
-  }
-
-  if (hasSiteSelector) {
-    selected = selected.filter((record) => recordMatchesSiteSelectors(record, siteSelectors));
-    if (selected.length === 0) throw new Error(`no_agents_match_site_filter: ${siteSelectors.join(', ')}`);
-  }
-
-  return selected;
+export function selectLaunchRecords(records: WorkspaceLaunchRecord[], options: WorkspaceLaunchPlanOptions): WorkspaceLaunchRecord[] {
+  return selectLaunchRecordsDomain(records, options);
 }
 
-function recordMatchesSiteSelectors(record: WorkspaceLaunchRecord, siteSelectors: string[]): boolean {
-  const sites = new Set(siteSelectors.map((site) => site.toLowerCase()));
-  const aliases = [
-    record.site,
-    record.legacy_site,
-    record.site.replace(/^narada-/, ''),
-    record.agent.split('.')[0],
-  ].filter((value): value is string => typeof value === 'string' && value.length > 0).map((value) => value.toLowerCase());
-  return aliases.some((alias) => sites.has(alias));
-}
-
-function buildAgentPlan(record: WorkspaceLaunchRecord, options: WorkspaceLaunchPlanOptions): WorkspaceLaunchAgentPlan {
+export function buildAgentPlan(record: WorkspaceLaunchRecord, options: WorkspaceLaunchPlanOptions): WorkspaceLaunchAgentPlan {
   const operatorSurfaceInput = options.operatorSurface ?? record.operator_surface;
   const launchCarriers = normalizeCarrierList(operatorSurfaceInput);
   const primaryCarrierInput = launchCarriers.includes('agent-cli') ? 'agent-cli' : launchCarriers[0] ?? operatorSurfaceInput;
@@ -3188,11 +1583,7 @@ function buildAgentPlan(record: WorkspaceLaunchRecord, options: WorkspaceLaunchP
       })
     : null;
   const qualifiedAgentId = workspaceLaunchQualifiedAgentId(record);
-  const operatorSurfaceStartCommand = [
-    'pnpm',
-    '--dir', naradaProper,
-    'exec',
-    'narada',
+  const runtimeStartArguments = [
     'operator-surface',
     'runtime',
     'start', launchCarrier,
@@ -3203,6 +1594,13 @@ function buildAgentPlan(record: WorkspaceLaunchRecord, options: WorkspaceLaunchP
     '--exec',
     '--format', 'human',
   ];
+  const operatorSurfaceStartCommand = [
+    'pnpm',
+    '--dir', naradaProper,
+    'exec',
+    'narada',
+    ...runtimeStartArguments,
+  ];
   if (record.workspace_root) operatorSurfaceStartCommand.push('--workspace-root', record.workspace_root);
   if (enableNativeShell) operatorSurfaceStartCommand.push('--enable-native-shell');
   operatorSurfaceStartCommand.push('--authority', authority);
@@ -3211,6 +1609,11 @@ function buildAgentPlan(record: WorkspaceLaunchRecord, options: WorkspaceLaunchP
   if (launchBindingPath) operatorSurfaceStartCommand.push('--launch-binding', launchBindingPath);
   if (!launchBindingPath) operatorSurfaceStartCommand.push('--launch-session-id', launchSessionId ?? '');
   if (waitForEnter) operatorSurfaceStartCommand.push('--wait');
+  const hiddenRuntimeStartCommand = [
+    process.execPath,
+    join(naradaProper, 'packages', 'layers', 'cli', 'dist', 'main.js'),
+    ...operatorSurfaceStartCommand.slice(5),
+  ];
   const runtimeStartExecutionMode: WorkspaceLaunchAgentPlan['runtime_start_execution_mode'] = isNarsRuntimeHost
     ? 'hidden_detached'
     : 'operator_terminal';
@@ -3278,6 +1681,7 @@ function buildAgentPlan(record: WorkspaceLaunchRecord, options: WorkspaceLaunchP
     wait_for_enter_before_exec: waitForEnter,
     runtime_start_execution_mode: runtimeStartExecutionMode,
     runtime_start_command: operatorSurfaceStartCommand,
+    hidden_runtime_start_command: hiddenRuntimeStartCommand,
     runtime_start_cwd: runtimeStartCwd,
     mcp_scope: mcpScope,
     enable_native_shell: enableNativeShell,
@@ -3294,7 +1698,7 @@ function buildAgentPlan(record: WorkspaceLaunchRecord, options: WorkspaceLaunchP
   };
 }
 
-function normalizeCarrierList(value: string | undefined): string[] {
+export function normalizeCarrierList(value: string | undefined): string[] {
   const carriers = String(value ?? 'agent-cli')
     .split(',')
     .map((item) => nonEmpty(item))
