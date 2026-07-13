@@ -170,7 +170,8 @@ export async function runPersistentWorkspaceLaunchSelectionUi(
   });
   const attempts: WorkspaceLaunchAttemptRecord[] = [...recoveredAttempts];
   launchCount = attempts.filter((attempt) => attempt.status === 'launched').length;
-  const uiSessionLifecycle = createWorkspaceLaunchUiSessionLifecycle();
+  let uiSessionLifecycle = createWorkspaceLaunchUiSessionLifecycle();
+  uiSessionLifecycle = transitionWorkspaceLaunchUiSession(uiSessionLifecycle, 'starting');
   const uiSession: WorkspaceLaunchUiSessionRecord = {
     schema: 'narada.workspace_launch.ui_session.v1',
     ui_session_id: support.workspaceLaunchId('wls'),
@@ -389,13 +390,26 @@ export async function runPersistentWorkspaceLaunchSelectionUi(
     });
     server.on('error', rejectClosed);
   });
-  const { url, port, fallback_used } = await listenWorkspaceLaunchUiServer(server!, host, portPolicy);
-  const ingress = await resolveWorkspaceLaunchUiIngress({
-    uiSessionId: uiSession.ui_session_id,
-    directUrl: url,
-    host,
-    port: options.operatorRouterPort,
-  });
+  let listening: Awaited<ReturnType<typeof listenWorkspaceLaunchUiServer>>;
+  let ingress: Awaited<ReturnType<typeof resolveWorkspaceLaunchUiIngress>>;
+  try {
+    listening = await listenWorkspaceLaunchUiServer(server!, host, portPolicy);
+    setWorkspaceLaunchUiSessionLifecycle(uiSession, 'open');
+    ingress = await resolveWorkspaceLaunchUiIngress({
+      uiSessionId: uiSession.ui_session_id,
+      directUrl: listening.url,
+      host,
+      port: options.operatorRouterPort,
+    });
+  } catch (error) {
+    if (uiSession.lifecycle_state !== 'failed' && uiSession.lifecycle_state !== 'closed' && uiSession.lifecycle_state !== 'timeout') {
+      setWorkspaceLaunchUiSessionLifecycle(uiSession, 'failed');
+    }
+    await persistWorkspaceLaunchDashboardState(persistenceDir, uiSession, attempts);
+    await closeWorkspaceLaunchUiServer(server);
+    throw error;
+  }
+  const { url, port, fallback_used } = listening;
   console.log(`Narada launcher selection UI: ${ingress.url}`);
   if (fallback_used) console.log(`[launcher] preferred UI port ${portPolicy.port} was occupied; using ephemeral port ${port} instead.`);
   if (ingress.ingress_mode === 'diagnostic') console.log(`[launcher] direct UI URL is diagnostic; Operator Console projection unavailable (${ingress.reason ?? 'unknown'}).`);

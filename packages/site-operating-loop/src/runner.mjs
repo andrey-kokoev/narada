@@ -24,6 +24,7 @@ export async function runSiteOperatingLoop(store, {
   lockTtlMs = 5 * 60_000,
   steps = [],
   summarize = null,
+  signal = null,
 } = {}) {
   if (!loopId) throw new Error('loopId is required');
   const startedAt = new Date().toISOString();
@@ -35,9 +36,25 @@ export async function runSiteOperatingLoop(store, {
 
   try {
     lifecycle = transitionSiteOperatingLoopRunLifecycle(lifecycle, 'locking');
+    beginLoopRun(store, {
+      run_id: runId,
+      loop_id: loopId,
+      status: 'locking',
+      dry_run: Boolean(dryRun),
+      started_at: startedAt,
+      lifecycle,
+    });
+    if (signal?.aborted) throw createSiteOperatingLoopAbortError();
     lock = acquireLoopLock(store, { loopId, runId, ownerId, ttlMs: lockTtlMs });
     if (lock.status === 'contended') {
       lifecycle = transitionSiteOperatingLoopRunLifecycle(lifecycle, 'locked');
+      const finishedAt = new Date().toISOString();
+      finishLoopRun(store, runId, {
+        status: 'locked',
+        finished_at: finishedAt,
+        summary: { lock },
+        lifecycle,
+      });
       return {
         schema: 'narada.site_operating_loop.run.v1',
         status: 'locked',
@@ -45,7 +62,7 @@ export async function runSiteOperatingLoop(store, {
         run_id: runId,
         dry_run: Boolean(dryRun),
         started_at: startedAt,
-        finished_at: new Date().toISOString(),
+        finished_at: finishedAt,
         lock,
         health: getLoopHealth(store, loopId),
         lifecycle_schema: lifecycle.schema,
@@ -57,17 +74,15 @@ export async function runSiteOperatingLoop(store, {
     }
 
     lifecycle = transitionSiteOperatingLoopRunLifecycle(lifecycle, 'running');
-    beginLoopRun(store, {
-      run_id: runId,
-      loop_id: loopId,
+    finishLoopRun(store, runId, {
       status: 'running',
-      dry_run: Boolean(dryRun),
-      started_at: startedAt,
-      lifecycle,
+      finished_at: null,
       summary: lock.status === 'stale_recovered' ? { stale_lock_recovered: lock } : null,
+      lifecycle,
     });
 
     for (const step of steps) {
+      if (signal?.aborted) throw createSiteOperatingLoopAbortError();
       const recorded = await runSiteOperatingLoopStep(store, {
         loopId,
         runId,
@@ -75,6 +90,7 @@ export async function runSiteOperatingLoop(store, {
         step,
         priorSteps: recordedSteps,
         resultsByStepId,
+        signal,
       });
       recordedSteps.push(recorded);
       resultsByStepId[recorded.step_id] = recorded.result ?? recorded.evidence ?? null;
@@ -82,8 +98,10 @@ export async function runSiteOperatingLoop(store, {
         failedStep = recorded;
         throw stepError(recorded);
       }
+      if (signal?.aborted) throw createSiteOperatingLoopAbortError();
     }
 
+    if (signal?.aborted) throw createSiteOperatingLoopAbortError();
     const finishedAt = new Date().toISOString();
     const summary = typeof summarize === 'function'
       ? await summarize({ steps: recordedSteps, lock })
@@ -111,31 +129,35 @@ export async function runSiteOperatingLoop(store, {
   } catch (error) {
     const finishedAt = new Date().toISOString();
     const payload = errorToPayload(error);
-    if (canTransitionSiteOperatingLoopRun(lifecycle.state, 'failed')) {
-      lifecycle = transitionSiteOperatingLoopRunLifecycle(lifecycle, 'failed');
+    const aborted = signal?.aborted === true || error?.name === 'AbortError' || error?.code === 'ABORT_ERR';
+    const terminalState = aborted ? 'aborted' : 'failed';
+    if (canTransitionSiteOperatingLoopRun(lifecycle.state, terminalState)) {
+      lifecycle = transitionSiteOperatingLoopRunLifecycle(lifecycle, terminalState);
     }
     let health = null;
     try {
       finishLoopRun(store, runId, {
-        status: 'failed',
+        status: aborted ? 'aborted' : 'failed',
         finished_at: finishedAt,
         summary: { step_count: recordedSteps.length },
         error: payload,
         lifecycle,
       });
-      health = recordLoopHealthFailure(store, {
-        loopId,
-        runId,
-        failingStep: failedStep?.step_id ?? null,
-        error: payload,
-        at: finishedAt,
-      });
+      health = aborted
+        ? getLoopHealth(store, loopId)
+        : recordLoopHealthFailure(store, {
+          loopId,
+          runId,
+          failingStep: failedStep?.step_id ?? null,
+          error: payload,
+          at: finishedAt,
+        });
     } catch {
       // Preserve the original loop failure.
     }
     return {
       schema: 'narada.site_operating_loop.run.v1',
-      status: 'failed',
+      status: aborted ? 'aborted' : 'failed',
       loop_id: loopId,
       run_id: runId,
       dry_run: Boolean(dryRun),
@@ -156,6 +178,13 @@ export async function runSiteOperatingLoop(store, {
   }
 }
 
+function createSiteOperatingLoopAbortError() {
+  const error = new Error('site_operating_loop_aborted');
+  error.name = 'AbortError';
+  error.code = 'ABORT_ERR';
+  return error;
+}
+
 export async function runSiteOperatingLoopStep(store, {
   loopId = null,
   runId,
@@ -163,13 +192,16 @@ export async function runSiteOperatingLoopStep(store, {
   step,
   priorSteps = [],
   resultsByStepId = {},
+  signal = null,
 } = {}) {
   if (!runId) throw new Error('runId is required');
   if (!step?.stepId) throw new Error('step.stepId is required');
   const startedAt = new Date().toISOString();
   try {
+    if (signal?.aborted) throw createSiteOperatingLoopAbortError();
     const stepContext = createStepContext({ loopId, runId, dryRun, step, priorSteps, resultsByStepId, startedAt });
     const result = typeof step.execute === 'function' ? await step.execute(stepContext) : null;
+    if (signal?.aborted) throw createSiteOperatingLoopAbortError();
     const finishedAt = new Date().toISOString();
     const finishedContext = { ...stepContext, result, finishedAt };
     const record = {

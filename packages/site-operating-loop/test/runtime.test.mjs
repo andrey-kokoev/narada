@@ -2,15 +2,18 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
 import {
+  acquireLoopLock,
   admitLoopTrigger,
   claimNextLoopTrigger,
   ensureSiteLoopTables,
   finishLoopTrigger,
+  getLoopRun,
   getLoopStatus,
   listLoopRuntimeEvents,
   listLoopTriggers,
   setLoopControl,
 } from '../src/site-loop-store.mjs';
+import { runSiteOperatingLoop } from '../src/runner.mjs';
 import { startSiteOperatingLoopRuntime } from '../src/runtime.mjs';
 
 function openTestStore() {
@@ -68,6 +71,60 @@ test('runtime executes bounded cycles with Site-provided steps', async () => {
     const afterFirst = listLoopRuntimeEvents(store, { loopId: 'test.loop', afterEventId: storedEvents.events[0].event_id, limit: 10 });
     assert.equal(afterFirst.count, 5);
     assert.equal(afterFirst.events[0].event, 'cycle_started');
+  } finally {
+    store.close();
+  }
+});
+
+test('contended run persists locked lifecycle evidence', async () => {
+  const store = openTestStore();
+  try {
+    acquireLoopLock(store, {
+      loopId: 'test.loop',
+      runId: 'active-run',
+      ttlMs: 60_000,
+    });
+    const result = await runSiteOperatingLoop(store, {
+      loopId: 'test.loop',
+      runId: 'contended-run',
+      steps: [],
+    });
+
+    assert.equal(result.status, 'locked');
+    assert.deepEqual(result.lifecycle_history, ['requested', 'locking', 'locked']);
+    const stored = getLoopRun(store, 'contended-run');
+    assert.equal(stored.status, 'locked');
+    assert.equal(stored.lifecycle_state, 'locked');
+    assert.deepEqual(stored.lifecycle_history, ['requested', 'locking', 'locked']);
+  } finally {
+    store.close();
+  }
+});
+
+test('aborted run persists an aborted lifecycle without degrading health', async () => {
+  const store = openTestStore();
+  const controller = new AbortController();
+  try {
+    const result = await runSiteOperatingLoop(store, {
+      loopId: 'test.loop',
+      runId: 'aborted-run',
+      signal: controller.signal,
+      steps: [{
+        stepId: 'abort-step',
+        execute: () => {
+          controller.abort();
+          return { reached: true };
+        },
+      }],
+    });
+
+    assert.equal(result.status, 'aborted');
+    assert.equal(result.lifecycle_state, 'aborted');
+    assert.deepEqual(result.lifecycle_history, ['requested', 'locking', 'running', 'aborted']);
+    assert.equal(result.health.status, 'unknown');
+    const stored = getLoopRun(store, 'aborted-run');
+    assert.equal(stored.status, 'aborted');
+    assert.equal(stored.lifecycle_state, 'aborted');
   } finally {
     store.close();
   }

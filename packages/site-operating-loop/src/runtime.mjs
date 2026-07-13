@@ -96,8 +96,10 @@ export async function startSiteOperatingLoopRuntime(store, {
         prepareRun,
         createSteps,
         summarize,
+        signal,
         context: { ...context, trigger },
       });
+      if (run.status === 'aborted') stoppedReason = 'aborted';
       if (trigger) {
         finishLoopTrigger(store, {
           triggerId: trigger.trigger_id,
@@ -141,7 +143,7 @@ export async function startSiteOperatingLoopRuntime(store, {
   }
 
   const finishedAt = new Date().toISOString();
-  const finalStatus = stoppedReason === 'aborted'
+  const finalStatus = stoppedReason === 'aborted' || cycles.some((cycle) => cycle.status === 'aborted')
     ? 'aborted'
     : cycles.some((cycle) => cycle.status === 'failed')
       ? 'degraded'
@@ -158,7 +160,7 @@ export async function startSiteOperatingLoopRuntime(store, {
     interval_ms: intervalMs,
     cycles,
     cycle_count: cycles.length,
-    stopped_reason: stoppedReason,
+    stopped_reason: stoppedReason ?? (cycles.some((cycle) => cycle.status === 'aborted') ? 'aborted' : null),
   };
 
   await emitRuntimeEvent(store, { onEvent, recordEvents }, {
@@ -173,7 +175,7 @@ export async function startSiteOperatingLoopRuntime(store, {
   return result;
 }
 
-async function runCycle(store, { loopId, ownerId, dryRun, lockTtlMs, prepareRun, createSteps, summarize, context }) {
+async function runCycle(store, { loopId, ownerId, dryRun, lockTtlMs, prepareRun, createSteps, summarize, signal, context }) {
   try {
     const prepared = typeof prepareRun === 'function' ? await prepareRun(context) : null;
     const preparedContext = { ...context, prepared };
@@ -186,6 +188,7 @@ async function runCycle(store, { loopId, ownerId, dryRun, lockTtlMs, prepareRun,
         dryRun,
         lockTtlMs,
         error: new Error(`invalid Site Operating Loop steps: ${validation.errors.join(', ')}`),
+        signal,
       });
     }
     return await runSiteOperatingLoop(store, {
@@ -194,6 +197,7 @@ async function runCycle(store, { loopId, ownerId, dryRun, lockTtlMs, prepareRun,
       dryRun,
       lockTtlMs,
       steps,
+      signal,
       summarize: typeof summarize === 'function'
         ? (runContext) => summarize({ ...runContext, ...preparedContext })
         : null,
@@ -205,11 +209,12 @@ async function runCycle(store, { loopId, ownerId, dryRun, lockTtlMs, prepareRun,
       dryRun,
       lockTtlMs,
       error,
+      signal,
     });
   }
 }
 
-async function runFactoryFailure(store, { loopId, ownerId, dryRun, lockTtlMs, error }) {
+async function runFactoryFailure(store, { loopId, ownerId, dryRun, lockTtlMs, error, signal }) {
   return await runSiteOperatingLoop(store, {
     loopId,
     ownerId,
@@ -221,6 +226,7 @@ async function runFactoryFailure(store, { loopId, ownerId, dryRun, lockTtlMs, er
         throw error;
       },
     }],
+    signal,
   });
 }
 

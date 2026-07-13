@@ -93,8 +93,11 @@ export function canTransitionSiteOperatingLoopHealth(from, to) {
 
 export function siteOperatingLoopRunLifecycleFromStatus(status) {
   const state = {
+    requested: 'requested',
+    locking: 'locking',
     running: 'running',
     ok: 'completed',
+    completed: 'completed',
     failed: 'failed',
     locked: 'locked',
     aborted: 'aborted',
