@@ -138,6 +138,8 @@ export const NARS_CLIENT_EVENT_LABELS = Object.freeze({
   session_health: 'Health',
   runtime_projection_failure: 'Runtime projection failure',
   runtime_control_input_bridge_error: 'Control-input bridge error',
+  runtime_intelligence_reconfiguration: 'Intelligence reconfiguration',
+  provider_runtime_reconfiguration_state_transition: 'Intelligence reconfiguration state',
   carrier_diagnostic_recorded: 'Diagnostic',
   mcp_runtime_fault: 'MCP runtime fault',
   authority_session_revoked: 'Session revoked',
@@ -964,7 +966,7 @@ export function classifyNarsClientEventProjection(projection) {
   if (kind === 'error' || kind === 'websocket_error' || kind === 'web_ui_decode_error' || kind === 'web_ui_input_not_sent' || kind === 'runtime_error') return 'conversation';
   if (kind === 'authority_session_revoked' || kind === 'projection_revoked') return 'diagnostics';
   if (kind === 'carrier_diagnostic_recorded' || kind === 'mcp_runtime_fault') return 'diagnostics';
-  if (kind === 'runtime_projection_failure' || kind === 'runtime_control_input_bridge_error') return 'diagnostics';
+  if (kind === 'runtime_projection_failure' || kind === 'runtime_control_input_bridge_error' || kind === 'runtime_intelligence_reconfiguration' || kind === 'provider_runtime_reconfiguration_state_transition') return 'diagnostics';
   if (kind === 'tool_call' || kind === 'tool_result' || kind === 'turn_failed') return 'operations';
   if (kind === 'session_artifact_registered' || kind === 'session_artifact_read') return 'conversation';
   if (kind === 'conversation_enqueue_requested' || kind === 'input_queued_for_turn_boundary' || kind === 'input_admitted_to_turn' || kind === 'input_dropped_by_operator' || kind === 'input_abandoned_on_session_end' || kind === 'input_completed') return 'operations';
@@ -1000,12 +1002,16 @@ export function shouldProjectNarsClientEvent(message, options = {}) {
   return shouldProjectNarsClientProjection(projectNarsClientEvent(message), options);
 }
 
-function eventTone(kind) {
+function eventTone(kind, event = null) {
   if (kind === 'assistant_message' || kind === 'assistant_message_stream' || kind === 'provider_agent_message') return NARS_CLIENT_EVENT_TONES.assistant;
   if (kind === 'user_message') return NARS_CLIENT_EVENT_TONES.operator;
   if (kind === 'tool_call' || kind === 'tool_result') return NARS_CLIENT_EVENT_TONES.tool;
   if (kind === 'session_artifact_registered' || kind === 'session_artifact_read') return NARS_CLIENT_EVENT_TONES.status;
   if (kind === 'error' || kind === 'websocket_error' || kind === 'web_ui_decode_error' || kind === 'turn_failed' || kind === 'authority_session_revoked' || kind === 'projection_revoked' || kind === 'mcp_runtime_fault' || kind === 'runtime_projection_failure' || kind === 'runtime_control_input_bridge_error') return NARS_CLIENT_EVENT_TONES.error;
+  if (kind === 'runtime_intelligence_reconfiguration' || kind === 'provider_runtime_reconfiguration_state_transition') {
+    const state = event?.terminal_state ?? event?.reconfiguration_state;
+    return state === 'refused' || state === 'failed' ? NARS_CLIENT_EVENT_TONES.error : NARS_CLIENT_EVENT_TONES.status;
+  }
   if (kind?.startsWith?.('agent_web_ui_') || kind === 'operator_input_submitted' || kind === 'web_ui_input_not_sent') return NARS_CLIENT_EVENT_TONES.local;
   if (kind === 'conversation_enqueue_requested' || kind?.startsWith?.('input_')) return NARS_CLIENT_EVENT_TONES.status;
   if (kind?.startsWith?.('authority_source_write_refused') || kind?.startsWith?.('authority_target_write_refused') || kind === 'authority_target_activation_refused') return NARS_CLIENT_EVENT_TONES.error;
@@ -1030,6 +1036,8 @@ function eventSummary(event, kind) {
   if (kind === 'session_health') return `${event.status ?? 'health'} · ${eventAgentDisplay(event)} · ${event.session_id ?? 'session'}`;
   if (kind === 'runtime_projection_failure') return runtimeProjectionFailureSummary(event);
   if (kind === 'runtime_control_input_bridge_error') return runtimeControlInputBridgeErrorSummary(event);
+  if (kind === 'runtime_intelligence_reconfiguration') return runtimeIntelligenceReconfigurationSummary(event);
+  if (kind === 'provider_runtime_reconfiguration_state_transition') return providerRuntimeReconfigurationStateSummary(event);
   if (kind === 'mcp_runtime_fault' || kind === 'carrier_diagnostic_recorded') return diagnosticSummary(event, kind);
   if (kind === 'turn_complete') return event.terminal_state ?? 'turn complete';
   if (kind === 'turn_failed') return errorSummary(event) ?? event.terminal_state ?? 'turn failed';
@@ -1087,6 +1095,22 @@ function runtimeControlInputBridgeErrorSummary(event) {
   return `control input bridge ${code}${error ? ` · ${error}` : ''}`;
 }
 
+function runtimeIntelligenceReconfigurationSummary(event) {
+  const state = event?.terminal_state ?? event?.reconfiguration_state ?? 'unknown';
+  const active = event?.active ?? event?.target ?? null;
+  const provider = active?.provider ?? event?.provider ?? null;
+  const model = active?.model ?? event?.model ?? null;
+  const target = [provider, model].filter((value) => typeof value === 'string' && value).join(' / ');
+  return `intelligence reconfiguration ${state}${target ? ` · ${target}` : ''}`;
+}
+
+function providerRuntimeReconfigurationStateSummary(event) {
+  const previous = event?.previous_state ?? 'new';
+  const next = event?.reconfiguration_state ?? 'unknown';
+  const target = event?.target?.provider ?? event?.active?.provider ?? null;
+  return `intelligence reconfiguration ${previous} -> ${next}${target ? ` · ${target}` : ''}`;
+}
+
 function artifactSummary(event, fallbackText) {
   const artifact = event?.artifact && typeof event.artifact === 'object' ? event.artifact : null;
   const artifactRef = buildNarsArtifactRefPart(artifact ?? {});
@@ -1105,7 +1129,7 @@ export function projectNarsClientEvent(message) {
   return {
     kind,
     label,
-    tone: eventTone(kind),
+    tone: eventTone(kind, event),
     summary,
     event,
     ...(renderKey ? { renderKey } : {}),

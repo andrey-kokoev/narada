@@ -1691,6 +1691,9 @@ test('spawned runtime applies provider reconfiguration before the next turn', { 
     const events = stdout.trim().split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
     const reconfiguration = events.find((event) => event.event === 'runtime_intelligence_reconfiguration');
     const health = events.find((event) => event.event === 'session_health' && event.request_id === 'health-1');
+    assert.deepEqual(events
+      .filter((event) => event.event === 'provider_runtime_reconfiguration_state_transition')
+      .map((event) => event.reconfiguration_state), ['requested', 'validating', 'admitted', 'switching', 'active']);
     assert.equal(reconfiguration?.terminal_state, 'active');
     assert.equal(health?.intelligence?.model, 'new-model');
     assert.deepEqual(observedModels, ['new-model']);

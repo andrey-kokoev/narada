@@ -55,8 +55,12 @@ function agentIdentitySiteId(agentIdentityRef) {
 
 async function loadRuntimeDependencies(runtimeContext = {}) {
   const deniedTools = new Set(String(process.env.NARADA_DENIED_CAPABILITY_TOOLS ?? '').split(',').map((value) => value.trim()).filter(Boolean));
-  const providerRuntime = createNarsProviderRuntimeController({ runtimeContext });
-  return createSessionCoreRuntimeService({
+  let appendRuntimeEvent = () => {};
+  const providerRuntime = createNarsProviderRuntimeController({
+    runtimeContext,
+    onTransition: (event) => appendRuntimeEvent(event),
+  });
+  const runtimeService = createSessionCoreRuntimeService({
     runtimeContext,
     providerRuntime,
     callChatApiFn: providerRuntime.callProvider,
@@ -64,6 +68,8 @@ async function loadRuntimeDependencies(runtimeContext = {}) {
       ? { admitted: false, reason: 'denied_by_runtime_policy' }
       : { admitted: true, reason: 'admitted_by_runtime_policy' },
   });
+  appendRuntimeEvent = (event) => runtimeService.supervisor.core.appendEvent(event);
+  return runtimeService;
 }
 
 function parseHealthOptions(args, env = process.env) {

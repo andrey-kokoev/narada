@@ -593,6 +593,20 @@ test('NARS client projection contract owns shared event rendering vocabulary', (
     summary: 'control input bridge control_input_record_invalid · Unexpected token',
     event: { event: 'runtime_control_input_bridge_error', error_code: 'control_input_record_invalid', error: 'Unexpected token' },
   });
+  assert.deepEqual(projectNarsClientEvent({ event: 'provider_runtime_reconfiguration_state_transition', request_id: 'switch-1', previous_state: 'validating', reconfiguration_state: 'admitted', target: { provider: 'deepseek-api' } }), {
+    kind: 'provider_runtime_reconfiguration_state_transition',
+    label: 'Intelligence reconfiguration state',
+    tone: 'status',
+    summary: 'intelligence reconfiguration validating -> admitted · deepseek-api',
+    event: { event: 'provider_runtime_reconfiguration_state_transition', request_id: 'switch-1', previous_state: 'validating', reconfiguration_state: 'admitted', target: { provider: 'deepseek-api' } },
+  });
+  assert.deepEqual(projectNarsClientEvent({ event: 'runtime_intelligence_reconfiguration', request_id: 'switch-1', reconfiguration_state: 'refused', terminal_state: 'refused', reason: 'runtime_not_at_clean_turn_boundary' }), {
+    kind: 'runtime_intelligence_reconfiguration',
+    label: 'Intelligence reconfiguration',
+    tone: 'error',
+    summary: 'intelligence reconfiguration refused',
+    event: { event: 'runtime_intelligence_reconfiguration', request_id: 'switch-1', reconfiguration_state: 'refused', terminal_state: 'refused', reason: 'runtime_not_at_clean_turn_boundary' },
+  });
   assert.equal(projectNarsClientEvent({ event: 'error', message: 'bad' }).tone, 'error');
   assert.equal(projectNarsClientEvent({ event: 'session_health', status: 'healthy', agent_id: 'narada.test', session_id: 'carrier_test' }).summary, 'healthy · narada.test · carrier_test');
   assert.equal(projectNarsClientEvent({
@@ -698,6 +712,10 @@ test('NARS client projection verbosity filters shared event classes', () => {
   assert.equal(shouldProjectNarsClientEvent(projectionFailure, { verbosity: 'conversation' }), false);
   assert.equal(shouldProjectNarsClientEvent(projectionFailure, { verbosity: 'operations' }), false);
   assert.equal(shouldProjectNarsClientEvent(projectionFailure, { verbosity: 'diagnostics' }), true);
+  const intelligenceReconfiguration = { event: 'runtime_intelligence_reconfiguration', terminal_state: 'active' };
+  assert.equal(shouldProjectNarsClientEvent(intelligenceReconfiguration, { verbosity: 'conversation' }), false);
+  assert.equal(shouldProjectNarsClientEvent(intelligenceReconfiguration, { verbosity: 'operations' }), false);
+  assert.equal(shouldProjectNarsClientEvent(intelligenceReconfiguration, { verbosity: 'diagnostics' }), true);
   assert.equal(shouldProjectNarsClientEvent(turnComplete, { verbosity: 'conversation' }), false);
   assert.equal(shouldProjectNarsClientEvent(turnComplete, { verbosity: 'operations' }), false);
   assert.equal(shouldProjectNarsClientEvent(turnComplete, { verbosity: 'diagnostics' }), true);

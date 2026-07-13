@@ -82,6 +82,7 @@ export function classifyRuntimeMessage(message) {
   if (!event || typeof event !== 'object') return 'raw_record';
   if (isRoutineHealthySessionHealth(event) || event.event === 'websocket_connected') return 'state_sample';
   if (event.event === 'session_health') return 'diagnostic_signal';
+  if (event.event === 'runtime_intelligence_reconfiguration' || event.event === 'provider_runtime_reconfiguration_state_transition') return 'diagnostic_signal';
   if (event.event === 'assistant_message' || event.event === 'assistant_message_stream' || event.event === 'user_message' || event.event === 'operator_input_submitted' || event.event === 'agent_web_ui_message' || event.event === 'agent_web_ui_help' || event.event === 'session_artifact_registered' || event.event === 'session_artifact_read') return 'conversation_fact';
   if (event.event === 'error' || event.event === 'websocket_error' || event.event === 'web_ui_decode_error' || event.event === 'web_ui_input_not_sent' || event.event === 'turn_failed' || event.event === 'authority_session_revoked' || event.event === 'projection_revoked' || event.event === 'runtime_projection_failure' || event.event === 'runtime_control_input_bridge_error') return 'diagnostic_signal';
   if (event.event === 'tool_call' || event.event === 'tool_result' || event.event === 'turn_started' || event.event === 'turn_complete') return 'operation_fact';
