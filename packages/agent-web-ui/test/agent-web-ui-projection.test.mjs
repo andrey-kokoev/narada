@@ -18,6 +18,12 @@ import {
   shouldRenderRuntimeEvent,
   summarizeRuntimeEvent,
 } from '../src/agent-web-ui.js';
+import {
+  OPERATOR_INPUT_DELIVERY_PHASES,
+  OPERATOR_INPUT_DELIVERY_TRANSITIONS,
+  canTransitionOperatorInputDelivery,
+  createOperatorInputDeliveryProjection,
+} from '../src/operator-input-delivery.js';
 
 class FakeElement {
   constructor(tagName = 'div') {
@@ -86,6 +92,32 @@ test('event stream reconnect uses bounded backoff and visible disconnected durat
   assert.equal(reconnectDelayForAttempt(2), 2000);
   assert.equal(reconnectDelayForAttempt(5), 10000);
   assert.equal(reconnectDelayForAttempt(20), 10000);
+});
+
+test('operator input delivery exposes an explicit monotonic transition table', () => {
+  assert.equal(canTransitionOperatorInputDelivery(OPERATOR_INPUT_DELIVERY_PHASES.DRAFT, OPERATOR_INPUT_DELIVERY_PHASES.SUBMITTING), true);
+  assert.equal(canTransitionOperatorInputDelivery(OPERATOR_INPUT_DELIVERY_PHASES.ACCEPTED, OPERATOR_INPUT_DELIVERY_PHASES.QUEUED), true);
+  assert.equal(canTransitionOperatorInputDelivery(OPERATOR_INPUT_DELIVERY_PHASES.QUEUED, OPERATOR_INPUT_DELIVERY_PHASES.ACCEPTED), false);
+  assert.equal(canTransitionOperatorInputDelivery(OPERATOR_INPUT_DELIVERY_PHASES.COMPLETED, OPERATOR_INPUT_DELIVERY_PHASES.STEERING), false);
+  assert.deepEqual(OPERATOR_INPUT_DELIVERY_TRANSITIONS[OPERATOR_INPUT_DELIVERY_PHASES.FAILED], []);
+});
+
+test('operator input delivery ignores backward runtime evidence after admission', () => {
+  const projection = createOperatorInputDeliveryProjection([
+    { event: 'operator_input_submitted', request_id: 'input-order', method: 'session.submit', content: 'run', operator_delivery_mode: 'enqueue' },
+    { event: 'input_event_queued', request_id: 'input-order', event_id: 'nars-input-order' },
+    { event: 'input_event_started', request_id: 'input-order', event_id: 'nars-input-order' },
+    { event: 'input_event_queued', request_id: 'input-order', event_id: 'nars-input-order' },
+  ]);
+
+  assert.equal(projection.phase, OPERATOR_INPUT_DELIVERY_PHASES.STEERING);
+  assert.deepEqual(projection.history, [
+    OPERATOR_INPUT_DELIVERY_PHASES.DRAFT,
+    OPERATOR_INPUT_DELIVERY_PHASES.SUBMITTING,
+    OPERATOR_INPUT_DELIVERY_PHASES.ACCEPTED,
+    OPERATOR_INPUT_DELIVERY_PHASES.QUEUED,
+    OPERATOR_INPUT_DELIVERY_PHASES.STEERING,
+  ]);
 });
 
 test('turn activity reducer exposes the canonical queued, thinking, tool, and idle phases', () => {
@@ -527,5 +559,78 @@ test('diagnostics projection shows fault signals without routine transcript and 
   const projection = createSessionProjection(events, { verbosity: 'diagnostics', nowMs: Date.parse('2026-06-30T18:00:05.000Z') });
   assert.deepEqual(projection.rows.map((row) => row.kind), ['session_health', 'websocket_error', 'turn_failed']);
   assert.match(projection.rows.map((row) => row.summary).join('\n'), /degraded|socket dropped|provider failed|turn_failed/i);
+});
+
+test('operator input delivery projects submission through NARS acknowledgment and completion', () => {
+  const projection = createOperatorInputDeliveryProjection([
+    { event: 'operator_input_submitted', request_id: 'input-1', method: 'session.submit', content: 'run startup sequence', operator_delivery_mode: 'default', timestamp: '2026-07-11T12:00:00.000Z' },
+    { event: 'input_event_queued', request_id: 'input-1', event_id: 'nars-input-1', source: 'manual_operator', timestamp: '2026-07-11T12:00:00.100Z' },
+    { event: 'input_event_started', request_id: 'input-1', event_id: 'nars-input-1', source: 'manual_operator', timestamp: '2026-07-11T12:00:00.200Z' },
+    { event: 'carrier_turn_started', turn_id: 'nars-input-1', timestamp: '2026-07-11T12:00:00.300Z' },
+    { event: 'input_event_completed', request_id: 'input-1', event_id: 'nars-input-1', terminal_state: 'completed', timestamp: '2026-07-11T12:00:01.000Z' },
+    { event: 'session_control_response', request_id: 'input-1', method: 'session.submit', terminal_state: 'completed', timestamp: '2026-07-11T12:00:01.100Z' },
+  ], Date.parse('2026-07-11T12:00:01.100Z'));
+
+  assert.equal(projection.phase, OPERATOR_INPUT_DELIVERY_PHASES.COMPLETED);
+  assert.deepEqual(projection.history, [
+    OPERATOR_INPUT_DELIVERY_PHASES.DRAFT,
+    OPERATOR_INPUT_DELIVERY_PHASES.SUBMITTING,
+    OPERATOR_INPUT_DELIVERY_PHASES.ACCEPTED,
+    OPERATOR_INPUT_DELIVERY_PHASES.STEERING,
+    OPERATOR_INPUT_DELIVERY_PHASES.COMPLETED,
+  ]);
+  assert.equal(projection.requestId, 'input-1');
+  assert.equal(projection.activeTurnId, 'nars-input-1');
+});
+
+test('operator input delivery distinguishes explicit queueing before turn admission', () => {
+  const projection = createOperatorInputDeliveryProjection([
+    { event: 'operator_input_submitted', request_id: 'input-queue-1', method: 'session.submit', content: 'run after this', operator_delivery_mode: 'enqueue', timestamp: '2026-07-11T12:01:00.000Z' },
+    { event: 'input_event_queued', request_id: 'input-queue-1', event_id: 'nars-input-queue-1', source: 'operator_steering', delivery_mode: 'admit_after_active_turn', timestamp: '2026-07-11T12:01:00.100Z' },
+    { event: 'session_control_response', request_id: 'input-queue-1', method: 'session.submit', terminal_state: 'completed', timestamp: '2026-07-11T12:01:00.200Z' },
+  ]);
+
+  assert.equal(projection.phase, OPERATOR_INPUT_DELIVERY_PHASES.QUEUED);
+  assert.deepEqual(projection.history, [
+    OPERATOR_INPUT_DELIVERY_PHASES.DRAFT,
+    OPERATOR_INPUT_DELIVERY_PHASES.SUBMITTING,
+    OPERATOR_INPUT_DELIVERY_PHASES.ACCEPTED,
+    OPERATOR_INPUT_DELIVERY_PHASES.QUEUED,
+  ]);
+  assert.match(projection.detail, /holding it for the next turn/);
+});
+
+test('operator input delivery correlates unlabelled runtime queue evidence to the local submission', () => {
+  const projection = createOperatorInputDeliveryProjection([
+    { event: 'operator_input_submitted', request_id: 'input-fallback', method: 'session.submit', content: 'run', operator_delivery_mode: 'default' },
+    { event: 'input_event_queued', event_id: 'nars-input-fallback', source: 'manual_operator' },
+    { event: 'input_event_started', event_id: 'nars-input-fallback', source: 'manual_operator' },
+    { event: 'carrier_turn_started', turn_id: 'nars-input-fallback' },
+    { event: 'input_event_completed', event_id: 'nars-input-fallback', terminal_state: 'completed' },
+    { event: 'session_control_response', request_id: 'input-fallback', method: 'session.submit', terminal_state: 'completed' },
+  ]);
+
+  assert.equal(projection.phase, OPERATOR_INPUT_DELIVERY_PHASES.COMPLETED);
+  assert.equal(projection.requestId, 'input-fallback');
+  assert.equal(projection.activeTurnId, 'nars-input-fallback');
+});
+
+test('operator input delivery keeps rejection and runtime failure terminal states distinct', () => {
+  const rejected = createOperatorInputDeliveryProjection([
+    { event: 'operator_input_submitted', request_id: 'input-rejected', method: 'session.submit', content: 'blocked', operator_delivery_mode: 'default' },
+    { event: 'session_control_rejected', request_id: 'input-rejected', method: 'session.submit', code: 'unsupported_session_control', error: 'unsupported', timestamp: '2026-07-11T12:02:00.000Z' },
+  ]);
+  assert.equal(rejected.phase, OPERATOR_INPUT_DELIVERY_PHASES.REJECTED);
+  assert.equal(rejected.terminalState, 'unsupported_session_control');
+
+  const failed = createOperatorInputDeliveryProjection([
+    { event: 'operator_input_submitted', request_id: 'input-failed', method: 'session.submit', content: 'run', operator_delivery_mode: 'default', active_turn_id: 'turn-failed' },
+    { event: 'input_event_queued', request_id: 'input-failed', event_id: 'nars-input-failed', timestamp: '2026-07-11T12:03:00.000Z' },
+    { event: 'carrier_turn_failed', turn_id: 'nars-input-failed', error: 'provider unavailable', terminal_state: 'failed', timestamp: '2026-07-11T12:03:01.000Z' },
+    { event: 'session_control_rejected', request_id: 'input-failed', method: 'session.submit', code: 'request_dispatch_failed', error: 'provider unavailable', timestamp: '2026-07-11T12:03:01.100Z' },
+  ]);
+  assert.equal(failed.phase, OPERATOR_INPUT_DELIVERY_PHASES.FAILED);
+  assert.equal(failed.error, 'provider unavailable');
+  assert.equal(failed.terminalState, 'failed');
 });
 
