@@ -34,6 +34,48 @@ test('session supervisor owns queue, journal, lifecycle, and carrier turn invoca
   assert.ok(records.some((record) => record.event === 'provider_response'));
 });
 
+test('session close waits for provider termination and abandons the admitted input', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'nars-session-close-barrier-'));
+  let markStarted;
+  const started = new Promise((resolve) => { markStarted = resolve; });
+  let providerTerminated = false;
+  const supervisor = createNarsSessionSupervisor({
+    sessionCoreOptions: { sessionId: 'close-barrier-1', sessionPath: join(root, 'session.json'), eventsPath: join(root, 'events.jsonl') },
+    carrier: {
+      runTurn: async (context, eventSink) => new Promise((_resolve, reject) => {
+        markStarted();
+        context.abortSignal.addEventListener('abort', async () => {
+          providerTerminated = true;
+          await eventSink({ kind: 'provider_turn_terminated', turn_id: context.turnId, terminal_state: 'interrupted' });
+          reject(new Error('provider_request_aborted'));
+        }, { once: true });
+      }),
+    },
+  });
+
+  supervisor.start();
+  const activeTurn = supervisor.submit({ event_id: 'input_close_barrier', content: 'stop me' });
+  await started;
+  const closeResult = supervisor.close({ reason: 'operator_close' });
+  await assert.rejects(activeTurn, /provider_request_aborted/);
+  const health = await closeResult;
+
+  assert.equal(providerTerminated, true);
+  assert.equal(health.lifecycle_state, 'closed');
+  assert.equal(health.shutdown_state, 'closed');
+  assert.equal(health.operator_input_queue.pending_count, 0);
+  assert.equal(supervisor.core.turn('input_close_barrier').turn_state, 'interrupted');
+  const records = readFileSync(join(root, 'events.jsonl'), 'utf8').trim().split('\n').map(JSON.parse);
+  assert.deepEqual(
+    records.filter((record) => record.event === 'session_shutdown_state_transition').map((record) => record.shutdown_state),
+    ['cancelling', 'draining', 'finalizing_queue', 'closing_tools', 'closed'],
+  );
+  const closedIndex = records.findIndex((record) => record.event === 'session_closed');
+  const interruptedIndex = records.findIndex((record) => record.event === 'turn_interrupted');
+  assert.ok(interruptedIndex >= 0 && interruptedIndex < closedIndex);
+  assert.ok(records.some((record) => record.event_kind === 'input_abandoned_on_session_end'));
+});
+
 test('session supervisor records delegated control dispatch in the durable journal', async () => {
   const root = mkdtempSync(join(tmpdir(), 'nars-session-control-'));
   const eventsPath = join(root, 'events.jsonl');
@@ -133,6 +175,9 @@ test('cancelled and failed turns remain recoverable and are replayed once', asyn
   assert.equal(recovered.health().operator_input_queue.pending_count, 0);
   assert.equal(recovered.recovery().operator_input_queue.pending_count, 0);
   assert.equal(recovered.core.turn('input_cancelled').turn_state, 'completed');
+  assert.equal(recovered.core.recoveryAttempts().length, 1);
+  assert.equal(recovered.core.recoveryAttempts()[0].recovery_attempt_state, 'completed');
+  assert.equal(recovered.core.recoveryAttempts()[0].turn_id, 'input_cancelled');
   await recovered.close();
   await cancelled.close();
 
@@ -159,6 +204,8 @@ test('cancelled and failed turns remain recoverable and are replayed once', asyn
   await recoveredFailure.recoveryDrain;
   assert.equal(failedReplayCount, 1);
   assert.equal(recoveredFailure.core.turn('input_failed').turn_state, 'completed');
+  assert.equal(recoveredFailure.core.recoveryAttempts().length, 1);
+  assert.equal(recoveredFailure.core.recoveryAttempts()[0].recovery_attempt_state, 'completed');
   await recoveredFailure.close();
   await failed.close();
 });

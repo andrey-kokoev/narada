@@ -7,10 +7,13 @@
     "package_role": "nars_session_core",
     "owns": [
       "session_lifecycle_state",
+      "session_shutdown_state",
       "durable_event_journal",
       "event_sequence_and_replay",
       "artifact_registry",
+      "artifact_lifecycle_state",
       "operator_input_queue_state",
+      "input_admission_state",
       "session_health_and_recovery_snapshots",
       "turn_lifecycle_state",
       "session_registry_projection",
@@ -31,8 +34,12 @@
     "./event-log": "./src/event-log.mjs",
     "./event-hub": "./src/event-hub.mjs",
     "./event-attachment-state": "./src/event-attachment-state.mjs",
+    "./session-lifecycle-state": "./src/session-lifecycle-state.mjs",
+    "./session-shutdown-state": "./src/session-shutdown-state.mjs",
+    "./artifact-lifecycle-state": "./src/artifact-lifecycle-state.mjs",
     "./artifacts": "./src/artifacts.mjs",
     "./input-queue": "./src/input-queue.mjs",
+    "./input-admission-state": "./src/input-admission-state.mjs",
     "./operator-input-queue-state": "./src/operator-input-queue-state.mjs",
     "./session-status-snapshots": "./src/session-status-snapshots.mjs",
     "./session-index": "./src/session-index.mjs",
@@ -47,7 +54,7 @@
   },
   "scripts": {
     "test": "node --test src/*.test.mjs",
-    "typecheck": "tsc --noEmit --allowJs --checkJs false src/index.mjs src/event-log.mjs src/event-hub.mjs src/event-attachment-state.mjs src/artifacts.mjs src/input-queue.mjs src/operator-input-queue-state.mjs src/session-status-snapshots.mjs src/session-index.mjs src/authority-transition-fsm.mjs src/authority-transition-state.mjs src/recovery-attempt-state.mjs src/turn-state.mjs src/session-core.mjs src/session-supervisor.mjs src/session-control-contract.mjs"
+    "typecheck": "tsc --noEmit --allowJs --checkJs false src/index.mjs src/event-log.mjs src/event-hub.mjs src/event-attachment-state.mjs src/session-lifecycle-state.mjs src/session-shutdown-state.mjs src/artifact-lifecycle-state.mjs src/artifacts.mjs src/input-queue.mjs src/input-admission-state.mjs src/operator-input-queue-state.mjs src/session-status-snapshots.mjs src/session-index.mjs src/authority-transition-fsm.mjs src/authority-transition-state.mjs src/recovery-attempt-state.mjs src/turn-state.mjs src/session-core.mjs src/session-supervisor.mjs src/session-control-contract.mjs"
   },
   "dependencies": {
     "@narada2/agent-identity": "workspace:*",

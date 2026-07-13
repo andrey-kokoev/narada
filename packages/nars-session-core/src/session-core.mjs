@@ -2,7 +2,7 @@ import { appendFileSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { createNarsEventHub } from './event-hub.mjs';
 import { readNarsEventLog } from './event-log.mjs';
-import { registerNarsArtifact, readNarsArtifactIndex } from './artifacts.mjs';
+import { registerNarsArtifact, readNarsArtifactIndex, transitionNarsArtifact } from './artifacts.mjs';
 import { createInputQueue } from './input-queue.mjs';
 import {
   operatorInputQueueStatePathFromSessionPath,
@@ -25,14 +25,10 @@ import {
   normalizeNarsRecoveryAttemptRecord,
   transitionNarsRecoveryAttempt,
 } from './recovery-attempt-state.mjs';
-
-const LIFECYCLE_TRANSITIONS = Object.freeze({
-  starting: new Set(['ready', 'closing', 'failed']),
-  ready: new Set(['closing', 'failed']),
-  closing: new Set(['closed', 'failed']),
-  failed: new Set(['closed']),
-  closed: new Set(),
-});
+import {
+  rehydrateNarsSessionLifecycle,
+  transitionNarsSessionLifecycle,
+} from './session-lifecycle-state.mjs';
 
 export function createNarsSessionCore({
   sessionId,
@@ -54,7 +50,7 @@ export function createNarsSessionCore({
   let sequence = existing.reduce((max, event, index) => Math.max(max, Number(event?.event_sequence ?? event?.sequence) || index + 1), 0);
   const activeTurn = findActiveTurn(turns);
   const state = {
-    lifecycle: rehydrateSessionLifecycle(existing),
+    lifecycle: rehydrateNarsSessionLifecycle(existing),
     sessionEventCount: existing.length,
     lastEventKind: existing.at(-1)?.event ?? existing.at(-1)?.event_kind ?? null,
     lastEventAt: existing.at(-1)?.timestamp ?? existing.at(-1)?.generated_at ?? null,
@@ -138,10 +134,12 @@ export function createNarsSessionCore({
   }
 
   function transition(next, evidence = {}) {
-    if (!LIFECYCLE_TRANSITIONS[state.lifecycle]?.has(next)) {
-      throw new Error(`invalid_nars_session_transition:${state.lifecycle}:${next}`);
-    }
     const previous = state.lifecycle;
+    const activeTurnRecord = state.activeTurnId ? turns.get(state.activeTurnId) : null;
+    if (next === 'closed' && activeTurnRecord && activeTurnRecord.turn_state !== 'accepted') {
+      throw new Error(`nars_session_active_turn:${state.activeTurnId}`);
+    }
+    transitionNarsSessionLifecycle(previous, next);
     const transitionEvent = appendEvent({
       event: 'session_lifecycle_transition',
       previous_state: previous,
@@ -367,6 +365,10 @@ export function createNarsSessionCore({
       identity: options.identity ?? agentId,
       session: options.session ?? sessionId,
       initialPending: options.initialPending ?? persisted.pending,
+      assertEnqueueAllowedFn: (event, enqueueOptions) => {
+        if (state.lifecycle !== 'ready') throw new Error(`nars_session_not_accepting_input:${state.lifecycle}`);
+        options.assertEnqueueAllowedFn?.(event, enqueueOptions);
+      },
       appendSessionFn: options.appendSessionFn ?? appendEvent,
       onInputAcceptedFn: (event) => {
         ensureTurn(event, {
@@ -400,6 +402,40 @@ export function createNarsSessionCore({
       artifact: registered.public_record,
     });
     return registered;
+  }
+
+  function transitionArtifact(artifactId, nextState, evidence = {}) {
+    if (state.lifecycle === 'closed') throw new Error('nars_session_closed');
+    const transitioned = transitionNarsArtifact({
+      sessionPath,
+      artifactId,
+      nextState,
+      evidence,
+    });
+    if (transitioned.changed) {
+      appendEvent({
+        event: 'session_artifact_lifecycle_transition',
+        artifact_id: transitioned.record.artifact_id,
+        kind: transitioned.record.kind,
+        previous_state: transitioned.previous_record.lifecycle.state,
+        artifact_state: transitioned.record.lifecycle.state,
+        reason: transitioned.record.lifecycle.reason,
+        artifact: transitioned.public_record,
+      });
+    }
+    return transitioned;
+  }
+
+  function revokeArtifact(artifactId, evidence = {}) {
+    return transitionArtifact(artifactId, 'revoked', evidence);
+  }
+
+  function expireArtifact(artifactId, evidence = {}) {
+    return transitionArtifact(artifactId, 'expired', evidence);
+  }
+
+  function archiveArtifact(artifactId, evidence = {}) {
+    return transitionArtifact(artifactId, 'archived', evidence);
   }
 
   function healthSnapshot({ mcpOperationalState = 'unknown' } = {}) {
@@ -452,6 +488,10 @@ export function createNarsSessionCore({
     turns: () => [...turns.values()],
     createQueue,
     registerArtifact,
+    transitionArtifact,
+    revokeArtifact,
+    expireArtifact,
+    archiveArtifact,
     healthSnapshot,
     recoverySnapshot,
     eventHub,
@@ -467,18 +507,6 @@ function inputRefFromInput(input = {}) {
     source: input.source ?? null,
     transport: input.transport ?? null,
   };
-}
-
-function rehydrateSessionLifecycle(events) {
-  let lifecycle = 'starting';
-  for (const event of events) {
-    if (event.event === 'session_lifecycle_transition' && LIFECYCLE_TRANSITIONS[lifecycle]?.has(event.lifecycle_state)) {
-      lifecycle = event.lifecycle_state;
-    } else if (event.event === 'session_closed') {
-      lifecycle = 'closed';
-    }
-  }
-  return lifecycle;
 }
 
 function rehydrateRecoveryAttempts(events, { sessionId = null } = {}) {

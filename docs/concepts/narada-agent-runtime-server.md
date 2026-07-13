@@ -98,6 +98,36 @@ The agent-context MCP stdio transport has its own protocol-session FSM:
 `tools/list` and `tools/call` require `serving`, and the current state/history
 are exposed by `agent_context_doctor`. See [`Narada FSM Contracts`](nars-fsm-contracts.md).
 
+## Runtime Request Lifecycle
+
+The runtime server has a transport-level request FSM in addition to the
+session, input-admission, turn, and shutdown FSMs. It describes the fate of
+one JSONL control request; it does not replace any of those domain lifecycles.
+
+```text
+received
+  -> scheduled
+  -> running
+  -> completed | rejected | failed
+
+scheduled
+  -> waiting
+  -> running
+```
+
+waiting is used by session.close: the runtime waits for requests that were
+already admitted, and then runs the session-close barrier. Close is graceful;
+an operator that needs interruption sends session.cancel explicitly before
+session.close. The close request reaches completed before the durable
+session_closed event is emitted. A request that cannot be parsed or admitted
+is rejected; a request whose admitted operation fails is failed.
+
+Each transition is durable as runtime_request_state_transition with a
+runtime-local request id and the caller-supplied request_id when present. The
+health projection exposes aggregate runtime_requests counts. This evidence is
+transport coordination, not provider output and not a substitute for
+input-admission or turn events.
+
 ## Required Properties
 
 A Narada Agent Runtime Server must:

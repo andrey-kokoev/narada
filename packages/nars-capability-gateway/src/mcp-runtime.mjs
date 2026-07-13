@@ -33,6 +33,7 @@ const CHILD_PROCESS_ENV_ALLOWLIST = Object.freeze([
   'NARADA_SITE_ROOT',
   'NARADA_WORKSPACE_ROOT',
   'NARADA_AGENT_CONTEXT_DB',
+  'NARADA_MCP_SCOPE',
   'NARADA_PC_SITE_ROOT',
   'NARADA_PROPER_ROOT',
   'NARADA_INTELLIGENCE_PROVIDER',
@@ -247,6 +248,7 @@ function classifyTool(name, args) {
 // MCP Server Discovery & Management
 // ---------------------------------------------------------------------------
 async function discoverAndStartMcpServers(siteRoot, ownershipContext = {}) {
+  if (isMcpScopeDisabled()) return {};
   const fabricRequired = isMcpFabricRequired();
   let fabric;
   try {
@@ -610,12 +612,18 @@ export function drainMcpStdoutMessages(input) {
 function isMcpFabricRequired() {
   if (process.env.NARADA_AGENT_CLI_REQUIRE_MCP_FABRIC === '0') return false;
   if (process.env.NARADA_AGENT_CLI_REQUIRE_MCP_FABRIC === '1') return true;
+  if (isMcpScopeDisabled()) return false;
   return process.env.NARADA_SITE_ROOT !== undefined
     && process.env.NARADA_AGENT_ID !== undefined
     && (process.env.NARADA_AGENT_START_EVENT_ID !== undefined
       || process.env.NARADA_NARS_SESSION_ID !== undefined
       || process.env.NARADA_RUNTIME_SESSION_ID !== undefined
       || process.env.NARADA_CARRIER_SESSION_ID !== undefined);
+}
+
+function isMcpScopeDisabled() {
+  return String(process.env.NARADA_MCP_SCOPE ?? '').trim().toLowerCase() === 'none'
+    && process.env.NARADA_AGENT_CLI_REQUIRE_MCP_FABRIC !== '1';
 }
 
 function createMcpStartupError(code, message, details = {}) {

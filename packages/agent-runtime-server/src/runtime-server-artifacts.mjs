@@ -5,6 +5,7 @@ import {
   readNarsArtifactContent,
   readNarsArtifactIndex,
   registerNarsArtifact,
+  transitionNarsArtifact,
 } from '@narada2/nars-session-core/artifacts';
 import { readNarsEventLog } from '@narada2/nars-session-core/event-log';
 
@@ -22,7 +23,13 @@ async function readRequestJson(request) {
 
 function artifactHttpError(response, error) {
   const code = error?.code ?? 'artifact_error';
-  const status = code === 'artifact_not_found' || code === 'artifact_content_missing' ? 404 : code === 'artifact_path_outside_admitted_roots' ? 403 : 400;
+  const status = code === 'artifact_not_found' || code === 'artifact_content_missing'
+    ? 404
+    : code === 'artifact_path_outside_admitted_roots'
+      ? 403
+      : code === 'invalid_nars_artifact_lifecycle_transition'
+        ? 409
+        : 400;
   sendJsonResponse(response, status, { schema: 'narada.nars.artifact_error.v1', error: code, message: error instanceof Error ? error.message : String(error), details: error?.details ?? null });
 }
 
@@ -37,6 +44,32 @@ export async function handleArtifactHttpRequest({ request, response, runtimeCont
     const artifactId = match[2] ? decodeURIComponent(match[2]) : null;
     if (sessionId !== runtimeContext.session) {
       sendJsonResponse(response, 404, { schema: 'narada.nars.artifact_error.v1', error: 'session_not_found', message: 'Artifact session does not match this NARS runtime.' });
+      return true;
+    }
+    if (request.method === 'PATCH' && artifactId && !content && !message) {
+      const params = await readRequestJson(request);
+      const nextState = params.lifecycle_state ?? params.state;
+      const transition = runtimeContext.sessionCore?.transitionArtifact
+        ? runtimeContext.sessionCore.transitionArtifact(artifactId, nextState, {
+          reason: params.reason,
+          requested_by: params.requested_by,
+        })
+        : transitionNarsArtifact({
+          sessionPath: runtimeContext.sessionPath,
+          artifactId,
+          nextState,
+          evidence: {
+            reason: params.reason,
+            requested_by: params.requested_by,
+          },
+        });
+      sendJsonResponse(response, 200, {
+        schema: 'narada.nars.artifact_lifecycle_transition.v1',
+        changed: transition.changed,
+        previous_state: transition.previous_record.lifecycle.state,
+        artifact_state: transition.record.lifecycle.state,
+        artifact: transition.public_record,
+      });
       return true;
     }
     if (request.method === 'POST' && !artifactId && !content && !message) {

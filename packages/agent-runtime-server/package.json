@@ -7,8 +7,10 @@
     "package_role": "nars_runtime_server",
     "owns": [
       "server_request_handling",
+      "server_request_lifecycle",
       "session_binding",
       "session_status_and_health_projection",
+      "health_projection_request_lifecycle",
       "runtime_event_subscription",
       "runtime_lifecycle_hooks",
       "artifact_http_request_handling",
@@ -29,14 +31,16 @@
     "./runtime-context": "./src/runtime-context.mjs",
     "./control-input-bridge": "./src/control-input-bridge.mjs",
     "./runtime-host-state": "./src/runtime-host-state.mjs",
+    "./runtime-request-state": "./src/runtime-request-state.mjs",
+    "./health-projection-request-state": "./src/health-projection-request-state.mjs",
     "./runtime-server-events": "./src/runtime-server-events.mjs",
     "./test-fixtures": "./src/test-fixtures.mjs",
     "./agent-cli-windows-wrapper-template": "./templates/Start-AgentCliSession.ps1",
     "./package.json": "./package.json"
   },
   "scripts": {
-    "test": "node --test test/*.test.mjs",
-    "typecheck": "tsc --noEmit --allowJs --checkJs false bin/narada-agent-runtime-server.mjs src/server-wrapper.mjs src/runtime-context.mjs src/control-input-bridge.mjs src/runtime-host-state.mjs src/runtime-session-binding.mjs src/session-core-runtime-service.mjs src/runtime-server-events.mjs src/test-fixtures.mjs"
+    "test": "node --test test/*.test.mjs src/*.test.mjs",
+    "typecheck": "tsc --noEmit --allowJs --checkJs false bin/narada-agent-runtime-server.mjs src/server-wrapper.mjs src/runtime-context.mjs src/control-input-bridge.mjs src/runtime-host-state.mjs src/runtime-request-state.mjs src/health-projection-request-state.mjs src/runtime-session-binding.mjs src/session-core-runtime-service.mjs src/runtime-server-events.mjs src/test-fixtures.mjs"
   },
   "dependencies": {
     "@narada2/agent-identity": "workspace:*",

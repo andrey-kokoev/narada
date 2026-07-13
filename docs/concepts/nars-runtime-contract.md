@@ -88,6 +88,43 @@ Required runtime environment, when available:
 
 NARS must not silently substitute a different Site, identity, or MCP fabric from ambient user config. If binding data is absent or contradictory, the runtime should fail before accepting operator or automation turns.
 
+## Runtime Request Lifecycle
+
+Every accepted transport request is tracked independently of the NARS
+session, input-admission, turn, and shutdown lifecycles. The current JSONL
+runtime uses this FSM:
+
+```text
+received -> scheduled -> running -> completed | rejected | failed
+                         \
+                          -> waiting -> running
+```
+
+waiting is the close barrier state. For session.close, the runtime waits for
+requests already admitted before the close request to settle, then invokes the
+supervisor close path. Close is graceful; callers that need interruption must
+send session.cancel explicitly before session.close. The close request's
+terminal transition is recorded before session_closed.
+
+The transition event is:
+
+```json
+{
+  "schema": "narada.nars.runtime_request_state.v1",
+  "event": "runtime_request_state_transition",
+  "runtime_request_id": "runtime_request_7",
+  "request_id": "close-1",
+  "method": "session.close",
+  "previous_state": "waiting",
+  "request_state": "running",
+  "terminal_state": null
+}
+```
+
+The runtime health projection includes aggregate runtime_requests counts.
+This is transport evidence: it must not be used as a replacement for
+session-core input, turn, recovery, artifact, or shutdown state.
+
 ## Protocol Shape
 
 The stable protocol is a request/event contract. The transport may be JSONL stdio, named pipe, local HTTP, WebSocket, or another local transport.
@@ -160,6 +197,73 @@ Every transition emits `provider_invocation_state_transition` with the invocatio
 
 The carrier forwards the correlation fields and the session event sink into the provider call. The session supervisor journals the transition events through its existing event boundary. This keeps provider execution observable without allowing provider runtime code to acquire session persistence or MCP authority.
 
+### Artifact Lifecycle
+
+`@narada2/nars-session-core` owns artifact records and their lifecycle under schema `narada.nars.artifact_lifecycle_state.v1`. Registration creates an `active` record; lifecycle transitions are durable in the artifact index and are also journaled as `session_artifact_lifecycle_transition` events when performed through session-core.
+
+```text
+active -> revoked  -> archived
+       |          \
+       v           \
+    expired  ------+
+       |
+       +----------> archived
+active ----------------> archived
+```
+
+`revoked` and `expired` are non-readable but retain their record and may be archived. `archived` is terminal: it cannot be reactivated or transitioned again. The allowed transitions are `active -> revoked`, `active -> expired`, `active -> archived`, `revoked -> archived`, and `expired -> archived`; all other transitions are refused. Each record retains normalized lifecycle history, including the previous state, new state, timestamp, reason, and optional requester. Legacy records that only contain `lifecycle.state: active` are read as active and receive compatible normalized lifecycle metadata.
+
+Artifact metadata remains readable in every lifecycle state, while artifact content is served only while the record is `active`. Session-core exposes `transitionArtifact`, `revokeArtifact`, `expireArtifact`, and `archiveArtifact`; the runtime server projects the same operation through `PATCH /sessions/{session_id}/artifacts/{artifact_id}` with `{ "state": "revoked|expired|archived", "reason": "..." }`. Both paths use the same FSM and reject illegal transitions.
+
+### Session Lifecycle
+
+`@narada2/nars-session-core` owns the session lifecycle under schema `narada.nars.session_lifecycle_state.v1`. The transition table and event-log rehydration rules are defined in the exported `session-lifecycle-state` module; `session-core` owns journaling and applies the transition guard.
+
+```text
+starting -> ready -> closing -> closed
+    |         |         |
+    +-------> failed <---+
+                  |
+                  +-----> closed
+```
+
+`closed` is terminal. `failed` may only be cleaned up to `closed`; a session cannot return to `starting` or `ready`, and same-state transitions are refused. Rehydration applies only legal `session_lifecycle_transition` records and recognizes the explicit `session_closed` terminal event, preserving the existing durable event contract.
+
+The supervisor separately owns the shutdown barrier under schema `narada.nars.session_shutdown_state.v1`. This is coordination state, not a second session lifecycle:
+
+```text
+idle -> cancelling -> draining -> finalizing_queue -> closing_tools -> closed
+  |         |           |               |                 |
+  +-------> draining   +--------------> failed <----------+
+```
+
+When no turn is active, shutdown begins at `draining`; otherwise it begins at `cancelling` and aborts the active provider call. The supervisor cannot enter `closed` until the active queue drain has settled, the active turn has reached a terminal state, pending inputs have been abandoned, and the tool gateway close has completed. A failed barrier leaves the session in `failed` and retains the failure evidence.
+
+### Input Admission Lifecycle
+
+`@narada2/nars-session-core` also owns the admission state of each input event under schema `narada.nars.input_admission_state.v1`. Admission is separate from turn state and provider completion:
+
+```text
+accepted -> queued -> held -> queued -> admitted
+    |         |         |       |        |
+    +-------> dropped   +-----> dropped  +--> abandoned
+    +-------> abandoned          +------> abandoned
+```
+
+The normal path is `accepted -> queued -> admitted`; `held` represents an explicit runtime hold and returns to `queued` when released. `admitted` is a handoff state, not a terminal state: a crash-recovery reconciliation may move it back to `queued` once with explicit recovery evidence. Only `dropped` and `abandoned` are terminal. During shutdown, pending inputs are deterministically moved to `abandoned` after any active drain has settled. Every transition is included in queue evidence and the corresponding input events; admission never implies provider execution.
+
+### Runtime Host Lifecycle
+
+`@narada2/agent-runtime-server` owns the process/projection host lifecycle under schema `narada.nars.runtime_host_state.v1`. This FSM describes whether the NARS host is bound and serving transports; it does not replace the session, turn, provider, capability, or input-admission FSMs.
+
+```text
+created -> binding -> projections_ready -> serving -> closing -> stopped
+    \-> failed <---------------------------/       \
+         \-> stopped                         failed
+```
+
+The host emits `runtime_host_lifecycle_transition` through the runtime event hub and exposes the current snapshot as `runtime_host_state` in health and `session_started` projections. Startup failures move through `failed` and then cleanup to `stopped`; serving failures retain failure evidence before cleanup. Client projections may use the snapshot for liveness display, but they do not own or mutate host state.
+
 ## Client And Runtime Split
 
 NARS is the runtime owner. `@narada2/agent-runtime-server` owns session binding, transport projection, durable `events.jsonl`, status/health/event subscription state, and lifecycle hook dispatch. `@narada2/nars-provider-runtime` owns provider turn execution, while `@narada2/nars-capability-gateway` owns MCP fabric hosting, tool dispatch, and tool admission. Client packages must not silently recreate those responsibilities.
@@ -181,7 +285,7 @@ The former `agent-cli` runtime-server adapter has been removed. Reintroduction r
 | Area | Current owner | Classification | Evidence | Residual risk |
 | --- | --- | --- | --- | --- |
 | Stable runtime binary | `@narada2/agent-runtime-server` | already correctly owned | package exports only `narada-agent-runtime-server`; tests assert no `agent-runtime-server` alias and no `@narada2/agent-cli` dependency | low |
-| Runtime wrapper, health, events, lifecycle hooks, artifacts | `@narada2/agent-runtime-server` | already correctly owned | `server-wrapper.mjs` owns health/event projections and lifecycle dispatch; package metadata names NARS responsibilities | low |
+| Runtime wrapper, health, events, lifecycle hooks, artifact HTTP projection | `@narada2/agent-runtime-server` | already correctly owned | `server-wrapper.mjs` owns health/event projections and lifecycle dispatch; artifact HTTP delegates record state to session-core | low |
 | Provider execution and MCP gateway internals | `@narada2/nars-provider-runtime` and `@narada2/nars-capability-gateway` | explicit split | server delegates provider execution to provider-runtime and capability hosting to the gateway | current runtime ownership |
 | Terminal rendering and operator input projection | `@narada2/agent-cli` plus `@narada2/carrier-terminal-projection` | intentionally client-specific | NARS creates projected terminal bridge only when `operator_surface=agent-cli`; raw JSONL and web surfaces bypass terminal projection | low |
 | Web projection | `@narada2/agent-web-ui` | correctly owned | package metadata declares web projection ownership and excludes runtime dependency construction/provider execution/MCP hosting | low |

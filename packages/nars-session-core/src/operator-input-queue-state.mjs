@@ -70,6 +70,7 @@ function toPersistedInputItem(item = {}) {
     authority_ref: item.authority_ref ?? null,
     directive_id: item.directive_id ?? null,
     request_id: item.request_id ?? null,
+    admission_state: item.admission_state ?? 'queued',
     content: item.content ?? '',
     metadata: item.metadata && typeof item.metadata === 'object' ? item.metadata : {},
   };

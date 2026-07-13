@@ -78,14 +78,91 @@ test('package owns the Narada agent runtime server bins and exports', () => {
   assert.equal(packageJson.narada.owns.includes('artifact_http_request_handling'), true);
   assert.equal(packageJson.narada.owns.includes('attachment_contract'), true);
   assert.equal(packageJson.narada.owns.includes('runtime_host_lifecycle'), true);
+  assert.equal(packageJson.narada.owns.includes('server_request_lifecycle'), true);
+  assert.equal(packageJson.narada.owns.includes('health_projection_request_lifecycle'), true);
   assert.equal(packageJson.narada.carrier_substrate, '@narada2/carrier-runtime in-process');
   assert.equal(packageJson.narada.runtime_dependency_owner.includes('nars-session-core owns session control'), true);
   assert.equal(packageJson.bin['narada-agent-runtime-server'], './bin/narada-agent-runtime-server.mjs');
   assert.equal(packageJson.bin['agent-runtime-server'], undefined);
   assert.equal(packageJson.exports['.'], './src/server-wrapper.mjs');
   assert.equal(packageJson.exports['./runtime-server-events'], './src/runtime-server-events.mjs');
+  assert.equal(packageJson.exports['./runtime-request-state'], './src/runtime-request-state.mjs');
+  assert.equal(packageJson.exports['./health-projection-request-state'], './src/health-projection-request-state.mjs');
   assert.equal(packageJson.dependencies['@narada2/agent-cli'], undefined);
   assert.equal(packageJson.dependencies['@narada2/carrier-terminal-projection'], 'workspace:*');
+});
+
+test('health projection tracks resolved, timed-out, and failed request lifecycles', { timeout: 10000 }, async () => {
+  const resolvedTransitions = [];
+  const resolvedInput = new PassThrough();
+  let resolvedProjection;
+  resolvedInput.setEncoding('utf8');
+  resolvedInput.on('data', (chunk) => {
+    const request = JSON.parse(String(chunk).trim());
+    setTimeout(() => resolvedProjection.observe({
+      event: 'session_health',
+      request_id: request.id,
+      status: 'healthy',
+      runtime: 'narada-agent-runtime-server',
+    }), 0);
+  });
+  resolvedProjection = await startHealthProjection({
+    childStdin: resolvedInput,
+    host: '127.0.0.1',
+    port: 0,
+    timeoutMs: 100,
+    onRequestTransition: (event) => resolvedTransitions.push(event),
+  });
+  try {
+    const resolvedResponse = await fetch(resolvedProjection.url);
+    assert.equal(resolvedResponse.status, 200);
+    assert.equal((await resolvedResponse.json()).status, 'healthy');
+    assert.deepEqual(resolvedTransitions.map((event) => event.request_state), [
+      'requested', 'dispatched', 'awaiting_response', 'resolved',
+    ]);
+  } finally {
+    resolvedInput.destroy();
+    await new Promise((resolve) => resolvedProjection.server.close(resolve));
+  }
+
+  const timeoutTransitions = [];
+  const timeoutInput = new PassThrough();
+  const timeoutProjection = await startHealthProjection({
+    childStdin: timeoutInput,
+    host: '127.0.0.1',
+    port: 0,
+    timeoutMs: 20,
+    onRequestTransition: (event) => timeoutTransitions.push(event),
+  });
+  try {
+    const timeoutResponse = await fetch(timeoutProjection.url);
+    assert.equal(timeoutResponse.status, 503);
+    assert.equal((await timeoutResponse.json()).status, 'unhealthy');
+    assert.deepEqual(timeoutTransitions.map((event) => event.request_state), [
+      'requested', 'dispatched', 'awaiting_response', 'timed_out',
+    ]);
+  } finally {
+    timeoutInput.destroy();
+    await new Promise((resolve) => timeoutProjection.server.close(resolve));
+  }
+
+  const failedTransitions = [];
+  const failedInput = new PassThrough();
+  failedInput.destroy();
+  const failedProjection = await startHealthProjection({
+    childStdin: failedInput,
+    host: '127.0.0.1',
+    port: 0,
+    onRequestTransition: (event) => failedTransitions.push(event),
+  });
+  try {
+    const failedResponse = await fetch(failedProjection.url);
+    assert.equal(failedResponse.status, 503);
+    assert.equal((await failedResponse.json()).status, 'unhealthy');
+    assert.deepEqual(failedTransitions.map((event) => event.request_state), ['requested', 'failed']);
+  } finally {
+    await new Promise((resolve) => failedProjection.server.close(resolve));
+  }
 });
 
 test('spawned runtime exposes active and completed FIFO queue state without provider overlap', { timeout: 10000 }, async () => {
@@ -142,7 +219,78 @@ test('spawned runtime exposes active and completed FIFO queue state without prov
     assert.equal(providerCalls, 2);
     assert.equal(events.find((event) => event.event === 'session_health' && event.request_id === 'health-completed')?.operator_input_queue?.pending_count, 0);
     assert.equal(events.find((event) => event.event === 'session_recovery' && event.request_id === 'recovery-completed')?.operator_input_queue?.pending_count, 0);
+    const requestStates = (requestId) => events
+      .filter((event) => event.event === 'runtime_request_state_transition' && event.request_id === requestId)
+      .map((event) => event.request_state);
+    assert.deepEqual(requestStates('turn-first'), ['received', 'scheduled', 'running', 'completed']);
+    assert.deepEqual(requestStates('turn-second'), ['received', 'scheduled', 'running', 'completed']);
+    assert.deepEqual(requestStates('health-active'), ['received', 'scheduled', 'running', 'completed']);
+    assert.deepEqual(requestStates('recovery-active'), ['received', 'scheduled', 'running', 'completed']);
+    assert.deepEqual(requestStates('health-completed'), ['received', 'scheduled', 'running', 'completed']);
+    assert.deepEqual(requestStates('recovery-completed'), ['received', 'scheduled', 'running', 'completed']);
+    assert.deepEqual(requestStates('close-1'), ['received', 'scheduled', 'waiting', 'running', 'completed']);
   } finally {
+    await new Promise((resolve) => provider.close(resolve));
+    rmSync(siteRoot, { recursive: true, force: true });
+  }
+});
+
+test('spawned runtime keeps close request waiting until active request is settled', { timeout: 10000 }, async () => {
+  const siteRoot = mkdtempSync(join(tmpdir(), 'narada-runtime-close-wait-e2e-'));
+  let markRequestReceived;
+  let releaseProvider;
+  const requestReceived = new Promise((resolve) => { markRequestReceived = resolve; });
+  const provider = createServer((request, response) => {
+    request.resume();
+    markRequestReceived();
+    releaseProvider = () => {
+      response.setHeader('content-type', 'application/json');
+      response.end(JSON.stringify({ choices: [{ message: { role: 'assistant', content: 'released' } }] }));
+    };
+  });
+  await new Promise((resolve) => provider.listen(0, '127.0.0.1', resolve));
+  const address = provider.address();
+  let child = null;
+  try {
+    const binPath = fileURLToPath(new URL('../bin/narada-agent-runtime-server.mjs', import.meta.url));
+    child = spawnTestChild(process.execPath, [binPath, '--raw-jsonl', '--identity', 'narada.test', '--session', 'close-wait-e2e'], {
+      env: { ...process.env, NARADA_SITE_ROOT: siteRoot, NARADA_INTELLIGENCE_PROVIDER: 'openai-api', OPENAI_BASE_URL: 'http://127.0.0.1:' + address.port + '/', OPENAI_API_KEY: 'close-wait-key' },
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    let stdout = '';
+    child.stdout.setEncoding('utf8');
+    child.stdout.on('data', (chunk) => { stdout += chunk; });
+    child.stdin.write(JSON.stringify({ id: 'turn-active', method: 'session.submit', params: { content: 'hold' } }) + '\n');
+    await requestReceived;
+    child.stdin.write(JSON.stringify({ id: 'close-wait', method: 'session.close' }) + '\n');
+    await waitForCapturedOutput(child, () => stdout, (text) => (
+      text.includes('"request_id":"close-wait"')
+      && text.includes('"request_state":"waiting"')
+    ));
+    assert.equal(typeof releaseProvider, 'function');
+    releaseProvider();
+    await waitForCapturedOutput(child, () => stdout, (text) => (
+      text.includes('"request_id":"close-wait"')
+      && text.includes('"request_state":"completed"')
+    ));
+    child.stdin.end();
+    assert.equal(await new Promise((resolve) => child.on('exit', resolve)), 0);
+    const events = stdout.trim().split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
+    const closeStates = events
+      .filter((event) => event.event === 'runtime_request_state_transition' && event.request_id === 'close-wait')
+      .map((event) => event.request_state);
+    assert.deepEqual(closeStates, ['received', 'scheduled', 'waiting', 'running', 'completed']);
+    const closeCompleted = events.find((event) => (
+      event.event === 'runtime_request_state_transition'
+      && event.request_id === 'close-wait'
+      && event.request_state === 'completed'
+    ));
+    const sessionClosed = events.find((event) => event.event === 'session_closed');
+    assert.ok(closeCompleted?.event_sequence < sessionClosed?.event_sequence);
+    assert.ok(events.some((event) => event.event === 'session_shutdown_state_transition' && event.shutdown_state === 'closed'));
+  } finally {
+    if (child && child.exitCode === null) child.kill();
+    provider.closeAllConnections?.();
     await new Promise((resolve) => provider.close(resolve));
     rmSync(siteRoot, { recursive: true, force: true });
   }
@@ -467,6 +615,20 @@ test('spawned runtime executes a provider-requested tool through the site MCP ga
     const artifactContent = await fetch(new URL(`/sessions/mcp-e2e/artifacts/${registeredArtifact.artifact.artifact_id}/content`, started.health_endpoint));
     assert.equal(artifactContent.status, 200);
     assert.match(await artifactContent.text(), /Generated by MCP/);
+    const revokeResponse = await fetch(new URL(`/sessions/mcp-e2e/artifacts/${registeredArtifact.artifact.artifact_id}`, started.health_endpoint), {
+      method: 'PATCH',
+      body: JSON.stringify({ state: 'revoked', reason: 'runtime_test_revoke', requested_by: 'test' }),
+    });
+    assert.equal(revokeResponse.status, 200);
+    const revokedArtifact = await revokeResponse.json();
+    assert.equal(revokedArtifact.artifact_state, 'revoked');
+    const archiveResponse = await fetch(new URL(`/sessions/mcp-e2e/artifacts/${registeredArtifact.artifact.artifact_id}`, started.health_endpoint), {
+      method: 'PATCH',
+      body: JSON.stringify({ lifecycle_state: 'archived', reason: 'runtime_test_archive' }),
+    });
+    assert.equal(archiveResponse.status, 200);
+    const archivedArtifact = await archiveResponse.json();
+    assert.equal(archivedArtifact.artifact.lifecycle.state, 'archived');
     child.stdin.end(`${JSON.stringify({ id: 'close-1', method: 'session.close' })}\n`);
     assert.equal(await new Promise((resolve) => child.on('exit', resolve)), 0);
     const events = stdout.trim().split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
@@ -483,6 +645,10 @@ test('spawned runtime executes a provider-requested tool through the site MCP ga
       && event.execution_id === completedExecution.execution_id
       && event.turn_id === completedExecution.turn_id));
     assert.ok(events.some((event) => event.event === 'session_artifact_registered' && event.artifact_id === registeredArtifact.artifact.artifact_id));
+    assert.deepEqual(
+      events.filter((event) => event.event === 'session_artifact_lifecycle_transition' && event.artifact_id === registeredArtifact.artifact.artifact_id).map((event) => [event.previous_state, event.artifact_state]),
+      [['active', 'revoked'], ['revoked', 'archived']],
+    );
     assert.ok(events.some((event) => event.event === 'tool_execution_refused' && event.tool_name === 'fixture_denied'));
     assert.deepEqual(events.filter((event) => event.event === 'carrier_tool_completed').map((event) => event.tool_name), ['fixture_echo', 'fixture_artifact', 'fixture_denied']);
     const eventsPath = resolveNaradaSitePaths({ siteRoot, sessionId: 'mcp-e2e' }).narsEventsPath;

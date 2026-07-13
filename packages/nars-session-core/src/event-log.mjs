@@ -89,8 +89,7 @@ export function readNarsEventLogTail(eventsPath, limit = MAX_LIMIT) {
   const events = [];
   let corruptLineCount = 0;
   // Keep parsed event memory bounded while preserving the newest evidence needed by
-  // readiness checks. The source text is streamed by the regexp iterator rather than
-  // materializing a second full array of lines.
+  // readiness checks; do not retain every parsed event in the returned array.
   for (const match of readFileSync(eventsPath, 'utf8').matchAll(/[^\r\n]+/g)) {
     const line = match[0];
     try {

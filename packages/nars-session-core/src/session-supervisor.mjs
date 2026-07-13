@@ -1,4 +1,5 @@
 import { createNarsSessionCore } from './session-core.mjs';
+import { transitionNarsSessionShutdown } from './session-shutdown-state.mjs';
 
 function eventRecord(event) {
   const { kind, ...payload } = event ?? {};
@@ -24,6 +25,8 @@ export function createNarsSessionSupervisor({
   let cancelRequested = false;
   let recoveryDrain = null;
   let recoveryMode = false;
+  let shutdownState = core.lifecycleState === 'closed' ? 'closed' : core.lifecycleState === 'failed' ? 'failed' : 'idle';
+  let closePromise = null;
 
   function queueSnapshot() {
     const snapshot = queue?.state?.() ?? {};
@@ -39,6 +42,7 @@ export function createNarsSessionSupervisor({
   function healthSnapshot(mcpOperationalState = toolGateway.operationalState?.() ?? 'unknown') {
     return {
       ...core.healthSnapshot({ mcpOperationalState }),
+      shutdown_state: shutdownState,
       operator_input_queue: queueSnapshot(),
     };
   }
@@ -48,6 +52,20 @@ export function createNarsSessionSupervisor({
     core.observeTurnEvent(record);
     return record;
   };
+
+  function transitionShutdown(nextState, evidence = {}) {
+    if (shutdownState === nextState) return shutdownState;
+    const previousState = shutdownState;
+    transitionNarsSessionShutdown(previousState, nextState);
+    shutdownState = nextState;
+    core.appendEvent({
+      event: 'session_shutdown_state_transition',
+      previous_state: previousState,
+      shutdown_state: nextState,
+      ...evidence,
+    });
+    return shutdownState;
+  }
 
   const drain = async (input) => {
     const turnId = String(input.event_id);
@@ -143,10 +161,11 @@ export function createNarsSessionSupervisor({
   }
 
   async function cancel(evidence = {}) {
+    const turnId = activeTurnId;
     if (activeAbortController) activeAbortController.abort();
     else cancelRequested = true;
-    await eventSink({ kind: 'session_turn_cancel_requested', turn_id: activeTurnId, ...evidence });
-    if (activeTurnId) await eventSink({ kind: 'interrupt_requested', turn_id: activeTurnId, ...evidence });
+    await eventSink({ kind: 'session_turn_cancel_requested', turn_id: turnId, ...evidence });
+    if (turnId) await eventSink({ kind: 'interrupt_requested', turn_id: turnId, ...evidence });
     return true;
   }
 
@@ -195,15 +214,36 @@ export function createNarsSessionSupervisor({
     return core.recoverySnapshot();
   }
 
-  async function close(evidence = {}) {
+  async function close(evidence = {}, hooks = {}) {
+    if (closePromise) return closePromise;
+    closePromise = closeInternal(evidence, hooks);
+    return closePromise;
+  }
+
+  async function closeInternal(evidence = {}, hooks = {}) {
+    if (core.lifecycleState === 'closed') return healthSnapshot('closed');
+    if (core.lifecycleState === 'failed') return healthSnapshot();
     if (core.lifecycleState === 'starting' || core.lifecycleState === 'ready') core.transition('closing', evidence);
     try {
+      if (activeAbortController || activeTurnId) {
+        transitionShutdown('cancelling', evidence);
+        await cancel({ ...evidence, reason: evidence.reason ?? 'session_close' });
+      } else {
+        transitionShutdown('draining', evidence);
+      }
+      await queue?.waitForIdle?.();
+      if (shutdownState === 'cancelling') transitionShutdown('draining', evidence);
+      transitionShutdown('finalizing_queue', evidence);
+      queue?.finalizeSession?.();
+      transitionShutdown('closing_tools', evidence);
       await toolGateway.close?.();
+      await hooks.beforeSessionClosed?.();
+      transitionShutdown('closed', evidence);
       if (core.lifecycleState === 'closing') core.transition('closed', evidence);
     } catch (error) {
-      if (core.lifecycleState === 'closing') {
-        core.transition('failed', { ...evidence, error: error instanceof Error ? error.message : String(error) });
-      }
+      const message = error instanceof Error ? error.message : String(error);
+      if (shutdownState !== 'closed' && shutdownState !== 'failed') transitionShutdown('failed', { ...evidence, error: message });
+      if (core.lifecycleState === 'closing') core.transition('failed', { ...evidence, error: message });
       throw error;
     }
     return healthSnapshot('closed');
@@ -220,5 +260,6 @@ export function createNarsSessionSupervisor({
     close,
     get recoveryDrain() { return recoveryDrain; },
     get activeTurnId() { return activeTurnId; },
+    get shutdownState() { return shutdownState; },
   });
 }

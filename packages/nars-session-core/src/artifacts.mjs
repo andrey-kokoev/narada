@@ -1,6 +1,11 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
+import {
+  createNarsArtifactLifecycle,
+  normalizeNarsArtifactLifecycle,
+  transitionNarsArtifactRecord,
+} from './artifact-lifecycle-state.mjs';
 
 export const NARS_ARTIFACT_RECORD_SCHEMA = 'narada.nars.artifact_record.v1';
 export const NARS_ARTIFACT_INDEX_SCHEMA = 'narada.nars.artifact_index.v1';
@@ -36,6 +41,13 @@ const EXTENSION_KIND = new Map([
 export function narsArtifactsRootFromSessionPath(sessionPath) {
   if (!sessionPath) throw new Error('session_path_required');
   return join(dirname(String(sessionPath)), 'artifacts');
+}
+
+function normalizeNarsArtifactRecord(record) {
+  return {
+    ...record,
+    lifecycle: normalizeNarsArtifactLifecycle(record.lifecycle),
+  };
 }
 
 function audioContentTypeForPath(path) {
@@ -91,8 +103,11 @@ export function registerNarsArtifact({
       ...(artifactKind === 'audio' ? { media_controls: true } : {}),
     },
     lifecycle: {
-      state: 'active',
-      owner: 'nars-session',
+      ...createNarsArtifactLifecycle({
+        owner: 'nars-session',
+        createdAt: new Date(now).toISOString(),
+        now: new Date(now).toISOString(),
+      }),
     },
   };
   const index = readNarsArtifactIndex({ sessionPath });
@@ -111,7 +126,12 @@ export function readNarsArtifactIndex({ sessionPath } = {}) {
   const artifactsRoot = narsArtifactsRootFromSessionPath(sessionPath);
   const indexPath = join(artifactsRoot, 'index.json');
   const parsed = readJson(indexPath);
-  if (parsed?.schema === NARS_ARTIFACT_INDEX_SCHEMA && Array.isArray(parsed.artifacts)) return parsed;
+  if (parsed?.schema === NARS_ARTIFACT_INDEX_SCHEMA && Array.isArray(parsed.artifacts)) {
+    return {
+      ...parsed,
+      artifacts: parsed.artifacts.map(normalizeNarsArtifactRecord),
+    };
+  }
   return {
     schema: NARS_ARTIFACT_INDEX_SCHEMA,
     session_id: null,
@@ -126,13 +146,57 @@ export function readNarsArtifact({ sessionPath, artifactId } = {}) {
   const index = readNarsArtifactIndex({ sessionPath });
   const record = index.artifacts.find((entry) => entry?.artifact_id === artifactId) ?? null;
   if (!record) throw artifactError('artifact_not_found', `Artifact not found: ${artifactId}`);
-  return record;
+  return normalizeNarsArtifactRecord(record);
+}
+
+export function transitionNarsArtifact({ sessionPath, artifactId, nextState, evidence = {}, now = new Date() } = {}) {
+  if (!sessionPath) throw artifactError('session_path_required', 'sessionPath is required to transition a NARS artifact.');
+  if (!artifactId) throw artifactError('artifact_id_required', 'artifactId is required.');
+  const index = readNarsArtifactIndex({ sessionPath });
+  const current = index.artifacts.find((entry) => entry?.artifact_id === artifactId) ?? null;
+  if (!current) throw artifactError('artifact_not_found', `Artifact not found: ${artifactId}`);
+  const transitionedAt = evidence.transitioned_at ?? evidence.updated_at ?? new Date(now).toISOString();
+  const next = transitionNarsArtifactRecord(current, nextState, { ...evidence, transitioned_at: transitionedAt });
+  const changed = next.lifecycle.state !== current.lifecycle.state;
+  if (changed) {
+    writeNarsArtifactIndex({
+      artifactsRoot: narsArtifactsRootFromSessionPath(sessionPath),
+      index: {
+        ...index,
+        generated_at: transitionedAt,
+        artifacts: index.artifacts.map((entry) => entry.artifact_id === artifactId ? next : entry),
+      },
+    });
+  }
+  return {
+    changed,
+    previous_record: current,
+    record: next,
+    public_record: publicNarsArtifactRecord(next),
+    index: publicNarsArtifactIndex({
+      ...index,
+      generated_at: changed ? transitionedAt : index.generated_at,
+      artifacts: index.artifacts.map((entry) => entry.artifact_id === artifactId ? next : entry),
+    }),
+  };
+}
+
+export function revokeNarsArtifact(options = {}) {
+  return transitionNarsArtifact({ ...options, nextState: 'revoked' });
+}
+
+export function expireNarsArtifact(options = {}) {
+  return transitionNarsArtifact({ ...options, nextState: 'expired' });
+}
+
+export function archiveNarsArtifact(options = {}) {
+  return transitionNarsArtifact({ ...options, nextState: 'archived' });
 }
 
 export function readNarsArtifactContent({ sessionPath, artifactId } = {}) {
   const record = readNarsArtifact({ sessionPath, artifactId });
   if (record.lifecycle?.state && record.lifecycle.state !== 'active') {
-    throw artifactError('artifact_not_active', `Artifact is ${record.lifecycle.state}.`);
+    throw artifactError('artifact_not_active', `Artifact is ${record.lifecycle.state}.`, { lifecycle_state: record.lifecycle.state });
   }
   const sourcePath = resolve(String(record.source_path ?? ''));
   if (!sourcePath || !existsSync(sourcePath) || !statSync(sourcePath).isFile()) {
@@ -148,6 +212,7 @@ export function readNarsArtifactContent({ sessionPath, artifactId } = {}) {
 
 export function publicNarsArtifactRecord(record) {
   if (!record || typeof record !== 'object') return null;
+  const lifecycle = normalizeNarsArtifactLifecycle(record.lifecycle);
   return {
     schema: NARS_ARTIFACT_PUBLIC_SCHEMA,
     artifact_id: record.artifact_id,
@@ -159,7 +224,7 @@ export function publicNarsArtifactRecord(record) {
     created_at: record.created_at ?? null,
     access: record.access ?? { scope: 'session', token_required: false },
     render: record.render ?? { preferred: 'inline' },
-    lifecycle: record.lifecycle ?? { state: 'active', owner: 'nars-session' },
+    lifecycle,
   };
 }
 

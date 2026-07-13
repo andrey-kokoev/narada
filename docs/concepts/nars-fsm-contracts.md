@@ -180,6 +180,22 @@ end in `failed`. Every transition is journaled as
 `runtime_request_state_transition`, and aggregate request counts are included
 in the runtime health projection.
 
+## Runtime Health Projection Request
+
+Owner: `@narada2/agent-runtime-server`, HTTP health projection wrapper.
+
+Schema: `narada.nars.health_projection_request_state.v1`.
+
+The wrapper-level request is separate from the child runtime's
+`session.health` request because it owns the HTTP response and its timeout:
+
+`requested -> dispatched -> awaiting_response -> resolved | timed_out | failed`
+
+Unavailable child input fails before dispatch. A response from the child
+runtime resolves the projection; a health-response timeout is distinct from a
+transport or runtime failure. This lifecycle is ephemeral request evidence and
+does not replace the runtime request FSM or the session health projection.
+
 ## Site-Registry and Receiving-Site Bootstrap
 
 Owner: `@narada2/cli`, `site-registry-management.ts` and `sites.ts`.

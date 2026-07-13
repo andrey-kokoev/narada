@@ -47,6 +47,33 @@ test('session core owns journal sequencing, queue persistence, artifacts, health
   }
 });
 
+test('session core journals artifact lifecycle transitions and exposes their durable state', () => {
+  const root = mkdtempSync(join(tmpdir(), 'nars-artifact-session-fsm-'));
+  const sessionPath = join(root, 'session.json');
+  const eventsPath = join(root, 'events.jsonl');
+  const artifactPath = join(root, 'briefing.txt');
+  writeFileSync(artifactPath, 'briefing\n', 'utf8');
+  try {
+    const core = createNarsSessionCore({ sessionId: 'artifact-session-fsm', sessionPath, eventsPath, siteRoot: root });
+    core.transition('ready');
+    const artifact = core.registerArtifact({ sourcePath: artifactPath, kind: 'text', title: 'Briefing' });
+    core.revokeArtifact(artifact.record.artifact_id, { reason: 'operator_revoked', requested_by: 'operator' });
+    core.archiveArtifact(artifact.record.artifact_id, { reason: 'retention_complete' });
+    assert.equal(core.recoverySnapshot().artifacts.artifacts[0].lifecycle.state, 'archived');
+    assert.throws(
+      () => core.expireArtifact(artifact.record.artifact_id),
+      /invalid_nars_artifact_lifecycle_transition/,
+    );
+    const events = readFileSync(eventsPath, 'utf8').trim().split(/\r?\n/).map((line) => JSON.parse(line));
+    assert.deepEqual(
+      events.filter((event) => event.event === 'session_artifact_lifecycle_transition').map((event) => [event.previous_state, event.artifact_state]),
+      [['active', 'revoked'], ['revoked', 'archived']],
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('session core treats an interrupted carrier tool as a terminal interrupted turn', () => {
   const root = mkdtempSync(join(tmpdir(), 'nars-turn-tool-interrupt-'));
   const sessionPath = join(root, 'session.json');

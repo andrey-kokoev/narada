@@ -4,6 +4,7 @@ import { markNarsSessionIndexClosed, writeNarsSessionStartedIndex } from '@narad
 import { buildLaunchProcessOwnershipEvidence } from '@narada2/launch-process-ownership';
 import { createRuntimeSessionBinding } from './runtime-session-binding.mjs';
 import { createNarsCapabilityGateway } from '@narada2/nars-capability-gateway/capability-gateway';
+import { createNarsRuntimeRequestRegistry } from './runtime-request-state.mjs';
 
 function createJsonLineWriter(output) {
   let failure = null;
@@ -77,7 +78,7 @@ function parseRequest(line) {
   }
 }
 
-function projectRuntimeHealth(snapshot, runtimeContext, toolGateway) {
+function projectRuntimeHealth(snapshot, runtimeContext, toolGateway, requestLifecycle = null) {
   const mcpScope = runtimeContext.mcpScope ?? 'all';
   const mcpOperationalState = mcpScope === 'none'
     ? 'disabled'
@@ -131,6 +132,7 @@ function projectRuntimeHealth(snapshot, runtimeContext, toolGateway) {
       request_posture: snapshot.request_posture ?? null,
       operational_posture: snapshot.operational_posture ?? null,
     },
+    runtime_requests: requestLifecycle?.snapshot?.() ?? null,
   };
 }
 
@@ -162,6 +164,10 @@ function readHeartbeatProjection(path) {
  */
 export function createSessionCoreRuntimeService({ runtimeContext, callChatApiFn, toolGateway = null, admitCapability = null } = {}) {
   let supervisor = null;
+  const requestLifecycle = createNarsRuntimeRequestRegistry({
+    metadata: { transport: 'jsonl_stdio' },
+    onTransition: (record) => supervisor?.core.appendEvent(record),
+  });
   const gateway = toolGateway ? null : createNarsCapabilityGateway({
     siteRoot: runtimeContext.siteRoot,
     ownershipContext: {
@@ -193,29 +199,35 @@ export function createSessionCoreRuntimeService({ runtimeContext, callChatApiFn,
   };
   supervisor = createRuntimeSessionBinding({ runtimeContext, callChatApiFn, toolGateway: providerToolGateway });
 
-  async function handleRequest(request, writer) {
+  async function handleRequest(request, writer, requestState) {
     const requestId = request?.id ?? request?.request_id ?? null;
     const method = request?.method ?? (requestContent(request) != null ? 'session.submit' : null);
+    requestState.transition('running');
     try {
       if (method === 'session.health') {
         await writer.write({
           event: 'session_health',
           request_id: requestId,
-          ...projectRuntimeHealth(supervisor.health(), runtimeContext, providerToolGateway),
+          ...projectRuntimeHealth(supervisor.health(), runtimeContext, providerToolGateway, requestLifecycle),
         });
+        requestState.transition('completed');
         return false;
       }
       if (method === 'session.cancel') {
         const cancelled = await supervisor.cancel({ request_id: requestId });
         await writer.write({ event: 'session_cancel', request_id: requestId, cancelled });
+        requestState.transition('completed');
         return false;
       }
       if (method === 'session.recovery') {
         await writer.write({ event: 'session_recovery', request_id: requestId, ...supervisor.recovery() });
+        requestState.transition('completed');
         return false;
       }
       if (method === 'session.close') {
-        await supervisor.close({ request_id: requestId, reason: 'control_request' });
+        await supervisor.close({ request_id: requestId, reason: 'control_request' }, {
+          beforeSessionClosed: () => requestState.transition('completed', { terminal_reason: 'control_request' }),
+        });
         markSessionClosed(runtimeContext, 'control_request');
         return true;
       }
@@ -229,6 +241,7 @@ export function createSessionCoreRuntimeService({ runtimeContext, callChatApiFn,
         method,
         terminal_state: result?.terminal_state ?? 'completed',
       });
+      requestState.transition('completed', { terminal_state: result?.terminal_state ?? 'completed' });
       return false;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -243,6 +256,8 @@ export function createSessionCoreRuntimeService({ runtimeContext, callChatApiFn,
             : 'unsupported_session_control',
         error: message,
       });
+      const terminalState = message === 'invalid_json' || method !== 'session.submit' ? 'rejected' : 'failed';
+      requestState.transition(terminalState, { error: message });
       if (method === 'session.close') throw error;
       return false;
     }
@@ -301,14 +316,29 @@ export function createSessionCoreRuntimeService({ runtimeContext, callChatApiFn,
     input.setEncoding?.('utf8');
     let buffer = '';
     let closed = false;
-    const pending = new Set();
     const schedule = (request) => {
       const method = request?.method ?? null;
-      if (method === 'session.cancel') return handleRequest(request, writer);
-      if (method === 'session.close') return Promise.allSettled([...pending]).then(() => handleRequest(request, writer));
-      const operation = handleRequest(request, writer);
-      pending.add(operation);
-      operation.finally(() => pending.delete(operation));
+      const requestId = request?.id ?? request?.request_id ?? null;
+      const requestState = requestLifecycle.receive({
+        requestId,
+        method: method ?? (requestContent(request) != null ? 'session.submit' : null),
+      });
+      requestState.transition('scheduled');
+      if (method === 'session.cancel') {
+        const operation = handleRequest(request, writer, requestState);
+        requestLifecycle.track(requestState.runtimeRequestId, operation);
+        return operation;
+      }
+      if (method === 'session.close') {
+        requestState.transition('waiting');
+        const pendingBeforeClose = requestLifecycle.pendingOperations();
+        const operation = Promise.allSettled(pendingBeforeClose)
+          .then(() => handleRequest(request, writer, requestState));
+        requestLifecycle.track(requestState.runtimeRequestId, operation);
+        return operation;
+      }
+      const operation = handleRequest(request, writer, requestState);
+      requestLifecycle.track(requestState.runtimeRequestId, operation);
       return Promise.resolve(false);
     };
     try {
@@ -325,7 +355,7 @@ export function createSessionCoreRuntimeService({ runtimeContext, callChatApiFn,
       }
       const request = parseRequest(buffer);
       if (request) closed = await schedule(request);
-      await Promise.allSettled([...pending]);
+      await Promise.allSettled(requestLifecycle.pendingOperations());
     } finally {
       if (!closed && supervisor.core.lifecycleState === 'ready') {
         await supervisor.close({ reason: 'input_closed' });
@@ -343,6 +373,7 @@ export function createSessionCoreRuntimeService({ runtimeContext, callChatApiFn,
   return Object.freeze({
     supervisor,
     runtimeContext,
+    requestLifecycle,
     run,
   });
 }

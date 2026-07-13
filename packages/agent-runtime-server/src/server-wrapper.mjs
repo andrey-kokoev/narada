@@ -32,6 +32,7 @@ import { createEventHub } from './runtime-server-event-hub.mjs';
 import { createDelegatedAuthorityHandoff } from './runtime-server-authority.mjs';
 import { handleArtifactHttpRequest } from './runtime-server-artifacts.mjs';
 import { createNarsRuntimeHostStateMachine } from './runtime-host-state.mjs';
+import { createNarsHealthProjectionRequestStateMachine } from './health-projection-request-state.mjs';
 
 export { formatHostStatusEvent } from './runtime-server-events.mjs';
 
@@ -121,26 +122,59 @@ function compactHealthForHttp(health) {
   return compact;
 }
 
-function startHealthProjection({ childStdin, host, port, timeoutMs = 2000, runtimeContext, sessionSupervisor = null }) {
+function startHealthProjection({ childStdin, host, port, timeoutMs = 2000, runtimeContext, sessionSupervisor = null, onRequestTransition = () => {} }) {
   const pending = new Map();
   let sequence = 0;
-  const requestHealth = sessionSupervisor
-    ? async () => sessionSupervisor.health()
-    : () => new Promise((resolve, reject) => {
-    const stdin = typeof childStdin === 'function' ? childStdin() : childStdin;
-    if (!stdin?.writable) {
-      reject(new Error('child_stdin_unavailable'));
-      return;
-    }
+  const requestHealth = async () => {
     sequence += 1;
     const requestId = `http-health-${Date.now()}-${sequence}`;
-    const timer = setTimeout(() => {
-      pending.delete(requestId);
-      reject(new Error('session_health_timeout'));
-    }, timeoutMs);
-    pending.set(requestId, { resolve, reject, timer });
-    stdin.write(`${JSON.stringify({ id: requestId, method: 'session.health', params: {} })}\n`);
-  });
+    const requestState = createNarsHealthProjectionRequestStateMachine({
+      requestId,
+      metadata: { transport: 'http', endpoint: '/health' },
+      onTransition: onRequestTransition,
+    });
+    requestState.transition('requested');
+    const stdin = typeof childStdin === 'function' ? childStdin() : childStdin;
+    if (!sessionSupervisor && !stdin?.writable) {
+      requestState.transition('failed', { error: 'child_stdin_unavailable' });
+      throw new Error('child_stdin_unavailable');
+    }
+    requestState.transition('dispatched');
+    if (sessionSupervisor) {
+      requestState.transition('awaiting_response');
+      try {
+        const health = await sessionSupervisor.health();
+        requestState.transition('resolved');
+        return health;
+      } catch (error) {
+        requestState.transition('failed', { error: error instanceof Error ? error.message : String(error) });
+        throw error;
+      }
+    }
+    const responsePromise = new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        pending.delete(requestId);
+        reject(new Error('session_health_timeout'));
+      }, timeoutMs);
+      pending.set(requestId, { resolve, reject, timer, requestState });
+    });
+    requestState.transition('awaiting_response');
+    try {
+      stdin.write(`${JSON.stringify({ id: requestId, method: 'session.health', params: {} })}\n`);
+      const health = await responsePromise;
+      requestState.transition('resolved');
+      return health;
+    } catch (error) {
+      const entry = pending.get(requestId);
+      if (entry) {
+        pending.delete(requestId);
+        clearTimeout(entry.timer);
+      }
+      const nextState = error?.message === 'session_health_timeout' ? 'timed_out' : 'failed';
+      requestState.transition(nextState, { error: error instanceof Error ? error.message : String(error) });
+      throw error;
+    }
+  };
   const server = createServer(async (request, response) => {
     if (await handleArtifactHttpRequest({ request, response, runtimeContext })) return;
     const url = new URL(request.url ?? '/', `http://${request.headers.host ?? `${host}:${port}`}`);

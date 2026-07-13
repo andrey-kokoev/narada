@@ -98,6 +98,7 @@ test('session-core turn persists carrier and gateway evidence for a provider too
   });
   const input = new PassThrough();
   const output = new PassThrough();
+  output.resume();
   const run = service.run({ input, output });
   input.end(`${JSON.stringify({ id: 'turn-1', method: 'session.submit', params: { content: 'read note' } })}\n${JSON.stringify({ id: 'close-1', method: 'session.close' })}\n`);
   await run;

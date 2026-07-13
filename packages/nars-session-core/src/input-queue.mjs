@@ -6,6 +6,10 @@ import {
   observerVisibility as protocolObserverVisibility,
   isObserverInputEvent as isProtocolObserverInputEvent,
 } from '@narada2/carrier-protocol';
+import {
+  assertNarsInputAdmissionTransition,
+  NARS_INPUT_ADMISSION_STATE_SCHEMA,
+} from './input-admission-state.mjs';
 
 export function shouldDeferQueuedInput(event, { rl, promptState } = {}) {
   return classifyCarrierInputHold(inputWithObserverMetadata(event), {
@@ -125,6 +129,7 @@ export function createInputQueue({
   noteSessionActivityFn = () => {},
   recordObserverInputQueuedFn = () => {},
   onInputAcceptedFn = () => {},
+  assertEnqueueAllowedFn = () => {},
   onQueueStateChangedFn = () => {},
   initialPending = [],
   classifyInputRuntimeQueueAdmissionFn = () => ({ queue_events: [] }),
@@ -138,9 +143,15 @@ export function createInputQueue({
   randomIdFn = defaultRandomId,
 } = {}) {
   const pending = Array.isArray(initialPending)
-    ? initialPending.map((event) => normalizeInputEvent(event, {}, { randomIdFn }))
+    ? initialPending.map((event) => normalizeQueuedInputEvent(event, randomIdFn))
     : [];
-  const state = { running: false, deferredNotified: new Set(), heldSystemDirectives: new Set() };
+  const state = {
+    running: false,
+    activeDrainPromise: null,
+    drainUntilIdlePromise: null,
+    deferredNotified: new Set(),
+    heldSystemDirectives: new Set(),
+  };
   return {
     get isRunning() { return state.running; },
     get pendingCount() { return pending.length; },
@@ -148,8 +159,13 @@ export function createInputQueue({
     get pendingOperatorDirectiveCount() { return pending.filter((event) => event.source === 'operator_steering').length; },
     get pendingObserverCount() { return pending.filter((event) => isObserverInputEvent(event)).length; },
     enqueue: async (event, options = {}) => {
+      assertEnqueueAllowedFn(event, options);
       const normalized = normalizeInputEvent(event, {}, { randomIdFn });
+      normalized.admission_state = null;
       pending.push(normalized);
+      transitionAdmission(normalized, 'accepted', { reason: 'input_received' });
+      persistQueueState('accepted', normalized);
+      const queuedAdmission = transitionAdmission(normalized, 'queued', { reason: 'queued_for_turn' });
       persistQueueState('queued', normalized);
       noteSessionActivityFn(options.state, 'input_event_queued', normalized.created_at ?? normalized.received_at ?? new Date().toISOString());
       appendSessionFn(sessionEventEntryFn('input_event_queued', {
@@ -162,6 +178,9 @@ export function createInputQueue({
         directive_id: normalized.directive_id,
         turn_id: normalized.event_id,
         turn_state: 'accepted',
+        admission_state_schema: NARS_INPUT_ADMISSION_STATE_SCHEMA,
+        admission_previous_state: queuedAdmission.previous_state,
+        admission_state: queuedAdmission.admission_state,
       }));
       onInputAcceptedFn(normalized);
       recordObserverInputQueuedFn(normalized);
@@ -179,8 +198,10 @@ export function createInputQueue({
     },
     drainOnce,
     drainUntilIdle,
+    waitForIdle,
     state: queueSnapshot,
     items: queueItems,
+    admissionState: (eventId) => pending.find((event) => event.event_id === eventId)?.admission_state ?? null,
     clearOperatorInput,
     dropOperatorInput,
     clearOperatorSteering,
@@ -208,6 +229,7 @@ export function createInputQueue({
       transport: event.transport,
       delivery_mode: event.delivery_mode,
       hold_condition: event.hold_condition ?? null,
+      admission_state: event.admission_state ?? null,
       created_at: event.created_at,
       received_at: event.received_at,
       content: event.content,
@@ -218,12 +240,14 @@ export function createInputQueue({
     const dropped = [];
     for (let index = pending.length - 1; index >= 0; index--) {
       if (pending[index].source !== 'operator_steering') continue;
+      if (state.running && pending[index] === pending[0]) continue;
       const [event] = pending.splice(index, 1);
-      dropped.unshift(event);
+      const admission = transitionAdmission(event, 'dropped', { reason: 'queue_clear' });
+      dropped.unshift({ event, admission });
     }
-    for (const event of dropped) recordDroppedByOperator(event, 'queue_clear');
-    if (dropped.length > 0) persistQueueState('queue_clear', dropped.at(-1));
-    return dropped;
+    for (const entry of dropped) recordDroppedByOperator(entry.event, 'queue_clear', entry.admission);
+    if (dropped.length > 0) persistQueueState('queue_clear', dropped.at(-1).event);
+    return dropped.map((entry) => entry.event);
   }
 
   function dropOperatorSteering(index) {
@@ -232,8 +256,10 @@ export function createInputQueue({
       .filter(({ event }) => event.source === 'operator_steering');
     const target = operatorSteering[index - 1];
     if (!target) return null;
+    if (state.running && target.pendingIndex === 0) return null;
     const [event] = pending.splice(target.pendingIndex, 1);
-    recordDroppedByOperator(event, 'queue_drop');
+    const admission = transitionAdmission(event, 'dropped', { reason: 'queue_drop' });
+    recordDroppedByOperator(event, 'queue_drop', admission);
     persistQueueState('queue_drop', event);
     return event;
   }
@@ -242,12 +268,14 @@ export function createInputQueue({
     const dropped = [];
     for (let index = pending.length - 1; index >= 0; index--) {
       if (!isOperatorQueuedInput(pending[index])) continue;
+      if (state.running && pending[index] === pending[0]) continue;
       const [event] = pending.splice(index, 1);
-      dropped.unshift(event);
+      const admission = transitionAdmission(event, 'dropped', { reason: 'queue_clear' });
+      dropped.unshift({ event, admission });
     }
-    for (const event of dropped) recordDroppedByOperator(event, 'queue_clear');
-    if (dropped.length > 0) persistQueueState('queue_clear', dropped.at(-1));
-    return dropped;
+    for (const entry of dropped) recordDroppedByOperator(entry.event, 'queue_clear', entry.admission);
+    if (dropped.length > 0) persistQueueState('queue_clear', dropped.at(-1).event);
+    return dropped.map((entry) => entry.event);
   }
 
   function dropOperatorInput(index) {
@@ -256,24 +284,33 @@ export function createInputQueue({
       .filter(({ event }) => isOperatorQueuedInput(event));
     const target = operatorInput[index - 1];
     if (!target) return null;
+    if (state.running && target.pendingIndex === 0) return null;
     const [event] = pending.splice(target.pendingIndex, 1);
-    recordDroppedByOperator(event, 'queue_drop');
+    const admission = transitionAdmission(event, 'dropped', { reason: 'queue_drop' });
+    recordDroppedByOperator(event, 'queue_drop', admission);
     persistQueueState('queue_drop', event);
     return event;
   }
 
-  function recordDroppedByOperator(event, dropReason) {
+  function recordDroppedByOperator(event, dropReason, admission) {
     appendSessionFn(carrierSessionEventEntryFn('input_dropped_by_operator', {
       input_event_id: event.event_id,
       drop_reason: dropReason,
+      admission_state_schema: NARS_INPUT_ADMISSION_STATE_SCHEMA,
+      admission_previous_state: admission.previous_state,
+      admission_state: admission.admission_state,
     }));
   }
 
   function finalizeSession() {
-    const abandoned = pending.splice(0, pending.length);
+    const abandoned = pending.splice(state.running ? 1 : 0, pending.length);
     for (const event of abandoned) {
+      const admission = transitionAdmission(event, 'abandoned', { reason: 'session_finalize' });
       appendSessionFn(carrierSessionEventEntryFn('input_abandoned_on_session_end', {
         input_event_id: event.event_id,
+        admission_state_schema: NARS_INPUT_ADMISSION_STATE_SCHEMA,
+        admission_previous_state: admission.previous_state,
+        admission_state: admission.admission_state,
       }));
       state.deferredNotified.delete(event.event_id);
       state.heldSystemDirectives.delete(event.event_id);
@@ -284,55 +321,92 @@ export function createInputQueue({
 
   async function drainOnce() {
     if (state.running || pending.length === 0) return null;
-    if (shouldDefer(pending[0])) {
-      const event = pending[0];
+    const operation = drainOnceInternal();
+    state.activeDrainPromise = operation;
+    try {
+      return await operation;
+    } finally {
+      if (state.activeDrainPromise === operation) state.activeDrainPromise = null;
+    }
+  }
+
+  async function drainOnceInternal() {
+    if (state.running || pending.length === 0) return null;
+    const event = pending[0];
+    if (event.admission_state === 'accepted') {
+      transitionAdmission(event, 'queued', { reason: 'recovery_queue_resume' });
+      persistQueueState('queued', event);
+    }
+    if (event.admission_state === 'admitted') {
+      transitionAdmission(event, 'queued', { reason: 'recovery_requeue_after_admission', recovery: true });
+      persistQueueState('recovery_requeued', event);
+    }
+    if (shouldDefer(event)) {
       if (event && !state.deferredNotified.has(event.event_id)) {
         state.deferredNotified.add(event.event_id);
-        recordSystemDirectiveHeld(event);
+        const admission = transitionAdmission(event, 'held', { reason: 'input_hold' });
+        persistQueueState('held', event);
+        recordSystemDirectiveHeld(event, admission);
         onDeferred?.(event, queueSnapshot());
       }
       return null;
     }
-    const event = pending[0];
+    let admission = null;
+    if (event.admission_state === 'held') {
+      admission = transitionAdmission(event, 'queued', { reason: 'hold_released' });
+      persistQueueState('hold_released', event);
+      recordSystemDirectiveReleased(event, admission);
+    }
+    admission = transitionAdmission(event, 'admitted', { reason: 'input_admitted_to_turn' });
     persistQueueState('admitted_to_turn', event);
     state.deferredNotified.delete(event.event_id);
-    recordSystemDirectiveReleased(event);
     state.running = true;
-    appendSessionFn(sessionEventEntryFn('input_event_started', {
-      event_id: event.event_id,
-      ...(event.request_id ? { request_id: event.request_id } : {}),
-      source: event.source,
-      transport: event.transport,
-      authority_ref: event.authority_ref,
-      directive_id: event.directive_id,
-    }));
-    const runtimeAdmission = classifyInputRuntimeAdmissionFn(event);
-    for (const admissionEvent of runtimeAdmission.admission_events ?? []) {
-      if (admissionEvent.event_kind === 'input_admitted_to_turn') {
-        appendSessionFn(carrierSessionEventEntryFn(admissionEvent.event_kind, admissionEvent.payload));
-      }
-    }
-    if (event.source === 'system_directive' && event.directive_id) {
-      appendSessionFn(sessionEventEntryFn('directive_receipt_recorded', directiveReceiptEvidenceFn(event, {
-        agentId: identity,
-        carrierSessionId: session,
-      })));
-      appendSessionFn(sessionEventEntryFn('directive_carrier_accepted_recorded', directiveAcceptedEvidenceFn(event, {
-        agentId: identity,
-        carrierSessionId: session,
-      })));
-    }
     try {
+      appendSessionFn(sessionEventEntryFn('input_event_started', {
+        event_id: event.event_id,
+        ...(event.request_id ? { request_id: event.request_id } : {}),
+        source: event.source,
+        transport: event.transport,
+        authority_ref: event.authority_ref,
+        directive_id: event.directive_id,
+        admission_state_schema: NARS_INPUT_ADMISSION_STATE_SCHEMA,
+        admission_previous_state: admission.previous_state,
+        admission_state: admission.admission_state,
+      }));
+      const runtimeAdmission = classifyInputRuntimeAdmissionFn(event);
+      for (const admissionEvent of runtimeAdmission.admission_events ?? []) {
+        if (admissionEvent.event_kind === 'input_admitted_to_turn') {
+          appendSessionFn(carrierSessionEventEntryFn(admissionEvent.event_kind, {
+            ...admissionEvent.payload,
+            admission_state_schema: NARS_INPUT_ADMISSION_STATE_SCHEMA,
+            admission_state: event.admission_state,
+          }));
+        }
+      }
+      if (event.source === 'system_directive' && event.directive_id) {
+        appendSessionFn(sessionEventEntryFn('directive_receipt_recorded', directiveReceiptEvidenceFn(event, {
+          agentId: identity,
+          carrierSessionId: session,
+        })));
+        appendSessionFn(sessionEventEntryFn('directive_carrier_accepted_recorded', directiveAcceptedEvidenceFn(event, {
+          agentId: identity,
+          carrierSessionId: session,
+        })));
+      }
       const result = await drain(event);
       appendSessionFn(sessionEventEntryFn('input_event_completed', {
         event_id: event.event_id,
         ...(event.request_id ? { request_id: event.request_id } : {}),
         terminal_state: result?.terminal_state ?? 'completed',
+        admission_state_schema: NARS_INPUT_ADMISSION_STATE_SCHEMA,
+        admission_state: event.admission_state,
       }));
       appendSessionFn(carrierSessionEventEntryFn('input_completed', {
         input_event_id: event.event_id,
         ...(event.request_id ? { request_id: event.request_id } : {}),
         terminal_state: result?.terminal_state ?? 'completed',
+        admission_state_schema: NARS_INPUT_ADMISSION_STATE_SCHEMA,
+        admission_state: event.admission_state,
       }));
       pending.shift();
       persistQueueState('completed', event);
@@ -342,7 +416,7 @@ export function createInputQueue({
     }
   }
 
-  function recordSystemDirectiveHeld(event) {
+  function recordSystemDirectiveHeld(event, admission) {
     if (state.heldSystemDirectives.has(event.event_id)) return;
     const hold = classifyInputRuntimeHoldFn(event, {
       composerHasDraft: true,
@@ -352,11 +426,16 @@ export function createInputQueue({
     if (hold.hold_action !== 'hold') return;
     state.heldSystemDirectives.add(event.event_id);
     for (const holdEvent of hold.hold_events ?? []) {
-      appendSessionFn(carrierSessionEventEntryFn(holdEvent.event_kind, holdEvent.payload));
+      appendSessionFn(carrierSessionEventEntryFn(holdEvent.event_kind, {
+        ...holdEvent.payload,
+        admission_state_schema: NARS_INPUT_ADMISSION_STATE_SCHEMA,
+        admission_previous_state: admission.previous_state,
+        admission_state: admission.admission_state,
+      }));
     }
   }
 
-  function recordSystemDirectiveReleased(event) {
+  function recordSystemDirectiveReleased(event, admission) {
     if (!state.heldSystemDirectives.has(event.event_id)) return;
     const release = classifyInputRuntimeHoldFn(event, {
       release: true,
@@ -365,17 +444,42 @@ export function createInputQueue({
     });
     state.heldSystemDirectives.delete(event.event_id);
     for (const releaseEvent of release.release_events ?? []) {
-      appendSessionFn(carrierSessionEventEntryFn(releaseEvent.event_kind, releaseEvent.payload));
+      appendSessionFn(carrierSessionEventEntryFn(releaseEvent.event_kind, {
+        ...releaseEvent.payload,
+        admission_state_schema: NARS_INPUT_ADMISSION_STATE_SCHEMA,
+        admission_previous_state: admission.previous_state,
+        admission_state: admission.admission_state,
+      }));
     }
   }
 
   async function drainUntilIdle() {
+    if (state.drainUntilIdlePromise) return state.drainUntilIdlePromise;
+    const operation = drainUntilIdleInternal();
+    state.drainUntilIdlePromise = operation;
+    try {
+      return await operation;
+    } finally {
+      if (state.drainUntilIdlePromise === operation) state.drainUntilIdlePromise = null;
+    }
+  }
+
+  async function drainUntilIdleInternal() {
     let last = null;
     while (!state.running && pending.length > 0 && !shouldDefer(pending[0])) {
       last = await drainOnce();
     }
     if (!state.running && pending.length > 0 && shouldDefer(pending[0])) await drainOnce();
     return last;
+  }
+
+  async function waitForIdle() {
+    while (state.running || state.activeDrainPromise || state.drainUntilIdlePromise) {
+      const operation = state.activeDrainPromise ?? state.drainUntilIdlePromise;
+      if (operation) await operation.catch(() => {});
+      else await Promise.resolve();
+    }
+    return queueSnapshot();
   }
 
   function persistQueueState(transition, event = null) {
@@ -386,6 +490,30 @@ export function createInputQueue({
       transition,
       event,
     });
+  }
+
+  function transitionAdmission(event, nextState, evidence = {}) {
+    const previousState = event.admission_state ?? null;
+    assertNarsInputAdmissionTransition(previousState, nextState, evidence);
+    if (previousState === nextState) {
+      return {
+        schema: NARS_INPUT_ADMISSION_STATE_SCHEMA,
+        input_event_id: event.event_id,
+        previous_state: previousState,
+        admission_state: nextState,
+        reason: evidence.reason ?? null,
+        recovery: evidence.recovery === true,
+      };
+    }
+    event.admission_state = nextState;
+    return {
+      schema: NARS_INPUT_ADMISSION_STATE_SCHEMA,
+      input_event_id: event.event_id,
+      previous_state: previousState,
+      admission_state: nextState,
+      reason: evidence.reason ?? null,
+      recovery: evidence.recovery === true,
+    };
   }
 }
 
@@ -437,4 +565,10 @@ function defaultObserverMetadata(input = {}) {
 
 function defaultRandomId() {
   return `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function normalizeQueuedInputEvent(event, randomIdFn) {
+  const normalized = normalizeInputEvent(event, {}, { randomIdFn });
+  normalized.admission_state = event?.admission_state ?? 'queued';
+  return normalized;
 }
