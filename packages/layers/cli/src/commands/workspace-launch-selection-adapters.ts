@@ -3,7 +3,7 @@ import type { ResolvedSiteRoot } from '../lib/site-root-resolver.js';
 import * as support from './workspace-launch-support.js';
 import type { WorkspaceLaunchSelectionServices } from './workspace-launch-context.js';
 import type { WorkspaceLaunchPlanOptions, WorkspaceLaunchRecord } from './workspace-launch-types.js';
-import { normalizeCarrierList } from './workspace-launch-plan-builder.js';
+import { normalizeOperatorSurfaceList } from './workspace-launch-plan-builder.js';
 import {
   runWorkspaceLaunchSelectionUi as runWorkspaceLaunchSelectionUiController,
 } from './workspace-launch-ui-controller.js';
@@ -45,17 +45,17 @@ export async function resolveInteractiveSelectionOptions(
   const selectorModel = selectionServices.workspaceLaunchSelectorModel(records, {
     site: selectedSiteValues,
     role: selectedRoleValues,
-    operatorSurface: options.operatorSurface ? normalizeCarrierList(options.operatorSurface) : undefined,
+    operatorSurface: options.operatorSurface ? normalizeOperatorSurfaceList(options.operatorSurface) : undefined,
     runtime: options.runtime ?? 'registry default',
     intelligenceProvider: options.intelligenceProvider ?? 'registry default',
   }, siteCatalog);
-  const selectedCarriers = await prompts.multiselect({
+  const selectedOperatorSurfaces = await prompts.multiselect({
     message: 'Select Operator Surface(s)',
     options: selectorModel.operatorSurfaceOptions,
     initialValues: selectorModel.selected.operatorSurface,
     required: true,
   });
-  if (prompts.isCancel(selectedCarriers)) throw new Error('interactive_selection_cancelled');
+  if (prompts.isCancel(selectedOperatorSurfaces)) throw new Error('interactive_selection_cancelled');
 
   const selectedRuntime = await prompts.select({
     message: 'Select Runtime',
@@ -64,11 +64,11 @@ export async function resolveInteractiveSelectionOptions(
   });
   if (prompts.isCancel(selectedRuntime)) throw new Error('interactive_selection_cancelled');
 
-  const selectedCarrierValues = selectionServices.normalizeInteractiveOperatorSurfaceValues(selectedCarriers as string[]);
+  const selectedOperatorSurfaceValues = selectionServices.normalizeInteractiveOperatorSurfaceValues(selectedOperatorSurfaces as string[]);
   const providerSelectorModel = selectionServices.workspaceLaunchSelectorModel(records, {
     site: selectedSiteValues,
     role: selectedRoleValues,
-    operatorSurface: selectedCarrierValues,
+    operatorSurface: selectedOperatorSurfaceValues,
     runtime: selectedRuntime as string,
     intelligenceProvider: options.intelligenceProvider ?? 'registry default',
   }, siteCatalog);
@@ -88,7 +88,7 @@ export async function resolveInteractiveSelectionOptions(
     all: false,
     site: selectedSiteValues,
     role: selectedRoleValues,
-    operatorSurface: selectedCarrierValues.includes('registry default') ? undefined : selectedCarrierValues.join(','),
+    operatorSurface: selectedOperatorSurfaceValues.includes('registry default') ? undefined : selectedOperatorSurfaceValues.join(','),
     runtime: selectedRuntime === 'registry default' ? undefined : selectedRuntime,
     intelligenceProvider: selectedProvider === 'registry default' ? undefined : selectedProvider,
   };

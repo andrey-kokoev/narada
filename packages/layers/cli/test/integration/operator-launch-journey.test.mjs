@@ -49,8 +49,8 @@ test('operator launch journey dry-run maps one agent to agent-cli and agent-web-
   assert.equal(plan.selected_agents.length, 1);
 
   const agent = plan.selected_agents[0];
-  assert.deepEqual(agent.launch_carriers, ['agent-cli', 'agent-web-ui']);
-  assert.equal(agent.launch_carrier, 'agent-cli');
+  assert.deepEqual(agent.launch_operator_surfaces, ['agent-cli', 'agent-web-ui']);
+  assert.equal(agent.launch_operator_surface, 'agent-cli');
   assert.equal(agent.launch_runtime, 'narada-agent-runtime-server');
 
   const separatorCount = agent.wt_args.filter((arg) => arg === ';').length;
@@ -86,8 +86,8 @@ test('operator launch journey dry-run admits agent-web-ui as the primary NARS la
   assert.equal(result.status, 0, `stderr:\n${result.stderr}\nstdout:\n${result.stdout}`);
   const plan = parseJsonOutput(result.stdout);
   const agent = plan.selected_agents[0];
-  assert.deepEqual(agent.launch_carriers, ['agent-web-ui']);
-  assert.equal(agent.launch_carrier, 'agent-web-ui');
+  assert.deepEqual(agent.launch_operator_surfaces, ['agent-web-ui']);
+  assert.equal(agent.launch_operator_surface, 'agent-web-ui');
   assert.equal(agent.launch_runtime, 'narada-agent-runtime-server');
   const commandText = agent.wt_args.join(' ');
   assert.match(commandText, /'operator-surface' 'runtime' 'start' 'agent-web-ui'/);

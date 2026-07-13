@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { runGovernedCommandSync } from '@narada2/process-launch-posture';
 import { buildAgentIdentityRefV2, resolveAgentIdentityRef } from '@narada2/agent-identity';
-import { defaultRuntimeForCarrier } from '@narada2/carrier-runtime-contract/carrier-runtime-selection';
+import { defaultRuntimeForCarrier as defaultRuntimeForOperatorSurface } from '@narada2/carrier-runtime-contract/carrier-runtime-selection';
 import {
   canonicalizeWorkspaceLaunchRecords as canonicalizeWorkspaceLaunchRecordsDomain,
   selectLaunchRecords as selectLaunchRecordsDomain,
@@ -18,8 +18,7 @@ import type {
 
 export interface WorkspaceLaunchRegistryContext {
   providerRegistry: WorkspaceLaunchProviderRegistry;
-  resolveCarrierRuntimeSelection: (operatorSurface: string | undefined, runtime: string) => {
-    carrier_kind: string;
+  resolveOperatorSurfaceRuntimeSelection: (operatorSurface: string | undefined, runtime: string) => {
     operator_surface_kind: string;
     runtime_substrate_kind: string;
     runtime_host_kind: string;
@@ -191,9 +190,13 @@ function normalizeAgentRecord(registry: RawLaunchRegistry, agent: RawAgentRecord
   const launcherPath = nonEmpty(agent.LauncherPath) ?? nonEmpty(registry.LauncherPath)
     ?? (launcher ? join(naradaRoot, launcher) : '');
   if (!launcherPath) throw new Error(`launcher_path_missing: ${agentId} in ${configPath}`);
-  const operatorSurface = nonEmpty(agent.OperatorSurface) ?? nonEmpty(registry.OperatorSurface) ?? 'codex';
-  const carrier = operatorSurface;
-  const runtime = nonEmpty(agent.Runtime) ?? nonEmpty(registry.Runtime) ?? defaultRuntimeForCarrier(carrier);
+  // Carrier is accepted only as a legacy registry input alias; normalized records use operator_surface.
+  const operatorSurface = nonEmpty(agent.OperatorSurface)
+    ?? nonEmpty(registry.OperatorSurface)
+    ?? nonEmpty(agent.Carrier)
+    ?? nonEmpty(registry.Carrier)
+    ?? 'codex';
+  const runtime = nonEmpty(agent.Runtime) ?? nonEmpty(registry.Runtime) ?? defaultRuntimeForOperatorSurface(operatorSurface);
   const authority = nonEmpty(agent.Authority) ?? nonEmpty(registry.Authority) ?? null;
   const role = nonEmpty(agent.Role) ?? (agentId.split('.').at(-1) ?? agentId).replace(/\d+$/, '');
   const resolvedAgentIdentityRef = resolveAgentIdentityRef(agentId, { site_id: explicitSite, role });
@@ -217,7 +220,6 @@ function normalizeAgentRecord(registry: RawLaunchRegistry, agent: RawAgentRecord
     workspace_root: workspaceRoot,
     launcher_path: launcherPath,
     operator_surface: operatorSurface,
-    carrier,
     runtime,
     authority,
     enable_native_shell: agent.EnableNativeShell === true,

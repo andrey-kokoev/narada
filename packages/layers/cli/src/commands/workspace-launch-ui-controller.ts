@@ -1,5 +1,7 @@
 import * as support from './workspace-launch-support.js';
+import { writeWorkspaceLaunchCommandOutput } from './workspace-launch-terminal.js';
 import * as handoff from './workspace-launch-handoff.js';
+import { emitCliOutputAdmission, emitLongLivedCommandStartup } from '../lib/cli-output.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { buildWorkspaceLaunchSelectionHtml } from './launcher-selection-ui.js';
 import {
@@ -21,6 +23,8 @@ import type { ResolvedSiteRoot } from '../lib/site-root-resolver.js';
 import type { WorkspaceLaunchSelection as WorkspaceLaunchBrowserSelection } from '@narada2/workspace-launch-contract';
 import type {
   WorkspaceLaunchAttemptRecord,
+  WorkspaceLaunchCommandOutput,
+  WorkspaceLaunchCommandResult,
   WorkspaceLaunchDashboardState,
   WorkspaceLaunchPlanOptions,
   WorkspaceLaunchRecord,
@@ -88,10 +92,11 @@ export async function runWorkspaceLaunchSelectionUi(
     throw error;
   }
   const { url, port, fallback_used } = listening;
-  console.log(`Narada launcher selection UI: ${url}`);
+  const selectionUiOutput = [`Narada launcher selection UI: ${url}`];
   if (fallback_used) {
-    console.log(`[launcher] preferred UI port ${portPolicy.port} was occupied; using ephemeral port ${port} instead.`);
+    selectionUiOutput.push(`[launcher] preferred UI port ${portPolicy.port} was occupied; using ephemeral port ${port} instead.`);
   }
+  emitCliOutputAdmission({ zone: 'interactive', lines: selectionUiOutput });
   requestWorkspaceLaunchSelectionUiProjectionOpen(url);
 
   try {
@@ -154,7 +159,7 @@ function setWorkspaceLaunchAttemptLifecycle(
 export async function runPersistentWorkspaceLaunchSelectionUi(
   records: WorkspaceLaunchRecord[],
   options: WorkspaceLaunchPlanOptions,
-  launchSelection: (selection: WorkspaceLaunchBrowserSelection) => Promise<{ exitCode: ExitCode; result: unknown }>,
+  launchSelection: (selection: WorkspaceLaunchBrowserSelection) => Promise<WorkspaceLaunchCommandResult<WorkspaceLaunchCommandOutput>>,
   siteCatalog: ResolvedSiteRoot[] = [],
   selectionServices: WorkspaceLaunchSelectionServices,
 ): Promise<WorkspaceLaunchUiIngress & { status: 'cancelled' | 'timeout'; launch_count: number }> {
@@ -268,7 +273,7 @@ export async function runPersistentWorkspaceLaunchSelectionUi(
         status: attempt.status,
         result_path: attempt.plan_result_path,
       }, `[launcher] ${success ? 'handed off' : 'failed'}: ${attempt.result_summary}${attempt.plan_result_path ? ` result=${attempt.plan_result_path}` : ''}`);
-      support.writeWorkspaceLaunchCommandOutput(launcherOutputs, attempt);
+      writeWorkspaceLaunchCommandOutput(launcherOutputs, attempt);
       return attempt;
     } catch (error) {
       setWorkspaceLaunchAttemptLifecycle(attempt, 'failed');
@@ -410,10 +415,11 @@ export async function runPersistentWorkspaceLaunchSelectionUi(
     throw error;
   }
   const { url, port, fallback_used } = listening;
-  console.log(`Narada launcher selection UI: ${ingress.url}`);
-  if (fallback_used) console.log(`[launcher] preferred UI port ${portPolicy.port} was occupied; using ephemeral port ${port} instead.`);
-  if (ingress.ingress_mode === 'diagnostic') console.log(`[launcher] direct UI URL is diagnostic; Operator Console projection unavailable (${ingress.reason ?? 'unknown'}).`);
-  console.log('Selection UI will remain available for additional launches until you close it.');
+  const persistentUiOutput = [`Narada launcher selection UI: ${ingress.url}`];
+  if (fallback_used) persistentUiOutput.push(`[launcher] preferred UI port ${portPolicy.port} was occupied; using ephemeral port ${port} instead.`);
+  if (ingress.ingress_mode === 'diagnostic') persistentUiOutput.push(`[launcher] direct UI URL is diagnostic; Operator Console projection unavailable (${ingress.reason ?? 'unknown'}).`);
+  persistentUiOutput.push('Selection UI will remain available for additional launches until you close it.');
+  emitLongLivedCommandStartup(persistentUiOutput);
   uiSession.url = url;
   await persistWorkspaceLaunchDashboardState(persistenceDir, uiSession, attempts);
   requestWorkspaceLaunchSelectionUiProjectionOpen(ingress.url);

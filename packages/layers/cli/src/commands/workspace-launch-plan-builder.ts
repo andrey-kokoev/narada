@@ -1,7 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import { join, resolve } from 'node:path';
 import { buildLaunchProcessOwnership, launchSessionIdFromToken } from '@narada2/launch-process-ownership';
-import type { WorkspaceLaunchAgentPlan, WorkspaceLaunchPlanOptions, WorkspaceLaunchRecord } from './workspace-launch-types.js';
+import type {
+  WorkspaceLaunchAgentPlan,
+  WorkspaceLaunchOperatorProjectionOpenRequest,
+  WorkspaceLaunchPlanOptions,
+  WorkspaceLaunchRecord,
+} from './workspace-launch-types.js';
 import type { WorkspaceLaunchRegistryContext } from './workspace-launch-registry.js';
 import { unique } from './workspace-launch-support.js';
 
@@ -19,21 +24,21 @@ function normalizeRuntimeAuthority(value: string | undefined | null): string {
 
 export function buildAgentPlan(record: WorkspaceLaunchRecord, options: WorkspaceLaunchPlanOptions, context: WorkspaceLaunchRegistryContext): WorkspaceLaunchAgentPlan {
   const operatorSurfaceInput = options.operatorSurface ?? record.operator_surface;
-  const launchCarriers = normalizeCarrierList(operatorSurfaceInput);
-  const primaryCarrierInput = launchCarriers.includes('agent-cli') ? 'agent-cli' : launchCarriers[0] ?? operatorSurfaceInput;
+  const launchOperatorSurfaces = normalizeOperatorSurfaceList(operatorSurfaceInput);
+  const primaryOperatorSurfaceInput = launchOperatorSurfaces.includes('agent-cli') ? 'agent-cli' : launchOperatorSurfaces[0] ?? operatorSurfaceInput;
   const runtimeInput = options.runtime ?? record.runtime;
-  const carrierRuntimeSelection = context.resolveCarrierRuntimeSelection(primaryCarrierInput, runtimeInput);
-  const launchCarrier = carrierRuntimeSelection.carrier_kind;
-  const operatorSurfaceKind = carrierRuntimeSelection.operator_surface_kind;
-  const launchRuntime = carrierRuntimeSelection.runtime_substrate_kind;
-  const runtimeHostKind = carrierRuntimeSelection.runtime_host_kind;
+  const runtimeSelection = context.resolveOperatorSurfaceRuntimeSelection(primaryOperatorSurfaceInput, runtimeInput);
+  const launchOperatorSurface = runtimeSelection.operator_surface_kind;
+  const operatorSurfaceKind = runtimeSelection.operator_surface_kind;
+  const launchRuntime = runtimeSelection.runtime_substrate_kind;
+  const runtimeHostKind = runtimeSelection.runtime_host_kind;
   const onboarding = options.onboarding === true;
   const enableNativeShell = options.enableNativeShell === true || record.enable_native_shell;
   const mcpScope = normalizeMcpScope(options.mcpScope ?? record.mcp_scope ?? undefined);
   const authority = normalizeRuntimeAuthority(options.authority ?? record.authority ?? undefined);
   const isNarsRuntimeHost = runtimeHostKind === 'narada-agent-runtime-server';
-  const waitForEnter = options.noWaitForEnterBeforeExec !== true && launchCarriers[0] !== 'agent-web-ui' && !isNarsRuntimeHost;
-  const isNarsOperatorSurface = launchCarrier === 'agent-cli' || launchCarrier === 'agent-web-ui';
+  const waitForEnter = options.noWaitForEnterBeforeExec !== true && launchOperatorSurfaces[0] !== 'agent-web-ui' && !isNarsRuntimeHost;
+  const isNarsOperatorSurface = launchOperatorSurface === 'agent-cli' || launchOperatorSurface === 'agent-web-ui';
   const intelligenceProvider = isNarsOperatorSurface
     ? (options.intelligenceProvider ?? context.providerRegistry.default_provider ?? null)
     : null;
@@ -44,7 +49,7 @@ export function buildAgentPlan(record: WorkspaceLaunchRecord, options: Workspace
   const naradaProper = resolve(process.env.NARADA_PROPER_ROOT ?? 'D:/code/narada');
   const launchSessionToken = workspaceLaunchSessionToken(record);
   const launchSessionId = launchSessionIdFromToken(launchSessionToken);
-  const launchBindingPath = launchCarriers.includes('agent-web-ui')
+  const launchBindingPath = launchOperatorSurfaces.includes('agent-web-ui')
     ? operatorProjectionLaunchBindingPath(record, launchSessionToken)
     : null;
   const processOwnership = launchSessionId
@@ -60,7 +65,7 @@ export function buildAgentPlan(record: WorkspaceLaunchRecord, options: Workspace
   const runtimeStartArguments = [
     'operator-surface',
     'runtime',
-    'start', launchCarrier,
+    'start', launchOperatorSurface,
     '--site-root', record.site_root,
     '--agent', record.agent,
     '--target-site-id', record.site,
@@ -103,18 +108,18 @@ export function buildAgentPlan(record: WorkspaceLaunchRecord, options: Workspace
     toPowerShellCommand(operatorSurfaceStartCommand),
   ];
   const wtArgs = [...base];
-  if (launchCarrier === 'agent-web-ui') {
+  if (launchOperatorSurface === 'agent-web-ui') {
     wtArgs.push(';', ...agentWebUiAttachWtArgs(record, naradaProper, cloudflareApiBaseUrl, launchBindingPath, onboarding));
   }
-  for (const extraCarrier of launchCarriers.filter((carrier) => carrier !== launchCarrier)) {
-    if (extraCarrier !== 'agent-web-ui') {
-      throw new Error(`unsupported_multi_carrier_projection: ${extraCarrier}`);
+  for (const extraOperatorSurface of launchOperatorSurfaces.filter((surface) => surface !== launchOperatorSurface)) {
+    if (extraOperatorSurface !== 'agent-web-ui') {
+      throw new Error(`unsupported_multi_operator_surface_projection: ${extraOperatorSurface}`);
     }
     wtArgs.push(';', ...agentWebUiAttachWtArgs(record, naradaProper, cloudflareApiBaseUrl, launchBindingPath, onboarding));
   }
 
   const smokeCommand = [
-    'narada', 'operator-surface', 'runtime', 'start', launchCarrier,
+    'narada', 'operator-surface', 'runtime', 'start', launchOperatorSurface,
     '--site-root', record.site_root,
     '--agent', record.agent,
     '--target-site-id', record.site,
@@ -129,26 +134,23 @@ export function buildAgentPlan(record: WorkspaceLaunchRecord, options: Workspace
   smokeCommand.push('--mcp-scope', mcpScope);
   if (launchBindingPath) smokeCommand.push('--launch-binding', launchBindingPath);
   if (!launchBindingPath) smokeCommand.push('--launch-session-id', launchSessionId ?? '');
-  const operatorProjectionOpenRequests = launchCarriers.includes('agent-web-ui')
+  const operatorProjectionOpenRequests = launchOperatorSurfaces.includes('agent-web-ui')
     ? [plannedAgentWebUiProjectionOpenRequest(record)]
     : [];
 
   return {
     ...record,
     operator_surface: operatorSurfaceKind,
-    carrier: launchCarrier,
     operator_surface_kind: operatorSurfaceKind,
     runtime_host_kind: runtimeHostKind,
-    launch_operator_surface: launchCarrier,
-    launch_operator_surfaces: launchCarriers,
+    launch_operator_surface: launchOperatorSurface,
+    launch_operator_surfaces: launchOperatorSurfaces,
     launch_runtime_host: runtimeHostKind,
     launch_runtime_hosts: [runtimeHostKind],
-    launch_carrier: launchCarrier,
     launch_runtime: launchRuntime,
-    launch_carriers: launchCarriers,
     onboarding_mode: onboarding ? 'user-site' : null,
     launch_session_id: launchSessionId,
-    process_ownership: processOwnership as Record<string, unknown> | null,
+    process_ownership: processOwnership,
     intelligence_provider: intelligenceProvider,
     authority,
     wait_for_enter_before_exec: waitForEnter,
@@ -171,12 +173,12 @@ export function buildAgentPlan(record: WorkspaceLaunchRecord, options: Workspace
   };
 }
 
-export function normalizeCarrierList(value: string | undefined): string[] {
-  const carriers = String(value ?? 'agent-cli')
+export function normalizeOperatorSurfaceList(value: string | undefined): string[] {
+  const operatorSurfaces = String(value ?? 'agent-cli')
     .split(',')
     .map((item) => nonEmpty(item))
     .filter((item): item is string => Boolean(item));
-  return unique(carriers.length > 0 ? carriers : ['agent-cli']);
+  return unique(operatorSurfaces.length > 0 ? operatorSurfaces : ['agent-cli']);
 }
 
 function workspaceLaunchSessionToken(record: WorkspaceLaunchRecord): string {
@@ -233,7 +235,7 @@ function agentWebUiAttachWtArgs(record: WorkspaceLaunchRecord, naradaProper: str
   ];
 }
 
-function plannedAgentWebUiProjectionOpenRequest(record: WorkspaceLaunchRecord): Record<string, unknown> {
+function plannedAgentWebUiProjectionOpenRequest(record: WorkspaceLaunchRecord): WorkspaceLaunchOperatorProjectionOpenRequest {
   return {
     schema: 'narada.operator_projection_open_request.v1',
     status: 'planned',

@@ -30,7 +30,12 @@ import {
 } from './workspace-launch-attempt-store.js';
 import type { ResolvedSiteRoot } from '../lib/site-root-resolver.js';
 import type { WorkspaceLaunchSelection as WorkspaceLaunchBrowserSelection } from '@narada2/workspace-launch-contract';
-import type { WorkspaceLaunchPlanOptions, WorkspaceLaunchRecord } from './workspace-launch-types.js';
+import type {
+  WorkspaceLaunchCommandOutput,
+  WorkspaceLaunchCommandResult,
+  WorkspaceLaunchPlanOptions,
+  WorkspaceLaunchRecord,
+} from './workspace-launch-types.js';
 
 export type { WorkspaceLaunchBrowserSelection };
 export { explainMcpCommand };
@@ -50,7 +55,7 @@ function getApplicationContext(): WorkspaceLaunchContext {
 export async function workspaceLaunchCommand(
   options: WorkspaceLaunchPlanOptions,
   context: CommandContext,
-): Promise<{ exitCode: number; result: unknown }> {
+): Promise<WorkspaceLaunchCommandResult<WorkspaceLaunchCommandOutput>> {
   return workspaceLaunchCommandImpl(
     options,
     context,
@@ -62,7 +67,7 @@ export async function workspaceLaunchCommand(
 export async function workspaceLaunchPlanCommand(
   options: WorkspaceLaunchPlanOptions,
   context: CommandContext,
-): Promise<{ exitCode: number; result: unknown }> {
+): Promise<WorkspaceLaunchCommandResult<WorkspaceLaunchCommandOutput>> {
   return workspaceLaunchPlanCommandImpl(
     options,
     context,

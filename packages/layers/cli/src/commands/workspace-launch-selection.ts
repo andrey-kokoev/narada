@@ -1,6 +1,10 @@
 import { resolve } from 'node:path';
 import { buildAgentIdentityRefV2 } from '@narada2/agent-identity';
-import { NARADA_AGENT_RUNTIME_SERVER_KIND, normalizeRuntimeAlias } from '@narada2/carrier-runtime-contract/carrier-runtime-selection';
+import {
+  NARADA_AGENT_RUNTIME_SERVER_KIND,
+  normalizeRuntimeAlias,
+  operatorSurfaceKindsForRuntimeHost,
+} from '@narada2/carrier-runtime-contract/carrier-runtime-selection';
 import type { ResolvedSiteRoot } from '../lib/site-root-resolver.js';
 import type {
   WorkspaceLaunchSelectionCardinality,
@@ -10,30 +14,16 @@ import type {
   WorkspaceLaunchSelectorModel as WorkspaceLaunchSelectorModelContract,
 } from '@narada2/workspace-launch-contract';
 import type { WorkspaceLaunchPlanOptions, WorkspaceLaunchRecord } from './workspace-launch-types.js';
-
-export interface WorkspaceLaunchProviderRegistry {
-  default_provider?: string;
-  providers?: Record<string, {
-    meaning?: string;
-    support_state?: string;
-  }>;
-}
-
-export interface WorkspaceLaunchSelectionContext {
-  providerRegistry: WorkspaceLaunchProviderRegistry;
-  admittedProviders?: string[];
-  resolveCarrierRuntimeSelection: (operatorSurface: string | undefined, runtime: string) => {
-    carrier_kind: string;
-    operator_surface_kind: string;
-    runtime_substrate_kind: string;
-    runtime_host_kind: string;
-  };
-}
+import type {
+  WorkspaceLaunchProviderRegistry,
+  WorkspaceLaunchSelectionContext,
+} from './workspace-launch-provider-context.js';
+export type { WorkspaceLaunchProviderRegistry, WorkspaceLaunchSelectionContext } from './workspace-launch-provider-context.js';
 
 export type WorkspaceLaunchSelectorOption = WorkspaceLaunchSelectorOptionContract;
 export type WorkspaceLaunchSelectorModel = WorkspaceLaunchSelectorModelContract;
 
-const NARS_OPERATOR_SURFACE_KINDS = ['agent-cli', 'agent-web-ui'] as const;
+const NARS_OPERATOR_SURFACE_KINDS = operatorSurfaceKindsForRuntimeHost(NARADA_AGENT_RUNTIME_SERVER_KIND);
 
 export function workspaceLaunchSelectionMode(
   raw: unknown,
@@ -86,7 +76,7 @@ function workspaceLaunchCapabilityPairs(
 ): Array<{ operatorSurface: string; runtime: string }> {
   const candidates = records.flatMap((record) => {
     const runtime = normalizeRuntimeAlias(record.runtime);
-    const pairs: Array<{ operatorSurface: string; runtime: string }> = [{ operatorSurface: record.carrier, runtime }];
+    const pairs: Array<{ operatorSurface: string; runtime: string }> = [{ operatorSurface: record.operator_surface, runtime }];
     if (runtime === NARADA_AGENT_RUNTIME_SERVER_KIND) {
       for (const operatorSurface of NARS_OPERATOR_SURFACE_KINDS) pairs.push({ operatorSurface, runtime });
     }
@@ -95,7 +85,7 @@ function workspaceLaunchCapabilityPairs(
   const admitted = new Map<string, { operatorSurface: string; runtime: string }>();
   for (const pair of candidates) {
     try {
-      context.resolveCarrierRuntimeSelection(pair.operatorSurface, pair.runtime);
+      context.resolveOperatorSurfaceRuntimeSelection(pair.operatorSurface, pair.runtime);
       admitted.set(`${pair.operatorSurface}\u0000${pair.runtime}`, pair);
     } catch {
       // Historical registry entries do not make an interactive option launchable.
@@ -148,7 +138,8 @@ export function workspaceLaunchSelectorModel(
     : 'registry default';
   const operatorSurfaceValues = workspaceLaunchCapabilityValues(selectedRecords, context, selectedOperatorSurfaces, selectedRuntime).operatorSurfaceValues;
   const normalizedOperatorSurfaces = initialOperatorSurfaceValues(operatorSurfaceValues, selectedOperatorSurfaces.join(','));
-  const providerOperatorSurface = normalizedOperatorSurfaces.includes('agent-cli') ? 'agent-cli' : (normalizedOperatorSurfaces[0] ?? 'registry default');
+  const providerOperatorSurface = NARS_OPERATOR_SURFACE_KINDS.find((surface) => normalizedOperatorSurfaces.includes(surface))
+    ?? (normalizedOperatorSurfaces[0] ?? 'registry default');
   const intelligenceProviderOptions = intelligenceProviderChoicesForLaunchSelection({
     records: selectedRecords,
     operatorSurface: providerOperatorSurface,
@@ -242,7 +233,8 @@ export function resolveWorkspaceLaunchBrowserSelection(
     ? (runtimeValues.includes(normalizeRuntimeAlias(requestedRuntime)) ? normalizeRuntimeAlias(requestedRuntime) : 'registry default')
     : (rememberedRuntime ?? (options.runtime ?? 'registry default'));
 
-  const providerOperatorSurface = selectedOperatorSurfaces.includes('agent-cli') ? 'agent-cli' : (selectedOperatorSurfaces[0] ?? 'registry default');
+  const providerOperatorSurface = NARS_OPERATOR_SURFACE_KINDS.find((surface) => selectedOperatorSurfaces.includes(surface))
+    ?? (selectedOperatorSurfaces[0] ?? 'registry default');
   const intelligenceProviderOptions = intelligenceProviderChoicesForLaunchSelection({
     records: selectedRecords,
     operatorSurface: providerOperatorSurface,
@@ -292,7 +284,6 @@ export function buildWorkspaceLaunchSelectionUiModel(
       schema: 'narada.workspace_launch.remembered_selection_semantics.v1',
       role: 'form_defaults_only',
       binds_runtime_session: false,
-      binds_carrier_session: false,
       binds_launch_session: false,
       launch_submission: 'always_creates_new_launch_session',
     },
@@ -334,7 +325,7 @@ export function registryDefaultIntelligenceProvider(context: WorkspaceLaunchSele
 
 export function initialOperatorSurfaceValues(choices: string[], current?: string): string[] {
   if (!current) return ['registry default'];
-  const explicit = normalizeCarrierList(current).filter((value) => choices.some((choice) => choice.toLowerCase() === value.toLowerCase()));
+  const explicit = normalizeOperatorSurfaceValues(current).filter((value) => choices.some((choice) => choice.toLowerCase() === value.toLowerCase()));
   return explicit.length > 0 ? explicit : ['registry default'];
 }
 
@@ -358,11 +349,11 @@ export function intelligenceProviderChoicesForLaunchSelection({
   context: WorkspaceLaunchSelectionContext;
 }): Array<{ value: string; label: string; hint?: string }> {
   const narsSurfaceRecords = records.filter((record) => {
-    const selection = context.resolveCarrierRuntimeSelection(
+    const selection = context.resolveOperatorSurfaceRuntimeSelection(
       operatorSurface === 'registry default' ? record.operator_surface : operatorSurface,
       runtime === 'registry default' ? record.runtime : runtime,
     );
-    return selection.carrier_kind === 'agent-cli' || selection.carrier_kind === 'agent-web-ui';
+    return NARS_OPERATOR_SURFACE_KINDS.includes(selection.operator_surface_kind);
   });
   if (narsSurfaceRecords.length === 0) {
     return [{ value: 'registry default', label: 'registry default', hint: 'no NARS operator-surface launches selected' }];
@@ -447,7 +438,7 @@ function filterWorkspaceLaunchValues(values: string[] | undefined, allowed: stri
   return unique(stringArray(values).filter((value) => allowedSet.has(value.toLowerCase())));
 }
 
-function normalizeCarrierList(value: string | undefined): string[] {
+function normalizeOperatorSurfaceValues(value: string | undefined): string[] {
   return unique((value ?? '').split(',').map((part) => part.trim()).filter(Boolean));
 }
 

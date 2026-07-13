@@ -1,8 +1,7 @@
-import { appendFile, writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
-import { spawnHiddenPostureProcess } from '@narada2/process-launch-posture';
 import { buildAgentIdentityRefV2, resolveAgentIdentityRef, type AgentIdentityRefV2 } from '@narada2/agent-identity';
 import type { WorkspaceLaunchSelection as WorkspaceLaunchBrowserSelection } from '@narada2/workspace-launch-contract';
+import { emitCliOutputAdmission } from '../lib/cli-output.js';
 import type {
   WorkspaceLaunchAttemptRecord,
   WorkspaceLaunchPlanOptions,
@@ -79,102 +78,6 @@ export function workspaceLaunchProjectionQualifiedAgentId(attempt: WorkspaceLaun
   return selectedSite && selectedRole ? `${selectedSite}.${selectedRole}` : null;
 }
 
-export function workspaceLaunchTerminalHandoffArgs(record: Record<string, unknown>): string[] {
-  const topLevel = stringArray(record.wt_args);
-  if (topLevel.length > 0) return topLevel;
-  const terminalHandoff = isRecord(record.operator_terminal_handoff) ? record.operator_terminal_handoff : null;
-  return terminalHandoff ? stringArray(terminalHandoff.wt_args) : [];
-}
-
-export async function workspaceLaunchStartHiddenRuntimeHost(commandArgs: string[], cwd: string): Promise<Record<string, unknown>> {
-  const captureLog = process.env.NARADA_WORKSPACE_LAUNCH_HIDDEN_RUNTIME_LOG;
-  if (captureLog) {
-    const redactedArgs = redactWorkspaceLaunchArgv(commandArgs);
-    await appendFile(captureLog, `${JSON.stringify({ command: redactedArgs, cwd })}\n`, 'utf8');
-    return {
-      posture: 'agent_runtime_server',
-      command: 'capture',
-      args: redactedArgs,
-      cwd,
-      detached: true,
-      stdio: 'ignore',
-      windowsHide: true,
-      pid: null,
-      capture_log: captureLog,
-    };
-  }
-  const [command, ...args] = commandArgs;
-  if (!command) throw new Error('narada_workspace_plan_empty_hidden_runtime_command');
-  const child = spawnHiddenPostureProcess(command, args, {
-    posture: 'agent_runtime_server',
-    cwd,
-    detached: true,
-    stdio: 'ignore',
-  });
-  await new Promise<void>((resolvePromise, rejectPromise) => {
-    child.once('error', rejectPromise);
-    child.once('spawn', () => resolvePromise());
-  });
-  child.unref();
-  return {
-    posture: 'agent_runtime_server',
-    command,
-    args: redactWorkspaceLaunchArgv(args),
-    cwd,
-    detached: true,
-    stdio: 'ignore',
-    windowsHide: true,
-    pid: typeof child.pid === 'number' ? child.pid : null,
-  };
-}
-
-export async function workspaceLaunchStartHiddenProjectionHost(command: string, cwd: string): Promise<Record<string, unknown>> {
-  const hostCommand = process.platform === 'win32' ? 'pwsh' : 'sh';
-  const hostArgs = process.platform === 'win32'
-    ? ['-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', command]
-    : ['-lc', command];
-  const child = spawnHiddenPostureProcess(hostCommand, hostArgs, {
-    posture: 'operator_projection_host',
-    cwd,
-    detached: true,
-    stdio: 'ignore',
-    env: process.env,
-  });
-  await new Promise<void>((resolvePromise, rejectPromise) => {
-    child.once('error', rejectPromise);
-    child.once('spawn', () => resolvePromise());
-  });
-  child.unref();
-  return {
-    posture: 'operator_projection_host',
-    command: hostCommand,
-    args: redactWorkspaceLaunchArgv(hostArgs),
-    cwd,
-    detached: true,
-    stdio: 'ignore',
-    windowsHide: true,
-    pid: typeof child.pid === 'number' ? child.pid : null,
-  };
-}
-
-export function redactWorkspaceLaunchArgv(args: string[]): string[] {
-  return args.map((arg) => /api[_-]?key|token|secret|password/i.test(arg) ? '<redacted>' : arg);
-}
-
-export function redactWorkspaceLaunchCommand(command: string): string {
-  return redactWorkspaceLaunchArgv([command])[0] ?? '<redacted>';
-}
-
-export async function captureWorkspaceLaunchTerminalInvocation(path: string, args: string[]): Promise<{ status: number; error?: Error }> {
-  await appendFile(path, `${JSON.stringify(args)}\n`, 'utf8');
-  return { status: 0 };
-}
-
-export async function writeWorkspacePlanResult(path: string | undefined, result: unknown): Promise<void> {
-  if (!path) return;
-  await writeFile(path, `${JSON.stringify(result, null, 2)}\n`, 'utf8');
-}
-
 export function normalizeLauncherOutput(value: unknown, options: WorkspaceLaunchPlanOptions): WorkspaceLauncherOutputProjection[] {
   const raw = stringArray(value).flatMap((entry) => entry.split(',')).map((entry) => entry.trim().toLowerCase()).filter(Boolean);
   const selected = raw.length > 0 ? raw : (options.interactiveSelectionUi ? ['summary', 'events'] : []);
@@ -194,22 +97,13 @@ function launcherOutputHas(outputs: WorkspaceLauncherOutputProjection[], project
 
 export function writeLauncherOutput(outputs: WorkspaceLauncherOutputProjection[], event: Record<string, unknown>, human: string): void {
   if (outputs.includes('quiet')) return;
-  if (launcherOutputHas(outputs, 'json')) console.log(JSON.stringify(event));
-  if (launcherOutputHas(outputs, 'events')) console.log(human);
+  const lines: string[] = [];
+  if (launcherOutputHas(outputs, 'json')) lines.push(JSON.stringify(event));
+  if (launcherOutputHas(outputs, 'events')) lines.push(human);
+  if (lines.length > 0) emitCliOutputAdmission({ zone: 'finite', lines });
 }
 
 export function formatWorkspaceLaunchSelection(selection: WorkspaceLaunchBrowserSelection): string {
   return `${selection.site.join(',') || '*'} / ${selection.role.join(',') || '*'} / ${selection.operatorSurface.join(',') || 'registry default'} / ${selection.runtime} / ${selection.intelligenceProvider}`;
-}
-
-function formatWorkspaceLaunchCommand(args: string[]): string {
-  return args.map((arg) => /\s/.test(arg) ? `'${arg.replace(/'/g, "''")}'` : arg).join(' ');
-}
-
-export function writeWorkspaceLaunchCommandOutput(outputs: WorkspaceLauncherOutputProjection[], attempt: WorkspaceLaunchAttemptRecord): void {
-  if (!launcherOutputHas(outputs, 'commands')) return;
-  for (const handoff of attempt.handoffs) {
-    if (handoff.argv_redacted.length > 0) console.log(`[launcher:command] ${formatWorkspaceLaunchCommand(handoff.argv_redacted)}`);
-  }
 }
 

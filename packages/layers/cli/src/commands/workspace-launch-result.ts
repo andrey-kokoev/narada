@@ -1,17 +1,28 @@
 import * as support from './workspace-launch-support.js';
+import type {
+  WorkspaceLaunchInvocationDetails,
+  WorkspaceLaunchLaunchResult,
+  WorkspaceLaunchPlanResult,
+} from './workspace-launch-types.js';
 
-export function finalizeWorkspaceLaunchResult(result: Record<string, unknown>): Record<string, unknown> {
-  const selectedAgents = Array.isArray(result.selected_agents) ? result.selected_agents.filter(support.isRecord) : [];
-  const wtArgs = support.stringArray(result.wt_args);
-  const { wt_args: _wtArgs, ...resultWithoutTopLevelTerminalPlan } = result;
-  const launchResult = {
-    ...resultWithoutTopLevelTerminalPlan,
+export function finalizeWorkspaceLaunchResult(
+  plan: WorkspaceLaunchPlanResult,
+  invocation: WorkspaceLaunchInvocationDetails,
+): WorkspaceLaunchLaunchResult {
+  const { wt_args: wtArgs, ...planWithoutTopLevelTerminalPlan } = plan;
+  const launchResult: WorkspaceLaunchLaunchResult = {
+    ...planWithoutTopLevelTerminalPlan,
     schema: 'narada.workspace_launch.launch_result.v1',
     status: 'launched',
     mode: 'launch',
     mutation_performed: true,
-    launch_agents: selectedAgents,
+    windows_terminal_invoked: invocation.windows_terminal_invoked,
+    launch_agents: plan.selected_agents,
     selected_agents_authority: 'narada-cli.plan_selection',
+    hidden_runtime_invoked: invocation.hidden_runtime_invoked,
+    launcher_execution_owner: 'narada-cli',
+    ...(invocation.hidden_runtime_launches ? { hidden_runtime_launches: invocation.hidden_runtime_launches } : {}),
+    ...(invocation.wt_exit_code === undefined ? {} : { wt_exit_code: invocation.wt_exit_code }),
     ...(wtArgs.length > 0
       ? {
           operator_terminal_handoff: {
@@ -26,7 +37,7 @@ export function finalizeWorkspaceLaunchResult(result: Record<string, unknown>): 
   return launchResult;
 }
 
-export function assertWorkspaceLaunchResultInvariants(result: Record<string, unknown>): void {
+export function assertWorkspaceLaunchResultInvariants(result: WorkspaceLaunchLaunchResult): void {
   if (result.schema !== 'narada.workspace_launch.launch_result.v1') {
     throw new Error(`workspace_launch_result_schema_invalid: ${String(result.schema ?? '')}`);
   }
@@ -44,7 +55,7 @@ export function assertWorkspaceLaunchResultInvariants(result: Record<string, unk
   if (windowsTerminalInvoked === hiddenRuntimeInvoked) {
     throw new Error('workspace_launch_result_invocation_posture_ambiguous');
   }
-  if (Array.isArray(result.wt_args)) {
+  if ('wt_args' in result) {
     throw new Error('workspace_launch_result_top_level_wt_args_forbidden');
   }
   const terminalHandoff = support.isRecord(result.operator_terminal_handoff) ? result.operator_terminal_handoff : null;
@@ -54,8 +65,7 @@ export function assertWorkspaceLaunchResultInvariants(result: Record<string, unk
   if (!Array.isArray(result.launch_agents)) {
     throw new Error('workspace_launch_result_launch_agents_required');
   }
-  const selectedAgents = Array.isArray(result.selected_agents) ? result.selected_agents.filter(support.isRecord) : [];
-  if (hiddenRuntimeInvoked && selectedAgents.some((agent) => agent.runtime_start_execution_mode !== 'hidden_detached')) {
+  if (hiddenRuntimeInvoked && result.selected_agents.some((agent) => agent.runtime_start_execution_mode !== 'hidden_detached')) {
     throw new Error('workspace_launch_result_hidden_runtime_requires_hidden_agent_modes');
   }
 }

@@ -4,6 +4,15 @@ import { dirname, join, resolve } from 'node:path';
 import { runGovernedCommandSync, startOperatorTerminal } from '@narada2/process-launch-posture';
 import { discoverNarsSessions } from '@narada2/nars-session-core/session-index';
 import * as support from './workspace-launch-support.js';
+import {
+  redactWorkspaceLaunchArgv,
+  redactWorkspaceLaunchCommand,
+  workspaceLaunchStartHiddenProjectionHost,
+} from './workspace-launch-process.js';
+import {
+  captureWorkspaceLaunchTerminalInvocation,
+  workspaceLaunchTerminalHandoffArgs,
+} from './workspace-launch-terminal.js';
 import type {
   WorkspaceLaunchAttemptRecord,
   WorkspaceLaunchHandoffRecord,
@@ -126,7 +135,7 @@ export async function workspaceLaunchExecuteProjectionAction(
   const cwd = workspaceLaunchProjectionCwd(attempt) ?? process.cwd();
   if (action === 'open-web-ui') {
     try {
-      const host = await support.workspaceLaunchStartHiddenProjectionHost(command, cwd);
+      const host = await workspaceLaunchStartHiddenProjectionHost(command, cwd);
       return {
         schema: 'narada.workspace_launch.observed_projection.v1',
         observation_id: support.workspaceLaunchId('wlp'),
@@ -139,7 +148,7 @@ export async function workspaceLaunchExecuteProjectionAction(
         ownership_posture: 'handoff_only',
         observed_at: new Date().toISOString(),
         message: `${projectionKind} projection host started hidden; browser projection owns visible operator surface.`,
-        diagnostic: { ...host, command: support.redactWorkspaceLaunchCommand(command) },
+        diagnostic: { ...host, command: redactWorkspaceLaunchCommand(command) },
       };
     } catch (error) {
       return {
@@ -154,7 +163,7 @@ export async function workspaceLaunchExecuteProjectionAction(
         ownership_posture: 'handoff_only',
         observed_at: new Date().toISOString(),
         message: error instanceof Error ? error.message : String(error),
-        diagnostic: { command: support.redactWorkspaceLaunchCommand(command) },
+        diagnostic: { command: redactWorkspaceLaunchCommand(command) },
       };
     }
   }
@@ -163,7 +172,7 @@ export async function workspaceLaunchExecuteProjectionAction(
   const terminalCaptureLog = process.env.NARADA_WORKSPACE_LAUNCH_TERMINAL_LOG;
   try {
     const launch = terminalCaptureLog
-      ? (await support.captureWorkspaceLaunchTerminalInvocation(terminalCaptureLog, effectiveWtArgs))
+      ? (await captureWorkspaceLaunchTerminalInvocation(terminalCaptureLog, effectiveWtArgs))
       : startOperatorTerminal('wt', effectiveWtArgs).result;
     if (launch.error) throw launch.error;
     if (launch.status !== 0) throw new Error(`projection_terminal_launch_failed: wt exited ${launch.status ?? 'unknown'}`);
@@ -236,7 +245,7 @@ export function workspaceLaunchHandoffFromResult(launchAttemptId: string, result
       diagnostic_ref: workspaceLaunchString(record.result_path),
     };
   }
-  const wtArgs = support.workspaceLaunchTerminalHandoffArgs(record);
+  const wtArgs = workspaceLaunchTerminalHandoffArgs(record);
   return {
     schema: 'narada.workspace_launch.handoff.v1',
     handoff_id: support.workspaceLaunchId('wlh'),
@@ -618,9 +627,3 @@ function workspaceLaunchHandoffCwd(record: Record<string, unknown>): string | nu
   return firstAgent ? workspaceLaunchString(firstAgent.workspace_root) ?? workspaceLaunchString(firstAgent.site_root) : null;
 }
 
-export function redactWorkspaceLaunchArgv(args: string[]): string[] {
-  return args.map((arg) => {
-    if (/api[_-]?key|token|secret|password/i.test(arg)) return '<redacted>';
-    return arg;
-  });
-}
