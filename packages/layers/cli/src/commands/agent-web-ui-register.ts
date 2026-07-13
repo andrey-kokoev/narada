@@ -54,12 +54,27 @@ export function registerAgentWebUiCommands(program: Command): void {
         return;
       }
       const formatted = formatStartedAgentWebUi(result.result);
+      const cleanup = cleanupFromAgentWebUiResult(result.result);
       emitLongLivedCommandStartup([
         formatted,
-        'Press Ctrl+C to stop',
+        ...(cleanup
+          ? ['Press Ctrl+C to stop']
+          : ['This command is attached to an existing projection; its owner remains responsible for lifecycle.']),
       ]);
-      process.on('SIGINT', () => exitLongLivedCommandSuccessfully());
+      if (!cleanup) return;
+      const stop = async (): Promise<void> => {
+        await cleanup?.();
+        exitLongLivedCommandSuccessfully();
+      };
+      process.once('SIGINT', stop);
+      process.once('SIGTERM', stop);
     });
+}
+
+function cleanupFromAgentWebUiResult(value: unknown): (() => Promise<void>) | null {
+  if (!value || typeof value !== 'object') return null;
+  const cleanup = (value as { _cleanup?: unknown })._cleanup;
+  return typeof cleanup === 'function' ? (cleanup as () => Promise<void>) : null;
 }
 
 function formatStartedAgentWebUi(result: unknown): string {

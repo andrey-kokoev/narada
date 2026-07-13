@@ -261,8 +261,10 @@ async function acquireLock(path: string): Promise<() => Promise<void>> {
   } catch (error) {
     if (!isRecord(error) || error.code !== 'EEXIST') throw error;
     let existing: { pid?: unknown; instance_nonce?: unknown };
+    let existingText: string;
     try {
-      existing = JSON.parse(await readFile(path, 'utf8')) as { pid?: unknown; instance_nonce?: unknown };
+      existingText = await readFile(path, 'utf8');
+      existing = JSON.parse(existingText) as { pid?: unknown; instance_nonce?: unknown };
     } catch (readError) {
       throw new Error('operator_router_singleton_lock_invalid', { cause: readError });
     }
@@ -270,6 +272,8 @@ async function acquireLock(path: string): Promise<() => Promise<void>> {
       throw new Error('operator_router_singleton_lock_invalid');
     }
     if (processAlive(existing.pid)) throw new Error('operator_router_singleton_already_running');
+    const currentText = await readFile(path, 'utf8').catch(() => null);
+    if (currentText !== existingText) throw new Error('operator_router_singleton_already_running');
     await unlink(path).catch(() => undefined);
     return acquireLock(path);
   }
@@ -363,7 +367,7 @@ async function readJsonBody(req: IncomingMessage, maxBytes: number): Promise<Rec
 
 function forwardedHeaders(req: IncomingMessage): Record<string, string> {
   const headers: Record<string, string> = {};
-  for (const name of ['accept', 'accept-encoding', 'authorization', 'content-type', 'cookie', 'if-none-match', 'origin', 'range', 'referer', 'user-agent']) {
+  for (const name of ['accept', 'accept-encoding', 'accept-language', 'authorization', 'content-type', 'cookie', 'if-match', 'if-modified-since', 'if-none-match', 'origin', 'range', 'referer', 'user-agent', 'x-csrf-token', 'x-requested-with', 'x-xsrf-token']) {
     const value = headerValue(req.headers[name]);
     if (value) headers[name] = value;
   }
@@ -372,12 +376,15 @@ function forwardedHeaders(req: IncomingMessage): Record<string, string> {
   return headers;
 }
 
-function responseHeaders(response: Response): Record<string, string> {
-  const headers: Record<string, string> = {};
-  for (const name of ['cache-control', 'content-disposition', 'content-encoding', 'content-language', 'content-length', 'content-range', 'content-security-policy', 'content-type', 'etag', 'last-modified', 'vary', 'x-narada-artifact-id', 'x-narada-artifact-kind']) {
+function responseHeaders(response: Response): Record<string, string | string[]> {
+  const headers: Record<string, string | string[]> = {};
+  for (const name of ['cache-control', 'content-disposition', 'content-encoding', 'content-language', 'content-length', 'content-range', 'content-security-policy', 'content-type', 'etag', 'last-modified', 'location', 'retry-after', 'vary', 'www-authenticate', 'x-narada-artifact-id', 'x-narada-artifact-kind']) {
     const value = response.headers.get(name);
     if (value) headers[name] = value;
   }
+  const getSetCookie = (response.headers as unknown as { getSetCookie?: () => string[] }).getSetCookie;
+  const setCookies = typeof getSetCookie === 'function' ? getSetCookie.call(response.headers) : [];
+  if (setCookies.length > 0) headers['set-cookie'] = setCookies;
   return headers;
 }
 
@@ -471,12 +478,18 @@ export async function createOperatorRouterServer(config: Partial<OperatorRouterS
   let releaseLock: (() => Promise<void>) | null = null;
   let healthTimer: NodeJS.Timeout | null = null;
   let maintenanceTimer: NodeJS.Timeout | null = null;
+  let stateWriteQueue: Promise<void> = Promise.resolve();
+  let healthInFlight: Promise<void> | null = null;
+  let maintenanceInFlight: Promise<void> | null = null;
   const startedAt = nowFrom(resolved);
   const fetchFn = resolved.fetch_fn ?? fetch;
 
   async function persist(): Promise<void> {
     state = { ...state, generation: state.generation + 1 };
-    await store.save(state);
+    const snapshot = structuredClone(state);
+    const write = stateWriteQueue.then(() => store.save(snapshot));
+    stateWriteQueue = write.catch(() => {});
+    await write;
   }
 
   async function healthCheck(route: OperatorRouterRouteRegistration): Promise<void> {
@@ -513,8 +526,30 @@ export async function createOperatorRouterServer(config: Partial<OperatorRouterS
   }
 
   async function refreshHealth(): Promise<void> {
-    await Promise.all(state.routes.filter((route) => routeLeaseValid(route, nowFrom(resolved))).map((route) => healthCheck(route)));
-    await store.save(state);
+    const routes = state.routes.filter((route) => routeLeaseValid(route, nowFrom(resolved)));
+    if (routes.length === 0) return;
+    await Promise.all(routes.map((route) => healthCheck(route)));
+    await persist();
+  }
+
+  function scheduleHealthRefresh(): void {
+    if (healthInFlight) return;
+    let current: Promise<void>;
+    current = refreshHealth().finally(() => {
+      if (healthInFlight === current) healthInFlight = null;
+    });
+    healthInFlight = current;
+    current.catch(() => undefined);
+  }
+
+  function scheduleRouteMaintenance(): void {
+    if (maintenanceInFlight) return;
+    let current: Promise<void>;
+    current = maintainRoutes().finally(() => {
+      if (maintenanceInFlight === current) maintenanceInFlight = null;
+    });
+    maintenanceInFlight = current;
+    current.catch(() => undefined);
   }
 
   function authorized(req: IncomingMessage): boolean {
@@ -639,8 +674,13 @@ export async function createOperatorRouterServer(config: Partial<OperatorRouterS
       jsonResponse(res, 421, { error: 'operator_router_host_or_origin_not_loopback' });
       return;
     }
-    const urlObject = new URL(req.url ?? '/', `http://${req.headers.host ?? `${resolved.host}:${resolved.port}`}`);
-    if (!requestPathIsSafe(urlObject.pathname)) { socket.destroy(); return; }
+    let urlObject: URL;
+    try {
+      urlObject = new URL(req.url ?? '/', `http://${req.headers.host ?? `${resolved.host}:${resolved.port}`}`);
+    } catch {
+      jsonResponse(res, 400, { error: 'operator_router_request_url_invalid' });
+      return;
+    }
     if (!requestPathIsSafe(urlObject.pathname)) {
       jsonResponse(res, 400, { error: 'operator_router_request_path_invalid' });
       return;
@@ -683,7 +723,14 @@ export async function createOperatorRouterServer(config: Partial<OperatorRouterS
 
   async function handleUpgrade(req: IncomingMessage, socket: Duplex, head: Buffer): Promise<void> {
     if (req.method !== 'GET' || headerValue(req.headers.upgrade)?.toLowerCase() !== 'websocket' || !requestHostIsLoopback(req) || !requestOriginIsLoopback(req)) { socket.destroy(); return; }
-    const urlObject = new URL(req.url ?? '/', `http://${req.headers.host ?? `${resolved.host}:${resolved.port}`}`);
+    let urlObject: URL;
+    try {
+      urlObject = new URL(req.url ?? '/', `http://${req.headers.host ?? `${resolved.host}:${resolved.port}`}`);
+    } catch {
+      socket.destroy();
+      return;
+    }
+    if (!requestPathIsSafe(urlObject.pathname)) { socket.destroy(); return; }
     const route = findRoute(state.routes, urlObject.pathname);
     if (!route || route.state === 'degraded' || !routeLeaseValid(route, nowFrom(resolved)) || !route.protocols.includes('websocket')) { socket.destroy(); return; }
     const target = targetUrlForRequest(route, urlObject.pathname, urlObject.search, true);
@@ -712,8 +759,8 @@ export async function createOperatorRouterServer(config: Partial<OperatorRouterS
           });
         });
         url = actualUrl;
-        healthTimer = setInterval(() => { refreshHealth().catch(() => undefined); }, resolved.health_interval_ms);
-        maintenanceTimer = setInterval(() => { maintainRoutes().catch(() => undefined); }, resolved.maintenance_interval_ms);
+        healthTimer = setInterval(scheduleHealthRefresh, resolved.health_interval_ms);
+        maintenanceTimer = setInterval(scheduleRouteMaintenance, resolved.maintenance_interval_ms);
         healthTimer.unref();
         maintenanceTimer.unref();
         await refreshHealth();
@@ -733,6 +780,9 @@ export async function createOperatorRouterServer(config: Partial<OperatorRouterS
         server = null;
         url = null;
       }
+      await healthInFlight?.catch(() => undefined);
+      await maintenanceInFlight?.catch(() => undefined);
+      await stateWriteQueue.catch(() => undefined);
       if (releaseLock) await releaseLock();
       releaseLock = null;
     },

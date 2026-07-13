@@ -4,8 +4,9 @@
 
 This document defines the implementation target and current boundary contract
 for Narada's stable local browser ingress. The dedicated router package and
-the first projection integrations are implemented; the acceptance suite and
-remaining launcher/open-flow migrations are still in progress.
+the first projection integrations are implemented, including owner-side route
+set renewal, recovery, and teardown; the acceptance suite and remaining
+launcher/open-flow migrations are still in progress.
 
 The router gives an operator one bookmarkable loopback origin while preserving
 ephemeral, independently owned backing services.
@@ -150,7 +151,8 @@ separate states. One unhealthy session does not make the router unhealthy.
 ## Process Lifecycle
 
 The router is a singleton hidden background process. Launchers and commands use
-an idempotent ensure operation:
+an idempotent ensure operation, and projection owners use the route-set lease
+contract for grouped registrations:
 
 1. probe the stable endpoint;
 2. verify router identity;
@@ -158,6 +160,12 @@ an idempotent ensure operation:
 4. wait for bounded readiness;
 5. register or reconstruct the required route;
 6. return the stable URL.
+
+Grouped owners register transactionally, renew all routes from one bounded
+timer, re-register a route that disappeared after router restart or lease
+loss, and unregister every route before stopping their backing service. The
+router may rehydrate and health-check route records, but it never starts a
+domain service on behalf of an owner.
 
 It uses the existing hidden process-launch posture and opens no persistent
 console window.
@@ -200,6 +208,9 @@ direct diagnostic endpoints.
 - Persisted routes are schema-validated on reload, health-verified before
   advertisement, degraded when their owner process is gone, and replaceable
   only when the prior registration is demonstrably stale.
+- Console, Site Operations, and Agent Web UI owners use a shared route-set
+  lifecycle; Agent Web UI reuses a healthy existing session projection and
+  cleans up its backing server and routes on signal-driven shutdown.
 - The router rehydrates route records and artifact routes from canonical
   evidence; Console, Agent Web UI, and Site Operations owners remain
   responsible for restarting their own backing services and re-registering
@@ -213,10 +224,11 @@ direct diagnostic endpoints.
    identity probe, health endpoint, and route registry. **Implemented:** the
    dedicated package and hidden process now own this behavior.
 2. Add strict registrations, leases, process evidence, and reconstruction.
-   **Partial:** persisted registrations are validated and health-verified,
-   artifact routes resolve from NARS evidence, and active owners renew while
-   stale owners degrade or expire. Automatic owner-side service restart and
-   re-registration remain outside the router.
+   **Implemented for the current projection owners:** persisted registrations
+   are validated and health-verified, artifact routes resolve from NARS
+   evidence, and active owners renew, re-register missing routes, and tear
+   down their route sets. Automatic owner-side service restart remains outside
+   the router by design.
 3. Make Agent Web UI base-path aware and verify assets, APIs, WebSockets, and
    artifacts beneath a session prefix. **Implemented:** session and event
    routes are registered; direct artifact routes use the NARS session index.

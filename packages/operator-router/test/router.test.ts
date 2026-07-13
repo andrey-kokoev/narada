@@ -10,6 +10,7 @@ import { registerNarsArtifact } from '@narada2/nars-session-core/artifacts';
 import { writeNarsSessionStartedIndex } from '@narada2/nars-session-core/session-index';
 import {
   createOperatorRouterServer,
+  registerOperatorRouteSet,
   registerOperatorRoute,
   unregisterOperatorRoute,
 } from '../src/index.ts';
@@ -85,13 +86,83 @@ test('router fails closed on an unreadable singleton lock', async () => {
   }
 });
 
+test('route sets renew missing routes and stop without leaving a renewal race', async () => {
+  const input = routeInput('http://127.0.0.1:1', 'http://127.0.0.1:1/health');
+  const registerCalls: string[] = [];
+  const unregisterCalls: string[] = [];
+  let renewCalls = 0;
+  const routeSet = await registerOperatorRouteSet({
+    admin: { url: 'http://127.0.0.1:1', registration_token: 'test-token' },
+    routes: [input],
+    renew_interval_ms: 1_000,
+    register_fn: async (_admin, route) => {
+      registerCalls.push(route.route_id);
+      return validateRouteRegistration(route);
+    },
+    renew_fn: async (_admin, routeId, route) => {
+      renewCalls += 1;
+      if (renewCalls === 1) throw new Error('operator_router_route_not_found');
+      return validateRouteRegistration({ ...input, route_id: routeId, owner_id: route.owner_id, process_evidence: { ...input.process_evidence, instance_nonce: route.instance_nonce } });
+    },
+    unregister_fn: async (_admin, routeId) => {
+      unregisterCalls.push(routeId);
+      return { status: 'removed', route_id: routeId };
+    },
+  });
+
+  await routeSet.renew();
+  assert.deepEqual(registerCalls, ['agent-session-demo', 'agent-session-demo']);
+  await routeSet.stop();
+  assert.deepEqual(unregisterCalls, ['agent-session-demo']);
+  await routeSet.stop();
+  assert.deepEqual(unregisterCalls, ['agent-session-demo']);
+});
+
+test('concurrent route registration preserves every route in persisted state', async () => {
+  const stateRoot = await mkdtemp(join(tmpdir(), 'narada-operator-router-concurrent-'));
+  const upstream = createServer((req, res) => {
+    res.writeHead(req.url === '/health' ? 200 : 404);
+    res.end();
+  });
+  const upstreamUrl = await listen(upstream);
+  const router = await createOperatorRouterServer({ host: '127.0.0.1', port: 0, state_root: stateRoot, health_interval_ms: 60_000 });
+  try {
+    const routerUrl = await router.start();
+    const admin = { url: routerUrl, registration_token: router.getRegistrationToken() };
+    const first = routeInput(upstreamUrl, `${upstreamUrl}/health`);
+    const second = {
+      ...first,
+      route_id: 'agent-session-second',
+      public_path: '/sessions/second',
+      session_id: 'second',
+    };
+    await Promise.all([
+      registerOperatorRoute(admin, first),
+      registerOperatorRoute(admin, second),
+    ]);
+    const routes = await fetch(`${routerUrl}/routes`).then((response) => response.json() as Promise<{ routes: Array<Record<string, unknown>> }>);
+    assert.deepEqual(routes.routes.map((route) => route.route_id).sort(), ['agent-session-demo', 'agent-session-second']);
+  } finally {
+    await router.stop();
+    await close(upstream);
+    await rm(stateRoot, { recursive: true, force: true });
+  }
+});
+
 test('router registers, health-checks, proxies, projects, renews, and removes a route', async () => {
   const stateRoot = await mkdtemp(join(tmpdir(), 'narada-operator-router-'));
   let observedOrigin: string | undefined;
+  let observedCsrf: string | undefined;
   const upstream = createServer((req, res) => {
     if (req.url === '/health') {
       res.writeHead(200, { 'content-type': 'text/plain' });
       res.end('healthy');
+      return;
+    }
+    if (req.url === '/headers') {
+      observedCsrf = Array.isArray(req.headers['x-csrf-token']) ? req.headers['x-csrf-token'][0] : req.headers['x-csrf-token'];
+      res.writeHead(302, { location: '/next', 'set-cookie': ['router_a=1', 'router_b=2'] });
+      res.end();
       return;
     }
     observedOrigin = Array.isArray(req.headers.origin) ? req.headers.origin[0] : req.headers.origin;
@@ -114,6 +185,14 @@ test('router registers, health-checks, proxies, projects, renews, and removes a 
     const originForwarded = await fetch(`${routerUrl}/sessions/demo/origin`, { headers: { origin: routerUrl } });
     assert.equal(originForwarded.status, 200);
     assert.equal(observedOrigin, routerUrl);
+    const headersForwarded = await fetch(`${routerUrl}/sessions/demo/headers`, {
+      redirect: 'manual',
+      headers: { 'x-csrf-token': 'csrf-demo' },
+    });
+    assert.equal(headersForwarded.status, 302);
+    assert.equal(headersForwarded.headers.get('location'), '/next');
+    assert.equal(observedCsrf, 'csrf-demo');
+    assert.match(headersForwarded.headers.get('set-cookie') ?? '', /router_a=1/);
     const traversal = await fetch(`${routerUrl}/sessions/demo/%2e%2e/admin`);
     assert.equal(traversal.status, 400);
 
@@ -134,6 +213,42 @@ test('router registers, health-checks, proxies, projects, renews, and removes a 
     assert.equal((await fetch(`${routerUrl}/sessions/demo/hello`)).status, 404);
   } finally {
     await router.stop();
+    await close(upstream);
+    await rm(stateRoot, { recursive: true, force: true });
+  }
+});
+
+test('router reconstructs a persisted healthy route after singleton restart', async () => {
+  const stateRoot = await mkdtemp(join(tmpdir(), 'narada-operator-router-restart-'));
+  const upstream = createServer((req, res) => {
+    if (req.url === '/health') {
+      res.writeHead(200);
+      res.end('healthy');
+      return;
+    }
+    res.writeHead(200, { 'content-type': 'text/plain' });
+    res.end(`reconstructed:${req.url}`);
+  });
+  const upstreamUrl = await listen(upstream);
+  const first = await createOperatorRouterServer({ host: '127.0.0.1', port: 0, state_root: stateRoot, health_interval_ms: 60_000 });
+  let second: Awaited<ReturnType<typeof createOperatorRouterServer>> | null = null;
+  try {
+    const firstUrl = await first.start();
+    await registerOperatorRoute({ url: firstUrl, registration_token: first.getRegistrationToken() }, routeInput(upstreamUrl, `${upstreamUrl}/health`));
+    await first.stop();
+
+    const restarted = await createOperatorRouterServer({ host: '127.0.0.1', port: 0, state_root: stateRoot, health_interval_ms: 60_000 });
+    second = restarted;
+    const secondUrl = await restarted.start();
+    const response = await fetch(`${secondUrl}/sessions/demo/reconstructed`);
+    assert.equal(response.status, 200);
+    assert.equal(await response.text(), 'reconstructed:/reconstructed');
+    const routes = await fetch(`${secondUrl}/routes`).then((result) => result.json() as Promise<{ routes: Array<Record<string, unknown>> }>);
+    assert.equal(routes.routes.length, 1);
+    assert.equal(routes.routes[0]?.state, 'healthy');
+  } finally {
+    await first.stop();
+    await second?.stop();
     await close(upstream);
     await rm(stateRoot, { recursive: true, force: true });
   }

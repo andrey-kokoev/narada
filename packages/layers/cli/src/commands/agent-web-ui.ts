@@ -6,9 +6,9 @@ import { agentIdentityDisplay, agentIdentityGroupKey, agentIdentityRefMatchesReq
 import {
   DEFAULT_OPERATOR_ROUTER_PORT,
   ensureOperatorRouter,
+  readOperatorRouterRoutes,
   registerOperatorRoute,
-  renewOperatorRoute,
-  unregisterOperatorRoute,
+  registerOperatorRouteSet,
   type EnsureOperatorRouterOptions,
   type EnsureOperatorRouterResult,
   type OperatorRouterAdminOptions,
@@ -481,7 +481,7 @@ function candidateNextCommand(candidate: AttachSessionCandidate): string {
 
 export interface AgentWebUiAttachPlan {
   schema: 'narada.agent_web_ui.attach_plan.v1';
-  status: 'planned' | 'started';
+  status: 'planned' | 'started' | 'attached';
   session_id: string;
   site_root: string | null;
   site_root_source: string | null;
@@ -511,8 +511,6 @@ export async function agentWebUiAttachCommand(
     startAgentWebUiServer?: (options: { host: string; port: number; eventEndpoint: string; healthEndpoint: string | null; sessionId: string; siteRoot: string | null; siteId: string | null; agentId: string | null; authorityTransition?: AuthorityTransitionSnapshot; onboarding?: boolean; cloudflareApiBaseUrl: string | null; publicBasePath?: string | null; publicEventEndpoint?: string | null; publicHealthEndpoint?: string | null; publicArtifactBasePath?: string | null; publicArtifactTransport?: string | null }) => Promise<{ url: string; server?: unknown }>;
     ensureOperatorRouter?: (options?: EnsureOperatorRouterOptions) => Promise<EnsureOperatorRouterResult>;
     registerOperatorRoute?: typeof registerOperatorRoute;
-    renewOperatorRoute?: typeof renewOperatorRoute;
-    unregisterOperatorRoute?: typeof unregisterOperatorRoute;
     openUrl?: (url: string) => Promise<void> | void;
     progress?: ProgressReporter;
   } = {},
@@ -611,6 +609,47 @@ export async function agentWebUiAttachCommand(
     : null;
   const publicEventEndpoint = router ? operatorRouterWebsocketUrl(router.url, `${publicPath}/events`) : null;
   const publicHealthEndpoint = router ? `${router.url}${publicPath}/api/health` : null;
+  const sessionKey = operatorRouterSessionKey(sessionId);
+  const httpRouteId = `agent-web-ui-${sessionKey}`;
+  const websocketRouteId = `${httpRouteId}-events`;
+  const artifactRouteId = `nars-artifact-${sessionKey}`;
+  const requiredRouteIds = [httpRouteId, websocketRouteId, ...(publicArtifactPath ? [artifactRouteId] : [])];
+  if (router) {
+    const existingRoutes = await readOperatorRouterRoutes({ url: router.url });
+    const existingById = new Map(existingRoutes.routes.map((route) => [route.route_id, route]));
+    const healthyRouteIds = requiredRouteIds.filter((routeId) => existingById.get(routeId)?.state === 'healthy');
+    if (healthyRouteIds.length === requiredRouteIds.length) {
+      const plan = buildPlan({
+        status: 'attached',
+        sessionId,
+        attach,
+        eventEndpoint,
+        healthEndpoint,
+        host,
+        port,
+        url: `${router.url}${publicPath}/`,
+        session: attach.session,
+        onboarding: options.onboarding === true,
+        ingressMode: 'operator-router',
+        routerUrl: router.url,
+        publicPath,
+        publicEventEndpoint,
+        publicHealthEndpoint,
+        backendUrl: null,
+        routeIds: requiredRouteIds,
+      });
+      const shouldOpen = options.open !== false;
+      if (shouldOpen && plan.url) {
+        progress(`agent-web-ui: opening browser ${plan.url}`);
+        plan.operator_projection_open_request = await buildAgentWebUiOpenRequest({ targetRef: plan.url, mode: 'execute', openUrl: deps.openUrl });
+      } else if (plan.url) {
+        plan.operator_projection_open_request = await buildAgentWebUiOpenRequest({ targetRef: plan.url, mode: 'execute', suppressReason: 'operator_policy:no_open' });
+      }
+      const renderedResult = formattedResult(plan, formatPlan(plan), options.format ?? 'auto');
+      return { exitCode: ExitCode.SUCCESS, result: renderedResult };
+    }
+    if (healthyRouteIds.length > 0) throw new Error(`operator_router_projection_incomplete:${healthyRouteIds.join(',')}`);
+  }
   const startAgentWebUiServer = deps.startAgentWebUiServer ?? (await import('@narada2/agent-web-ui/server')).startAgentWebUiServer;
   const started = await startAgentWebUiServer({
     host,
@@ -634,39 +673,36 @@ export async function agentWebUiAttachCommand(
       || null,
   });
   const routeIds: string[] = [];
+  let routeSet: Awaited<ReturnType<typeof registerOperatorRouteSet>> | null = null;
   if (router) {
     const admin = operatorRouterAdmin(router);
-    const sessionKey = operatorRouterSessionKey(sessionId);
     const ownerId = `agent-web-ui:${sessionKey}:${process.pid}`;
     const instanceNonce = randomUUID().replace(/-/g, '');
-    const httpRouteId = `agent-web-ui-${sessionKey}`;
-    const websocketRouteId = `${httpRouteId}-events`;
     const reconstruction = { kind: 'nars-session' as const, site_root: siteRoot, site_id: siteId, session_id: sessionId };
     const startedBackendUrl = started.url.replace(/\/+$/, '');
     const startedHealthUrl = new URL('/api/health', started.url).toString();
-    try {
-      await (deps.registerOperatorRoute ?? registerOperatorRoute)(admin, {
+    const routeInputs = [
+      {
         route_id: httpRouteId,
-        route_class: 'agent-web-ui',
+        route_class: 'agent-web-ui' as const,
         public_path: publicPath,
-        route_mode: 'prefix',
+        route_mode: 'prefix' as const,
         target_url: startedBackendUrl,
         health_url: startedHealthUrl,
         owner_id: ownerId,
         site_id: siteId,
         session_id: sessionId,
         process_evidence: { instance_nonce: instanceNonce, pid: process.pid, started_at: new Date().toISOString() },
-        protocols: ['http'],
+        protocols: ['http'] as const,
         methods: ['GET', 'HEAD', 'POST', 'OPTIONS'],
         lease_ms: 60 * 60 * 1000,
         reconstruction,
-      });
-      routeIds.push(httpRouteId);
-      await (deps.registerOperatorRoute ?? registerOperatorRoute)(admin, {
+      },
+      {
         route_id: websocketRouteId,
-        route_class: 'agent-web-ui',
+        route_class: 'agent-web-ui' as const,
         public_path: `${publicPath}/events`,
-        route_mode: 'exact',
+        route_mode: 'exact' as const,
         target_url: startedBackendUrl,
         websocket_target_url: eventEndpoint,
         health_url: startedHealthUrl,
@@ -674,42 +710,42 @@ export async function agentWebUiAttachCommand(
         site_id: siteId,
         session_id: sessionId,
         process_evidence: { instance_nonce: instanceNonce, pid: process.pid, started_at: new Date().toISOString() },
-        protocols: ['websocket'],
+        protocols: ['websocket'] as const,
         methods: ['GET'],
         lease_ms: 60 * 60 * 1000,
         reconstruction,
+      },
+      ...(publicArtifactPath ? [{
+        route_id: artifactRouteId,
+        route_class: 'nars-artifact' as const,
+        backend_kind: 'nars-artifact' as const,
+        public_path: publicArtifactPath,
+        route_mode: 'prefix' as const,
+        target_url: null,
+        health_url: healthEndpoint,
+        owner_id: ownerId,
+        site_id: siteId,
+        session_id: sessionId,
+        process_evidence: { instance_nonce: instanceNonce, pid: process.pid, started_at: new Date().toISOString() },
+        protocols: ['http'] as const,
+        methods: ['GET', 'HEAD'],
+        max_body_bytes: 0,
+        lease_ms: 60 * 60 * 1000,
+        reconstruction,
+      }] : []),
+    ];
+    try {
+      routeSet = await registerOperatorRouteSet({
+        admin,
+        routes: routeInputs,
+        renew_interval_ms: 30_000,
+        register_fn: deps.registerOperatorRoute,
       });
-      routeIds.push(websocketRouteId);
-      if (publicArtifactPath) {
-        await (deps.registerOperatorRoute ?? registerOperatorRoute)(admin, {
-          route_id: `nars-artifact-${sessionKey}`,
-          route_class: 'nars-artifact',
-          backend_kind: 'nars-artifact',
-          public_path: publicArtifactPath,
-          route_mode: 'prefix',
-          health_url: healthEndpoint,
-          owner_id: ownerId,
-          site_id: siteId,
-          session_id: sessionId,
-          process_evidence: { instance_nonce: instanceNonce, pid: process.pid, started_at: new Date().toISOString() },
-          protocols: ['http'],
-          methods: ['GET', 'HEAD'],
-          max_body_bytes: 0,
-          lease_ms: 60 * 60 * 1000,
-          reconstruction,
-        });
-        routeIds.push(`nars-artifact-${sessionKey}`);
-      }
+      routeIds.push(...routeSet.route_ids);
     } catch (error) {
-      await Promise.all(routeIds.map((routeId) => (deps.unregisterOperatorRoute ?? unregisterOperatorRoute)(admin, routeId, { owner_id: ownerId, instance_nonce: instanceNonce }).catch(() => undefined)));
       await closeStartedServer(started.server);
       throw error;
     }
-    const renew = deps.renewOperatorRoute ?? renewOperatorRoute;
-    const renewTimer = setInterval(() => {
-      Promise.all(routeIds.map((routeId) => renew(admin, routeId, { owner_id: ownerId, instance_nonce: instanceNonce, lease_ms: 60 * 60 * 1000 }))).catch(() => undefined);
-    }, 30_000);
-    renewTimer.unref();
   }
   const plan = buildPlan({
     status: 'started',
@@ -750,9 +786,20 @@ export async function agentWebUiAttachCommand(
     });
   }
   plan.operator_projection_open_request = operatorProjectionOpenRequest;
+  let cleanedUp = false;
+  const cleanup = async (): Promise<void> => {
+    if (cleanedUp) return;
+    cleanedUp = true;
+    await routeSet?.stop();
+    await closeStartedServer(started.server);
+  };
+  const renderedResult = formattedResult(plan, formatPlan(plan), options.format ?? 'auto');
+  if (renderedResult && typeof renderedResult === 'object') {
+    Object.defineProperty(renderedResult, '_cleanup', { value: cleanup, enumerable: false });
+  }
   return {
     exitCode: ExitCode.SUCCESS,
-    result: formattedResult(plan, formatPlan(plan), options.format ?? 'auto'),
+    result: renderedResult,
   };
 }
 
@@ -836,7 +883,7 @@ function createProgressReporter(options: AgentWebUiAttachOptions, injected?: Pro
 }
 
 function buildPlan(args: {
-  status: 'planned' | 'started';
+  status: 'planned' | 'started' | 'attached';
   sessionId: string;
   attach: { command?: string; site_root?: string | null; site_root_source?: string | null; site_id?: string | null };
   eventEndpoint: string;
@@ -880,7 +927,7 @@ function buildPlan(args: {
 }
 
 function formatPlan(plan: AgentWebUiAttachPlan): string {
-  if (plan.status === 'started') {
+  if (plan.status !== 'planned') {
     const lines = [
       `agent-web-ui: ${plan.url}`,
       `  Session ${plan.session_id}`,

@@ -12,6 +12,7 @@ import {
   type OperatorRouterHealthResponse,
   type OperatorRouterRouteRegistration,
   type OperatorRouterRouteRegistrationInput,
+  type OperatorRouterRoutesResponse,
 } from './contract.js';
 
 const ROUTER_TOKEN_HEADER = 'x-narada-router-token';
@@ -42,9 +43,27 @@ export interface OperatorRouterAdminOptions {
   url: string;
   registration_token: string;
   fetch_fn?: typeof fetch;
+  timeout_ms?: number;
+}
+
+export interface OperatorRouterRouteSetOptions {
+  admin: OperatorRouterAdminOptions;
+  routes: readonly OperatorRouterRouteRegistrationInput[];
+  renew_interval_ms?: number;
+  register_fn?: typeof registerOperatorRoute;
+  renew_fn?: typeof renewOperatorRoute;
+  unregister_fn?: typeof unregisterOperatorRoute;
+}
+
+export interface OperatorRouterRouteSet {
+  route_ids: readonly string[];
+  renew(): Promise<void>;
+  stop(): Promise<void>;
 }
 
 function defaultStateRoot(): string {
+  const configured = process.env.NARADA_OPERATOR_ROUTER_STATE_ROOT?.trim();
+  if (configured) return configured;
   const localAppData = process.env.LOCALAPPDATA;
   return localAppData ? join(localAppData, 'Narada', 'operator-router') : join(homedir(), '.narada', 'operator-router');
 }
@@ -60,6 +79,12 @@ function baseUrl(host: string, port: number): string {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function boundedClientTimeout(value: number | undefined, fallback: number): number {
+  const timeout = value ?? fallback;
+  if (!Number.isInteger(timeout) || timeout < 100 || timeout > 120_000) throw new Error('operator_router_client_timeout_invalid');
+  return timeout;
 }
 
 async function readToken(stateRoot: string): Promise<string> {
@@ -121,6 +146,7 @@ export async function ensureOperatorRouter(options: EnsureOperatorRouterOptions 
 async function adminRequest<T>(options: OperatorRouterAdminOptions, path: string, method: string, body?: unknown): Promise<T> {
   const response = await (options.fetch_fn ?? fetch)(`${options.url.replace(/\/+$/, '')}${path}`, {
     method,
+    signal: AbortSignal.timeout(boundedClientTimeout(options.timeout_ms, 10_000)),
     headers: {
       [ROUTER_TOKEN_HEADER]: options.registration_token,
       ...(body === undefined ? {} : { 'content-type': 'application/json' }),
@@ -133,6 +159,20 @@ async function adminRequest<T>(options: OperatorRouterAdminOptions, path: string
     throw new Error(reason);
   }
   return payload as T;
+}
+
+export async function readOperatorRouterRoutes(options: { url: string; fetch_fn?: typeof fetch; timeout_ms?: number }): Promise<OperatorRouterRoutesResponse> {
+  const response = await (options.fetch_fn ?? fetch)(`${options.url.replace(/\/+$/, '')}/routes`, {
+    signal: AbortSignal.timeout(boundedClientTimeout(options.timeout_ms, 3_000)),
+  });
+  const payload: unknown = await response.json().catch(() => null);
+  if (!response.ok || !isRecord(payload)
+    || payload.schema !== 'narada.operator_router.routes.v1'
+    || payload.identity !== OPERATOR_ROUTER_IDENTITY
+    || !Array.isArray(payload.routes)) {
+    throw new Error(`operator_router_routes_read_failed:${response.status}`);
+  }
+  return payload as unknown as OperatorRouterRoutesResponse;
 }
 
 export function registerOperatorRoute(
@@ -156,6 +196,89 @@ export function unregisterOperatorRoute(
   input: { owner_id: string; instance_nonce: string },
 ): Promise<{ status: string; route_id: string }> {
   return adminRequest(options, `/admin/routes/${encodeURIComponent(routeId)}`, 'DELETE', input);
+}
+
+function routeSetRenewInterval(value: number | undefined): number {
+  const interval = value ?? 30_000;
+  if (!Number.isInteger(interval) || interval < 1_000 || interval > 60 * 60 * 1000) {
+    throw new Error('operator_router_route_set_renew_interval_invalid');
+  }
+  return interval;
+}
+
+export async function registerOperatorRouteSet(options: OperatorRouterRouteSetOptions): Promise<OperatorRouterRouteSet> {
+  if (!options.routes.length) throw new Error('operator_router_route_set_empty');
+  const routeIds = options.routes.map((route) => route.route_id);
+  if (new Set(routeIds).size !== routeIds.length) throw new Error('operator_router_route_set_duplicate_route');
+  const renewIntervalMs = routeSetRenewInterval(options.renew_interval_ms);
+  const shortestLeaseMs = Math.min(...options.routes.map((route) => route.lease_ms ?? 60_000));
+  if (renewIntervalMs * 2 > shortestLeaseMs) throw new Error('operator_router_route_set_renew_interval_exceeds_lease');
+  const register = options.register_fn ?? registerOperatorRoute;
+  const renewRoute = options.renew_fn ?? renewOperatorRoute;
+  const unregister = options.unregister_fn ?? unregisterOperatorRoute;
+  const registered: OperatorRouterRouteRegistration[] = [];
+  try {
+    for (const route of options.routes) registered.push(await register(options.admin, route));
+  } catch (error) {
+    await Promise.all(registered.map((route) => unregister(options.admin, route.route_id, {
+      owner_id: route.owner_id,
+      instance_nonce: route.process_evidence.instance_nonce,
+    }).catch(() => undefined)));
+    throw error;
+  }
+
+  let stopped = false;
+  let renewal: NodeJS.Timeout | null = null;
+  let renewalInFlight: Promise<void> | null = null;
+  const renew = async (): Promise<void> => {
+    if (stopped) return;
+    if (renewalInFlight) return renewalInFlight;
+    const work = (async (): Promise<void> => {
+      for (let index = 0; index < options.routes.length; index += 1) {
+        if (stopped) return;
+        const input = options.routes[index]!;
+        try {
+          registered[index] = await renewRoute(options.admin, input.route_id, {
+            owner_id: input.owner_id,
+            instance_nonce: input.process_evidence.instance_nonce,
+            lease_ms: input.lease_ms,
+          });
+        } catch (error) {
+          if (error instanceof Error && error.message === 'operator_router_route_not_found' && !stopped) {
+            try {
+              registered[index] = await register(options.admin, input);
+            } catch {
+              // The next bounded renewal will retry registration while the owner remains alive.
+            }
+          }
+        }
+      }
+    })();
+    let wrapped: Promise<void>;
+    wrapped = work.finally(() => {
+      if (renewalInFlight === wrapped) renewalInFlight = null;
+    });
+    renewalInFlight = wrapped;
+    return wrapped;
+  };
+  renewal = setInterval(() => { renew().catch(() => undefined); }, renewIntervalMs);
+  renewal.unref();
+
+  return {
+    route_ids: [...routeIds],
+    renew,
+    async stop(): Promise<void> {
+      if (stopped) return;
+      stopped = true;
+      if (renewal) clearInterval(renewal);
+      renewal = null;
+      await renewalInFlight?.catch(() => undefined);
+      await Promise.all(registered.map((route) => unregister(options.admin, route.route_id, {
+        owner_id: route.owner_id,
+        instance_nonce: route.process_evidence.instance_nonce,
+      }).catch(() => undefined)));
+    },
+  };
 }
 
 export function routerHealth(response: unknown): OperatorRouterHealthResponse | null {

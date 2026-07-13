@@ -1,7 +1,7 @@
 import type { Command } from 'commander';
 import { createHash, randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
-import { DEFAULT_OPERATOR_ROUTER_PORT, ensureOperatorRouter, registerOperatorRoute, renewOperatorRoute, unregisterOperatorRoute } from '@narada2/operator-router';
+import { DEFAULT_OPERATOR_ROUTER_PORT, ensureOperatorRouter, readOperatorRouterRoutes, registerOperatorRouteSet } from '@narada2/operator-router';
 import { createWorkbenchServer, workbenchDiagnoseCommand } from './workbench-server.js';
 import {
   emitFiniteCommandResult,
@@ -63,38 +63,52 @@ export function registerWorkbenchCommands(program: Command): void {
       const siteRoot = resolve(cwd);
       const router = await ensureOperatorRouter({ host, port });
       const publicPath = `/sites/${encodeURIComponent(siteId)}/operations`;
-      const server = await createWorkbenchServer({ host, port: 0, cwd, verbose: !!opts.verbose, publicBasePath: publicPath });
-      const backendUrl = await server.start();
       const routeKey = createHash('sha256').update(siteId, 'utf8').digest('hex').slice(0, 32);
       const routeId = `site-operations-${routeKey}`;
+      const existingRoutes = await readOperatorRouterRoutes({ url: router.url });
+      const existingRoute = existingRoutes.routes.find((route) => route.route_id === routeId);
+      if (existingRoute?.state === 'healthy') {
+        emitLongLivedCommandStartup([
+          `Site Operations: ${router.url}${publicPath}/`,
+          `  Site    ${siteId}`,
+          `  Router  ${router.url}`,
+          `  Ownership: ${router.ownership === 'attached' ? 'existing operator-router projection' : 'operator-router projection'}`,
+          '  Projection: attached',
+          '  Lifecycle: owned by the existing projection process',
+        ]);
+        return;
+      }
+      const server = await createWorkbenchServer({ host, port: 0, cwd, verbose: !!opts.verbose, publicBasePath: publicPath });
+      const backendUrl = await server.start();
       const ownerId = `site-operations:${routeKey}:${process.pid}`;
       const instanceNonce = randomUUID().replace(/-/g, '');
       const admin = { url: router.url, registration_token: router.registration_token };
+      let routeSet: Awaited<ReturnType<typeof registerOperatorRouteSet>> | null = null;
       try {
-        await registerOperatorRoute(admin, {
-          route_id: routeId,
-          route_class: 'site-operations',
-          public_path: publicPath,
-          route_mode: 'prefix',
-          target_url: backendUrl,
-          health_url: `${backendUrl.replace(/\/+$/, '')}/api/health`,
-          owner_id: ownerId,
-          site_id: siteId,
-          session_id: null,
-          process_evidence: { instance_nonce: instanceNonce, pid: process.pid, started_at: new Date().toISOString() },
-          protocols: ['http'],
-          methods: ['GET', 'HEAD', 'POST', 'OPTIONS'],
-          lease_ms: 60 * 60 * 1000,
-          reconstruction: { kind: 'site-operation', site_root: siteRoot, site_id: siteId, session_id: null },
+        routeSet = await registerOperatorRouteSet({
+          admin,
+          renew_interval_ms: 30_000,
+          routes: [{
+            route_id: routeId,
+            route_class: 'site-operations',
+            public_path: publicPath,
+            route_mode: 'prefix',
+            target_url: backendUrl,
+            health_url: `${backendUrl.replace(/\/+$/, '')}/api/health`,
+            owner_id: ownerId,
+            site_id: siteId,
+            session_id: null,
+            process_evidence: { instance_nonce: instanceNonce, pid: process.pid, started_at: new Date().toISOString() },
+            protocols: ['http'],
+            methods: ['GET', 'HEAD', 'POST', 'OPTIONS'],
+            lease_ms: 60 * 60 * 1000,
+            reconstruction: { kind: 'site-operation', site_root: siteRoot, site_id: siteId, session_id: null },
+          }],
         });
       } catch (error) {
         await server.stop();
         throw error;
       }
-      const renewTimer = setInterval(() => {
-        renewOperatorRoute(admin, routeId, { owner_id: ownerId, instance_nonce: instanceNonce, lease_ms: 60 * 60 * 1000 }).catch(() => undefined);
-      }, 30_000);
-      renewTimer.unref();
       const publicUrl = `${router.url}${publicPath}/`;
       emitLongLivedCommandStartup([
         `Site Operations: ${publicUrl}`,
@@ -104,8 +118,7 @@ export function registerWorkbenchCommands(program: Command): void {
         'Press Ctrl+C to stop',
       ]);
       const stopProjection = async (): Promise<void> => {
-        clearInterval(renewTimer);
-        await unregisterOperatorRoute(admin, routeId, { owner_id: ownerId, instance_nonce: instanceNonce }).catch(() => undefined);
+        await routeSet?.stop();
         await server.stop();
         exitLongLivedCommandSuccessfully();
       };
