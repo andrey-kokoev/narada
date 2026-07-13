@@ -65,6 +65,31 @@ function writeAllowedRootMcpServerFile(siteRoot, fileName, serverName, allowedRo
   }, null, 2), 'utf8');
 }
 
+function writeCanonicalMcpServerFile(siteRoot, fileName, serverName, surfaceId, injectionScope) {
+  mkdirSync(join(siteRoot, '.ai'), { recursive: true });
+  mkdirSync(join(siteRoot, '.ai', 'mcp'), { recursive: true });
+  copyFileSync(join(naradaProperRoot, '.ai', 'task-lifecycle.db'), join(siteRoot, '.ai', 'task-lifecycle.db'));
+  writeFileSync(join(siteRoot, '.ai', 'mcp', fileName), JSON.stringify({
+    mcpServers: {
+      [serverName]: {
+        transport: 'stdio',
+        command: 'node',
+        args: ['--version'],
+        surface_id: surfaceId,
+        surface_projection: {
+          surface_id: surfaceId,
+          projection_id: 'default',
+          injection_scope: injectionScope,
+        },
+        tools: ['agent_context_startup_sequence'],
+        target_site_root: '{site_root}',
+        injection_scope: injectionScope,
+        narada_scope: { injection_scope: injectionScope },
+      },
+    },
+  }, null, 2), 'utf8');
+}
+
 function writeMinimalMcpFabric(siteRoot, serverName, injectionScope = 'local_site') {
   mkdirSync(join(siteRoot, '.ai'), { recursive: true });
   mkdirSync(join(siteRoot, '.ai', 'mcp'), { recursive: true });
@@ -308,6 +333,26 @@ test('McpScope all explicitly composes available Host, User Site, and local Site
   assert.ok(output.mcp_fabric.skipped.some((entry) => entry.locus === 'user-site' && entry.server_name === 'narada-user-local-duplicate' && entry.reason === 'injection_scope_not_requested'));
   assert.equal(output.mcp_scope.resolution.enforcement, 'explicit_locus_composition');
   assert.equal(output.mcp_registry_validation, 'diagnostic');
+});
+
+test('McpScope all rejects duplicate canonical surface projections across loci', () => {
+  const targetRoot = mkdtempSync(join(tmpdir(), 'narada-agent-start-target-canonical-'));
+  const userRoot = mkdtempSync(join(tmpdir(), 'narada-agent-start-user-canonical-'));
+  const hostRoot = mkdtempSync(join(tmpdir(), 'narada-agent-start-host-canonical-'));
+  writeCanonicalMcpServerFile(targetRoot, 'target-canonical.json', 'narada-target-canonical', 'shared.surface', 'local_site');
+  writeCanonicalMcpServerFile(userRoot, 'user-canonical.json', 'narada-user-canonical', 'shared.surface', 'user_site');
+  writeMinimalMcpFabric(hostRoot, 'narada-host-only', 'host');
+
+  const result = run([
+    '--carrier', 'codex',
+    '--runtime', 'codex',
+    '--target-site-root', targetRoot,
+    '--mcp-scope', 'all',
+    '--user-site-root', userRoot,
+    '--host-site-root', hostRoot,
+  ]);
+  assert.notEqual(result.status, 0);
+  assert.match(`${result.stdout}\n${result.stderr}`, /mcp_scope_duplicate_canonical_surface_projection/);
 });
 
 test('Codex McpScope none materializes isolated config with no MCP servers', () => {

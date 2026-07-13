@@ -677,7 +677,20 @@ function emptyScopedMcpFabric() {
     scope_loci: [],
     locus_fabrics: [],
     missing_loci: [],
+    canonical_sources: {},
   };
+}
+
+function canonicalSurfaceProjectionKey(server) {
+  const surfaceId = String(server?.canonical_surface_id
+    ?? server?.surface_projection?.surface_id
+    ?? server?.surface_id
+    ?? '').trim();
+  if (!surfaceId) return null;
+  const projectionId = String(server?.projection_id
+    ?? server?.surface_projection?.projection_id
+    ?? 'default').trim() || 'default';
+  return `${surfaceId}::${projectionId}`;
 }
 
 function composeMcpFabrics(locusFabrics, missingLoci) {
@@ -698,6 +711,17 @@ function composeMcpFabrics(locusFabrics, missingLoci) {
     for (const file of entry.fabric.candidate_files ?? entry.fabric.files ?? []) composed.candidate_files.push(`${entry.locus}:${file}`);
     for (const skipped of entry.fabric.skipped ?? []) composed.skipped.push({ locus: entry.locus, ...skipped });
     for (const [serverName, server] of Object.entries(entry.fabric.servers ?? {})) {
+      const canonicalKey = canonicalSurfaceProjectionKey(server);
+      if (canonicalKey && composed.canonical_sources[canonicalKey]) {
+        throw new McpFabricError('mcp_scope_duplicate_canonical_surface_projection', `Conflicting MCP surface projection for ${canonicalKey} across MCP scope loci`, {
+          scope: mcpScope,
+          canonical_surface_projection: canonicalKey,
+          serverName,
+          existing_source: composed.canonical_sources[canonicalKey],
+          conflicting_locus: entry.locus,
+          conflicting_root: entry.root,
+        });
+      }
       if (composed.servers[serverName] && canonicalJson(composed.servers[serverName]) !== canonicalJson(server)) {
         throw new McpFabricError('mcp_scope_duplicate_server_conflict', `Conflicting MCP server definition for ${serverName} across MCP scope loci`, {
           scope: mcpScope,
@@ -709,6 +733,7 @@ function composeMcpFabrics(locusFabrics, missingLoci) {
       }
       composed.servers[serverName] = server;
       composed.sources[serverName] = `${entry.locus}:${entry.fabric.sources?.[serverName] ?? 'unknown'}`;
+      if (canonicalKey) composed.canonical_sources[canonicalKey] = `${entry.locus}:${entry.fabric.sources?.[serverName] ?? 'unknown'}`;
     }
   }
   return composed;
@@ -1131,6 +1156,10 @@ const { requiredEnvironment, wouldSetEnvironment } = buildCarrierEnvironmentProj
   dbPath,
   siteConfig,
   mcpScope,
+  launchSessionId: process.env.NARADA_LAUNCH_SESSION_ID ?? null,
+  processOwnership: process.env.NARADA_PROCESS_OWNERSHIP ?? null,
+  processRole: process.env.NARADA_PROCESS_ROLE ?? null,
+  createdByPid: process.env.NARADA_CREATED_BY_PID ?? null,
   runtimeProcessCreatorPid: process.pid,
   runtimeProcessRole: 'runtime_server',
 });
@@ -1154,6 +1183,10 @@ const spawnEnvironmentDelta = buildCarrierSpawnEnvironmentDelta({
   dbPath,
   siteConfig,
   mcpScope,
+  launchSessionId: process.env.NARADA_LAUNCH_SESSION_ID ?? null,
+  processOwnership: process.env.NARADA_PROCESS_OWNERSHIP ?? null,
+  processRole: process.env.NARADA_PROCESS_ROLE ?? null,
+  createdByPid: process.env.NARADA_CREATED_BY_PID ?? null,
   codexMcpScope,
   runtimeProcessCreatorPid: process.pid,
   runtimeProcessRole: 'runtime_server',
@@ -1324,6 +1357,10 @@ const processEnvironment = buildCarrierProcessEnvironment({
   dbPath,
   siteConfig,
   mcpScope,
+  launchSessionId: process.env.NARADA_LAUNCH_SESSION_ID ?? null,
+  processOwnership: process.env.NARADA_PROCESS_OWNERSHIP ?? null,
+  processRole: process.env.NARADA_PROCESS_ROLE ?? null,
+  createdByPid: process.env.NARADA_CREATED_BY_PID ?? null,
 });
 const launchEnvironment = intelligenceProviderResolution?.intelligence_provider === 'codex-subscription'
   ? stripCodexSubscriptionOpenAIEnvironment(processEnvironment)

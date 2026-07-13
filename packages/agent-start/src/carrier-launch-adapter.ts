@@ -330,6 +330,10 @@ export function buildCarrierEnvironmentProjection({
   dbPath,
   siteConfig = null,
   mcpScope = null,
+  launchSessionId = null,
+  processOwnership = null,
+  processRole = null,
+  createdByPid = null,
 }) {
   const shouldStripOpenAIEnvironment = intelligenceProviderEnv.NARADA_INTELLIGENCE_PROVIDER === 'codex-subscription';
   const projectedCarrierEnvironment = shouldStripOpenAIEnvironment
@@ -351,6 +355,10 @@ export function buildCarrierEnvironmentProjection({
     ...(startResult.role ? { NARADA_AGENT_ROLE: startResult.role } : {}),
     NARADA_AGENT_START_EVENT_ID: agentStartEventId,
     ...(targetSiteId ? { NARADA_SITE_ID: targetSiteId } : {}),
+    ...(launchSessionId ? { NARADA_LAUNCH_SESSION_ID: launchSessionId } : {}),
+    ...(processOwnership ? { NARADA_PROCESS_OWNERSHIP: processOwnership } : {}),
+    ...(processRole ? { NARADA_PROCESS_ROLE: processRole } : {}),
+    ...(createdByPid ? { NARADA_CREATED_BY_PID: createdByPid } : {}),
     NARADA_SITE_ROOT: environmentSiteRoot,
     NARADA_WORKSPACE_ROOT: workspaceRoot,
     NARADA_AGENT_CONTEXT_DB: dbPath,
@@ -394,6 +402,10 @@ export function buildCarrierSpawnEnvironmentDelta({
   siteConfig = null,
   codexMcpScope = null,
   mcpScope = null,
+  launchSessionId = null,
+  processOwnership = null,
+  processRole = null,
+  createdByPid = null,
   runtimeProcessCreatorPid = null,
   runtimeProcessRole = 'runtime_server',
 }) {
@@ -417,6 +429,10 @@ export function buildCarrierSpawnEnvironmentDelta({
     dbPath,
     siteConfig,
     mcpScope,
+    launchSessionId,
+    processOwnership,
+    processRole,
+    createdByPid,
     runtimeProcessCreatorPid,
     runtimeProcessRole,
   });
@@ -450,9 +466,23 @@ export function buildCarrierProcessEnvironment({
   dbPath,
   siteConfig,
   mcpScope,
+  launchSessionId = null,
+  processOwnership = null,
+  processRole = null,
+  createdByPid = null,
   runtimeProcessCreatorPid = null,
   runtimeProcessRole = null,
 }) {
+  const effectiveLaunchSessionId = launchSessionId ?? processEnvironment?.NARADA_LAUNCH_SESSION_ID ?? null;
+  const effectiveProcessOwnership = processOwnership ?? processEnvironment?.NARADA_PROCESS_OWNERSHIP ?? null;
+  const effectiveProcessRole = processRole ?? processEnvironment?.NARADA_PROCESS_ROLE ?? null;
+  const effectiveCreatedByPid = createdByPid ?? processEnvironment?.NARADA_CREATED_BY_PID ?? null;
+  const launchProcessEnvironment = {
+    ...(effectiveLaunchSessionId ? { NARADA_LAUNCH_SESSION_ID: effectiveLaunchSessionId } : {}),
+    ...(effectiveProcessOwnership ? { NARADA_PROCESS_OWNERSHIP: effectiveProcessOwnership } : {}),
+    ...(effectiveProcessRole ? { NARADA_PROCESS_ROLE: effectiveProcessRole } : {}),
+    ...(effectiveCreatedByPid ? { NARADA_CREATED_BY_PID: effectiveCreatedByPid } : {}),
+  };
   return {
     ...processEnvironment,
     ...intelligenceProviderEnv,
@@ -470,7 +500,12 @@ export function buildCarrierProcessEnvironment({
     NARADA_AGENT_CONTEXT_DB: dbPath,
     ...(siteConfig ? { NARADA_SITE_CONFIG: JSON.stringify(siteConfig) } : {}),
     ...((mcpScope ?? siteConfig?.mcp_scope) ? { NARADA_MCP_SCOPE: mcpScope ?? siteConfig.mcp_scope } : {}),
-    ...runtimeProcessOwnershipEnvironment({ processEnvironment, runtimeProcessCreatorPid, runtimeProcessRole }),
+    ...launchProcessEnvironment,
+    ...runtimeProcessOwnershipEnvironment({
+      processEnvironment: { ...processEnvironment, ...launchProcessEnvironment },
+      runtimeProcessCreatorPid,
+      runtimeProcessRole,
+    }),
     ...agentTuiEnvironment,
     ...(codexMcpScope?.status === 'materialized' ? { CODEX_HOME: codexMcpScope.codex_home, CODEX_CONFIG_DIR: codexMcpScope.codex_home } : {}),
   };
