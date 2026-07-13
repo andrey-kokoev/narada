@@ -59,12 +59,20 @@ importers:
       '@narada2/mcp-transport':
         specifier: workspace:*
         version: link:../shared/mcp-transport
+    devDependencies:
+      '@narada2/mcp-e2e-harness':
+        specifier: workspace:*
+        version: link:../shared/mcp-e2e-harness
 
   ../mcp-surfaces/packages/git-mcp:
     dependencies:
       '@narada2/mcp-transport':
         specifier: workspace:*
         version: link:../shared/mcp-transport
+    devDependencies:
+      '@narada2/mcp-e2e-harness':
+        specifier: workspace:*
+        version: link:../shared/mcp-e2e-harness
 
   ../mcp-surfaces/packages/graph-mail-mcp:
     dependencies:
@@ -74,27 +82,46 @@ importers:
       '@narada2/mcp-transport':
         specifier: workspace:*
         version: link:../shared/mcp-transport
+    devDependencies:
+      '@narada2/mcp-e2e-harness':
+        specifier: workspace:*
+        version: link:../shared/mcp-e2e-harness
 
   ../mcp-surfaces/packages/local-filesystem-mcp:
     dependencies:
       '@narada2/mcp-transport':
         specifier: workspace:*
         version: link:../shared/mcp-transport
+    devDependencies:
+      '@narada2/mcp-e2e-harness':
+        specifier: workspace:*
+        version: link:../shared/mcp-e2e-harness
 
   ../mcp-surfaces/packages/mailbox-mcp:
     dependencies:
       '@narada2/mcp-transport':
         specifier: workspace:*
         version: link:../shared/mcp-transport
+    devDependencies:
+      '@narada2/mcp-e2e-harness':
+        specifier: workspace:*
+        version: link:../shared/mcp-e2e-harness
 
   ../mcp-surfaces/packages/nars-session-mcp:
     dependencies:
+      '@narada2/mcp-e2e-harness':
+        specifier: workspace:*
+        version: link:../shared/mcp-e2e-harness
       '@narada2/mcp-transport':
         specifier: workspace:*
         version: link:../shared/mcp-transport
       '@narada2/site-paths':
         specifier: workspace:*
         version: link:../../../narada/packages/site-paths
+
+  ../mcp-surfaces/packages/shared/execution-contract: {}
+
+  ../mcp-surfaces/packages/shared/mcp-e2e-harness: {}
 
   ../mcp-surfaces/packages/shared/mcp-telemetry: {}
 
@@ -109,15 +136,26 @@ importers:
       '@narada2/mcp-telemetry':
         specifier: workspace:*
         version: link:../shared/mcp-telemetry
+    devDependencies:
+      '@narada2/mcp-e2e-harness':
+        specifier: workspace:*
+        version: link:../shared/mcp-e2e-harness
 
   ../mcp-surfaces/packages/task-lifecycle-mcp:
     dependencies:
+      '@narada2/execution-contract':
+        specifier: workspace:*
+        version: link:../shared/execution-contract
       '@narada2/mcp-transport':
         specifier: workspace:*
         version: link:../shared/mcp-transport
       '@narada2/task-governance-core':
         specifier: workspace:*
         version: link:../../../narada-core/packages/task-governance-core
+    devDependencies:
+      '@narada2/mcp-e2e-harness':
+        specifier: workspace:*
+        version: link:../shared/mcp-e2e-harness
 
   ../narada-core/packages/task-governance-core:
     devDependencies:
