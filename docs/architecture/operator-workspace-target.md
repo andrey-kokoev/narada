@@ -114,26 +114,30 @@ evidence, never credentials, raw message bodies, or arbitrary local paths.
 ## Current Implementation Slice
 
 The Console server is the first composed local workspace host. Its root serves
-a read-only surface directory and exposes the Registry. It does not mount the
-legacy cwd-scoped task and agent dashboard; `narada workbench serve` remains a
-separate diagnostic command until a canonical Site-scoped route exists. This
-is a useful joined surface, not yet the full stable Operator Router.
+a read-only surface directory and exposes the Registry through the dedicated
+Operator Router. The existing task and agent dashboard is now available as a
+Site-scoped projection at `/sites/<site-id>/operations/` when started with
+`narada workbench serve --site-id <site-id>`; port 0 remains its direct
+diagnostic mode.
 
 The Launcher Session Dashboard is a separate Vue/shadcn presentation package
 served by the CLI launcher. Its launch authority, dashboard records, and
-browser API remain CLI-owned. The direct launcher URL is still diagnostic; it
-is not yet a Workspace route.
+browser API remain CLI-owned. Agent Web UI attach now returns a stable session
+route; the launcher selection page and session inventory still need to consume
+the router route inventory directly.
 
-The dynamic Router work remains explicit:
+The remaining Router/workspace work is explicit:
 
-1. provide the singleton stable loopback listener;
-2. register and lease backing projections;
-3. reconstruct routes from canonical runtime evidence;
-4. make Agent Web UI base-path aware;
-5. return router URLs from normal launch/open commands.
+1. expose registry/session/artifact route availability in the Workspace catalog;
+2. reconstruct managed projections from lifecycle evidence rather than only
+   rehydrating persisted targets;
+3. complete Host, Origin, CSRF, and browser mutation acceptance coverage;
+4. migrate launcher and artifact open flows to stable URLs;
+5. add the composed Workspace route directory above the individual projections.
 
-Until those slices land, direct Workbench, Console, Agent Web UI, and NARS
-listeners remain supported as diagnostics.
+Direct low-level Workbench, Console, Agent Web UI, and NARS listeners remain
+supported only as explicitly labeled diagnostic paths; normal projection
+commands use the stable router.
 
 ## Acceptance Invariants
 

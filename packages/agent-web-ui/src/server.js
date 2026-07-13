@@ -71,6 +71,27 @@ export function parseAgentWebUiArgs(args = []) {
   return options;
 }
 
+function normalizePublicBasePath(value) {
+  const raw = String(value ?? '').trim();
+  if (!raw) return null;
+  let decoded;
+  try {
+    decoded = decodeURIComponent(raw);
+  } catch {
+    return null;
+  }
+  if (!raw.startsWith('/') || raw.includes('..') || raw.includes('?') || raw.includes('#') || decoded.includes('..') || decoded.includes('\\')) return null;
+  const normalized = `/${raw.replace(/^\/+|\/+$/g, '')}`;
+  return normalized === '//' ? '/' : normalized;
+}
+
+function publicPath(basePath, suffix) {
+  const normalizedSuffix = suffix.startsWith('/') ? suffix : `/${suffix}`;
+  return basePath && basePath !== '/'
+    ? `${basePath}${normalizedSuffix}`
+    : normalizedSuffix;
+}
+
 async function readJsonBody(request) {
   const chunks = [];
   let size = 0;
@@ -262,17 +283,20 @@ export function buildClientConfig(options) {
       ...onboardingConfig(options),
     };
   }
+  const publicBasePath = normalizePublicBasePath(options.publicBasePath);
+  const localPublicPath = (suffix) => publicPath(publicBasePath, suffix);
   return {
-    eventEndpoint: options.eventEndpoint ?? null,
-    healthEndpoint: options.healthEndpoint ? '/api/health' : null,
+    ...(publicBasePath ? { publicBasePath } : {}),
+    eventEndpoint: options.publicEventEndpoint ?? options.eventEndpoint ?? null,
+    healthEndpoint: options.healthEndpoint ? options.publicHealthEndpoint ?? localPublicPath('/api/health') : null,
     healthTransport: options.healthEndpoint ? 'http-proxy' : 'not-configured',
-    artifactBasePath: options.healthEndpoint ? '/api/nars' : null,
-    artifactTransport: 'local-nars-proxy',
+    artifactBasePath: options.healthEndpoint ? options.publicArtifactBasePath ?? localPublicPath('/api/nars') : null,
+    artifactTransport: options.publicArtifactTransport ?? 'local-nars-proxy',
     projectionControl: hasLocalProjectionAuthority(options) ? {
       cloudflare: {
         available: true,
-        startEndpoint: '/api/projections/cloudflare/start',
-        statusEndpoint: '/api/projections/cloudflare/status',
+        startEndpoint: localPublicPath('/api/projections/cloudflare/start'),
+        statusEndpoint: localPublicPath('/api/projections/cloudflare/status'),
         defaultApiBaseUrl: normalizeBaseUrl(options.cloudflareApiBaseUrl),
       },
     } : null,
@@ -310,7 +334,12 @@ async function readStaticFile(pathname, clientConfig) {
 
   const distFile = await tryReadStaticRoot(DIST_ROOT, relativePath);
   if (distFile) {
-    const content = relativePath === 'index.html' ? distFile.content.replace('__NARADA_AGENT_WEB_UI_CONFIG__', JSON.stringify(clientConfig)) : distFile.content;
+    let content = relativePath === 'index.html' ? distFile.content.replace('__NARADA_AGENT_WEB_UI_CONFIG__', JSON.stringify(clientConfig)) : distFile.content;
+    if (relativePath === 'index.html' && clientConfig.publicBasePath) {
+      content = content
+        .replaceAll('src="/assets/', `src="${clientConfig.publicBasePath}/assets/`)
+        .replaceAll('href="/assets/', `href="${clientConfig.publicBasePath}/assets/`);
+    }
     return { content, contentType: CONTENT_TYPES.get(extname(relativePath)) ?? 'text/plain; charset=utf-8' };
   }
 
@@ -320,6 +349,10 @@ async function readStaticFile(pathname, clientConfig) {
   let content = sourceFile.content;
   if (sourceRelativePath === 'compat-index.html') {
     content = content.replace('__NARADA_AGENT_WEB_UI_CONFIG__', JSON.stringify(clientConfig));
+    if (clientConfig.publicBasePath) {
+      content = content.replaceAll('src="./', `src="${clientConfig.publicBasePath}/`)
+        .replaceAll('href="./', `href="${clientConfig.publicBasePath}/`);
+    }
   } else if (sourceRelativePath.endsWith('.js')) {
     for (const [from, to] of BROWSER_IMPORT_REWRITES) {
       content = content.replaceAll(`'${from}'`, `'${to}'`).replaceAll(`"${from}"`, `"${to}"`);

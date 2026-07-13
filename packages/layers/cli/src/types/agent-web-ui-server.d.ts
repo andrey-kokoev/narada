@@ -11,5 +11,10 @@ declare module '@narada2/agent-web-ui/server' {
     agentId?: string | null;
     cloudflareApiBaseUrl?: string | null;
     authorityTransition?: unknown;
+    publicBasePath?: string | null;
+    publicEventEndpoint?: string | null;
+    publicHealthEndpoint?: string | null;
+    publicArtifactBasePath?: string | null;
+    publicArtifactTransport?: string | null;
   }): Promise<{ server: unknown; url: string }>;
 }

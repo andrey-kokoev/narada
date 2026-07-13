@@ -1,10 +1,17 @@
 import type { Command } from 'commander';
+import { randomUUID } from 'node:crypto';
 import {
   consoleStatusCommand,
   consoleAttentionCommand,
   consoleControlCommand,
 } from './console.js';
-import { DEFAULT_OPERATOR_CONSOLE_PORT, ensureConsoleServer } from './console-server.js';
+import { DEFAULT_OPERATOR_CONSOLE_PORT, createConsoleServer } from './console-server.js';
+import {
+  ensureOperatorRouter,
+  registerOperatorRoute,
+  renewOperatorRoute,
+  unregisterOperatorRoute,
+} from '@narada2/operator-router';
 import { silentCommandContext, wrapCommand } from '../lib/command-wrapper.js';
 import {
   emitFormatterBackedCommandResult,
@@ -79,19 +86,95 @@ export function registerConsoleCommands(program: Command): void {
       // Long-lived process surface: keep direct lifecycle output and SIGINT handling.
       const host = (opts.host as string) ?? '127.0.0.1';
       const port = opts.port ? parseInt(String(opts.port), 10) : 0;
-      const ensured = await ensureConsoleServer({ host, port, ingressMode: port === 0 ? 'diagnostic' : 'router' });
-      const { server, url } = ensured;
+      if (port === 0) {
+        const server = await createConsoleServer({ host, port: 0, ingressMode: 'diagnostic' });
+        const url = await server.start();
+        emitLongLivedCommandStartup([
+          `Operator Workspace diagnostic host: ${url}/`,
+          `Operator Console Site Registry: ${url}/console/registry`,
+          `Operator Console Agent Launcher: ${url}/console/launch`,
+          `Operator Console API base: ${url}/console`,
+          'Operator Console ownership: diagnostic',
+          'Press Ctrl+C to stop',
+        ]);
+        const stopDiagnostic = async (): Promise<void> => {
+          await server.stop();
+          exitLongLivedCommandSuccessfully();
+        };
+        process.once('SIGINT', stopDiagnostic);
+        process.once('SIGTERM', stopDiagnostic);
+        return;
+      }
+
+      const router = await ensureOperatorRouter({ host, port });
+      const routerRoutes = await fetch(`${router.url}/routes`).then((response) => response.json() as Promise<{ routes?: Array<{ route_id?: string; state?: string }> }>);
+      const existingProjection = routerRoutes.routes?.find((route) => route.route_id === 'operator-console');
+      if (existingProjection) {
+        if (existingProjection.state !== 'healthy') throw new Error(`operator_console_projection_${existingProjection.state}`);
+        emitLongLivedCommandStartup([
+          `Operator Router: ${router.url}/`,
+          `Operator Workspace: ${router.url}/`,
+          `Operator Console Site Registry: ${router.url}/console/registry`,
+          `Operator Console Agent Launcher: ${router.url}/console/launch`,
+          `Operator Console API base: ${router.url}/console`,
+          `Operator Router ownership: ${router.ownership}`,
+          'Operator Console projection: attached',
+          'Press Ctrl+C to stop',
+        ]);
+        return;
+      }
+
+      const server = await createConsoleServer({ host, port: 0, ingressMode: 'diagnostic' });
+      const backendUrl = await server.start();
+      const ownerId = `operator-console:${process.pid}`;
+      const instanceNonce = randomUUID().replace(/-/g, '');
+      try {
+        await registerOperatorRoute({ url: router.url, registration_token: router.registration_token }, {
+          route_id: 'operator-console',
+          route_class: 'operator-console',
+          public_path: '/',
+          route_mode: 'prefix',
+          target_url: backendUrl,
+          health_url: `${backendUrl}/health`,
+          owner_id: ownerId,
+          process_evidence: { instance_nonce: instanceNonce, pid: process.pid, started_at: new Date().toISOString() },
+          protocols: ['http'],
+          methods: ['GET', 'HEAD', 'POST', 'OPTIONS'],
+          lease_ms: 60 * 60 * 1000,
+          reconstruction: { kind: 'explicit', site_root: null, site_id: null, session_id: null },
+        });
+      } catch (error) {
+        await server.stop();
+        throw error;
+      }
+      const renewTimer = setInterval(() => {
+        renewOperatorRoute({ url: router.url, registration_token: router.registration_token }, 'operator-console', {
+          owner_id: ownerId,
+          instance_nonce: instanceNonce,
+          lease_ms: 60 * 60 * 1000,
+        }).catch(() => undefined);
+      }, 30_000);
+      renewTimer.unref();
       emitLongLivedCommandStartup([
-        `Operator Workspace: ${url}/`,
-        `Operator Console Site Registry: ${url}/console/registry`,
-        `Operator Console Agent Launcher: ${url}/console/launch`,
-        `Operator Console API base: ${url}/console`,
-        `Operator Console ownership: ${ensured.ownership}`,
+        `Operator Router: ${router.url}/`,
+        `Operator Workspace: ${router.url}/`,
+        `Operator Console Site Registry: ${router.url}/console/registry`,
+        `Operator Console Agent Launcher: ${router.url}/console/launch`,
+        `Operator Console API base: ${router.url}/console`,
+        `Operator Router ownership: ${router.ownership}`,
+        'Operator Console projection: started',
         'Press Ctrl+C to stop',
       ]);
-      process.on('SIGINT', async () => {
+      const stopProjection = async (): Promise<void> => {
+        clearInterval(renewTimer);
+        await unregisterOperatorRoute({ url: router.url, registration_token: router.registration_token }, 'operator-console', {
+          owner_id: ownerId,
+          instance_nonce: instanceNonce,
+        }).catch(() => undefined);
         await server.stop();
         exitLongLivedCommandSuccessfully();
-      });
+      };
+      process.once('SIGINT', stopProjection);
+      process.once('SIGTERM', stopProjection);
     });
 }

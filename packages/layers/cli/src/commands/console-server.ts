@@ -16,13 +16,14 @@ import { createRegistryMutationGateway, type RegistryMutationGateway } from './s
 import { renderOperatorWorkspacePage } from './operator-workspace-page.js';
 import type { WorkspaceLaunchUiSessionRecord } from './workspace-launch-session-store.js';
 import { createAgentSessionReadModel, type AgentSessionReadModel } from './agent-session-read-model.js';
+import { DEFAULT_OPERATOR_ROUTER_PORT } from '@narada2/operator-router';
 import {
   projectOperatorSurfaceCatalog,
   operatorSurfaceRoutePath,
   type OperatorSurfaceAvailabilityOverrides,
 } from '@narada2/operator-console-contract';
 
-export const DEFAULT_OPERATOR_CONSOLE_PORT = 61729;
+export const DEFAULT_OPERATOR_CONSOLE_PORT = DEFAULT_OPERATOR_ROUTER_PORT;
 export const OPERATOR_CONSOLE_IDENTITY = 'narada.operator-console';
 const OPERATOR_CONSOLE_HEALTH_SCHEMA = 'narada.operator_console.health.v1';
 const OPERATOR_CONSOLE_ROUTES_SCHEMA = 'narada.operator_console.routes.v1';

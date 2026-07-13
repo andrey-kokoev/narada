@@ -26,6 +26,30 @@ export interface WorkbenchServerConfig {
   host?: string;
   cwd?: string;
   verbose?: boolean;
+  publicBasePath?: string | null;
+}
+
+function normalizePublicBasePath(value: string | null | undefined): string | null {
+  const raw = String(value ?? '').trim();
+  if (!raw) return null;
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(raw);
+  } catch {
+    throw new Error('workbench_public_base_path_invalid');
+  }
+  if (!raw.startsWith('/') || raw.includes('..') || raw.includes('?') || raw.includes('#') || decoded.includes('..') || decoded.includes('\\')) throw new Error('workbench_public_base_path_invalid');
+  const normalized = `/${raw.replace(/^\/+|\/+$/g, '')}`;
+  return normalized === '//' ? '/' : normalized;
+}
+
+function applyPublicBasePath(html: string, publicBasePath: string | null): string {
+  if (!publicBasePath) return html;
+  const script = "const workspaceHosted = window.location.pathname === '/workbench' || window.location.pathname.startsWith('/workbench/');\n    if (!workspaceHosted) document.querySelector('.workspace-nav')?.remove();\n    const API_BASE = workspaceHosted ? '/workbench' : '';";
+  const replacement = `const workspaceHosted = true;\n    const API_BASE = ${JSON.stringify(publicBasePath)};`;
+  return html
+    .replace(script, replacement)
+    .replaceAll('href="/workbench"', `href="${publicBasePath}/"`);
 }
 
 export interface WorkbenchServer {
@@ -75,6 +99,8 @@ export async function createWorkbenchServer(config: WorkbenchServerConfig): Prom
   const port = config.port;
   const cwd = config.cwd ? resolve(config.cwd) : process.cwd();
 
+  const publicBasePath = normalizePublicBasePath(config.publicBasePath);
+
   const routeContext = { cwd, verbose: !!config.verbose };
   const apiRoutes = createWorkbenchRoutes(routeContext);
 
@@ -87,11 +113,11 @@ export async function createWorkbenchServer(config: WorkbenchServerConfig): Prom
 
     for (const path of candidates) {
       if (existsSync(path)) {
-        return readFileSync(path, 'utf8');
+        return applyPublicBasePath(readFileSync(path, 'utf8'), publicBasePath);
       }
     }
 
-    return '<!DOCTYPE html><html><body><h1>Narada Workbench</h1><p>UI not found.</p></body></html>';
+    return applyPublicBasePath('<!DOCTYPE html><html><body><h1>Narada Workbench</h1><p>UI not found.</p></body></html>', publicBasePath);
   }
 
   // Load workbench UI HTML (served at root)

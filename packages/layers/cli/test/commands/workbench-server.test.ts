@@ -166,6 +166,22 @@ describe('workbench server', () => {
       await expect(server.start()).rejects.toThrow('already started');
       await server.stop();
     });
+
+    it('rewrites browser API base for a router-assigned Site Operations path', async () => {
+      const server = await createWorkbenchServer({
+        port: 0,
+        host: '127.0.0.1',
+        cwd: tempDir,
+        publicBasePath: '/sites/demo/operations',
+      });
+      const url = await server.start();
+      const response = await fetch(`${url}/`);
+      const html = await response.text();
+      expect(response.status).toBe(200);
+      expect(html).toContain('const API_BASE = "/sites/demo/operations";');
+      expect(html).toContain('href="/sites/demo/operations/"');
+      await server.stop();
+    });
   });
 
   describe('GET /api/roster', () => {
@@ -379,7 +395,7 @@ describe('workbench server', () => {
       const contentType = response.headers.get('Content-Type');
       expect(contentType).toContain('text/html');
       const text = await response.text();
-      expect(text).toContain('Narada Workbench');
+      expect(text).toContain('Task &amp; Agent Operations');
       await server.stop();
     });
   });

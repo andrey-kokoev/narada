@@ -149,9 +149,9 @@ function createFakeDocument() {
 }
 
 const AGENT_WEB_UI_CSS_IMPORTS = [
-  ['styles/theme.css', 'narada-theme'],
+  ['@narada2/ui/styles.css', null],
+  ['@narada2/ui-vue/components.css', 'narada-vue-primitives'],
   ['styles/base.css', 'narada-base'],
-  ['styles/primitives.css', 'narada-primitives'],
   ['styles/operator-surfaces.css', 'narada-operator'],
   ['styles/shell-and-navigation.css', 'narada-shell'],
   ['styles/panels.css', 'narada-panels'],
@@ -159,15 +159,20 @@ const AGENT_WEB_UI_CSS_IMPORTS = [
   ['styles/events-and-content.css', 'narada-content'],
   ['styles/composer.css', 'narada-composer'],
   ['styles/responsive.css', 'narada-responsive'],
-  ['styles/dark-theme.css', 'narada-dark-theme'],
   ['styles/dark-overrides.css', 'narada-dark-overrides'],
 ];
-const AGENT_WEB_UI_CSS_MODULES = AGENT_WEB_UI_CSS_IMPORTS.map(([modulePath]) => modulePath);
+const AGENT_WEB_UI_CSS_MODULES = AGENT_WEB_UI_CSS_IMPORTS
+  .map(([modulePath]) => modulePath)
+  .filter((modulePath) => modulePath.startsWith('styles/'));
 
 async function readAgentWebUiCss() {
   const sourceRoot = new URL('../src/', import.meta.url);
   const entry = await readFile(new URL('agent-web-ui.css', sourceRoot), 'utf8');
-  const modules = await Promise.all(AGENT_WEB_UI_CSS_MODULES.map((modulePath) => readFile(new URL(modulePath, sourceRoot), 'utf8')));
+  const modules = await Promise.all([
+    readFile(new URL('../../ui/src/styles.css', import.meta.url), 'utf8'),
+    readFile(new URL('../../ui-vue/src/components.css', import.meta.url), 'utf8'),
+    ...AGENT_WEB_UI_CSS_MODULES.map((modulePath) => readFile(new URL(modulePath, sourceRoot), 'utf8')),
+  ]);
   return [entry, ...modules].join('\n');
 }
 
@@ -410,10 +415,10 @@ test('Vue operator components expose composer without hidden privileged controls
   const commandPalette = await readFile(new URL('../src/app/composables/useOperatorCommandPalette.ts', import.meta.url), 'utf8');
   const commandController = await readFile(new URL('../src/app/lib/operatorCommandController.ts', import.meta.url), 'utf8');
   const commandPaletteComponent = await readFile(new URL('../src/app/components/OperatorCommandPalette.vue', import.meta.url), 'utf8');
-  const commandUiIndex = await readFile(new URL('../src/app/components/ui/command/index.ts', import.meta.url), 'utf8');
-  const commandItem = await readFile(new URL('../src/app/components/ui/command/CommandItem.vue', import.meta.url), 'utf8');
-  const commandList = await readFile(new URL('../src/app/components/ui/command/CommandList.vue', import.meta.url), 'utf8');
-  const commandEmpty = await readFile(new URL('../src/app/components/ui/command/CommandEmpty.vue', import.meta.url), 'utf8');
+  const commandUiIndex = await readFile(new URL('../../ui-vue/src/components/command/index.ts', import.meta.url), 'utf8');
+  const commandItem = await readFile(new URL('../../ui-vue/src/components/command/CommandItem.vue', import.meta.url), 'utf8');
+  const commandList = await readFile(new URL('../../ui-vue/src/components/command/CommandList.vue', import.meta.url), 'utf8');
+  const commandEmpty = await readFile(new URL('../../ui-vue/src/components/command/CommandEmpty.vue', import.meta.url), 'utf8');
   const interruptPrompt = await readFile(new URL('../src/app/composables/useOperatorInterruptPrompt.ts', import.meta.url), 'utf8');
   const snippets = await readFile(new URL('../src/app/composables/useOperatorSnippets.ts', import.meta.url), 'utf8');
   const slashSnippetE2e = await readFile(new URL('../test/e2e/slash-snippets.spec.js', import.meta.url), 'utf8');
@@ -459,7 +464,7 @@ test('Vue operator components expose composer without hidden privileged controls
   assert.match(commandController, /choose snippet to delete/);
   assert.match(commandController, /entry\.kind === 'snippet'/);
   assert.match(commandController, /command\.id === 'snippet'[\s\S]*draft: '\/snippet '/);
-  assert.match(commandPaletteComponent, /from '.\/ui\/command'/);
+  assert.match(commandPaletteComponent, /from '@narada2\/ui-vue'/);
   assert.match(commandPaletteComponent, /command-palette-header/);
   assert.match(commandPaletteComponent, /command-section/);
   assert.match(commandPaletteComponent, /role="group"/);
@@ -591,10 +596,10 @@ test('Vue operator components expose composer without hidden privileged controls
   assert.match(app, /useSchedulerSummary\(session\.events\)/);
   assert.match(app, /useSopSummary\(session\.events\)/);
   assert.match(app, /useTaskLifecycleSummary\(session\.events\)/);
-  assert.match(app, /useSurfaceAffordances\(session\.events, health\.body\)/);
-  assert.match(app, /useSessionState\(projection\.verbosity, health\.identity\)/);
+  assert.match(app, /useSurfaceAffordances\(session\.events, session\.health\.body\)/);
+  assert.match(app, /useSessionState\(projection\.verbosity, \{/);
   assert.doesNotMatch(app, /useRetainedEvents|useNarsEvents/);
-  assert.match(sessionState, /useRetainedEvents\(\)/);
+  assert.match(sessionState, /useRetainedEvents\(config\.maxRetainedEvents\)/);
   assert.match(sessionState, /useNarsEvents\(retained\.events/);
   assert.match(siteInfo, /'open-surface-navigator': \[\]/);
   assert.match(siteInfo, /function openSurfaceNavigator/);
@@ -674,7 +679,7 @@ test('Vue operator components expose composer without hidden privileged controls
 test('session state boundary exposes retention and projection as one owner', async () => {
   const sessionState = await readFile(new URL('../src/app/composables/useSessionState.ts', import.meta.url), 'utf8');
   assert.match(sessionState, /The browser-owned session boundary/);
-  assert.match(sessionState, /const retained = useRetainedEvents\(\)/);
+  assert.match(sessionState, /const retained = useRetainedEvents\(config\.maxRetainedEvents\)/);
   assert.match(sessionState, /const projection = useNarsEvents\(retained\.events/);
   assert.match(sessionState, /\.\.\.retained/);
   assert.match(sessionState, /\.\.\.projection/);
@@ -797,12 +802,19 @@ test('session title parts do not duplicate an explicit Site id when agent id is 
 
 test('agent-web-ui CSS entry imports logical modules in cascade order', async () => {
   const entry = await readFile(new URL('../src/agent-web-ui.css', import.meta.url), 'utf8');
-  assert.equal(entry, [
-    '@import "tailwindcss";',
-    '@layer narada-theme, narada-base, narada-primitives, narada-operator, narada-shell, narada-panels, narada-layout, narada-content, narada-composer, narada-responsive, narada-dark-theme, narada-dark-overrides;',
-    ...AGENT_WEB_UI_CSS_IMPORTS.map(([modulePath, layer]) => '@import "./' + modulePath + '" layer(' + layer + ');'),
-    '',
-  ].join('\n'));
+  const expectedImports = [
+    ...AGENT_WEB_UI_CSS_IMPORTS.map(([modulePath, layer]) => layer
+      ? '@import "' + (modulePath.startsWith('@') ? modulePath : './' + modulePath) + '" layer(' + layer + ');'
+      : '@import "' + modulePath + '";'),
+  ];
+  let previousIndex = -1;
+  for (const expectedImport of expectedImports) {
+    const currentIndex = entry.indexOf(expectedImport);
+    assert.ok(currentIndex > previousIndex, expectedImport);
+    previousIndex = currentIndex;
+  }
+  assert.match(entry, /@layer narada-theme, narada-base, narada-vue-primitives, narada-operator, narada-shell, narada-panels, narada-layout, narada-content, narada-composer, narada-responsive, narada-dark-overrides;/);
+  assert.doesNotMatch(entry, /styles\/(theme|primitives|dark-theme)\.css/);
 });
 
 test('Vue layout smoke covers shell, status, event list, composer, and event tone styles', async () => {
@@ -833,10 +845,10 @@ test('Vue layout smoke covers shell, status, event list, composer, and event ton
   assert.match(shell, /\{\{ sessionIdentity\.subtitle \}\}/);
   assert.match(shell, /follow-latest-revision="followLatestRevision"/);
   assert.match(shell, /AGENT_WEB_UI_PREFERENCE_KEYS\.statusRowOpen/);
-  assert.match(app, /useAgentActivity\(session\.events, health\.body\)/);
-  assert.match(app, /useSessionActions\(connection\.connection, session\.retain, supportsProtocolMethod\)/);
+  assert.doesNotMatch(app, /useAgentActivity\(/);
+  assert.match(app, /useSessionActions\(session\.connection\.connection, session\.retain, supportsProtocolMethod\)/);
   assert.match(app, /sessionActions\.send/);
-  assert.match(sessionActions, /invalid_session_action/);
+  assert.match(sessionActions, /invalid_session_control/);
   assert.match(sessionActions, /unsupported_session_control/);
   assert.match(sessionActions, /event stream is not open/);
   assert.match(activity, /active_turn_state/);
@@ -891,7 +903,7 @@ test('Vue layout smoke covers shell, status, event list, composer, and event ton
   assert.doesNotMatch(css, /\.box-visibility-selector-shell[\s\S]*?top: 42px/);
   assert.match(css, /\.box-visibility-selector-trigger[\s\S]*?width: 26px/);
   assert.match(css, /\.box-visibility-selector-icon/);
-  assert.match(css, /\.shell \.narada-list-reset\s*\{[^}]*list-style: none;/s);
+  assert.match(css, /\.narada-list-reset\s*\{[^}]*list-style: none;/s);
   assert.match(css, /\.shell \.event \.event-heading\s*\{/);
   assert.match(css, /\.shell \.event \.message-markdown\s*\{/);
   for (const eventDescendant of ['event-heading', 'event-label', 'event-kind', 'event-detail', 'event-summary', 'message-content', 'message-part', 'message-plain', 'message-markdown']) {
@@ -920,7 +932,7 @@ test('Vue layout smoke covers shell, status, event list, composer, and event ton
   assert.match(css, /\.new-messages-button/);
   assert.match(status, /verbosity === 'diagnostics' \|\| verbosity === 'raw'/);
   assert.match(status, /routine status update\{\{ summarizedStateSampleCount === 1 \? '' : 's' \}\} folded into State/);
-  assert.match(retainedEvents, /Number\.POSITIVE_INFINITY/);
+  assert.match(retainedEvents, /DEFAULT_RETAINED_EVENT_LIMIT = 500/);
   assert.doesNotMatch(projectionVerbosity, /agent-web-ui\.js/);
   assert.match(css, /content-visibility:\s*auto/);
   assert.doesNotMatch(transcript, /visibleItems|ResizeObserver|event-virtual-item/);
@@ -1012,6 +1024,7 @@ test('Vue message content renderer has typed parts, inline code, and lazy Mermai
   const mermaidPart = await readFile(new URL('../src/app/components/content/MermaidDiagramPart.vue', import.meta.url), 'utf8');
   const renderedFrame = await readFile(new URL('../src/app/components/content/RenderedPartFrame.vue', import.meta.url), 'utf8');
   const parser = await readFile(new URL('../src/app/lib/messageContent.ts', import.meta.url), 'utf8');
+  const canonicalParser = await readFile(new URL('../src/content-pipeline.js', import.meta.url), 'utf8');
   const css = await readAgentWebUiCss();
 
   assert.match(eventRow, /<MessageContent :content="row\.summary"/);
@@ -1022,11 +1035,12 @@ test('Vue message content renderer has typed parts, inline code, and lazy Mermai
   assert.match(projectionSelect, /aria-label="View"/);
   assert.match(messageContent, /buildMessageContentPipeline/);
   assert.match(messageContent, /rendererKeyFor/);
-  assert.match(parser, /normalizeTextPart/);
-  assert.match(parser, /markdown\|md/);
+  assert.match(parser, /parseMessageContent/);
+  assert.match(canonicalParser, /normalizeTextPart/);
+  assert.match(canonicalParser, /markdown\|md/);
   for (const renderKind of ['plain_text', 'markdown', 'code_block', 'mermaid_diagram', 'json_block', 'intent_ref']) {
     assert.equal(messageContent.includes(renderKind), true, renderKind);
-    assert.equal(parser.includes(renderKind), true, renderKind);
+    assert.equal((parser + canonicalParser).includes(renderKind), true, renderKind);
   }
   assert.match(messageContent, /IntentRefPart/);
   assert.match(messageContent, /'intent-selected'/);
@@ -1062,7 +1076,7 @@ test('Vue message content renderer has typed parts, inline code, and lazy Mermai
   assert.match(css, /\.intent-ref-part/);
   assert.match(css, /\.markdown-intent-button/);
   assert.match(css, /data-status='staged'/);
-  assert.equal(parser.includes('(?:^|\\n)\\s*[-*+]\\s+'), true);
+  assert.equal(canonicalParser.includes('(?:^|\\n)\\s*[-*+]\\s+'), true);
   assert.match(mermaidPart, /import\('mermaid'\)/);
   assert.match(mermaidPart, /nextMermaidInstanceId/);
   assert.match(mermaidPart, /securityLevel: 'strict'/);
@@ -1209,6 +1223,7 @@ test('CLI args and client config keep runtime authority outside the web package'
     port: 4888,
     eventEndpoint: 'ws://nars/events',
     healthEndpoint: 'http://nars/health',
+    onboarding: false,
   });
   assert.deepEqual(buildClientConfig(options), {
     eventEndpoint: 'ws://nars/events',
@@ -1223,6 +1238,61 @@ test('CLI args and client config keep runtime authority outside the web package'
     operatorInput: true,
     admittedMethods: [...AGENT_WEB_UI_NARS_METHOD_LIST],
   });
+});
+
+test('local client config is public-base aware for Operator Router session mounts', async () => {
+  const config = buildClientConfig({
+    eventEndpoint: 'ws://127.0.0.1:49100/events',
+    healthEndpoint: 'http://127.0.0.1:49101/health',
+    publicBasePath: '/sessions/carrier_demo',
+    publicEventEndpoint: 'ws://127.0.0.1:61729/sessions/carrier_demo/events',
+    sessionId: 'carrier_demo',
+    siteRoot: 'D:/code/narada.demo',
+    siteId: 'narada.demo',
+    cloudflareApiBaseUrl: 'https://projection.example.test',
+  });
+  assert.equal(config.publicBasePath, '/sessions/carrier_demo');
+  assert.equal(config.eventEndpoint, 'ws://127.0.0.1:61729/sessions/carrier_demo/events');
+  assert.equal(config.healthEndpoint, '/sessions/carrier_demo/api/health');
+  assert.equal(config.artifactBasePath, '/sessions/carrier_demo/api/nars');
+  assert.deepEqual(config.projectionControl, {
+    cloudflare: {
+      available: true,
+      startEndpoint: '/sessions/carrier_demo/api/projections/cloudflare/start',
+      statusEndpoint: '/sessions/carrier_demo/api/projections/cloudflare/status',
+      defaultApiBaseUrl: 'https://projection.example.test',
+    },
+  });
+
+  const web = await startAgentWebUiServer({
+    host: '127.0.0.1',
+    port: 0,
+    eventEndpoint: 'ws://127.0.0.1:49100/events',
+    healthEndpoint: 'http://127.0.0.1:49101/health',
+    publicBasePath: '/sessions/carrier_demo',
+    publicEventEndpoint: 'ws://127.0.0.1:61729/sessions/carrier_demo/events',
+  });
+  try {
+    const response = await fetch(`${web.url}api/config`);
+    assert.equal(response.status, 200);
+    assert.equal((await response.json()).healthEndpoint, '/sessions/carrier_demo/api/health');
+    const html = await (await fetch(web.url)).text();
+    assert.match(html, /\/sessions\/carrier_demo\/assets\//);
+  } finally {
+    await new Promise((resolve) => web.server.close(resolve));
+  }
+});
+
+test('User Site onboarding mode is explicit and reaches the browser client config', () => {
+  const options = parseAgentWebUiArgs([
+    '--event-endpoint', 'ws://nars/events',
+    '--health-endpoint', 'http://nars/health',
+    '--onboarding',
+  ]);
+  assert.equal(options.onboarding, true);
+  const onboarding = buildClientConfig(options).onboarding;
+  assert.deepEqual(onboarding, { mode: 'user-site' });
+  assert.deepEqual(resolveAttachConfig('', { onboarding }).onboarding, { mode: 'user-site' });
 });
 
 test('local client config exposes Cloudflare projection control only with session authority', () => {

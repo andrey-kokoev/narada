@@ -129,7 +129,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^1.0.0
-        version: 1.6.1(@types/node@22.19.19)(lightningcss@1.32.0)(stylus@0.57.0)
+        version: 1.6.1(@types/node@22.19.19)(jsdom@26.1.0)(lightningcss@1.32.0)(stylus@0.57.0)
 
   packages/agent-context-memory:
     devDependencies:
@@ -510,6 +510,9 @@ importers:
       '@narada2/operator-console-ui':
         specifier: workspace:*
         version: link:../../operator-console-ui
+      '@narada2/operator-router':
+        specifier: workspace:*
+        version: link:../../operator-router
       '@narada2/ops-kit':
         specifier: workspace:*
         version: link:../../ops-kit
@@ -822,6 +825,25 @@ importers:
       vue-tsc:
         specifier: ^2.2.0
         version: 2.2.12(typescript@5.9.3)
+
+  packages/operator-router:
+    dependencies:
+      '@narada2/nars-session-core':
+        specifier: workspace:*
+        version: link:../nars-session-core
+      '@narada2/process-launch-posture':
+        specifier: workspace:*
+        version: link:../process-launch-posture
+    devDependencies:
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.19.19
+      tsx:
+        specifier: ^4.7.0
+        version: 4.21.0
+      typescript:
+        specifier: ^5.3.0
+        version: 5.9.3
 
   packages/operator-surface-carriers:
     dependencies:
@@ -9501,40 +9523,6 @@ snapshots:
     optionalDependencies:
       '@types/node': 22.19.19
       jsdom: 26.1.0
-    transitivePeerDependencies:
-      - less
-      - lightningcss
-      - sass
-      - sass-embedded
-      - stylus
-      - sugarss
-      - supports-color
-      - terser
-
-  vitest@1.6.1(@types/node@22.19.19)(lightningcss@1.32.0)(stylus@0.57.0):
-    dependencies:
-      '@vitest/expect': 1.6.1
-      '@vitest/runner': 1.6.1
-      '@vitest/snapshot': 1.6.1
-      '@vitest/spy': 1.6.1
-      '@vitest/utils': 1.6.1
-      acorn-walk: 8.3.5
-      chai: 4.5.0
-      debug: 4.4.3
-      execa: 8.0.1
-      local-pkg: 0.5.1
-      magic-string: 0.30.21
-      pathe: 1.1.2
-      picocolors: 1.1.1
-      std-env: 3.10.0
-      strip-literal: 2.1.1
-      tinybench: 2.9.0
-      tinypool: 0.8.4
-      vite: 5.4.21(@types/node@22.19.19)(lightningcss@1.32.0)(stylus@0.57.0)
-      vite-node: 1.6.1(@types/node@22.19.19)(lightningcss@1.32.0)(stylus@0.57.0)
-      why-is-node-running: 2.3.0
-    optionalDependencies:
-      '@types/node': 22.19.19
     transitivePeerDependencies:
       - less
       - lightningcss

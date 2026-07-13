@@ -1,5 +1,6 @@
 import { createSessionProjection, classifyRuntimeMessage } from './session-projection.js';
 import { NARS_CLIENT_PROJECTION_DEFAULT_VERBOSITY, normalizeNarsClientProjectionVerbosity, projectRuntimeEvent, shouldRenderRuntimeProjection } from './runtime-events.js';
+import { parseMessageContent } from './content-pipeline.js';
 
 export function setText(id, text, documentRef = document) {
   const element = documentRef.getElementById(id);
@@ -46,20 +47,38 @@ function sessionIdFromProjection(projection) {
 
 function appendStructuredSummaryContent(container, parts, documentRef, context = {}) {
   for (const part of parts) {
-    if (part?.type === 'artifact_ref' && part.artifact_id) {
-      container.append(createArtifactReferenceCard(part, documentRef, context));
+    if (part?.kind === 'artifact_ref' && part.artifact) {
+      container.append(createArtifactReferenceCard(part.artifact, documentRef, context));
       continue;
     }
-    if (part?.type === 'intent_ref' && typeof part.intent === 'string' && part.intent.trim()) {
-      container.append(createIntentReferenceButton(part, documentRef));
+    if (part?.kind === 'intent_ref' && part.intent) {
+      container.append(createIntentReferenceButton(part.intent, documentRef));
       continue;
     }
-    if ((part?.type === 'markdown' || part?.type === 'text') && typeof part.text === 'string') {
-      appendSummaryContent(container, part.text, documentRef, context);
+    if (part?.kind === 'markdown') {
+      container.append(createRenderedMarkdownFrame(part.content, documentRef));
       continue;
     }
-    appendSummaryContent(container, stringSummary(part), documentRef, context);
+    if (part?.kind === 'plain_text') {
+      container.append(documentRef.createTextNode(part.content));
+      continue;
+    }
+    if (part?.kind === 'code_block' || part?.kind === 'json_block' || part?.kind === 'mermaid_diagram') {
+      container.append(createCanonicalCodeBlock(part, documentRef));
+      continue;
+    }
+    container.append(documentRef.createTextNode(String(part?.content ?? '')));
   }
+}
+
+function createCanonicalCodeBlock(part, documentRef) {
+  const pre = documentRef.createElement('pre');
+  pre.className = `message-code-block message-code-${part.kind}`;
+  const code = documentRef.createElement('code');
+  if (part.language) code.className = `language-${part.language}`;
+  code.textContent = part.content;
+  pre.append(code);
+  return pre;
 }
 
 function createArtifactReferenceCard(part, documentRef, context = {}) {
@@ -161,35 +180,22 @@ function artifactContentPath({ basePath, artifactTransport, sessionId, artifactI
   const normalizedBasePath = basePath?.replace(/\/+$/, '') ?? null;
   if (!normalizedBasePath || !artifactId) return null;
   if (artifactTransport === 'cloudflare-projection' || artifactTransport === 'cloudflare-authority') return withBrowserToken(`${normalizedBasePath}/${encodeURIComponent(artifactId)}/content`, browserToken);
+  if (artifactTransport === 'operator-router') return `${normalizedBasePath}/${encodeURIComponent(artifactId)}/content`;
   if (!sessionId) return null;
   return `${normalizedBasePath}/sessions/${encodeURIComponent(sessionId)}/artifacts/${encodeURIComponent(artifactId)}/content`;
 }
 
-function normalizeRenderableText(value) {
-  return String(value ?? '').trim().replace(/\r\n/g, '\n');
-}
-
-function stripMarkdownHint(value) {
-  return normalizeRenderableText(value).replace(/^\s*(markdown|md)\s*\n/i, '');
-}
-
-function looksLikeMarkdown(value) {
-  const text = stripMarkdownHint(value);
-  return text !== normalizeRenderableText(value)
-    || /(`[^`]+`|\[[^\]]+\]\([^)]+\)|\*\*[^*]+\*\*|__[^_]+__|^\s*>\s+|^\s*#{1,6}\s+|^\s*\|.+\|\s*$|\n\s*\|?\s*:?-{3,}:?\s*\||\n\s*[-*+]\s+|\n\s*\d+\.\s+)/m.test(text);
-}
-
 function appendSummaryContent(container, value, documentRef, context = {}) {
-  if (Array.isArray(value)) {
-    appendStructuredSummaryContent(container, value, documentRef, context);
+  const parts = parseMessageContent(value);
+  if (parts.length === 1 && parts[0].kind === 'plain_text') {
+    container.textContent = parts[0].content;
     return;
   }
-  const text = stringSummary(value);
-  if (!looksLikeMarkdown(text)) {
-    container.textContent = text;
+  if (parts.length > 0) {
+    appendStructuredSummaryContent(container, parts, documentRef, context);
     return;
   }
-  container.append(createRenderedMarkdownFrame(stripMarkdownHint(text), documentRef));
+  container.textContent = stringSummary(value);
 }
 
 function createRenderedMarkdownFrame(markdownText, documentRef) {

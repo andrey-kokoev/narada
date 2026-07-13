@@ -2,6 +2,7 @@ import type { Command } from 'commander';
 import { silentCommandContext } from '../lib/command-wrapper.js';
 import { emitFiniteCommandResult, emitLongLivedCommandStartup, exitLongLivedCommandSuccessfully, resolveCommandFormat } from '../lib/cli-output.js';
 import { ExitCode } from '../lib/exit-codes.js';
+import { DEFAULT_OPERATOR_ROUTER_PORT } from '@narada2/operator-router';
 import { agentWebUiAttachCommand } from './agent-web-ui.js';
 
 export function registerAgentWebUiCommands(program: Command): void {
@@ -18,7 +19,7 @@ export function registerAgentWebUiCommands(program: Command): void {
     .option('--site-root <path>', 'Target Site root')
     .option('--site <id>', 'Registered Site id')
     .option('--host <host>', 'Host to bind to', '127.0.0.1')
-    .option('--port <port>', 'Port to bind to (0 for ephemeral)', '0')
+    .option('--port <port>', 'Stable Operator Router port (0 for direct diagnostic mode)', String(DEFAULT_OPERATOR_ROUTER_PORT))
     .option('--dry-run', 'Resolve attachment without starting the web UI', false)
     .option('--inspect-stale-session', 'Open AgentWebUI in diagnostic mode for a closed, unhealthy, or superseded NARS session', false)
     .option('--allow-stale-session', 'Deprecated alias for --inspect-stale-session', false)
@@ -64,14 +65,15 @@ export function registerAgentWebUiCommands(program: Command): void {
 function formatStartedAgentWebUi(result: unknown): string {
   if (!result || typeof result !== 'object') return 'agent-web-ui started';
   if ('_formatted' in result) return String((result as { _formatted: unknown })._formatted);
-  const plan = result as { url?: unknown; session_id?: unknown; site_id?: unknown; site_root?: unknown; event_endpoint?: unknown; health_endpoint?: unknown };
+  const plan = result as { url?: unknown; session_id?: unknown; site_id?: unknown; site_root?: unknown; event_endpoint?: unknown; public_event_endpoint?: unknown; health_endpoint?: unknown; ingress_mode?: unknown; router_url?: unknown };
   if (typeof plan.url === 'string' && plan.url.length > 0) {
     return [
       `agent-web-ui: ${plan.url}`,
       `  Session ${typeof plan.session_id === 'string' ? plan.session_id : 'unknown'}`,
       `  Site    ${typeof plan.site_id === 'string' ? plan.site_id : (typeof plan.site_root === 'string' ? plan.site_root : 'unknown')}`,
-      `  Events  ${typeof plan.event_endpoint === 'string' ? plan.event_endpoint : 'not configured'}`,
+      `  Events  ${typeof plan.public_event_endpoint === 'string' ? plan.public_event_endpoint : (typeof plan.event_endpoint === 'string' ? plan.event_endpoint : 'not configured')}`,
       `  Health  ${typeof plan.health_endpoint === 'string' ? `${plan.health_endpoint} via local /api/health` : 'not configured'}`,
+      `  Ingress ${typeof plan.ingress_mode === 'string' ? plan.ingress_mode : 'unknown'}${typeof plan.router_url === 'string' ? ` ${plan.router_url}` : ''}`,
       '  Input   session.submit/session.cancel/session.close; Cloudflare adapters translate as needed',
     ].join('\n');
   }

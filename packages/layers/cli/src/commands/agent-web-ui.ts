@@ -1,7 +1,18 @@
 import type { CommandContext } from '../lib/command-wrapper.js';
+import { createHash, randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { executeOperatorProjectionOpenRequest } from '@narada2/process-launch-posture';
 import { agentIdentityDisplay, agentIdentityGroupKey, agentIdentityRefMatchesRequest, normalizeSiteToken, roleSegment, siteSegment } from '@narada2/agent-identity';
+import {
+  DEFAULT_OPERATOR_ROUTER_PORT,
+  ensureOperatorRouter,
+  registerOperatorRoute,
+  renewOperatorRoute,
+  unregisterOperatorRoute,
+  type EnsureOperatorRouterOptions,
+  type EnsureOperatorRouterResult,
+  type OperatorRouterAdminOptions,
+} from '@narada2/operator-router';
 import { formattedResult, type CliFormat } from '../lib/cli-output.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { narsAttachCommandCommand, narsSessionsCommand } from './nars.js';
@@ -28,6 +39,36 @@ export interface AgentWebUiAttachOptions {
 
 function allowsStaleSessionInspection(options: AgentWebUiAttachOptions): boolean {
   return options.inspectStaleSession === true || options.allowStaleSession === true;
+}
+
+function operatorRouterSessionKey(sessionId: string): string {
+  return createHash('sha256').update(sessionId, 'utf8').digest('hex').slice(0, 32);
+}
+
+function operatorRouterSessionPath(sessionId: string): string {
+  return `/sessions/${encodeURIComponent(sessionId)}`;
+}
+
+function operatorRouterUrl(host: string, port: number): string {
+  const displayHost = host.includes(':') && !host.startsWith('[') ? `[${host}]` : host;
+  return `http://${displayHost}:${port}`;
+}
+
+function operatorRouterWebsocketUrl(routerUrl: string, publicPath: string): string {
+  const parsed = new URL(`${routerUrl.replace(/\/+$/, '')}${publicPath}`);
+  parsed.protocol = parsed.protocol === 'https:' ? 'wss:' : 'ws:';
+  return parsed.toString();
+}
+
+function operatorRouterAdmin(router: EnsureOperatorRouterResult): OperatorRouterAdminOptions {
+  return { url: router.url, registration_token: router.registration_token };
+}
+
+function closeStartedServer(server: unknown): Promise<void> {
+  if (!server || typeof server !== 'object') return Promise.resolve();
+  const close = (server as { close?: (callback: () => void) => void }).close;
+  if (typeof close !== 'function') return Promise.resolve();
+  return new Promise((resolve) => close.call(server, resolve));
 }
 
 async function resolveAttachSessionIdFromLaunchBinding(options: AgentWebUiAttachOptions, progress: ProgressReporter): Promise<ResolvedAttachSession> {
@@ -450,6 +491,13 @@ export interface AgentWebUiAttachPlan {
   host: string;
   port: number;
   url: string | null;
+  ingress_mode: 'operator-router' | 'diagnostic';
+  router_url: string | null;
+  public_path: string | null;
+  public_event_endpoint: string | null;
+  public_health_endpoint: string | null;
+  backend_url: string | null;
+  route_ids: string[];
   command: string;
   authority_transition: AuthorityTransitionSnapshot;
   onboarding_mode: 'user-site' | null;
@@ -460,7 +508,11 @@ export async function agentWebUiAttachCommand(
   options: AgentWebUiAttachOptions,
   context: CommandContext,
   deps: {
-    startAgentWebUiServer?: (options: { host: string; port: number; eventEndpoint: string; healthEndpoint: string | null; sessionId: string; siteRoot: string | null; siteId: string | null; agentId: string | null; authorityTransition?: AuthorityTransitionSnapshot; onboarding?: boolean; cloudflareApiBaseUrl: string | null }) => Promise<{ url: string; server?: { close?: () => void } }>;
+    startAgentWebUiServer?: (options: { host: string; port: number; eventEndpoint: string; healthEndpoint: string | null; sessionId: string; siteRoot: string | null; siteId: string | null; agentId: string | null; authorityTransition?: AuthorityTransitionSnapshot; onboarding?: boolean; cloudflareApiBaseUrl: string | null; publicBasePath?: string | null; publicEventEndpoint?: string | null; publicHealthEndpoint?: string | null; publicArtifactBasePath?: string | null; publicArtifactTransport?: string | null }) => Promise<{ url: string; server?: unknown }>;
+    ensureOperatorRouter?: (options?: EnsureOperatorRouterOptions) => Promise<EnsureOperatorRouterResult>;
+    registerOperatorRoute?: typeof registerOperatorRoute;
+    renewOperatorRoute?: typeof renewOperatorRoute;
+    unregisterOperatorRoute?: typeof unregisterOperatorRoute;
     openUrl?: (url: string) => Promise<void> | void;
     progress?: ProgressReporter;
   } = {},
@@ -500,7 +552,16 @@ export async function agentWebUiAttachCommand(
   if (!eventEndpoint) throw new Error(`agent_web_ui_attach_missing_event_endpoint: ${sessionId}`);
   const healthEndpoint = stringField(attach.session, 'health_endpoint');
   const host = options.host ?? '127.0.0.1';
-  const port = Number.isFinite(options.port) ? Number(options.port) : 0;
+  const port = Number.isFinite(options.port) ? Number(options.port) : DEFAULT_OPERATOR_ROUTER_PORT;
+  const useOperatorRouter = port !== 0;
+  const publicPath = operatorRouterSessionPath(sessionId);
+  const predictedRouterUrl = useOperatorRouter ? operatorRouterUrl(host, port) : null;
+  const predictedPublicUrl = predictedRouterUrl ? `${predictedRouterUrl}${publicPath}/` : null;
+  const predictedPublicEventEndpoint = predictedRouterUrl ? operatorRouterWebsocketUrl(predictedRouterUrl, `${publicPath}/events`) : null;
+  const predictedPublicHealthEndpoint = predictedRouterUrl ? `${predictedRouterUrl}${publicPath}/api/health` : null;
+  const siteRoot = attach.site_root ?? options.siteRoot ?? null;
+  const siteId = attach.site_id ?? stringField(attach.session, 'site_id') ?? options.site ?? null;
+  const publicArtifactPath = useOperatorRouter && siteRoot ? `/artifacts/${encodeURIComponent(sessionId)}` : null;
   if (options.dryRun) {
     const plan = buildPlan({
       status: 'planned',
@@ -510,9 +571,16 @@ export async function agentWebUiAttachCommand(
       healthEndpoint,
       host,
       port,
-      url: null,
+      url: predictedPublicUrl,
       session: attach.session,
       onboarding: options.onboarding === true,
+      ingressMode: useOperatorRouter ? 'operator-router' : 'diagnostic',
+      routerUrl: predictedRouterUrl,
+      publicPath: useOperatorRouter ? publicPath : null,
+      publicEventEndpoint: predictedPublicEventEndpoint,
+      publicHealthEndpoint: predictedPublicHealthEndpoint,
+      backendUrl: null,
+      routeIds: [],
     });
     plan.operator_projection_open_request = await buildAgentWebUiOpenRequest({
       targetRef: null,
@@ -537,24 +605,112 @@ export async function agentWebUiAttachCommand(
       result: formattedResult(failure, formatFailure(failure), options.format ?? 'auto'),
     };
   }
-  progress(`agent-web-ui: starting local web UI for ${sessionId}`);
+  progress(`agent-web-ui: starting local web UI for ${sessionId}${useOperatorRouter ? ' through Operator Router' : ''}`);
+  const router = useOperatorRouter
+    ? await (deps.ensureOperatorRouter ?? ensureOperatorRouter)({ host, port })
+    : null;
+  const publicEventEndpoint = router ? operatorRouterWebsocketUrl(router.url, `${publicPath}/events`) : null;
+  const publicHealthEndpoint = router ? `${router.url}${publicPath}/api/health` : null;
   const startAgentWebUiServer = deps.startAgentWebUiServer ?? (await import('@narada2/agent-web-ui/server')).startAgentWebUiServer;
   const started = await startAgentWebUiServer({
     host,
-    port,
+    port: router ? 0 : port,
     eventEndpoint,
     healthEndpoint,
     sessionId,
-    siteRoot: attach.site_root ?? null,
-    siteId: attach.site_id ?? stringField(attach.session, 'site_id') ?? options.site ?? null,
+    siteRoot,
+    siteId,
     agentId: options.agent?.trim() || stringField(attach.session, 'agent_id'),
     authorityTransition: authorityTransitionSnapshot(attach.session),
     onboarding: options.onboarding === true,
+    publicBasePath: router ? publicPath : null,
+    publicEventEndpoint,
+    publicHealthEndpoint: router ? `${publicPath}/api/health` : null,
+    publicArtifactBasePath: publicArtifactPath,
+    publicArtifactTransport: publicArtifactPath ? 'operator-router' : null,
     cloudflareApiBaseUrl: options.cloudflareApiBaseUrl?.trim()
       || process.env.NARADA_CLOUDFLARE_NARS_PROJECTION_URL
       || process.env.CLOUDFLARE_NARS_PROJECTION_URL
       || null,
   });
+  const routeIds: string[] = [];
+  if (router) {
+    const admin = operatorRouterAdmin(router);
+    const sessionKey = operatorRouterSessionKey(sessionId);
+    const ownerId = `agent-web-ui:${sessionKey}:${process.pid}`;
+    const instanceNonce = randomUUID().replace(/-/g, '');
+    const httpRouteId = `agent-web-ui-${sessionKey}`;
+    const websocketRouteId = `${httpRouteId}-events`;
+    const reconstruction = { kind: 'nars-session' as const, site_root: siteRoot, site_id: siteId, session_id: sessionId };
+    const startedBackendUrl = started.url.replace(/\/+$/, '');
+    const startedHealthUrl = new URL('/api/health', started.url).toString();
+    try {
+      await (deps.registerOperatorRoute ?? registerOperatorRoute)(admin, {
+        route_id: httpRouteId,
+        route_class: 'agent-web-ui',
+        public_path: publicPath,
+        route_mode: 'prefix',
+        target_url: startedBackendUrl,
+        health_url: startedHealthUrl,
+        owner_id: ownerId,
+        site_id: siteId,
+        session_id: sessionId,
+        process_evidence: { instance_nonce: instanceNonce, pid: process.pid, started_at: new Date().toISOString() },
+        protocols: ['http'],
+        methods: ['GET', 'HEAD', 'POST', 'OPTIONS'],
+        lease_ms: 60 * 60 * 1000,
+        reconstruction,
+      });
+      routeIds.push(httpRouteId);
+      await (deps.registerOperatorRoute ?? registerOperatorRoute)(admin, {
+        route_id: websocketRouteId,
+        route_class: 'agent-web-ui',
+        public_path: `${publicPath}/events`,
+        route_mode: 'exact',
+        target_url: startedBackendUrl,
+        websocket_target_url: eventEndpoint,
+        health_url: startedHealthUrl,
+        owner_id: ownerId,
+        site_id: siteId,
+        session_id: sessionId,
+        process_evidence: { instance_nonce: instanceNonce, pid: process.pid, started_at: new Date().toISOString() },
+        protocols: ['websocket'],
+        methods: ['GET'],
+        lease_ms: 60 * 60 * 1000,
+        reconstruction,
+      });
+      routeIds.push(websocketRouteId);
+      if (publicArtifactPath) {
+        await (deps.registerOperatorRoute ?? registerOperatorRoute)(admin, {
+          route_id: `nars-artifact-${sessionKey}`,
+          route_class: 'nars-artifact',
+          backend_kind: 'nars-artifact',
+          public_path: publicArtifactPath,
+          route_mode: 'prefix',
+          health_url: healthEndpoint,
+          owner_id: ownerId,
+          site_id: siteId,
+          session_id: sessionId,
+          process_evidence: { instance_nonce: instanceNonce, pid: process.pid, started_at: new Date().toISOString() },
+          protocols: ['http'],
+          methods: ['GET', 'HEAD'],
+          max_body_bytes: 0,
+          lease_ms: 60 * 60 * 1000,
+          reconstruction,
+        });
+        routeIds.push(`nars-artifact-${sessionKey}`);
+      }
+    } catch (error) {
+      await Promise.all(routeIds.map((routeId) => (deps.unregisterOperatorRoute ?? unregisterOperatorRoute)(admin, routeId, { owner_id: ownerId, instance_nonce: instanceNonce }).catch(() => undefined)));
+      await closeStartedServer(started.server);
+      throw error;
+    }
+    const renew = deps.renewOperatorRoute ?? renewOperatorRoute;
+    const renewTimer = setInterval(() => {
+      Promise.all(routeIds.map((routeId) => renew(admin, routeId, { owner_id: ownerId, instance_nonce: instanceNonce, lease_ms: 60 * 60 * 1000 }))).catch(() => undefined);
+    }, 30_000);
+    renewTimer.unref();
+  }
   const plan = buildPlan({
     status: 'started',
     sessionId,
@@ -563,25 +719,32 @@ export async function agentWebUiAttachCommand(
     healthEndpoint,
     host,
     port,
-    url: started.url,
+    url: router ? `${router.url}${publicPath}/` : started.url,
     session: attach.session,
     onboarding: options.onboarding === true,
+    ingressMode: router ? 'operator-router' : 'diagnostic',
+    routerUrl: router?.url ?? null,
+    publicPath: router ? publicPath : null,
+    publicEventEndpoint,
+    backendUrl: started.url,
+    routeIds,
   });
   const shouldOpen = options.open !== false;
+  const browserUrl = plan.url;
   let operatorProjectionOpenRequest: Record<string, unknown> | undefined;
-  if (shouldOpen && started.url) {
-    progress(`agent-web-ui: opening browser ${started.url}`);
+  if (shouldOpen && browserUrl) {
+    progress(`agent-web-ui: opening browser ${browserUrl}`);
     operatorProjectionOpenRequest = await buildAgentWebUiOpenRequest({
-      targetRef: started.url,
+      targetRef: browserUrl,
       mode: 'execute',
       openUrl: deps.openUrl,
     });
     if (operatorProjectionOpenRequest.status !== 'opened') {
-      progress(`agent-web-ui: browser open failed; use ${started.url}`);
+      progress(`agent-web-ui: browser open failed; use ${browserUrl}`);
     }
-  } else if (started.url) {
+  } else if (browserUrl) {
     operatorProjectionOpenRequest = await buildAgentWebUiOpenRequest({
-      targetRef: started.url,
+      targetRef: browserUrl,
       mode: 'execute',
       suppressReason: 'operator_policy:no_open',
     });
@@ -683,6 +846,13 @@ function buildPlan(args: {
   url: string | null;
   session?: Record<string, unknown> | null;
   onboarding?: boolean;
+  ingressMode: 'operator-router' | 'diagnostic';
+  routerUrl: string | null;
+  publicPath: string | null;
+  publicEventEndpoint: string | null;
+  publicHealthEndpoint: string | null;
+  backendUrl: string | null;
+  routeIds: string[];
 }): AgentWebUiAttachPlan {
   return {
     schema: 'narada.agent_web_ui.attach_plan.v1',
@@ -696,6 +866,13 @@ function buildPlan(args: {
     host: args.host,
     port: args.port,
     url: args.url,
+    ingress_mode: args.ingressMode,
+    router_url: args.routerUrl,
+    public_path: args.publicPath,
+    public_event_endpoint: args.publicEventEndpoint,
+    public_health_endpoint: args.publicHealthEndpoint,
+    backend_url: args.backendUrl,
+    route_ids: [...args.routeIds],
     command: args.attach.command ?? `narada-agent-web-ui --event-endpoint ${args.eventEndpoint}${args.healthEndpoint ? ` --health-endpoint ${args.healthEndpoint}` : ''}`,
     authority_transition: authorityTransitionSnapshot(args.session),
     onboarding_mode: args.onboarding ? 'user-site' : null,
@@ -708,8 +885,9 @@ function formatPlan(plan: AgentWebUiAttachPlan): string {
       `agent-web-ui: ${plan.url}`,
       `  Session ${plan.session_id}`,
       `  Site    ${plan.site_id ?? plan.site_root ?? 'unknown'}`,
-      `  Events  ${plan.event_endpoint}`,
-      `  Health  ${plan.health_endpoint ?? 'not configured'} via local /api/health`,
+      `  Events  ${plan.public_event_endpoint ?? plan.event_endpoint}`,
+      `  Health  ${plan.public_health_endpoint ?? (plan.health_endpoint ? `${plan.health_endpoint} via local /api/health` : 'not configured')}`,
+      `  Ingress ${plan.ingress_mode}${plan.router_url ? ` ${plan.router_url}` : ''}`,
       `  Authority ${formatAuthorityTransition(plan.authority_transition)}`,
       '  Input   session.submit/session.cancel/session.close; Cloudflare adapters translate as needed',
     ];

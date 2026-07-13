@@ -2,8 +2,10 @@
 
 ## Status
 
-This document defines the implementation target for Narada's stable local
-browser ingress. It is not a claim that the router already exists.
+This document defines the implementation target and current boundary contract
+for Narada's stable local browser ingress. The dedicated router package and
+the first projection integrations are implemented; the acceptance suite and
+remaining launcher/open-flow migrations are still in progress.
 
 The router gives an operator one bookmarkable loopback origin while preserving
 ephemeral, independently owned backing services.
@@ -94,8 +96,9 @@ Dynamic registrations are projections:
 - failed probes mark routes unavailable before retirement;
 - expired leases are removed;
 - process identity includes a nonce to defeat PID reuse;
-- NARS routes reconstruct from live session indexes;
-- managed projections reconstruct from lifecycle evidence;
+- artifact routes resolve from live NARS session indexes;
+- projection owners reconstruct managed services and registrations from
+  lifecycle evidence; the router never starts domain services;
 - reconstructed targets are health-verified before advertisement.
 
 The stable port is durable configuration. The live table is reconstructible.
@@ -179,33 +182,56 @@ direct diagnostic endpoints.
 
 ## Current State
 
-- `@narada2/operator-console-contract` now defines the shared surface catalog
-  consumed by the CLI workspace page and browser route model.
-- `narada console serve` now defaults to the stable loopback port `61729`,
-  exposes `/health` and bounded `/routes`, attaches to a matching healthy
-  console instance, and refuses foreign port ownership.
-- `--port 0` remains an explicitly labeled diagnostic mode.
-- Console is still a foreground process and owns direct route handlers; hidden
-  singleton process management, dynamic registrations, leases, and backing
-  service proxying are not implemented yet.
-- Site Operations, Agent Web UI, and NARS still own direct listeners.
-- Stable Agent Web UI ports are launcher convention, not package authority.
-- NARS correctly publishes ephemeral endpoints through its session index.
+- `@narada2/operator-router` owns the stable loopback listener, singleton lock,
+  hidden detached startup, authenticated registration, finite leases, health
+  state, bounded HTTP/WebSocket forwarding, and redacted route inventory.
+- `narada console serve` registers the Console projection at `/` and keeps
+  `--port 0` as explicitly labeled diagnostic mode.
+- `narada agent-web-ui attach` defaults to the router, registers a session HTTP
+  route and an exact event-WebSocket route, and returns a stable
+  `/sessions/<session-id>/` URL. Its browser config is base-path aware for
+  assets, APIs, WebSockets, and direct artifact URLs.
+- Session-owned artifacts register at
+  `/artifacts/<session-id>/<artifact-id>/*` and reconstruct from the NARS
+  session index and artifact registry.
+- `narada workbench serve --site-id <id>` registers the existing governed Site
+  Operations projection at `/sites/<site-id>/operations/`; `--port 0` remains
+  the direct diagnostic mode.
+- Persisted routes are schema-validated on reload, health-verified before
+  advertisement, degraded when their owner process is gone, and replaceable
+  only when the prior registration is demonstrably stale.
+- The router rehydrates route records and artifact routes from canonical
+  evidence; Console, Agent Web UI, and Site Operations owners remain
+  responsible for restarting their own backing services and re-registering
+  them.
+- The workspace surface catalog and remaining launcher/open flows still need
+  to consume the router route inventory instead of assuming direct listeners.
 
 ## Migration Slices
 
 1. Add the Host/PC Operator Router package, config schema, singleton lock,
-   identity probe, health endpoint, and route registry. **Partial:** the
-   identity/health/route and stable-port behavior currently lives in the CLI
-   console server; the dedicated Host/PC package and hidden process remain.
+   identity probe, health endpoint, and route registry. **Implemented:** the
+   dedicated package and hidden process now own this behavior.
 2. Add strict registrations, leases, process evidence, and reconstruction.
+   **Partial:** persisted registrations are validated and health-verified,
+   artifact routes resolve from NARS evidence, and active owners renew while
+   stale owners degrade or expire. Automatic owner-side service restart and
+   re-registration remain outside the router.
 3. Make Agent Web UI base-path aware and verify assets, APIs, WebSockets, and
-   artifacts beneath a session prefix.
-4. Register Console/Registry and Site Operations projections.
-5. Change launcher and CLI open flows to return router URLs.
+   artifacts beneath a session prefix. **Implemented:** session and event
+   routes are registered; direct artifact routes use the NARS session index.
+4. Register Console/Registry and Site Operations projections. **Partial:**
+   Console and the existing Workbench Site Operations server are registered;
+   registry-specific route ownership and the composed session inventory remain.
+5. Change launcher and CLI open flows to return router URLs. **Partial:**
+   Console, Agent Web UI, and Site Operations commands return router URLs;
+   launcher/session-inventory/artifact open flows still need migration.
 6. Add Host, Origin, CSRF, route admission, loopback-target, and redaction
-   acceptance tests.
+   acceptance tests. **Partial:** route admission, redaction, HTTP, artifact,
+   and WebSocket coverage exists; broader mutation/CSRF acceptance remains.
 7. Keep ephemeral commands as diagnostics and remove stable per-surface ports.
+   **In progress:** normal projection commands use the router and port 0 is
+   retained only as explicit diagnostic mode.
 
 ## Acceptance Invariants
 

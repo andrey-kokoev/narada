@@ -23,6 +23,7 @@ export function artifactMetadataPath(config: ArtifactRenderingConfig, sessionId:
   const basePath = config.artifactBasePath?.replace(/\/+$/, '') ?? null;
   if (!basePath || !artifactId) return null;
   if (config.artifactTransport === 'cloudflare-projection' || config.artifactTransport === 'cloudflare-authority') return withBrowserToken(`${basePath}/${encodeURIComponent(artifactId)}`, config.browserToken);
+  if (config.artifactTransport === 'operator-router') return `${basePath}/${encodeURIComponent(artifactId)}`;
   if (!sessionId) return null;
   return `${basePath}/sessions/${encodeURIComponent(sessionId)}/artifacts/${encodeURIComponent(artifactId)}`;
 }
@@ -31,6 +32,7 @@ export function artifactContentPath(config: ArtifactRenderingConfig, sessionId: 
   const basePath = config.artifactBasePath?.replace(/\/+$/, '') ?? null;
   if (!basePath || !artifactId) return null;
   if (config.artifactTransport === 'cloudflare-projection' || config.artifactTransport === 'cloudflare-authority') return withBrowserToken(`${basePath}/${encodeURIComponent(artifactId)}/content`, config.browserToken);
+  if (config.artifactTransport === 'operator-router') return `${basePath}/${encodeURIComponent(artifactId)}/content`;
   if (!sessionId) return null;
   return `${basePath}/sessions/${encodeURIComponent(sessionId)}/artifacts/${encodeURIComponent(artifactId)}/content`;
 }
