@@ -41,9 +41,9 @@ Route registration grants reachability only, never effect authority.
 | Route | Owner behind router | Meaning |
 | --- | --- | --- |
 | / | Router | Workspace surface directory. |
-| /console/registry | User Site Registry projection | Cross-Site registry UI. |
-| /console/registry/api/* | User Site Registry projection | Registry reads and admitted management requests. |
-| /console/sessions | NARS session index projection | Read-only agent session inventory. |
+| /console/registry | Console / User Site Registry projection | Cross-Site registry UI. |
+| /console/registry/api/* | Console / User Site Registry projection | Registry reads and admitted management requests. |
+| /console/sessions | Console / NARS session index projection | Read-only composed agent session inventory. |
 | /sites/<site-id>/operations/* | Site Operations projection | Local Site task, assignment, review, and agent projection. |
 | /sessions/<session-id>/* | Agent Web UI | Browser projection for one NARS session. |
 | /artifacts/<session-id>/<artifact-id>/* | NARS artifact projection | Admitted artifact metadata or content. |
@@ -247,9 +247,13 @@ direct diagnostic endpoints.
 3. Make Agent Web UI base-path aware and verify assets, APIs, WebSockets, and
    artifacts beneath a session prefix. **Implemented:** session and event
    routes are registered; direct artifact routes use the NARS session index.
-4. Register Console/Registry and Site Operations projections. **Partial:**
-   Console and the existing Workbench Site Operations server are registered;
-   registry-specific route ownership and the composed session inventory remain.
+4. Register Console/Registry and Site Operations projections. **Implemented for
+   the current owner boundary:** the Console projection owns `/` and serves the
+   User Site Registry and composed NARS session inventory beneath its stable
+   route set; the existing Workbench Site Operations server is registered at
+   its Site route. Registry-specific ownership is intentionally not split into
+   a second Router route class because that would duplicate Console/User Site
+   projection authority.
 5. Change launcher and CLI open flows to return router URLs. **Partial:**
    Console, Agent Web UI, Site Operations, and the persistent launcher session
    handoff return router URLs when their owning projection is healthy. One-shot
