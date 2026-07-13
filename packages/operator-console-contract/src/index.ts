@@ -1,5 +1,6 @@
 export const OPERATOR_SURFACE_DESCRIPTOR_SCHEMA = 'narada.operator.surface_descriptor.v1' as const;
 export const OPERATOR_WORKSPACE_ROUTE_DIRECTORY_SCHEMA = 'narada.operator_workspace.route_directory.v1' as const;
+export const OPERATOR_WORKSPACE_ROUTE_DIRECTORY_PATH = '/console/routes' as const;
 
 export type OperatorSurfaceId =
   | 'site-registry'
@@ -114,9 +115,14 @@ export type OperatorSurfaceRouteAvailabilityOverrides = Partial<
   Record<OperatorSurfaceId, Partial<Record<string, OperatorSurfaceAvailability>>>
 >;
 
+export type OperatorSurfaceAdditionalRouteOverrides = Partial<
+  Record<OperatorSurfaceId, readonly OperatorSurfaceRouteDescriptor[]>
+>;
+
 export interface OperatorSurfaceCatalogProjectionInput {
   availability?: OperatorSurfaceAvailabilityOverrides;
   routeAvailability?: OperatorSurfaceRouteAvailabilityOverrides;
+  additionalRoutes?: OperatorSurfaceAdditionalRouteOverrides;
 }
 
 export interface OperatorWorkspaceRouteDirectory {
@@ -221,7 +227,13 @@ export function projectOperatorSurfaceCatalog(
 ): OperatorSurfaceProjection[] {
   return operatorSurfaceDescriptors.map((descriptor) => {
     const availability = input.availability?.[descriptor.id] ?? descriptor.defaultAvailability;
-    const projectedRoutes = descriptor.routes.map((route) => {
+    const routes = [...descriptor.routes, ...(input.additionalRoutes?.[descriptor.id] ?? [])];
+    const routeIds = new Set<string>();
+    const projectedRoutes = routes.map((route) => {
+      if (routeIds.has(route.id)) {
+        throw new Error(`operator_surface_route_duplicate:${descriptor.id}:${route.id}`);
+      }
+      routeIds.add(route.id);
       const routeOverride = input.routeAvailability?.[descriptor.id]?.[route.id];
       const routeAvailability = availability === 'available'
         ? routeOverride ?? 'available'
@@ -260,6 +272,13 @@ export function primaryProjectedOperatorSurfaceRoute(
   projection: OperatorSurfaceProjection,
 ): OperatorSurfaceRouteProjection | undefined {
   return projection.projectedRoutes[0];
+}
+
+export function firstAvailableConcreteProjectedOperatorSurfaceRoute(
+  projection: OperatorSurfaceProjection,
+): OperatorSurfaceRouteProjection | undefined {
+  return projection.projectedRoutes.find((route) =>
+    route.availability === 'available' && !route.path.includes('<') && !route.path.includes('>'));
 }
 
 export function operatorSurfaceRoutePath(

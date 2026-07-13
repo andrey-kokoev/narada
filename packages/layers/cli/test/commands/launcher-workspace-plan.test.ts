@@ -6,6 +6,7 @@ import { vol } from 'memfs';
 import { buildWorkspaceLaunchSelectionHtml, buildWorkspaceLaunchSelectionUiModel, explainMcpCommand, hasWorkspaceLaunchSelectionIntent, initialOperatorSurfaceValues, initialRoleValuesForInteractiveSelection, intelligenceProviderChoices, intelligenceProviderChoicesForLaunchSelection, listenWorkspaceLaunchUiServer, normalizeInteractiveOperatorSurfaceValues, readWorkspaceLaunchRememberedSelection, registryDefaultIntelligenceProviderLabel, registryDefaultOperatorSurfaceLabel, registryDefaultRuntimeLabel, resolveWorkspaceLaunchUiIngress, resolveWorkspaceLaunchUiPortPolicy, roleChoicesForSelectedSites, workspaceLaunchCommand, workspaceLaunchPlanCommand, workspaceLaunchReapStaleSessionOwnedDescendants, workspaceLaunchRuntimeObservations, workspaceLaunchSelectorModel, writeWorkspaceLaunchRememberedSelection, type WorkspaceLaunchBrowserSelection, type WorkspaceLaunchRecord } from '../../src/commands/launcher.js';
 import type { CommandContext } from '../../src/lib/command-wrapper.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
+import { projectOperatorWorkspaceRouteDirectory } from '@narada2/operator-console-contract';
 
 const discoverNarsSessionsMock = vi.hoisted(() => vi.fn());
 
@@ -1773,6 +1774,9 @@ describe('launcher workspace planning', () => {
           last_health_error: null,
         }],
       }),
+      readWorkspaceRouteDirectory: async () => projectOperatorWorkspaceRouteDirectory({
+        availability: { launcher: 'available' },
+      }),
     });
 
     expect(ingress).toMatchObject({
@@ -1782,6 +1786,50 @@ describe('launcher workspace planning', () => {
       stable_url: 'http://127.0.0.1:61729/console/launch/sessions/wls_test',
       ingress_mode: 'operator-router',
       reason: null,
+    });
+  });
+
+  it('keeps a direct diagnostic URL when the live Workspace directory does not admit the launcher route', async () => {
+    const ingress = await resolveWorkspaceLaunchUiIngress({
+      uiSessionId: 'wls_missing_launcher_route',
+      directUrl: 'http://127.0.0.1:47320',
+      ensureRouter: async () => ({
+        url: 'http://127.0.0.1:61729',
+        ownership: 'attached',
+        registration_token: 'router-token',
+        child: null,
+      }),
+      readRoutes: async () => ({
+        schema: 'narada.operator_router.routes.v1',
+        identity: 'narada.operator-router',
+        routes: [{
+          route_id: 'operator-console',
+          route_class: 'operator-console',
+          backend_kind: 'http',
+          public_path: '/',
+          route_mode: 'prefix',
+          owner_id: 'operator-console:1',
+          site_id: null,
+          session_id: null,
+          protocols: ['http'],
+          methods: ['GET'],
+          state: 'healthy',
+          lease_expires_at: new Date(Date.now() + 60_000).toISOString(),
+          last_health_at: new Date().toISOString(),
+          last_health_error: null,
+        }],
+      }),
+      readWorkspaceRouteDirectory: async () => projectOperatorWorkspaceRouteDirectory({
+        availability: { launcher: 'unavailable' },
+      }),
+    });
+
+    expect(ingress).toMatchObject({
+      url: 'http://127.0.0.1:47320',
+      router_url: 'http://127.0.0.1:61729',
+      stable_url: null,
+      ingress_mode: 'diagnostic',
+      reason: 'operator_workspace_launcher_route_unavailable',
     });
   });
 

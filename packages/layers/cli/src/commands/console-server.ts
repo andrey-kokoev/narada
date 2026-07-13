@@ -16,12 +16,20 @@ import { createRegistryMutationGateway, type RegistryMutationGateway } from './s
 import { renderOperatorWorkspacePage } from './operator-workspace-page.js';
 import type { WorkspaceLaunchUiSessionRecord } from './workspace-launch-session-store.js';
 import { createAgentSessionReadModel, type AgentSessionReadModel } from './agent-session-read-model.js';
-import { DEFAULT_OPERATOR_ROUTER_PORT } from '@narada2/operator-router';
 import {
+  DEFAULT_OPERATOR_ROUTER_PORT,
+  readOperatorRouterRoutes,
+  type OperatorRouterRouteProjection,
+} from '@narada2/operator-router';
+import {
+  OPERATOR_WORKSPACE_ROUTE_DIRECTORY_PATH,
   operatorSurfaceDescriptors,
   projectOperatorWorkspaceRouteDirectory,
+  type OperatorSurfaceAdditionalRouteOverrides,
   type OperatorSurfaceAvailability,
   type OperatorSurfaceAvailabilityOverrides,
+  type OperatorSurfaceId,
+  type OperatorSurfaceRouteDescriptor,
   type OperatorSurfaceRouteAvailabilityOverrides,
 } from '@narada2/operator-console-contract';
 
@@ -61,10 +69,91 @@ function projectLocalSurfaceAvailability(
   })) as OperatorSurfaceAvailabilityOverrides;
 }
 
+interface WorkspaceRouteProjection {
+  additionalRoutes: OperatorSurfaceAdditionalRouteOverrides;
+  routeAvailability: OperatorSurfaceRouteAvailabilityOverrides;
+  surfaceAvailability: OperatorSurfaceAvailabilityOverrides;
+}
+
+function emptyWorkspaceRouteProjection(): WorkspaceRouteProjection {
+  return { additionalRoutes: {}, routeAvailability: {}, surfaceAvailability: {} };
+}
+
+function dynamicWorkspaceRouteLabel(surfaceId: OperatorSurfaceId, route: OperatorRouterRouteProjection): string {
+  if (surfaceId === 'site-operations') return `Site ${route.site_id ?? 'unknown'} Operations`;
+  if (surfaceId === 'agent-sessions') return `Session ${route.session_id ?? 'unknown'}`;
+  return `Session ${route.session_id ?? 'unknown'} Artifacts`;
+}
+
+function projectLiveRouterRoutes(routes: readonly OperatorRouterRouteProjection[]): WorkspaceRouteProjection {
+  const projection = emptyWorkspaceRouteProjection();
+  const surfaceRoutes = new Map<OperatorSurfaceId, OperatorSurfaceRouteDescriptor[]>();
+  const routeAvailability = new Map<OperatorSurfaceId, Record<string, OperatorSurfaceAvailability>>();
+
+  for (const route of routes) {
+    if (!route.protocols.includes('http') || !concreteWorkspaceRoutePath(route.public_path)) continue;
+    const surfaceId = route.route_class === 'site-operations'
+      ? 'site-operations'
+      : route.route_class === 'agent-web-ui'
+        ? 'agent-sessions'
+        : route.route_class === 'nars-artifact'
+          ? 'artifacts'
+          : null;
+    if (!surfaceId) continue;
+    const routeId = `router-${route.route_id}`;
+    const surfaceRouteList = surfaceRoutes.get(surfaceId) ?? [];
+    surfaceRouteList.push({
+      id: routeId,
+      path: route.public_path,
+      kind: 'page',
+      label: dynamicWorkspaceRouteLabel(surfaceId, route),
+    });
+    surfaceRoutes.set(surfaceId, surfaceRouteList);
+    const surfaceRouteAvailability = routeAvailability.get(surfaceId) ?? {};
+    surfaceRouteAvailability[routeId] = route.state === 'healthy' ? 'available' : 'unavailable';
+    routeAvailability.set(surfaceId, surfaceRouteAvailability);
+  }
+
+  for (const [surfaceId, routesForSurface] of surfaceRoutes) {
+    projection.additionalRoutes[surfaceId] = routesForSurface;
+    const states = routeAvailability.get(surfaceId) ?? {};
+    projection.routeAvailability[surfaceId] = states;
+    if (surfaceId === 'site-operations' || surfaceId === 'artifacts') {
+      const hasHealthyRoute = Object.values(states).includes('available');
+      projection.surfaceAvailability[surfaceId] = hasHealthyRoute ? 'available' : 'unavailable';
+      const templateRouteId = surfaceId === 'site-operations' ? 'operations' : 'artifact';
+      projection.routeAvailability[surfaceId] = {
+        [templateRouteId]: 'unavailable',
+        ...states,
+      };
+    }
+  }
+  return projection;
+}
+
+function mergeWorkspaceRouteAvailability(
+  base: OperatorSurfaceRouteAvailabilityOverrides,
+  live: OperatorSurfaceRouteAvailabilityOverrides,
+): OperatorSurfaceRouteAvailabilityOverrides {
+  return Object.fromEntries(operatorSurfaceDescriptors.map((surface) => [
+    surface.id,
+    { ...(base[surface.id] ?? {}), ...(live[surface.id] ?? {}) },
+  ])) as OperatorSurfaceRouteAvailabilityOverrides;
+}
+
+function mergeWorkspaceSurfaceAvailability(
+  base: OperatorSurfaceAvailabilityOverrides,
+  live: OperatorSurfaceAvailabilityOverrides,
+): OperatorSurfaceAvailabilityOverrides {
+  return { ...base, ...live };
+}
+
 export interface ConsoleServerConfig {
   port: number;
   host?: string;
   ingressMode?: 'diagnostic' | 'router';
+  operatorRouterUrl?: string;
+  readOperatorRouterRoutes?: typeof readOperatorRouterRoutes;
   registryReadModel?: SiteRegistryReadModel;
   registryMutationGateway?: RegistryMutationGateway;
   workspaceLaunchSessions?: () => Promise<WorkspaceLaunchUiSessionRecord[]>;
@@ -157,6 +246,32 @@ export async function createConsoleServer(config: ConsoleServerConfig): Promise<
   const routeAvailability = projectLocalRouteAvailability(routes);
   const surfaceAvailability = projectLocalSurfaceAvailability(routeAvailability);
 
+  async function currentWorkspaceRouteProjection(): Promise<WorkspaceRouteProjection> {
+    if (!config.operatorRouterUrl) return emptyWorkspaceRouteProjection();
+    try {
+      const readRoutes = config.readOperatorRouterRoutes ?? readOperatorRouterRoutes;
+      const liveRoutes = await readRoutes({ url: config.operatorRouterUrl });
+      return projectLiveRouterRoutes(liveRoutes.routes);
+    } catch {
+      // The static Console projection remains truthful when the Router inventory
+      // is temporarily unavailable; no dynamic route is advertised in that case.
+      return emptyWorkspaceRouteProjection();
+    }
+  }
+
+  async function currentWorkspaceProjection(): Promise<{
+    additionalRoutes: OperatorSurfaceAdditionalRouteOverrides;
+    routeAvailability: OperatorSurfaceRouteAvailabilityOverrides;
+    surfaceAvailability: OperatorSurfaceAvailabilityOverrides;
+  }> {
+    const live = await currentWorkspaceRouteProjection();
+    return {
+      additionalRoutes: live.additionalRoutes,
+      routeAvailability: mergeWorkspaceRouteAvailability(routeAvailability, live.routeAvailability),
+      surfaceAvailability: mergeWorkspaceSurfaceAvailability(surfaceAvailability, live.surfaceAvailability),
+    };
+  }
+
   let server: Server | null = null;
   let isRunning = false;
   let serverUrl: string | null = null;
@@ -178,9 +293,11 @@ export async function createConsoleServer(config: ConsoleServerConfig): Promise<
       const pathname = url.pathname;
 
       if (pathname === '/health' && req.method === 'GET') {
+        const workspaceProjection = await currentWorkspaceProjection();
         const routeDirectory = projectOperatorWorkspaceRouteDirectory({
-          availability: surfaceAvailability,
-          routeAvailability,
+          availability: workspaceProjection.surfaceAvailability,
+          routeAvailability: workspaceProjection.routeAvailability,
+          additionalRoutes: workspaceProjection.additionalRoutes,
         });
         const surfaceCatalog = routeDirectory.surfaces;
         const routeCount = surfaceCatalog.reduce((count, surface) => count + surface.projectedRoutes.length, 0);
@@ -202,9 +319,11 @@ export async function createConsoleServer(config: ConsoleServerConfig): Promise<
       }
 
       if (pathname === '/routes' && req.method === 'GET') {
+        const workspaceProjection = await currentWorkspaceProjection();
         const routeDirectory = projectOperatorWorkspaceRouteDirectory({
-          availability: surfaceAvailability,
-          routeAvailability,
+          availability: workspaceProjection.surfaceAvailability,
+          routeAvailability: workspaceProjection.routeAvailability,
+          additionalRoutes: workspaceProjection.additionalRoutes,
         });
         jsonResponse(res, 200, {
           schema: OPERATOR_CONSOLE_ROUTES_SCHEMA,
@@ -221,11 +340,24 @@ export async function createConsoleServer(config: ConsoleServerConfig): Promise<
         return;
       }
 
+      if (pathname === OPERATOR_WORKSPACE_ROUTE_DIRECTORY_PATH && req.method === 'GET') {
+        const workspaceProjection = await currentWorkspaceProjection();
+        const routeDirectory = projectOperatorWorkspaceRouteDirectory({
+          availability: workspaceProjection.surfaceAvailability,
+          routeAvailability: workspaceProjection.routeAvailability,
+          additionalRoutes: workspaceProjection.additionalRoutes,
+        });
+        jsonResponse(res, 200, routeDirectory);
+        return;
+      }
+
       if (pathname === '/') {
+        const workspaceProjection = await currentWorkspaceProjection();
         htmlResponse(res, 200, renderOperatorWorkspacePage({
           ingressMode: config.ingressMode ?? 'diagnostic',
-          surfaceAvailability,
-          routeAvailability,
+          surfaceAvailability: workspaceProjection.surfaceAvailability,
+          routeAvailability: workspaceProjection.routeAvailability,
+          additionalRoutes: workspaceProjection.additionalRoutes,
         }));
         return;
       }

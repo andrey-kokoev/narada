@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  firstAvailableConcreteProjectedOperatorSurfaceRoute,
   findOperatorSurfaceRoute,
   operatorSurfaceDescriptors,
   operatorSurfaceRoutePath,
@@ -74,4 +75,34 @@ test('workspace route directory preserves concrete and template route availabili
     availability: { artifacts: 'available' },
     routeAvailability: { artifacts: { artifact: 'available' } },
   }).map((item) => item.key), ['sites', 'add', 'manage', 'launcher', 'sessions']);
+});
+
+test('workspace route directory admits live concrete routes without replacing templates', () => {
+  const directory = projectOperatorWorkspaceRouteDirectory({
+    availability: { 'site-operations': 'available', artifacts: 'available' },
+    routeAvailability: {
+      'site-operations': { operations: 'unavailable', 'router-site-operations-demo': 'available' },
+      artifacts: { artifact: 'unavailable', 'router-artifact-demo': 'available' },
+    },
+    additionalRoutes: {
+      'site-operations': [{
+        id: 'router-site-operations-demo',
+        path: '/sites/demo/operations',
+        kind: 'page',
+        label: 'Site demo Operations',
+      }],
+      artifacts: [{
+        id: 'router-artifact-demo',
+        path: '/artifacts/session-demo',
+        kind: 'page',
+        label: 'Session session-demo Artifacts',
+      }],
+    },
+  });
+  const siteOperations = directory.surfaces.find((surface) => surface.id === 'site-operations');
+  const artifacts = directory.surfaces.find((surface) => surface.id === 'artifacts');
+  assert.equal(firstAvailableConcreteProjectedOperatorSurfaceRoute(siteOperations!)?.path, '/sites/demo/operations');
+  assert.equal(firstAvailableConcreteProjectedOperatorSurfaceRoute(artifacts!)?.path, '/artifacts/session-demo');
+  assert.equal(siteOperations?.projectedRoutes.find((route) => route.id === 'operations')?.availability, 'unavailable');
+  assert.equal(artifacts?.projectedRoutes.find((route) => route.id === 'artifact')?.availability, 'unavailable');
 });

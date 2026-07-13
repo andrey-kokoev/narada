@@ -122,7 +122,7 @@ export function registerConsoleCommands(program: Command): void {
         return;
       }
 
-      const server = await createConsoleServer({ host, port: 0, ingressMode: 'router' });
+      const server = await createConsoleServer({ host, port: 0, ingressMode: 'router', operatorRouterUrl: router.url });
       const backendUrl = await server.start();
       const ownerId = `operator-console:${process.pid}`;
       const instanceNonce = randomUUID().replace(/-/g, '');

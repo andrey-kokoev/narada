@@ -31,6 +31,11 @@ import {
   type EnsureOperatorRouterOptions,
   type EnsureOperatorRouterResult,
 } from '@narada2/operator-router';
+import {
+  OPERATOR_WORKSPACE_ROUTE_DIRECTORY_PATH,
+  OPERATOR_WORKSPACE_ROUTE_DIRECTORY_SCHEMA,
+  type OperatorWorkspaceRouteDirectory,
+} from '@narada2/operator-console-contract';
 import { explainMcpCommand as explainMcpAuthorityCommand } from './launcher-mcp-authority.js';
 import {
   isWorkspaceLaunchUiSessionRecord,
@@ -1231,6 +1236,7 @@ export interface ResolveWorkspaceLaunchUiIngressOptions {
   port?: number;
   ensureRouter?: (options: EnsureOperatorRouterOptions) => Promise<EnsureOperatorRouterResult>;
   readRoutes?: typeof readOperatorRouterRoutes;
+  readWorkspaceRouteDirectory?: typeof readOperatorWorkspaceRouteDirectory;
 }
 
 function boundedWorkspaceLaunchIngressError(error: unknown): string {
@@ -1243,6 +1249,53 @@ function operatorRouterIngressUrl(routerUrl: string, uiSessionId: string): strin
   return `${routerUrl.replace(/\/+$/, '')}${workspaceLaunchUiSessionRoute(uiSessionId)}`;
 }
 
+export async function readOperatorWorkspaceRouteDirectory(options: {
+  url: string;
+  fetch_fn?: typeof fetch;
+  timeout_ms?: number;
+}): Promise<OperatorWorkspaceRouteDirectory> {
+  const timeoutMs = options.timeout_ms ?? 3_000;
+  if (!Number.isInteger(timeoutMs) || timeoutMs < 100 || timeoutMs > 120_000) {
+    throw new Error('operator_workspace_route_directory_timeout_invalid');
+  }
+  const response = await (options.fetch_fn ?? fetch)(
+    `${options.url.replace(/\/+$/, '')}${OPERATOR_WORKSPACE_ROUTE_DIRECTORY_PATH}`,
+    { signal: AbortSignal.timeout(timeoutMs) },
+  );
+  const payload: unknown = await response.json().catch(() => null);
+  if (!response.ok || !isOperatorWorkspaceRouteDirectory(payload)) {
+    throw new Error(`operator_workspace_route_directory_read_failed:${response.status}`);
+  }
+  return payload;
+}
+
+function isOperatorWorkspaceRouteDirectory(value: unknown): value is OperatorWorkspaceRouteDirectory {
+  if (!isRecord(value)
+    || value.schema !== OPERATOR_WORKSPACE_ROUTE_DIRECTORY_SCHEMA
+    || !Array.isArray(value.surfaces)) return false;
+  return value.surfaces.every((surface) => {
+    if (!isRecord(surface)
+      || typeof surface.id !== 'string'
+      || !['available', 'unavailable', 'planned'].includes(String(surface.availability))
+      || !Array.isArray(surface.projectedRoutes)) return false;
+    return surface.projectedRoutes.every((route) => isRecord(route)
+      && typeof route.id === 'string'
+      && typeof route.path === 'string'
+      && (route.kind === 'page' || route.kind === 'workflow')
+      && typeof route.label === 'string'
+      && ['available', 'unavailable', 'planned'].includes(String(route.availability))
+      && typeof route.projectedDetail === 'string');
+  });
+}
+
+function workspaceLaunchRouteDirectoryHealthy(directory: OperatorWorkspaceRouteDirectory): boolean {
+  const launcher = directory.surfaces.find((surface) => surface.id === 'launcher');
+  return launcher?.availability === 'available'
+    && launcher.projectedRoutes.some((route) => route.id === 'launcher'
+      && route.path === '/console/launch'
+      && route.availability === 'available');
+}
+
 export async function resolveWorkspaceLaunchUiIngress(
   options: ResolveWorkspaceLaunchUiIngressOptions,
 ): Promise<WorkspaceLaunchUiIngress> {
@@ -1251,6 +1304,7 @@ export async function resolveWorkspaceLaunchUiIngress(
   try {
     const ensureRouter = options.ensureRouter ?? ensureOperatorRouter;
     const readRoutes = options.readRoutes ?? readOperatorRouterRoutes;
+    const readWorkspaceRouteDirectory = options.readWorkspaceRouteDirectory ?? readOperatorWorkspaceRouteDirectory;
     const router = await ensureRouter({
       host: options.host ?? '127.0.0.1',
       port: options.port ?? DEFAULT_OPERATOR_ROUTER_PORT,
@@ -1263,6 +1317,17 @@ export async function resolveWorkspaceLaunchUiIngress(
       && consoleProjection.route_mode === 'prefix'
       && consoleProjection.state === 'healthy';
     if (consoleProjectionHealthy) {
+      const workspaceRouteDirectory = await readWorkspaceRouteDirectory({ url: router.url });
+      if (!workspaceLaunchRouteDirectoryHealthy(workspaceRouteDirectory)) {
+        return {
+          url: directUrl,
+          direct_url: directUrl,
+          router_url: router.url,
+          stable_url: null,
+          ingress_mode: 'diagnostic',
+          reason: 'operator_workspace_launcher_route_unavailable',
+        };
+      }
       const stableUrl = operatorRouterIngressUrl(router.url, options.uiSessionId);
       return {
         url: stableUrl,

@@ -1,9 +1,10 @@
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import {
-  primaryProjectedOperatorSurfaceRoute,
+  firstAvailableConcreteProjectedOperatorSurfaceRoute,
   projectOperatorSurfaceNavigation,
   projectOperatorSurfaceCatalog,
+  type OperatorSurfaceAdditionalRouteOverrides,
   type OperatorSurfaceAvailabilityOverrides,
   type OperatorSurfaceRouteAvailabilityOverrides,
   type OperatorSurfaceProjection,
@@ -23,6 +24,7 @@ function workspaceNavigation(options: OperatorWorkspacePageOptions): string {
   const items = projectOperatorSurfaceNavigation({
     availability: options.surfaceAvailability,
     routeAvailability: options.routeAvailability,
+    additionalRoutes: options.additionalRoutes,
   });
   return [
     '<a href="/" aria-current="page">Home</a>',
@@ -34,6 +36,7 @@ export interface OperatorWorkspacePageOptions {
   ingressMode: 'diagnostic' | 'router';
   surfaceAvailability: OperatorSurfaceAvailabilityOverrides;
   routeAvailability?: OperatorSurfaceRouteAvailabilityOverrides;
+  additionalRoutes?: OperatorSurfaceAdditionalRouteOverrides;
 }
 
 function escapeHtml(value: string): string {
@@ -47,7 +50,7 @@ function escapeHtml(value: string): string {
 }
 
 function surfaceMarkup(surface: OperatorSurfaceProjection): string {
-  const primaryRoute = primaryProjectedOperatorSurfaceRoute(surface);
+  const primaryRoute = firstAvailableConcreteProjectedOperatorSurfaceRoute(surface);
   const routeMarkup = surface.projectedRoutes.length > 0
     ? `<dt>Routes</dt><dd><ul class="route-list">${surface.projectedRoutes.map((route) => `<li data-route-id="${escapeHtml(route.id)}"><code>${escapeHtml(route.path)}</code> <span class="route-status ${escapeHtml(route.availability)}">${escapeHtml(route.availability)}</span></li>`).join('')}</ul></dd>`
     : '';
@@ -68,6 +71,7 @@ export function renderOperatorWorkspacePage(options: OperatorWorkspacePageOption
   const surfaces = projectOperatorSurfaceCatalog({
     availability: options.surfaceAvailability,
     routeAvailability: options.routeAvailability,
+    additionalRoutes: options.additionalRoutes,
   });
   const availableSurfaces = surfaces.filter((surface) => surface.availability === 'available');
   const unavailableSurfaces = surfaces.filter((surface) => surface.availability === 'unavailable');

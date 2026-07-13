@@ -41,6 +41,12 @@ their own policy and admission checks. `/routes` omits target URLs and local
 paths; `/health` reports router liveness separately from degraded projections.
 
 The Operator Workspace consumes the typed route directory from the Console
-projection. A declared route template is not a browser link until its concrete
-projection is available; route availability is derived from actual admitted
-handlers rather than from the descriptor default alone.
+projection at `/console/routes`. A declared route template is not a browser
+link until its concrete projection is available; route availability is derived
+from actual admitted handlers rather than from the descriptor default alone.
+The launcher stable handoff checks this directory before returning a
+non-diagnostic URL. In Router mode the Console augments the static catalog
+from the live route inventory, so healthy and degraded session, artifact, and
+Site Operations leases are visible without making the Router a domain owner.
+The Console still owns the directory's surface semantics; the Router only
+provides stable ingress and the low-level route inventory.

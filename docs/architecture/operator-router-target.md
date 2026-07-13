@@ -216,6 +216,9 @@ direct diagnostic endpoints.
   cleans up its backing server and routes on signal-driven shutdown.
 - The Console Workspace catalog projects concrete route availability and keeps
   parameterized route templates visible without presenting them as dead links.
+  In Router mode it also reads the live Router inventory and projects healthy
+  or degraded Site Operations, Agent Web UI session, and NARS artifact leases
+  as concrete Workspace routes.
 - Agent Web UI and Site Operations use an explicit owner-side reconstruction
   helper for absent or stale route sets; a partially live set is refused rather
   than silently replaced.
@@ -228,7 +231,11 @@ direct diagnostic endpoints.
   `/console/launch/sessions/<id>`; its private listener remains persisted as a
   backing target only. If the Console projection is unavailable, the command
   returns the direct listener explicitly as a diagnostic fallback with a
-  reason code.
+  reason code. The stable Console projection publishes the typed Workspace
+  route directory at `/console/routes`, and the launcher requires its concrete
+  launcher route before selecting the stable handoff. The Workspace root uses
+  the same directory to select concrete live Site Operations and session or
+  artifact routes.
 - One-shot launcher selection and local task-graph/observation file renders
   remain diagnostic local-file projections. They are not falsely presented as
   Router artifacts; session-owned NARS artifacts already use the Router
@@ -262,7 +269,10 @@ direct diagnostic endpoints.
    launcher selection and local task-graph or observation renders remain
    explicitly diagnostic because they have no persisted Router-owned artifact
    projection. A future artifact owner may admit those outputs without adding
-   a generic file route.
+   a generic file route. Persistent launcher ingress now validates the live
+   Workspace route directory before returning its stable URL; the launcher and
+   session dashboard still need to use the directory for all cross-surface
+   navigation rather than relying on static local assumptions.
 6. Add Host, Origin, CSRF, route admission, loopback-target, and redaction
    acceptance tests. **Mostly implemented at the Router boundary:** route
    admission, redaction, HTTP method/body bounds, artifact, Host, and WebSocket
@@ -274,8 +284,10 @@ direct diagnostic endpoints.
 7. Keep ephemeral commands as diagnostics and remove stable per-surface ports.
    **Normal projection commands implemented:** Console, Agent Web UI, Site
    Operations, and persistent launcher sessions use the Router; port 0 is
-   retained only as explicit diagnostic mode. Launcher/session route-directory
-   composition remains the next migration slice.
+   retained only as explicit diagnostic mode. The Console route-directory
+   endpoint and launcher admission check are implemented; live composition of
+   Site Operations, Agent Web UI session, and artifact route projections is
+   implemented in Router-backed Workspace mode.
 
 ## Acceptance Invariants
 

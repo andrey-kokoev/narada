@@ -218,6 +218,93 @@ describe('console server', () => {
         expect.objectContaining({ path: '/console/registry' }),
         expect.objectContaining({ path: '/console/launch' }),
       ]));
+
+      const workspaceRoutes = await httpGet(`${url}/console/routes`);
+      expect(workspaceRoutes.status).toBe(200);
+      expect((workspaceRoutes.body as { schema: string; surfaces: unknown[] }).schema)
+        .toBe('narada.operator_workspace.route_directory.v1');
+      expect(Array.isArray((workspaceRoutes.body as { surfaces: unknown[] }).surfaces)).toBe(true);
+      await server.stop();
+    });
+
+    it('projects healthy Router leases into the Workspace directory and concrete links', async () => {
+      const server = await createConsoleServer({
+        port: 0,
+        host: '127.0.0.1',
+        ingressMode: 'router',
+        operatorRouterUrl: 'http://127.0.0.1:61729',
+        readOperatorRouterRoutes: async () => ({
+          schema: 'narada.operator_router.routes.v1',
+          identity: 'narada.operator-router',
+          routes: [
+            {
+              route_id: 'site-operations-site-a',
+              route_class: 'site-operations',
+              backend_kind: 'http',
+              public_path: '/sites/site-a/operations',
+              route_mode: 'prefix',
+              owner_id: 'site-operations:site-a',
+              site_id: 'site-a',
+              session_id: null,
+              protocols: ['http'],
+              methods: ['GET'],
+              state: 'healthy',
+              lease_expires_at: '2026-07-14T00:00:00.000Z',
+              last_health_at: '2026-07-13T00:00:00.000Z',
+              last_health_error: null,
+            },
+            {
+              route_id: 'agent-session-session-a',
+              route_class: 'agent-web-ui',
+              backend_kind: 'http',
+              public_path: '/sessions/session-a',
+              route_mode: 'prefix',
+              owner_id: 'agent-web-ui:session-a',
+              site_id: 'site-a',
+              session_id: 'session-a',
+              protocols: ['http'],
+              methods: ['GET'],
+              state: 'healthy',
+              lease_expires_at: '2026-07-14T00:00:00.000Z',
+              last_health_at: '2026-07-13T00:00:00.000Z',
+              last_health_error: null,
+            },
+            {
+              route_id: 'nars-artifact-session-a',
+              route_class: 'nars-artifact',
+              backend_kind: 'nars-artifact',
+              public_path: '/artifacts/session-a',
+              route_mode: 'prefix',
+              owner_id: 'agent-web-ui:session-a',
+              site_id: 'site-a',
+              session_id: 'session-a',
+              protocols: ['http'],
+              methods: ['GET'],
+              state: 'healthy',
+              lease_expires_at: '2026-07-14T00:00:00.000Z',
+              last_health_at: '2026-07-13T00:00:00.000Z',
+              last_health_error: null,
+            },
+          ],
+        }),
+      });
+      const url = await server.start();
+
+      const directory = await httpGet(`${url}/console/routes`);
+      expect(directory.status).toBe(200);
+      const surfaces = (directory.body as { surfaces: Array<{ id: string; availability: string; projectedRoutes: Array<{ path: string; availability: string }> }> }).surfaces;
+      expect(surfaces.find((surface) => surface.id === 'site-operations')?.availability).toBe('available');
+      expect(surfaces.find((surface) => surface.id === 'site-operations')?.projectedRoutes)
+        .toEqual(expect.arrayContaining([expect.objectContaining({ path: '/sites/site-a/operations', availability: 'available' })]));
+      expect(surfaces.find((surface) => surface.id === 'agent-sessions')?.projectedRoutes)
+        .toEqual(expect.arrayContaining([expect.objectContaining({ path: '/sessions/session-a', availability: 'available' })]));
+      expect(surfaces.find((surface) => surface.id === 'artifacts')?.projectedRoutes)
+        .toEqual(expect.arrayContaining([expect.objectContaining({ path: '/artifacts/session-a', availability: 'available' })]));
+
+      const root = await fetch(url);
+      const rootHtml = await root.text();
+      expect(rootHtml).toContain('href="/sites/site-a/operations"');
+      expect(rootHtml).not.toContain('href="/sites/<site-id>/operations/"');
       await server.stop();
     });
 

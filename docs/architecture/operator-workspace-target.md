@@ -4,8 +4,11 @@
 
 This document defines the browser experience that sits above individual
 operator surfaces. It is an implementation target and a boundary contract.
-The Workspace route directory and current owner reconstruction slice are live;
-launcher/open-flow migration and broader browser acceptance remain.
+The typed Workspace route directory is live at the Console projection's
+`/console/routes` endpoint, and persistent launcher ingress validates it before
+returning a stable route. Router-backed Console instances compose live Site
+Operations, Agent Web UI session, and artifact leases into that directory.
+Launcher/session navigation and broader browser acceptance remain.
 
 ## Shape
 
@@ -128,14 +131,16 @@ route. The Console Workspace catalog now exposes typed per-route availability,
 including concrete routes and non-linkable parameterized templates. Agent Web
 UI and Site Operations use the shared owner-side reconstruction contract for
 absent or stale route sets; the launcher selection page and session inventory
-still need to consume the router route inventory directly.
+now require the live Workspace route directory for stable handoff. In Router
+mode the Workspace landing page chooses a healthy concrete route when one
+exists.
 
 The remaining Router/workspace work is explicit:
 
 1. complete Host, Origin, CSRF, and browser mutation acceptance coverage;
 2. migrate launcher and artifact open flows to stable URLs and route inventory;
-3. make the launcher/session dashboard consume the composed Workspace route
-   directory rather than assuming direct listeners.
+3. make the launcher/session dashboard use the composed directory for
+   cross-surface navigation rather than static local assumptions.
 
 Direct low-level Workbench, Console, Agent Web UI, and NARS listeners remain
 supported only as explicitly labeled diagnostic paths; normal projection
