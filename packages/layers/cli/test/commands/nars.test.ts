@@ -738,6 +738,7 @@ describe('nars CLI commands', () => {
     const result = await agentWebUiAttachCommand({
       launchRegistryPath,
       agent: 'sonar.resident',
+      port: 0,
       waitForSessionMs: 2000,
       open: true,
     }, createMockContext(), {
@@ -789,6 +790,7 @@ describe('nars CLI commands', () => {
 
     const result = await agentWebUiAttachCommand({
       launchRegistryPath,
+      port: 0,
       siteRoot,
       launchBindingPath: bindingPath,
       agent: 'sonar.resident',
@@ -857,6 +859,7 @@ describe('nars CLI commands', () => {
 
     const result = await agentWebUiAttachCommand({
       launchRegistryPath,
+      port: 0,
       siteRoot,
       launchBindingPath: bindingPath,
       agent: 'sonar.resident',
@@ -896,6 +899,7 @@ describe('nars CLI commands', () => {
 
     const result = await agentWebUiAttachCommand({
       launchRegistryPath,
+      port: 0,
       siteRoot,
       launchBindingPath: bindingPath,
       waitForSessionMs: 1500,
@@ -924,6 +928,7 @@ describe('nars CLI commands', () => {
 
     const result = await agentWebUiAttachCommand({
       launchRegistryPath,
+      port: 0,
       session: 'carrier_cli_test',
     }, createMockContext(), {
       startAgentWebUiServer: async () => ({ url: 'http://127.0.0.1:4545' }),
@@ -1112,6 +1117,7 @@ describe('nars CLI commands', () => {
 
     const result = await agentWebUiAttachCommand({
       launchRegistryPath,
+      port: 0,
       site: 'sonar',
       session: 'carrier_closed_test',
       inspectStaleSession: true,
@@ -1128,7 +1134,7 @@ describe('nars CLI commands', () => {
         purpose: 'agent_web_ui_attach',
       },
     });
-    expect(startAgentWebUiServer).toHaveBeenCalledWith({
+    expect(startAgentWebUiServer).toHaveBeenCalledWith(expect.objectContaining({
       host: '127.0.0.1',
       port: 0,
       eventEndpoint: 'ws://127.0.0.1:12345/events',
@@ -1139,6 +1145,6 @@ describe('nars CLI commands', () => {
       agentId: 'sonar.resident',
       authorityTransition: expect.objectContaining({ authority_runtime_host: 'local', authority_epoch: 3, input_policy: 'enabled' }),
       cloudflareApiBaseUrl: null,
-    });
+    }));
   });
 });

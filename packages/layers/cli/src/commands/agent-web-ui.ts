@@ -796,6 +796,7 @@ export async function agentWebUiAttachCommand(
     routerUrl: router?.url ?? null,
     publicPath: router ? publicPath : null,
     publicEventEndpoint,
+    publicHealthEndpoint,
     backendUrl: started.url,
     routeIds,
   });
