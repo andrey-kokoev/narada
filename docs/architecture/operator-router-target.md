@@ -259,7 +259,11 @@ direct diagnostic endpoints.
    a generic file route.
 6. Add Host, Origin, CSRF, route admission, loopback-target, and redaction
    acceptance tests. **Partial:** route admission, redaction, HTTP, artifact,
-   and WebSocket coverage exists; broader mutation/CSRF acceptance remains.
+   and WebSocket coverage exists. Router Host validation is bound to the
+   actual listener port, Origin validation is enforced for same-origin
+   loopback requests and WebSocket upgrades, and CSRF tokens are transported
+   to the backend authority; broader mutation/CSRF acceptance remains an
+   owner-surface responsibility.
 7. Keep ephemeral commands as diagnostics and remove stable per-surface ports.
    **In progress:** normal projection commands use the router and port 0 is
    retained only as explicit diagnostic mode.

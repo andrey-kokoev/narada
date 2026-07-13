@@ -111,17 +111,22 @@ function isLoopbackHost(value: string): boolean {
   return host === 'localhost' || host === '127.0.0.1' || host === '::1';
 }
 
-function requestHostIsLoopback(req: IncomingMessage): boolean {
+function effectiveHttpPort(url: URL): string {
+  return url.port || (url.protocol === 'https:' ? '443' : '80');
+}
+
+function requestHostMatchesListener(req: IncomingMessage, expectedPort: number): boolean {
   const hostHeader = headerValue(req.headers.host);
   if (!hostHeader) return false;
   try {
-    return isLoopbackHost(new URL(`http://${hostHeader}`).hostname);
+    const parsed = new URL(`http://${hostHeader}`);
+    return isLoopbackHost(parsed.hostname) && effectiveHttpPort(parsed) === String(expectedPort);
   } catch {
     return false;
   }
 }
 
-function requestOriginIsSameLoopbackOrigin(req: IncomingMessage): boolean {
+function requestOriginIsSameLoopbackOrigin(req: IncomingMessage, expectedPort: number): boolean {
   const origin = headerValue(req.headers.origin);
   if (!origin) return true;
   const host = headerValue(req.headers.host);
@@ -129,8 +134,8 @@ function requestOriginIsSameLoopbackOrigin(req: IncomingMessage): boolean {
   try {
     const requestUrl = new URL(`http://${host}`);
     const parsed = new URL(origin);
-    const requestPort = parsed.port || (requestUrl.protocol === 'https:' ? '443' : '80');
-    const expectedPort = requestUrl.port || (requestUrl.protocol === 'https:' ? '443' : '80');
+    const requestPort = effectiveHttpPort(requestUrl);
+    const originPort = effectiveHttpPort(parsed);
     return parsed.protocol === requestUrl.protocol
       && parsed.username.length === 0
       && parsed.password.length === 0
@@ -140,7 +145,8 @@ function requestOriginIsSameLoopbackOrigin(req: IncomingMessage): boolean {
       && isLoopbackHost(parsed.hostname)
       && isLoopbackHost(requestUrl.hostname)
       && parsed.hostname === requestUrl.hostname
-      && requestPort === expectedPort;
+      && requestPort === String(expectedPort)
+      && originPort === String(expectedPort);
   } catch {
     return false;
   }
@@ -684,7 +690,7 @@ export async function createOperatorRouterServer(config: Partial<OperatorRouterS
   }
 
   async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
-    if (!requestHostIsLoopback(req) || !requestOriginIsSameLoopbackOrigin(req)) {
+    if (!requestHostMatchesListener(req, resolved.port) || !requestOriginIsSameLoopbackOrigin(req, resolved.port)) {
       jsonResponse(res, 421, { error: 'operator_router_host_or_origin_not_loopback' });
       return;
     }
@@ -736,7 +742,7 @@ export async function createOperatorRouterServer(config: Partial<OperatorRouterS
   }
 
   async function handleUpgrade(req: IncomingMessage, socket: Duplex, head: Buffer): Promise<void> {
-    if (req.method !== 'GET' || headerValue(req.headers.upgrade)?.toLowerCase() !== 'websocket' || !requestHostIsLoopback(req) || !requestOriginIsSameLoopbackOrigin(req)) { socket.destroy(); return; }
+    if (req.method !== 'GET' || headerValue(req.headers.upgrade)?.toLowerCase() !== 'websocket' || !requestHostMatchesListener(req, resolved.port) || !requestOriginIsSameLoopbackOrigin(req, resolved.port)) { socket.destroy(); return; }
     let urlObject: URL;
     try {
       urlObject = new URL(req.url ?? '/', `http://${req.headers.host ?? `${resolved.host}:${resolved.port}`}`);

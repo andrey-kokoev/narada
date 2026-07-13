@@ -251,6 +251,10 @@ test('router registers, health-checks, proxies, projects, renews, and removes a 
     const originForwarded = await fetch(`${routerUrl}/sessions/demo/origin`, { headers: { origin: routerUrl } });
     assert.equal(originForwarded.status, 200);
     assert.equal(observedOrigin, routerUrl);
+    const foreignLoopbackHost = await fetch(`${routerUrl}/sessions/demo/origin`, {
+      headers: { host: '127.0.0.1:9' },
+    });
+    assert.equal(foreignLoopbackHost.status, 421);
     const foreignLoopbackOrigin = await fetch(`${routerUrl}/sessions/demo/origin`, {
       headers: { origin: 'http://127.0.0.1:9' },
     });
@@ -393,7 +397,7 @@ test('websocket route forwards the stable session event upgrade', { timeout: 5_0
       client?.once('connect', () => {
         client?.write([
           'GET /sessions/websocket_demo/events HTTP/1.1',
-          'Host: 127.0.0.1',
+          `Host: 127.0.0.1:${routerPort}`,
           'Connection: Upgrade',
           'Upgrade: websocket',
           'Sec-WebSocket-Version: 13',
