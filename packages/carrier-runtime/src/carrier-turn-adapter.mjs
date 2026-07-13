@@ -5,6 +5,7 @@
 export async function runTurn(context = {}, eventSink = () => {}, toolGateway = {}) {
   const callProvider = context.callProvider;
   if (typeof callProvider !== 'function') throw new Error('carrier_turn_call_provider_required');
+  const maxToolRounds = normalizeMaxToolRounds(context.maxToolRounds ?? context.settings?.maxToolRounds);
 
   const tools = typeof toolGateway.toolCatalog === 'function'
     ? await toolGateway.toolCatalog()
@@ -18,7 +19,7 @@ export async function runTurn(context = {}, eventSink = () => {}, toolGateway = 
   try {
     const messages = [...(Array.isArray(context.messages) ? context.messages : [])];
     let result = null;
-    for (let round = 0; round < 8; round += 1) {
+    for (let round = 0; round < maxToolRounds; round += 1) {
       result = await callProvider({
         messages,
         tools,
@@ -53,7 +54,7 @@ export async function runTurn(context = {}, eventSink = () => {}, toolGateway = 
         });
       }
     }
-    if (providerToolCalls(result).length > 0) throw new Error('carrier_turn_tool_round_limit_exceeded');
+    if (providerToolCalls(result).length > 0) throw new Error(`carrier_turn_tool_round_limit_exceeded:${maxToolRounds}`);
     const assistantMessage = providerAssistantMessage(result);
     await eventSink({
       kind: 'assistant_message',
@@ -73,6 +74,12 @@ export async function runTurn(context = {}, eventSink = () => {}, toolGateway = 
 function providerToolCalls(result) {
   const calls = result?.choices?.[0]?.message?.tool_calls ?? result?.tool_calls ?? [];
   return Array.isArray(calls) ? calls : [];
+}
+
+function normalizeMaxToolRounds(value) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return 8;
+  return Math.min(64, Math.max(1, Math.trunc(parsed)));
 }
 
 function providerAssistantMessage(result) {
