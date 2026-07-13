@@ -19,12 +19,12 @@
     "openai-api": {
       "meaning": "OpenAI API via OpenAI-compatible chat completions.",
       "base_url": "https://api.openai.com",
-      "default_model": "gpt-5.5",
-      "available_models": ["gpt-5.5", "gpt-5.4", "gpt-5.4-mini", "gpt-5.4-nano"],
+      "default_model": "gpt-5.6-sol",
+      "available_models": ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"],
       "cognition_defaults": {
-        "low": { "model": "gpt-5.4-mini", "reasoning_effort": "low" },
-        "medium": { "model": "gpt-5.5", "reasoning_effort": "medium" },
-        "high": { "model": "gpt-5.5", "reasoning_effort": "high" }
+        "low": { "model": "gpt-5.6-luna", "reasoning_effort": "low" },
+        "medium": { "model": "gpt-5.6-terra", "reasoning_effort": "medium" },
+        "high": { "model": "gpt-5.6-sol", "reasoning_effort": "high" }
       },
       "adapter_kind": "openai-compatible-chat-completions",
       "support_state": "verified_supported",
@@ -41,11 +41,11 @@
     "kimi-api": {
       "meaning": "Kimi/Moonshot API via OpenAI-compatible chat completions.",
       "base_url": "https://api.moonshot.ai",
-      "default_model": "kimi-k2.6",
+      "default_model": "kimi-k2.7",
       "available_models": ["kimi-k2.6", "kimi-k2.7"],
       "cognition_defaults": {
-        "low": { "model": "kimi-k2.6", "reasoning_effort": "low" },
-        "medium": { "model": "kimi-k2.6", "reasoning_effort": "medium" },
+        "low": { "model": "kimi-k2.7", "reasoning_effort": "low" },
+        "medium": { "model": "kimi-k2.7", "reasoning_effort": "medium" },
         "high": { "model": "kimi-k2.7", "reasoning_effort": "high" }
       },
       "adapter_kind": "openai-compatible-chat-completions",
@@ -66,7 +66,7 @@
       "default_model": "kimi-k2.7",
       "available_models": ["kimi-k2.6", "kimi-k2.7"],
       "cognition_defaults": {
-        "low": { "model": "kimi-k2.6", "reasoning_effort": "low" },
+        "low": { "model": "kimi-k2.7", "reasoning_effort": "low" },
         "medium": { "model": "kimi-k2.7", "reasoning_effort": "medium" },
         "high": { "model": "kimi-k2.7", "reasoning_effort": "high" }
       },
@@ -151,12 +151,12 @@
     "openrouter-api": {
       "meaning": "OpenRouter API via OpenAI-compatible chat completions; preserves configured router model identity.",
       "base_url": "https://openrouter.ai/api/",
-      "default_model": "openai/gpt-5.5",
-      "available_models": ["openai/gpt-5.5"],
+      "default_model": "z-ai/glm-5.2",
+      "available_models": ["z-ai/glm-5.2", "z-ai/glm-5-turbo"],
       "cognition_defaults": {
-        "low": { "model": "openai/gpt-5.5", "reasoning_effort": "low" },
-        "medium": { "model": "openai/gpt-5.5", "reasoning_effort": "medium" },
-        "high": { "model": "openai/gpt-5.5", "reasoning_effort": "high" }
+        "low": { "model": "z-ai/glm-5-turbo", "reasoning_effort": "low" },
+        "medium": { "model": "z-ai/glm-5.2", "reasoning_effort": "medium" },
+        "high": { "model": "z-ai/glm-5.2", "reasoning_effort": "high" }
       },
       "adapter_kind": "openai-compatible-chat-completions",
       "support_state": "verified_supported",
@@ -189,9 +189,9 @@
         "gpt-5.3-codex-spark"
       ],
       "cognition_defaults": {
-        "low": { "model": "gpt-5.6-sol", "reasoning_effort": "low" },
-        "medium": { "model": "gpt-5.5", "reasoning_effort": "medium" },
-        "high": { "model": "gpt-5.5", "reasoning_effort": "high" }
+        "low": { "model": "gpt-5.6-luna", "reasoning_effort": "low" },
+        "medium": { "model": "gpt-5.6-terra", "reasoning_effort": "medium" },
+        "high": { "model": "gpt-5.6-sol", "reasoning_effort": "high" }
       },
       "adapter_kind": "codex-mcp-server",
       "support_state": "verified_supported",

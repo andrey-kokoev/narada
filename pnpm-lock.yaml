@@ -186,12 +186,12 @@ importers:
       '@narada2/nars-provider-runtime':
         specifier: workspace:*
         version: link:../nars-provider-runtime
-      '@narada2/nars-session-core':
-        specifier: workspace:*
-        version: link:../nars-session-core
       '@narada2/nars-runtime-contract':
         specifier: workspace:*
         version: link:../nars-runtime-contract
+      '@narada2/nars-session-core':
+        specifier: workspace:*
+        version: link:../nars-session-core
       '@narada2/process-launch-posture':
         specifier: workspace:*
         version: link:../process-launch-posture
@@ -507,6 +507,12 @@ importers:
       '@narada2/macos-site':
         specifier: workspace:*
         version: link:../../sites/macos
+      '@narada2/nars-client-projection-contract':
+        specifier: workspace:*
+        version: link:../../nars-client-projection-contract
+      '@narada2/nars-runtime-contract':
+        specifier: workspace:*
+        version: link:../../nars-runtime-contract
       '@narada2/nars-session-core':
         specifier: workspace:*
         version: link:../../nars-session-core
@@ -759,8 +765,6 @@ importers:
         specifier: workspace:*
         version: link:../nars-session-core
 
-  packages/nars-runtime-contract: {}
-
   packages/nars-provider-runtime:
     dependencies:
       '@narada2/carrier-provider-contract':
@@ -775,6 +779,8 @@ importers:
       '@narada2/process-launch-posture':
         specifier: workspace:*
         version: link:../process-launch-posture
+
+  packages/nars-runtime-contract: {}
 
   packages/nars-session-core:
     dependencies:

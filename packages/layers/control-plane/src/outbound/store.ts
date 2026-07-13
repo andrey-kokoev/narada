@@ -534,9 +534,9 @@ export class SqliteOutboundStore implements OutboundStore {
          where outbound_id = ?
          order by transition_at desc
          limit 1`;
-    const row = this.db.prepare(sql).get(
-      to_status ? [outbound_id, to_status] : outbound_id
-    ) as Record<string, unknown> | undefined;
+    const row = (to_status
+      ? this.db.prepare(sql).get(outbound_id, to_status)
+      : this.db.prepare(sql).get(outbound_id)) as Record<string, unknown> | undefined;
     if (!row) return undefined;
     return {
       id: Number(row.id),

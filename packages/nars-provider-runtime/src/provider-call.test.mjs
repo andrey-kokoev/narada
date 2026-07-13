@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { createProviderCall } from './provider-call.mjs';
 import { REQUEST_ADAPTERS } from './provider-adapters.mjs';
+import { resolveProviderAdapter } from './provider-resolution.mjs';
 
 async function withServer(handler, run) {
   const server = createServer(handler);
@@ -43,6 +44,77 @@ test('provider call shapes and sends an OpenAI-compatible request', async () => 
     assert.equal(events.at(-1).turn_id, 'turn-success');
     assert.equal(events.at(-1).input_event_id, 'input-success');
   });
+});
+
+test('declared Kimi, DeepSeek, and OpenRouter providers resolve to the shared adapter with provider-specific endpoints', () => {
+  const cases = [
+    {
+      provider: 'kimi-api',
+      baseUrl: 'https://api.moonshot.ai',
+      expectedUrl: 'https://api.moonshot.ai/v1/chat/completions',
+      model: 'kimi-k2.7',
+    },
+    {
+      provider: 'kimi-code-api',
+      baseUrl: 'https://api.kimi.com/coding/',
+      expectedUrl: 'https://api.kimi.com/coding/v1/chat/completions',
+      model: 'kimi-k2.7',
+    },
+    {
+      provider: 'deepseek-api',
+      baseUrl: 'https://api.deepseek.com',
+      expectedUrl: 'https://api.deepseek.com/v1/chat/completions',
+      model: 'deepseek-chat',
+    },
+    {
+      provider: 'openrouter-api',
+      baseUrl: 'https://openrouter.ai/api/',
+      expectedUrl: 'https://openrouter.ai/api/v1/chat/completions',
+      model: 'z-ai/glm-5.2',
+    },
+  ];
+
+  for (const entry of cases) {
+    const resolved = resolveProviderAdapter(entry.provider);
+    const request = resolved.adapter.buildRequest(
+      [{ role: 'user', content: 'hello' }],
+      [],
+      {
+        provider: entry.provider,
+        apiKey: 'test-key',
+        baseUrl: entry.baseUrl,
+        model: entry.model,
+        openrouterSiteUrl: 'https://narada.test',
+        openrouterTitle: 'Narada',
+      },
+    );
+    assert.equal(resolved.adapter_id, 'openai-compatible-chat-completions');
+    assert.equal(resolved.support_state, 'verified_supported');
+    assert.equal(request.url.href, entry.expectedUrl);
+    assert.equal(request.headers.Authorization, 'Bearer test-key');
+    assert.equal(request.body.model, entry.model);
+  }
+});
+
+test('provider-specific reasoning message fields use the explicit build provider', () => {
+  const request = REQUEST_ADAPTERS['openai-compatible-chat-completions'].buildRequest(
+    [
+      { role: 'user', content: 'hello' },
+      {
+        role: 'assistant',
+        content: null,
+        tool_calls: [{ id: 'call-1', type: 'function', function: { name: 'read', arguments: '{}' } }],
+      },
+    ],
+    [],
+    {
+      provider: 'deepseek-api',
+      apiKey: 'test-key',
+      baseUrl: 'https://api.deepseek.com',
+      model: 'deepseek-chat',
+    },
+  );
+  assert.equal(request.body.messages[1].reasoning_content, '');
 });
 
 test('Codex continuation state is scoped to the provider call instance', () => {

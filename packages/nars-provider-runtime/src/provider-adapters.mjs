@@ -240,7 +240,7 @@ function buildOpenAiChatRequest(messages, tools, options = {}) {
   const requestTools = normalizeOpenAiCompatibleTools(tools, { provider });
   const body = {
     model,
-    messages: cleanOpenAiMessages(messages),
+    messages: cleanOpenAiMessages(messages, { provider }),
     tools: requestTools.length > 0 ? requestTools : undefined,
     tool_choice: requestTools.length > 0 ? 'auto' : undefined,
     temperature: isKimiProvider ? 1 : 0.2,
@@ -328,7 +328,7 @@ function normalizeKimiJsonSchema(schema) {
   return normalized;
 }
 
-function cleanOpenAiMessages(messages) {
+function cleanOpenAiMessages(messages, { provider = providerAdapterContext.provider } = {}) {
   return messages.map((m) => {
     const clean = { role: m.role };
     if (m.role === 'tool') {
@@ -338,7 +338,7 @@ function cleanOpenAiMessages(messages) {
       clean.content = m.content ?? null;
       if (m.tool_calls && m.tool_calls.length > 0) {
         clean.tool_calls = m.tool_calls;
-        if (providerAdapterContext.provider === 'kimi-api' || providerAdapterContext.provider === 'kimi-code-api' || providerAdapterContext.provider === 'deepseek-api') {
+        if (provider === 'kimi-api' || provider === 'kimi-code-api' || provider === 'deepseek-api') {
           clean.reasoning_content = m.reasoning_content ?? '';
         }
       }

@@ -10,6 +10,9 @@ import {
   loadNaradaToolCallEnvelope,
   loadProviderRegistry,
   providerEnvironment,
+  providerRuntimeEnvironment,
+  redactProviderRuntimeBinding,
+  resolveProviderRuntimeBinding,
   resolveProviderMetadata,
 } from './carrier-provider-contract.mjs';
 
@@ -35,6 +38,23 @@ test('provider registry exposes carrier-level defaults and support states', () =
   assert.equal(registry.providers['codex-subscription'].default_model, 'gpt-5.6-sol');
   assert.equal(registry.providers['codex-subscription'].default_thinking, 'low');
   assert.deepEqual(registry.providers['codex-subscription'].model_catalog, { kind: 'codex_local_cache', max_age_ms: 86400000 });
+  assert.deepEqual(registry.providers['kimi-api'].cognition_defaults.low, { model: 'kimi-k2.7', reasoning_effort: 'low' });
+  assert.deepEqual(registry.providers['kimi-code-api'].cognition_defaults.low, { model: 'kimi-k2.7', reasoning_effort: 'low' });
+  assert.deepEqual(registry.providers['openai-api'].cognition_defaults, {
+    low: { model: 'gpt-5.6-luna', reasoning_effort: 'low' },
+    medium: { model: 'gpt-5.6-terra', reasoning_effort: 'medium' },
+    high: { model: 'gpt-5.6-sol', reasoning_effort: 'high' },
+  });
+  assert.deepEqual(registry.providers['codex-subscription'].cognition_defaults, {
+    low: { model: 'gpt-5.6-luna', reasoning_effort: 'low' },
+    medium: { model: 'gpt-5.6-terra', reasoning_effort: 'medium' },
+    high: { model: 'gpt-5.6-sol', reasoning_effort: 'high' },
+  });
+  assert.deepEqual(registry.providers['openrouter-api'].cognition_defaults, {
+    low: { model: 'z-ai/glm-5-turbo', reasoning_effort: 'low' },
+    medium: { model: 'z-ai/glm-5.2', reasoning_effort: 'medium' },
+    high: { model: 'z-ai/glm-5.2', reasoning_effort: 'high' },
+  });
   for (const [provider, metadata] of Object.entries(registry.providers)) {
     assert.equal(Array.isArray(metadata.available_models), true, `${provider} must advertise available_models`);
     assert.equal(metadata.available_models.includes(metadata.default_model), true, `${provider} available_models must include default_model`);
@@ -48,9 +68,55 @@ test('provider registry exposes carrier-level defaults and support states', () =
   }
 });
 
+test('provider runtime binding is isolated from unrelated provider credentials', () => {
+  const metadata = loadProviderMetadata();
+  const env = {
+    NARADA_INTELLIGENCE_PROVIDER: 'openai-api',
+    NARADA_AI_API_KEY: 'canonical-openai-decoy',
+    NARADA_AI_BASE_URL: 'https://canonical-openai-decoy.invalid',
+    OPENAI_API_KEY: 'openai-decoy',
+    DEEPSEEK_API_KEY: 'deepseek-decoy',
+    KIMI_API_KEY: 'kimi-decoy',
+    KIMI_CODE_API_KEY: 'kimi-code-selected',
+    ANTHROPIC_API_KEY: 'anthropic-decoy',
+  };
+  const binding = resolveProviderRuntimeBinding('kimi-code-api', { metadata, env });
+  assert.equal(binding.provider_id, 'kimi-code-api');
+  assert.equal(binding.base_url, 'https://api.kimi.com/coding/');
+  assert.equal(binding.api_key, 'kimi-code-selected');
+  assert.equal(binding.credential_source, 'provider_environment');
+  assert.equal(binding.credential_fingerprint.startsWith('sha256:'), true);
+  assert.equal(redactProviderRuntimeBinding(binding).api_key, undefined);
+  const projected = providerRuntimeEnvironment(binding);
+  assert.equal(projected.NARADA_AI_API_KEY, 'kimi-code-selected');
+  assert.equal(projected.KIMI_CODE_API_KEY, 'kimi-code-selected');
+  assert.equal(Object.hasOwn(projected, 'OPENAI_API_KEY'), false);
+  assert.equal(Object.hasOwn(projected, 'KIMI_API_KEY'), false);
+  assert.notEqual(binding.api_key, env.NARADA_AI_API_KEY);
+  assert.notEqual(binding.base_url, env.NARADA_AI_BASE_URL);
+
+  const changedDecoys = resolveProviderRuntimeBinding('kimi-code-api', {
+    metadata,
+    env: { ...env, OPENAI_API_KEY: 'changed-openai', KIMI_API_KEY: 'changed-kimi' },
+  });
+  assert.equal(changedDecoys.credential_fingerprint, binding.credential_fingerprint);
+  assert.equal(changedDecoys.api_key, binding.api_key);
+});
+
+test('provider runtime binding fails closed for a missing selected credential', () => {
+  const metadata = loadProviderMetadata();
+  assert.throws(
+    () => resolveProviderRuntimeBinding('kimi-code-api', {
+      metadata,
+      env: { OPENAI_API_KEY: 'unrelated-openai', KIMI_API_KEY: 'unrelated-kimi' },
+    }),
+    /provider_runtime_credential_missing:kimi-code-api/,
+  );
+});
+
 test('provider environment uses provider-specific env precedence', () => {
   const metadata = loadProviderMetadata();
-  assert.equal(resolveProviderMetadata('missing-provider', metadata), metadata['openai-api']);
+  assert.throws(() => resolveProviderMetadata('missing-provider', metadata), /provider_runtime_provider_unknown/);
 
   const kimi = providerEnvironment('kimi-api', metadata, {
     KIMI_API_BASE_URL: 'https://kimi.example',

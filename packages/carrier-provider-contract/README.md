@@ -17,6 +17,21 @@ The authoritative registry is `contracts/provider-registry.json`. Each provider 
 `available_models` is declared fallback policy, not proof of current account availability. Providers with a live account-local catalog, such as `codex-subscription`, may replace it at runtime and must expose catalog provenance.
 The optional `model_catalog` contract declares the observation mechanism and freshness policy. `codex_local_cache.max_age_ms` is the canonical freshness threshold for Codex subscription cache evidence.
 
+## Runtime Binding Boundary
+
+Before a carrier runtime or delegated NARS worker starts, it must resolve exactly one `narada.carrier.provider_runtime_binding.v1` from the registry entry selected by `NARADA_INTELLIGENCE_PROVIDER`.
+
+The binding is the runtime authority for the provider tuple:
+
+- provider identity
+- endpoint
+- model and reasoning effort
+- selected credential requirement and credential fingerprint
+
+`NARADA_AI_API_KEY`, `NARADA_AI_BASE_URL`, `NARADA_AI_MODEL`, and `NARADA_AI_THINKING` are the canonical projection of that tuple. They are accepted as input only when their accompanying `NARADA_INTELLIGENCE_PROVIDER` matches the selected provider. Provider-specific variables are input adapters for that same provider only; they must never be selected by cross-provider fallback order.
+
+Runtimes may retain other credentials in their parent process when independent MCP surfaces require them, but a delegated worker child receives only the selected binding's canonical variables and selected provider aliases. Bindings exposed in logs, run records, or tool results must be redacted and may contain only a credential fingerprint, never the credential itself.
+
 ## Verified Runtime Providers
 
 | Provider | Adapter | Required API key env | Model env | Base URL env |
