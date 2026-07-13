@@ -5,6 +5,8 @@ import {
   retainEvent,
 } from '../src/app/lib/eventRetention';
 import {
+  NARS_TRANSPORT_TRANSITIONS,
+  canTransitionNarsTransport,
   createNarsTransportLifecycle,
   transitionNarsTransport,
 } from '../src/protocol/sessionTransportAdapters';
@@ -43,6 +45,22 @@ describe('agent-web-ui runtime boundaries', () => {
     transitionNarsTransport(lifecycle, { type: 'close_requested' });
     transitionNarsTransport(lifecycle, { type: 'closed' });
     expect(lifecycle.phase).toBe('closed');
+  });
+
+  it('exposes the transport contract and ignores stale socket events', () => {
+    expect(canTransitionNarsTransport('idle', 'open_requested')).toBe(true);
+    expect(canTransitionNarsTransport('live', 'open_requested')).toBe(false);
+    expect(canTransitionNarsTransport('closed', 'connected')).toBe(false);
+    expect(NARS_TRANSPORT_TRANSITIONS.closed).toEqual([]);
+
+    const lifecycle = createNarsTransportLifecycle(true);
+    transitionNarsTransport(lifecycle, { type: 'connected' });
+    expect(lifecycle.phase).toBe('idle');
+    transitionNarsTransport(lifecycle, { type: 'open_requested' });
+    transitionNarsTransport(lifecycle, { type: 'replay_started' });
+    expect(lifecycle.phase).toBe('replaying');
+    transitionNarsTransport(lifecycle, { type: 'open_requested' });
+    expect(lifecycle.phase).toBe('replaying');
   });
 
   it('builds the Intelligence box action as a direct local runtime control', () => {
