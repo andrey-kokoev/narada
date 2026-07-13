@@ -13,6 +13,7 @@
       "health_projection_request_lifecycle",
       "runtime_event_subscription",
       "runtime_lifecycle_hooks",
+      "runtime_intelligence_reconfiguration",
       "artifact_http_request_handling",
       "attachment_contract",
       "carrier_substrate_handoff",
@@ -33,6 +34,9 @@
     "./runtime-host-state": "./src/runtime-host-state.mjs",
     "./runtime-request-state": "./src/runtime-request-state.mjs",
     "./health-projection-request-state": "./src/health-projection-request-state.mjs",
+    "./runtime-control-contract": "./src/runtime-control-contract.mjs",
+    "./provider-runtime-reconfiguration-state": "./src/provider-runtime-reconfiguration-state.mjs",
+    "./provider-runtime-controller": "./src/provider-runtime-controller.mjs",
     "./runtime-server-events": "./src/runtime-server-events.mjs",
     "./test-fixtures": "./src/test-fixtures.mjs",
     "./agent-cli-windows-wrapper-template": "./templates/Start-AgentCliSession.ps1",
@@ -40,7 +44,7 @@
   },
   "scripts": {
     "test": "node --test test/*.test.mjs src/*.test.mjs",
-    "typecheck": "tsc --noEmit --allowJs --checkJs false bin/narada-agent-runtime-server.mjs src/server-wrapper.mjs src/runtime-context.mjs src/control-input-bridge.mjs src/runtime-host-state.mjs src/runtime-request-state.mjs src/health-projection-request-state.mjs src/runtime-session-binding.mjs src/session-core-runtime-service.mjs src/runtime-server-events.mjs src/test-fixtures.mjs"
+    "typecheck": "tsc --noEmit --allowJs --checkJs false bin/narada-agent-runtime-server.mjs src/server-wrapper.mjs src/runtime-context.mjs src/control-input-bridge.mjs src/runtime-host-state.mjs src/runtime-request-state.mjs src/health-projection-request-state.mjs src/runtime-session-binding.mjs src/session-core-runtime-service.mjs src/runtime-server-events.mjs src/runtime-control-contract.mjs src/provider-runtime-reconfiguration-state.mjs src/provider-runtime-controller.mjs src/test-fixtures.mjs"
   },
   "dependencies": {
     "@narada2/agent-identity": "workspace:*",

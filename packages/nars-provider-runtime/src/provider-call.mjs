@@ -41,6 +41,7 @@ export function createProviderCall({ runtimeContext = {}, env = process.env, inv
     thinking: binding.reasoning_effort,
     stream: explicitSettings.stream !== false,
     providerRuntimeBinding: redactProviderRuntimeBinding(binding),
+    codexSessionState: { threadId: null },
   };
   configureProviderAdapterContext(settings);
   return (messages, tools, overrides = {}) => callProvider(messages, tools, {
@@ -112,6 +113,7 @@ async function callProvider(messages, tools, settings) {
 
     if (metadata.adapter_kind === 'codex-mcp-server') {
       const response = await sendCodex(request, settings);
+      if (response?.threadId && settings.codexSessionState) settings.codexSessionState.threadId = response.threadId;
       const result = parseCodexMcpResponse(response);
       await transition('completed', { transport, thread_id: response?.threadId ?? null });
       return result;

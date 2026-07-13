@@ -29,8 +29,6 @@ const providerAdapterContext = {
   buildChildProcessEnv: defaultChildProcessEnv,
   writeDurableTextFile: (path, text, encoding = 'utf8') => writeFileSync(path, text, encoding),
 };
-let codexSubscriptionThreadId = null;
-
 function configureProviderAdapterContext(nextContext = {}) {
   Object.assign(providerAdapterContext, Object.fromEntries(Object.entries(nextContext).filter(([, value]) => value !== undefined)));
 }
@@ -61,7 +59,7 @@ function reasoningEffort(thinking) {
 }
 
 function buildCodexMcpRequest(messages, tools = [], options = {}) {
-  const { model = providerAdapterContext.model, thinking = providerAdapterContext.thinking, siteRoot = providerAdapterContext.siteRoot, nativeMcpTools = providerAdapterContext.nativeMcpTools, mcpServers = {} } = options;
+  const { model = providerAdapterContext.model, thinking = providerAdapterContext.thinking, siteRoot = providerAdapterContext.siteRoot, nativeMcpTools = providerAdapterContext.nativeMcpTools, mcpServers = {}, codexSessionState = null } = options;
   const latestUserIndex = findLastMessageIndex(messages, 'user');
   const latestToolIndex = findLastMessageIndex(messages, 'tool');
   const latestUser = latestUserIndex >= 0 ? messages[latestUserIndex] : null;
@@ -82,11 +80,11 @@ function buildCodexMcpRequest(messages, tools = [], options = {}) {
   if (!prompt.trim()) throw new Error('codex_subscription_prompt_missing');
   const developerInstructions = [system, codexToolProtocolInstructions(tools, { nativeMcpTools })].filter(Boolean).join('\n\n');
 
-  if (codexSubscriptionThreadId) {
+  if (codexSessionState?.threadId) {
     return {
       tool: 'codex-reply',
       arguments: {
-        threadId: codexSubscriptionThreadId,
+        threadId: codexSessionState.threadId,
         prompt,
         model,
         native_mcp_tools: nativeMcpTools,
@@ -154,7 +152,6 @@ function codexToolProtocolInstructions(tools = [], { nativeMcpTools = false } = 
 }
 
 function parseCodexMcpResponse(response) {
-  if (response?.threadId) codexSubscriptionThreadId = response.threadId;
   const toolCall = parseNaradaToolCall(response?.content ?? '');
   if (toolCall) {
     return {

@@ -196,6 +196,39 @@ runtime resolves the projection; a health-response timeout is distinct from a
 transport or runtime failure. This lifecycle is ephemeral request evidence and
 does not replace the runtime request FSM or the session health projection.
 
+## Provider Runtime Reconfiguration
+
+Owner: `@narada2/agent-runtime-server`, using `@narada2/nars-provider-runtime`
+for provider binding and call construction.
+
+Schema: `narada.nars.provider_runtime_reconfiguration_state.v1`.
+
+The runtime-server control `runtime.intelligence.reconfigure` changes the
+provider binding used by future turns. It follows:
+
+`requested -> validating -> admitted -> switching -> active`
+
+The request may be refused from `requested`, `validating`, or `admitted` when
+the target is invalid, the provider is unavailable, credentials are absent, or
+the session is not at a clean turn boundary. A failure during the actual
+switch is terminal for that request:
+
+`requested | validating | admitted -> refused`
+
+`switching -> failed`
+
+The request accepts a provider and model, with optional thinking level. It
+does not accept raw credentials. Provider binding resolution selects the
+provider-specific credential and base URL from the already projected runtime
+environment. Validation is local: it checks the provider contract, adapter,
+model, and credential shape without making a provider network call.
+
+The switch is atomic at the turn boundary. The active turn keeps its existing
+provider call; only a later turn observes the new binding. Health and
+transition events expose provider, model, thinking, and redacted binding
+metadata, never API keys. Codex continuation state belongs to one provider
+call instance and is not shared through process-global mutable state.
+
 ## Site-Registry and Receiving-Site Bootstrap
 
 Owner: `@narada2/cli`, `site-registry-management.ts` and `sites.ts`.

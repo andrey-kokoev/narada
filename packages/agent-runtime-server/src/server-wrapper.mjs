@@ -1,10 +1,10 @@
 import { createServer } from 'node:http';
 import { PassThrough } from 'node:stream';
 import { redactProviderRuntimeBinding, resolveProviderRuntimeBinding } from '@narada2/carrier-provider-contract';
-import { createProviderCall } from '@narada2/nars-provider-runtime/provider-call';
 import { createProjectedTerminalBridge } from '@narada2/carrier-terminal-projection/projected-terminal';
 import { createControlInputBridge } from './control-input-bridge.mjs';
 import { createSessionCoreRuntimeService } from './session-core-runtime-service.mjs';
+import { createNarsProviderRuntimeController } from './provider-runtime-controller.mjs';
 import { createNarsRuntimeContext } from './runtime-context.mjs';
 import {
   formatPreflightWorkflowEvent,
@@ -55,9 +55,11 @@ function agentIdentitySiteId(agentIdentityRef) {
 
 async function loadRuntimeDependencies(runtimeContext = {}) {
   const deniedTools = new Set(String(process.env.NARADA_DENIED_CAPABILITY_TOOLS ?? '').split(',').map((value) => value.trim()).filter(Boolean));
+  const providerRuntime = createNarsProviderRuntimeController({ runtimeContext });
   return createSessionCoreRuntimeService({
     runtimeContext,
-    callChatApiFn: createProviderCall({ runtimeContext }),
+    providerRuntime,
+    callChatApiFn: providerRuntime.callProvider,
     admitCapability: ({ toolName }) => deniedTools.has(toolName)
       ? { admitted: false, reason: 'denied_by_runtime_policy' }
       : { admitted: true, reason: 'admitted_by_runtime_policy' },

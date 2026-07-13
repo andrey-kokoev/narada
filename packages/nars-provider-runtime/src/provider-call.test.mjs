@@ -45,6 +45,24 @@ test('provider call shapes and sends an OpenAI-compatible request', async () => 
   });
 });
 
+test('Codex continuation state is scoped to the provider call instance', () => {
+  const messages = [{ role: 'user', content: 'continue' }];
+  const first = REQUEST_ADAPTERS['codex-mcp-server'].buildRequest(messages, [], {
+    model: 'gpt-5.5',
+    codexSessionState: { threadId: 'thread-one' },
+  });
+  const second = REQUEST_ADAPTERS['codex-mcp-server'].buildRequest(messages, [], {
+    model: 'gpt-5.5',
+    codexSessionState: { threadId: 'thread-two' },
+  });
+  const fresh = REQUEST_ADAPTERS['codex-mcp-server'].buildRequest(messages, [], { model: 'gpt-5.5' });
+  assert.equal(first.tool, 'codex-reply');
+  assert.equal(first.arguments.threadId, 'thread-one');
+  assert.equal(second.tool, 'codex-reply');
+  assert.equal(second.arguments.threadId, 'thread-two');
+  assert.equal(fresh.tool, 'codex');
+});
+
 test('provider call binds endpoint and credential to the selected provider despite decoys', async () => {
   await withServer((request, response) => {
     let body = '';

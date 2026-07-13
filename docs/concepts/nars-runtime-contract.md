@@ -147,6 +147,51 @@ Human terminal input is a projection of this contract. Ordinary lines become `se
 
 MCP surface affordances, provider-specific panels, authority transitions, observer controls, and session synchronization are deferred adapter capabilities. They must not be advertised as local session-core controls until an owning runtime handler and boundary tests exist.
 
+### Runtime Intelligence Reconfiguration
+
+The runtime server owns the control method `runtime.intelligence.reconfigure`.
+It is intentionally separate from session-core controls because it changes
+provider execution policy, not session authority or turn history.
+
+```json
+{
+  "method": "runtime.intelligence.reconfigure",
+  "params": {
+    "request_id": "reconfigure-7",
+    "provider": "deepseek-api",
+    "model": "deepseek-chat",
+    "thinking": "medium"
+  }
+}
+```
+
+`provider` and `model` are explicit target values; `thinking` is optional.
+The request never carries an API key. The controller resolves credentials and
+base URL from the provider-specific environment already admitted by
+`agent-start`.
+
+The reconfiguration request has its own FSM:
+
+```text
+requested -> validating -> admitted -> switching -> active
+requested | validating | admitted -> refused
+switching -> failed
+```
+
+Validation is local and bounded: provider contract, adapter, model, and
+credential shape are checked without a provider network call. A request is
+refused while a turn is active or operator input is pending because changing
+the binding mid-turn would make one turn observe two provider contracts. The
+caller must wait for a clean turn boundary and retry. The switch replaces the
+provider call atomically; the current turn keeps its existing call and future
+turns use the new one.
+
+The runtime health projection includes the active provider, model, thinking,
+redacted binding metadata, and the latest reconfiguration outcome. Transition
+events include the request id and terminal state, but never raw credentials.
+Provider continuation state, including Codex thread continuation, is scoped
+to the provider-call instance rather than process-global state.
+
 ### Durable Turn Lifecycle
 
 `@narada2/nars-session-core` is authoritative for the durable turn FSM (`narada.nars.turn_state.v1`). Each accepted input is one `turn_id` and is persisted through this path:
@@ -324,7 +369,7 @@ Existing files keep their authority:
 | File | Owner | Meaning |
 | --- | --- | --- |
 | `control.jsonl` | launcher/NARS control sideband | Admitted operator/system input records for one session. |
-| `session.jsonl` | NARS/carrier runtime | Durable session transcript/protocol evidence. |
+| `session.jsonl` | `agent-start` launch materialization | Empty compatibility/attachment path reserved for the bound session. The current runtime does not append the durable transcript here. |
 | `events.jsonl` | NARS/carrier runtime | Durable ordered runtime event evidence. |
 | `heartbeat.json` | live NARS process | Durable liveness evidence for crash/recovery observation. |
 | `session-index-record.json` | live NARS process | Discovery projection for one session. Rebuildable from session events and heartbeat. |

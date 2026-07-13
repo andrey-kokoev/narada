@@ -80,6 +80,7 @@ test('package owns the Narada agent runtime server bins and exports', () => {
   assert.equal(packageJson.narada.owns.includes('runtime_host_lifecycle'), true);
   assert.equal(packageJson.narada.owns.includes('server_request_lifecycle'), true);
   assert.equal(packageJson.narada.owns.includes('health_projection_request_lifecycle'), true);
+  assert.equal(packageJson.narada.owns.includes('runtime_intelligence_reconfiguration'), true);
   assert.equal(packageJson.narada.carrier_substrate, '@narada2/carrier-runtime in-process');
   assert.equal(packageJson.narada.runtime_dependency_owner.includes('nars-session-core owns session control'), true);
   assert.equal(packageJson.bin['narada-agent-runtime-server'], './bin/narada-agent-runtime-server.mjs');
@@ -88,6 +89,9 @@ test('package owns the Narada agent runtime server bins and exports', () => {
   assert.equal(packageJson.exports['./runtime-server-events'], './src/runtime-server-events.mjs');
   assert.equal(packageJson.exports['./runtime-request-state'], './src/runtime-request-state.mjs');
   assert.equal(packageJson.exports['./health-projection-request-state'], './src/health-projection-request-state.mjs');
+  assert.equal(packageJson.exports['./runtime-control-contract'], './src/runtime-control-contract.mjs');
+  assert.equal(packageJson.exports['./provider-runtime-reconfiguration-state'], './src/provider-runtime-reconfiguration-state.mjs');
+  assert.equal(packageJson.exports['./provider-runtime-controller'], './src/provider-runtime-controller.mjs');
   assert.equal(packageJson.dependencies['@narada2/agent-cli'], undefined);
   assert.equal(packageJson.dependencies['@narada2/carrier-terminal-projection'], 'workspace:*');
 });
@@ -713,7 +717,7 @@ test('default server path does not construct the legacy server runtime or legacy
   assert.equal(source.includes('createLegacyRuntimeService'), false);
   assert.equal(source.includes('createCarrierRuntimeContext'), false);
   assert.equal(source.includes('createLegacyProviderCall'), false);
-  assert.equal(source.includes('createProviderCall'), true);
+  assert.equal(source.includes('createNarsProviderRuntimeController'), true);
 });
 
 test('WebSocket /events replays and reads durable events.jsonl beyond memory buffer', async () => {
@@ -1632,6 +1636,68 @@ test('narada-owned entrypoint runs the session-core control runtime in process',
     assert.equal(events.some((event) => event.event === 'session_closed' && event.request_id === 'close-1'), true);
     assert.equal(stderr.includes('Fatal error'), false);
   } finally {
+    rmSync(siteRoot, { recursive: true, force: true });
+  }
+});
+
+test('spawned runtime applies provider reconfiguration before the next turn', { timeout: 10000 }, async () => {
+  const siteRoot = mkdtempSync(join(tmpdir(), 'narada-runtime-provider-reconfigure-e2e-'));
+  const observedModels = [];
+  const provider = createServer((request, response) => {
+    let body = '';
+    request.setEncoding('utf8');
+    request.on('data', (chunk) => { body += chunk; });
+    request.on('end', () => {
+      const payload = JSON.parse(body);
+      observedModels.push(payload.model);
+      response.setHeader('content-type', 'application/json');
+      response.end(JSON.stringify({ choices: [{ message: { role: 'assistant', content: 'provider switched' } }] }));
+    });
+  });
+  await new Promise((resolve) => provider.listen(0, '127.0.0.1', resolve));
+  const address = provider.address();
+  let child = null;
+  try {
+    const binPath = fileURLToPath(new URL('../bin/narada-agent-runtime-server.mjs', import.meta.url));
+    child = spawnTestChild(process.execPath, [
+      binPath,
+      '--raw-jsonl',
+      '--identity', 'narada.test',
+      '--session', 'provider-reconfigure-e2e',
+    ], {
+      env: {
+        ...process.env,
+        NARADA_SITE_ROOT: siteRoot,
+        NARADA_INTELLIGENCE_PROVIDER: 'openai-api',
+        OPENAI_BASE_URL: `http://127.0.0.1:${address.port}/`,
+        OPENAI_API_KEY: 'provider-reconfigure-key',
+      },
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.setEncoding('utf8');
+    child.stderr.setEncoding('utf8');
+    child.stdout.on('data', (chunk) => { stdout += chunk; });
+    child.stderr.on('data', (chunk) => { stderr += chunk; });
+    child.stdin.write(`${JSON.stringify({ id: 'reconfigure-1', method: 'runtime.intelligence.reconfigure', params: { model: 'new-model' } })}\n`);
+    child.stdin.write(`${JSON.stringify({ id: 'turn-1', method: 'session.submit', params: { content: 'use the new model' } })}\n`);
+    await waitForCapturedOutput(child, () => stdout, (text) => text.includes('runtime_intelligence_reconfiguration') && text.includes('carrier_turn_completed'));
+    child.stdin.write(`${JSON.stringify({ id: 'health-1', method: 'session.health', params: {} })}\n`);
+    await waitForCapturedOutput(child, () => stdout, (text) => text.includes('"request_id":"health-1"'));
+    child.stdin.end(`${JSON.stringify({ id: 'close-1', method: 'session.close', params: {} })}\n`);
+    const exitCode = await new Promise((resolveExit) => child.on('exit', resolveExit));
+    assert.equal(exitCode, 0, stderr);
+    const events = stdout.trim().split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
+    const reconfiguration = events.find((event) => event.event === 'runtime_intelligence_reconfiguration');
+    const health = events.find((event) => event.event === 'session_health' && event.request_id === 'health-1');
+    assert.equal(reconfiguration?.terminal_state, 'active');
+    assert.equal(health?.intelligence?.model, 'new-model');
+    assert.deepEqual(observedModels, ['new-model']);
+    assert.equal(stdout.includes('provider-reconfigure-key'), false);
+  } finally {
+    if (child && child.exitCode === null) child.kill();
+    await new Promise((resolve) => provider.close(resolve));
     rmSync(siteRoot, { recursive: true, force: true });
   }
 });
