@@ -2,7 +2,6 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { appendFile, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { spawnHiddenPostureProcess } from '@narada2/process-launch-posture';
-import { executeOperatorProjectionOpenRequest } from '@narada2/process-launch-posture';
 import { runGovernedCommandSync } from '@narada2/process-launch-posture';
 import { dirname, join, resolve } from 'node:path';
 import { createRequire } from 'node:module';
@@ -22,18 +21,6 @@ import {
   resolveCarrierRuntimeSelection,
 } from '@narada2/carrier-runtime-contract/carrier-runtime-selection';
 import { discoverNarsSessions } from '@narada2/nars-session-core/session-index';
-import {
-  DEFAULT_OPERATOR_ROUTER_PORT,
-  ensureOperatorRouter,
-  readOperatorRouterRoutes,
-  type EnsureOperatorRouterOptions,
-  type EnsureOperatorRouterResult,
-} from '@narada2/operator-router';
-import {
-  OPERATOR_WORKSPACE_ROUTE_DIRECTORY_PATH,
-  OPERATOR_WORKSPACE_ROUTE_DIRECTORY_SCHEMA,
-  type OperatorWorkspaceRouteDirectory,
-} from '@narada2/operator-console-contract';
 import { explainMcpCommand as explainMcpAuthorityCommand } from './launcher-mcp-authority.js';
 import {
   isWorkspaceLaunchUiSessionRecord,
@@ -45,7 +32,6 @@ import {
 } from './workspace-launch-session-store.js';
 import {
   buildWorkspaceLaunchSelectionUiModel as buildWorkspaceLaunchSelectionUiModelDomain,
-  canonicalizeWorkspaceLaunchRecords as canonicalizeWorkspaceLaunchRecordsDomain,
   initialOperatorSurfaceValues as initialOperatorSurfaceValuesDomain,
   initialRoleValuesForInteractiveSelection as initialRoleValuesForInteractiveSelectionDomain,
   intelligenceProviderChoices as intelligenceProviderChoicesDomain,
@@ -58,7 +44,6 @@ import {
   registryDefaultRuntimeLabel as registryDefaultRuntimeLabelDomain,
   resolveWorkspaceLaunchBrowserSelection as resolveWorkspaceLaunchBrowserSelectionDomain,
   roleChoicesForSelectedSites as roleChoicesForSelectedSitesDomain,
-  selectLaunchRecords as selectLaunchRecordsDomain,
   workspaceLaunchSelectionMode as workspaceLaunchSelectionModeDomain,
   workspaceLaunchSelectorModel as workspaceLaunchSelectorModelDomain,
   type WorkspaceLaunchSelectionContext,
@@ -67,7 +52,6 @@ import {
   closeWorkspaceLaunchUiServer,
   createWorkspaceLaunchUiServer,
   readWorkspaceLaunchUiAsset,
-  type WorkspaceLaunchUiPortPolicy,
 } from './workspace-launch-ui-server.js';
 import {
   loadRecoveredWorkspaceLaunchAttempts as loadRecoveredWorkspaceLaunchAttemptsStore,
@@ -94,7 +78,18 @@ import {
   workspaceLaunchRuntimeObservations as workspaceLaunchRuntimeObservationsHandoff,
 } from './workspace-launch-handoff.js';
 import * as workspaceLaunchHandoff from './workspace-launch-handoff.js';
-import { defaultLaunchRegistryPath, listKnownSiteRootsForCli, type ResolvedSiteRoot } from '../lib/site-root-resolver.js';
+import type { ResolvedSiteRoot } from '../lib/site-root-resolver.js';
+import {
+  buildAgentPlan,
+  normalizeCarrierList,
+  normalizeWorkspaceLaunchPlanOptions,
+  readLaunchRegistry,
+  readWorkspaceLaunchRecords,
+  requireSiteCatalogForInteractiveSelection,
+  resolveRegistryPaths,
+  selectLaunchRecords,
+  type WorkspaceLaunchRegistryContext,
+} from './workspace-launch-registry.js';
 import type {
   WorkspaceLaunchSelectionCardinality,
   WorkspaceLaunchSelection as WorkspaceLaunchBrowserSelection,
@@ -102,6 +97,32 @@ import type {
   WorkspaceLaunchOption as WorkspaceLaunchSelectorOptionContract,
   WorkspaceLaunchSelectorModel as WorkspaceLaunchSelectorModelContract,
 } from '@narada2/workspace-launch-contract';
+import type {
+  WorkspaceLaunchAgentPlan,
+  WorkspaceLaunchAttemptRecord,
+  WorkspaceLaunchDashboardState,
+  WorkspaceLaunchHandoffRecord,
+  WorkspaceLaunchLegacyCarrierCompatibility,
+  WorkspaceLaunchObservationRecord,
+  WorkspaceLaunchPlanOptions,
+  WorkspaceLaunchProjectionObservationRecord,
+  WorkspaceLaunchRecord,
+  WorkspaceLaunchRecordsLoad,
+  WorkspaceLauncherOutputProjection,
+} from './workspace-launch-types.js';
+export type {
+  WorkspaceLaunchAgentPlan,
+  WorkspaceLaunchAttemptRecord,
+  WorkspaceLaunchDashboardState,
+  WorkspaceLaunchHandoffRecord,
+  WorkspaceLaunchLegacyCarrierCompatibility,
+  WorkspaceLaunchObservationRecord,
+  WorkspaceLaunchPlanOptions,
+  WorkspaceLaunchProjectionObservationRecord,
+  WorkspaceLaunchRecord,
+  WorkspaceLaunchRecordsLoad,
+  WorkspaceLauncherOutputProjection,
+} from './workspace-launch-types.js';
 
 const requireFromLauncherCommand = createRequire(import.meta.url);
 const providerRegistry = loadProviderRegistry();
@@ -121,6 +142,14 @@ function workspaceLaunchSelectionContext(): WorkspaceLaunchSelectionContext {
     providerRegistry,
     admittedProviders: providerAdapters.admitted_providers,
     resolveCarrierRuntimeSelection: resolveWorkspaceCarrierRuntimeSelection,
+  };
+}
+
+export function workspaceLaunchRegistryContext(): WorkspaceLaunchRegistryContext {
+  return {
+    providerRegistry,
+    resolveCarrierRuntimeSelection: resolveWorkspaceCarrierRuntimeSelection,
+    legacyCarrierCompatibility,
   };
 }
 
@@ -397,21 +426,6 @@ function fallbackProviderRegistryForTests(): ProviderRegistry {
   };
 }
 
-export interface WorkspaceLaunchProjectionObservationRecord {
-  schema: 'narada.workspace_launch.observed_projection.v1';
-  observation_id: string;
-  launch_attempt_id: string;
-  projection_kind: 'agent-web-ui' | 'agent-cli';
-  session_id: string | null;
-  status: 'planned' | 'handed_off' | 'failed';
-  command: string;
-  authority: 'nars_client_projection_contract';
-  ownership_posture: 'handoff_only' | 'owned_by_projection_authority';
-  observed_at: string;
-  message: string;
-  diagnostic: unknown;
-}
-
 function resolveProviderRegistryPath(): string {
   const candidates: string[] = [];
   try {
@@ -443,121 +457,6 @@ function loadProviderRegistry(): ProviderRegistry {
     const message = error instanceof Error ? error.message : String(error);
     throw new Error(`provider_registry_load_failed: ${registryPath}: ${message}`);
   }
-}
-
-export interface WorkspaceLaunchPlanOptions {
-  agent?: string[];
-  all?: boolean;
-  role?: string[];
-  site?: string[];
-  configPath?: string[];
-  registryPath?: string;
-  operatorSurface?: string;
-  onboarding?: boolean;
-  runtime?: string;
-  authority?: string;
-  intelligenceProvider?: string;
-  mcpScope?: string;
-  cloudflareApiBaseUrl?: string;
-  interactiveSelection?: boolean;
-  interactiveSelectionUi?: boolean;
-  launcherUiPort?: number;
-  launcherUiPortFallback?: boolean;
-  operatorRouterPort?: number;
-  launcherOutput?: string[];
-  defaultInteractiveSelection?: boolean;
-  resultPath?: string;
-  suppressResultOutput?: boolean;
-  enableNativeShell?: boolean;
-  noWaitForEnterBeforeExec?: boolean;
-  smoke?: boolean;
-  dryRun?: boolean;
-  format?: CliFormat;
-}
-
-type WorkspaceLaunchAttemptStatus = 'queued' | 'planning' | 'launching' | 'launched' | 'failed' | 'forgotten';
-export type WorkspaceLauncherOutputProjection = 'summary' | 'events' | 'commands' | 'json' | 'quiet';
-
-interface WorkspaceLaunchLegacyCarrierCompatibility {
-  schema: 'narada.workspace_launch.legacy_carrier_compatibility.v1';
-  status: 'compatibility_fields_present';
-  canonical_terms: {
-    operator_surface: 'operator_surface';
-    runtime_host: 'runtime_host';
-  };
-  compatibility_paths: {
-    command_aliases: string[];
-    runtime_aliases: string[];
-    status: 'fenced_compatibility';
-  };
-  compatibility_note: string;
-  deprecated_fields: string[];
-  replacement_fields: Record<string, string>;
-  removal_policy: 'remove_after_consumers_migrate';
-}
-
-export interface WorkspaceLaunchHandoffRecord {
-  schema: 'narada.workspace_launch.handoff.v1';
-  handoff_id: string;
-  launch_attempt_id: string;
-  posture: 'operator_terminal' | 'hidden_runtime_host';
-  status: 'planned' | 'handed_off' | 'failed' | 'unknown_after_handoff';
-  command: string | null;
-  argv_redacted: string[];
-  cwd: string | null;
-  exit_code: number | null;
-  ownership_posture: 'handoff_only';
-  diagnostic_ref: string | null;
-}
-
-export interface WorkspaceLaunchObservationRecord {
-  schema: 'narada.workspace_launch.observed_runtime.v1';
-  observation_id: string;
-  launch_attempt_id: string;
-  kind: 'nars';
-  session_id: string | null;
-  site_root: string | null;
-  health: 'waiting' | 'healthy' | 'ambiguous' | 'stale' | 'failed' | 'unowned';
-  authority: 'nars_session_management';
-  ownership_posture: 'not_yet_observed' | 'owned_by_runtime_authority' | 'observed_unowned';
-  last_checked_at: string;
-  message: string;
-  agent_id?: string | null;
-  site_id?: string | null;
-  agent_identity_ref?: AgentIdentityRefV2 | null;
-  control_path?: string | null;
-  process_ownership?: Record<string, unknown> | null;
-  runtime_pid?: number | null;
-  attach_commands?: {
-    agent_web_ui?: string | null;
-    agent_cli?: string | null;
-  };
-}
-
-export interface WorkspaceLaunchAttemptRecord {
-  schema: 'narada.workspace_launch.attempt.v1';
-  launch_attempt_id: string;
-  ui_session_id: string;
-  expected_launch_session_ids: string[];
-  submitted_at: string;
-  updated_at: string;
-  selection: WorkspaceLaunchBrowserSelection;
-  status: WorkspaceLaunchAttemptStatus;
-  result_summary: string;
-  plan_result_path: string | null;
-  handoffs: WorkspaceLaunchHandoffRecord[];
-  observations: WorkspaceLaunchObservationRecord[];
-  projections: WorkspaceLaunchProjectionObservationRecord[];
-  actions: string[];
-  diagnostic: unknown;
-}
-
-export interface WorkspaceLaunchDashboardState {
-  schema: 'narada.workspace_launch.ui_session_state.v1';
-  ui_session: WorkspaceLaunchUiSessionRecord;
-  attempts: WorkspaceLaunchAttemptRecord[];
-  observed_unowned: unknown[];
-  actions: string[];
 }
 
 function resolveWorkspaceCarrierRuntimeSelection(operatorSurface: string | undefined, runtime: string): { carrier_kind: string; operator_surface_kind: string; runtime_substrate_kind: string; runtime_host_kind: string } {
@@ -907,100 +806,6 @@ interface RawAgentRecord {
   EnableNativeShell?: boolean;
 }
 
-export interface WorkspaceLaunchRecord {
-  agent: string;
-  agent_identity_ref: AgentIdentityRefV2;
-  title: string;
-  role: string;
-  site: string;
-  narada_root: string;
-  site_root: string;
-  workspace_root: string | null;
-  launcher_path: string;
-  operator_surface: string;
-  carrier: string;
-  runtime: string;
-  authority: string | null;
-  enable_native_shell: boolean;
-  mcp_scope: string | null;
-  config_path: string;
-  legacy_site?: string | null;
-}
-
-export interface WorkspaceLaunchAgentPlan extends WorkspaceLaunchRecord {
-  operator_surface_kind: string;
-  runtime_host_kind: string;
-  launch_operator_surface: string;
-  launch_operator_surfaces: string[];
-  launch_runtime_host: string;
-  launch_runtime_hosts: string[];
-  launch_carrier: string;
-  launch_runtime: string;
-  launch_carriers: string[];
-  onboarding_mode: 'user-site' | null;
-  launch_session_id: string | null;
-  process_ownership: Record<string, unknown> | null;
-  intelligence_provider: string | null;
-  authority: string | null;
-  wait_for_enter_before_exec: boolean;
-  runtime_start_execution_mode: 'hidden_detached' | 'operator_terminal';
-  runtime_start_command: string[];
-  hidden_runtime_start_command: string[];
-  runtime_start_cwd: string;
-  mcp_scope: string;
-  wt_args: string[];
-  smoke_command: string[];
-  operator_projection_launch_binding: Record<string, unknown> | null;
-  operator_projection_open_requests: Array<Record<string, unknown>>;
-  legacy_carrier_compatibility: WorkspaceLaunchLegacyCarrierCompatibility;
-}
-
-export interface WorkspaceLaunchRecordsLoad {
-  records: WorkspaceLaunchRecord[];
-  siteCatalog: ResolvedSiteRoot[];
-}
-
-export async function readWorkspaceLaunchRecords(options: WorkspaceLaunchPlanOptions): Promise<WorkspaceLaunchRecordsLoad> {
-  const registryPaths = resolveRegistryPaths(options);
-  const records = (await Promise.all(registryPaths.map(readLaunchRegistry))).flat();
-  let siteCatalog: ResolvedSiteRoot[] = [];
-  try {
-    siteCatalog = await listKnownSiteRootsForCli({ launchRegistryPath: registryPaths[0] });
-  } catch {
-    // Keep launch planning usable for explicit non-interactive compatibility
-    // paths; interactive selection reports the missing catalog below.
-  }
-  return {
-    records: canonicalizeWorkspaceLaunchRecords(records, siteCatalog),
-    siteCatalog,
-  };
-}
-
-function canonicalizeWorkspaceLaunchRecords(
-  records: WorkspaceLaunchRecord[],
-  siteCatalog: ResolvedSiteRoot[],
-): WorkspaceLaunchRecord[] {
-  return canonicalizeWorkspaceLaunchRecordsDomain(records, siteCatalog);
-}
-
-export function requireSiteCatalogForInteractiveSelection(
-  options: WorkspaceLaunchPlanOptions,
-  siteCatalog: ResolvedSiteRoot[],
-  records: WorkspaceLaunchRecord[],
-): void {
-  if ((options.interactiveSelection === true || options.interactiveSelectionUi === true) && siteCatalog.length === 0) {
-    throw new Error('site_registry_empty_for_interactive_selection: run `narada sites discover` before opening launcher selection');
-  }
-  if (options.interactiveSelection !== true && options.interactiveSelectionUi !== true) return;
-  const catalogRoots = new Set(siteCatalog.map((site) => resolve(site.site_root).toLowerCase()));
-  const unregisteredRoots = unique(records
-    .filter((record) => !catalogRoots.has(resolve(record.site_root).toLowerCase()))
-    .map((record) => record.site_root));
-  if (unregisteredRoots.length > 0) {
-    throw new Error(`site_registry_missing_launch_roots: run 'narada sites discover' before opening launcher selection (${unregisteredRoots.join(', ')})`);
-  }
-}
-
 export async function workspaceLaunchCommand(
   options: WorkspaceLaunchPlanOptions,
   context: CommandContext,
@@ -1019,168 +824,6 @@ export async function workspaceLaunchPlanCommand(
   return workspaceLaunchPlanCommandImpl(options, context);
 }
 
-export interface WorkspaceLaunchUiIngress {
-  url: string;
-  direct_url: string;
-  router_url: string | null;
-  stable_url: string | null;
-  ingress_mode: 'operator-router' | 'diagnostic';
-  reason: string | null;
-}
-
-export interface ResolveWorkspaceLaunchUiIngressOptions {
-  uiSessionId: string;
-  directUrl: string;
-  host?: string;
-  port?: number;
-  ensureRouter?: (options: EnsureOperatorRouterOptions) => Promise<EnsureOperatorRouterResult>;
-  readRoutes?: typeof readOperatorRouterRoutes;
-  readWorkspaceRouteDirectory?: typeof readOperatorWorkspaceRouteDirectory;
-}
-
-function boundedWorkspaceLaunchIngressError(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error);
-  const bounded = message.replace(/[\r\n\t]+/g, ' ').trim().slice(0, 160);
-  return `operator_router_unavailable:${bounded || 'unknown_error'}`;
-}
-
-function operatorRouterIngressUrl(routerUrl: string, uiSessionId: string): string {
-  return `${routerUrl.replace(/\/+$/, '')}${workspaceLaunchUiSessionRoute(uiSessionId)}`;
-}
-
-export async function readOperatorWorkspaceRouteDirectory(options: {
-  url: string;
-  fetch_fn?: typeof fetch;
-  timeout_ms?: number;
-}): Promise<OperatorWorkspaceRouteDirectory> {
-  const timeoutMs = options.timeout_ms ?? 3_000;
-  if (!Number.isInteger(timeoutMs) || timeoutMs < 100 || timeoutMs > 120_000) {
-    throw new Error('operator_workspace_route_directory_timeout_invalid');
-  }
-  const response = await (options.fetch_fn ?? fetch)(
-    `${options.url.replace(/\/+$/, '')}${OPERATOR_WORKSPACE_ROUTE_DIRECTORY_PATH}`,
-    { signal: AbortSignal.timeout(timeoutMs) },
-  );
-  const payload: unknown = await response.json().catch(() => null);
-  if (!response.ok || !isOperatorWorkspaceRouteDirectory(payload)) {
-    throw new Error(`operator_workspace_route_directory_read_failed:${response.status}`);
-  }
-  return payload;
-}
-
-function isOperatorWorkspaceRouteDirectory(value: unknown): value is OperatorWorkspaceRouteDirectory {
-  if (!isRecord(value)
-    || value.schema !== OPERATOR_WORKSPACE_ROUTE_DIRECTORY_SCHEMA
-    || !Array.isArray(value.surfaces)) return false;
-  return value.surfaces.every((surface) => {
-    if (!isRecord(surface)
-      || typeof surface.id !== 'string'
-      || !['available', 'unavailable', 'planned'].includes(String(surface.availability))
-      || !Array.isArray(surface.projectedRoutes)) return false;
-    return surface.projectedRoutes.every((route) => isRecord(route)
-      && typeof route.id === 'string'
-      && typeof route.path === 'string'
-      && (route.kind === 'page' || route.kind === 'workflow')
-      && typeof route.label === 'string'
-      && ['available', 'unavailable', 'planned'].includes(String(route.availability))
-      && typeof route.projectedDetail === 'string');
-  });
-}
-
-function workspaceLaunchRouteDirectoryHealthy(directory: OperatorWorkspaceRouteDirectory): boolean {
-  const launcher = directory.surfaces.find((surface) => surface.id === 'launcher');
-  return launcher?.availability === 'available'
-    && launcher.projectedRoutes.some((route) => route.id === 'launcher'
-      && route.path === '/console/launch'
-      && route.availability === 'available');
-}
-
-export async function resolveWorkspaceLaunchUiIngress(
-  options: ResolveWorkspaceLaunchUiIngressOptions,
-): Promise<WorkspaceLaunchUiIngress> {
-  const directUrl = options.directUrl;
-  let routerUrl: string | null = null;
-  try {
-    const ensureRouter = options.ensureRouter ?? ensureOperatorRouter;
-    const readRoutes = options.readRoutes ?? readOperatorRouterRoutes;
-    const readWorkspaceRouteDirectory = options.readWorkspaceRouteDirectory ?? readOperatorWorkspaceRouteDirectory;
-    const router = await ensureRouter({
-      host: options.host ?? '127.0.0.1',
-      port: options.port ?? DEFAULT_OPERATOR_ROUTER_PORT,
-    });
-    routerUrl = router.url;
-    const routes = await readRoutes({ url: router.url });
-    const consoleProjection = routes.routes.find((route) => route.route_id === 'operator-console');
-    const consoleProjectionHealthy = consoleProjection?.route_class === 'operator-console'
-      && consoleProjection.public_path === '/'
-      && consoleProjection.route_mode === 'prefix'
-      && consoleProjection.state === 'healthy';
-    if (consoleProjectionHealthy) {
-      const workspaceRouteDirectory = await readWorkspaceRouteDirectory({ url: router.url });
-      if (!workspaceLaunchRouteDirectoryHealthy(workspaceRouteDirectory)) {
-        return {
-          url: directUrl,
-          direct_url: directUrl,
-          router_url: router.url,
-          stable_url: null,
-          ingress_mode: 'diagnostic',
-          reason: 'operator_workspace_launcher_route_unavailable',
-        };
-      }
-      const stableUrl = operatorRouterIngressUrl(router.url, options.uiSessionId);
-      return {
-        url: stableUrl,
-        direct_url: directUrl,
-        router_url: router.url,
-        stable_url: stableUrl,
-        ingress_mode: 'operator-router',
-        reason: null,
-      };
-    }
-    return {
-      url: directUrl,
-      direct_url: directUrl,
-      router_url: router.url,
-      stable_url: null,
-      ingress_mode: 'diagnostic',
-      reason: 'operator_console_projection_unavailable',
-    };
-  } catch (error) {
-    return {
-      url: directUrl,
-      direct_url: directUrl,
-      router_url: routerUrl,
-      stable_url: null,
-      ingress_mode: 'diagnostic',
-      reason: boundedWorkspaceLaunchIngressError(error),
-    };
-  }
-}
-
-export function requestWorkspaceLaunchSelectionUiProjectionOpen(url: string): void {
-  void executeOperatorProjectionOpenRequest({
-    projection_kind: 'browser_url',
-    target_ref: url,
-    purpose: 'workspace_launch_interactive_selection_ui',
-    caller: { package: '@narada2/cli', command: 'launcher workspace-launch', module: 'commands/launcher' },
-    mode: 'execute',
-    policy: { allow_visible_host_effect: true },
-  }).catch(() => undefined);
-}
-
-interface WorkspaceLaunchRememberedSelectionRecord {
-  schema: 'narada.workspace_launch.remembered_selection.v1';
-  updated_at: string;
-  selection: WorkspaceLaunchBrowserSelection;
-}
-
-interface WorkspaceLaunchUiPortPolicyRecord {
-  LauncherUiPort?: number;
-  LauncherUiPortFallback?: boolean;
-  launcherUiPort?: number;
-  launcherUiPortFallback?: boolean;
-}
-
 export type WorkspaceLaunchSelectorOption = WorkspaceLaunchSelectorOptionContract;
 export type WorkspaceLaunchSelectorModel = WorkspaceLaunchSelectorModelContract;
 
@@ -1196,50 +839,10 @@ export function workspaceLaunchId(prefix: string): string {
   return `${prefix}_${randomUUID().replace(/-/g, '').slice(0, 16)}`;
 }
 
-const WORKSPACE_LAUNCH_UI_DEFAULT_PORT = 47320;
-
-function workspaceLaunchUiPolicyPath(): string {
-  return join(resolve(workspaceLaunchUserSiteRoot()), 'config', 'launch', 'workspace-launch.psd1');
-}
-
-function parseWorkspaceLaunchUiPort(value: unknown): number | null {
-  const parsed = typeof value === 'number' ? value : typeof value === 'string' ? Number.parseInt(value, 10) : NaN;
-  return Number.isInteger(parsed) && parsed > 0 && parsed <= 65535 ? parsed : null;
-}
-
-function parseWorkspaceLaunchUiPortFallback(value: unknown): boolean | null {
-  if (typeof value === 'boolean') return value;
-  if (typeof value === 'string') {
-    const normalized = value.trim().toLowerCase().replace(/^\$/, '');
-    if (['true', '1', 'yes', 'y'].includes(normalized)) return true;
-    if (['false', '0', 'no', 'n'].includes(normalized)) return false;
-  }
-  return null;
-}
-
-function readWorkspaceLaunchUiPortPolicyConfig(): WorkspaceLaunchUiPortPolicyRecord | null {
-  const path = workspaceLaunchUiPolicyPath();
-  if (!existsSync(path)) return null;
-  const text = readFileSync(path, 'utf8');
-  const portMatch = text.match(/LauncherUiPort\s*=\s*([0-9]+)/i);
-  const fallbackMatch = text.match(/LauncherUiPortFallback\s*=\s*(\$true|\$false|true|false|1|0|yes|no|y|n)/i);
-  return {
-    LauncherUiPort: parseWorkspaceLaunchUiPort(portMatch ? portMatch[1] : null) ?? undefined,
-    LauncherUiPortFallback: parseWorkspaceLaunchUiPortFallback(fallbackMatch ? fallbackMatch[1] : null) ?? undefined,
-  };
-}
-
-export function resolveWorkspaceLaunchUiPortPolicy(options: WorkspaceLaunchPlanOptions): WorkspaceLaunchUiPortPolicy {
-  const config = readWorkspaceLaunchUiPortPolicyConfig();
-  const explicitPort = parseWorkspaceLaunchUiPort(options.launcherUiPort);
-  const explicitFallback = typeof options.launcherUiPortFallback === 'boolean' ? options.launcherUiPortFallback : null;
-  const configPort = config ? parseWorkspaceLaunchUiPort(config.LauncherUiPort ?? config.launcherUiPort) : null;
-  const configFallback = config ? parseWorkspaceLaunchUiPortFallback(config.LauncherUiPortFallback ?? config.launcherUiPortFallback) : null;
-
-  const port = explicitPort ?? configPort ?? WORKSPACE_LAUNCH_UI_DEFAULT_PORT;
-  const fallbackToEphemeral = explicitFallback ?? configFallback ?? false;
-  const source: WorkspaceLaunchUiPortPolicy['source'] = explicitPort !== null ? 'explicit' : (configPort !== null ? 'config' : 'default');
-  return { port, fallbackToEphemeral, source };
+interface WorkspaceLaunchRememberedSelectionRecord {
+  schema: 'narada.workspace_launch.remembered_selection.v1';
+  updated_at: string;
+  selection: WorkspaceLaunchBrowserSelection;
 }
 
 function workspaceLaunchAttemptStoreContext(): WorkspaceLaunchAttemptStoreContext {
@@ -1426,377 +1029,3 @@ export function unique(values: string[]): string[] {
   return result;
 }
 
-export function resolveRegistryPaths(options: WorkspaceLaunchPlanOptions): string[] {
-  const configPaths = nonEmptyStringArray(options.configPath);
-  const paths = configPaths.length > 0
-    ? configPaths
-    : [options.registryPath ?? defaultLaunchRegistryPath()];
-  return paths.map((path) => resolve(path));
-}
-
-export function hasWorkspaceLaunchSelectionIntent(options: WorkspaceLaunchPlanOptions): boolean {
-  return options.all === true
-    || nonEmptyStringArray(options.agent).length > 0
-    || nonEmptyStringArray(options.role).length > 0
-    || nonEmptyStringArray(options.site).length > 0
-    || nonEmptyStringArray(options.configPath).length > 0;
-}
-
-export function normalizeWorkspaceLaunchPlanOptions(options: WorkspaceLaunchPlanOptions): WorkspaceLaunchPlanOptions {
-  const normalized: WorkspaceLaunchPlanOptions = {
-    ...options,
-    agent: nonEmptyStringArray(options.agent),
-    role: nonEmptyStringArray(options.role),
-    site: nonEmptyStringArray(options.site),
-    configPath: nonEmptyStringArray(options.configPath),
-  };
-  if (normalized.defaultInteractiveSelection === true && !hasWorkspaceLaunchSelectionIntent(normalized)) {
-    return { ...normalized, interactiveSelection: true };
-  }
-  return normalized;
-}
-
-async function readLaunchRegistry(path: string): Promise<WorkspaceLaunchRecord[]> {
-  if (!existsSync(path)) throw new Error(`launch_registry_missing: ${path}`);
-  const raw = path.toLowerCase().endsWith('.json')
-    ? JSON.parse(await readFile(path, 'utf8')) as RawLaunchRegistry
-    : readPowerShellDataFile(path);
-  const agents = Array.isArray(raw.Agents) ? raw.Agents : raw.Agents ? [raw.Agents] : [];
-  return agents.map((agent) => normalizeAgentRecord(raw, agent, path));
-}
-
-function readPowerShellDataFile(path: string): RawLaunchRegistry {
-  const script = [
-    '$ErrorActionPreference = "Stop"',
-    '$path = $env:NARADA_LAUNCH_REGISTRY_PATH',
-    '$data = Import-PowerShellDataFile -Path $path',
-    '$data | ConvertTo-Json -Depth 20 -Compress',
-  ].join('; ');
-  const result = runGovernedCommandSync('pwsh', ['-NoProfile', '-NonInteractive', '-Command', script], {
-    encoding: 'utf8',
-    timeout: 30_000,
-    windowsHide: true,
-    env: {
-      ...process.env,
-      NARADA_LAUNCH_REGISTRY_PATH: path,
-    },
-  });
-  if (result.error) throw result.error;
-  if (result.status !== 0) {
-    const detail = String(result.stderr || result.stdout || `exit ${result.status}`).trim();
-    throw new Error(`launch_registry_read_failed: ${path}: ${detail}`);
-  }
-  return JSON.parse(String(result.stdout || '{}')) as RawLaunchRegistry;
-}
-
-function normalizeAgentRecord(registry: RawLaunchRegistry, agent: RawAgentRecord, configPath: string): WorkspaceLaunchRecord {
-  const agentId = nonEmpty(agent.Agent);
-  if (!agentId) throw new Error(`agent_id_missing_in_launch_registry: ${configPath}`);
-  const explicitSite = nonEmpty(agent.Site) ?? nonEmpty(registry.Site) ?? null;
-  if (!agentId.includes('.') && !explicitSite) {
-    throw new Error(`site_local_agent_requires_explicit_site: ${agentId} in ${configPath}`);
-  }
-  const naradaRoot = nonEmpty(agent.NaradaRoot) ?? nonEmpty(registry.NaradaRoot);
-  if (!naradaRoot) throw new Error(`agent_narada_root_missing: ${agentId} in ${configPath}`);
-  const siteRoot = nonEmpty(agent.SiteRoot) ?? nonEmpty(registry.SiteRoot) ?? naradaRoot;
-  const workspaceRoot = nonEmpty(agent.WorkspaceRoot) ?? nonEmpty(registry.WorkspaceRoot) ?? null;
-  const launcher = nonEmpty(agent.Launcher) ?? nonEmpty(registry.Launcher);
-  const launcherPath = nonEmpty(agent.LauncherPath) ?? nonEmpty(registry.LauncherPath)
-    ?? (launcher ? join(naradaRoot, launcher) : '');
-  if (!launcherPath) throw new Error(`launcher_path_missing: ${agentId} in ${configPath}`);
-  const operatorSurface = nonEmpty(agent.OperatorSurface) ?? nonEmpty(registry.OperatorSurface) ?? 'codex';
-  const carrier = operatorSurface;
-  const runtime = nonEmpty(agent.Runtime) ?? nonEmpty(registry.Runtime) ?? defaultRuntimeForCarrier(carrier);
-  const authority = nonEmpty(agent.Authority) ?? nonEmpty(registry.Authority) ?? null;
-  const role = nonEmpty(agent.Role) ?? (agentId.split('.').at(-1) ?? agentId).replace(/\d+$/, '');
-  const resolvedAgentIdentityRef = resolveAgentIdentityRef(agentId, { site_id: explicitSite, role });
-  const agentIdentityRef = resolvedAgentIdentityRef.status === 'resolved' ? resolvedAgentIdentityRef.value : buildAgentIdentityRefV2({
-    identity_scope: explicitSite ? { kind: 'narada_site', site_id: explicitSite } : { kind: 'unscoped' },
-    local_agent_id: agentId.split('.').at(-1) ?? agentId,
-    role,
-    legacy_agent_id: agentId,
-  });
-  const agentIdentitySite = agentIdentityRef.identity_scope.kind === 'narada_site'
-    ? agentIdentityRef.identity_scope.site_id
-    : null;
-  return {
-    agent: agentId,
-    agent_identity_ref: agentIdentityRef,
-    title: nonEmpty(agent.Title) ?? agentId.split('.').at(-1) ?? agentId,
-    role,
-    site: agentIdentitySite ?? agentId.split('.')[0] ?? agentId,
-    narada_root: naradaRoot,
-    site_root: siteRoot,
-    workspace_root: workspaceRoot,
-    launcher_path: launcherPath,
-    operator_surface: operatorSurface,
-    carrier,
-    runtime,
-    authority,
-    enable_native_shell: agent.EnableNativeShell === true,
-    mcp_scope: nonEmpty(agent.McpScope) ?? nonEmpty(registry.McpScope) ?? null,
-    config_path: configPath,
-  };
-}
-
-export function selectLaunchRecords(records: WorkspaceLaunchRecord[], options: WorkspaceLaunchPlanOptions): WorkspaceLaunchRecord[] {
-  return selectLaunchRecordsDomain(records, options);
-}
-
-export function buildAgentPlan(record: WorkspaceLaunchRecord, options: WorkspaceLaunchPlanOptions): WorkspaceLaunchAgentPlan {
-  const operatorSurfaceInput = options.operatorSurface ?? record.operator_surface;
-  const launchCarriers = normalizeCarrierList(operatorSurfaceInput);
-  const primaryCarrierInput = launchCarriers.includes('agent-cli') ? 'agent-cli' : launchCarriers[0] ?? operatorSurfaceInput;
-  const runtimeInput = options.runtime ?? record.runtime;
-  const carrierRuntimeSelection = resolveWorkspaceCarrierRuntimeSelection(primaryCarrierInput, runtimeInput);
-  const launchCarrier = carrierRuntimeSelection.carrier_kind;
-  const operatorSurfaceKind = carrierRuntimeSelection.operator_surface_kind;
-  const launchRuntime = carrierRuntimeSelection.runtime_substrate_kind;
-  const runtimeHostKind = carrierRuntimeSelection.runtime_host_kind;
-  const onboarding = options.onboarding === true;
-  const enableNativeShell = options.enableNativeShell === true || record.enable_native_shell;
-  const mcpScope = normalizeMcpScope(options.mcpScope ?? record.mcp_scope ?? undefined);
-  const authority = normalizeRuntimeAuthority(options.authority ?? record.authority ?? undefined);
-  const isNarsRuntimeHost = runtimeHostKind === 'narada-agent-runtime-server';
-  const waitForEnter = options.noWaitForEnterBeforeExec !== true && launchCarriers[0] !== 'agent-web-ui' && !isNarsRuntimeHost;
-  const isNarsOperatorSurface = launchCarrier === 'agent-cli' || launchCarrier === 'agent-web-ui';
-  const intelligenceProvider = isNarsOperatorSurface
-    ? (options.intelligenceProvider ?? providerRegistry.default_provider ?? null)
-    : null;
-  const cloudflareApiBaseUrl = options.cloudflareApiBaseUrl?.trim()
-    || process.env.NARADA_CLOUDFLARE_NARS_PROJECTION_URL
-    || process.env.CLOUDFLARE_NARS_PROJECTION_URL
-    || null;
-  const naradaProper = resolve(process.env.NARADA_PROPER_ROOT ?? 'D:/code/narada');
-  const launchSessionToken = workspaceLaunchSessionToken(record);
-  const launchSessionId = launchSessionIdFromToken(launchSessionToken);
-  const launchBindingPath = launchCarriers.includes('agent-web-ui')
-    ? operatorProjectionLaunchBindingPath(record, launchSessionToken)
-    : null;
-  const processOwnership = launchSessionId
-    ? buildLaunchProcessOwnership({
-        launchSessionId,
-        processRole: 'workspace_launch_plan',
-        siteRoot: record.site_root,
-        workspaceRoot: record.workspace_root ?? record.narada_root,
-        createdByPid: process.pid,
-      })
-    : null;
-  const qualifiedAgentId = workspaceLaunchQualifiedAgentId(record);
-  const runtimeStartArguments = [
-    'operator-surface',
-    'runtime',
-    'start', launchCarrier,
-    '--site-root', record.site_root,
-    '--agent', record.agent,
-    '--target-site-id', record.site,
-    '--runtime', launchRuntime,
-    '--exec',
-    '--format', 'human',
-  ];
-  const operatorSurfaceStartCommand = [
-    'pnpm',
-    '--dir', naradaProper,
-    'exec',
-    'narada',
-    ...runtimeStartArguments,
-  ];
-  if (record.workspace_root) operatorSurfaceStartCommand.push('--workspace-root', record.workspace_root);
-  if (enableNativeShell) operatorSurfaceStartCommand.push('--enable-native-shell');
-  operatorSurfaceStartCommand.push('--authority', authority);
-  if (intelligenceProvider) operatorSurfaceStartCommand.push('--intelligence-provider', intelligenceProvider);
-  operatorSurfaceStartCommand.push('--mcp-scope', mcpScope);
-  if (launchBindingPath) operatorSurfaceStartCommand.push('--launch-binding', launchBindingPath);
-  if (!launchBindingPath) operatorSurfaceStartCommand.push('--launch-session-id', launchSessionId ?? '');
-  if (waitForEnter) operatorSurfaceStartCommand.push('--wait');
-  const hiddenRuntimeStartCommand = [
-    process.execPath,
-    join(naradaProper, 'packages', 'layers', 'cli', 'dist', 'main.js'),
-    ...operatorSurfaceStartCommand.slice(5),
-  ];
-  const runtimeStartExecutionMode: WorkspaceLaunchAgentPlan['runtime_start_execution_mode'] = isNarsRuntimeHost
-    ? 'hidden_detached'
-    : 'operator_terminal';
-  const runtimeStartCwd = record.workspace_root ?? record.narada_root;
-
-  const base = [
-    'new-tab',
-    '--title', `${qualifiedAgentId} runtime`,
-    '-d', runtimeStartCwd,
-    'pwsh',
-    waitForEnter ? '-NoExit' : '-NoProfile',
-    '-Command',
-    toPowerShellCommand(operatorSurfaceStartCommand),
-  ];
-  const wtArgs = [...base];
-  if (launchCarrier === 'agent-web-ui') {
-    wtArgs.push(';', ...agentWebUiAttachWtArgs(record, naradaProper, cloudflareApiBaseUrl, launchBindingPath, onboarding));
-  }
-  for (const extraCarrier of launchCarriers.filter((carrier) => carrier !== launchCarrier)) {
-    if (extraCarrier !== 'agent-web-ui') {
-      throw new Error(`unsupported_multi_carrier_projection: ${extraCarrier}`);
-    }
-    wtArgs.push(';', ...agentWebUiAttachWtArgs(record, naradaProper, cloudflareApiBaseUrl, launchBindingPath, onboarding));
-  }
-
-  const smokeCommand = [
-    'narada', 'operator-surface', 'runtime', 'start', launchCarrier,
-    '--site-root', record.site_root,
-    '--agent', record.agent,
-    '--target-site-id', record.site,
-    '--runtime', launchRuntime,
-    '--dry-run',
-    '--format', 'json',
-  ];
-  if (record.workspace_root) smokeCommand.push('--workspace-root', record.workspace_root);
-  smokeCommand.push('--authority', authority);
-  if (intelligenceProvider) smokeCommand.push('--intelligence-provider', intelligenceProvider);
-  if (enableNativeShell) smokeCommand.push('--enable-native-shell');
-  smokeCommand.push('--mcp-scope', mcpScope);
-  if (launchBindingPath) smokeCommand.push('--launch-binding', launchBindingPath);
-  if (!launchBindingPath) smokeCommand.push('--launch-session-id', launchSessionId ?? '');
-  const operatorProjectionOpenRequests = launchCarriers.includes('agent-web-ui')
-    ? [plannedAgentWebUiProjectionOpenRequest(record)]
-    : [];
-
-  return {
-    ...record,
-    operator_surface: operatorSurfaceKind,
-    carrier: launchCarrier,
-    operator_surface_kind: operatorSurfaceKind,
-    runtime_host_kind: runtimeHostKind,
-    launch_operator_surface: launchCarrier,
-    launch_operator_surfaces: launchCarriers,
-    launch_runtime_host: runtimeHostKind,
-    launch_runtime_hosts: [runtimeHostKind],
-    launch_carrier: launchCarrier,
-    launch_runtime: launchRuntime,
-    launch_carriers: launchCarriers,
-    onboarding_mode: onboarding ? 'user-site' : null,
-    launch_session_id: launchSessionId,
-    process_ownership: processOwnership as Record<string, unknown> | null,
-    legacy_carrier_compatibility: legacyCarrierCompatibility(),
-    intelligence_provider: intelligenceProvider,
-    authority,
-    wait_for_enter_before_exec: waitForEnter,
-    runtime_start_execution_mode: runtimeStartExecutionMode,
-    runtime_start_command: operatorSurfaceStartCommand,
-    hidden_runtime_start_command: hiddenRuntimeStartCommand,
-    runtime_start_cwd: runtimeStartCwd,
-    mcp_scope: mcpScope,
-    enable_native_shell: enableNativeShell,
-    wt_args: wtArgs,
-    smoke_command: smokeCommand,
-    operator_projection_launch_binding: launchBindingPath
-      ? {
-          schema: 'narada.operator_projection_launch_binding_ref.v1',
-          path: launchBindingPath,
-          exact_attach_required: true,
-        }
-      : null,
-    operator_projection_open_requests: operatorProjectionOpenRequests,
-  };
-}
-
-export function normalizeCarrierList(value: string | undefined): string[] {
-  const carriers = String(value ?? 'agent-cli')
-    .split(',')
-    .map((item) => nonEmpty(item))
-    .filter((item): item is string => Boolean(item));
-  return unique(carriers.length > 0 ? carriers : ['agent-cli']);
-}
-
-function workspaceLaunchSessionToken(record: WorkspaceLaunchRecord): string {
-  const stamp = new Date().toISOString().replace(/[^0-9A-Za-z]+/g, '');
-  return `${stamp}-${safePathToken(record.site)}-${safePathToken(record.role)}-${randomUUID()}`;
-}
-
-function operatorProjectionLaunchBindingPath(record: WorkspaceLaunchRecord, launchSessionToken: string): string {
-  const root = record.workspace_root ?? record.narada_root;
-  const name = `${launchSessionToken}.json`;
-  return join(root, '.ai', 'runtime', 'operator-projection-launch-bindings', name);
-}
-
-function safePathToken(value: string): string {
-  return value.replace(/[^0-9A-Za-z_.-]+/g, '-').replace(/^-+|-+$/g, '') || 'unknown';
-}
-
-function workspaceLaunchQualifiedAgentId(record: WorkspaceLaunchRecord): string {
-  const canonical = record.agent_identity_ref?.canonical_agent_id;
-  if (typeof canonical === 'string' && canonical.trim()) return canonical.trim();
-  const localAgentId = record.agent_identity_ref?.local_agent_id
-    ?? record.agent.split('.').filter(Boolean).at(-1)
-    ?? record.agent;
-  const identityScope = record.agent_identity_ref?.identity_scope;
-  const siteId = identityScope?.kind === 'narada_site' ? identityScope.site_id : record.site;
-  return record.agent.includes('.') || !siteId ? record.agent : `${siteId}.${localAgentId}`;
-}
-
-function agentWebUiAttachWtArgs(record: WorkspaceLaunchRecord, naradaProper: string, cloudflareApiBaseUrl: string | null, launchBindingPath: string | null, onboarding: boolean): string[] {
-  const agentDisplay = workspaceLaunchQualifiedAgentId(record);
-  const attachCommand = [
-    'pnpm',
-    '--dir', naradaProper,
-    'exec',
-    'narada',
-    'agent-web-ui',
-    'attach',
-    '--site-root', record.site_root,
-    ...(launchBindingPath ? ['--launch-binding', launchBindingPath] : ['--agent', record.agent]),
-    '--wait-for-session-ms', '60000',
-    '--open',
-  ];
-  if (onboarding) attachCommand.push('--onboarding');
-  if (cloudflareApiBaseUrl) attachCommand.push('--cloudflare-api-base-url', cloudflareApiBaseUrl);
-  const prelude = `Write-Host ${quotePowerShellArgument(`agent-web-ui: waiting for ${agentDisplay} launch binding, then starting browser projection`)}`;
-  return [
-    'new-tab',
-    '--title', `${agentDisplay} web ui`,
-    '-d', record.workspace_root ?? record.narada_root,
-    'pwsh',
-    '-NoExit',
-    '-Command',
-    `${prelude}\n${toPowerShellCommand(attachCommand)}`,
-  ];
-}
-
-function plannedAgentWebUiProjectionOpenRequest(record: WorkspaceLaunchRecord): Record<string, unknown> {
-  return {
-    schema: 'narada.operator_projection_open_request.v1',
-    status: 'planned',
-    projection_kind: 'browser_url',
-    target_ref: null,
-    target_ref_resolution: 'agent-web-ui attach resolves local URL after NARS session attach and server start',
-    purpose: 'agent_web_ui_attach',
-    caller: { package: '@narada2/cli', command: 'workspace launch', module: 'commands/launcher' },
-    mode: 'execute',
-    policy: { allow_visible_host_effect: true, suppress_reason: null },
-    mutation_performed: false,
-    launch_agent: record.agent,
-    launch_site: record.site,
-  };
-}
-
-function nonEmpty(value: unknown): string | null {
-  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
-}
-
-function nonEmptyStringArray(values: string[] | undefined): string[] {
-  return (values ?? []).map((value) => nonEmpty(value)).filter((value): value is string => Boolean(value));
-}
-
-function toPowerShellCommand(args: string[]): string {
-  return `& ${args.map(quotePowerShellArgument).join(' ')}`;
-}
-
-function quotePowerShellArgument(value: string): string {
-  return `'${value.replace(/'/g, "''")}'`;
-}
-
-function toShCommand(args: string[]): string {
-  return args.map(quoteShArgument).join(' ');
-}
-
-function quoteShArgument(value: string): string {
-  return `'${value.replace(/'/g, `'"'"'`)}'`;
-}
