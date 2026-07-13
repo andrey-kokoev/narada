@@ -206,7 +206,7 @@ async function copyDiagnostics() {
               </section>
               <section class="sop-section" aria-label="SOP templates">
                 <h3>Templates</h3>
-                <ol v-if="templates.length" class="mcp-server-list sop-item-list">
+                <ol v-if="templates.length" class="mcp-server-list sop-item-list narada-list-reset">
                   <li v-for="template in templates" :key="templateKey(template)" class="mcp-server-item sop-item">
                     <button type="button" class="mcp-server-row sop-item-row" :aria-expanded="isExpanded(templateKey(template))" @click="toggleItem(templateKey(template))">
                       <span class="mcp-server-main">
@@ -217,7 +217,7 @@ async function copyDiagnostics() {
                       <span class="mcp-server-tools-count">{{ textField(template, 'step_count') || arrayField(template, 'steps').length }} steps</span>
                       <span class="mcp-server-chevron" aria-hidden="true">{{ isExpanded(templateKey(template)) ? '−' : '+' }}</span>
                     </button>
-                    <ol v-if="isExpanded(templateKey(template))" class="mcp-tool-list sop-step-list">
+                    <ol v-if="isExpanded(templateKey(template))" class="mcp-tool-list sop-step-list narada-list-reset">
                       <li v-for="step in arrayField(template, 'steps')" :key="textField(step, 'id', 'step_id') || stepTitle(step)" class="mcp-tool-row sop-step-row">
                         <strong>{{ stepTitle(step) }}</strong>
                         <span v-if="stepMeta(step)">{{ stepMeta(step) }}</span>
@@ -231,7 +231,7 @@ async function copyDiagnostics() {
               </section>
               <section class="sop-section" aria-label="Recent SOP runs">
                 <h3>Recent runs</h3>
-                <ol v-if="runs.length" class="mcp-server-list sop-item-list">
+                <ol v-if="runs.length" class="mcp-server-list sop-item-list narada-list-reset">
                   <li v-for="run in runs" :key="runKey(run)" class="mcp-server-item sop-item">
                     <button type="button" class="mcp-server-row sop-item-row" :aria-expanded="isExpanded(runKey(run))" @click="toggleItem(runKey(run))">
                       <span class="mcp-server-main">
@@ -243,7 +243,7 @@ async function copyDiagnostics() {
                       <span class="mcp-server-tools-count">{{ textField(run, 'step_count') || arrayField(run, 'step_timeline', 'step_states').length }} steps</span>
                       <span class="mcp-server-chevron" aria-hidden="true">{{ isExpanded(runKey(run)) ? '−' : '+' }}</span>
                     </button>
-                    <ol v-if="isExpanded(runKey(run))" class="mcp-tool-list sop-step-list">
+                    <ol v-if="isExpanded(runKey(run))" class="mcp-tool-list sop-step-list narada-list-reset">
                       <li v-for="step in arrayField(run, 'step_timeline', 'step_states')" :key="textField(step, 'id', 'step_id') || stepTitle(step)" class="mcp-tool-row sop-step-row">
                         <strong>{{ stepTitle(step) }}</strong>
                         <span v-if="stepMeta(step)">{{ stepMeta(step) }}</span>

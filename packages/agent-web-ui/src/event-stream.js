@@ -1,4 +1,4 @@
-import { buildAgentWebUiSubscribeFrame, isAgentWebUiProtocolFrame } from '@narada2/nars-client-projection-contract';
+import { buildAgentWebUiSubscribeFrame, isAgentWebUiCloudflareProtocolFrame, translateAgentWebUiFrameForCloudflare } from '@narada2/nars-client-projection-contract';
 import { applyRuntimeEventToWebUiState, sequenceFromRuntimeMessage } from './runtime-events.js';
 import { appendEvent, setText } from './render.js';
 
@@ -61,10 +61,12 @@ export function connectEvents(endpointOrConfig, maxReplay, documentRef = documen
         this.socket.send(JSON.stringify(frame));
         return true;
       }
+      const remoteFrame = translateAgentWebUiFrameForCloudflare(frame);
+      if (!remoteFrame) return false;
       fetchFn(inputEndpoint, {
         method: 'POST',
         headers: { 'content-type': 'application/json', ...projectionHeaders(browserToken) },
-        body: JSON.stringify({ method: frame.method, payload: frame.params ?? {}, request_id: frame.id }),
+        body: JSON.stringify({ method: remoteFrame.method, payload: remoteFrame.params ?? {}, request_id: frame.id }),
       }).then(async (response) => {
         const body = await response.json().catch(() => ({ event: 'projection_input_response', status: response.ok ? 'ok' : 'failed' }));
         appendEvent({ event: 'projection_input_response', status: response.ok ? 'ok' : 'failed', ...body }, documentRef);
@@ -166,7 +168,7 @@ export function connectEvents(endpointOrConfig, maxReplay, documentRef = documen
         maxReplay,
         ...(connection.lastSequence === null ? {} : { sinceSequence: connection.lastSequence }),
       });
-      if (!isAgentWebUiProtocolFrame(frame)) throw new Error('unsupported_agent_web_ui_protocol_frame');
+      if (!isAgentWebUiCloudflareProtocolFrame(frame)) throw new Error('unsupported_agent_web_ui_protocol_frame');
       socket.send(JSON.stringify(frame));
     });
     socket.addEventListener('message', (event) => {

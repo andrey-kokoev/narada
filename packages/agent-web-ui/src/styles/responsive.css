@@ -1,5 +1,5 @@
 @media (max-width: 900px) {
-  .status .box-row-items {
+  .shell .status .box-row-items {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -31,71 +31,71 @@
     border-left: 0;
   }
 
-  .status .box-row-items {
+  .shell .status .box-row-items {
     grid-template-columns: 1fr;
   }
 
-  .status {
+  .shell .status {
     padding: 10px;
   }
 
-  .status .box-row-items > div {
+  .shell .status .box-row-items > div {
     padding: 9px 10px;
   }
 
-  .status > div:nth-child(1),
-  .status > div:nth-child(2) {
+  .shell .status > div:nth-child(1),
+  .shell .status > div:nth-child(2) {
     display: none;
   }
 
-  .events {
+  .shell .events {
     padding: 10px;
   }
 
-  .event {
+  .shell .event {
     grid-template-columns: 1fr;
   }
 
-  .event-detail {
+  .shell .event .event-detail {
     padding: 10px;
   }
 
-  .rendered-part-render {
+  .shell .event .rendered-part-render {
     padding: 10px;
   }
 
-  .message-markdown table {
+  .shell .event .message-markdown table {
     display: block;
     font-size: 11px;
     border: 0;
   }
 
-  .message-markdown thead,
-  .message-markdown tbody,
-  .message-markdown tr,
-  .message-markdown th,
-  .message-markdown td {
+  .shell .event .message-markdown thead,
+  .shell .event .message-markdown tbody,
+  .shell .event .message-markdown tr,
+  .shell .event .message-markdown th,
+  .shell .event .message-markdown td {
     display: block;
     width: 100%;
     padding: 6px 7px;
   }
 
-  .message-markdown thead {
+  .shell .event .message-markdown thead {
     display: none;
   }
 
-  .message-markdown tr {
+  .shell .event .message-markdown tr {
     margin-bottom: 8px;
     border: 1px solid var(--line);
     border-radius: var(--radius);
     overflow: hidden;
   }
 
-  .message-markdown td {
+  .shell .event .message-markdown td {
     border-width: 0 0 1px;
   }
 
-  .message-markdown td::before {
+  .shell .event .message-markdown td::before {
     content: attr(data-label);
     display: block;
     margin-bottom: 2px;
@@ -104,16 +104,16 @@
     text-transform: uppercase;
   }
 
-  .message-markdown td:last-child {
+  .shell .event .message-markdown td:last-child {
     border-bottom: 0;
   }
 
-  .event-heading {
+  .shell .event .event-heading {
     border-right: 0;
     border-bottom: 1px solid var(--line);
   }
 
-  .composer {
+  .shell .composer {
     padding: 10px;
   }
 

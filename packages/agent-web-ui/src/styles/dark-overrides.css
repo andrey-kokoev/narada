@@ -1,0 +1,46 @@
+@media (prefers-color-scheme: dark) {
+  .shell-header,
+  .shell .status,
+  .shell .composer,
+  .shell .event,
+  .shell .status .box-row-items > div {
+    background: var(--surface);
+  }
+
+  .shell .status {
+    background: var(--status-bg);
+  }
+
+  .shell .event .event-heading {
+    background: var(--surface-muted);
+  }
+
+  .shell .event .event-summary,
+  .shell .event .message-plain,
+  .shell .event .message-markdown,
+  .shell .event .event-label,
+  .shell .status .box-row-items > div > span:last-child,
+  .shell-header h1 {
+    color: var(--text);
+  }
+
+  .shell .event .inline-code-token,
+  .shell .event .message-markdown code {
+    background: var(--inline-code-bg);
+    color: var(--inline-code-text);
+  }
+
+  .shell .event .message-markdown th {
+    background: var(--surface-muted);
+  }
+
+  .shell .event .rendered-part-frame {
+    background: var(--surface);
+  }
+
+  .shell .composer textarea,
+  .shell .status select {
+    background: var(--control-bg);
+    color: var(--text);
+  }
+}

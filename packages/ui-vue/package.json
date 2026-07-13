@@ -28,6 +28,7 @@
     "@narada2/ui": "workspace:*",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "lucide-vue-next": "^0.563.0",
     "reka-ui": "^2.8.0",
     "tailwind-merge": "^3.4.0",
     "vue": "^3.5.0"

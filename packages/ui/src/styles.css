@@ -17,6 +17,7 @@
     --accent: #d99100;
     --accent-soft: #fff1cf;
     --operator: #2f7d54;
+    --success: var(--operator);
     --assistant: #d99100;
     --tool: #7c5fb0;
     --warning: #a66b18;
@@ -77,6 +78,7 @@
       --accent: #f4c430;
       --accent-soft: #3b2c0b;
       --operator: #57c083;
+      --success: var(--operator);
       --assistant: #f4c430;
       --tool: #bca7e7;
       --warning: #d99b43;

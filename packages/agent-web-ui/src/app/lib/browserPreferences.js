@@ -9,7 +9,7 @@ export const AGENT_WEB_UI_PREFERENCE_KEYS = Object.freeze({
 });
 
 export function readJsonPreference(key, fallback, storage = browserStorage()) {
-  const raw = storage?.getItem(key);
+  const raw = safeGetItem(storage, key);
   if (raw === null || raw === undefined) return fallback;
   try {
     return JSON.parse(raw);
@@ -29,7 +29,7 @@ export function writeJsonPreference(key, value, storage = browserStorage()) {
 }
 
 export function readStringPreference(key, fallback, storage = browserStorage()) {
-  return storage?.getItem(key) ?? fallback;
+  return safeGetItem(storage, key) ?? fallback;
 }
 
 export function writeStringPreference(key, value, storage = browserStorage()) {
@@ -43,7 +43,7 @@ export function writeStringPreference(key, value, storage = browserStorage()) {
 }
 
 export function readBooleanPreference(key, fallback, storage = browserStorage()) {
-  const stored = storage?.getItem(key);
+  const stored = safeGetItem(storage, key);
   if (stored === 'true') return true;
   if (stored === 'false') return false;
   return fallback;
@@ -54,5 +54,19 @@ export function writeBooleanPreference(key, value, storage = browserStorage()) {
 }
 
 function browserStorage() {
-  return typeof window === 'undefined' ? null : window.localStorage;
+  if (typeof window === 'undefined') return null;
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+}
+
+function safeGetItem(storage, key) {
+  if (!storage) return null;
+  try {
+    return storage.getItem(key);
+  } catch {
+    return null;
+  }
 }

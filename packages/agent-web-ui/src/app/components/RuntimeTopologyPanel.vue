@@ -101,7 +101,7 @@ function openEndpoint(endpoint: string | null) {
             <p>{{ props.topology.nodes.length }} runtime nodes</p>
           </section>
 
-          <ol class="runtime-topology-list">
+          <ol class="runtime-topology-list narada-list-reset">
             <li v-for="node in props.topology.nodes" :key="node.id" class="runtime-topology-node" :data-state="node.state">
               <div class="runtime-topology-node-main">
                 <strong>{{ node.label }}</strong>

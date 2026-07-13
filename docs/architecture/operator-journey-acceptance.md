@@ -33,6 +33,57 @@ The bounded acceptance commands are:
 
 pnpm --filter @narada2/cli run test:launcher-acceptance
 pnpm --filter @narada2/cli run test:operator-journey-acceptance
+pnpm --filter @narada2/agent-start run test:launcher-contract
+
+## Cross-Carrier Matrix
+
+The launcher-contract test derives its carrier set from the shared admitted
+carrier launch matrix contract at
+`packages/carrier-runtime-contract/contracts/carrier-launch-matrix.json` and
+runs a bounded dry-run for every row. Runtime adapter selection consumes the
+same contract. A dry-run proves selection, runtime identity, launch packet
+shape, and tool-fabric adapter selection. It does not claim that an external
+carrier binary or provider was started.
+
+The authoritative row data is the JSON contract itself. The generated
+conformance report at `tools/operator-surface-carriers/carrier-conformance-matrix.mjs`
+projects those rows and adds current launch-registry observations. This
+document intentionally does not repeat the row table, because a second table
+would become an unvalidated carrier authority.
+
+The report preserves the matrix's runtime substrate, fabric source, adapter
+entrypoint, projection capabilities, expected tools, and states for each row;
+it is therefore a complete readback with observations, not a reduced carrier
+summary.
+
+The matrix is intentionally factored. `launch selection` is the value consumed
+by the legacy `--carrier` path; `operator surface` identifies the presentation;
+`carrier implementation` identifies the semantic carrier family; and `runtime host`
+identifies the process substrate that owns the session. The launch result
+keeps `carrier_kind` as the compatibility selection alias and exposes
+`carrier_implementation_kind` for the semantic value. `agent-cli` and
+`agent-web-ui` therefore share one carrier implementation and runtime host
+while remaining distinct projections. The other rows must not be described as
+NARS sessions merely because they are admitted launch selections. Materialized
+carrier-session records must preserve `launch_selection_kind` and
+`operator_surface_kind` from the same matrix row; they must not infer the
+operator surface from a hard-coded subset of carriers.
+
+Rows may also declare bounded `projection_capabilities`. These are capability
+selectors, not runtime hosts: the `nars_attach` capability currently resolves
+to `agent-cli`, `agent-web-ui`, and `agent-tui`, even though the latter uses a
+different runtime host. Consumers must use the capability helper rather than
+recreate that subset locally.
+
+Each row also carries the static conformance profile used by the carrier
+conformance report: evidence level, MCP-fabric source, native-shell posture,
+mutation handling, startup availability, and known gaps. The report may add
+current launch-registry observations, but it must not define another carrier
+row set.
+
+The matrix is a launch-contract boundary, not a claim of feature parity. A
+carrier row with a native or ambient adapter still needs its own substrate
+integration evidence before it can be promoted to live journey acceptance.
 
 ## Evidence
 
@@ -93,5 +144,9 @@ live WebSocket and artifact delivery, real launcher projection, hidden-
 detached launch-to-session observation and shutdown, governed registry edit and
 add mutations, CSRF boundaries, route reconstruction, and cleanup.
 
-Remaining by design: other Site substrates, carrier/runtime combinations, and
-destructive Registry mutation classes remain outside this milestone.
+Remaining by design: live end-to-end journeys for external carrier processes,
+the agent-tui terminal loop, and a separately selected agent-web-ui carrier
+remain outside this milestone. Destructive Registry mutation classes also
+remain outside the acceptance journey. The contract matrix is the evidence
+boundary for those rows until their native processes can be exercised in a
+controlled environment.

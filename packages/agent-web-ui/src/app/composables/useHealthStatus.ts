@@ -1,5 +1,6 @@
 import { onBeforeUnmount, ref } from 'vue';
 import { agentIdentityDisplay } from '@narada2/agent-identity';
+import type { SessionTransport } from '../../protocol/sessionTransport';
 
 export interface HealthIdentitySummary {
   siteId: string | null;
@@ -17,12 +18,14 @@ export interface HealthIntelligenceSummary {
 export interface HealthStatusOptions {
   endpoint: string | null;
   browserToken?: string | null;
+  transport?: Pick<SessionTransport, 'healthEndpoint' | 'requestHealth'>;
   fetchFn?: typeof fetch;
   intervalMs?: number;
 }
 
 export function useHealthStatus(options: HealthStatusOptions) {
-  const text = ref(options.endpoint ? 'checking' : 'health endpoint not configured');
+  const hasEndpoint = Boolean(options.transport?.healthEndpoint ?? options.endpoint);
+  const text = ref(hasEndpoint ? 'checking' : 'health endpoint not configured');
   const identity = ref<HealthIdentitySummary>({ siteId: null, agentId: null, role: null, sessionId: null });
   const intelligence = ref<HealthIntelligenceSummary>({ provider: null, model: null, thinking: null });
   const body = ref<Record<string, unknown> | null>(null);
@@ -30,12 +33,19 @@ export function useHealthStatus(options: HealthStatusOptions) {
   let timer: ReturnType<typeof setInterval> | null = null;
 
   async function refresh() {
-    if (!options.endpoint) {
+    if (!hasEndpoint) {
       text.value = 'health endpoint not configured';
       return;
     }
     try {
-      const response = await fetchFn(options.endpoint, { method: 'GET', cache: 'no-store', headers: projectionHeaders(options.browserToken) });
+      const response = await (options.transport?.requestHealth(fetchFn)
+        ?? (options.endpoint
+          ? fetchFn(options.endpoint, { method: 'GET', cache: 'no-store', headers: projectionHeaders(options.browserToken) })
+          : null));
+      if (!response) {
+        text.value = 'health endpoint not configured';
+        return;
+      }
       const parsedValue = await response.json() as unknown;
       const parsed = parsedValue && typeof parsedValue === 'object' && !Array.isArray(parsedValue) ? parsedValue as Record<string, unknown> : {};
       body.value = parsed;
@@ -56,7 +66,7 @@ export function useHealthStatus(options: HealthStatusOptions) {
   }
 
   refresh();
-  if (options.endpoint) timer = setInterval(refresh, options.intervalMs ?? 10000);
+  if (hasEndpoint) timer = setInterval(refresh, options.intervalMs ?? 10000);
   onBeforeUnmount(() => {
     if (timer) clearInterval(timer);
   });

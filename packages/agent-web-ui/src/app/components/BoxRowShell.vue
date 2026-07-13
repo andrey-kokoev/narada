@@ -3,7 +3,7 @@
     <div class="box-row-items">
       <slot />
     </div>
-    <div class="box-row-controls" aria-label="Row controls">
+    <div v-if="$slots.controls" class="box-row-controls" aria-label="Row controls">
       <slot name="controls" />
     </div>
   </section>

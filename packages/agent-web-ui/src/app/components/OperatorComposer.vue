@@ -11,7 +11,7 @@ import type { OperatorSnippet, OperatorSnippetDeliveryMode } from '../composable
 import type { OperatorInputDeliveryProjection } from '../composables/useNarsEvents';
 
 const draft = defineModel<string>({ required: true });
-const props = defineProps<{ disabled?: boolean; disabledReason?: string; canInterrupt?: boolean; operatorSnippets?: OperatorSnippet[]; targetLabel?: string; targetState?: string; operatorDelivery: OperatorInputDeliveryProjection }>();
+const props = defineProps<{ disabled?: boolean; disabledReason?: string; canInterrupt?: boolean; operatorSnippets?: OperatorSnippet[]; targetLabel?: string; targetState?: string; operatorDelivery: OperatorInputDeliveryProjection; supportsProtocolMethod?: (method: string) => boolean }>();
 const emit = defineEmits<{ submit: [deliveryMode?: OperatorSnippetDeliveryMode]; 'run-snippet': [snippet: OperatorSnippet, deliveryMode?: OperatorSnippetDeliveryMode]; interrupt: [] }>();
 const inputRef = ref<HTMLTextAreaElement | null>(null);
 
@@ -52,6 +52,7 @@ const {
   draft,
   disabled,
   operatorSnippets,
+  supportsProtocolMethod: props.supportsProtocolMethod,
   focusInput,
   submit: (deliveryMode) => emit('submit', deliveryMode),
   runSnippet: (snippet, deliveryMode) => emit('run-snippet', snippet, deliveryMode),

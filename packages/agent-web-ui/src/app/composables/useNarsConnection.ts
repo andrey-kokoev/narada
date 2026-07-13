@@ -3,6 +3,7 @@ import { createNarsClient, type NarsClientConnection } from '../../protocol/nars
 
 export interface NarsConnectionConfig {
   eventEndpoint: string | null;
+  healthEndpoint?: string | null;
   inputEndpoint?: string | null;
   browserToken?: string | null;
   maxReplay?: number;
@@ -20,6 +21,7 @@ export function useNarsConnection(
 
   connection.value = createNarsClient({
     endpoint: config.eventEndpoint,
+    healthEndpoint: config.healthEndpoint,
     inputEndpoint: config.inputEndpoint,
     browserToken: config.browserToken,
     maxReplay: config.maxReplay,

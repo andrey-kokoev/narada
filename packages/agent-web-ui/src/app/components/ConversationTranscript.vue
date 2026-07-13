@@ -103,7 +103,7 @@ watch(() => props.followLatestRevision, () => {
 
 <template>
   <div ref="scroller" class="events-scroll" @scroll="updateScrollState">
-    <ol id="events" class="events" aria-label="NARS session events">
+    <ol id="events" class="events narada-list-reset" aria-label="NARS session events">
       <EventRow v-for="row in rows" :key="row.key" :row="row" :verbosity="verbosity" @intent-selected="emit('intent-selected', $event)" />
       <li
         v-if="agentActivity.active && (verbosity === 'conversation' || verbosity === 'operations')"

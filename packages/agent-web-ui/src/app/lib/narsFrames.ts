@@ -3,58 +3,62 @@ import { toSessionProtocolFrame, type SessionProtocolFrame } from '../../protoco
 
 const contract = NarsClientProjectionContract as unknown as Record<string, (...args: unknown[]) => unknown>;
 
-export function buildSopSummaryRequestFrame() {
-  return contract.buildAgentWebUiSopSummaryFrame();
+function frameFromContract(value: unknown): SessionProtocolFrame | null {
+  return toSessionProtocolFrame(value);
 }
 
-export function buildInboxSummaryRequestFrame() {
-  return contract.buildAgentWebUiInboxSummaryFrame();
+export function buildSopSummaryRequestFrame(): SessionProtocolFrame | null {
+  return frameFromContract(contract.buildAgentWebUiSopSummaryFrame());
 }
 
-export function buildDelegationSummaryRequestFrame() {
-  return contract.buildAgentWebUiDelegationSummaryFrame();
+export function buildInboxSummaryRequestFrame(): SessionProtocolFrame | null {
+  return frameFromContract(contract.buildAgentWebUiInboxSummaryFrame());
 }
 
-export function buildGitSummaryRequestFrame() {
-  return contract.buildAgentWebUiGitSummaryFrame();
+export function buildDelegationSummaryRequestFrame(): SessionProtocolFrame | null {
+  return frameFromContract(contract.buildAgentWebUiDelegationSummaryFrame());
 }
 
-export function buildArtifactsSummaryRequestFrame() {
-  return contract.buildAgentWebUiArtifactsSummaryFrame();
+export function buildGitSummaryRequestFrame(): SessionProtocolFrame | null {
+  return frameFromContract(contract.buildAgentWebUiGitSummaryFrame());
 }
 
-export function buildMailboxSummaryRequestFrame() {
-  return contract.buildAgentWebUiMailboxSummaryFrame();
+export function buildArtifactsSummaryRequestFrame(): SessionProtocolFrame | null {
+  return frameFromContract(contract.buildAgentWebUiArtifactsSummaryFrame());
 }
 
-export function buildSchedulerSummaryRequestFrame() {
-  return contract.buildAgentWebUiSchedulerSummaryFrame();
+export function buildMailboxSummaryRequestFrame(): SessionProtocolFrame | null {
+  return frameFromContract(contract.buildAgentWebUiMailboxSummaryFrame());
 }
 
-export function buildTaskLifecycleSummaryRequestFrame() {
-  return contract.buildAgentWebUiTaskLifecycleSummaryFrame();
+export function buildSchedulerSummaryRequestFrame(): SessionProtocolFrame | null {
+  return frameFromContract(contract.buildAgentWebUiSchedulerSummaryFrame());
 }
 
-export function buildSurfaceAffordancesRequestFrame() {
-  return contract.buildAgentWebUiSurfaceAffordancesFrame();
+export function buildTaskLifecycleSummaryRequestFrame(): SessionProtocolFrame | null {
+  return frameFromContract(contract.buildAgentWebUiTaskLifecycleSummaryFrame());
+}
+
+export function buildSurfaceAffordancesRequestFrame(): SessionProtocolFrame | null {
+  return frameFromContract(contract.buildAgentWebUiSurfaceAffordancesFrame());
 }
 
 export function buildIntelligenceReconfigureFrame(input: Record<string, unknown>, options: Record<string, unknown> = {}): SessionProtocolFrame | null {
-  return toSessionProtocolFrame(contract.buildAgentWebUiIntelligenceReconfigureFrame(input, options));
+  return frameFromContract(contract.buildAgentWebUiIntelligenceReconfigureFrame(input, options));
 }
 
-export function buildAffordanceActionRequestFrame(input: Record<string, unknown>, options: Record<string, unknown> = {}) {
-  return contract.buildAgentWebUiAffordanceActionRequestFrame(input, options);
+export function buildAffordanceActionRequestFrame(input: Record<string, unknown>, options: Record<string, unknown> = {}): SessionProtocolFrame | null {
+  return frameFromContract(contract.buildAgentWebUiAffordanceActionRequestFrame(input, options));
 }
 
-export function buildAffordanceActionConfirmFrame(input: Record<string, unknown>, options: Record<string, unknown> = {}) {
-  return contract.buildAgentWebUiAffordanceActionConfirmFrame(input, options);
+export function buildAffordanceActionConfirmFrame(input: Record<string, unknown>, options: Record<string, unknown> = {}): SessionProtocolFrame | null {
+  return frameFromContract(contract.buildAgentWebUiAffordanceActionConfirmFrame(input, options));
 }
 
-export function buildAffordanceActionCancelFrame(input: Record<string, unknown>, options: Record<string, unknown> = {}) {
-  return contract.buildAgentWebUiAffordanceActionCancelFrame(input, options);
+export function buildAffordanceActionCancelFrame(input: Record<string, unknown>, options: Record<string, unknown> = {}): SessionProtocolFrame | null {
+  return frameFromContract(contract.buildAgentWebUiAffordanceActionCancelFrame(input, options));
 }
 
-export function buildSurfaceFeedbackSummaryRequestFrame() {
-  return contract.buildAgentWebUiSurfaceFeedbackSummaryFrame();
+export function buildSurfaceFeedbackSummaryRequestFrame(): SessionProtocolFrame | null {
+  return frameFromContract(contract.buildAgentWebUiSurfaceFeedbackSummaryFrame());
 }

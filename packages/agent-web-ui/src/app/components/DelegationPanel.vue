@@ -121,7 +121,7 @@ async function copyDiagnostics() {
                   <span class="mcp-server-main"><strong>Worker runs</strong><span>{{ summary.workers.count }} item(s)</span></span>
                   <span class="mcp-server-chevron" aria-hidden="true">{{ isExpanded('workers') ? '-' : '+' }}</span>
                 </button>
-                <ol v-if="isExpanded('workers') && summary.workers.items.length" class="mcp-server-list delegation-list">
+                <ol v-if="isExpanded('workers') && summary.workers.items.length" class="mcp-server-list delegation-list narada-list-reset">
                   <li v-for="(run, index) in summary.workers.items" :key="rowKey(run, index)" class="mcp-server-item delegation-item">
                     <span class="mcp-server-main"><strong>{{ workerTitle(run) }}</strong><span>{{ rowMeta(run) }}</span></span>
                   </li>
@@ -133,7 +133,7 @@ async function copyDiagnostics() {
                   <span class="mcp-server-main"><strong>Delegated tasks</strong><span>{{ summary.delegatedTasks.count }} item(s)</span></span>
                   <span class="mcp-server-chevron" aria-hidden="true">{{ isExpanded('delegated_tasks') ? '-' : '+' }}</span>
                 </button>
-                <ol v-if="isExpanded('delegated_tasks') && summary.delegatedTasks.items.length" class="mcp-server-list delegation-list">
+                <ol v-if="isExpanded('delegated_tasks') && summary.delegatedTasks.items.length" class="mcp-server-list delegation-list narada-list-reset">
                   <li v-for="(task, index) in summary.delegatedTasks.items" :key="rowKey(task, index)" class="mcp-server-item delegation-item">
                     <span class="mcp-server-main"><strong>{{ taskTitle(task) }}</strong><span>{{ rowMeta(task) }}</span></span>
                   </li>

@@ -112,7 +112,7 @@ async function copyDiagnostics() {
             <div class="sop-items-scroll inbox-items-scroll">
               <section class="sop-section inbox-section" aria-label="Received inbox envelopes">
                 <h3>Received</h3>
-                <ol v-if="envelopes.length" class="mcp-server-list inbox-envelope-list">
+                <ol v-if="envelopes.length" class="mcp-server-list inbox-envelope-list narada-list-reset">
                   <li v-for="(envelope, index) in envelopes" :key="envelopeKey(envelope, index)" class="mcp-server-item inbox-envelope-item">
                     <button type="button" class="mcp-server-row inbox-envelope-row" :aria-expanded="isExpanded(envelopeKey(envelope, index))" @click="toggleEnvelope(envelopeKey(envelope, index))">
                       <span class="mcp-server-main">

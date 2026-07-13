@@ -12,6 +12,7 @@ import {
   registerOperatorRouteSet,
   routeProjectionMatchesIdentity,
 } from '@narada2/operator-router';
+import { OPERATOR_CONSOLE_LONG_RUNNING_REQUEST_TIMEOUT_MS } from '@narada2/operator-console-contract';
 import { silentCommandContext, wrapCommand } from '../lib/command-wrapper.js';
 import {
   emitFormatterBackedCommandResult,
@@ -152,6 +153,7 @@ export function registerConsoleCommands(program: Command): void {
             process_evidence: { instance_nonce: instanceNonce, pid: process.pid, started_at: new Date().toISOString() },
             protocols: ['http'],
             methods: ['GET', 'HEAD', 'POST', 'OPTIONS'],
+            timeout_ms: OPERATOR_CONSOLE_LONG_RUNNING_REQUEST_TIMEOUT_MS,
             lease_ms: 60 * 60 * 1000,
             reconstruction: { kind: 'explicit', site_root: null, site_id: null, session_id: null },
           }],

@@ -6,6 +6,7 @@ interface SurfaceNavigatorItem {
   label: string;
   detail: string;
   available: boolean;
+  unavailableMessage?: string;
 }
 
 interface SurfaceNavigatorGroup {
@@ -32,9 +33,8 @@ const visibleGroups = computed(() => {
     .map((group) => ({
       ...group,
       items: group.items.filter((item) => {
-        if (!item.available) return false;
         if (!query) return true;
-        return [group.title, item.label, item.detail].some((value) => value.toLowerCase().includes(query));
+        return [group.title, item.label, item.detail, item.unavailableMessage ?? ''].some((value) => value.toLowerCase().includes(query));
       }),
     }))
     .filter((group) => group.items.length > 0);
@@ -43,6 +43,10 @@ const visibleGroups = computed(() => {
 function openSurface(key: string) {
   emit('open', key);
   open.value = false;
+}
+
+function itemDetail(item: SurfaceNavigatorItem): string {
+  return item.available ? item.detail : item.unavailableMessage ?? 'Capability is not advertised by the attached runtime.';
 }
 
 function handleKeydown(event: KeyboardEvent) {
@@ -85,12 +89,12 @@ watch(open, async (value) => {
             <div class="surface-navigator-groups">
               <section v-for="group in visibleGroups" :key="group.title" class="surface-navigator-group">
                 <h3>{{ group.title }}</h3>
-                <ol class="surface-navigator-list">
+                <ol class="surface-navigator-list narada-list-reset">
                   <li v-for="item in group.items" :key="item.key">
-                    <button type="button" class="surface-navigator-row" @click="openSurface(item.key)">
+                    <button type="button" class="surface-navigator-row" :disabled="!item.available" :aria-disabled="!item.available" @click="item.available && openSurface(item.key)">
                       <span>
                         <strong>{{ item.label }}</strong>
-                        <small>{{ item.detail }}</small>
+                        <small>{{ itemDetail(item) }}</small>
                       </span>
                       <span aria-hidden="true">›</span>
                     </button>

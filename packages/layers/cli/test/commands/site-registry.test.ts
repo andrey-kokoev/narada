@@ -18,11 +18,11 @@ function validPayload(overrides: Record<string, unknown> = {}): Record<string, u
     registry_url: 'https://registry.example',
     credential_ref: 'config-ref:NARADA_SITE_REGISTRY_RELATION_ADMIN_TOKEN',
     event_id: 'srrt_test',
-    idempotency_key: 'narada-proper:narada-andrey:activate:test',
+    idempotency_key: 'narada-proper:andrey-user:activate:test',
     registry_id: 'site-registry:narada-proper:cloudflare',
-    relation_id: 'rel_narada-proper_registry_narada-andrey',
-    site_id: 'narada-andrey',
-    subject_site_id: 'narada-andrey',
+    relation_id: 'rel_narada-proper_registry_andrey-user',
+    site_id: 'andrey-user',
+    subject_site_id: 'andrey-user',
     relation_kind: 'user_locus_site_public_projection',
     transition: 'activate',
     from_state: 'candidate',
@@ -33,7 +33,7 @@ function validPayload(overrides: Record<string, unknown> = {}): Record<string, u
     capability_ref: 'capability:site_registry.relation.admin.narada-proper',
     occurred_at: '2026-05-17T21:00:00.000Z',
     reason_codes: ['target_site_local_relation_admitted'],
-    evidence_refs: ['narada-andrey:task:957'],
+    evidence_refs: ['andrey-user:task:957'],
     ...overrides,
   };
 }
@@ -54,7 +54,7 @@ describe('site registry relation planner', () => {
         raw_secret_values_recorded: false,
       },
       transition_preview: {
-        site_id: 'narada-andrey',
+        site_id: 'andrey-user',
         transition: 'activate',
         capability_ref: 'capability:site_registry.relation.admin.narada-proper',
       },

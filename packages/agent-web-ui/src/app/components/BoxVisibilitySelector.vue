@@ -73,7 +73,7 @@ const filteredBoxes = computed(() => {
               <span>{{ boxCountLabel }} visible</span>
               <button type="button" @click="emit('reset')">Reset</button>
             </div>
-            <ol class="box-visibility-selector-list">
+            <ol class="box-visibility-selector-list narada-list-reset">
               <li v-for="box in filteredBoxes" :key="box.id" class="box-visibility-selector-item" :data-visible="box.visible">
                 <label>
                   <input type="checkbox" :checked="box.visible" :disabled="box.required" @change="emit('toggle', box.id)" />

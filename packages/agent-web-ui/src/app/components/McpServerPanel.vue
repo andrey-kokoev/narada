@@ -174,7 +174,7 @@ async function copyDiagnostics() {
               </label>
               <button type="button" @click="copyDiagnostics">{{ copyLabel }}</button>
             </div>
-            <ol v-if="filteredServers.length" class="mcp-server-list">
+            <ol v-if="filteredServers.length" class="mcp-server-list narada-list-reset">
               <li v-for="server in filteredServers" :key="server.serverName" class="mcp-server-item" :data-state="server.operationalState">
                 <button type="button" class="mcp-server-row" :aria-expanded="isExpanded(server.serverName)" @click="toggleServer(server.serverName)">
                   <span class="mcp-server-main">
@@ -192,7 +192,7 @@ async function copyDiagnostics() {
                 >
                   {{ panelLabelForServer(server) }}
                 </button>
-                <ol v-if="isExpanded(server.serverName)" class="mcp-tool-list">
+                <ol v-if="isExpanded(server.serverName)" class="mcp-tool-list narada-list-reset">
                   <li v-for="tool in server.tools" :key="tool.toolName" class="mcp-tool-row">
                     <strong>{{ tool.toolName }}</strong>
                     <span v-if="tool.description">{{ tool.description }}</span>

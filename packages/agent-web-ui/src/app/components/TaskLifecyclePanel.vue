@@ -133,7 +133,7 @@ async function copyDiagnostics() {
                   <span class="mcp-server-main"><strong>{{ section.title }}</strong><span>{{ section.collection.count }} item(s)</span></span>
                   <span class="mcp-server-chevron" aria-hidden="true">{{ isExpanded(section.key) ? '-' : '+' }}</span>
                 </button>
-                <ol v-if="isExpanded(section.key) && section.collection.items.length" class="mcp-server-list task-lifecycle-list">
+                <ol v-if="isExpanded(section.key) && section.collection.items.length" class="mcp-server-list task-lifecycle-list narada-list-reset">
                   <li v-for="(task, index) in section.collection.items" :key="taskKey(task, index)" class="mcp-server-item task-lifecycle-item">
                     <span class="mcp-server-main">
                       <strong>{{ taskTitle(task) }}</strong>

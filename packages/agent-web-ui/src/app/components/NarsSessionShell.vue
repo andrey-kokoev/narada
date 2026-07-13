@@ -11,6 +11,7 @@ import GitPanel from './GitPanel.vue';
 import InboxPanel from './InboxPanel.vue';
 import MailboxPanel from './MailboxPanel.vue';
 import McpServerPanel from './McpServerPanel.vue';
+import OnboardingWelcomePanel from './OnboardingWelcomePanel.vue';
 import OperatorComposer from './OperatorComposer.vue';
 import OperatorQueuePanel from './OperatorQueuePanel.vue';
 import OperatorSnippetPanel from './OperatorSnippetPanel.vue';
@@ -23,7 +24,7 @@ import BoxVisibilitySelector, { type BoxVisibilitySelectorItem } from './BoxVisi
 import SurfaceNavigator from './SurfaceNavigator.vue';
 import SurfaceFeedbackPanel from './SurfaceFeedbackPanel.vue';
 import TaskLifecyclePanel from './TaskLifecyclePanel.vue';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@narada2/ui-vue';
 import { summarizeSessionTitleParts } from '../../session-identity.js';
 import { useBoxVisibilityPreference } from '../composables/useBoxVisibilityPreference';
 import { useSessionPanels } from '../composables/useSessionPanels';
@@ -44,7 +45,7 @@ import type { OperatorSnippet, OperatorSnippetFeedback, OperatorSnippetOpenReque
 import type { ProjectionVerbosity } from '../composables/useProjectionVerbosity';
 import type { RuntimeTopologySummary } from '../composables/useRuntimeTopology';
 import type { SchedulerSummary } from '../composables/useSchedulerSummary';
-import type { SessionIdentitySummary } from '../composables/useNarsEvents';
+import type { OperatorInputDeliveryProjection, SessionIdentitySummary } from '../composables/useNarsEvents';
 import type { SopSummary } from '../composables/useSopSummary';
 import type { SurfaceAffordanceSummary } from '../composables/useSurfaceAffordances';
 import type { SurfaceFeedbackSummary } from '../composables/useSurfaceFeedbackSummary';
@@ -59,6 +60,7 @@ const props = defineProps<{
   artifactBasePath: string | null;
   artifactTransport: string | null;
   healthBody: Record<string, unknown> | null;
+  onboarding: boolean;
   streamText: string;
   healthText: string;
   intelligence: HealthIntelligenceSummary;
@@ -67,6 +69,7 @@ const props = defineProps<{
   verbosityLevels: readonly ProjectionVerbosity[];
   rows: ProjectedEventRow[];
   sessionIdentity: SessionIdentitySummary;
+  operatorDelivery: OperatorInputDeliveryProjection;
   supportsProtocolMethod: (method: string) => boolean;
   agentActivity: AgentActivityState;
   affordanceConfirmations: AffordanceConfirmationItem[];
@@ -94,8 +97,7 @@ const props = defineProps<{
 }>();
 const draft = defineModel<string>('draft', { required: true });
 const emit = defineEmits<{
-  'update:verbosity': [value: ProjectionVerbosity];
-  'publish-cloudflare': [cloudflareApiBaseUrl: string];
+  'update:verbosity': [value: ProjectionVerbosity];  'publish-cloudflare': [cloudflareApiBaseUrl: string];
   submit: [deliveryMode?: 'default' | 'enqueue'];
   'run-snippet': [snippet: OperatorSnippet, deliveryMode?: 'default' | 'enqueue'];
   'save-snippet': [name: string, body: string, mode: 'save' | 'edit'];
@@ -177,34 +179,30 @@ const surfaceGroups = computed(() => [
   {
     title: 'Workflows',
     items: [
-      { key: 'task_lifecycle', label: 'Tasks', detail: props.taskLifecycleSummary.status, available: panels.isAvailable('task_lifecycle') },
-      { key: 'inbox', label: 'Inbox', detail: `${props.inboxSummary.status} · ${props.inboxSummary.envelopes.count} received`, available: panels.isAvailable('inbox') },
-      { key: 'mailbox', label: 'Email', detail: `${props.mailboxSummary.status} · ${props.mailboxSummary.messages.count} messages`, available: panels.isAvailable('mailbox') },
-      { key: 'artifacts', label: 'Artifacts', detail: `${props.artifactsSummary.status} · ${props.artifactsSummary.artifacts.total} total`, available: panels.isAvailable('artifacts') },
+      panelNavigationItem('task_lifecycle', 'Tasks', props.taskLifecycleSummary.status),
+      panelNavigationItem('inbox', 'Inbox', `${props.inboxSummary.status} · ${props.inboxSummary.envelopes.count} received`),
+      panelNavigationItem('mailbox', 'Email', `${props.mailboxSummary.status} · ${props.mailboxSummary.messages.count} messages`),
+      panelNavigationItem('artifacts', 'Artifacts', `${props.artifactsSummary.status} · ${props.artifactsSummary.artifacts.total} total`),
     ],
   },
   {
     title: 'Automation',
     items: [
-      { key: 'delegation', label: 'Delegation', detail: `${props.delegationSummary.status} · ${props.delegationSummary.workers.count + props.delegationSummary.delegatedTasks.count} visible`, available: panels.isAvailable('delegation') },
-      { key: 'sop', label: 'SOP', detail: `${props.sopSummary.status} · ${props.sopSummary.templates.count} templates`, available: panels.isAvailable('sop') },
-      { key: 'scheduler', label: 'Scheduler', detail: `${props.schedulerSummary.status} · ${props.schedulerSummary.tasks.count} tasks`, available: panels.isAvailable('scheduler') },
+      panelNavigationItem('delegation', 'Delegation', `${props.delegationSummary.status} · ${props.delegationSummary.workers.count + props.delegationSummary.delegatedTasks.count} visible`),
+      panelNavigationItem('sop', 'SOP', `${props.sopSummary.status} · ${props.sopSummary.templates.count} templates`),
+      panelNavigationItem('scheduler', 'Scheduler', `${props.schedulerSummary.status} · ${props.schedulerSummary.tasks.count} tasks`),
     ],
   },
   {
     title: 'Diagnostics',
     items: [
-      {
-        key: 'runtime_topology',
+      {        key: 'runtime_topology',
         label: 'Connection',
         detail: props.runtimeTopology.statusText,
         available: true,
       },
       {
-        key: 'git',
-        label: 'Git',
-        detail: `${props.gitSummary.status} · ${props.gitSummary.changedFiles.count} changed`,
-        available: panels.isAvailable('git'),
+        ...panelNavigationItem('git', 'Git', `${props.gitSummary.status} · ${props.gitSummary.changedFiles.count} changed`),
       },
       {
         key: 'mcp',
@@ -221,10 +219,22 @@ const surfaceGroups = computed(() => [
   {
     title: 'Feedback',
     items: [
-      { key: 'surface_feedback', label: 'Surface Feedback', detail: props.surfaceFeedbackSummary.status, available: panels.isAvailable('surface_feedback') },
+      panelNavigationItem('surface_feedback', 'Surface Feedback', props.surfaceFeedbackSummary.status),
     ],
   },
 ]);
+
+function panelNavigationItem(id: SessionPanelId, label: string, detail: string) {
+  const available = panels.isAvailable(id);
+  const unavailableMessage = panels.registrations.value.find((registration) => registration.id === id)?.unavailableMessage;
+  return {
+    key: id,
+    label,
+    detail,
+    available,
+    ...(available || !unavailableMessage ? {} : { unavailableMessage }),
+  };
+}
 const headerItemDefinitions: Record<HeaderItemId, Omit<BoxVisibilitySelectorItem, 'visible'>> = {
   identity: { id: 'identity', label: 'Identity', description: 'Site and agent identity title for this session.', required: true },
   snippets: { id: 'snippets', label: 'Snippets', description: 'Browser-local reusable operator inputs.' },
@@ -285,7 +295,6 @@ function isHeaderItemVisible(id: HeaderItemId): boolean {
 function toggleHeaderItem(id: string) {
   headerVisibility.toggle(id);
 }
-
 function resetHeaderItems() {
   headerVisibility.reset();
 }
@@ -385,8 +394,7 @@ function resetHeaderItems() {
           </Tooltip>
           <Tooltip v-if="!statusRowOpen && isHeaderItemVisible('status_toggle')">
             <TooltipTrigger as-child>
-              <button
-                type="button"
+              <button                type="button"
                 class="status-row-collapse-toggle status-row-collapse-toggle-header"
                 :aria-expanded="statusRowOpen"
                 aria-label="Expand status boxes"
@@ -474,9 +482,16 @@ function resetHeaderItems() {
         @collapse="statusRowOpen = false"
       />
     </section>
+    <OnboardingWelcomePanel
+      :enabled="onboarding"
+      :rows="rows"
+      :agent-activity="agentActivity"
+      :session-identity="sessionIdentity"
+      :intelligence="intelligence"
+      @intent-selected="emit('intent-selected', $event)"
+    />
     <ConversationTranscript :rows="rows" :verbosity="verbosity" :agent-activity="agentActivity" :follow-latest-revision="followLatestRevision" @intent-selected="emit('intent-selected', $event)" />
     <AffordanceConfirmationPanel :items="affordanceConfirmations" @confirm="emit('confirm-affordance-action', $event)" @cancel="emit('cancel-affordance-action', $event)" />
     <OperatorQueuePanel :items="operatorQueueItems" :active-turn-id="activeTurnId" :can-steer-active-turn="canSteerActiveTurn" @edit="emit('edit-queued', $event)" @remove="emit('remove-queued', $event)" @steer="emit('steer-queued', $event)" />
-    <OperatorComposer v-model="draft" :operator-snippets="operatorSnippets" :disabled="composerDisabled" :can-interrupt="canInterruptModel" :disabled-reason="composerDisabledReason" :target-label="composerTargetLabel" :target-state="composerTargetState" @submit="emit('submit', $event)" @run-snippet="(snippet, mode) => emit('run-snippet', snippet, mode)" @interrupt="emit('interrupt')" />
-  </main>
+    <OperatorComposer v-model="draft" :operator-snippets="operatorSnippets" :disabled="composerDisabled" :can-interrupt="canInterruptModel" :disabled-reason="composerDisabledReason" :target-label="composerTargetLabel" :target-state="composerTargetState" :operator-delivery="operatorDelivery" :supports-protocol-method="supportsProtocolMethod" @submit="emit('submit', $event)" @run-snippet="(snippet, mode) => emit('run-snippet', snippet, mode)" @interrupt="emit('interrupt')" />  </main>
 </template>

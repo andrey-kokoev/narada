@@ -6,6 +6,13 @@ export interface RetainedEventState {
   maxEvents: number;
 }
 
+function normalizeRetainedEventLimit(maxEvents: number): number {
+  if (!Number.isFinite(maxEvents) || maxEvents < 1) return DEFAULT_RETAINED_EVENT_LIMIT;
+  return Math.max(1, Math.floor(maxEvents));
+}
+
+export const DEFAULT_RETAINED_EVENT_LIMIT = 500;
+
 function sameRuntimeEventIdentity(left: unknown, right: unknown): boolean {
   const leftEvent = unwrapRetainedEvent(left);
   const rightEvent = unwrapRetainedEvent(right);
@@ -28,8 +35,8 @@ function eventIdentity(event: Record<string, unknown> | null): string {
   return `${kind}:${requestId ?? JSON.stringify(event)}`;
 }
 
-export function createRetainedEventState(maxEvents = 500): RetainedEventState {
-  return { events: [], droppedCount: 0, maxEvents };
+export function createRetainedEventState(maxEvents = DEFAULT_RETAINED_EVENT_LIMIT): RetainedEventState {
+  return { events: [], droppedCount: 0, maxEvents: normalizeRetainedEventLimit(maxEvents) };
 }
 
 export function retainEvent(state: RetainedEventState, event: unknown): void {

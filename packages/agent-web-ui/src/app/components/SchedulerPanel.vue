@@ -108,7 +108,7 @@ async function copyDiagnostics() {
             <div class="sop-items-scroll scheduler-items-scroll">
               <section class="sop-section scheduler-section" aria-label="Scheduled tasks">
                 <h3>Tasks</h3>
-                <ol v-if="tasks.length" class="mcp-server-list scheduler-task-list">
+                <ol v-if="tasks.length" class="mcp-server-list scheduler-task-list narada-list-reset">
                   <li v-for="task in tasks" :key="taskKey(task)" class="mcp-server-item scheduler-task-item">
                     <button type="button" class="mcp-server-row scheduler-task-row" :aria-expanded="isExpanded(taskKey(task))" @click="toggleTask(taskKey(task))">
                       <span class="mcp-server-main">

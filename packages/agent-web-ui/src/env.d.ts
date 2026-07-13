@@ -17,6 +17,7 @@ declare module '@narada2/nars-client-projection-contract' {
     description: string;
     keywords: readonly string[];
     usage: string;
+    protocolMethods: readonly string[];
     palette: Readonly<{ visible: boolean; rank: number; danger: boolean }>;
     buildAction(input: object, context?: object): object;
   }
@@ -49,6 +50,8 @@ declare module '@narada2/nars-client-projection-contract' {
   export const AGENT_WEB_UI_NARS_METHOD_LIST: readonly string[];
   export const AGENT_WEB_UI_NARS_METHODS: Record<string, string>;
   export const NARS_RUNTIME_INTELLIGENCE_RECONFIGURE_METHOD: 'runtime.intelligence.reconfigure';
+  export const AGENT_WEB_UI_CLOUDFLARE_METHOD_LIST: readonly string[];
+  export const AGENT_WEB_UI_CLOUDFLARE_METHODS: ReadonlySet<string>;
   export const NARS_CLIENT_PROJECTION_DEFAULT_VERBOSITY: string;
   export const NARS_CLIENT_PROJECTION_VERBOSITY_LEVELS: readonly string[];
   export type NarsClientProjectionVerbosity = string;
@@ -61,9 +64,9 @@ declare module '@narada2/nars-client-projection-contract' {
   export function buildAgentWebUiSubscribeFrame(options?: object): any;
   export function buildAgentWebUiConversationSendFrame(message: string): any;
   export function buildAgentWebUiConversationSteerFrame(command: string): any;
-  export function buildAgentWebUiHelpText(): string;
+  export function buildAgentWebUiHelpText(options?: { supportsProtocolMethod?: (method: string) => boolean }): string;
   export function findAgentWebUiCommand(rawCommand: unknown): AgentWebUiCommand | null;
-  export function filterAgentWebUiCommands(query?: unknown): AgentWebUiCommand[];
+  export function filterAgentWebUiCommands(query?: unknown, options?: { supportsProtocolMethod?: (method: string) => boolean }): AgentWebUiCommand[];
   export function findAgentWebUiSnippetAction(rawVerb?: unknown): AgentWebUiSnippetAction | null;
   export function filterAgentWebUiSnippetActions(query?: unknown): AgentWebUiSnippetAction[];
   export function isAgentWebUiSnippetSelectionAction(rawVerb?: unknown): boolean;
@@ -71,5 +74,8 @@ declare module '@narada2/nars-client-projection-contract' {
   export function parseAgentWebUiSnippetCommand(value?: unknown): AgentWebUiSnippetCommandParse;
   export function buildAgentWebUiOperatorInputAction(text: string, options?: object): any;
   export function isAgentWebUiNarsMethod(value: unknown): boolean;
+  export function isAgentWebUiCloudflareMethod(value: unknown): boolean;
   export function isAgentWebUiProtocolFrame(value: unknown): boolean;
+  export function isAgentWebUiCloudflareProtocolFrame(value: unknown): boolean;
+  export function translateAgentWebUiFrameForCloudflare(value: unknown): Record<string, unknown> | null;
 }

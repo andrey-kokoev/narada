@@ -122,7 +122,7 @@ async function copyDiagnostics() {
             <div class="sop-items-scroll artifacts-items-scroll">
               <section class="sop-section artifacts-section" aria-label="Recent artifacts">
                 <h3>Recent artifacts</h3>
-                <ol v-if="filteredItems.length" class="mcp-server-list artifacts-list">
+                <ol v-if="filteredItems.length" class="mcp-server-list artifacts-list narada-list-reset">
                   <li v-for="(item, index) in filteredItems" :key="itemKey(item, index)" class="mcp-server-item artifacts-item">
                     <div class="mcp-server-row artifacts-row">
                       <span class="mcp-server-main"><strong>{{ itemTitle(item) }}</strong><span>{{ itemMeta(item) }}</span></span>

@@ -1,6 +1,6 @@
 import {
-  AGENT_WEB_UI_NARS_METHOD_LIST,
-  AGENT_WEB_UI_NARS_METHODS,
+  AGENT_WEB_UI_CLOUDFLARE_METHOD_LIST,
+  AGENT_WEB_UI_CLOUDFLARE_METHODS,
   buildAgentWebUiArtifactsSummaryFrame as buildArtifactsSummaryRequestFrame,
   buildAgentWebUiDelegationSummaryFrame as buildDelegationSummaryRequestFrame,
   buildAgentWebUiEventsReadFrame as buildEventsReadFrame,
@@ -15,8 +15,8 @@ import {
   buildAgentWebUiAffordanceActionConfirmFrame as buildAffordanceActionConfirmFrame,
   buildAgentWebUiAffordanceActionCancelFrame as buildAffordanceActionCancelFrame,
   buildAgentWebUiSurfaceFeedbackSummaryFrame as buildSurfaceFeedbackSummaryRequestFrame,
-  isAgentWebUiNarsMethod,
-  isAgentWebUiProtocolFrame,
+  isAgentWebUiCloudflareMethod,
+  isAgentWebUiCloudflareProtocolFrame,
 } from '@narada2/nars-client-projection-contract';
 import { readInjectedConfig, resolveAttachConfig } from './config.js';
 import { connectEvents, buildSubscribeFrame, reconnectDelayForAttempt } from './event-stream.js';
@@ -42,13 +42,19 @@ import { rerenderEvents, setText } from './render.js';
 
 export const AGENT_WEB_UI_DEFAULT_VERBOSITY = 'conversation';
 
+// This package is retained only as a deprecated Cloudflare adapter surface.
+export const AGENT_WEB_UI_NARS_METHOD_LIST = AGENT_WEB_UI_CLOUDFLARE_METHOD_LIST;
+export const AGENT_WEB_UI_NARS_METHODS = AGENT_WEB_UI_CLOUDFLARE_METHODS;
+export const isAgentWebUiNarsMethod = isAgentWebUiCloudflareMethod;
+export const isAgentWebUiProtocolFrame = isAgentWebUiCloudflareProtocolFrame;
+
 export {
-  AGENT_WEB_UI_NARS_METHOD_LIST,
-  AGENT_WEB_UI_NARS_METHODS,
+  AGENT_WEB_UI_CLOUDFLARE_METHOD_LIST,
+  AGENT_WEB_UI_CLOUDFLARE_METHODS,
   NARS_CLIENT_PROJECTION_DEFAULT_VERBOSITY,
   NARS_CLIENT_PROJECTION_VERBOSITY_LEVELS,
-  isAgentWebUiNarsMethod,
-  isAgentWebUiProtocolFrame,
+  isAgentWebUiCloudflareMethod,
+  isAgentWebUiCloudflareProtocolFrame,
   applyRuntimeEventToWebUiState,
   normalizeNarsClientProjectionVerbosity,
   projectRuntimeEvent,

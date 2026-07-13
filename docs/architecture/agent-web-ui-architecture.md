@@ -16,6 +16,11 @@ The Web UI is a browser operator surface for one NARS session. It is a peer
 projection of NARS, not a runtime host, provider adapter, MCP host, or session
 authority.
 
+Normal local browser ingress is governed by the
+[Operator Router target](operator-router-target.md). Agent Web UI remains a
+per-session backing projection and must support the router-assigned base path;
+it does not own a stable host port.
+
 ## Objective
 
 Keep the browser surface easy to extend without moving runtime authority into

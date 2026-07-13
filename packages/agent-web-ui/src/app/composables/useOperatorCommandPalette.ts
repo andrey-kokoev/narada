@@ -16,6 +16,7 @@ interface OperatorCommandPaletteOptions {
   draft: Ref<string>;
   disabled: ComputedRef<boolean>;
   operatorSnippets: ComputedRef<OperatorSnippet[]>;
+  supportsProtocolMethod?: (method: string) => boolean;
   focusInput: () => void;
   submit: (deliveryMode?: OperatorSnippetDeliveryMode) => void;
   runSnippet: (snippet: OperatorSnippet, deliveryMode?: OperatorSnippetDeliveryMode) => void;
@@ -28,7 +29,11 @@ export function useOperatorCommandPalette(options: OperatorCommandPaletteOptions
   const commandPaletteOpen = computed(() => isOperatorCommandPaletteOpen(options.draft.value, commandPaletteDismissedFor.value, options.disabled.value));
 
   const commandResults = computed<OperatorCommandPaletteEntry[]>(() => {
-    return buildOperatorCommandPaletteEntries({ draft: options.draft.value, snippets: options.operatorSnippets.value });
+    return buildOperatorCommandPaletteEntries({
+      draft: options.draft.value,
+      snippets: options.operatorSnippets.value,
+      supportsProtocolMethod: options.supportsProtocolMethod,
+    });
   });
 
   const commandPaletteView = computed<OperatorCommandPaletteView>(() => {

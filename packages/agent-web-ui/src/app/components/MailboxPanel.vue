@@ -134,7 +134,7 @@ async function copyDiagnostics() {
             <div class="sop-items-scroll mailbox-items-scroll">
               <section class="sop-section mailbox-section" aria-label="Synced mailbox accounts">
                 <h3>Accounts</h3>
-                <ol v-if="accounts.length" class="mcp-server-list mailbox-item-list">
+                <ol v-if="accounts.length" class="mcp-server-list mailbox-item-list narada-list-reset">
                   <li v-for="account in accounts" :key="textField(account, 'mailbox_id') || textField(account, 'label')" class="mcp-server-item mailbox-item">
                     <div class="mcp-server-row mailbox-item-row">
                       <span class="mcp-server-main">
@@ -149,7 +149,7 @@ async function copyDiagnostics() {
               </section>
               <section class="sop-section mailbox-section" aria-label="Recent synced email messages">
                 <h3>Recent messages</h3>
-                <ol v-if="messages.length" class="mcp-server-list mailbox-item-list">
+                <ol v-if="messages.length" class="mcp-server-list mailbox-item-list narada-list-reset">
                   <li v-for="message in messages" :key="messageKey(message)" class="mcp-server-item mailbox-item">
                     <button type="button" class="mcp-server-row mailbox-item-row" :aria-expanded="isExpanded(messageKey(message))" @click="toggleMessage(messageKey(message))">
                       <span class="mcp-server-main">

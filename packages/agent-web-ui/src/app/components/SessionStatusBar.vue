@@ -6,7 +6,7 @@ import ProjectionVerbositySelect from './ProjectionVerbositySelect.vue';
 import { useBoxVisibilityPreference } from '../composables/useBoxVisibilityPreference';
 import { AGENT_WEB_UI_PREFERENCE_KEYS } from '../lib/browserPreferences.js';
 import { NARS_RUNTIME_INTELLIGENCE_RECONFIGURE_METHOD } from '@narada2/nars-client-projection-contract';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@narada2/ui-vue';
 import type { AgentActivityState } from '../composables/useAgentActivity';
 import type { useCloudflareProjection } from '../composables/useCloudflareProjection';
 import type { HealthIntelligenceSummary } from '../composables/useHealthStatus';
@@ -97,8 +97,7 @@ function authorityText(authority: Record<string, unknown> | null): string {
   const epoch = Number.isInteger(authority.authority_epoch) ? ` e${authority.authority_epoch}` : '';
   const transition = typeof authority.authority_transition_state === 'string' && authority.authority_transition_state ? ` · ${authority.authority_transition_state}` : '';
   const writes = typeof authority.source_write_admission === 'string' && authority.source_write_admission ? ` · writes ${authority.source_write_admission}` : '';
-  return `${host}${epoch}${transition}${writes}`;
-}
+  return `${host}${epoch}${transition}${writes}`;}
 
 function reattachText(authority: Record<string, unknown> | null): string | null {
   if (!authority?.stale_source) return null;
@@ -197,8 +196,7 @@ function requestThinkingChange(event: Event) {
 function actionList(record: Record<string, unknown> | null | undefined): { id: string; raw: Record<string, unknown> }[] {
   const actions = arrayField(objectField(record, 'affordance_document'), 'actions');
   return actions
-    .map((action) => ({ id: stringField(action, 'id'), raw: action }))
-    .filter((action): action is { id: string; raw: Record<string, unknown> } => Boolean(action.id));
+    .map((action) => ({ id: stringField(action, 'id'), raw: action }))    .filter((action): action is { id: string; raw: Record<string, unknown> } => Boolean(action.id));
 }
 
 function objectField(record: unknown, field: string): Record<string, unknown> | null {
@@ -297,8 +295,7 @@ function stringField(record: Record<string, unknown>, field: string): string | n
                 class="intelligence-thinking-select"
                 :value="thinkingInputValue"
                 aria-label="Thinking level"
-                @change="requestThinkingChange"
-                @click.stop
+                @change="requestThinkingChange"                @click.stop
                 @keydown.stop
               >
                 <option v-for="choice in thinkingChoices" :key="choice" :value="choice">{{ choice }}</option>

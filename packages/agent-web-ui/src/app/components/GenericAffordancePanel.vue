@@ -144,7 +144,7 @@ function stringField(record: unknown, field: string): string | null {
                 <dd>{{ metric.value ?? 'n/a' }}</dd>
               </div>
             </dl>
-            <ol v-if="panelActions(panel).length" class="mcp-tool-list">
+            <ol v-if="panelActions(panel).length" class="mcp-tool-list narada-list-reset">
               <li v-for="action in panelActions(panel)" :key="String(action.id)" class="mcp-tool-row">
                 <button v-if="canRequestAction(action)" type="button" class="mcp-panel-close" @click="requestAction(action)">
                   {{ actionLabel(action) }}
@@ -157,7 +157,7 @@ function stringField(record: unknown, field: string): string | null {
           </section>
           <section v-if="refs.length" class="generic-affordance-section">
             <h3>References</h3>
-            <ol class="mcp-tool-list">
+            <ol class="mcp-tool-list narada-list-reset">
               <li v-for="ref in refs" :key="String(ref.id)" class="mcp-tool-row">
                 <strong>{{ stringField(ref, 'label') ?? stringField(ref, 'id') ?? 'Reference' }}</strong>
                 <span>{{ targetLabel(objectField(ref, 'target')) ?? 'target unavailable' }}</span>

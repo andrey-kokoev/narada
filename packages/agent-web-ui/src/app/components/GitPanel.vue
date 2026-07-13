@@ -148,7 +148,7 @@ async function copyDiagnostics() {
                   <span class="mcp-server-main"><strong>{{ section.title }}</strong><span>{{ section.collection.count }} item(s)<template v-if="section.collection.truncated"> · truncated</template></span></span>
                   <span class="mcp-server-chevron" aria-hidden="true">{{ isExpanded(section.key) ? '-' : '+' }}</span>
                 </button>
-                <ol v-if="isExpanded(section.key) && section.collection.items.length" class="mcp-server-list git-list">
+                <ol v-if="isExpanded(section.key) && section.collection.items.length" class="mcp-server-list git-list narada-list-reset">
                   <li v-for="(item, index) in section.collection.items" :key="section.key === 'changed_files' ? changedFileKey(item, index) : commitKey(item, index)" class="mcp-server-item git-item">
                     <span class="mcp-server-main">
                       <strong>{{ section.key === 'changed_files' ? changedFileTitle(item) : commitTitle(item) }}</strong>

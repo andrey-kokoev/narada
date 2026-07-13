@@ -131,7 +131,7 @@ async function copyDiagnostics() {
             <div class="sop-items-scroll surface-feedback-items-scroll">
               <section class="sop-section surface-feedback-section" aria-label="Recent feedback">
                 <h3>Recent feedback</h3>
-                <ol v-if="summary.feedback.items.length" class="mcp-server-list surface-feedback-list">
+                <ol v-if="summary.feedback.items.length" class="mcp-server-list surface-feedback-list narada-list-reset">
                   <li v-for="(item, index) in summary.feedback.items" :key="itemKey(item, index)" class="mcp-server-item surface-feedback-item">
                     <button type="button" class="mcp-server-row surface-feedback-row" :aria-expanded="isExpanded(itemKey(item, index))" @click="toggleItem(itemKey(item, index))">
                       <span class="mcp-server-main"><strong>{{ itemTitle(item) }}</strong><span>{{ itemMeta(item) }}</span></span>

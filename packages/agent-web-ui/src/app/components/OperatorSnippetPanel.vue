@@ -258,7 +258,7 @@ function normalizePreviewName(value: string): string {
               </label>
               <button type="button" :disabled="!importText.trim()" @click="importJson">Import</button>
             </section>
-            <ol v-if="visibleSnippets.length" class="operator-snippet-list">
+            <ol v-if="visibleSnippets.length" class="operator-snippet-list narada-list-reset">
               <li v-for="snippet in visibleSnippets" :key="snippet.id" class="operator-snippet-item" :data-pinned="snippet.pinned === true">
                 <div class="operator-snippet-main">
                   <strong><span v-if="snippet.pinned" class="operator-snippet-pin" aria-label="Pinned">PIN</span>{{ snippet.name }}</strong>

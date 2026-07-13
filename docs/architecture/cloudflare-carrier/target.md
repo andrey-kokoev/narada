@@ -209,6 +209,8 @@ The first HTTP/WebSocket control surface should be narrow and protocol-shaped:
 
 The public API may use HTTP routes, WebSocket messages, or both. The semantic operation names above are the contract-facing shape; route names are transport mechanics.
 
+These are Cloudflare Carrier control names, not the local NARS session-core contract. A local session-core client uses `session.health`, `session.recovery`, `session.submit`, and `session.cancel`; a named Cloudflare adapter may translate those local controls to this carrier vocabulary before the request reaches the carrier.
+
 Every mutating operation must be idempotency-aware. A request should carry a request id or event id that lets the Durable Object avoid duplicate evidence when clients retry after disconnects.
 
 ## Concurrency Model

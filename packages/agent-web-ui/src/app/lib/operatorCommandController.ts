@@ -80,6 +80,7 @@ export function operatorCommandPaletteEntrySection(entry: OperatorCommandPalette
 export interface OperatorCommandControllerState {
   draft: string;
   snippets: readonly OperatorSnippet[];
+  supportsProtocolMethod?: (method: string) => boolean;
 }
 
 export interface OperatorCommandAcceptDecision {
@@ -98,7 +99,9 @@ export function isOperatorCommandPaletteOpen(draft: string, dismissedFor: string
 export function buildOperatorCommandPaletteEntries(state: OperatorCommandControllerState): OperatorCommandPaletteEntry[] {
   if (isSnippetPaletteActive(state.draft)) return buildSnippetPaletteEntries(state.draft, state.snippets);
   const query = commandQuery(state.draft).trim().toLowerCase();
-  const commands: OperatorCommandPaletteEntry[] = filterAgentWebUiCommands(commandQuery(state.draft)).map((command) => ({
+  const commands: OperatorCommandPaletteEntry[] = filterAgentWebUiCommands(commandQuery(state.draft), {
+    supportsProtocolMethod: state.supportsProtocolMethod,
+  }).map((command) => ({
     kind: 'command',
     command,
     id: command.id,

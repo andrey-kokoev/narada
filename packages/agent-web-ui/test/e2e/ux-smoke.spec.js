@@ -17,10 +17,11 @@ function listen(server, host = '127.0.0.1') {
   });
 }
 
-async function withHealthServer(fn) {
+async function withHealthServer(fn, options = {}) {
+  const healthState = options.healthState ?? { sessionId: 'ux_session' };
   const server = createServer((request, response) => {
     response.writeHead(200, { 'content-type': 'application/json' });
-    response.end(JSON.stringify({ schema: 'narada.nars.health.v1', status: 'healthy', site_id: 'narada.ux', agent_id: 'ux.agent', role: 'resident', session_id: 'ux_session', mcp_operational_state: 'healthy' }));
+    response.end(JSON.stringify({ schema: 'narada.nars.health.v1', status: 'healthy', site_id: 'narada.ux', agent_id: 'ux.agent', role: 'resident', session_id: healthState.sessionId, mcp_operational_state: 'healthy' }));
   });
   const url = await listen(server);
   try {
@@ -30,8 +31,8 @@ async function withHealthServer(fn) {
   }
 }
 
-function publishScenarioEvents(eventHub, scenario) {
-  const base = { agent_id: 'ux.agent', session_id: `ux_${scenario}`, timestamp: new Date().toISOString(), provider: 'codex-subscription' };
+function publishScenarioEvents(eventHub, scenario, sessionId = `ux_${scenario}`) {
+  const base = { agent_id: 'ux.agent', session_id: sessionId, timestamp: new Date().toISOString(), provider: 'codex-subscription' };
   eventHub.publish({ ...base, event: 'session_started', site_id: 'narada.ux', role: 'resident', model: 'gpt-5.5', mcp_server_count: 15, mcp_operational_state: 'healthy' });
   if (scenario === 'thinking') {
     eventHub.publish({ ...base, event: 'operator_input_submitted', request_id: 'input_thinking', content: 'Think through the plan' });
@@ -167,12 +168,12 @@ async function withScenarioServer(scenario, fn, options = {}) {
       ...(options.onboarding === true ? { onboarding: true } : {}),
     });
     try {
-      return await fn(web.url, () => publishScenarioEvents(eventHub, scenario), inputFrames, eventHub);
+      return await fn(web.url, () => publishScenarioEvents(eventHub, scenario, options.sessionId ?? `ux_${scenario}`), inputFrames, eventHub);
     } finally {
       web.server.close();
       eventProjection.server.close();
     }
-  });
+  }, options);
 }
 
 const UX_ASSERTION_SCRIPT = String.raw`(() => {
@@ -323,6 +324,9 @@ async function runScenarioViewport({ page, scenario, viewport }) {
       assert.ok(screenshot.length > 5000, `expected non-empty screenshot: ${scenario.name}-${viewport.name}.png`);
       const result = await page.evaluate(UX_ASSERTION_SCRIPT);
       assert.deepEqual(result.failures, [], `${scenario.name}/${viewport.name}: ${JSON.stringify({ failures: result.failures, messages: result.messages })}`);
+      if (!scenario.onboarding) {
+        assert.equal(await page.locator('.onboarding-panel').count(), 0, `${scenario.name}/${viewport.name}: onboarding must remain opt-in`);
+      }
       if (scenario.name !== 'disconnected') {
         assert.match(result.text, /narada\.ux[\s\S]*ux\.agent/i, 'expected header to show site and agent identity');
         assert.match(result.text, /Role:\s*resident/i, 'expected header to show agent role');
@@ -421,6 +425,9 @@ test('agent-web-ui User Site onboarding makes the first-use path explicit', asyn
     assert.match(readyText ?? '', /Surface[\s\S]*Browser/);
     assert.match(readyText ?? '', /Authority[\s\S]*Resident runtime[\s\S]*NARS/);
 
+    await page.getByRole('button', { name: 'Ask what is possible' }).click();
+    assert.equal(await page.locator('#operator-input').inputValue(), 'What can you help me with?');
+
     await page.getByRole('button', { name: 'Start with a request' }).click();
     assert.equal(await page.locator('#operator-input').inputValue(), 'What would you like to work on?');
     assert.equal(await page.locator('#operator-input').evaluate((element) => document.activeElement === element), true);
@@ -432,6 +439,61 @@ test('agent-web-ui User Site onboarding makes the first-use path explicit', asyn
     assert.match(completeText ?? '', /architect and builder roles/);
     await page.getByRole('button', { name: 'Review optional roles' }).click();
     assert.equal(await page.locator('#operator-input').inputValue(), 'What roles could I add later, and when would architect or builder help?');
+  }, { onboarding: true });
+});
+
+test('agent-web-ui User Site onboarding dismissal is scoped to the attached runtime session', async ({ page }) => {
+  const healthState = { sessionId: 'ux_onboarding_session_a' };
+  await withScenarioServer('thinking', async (url, publishEvents, _inputFrames, eventHub) => {
+    await page.setViewportSize({ width: 900, height: 560 });
+    await page.goto(url);
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForSelector('.onboarding-panel[data-phase="ready"]');
+    publishEvents();
+    await page.waitForSelector('.onboarding-panel[data-phase="working"]');
+    await page.getByRole('button', { name: 'Dismiss onboarding' }).click();
+    assert.equal(await page.locator('.onboarding-panel').count(), 0);
+
+    healthState.sessionId = 'ux_onboarding_session_b';
+    eventHub.publish({
+      agent_id: 'ux.agent',
+      session_id: healthState.sessionId,
+      site_id: 'narada.ux',
+      role: 'resident',
+      provider: 'codex-subscription',
+      model: 'gpt-5.5',
+      timestamp: new Date().toISOString(),
+      event: 'session_started',
+      mcp_server_count: 15,
+      mcp_operational_state: 'healthy',
+    });
+    await page.reload();
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForSelector('.onboarding-panel');
+    assert.match(await page.locator('.onboarding-panel').textContent() ?? '', /Your assistant is working|Welcome to your General assistant/);
+  }, { onboarding: true, healthState });
+});
+
+test('agent-web-ui User Site onboarding shows active work and persists dismissal for the session', async ({ page }) => {
+  await withScenarioServer('thinking', async (url, publishEvents) => {
+    await page.setViewportSize({ width: 900, height: 560 });
+    await page.goto(url);
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForSelector('.onboarding-panel[data-phase="ready"]');
+
+    publishEvents();
+    await page.waitForSelector('.onboarding-panel[data-phase="working"]');
+    const workingText = await page.locator('.onboarding-panel').textContent();
+    assert.match(workingText ?? '', /Your assistant is working/);
+    assert.match(workingText ?? '', /Keep this page open/);
+
+    await page.getByRole('button', { name: 'Dismiss onboarding' }).click();
+    assert.equal(await page.locator('.onboarding-panel').count(), 0);
+
+    await page.reload();
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(100);
+    assert.equal(await page.locator('.onboarding-panel').count(), 0, 'dismissal should survive reload for the same session');
   }, { onboarding: true });
 });
 
