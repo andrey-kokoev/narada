@@ -13,7 +13,8 @@
       "runtime_lifecycle_hooks",
       "artifact_http_request_handling",
       "attachment_contract",
-      "carrier_substrate_handoff"
+      "carrier_substrate_handoff",
+      "runtime_host_lifecycle"
     ],
     "carrier_substrate": "@narada2/carrier-runtime in-process",
     "runtime_dependency_owner": "nars-session-core owns session control and durability; nars-provider-runtime supplies provider execution"
@@ -26,6 +27,8 @@
     "./runtime-session-binding": "./src/runtime-session-binding.mjs",
     "./session-core-runtime-service": "./src/session-core-runtime-service.mjs",
     "./runtime-context": "./src/runtime-context.mjs",
+    "./control-input-bridge": "./src/control-input-bridge.mjs",
+    "./runtime-host-state": "./src/runtime-host-state.mjs",
     "./runtime-server-events": "./src/runtime-server-events.mjs",
     "./test-fixtures": "./src/test-fixtures.mjs",
     "./agent-cli-windows-wrapper-template": "./templates/Start-AgentCliSession.ps1",
@@ -33,7 +36,7 @@
   },
   "scripts": {
     "test": "node --test test/*.test.mjs",
-    "typecheck": "tsc --noEmit --allowJs --checkJs false bin/narada-agent-runtime-server.mjs src/server-wrapper.mjs src/runtime-context.mjs src/runtime-session-binding.mjs src/session-core-runtime-service.mjs src/runtime-server-events.mjs src/test-fixtures.mjs"
+    "typecheck": "tsc --noEmit --allowJs --checkJs false bin/narada-agent-runtime-server.mjs src/server-wrapper.mjs src/runtime-context.mjs src/control-input-bridge.mjs src/runtime-host-state.mjs src/runtime-session-binding.mjs src/session-core-runtime-service.mjs src/runtime-server-events.mjs src/test-fixtures.mjs"
   },
   "dependencies": {
     "@narada2/agent-identity": "workspace:*",
@@ -41,6 +44,7 @@
     "@narada2/carrier-protocol": "workspace:*",
     "@narada2/carrier-provider-contract": "workspace:*",
     "@narada2/carrier-terminal-projection": "workspace:*",
+    "@narada2/launch-process-ownership": "workspace:*",
     "@narada2/nars-session-core": "workspace:*",
     "@narada2/nars-capability-gateway": "workspace:*",
     "@narada2/nars-provider-runtime": "workspace:*",

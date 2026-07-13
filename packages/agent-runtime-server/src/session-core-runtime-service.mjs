@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { resolveNaradaSitePaths } from '@narada2/site-paths';
-import { writeNarsSessionStartedIndex } from '@narada2/nars-session-core/session-index';
+import { markNarsSessionIndexClosed, writeNarsSessionStartedIndex } from '@narada2/nars-session-core/session-index';
+import { buildLaunchProcessOwnershipEvidence } from '@narada2/launch-process-ownership';
 import { createRuntimeSessionBinding } from './runtime-session-binding.mjs';
 import { createNarsCapabilityGateway } from '@narada2/nars-capability-gateway/capability-gateway';
 
@@ -40,6 +41,21 @@ function createJsonLineWriter(output) {
       output.off?.('error', onError);
     },
   };
+}
+
+function markSessionClosed(runtimeContext, reason) {
+  markNarsSessionIndexClosed({
+    sessionPath: runtimeContext.sessionPath,
+    siteRoot: runtimeContext.siteRoot,
+    terminalState: 'closed',
+    terminalReason: reason,
+    closedAt: new Date().toISOString(),
+  });
+}
+
+function runtimeHostSnapshot(runtimeContext) {
+  if (typeof runtimeContext.runtimeHostState === 'function') return runtimeContext.runtimeHostState();
+  return runtimeContext.runtimeHostState ?? null;
 }
 
 function requestContent(request) {
@@ -90,6 +106,7 @@ function projectRuntimeHealth(snapshot, runtimeContext, toolGateway) {
     runtime_mode: 'server',
     health_endpoint: runtimeContext.healthUrl ?? null,
     event_endpoint: runtimeContext.eventStreamUrl ?? null,
+    runtime_host_state: runtimeHostSnapshot(runtimeContext),
     heartbeat,
     intelligence: {
       provider: runtimeContext.intelligenceProvider ?? null,
@@ -199,6 +216,7 @@ export function createSessionCoreRuntimeService({ runtimeContext, callChatApiFn,
       }
       if (method === 'session.close') {
         await supervisor.close({ request_id: requestId, reason: 'control_request' });
+        markSessionClosed(runtimeContext, 'control_request');
         return true;
       }
       if (request?.parse_error === 'invalid_json') throw new Error('invalid_json');
@@ -245,6 +263,7 @@ export function createSessionCoreRuntimeService({ runtimeContext, callChatApiFn,
       agent_identity_ref: runtimeContext.agentIdentityRef ?? null,
       site_id: runtimeContext.siteId ?? null,
       site_root: runtimeContext.siteRoot ?? null,
+      control_path: runtimeContext.controlPath ?? null,
       session_path: runtimeContext.sessionPath ?? null,
       events_path: runtimeContext.eventsPath ?? null,
       operator_surface_kind: runtimeContext.operatorSurfaceKind ?? null,
@@ -257,6 +276,21 @@ export function createSessionCoreRuntimeService({ runtimeContext, callChatApiFn,
       delegated_authority_ref: runtimeContext.narsDelegatedAuthorityHandoff?.authority_ref ?? null,
       health_endpoint: runtimeContext.healthUrl ?? null,
       event_endpoint: runtimeContext.eventStreamUrl ?? null,
+      runtime_host_state: runtimeHostSnapshot(runtimeContext),
+      launch_session_id: runtimeContext.launchSessionId ?? null,
+      process_role: runtimeContext.processRole ?? null,
+      process_ownership: runtimeContext.launchSessionId
+        ? buildLaunchProcessOwnershipEvidence({
+          launchSessionId: runtimeContext.launchSessionId,
+          ownership: runtimeContext.processOwnership,
+          processRole: runtimeContext.processRole,
+          siteRoot: runtimeContext.siteRoot,
+          ownerSiteRoot: runtimeContext.siteRoot,
+          createdByPid: runtimeContext.createdByPid,
+          pid: process.pid,
+          serverName: 'narada-agent-runtime-server',
+        })
+        : null,
     });
     writeNarsSessionStartedIndex({
       sessionStartedEvent,
@@ -293,7 +327,10 @@ export function createSessionCoreRuntimeService({ runtimeContext, callChatApiFn,
       if (request) closed = await schedule(request);
       await Promise.allSettled([...pending]);
     } finally {
-      if (!closed && supervisor.core.lifecycleState === 'ready') await supervisor.close({ reason: 'input_closed' });
+      if (!closed && supervisor.core.lifecycleState === 'ready') {
+        await supervisor.close({ reason: 'input_closed' });
+        markSessionClosed(runtimeContext, 'input_closed');
+      }
       try {
         await writer.flush();
       } finally {

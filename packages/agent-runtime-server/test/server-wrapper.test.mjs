@@ -77,6 +77,7 @@ test('package owns the Narada agent runtime server bins and exports', () => {
   assert.equal(packageJson.narada.owns.includes('session_binding'), true);
   assert.equal(packageJson.narada.owns.includes('artifact_http_request_handling'), true);
   assert.equal(packageJson.narada.owns.includes('attachment_contract'), true);
+  assert.equal(packageJson.narada.owns.includes('runtime_host_lifecycle'), true);
   assert.equal(packageJson.narada.carrier_substrate, '@narada2/carrier-runtime in-process');
   assert.equal(packageJson.narada.runtime_dependency_owner.includes('nars-session-core owns session control'), true);
   assert.equal(packageJson.bin['narada-agent-runtime-server'], './bin/narada-agent-runtime-server.mjs');
@@ -127,7 +128,10 @@ test('spawned runtime exposes active and completed FIFO queue state without prov
     await waitForCapturedOutput(child, () => stdout, (text) => text.includes('health-active') && text.includes('recovery-active'));
     assert.equal(providerCalls, 1);
     const activeEvents = stdout.trim().split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
-    assert.equal(activeEvents.find((event) => event.event === 'session_health' && event.request_id === 'health-active')?.operator_input_queue?.pending_count, 2);
+    const activeHealth = activeEvents.find((event) => event.event === 'session_health' && event.request_id === 'health-active');
+    assert.equal(activeHealth?.operator_input_queue?.pending_count, 2);
+    assert.equal(activeHealth?.runtime_host_state?.runtime_host_state, 'serving');
+    assert.equal(activeEvents.find((event) => event.event === 'session_started')?.runtime_host_state?.runtime_host_state, 'serving');
     assert.equal(activeEvents.find((event) => event.event === 'session_recovery' && event.request_id === 'recovery-active')?.operator_input_queue?.pending_count, 2);
     releaseFirst();
     await waitForCapturedOutput(child, () => stdout, (text) => (text.match(/carrier_turn_completed/g) ?? []).length === 2);

@@ -24,12 +24,17 @@ export function createNarsRuntimeContext({
   if (!intelligenceProvider) throw new TypeError('intelligenceProvider is required');
   const resolvedPaths = resolveNaradaSitePaths({ siteRoot, sessionId: session });
   const paths = sessionPath && eventsPath
-    ? { sessionPath, eventsPath }
-    : { sessionPath: resolvedPaths.narsSessionPath, eventsPath: resolvedPaths.narsEventsPath };
+    ? { controlPath: resolvedPaths.narsControlPath, sessionPath, eventsPath }
+    : {
+      controlPath: resolvedPaths.narsControlPath,
+      sessionPath: resolvedPaths.narsSessionPath,
+      eventsPath: resolvedPaths.narsEventsPath,
+    };
   const resolved = resolveAgentIdentityRef(identity, { site_id: siteId, role: process.env.NARADA_AGENT_ROLE ?? null });
   const agentIdentityRef = inputAgentIdentityRef && typeof inputAgentIdentityRef === 'object'
     ? normalizeAgentIdentityRefV2(inputAgentIdentityRef, { site_id: siteId, agent_id: identity })
     : resolved.status === 'resolved' ? resolved.value : null;
+  const maxToolRounds = normalizeMaxToolRounds(providerSettings.maxToolRounds ?? process.env.NARADA_MAX_TOOL_ROUNDS);
   return Object.freeze({
     ...rest,
     identity,
@@ -42,9 +47,11 @@ export function createNarsRuntimeContext({
     session,
     siteRoot,
     siteId,
+    controlPath: paths.controlPath,
     sessionPath: paths.sessionPath,
     eventsPath: paths.eventsPath,
     intelligenceProvider,
+    maxToolRounds,
     launchSessionId: optionalString(rest.launchSessionId),
     processOwnership: optionalString(rest.processOwnership),
     processRole: optionalString(rest.processRole),
@@ -59,4 +66,10 @@ export function createNarsRuntimeContext({
       runtimeBinding: providerSettings.runtimeBinding ?? null,
     }),
   });
+}
+
+function normalizeMaxToolRounds(value) {
+  const numeric = typeof value === 'number' ? value : Number.parseInt(String(value ?? ''), 10);
+  if (!Number.isFinite(numeric)) return 8;
+  return Math.min(64, Math.max(1, Math.trunc(numeric)));
 }

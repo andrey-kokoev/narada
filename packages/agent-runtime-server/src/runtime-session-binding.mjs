@@ -20,6 +20,10 @@ export function createRuntimeSessionBinding({ runtimeContext = {}, callChatApiFn
       invocationEventSink,
     }),
   });
+  const defaultBuildTurnContext = (input) => ({
+    turnId: input.event_id,
+    messages: [{ role: 'user', content: input.content }],
+  });
   return createNarsSessionSupervisor({
     sessionCoreOptions: {
       sessionId,
@@ -31,10 +35,12 @@ export function createRuntimeSessionBinding({ runtimeContext = {}, callChatApiFn
     carrier,
     toolGateway,
     handleControlRequest,
-    buildTurnContext: buildTurnContext ?? ((input) => ({
-      turnId: input.event_id,
-      messages: [{ role: 'user', content: input.content }],
-      settings: runtimeContext.providerSettings ?? {},
-    })),
+    buildTurnContext: (input) => {
+      const turnContext = (buildTurnContext ?? defaultBuildTurnContext)(input);
+      return {
+        ...turnContext,
+        maxToolRounds: turnContext.maxToolRounds ?? runtimeContext.maxToolRounds ?? 8,
+      };
+    },
   });
 }
