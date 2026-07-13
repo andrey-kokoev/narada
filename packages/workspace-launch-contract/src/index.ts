@@ -106,7 +106,10 @@ export interface WorkspaceLaunchUiSession {
   schema: 'narada.workspace_launch.ui_session.v1';
   ui_session_id: string;
   started_at: string;
-  status: 'open' | 'closing' | 'closed' | 'timeout';
+  status: 'open' | 'closing' | 'closed' | 'timeout' | 'failed';
+  lifecycle_schema?: 'narada.workspace_launch.ui_session.lifecycle_state.v1';
+  lifecycle_state?: 'created' | 'starting' | 'open' | 'closing' | 'closed' | 'timeout' | 'failed';
+  lifecycle_history?: Array<'created' | 'starting' | 'open' | 'closing' | 'closed' | 'timeout' | 'failed'>;
   url: string | null;
   registry_paths: string[];
   owner: {
@@ -132,6 +135,108 @@ export interface WorkspaceLaunchResultEnvelope {
   launch_count?: number;
   dashboard?: WorkspaceLaunchUiDashboard;
   attempt?: WorkspaceLaunchWireAttempt;
+}
+
+export interface WorkspaceLaunchIdentityRef {
+  canonical_agent_id?: string;
+  local_agent_id?: string;
+  role?: string;
+  identity_scope?: { kind: string; site_id?: string };
+  legacy_agent_id?: string;
+}
+
+export interface WorkspaceLaunchProjectionObservationRecord {
+  schema: 'narada.workspace_launch.observed_projection.v1';
+  observation_id: string;
+  launch_attempt_id: string;
+  projection_kind: 'agent-web-ui' | 'agent-cli';
+  session_id: string | null;
+  status: 'planned' | 'handed_off' | 'failed';
+  command: string;
+  authority: 'nars_client_projection_contract';
+  ownership_posture: 'handoff_only' | 'owned_by_projection_authority';
+  observed_at: string;
+  message: string;
+  diagnostic: unknown;
+}
+
+export interface WorkspaceLaunchHandoffRecord {
+  schema: 'narada.workspace_launch.handoff.v1';
+  handoff_id: string;
+  launch_attempt_id: string;
+  posture: 'operator_terminal' | 'hidden_runtime_host';
+  status: 'planned' | 'handed_off' | 'failed' | 'unknown_after_handoff';
+  command: string | null;
+  argv_redacted: string[];
+  cwd: string | null;
+  exit_code: number | null;
+  ownership_posture: 'handoff_only';
+  diagnostic_ref: string | null;
+}
+
+export interface WorkspaceLaunchObservationRecord {
+  schema: 'narada.workspace_launch.observed_runtime.v1';
+  observation_id: string;
+  launch_attempt_id: string;
+  kind: 'nars';
+  session_id: string | null;
+  site_root: string | null;
+  health: 'waiting' | 'healthy' | 'ambiguous' | 'stale' | 'failed' | 'unowned';
+  authority: 'nars_session_management';
+  ownership_posture: 'not_yet_observed' | 'owned_by_runtime_authority' | 'observed_unowned';
+  last_checked_at: string;
+  message: string;
+  agent_id?: string | null;
+  site_id?: string | null;
+  agent_identity_ref?: WorkspaceLaunchIdentityRef | null;
+  control_path?: string | null;
+  process_ownership?: Record<string, unknown> | null;
+  runtime_pid?: number | null;
+  attach_commands?: {
+    agent_web_ui?: string | null;
+    agent_cli?: string | null;
+  };
+}
+
+export type WorkspaceLaunchAttemptStatus = 'queued' | 'planning' | 'launching' | 'launched' | 'failed' | 'forgotten';
+
+export type WorkspaceLaunchAttemptLifecycleState =
+  | 'queued'
+  | 'planning'
+  | 'launching'
+  | 'handoff_recorded'
+  | 'observing'
+  | 'launched'
+  | 'failed'
+  | 'forgotten';
+
+export interface WorkspaceLaunchAttemptRecord {
+  schema: 'narada.workspace_launch.attempt.v1';
+  launch_attempt_id: string;
+  ui_session_id: string;
+  expected_launch_session_ids: string[];
+  submitted_at: string;
+  updated_at: string;
+  selection: WorkspaceLaunchSelection;
+  status: WorkspaceLaunchAttemptStatus;
+  lifecycle_schema?: 'narada.workspace_launch.attempt.lifecycle_state.v1';
+  lifecycle_state?: WorkspaceLaunchAttemptLifecycleState;
+  lifecycle_history?: WorkspaceLaunchAttemptLifecycleState[];
+  result_summary: string;
+  plan_result_path: string | null;
+  handoffs: WorkspaceLaunchHandoffRecord[];
+  observations: WorkspaceLaunchObservationRecord[];
+  projections: WorkspaceLaunchProjectionObservationRecord[];
+  actions: string[];
+  diagnostic: unknown;
+}
+
+export interface WorkspaceLaunchDashboardState {
+  schema: 'narada.workspace_launch.ui_session_state.v1';
+  ui_session: WorkspaceLaunchUiSession;
+  attempts: WorkspaceLaunchAttemptRecord[];
+  observed_unowned: unknown[];
+  actions: string[];
 }
 
 type UnknownRecord = Record<string, unknown>;
@@ -265,7 +370,10 @@ function isWorkspaceLaunchUiSession(value: unknown): value is WorkspaceLaunchUiS
   return value.schema === 'narada.workspace_launch.ui_session.v1'
     && isString(value.ui_session_id)
     && isString(value.started_at)
-    && (value.status === 'open' || value.status === 'closing' || value.status === 'closed' || value.status === 'timeout')
+    && (value.status === 'open' || value.status === 'closing' || value.status === 'closed' || value.status === 'timeout' || value.status === 'failed')
+    && (value.lifecycle_schema === undefined || value.lifecycle_schema === 'narada.workspace_launch.ui_session.lifecycle_state.v1')
+    && (value.lifecycle_state === undefined || (isString(value.lifecycle_state) && ['created', 'starting', 'open', 'closing', 'closed', 'timeout', 'failed'].includes(value.lifecycle_state)))
+    && (value.lifecycle_history === undefined || (Array.isArray(value.lifecycle_history) && value.lifecycle_history.every((state) => isString(state) && ['created', 'starting', 'open', 'closing', 'closed', 'timeout', 'failed'].includes(state))))
     && (value.url === null || isString(value.url))
     && isStringArray(value.registry_paths)
     && isRecord(owner)
