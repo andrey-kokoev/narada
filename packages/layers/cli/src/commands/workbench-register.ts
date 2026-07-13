@@ -65,7 +65,14 @@ export function registerWorkbenchCommands(program: Command): void {
       const routeKey = createHash('sha256').update(siteId, 'utf8').digest('hex').slice(0, 32);
       const routeId = `site-operations-${routeKey}`;
       const existingRoutes = await readOperatorRouterRoutes({ url: router.url });
-      const routePosture = inspectOperatorRouterRouteSet(existingRoutes.routes, [routeId]);
+      const routePosture = inspectOperatorRouterRouteSet(existingRoutes.routes, [routeId], [{
+        route_id: routeId,
+        route_class: 'site-operations',
+        public_path: publicPath,
+        route_mode: 'prefix',
+        site_id: siteId,
+        session_id: null,
+      }]);
       if (routePosture.posture === 'healthy') {
         emitLongLivedCommandStartup([
           `Site Operations: ${router.url}${publicPath}/`,
@@ -76,6 +83,9 @@ export function registerWorkbenchCommands(program: Command): void {
           '  Lifecycle: owned by the existing projection process',
         ]);
         return;
+      }
+      if (routePosture.posture === 'identity_conflict') {
+        throw new Error(`operator_router_projection_identity_conflict:${routePosture.identity_mismatch_route_ids.join(',')}`);
       }
       if (routePosture.posture === 'incomplete_live') {
         throw new Error(`operator_router_projection_incomplete:${routePosture.healthy_route_ids.join(',')}`);

@@ -616,9 +616,36 @@ export async function agentWebUiAttachCommand(
   const websocketRouteId = `${httpRouteId}-events`;
   const artifactRouteId = `nars-artifact-${sessionKey}`;
   const requiredRouteIds = [httpRouteId, websocketRouteId, ...(publicArtifactPath ? [artifactRouteId] : [])];
+  const expectedRouteIdentities = [
+    {
+      route_id: httpRouteId,
+      route_class: 'agent-web-ui' as const,
+      public_path: publicPath,
+      route_mode: 'prefix' as const,
+      site_id: siteId,
+      session_id: sessionId,
+    },
+    {
+      route_id: websocketRouteId,
+      route_class: 'agent-web-ui' as const,
+      public_path: `${publicPath}/events`,
+      route_mode: 'exact' as const,
+      site_id: siteId,
+      session_id: sessionId,
+    },
+    ...(publicArtifactPath ? [{
+      route_id: artifactRouteId,
+      route_class: 'nars-artifact' as const,
+      backend_kind: 'nars-artifact' as const,
+      public_path: publicArtifactPath,
+      route_mode: 'prefix' as const,
+      site_id: siteId,
+      session_id: sessionId,
+    }] : []),
+  ];
   if (router) {
     const existingRoutes = await readOperatorRouterRoutes({ url: router.url });
-    const routePosture = inspectOperatorRouterRouteSet(existingRoutes.routes, requiredRouteIds);
+    const routePosture = inspectOperatorRouterRouteSet(existingRoutes.routes, requiredRouteIds, expectedRouteIdentities);
     if (routePosture.posture === 'healthy') {
       const plan = buildPlan({
         status: 'attached',
@@ -648,6 +675,9 @@ export async function agentWebUiAttachCommand(
       }
       const renderedResult = formattedResult(plan, formatPlan(plan), options.format ?? 'auto');
       return { exitCode: ExitCode.SUCCESS, result: renderedResult };
+    }
+    if (routePosture.posture === 'identity_conflict') {
+      throw new Error(`operator_router_projection_identity_conflict:${routePosture.identity_mismatch_route_ids.join(',')}`);
     }
     if (routePosture.posture === 'incomplete_live') {
       throw new Error(`operator_router_projection_incomplete:${routePosture.healthy_route_ids.join(',')}`);

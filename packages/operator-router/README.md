@@ -15,7 +15,10 @@ restart or lease loss, and provides idempotent teardown. When an owner is
 restarting from canonical lifecycle evidence, use `reconstructOperatorRouteSet`:
 it admits only reconstructable route declarations, refuses a partially live
 route set, and replaces an absent or stale set without starting a domain
-service on the Router's behalf.
+service on the Router's behalf. Reconstruction compares stable route identity
+(class, public path, backend, Site, and session); process-specific owner ids are
+not treated as restart-stable identity. Registration and renewal remain the
+authority boundary for the current owner process.
 
 The normal listener is `http://127.0.0.1:61729`. The router state and
 registration token live in the host-level Operator Router state directory, not
@@ -39,6 +42,8 @@ The router is a reachability layer, not an authority layer. It does not scan
 ports, infer Site ownership, or authorize domain mutations. Backends retain
 their own policy and admission checks. `/routes` omits target URLs and local
 paths; `/health` reports router liveness separately from degraded projections.
+`/health`, `/routes`, and `/admin/*` are Router-owned paths and cannot be
+registered as backend routes.
 
 The Operator Workspace consumes the typed route directory from the Console
 projection at `/console/routes`. A declared route template is not a browser

@@ -14,6 +14,7 @@ import {
   type OperatorRouterRouteRegistrationInput,
   type OperatorRouterRouteProjection,
   type OperatorRouterRoutesResponse,
+  validateRouteRegistration,
 } from './contract.js';
 
 const ROUTER_TOKEN_HEADER = 'x-narada-router-token';
@@ -44,7 +45,29 @@ export async function reconstructOperatorRouteSet(
     fetch_fn: options.admin.fetch_fn,
     timeout_ms: options.admin.timeout_ms,
   });
-  const posture = inspectOperatorRouterRouteSet(inventory.routes, requiredRouteIds);
+  // Owner ids may include the current process id; reconstruction compares the
+  // stable route identity and leaves process authority to registration/renewal.
+  const identityExpectations = options.routes.map((input) => {
+    let normalized: OperatorRouterRouteRegistration;
+    try {
+      normalized = validateRouteRegistration(input, new Date(0));
+    } catch {
+      throw new Error(`operator_router_route_set_identity_invalid:${input.route_id}`);
+    }
+    return {
+      route_id: normalized.route_id,
+      route_class: normalized.route_class,
+      backend_kind: normalized.backend_kind,
+      public_path: normalized.public_path,
+      route_mode: normalized.route_mode,
+      site_id: normalized.site_id,
+      session_id: normalized.session_id,
+    } satisfies OperatorRouterRouteIdentityExpectation;
+  });
+  const posture = inspectOperatorRouterRouteSet(inventory.routes, requiredRouteIds, identityExpectations);
+  if (posture.posture === 'identity_conflict') {
+    throw new Error(`operator_router_route_set_identity_conflict:${posture.identity_mismatch_route_ids.join(',')}`);
+  }
   if (posture.posture === 'healthy') throw new Error('operator_router_route_set_already_healthy');
   if (posture.posture === 'incomplete_live') throw new Error(`operator_router_route_set_incomplete_live:${posture.healthy_route_ids.join(',')}`);
 
@@ -69,6 +92,7 @@ export async function reconstructOperatorRouteSet(
 export function inspectOperatorRouterRouteSet(
   routes: readonly OperatorRouterRouteProjection[],
   requiredRouteIds: readonly string[],
+  expectedIdentities: readonly OperatorRouterRouteIdentityExpectation[] = [],
 ): OperatorRouterRouteSetPostureResult {
   const required = [...requiredRouteIds];
   if (required.length === 0 || new Set(required).size !== required.length) {
@@ -76,10 +100,18 @@ export function inspectOperatorRouterRouteSet(
   }
   const byId = new Map(routes.map((route) => [route.route_id, route]));
   const existing = required.filter((routeId) => byId.has(routeId));
-  const healthy = existing.filter((routeId) => byId.get(routeId)?.state === 'healthy');
-  const degraded = existing.filter((routeId) => byId.get(routeId)?.state !== 'healthy');
+  const expectedById = new Map(expectedIdentities.map((identity) => [identity.route_id, identity]));
+  const identityMismatch = existing.filter((routeId) => {
+    const expected = expectedById.get(routeId);
+    const route = byId.get(routeId);
+    return expected !== undefined && route !== undefined && !routeProjectionMatchesIdentity(route, expected);
+  });
+  const healthy = existing.filter((routeId) => !identityMismatch.includes(routeId) && byId.get(routeId)?.state === 'healthy');
+  const degraded = existing.filter((routeId) => !identityMismatch.includes(routeId) && byId.get(routeId)?.state !== 'healthy');
   const missing = required.filter((routeId) => !byId.has(routeId));
-  const posture: OperatorRouterRouteSetPosture = healthy.length === required.length
+  const posture: OperatorRouterRouteSetPosture = identityMismatch.length > 0
+    ? 'identity_conflict'
+    : healthy.length === required.length
     ? 'healthy'
     : healthy.length > 0
       ? 'incomplete_live'
@@ -92,7 +124,33 @@ export function inspectOperatorRouterRouteSet(
     healthy_route_ids: healthy,
     degraded_route_ids: degraded,
     missing_route_ids: missing,
+    identity_mismatch_route_ids: identityMismatch,
   };
+}
+
+export interface OperatorRouterRouteIdentityExpectation {
+  route_id: string;
+  route_class: OperatorRouterRouteRegistrationInput['route_class'];
+  backend_kind?: NonNullable<OperatorRouterRouteRegistrationInput['backend_kind']>;
+  public_path: string;
+  route_mode?: NonNullable<OperatorRouterRouteRegistrationInput['route_mode']>;
+  owner_id?: string;
+  site_id?: string | null;
+  session_id?: string | null;
+}
+
+export function routeProjectionMatchesIdentity(
+  route: OperatorRouterRouteProjection,
+  expected: OperatorRouterRouteIdentityExpectation,
+): boolean {
+  return route.route_id === expected.route_id
+    && route.route_class === expected.route_class
+    && route.public_path === expected.public_path
+    && (expected.backend_kind === undefined || route.backend_kind === expected.backend_kind)
+    && (expected.route_mode === undefined || route.route_mode === expected.route_mode)
+    && (expected.owner_id === undefined || route.owner_id === expected.owner_id)
+    && (expected.site_id === undefined || route.site_id === expected.site_id)
+    && (expected.session_id === undefined || route.session_id === expected.session_id);
 }
 
 function assertLoopbackHost(host: string): void {
@@ -127,7 +185,7 @@ export interface OperatorRouterRouteSetOptions {
   unregister_fn?: typeof unregisterOperatorRoute;
 }
 
-export type OperatorRouterRouteSetPosture = 'absent' | 'healthy' | 'reconstructable' | 'incomplete_live';
+export type OperatorRouterRouteSetPosture = 'absent' | 'healthy' | 'reconstructable' | 'incomplete_live' | 'identity_conflict';
 
 export interface OperatorRouterRouteSetPostureResult {
   posture: OperatorRouterRouteSetPosture;
@@ -135,6 +193,7 @@ export interface OperatorRouterRouteSetPostureResult {
   healthy_route_ids: readonly string[];
   degraded_route_ids: readonly string[];
   missing_route_ids: readonly string[];
+  identity_mismatch_route_ids: readonly string[];
 }
 
 export interface OperatorRouterRouteSetReconstructionOptions extends OperatorRouterRouteSetOptions {

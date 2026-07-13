@@ -88,7 +88,9 @@ lease, protocols, methods, body bounds, and timeout class.
 
 Registration rejects unknown classes, non-loopback targets, path traversal,
 overlapping prefixes, owner mismatch, PID-only identity, and unbounded methods,
-bodies, or leases. The router is not a general reverse proxy.
+bodies, or leases. Router-owned `/health`, `/routes`, and `/admin/*` paths are
+reserved and cannot be claimed by a backend. The router is not a general
+reverse proxy.
 
 ## Lease And Recovery
 
@@ -102,6 +104,11 @@ Dynamic registrations are projections:
 - projection owners reconstruct managed services and registrations from
   lifecycle evidence; the router never starts domain services;
 - reconstructed targets are health-verified before advertisement.
+- reconstruction compares stable route identity, including route class, public
+  path, backend kind, Site, and session; process-specific owner ids are not
+  restart-stable and remain enforced by registration and renewal;
+- an identity conflict is fail-closed evidence, not permission to replace a
+  live route.
 
 The stable port is durable configuration. The live table is reconstructible.
 

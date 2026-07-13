@@ -165,7 +165,11 @@ function normalizePublicPath(value: string): string {
     throw new Error('operator_router_public_path_invalid');
   }
   const normalized = `/${path.replace(/^\/+|\/+$/g, '')}`;
-  return normalized === '//' ? '/' : normalized;
+  const canonical = normalized === '//' ? '/' : normalized;
+  if (canonical === '/health' || canonical === '/routes' || canonical === '/admin' || canonical.startsWith('/admin/')) {
+    throw new Error('operator_router_public_path_reserved');
+  }
+  return canonical;
 }
 
 function normalizeRouteId(value: string): string {

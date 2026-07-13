@@ -94,6 +94,18 @@ test('route admission requires loopback targets and non-PID process identity', (
   assert.throws(() => validateRouteRegistration({
     ...routeInput('http://user:password@127.0.0.1:1', 'http://127.0.0.1:1/health'),
   }), /target_not_loopback/);
+  assert.throws(() => validateRouteRegistration({
+    ...routeInput('http://127.0.0.1:1', 'http://127.0.0.1:1/health'),
+    public_path: '/health',
+  }), /public_path_reserved/);
+  assert.throws(() => validateRouteRegistration({
+    ...routeInput('http://127.0.0.1:1', 'http://127.0.0.1:1/health'),
+    public_path: '/routes',
+  }), /public_path_reserved/);
+  assert.throws(() => validateRouteRegistration({
+    ...routeInput('http://127.0.0.1:1', 'http://127.0.0.1:1/health'),
+    public_path: '/admin/custom',
+  }), /public_path_reserved/);
 });
 
 test('router enforces admitted methods and bounded request bodies', async () => {
@@ -238,7 +250,11 @@ test('owner reconstruction re-registers only an absent or stale route set', asyn
     site_id: 'demo',
     reconstruction: { kind: 'nars-session' as const, site_root: 'C:\\site', site_id: 'demo', session_id: 'demo' },
   };
-  const existing = { ...projectRouteRegistration(validateRouteRegistration(input)), state: 'degraded' as const };
+  const existing = {
+    ...projectRouteRegistration(validateRouteRegistration(input)),
+    owner_id: 'agent-web-ui:demo:restarted-process',
+    state: 'degraded' as const,
+  };
   const inventory = {
     schema: OPERATOR_ROUTER_ROUTES_SCHEMA,
     identity: OPERATOR_ROUTER_IDENTITY,
@@ -266,6 +282,31 @@ test('owner reconstruction re-registers only an absent or stale route set', asyn
   assert.deepEqual(registerCalls, [input.route_id]);
   await reconstructed.route_set.stop();
   assert.deepEqual(unregisterCalls, [input.route_id]);
+});
+
+test('owner reconstruction refuses a live route with a different session identity', async () => {
+  const input = {
+    ...routeInput('http://127.0.0.1:1', 'http://127.0.0.1:1/health'),
+    site_id: 'demo',
+    reconstruction: { kind: 'nars-session' as const, site_root: 'C:\\site', site_id: 'demo', session_id: 'demo' },
+  };
+  const existing = {
+    ...projectRouteRegistration(validateRouteRegistration(input)),
+    session_id: 'other',
+    state: 'healthy' as const,
+  };
+  const inventory = {
+    schema: OPERATOR_ROUTER_ROUTES_SCHEMA,
+    identity: OPERATOR_ROUTER_IDENTITY,
+    routes: [existing],
+  } satisfies OperatorRouterRoutesResponse;
+  await assert.rejects(() => reconstructOperatorRouteSet({
+    admin: { url: 'http://127.0.0.1:1', registration_token: 'test-token' },
+    routes: [input],
+    read_routes_fn: async () => inventory,
+    register_fn: async (_admin, route) => validateRouteRegistration(route),
+    unregister_fn: async (_admin, routeId) => ({ status: 'removed', route_id: routeId }),
+  }), /route_set_identity_conflict/);
 });
 
 test('concurrent route registration preserves every route in persisted state', async () => {

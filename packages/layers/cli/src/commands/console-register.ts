@@ -10,6 +10,7 @@ import {
   ensureOperatorRouter,
   readOperatorRouterRoutes,
   registerOperatorRouteSet,
+  routeProjectionMatchesIdentity,
 } from '@narada2/operator-router';
 import { silentCommandContext, wrapCommand } from '../lib/command-wrapper.js';
 import {
@@ -108,6 +109,14 @@ export function registerConsoleCommands(program: Command): void {
       const router = await ensureOperatorRouter({ host, port });
       const routerRoutes = await readOperatorRouterRoutes({ url: router.url });
       const existingProjection = routerRoutes.routes?.find((route) => route.route_id === 'operator-console');
+      if (existingProjection && !routeProjectionMatchesIdentity(existingProjection, {
+        route_id: 'operator-console',
+        route_class: 'operator-console',
+        public_path: '/',
+        route_mode: 'prefix',
+      })) {
+        throw new Error('operator_router_projection_identity_conflict:operator-console');
+      }
       if (existingProjection?.state === 'healthy') {
         emitLongLivedCommandStartup([
           `Operator Router: ${router.url}/`,
