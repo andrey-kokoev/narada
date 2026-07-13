@@ -3,26 +3,52 @@ import { appendFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { runGovernedCommandSync, startOperatorTerminal } from '@narada2/process-launch-posture';
 import { discoverNarsSessions } from '@narada2/nars-session-core/session-index';
-import * as launcher from './launcher.js';
+import * as support from './workspace-launch-support.js';
 import type {
   WorkspaceLaunchAttemptRecord,
   WorkspaceLaunchHandoffRecord,
   WorkspaceLaunchObservationRecord,
   WorkspaceLaunchProjectionObservationRecord,
   WorkspaceLaunchRecord,
-} from './launcher.js';
+} from './workspace-launch-types.js';
 import type { WorkspaceLaunchSelection as WorkspaceLaunchBrowserSelection } from '@narada2/workspace-launch-contract';
+import { selectLaunchRecords } from './workspace-launch-registry.js';
 
 function workspaceLaunchString(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value : null;
 }
 
+export async function workspaceLaunchReapStaleSessionOwnedDescendants(
+  selection: WorkspaceLaunchBrowserSelection,
+  records: WorkspaceLaunchRecord[],
+): Promise<{ scanned: number; cleanup_requested: number }> {
+  const siteRoots = workspaceLaunchSiteRootsForSelection(selection, records);
+  const attempted = new Set<string>();
+  let scanned = 0;
+  for (const siteRoot of siteRoots) {
+    try {
+      const discovery = discoverNarsSessions({ siteRoot });
+      for (const session of discovery.sessions) {
+        const normalized = { ...session, site_root: session.site_root ?? siteRoot };
+        scanned += 1;
+        if (!workspaceLaunchSessionMatchesSelection(normalized, selection)) continue;
+        if (!workspaceLaunchSessionOwnedCleanupAllowed(normalized)) continue;
+        if (!workspaceLaunchSessionIsTerminalForCleanup(normalized)) continue;
+        await workspaceLaunchRequestStaleSessionCleanup(normalized, attempted);
+      }
+    } catch {
+      // Reaper preflight is best-effort; unreadable indexes must not block a fresh launch.
+    }
+  }
+  return { scanned, cleanup_requested: attempted.size };
+}
+
 export function workspaceLaunchResultSummary(result: unknown, success: boolean): string {
   if (!success) {
-    const error = launcher.isRecord(result) ? workspaceLaunchString(result.error) ?? workspaceLaunchString(result.reason) : null;
+    const error = support.isRecord(result) ? workspaceLaunchString(result.error) ?? workspaceLaunchString(result.reason) : null;
     return error ?? 'Launch failed.';
   }
-  const record = launcher.isRecord(result) ? result : {};
+  const record = support.isRecord(result) ? result : {};
   const count = typeof record.count === 'number' ? record.count : null;
   if (count !== null) return `Launch accepted for ${count} workspace launch${count === 1 ? '' : 'es'}.`;
   return 'Launch accepted.';
@@ -35,7 +61,7 @@ export function workspaceLaunchActionsForAttempt(attempt: WorkspaceLaunchAttempt
   actions.push('retry');
   if (workspaceLaunchRuntimeStopControlPath(attempt)) actions.push('stop-runtime');
   actions.push('forget');
-  return launcher.unique(actions);
+  return support.unique(actions);
 }
 
 export async function workspaceLaunchRequestRuntimeStop(attempt: WorkspaceLaunchAttemptRecord): Promise<Record<string, unknown>> {
@@ -48,7 +74,7 @@ export async function workspaceLaunchRequestRuntimeStop(attempt: WorkspaceLaunch
       message: 'Stop Runtime requires an admitted NARS control path for this session.',
     };
   }
-  const requestId = launcher.workspaceLaunchId('stop_runtime');
+  const requestId = support.workspaceLaunchId('stop_runtime');
   const frame = {
     id: requestId,
     method: 'session.close',
@@ -92,7 +118,7 @@ export async function workspaceLaunchExecuteProjectionAction(
 ): Promise<WorkspaceLaunchProjectionObservationRecord> {
   const projectionKind = action === 'open-web-ui' ? 'agent-web-ui' : 'agent-cli';
   const sessionId = workspaceLaunchProjectionSessionId(attempt);
-  const qualifiedAgentId = launcher.workspaceLaunchProjectionQualifiedAgentId(attempt);
+  const qualifiedAgentId = support.workspaceLaunchProjectionQualifiedAgentId(attempt);
   const titleSuffix = qualifiedAgentId
     ? (projectionKind === 'agent-web-ui' ? 'web ui' : 'runtime')
     : (sessionId ?? attempt.launch_attempt_id);
@@ -100,10 +126,10 @@ export async function workspaceLaunchExecuteProjectionAction(
   const cwd = workspaceLaunchProjectionCwd(attempt) ?? process.cwd();
   if (action === 'open-web-ui') {
     try {
-      const host = await launcher.workspaceLaunchStartHiddenProjectionHost(command, cwd);
+      const host = await support.workspaceLaunchStartHiddenProjectionHost(command, cwd);
       return {
         schema: 'narada.workspace_launch.observed_projection.v1',
-        observation_id: launcher.workspaceLaunchId('wlp'),
+        observation_id: support.workspaceLaunchId('wlp'),
         launch_attempt_id: attempt.launch_attempt_id,
         projection_kind: projectionKind,
         session_id: sessionId,
@@ -113,12 +139,12 @@ export async function workspaceLaunchExecuteProjectionAction(
         ownership_posture: 'handoff_only',
         observed_at: new Date().toISOString(),
         message: `${projectionKind} projection host started hidden; browser projection owns visible operator surface.`,
-        diagnostic: { ...host, command: launcher.redactWorkspaceLaunchCommand(command) },
+        diagnostic: { ...host, command: support.redactWorkspaceLaunchCommand(command) },
       };
     } catch (error) {
       return {
         schema: 'narada.workspace_launch.observed_projection.v1',
-        observation_id: launcher.workspaceLaunchId('wlp'),
+        observation_id: support.workspaceLaunchId('wlp'),
         launch_attempt_id: attempt.launch_attempt_id,
         projection_kind: projectionKind,
         session_id: sessionId,
@@ -128,7 +154,7 @@ export async function workspaceLaunchExecuteProjectionAction(
         ownership_posture: 'handoff_only',
         observed_at: new Date().toISOString(),
         message: error instanceof Error ? error.message : String(error),
-        diagnostic: { command: launcher.redactWorkspaceLaunchCommand(command) },
+        diagnostic: { command: support.redactWorkspaceLaunchCommand(command) },
       };
     }
   }
@@ -137,13 +163,13 @@ export async function workspaceLaunchExecuteProjectionAction(
   const terminalCaptureLog = process.env.NARADA_WORKSPACE_LAUNCH_TERMINAL_LOG;
   try {
     const launch = terminalCaptureLog
-      ? (await launcher.captureWorkspaceLaunchTerminalInvocation(terminalCaptureLog, effectiveWtArgs))
+      ? (await support.captureWorkspaceLaunchTerminalInvocation(terminalCaptureLog, effectiveWtArgs))
       : startOperatorTerminal('wt', effectiveWtArgs).result;
     if (launch.error) throw launch.error;
     if (launch.status !== 0) throw new Error(`projection_terminal_launch_failed: wt exited ${launch.status ?? 'unknown'}`);
     return {
       schema: 'narada.workspace_launch.observed_projection.v1',
-      observation_id: launcher.workspaceLaunchId('wlp'),
+      observation_id: support.workspaceLaunchId('wlp'),
       launch_attempt_id: attempt.launch_attempt_id,
       projection_kind: projectionKind,
       session_id: sessionId,
@@ -158,7 +184,7 @@ export async function workspaceLaunchExecuteProjectionAction(
   } catch (error) {
     return {
       schema: 'narada.workspace_launch.observed_projection.v1',
-      observation_id: launcher.workspaceLaunchId('wlp'),
+      observation_id: support.workspaceLaunchId('wlp'),
       launch_attempt_id: attempt.launch_attempt_id,
       projection_kind: projectionKind,
       session_id: sessionId,
@@ -191,29 +217,29 @@ function workspaceLaunchProjectionCwd(attempt: WorkspaceLaunchAttemptRecord): st
 }
 
 export function workspaceLaunchHandoffFromResult(launchAttemptId: string, result: unknown, success: boolean): WorkspaceLaunchHandoffRecord {
-  const record = launcher.isRecord(result) ? result : {};
+  const record = support.isRecord(result) ? result : {};
   const hiddenRuntimeLaunches = Array.isArray(record.hidden_runtime_launches) ? record.hidden_runtime_launches : [];
   if (record.hidden_runtime_invoked === true || hiddenRuntimeLaunches.length > 0) {
-    const selectedAgents = Array.isArray(record.selected_agents) ? record.selected_agents.filter(launcher.isRecord) : [];
+    const selectedAgents = Array.isArray(record.selected_agents) ? record.selected_agents.filter(support.isRecord) : [];
     const firstAgent = selectedAgents.find((agent) => agent.runtime_start_execution_mode === 'hidden_detached') ?? selectedAgents[0];
     return {
       schema: 'narada.workspace_launch.handoff.v1',
-      handoff_id: launcher.workspaceLaunchId('wlh'),
+      handoff_id: support.workspaceLaunchId('wlh'),
       launch_attempt_id: launchAttemptId,
       posture: 'hidden_runtime_host',
       status: success ? 'handed_off' : 'failed',
       command: 'hidden_runtime_host',
-      argv_redacted: redactWorkspaceLaunchArgv(launcher.stringArray(firstAgent?.hidden_runtime_start_command ?? firstAgent?.runtime_start_command)),
+      argv_redacted: redactWorkspaceLaunchArgv(support.stringArray(firstAgent?.hidden_runtime_start_command ?? firstAgent?.runtime_start_command)),
       cwd: workspaceLaunchString(firstAgent?.runtime_start_cwd) ?? workspaceLaunchHandoffCwd(record),
       exit_code: null,
       ownership_posture: 'handoff_only',
       diagnostic_ref: workspaceLaunchString(record.result_path),
     };
   }
-  const wtArgs = launcher.workspaceLaunchLegacyTerminalWtArgs(record);
+  const wtArgs = support.workspaceLaunchLegacyTerminalWtArgs(record);
   return {
     schema: 'narada.workspace_launch.handoff.v1',
-    handoff_id: launcher.workspaceLaunchId('wlh'),
+    handoff_id: support.workspaceLaunchId('wlh'),
     launch_attempt_id: launchAttemptId,
     posture: 'operator_terminal',
     status: success ? 'handed_off' : 'failed',
@@ -229,7 +255,7 @@ export function workspaceLaunchHandoffFromResult(launchAttemptId: string, result
 export function workspaceLaunchFailedHandoff(launchAttemptId: string, error: unknown): WorkspaceLaunchHandoffRecord {
   return {
     schema: 'narada.workspace_launch.handoff.v1',
-    handoff_id: launcher.workspaceLaunchId('wlh'),
+    handoff_id: support.workspaceLaunchId('wlh'),
     launch_attempt_id: launchAttemptId,
     posture: 'operator_terminal',
     status: 'failed',
@@ -245,7 +271,7 @@ export function workspaceLaunchFailedHandoff(launchAttemptId: string, error: unk
 function workspaceLaunchWaitingObservation(launchAttemptId: string, selection: WorkspaceLaunchBrowserSelection): WorkspaceLaunchObservationRecord {
   return {
     schema: 'narada.workspace_launch.observed_runtime.v1',
-    observation_id: launcher.workspaceLaunchId('wlr'),
+    observation_id: support.workspaceLaunchId('wlr'),
     launch_attempt_id: launchAttemptId,
     kind: 'nars',
     session_id: null,
@@ -265,7 +291,7 @@ export async function workspaceLaunchRuntimeObservations(
   expectedLaunchSessionIds: string[] = [],
   launchSiteRoots: string[] = [],
 ): Promise<WorkspaceLaunchObservationRecord[]> {
-  const siteRoots = launcher.unique(
+  const siteRoots = support.unique(
     (launchSiteRoots.length > 0 ? launchSiteRoots : workspaceLaunchSiteRootsForSelection(selection, records))
       .map((siteRoot) => resolve(siteRoot)),
   );
@@ -318,10 +344,10 @@ export async function workspaceLaunchRuntimeObservations(
 }
 
 export function workspaceLaunchExpectedSessionIds(result: unknown): string[] {
-  const resultRecord = launcher.isRecord(result) ? result : null;
+  const resultRecord = support.isRecord(result) ? result : null;
   const selectedAgents = Array.isArray(resultRecord?.selected_agents) ? resultRecord.selected_agents : [];
   return selectedAgents
-    .map((agent) => launcher.isRecord(agent) ? workspaceLaunchString(agent.launch_session_id) : null)
+    .map((agent) => support.isRecord(agent) ? workspaceLaunchString(agent.launch_session_id) : null)
     .filter((value): value is string => Boolean(value));
 }
 
@@ -332,16 +358,16 @@ function workspaceLaunchSessionMatchesExpectedLaunch(session: Record<string, unk
 }
 
 function workspaceLaunchSessionLaunchSessionId(session: Record<string, unknown>): string | null {
-  const record = launcher.isRecord(session.record) ? session.record : null;
-  const ownership = launcher.isRecord(session.process_ownership) ? session.process_ownership : launcher.isRecord(record?.process_ownership) ? record.process_ownership : null;
+  const record = support.isRecord(session.record) ? session.record : null;
+  const ownership = support.isRecord(session.process_ownership) ? session.process_ownership : support.isRecord(record?.process_ownership) ? record.process_ownership : null;
   return workspaceLaunchString(session.launch_session_id)
     ?? workspaceLaunchString(record?.launch_session_id)
     ?? workspaceLaunchString(ownership?.launch_session_id);
 }
 
 function workspaceLaunchSessionOwnership(session: Record<string, unknown>): Record<string, unknown> | null {
-  const record = launcher.isRecord(session.record) ? session.record : null;
-  return launcher.isRecord(session.process_ownership) ? session.process_ownership : launcher.isRecord(record?.process_ownership) ? record.process_ownership : null;
+  const record = support.isRecord(session.record) ? session.record : null;
+  return support.isRecord(session.process_ownership) ? session.process_ownership : support.isRecord(record?.process_ownership) ? record.process_ownership : null;
 }
 
 function workspaceLaunchSessionIsStaleSessionOwnedCandidate(session: Record<string, unknown>, expectedLaunchSessionIds: Set<string>): boolean {
@@ -369,7 +395,7 @@ export async function workspaceLaunchRequestStaleSessionCleanup(session: Record<
   const controlPath = workspaceLaunchControlPathFromSession(session);
   if (controlPath && existsSync(controlPath)) {
     const frame = {
-      id: launcher.workspaceLaunchId('stale_cleanup'),
+      id: support.workspaceLaunchId('stale_cleanup'),
       method: 'session.close',
       params: {
         source: 'launcher-session-owned-process-cleanup',
@@ -421,7 +447,7 @@ async function workspaceLaunchProbeHealthBySessionId(sessions: Record<string, un
 }
 
 async function workspaceLaunchProbeSessionHealth(session: Record<string, unknown>): Promise<unknown | null> {
-  const record = launcher.isRecord(session.record) ? session.record : null;
+  const record = support.isRecord(session.record) ? session.record : null;
   const endpoint = workspaceLaunchString(session.health_endpoint) ?? workspaceLaunchString(record?.health_endpoint);
   if (!endpoint) return null;
   let parsed: URL;
@@ -453,8 +479,8 @@ async function workspaceLaunchProbeSessionHealth(session: Record<string, unknown
 }
 
 export function workspaceLaunchSiteRootsForSelection(selection: WorkspaceLaunchBrowserSelection, records: WorkspaceLaunchRecord[]): string[] {
-  const selected = launcher.selectLaunchRecords(records, { all: true, site: selection.site, role: selection.role });
-  return launcher.unique(selected.map((record) => resolve(record.site_root)));
+  const selected = selectLaunchRecords(records, { all: true, site: selection.site, role: selection.role });
+  return support.unique(selected.map((record) => resolve(record.site_root)));
 }
 
 export function workspaceLaunchSessionMatchesSelection(session: Record<string, unknown>, selection: WorkspaceLaunchBrowserSelection): boolean {
@@ -472,7 +498,7 @@ function workspaceLaunchObservationFromSession(launchAttemptId: string, session:
   const health = workspaceLaunchHealthFromSession(session);
   const attachCommands = workspaceLaunchAttachCommandsFromSession(session);
   const controlPath = workspaceLaunchControlPathFromSession(session);
-  const record = launcher.isRecord(session.record) ? session.record : null;
+  const record = support.isRecord(session.record) ? session.record : null;
   const agentId = workspaceLaunchString(session.agent_id) ?? workspaceLaunchString(record?.agent_id);
   const siteId = workspaceLaunchString(session.site_id) ?? workspaceLaunchString(record?.site_id);
   const processOwnership = workspaceLaunchSessionOwnership(session);
@@ -481,7 +507,7 @@ function workspaceLaunchObservationFromSession(launchAttemptId: string, session:
     : null;
   return {
     schema: 'narada.workspace_launch.observed_runtime.v1',
-    observation_id: launcher.workspaceLaunchId('wlr'),
+    observation_id: support.workspaceLaunchId('wlr'),
     launch_attempt_id: launchAttemptId,
     kind: 'nars',
     session_id: workspaceLaunchString(session.session_id) ?? workspaceLaunchString(session.carrier_session_id),
@@ -493,7 +519,7 @@ function workspaceLaunchObservationFromSession(launchAttemptId: string, session:
     message: `NARS session ${workspaceLaunchString(session.session_id) ?? workspaceLaunchString(session.carrier_session_id) ?? 'unknown'} is ${health}.`,
     agent_id: agentId,
     site_id: siteId,
-    agent_identity_ref: launcher.workspaceLaunchSessionIdentityRef(session),
+    agent_identity_ref: support.workspaceLaunchSessionIdentityRef(session),
     control_path: controlPath,
     process_ownership: processOwnership,
     runtime_pid: runtimePid,
@@ -502,7 +528,7 @@ function workspaceLaunchObservationFromSession(launchAttemptId: string, session:
 }
 
 function workspaceLaunchControlPathFromSession(session: Record<string, unknown>): string | null {
-  const record = launcher.isRecord(session.record) ? session.record : null;
+  const record = support.isRecord(session.record) ? session.record : null;
   const direct = workspaceLaunchString(session.control_path) ?? workspaceLaunchString(record?.control_path);
   if (direct) return direct;
   const sessionPath = workspaceLaunchString(session.session_path) ?? workspaceLaunchString(record?.session_path);
@@ -510,8 +536,8 @@ function workspaceLaunchControlPathFromSession(session: Record<string, unknown>)
 }
 
 function workspaceLaunchAttachCommandsFromSession(session: Record<string, unknown>): WorkspaceLaunchObservationRecord['attach_commands'] {
-  const record = launcher.isRecord(session.record) ? session.record : null;
-  const recordedCommands = launcher.isRecord(record?.attach_commands) ? record.attach_commands : null;
+  const record = support.isRecord(session.record) ? session.record : null;
+  const recordedCommands = support.isRecord(record?.attach_commands) ? record.attach_commands : null;
   const eventEndpoint = workspaceLaunchString(session.event_endpoint) ?? workspaceLaunchString(record?.event_endpoint);
   const healthEndpoint = workspaceLaunchString(session.health_endpoint) ?? workspaceLaunchString(record?.health_endpoint);
   return {
@@ -525,7 +551,7 @@ function workspaceLaunchAttachCommandsFromSession(session: Record<string, unknow
 function workspaceLaunchAmbiguousObservation(launchAttemptId: string, selection: WorkspaceLaunchBrowserSelection, sessions: Record<string, unknown>[]): WorkspaceLaunchObservationRecord {
   return {
     schema: 'narada.workspace_launch.observed_runtime.v1',
-    observation_id: launcher.workspaceLaunchId('wlr'),
+    observation_id: support.workspaceLaunchId('wlr'),
     launch_attempt_id: launchAttemptId,
     kind: 'nars',
     session_id: null,
@@ -552,7 +578,7 @@ function workspaceLaunchHealthFromSession(session: Record<string, unknown>): Wor
 function workspaceLaunchUnownedObservation(launchAttemptId: string, selection: WorkspaceLaunchBrowserSelection): WorkspaceLaunchObservationRecord {
   return {
     schema: 'narada.workspace_launch.observed_runtime.v1',
-    observation_id: launcher.workspaceLaunchId('wlr'),
+    observation_id: support.workspaceLaunchId('wlr'),
     launch_attempt_id: launchAttemptId,
     kind: 'nars',
     session_id: null,
@@ -588,7 +614,7 @@ function normalizeWorkspaceLaunchSiteToken(value: string): string {
 
 function workspaceLaunchHandoffCwd(record: Record<string, unknown>): string | null {
   const selectedAgents = Array.isArray(record.selected_agents) ? record.selected_agents : [];
-  const firstAgent = selectedAgents.find(launcher.isRecord);
+  const firstAgent = selectedAgents.find(support.isRecord);
   return firstAgent ? workspaceLaunchString(firstAgent.workspace_root) ?? workspaceLaunchString(firstAgent.site_root) : null;
 }
 

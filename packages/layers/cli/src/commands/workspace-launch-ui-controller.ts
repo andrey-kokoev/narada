@@ -1,4 +1,5 @@
-import * as launcher from './launcher.js';
+import * as support from './workspace-launch-support.js';
+import * as handoff from './workspace-launch-handoff.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { buildWorkspaceLaunchSelectionHtml } from './launcher-selection-ui.js';
 import {
@@ -15,6 +16,7 @@ import {
   writeWorkspaceLaunchRememberedSelection,
 } from './workspace-launch-attempt-store.js';
 import type { WorkspaceLaunchUiSessionRecord } from './workspace-launch-session-store.js';
+import type { WorkspaceLaunchSelectionServices } from './workspace-launch-context.js';
 import type { ResolvedSiteRoot } from '../lib/site-root-resolver.js';
 import type { WorkspaceLaunchSelection as WorkspaceLaunchBrowserSelection } from '@narada2/workspace-launch-contract';
 import type {
@@ -22,30 +24,37 @@ import type {
   WorkspaceLaunchDashboardState,
   WorkspaceLaunchPlanOptions,
   WorkspaceLaunchRecord,
-  WorkspaceLaunchUiIngress,
-} from './launcher.js';
+} from './workspace-launch-types.js';
+import {
+  requestWorkspaceLaunchSelectionUiProjectionOpen,
+  resolveWorkspaceLaunchUiIngress,
+  resolveWorkspaceLaunchUiPortPolicy,
+} from './workspace-launch-ingress.js';
+import type { WorkspaceLaunchUiIngress } from './workspace-launch-ingress.js';
+import { resolveRegistryPaths } from './workspace-launch-registry.js';
 
 export async function runWorkspaceLaunchSelectionUi(
   records: WorkspaceLaunchRecord[],
   options: WorkspaceLaunchPlanOptions,
   siteCatalog: ResolvedSiteRoot[] = [],
+  selectionServices: WorkspaceLaunchSelectionServices,
 ): Promise<WorkspaceLaunchBrowserSelection> {
   const host = '127.0.0.1';
   let server: ReturnType<typeof createWorkspaceLaunchUiServer> | null = null;
   let settled = false;
-  const portPolicy = launcher.resolveWorkspaceLaunchUiPortPolicy(options);
+  const portPolicy = resolveWorkspaceLaunchUiPortPolicy(options);
 
   const rememberedSelection = await readWorkspaceLaunchRememberedSelection();
-  const pageModel = launcher.buildWorkspaceLaunchSelectionUiModel(records, options, rememberedSelection, siteCatalog);
+  const pageModel = selectionServices.buildWorkspaceLaunchSelectionUiModel(records, options, rememberedSelection, siteCatalog);
   const html = buildWorkspaceLaunchSelectionHtml(pageModel);
 
   const selectionPromise = new Promise<WorkspaceLaunchBrowserSelection>((resolveSelection, rejectSelection) => {
     server = createWorkspaceLaunchUiServer({
       page: () => html,
       asset: readWorkspaceLaunchUiAsset,
-      selectorModel: (payload) => launcher.workspaceLaunchSelectorModel(records, payload as Partial<WorkspaceLaunchBrowserSelection>, siteCatalog),
+      selectorModel: (payload) => selectionServices.workspaceLaunchSelectorModel(records, payload as Partial<WorkspaceLaunchBrowserSelection>, siteCatalog),
       submit: async (payload) => {
-        const selection = launcher.normalizeWorkspaceLaunchBrowserSelection(payload as Partial<WorkspaceLaunchBrowserSelection>);
+        const selection = selectionServices.normalizeWorkspaceLaunchBrowserSelection(payload as Partial<WorkspaceLaunchBrowserSelection>);
         await writeWorkspaceLaunchRememberedSelection(selection);
         settled = true;
         return { status: 200, payload: { status: 'accepted' }, afterSend: () => resolveSelection(selection) };
@@ -67,7 +76,7 @@ export async function runWorkspaceLaunchSelectionUi(
   if (fallback_used) {
     console.log(`[launcher] preferred UI port ${portPolicy.port} was occupied; using ephemeral port ${port} instead.`);
   }
-  launcher.requestWorkspaceLaunchSelectionUiProjectionOpen(url);
+  requestWorkspaceLaunchSelectionUiProjectionOpen(url);
 
   try {
     return await Promise.race([
@@ -89,22 +98,23 @@ export async function runPersistentWorkspaceLaunchSelectionUi(
   options: WorkspaceLaunchPlanOptions,
   launchSelection: (selection: WorkspaceLaunchBrowserSelection) => Promise<{ exitCode: ExitCode; result: unknown }>,
   siteCatalog: ResolvedSiteRoot[] = [],
+  selectionServices: WorkspaceLaunchSelectionServices,
 ): Promise<WorkspaceLaunchUiIngress & { status: 'cancelled' | 'timeout'; launch_count: number }> {
   const host = '127.0.0.1';
   let server: ReturnType<typeof createWorkspaceLaunchUiServer> | null = null;
   let settled = false;
   let launchCount = 0;
-  const portPolicy = launcher.resolveWorkspaceLaunchUiPortPolicy(options);
-  const registryPaths = launcher.resolveRegistryPaths(options);
-  const launcherOutputs = launcher.normalizeLauncherOutput(options.launcherOutput, options);
+  const portPolicy = resolveWorkspaceLaunchUiPortPolicy(options);
+  const registryPaths = resolveRegistryPaths(options);
+  const launcherOutputs = support.normalizeLauncherOutput(options.launcherOutput, options);
   const recoveredAttempts = await loadRecoveredWorkspaceLaunchAttempts(registryPaths, {
-    expectedLaunchSessionIds: launcher.workspaceLaunchExpectedSessionIds,
+    expectedLaunchSessionIds: handoff.workspaceLaunchExpectedSessionIds,
   });
   const attempts: WorkspaceLaunchAttemptRecord[] = [...recoveredAttempts];
   launchCount = attempts.filter((attempt) => attempt.status === 'launched').length;
   const uiSession: WorkspaceLaunchUiSessionRecord = {
     schema: 'narada.workspace_launch.ui_session.v1',
-    ui_session_id: launcher.workspaceLaunchId('wls'),
+    ui_session_id: support.workspaceLaunchId('wls'),
     started_at: new Date().toISOString(),
     status: 'open',
     url: null,
@@ -114,7 +124,7 @@ export async function runPersistentWorkspaceLaunchSelectionUi(
   const persistenceDir = workspaceLaunchUiSessionPersistenceDir(uiSession.ui_session_id);
 
   const rememberedSelection = await readWorkspaceLaunchRememberedSelection();
-  const pageModel = launcher.buildWorkspaceLaunchSelectionUiModel(records, options, rememberedSelection, siteCatalog);
+  const pageModel = selectionServices.buildWorkspaceLaunchSelectionUiModel(records, options, rememberedSelection, siteCatalog);
   const html = buildWorkspaceLaunchSelectionHtml(pageModel, { persistent: true });
   const dashboardState = (): WorkspaceLaunchDashboardState => ({
     schema: 'narada.workspace_launch.ui_session_state.v1',
@@ -127,7 +137,7 @@ export async function runPersistentWorkspaceLaunchSelectionUi(
   const runLaunchAttempt = async (selection: WorkspaceLaunchBrowserSelection): Promise<WorkspaceLaunchAttemptRecord> => {
     const attempt: WorkspaceLaunchAttemptRecord = {
       schema: 'narada.workspace_launch.attempt.v1',
-      launch_attempt_id: launcher.workspaceLaunchId('wla'),
+      launch_attempt_id: support.workspaceLaunchId('wla'),
       ui_session_id: uiSession.ui_session_id,
       expected_launch_session_ids: [],
       submitted_at: new Date().toISOString(),
@@ -143,59 +153,59 @@ export async function runPersistentWorkspaceLaunchSelectionUi(
       diagnostic: null,
     };
     attempts.push(attempt);
-    launcher.writeLauncherOutput(launcherOutputs, {
+    support.writeLauncherOutput(launcherOutputs, {
       schema: 'narada.workspace_launch.terminal_event.v1',
       event: 'selection_submitted',
       launch_attempt_id: attempt.launch_attempt_id,
       selection,
-    }, `[launcher] selection submitted: ${launcher.formatWorkspaceLaunchSelection(selection)}`);
+    }, `[launcher] selection submitted: ${support.formatWorkspaceLaunchSelection(selection)}`);
     attempt.status = 'planning';
     attempt.result_summary = 'Planning workspace launch.';
     attempt.updated_at = new Date().toISOString();
     try {
-      await launcher.workspaceLaunchReapStaleSessionOwnedDescendants(selection, records);
+      await handoff.workspaceLaunchReapStaleSessionOwnedDescendants(selection, records);
       attempt.status = 'launching';
       attempt.result_summary = 'Executing host handoff.';
       attempt.updated_at = new Date().toISOString();
       const launch = await launchSelection(selection);
       const success = launch.exitCode === ExitCode.SUCCESS;
       attempt.status = success ? 'launched' : 'failed';
-      attempt.result_summary = launcher.workspaceLaunchResultSummary(launch.result, success);
+      attempt.result_summary = handoff.workspaceLaunchResultSummary(launch.result, success);
       attempt.plan_result_path = stringValue(isRecord(launch.result) ? launch.result.result_path : null);
-      attempt.handoffs = [launcher.workspaceLaunchHandoffFromResult(attempt.launch_attempt_id, launch.result, success)];
-      attempt.expected_launch_session_ids = success ? launcher.workspaceLaunchExpectedSessionIds(launch.result) : [];
+      attempt.handoffs = [handoff.workspaceLaunchHandoffFromResult(attempt.launch_attempt_id, launch.result, success)];
+      attempt.expected_launch_session_ids = success ? handoff.workspaceLaunchExpectedSessionIds(launch.result) : [];
       attempt.observations = success
-        ? await launcher.workspaceLaunchRuntimeObservations(
+        ? await handoff.workspaceLaunchRuntimeObservations(
           attempt.launch_attempt_id,
           selection,
           records,
           attempt.expected_launch_session_ids,
-          launcher.workspaceLaunchSiteRootsFromLaunchResult(launch.result),
+          support.workspaceLaunchSiteRootsFromLaunchResult(launch.result),
         )
         : [];
-      attempt.actions = success ? launcher.workspaceLaunchActionsForAttempt(attempt) : ['retry', 'forget'];
+      attempt.actions = success ? handoff.workspaceLaunchActionsForAttempt(attempt) : ['retry', 'forget'];
       attempt.diagnostic = launch.result;
       attempt.updated_at = new Date().toISOString();
       if (success) launchCount += 1;
       await persistWorkspaceLaunchDashboardState(persistenceDir, uiSession, attempts);
-      launcher.writeLauncherOutput(launcherOutputs, {
+      support.writeLauncherOutput(launcherOutputs, {
         schema: 'narada.workspace_launch.terminal_event.v1',
         event: success ? 'launch_handed_off' : 'launch_failed',
         launch_attempt_id: attempt.launch_attempt_id,
         status: attempt.status,
         result_path: attempt.plan_result_path,
       }, `[launcher] ${success ? 'handed off' : 'failed'}: ${attempt.result_summary}${attempt.plan_result_path ? ` result=${attempt.plan_result_path}` : ''}`);
-      launcher.writeWorkspaceLaunchCommandOutput(launcherOutputs, attempt);
+      support.writeWorkspaceLaunchCommandOutput(launcherOutputs, attempt);
       return attempt;
     } catch (error) {
       attempt.status = 'failed';
       attempt.result_summary = error instanceof Error ? error.message : String(error);
-      attempt.handoffs = [launcher.workspaceLaunchFailedHandoff(attempt.launch_attempt_id, error)];
+      attempt.handoffs = [handoff.workspaceLaunchFailedHandoff(attempt.launch_attempt_id, error)];
       attempt.actions = ['retry', 'forget'];
       attempt.diagnostic = { error: attempt.result_summary };
       attempt.updated_at = new Date().toISOString();
       await persistWorkspaceLaunchDashboardState(persistenceDir, uiSession, attempts);
-      launcher.writeLauncherOutput(launcherOutputs, {
+      support.writeLauncherOutput(launcherOutputs, {
         schema: 'narada.workspace_launch.terminal_event.v1',
         event: 'launch_failed',
         launch_attempt_id: attempt.launch_attempt_id,
@@ -210,9 +220,9 @@ export async function runPersistentWorkspaceLaunchSelectionUi(
       page: () => html,
       asset: readWorkspaceLaunchUiAsset,
       dashboard: dashboardState,
-      selectorModel: (payload) => launcher.workspaceLaunchSelectorModel(records, payload as Partial<WorkspaceLaunchBrowserSelection>, siteCatalog),
+      selectorModel: (payload) => selectionServices.workspaceLaunchSelectorModel(records, payload as Partial<WorkspaceLaunchBrowserSelection>, siteCatalog),
       submit: async (payload) => {
-        const selection = launcher.normalizeWorkspaceLaunchBrowserSelection(payload as Partial<WorkspaceLaunchBrowserSelection>);
+        const selection = selectionServices.normalizeWorkspaceLaunchBrowserSelection(payload as Partial<WorkspaceLaunchBrowserSelection>);
         await writeWorkspaceLaunchRememberedSelection(selection);
         const attempt = await runLaunchAttempt(selection);
         return {
@@ -244,21 +254,21 @@ export async function runPersistentWorkspaceLaunchSelectionUi(
         }
         if (action === 'recheck') {
           attempt.updated_at = new Date().toISOString();
-          attempt.observations = await launcher.workspaceLaunchRuntimeObservations(
+          attempt.observations = await handoff.workspaceLaunchRuntimeObservations(
             attempt.launch_attempt_id,
             attempt.selection,
             records,
             attempt.expected_launch_session_ids,
-            launcher.workspaceLaunchSiteRootsFromLaunchResult(attempt.diagnostic),
+            support.workspaceLaunchSiteRootsFromLaunchResult(attempt.diagnostic),
           );
-          attempt.actions = launcher.workspaceLaunchActionsForAttempt(attempt);
+          attempt.actions = handoff.workspaceLaunchActionsForAttempt(attempt);
           await persistWorkspaceLaunchDashboardState(persistenceDir, uiSession, attempts);
           return { status: 200, payload: { schema: 'narada.workspace_launch.action_result.v1', status: 'rechecked', attempt, dashboard: dashboardState() } };
         }
         if (action === 'open-web-ui' || action === 'attach-cli') {
           const command = attachCommandForAction(attempt, action);
           if (!command) return actionRefusal('attach_command_not_available', `${action === 'open-web-ui' ? 'Open This UI' : 'Attach CLI To This Session'} requires a discovered attachable NARS session for this launch result.`, 409, dashboardState());
-          const projection = await launcher.workspaceLaunchExecuteProjectionAction(attempt, action, command);
+          const projection = await handoff.workspaceLaunchExecuteProjectionAction(attempt, action, command);
           attempt.projections.push(projection);
           attempt.updated_at = new Date().toISOString();
           await persistWorkspaceLaunchDashboardState(persistenceDir, uiSession, attempts);
@@ -276,10 +286,10 @@ export async function runPersistentWorkspaceLaunchSelectionUi(
           };
         }
         if (action === 'stop-runtime') {
-          const result = await launcher.workspaceLaunchRequestRuntimeStop(attempt);
+          const result = await handoff.workspaceLaunchRequestRuntimeStop(attempt);
           if (result.status !== 'requested') return { status: 409, payload: { ...result, dashboard: dashboardState() } };
           attempt.updated_at = new Date().toISOString();
-          attempt.actions = launcher.workspaceLaunchActionsForAttempt(attempt);
+          attempt.actions = handoff.workspaceLaunchActionsForAttempt(attempt);
           await persistWorkspaceLaunchDashboardState(persistenceDir, uiSession, attempts);
           return { status: 200, payload: { ...result, dashboard: dashboardState() } };
         }
@@ -300,7 +310,7 @@ export async function runPersistentWorkspaceLaunchSelectionUi(
     server.on('error', rejectClosed);
   });
   const { url, port, fallback_used } = await listenWorkspaceLaunchUiServer(server!, host, portPolicy);
-  const ingress = await launcher.resolveWorkspaceLaunchUiIngress({
+  const ingress = await resolveWorkspaceLaunchUiIngress({
     uiSessionId: uiSession.ui_session_id,
     directUrl: url,
     host,
@@ -312,7 +322,7 @@ export async function runPersistentWorkspaceLaunchSelectionUi(
   console.log('Selection UI will remain available for additional launches until you close it.');
   uiSession.url = url;
   await persistWorkspaceLaunchDashboardState(persistenceDir, uiSession, attempts);
-  launcher.requestWorkspaceLaunchSelectionUiProjectionOpen(ingress.url);
+  requestWorkspaceLaunchSelectionUiProjectionOpen(ingress.url);
 
   try {
     const status = await Promise.race([

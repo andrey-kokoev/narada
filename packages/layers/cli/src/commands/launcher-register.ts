@@ -1,8 +1,7 @@
 import type { Command } from 'commander';
 import { directCommandAction, silentCommandContext } from '../lib/command-wrapper.js';
 import { emitCommandResult, resolveCommandFormat } from '../lib/cli-output.js';
-import { explainMcpCommand } from './launcher.js';
-import { workspaceLaunchCommand, workspaceLaunchPlanCommand } from './workspace-launch-command.js';
+import { explainMcpCommand, workspaceLaunchCommand, workspaceLaunchPlanCommand } from './launcher.js';
 
 export function registerLauncherCommands(program: Command): void {
   const launcher = program

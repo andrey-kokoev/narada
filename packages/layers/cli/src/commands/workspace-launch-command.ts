@@ -6,7 +6,19 @@ import { formattedResult } from '../lib/cli-output.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import type { CommandContext } from '../lib/command-wrapper.js';
 import type { ResolvedSiteRoot } from '../lib/site-root-resolver.js';
-import * as launcher from './launcher.js';
+import * as support from './workspace-launch-support.js';
+import type { WorkspaceLaunchPlanOptions, WorkspaceLaunchRecord } from './workspace-launch-types.js';
+import type { WorkspaceLaunchRegistryContext } from './workspace-launch-registry.js';
+import type { WorkspaceLaunchSelectionServices } from './workspace-launch-context.js';
+import {
+  buildAgentPlan,
+  normalizeCarrierList,
+  normalizeWorkspaceLaunchPlanOptions,
+  readWorkspaceLaunchRecords,
+  requireSiteCatalogForInteractiveSelection,
+  resolveRegistryPaths,
+  selectLaunchRecords,
+} from './workspace-launch-registry.js';
 import {
   runPersistentWorkspaceLaunchSelectionUi as runPersistentWorkspaceLaunchSelectionUiController,
   runWorkspaceLaunchSelectionUi as runWorkspaceLaunchSelectionUiController,
@@ -14,17 +26,19 @@ import {
 import type { WorkspaceLaunchSelection as WorkspaceLaunchBrowserSelection } from '@narada2/workspace-launch-contract';
 
 export async function workspaceLaunchPlanCommand(
-  options: launcher.WorkspaceLaunchPlanOptions,
+  options: WorkspaceLaunchPlanOptions,
   context: CommandContext,
+  selectionServices: WorkspaceLaunchSelectionServices,
+  registryContext: WorkspaceLaunchRegistryContext,
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
-  const normalizedOptions = launcher.normalizeWorkspaceLaunchPlanOptions(options);
-  const registryPaths = launcher.resolveRegistryPaths(normalizedOptions);
-  const loaded = await launcher.readWorkspaceLaunchRecords(normalizedOptions);
+  const normalizedOptions = normalizeWorkspaceLaunchPlanOptions(options);
+  const registryPaths = resolveRegistryPaths(normalizedOptions);
+  const loaded = await readWorkspaceLaunchRecords(normalizedOptions);
   const records = loaded.records;
-  launcher.requireSiteCatalogForInteractiveSelection(normalizedOptions, loaded.siteCatalog, loaded.records);
-  const resolvedOptions = await resolveInteractiveSelectionOptions(records, normalizedOptions, loaded.siteCatalog);
-  const selected = launcher.selectLaunchRecords(records, resolvedOptions);
-  const plans = selected.map((record) => launcher.buildAgentPlan(record, resolvedOptions));
+  requireSiteCatalogForInteractiveSelection(normalizedOptions, loaded.siteCatalog, loaded.records);
+  const resolvedOptions = await resolveInteractiveSelectionOptions(records, normalizedOptions, loaded.siteCatalog, selectionServices);
+  const selected = selectLaunchRecords(records, resolvedOptions);
+  const plans = selected.map((record) => buildAgentPlan(record, resolvedOptions, registryContext));
   const wtArgs = plans.flatMap((plan, index) => [
     ...(index === 0 ? [] : [';']),
     ...plan.wt_args,
@@ -53,7 +67,7 @@ export async function workspaceLaunchPlanCommand(
         operator_surface: plan.launch_operator_surface,
         carrier: plan.launch_carrier,
         runtime: plan.launch_runtime,
-        legacy_carrier_compatibility: launcher.legacyCarrierCompatibility(),
+        legacy_carrier_compatibility: support.legacyCarrierCompatibility(),
         status: smoke.exitCode === ExitCode.SUCCESS ? 'passed' : 'failed',
         plan,
         operator_surface_runtime_start: operatorSurfaceRuntimeStart,
@@ -73,7 +87,7 @@ export async function workspaceLaunchPlanCommand(
       },
       registry_paths: registryPaths,
       agents,
-      compatibility: launcher.legacyCarrierCompatibility(),
+      compatibility: support.legacyCarrierCompatibility(),
       ownership: {
         planner: 'narada-cli',
         smoke_aggregator: 'narada-cli',
@@ -83,7 +97,7 @@ export async function workspaceLaunchPlanCommand(
       ...(resolvedOptions.resultPath ? { result_path: resolvedOptions.resultPath } : {}),
       ...(resolvedOptions.suppressResultOutput ? { suppress_result_output: true } : {}),
     };
-    await launcher.writeWorkspacePlanResult(resolvedOptions.resultPath, smokeResult);
+    await support.writeWorkspacePlanResult(resolvedOptions.resultPath, smokeResult);
     return {
       exitCode: failed.length === 0 ? ExitCode.SUCCESS : ExitCode.GENERAL_ERROR,
       result: formattedResult(smokeResult, `workspace smoke ${smokeResult.status}`, resolvedOptions.format ?? 'auto'),
@@ -103,7 +117,7 @@ export async function workspaceLaunchPlanCommand(
     selected_agents: plans,
     wt_args: wtArgs,
     wt_args_authority: 'compatibility_non_authoritative',
-    compatibility: launcher.legacyCarrierCompatibility(),
+    compatibility: support.legacyCarrierCompatibility(),
     ownership: {
       planner: 'narada-cli',
       executor: 'narada-cli.workspace-launch',
@@ -112,7 +126,7 @@ export async function workspaceLaunchPlanCommand(
     ...(resolvedOptions.resultPath ? { result_path: resolvedOptions.resultPath } : {}),
     ...(resolvedOptions.suppressResultOutput ? { suppress_result_output: true } : {}),
   };
-  await launcher.writeWorkspacePlanResult(resolvedOptions.resultPath, result);
+  await support.writeWorkspacePlanResult(resolvedOptions.resultPath, result);
 
   return {
     exitCode: ExitCode.SUCCESS,
@@ -121,19 +135,21 @@ export async function workspaceLaunchPlanCommand(
 }
 
 export async function workspaceLaunchCommand(
-  options: launcher.WorkspaceLaunchPlanOptions,
+  options: WorkspaceLaunchPlanOptions,
   context: CommandContext,
+  selectionServices: WorkspaceLaunchSelectionServices,
+  registryContext: WorkspaceLaunchRegistryContext,
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
   if (options.interactiveSelectionUi && !options.dryRun && !options.smoke) {
-    return runPersistentWorkspaceLaunchSelectionUiCommand(options, context);
+    return runPersistentWorkspaceLaunchSelectionUiCommand(options, context, selectionServices, registryContext);
   }
 
-  const plan = await workspaceLaunchPlanCommand(options, context);
+  const plan = await workspaceLaunchPlanCommand(options, context, selectionServices, registryContext);
   if (plan.exitCode !== ExitCode.SUCCESS || options.smoke) return plan;
 
   const result = plan.result as Record<string, unknown>;
-  const wtArgs = launcher.stringArray(result.wt_args);
-  const selectedAgents = Array.isArray(result.selected_agents) ? result.selected_agents.filter(launcher.isRecord) : [];
+  const wtArgs = support.stringArray(result.wt_args);
+  const selectedAgents = Array.isArray(result.selected_agents) ? result.selected_agents.filter(support.isRecord) : [];
   const hiddenRuntimeAgents = selectedAgents.filter((agent) => agent.runtime_start_execution_mode === 'hidden_detached');
   const operatorTerminalAgents = selectedAgents.filter((agent) => agent.runtime_start_execution_mode !== 'hidden_detached');
   const projectionBearingAgents = selectedAgents.filter((agent) => Array.isArray(agent.operator_projection_open_requests) && agent.operator_projection_open_requests.length > 0);
@@ -159,10 +175,10 @@ export async function workspaceLaunchCommand(
   if (canUseHiddenRuntimeStart) {
     const hiddenLaunches = [];
     for (const agent of hiddenRuntimeAgents) {
-      const runtimeStartCommand = launcher.stringArray(agent.hidden_runtime_start_command ?? agent.runtime_start_command);
-      const runtimeStartCwd = launcher.workspaceLaunchString(agent.runtime_start_cwd) ?? process.cwd();
+      const runtimeStartCommand = support.stringArray(agent.hidden_runtime_start_command ?? agent.runtime_start_command);
+      const runtimeStartCwd = support.workspaceLaunchString(agent.runtime_start_cwd) ?? process.cwd();
       if (runtimeStartCommand.length === 0) throw new Error('narada_workspace_plan_empty_runtime_start_command');
-      hiddenLaunches.push(await launcher.workspaceLaunchStartHiddenRuntimeHost(runtimeStartCommand, runtimeStartCwd));
+      hiddenLaunches.push(await support.workspaceLaunchStartHiddenRuntimeHost(runtimeStartCommand, runtimeStartCwd));
     }
     const launchResult = finalizeWorkspaceLaunchResult({
       ...result,
@@ -171,7 +187,7 @@ export async function workspaceLaunchCommand(
       launcher_execution_owner: 'narada-cli',
       hidden_runtime_launches: hiddenLaunches,
     });
-    await launcher.writeWorkspacePlanResult(options.resultPath, launchResult);
+    await support.writeWorkspacePlanResult(options.resultPath, launchResult);
     return {
       exitCode: ExitCode.SUCCESS,
       result: formattedResult(launchResult, `launched ${result.count ?? 0} hidden runtime start(s)`, options.format ?? 'auto'),
@@ -195,7 +211,7 @@ export async function workspaceLaunchCommand(
     launcher_execution_owner: 'narada-cli',
     wt_exit_code: launch.status ?? 0,
   });
-  await launcher.writeWorkspacePlanResult(options.resultPath, launchResult);
+  await support.writeWorkspacePlanResult(options.resultPath, launchResult);
   return {
     exitCode: ExitCode.SUCCESS,
     result: formattedResult(launchResult, `launched ${result.count ?? 0} workspace launch(es)`, options.format ?? 'auto'),
@@ -203,21 +219,23 @@ export async function workspaceLaunchCommand(
 }
 
 export async function runPersistentWorkspaceLaunchSelectionUiCommand(
-  options: launcher.WorkspaceLaunchPlanOptions,
+  options: WorkspaceLaunchPlanOptions,
   context: CommandContext,
+  selectionServices: WorkspaceLaunchSelectionServices,
+  registryContext: WorkspaceLaunchRegistryContext,
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
-  const normalizedOptions = launcher.normalizeWorkspaceLaunchPlanOptions(options);
-  const registryPaths = launcher.resolveRegistryPaths(normalizedOptions);
-  const loaded = await launcher.readWorkspaceLaunchRecords(normalizedOptions);
-  launcher.requireSiteCatalogForInteractiveSelection(normalizedOptions, loaded.siteCatalog, loaded.records);
+  const normalizedOptions = normalizeWorkspaceLaunchPlanOptions(options);
+  const registryPaths = resolveRegistryPaths(normalizedOptions);
+  const loaded = await readWorkspaceLaunchRecords(normalizedOptions);
+  requireSiteCatalogForInteractiveSelection(normalizedOptions, loaded.siteCatalog, loaded.records);
   const session = await runPersistentWorkspaceLaunchSelectionUiController(loaded.records, normalizedOptions, async (selection) => {
     const selectionOptions = workspaceLaunchOptionsFromBrowserSelection(normalizedOptions, selection);
     return workspaceLaunchCommand({
       ...selectionOptions,
       interactiveSelection: false,
       interactiveSelectionUi: false,
-    }, context);
-  }, loaded.siteCatalog);
+    }, context, selectionServices, registryContext);
+  }, loaded.siteCatalog, selectionServices);
 
   return {
     exitCode: session.status === 'cancelled' ? ExitCode.SUCCESS : ExitCode.GENERAL_ERROR,
@@ -243,17 +261,18 @@ export async function runPersistentWorkspaceLaunchSelectionUiCommand(
 }
 
 async function resolveInteractiveSelectionOptions(
-  records: launcher.WorkspaceLaunchRecord[],
-  options: launcher.WorkspaceLaunchPlanOptions,
+  records: WorkspaceLaunchRecord[],
+  options: WorkspaceLaunchPlanOptions,
   siteCatalog: ResolvedSiteRoot[] = [],
-): Promise<launcher.WorkspaceLaunchPlanOptions> {
-  if (options.interactiveSelectionUi) return resolveInteractiveSelectionUiOptions(records, options, siteCatalog);
+  selectionServices: WorkspaceLaunchSelectionServices,
+): Promise<WorkspaceLaunchPlanOptions> {
+  if (options.interactiveSelectionUi) return resolveInteractiveSelectionUiOptions(records, options, siteCatalog, selectionServices);
   if (!options.interactiveSelection) return options;
   if (!process.stdin.isTTY || !process.stdout.isTTY) {
     throw new Error('interactive_selection_requires_tty: --interactive-selection requires an interactive terminal');
   }
 
-  const siteChoices = launcher.unique(records.map((record) => record.site));
+  const siteChoices = support.unique(records.map((record) => record.site));
   const selectedSites = await prompts.multiselect({
     message: 'Select Site(s)',
     options: siteChoices.map((site) => ({ value: site, label: site })),
@@ -263,8 +282,8 @@ async function resolveInteractiveSelectionOptions(
   if (prompts.isCancel(selectedSites)) throw new Error('interactive_selection_cancelled');
 
   const selectedSiteValues = selectedSites as string[];
-  const roleChoices = launcher.roleChoicesForSelectedSites(records, selectedSiteValues);
-  const initialRoleValues = launcher.initialRoleValuesForInteractiveSelection(roleChoices, options.role);
+  const roleChoices = selectionServices.roleChoicesForSelectedSites(records, selectedSiteValues);
+  const initialRoleValues = selectionServices.initialRoleValuesForInteractiveSelection(roleChoices, options.role);
   const selectedRoles = await prompts.multiselect({
     message: 'Select Role(s)',
     options: roleChoices.map((role) => ({ value: role, label: role })),
@@ -274,10 +293,10 @@ async function resolveInteractiveSelectionOptions(
   if (prompts.isCancel(selectedRoles)) throw new Error('interactive_selection_cancelled');
 
   const selectedRoleValues = selectedRoles as string[];
-  const selectorModel = launcher.workspaceLaunchSelectorModel(records, {
+  const selectorModel = selectionServices.workspaceLaunchSelectorModel(records, {
     site: selectedSiteValues,
     role: selectedRoleValues,
-    operatorSurface: options.operatorSurface ? launcher.normalizeCarrierList(options.operatorSurface) : undefined,
+    operatorSurface: options.operatorSurface ? normalizeCarrierList(options.operatorSurface) : undefined,
     runtime: options.runtime ?? 'registry default',
     intelligenceProvider: options.intelligenceProvider ?? 'registry default',
   }, siteCatalog);
@@ -296,8 +315,8 @@ async function resolveInteractiveSelectionOptions(
   });
   if (prompts.isCancel(selectedRuntime)) throw new Error('interactive_selection_cancelled');
 
-  const selectedCarrierValues = launcher.normalizeInteractiveOperatorSurfaceValues(selectedCarriers as string[]);
-  const providerSelectorModel = launcher.workspaceLaunchSelectorModel(records, {
+  const selectedCarrierValues = selectionServices.normalizeInteractiveOperatorSurfaceValues(selectedCarriers as string[]);
+  const providerSelectorModel = selectionServices.workspaceLaunchSelectorModel(records, {
     site: selectedSiteValues,
     role: selectedRoleValues,
     operatorSurface: selectedCarrierValues,
@@ -327,18 +346,19 @@ async function resolveInteractiveSelectionOptions(
 }
 
 async function resolveInteractiveSelectionUiOptions(
-  records: launcher.WorkspaceLaunchRecord[],
-  options: launcher.WorkspaceLaunchPlanOptions,
+  records: WorkspaceLaunchRecord[],
+  options: WorkspaceLaunchPlanOptions,
   siteCatalog: ResolvedSiteRoot[] = [],
-): Promise<launcher.WorkspaceLaunchPlanOptions> {
-  const selection = await runWorkspaceLaunchSelectionUiController(records, options, siteCatalog);
+  selectionServices: WorkspaceLaunchSelectionServices,
+): Promise<WorkspaceLaunchPlanOptions> {
+  const selection = await runWorkspaceLaunchSelectionUiController(records, options, siteCatalog, selectionServices);
   return workspaceLaunchOptionsFromBrowserSelection(options, selection);
 }
 
 function workspaceLaunchOptionsFromBrowserSelection(
-  options: launcher.WorkspaceLaunchPlanOptions,
+  options: WorkspaceLaunchPlanOptions,
   selection: WorkspaceLaunchBrowserSelection,
-): launcher.WorkspaceLaunchPlanOptions {
+): WorkspaceLaunchPlanOptions {
   return {
     ...options,
     all: false,
@@ -356,8 +376,8 @@ export async function captureWorkspaceLaunchTerminalInvocation(path: string, arg
 }
 
 function finalizeWorkspaceLaunchResult(result: Record<string, unknown>): Record<string, unknown> {
-  const selectedAgents = Array.isArray(result.selected_agents) ? result.selected_agents.filter(launcher.isRecord) : [];
-  const wtArgs = launcher.stringArray(result.wt_args);
+  const selectedAgents = Array.isArray(result.selected_agents) ? result.selected_agents.filter(support.isRecord) : [];
+  const wtArgs = support.stringArray(result.wt_args);
   const { wt_args: _wtArgs, wt_args_authority: _wtArgsAuthority, ...resultWithoutTopLevelTerminalPlan } = result;
   const launchResult = {
     ...resultWithoutTopLevelTerminalPlan,
@@ -402,14 +422,14 @@ function assertWorkspaceLaunchResultInvariants(result: Record<string, unknown>):
   if (Array.isArray(result.wt_args)) {
     throw new Error('workspace_launch_result_top_level_wt_args_forbidden');
   }
-  const legacyTerminalPlan = launcher.isRecord(result.legacy_terminal_plan) ? result.legacy_terminal_plan : null;
+  const legacyTerminalPlan = support.isRecord(result.legacy_terminal_plan) ? result.legacy_terminal_plan : null;
   if (legacyTerminalPlan && legacyTerminalPlan.authority !== 'compatibility_non_authoritative') {
     throw new Error('workspace_launch_result_legacy_terminal_plan_authority_invalid');
   }
   if (!Array.isArray(result.launch_agents)) {
     throw new Error('workspace_launch_result_launch_agents_required');
   }
-  const selectedAgents = Array.isArray(result.selected_agents) ? result.selected_agents.filter(launcher.isRecord) : [];
+  const selectedAgents = Array.isArray(result.selected_agents) ? result.selected_agents.filter(support.isRecord) : [];
   if (hiddenRuntimeInvoked && selectedAgents.some((agent) => agent.runtime_start_execution_mode !== 'hidden_detached')) {
     throw new Error('workspace_launch_result_hidden_runtime_requires_hidden_agent_modes');
   }
