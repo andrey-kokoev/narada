@@ -24,6 +24,9 @@ export async function runTurn(context = {}, eventSink = () => {}, toolGateway = 
         tools,
         settings: context.settings ?? {},
         abortSignal: context.abortSignal ?? null,
+        turnId: context.turnId ?? null,
+        inputEventId: context.inputEventId ?? null,
+        invocationEventSink: eventSink,
         toolGateway,
       });
       const toolCalls = providerToolCalls(result);

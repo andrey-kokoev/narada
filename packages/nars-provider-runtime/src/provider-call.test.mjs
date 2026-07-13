@@ -28,9 +28,20 @@ test('provider call shapes and sends an OpenAI-compatible request', async () => 
       response.end(JSON.stringify({ choices: [{ message: { role: 'assistant', content: 'ok' } }] }));
     });
   }, async (baseUrl) => {
+    const events = [];
     const call = createProviderCall({ runtimeContext: { intelligenceProvider: 'openai-api', providerSettings: { apiKey: 'test-key', baseUrl, model: 'test-model' } } });
-    const result = await call([{ role: 'user', content: 'hello' }], []);
+    const result = await call([{ role: 'user', content: 'hello' }], [], {
+      invocationId: 'prov_inv_success',
+      turnId: 'turn-success',
+      inputEventId: 'input-success',
+      invocationEventSink: (event) => events.push(event),
+    });
     assert.equal(result.choices[0].message.content, 'ok');
+    assert.deepEqual(events.map((event) => event.invocation_state), ['requested', 'validated', 'shaped', 'dispatched', 'receiving', 'completed']);
+    assert.equal(new Set(events.map((event) => event.invocation_id)).size, 1);
+    assert.equal(events.at(-1).invocation_id, 'prov_inv_success');
+    assert.equal(events.at(-1).turn_id, 'turn-success');
+    assert.equal(events.at(-1).input_event_id, 'input-success');
   });
 });
 
@@ -67,9 +78,14 @@ test('provider call aborts an in-flight HTTP request', async () => {
   await withServer((_request, _response) => {}, async (baseUrl) => {
     const controller = new AbortController();
     const call = createProviderCall({ runtimeContext: { intelligenceProvider: 'openai-api', providerSettings: { apiKey: 'test-key', baseUrl } } });
-    const pending = call([{ role: 'user', content: 'hello' }], [], { abortSignal: controller.signal });
+    const events = [];
+    const pending = call([{ role: 'user', content: 'hello' }], [], {
+      abortSignal: controller.signal,
+      invocationEventSink: (event) => events.push(event),
+    });
     controller.abort();
     await assert.rejects(pending, /provider_request_aborted/);
+    assert.equal(events.at(-1).invocation_state, 'interrupted');
   });
 });
 
@@ -90,7 +106,10 @@ test('provider call rejects provider error payloads', async () => {
     response.statusCode = 429;
     response.end(JSON.stringify({ error: { message: 'rate limited' } }));
   }, async (baseUrl) => {
+    const events = [];
     const call = createProviderCall({ runtimeContext: { intelligenceProvider: 'openai-api', providerSettings: { apiKey: 'test-key', baseUrl } } });
-    await assert.rejects(() => call([{ role: 'user', content: 'hello' }], []), /API error 429/);
+    await assert.rejects(() => call([{ role: 'user', content: 'hello' }], [], { invocationEventSink: (event) => events.push(event) }), /API error 429/);
+    assert.equal(events.at(-1).invocation_state, 'failed');
   });
 });
+

@@ -4,8 +4,12 @@ import { createCarrierTurnAdapter } from './carrier-turn-adapter.mjs';
 
 test('carrier turn adapter retains no session state and reports turn events', async () => {
   const events = [];
+  let providerRequest;
   const adapter = createCarrierTurnAdapter({
-    callProvider: async ({ messages, tools }) => ({ messages, tools }),
+    callProvider: async (request) => {
+      providerRequest = request;
+      return { messages: request.messages, tools: request.tools };
+    },
   });
   const result = await adapter.runTurn(
     { turnId: 'turn-1', provider: 'codex', messages: [{ role: 'user', content: 'hi' }] },
@@ -14,6 +18,9 @@ test('carrier turn adapter retains no session state and reports turn events', as
   );
   assert.equal(result.messages[0].content, 'hi');
   assert.equal(result.tools[0].name, 'fs_read_file');
+  assert.equal(providerRequest.turnId, 'turn-1');
+  assert.equal(providerRequest.inputEventId, null);
+  assert.equal(typeof providerRequest.invocationEventSink, 'function');
   assert.deepEqual(events.map((event) => event.kind), ['carrier_turn_started', 'assistant_message', 'carrier_turn_completed']);
 });
 
@@ -27,6 +34,18 @@ test('carrier tool loop bounds repeated tool requests and normalizes malformed a
     invoke: async ({ arguments: args }) => { invocations += 1; assert.deepEqual(args, {}); return { status: 'completed' }; },
   }), /carrier_turn_tool_round_limit_exceeded/);
   assert.equal(invocations, 8);
+});
+
+test('carrier tool loop accepts a bounded explicit round budget', async () => {
+  let invocations = 0;
+  const adapter = createCarrierTurnAdapter({
+    callProvider: async () => ({ choices: [{ message: { role: 'assistant', tool_calls: [{ id: 'call', function: { name: 'read', arguments: '{}' } }] } }] }),
+  });
+  await assert.rejects(() => adapter.runTurn({ maxToolRounds: 3 }, async () => {}, {
+    toolCatalog: () => [{ type: 'function', function: { name: 'read' } }],
+    invoke: async () => { invocations += 1; return { status: 'completed' }; },
+  }), /carrier_turn_tool_round_limit_exceeded:3/);
+  assert.equal(invocations, 3);
 });
 
 test('carrier turn adapter emits failure without converting provider errors into state', async () => {

@@ -7,11 +7,18 @@ import { REQUEST_ADAPTERS, accumulateCodexExecEvent, buildCodexExecArgs, buildCo
 import { PROVIDER_SUPPORT_STATES, loadProviderMetadata } from './provider-resolution.mjs';
 import { resolveProviderRuntimeDefaults } from './provider-runtime-defaults.mjs';
 import { spawnOwnedProcess } from './process-supervisor.mjs';
-import { codexCliSpawnError, codexCommand } from './runtime-tail-utils.mjs';
+import {
+  assertNarsProviderInvocationTransition,
+  createNarsProviderInvocationId,
+  isNarsProviderInvocationTerminalState,
+  NarsProviderInvocationRefusalError,
+  normalizeNarsProviderInvocationRecord,
+} from './provider-invocation-state.mjs';
+import { codexCliSpawnError, codexCommand, isAbortError } from './runtime-tail-utils.mjs';
 
 const PROVIDER_METADATA = loadProviderMetadata();
 
-export function createProviderCall({ runtimeContext = {}, env = process.env } = {}) {
+export function createProviderCall({ runtimeContext = {}, env = process.env, invocationEventSink = null, invocationIdFn = null } = {}) {
   const provider = runtimeContext.intelligenceProvider ?? env.NARADA_INTELLIGENCE_PROVIDER;
   if (!provider) throw new Error('provider_runtime_provider_required');
   const defaults = resolveProviderRuntimeDefaults(provider, env);
@@ -36,20 +43,110 @@ export function createProviderCall({ runtimeContext = {}, env = process.env } = 
     providerRuntimeBinding: redactProviderRuntimeBinding(binding),
   };
   configureProviderAdapterContext(settings);
-  return (messages, tools, overrides = {}) => callProvider(messages, tools, { ...settings, ...overrides });
+  return (messages, tools, overrides = {}) => callProvider(messages, tools, {
+    ...settings,
+    ...overrides,
+    invocationEventSink: overrides.invocationEventSink ?? invocationEventSink,
+    invocationIdFn: overrides.invocationIdFn ?? invocationIdFn,
+  });
 }
 
 async function callProvider(messages, tools, settings) {
-  const metadata = PROVIDER_METADATA[settings.provider];
-  if (!metadata) throw new Error(`Unsupported intelligence provider: ${settings.provider}`);
-  const adapter = REQUEST_ADAPTERS[metadata.adapter_kind];
-  const state = metadata.support_state ?? metadata.support_status;
-  if (!adapter || ![PROVIDER_SUPPORT_STATES.VERIFIED_SUPPORTED, PROVIDER_SUPPORT_STATES.DEPRECATED, 'supported'].includes(state)) throw new Error(`Unsupported intelligence provider adapter for ${settings.provider}`);
-  if (settings.provider !== 'codex-subscription' && !settings.apiKey) throw new Error(`Missing API key for ${settings.provider}`);
-  const request = adapter.buildRequest(messages, tools, settings);
-  if (metadata.adapter_kind === 'codex-mcp-server') return parseCodexMcpResponse(await sendCodex(request, settings));
-  const response = await sendHttp(request, settings);
-  return metadata.adapter_kind === 'anthropic-messages' ? parseAnthropicMessagesResponse(response) : response;
+  const invocationId = settings.invocationId
+    ?? settings.invocation_id
+    ?? settings.providerInvocationId
+    ?? createNarsProviderInvocationId(typeof settings.invocationIdFn === 'function' ? settings.invocationIdFn : undefined);
+  const baseRecord = {
+    invocation_id: invocationId,
+    provider: settings.provider ?? null,
+    adapter_kind: null,
+    transport: null,
+    turn_id: settings.turnId ?? settings.turn_id ?? null,
+    input_event_id: settings.inputEventId ?? settings.input_event_id ?? null,
+    request_id: settings.requestId ?? settings.request_id ?? null,
+    thread_id: null,
+  };
+  let record = null;
+  const transition = async (nextState, evidence = {}) => {
+    const previousState = record?.invocation_state ?? null;
+    assertNarsProviderInvocationTransition(previousState, nextState);
+    record = normalizeNarsProviderInvocationRecord({
+      ...baseRecord,
+      ...record,
+      ...evidence,
+      invocation_state: nextState,
+      updated_at: new Date().toISOString(),
+    });
+    if (typeof settings.invocationEventSink === 'function') {
+      await settings.invocationEventSink({
+        kind: 'provider_invocation_state_transition',
+        previous_state: previousState,
+        next_state: record.invocation_state,
+        ...record,
+      });
+    }
+    return record;
+  };
+
+  try {
+    await transition('requested');
+    if (settings.abortSignal?.aborted) throw new Error('provider_request_aborted');
+
+    const metadata = PROVIDER_METADATA[settings.provider];
+    if (!metadata) throw new NarsProviderInvocationRefusalError(`Unsupported intelligence provider: ${settings.provider}`);
+    const adapter = REQUEST_ADAPTERS[metadata.adapter_kind];
+    const supportState = metadata.support_state ?? metadata.support_status;
+    if (!adapter || ![PROVIDER_SUPPORT_STATES.VERIFIED_SUPPORTED, PROVIDER_SUPPORT_STATES.DEPRECATED, 'supported'].includes(supportState)) {
+      throw new NarsProviderInvocationRefusalError(`Unsupported intelligence provider adapter for ${settings.provider}`);
+    }
+    if (settings.provider !== 'codex-subscription' && !settings.apiKey) {
+      throw new NarsProviderInvocationRefusalError(`Missing API key for ${settings.provider}`);
+    }
+    await transition('validated', { adapter_kind: metadata.adapter_kind });
+
+    const request = adapter.buildRequest(messages, tools, settings);
+    await transition('shaped', { adapter_kind: metadata.adapter_kind });
+    const transport = metadata.adapter_kind === 'codex-mcp-server' ? 'codex_subprocess' : 'http';
+    await transition('dispatched', { adapter_kind: metadata.adapter_kind, transport });
+    await transition('receiving', { adapter_kind: metadata.adapter_kind, transport });
+
+    if (metadata.adapter_kind === 'codex-mcp-server') {
+      const response = await sendCodex(request, settings);
+      const result = parseCodexMcpResponse(response);
+      await transition('completed', { transport, thread_id: response?.threadId ?? null });
+      return result;
+    }
+    const response = await sendHttp(request, settings);
+    const result = metadata.adapter_kind === 'anthropic-messages' ? parseAnthropicMessagesResponse(response) : response;
+    await transition('completed', { transport });
+    return result;
+  } catch (error) {
+    const terminalState = providerInvocationTerminalState(error, settings);
+    if (!isNarsProviderInvocationTerminalState(record?.invocation_state)) {
+      await transition(terminalState, {
+        reason: providerInvocationTerminalReason(terminalState),
+        error: providerInvocationErrorMessage(error),
+      });
+    }
+    throw error;
+  }
+}
+
+function providerInvocationTerminalState(error, settings) {
+  if (settings.abortSignal?.aborted || isAbortError(error)) return 'interrupted';
+  if (error instanceof NarsProviderInvocationRefusalError || error?.code === 'provider_invocation_refused') return 'refused';
+  return 'failed';
+}
+
+function providerInvocationTerminalReason(state) {
+  if (state === 'refused') return 'admission_refused';
+  if (state === 'interrupted') return 'aborted';
+  return 'provider_failure';
+}
+
+function providerInvocationErrorMessage(error) {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.length > 1000 ? `${message.slice(0, 997)}...` : message;
 }
 
 function sendHttp({ url, body, headers }, settings) {
@@ -69,7 +166,7 @@ function sendCodex(request, settings) {
     if (settings.abortSignal?.aborted) return rejectRequest(new Error('provider_request_aborted'));
     const command = codexCommand(); const cwd = request.arguments?.cwd ?? settings.siteRoot;
     let owner;
-    try { owner = spawnAiProcessInvocation({ adapterKind: 'codex', projection: 'codex-subscription', purpose: 'provider_request', siteRoot: cwd, cwd, command: command.command, argv: [...command.prefixArgs, ...buildCodexExecArgs(request, settings)], env: buildCodexSubprocessEnv(codexRequestMcpServers(request, settings), settings) }, { spawnProcess: spawnOwnedProcess, spawnOptions: { cwd, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] } }); } catch (error) { return rejectRequest(error instanceof AiProcessInvocationRefusalError ? new Error(`codex ai process invocation refused: ${error.admission.reason}`) : error); }
+    try { owner = spawnAiProcessInvocation({ adapterKind: 'codex', projection: 'codex-subscription', purpose: 'provider_request', siteRoot: cwd, cwd, command: command.command, argv: [...command.prefixArgs, ...buildCodexExecArgs(request, settings)], env: buildCodexSubprocessEnv(codexRequestMcpServers(request, settings), settings) }, { spawnProcess: spawnOwnedProcess, spawnOptions: { cwd, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] } }); } catch (error) { return rejectRequest(error instanceof AiProcessInvocationRefusalError ? new NarsProviderInvocationRefusalError(`codex ai process invocation refused: ${error.admission.reason}`) : error); }
     const abortChild = () => owner.terminateTree('codex_provider_abort');
     settings.abortSignal?.addEventListener?.('abort', abortChild, { once: true });
     owner.child.stdin.end(codexExecPrompt(request)); let stdout = ''; let stderr = '';

@@ -144,6 +144,22 @@ requested -> admitted -> executing -> completed | failed | interrupted
 
 `requested`, `admitted`, and `executing` are non-terminal. `completed`, `refused`, `failed`, and `interrupted` are terminal for that execution id and cannot be replayed into another terminal state. Every transition emits `capability_gateway_lifecycle_transition` or `tool_execution_state_transition`; the existing `tool_execution_completed`, `tool_execution_refused`, `tool_execution_failed`, and `tool_execution_interrupted` events remain terminal compatibility evidence. `turn_id` and `input_event_id` correlate the attempt back to the session boundary, while the gateway remains the authority for tool transport and admission.
 
+### Provider Invocation Lifecycle
+
+`@narada2/nars-provider-runtime` owns the lifecycle of one provider request under schema `narada.nars.provider_invocation_state.v1`. This is distinct from the session-core turn FSM and the capability-gateway tool-attempt FSM: the provider runtime owns request admission, provider-specific request shaping, transport dispatch, response receipt, and the request outcome, but it does not own session state or tool authority.
+
+Each provider invocation has its own `invocation_id` and follows:
+
+```text
+requested -> validated -> shaped -> dispatched -> receiving -> completed
+requested | validated | shaped -> refused
+dispatched | receiving -> failed | interrupted
+```
+
+Every transition emits `provider_invocation_state_transition` with the invocation id, provider, adapter kind, transport when known, and `turn_id` / `input_event_id` correlation. `completed`, `refused`, `failed`, and `interrupted` are terminal for that invocation id. The provider runtime never retries inside this FSM; an explicit retry creates a new invocation under the owning turn policy. Provider failures remain provider-invocation evidence and do not silently become turn-state transitions; session-core observes the carrier's turn outcome separately.
+
+The carrier forwards the correlation fields and the session event sink into the provider call. The session supervisor journals the transition events through its existing event boundary. This keeps provider execution observable without allowing provider runtime code to acquire session persistence or MCP authority.
+
 ## Client And Runtime Split
 
 NARS is the runtime owner. `@narada2/agent-runtime-server` owns session binding, transport projection, durable `events.jsonl`, status/health/event subscription state, and lifecycle hook dispatch. `@narada2/nars-provider-runtime` owns provider turn execution, while `@narada2/nars-capability-gateway` owns MCP fabric hosting, tool dispatch, and tool admission. Client packages must not silently recreate those responsibilities.

@@ -351,6 +351,9 @@ test('spawned runtime cancels an in-flight provider request through JSONL contro
     const events = stdout.trim().split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
     assert.ok(events.some((event) => event.event === 'session_cancel' && event.cancelled === true));
     assert.ok(events.some((event) => event.event === 'carrier_turn_failed' && /abort/i.test(event.error)));
+    const invocationEvents = events.filter((event) => event.event === 'provider_invocation_state_transition');
+    assert.equal(invocationEvents.at(-1)?.invocation_state, 'interrupted');
+    assert.ok(invocationEvents.every((event) => event.turn_id && event.turn_id === event.input_event_id));
   } finally {
     await new Promise((resolve) => provider.close(resolve));
     rmSync(siteRoot, { recursive: true, force: true });
@@ -524,6 +527,10 @@ test('spawned runtime submits a turn through the configured local provider endpo
     const events = stdout.trim().split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
     assert.ok(events.some((event) => event.event === 'carrier_turn_completed'));
     assert.ok(events.some((event) => event.event === 'session_control_response' && event.request_id === 'turn-1'));
+    const invocationEvents = events.filter((event) => event.event === 'provider_invocation_state_transition');
+    assert.deepEqual(invocationEvents.map((event) => event.invocation_state), ['requested', 'validated', 'shaped', 'dispatched', 'receiving', 'completed']);
+    assert.equal(new Set(invocationEvents.map((event) => event.invocation_id)).size, 1);
+    assert.ok(invocationEvents.every((event) => event.turn_id && event.turn_id === event.input_event_id));
   } finally {
     await new Promise((resolve) => provider.close(resolve));
     rmSync(siteRoot, { recursive: true, force: true });

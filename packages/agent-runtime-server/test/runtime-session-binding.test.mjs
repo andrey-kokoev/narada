@@ -9,15 +9,22 @@ import { createSessionCoreRuntimeService } from '../src/session-core-runtime-ser
 
 test('runtime session binding delegates session state to session core and turns to carrier adapter', async () => {
   const root = mkdtempSync(join(tmpdir(), 'runtime-session-binding-'));
+  let providerSettings;
   const binding = createRuntimeSessionBinding({
     runtimeContext: {
       identity: 'agent-1', session: 'session-1', sessionPath: join(root, 'session.json'), eventsPath: join(root, 'events.jsonl'), siteRoot: root,
     },
-    callChatApiFn: async (messages, tools) => ({ content: messages[0].content, tool_count: tools.length }),
+    callChatApiFn: async (messages, tools, settings) => {
+      providerSettings = settings;
+      return { content: messages[0].content, tool_count: tools.length };
+    },
     toolGateway: { toolCatalog: () => [{ name: 'fs_read_file' }], operationalState: () => 'healthy' },
   });
   assert.equal(binding.start().lifecycle_state, 'ready');
   await binding.submit({ event_id: 'input_1', content: 'hello' });
+  assert.equal(providerSettings.turnId, 'input_1');
+  assert.equal(providerSettings.inputEventId, 'input_1');
+  assert.equal(typeof providerSettings.invocationEventSink, 'function');
   assert.equal(binding.health().lifecycle_state, 'ready');
   await binding.close();
   assert.equal(binding.health().lifecycle_state, 'closed');

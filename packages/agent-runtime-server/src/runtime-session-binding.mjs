@@ -12,7 +12,13 @@ export function createRuntimeSessionBinding({ runtimeContext = {}, callChatApiFn
     throw new Error('runtime_session_binding_context_required');
   }
   const carrier = createCarrierTurnAdapter({
-    callProvider: ({ messages, tools, settings, abortSignal }) => callChatApiFn(messages, tools, { ...settings, abortSignal }),
+    callProvider: ({ messages, tools, settings, abortSignal, turnId, inputEventId, invocationEventSink }) => callChatApiFn(messages, tools, {
+      ...settings,
+      abortSignal,
+      turnId,
+      inputEventId,
+      invocationEventSink,
+    }),
   });
   return createNarsSessionSupervisor({
     sessionCoreOptions: {
