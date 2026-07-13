@@ -9,7 +9,7 @@ const dist = resolve(root, 'dist');
 rmSync(dist, { recursive: true, force: true });
 mkdirSync(resolve(dist, 'bin'), { recursive: true });
 
-for (const file of ['site-loop-store.mjs', 'runner.mjs', 'runtime.mjs', 'server.mjs', 'loop-module.mjs', 'policy.mjs']) {
+for (const file of ['site-loop-store.mjs', 'runner.mjs', 'runtime.mjs', 'server.mjs', 'loop-module.mjs', 'policy.mjs', 'site-operating-loop-state.mjs']) {
   cpSync(resolve(root, 'src', file), resolve(dist, file));
 }
 

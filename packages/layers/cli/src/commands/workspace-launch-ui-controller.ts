@@ -419,6 +419,12 @@ export async function runPersistentWorkspaceLaunchSelectionUi(
     ]);
     await persistWorkspaceLaunchDashboardState(persistenceDir, uiSession, attempts);
     return { ...ingress, status, launch_count: launchCount };
+  } catch (error) {
+    if (uiSession.lifecycle_state && uiSession.lifecycle_state !== 'failed' && uiSession.lifecycle_state !== 'closed' && uiSession.lifecycle_state !== 'timeout') {
+      setWorkspaceLaunchUiSessionLifecycle(uiSession, 'failed');
+    }
+    await persistWorkspaceLaunchDashboardState(persistenceDir, uiSession, attempts);
+    throw error;
   } finally {
     await closeWorkspaceLaunchUiServer(server);
   }

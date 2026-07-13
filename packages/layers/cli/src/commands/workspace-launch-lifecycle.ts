@@ -59,7 +59,7 @@ const ATTEMPT_TRANSITIONS: Record<WorkspaceLaunchAttemptLifecycleState, readonly
   handoff_recorded: ['observing', 'failed', 'forgotten'],
   observing: ['launched', 'failed', 'forgotten'],
   launched: ['observing', 'forgotten'],
-  failed: ['queued', 'forgotten'],
+  failed: ['forgotten'],
   forgotten: [],
 };
 

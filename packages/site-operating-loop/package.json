@@ -36,6 +36,9 @@
     },
     "./policy": {
       "import": "./dist/policy.mjs"
+    },
+    "./state": {
+      "import": "./dist/site-operating-loop-state.mjs"
     }
   }
 }

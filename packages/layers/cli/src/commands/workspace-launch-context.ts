@@ -16,7 +16,6 @@ import {
   type WorkspaceLaunchProviderRegistry,
   type WorkspaceLaunchSelectionContext,
 } from './workspace-launch-selection.js';
-import { legacyCarrierCompatibility } from './workspace-launch-support.js';
 import type { WorkspaceLaunchRegistryContext } from './workspace-launch-registry.js';
 import type { WorkspaceLaunchPlanOptions, WorkspaceLaunchRecord } from './workspace-launch-types.js';
 
@@ -185,7 +184,6 @@ export function createWorkspaceLaunchRegistryContext(
   return {
     providerRegistry: selectionContext.providerRegistry,
     resolveCarrierRuntimeSelection: selectionContext.resolveCarrierRuntimeSelection,
-    legacyCarrierCompatibility,
   };
 }
 

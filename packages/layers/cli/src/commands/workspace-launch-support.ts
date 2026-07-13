@@ -5,7 +5,6 @@ import { buildAgentIdentityRefV2, resolveAgentIdentityRef, type AgentIdentityRef
 import type { WorkspaceLaunchSelection as WorkspaceLaunchBrowserSelection } from '@narada2/workspace-launch-contract';
 import type {
   WorkspaceLaunchAttemptRecord,
-  WorkspaceLaunchLegacyCarrierCompatibility,
   WorkspaceLaunchPlanOptions,
   WorkspaceLauncherOutputProjection,
 } from './workspace-launch-types.js';
@@ -80,11 +79,11 @@ export function workspaceLaunchProjectionQualifiedAgentId(attempt: WorkspaceLaun
   return selectedSite && selectedRole ? `${selectedSite}.${selectedRole}` : null;
 }
 
-export function workspaceLaunchLegacyTerminalWtArgs(record: Record<string, unknown>): string[] {
+export function workspaceLaunchTerminalHandoffArgs(record: Record<string, unknown>): string[] {
   const topLevel = stringArray(record.wt_args);
   if (topLevel.length > 0) return topLevel;
-  const legacyTerminalPlan = isRecord(record.legacy_terminal_plan) ? record.legacy_terminal_plan : null;
-  return legacyTerminalPlan ? stringArray(legacyTerminalPlan.wt_args) : [];
+  const terminalHandoff = isRecord(record.operator_terminal_handoff) ? record.operator_terminal_handoff : null;
+  return terminalHandoff ? stringArray(terminalHandoff.wt_args) : [];
 }
 
 export async function workspaceLaunchStartHiddenRuntimeHost(commandArgs: string[], cwd: string): Promise<Record<string, unknown>> {
@@ -214,32 +213,3 @@ export function writeWorkspaceLaunchCommandOutput(outputs: WorkspaceLauncherOutp
   }
 }
 
-export function legacyCarrierCompatibility(): WorkspaceLaunchLegacyCarrierCompatibility {
-  return {
-    schema: 'narada.workspace_launch.legacy_carrier_compatibility.v1',
-    status: 'compatibility_fields_present',
-    canonical_terms: {
-      operator_surface: 'operator_surface',
-      runtime_host: 'runtime_host',
-    },
-    compatibility_paths: {
-      command_aliases: ['--carrier', 'carrier start'],
-      runtime_aliases: ['nars'],
-      status: 'fenced_compatibility',
-    },
-    compatibility_note: 'Legacy carrier terminology and the nars runtime alias remain available only as fenced compatibility paths. Use operator_surface and runtime_host in new commands and docs.',
-    deprecated_fields: [
-      'carrier',
-      'launch_carrier',
-      'launch_carriers',
-      'launch_runtime',
-    ],
-    replacement_fields: {
-      carrier: 'operator_surface',
-      launch_carrier: 'launch_operator_surface',
-      launch_carriers: 'launch_operator_surfaces',
-      launch_runtime: 'launch_runtime_host',
-    },
-    removal_policy: 'remove_after_consumers_migrate',
-  };
-}

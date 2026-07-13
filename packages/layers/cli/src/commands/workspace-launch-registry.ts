@@ -11,7 +11,6 @@ import {
 } from './workspace-launch-selection.js';
 import { defaultLaunchRegistryPath, listKnownSiteRootsForCli, type ResolvedSiteRoot } from '../lib/site-root-resolver.js';
 import type {
-  WorkspaceLaunchLegacyCarrierCompatibility,
   WorkspaceLaunchPlanOptions,
   WorkspaceLaunchRecord,
   WorkspaceLaunchRecordsLoad,
@@ -25,7 +24,6 @@ export interface WorkspaceLaunchRegistryContext {
     runtime_substrate_kind: string;
     runtime_host_kind: string;
   };
-  legacyCarrierCompatibility: () => WorkspaceLaunchLegacyCarrierCompatibility;
 }
 
 interface RawLaunchRegistry {

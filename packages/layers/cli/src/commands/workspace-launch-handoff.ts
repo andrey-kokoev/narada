@@ -236,7 +236,7 @@ export function workspaceLaunchHandoffFromResult(launchAttemptId: string, result
       diagnostic_ref: workspaceLaunchString(record.result_path),
     };
   }
-  const wtArgs = support.workspaceLaunchLegacyTerminalWtArgs(record);
+  const wtArgs = support.workspaceLaunchTerminalHandoffArgs(record);
   return {
     schema: 'narada.workspace_launch.handoff.v1',
     handoff_id: support.workspaceLaunchId('wlh'),

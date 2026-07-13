@@ -32,6 +32,7 @@ Canonical exports:
 | `@narada2/site-operating-loop/server` | Local HTTP/SSE attachment surface over one Site loop store. |
 | `@narada2/site-operating-loop/loop-module` | Validation of Site-owned loop body modules and step records. |
 | `@narada2/site-operating-loop/policy` | Generic policy loading, merging, validation, and quiet-hours helpers. |
+| `@narada2/site-operating-loop/state` | Pure run, trigger, and health lifecycle guards and transition evidence. |
 
 ## Layer Shape
 
@@ -177,6 +178,12 @@ Lifecycle:
 pending -> claimed -> completed | failed | skipped
 ```
 
+Each trigger result also carries lifecycle evidence under schema
+`narada.site_operating_loop.trigger.lifecycle_state.v1`. The store refuses a
+completion transition from `pending` and refuses any transition after a
+terminal state. Existing trigger rows without lifecycle evidence are projected
+from their stored `status` during schema repair/read.
+
 Fields:
 
 | Field | Meaning |
@@ -219,6 +226,15 @@ Minimum event kinds:
 ## Health And Control
 
 Loop health is store-backed and derived from bounded run outcomes plus attention/backlog/outcome summaries. HTTP `/health`, CLI `health`, and status projections are read surfaces over the same store helpers.
+
+Run evidence carries schema `narada.site_operating_loop.run.lifecycle_state.v1`
+and follows `requested -> locking -> running -> completed`, with explicit
+`locked`, `failed`, and `aborted` outcomes. Health evidence carries schema
+`narada.site_operating_loop.health.lifecycle_state.v1` and retains transition
+history across `unknown`, `healthy`, `degraded`, and `critical` outcomes. These
+state records are stored beside the existing run and health projections; they
+do not replace leases, step records, runtime events, or the read-only health
+projection caused by attention/backlog signals.
 
 Pause/resume is generic loop control. A paused runtime cycle records a paused cycle and does not call the Site loop module. Pause is not a Site policy decision; it is an operator/runtime control gate.
 

@@ -5,6 +5,10 @@ import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { projectIntent } from '../lifecycle/project-onboarding-intent.mjs';
 import { siteControlRoot } from '../site-layout.mjs';
+import {
+  createSiteInitLifecycle,
+  transitionSiteInitLifecycle,
+} from './site-init-lifecycle.mjs';
 
 const SCHEMA = 'narada.site_init.result.v0';
 
@@ -144,7 +148,10 @@ function baseResult({ command, projectRoot, siteConfigProposal = null }) {
     next_command: null,
     agent_next_action: 'stop',
     pause_triggers: [],
-    messages: []
+    messages: [],
+    lifecycle_schema: 'narada.site_init.lifecycle_state.v1',
+    lifecycle_state: 'requested',
+    lifecycle_history: ['requested'],
   };
 }
 
@@ -160,10 +167,15 @@ function statMaybe(targetPath) {
 function createSeed(result) {
   const createdFiles = [];
   for (const relativePath of SEED_FILES) {
-    const targetPath = path.join(result.project_root, relativePath);
-    fs.mkdirSync(path.dirname(targetPath), { recursive: true });
-    fs.writeFileSync(targetPath, seedFileContent(relativePath, result), { flag: 'wx' });
-    createdFiles.push(relativePath);
+    try {
+      const targetPath = path.join(result.project_root, relativePath);
+      fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+      fs.writeFileSync(targetPath, seedFileContent(relativePath, result), { flag: 'wx' });
+      createdFiles.push(relativePath);
+    } catch (error) {
+      error.created_files = createdFiles;
+      throw error;
+    }
   }
   return createdFiles;
 }
@@ -177,10 +189,21 @@ function inspectProject({
 } = {}) {
   const siteConfigProposal = intent ? projectIntent(intent) : null;
   const result = baseResult({ command, projectRoot, siteConfigProposal });
+  let lifecycle = createSiteInitLifecycle();
+  lifecycle = transitionSiteInitLifecycle(lifecycle, 'inspecting');
+  const finish = (value, state) => {
+    lifecycle = transitionSiteInitLifecycle(lifecycle, state);
+    return {
+      ...value,
+      lifecycle_schema: lifecycle.schema,
+      lifecycle_state: lifecycle.state,
+      lifecycle_history: lifecycle.history,
+    };
+  };
   const rootStat = statMaybe(result.project_root);
 
   if (!projectionTargetsProjectMemory(siteConfigProposal)) {
-    return {
+    return finish({
       ...result,
       status: 'blocked',
       authority_classification: 'blocked',
@@ -188,33 +211,33 @@ function inspectProject({
       agent_next_action: 'stop',
       pause_triggers: ['intent_does_not_target_project_site_init'],
       messages: ['Intent projection does not target project or receiving Site init. No files changed.']
-    };
+    }, 'blocked');
   }
 
   if (!rootStat || !rootStat.isDirectory()) {
-    return {
+    return finish({
       ...result,
       status: 'blocked',
       authority_classification: 'blocked',
       pause_triggers: ['project_root_missing_or_not_directory'],
       messages: ['Project root does not exist or is not a directory.']
-    };
+    }, 'blocked');
   }
 
   const suspicious = isSuspiciousRoot(result.project_root);
   if (suspicious.suspicious) {
-    return {
+    return finish({
       ...result,
       status: 'blocked',
       authority_classification: 'blocked',
       next_command: 'narada init --root <project-root>',
       pause_triggers: [suspicious.reason],
       messages: ['Project root is suspicious; select an explicit project root before init.']
-    };
+    }, 'blocked');
   }
 
   if (apply && !yes) {
-    return {
+    return finish({
       ...result,
       status: 'refused',
       authority_classification: 'refused',
@@ -222,7 +245,7 @@ function inspectProject({
       agent_next_action: 'stop',
       pause_triggers: ['write_mode_not_implemented'],
       messages: ['Apply mode requires --yes confirmation. No files changed.']
-    };
+    }, 'refused');
   }
 
   const siteStat = statMaybe(result.project_memory_root);
@@ -230,7 +253,7 @@ function inspectProject({
   const incompatibleNarada = Boolean(siteStat && !siteStat.isDirectory());
 
   if (incompatibleNarada) {
-    return {
+    return finish({
       ...result,
       status: 'blocked',
       authority_classification: 'blocked',
@@ -238,33 +261,33 @@ function inspectProject({
       agent_next_action: 'stop',
       pause_triggers: ['project_memory_root_exists_but_is_not_directory'],
       messages: ['A .narada path exists but is not a directory. No files changed.']
-    };
+    }, 'blocked');
   }
 
   if (command === 'start') {
     if (hasNarada) {
-      return {
+      return finish({
         ...result,
         status: 'already_initialized',
         authority_classification: 'preview_only',
         next_command: 'narada start',
         agent_next_action: 'start_first_session',
         messages: ['Narada project memory is present.']
-      };
+      }, 'already_initialized');
     }
 
-    return {
+    return finish({
       ...result,
       status: 'not_initialized',
       authority_classification: 'preview_only',
       next_command: 'narada init',
       agent_next_action: 'preview',
       messages: ['No Narada project memory found in this folder.']
-    };
+    }, 'not_initialized');
   }
 
   if (command === 'doctor') {
-    return {
+    return finish({
       ...result,
       status: 'doctor_report',
       authority_classification: 'preview_only',
@@ -272,35 +295,55 @@ function inspectProject({
       next_command: hasNarada ? 'narada start' : 'narada init',
       agent_next_action: hasNarada ? 'start_first_session' : 'preview',
       messages: [hasNarada ? 'Narada project memory is present.' : 'No Narada project memory found.']
-    };
+    }, 'doctor_report');
   }
 
   if (hasNarada) {
-    return {
+    return finish({
       ...result,
       status: 'already_initialized',
       authority_classification: 'preview_only',
       next_command: 'narada start',
       agent_next_action: 'start_first_session',
       messages: ['Narada is already initialized in this folder.']
-    };
+    }, 'already_initialized');
   }
 
   if (yes) {
-    const createdFiles = createSeed(result);
-    return {
-      ...result,
-      status: 'initialized',
-      authority_basis: 'operator_confirmed_init_yes',
-      authority_classification: 'write_authorized',
-      created_files: createdFiles,
-      next_command: 'narada start',
-      agent_next_action: 'start_first_session',
-      messages: ['Created Narada project memory. No prior memory imported.']
-    };
+    lifecycle = transitionSiteInitLifecycle(lifecycle, 'planned');
+    lifecycle = transitionSiteInitLifecycle(lifecycle, 'applying');
+    try {
+      const createdFiles = createSeed(result);
+      lifecycle = transitionSiteInitLifecycle(lifecycle, 'seeded');
+      return finish({
+        ...result,
+        status: 'initialized',
+        authority_basis: 'operator_confirmed_init_yes',
+        authority_classification: 'write_authorized',
+        created_files: createdFiles,
+        next_command: 'narada start',
+        agent_next_action: 'start_first_session',
+        messages: ['Created Narada project memory. No prior memory imported.']
+      }, 'initialized');
+    } catch (error) {
+      lifecycle = transitionSiteInitLifecycle(lifecycle, 'partial');
+      const createdFiles = Array.isArray(error.created_files) ? error.created_files : [];
+      return finish({
+        ...result,
+        status: 'partial',
+        authority_classification: 'write_authorized',
+        created_files: createdFiles,
+        next_command: 'narada doctor',
+        agent_next_action: 'stop',
+        pause_triggers: ['seed_write_partial'],
+        diagnostic: { error: error.message },
+        messages: ['Site init wrote only part of the seed. Inspect the listed files and recover before retrying.']
+      }, 'partial');
+    }
   }
 
-  return {
+  lifecycle = transitionSiteInitLifecycle(lifecycle, 'planned');
+  return finish({
     ...result,
     status: 'previewed',
     authority_classification: 'preview_only',
@@ -308,7 +351,7 @@ function inspectProject({
     next_command: 'narada init --yes',
     agent_next_action: 'ask_operator',
     messages: ['Narada init preview. No files changed.']
-  };
+  }, 'previewed');
 }
 
 function parseArgs(argv) {
@@ -373,13 +416,16 @@ function runCli(argv = process.argv.slice(2), stdout = process.stdout, stderr = 
     const options = parseArgs(argv);
     const result = inspectProject(options);
     stdout.write(`${JSON.stringify(result, null, options.pretty ? 2 : 0)}\n`);
-    return result.status === 'blocked' || result.status === 'refused' ? 2 : 0;
+    return result.status === 'blocked' || result.status === 'refused' || result.status === 'partial' ? 2 : 0;
   } catch (error) {
     const result = {
       schema: SCHEMA,
       status: 'refused',
       authority_classification: 'refused',
       agent_next_action: 'stop',
+      lifecycle_schema: 'narada.site_init.lifecycle_state.v1',
+      lifecycle_state: 'refused',
+      lifecycle_history: ['requested', 'refused'],
       messages: [error.message]
     };
     stderr.write(`${JSON.stringify(result)}\n`);

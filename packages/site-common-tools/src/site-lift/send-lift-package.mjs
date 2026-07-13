@@ -5,6 +5,10 @@ import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { admitEnvelope } from '../inbox/admission-log.mjs';
 import { payloadCreate, payloadShow } from '../mcp-payload-file.mjs';
+import {
+  createSiteLiftLifecycle,
+  transitionSiteLiftLifecycle,
+} from './site-lift-lifecycle.mjs';
 
 const SEND_PAYLOAD_SCHEMA = 'narada.payload.site_lift.send.v1';
 const SEND_RECORD_SCHEMA = 'narada.site_lift.send_record.v0';
@@ -57,6 +61,9 @@ export function sendLiftPackage({
   const envelope = buildEnvelope({ payload: sendPayload, payloadRef: prepared.payloadRef, envelopeId, createdAt, targetSiteRoot: resolvedTargetSiteRoot });
   const recordRelPath = normalizePath(join(sendRecordDir, `${sendPayload.package_id}-${envelopeId}.json`));
   const recordPath = resolveInside(root, recordRelPath);
+  let lifecycle = createSiteLiftLifecycle();
+  lifecycle = transitionSiteLiftLifecycle(lifecycle, 'validating');
+  lifecycle = transitionSiteLiftLifecycle(lifecycle, 'planned');
   const plannedRecord = buildSendRecord({
     payload: sendPayload,
     payloadRef: prepared.payloadRef,
@@ -66,6 +73,7 @@ export function sendLiftPackage({
     recordRelPath,
     createdAt,
     admission: null,
+    lifecycle,
   });
 
   const result = {
@@ -83,6 +91,9 @@ export function sendLiftPackage({
     commit_ready_paths: [recordRelPath],
     authority_posture: 'advisory_until_receiving_site_admits',
     receiving_site_must_admit: true,
+    lifecycle_schema: lifecycle.schema,
+    lifecycle_state: lifecycle.state,
+    lifecycle_history: lifecycle.history,
   };
 
   if (dryRun) {
@@ -90,29 +101,58 @@ export function sendLiftPackage({
   }
 
   if (existsSync(recordPath)) throw new Error(`send_record_already_exists: ${recordRelPath}`);
-  const admitted = admitEnvelope(resolvedTargetSiteRoot, envelope);
-  const record = buildSendRecord({
-    payload: sendPayload,
-    payloadRef: prepared.payloadRef,
-    payloadStagedFromInline: prepared.payloadStagedFromInline,
-    envelope,
-    targetSiteRoot: resolvedTargetSiteRoot,
-    recordRelPath,
-    createdAt,
-    admission: admitted,
-  });
-  mkdirSync(dirname(recordPath), { recursive: true });
-  writeFileSync(recordPath, `${JSON.stringify(record, null, 2)}\n`, 'utf8');
+  lifecycle = transitionSiteLiftLifecycle(lifecycle, 'sending');
+  let admitted;
+  try {
+    admitted = admitEnvelope(resolvedTargetSiteRoot, envelope);
+    lifecycle = transitionSiteLiftLifecycle(lifecycle, 'sent');
+    lifecycle = transitionSiteLiftLifecycle(lifecycle, 'receiving');
+    lifecycle = transitionSiteLiftLifecycle(lifecycle, 'received');
+    lifecycle = transitionSiteLiftLifecycle(lifecycle, 'admitting');
+    lifecycle = transitionSiteLiftLifecycle(lifecycle, 'admitted');
+    const record = buildSendRecord({
+      payload: sendPayload,
+      payloadRef: prepared.payloadRef,
+      payloadStagedFromInline: prepared.payloadStagedFromInline,
+      envelope,
+      targetSiteRoot: resolvedTargetSiteRoot,
+      recordRelPath,
+      createdAt,
+      admission: admitted,
+      lifecycle,
+    });
+    mkdirSync(dirname(recordPath), { recursive: true });
+    writeFileSync(recordPath, `${JSON.stringify(record, null, 2)}\n`, 'utf8');
 
-  return {
-    ...result,
-    target_admission: {
-      envelope_path: normalizePath(relative(resolvedTargetSiteRoot, admitted.envelopePath)),
-      event_id: admitted.event.event_id,
-      event_sequence: admitted.event.event_sequence,
-    },
-    send_record: record,
-  };
+    return {
+      ...result,
+      target_admission: {
+        envelope_path: normalizePath(relative(resolvedTargetSiteRoot, admitted.envelopePath)),
+        event_id: admitted.event.event_id,
+        event_sequence: admitted.event.event_sequence,
+      },
+      send_record: record,
+      lifecycle_schema: lifecycle.schema,
+      lifecycle_state: lifecycle.state,
+      lifecycle_history: lifecycle.history,
+    };
+  } catch (error) {
+    if (lifecycle.state !== 'partial') lifecycle = transitionSiteLiftLifecycle(lifecycle, 'partial');
+    return {
+      ...result,
+      status: 'partial',
+      target_admission: admitted ? {
+        envelope_path: normalizePath(relative(resolvedTargetSiteRoot, admitted.envelopePath)),
+        event_id: admitted.event.event_id,
+        event_sequence: admitted.event.event_sequence,
+      } : null,
+      send_record: null,
+      admission_error: error.message,
+      lifecycle_schema: lifecycle.schema,
+      lifecycle_state: lifecycle.state,
+      lifecycle_history: lifecycle.history,
+    };
+  }
 }
 
 function prepareSendPayload({ siteRoot, payloadRef, payload }) {
@@ -190,7 +230,7 @@ function buildEnvelope({ payload, payloadRef, envelopeId, createdAt, targetSiteR
   };
 }
 
-function buildSendRecord({ payload, payloadRef, payloadStagedFromInline, envelope, targetSiteRoot, recordRelPath, createdAt, admission }) {
+function buildSendRecord({ payload, payloadRef, payloadStagedFromInline, envelope, targetSiteRoot, recordRelPath, createdAt, admission, lifecycle }) {
   return {
     schema: SEND_RECORD_SCHEMA,
     package_id: payload.package_id,
@@ -215,6 +255,9 @@ function buildSendRecord({ payload, payloadRef, payloadStagedFromInline, envelop
     send_record_path: recordRelPath,
     authority_posture: 'advisory_until_receiving_site_admits',
     receiving_site_must_admit: true,
+    lifecycle_schema: lifecycle?.schema ?? 'narada.site_lift.lifecycle_state.v1',
+    lifecycle_state: lifecycle?.state ?? 'planned',
+    lifecycle_history: lifecycle?.history ?? ['planned'],
   };
 }
 

@@ -3,6 +3,10 @@ import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { payloadShow } from '../mcp-payload-file.mjs';
+import {
+  createSiteLiftLifecycle,
+  transitionSiteLiftLifecycle,
+} from './site-lift-lifecycle.mjs';
 
 const PACKAGE_PAYLOAD_SCHEMA = 'narada.payload.site_lift.package.v1';
 const METADATA_SCHEMA = 'narada.site_lift.package_metadata.v0';
@@ -52,7 +56,9 @@ export function createLiftPackageFromPayloadRef({
   const metadataPath = resolveInside(root, metadataRelPath);
   const createdAt = new Date().toISOString();
   const markdown = renderPackageMarkdown({ payload, payloadRef, createdAt });
-  const metadata = buildMetadata({ payload, payloadRef, packageRelPath, metadataRelPath, createdAt, payloadSha256: shown.sha256 });
+  let lifecycle = createSiteLiftLifecycle();
+  lifecycle = transitionSiteLiftLifecycle(lifecycle, 'validating');
+  lifecycle = transitionSiteLiftLifecycle(lifecycle, 'planned');
 
   const result = {
     schema: RESULT_SCHEMA,
@@ -70,18 +76,44 @@ export function createLiftPackageFromPayloadRef({
     authority_posture: 'advisory_until_receiving_site_admits',
     receiving_site_must_admit: true,
     writes: [],
+    lifecycle_schema: lifecycle.schema,
+    lifecycle_state: lifecycle.state,
+    lifecycle_history: lifecycle.history,
   };
 
   if (dryRun) return result;
 
   if (existsSync(packagePath)) throw new Error(`package_markdown_already_exists: ${packageRelPath}`);
   if (existsSync(metadataPath)) throw new Error(`package_metadata_already_exists: ${metadataRelPath}`);
-  mkdirSync(dirname(packagePath), { recursive: true });
-  mkdirSync(dirname(metadataPath), { recursive: true });
-  writeFileSync(packagePath, markdown, 'utf8');
-  writeFileSync(metadataPath, `${JSON.stringify(metadata, null, 2)}\n`, 'utf8');
-  result.writes = [packageRelPath, metadataRelPath];
-  return result;
+  const writes = [];
+  try {
+    mkdirSync(dirname(packagePath), { recursive: true });
+    mkdirSync(dirname(metadataPath), { recursive: true });
+    writeFileSync(packagePath, markdown, 'utf8');
+    writes.push(packageRelPath);
+    lifecycle = transitionSiteLiftLifecycle(lifecycle, 'created');
+    const metadata = buildMetadata({ payload, payloadRef, packageRelPath, metadataRelPath, createdAt, payloadSha256: shown.sha256, lifecycle });
+    writeFileSync(metadataPath, `${JSON.stringify(metadata, null, 2)}\n`, 'utf8');
+    writes.push(metadataRelPath);
+    return {
+      ...result,
+      writes,
+      lifecycle_schema: lifecycle.schema,
+      lifecycle_state: lifecycle.state,
+      lifecycle_history: lifecycle.history,
+    };
+  } catch (error) {
+    lifecycle = transitionSiteLiftLifecycle(lifecycle, 'partial');
+    return {
+      ...result,
+      status: 'partial',
+      writes,
+      lifecycle_schema: lifecycle.schema,
+      lifecycle_state: lifecycle.state,
+      lifecycle_history: lifecycle.history,
+      diagnostic: { error: error.message },
+    };
+  }
 }
 
 function validatePackagePayload(payload) {
@@ -128,7 +160,7 @@ function renderPackageMarkdown({ payload, payloadRef, createdAt }) {
   return `${lines.join('\n')}\n`;
 }
 
-function buildMetadata({ payload, payloadRef, packageRelPath, metadataRelPath, createdAt, payloadSha256 }) {
+function buildMetadata({ payload, payloadRef, packageRelPath, metadataRelPath, createdAt, payloadSha256, lifecycle = null }) {
   return {
     schema: METADATA_SCHEMA,
     package_id: payload.package_id,
@@ -143,6 +175,9 @@ function buildMetadata({ payload, payloadRef, packageRelPath, metadataRelPath, c
     metadata_path: metadataRelPath,
     authority_posture: 'advisory_until_receiving_site_admits',
     receiving_site_must_admit: true,
+    lifecycle_schema: lifecycle?.schema ?? 'narada.site_lift.lifecycle_state.v1',
+    lifecycle_state: lifecycle?.state ?? 'planned',
+    lifecycle_history: lifecycle?.history ?? ['planned'],
     non_portable_boundaries: payload.non_portable_boundaries ?? [
       'credentials',
       'runtime_state',

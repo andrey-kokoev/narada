@@ -10,6 +10,11 @@ import {
   recordLoopStep,
   releaseLoopLock,
 } from './site-loop-store.mjs';
+import {
+  canTransitionSiteOperatingLoopRun,
+  createSiteOperatingLoopRunLifecycle,
+  transitionSiteOperatingLoopRunLifecycle,
+} from './site-operating-loop-state.mjs';
 
 export async function runSiteOperatingLoop(store, {
   loopId,
@@ -26,10 +31,13 @@ export async function runSiteOperatingLoop(store, {
   const resultsByStepId = {};
   let lock = null;
   let failedStep = null;
+  let lifecycle = createSiteOperatingLoopRunLifecycle();
 
   try {
+    lifecycle = transitionSiteOperatingLoopRunLifecycle(lifecycle, 'locking');
     lock = acquireLoopLock(store, { loopId, runId, ownerId, ttlMs: lockTtlMs });
     if (lock.status === 'contended') {
+      lifecycle = transitionSiteOperatingLoopRunLifecycle(lifecycle, 'locked');
       return {
         schema: 'narada.site_operating_loop.run.v1',
         status: 'locked',
@@ -40,16 +48,22 @@ export async function runSiteOperatingLoop(store, {
         finished_at: new Date().toISOString(),
         lock,
         health: getLoopHealth(store, loopId),
+        lifecycle_schema: lifecycle.schema,
+        lifecycle_state: lifecycle.state,
+        lifecycle_history: lifecycle.history,
+        lifecycle,
         steps: [],
       };
     }
 
+    lifecycle = transitionSiteOperatingLoopRunLifecycle(lifecycle, 'running');
     beginLoopRun(store, {
       run_id: runId,
       loop_id: loopId,
       status: 'running',
       dry_run: Boolean(dryRun),
       started_at: startedAt,
+      lifecycle,
       summary: lock.status === 'stale_recovered' ? { stale_lock_recovered: lock } : null,
     });
 
@@ -74,7 +88,8 @@ export async function runSiteOperatingLoop(store, {
     const summary = typeof summarize === 'function'
       ? await summarize({ steps: recordedSteps, lock })
       : { step_count: recordedSteps.length };
-    finishLoopRun(store, runId, { status: 'ok', finished_at: finishedAt, summary });
+    lifecycle = transitionSiteOperatingLoopRunLifecycle(lifecycle, 'completed');
+    finishLoopRun(store, runId, { status: 'ok', finished_at: finishedAt, summary, lifecycle });
     const health = recordLoopHealthSuccess(store, { loopId, runId, at: finishedAt });
     return {
       schema: 'narada.site_operating_loop.run.v1',
@@ -86,20 +101,29 @@ export async function runSiteOperatingLoop(store, {
       finished_at: finishedAt,
       lock,
       health,
+      lifecycle_schema: lifecycle.schema,
+      lifecycle_state: lifecycle.state,
+      lifecycle_history: lifecycle.history,
+      lifecycle,
       summary,
       steps: recordedSteps,
     };
   } catch (error) {
     const finishedAt = new Date().toISOString();
     const payload = errorToPayload(error);
+    if (canTransitionSiteOperatingLoopRun(lifecycle.state, 'failed')) {
+      lifecycle = transitionSiteOperatingLoopRunLifecycle(lifecycle, 'failed');
+    }
+    let health = null;
     try {
       finishLoopRun(store, runId, {
         status: 'failed',
         finished_at: finishedAt,
         summary: { step_count: recordedSteps.length },
         error: payload,
+        lifecycle,
       });
-      recordLoopHealthFailure(store, {
+      health = recordLoopHealthFailure(store, {
         loopId,
         runId,
         failingStep: failedStep?.step_id ?? null,
@@ -118,6 +142,11 @@ export async function runSiteOperatingLoop(store, {
       started_at: startedAt,
       finished_at: finishedAt,
       error: payload,
+      health,
+      lifecycle_schema: lifecycle.schema,
+      lifecycle_state: lifecycle.state,
+      lifecycle_history: lifecycle.history,
+      lifecycle,
       steps: recordedSteps,
     };
   } finally {

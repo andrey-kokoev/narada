@@ -296,31 +296,6 @@ function launchSelectionFixtureRecords(): WorkspaceLaunchRecord[] {
   ] as WorkspaceLaunchRecord[];
 }
 
-function expectLegacyCarrierCompatibility(value: unknown): void {
-  expect(value).toMatchObject({
-    schema: 'narada.workspace_launch.legacy_carrier_compatibility.v1',
-    status: 'compatibility_fields_present',
-    canonical_terms: {
-      operator_surface: 'operator_surface',
-      runtime_host: 'runtime_host',
-    },
-    compatibility_paths: {
-      command_aliases: ['--carrier', 'carrier start'],
-      runtime_aliases: ['nars'],
-      status: 'fenced_compatibility',
-    },
-    compatibility_note: expect.stringContaining('fenced compatibility paths'),
-    deprecated_fields: expect.arrayContaining(['carrier', 'launch_carrier', 'launch_carriers', 'launch_runtime']),
-    replacement_fields: expect.objectContaining({
-      carrier: 'operator_surface',
-      launch_carrier: 'launch_operator_surface',
-      launch_carriers: 'launch_operator_surfaces',
-      launch_runtime: 'launch_runtime_host',
-    }),
-    removal_policy: 'remove_after_consumers_migrate',
-  });
-}
-
 afterEach(async () => {
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
   discoverNarsSessionsMock.mockReset();
@@ -356,7 +331,6 @@ describe('launcher workspace planning', () => {
     const result = plan.result as {
       schema: string;
       mutation_performed: boolean;
-      wt_args_authority: string;
       selected_agents: Array<{
         agent: string;
         operator_surface_kind: string;
@@ -366,12 +340,6 @@ describe('launcher workspace planning', () => {
         launch_carrier: string;
         launch_runtime: string;
         launch_carriers: string[];
-        legacy_carrier_compatibility: {
-          schema: string;
-          status: string;
-          deprecated_fields: string[];
-          replacement_fields: Record<string, string>;
-        };
         intelligence_provider: string;
         launch_session_id: string;
         process_ownership: Record<string, unknown>;
@@ -383,19 +351,12 @@ describe('launcher workspace planning', () => {
         smoke_command: string[];
       }>;
       wt_args: string[];
-      compatibility: {
-        schema: string;
-        deprecated_fields: string[];
-        replacement_fields: Record<string, string>;
-      };
       ownership: { planner: string; executor: string };
     };
     expect(result.schema).toBe('narada.workspace_launch.plan.v1');
     expect(result.mutation_performed).toBe(false);
-    expect(result.wt_args_authority).toBe('compatibility_non_authoritative');
     expect(result.ownership.planner).toBe('narada-cli');
     expect(result.ownership.executor).toBe('narada-cli.workspace-launch');
-    expectLegacyCarrierCompatibility(result.compatibility);
     expect(result.selected_agents).toHaveLength(1);
     expect(result.selected_agents[0].agent).toBe('sonar.resident');
     expect(result.selected_agents[0].operator_surface_kind).toBe('agent-cli');
@@ -405,7 +366,6 @@ describe('launcher workspace planning', () => {
     expect(result.selected_agents[0].launch_operator_surfaces).toEqual(['agent-cli']);
     expect(result.selected_agents[0].launch_carrier).toBe('agent-cli');
     expect(result.selected_agents[0].launch_carriers).toEqual(['agent-cli']);
-    expectLegacyCarrierCompatibility(result.selected_agents[0].legacy_carrier_compatibility);
     expect(result.selected_agents[0].launch_runtime).toBe('narada-agent-runtime-server');
     expect(result.selected_agents[0].intelligence_provider).toBe('codex-subscription');
     expect(result.selected_agents[0].launch_session_id).toMatch(/^launch_/);
@@ -570,7 +530,7 @@ describe('launcher workspace planning', () => {
         selected_agents: Array<{ runtime_start_execution_mode: string }>;
         selected_agents_authority: string;
         wt_args?: string[];
-        legacy_terminal_plan: { authority: string; wt_args: string[] };
+        operator_terminal_handoff: { authority: string; wt_args: string[] };
       };
       expect(result.schema).toBe('narada.workspace_launch.launch_result.v1');
       expect(result.status).toBe('launched');
@@ -579,10 +539,10 @@ describe('launcher workspace planning', () => {
       expect(result.windows_terminal_invoked).toBe(false);
       expect(result.hidden_runtime_invoked).toBe(true);
       expect(result.wt_args).toBeUndefined();
-      expect(result.legacy_terminal_plan.authority).toBe('compatibility_non_authoritative');
-      expect(result.legacy_terminal_plan.wt_args[0]).toBe('new-tab');
+      expect(result.operator_terminal_handoff.authority).toBe('narada-cli.workspace-launch-executor');
+      expect(result.operator_terminal_handoff.wt_args[0]).toBe('new-tab');
       expect(result.launch_agents).toEqual(result.selected_agents);
-      expect(result.selected_agents_authority).toBe('compatibility_plan_selection');
+      expect(result.selected_agents_authority).toBe('narada-cli.plan_selection');
       expect(result.selected_agents[0].runtime_start_execution_mode).toBe('hidden_detached');
       expect(result.hidden_runtime_launches[0]).toMatchObject({ posture: 'agent_runtime_server', windowsHide: true });
       const hiddenLogText = await readFile(hiddenLog, 'utf8');
@@ -632,7 +592,7 @@ describe('launcher workspace planning', () => {
         hidden_runtime_invoked: boolean;
         wt_exit_code: number;
         wt_args?: string[];
-        legacy_terminal_plan: { authority: string; wt_args: string[] };
+        operator_terminal_handoff: { authority: string; wt_args: string[] };
       };
       expect(result).toMatchObject({
         schema: 'narada.workspace_launch.launch_result.v1',
@@ -644,8 +604,8 @@ describe('launcher workspace planning', () => {
         wt_exit_code: 0,
       });
       expect(result.wt_args).toBeUndefined();
-      expect(result.legacy_terminal_plan.authority).toBe('compatibility_non_authoritative');
-      expect(result.legacy_terminal_plan.wt_args[0]).toBe('new-tab');
+      expect(result.operator_terminal_handoff.authority).toBe('narada-cli.workspace-launch-executor');
+      expect(result.operator_terminal_handoff.wt_args[0]).toBe('new-tab');
       const writtenResult = JSON.parse(await readFile(resultPath, 'utf8')) as typeof result;
       expect(writtenResult).toEqual(result);
       const terminalLogText = await readFile(terminalLog, 'utf8');
@@ -671,13 +631,12 @@ describe('launcher workspace planning', () => {
     }, createMockContext());
 
     expect(plan.exitCode).toBe(ExitCode.SUCCESS);
-    const result = plan.result as { selected_agents: Array<{ launch_operator_surfaces: string[]; launch_runtime_host: string; launch_runtime_hosts: string[]; launch_carriers: string[]; legacy_carrier_compatibility: unknown; wt_args: string[]; smoke_command: string[]; operator_projection_launch_binding: { path: string; exact_attach_required: boolean }; operator_projection_open_requests: Array<Record<string, unknown>> }>; wt_args: string[] };
+    const result = plan.result as { selected_agents: Array<{ launch_operator_surfaces: string[]; launch_runtime_host: string; launch_runtime_hosts: string[]; launch_carriers: string[]; wt_args: string[]; smoke_command: string[]; operator_projection_launch_binding: { path: string; exact_attach_required: boolean }; operator_projection_open_requests: Array<Record<string, unknown>> }>; wt_args: string[] };
     const agent = result.selected_agents[0];
     expect(agent.launch_operator_surfaces).toEqual(['agent-cli', 'agent-web-ui']);
     expect(agent.launch_runtime_host).toBe('narada-agent-runtime-server');
     expect(agent.launch_runtime_hosts).toEqual(['narada-agent-runtime-server']);
     expect(agent.launch_carriers).toEqual(['agent-cli', 'agent-web-ui']);
-    expectLegacyCarrierCompatibility(agent.legacy_carrier_compatibility);
     expect(agent.operator_projection_open_requests).toHaveLength(1);
     expect(agent.operator_projection_open_requests[0]).toMatchObject({
       schema: 'narada.operator_projection_open_request.v1',
@@ -1578,14 +1537,13 @@ describe('launcher workspace planning', () => {
     }, createMockContext());
 
     expect(plan.exitCode).toBe(ExitCode.SUCCESS);
-    const result = plan.result as { selected_agents: Array<{ agent: string; launch_operator_surface: string; launch_carrier: string; launch_runtime: string; launch_runtime_host: string; legacy_carrier_compatibility: unknown; intelligence_provider: string | null; wt_args: string[]; smoke_command: string[] }> };
+    const result = plan.result as { selected_agents: Array<{ agent: string; launch_operator_surface: string; launch_carrier: string; launch_runtime: string; launch_runtime_host: string; intelligence_provider: string | null; wt_args: string[]; smoke_command: string[] }> };
     const sonar = result.selected_agents.find((agent) => agent.agent === 'sonar.resident');
     const smartScheduling = result.selected_agents.find((agent) => agent.agent === 'smart-scheduling.resident');
     expect(sonar?.launch_operator_surface).toBe('agent-cli');
     expect(sonar?.launch_carrier).toBe('agent-cli');
     expect(sonar?.launch_runtime).toBe('narada-agent-runtime-server');
     expect(sonar?.launch_runtime_host).toBe('narada-agent-runtime-server');
-    expectLegacyCarrierCompatibility(sonar?.legacy_carrier_compatibility);
     expect(sonar?.intelligence_provider).toBe('codex-subscription');
     expect(sonar?.wt_args.join(' ')).toContain('--intelligence-provider');
     expect(sonar?.smoke_command).toContain('--intelligence-provider');
@@ -1593,7 +1551,6 @@ describe('launcher workspace planning', () => {
     expect(smartScheduling?.launch_carrier).toBe('codex');
     expect(smartScheduling?.launch_runtime).toBe('codex');
     expect(smartScheduling?.launch_runtime_host).toBe('codex');
-    expectLegacyCarrierCompatibility(smartScheduling?.legacy_carrier_compatibility);
     expect(smartScheduling?.intelligence_provider).toBeNull();
     expect(smartScheduling?.wt_args.join(' ')).not.toContain('--intelligence-provider');
     expect(smartScheduling?.smoke_command).not.toContain('--intelligence-provider');
@@ -1692,23 +1649,17 @@ describe('launcher workspace planning', () => {
       windows_terminal_invoked: boolean;
       agents: Array<{
         agent: string;
-        legacy_carrier_compatibility: unknown;
-        plan: { legacy_carrier_compatibility: unknown };
         operator_surface_runtime_start: { schema: string; mutation_performed: boolean; mode: string; operator_surface_kind: string; runtime_host_kind: string; target_site_id: string };
         operator_surface_start: { schema: string; mutation_performed: boolean; mode: string; operator_surface_kind: string; runtime_host_kind: string; target_site_id: string };
       }>;
-      compatibility: unknown;
       ownership: { smoke_aggregator: string };
     };
     expect(result.schema).toBe('narada.workspace_launch.smoke.v1');
     expect(result.mutation_performed).toBe(false);
     expect(result.windows_terminal_invoked).toBe(false);
     expect(result.ownership.smoke_aggregator).toBe('narada-cli');
-    expectLegacyCarrierCompatibility(result.compatibility);
     expect(result.agents).toHaveLength(1);
     expect(result.agents[0].agent).toBe('sonar.resident');
-    expectLegacyCarrierCompatibility(result.agents[0].legacy_carrier_compatibility);
-    expectLegacyCarrierCompatibility(result.agents[0].plan.legacy_carrier_compatibility);
     expect(result.agents[0].operator_surface_runtime_start.schema).toBe('narada.operator_surface.runtime_start_result.v1');
     expect(result.agents[0].operator_surface_runtime_start.mutation_performed).toBe(false);
     expect(result.agents[0].operator_surface_runtime_start.mode).toBe('dry_run');

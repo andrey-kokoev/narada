@@ -3,7 +3,9 @@ import { test } from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
 import {
   admitLoopTrigger,
+  claimNextLoopTrigger,
   ensureSiteLoopTables,
+  finishLoopTrigger,
   getLoopStatus,
   listLoopRuntimeEvents,
   listLoopTriggers,
@@ -42,6 +44,7 @@ test('runtime executes bounded cycles with Site-provided steps', async () => {
     assert.equal(result.status, 'ok');
     assert.equal(result.cycle_count, 2);
     assert.deepEqual(result.cycles.map((cycle) => cycle.status), ['ok', 'ok']);
+    assert.deepEqual(result.cycles.map((cycle) => cycle.run.lifecycle_state), ['completed', 'completed']);
     assert.deepEqual(result.cycles.map((cycle) => cycle.run.steps[0].step_id), ['cycle-1', 'cycle-2']);
     assert.deepEqual(events.map((event) => event.event), [
       'runtime_started',
@@ -56,6 +59,7 @@ test('runtime executes bounded cycles with Site-provided steps', async () => {
     const status = getLoopStatus(store, { loopId: 'test.loop' });
     assert.equal(status.counts.ok, 2);
     assert.equal(status.health.status, 'healthy');
+    assert.equal(status.health.lifecycle_state, 'healthy');
 
     const storedEvents = listLoopRuntimeEvents(store, { loopId: 'test.loop', limit: 10 });
     assert.equal(storedEvents.count, 6);
@@ -64,6 +68,30 @@ test('runtime executes bounded cycles with Site-provided steps', async () => {
     const afterFirst = listLoopRuntimeEvents(store, { loopId: 'test.loop', afterEventId: storedEvents.events[0].event_id, limit: 10 });
     assert.equal(afterFirst.count, 5);
     assert.equal(afterFirst.events[0].event, 'cycle_started');
+  } finally {
+    store.close();
+  }
+});
+
+test('trigger completion refuses an unclaimed or terminal trigger', () => {
+  const store = openTestStore();
+  try {
+    const admitted = admitLoopTrigger(store, {
+      loopId: 'test.loop',
+      kind: 'operator_request',
+      source: 'test',
+    });
+    assert.throws(
+      () => finishLoopTrigger(store, { triggerId: admitted.trigger_id, status: 'completed' }),
+      /invalid_site_operating_loop_trigger_transition/,
+    );
+    const claimed = claimNextLoopTrigger(store, { loopId: 'test.loop' });
+    assert.equal(claimed.trigger_id, admitted.trigger_id);
+    finishLoopTrigger(store, { triggerId: admitted.trigger_id, status: 'completed' });
+    assert.throws(
+      () => finishLoopTrigger(store, { triggerId: admitted.trigger_id, status: 'failed' }),
+      /invalid_site_operating_loop_trigger_transition/,
+    );
   } finally {
     store.close();
   }
@@ -98,6 +126,8 @@ test('runtime claims pending trigger and completes it with run evidence', async 
     assert.equal(triggers.count, 1);
     assert.equal(triggers.triggers[0].status, 'completed');
     assert.equal(triggers.triggers[0].run_id, result.cycles[0].run.run_id);
+    assert.equal(triggers.triggers[0].lifecycle_state, 'completed');
+    assert.deepEqual(triggers.triggers[0].lifecycle_history, ['pending', 'claimed', 'completed']);
   } finally {
     store.close();
   }

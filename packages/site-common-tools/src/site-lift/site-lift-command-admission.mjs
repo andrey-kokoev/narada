@@ -35,6 +35,9 @@ export function admitSiteLiftCreatePackageCommand(command, { siteRoot = process.
     commit_ready_paths: result.commit_ready_paths,
     authority_posture: result.authority_posture,
     receiving_site_must_admit: result.receiving_site_must_admit,
+    lifecycle_schema: result.lifecycle_schema,
+    lifecycle_state: result.lifecycle_state,
+    lifecycle_history: result.lifecycle_history,
   };
 }
 
@@ -61,6 +64,9 @@ export function admitSiteLiftSendPackageCommand(command, { siteRoot = process.cw
     commit_ready_paths: result.commit_ready_paths,
     authority_posture: result.authority_posture,
     receiving_site_must_admit: result.receiving_site_must_admit,
+    lifecycle_schema: result.lifecycle_schema,
+    lifecycle_state: result.lifecycle_state,
+    lifecycle_history: result.lifecycle_history,
   };
 }
 

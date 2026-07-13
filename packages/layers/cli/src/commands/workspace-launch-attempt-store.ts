@@ -6,19 +6,32 @@ import { normalizeWorkspaceLaunchBrowserSelection } from './workspace-launch-sel
 import type {
   WorkspaceLaunchAttemptRecord,
   WorkspaceLaunchProjectionObservationRecord,
-} from './launcher.js';
+} from './workspace-launch-types.js';
 import type { WorkspaceLaunchSelection as WorkspaceLaunchBrowserSelection } from '@narada2/workspace-launch-contract';
 import {
   isWorkspaceLaunchUiSessionRecord,
+  normalizeWorkspaceLaunchUiSessionRecord,
   workspaceLaunchUiSessionPersistenceRoot,
   workspaceLaunchUserSiteRoot,
   type WorkspaceLaunchUiSessionRecord,
 } from './workspace-launch-session-store.js';
+import { workspaceLaunchAttemptLifecycleFromStatus } from './workspace-launch-lifecycle.js';
 
 interface WorkspaceLaunchRememberedSelectionRecord {
   schema: 'narada.workspace_launch.remembered_selection.v1';
   updated_at: string;
   selection: WorkspaceLaunchBrowserSelection;
+}
+
+function isWorkspaceLaunchAttemptLifecycleEvidence(value: WorkspaceLaunchAttemptRecord): value is WorkspaceLaunchAttemptRecord & {
+  lifecycle_schema: 'narada.workspace_launch.attempt.lifecycle_state.v1';
+  lifecycle_state: NonNullable<WorkspaceLaunchAttemptRecord['lifecycle_state']>;
+  lifecycle_history: NonNullable<WorkspaceLaunchAttemptRecord['lifecycle_history']>;
+} {
+  return value.lifecycle_schema === 'narada.workspace_launch.attempt.lifecycle_state.v1'
+    && typeof value.lifecycle_state === 'string'
+    && Array.isArray(value.lifecycle_history)
+    && value.lifecycle_history.length > 0;
 }
 
 export interface WorkspaceLaunchAttemptStoreContext {
@@ -94,12 +107,13 @@ export async function loadRecoveredWorkspaceLaunchAttempts(
     .map(async (entry) => {
       const dir = join(root, entry.name);
       const session = await readJsonFile(join(dir, 'session.json'));
-      if (!isWorkspaceLaunchUiSessionRecord(session)) return null;
-      if (!workspaceLaunchRegistryPathsCompatible(registryPaths, session.registry_paths)) return null;
+      const normalizedSession = normalizeWorkspaceLaunchUiSessionRecord(session);
+      if (!normalizedSession) return null;
+      if (!workspaceLaunchRegistryPathsCompatible(registryPaths, normalizedSession.registry_paths)) return null;
       const attempts = (await readJsonLinesFile(join(dir, 'attempts.jsonl')))
         .map((value) => normalizeWorkspaceLaunchAttemptRecord(value, context))
         .filter((attempt): attempt is WorkspaceLaunchAttemptRecord => attempt !== null);
-      return { session, attempts };
+      return { session: normalizedSession, attempts };
     }));
   const compatible = sessions.filter((session): session is { session: WorkspaceLaunchUiSessionRecord; attempts: WorkspaceLaunchAttemptRecord[] } => session !== null);
   compatible.sort((a, b) => b.session.started_at.localeCompare(a.session.started_at));
@@ -111,8 +125,18 @@ export function normalizeWorkspaceLaunchAttemptRecord(
   context: WorkspaceLaunchAttemptStoreContext,
 ): WorkspaceLaunchAttemptRecord | null {
   if (!isWorkspaceLaunchAttemptRecord(value)) return null;
+  const lifecycle = isWorkspaceLaunchAttemptLifecycleEvidence(value)
+    ? {
+      schema: value.lifecycle_schema,
+      state: value.lifecycle_state,
+      history: value.lifecycle_history,
+    }
+    : workspaceLaunchAttemptLifecycleFromStatus(value.status);
   return {
     ...value,
+    lifecycle_schema: lifecycle.schema,
+    lifecycle_state: lifecycle.state,
+    lifecycle_history: lifecycle.history,
     expected_launch_session_ids: Array.isArray(value.expected_launch_session_ids)
       ? value.expected_launch_session_ids.map(workspaceLaunchString).filter((entry): entry is string => Boolean(entry))
       : context.expectedLaunchSessionIds(value.diagnostic),

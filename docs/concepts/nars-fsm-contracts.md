@@ -157,6 +157,29 @@ Schema: `narada.agent_context_mcp.session_state.v1`.
 
 The stdio protocol session follows `created -> initializing -> initialized -> serving -> closing -> closed`. Malformed input or protocol ordering failure enters `failed`; failed sessions may only close. `tools/list` and `tools/call` are admitted only in `serving`. The server exposes state and history through `agent_context_doctor`, and `shutdown` closes the session after acknowledging the request.
 
+## Runtime Request Lifecycle
+
+Owner: `@narada2/agent-runtime-server`, JSONL runtime control service.
+
+Schema: `narada.nars.runtime_request_state.v1`.
+
+Each control request is tracked independently from the session, turn, and
+shutdown machines:
+
+`received -> scheduled -> running -> completed | rejected | failed`
+
+An admitted close request may wait before execution:
+
+`scheduled -> waiting -> running -> completed`
+
+`waiting` means that the runtime is performing a graceful drain of requests
+already admitted before it closes the session. It does not interrupt an active
+turn. An explicit `session.cancel` request is the interruption path. Invalid
+JSON and unsupported controls end in `rejected`; provider or dispatch failures
+end in `failed`. Every transition is journaled as
+`runtime_request_state_transition`, and aggregate request counts are included
+in the runtime health projection.
+
 ## Site-Registry and Receiving-Site Bootstrap
 
 Owner: `@narada2/cli`, `site-registry-management.ts` and `sites.ts`.
@@ -164,6 +187,42 @@ Owner: `@narada2/cli`, `site-registry-management.ts` and `sites.ts`.
 Schema: `narada.site_registry_bootstrap.lifecycle_state.v1`.
 
 Registry management uses `requested -> preflighted -> planned -> applying -> verified`, with explicit `advisory` and `refused` outcomes. Paired Windows receiving-site bootstrap uses `requested -> preflighted -> planned -> applying -> user_site_created -> pc_site_created -> paired -> verified`. If the User Site exists but PC creation is not confirmed, the lifecycle ends at `partial`; it is not reported as a successful pair. Preflight refusal, failed execution, and partial evidence are returned with lifecycle state and history while preserving the existing command status and repair guidance.
+
+## Workspace Launch Session and Attempt
+
+Owner: `@narada2/cli`, persistent workspace-launch UI controller and attempt store.
+
+Schemas: `narada.workspace_launch.ui_session.lifecycle_state.v1` and `narada.workspace_launch.attempt.lifecycle_state.v1`.
+
+The persistent launcher session follows `created -> starting -> open -> closing -> closed`. Timeout and server failure are explicit branches: `open -> timeout` and `created|starting|open -> failed`. Recovered sessions without lifecycle fields are normalized from their existing public status.
+
+A launch attempt follows `queued -> planning -> launching -> handoff_recorded -> observing -> launched`. Launch failure is terminal from an active attempt, and `launched -> observing -> launched` records an explicit recheck. Forgetting is terminal for the attempt. The existing `status` field remains the compatibility projection; lifecycle history is durable in the session JSON and attempts JSONL.
+
+## Site Operating Loop Run, Trigger, and Health
+
+Owner: `@narada2/site-operating-loop`.
+
+Schemas: `narada.site_operating_loop.run.lifecycle_state.v1`, `narada.site_operating_loop.trigger.lifecycle_state.v1`, and `narada.site_operating_loop.health.lifecycle_state.v1`.
+
+A bounded run follows `requested -> locking -> running -> completed`, with `locking -> locked` for contention and `running -> failed` or `running -> aborted` for non-success outcomes. A trigger follows `pending -> claimed -> completed|failed|skipped`; completion is refused until the trigger has been claimed and terminal triggers cannot be reopened. Health starts at `unknown`, moves through `healthy`, `degraded`, and `critical`, and may recover after a later successful run.
+
+Lifecycle evidence is stored in `lifecycle_json` columns beside run, trigger, and health rows. `ensureSiteLoopTables()` adds those columns to existing Site databases, so old rows remain readable through status-derived lifecycle projections.
+
+## Generic Site Init
+
+Owner: `@narada2/site-common-tools`, `src/site-init/site-init.mjs`.
+
+Schema: `narada.site_init.lifecycle_state.v1`.
+
+Inspection follows `requested -> inspecting`. A preview follows `inspecting -> planned -> previewed`; confirmed seed creation follows `inspecting -> planned -> applying -> seeded -> initialized`. Existing memory, doctor, start, blocked, and refused outcomes are terminal branches from inspection. A filesystem failure after one or more seed files have been written is `applying -> partial`; it remains explicit and requires doctor/recovery before another write attempt.
+
+## Site Lift Transfer and Admission
+
+Owner: `@narada2/site-common-tools`, site-lift package creation, send, and inbox admission tools.
+
+Schema: `narada.site_lift.lifecycle_state.v1`.
+
+Creation follows `requested -> validating -> planned -> created`. Sending and receiving a target envelope follows `planned -> sending -> sent -> receiving -> received -> admitting -> admitted`. Partial filesystem or target-admission failure is recorded as `partial` with the available evidence. The package remains advisory until receiving-Site policy admits it; `admitted` in this lifecycle describes the receiving inbox envelope admission, not authority to implement the lifted package. Existing send results retain `status: sent` as a compatibility projection while exposing the complete lifecycle history.
 
 ## Boundary Rules
 

@@ -2,18 +2,44 @@ import { existsSync } from 'node:fs';
 import { readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { siteAuthorityRootFromSiteRoot } from '@narada2/site-paths';
+import {
+  workspaceLaunchUiSessionLifecycleFromStatus,
+  type WorkspaceLaunchUiSessionLifecycleState,
+} from './workspace-launch-lifecycle.js';
 
 export interface WorkspaceLaunchUiSessionRecord {
   schema: 'narada.workspace_launch.ui_session.v1';
   ui_session_id: string;
   started_at: string;
-  status: 'open' | 'closing' | 'closed' | 'timeout';
+  status: 'open' | 'closing' | 'closed' | 'timeout' | 'failed';
+  lifecycle_schema?: 'narada.workspace_launch.ui_session.lifecycle_state.v1';
+  lifecycle_state?: WorkspaceLaunchUiSessionLifecycleState;
+  lifecycle_history?: WorkspaceLaunchUiSessionLifecycleState[];
   url: string | null;
   registry_paths: string[];
   owner: {
     package: '@narada2/cli';
     command: 'launcher workspace-launch';
     surface: 'interactive-selection-ui';
+  };
+}
+
+export function normalizeWorkspaceLaunchUiSessionRecord(value: unknown): WorkspaceLaunchUiSessionRecord | null {
+  if (!isWorkspaceLaunchUiSessionRecord(value)) return null;
+  const lifecycle = isWorkspaceLaunchUiSessionLifecycleState(value.lifecycle_state)
+    && value.lifecycle_schema === 'narada.workspace_launch.ui_session.lifecycle_state.v1'
+    && isWorkspaceLaunchUiSessionLifecycleHistory(value.lifecycle_history)
+    ? {
+      schema: value.lifecycle_schema,
+      state: value.lifecycle_state,
+      history: value.lifecycle_history,
+    }
+    : workspaceLaunchUiSessionLifecycleFromStatus(value.status);
+  return {
+    ...value,
+    lifecycle_schema: lifecycle.schema,
+    lifecycle_state: lifecycle.state,
+    lifecycle_history: lifecycle.history,
   };
 }
 
@@ -52,7 +78,7 @@ export async function readWorkspaceLaunchUiSessions(): Promise<WorkspaceLaunchUi
     .filter((entry) => entry.isDirectory())
     .map(async (entry) => {
       const session = await readJsonFile(join(root, entry.name, 'session.json'));
-      return isWorkspaceLaunchUiSessionRecord(session) ? session : null;
+      return normalizeWorkspaceLaunchUiSessionRecord(session);
     }));
   return sessions
     .filter((session): session is WorkspaceLaunchUiSessionRecord => session !== null)
@@ -65,7 +91,7 @@ export function isWorkspaceLaunchUiSessionRecord(value: unknown): value is Works
   return value.schema === 'narada.workspace_launch.ui_session.v1'
     && isString(value.ui_session_id)
     && isString(value.started_at)
-    && (value.status === 'open' || value.status === 'closing' || value.status === 'closed' || value.status === 'timeout')
+    && (value.status === 'open' || value.status === 'closing' || value.status === 'closed' || value.status === 'timeout' || value.status === 'failed')
     && (value.url === null || isString(value.url))
     && isStringArray(value.registry_paths)
     && isRecord(owner)
@@ -92,4 +118,18 @@ function isString(value: unknown): value is string {
 
 function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every(isString);
+}
+
+function isWorkspaceLaunchUiSessionLifecycleState(value: unknown): value is WorkspaceLaunchUiSessionLifecycleState {
+  return value === 'created'
+    || value === 'starting'
+    || value === 'open'
+    || value === 'closing'
+    || value === 'closed'
+    || value === 'timeout'
+    || value === 'failed';
+}
+
+function isWorkspaceLaunchUiSessionLifecycleHistory(value: unknown): value is WorkspaceLaunchUiSessionLifecycleState[] {
+  return Array.isArray(value) && value.length > 0 && value.every(isWorkspaceLaunchUiSessionLifecycleState);
 }

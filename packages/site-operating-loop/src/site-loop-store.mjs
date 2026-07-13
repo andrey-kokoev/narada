@@ -1,4 +1,14 @@
 import { createHash, randomUUID } from 'node:crypto';
+import {
+  createSiteOperatingLoopHealthLifecycle,
+  createSiteOperatingLoopRunLifecycle,
+  createSiteOperatingLoopTriggerLifecycle,
+  siteOperatingLoopHealthLifecycleFromStatus,
+  siteOperatingLoopRunLifecycleFromStatus,
+  siteOperatingLoopTriggerLifecycleFromStatus,
+  transitionSiteOperatingLoopHealthLifecycle,
+  transitionSiteOperatingLoopTriggerLifecycle,
+} from './site-operating-loop-state.mjs';
 
 export const DEFAULT_SITE_OPERATING_LOOP_ID = 'site.operating-loop';
 export const DEFAULT_SITE_OPERATING_LOOP_OWNER_ID = 'site-operating-loop';
@@ -14,7 +24,8 @@ export function ensureSiteLoopTables(db) {
       started_at TEXT NOT NULL,
       finished_at TEXT,
       summary_json TEXT,
-      error_json TEXT
+      error_json TEXT,
+      lifecycle_json TEXT
     );
 
     CREATE TABLE IF NOT EXISTS site_loop_step_runs (
@@ -57,7 +68,8 @@ export function ensureSiteLoopTables(db) {
       last_run_at TEXT,
       failing_step TEXT,
       last_error_json TEXT,
-      updated_at TEXT NOT NULL
+      updated_at TEXT NOT NULL,
+      lifecycle_json TEXT
     );
 
     CREATE TABLE IF NOT EXISTS site_loop_control (
@@ -94,7 +106,8 @@ export function ensureSiteLoopTables(db) {
       completed_at TEXT,
       run_id TEXT,
       trigger_json TEXT NOT NULL,
-      result_json TEXT
+      result_json TEXT,
+      lifecycle_json TEXT
     );
 
     CREATE INDEX IF NOT EXISTS idx_site_loop_triggers_pending
@@ -163,6 +176,9 @@ export function ensureSiteLoopTables(db) {
     CREATE INDEX IF NOT EXISTS idx_directive_outcome_latest_outcome
       ON directive_outcome_latest(loop_id, outcome, observed_at DESC, recorded_at DESC);
   `);
+  ensureColumn(db, 'site_loop_runs', 'lifecycle_json', 'TEXT', repairs);
+  ensureColumn(db, 'site_loop_health', 'lifecycle_json', 'TEXT', repairs);
+  ensureColumn(db, 'site_loop_triggers', 'lifecycle_json', 'TEXT', repairs);
   ensureColumn(db, 'site_loop_escalations', 'acknowledged_at', 'TEXT', repairs);
   ensureColumn(db, 'site_loop_escalations', 'acknowledged_by', 'TEXT', repairs);
   ensureColumn(db, 'site_loop_escalations', 'ack_reason', 'TEXT', repairs);
@@ -381,12 +397,15 @@ export function getLoopLock(store, loopId) {
   };
 }
 
-export function recordLoopHealthSuccess(store, { loopId, runId, at = new Date().toISOString() } = {}) {
+export function recordLoopHealthSuccess(store, { loopId, runId, at = new Date().toISOString(), lifecycle = null } = {}) {
+  const previous = getLoopHealth(store, loopId);
+  const currentLifecycle = lifecycle ?? previous.lifecycle ?? createSiteOperatingLoopHealthLifecycle();
+  const healthLifecycle = transitionSiteOperatingLoopHealthLifecycle(currentLifecycle, 'healthy');
   store.db.prepare(`
     INSERT INTO site_loop_health (
       loop_id, status, consecutive_failures, last_successful_run_id, last_success_at,
-      last_run_id, last_run_at, failing_step, last_error_json, updated_at
-    ) VALUES (?, 'healthy', 0, ?, ?, ?, ?, NULL, NULL, ?)
+      last_run_id, last_run_at, failing_step, last_error_json, updated_at, lifecycle_json
+    ) VALUES (?, 'healthy', 0, ?, ?, ?, ?, NULL, NULL, ?, ?)
     ON CONFLICT(loop_id) DO UPDATE SET
       status = 'healthy',
       consecutive_failures = 0,
@@ -396,8 +415,9 @@ export function recordLoopHealthSuccess(store, { loopId, runId, at = new Date().
       last_run_at = excluded.last_run_at,
       failing_step = NULL,
       last_error_json = NULL,
+      lifecycle_json = excluded.lifecycle_json,
       updated_at = excluded.updated_at
-  `).run(loopId, runId, at, runId, at, at);
+  `).run(loopId, runId, at, runId, at, at, JSON.stringify(healthLifecycle));
   return getLoopHealth(store, loopId);
 }
 
@@ -408,15 +428,18 @@ export function recordLoopHealthFailure(store, {
   error = null,
   forcedStatus = null,
   at = new Date().toISOString(),
+  lifecycle = null,
 } = {}) {
   const previous = getLoopHealth(store, loopId);
   const consecutiveFailures = Number(previous?.consecutive_failures ?? 0) + 1;
   const status = forcedStatus ?? (consecutiveFailures >= 3 ? 'critical' : 'degraded');
+  const currentLifecycle = lifecycle ?? previous?.lifecycle ?? siteOperatingLoopHealthLifecycleFromStatus(previous?.stored_status ?? previous?.status);
+  const healthLifecycle = transitionSiteOperatingLoopHealthLifecycle(currentLifecycle, status === 'critical' ? 'critical' : 'degraded');
   store.db.prepare(`
     INSERT INTO site_loop_health (
       loop_id, status, consecutive_failures, last_successful_run_id, last_success_at,
-      last_run_id, last_run_at, failing_step, last_error_json, updated_at
-    ) VALUES (?, ?, ?, NULL, NULL, ?, ?, ?, ?, ?)
+      last_run_id, last_run_at, failing_step, last_error_json, updated_at, lifecycle_json
+    ) VALUES (?, ?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(loop_id) DO UPDATE SET
       status = excluded.status,
       consecutive_failures = excluded.consecutive_failures,
@@ -424,8 +447,9 @@ export function recordLoopHealthFailure(store, {
       last_run_at = excluded.last_run_at,
       failing_step = excluded.failing_step,
       last_error_json = excluded.last_error_json,
+      lifecycle_json = excluded.lifecycle_json,
       updated_at = excluded.updated_at
-  `).run(loopId, status, consecutiveFailures, runId, at, failingStep, stringifyJson(error), at);
+  `).run(loopId, status, consecutiveFailures, runId, at, failingStep, stringifyJson(error), at, JSON.stringify(healthLifecycle));
   return getLoopHealth(store, loopId);
 }
 
@@ -440,6 +464,10 @@ export function getLoopHealth(store, loopId) {
       loop_id: loopId,
       status: 'unknown',
       consecutive_failures: 0,
+      lifecycle_schema: 'narada.site_operating_loop.health.lifecycle_state.v1',
+      lifecycle_state: 'unknown',
+      lifecycle_history: ['unknown'],
+      lifecycle: createSiteOperatingLoopHealthLifecycle(),
       attention,
       unresolved_backlog: unresolvedBacklog,
       directive_outcomes: directiveOutcomes,
@@ -447,11 +475,16 @@ export function getLoopHealth(store, loopId) {
   }
   const storedStatus = String(row.status);
   const effectiveStatus = storedStatus === 'healthy' && (attention.open_count > 0 || unresolvedBacklog.unresolved_count > 0) ? 'degraded' : storedStatus;
+  const lifecycle = parseLifecycle(row.lifecycle_json, siteOperatingLoopHealthLifecycleFromStatus(storedStatus));
   return {
     schema: 'narada.site_operating_loop.health.v1',
     loop_id: String(row.loop_id),
     status: effectiveStatus,
     stored_status: storedStatus,
+    lifecycle_schema: lifecycle.schema,
+    lifecycle_state: lifecycle.state,
+    lifecycle_history: lifecycle.history,
+    lifecycle,
     consecutive_failures: Number(row.consecutive_failures ?? 0),
     last_successful_run_id: row.last_successful_run_id ? String(row.last_successful_run_id) : null,
     last_success_at: row.last_success_at ? String(row.last_success_at) : null,
@@ -467,9 +500,10 @@ export function getLoopHealth(store, loopId) {
 }
 
 export function beginLoopRun(store, run) {
+  const lifecycle = run.lifecycle ?? siteOperatingLoopRunLifecycleFromStatus(run.status);
   store.db.prepare(`
-    INSERT INTO site_loop_runs (run_id, loop_id, status, dry_run, started_at, summary_json, error_json)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO site_loop_runs (run_id, loop_id, status, dry_run, started_at, summary_json, error_json, lifecycle_json)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     run.run_id,
     run.loop_id,
@@ -478,15 +512,16 @@ export function beginLoopRun(store, run) {
     run.started_at,
     stringifyJson(run.summary ?? null),
     stringifyJson(run.error ?? null),
+    JSON.stringify(lifecycle),
   );
 }
 
-export function finishLoopRun(store, runId, { status, finished_at, summary = null, error = null }) {
+export function finishLoopRun(store, runId, { status, finished_at, summary = null, error = null, lifecycle = null }) {
   store.db.prepare(`
     UPDATE site_loop_runs
-    SET status = ?, finished_at = ?, summary_json = ?, error_json = ?
+    SET status = ?, finished_at = ?, summary_json = ?, error_json = ?, lifecycle_json = COALESCE(?, lifecycle_json)
     WHERE run_id = ?
-  `).run(status, finished_at, stringifyJson(summary), stringifyJson(error), runId);
+  `).run(status, finished_at, stringifyJson(summary), stringifyJson(error), lifecycle ? JSON.stringify(lifecycle) : null, runId);
 }
 
 export function recordLoopStep(store, step) {
@@ -676,11 +711,12 @@ export function admitLoopTrigger(store, {
     payload: payload ?? null,
     admitted_at: at,
   };
+  const lifecycle = createSiteOperatingLoopTriggerLifecycle();
   store.db.prepare(`
     INSERT INTO site_loop_triggers (
-      trigger_id, loop_id, kind, status, source, source_ref, admitted_at, trigger_json, result_json
-    ) VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, NULL)
-  `).run(finalTriggerId, loopId, kind, source, sourceRef, at, stringifyJson(trigger));
+      trigger_id, loop_id, kind, status, source, source_ref, admitted_at, trigger_json, result_json, lifecycle_json
+    ) VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, NULL, ?)
+  `).run(finalTriggerId, loopId, kind, source, sourceRef, at, stringifyJson(trigger), JSON.stringify(lifecycle));
   return getLoopTrigger(store, { triggerId: finalTriggerId });
 }
 
@@ -726,11 +762,15 @@ export function claimNextLoopTrigger(store, { loopId = DEFAULT_SITE_OPERATING_LO
       store.db.exec('COMMIT');
       return null;
     }
+    const lifecycle = transitionSiteOperatingLoopTriggerLifecycle(
+      parseLifecycle(row.lifecycle_json, siteOperatingLoopTriggerLifecycleFromStatus(row.status)),
+      'claimed',
+    );
     store.db.prepare(`
       UPDATE site_loop_triggers
-      SET status = 'claimed', claimed_at = ?, run_id = ?
+      SET status = 'claimed', claimed_at = ?, run_id = ?, lifecycle_json = ?
       WHERE trigger_id = ? AND status = 'pending'
-    `).run(at, runId, row.trigger_id);
+    `).run(at, runId, JSON.stringify(lifecycle), row.trigger_id);
     store.db.exec('COMMIT');
     return getLoopTrigger(store, { triggerId: row.trigger_id });
   } catch (error) {
@@ -752,11 +792,17 @@ export function finishLoopTrigger(store, {
 } = {}) {
   if (!triggerId) throw new Error('triggerId is required');
   if (!['completed', 'failed', 'skipped'].includes(status)) throw new Error('invalid trigger finish status');
+  const existing = getLoopTrigger(store, { triggerId });
+  if (!existing) return null;
+  const lifecycle = transitionSiteOperatingLoopTriggerLifecycle(
+    existing.lifecycle ?? siteOperatingLoopTriggerLifecycleFromStatus(existing.status),
+    status,
+  );
   store.db.prepare(`
     UPDATE site_loop_triggers
-    SET status = ?, completed_at = ?, run_id = COALESCE(?, run_id), result_json = ?
+    SET status = ?, completed_at = ?, run_id = COALESCE(?, run_id), result_json = ?, lifecycle_json = ?
     WHERE trigger_id = ?
-  `).run(status, at, runId, stringifyJson(result ?? {}), triggerId);
+  `).run(status, at, runId, stringifyJson(result ?? {}), JSON.stringify(lifecycle), triggerId);
   return getLoopTrigger(store, { triggerId });
 }
 
@@ -1134,6 +1180,7 @@ function tableExists(db, table) {
 }
 
 function parseRunRow(row) {
+  const lifecycle = parseLifecycle(row.lifecycle_json, siteOperatingLoopRunLifecycleFromStatus(row.status));
   return {
     run_id: row.run_id,
     loop_id: row.loop_id,
@@ -1143,6 +1190,10 @@ function parseRunRow(row) {
     finished_at: row.finished_at ?? null,
     summary: parseJson(row.summary_json),
     error: parseJson(row.error_json),
+    lifecycle_schema: lifecycle.schema,
+    lifecycle_state: lifecycle.state,
+    lifecycle_history: lifecycle.history,
+    lifecycle,
   };
 }
 
@@ -1178,6 +1229,7 @@ function parseRuntimeEventRow(row) {
 
 function parseTriggerRow(row) {
   const trigger = parseJson(row.trigger_json) ?? {};
+  const lifecycle = parseLifecycle(row.lifecycle_json, siteOperatingLoopTriggerLifecycleFromStatus(row.status));
   return {
     ...trigger,
     schema: trigger.schema ?? 'narada.site_operating_loop.trigger.v1',
@@ -1192,7 +1244,18 @@ function parseTriggerRow(row) {
     completed_at: row.completed_at ? String(row.completed_at) : null,
     run_id: row.run_id ? String(row.run_id) : null,
     result: parseJson(row.result_json),
+    lifecycle_schema: lifecycle.schema,
+    lifecycle_state: lifecycle.state,
+    lifecycle_history: lifecycle.history,
+    lifecycle,
   };
+}
+
+function parseLifecycle(value, fallback) {
+  const lifecycle = parseJson(value);
+  if (!lifecycle || typeof lifecycle !== 'object' || Array.isArray(lifecycle)) return fallback;
+  if (typeof lifecycle.schema !== 'string' || typeof lifecycle.state !== 'string' || !Array.isArray(lifecycle.history)) return fallback;
+  return lifecycle;
 }
 
 function stringifyJson(value) {
