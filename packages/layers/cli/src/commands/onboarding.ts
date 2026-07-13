@@ -8,7 +8,7 @@ import { readNarsEventLogTail } from '@narada2/nars-session-core/event-log';
 import { defaultLaunchRegistryPath } from '../lib/site-root-resolver.js';
 import { formattedResult, type CliFormat } from '../lib/cli-output.js';
 import { ExitCode } from '../lib/exit-codes.js';
-import { registryDefaultIntelligenceProvider, workspaceLaunchCommand } from './launcher.js';
+import { registryDefaultIntelligenceProvider, workspaceLaunchCommand } from './workspace-launch-application.js';
 import type { WorkspaceLaunchPlanOptions, WorkspaceLaunchRecord } from './workspace-launch-types.js';
 import { readWorkspaceLaunchRecords } from './workspace-launch-registry.js';
 import { narsSessionsCommand } from './nars.js';

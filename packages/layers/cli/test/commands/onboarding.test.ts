@@ -5,10 +5,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const workspaceLaunchMock = vi.hoisted(() => vi.fn());
 const narsSessionsMock = vi.hoisted(() => vi.fn());
 
-vi.mock('../../src/commands/launcher.js', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../../src/commands/launcher.js')>();
-  return { ...actual, workspaceLaunchCommand: workspaceLaunchMock };
-});
+vi.mock('../../src/commands/workspace-launch-application.js', () => ({
+  registryDefaultIntelligenceProvider: () => 'kimi-code-api',
+  workspaceLaunchCommand: workspaceLaunchMock,
+}));
 
 vi.mock('../../src/commands/nars.js', () => ({ narsSessionsCommand: narsSessionsMock }));
 
