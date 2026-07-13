@@ -3,7 +3,7 @@ import { createServer, type Server } from 'node:http';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { vol } from 'memfs';
-import { buildWorkspaceLaunchSelectionHtml, buildWorkspaceLaunchSelectionUiModel, explainMcpCommand, hasWorkspaceLaunchSelectionIntent, initialOperatorSurfaceValues, initialRoleValuesForInteractiveSelection, intelligenceProviderChoices, intelligenceProviderChoicesForLaunchSelection, listenWorkspaceLaunchUiServer, normalizeInteractiveOperatorSurfaceValues, readWorkspaceLaunchRememberedSelection, registryDefaultIntelligenceProviderLabel, registryDefaultOperatorSurfaceLabel, registryDefaultRuntimeLabel, resolveWorkspaceLaunchUiPortPolicy, roleChoicesForSelectedSites, workspaceLaunchCommand, workspaceLaunchPlanCommand, workspaceLaunchReapStaleSessionOwnedDescendants, workspaceLaunchRuntimeObservations, workspaceLaunchSelectorModel, writeWorkspaceLaunchRememberedSelection, type WorkspaceLaunchBrowserSelection, type WorkspaceLaunchRecord } from '../../src/commands/launcher.js';
+import { buildWorkspaceLaunchSelectionHtml, buildWorkspaceLaunchSelectionUiModel, explainMcpCommand, hasWorkspaceLaunchSelectionIntent, initialOperatorSurfaceValues, initialRoleValuesForInteractiveSelection, intelligenceProviderChoices, intelligenceProviderChoicesForLaunchSelection, listenWorkspaceLaunchUiServer, normalizeInteractiveOperatorSurfaceValues, readWorkspaceLaunchRememberedSelection, registryDefaultIntelligenceProviderLabel, registryDefaultOperatorSurfaceLabel, registryDefaultRuntimeLabel, resolveWorkspaceLaunchUiIngress, resolveWorkspaceLaunchUiPortPolicy, roleChoicesForSelectedSites, workspaceLaunchCommand, workspaceLaunchPlanCommand, workspaceLaunchReapStaleSessionOwnedDescendants, workspaceLaunchRuntimeObservations, workspaceLaunchSelectorModel, writeWorkspaceLaunchRememberedSelection, type WorkspaceLaunchBrowserSelection, type WorkspaceLaunchRecord } from '../../src/commands/launcher.js';
 import type { CommandContext } from '../../src/lib/command-wrapper.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
 
@@ -1740,6 +1740,94 @@ describe('launcher workspace planning', () => {
         fallbackToEphemeral: false,
         source: 'explicit',
       });
+    });
+  });
+
+  it('returns the stable Console route when the Operator Console projection is healthy', async () => {
+    const ingress = await resolveWorkspaceLaunchUiIngress({
+      uiSessionId: 'wls_test',
+      directUrl: 'http://127.0.0.1:47320',
+      ensureRouter: async () => ({
+        url: 'http://127.0.0.1:61729',
+        ownership: 'attached',
+        registration_token: 'router-token',
+        child: null,
+      }),
+      readRoutes: async () => ({
+        schema: 'narada.operator_router.routes.v1',
+        identity: 'narada.operator-router',
+        routes: [{
+          route_id: 'operator-console',
+          route_class: 'operator-console',
+          backend_kind: 'http',
+          public_path: '/',
+          route_mode: 'prefix',
+          owner_id: 'operator-console:1',
+          site_id: null,
+          session_id: null,
+          protocols: ['http'],
+          methods: ['GET'],
+          state: 'healthy',
+          lease_expires_at: new Date(Date.now() + 60_000).toISOString(),
+          last_health_at: new Date().toISOString(),
+          last_health_error: null,
+        }],
+      }),
+    });
+
+    expect(ingress).toMatchObject({
+      url: 'http://127.0.0.1:61729/console/launch/sessions/wls_test',
+      direct_url: 'http://127.0.0.1:47320',
+      router_url: 'http://127.0.0.1:61729',
+      stable_url: 'http://127.0.0.1:61729/console/launch/sessions/wls_test',
+      ingress_mode: 'operator-router',
+      reason: null,
+    });
+  });
+
+  it('labels the direct launcher URL as diagnostic when Console projection is unavailable', async () => {
+    const ingress = await resolveWorkspaceLaunchUiIngress({
+      uiSessionId: 'wls_missing_console',
+      directUrl: 'http://127.0.0.1:47320',
+      ensureRouter: async () => ({
+        url: 'http://127.0.0.1:61729',
+        ownership: 'attached',
+        registration_token: 'router-token',
+        child: null,
+      }),
+      readRoutes: async () => ({
+        schema: 'narada.operator_router.routes.v1',
+        identity: 'narada.operator-router',
+        routes: [],
+      }),
+    });
+
+    expect(ingress).toMatchObject({
+      url: 'http://127.0.0.1:47320',
+      direct_url: 'http://127.0.0.1:47320',
+      router_url: 'http://127.0.0.1:61729',
+      stable_url: null,
+      ingress_mode: 'diagnostic',
+      reason: 'operator_console_projection_unavailable',
+    });
+  });
+
+  it('keeps a direct diagnostic URL when Router discovery fails', async () => {
+    const ingress = await resolveWorkspaceLaunchUiIngress({
+      uiSessionId: 'wls_router_failure',
+      directUrl: 'http://127.0.0.1:47320',
+      ensureRouter: async () => {
+        throw new Error('operator_router_start_timeout:absent');
+      },
+    });
+
+    expect(ingress).toMatchObject({
+      url: 'http://127.0.0.1:47320',
+      direct_url: 'http://127.0.0.1:47320',
+      router_url: null,
+      stable_url: null,
+      ingress_mode: 'diagnostic',
+      reason: 'operator_router_unavailable:operator_router_start_timeout:absent',
     });
   });
 

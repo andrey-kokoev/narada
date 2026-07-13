@@ -221,8 +221,16 @@ direct diagnostic endpoints.
   evidence; Console, Agent Web UI, and Site Operations owners remain
   responsible for restarting their own backing services and re-registering
   them.
-- The launcher/session dashboard and remaining artifact open flows still need
-  to consume the router route inventory instead of assuming direct listeners.
+- The persistent launcher selection session now consumes the route inventory:
+  when the Console projection is healthy it returns and opens
+  `/console/launch/sessions/<id>`; its private listener remains persisted as a
+  backing target only. If the Console projection is unavailable, the command
+  returns the direct listener explicitly as a diagnostic fallback with a
+  reason code.
+- One-shot launcher selection and local task-graph/observation file renders
+  remain diagnostic local-file projections. They are not falsely presented as
+  Router artifacts; session-owned NARS artifacts already use the Router
+  artifact route.
 
 ## Migration Slices
 
@@ -243,8 +251,12 @@ direct diagnostic endpoints.
    Console and the existing Workbench Site Operations server are registered;
    registry-specific route ownership and the composed session inventory remain.
 5. Change launcher and CLI open flows to return router URLs. **Partial:**
-   Console, Agent Web UI, and Site Operations commands return router URLs;
-   launcher/session-inventory/artifact open flows still need migration.
+   Console, Agent Web UI, Site Operations, and the persistent launcher session
+   handoff return router URLs when their owning projection is healthy. One-shot
+   launcher selection and local task-graph or observation renders remain
+   explicitly diagnostic because they have no persisted Router-owned artifact
+   projection. A future artifact owner may admit those outputs without adding
+   a generic file route.
 6. Add Host, Origin, CSRF, route admission, loopback-target, and redaction
    acceptance tests. **Partial:** route admission, redaction, HTTP, artifact,
    and WebSocket coverage exists; broader mutation/CSRF acceptance remains.

@@ -24,11 +24,19 @@ import {
   resolveCarrierRuntimeSelection,
 } from '@narada2/carrier-runtime-contract/carrier-runtime-selection';
 import { discoverNarsSessions } from '@narada2/nars-session-core/session-index';
+import {
+  DEFAULT_OPERATOR_ROUTER_PORT,
+  ensureOperatorRouter,
+  readOperatorRouterRoutes,
+  type EnsureOperatorRouterOptions,
+  type EnsureOperatorRouterResult,
+} from '@narada2/operator-router';
 import { explainMcpCommand as explainMcpAuthorityCommand } from './launcher-mcp-authority.js';
 import {
   isWorkspaceLaunchUiSessionRecord,
   readWorkspaceLaunchUiSessions,
   workspaceLaunchUiSessionPersistenceRoot,
+  workspaceLaunchUiSessionRoute,
   workspaceLaunchUserSiteRoot,
   type WorkspaceLaunchUiSessionRecord,
 } from './workspace-launch-session-store.js';
@@ -1207,6 +1215,84 @@ function assertWorkspaceLaunchResultInvariants(result: Record<string, unknown>):
   }
 }
 
+export interface WorkspaceLaunchUiIngress {
+  url: string;
+  direct_url: string;
+  router_url: string | null;
+  stable_url: string | null;
+  ingress_mode: 'operator-router' | 'diagnostic';
+  reason: string | null;
+}
+
+export interface ResolveWorkspaceLaunchUiIngressOptions {
+  uiSessionId: string;
+  directUrl: string;
+  host?: string;
+  port?: number;
+  ensureRouter?: (options: EnsureOperatorRouterOptions) => Promise<EnsureOperatorRouterResult>;
+  readRoutes?: typeof readOperatorRouterRoutes;
+}
+
+function boundedWorkspaceLaunchIngressError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  const bounded = message.replace(/[\r\n\t]+/g, ' ').trim().slice(0, 160);
+  return `operator_router_unavailable:${bounded || 'unknown_error'}`;
+}
+
+function operatorRouterIngressUrl(routerUrl: string, uiSessionId: string): string {
+  return `${routerUrl.replace(/\/+$/, '')}${workspaceLaunchUiSessionRoute(uiSessionId)}`;
+}
+
+export async function resolveWorkspaceLaunchUiIngress(
+  options: ResolveWorkspaceLaunchUiIngressOptions,
+): Promise<WorkspaceLaunchUiIngress> {
+  const directUrl = options.directUrl;
+  let routerUrl: string | null = null;
+  try {
+    const ensureRouter = options.ensureRouter ?? ensureOperatorRouter;
+    const readRoutes = options.readRoutes ?? readOperatorRouterRoutes;
+    const router = await ensureRouter({
+      host: options.host ?? '127.0.0.1',
+      port: options.port ?? DEFAULT_OPERATOR_ROUTER_PORT,
+    });
+    routerUrl = router.url;
+    const routes = await readRoutes({ url: router.url });
+    const consoleProjection = routes.routes.find((route) => route.route_id === 'operator-console');
+    const consoleProjectionHealthy = consoleProjection?.route_class === 'operator-console'
+      && consoleProjection.public_path === '/'
+      && consoleProjection.route_mode === 'prefix'
+      && consoleProjection.state === 'healthy';
+    if (consoleProjectionHealthy) {
+      const stableUrl = operatorRouterIngressUrl(router.url, options.uiSessionId);
+      return {
+        url: stableUrl,
+        direct_url: directUrl,
+        router_url: router.url,
+        stable_url: stableUrl,
+        ingress_mode: 'operator-router',
+        reason: null,
+      };
+    }
+    return {
+      url: directUrl,
+      direct_url: directUrl,
+      router_url: router.url,
+      stable_url: null,
+      ingress_mode: 'diagnostic',
+      reason: 'operator_console_projection_unavailable',
+    };
+  } catch (error) {
+    return {
+      url: directUrl,
+      direct_url: directUrl,
+      router_url: routerUrl,
+      stable_url: null,
+      ingress_mode: 'diagnostic',
+      reason: boundedWorkspaceLaunchIngressError(error),
+    };
+  }
+}
+
 function requestWorkspaceLaunchSelectionUiProjectionOpen(url: string): void {
   void executeOperatorProjectionOpenRequest({
     projection_kind: 'browser_url',
@@ -1242,6 +1328,11 @@ async function runPersistentWorkspaceLaunchSelectionUiCommand(
       status: session.status,
       mutation_performed: session.launch_count > 0,
       url: session.url,
+      direct_url: session.direct_url,
+      router_url: session.router_url,
+      stable_url: session.stable_url,
+      ingress_mode: session.ingress_mode,
+      ingress_reason: session.reason,
       launch_count: session.launch_count,
       registry_paths: registryPaths,
       ownership: {
@@ -1544,7 +1635,7 @@ async function runPersistentWorkspaceLaunchSelectionUi(
   options: WorkspaceLaunchPlanOptions,
   launchSelection: (selection: WorkspaceLaunchBrowserSelection) => Promise<{ exitCode: ExitCode; result: unknown }>,
   siteCatalog: ResolvedSiteRoot[] = [],
-): Promise<{ status: 'cancelled' | 'timeout'; url: string; launch_count: number }> {
+): Promise<WorkspaceLaunchUiIngress & { status: 'cancelled' | 'timeout'; launch_count: number }> {
   const host = '127.0.0.1';
   let server: Server | null = null;
   let settled = false;
@@ -1797,14 +1888,22 @@ async function runPersistentWorkspaceLaunchSelectionUi(
 
   const { url, port, fallback_used } = await listenWorkspaceLaunchUiServer(server!, host, portPolicy);
 
-  console.log(`Narada launcher selection UI: ${url}`);
+  const ingress = await resolveWorkspaceLaunchUiIngress({
+    uiSessionId: uiSession.ui_session_id,
+    directUrl: url,
+    host,
+  });
+  console.log(`Narada launcher selection UI: ${ingress.url}`);
   if (fallback_used) {
     console.log(`[launcher] preferred UI port ${portPolicy.port} was occupied; using ephemeral port ${port} instead.`);
+  }
+  if (ingress.ingress_mode === 'diagnostic') {
+    console.log(`[launcher] direct UI URL is diagnostic; Operator Console projection unavailable (${ingress.reason ?? 'unknown'}).`);
   }
   console.log('Selection UI will remain available for additional launches until you close it.');
   uiSession.url = url;
   await persistWorkspaceLaunchDashboardState(persistenceDir, uiSession, attempts);
-  requestWorkspaceLaunchSelectionUiProjectionOpen(url);
+  requestWorkspaceLaunchSelectionUiProjectionOpen(ingress.url);
 
   try {
     const status = await Promise.race([
@@ -1820,7 +1919,7 @@ async function runPersistentWorkspaceLaunchSelectionUi(
       }),
     ]);
     await persistWorkspaceLaunchDashboardState(persistenceDir, uiSession, attempts);
-    return { status, url, launch_count: launchCount };
+    return { ...ingress, status, launch_count: launchCount };
   } finally {
     await closeWorkspaceLaunchSelectionServer(server);
   }
