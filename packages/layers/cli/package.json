@@ -79,6 +79,7 @@
     "test": "node scripts/run-vitest-quiet.mjs run --silent && pnpm run test:realfs",
     "test:launcher": "pnpm run build && node scripts/run-vitest-quiet.mjs run --silent test/commands/carrier-launcher.test.ts test/commands/launcher-workspace-plan.test.ts test/commands/nars.test.ts && pnpm run test:realfs",
     "test:launcher-acceptance": "pnpm run build && node --import tsx --test --test-concurrency=1 test/integration/operator-launch-journey.test.mjs test/integration/workspace-selection-ui-e2e.test.mjs",
+    "test:operator-journey-acceptance": "pnpm run build && pnpm --filter @narada2/agent-web-ui build && node --import tsx --test --test-concurrency=1 test/integration/operator-journey-acceptance-e2e.test.mjs",
     "test:operator-projection-open": "node scripts/run-vitest-quiet.mjs run --silent test/commands/nars.test.ts test/commands/launcher-workspace-plan.test.ts test/lib/browser-render.test.ts test/commands/task-graph.test.ts",
     "test:realfs": "pnpm --filter @narada2/ui build && node --import tsx --test test/integration/*.test.mjs",
     "coverage": "vitest run --coverage"

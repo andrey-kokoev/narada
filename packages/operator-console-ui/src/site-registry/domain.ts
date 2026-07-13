@@ -139,6 +139,7 @@ export function buildSiteRegistryMutationRequest(
     request.substrate = draft.substrate.trim() || undefined;
     request.source = draft.source.trim() || undefined;
     request.source_ref = draft.sourceRef.trim() || undefined;
+    request.reason = draft.reason.trim() || undefined;
     request.control_endpoint = draft.clearControlEndpoint
       ? undefined
       : draft.controlEndpoint.trim() || undefined;

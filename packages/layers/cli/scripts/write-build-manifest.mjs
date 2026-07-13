@@ -1,8 +1,13 @@
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { BUILD_MANIFEST_PATH, BUILD_MANIFEST_SCHEMA, computeCliBuildSourceHash } from './build-manifest-lib.mjs';
 
 const siteRoot = resolve(process.argv[2] ?? join(import.meta.dirname, '..', '..', '..', '..'));
+const packageRoot = resolve(import.meta.dirname, '..');
+const workbenchSourcePath = join(packageRoot, 'src', 'ui', 'workbench.html');
+const workbenchTargetPath = join(packageRoot, 'dist', 'ui', 'workbench.html');
+mkdirSync(dirname(workbenchTargetPath), { recursive: true });
+copyFileSync(workbenchSourcePath, workbenchTargetPath);
 const current = computeCliBuildSourceHash(siteRoot);
 const manifestPath = join(siteRoot, BUILD_MANIFEST_PATH);
 const manifest = {
