@@ -21,6 +21,7 @@ import type { ConsoleControlRequest } from '@narada2/windows-site';
 import type { WorkspaceLaunchUiSession } from '@narada2/workspace-launch-contract';
 import type { SiteRegistryReadModel } from './site-registry-read-model.js';
 import type { RegistryMutationGateway, RegistryMutationInput, RegistryMutationOperation } from './site-registry-management-gateway.js';
+import type { AgentSessionReadModel } from './agent-session-read-model.js';
 import {
   isWorkspaceLaunchUiSessionProxyable,
   readWorkspaceLaunchUiSessions,
@@ -47,6 +48,7 @@ export interface ConsoleServerRouteContext {
   registryReadModel: SiteRegistryReadModel;
   registryMutationGateway: RegistryMutationGateway;
   workspaceLaunchSessions?: () => Promise<WorkspaceLaunchUiSessionRecord[]>;
+  agentSessions?: AgentSessionReadModel;
 }
 
 function jsonResponse(res: ServerResponse, status: number, payload: unknown): void {
@@ -348,6 +350,41 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
           schema: 'narada.workspace_launch.ui_session_list.v1',
           sessions: (await (ctx.workspaceLaunchSessions ?? readWorkspaceLaunchUiSessions)()).map(consoleLauncherSessionProjection),
         });
+      },
+    },
+    {
+      method: 'GET',
+      pattern: /^\/console\/sessions$/,
+      handler: async (_req, res) => {
+        const origin = _req.headers.origin;
+        if (!setCorsHeaders(res, origin)) {
+          jsonResponse(res, 403, { error: 'Origin not allowed' });
+          return;
+        }
+        htmlResponse(res, 200, readOperatorConsoleUiDocument());
+      },
+    },
+    {
+      method: 'GET',
+      pattern: /^\/console\/sessions\/api\/sessions$/,
+      handler: async (_req, res) => {
+        const origin = _req.headers.origin;
+        if (!setCorsHeaders(res, origin)) {
+          jsonResponse(res, 403, { error: 'Origin not allowed' });
+          return;
+        }
+        if (!ctx.agentSessions) {
+          jsonResponse(res, 503, {
+            schema: 'narada.operator_console.agent_sessions.v1',
+            status: 'refused',
+            generated_at: new Date().toISOString(),
+            count: 0,
+            sessions: [],
+            refusals: ['agent_session_read_model_unavailable'],
+          });
+          return;
+        }
+        jsonResponse(res, 200, await ctx.agentSessions.list());
       },
     },
     {

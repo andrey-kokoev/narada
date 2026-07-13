@@ -34,6 +34,10 @@ test('operator console route resolver admits canonical registry and launcher rou
     kind: 'launcher',
     path: '/console/launch',
   });
+  assert.deepEqual(resolveOperatorConsoleRoute('/console/sessions/'), {
+    kind: 'agent-sessions',
+    path: '/console/sessions',
+  });
   assert.deepEqual(resolveOperatorConsoleRoute('/console/workbench'), {
     kind: 'not-found',
     path: '/console/workbench',
@@ -45,6 +49,7 @@ test('operator navigation marks exactly one current route and includes launcher 
   assert.equal(items.filter((item) => item.current).length, 1);
   assert.equal(items.find((item) => item.current)?.href, '/console/registry/manage');
   assert.equal(items.find((item) => item.key === 'launcher')?.href, '/console/launch');
+  assert.equal(items.find((item) => item.key === 'sessions')?.href, '/console/sessions');
 
   const launcherItems = operatorConsoleNavigation('launcher');
   assert.equal(launcherItems.filter((item) => item.current).length, 1);

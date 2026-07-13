@@ -12,6 +12,20 @@ A domain concept earns a UI surface through an explicit chain:
 
 The browser is a projection and workflow client. It is not a second authority model.
 
+## Operator Surface Catalog
+
+`@narada2/operator-console-contract` owns the UI-neutral
+`OperatorSurfaceDescriptor` records for the console concepts. Each descriptor
+names its concept, scope, owner, routes, default availability, and bounded
+operator handoff. `projectOperatorSurfaceCatalog` adds current availability
+without changing the descriptor authority. The CLI workspace directory and
+the Vue route/navigation model both consume this catalog; neither maintains a
+parallel list.
+
+The catalog is a route and concept contract, not a generic page registry. A
+concept still earns a page through the contract, transport, adapter,
+composable, page, and projection chain below.
+
 ## Current Map
 
 ### User Site Registry
@@ -26,7 +40,7 @@ The browser is a projection and workflow client. It is not a second authority mo
 | Read and detail state | `useSiteRegistry` |
 | Mutation state | `useSiteRegistryMutation` |
 | Draft, operation, confirmation, and route workflow | `useSiteRegistryWorkflow` |
-| Shared console chrome and route resolution | `@narada2/ui-vue` `OperatorSurfaceShell`, `OperatorConsoleShell.vue`, `console/routes.ts` |
+| Shared console chrome and route resolution | `@narada2/ui-vue` `OperatorSurfaceShell`, `OperatorConsoleShell.vue`, `console/routes.ts`, `@narada2/operator-console-contract` |
 | Collection page | `/console/registry` |
 | Add workflow | `/console/registry/add` |
 | Manage workflow | `/console/registry/manage` |
@@ -54,6 +68,24 @@ Workspace Launch shares the Narada UI design system with Operator Console, but i
 
 `/console/launch` is a console-owned routing projection for CLI-owned persistent launcher sessions. The CLI session store owns the read-only persisted session projection; the page reaches it through its typed transport and composable. The inventory exposes stable `/console/launch/sessions/:ui_session_id` links, while the console server forwards only active loopback sessions and the launcher's known browser paths to the CLI-owned server. The console rewrites the launcher bootstrap and asset paths for that stable prefix; it does not start agents, submit launch selections, or duplicate launch authority. The CLI launcher remains the only authority for launch policy, runtime handoff, and session mutation.
 
+### Agent Session Inventory
+
+| Concern | Owner |
+| --- | --- |
+| Session descriptor and redacted wire record | `@narada2/operator-console-contract` |
+| Durable session discovery | `@narada2/nars-session-core` session index |
+| Site selection for discovery | CLI User Site Registry read model |
+| Browser HTTP transport | `operator-console-ui/src/agent-sessions/transport.ts` |
+| Browser contract adapter | `operator-console-ui/src/agent-sessions/adapter.ts` |
+| Read and refresh state | `useAgentSessions` |
+| Collection page | `/console/sessions` |
+| Repeated projection | Session rows with lifecycle and liveness posture |
+
+The session page is an inventory projection. It deliberately does not send
+turns, control runtime lifecycle, expose local session paths, or replace Agent
+Web UI. Session state is classified from the canonical NARS index and remains
+truthful when liveness has not been probed.
+
 ## Shared Component Roles
 
 - **Shell**: stable navigation, page framing, and cross-page context. It must not own domain data or mutations.
@@ -71,6 +103,7 @@ Workspace Launch shares the Narada UI design system with Operator Console, but i
 - Composables own asynchronous state and workflow transitions; templates do not duplicate fetch, plan, apply, or retry logic.
 - Pages do not read databases, construct policy decisions, or call mutation endpoints directly.
 - A route is explicit and typed. A generic page registry is not introduced until a second concept demonstrates the same route contract.
+- The operator surface catalog is explicit and typed, but it does not imply that every descriptor has a page or that planned routes are reachable.
 - Shared UI components remain presentation-only. Concept-specific labels, validation, and transitions stay in the concept module.
 - A shared shell may host multiple concepts, but it must not imply that those concepts share lifecycle authority.
 

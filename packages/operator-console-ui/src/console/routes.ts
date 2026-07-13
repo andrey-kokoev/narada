@@ -1,4 +1,9 @@
 import type { RegistryManagementOperation } from '@narada2/site-registry-contract';
+import {
+  findOperatorSurfaceRoute,
+  operatorSurfaceDescriptors,
+  type OperatorSurfaceNavigationKey,
+} from '@narada2/operator-console-contract';
 import type { OperatorSurfaceNavItem } from '@narada2/ui-vue';
 
 export type OperatorConsoleRouteKind =
@@ -6,6 +11,8 @@ export type OperatorConsoleRouteKind =
   | 'site-registry-add'
   | 'site-registry-manage'
   | 'launcher'
+  | 'agent-sessions'
+  | 'artifacts'
   | 'not-found';
 
 export interface OperatorConsoleRoute {
@@ -16,7 +23,7 @@ export interface OperatorConsoleRoute {
 }
 
 export type SiteRegistryNavigationKey = 'sites' | 'add' | 'manage';
-export type OperatorConsoleNavigationKey = SiteRegistryNavigationKey | 'launcher';
+export type OperatorConsoleNavigationKey = OperatorSurfaceNavigationKey;
 export type OperatorConsoleNavItem = OperatorSurfaceNavItem;
 
 function normalizedPathname(pathname: string): string {
@@ -43,17 +50,18 @@ export function resolveOperatorConsoleRoute(
   const query = new URLSearchParams(search);
   const siteId = query.get('site') || undefined;
 
-  if (path === '/console/registry') {
-    return {
-      kind: 'site-registry',
-      path,
-      ...(siteId ? { siteId } : {}),
-    };
-  }
-  if (path === '/console/registry/add') {
-    return { kind: 'site-registry-add', path };
-  }
-  if (path === '/console/registry/manage') {
+  const matched = findOperatorSurfaceRoute(path);
+  if (matched?.surface.id === 'site-registry') {
+    if (matched.route.id === 'sites') {
+      return {
+        kind: 'site-registry',
+        path,
+        ...(siteId ? { siteId } : {}),
+      };
+    }
+    if (matched.route.id === 'add') {
+      return { kind: 'site-registry-add', path };
+    }
     const operation = managementOperation(query.get('operation'));
     return {
       kind: 'site-registry-manage',
@@ -62,8 +70,14 @@ export function resolveOperatorConsoleRoute(
       ...(operation ? { operation } : {}),
     };
   }
-  if (path === '/console/launch') {
+  if (matched?.surface.id === 'launcher') {
     return { kind: 'launcher', path };
+  }
+  if (matched?.surface.id === 'agent-sessions') {
+    return { kind: 'agent-sessions', path };
+  }
+  if (matched?.surface.id === 'artifacts') {
+    return { kind: 'artifacts', path };
   }
   return { kind: 'not-found', path };
 }
@@ -71,12 +85,18 @@ export function resolveOperatorConsoleRoute(
 export function operatorConsoleNavigation(
   current: OperatorConsoleNavigationKey,
 ): OperatorConsoleNavItem[] {
-  return [
-    { key: 'sites', label: 'Sites', href: '/console/registry', current: current === 'sites' },
-    { key: 'add', label: 'Add Site', href: '/console/registry/add', current: current === 'add' },
-    { key: 'manage', label: 'Manage', href: '/console/registry/manage', current: current === 'manage' },
-    { key: 'launcher', label: 'Launcher', href: '/console/launch', current: current === 'launcher' },
-  ];
+  return operatorSurfaceDescriptors.flatMap((surface) => {
+    if (surface.defaultAvailability !== 'available') return [];
+    return surface.routes.flatMap((route) => {
+      if (!route.navigationKey) return [];
+      return [{
+        key: route.navigationKey,
+        label: route.label,
+        href: route.path,
+        current: current === route.navigationKey,
+      }];
+    });
+  });
 }
 
 export function siteRegistryNavigation(

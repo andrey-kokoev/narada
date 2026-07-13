@@ -1,5 +1,11 @@
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import {
+  primaryOperatorSurfaceRoute,
+  projectOperatorSurfaceCatalog,
+  type OperatorSurfaceAvailabilityOverrides,
+  type OperatorSurfaceProjection,
+} from '@narada2/operator-console-contract';
 
 const require = createRequire(import.meta.url);
 let sharedUiCssCache: string | undefined;
@@ -11,22 +17,9 @@ function sharedUiCss(): string {
   return sharedUiCssCache;
 }
 
-type SurfaceAvailability = 'available' | 'unavailable' | 'planned';
-
-interface WorkspaceSurface {
-  id: string;
-  name: string;
-  scope: string;
-  owner: string;
-  route?: string;
-  availability: SurfaceAvailability;
-  detail: string;
-  nextAction?: { href: string; label: string };
-}
-
 export interface OperatorWorkspacePageOptions {
   ingressMode: 'diagnostic' | 'router';
-  siteRegistryAvailable: boolean;
+  surfaceAvailability: OperatorSurfaceAvailabilityOverrides;
 }
 
 function escapeHtml(value: string): string {
@@ -39,64 +32,19 @@ function escapeHtml(value: string): string {
   })[character] ?? character);
 }
 
-function surfaceMarkup(surface: WorkspaceSurface): string {
-  const route = surface.route ? `<dt>Route</dt><dd><code>${escapeHtml(surface.route)}</code></dd>` : '';
+function surfaceMarkup(surface: OperatorSurfaceProjection): string {
+  const route = primaryOperatorSurfaceRoute(surface)?.path;
+  const routeMarkup = route ? `<dt>Route</dt><dd><code>${escapeHtml(route)}</code></dd>` : '';
   const nextAction = surface.nextAction ? `<p class="surface-action"><a href="${escapeHtml(surface.nextAction.href)}">${escapeHtml(surface.nextAction.label)}</a></p>` : '';
-  const content = `<div class="surface-heading"><h2>${escapeHtml(surface.name)}</h2><span class="status ${surface.availability}">${escapeHtml(surface.availability)}</span></div><dl><dt>Scope</dt><dd>${escapeHtml(surface.scope)}</dd><dt>Owner</dt><dd>${escapeHtml(surface.owner)}</dd>${route}</dl><p>${escapeHtml(surface.detail)}</p>${nextAction}`;
-  if (surface.availability === 'available' && surface.route) {
-    return `<a class="surface available" href="${escapeHtml(surface.route)}" data-surface-id="${escapeHtml(surface.id)}">${content}</a>`;
+  const content = `<div class="surface-heading"><h2>${escapeHtml(surface.name)}</h2><span class="status ${surface.availability}">${escapeHtml(surface.availability)}</span></div><dl><dt>Scope</dt><dd>${escapeHtml(surface.scope)}</dd><dt>Owner</dt><dd>${escapeHtml(surface.owner)}</dd>${routeMarkup}</dl><p>${escapeHtml(surface.projectedDetail)}</p>${nextAction}`;
+  if (surface.availability === 'available' && route) {
+    return `<a class="surface available" href="${escapeHtml(route)}" data-surface-id="${escapeHtml(surface.id)}">${content}</a>`;
   }
   return `<div class="surface ${surface.availability}" data-surface-id="${escapeHtml(surface.id)}">${content}</div>`;
 }
 
 export function renderOperatorWorkspacePage(options: OperatorWorkspacePageOptions): string {
-  const surfaces: WorkspaceSurface[] = [
-    {
-      id: 'site-registry',
-      name: 'Site Registry',
-      scope: 'User Site',
-      owner: 'Canonical Site Registry',
-      route: '/console/registry',
-      availability: options.siteRegistryAvailable ? 'available' : 'unavailable',
-      detail: options.siteRegistryAvailable
-        ? 'Inspect the canonical inventory and enter governed Site workflows.'
-        : 'The Site Registry projection is not available from this host.',
-    },
-    {
-      id: 'launcher',
-      name: 'Agent Launcher',
-      scope: 'Operator Console',
-      owner: 'Narada CLI workspace-launch',
-      route: '/console/launch',
-      availability: 'available',
-      detail: 'Open the router for CLI-owned launcher sessions and their browser surfaces.',
-    },
-    {
-      id: 'site-operations',
-      name: 'Site Operations',
-      scope: 'Local Site',
-      owner: 'Task and Agent Operations',
-      availability: 'planned',
-      detail: 'Select a Site before entering its task, assignment, review, and agent projection.',
-      nextAction: { href: '/console/registry', label: 'Select a Site in Site Registry' },
-    },
-    {
-      id: 'agent-sessions',
-      name: 'Agent Sessions',
-      scope: 'NARS session',
-      owner: 'Agent Web UI',
-      availability: 'planned',
-      detail: 'Available after the Operator Router registers a live session route.',
-    },
-    {
-      id: 'artifacts',
-      name: 'Artifacts',
-      scope: 'Session-owned artifact',
-      owner: 'Artifact projection',
-      availability: 'planned',
-      detail: 'Available after session and artifact projections are registered.',
-    },
-  ];
+  const surfaces = projectOperatorSurfaceCatalog({ availability: options.surfaceAvailability });
   const availableSurfaces = surfaces.filter((surface) => surface.availability === 'available');
   const unavailableSurfaces = surfaces.filter((surface) => surface.availability === 'unavailable');
   const plannedSurfaces = surfaces.filter((surface) => surface.availability === 'planned');

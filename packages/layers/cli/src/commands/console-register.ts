@@ -4,7 +4,7 @@ import {
   consoleAttentionCommand,
   consoleControlCommand,
 } from './console.js';
-import { createConsoleServer } from './console-server.js';
+import { DEFAULT_OPERATOR_CONSOLE_PORT, ensureConsoleServer } from './console-server.js';
 import { silentCommandContext, wrapCommand } from '../lib/command-wrapper.js';
 import {
   emitFormatterBackedCommandResult,
@@ -74,18 +74,19 @@ export function registerConsoleCommands(program: Command): void {
     .command('serve')
     .description('Start the local Operator Workspace host for browser UI')
     .option('--host <host>', 'Host to bind to', '127.0.0.1')
-    .option('--port <port>', 'Port to bind to (0 for ephemeral)', '0')
+    .option('--port <port>', `Stable Operator Router port (0 for diagnostic ephemeral mode)`, String(DEFAULT_OPERATOR_CONSOLE_PORT))
     .action(async (opts: Record<string, unknown>) => {
       // Long-lived process surface: keep direct lifecycle output and SIGINT handling.
       const host = (opts.host as string) ?? '127.0.0.1';
       const port = opts.port ? parseInt(String(opts.port), 10) : 0;
-      const server = await createConsoleServer({ host, port, ingressMode: 'diagnostic' });
-      const url = await server.start();
+      const ensured = await ensureConsoleServer({ host, port, ingressMode: port === 0 ? 'diagnostic' : 'router' });
+      const { server, url } = ensured;
       emitLongLivedCommandStartup([
         `Operator Workspace: ${url}/`,
         `Operator Console Site Registry: ${url}/console/registry`,
         `Operator Console Agent Launcher: ${url}/console/launch`,
         `Operator Console API base: ${url}/console`,
+        `Operator Console ownership: ${ensured.ownership}`,
         'Press Ctrl+C to stop',
       ]);
       process.on('SIGINT', async () => {

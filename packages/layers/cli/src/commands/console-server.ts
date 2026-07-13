@@ -15,6 +15,17 @@ import { createSiteRegistryReadModel, type SiteRegistryReadModel } from './site-
 import { createRegistryMutationGateway, type RegistryMutationGateway } from './site-registry-management-gateway.js';
 import { renderOperatorWorkspacePage } from './operator-workspace-page.js';
 import type { WorkspaceLaunchUiSessionRecord } from './workspace-launch-session-store.js';
+import { createAgentSessionReadModel, type AgentSessionReadModel } from './agent-session-read-model.js';
+import {
+  projectOperatorSurfaceCatalog,
+  type OperatorSurfaceAvailabilityOverrides,
+} from '@narada2/operator-console-contract';
+
+export const DEFAULT_OPERATOR_CONSOLE_PORT = 61729;
+export const OPERATOR_CONSOLE_IDENTITY = 'narada.operator-console';
+const OPERATOR_CONSOLE_HEALTH_SCHEMA = 'narada.operator_console.health.v1';
+const OPERATOR_CONSOLE_ROUTES_SCHEMA = 'narada.operator_console.routes.v1';
+const OPERATOR_CONSOLE_PROBE_TIMEOUT_MS = 800;
 
 export interface ConsoleServerConfig {
   port: number;
@@ -23,6 +34,7 @@ export interface ConsoleServerConfig {
   registryReadModel?: SiteRegistryReadModel;
   registryMutationGateway?: RegistryMutationGateway;
   workspaceLaunchSessions?: () => Promise<WorkspaceLaunchUiSessionRecord[]>;
+  agentSessions?: AgentSessionReadModel;
 }
 
 export interface ConsoleServer {
@@ -30,6 +42,62 @@ export interface ConsoleServer {
   stop(): Promise<void>;
   isRunning(): boolean;
   getUrl(): string | null;
+  getOwnership(): 'started' | 'attached' | 'diagnostic';
+}
+
+export interface EnsureConsoleServerResult {
+  server: ConsoleServer;
+  url: string;
+  ownership: 'started' | 'attached' | 'diagnostic';
+}
+
+interface ConsoleProbeResult {
+  status: 'absent' | 'matching' | 'unhealthy' | 'foreign';
+  url: string;
+  detail?: string;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function errorCode(error: unknown): string | undefined {
+  return isRecord(error) && typeof error.code === 'string' ? error.code : undefined;
+}
+
+function probeHost(host: string): string {
+  if (host === '0.0.0.0') return '127.0.0.1';
+  if (host === '::') return '[::1]';
+  return host.includes(':') && !host.startsWith('[') ? `[${host}]` : host;
+}
+
+async function probeConsoleServer(host: string, port: number): Promise<ConsoleProbeResult> {
+  const url = `http://${probeHost(host)}:${port}`;
+  try {
+    const response = await fetch(`${url}/health`, {
+      signal: AbortSignal.timeout(OPERATOR_CONSOLE_PROBE_TIMEOUT_MS),
+    });
+    let payload: unknown = null;
+    try {
+      payload = await response.json();
+    } catch {
+      payload = null;
+    }
+    const matching = isRecord(payload) && payload.identity === OPERATOR_CONSOLE_IDENTITY;
+    if (!matching) {
+      return { status: 'foreign', url, detail: `unexpected_health_identity:${response.status}` };
+    }
+    if (!response.ok || !isRecord(payload) || payload.status !== 'healthy') {
+      return { status: 'unhealthy', url, detail: `operator_console_not_healthy:${response.status}` };
+    }
+    return { status: 'matching', url };
+  } catch (error) {
+    const code = errorCode(error);
+    if (code === 'ECONNREFUSED' || code === 'ECONNRESET' || error instanceof TypeError) {
+      return { status: 'absent', url };
+    }
+    return { status: 'absent', url, detail: error instanceof Error ? error.message : String(error) };
+  }
 }
 
 export async function createConsoleServer(config: ConsoleServerConfig): Promise<ConsoleServer> {
@@ -39,18 +107,25 @@ export async function createConsoleServer(config: ConsoleServerConfig): Promise<
 
   const observationFactory = createObservationFactory();
   const controlClientFactory = createControlClientFactory(registry);
+  const registryReadModel = config.registryReadModel ?? createSiteRegistryReadModel();
 
   const routeContext = {
     registry,
     observationFactory,
     controlClientFactory,
-    registryReadModel: config.registryReadModel ?? createSiteRegistryReadModel(),
+    registryReadModel,
     registryMutationGateway: config.registryMutationGateway ?? createRegistryMutationGateway(),
     workspaceLaunchSessions: config.workspaceLaunchSessions,
+    agentSessions: config.agentSessions ?? createAgentSessionReadModel(registryReadModel),
   };
 
   const routes = createConsoleServerRoutes(routeContext);
   const siteRegistryAvailable = routes.some((route) => route.method === 'GET' && route.pattern.test('/console/registry'));
+  const surfaceAvailability: OperatorSurfaceAvailabilityOverrides = {
+    'site-registry': siteRegistryAvailable ? 'available' : 'unavailable',
+    launcher: 'available',
+    'agent-sessions': 'available',
+  };
 
   let server: Server | null = null;
   let isRunning = false;
@@ -72,10 +147,42 @@ export async function createConsoleServer(config: ConsoleServerConfig): Promise<
       const url = new URL(req.url ?? '/', `http://${req.headers.host}`);
       const pathname = url.pathname;
 
+      if (pathname === '/health' && req.method === 'GET') {
+        const surfaceCatalog = projectOperatorSurfaceCatalog({ availability: surfaceAvailability });
+        const degradedSurfaceCount = surfaceCatalog.filter((surface) => surface.availability !== 'available').length;
+        jsonResponse(res, 200, {
+          schema: OPERATOR_CONSOLE_HEALTH_SCHEMA,
+          identity: OPERATOR_CONSOLE_IDENTITY,
+          status: 'healthy',
+          ingress_mode: config.ingressMode ?? 'diagnostic',
+          listener_host: host,
+          listener_port: port,
+          route_count: routes.length + 2,
+          surface_count: surfaceCatalog.length,
+          degraded_surface_count: degradedSurfaceCount,
+        });
+        return;
+      }
+
+      if (pathname === '/routes' && req.method === 'GET') {
+        const surfaceCatalog = projectOperatorSurfaceCatalog({ availability: surfaceAvailability });
+        jsonResponse(res, 200, {
+          schema: OPERATOR_CONSOLE_ROUTES_SCHEMA,
+          identity: OPERATOR_CONSOLE_IDENTITY,
+          routes: surfaceCatalog.flatMap((surface) => surface.routes.map((route) => ({
+            surface_id: surface.id,
+            path: route.path,
+            kind: route.kind,
+            availability: surface.availability,
+          }))),
+        });
+        return;
+      }
+
       if (pathname === '/') {
         htmlResponse(res, 200, renderOperatorWorkspacePage({
           ingressMode: config.ingressMode ?? 'diagnostic',
-          siteRegistryAvailable,
+          surfaceAvailability,
         }));
         return;
       }
@@ -169,5 +276,57 @@ export async function createConsoleServer(config: ConsoleServerConfig): Promise<
     getUrl(): string | null {
       return serverUrl;
     },
+
+    getOwnership(): 'started' | 'attached' | 'diagnostic' {
+      return port === 0 ? 'diagnostic' : 'started';
+    },
   };
+}
+
+export async function ensureConsoleServer(config: ConsoleServerConfig): Promise<EnsureConsoleServerResult> {
+  const host = config.host ?? '127.0.0.1';
+  if (config.port === 0) {
+    const server = await createConsoleServer(config);
+    const url = await server.start();
+    return { server, url, ownership: 'diagnostic' };
+  }
+
+  const existing = await probeConsoleServer(host, config.port);
+  if (existing.status === 'matching') {
+    const server: ConsoleServer = {
+      async start(): Promise<string> {
+        return existing.url;
+      },
+      async stop(): Promise<void> {
+        // An attached handle must not stop the process it did not create.
+      },
+      isRunning(): boolean {
+        return true;
+      },
+      getUrl(): string {
+        return existing.url;
+      },
+      getOwnership(): 'attached' {
+        return 'attached';
+      },
+    };
+    return { server, url: existing.url, ownership: 'attached' };
+  }
+  if (existing.status === 'unhealthy' || existing.status === 'foreign') {
+    throw new Error(`operator_console_port_occupied:${config.port}:${existing.detail ?? existing.status}`);
+  }
+
+  const server = await createConsoleServer({ ...config, ingressMode: config.ingressMode ?? 'router' });
+  try {
+    const url = await server.start();
+    return { server, url, ownership: 'started' };
+  } catch (error) {
+    await server.stop();
+    if (errorCode(error) !== 'EADDRINUSE') throw error;
+    const raced = await probeConsoleServer(host, config.port);
+    if (raced.status === 'matching') {
+      return ensureConsoleServer({ ...config, ingressMode: config.ingressMode ?? 'router' });
+    }
+    throw new Error(`operator_console_port_occupied:${config.port}:${raced.detail ?? raced.status}`);
+  }
 }

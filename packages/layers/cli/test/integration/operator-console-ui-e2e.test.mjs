@@ -23,6 +23,22 @@ const site = {
   retire_reason: null,
 };
 
+const activeAgentSession = {
+  session_id: 'session-agent-active',
+  site_id: 'site-a',
+  agent_id: 'site-a.resident',
+  runtime_kind: 'narada-agent-runtime-server',
+  launch_operator_surface_kind: 'agent-web-ui',
+  started_at: '2026-07-12T00:00:00.000Z',
+  last_seen_at: '2026-07-12T00:01:00.000Z',
+  terminal_state: null,
+  display_state: 'active',
+  display_state_reason: 'health_probe_succeeded',
+  heartbeat_fresh: true,
+  heartbeat_age_ms: 1000,
+  health_status: 'healthy',
+};
+
 const retiredSite = {
   ...site,
   site_id: 'retired-site',
@@ -124,19 +140,30 @@ function mutationResponse(input, applied) {
   };
 }
 
-async function startFixtureServer({ launcherSessions = [] } = {}) {
+async function startFixtureServer({ launcherSessions = [], agentSessions = [] } = {}) {
   const requests = [];
   const launcherRequests = [];
   const server = createServer(async (req, res) => {
     try {
       const pathname = new URL(req.url || '/', 'http://127.0.0.1').pathname;
-      if (req.method === 'GET' && ['/console/registry', '/console/registry/add', '/console/registry/manage', '/console/launch'].includes(pathname)) {
+      if (req.method === 'GET' && ['/console/registry', '/console/registry/add', '/console/registry/manage', '/console/launch', '/console/sessions'].includes(pathname)) {
         const body = readOperatorConsoleUiDocument();
         res.writeHead(200, {
           'Content-Type': 'text/html; charset=utf-8',
           'Content-Length': Buffer.byteLength(body),
         });
         res.end(body);
+        return;
+      }
+      if (req.method === 'GET' && pathname === '/console/sessions/api/sessions') {
+        sendJson(res, 200, {
+          schema: 'narada.operator_console.agent_sessions.v1',
+          status: 'success',
+          generated_at: '2026-07-12T00:01:00.000Z',
+          count: agentSessions.length,
+          sessions: agentSessions,
+          refusals: [],
+        });
         return;
       }
       if (req.method === 'GET' && pathname === '/console/launch/api/sessions') {
@@ -249,6 +276,28 @@ test('Operator Console Vue registry projection works at desktop and mobile width
     await page.reload();
     await page.locator('.site-tile').waitFor();
     await assertNoHorizontalOverflow(page, 'operator console mobile');
+  } finally {
+    await browser.close();
+    await fixture.close();
+  }
+});
+
+test('Operator Console session inventory renders canonical lifecycle posture without overflow', async () => {
+  const fixture = await startFixtureServer({ agentSessions: [activeAgentSession] });
+  const browser = await chromium.launch();
+  try {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+    await page.goto(fixture.url + '/console/sessions');
+    await page.getByRole('heading', { level: 2, name: 'Agent Sessions' }).waitFor();
+    await page.getByText('session-agent-active').waitFor();
+    assert.equal(await page.locator('tbody tr').count(), 1);
+    assert.ok((await page.locator('tbody').textContent()).includes('active'));
+    await assertNoHorizontalOverflow(page, 'agent sessions desktop');
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.reload();
+    await page.getByText('session-agent-active').waitFor();
+    await assertNoHorizontalOverflow(page, 'agent sessions mobile');
   } finally {
     await browser.close();
     await fixture.close();

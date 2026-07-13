@@ -1,6 +1,10 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { createServer } from 'node:http';
-import { createConsoleServer } from '../../src/commands/console-server.js';
+import {
+  createConsoleServer,
+  ensureConsoleServer,
+  OPERATOR_CONSOLE_IDENTITY,
+} from '../../src/commands/console-server.js';
 
 // The Registry page embeds a built package artifact; this test must read it from the real checkout.
 vi.unmock('node:fs');
@@ -188,6 +192,7 @@ describe('console server', () => {
       const url = await server.start();
       expect(url).toContain('http://127.0.0.1:');
       expect(server.isRunning()).toBe(true);
+      expect(server.getOwnership()).toBe('diagnostic');
       await server.stop();
       expect(server.isRunning()).toBe(false);
     });
@@ -197,6 +202,52 @@ describe('console server', () => {
       await server.start();
       await expect(server.start()).rejects.toThrow('already started');
       await server.stop();
+    });
+
+    it('exposes stable identity health and redacted surface routes', async () => {
+      const server = await createConsoleServer({ port: 0, host: '127.0.0.1', ingressMode: 'router' });
+      const url = await server.start();
+      const health = await httpGet(`${url}/health`);
+      expect(health.status).toBe(200);
+      expect((health.body as { identity: string; status: string }).identity).toBe(OPERATOR_CONSOLE_IDENTITY);
+      expect((health.body as { status: string }).status).toBe('healthy');
+
+      const routes = await httpGet(`${url}/routes`);
+      expect(routes.status).toBe(200);
+      expect((routes.body as { routes: Array<{ path: string }> }).routes).toEqual(expect.arrayContaining([
+        expect.objectContaining({ path: '/console/registry' }),
+        expect.objectContaining({ path: '/console/launch' }),
+      ]));
+      await server.stop();
+    });
+
+    it('attaches to a matching healthy stable server without owning its lifecycle', async () => {
+      const owner = await createConsoleServer({ port: 0, host: '127.0.0.1', ingressMode: 'router' });
+      const ownerUrl = await owner.start();
+      const port = Number(new URL(ownerUrl).port);
+
+      const ensured = await ensureConsoleServer({ port, host: '127.0.0.1', ingressMode: 'router' });
+      expect(ensured.ownership).toBe('attached');
+      expect(ensured.url).toBe(ownerUrl);
+      await ensured.server.stop();
+      expect(owner.isRunning()).toBe(true);
+      await owner.stop();
+    });
+
+    it('refuses a stable port owned by a foreign server', async () => {
+      const foreign = createServer((_req, res) => {
+        res.writeHead(200, { 'Content-Type': 'text/plain' });
+        res.end('foreign');
+      });
+      await new Promise<void>((resolve, reject) => {
+        foreign.once('error', reject);
+        foreign.listen(0, '127.0.0.1', () => resolve());
+      });
+      const address = foreign.address();
+      const port = typeof address === 'object' && address !== null ? address.port : 0;
+      await expect(ensureConsoleServer({ port, host: '127.0.0.1', ingressMode: 'router' }))
+        .rejects.toThrow(`operator_console_port_occupied:${port}`);
+      await new Promise<void>((resolve, reject) => foreign.close((error) => error ? reject(error) : resolve()));
     });
   });
 
@@ -715,6 +766,16 @@ describe('console server', () => {
       expect(launcherHtml).toContain('<div id="app"></div>');
       expect(launcherHtml).toContain('/console/registry/assets/');
 
+      const sessionsPage = await fetch(`${url}/console/sessions`);
+      const sessionsHtml = await sessionsPage.text();
+      expect(sessionsPage.status, sessionsHtml).toBe(200);
+      expect(sessionsHtml).toContain('<div id="app"></div>');
+
+      const sessionList = await httpGet(`${url}/console/sessions/api/sessions`);
+      expect(sessionList.status).toBe(200);
+      expect((sessionList.body as { schema: string; status: string }).schema).toBe('narada.operator_console.agent_sessions.v1');
+      expect((sessionList.body as { status: string }).status).toBe('success');
+
       const launcherSessions = await httpGet(`${url}/console/launch/api/sessions`);
       expect(launcherSessions.status).toBe(200);
       expect((launcherSessions.body as { schema: string; sessions: unknown[] }).schema).toBe('narada.workspace_launch.ui_session_list.v1');
@@ -726,7 +787,7 @@ describe('console server', () => {
       const list = await httpGet(`${url}/console/registry/api/sites`);
       expect(list.status).toBe(200);
       expect((list.body as { sites: Array<{ site_id: string }> }).sites[0]?.site_id).toBe('site-a');
-      expect(registryReadModel.list).toHaveBeenCalledOnce();
+      expect(registryReadModel.list).toHaveBeenCalledTimes(2);
 
       const detail = await httpGet(`${url}/console/registry/api/sites/site-alias`);
       expect(detail.status).toBe(200);

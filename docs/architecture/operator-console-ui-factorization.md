@@ -28,10 +28,26 @@ The CLI serves the same built Vue document at `/console/registry`, `/console/reg
 
 ## Shared Console Boundary
 
-`console/routes.ts` owns the explicit Operator Console route model and site-registry navigation. The route-neutral `OperatorSurfaceShell` lives in `@narada2/ui-vue`; `OperatorConsoleShell.vue` is the console-specific type-safe wrapper. Shared framing leaves domain state to page composables. Unknown paths render a bounded not-found projection instead of silently falling back to the registry.
+`@narada2/operator-console-contract` owns typed `OperatorSurfaceDescriptor`
+records and the availability projection for Registry, Launcher, and future
+concepts. `console/routes.ts` maps those records into the browser route model
+and navigation items. The CLI workspace directory uses the same projection,
+so a surface cannot be available in one ingress view and absent from the other
+because of a duplicated list. The route-neutral `OperatorSurfaceShell` lives
+in `@narada2/ui-vue`; `OperatorConsoleShell.vue` is the console-specific
+type-safe wrapper. Shared framing leaves domain state to page composables.
+Unknown paths render a bounded not-found projection instead of silently
+falling back to the registry.
 
 The launcher is a separate `@narada2/workspace-launch-ui` presentation package. Its `domain.ts` adapter, typed `transport.ts`, and `useWorkspaceLaunchWorkflow` own client state while `@narada2/cli` remains the authority for launch policy, runtime handoff, and endpoint behavior. The transport accepts an explicit base path so the same page can run at the standalone root or a mounted route without endpoint drift.
 
 The console route `/console/launch` is intentionally a router for persistent CLI-owned sessions. The CLI session store exposes the read-only session-list projection, and the UI reaches it through a typed transport and composable before linking to a stable console session route. The console route proxies only active loopback launcher sessions and known launcher paths, rewriting the bootstrap and asset prefix while leaving launch authority in the CLI. This preserves the boundary `contract -> transport -> adapter -> composable -> page -> projection` without introducing a generic page registry.
 
 The concept-to-page map is maintained in `docs/architecture/operator-console-concept-surfaces.md`.
+
+The console server is also the first managed router projection. Normal
+`narada console serve` uses the configured default loopback port `61729`,
+probes `/health` for matching identity, attaches to a healthy existing
+instance, and refuses foreign ownership. `--port 0` remains an explicitly
+diagnostic ephemeral mode. Full hidden-process singleton management and
+dynamic route leases remain later router slices.
