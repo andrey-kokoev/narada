@@ -1,183 +1,48 @@
-import { accessSync, closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { accessSync, existsSync, mkdirSync } from 'node:fs';
 import { basename, dirname, join, parse, resolve } from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { agentIdentityRefMatchesRequest } from '@narada2/agent-identity';
 import { NARADA_AGENT_RUNTIME_SERVER_KIND } from '@narada2/carrier-runtime-contract/carrier-runtime-selection';
-import { runGovernedCommandSync, spawnHiddenPostureProcess, startOperatorTerminal } from '@narada2/process-launch-posture';
+import { runGovernedCommandSync } from '@narada2/process-launch-posture';
 import { buildLaunchProcessOwnership, launchSessionIdFromToken, type LaunchProcessOwnership } from '@narada2/launch-process-ownership';
+import type {
+  AgentStartCommandResult,
+  AgentStartOptions,
+  CommandExecutionResult,
+  LaunchResultRecord,
+  SiteCommandResult,
+} from './launcher-contracts.js';
+import {
+  runPowerShell,
+  runProcess,
+  runProcessDetachedUntilJson,
+  runProcessInherited,
+  isAccessDeniedMessage,
+  truncateText,
+  windowsElevationState,
+} from './launcher-runtime-process.js';
+import { readJsonFile, stringValue, tryParseJson } from './launcher-runtime-results.js';
+import {
+  classifyAgentStartLaunchBindingStatus,
+  getOperatorSurfaceRuntimeControlPath,
+  getOperatorSurfaceRuntimeStatus,
+  writeOperatorProjectionLaunchBinding,
+} from './launcher-runtime-projection.js';
+import {
+  checkWorkspaceDependencyPreflight,
+  formatWorkspaceDependencyPreflightFailure,
+} from './workspace-dependency-preflight.js';
+export {
+  classifyAgentStartLaunchBindingStatus,
+  getOperatorSurfaceRuntimeControlPath,
+  getOperatorSurfaceRuntimeStatus,
+  writeOperatorProjectionLaunchBinding,
+} from './launcher-runtime-projection.js';
 
 const requireFromLauncherRuntime = createRequire(import.meta.url);
 
-export interface LaunchResultSummary {
-  path: string;
-  mtime_ms: number;
-  schema?: string;
-  status?: string;
-  agent_start_event?: string;
-  identity?: string;
-  agent_identity_ref?: unknown;
-  operator_surface_kind?: string;
-  runtime_host_kind?: string;
-  carrier_kind?: string;
-  runtime?: string;
-  runtime_substrate_kind?: string;
-  site_root?: string;
-  target_site_root?: string;
-  session_site_root?: string;
-  runtime_session_id?: string;
-  nars_session_id?: string;
-  carrier_session_id?: string;
-  control_path?: string;
-  control_path_exists?: boolean;
-  session_path?: string;
-  session_path_exists?: boolean;
-  launch_source?: string;
-  parent_pid?: number;
-  parent_process_alive?: boolean | null;
-  started_at?: string;
-  expires_at?: string;
-}
-
-export function writeOperatorProjectionLaunchBinding(path: string | undefined, args: {
-  status: OperatorProjectionLaunchBinding['status'];
-  siteRoot: string;
-  workspaceRoot: string;
-  agent: string;
-  operatorSurfaceKind?: string;
-  runtimeHostKind: string;
-  authority?: string | null;
-  intelligenceProvider?: string | null;
-  agentStartResultFile?: string;
-  narsSessionId?: string | null;
-  runtimeSessionId?: string | null;
-  carrierSessionId?: string | null;
-  launchSessionId?: string | null;
-  processOwnership?: LaunchProcessOwnership | null;
-  reason?: string | null;
-}): void {
-  if (!path) return;
-  const now = new Date().toISOString();
-  let createdAt = now;
-  try {
-    const previous = tryReadJsonFile(path) as { created_at?: unknown } | null;
-    if (typeof previous?.created_at === 'string') createdAt = previous.created_at;
-  } catch {
-    // Keep binding writes best-effort; launch itself remains authoritative.
-  }
-  const binding: OperatorProjectionLaunchBinding = {
-    schema: 'narada.operator_projection_launch_binding.v1',
-    status: args.status,
-    created_at: createdAt,
-    updated_at: now,
-    site_root: args.siteRoot,
-    workspace_root: args.workspaceRoot,
-    agent: args.agent,
-    operator_surface_kind: args.operatorSurfaceKind,
-    runtime_host_kind: args.runtimeHostKind,
-    authority: args.authority ?? null,
-    intelligence_provider: args.intelligenceProvider ?? null,
-    agent_start_result_file: args.agentStartResultFile,
-    nars_session_id: args.narsSessionId ?? null,
-    runtime_session_id: args.runtimeSessionId ?? null,
-    carrier_session_id: args.carrierSessionId ?? null,
-    launch_session_id: args.launchSessionId ?? null,
-    process_ownership: args.processOwnership ?? null,
-    reason: args.reason ?? null,
-  };
-  mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, `${JSON.stringify(binding, null, 2)}\n`, 'utf8');
-}
-
-function tryReadJsonFile(path: string): unknown {
-  try {
-    if (!existsSync(path)) return null;
-    return JSON.parse(readFileSync(path, 'utf8'));
-  } catch {
-    return null;
-  }
-}
-
 function tsxImportPath(): string {
   return pathToFileURL(requireFromLauncherRuntime.resolve('tsx')).href;
-}
-
-export interface OperatorSurfaceRuntimeStatusOptions {
-  siteRoot: string;
-  agent?: string;
-  carrier?: string;
-  runtime?: string;
-  now?: Date;
-}
-
-export interface AgentStartOptions {
-  siteRoot: string;
-  targetSiteId?: string;
-  workspaceRoot?: string;
-  agent: string;
-  carrier?: string;
-  runtime: string;
-  authority?: string;
-  intelligenceProvider?: string;
-  mcpScope?: string;
-  dryRun?: boolean;
-  exec?: boolean;
-  wait?: boolean;
-  enableNativeShell?: boolean;
-  launchSource?: string;
-  launchBindingPath?: string;
-  launchSessionId?: string;
-}
-
-export interface OperatorProjectionLaunchBinding {
-  schema: 'narada.operator_projection_launch_binding.v1';
-  status: 'waiting_for_agent_start' | 'ready' | 'failed';
-  created_at: string;
-  updated_at: string;
-  site_root: string;
-  workspace_root: string;
-  agent: string;
-  operator_surface_kind?: string;
-  runtime_host_kind: string;
-  authority?: string | null;
-  intelligence_provider?: string | null;
-  agent_start_result_file?: string;
-  nars_session_id?: string | null;
-  runtime_session_id?: string | null;
-  carrier_session_id?: string | null;
-  launch_session_id?: string | null;
-  process_ownership?: LaunchProcessOwnership | null;
-  reason?: string | null;
-}
-
-export interface AgentStartCommandResult {
-  schema: 'narada.agent_start.command_result.v0';
-  status: 'success' | 'failed' | 'not_available';
-  mutation_performed: boolean;
-  site_root: string;
-  agent: string;
-  carrier?: string;
-  runtime: string;
-  command: string[];
-  execution?: CommandExecutionResult;
-  result_handoff?: 'json_output_file';
-  result_file?: string;
-  parsed_result?: unknown;
-  error?: string;
-}
-
-export interface OperatorSurfaceRuntimeStatusResult {
-  schema: 'narada.carrier.status.v0';
-  status: 'ok' | 'not_found';
-  mutation_performed: false;
-  site_root: string;
-  agent?: string;
-  carrier?: string;
-  runtime?: string;
-  latest?: LaunchResultSummary;
-  launch_results_dir: string;
-  launch_results_seen: number;
-  candidates_scanned: number;
 }
 
 export interface SchedulerDaemonPlanOptions {
@@ -224,136 +89,9 @@ export interface SchedulerDaemonInstallPlan {
   execution?: CommandExecutionResult;
 }
 
-export interface CommandExecutionResult {
-  status: 'success' | 'failed';
-  exit_code: number;
-  stdout: string;
-  stderr: string;
-  error?: string;
-}
-
-export interface SiteCommandResult {
-  schema: 'narada.site_command_result.v0';
-  status: 'success' | 'failed' | 'not_available';
-  mutation_performed: boolean;
-  site_root: string;
-  command: string[];
-  execution?: CommandExecutionResult;
-  parsed_stdout?: unknown;
-  error?: string;
-}
-
-interface LaunchResultRecord {
-  schema?: unknown;
-  status?: unknown;
-  agent_start_event?: unknown;
-  identity?: unknown;
-  agent_identity_ref?: unknown;
-  operator_surface_kind?: unknown;
-  runtime_host_kind?: unknown;
-  carrier_kind?: unknown;
-  runtime?: unknown;
-  runtime_substrate_kind?: unknown;
-  target_site_root?: unknown;
-  session_site_root?: unknown;
-  launch_source?: unknown;
-  expires_at?: unknown;
-  nars_launch?: {
-    session_id?: unknown;
-    runtime_session_id?: unknown;
-    nars_session_id?: unknown;
-    operator_surface_kind?: unknown;
-    runtime_host_kind?: unknown;
-    control_path?: unknown;
-    session_path?: unknown;
-  };
-  required_environment?: {
-    NARADA_AGENT_ID?: unknown;
-    NARADA_RUNTIME_SESSION_ID?: unknown;
-    NARADA_NARS_SESSION_ID?: unknown;
-    NARADA_CARRIER_SESSION_ID?: unknown;
-    NARADA_SITE_ROOT?: unknown;
-  };
-  carrier_actions?: {
-    carrier_session_registration?: {
-      carrier_session_id?: unknown;
-      record?: {
-        started_at?: unknown;
-        parent_process?: {
-          pid?: unknown;
-        };
-      };
-    };
-  };
-  carrier_session?: {
-    carrier_session_id?: unknown;
-    record?: {
-      started_at?: unknown;
-      parent_process?: {
-        pid?: unknown;
-      };
-    };
-  };
-  runtime_args?: unknown;
-  started_at?: unknown;
-  created_at?: unknown;
-}
-
-export function classifyAgentStartLaunchBindingStatus(
-  executionStatus: CommandExecutionResult['status'],
-  parsedRecord: LaunchResultRecord | null,
-): Pick<OperatorProjectionLaunchBinding, 'status' | 'reason'> {
-  const parsedStatus = stringValue(parsedRecord?.status)?.toLowerCase();
-  const hasNarsSession = Boolean(
-    stringValue(parsedRecord?.nars_launch?.nars_session_id ?? parsedRecord?.nars_launch?.session_id ?? parsedRecord?.required_environment?.NARADA_NARS_SESSION_ID),
-  );
-  if (hasNarsSession && (parsedStatus === 'materialized' || parsedStatus === 'success')) {
-    return { status: 'ready', reason: null };
-  }
-  if (executionStatus === 'success') return { status: 'ready', reason: null };
-  return { status: 'failed', reason: 'agent_start_failed' };
-}
-
 export function shouldDetachAgentStartProcess(options: Pick<AgentStartOptions, 'exec' | 'wait' | 'carrier' | 'runtime'>): boolean {
   if (options.exec !== true || options.wait === true) return false;
   return options.runtime === NARADA_AGENT_RUNTIME_SERVER_KIND;
-}
-
-export function getOperatorSurfaceRuntimeStatus(
-  options: OperatorSurfaceRuntimeStatusOptions,
-): OperatorSurfaceRuntimeStatusResult {
-  const siteRoot = resolve(options.siteRoot);
-  const launchResultsDir = join(siteRoot, '.ai', 'runtime', 'agent-start-results');
-  const allSummaries = readLaunchResults(launchResultsDir);
-  const summaries = allSummaries
-    .filter((summary) => !options.agent || summary.identity === options.agent || agentIdentityRefMatchesRequest(summary.agent_identity_ref, options.agent))
-    .filter((summary) => !options.carrier || summary.carrier_kind === options.carrier)
-    .filter((summary) => {
-      if (!options.runtime) return true;
-      return summary.runtime === options.runtime || summary.runtime_substrate_kind === options.runtime;
-    })
-    .sort((a, b) => b.mtime_ms - a.mtime_ms);
-  const latest = summaries[0];
-
-  return {
-    schema: 'narada.carrier.status.v0',
-    status: latest ? 'ok' : 'not_found',
-    mutation_performed: false,
-    site_root: siteRoot,
-    agent: options.agent,
-    carrier: options.carrier,
-    runtime: options.runtime,
-    latest,
-    launch_results_dir: launchResultsDir,
-    launch_results_seen: allSummaries.length,
-    candidates_scanned: summaries.length,
-  };
-}
-
-export function getOperatorSurfaceRuntimeControlPath(
-  options: OperatorSurfaceRuntimeStatusOptions,
-): OperatorSurfaceRuntimeStatusResult {
-  return getOperatorSurfaceRuntimeStatus(options);
 }
 
 export function runAgentStartCommand(options: AgentStartOptions): AgentStartCommandResult {
@@ -369,21 +107,7 @@ export function runAgentStartCommand(options: AgentStartOptions): AgentStartComm
     ? resolvedAgentStart
     : siteRootAgentStart;
   const resultDir = join(workspaceRoot, '.ai', 'runtime', 'agent-start-command-results', `${Date.now()}-${Math.random().toString(16).slice(2)}`);
-  mkdirSync(resultDir, { recursive: true });
   const resultPath = join(resultDir, 'result.json');
-  writeOperatorProjectionLaunchBinding(options.launchBindingPath, {
-    status: 'waiting_for_agent_start',
-    siteRoot,
-    workspaceRoot,
-    agent: options.agent,
-    operatorSurfaceKind: options.carrier ?? options.runtime,
-    runtimeHostKind: options.runtime,
-    authority: options.authority ?? null,
-    intelligenceProvider: options.intelligenceProvider ?? null,
-    agentStartResultFile: resultPath,
-    launchSessionId,
-    processOwnership,
-  });
   const inheritedInteractiveExec = options.exec === true && options.dryRun !== true;
   const args = [
     '--import',
@@ -412,6 +136,36 @@ export function runAgentStartCommand(options: AgentStartOptions): AgentStartComm
   if (options.exec) args.push('--exec');
   if (options.wait) args.push('--wait');
   if (options.enableNativeShell) args.push('--enable-native-shell');
+
+  const dependencyPreflight = checkWorkspaceDependencyPreflight(workspaceRoot);
+  if (dependencyPreflight.status !== 'ready') {
+    return {
+      schema: 'narada.agent_start.command_result.v0',
+      status: 'not_available',
+      mutation_performed: false,
+      site_root: siteRoot,
+      agent: options.agent,
+      carrier: options.carrier,
+      runtime: options.runtime,
+      command: [process.execPath, ...args],
+      error: formatWorkspaceDependencyPreflightFailure(dependencyPreflight),
+    };
+  }
+
+  mkdirSync(resultDir, { recursive: true });
+  writeOperatorProjectionLaunchBinding(options.launchBindingPath, {
+    status: 'waiting_for_agent_start',
+    siteRoot,
+    workspaceRoot,
+    agent: options.agent,
+    operatorSurfaceKind: options.carrier ?? options.runtime,
+    runtimeHostKind: options.runtime,
+    authority: options.authority ?? null,
+    intelligenceProvider: options.intelligenceProvider ?? null,
+    agentStartResultFile: resultPath,
+    launchSessionId,
+    processOwnership,
+  });
 
   if (!existsSync(agentStart)) {
     return {
@@ -448,7 +202,7 @@ export function runAgentStartCommand(options: AgentStartOptions): AgentStartComm
     : inheritedInteractiveExec
     ? runProcessInherited(process.execPath, args, workspaceRoot, executionEnv)
     : runProcess(process.execPath, args, workspaceRoot, executionEnv);
-  const parsed = tryReadJsonFile(resultPath);
+  const parsed = readJsonFile(resultPath);
   const parsedRecord = parsed as LaunchResultRecord | null;
   const launchBindingStatus = classifyAgentStartLaunchBindingStatus(execution.status, parsedRecord);
   writeOperatorProjectionLaunchBinding(options.launchBindingPath, {
@@ -772,94 +526,6 @@ function isMutatingSiteCommand(args: string[]): boolean {
   return false;
 }
 
-function readLaunchResults(launchResultsDir: string): LaunchResultSummary[] {
-  if (!existsSync(launchResultsDir)) return [];
-  return readdirSync(launchResultsDir, { withFileTypes: true })
-    .filter((entry) => entry.isFile() && entry.name.endsWith('.result.json'))
-    .map((entry) => readLaunchResult(join(launchResultsDir, entry.name)))
-    .filter((summary): summary is LaunchResultSummary => Boolean(summary));
-}
-
-function readLaunchResult(path: string): LaunchResultSummary | null {
-  try {
-    const stats = statSync(path);
-    const record = JSON.parse(readFileSync(path, 'utf8')) as LaunchResultRecord;
-    const carrierSessionRegistration = record.carrier_actions?.carrier_session_registration;
-    const runtimeSessionId = stringValue(
-      record.nars_launch?.runtime_session_id
-        ?? record.nars_launch?.session_id
-        ?? record.required_environment?.NARADA_RUNTIME_SESSION_ID,
-    );
-    const narsSessionId = stringValue(
-      record.nars_launch?.nars_session_id
-        ?? record.nars_launch?.session_id
-        ?? record.required_environment?.NARADA_NARS_SESSION_ID,
-    );
-    const carrierSessionId = stringValue(
-      record.carrier_session?.carrier_session_id
-        ?? carrierSessionRegistration?.carrier_session_id
-        ?? record.required_environment?.NARADA_CARRIER_SESSION_ID,
-    );
-    const controlPath = stringValue(
-      record.nars_launch?.control_path
-        ?? controlPathFromRuntimeArgs(record.runtime_args)
-        ?? (carrierSessionId
-          ? join(
-              siteRootFromLaunchResultPath(path),
-              '.narada',
-              'crew',
-              'nars-sessions',
-              carrierSessionId,
-              'control.jsonl',
-            )
-          : undefined),
-    );
-    const sessionPath = stringValue(
-      record.nars_launch?.session_path,
-    );
-    const parentPid = numberValue(
-      record.carrier_session?.record?.parent_process?.pid
-        ?? carrierSessionRegistration?.record?.parent_process?.pid,
-    );
-    return {
-      path,
-      mtime_ms: stats.mtimeMs,
-      schema: stringValue(record.schema),
-      status: stringValue(record.status),
-      agent_start_event: stringValue(record.agent_start_event),
-      identity: stringValue(record.identity ?? record.required_environment?.NARADA_AGENT_ID),
-      agent_identity_ref: objectValue(record.agent_identity_ref),
-      operator_surface_kind: stringValue(record.operator_surface_kind ?? record.nars_launch?.operator_surface_kind ?? record.carrier_kind),
-      runtime_host_kind: stringValue(record.runtime_host_kind ?? record.nars_launch?.runtime_host_kind ?? record.runtime_substrate_kind ?? record.runtime),
-      carrier_kind: stringValue(record.carrier_kind),
-      runtime: stringValue(record.runtime),
-      runtime_substrate_kind: stringValue(record.runtime_substrate_kind),
-      site_root: stringValue(record.required_environment?.NARADA_SITE_ROOT),
-      target_site_root: stringValue(record.target_site_root),
-      session_site_root: stringValue(record.session_site_root),
-      runtime_session_id: runtimeSessionId,
-      nars_session_id: narsSessionId,
-      carrier_session_id: carrierSessionId,
-      control_path: controlPath,
-      control_path_exists: controlPath ? existsSync(controlPath) : false,
-      session_path: sessionPath,
-      session_path_exists: sessionPath ? existsSync(sessionPath) : false,
-      launch_source: stringValue(record.launch_source),
-      parent_pid: parentPid,
-      parent_process_alive: parentPid ? isProcessAlive(parentPid) : null,
-      started_at: stringValue(
-        record.started_at
-          ?? record.carrier_session?.record?.started_at
-          ?? carrierSessionRegistration?.record?.started_at
-          ?? record.created_at,
-      ),
-      expires_at: stringValue(record.expires_at),
-    };
-  } catch {
-    return null;
-  }
-}
-
 function defaultSiteDaemonTaskName(siteRoot: string): string {
   const leaf = basename(siteRoot).replace(/[^A-Za-z0-9_.-]+/g, '-');
   return leaf === 'narada.sonar' ? 'Narada-Sonar-Daemon' : `Narada-${leaf}-Daemon`;
@@ -872,37 +538,6 @@ function pathCheck(name: string, path: string): { name: string; ok: boolean; pat
   } catch {
     return { name, ok: false, path, detail: 'missing_or_unreadable' };
   }
-}
-
-function isProcessAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (error) {
-    return (error as { code?: string }).code === 'EPERM';
-  }
-}
-
-function stringValue(value: unknown): string | undefined {
-  return typeof value === 'string' && value.length > 0 ? value : undefined;
-}
-
-function objectValue(value: unknown): Record<string, unknown> | undefined {
-  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
-}
-
-function numberValue(value: unknown): number | undefined {
-  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
-}
-
-function controlPathFromRuntimeArgs(args: unknown): string | undefined {
-  if (!Array.isArray(args)) return undefined;
-  const index = args.findIndex((arg) => String(arg) === '--control-jsonl');
-  return index >= 0 ? stringValue(args[index + 1]) : undefined;
-}
-
-function siteRootFromLaunchResultPath(path: string): string {
-  return dirname(dirname(dirname(dirname(path))));
 }
 
 function naradaProperRoot(): string {
@@ -947,185 +582,3 @@ function findNaradaProperRoot(start: string): string | null {
   return null;
 }
 
-function windowsElevationState(): { elevated: boolean; execution: CommandExecutionResult } {
-  const execution = runPowerShell([
-    '$identity = [Security.Principal.WindowsIdentity]::GetCurrent()',
-    '$principal = [Security.Principal.WindowsPrincipal]::new($identity)',
-    '$isAdmin = $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)',
-    'if ($isAdmin) { "true" } else { "false" }',
-  ]);
-  return {
-    elevated: execution.status === 'success' && execution.stdout.trim() === 'true',
-    execution,
-  };
-}
-
-function isAccessDeniedMessage(message: string): boolean {
-  return /\b(access denied|unauthorized|permission denied|requires elevation)\b/i.test(message);
-}
-
-function runPowerShell(commands: string[], env: Record<string, string> = {}): CommandExecutionResult {
-  return runProcess('powershell.exe', [
-    '-NoProfile',
-    '-NonInteractive',
-    '-ExecutionPolicy',
-    'Bypass',
-    '-Command',
-    commands.join('; '),
-  ], process.cwd(), env);
-}
-
-function runProcess(
-  command: string,
-  args: string[],
-  cwd: string,
-  env: Record<string, string> = {},
-): CommandExecutionResult {
-  const result = runGovernedCommandSync(command, args, {
-    cwd,
-    encoding: 'utf8',
-    timeout: 120_000,
-    windowsHide: true,
-    env: {
-      ...process.env,
-      NODE_OPTIONS: appendNodeOption(process.env.NODE_OPTIONS, '--disable-warning=ExperimentalWarning'),
-      OUTPUT_FORMAT: 'json',
-      ...env,
-    },
-  });
-  const exitCode = result.status ?? (result.error ? 1 : 0);
-  return {
-    status: exitCode === 0 ? 'success' : 'failed',
-    exit_code: exitCode,
-    stdout: String(result.stdout ?? '').trim(),
-    stderr: String(result.stderr ?? '').trim(),
-    error: result.error ? result.error.message : undefined,
-  };
-}
-
-function runProcessDetachedUntilJson(
-  command: string,
-  args: string[],
-  cwd: string,
-  resultPath: string,
-  env: Record<string, string> = {},
-  timeoutMs = 30_000,
-): CommandExecutionResult {
-  const logDir = dirname(resultPath);
-  mkdirSync(logDir, { recursive: true });
-  const stdoutPath = join(logDir, 'detached-stdout.log');
-  const stderrPath = join(logDir, 'detached-stderr.log');
-  let stdoutFd: number | null = null;
-  let stderrFd: number | null = null;
-  try {
-    stdoutFd = openSync(stdoutPath, 'a');
-    stderrFd = openSync(stderrPath, 'a');
-    const child = spawnHiddenPostureProcess(command, args, {
-      posture: 'provider_subprocess',
-      cwd,
-      detached: true,
-      stdio: ['ignore', stdoutFd, stderrFd],
-      env: {
-        ...process.env,
-        NODE_OPTIONS: appendNodeOption(process.env.NODE_OPTIONS, '--disable-warning=ExperimentalWarning'),
-        OUTPUT_FORMAT: 'json',
-        ...env,
-      },
-    });
-    child.unref();
-  } catch (error) {
-    if (stdoutFd !== null) closeSync(stdoutFd);
-    if (stderrFd !== null) closeSync(stderrFd);
-    return {
-      status: 'failed',
-      exit_code: 1,
-      stdout: '',
-      stderr: '',
-      error: error instanceof Error ? error.message : String(error),
-    };
-  } finally {
-    if (stdoutFd !== null) closeSync(stdoutFd);
-    if (stderrFd !== null) closeSync(stderrFd);
-  }
-
-  const startedAt = Date.now();
-  while (Date.now() - startedAt < timeoutMs) {
-    const parsed = tryReadJsonFile(resultPath);
-    if (parsed && typeof parsed === 'object') {
-      return {
-        status: 'success',
-        exit_code: 0,
-        stdout: `detached_stdout=${stdoutPath}`,
-        stderr: `detached_stderr=${stderrPath}`,
-      };
-    }
-    sleepSync(100);
-  }
-  const stderrTail = readTextTail(stderrPath, 2000);
-  return {
-    status: 'failed',
-    exit_code: 1,
-    stdout: `detached_stdout=${stdoutPath}`,
-    stderr: `timed out waiting for agent-start JSON handoff: ${resultPath}\ndetached_stderr=${stderrPath}\n${stderrTail}`.trim(),
-    error: 'agent_start_handoff_timeout',
-  };
-}
-
-function runProcessInherited(
-  command: string,
-  args: string[],
-  cwd: string,
-  env: Record<string, string> = {},
-): CommandExecutionResult {
-  const launch = startOperatorTerminal(command, args, {
-    cwd,
-    stdio: 'inherit',
-    timeout: 0,
-    env: {
-      ...process.env,
-      NODE_OPTIONS: appendNodeOption(process.env.NODE_OPTIONS, '--disable-warning=ExperimentalWarning'),
-      OUTPUT_FORMAT: 'json',
-      ...env,
-    },
-  });
-  const result = launch.result;
-  const exitCode = result.status ?? (result.error ? 1 : 0);
-  return {
-    status: exitCode === 0 ? 'success' : 'failed',
-    exit_code: exitCode,
-    stdout: '',
-    stderr: '',
-    error: result.error ? result.error.message : undefined,
-  };
-}
-
-function sleepSync(ms: number): void {
-  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
-}
-
-function readTextTail(path: string, maxChars: number): string {
-  try {
-    if (!existsSync(path)) return '';
-    const text = readFileSync(path, 'utf8');
-    return text.length > maxChars ? text.slice(text.length - maxChars) : text;
-  } catch {
-    return '';
-  }
-}
-
-function tryParseJson(value: string): unknown {
-  try {
-    return value ? JSON.parse(value) : null;
-  } catch {
-    return null;
-  }
-}
-
-function appendNodeOption(existing: string | undefined, option: string): string {
-  const current = String(existing ?? '').trim();
-  return current.includes(option) ? current : [current, option].filter(Boolean).join(' ');
-}
-
-function truncateText(value: string, max: number): string {
-  return value.length <= max ? value : `${value.slice(0, max)}... [truncated ${value.length - max} chars]`;
-}

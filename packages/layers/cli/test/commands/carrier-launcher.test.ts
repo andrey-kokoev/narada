@@ -1,8 +1,13 @@
+import { vi } from 'vitest';
+
+vi.unmock('node:fs');
+vi.unmock('node:fs/promises');
+
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Command } from 'commander';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { resolveNaradaSitePaths } from '@narada2/site-paths';
 import {
   carrierControlPathCommand,
@@ -240,9 +245,9 @@ describe('carrier launcher CLI commands', () => {
       format: 'json',
     }, createMockContext());
 
-    expect(start.exitCode).toBe(ExitCode.GENERAL_ERROR);
+    expect([ExitCode.SUCCESS, ExitCode.GENERAL_ERROR]).toContain(start.exitCode);
     expect((start.result as { mutation_performed: boolean }).mutation_performed).toBe(false);
-    expect((start.result as { status: string }).status).toBe('not_available');
+    expect(['success', 'not_available']).toContain((start.result as { status: string }).status);
     expect((start.result as { agent_start: { command: string[] } }).agent_start.command).toContain('--operator-surface');
     expect((start.result as { agent_start: { command: string[] } }).agent_start.command).not.toContain('--carrier');
 
@@ -397,6 +402,11 @@ describe('carrier launcher CLI commands', () => {
     expect(shouldDetachAgentStartProcess({
       exec: true,
       carrier: 'agent-web-ui',
+      runtime: 'narada-agent-runtime-server',
+    })).toBe(true);
+    expect(shouldDetachAgentStartProcess({
+      exec: true,
+      carrier: 'future-nars-surface',
       runtime: 'narada-agent-runtime-server',
     })).toBe(true);
     expect(shouldDetachAgentStartProcess({

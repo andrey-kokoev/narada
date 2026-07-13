@@ -4,6 +4,13 @@ import { emitFiniteCommandResult, emitLongLivedCommandStartup, exitLongLivedComm
 import { ExitCode } from '../lib/exit-codes.js';
 import { DEFAULT_OPERATOR_ROUTER_PORT } from '@narada2/operator-router';
 import { agentWebUiAttachCommand } from './agent-web-ui.js';
+import type { AgentWebUiAttachOptions } from './agent-web-ui-types.js';
+
+type AgentWebUiCliOptions = Omit<AgentWebUiAttachOptions, 'format' | 'port' | 'launchBindingPath'> & {
+  launchBinding?: string;
+  port?: string;
+  format?: string;
+};
 
 export function registerAgentWebUiCommands(program: Command): void {
   const agentWebUi = program
@@ -30,23 +37,23 @@ export function registerAgentWebUiCommands(program: Command): void {
     .option('--onboarding', 'Show the first-time User Site onboarding experience', false)
     .option('--cloudflare-api-base-url <url>', 'Default Cloudflare NARS projection Worker URL for local publish controls')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(async (opts: Record<string, unknown>) => {
+    .action(async (opts: AgentWebUiCliOptions) => {
       const result = await agentWebUiAttachCommand({
-        session: opts.session as string | undefined,
-        agent: opts.agent as string | undefined,
-        launchBindingPath: opts.launchBinding as string | undefined,
-        siteRoot: opts.siteRoot as string | undefined,
-        site: opts.site as string | undefined,
-        host: opts.host as string | undefined,
+        session: opts.session,
+        agent: opts.agent,
+        launchBindingPath: opts.launchBinding,
+        siteRoot: opts.siteRoot,
+        site: opts.site,
+        host: opts.host,
         port: opts.port ? Number(opts.port) : undefined,
-        dryRun: opts.dryRun as boolean | undefined,
-        allowStaleSession: opts.allowStaleSession as boolean | undefined,
-        inspectStaleSession: opts.inspectStaleSession as boolean | undefined,
-        open: opts.open as boolean | undefined,
+        dryRun: opts.dryRun,
+        allowStaleSession: opts.allowStaleSession,
+        inspectStaleSession: opts.inspectStaleSession,
+        open: opts.open,
         healthTimeoutMs: opts.healthTimeoutMs ? Number(opts.healthTimeoutMs) : undefined,
         waitForSessionMs: opts.waitForSessionMs ? Number(opts.waitForSessionMs) : undefined,
-        onboarding: opts.onboarding as boolean | undefined,
-        cloudflareApiBaseUrl: opts.cloudflareApiBaseUrl as string | undefined,
+        onboarding: opts.onboarding,
+        cloudflareApiBaseUrl: opts.cloudflareApiBaseUrl,
         format: resolveCommandFormat(opts.format, 'auto'),
       }, silentCommandContext());
       if (opts.dryRun || result.exitCode !== ExitCode.SUCCESS) {

@@ -3,6 +3,16 @@ import { directCommandAction, silentCommandContext } from '../lib/command-wrappe
 import { emitCommandResult, resolveCommandFormat } from '../lib/cli-output.js';
 import { explainMcpCommand } from './launcher-mcp-authority.js';
 import { workspaceLaunchCommand, workspaceLaunchPlanCommand } from './workspace-launch-application.js';
+import type { ExplainMcpOptions } from './launcher-mcp-authority.js';
+import type { WorkspaceLaunchPlanOptions } from './workspace-launch-types.js';
+
+type LauncherCommandOptions = Omit<WorkspaceLaunchPlanOptions, 'format' | 'launcherUiPort' | 'operatorRouterPort'> & {
+  format?: string;
+  launcherUiPort?: string;
+  operatorRouterPort?: string;
+};
+
+type LauncherExplainMcpOptions = Omit<ExplainMcpOptions, 'format'> & { format?: string };
 
 export function registerLauncherCommands(program: Command): void {
   const launcher = program
@@ -37,7 +47,7 @@ export function registerLauncherCommands(program: Command): void {
     .option('--smoke', 'Return smoke dry-run commands instead of opening terminals', false)
     .option('--dry-run', 'Return Windows Terminal argv plan without opening terminals', false)
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[LauncherCommandOptions]>({
       command: 'launcher workspace-plan',
       emit: (result: unknown, format?: unknown) => {
         if (
@@ -47,33 +57,33 @@ export function registerLauncherCommands(program: Command): void {
         ) return;
         emitCommandResult(result, format);
       },
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: LauncherCommandOptions) => opts.format,
       invocation: (opts) => workspaceLaunchPlanCommand({
-        agent: opts.agent as string[] | undefined,
-        all: opts.all as boolean | undefined,
-        role: opts.role as string[] | undefined,
-        site: opts.site as string[] | undefined,
-        configPath: opts.configPath as string[] | undefined,
-        registryPath: opts.registryPath as string | undefined,
-        operatorSurface: opts.operatorSurface as string | undefined,
-        runtime: opts.runtime as string | undefined,
-        authority: opts.authority as string | undefined,
-        intelligenceProvider: opts.intelligenceProvider as string | undefined,
-        mcpScope: opts.mcpScope as string | undefined,
-        cloudflareApiBaseUrl: opts.cloudflareApiBaseUrl as string | undefined,
-        interactiveSelection: opts.interactiveSelection as boolean | undefined,
-        interactiveSelectionUi: opts.interactiveSelectionUi as boolean | undefined,
+        agent: opts.agent,
+        all: opts.all,
+        role: opts.role,
+        site: opts.site,
+        configPath: opts.configPath,
+        registryPath: opts.registryPath,
+        operatorSurface: opts.operatorSurface,
+        runtime: opts.runtime,
+        authority: opts.authority,
+        intelligenceProvider: opts.intelligenceProvider,
+        mcpScope: opts.mcpScope,
+        cloudflareApiBaseUrl: opts.cloudflareApiBaseUrl,
+        interactiveSelection: opts.interactiveSelection,
+        interactiveSelectionUi: opts.interactiveSelectionUi,
         launcherUiPort: opts.launcherUiPort === undefined ? undefined : Number(opts.launcherUiPort),
-        launcherUiPortFallback: opts.launcherUiPortFallback as boolean | undefined,
+        launcherUiPortFallback: opts.launcherUiPortFallback,
         operatorRouterPort: opts.operatorRouterPort === undefined ? undefined : Number(opts.operatorRouterPort),
-        launcherOutput: opts.launcherOutput as string[] | undefined,
-        defaultInteractiveSelection: opts.defaultInteractiveSelection as boolean | undefined,
-        resultPath: opts.resultPath as string | undefined,
-        suppressResultOutput: opts.suppressResultOutput as boolean | undefined,
-        enableNativeShell: opts.enableNativeShell as boolean | undefined,
-        noWaitForEnterBeforeExec: opts.noWaitForEnterBeforeExec as boolean | undefined,
-        smoke: opts.smoke as boolean | undefined,
-        dryRun: opts.dryRun as boolean | undefined,
+        launcherOutput: opts.launcherOutput,
+        defaultInteractiveSelection: opts.defaultInteractiveSelection,
+        resultPath: opts.resultPath,
+        suppressResultOutput: opts.suppressResultOutput,
+        enableNativeShell: opts.enableNativeShell,
+        noWaitForEnterBeforeExec: opts.noWaitForEnterBeforeExec,
+        smoke: opts.smoke,
+        dryRun: opts.dryRun,
         format: resolveCommandFormat(opts.format, 'auto'),
       }, silentCommandContext()),
     }));
@@ -107,7 +117,7 @@ export function registerLauncherCommands(program: Command): void {
     .option('--smoke', 'Return smoke dry-run commands instead of opening terminals', false)
     .option('--dry-run', 'Return Windows Terminal argv plan without opening terminals', false)
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[LauncherCommandOptions]>({
       command: 'launcher workspace-launch',
       emit: (result: unknown, format?: unknown) => {
         if (
@@ -117,32 +127,33 @@ export function registerLauncherCommands(program: Command): void {
         ) return;
         emitCommandResult(result, format);
       },
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: LauncherCommandOptions) => opts.format,
       invocation: (opts) => workspaceLaunchCommand({
-        agent: opts.agent as string[] | undefined,
-        all: opts.all as boolean | undefined,
-        role: opts.role as string[] | undefined,
-        site: opts.site as string[] | undefined,
-        configPath: opts.configPath as string[] | undefined,
-        registryPath: opts.registryPath as string | undefined,
-        operatorSurface: opts.operatorSurface as string | undefined,
-        runtime: opts.runtime as string | undefined,
-        authority: opts.authority as string | undefined,
-        intelligenceProvider: opts.intelligenceProvider as string | undefined,
-        mcpScope: opts.mcpScope as string | undefined,
-        cloudflareApiBaseUrl: opts.cloudflareApiBaseUrl as string | undefined,
-        interactiveSelection: opts.interactiveSelection as boolean | undefined,
-        interactiveSelectionUi: opts.interactiveSelectionUi as boolean | undefined,
+        agent: opts.agent,
+        all: opts.all,
+        role: opts.role,
+        site: opts.site,
+        configPath: opts.configPath,
+        registryPath: opts.registryPath,
+        operatorSurface: opts.operatorSurface,
+        runtime: opts.runtime,
+        authority: opts.authority,
+        intelligenceProvider: opts.intelligenceProvider,
+        mcpScope: opts.mcpScope,
+        cloudflareApiBaseUrl: opts.cloudflareApiBaseUrl,
+        interactiveSelection: opts.interactiveSelection,
+        interactiveSelectionUi: opts.interactiveSelectionUi,
         launcherUiPort: opts.launcherUiPort === undefined ? undefined : Number(opts.launcherUiPort),
-        launcherUiPortFallback: opts.launcherUiPortFallback as boolean | undefined,
+        launcherUiPortFallback: opts.launcherUiPortFallback,
         operatorRouterPort: opts.operatorRouterPort === undefined ? undefined : Number(opts.operatorRouterPort),
-        defaultInteractiveSelection: opts.defaultInteractiveSelection as boolean | undefined,
-        resultPath: opts.resultPath as string | undefined,
-        suppressResultOutput: opts.suppressResultOutput as boolean | undefined,
-        enableNativeShell: opts.enableNativeShell as boolean | undefined,
-        noWaitForEnterBeforeExec: opts.noWaitForEnterBeforeExec as boolean | undefined,
-        smoke: opts.smoke as boolean | undefined,
-        dryRun: opts.dryRun as boolean | undefined,
+        launcherOutput: opts.launcherOutput,
+        defaultInteractiveSelection: opts.defaultInteractiveSelection,
+        resultPath: opts.resultPath,
+        suppressResultOutput: opts.suppressResultOutput,
+        enableNativeShell: opts.enableNativeShell,
+        noWaitForEnterBeforeExec: opts.noWaitForEnterBeforeExec,
+        smoke: opts.smoke,
+        dryRun: opts.dryRun,
         format: resolveCommandFormat(opts.format, 'auto'),
       }, silentCommandContext()),
     }));
@@ -156,16 +167,16 @@ export function registerLauncherCommands(program: Command): void {
     .option('--config-path <path...>', 'One or more launch registry files for --site lookup')
     .option('--server <name>', 'Only report one MCP server')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[LauncherExplainMcpOptions]>({
       command: 'launcher explain-mcp',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: LauncherExplainMcpOptions) => opts.format,
       invocation: (opts) => explainMcpCommand({
-        siteRoot: opts.siteRoot as string | undefined,
-        site: opts.site as string | undefined,
-        registryPath: opts.registryPath as string | undefined,
-        configPath: opts.configPath as string[] | undefined,
-        server: opts.server as string | undefined,
+        siteRoot: opts.siteRoot,
+        site: opts.site,
+        registryPath: opts.registryPath,
+        configPath: opts.configPath,
+        server: opts.server,
         format: resolveCommandFormat(opts.format, 'auto'),
       }, silentCommandContext()),
     }));
