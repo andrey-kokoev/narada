@@ -22,3 +22,15 @@ test('operator workspace navigation excludes unavailable descriptor routes', () 
   assert.doesNotMatch(page, /href="\/console\/launch"[^>]*>Launcher<\/a>/);
   assert.match(page, /data-surface-id="launcher"/);
 });
+
+test('operator workspace navigation excludes unavailable routes within an available surface', () => {
+  const page = renderOperatorWorkspacePage({
+    ingressMode: 'router',
+    surfaceAvailability: {},
+    routeAvailability: { 'site-registry': { add: 'unavailable', manage: 'unavailable' } },
+  });
+
+  assert.match(page, /href="\/console\/registry"[^>]*>Sites<\/a>/);
+  assert.doesNotMatch(page, /href="\/console\/registry\/add"[^>]*>Add Site<\/a>/);
+  assert.doesNotMatch(page, /href="\/console\/registry\/manage"[^>]*>Manage<\/a>/);
+});

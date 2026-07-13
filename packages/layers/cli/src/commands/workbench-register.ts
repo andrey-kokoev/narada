@@ -1,7 +1,7 @@
 import type { Command } from 'commander';
 import { createHash, randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
-import { DEFAULT_OPERATOR_ROUTER_PORT, ensureOperatorRouter, readOperatorRouterRoutes, registerOperatorRouteSet } from '@narada2/operator-router';
+import { DEFAULT_OPERATOR_ROUTER_PORT, ensureOperatorRouter, inspectOperatorRouterRouteSet, readOperatorRouterRoutes, reconstructOperatorRouteSet } from '@narada2/operator-router';
 import { createWorkbenchServer, workbenchDiagnoseCommand } from './workbench-server.js';
 import {
   emitFiniteCommandResult,
@@ -57,7 +57,6 @@ export function registerWorkbenchCommands(program: Command): void {
         process.once('SIGTERM', stopDiagnostic);
         return;
       }
-
       const siteId = String(opts.siteId ?? '').trim();
       if (!siteId) throw new Error('workbench_site_id_required_for_router');
       const siteRoot = resolve(cwd);
@@ -66,8 +65,8 @@ export function registerWorkbenchCommands(program: Command): void {
       const routeKey = createHash('sha256').update(siteId, 'utf8').digest('hex').slice(0, 32);
       const routeId = `site-operations-${routeKey}`;
       const existingRoutes = await readOperatorRouterRoutes({ url: router.url });
-      const existingRoute = existingRoutes.routes.find((route) => route.route_id === routeId);
-      if (existingRoute?.state === 'healthy') {
+      const routePosture = inspectOperatorRouterRouteSet(existingRoutes.routes, [routeId]);
+      if (routePosture.posture === 'healthy') {
         emitLongLivedCommandStartup([
           `Site Operations: ${router.url}${publicPath}/`,
           `  Site    ${siteId}`,
@@ -78,14 +77,17 @@ export function registerWorkbenchCommands(program: Command): void {
         ]);
         return;
       }
+      if (routePosture.posture === 'incomplete_live') {
+        throw new Error(`operator_router_projection_incomplete:${routePosture.healthy_route_ids.join(',')}`);
+      }
       const server = await createWorkbenchServer({ host, port: 0, cwd, verbose: !!opts.verbose, publicBasePath: publicPath });
       const backendUrl = await server.start();
       const ownerId = `site-operations:${routeKey}:${process.pid}`;
       const instanceNonce = randomUUID().replace(/-/g, '');
       const admin = { url: router.url, registration_token: router.registration_token };
-      let routeSet: Awaited<ReturnType<typeof registerOperatorRouteSet>> | null = null;
+      let routeSet: Awaited<ReturnType<typeof reconstructOperatorRouteSet>>['route_set'] | null = null;
       try {
-        routeSet = await registerOperatorRouteSet({
+        const reconstructed = await reconstructOperatorRouteSet({
           admin,
           renew_interval_ms: 30_000,
           routes: [{
@@ -105,6 +107,7 @@ export function registerWorkbenchCommands(program: Command): void {
             reconstruction: { kind: 'site-operation', site_root: siteRoot, site_id: siteId, session_id: null },
           }],
         });
+        routeSet = reconstructed.route_set;
       } catch (error) {
         await server.stop();
         throw error;

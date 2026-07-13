@@ -6,7 +6,9 @@ import { agentIdentityDisplay, agentIdentityGroupKey, agentIdentityRefMatchesReq
 import {
   DEFAULT_OPERATOR_ROUTER_PORT,
   ensureOperatorRouter,
+  inspectOperatorRouterRouteSet,
   readOperatorRouterRoutes,
+  reconstructOperatorRouteSet,
   registerOperatorRoute,
   registerOperatorRouteSet,
   type EnsureOperatorRouterOptions,
@@ -616,9 +618,8 @@ export async function agentWebUiAttachCommand(
   const requiredRouteIds = [httpRouteId, websocketRouteId, ...(publicArtifactPath ? [artifactRouteId] : [])];
   if (router) {
     const existingRoutes = await readOperatorRouterRoutes({ url: router.url });
-    const existingById = new Map(existingRoutes.routes.map((route) => [route.route_id, route]));
-    const healthyRouteIds = requiredRouteIds.filter((routeId) => existingById.get(routeId)?.state === 'healthy');
-    if (healthyRouteIds.length === requiredRouteIds.length) {
+    const routePosture = inspectOperatorRouterRouteSet(existingRoutes.routes, requiredRouteIds);
+    if (routePosture.posture === 'healthy') {
       const plan = buildPlan({
         status: 'attached',
         sessionId,
@@ -648,7 +649,9 @@ export async function agentWebUiAttachCommand(
       const renderedResult = formattedResult(plan, formatPlan(plan), options.format ?? 'auto');
       return { exitCode: ExitCode.SUCCESS, result: renderedResult };
     }
-    if (healthyRouteIds.length > 0) throw new Error(`operator_router_projection_incomplete:${healthyRouteIds.join(',')}`);
+    if (routePosture.posture === 'incomplete_live') {
+      throw new Error(`operator_router_projection_incomplete:${routePosture.healthy_route_ids.join(',')}`);
+    }
   }
   const startAgentWebUiServer = deps.startAgentWebUiServer ?? (await import('@narada2/agent-web-ui/server')).startAgentWebUiServer;
   const started = await startAgentWebUiServer({
@@ -735,12 +738,13 @@ export async function agentWebUiAttachCommand(
       }] : []),
     ];
     try {
-      routeSet = await registerOperatorRouteSet({
+      const reconstructed = await reconstructOperatorRouteSet({
         admin,
         routes: routeInputs,
         renew_interval_ms: 30_000,
         register_fn: deps.registerOperatorRoute,
       });
+      routeSet = reconstructed.route_set;
       routeIds.push(...routeSet.route_ids);
     } catch (error) {
       await closeStartedServer(started.server);

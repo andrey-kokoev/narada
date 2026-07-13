@@ -12,6 +12,7 @@ import {
   type OperatorRouterHealthResponse,
   type OperatorRouterRouteRegistration,
   type OperatorRouterRouteRegistrationInput,
+  type OperatorRouterRouteProjection,
   type OperatorRouterRoutesResponse,
 } from './contract.js';
 
@@ -25,6 +26,73 @@ export interface EnsureOperatorRouterOptions {
   timeout_ms?: number;
   fetch_fn?: typeof fetch;
   spawn_impl?: typeof spawn;
+}
+
+export async function reconstructOperatorRouteSet(
+  options: OperatorRouterRouteSetReconstructionOptions,
+): Promise<OperatorRouterRouteSetReconstructionResult> {
+  const requiredRouteIds = options.routes.map((route) => route.route_id);
+  const nonReconstructable = options.routes.find((route) => {
+    const source = route.reconstruction;
+    return !source || (source.kind === 'explicit' && options.allow_explicit_reconstruction !== true);
+  });
+  if (nonReconstructable) throw new Error(`operator_router_reconstruction_source_required:${nonReconstructable.route_id}`);
+
+  const readRoutes = options.read_routes_fn ?? readOperatorRouterRoutes;
+  const inventory = await readRoutes({
+    url: options.admin.url,
+    fetch_fn: options.admin.fetch_fn,
+    timeout_ms: options.admin.timeout_ms,
+  });
+  const posture = inspectOperatorRouterRouteSet(inventory.routes, requiredRouteIds);
+  if (posture.posture === 'healthy') throw new Error('operator_router_route_set_already_healthy');
+  if (posture.posture === 'incomplete_live') throw new Error(`operator_router_route_set_incomplete_live:${posture.healthy_route_ids.join(',')}`);
+
+  const routeSetOptions: OperatorRouterRouteSetOptions = {
+    admin: options.admin,
+    routes: options.routes,
+    renew_interval_ms: options.renew_interval_ms,
+    register_fn: options.register_fn,
+    renew_fn: options.renew_fn,
+    unregister_fn: options.unregister_fn,
+  };
+  const routeSet = await registerOperatorRouteSet(routeSetOptions);
+  return {
+    route_set: routeSet,
+    posture: posture.posture,
+    existing_route_ids: posture.existing_route_ids,
+    reconstructed_route_ids: requiredRouteIds,
+    missing_route_ids: posture.missing_route_ids,
+  };
+}
+
+export function inspectOperatorRouterRouteSet(
+  routes: readonly OperatorRouterRouteProjection[],
+  requiredRouteIds: readonly string[],
+): OperatorRouterRouteSetPostureResult {
+  const required = [...requiredRouteIds];
+  if (required.length === 0 || new Set(required).size !== required.length) {
+    throw new Error('operator_router_route_set_required_ids_invalid');
+  }
+  const byId = new Map(routes.map((route) => [route.route_id, route]));
+  const existing = required.filter((routeId) => byId.has(routeId));
+  const healthy = existing.filter((routeId) => byId.get(routeId)?.state === 'healthy');
+  const degraded = existing.filter((routeId) => byId.get(routeId)?.state !== 'healthy');
+  const missing = required.filter((routeId) => !byId.has(routeId));
+  const posture: OperatorRouterRouteSetPosture = healthy.length === required.length
+    ? 'healthy'
+    : healthy.length > 0
+      ? 'incomplete_live'
+      : existing.length === 0
+        ? 'absent'
+        : 'reconstructable';
+  return {
+    posture,
+    existing_route_ids: existing,
+    healthy_route_ids: healthy,
+    degraded_route_ids: degraded,
+    missing_route_ids: missing,
+  };
 }
 
 function assertLoopbackHost(host: string): void {
@@ -53,6 +121,29 @@ export interface OperatorRouterRouteSetOptions {
   register_fn?: typeof registerOperatorRoute;
   renew_fn?: typeof renewOperatorRoute;
   unregister_fn?: typeof unregisterOperatorRoute;
+}
+
+export type OperatorRouterRouteSetPosture = 'absent' | 'healthy' | 'reconstructable' | 'incomplete_live';
+
+export interface OperatorRouterRouteSetPostureResult {
+  posture: OperatorRouterRouteSetPosture;
+  existing_route_ids: readonly string[];
+  healthy_route_ids: readonly string[];
+  degraded_route_ids: readonly string[];
+  missing_route_ids: readonly string[];
+}
+
+export interface OperatorRouterRouteSetReconstructionOptions extends OperatorRouterRouteSetOptions {
+  read_routes_fn?: typeof readOperatorRouterRoutes;
+  allow_explicit_reconstruction?: boolean;
+}
+
+export interface OperatorRouterRouteSetReconstructionResult {
+  route_set: OperatorRouterRouteSet;
+  posture: OperatorRouterRouteSetPosture;
+  existing_route_ids: readonly string[];
+  reconstructed_route_ids: readonly string[];
+  missing_route_ids: readonly string[];
 }
 
 export interface OperatorRouterRouteSet {

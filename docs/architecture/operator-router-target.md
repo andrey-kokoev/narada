@@ -4,9 +4,10 @@
 
 This document defines the implementation target and current boundary contract
 for Narada's stable local browser ingress. The dedicated router package and
-the first projection integrations are implemented, including owner-side route
-set renewal, recovery, and teardown; the acceptance suite and remaining
-launcher/open-flow migrations are still in progress.
+the first projection integrations are implemented, including a typed Workspace
+route directory and owner-side route-set reconstruction, renewal, recovery,
+and teardown; the acceptance suite and remaining launcher/open-flow migrations
+are still in progress.
 
 The router gives an operator one bookmarkable loopback origin while preserving
 ephemeral, independently owned backing services.
@@ -211,11 +212,16 @@ direct diagnostic endpoints.
 - Console, Site Operations, and Agent Web UI owners use a shared route-set
   lifecycle; Agent Web UI reuses a healthy existing session projection and
   cleans up its backing server and routes on signal-driven shutdown.
+- The Console Workspace catalog projects concrete route availability and keeps
+  parameterized route templates visible without presenting them as dead links.
+- Agent Web UI and Site Operations use an explicit owner-side reconstruction
+  helper for absent or stale route sets; a partially live set is refused rather
+  than silently replaced.
 - The router rehydrates route records and artifact routes from canonical
   evidence; Console, Agent Web UI, and Site Operations owners remain
   responsible for restarting their own backing services and re-registering
   them.
-- The workspace surface catalog and remaining launcher/open flows still need
+- The launcher/session dashboard and remaining artifact open flows still need
   to consume the router route inventory instead of assuming direct listeners.
 
 ## Migration Slices
@@ -226,9 +232,10 @@ direct diagnostic endpoints.
 2. Add strict registrations, leases, process evidence, and reconstruction.
    **Implemented for the current projection owners:** persisted registrations
    are validated and health-verified, artifact routes resolve from NARS
-   evidence, and active owners renew, re-register missing routes, and tear
-   down their route sets. Automatic owner-side service restart remains outside
-   the router by design.
+   evidence, and active owners use an explicit reconstruction contract for
+   absent or stale route sets, renew them, and tear them down. Partially live
+   sets are refused; automatic owner-side service restart remains outside the
+   router by design.
 3. Make Agent Web UI base-path aware and verify assets, APIs, WebSockets, and
    artifacts beneath a session prefix. **Implemented:** session and event
    routes are registered; direct artifact routes use the NARS session index.

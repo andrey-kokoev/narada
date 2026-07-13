@@ -9,10 +9,16 @@ import test from 'node:test';
 import { registerNarsArtifact } from '@narada2/nars-session-core/artifacts';
 import { writeNarsSessionStartedIndex } from '@narada2/nars-session-core/session-index';
 import {
+  OPERATOR_ROUTER_IDENTITY,
+  OPERATOR_ROUTER_ROUTES_SCHEMA,
   createOperatorRouterServer,
+  inspectOperatorRouterRouteSet,
   registerOperatorRouteSet,
   registerOperatorRoute,
+  reconstructOperatorRouteSet,
   unregisterOperatorRoute,
+  projectRouteRegistration,
+  type OperatorRouterRoutesResponse,
 } from '../src/index.ts';
 import { validateRouteRegistration } from '../src/contract.ts';
 
@@ -131,6 +137,51 @@ test('route sets renew missing routes and stop without leaving a renewal race', 
   assert.deepEqual(unregisterCalls, ['agent-session-demo']);
   await routeSet.stop();
   assert.deepEqual(unregisterCalls, ['agent-session-demo']);
+});
+
+test('route-set posture distinguishes absent, incomplete live, and reconstructable owners', () => {
+  const input = routeInput('http://127.0.0.1:1', 'http://127.0.0.1:1/health');
+  const healthy = projectRouteRegistration(validateRouteRegistration(input));
+  const degraded = { ...healthy, state: 'degraded' as const };
+  assert.equal(inspectOperatorRouterRouteSet([], [input.route_id]).posture, 'absent');
+  assert.equal(inspectOperatorRouterRouteSet([healthy], [input.route_id, 'missing']).posture, 'incomplete_live');
+  assert.equal(inspectOperatorRouterRouteSet([degraded], [input.route_id]).posture, 'reconstructable');
+});
+
+test('owner reconstruction re-registers only an absent or stale route set', async () => {
+  const input = {
+    ...routeInput('http://127.0.0.1:1', 'http://127.0.0.1:1/health'),
+    site_id: 'demo',
+    reconstruction: { kind: 'nars-session' as const, site_root: 'C:\\site', site_id: 'demo', session_id: 'demo' },
+  };
+  const existing = { ...projectRouteRegistration(validateRouteRegistration(input)), state: 'degraded' as const };
+  const inventory = {
+    schema: OPERATOR_ROUTER_ROUTES_SCHEMA,
+    identity: OPERATOR_ROUTER_IDENTITY,
+    routes: [existing],
+  } satisfies OperatorRouterRoutesResponse;
+  const registerCalls: string[] = [];
+  const unregisterCalls: string[] = [];
+  const reconstructed = await reconstructOperatorRouteSet({
+    admin: { url: 'http://127.0.0.1:1', registration_token: 'test-token' },
+    routes: [input],
+    renew_interval_ms: 1_000,
+    read_routes_fn: async () => inventory,
+    register_fn: async (_admin, route) => {
+      registerCalls.push(route.route_id);
+      return validateRouteRegistration(route);
+    },
+    unregister_fn: async (_admin, routeId) => {
+      unregisterCalls.push(routeId);
+      return { status: 'removed', route_id: routeId };
+    },
+  });
+  assert.equal(reconstructed.posture, 'reconstructable');
+  assert.deepEqual(reconstructed.existing_route_ids, [input.route_id]);
+  assert.deepEqual(reconstructed.reconstructed_route_ids, [input.route_id]);
+  assert.deepEqual(registerCalls, [input.route_id]);
+  await reconstructed.route_set.stop();
+  assert.deepEqual(unregisterCalls, [input.route_id]);
 });
 
 test('concurrent route registration preserves every route in persisted state', async () => {

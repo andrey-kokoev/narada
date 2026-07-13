@@ -3,8 +3,9 @@
 ## Status
 
 This document defines the browser experience that sits above individual
-operator surfaces. It is an implementation target and a boundary contract; it
-does not claim that the full dynamic Operator Router already exists.
+operator surfaces. It is an implementation target and a boundary contract.
+The Workspace route directory and current owner reconstruction slice are live;
+launcher/open-flow migration and broader browser acceptance remain.
 
 ## Shape
 
@@ -123,17 +124,18 @@ diagnostic mode.
 The Launcher Session Dashboard is a separate Vue/shadcn presentation package
 served by the CLI launcher. Its launch authority, dashboard records, and
 browser API remain CLI-owned. Agent Web UI attach now returns a stable session
-route; the launcher selection page and session inventory still need to consume
-the router route inventory directly.
+route. The Console Workspace catalog now exposes typed per-route availability,
+including concrete routes and non-linkable parameterized templates. Agent Web
+UI and Site Operations use the shared owner-side reconstruction contract for
+absent or stale route sets; the launcher selection page and session inventory
+still need to consume the router route inventory directly.
 
 The remaining Router/workspace work is explicit:
 
-1. expose registry/session/artifact route availability in the Workspace catalog;
-2. reconstruct managed projections from lifecycle evidence rather than only
-   rehydrating persisted targets;
-3. complete Host, Origin, CSRF, and browser mutation acceptance coverage;
-4. migrate launcher and artifact open flows to stable URLs;
-5. add the composed Workspace route directory above the individual projections.
+1. complete Host, Origin, CSRF, and browser mutation acceptance coverage;
+2. migrate launcher and artifact open flows to stable URLs and route inventory;
+3. make the launcher/session dashboard consume the composed Workspace route
+   directory rather than assuming direct listeners.
 
 Direct low-level Workbench, Console, Agent Web UI, and NARS listeners remain
 supported only as explicitly labeled diagnostic paths; normal projection

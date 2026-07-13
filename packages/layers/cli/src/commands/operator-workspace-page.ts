@@ -1,10 +1,11 @@
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import {
-  primaryOperatorSurfaceRoute,
+  primaryProjectedOperatorSurfaceRoute,
   projectOperatorSurfaceNavigation,
   projectOperatorSurfaceCatalog,
   type OperatorSurfaceAvailabilityOverrides,
+  type OperatorSurfaceRouteAvailabilityOverrides,
   type OperatorSurfaceProjection,
 } from '@narada2/operator-console-contract';
 
@@ -19,7 +20,10 @@ function sharedUiCss(): string {
 }
 
 function workspaceNavigation(options: OperatorWorkspacePageOptions): string {
-  const items = projectOperatorSurfaceNavigation({ availability: options.surfaceAvailability });
+  const items = projectOperatorSurfaceNavigation({
+    availability: options.surfaceAvailability,
+    routeAvailability: options.routeAvailability,
+  });
   return [
     '<a href="/" aria-current="page">Home</a>',
     ...items.map((item) => `<a href="${escapeHtml(item.href)}">${escapeHtml(item.label)}</a>`),
@@ -29,6 +33,7 @@ function workspaceNavigation(options: OperatorWorkspacePageOptions): string {
 export interface OperatorWorkspacePageOptions {
   ingressMode: 'diagnostic' | 'router';
   surfaceAvailability: OperatorSurfaceAvailabilityOverrides;
+  routeAvailability?: OperatorSurfaceRouteAvailabilityOverrides;
 }
 
 function escapeHtml(value: string): string {
@@ -42,18 +47,28 @@ function escapeHtml(value: string): string {
 }
 
 function surfaceMarkup(surface: OperatorSurfaceProjection): string {
-  const route = primaryOperatorSurfaceRoute(surface)?.path;
-  const routeMarkup = route ? `<dt>Route</dt><dd><code>${escapeHtml(route)}</code></dd>` : '';
-  const nextAction = surface.nextAction ? `<p class="surface-action"><a href="${escapeHtml(surface.nextAction.href)}">${escapeHtml(surface.nextAction.label)}</a></p>` : '';
+  const primaryRoute = primaryProjectedOperatorSurfaceRoute(surface);
+  const routeMarkup = surface.projectedRoutes.length > 0
+    ? `<dt>Routes</dt><dd><ul class="route-list">${surface.projectedRoutes.map((route) => `<li data-route-id="${escapeHtml(route.id)}"><code>${escapeHtml(route.path)}</code> <span class="route-status ${escapeHtml(route.availability)}">${escapeHtml(route.availability)}</span></li>`).join('')}</ul></dd>`
+    : '';
+  const nextAction = surface.nextAction && !(primaryRoute?.availability === 'available' && !primaryRoute.path.includes('<'))
+    ? `<p class="surface-action"><a href="${escapeHtml(surface.nextAction.href)}">${escapeHtml(surface.nextAction.label)}</a></p>`
+    : '';
   const content = `<div class="surface-heading"><h2>${escapeHtml(surface.name)}</h2><span class="status ${surface.availability}">${escapeHtml(surface.availability)}</span></div><dl><dt>Scope</dt><dd>${escapeHtml(surface.scope)}</dd><dt>Owner</dt><dd>${escapeHtml(surface.owner)}</dd>${routeMarkup}</dl><p>${escapeHtml(surface.projectedDetail)}</p>${nextAction}`;
-  if (surface.availability === 'available' && route) {
-    return `<a class="surface available" href="${escapeHtml(route)}" data-surface-id="${escapeHtml(surface.id)}">${content}</a>`;
+  const linkPath = primaryRoute?.availability === 'available' && !primaryRoute.path.includes('<')
+    ? primaryRoute.path
+    : null;
+  if (surface.availability === 'available' && linkPath) {
+    return `<a class="surface available" href="${escapeHtml(linkPath)}" data-surface-id="${escapeHtml(surface.id)}">${content}</a>`;
   }
   return `<div class="surface ${surface.availability}" data-surface-id="${escapeHtml(surface.id)}">${content}</div>`;
 }
 
 export function renderOperatorWorkspacePage(options: OperatorWorkspacePageOptions): string {
-  const surfaces = projectOperatorSurfaceCatalog({ availability: options.surfaceAvailability });
+  const surfaces = projectOperatorSurfaceCatalog({
+    availability: options.surfaceAvailability,
+    routeAvailability: options.routeAvailability,
+  });
   const availableSurfaces = surfaces.filter((surface) => surface.availability === 'available');
   const unavailableSurfaces = surfaces.filter((surface) => surface.availability === 'unavailable');
   const plannedSurfaces = surfaces.filter((surface) => surface.availability === 'planned');
@@ -82,7 +97,7 @@ export function renderOperatorWorkspacePage(options: OperatorWorkspacePageOption
     .surface-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
     .surface { display: block; min-width: 0; padding: 16px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); color: var(--text); text-decoration: none; } .surface.available:hover { border-color: var(--operator); background: var(--surface-muted); } .surface.unavailable, .surface.planned { color: var(--muted); background: var(--surface-muted); }
     .surface-heading { display: flex; align-items: center; gap: 10px; justify-content: space-between; } .surface h2 { margin: 0; font-size: 15px; font-weight: 650; } .status { flex: 0 0 auto; padding: 3px 7px; border-radius: calc(var(--radius) - 2px); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; } .status.available { color: var(--operator); background: var(--activity-chip-bg); } .status.unavailable, .status.planned { color: var(--muted); background: var(--control-bg); }
-    dl { display: grid; grid-template-columns: 80px minmax(0, 1fr); gap: 6px 12px; margin: 16px 0 0; font-size: 12px; } dt { color: var(--muted); } dd { margin: 0; overflow-wrap: anywhere; } code { font: 12px/1.4 var(--mono); }
+    dl { display: grid; grid-template-columns: 80px minmax(0, 1fr); gap: 6px 12px; margin: 16px 0 0; font-size: 12px; } dt { color: var(--muted); } dd { margin: 0; overflow-wrap: anywhere; } code { font: 12px/1.4 var(--mono); } .route-list { display: grid; gap: 5px; list-style: none; margin: 0; padding: 0; } .route-list li { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; } .route-status { flex: 0 0 auto; color: var(--muted); font-size: 10px; text-transform: uppercase; } .route-status.available { color: var(--operator); } .route-status.unavailable { color: var(--danger); }
     .surface p { margin: 16px 0 0; color: var(--muted); font-size: 13px; line-height: 1.4; } .surface.available p { color: var(--text); } .surface-action a { color: var(--operator); font-weight: 600; text-decoration: none; } .surface-action a:hover { text-decoration: underline; } .empty { padding: 16px; border: 1px dashed var(--line); color: var(--muted); font-size: 13px; }
     @media (max-width: 760px) { .bar { align-items: flex-start; flex-wrap: wrap; } .spacer { display: none; } main { padding: 18px 12px 28px; } .surface-grid { grid-template-columns: 1fr; } }
   </style>
@@ -90,7 +105,7 @@ export function renderOperatorWorkspacePage(options: OperatorWorkspacePageOption
 <body data-narada-surface="operator-workspace">
   <header class="bar"><div><h1>Operator Workspace</h1><p>Choose the next governed surface</p></div><nav class="workspace-nav" aria-label="Operator workspace">${navigationMarkup}</nav><span class="posture">${escapeHtml(ingressLabel)}</span><div class="spacer"></div></header>
   <main>
-    <div class="intro"><h2>Surfaces</h2><p>Only available surfaces are links. Future surfaces show their next valid handoff.</p></div>
+    <div class="intro"><h2>Surfaces</h2><p>Only available concrete routes are links. Future surfaces show their next valid handoff.</p></div>
     <section class="surface-section"><div class="section-head"><h2>Available</h2><p>Ready from this host</p></div><div class="surface-grid">${availableMarkup}</div></section>
     ${unavailableMarkup ? `<section class="surface-section"><div class="section-head"><h2>Unavailable</h2><p>Not currently reachable</p></div><div class="surface-grid">${unavailableMarkup}</div></section>` : ''}
     ${plannedMarkup ? `<section class="surface-section"><div class="section-head"><h2>Not available yet</h2><p>Planned next-level projections</p></div><div class="surface-grid">${plannedMarkup}</div></section>` : ''}

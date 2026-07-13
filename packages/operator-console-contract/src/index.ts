@@ -1,4 +1,5 @@
 export const OPERATOR_SURFACE_DESCRIPTOR_SCHEMA = 'narada.operator.surface_descriptor.v1' as const;
+export const OPERATOR_WORKSPACE_ROUTE_DIRECTORY_SCHEMA = 'narada.operator_workspace.route_directory.v1' as const;
 
 export type OperatorSurfaceId =
   | 'site-registry'
@@ -25,6 +26,12 @@ export interface OperatorSurfaceNavigationItem {
   href: string;
 }
 
+function projectedRouteDetail(availability: OperatorSurfaceAvailability): string {
+  if (availability === 'available') return 'Route is available from this host.';
+  if (availability === 'unavailable') return 'Route is not currently reachable from this host.';
+  return 'Route is declared but not currently available from this host.';
+}
+
 export type OperatorSessionDisplayState =
   | 'active'
   | 'starting_or_degraded'
@@ -38,6 +45,11 @@ export interface OperatorSurfaceRouteDescriptor {
   kind: OperatorSurfaceRouteKind;
   label: string;
   navigationKey?: OperatorSurfaceNavigationKey;
+}
+
+export interface OperatorSurfaceRouteProjection extends OperatorSurfaceRouteDescriptor {
+  availability: OperatorSurfaceAvailability;
+  projectedDetail: string;
 }
 
 export interface OperatorSessionWireRecord {
@@ -91,14 +103,25 @@ export interface OperatorSurfaceDescriptor {
 export interface OperatorSurfaceProjection extends OperatorSurfaceDescriptor {
   availability: OperatorSurfaceAvailability;
   projectedDetail: string;
+  projectedRoutes: readonly OperatorSurfaceRouteProjection[];
 }
 
 export type OperatorSurfaceAvailabilityOverrides = Partial<
   Record<OperatorSurfaceId, OperatorSurfaceAvailability>
 >;
 
+export type OperatorSurfaceRouteAvailabilityOverrides = Partial<
+  Record<OperatorSurfaceId, Partial<Record<string, OperatorSurfaceAvailability>>>
+>;
+
 export interface OperatorSurfaceCatalogProjectionInput {
   availability?: OperatorSurfaceAvailabilityOverrides;
+  routeAvailability?: OperatorSurfaceRouteAvailabilityOverrides;
+}
+
+export interface OperatorWorkspaceRouteDirectory {
+  schema: typeof OPERATOR_WORKSPACE_ROUTE_DIRECTORY_SCHEMA;
+  surfaces: readonly OperatorSurfaceProjection[];
 }
 
 export const operatorSurfaceDescriptors: readonly OperatorSurfaceDescriptor[] = [
@@ -142,7 +165,9 @@ export const operatorSurfaceDescriptors: readonly OperatorSurfaceDescriptor[] = 
     name: 'Site Operations',
     scope: 'local-site',
     owner: 'Task and Agent Operations',
-    routes: [],
+    routes: [
+      { id: 'operations', path: '/sites/<site-id>/operations/', kind: 'page', label: 'Operations' },
+    ],
     defaultAvailability: 'planned',
     detail: {
       available: 'Enter the selected Site\'s task, assignment, review, and agent projections.',
@@ -174,7 +199,7 @@ export const operatorSurfaceDescriptors: readonly OperatorSurfaceDescriptor[] = 
     scope: 'nars-session',
     owner: 'Artifact projection',
     routes: [
-      { id: 'artifacts', path: '/console/artifacts', kind: 'page', label: 'Artifacts' },
+      { id: 'artifact', path: '/artifacts/<session-id>/<artifact-id>/', kind: 'page', label: 'Artifact' },
     ],
     defaultAvailability: 'planned',
     detail: {
@@ -196,18 +221,45 @@ export function projectOperatorSurfaceCatalog(
 ): OperatorSurfaceProjection[] {
   return operatorSurfaceDescriptors.map((descriptor) => {
     const availability = input.availability?.[descriptor.id] ?? descriptor.defaultAvailability;
+    const projectedRoutes = descriptor.routes.map((route) => {
+      const routeOverride = input.routeAvailability?.[descriptor.id]?.[route.id];
+      const routeAvailability = availability === 'available'
+        ? routeOverride ?? 'available'
+        : availability;
+      return {
+        ...route,
+        availability: routeAvailability,
+        projectedDetail: projectedRouteDetail(routeAvailability),
+      } satisfies OperatorSurfaceRouteProjection;
+    });
     return {
       ...descriptor,
       availability,
       projectedDetail: descriptor.detail[availability],
+      projectedRoutes,
     };
   });
+}
+
+export function projectOperatorWorkspaceRouteDirectory(
+  input: OperatorSurfaceCatalogProjectionInput = {},
+): OperatorWorkspaceRouteDirectory {
+  return {
+    schema: OPERATOR_WORKSPACE_ROUTE_DIRECTORY_SCHEMA,
+    surfaces: projectOperatorSurfaceCatalog(input),
+  };
 }
 
 export function primaryOperatorSurfaceRoute(
   descriptor: OperatorSurfaceDescriptor,
 ): OperatorSurfaceRouteDescriptor | undefined {
   return descriptor.routes[0];
+}
+
+export function primaryProjectedOperatorSurfaceRoute(
+  projection: OperatorSurfaceProjection,
+): OperatorSurfaceRouteProjection | undefined {
+  return projection.projectedRoutes[0];
 }
 
 export function operatorSurfaceRoutePath(
@@ -225,10 +277,10 @@ export function operatorSurfaceRoutePath(
 export function projectOperatorSurfaceNavigation(
   input: OperatorSurfaceCatalogProjectionInput = {},
 ): OperatorSurfaceNavigationItem[] {
-  return projectOperatorSurfaceCatalog(input).flatMap((surface) => {
+  return projectOperatorWorkspaceRouteDirectory(input).surfaces.flatMap((surface) => {
     if (surface.availability !== 'available') return [];
-    return surface.routes.flatMap((route) => {
-      if (!route.navigationKey) return [];
+    return surface.projectedRoutes.flatMap((route) => {
+      if (!route.navigationKey || route.availability !== 'available') return [];
       return [{ key: route.navigationKey, label: route.label, href: route.path }];
     });
   });
