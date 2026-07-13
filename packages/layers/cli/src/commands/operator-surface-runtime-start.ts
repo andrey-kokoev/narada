@@ -2,11 +2,11 @@ import type { CommandContext } from '../lib/command-wrapper.js';
 import { formattedResult, type CliFormat } from '../lib/cli-output.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import {
-  getCarrierStatus,
+  getOperatorSurfaceRuntimeStatus,
   runAgentStartCommand,
   writeOperatorProjectionLaunchBinding,
 } from '../lib/launcher-runtime.js';
-import { defaultRuntimeForCarrier } from '@narada2/carrier-runtime-contract/carrier-runtime-selection';
+import { defaultRuntimeForCarrier as defaultRuntimeForOperatorSurface } from '@narada2/carrier-runtime-contract/carrier-runtime-selection';
 import { requireAgent, requireSiteRoot } from './carrier-support.js';
 
 /**
@@ -42,9 +42,9 @@ export async function operatorSurfaceRuntimeStartCommand(
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
   const siteRoot = requireSiteRoot(options);
   const carrier = options.carrier ?? 'agent-cli';
-  const runtime = options.runtime ?? defaultRuntimeForCarrier(carrier);
+  const runtime = options.runtime ?? defaultRuntimeForOperatorSurface(carrier);
   const agent = requireAgent(options);
-  const existing = getCarrierStatus({
+  const existing = getOperatorSurfaceRuntimeStatus({
     siteRoot,
     agent,
     carrier,

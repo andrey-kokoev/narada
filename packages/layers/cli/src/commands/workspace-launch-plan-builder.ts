@@ -10,10 +10,11 @@ import type {
 } from './workspace-launch-types.js';
 import type { WorkspaceLaunchRegistryContext } from './workspace-launch-registry.js';
 import {
-  workspaceLaunchNodeNaradaCommand,
-  workspaceLaunchPnpmNaradaCommand,
-  workspaceLaunchRuntimeArguments,
-  workspaceLaunchSmokeCommand,
+  workspaceLaunchCommandArgv,
+  workspaceLaunchNodeNaradaCommandSpec,
+  workspaceLaunchPnpmNaradaCommandSpec,
+  workspaceLaunchRuntimeCommandSpec,
+  workspaceLaunchSmokeCommandSpec,
 } from './workspace-launch-command-spec.js';
 import { unique } from './workspace-launch-support.js';
 
@@ -84,9 +85,11 @@ export function buildAgentPlan(record: WorkspaceLaunchRecord, options: Workspace
     launchSessionId,
     waitForEnter,
   };
-  const runtimeStartArguments = workspaceLaunchRuntimeArguments(runtimeCommandOptions, 'execute');
-  const operatorSurfaceStartCommand = workspaceLaunchPnpmNaradaCommand(naradaProper, runtimeStartArguments);
-  const hiddenRuntimeStartCommand = workspaceLaunchNodeNaradaCommand(naradaProper, runtimeStartArguments);
+  const runtimeCommandSpec = workspaceLaunchRuntimeCommandSpec(runtimeCommandOptions, 'execute');
+  const operatorSurfaceStartCommandSpec = workspaceLaunchPnpmNaradaCommandSpec(naradaProper, runtimeCommandSpec);
+  const hiddenRuntimeStartCommandSpec = workspaceLaunchNodeNaradaCommandSpec(naradaProper, runtimeCommandSpec);
+  const operatorSurfaceStartCommand = workspaceLaunchCommandArgv(operatorSurfaceStartCommandSpec);
+  const hiddenRuntimeStartCommand = workspaceLaunchCommandArgv(hiddenRuntimeStartCommandSpec);
   const runtimeStartExecutionMode: WorkspaceLaunchAgentPlan['runtime_start_execution_mode'] = isNarsRuntimeHost
     ? 'hidden_detached'
     : 'operator_terminal';
@@ -111,10 +114,10 @@ export function buildAgentPlan(record: WorkspaceLaunchRecord, options: Workspace
     wtArgs.push(';', ...agentWebUiAttachWtArgs(record, naradaProper, cloudflareApiBaseUrl, launchBindingPath, onboarding));
   }
 
-  const smokeCommand = workspaceLaunchSmokeCommand(workspaceLaunchRuntimeArguments({
+  const smokeCommand = workspaceLaunchCommandArgv(workspaceLaunchSmokeCommandSpec(workspaceLaunchRuntimeCommandSpec({
     ...runtimeCommandOptions,
     waitForEnter: false,
-  }, 'dry-run'));
+  }, 'dry-run')));
   const operatorProjectionOpenRequests = launchOperatorSurfaces.includes('agent-web-ui')
     ? [plannedAgentWebUiProjectionOpenRequest(record)]
     : [];

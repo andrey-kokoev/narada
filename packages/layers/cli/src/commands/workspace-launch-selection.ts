@@ -13,7 +13,11 @@ import type {
   WorkspaceLaunchOption as WorkspaceLaunchSelectorOptionContract,
   WorkspaceLaunchSelectorModel as WorkspaceLaunchSelectorModelContract,
 } from '@narada2/workspace-launch-contract';
-import type { WorkspaceLaunchPlanOptions, WorkspaceLaunchRecord } from './workspace-launch-types.js';
+import type {
+  WorkspaceLaunchPlanOptions,
+  WorkspaceLaunchRecord,
+  WorkspaceLaunchSelectionUiModel,
+} from './workspace-launch-types.js';
 import type {
   WorkspaceLaunchProviderRegistry,
   WorkspaceLaunchSelectionContext,
@@ -311,7 +315,7 @@ export function buildWorkspaceLaunchSelectionUiModel(
   rememberedSelection: WorkspaceLaunchBrowserSelection | null = null,
   siteCatalog: ResolvedSiteRoot[] = [],
   context: WorkspaceLaunchSelectionContext,
-): Record<string, unknown> {
+): WorkspaceLaunchSelectionUiModel {
   const effectiveRecords = canonicalizeWorkspaceLaunchRecords(records, siteCatalog);
   const resolvedSelection = resolveWorkspaceLaunchBrowserSelection(effectiveRecords, options, rememberedSelection, siteCatalog, context);
   const siteChoices = unique(effectiveRecords.map((record) => record.site));

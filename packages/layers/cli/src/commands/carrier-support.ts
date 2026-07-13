@@ -1,6 +1,6 @@
 import { agentIdentityDisplay } from '@narada2/agent-identity';
 import type { OperatorSurfaceRuntimeStartOptions } from './operator-surface-runtime-start.js';
-import { getCarrierStatus } from '../lib/launcher-runtime.js';
+import { getOperatorSurfaceRuntimeStatus } from '../lib/launcher-runtime.js';
 
 export function requireSiteRoot(options: OperatorSurfaceRuntimeStartOptions): string {
   const siteRoot = options.siteRoot ?? options.site;
@@ -18,7 +18,9 @@ export function requireAgent(options: OperatorSurfaceRuntimeStartOptions): strin
   return agent;
 }
 
-export function formatCarrierStatus(status: ReturnType<typeof getCarrierStatus>): string {
+export function formatOperatorSurfaceRuntimeStatus(
+  status: ReturnType<typeof getOperatorSurfaceRuntimeStatus>,
+): string {
   if (!status.latest) {
     return `No runtime launch result found for ${status.site_root}`;
   }

@@ -42,7 +42,10 @@
     "./input-admission-state": "./src/input-admission-state.mjs",
     "./operator-input-queue-state": "./src/operator-input-queue-state.mjs",
     "./session-status-snapshots": "./src/session-status-snapshots.mjs",
-    "./session-index": "./src/session-index.mjs",
+    "./session-index": {
+      "types": "./src/session-index.d.ts",
+      "default": "./src/session-index.mjs"
+    },
     "./authority-transition-state": "./src/authority-transition-state.mjs",
     "./authority-transition-fsm": "./src/authority-transition-fsm.mjs",
     "./recovery-attempt-state": "./src/recovery-attempt-state.mjs",

@@ -3,6 +3,7 @@ import { basename, dirname, join, parse, resolve } from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { agentIdentityRefMatchesRequest } from '@narada2/agent-identity';
+import { NARADA_AGENT_RUNTIME_SERVER_KIND } from '@narada2/carrier-runtime-contract/carrier-runtime-selection';
 import { runGovernedCommandSync, spawnHiddenPostureProcess, startOperatorTerminal } from '@narada2/process-launch-posture';
 import { buildLaunchProcessOwnership, launchSessionIdFromToken, type LaunchProcessOwnership } from '@narada2/launch-process-ownership';
 
@@ -101,7 +102,7 @@ function tsxImportPath(): string {
   return pathToFileURL(requireFromLauncherRuntime.resolve('tsx')).href;
 }
 
-export interface CarrierStatusOptions {
+export interface OperatorSurfaceRuntimeStatusOptions {
   siteRoot: string;
   agent?: string;
   carrier?: string;
@@ -165,7 +166,7 @@ export interface AgentStartCommandResult {
   error?: string;
 }
 
-export interface CarrierStatusResult {
+export interface OperatorSurfaceRuntimeStatusResult {
   schema: 'narada.carrier.status.v0';
   status: 'ok' | 'not_found';
   mutation_performed: false;
@@ -315,11 +316,12 @@ export function classifyAgentStartLaunchBindingStatus(
 
 export function shouldDetachAgentStartProcess(options: Pick<AgentStartOptions, 'exec' | 'wait' | 'carrier' | 'runtime'>): boolean {
   if (options.exec !== true || options.wait === true) return false;
-  if (options.runtime !== 'narada-agent-runtime-server') return false;
-  return options.carrier === 'agent-cli' || options.carrier === 'agent-web-ui';
+  return options.runtime === NARADA_AGENT_RUNTIME_SERVER_KIND;
 }
 
-export function getCarrierStatus(options: CarrierStatusOptions): CarrierStatusResult {
+export function getOperatorSurfaceRuntimeStatus(
+  options: OperatorSurfaceRuntimeStatusOptions,
+): OperatorSurfaceRuntimeStatusResult {
   const siteRoot = resolve(options.siteRoot);
   const launchResultsDir = join(siteRoot, '.ai', 'runtime', 'agent-start-results');
   const allSummaries = readLaunchResults(launchResultsDir);
@@ -348,8 +350,10 @@ export function getCarrierStatus(options: CarrierStatusOptions): CarrierStatusRe
   };
 }
 
-export function getCarrierControlPath(options: CarrierStatusOptions): CarrierStatusResult {
-  return getCarrierStatus(options);
+export function getOperatorSurfaceRuntimeControlPath(
+  options: OperatorSurfaceRuntimeStatusOptions,
+): OperatorSurfaceRuntimeStatusResult {
+  return getOperatorSurfaceRuntimeStatus(options);
 }
 
 export function runAgentStartCommand(options: AgentStartOptions): AgentStartCommandResult {

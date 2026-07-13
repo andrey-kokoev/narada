@@ -19,6 +19,11 @@ export type {
 import type { CliFormat } from '../lib/cli-output.js';
 import type { ExitCode } from '../lib/exit-codes.js';
 import type { ResolvedSiteRoot } from '../lib/site-root-resolver.js';
+import type {
+  WorkspaceLaunchSelection,
+  WorkspaceLaunchSelectionMode,
+  WorkspaceLaunchSelectorModel,
+} from '@narada2/workspace-launch-contract';
 
 export interface WorkspaceLaunchPlanOptions {
   agent?: string[];
@@ -86,6 +91,77 @@ export interface WorkspaceLaunchRecord {
   mcp_scope: string | null;
   config_path: string;
   legacy_site?: string | null;
+}
+
+export interface WorkspaceLaunchResultAgentInput {
+  runtime_start_execution_mode?: unknown;
+  hidden_runtime_start_command?: unknown;
+  runtime_start_command?: unknown;
+  runtime_start_cwd?: unknown;
+  workspace_root?: unknown;
+  site_root?: unknown;
+}
+
+export interface WorkspaceLaunchResultTerminalHandoffInput {
+  wt_args?: unknown;
+}
+
+export interface WorkspaceLaunchResultRecord {
+  count?: unknown;
+  error?: unknown;
+  reason?: unknown;
+  result_path?: unknown;
+  wt_exit_code?: unknown;
+  hidden_runtime_invoked?: unknown;
+  hidden_runtime_launches: unknown[];
+  selected_agents: WorkspaceLaunchResultAgentInput[];
+  wt_args?: unknown;
+  operator_terminal_handoff?: WorkspaceLaunchResultTerminalHandoffInput | null;
+}
+
+export interface WorkspaceLaunchSelectionSiteCatalogEntry {
+  site_id: string | null;
+  site_root: string;
+  source: string;
+}
+
+export interface WorkspaceLaunchRememberedSelectionSemantics {
+  schema: 'narada.workspace_launch.remembered_selection_semantics.v1';
+  role: 'form_defaults_only';
+  binds_runtime_session: false;
+  binds_launch_session: false;
+  launch_submission: 'always_creates_new_launch_session';
+}
+
+export interface WorkspaceLaunchSelectionUiModel {
+  records: WorkspaceLaunchRecord[];
+  siteChoices: string[];
+  siteCatalog: WorkspaceLaunchSelectionSiteCatalogEntry[];
+  rememberedSelection: WorkspaceLaunchSelection | null;
+  rememberedSelectionSemantics: WorkspaceLaunchRememberedSelectionSemantics;
+  initialSites: string[];
+  initialRoles: string[];
+  initialOperatorSurfaces: string[];
+  initialRuntime: string;
+  initialIntelligenceProvider: string;
+  initialSelectionMode: WorkspaceLaunchSelectionMode;
+  narsOperatorSurfaceChoices: string[];
+  selectorModel: WorkspaceLaunchSelectorModel;
+  explicitSelection: {
+    site: boolean;
+    role: boolean;
+    operatorSurface: boolean;
+    runtime: boolean;
+    intelligenceProvider: boolean;
+  };
+}
+
+export interface WorkspaceLaunchActionRefusalPayload {
+  schema: 'narada.workspace_launch.action_refusal.v1';
+  status: 'refused';
+  reason_code: string;
+  message: string;
+  dashboard?: WorkspaceLaunchDashboardState;
 }
 
 export interface WorkspaceLaunchAgentPlan extends WorkspaceLaunchRecord {

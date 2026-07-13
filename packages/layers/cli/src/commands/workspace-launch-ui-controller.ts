@@ -23,6 +23,7 @@ import type { ResolvedSiteRoot } from '../lib/site-root-resolver.js';
 import type { WorkspaceLaunchSelection as WorkspaceLaunchBrowserSelection } from '@narada2/workspace-launch-contract';
 import type {
   WorkspaceLaunchAttemptRecord,
+  WorkspaceLaunchActionRefusalPayload,
   WorkspaceLaunchCommandOutput,
   WorkspaceLaunchCommandResult,
   WorkspaceLaunchDashboardState,
@@ -468,7 +469,7 @@ function attachCommandForAction(attempt: WorkspaceLaunchAttemptRecord, action: s
   return null;
 }
 
-function actionRefusal(reason_code: string, message: string, status: number, dashboard?: WorkspaceLaunchDashboardState): { status: number; payload: Record<string, unknown> } {
+function actionRefusal(reason_code: string, message: string, status: number, dashboard?: WorkspaceLaunchDashboardState): { status: number; payload: WorkspaceLaunchActionRefusalPayload } {
   return {
     status,
     payload: {

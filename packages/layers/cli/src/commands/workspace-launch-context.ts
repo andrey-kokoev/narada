@@ -16,7 +16,11 @@ import {
   type WorkspaceLaunchSelectionContext,
 } from './workspace-launch-provider-context.js';
 import type { WorkspaceLaunchRegistryContext } from './workspace-launch-registry.js';
-import type { WorkspaceLaunchPlanOptions, WorkspaceLaunchRecord } from './workspace-launch-types.js';
+import type {
+  WorkspaceLaunchPlanOptions,
+  WorkspaceLaunchRecord,
+  WorkspaceLaunchSelectionUiModel,
+} from './workspace-launch-types.js';
 
 export type {
   WorkspaceLaunchProviderRegistry,
@@ -37,7 +41,7 @@ export interface WorkspaceLaunchSelectionServices {
     options: WorkspaceLaunchPlanOptions,
     rememberedSelection?: WorkspaceLaunchBrowserSelection | null,
     siteCatalog?: ResolvedSiteRoot[],
-  ): Record<string, unknown>;
+  ): WorkspaceLaunchSelectionUiModel;
   normalizeInteractiveOperatorSurfaceValues(values: string[]): string[];
   roleChoicesForSelectedSites(records: WorkspaceLaunchRecord[], siteSelectors: string[]): string[];
   initialRoleValuesForInteractiveSelection(roleChoices: string[], explicitRoles?: string[]): string[];

@@ -2,11 +2,12 @@ import { appendFile } from 'node:fs/promises';
 import { emitCliOutputAdmission } from '../lib/cli-output.js';
 import type {
   WorkspaceLaunchAttemptRecord,
+  WorkspaceLaunchResultRecord,
   WorkspaceLauncherOutputProjection,
 } from './workspace-launch-types.js';
 import { isRecord, stringArray } from './workspace-launch-support.js';
 
-export function workspaceLaunchTerminalHandoffArgs(record: Record<string, unknown>): string[] {
+export function workspaceLaunchTerminalHandoffArgs(record: WorkspaceLaunchResultRecord): string[] {
   const topLevel = stringArray(record.wt_args);
   if (topLevel.length > 0) return topLevel;
   const terminalHandoff = isRecord(record.operator_terminal_handoff) ? record.operator_terminal_handoff : null;

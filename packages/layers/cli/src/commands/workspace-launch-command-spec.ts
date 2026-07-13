@@ -1,5 +1,11 @@
 import { join } from 'node:path';
 
+export interface WorkspaceLaunchCommandSpec {
+  executable: string;
+  args: string[];
+  cwd?: string | null;
+}
+
 export interface WorkspaceLaunchRuntimeCommandOptions {
   operatorSurface: string;
   siteRoot: string;
@@ -18,10 +24,10 @@ export interface WorkspaceLaunchRuntimeCommandOptions {
 
 export type WorkspaceLaunchRuntimeCommandMode = 'execute' | 'dry-run';
 
-export function workspaceLaunchRuntimeArguments(
+export function workspaceLaunchRuntimeCommandSpec(
   options: WorkspaceLaunchRuntimeCommandOptions,
   mode: WorkspaceLaunchRuntimeCommandMode,
-): string[] {
+): WorkspaceLaunchCommandSpec {
   const args = [
     'operator-surface', 'runtime', 'start', options.operatorSurface,
     '--site-root', options.siteRoot,
@@ -38,17 +44,39 @@ export function workspaceLaunchRuntimeArguments(
   if (options.launchBindingPath) args.push('--launch-binding', options.launchBindingPath);
   if (!options.launchBindingPath) args.push('--launch-session-id', options.launchSessionId ?? '');
   if (options.waitForEnter) args.push('--wait');
-  return args;
+  return { executable: 'narada', args };
 }
 
-export function workspaceLaunchPnpmNaradaCommand(naradaProper: string, runtimeArguments: string[]): string[] {
-  return ['pnpm', '--dir', naradaProper, 'exec', 'narada', ...runtimeArguments];
+export function workspaceLaunchPnpmNaradaCommandSpec(
+  naradaProper: string,
+  runtimeCommand: WorkspaceLaunchCommandSpec,
+): WorkspaceLaunchCommandSpec {
+  return {
+    executable: 'pnpm',
+    args: ['--dir', naradaProper, 'exec', runtimeCommand.executable, ...runtimeCommand.args],
+    cwd: runtimeCommand.cwd,
+  };
 }
 
-export function workspaceLaunchNodeNaradaCommand(naradaProper: string, runtimeArguments: string[]): string[] {
-  return [process.execPath, join(naradaProper, 'packages', 'layers', 'cli', 'dist', 'main.js'), ...runtimeArguments];
+export function workspaceLaunchNodeNaradaCommandSpec(
+  naradaProper: string,
+  runtimeCommand: WorkspaceLaunchCommandSpec,
+): WorkspaceLaunchCommandSpec {
+  return {
+    executable: process.execPath,
+    args: [join(naradaProper, 'packages', 'layers', 'cli', 'dist', 'main.js'), ...runtimeCommand.args],
+    cwd: runtimeCommand.cwd,
+  };
 }
 
-export function workspaceLaunchSmokeCommand(runtimeArguments: string[]): string[] {
-  return ['narada', ...runtimeArguments];
+export function workspaceLaunchSmokeCommandSpec(runtimeCommand: WorkspaceLaunchCommandSpec): WorkspaceLaunchCommandSpec {
+  return {
+    executable: runtimeCommand.executable,
+    args: [...runtimeCommand.args],
+    cwd: runtimeCommand.cwd,
+  };
+}
+
+export function workspaceLaunchCommandArgv(command: WorkspaceLaunchCommandSpec): string[] {
+  return [command.executable, ...command.args];
 }

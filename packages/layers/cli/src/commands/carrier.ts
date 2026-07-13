@@ -2,11 +2,15 @@ import type { CommandContext } from '../lib/command-wrapper.js';
 import { formattedResult } from '../lib/cli-output.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import {
-  getCarrierControlPath,
-  getCarrierStatus,
+  getOperatorSurfaceRuntimeControlPath,
+  getOperatorSurfaceRuntimeStatus,
 } from '../lib/launcher-runtime.js';
-import { defaultRuntimeForCarrier } from '@narada2/carrier-runtime-contract/carrier-runtime-selection';
-import { formatCarrierStatus, requireAgent, requireSiteRoot } from './carrier-support.js';
+import { defaultRuntimeForCarrier as defaultRuntimeForOperatorSurface } from '@narada2/carrier-runtime-contract/carrier-runtime-selection';
+import {
+  formatOperatorSurfaceRuntimeStatus,
+  requireAgent,
+  requireSiteRoot,
+} from './carrier-support.js';
 import {
   operatorSurfaceRuntimeStartCommand,
   type OperatorSurfaceRuntimeStartOptions,
@@ -18,7 +22,7 @@ export async function carrierStatusCommand(
   options: CarrierCommandOptions,
   _context: CommandContext,
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
-  const status = getCarrierStatus({
+  const status = getOperatorSurfaceRuntimeStatus({
     siteRoot: requireSiteRoot(options),
     agent: options.agent,
     carrier: options.carrier,
@@ -27,7 +31,7 @@ export async function carrierStatusCommand(
 
   return {
     exitCode: ExitCode.SUCCESS,
-    result: formattedResult(status, formatCarrierStatus(status), options.format ?? 'auto'),
+    result: formattedResult(status, formatOperatorSurfaceRuntimeStatus(status), options.format ?? 'auto'),
   };
 }
 
@@ -35,7 +39,7 @@ export async function carrierControlPathCommand(
   options: CarrierCommandOptions,
   _context: CommandContext,
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
-  const status = getCarrierControlPath({
+  const status = getOperatorSurfaceRuntimeControlPath({
     siteRoot: requireSiteRoot(options),
     agent: options.agent,
     carrier: options.carrier,
@@ -60,7 +64,7 @@ export async function carrierReadinessCommand(
   options: CarrierCommandOptions,
   _context: CommandContext,
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
-  const status = getCarrierStatus({
+  const status = getOperatorSurfaceRuntimeStatus({
     siteRoot: requireSiteRoot(options),
     agent: options.agent,
     carrier: options.carrier,
@@ -109,7 +113,7 @@ export async function carrierRestartCommand(
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
   const siteRoot = requireSiteRoot(options);
   const carrier = options.carrier ?? 'agent-cli';
-  const runtime = defaultRuntimeForCarrier(carrier);
+  const runtime = defaultRuntimeForOperatorSurface(carrier);
   const agent = requireAgent(options);
   const result = unsupportedCarrierLifecycle('restart', siteRoot, agent, carrier, runtime);
   return {
@@ -124,7 +128,7 @@ export async function carrierDrainCommand(
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
   const siteRoot = requireSiteRoot(options);
   const carrier = options.carrier ?? 'agent-cli';
-  const runtime = defaultRuntimeForCarrier(carrier);
+  const runtime = defaultRuntimeForOperatorSurface(carrier);
   const agent = requireAgent(options);
   const result = unsupportedCarrierLifecycle('drain', siteRoot, agent, carrier, runtime);
   return {
@@ -139,7 +143,7 @@ export async function carrierReloadCommand(
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
   const siteRoot = requireSiteRoot(options);
   const carrier = options.carrier ?? 'agent-cli';
-  const runtime = defaultRuntimeForCarrier(carrier);
+  const runtime = defaultRuntimeForOperatorSurface(carrier);
   const agent = requireAgent(options);
   if (carrier === 'agent-cli') {
     const restart = await carrierRestartCommand(options, _context);
@@ -185,4 +189,3 @@ function unsupportedCarrierLifecycle(
     reason: `Runtime ${action} is not wired for operator surface ${carrier}.`,
   };
 }
-
