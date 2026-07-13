@@ -18,3 +18,4 @@ export {
   runAiProcessInvocationSync,
   spawnAiProcessInvocation,
 } from './ai-process-invocation.mjs';
+export * from './ai-process-invocation-state.mjs';

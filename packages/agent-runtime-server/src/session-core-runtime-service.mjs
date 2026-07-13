@@ -236,6 +236,7 @@ export function createSessionCoreRuntimeService({ runtimeContext, callChatApiFn,
       subscriptionId: 'runtime-jsonl',
       send: (envelope) => writer.write(envelope.payload),
     });
+    subscription.markLive({ source: 'jsonl_stdio_ready' });
     const sessionStartedEvent = supervisor.core.appendEvent({
       event: 'session_started',
       runtime: 'narada-agent-runtime-server',

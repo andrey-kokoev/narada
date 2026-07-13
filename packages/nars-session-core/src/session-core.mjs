@@ -18,6 +18,13 @@ import {
   normalizeNarsTurnRecord,
   terminalStateForTurnState,
 } from './turn-state.mjs';
+import {
+  createNarsRecoveryAttemptId,
+  createNarsRecoveryAttemptRecord,
+  isNarsRecoveryAttemptState,
+  normalizeNarsRecoveryAttemptRecord,
+  transitionNarsRecoveryAttempt,
+} from './recovery-attempt-state.mjs';
 
 const LIFECYCLE_TRANSITIONS = Object.freeze({
   starting: new Set(['ready', 'closing', 'failed']),
@@ -41,6 +48,7 @@ export function createNarsSessionCore({
   const eventHub = createNarsEventHub({ maxBuffer: maxEventBuffer });
   const existing = readNarsEventLog(eventsPath).events;
   const turns = rehydrateTurnRecords(existing, { sessionId, agentId });
+  const recoveryAttempts = rehydrateRecoveryAttempts(existing, { sessionId });
   const existingOutcomeCounts = countExistingEvents(existing, requestOutcomeForEvent);
   const existingIssueCounts = countExistingEvents(existing, requestIssueForEvent);
   let sequence = existing.reduce((max, event, index) => Math.max(max, Number(event?.event_sequence ?? event?.sequence) || index + 1), 0);
@@ -81,6 +89,52 @@ export function createNarsSessionCore({
     incrementCount(state.requestOutcomeCounts, requestOutcomeForEvent(published));
     incrementCount(state.requestIssueCounts, requestIssueForEvent(published));
     return published;
+  }
+
+  function beginRecoveryAttempt(turnId, evidence = {}) {
+    const normalizedTurnId = String(turnId);
+    const attemptNumber = [...recoveryAttempts.values()]
+      .filter((attempt) => attempt.turn_id === normalizedTurnId)
+      .reduce((max, attempt) => Math.max(max, attempt.attempt_number), 0) + 1;
+    const requestedAt = now();
+    const record = createNarsRecoveryAttemptRecord({
+      attemptId: evidence.attempt_id ?? createNarsRecoveryAttemptId(),
+      turnId: normalizedTurnId,
+      inputEventId: evidence.input_event_id ?? normalizedTurnId,
+      sessionId,
+      attemptNumber,
+      recoveryKind: evidence.recovery_kind ?? 'queue_replay',
+      requestedAt,
+      reason: evidence.reason ?? 'runtime_recovery_replay',
+    });
+    const published = appendEvent({
+      event: 'recovery_attempt_state_transition',
+      ...record,
+      previous_state: null,
+      ...evidence,
+      recovery_attempt_state: 'requested',
+      timestamp: requestedAt,
+    });
+    const persisted = normalizeNarsRecoveryAttemptRecord({ ...record, updated_at: published.timestamp });
+    recoveryAttempts.set(persisted.attempt_id, persisted);
+    return persisted;
+  }
+
+  function transitionRecoveryAttempt(attemptId, nextState, evidence = {}) {
+    const current = recoveryAttempts.get(String(attemptId));
+    if (!current) throw new Error(`nars_recovery_attempt_not_found:${attemptId}`);
+    const next = transitionNarsRecoveryAttempt(current, nextState, { ...evidence, updated_at: now() });
+    if (next.recovery_attempt_state === current.recovery_attempt_state) return current;
+    const published = appendEvent({
+      event: 'recovery_attempt_state_transition',
+      ...next,
+      previous_state: current.recovery_attempt_state,
+      ...evidence,
+      recovery_attempt_state: nextState,
+    });
+    const persisted = normalizeNarsRecoveryAttemptRecord({ ...next, updated_at: published.timestamp });
+    recoveryAttempts.set(persisted.attempt_id, persisted);
+    return persisted;
   }
 
   function transition(next, evidence = {}) {
@@ -375,6 +429,7 @@ export function createNarsSessionCore({
       artifacts: readNarsArtifactIndex({ sessionPath }),
       active_turn: state.activeTurnId ? turns.get(state.activeTurnId) ?? null : null,
       turns: [...turns.values()],
+      recovery_attempts: [...recoveryAttempts.values()],
     };
   }
 
@@ -389,6 +444,10 @@ export function createNarsSessionCore({
     prepareTurn,
     transitionTurn,
     observeTurnEvent,
+    beginRecoveryAttempt,
+    transitionRecoveryAttempt,
+    recoveryAttempt: (attemptId) => recoveryAttempts.get(String(attemptId)) ?? null,
+    recoveryAttempts: () => [...recoveryAttempts.values()],
     turn: (turnId) => turns.get(String(turnId)) ?? null,
     turns: () => [...turns.values()],
     createQueue,
@@ -420,6 +479,46 @@ function rehydrateSessionLifecycle(events) {
     }
   }
   return lifecycle;
+}
+
+function rehydrateRecoveryAttempts(events, { sessionId = null } = {}) {
+  const attempts = new Map();
+  for (const event of events) {
+    if (event.event !== 'recovery_attempt_state_transition' || !event.attempt_id) continue;
+    const nextState = event.recovery_attempt_state;
+    if (!isNarsRecoveryAttemptState(nextState)) continue;
+    const attemptId = String(event.attempt_id);
+    const current = attempts.get(attemptId);
+    if (!current) {
+      let created = createNarsRecoveryAttemptRecord({
+        attemptId,
+        turnId: event.turn_id,
+        inputEventId: event.input_event_id,
+        sessionId: event.session_id ?? sessionId,
+        attemptNumber: event.attempt_number,
+        recoveryKind: event.recovery_kind,
+        requestedAt: event.timestamp ?? null,
+        reason: event.reason ?? null,
+      });
+      if (nextState !== 'requested') {
+        created = transitionNarsRecoveryAttempt(created, nextState, {
+          reason: event.reason,
+          error: event.error,
+          updated_at: event.timestamp ?? null,
+        });
+      }
+      attempts.set(attemptId, normalizeNarsRecoveryAttemptRecord({ ...created, updated_at: event.timestamp ?? created.updated_at, error: event.error ?? created.error }));
+      continue;
+    }
+    if (current.recovery_attempt_state === nextState) continue;
+    const transitioned = transitionNarsRecoveryAttempt(current, nextState, {
+      reason: event.reason,
+      error: event.error,
+      updated_at: event.timestamp ?? current.updated_at,
+    });
+    attempts.set(attemptId, normalizeNarsRecoveryAttemptRecord({ ...transitioned, updated_at: event.timestamp ?? transitioned.updated_at, error: event.error ?? transitioned.error }));
+  }
+  return attempts;
 }
 
 function rehydrateTurnRecords(events, defaults) {

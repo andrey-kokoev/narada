@@ -7,6 +7,7 @@ import {
   NARS_AUTHORITY_RUNTIME_SOURCE_WRITE_ADMISSIONS,
   NARS_AUTHORITY_RUNTIME_TARGET_WRITE_ADMISSIONS,
 } from '@narada2/carrier-protocol';
+import { assertNarsAuthorityRuntimeHostTransition } from './authority-transition-fsm.mjs';
 import { updateNarsSessionAuthorityTransitionState } from './session-index.mjs';
 
 export const NARS_AUTHORITY_TRANSITION_SOURCE_STATE_SCHEMA = 'narada.nars.authority_transition_source_state.v1';
@@ -89,6 +90,12 @@ export function planTargetAuthorityTransition({ sourceAuthorityRuntimeHost = 'lo
 
 export function prepareTargetAuthority({ path, sessionPath, state, targetAuthorityLocator = null, supersededBySessionId = null, authorityLocatorRef = null, transitionPlan = null, reason = null, requestedBy = null, now = new Date() } = {}) {
   const current = normalizeAuthorityTransitionSourceState(state ?? readAuthorityTransitionSourceState(path));
+  if (current.authority_transition_state === 'not_requested' || current.authority_transition_state == null) {
+    assertNarsAuthorityRuntimeHostTransition(current.authority_transition_state, 'proposed');
+    assertNarsAuthorityRuntimeHostTransition('proposed', 'preparing_target');
+  } else {
+    assertNarsAuthorityRuntimeHostTransition(current.authority_transition_state, 'preparing_target');
+  }
   const occurredAt = now.toISOString();
   const next = writeAuthorityTransitionSourceState(path, {
     ...current,
@@ -116,6 +123,8 @@ export function prepareTargetAuthority({ path, sessionPath, state, targetAuthori
 
 export function activateTargetAuthority({ path, sessionPath, state, activationId, targetFirstSequence, authorityEpochToken, targetAuthorityLocator = null, supersededBySessionId = null, authorityLocatorRef = null, reason = null, requestedBy = null, now = new Date() } = {}) {
   const current = normalizeAuthorityTransitionSourceState(state ?? readAuthorityTransitionSourceState(path));
+  assertNarsAuthorityRuntimeHostTransition(current.authority_transition_state, 'target_activating');
+  assertNarsAuthorityRuntimeHostTransition('target_activating', 'target_active');
   const occurredAt = now.toISOString();
   const next = writeAuthorityTransitionSourceState(path, {
     ...current,
@@ -147,6 +156,7 @@ export function activateTargetAuthority({ path, sessionPath, state, activationId
 export function beginSourceDrain({ path, sessionPath, state, reason = null, requestedBy = null, now = new Date() } = {}) {
   const current = normalizeAuthorityTransitionSourceState(state ?? readAuthorityTransitionSourceState(path));
   if (current.source_write_admission === 'sealed') return current;
+  assertNarsAuthorityRuntimeHostTransition(current.authority_transition_state, 'source_draining');
   const occurredAt = now.toISOString();
   const next = writeAuthorityTransitionSourceState(path, {
     ...current,
@@ -168,6 +178,7 @@ export function beginSourceDrain({ path, sessionPath, state, reason = null, requ
 
 export function sealSourceAuthority({ path, sessionPath, state, sourceLastSequence = null, reason = null, requestedBy = null, now = new Date() } = {}) {
   const current = normalizeAuthorityTransitionSourceState(state ?? readAuthorityTransitionSourceState(path));
+  assertNarsAuthorityRuntimeHostTransition(current.authority_transition_state, 'source_sealed');
   const occurredAt = now.toISOString();
   const next = writeAuthorityTransitionSourceState(path, {
     ...current,

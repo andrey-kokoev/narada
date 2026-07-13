@@ -99,6 +99,7 @@ test('spawnAiProcessInvocation supports explicit duplicate override', () => {
   });
   assert.equal(called, true);
   assert.equal(owner.aiProcessInvocation.admitted, true);
+  assert.equal(owner.aiProcessInvocation.lifecycle_state, 'spawned');
 });
 
 test('spawnAiProcessInvocation writes exit evidence when the child closes', () => {
@@ -110,7 +111,7 @@ test('spawnAiProcessInvocation writes exit evidence when the child closes', () =
     isPidAlive: (pid) => pid === 456,
     spawnProcess: () => ({ child, terminateTree() {} }),
   });
-  assert.equal(owner.aiProcessInvocation.event, 'launch');
+  assert.equal(owner.aiProcessInvocation.event, 'spawn');
   closeHandler(0, null);
   const artifactDir = join(root, '.ai', 'runtime', 'ai-process-invocation', 'artifacts');
   const exitArtifactName = readdirSync(artifactDir).find((name) => name.includes('-exit-'));
@@ -119,4 +120,5 @@ test('spawnAiProcessInvocation writes exit evidence when the child closes', () =
   assert.equal(exitArtifact.event, 'exit');
   assert.equal(exitArtifact.lifecycle_state, 'exited');
   assert.equal(exitArtifact.exit_code, 0);
+  assert.equal(owner.aiProcessInvocation.lifecycle_state, 'released');
 });

@@ -2,6 +2,10 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { runHiddenPostureCommandSync } from '@narada2/process-launch-posture';
+import {
+  aiProcessInvocationEventForState,
+  transitionAiProcessInvocation,
+} from './ai-process-invocation-state.mjs';
 
 const SCHEMA = 'narada.ai_process_invocation.v1';
 const SECRET_NAME = /(key|token|secret|password|credential|cookie|authorization)/i;
@@ -15,6 +19,13 @@ export class AiProcessInvocationRefusalError extends Error {
   }
 }
 
+function transitionAndWrite(admission, nextState, evidence, artifactDir) {
+  const next = transitionAiProcessInvocation({ ...admission, ...evidence }, nextState, evidence);
+  Object.assign(admission, next);
+  admission.artifact_path = writeEvidenceArtifact(artifactDir, admission);
+  return admission;
+}
+
 function leaseRoot(admission) {
   return admission?.lease_path ? resolve(admission.lease_path, '..', '..') : aiProcessInvocationRoot({ siteRoot: admission.site_root, cwd: admission.cwd });
 }
@@ -24,17 +35,15 @@ function liveCapRefusal({ record, leaseDir, artifactDir, leasePath, options, all
   if (allowDuplicate || record.adapter_kind !== 'codex' || !Number.isInteger(cap) || cap <= 0) return null;
   const live = liveLeases(leaseDir, options.isPidAlive).filter((candidate) => sameSiteSessionInvocationScope(candidate, record));
   if (live.length < cap) return null;
-  const refusal = {
+  const refusal = transitionAiProcessInvocation({
     ...record,
-    event: 'refusal',
-    lifecycle_state: 'refused',
     admitted: false,
     reason: 'codex_live_invocation_cap_exceeded',
     existing_invocations: live,
     existing_invocation: live[0] ?? null,
     cleanup_hint: 'Stop or wait for an existing Codex invocation in this site/session scope, or use an explicit duplicate override when policy permits it.',
     lease_path: leasePath,
-  };
+  }, 'refused', { reason: 'codex_live_invocation_cap_exceeded' });
   refusal.artifact_path = writeEvidenceArtifact(artifactDir, refusal);
   return refusal;
 }
@@ -112,6 +121,10 @@ export function buildAiProcessInvocationRecord(invocation, options = {}) {
     policy: normalizePolicy(invocation, options),
     owner_pid: ownerPid,
     created_at: now instanceof Date ? now.toISOString() : new Date(now).toISOString(),
+    event: aiProcessInvocationEventForState('planned'),
+    lifecycle_state: 'planned',
+    terminal_state: null,
+    lifecycle_history: [],
   };
 }
 
@@ -127,16 +140,14 @@ export function admitAiProcessInvocation(invocation, options = {}) {
 
   const existing = readJsonIfPresent(leasePath);
   if (existing && isPidAlive(existing.owner_pid, options.isPidAlive) && !allowDuplicate) {
-    const refusal = {
+    const refusal = transitionAiProcessInvocation({
       ...record,
-      event: 'refusal',
-      lifecycle_state: 'refused',
       admitted: false,
       reason: 'duplicate_live_invocation',
       existing_invocation: existing,
       cleanup_hint: 'Stop the existing invocation or set NARADA_AI_PROCESS_INVOCATION_ALLOW_DUPLICATE=1 for an explicit duplicate launch.',
       lease_path: leasePath,
-    };
+    }, 'refused', { reason: 'duplicate_live_invocation' });
     refusal.artifact_path = writeEvidenceArtifact(artifactDir, refusal);
     return refusal;
   }
@@ -147,26 +158,32 @@ export function admitAiProcessInvocation(invocation, options = {}) {
   const capRefusal = liveCapRefusal({ record, leaseDir, artifactDir, leasePath, options, allowDuplicate });
   if (capRefusal) return capRefusal;
 
-  const admitted = { ...record, event: 'launch', lifecycle_state: 'admitted', admitted: true, lease_path: leasePath };
+  const admitted = transitionAiProcessInvocation({ ...record, admitted: true, lease_path: leasePath }, 'admitted', { reason: 'lease_created' });
   writeFileSync(leasePath, `${JSON.stringify(admitted, null, 2)}\n`, 'utf8');
   admitted.artifact_path = writeEvidenceArtifact(artifactDir, admitted);
   return admitted;
 }
 
 export function releaseAiProcessInvocationLease(admission, result = {}) {
-  if (!admission?.admitted) return;
+  if (!admission?.admitted || admission.lifecycle_state === 'refused') return admission;
   const artifactDir = join(leaseRoot(admission), 'artifacts');
   try { rmSync(admission.lease_path, { force: true }); } catch { /* best effort */ }
   try {
-    writeEvidenceArtifact(artifactDir, {
-      ...admission,
-      event: 'exit',
-      lifecycle_state: 'exited',
-      exit_code: result.exitCode ?? result.status ?? null,
-      signal: result.signal ?? null,
-      exited_at: new Date().toISOString(),
-    });
+    if (admission.lifecycle_state === 'spawned') {
+      transitionAndWrite(admission, 'exited', {
+        exit_code: result.exitCode ?? result.status ?? null,
+        signal: result.signal ?? null,
+        exited_at: new Date().toISOString(),
+      }, artifactDir);
+    }
+    if (admission.lifecycle_state === 'admitted') {
+      transitionAndWrite(admission, 'failed', { reason: 'lease_released_before_spawn' }, artifactDir);
+    }
+    if (admission.lifecycle_state === 'exited' || admission.lifecycle_state === 'failed' || admission.lifecycle_state === 'interrupted') {
+      transitionAndWrite(admission, 'released', { reason: 'lease_removed' }, artifactDir);
+    }
   } catch { /* evidence failure must not mask process result */ }
+  return admission;
 }
 
 function defaultAiProcessInvocationRunner(command, args, options) {
@@ -181,11 +198,13 @@ export function runAiProcessInvocationSync(invocation, { runProcessSync, spawnSy
   }
   const runner = runProcessSync ?? spawnSync ?? defaultAiProcessInvocationRunner;
   try {
+    transitionAndWrite(admission, 'spawned', { mode: 'sync' }, join(leaseRoot(admission), 'artifacts'));
     const result = runner(invocation.command, invocation.argv ?? [], spawnOptions);
     result.aiProcessInvocation = admission;
     releaseAiProcessInvocationLease(admission, result);
     return result;
   } catch (error) {
+    transitionAndWrite(admission, 'failed', { error: error instanceof Error ? error.message : String(error) }, join(leaseRoot(admission), 'artifacts'));
     releaseAiProcessInvocationLease(admission, { status: null, signal: null });
     throw error;
   }
@@ -198,9 +217,11 @@ export function spawnAiProcessInvocation(invocation, { spawnProcess, spawnOption
   try {
     processOwner = spawnProcess(invocation.command, invocation.argv ?? [], spawnOptions);
   } catch (error) {
+    transitionAndWrite(admission, 'failed', { error: error instanceof Error ? error.message : String(error) }, join(leaseRoot(admission), 'artifacts'));
     releaseAiProcessInvocationLease(admission, { status: null, signal: null });
     throw error;
   }
+  transitionAndWrite(admission, 'spawned', { mode: 'async' }, join(leaseRoot(admission), 'artifacts'));
   const child = processOwner?.child ?? processOwner;
   child?.once?.('close', (code, signal) => releaseAiProcessInvocationLease(admission, { exitCode: code, signal }));
   child?.once?.('error', () => releaseAiProcessInvocationLease(admission, { exitCode: null, signal: null }));

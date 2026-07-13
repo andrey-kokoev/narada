@@ -3,9 +3,15 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "narada": {
+    "package_role": "carrier_provider_support",
+    "owns": ["ai_process_invocation_state"],
+    "does_not_own": ["session_persistence", "provider_turn_lifecycle", "mcp_hosting"]
+  },
   "exports": {
     ".": "./src/index.mjs",
     "./ai-process-invocation": "./src/ai-process-invocation.mjs",
+    "./ai-process-invocation-state": "./src/ai-process-invocation-state.mjs",
     "./codex-subscription-auth": "./src/codex-subscription-auth.mjs",
     "./codex-subscription-command": "./src/codex-subscription-command.mjs",
     "./codex-subscription-models": "./src/codex-subscription-models.mjs",
@@ -13,7 +19,7 @@
   },
   "scripts": {
     "test": "node --test src/*.test.mjs",
-    "typecheck": "tsc --noEmit --allowJs --checkJs false src/index.mjs src/codex-subscription-auth.mjs src/codex-subscription-command.mjs src/codex-subscription-models.mjs src/ai-process-invocation.mjs"
+    "typecheck": "tsc --noEmit --allowJs --checkJs false src/index.mjs src/codex-subscription-auth.mjs src/codex-subscription-command.mjs src/codex-subscription-models.mjs src/ai-process-invocation-state.mjs src/ai-process-invocation.mjs"
   },
   "dependencies": {
     "@narada2/process-launch-posture": "workspace:*"

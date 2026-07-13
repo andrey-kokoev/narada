@@ -90,6 +90,8 @@ export function startEventStreamProjection({ childStdin, eventHub, host, port, e
           const subscriptionId = params.subscription_id ?? `sub_${message.id ?? Date.now()}`;
           const subscription = eventHub.subscribe({ subscriptionId, filters, send });
           subscriptions.add(subscription);
+          if (params.include_replay === false) subscription.markLive({ source: 'subscription_without_replay' });
+          else subscription.beginReplay({ source: eventsPath ? 'event_log' : 'memory_event_hub' });
           const replayPage = params.include_replay === false || !eventsPath ? null : readNarsEventLogPage({
             eventsPath,
             afterSequence: params.since_sequence,
@@ -98,12 +100,14 @@ export function startEventStreamProjection({ childStdin, eventHub, host, port, e
             limit: params.max_replay ?? 100,
             direction: params.since_sequence != null || params.since_timestamp ? 'forward' : 'backward',
           });
-          const replay = replayPage ? replayPage.events : eventHub.replayFor({
-            sinceSequence: params.since_sequence,
-            sinceTimestamp: params.since_timestamp,
-            filters,
-            maxReplay: params.max_replay ?? 100,
-          });
+          const replay = params.include_replay === false
+            ? []
+            : replayPage ? replayPage.events : eventHub.replayFor({
+              sinceSequence: params.since_sequence,
+              sinceTimestamp: params.since_timestamp,
+              filters,
+              maxReplay: params.max_replay ?? 100,
+            });
           send({
             schema: 'narada.nars.events.subscription.v1',
             event: 'session_events_subscription_started',
@@ -118,6 +122,7 @@ export function startEventStreamProjection({ childStdin, eventHub, host, port, e
           for (const event of replay) {
             send({ schema: 'narada.nars.events.envelope.v1', event: 'session_event', subscription_id: subscriptionId, cursor: { sequence: event.event_sequence, next_sequence: event.event_sequence + 1 }, payload: event });
           }
+          if (subscription.state === 'replaying') subscription.markLive({ source: 'replay_complete' });
           continue;
         }
         if (message.method === 'session.events.read') {

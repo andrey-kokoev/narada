@@ -23,6 +23,7 @@ export function createNarsSessionSupervisor({
   let activeTurnId = null;
   let cancelRequested = false;
   let recoveryDrain = null;
+  let recoveryMode = false;
 
   function queueSnapshot() {
     const snapshot = queue?.state?.() ?? {};
@@ -50,10 +51,27 @@ export function createNarsSessionSupervisor({
 
   const drain = async (input) => {
     const turnId = String(input.event_id);
-    const prepared = core.prepareTurn(turnId, { reason: 'queue_replay' });
+    const isRecoveryReplay = recoveryMode;
+    let recoveryAttempt = null;
+    if (isRecoveryReplay) {
+      recoveryAttempt = core.beginRecoveryAttempt(turnId, {
+        input_event_id: input.event_id,
+        recovery_kind: 'queue_replay',
+        reason: 'session_start_recovery',
+      });
+      core.transitionRecoveryAttempt(recoveryAttempt.attempt_id, 'claimed', { reason: 'queue_item_claimed' });
+    }
+    const prepared = core.prepareTurn(turnId, {
+      reason: isRecoveryReplay ? 'queue_replay' : 'queue_drain',
+      ...(recoveryAttempt ? { recovery_attempt_id: recoveryAttempt.attempt_id } : {}),
+    });
     if (prepared.action === 'already_completed' || prepared.action === 'terminal') {
+      if (recoveryAttempt) core.transitionRecoveryAttempt(recoveryAttempt.attempt_id, 'skipped', {
+        reason: prepared.action === 'already_completed' ? 'already_completed' : 'terminal_turn',
+      });
       return { terminal_state: prepared.turn.terminal_state, replay_skipped: true };
     }
+    if (recoveryAttempt) core.transitionRecoveryAttempt(recoveryAttempt.attempt_id, 'replaying', { reason: 'carrier_replay_started' });
 
     core.transitionTurn(turnId, 'contextualized', { reason: 'input_admitted_to_turn' });
     core.transitionTurn(turnId, 'evaluating', { reason: 'turn_context_ready' });
@@ -77,6 +95,13 @@ export function createNarsSessionSupervisor({
         core.transitionTurn(turnId, 'completed', { terminal_status: 'completed' });
       }
       const finalTurn = core.turn(turnId);
+      if (recoveryAttempt) {
+        core.transitionRecoveryAttempt(recoveryAttempt.attempt_id, 'reconciled', {
+          reason: 'carrier_replay_returned',
+          terminal_state: finalTurn?.terminal_state ?? null,
+        });
+        core.transitionRecoveryAttempt(recoveryAttempt.attempt_id, 'completed', { reason: 'recovery_replay_completed' });
+      }
       return { terminal_state: finalTurn?.terminal_state ?? 'completed', result };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -86,6 +111,12 @@ export function createNarsSessionSupervisor({
         core.transitionTurn(turnId, interrupted ? 'interrupted' : 'failed', {
           error: message,
           terminal_status: interrupted ? 'interrupted' : 'failed',
+        });
+      }
+      if (recoveryAttempt) {
+        core.transitionRecoveryAttempt(recoveryAttempt.attempt_id, interrupted ? 'interrupted' : 'failed', {
+          reason: interrupted ? 'recovery_replay_interrupted' : 'recovery_replay_failed',
+          error: message,
         });
       }
       throw error;
@@ -101,9 +132,12 @@ export function createNarsSessionSupervisor({
     if (core.lifecycleState === 'starting') core.transition('ready', { supervisor: 'nars-session-core' });
     if (!queue) queue = core.createQueue({ drain });
     if (queue.pendingCount > 0 && !recoveryDrain && core.lifecycleState === 'ready') {
-      recoveryDrain = queue.drainUntilIdle().catch(async (error) => {
-        await eventSink({ kind: 'session_recovery_drain_failed', error: error instanceof Error ? error.message : String(error) });
-      });
+      recoveryMode = true;
+      recoveryDrain = queue.drainUntilIdle()
+        .catch(async (error) => {
+          await eventSink({ kind: 'session_recovery_drain_failed', error: error instanceof Error ? error.message : String(error) });
+        })
+        .finally(() => { recoveryMode = false; });
     }
     return healthSnapshot();
   }

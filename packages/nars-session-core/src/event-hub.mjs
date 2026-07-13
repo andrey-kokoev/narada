@@ -1,4 +1,5 @@
 import { eventMatchesNarsFilters } from './event-log.mjs';
+import { createNarsEventAttachmentStateMachine } from './event-attachment-state.mjs';
 
 export function createNarsEventHub({ maxBuffer = 1000 } = {}) {
   const buffer = [];
@@ -41,14 +42,41 @@ export function createNarsEventHub({ maxBuffer = 1000 } = {}) {
             payload: sequencedEvent,
           });
         } catch {
+          subscriber.fail({ reason: 'subscriber_send_failed' });
           subscribers.delete(subscriptionId);
         }
       }
       return sequencedEvent;
     },
     subscribe({ subscriptionId = `sub_${Date.now()}_${subscribers.size + 1}`, filters = {}, send }) {
-      subscribers.set(subscriptionId, { filters, send });
-      return { subscriptionId, unsubscribe: () => subscribers.delete(subscriptionId) };
+      const lifecycle = createNarsEventAttachmentStateMachine({ attachmentId: subscriptionId });
+      const remove = (reason = 'unsubscribe') => {
+        subscribers.delete(subscriptionId);
+        if (lifecycle.state === 'requested' || lifecycle.state === 'replaying' || lifecycle.state === 'live') {
+          lifecycle.transition('closing', { reason });
+        }
+        if (lifecycle.state === 'closing') lifecycle.transition('closed', { reason });
+      };
+      const fail = (evidence = {}) => {
+        if (['requested', 'replaying', 'live'].includes(lifecycle.state)) lifecycle.transition('failed', evidence);
+        subscribers.delete(subscriptionId);
+      };
+      const subscription = {
+        filters,
+        send,
+        lifecycle,
+        fail,
+      };
+      subscribers.set(subscriptionId, subscription);
+      return {
+        subscriptionId,
+        get state() { return lifecycle.state; },
+        get stateHistory() { return lifecycle.history; },
+        beginReplay: (evidence = {}) => lifecycle.transition('replaying', evidence),
+        markLive: (evidence = {}) => lifecycle.transition('live', evidence),
+        fail,
+        unsubscribe: remove,
+      };
     },
     replayFor,
     cursor() {

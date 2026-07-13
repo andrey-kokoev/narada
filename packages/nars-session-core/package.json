@@ -14,7 +14,9 @@
       "session_health_and_recovery_snapshots",
       "turn_lifecycle_state",
       "session_registry_projection",
-      "authority_transition_state"
+      "authority_transition_state",
+      "recovery_attempt_state",
+      "event_attachment_state"
     ],
     "does_not_own": [
       "provider_turn_execution",
@@ -28,12 +30,16 @@
     ".": "./src/index.mjs",
     "./event-log": "./src/event-log.mjs",
     "./event-hub": "./src/event-hub.mjs",
+    "./event-attachment-state": "./src/event-attachment-state.mjs",
     "./artifacts": "./src/artifacts.mjs",
     "./input-queue": "./src/input-queue.mjs",
+    "./input-admission-state": "./src/input-admission-state.mjs",
     "./operator-input-queue-state": "./src/operator-input-queue-state.mjs",
     "./session-status-snapshots": "./src/session-status-snapshots.mjs",
     "./session-index": "./src/session-index.mjs",
     "./authority-transition-state": "./src/authority-transition-state.mjs",
+    "./authority-transition-fsm": "./src/authority-transition-fsm.mjs",
+    "./recovery-attempt-state": "./src/recovery-attempt-state.mjs",
     "./session-core": "./src/session-core.mjs",
     "./session-supervisor": "./src/session-supervisor.mjs",
     "./turn-state": "./src/turn-state.mjs",
@@ -42,7 +48,7 @@
   },
   "scripts": {
     "test": "node --test src/*.test.mjs",
-    "typecheck": "tsc --noEmit --allowJs --checkJs false src/index.mjs src/event-log.mjs src/event-hub.mjs src/artifacts.mjs src/input-queue.mjs src/operator-input-queue-state.mjs src/session-status-snapshots.mjs src/session-index.mjs src/authority-transition-state.mjs src/turn-state.mjs src/session-core.mjs src/session-supervisor.mjs src/session-control-contract.mjs"
+    "typecheck": "tsc --noEmit --allowJs --checkJs false src/index.mjs src/event-log.mjs src/event-hub.mjs src/event-attachment-state.mjs src/artifacts.mjs src/input-queue.mjs src/input-admission-state.mjs src/operator-input-queue-state.mjs src/session-status-snapshots.mjs src/session-index.mjs src/authority-transition-fsm.mjs src/authority-transition-state.mjs src/recovery-attempt-state.mjs src/turn-state.mjs src/session-core.mjs src/session-supervisor.mjs src/session-control-contract.mjs"
   },
   "dependencies": {
     "@narada2/agent-identity": "workspace:*",
