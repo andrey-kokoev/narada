@@ -18,6 +18,24 @@ import type {
   WorkspaceLaunchProviderRegistry,
   WorkspaceLaunchSelectionContext,
 } from './workspace-launch-provider-context.js';
+import {
+  filterWorkspaceLaunchValues,
+  initialOperatorSurfaceValues,
+  initialRoleValuesForInteractiveSelection,
+  isRecord,
+  normalizeInteractiveOperatorSurfaceValues,
+  nonEmpty,
+  nonEmptyStringArray,
+  rememberedArraySelection,
+  rememberedScalarSelection,
+  stringArray,
+  unique,
+} from './workspace-launch-selection-state.js';
+export {
+  initialOperatorSurfaceValues,
+  initialRoleValuesForInteractiveSelection,
+  normalizeInteractiveOperatorSurfaceValues,
+};
 export type { WorkspaceLaunchProviderRegistry, WorkspaceLaunchSelectionContext } from './workspace-launch-provider-context.js';
 
 export type WorkspaceLaunchSelectorOption = WorkspaceLaunchSelectorOptionContract;
@@ -204,14 +222,24 @@ export function resolveWorkspaceLaunchBrowserSelection(
   const siteChoices = unique(effectiveRecords.map((record) => record.site));
   const requestedSites = filterWorkspaceLaunchValues(options.site, siteChoices);
   const rememberedSites = rememberedSelection ? filterWorkspaceLaunchValues(rememberedSelection.site, siteChoices) : [];
-  const selectedSites = requestedSites.length > 0 ? requestedSites : rememberedSites;
+  const selectedSites = rememberedArraySelection(
+    requestedSites,
+    rememberedSites,
+    siteChoices,
+    nonEmptyStringArray(options.site).length > 0,
+    [],
+  );
 
   const roleChoices = roleChoicesForSelectedSites(effectiveRecords, selectedSites);
   const requestedRoles = initialRoleValuesForInteractiveSelection(roleChoices, options.role);
   const rememberedRoles = rememberedSelection ? filterWorkspaceLaunchValues(rememberedSelection.role, roleChoices) : [];
-  const selectedRoles = nonEmptyStringArray(options.role).length > 0
-    ? requestedRoles
-    : (rememberedRoles.length > 0 ? rememberedRoles : requestedRoles);
+  const selectedRoles = rememberedArraySelection(
+    requestedRoles,
+    rememberedRoles,
+    roleChoices,
+    nonEmptyStringArray(options.role).length > 0,
+    requestedRoles,
+  );
 
   const selectedRecords = selectLaunchRecords(effectiveRecords, { ...options, all: true, site: selectedSites, role: selectedRoles });
   const capabilityValues = workspaceLaunchCapabilityValues(selectedRecords, context);
@@ -219,9 +247,13 @@ export function resolveWorkspaceLaunchBrowserSelection(
   const rememberedOperatorSurfaces = rememberedSelection
     ? initialOperatorSurfaceValues(capabilityValues.operatorSurfaceValues, rememberedSelection.operatorSurface.join(','))
     : [];
-  const selectedOperatorSurfaces = options.operatorSurface
-    ? requestedOperatorSurfaces
-    : (rememberedOperatorSurfaces.length > 0 ? rememberedOperatorSurfaces : requestedOperatorSurfaces);
+  const selectedOperatorSurfaces = rememberedArraySelection(
+    requestedOperatorSurfaces,
+    rememberedOperatorSurfaces,
+    capabilityValues.operatorSurfaceValues,
+    Boolean(options.operatorSurface),
+    requestedOperatorSurfaces,
+  );
 
   const runtimeValues = workspaceLaunchCapabilityValues(selectedRecords, context, selectedOperatorSurfaces).runtimeValues;
   const requestedRuntime = nonEmpty(options.runtime);
@@ -229,9 +261,13 @@ export function resolveWorkspaceLaunchBrowserSelection(
     && runtimeValues.includes(normalizeRuntimeAlias(rememberedSelection.runtime))
     ? normalizeRuntimeAlias(rememberedSelection.runtime)
     : null;
-  const selectedRuntime = requestedRuntime
-    ? (runtimeValues.includes(normalizeRuntimeAlias(requestedRuntime)) ? normalizeRuntimeAlias(requestedRuntime) : 'registry default')
-    : (rememberedRuntime ?? (options.runtime ?? 'registry default'));
+  const selectedRuntime = rememberedScalarSelection(
+    requestedRuntime ? normalizeRuntimeAlias(requestedRuntime) : null,
+    rememberedRuntime,
+    runtimeValues,
+    Boolean(options.runtime),
+    'registry default',
+  );
 
   const providerOperatorSurface = NARS_OPERATOR_SURFACE_KINDS.find((surface) => selectedOperatorSurfaces.includes(surface))
     ?? (selectedOperatorSurfaces[0] ?? 'registry default');
@@ -247,9 +283,13 @@ export function resolveWorkspaceLaunchBrowserSelection(
     && providerValues.has(rememberedSelection.intelligenceProvider)
     ? rememberedSelection.intelligenceProvider
     : null;
-  const selectedProvider = requestedProvider
-    ? (providerValues.has(requestedProvider) ? requestedProvider : 'registry default')
-    : (rememberedProvider ?? (options.intelligenceProvider ?? 'registry default'));
+  const selectedProvider = rememberedScalarSelection(
+    requestedProvider,
+    rememberedProvider,
+    [...providerValues],
+    Boolean(options.intelligenceProvider),
+    'registry default',
+  );
 
   const selection = {
     site: selectedSites,
@@ -323,20 +363,6 @@ export function registryDefaultIntelligenceProvider(context: WorkspaceLaunchSele
   return context.providerRegistry.default_provider ?? 'registry default';
 }
 
-export function initialOperatorSurfaceValues(choices: string[], current?: string): string[] {
-  if (!current) return ['registry default'];
-  const explicit = normalizeOperatorSurfaceValues(current).filter((value) => choices.some((choice) => choice.toLowerCase() === value.toLowerCase()));
-  return explicit.length > 0 ? explicit : ['registry default'];
-}
-
-export function normalizeInteractiveOperatorSurfaceValues(values: string[]): string[] {
-  const normalized = unique(values);
-  const explicit = normalized.filter((value) => value !== 'registry default');
-  if (explicit.length > 0) return explicit;
-  if (normalized.includes('registry default')) return ['registry default'];
-  return normalized;
-}
-
 export function intelligenceProviderChoicesForLaunchSelection({
   records,
   operatorSurface,
@@ -384,13 +410,6 @@ export function roleChoicesForSelectedSites(records: WorkspaceLaunchRecord[], si
   return unique(records.filter((record) => recordMatchesSiteSelectors(record, siteSelectors)).map((record) => record.role));
 }
 
-export function initialRoleValuesForInteractiveSelection(roleChoices: string[], explicitRoles?: string[]): string[] {
-  const explicitRoleValues = (explicitRoles ?? []).filter((role) => roleChoices.some((choice) => choice.toLowerCase() === role.toLowerCase()));
-  if (explicitRoleValues.length > 0) return explicitRoleValues;
-  const residentChoice = roleChoices.find((role) => role.toLowerCase() === 'resident');
-  return residentChoice ? [residentChoice] : [];
-}
-
 export function selectLaunchRecords(records: WorkspaceLaunchRecord[], options: WorkspaceLaunchPlanOptions): WorkspaceLaunchRecord[] {
   let selected: WorkspaceLaunchRecord[];
   const agentSelectors = nonEmptyStringArray(options.agent);
@@ -433,45 +452,4 @@ function recordMatchesSiteSelectors(record: WorkspaceLaunchRecord, siteSelectors
   return aliases.some((alias) => sites.has(alias));
 }
 
-function filterWorkspaceLaunchValues(values: string[] | undefined, allowed: string[]): string[] {
-  const allowedSet = new Set(allowed.map((value) => value.toLowerCase()));
-  return unique(stringArray(values).filter((value) => allowedSet.has(value.toLowerCase())));
-}
 
-function normalizeOperatorSurfaceValues(value: string | undefined): string[] {
-  return unique((value ?? '').split(',').map((part) => part.trim()).filter(Boolean));
-}
-
-function normalizeSiteToken(value: string): string {
-  return value.toLowerCase().replace(/^narada[-.]/, '').replace(/^narada/, '').replace(/^[-.]/, '');
-}
-
-function nonEmpty(value: unknown): string | null {
-  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
-}
-
-function nonEmptyStringArray(values: string[] | undefined): string[] {
-  return (values ?? []).map((value) => nonEmpty(value)).filter((value): value is string => Boolean(value));
-}
-
-function stringArray(value: unknown): string[] {
-  return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string') : [];
-}
-
-function unique(values: string[]): string[] {
-  const seen = new Set<string>();
-  const result: string[] = [];
-  for (const value of values) {
-    const normalized = value.trim();
-    if (!normalized) continue;
-    const key = normalized.toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    result.push(normalized);
-  }
-  return result;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}

@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { join, resolve } from 'node:path';
 import { buildLaunchProcessOwnership, launchSessionIdFromToken } from '@narada2/launch-process-ownership';
+import { NARADA_AGENT_RUNTIME_SERVER_KIND } from '@narada2/carrier-runtime-contract/carrier-runtime-selection';
 import type {
   WorkspaceLaunchAgentPlan,
   WorkspaceLaunchOperatorProjectionOpenRequest,
@@ -8,6 +9,12 @@ import type {
   WorkspaceLaunchRecord,
 } from './workspace-launch-types.js';
 import type { WorkspaceLaunchRegistryContext } from './workspace-launch-registry.js';
+import {
+  workspaceLaunchNodeNaradaCommand,
+  workspaceLaunchPnpmNaradaCommand,
+  workspaceLaunchRuntimeArguments,
+  workspaceLaunchSmokeCommand,
+} from './workspace-launch-command-spec.js';
 import { unique } from './workspace-launch-support.js';
 
 function normalizeMcpScope(value: string | undefined): string {
@@ -36,10 +43,9 @@ export function buildAgentPlan(record: WorkspaceLaunchRecord, options: Workspace
   const enableNativeShell = options.enableNativeShell === true || record.enable_native_shell;
   const mcpScope = normalizeMcpScope(options.mcpScope ?? record.mcp_scope ?? undefined);
   const authority = normalizeRuntimeAuthority(options.authority ?? record.authority ?? undefined);
-  const isNarsRuntimeHost = runtimeHostKind === 'narada-agent-runtime-server';
+  const isNarsRuntimeHost = runtimeHostKind === NARADA_AGENT_RUNTIME_SERVER_KIND;
   const waitForEnter = options.noWaitForEnterBeforeExec !== true && launchOperatorSurfaces[0] !== 'agent-web-ui' && !isNarsRuntimeHost;
-  const isNarsOperatorSurface = launchOperatorSurface === 'agent-cli' || launchOperatorSurface === 'agent-web-ui';
-  const intelligenceProvider = isNarsOperatorSurface
+  const intelligenceProvider = isNarsRuntimeHost
     ? (options.intelligenceProvider ?? context.providerRegistry.default_provider ?? null)
     : null;
   const cloudflareApiBaseUrl = options.cloudflareApiBaseUrl?.trim()
@@ -62,41 +68,28 @@ export function buildAgentPlan(record: WorkspaceLaunchRecord, options: Workspace
       })
     : null;
   const qualifiedAgentId = workspaceLaunchQualifiedAgentId(record);
-  const runtimeStartArguments = [
-    'operator-surface',
-    'runtime',
-    'start', launchOperatorSurface,
-    '--site-root', record.site_root,
-    '--agent', record.agent,
-    '--target-site-id', record.site,
-    '--runtime', launchRuntime,
-    '--exec',
-    '--format', 'human',
-  ];
-  const operatorSurfaceStartCommand = [
-    'pnpm',
-    '--dir', naradaProper,
-    'exec',
-    'narada',
-    ...runtimeStartArguments,
-  ];
-  if (record.workspace_root) operatorSurfaceStartCommand.push('--workspace-root', record.workspace_root);
-  if (enableNativeShell) operatorSurfaceStartCommand.push('--enable-native-shell');
-  operatorSurfaceStartCommand.push('--authority', authority);
-  if (intelligenceProvider) operatorSurfaceStartCommand.push('--intelligence-provider', intelligenceProvider);
-  operatorSurfaceStartCommand.push('--mcp-scope', mcpScope);
-  if (launchBindingPath) operatorSurfaceStartCommand.push('--launch-binding', launchBindingPath);
-  if (!launchBindingPath) operatorSurfaceStartCommand.push('--launch-session-id', launchSessionId ?? '');
-  if (waitForEnter) operatorSurfaceStartCommand.push('--wait');
-  const hiddenRuntimeStartCommand = [
-    process.execPath,
-    join(naradaProper, 'packages', 'layers', 'cli', 'dist', 'main.js'),
-    ...operatorSurfaceStartCommand.slice(5),
-  ];
+  const runtimeStartCwd = record.workspace_root ?? record.narada_root;
+  const runtimeCommandOptions = {
+    operatorSurface: launchOperatorSurface,
+    siteRoot: record.site_root,
+    agent: record.agent,
+    targetSiteId: record.site,
+    runtime: launchRuntime,
+    workspaceRoot: record.workspace_root,
+    authority,
+    intelligenceProvider,
+    mcpScope,
+    enableNativeShell,
+    launchBindingPath,
+    launchSessionId,
+    waitForEnter,
+  };
+  const runtimeStartArguments = workspaceLaunchRuntimeArguments(runtimeCommandOptions, 'execute');
+  const operatorSurfaceStartCommand = workspaceLaunchPnpmNaradaCommand(naradaProper, runtimeStartArguments);
+  const hiddenRuntimeStartCommand = workspaceLaunchNodeNaradaCommand(naradaProper, runtimeStartArguments);
   const runtimeStartExecutionMode: WorkspaceLaunchAgentPlan['runtime_start_execution_mode'] = isNarsRuntimeHost
     ? 'hidden_detached'
     : 'operator_terminal';
-  const runtimeStartCwd = record.workspace_root ?? record.narada_root;
 
   const base = [
     'new-tab',
@@ -118,22 +111,10 @@ export function buildAgentPlan(record: WorkspaceLaunchRecord, options: Workspace
     wtArgs.push(';', ...agentWebUiAttachWtArgs(record, naradaProper, cloudflareApiBaseUrl, launchBindingPath, onboarding));
   }
 
-  const smokeCommand = [
-    'narada', 'operator-surface', 'runtime', 'start', launchOperatorSurface,
-    '--site-root', record.site_root,
-    '--agent', record.agent,
-    '--target-site-id', record.site,
-    '--runtime', launchRuntime,
-    '--dry-run',
-    '--format', 'json',
-  ];
-  if (record.workspace_root) smokeCommand.push('--workspace-root', record.workspace_root);
-  smokeCommand.push('--authority', authority);
-  if (intelligenceProvider) smokeCommand.push('--intelligence-provider', intelligenceProvider);
-  if (enableNativeShell) smokeCommand.push('--enable-native-shell');
-  smokeCommand.push('--mcp-scope', mcpScope);
-  if (launchBindingPath) smokeCommand.push('--launch-binding', launchBindingPath);
-  if (!launchBindingPath) smokeCommand.push('--launch-session-id', launchSessionId ?? '');
+  const smokeCommand = workspaceLaunchSmokeCommand(workspaceLaunchRuntimeArguments({
+    ...runtimeCommandOptions,
+    waitForEnter: false,
+  }, 'dry-run'));
   const operatorProjectionOpenRequests = launchOperatorSurfaces.includes('agent-web-ui')
     ? [plannedAgentWebUiProjectionOpenRequest(record)]
     : [];

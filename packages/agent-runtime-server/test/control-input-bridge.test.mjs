@@ -54,6 +54,10 @@ test('control input bridge keeps sideband exhaustion open and delivers appended 
     await waitFor(() => lines.length === 1);
     assert.equal(JSON.parse(lines[0]).content, initialInput.content);
     assert.equal(output.writableEnded, false);
+    assert.equal(bridge.state.started, true);
+    assert.equal(bridge.state.last_read_status, 'available');
+    assert.equal(bridge.state.emitted_count, 1);
+    assert.equal(bridge.state.error_count, 0);
 
     const input = createInputEvent({
       event_id: 'input_control_bridge_test',
@@ -92,6 +96,33 @@ test('control input bridge keeps sideband exhaustion open and delivers appended 
     await waitFor(() => lines.length === 3);
     assert.deepEqual(JSON.parse(lines[2]), lifecycleRequest);
     assert.deepEqual(errors, []);
+    assert.equal(bridge.state.emitted_count, 3);
+  } finally {
+    bridge.close();
+    output.destroy();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('control input bridge exposes bounded diagnostics for malformed records', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'narada-control-input-invalid-'));
+  const controlPath = join(root, 'control.jsonl');
+  const output = new PassThrough();
+  const errors = [];
+  const bridge = createControlInputBridge({
+    path: controlPath,
+    output,
+    pollIntervalMs: 10,
+    onError: (error) => errors.push(error),
+  });
+  try {
+    await writeFile(controlPath, 'not-json\n', 'utf8');
+    await bridge.start();
+    await waitFor(() => bridge.state.error_count === 1);
+    assert.equal(errors.length, 1);
+    assert.equal(bridge.state.last_error.code, 'control_input_record_invalid');
+    assert.equal(bridge.state.last_error.message, 'control_input_record_invalid');
+    assert.equal(bridge.state.emitted_count, 0);
   } finally {
     bridge.close();
     output.destroy();

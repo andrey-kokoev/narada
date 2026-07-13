@@ -46,7 +46,14 @@ export function workspaceLaunchSiteRootsFromLaunchResult(result: unknown): strin
     .filter((value): value is string => Boolean(value));
 }
 
-export function workspaceLaunchSessionIdentityRef(session: Record<string, unknown>): AgentIdentityRefV2 | null {
+export interface WorkspaceLaunchSessionIdentityInput {
+  agent_id?: unknown;
+  site_id?: unknown;
+  agent_identity_ref?: unknown;
+  record?: unknown;
+}
+
+export function workspaceLaunchSessionIdentityRef(session: WorkspaceLaunchSessionIdentityInput): AgentIdentityRefV2 | null {
   const record = isRecord(session.record) ? session.record : null;
   const agentId = workspaceLaunchString(session.agent_id) ?? workspaceLaunchString(record?.agent_id);
   const siteId = workspaceLaunchString(session.site_id) ?? workspaceLaunchString(record?.site_id);

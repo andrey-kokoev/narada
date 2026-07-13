@@ -2,7 +2,11 @@ import { existsSync } from 'node:fs';
 import { appendFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { runGovernedCommandSync, startOperatorTerminal } from '@narada2/process-launch-posture';
-import { discoverNarsSessions } from '@narada2/nars-session-core/session-index';
+import {
+  discoverNarsSessions,
+  type NarsSessionObservation,
+  type NarsSessionProcessOwnership,
+} from '@narada2/nars-session-core/session-index';
 import * as support from './workspace-launch-support.js';
 import {
   redactWorkspaceLaunchArgv,
@@ -313,8 +317,8 @@ export async function workspaceLaunchRuntimeObservations(
   const staleCleanupAttempted = new Set<string>();
 
   while (true) {
-    const discoveredSessions: Record<string, unknown>[] = [];
-    const candidates: Record<string, unknown>[] = [];
+    const discoveredSessions: NarsSessionObservation[] = [];
+    const candidates: NarsSessionObservation[] = [];
     for (const siteRoot of siteRoots) {
       try {
         const initialDiscovery = discoverNarsSessions({ siteRoot });
@@ -360,44 +364,43 @@ export function workspaceLaunchExpectedSessionIds(result: unknown): string[] {
     .filter((value): value is string => Boolean(value));
 }
 
-function workspaceLaunchSessionMatchesExpectedLaunch(session: Record<string, unknown>, expectedLaunchSessionIds: Set<string>): boolean {
+function workspaceLaunchSessionMatchesExpectedLaunch(session: NarsSessionObservation, expectedLaunchSessionIds: Set<string>): boolean {
   if (expectedLaunchSessionIds.size === 0) return true;
   const launchSessionId = workspaceLaunchSessionLaunchSessionId(session);
   return launchSessionId !== null && expectedLaunchSessionIds.has(launchSessionId);
 }
 
-function workspaceLaunchSessionLaunchSessionId(session: Record<string, unknown>): string | null {
-  const record = support.isRecord(session.record) ? session.record : null;
-  const ownership = support.isRecord(session.process_ownership) ? session.process_ownership : support.isRecord(record?.process_ownership) ? record.process_ownership : null;
+function workspaceLaunchSessionLaunchSessionId(session: NarsSessionObservation): string | null {
+  const record = session.record;
+  const ownership = session.process_ownership ?? record?.process_ownership ?? null;
   return workspaceLaunchString(session.launch_session_id)
     ?? workspaceLaunchString(record?.launch_session_id)
     ?? workspaceLaunchString(ownership?.launch_session_id);
 }
 
-function workspaceLaunchSessionOwnership(session: Record<string, unknown>): Record<string, unknown> | null {
-  const record = support.isRecord(session.record) ? session.record : null;
-  return support.isRecord(session.process_ownership) ? session.process_ownership : support.isRecord(record?.process_ownership) ? record.process_ownership : null;
+function workspaceLaunchSessionOwnership(session: NarsSessionObservation): NarsSessionProcessOwnership | null {
+  return session.process_ownership ?? session.record?.process_ownership ?? null;
 }
 
-function workspaceLaunchSessionIsStaleSessionOwnedCandidate(session: Record<string, unknown>, expectedLaunchSessionIds: Set<string>): boolean {
+function workspaceLaunchSessionIsStaleSessionOwnedCandidate(session: NarsSessionObservation, expectedLaunchSessionIds: Set<string>): boolean {
   if (expectedLaunchSessionIds.size === 0) return false;
   if (!workspaceLaunchSessionOwnedCleanupAllowed(session)) return false;
   const launchSessionId = workspaceLaunchSessionLaunchSessionId(session);
   return launchSessionId !== null && !expectedLaunchSessionIds.has(launchSessionId);
 }
 
-export function workspaceLaunchSessionOwnedCleanupAllowed(session: Record<string, unknown>): boolean {
+export function workspaceLaunchSessionOwnedCleanupAllowed(session: NarsSessionObservation): boolean {
   const ownership = workspaceLaunchSessionOwnership(session);
   return Boolean(ownership && ownership.ownership === 'session_owned' && ownership.cleanup_policy === 'terminate_with_launch_session');
 }
 
-export function workspaceLaunchSessionIsTerminalForCleanup(session: Record<string, unknown>): boolean {
+export function workspaceLaunchSessionIsTerminalForCleanup(session: NarsSessionObservation): boolean {
   const displayState = workspaceLaunchString(session.display_state);
   const terminalState = workspaceLaunchString(session.terminal_state);
   return terminalState === 'closed' || displayState === 'closed';
 }
 
-export async function workspaceLaunchRequestStaleSessionCleanup(session: Record<string, unknown>, attempted: Set<string>): Promise<void> {
+export async function workspaceLaunchRequestStaleSessionCleanup(session: NarsSessionObservation, attempted: Set<string>): Promise<void> {
   const sessionId = workspaceLaunchString(session.session_id) ?? workspaceLaunchString(session.carrier_session_id) ?? workspaceLaunchSessionLaunchSessionId(session);
   if (!sessionId || attempted.has(sessionId)) return;
   attempted.add(sessionId);
@@ -441,7 +444,7 @@ function workspaceLaunchInteger(value: unknown): number | null {
   return null;
 }
 
-async function workspaceLaunchProbeHealthBySessionId(sessions: Record<string, unknown>[]): Promise<Map<string, unknown>> {
+async function workspaceLaunchProbeHealthBySessionId(sessions: NarsSessionObservation[]): Promise<Map<string, unknown>> {
   const healthBySessionId = new Map<string, unknown>();
   const pairs = await Promise.all(sessions.map(async (session) => {
     const sessionId = workspaceLaunchString(session.session_id) ?? workspaceLaunchString(session.carrier_session_id);
@@ -455,8 +458,8 @@ async function workspaceLaunchProbeHealthBySessionId(sessions: Record<string, un
   return healthBySessionId;
 }
 
-async function workspaceLaunchProbeSessionHealth(session: Record<string, unknown>): Promise<unknown | null> {
-  const record = support.isRecord(session.record) ? session.record : null;
+async function workspaceLaunchProbeSessionHealth(session: NarsSessionObservation): Promise<unknown | null> {
+  const record = session.record;
   const endpoint = workspaceLaunchString(session.health_endpoint) ?? workspaceLaunchString(record?.health_endpoint);
   if (!endpoint) return null;
   let parsed: URL;
@@ -492,7 +495,7 @@ export function workspaceLaunchSiteRootsForSelection(selection: WorkspaceLaunchB
   return support.unique(selected.map((record) => resolve(record.site_root)));
 }
 
-export function workspaceLaunchSessionMatchesSelection(session: Record<string, unknown>, selection: WorkspaceLaunchBrowserSelection): boolean {
+export function workspaceLaunchSessionMatchesSelection(session: NarsSessionObservation, selection: WorkspaceLaunchBrowserSelection): boolean {
   const roles = new Set(selection.role.map((role) => role.toLowerCase()));
   const sites = new Set(selection.site.map((site) => normalizeWorkspaceLaunchSiteToken(site)));
   const agentId = workspaceLaunchString(session.agent_id);
@@ -503,16 +506,19 @@ export function workspaceLaunchSessionMatchesSelection(session: Record<string, u
   return true;
 }
 
-function workspaceLaunchObservationFromSession(launchAttemptId: string, session: Record<string, unknown>): WorkspaceLaunchObservationRecord {
+function workspaceLaunchObservationFromSession(launchAttemptId: string, session: NarsSessionObservation): WorkspaceLaunchObservationRecord {
   const health = workspaceLaunchHealthFromSession(session);
   const attachCommands = workspaceLaunchAttachCommandsFromSession(session);
   const controlPath = workspaceLaunchControlPathFromSession(session);
-  const record = support.isRecord(session.record) ? session.record : null;
+  const record = session.record;
   const agentId = workspaceLaunchString(session.agent_id) ?? workspaceLaunchString(record?.agent_id);
   const siteId = workspaceLaunchString(session.site_id) ?? workspaceLaunchString(record?.site_id);
   const processOwnership = workspaceLaunchSessionOwnership(session);
   const runtimePid = typeof processOwnership?.pid === 'number' && Number.isInteger(processOwnership.pid)
     ? processOwnership.pid
+    : null;
+  const processOwnershipRecord = processOwnership
+    ? processOwnership as unknown as Record<string, unknown>
     : null;
   return {
     schema: 'narada.workspace_launch.observed_runtime.v1',
@@ -530,23 +536,24 @@ function workspaceLaunchObservationFromSession(launchAttemptId: string, session:
     site_id: siteId,
     agent_identity_ref: support.workspaceLaunchSessionIdentityRef(session),
     control_path: controlPath,
-    process_ownership: processOwnership,
+    process_ownership: processOwnershipRecord,
     runtime_pid: runtimePid,
     attach_commands: attachCommands,
   };
 }
 
-function workspaceLaunchControlPathFromSession(session: Record<string, unknown>): string | null {
-  const record = support.isRecord(session.record) ? session.record : null;
-  const direct = workspaceLaunchString(session.control_path) ?? workspaceLaunchString(record?.control_path);
-  if (direct) return direct;
-  const sessionPath = workspaceLaunchString(session.session_path) ?? workspaceLaunchString(record?.session_path);
+function workspaceLaunchControlPathFromSession(session: NarsSessionObservation): string | null {
+  const record = session.record as Record<string, unknown> | null | undefined;
+  const sessionRecord = session as unknown as Record<string, unknown>;
+  const directControlPath = workspaceLaunchString(sessionRecord.control_path) ?? workspaceLaunchString(record?.control_path);
+  if (directControlPath) return directControlPath;
+  const sessionPath = workspaceLaunchString(sessionRecord.session_path) ?? workspaceLaunchString(record?.session_path);
   return sessionPath ? join(dirname(sessionPath), 'control.jsonl') : null;
 }
 
-function workspaceLaunchAttachCommandsFromSession(session: Record<string, unknown>): WorkspaceLaunchObservationRecord['attach_commands'] {
-  const record = support.isRecord(session.record) ? session.record : null;
-  const recordedCommands = support.isRecord(record?.attach_commands) ? record.attach_commands : null;
+function workspaceLaunchAttachCommandsFromSession(session: NarsSessionObservation): WorkspaceLaunchObservationRecord['attach_commands'] {
+  const record = session.record;
+  const recordedCommands = record?.attach_commands;
   const eventEndpoint = workspaceLaunchString(session.event_endpoint) ?? workspaceLaunchString(record?.event_endpoint);
   const healthEndpoint = workspaceLaunchString(session.health_endpoint) ?? workspaceLaunchString(record?.health_endpoint);
   return {
@@ -557,7 +564,7 @@ function workspaceLaunchAttachCommandsFromSession(session: Record<string, unknow
   };
 }
 
-function workspaceLaunchAmbiguousObservation(launchAttemptId: string, selection: WorkspaceLaunchBrowserSelection, sessions: Record<string, unknown>[]): WorkspaceLaunchObservationRecord {
+function workspaceLaunchAmbiguousObservation(launchAttemptId: string, selection: WorkspaceLaunchBrowserSelection, sessions: NarsSessionObservation[]): WorkspaceLaunchObservationRecord {
   return {
     schema: 'narada.workspace_launch.observed_runtime.v1',
     observation_id: support.workspaceLaunchId('wlr'),
@@ -573,7 +580,7 @@ function workspaceLaunchAmbiguousObservation(launchAttemptId: string, selection:
   };
 }
 
-function workspaceLaunchHealthFromSession(session: Record<string, unknown>): WorkspaceLaunchObservationRecord['health'] {
+function workspaceLaunchHealthFromSession(session: NarsSessionObservation): WorkspaceLaunchObservationRecord['health'] {
   const healthStatus = workspaceLaunchString(session.health_status);
   if (healthStatus === 'healthy') return 'healthy';
   const displayState = workspaceLaunchString(session.display_state);

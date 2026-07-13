@@ -7,6 +7,12 @@ const DEFAULT_POLL_INTERVAL_MS = 100;
 const DEFAULT_MAX_READ_BYTES = 64 * 1024;
 const DEFAULT_MAX_LINE_CHARS = 1024 * 1024;
 
+function errorCode(error) {
+  if (typeof error?.code === 'string' && error.code.trim()) return error.code.trim();
+  const message = error instanceof Error ? error.message : String(error ?? 'unknown_error');
+  return message.split(':', 1)[0].trim() || 'control_input_bridge_error';
+}
+
 function reportError(onError, error, line = null) {
   try {
     onError?.(error, line);
@@ -44,6 +50,7 @@ export function createControlInputBridge({
   maxReadBytes = DEFAULT_MAX_READ_BYTES,
   maxLineChars = DEFAULT_MAX_LINE_CHARS,
   onError = null,
+  now = () => new Date().toISOString(),
 } = {}) {
   if (typeof path !== 'string' || path.trim().length === 0) throw new TypeError('control_input_path_required');
   if (!output || typeof output.write !== 'function') throw new TypeError('control_input_output_required');
@@ -55,6 +62,27 @@ export function createControlInputBridge({
   let pumping = false;
   let started = false;
   let closed = false;
+  let readCount = 0;
+  let emittedCount = 0;
+  let errorCount = 0;
+  let lastReadAt = null;
+  let lastReadStatus = 'not_started';
+  let lastEmittedAt = null;
+  let lastError = null;
+  let closedAt = null;
+
+  function recordError(error, line = null) {
+    const message = error instanceof SyntaxError
+      ? 'control_input_record_invalid'
+      : error instanceof Error ? error.message : String(error ?? 'unknown_error');
+    errorCount += 1;
+    lastError = Object.freeze({
+      code: error instanceof SyntaxError ? 'control_input_record_invalid' : errorCode(error),
+      message: message.slice(0, 240),
+      at: now(),
+    });
+    reportError(onError, error, line);
+  }
 
   function schedule(delayMs = pollIntervalMs) {
     if (closed || timer !== null) return;
@@ -65,11 +93,17 @@ export function createControlInputBridge({
   }
 
   function emitLine(line) {
-    if (!line.trim() || closed || output.destroyed || output.writableEnded) return;
+    if (!line.trim() || closed) return;
+    if (output.destroyed || output.writableEnded) {
+      recordError(new Error('control_input_output_unavailable'), line);
+      return;
+    }
     try {
       output.write(`${JSON.stringify(requestFromControlLine(line))}\n`);
+      emittedCount += 1;
+      lastEmittedAt = now();
     } catch (error) {
-      reportError(onError, error, line);
+      recordError(error, line);
     }
   }
 
@@ -83,23 +117,29 @@ export function createControlInputBridge({
       newlineIndex = partialLine.indexOf('\n');
     }
     if (partialLine.length > maxLineChars) {
-      reportError(onError, new Error('control_input_line_too_large'));
+      recordError(new Error('control_input_line_too_large'));
       partialLine = '';
     }
   }
 
   async function readAvailable() {
     let handle = null;
+    readCount += 1;
+    lastReadAt = now();
     try {
       handle = await open(path, 'r');
       const stats = await handle.stat();
+      lastReadStatus = 'available';
       if (stats.size < offset) {
         offset = 0;
         partialLine = '';
         decoder = new StringDecoder('utf8');
       }
       const readLength = Math.min(maxReadBytes, Math.max(0, stats.size - offset));
-      if (readLength === 0) return false;
+      if (readLength === 0) {
+        lastReadStatus = 'empty';
+        return false;
+      }
       const buffer = Buffer.allocUnsafe(readLength);
       const result = await handle.read(buffer, 0, readLength, offset);
       if (result.bytesRead === 0) return false;
@@ -107,10 +147,14 @@ export function createControlInputBridge({
       consumeChunk(buffer.subarray(0, result.bytesRead));
       return result.bytesRead >= readLength && stats.size > offset;
     } catch (error) {
-      if (error?.code !== 'ENOENT') reportError(onError, error);
+      if (error?.code === 'ENOENT') lastReadStatus = 'missing';
+      else {
+        lastReadStatus = 'error';
+        recordError(error);
+      }
       return false;
     } finally {
-      if (handle) await handle.close().catch((error) => reportError(onError, error));
+      if (handle) await handle.close().catch((error) => recordError(error));
     }
   }
 
@@ -134,11 +178,26 @@ export function createControlInputBridge({
     },
     close() {
       closed = true;
+      closedAt = now();
       if (timer !== null) clearTimeout(timer);
       timer = null;
     },
     get state() {
-      return Object.freeze({ closed, offset, has_partial_line: partialLine.length > 0 });
+      return Object.freeze({
+        status: closed ? 'closed' : !started ? 'created' : pumping ? 'reading' : timer !== null ? 'polling' : 'idle',
+        started,
+        closed,
+        offset,
+        has_partial_line: partialLine.length > 0,
+        read_count: readCount,
+        emitted_count: emittedCount,
+        error_count: errorCount,
+        last_read_at: lastReadAt,
+        last_read_status: lastReadStatus,
+        last_emitted_at: lastEmittedAt,
+        last_error: lastError,
+        closed_at: closedAt,
+      });
     },
   });
 }

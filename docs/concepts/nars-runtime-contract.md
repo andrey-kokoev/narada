@@ -309,6 +309,22 @@ created -> binding -> projections_ready -> serving -> closing -> stopped
 
 The host emits `runtime_host_lifecycle_transition` through the runtime event hub and exposes the current snapshot as `runtime_host_state` in health and `session_started` projections. Startup failures move through `failed` and then cleanup to `stopped`; serving failures retain failure evidence before cleanup. Client projections may use the snapshot for liveness display, but they do not own or mutate host state.
 
+### Operational Observation
+
+The control sideband is a durable input source, but sideband exhaustion is not
+EOF. NARS keeps polling it while the session is alive. The runtime health
+projection exposes a bounded `control_input_bridge` diagnostic snapshot with
+read/emission counts, last read status, partial-line state, and the latest
+redacted error. Missing or empty sideband files are normal idle states; parse,
+read, close, and output failures are explicit diagnostics.
+
+Projection request machines remain internal request evidence. Only terminal
+health-projection failures and timeouts are projected as
+`runtime_projection_failure` events, preventing healthy polling from becoming
+conversation noise. The WebSocket and terminal clients may render these
+diagnostics, but they do not infer runtime liveness from the absence of
+events.
+
 ## Client And Runtime Split
 
 NARS is the runtime owner. `@narada2/agent-runtime-server` owns session binding, transport projection, durable `events.jsonl`, status/health/event subscription state, and lifecycle hook dispatch. `@narada2/nars-provider-runtime` owns provider turn execution, while `@narada2/nars-capability-gateway` owns MCP fabric hosting, tool dispatch, and tool admission. Client packages must not silently recreate those responsibilities.

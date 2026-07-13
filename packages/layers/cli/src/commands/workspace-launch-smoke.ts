@@ -1,4 +1,4 @@
-import { carrierStartCommand as runOperatorSurfaceRuntimeStart } from './carrier.js';
+import { operatorSurfaceRuntimeStartCommand as runOperatorSurfaceRuntimeStart } from './operator-surface-runtime-start.js';
 import { formattedResult } from '../lib/cli-output.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import type { CommandContext } from '../lib/command-wrapper.js';

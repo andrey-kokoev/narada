@@ -178,6 +178,9 @@ function projectRuntimeHealth(snapshot, runtimeContext, toolGateway, requestLife
       request_posture: snapshot.request_posture ?? null,
       operational_posture: snapshot.operational_posture ?? null,
     },
+    control_input_bridge: typeof runtimeContext.controlInputBridgeState === 'function'
+      ? runtimeContext.controlInputBridgeState()
+      : null,
     runtime_requests: requestLifecycle?.snapshot?.() ?? null,
   };
 }

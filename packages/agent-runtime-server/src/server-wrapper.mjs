@@ -332,6 +332,15 @@ async function main() {
         host: parsedHealth.health.host,
         port: parsedHealth.health.port,
         runtimeContext: healthRuntimeContext,
+        onRequestTransition: (transition) => {
+          if (transition.request_state !== 'timed_out' && transition.request_state !== 'failed') return;
+          eventHub.publish({
+            schema: 'narada.nars.runtime_projection_failure.v1',
+            event: 'runtime_projection_failure',
+            projection: 'health',
+            ...transition,
+          });
+        },
       });
       process.env.NARADA_HEALTH_URL = healthProjection.url;
     }
@@ -404,13 +413,27 @@ async function main() {
       eventStreamUrl: process.env.NARADA_EVENT_STREAM_URL ?? null,
       eventsPath: preliminaryRuntimeContext.eventsPath,
       sessionPath: preliminaryRuntimeContext.sessionPath,
+      controlInputBridgeState: () => controlInputBridge?.state ?? null,
     });
     runtimeService = await loadRuntimeDependencies(runtimeContext);
     if (healthRuntimeContext) healthRuntimeContext.sessionCore = runtimeService.supervisor.core;
     controlInputBridge = createControlInputBridge({
       path: runtimeContext.controlPath,
       output: runtimeInput,
-      onError: (error) => console.error(`[agent-runtime-server] carrier control input rejected: ${error instanceof Error ? error.message : String(error)}`),
+      onError: (error) => {
+        const message = error instanceof Error ? error.message : String(error ?? 'unknown_error');
+        eventHub.publish({
+          schema: 'narada.nars.runtime_control_input_bridge_error.v1',
+          event: 'runtime_control_input_bridge_error',
+          timestamp: new Date().toISOString(),
+          agent_id: runtimeContext.identity,
+          session_id: runtimeContext.session,
+          control_path: runtimeContext.controlPath,
+          error_code: error?.code ?? (error instanceof SyntaxError ? 'control_input_record_invalid' : 'control_input_bridge_error'),
+          error: message.slice(0, 240),
+        });
+        console.error(`[agent-runtime-server] carrier control input rejected: ${message}`);
+      },
     });
     await controlInputBridge.start();
   } catch (error) {
