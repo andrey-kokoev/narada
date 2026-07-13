@@ -1,10 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { createServer } from 'node:http';
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { chromium } from '@playwright/test';
 import { createAgentWebUiServer } from '@narada2/agent-web-ui/server';
 import { registerNarsArtifact } from '@narada2/nars-session-core/artifacts';
@@ -327,6 +329,66 @@ async function waitForEmptySockets(sockets) {
   }))));
 }
 
+function waitForChildExit(child, timeoutMs = 5_000) {
+  if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const timer = setTimeout(() => {
+      settled = true;
+      child.off('exit', onExit);
+      reject(new Error('operator_console_process_exit_timeout'));
+    }, timeoutMs);
+    const onExit = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve();
+    };
+    child.once('exit', onExit);
+    if (child.exitCode !== null || child.signalCode !== null) onExit();
+  });
+}
+
+async function stopChildProcess(child) {
+  if (!child || child.exitCode !== null || child.signalCode !== null) return;
+  child.kill('SIGTERM');
+  try {
+    await waitForChildExit(child);
+    return;
+  } catch (error) {
+    if (child.exitCode === null) child.kill('SIGKILL');
+    try {
+      await waitForChildExit(child, 2_000);
+      return;
+    } catch {
+      throw error;
+    }
+  }
+}
+
+async function waitForRouterRoutes(url, predicate, timeoutMs = 10_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      const result = await fetchJson(url + '/routes');
+      if (predicate(result.body)) return result.body;
+    } catch {
+      // The real CLI may still be starting its Router and projection.
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  throw new Error('operator_console_route_projection_timeout');
+}
+
+async function waitForChildOutput(readOutput, needle, timeoutMs = 5_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (readOutput().includes(needle)) return;
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  throw new Error('operator_console_startup_output_timeout:' + needle);
+}
+
 test('canonical operator journey remains usable through the stable Router', async () => {
   const root = await mkdtemp(join(tmpdir(), 'narada-operator-journey-'));
   const siteRoot = join(root, 'journey-site');
@@ -573,5 +635,117 @@ test('canonical operator journey remains usable through the stable Router', asyn
     if (previousUserSiteRoot === undefined) delete process.env.NARADA_USER_SITE_ROOT;
     else process.env.NARADA_USER_SITE_ROOT = previousUserSiteRoot;
     await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('real console startup projects the stable Router origin', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'narada-real-operator-startup-'));
+  const stateRoot = join(root, 'operator-router');
+  const userSiteRoot = join(root, 'Narada', '.registry');
+  await mkdir(userSiteRoot, { recursive: true });
+  const cliPackageRoot = fileURLToPath(new URL('../..', import.meta.url));
+  const cliEntrypoint = fileURLToPath(new URL('../../dist/main.js', import.meta.url));
+  const routerPort = await reservePort();
+  const routerUrl = 'http://127.0.0.1:' + routerPort;
+  const childEnvironment = {
+    ...process.env,
+    LOCALAPPDATA: root,
+    NARADA_USER_SITE_ROOT: userSiteRoot,
+    NARADA_OPERATOR_ROUTER_STATE_ROOT: stateRoot,
+  };
+  const child = spawn(process.execPath, [
+    cliEntrypoint,
+    'console',
+    'serve',
+    '--host',
+    '127.0.0.1',
+    '--port',
+    String(routerPort),
+  ], {
+    cwd: cliPackageRoot,
+    env: childEnvironment,
+    stdio: ['ignore', 'pipe', 'pipe'],
+    windowsHide: true,
+  });
+  let stdout = '';
+  let stderr = '';
+  child.stdout?.on('data', (chunk) => { stdout += String(chunk); });
+  child.stderr?.on('data', (chunk) => { stderr += String(chunk); });
+  let routerPid = null;
+  let browser = null;
+  try {
+    await waitForRouterRoutes(routerUrl, (body) => body.routes?.some((route) =>
+      route.route_id === 'operator-console' && route.state === 'healthy'));
+    const lock = JSON.parse(await readFile(join(stateRoot, 'router.lock'), 'utf8'));
+    assert.equal(typeof lock.pid, 'number');
+    assert.notEqual(lock.pid, child.pid);
+    routerPid = lock.pid;
+    await waitForChildOutput(() => stdout, 'Operator Router: ' + routerUrl);
+    await waitForChildOutput(() => stdout, 'Operator Console projection: started');
+    assert.match(stdout, new RegExp('Operator Router: ' + routerUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+    assert.match(stdout, /Operator Console projection: started/);
+
+    const health = await fetchJson(routerUrl + '/health');
+    assert.equal(health.response.status, 200);
+    assert.equal(health.body.status, 'healthy');
+
+    const routes = await fetchJson(routerUrl + '/routes');
+    assert.equal(routes.response.status, 200);
+    assert.equal(routes.body.routes.some((route) => route.route_id === 'operator-console'), true);
+    assert.equal(JSON.stringify(routes.body).includes('target_url'), false);
+    assert.equal(JSON.stringify(routes.body).includes('health_url'), false);
+
+    const workspace = await fetch(routerUrl + '/');
+    const workspaceHtml = await workspace.text();
+    assert.equal(workspace.status, 200);
+    assert.match(workspaceHtml, /data-narada-surface="operator-workspace"/);
+    assert.equal(workspaceHtml.includes('Operator Router:'), false);
+
+    const registry = await fetch(routerUrl + '/console/registry');
+    const registryHtml = await registry.text();
+    assert.equal(registry.status, 200);
+    assert.match(registryHtml, /<title>Operator Console - Sites<\/title>/);
+
+    browser = await chromium.launch({ headless: true });
+    const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+    await page.goto(routerUrl + '/', { waitUntil: 'domcontentloaded' });
+    assert.equal(await page.locator('body[data-narada-surface="operator-workspace"]').count(), 1);
+    await page.locator('a[href="/console/registry"]').first().click();
+    await page.waitForURL(routerUrl + '/console/registry');
+    await page.getByText('Site Registry', { exact: true }).waitFor();
+
+    await browser.close();
+    browser = null;
+    await stopChildProcess(child);
+    const routesAfterStop = await waitForRouterRoutes(routerUrl, (body) =>
+      !body.routes?.some((route) => route.route_id === 'operator-console' && route.state === 'healthy'));
+    const projectionAfterStop = routesAfterStop.routes.find((route) => route.route_id === 'operator-console');
+    // ChildProcess.kill cannot emulate a Windows console Ctrl+C. The in-process
+    // journey proves graceful unregister; the real-child path proves that a
+    // terminated owner cannot remain healthy in the Router.
+    assert.notEqual(projectionAfterStop?.state, 'healthy');
+  } catch (error) {
+    throw new Error(String(error) + `\nstdout:\n${stdout}\nstderr:\n${stderr}`);
+  } finally {
+    if (browser) {
+      await browser.close().catch(() => undefined);
+      browser = null;
+    }
+    try {
+      await stopChildProcess(child);
+    } finally {
+      try {
+        if (routerPid !== null) {
+          try {
+            process.kill(routerPid, 'SIGTERM');
+          } catch {
+            // The Router may already have exited after a failed startup.
+          }
+          await waitForRouterUnavailable(routerUrl);
+        }
+      } finally {
+        await rm(root, { recursive: true, force: true });
+      }
+    }
   }
 });
