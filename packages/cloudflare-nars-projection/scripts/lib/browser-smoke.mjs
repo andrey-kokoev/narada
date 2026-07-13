@@ -125,6 +125,7 @@ export async function openCdpPage({ browserPath, url, userDataPrefix = 'narada-b
       };
       networkResponses.push(entry);
       for (const waiter of [...networkWaiters]) {
+        if (networkResponses.length - 1 < waiter.afterCount) continue;
         if (!waiter.predicate(entry)) continue;
         networkWaiters.delete(waiter);
         clearTimeout(waiter.timer);
@@ -220,13 +221,17 @@ export async function openCdpPage({ browserPath, url, userDataPrefix = 'narada-b
         return count;
       })()`);
     },
-    async waitForNetworkResponse(predicate, timeoutMs) {
+    networkResponseCount() {
+      return networkResponses.length;
+    },
+    async waitForNetworkResponse(predicate, timeoutMs, afterCount = 0) {
       const started = Date.now();
-      const existing = networkResponses.find(predicate);
+      const existing = networkResponses.slice(afterCount).find(predicate);
       if (existing) return { found: true, ...existing, waited_ms: 0 };
       return await new Promise((resolve) => {
         const waiter = {
           predicate,
+          afterCount,
           started,
           resolve,
           timer: setTimeout(() => {
@@ -262,6 +267,9 @@ export async function openCdpPage({ browserPath, url, userDataPrefix = 'narada-b
       if (result?.error) return result;
       const body = result?.body ?? '';
       try { return JSON.parse(body); } catch { return { body, base64_encoded: Boolean(result?.base64Encoded) }; }
+    },
+    async reload() {
+      return await send('Page.reload', { ignoreCache: true });
     },
     async close() {
       try {

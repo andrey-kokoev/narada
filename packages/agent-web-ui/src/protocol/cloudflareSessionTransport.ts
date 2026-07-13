@@ -1,5 +1,5 @@
 import { buildAgentWebUiSubscribeFrame, isAgentWebUiCloudflareProtocolFrame, translateAgentWebUiFrameForCloudflare } from '@narada2/nars-client-projection-contract';
-import { applyRuntimeEventToWebUiState, sequenceFromRuntimeMessage } from '../runtime-events.js';
+import { applyRuntimeEventToWebUiState, isTerminalRuntimeEvent, sequenceFromRuntimeMessage } from '../runtime-events.js';
 import { reconnectDelayForAttempt } from '../event-stream.js';
 import { toSessionProtocolFrame } from './sessionTransport';
 import { isNarsTransportClosed, isNarsTransportOpening, transitionNarsTransport, type NarsClientAdapterContext } from './sessionTransportAdapters';
@@ -160,6 +160,10 @@ export function startCloudflareSessionTransport(context: NarsClientAdapterContex
             return;
           }
           processRuntimeMessage(message);
+          if (isTerminalRuntimeEvent(message)) {
+            connection.close();
+            options.onStatus?.('closed');
+          }
         } catch (error) {
           options.onDecodeError?.(error instanceof Error ? error.message : String(error));
         }

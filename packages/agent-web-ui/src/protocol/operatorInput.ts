@@ -29,7 +29,7 @@ export function submitOperatorInput(text: string, connection: NarsClientConnecti
   });
   if (!action) return { handled: false, shouldClearDraft: false };
   if (action.kind === 'local_help') {
-    return { handled: true, shouldClearDraft: true, localEvent: { event: 'agent_web_ui_help', content: buildAgentWebUiHelpText() } };
+    return { handled: true, shouldClearDraft: true, localEvent: { event: 'agent_web_ui_help', content: buildAgentWebUiHelpText({ supportsProtocolMethod: supportsProtocolMethod ?? undefined }) } };
   }
   if (action.kind === 'local_clear') {
     return { handled: true, shouldClearDraft: true, localEvent: { event: 'agent_web_ui_clear_requested' } };
@@ -84,7 +84,6 @@ export function submitOperatorInput(text: string, connection: NarsClientConnecti
   }
   const sent = sendFrame ? sendFrame(frame) : connection?.sendFrame(frame) ?? false;
   if (!sent) return { handled: false, shouldClearDraft: false, localEvent: { event: 'web_ui_input_not_sent', request_id: frame.id, method: frame.method, message: 'event stream is not open' } };
-  if (frame.method === 'session.close') connection?.close?.();
   return {
     handled: true,
     shouldClearDraft: true,

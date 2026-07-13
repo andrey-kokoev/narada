@@ -29,6 +29,11 @@ export function sequenceFromRuntimeMessage(message) {
   return Number.isFinite(sequence) ? sequence : null;
 }
 
+export function isTerminalRuntimeEvent(message) {
+  const event = unwrapRuntimeEvent(message)?.event;
+  return event === 'session_closed' || event === 'authority_session_revoked' || event === 'projection_revoked';
+}
+
 export function applyRuntimeEventToWebUiState(state, message) {
   const runtimeEvent = unwrapRuntimeEvent(message);
   if (!state || !runtimeEvent || typeof runtimeEvent !== 'object') return state;

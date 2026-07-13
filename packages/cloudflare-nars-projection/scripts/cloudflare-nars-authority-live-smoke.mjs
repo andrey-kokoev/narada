@@ -15,6 +15,17 @@ if (args.help) {
   process.exit(0);
 }
 
+async function waitForPageElementText(page, selector, text, timeoutMs) {
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    const found = await page.evaluate(`(() => [...document.querySelectorAll(${JSON.stringify(selector)})].some((element) => element.textContent?.includes(${JSON.stringify(text)})))()`);
+    if (found) return { found: true, waited_ms: Date.now() - started };
+    await sleep(250);
+  }
+  const bodyText = await page.evaluate('document.body?.innerText?.slice(0, 1000) ?? ""').catch(() => '');
+  return { found: false, waited_ms: Date.now() - started, body_text_sample: bodyText };
+}
+
 function printHelp() {
   process.stdout.write(`Cloudflare authority live smoke\n\n`);
   process.stdout.write(`Safe planning mode:\n  pnpm --filter @narada2/cloudflare-nars-projection smoke:cloudflare-origin-live\n\n`);
@@ -71,6 +82,11 @@ async function run() {
   let created = null;
   let revoke = null;
   let cleanup = { status: 'not_needed' };
+  let isolationCreated = null;
+  let isolationRevoke = null;
+  let isolation = null;
+  const isolationSessionId = `${sessionId}_isolation`;
+  const isolationSessionBase = `${baseUrl}/api/nars/authority/sessions/${encodeURIComponent(isolationSessionId)}`;
 
   try {
     phase(`checking service health at ${baseUrl}`);
@@ -81,6 +97,28 @@ async function run() {
     const health = await getJson(`${sessionBase}/health`);
     phase('checking bounded event replay');
     const initialReplay = await getJson(`${sessionBase}/events?since_sequence=0&max_events=20`);
+    phase('checking concurrent session isolation');
+    const isolationMessage = `Cloudflare authority isolation ${Date.now()}`;
+    isolationCreated = await postJson(`${baseUrl}/api/nars/authority/sessions`, { session_id: isolationSessionId, site_id: siteId, agent_id: agentId, mcp_fabric: mcpFabric });
+    const isolationInput = await postJson(`${isolationSessionBase}/input`, { method: 'conversation.send', payload: { message: isolationMessage, source: 'authority-live-smoke-isolation' } });
+    const isolationReplay = await getJson(`${isolationSessionBase}/events?since_sequence=0&max_events=20`);
+    const primaryIsolationReplay = await getJson(`${sessionBase}/events?since_sequence=0&max_events=20`);
+    isolationRevoke = await revokeSession(isolationSessionBase);
+    isolation = {
+      status: isolationCreated.status === 'created'
+        && isolationInput.status === 'admitted'
+        && isolationReplay.status === 'ok'
+        && isolationReplay.events?.some((event) => event.payload?.event === 'user_message' && event.payload?.content === isolationMessage)
+        && !primaryIsolationReplay.events?.some((event) => event.payload?.content === isolationMessage)
+        && isolationRevoke.status === 'revoked' ? 'passed' : 'failed',
+      session_id: isolationSessionId,
+      message: isolationMessage,
+      created: isolationCreated,
+      input: isolationInput,
+      replay: isolationReplay,
+      primary_replay: primaryIsolationReplay,
+      revoke: isolationRevoke,
+    };
 
     const webSocketEndpoint = `${baseUrl.replace(/^http:/i, 'ws:').replace(/^https:/i, 'wss:')}/api/nars/authority/sessions/${encodeURIComponent(sessionId)}/events/websocket?since_sequence=0&max_events=20`;
     phase('opening authority WebSocket and admitting operator input');
@@ -108,6 +146,7 @@ async function run() {
       && health.mcp_fabric?.requested_scope === 'all'
       && initialReplay.status === 'ok'
       && initialReplay.events?.some((event) => event.payload?.event === 'session_started')
+      && isolation?.status === 'passed'
       && live.status === 'passed'
       && replayAfterInput.status === 'ok'
       && replayAfterInput.events?.some((event) => event.payload?.event === 'assistant_message' && event.payload?.execution_kind === 'cloudflare_runtime_tool_adapter')
@@ -142,12 +181,16 @@ async function run() {
       hosted_browser_check_kind: 'browser_level_authority_e2e',
       strongest_hosted_web_ui_evidence: strongestHostedWebUiEvidence({ hostedShell, hostedBrowser }),
       hosted_web_ui_evidence: hostedWebUiEvidence({ hostedShell, hostedBrowser }),
-      checks: { service_health: serviceHealth, created, health, initial_replay: initialReplay, live_websocket: live, replay_after_input: replayAfterInput, hosted_shell: hostedShell, hosted_browser: hostedBrowser, revoke, refused_health: refusedHealth, refused_replay: refusedReplay, refused_input: refusedInput, cleanup },
+      checks: { service_health: serviceHealth, created, health, initial_replay: initialReplay, session_isolation: isolation, live_websocket: live, replay_after_input: replayAfterInput, hosted_shell: hostedShell, hosted_browser: hostedBrowser, revoke, refused_health: refusedHealth, refused_replay: refusedReplay, refused_input: refusedInput, cleanup },
       evidence_path: evidencePath,
       evidence_latest_path: evidencePaths.latestPath,
       evidence_index_path: evidencePaths.indexPath,
     }, evidencePaths, true);
   } catch (error) {
+    if (isolationCreated?.status === 'created' && !isolationRevoke) {
+      phase('attempting isolation-session cleanup revoke after failure');
+      isolationRevoke = await safeCleanupRevoke(isolationSessionBase);
+    }
     if (created?.status === 'created' && !revoke) {
       phase('attempting cleanup revoke after failure');
       cleanup = await safeCleanupRevoke(sessionBase);
@@ -162,6 +205,7 @@ async function run() {
       site_id: siteId,
       agent_id: agentId,
       hosted_web_url: hostedWebUrl,
+      session_isolation: isolation,
       cleanup,
       evidence_path: evidencePath,
     }, evidencePaths, true);
@@ -181,8 +225,11 @@ async function verifyHostedAuthorityBrowser(args) {
   const page = await openCdpPage({ browserPath, url: args.hostedWebUrl, userDataPrefix: 'narada-cloudflare-authority-browser-' });
   try {
     const stream = await waitForPageText(page, 'stream connected', 20000);
+    const connectionHealthRendered = await waitForPageText(page, 'Connection: attached', 15000);
     await selectHostedBrowserView(page, 'Raw');
-    const replayRendered = await waitForPageText(page, 'session_started', 15000);
+    // The Web UI projects session_started into its identity/state header. The
+    // pre-browser artifact is an unambiguous retained event proving replay.
+    const replayRendered = await waitForPageText(page, 'session_artifact_registered', 15000);
     await selectHostedBrowserView(page, 'Chat');
     const beforeMessageCount = await page.textOccurrenceCount(message);
     const beforeAssistantCount = await page.textOccurrenceCount(assistantText);
@@ -201,36 +248,54 @@ async function verifyHostedAuthorityBrowser(args) {
     const assistantMessageCount = await page.textOccurrenceCount(assistantText);
     await selectHostedBrowserView(page, 'Diagnostics');
     const turnCompleteRendered = await waitForPageText(page, 'completed', 15000);
-    const revoke = await revokeSession(args.sessionBase);
-    const revocationFrame = await page.waitForWebSocketFrame((entry) => {
+    const reload = await page.reload();
+    const reloadedStream = await waitForPageText(page, 'stream connected', 20000);
+    await selectHostedBrowserView(page, 'Raw');
+    const replayAfterReload = await waitForPageText(page, 'session_artifact_registered', 15000);
+    await selectHostedBrowserView(page, 'Chat');
+    const reloadedUserMessageCount = await page.textOccurrenceCount(message);
+    const reloadedAssistantMessageCount = await page.textOccurrenceCount(assistantText);
+    const closeInput = await submitHostedAuthorityOperatorMessage(page, '/exit', 'session.close');
+    const revoke = {
+      status: closeInput.input_response?.status === 200 || closeInput.input_response?.body?.status === 'admitted' ? 'revoked' : 'failed',
+      via: 'hosted_browser_ui',
+      input: closeInput,
+    };
+    const terminalFrame = await page.waitForWebSocketFrame((entry) => {
       const url = String(entry.url ?? '');
       const payload = String(entry.payload_data ?? '');
       return url.includes(`/api/nars/authority/sessions/${args.sessionId}/events/websocket`)
-        && payload.includes('authority_session_revoked')
-        && payload.includes('session_revoked');
+        && (payload.includes('authority_session_revoked') || payload.includes('session_closed'));
     }, 15000);
-    await selectHostedBrowserView(page, 'Diagnostics');
-    const revokedRendered = await waitForPageText(page, 'session_revoked', 15000);
-    const disconnectedRendered = await waitForPageText(page, 'stream reconnecting', 15000);
+    await selectHostedBrowserView(page, 'Operations');
+    const terminalRendered = await waitForPageText(page, 'session_closed', 15000);
+    const closedStateRendered = await waitForPageElementText(page, '.runtime-topology-trigger', 'closed', 15000);
     const passed = stream.found
       && replayRendered.found
       && input.status === 'submitted_from_hosted_browser_ui'
       && (input.input_response?.body?.status === 'admitted' || input.input_response?.status === 200)
+      && connectionHealthRendered.found
       && userRendered.found
       && assistantRendered.found
       && liveAssistantFrame.found
       && userMessageCount === beforeMessageCount + 1
       && assistantMessageCount === beforeAssistantCount + 1
       && turnCompleteRendered.found
+      && reloadedStream.found
+      && replayAfterReload.found
+      && reloadedUserMessageCount === userMessageCount
+      && reloadedAssistantMessageCount === assistantMessageCount
+      && closeInput.input_response?.status === 200
       && revoke.status === 'revoked'
-      && revocationFrame.found
-      && revokedRendered.found
-      && disconnectedRendered.found;
+      && terminalFrame.found
+      && terminalRendered.found
+      && closedStateRendered.found;
     return {
       status: passed ? 'passed' : 'failed',
       message,
       submitted_input: submittedInput,
       stream,
+      connection_health_rendered: connectionHealthRendered,
       replay_rendered: replayRendered,
       input,
       user_rendered: userRendered,
@@ -243,10 +308,20 @@ async function verifyHostedAuthorityBrowser(args) {
         expected_assistant_message_count: beforeAssistantCount + 1,
       },
       turn_complete_rendered: turnCompleteRendered,
+      reload,
+      reloaded_stream: reloadedStream,
+      replay_after_reload: replayAfterReload,
+      reloaded_message_cardinality: {
+        user_message_count: reloadedUserMessageCount,
+        expected_user_message_count: userMessageCount,
+        assistant_message_count: reloadedAssistantMessageCount,
+        expected_assistant_message_count: assistantMessageCount,
+      },
+      close_input: closeInput,
       revoke,
-      revocation_websocket_frame: revocationFrame,
-      revoked_state_rendered: revokedRendered,
-      disconnected_state_rendered: disconnectedRendered,
+      terminal_websocket_frame: terminalFrame,
+      terminal_state_rendered: terminalRendered,
+      closed_state_rendered: closedStateRendered,
     };
   } catch (error) {
     return { status: 'failed', code: 'hosted_authority_browser_failed', error: error instanceof Error ? error.message : String(error), message };
@@ -275,7 +350,8 @@ async function selectHostedBrowserView(page, label) {
 }
 
 async function submitHostedAuthorityOperatorMessage(page, submittedInput, message) {
-  const inputResponsePromise = page.waitForNetworkResponse((entry) => entry.method === 'POST' && /\/api\/nars\/authority\/sessions\/[^/]+\/input$/.test(new URL(entry.url).pathname), 10000);
+  const responseCountBefore = page.networkResponseCount();
+  const inputResponsePromise = page.waitForNetworkResponse((entry) => entry.method === 'POST' && /\/api\/nars\/authority\/sessions\/[^/]+\/input$/.test(new URL(entry.url).pathname), 10000, responseCountBefore);
   await page.evaluate(`(() => {
     const input = document.querySelector('#operator-input');
     if (!input) throw new Error('operator_input_not_found');
@@ -386,15 +462,17 @@ function hostedWebUiEvidence({ hostedShell, hostedBrowser }) {
       { level: 'html_shell_available', status: hostedShell?.ok === true ? 'passed' : 'failed' },
       { level: 'browser_booted', status: hostedBrowser?.stream?.found === true ? 'passed' : 'failed' },
       { level: 'replay_rendered', status: hostedBrowser?.replay_rendered?.found === true ? 'passed' : 'failed' },
+      { level: 'connection_health_rendered', status: hostedBrowser?.connection_health_rendered?.found === true ? 'passed' : 'failed' },
       { level: 'live_stream_rendered', status: hostedBrowser?.stream?.found === true ? 'passed' : 'failed' },
       { level: 'operator_input_submitted', status: hostedBrowser?.input?.status === 'submitted_from_hosted_browser_ui' ? 'passed' : 'failed' },
       { level: 'assistant_rendered', status: hostedBrowser?.assistant_rendered?.found === true ? 'passed' : 'failed' },
       { level: 'live_websocket_assistant_frame_verified', status: hostedBrowser?.live_assistant_websocket_frame?.found === true ? 'passed' : 'failed' },
       { level: 'turn_completion_rendered', status: hostedBrowser?.turn_complete_rendered?.found === true ? 'passed' : 'failed' },
       { level: 'message_cardinality_verified', status: hostedBrowser?.message_cardinality?.user_message_count === hostedBrowser?.message_cardinality?.expected_user_message_count && hostedBrowser?.message_cardinality?.assistant_message_count === hostedBrowser?.message_cardinality?.expected_assistant_message_count ? 'passed' : 'failed' },
-      { level: 'revocation_rendered', status: hostedBrowser?.revoked_state_rendered?.found === true ? 'passed' : 'failed' },
-      { level: 'live_websocket_revocation_frame_verified', status: hostedBrowser?.revocation_websocket_frame?.found === true ? 'passed' : 'failed' },
-      { level: 'disconnection_rendered', status: hostedBrowser?.disconnected_state_rendered?.found === true ? 'passed' : 'failed' },
+      { level: 'reload_replay_rendered', status: hostedBrowser?.replay_after_reload?.found === true ? 'passed' : 'failed' },
+      { level: 'terminal_lifecycle_rendered', status: hostedBrowser?.terminal_state_rendered?.found === true ? 'passed' : 'failed' },
+      { level: 'live_websocket_terminal_frame_verified', status: hostedBrowser?.terminal_websocket_frame?.found === true ? 'passed' : 'failed' },
+      { level: 'terminal_transport_closed', status: hostedBrowser?.closed_state_rendered?.found === true ? 'passed' : 'failed' },
     ],
   };
 }
