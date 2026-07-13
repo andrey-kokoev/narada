@@ -73,6 +73,7 @@ export interface CapabilityLifecycleProjection {
   capabilityId: string;
   state: CapabilityLifecycleState;
   exposureClass: McpSupervisorExposureClass;
+  previousState?: CapabilityLifecycleState;
 }
 
 export interface McpSurfaceCarrierStatusInput {
@@ -81,6 +82,7 @@ export interface McpSurfaceCarrierStatusInput {
   carrierSession: CarrierSessionDescriptor;
   runtimeRegistry: RuntimeRegistryObservation;
   capability: CapabilityLifecycleProjection;
+  previousLifecycleState?: McpSurfaceCarrierLifecycleState;
   restartRequest?: RestartRequestDescriptor;
   verification?: VerificationDescriptor;
   sourceNewerThanBaseline?: boolean;
@@ -91,7 +93,7 @@ export interface McpSurfaceCarrierStatusInput {
 export interface DeniedSupervisorInputFinding {
   path: string;
   reason:
-    | 'narada-andrey runtime registry import'
+    | 'legacy user-site runtime registry import'
     | 'PC-locus state import'
     | 'operator-surface runtime copying'
     | 'source Site MCP runtime import'
@@ -102,12 +104,21 @@ export interface McpSurfaceCarrierStatusResult {
   schema: 'narada.mcp_surface_carrier_supervisor.status.v0';
   surfaceId: string;
   lifecycleState: McpSurfaceCarrierLifecycleState;
+  previousLifecycleState?: McpSurfaceCarrierLifecycleState;
+  lifecycleTransition?: {
+    from: McpSurfaceCarrierLifecycleState;
+    to: McpSurfaceCarrierLifecycleState;
+  };
   exposureClass: McpSupervisorExposureClass;
   siteAuthority: SiteAuthorityRef;
   mcpProcess: McpProcessDescriptor;
   carrierSession: CarrierSessionDescriptor;
   runtimeRegistry: RuntimeRegistryObservation;
   capability: CapabilityLifecycleProjection;
+  capabilityTransition?: {
+    from: CapabilityLifecycleState;
+    to: CapabilityLifecycleState;
+  };
   restartRequest?: RestartRequestDescriptor;
   verification?: VerificationDescriptor;
   reasons: string[];

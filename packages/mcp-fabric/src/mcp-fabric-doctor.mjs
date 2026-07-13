@@ -6,6 +6,7 @@ import { projectServerEnvironment } from './mcp-fabric-projection.mjs';
 import { renderTable } from './mcp-fabric-table.mjs';
 import { loadSiteMcpFabric } from './mcp-fabric-loader.mjs';
 import { mcpFabricRepairPlan } from './mcp-fabric-repair-plans.mjs';
+import { createMcpFabricLifecycle, transitionMcpFabricLifecycle } from './mcp-fabric-state.mjs';
 
 export async function runMcpFabricDoctor(siteRoot, options = {}) {
   const timeoutMs = Math.max(1, Number(options.timeoutMs ?? 5000));
@@ -47,6 +48,8 @@ export async function runMcpFabricDoctor(siteRoot, options = {}) {
     files: fabric.files,
     candidate_files: fabric.candidate_files ?? fabric.files,
     registry_validation: fabric.registry_validation ?? null,
+    lifecycle_state: fabric.lifecycle_state ?? 'loaded',
+    lifecycle_history: fabric.lifecycle_history ?? ['discovered', 'loaded'],
     generated_config_diagnostics: configDiagnostics,
     rows,
     diagnostics: [],
@@ -87,8 +90,11 @@ async function probeMcpServer({ siteRoot, serverName, server, sourceFile, config
   let toolsListStatus = 'not_run';
   let toolsListCount = null;
   let proc = null;
+  let lifecycle = transitionMcpFabricLifecycle(createMcpFabricLifecycle(), 'loaded');
   const entrypoint = resolveServerEntrypoint(server, siteRoot);
   if (entrypoint && !existsSync(entrypoint.path)) {
+    lifecycle = transitionMcpFabricLifecycle(lifecycle, 'starting');
+    lifecycle = transitionMcpFabricLifecycle(lifecycle, 'start_failed');
     diagnostics.push({
       code: 'entry_missing',
       message: entrypoint.path,
@@ -101,10 +107,12 @@ async function probeMcpServer({ siteRoot, serverName, server, sourceFile, config
       },
       repair_plan: entrypointRepairPlan(entrypoint, configDiagnostic),
     });
-    return { file: sourceFile, server: serverName, command: commandSummary, path_normalization: pathNormalization, initialize_status: "not_run", tools_list_status: "not_run", tools_list_count: null, first_diagnostic: `${diagnostics[0].code}: ${diagnostics[0].message}`, diagnostics };
+    lifecycle = transitionMcpFabricLifecycle(lifecycle, 'closed');
+    return { file: sourceFile, server: serverName, command: commandSummary, path_normalization: pathNormalization, initialize_status: "not_run", tools_list_status: "not_run", tools_list_count: null, first_diagnostic: `${diagnostics[0].code}: ${diagnostics[0].message}`, diagnostics, lifecycle_state: lifecycle.state, lifecycle_history: lifecycle.history };
   }
 
   try {
+    lifecycle = transitionMcpFabricLifecycle(lifecycle, 'starting');
     proc = spawnHiddenPostureProcess(server.command, server.args ?? [], {
       posture: 'mcp_server',
       cwd: siteRoot,
@@ -174,6 +182,10 @@ async function probeMcpServer({ siteRoot, serverName, server, sourceFile, config
     if (stderrLines.length > 0) {
       diagnostics.push({ code: 'stderr', message: stderrLines[0] });
     }
+    lifecycle = transitionMcpFabricLifecycle(
+      lifecycle,
+      initializeStatus === 'ok' && toolsListStatus === 'ok' ? 'ready' : initializeStatus === 'ok' ? 'probe_failed' : 'start_failed',
+    );
   } catch (error) {
     const diagnostic = doctorDiagnostic(error, initializeStatus === 'not_run' ? 'initialize' : 'tools_list');
     diagnostics.push(diagnostic);
@@ -181,8 +193,15 @@ async function probeMcpServer({ siteRoot, serverName, server, sourceFile, config
     else if (diagnostic.code === 'tools_list_timeout') toolsListStatus = 'timeout';
     else if (initializeStatus === 'not_run') initializeStatus = 'error';
     else toolsListStatus = 'error';
+    lifecycle = transitionMcpFabricLifecycle(lifecycle, initializeStatus === 'ok' ? 'probe_failed' : 'start_failed');
   } finally {
+    if (proc && lifecycle.state !== 'closed') {
+      lifecycle = transitionMcpFabricLifecycle(lifecycle, 'closing');
+    }
     await stopDoctorProcess(proc);
+    if (lifecycle.state !== 'closed') {
+      lifecycle = transitionMcpFabricLifecycle(lifecycle, 'closed');
+    }
   }
 
   return {
@@ -195,6 +214,8 @@ async function probeMcpServer({ siteRoot, serverName, server, sourceFile, config
     tools_list_count: toolsListCount,
     first_diagnostic: diagnostics[0] ? `${diagnostics[0].code}: ${diagnostics[0].message}` : null,
     diagnostics,
+    lifecycle_state: lifecycle.state,
+    lifecycle_history: lifecycle.history,
   };
 }
 

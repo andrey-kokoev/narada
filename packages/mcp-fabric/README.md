@@ -23,6 +23,17 @@ This package describes available MCP servers and tool metadata. It does not gran
 mutation authority. Non-read-only tool requests still cross the Carrier Action
 Admission Boundary before consequence.
 
+## Fabric and server lifecycle
+
+The loader and doctor expose `narada.mcp.fabric.lifecycle_state.v1` evidence.
+The fabric loader moves `discovered -> loaded`. Each server probe moves through
+`loaded -> starting -> ready -> closing -> closed`, with explicit
+`start_failed`, `probe_failed`, and `close_failed` paths. Probe results include
+the current `lifecycle_state` and `lifecycle_history`.
+
+These states describe loading and probing evidence only. They do not grant MCP
+tool authority or replace the carrier action-admission boundary.
+
 ## Verification
 
 ```powershell

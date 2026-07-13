@@ -297,6 +297,7 @@ async function handleOperatorAction(
         getOutboundCommand: async (id) => coordinator.getOutboundCommand(id),
         updateOutboundCommandStatus: async (id, status) => coordinator.updateOutboundCommandStatus(id, status),
         insertOperatorActionRequest: async (req) => coordinator.insertOperatorActionRequest(req),
+        markOperatorActionRequestExecuting: async (id, at) => coordinator.markOperatorActionRequestExecuting(id, at),
         markOperatorActionRequestExecuted: async (id, at) => coordinator.markOperatorActionRequestExecuted(id, at),
         markOperatorActionRequestRejected: async (id, reason, at) => coordinator.markOperatorActionRequestRejected(id, reason, at),
       },

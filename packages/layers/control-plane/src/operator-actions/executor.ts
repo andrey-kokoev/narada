@@ -102,6 +102,7 @@ export async function executeOperatorAction(
   ctx.coordinatorStore.insertOperatorActionRequest(request);
 
   try {
+    ctx.coordinatorStore.markOperatorActionRequestExecuting(requestId, now);
     switch (payload.action_type) {
       case "retry_work_item": {
         if (!payload.target_id) {

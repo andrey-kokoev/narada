@@ -335,6 +335,7 @@ export interface CoordinatorStore {
   // Operator action requests
   insertOperatorActionRequest(request: OperatorActionRequest): void;
   getPendingOperatorActionRequests(scopeId?: string): OperatorActionRequest[];
+  markOperatorActionRequestExecuting(requestId: string, executingAt?: string): void;
   markOperatorActionRequestExecuted(requestId: string, executedAt?: string): void;
   markOperatorActionRequestRejected(requestId: string, rejectedAt?: string): void;
 
@@ -375,6 +376,7 @@ export type CoordinatorStoreView = Omit<
   | "updateToolCallRecord"
   | "insertOverride"
   | "insertOperatorActionRequest"
+  | "markOperatorActionRequestExecuting"
   | "markOperatorActionRequestExecuted"
   | "insertConfirmationChallenge"
   | "markConfirmationChallengeConfirmed"
@@ -390,6 +392,7 @@ export type CoordinatorStoreOperatorView = CoordinatorStoreView &
     CoordinatorStore,
     | "updateWorkItemStatus"
     | "insertOperatorActionRequest"
+    | "markOperatorActionRequestExecuting"
     | "markOperatorActionRequestExecuted"
     | "markOperatorActionRequestRejected"
     | "insertConfirmationChallenge"
@@ -409,7 +412,7 @@ export interface OperatorActionRequest {
   target_id: string | null;
   payload_json: string | null;
   source_message_id: string | null;
-  status: "pending" | "executed" | "rejected";
+  status: "pending" | "executing" | "executed" | "rejected";
   requested_by: string;
   requested_at: string;
   executed_at: string | null;

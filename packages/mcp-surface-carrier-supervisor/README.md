@@ -14,13 +14,30 @@ The package models the boundary between:
 
 It does not kill processes, restart carriers, bind operator surfaces, mutate runtime registries, import source Site state, or provide native shell fallback.
 
-## First Slice
+## Lifecycle contracts
 
-The first slice exposes typed status projection for these lifecycle states:
+The package exposes typed status projection and transition guards for the
+surface/carrier continuity lifecycle:
 
 - `stale`
 - `restart_requested`
 - `carrier_restarted`
 - `live_verified`
 
-Restart/rebind is represented as request/evidence data only. A receiving Site must admit a separate carrier/supervisor execution surface before any live restart, rebind, or process mutation can occur.
+The schema is `narada.mcp.surface_carrier.lifecycle_state.v1`. Normal progress is
+`stale -> restart_requested -> carrier_restarted -> live_verified`; stale or
+restart-requested evidence may be recorded again when verification regresses.
+
+Capability maturity is projected separately under
+`narada.capability.lifecycle_state.v1`:
+
+`observed -> named -> designed -> implemented -> cataloged -> mcp_exposed -> admitted -> trialed -> in_use`
+
+`blocked -> observed` is the documented recovery path. `admitted` here is
+lifecycle evidence, not a runtime grant. Runtime capability admission remains
+owned by `@narada2/nars-capability-gateway`.
+
+Restart/rebind is represented as request/evidence data only. The package is
+read-only: it never kills processes, restarts carriers, rebinds surfaces, or
+mutates runtime registries. A receiving Site must admit a separate execution
+surface before any such operation can occur.

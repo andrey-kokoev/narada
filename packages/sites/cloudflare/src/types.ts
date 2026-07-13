@@ -123,7 +123,7 @@ export interface SiteOperatorActionRequest {
   target_id: string;
   target_kind: "work_item" | "outbound_command";
   payload_json: string | null;
-  status: "pending" | "executed" | "rejected";
+  status: "pending" | "executing" | "executed" | "rejected";
   requested_by: string;
   requested_at: string;
   executed_at: string | null;

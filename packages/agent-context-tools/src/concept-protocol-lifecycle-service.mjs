@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { assertConceptProtocolLifecycleTransition } from './concept-protocol-lifecycle-state.mjs';
 
 export const CONCEPT_LIFECYCLE_OBJECT_TYPES = new Set([
   'concept',
@@ -57,7 +58,7 @@ export function validateLifecycleEventInput({
   if (!CONCEPT_LIFECYCLE_STATES.has(stateAfter)) {
     throw new Error(`invalid_concept_lifecycle_state_after: ${stateAfter ?? ''}`);
   }
-  if (!actorAgentId || !/^narada-andrey\.[A-Za-z0-9_-]+$/.test(actorAgentId)) {
+  if (!actorAgentId || !/^andrey-user\.[A-Za-z0-9_-]+$/.test(actorAgentId)) {
     throw new Error(`invalid_concept_lifecycle_actor_agent_id: ${actorAgentId ?? ''}`);
   }
   validateObject('authority_basis', authorityBasis, ['kind', 'summary']);
@@ -100,6 +101,7 @@ export function buildLifecycleEventPayload({
   artifactRefs,
   evidenceRefs,
   notes,
+  previousState,
   createdAt,
 }) {
   return {
@@ -109,6 +111,7 @@ export function buildLifecycleEventPayload({
     object_type: objectType,
     event_type: eventType,
     state_after: stateAfter,
+    previous_state: previousState,
     actor_agent_id: actorAgentId,
     authority_basis: authorityBasis,
     scope,
@@ -127,6 +130,7 @@ export function buildCurrentStatePayload({ event }) {
     object_id: event.object_id,
     object_type: event.object_type,
     state_after: event.state_after,
+    previous_state: event.previous_state,
     last_event_id: event.event_id,
     last_event_type: event.event_type,
     actor_agent_id: event.actor_agent_id,
@@ -207,6 +211,16 @@ export function recordLifecycleEvent({ db, toolArgs, assertBoundIdentity = () =>
     evidenceRefs,
   });
 
+  const currentStateRow = db.prepare(
+    'SELECT state_after FROM concept_protocol_lifecycle_current_state WHERE object_id = ?',
+  ).get(objectId);
+  const previousState = currentStateRow ? String(currentStateRow.state_after) : null;
+  assertConceptProtocolLifecycleTransition({
+    previousState,
+    nextState: stateAfter,
+    eventType,
+  });
+
   const now = new Date().toISOString();
   const eventId = `clife_${randomUUID().replace(/-/g, '')}`;
   const payload = buildLifecycleEventPayload({
@@ -221,6 +235,7 @@ export function recordLifecycleEvent({ db, toolArgs, assertBoundIdentity = () =>
     artifactRefs,
     evidenceRefs,
     notes,
+    previousState,
     createdAt: now,
   });
   const currentProjection = buildCurrentStatePayload({ event: payload });
@@ -291,6 +306,10 @@ export function recordLifecycleEvent({ db, toolArgs, assertBoundIdentity = () =>
     append_only_event_log: true,
     projection_not_authority: true,
     adjacent_surfaces_are_evidence_only: true,
+    previous_state: previousState,
+    lifecycle_transition: previousState === stateAfter
+      ? null
+      : { from: previousState, to: stateAfter, event_type: eventType },
     event: payload,
     current_state_projection: currentProjection,
   };

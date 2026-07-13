@@ -56,10 +56,86 @@ Schema: `narada.nars.event_attachment_state.v1`.
 
 An attachment without replay may use `requested -> live`. Sender failure enters terminal `failed` and removes the subscriber. WebSocket replay and JSONL activation call the explicit state operations; socket/input cleanup closes the attachment through the same contract.
 
+## MCP Surface and Carrier Continuity
+
+Owner: `@narada2/mcp-surface-carrier-supervisor`.
+
+Schema: `narada.mcp.surface_carrier.lifecycle_state.v1`.
+
+The read-only evidence lifecycle is:
+
+`stale -> restart_requested -> carrier_restarted -> live_verified`
+
+The guard also permits evidence regression from `carrier_restarted` or
+`live_verified` back to `stale`, and a new `restart_requested` after a stale
+observation. The supervisor records evidence and denied actions; it does not
+restart a process, rebind a surface, or mutate a runtime registry.
+
+## MCP Fabric and Server Probe
+
+Owner: `@narada2/mcp-fabric`.
+
+Schema: `narada.mcp.fabric.lifecycle_state.v1`.
+
+Fabric loading is `discovered -> loaded`. A server probe is
+`loaded -> starting -> ready -> closing -> closed`. Start and probe failures
+are explicit (`start_failed` or `probe_failed`) and close failures use
+`close_failed -> closed`. The loader and doctor return the current state and
+history for the fabric or each probed server. This is loading/probe evidence,
+not tool-admission authority.
+
+## Concept and Protocol Lifecycle
+
+Owner: `@narada2/agent-context-tools`.
+
+Schema: `narada.concept_protocol.lifecycle_state.v1`.
+
+The append-only event contract is:
+
+`observed -> named -> doctrine_checked -> codified -> trialed -> promoted -> canonical`
+
+Pre-canonical states may be rejected. `canonical -> deprecated -> superseded` and
+`canonical -> superseded` are the retirement paths. `rejected` and `superseded`
+are terminal. A `corrected` event is allowed only as a same-state correction
+before a terminal state. The SQLite writer checks the current projection before
+inserting the event.
+
+## Capability Lifecycle and Runtime Admission
+
+The read-only capability maturity projection owned by
+`@narada2/mcp-surface-carrier-supervisor` uses schema
+`narada.capability.lifecycle_state.v1`:
+
+`observed -> named -> designed -> implemented -> cataloged -> mcp_exposed -> admitted -> trialed -> in_use`
+
+Any non-`blocked` state may enter `blocked`; `blocked -> observed` is recovery.
+The projection's `admitted` state is evidence that a capability reached that
+maturity stage. It is not a grant and cannot authorize a call. Runtime gateway
+health and tool execution remain separate FSMs owned by
+`@narada2/nars-capability-gateway`.
+
+## Operator Action and Confirmation
+
+Owner: the SQLite control-plane coordinator, with the equivalent action guard in
+the Cloudflare Site coordinator.
+
+Operator actions follow:
+
+`pending -> executing -> executed`
+
+They may be rejected from `pending` or `executing`; `executed` and `rejected`
+cannot reopen. Confirmation challenges follow:
+
+`pending -> confirmed -> consumed`
+
+or `pending -> expired` / `pending -> rejected`. Only the owning coordinator
+mutation methods perform these transitions. The action executor enters
+`executing` before invoking the audited mutation.
+
 ## Boundary Rules
 
-- A terminal state cannot be reopened. Retry or reconnection creates a new record or attachment.
+- Terminal states are contract-specific. Operator actions, confirmation challenges, and concept/protocol retirement states cannot be reopened; recoverable status projections such as `stale`, `blocked`, or a fabric load failure use their documented recovery path.
 - A lower-level FSM may expose state to its caller, but it does not acquire authority owned by a higher-level FSM.
 - State transitions that govern durable recovery or leases are journaled or artifacted. Ephemeral attachment history is exposed by the subscription handle and is not treated as session authority.
-- Existing turn, input-admission, provider-invocation, capability-gateway, runtime-host, and tool-execution FSMs remain separate contracts with their existing owners.
+- Existing turn, input-admission, provider-invocation, capability-gateway, runtime-host, and tool-execution FSMs remain separate contracts with their existing owners. In particular, capability maturity evidence never replaces runtime capability admission.
 

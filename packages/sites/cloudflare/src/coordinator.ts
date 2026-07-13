@@ -5,6 +5,7 @@
 
 import type { SiteHealthRecord, CycleTraceRecord, RecoveryTraceRecord, FactRecord, SiteOperatorActionRequest, ExecutionAttemptRecord } from "./types.js";
 import type { NotificationRateLimiter } from "./notification.js";
+import { assertSiteOperatorActionRequestTransition } from "./operator-action-lifecycle.js";
 
 export interface CloudflareEnv {
   NARADA_SITE_COORDINATOR: DurableObjectNamespace;
@@ -27,6 +28,7 @@ export interface SiteCoordinator {
   insertOperatorActionRequest(request: import("./types.js").SiteOperatorActionRequest): Promise<void>;
   getOperatorActionRequest(requestId: string): Promise<import("./types.js").SiteOperatorActionRequest | null>;
   getPendingOperatorActionRequests(scopeId?: string): Promise<import("./types.js").SiteOperatorActionRequest[]>;
+  markOperatorActionRequestExecuting(requestId: string, executingAt?: string): Promise<void>;
   markOperatorActionRequestExecuted(requestId: string, executedAt?: string): Promise<void>;
   markOperatorActionRequestRejected(requestId: string, reason: string, rejectedAt?: string): Promise<void>;
   getStuckWorkItems(): Promise<{ workItemId: string; scopeId: string; status: string; contextId: string; lastUpdatedAt: string; summary: string }[]>;
@@ -146,6 +148,7 @@ export class NaradaSiteCoordinator {
               getOutboundCommand: async (id) => this.getOutboundCommand(id),
               updateOutboundCommandStatus: async (id, status) => { this.updateOutboundCommandStatus(id, status); },
               insertOperatorActionRequest: async (req) => { this.insertOperatorActionRequest(req); },
+              markOperatorActionRequestExecuting: async (id, at) => { this.markOperatorActionRequestExecuting(id, at); },
               markOperatorActionRequestExecuted: async (id, at) => { this.markOperatorActionRequestExecuted(id, at); },
               markOperatorActionRequestRejected: async (id, reason, at) => { this.markOperatorActionRequestRejected(id, reason, at); },
             },
@@ -703,12 +706,46 @@ export class NaradaSiteCoordinator {
     return results;
   }
 
+  markOperatorActionRequestExecuting(requestId: string, _executingAt?: string): void {
+    const row = this.sql.exec<{ status: string }>(
+      `SELECT status FROM operator_action_requests WHERE request_id = ? LIMIT 1`,
+      requestId,
+    ).one();
+    if (!row) throw new Error(`Operator action request ${requestId} not found`);
+    assertSiteOperatorActionRequestTransition(
+      row.status as import("./operator-action-lifecycle.js").SiteOperatorActionRequestLifecycleState,
+      "executing",
+    );
+    this.sql.exec(
+      `UPDATE operator_action_requests SET status = 'executing', executed_at = NULL WHERE request_id = ?`,
+      requestId,
+    );
+  }
+
   markOperatorActionRequestExecuted(requestId: string, executedAt?: string): void {
+    const row = this.sql.exec<{ status: string }>(
+      `SELECT status FROM operator_action_requests WHERE request_id = ? LIMIT 1`,
+      requestId,
+    ).one();
+    if (!row) throw new Error(`Operator action request ${requestId} not found`);
+    assertSiteOperatorActionRequestTransition(
+      row.status as import("./operator-action-lifecycle.js").SiteOperatorActionRequestLifecycleState,
+      "executed",
+    );
     const now = executedAt ?? new Date().toISOString();
     this.sql.exec(`UPDATE operator_action_requests SET status = 'executed', executed_at = ? WHERE request_id = ?`, now, requestId);
   }
 
   markOperatorActionRequestRejected(requestId: string, reason: string, rejectedAt?: string): void {
+    const row = this.sql.exec<{ status: string }>(
+      `SELECT status FROM operator_action_requests WHERE request_id = ? LIMIT 1`,
+      requestId,
+    ).one();
+    if (!row) throw new Error(`Operator action request ${requestId} not found`);
+    assertSiteOperatorActionRequestTransition(
+      row.status as import("./operator-action-lifecycle.js").SiteOperatorActionRequestLifecycleState,
+      "rejected",
+    );
     const now = rejectedAt ?? new Date().toISOString();
     this.sql.exec(`UPDATE operator_action_requests SET status = 'rejected', rejected_at = ?, rejection_reason = ? WHERE request_id = ?`, now, reason, requestId);
   }

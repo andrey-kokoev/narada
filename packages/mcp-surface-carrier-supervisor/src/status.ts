@@ -1,4 +1,6 @@
 import { findDeniedSupervisorInputs } from './refusal.js';
+import { transitionCapabilityLifecycle } from './capability-lifecycle.js';
+import { transitionMcpSurfaceCarrierLifecycle } from './lifecycle.js';
 import type {
   McpSurfaceCarrierLifecycleState,
   McpSurfaceCarrierStatusInput,
@@ -11,18 +13,32 @@ export function projectMcpSurfaceCarrierStatus(
   const deniedInputFindings = findDeniedSupervisorInputs(input.sourcePaths ?? []);
   const deniedActionsRequested = input.deniedActionsRequested ?? [];
   const lifecycleState = determineLifecycleState(input);
+  const lifecycleMachine = input.previousLifecycleState
+    ? transitionMcpSurfaceCarrierLifecycle(
+        { state: input.previousLifecycleState, history: [input.previousLifecycleState] },
+        lifecycleState,
+      )
+    : undefined;
+  const capabilityTransition = input.capability.previousState
+    ? transitionCapabilityLifecycle(input.capability.previousState, input.capability.state)
+    : undefined;
   const reasons = buildReasons(input, lifecycleState, deniedInputFindings.length, deniedActionsRequested.length);
 
   return {
     schema: 'narada.mcp_surface_carrier_supervisor.status.v0',
     surfaceId: input.mcpProcess.surfaceId,
     lifecycleState,
+    previousLifecycleState: input.previousLifecycleState,
+    lifecycleTransition: lifecycleMachine && lifecycleMachine.state !== input.previousLifecycleState
+      ? { from: input.previousLifecycleState!, to: lifecycleMachine.state }
+      : undefined,
     exposureClass: 'read_only',
     siteAuthority: input.siteAuthority,
     mcpProcess: input.mcpProcess,
     carrierSession: input.carrierSession,
     runtimeRegistry: input.runtimeRegistry,
     capability: input.capability,
+    capabilityTransition,
     restartRequest: input.restartRequest,
     verification: input.verification,
     reasons,

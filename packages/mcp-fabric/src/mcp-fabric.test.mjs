@@ -10,6 +10,7 @@ import {
   loadSiteMcpFabric,
   mcpServerNames,
   projectFabricForAgentTui,
+  projectFabricForCodex,
   projectServerEnvironment,
   renderMcpFabricDoctorTable,
   runMcpFabricDoctor,
@@ -23,6 +24,22 @@ assert.deepEqual(codexMcpEnvVarNames().filter((name) => name.endsWith('SESSION_I
   'NARADA_RUNTIME_SESSION_ID',
   'NARADA_CARRIER_SESSION_ID',
 ]);
+
+const projectedCarrierFabric = {
+  servers: {
+    portableNode: { command: 'node', args: ['portable.mjs'], tools: ['probe'] },
+    staleFnmNode: { command: 'C:\\Users\\Andrey\\AppData\\Local\\fnm_multishells\\old\\node.exe', args: ['stale.mjs'], tools: ['probe'] },
+    powershell: { command: 'pwsh', args: ['-File', 'server.ps1'], tools: ['probe'] },
+  },
+};
+const projectedCodexServers = projectFabricForCodex(projectedCarrierFabric);
+assert.equal(projectedCodexServers.find((server) => server.name === 'portableNode').command, process.execPath);
+assert.equal(projectedCodexServers.find((server) => server.name === 'staleFnmNode').command, process.execPath);
+assert.equal(projectedCodexServers.find((server) => server.name === 'powershell').command, 'pwsh');
+const projectedAgentTuiServers = projectFabricForAgentTui(projectedCarrierFabric, {}).mcpServers;
+assert.equal(projectedAgentTuiServers.portableNode.command, process.execPath);
+assert.equal(projectedAgentTuiServers.staleFnmNode.command, process.execPath);
+assert.equal(projectedAgentTuiServers.powershell.command, 'pwsh');
 
 const missingSite = mkdtempSync(join(tmpdir(), 'narada-mcp-fabric-missing-'));
 try {
@@ -53,6 +70,8 @@ try {
     },
   }, null, 2)}\n`, 'utf8');
   const containedFabric = loadSiteMcpFabric(containedSite, { required: true });
+  assert.equal(containedFabric.lifecycle_state, 'loaded');
+  assert.deepEqual(containedFabric.lifecycle_history, ['discovered', 'loaded']);
   assert.equal(containedFabric.source, '.narada/.ai/mcp');
   assert.equal(containedFabric.mcp_dir, join(containedSite, '.narada', '.ai', 'mcp'));
   assert.deepEqual(mcpServerNames(containedFabric), ['narada-contained']);
@@ -126,6 +145,67 @@ try {
   }]);
 } finally {
   rmSync(runtimeProjectionSite, { recursive: true, force: true });
+}
+
+const registryScopeSite = mkdtempSync(join(tmpdir(), 'narada-mcp-fabric-registry-scope-'));
+mkdirSync(join(registryScopeSite, '.ai', 'mcp'), { recursive: true });
+mkdirSync(join(registryScopeSite, '.narada', 'capabilities'), { recursive: true });
+try {
+  writeFileSync(join(registryScopeSite, '.ai', 'mcp', 'surface-feedback.json'), `${JSON.stringify({
+    mcpServers: {
+      'narada-sonar-surface-feedback': {
+        command: 'node',
+        args: ['surface-feedback.mjs'],
+      },
+    },
+  }, null, 2)}\n`, 'utf8');
+  writeFileSync(join(registryScopeSite, '.narada', 'capabilities', 'mcp-surfaces.json'), `${JSON.stringify({
+    schema: 'narada.site.capabilities.mcp_surfaces.v1',
+    surfaces: [{
+      surface_id: 'narada-sonar-surface-feedback.local',
+      server_name: 'narada-sonar-surface-feedback',
+      surface_projection: {
+        surface_id: 'surface-feedback',
+        projection_id: 'default',
+        injection_scope: 'user_site',
+      },
+      catalog_surface_id: 'surface-feedback',
+      client_config: { generated_path: '.ai/mcp/surface-feedback.json' },
+      tool_contract: { read_only_tools: ['surface_feedback_doctor'] },
+    }],
+  }, null, 2)}\n`, 'utf8');
+  const localScopeFabric = loadSiteMcpFabric(registryScopeSite, { injection_scope: 'local_site' });
+  assert.deepEqual(mcpServerNames(localScopeFabric), []);
+  assert.ok(localScopeFabric.skipped.some((entry) => (
+    entry.server_name === 'narada-sonar-surface-feedback'
+      && entry.reason === 'injection_scope_not_requested'
+      && entry.injection_scope === 'user_site'
+      && entry.canonical_surface_id === 'surface-feedback'
+  )));
+} finally {
+  rmSync(registryScopeSite, { recursive: true, force: true });
+}
+
+const duplicateCanonicalSite = mkdtempSync(join(tmpdir(), 'narada-mcp-fabric-duplicate-canonical-'));
+mkdirSync(join(duplicateCanonicalSite, '.ai', 'mcp'), { recursive: true });
+try {
+  writeFileSync(join(duplicateCanonicalSite, '.ai', 'mcp', 'duplicate-canonical.json'), `${JSON.stringify({
+    mcpServers: {
+      'narada-surface-a': { command: 'node', args: ['a.mjs'], surface_id: 'shared.surface' },
+      'narada-surface-b': { command: 'node', args: ['b.mjs'], surface_id: 'shared.surface' },
+    },
+  }, null, 2)}\n`, 'utf8');
+  assert.throws(
+    () => loadSiteMcpFabric(duplicateCanonicalSite, { required: true }),
+    (error) => {
+      assert.equal(error instanceof McpFabricError, true);
+      assert.equal(error.code, 'mcp_fabric_duplicate_canonical_surface_projection');
+      assert.equal(error.details.canonical_surface_projection, 'shared.surface::default');
+      return true;
+    },
+  );
+} finally {
+  rmSync(duplicateCanonicalSite, { recursive: true, force: true });
 }
 
 const emptySite = mkdtempSync(join(tmpdir(), 'narada-mcp-fabric-empty-'));
@@ -521,6 +601,8 @@ writeFileSync(join(missingEntrypointSite, '.narada', 'capabilities', 'mcp-surfac
 const missingReport = await runMcpFabricDoctor(missingEntrypointSite, { timeoutMs: 1000 });
 assert.equal(missingReport.status, 'failed');
 assert.equal(missingReport.rows[0].diagnostics[0].code, 'entry_missing');
+assert.equal(missingReport.rows[0].lifecycle_state, 'closed');
+assert.deepEqual(missingReport.rows[0].lifecycle_history, ['discovered', 'loaded', 'starting', 'start_failed', 'closed']);
 assert.equal(missingReport.generated_config_diagnostics.status, 'stale_entrypoints');
 assert.equal(missingReport.generated_config_diagnostics.generated_configs[0].config_ignored, true);
 assert.equal(missingReport.generated_config_diagnostics.generated_configs[0].repair_scope, 'ignored_local_projection_repair');
@@ -566,6 +648,8 @@ assert.equal(doctorReport.rows[0].server, 'narada-doctor');
 assert.equal(doctorReport.rows[0].path_normalization, 'ok');
 assert.equal(doctorReport.rows[0].initialize_status, 'ok');
 assert.equal(doctorReport.rows[0].tools_list_count, 2);
+assert.equal(doctorReport.rows[0].lifecycle_state, 'closed');
+assert.deepEqual(doctorReport.rows[0].lifecycle_history, ['discovered', 'loaded', 'starting', 'ready', 'closing', 'closed']);
 const doctorTable = renderMcpFabricDoctorTable(doctorReport);
 assert.match(doctorTable, /file\s+server\s+command\s+paths\s+init\s+tools\s+first diagnostic/);
 assert.match(doctorTable, /doctor-mcp\.json\s+narada-doctor/);
@@ -596,6 +680,8 @@ writeFileSync(join(failingDoctorSite, '.ai', 'mcp', 'failing-mcp.json'), `${JSON
 const failingReport = await runMcpFabricDoctor(failingDoctorSite, { timeoutMs: 25 });
 assert.equal(failingReport.status, 'failed');
 assert.equal(failingReport.rows[0].initialize_status, 'timeout');
+assert.equal(failingReport.rows[0].lifecycle_state, 'closed');
+assert.deepEqual(failingReport.rows[0].lifecycle_history, ['discovered', 'loaded', 'starting', 'start_failed', 'closing', 'closed']);
 assert.match(failingReport.rows[0].first_diagnostic, /initialize_timeout/);
 rmSync(failingDoctorSite, { recursive: true, force: true });
 

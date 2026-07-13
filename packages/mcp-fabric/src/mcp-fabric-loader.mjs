@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { loadMcpSurfaceRegistry, registrySurfaces, siteControlRoot } from '../../carrier-action-admission/src/tool-metadata.mjs';
 import { McpFabricError } from './mcp-fabric-errors.mjs';
 import { mcpFabricRepairPlan } from './mcp-fabric-repair-plans.mjs';
+import { createMcpFabricLifecycle, transitionMcpFabricLifecycle } from './mcp-fabric-state.mjs';
 
 export function loadSiteMcpFabric(siteRoot, options = {}) {
   const required = options.required ?? false;
@@ -12,6 +13,7 @@ export function loadSiteMcpFabric(siteRoot, options = {}) {
   const runtimeKindFilter = normalizeRuntimeKindFilter(options.runtimeKind ?? options.runtime_kind ?? null);
   const fabricDirectory = resolveSiteMcpFabricDirectory(siteRoot);
   const mcpDir = fabricDirectory.mcpDir;
+  const lifecycle = transitionMcpFabricLifecycle(createMcpFabricLifecycle(), 'loaded');
   if (!existsSync(mcpDir)) {
     if (!required) {
       const empty = emptyFabric(siteRoot, mcpDir);
@@ -37,6 +39,7 @@ export function loadSiteMcpFabric(siteRoot, options = {}) {
   const sources = {};
   const skipped = [];
   const activeFiles = [];
+  const canonicalSources = new Map();
   const surfaceRegistry = loadMcpSurfaceRegistry(siteRoot);
 
   for (const file of candidateFiles) {
@@ -70,6 +73,51 @@ export function loadSiteMcpFabric(siteRoot, options = {}) {
         skipped.push({ file, server_name: serverName, reason: 'transport_not_stdio', transport: rawServer?.transport ?? null });
         continue;
       }
+
+      const registrySurface = authoritativeRegistrySurface(surfaceRegistry, serverName, file, normalized.surface_id);
+      const authoritativeProjection = registrySurface?.surface_projection;
+      const authoritativeInjectionScope = normalizeInjectionScopeToken(authoritativeProjection?.injection_scope ?? null);
+      if (authoritativeInjectionScope && injectionScopeFilter && !injectionScopeFilter.has(authoritativeInjectionScope)) {
+        skipped.push({
+          file,
+          server_name: serverName,
+          reason: 'injection_scope_not_requested',
+          injection_scope: authoritativeInjectionScope,
+          declared_injection_scope: normalized.injection_scope,
+          surface_id: registrySurface?.surface_id ?? normalized.surface_id ?? null,
+          canonical_surface_id: registrySurface?.catalog_surface_id ?? authoritativeProjection?.surface_id ?? normalized.surface_id ?? null,
+        });
+        continue;
+      }
+      if (registrySurface) {
+        if (typeof registrySurface.surface_id === 'string' && !normalized.surface_id) {
+          normalized.surface_id = registrySurface.surface_id;
+        }
+        const canonicalSurfaceId = registrySurface.catalog_surface_id
+          ?? authoritativeProjection?.surface_id
+          ?? normalized.surface_id;
+        if (canonicalSurfaceId) normalized.canonical_surface_id = String(canonicalSurfaceId);
+        if (authoritativeInjectionScope) normalized.injection_scope = authoritativeInjectionScope;
+        if (authoritativeProjection && typeof authoritativeProjection === 'object' && !Array.isArray(authoritativeProjection)) {
+          normalized.surface_projection = {
+            ...(normalized.surface_projection ?? {}),
+            ...authoritativeProjection,
+          };
+        }
+      }
+
+      const canonicalKey = canonicalSurfaceProjectionKey(normalized);
+      if (canonicalKey && canonicalSources.has(canonicalKey)) {
+        throw new McpFabricError('mcp_fabric_duplicate_canonical_surface_projection', `Conflicting MCP surface projection for ${canonicalKey}`, {
+          canonical_surface_projection: canonicalKey,
+          firstFile: canonicalSources.get(canonicalKey),
+          secondFile: file,
+          serverName,
+          siteRoot,
+          mcpDir,
+        });
+      }
+      if (canonicalKey) canonicalSources.set(canonicalKey, file);
 
       if (servers[serverName]) {
         if (canonicalJson(servers[serverName]) !== canonicalJson(normalized)) {
@@ -158,6 +206,8 @@ export function loadSiteMcpFabric(siteRoot, options = {}) {
     skipped,
     runtime_kind: runtimeKindFilter,
     registry_validation: validateRegistry === false ? undefined : registryValidation,
+    lifecycle_state: lifecycle.state,
+    lifecycle_history: lifecycle.history,
   };
 }
 
@@ -186,6 +236,8 @@ function emptyFabric(siteRoot, mcpDir) {
     sources: {},
     skipped: [],
     runtime_kind: null,
+    lifecycle_state: 'loaded',
+    lifecycle_history: ['discovered', 'loaded'],
   };
 }
 
@@ -320,6 +372,28 @@ function serverRuntimeRequirements(rawServer) {
 
 function runtimeRequirementsMatch(requirements, runtimeKind) {
   return requirements.length === 0 || (runtimeKind !== null && requirements.includes(runtimeKind));
+}
+
+function authoritativeRegistrySurface(registry, serverName, generatedFile, declaredSurfaceId) {
+  const surfaces = Array.isArray(registry?.surfaces) ? registry.surfaces : [];
+  return surfaces.find((surface) => {
+    const configuredServerName = String(surface?.server_name ?? surface?.client_config?.server_name ?? '');
+    return configuredServerName === serverName;
+  })
+    ?? surfaces.find((surface) => String(surface?.surface_id ?? '') === String(declaredSurfaceId ?? ''))
+    ?? null;
+}
+
+function canonicalSurfaceProjectionKey(server) {
+  const surfaceId = String(server?.canonical_surface_id
+    ?? server?.surface_projection?.surface_id
+    ?? server?.surface_id
+    ?? '').trim();
+  if (!surfaceId) return null;
+  const projectionId = String(server?.projection_id
+    ?? server?.surface_projection?.projection_id
+    ?? 'default').trim() || 'default';
+  return `${surfaceId}::${projectionId}`;
 }
 
 function firstServerPathPolicyViolation(serverName, siteRoot, args, targetSiteRoot) {

@@ -22,6 +22,10 @@ import type {
   OperatorActionRequest,
 } from "./types.js";
 import { isValidCreatedBy } from "./types.js";
+import {
+  assertConfirmationChallengeTransition,
+  assertOperatorActionRequestTransition,
+} from "../operator-actions/lifecycle.js";
 
 function rowToContextRecord(row: Record<string, unknown>): import("./types.js").ContextRecord {
   return {
@@ -1289,13 +1293,43 @@ export class SqliteCoordinatorStore implements CoordinatorStore {
     return rows.map(rowToOperatorActionRequest);
   }
 
+  markOperatorActionRequestExecuting(requestId: string, _executingAt?: string): void {
+    const row = this.db.prepare(
+      "select status from operator_action_requests where request_id = ?",
+    ).get(requestId) as { status: string } | undefined;
+    if (!row) throw new Error(`Operator action request ${requestId} not found`);
+    assertOperatorActionRequestTransition(
+      row.status as import("../operator-actions/lifecycle.js").OperatorActionRequestLifecycleState,
+      "executing",
+    );
+    this.db.prepare(
+      "update operator_action_requests set status = 'executing', executed_at = null where request_id = ?",
+    ).run(requestId);
+  }
+
   markOperatorActionRequestExecuted(requestId: string, executedAt?: string): void {
+    const row = this.db.prepare(
+      "select status from operator_action_requests where request_id = ?",
+    ).get(requestId) as { status: string } | undefined;
+    if (!row) throw new Error(`Operator action request ${requestId} not found`);
+    assertOperatorActionRequestTransition(
+      row.status as import("../operator-actions/lifecycle.js").OperatorActionRequestLifecycleState,
+      "executed",
+    );
     this.db.prepare(`
       update operator_action_requests set status = 'executed', executed_at = ? where request_id = ?
     `).run(executedAt ?? new Date().toISOString(), requestId);
   }
 
   markOperatorActionRequestRejected(requestId: string, rejectedAt?: string): void {
+    const row = this.db.prepare(
+      "select status from operator_action_requests where request_id = ?",
+    ).get(requestId) as { status: string } | undefined;
+    if (!row) throw new Error(`Operator action request ${requestId} not found`);
+    assertOperatorActionRequestTransition(
+      row.status as import("../operator-actions/lifecycle.js").OperatorActionRequestLifecycleState,
+      "rejected",
+    );
     this.db.prepare(`
       update operator_action_requests set status = 'rejected', executed_at = ? where request_id = ?
     `).run(rejectedAt ?? new Date().toISOString(), requestId);
@@ -1333,24 +1367,56 @@ export class SqliteCoordinatorStore implements CoordinatorStore {
   }
 
   markConfirmationChallengeConfirmed(challengeId: string, confirmedAt?: string): void {
+    const row = this.db.prepare(
+      "select status from confirmation_challenges where challenge_id = ?",
+    ).get(challengeId) as { status: string } | undefined;
+    if (!row) throw new Error(`Confirmation challenge ${challengeId} not found`);
+    assertConfirmationChallengeTransition(
+      row.status as import("../operator-actions/lifecycle.js").ConfirmationChallengeLifecycleState,
+      "confirmed",
+    );
     this.db.prepare(`
       update confirmation_challenges set status = 'confirmed', confirmed_at = ? where challenge_id = ?
     `).run(confirmedAt ?? new Date().toISOString(), challengeId);
   }
 
   markConfirmationChallengeConsumed(challengeId: string, consumedAt?: string): void {
+    const row = this.db.prepare(
+      "select status from confirmation_challenges where challenge_id = ?",
+    ).get(challengeId) as { status: string } | undefined;
+    if (!row) throw new Error(`Confirmation challenge ${challengeId} not found`);
+    assertConfirmationChallengeTransition(
+      row.status as import("../operator-actions/lifecycle.js").ConfirmationChallengeLifecycleState,
+      "consumed",
+    );
     this.db.prepare(`
       update confirmation_challenges set status = 'consumed', consumed_at = ? where challenge_id = ?
     `).run(consumedAt ?? new Date().toISOString(), challengeId);
   }
 
   markConfirmationChallengeExpired(challengeId: string, _expiredAt?: string): void {
+    const row = this.db.prepare(
+      "select status from confirmation_challenges where challenge_id = ?",
+    ).get(challengeId) as { status: string } | undefined;
+    if (!row) throw new Error(`Confirmation challenge ${challengeId} not found`);
+    assertConfirmationChallengeTransition(
+      row.status as import("../operator-actions/lifecycle.js").ConfirmationChallengeLifecycleState,
+      "expired",
+    );
     this.db.prepare(`
       update confirmation_challenges set status = 'expired', failure_reason = 'expired' where challenge_id = ?
     `).run(challengeId);
   }
 
   markConfirmationChallengeRejected(challengeId: string, reason: string, _rejectedAt?: string): void {
+    const row = this.db.prepare(
+      "select status from confirmation_challenges where challenge_id = ?",
+    ).get(challengeId) as { status: string } | undefined;
+    if (!row) throw new Error(`Confirmation challenge ${challengeId} not found`);
+    assertConfirmationChallengeTransition(
+      row.status as import("../operator-actions/lifecycle.js").ConfirmationChallengeLifecycleState,
+      "rejected",
+    );
     this.db.prepare(`
       update confirmation_challenges set status = 'rejected', failure_reason = ? where challenge_id = ?
     `).run(reason, challengeId);

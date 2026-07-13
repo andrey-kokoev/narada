@@ -233,6 +233,16 @@ export type {
 } from "./coordinator/types.js";
 export type { SqliteCoordinatorStoreOptions } from "./coordinator/store.js";
 export { deriveThreadId } from "./coordinator/mailbox-thread-id.js";
+export {
+  assertConfirmationChallengeTransition,
+  assertOperatorActionRequestTransition,
+  canTransitionConfirmationChallenge,
+  canTransitionOperatorActionRequest,
+} from "./operator-actions/lifecycle.js";
+export type {
+  ConfirmationChallengeLifecycleState,
+  OperatorActionRequestLifecycleState,
+} from "./operator-actions/lifecycle.js";
 
 // Foreman exports
 export { DefaultForemanFacade } from "./foreman/facade.js";

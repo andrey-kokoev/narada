@@ -10,7 +10,7 @@
     ".": "./src/mcp-fabric.mjs"
   },
   "scripts": {
-    "test": "node --test src/mcp-fabric.test.mjs",
+    "test": "node --test src/*.test.mjs",
     "typecheck": "tsc --noEmit --allowJs --checkJs false src/mcp-fabric.mjs"
   },
   "dependencies": {

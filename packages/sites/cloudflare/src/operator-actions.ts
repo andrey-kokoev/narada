@@ -26,6 +26,7 @@ export interface SiteOperatorActionContext {
   getOutboundCommand(outboundId: string): Promise<{ outboundId: string; contextId: string; scopeId: string; actionType: string; status: string; createdAt: string } | null>;
   updateOutboundCommandStatus(outboundId: string, status: string): Promise<void>;
   insertOperatorActionRequest(request: SiteOperatorActionRequest): Promise<void>;
+  markOperatorActionRequestExecuting(requestId: string, executingAt?: string): Promise<void>;
   markOperatorActionRequestExecuted(requestId: string, executedAt?: string): Promise<void>;
   markOperatorActionRequestRejected(requestId: string, reason: string, rejectedAt?: string): Promise<void>;
 }
@@ -61,6 +62,7 @@ export async function executeSiteOperatorAction(
   await ctx.insertOperatorActionRequest(request);
 
   try {
+    await ctx.markOperatorActionRequestExecuting(requestId, now);
     switch (payload.action_type) {
       case "approve": {
         const command = await ctx.getOutboundCommand(payload.target_id);
