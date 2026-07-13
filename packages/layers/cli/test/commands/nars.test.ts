@@ -722,6 +722,94 @@ describe('nars CLI commands', () => {
     expect((result.result as { _formatted?: string })._formatted).toContain('Next    Start the NARS runtime host for this agent, or pass --session <id> for an existing healthy session.');
   });
 
+  it('retries transient session-index failures while discovering an agent-web-ui session', async () => {
+    const siteRoot = tempSite();
+    const discoverSessions = vi.fn()
+      .mockRejectedValueOnce(new Error('database is locked'))
+      .mockResolvedValueOnce({
+        exitCode: ExitCode.SUCCESS,
+        result: {
+          sessions: [{
+            session_id: 'carrier_discovery_retry',
+            agent_id: 'sonar.resident',
+            site_id: 'sonar',
+            display_state: 'active',
+            terminal_state: 'running',
+            started_at: '2026-07-13T00:00:00.000Z',
+          }],
+        },
+      });
+    const resolveAttachEndpoints = vi.fn(async () => ({
+      exitCode: ExitCode.SUCCESS,
+      result: {
+        schema: 'narada.nars.attach_command.v1',
+        status: 'resolved',
+        session_id: 'carrier_discovery_retry',
+        site_root: siteRoot,
+        site_root_source: 'explicit_site_root',
+        site_id: 'sonar',
+        session: {
+          event_endpoint: 'ws://127.0.0.1:12345/events',
+          health_endpoint: 'http://127.0.0.1:12346/health',
+        },
+      },
+    }));
+
+    const result = await agentWebUiAttachCommand({
+      site: 'sonar',
+      siteRoot,
+      agent: 'sonar.resident',
+      waitForSessionMs: 1100,
+      dryRun: true,
+      format: 'json',
+    }, createMockContext(), { discoverSessions, resolveAttachEndpoints });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(discoverSessions).toHaveBeenCalledTimes(2);
+    expect(resolveAttachEndpoints).toHaveBeenCalledTimes(1);
+    expect(result.result).toMatchObject({
+      status: 'planned',
+      session_id: 'carrier_discovery_retry',
+    });
+  });
+
+  it('retries transient attach-endpoint failures while a NARS session is starting', async () => {
+    const siteRoot = tempSite();
+    const resolveAttachEndpoints = vi.fn()
+      .mockRejectedValueOnce(new Error('SQLITE_BUSY: database is locked'))
+      .mockResolvedValueOnce({
+        exitCode: ExitCode.SUCCESS,
+        result: {
+          schema: 'narada.nars.attach_command.v1',
+          status: 'resolved',
+          session_id: 'carrier_endpoint_retry',
+          site_root: siteRoot,
+          site_root_source: 'explicit_site_root',
+          site_id: 'sonar',
+          session: {
+            event_endpoint: 'ws://127.0.0.1:12345/events',
+            health_endpoint: 'http://127.0.0.1:12346/health',
+          },
+        },
+      });
+
+    const result = await agentWebUiAttachCommand({
+      site: 'sonar',
+      siteRoot,
+      session: 'carrier_endpoint_retry',
+      waitForSessionMs: 1100,
+      dryRun: true,
+      format: 'json',
+    }, createMockContext(), { resolveAttachEndpoints });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(resolveAttachEndpoints).toHaveBeenCalledTimes(2);
+    expect(result.result).toMatchObject({
+      status: 'planned',
+      session_id: 'carrier_endpoint_retry',
+    });
+  });
+
   it('waits for health availability before starting agent-web-ui attachment', async () => {
     const siteRoot = tempSite();
     writeSession(siteRoot);

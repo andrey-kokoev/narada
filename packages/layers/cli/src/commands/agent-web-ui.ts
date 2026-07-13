@@ -16,12 +16,13 @@ import {
 } from '@narada2/operator-router';
 import { formattedResult } from '../lib/cli-output.js';
 import { ExitCode } from '../lib/exit-codes.js';
-import { objectField, stringField, type JsonRecord } from '../lib/launcher-contracts.js';
+import { asJsonRecord, objectField, stringField, type JsonRecord } from '../lib/launcher-contracts.js';
 import {
   assessAttachability,
   AttachSessionDiscoveryError,
   authorityTransitionSnapshot,
   delay,
+  isTransientAttachDiscoveryDetail,
   resolveAttachSessionId,
 } from './agent-web-ui-session.js';
 import type {
@@ -105,17 +106,25 @@ function buildDiscoveryFailure(args: {
   waitMs: number;
   reason?: string;
   candidates?: AttachSessionCandidate[];
+  detail?: string | null;
+  retryable?: boolean;
 }) {
+  const reason = args.reason ?? 'nars_session_not_found_for_agent';
   return {
     schema: 'narada.agent_web_ui.attach_refusal.v1',
     status: 'refused',
-    reason: args.reason ?? 'nars_session_not_found_for_agent',
+    reason,
     agent_id: args.agentId,
     site_root: args.siteRoot ?? null,
     site_id: args.siteId ?? null,
     wait_ms: args.waitMs,
     candidates: args.candidates ?? [],
-    required_next_step: 'Start the NARS runtime host for this agent, or pass --session <id> for an existing healthy session.',
+    phase: 'session_discovery',
+    detail: args.detail ?? null,
+    retryable: args.retryable ?? false,
+    required_next_step: reason === 'session_discovery_failed'
+      ? 'Retry while the NARS runtime is starting; if it persists, inspect the session-index/runtime error detail.'
+      : 'Start the NARS runtime host for this agent, or pass --session <id> for an existing healthy session.',
   };
 }
 
@@ -132,14 +141,17 @@ function formatFailure(failure: ReturnType<typeof buildFailure>): string {
 }
 
 function formatDiscoveryFailure(failure: ReturnType<typeof buildDiscoveryFailure>): string {
-  return [
+  const lines = [
     `agent-web-ui attach refused: ${failure.reason}`,
     `  Agent   ${failure.agent_id ?? 'unknown'}`,
     `  Site    ${failure.site_id ?? failure.site_root ?? 'unknown'}`,
+    `  Phase   ${failure.phase}`,
     `  Wait    ${Math.ceil((failure.wait_ms ?? 0) / 1000)}s`,
     ...formatCandidateLines(failure.candidates),
     `  Next    ${failure.required_next_step}`,
-  ].join('\n');
+  ];
+  if (failure.detail) lines.splice(4, 0, `  Detail  ${failure.detail}`);
+  return lines.join('\n');
 }
 
 function formatCandidateLines(candidates: AttachSessionCandidate[]): string[] {
@@ -177,9 +189,13 @@ export async function agentWebUiAttachCommand(
   const progress = createProgressReporter(options, deps.progress);
   let resolvedSession: ResolvedAttachSession;
   try {
-    resolvedSession = await resolveAttachSessionId(options, context, progress);
+    resolvedSession = await resolveAttachSessionId(
+      options,
+      context,
+      progress,
+      { discoverSessions: deps.discoverSessions },
+    );
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
     if (!(error instanceof AttachSessionDiscoveryError)) throw error;
     const failure = buildDiscoveryFailure({
       agentId: options.agent?.trim() || null,
@@ -188,6 +204,8 @@ export async function agentWebUiAttachCommand(
       waitMs: Math.max(0, Math.trunc(options.waitForSessionMs ?? 0)),
       reason: error.reason,
       candidates: error.candidates,
+      detail: error.detail,
+      retryable: error.retryable,
     });
     return {
       exitCode: ExitCode.INVALID_CONFIG,
@@ -196,7 +214,13 @@ export async function agentWebUiAttachCommand(
   }
   const sessionId = resolvedSession.sessionId;
   if (!options.dryRun) progress(`agent-web-ui: resolving attach endpoints for ${sessionId}`);
-  const resolved = await resolveAttachEndpointsWithWait({ sessionId, options, context, progress });
+  const resolved = await resolveAttachEndpointsWithWait({
+    sessionId,
+    options,
+    context,
+    progress,
+    resolveAttachEndpoints: deps.resolveAttachEndpoints,
+  });
   if (resolved.exitCode !== ExitCode.SUCCESS) return resolved;
   const attach = resolved.result as {
     command?: string;
@@ -495,36 +519,120 @@ export async function agentWebUiAttachCommand(
   };
 }
 
+type AttachEndpointAttempt = {
+  exitCode: ExitCode;
+  result: unknown;
+  retryable: boolean;
+};
+
 async function resolveAttachEndpointsWithWait(args: {
   sessionId: string;
   options: AgentWebUiAttachOptions;
   context: CommandContext;
   progress: ProgressReporter;
-}): Promise<{ exitCode: ExitCode; result: unknown }> {
+  resolveAttachEndpoints?: AgentWebUiAttachDependencies['resolveAttachEndpoints'];
+}): Promise<AttachEndpointAttempt> {
   const startedAt = Date.now();
   const timeoutMs = Math.max(0, Math.trunc(args.options.waitForSessionMs ?? 0));
   let nextProgressAt = startedAt + 5000;
-  let last = await resolveAttachEndpointsOnce(args.sessionId, args.options, args.context);
-  while (last.exitCode !== ExitCode.SUCCESS && timeoutMs > 0 && Date.now() - startedAt < timeoutMs) {
+  let last = await resolveAttachEndpointsOnce(
+    args.sessionId,
+    args.options,
+    args.context,
+    args.resolveAttachEndpoints,
+  );
+  while (last.exitCode !== ExitCode.SUCCESS
+    && last.retryable
+    && timeoutMs > 0
+    && Date.now() - startedAt < timeoutMs) {
     if (!args.options.dryRun && Date.now() >= nextProgressAt) {
       args.progress(`agent-web-ui: still waiting for NARS attach endpoints for ${args.sessionId}`);
       nextProgressAt = Date.now() + 5000;
     }
     await delay(1000);
-    last = await resolveAttachEndpointsOnce(args.sessionId, args.options, args.context);
+    last = await resolveAttachEndpointsOnce(
+      args.sessionId,
+      args.options,
+      args.context,
+      args.resolveAttachEndpoints,
+    );
   }
   return last;
 }
 
-async function resolveAttachEndpointsOnce(sessionId: string, options: AgentWebUiAttachOptions, context: CommandContext): Promise<{ exitCode: ExitCode; result: unknown }> {
-  return narsAttachCommandCommand({
+async function resolveAttachEndpointsOnce(
+  sessionId: string,
+  options: AgentWebUiAttachOptions,
+  context: CommandContext,
+  resolveAttachEndpoints: AgentWebUiAttachDependencies['resolveAttachEndpoints'] = narsAttachCommandCommand,
+): Promise<AttachEndpointAttempt> {
+  const commandOptions = {
     session: sessionId,
     site: options.site,
     siteRoot: options.siteRoot,
-    surface: 'agent-web-ui',
-    format: 'json',
+    surface: 'agent-web-ui' as const,
+    format: 'json' as const,
     launchRegistryPath: options.launchRegistryPath,
-  }, context);
+  };
+  try {
+    const result = await resolveAttachEndpoints(commandOptions, context);
+    const body = asJsonRecord(result.result);
+    const reason = stringField(body, 'reason');
+    const detail = stringField(body, 'error')
+      ?? stringField(body, '_formatted')
+      ?? reason;
+    return {
+      ...result,
+      retryable: result.exitCode !== ExitCode.SUCCESS
+        && (reason === 'session_not_found' || (detail ? isTransientAttachDiscoveryDetail(detail) : false)),
+    };
+  } catch (error) {
+    const detail = compactAttachEndpointError(error);
+    const retryable = isTransientAttachDiscoveryDetail(detail);
+    const failure = {
+      schema: 'narada.agent_web_ui.attach_refusal.v1',
+      status: 'refused',
+      reason: 'session_discovery_failed',
+      phase: 'attach_endpoint_resolution',
+      session_id: sessionId,
+      site_root: options.siteRoot ?? null,
+      site_id: options.site ?? null,
+      wait_ms: Math.max(0, Math.trunc(options.waitForSessionMs ?? 0)),
+      detail,
+      retryable,
+      required_next_step: retryable
+        ? 'Retry while the NARS runtime is starting; if it persists, inspect NARS session discovery.'
+        : 'Inspect the NARS session index and runtime error detail before retrying.',
+    };
+    return {
+      exitCode: ExitCode.INVALID_CONFIG,
+      result: formattedResult(failure, formatEndpointFailure(failure), options.format ?? 'auto'),
+      retryable,
+    };
+  }
+}
+
+function compactAttachEndpointError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.replace(/\s+/g, ' ').trim().slice(0, 500) || 'unknown attach endpoint error';
+}
+
+function formatEndpointFailure(failure: {
+  reason: string;
+  phase: string;
+  session_id: string;
+  detail: string;
+  retryable: boolean;
+  required_next_step: string;
+}): string {
+  return [
+    `agent-web-ui attach refused: ${failure.reason}`,
+    `  Session ${failure.session_id}`,
+    `  Phase   ${failure.phase}`,
+    `  Detail  ${failure.detail}`,
+    `  Retry   ${failure.retryable ? 'yes' : 'no'}`,
+    `  Next    ${failure.required_next_step}`,
+  ].join('\n');
 }
 
 async function buildAgentWebUiOpenRequest(args: {

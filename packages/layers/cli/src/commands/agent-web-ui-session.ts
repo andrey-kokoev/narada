@@ -17,6 +17,7 @@ import type {
   AttachSessionCandidate,
   AttachSessionDiscoveryReason,
   AuthorityTransitionSnapshot,
+  NarsSessionsCommand,
   ProgressReporter,
   ResolvedAttachSession,
 } from './agent-web-ui-types.js';
@@ -26,6 +27,9 @@ export class AttachSessionDiscoveryError extends Error {
     message: string,
     readonly reason: AttachSessionDiscoveryReason,
     readonly candidates: AttachSessionCandidate[] = [],
+    readonly detail: string | null = null,
+    readonly retryable: boolean = reason === 'nars_session_not_found_for_agent'
+      || (detail ? isTransientAttachDiscoveryDetail(detail) : false),
   ) {
     super(message);
     this.name = 'AttachSessionDiscoveryError';
@@ -36,6 +40,7 @@ export async function resolveAttachSessionId(
   options: AgentWebUiAttachOptions,
   context: CommandContext,
   progress: ProgressReporter,
+  dependencies: { discoverSessions?: NarsSessionsCommand } = {},
 ): Promise<ResolvedAttachSession> {
   if (options.session) return { sessionId: options.session, reason: null };
   if (options.launchBindingPath) return resolveAttachSessionIdFromLaunchBinding(options, progress);
@@ -50,13 +55,13 @@ export async function resolveAttachSessionId(
   let nextProgressAt = startedAt + 5000;
   do {
     try {
-      const resolved = await discoverAttachSessionIdOnce(options, context, agentId);
+      const resolved = await discoverAttachSessionIdOnce(options, context, agentId, dependencies.discoverSessions);
       if (!options.dryRun) progress(`agent-web-ui: found NARS session ${resolved.sessionId}`);
       return resolved;
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
       if (!(lastError instanceof AttachSessionDiscoveryError)
-        || lastError.reason !== 'nars_session_not_found_for_agent'
+        || !lastError.retryable
         || Date.now() - startedAt >= timeoutMs) break;
       if (!options.dryRun && Date.now() >= nextProgressAt) {
         progress(`agent-web-ui: still waiting for ${agentId} NARS session health`);
@@ -158,18 +163,40 @@ async function discoverAttachSessionIdOnce(
   options: AgentWebUiAttachOptions,
   context: CommandContext,
   agentId: string,
+  discoverSessions: NarsSessionsCommand = narsSessionsCommand,
 ): Promise<ResolvedAttachSession> {
-  const sessionsResult = await narsSessionsCommand({
-    site: options.site,
-    siteRoot: options.siteRoot,
-    health: options.dryRun === true ? false : true,
-    healthTimeoutMs: options.healthTimeoutMs,
-    limit: 200,
-    format: 'json',
-    launchRegistryPath: options.launchRegistryPath,
-  }, context);
+  let sessionsResult: Awaited<ReturnType<NarsSessionsCommand>>;
+  try {
+    sessionsResult = await discoverSessions({
+      site: options.site,
+      siteRoot: options.siteRoot,
+      health: options.dryRun === true ? false : true,
+      healthTimeoutMs: options.healthTimeoutMs,
+      limit: 200,
+      format: 'json',
+      launchRegistryPath: options.launchRegistryPath,
+    }, context);
+  } catch (error) {
+    const detail = attachDiscoveryErrorDetail(error);
+    throw new AttachSessionDiscoveryError(
+      `session_discovery_failed: ${agentId}: ${detail}`,
+      'session_discovery_failed',
+      [],
+      detail,
+    );
+  }
   if (sessionsResult.exitCode !== ExitCode.SUCCESS) {
-    throw new AttachSessionDiscoveryError(`session_discovery_failed: ${agentId}`, 'session_discovery_failed');
+    const body = asJsonRecord(sessionsResult.result);
+    const detail = stringField(body, 'error')
+      ?? stringField(body, 'reason')
+      ?? stringField(body, '_formatted')
+      ?? 'NARS session discovery returned a non-success result';
+    throw new AttachSessionDiscoveryError(
+      `session_discovery_failed: ${agentId}: ${detail}`,
+      'session_discovery_failed',
+      [],
+      detail,
+    );
   }
   const body = sessionsResult.result as { sessions?: JsonRecord[] };
   const candidates = body.sessions ?? [];
@@ -325,6 +352,16 @@ export function authorityTransitionSnapshot(session: JsonRecord | null | undefin
       target_authority_locator: targetLocator,
     } : null,
   };
+}
+
+export function isTransientAttachDiscoveryDetail(detail: string): boolean {
+  if (/site_not_found|invalid_site|launch_registry/i.test(detail)) return false;
+  return /database is locked|sqlite_(?:busy|locked)|\b(?:ebusy|eagain|econnrefused|enoent)\b|not listening|temporarily unavailable|still starting/i.test(detail);
+}
+
+function attachDiscoveryErrorDetail(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.replace(/\s+/g, ' ').trim().slice(0, 500) || 'unknown discovery error';
 }
 
 async function readJsonRecord(path: string): Promise<JsonRecord | null> {

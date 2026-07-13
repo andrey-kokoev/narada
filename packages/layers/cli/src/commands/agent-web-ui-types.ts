@@ -22,6 +22,9 @@ export interface AgentWebUiAttachOptions {
   cloudflareApiBaseUrl?: string;
 }
 
+export type NarsSessionsCommand = typeof import('./nars.js').narsSessionsCommand;
+export type NarsAttachCommand = typeof import('./nars.js').narsAttachCommandCommand;
+
 export interface ResolvedAttachSession {
   sessionId: string;
   reason: string | null;
@@ -116,6 +119,8 @@ export interface AgentWebUiServerStartOptions {
 }
 
 export interface AgentWebUiAttachDependencies {
+  discoverSessions?: NarsSessionsCommand;
+  resolveAttachEndpoints?: NarsAttachCommand;
   startAgentWebUiServer?: (options: AgentWebUiServerStartOptions) => Promise<{ url: string; server?: unknown }>;
   ensureOperatorRouter?: (options?: EnsureOperatorRouterOptions) => Promise<EnsureOperatorRouterResult>;
   registerOperatorRoute?: typeof import('@narada2/operator-router').registerOperatorRoute;
