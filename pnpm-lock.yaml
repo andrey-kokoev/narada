@@ -1256,10 +1256,13 @@ importers:
         specifier: ^6.0.7
         version: 6.0.7(vite@8.1.1(@types/node@22.19.19)(esbuild@0.27.7)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.21.0))(vue@3.5.39(typescript@5.9.3))
       tailwindcss:
+      tailwindcss:
         specifier: ^4.1.18
         version: 4.3.2
+      tsx:
+        specifier: ^4.7.0
+        version: 4.21.0
       vite:
-        specifier: ^8.1.1
         version: 8.1.1(@types/node@22.19.19)(esbuild@0.27.7)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.21.0)
       vue-tsc:
         specifier: ^2.2.0

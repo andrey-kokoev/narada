@@ -1,12 +1,15 @@
 <script setup lang="ts">
-import SiteRegistryPage from './pages/SiteRegistryPage.vue';
+import OperatorConsoleNotFound from './components/OperatorConsoleNotFound.vue';
 import SiteRegistryMutationPage from './pages/SiteRegistryMutationPage.vue';
+import SiteRegistryPage from './pages/SiteRegistryPage.vue';
+import { resolveOperatorConsoleRoute } from './console/routes';
 
-const pathname = window.location.pathname.replace(/\/+$/, '') || '/';
-const mode = pathname.endsWith('/add') ? 'add' : pathname.endsWith('/manage') ? 'manage' : null;
+const route = resolveOperatorConsoleRoute(window.location.pathname, window.location.search);
 </script>
 
 <template>
-  <SiteRegistryMutationPage v-if="mode" :mode="mode" />
-  <SiteRegistryPage v-else />
+  <SiteRegistryPage v-if="route.kind === 'site-registry'" />
+  <SiteRegistryMutationPage v-else-if="route.kind === 'site-registry-add'" mode="add" />
+  <SiteRegistryMutationPage v-else-if="route.kind === 'site-registry-manage'" mode="manage" />
+  <OperatorConsoleNotFound v-else :path="route.path" />
 </template>

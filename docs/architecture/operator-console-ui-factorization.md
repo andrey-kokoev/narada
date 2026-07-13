@@ -9,7 +9,9 @@ The Operator Console Site Registry UI has one canonical domain model and one exp
 - `@narada2/site-registry-contract` owns browser-safe canonical registry types and runtime parsers for the snake_case HTTP/CLI envelopes.
 - `@narada2/windows-site` remains the durable registry implementation and authority owner. It re-exports the canonical types for existing callers.
 - `@narada2/operator-console-ui` owns ephemeral `SiteListProjection`, `SiteTileProjection`, and `SiteDetailProjection` view models, plus composables for fetch, selection, and plan/apply client state.
-- Components and pages render projections; they do not read the registry database, infer authority, or bypass the plan/apply gateway.
+- The site-registry domain module owns typed draft, operation, validation, request-builder, and diff-row contracts. It adapts the canonical contract for browser workflows without becoming a second authority model.
+- `useSiteRegistry` owns list/detail retrieval and presentation projections; `useSiteRegistryMutation` owns one plan/apply gateway; `useSiteRegistryWorkflow` composes them into draft, lifecycle, route, and confirmation state.
+- Components and pages render projections and wire events to the workflow composable; they do not read the registry database, infer authority, or bypass the plan/apply gateway.
 - `@narada2/site-config` remains distinct: its registry projection contracts describe awareness and event-derived read models, not durable User Site registry rows.
 
 ## Serving Boundary
@@ -24,6 +26,10 @@ The CLI serves the same built Vue document at `/console/registry`, `/console/reg
 - Plan and apply remain separate operations, with the server retaining mutation authority.
 - Malformed list/show responses fail visibly instead of becoming partial UI state.
 
-## Next Boundary
+## Shared Console Boundary
 
-The mutation slice is complete: add, edit, retire, restore, and purge drafts reuse the typed mutation client, pin expected revisions, preserve retired-record recovery, and keep plan/apply and purge confirmation visible in the UI while the server remains authoritative.
+`console/routes.ts` owns the explicit Operator Console route model and site-registry navigation. `OperatorConsoleShell.vue` owns shared console framing and leaves domain state to the page composables. Unknown paths render a bounded not-found projection instead of silently falling back to the registry.
+
+The launcher is a separate `@narada2/workspace-launch-ui` presentation package. Its `domain.ts` adapter and `useWorkspaceLaunchWorkflow` own launcher state while `@narada2/cli` remains the authority for launch policy, runtime handoff, and endpoint behavior. It shares the UI design system but does not become part of the registry domain.
+
+The concept-to-page map is maintained in `docs/architecture/operator-console-concept-surfaces.md`.

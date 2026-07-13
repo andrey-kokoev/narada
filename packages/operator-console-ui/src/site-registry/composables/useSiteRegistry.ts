@@ -5,7 +5,14 @@ import {
   type RegistrySiteRecord,
   type SiteRegistryMutationRequest,
 } from '@narada2/site-registry-contract';
-import { toSiteDetailProjection, toSiteListProjection, type SiteDetailProjection, type SiteListProjection } from '../projections';
+import {
+  toSiteDetailProjection,
+  toSiteListProjection,
+  toSiteTileProjection,
+  type SiteDetailProjection,
+  type SiteListProjection,
+  type SiteTileProjection,
+} from '../projections';
 
 export interface SiteRegistryClient {
   list(): Promise<unknown>;
@@ -73,6 +80,7 @@ export function createSiteRegistryClient(
 export interface UseSiteRegistryState {
   records: Ref<RegistrySiteRecord[]>;
   sites: Ref<SiteListProjection[]>;
+  tiles: Ref<SiteTileProjection[]>;
   selectedSiteId: Ref<string | null>;
   selectedRecord: Ref<RegistrySiteRecord | null>;
   selected: Ref<SiteDetailProjection | null>;
@@ -92,6 +100,7 @@ export function useSiteRegistry(client = createSiteRegistryClient()): UseSiteReg
   const loadingDetail = ref(false);
   const error = ref<string | null>(null);
   const sites = computed(() => records.value.map((site) => toSiteListProjection(site)));
+  const tiles = computed(() => records.value.map((site) => toSiteTileProjection(site)));
   const selected = computed(() => selectedRecord.value ? toSiteDetailProjection(selectedRecord.value) : null);
 
   async function load(): Promise<void> {
@@ -135,5 +144,5 @@ export function useSiteRegistry(client = createSiteRegistryClient()): UseSiteReg
 
   onMounted(() => { void load(); });
 
-  return { records, sites, selectedSiteId, selectedRecord, selected, loading, loadingDetail, error, load, select, clearSelection };
+  return { records, sites, tiles, selectedSiteId, selectedRecord, selected, loading, loadingDetail, error, load, select, clearSelection };
 }
