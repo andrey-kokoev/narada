@@ -16,12 +16,14 @@ import {
 } from '../src/app/panel-registry';
 import { useSessionActions } from '../src/app/composables/useSessionActions';
 import { submitOperatorInput } from '../src/protocol/operatorInput';
+import { buildOperatorCommandPaletteEntries } from '../src/app/lib/operatorCommandController';
 import {
   readBooleanPreference,
   readJsonPreference,
   writeBooleanPreference,
 } from '../src/app/lib/browserPreferences.js';
 import { createNarsClient } from '../src/protocol/narsClient';
+import { useRuntimeTopology } from '../src/app/composables/useRuntimeTopology';
 import type { SessionProtocolFrame, SessionTransport } from '../src/protocol/sessionTransport';
 
 describe('agent-web-ui runtime boundaries', () => {
@@ -40,6 +42,53 @@ describe('agent-web-ui runtime boundaries', () => {
     transitionNarsTransport(lifecycle, { type: 'close_requested' });
     transitionNarsTransport(lifecycle, { type: 'closed' });
     expect(lifecycle.phase).toBe('closed');
+  });
+
+  it('projects the NARS control-input bridge into connection diagnostics', () => {
+    const topology = useRuntimeTopology({
+      eventEndpoint: 'ws://127.0.0.1/events',
+      healthEndpoint: 'http://127.0.0.1/health',
+      inputEndpoint: 'http://127.0.0.1/input',
+      streamText: shallowRef('connected'),
+      healthText: shallowRef('healthy'),
+      healthBody: shallowRef({
+        status: 'healthy',
+        session_id: 'session-1',
+        control_input_bridge: {
+          status: 'polling',
+          path: 'control.jsonl',
+          last_read_status: 'empty',
+          offset: 42,
+          read_count: 7,
+          emitted_count: 2,
+          error_count: 0,
+        },
+      }),
+      sessionIdentity: shallowRef({ siteId: 'sonar', agentId: 'sonar.resident', role: 'resident', sessionId: 'session-1', title: 'sonar.resident', subtitle: 'session-1' }),
+      authorityTransition: shallowRef(null),
+      mcpInventory: shallowRef({ operationalState: 'healthy', serverCount: 1, startupFailureCount: 0, runtimeFaultCount: 0, servers: [], source: 'health' }),
+    }).topology.value;
+    expect(topology.nodes.find((node) => node.id === 'control-input-bridge')).toMatchObject({
+      label: 'Control Input',
+      state: 'polling',
+      detail: 'control.jsonl',
+    });
+  });
+
+  it('filters command discovery and help through runtime method capabilities', () => {
+    const supportsHealthOnly = (method: string) => method === 'session.health';
+    const commands = buildOperatorCommandPaletteEntries({
+      draft: '/',
+      snippets: [],
+      supportsProtocolMethod: supportsHealthOnly,
+    });
+    expect(commands.some((entry) => entry.kind === 'command' && entry.command.id === 'status')).toBe(true);
+    expect(commands.some((entry) => entry.kind === 'command' && entry.command.id === 'recovery')).toBe(false);
+
+    const help = submitOperatorInput('/help', null, null, 'default', false, supportsHealthOnly);
+    expect(help.localEvent).toMatchObject({ event: 'agent_web_ui_help' });
+    expect((help.localEvent as { content: string }).content).toContain('/status');
+    expect((help.localEvent as { content: string }).content).not.toContain('/recovery');
   });
 
   it('bounds retained session events and preserves the newest sequence window', () => {

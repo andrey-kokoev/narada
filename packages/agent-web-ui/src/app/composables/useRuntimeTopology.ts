@@ -10,6 +10,29 @@ export interface RuntimeTopologyNode {
   metadata: { label: string; value: string }[];
 }
 
+function controlInputBridgeNode(bridge: Record<string, unknown> | null): RuntimeTopologyNode {
+  const status = stringField(bridge, 'status');
+  const lastReadStatus = stringField(bridge, 'last_read_status');
+  const errorCount = numberField(bridge, 'error_count') ?? 0;
+  const state = bridge
+    ? errorCount > 0 ? 'error' : status ?? lastReadStatus ?? 'advertised'
+    : 'not advertised';
+  return {
+    id: 'control-input-bridge',
+    label: 'Control Input',
+    state,
+    detail: stringField(bridge, 'path') ?? 'control input bridge not advertised',
+    metadata: compactMetadata([
+      ['Read status', lastReadStatus],
+      ['Offset', numberField(bridge, 'offset')],
+      ['Reads', numberField(bridge, 'read_count')],
+      ['Records emitted', numberField(bridge, 'emitted_count')],
+      ['Errors', numberField(bridge, 'error_count')],
+      ['Last error', stringField(objectField(bridge, 'last_error'), 'code') ?? stringField(objectField(bridge, 'last_error'), 'message')],
+    ]),
+  };
+}
+
 export interface RuntimeTopologySummary {
   status: 'live' | 'degraded' | 'stale' | 'unavailable';
   statusText: string;
@@ -56,6 +79,7 @@ function canonicalRuntimeTopology(health: Record<string, unknown> | null): Runti
   const runtime = objectField(raw, 'runtime');
   const endpoints = objectField(raw, 'endpoints');
   const heartbeat = objectField(raw, 'heartbeat');
+  const controlInputBridge = objectField(health, 'control_input_bridge');
   const mcp = objectField(raw, 'mcp');
   const mcpChildren = arrayField(mcp, 'children');
   const status = canonicalStatus(stringField(raw, 'status'), booleanField(authority, 'stale_source') === true);
@@ -100,6 +124,7 @@ function canonicalRuntimeTopology(health: Record<string, unknown> | null): Runti
           ['Launch session', stringField(raw, 'launch_session_id')],
         ]),
       },
+      controlInputBridgeNode(controlInputBridge),
       {
         id: 'session',
         label: 'Session',
@@ -194,6 +219,7 @@ function fallbackRuntimeTopology(options: RuntimeTopologyOptions): RuntimeTopolo
       fallbackLaunchNode(health, healthText),
       fallbackSessionNode(health, options.sessionIdentity.value, sessionId, streamText),
       fallbackAuthorityNode(authority),
+      controlInputBridgeNode(objectField(health, 'control_input_bridge')),
       endpointNode('Event Stream', options.eventEndpoint, streamText),
       endpointNode('Health', options.healthEndpoint, healthText),
       endpointNode('Operator Input', options.inputEndpoint, inputPolicy ?? 'input policy not advertised'),

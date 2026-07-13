@@ -93,7 +93,7 @@ test('NARS client projection contract owns attach commands and web UI capabiliti
     protocol: '{"id":"events-1","method":"session.events.subscribe","params":{"include_replay":true,"max_replay":20}}',
     operator_input_protocol: '{"id":"input-1","method":"session.submit","params":{"content":"<operator message>","source":"manual_operator"}}',
     queued_operator_input_protocol: '{"id":"input-2","method":"session.submit","params":{"content":"<operator message>","source":"operator_steering","delivery_mode":"admit_after_active_turn"}}',
-    slash_command_protocol: '{"id":"command-1","method":"session.health","params":{}}',
+    slash_command_protocol: '{"id":"command-1","method":"session.command.execute","params":{"command":"/status","value":""}}',
   });
   assert.equal(NARS_CLIENT_PROJECTION_REGISTRY.default_verbosity, 'conversation');
   assert.equal(NARS_CLIENT_PROJECTION_DEFAULT_VERBOSITY, 'conversation');
@@ -579,6 +579,20 @@ test('NARS client projection contract owns shared event rendering vocabulary', (
     summary: 'MCP runtime fault narada-site:fixture_fail fixture_mcp_forced_failure',
     event: { event: 'mcp_runtime_fault', server_name: 'narada-site', tool_name: 'fixture_fail', error_code: 'fixture_mcp_forced_failure' },
   });
+  assert.deepEqual(projectNarsClientEvent({ event: 'runtime_projection_failure', projection: 'health', request_state: 'timed_out', error: 'session_health_timeout' }), {
+    kind: 'runtime_projection_failure',
+    label: 'Runtime projection failure',
+    tone: 'error',
+    summary: 'health projection timed_out · session_health_timeout',
+    event: { event: 'runtime_projection_failure', projection: 'health', request_state: 'timed_out', error: 'session_health_timeout' },
+  });
+  assert.deepEqual(projectNarsClientEvent({ event: 'runtime_control_input_bridge_error', error_code: 'control_input_record_invalid', error: 'Unexpected token' }), {
+    kind: 'runtime_control_input_bridge_error',
+    label: 'Control-input bridge error',
+    tone: 'error',
+    summary: 'control input bridge control_input_record_invalid · Unexpected token',
+    event: { event: 'runtime_control_input_bridge_error', error_code: 'control_input_record_invalid', error: 'Unexpected token' },
+  });
   assert.equal(projectNarsClientEvent({ event: 'error', message: 'bad' }).tone, 'error');
   assert.equal(projectNarsClientEvent({ event: 'session_health', status: 'healthy', agent_id: 'narada.test', session_id: 'carrier_test' }).summary, 'healthy · narada.test · carrier_test');
   assert.equal(projectNarsClientEvent({
@@ -663,6 +677,7 @@ test('NARS client projection verbosity filters shared event classes', () => {
   const toolCall = { event: 'tool_call', tool_name: 'narada-site.whoami' };
   const toolResult = { event: 'tool_result', tool_name: 'narada-site.whoami', status: 'ok' };
   const mcpRuntimeFault = { event: 'mcp_runtime_fault', server_name: 'narada-site', tool_name: 'fixture_fail', error_code: 'fixture_mcp_forced_failure' };
+  const projectionFailure = { event: 'runtime_projection_failure', projection: 'health', request_state: 'failed', error: 'session_health_timeout' };
   const turnComplete = { event: 'turn_complete', terminal_state: 'completed' };
 
   assert.equal(shouldProjectNarsClientEvent(assistant, { verbosity: 'conversation' }), true);
@@ -680,6 +695,9 @@ test('NARS client projection verbosity filters shared event classes', () => {
   assert.equal(shouldProjectNarsClientEvent(mcpRuntimeFault, { verbosity: 'conversation' }), false);
   assert.equal(shouldProjectNarsClientEvent(mcpRuntimeFault, { verbosity: 'operations' }), false);
   assert.equal(shouldProjectNarsClientEvent(mcpRuntimeFault, { verbosity: 'diagnostics' }), true);
+  assert.equal(shouldProjectNarsClientEvent(projectionFailure, { verbosity: 'conversation' }), false);
+  assert.equal(shouldProjectNarsClientEvent(projectionFailure, { verbosity: 'operations' }), false);
+  assert.equal(shouldProjectNarsClientEvent(projectionFailure, { verbosity: 'diagnostics' }), true);
   assert.equal(shouldProjectNarsClientEvent(turnComplete, { verbosity: 'conversation' }), false);
   assert.equal(shouldProjectNarsClientEvent(turnComplete, { verbosity: 'operations' }), false);
   assert.equal(shouldProjectNarsClientEvent(turnComplete, { verbosity: 'diagnostics' }), true);

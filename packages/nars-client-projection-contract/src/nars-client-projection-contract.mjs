@@ -136,6 +136,8 @@ export const NARS_CLIENT_EVENT_LABELS = Object.freeze({
   session_artifact_registered: 'Artifact registered',
   session_artifact_read: 'Artifact',
   session_health: 'Health',
+  runtime_projection_failure: 'Runtime projection failure',
+  runtime_control_input_bridge_error: 'Control-input bridge error',
   carrier_diagnostic_recorded: 'Diagnostic',
   mcp_runtime_fault: 'MCP runtime fault',
   authority_session_revoked: 'Session revoked',
@@ -962,6 +964,7 @@ export function classifyNarsClientEventProjection(projection) {
   if (kind === 'error' || kind === 'websocket_error' || kind === 'web_ui_decode_error' || kind === 'web_ui_input_not_sent' || kind === 'runtime_error') return 'conversation';
   if (kind === 'authority_session_revoked' || kind === 'projection_revoked') return 'diagnostics';
   if (kind === 'carrier_diagnostic_recorded' || kind === 'mcp_runtime_fault') return 'diagnostics';
+  if (kind === 'runtime_projection_failure' || kind === 'runtime_control_input_bridge_error') return 'diagnostics';
   if (kind === 'tool_call' || kind === 'tool_result' || kind === 'turn_failed') return 'operations';
   if (kind === 'session_artifact_registered' || kind === 'session_artifact_read') return 'conversation';
   if (kind === 'conversation_enqueue_requested' || kind === 'input_queued_for_turn_boundary' || kind === 'input_admitted_to_turn' || kind === 'input_dropped_by_operator' || kind === 'input_abandoned_on_session_end' || kind === 'input_completed') return 'operations';
@@ -1002,7 +1005,7 @@ function eventTone(kind) {
   if (kind === 'user_message') return NARS_CLIENT_EVENT_TONES.operator;
   if (kind === 'tool_call' || kind === 'tool_result') return NARS_CLIENT_EVENT_TONES.tool;
   if (kind === 'session_artifact_registered' || kind === 'session_artifact_read') return NARS_CLIENT_EVENT_TONES.status;
-  if (kind === 'error' || kind === 'websocket_error' || kind === 'web_ui_decode_error' || kind === 'turn_failed' || kind === 'authority_session_revoked' || kind === 'projection_revoked' || kind === 'mcp_runtime_fault') return NARS_CLIENT_EVENT_TONES.error;
+  if (kind === 'error' || kind === 'websocket_error' || kind === 'web_ui_decode_error' || kind === 'turn_failed' || kind === 'authority_session_revoked' || kind === 'projection_revoked' || kind === 'mcp_runtime_fault' || kind === 'runtime_projection_failure' || kind === 'runtime_control_input_bridge_error') return NARS_CLIENT_EVENT_TONES.error;
   if (kind?.startsWith?.('agent_web_ui_') || kind === 'operator_input_submitted' || kind === 'web_ui_input_not_sent') return NARS_CLIENT_EVENT_TONES.local;
   if (kind === 'conversation_enqueue_requested' || kind?.startsWith?.('input_')) return NARS_CLIENT_EVENT_TONES.status;
   if (kind?.startsWith?.('authority_source_write_refused') || kind?.startsWith?.('authority_target_write_refused') || kind === 'authority_target_activation_refused') return NARS_CLIENT_EVENT_TONES.error;
@@ -1025,6 +1028,8 @@ function eventSummary(event, kind) {
   if (kind === 'session_artifact_registered') return artifactSummary(event, 'artifact registered');
   if (kind === 'session_artifact_read') return artifactSummary(event, 'artifact');
   if (kind === 'session_health') return `${event.status ?? 'health'} · ${eventAgentDisplay(event)} · ${event.session_id ?? 'session'}`;
+  if (kind === 'runtime_projection_failure') return runtimeProjectionFailureSummary(event);
+  if (kind === 'runtime_control_input_bridge_error') return runtimeControlInputBridgeErrorSummary(event);
   if (kind === 'mcp_runtime_fault' || kind === 'carrier_diagnostic_recorded') return diagnosticSummary(event, kind);
   if (kind === 'turn_complete') return event.terminal_state ?? 'turn complete';
   if (kind === 'turn_failed') return errorSummary(event) ?? event.terminal_state ?? 'turn failed';
@@ -1067,6 +1072,19 @@ function diagnosticSummary(event, kind) {
     return `MCP runtime fault ${server}:${tool}${error ? ` ${error}` : ''}`;
   }
   return event?.message ?? event?.diagnostic_code ?? kind;
+}
+
+function runtimeProjectionFailureSummary(event) {
+  const projection = event?.projection ?? 'runtime';
+  const state = event?.request_state ?? event?.state ?? 'failed';
+  const error = event?.error ?? event?.reason ?? event?.code ?? null;
+  return `${projection} projection ${state}${error ? ` · ${error}` : ''}`;
+}
+
+function runtimeControlInputBridgeErrorSummary(event) {
+  const code = event?.error_code ?? event?.code ?? 'error';
+  const error = event?.error ?? event?.message ?? null;
+  return `control input bridge ${code}${error ? ` · ${error}` : ''}`;
 }
 
 function artifactSummary(event, fallbackText) {
@@ -1273,6 +1291,6 @@ export function buildNarsAttachCommands({ eventEndpoint = '<session_started.even
     protocol: '{"id":"events-1","method":"session.events.subscribe","params":{"include_replay":true,"max_replay":20}}',
     operator_input_protocol: '{"id":"input-1","method":"session.submit","params":{"content":"<operator message>","source":"manual_operator"}}',
     queued_operator_input_protocol: '{"id":"input-2","method":"session.submit","params":{"content":"<operator message>","source":"operator_steering","delivery_mode":"admit_after_active_turn"}}',
-    slash_command_protocol: '{"id":"command-1","method":"session.health","params":{}}',
+    slash_command_protocol: '{"id":"command-1","method":"session.command.execute","params":{"command":"/status","value":""}}',
   };
 }
