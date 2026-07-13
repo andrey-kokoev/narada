@@ -73,6 +73,11 @@ function requestPathIsSafe(pathname: string): boolean {
   return !decoded.split('/').some((segment) => segment === '.' || segment === '..');
 }
 
+function requestTargetPath(requestTarget: string): string {
+  const queryIndex = requestTarget.indexOf('?');
+  return queryIndex < 0 ? requestTarget : requestTarget.slice(0, queryIndex);
+}
+
 export interface OperatorRouterServer {
   start(): Promise<string>;
   stop(): Promise<void>;
@@ -445,12 +450,15 @@ function proxySocketRequest(
   head: Buffer,
   target: URL,
   timeoutMs: number,
+  activeSockets?: Set<Duplex>,
 ): void {
   const port = Number(target.port) || (target.protocol === 'wss:' ? 443 : 80);
   const connectOptions = { host: target.hostname, port };
   const upstream = target.protocol === 'wss:'
     ? connectTls({ ...connectOptions, servername: target.hostname })
     : connectTcp(connectOptions);
+  activeSockets?.add(upstream);
+  upstream.once('close', () => activeSockets?.delete(upstream));
   const requestHeaders = [
     `GET ${target.pathname || '/'}${target.search} HTTP/1.1`,
     `Host: ${target.host}`,
@@ -504,6 +512,7 @@ export async function createOperatorRouterServer(config: Partial<OperatorRouterS
   let releaseLock: (() => Promise<void>) | null = null;
   let healthTimer: NodeJS.Timeout | null = null;
   let maintenanceTimer: NodeJS.Timeout | null = null;
+  const activeUpgradeSockets = new Set<Duplex>();
   let stateWriteQueue: Promise<void> = Promise.resolve();
   let healthInFlight: Promise<void> | null = null;
   let maintenanceInFlight: Promise<void> | null = null;
@@ -700,6 +709,10 @@ export async function createOperatorRouterServer(config: Partial<OperatorRouterS
       jsonResponse(res, 421, { error: 'operator_router_host_or_origin_not_loopback' });
       return;
     }
+    if (!requestPathIsSafe(requestTargetPath(req.url ?? '/'))) {
+      jsonResponse(res, 400, { error: 'operator_router_request_path_invalid' });
+      return;
+    }
     let urlObject: URL;
     try {
       urlObject = new URL(req.url ?? '/', `http://${req.headers.host ?? `${resolved.host}:${resolved.port}`}`);
@@ -749,6 +762,7 @@ export async function createOperatorRouterServer(config: Partial<OperatorRouterS
 
   async function handleUpgrade(req: IncomingMessage, socket: Duplex, head: Buffer): Promise<void> {
     if (req.method !== 'GET' || headerValue(req.headers.upgrade)?.toLowerCase() !== 'websocket' || !requestHostMatchesListener(req, resolved.port) || !requestOriginIsSameLoopbackOrigin(req, resolved.port)) { socket.destroy(); return; }
+    if (!requestPathIsSafe(requestTargetPath(req.url ?? '/'))) { socket.destroy(); return; }
     let urlObject: URL;
     try {
       urlObject = new URL(req.url ?? '/', `http://${req.headers.host ?? `${resolved.host}:${resolved.port}`}`);
@@ -761,7 +775,9 @@ export async function createOperatorRouterServer(config: Partial<OperatorRouterS
     if (!route || route.state === 'degraded' || !routeLeaseValid(route, nowFrom(resolved)) || !route.protocols.includes('websocket') || !route.methods.includes('GET')) { socket.destroy(); return; }
     const target = targetUrlForRequest(route, urlObject.pathname, urlObject.search, true);
     if (!target || (target.protocol !== 'ws:' && target.protocol !== 'wss:')) { socket.destroy(); return; }
-    proxySocketRequest(socket, req, head, target, route.timeout_ms);
+    activeUpgradeSockets.add(socket);
+    socket.once('close', () => activeUpgradeSockets.delete(socket));
+    proxySocketRequest(socket, req, head, target, route.timeout_ms, activeUpgradeSockets);
   }
 
   return {
@@ -801,6 +817,8 @@ export async function createOperatorRouterServer(config: Partial<OperatorRouterS
       if (maintenanceTimer) clearInterval(maintenanceTimer);
       healthTimer = null;
       maintenanceTimer = null;
+      for (const socket of activeUpgradeSockets) socket.destroy();
+      activeUpgradeSockets.clear();
       if (server) {
         await new Promise<void>((resolvePromise) => server!.close(() => resolvePromise()));
         server = null;

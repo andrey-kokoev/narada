@@ -4,7 +4,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { connect as connectTcp } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createServer } from 'node:http';
+import { createServer, request as httpRequest } from 'node:http';
 import test from 'node:test';
 import { registerNarsArtifact } from '@narada2/nars-session-core/artifacts';
 import { writeNarsSessionStartedIndex } from '@narada2/nars-session-core/session-index';
@@ -36,8 +36,37 @@ function listen(server: ReturnType<typeof createServer>): Promise<string> {
   });
 }
 
+function requestStatusPath(baseUrl: string, requestPath: string, headers: Record<string, string> = {}): Promise<number> {
+  const parsed = new URL(baseUrl);
+  return new Promise((resolve, reject) => {
+    const request = httpRequest({
+      hostname: parsed.hostname,
+      port: parsed.port,
+      path: requestPath,
+      method: 'GET',
+      headers,
+    }, (response) => {
+      response.resume();
+      response.once('end', () => resolve(response.statusCode ?? 0));
+    });
+    request.once('error', reject);
+    request.end();
+  });
+}
+
 function close(server: ReturnType<typeof createServer>): Promise<void> {
   return new Promise((resolve) => server.close(() => resolve()));
+}
+
+function requestStatus(url: string, headers: Record<string, string> = {}): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const request = httpRequest(new URL(url), { method: 'GET', headers }, (response) => {
+      response.resume();
+      response.once('end', () => resolve(response.statusCode ?? 0));
+    });
+    request.once('error', reject);
+    request.end();
+  });
 }
 
 function routeInput(targetUrl: string, healthUrl: string) {
@@ -376,10 +405,8 @@ test('router registers, health-checks, proxies, projects, renews, and removes a 
     const originForwarded = await fetch(`${routerUrl}/sessions/demo/origin`, { headers: { origin: routerUrl } });
     assert.equal(originForwarded.status, 200);
     assert.equal(observedOrigin, routerUrl);
-    const foreignLoopbackHost = await fetch(`${routerUrl}/sessions/demo/origin`, {
-      headers: { host: '127.0.0.1:9' },
-    });
-    assert.equal(foreignLoopbackHost.status, 421);
+    const foreignLoopbackHost = await requestStatus(`${routerUrl}/sessions/demo/origin`, { host: '127.0.0.1:9' });
+    assert.equal(foreignLoopbackHost, 421);
     const foreignLoopbackOrigin = await fetch(`${routerUrl}/sessions/demo/origin`, {
       headers: { origin: 'http://127.0.0.1:9' },
     });
@@ -392,8 +419,8 @@ test('router registers, health-checks, proxies, projects, renews, and removes a 
     assert.equal(headersForwarded.headers.get('location'), '/next');
     assert.equal(observedCsrf, 'csrf-demo');
     assert.match(headersForwarded.headers.get('set-cookie') ?? '', /router_a=1/);
-    const traversal = await fetch(`${routerUrl}/sessions/demo/%2e%2e/admin`);
-    assert.equal(traversal.status, 400);
+    const traversal = await requestStatusPath(routerUrl, '/sessions/demo/%2e%2e/admin');
+    assert.equal(traversal, 400);
 
     const routeResponse = await fetch(`${routerUrl}/routes`);
     const routeBody = await routeResponse.json() as { routes: Array<Record<string, unknown>> };
@@ -455,6 +482,8 @@ test('router reconstructs a persisted healthy route after singleton restart', as
 
 test('websocket route forwards the stable session event upgrade', { timeout: 5_000 }, async () => {
   const stateRoot = await mkdtemp(join(tmpdir(), 'narada-operator-router-websocket-'));
+  let upgradeObserved = false;
+  let upstreamSocket: { destroyed: boolean; destroy(): void } | null = null;
   const upstream = createServer((req, res) => {
     if (req.url === '/health') {
       res.writeHead(200);
@@ -465,6 +494,8 @@ test('websocket route forwards the stable session event upgrade', { timeout: 5_0
     res.end();
   });
   upstream.on('upgrade', (request, socket) => {
+    upgradeObserved = true;
+    upstreamSocket = socket;
     const key = request.headers['sec-websocket-key'];
     const accept = createHash('sha1').update(`${key}258EAFA5-E914-47DA-95CA-C5AB0DC85B11`).digest('base64');
     socket.write([
@@ -502,7 +533,7 @@ test('websocket route forwards the stable session event upgrade', { timeout: 5_0
     client = connectTcp(Number(routerPort), '127.0.0.1');
     const response = await new Promise<Buffer>((resolve, reject) => {
       const chunks: Buffer[] = [];
-      const timeout = setTimeout(() => reject(new Error('websocket_test_timeout')), 3_000);
+      const timeout = setTimeout(() => reject(new Error(`websocket_test_timeout: upgrade_observed=${upgradeObserved}; bytes_received=${Buffer.concat(chunks).byteLength}`)), 3_000);
       const onError = (error: Error) => {
         clearTimeout(timeout);
         reject(error);
@@ -536,6 +567,7 @@ test('websocket route forwards the stable session event upgrade', { timeout: 5_0
   } finally {
     client?.destroy();
     await router.stop();
+    upstreamSocket?.destroy();
     await close(upstream);
     await rm(stateRoot, { recursive: true, force: true });
   }
