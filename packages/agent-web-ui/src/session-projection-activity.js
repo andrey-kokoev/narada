@@ -33,6 +33,11 @@ export function createInitialHealthState() {
   };
 }
 
+function eventRequestId(event) {
+  const requestId = event?.request_id ?? event?.requestId;
+  return typeof requestId === 'string' && requestId ? requestId : null;
+}
+
 export function reduceHealthState(state, message) {
   const event = unwrapRuntimeEvent(message);
   if (!event || typeof event !== 'object' || event.event !== 'session_health') return;
@@ -63,6 +68,9 @@ export function createTurnActivityState() {
     label: 'Idle',
     detail: null,
     activeTurnId: null,
+    activeRequestId: null,
+    lastTerminalTurnId: null,
+    lastTerminalRequestId: null,
     activeToolIds: new Set(),
     toolCallCount: 0,
     toolResultCount: 0,
@@ -82,16 +90,55 @@ export function reduceTurnActivity(state, message) {
   if (!event || typeof event !== 'object') return state;
   if (event.event === 'operator_input_submitted') return transitionTurnActivity(state, TURN_ACTIVITY_PHASES.QUEUED, timestampMs, 'Waiting for agent...', null);
   if (event.event === 'directive_received' || event.event === 'directive_carrier_accepted_recorded') return transitionTurnActivity(state, TURN_ACTIVITY_PHASES.QUEUED, timestampMs, 'Waiting for agent...', 'directive accepted');
-  if (event.event === 'turn_started') return transitionTurnActivity(state, TURN_ACTIVITY_PHASES.THINKING, timestampMs, agentLabel(event, 'is thinking...'), providerDetail(event), event.turn_id ?? true);
-  if (event.event === 'assistant_message_stream') return transitionTurnActivity(state, TURN_ACTIVITY_PHASES.STREAMING, timestampMs, agentLabel(event, 'is responding...'), null);
+  if (event.event === 'turn_started') {
+    if (isLateCompletedActivityEvent(state, event)) return state;
+    return startTurnActivity(state, timestampMs, agentLabel(event, 'is thinking...'), providerDetail(event), event.turn_id ?? true, eventRequestId(event));
+  }
+  if (event.event === 'assistant_message_stream') {
+    if (isStaleTurnActivityEvent(state, event)) return state;
+    adoptActivityIdentity(state, event);
+    return transitionTurnActivity(state, TURN_ACTIVITY_PHASES.STREAMING, timestampMs, agentLabel(event, 'is responding...'), null);
+  }
   if (event.event === 'session_health') return reconcileTurnActivityWithHealth(state, event);
+  const providerEvent = event.event;
+  if (providerEvent && typeof providerEvent === 'object') {
+    if (providerEvent.type === 'turn.started' || providerEvent.type === 'thread.started') return applyProviderActivityEvent(state, providerEvent, event, timestampMs);
+    if (isStaleTurnActivityEvent(state, event)) return state;
+    return applyProviderActivityEvent(state, providerEvent, event, timestampMs);
+  }
+  if (isStaleTurnActivityEvent(state, event)) return state;
   if (event.event === 'tool_call') return applyTopLevelToolCallActivity(state, event, timestampMs);
   if (event.event === 'tool_result') return applyTopLevelToolResultActivity(state, event, timestampMs);
-  if (event.event === 'assistant_message' || event.event === 'turn_complete' || event.event === 'turn_interrupted' || event.event === 'directive_complete' || event.event === 'session_closed') return resetTurnActivity(state, event);
+  if (event.event === 'assistant_message') {
+    // A turn can emit an interim assistant message before its next tool call; only the explicit lifecycle aggregate terminates it.
+    if (state.activeTurnId && event.lifecycle_event !== 'assistant_message') return state;
+    return resetTurnActivity(state, event);
+  }
+  if (event.event === 'turn_complete' || event.event === 'turn_interrupted' || event.event === 'directive_complete' || event.event === 'session_closed') return resetTurnActivity(state, event);
   if (event.event === 'turn_failed') return transitionTurnActivity(state, TURN_ACTIVITY_PHASES.FAILED, timestampMs, 'Turn failed', terminalDetail(event), event.turn_id ?? state.activeTurnId);
-  const providerEvent = event.event;
-  if (providerEvent && typeof providerEvent === 'object') return applyProviderActivityEvent(state, providerEvent, event, timestampMs);
   return state;
+}
+
+function adoptActivityIdentity(state, event) {
+  const turnId = typeof event?.turn_id === 'string' && event.turn_id ? event.turn_id : null;
+  const requestId = eventRequestId(event);
+  if (turnId && !state.activeTurnId) state.activeTurnId = turnId;
+  if (requestId && !state.activeRequestId) state.activeRequestId = requestId;
+}
+
+function isLateCompletedActivityEvent(state, event) {
+  const turnId = typeof event?.turn_id === 'string' && event.turn_id ? event.turn_id : null;
+  const requestId = eventRequestId(event);
+  return Boolean((turnId && turnId === state.lastTerminalTurnId) || (requestId && requestId === state.lastTerminalRequestId));
+}
+
+function isStaleTurnActivityEvent(state, event) {
+  if (isLateCompletedActivityEvent(state, event)) return true;
+  const turnId = typeof event?.turn_id === 'string' && event.turn_id ? event.turn_id : null;
+  const requestId = eventRequestId(event);
+  if (state.activeTurnId && turnId && turnId !== state.activeTurnId) return true;
+  if (state.activeRequestId && requestId && requestId !== state.activeRequestId) return true;
+  return false;
 }
 
 // Compatibility aliases for callers that still import the pre-state-machine names.
@@ -115,19 +162,27 @@ export function materializeTurnActivity(state, nowMs) {
 export function reconcileTurnActivityWithHealth(state, event) {
   if (!event || typeof event !== 'object') return state;
   const activeTurnState = typeof event.active_turn_state === 'string' ? event.active_turn_state : null;
-  if (activeTurnState === 'running' && state.state === TURN_ACTIVITY_PHASES.IDLE) {
-    return transitionTurnActivity(state, TURN_ACTIVITY_PHASES.THINKING, timestampFromEvent(event) ?? Date.now(), agentLabel(event, 'is thinking...'), providerDetail(event), event.active_turn_id ?? true);
+  if (activeTurnState === 'running') {
+    const activeTurnId = event.active_turn_id ?? true;
+    const differentTurn = event.active_turn_id && state.activeTurnId && event.active_turn_id !== state.activeTurnId;
+    if (state.state === TURN_ACTIVITY_PHASES.IDLE || state.state === TURN_ACTIVITY_PHASES.FAILED || !state.activeTurnId || differentTurn) {
+      return startTurnActivity(state, timestampFromEvent(event) ?? Date.now(), agentLabel(event, 'is thinking...'), providerDetail(event), activeTurnId, null);
+    }
   }
   if (activeTurnState && activeTurnState !== 'running') return resetTurnActivity(state, {});
   return state;
 }
 
 function applyProviderActivityEvent(state, providerEvent, envelope, timestampMs) {
-  if (providerEvent.type === 'turn.started' || providerEvent.type === 'thread.started') return transitionTurnActivity(state, TURN_ACTIVITY_PHASES.THINKING, timestampMs, agentLabel(envelope, 'is thinking...'), providerDetail(envelope), envelope.turn_id ?? state.activeTurnId ?? true);
+  if (providerEvent.type === 'turn.started' || providerEvent.type === 'thread.started') {
+    if (isLateCompletedActivityEvent(state, envelope)) return state;
+    return startTurnActivity(state, timestampMs, agentLabel(envelope, 'is thinking...'), providerDetail(envelope), envelope.turn_id ?? state.activeTurnId ?? true, eventRequestId(envelope));
+  }
   if (providerEvent.type === 'turn.completed') return resetTurnActivity(state, envelope);
   if (providerEvent.type === 'item.started') {
     const item = objectField(providerEvent, 'item');
     if (item?.type === 'mcp_tool_call') {
+      adoptActivityIdentity(state, envelope);
       if (item.id) state.activeToolIds.add(String(item.id));
       recordToolCall(state, toolDetail(item));
       return transitionTurnActivity(state, TURN_ACTIVITY_PHASES.TOOL, timestampMs, agentLabel(envelope, 'is using tools...'), toolProgressDetail(state));
@@ -138,6 +193,7 @@ function applyProviderActivityEvent(state, providerEvent, envelope, timestampMs)
     const item = objectField(providerEvent, 'item');
     if (item?.type === 'agent_message') return resetTurnActivity(state, envelope);
     if (item?.type === 'mcp_tool_call') {
+      adoptActivityIdentity(state, envelope);
       if (item.id) state.activeToolIds.delete(String(item.id));
       recordToolResult(state, toolDetail(item), Boolean(item.error));
       if (state.activeToolIds.size === 0) return transitionTurnActivity(state, TURN_ACTIVITY_PHASES.THINKING, timestampMs, agentLabel(envelope, 'is thinking...'), toolProgressDetail(state) ?? providerDetail(envelope));
@@ -148,11 +204,13 @@ function applyProviderActivityEvent(state, providerEvent, envelope, timestampMs)
 }
 
 function applyTopLevelToolCallActivity(state, event, timestampMs) {
+  adoptActivityIdentity(state, event);
   recordToolCall(state, topLevelToolName(event));
   return transitionTurnActivity(state, TURN_ACTIVITY_PHASES.TOOL, timestampMs, agentLabel(event, 'is using tools...'), toolProgressDetail(state));
 }
 
 function applyTopLevelToolResultActivity(state, event, timestampMs) {
+  adoptActivityIdentity(state, event);
   recordToolResult(state, topLevelToolName(event), topLevelToolFailed(event));
   const activeCount = activeToolCount(state);
   if (activeCount > 0) return transitionTurnActivity(state, TURN_ACTIVITY_PHASES.TOOL, timestampMs, agentLabel(event, 'is using tools...'), toolProgressDetail(state));
@@ -207,11 +265,25 @@ function transitionTurnActivity(state, nextState, timestampMs, label, detail, ac
   return state;
 }
 
+function startTurnActivity(state, timestampMs, label, detail, activeTurnId, activeRequestId) {
+  state.lastTerminalTurnId = null;
+  state.lastTerminalRequestId = null;
+  state.activeRequestId = activeRequestId ?? null;
+  return transitionTurnActivity(state, TURN_ACTIVITY_PHASES.THINKING, timestampMs, label, detail, activeTurnId);
+}
+
 function resetTurnActivity(state, event) {
-  if (event.turn_id && state.activeTurnId && event.turn_id !== state.activeTurnId) return state;
+  if (isStaleTurnActivityEvent(state, event)) return state;
+  const terminalTurnId = event.turn_id ?? state.activeTurnId;
+  const terminalRequestId = eventRequestId(event) ?? state.activeRequestId;
+  if (terminalTurnId || terminalRequestId) {
+    state.lastTerminalTurnId = terminalTurnId ?? null;
+    state.lastTerminalRequestId = terminalRequestId ?? null;
+  }
   transitionTurnActivity(state, TURN_ACTIVITY_PHASES.IDLE, timestampFromEvent(event) ?? state.startedAtMs ?? Date.now(), 'Idle', null, null);
   state.startedAtMs = null;
   state.activeTurnId = null;
+  state.activeRequestId = null;
   state.activeToolIds.clear();
   state.toolCallCount = 0;
   state.toolResultCount = 0;

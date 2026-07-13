@@ -143,6 +143,26 @@ test('turn activity reducer exposes the canonical queued, thinking, tool, and id
   });
 });
 
+test('turn activity ignores late evidence and rebases on a newer turn or health identity', () => {
+  const state = createTurnActivityState();
+  reduceTurnActivity(state, { event: 'turn_started', turn_id: 'turn-1', request_id: 'request-1', agent_id: 'resident', timestamp: '2026-07-11T12:00:01.000Z' });
+  reduceTurnActivity(state, { event: 'turn_complete', turn_id: 'turn-1', request_id: 'request-1', timestamp: '2026-07-11T12:00:04.000Z' });
+  reduceTurnActivity(state, { event: 'tool_call', turn_id: 'turn-1', request_id: 'request-1', tool_name: 'late.tool', timestamp: '2026-07-11T12:00:05.000Z' });
+  assert.equal(state.state, TURN_ACTIVITY_PHASES.IDLE);
+  assert.equal(state.toolCallCount, 0);
+
+  reduceTurnActivity(state, { event: 'turn_started', turn_id: 'turn-2', request_id: 'request-2', agent_id: 'resident', timestamp: '2026-07-11T12:00:06.000Z' });
+  reduceTurnActivity(state, { event: 'tool_call', turn_id: 'turn-1', request_id: 'request-1', tool_name: 'stale.tool', timestamp: '2026-07-11T12:00:07.000Z' });
+  assert.equal(state.state, TURN_ACTIVITY_PHASES.THINKING);
+  assert.equal(state.activeTurnId, 'turn-2');
+  assert.equal(state.toolCallCount, 0);
+
+  reduceTurnActivity(state, { event: 'session_health', active_turn_state: 'running', active_turn_id: 'turn-3', timestamp: '2026-07-11T12:00:08.000Z' });
+  assert.equal(state.state, TURN_ACTIVITY_PHASES.THINKING);
+  assert.equal(state.activeTurnId, 'turn-3');
+  assert.equal(state.activeRequestId, null);
+});
+
 test('session projection reconciles incomplete replay from the runtime health snapshot', () => {
   const running = createSessionProjection([], {
     nowMs: Date.parse('2026-07-11T12:01:05.000Z'),
