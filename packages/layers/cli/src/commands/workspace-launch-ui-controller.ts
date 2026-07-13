@@ -1,8 +1,6 @@
 import * as support from './workspace-launch-support.js';
-import { writeWorkspaceLaunchCommandOutput } from './workspace-launch-terminal.js';
 import * as handoff from './workspace-launch-handoff.js';
 import { emitCliOutputAdmission, emitLongLivedCommandStartup } from '../lib/cli-output.js';
-import { ExitCode } from '../lib/exit-codes.js';
 import { buildWorkspaceLaunchSelectionHtml } from './launcher-selection-ui.js';
 import {
   closeWorkspaceLaunchUiServer,
@@ -23,7 +21,6 @@ import type { ResolvedSiteRoot } from '../lib/site-root-resolver.js';
 import type { WorkspaceLaunchSelection as WorkspaceLaunchBrowserSelection } from '@narada2/workspace-launch-contract';
 import type {
   WorkspaceLaunchAttemptRecord,
-  WorkspaceLaunchActionRefusalPayload,
   WorkspaceLaunchCommandOutput,
   WorkspaceLaunchCommandResult,
   WorkspaceLaunchDashboardState,
@@ -38,15 +35,12 @@ import {
 import type { WorkspaceLaunchUiIngress } from './workspace-launch-ingress.js';
 import { resolveRegistryPaths } from './workspace-launch-registry.js';
 import {
-  createWorkspaceLaunchAttemptLifecycle,
   createWorkspaceLaunchUiSessionLifecycle,
-  transitionWorkspaceLaunchAttempt,
   transitionWorkspaceLaunchUiSession,
-  workspaceLaunchAttemptLifecycleFromStatus,
-  workspaceLaunchUiSessionLifecycleFromStatus,
-  type WorkspaceLaunchAttemptLifecycleState,
-  type WorkspaceLaunchUiSessionLifecycleState,
 } from './workspace-launch-lifecycle.js';
+import { createWorkspaceLaunchAttemptRunner } from './workspace-launch-ui-attempts.js';
+import { executeWorkspaceLaunchUiAction } from './workspace-launch-ui-actions.js';
+import { setWorkspaceLaunchUiSessionLifecycle } from './workspace-launch-ui-lifecycle.js';
 
 export async function runWorkspaceLaunchSelectionUi(
   records: WorkspaceLaunchRecord[],
@@ -115,48 +109,6 @@ export async function runWorkspaceLaunchSelectionUi(
   }
 }
 
-function setWorkspaceLaunchUiSessionLifecycle(
-  session: WorkspaceLaunchUiSessionRecord,
-  nextState: WorkspaceLaunchUiSessionLifecycleState,
-): void {
-  const current = session.lifecycle_schema && session.lifecycle_state && session.lifecycle_history
-    ? {
-      schema: session.lifecycle_schema,
-      state: session.lifecycle_state,
-      history: session.lifecycle_history,
-    }
-    : workspaceLaunchUiSessionLifecycleFromStatus(session.status);
-  const next = transitionWorkspaceLaunchUiSession(current, nextState);
-  session.lifecycle_schema = next.schema as 'narada.workspace_launch.ui_session.lifecycle_state.v1';
-  session.lifecycle_state = next.state;
-  session.lifecycle_history = next.history;
-  if (nextState === 'closing' || nextState === 'closed' || nextState === 'timeout' || nextState === 'failed') {
-    session.status = nextState;
-  } else if (nextState === 'open' || nextState === 'starting' || nextState === 'created') {
-    session.status = 'open';
-  }
-}
-
-function setWorkspaceLaunchAttemptLifecycle(
-  attempt: WorkspaceLaunchAttemptRecord,
-  nextState: WorkspaceLaunchAttemptLifecycleState,
-): void {
-  const current = attempt.lifecycle_schema && attempt.lifecycle_state && attempt.lifecycle_history
-    ? {
-      schema: attempt.lifecycle_schema,
-      state: attempt.lifecycle_state,
-      history: attempt.lifecycle_history,
-    }
-    : workspaceLaunchAttemptLifecycleFromStatus(attempt.status);
-  const next = transitionWorkspaceLaunchAttempt(current, nextState);
-  attempt.lifecycle_schema = next.schema as 'narada.workspace_launch.attempt.lifecycle_state.v1';
-  attempt.lifecycle_state = next.state;
-  attempt.lifecycle_history = next.history;
-  if (nextState === 'queued' || nextState === 'planning' || nextState === 'launching' || nextState === 'launched' || nextState === 'failed' || nextState === 'forgotten') {
-    attempt.status = nextState;
-  }
-}
-
 export async function runPersistentWorkspaceLaunchSelectionUi(
   records: WorkspaceLaunchRecord[],
   options: WorkspaceLaunchPlanOptions,
@@ -203,96 +155,18 @@ export async function runPersistentWorkspaceLaunchSelectionUi(
     actions: ['submit', 'cancel'],
   });
 
-  const runLaunchAttempt = async (selection: WorkspaceLaunchBrowserSelection): Promise<WorkspaceLaunchAttemptRecord> => {
-    const attempt: WorkspaceLaunchAttemptRecord = {
-      schema: 'narada.workspace_launch.attempt.v1',
-      launch_attempt_id: support.workspaceLaunchId('wla'),
-      ui_session_id: uiSession.ui_session_id,
-      expected_launch_session_ids: [],
-      submitted_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      selection,
-      status: 'queued',
-      lifecycle_schema: createWorkspaceLaunchAttemptLifecycle().schema,
-      lifecycle_state: 'queued',
-      lifecycle_history: ['queued'],
-      result_summary: 'Launch queued.',
-      plan_result_path: null,
-      handoffs: [],
-      observations: [],
-      projections: [],
-      actions: ['recheck', 'forget'],
-      diagnostic: null,
-    };
-    attempts.push(attempt);
-    support.writeLauncherOutput(launcherOutputs, {
-      schema: 'narada.workspace_launch.terminal_event.v1',
-      event: 'selection_submitted',
-      launch_attempt_id: attempt.launch_attempt_id,
-      selection,
-    }, `[launcher] selection submitted: ${support.formatWorkspaceLaunchSelection(selection)}`);
-    setWorkspaceLaunchAttemptLifecycle(attempt, 'planning');
-    attempt.result_summary = 'Planning workspace launch.';
-    attempt.updated_at = new Date().toISOString();
-    try {
-      await handoff.workspaceLaunchReapStaleSessionOwnedDescendants(selection, records);
-      setWorkspaceLaunchAttemptLifecycle(attempt, 'launching');
-      attempt.result_summary = 'Executing host handoff.';
-      attempt.updated_at = new Date().toISOString();
-      const launch = await launchSelection(selection);
-      const success = launch.exitCode === ExitCode.SUCCESS;
-      attempt.result_summary = handoff.workspaceLaunchResultSummary(launch.result, success);
-      attempt.plan_result_path = stringValue(isRecord(launch.result) ? launch.result.result_path : null);
-      attempt.handoffs = [handoff.workspaceLaunchHandoffFromResult(attempt.launch_attempt_id, launch.result, success)];
-      if (success) {
-        setWorkspaceLaunchAttemptLifecycle(attempt, 'handoff_recorded');
-        attempt.expected_launch_session_ids = handoff.workspaceLaunchExpectedSessionIds(launch.result);
-        setWorkspaceLaunchAttemptLifecycle(attempt, 'observing');
-        attempt.observations = await handoff.workspaceLaunchRuntimeObservations(
-          attempt.launch_attempt_id,
-          selection,
-          records,
-          attempt.expected_launch_session_ids,
-          support.workspaceLaunchSiteRootsFromLaunchResult(launch.result),
-        );
-        setWorkspaceLaunchAttemptLifecycle(attempt, 'launched');
-        attempt.actions = handoff.workspaceLaunchActionsForAttempt(attempt);
-      } else {
-        setWorkspaceLaunchAttemptLifecycle(attempt, 'failed');
-        attempt.expected_launch_session_ids = [];
-        attempt.observations = [];
-        attempt.actions = ['retry', 'forget'];
-      }
-      attempt.diagnostic = launch.result;
-      attempt.updated_at = new Date().toISOString();
-      if (success) launchCount += 1;
-      await persistWorkspaceLaunchDashboardState(persistenceDir, uiSession, attempts);
-      support.writeLauncherOutput(launcherOutputs, {
-        schema: 'narada.workspace_launch.terminal_event.v1',
-        event: success ? 'launch_handed_off' : 'launch_failed',
-        launch_attempt_id: attempt.launch_attempt_id,
-        status: attempt.status,
-        result_path: attempt.plan_result_path,
-      }, `[launcher] ${success ? 'handed off' : 'failed'}: ${attempt.result_summary}${attempt.plan_result_path ? ` result=${attempt.plan_result_path}` : ''}`);
-      writeWorkspaceLaunchCommandOutput(launcherOutputs, attempt);
-      return attempt;
-    } catch (error) {
-      setWorkspaceLaunchAttemptLifecycle(attempt, 'failed');
-      attempt.result_summary = error instanceof Error ? error.message : String(error);
-      attempt.handoffs = [handoff.workspaceLaunchFailedHandoff(attempt.launch_attempt_id, error)];
-      attempt.actions = ['retry', 'forget'];
-      attempt.diagnostic = { error: attempt.result_summary };
-      attempt.updated_at = new Date().toISOString();
-      await persistWorkspaceLaunchDashboardState(persistenceDir, uiSession, attempts);
-      support.writeLauncherOutput(launcherOutputs, {
-        schema: 'narada.workspace_launch.terminal_event.v1',
-        event: 'launch_failed',
-        launch_attempt_id: attempt.launch_attempt_id,
-        error: attempt.result_summary,
-      }, `[launcher] failed: ${attempt.result_summary}`);
-      return attempt;
-    }
-  };
+  const runLaunchAttempt = createWorkspaceLaunchAttemptRunner({
+    uiSession,
+    persistenceDir,
+    attempts,
+    records,
+    launcherOutputs,
+    launchSelection,
+    onLaunch: () => {
+      launchCount += 1;
+    },
+  });
+
 
   const closed = new Promise<'cancelled'>((resolveClosed, rejectClosed) => {
     server = createWorkspaceLaunchUiServer({
@@ -315,72 +189,15 @@ export async function runPersistentWorkspaceLaunchSelectionUi(
           },
         };
       },
-      action: async (launchAttemptId, action) => {
-        const attempt = attempts.find((candidate) => candidate.launch_attempt_id === launchAttemptId);
-        if (!attempt) return actionRefusal('launch_attempt_not_found', `Launch attempt not found: ${launchAttemptId}`, 404);
-        if (action === 'forget') {
-          setWorkspaceLaunchAttemptLifecycle(attempt, 'forgotten');
-          attempt.updated_at = new Date().toISOString();
-          await persistWorkspaceLaunchDashboardState(persistenceDir, uiSession, attempts);
-          return { status: 200, payload: { schema: 'narada.workspace_launch.action_result.v1', status: 'forgotten', dashboard: dashboardState() } };
-        }
-        if (action === 'retry') {
-          const retryAttempt = await runLaunchAttempt(attempt.selection);
-          return {
-            status: retryAttempt.status === 'launched' ? 200 : 500,
-            payload: { schema: 'narada.workspace_launch.action_result.v1', status: retryAttempt.status, attempt: retryAttempt, dashboard: dashboardState() },
-          };
-        }
-        if (action === 'recheck') {
-          attempt.updated_at = new Date().toISOString();
-          setWorkspaceLaunchAttemptLifecycle(attempt, 'observing');
-          try {
-            attempt.observations = await handoff.workspaceLaunchRuntimeObservations(
-              attempt.launch_attempt_id,
-              attempt.selection,
-              records,
-              attempt.expected_launch_session_ids,
-              support.workspaceLaunchSiteRootsFromLaunchResult(attempt.diagnostic),
-            );
-            setWorkspaceLaunchAttemptLifecycle(attempt, 'launched');
-          } catch (error) {
-            setWorkspaceLaunchAttemptLifecycle(attempt, 'failed');
-            attempt.diagnostic = { error: error instanceof Error ? error.message : String(error) };
-          }
-          attempt.actions = handoff.workspaceLaunchActionsForAttempt(attempt);
-          await persistWorkspaceLaunchDashboardState(persistenceDir, uiSession, attempts);
-          return { status: 200, payload: { schema: 'narada.workspace_launch.action_result.v1', status: 'rechecked', attempt, dashboard: dashboardState() } };
-        }
-        if (action === 'open-web-ui' || action === 'attach-cli') {
-          const command = attachCommandForAction(attempt, action);
-          if (!command) return actionRefusal('attach_command_not_available', `${action === 'open-web-ui' ? 'Open This UI' : 'Attach CLI To This Session'} requires a discovered attachable NARS session for this launch result.`, 409, dashboardState());
-          const projection = await handoff.workspaceLaunchExecuteProjectionAction(attempt, action, command);
-          attempt.projections.push(projection);
-          attempt.updated_at = new Date().toISOString();
-          await persistWorkspaceLaunchDashboardState(persistenceDir, uiSession, attempts);
-          return {
-            status: 200,
-            payload: {
-              schema: 'narada.workspace_launch.action_result.v1',
-              status: projection.status,
-              action,
-              command,
-              projection,
-              message: projection.message,
-              dashboard: dashboardState(),
-            },
-          };
-        }
-        if (action === 'stop-runtime') {
-          const result = await handoff.workspaceLaunchRequestRuntimeStop(attempt);
-          if (result.status !== 'requested') return { status: 409, payload: { ...result, dashboard: dashboardState() } };
-          attempt.updated_at = new Date().toISOString();
-          attempt.actions = handoff.workspaceLaunchActionsForAttempt(attempt);
-          await persistWorkspaceLaunchDashboardState(persistenceDir, uiSession, attempts);
-          return { status: 200, payload: { ...result, dashboard: dashboardState() } };
-        }
-        return actionRefusal('projection_lifecycle_not_admitted', 'Stop Projection requires admitted projection lifecycle authority.', 409, dashboardState());
-      },
+      action: (launchAttemptId, action) => executeWorkspaceLaunchUiAction({
+        uiSession,
+        persistenceDir,
+        attempts,
+        records,
+        dashboardState,
+        runLaunchAttempt,
+      }, launchAttemptId, action),
+
       cancel: async () => {
         settled = true;
         setWorkspaceLaunchUiSessionLifecycle(uiSession, 'closing');
@@ -451,33 +268,3 @@ export async function runPersistentWorkspaceLaunchSelectionUi(
   }
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
-
-function stringValue(value: unknown): string | null {
-  return typeof value === 'string' && value.trim() ? value : null;
-}
-
-function attachCommandForAction(attempt: WorkspaceLaunchAttemptRecord, action: string): string | null {
-  const key = action === 'open-web-ui' ? 'agent_web_ui' : action === 'attach-cli' ? 'agent_cli' : null;
-  if (!key) return null;
-  for (const observation of attempt.observations) {
-    const command = observation.attach_commands?.[key];
-    if (command) return command;
-  }
-  return null;
-}
-
-function actionRefusal(reason_code: string, message: string, status: number, dashboard?: WorkspaceLaunchDashboardState): { status: number; payload: WorkspaceLaunchActionRefusalPayload } {
-  return {
-    status,
-    payload: {
-      schema: 'narada.workspace_launch.action_refusal.v1',
-      status: 'refused',
-      reason_code,
-      message,
-      ...(dashboard ? { dashboard } : {}),
-    },
-  };
-}

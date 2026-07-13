@@ -34,6 +34,7 @@ describe('workspace launch module boundaries', () => {
 
   it('keeps the application composition boundary explicit', () => {
     const application = readFileSync(resolve(commandsRoot, 'workspace-launch-application.ts'), 'utf8');
+    const applicationExecution = readFileSync(resolve(commandsRoot, 'workspace-launch-application-execution.ts'), 'utf8');
     const command = readFileSync(resolve(commandsRoot, 'workspace-launch-command.ts'), 'utf8');
     const context = readFileSync(resolve(commandsRoot, 'workspace-launch-context.ts'), 'utf8');
     const registry = readFileSync(resolve(commandsRoot, 'workspace-launch-registry.ts'), 'utf8');
@@ -42,8 +43,9 @@ describe('workspace launch module boundaries', () => {
     const result = readFileSync(resolve(commandsRoot, 'workspace-launch-result.ts'), 'utf8');
     const selectionAdapters = readFileSync(resolve(commandsRoot, 'workspace-launch-selection-adapters.ts'), 'utf8');
 
-    expect(application).toContain("from './workspace-launch-command.js'");
-    expect(application).toContain("from './workspace-launch-context.js'");
+    expect(application).toContain("from './workspace-launch-application-execution.js'");
+    expect(applicationExecution).toContain("from './workspace-launch-command.js'");
+    expect(applicationExecution).toContain("from './workspace-launch-application-context.js'");
     expect(command).toContain('selectionServices: WorkspaceLaunchSelectionServices');
     expect(command).toContain('registryContext: WorkspaceLaunchRegistryContext');
     expect(context).toContain('createWorkspaceLaunchContext');
