@@ -114,6 +114,52 @@ export function formatRuntimeMcpFaultEvent(event) {
   };
 }
 
+export function formatRuntimeProjectionFailureSummary(event) {
+  if (!event || event.event !== 'runtime_projection_failure') return null;
+  const projection = event.projection ?? 'unknown';
+  const state = event.request_state ?? event.terminal_state ?? 'failed';
+  const error = event.error_code ?? event.error ?? 'unknown_error';
+  return `[agent-runtime-server] Runtime projection failure ${projection} ${state} ${String(error).slice(0, 240)}`;
+}
+
+export function formatRuntimeProjectionFailureEvent(event) {
+  if (!event || event.event !== 'runtime_projection_failure') return null;
+  return {
+    schema: 'narada.agent_runtime_server.wrapper_event.v1',
+    event: 'runtime_projection_failure',
+    timestamp: event.timestamp ?? new Date().toISOString(),
+    ...identityProjectionFields(event),
+    session_id: event.session_id ?? null,
+    request_id: event.request_id ?? null,
+    projection: event.projection ?? null,
+    request_state: event.request_state ?? null,
+    terminal_state: event.terminal_state ?? null,
+    error_code: event.error_code ?? null,
+    error: event.error ?? null,
+  };
+}
+
+export function formatControlInputBridgeErrorSummary(event) {
+  if (!event || event.event !== 'runtime_control_input_bridge_error') return null;
+  const code = event.error_code ?? 'control_input_bridge_error';
+  return `[agent-runtime-server] Control-input bridge error ${String(code).slice(0, 240)}`;
+}
+
+export function formatControlInputBridgeErrorEvent(event) {
+  if (!event || event.event !== 'runtime_control_input_bridge_error') return null;
+  return {
+    schema: 'narada.agent_runtime_server.wrapper_event.v1',
+    event: 'control_input_bridge_error',
+    timestamp: event.timestamp ?? new Date().toISOString(),
+    ...identityProjectionFields(event),
+    session_id: event.session_id ?? null,
+    control_path: event.control_path ?? null,
+    error_code: event.error_code ?? null,
+    error: event.error ?? null,
+    error_at: event.error_at ?? null,
+  };
+}
+
 export function formatSessionWorkflowSummary(event) {
   if (!event || !isSessionLifecycleEvent(event)) return null;
   if (!event.recommended_action || event.recommended_action === 'review_session_summary') return null;

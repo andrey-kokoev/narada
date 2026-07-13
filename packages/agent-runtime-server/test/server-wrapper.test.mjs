@@ -96,6 +96,62 @@ test('package owns the Narada agent runtime server bins and exports', () => {
   assert.equal(packageJson.dependencies['@narada2/carrier-terminal-projection'], 'workspace:*');
 });
 
+test('wrapper diagnostics preserve projection and control-input failure details', () => {
+  const projectionFailure = {
+    event: 'runtime_projection_failure',
+    timestamp: '2026-07-13T12:00:00.000Z',
+    agent_id: 'narada.test',
+    session_id: 'diagnostics-session',
+    request_id: 'health-request',
+    projection: 'health',
+    request_state: 'timed_out',
+    error: 'session_health_timeout',
+  };
+  assert.equal(
+    canonicalRuntimeEvents.formatRuntimeProjectionFailureSummary(projectionFailure),
+    '[agent-runtime-server] Runtime projection failure health timed_out session_health_timeout',
+  );
+  assert.deepEqual(canonicalRuntimeEvents.formatRuntimeProjectionFailureEvent(projectionFailure), {
+    schema: 'narada.agent_runtime_server.wrapper_event.v1',
+    event: 'runtime_projection_failure',
+    timestamp: '2026-07-13T12:00:00.000Z',
+    agent_id: 'narada.test',
+    session_id: 'diagnostics-session',
+    request_id: 'health-request',
+    projection: 'health',
+    request_state: 'timed_out',
+    terminal_state: null,
+    error_code: null,
+    error: 'session_health_timeout',
+  });
+
+  const bridgeFailure = {
+    event: 'runtime_control_input_bridge_error',
+    timestamp: '2026-07-13T12:00:01.000Z',
+    agent_id: 'narada.test',
+    session_id: 'diagnostics-session',
+    control_path: 'D:/tmp/control.jsonl',
+    error_code: 'control_input_line_too_large',
+    error: 'control_input_line_too_large',
+    error_at: '2026-07-13T12:00:01.000Z',
+  };
+  assert.equal(
+    canonicalRuntimeEvents.formatControlInputBridgeErrorSummary(bridgeFailure),
+    '[agent-runtime-server] Control-input bridge error control_input_line_too_large',
+  );
+  assert.deepEqual(canonicalRuntimeEvents.formatControlInputBridgeErrorEvent(bridgeFailure), {
+    schema: 'narada.agent_runtime_server.wrapper_event.v1',
+    event: 'control_input_bridge_error',
+    timestamp: '2026-07-13T12:00:01.000Z',
+    agent_id: 'narada.test',
+    session_id: 'diagnostics-session',
+    control_path: 'D:/tmp/control.jsonl',
+    error_code: 'control_input_line_too_large',
+    error: 'control_input_line_too_large',
+    error_at: '2026-07-13T12:00:01.000Z',
+  });
+});
+
 test('health projection tracks resolved, timed-out, and failed request lifecycles', { timeout: 10000 }, async () => {
   const resolvedTransitions = [];
   const resolvedInput = new PassThrough();

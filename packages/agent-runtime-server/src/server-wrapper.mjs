@@ -10,8 +10,12 @@ import {
   formatPreflightWorkflowEvent,
   formatPreflightWorkflowSummary,
   formatHostStatusEvent,
+  formatControlInputBridgeErrorEvent,
+  formatControlInputBridgeErrorSummary,
   formatRuntimeMcpFaultEvent,
   formatRuntimeMcpFaultSummary,
+  formatRuntimeProjectionFailureEvent,
+  formatRuntimeProjectionFailureSummary,
   formatSessionOperationsEvent,
   formatSessionOperationsSummary,
   formatSessionWorkflowEvent,
@@ -252,6 +256,15 @@ function renderWrapperEvents({ event, wrapperEventsJsonl, state }) {
     }
     state.runtimeFaultSummaries.add(runtimeFaultSummary);
   }
+  for (const [failureSummary, wrapperEvent] of [
+    [formatRuntimeProjectionFailureSummary(event), formatRuntimeProjectionFailureEvent(event)],
+    [formatControlInputBridgeErrorSummary(event), formatControlInputBridgeErrorEvent(event)],
+  ]) {
+    if (!failureSummary || state.projectionFailureSummaries.has(failureSummary)) continue;
+    console.error(failureSummary);
+    if (wrapperEventsJsonl && wrapperEvent) console.error(JSON.stringify(wrapperEvent));
+    state.projectionFailureSummaries.add(failureSummary);
+  }
   for (const [workflowSummary, wrapperEvent] of [
     [formatSessionWorkflowSummary(event), formatSessionWorkflowEvent(event)],
     [formatSessionOperationsSummary(event), formatSessionOperationsEvent(event)],
@@ -426,7 +439,7 @@ async function main() {
     controlInputBridge = createControlInputBridge({
       path: runtimeContext.controlPath,
       output: runtimeInput,
-      onError: (error) => {
+      onError: (error, _line, diagnostic) => {
         const message = error instanceof Error ? error.message : String(error ?? 'unknown_error');
         eventHub.publish({
           schema: 'narada.nars.runtime_control_input_bridge_error.v1',
@@ -435,8 +448,9 @@ async function main() {
           agent_id: runtimeContext.identity,
           session_id: runtimeContext.session,
           control_path: runtimeContext.controlPath,
-          error_code: error?.code ?? (error instanceof SyntaxError ? 'control_input_record_invalid' : 'control_input_bridge_error'),
-          error: message.slice(0, 240),
+          error_code: diagnostic?.code ?? error?.code ?? (error instanceof SyntaxError ? 'control_input_record_invalid' : 'control_input_bridge_error'),
+          error: diagnostic?.message ?? message.slice(0, 240),
+          error_at: diagnostic?.at ?? null,
         });
         console.error(`[agent-runtime-server] carrier control input rejected: ${message}`);
       },
@@ -477,6 +491,7 @@ async function main() {
   const state = {
     startupSummaryPrinted: false,
     runtimeFaultSummaries: new Set(),
+    projectionFailureSummaries: new Set(),
     workflowSummaries: new Set(),
   };
   let stdoutBuffer = '';
@@ -590,8 +605,12 @@ export {
   startEventStreamProjection,
   formatPreflightWorkflowEvent,
   formatPreflightWorkflowSummary,
+  formatControlInputBridgeErrorEvent,
+  formatControlInputBridgeErrorSummary,
   formatRuntimeMcpFaultEvent,
   formatRuntimeMcpFaultSummary,
+  formatRuntimeProjectionFailureEvent,
+  formatRuntimeProjectionFailureSummary,
   formatSessionOperationsEvent,
   formatSessionOperationsSummary,
   formatSessionWorkflowEvent,

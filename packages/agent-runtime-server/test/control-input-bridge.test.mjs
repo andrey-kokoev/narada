@@ -55,6 +55,7 @@ test('control input bridge keeps sideband exhaustion open and delivers appended 
     assert.equal(JSON.parse(lines[0]).content, initialInput.content);
     assert.equal(output.writableEnded, false);
     assert.equal(bridge.state.started, true);
+    assert.equal(bridge.state.path, controlPath);
     assert.equal(bridge.state.last_read_status, 'available');
     assert.equal(bridge.state.emitted_count, 1);
     assert.equal(bridge.state.error_count, 0);
@@ -109,17 +110,24 @@ test('control input bridge exposes bounded diagnostics for malformed records', a
   const controlPath = join(root, 'control.jsonl');
   const output = new PassThrough();
   const errors = [];
+  const diagnostics = [];
   const bridge = createControlInputBridge({
     path: controlPath,
     output,
     pollIntervalMs: 10,
-    onError: (error) => errors.push(error),
+    onError: (error, _line, diagnostic) => {
+      errors.push(error);
+      diagnostics.push(diagnostic);
+    },
   });
   try {
     await writeFile(controlPath, 'not-json\n', 'utf8');
     await bridge.start();
     await waitFor(() => bridge.state.error_count === 1);
     assert.equal(errors.length, 1);
+    assert.equal(diagnostics.length, 1);
+    assert.equal(diagnostics[0].code, 'control_input_record_invalid');
+    assert.equal(diagnostics[0].message, 'control_input_record_invalid');
     assert.equal(bridge.state.last_error.code, 'control_input_record_invalid');
     assert.equal(bridge.state.last_error.message, 'control_input_record_invalid');
     assert.equal(bridge.state.emitted_count, 0);

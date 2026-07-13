@@ -13,9 +13,9 @@ function errorCode(error) {
   return message.split(':', 1)[0].trim() || 'control_input_bridge_error';
 }
 
-function reportError(onError, error, line = null) {
+function reportError(onError, error, line = null, diagnostic = null) {
   try {
-    onError?.(error, line);
+    onError?.(error, line, diagnostic);
   } catch {
     // Diagnostics must not terminate the carrier input owner.
   }
@@ -75,13 +75,15 @@ export function createControlInputBridge({
     const message = error instanceof SyntaxError
       ? 'control_input_record_invalid'
       : error instanceof Error ? error.message : String(error ?? 'unknown_error');
+    const code = error instanceof SyntaxError ? 'control_input_record_invalid' : errorCode(error);
     errorCount += 1;
-    lastError = Object.freeze({
-      code: error instanceof SyntaxError ? 'control_input_record_invalid' : errorCode(error),
+    const diagnostic = Object.freeze({
+      code,
       message: message.slice(0, 240),
       at: now(),
     });
-    reportError(onError, error, line);
+    lastError = diagnostic;
+    reportError(onError, error, line, diagnostic);
   }
 
   function schedule(delayMs = pollIntervalMs) {
@@ -184,6 +186,7 @@ export function createControlInputBridge({
     },
     get state() {
       return Object.freeze({
+        path,
         status: closed ? 'closed' : !started ? 'created' : pumping ? 'reading' : timer !== null ? 'polling' : 'idle',
         started,
         closed,
