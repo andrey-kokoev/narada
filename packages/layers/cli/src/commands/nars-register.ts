@@ -1,8 +1,13 @@
 import type { Command } from 'commander';
+import {
+  operatorSurfaceKindsForProjectionCapability,
+} from '@narada2/carrier-runtime-contract/carrier-runtime-selection';
 import { directCommandAction, silentCommandContext } from '../lib/command-wrapper.js';
 import { emitCommandResult, resolveCommandFormat } from '../lib/cli-output.js';
 import { narsAttachCommandCommand, narsAuthorityTransitionExecuteCommand, narsAuthorityTransitionPlanCommand, narsSessionsCommand } from './nars.js';
 import { narsProjectionBridgeRunCommand, narsProjectionBridgeStartCommand, narsProjectionRegisterCommand } from './nars-projection.js';
+
+const NARS_PROJECTION_SURFACE_KINDS = operatorSurfaceKindsForProjectionCapability('nars_attach');
 
 export function registerNarsCommands(program: Command): void {
   const nars = program
@@ -186,7 +191,7 @@ export function registerNarsCommands(program: Command): void {
     .command('attach-command')
     .description('Resolve the command for attaching a projection to one NARS session')
     .requiredOption('--session <id>', 'NARS session id')
-    .option('--surface <surface>', 'Projection surface: agent-web-ui|agent-cli|agent-tui', 'agent-web-ui')
+    .option('--surface <surface>', `Projection surface: ${NARS_PROJECTION_SURFACE_KINDS.join('|')}`, 'agent-web-ui')
     .option('--site-root <path>', 'Target Site root')
     .option('--site <id>', 'Registered Site id')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')

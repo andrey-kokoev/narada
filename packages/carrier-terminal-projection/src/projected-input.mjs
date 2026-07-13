@@ -79,9 +79,6 @@ export function createBracketedPasteComposer({ onPaste = () => {}, onSuppressLin
 export function createProjectedSlashCommandAction(line) {
   const trimmed = String(line ?? '').trim();
   if (!trimmed) return null;
-  if (trimmed === 'exit') {
-    return { kind: 'frame', frame: controlFrame('exit', 'session.close') };
-  }
   if (!trimmed.startsWith('/')) return null;
   const [rawCommand] = trimmed.split(/\s+/);
   const command = rawCommand.toLowerCase();

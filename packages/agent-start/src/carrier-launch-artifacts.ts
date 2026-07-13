@@ -2,6 +2,12 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { resolveNaradaSitePaths, siteAuthorityRootFromSiteRoot } from '@narada2/site-paths';
+import {
+  NARADA_AGENT_RUNTIME_SERVER_KIND,
+  operatorSurfaceKindsForRuntimeHost,
+} from '@narada2/carrier-runtime-contract/carrier-runtime-selection';
+
+const NARS_OPERATOR_SURFACE_KINDS = operatorSurfaceKindsForRuntimeHost(NARADA_AGENT_RUNTIME_SERVER_KIND);
 
 export function siteNaradaRoot(siteRoot) {
   return siteAuthorityRootFromSiteRoot(siteRoot);
@@ -75,6 +81,9 @@ export function materializeCarrierSessionRecord({
   identity,
   carrier,
   runtime,
+  launchSelectionKind = carrier,
+  operatorSurfaceKind = carrier,
+  carrierImplementationKind = null,
   startResult,
   dryRun = false,
   pcSiteRoot,
@@ -92,7 +101,7 @@ export function materializeCarrierSessionRecord({
     schema: 'narada.pc_runtime.carrier_session.v0',
     session_id: carrierSessionId,
     runtime_session_id: carrierSessionId,
-    nars_session_id: carrier === 'agent-cli' || carrier === 'agent-web-ui' ? carrierSessionId : null,
+    nars_session_id: NARS_OPERATOR_SURFACE_KINDS.includes(operatorSurfaceKind) ? carrierSessionId : null,
     carrier_session_id: carrierSessionId,
     status: dryRun ? 'planned' : 'registered',
     declared_agent_identity: identity,
@@ -104,9 +113,11 @@ export function materializeCarrierSessionRecord({
     runtime_substrate_kind: runtime,
     substrate: runtime,
     launch_carrier_kind: carrier,
-    carrier_runtime_kind: carrier === 'agent-cli' || carrier === 'agent-web-ui' ? 'narada-agent-runtime-server' : runtime,
-    launch_operator_surface_kind: carrier === 'agent-cli' || carrier === 'agent-web-ui' ? carrier : null,
-    operator_surface_kind: carrier === 'agent-cli' || carrier === 'agent-web-ui' ? carrier : null,
+    launch_selection_kind: launchSelectionKind,
+    carrier_implementation_kind: carrierImplementationKind ?? startResult.carrier_implementation_kind ?? null,
+    carrier_runtime_kind: carrierImplementationKind ?? (NARS_OPERATOR_SURFACE_KINDS.includes(operatorSurfaceKind) ? NARADA_AGENT_RUNTIME_SERVER_KIND : runtime),
+    launch_operator_surface_kind: operatorSurfaceKind,
+    operator_surface_kind: operatorSurfaceKind,
     launcher_process_kind: 'launcher_process',
     workspace,
     launch_source: launchSource,
@@ -139,12 +150,12 @@ export function materializeCarrierSessionRecord({
     status: dryRun ? 'planned' : 'registered',
     session_id: carrierSessionId,
     runtime_session_id: carrierSessionId,
-    nars_session_id: carrier === 'agent-cli' || carrier === 'agent-web-ui' ? carrierSessionId : null,
+    nars_session_id: NARS_OPERATOR_SURFACE_KINDS.includes(operatorSurfaceKind) ? carrierSessionId : null,
     carrier_session_id: carrierSessionId,
     record_path: recordPath,
     environment: {
       NARADA_RUNTIME_SESSION_ID: carrierSessionId,
-      ...(carrier === 'agent-cli' || carrier === 'agent-web-ui' ? { NARADA_NARS_SESSION_ID: carrierSessionId } : {}),
+      ...(NARS_OPERATOR_SURFACE_KINDS.includes(operatorSurfaceKind) ? { NARADA_NARS_SESSION_ID: carrierSessionId } : {}),
       NARADA_CARRIER_SESSION_ID: carrierSessionId,
     },
     record,

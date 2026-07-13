@@ -7,6 +7,7 @@ export type ProcessLaunchPosture =
   | 'mcp_server'
   | 'governed_command_execution'
   | 'operator_projection_host'
+  | 'agent_runtime_server'
   | 'test_child'
   | 'elevated_or_operator_prompt';
 

@@ -70,13 +70,23 @@ test('credential projection redacts API secrets while projecting required env', 
     processEnv: {
       NARADA_PROVIDER_SECRET_STORE: 'disabled',
       KIMI_API_KEY: 'module-secret-value',
+      OPENAI_API_KEY: 'unrelated-openai-decoy',
+      KIMI_CODE_API_KEY: 'unrelated-kimi-code-decoy',
     },
     codexSubscriptionPreflight: () => ({ ok: true, status: 'passed' }),
   });
   assert.equal(projected.env.KIMI_API_KEY, 'module-secret-value');
+  assert.equal(projected.env.NARADA_AI_API_KEY, 'module-secret-value');
+  assert.equal(projected.env.NARADA_INTELLIGENCE_PROVIDER, 'kimi-api');
+  assert.equal(projected.env.NARADA_AI_BASE_URL, 'https://api.moonshot.ai');
+  assert.equal(Object.hasOwn(projected.env, 'OPENAI_API_KEY'), false);
+  assert.equal(Object.hasOwn(projected.env, 'KIMI_CODE_API_KEY'), false);
   assert.equal(projected.credential.credential_source, 'environment');
   assert.equal(Object.hasOwn(projected.credential, 'value'), false);
   assert.doesNotMatch(JSON.stringify(projected.credential), /module-secret-value/);
+  assert.equal(projected.runtime_binding.provider_id, 'kimi-api');
+  assert.match(projected.runtime_binding.credential_fingerprint, /^sha256:[a-f0-9]{12}$/);
+  assert.equal(Object.hasOwn(projected.runtime_binding, 'api_key'), false);
 });
 
 test('codex subscription support defers dry-run auth and scrubs OpenAI API env', () => {

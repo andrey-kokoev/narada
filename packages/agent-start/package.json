@@ -10,6 +10,7 @@
     "@narada2/carrier-runtime-contract": "workspace:*",
     "@narada2/carrier-protocol": "workspace:*",
     "@narada2/carrier-provider-support": "workspace:*",
+    "@narada2/carrier-provider-contract": "workspace:*",
     "@narada2/process-launch-posture": "workspace:*",
     "@narada2/nars-client-projection-contract": "workspace:*",
     "@narada2/site-paths": "workspace:*"

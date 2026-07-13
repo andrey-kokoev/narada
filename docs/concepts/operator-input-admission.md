@@ -47,6 +47,8 @@ After the operator submits text but before NARS acknowledges it, it is a surface
 
 After NARS acknowledges it, it is NARS-owned admitted input. All attached surfaces should derive visible queued or admitted state from NARS events, not from their own private queues.
 
+`admitted` is a handoff state rather than terminal completion. It means the input has been admitted to the turn boundary; the turn and provider FSMs still have to settle. If the process fails after admission but before queue completion evidence, recovery may explicitly requeue that input. On session shutdown, pending input is abandoned only after the active drain has settled.
+
 ## Required Invariants
 
 - `send` must not mean interrupt.

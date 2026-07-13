@@ -230,6 +230,22 @@ test('spawnHiddenPostureProcess admits hidden operator projection host posture',
   assert.equal(observed.options.windowsHide, true);
 });
 
+test('spawnHiddenPostureProcess admits hidden agent runtime server posture', () => {
+  let observed = null;
+  const child = spawnHiddenPostureProcess('node', ['agent-runtime-server.mjs'], {
+    posture: 'agent_runtime_server',
+    spawnImpl: (command, args, options) => {
+      observed = { command, args, options };
+      return { once() {}, unref() {} };
+    },
+  });
+
+  assert.ok(child);
+  assert.equal(observed.command, 'node');
+  assert.deepEqual(observed.args, ['agent-runtime-server.mjs']);
+  assert.equal(observed.options.windowsHide, true);
+});
+
 test('startOperatorTerminal makes visibility explicit', () => {
   let observed = null;
   const output = startOperatorTerminal('wt', ['new-tab'], {

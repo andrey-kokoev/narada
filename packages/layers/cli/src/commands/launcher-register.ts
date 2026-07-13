@@ -44,6 +44,7 @@ export function registerLauncherCommands(program: Command): void {
     .option('--suppress-result-output', 'Do not print the final result envelope after writing --result-path', false)
     .option('--enable-native-shell', 'Break-glass: permit native shell posture where supported', false)
     .option('--no-wait-for-enter-before-exec', 'Do not add the wait gate before exec handoff')
+    .option('--visible-runtime-terminal', 'Request a visible terminal for NARS runtime hosts', false)
     .option('--smoke', 'Return smoke dry-run commands instead of opening terminals', false)
     .option('--dry-run', 'Return Windows Terminal argv plan without opening terminals', false)
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
@@ -82,6 +83,7 @@ export function registerLauncherCommands(program: Command): void {
         suppressResultOutput: opts.suppressResultOutput,
         enableNativeShell: opts.enableNativeShell,
         noWaitForEnterBeforeExec: opts.noWaitForEnterBeforeExec,
+        visibleRuntimeTerminal: opts.visibleRuntimeTerminal,
         smoke: opts.smoke,
         dryRun: opts.dryRun,
         format: resolveCommandFormat(opts.format, 'auto'),
@@ -114,6 +116,7 @@ export function registerLauncherCommands(program: Command): void {
     .option('--suppress-result-output', 'Do not print the final result envelope after writing --result-path', false)
     .option('--enable-native-shell', 'Break-glass: permit native shell posture where supported', false)
     .option('--no-wait-for-enter-before-exec', 'Do not add the wait gate before exec handoff')
+    .option('--visible-runtime-terminal', 'Request a visible terminal for NARS runtime hosts', false)
     .option('--smoke', 'Return smoke dry-run commands instead of opening terminals', false)
     .option('--dry-run', 'Return Windows Terminal argv plan without opening terminals', false)
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
@@ -152,6 +155,7 @@ export function registerLauncherCommands(program: Command): void {
         suppressResultOutput: opts.suppressResultOutput,
         enableNativeShell: opts.enableNativeShell,
         noWaitForEnterBeforeExec: opts.noWaitForEnterBeforeExec,
+        visibleRuntimeTerminal: opts.visibleRuntimeTerminal,
         smoke: opts.smoke,
         dryRun: opts.dryRun,
         format: resolveCommandFormat(opts.format, 'auto'),

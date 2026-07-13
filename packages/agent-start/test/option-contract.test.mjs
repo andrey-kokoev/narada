@@ -7,7 +7,12 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createRequire } from 'node:module';
 import { resolveNaradaSitePaths } from '@narada2/site-paths';
 import { runHiddenPostureCommandSync } from '@narada2/process-launch-posture';
-import { buildCarrierProcessEnvironment, carrierSpawnOptions } from '../src/carrier-launch-adapter.ts';
+import {
+  buildCarrierProcessEnvironment,
+  carrierSpawnOptions,
+  resolveCarrierCommand,
+  resolveToolFabricAdapter,
+} from '../src/carrier-launch-adapter.ts';
 
 const require = createRequire(import.meta.url);
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -17,6 +22,7 @@ const launcherPath = join(packageRoot, 'src', 'narada-agent-start.ts');
 const tsxLoaderPath = pathToFileURL(require.resolve('tsx')).href;
 const identity = 'narada.architect';
 const sharedRuntimeContract = JSON.parse(readFileSync(resolve(naradaProperRoot, 'packages', 'carrier-runtime-contract', 'contracts', 'runtime-substrate-kinds.json'), 'utf8'));
+const sharedCarrierLaunchMatrix = JSON.parse(readFileSync(resolve(naradaProperRoot, 'packages', 'carrier-runtime-contract', 'contracts', 'carrier-launch-matrix.json'), 'utf8'));
 const sharedProviderContract = JSON.parse(readFileSync(resolve(naradaProperRoot, 'packages', 'carrier-provider-contract', 'contracts', 'provider-registry.json'), 'utf8'));
 const sharedProviderAdapterContract = JSON.parse(readFileSync(resolve(naradaProperRoot, 'packages', 'carrier-provider-contract', 'contracts', 'provider-adapters.json'), 'utf8'));
 const baseArgs = [
@@ -751,6 +757,42 @@ test('carrier process spawn defaults suppress accidental Windows console windows
   assert.deepEqual(carrierSpawnOptions('opencode'), { shell: false, windowsHide: true });
 });
 
+test('carrier adapter refuses launch selectors absent from the canonical matrix', () => {
+  assert.throws(() => resolveToolFabricAdapter('future-carrier', {
+    schema: 'narada.tool_fabric_adapter_kind.v1',
+    agentTuiCarrier: 'agent-tui',
+  }), /carrier_launch_matrix_row_missing:future-carrier/);
+  assert.throws(() => resolveCarrierCommand('future-carrier', {
+    agentTuiCarrier: 'agent-tui',
+    processPlatform: 'win32',
+    processExecPath: process.execPath,
+    stableNodeCommand: () => 'node',
+    defaultClaudeCodeCommand: 'claude',
+  }), /carrier_launch_matrix_row_missing:future-carrier/);
+  assert.throws(() => carrierSpawnOptions('future-carrier'), /carrier_launch_matrix_row_missing:future-carrier/);
+});
+
+test('carrier adapter projection is defined for every canonical matrix row', () => {
+  for (const row of sharedCarrierLaunchMatrix.rows) {
+    const projected = resolveToolFabricAdapter(row.launch_selection_kind, {
+      schema: 'narada.tool_fabric_adapter_kind.v1',
+      agentTuiCarrier: 'agent-tui',
+    });
+    assert.equal(projected.launch_selection_kind, row.launch_selection_kind);
+    assert.equal(projected.operator_surface_kind, row.operator_surface_kind);
+    assert.equal(projected.runtime_host_kind, row.runtime_host_kind);
+    assert.equal(projected.runtime_substrate_kind, row.runtime_substrate_kind);
+    assert.equal(projected.tool_fabric_adapter_kind, row.tool_fabric_adapter_kind);
+    assert.equal(projected.tool_fabric_source, row.tool_fabric_source);
+    assert.equal(projected.adapter_entrypoint, row.adapter_entrypoint);
+    assert.deepEqual(projected.projection_capabilities, row.projection_capabilities);
+    assert.equal(projected.expected_tools_scope, row.expected_tools_scope);
+    assert.deepEqual(projected.expected_tools, row.expected_tools);
+    assert.deepEqual(projected.states, row.states);
+    assert.equal(projected.admission_basis, row.admission_basis);
+  }
+});
+
 test('agent-cli dry-run records event-id propagation residual at runtime-server boundary', () => {
   const output = runOk(['--carrier', 'agent-cli', '--runtime', 'narada-agent-runtime-server', '--exec']);
   const sessionId = output.carrier_session.carrier_session_id;
@@ -1219,19 +1261,22 @@ test('opencode runtime is admitted by the contract', () => {
   assert.equal(sharedRuntimeContract.admitted_runtime_substrate_kinds.includes('opencode'), true);
 });
 
-test('opencode dry-run resolves as opencode-native-mcp', () => {
+test('opencode dry-run records prompt-only carrier posture', () => {
   const output = runOk(['--runtime', 'opencode']);
   assert.equal(output.runtime_substrate_kind, 'opencode');
-  assert.equal(output.tool_fabric_adapter_kind, 'opencode-native-mcp');
-  assert.equal(output.tool_fabric_adapter.tool_fabric_adapter_kind, 'opencode-native-mcp');
+  assert.equal(output.tool_fabric_adapter_kind, 'ambient-carrier-tools');
+  assert.equal(output.tool_fabric_adapter.tool_fabric_adapter_kind, 'ambient-carrier-tools');
   assert.equal(output.tool_fabric_adapter.runtime_substrate_kind, 'opencode');
-  assert.equal(output.tool_fabric_adapter.expected_tools.includes('agent_context_startup_sequence'), true);
-  assert.equal(output.tool_fabric_adapter.expected_tools.includes('mcp_output_show'), true);
+  assert.equal(output.carrier_implementation_kind, 'opencode');
+  assert.deepEqual(output.tool_fabric_adapter.expected_tools, []);
+  assert.equal(output.tool_fabric_adapter.expected_tools_scope, 'none');
+  assert.equal(output.tool_fabric_adapter.adapter_entrypoint, null);
   assert.equal(output.context_isolation.status, 'isolated');
   assert.equal(output.context_isolation.runtime, 'opencode');
   assert.equal(output.runtime_args.length, 2);
   assert.equal(output.runtime_args[0], '--prompt');
   assert.ok(output.runtime_args[1].includes('Use agent_context_startup_sequence first'));
+  assert.ok(output.runtime_args[1].includes('does not attach or verify Narada MCP servers'));
   assert.deepEqual(output.mcp_fabric.server_names, []);
   assert.equal(output.mcp_scope.resolution.enforcement, 'carrier_without_narada_mcp_adapter');
   assert.equal(output.mcp_scope.enforcement.status, 'enforced_by_carrier_adapter');

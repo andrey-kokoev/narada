@@ -2,6 +2,8 @@ export function codexMcpEnvVarNames() {
   return [
     'NARADA_AGENT_ID',
     'NARADA_AGENT_START_EVENT_ID',
+    'NARADA_NARS_SESSION_ID',
+    'NARADA_RUNTIME_SESSION_ID',
     'NARADA_CARRIER_SESSION_ID',
     'NARADA_SITE_ROOT',
     'NARADA_WORKSPACE_ROOT',
@@ -9,11 +11,19 @@ export function codexMcpEnvVarNames() {
   ];
 }
 
+function projectCarrierCommand(command) {
+  const value = String(command ?? '').trim();
+  if (/^(?:node|node\.exe|node\.cmd)$/i.test(value) || /[\\/]node\.exe$/i.test(value)) {
+    return process.execPath;
+  }
+  return command;
+}
+
 export function projectFabricForCodex(fabric) {
   const envVars = codexMcpEnvVarNames();
   return Object.entries(fabric.servers).map(([name, server]) => ({
     name,
-    command: server.command,
+    command: projectCarrierCommand(server.command),
     args: server.args,
     env_vars: mergeUnique([...(server.env_vars ?? []), ...envVars]),
     ...(server.startup_timeout_sec ? { startup_timeout_sec: server.startup_timeout_sec } : {}),
@@ -26,7 +36,7 @@ export function projectFabricForAgentTui(fabric, envValues) {
     const tools = agentTuiToolNames(server);
     if (tools.length === 0) continue;
     mcpServers[name] = {
-      command: server.command,
+      command: projectCarrierCommand(server.command),
       args: server.args,
       ...(server.target_site_root ? { target_site_root: server.target_site_root } : {}),
       env: {
@@ -43,7 +53,7 @@ export function projectFabricForClaudeCode(fabric, envValues) {
   const mcpServers = {};
   for (const [name, server] of Object.entries(fabric.servers)) {
     mcpServers[name] = {
-      command: server.command,
+      command: projectCarrierCommand(server.command),
       args: server.args,
       env: {
         ...projectServerEnvironment(server),

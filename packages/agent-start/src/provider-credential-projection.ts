@@ -1,7 +1,17 @@
 import { runGovernedCommandSync } from '@narada2/process-launch-posture';
+import {
+  providerRuntimeEnvironment,
+  redactProviderRuntimeBinding,
+  resolveProviderRuntimeBinding,
+} from '@narada2/carrier-provider-contract';
+import {
+  NARADA_AGENT_RUNTIME_SERVER_KIND,
+  operatorSurfaceKindsForRuntimeHost,
+} from '@narada2/carrier-runtime-contract/carrier-runtime-selection';
 
 export const PROVIDER_SECRET_STORE_MODE_ENV = 'NARADA_PROVIDER_SECRET_STORE';
 export const SECRET_MANAGEMENT_LOOKUP_TIMEOUT_MS = 5000;
+const NARS_OPERATOR_SURFACE_KINDS = operatorSurfaceKindsForRuntimeHost(NARADA_AGENT_RUNTIME_SERVER_KIND);
 export const SECRET_MANAGEMENT_LOOKUP_SCRIPT = `
 $ErrorActionPreference = 'SilentlyContinue'
 $name = [Environment]::GetEnvironmentVariable('NARADA_SECRET_LOOKUP_NAME', 'Process')
@@ -193,24 +203,24 @@ export function intelligenceProviderEnvironmentProjection(providerResolution, {
     ?? providerResolution.default_thinking
     ?? metadata.default_thinking
     ?? 'medium';
-  const env = {
-    NARADA_INTELLIGENCE_PROVIDER: provider,
-    NARADA_AI_BASE_URL: baseUrl,
-    NARADA_AI_MODEL: model,
-    NARADA_AI_THINKING: thinking,
+  const runtimeBinding = resolveProviderRuntimeBinding(provider, {
+    metadata: metadataByProvider,
+    env: {},
+    overrides: {
+      apiKey: credential.value || null,
+      baseUrl,
+      model,
+      thinking,
+    },
+    // Agent-start emits the authoritative structured credential refusal below.
+    // Runtime entry points retain the hard missing-credential guard.
+    requireCredential: false,
+  });
+  return {
+    env: providerRuntimeEnvironment(runtimeBinding),
+    credential: redactProviderCredentialResolution(credential),
+    runtime_binding: redactProviderRuntimeBinding(runtimeBinding),
   };
-  const primaryBaseUrlEnv = metadata.base_url_env_names?.[0];
-  if (primaryBaseUrlEnv) {
-    env[primaryBaseUrlEnv] = baseUrl;
-  }
-  const primaryModelEnv = metadata.model_env_names?.[0];
-  if (primaryModelEnv) {
-    env[primaryModelEnv] = model;
-  }
-  if (credential.primary_credential_env) {
-    env[credential.primary_credential_env] = credential.value ?? '';
-  }
-  return { env, credential: redactProviderCredentialResolution(credential) };
 }
 
 export function intelligenceProviderEnvironment(providerResolution, options = {}) {
@@ -224,7 +234,7 @@ export function mcpProviderCredentialEnvironment({
   processEnv = process.env,
   codexSubscriptionPreflight,
 }) {
-  if (carrier !== 'agent-cli' && carrier !== 'agent-web-ui' && carrier !== agentTuiCarrier && carrier !== 'claude-code') return {};
+  if (!NARS_OPERATOR_SURFACE_KINDS.includes(carrier) && carrier !== agentTuiCarrier && carrier !== 'claude-code') return {};
   const env = {};
   for (const [provider, metadata] of Object.entries(metadataByProvider)) {
     const requirement = providerCredentialRequirement(provider, metadata);

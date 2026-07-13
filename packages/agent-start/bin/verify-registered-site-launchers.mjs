@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildAgentIdentityRefV2, resolveAgentIdentityRef } from '@narada2/agent-identity';
+import { carrierLaunchMatrixRow } from '@narada2/carrier-runtime-contract/carrier-runtime-selection';
 import { runGovernedCommand } from '@narada2/process-launch-posture';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -259,13 +260,11 @@ function parseJsonOutput(output) {
   return JSON.parse(text.slice(start, end + 1));
 }
 
-function expectedAdapter(carrier, runtime) {
-  if (carrier === 'codex') return 'codex-native-mcp';
-  if (carrier === 'agent-cli' || carrier === 'agent-web-ui') return 'narada-agent-runtime-server-mcp-client';
-  if (carrier === 'agent-tui') return 'narada-agent-tui-terminal-interactive-loop';
-  if (carrier === 'pi') return 'pi-extension-mcp-bridge';
-  if (carrier === 'claude-code') return 'claude-code-native-mcp';
-  return null;
+function expectedAdapter(carrier) {
+  const matrixRow = carrierLaunchMatrixRow(carrier);
+  return matrixRow?.expected_tools_scope === 'sentinel'
+    ? matrixRow.tool_fabric_adapter_kind
+    : null;
 }
 
 function validateLaunch(record, carrier, runtime, launch) {
@@ -273,7 +272,7 @@ function validateLaunch(record, carrier, runtime, launch) {
   const expectedSiteRoot = record.SiteRoot;
   const expectedWorkspaceRoot = record.WorkspaceRoot;
   const env = launch.required_environment ?? {};
-  const adapter = expectedAdapter(carrier, runtime);
+  const adapter = expectedAdapter(carrier);
 
   if (launch.status === 'refused') failures.push({ reason: 'launch_refused', refusals: launch.refusals ?? launch.reason ?? null });
   if (launch.identity !== record.Agent) failures.push({ reason: 'identity_mismatch', expected: record.Agent, actual: launch.identity });

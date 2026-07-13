@@ -6,6 +6,7 @@ const HIDDEN_POSTURES = new Set([
   'mcp_server',
   'governed_command_execution',
   'operator_projection_host',
+  'agent_runtime_server',
   'test_child',
 ]);
 

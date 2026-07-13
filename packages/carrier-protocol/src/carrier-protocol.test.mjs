@@ -414,7 +414,7 @@ assert.deepEqual(classifyCarrierControlRequest({
 }), {
   request_id: 'control_1',
   method: 'carrier.input.deliver',
-  concurrent_allowed: false,
+  concurrent_allowed: true,
   allowed_when_closed: false,
   native_control_input: true,
   observer_action: null,
@@ -1362,3 +1362,19 @@ assert.match(thrownMessage(() => createSessionEvent({ ...sessionBase, event_kind
 
 assert.equal(isTerminalTurnState('completed'), true);
 assert.equal(isTerminalTurnState('active'), false);
+
+const agentDirectiveInput = createInputEvent({
+  event_id: 'input_agent_directive_1',
+  source_kind: 'agent',
+  source_id: 'sender.agent',
+  transport: 'carrier_server_api',
+  delivery_mode: 'admit_after_active_turn',
+  content: 'continue the bounded investigation',
+  authority_ref: 'nars-session-mcp:test-site:session_test:1',
+  directive_id: 'dir_agent_directive_1',
+  metadata: {
+    agent_control_input: true,
+    directive_provenance: { kind: 'agent_directive_surface' },
+  },
+});
+assert.deepEqual(validateInputEvent(agentDirectiveInput), []);

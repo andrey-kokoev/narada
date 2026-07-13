@@ -464,7 +464,7 @@ export function classifyCarrierControlRequest(request = {}) {
     error: null,
   };
   if (nativeControlInput || method === 'carrier.input.deliver') {
-    return { ...base, method_kind: 'carrier_input_deliver' };
+    return { ...base, method_kind: 'carrier_input_deliver', concurrent_allowed: true };
   }
   if (method === 'session.status') return { ...base, method_kind: 'session_status', allowed_when_closed: true };
   if (method === 'session.health') return { ...base, method_kind: 'session_health', allowed_when_closed: true, concurrent_allowed: true };
@@ -932,9 +932,13 @@ export function validateInputEvent(event) {
   if (event.source_kind === 'external' && !event.metadata?.admitted_by) errors.push('external_source_requires_admitted_by_metadata');
   if (event.directive_id !== null && event.directive_id !== undefined) {
     if (typeof event.directive_id !== 'string' || event.directive_id.length === 0) errors.push('invalid_directive_id');
+    const directiveProvenanceKind = event.metadata?.directive_provenance?.kind;
     const explicitOperatorDirective = event.source_kind === 'operator'
-      && event.metadata?.directive_provenance?.kind === 'explicit_operator_directive_surface';
-    if (event.source_kind !== 'system' && !explicitOperatorDirective) {
+      && directiveProvenanceKind === 'explicit_operator_directive_surface';
+    const explicitAgentDirective = event.source_kind === 'agent'
+      && event.metadata?.agent_control_input === true
+      && directiveProvenanceKind === 'agent_directive_surface';
+    if (event.source_kind !== 'system' && !explicitOperatorDirective && !explicitAgentDirective) {
       errors.push('directive_id_incompatible_with_source');
     }
     if (!event.authority_ref && !event.metadata?.directive_provenance) {

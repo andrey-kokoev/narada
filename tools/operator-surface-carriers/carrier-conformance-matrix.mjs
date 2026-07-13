@@ -2,6 +2,11 @@
 import { existsSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { parseLaunchRegistry } from '../mcp-fabric/site-fabric-audit.mjs';
+import {
+  ADMITTED_LAUNCH_SELECTION_KINDS,
+  CARRIER_LAUNCH_MATRIX_CONTRACT_SCHEMA,
+  carrierLaunchMatrixRow,
+} from '../../packages/carrier-runtime-contract/src/carrier-runtime-selection.mjs';
 
 const DEFAULT_LAUNCH_REGISTRY = 'C:/Users/Andrey/Narada/config/launch/agents.psd1';
 
@@ -13,79 +18,30 @@ const EVIDENCE_LEVELS = Object.freeze({
   UNVERIFIED: 'unverified',
 });
 
-const CARRIER_ROWS = Object.freeze([
-  {
-    carrier: 'agent-cli',
+const CANONICAL_CARRIER_ROWS = Object.freeze(ADMITTED_LAUNCH_SELECTION_KINDS.map((launchSelectionKind) => {
+  const matrixRow = carrierLaunchMatrixRow(launchSelectionKind);
+  if (!matrixRow) throw new Error(`carrier_launch_matrix_row_missing:${launchSelectionKind}`);
+  return Object.freeze({
+    carrier: matrixRow.launch_selection_kind,
+    launch_selection_kind: matrixRow.launch_selection_kind,
+    operator_surface_kind: matrixRow.operator_surface_kind,
+    carrier_implementation_kind: matrixRow.carrier_implementation_kind,
+    runtime_host_kind: matrixRow.runtime_host_kind,
+    runtime_substrate_kind: matrixRow.runtime_substrate_kind,
+    tool_fabric_adapter_kind: matrixRow.tool_fabric_adapter_kind,
+    tool_fabric_source: matrixRow.tool_fabric_source,
+    adapter_entrypoint: matrixRow.adapter_entrypoint,
+    projection_capabilities: [...matrixRow.projection_capabilities],
+    expected_tools: [...matrixRow.expected_tools],
     launch_supported: true,
-    default_intelligence_auth_path: 'codex-subscription through local Codex MCP server unless another admitted provider is selected',
-    mcp_fabric_source: 'tools/mcp-fabric/loadSiteMcpFabric at runtime',
-    native_shell_posture: 'not exposed as native carrier shell in Agent Runtime Server mode; shell-like effects must be MCP tools and then admitted',
-    mutating_call_handling: 'code-mediated Carrier Action Admission; read-only executes, mutating/unknown/credential-bearing routes or refuses',
-    startup_sequence_availability: 'MCP tool if present in site fabric',
-    evidence_level: EVIDENCE_LEVELS.CODE_ENFORCED,
-    known_gaps: [
-      'Full owner-side canonical materialization remains outside this carrier boundary slice.',
-    ],
-  },
-  {
-    carrier: 'codex',
-    launch_supported: true,
-    default_intelligence_auth_path: 'Codex subscription/auth handled by Codex CLI',
-    mcp_fabric_source: 'Narada launcher projects Site MCP fabric into Codex -c mcp_servers.* arguments',
-    native_shell_posture: 'launcher passes --disable shell_tool unless break-glass EnableNativeShell is set',
-    mutating_call_handling: 'configuration limits available Narada MCP surfaces; Codex itself is not a Narada code-mediated admission loop',
-    startup_sequence_availability: 'MCP tool if present in projected fabric',
-    evidence_level: EVIDENCE_LEVELS.CONFIG_ENFORCED,
-    known_gaps: [
-      'Tool execution provenance is carrier-native unless routed through Narada-owned MCP/admission surfaces.',
-      'Codex approval settings are launcher configuration, not Agent Runtime Server code mediation.',
-    ],
-  },
-  {
-    carrier: 'pi',
-    launch_supported: true,
-    coherent_launch_supported: true,
-    support_posture: 'narada_owned_extension_bridge',
-    default_intelligence_auth_path: 'openai-codex provider/model via Pi CLI by launcher default',
-    mcp_fabric_source: 'Narada-owned Pi extension loads Site MCP tools declared in .ai/mcp',
-    native_shell_posture: 'depends on Pi runtime; Narada launch attaches only Site-local MCP bridge and governed prompt posture',
-    mutating_call_handling: 'configuration/adapter-mediated through Site MCP surfaces; not Agent Runtime Server code-mediated',
-    startup_sequence_availability: 'MCP tool through Narada Pi extension when bridge loads correctly',
-    evidence_level: EVIDENCE_LEVELS.CONFIG_ENFORCED,
-    known_gaps: [
-      'Pi native carrier behavior is not universally intercepted by Agent Runtime Server; only Narada MCP bridge calls are governed by the projected Site surfaces.',
-      'Bridge startup should be smoke-tested per installed Pi version.',
-    ],
-  },
-  {
-    carrier: 'claude-code',
-    launch_supported: true,
-    default_intelligence_auth_path: 'Claude Code local auth/runtime',
-    mcp_fabric_source: 'Narada launcher passes strict MCP config generated from Site fabric',
-    native_shell_posture: 'launcher disallows Bash/Edit/Write/MultiEdit/NotebookEdit/WebFetch/WebSearch',
-    mutating_call_handling: 'Claude Code effect mediation exists for explicit effect requests; native MCP calls are config-mediated unless adapter-mediated',
-    startup_sequence_availability: 'MCP tool if present in generated strict MCP config',
-    evidence_level: EVIDENCE_LEVELS.CONFIG_ENFORCED,
-    known_gaps: [
-      'Not all Claude Code native tool behavior is Narada code-mediated.',
-      'Effect mediation is explicit artifact flow, not universal interception of all carrier actions.',
-    ],
-  },
-  {
-    carrier: 'opencode',
-    launch_supported: true,
-    default_intelligence_auth_path: 'No Narada intelligence provider; OpenCode manages its own provider/config',
-    mcp_fabric_source: 'None — excluded from MCP fabric loading; uses ambient-carrier-tools with no_narada_mcp_claim; MCP servers loaded from ~/.config/opencode/opencode.jsonc',
-    native_shell_posture: 'Not enforced by Narada; OpenCode manages its own tool execution',
-    mutating_call_handling: 'No Narada code-mediated admission loop; ambient-carrier-tools pattern only',
-    startup_sequence_availability: 'Not available — no MCP fabric loaded; OpenCode reads AGENTS.md for startup instructions',
-    evidence_level: EVIDENCE_LEVELS.CODE_ENFORCED,
-    known_gaps: [
-      'OpenCode is a pass-through carrier; Narada does not inject MCP tools.',
-      'Shell execution provenance is carrier-native, not Narada code-mediated.',
-    ],
-  },
-]);
+    ...matrixRow.conformance,
+    known_gaps: Object.freeze([...matrixRow.conformance.known_gaps]),
+    states: [...matrixRow.states],
+    matrix_states: [...matrixRow.states],
+    expected_tools_scope: matrixRow.expected_tools_scope,
+    ...(matrixRow.admission_basis ? { admission_basis: matrixRow.admission_basis } : {}),
+  });
+}));
 
 function currentLaunchRegistrySummary(launchRegistryPath = DEFAULT_LAUNCH_REGISTRY) {
   if (!existsSync(launchRegistryPath)) {
@@ -123,7 +79,7 @@ function buildCarrierRows(launchRegistrySummary) {
     : (codexNativeShellEnabledCount > 0
       ? `native_shell_enabled_by_launch_registry_for_${codexNativeShellEnabledCount}_of_${codexCount}_codex_agents`
       : `native_shell_disabled_by_launch_registry_for_${codexCount}_codex_agents`);
-  return CARRIER_ROWS.map((row) => {
+  return CANONICAL_CARRIER_ROWS.map((row) => {
     if (row.carrier !== 'codex') return { ...row, known_gaps: [...row.known_gaps] };
     return {
       ...row,
@@ -145,6 +101,7 @@ function buildCarrierConformanceMatrix({ launchRegistryPath = DEFAULT_LAUNCH_REG
   return {
     schema: 'narada.carrier_conformance_matrix.v1',
     generated_at: new Date().toISOString(),
+    carrier_launch_matrix_schema: CARRIER_LAUNCH_MATRIX_CONTRACT_SCHEMA,
     launch_registry_summary: launchRegistrySummary,
     evidence_levels: {
       code_enforced: 'Narada code mediates execution and can block, route, or refuse the requested action.',

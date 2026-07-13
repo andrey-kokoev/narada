@@ -6,6 +6,12 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { runHiddenPostureCommandSync } from '@narada2/process-launch-posture';
+import {
+  ADMITTED_CARRIER_KINDS,
+  carrierLaunchMatrixRow,
+  defaultRuntimeForCarrier,
+  NARADA_AGENT_RUNTIME_SERVER_KIND,
+} from '@narada2/carrier-runtime-contract/carrier-runtime-selection';
 
 const require = createRequire(import.meta.url);
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -14,11 +20,11 @@ const naradaProperRoot = resolve(packageRoot, '..', '..');
 const fixtureRegistryPath = join(__dirname, 'fixtures', 'launch-registry.psd1');
 const packagedLauncherPath = join(naradaProperRoot, 'packages', 'agent-start', 'src', 'narada-agent-start.ts');
 const tsxLoaderPath = pathToFileURL(require.resolve('tsx')).href;
-const admittedCarrierMatrix = Object.freeze(['agent-cli', 'agent-tui', 'codex', 'opencode']);
+const admittedCarrierMatrix = Object.freeze([...ADMITTED_CARRIER_KINDS]);
 const requiredFields = Object.freeze(['Agent', 'NaradaRoot', 'WorkspaceRoot', 'SiteRoot', 'Launcher', 'Carrier', 'Runtime']);
 const pwshAvailable = spawnHiddenSync('pwsh', ['-NoProfile', '-Command', '$PSVersionTable.PSVersion.Major'], { encoding: 'utf8' }).status === 0;
 const nonNaradaProperSites = Object.freeze([
-  'narada-andrey',
+  'andrey-user',
   'narada-staccato',
   'narada-revolution',
   'narada-timour-marketing-agent',
@@ -104,7 +110,8 @@ function assertLauncherFileShape(records, sourceLabel) {
 
 function dryRunEnv(carrier) {
   if (carrier === 'codex') return { NARADA_CODEX_CLI_SCRIPT: packagedLauncherPath };
-  if (carrier === 'agent-cli') return {
+  if (carrierLaunchMatrixRow(carrier)?.runtime_host_kind === NARADA_AGENT_RUNTIME_SERVER_KIND) return {
+    NARADA_INTELLIGENCE_PROVIDER: 'kimi-code-api',
     NARADA_PROVIDER_SECRET_STORE: 'disabled',
     NARADA_CODEX_SUBSCRIPTION_PREFLIGHT: 'defer',
     KIMI_CODE_API_KEY: 'test-key',
@@ -120,10 +127,21 @@ function dryRunEnv(carrier) {
   return {};
 }
 
+function parseJsonOutput(output) {
+  const text = String(output ?? '').trim();
+  const start = text.indexOf('{');
+  const end = text.lastIndexOf('}');
+  assert.ok(start >= 0 && end >= start, `json object missing from output: ${text.slice(0, 500)}`);
+  return JSON.parse(text.slice(start, end + 1));
+}
+
 function assertCarrierMatrixDryRuns(records, sourceLabel) {
   for (const record of records) {
     for (const carrier of admittedCarrierMatrix) {
-      const runtime = carrier === 'agent-cli' ? 'narada-agent-runtime-server' : carrier;
+      const matrixRow = carrierLaunchMatrixRow(carrier);
+      assert.ok(matrixRow, `${sourceLabel}:${record.Agent}:${carrier}: carrier matrix row is required`);
+      const runtime = defaultRuntimeForCarrier(carrier);
+      assert.equal(runtime, matrixRow.runtime_substrate_kind);
       const result = spawnHiddenSync(process.execPath, [
         '--import',
         tsxLoaderPath,
@@ -145,6 +163,30 @@ function assertCarrierMatrixDryRuns(records, sourceLabel) {
         env: { ...process.env, ...dryRunEnv(carrier) },
       });
       assert.equal(result.status, 0, `${sourceLabel}:${record.Agent}:${carrier}/${runtime}: ${result.stderr || result.stdout}`);
+      const launch = parseJsonOutput(result.stdout);
+      assert.equal(launch.status, 'dry_run', `${sourceLabel}:${record.Agent}:${carrier}/${runtime}: ${result.stdout}`);
+      assert.equal(launch.carrier_kind, matrixRow.launch_selection_kind);
+      assert.equal(launch.launch_selection_kind, matrixRow.launch_selection_kind);
+      assert.equal(launch.operator_surface_kind, matrixRow.operator_surface_kind);
+      assert.equal(launch.carrier_implementation_kind, matrixRow.carrier_implementation_kind);
+      assert.equal(launch.runtime_substrate_kind, matrixRow.runtime_substrate_kind);
+      assert.equal(launch.runtime_host_kind, matrixRow.runtime_host_kind);
+      assert.equal(launch.runtime_resolution.status, 'accepted');
+      assert.equal(launch.carrier_session.record.launch_selection_kind, matrixRow.launch_selection_kind);
+      assert.equal(launch.carrier_session.record.launch_operator_surface_kind, matrixRow.operator_surface_kind);
+      assert.equal(launch.carrier_session.record.operator_surface_kind, matrixRow.operator_surface_kind);
+      assert.equal(launch.tool_fabric_adapter_kind, matrixRow.tool_fabric_adapter_kind);
+      assert.equal(launch.tool_fabric_adapter.runtime_substrate_kind, matrixRow.runtime_substrate_kind);
+      assert.equal(launch.tool_fabric_adapter.runtime_host_kind, matrixRow.runtime_host_kind);
+      assert.equal(launch.tool_fabric_adapter.launch_selection_kind, matrixRow.launch_selection_kind);
+      assert.equal(launch.tool_fabric_adapter.operator_surface_kind, matrixRow.operator_surface_kind);
+      assert.equal(launch.tool_fabric_adapter.carrier_implementation_kind, matrixRow.carrier_implementation_kind);
+      assert.equal(launch.tool_fabric_adapter.tool_fabric_source, matrixRow.tool_fabric_source);
+      assert.equal(launch.tool_fabric_adapter.adapter_entrypoint, matrixRow.adapter_entrypoint);
+      assert.deepEqual(launch.tool_fabric_adapter.projection_capabilities, matrixRow.projection_capabilities);
+      assert.equal(launch.tool_fabric_adapter.expected_tools_scope, matrixRow.expected_tools_scope);
+      assert.deepEqual(launch.tool_fabric_adapter.expected_tools, matrixRow.expected_tools);
+      assert.deepEqual(launch.tool_fabric_adapter.states, matrixRow.states);
     }
   }
 }
@@ -154,7 +196,8 @@ test('package fixture encodes the launcher registry boundary', () => {
   assertRegistryContract(records, 'fixture');
   assertLauncherFileShape(records, 'fixture');
   const deterministicCarrierRecords = records.filter((record) => normalizePath(record.NaradaRoot) === normalizePath(naradaProperRoot));
-  assertCarrierMatrixDryRuns(deterministicCarrierRecords, 'fixture');
+  assert.equal(deterministicCarrierRecords.length > 0, true, 'fixture: deterministic Narada proper record is required for the carrier matrix');
+  assertCarrierMatrixDryRuns([deterministicCarrierRecords[0]], 'fixture');
   assert.equal(existsSync(packagedLauncherPath), true, 'packaged TS launcher must exist in Narada proper');
 });
 

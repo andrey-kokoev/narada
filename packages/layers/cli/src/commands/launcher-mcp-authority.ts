@@ -415,7 +415,8 @@ function normalizeAgentRecord(registry: RawLaunchRegistry, agent: RawAgentRecord
   const workspaceRoot = nonEmpty(agent.WorkspaceRoot) ?? nonEmpty(registry.WorkspaceRoot) ?? null;
   const launcher = nonEmpty(agent.Launcher) ?? nonEmpty(registry.Launcher);
   const launcherPath = nonEmpty(agent.LauncherPath) ?? nonEmpty(registry.LauncherPath)
-    ?? (launcher ? join(naradaRoot, launcher) : join(naradaRoot, 'narada-andrey.ps1'));
+    ?? (launcher ? join(naradaRoot, launcher) : '');
+  if (!launcherPath) throw new Error(`launcher_path_missing: ${agentId} in ${configPath}`);
   const operatorSurface = nonEmpty(agent.OperatorSurface) ?? nonEmpty(registry.OperatorSurface) ?? 'codex';
   const carrier = operatorSurface;
   const runtime = nonEmpty(agent.Runtime) ?? nonEmpty(registry.Runtime) ?? 'codex';

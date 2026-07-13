@@ -238,6 +238,11 @@ try {
     description: 'legacy sidecar retired; aggregate aggregate-mcp.json is authoritative.',
     mcpServers: {},
   }, null, 2)}\n`, 'utf8');
+  writeFileSync(join(retiredSidecarSite, '.ai', 'mcp', 'retired-leading-sidecar-mcp.json'), `${JSON.stringify({
+    schema: 'narada.mcp.client_config.v0',
+    description: 'Retired compatibility sidecar; aggregate aggregate-mcp.json is authoritative.',
+    mcpServers: {},
+  }, null, 2)}\n`, 'utf8');
   writeFileSync(join(retiredSidecarSite, '.narada', 'capabilities', 'mcp-surfaces.json'), `${JSON.stringify({
     schema: 'narada.site.capabilities.mcp_surfaces.v1',
     surfaces: [{ client_config: { generated_path: '.ai/mcp/aggregate-mcp.json' }, surface_id: 'aggregate.surface' }],
@@ -246,7 +251,10 @@ try {
   assert.deepEqual(mcpServerNames(retiredSidecarFabric), ['narada-aggregate']);
   assert.deepEqual(retiredSidecarFabric.registry_validation.missing, []);
   assert.deepEqual(retiredSidecarFabric.registry_validation.unexpected, []);
-  assert.deepEqual(retiredSidecarFabric.skipped, [{ file: 'retired-sidecar-mcp.json', reason: 'retired_empty_sidecar' }]);
+  assert.deepEqual(retiredSidecarFabric.skipped, [
+    { file: 'retired-leading-sidecar-mcp.json', reason: 'retired_empty_sidecar' },
+    { file: 'retired-sidecar-mcp.json', reason: 'retired_empty_sidecar' },
+  ]);
 } finally {
   rmSync(retiredSidecarSite, { recursive: true, force: true });
 }

@@ -1126,7 +1126,7 @@ function baseResult(
     defaults: {
       assistant_label: 'General assistant',
       role: 'resident',
-      operator_surface: record?.operator_surface ?? record?.carrier ?? null,
+      operator_surface: record?.operator_surface ?? null,
       runtime_host: record?.runtime ?? null,
       intelligence_provider: providerDefault(),
     },

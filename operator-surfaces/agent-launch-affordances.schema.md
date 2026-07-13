@@ -52,6 +52,16 @@ Launch carriers must prove the visible Windows Terminal carrier before mutating 
 
 Identity must not be inferred from terminal title, process order, or foreground focus.
 
+## Carrier Selection
+
+`carrier_kind` is the launch-selection kind from the canonical
+`carrier-launch-matrix.json` contract. It may be omitted only when the
+selected `runtime_substrate_kind` maps to exactly one launch-selection row.
+When a runtime is shared by multiple rows, such as
+`narada-agent-runtime-server` for `agent-cli` and `agent-web-ui`, the
+affordance must declare `carrier_kind`; the PC projection must refuse an
+ambiguous record rather than silently selecting a default carrier.
+
 ## Not Admitted
 
 - Direct substrate shortcut execution.

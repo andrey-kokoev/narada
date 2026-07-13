@@ -1,0 +1,191 @@
+{
+  "schema": "narada.carrier_launch_matrix.v3",
+  "rows": [
+    {
+      "launch_selection_kind": "agent-cli",
+      "operator_surface_kind": "agent-cli",
+      "carrier_implementation_kind": "narada-agent-runtime-server",
+      "runtime_host_kind": "narada-agent-runtime-server",
+      "runtime_substrate_kind": "narada-agent-runtime-server",
+      "tool_fabric_adapter_kind": "narada-agent-runtime-server-mcp-client",
+      "tool_fabric_source": ".ai/mcp",
+      "adapter_entrypoint": "package:@narada2/agent-runtime-server#narada-agent-runtime-server",
+      "projection_capabilities": ["nars_attach"],
+      "conformance": {
+        "evidence_level": "code_enforced",
+        "default_intelligence_auth_path": "codex-subscription through local Codex MCP server unless another admitted provider is selected",
+        "mcp_fabric_source": "tools/mcp-fabric/loadSiteMcpFabric at runtime",
+        "native_shell_posture": "not exposed as native carrier shell in Agent Runtime Server mode; shell-like effects must be MCP tools and then admitted",
+        "mutating_call_handling": "code-mediated Carrier Action Admission; read-only executes, mutating/unknown/credential-bearing routes or refuses",
+        "startup_sequence_availability": "MCP tool if present in site fabric",
+        "known_gaps": ["Full owner-side canonical materialization remains outside this carrier boundary slice."]
+      },
+      "expected_tools": ["agent_context_startup_sequence", "mcp_output_show", "task_lifecycle_next"],
+      "expected_tools_scope": "sentinel",
+      "states": ["runtime_known", "adapter_selected", "source_declared", "launch_ready"]
+    },
+    {
+      "launch_selection_kind": "agent-web-ui",
+      "operator_surface_kind": "agent-web-ui",
+      "carrier_implementation_kind": "narada-agent-runtime-server",
+      "runtime_host_kind": "narada-agent-runtime-server",
+      "runtime_substrate_kind": "narada-agent-runtime-server",
+      "tool_fabric_adapter_kind": "narada-agent-runtime-server-mcp-client",
+      "tool_fabric_source": ".ai/mcp",
+      "adapter_entrypoint": "package:@narada2/agent-runtime-server#narada-agent-runtime-server",
+      "projection_capabilities": ["nars_attach"],
+      "conformance": {
+        "evidence_level": "code_enforced",
+        "default_intelligence_auth_path": "codex-subscription through local Codex MCP server unless another admitted provider is selected",
+        "mcp_fabric_source": "tools/mcp-fabric/loadSiteMcpFabric at runtime",
+        "native_shell_posture": "not exposed as native carrier shell in Agent Runtime Server mode; shell-like effects must be MCP tools and then admitted",
+        "mutating_call_handling": "code-mediated Carrier Action Admission; read-only executes, mutating/unknown/credential-bearing routes or refuses",
+        "startup_sequence_availability": "MCP tool if present in site fabric; the Web UI projection is covered by separate live acceptance",
+        "known_gaps": ["Full owner-side canonical materialization remains outside this carrier boundary slice."]
+      },
+      "expected_tools": ["agent_context_startup_sequence", "mcp_output_show", "task_lifecycle_next"],
+      "expected_tools_scope": "sentinel",
+      "states": ["runtime_known", "adapter_selected", "source_declared", "launch_ready"]
+    },
+    {
+      "launch_selection_kind": "agent-tui",
+      "operator_surface_kind": "agent-tui",
+      "carrier_implementation_kind": "agent-tui",
+      "runtime_host_kind": "agent-tui",
+      "runtime_substrate_kind": "agent-tui",
+      "tool_fabric_adapter_kind": "narada-agent-tui-terminal-interactive-loop",
+      "tool_fabric_source": "control_jsonl_session_jsonl",
+      "adapter_entrypoint": "package:@narada2/agent-tui#narada-agent-tui",
+      "projection_capabilities": ["nars_attach"],
+      "conformance": {
+        "evidence_level": "startup_enforced",
+        "default_intelligence_auth_path": "Provider selected by the agent-tui runtime configuration",
+        "mcp_fabric_source": "Generated session MCP config consumed by agent-tui",
+        "native_shell_posture": "The terminal runtime owns the interactive loop; Narada does not claim native shell mediation",
+        "mutating_call_handling": "MCP surface policy applies to projected MCP calls; carrier-native terminal actions remain outside this boundary",
+        "startup_sequence_availability": "MCP tool if present in the generated session MCP config",
+        "known_gaps": ["Live terminal-loop acceptance remains environment-dependent."]
+      },
+      "expected_tools": ["agent_context_startup_sequence", "mcp_output_show", "task_lifecycle_next"],
+      "expected_tools_scope": "sentinel",
+      "states": ["runtime_known", "adapter_selected", "terminal_loop_carrier", "launch_ready"]
+    },
+    {
+      "launch_selection_kind": "codex",
+      "operator_surface_kind": "codex",
+      "carrier_implementation_kind": "codex",
+      "runtime_host_kind": "codex",
+      "runtime_substrate_kind": "codex",
+      "tool_fabric_adapter_kind": "codex-native-mcp",
+      "tool_fabric_source": ".ai/mcp",
+      "adapter_entrypoint": null,
+      "projection_capabilities": [],
+      "conformance": {
+        "evidence_level": "config_enforced",
+        "default_intelligence_auth_path": "Codex subscription/auth handled by Codex CLI",
+        "mcp_fabric_source": "Narada launcher projects Site MCP fabric into Codex mcp_servers arguments",
+        "native_shell_posture": "Launcher passes --disable shell_tool unless break-glass EnableNativeShell is set",
+        "mutating_call_handling": "Configuration limits available Narada MCP surfaces; Codex itself is not a Narada code-mediated admission loop",
+        "startup_sequence_availability": "MCP tool if present in the projected fabric",
+        "known_gaps": ["Tool execution provenance is carrier-native unless routed through Narada-owned MCP/admission surfaces.", "Codex approval settings are launcher configuration, not Agent Runtime Server code mediation."]
+      },
+      "expected_tools": ["agent_context_startup_sequence", "mcp_output_show", "task_lifecycle_next"],
+      "expected_tools_scope": "sentinel",
+      "states": ["runtime_known", "adapter_selected", "source_declared", "launch_ready"]
+    },
+    {
+      "launch_selection_kind": "kimi",
+      "operator_surface_kind": "kimi",
+      "carrier_implementation_kind": "kimi",
+      "runtime_host_kind": "kimi",
+      "runtime_substrate_kind": "kimi",
+      "tool_fabric_adapter_kind": "ambient-carrier-tools",
+      "tool_fabric_source": "substrate-native",
+      "adapter_entrypoint": null,
+      "projection_capabilities": [],
+      "conformance": {
+        "evidence_level": "unverified",
+        "default_intelligence_auth_path": "Kimi native carrier/provider authentication",
+        "mcp_fabric_source": "No Narada MCP adapter is claimed; native carrier tools remain carrier-owned",
+        "native_shell_posture": "Not enforced by Narada; Kimi manages its own tool execution",
+        "mutating_call_handling": "No Narada code-mediated admission loop is claimed",
+        "startup_sequence_availability": "No Narada startup MCP tool is claimed",
+        "known_gaps": ["Kimi native carrier integration has not been verified through a Narada adapter."]
+      },
+      "expected_tools": [],
+      "expected_tools_scope": "none",
+      "states": ["runtime_known", "adapter_selected", "no_narada_mcp_claim"]
+    },
+    {
+      "launch_selection_kind": "pi",
+      "operator_surface_kind": "pi",
+      "carrier_implementation_kind": "pi",
+      "runtime_host_kind": "pi",
+      "runtime_substrate_kind": "pi",
+      "tool_fabric_adapter_kind": "pi-extension-mcp-bridge",
+      "tool_fabric_source": ".ai/mcp",
+      "adapter_entrypoint": ".pi/extensions/narada-mcp-bridge.ts",
+      "projection_capabilities": [],
+      "conformance": {
+        "evidence_level": "config_enforced",
+        "default_intelligence_auth_path": "openai-codex provider/model via Pi CLI by launcher default",
+        "mcp_fabric_source": "Narada-owned Pi extension loads Site MCP tools declared in .ai/mcp",
+        "native_shell_posture": "Depends on Pi runtime; Narada launch attaches only the Site-local MCP bridge and governed prompt posture",
+        "mutating_call_handling": "Configuration/adapter-mediated through Site MCP surfaces; not Agent Runtime Server code-mediated",
+        "startup_sequence_availability": "MCP tool through the Narada Pi extension when the bridge loads correctly",
+        "known_gaps": ["Pi native carrier behavior is not universally intercepted by Agent Runtime Server; only Narada MCP bridge calls are governed by the projected Site surfaces.", "Bridge startup should be smoke-tested per installed Pi version."]
+      },
+      "expected_tools": ["agent_context_startup_sequence", "mcp_output_show", "task_lifecycle_next", "task_lifecycle_un_defer"],
+      "expected_tools_scope": "sentinel",
+      "states": ["runtime_known", "adapter_selected", "source_declared", "narada_owned_extension_bridge", "launch_ready"],
+      "admission_basis": "Narada-owned Pi extension bridges Site-local .ai/mcp tools into Pi; MCP servers remain Site-local authority surfaces."
+    },
+    {
+      "launch_selection_kind": "claude-code",
+      "operator_surface_kind": "claude-code",
+      "carrier_implementation_kind": "claude-code",
+      "runtime_host_kind": "claude-code",
+      "runtime_substrate_kind": "claude-code",
+      "tool_fabric_adapter_kind": "claude-code-native-mcp",
+      "tool_fabric_source": ".ai/mcp",
+      "adapter_entrypoint": "claude --mcp-config",
+      "projection_capabilities": [],
+      "conformance": {
+        "evidence_level": "config_enforced",
+        "default_intelligence_auth_path": "Claude Code local auth/runtime",
+        "mcp_fabric_source": "Narada launcher passes strict MCP config generated from Site fabric",
+        "native_shell_posture": "Launcher disallows Bash/Edit/Write/MultiEdit/NotebookEdit/WebFetch/WebSearch",
+        "mutating_call_handling": "Claude Code effect mediation exists for explicit effect requests; native MCP calls are config-mediated unless adapter-mediated",
+        "startup_sequence_availability": "MCP tool if present in generated strict MCP config",
+        "known_gaps": ["Not all Claude Code native tool behavior is Narada code-mediated.", "Effect mediation is explicit artifact flow, not universal interception of all carrier actions."]
+      },
+      "expected_tools": ["agent_context_startup_sequence", "mcp_output_show", "task_lifecycle_next", "task_lifecycle_un_defer"],
+      "expected_tools_scope": "sentinel",
+      "states": ["runtime_known", "adapter_selected", "source_declared", "native_mcp_config_required", "launch_ready"]
+    },
+    {
+      "launch_selection_kind": "opencode",
+      "operator_surface_kind": "opencode",
+      "carrier_implementation_kind": "opencode",
+      "runtime_host_kind": "opencode",
+      "runtime_substrate_kind": "opencode",
+      "tool_fabric_adapter_kind": "ambient-carrier-tools",
+      "tool_fabric_source": "substrate-native",
+      "adapter_entrypoint": null,
+      "projection_capabilities": [],
+      "conformance": {
+        "evidence_level": "documented_advisory",
+        "default_intelligence_auth_path": "No Narada intelligence provider; OpenCode manages its own provider/config",
+        "mcp_fabric_source": "None; excluded from MCP fabric loading and uses ambient carrier tools",
+        "native_shell_posture": "Not enforced by Narada; OpenCode manages its own tool execution",
+        "mutating_call_handling": "No Narada code-mediated admission loop is claimed",
+        "startup_sequence_availability": "Not available as a Narada MCP tool; the launcher injects a startup prompt",
+        "known_gaps": ["OpenCode is a pass-through carrier; Narada does not inject MCP tools.", "Shell execution provenance is carrier-native, not Narada code-mediated."]
+      },
+      "expected_tools": [],
+      "expected_tools_scope": "none",
+      "states": ["runtime_known", "adapter_selected", "no_narada_mcp_claim", "startup_prompt_injected"],
+      "admission_basis": "The current OpenCode launcher injects a startup prompt but does not inject or verify a Narada MCP configuration. Native MCP attachment remains a separate integration milestone."
+    }
+  ]
+}

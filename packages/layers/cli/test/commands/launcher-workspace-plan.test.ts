@@ -557,6 +557,50 @@ describe('launcher workspace planning', () => {
     }
   });
 
+  it('launches NARS runtime starts through a visible terminal when explicitly requested', async () => {
+    const registryPath = await tempRegistry();
+    const hiddenLog = join(tempDirs[0], 'visible-request-hidden-runtime.jsonl');
+    const terminalLog = join(tempDirs[0], 'visible-request-terminal.jsonl');
+    const resultPath = join(tempDirs[0], 'visible-request-result.json');
+    const previousHiddenLog = process.env.NARADA_WORKSPACE_LAUNCH_HIDDEN_RUNTIME_LOG;
+    const previousTerminalLog = process.env.NARADA_WORKSPACE_LAUNCH_TERMINAL_LOG;
+    process.env.NARADA_WORKSPACE_LAUNCH_HIDDEN_RUNTIME_LOG = hiddenLog;
+    process.env.NARADA_WORKSPACE_LAUNCH_TERMINAL_LOG = terminalLog;
+    try {
+      const launch = await workspaceLaunchCommand({
+        registryPath,
+        site: ['sonar'],
+        role: ['resident'],
+        operatorSurface: 'agent-cli',
+        runtime: 'narada-agent-runtime-server',
+        visibleRuntimeTerminal: true,
+        resultPath,
+        suppressResultOutput: true,
+        format: 'json',
+      }, createMockContext());
+
+      expect(launch.exitCode).toBe(ExitCode.SUCCESS);
+      const result = launch.result as {
+        windows_terminal_invoked: boolean;
+        hidden_runtime_invoked: boolean;
+        selected_agents: Array<{ runtime_start_execution_mode: string }>;
+        operator_terminal_handoff: { wt_args: string[] };
+      };
+      expect(result.windows_terminal_invoked).toBe(true);
+      expect(result.hidden_runtime_invoked).toBe(false);
+      expect(result.selected_agents[0].runtime_start_execution_mode).toBe('operator_terminal');
+      expect(result.operator_terminal_handoff.wt_args[0]).toBe('new-tab');
+      expect(await readFile(terminalLog, 'utf8')).toContain('new-tab');
+      await expect(readFile(hiddenLog, 'utf8')).rejects.toThrow();
+      expect(JSON.parse(await readFile(resultPath, 'utf8'))).toEqual(result);
+    } finally {
+      if (previousHiddenLog === undefined) delete process.env.NARADA_WORKSPACE_LAUNCH_HIDDEN_RUNTIME_LOG;
+      else process.env.NARADA_WORKSPACE_LAUNCH_HIDDEN_RUNTIME_LOG = previousHiddenLog;
+      if (previousTerminalLog === undefined) delete process.env.NARADA_WORKSPACE_LAUNCH_TERMINAL_LOG;
+      else process.env.NARADA_WORKSPACE_LAUNCH_TERMINAL_LOG = previousTerminalLog;
+    }
+  });
+
   it('materializes terminal launch results with launch schema and non-overlapping invocation posture', async () => {
     const registryPath = await tempRegistry();
     const terminalLog = join(tempDirs[0], 'terminal-launch.jsonl');

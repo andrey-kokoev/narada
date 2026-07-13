@@ -63,7 +63,9 @@ export function buildRuntimeHealthPosture(result) {
     schema: 'narada.runtime_health_posture.v0',
     operator_surface_kind: result.operator_surface_kind ?? result.carrier_kind ?? null,
     runtime_host_kind: result.runtime_host_kind ?? result.runtime_substrate_kind ?? null,
+    launch_selection_kind: result.launch_selection_kind ?? result.carrier_kind ?? null,
     carrier_kind: result.carrier_kind ?? null,
+    carrier_implementation_kind: result.carrier_implementation_kind ?? null,
     runtime_substrate_kind: result.runtime_substrate_kind ?? null,
     status: result.exec && !result.dry_run ? 'projected_for_runtime' : 'projected_for_launch',
     dimensions: {
@@ -92,7 +94,7 @@ export function buildRuntimeHealthPosture(result) {
       } : null,
     },
     projection: {
-      operator_surface_kind: result.carrier_kind ?? null,
+      operator_surface_kind: result.operator_surface_kind ?? result.carrier_kind ?? null,
       chat_spam_reduction: true,
       summary: 'compact_health_projection',
     },
@@ -100,8 +102,10 @@ export function buildRuntimeHealthPosture(result) {
 }
 
 export function buildLauncherContracts(result) {
-  const runtimeHostKind = result.runtime_substrate_kind ?? null;
-  const operatorSurfaceKind = result.nars_launch?.operator_surface_kind ?? result.carrier_kind ?? null;
+  const runtimeHostKind = result.runtime_host_kind ?? result.runtime_substrate_kind ?? null;
+  const operatorSurfaceKind = result.operator_surface_kind ?? result.nars_launch?.operator_surface_kind ?? result.carrier_kind ?? null;
+  const launchSelectionKind = result.launch_selection_kind ?? result.carrier_kind ?? null;
+  const carrierImplementationKind = result.carrier_implementation_kind ?? null;
   const launchResultArtifact = buildLaunchResultArtifact(result);
   const runtimeHealthPosture = buildRuntimeHealthPosture(result);
   const intelligenceProviderPreflight = result.intelligence_provider_resolution?.credential?.preflight ?? result.intelligence_provider_resolution?.preflight ?? null;
@@ -119,7 +123,9 @@ export function buildLauncherContracts(result) {
       schema: 'narada.authority_runtime_host_selection.v0',
       operator_surface_kind: operatorSurfaceKind,
       runtime_host_kind: runtimeHostKind,
+      launch_selection_kind: launchSelectionKind,
       carrier_kind: result.carrier_kind ?? null,
+      carrier_implementation_kind: carrierImplementationKind,
       runtime_substrate_kind: result.runtime_substrate_kind ?? null,
       runtime_contract_schema: result.runtime_contract_schema ?? null,
       selection_source: result.runtime_resolution ?? null,
@@ -128,7 +134,9 @@ export function buildLauncherContracts(result) {
       schema: 'narada.operator_surface_attachment.v0',
       operator_surface_kind: operatorSurfaceKind,
       runtime_host_kind: runtimeHostKind,
+      launch_selection_kind: launchSelectionKind,
       carrier_kind: result.carrier_kind ?? null,
+      carrier_implementation_kind: carrierImplementationKind,
       tool_fabric_adapter_kind: result.tool_fabric_adapter_kind ?? null,
       tool_fabric_source: result.tool_fabric_adapter?.tool_fabric_source ?? null,
       launch_operator_surface_kind: result.nars_launch?.launch_operator_surface_kind ?? null,
@@ -154,7 +162,9 @@ export function buildLauncherContracts(result) {
       schema: 'narada.launch_selection_session.v0',
       operator_surface_kind: operatorSurfaceKind,
       runtime_host_kind: runtimeHostKind,
+      launch_selection_kind: launchSelectionKind,
       carrier_kind: result.carrier_kind ?? null,
+      carrier_implementation_kind: carrierImplementationKind,
       runtime: result.runtime ?? null,
       runtime_substrate_kind: result.runtime_substrate_kind ?? null,
       runtime_authority_selection: result.runtime_authority_selection ?? null,

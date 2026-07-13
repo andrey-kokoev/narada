@@ -4,6 +4,7 @@ import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PassThrough, Writable } from 'node:stream';
+import { resolveNaradaSitePaths } from '@narada2/site-paths';
 import { createRuntimeSessionBinding } from '../src/runtime-session-binding.mjs';
 import { createSessionCoreRuntimeService } from '../src/session-core-runtime-service.mjs';
 
@@ -193,4 +194,35 @@ test('session close propagates capability-gateway shutdown failure', async () =>
   input.end(`${JSON.stringify({ id: 'close-1', method: 'session.close' })}\n`);
   await assert.rejects(run, /gateway_close_failed/);
   assert.match(readFileSync(join(root, 'events.jsonl'), 'utf8'), /session_control_rejected/);
+});
+
+test('runtime writes heartbeat evidence and records natural input exhaustion as process exit', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'session-core-heartbeat-'));
+  const sessionId = 'heartbeat-1';
+  const paths = resolveNaradaSitePaths({ siteRoot: root, sessionId });
+  const service = createSessionCoreRuntimeService({
+    runtimeContext: {
+      identity: 'agent-1',
+      session: sessionId,
+      sessionPath: paths.narsSessionPath,
+      eventsPath: paths.narsEventsPath,
+      siteRoot: root,
+    },
+    callChatApiFn: async () => ({ content: 'unused' }),
+    toolGateway: { toolCatalog: () => [], operationalState: () => 'healthy' },
+    heartbeatIntervalMs: 1,
+  });
+  const input = new PassThrough();
+  const output = new PassThrough();
+  output.resume();
+  const run = service.run({ input, output });
+  input.end();
+  await run;
+
+  const heartbeat = JSON.parse(readFileSync(paths.narsHeartbeatPath, 'utf8'));
+  const indexRecord = JSON.parse(readFileSync(paths.narsSessionIndexRecordPath, 'utf8'));
+  assert.equal(heartbeat.schema, 'narada.nars.heartbeat.v1');
+  assert.equal(heartbeat.reason, 'runtime_process_exit');
+  assert.equal(indexRecord.terminal_state, 'closed');
+  assert.equal(indexRecord.terminal_reason, 'runtime_process_exit');
 });

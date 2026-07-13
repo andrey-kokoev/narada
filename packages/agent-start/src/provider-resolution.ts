@@ -5,8 +5,13 @@ import {
   redactProviderCredentialRequirement,
 } from './provider-credential-projection.ts';
 import { resolveCodexSubscriptionModelCatalog } from '@narada2/carrier-provider-support/codex-subscription-models';
+import {
+  NARADA_AGENT_RUNTIME_SERVER_KIND,
+  operatorSurfaceKindsForRuntimeHost,
+} from '@narada2/carrier-runtime-contract/carrier-runtime-selection';
 
 export const INTELLIGENCE_PROVIDER_CONTRACT_SCHEMA = 'narada.intelligence_provider.v1';
+const NARS_OPERATOR_SURFACE_KINDS = operatorSurfaceKindsForRuntimeHost(NARADA_AGENT_RUNTIME_SERVER_KIND);
 
 export const PROVIDER_SUPPORT_STATES = Object.freeze({
   DECLARED: 'declared',
@@ -63,7 +68,7 @@ export function resolveIntelligenceProviderInputSource(argumentValue, environmen
   if (nonEmptyString(argumentValue)) {
     return { source_field: 'cli_argument' };
   }
-  if ((carrierName === 'agent-cli' || carrierName === 'agent-web-ui') && nonEmptyString(environmentValue)) {
+  if (NARS_OPERATOR_SURFACE_KINDS.includes(carrierName) && nonEmptyString(environmentValue)) {
     const siteBinding = siteEnvBindings.get('NARADA_INTELLIGENCE_PROVIDER');
     if (siteBinding) return siteBinding;
     if (nonEmptyString(processEnv.NARADA_INTELLIGENCE_PROVIDER_SOURCE_FIELD)) {
@@ -149,7 +154,7 @@ export function resolveIntelligenceProviderLaunch(value, carrierName, inputSourc
   const inputAbsent = value === null || value === undefined || String(value).trim() === '';
   if (inputAbsent) {
     pushState('input_absent');
-    if (carrierName !== 'agent-cli' && carrierName !== 'agent-web-ui') return null;
+    if (!NARS_OPERATOR_SURFACE_KINDS.includes(carrierName)) return null;
     value = defaultProvider;
     pushState('default_provider_selected', { intelligence_provider: value });
   }
@@ -161,7 +166,7 @@ export function resolveIntelligenceProviderLaunch(value, carrierName, inputSourc
   }
   pushState('provider_known', { intelligence_provider: provider });
 
-  if (carrierName !== 'agent-cli' && carrierName !== 'agent-web-ui') {
+  if (!NARS_OPERATOR_SURFACE_KINDS.includes(carrierName)) {
     pushState('launch_refused', { reason_code: 'intelligence_provider_runtime_unsupported' });
     return withResolutionStates({
       schema,
@@ -169,7 +174,7 @@ export function resolveIntelligenceProviderLaunch(value, carrierName, inputSourc
       reason_code: 'intelligence_provider_runtime_unsupported',
       intelligence_provider: provider,
       carrier_kind: carrierName,
-      reason: '-IntelligenceProvider currently applies only to NARS operator surfaces such as agent-cli or agent-web-ui. Kimi and Codex CLI provider selection remains owned by their native runtime adapters.',
+      reason: '-IntelligenceProvider currently applies only to NARS operator surfaces admitted by the carrier launch matrix. Kimi and Codex CLI provider selection remains owned by their native runtime adapters.',
     }, states);
   }
   pushState('carrier_supports_provider_selection', { carrier_kind: carrierName });

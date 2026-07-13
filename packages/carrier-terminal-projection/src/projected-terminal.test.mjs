@@ -23,7 +23,7 @@ test('projected slash commands produce NARS protocol frames', () => {
   assert.equal(createProjectedSlashCommandAction('/exit').frame.method, 'session.close');
   assert.equal(createProjectedSlashCommandAction('/tool').kind, 'message');
   assert.equal(createProjectedSlashCommandAction('/queue clear').kind, 'message');
-  assert.equal(createProjectedSlashCommandAction('exit').frame.method, 'session.close');
+  assert.equal(createProjectedSlashCommandAction('exit'), null);
   assert.equal(createExplicitJsonControlFrame('/json {"id":"health-1","method":"session.health","params":{}}').frame.method, 'session.health');
   assert.equal(createExplicitJsonControlFrame('/json {"id":"bad-1","method":"bad.method","params":{}}').error, '/json unsupported session-core method: bad.method');
   assert.match(projectedHelpText(), /\/interrupt\s+Cancel the active request/);

@@ -10,6 +10,7 @@
       "default": "./src/carrier-runtime-selection.mjs"
     },
     "./launch-slice": "./contracts/launch-slice.json",
+    "./carrier-launch-matrix": "./contracts/carrier-launch-matrix.json",
     "./mcp-runtime": "./contracts/mcp-runtime.json",
     "./terminal-runtime": "./contracts/terminal-runtime.json",
     "./runtime-substrate-kinds": "./contracts/runtime-substrate-kinds.json",

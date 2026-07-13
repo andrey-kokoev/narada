@@ -80,6 +80,68 @@ Wrappers must also make stream posture explicit:
 - `ignore`: helper has no meaningful stream contract;
 - `inherit`: only admitted for visible operator processes or explicit debug/test fixtures.
 
+## Agent Runtime Start Posture
+
+Starting `narada-agent-runtime-server` is not an operator-terminal action just because an operator surface requested it. The runtime host is a background authority process; the operator surface is a projection or client that may attach to it. Hidden runtime start selection must therefore be based on runtime semantics, not on carrier or operator-surface names.
+
+Default rule:
+
+```text
+runtime == "narada-agent-runtime-server"
+exec == true
+wait != true
+no explicit visible_runtime_terminal request
+=> agent_start_execution_mode = "hidden_detached"
+```
+
+This rule must hold regardless of whether the caller spells the presentation side as `agent-cli`, `agent-web-ui`, a compatibility `carrier` value, or a future operator-surface identifier. Carrier/operator-surface naming may affect projection behavior; it must not decide whether the runtime host is hidden or visible.
+
+Allowed execution modes:
+
+| Mode | Meaning | Visibility |
+| --- | --- | --- |
+| `hidden_detached` | Runtime host is spawned through the hidden posture helper, detached from the launching terminal, with stdout/stderr routed to owned files or structured artifacts. | Hidden. |
+| `visible_inherited` | Runtime start intentionally inherits an operator-visible terminal. | Visible by explicit request only. |
+| `sync` | Caller waits for runtime start completion as a foreground command, typically for dry-run, tests, or blocking diagnostics. | Caller-owned; not a background runtime posture. |
+
+Fallback to `visible_inherited` requires an explicit reason such as `visible_runtime_terminal`, `wait == true`, or a test/debug fixture. It is not an acceptable fallback merely because the operator-surface name is unknown. A visible FNM `node.exe`, `cmd.exe`, `pwsh.exe`, or equivalent helper window during `narada-agent-runtime-server --exec` startup is a posture violation unless that explicit visible-runtime request is present in the launch evidence.
+
+Runtime-start launch results should record:
+
+- `agent_start_execution_mode`: `hidden_detached`, `visible_inherited`, or `sync`;
+- `detach_decision`: structured selected/blocked decision for hidden detach;
+- `detach_refusal_reasons`: empty when hidden detach is selected, otherwise the concrete reasons;
+- runtime, operator surface, `exec`, `wait`, and visible-terminal request inputs used by the decision;
+- hidden launch output locations when `hidden_detached` is selected.
+
+Workspace launch has the same obligation at its own handoff boundary. A workspace plan that selects a NARS runtime start must expose `runtime_start_execution_mode`, `runtime_start_command`, and `runtime_start_cwd`. When every selected runtime start is `hidden_detached`, the workspace launcher must start those runtime hosts through the hidden process posture directly; it must not wrap the hidden start in Windows Terminal, `pwsh -NoExit`, `cmd.exe`, or another visible operator terminal. Compatibility `wt_args` may remain in dry-run or transitional plan output for non-hidden projections, but it is not the authoritative execution path for hidden NARS runtime starts.
+
+Workspace launch results should therefore distinguish:
+
+- `windows_terminal_invoked: false` and `hidden_runtime_invoked: true` for hidden NARS runtime handoff;
+- `hidden_runtime_launches` with redacted posture diagnostics for each hidden runtime host;
+- handoff posture `hidden_runtime_host` instead of `operator_terminal` when no operator terminal was launched.
+
+Workspace launch evidence must satisfy these mechanical constraints:
+
+- `workspaceLaunchCommand` returns `schema: narada.workspace_launch.launch_result.v1` for executed launches; planning remains `narada.workspace_launch.plan.v1`.
+- If `--result-path` is supplied, the persisted JSON artifact must be structurally equal to the returned launch result after final status, mode, and invocation posture fields are applied.
+- `mode: launch` implies `status: launched` and `mutation_performed: true`; `status: planned` must never survive in a launch result.
+- For a single runtime handoff, `windows_terminal_invoked` and `hidden_runtime_invoked` are mutually exclusive. Hidden runtime launches require all selected runtime starts to carry `runtime_start_execution_mode: hidden_detached`.
+- Executed launch results use `launch_agents` as the canonical launched-agent list. Transitional `selected_agents` may remain only with `selected_agents_authority: compatibility_plan_selection`.
+- Compatibility terminal argv must live under `legacy_terminal_plan` with `authority: compatibility_non_authoritative`; executed launch results must not expose top-level `wt_args`. Consumers must use `runtime_start_execution_mode` and `runtime_start_command` for execution posture.
+- `NARADA_WORKSPACE_LAUNCH_HIDDEN_RUNTIME_LOG` and `NARADA_WORKSPACE_LAUNCH_TERMINAL_LOG` are test-only capture hooks for proving branch selection without starting real long-lived runtime processes. They are not product configuration knobs.
+
+Regression coverage should include a Site launch such as `smart-scheduling.resident` with `runtime = narada-agent-runtime-server`, `exec = true`, and `wait = false`, proving hidden-detached selection independent of operator-surface naming.
+
+The host-wrapper verification command is:
+
+```powershell
+pnpm run narada:verify-workspace-launch-hidden-runtime
+```
+
+It exercises `Start-NaradaWorkspace.ps1` with the test-only capture hooks and fails unless the materialized result artifact reports `schema: narada.workspace_launch.launch_result.v1`, `status: launched`, `mode: launch`, `windows_terminal_invoked: false`, and `hidden_runtime_invoked: true`.
+
 ## Operator Projection Open Request
 
 `browser_open` needs a semantic request layer above `openBrowserUrl(...)`. The target first-class object is `OperatorProjectionOpenRequest`.

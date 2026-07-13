@@ -91,6 +91,7 @@ export function buildAgentPlan(record: WorkspaceLaunchRecord, options: Workspace
   const operatorSurfaceStartCommand = workspaceLaunchCommandArgv(operatorSurfaceStartCommandSpec);
   const hiddenRuntimeStartCommand = workspaceLaunchCommandArgv(hiddenRuntimeStartCommandSpec);
   const runtimeStartExecutionMode: WorkspaceLaunchAgentPlan['runtime_start_execution_mode'] = isNarsRuntimeHost
+    && options.visibleRuntimeTerminal !== true
     ? 'hidden_detached'
     : 'operator_terminal';
 

@@ -37,45 +37,45 @@
       EnableNativeShell = $false
     }
     @{
-      Agent = "narada-andrey.Kevin"
+      Agent = "andrey-user.Kevin"
       Title = "Kevin"
       NaradaRoot = "C:\Users\Andrey\Narada"
       WorkspaceRoot = "C:\Users\Andrey\Narada"
       SiteRoot = "C:\Users\Andrey\Narada"
-      Launcher = "narada-andrey.ps1"
+      Launcher = "andrey-user.ps1"
       Carrier = "agent-cli"
       Runtime = "narada-agent-runtime-server"
       EnableNativeShell = $false
     }
     @{
-      Agent = "narada-andrey.Bob"
+      Agent = "andrey-user.Bob"
       Title = "Bob"
       NaradaRoot = "C:\Users\Andrey\Narada"
       WorkspaceRoot = "C:\Users\Andrey\Narada"
       SiteRoot = "C:\Users\Andrey\Narada"
-      Launcher = "narada-andrey.ps1"
+      Launcher = "andrey-user.ps1"
       Carrier = "agent-cli"
       Runtime = "narada-agent-runtime-server"
       EnableNativeShell = $false
     }
     @{
-      Agent = "narada-andrey.Robin"
+      Agent = "andrey-user.Robin"
       Title = "Robin"
       NaradaRoot = "C:\Users\Andrey\Narada"
       WorkspaceRoot = "C:\Users\Andrey\Narada"
       SiteRoot = "C:\Users\Andrey\Narada"
-      Launcher = "narada-andrey.ps1"
+      Launcher = "andrey-user.ps1"
       Carrier = "agent-cli"
       Runtime = "narada-agent-runtime-server"
       EnableNativeShell = $false
     }
     @{
-      Agent = "narada-andrey.resident"
+      Agent = "andrey-user.resident"
       Title = "Andrey Resident"
       NaradaRoot = "C:\Users\Andrey\Narada"
       WorkspaceRoot = "C:\Users\Andrey\Narada"
       SiteRoot = "C:\Users\Andrey\Narada"
-      Launcher = "narada-andrey.ps1"
+      Launcher = "andrey-user.ps1"
       Carrier = "agent-cli"
       Runtime = "narada-agent-runtime-server"
       EnableNativeShell = $false

@@ -50,6 +50,7 @@ export interface WorkspaceLaunchPlanOptions {
   suppressResultOutput?: boolean;
   enableNativeShell?: boolean;
   noWaitForEnterBeforeExec?: boolean;
+  visibleRuntimeTerminal?: boolean;
   smoke?: boolean;
   dryRun?: boolean;
   format?: CliFormat;

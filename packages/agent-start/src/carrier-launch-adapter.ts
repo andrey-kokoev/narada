@@ -1,82 +1,42 @@
 import { dirname, join } from 'node:path';
+import {
+  carrierLaunchMatrixRow,
+  NARADA_AGENT_RUNTIME_SERVER_KIND,
+  normalizeRuntimeAlias,
+} from '@narada2/carrier-runtime-contract/carrier-runtime-selection';
 
-export function resolveToolFabricAdapter(carrierName, { schema, agentTuiCarrier, runtimeName = carrierName }) {
-  const source = '.ai/mcp';
-  if (carrierName === 'codex') {
-    return {
-      schema,
-      tool_fabric_adapter_kind: 'codex-native-mcp',
-      tool_fabric_source: source,
-      runtime_substrate_kind: runtimeName,
-      adapter_entrypoint: null,
-      expected_tools: ['agent_context_startup_sequence', 'mcp_output_show', 'task_lifecycle_next'],
-      states: ['runtime_known', 'adapter_selected', 'source_declared', 'launch_ready'],
-    };
+function requireCarrierLaunchMatrixRow(launchSelectionKind) {
+  const matrixRow = carrierLaunchMatrixRow(launchSelectionKind);
+  if (!matrixRow) {
+    throw new Error('carrier_launch_matrix_row_missing:' + launchSelectionKind);
   }
-  if (carrierName === 'agent-cli' || carrierName === 'agent-web-ui') {
-    return {
-      schema,
-      tool_fabric_adapter_kind: 'narada-agent-runtime-server-mcp-client',
-      tool_fabric_source: source,
-      runtime_substrate_kind: runtimeName,
-      adapter_entrypoint: 'package:@narada2/agent-runtime-server#narada-agent-runtime-server',
-      expected_tools: ['agent_context_startup_sequence', 'mcp_output_show', 'task_lifecycle_next'],
-      states: ['runtime_known', 'adapter_selected', 'source_declared', 'launch_ready'],
-    };
-  }
-  if (carrierName === agentTuiCarrier) {
-    return {
-      schema,
-      tool_fabric_adapter_kind: 'narada-agent-tui-terminal-interactive-loop',
-      tool_fabric_source: 'control_jsonl_session_jsonl',
-      runtime_substrate_kind: runtimeName,
-      adapter_entrypoint: 'package:@narada2/agent-tui#narada-agent-tui',
-      expected_tools: ['agent_context_startup_sequence', 'mcp_output_show', 'task_lifecycle_next'],
-      states: ['runtime_known', 'adapter_selected', 'terminal_loop_carrier', 'launch_ready'],
-    };
-  }
-  if (carrierName === 'pi') {
-    return {
-      schema,
-      tool_fabric_adapter_kind: 'pi-extension-mcp-bridge',
-      tool_fabric_source: source,
-      runtime_substrate_kind: runtimeName,
-      adapter_entrypoint: '.pi/extensions/narada-mcp-bridge.ts',
-      expected_tools: ['agent_context_startup_sequence', 'mcp_output_show', 'task_lifecycle_next', 'task_lifecycle_un_defer'],
-      states: ['runtime_known', 'adapter_selected', 'source_declared', 'narada_owned_extension_bridge', 'launch_ready'],
-      admission_basis: 'Narada-owned Pi extension bridges Site-local .ai/mcp tools into Pi; MCP servers remain Site-local authority surfaces.',
-    };
-  }
-  if (carrierName === 'claude-code') {
-    return {
-      schema,
-      tool_fabric_adapter_kind: 'claude-code-native-mcp',
-      tool_fabric_source: source,
-      runtime_substrate_kind: runtimeName,
-      adapter_entrypoint: 'claude --mcp-config',
-      expected_tools: ['agent_context_startup_sequence', 'mcp_output_show', 'task_lifecycle_next', 'task_lifecycle_un_defer'],
-      states: ['runtime_known', 'adapter_selected', 'source_declared', 'native_mcp_config_required', 'launch_ready'],
-    };
-  }
-  if (carrierName === 'opencode') {
-    return {
-      schema,
-      tool_fabric_adapter_kind: 'opencode-native-mcp',
-      tool_fabric_source: 'substrate-native',
-      runtime_substrate_kind: runtimeName,
-      adapter_entrypoint: 'opencode --prompt',
-      expected_tools: ['agent_context_startup_sequence', 'mcp_output_show', 'task_lifecycle_next'],
-      states: ['runtime_known', 'adapter_selected', 'source_declared', 'native_prompt_injection_required', 'launch_ready'],
-    };
+  return matrixRow;
+}
+
+export function resolveToolFabricAdapter(carrierName, { schema, agentTuiCarrier, runtimeName } = {}) {
+  const launchSelectionKind = carrierName === agentTuiCarrier ? 'agent-tui' : carrierName;
+  const matrixRow = requireCarrierLaunchMatrixRow(launchSelectionKind);
+  const effectiveRuntimeName = runtimeName == null
+    ? matrixRow.runtime_substrate_kind
+    : normalizeRuntimeAlias(runtimeName);
+  if (effectiveRuntimeName !== matrixRow.runtime_substrate_kind) {
+    throw new Error(`carrier_launch_matrix_runtime_mismatch:${launchSelectionKind}:${effectiveRuntimeName}:${matrixRow.runtime_substrate_kind}`);
   }
   return {
     schema,
-    tool_fabric_adapter_kind: 'ambient-carrier-tools',
-    tool_fabric_source: 'substrate-native',
-    runtime_substrate_kind: runtimeName,
-    adapter_entrypoint: null,
-    expected_tools: [],
-    states: ['runtime_known', 'adapter_selected', 'no_narada_mcp_claim'],
+    tool_fabric_adapter_kind: matrixRow.tool_fabric_adapter_kind,
+    tool_fabric_source: matrixRow.tool_fabric_source,
+    runtime_substrate_kind: effectiveRuntimeName,
+    runtime_host_kind: matrixRow.runtime_host_kind,
+    launch_selection_kind: matrixRow.launch_selection_kind,
+    operator_surface_kind: matrixRow.operator_surface_kind,
+    carrier_implementation_kind: matrixRow.carrier_implementation_kind,
+    adapter_entrypoint: matrixRow.adapter_entrypoint,
+    projection_capabilities: [...matrixRow.projection_capabilities],
+    expected_tools: [...matrixRow.expected_tools],
+    expected_tools_scope: matrixRow.expected_tools_scope,
+    states: [...matrixRow.states],
+    ...(matrixRow.admission_basis ? { admission_basis: matrixRow.admission_basis } : {}),
   };
 }
 
@@ -133,6 +93,9 @@ export function buildCarrierSpawnArgs(carrierName, {
   claudeCodeModel,
   runtimeAuthority,
 }) {
+  const launchSelectionKind = carrierName === agentTuiCarrier ? 'agent-tui' : carrierName;
+  const matrixRow = requireCarrierLaunchMatrixRow(launchSelectionKind);
+
   if (carrierName === 'codex') {
     const args = [
       '--ask-for-approval',
@@ -149,7 +112,7 @@ export function buildCarrierSpawnArgs(carrierName, {
     return args;
   }
 
-  if (carrierName === 'agent-cli' || carrierName === 'agent-web-ui') {
+  if (matrixRow.runtime_host_kind === NARADA_AGENT_RUNTIME_SERVER_KIND) {
     const sessionId = carrierSessionRegistration?.carrier_session_id ?? agentCliSessionName(identity);
     return [
       agentRuntimeServerScriptPath(),
@@ -232,7 +195,7 @@ export function buildCarrierSpawnArgs(carrierName, {
   if (carrierName === 'opencode') {
     return [
       '--prompt',
-      startupAffordancePrompt(identity, 'Narada tools are attached through the Site MCP fabric declared in .ai/mcp.'),
+      startupAffordancePrompt(identity, 'This carrier path injects the Narada startup affordance as a prompt only; it does not attach or verify Narada MCP servers.'),
     ];
   }
 
@@ -252,9 +215,11 @@ export function resolveCarrierCommand(carrierName, {
   claudeCodeCommand,
   opencodeCommand,
 }) {
+  const launchSelectionKind = carrierName === agentTuiCarrier ? 'agent-tui' : carrierName;
+  const matrixRow = requireCarrierLaunchMatrixRow(launchSelectionKind);
   if (carrierName === agentTuiCarrier) return 'cargo';
   if (processPlatform === 'win32' && carrierName === 'codex') return processExecPath;
-  if (carrierName === 'agent-cli' || carrierName === 'agent-web-ui') return processExecPath;
+  if (matrixRow.runtime_host_kind === NARADA_AGENT_RUNTIME_SERVER_KIND) return processExecPath;
   if (carrierName === 'pi') return stableNodeCommand();
   if (carrierName === 'claude-code') return claudeCodeCommand ?? defaultClaudeCodeCommand;
   if (carrierName === 'opencode') return opencodeCommand ?? 'opencode';
@@ -262,6 +227,7 @@ export function resolveCarrierCommand(carrierName, {
 }
 
 export function carrierSpawnOptions(carrierName) {
+  requireCarrierLaunchMatrixRow(carrierName);
   if (carrierName === 'opencode') return { shell: false, windowsHide: true };
   return { windowsHide: true };
 }
@@ -273,6 +239,7 @@ export function carrierSpecificEnvironment(carrierName, {
   defaultClaudeCodeCommand,
   defaultClaudeCodeModel,
 } = {}) {
+  requireCarrierLaunchMatrixRow(carrierName);
   if (carrierName === 'pi') {
     return {
       NARADA_PI_COMMAND: processEnv.NARADA_PI_COMMAND ?? 'pi',
@@ -529,7 +496,8 @@ export function buildNarsLaunchPacket(carrierName, {
   siteCarrierControlPath,
   siteCarrierSessionPath,
 }) {
-  if (carrierName !== 'agent-cli' && carrierName !== 'agent-web-ui') return null;
+  const matrixRow = carrierLaunchMatrixRow(carrierName);
+  if (!matrixRow || matrixRow.runtime_host_kind !== NARADA_AGENT_RUNTIME_SERVER_KIND) return null;
   const sessionId = carrierSessionRegistration.carrier_session_id;
   return {
     schema: 'narada.agent_start.nars_launch.v1',
@@ -537,16 +505,16 @@ export function buildNarsLaunchPacket(carrierName, {
     runtime_session_id: sessionId,
     nars_session_id: sessionId,
     ...(targetSiteId ? { site_id: targetSiteId } : {}),
-    runtime_host_kind: 'narada-agent-runtime-server',
-    carrier_runtime_kind: 'narada-agent-runtime-server',
-    launch_operator_surface_kind: carrierName,
-    operator_surface_kind: carrierName,
+    runtime_host_kind: matrixRow.runtime_host_kind,
+    carrier_runtime_kind: matrixRow.carrier_implementation_kind,
+    launch_operator_surface_kind: matrixRow.operator_surface_kind,
+    operator_surface_kind: matrixRow.operator_surface_kind,
     control_transport: 'jsonl_sideband_file',
     carrier_relation: 'narada_agent_runtime_server',
     runtime_server: {
       package: '@narada2/agent-runtime-server',
       entrypoint: 'narada-agent-runtime-server',
-      runtime_kind: 'narada-agent-runtime-server',
+      runtime_kind: matrixRow.runtime_host_kind,
     },
     command: processExecPath,
     session_dir: dirname(siteCarrierControlPath(sessionId)),

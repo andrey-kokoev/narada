@@ -481,7 +481,7 @@ function validateFabricAgainstRegistry(siteRoot, mcpDir, files, servers) {
 function isRetiredEmptyMcpSidecar(packet) {
   return Object.keys(packet?.mcpServers ?? {}).length === 0
     && typeof packet?.description === 'string'
-    && /\bsidecar\b.*\bretired\b/i.test(packet.description);
+    && /(?:\bsidecar\b.*\bretired\b|\bretired\b.*\bsidecar\b)/i.test(packet.description);
 }
 
 function normalizeCommand(command) {
