@@ -33,6 +33,20 @@ const retiredSite = {
   retire_reason: 'fixture retirement',
 };
 
+const activeLauncherSession = {
+  schema: 'narada.workspace_launch.ui_session.v1',
+  ui_session_id: 'ui-session-active',
+  started_at: '2026-07-12T00:00:00.000Z',
+  status: 'open',
+  url: 'http://127.0.0.1:47320/',
+  registry_paths: ['D:/code/registry.sqlite'],
+  owner: {
+    package: '@narada2/cli',
+    command: 'launcher workspace-launch',
+    surface: 'interactive-selection-ui',
+  },
+};
+
 function sendJson(res, status, payload) {
   const body = JSON.stringify(payload);
   res.writeHead(status, {
@@ -50,6 +64,13 @@ async function readJson(req) {
 
 function wireSite(overrides = {}) {
   return { ...site, ...overrides };
+}
+
+function projectLauncherSessions(sessions) {
+  return sessions.map((session) => ({
+    ...session,
+    url: `/console/launch/sessions/${encodeURIComponent(session.ui_session_id)}`,
+  }));
 }
 
 function mutationResponse(input, applied) {
@@ -103,7 +124,7 @@ function mutationResponse(input, applied) {
   };
 }
 
-async function startFixtureServer() {
+async function startFixtureServer({ launcherSessions = [] } = {}) {
   const requests = [];
   const launcherRequests = [];
   const server = createServer(async (req, res) => {
@@ -122,7 +143,7 @@ async function startFixtureServer() {
         launcherRequests.push(pathname);
         sendJson(res, 200, {
           schema: 'narada.workspace_launch.ui_session_list.v1',
-          sessions: [],
+          sessions: projectLauncherSessions(launcherSessions),
         });
         return;
       }
@@ -231,6 +252,39 @@ test('Operator Console Vue registry projection works at desktop and mobile width
   } finally {
     await browser.close();
     await fixture.close();
+  }
+});
+
+test('Operator Console opens active CLI sessions through a stable route and fails closed on malformed inventory', async () => {
+  const activeFixture = await startFixtureServer({ launcherSessions: [activeLauncherSession] });
+  const browser = await chromium.launch();
+  try {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+    await page.goto(activeFixture.url + '/console/launch');
+    await page.getByRole('link', { name: 'Open launcher' }).waitFor();
+    assert.equal(
+      await page.getByRole('link', { name: 'Open launcher' }).getAttribute('href'),
+      '/console/launch/sessions/ui-session-active',
+    );
+    assert.deepEqual(activeFixture.launcherRequests, ['/console/launch/api/sessions']);
+  } finally {
+    await browser.close();
+    await activeFixture.close();
+  }
+
+  const malformedFixture = await startFixtureServer({
+    launcherSessions: [{ ...activeLauncherSession, status: 'running' }],
+  });
+  const malformedBrowser = await chromium.launch();
+  try {
+    const page = await malformedBrowser.newPage({ viewport: { width: 1280, height: 900 } });
+    await page.goto(malformedFixture.url + '/console/launch');
+    await page.getByRole('alert').waitFor();
+    assert.match(await page.getByRole('alert').textContent(), /did not match its contract/);
+    assert.equal(await page.getByRole('link', { name: 'Open launcher' }).count(), 0);
+  } finally {
+    await malformedBrowser.close();
+    await malformedFixture.close();
   }
 });
 

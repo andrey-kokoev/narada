@@ -21,8 +21,10 @@ The browser is a projection and workflow client. It is not a second authority mo
 | Canonical data and request envelopes | `@narada2/site-registry-contract` |
 | Durable registry authority | `@narada2/windows-site` |
 | Browser domain types and validation | `operator-console-ui/src/site-registry/domain.ts` |
+| Browser HTTP transport | `operator-console-ui/src/site-registry/transport.ts` |
+| Browser contract adapter | `operator-console-ui/src/site-registry/adapter.ts` |
 | Read and detail state | `useSiteRegistry` |
-| Mutation transport | `useSiteRegistryMutation` |
+| Mutation state | `useSiteRegistryMutation` |
 | Draft, operation, confirmation, and route workflow | `useSiteRegistryWorkflow` |
 | Shared console chrome and route resolution | `@narada2/ui-vue` `OperatorSurfaceShell`, `OperatorConsoleShell.vue`, `console/routes.ts` |
 | Collection page | `/console/registry` |
@@ -50,7 +52,7 @@ Workspace Launch shares the Narada UI design system with Operator Console, but i
 
 ### Operator Console Launcher Router
 
-`/console/launch` is a console-owned routing projection for CLI-owned persistent launcher sessions. The CLI session store owns the read-only persisted session projection; the page reaches it through its typed transport and composable. The route lists recorded session URLs and provides the CLI handoff command when none are available. It does not start agents, submit launch selections, or duplicate the launcher server. The CLI launcher remains the only authority for launch policy, runtime handoff, and session mutation.
+`/console/launch` is a console-owned routing projection for CLI-owned persistent launcher sessions. The CLI session store owns the read-only persisted session projection; the page reaches it through its typed transport and composable. The inventory exposes stable `/console/launch/sessions/:ui_session_id` links, while the console server forwards only active loopback sessions and the launcher's known browser paths to the CLI-owned server. The console rewrites the launcher bootstrap and asset paths for that stable prefix; it does not start agents, submit launch selections, or duplicate launch authority. The CLI launcher remains the only authority for launch policy, runtime handoff, and session mutation.
 
 ## Shared Component Roles
 
@@ -64,7 +66,7 @@ Workspace Launch shares the Narada UI design system with Operator Console, but i
 ## Invariants
 
 - Canonical contracts are the source of truth; UI types may rename wire fields but may not invent authority fields.
-- Parsing happens at the transport boundary. Invalid envelopes become visible errors or a null adapter result, never partial domain state.
+- Parsing happens in the typed adapter immediately after transport. Invalid envelopes become visible errors or a null adapter result, never partial domain state.
 - Client requests cross a typed transport boundary before reaching a composable; a mounted surface supplies its base path explicitly rather than relying on the current URL by accident.
 - Composables own asynchronous state and workflow transitions; templates do not duplicate fetch, plan, apply, or retry logic.
 - Pages do not read databases, construct policy decisions, or call mutation endpoints directly.

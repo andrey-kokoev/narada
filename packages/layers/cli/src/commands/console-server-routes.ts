@@ -18,9 +18,15 @@ import type {
   SiteControlClientFactory,
 } from '@narada2/windows-site';
 import type { ConsoleControlRequest } from '@narada2/windows-site';
+import type { WorkspaceLaunchUiSession } from '@narada2/workspace-launch-contract';
 import type { SiteRegistryReadModel } from './site-registry-read-model.js';
 import type { RegistryMutationGateway, RegistryMutationInput, RegistryMutationOperation } from './site-registry-management-gateway.js';
-import { readWorkspaceLaunchUiSessions } from './workspace-launch-session-store.js';
+import {
+  isWorkspaceLaunchUiSessionProxyable,
+  readWorkspaceLaunchUiSessions,
+  workspaceLaunchUiSessionRoute,
+  type WorkspaceLaunchUiSessionRecord,
+} from './workspace-launch-session-store.js';
 import { readOperatorConsoleUiAsset, readOperatorConsoleUiDocument } from './console-ui-assets.js';
 
 export interface RouteHandler {
@@ -40,6 +46,7 @@ export interface ConsoleServerRouteContext {
   controlClientFactory: SiteControlClientFactory;
   registryReadModel: SiteRegistryReadModel;
   registryMutationGateway: RegistryMutationGateway;
+  workspaceLaunchSessions?: () => Promise<WorkspaceLaunchUiSessionRecord[]>;
 }
 
 function jsonResponse(res: ServerResponse, status: number, payload: unknown): void {
@@ -156,6 +163,147 @@ function setCorsHeaders(res: ServerResponse, origin: string | undefined): boolea
   return true;
 }
 
+function headerValue(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function decodeSessionId(value: string): string | null {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return null;
+  }
+}
+
+function launcherProxyPathAllowed(method: string, path: string): boolean {
+  if (method === 'GET') return path === '/' || path === '/launches' || path.startsWith('/assets/');
+  if (method === 'POST') {
+    return path === '/selector-model'
+      || path === '/submit'
+      || /^\/launches\/[^/]+\/(recheck|retry|forget|open-web-ui|attach-cli|stop-runtime|stop-projection)$/.test(path);
+  }
+  return false;
+}
+
+function launcherTargetUrl(session: WorkspaceLaunchUiSessionRecord, path: string, searchParams: URLSearchParams): URL | null {
+  if (!isWorkspaceLaunchUiSessionProxyable(session)) return null;
+  try {
+    const target = new URL(session.url!);
+    target.pathname = path;
+    target.search = searchParams.toString();
+    return target;
+  } catch {
+    return null;
+  }
+}
+
+function rewriteLauncherDocument(body: Buffer, basePath: string): Buffer {
+  let html = body.toString('utf8');
+  const bootstrapOpen = '<script type="application/json" id="narada-workspace-launch-bootstrap">';
+  const bootstrapClose = '</script>';
+  const bootstrapStart = html.indexOf(bootstrapOpen);
+  if (bootstrapStart >= 0) {
+    const contentStart = bootstrapStart + bootstrapOpen.length;
+    const contentEnd = html.indexOf(bootstrapClose, contentStart);
+    if (contentEnd >= 0) {
+      try {
+        const parsed: unknown = JSON.parse(html.slice(contentStart, contentEnd));
+        if (isRecord(parsed)) {
+          parsed.basePath = basePath;
+          const serialized = JSON.stringify(parsed).replace(/</g, '\\u003c');
+          html = html.slice(0, contentStart) + serialized + html.slice(contentEnd);
+        }
+      } catch {
+        // The upstream launcher document remains authoritative if its bootstrap is malformed.
+      }
+    }
+  }
+  return Buffer.from(
+    html
+      .replaceAll('src="/assets/', `src="${basePath}/assets/`)
+      .replaceAll('href="/assets/', `href="${basePath}/assets/`),
+    'utf8',
+  );
+}
+
+async function readProxyBody(req: IncomingMessage): Promise<Buffer | null> {
+  const chunks: Buffer[] = [];
+  let size = 0;
+  let oversized = false;
+  for await (const chunk of req) {
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    size += buffer.byteLength;
+    if (size > 1024 * 1024) {
+      oversized = true;
+      continue;
+    }
+    chunks.push(buffer);
+  }
+  return oversized ? null : Buffer.concat(chunks);
+}
+
+async function proxyLauncherSessionRequest(
+  req: IncomingMessage,
+  res: ServerResponse,
+  session: WorkspaceLaunchUiSessionRecord,
+  sessionPath: string,
+  proxyPath: string,
+  searchParams: URLSearchParams,
+): Promise<void> {
+  if (!launcherProxyPathAllowed(req.method ?? '', proxyPath)) {
+    jsonResponse(res, 404, { error: 'Launcher session path not found' });
+    return;
+  }
+  const target = launcherTargetUrl(session, proxyPath, searchParams);
+  if (!target) {
+    jsonResponse(res, 409, { error: 'Launcher session is no longer active' });
+    return;
+  }
+  let body: Buffer | undefined;
+  if (req.method !== 'GET') {
+    const received = await readProxyBody(req);
+    if (!received) {
+      jsonResponse(res, 413, { error: 'Launcher session request is too large' });
+      return;
+    }
+    body = received;
+  }
+  try {
+    const upstream = await fetch(target, {
+      method: req.method,
+      headers: {
+        ...(headerValue(req.headers.accept) ? { Accept: headerValue(req.headers.accept)! } : {}),
+        ...(headerValue(req.headers['content-type']) ? { 'Content-Type': headerValue(req.headers['content-type'])! } : {}),
+      },
+      ...(body ? { body } : {}),
+      signal: AbortSignal.timeout(15_000),
+    });
+    const contentType = upstream.headers.get('content-type') ?? 'application/octet-stream';
+    const upstreamBody = Buffer.from(await upstream.arrayBuffer());
+    const responseBody = contentType.includes('text/html')
+      ? rewriteLauncherDocument(upstreamBody, sessionPath)
+      : upstreamBody;
+    res.writeHead(upstream.status, {
+      'Content-Type': contentType,
+      'Content-Length': responseBody.byteLength,
+      'Cache-Control': upstream.headers.get('cache-control') ?? 'no-cache',
+    });
+    res.end(responseBody);
+  } catch (error) {
+    jsonResponse(res, 502, {
+      error: 'Launcher session is unreachable',
+      detail: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
+function consoleLauncherSessionProjection(session: WorkspaceLaunchUiSessionRecord): WorkspaceLaunchUiSession {
+  return {
+    ...session,
+    url: isWorkspaceLaunchUiSessionProxyable(session) ? workspaceLaunchUiSessionRoute(session.ui_session_id) : null,
+  };
+}
+
 export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): RouteHandler[] {
   return [
     // ── CORS preflight ──
@@ -198,8 +346,54 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
         }
         jsonResponse(res, 200, {
           schema: 'narada.workspace_launch.ui_session_list.v1',
-          sessions: await readWorkspaceLaunchUiSessions(),
+          sessions: (await (ctx.workspaceLaunchSessions ?? readWorkspaceLaunchUiSessions)()).map(consoleLauncherSessionProjection),
         });
+      },
+    },
+    {
+      method: 'GET',
+      pattern: /^\/console\/launch\/sessions\/([^/]+)(\/.*)?$/,
+      handler: async (req, res, params, searchParams) => {
+        const origin = req.headers.origin;
+        if (!setCorsHeaders(res, origin)) {
+          jsonResponse(res, 403, { error: 'Origin not allowed' });
+          return;
+        }
+        const sessionId = decodeSessionId(params[1]!);
+        if (!sessionId) {
+          jsonResponse(res, 400, { error: 'Invalid launcher session id' });
+          return;
+        }
+        const sessions = await (ctx.workspaceLaunchSessions ?? readWorkspaceLaunchUiSessions)();
+        const session = sessions.find((candidate) => candidate.ui_session_id === sessionId);
+        if (!session) {
+          jsonResponse(res, 404, { error: 'Launcher session not found' });
+          return;
+        }
+        await proxyLauncherSessionRequest(req, res, session, workspaceLaunchUiSessionRoute(sessionId), params[2] ?? '/', searchParams);
+      },
+    },
+    {
+      method: 'POST',
+      pattern: /^\/console\/launch\/sessions\/([^/]+)(\/.*)?$/,
+      handler: async (req, res, params, searchParams) => {
+        const origin = req.headers.origin;
+        if (!setCorsHeaders(res, origin)) {
+          jsonResponse(res, 403, { error: 'Origin not allowed' });
+          return;
+        }
+        const sessionId = decodeSessionId(params[1]!);
+        if (!sessionId) {
+          jsonResponse(res, 400, { error: 'Invalid launcher session id' });
+          return;
+        }
+        const sessions = await (ctx.workspaceLaunchSessions ?? readWorkspaceLaunchUiSessions)();
+        const session = sessions.find((candidate) => candidate.ui_session_id === sessionId);
+        if (!session) {
+          jsonResponse(res, 404, { error: 'Launcher session not found' });
+          return;
+        }
+        await proxyLauncherSessionRequest(req, res, session, workspaceLaunchUiSessionRoute(sessionId), params[2] ?? '/', searchParams);
       },
     },
 

@@ -10,16 +10,19 @@
 
 import { createServer, type Server, type IncomingMessage, type ServerResponse } from 'http';
 import { openRegistry, createObservationFactory, createControlClientFactory } from '../lib/console-core.js';
-import { createConsoleServerRoutes, type RouteHandler } from './console-server-routes.js';
+import { createConsoleServerRoutes } from './console-server-routes.js';
 import { createSiteRegistryReadModel, type SiteRegistryReadModel } from './site-registry-read-model.js';
 import { createRegistryMutationGateway, type RegistryMutationGateway } from './site-registry-management-gateway.js';
+import { renderOperatorWorkspacePage } from './operator-workspace-page.js';
+import type { WorkspaceLaunchUiSessionRecord } from './workspace-launch-session-store.js';
 
 export interface ConsoleServerConfig {
   port: number;
   host?: string;
-  verbose?: boolean;
+  ingressMode?: 'diagnostic' | 'router';
   registryReadModel?: SiteRegistryReadModel;
   registryMutationGateway?: RegistryMutationGateway;
+  workspaceLaunchSessions?: () => Promise<WorkspaceLaunchUiSessionRecord[]>;
 }
 
 export interface ConsoleServer {
@@ -43,9 +46,11 @@ export async function createConsoleServer(config: ConsoleServerConfig): Promise<
     controlClientFactory,
     registryReadModel: config.registryReadModel ?? createSiteRegistryReadModel(),
     registryMutationGateway: config.registryMutationGateway ?? createRegistryMutationGateway(),
+    workspaceLaunchSessions: config.workspaceLaunchSessions,
   };
 
   const routes = createConsoleServerRoutes(routeContext);
+  const siteRegistryAvailable = routes.some((route) => route.method === 'GET' && route.pattern.test('/console/registry'));
 
   let server: Server | null = null;
   let isRunning = false;
@@ -57,10 +62,23 @@ export async function createConsoleServer(config: ConsoleServerConfig): Promise<
     res.end(body);
   }
 
+  function htmlResponse(res: ServerResponse, status: number, body: string): void {
+    res.writeHead(status, { 'Content-Type': 'text/html; charset=utf-8', 'Content-Length': Buffer.byteLength(body) });
+    res.end(body);
+  }
+
   async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
     try {
       const url = new URL(req.url ?? '/', `http://${req.headers.host}`);
       const pathname = url.pathname;
+
+      if (pathname === '/') {
+        htmlResponse(res, 200, renderOperatorWorkspacePage({
+          ingressMode: config.ingressMode ?? 'diagnostic',
+          siteRegistryAvailable,
+        }));
+        return;
+      }
 
       for (const route of routes) {
         const match = route.pattern.exec(pathname);
@@ -98,43 +116,50 @@ export async function createConsoleServer(config: ConsoleServerConfig): Promise<
       if (server) {
         throw new Error('Console server already started');
       }
-      return new Promise((resolve, reject) => {
-        server = createServer((req, res) => {
-          handleRequest(req, res).catch(() => {
-            if (!res.headersSent) {
-              jsonResponse(res, 500, { error: 'Internal server error' });
-            }
+      try {
+        return await new Promise((resolve, reject) => {
+          server = createServer((req, res) => {
+            handleRequest(req, res).catch(() => {
+              if (!res.headersSent) {
+                jsonResponse(res, 500, { error: 'Internal server error' });
+              }
+            });
+          });
+
+          server.on('error', (error) => {
+            reject(error);
+          });
+
+          server.listen(port, host, () => {
+            isRunning = true;
+            const address = server!.address();
+            const actualPort = typeof address === 'object' && address !== null ? address.port : port;
+            serverUrl = `http://${host === '0.0.0.0' ? 'localhost' : host}:${actualPort}`;
+            resolve(serverUrl);
           });
         });
-
-        server.on('error', (error) => {
-          reject(error);
-        });
-
-        server.listen(port, host, () => {
-          isRunning = true;
-          const address = server!.address();
-          const actualPort = typeof address === 'object' && address !== null ? address.port : port;
-          serverUrl = `http://${host === '0.0.0.0' ? 'localhost' : host}:${actualPort}`;
-          resolve(serverUrl);
-        });
-      });
+      } catch (error) {
+        const failedServer = server as unknown as Server | null;
+        server = null;
+        if (failedServer?.listening) {
+          await new Promise<void>((resolve) => failedServer.close(() => resolve()));
+        }
+        throw error;
+      }
     },
 
     async stop(): Promise<void> {
-      return new Promise((resolve) => {
-        registry.close();
-        if (!server) {
-          resolve();
-          return;
-        }
-        server.close(() => {
-          isRunning = false;
-          serverUrl = null;
-          server = null;
-          resolve();
+      registry.close();
+      if (server) {
+        await new Promise<void>((resolve) => {
+          server!.close(() => {
+            isRunning = false;
+            serverUrl = null;
+            server = null;
+            resolve();
+          });
         });
-      });
+      }
     },
 
     isRunning(): boolean {

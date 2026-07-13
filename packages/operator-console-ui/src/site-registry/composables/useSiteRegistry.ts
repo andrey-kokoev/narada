@@ -1,10 +1,5 @@
 import { computed, onMounted, ref, type Ref } from 'vue';
-import {
-  parseSiteRegistryListResponse,
-  parseSiteRegistryShowResponse,
-  type RegistrySiteRecord,
-  type SiteRegistryMutationRequest,
-} from '@narada2/site-registry-contract';
+import type { RegistrySiteRecord } from '@narada2/site-registry-contract';
 import {
   toSiteDetailProjection,
   toSiteListProjection,
@@ -13,69 +8,14 @@ import {
   type SiteListProjection,
   type SiteTileProjection,
 } from '../projections';
+import {
+  SiteRegistryApiError,
+  createSiteRegistryAdapter,
+  type SiteRegistryClient,
+} from '../adapter';
 
-export interface SiteRegistryClient {
-  list(): Promise<unknown>;
-  show(reference: string): Promise<unknown>;
-  plan(request: SiteRegistryMutationRequest): Promise<unknown>;
-  apply(request: SiteRegistryMutationRequest): Promise<unknown>;
-}
-
-export class SiteRegistryApiError extends Error {
-  readonly code: string;
-  readonly refusals: string[];
-
-  constructor(code: string, message: string, refusals: string[] = []) {
-    super(message);
-    this.name = 'SiteRegistryApiError';
-    this.code = code;
-    this.refusals = refusals;
-  }
-}
-
-type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
-
-async function readJson(response: Response): Promise<unknown> {
-  try {
-    return await response.json();
-  } catch {
-    throw new SiteRegistryApiError('invalid_json', `Registry returned HTTP ${response.status} without valid JSON.`);
-  }
-}
-
-function createRequestClient(basePath: string, fetchLike: FetchLike): SiteRegistryClient {
-  async function get(path: string): Promise<unknown> {
-    const response = await fetchLike(`${basePath}${path}`, { headers: { Accept: 'application/json' } });
-    const payload = await readJson(response);
-    if (!response.ok) throw new SiteRegistryApiError('http_error', `Registry request failed with HTTP ${response.status}.`);
-    return payload;
-  }
-
-  async function post(path: string, request: SiteRegistryMutationRequest, confirmApply: boolean): Promise<unknown> {
-    const response = await fetchLike(`${basePath}${path}`, {
-      method: 'POST',
-      headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
-      body: JSON.stringify(confirmApply ? { ...request, confirm_apply: true } : request),
-    });
-    const payload = await readJson(response);
-    if (!response.ok && response.status !== 409) throw new SiteRegistryApiError('http_error', `Registry request failed with HTTP ${response.status}.`);
-    return payload;
-  }
-
-  return {
-    list: () => get('/sites'),
-    show: (reference) => get(`/sites/${encodeURIComponent(reference)}`),
-    plan: (request) => post('/operations/plan', request, false),
-    apply: (request) => post('/operations/apply', request, true),
-  };
-}
-
-export function createSiteRegistryClient(
-  basePath = '/console/registry/api',
-  fetchLike: FetchLike = (input, init) => fetch(input, init),
-): SiteRegistryClient {
-  return createRequestClient(basePath, fetchLike);
-}
+export { SiteRegistryApiError, createSiteRegistryAdapter } from '../adapter';
+export type { SiteRegistryClient } from '../adapter';
 
 export interface UseSiteRegistryState {
   records: Ref<RegistrySiteRecord[]>;
@@ -92,7 +32,7 @@ export interface UseSiteRegistryState {
   clearSelection: () => void;
 }
 
-export function useSiteRegistry(client = createSiteRegistryClient()): UseSiteRegistryState {
+export function useSiteRegistry(client: SiteRegistryClient = createSiteRegistryAdapter()): UseSiteRegistryState {
   const records = ref<RegistrySiteRecord[]>([]);
   const selectedSiteId = ref<string | null>(null);
   const selectedRecord = ref<RegistrySiteRecord | null>(null);
@@ -107,8 +47,7 @@ export function useSiteRegistry(client = createSiteRegistryClient()): UseSiteReg
     loading.value = true;
     error.value = null;
     try {
-      const response = parseSiteRegistryListResponse(await client.list());
-      if (!response) throw new SiteRegistryApiError('invalid_response', 'Registry list response did not match its contract.');
+      const response = await client.list();
       if (response.status === 'refused') throw new SiteRegistryApiError('refused', 'Registry refused the list request.', response.refusals);
       records.value = response.sites;
       if (selectedSiteId.value && !records.value.some((site) => site.siteId === selectedSiteId.value)) clearSelection();
@@ -124,8 +63,7 @@ export function useSiteRegistry(client = createSiteRegistryClient()): UseSiteReg
     error.value = null;
     selectedSiteId.value = reference;
     try {
-      const response = parseSiteRegistryShowResponse(await client.show(reference));
-      if (!response) throw new SiteRegistryApiError('invalid_response', 'Registry detail response did not match its contract.');
+      const response = await client.show(reference);
       if (response.status === 'refused' || !response.site) throw new SiteRegistryApiError('refused', 'Registry refused the Site detail request.', response.refusals);
       selectedSiteId.value = response.site.siteId;
       selectedRecord.value = response.site;

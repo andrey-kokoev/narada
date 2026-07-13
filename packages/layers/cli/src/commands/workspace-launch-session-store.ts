@@ -27,6 +27,23 @@ export function workspaceLaunchUiSessionPersistenceRoot(): string {
   return join(siteAuthorityRootFromSiteRoot(workspaceLaunchUserSiteRoot()), 'runtime', 'workspace-launch-ui-sessions');
 }
 
+export function workspaceLaunchUiSessionRoute(uiSessionId: string): string {
+  return `/console/launch/sessions/${encodeURIComponent(uiSessionId)}`;
+}
+
+export function isWorkspaceLaunchUiSessionProxyable(session: WorkspaceLaunchUiSessionRecord): boolean {
+  if (!session.url || (session.status !== 'open' && session.status !== 'closing')) return false;
+  try {
+    const target = new URL(session.url);
+    return (target.protocol === 'http:' || target.protocol === 'https:')
+      && (target.hostname === '127.0.0.1'
+        || target.hostname === '::1'
+        || target.hostname === '[::1]');
+  } catch {
+    return false;
+  }
+}
+
 export async function readWorkspaceLaunchUiSessions(): Promise<WorkspaceLaunchUiSessionRecord[]> {
   const root = workspaceLaunchUiSessionPersistenceRoot();
   if (!existsSync(root)) return [];

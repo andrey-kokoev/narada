@@ -14,6 +14,9 @@ test('Operator Console pages stay behind the route and workflow boundaries', () 
   const app = read('App.vue');
   const registryPage = read('pages/SiteRegistryPage.vue');
   const mutationPage = read('pages/SiteRegistryMutationPage.vue');
+  const registryComposable = read('site-registry/composables/useSiteRegistry.ts');
+  const registryAdapter = read('site-registry/adapter.ts');
+  const registryTransport = read('site-registry/transport.ts');
   const launchPage = read('pages/OperatorConsoleLaunchPage.vue');
   const launchDomain = read('launcher/session-domain.ts');
   const launchTransport = read('launcher/session-transport.ts');
@@ -25,6 +28,12 @@ test('Operator Console pages stay behind the route and workflow boundaries', () 
   assert.doesNotMatch(registryPage, /fetch\s*\(/);
   assert.doesNotMatch(mutationPage, /fetch\s*\(/);
   assert.doesNotMatch(launchPage, /fetch\s*\(/);
+  assert.doesNotMatch(registryComposable, /fetch\s*\(/);
+  assert.doesNotMatch(registryComposable, /parseSiteRegistry/);
+  assert.match(registryTransport, /createSiteRegistryTransport/);
+  assert.match(registryTransport, /fetchLike/);
+  assert.match(registryAdapter, /parseSiteRegistryListResponse/);
+  assert.match(registryAdapter, /createSiteRegistryAdapter/);
   assert.match(launchPage, /useOperatorConsoleLauncherSessions/);
   assert.match(launchDomain, /parseWorkspaceLaunchUiSessionList/);
   assert.match(launchTransport, /parseOperatorConsoleLauncherSessions/);

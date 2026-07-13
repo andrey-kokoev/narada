@@ -1,4 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
+import { createServer } from 'node:http';
 import { createConsoleServer } from '../../src/commands/console-server.js';
 
 // The Registry page embeds a built package artifact; this test must read it from the real checkout.
@@ -787,6 +788,117 @@ describe('console server', () => {
       expect(invalidDiscovery.status).toBe(400);
       expect(registryReadModel.discoverPlan).toHaveBeenCalledTimes(1);
       await server.stop();
+    });
+  });
+  describe('CLI-owned launcher routing', () => {
+    it('projects active sessions through the stable console route and proxies only launcher paths', async () => {
+      const targetRequests: string[] = [];
+      const targetServer = createServer(async (req, res) => {
+        targetRequests.push(`${req.method} ${req.url}`);
+        if (req.method === 'GET' && req.url === '/') {
+          const body = '<script type="application/json" id="narada-workspace-launch-bootstrap">{"model":{},"persistent":true}</script><script src="/assets/index.js"></script>';
+          res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+          res.end(body);
+          return;
+        }
+        if (req.method === 'GET' && req.url === '/assets/index.js') {
+          res.writeHead(200, { 'Content-Type': 'text/javascript; charset=utf-8' });
+          res.end('export const launcher = true;');
+          return;
+        }
+        if (req.method === 'POST' && req.url === '/selector-model') {
+          for await (const _chunk of req) { /* drain the fixture request */ }
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ schema: 'fixture.selector-model.v1' }));
+          return;
+        }
+        res.writeHead(404);
+        res.end();
+      });
+      const targetUrl = await new Promise<string>((resolve, reject) => {
+        targetServer.once('error', reject);
+        targetServer.listen(0, '127.0.0.1', () => {
+          const address = targetServer.address();
+          if (!address || typeof address === 'string') {
+            reject(new Error('launcher_fixture_address_unavailable'));
+            return;
+          }
+          resolve(`http://127.0.0.1:${address.port}/`);
+        });
+      });
+      const session = {
+        schema: 'narada.workspace_launch.ui_session.v1',
+        ui_session_id: 'ui-session-active',
+        started_at: '2026-07-12T00:00:00.000Z',
+        status: 'open',
+        url: targetUrl,
+        registry_paths: ['D:/code/registry.sqlite'],
+        owner: {
+          package: '@narada2/cli',
+          command: 'launcher workspace-launch',
+          surface: 'interactive-selection-ui',
+        },
+      } as const;
+      const server = await createConsoleServer({
+        port: 0,
+        host: '127.0.0.1',
+        workspaceLaunchSessions: async () => [session],
+      });
+      try {
+        const url = await server.start();
+        const inventory = await httpGet(`${url}/console/launch/api/sessions`);
+        expect(inventory.status).toBe(200);
+        expect((inventory.body as { sessions: Array<{ url: string | null }> }).sessions[0]?.url)
+          .toBe('/console/launch/sessions/ui-session-active');
+
+        const page = await fetch(`${url}/console/launch/sessions/ui-session-active`);
+        const html = await page.text();
+        expect(page.status, html).toBe(200);
+        expect(html).toContain('"basePath":"/console/launch/sessions/ui-session-active"');
+        expect(html).toContain('/console/launch/sessions/ui-session-active/assets/index.js');
+
+        const asset = await fetch(`${url}/console/launch/sessions/ui-session-active/assets/index.js`);
+        expect(asset.status).toBe(200);
+        expect(await asset.text()).toContain('launcher = true');
+
+        const selector = await httpPost(`${url}/console/launch/sessions/ui-session-active/selector-model`, { site: [] });
+        expect(selector.status).toBe(200);
+        expect((selector.body as { schema: string }).schema).toBe('fixture.selector-model.v1');
+        expect(targetRequests).toEqual(['GET /', 'GET /assets/index.js', 'POST /selector-model']);
+      } finally {
+        await server.stop();
+        await new Promise<void>((resolve, reject) => targetServer.close((error) => error ? reject(error) : resolve()));
+      }
+    });
+
+    it('does not publish or proxy a non-loopback launcher target', async () => {
+      const session = {
+        schema: 'narada.workspace_launch.ui_session.v1',
+        ui_session_id: 'ui-session-external',
+        started_at: '2026-07-12T00:00:00.000Z',
+        status: 'open',
+        url: 'https://example.invalid/launcher',
+        registry_paths: [],
+        owner: {
+          package: '@narada2/cli',
+          command: 'launcher workspace-launch',
+          surface: 'interactive-selection-ui',
+        },
+      } as const;
+      const server = await createConsoleServer({
+        port: 0,
+        host: '127.0.0.1',
+        workspaceLaunchSessions: async () => [session],
+      });
+      try {
+        const url = await server.start();
+        const inventory = await httpGet(`${url}/console/launch/api/sessions`);
+        expect((inventory.body as { sessions: Array<{ url: string | null }> }).sessions[0]?.url).toBeNull();
+        const proxied = await httpGet(`${url}/console/launch/sessions/ui-session-external`);
+        expect(proxied.status).toBe(409);
+      } finally {
+        await server.stop();
+      }
     });
   });
   describe('CORS and safety', () => {
