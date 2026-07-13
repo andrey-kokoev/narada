@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { parseWorkspaceLaunchDashboard } from '../src/index.ts';
+import { parseWorkspaceLaunchDashboard, parseWorkspaceLaunchResultEnvelope } from '../src/index.ts';
 
 const selection = {
   site: ['sonar'],
@@ -38,4 +38,11 @@ test('rejects a dashboard when any attempt row is malformed', () => {
     }),
     null,
   );
+});
+
+test('preserves legacy HTTP error envelopes without inventing a status', () => {
+  assert.deepEqual(parseWorkspaceLaunchResultEnvelope({ error: 'selection_stale_retry' }), {
+    error: 'selection_stale_retry',
+  });
+  assert.equal(parseWorkspaceLaunchResultEnvelope({}), null);
 });

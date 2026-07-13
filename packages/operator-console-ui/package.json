@@ -20,10 +20,11 @@
     "prebuild": "pnpm --filter @narada2/ui build",
     "build": "vite build --config vite.config.mjs",
     "typecheck": "vue-tsc --noEmit -p tsconfig.json",
-    "test": "pnpm run typecheck && node --import tsx --test test/projections.test.ts test/site-registry-domain.test.ts test/routes.test.ts test/site-registry-workflow.test.ts"
+    "test": "pnpm run typecheck && node --import tsx --test test/projections.test.ts test/site-registry-domain.test.ts test/routes.test.ts test/site-registry-workflow.test.ts test/architecture-boundary.test.ts"
   },
   "dependencies": {
     "@narada2/site-registry-contract": "workspace:*",
+    "@narada2/workspace-launch-contract": "workspace:*",
     "@narada2/ui-vue": "workspace:*",
     "lucide-vue-next": "^0.563.0",
     "vue": "^3.5.0"

@@ -1,9 +1,11 @@
 import type { RegistryManagementOperation } from '@narada2/site-registry-contract';
+import type { OperatorSurfaceNavItem } from '@narada2/ui-vue';
 
 export type OperatorConsoleRouteKind =
   | 'site-registry'
   | 'site-registry-add'
   | 'site-registry-manage'
+  | 'launcher'
   | 'not-found';
 
 export interface OperatorConsoleRoute {
@@ -14,13 +16,8 @@ export interface OperatorConsoleRoute {
 }
 
 export type SiteRegistryNavigationKey = 'sites' | 'add' | 'manage';
-
-export interface OperatorConsoleNavItem {
-  key: SiteRegistryNavigationKey;
-  label: string;
-  href: string;
-  current: boolean;
-}
+export type OperatorConsoleNavigationKey = SiteRegistryNavigationKey | 'launcher';
+export type OperatorConsoleNavItem = OperatorSurfaceNavItem;
 
 function normalizedPathname(pathname: string): string {
   const value = pathname.trim() || '/';
@@ -65,15 +62,25 @@ export function resolveOperatorConsoleRoute(
       ...(operation ? { operation } : {}),
     };
   }
+  if (path === '/console/launch') {
+    return { kind: 'launcher', path };
+  }
   return { kind: 'not-found', path };
 }
 
-export function siteRegistryNavigation(
-  current: SiteRegistryNavigationKey,
+export function operatorConsoleNavigation(
+  current: OperatorConsoleNavigationKey,
 ): OperatorConsoleNavItem[] {
   return [
     { key: 'sites', label: 'Sites', href: '/console/registry', current: current === 'sites' },
     { key: 'add', label: 'Add Site', href: '/console/registry/add', current: current === 'add' },
     { key: 'manage', label: 'Manage', href: '/console/registry/manage', current: current === 'manage' },
+    { key: 'launcher', label: 'Launcher', href: '/console/launch', current: current === 'launcher' },
   ];
+}
+
+export function siteRegistryNavigation(
+  current: SiteRegistryNavigationKey,
+): OperatorConsoleNavItem[] {
+  return operatorConsoleNavigation(current);
 }

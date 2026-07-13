@@ -1,13 +1,10 @@
 import { computed, onMounted, ref } from 'vue';
-import { parseWorkspaceLaunchSelectorModel } from '@narada2/workspace-launch-contract';
-import type { WorkspaceLaunchOption } from '@narada2/workspace-launch-contract';
+import type { WorkspaceLaunchAction, WorkspaceLaunchOption } from '@narada2/workspace-launch-contract';
 import {
   arrayValues,
-  objectRecord,
   parseWorkspaceLaunchBootstrapPayload,
   parseWorkspaceLaunchDashboardAttempts,
   parseWorkspaceLaunchSelectorModelPayload,
-  stringValue,
   unique,
   type Bootstrap,
   type LaunchAttempt,
@@ -17,6 +14,7 @@ import {
   type SelectorModel,
   type StageRow,
 } from '../domain';
+import { createWorkspaceLaunchTransport } from '../transport';
 
 function readBootstrap(): Bootstrap {
   const element = document.getElementById('narada-workspace-launch-bootstrap');
@@ -43,6 +41,18 @@ function statusLabel(value: string | undefined): string {
   return String(value || '').replace(/_/g, ' ');
 }
 
+function toWorkspaceLaunchAction(value: string): WorkspaceLaunchAction | null {
+  return value === 'recheck'
+    || value === 'retry'
+    || value === 'forget'
+    || value === 'open-web-ui'
+    || value === 'attach-cli'
+    || value === 'stop-runtime'
+    || value === 'stop-projection'
+    ? value
+    : null;
+}
+
 function formatAge(timestamp: string | null): string | null {
   if (!timestamp) return null;
   const milliseconds = Date.parse(timestamp);
@@ -58,6 +68,7 @@ function formatAge(timestamp: string | null): string | null {
 
 export function useWorkspaceLaunchWorkflow() {
   const bootstrap = readBootstrap();
+  const transport = createWorkspaceLaunchTransport({ basePath: bootstrap.basePath });
   const model = bootstrap.model;
   const persistent = bootstrap.persistent;
   const selectedSites = ref(new Set(model.initialSites));
@@ -184,15 +195,10 @@ export function useWorkspaceLaunchWorkflow() {
     const sequence = ++refreshSequence.value;
     const requested = selectorPayload();
     try {
-      const response = await fetch('/selector-model', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requested),
-      });
+      const response = await transport.selectorModel(requested);
       if (sequence !== refreshSequence.value) return;
-      if (response.ok) {
-        const parsed = parseWorkspaceLaunchSelectorModel(await response.json() as unknown);
-        if (parsed) currentSelectorModel.value = parseWorkspaceLaunchSelectorModelPayload(parsed);
+      if (response.ok && response.payload) {
+        currentSelectorModel.value = parseWorkspaceLaunchSelectorModelPayload(response.payload);
       }
     } catch {
       return;
@@ -393,8 +399,8 @@ export function useWorkspaceLaunchWorkflow() {
 
   async function loadLaunches(): Promise<void> {
     try {
-      const response = await fetch('/launches');
-      if (response.ok) updateDashboard(await response.json() as unknown);
+      const response = await transport.launches();
+      if (response.ok && response.payload) updateDashboard(response.payload);
     } catch {
       // The launcher page remains usable if the optional recovery read is unavailable.
     }
@@ -409,14 +415,19 @@ export function useWorkspaceLaunchWorkflow() {
     }
     stopConfirmationAttemptId.value = null;
     statusText.value = `${actionLabel(action)}...`;
+    const normalizedAction = toWorkspaceLaunchAction(action);
+    if (!normalizedAction) {
+      statusText.value = `Action refused: unsupported launch action ${action}`;
+      return;
+    }
     try {
-      const response = await fetch(`/launches/${encodeURIComponent(launchAttemptId)}/${encodeURIComponent(action)}`, { method: 'POST' });
-      const result = objectRecord(await response.json() as unknown);
-      updateDashboard(result.dashboard || result);
+      const response = await transport.action(launchAttemptId, normalizedAction);
+      const result = response.payload;
+      if (result?.dashboard) updateDashboard(result.dashboard);
       statusText.value = response.ok
-        ? stringValue(result.message) || `${actionLabel(action)} completed.`
-        : `Action refused: ${stringValue(result.message) || stringValue(result.reason_code) || response.statusText}`;
-      if (typeof result.command === 'string' && result.command) statusText.value += `\\n${result.command}`;
+        ? result?.message || `${actionLabel(action)} completed.`
+        : `Action refused: ${result?.message || result?.reason_code || `HTTP ${response.status}`}`;
+      if (result?.command) statusText.value += `\\n${result.command}`;
     } catch (error) {
       statusText.value = `Action failed: ${error instanceof Error ? error.message : String(error)}`;
     }
@@ -427,21 +438,17 @@ export function useWorkspaceLaunchWorkflow() {
     submitting.value = true;
     statusText.value = 'Creating a fresh launch attempt. This does not attach to any previous session.';
     try {
-      const response = await fetch('/submit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(selectorPayload()),
-      });
-      const result = objectRecord(await response.json() as unknown);
+      const response = await transport.submit(selectorPayload());
+      const result = response.payload;
       if (response.ok) {
         statusText.value = persistent
           ? 'New launch accepted. Open or attach only from the specific result card below.'
           : 'New launch submitted. You can return to the terminal.';
-        updateDashboard(result.dashboard || {});
+        if (result?.dashboard) updateDashboard(result.dashboard);
         if (!persistent) finishedView.value = 'submitted';
       } else {
-        statusText.value = `Launch failed: ${stringValue(result.error) || stringValue(result.status) || response.statusText}`;
-        if (result.dashboard) updateDashboard(result.dashboard);
+        statusText.value = `Launch failed: ${result?.error || result?.status || `HTTP ${response.status}`}`;
+        if (result?.dashboard) updateDashboard(result.dashboard);
       }
     } catch (error) {
       statusText.value = `Launch failed: ${error instanceof Error ? error.message : String(error)}`;
@@ -452,7 +459,7 @@ export function useWorkspaceLaunchWorkflow() {
 
   async function cancel(): Promise<void> {
     try {
-      await fetch('/cancel', { method: 'POST' });
+      await transport.cancel();
     } finally {
       finishedView.value = 'cancelled';
     }
@@ -469,6 +476,7 @@ export function useWorkspaceLaunchWorkflow() {
   return {
     model,
     persistent,
+    basePath: transport.basePath,
     selectedSites,
     selectedRoles,
     selectedSurfaces,

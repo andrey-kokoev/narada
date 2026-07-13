@@ -25,6 +25,13 @@ import {
 } from '@narada2/carrier-runtime-contract/carrier-runtime-selection';
 import { discoverNarsSessions } from '@narada2/nars-session-core/session-index';
 import { explainMcpCommand as explainMcpAuthorityCommand } from './launcher-mcp-authority.js';
+import {
+  isWorkspaceLaunchUiSessionRecord,
+  readWorkspaceLaunchUiSessions,
+  workspaceLaunchUiSessionPersistenceRoot,
+  workspaceLaunchUserSiteRoot,
+  type WorkspaceLaunchUiSessionRecord,
+} from './workspace-launch-session-store.js';
 import { defaultLaunchRegistryPath, listKnownSiteRootsForCli, type ResolvedSiteRoot } from '../lib/site-root-resolver.js';
 import type {
   WorkspaceLaunchSelectionCardinality,
@@ -419,20 +426,6 @@ interface WorkspaceLaunchLegacyCarrierCompatibility {
   deprecated_fields: string[];
   replacement_fields: Record<string, string>;
   removal_policy: 'remove_after_consumers_migrate';
-}
-
-interface WorkspaceLaunchUiSessionRecord {
-  schema: 'narada.workspace_launch.ui_session.v1';
-  ui_session_id: string;
-  started_at: string;
-  status: 'open' | 'closing' | 'closed' | 'timeout';
-  url: string | null;
-  registry_paths: string[];
-  owner: {
-    package: '@narada2/cli';
-    command: 'launcher workspace-launch';
-    surface: 'interactive-selection-ui';
-  };
 }
 
 interface WorkspaceLaunchHandoffRecord {
@@ -1837,12 +1830,6 @@ function workspaceLaunchId(prefix: string): string {
   return `${prefix}_${randomUUID().replace(/-/g, '').slice(0, 16)}`;
 }
 
-function workspaceLaunchUserSiteRoot(): string {
-  return process.env.NARADA_USER_SITE_ROOT
-    ?? (process.env.USERPROFILE ? join(process.env.USERPROFILE, 'Narada') : null)
-    ?? join(process.cwd(), '.andrey-user');
-}
-
 const WORKSPACE_LAUNCH_UI_DEFAULT_PORT = 47320;
 
 function workspaceLaunchUiPolicyPath(): string {
@@ -1952,10 +1939,6 @@ export async function listenWorkspaceLaunchUiServer(server: Server, host: string
     }
     throw new Error(`launcher_ui_port_in_use: ${occupiedUrl} is already occupied. Use --launcher-ui-port-fallback to allow an ephemeral fallback port or choose a different --launcher-ui-port.`);
   }
-}
-
-function workspaceLaunchUiSessionPersistenceRoot(): string {
-  return join(siteAuthorityRootFromSiteRoot(workspaceLaunchUserSiteRoot()), 'runtime', 'workspace-launch-ui-sessions');
 }
 
 function workspaceLaunchRememberedSelectionRoot(): string {
@@ -2095,14 +2078,6 @@ function workspaceLaunchDashboardRetentionCount(): number {
   if (!raw) return 20;
   const parsed = Number.parseInt(raw, 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 20;
-}
-
-function isWorkspaceLaunchUiSessionRecord(value: unknown): value is WorkspaceLaunchUiSessionRecord {
-  return isRecord(value)
-    && value.schema === 'narada.workspace_launch.ui_session.v1'
-    && typeof value.ui_session_id === 'string'
-    && typeof value.started_at === 'string'
-    && Array.isArray(value.registry_paths);
 }
 
 function isWorkspaceLaunchAttemptRecord(value: unknown): value is WorkspaceLaunchAttemptRecord {
@@ -2847,12 +2822,16 @@ export function buildWorkspaceLaunchSelectionUiModel(
   };
 }
 
-export function buildWorkspaceLaunchSelectionHtml(model: Record<string, unknown>, options: { persistent?: boolean } = {}): string {
+export function buildWorkspaceLaunchSelectionHtml(
+  model: Record<string, unknown>,
+  options: { persistent?: boolean; basePath?: string } = {},
+): string {
   const templatePath = requireFromLauncherCommand.resolve('@narada2/workspace-launch-ui/dist/index.html');
   const template = readFileSync(templatePath, 'utf8');
   const bootstrap = JSON.stringify({
     model,
     persistent: options.persistent === true,
+    ...(options.basePath ? { basePath: options.basePath } : {}),
   }).replace(/</g, '\\u003c');
   const placeholder = '__NARADA_WORKSPACE_LAUNCH_BOOTSTRAP__';
   if (!template.includes(placeholder)) {

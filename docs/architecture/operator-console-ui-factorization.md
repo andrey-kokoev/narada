@@ -16,7 +16,7 @@ The Operator Console Site Registry UI has one canonical domain model and one exp
 
 ## Serving Boundary
 
-The CLI serves the same built Vue document at `/console/registry`, `/console/registry/add`, and `/console/registry/manage`, and only admits bundle assets through the bounded `/console/registry/assets/:asset` route. The mutation page selects its initial mode from the request path; it does not create a second app.
+The CLI serves the same built Vue document at `/console/registry`, `/console/registry/add`, `/console/registry/manage`, and `/console/launch`, and only admits bundle assets through the bounded `/console/registry/assets/:asset` route. The mutation page selects its initial mode from the request path; it does not create a second app.
 
 ## Invariants
 
@@ -28,8 +28,10 @@ The CLI serves the same built Vue document at `/console/registry`, `/console/reg
 
 ## Shared Console Boundary
 
-`console/routes.ts` owns the explicit Operator Console route model and site-registry navigation. `OperatorConsoleShell.vue` owns shared console framing and leaves domain state to the page composables. Unknown paths render a bounded not-found projection instead of silently falling back to the registry.
+`console/routes.ts` owns the explicit Operator Console route model and site-registry navigation. The route-neutral `OperatorSurfaceShell` lives in `@narada2/ui-vue`; `OperatorConsoleShell.vue` is the console-specific type-safe wrapper. Shared framing leaves domain state to page composables. Unknown paths render a bounded not-found projection instead of silently falling back to the registry.
 
-The launcher is a separate `@narada2/workspace-launch-ui` presentation package. Its `domain.ts` adapter and `useWorkspaceLaunchWorkflow` own launcher state while `@narada2/cli` remains the authority for launch policy, runtime handoff, and endpoint behavior. It shares the UI design system but does not become part of the registry domain.
+The launcher is a separate `@narada2/workspace-launch-ui` presentation package. Its `domain.ts` adapter, typed `transport.ts`, and `useWorkspaceLaunchWorkflow` own client state while `@narada2/cli` remains the authority for launch policy, runtime handoff, and endpoint behavior. The transport accepts an explicit base path so the same page can run at the standalone root or a mounted route without endpoint drift.
+
+The console route `/console/launch` is intentionally a router for persistent CLI-owned sessions. The CLI session store exposes the read-only session-list projection, and the UI reaches it through a typed transport and composable before linking to the recorded launcher URL; it does not acquire launch authority. This preserves the boundary `contract -> transport/adapter -> composable -> page -> projection` without introducing a generic page registry.
 
 The concept-to-page map is maintained in `docs/architecture/operator-console-concept-surfaces.md`.

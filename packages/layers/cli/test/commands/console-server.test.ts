@@ -708,6 +708,20 @@ describe('console server', () => {
       expect(manageHtml).toContain('<div id="app"></div>');
       expect(manageHtml).toContain('/console/registry/assets/');
 
+      const launcherPage = await fetch(`${url}/console/launch`);
+      const launcherHtml = await launcherPage.text();
+      expect(launcherPage.status, launcherHtml).toBe(200);
+      expect(launcherHtml).toContain('<div id="app"></div>');
+      expect(launcherHtml).toContain('/console/registry/assets/');
+
+      const launcherSessions = await httpGet(`${url}/console/launch/api/sessions`);
+      expect(launcherSessions.status).toBe(200);
+      expect((launcherSessions.body as { schema: string; sessions: unknown[] }).schema).toBe('narada.workspace_launch.ui_session_list.v1');
+      expect(Array.isArray((launcherSessions.body as { sessions: unknown[] }).sessions)).toBe(true);
+
+      const unknownRoute = await fetch(`${url}/console/not-found`);
+      expect(unknownRoute.status).toBe(404);
+
       const list = await httpGet(`${url}/console/registry/api/sites`);
       expect(list.status).toBe(200);
       expect((list.body as { sites: Array<{ site_id: string }> }).sites[0]?.site_id).toBe('site-a');

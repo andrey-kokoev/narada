@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { cn } from '@narada2/ui-vue';
+import { OperatorSurfaceShell, cn } from '@narada2/ui-vue';
 import {
   ExternalLink,
   Play,
@@ -15,6 +15,7 @@ import { useWorkspaceLaunchWorkflow } from './launcher/composables/useWorkspaceL
 const {
   model,
   persistent,
+  basePath,
   selectedSites,
   selectedRoles,
   selectedSurfaces,
@@ -63,6 +64,15 @@ const {
   cancel,
 } = useWorkspaceLaunchWorkflow();
 
+const operatorSurfaceNavigation = basePath === '/console/launch'
+  ? [
+      { key: 'sites', label: 'Sites', href: '/console/registry', current: false },
+      { key: 'launcher', label: 'Launcher', href: '/console/launch', current: true },
+    ]
+  : [
+      { key: 'launcher', label: 'Launcher', href: '/', current: true },
+    ];
+
 function actionGroup(action: string): string {
   if (action === 'recheck') return 'inspect';
   if (action === 'open-web-ui' || action === 'attach-cli') return 'attach';
@@ -91,6 +101,13 @@ function actionIcon(action: string): typeof RefreshCw {
 
 
 <template>
+  <OperatorSurfaceShell
+    eyebrow="Operator Console"
+    title="Agent Launcher"
+    back-href="/"
+    back-label="Back to Operator Workspace"
+    :nav-items="operatorSurfaceNavigation"
+  >
   <div v-if="finishedView === 'submitted'" class="launcher-terminal-state">
     <h1>New launch submitted</h1>
     <p>You can return to the terminal.</p>
@@ -239,6 +256,7 @@ function actionIcon(action: string): typeof RefreshCw {
       </div>
     </section>
   </main>
+  </OperatorSurfaceShell>
 </template>
 
 <style scoped>

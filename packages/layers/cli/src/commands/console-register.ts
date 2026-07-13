@@ -72,18 +72,20 @@ export function registerConsoleCommands(program: Command): void {
 
   consoleCmd
     .command('serve')
-    .description('Start the Operator Console HTTP API for browser UI')
+    .description('Start the local Operator Workspace host for browser UI')
     .option('--host <host>', 'Host to bind to', '127.0.0.1')
     .option('--port <port>', 'Port to bind to (0 for ephemeral)', '0')
-    .option('-v, --verbose', 'Enable verbose output', false)
     .action(async (opts: Record<string, unknown>) => {
       // Long-lived process surface: keep direct lifecycle output and SIGINT handling.
       const host = (opts.host as string) ?? '127.0.0.1';
       const port = opts.port ? parseInt(String(opts.port), 10) : 0;
-      const server = await createConsoleServer({ host, port, verbose: !!opts.verbose });
+      const server = await createConsoleServer({ host, port, ingressMode: 'diagnostic' });
       const url = await server.start();
       emitLongLivedCommandStartup([
-        `Operator Console HTTP API listening at ${url}`,
+        `Operator Workspace: ${url}/`,
+        `Operator Console Site Registry: ${url}/console/registry`,
+        `Operator Console Agent Launcher: ${url}/console/launch`,
+        `Operator Console API base: ${url}/console`,
         'Press Ctrl+C to stop',
       ]);
       process.on('SIGINT', async () => {

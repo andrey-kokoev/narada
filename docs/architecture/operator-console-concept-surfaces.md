@@ -5,7 +5,7 @@
 A domain concept earns a UI surface through an explicit chain:
 
 1. A canonical contract defines the durable or wire shape.
-2. A domain adapter parses and names that shape for the client.
+2. A typed transport and domain adapter parse and name that shape for the client.
 3. A composable owns request state, workflow state, and command semantics.
 4. A page chooses the route-level composition.
 5. Components render stable projections of the concept.
@@ -24,7 +24,7 @@ The browser is a projection and workflow client. It is not a second authority mo
 | Read and detail state | `useSiteRegistry` |
 | Mutation transport | `useSiteRegistryMutation` |
 | Draft, operation, confirmation, and route workflow | `useSiteRegistryWorkflow` |
-| Shared console chrome and route resolution | `OperatorConsoleShell.vue`, `console/routes.ts` |
+| Shared console chrome and route resolution | `@narada2/ui-vue` `OperatorSurfaceShell`, `OperatorConsoleShell.vue`, `console/routes.ts` |
 | Collection page | `/console/registry` |
 | Add workflow | `/console/registry/add` |
 | Manage workflow | `/console/registry/manage` |
@@ -40,12 +40,17 @@ The registry page is a collection and selection surface. Add and manage are sepa
 | Canonical launch selector and dashboard wire types | `@narada2/workspace-launch-contract` |
 | Launch authority and HTTP endpoints | `@narada2/cli` |
 | Browser domain adapter | `workspace-launch-ui/src/launcher/domain.ts` |
+| Typed browser transport and base-path binding | `workspace-launch-ui/src/launcher/transport.ts` |
 | Selection, submit, cancel, retry, and dashboard state | `useWorkspaceLaunchWorkflow` |
 | Launcher presentation | `workspace-launch-ui/src/App.vue` |
 | Repeated projection | Launch attempt cards and stage rows |
 | Serving boundary | CLI launcher server root and its bounded asset route |
 
 Workspace Launch shares the Narada UI design system with Operator Console, but it is not a Site Registry page and does not acquire registry authority. The CLI remains the owner of launch policy and runtime handoff.
+
+### Operator Console Launcher Router
+
+`/console/launch` is a console-owned routing projection for CLI-owned persistent launcher sessions. The CLI session store owns the read-only persisted session projection; the page reaches it through its typed transport and composable. The route lists recorded session URLs and provides the CLI handoff command when none are available. It does not start agents, submit launch selections, or duplicate the launcher server. The CLI launcher remains the only authority for launch policy, runtime handoff, and session mutation.
 
 ## Shared Component Roles
 
@@ -60,6 +65,7 @@ Workspace Launch shares the Narada UI design system with Operator Console, but i
 
 - Canonical contracts are the source of truth; UI types may rename wire fields but may not invent authority fields.
 - Parsing happens at the transport boundary. Invalid envelopes become visible errors or a null adapter result, never partial domain state.
+- Client requests cross a typed transport boundary before reaching a composable; a mounted surface supplies its base path explicitly rather than relying on the current URL by accident.
 - Composables own asynchronous state and workflow transitions; templates do not duplicate fetch, plan, apply, or retry logic.
 - Pages do not read databases, construct policy decisions, or call mutation endpoints directly.
 - A route is explicit and typed. A generic page registry is not introduced until a second concept demonstrates the same route contract.

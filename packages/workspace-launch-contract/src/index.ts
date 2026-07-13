@@ -90,9 +90,52 @@ export interface WorkspaceLaunchUiDashboard {
 export interface WorkspaceLaunchBootstrapPayload {
   model: WorkspaceLaunchWireModel;
   persistent: boolean;
+  basePath?: string;
+}
+
+export type WorkspaceLaunchAction =
+  | 'recheck'
+  | 'retry'
+  | 'forget'
+  | 'open-web-ui'
+  | 'attach-cli'
+  | 'stop-runtime'
+  | 'stop-projection';
+
+export interface WorkspaceLaunchUiSession {
+  schema: 'narada.workspace_launch.ui_session.v1';
+  ui_session_id: string;
+  started_at: string;
+  status: 'open' | 'closing' | 'closed' | 'timeout';
+  url: string | null;
+  registry_paths: string[];
+  owner: {
+    package: string;
+    command: string;
+    surface: string;
+  };
+}
+
+export interface WorkspaceLaunchUiSessionList {
+  schema: 'narada.workspace_launch.ui_session_list.v1';
+  sessions: WorkspaceLaunchUiSession[];
+}
+
+export interface WorkspaceLaunchResultEnvelope {
+  status?: string;
+  schema?: string;
+  message?: string;
+  error?: string;
+  reason_code?: string;
+  command?: string;
+  action?: string;
+  launch_count?: number;
+  dashboard?: WorkspaceLaunchUiDashboard;
+  attempt?: WorkspaceLaunchWireAttempt;
 }
 
 type UnknownRecord = Record<string, unknown>;
+
 
 function isRecord(value: unknown): value is UnknownRecord {
   return typeof value === 'object' && value !== null;
@@ -216,6 +259,69 @@ export function parseWorkspaceLaunchDashboard(value: unknown): WorkspaceLaunchUi
   return dashboard;
 }
 
+function isWorkspaceLaunchUiSession(value: unknown): value is WorkspaceLaunchUiSession {
+  if (!isRecord(value)) return false;
+  const owner = value.owner;
+  return value.schema === 'narada.workspace_launch.ui_session.v1'
+    && isString(value.ui_session_id)
+    && isString(value.started_at)
+    && (value.status === 'open' || value.status === 'closing' || value.status === 'closed' || value.status === 'timeout')
+    && (value.url === null || isString(value.url))
+    && isStringArray(value.registry_paths)
+    && isRecord(owner)
+    && isString(owner.package)
+    && isString(owner.command)
+    && isString(owner.surface);
+}
+
+export function parseWorkspaceLaunchUiSessionList(value: unknown): WorkspaceLaunchUiSessionList | null {
+  if (!isRecord(value) || value.schema !== 'narada.workspace_launch.ui_session_list.v1') return null;
+  return Array.isArray(value.sessions) && value.sessions.every(isWorkspaceLaunchUiSession)
+    ? { schema: value.schema, sessions: value.sessions }
+    : null;
+}
+
+function optionalNumber(value: unknown): number | undefined {
+  return value === undefined || (typeof value === 'number' && Number.isFinite(value)) ? value as number | undefined : undefined;
+}
+
+export function parseWorkspaceLaunchResultEnvelope(value: unknown): WorkspaceLaunchResultEnvelope | null {
+  if (!isRecord(value)) return null;
+  const dashboard = value.dashboard === undefined ? undefined : parseWorkspaceLaunchDashboard(value.dashboard);
+  if (value.dashboard !== undefined && !dashboard) return null;
+  let attempt: WorkspaceLaunchWireAttempt | undefined;
+  if (value.attempt !== undefined) {
+    const parsedAttempt = parseWorkspaceLaunchDashboard({ attempts: [value.attempt] });
+    if (!parsedAttempt) return null;
+    attempt = parsedAttempt.attempts[0];
+  }
+  const launchCount = optionalNumber(value.launch_count);
+  const hasMeaningfulField = isString(value.status)
+    || isString(value.schema)
+    || isString(value.message)
+    || isString(value.error)
+    || isString(value.reason_code)
+    || isString(value.command)
+    || isString(value.action)
+    || launchCount !== undefined
+    || dashboard !== undefined
+    || attempt !== undefined;
+  if (!hasMeaningfulField) return null;
+  const envelope: WorkspaceLaunchResultEnvelope = {
+    ...(isString(value.status) ? { status: value.status } : {}),
+    ...(isString(value.schema) ? { schema: value.schema } : {}),
+    ...(isString(value.message) ? { message: value.message } : {}),
+    ...(isString(value.error) ? { error: value.error } : {}),
+    ...(isString(value.reason_code) ? { reason_code: value.reason_code } : {}),
+    ...(isString(value.command) ? { command: value.command } : {}),
+    ...(isString(value.action) ? { action: value.action } : {}),
+    ...(launchCount !== undefined ? { launch_count: launchCount } : {}),
+    ...(dashboard ? { dashboard } : {}),
+    ...(attempt ? { attempt } : {}),
+  };
+  return envelope;
+}
+
 export function parseWorkspaceLaunchSelectorModel(value: unknown): WorkspaceLaunchSelectorModel | null {
   return isSelectorModel(value) ? value : null;
 }
@@ -225,5 +331,6 @@ export function parseWorkspaceLaunchBootstrap(value: unknown): WorkspaceLaunchBo
   return {
     model: value.model,
     persistent: value.persistent,
+    ...(isString(value.basePath) ? { basePath: value.basePath } : {}),
   };
 }

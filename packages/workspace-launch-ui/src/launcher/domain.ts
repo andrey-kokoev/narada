@@ -55,6 +55,7 @@ export interface LauncherModel {
 export interface Bootstrap {
   model: LauncherModel;
   persistent: boolean;
+  basePath: string;
 }
 
 export interface Handoff {
@@ -162,6 +163,7 @@ export function parseWorkspaceLaunchBootstrapPayload(value: unknown): Bootstrap 
   return {
     model: parseModel(parsed.model),
     persistent: parsed.persistent,
+    basePath: parsed.basePath || '',
   };
 }
 

@@ -20,6 +20,7 @@ import type {
 import type { ConsoleControlRequest } from '@narada2/windows-site';
 import type { SiteRegistryReadModel } from './site-registry-read-model.js';
 import type { RegistryMutationGateway, RegistryMutationInput, RegistryMutationOperation } from './site-registry-management-gateway.js';
+import { readWorkspaceLaunchUiSessions } from './workspace-launch-session-store.js';
 import { readOperatorConsoleUiAsset, readOperatorConsoleUiDocument } from './console-ui-assets.js';
 
 export interface RouteHandler {
@@ -170,6 +171,35 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
         }
         res.writeHead(204);
         res.end();
+      },
+    },
+
+    // ── CLI-owned launcher routing surface ──
+    {
+      method: 'GET',
+      pattern: /^\/console\/launch$/,
+      handler: async (_req, res) => {
+        const origin = _req.headers.origin;
+        if (!setCorsHeaders(res, origin)) {
+          jsonResponse(res, 403, { error: 'Origin not allowed' });
+          return;
+        }
+        htmlResponse(res, 200, readOperatorConsoleUiDocument());
+      },
+    },
+    {
+      method: 'GET',
+      pattern: /^\/console\/launch\/api\/sessions$/,
+      handler: async (_req, res) => {
+        const origin = _req.headers.origin;
+        if (!setCorsHeaders(res, origin)) {
+          jsonResponse(res, 403, { error: 'Origin not allowed' });
+          return;
+        }
+        jsonResponse(res, 200, {
+          schema: 'narada.workspace_launch.ui_session_list.v1',
+          sessions: await readWorkspaceLaunchUiSessions(),
+        });
       },
     },
 

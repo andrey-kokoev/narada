@@ -20,7 +20,7 @@
     "prebuild": "pnpm --filter @narada2/ui build",
     "build": "vite build",
     "typecheck": "vue-tsc --noEmit -p tsconfig.json",
-    "test": "node --import tsx --test test/domain.test.ts"
+    "test": "node --import tsx --test test/domain.test.ts test/transport.test.ts test/architecture-boundary.test.ts"
   },
   "dependencies": {
     "@narada2/workspace-launch-contract": "workspace:*",

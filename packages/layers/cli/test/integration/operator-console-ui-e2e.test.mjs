@@ -105,16 +105,25 @@ function mutationResponse(input, applied) {
 
 async function startFixtureServer() {
   const requests = [];
+  const launcherRequests = [];
   const server = createServer(async (req, res) => {
     try {
       const pathname = new URL(req.url || '/', 'http://127.0.0.1').pathname;
-      if (req.method === 'GET' && ['/console/registry', '/console/registry/add', '/console/registry/manage'].includes(pathname)) {
+      if (req.method === 'GET' && ['/console/registry', '/console/registry/add', '/console/registry/manage', '/console/launch'].includes(pathname)) {
         const body = readOperatorConsoleUiDocument();
         res.writeHead(200, {
           'Content-Type': 'text/html; charset=utf-8',
           'Content-Length': Buffer.byteLength(body),
         });
         res.end(body);
+        return;
+      }
+      if (req.method === 'GET' && pathname === '/console/launch/api/sessions') {
+        launcherRequests.push(pathname);
+        sendJson(res, 200, {
+          schema: 'narada.workspace_launch.ui_session_list.v1',
+          sessions: [],
+        });
         return;
       }
       if (req.method === 'GET' && pathname.startsWith('/console/registry/assets/')) {
@@ -186,6 +195,7 @@ async function startFixtureServer() {
   return {
     url,
     requests,
+    launcherRequests,
     close: () => new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve())),
   };
 }
@@ -218,6 +228,25 @@ test('Operator Console Vue registry projection works at desktop and mobile width
     await page.reload();
     await page.locator('.site-tile').waitFor();
     await assertNoHorizontalOverflow(page, 'operator console mobile');
+  } finally {
+    await browser.close();
+    await fixture.close();
+  }
+});
+
+test('Operator Console routes launcher sessions through its base-path API and rejects unknown routes', async () => {
+  const fixture = await startFixtureServer();
+  const browser = await chromium.launch();
+  try {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+    const response = await page.goto(fixture.url + '/console/launch');
+    assert.equal(response?.status(), 200);
+    await page.getByRole('heading', { name: 'Start the launcher from the CLI' }).waitFor();
+    assert.equal(await page.getByRole('link', { name: 'Launcher' }).getAttribute('href'), '/console/launch');
+    assert.deepEqual(fixture.launcherRequests, ['/console/launch/api/sessions']);
+
+    const unknown = await fetch(fixture.url + '/console/not-found');
+    assert.equal(unknown.status, 404);
   } finally {
     await browser.close();
     await fixture.close();
