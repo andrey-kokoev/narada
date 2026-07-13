@@ -22,7 +22,10 @@ import type { WorkspaceLaunchUiSession } from '@narada2/workspace-launch-contrac
 import type { SiteRegistryReadModel } from './site-registry-read-model.js';
 import type { RegistryMutationGateway, RegistryMutationInput, RegistryMutationOperation } from './site-registry-management-gateway.js';
 import type { AgentSessionReadModel } from './agent-session-read-model.js';
-import { operatorSurfaceRoutePath } from '@narada2/operator-console-contract';
+import {
+  OPERATOR_CONSOLE_LONG_RUNNING_REQUEST_TIMEOUT_MS,
+  operatorSurfaceRoutePath,
+} from '@narada2/operator-console-contract';
 import {
   isWorkspaceLaunchUiSessionProxyable,
   readWorkspaceLaunchUiSessions,
@@ -298,7 +301,7 @@ async function proxyLauncherSessionRequest(
         ...(headerValue(req.headers['content-type']) ? { 'Content-Type': headerValue(req.headers['content-type'])! } : {}),
       },
       ...(body ? { body } : {}),
-      signal: AbortSignal.timeout(15_000),
+      signal: AbortSignal.timeout(OPERATOR_CONSOLE_LONG_RUNNING_REQUEST_TIMEOUT_MS),
     });
     const contentType = upstream.headers.get('content-type') ?? 'application/octet-stream';
     const upstreamBody = Buffer.from(await upstream.arrayBuffer());

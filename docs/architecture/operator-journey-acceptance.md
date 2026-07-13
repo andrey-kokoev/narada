@@ -12,13 +12,20 @@ starts the real compiled `narada launcher workspace-launch` process with
 `--interactive-selection-ui` alongside that Console, opens the returned browser
 page through the stable Router session path, and closes the session through the
 same path. The canonical journey test also starts that real
-launcher against the already-running Router after artifact delivery, opens
-and cancels its session through the same browser origin, and only then tests
-Router restart. That test starts the Router through the
-production `ensureOperatorRouter` path, which exercises hidden detached
-ownership and same-port restart; it starts the real Console, Site Operations,
+launcher against the already-running Router after artifact delivery, adds a
+second Site through the governed Registry workflow, selects that Site in the
+launcher, proves a real hidden-detached runtime host with an attachable
+`agent-cli` projection through a healthy new NARS session, requests runtime
+shutdown through the admitted control path consumed by the runtime wrapper,
+and only then closes the launcher and tests Router restart. The runtime control
+sideband accepts either governed carrier-input envelopes or the narrow NARS
+session-core control methods; it does not accept arbitrary commands. That test
+starts the Router through the production `ensureOperatorRouter` path, which
+exercises hidden detached ownership and same-port restart; it starts the real
+Console, Site Operations,
 and Agent Web UI servers in-process, seeds one User Site registry record and
-one NARS session-owned artifact, and registers the corresponding
+one NARS session-owned artifact, creates a second registry record through the
+live add workflow, and registers the corresponding
 production-shaped routes with that Router. Both tests keep browser navigation
 on the Router origin, not on any backing server URL.
 
@@ -41,15 +48,21 @@ The test records these acceptance properties as assertions:
   same stable Router origin used by Workspace, Registry, Site Operations,
   Agent Web UI, and the artifact; it serves the browser UI through
   `/console/launch/sessions/<id>`, keeps its direct localhost port out of
-  operator-facing output, and exits cleanly after the operator cancels through
-  that Router; the closed session no longer serves launcher content;
+  operator-facing output, selects the second Site, starts a real hidden-
+  detached runtime host, observes its newly-created NARS session as healthy and
+  launch-owned, links the logical launch-session ID to the distinct carrier/NARS
+  session record, stops it through the durable session control path, and exits
+  cleanly after the operator cancels through that Router. The acceptance waits
+  for the session-owned runtime PID to exit before removing the temporary Site root;
+  the closed session no longer serves launcher content;
 - the separate launcher acceptance test repeats the real Console-plus-launcher
   projection with an independently started Router, covering the launcher
   process boundary without relying on the in-process journey fixture;
 - the Workspace route directory exposes Registry, Site Operations, and the
   session route from the live Router inventory;
-- Registry edit uses the canonical preview, explicit confirmation, and apply
-  gateway, and the changed metadata is read back from the live registry;
+- Registry edit and add each use the canonical preview, explicit confirmation,
+  and apply gateway; the edited metadata and second Site are read back from
+  the live registry;
 - a same-origin browser mutation succeeds;
 - a foreign Origin is refused by the stable Router with status 421, and the
   direct owner server refuses the same request with status 403;
@@ -72,12 +85,13 @@ acceptance test does not treat a direct owner URL as an operator surface.
 
 ## Residual report
 
-Status: accepted for the representative continuous operator journey.
+Status: accepted for the representative continuous operator journey across
+two Sites and two Registry mutation classes.
 
 Proven: hidden Router start and same-port restart, stable-origin navigation,
-live WebSocket and artifact delivery, real launcher projection and cancellation,
-governed registry mutation, CSRF boundaries, route reconstruction, and cleanup.
+live WebSocket and artifact delivery, real launcher projection, hidden-
+detached launch-to-session observation and shutdown, governed registry edit and
+add mutations, CSRF boundaries, route reconstruction, and cleanup.
 
-Remaining by design: coverage uses one representative Site and one
-non-destructive registry metadata mutation. Other Site types and mutation
-classes remain outside this milestone.
+Remaining by design: other Site substrates, carrier/runtime combinations, and
+destructive Registry mutation classes remain outside this milestone.
