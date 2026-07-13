@@ -240,6 +240,10 @@ direct diagnostic endpoints.
   remain diagnostic local-file projections. They are not falsely presented as
   Router artifacts; session-owned NARS artifacts already use the Router
   artifact route.
+- The Operator Console Vue surface reads and validates `/console/routes` as
+  its live navigation source, falls back to known static routes only when the
+  directory is unavailable, and resolves session links from typed route target
+  identity rather than labels or path parsing.
 
 ## Migration Slices
 
@@ -263,7 +267,8 @@ direct diagnostic endpoints.
    its Site route. Registry-specific ownership is intentionally not split into
    a second Router route class because that would duplicate Console/User Site
    projection authority.
-5. Change launcher and CLI open flows to return router URLs. **Partial:**
+5. Change launcher and CLI open flows to return router URLs. **Mostly
+   implemented:**
    Console, Agent Web UI, Site Operations, and the persistent launcher session
    handoff return router URLs when their owning projection is healthy. One-shot
    launcher selection and local task-graph or observation renders remain
@@ -271,8 +276,8 @@ direct diagnostic endpoints.
    projection. A future artifact owner may admit those outputs without adding
    a generic file route. Persistent launcher ingress now validates the live
    Workspace route directory before returning its stable URL; the launcher and
-   session dashboard still need to use the directory for all cross-surface
-   navigation rather than relying on static local assumptions.
+   session dashboard now consume the directory for stable navigation and
+   session handoff rather than relying on static local assumptions.
 6. Add Host, Origin, CSRF, route admission, loopback-target, and redaction
    acceptance tests. **Mostly implemented at the Router boundary:** route
    admission, redaction, HTTP method/body bounds, artifact, Host, and WebSocket

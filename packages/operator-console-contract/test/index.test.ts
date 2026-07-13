@@ -90,17 +90,21 @@ test('workspace route directory admits live concrete routes without replacing te
         path: '/sites/demo/operations',
         kind: 'page',
         label: 'Site demo Operations',
+        target: { kind: 'site', id: 'demo' },
       }],
       artifacts: [{
         id: 'router-artifact-demo',
         path: '/artifacts/session-demo',
         kind: 'page',
         label: 'Session session-demo Artifacts',
+        target: { kind: 'artifact', id: 'session-demo' },
       }],
     },
   });
   const siteOperations = directory.surfaces.find((surface) => surface.id === 'site-operations');
   const artifacts = directory.surfaces.find((surface) => surface.id === 'artifacts');
+  assert.equal(siteOperations?.routes.find((route) => route.id === 'router-site-operations-demo')?.path, '/sites/demo/operations');
+  assert.equal(artifacts?.routes.find((route) => route.id === 'router-artifact-demo')?.path, '/artifacts/session-demo');
   assert.equal(firstAvailableConcreteProjectedOperatorSurfaceRoute(siteOperations!)?.path, '/sites/demo/operations');
   assert.equal(firstAvailableConcreteProjectedOperatorSurfaceRoute(artifacts!)?.path, '/artifacts/session-demo');
   assert.equal(siteOperations?.projectedRoutes.find((route) => route.id === 'operations')?.availability, 'unavailable');

@@ -2,6 +2,8 @@ import type { RegistryManagementOperation } from '@narada2/site-registry-contrac
 import {
   findOperatorSurfaceRoute,
   projectOperatorSurfaceNavigation,
+  type OperatorSurfaceRouteTarget,
+  type OperatorWorkspaceRouteDirectory,
   type OperatorSurfaceNavigationKey,
 } from '@narada2/operator-console-contract';
 import type { OperatorSurfaceNavItem } from '@narada2/ui-vue';
@@ -20,6 +22,34 @@ export interface OperatorConsoleRoute {
   path: string;
   siteId?: string;
   operation?: RegistryManagementOperation;
+}
+
+export function operatorConsoleNavigationFromDirectory(
+  directory: OperatorWorkspaceRouteDirectory,
+  current: OperatorConsoleNavigationKey,
+): OperatorConsoleNavItem[] {
+  const keys = new Set<OperatorConsoleNavigationKey>();
+  return directory.surfaces.flatMap((surface) => surface.projectedRoutes.flatMap((route) => {
+    if (surface.availability !== 'available' || route.availability !== 'available' || !route.navigationKey || keys.has(route.navigationKey)) {
+      return [];
+    }
+    keys.add(route.navigationKey);
+    return [{ key: route.navigationKey, label: route.label, href: route.path, current: current === route.navigationKey }];
+  }));
+}
+
+export function findOperatorRouteTarget(
+  directory: OperatorWorkspaceRouteDirectory,
+  target: OperatorSurfaceRouteTarget,
+): string | null {
+  for (const surface of directory.surfaces) {
+    const route = surface.projectedRoutes.find((candidate) =>
+      candidate.availability === 'available'
+      && candidate.target?.kind === target.kind
+      && candidate.target.id === target.id);
+    if (route) return route.path;
+  }
+  return null;
 }
 
 export type SiteRegistryNavigationKey = 'sites' | 'add' | 'manage';

@@ -8,7 +8,8 @@ The typed Workspace route directory is live at the Console projection's
 `/console/routes` endpoint, and persistent launcher ingress validates it before
 returning a stable route. Router-backed Console instances compose live Site
 Operations, Agent Web UI session, and artifact leases into that directory.
-Launcher/session navigation and broader browser acceptance remain.
+The Vue console consumes the directory for navigation and concrete session
+links; broader browser acceptance remains.
 
 ## Shape
 
@@ -138,9 +139,8 @@ exists.
 The remaining Router/workspace work is explicit:
 
 1. complete Host, Origin, CSRF, and browser mutation acceptance coverage;
-2. migrate launcher and artifact open flows to stable URLs and route inventory;
-3. make the launcher/session dashboard use the composed directory for
-   cross-surface navigation rather than static local assumptions.
+2. migrate any remaining artifact open flows to stable URLs and route
+   inventory, including browser acceptance for artifact content links.
 
 Direct low-level Workbench, Console, Agent Web UI, and NARS listeners remain
 supported only as explicitly labeled diagnostic paths; normal projection

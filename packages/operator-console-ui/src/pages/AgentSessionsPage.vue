@@ -1,9 +1,16 @@
 <script setup lang="ts">
 import OperatorConsoleShell from '../components/OperatorConsoleShell.vue';
-import { operatorConsoleNavigation } from '../console/routes';
+import { findOperatorRouteTarget, operatorConsoleNavigation } from '../console/routes';
+import { useOperatorWorkspaceRouteDirectory } from '../console/route-directory';
 import { useAgentSessions } from '../agent-sessions/composables/useAgentSessions';
 
 const sessions = useAgentSessions();
+const routeDirectory = useOperatorWorkspaceRouteDirectory();
+
+function sessionUrl(sessionId: string): string | null {
+  const directory = routeDirectory?.directory.value;
+  return directory ? findOperatorRouteTarget(directory, { kind: 'session', id: sessionId }) : null;
+}
 
 function formatTimestamp(value: string | null): string {
   if (!value) return 'Unknown';
@@ -41,7 +48,7 @@ function formatTimestamp(value: string | null): string {
       <div v-else class="table-wrap">
         <table>
           <thead>
-            <tr><th scope="col">Session</th><th scope="col">Site</th><th scope="col">State</th><th scope="col">Runtime</th><th scope="col">Last seen</th><th scope="col">Health</th></tr>
+            <tr><th scope="col">Session</th><th scope="col">Site</th><th scope="col">State</th><th scope="col">Runtime</th><th scope="col">Last seen</th><th scope="col">Health</th><th scope="col">Open</th></tr>
           </thead>
           <tbody>
             <tr v-for="session in sessions.sessions.value" :key="session.sessionId">
@@ -51,6 +58,10 @@ function formatTimestamp(value: string | null): string {
               <td>{{ session.runtimeKind ?? 'Unknown' }}</td>
               <td>{{ formatTimestamp(session.lastSeenAt) }}</td>
               <td>{{ session.healthStatus }}</td>
+              <td>
+                <a v-if="sessionUrl(session.sessionId)" class="open-link" :href="sessionUrl(session.sessionId)" target="_blank" rel="noreferrer">Open</a>
+                <span v-else class="unavailable">Unavailable</span>
+              </td>
             </tr>
           </tbody>
         </table>
@@ -85,5 +96,8 @@ code { font: 12px/1.4 var(--mono); overflow-wrap: anywhere; }
 small { display: block; margin-top: 4px; color: var(--muted); font-size: 11px; font-weight: 400; overflow-wrap: anywhere; }
 .status { display: inline-block; padding: 3px 7px; border-radius: calc(var(--radius) - 2px); background: var(--control-bg); color: var(--muted); font-size: 11px; }
 .status[data-state="active"] { color: var(--operator); background: var(--activity-chip-bg); }
+.open-link { color: var(--operator); font-size: 12px; font-weight: 650; text-decoration: none; }
+.open-link:hover { text-decoration: underline; }
+.unavailable { color: var(--muted); font-size: 12px; }
 @media (max-width: 760px) { .console-main { padding: 18px 12px 28px; } .refresh { margin-left: 0; } }
 </style>

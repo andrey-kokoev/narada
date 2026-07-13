@@ -60,6 +60,7 @@ export interface OperatorRouterRouteRegistration {
   methods: readonly string[];
   max_body_bytes: number;
   timeout_ms: number;
+  lease_ms: number;
   lease_expires_at: string;
   state: OperatorRouterRouteState;
   last_health_at: string | null;
@@ -314,6 +315,7 @@ export function validateRouteRegistration(
     methods,
     max_body_bytes: normalizeBodyBytes(input.max_body_bytes),
     timeout_ms: normalizeTimeoutMs(input.timeout_ms),
+    lease_ms: leaseMs,
     lease_expires_at: expires,
     state: 'healthy',
     last_health_at: null,

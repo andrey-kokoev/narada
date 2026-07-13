@@ -44,6 +44,9 @@ The Operator Workspace consumes the typed route directory from the Console
 projection at `/console/routes`. A declared route template is not a browser
 link until its concrete projection is available; route availability is derived
 from actual admitted handlers rather than from the descriptor default alone.
+Concrete routes carry typed target identity when a caller needs to resolve a
+session, Site, or artifact link; consumers must not infer identity from labels
+or parse public paths.
 The launcher stable handoff checks this directory before returning a
 non-diagnostic URL. In Router mode the Console augments the static catalog
 from the live route inventory, so healthy and degraded session, artifact, and

@@ -608,7 +608,7 @@ export async function createOperatorRouterServer(config: Partial<OperatorRouterS
     const route = state.routes.find((candidate) => candidate.route_id === routeId);
     if (!route) throw new Error('operator_router_route_not_found');
     if (body.owner_id !== route.owner_id || body.instance_nonce !== route.process_evidence.instance_nonce) throw new Error('operator_router_route_owner_conflict');
-    const leaseMs = typeof body.lease_ms === 'number' ? body.lease_ms : undefined;
+    const leaseMs = typeof body.lease_ms === 'number' ? body.lease_ms : route.lease_ms;
     const renewed = validateRouteRegistration({
       ...route,
       lease_ms: leaseMs,

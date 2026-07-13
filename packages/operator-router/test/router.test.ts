@@ -140,6 +140,41 @@ test('router enforces admitted methods and bounded request bodies', async () => 
   }
 });
 
+test('route renewal preserves the registered lease duration when the request omits it', async () => {
+  const stateRoot = await mkdtemp(join(tmpdir(), 'narada-operator-router-renewal-'));
+  const upstream = createServer((req, res) => {
+    res.writeHead(req.url === '/health' ? 200 : 404);
+    res.end();
+  });
+  const upstreamUrl = await listen(upstream);
+  const router = await createOperatorRouterServer({ host: '127.0.0.1', port: 0, state_root: stateRoot, health_interval_ms: 60_000 });
+  try {
+    const routerUrl = await router.start();
+    const route = {
+      ...routeInput(upstreamUrl, `${upstreamUrl}/health`),
+      route_id: 'long-lease-route',
+      public_path: '/long-lease',
+      lease_ms: 120_000,
+    };
+    await registerOperatorRoute({ url: routerUrl, registration_token: router.getRegistrationToken() }, route);
+    const response = await fetch(`${routerUrl}/admin/routes/${route.route_id}/renew`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-narada-router-token': router.getRegistrationToken(),
+      },
+      body: JSON.stringify({ owner_id: route.owner_id, instance_nonce: route.process_evidence.instance_nonce }),
+    });
+    assert.equal(response.status, 200);
+    const renewed = await response.json() as { lease_ms: number };
+    assert.equal(renewed.lease_ms, 120_000);
+  } finally {
+    await router.stop();
+    await close(upstream);
+    await rm(stateRoot, { recursive: true, force: true });
+  }
+});
+
 test('operator router client reserves port zero for diagnostic server construction', async () => {
   await assert.rejects(() => ensureOperatorRouter({ port: 0 }), /operator_router_client_port_invalid/);
 });

@@ -292,12 +292,20 @@ describe('console server', () => {
 
       const directory = await httpGet(`${url}/console/routes`);
       expect(directory.status).toBe(200);
-      const surfaces = (directory.body as { surfaces: Array<{ id: string; availability: string; projectedRoutes: Array<{ path: string; availability: string }> }> }).surfaces;
+      const surfaces = (directory.body as { surfaces: Array<{ id: string; availability: string; projectedRoutes: Array<{ path: string; availability: string; target?: { kind: string; id: string } }> }> }).surfaces;
       expect(surfaces.find((surface) => surface.id === 'site-operations')?.availability).toBe('available');
       expect(surfaces.find((surface) => surface.id === 'site-operations')?.projectedRoutes)
-        .toEqual(expect.arrayContaining([expect.objectContaining({ path: '/sites/site-a/operations', availability: 'available' })]));
+        .toEqual(expect.arrayContaining([expect.objectContaining({
+          path: '/sites/site-a/operations',
+          availability: 'available',
+          target: { kind: 'site', id: 'site-a' },
+        })]));
       expect(surfaces.find((surface) => surface.id === 'agent-sessions')?.projectedRoutes)
-        .toEqual(expect.arrayContaining([expect.objectContaining({ path: '/sessions/session-a', availability: 'available' })]));
+        .toEqual(expect.arrayContaining([expect.objectContaining({
+          path: '/sessions/session-a',
+          availability: 'available',
+          target: { kind: 'session', id: 'session-a' },
+        })]));
       expect(surfaces.find((surface) => surface.id === 'artifacts')?.projectedRoutes)
         .toEqual(expect.arrayContaining([expect.objectContaining({ path: '/artifacts/session-a', availability: 'available' })]));
 

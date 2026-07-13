@@ -107,6 +107,11 @@ function projectLiveRouterRoutes(routes: readonly OperatorRouterRouteProjection[
       path: route.public_path,
       kind: 'page',
       label: dynamicWorkspaceRouteLabel(surfaceId, route),
+      ...(surfaceId === 'site-operations' && route.site_id
+        ? { target: { kind: 'site' as const, id: route.site_id } }
+        : surfaceId === 'agent-sessions' && route.session_id
+          ? { target: { kind: 'session' as const, id: route.session_id } }
+          : {}),
     });
     surfaceRoutes.set(surfaceId, surfaceRouteList);
     const surfaceRouteAvailability = routeAvailability.get(surfaceId) ?? {};

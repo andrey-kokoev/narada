@@ -1,12 +1,21 @@
 <script setup lang="ts">
+import { onMounted } from 'vue';
 import OperatorConsoleNotFound from './components/OperatorConsoleNotFound.vue';
 import OperatorConsoleLaunchPage from './pages/OperatorConsoleLaunchPage.vue';
 import AgentSessionsPage from './pages/AgentSessionsPage.vue';
 import SiteRegistryMutationPage from './pages/SiteRegistryMutationPage.vue';
 import SiteRegistryPage from './pages/SiteRegistryPage.vue';
 import { resolveOperatorConsoleRoute } from './console/routes';
+import {
+  createOperatorWorkspaceRouteDirectoryState,
+  provideOperatorWorkspaceRouteDirectory,
+} from './console/route-directory';
 
 const route = resolveOperatorConsoleRoute(window.location.pathname, window.location.search);
+const routeDirectory = createOperatorWorkspaceRouteDirectoryState();
+provideOperatorWorkspaceRouteDirectory(routeDirectory);
+
+onMounted(() => { void routeDirectory.load(); });
 </script>
 
 <template>

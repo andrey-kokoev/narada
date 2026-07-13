@@ -46,6 +46,14 @@ export interface OperatorSurfaceRouteDescriptor {
   kind: OperatorSurfaceRouteKind;
   label: string;
   navigationKey?: OperatorSurfaceNavigationKey;
+  target?: OperatorSurfaceRouteTarget;
+}
+
+export type OperatorSurfaceRouteTargetKind = 'site' | 'session' | 'artifact';
+
+export interface OperatorSurfaceRouteTarget {
+  kind: OperatorSurfaceRouteTargetKind;
+  id: string;
 }
 
 export interface OperatorSurfaceRouteProjection extends OperatorSurfaceRouteDescriptor {
@@ -246,6 +254,7 @@ export function projectOperatorSurfaceCatalog(
     });
     return {
       ...descriptor,
+      routes,
       availability,
       projectedDetail: descriptor.detail[availability],
       projectedRoutes,
