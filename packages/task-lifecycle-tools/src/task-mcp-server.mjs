@@ -23,8 +23,8 @@ import { relative, resolve, join } from 'path';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { runGovernedCommandSync, spawnMcpServer } from '@narada2/process-launch-posture';
 import { pollInboxBridge, targetInboxEnvelope, readUnprocessedEnvelopes, evaluateEnvelopeSeverity } from './inbox-bridge.mjs';
-import { readAdmissionLog, resolveEnvelopeStatus } from '../inbox/admission-log.mjs';
-import { refreshInboxIndex } from '../inbox/inbox-index.mjs';
+import { readAdmissionLog, resolveEnvelopeStatus } from '../../task-governance/runtime/inbox/admission-log.mjs';
+import { refreshInboxIndex } from '../../task-governance/runtime/inbox/inbox-index.mjs';
 import { emitCheckpoint } from './emit-checkpoint.mjs';
 import {
   buildReviewAcceptanceProvenanceAnnotation,
@@ -64,7 +64,7 @@ import {
   resultShow,
   resolveToolPayloadArgs,
 } from '../../site-common-tools/compat/mcp-payload-file.legacy-site.mjs';
-import { genericCommandRegistrySummary } from '../generic-command-registry.mjs';
+import { genericCommandRegistrySummary } from '../../site-common-tools/src/generic-command-registry.mjs';
 import {
   acknowledgeMcpRestartRequest,
   buildMcpFreshnessStatus,
@@ -74,7 +74,7 @@ import {
   readJsonFile as readMcpFreshnessJsonFile,
   writeMcpRuntimeInstanceObservation,
   writeMcpRestartRequest,
-} from '../mcp-freshness-service.mjs';
+} from '../../task-governance/runtime/mcp-freshness-service.mjs';
 import { agentExistsWithRole, checkTaskRoleEligibilityLocal, resolveAgentRole, resolveAgentRoleWithDiagnostics, roleExistsInRoster } from './agent-role-resolution.mjs';
 import { resolveTaskRolePolicy } from './task-role-policy.mjs';
 
@@ -1042,7 +1042,13 @@ async function dispatchTool(canonicalName, args, dispatchContext = {}) {
         }
       }
       const refIds = [...new Set([inputTaskId, inputTaskNumber === undefined ? null : String(inputTaskNumber)].filter(Boolean))];
-      const directiveRefs = refIds.length === 0
+      const directiveTables = store.db.prepare(`
+        SELECT name
+        FROM sqlite_master
+        WHERE type = 'table' AND name IN ('directive_records', 'directive_refs')
+      `).all().map((row) => row.name);
+      const directiveReferenceStorePresent = directiveTables.includes('directive_records') && directiveTables.includes('directive_refs');
+      const directiveRefs = !directiveReferenceStorePresent || refIds.length === 0
         ? []
         : store.db.prepare(`
           SELECT dr.directive_id, dr.ref_id, dr.locus, dr.relation,
@@ -1069,6 +1075,7 @@ async function dispatchTool(canonicalName, args, dispatchContext = {}) {
           task_file_present: Boolean(taskFile),
         },
         directive_references: {
+          store_present: directiveReferenceStorePresent,
           count: directiveRefs.length,
           unsafe_count: unsafeDirectiveRefs.length,
           refs: directiveRefs,

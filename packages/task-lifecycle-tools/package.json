@@ -5,7 +5,8 @@
   "type": "module",
   "dependencies": {
     "@narada2/process-launch-posture": "workspace:*",
-    "@narada2/sqlite": "workspace:*"
+    "@narada2/sqlite": "workspace:*",
+    "@narada2/task-governance": "workspace:*"
   },
   "engines": {
     "node": ">=22.0.0"

@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { readAdmissionLog, resolveEnvelopeStatus } from '../inbox/admission-log.mjs';
+import { readAdmissionLog, resolveEnvelopeStatus } from '../../task-governance/runtime/inbox/admission-log.mjs';
 import { resolveAgentRoleWithDiagnostics } from './agent-role-resolution.mjs';
 
 const CORRECTIVE_COVERAGE_PRESSURE_STATUSES = new Set([
