@@ -1,12 +1,12 @@
 import { dirname, join } from 'node:path';
 import {
-  carrierLaunchMatrixRow,
+  operatorSurfaceLaunchMatrixRow,
   NARADA_AGENT_RUNTIME_SERVER_KIND,
   normalizeRuntimeAlias,
-} from '@narada2/carrier-runtime-contract/carrier-runtime-selection';
+} from '@narada2/operator-surface-runtime-contract/operator-surface-runtime-selection';
 
 function requireCarrierLaunchMatrixRow(launchSelectionKind) {
-  const matrixRow = carrierLaunchMatrixRow(launchSelectionKind);
+  const matrixRow = operatorSurfaceLaunchMatrixRow(launchSelectionKind);
   if (!matrixRow) {
     throw new Error('carrier_launch_matrix_row_missing:' + launchSelectionKind);
   }
@@ -496,7 +496,7 @@ export function buildNarsLaunchPacket(carrierName, {
   siteCarrierControlPath,
   siteCarrierSessionPath,
 }) {
-  const matrixRow = carrierLaunchMatrixRow(carrierName);
+  const matrixRow = operatorSurfaceLaunchMatrixRow(carrierName);
   if (!matrixRow || matrixRow.runtime_host_kind !== NARADA_AGENT_RUNTIME_SERVER_KIND) return null;
   const sessionId = carrierSessionRegistration.carrier_session_id;
   return {

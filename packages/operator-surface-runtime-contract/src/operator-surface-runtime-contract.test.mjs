@@ -2,24 +2,24 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   loadLaunchSliceContract,
-  loadCarrierLaunchMatrixContract,
+  loadOperatorSurfaceLaunchMatrixContract,
   loadMcpRuntimeContract,
   loadRuntimeBooleanValuesContract,
   loadRuntimeSubstrateKindsContract,
   loadTerminalRuntimeContract,
-} from './carrier-runtime-contract.mjs';
+} from './operator-surface-runtime-contract.mjs';
 import {
-  ADMITTED_CARRIER_KINDS,
-  ADMITTED_CARRIER_IMPLEMENTATION_KINDS,
+  ADMITTED_LAUNCH_SELECTION_KINDS,
+  ADMITTED_RUNTIME_IMPLEMENTATION_KINDS,
   ADMITTED_RUNTIME_SUBSTRATE_KINDS,
   ADMITTED_TOOL_FABRIC_ADAPTER_KINDS,
-  CARRIER_LAUNCH_MATRIX_CONTRACT_SCHEMA,
-  defaultRuntimeForCarrier,
+  OPERATOR_SURFACE_LAUNCH_MATRIX_CONTRACT_SCHEMA,
+  defaultRuntimeForOperatorSurface,
   normalizeRuntimeAlias,
   operatorSurfaceKindsForProjectionCapability,
   operatorSurfaceKindsForRuntimeHost,
-  resolveCarrierRuntimeSelection,
-} from './carrier-runtime-selection.mjs';
+  resolveOperatorSurfaceRuntimeSelection,
+} from './operator-surface-runtime-selection.mjs';
 import { buildCarrierConformanceMatrix } from '../../../tools/operator-surface-carriers/carrier-conformance-matrix.mjs';
 
 test('launch slice contract identifies the admitted carrier runtime', () => {
@@ -31,11 +31,11 @@ test('launch slice contract identifies the admitted carrier runtime', () => {
 });
 
 test('carrier conformance report derives every row from the launch matrix', () => {
-  const contract = loadCarrierLaunchMatrixContract();
+  const contract = loadOperatorSurfaceLaunchMatrixContract();
   const report = buildCarrierConformanceMatrix({
     launchRegistryPath: 'C:/tmp/narada-cross-carrier-matrix-test-registry-that-does-not-exist.psd1',
   });
-  assert.equal(report.carrier_launch_matrix_schema, CARRIER_LAUNCH_MATRIX_CONTRACT_SCHEMA);
+  assert.equal(report.carrier_launch_matrix_schema, OPERATOR_SURFACE_LAUNCH_MATRIX_CONTRACT_SCHEMA);
   assert.deepEqual(
     report.rows.map((row) => row.carrier),
     contract.rows.map((row) => row.launch_selection_kind),
@@ -59,7 +59,7 @@ test('carrier conformance report derives every row from the launch matrix', () =
 
 test('runtime selection refuses a carrier surface paired with the wrong runtime', () => {
   const contract = loadRuntimeSubstrateKindsContract();
-  const refused = resolveCarrierRuntimeSelection({
+  const refused = resolveOperatorSurfaceRuntimeSelection({
     carrierValue: 'agent-cli',
     runtimeValue: 'codex',
     admittedRuntimeSubstrateKinds: contract.admitted_runtime_substrate_kinds,
@@ -71,8 +71,8 @@ test('runtime selection refuses a carrier surface paired with the wrong runtime'
 });
 
 test('carrier launch matrix is the complete admitted launch-selection authority', () => {
-  const contract = loadCarrierLaunchMatrixContract();
-  assert.equal(contract.schema, CARRIER_LAUNCH_MATRIX_CONTRACT_SCHEMA);
+  const contract = loadOperatorSurfaceLaunchMatrixContract();
+  assert.equal(contract.schema, OPERATOR_SURFACE_LAUNCH_MATRIX_CONTRACT_SCHEMA);
   assert.deepEqual(
     contract.rows.map((row) => row.launch_selection_kind),
     ['agent-cli', 'agent-web-ui', 'agent-tui', 'codex', 'kimi', 'pi', 'claude-code', 'opencode'],
@@ -81,7 +81,7 @@ test('carrier launch matrix is the complete admitted launch-selection authority'
     contract.rows.map((row) => row.operator_surface_kind),
     contract.rows.map((row) => row.launch_selection_kind),
   );
-  assert.deepEqual([...ADMITTED_CARRIER_KINDS], contract.rows.map((row) => row.launch_selection_kind));
+  assert.deepEqual([...ADMITTED_LAUNCH_SELECTION_KINDS], contract.rows.map((row) => row.launch_selection_kind));
   assert.deepEqual([...ADMITTED_RUNTIME_SUBSTRATE_KINDS], loadRuntimeSubstrateKindsContract().admitted_runtime_substrate_kinds);
   assert.equal(contract.rows.every((row) => ADMITTED_RUNTIME_SUBSTRATE_KINDS.includes(row.runtime_host_kind)), true);
   assert.deepEqual([...operatorSurfaceKindsForRuntimeHost('narada-agent-runtime-server')], ['agent-cli', 'agent-web-ui']);
@@ -93,7 +93,7 @@ test('carrier launch matrix is the complete admitted launch-selection authority'
     ['code_enforced', 'code_enforced', 'startup_enforced', 'config_enforced', 'unverified', 'config_enforced', 'config_enforced', 'documented_advisory'],
   );
   assert.equal(contract.rows.find((row) => row.launch_selection_kind === 'opencode').conformance.evidence_level, 'documented_advisory');
-  assert.deepEqual([...ADMITTED_CARRIER_IMPLEMENTATION_KINDS].sort(), [
+  assert.deepEqual([...ADMITTED_RUNTIME_IMPLEMENTATION_KINDS].sort(), [
     'agent-tui',
     'claude-code',
     'codex',
@@ -124,7 +124,7 @@ test('carrier launch matrix is the complete admitted launch-selection authority'
 
 test('agent-web-ui is an admitted NARS operator surface and launch carrier', () => {
   const contract = loadRuntimeSubstrateKindsContract();
-  const accepted = resolveCarrierRuntimeSelection({
+  const accepted = resolveOperatorSurfaceRuntimeSelection({
     carrierValue: 'agent-web-ui',
     runtimeValue: 'nars',
     admittedRuntimeSubstrateKinds: contract.admitted_runtime_substrate_kinds,
@@ -173,12 +173,12 @@ test('runtime substrate contract admits carrier substrates and codex isolation b
 
 test('carrier runtime selection keeps agent-cli carrier separate from runtime server', () => {
   const contract = loadRuntimeSubstrateKindsContract();
-  assert.equal(defaultRuntimeForCarrier('agent-cli'), 'narada-agent-runtime-server');
-  assert.equal(defaultRuntimeForCarrier('agent-web-ui'), 'narada-agent-runtime-server');
-  assert.equal(defaultRuntimeForCarrier('codex'), 'codex');
-  assert.throws(() => defaultRuntimeForCarrier('future-carrier'), /carrier_launch_matrix_row_missing:future-carrier/);
+  assert.equal(defaultRuntimeForOperatorSurface('agent-cli'), 'narada-agent-runtime-server');
+  assert.equal(defaultRuntimeForOperatorSurface('agent-web-ui'), 'narada-agent-runtime-server');
+  assert.equal(defaultRuntimeForOperatorSurface('codex'), 'codex');
+  assert.throws(() => defaultRuntimeForOperatorSurface('future-carrier'), /carrier_launch_matrix_row_missing:future-carrier/);
 
-  const accepted = resolveCarrierRuntimeSelection({
+  const accepted = resolveOperatorSurfaceRuntimeSelection({
     carrierValue: 'agent-cli',
     runtimeValue: 'narada-agent-runtime-server',
     admittedRuntimeSubstrateKinds: contract.admitted_runtime_substrate_kinds,
@@ -195,7 +195,7 @@ test('carrier runtime selection keeps agent-cli carrier separate from runtime se
   assert.equal(accepted.carrier_implementation_kind, 'narada-agent-runtime-server');
   assert.equal(accepted.runtime_substrate_kind, 'narada-agent-runtime-server');
 
-  const refused = resolveCarrierRuntimeSelection({
+  const refused = resolveOperatorSurfaceRuntimeSelection({
     runtimeValue: 'agent-cli',
     admittedRuntimeSubstrateKinds: contract.admitted_runtime_substrate_kinds,
     runtimeContractSchema: contract.schema,
@@ -205,7 +205,7 @@ test('carrier runtime selection keeps agent-cli carrier separate from runtime se
 });
 
 test('runtime selection uses the canonical runtime contract by default', () => {
-  const accepted = resolveCarrierRuntimeSelection({
+  const accepted = resolveOperatorSurfaceRuntimeSelection({
     carrierValue: 'agent-cli',
     runtimeValue: 'nars',
   });
@@ -216,7 +216,7 @@ test('runtime selection uses the canonical runtime contract by default', () => {
 
 test('operator surface is the explicit primitive while carrier remains a legacy alias', () => {
   const contract = loadRuntimeSubstrateKindsContract();
-  const accepted = resolveCarrierRuntimeSelection({
+  const accepted = resolveOperatorSurfaceRuntimeSelection({
     operatorSurfaceValue: 'agent-cli',
     runtimeValue: 'narada-agent-runtime-server',
     admittedRuntimeSubstrateKinds: contract.admitted_runtime_substrate_kinds,
@@ -237,7 +237,7 @@ test('operator surface is the explicit primitive while carrier remains a legacy 
   assert.equal(accepted.operator_surface_source_field, 'operator_surface');
   assert.equal(accepted.carrier_source_field, 'operator_surface');
 
-  const overridden = resolveCarrierRuntimeSelection({
+  const overridden = resolveOperatorSurfaceRuntimeSelection({
     carrierValue: 'codex',
     operatorSurfaceValue: 'agent-web-ui',
     runtimeValue: 'narada-agent-runtime-server',
@@ -260,7 +260,7 @@ test('nars is a runtime input alias for narada-agent-runtime-server', () => {
   assert.equal(contract.admitted_runtime_substrate_kinds.includes('nars'), false);
   assert.equal(normalizeRuntimeAlias('nars'), 'narada-agent-runtime-server');
 
-  const accepted = resolveCarrierRuntimeSelection({
+  const accepted = resolveOperatorSurfaceRuntimeSelection({
     carrierValue: 'agent-cli',
     runtimeValue: 'nars',
     admittedRuntimeSubstrateKinds: contract.admitted_runtime_substrate_kinds,

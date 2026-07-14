@@ -7,11 +7,11 @@ import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { runHiddenPostureCommandSync } from '@narada2/process-launch-posture';
 import {
-  ADMITTED_CARRIER_KINDS,
-  carrierLaunchMatrixRow,
-  defaultRuntimeForCarrier,
+  ADMITTED_LAUNCH_SELECTION_KINDS,
+  operatorSurfaceLaunchMatrixRow,
+  defaultRuntimeForOperatorSurface,
   NARADA_AGENT_RUNTIME_SERVER_KIND,
-} from '@narada2/carrier-runtime-contract/carrier-runtime-selection';
+} from '@narada2/operator-surface-runtime-contract/operator-surface-runtime-selection';
 
 const require = createRequire(import.meta.url);
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -20,7 +20,7 @@ const naradaProperRoot = resolve(packageRoot, '..', '..');
 const fixtureRegistryPath = join(__dirname, 'fixtures', 'launch-registry.psd1');
 const packagedLauncherPath = join(naradaProperRoot, 'packages', 'agent-start', 'src', 'narada-agent-start.ts');
 const tsxLoaderPath = pathToFileURL(require.resolve('tsx')).href;
-const admittedCarrierMatrix = Object.freeze([...ADMITTED_CARRIER_KINDS]);
+const admittedCarrierMatrix = Object.freeze([...ADMITTED_LAUNCH_SELECTION_KINDS]);
 const requiredFields = Object.freeze(['Agent', 'NaradaRoot', 'WorkspaceRoot', 'SiteRoot', 'Launcher', 'Carrier', 'Runtime']);
 const pwshAvailable = spawnHiddenSync('pwsh', ['-NoProfile', '-Command', '$PSVersionTable.PSVersion.Major'], { encoding: 'utf8' }).status === 0;
 const nonNaradaProperSites = Object.freeze([
@@ -142,7 +142,7 @@ function assertLauncherFileShape(records, sourceLabel) {
 
 function dryRunEnv(carrier) {
   if (carrier === 'codex') return { NARADA_CODEX_CLI_SCRIPT: packagedLauncherPath };
-  if (carrierLaunchMatrixRow(carrier)?.runtime_host_kind === NARADA_AGENT_RUNTIME_SERVER_KIND) return {
+  if (operatorSurfaceLaunchMatrixRow(carrier)?.runtime_host_kind === NARADA_AGENT_RUNTIME_SERVER_KIND) return {
     NARADA_INTELLIGENCE_PROVIDER: 'kimi-code-api',
     NARADA_PROVIDER_SECRET_STORE: 'disabled',
     NARADA_CODEX_SUBSCRIPTION_PREFLIGHT: 'defer',
@@ -170,9 +170,9 @@ function parseJsonOutput(output) {
 function assertCarrierMatrixDryRuns(records, sourceLabel) {
   for (const record of records) {
     for (const carrier of admittedCarrierMatrix) {
-      const matrixRow = carrierLaunchMatrixRow(carrier);
+      const matrixRow = operatorSurfaceLaunchMatrixRow(carrier);
       assert.ok(matrixRow, `${sourceLabel}:${record.Agent}:${carrier}: carrier matrix row is required`);
-      const runtime = defaultRuntimeForCarrier(carrier);
+      const runtime = defaultRuntimeForOperatorSurface(carrier);
       assert.equal(runtime, matrixRow.runtime_substrate_kind);
       const result = spawnHiddenSync(process.execPath, [
         '--import',

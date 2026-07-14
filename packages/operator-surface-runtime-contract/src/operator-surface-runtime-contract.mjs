@@ -4,7 +4,7 @@ export function loadLaunchSliceContract(url = new URL('../contracts/launch-slice
   return Object.freeze(JSON.parse(readFileSync(url, 'utf-8')));
 }
 
-export function loadCarrierLaunchMatrixContract(url = new URL('../contracts/carrier-launch-matrix.json', import.meta.url)) {
+export function loadOperatorSurfaceLaunchMatrixContract(url = new URL('../contracts/operator-surface-launch-matrix.json', import.meta.url)) {
   return Object.freeze(JSON.parse(readFileSync(url, 'utf-8')));
 }
 

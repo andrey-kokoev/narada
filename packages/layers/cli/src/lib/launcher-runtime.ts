@@ -2,7 +2,7 @@ import { existsSync, mkdirSync } from 'node:fs';
 import { dirname, join, parse, resolve } from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { NARADA_AGENT_RUNTIME_SERVER_KIND } from '@narada2/carrier-runtime-contract/carrier-runtime-selection';
+import { NARADA_AGENT_RUNTIME_SERVER_KIND } from '@narada2/operator-surface-runtime-contract/operator-surface-runtime-selection';
 import { buildLaunchProcessOwnership, launchSessionIdFromToken, type LaunchProcessOwnership } from '@narada2/launch-process-ownership';
 import type {
   AgentStartCommandResult,

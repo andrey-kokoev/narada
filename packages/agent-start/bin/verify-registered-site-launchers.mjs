@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildAgentIdentityRefV2, resolveAgentIdentityRef } from '@narada2/agent-identity';
-import { carrierLaunchMatrixRow } from '@narada2/carrier-runtime-contract/carrier-runtime-selection';
+import { operatorSurfaceLaunchMatrixRow } from '@narada2/operator-surface-runtime-contract/operator-surface-runtime-selection';
 import { runGovernedCommand } from '@narada2/process-launch-posture';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -261,7 +261,7 @@ function parseJsonOutput(output) {
 }
 
 function expectedAdapter(carrier) {
-  const matrixRow = carrierLaunchMatrixRow(carrier);
+  const matrixRow = operatorSurfaceLaunchMatrixRow(carrier);
   return matrixRow?.expected_tools_scope === 'sentinel'
     ? matrixRow.tool_fabric_adapter_kind
     : null;

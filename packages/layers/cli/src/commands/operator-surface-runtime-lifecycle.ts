@@ -5,7 +5,7 @@ import {
   getOperatorSurfaceRuntimeControlPath,
   getOperatorSurfaceRuntimeStatus,
 } from '../lib/launcher-runtime.js';
-import { defaultRuntimeForCarrier as defaultRuntimeForOperatorSurface } from '@narada2/carrier-runtime-contract/carrier-runtime-selection';
+import { defaultRuntimeForOperatorSurface } from '@narada2/operator-surface-runtime-contract/operator-surface-runtime-selection';
 import {
   formatOperatorSurfaceRuntimeStatus,
   requireAgent,

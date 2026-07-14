@@ -4,9 +4,9 @@ import { pathToFileURL } from 'node:url';
 import { parseLaunchRegistry } from '../mcp-fabric/site-fabric-audit.mjs';
 import {
   ADMITTED_LAUNCH_SELECTION_KINDS,
-  CARRIER_LAUNCH_MATRIX_CONTRACT_SCHEMA,
-  carrierLaunchMatrixRow,
-} from '../../packages/carrier-runtime-contract/src/carrier-runtime-selection.mjs';
+  OPERATOR_SURFACE_LAUNCH_MATRIX_CONTRACT_SCHEMA,
+  operatorSurfaceLaunchMatrixRow,
+} from '../../packages/operator-surface-runtime-contract/src/operator-surface-runtime-selection.mjs';
 
 const DEFAULT_LAUNCH_REGISTRY = 'C:/Users/Andrey/Narada/config/launch/agents.psd1';
 
@@ -19,7 +19,7 @@ const EVIDENCE_LEVELS = Object.freeze({
 });
 
 const CANONICAL_CARRIER_ROWS = Object.freeze(ADMITTED_LAUNCH_SELECTION_KINDS.map((launchSelectionKind) => {
-  const matrixRow = carrierLaunchMatrixRow(launchSelectionKind);
+  const matrixRow = operatorSurfaceLaunchMatrixRow(launchSelectionKind);
   if (!matrixRow) throw new Error(`carrier_launch_matrix_row_missing:${launchSelectionKind}`);
   return Object.freeze({
     carrier: matrixRow.launch_selection_kind,
@@ -101,7 +101,7 @@ function buildCarrierConformanceMatrix({ launchRegistryPath = DEFAULT_LAUNCH_REG
   return {
     schema: 'narada.carrier_conformance_matrix.v1',
     generated_at: new Date().toISOString(),
-    carrier_launch_matrix_schema: CARRIER_LAUNCH_MATRIX_CONTRACT_SCHEMA,
+    carrier_launch_matrix_schema: OPERATOR_SURFACE_LAUNCH_MATRIX_CONTRACT_SCHEMA,
     launch_registry_summary: launchRegistrySummary,
     evidence_levels: {
       code_enforced: 'Narada code mediates execution and can block, route, or refuse the requested action.',

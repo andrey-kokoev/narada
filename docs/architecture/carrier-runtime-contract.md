@@ -139,7 +139,7 @@ Existing shared packages should remain the first home for their domains:
 
 New packages should be introduced only where the existing package boundary would become confused:
 
-1. `packages/carrier-runtime-contract`
+1. `packages/operator-surface-runtime-contract`
 2. `packages/carrier-provider-contract`
 3. `packages/carrier-command-contract`
 

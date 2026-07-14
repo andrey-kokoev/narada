@@ -20,12 +20,12 @@ process.env.NARADA_GIT_BINARY ??= 'git';
 
 const realFs = await vi.importActual<typeof import('node:fs')>('node:fs');
 const carrierRuntimeContractRoot = new URL(
-  '../../../carrier-runtime-contract/contracts/',
+  '../../../operator-surface-runtime-contract/contracts/',
   import.meta.url,
 );
 const carrierRuntimeContractNames = [
   'launch-slice.json',
-  'carrier-launch-matrix.json',
+  'operator-surface-launch-matrix.json',
   'boolean-values.json',
   'runtime-substrate-kinds.json',
   'mcp-runtime.json',

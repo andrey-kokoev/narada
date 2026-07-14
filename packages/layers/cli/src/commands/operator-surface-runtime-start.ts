@@ -6,7 +6,7 @@ import {
   runAgentStartCommand,
   writeOperatorProjectionLaunchBinding,
 } from '../lib/launcher-runtime.js';
-import { defaultRuntimeForCarrier as defaultRuntimeForOperatorSurface } from '@narada2/carrier-runtime-contract/carrier-runtime-selection';
+import { defaultRuntimeForOperatorSurface } from '@narada2/operator-surface-runtime-contract/operator-surface-runtime-selection';
 import { requireAgent, requireSiteRoot } from './operator-surface-runtime-support.js';
 
 /**

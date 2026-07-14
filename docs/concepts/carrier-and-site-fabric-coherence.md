@@ -28,7 +28,7 @@ node tools\operator-surface-carriers\carrier-conformance-matrix.mjs
 ```
 
 The command emits the conformance view for every row in the canonical
-`packages/carrier-runtime-contract/contracts/carrier-launch-matrix.json`.
+`packages/operator-surface-runtime-contract/contracts/operator-surface-launch-matrix.json`.
 The launch matrix owns the row set and static posture; this report adds the
 current launch-registry observation, such as Codex native-shell counts. This
 document intentionally does not maintain a second carrier list.

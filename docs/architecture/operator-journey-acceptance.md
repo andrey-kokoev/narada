@@ -39,7 +39,7 @@ pnpm --filter @narada2/agent-start run test:launcher-contract
 
 The launcher-contract test derives its carrier set from the shared admitted
 carrier launch matrix contract at
-`packages/carrier-runtime-contract/contracts/carrier-launch-matrix.json` and
+`packages/operator-surface-runtime-contract/contracts/operator-surface-launch-matrix.json` and
 runs a bounded dry-run for every row. Runtime adapter selection consumes the
 same contract. A dry-run proves selection, runtime identity, launch packet
 shape, and tool-fabric adapter selection. It does not claim that an external

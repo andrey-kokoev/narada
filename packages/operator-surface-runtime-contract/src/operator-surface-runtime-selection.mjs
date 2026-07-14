@@ -1,11 +1,12 @@
-import { loadCarrierLaunchMatrixContract, loadRuntimeSubstrateKindsContract } from './carrier-runtime-contract.mjs';
+import { loadOperatorSurfaceLaunchMatrixContract, loadRuntimeSubstrateKindsContract } from './operator-surface-runtime-contract.mjs';
 
-export const AGENT_CLI_CARRIER_KIND = 'agent-cli';
+export const AGENT_CLI_OPERATOR_SURFACE_KIND = 'agent-cli';
 export const NARADA_AGENT_RUNTIME_SERVER_KIND = 'narada-agent-runtime-server';
 export const NARADA_AGENT_RUNTIME_SERVER_ALIAS = 'nars';
-export const CARRIER_LAUNCH_MATRIX_CONTRACT_SCHEMA = 'narada.carrier_launch_matrix.v3';
+// The value is versioned persisted data; the exported identifier is canonical.
+export const OPERATOR_SURFACE_LAUNCH_MATRIX_CONTRACT_SCHEMA = 'narada.carrier_launch_matrix.v3';
 
-const carrierLaunchMatrix = loadCarrierLaunchMatrixContract();
+const carrierLaunchMatrix = loadOperatorSurfaceLaunchMatrixContract();
 const runtimeSubstrateContract = loadRuntimeSubstrateKindsContract();
 const admittedRuntimeSubstrateKindsFromContract = Array.isArray(runtimeSubstrateContract.admitted_runtime_substrate_kinds)
   ? runtimeSubstrateContract.admitted_runtime_substrate_kinds
@@ -56,7 +57,7 @@ const isCarrierLaunchMatrixRow = (row) => row
   && row.states.every((state) => isNonEmptyString(state))
   && (row.admission_basis === undefined || isNonEmptyString(row.admission_basis));
 if (
-  carrierLaunchMatrix.schema !== CARRIER_LAUNCH_MATRIX_CONTRACT_SCHEMA
+  carrierLaunchMatrix.schema !== OPERATOR_SURFACE_LAUNCH_MATRIX_CONTRACT_SCHEMA
   || runtimeSubstrateContract.schema !== 'narada.runtime_substrate_kind.v1'
   || admittedRuntimeSubstrateKindsFromContract.length === 0
   || rawCarrierLaunchMatrixRows.length === 0
@@ -97,10 +98,9 @@ if (
 
 export const ADMITTED_LAUNCH_SELECTION_KINDS = Object.freeze(carrierLaunchMatrixRows.map((row) => row.launch_selection_kind));
 // Compatibility name: existing --carrier callers pass the launch selector.
-export const ADMITTED_CARRIER_KINDS = ADMITTED_LAUNCH_SELECTION_KINDS;
 export const ADMITTED_RUNTIME_SUBSTRATE_KINDS = Object.freeze([...admittedRuntimeSubstrateKindsFromContract]);
 export const ADMITTED_OPERATOR_SURFACE_KINDS = Object.freeze(carrierLaunchMatrixRows.map((row) => row.operator_surface_kind));
-export const ADMITTED_CARRIER_IMPLEMENTATION_KINDS = Object.freeze([
+export const ADMITTED_RUNTIME_IMPLEMENTATION_KINDS = Object.freeze([
   ...new Set(carrierLaunchMatrixRows.map((row) => row.carrier_implementation_kind)),
 ]);
 export const ADMITTED_TOOL_FABRIC_ADAPTER_KINDS = Object.freeze([
@@ -118,7 +118,7 @@ export const CARRIER_COMPATIBILITY_POLICY = Object.freeze({
   retirement: 'Remove the carrier alias after registered launchers and consumers emit operator_surface explicitly.',
 });
 
-export function carrierLaunchMatrixRow(launchSelectionKind) {
+export function operatorSurfaceLaunchMatrixRow(launchSelectionKind) {
   return carrierLaunchMatrixByLaunchSelection.get(String(launchSelectionKind ?? '')) ?? null;
 }
 
@@ -133,8 +133,8 @@ export function operatorSurfaceKindsForProjectionCapability(capability) {
     .map((row) => row.operator_surface_kind));
 }
 
-export function defaultRuntimeForCarrier(launchSelectionKind) {
-  const matrixRow = carrierLaunchMatrixRow(launchSelectionKind);
+export function defaultRuntimeForOperatorSurface(launchSelectionKind) {
+  const matrixRow = operatorSurfaceLaunchMatrixRow(launchSelectionKind);
   if (!matrixRow) throw new Error('carrier_launch_matrix_row_missing:' + launchSelectionKind);
   return matrixRow.runtime_substrate_kind;
 }
@@ -161,9 +161,9 @@ export function normalizeRuntimeAlias(value) {
 }
 
 export function carrierRefusal(candidate, {
-  admittedCarrierKinds = ADMITTED_CARRIER_KINDS,
+  admittedCarrierKinds = ADMITTED_LAUNCH_SELECTION_KINDS,
   reasonCode = 'carrier_kind_unsupported',
-  reason = `launch_selection_kind is not admitted by ${CARRIER_LAUNCH_MATRIX_CONTRACT_SCHEMA}`,
+  reason = `launch_selection_kind is not admitted by ${OPERATOR_SURFACE_LAUNCH_MATRIX_CONTRACT_SCHEMA}`,
 } = {}) {
   return {
     schema: 'narada.carrier_kind.v1',
@@ -211,20 +211,20 @@ export function normalizeRuntimeSubstrateKind(value, {
   return runtimeRefusal(runtimeName, { admittedRuntimeSubstrateKinds, runtimeContractSchema });
 }
 
-export function resolveCarrierRuntimeSelection({
+export function resolveOperatorSurfaceRuntimeSelection({
   carrierValue,
   operatorSurfaceValue,
   runtimeValue,
   admittedRuntimeSubstrateKinds = ADMITTED_RUNTIME_SUBSTRATE_KINDS,
   runtimeContractSchema = runtimeSubstrateContract.schema,
-  admittedCarrierKinds = ADMITTED_CARRIER_KINDS,
+  admittedCarrierKinds = ADMITTED_LAUNCH_SELECTION_KINDS,
   admittedOperatorSurfaceKinds = ADMITTED_OPERATOR_SURFACE_KINDS,
 } = {}) {
   const explicitCarrier = typeof carrierValue === 'string' && carrierValue.trim() ? carrierValue.trim() : null;
   const explicitOperatorSurface = typeof operatorSurfaceValue === 'string' && operatorSurfaceValue.trim() ? operatorSurfaceValue.trim() : null;
   const explicitRuntimeInput = typeof runtimeValue === 'string' && runtimeValue.trim() ? runtimeValue.trim() : null;
   const explicitRuntime = explicitRuntimeInput ? normalizeRuntimeAlias(explicitRuntimeInput) : null;
-  if (explicitRuntime === AGENT_CLI_CARRIER_KIND) {
+  if (explicitRuntime === AGENT_CLI_OPERATOR_SURFACE_KIND) {
     return runtimeRefusal(explicitRuntime, {
       admittedRuntimeSubstrateKinds,
       runtimeContractSchema,
@@ -238,7 +238,7 @@ export function resolveCarrierRuntimeSelection({
     return runtimeRefusal(explicitRuntime, { admittedRuntimeSubstrateKinds, runtimeContractSchema });
   }
 
-  const operatorSurfaceKind = explicitOperatorSurface ?? explicitCarrier ?? (explicitRuntime && explicitRuntime !== NARADA_AGENT_RUNTIME_SERVER_KIND ? explicitRuntime : AGENT_CLI_CARRIER_KIND);
+  const operatorSurfaceKind = explicitOperatorSurface ?? explicitCarrier ?? (explicitRuntime && explicitRuntime !== NARADA_AGENT_RUNTIME_SERVER_KIND ? explicitRuntime : AGENT_CLI_OPERATOR_SURFACE_KIND);
   if (!admittedOperatorSurfaceKinds.includes(operatorSurfaceKind)) {
     return operatorSurfaceRefusal(operatorSurfaceKind, { admittedOperatorSurfaceKinds });
   }

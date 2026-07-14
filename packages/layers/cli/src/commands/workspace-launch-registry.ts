@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { runGovernedCommandSync } from '@narada2/process-launch-posture';
 import { buildAgentIdentityRefV2, resolveAgentIdentityRef } from '@narada2/agent-identity';
-import { defaultRuntimeForCarrier as defaultRuntimeForOperatorSurface } from '@narada2/carrier-runtime-contract/carrier-runtime-selection';
+import { defaultRuntimeForOperatorSurface } from '@narada2/operator-surface-runtime-contract/operator-surface-runtime-selection';
 import type { WorkspaceLaunchAdmissionPolicy } from './workspace-launch-admission.js';
 import {
   canonicalizeWorkspaceLaunchRecords as canonicalizeWorkspaceLaunchRecordsDomain,

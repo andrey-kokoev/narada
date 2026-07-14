@@ -3,8 +3,8 @@ import {
   NARADA_AGENT_RUNTIME_SERVER_KIND,
   normalizeRuntimeAlias,
   operatorSurfaceKindsForRuntimeHost,
-  resolveCarrierRuntimeSelection,
-} from '@narada2/carrier-runtime-contract/carrier-runtime-selection';
+  resolveOperatorSurfaceRuntimeSelection as resolveCanonicalOperatorSurfaceRuntimeSelection,
+} from '@narada2/operator-surface-runtime-contract/operator-surface-runtime-selection';
 import { commandResultError } from '../lib/command-wrapper.js';
 import type { WorkspaceLaunchRecord } from './workspace-launch-types.js';
 
@@ -61,7 +61,7 @@ export function createWorkspaceLaunchAdmissionPolicy(args: {
     operatorSurface: string | undefined,
     runtime: string,
   ): WorkspaceLaunchRuntimeSelection => {
-    const selection = resolveCarrierRuntimeSelection({
+    const selection = resolveCanonicalOperatorSurfaceRuntimeSelection({
       carrierValue: operatorSurface,
       operatorSurfaceValue: operatorSurface,
       runtimeValue: runtime,

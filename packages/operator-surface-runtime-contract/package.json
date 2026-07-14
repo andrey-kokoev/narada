@@ -1,0 +1,23 @@
+{
+  "name": "@narada2/operator-surface-runtime-contract",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/operator-surface-runtime-contract.mjs",
+    "./operator-surface-runtime-selection": {
+      "types": "./src/operator-surface-runtime-selection.d.ts",
+      "default": "./src/operator-surface-runtime-selection.mjs"
+    },
+    "./launch-slice": "./contracts/launch-slice.json",
+    "./operator-surface-launch-matrix": "./contracts/operator-surface-launch-matrix.json",
+    "./mcp-runtime": "./contracts/mcp-runtime.json",
+    "./terminal-runtime": "./contracts/terminal-runtime.json",
+    "./runtime-substrate-kinds": "./contracts/runtime-substrate-kinds.json",
+    "./boolean-values": "./contracts/boolean-values.json"
+  },
+  "scripts": {
+    "test": "node --test src/operator-surface-runtime-contract.test.mjs",
+    "typecheck": "tsc --noEmit --allowJs --checkJs false src/operator-surface-runtime-contract.mjs src/operator-surface-runtime-selection.mjs"
+  }
+}

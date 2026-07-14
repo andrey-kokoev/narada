@@ -26,7 +26,7 @@ Existing packages:
 
 Likely new packages:
 
-1. `packages/carrier-runtime-contract`
+1. `packages/operator-surface-runtime-contract`
 2. `packages/carrier-provider-contract`
 3. `packages/carrier-command-contract`
 

@@ -1,12 +1,11 @@
-export const AGENT_CLI_CARRIER_KIND: 'agent-cli';
+export const AGENT_CLI_OPERATOR_SURFACE_KIND: 'agent-cli';
 export const NARADA_AGENT_RUNTIME_SERVER_KIND: 'narada-agent-runtime-server';
 export const NARADA_AGENT_RUNTIME_SERVER_ALIAS: 'nars';
-export const CARRIER_LAUNCH_MATRIX_CONTRACT_SCHEMA: 'narada.carrier_launch_matrix.v3';
+export const OPERATOR_SURFACE_LAUNCH_MATRIX_CONTRACT_SCHEMA: 'narada.carrier_launch_matrix.v3';
 export const ADMITTED_LAUNCH_SELECTION_KINDS: readonly string[];
-export const ADMITTED_CARRIER_KINDS: readonly string[];
 export const ADMITTED_RUNTIME_SUBSTRATE_KINDS: readonly string[];
 export const ADMITTED_OPERATOR_SURFACE_KINDS: readonly string[];
-export const ADMITTED_CARRIER_IMPLEMENTATION_KINDS: readonly string[];
+export const ADMITTED_RUNTIME_IMPLEMENTATION_KINDS: readonly string[];
 export const ADMITTED_TOOL_FABRIC_ADAPTER_KINDS: readonly string[];
 export const OPERATOR_SURFACE_RUNTIME_SELECTION_SCHEMA: 'narada.operator_surface_runtime_selection.v1';
 export const LEGACY_CARRIER_RUNTIME_SELECTION_SCHEMA: 'narada.carrier_runtime_selection.v1';
@@ -92,13 +91,13 @@ export interface RefusedCarrierRuntimeSelection {
 
 export type CarrierRuntimeSelection = AcceptedCarrierRuntimeSelection | RefusedCarrierRuntimeSelection;
 
-export function carrierLaunchMatrixRow(launchSelectionKind: string): CarrierLaunchMatrixRow | null;
+export function operatorSurfaceLaunchMatrixRow(launchSelectionKind: string): CarrierLaunchMatrixRow | null;
 export function operatorSurfaceKindsForRuntimeHost(runtimeHostKind: string): readonly string[];
 export function operatorSurfaceKindsForProjectionCapability(capability: string): readonly string[];
-export function defaultRuntimeForCarrier(launchSelectionKind: string): string;
+export function defaultRuntimeForOperatorSurface(launchSelectionKind: string): string;
 export function normalizeRuntimeAlias(value: unknown): string;
 export function carrierRefusal(candidate: unknown, options?: Record<string, unknown>): Record<string, unknown>;
 export function operatorSurfaceRefusal(candidate: unknown, options?: Record<string, unknown>): Record<string, unknown>;
 export function runtimeRefusal(candidate: unknown, options?: Record<string, unknown>): Record<string, unknown>;
 export function normalizeRuntimeSubstrateKind(value: unknown, options?: Record<string, unknown>): Record<string, unknown>;
-export function resolveCarrierRuntimeSelection(options?: RuntimeSelectionOptions): CarrierRuntimeSelection;
+export function resolveOperatorSurfaceRuntimeSelection(options?: RuntimeSelectionOptions): CarrierRuntimeSelection;

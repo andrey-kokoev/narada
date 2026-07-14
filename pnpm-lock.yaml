@@ -257,12 +257,12 @@ importers:
       '@narada2/carrier-provider-support':
         specifier: workspace:*
         version: link:../carrier-provider-support
-      '@narada2/carrier-runtime-contract':
-        specifier: workspace:*
-        version: link:../carrier-runtime-contract
       '@narada2/nars-client-projection-contract':
         specifier: workspace:*
         version: link:../nars-client-projection-contract
+      '@narada2/operator-surface-runtime-contract':
+        specifier: workspace:*
+        version: link:../operator-surface-runtime-contract
       '@narada2/process-launch-posture':
         specifier: workspace:*
         version: link:../process-launch-posture
@@ -384,8 +384,6 @@ importers:
   packages/carrier-routing-contract: {}
 
   packages/carrier-runtime: {}
-
-  packages/carrier-runtime-contract: {}
 
   packages/carrier-terminal-projection:
     dependencies:
@@ -512,9 +510,6 @@ importers:
       '@narada2/carrier-provider-contract':
         specifier: workspace:*
         version: link:../../carrier-provider-contract
-      '@narada2/carrier-runtime-contract':
-        specifier: workspace:*
-        version: link:../../carrier-runtime-contract
       '@narada2/charters':
         specifier: workspace:*
         version: link:../../domains/charters
@@ -563,6 +558,9 @@ importers:
       '@narada2/operator-router':
         specifier: workspace:*
         version: link:../../operator-router
+      '@narada2/operator-surface-runtime-contract':
+        specifier: workspace:*
+        version: link:../../operator-surface-runtime-contract
       '@narada2/ops-kit':
         specifier: workspace:*
         version: link:../../ops-kit
@@ -906,6 +904,8 @@ importers:
         specifier: workspace:*
         version: link:../process-launch-posture
 
+  packages/operator-surface-runtime-contract: {}
+
   packages/ops-kit:
     dependencies:
       '@narada2/charters':
@@ -1180,6 +1180,9 @@ importers:
       '@narada2/sqlite':
         specifier: workspace:*
         version: link:../sqlite
+      '@narada2/task-governance':
+        specifier: workspace:*
+        version: link:../task-governance
 
   packages/typed-mcp-surface:
     dependencies:

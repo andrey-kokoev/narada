@@ -63,10 +63,10 @@ describe('workspace launch module boundaries', () => {
     expect(executor).toContain("from './workspace-launch-result.js'");
     expect(command).not.toContain('startOperatorTerminal');
     expect(command).not.toContain('prompts.');
-    expect(admission).toContain('resolveCarrierRuntimeSelection');
+    expect(admission).toContain('resolveOperatorSurfaceRuntimeSelection');
     expect(providerContext).toContain("from './workspace-launch-admission.js'");
-    expect(providerContext).not.toContain('resolveCarrierRuntimeSelection');
+    expect(providerContext).not.toContain('resolveOperatorSurfaceRuntimeSelection');
     expect(selection).toContain("from './workspace-launch-admission.js'");
-    expect(selection).not.toContain('resolveCarrierRuntimeSelection');
+    expect(selection).not.toContain('resolveOperatorSurfaceRuntimeSelection');
   });
 });

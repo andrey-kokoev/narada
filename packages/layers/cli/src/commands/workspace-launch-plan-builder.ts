@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { join, resolve } from 'node:path';
 import { buildLaunchProcessOwnership, launchSessionIdFromToken } from '@narada2/launch-process-ownership';
-import { NARADA_AGENT_RUNTIME_SERVER_KIND } from '@narada2/carrier-runtime-contract/carrier-runtime-selection';
+import { NARADA_AGENT_RUNTIME_SERVER_KIND } from '@narada2/operator-surface-runtime-contract/operator-surface-runtime-selection';
 import type {
   WorkspaceLaunchAgentPlan,
   WorkspaceLaunchOperatorProjectionOpenRequest,

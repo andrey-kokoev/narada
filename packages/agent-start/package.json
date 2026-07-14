@@ -7,7 +7,7 @@
     "@narada2/agent-context-mcp": "workspace:*",
     "@narada2/agent-identity": "workspace:*",
     "@narada2/agent-runtime-server": "workspace:*",
-    "@narada2/carrier-runtime-contract": "workspace:*",
+    "@narada2/operator-surface-runtime-contract": "workspace:*",
     "@narada2/carrier-protocol": "workspace:*",
     "@narada2/carrier-provider-support": "workspace:*",
     "@narada2/carrier-provider-contract": "workspace:*",
