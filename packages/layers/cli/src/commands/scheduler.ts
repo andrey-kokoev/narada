@@ -5,7 +5,7 @@ import {
   getSchedulerSiteDaemonStatus,
   planSchedulerSiteDaemonInstall,
   setSchedulerSiteDaemonEnabled,
-} from '../lib/launcher-runtime.js';
+} from '../lib/launcher-runtime-scheduler.js';
 
 export interface SchedulerSiteDaemonOptions {
   siteRoot?: string;

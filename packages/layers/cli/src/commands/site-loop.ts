@@ -1,7 +1,7 @@
 import type { CommandContext } from '../lib/command-wrapper.js';
 import { formattedResult, type CliFormat } from '../lib/cli-output.js';
 import { ExitCode } from '../lib/exit-codes.js';
-import { runSiteCliCommand } from '../lib/launcher-runtime.js';
+import { runSiteCliCommand } from '../lib/launcher-runtime-site-command.js';
 
 export interface SiteLoopOptions {
   siteRoot?: string;

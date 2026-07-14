@@ -25,7 +25,8 @@ import {
   schedulerSiteDaemonInstallCommand,
   schedulerSiteDaemonStatusCommand,
 } from '../../src/commands/scheduler.js';
-import { classifyAgentStartLaunchBindingStatus, getSchedulerSiteDaemonStatus, runAgentStartCommand, shouldDetachAgentStartProcess } from '../../src/lib/launcher-runtime.js';
+import { classifyAgentStartLaunchBindingStatus, runAgentStartCommand, shouldDetachAgentStartProcess } from '../../src/lib/launcher-runtime.js';
+import { getSchedulerSiteDaemonStatus } from '../../src/lib/launcher-runtime-scheduler.js';
 import type { CommandContext } from '../../src/lib/command-wrapper.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
 import { registerOperatorSurfaceCommands } from '../../src/commands/operator-surface-register.js';
