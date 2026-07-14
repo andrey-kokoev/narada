@@ -1,7 +1,7 @@
 param(
     [string]$UserSiteRoot = $(if ($env:NARADA_USER_SITE_ROOT) { $env:NARADA_USER_SITE_ROOT } else { Join-Path $HOME 'Narada' }),
     [string]$NaradaCli = $(if ($env:NARADA_CLI) { $env:NARADA_CLI } else { "" }),
-    [string]$ArchitectIdentity = "narada-andrey.Kevin",
+    [string]$ArchitectIdentity = "andrey-user.Kevin",
     [string]$WorkboardFixturePath,
     [string]$OsaFixturePath,
     [int]$ProjectionFreshnessSeconds = 600,

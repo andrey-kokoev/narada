@@ -1,8 +1,8 @@
 param(
     [string]$UserSiteRoot = $(if ($env:NARADA_USER_SITE_ROOT) { $env:NARADA_USER_SITE_ROOT } else { Join-Path $HOME 'Narada' }),
     [string]$PcSiteRoot = if ($env:NARADA_PC_SITE_ROOT) { $env:NARADA_PC_SITE_ROOT } else { "C:\ProgramData\Narada\sites\pc\desktop-sunroom-2" },
-    [string]$IdentityName = "narada-andrey.Kevin",
-    [string]$FromIdentity = "narada-andrey.Bob",
+    [string]$IdentityName = "andrey-user.Kevin",
+    [string]$FromIdentity = "andrey-user.Bob",
     [string]$ObligationsPath,
     [string]$WorkboardFixturePath,
     [string]$BridgeResultFixturePath,

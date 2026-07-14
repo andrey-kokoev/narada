@@ -1,7 +1,7 @@
 param(
     [string]$UserSiteRoot = $(if ($env:NARADA_USER_SITE_ROOT) { $env:NARADA_USER_SITE_ROOT } else { Join-Path $HOME 'Narada' }),
     [string]$PcSiteRoot = ($env:NARADA_PC_SITE_ROOT ? $env:NARADA_PC_SITE_ROOT : "C:\ProgramData\Narada\sites\pc\desktop-sunroom-2"),
-    [string]$WorkspaceId = "narada-andrey",
+    [string]$WorkspaceId = "andrey-user",
     [switch]$SkipRestore,
     [switch]$PassThru
 )

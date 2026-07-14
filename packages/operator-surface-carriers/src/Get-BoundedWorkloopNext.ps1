@@ -1,7 +1,7 @@
 param(
     [string]$UserSiteRoot = $(if ($env:NARADA_USER_SITE_ROOT) { $env:NARADA_USER_SITE_ROOT } else { Join-Path $HOME 'Narada' }),
     [string]$NaradaCli,
-    [string]$Agent = "narada-andrey.Bob",
+    [string]$Agent = "andrey-user.Bob",
     [int]$Limit = 8,
     [int]$MaxHumanLines = 18,
     [int]$MaxHumanBytes = 2400,

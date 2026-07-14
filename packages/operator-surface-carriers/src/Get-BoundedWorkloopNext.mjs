@@ -17,7 +17,7 @@ import { runGovernedCommandSync } from '@narada2/process-launch-posture';
 
 function parseArgs(argv) {
   const args = {
-    agent: 'narada-andrey.Bob',
+    agent: 'andrey-user.Bob',
     limit: 8,
     maxHumanLines: 18,
     maxHumanBytes: 2400,

@@ -8,6 +8,8 @@ param(
     [string] $DesktopPath,
     [string] $SiteRoot = $(if ($env:NARADA_USER_SITE_ROOT) { $env:NARADA_USER_SITE_ROOT } else { Join-Path $HOME 'Narada' }),
     [string] $Runtime,
+    [string] $RuntimeContractPath,
+    [string] $LaunchMatrixContractPath,
     [ValidateSet('Plan', 'Create')]
     [string] $Mode = 'Plan',
     [string] $PCLocusAuthorityPath,
@@ -17,7 +19,185 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $RuntimeContractSchema = 'narada.runtime_substrate_kind.v1'
-$AdmittedRuntimeSubstrateKinds = @('kimi', 'codex', 'narada-agent-runtime-server', 'agent-tui', 'pi', 'claude-code', 'opencode')
+$AdmittedRuntimeSubstrateKinds = @()
+$LaunchMatrixContractSchema = 'narada.carrier_launch_matrix.v3'
+$CarrierLaunchMatrixRows = @()
+
+function Resolve-RuntimeSubstrateContractPath {
+    param(
+        [string] $ExplicitPath,
+        [string] $SiteRoot
+    )
+
+    $candidates = @()
+    if ($ExplicitPath) {
+        $candidates += $ExplicitPath
+    }
+    if ($env:NARADA_RUNTIME_SUBSTRATE_CONTRACT_PATH) {
+        $candidates += $env:NARADA_RUNTIME_SUBSTRATE_CONTRACT_PATH
+    }
+    if ($env:NARADA_PROPER_ROOT) {
+        $candidates += Join-Path $env:NARADA_PROPER_ROOT 'packages\operator-surface-runtime-contract\contracts\runtime-substrate-kinds.json'
+    }
+    $candidates += Join-Path $PSScriptRoot '..\..\operator-surface-runtime-contract\contracts\runtime-substrate-kinds.json'
+
+    foreach ($candidate in @($candidates | Select-Object -Unique)) {
+        if ([string]::IsNullOrWhiteSpace([string] $candidate)) {
+            continue
+        }
+        if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+            return (Resolve-Path -LiteralPath $candidate).Path
+        }
+    }
+
+    $refusal = [ordered]@{
+        schema = 'narada.runtime_substrate_contract_resolution.v1'
+        status = 'refused'
+        reason_code = 'runtime_substrate_contract_not_found'
+        site_root = $SiteRoot
+        attempted_paths = @($candidates | Select-Object -Unique)
+        required_next_step = 'Provide -RuntimeContractPath or NARADA_RUNTIME_SUBSTRATE_CONTRACT_PATH pointing to the canonical runtime-substrate-kinds.json contract.'
+    }
+    throw ($refusal | ConvertTo-Json -Depth 10 -Compress)
+}
+
+function Get-RuntimeSubstrateContract {
+    param(
+        [string] $ExplicitPath,
+        [string] $SiteRoot
+    )
+
+    $contractPath = Resolve-RuntimeSubstrateContractPath -ExplicitPath $ExplicitPath -SiteRoot $SiteRoot
+    try {
+        $contract = Get-Content -LiteralPath $contractPath -Raw | ConvertFrom-Json
+    } catch {
+        throw "runtime_substrate_contract_invalid_json: $contractPath"
+    }
+
+    if ([string] $contract.schema -ne $RuntimeContractSchema) {
+        throw "runtime_substrate_contract_schema_mismatch: expected $RuntimeContractSchema at $contractPath"
+    }
+
+    $admitted = @($contract.admitted_runtime_substrate_kinds |
+        ForEach-Object { [string] $_ } |
+        Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+    if ($admitted.Count -eq 0) {
+        throw "runtime_substrate_contract_empty_admission: $contractPath"
+    }
+    if (@($admitted | Select-Object -Unique).Count -ne $admitted.Count) {
+        throw "runtime_substrate_contract_duplicate_admission: $contractPath"
+    }
+
+    return [pscustomobject]@{
+        Path = $contractPath
+        Schema = [string] $contract.schema
+        AdmittedRuntimeSubstrateKinds = $admitted
+    }
+}
+
+function Resolve-CarrierLaunchMatrixContractPath {
+    param(
+        [string] $ExplicitPath,
+        [string] $SiteRoot
+    )
+
+    $candidates = @()
+    if ($ExplicitPath) {
+        $candidates += $ExplicitPath
+    }
+    if ($env:NARADA_CARRIER_LAUNCH_MATRIX_CONTRACT_PATH) {
+        $candidates += $env:NARADA_CARRIER_LAUNCH_MATRIX_CONTRACT_PATH
+    }
+    if ($env:NARADA_PROPER_ROOT) {
+        $candidates += Join-Path $env:NARADA_PROPER_ROOT 'packages\operator-surface-runtime-contract\contracts\operator-surface-launch-matrix.json'
+    }
+    $candidates += Join-Path $PSScriptRoot '..\..\operator-surface-runtime-contract\contracts\operator-surface-launch-matrix.json'
+
+    foreach ($candidate in @($candidates | Select-Object -Unique)) {
+        if ([string]::IsNullOrWhiteSpace([string] $candidate)) {
+            continue
+        }
+        if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+            return (Resolve-Path -LiteralPath $candidate).Path
+        }
+    }
+
+    $refusal = [ordered]@{
+        schema = 'narada.carrier_launch_matrix_contract_resolution.v1'
+        status = 'refused'
+        reason_code = 'carrier_launch_matrix_contract_not_found'
+        site_root = $SiteRoot
+        attempted_paths = @($candidates | Select-Object -Unique)
+        required_next_step = 'Provide -LaunchMatrixContractPath or NARADA_CARRIER_LAUNCH_MATRIX_CONTRACT_PATH pointing to the canonical operator-surface-launch-matrix.json contract.'
+    }
+    throw ($refusal | ConvertTo-Json -Depth 10 -Compress)
+}
+
+function Get-CarrierLaunchMatrixContract {
+    param(
+        [string] $ExplicitPath,
+        [string] $SiteRoot
+    )
+
+    $contractPath = Resolve-CarrierLaunchMatrixContractPath -ExplicitPath $ExplicitPath -SiteRoot $SiteRoot
+    try {
+        $contract = Get-Content -LiteralPath $contractPath -Raw | ConvertFrom-Json
+    } catch {
+        throw "carrier_launch_matrix_contract_invalid_json: $contractPath"
+    }
+
+    if ([string] $contract.schema -ne $LaunchMatrixContractSchema) {
+        throw "carrier_launch_matrix_contract_schema_mismatch: expected $LaunchMatrixContractSchema at $contractPath"
+    }
+
+    $rows = @($contract.rows)
+    if ($rows.Count -eq 0) {
+        throw "carrier_launch_matrix_contract_empty_rows: $contractPath"
+    }
+
+    $selectionKinds = @($rows |
+        ForEach-Object { [string] $_.launch_selection_kind } |
+        Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+    if ($selectionKinds.Count -ne $rows.Count) {
+        throw "carrier_launch_matrix_contract_row_missing_launch_selection_kind: $contractPath"
+    }
+    if (@($selectionKinds | Select-Object -Unique).Count -ne $selectionKinds.Count) {
+        throw "carrier_launch_matrix_contract_duplicate_launch_selection_kind: $contractPath"
+    }
+    foreach ($row in $rows) {
+        if ([string]::IsNullOrWhiteSpace([string] $row.runtime_substrate_kind)) {
+            throw "carrier_launch_matrix_contract_row_missing_runtime_substrate_kind: $contractPath"
+        }
+        $projectionCapabilities = @($row.projection_capabilities)
+        if ($null -eq $row.projection_capabilities -or @($projectionCapabilities | Where-Object { [string]::IsNullOrWhiteSpace([string] $_) }).Count -gt 0) {
+            throw "carrier_launch_matrix_contract_row_invalid_projection_capabilities: $contractPath"
+        }
+        $conformance = $row.conformance
+        $evidenceLevels = @('code_enforced', 'config_enforced', 'startup_enforced', 'documented_advisory', 'unverified')
+        $conformanceGaps = @($conformance.known_gaps)
+        if (
+            $null -eq $conformance
+            -or $evidenceLevels -notcontains [string] $conformance.evidence_level
+            -or [string]::IsNullOrWhiteSpace([string] $conformance.default_intelligence_auth_path)
+            -or [string]::IsNullOrWhiteSpace([string] $conformance.mcp_fabric_source)
+            -or [string]::IsNullOrWhiteSpace([string] $conformance.native_shell_posture)
+            -or [string]::IsNullOrWhiteSpace([string] $conformance.mutating_call_handling)
+            -or [string]::IsNullOrWhiteSpace([string] $conformance.startup_sequence_availability)
+            -or $null -eq $conformance.known_gaps
+            -or $conformance.known_gaps -isnot [System.Array]
+            -or $conformanceGaps.Count -eq 0
+            -or @($conformanceGaps | Where-Object { [string]::IsNullOrWhiteSpace([string] $_) }).Count -gt 0
+        ) {
+            throw "carrier_launch_matrix_contract_row_invalid_conformance: $contractPath"
+        }
+    }
+
+    return [pscustomobject]@{
+        Path = $contractPath
+        Schema = [string] $contract.schema
+        Rows = $rows
+    }
+}
 
 function Get-RuntimeKindRefusal {
     param(
@@ -41,13 +221,30 @@ function Resolve-CarrierKind {
         [string] $CarrierCandidate
     )
 
-    if (-not [string]::IsNullOrWhiteSpace($CarrierCandidate) -and $CarrierCandidate -eq 'agent-cli') {
-        return 'agent-cli'
+    $runtimeRows = @($CarrierLaunchMatrixRows |
+        Where-Object { [string] $_.runtime_substrate_kind -eq $RuntimeSubstrateKind })
+    if ($runtimeRows.Count -eq 0) {
+        throw "carrier_launch_matrix_runtime_substrate_kind_not_found: $RuntimeSubstrateKind"
     }
-    if ($RuntimeSubstrateKind -eq 'narada-agent-runtime-server') {
-        return 'agent-cli'
+
+    if (-not [string]::IsNullOrWhiteSpace($CarrierCandidate)) {
+        $carrierRow = @($CarrierLaunchMatrixRows |
+            Where-Object { [string] $_.launch_selection_kind -eq $CarrierCandidate })
+        if ($carrierRow.Count -eq 0) {
+            throw "carrier_launch_matrix_launch_selection_kind_not_found: $CarrierCandidate"
+        }
+        if ([string] $carrierRow[0].runtime_substrate_kind -ne $RuntimeSubstrateKind) {
+            throw "carrier_launch_matrix_runtime_mismatch: launch_selection_kind '$CarrierCandidate' does not use runtime_substrate_kind '$RuntimeSubstrateKind'"
+        }
+        return [string] $carrierRow[0].launch_selection_kind
     }
-    return $RuntimeSubstrateKind
+
+    if ($runtimeRows.Count -eq 1) {
+        return [string] $runtimeRows[0].launch_selection_kind
+    }
+
+    $candidates = @($runtimeRows | ForEach-Object { [string] $_.launch_selection_kind })
+    throw "carrier_kind_required_for_runtime_substrate_kind: '$RuntimeSubstrateKind' maps to multiple launch selections: $($candidates -join ', ')"
 }
 
 function Assert-RuntimeSubstrateKind {
@@ -154,7 +351,11 @@ function Write-MaterializationTrace {
         [Parameter(Mandatory = $true)]
         [string] $ShortcutDirectory,
         [Parameter(Mandatory = $true)]
-        [string] $AffordancePath
+        [string] $AffordancePath,
+        [Parameter(Mandatory = $true)]
+        [string] $RuntimeContractPath,
+        [Parameter(Mandatory = $true)]
+        [string] $LaunchMatrixContractPath
     )
 
     if (-not (Test-Path -LiteralPath $Directory)) {
@@ -171,6 +372,9 @@ function Write-MaterializationTrace {
         source_affordance_path = $AffordancePath
         shortcut_directory = $ShortcutDirectory
         runtime_contract_schema = $RuntimeContractSchema
+        runtime_contract_path = $RuntimeContractPath
+        launch_matrix_contract_schema = $LaunchMatrixContractSchema
+        launch_matrix_contract_path = $LaunchMatrixContractPath
         runtime_substrate_kind = $RuntimeSubstrateKind
         carrier_kind = $CarrierKind
         runtime = $RuntimeSubstrateKind
@@ -187,6 +391,14 @@ if (-not (Test-Path -LiteralPath $AffordancePath)) {
 }
 
 $projection = Get-Content -LiteralPath $AffordancePath -Raw | ConvertFrom-Json
+$runtimeContract = Get-RuntimeSubstrateContract -ExplicitPath $RuntimeContractPath -SiteRoot $SiteRoot
+$launchMatrixContract = Get-CarrierLaunchMatrixContract -ExplicitPath $LaunchMatrixContractPath -SiteRoot $SiteRoot
+$RuntimeContractPath = $runtimeContract.Path
+$RuntimeContractSchema = $runtimeContract.Schema
+$AdmittedRuntimeSubstrateKinds = @($runtimeContract.AdmittedRuntimeSubstrateKinds)
+$LaunchMatrixContractPath = $launchMatrixContract.Path
+$LaunchMatrixContractSchema = $launchMatrixContract.Schema
+$CarrierLaunchMatrixRows = @($launchMatrixContract.Rows)
 if (-not $Runtime) {
     $Runtime = [string] $projection.default_runtime_substrate_kind
 }
@@ -269,6 +481,9 @@ if ($Mode -eq 'Plan') {
         Runtime = $Runtime
         ShortcutDirectory = $ShortcutDirectory
         AffordancePath = $AffordancePath
+        RuntimeContractPath = $RuntimeContractPath
+        LaunchMatrixContractSchema = $LaunchMatrixContractSchema
+        LaunchMatrixContractPath = $LaunchMatrixContractPath
         ShortcutAuthority = 'pc_site_projection_required'
         MigrationGuidance = 'Existing .crew/agent-shortcuts and Desktop .lnk files are local PC projections. Keep or remove them only through PC-locus materialization/disposition authority; User Site JSON remains portable intent.'
         PlannedShortcuts = $planned
@@ -298,7 +513,7 @@ foreach ($entry in $planned) {
 
 $createdCarrierKinds = @($planned | Select-Object -ExpandProperty CarrierKind -Unique)
 $createdCarrierKind = if ($createdCarrierKinds.Count -eq 1) { [string] $createdCarrierKinds[0] } else { 'multiple' }
-$tracePath = Write-MaterializationTrace -Directory $TraceDirectory -Authority $pcAuthority -Shortcuts $created -RuntimeSubstrateKind $Runtime -CarrierKind $createdCarrierKind -ShortcutDirectory $ShortcutDirectory -AffordancePath $AffordancePath
+$tracePath = Write-MaterializationTrace -Directory $TraceDirectory -Authority $pcAuthority -Shortcuts $created -RuntimeSubstrateKind $Runtime -CarrierKind $createdCarrierKind -ShortcutDirectory $ShortcutDirectory -AffordancePath $AffordancePath -RuntimeContractPath $RuntimeContractPath -LaunchMatrixContractPath $LaunchMatrixContractPath
 
 [pscustomobject]@{
     Status = 'created'
@@ -308,6 +523,9 @@ $tracePath = Write-MaterializationTrace -Directory $TraceDirectory -Authority $p
     CarrierKind = $createdCarrierKind
     ShortcutDirectory = $ShortcutDirectory
     AffordancePath = $AffordancePath
+    RuntimeContractPath = $RuntimeContractPath
+    LaunchMatrixContractSchema = $LaunchMatrixContractSchema
+    LaunchMatrixContractPath = $LaunchMatrixContractPath
     AuthorityPath = $PCLocusAuthorityPath
     TracePath = $tracePath
     ShortcutAuthority = 'pc_site_projection_recorded'

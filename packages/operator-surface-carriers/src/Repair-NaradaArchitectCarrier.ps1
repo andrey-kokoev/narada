@@ -4,7 +4,7 @@
 param(
     [string]$UserSiteRoot = $(if ($env:NARADA_USER_SITE_ROOT) { $env:NARADA_USER_SITE_ROOT } else { Join-Path $HOME 'Narada' }),
     [string]$PcSiteRoot = "C:\ProgramData\Narada\sites\pc\desktop-sunroom-2",
-    [string]$Identity = "narada-andrey.architect",
+    [string]$Identity = "andrey-user.architect",
     [ValidateSet("codex", "kimi")]
     [string]$Runtime = "codex",
     [string]$SurfaceId = "task-lifecycle-mcp.local",
@@ -142,9 +142,9 @@ if (-not $SkipKill) {
     Write-Host "Skipping process termination."
 }
 
-$launcher = Join-Path $UserSiteRoot "narada-andrey.ps1"
+$launcher = Join-Path $UserSiteRoot "andrey-user.ps1"
 if (-not (Test-Path -LiteralPath $launcher)) {
-    throw "narada_andrey_launcher_missing: $launcher"
+    throw "andrey_user_launcher_missing: $launcher"
 }
 
 if ($PSCmdlet.ShouldProcess($Identity, "Start registered $Runtime carrier through agent-start")) {

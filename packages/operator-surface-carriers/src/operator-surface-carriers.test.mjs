@@ -38,3 +38,23 @@ test('operator surface carrier lifecycle declares claim, resolution, binding, an
   }
   assert.match(lifecycle, /invalid_operator_surface_carrier_transition/);
 });
+
+test('desktop shortcut projection consumes the canonical runtime contract', async () => {
+  const scriptPath = join(root, 'Install-AgentDesktopShortcuts.ps1');
+  const script = await readFile(scriptPath, 'utf8');
+  assert.match(script, /RuntimeContractPath/);
+  assert.match(script, /NARADA_RUNTIME_SUBSTRATE_CONTRACT_PATH/);
+  assert.match(script, /NARADA_PROPER_ROOT/);
+  assert.match(script, /Get-RuntimeSubstrateContract/);
+  assert.match(script, /runtime_substrate_contract_not_found/);
+  assert.match(script, /LaunchMatrixContractPath/);
+  assert.match(script, /NARADA_CARRIER_LAUNCH_MATRIX_CONTRACT_PATH/);
+  assert.match(script, /Get-CarrierLaunchMatrixContract/);
+  assert.match(script, /carrier_kind_required_for_runtime_substrate_kind/);
+  assert.match(script, /projection_capabilities/);
+  assert.match(script, /carrier_launch_matrix_contract_row_invalid_projection_capabilities/);
+  assert.match(script, /default_intelligence_auth_path/);
+  assert.match(script, /carrier_launch_matrix_contract_row_invalid_conformance/);
+  assert.doesNotMatch(script, /return 'agent-cli'/);
+  assert.doesNotMatch(script, /\$AdmittedRuntimeSubstrateKinds\s*=\s*@\(\s*'/);
+});

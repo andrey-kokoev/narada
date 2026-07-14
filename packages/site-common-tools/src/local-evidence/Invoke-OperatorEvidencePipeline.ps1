@@ -122,8 +122,8 @@ function Convert-WorkboardEvidence {
         if ($pendingReviews.Count -gt 0) {
             $nextActor = "architect"
             $nextAction = "review pending task evidence"
-        } elseif (@($inProgress | Where-Object { $_.assigned_agent -eq "narada-andrey.Bob" }).Count -gt 0) {
-            $nextActor = "narada-andrey.Bob"
+        } elseif (@($inProgress | Where-Object { $_.assigned_agent -eq "andrey-user.Bob" }).Count -gt 0) {
+            $nextActor = "andrey-user.Bob"
             $nextAction = "continue claimed task"
         } elseif ($inProgress.Count -gt 0) {
             $nextActor = "builder"

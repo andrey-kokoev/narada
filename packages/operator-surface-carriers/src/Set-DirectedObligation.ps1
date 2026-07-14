@@ -63,7 +63,7 @@ $store = Read-JsonFile $ObligationsPath
 if (-not $store) {
     $store = [pscustomobject][ordered]@{
         schema = "narada.operator_surfaces.directed_obligations.v0"
-        owner_site_id = "narada-andrey"
+        owner_site_id = "andrey-user"
         obligations = @()
     }
 }
