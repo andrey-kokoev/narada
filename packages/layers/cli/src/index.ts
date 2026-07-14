@@ -9,6 +9,19 @@ export { restoreCommand, type RestoreOptions, type RestoreResult } from './comma
 export { verifyBackupCommand, type VerifyBackupOptions, type VerifyBackupResult } from './commands/verify-backup.js';
 export { listBackupCommand, type ListBackupOptions } from './commands/backup-ls.js';
 export {
+  operatorSurfaceRuntimeControlPathCommand,
+  operatorSurfaceRuntimeDrainCommand,
+  operatorSurfaceRuntimeReadinessCommand,
+  operatorSurfaceRuntimeReloadCommand,
+  operatorSurfaceRuntimeRestartCommand,
+  operatorSurfaceRuntimeStatusCommand,
+  type OperatorSurfaceRuntimeLifecycleOptions,
+} from './commands/operator-surface-runtime-lifecycle.js';
+export {
+  operatorSurfaceRuntimeStartCommand,
+  type OperatorSurfaceRuntimeStartOptions,
+} from './commands/operator-surface-runtime-start.js';
+export {
   carrierControlPathCommand,
   carrierDrainCommand,
   carrierReadinessCommand,

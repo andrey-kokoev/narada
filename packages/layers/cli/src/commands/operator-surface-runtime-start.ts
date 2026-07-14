@@ -10,8 +10,8 @@ import { defaultRuntimeForCarrier as defaultRuntimeForOperatorSurface } from '@n
 import { requireAgent, requireSiteRoot } from './carrier-support.js';
 
 /**
- * Compatibility adapter for the external operator-surface runtime-start contract.
- * Workspace launch calls this boundary directly; the carrier command remains a facade.
+ * Canonical Operator Surface runtime-start boundary.
+ * Workspace launch and Operator Surface registration call this directly; carrier exports preserve old names only.
  */
 export interface OperatorSurfaceRuntimeStartOptions {
   siteRoot?: string;

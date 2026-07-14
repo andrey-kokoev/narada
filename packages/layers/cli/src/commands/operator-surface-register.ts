@@ -16,7 +16,7 @@ import {
   operatorSurfaceStatusCommand,
   operatorSurfaceVoiceTranscriptionCheckCommand,
 } from './operator-surface.js';
-import { carrierStartCommand } from './carrier.js';
+import { operatorSurfaceRuntimeStartCommand } from './operator-surface-runtime-start.js';
 
 export function registerOperatorSurfaceCommands(program: Command): void {
   const surfaceCmd = program
@@ -50,7 +50,7 @@ export function registerOperatorSurfaceCommands(program: Command): void {
       command: 'operator-surface runtime start',
       emit: emitCommandResult,
       format: (_surface: string | undefined, opts: CommanderOptionValues) => opts.format,
-      invocation: (surface, opts) => carrierStartCommand({
+      invocation: (surface, opts) => operatorSurfaceRuntimeStartCommand({
         siteRoot: opts.siteRoot as string | undefined,
         site: opts.site as string | undefined,
         targetSiteId: opts.targetSiteId as string | undefined,
