@@ -68,6 +68,7 @@ describe("WindowsSiteControlClient", () => {
           insertOperatorActionRequest: (req) => {
             operatorRequests.push(req as unknown as Record<string, unknown>);
           },
+          markOperatorActionRequestExecuting: () => undefined,
           markOperatorActionRequestExecuted: () => undefined,
           markOperatorActionRequestRejected: () => undefined,
           getWorkItem: (id: string) =>

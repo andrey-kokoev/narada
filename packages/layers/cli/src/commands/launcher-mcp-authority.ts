@@ -45,6 +45,7 @@ function fallbackProviderRegistryForTests(): ProviderRegistry {
       'kimi-api': { meaning: 'Kimi/Moonshot API via OpenAI-compatible chat completions.', support_state: 'verified_supported' },
       'kimi-code-api': { meaning: 'Kimi Code API via OpenAI-compatible chat completions; uses KIMI_CODE_API_KEY against api.kimi.com/coding/v1.', support_state: 'verified_supported' },
       'openai-api': { meaning: 'OpenAI API via OpenAI-compatible chat completions.', support_state: 'verified_supported' },
+      'openrouter-api': { meaning: 'OpenRouter API via OpenAI-compatible chat completions; preserves configured router model identity.', support_state: 'verified_supported' },
     },
   };
 }

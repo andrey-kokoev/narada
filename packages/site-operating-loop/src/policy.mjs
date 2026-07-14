@@ -13,8 +13,8 @@ export const DEFAULT_SITE_OPERATING_LOOP_POLICY = {
   },
   carrier: {
     preferred: 'narada-agent-runtime-server',
-    fallback: 'agent-cli-compatibility-shim',
-    fallback_enabled: true,
+    fallback: null,
+    fallback_enabled: false,
     require_policy_current: true,
   },
   source_sync: {
@@ -92,10 +92,15 @@ export function validateSiteOperatingLoopPolicy(policy, options = {}) {
   if (options.allowedPreferredCarriers && !options.allowedPreferredCarriers.includes(policy?.carrier?.preferred)) {
     errors.push('invalid_preferred_carrier');
   }
-  if (options.allowedFallbackCarriers && !options.allowedFallbackCarriers.includes(policy?.carrier?.fallback)) {
+  if (policy?.carrier?.fallback != null
+    && options.allowedFallbackCarriers
+    && !options.allowedFallbackCarriers.includes(policy.carrier.fallback)) {
     errors.push('invalid_fallback_carrier');
   }
   if (typeof policy?.carrier?.fallback_enabled !== 'boolean') errors.push('invalid_fallback_enabled');
+  if (policy?.carrier?.fallback_enabled === true && policy?.carrier?.fallback == null) {
+    errors.push('fallback_carrier_required');
+  }
   for (const [path, min] of [
     ['source_sync.max_batch_size', 1],
     ['rate_limits.max_directives_per_cycle', 1],

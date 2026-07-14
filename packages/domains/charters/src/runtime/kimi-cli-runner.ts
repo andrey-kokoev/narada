@@ -5,14 +5,14 @@
  * backed) with a structured prompt derived from the CharterInvocationEnvelope,
  * then parses and validates the response into a CharterOutputEnvelope.
  *
- * The installed Kimi CLI supports non-interactive print mode. This runner uses
- * `--print --final-message-only` with prompt text on stdin and captures stdout
- * with a timeout.
+ * The installed Kimi Code CLI supports non-interactive prompt mode. This
+ * runner uses `--prompt` and sets the agent working directory through the
+ * child-process `cwd` option, then captures stdout with a timeout.
  */
 
 import { spawnProviderSubprocess } from "@narada2/process-launch-posture";
-import { existsSync } from "node:fs";
-import { homedir } from "node:os";
+import { existsSync, mkdirSync, unlinkSync, writeFileSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import type {
   CharterInvocationEnvelope,
@@ -59,6 +59,28 @@ function hasBrowserSession(): boolean {
   return existsSync(credPath);
 }
 
+function ensureWorkDir(workDir?: string): void {
+  if (workDir) {
+    mkdirSync(workDir, { recursive: true });
+  }
+}
+
+const MAX_PROMPT_ARG_LENGTH = 6000;
+
+function promptFileName(executionId: string): string {
+  const safeExecutionId = executionId.replace(/[^A-Za-z0-9_-]/g, "_");
+  return `.narada-charter-request-${safeExecutionId}.txt`;
+}
+
+function removePromptFile(path?: string): void {
+  if (!path) return;
+  try {
+    unlinkSync(path);
+  } catch {
+    // Cleanup is best-effort; the request is already durable in the execution record.
+  }
+}
+
 export class KimiCliCharterRunner implements CharterRunner {
   constructor(
     private readonly opts: KimiCliCharterRunnerOptions,
@@ -76,6 +98,17 @@ export class KimiCliCharterRunner implements CharterRunner {
     }
 
     const cliPath = resolveCliPath(this.opts.cliPath);
+
+    try {
+      ensureWorkDir(this.opts.workDir);
+    } catch (error) {
+      const details = error instanceof Error ? error.message : String(error);
+      return {
+        class: "broken",
+        checked_at: new Date().toISOString(),
+        details: `Kimi CLI work directory is unavailable: ${details}`,
+      };
+    }
 
     // Check CLI exists on PATH by running `kimi --version`
     const versionCheck = await new Promise<{
@@ -136,12 +169,22 @@ export class KimiCliCharterRunner implements CharterRunner {
     validateInvocationEnvelope(envelope);
 
     const cliPath = resolveCliPath(this.opts.cliPath);
+    ensureWorkDir(this.opts.workDir);
     const prompt = this.buildPrompt(envelope);
+    let promptFilePath: string | undefined;
+    if (prompt.length > MAX_PROMPT_ARG_LENGTH) {
+      const promptDirectory = this.opts.workDir ?? tmpdir();
+      mkdirSync(promptDirectory, { recursive: true });
+      promptFilePath = join(promptDirectory, promptFileName(envelope.execution_id));
+      try {
+        writeFileSync(promptFilePath, prompt, "utf8");
+      } catch (error) {
+        removePromptFile(promptFilePath);
+        throw error;
+      }
+    }
 
     const args: string[] = [];
-    if (this.opts.workDir) {
-      args.push("--work-dir", this.opts.workDir);
-    }
     if (this.opts.sessionId) {
       args.push("--session", this.opts.sessionId);
     }
@@ -151,15 +194,27 @@ export class KimiCliCharterRunner implements CharterRunner {
     if (this.opts.model) {
       args.push("--model", this.opts.model);
     }
-    args.push("--print", "--final-message-only", "--input-format", "text");
+    const promptArgument = promptFilePath
+      ? `Read the Narada charter request from ${promptFilePath}. Treat its contents as the complete request and return only the requested JSON object.`
+      : prompt;
+    args.push("--prompt", promptArgument);
 
     const timeoutMs = this.opts.timeoutMs ?? 120000;
+    const spawnOptions = {
+      stdio: ["ignore", "pipe", "pipe"] as ["ignore", "pipe", "pipe"],
+      windowsHide: true,
+      ...(this.opts.workDir ? { cwd: this.opts.workDir } : {}),
+    };
 
     return new Promise((resolve, reject) => {
-      const child = spawnProviderSubprocess(cliPath, args, {
-        stdio: ["pipe", "pipe", "pipe"],
-        windowsHide: true,
-      });
+      let child;
+      try {
+        child = spawnProviderSubprocess(cliPath, args, spawnOptions);
+      } catch (error) {
+        removePromptFile(promptFilePath);
+        reject(error);
+        return;
+      }
 
       let stdout = "";
       let stderr = "";
@@ -179,15 +234,15 @@ export class KimiCliCharterRunner implements CharterRunner {
         stderr += String(d);
       });
 
-      child.stdin?.end(prompt);
-
       child.on("error", (err) => {
         clearTimeout(timeout);
+        removePromptFile(promptFilePath);
         reject(new Error(`Failed to spawn Kimi CLI: ${err.message}`));
       });
 
       child.on("close", (code) => {
         clearTimeout(timeout);
+        removePromptFile(promptFilePath);
 
         if (killedByTimeout) {
           reject(new Error(`Kimi CLI timed out after ${timeoutMs}ms`));

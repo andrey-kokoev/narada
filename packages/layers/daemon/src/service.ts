@@ -920,6 +920,7 @@ async function createDispatchContext(
   async function runDispatchPhase(): Promise<{
     signal: SyncCompletionSignal | null;
     openedCount: number;
+    retryableFailures: number;
   }> {
     const deps = await initDispatchDeps();
 
@@ -931,6 +932,7 @@ async function createDispatchContext(
 
     let signal: SyncCompletionSignal | null = null;
     let openedCount = 0;
+    let retryableFailures = 0;
 
     if (facts.length > 0) {
       logger.info('Dispatch phase starting', { scope: scope.scope_id, facts: facts.length });
@@ -1269,6 +1271,7 @@ async function createDispatchContext(
         const msg = error instanceof Error ? error.message : String(error);
         deps.scheduler.failExecution(attempt.execution_id, msg, true);
         deps.foreman.failWorkItem(workItem.work_item_id, msg, true);
+        retryableFailures++;
         logger.error('Execution failed', { scope: scope.scope_id, work_item_id: workItem.work_item_id, error: msg });
 
         // Transition default principal back to attached_interact on failure (Task 406)
@@ -1325,7 +1328,7 @@ async function createDispatchContext(
     }
 
     logger.info('Dispatch phase complete', { scope: scope.scope_id });
-    return { signal, openedCount };
+    return { signal, openedCount, retryableFailures };
   }
 
   async function getNextRetryDeadline(): Promise<Date | null> {
@@ -1915,6 +1918,11 @@ export async function createSyncService(
               const dispatchResult = await dispatchContext.runDispatchPhase();
               if (dispatchResult.openedCount > 0 || dispatchResult.signal) {
                 lastDispatchAt = new Date();
+              }
+              if (dispatchResult.retryableFailures > 0) {
+                if (mb) mb.errors += dispatchResult.retryableFailures;
+                stats.errors += dispatchResult.retryableFailures;
+                anyRetryable = true;
               }
             } catch (dispatchError) {
               const msg = dispatchError instanceof Error ? dispatchError.message : String(dispatchError);

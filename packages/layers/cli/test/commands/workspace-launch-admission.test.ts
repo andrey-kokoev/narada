@@ -14,6 +14,7 @@ const providerRegistry: WorkspaceLaunchProviderRegistry = {
   providers: {
     'kimi-code-api': { meaning: 'Kimi Code', support_state: 'verified_supported' },
     'codex-subscription': { meaning: 'Codex subscription', support_state: 'verified_supported' },
+    'openrouter-api': { meaning: 'OpenRouter', support_state: 'verified_supported' },
     'retired-provider': { meaning: 'Retired', support_state: 'retired' },
   },
 };
@@ -40,7 +41,7 @@ describe('workspace launch admission policy', () => {
   it('centralizes runtime, surface, role, and provider admission', () => {
     const admission = createWorkspaceLaunchAdmissionPolicy({
       providerRegistry,
-      admittedProviders: ['kimi-code-api'],
+      admittedProviders: ['kimi-code-api', 'openrouter-api'],
     });
     const context: WorkspaceLaunchSelectionContext = { admission };
 
@@ -53,6 +54,7 @@ describe('workspace launch admission policy', () => {
     expect(admission.intelligenceProviderChoices().map((choice) => choice.value)).toEqual([
       'registry default',
       'kimi-code-api',
+      'openrouter-api',
     ]);
 
     const model = workspaceLaunchSelectorModel(
@@ -73,6 +75,7 @@ describe('workspace launch admission policy', () => {
     expect(model.intelligenceProviderOptions.map((choice) => choice.value)).toEqual([
       'registry default',
       'kimi-code-api',
+      'openrouter-api',
     ]);
   });
 });

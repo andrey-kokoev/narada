@@ -23,7 +23,7 @@ It owns the public runtime-server contract for:
 - artifact HTTP request handling;
 - protocol-facing wrapper behavior around the carrier substrate.
 
-It binds transport and process lifetime to one `@narada2/nars-session-core` supervisor. The in-process carrier is a stateless turn adapter; legacy provider code is compatibility-only support.
+It binds transport and process lifetime to one `@narada2/nars-session-core` supervisor. The in-process carrier is a stateless turn adapter; provider execution is delegated to `@narada2/nars-provider-runtime`.
 
 ## Boundary Rules
 

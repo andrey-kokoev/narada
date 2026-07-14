@@ -14,6 +14,7 @@ import {
   type NormalizedEvent,
   type GraphAdapter,
 } from "@narada2/control-plane";
+import type { CharterRunner } from "@narada2/charters";
 
 function createTempDir(): string {
   return mkdtempSync(join(tmpdir(), "efs-daemon-dispatch-"));
@@ -269,6 +270,35 @@ describe("daemon dispatch phase integration", { timeout: 30000 }, () => {
     expect(command?.status).toBeDefined();
 
     db.close();
+  });
+
+  it("returns retryable when charter execution fails during one-shot dispatch", async () => {
+    const conversationId = "conv-run-once-failure-001";
+    const mockAdapter = createMockAdapterForConversation(conversationId);
+    const charterRunner: CharterRunner = {
+      probeHealth: async () => ({
+        class: "healthy",
+        checked_at: new Date().toISOString(),
+        details: "Test runtime",
+      }),
+      run: async () => {
+        throw new Error("provider unavailable");
+      },
+    };
+
+    service = await createSyncService({
+      configPath,
+      verbose: false,
+      adapter: mockAdapter,
+      charterRunner,
+      pollingIntervalMs: 100000,
+    });
+
+    const result = await service.runOnce();
+
+    expect(result).toBe("retryable");
+    expect(service.getStats().errors).toBe(1);
+    expect(service.getStats().cyclesCompleted).toBe(0);
   });
 
   it("reaches quiescence when no conversations changed", async () => {

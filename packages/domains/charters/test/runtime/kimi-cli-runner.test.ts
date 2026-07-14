@@ -31,23 +31,36 @@ vi.mock("@narada2/process-launch-posture", () => ({
   spawnProviderSubprocess: vi.fn(),
 }));
 
-// Mock fs and os for probeHealth
-vi.mock("node:fs", () => ({
-  existsSync: vi.fn(),
-}));
+// Mock fs for probeHealth while retaining real file helpers for prompt-file tests.
+vi.mock("node:fs", async () => {
+  const actual = await vi.importActual<typeof import("node:fs")>("node:fs");
+  return {
+    ...actual,
+    existsSync: vi.fn(),
+  };
+});
 
 import * as os from "node:os";
+import { join } from "node:path";
 
 import { spawnProviderSubprocess as spawn } from "@narada2/process-launch-posture";
-import { existsSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+} from "node:fs";
 
 function mockSpawn(
   stdout: string,
   stderr: string,
   exitCode: number | null,
   error?: Error,
+  onSpawn?: (args: string[]) => void,
 ) {
-  return vi.fn().mockImplementation(() => {
+  return vi.fn().mockImplementation((_command: string, args: string[]) => {
+    onSpawn?.(args);
     const events: Record<string, Array<(...args: unknown[]) => void>> = {};
     const stdin = { write: vi.fn(), end: vi.fn() };
     const stdoutStream = {
@@ -346,22 +359,73 @@ describe("KimiCliCharterRunner", () => {
       expect(mockedSpawn).toHaveBeenCalledWith(
         "/custom/kimi",
         [
-          "--work-dir",
-          "/tmp/wd",
           "--session",
           "sess-123",
           "--continue",
           "--model",
           "moonshot-v1-8k",
-          "--print",
-          "--final-message-only",
-          "--input-format",
-          "text",
+          "--prompt",
+          expect.any(String),
         ],
-        { stdio: ["pipe", "pipe", "pipe"], windowsHide: true },
+        {
+          stdio: ["ignore", "pipe", "pipe"],
+          windowsHide: true,
+          cwd: "/tmp/wd",
+        },
       );
-      const child = mockedSpawn.mock.results[0]?.value as { stdin?: { end?: ReturnType<typeof vi.fn> } };
-      expect(child.stdin?.end).toHaveBeenCalledWith(expect.stringContaining("single JSON object"));
+    });
+
+    it("creates and cleans up a missing work directory for long prompts", async () => {
+      const validOutput = {
+        output_version: "2.0",
+        execution_id: "ex-1",
+        charter_id: "support_steward",
+        role: "primary",
+        analyzed_at: new Date().toISOString(),
+        outcome: "no_op",
+        confidence: { overall: "high", uncertainty_flags: [] },
+        summary: "Test",
+        classifications: [],
+        facts: [],
+        proposed_actions: [],
+        tool_requests: [],
+        escalations: [],
+      };
+      const root = mkdtempSync(join(os.tmpdir(), "narada-kimi-runner-"));
+      const workDir = join(root, "missing-work-dir");
+      let promptFilePath: string | undefined;
+
+      try {
+        const mockedSpawn = mockSpawn(
+          JSON.stringify(validOutput),
+          "",
+          0,
+          undefined,
+          (args) => {
+            const promptArgument = args[args.indexOf("--prompt") + 1];
+            const match = promptArgument?.match(/^Read the Narada charter request from (.*)\. Treat/);
+            promptFilePath = match?.[1];
+            expect(promptFilePath).toBeDefined();
+            expect(readFileSync(promptFilePath!, "utf8")).toContain("x".repeat(10000));
+          },
+        );
+        vi.mocked(spawn).mockImplementation(mockedSpawn);
+
+        const runner = new KimiCliCharterRunner({ workDir });
+        await runner.run(
+          makeInvocation({
+            context_materialization: {
+              messages: [{ body_preview: "x".repeat(10000) }],
+            },
+          }),
+        );
+
+        expect(readdirSync(workDir)).toEqual([]);
+        expect(promptFilePath).toBeDefined();
+        expect(() => readFileSync(promptFilePath!, "utf8")).toThrow();
+      } finally {
+        rmSync(root, { recursive: true, force: true });
+      }
     });
   });
 });

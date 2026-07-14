@@ -100,7 +100,7 @@ export function getRecoveryGuidance(
     case "interactive_auth_required":
       return {
         operator_action:
-          "Browser session authentication is required. Run `kimi login` to authenticate the Kimi CLI, then verify with `kimi info`.",
+          "Browser session authentication is required. Run `kimi login` to authenticate the Kimi CLI, then rerun the Narada health check.",
         safe_behavior:
           "In production, Narada will skip charter execution when the CLI runtime requires interactive authentication. Work items remain opened and will be executed once authentication is completed. Sync continues normally.",
         inspectable:

@@ -20,6 +20,11 @@ Site-specific code is expected to:
 - compose source-specific loop steps;
 - pass the resulting store into the exported run/status/control helpers.
 
+The generic default policy prefers `narada-agent-runtime-server` and leaves
+carrier fallback unset and disabled. A Site host must explicitly name and
+enable any fallback; this package validates that declaration but does not
+select or launch carriers.
+
 For simple loops, use `runSiteOperatingLoop()` from `@narada2/site-operating-loop/runner`.
 For hosted loops, use `startSiteOperatingLoopRuntime()` from `@narada2/site-operating-loop/runtime`.
 For mature loops that need custom branching or domain-specific reconciliation,
