@@ -7,7 +7,16 @@
     "package_role": "private_operator_surface_ui",
     "surface": "operator_console",
     "authority_owner": "@narada2/cli",
-    "presentation_only": true
+    "presentation_only": true,
+    "launch_artifact": {
+      "target": "operator-console",
+      "build_script": "build",
+      "output_root": "dist",
+      "required_outputs": [
+        "index.html",
+        "assets/**"
+      ]
+    }
   },
   "exports": {
     "./dist/*": "./dist/*",
@@ -19,6 +28,7 @@
   "scripts": {
     "prebuild": "pnpm --filter @narada2/ui build",
     "build": "vite build --config vite.config.mjs",
+    "postbuild": "node ../layers/cli/scripts/write-launch-artifact.mjs --target operator-console --package-root . --site-root ../..",
     "typecheck": "vue-tsc --noEmit -p tsconfig.json",
     "test": "pnpm run typecheck && node --import tsx --test test/projections.test.ts test/site-registry-domain.test.ts test/site-registry-adapter.test.ts test/agent-sessions-adapter.test.ts test/routes.test.ts test/route-directory.test.ts test/site-registry-workflow.test.ts test/architecture-boundary.test.ts"
   },

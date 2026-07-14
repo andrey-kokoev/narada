@@ -16,6 +16,7 @@ import { createRegistryMutationGateway, type RegistryMutationGateway } from './s
 import { renderOperatorWorkspacePage } from './operator-workspace-page.js';
 import type { WorkspaceLaunchUiSessionRecord } from './workspace-launch-session-store.js';
 import { createAgentSessionReadModel, type AgentSessionReadModel } from './agent-session-read-model.js';
+import { ensureLaunchArtifact, naradaProperRoot } from '../lib/launch-artifact.js';
 import {
   DEFAULT_OPERATOR_ROUTER_PORT,
   readOperatorRouterRoutes,
@@ -163,6 +164,7 @@ export interface ConsoleServerConfig {
   registryMutationGateway?: RegistryMutationGateway;
   workspaceLaunchSessions?: () => Promise<WorkspaceLaunchUiSessionRecord[]>;
   agentSessions?: AgentSessionReadModel;
+  operatorConsoleUiRoot?: string;
 }
 
 export interface ConsoleServer {
@@ -231,6 +233,8 @@ async function probeConsoleServer(host: string, port: number): Promise<ConsolePr
 export async function createConsoleServer(config: ConsoleServerConfig): Promise<ConsoleServer> {
   const host = config.host ?? '127.0.0.1';
   const port = config.port;
+  const operatorConsoleUiRoot = config.operatorConsoleUiRoot
+    ?? ensureLaunchArtifact(naradaProperRoot(), 'operator-console').artifact_root;
   const registry = await openRegistry();
 
   const observationFactory = createObservationFactory();
@@ -245,6 +249,7 @@ export async function createConsoleServer(config: ConsoleServerConfig): Promise<
     registryMutationGateway: config.registryMutationGateway ?? createRegistryMutationGateway(),
     workspaceLaunchSessions: config.workspaceLaunchSessions,
     agentSessions: config.agentSessions ?? createAgentSessionReadModel(registryReadModel),
+    operatorConsoleUiRoot,
   };
 
   const routes = createConsoleServerRoutes(routeContext);

@@ -6,6 +6,11 @@ Narada's build authority is conservative by default:
 - `tsc` is the authoritative package build and declaration emit path.
 - Faster emit tools may be evaluated only as non-authoritative probes until they preserve Narada's package contracts.
 
+Launchable generated output has a separate integrity contract. See
+[`Launch Artifact Integrity`](../architecture/launch-artifact-integrity.md) for
+source-closure resolution, generated manifests, launch admission, and the
+ownership boundary between build targets, Narada CLI, and User Site launchers.
+
 ## Oxbuild
 
 `oxbuild` is currently allowed only as an experimental emit probe.

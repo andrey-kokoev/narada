@@ -134,11 +134,13 @@ export function createWorkspaceLaunchUiServer(controller: WorkspaceLaunchUiContr
   });
 }
 
-export function readWorkspaceLaunchUiAsset(pathname: string): WorkspaceLaunchUiAsset | null {
+export function readWorkspaceLaunchUiAsset(pathname: string, artifactRoot?: string | null): WorkspaceLaunchUiAsset | null {
   if (!pathname.startsWith('/assets/')) return null;
   const relativePath = pathname.slice('/assets/'.length);
   if (!relativePath || relativePath.includes('..') || !/^[A-Za-z0-9._/-]+$/.test(relativePath)) return null;
-  const indexPath = requireFromWorkspaceLaunchUiServer.resolve('@narada2/workspace-launch-ui/dist/index.html');
+  const indexPath = artifactRoot
+    ? resolve(artifactRoot, 'index.html')
+    : requireFromWorkspaceLaunchUiServer.resolve('@narada2/workspace-launch-ui/dist/index.html');
   const assetsRoot = resolve(dirname(indexPath), 'assets');
   const assetPath = resolve(assetsRoot, relativePath);
   if (assetPath !== assetsRoot && !assetPath.startsWith(`${assetsRoot}${sep}`)) return null;

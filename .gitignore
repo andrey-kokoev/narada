@@ -46,6 +46,7 @@ inputs/
 .narada/tmp/
 .narada/runtime/local-history/
 .narada/runtime/mcp-audit/
+.narada/runtime/launch-artifact-locks/
 .narada/local-filesystem-mcp/patch-outcomes/
 .narada/local-history-workspace.json
 packages/*/target/

@@ -1,6 +1,7 @@
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
-import { extname } from 'node:path';
+import { extname, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { buildAgentWebUiCloudflareAuthorityConfig, buildAgentWebUiCloudflareProjectionConfig } from '@narada2/cloudflare-nars-projection';
 import { readProjectionRegistration, registerProjectionRemotely, startLocalProjectionBridgeOnce, startLocalProjectionBridgeRunProcess } from '@narada2/cloudflare-nars-projection/node';
 import { AGENT_WEB_UI_CLOUDFLARE_METHOD_LIST, AGENT_WEB_UI_NARS_METHOD_LIST } from '@narada2/nars-client-projection-contract';
@@ -314,6 +315,19 @@ function sendJson(response, statusCode, payload) {
   response.end(`${JSON.stringify(payload)}\n`);
 }
 
+function rewritePublicBaseAssetPaths(content, publicBasePath) {
+  const base = publicBasePath.replace(/\/+$/, '');
+  return content
+    .replaceAll('src="/assets/', `src="${base}/assets/`)
+    .replaceAll('href="/assets/', `href="${base}/assets/`)
+    .replaceAll("src='/assets/", `src='${base}/assets/`)
+    .replaceAll("href='/assets/", `href='${base}/assets/`)
+    .replaceAll('src="./', `src="${base}/`)
+    .replaceAll('href="./', `href="${base}/`)
+    .replaceAll("src='./", `src='${base}/`)
+    .replaceAll("href='./", `href='${base}/`);
+}
+
 async function tryReadStaticRoot(root, relativePath) {
   const fileUrl = new URL(relativePath, root);
   if (!fileUrl.href.startsWith(root.href)) return null;
@@ -324,7 +338,12 @@ async function tryReadStaticRoot(root, relativePath) {
   }
 }
 
-async function readStaticFile(pathname, clientConfig) {
+function resolveDistRoot(artifactRoot) {
+  if (!artifactRoot) return DIST_ROOT;
+  return new URL('./', pathToFileURL(resolve(String(artifactRoot))).href);
+}
+
+async function readStaticFile(pathname, clientConfig, distRoot) {
   const relativePath = pathname === '/' ? 'index.html' : pathname.replace(/^\/+/, '');
   if (relativePath.includes('..')) return null;
   const vendorModule = VENDOR_MODULES.get(relativePath);
@@ -332,13 +351,11 @@ async function readStaticFile(pathname, clientConfig) {
     return { content: await readFile(vendorModule, 'utf8'), contentType: CONTENT_TYPES.get(extname(relativePath)) ?? 'text/javascript; charset=utf-8' };
   }
 
-  const distFile = await tryReadStaticRoot(DIST_ROOT, relativePath);
+  const distFile = await tryReadStaticRoot(distRoot, relativePath);
   if (distFile) {
     let content = relativePath === 'index.html' ? distFile.content.replace('__NARADA_AGENT_WEB_UI_CONFIG__', JSON.stringify(clientConfig)) : distFile.content;
     if (relativePath === 'index.html' && clientConfig.publicBasePath) {
-      content = content
-        .replaceAll('src="/assets/', `src="${clientConfig.publicBasePath}/assets/`)
-        .replaceAll('href="/assets/', `href="${clientConfig.publicBasePath}/assets/`);
+      content = rewritePublicBaseAssetPaths(content, clientConfig.publicBasePath);
     }
     return { content, contentType: CONTENT_TYPES.get(extname(relativePath)) ?? 'text/plain; charset=utf-8' };
   }
@@ -350,8 +367,7 @@ async function readStaticFile(pathname, clientConfig) {
   if (sourceRelativePath === 'compat-index.html') {
     content = content.replace('__NARADA_AGENT_WEB_UI_CONFIG__', JSON.stringify(clientConfig));
     if (clientConfig.publicBasePath) {
-      content = content.replaceAll('src="./', `src="${clientConfig.publicBasePath}/`)
-        .replaceAll('href="./', `href="${clientConfig.publicBasePath}/`);
+      content = rewritePublicBaseAssetPaths(content, clientConfig.publicBasePath);
     }
   } else if (sourceRelativePath.endsWith('.js')) {
     for (const [from, to] of BROWSER_IMPORT_REWRITES) {
@@ -363,6 +379,7 @@ async function readStaticFile(pathname, clientConfig) {
 
 export function createAgentWebUiServer(options, deps = {}) {
   const clientConfig = buildClientConfig(options);
+  const distRoot = resolveDistRoot(options.artifactRoot);
   const server = createServer(async (request, response) => {
     const url = new URL(request.url ?? '/', `http://${request.headers.host ?? '127.0.0.1'}`);
     if (url.pathname === '/api/projections/cloudflare/start') {
@@ -441,7 +458,7 @@ export function createAgentWebUiServer(options, deps = {}) {
       }
       return;
     }
-    const file = await readStaticFile(url.pathname, clientConfig);
+    const file = await readStaticFile(url.pathname, clientConfig, distRoot);
     if (!file) {
       sendJson(response, 404, { error: 'not_found' });
       return;

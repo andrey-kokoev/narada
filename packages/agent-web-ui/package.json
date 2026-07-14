@@ -19,7 +19,16 @@
       "slash_command_execution"
     ],
     "nars_protocol_methods_source": "@narada2/nars-client-projection-contract",
-    "protocol_scope": "local_nars_and_cloudflare_projection"
+    "protocol_scope": "local_nars_and_cloudflare_projection",
+    "launch_artifact": {
+      "target": "agent-web-ui",
+      "build_script": "build",
+      "output_root": "dist",
+      "required_outputs": [
+        "index.html",
+        "assets/**"
+      ]
+    }
   },
   "exports": {
     ".": "./src/agent-web-ui.js",
@@ -35,6 +44,7 @@
   "scripts": {
     "prebuild": "pnpm --filter @narada2/ui build",
     "build": "vite build",
+    "postbuild": "node ../layers/cli/scripts/write-launch-artifact.mjs --target agent-web-ui --package-root . --site-root ../..",
     "test": "node --test test/agent-web-ui.test.mjs test/agent-web-ui-projection.test.mjs test/agent-web-ui-protocol.test.mjs && pnpm run test:unit",
     "test:unit": "vitest run --config vitest.config.mjs",
     "test:unit:coverage": "vitest run --config vitest.config.mjs --coverage",

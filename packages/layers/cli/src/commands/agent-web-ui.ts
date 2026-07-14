@@ -23,6 +23,7 @@ import {
   authorityTransitionSnapshot,
   delay,
   isTransientAttachDiscoveryDetail,
+  diagnoseAttachSession,
   resolveAttachSessionId,
 } from './agent-web-ui-session.js';
 import type {
@@ -41,6 +42,7 @@ import {
   type AgentWebUiAttachmentLifecycle,
 } from './agent-web-ui-attachment-state.js';
 import { narsAttachCommandCommand } from './nars.js';
+import { ensureLaunchArtifact, naradaProperRoot } from '../lib/launch-artifact.js';
 
 function allowsStaleSessionInspection(options: AgentWebUiAttachOptions): boolean {
   return options.inspectStaleSession === true || options.allowStaleSession === true;
@@ -200,6 +202,7 @@ export async function agentWebUiAttachCommand(
   context: CommandContext,
   deps: AgentWebUiAttachDependencies = {},
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
+  if (options.diagnose) return diagnoseAttachSession(options, context, { discoverSessions: deps.discoverSessions });
   const progress = createProgressReporter(options, deps.progress);
   let attachmentLifecycle = createAgentWebUiAttachmentLifecycle();
   const transitionAttachment = (nextState: Parameters<typeof transitionAgentWebUiAttachment>[1]): void => {
@@ -399,6 +402,9 @@ export async function agentWebUiAttachCommand(
       throw new Error(`operator_router_projection_incomplete:${routePosture.healthy_route_ids.join(',')}`);
     }
   }
+  const agentWebUiArtifact = deps.startAgentWebUiServer
+    ? null
+    : ensureLaunchArtifact(naradaProperRoot(), 'agent-web-ui');
   const startAgentWebUiServer = deps.startAgentWebUiServer ?? (await import('@narada2/agent-web-ui/server')).startAgentWebUiServer;
   const started = await startAgentWebUiServer({
     host,
@@ -416,6 +422,7 @@ export async function agentWebUiAttachCommand(
     publicHealthEndpoint: router ? `${publicPath}/api/health` : null,
     publicArtifactBasePath: publicArtifactPath,
     publicArtifactTransport: publicArtifactPath ? 'operator-router' : null,
+    artifactRoot: agentWebUiArtifact?.artifact_root ?? null,
     cloudflareApiBaseUrl: options.cloudflareApiBaseUrl?.trim()
       || process.env.NARADA_CLOUDFLARE_NARS_PROJECTION_URL
       || process.env.CLOUDFLARE_NARS_PROJECTION_URL

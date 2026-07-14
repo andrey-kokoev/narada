@@ -2,8 +2,10 @@ import type { Command } from 'commander';
 import { directCommandAction, silentCommandContext } from '../lib/command-wrapper.js';
 import { emitCommandResult, resolveCommandFormat } from '../lib/cli-output.js';
 import { explainMcpCommand } from './launcher-mcp-authority.js';
+import { launcherArtifactCheckCommand, launcherArtifactEnsureCommand } from './launcher-artifact.js';
 import { workspaceLaunchCommand, workspaceLaunchPlanCommand } from './workspace-launch-application.js';
 import type { ExplainMcpOptions } from './launcher-mcp-authority.js';
+import type { LauncherArtifactOptions } from './launcher-artifact.js';
 import type { WorkspaceLaunchPlanOptions } from './workspace-launch-types.js';
 
 type LauncherCommandOptions = Omit<WorkspaceLaunchPlanOptions, 'format' | 'launcherUiPort' | 'operatorRouterPort'> & {
@@ -18,6 +20,40 @@ export function registerLauncherCommands(program: Command): void {
   const launcher = program
     .command('launcher')
     .description('Narada launcher planning and workspace orchestration commands');
+
+  const artifact = launcher
+    .command('artifact')
+    .description('Inspect and materialize verified launch artifacts');
+
+  artifact
+    .command('check <target>')
+    .description('Check a package-owned launch artifact without building')
+    .option('--site-root <path>', 'Narada workspace root; defaults to the current Narada proper root')
+    .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
+    .action(directCommandAction<[string, LauncherArtifactOptions]>({
+      command: 'launcher artifact check',
+      emit: emitCommandResult,
+      format: (_target: string, opts: LauncherArtifactOptions) => opts.format,
+      invocation: (target, opts) => launcherArtifactCheckCommand(target, {
+        siteRoot: opts.siteRoot,
+        format: resolveCommandFormat(opts.format, 'auto'),
+      }, silentCommandContext()),
+    }));
+
+  artifact
+    .command('ensure <target>')
+    .description('Build and verify a stale launch artifact before it is consumed')
+    .option('--site-root <path>', 'Narada workspace root; defaults to the current Narada proper root')
+    .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
+    .action(directCommandAction<[string, LauncherArtifactOptions]>({
+      command: 'launcher artifact ensure',
+      emit: emitCommandResult,
+      format: (_target: string, opts: LauncherArtifactOptions) => opts.format,
+      invocation: (target, opts) => launcherArtifactEnsureCommand(target, {
+        siteRoot: opts.siteRoot,
+        format: resolveCommandFormat(opts.format, 'auto'),
+      }, silentCommandContext()),
+    }));
 
   launcher
     .command('workspace-plan')

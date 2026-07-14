@@ -16,5 +16,6 @@ declare module '@narada2/agent-web-ui/server' {
     publicHealthEndpoint?: string | null;
     publicArtifactBasePath?: string | null;
     publicArtifactTransport?: string | null;
+    artifactRoot?: string | null;
   }): Promise<{ server: unknown; url: string }>;
 }

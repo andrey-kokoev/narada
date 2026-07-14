@@ -41,6 +41,7 @@ import {
 import { createWorkspaceLaunchAttemptRunner } from './workspace-launch-ui-attempts.js';
 import { executeWorkspaceLaunchUiAction } from './workspace-launch-ui-actions.js';
 import { setWorkspaceLaunchUiSessionLifecycle } from './workspace-launch-ui-lifecycle.js';
+import { ensureLaunchArtifact, naradaProperRoot } from '../lib/launch-artifact.js';
 
 export async function runWorkspaceLaunchSelectionUi(
   records: WorkspaceLaunchRecord[],
@@ -52,15 +53,16 @@ export async function runWorkspaceLaunchSelectionUi(
   let server: ReturnType<typeof createWorkspaceLaunchUiServer> | null = null;
   let settled = false;
   const portPolicy = resolveWorkspaceLaunchUiPortPolicy(options);
+  const workspaceLaunchArtifact = ensureLaunchArtifact(naradaProperRoot(), 'workspace-launch');
 
   const rememberedSelection = await readWorkspaceLaunchRememberedSelection();
   const pageModel = selectionServices.buildWorkspaceLaunchSelectionUiModel(records, options, rememberedSelection, siteCatalog);
-  const html = buildWorkspaceLaunchSelectionHtml(pageModel);
+  const html = buildWorkspaceLaunchSelectionHtml(pageModel, { artifactRoot: workspaceLaunchArtifact.artifact_root });
 
   const selectionPromise = new Promise<WorkspaceLaunchBrowserSelection>((resolveSelection, rejectSelection) => {
     server = createWorkspaceLaunchUiServer({
       page: () => html,
-      asset: readWorkspaceLaunchUiAsset,
+      asset: (pathname) => readWorkspaceLaunchUiAsset(pathname, workspaceLaunchArtifact.artifact_root),
       selectorModel: (payload) => selectionServices.workspaceLaunchSelectorModel(records, payload as Partial<WorkspaceLaunchBrowserSelection>, siteCatalog),
       submit: async (payload) => {
         const selection = selectionServices.normalizeWorkspaceLaunchBrowserSelection(payload as Partial<WorkspaceLaunchBrowserSelection>);
@@ -121,6 +123,7 @@ export async function runPersistentWorkspaceLaunchSelectionUi(
   let settled = false;
   let launchCount = 0;
   const portPolicy = resolveWorkspaceLaunchUiPortPolicy(options);
+  const workspaceLaunchArtifact = ensureLaunchArtifact(naradaProperRoot(), 'workspace-launch');
   const registryPaths = resolveRegistryPaths(options);
   const launcherOutputs = support.normalizeLauncherOutput(options.launcherOutput, options);
   const recoveredAttempts = await loadRecoveredWorkspaceLaunchAttempts(registryPaths, {
@@ -146,7 +149,10 @@ export async function runPersistentWorkspaceLaunchSelectionUi(
 
   const rememberedSelection = await readWorkspaceLaunchRememberedSelection();
   const pageModel = selectionServices.buildWorkspaceLaunchSelectionUiModel(records, options, rememberedSelection, siteCatalog);
-  const html = buildWorkspaceLaunchSelectionHtml(pageModel, { persistent: true });
+  const html = buildWorkspaceLaunchSelectionHtml(pageModel, {
+    persistent: true,
+    artifactRoot: workspaceLaunchArtifact.artifact_root,
+  });
   const dashboardState = (): WorkspaceLaunchDashboardState => ({
     schema: 'narada.workspace_launch.ui_session_state.v1',
     ui_session: uiSession,
@@ -171,7 +177,7 @@ export async function runPersistentWorkspaceLaunchSelectionUi(
   const closed = new Promise<'cancelled'>((resolveClosed, rejectClosed) => {
     server = createWorkspaceLaunchUiServer({
       page: () => html,
-      asset: readWorkspaceLaunchUiAsset,
+      asset: (pathname) => readWorkspaceLaunchUiAsset(pathname, workspaceLaunchArtifact.artifact_root),
       dashboard: dashboardState,
       selectorModel: (payload) => selectionServices.workspaceLaunchSelectorModel(records, payload as Partial<WorkspaceLaunchBrowserSelection>, siteCatalog),
       submit: async (payload) => {

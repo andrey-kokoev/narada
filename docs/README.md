@@ -24,6 +24,7 @@ Implementation-facing architecture and ownership contracts.
 
 - [`agent-web-ui-architecture.md`](architecture/agent-web-ui-architecture.md) — Agent Web UI layers, ownership boundaries, target source shape, and migration seams
 - [`agent-web-ui-command-ux.md`](architecture/agent-web-ui-command-ux.md) — Browser command palette and slash-command UX target
+- [`launch-artifact-integrity.md`](architecture/launch-artifact-integrity.md) — Source-closure, manifest, and launch-admission contract for generated artifacts
 - [`nars-session-input-contract.md`](architecture/nars-session-input-contract.md) — NARS session input and operator command boundary
 
 ## `product/`

@@ -71,6 +71,7 @@ export interface ConsoleServerRouteContext {
   registryMutationGateway: RegistryMutationGateway;
   workspaceLaunchSessions?: () => Promise<WorkspaceLaunchUiSessionRecord[]>;
   agentSessions?: AgentSessionReadModel;
+  operatorConsoleUiRoot?: string;
 }
 
 function jsonResponse(res: ServerResponse, status: number, payload: unknown): void {
@@ -357,7 +358,7 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
           jsonResponse(res, 403, { error: 'Origin not allowed' });
           return;
         }
-        htmlResponse(res, 200, readOperatorConsoleUiDocument());
+        htmlResponse(res, 200, readOperatorConsoleUiDocument(ctx.operatorConsoleUiRoot));
       },
     },
     {
@@ -384,7 +385,7 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
           jsonResponse(res, 403, { error: 'Origin not allowed' });
           return;
         }
-        htmlResponse(res, 200, readOperatorConsoleUiDocument());
+        htmlResponse(res, 200, readOperatorConsoleUiDocument(ctx.operatorConsoleUiRoot));
       },
     },
     {
@@ -504,14 +505,14 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
           jsonResponse(res, 403, { error: 'Origin not allowed' });
           return;
         }
-        htmlResponse(res, 200, readOperatorConsoleUiDocument());
+        htmlResponse(res, 200, readOperatorConsoleUiDocument(ctx.operatorConsoleUiRoot));
       },
     },
     {
       method: 'GET',
       pattern: suffixPathPattern(OPERATOR_CONSOLE_REGISTRY_PATH, '/assets/(.+)$'),
       handler: async (_req, res, params) => {
-        const asset = readOperatorConsoleUiAsset(`${OPERATOR_CONSOLE_REGISTRY_PATH}/assets/${params[1]!}`);
+        const asset = readOperatorConsoleUiAsset(`${OPERATOR_CONSOLE_REGISTRY_PATH}/assets/${params[1]!}`, ctx.operatorConsoleUiRoot);
         if (!asset) {
           jsonResponse(res, 404, { error: 'Operator Console asset not found' });
           return;
@@ -529,7 +530,7 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
           jsonResponse(res, 403, { error: 'Origin not allowed' });
           return;
         }
-        htmlResponse(res, 200, readOperatorConsoleUiDocument());
+        htmlResponse(res, 200, readOperatorConsoleUiDocument(ctx.operatorConsoleUiRoot));
       },
     },
     {
@@ -541,7 +542,7 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
           jsonResponse(res, 403, { error: 'Origin not allowed' });
           return;
         }
-        htmlResponse(res, 200, readOperatorConsoleUiDocument());
+        htmlResponse(res, 200, readOperatorConsoleUiDocument(ctx.operatorConsoleUiRoot));
       },
     },
     {

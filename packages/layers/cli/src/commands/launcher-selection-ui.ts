@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import { resolve } from 'node:path';
 import type { WorkspaceLaunchSelectionUiModel } from './workspace-launch-types.js';
 
 const requireFromLauncherSelectionUi = createRequire(import.meta.url);
@@ -8,6 +9,7 @@ const WORKSPACE_LAUNCH_BOOTSTRAP_PLACEHOLDER = '__NARADA_WORKSPACE_LAUNCH_BOOTST
 export interface WorkspaceLaunchSelectionHtmlOptions {
   persistent?: boolean;
   basePath?: string;
+  artifactRoot?: string;
 }
 
 export function renderWorkspaceLaunchSelectionHtml(
@@ -31,6 +33,8 @@ export function buildWorkspaceLaunchSelectionHtml(
   model: WorkspaceLaunchSelectionUiModel,
   options: WorkspaceLaunchSelectionHtmlOptions = {},
 ): string {
-  const templatePath = requireFromLauncherSelectionUi.resolve('@narada2/workspace-launch-ui/dist/index.html');
+  const templatePath = options.artifactRoot
+    ? resolve(options.artifactRoot, 'index.html')
+    : requireFromLauncherSelectionUi.resolve('@narada2/workspace-launch-ui/dist/index.html');
   return renderWorkspaceLaunchSelectionHtml(readFileSync(templatePath, 'utf8'), model, options);
 }

@@ -7,7 +7,16 @@
     "package_role": "private_operator_surface_ui",
     "surface": "launcher_session_dashboard",
     "authority_owner": "@narada2/cli",
-    "presentation_only": true
+    "presentation_only": true,
+    "launch_artifact": {
+      "target": "workspace-launch",
+      "build_script": "build",
+      "output_root": "dist",
+      "required_outputs": [
+        "index.html",
+        "assets/**"
+      ]
+    }
   },
   "exports": {
     "./dist/*": "./dist/*",
@@ -19,6 +28,7 @@
   "scripts": {
     "prebuild": "pnpm --filter @narada2/ui build",
     "build": "vite build",
+    "postbuild": "node ../layers/cli/scripts/write-launch-artifact.mjs --target workspace-launch --package-root . --site-root ../..",
     "typecheck": "vue-tsc --noEmit -p tsconfig.json",
     "test": "node --import tsx --test test/domain.test.ts test/transport.test.ts test/architecture-boundary.test.ts"
   },

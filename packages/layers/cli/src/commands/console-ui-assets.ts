@@ -9,21 +9,21 @@ interface ConsoleUiAsset {
   contentType: string;
 }
 
-function packageIndexPath(): string {
-  return require.resolve('@narada2/operator-console-ui/dist/index.html');
+function packageIndexPath(artifactRoot?: string | null): string {
+  return artifactRoot ? resolve(artifactRoot, 'index.html') : require.resolve('@narada2/operator-console-ui/dist/index.html');
 }
 
-export function readOperatorConsoleUiDocument(): string {
-  return readFileSync(packageIndexPath(), 'utf8');
+export function readOperatorConsoleUiDocument(artifactRoot?: string | null): string {
+  return readFileSync(packageIndexPath(artifactRoot), 'utf8');
 }
 
-export function readOperatorConsoleUiAsset(pathname: string): ConsoleUiAsset | null {
+export function readOperatorConsoleUiAsset(pathname: string, artifactRoot?: string | null): ConsoleUiAsset | null {
   const prefix = '/console/registry/assets/';
   if (!pathname.startsWith(prefix)) return null;
   const relativePath = pathname.slice(prefix.length);
   if (!relativePath || relativePath.includes('\\') || relativePath.split('/').some((part) => part === '..' || part === '.')) return null;
 
-  const assetsRoot = resolve(dirname(packageIndexPath()), 'assets');
+  const assetsRoot = resolve(dirname(packageIndexPath(artifactRoot)), 'assets');
   const assetPath = resolve(assetsRoot, relativePath);
   if (assetPath !== assetsRoot && !assetPath.startsWith(`${assetsRoot}${sep}`)) return null;
 
