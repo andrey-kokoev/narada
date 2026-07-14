@@ -1,5 +1,5 @@
 import type { Command } from 'commander';
-import { directCommandAction } from '../lib/command-wrapper.js';
+import {directCommandAction, type CommanderOptionValues} from '../lib/command-wrapper.js';
 import { emitCommandResult, resolveCommandFormat } from '../lib/cli-output.js';
 import { roleLoopNextCommand, roleLoopNextObligationCommand } from './role-loop.js';
 
@@ -16,10 +16,10 @@ export function registerRoleLoopCommands(program: Command): void {
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
     .option('--include-workboard', 'Include compact workboard exploration payload explicitly', false)
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'role-loop next',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => roleLoopNextCommand({
         agent: opts.agent as string | undefined,
         role: opts.role as string | undefined,
@@ -37,10 +37,10 @@ export function registerRoleLoopCommands(program: Command): void {
     .option('--recurrence-key <key>', 'Mark this packet as recurrence of a known CAPA/ergonomics incident')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'role-loop next-obligation',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => roleLoopNextObligationCommand({
         agent: opts.agent as string | undefined,
         role: opts.role as string | undefined,

@@ -1,5 +1,5 @@
 import type { Command } from 'commander';
-import { directCommandAction } from '../lib/command-wrapper.js';
+import {directCommandAction, type CommanderOptionValues} from '../lib/command-wrapper.js';
 import { emitCommandResult } from '../lib/cli-output.js';
 import { siteTelemetryPublishCommand, siteTelemetryPullCommand } from './site-telemetry.js';
 
@@ -16,7 +16,7 @@ export function registerSiteTelemetryCommands(program: Command): void {
     .option('--send', 'Perform transport; default is dry-run', false)
     .option('--expected-surface-id <id>', 'Expected target surface id')
     .option('--credential-ref-status <status>', 'Credential ref status for preflight')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'site-telemetry publish',
       emit: emitCommandResult,
       invocation: (opts) => siteTelemetryPublishCommand({
@@ -35,7 +35,7 @@ export function registerSiteTelemetryCommands(program: Command): void {
     .requiredOption('--event-file <path>', 'Bounded event JSON file')
     .option('--expected-surface-id <id>', 'Expected target surface id')
     .option('--credential-ref-status <status>', 'Credential ref status for preflight')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'site-telemetry publish plan',
       emit: emitCommandResult,
       invocation: (opts) => siteTelemetryPublishCommand({
@@ -54,7 +54,7 @@ export function registerSiteTelemetryCommands(program: Command): void {
     .requiredOption('--event-file <path>', 'Bounded event JSON file')
     .option('--expected-surface-id <id>', 'Expected target surface id')
     .option('--credential-ref-status <status>', 'Credential ref status for preflight')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'site-telemetry publish run',
       emit: emitCommandResult,
       invocation: (opts) => siteTelemetryPublishCommand({
@@ -73,7 +73,7 @@ export function registerSiteTelemetryCommands(program: Command): void {
     .requiredOption('--poll-capability-ref <ref>', 'Poll capability reference')
     .requiredOption('--finalize-capability-ref <ref>', 'Finalize capability reference')
     .option('--import', 'Perform remote pull preview; default is dry-run', false)
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'site-telemetry pull',
       emit: emitCommandResult,
       invocation: (opts) => siteTelemetryPullCommand({
@@ -90,7 +90,7 @@ export function registerSiteTelemetryCommands(program: Command): void {
     .requiredOption('--registry-url <url>', 'Hosted registry base URL')
     .requiredOption('--poll-capability-ref <ref>', 'Poll capability reference')
     .requiredOption('--finalize-capability-ref <ref>', 'Finalize capability reference')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'site-telemetry pull plan',
       emit: emitCommandResult,
       invocation: (opts) => siteTelemetryPullCommand({
@@ -107,7 +107,7 @@ export function registerSiteTelemetryCommands(program: Command): void {
     .requiredOption('--registry-url <url>', 'Hosted registry base URL')
     .requiredOption('--poll-capability-ref <ref>', 'Poll capability reference')
     .requiredOption('--finalize-capability-ref <ref>', 'Finalize capability reference')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'site-telemetry pull run',
       emit: emitCommandResult,
       invocation: (opts) => siteTelemetryPullCommand({

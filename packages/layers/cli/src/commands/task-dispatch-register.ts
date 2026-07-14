@@ -1,6 +1,6 @@
 import type { Command } from 'commander';
 import { taskDispatchCommand } from './task-dispatch.js';
-import { resourceScopedDirectCommandAction } from '../lib/command-wrapper.js';
+import {resourceScopedDirectCommandAction, type CommanderOptionValues} from '../lib/command-wrapper.js';
 import { emitCommandResult } from '../lib/cli-output.js';
 import {
   openTaskLifecycleStore,
@@ -20,10 +20,10 @@ export function registerTaskDispatchCommands(taskCmd: Command): void {
     .option('--exec', 'Actually spawn the execution session (start action only)')
     .option('--format <fmt>', 'Output format: json or human', 'human')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-    .action(resourceScopedDirectCommandAction<SqliteTaskLifecycleStore, [string, Record<string, unknown>]>({
+    .action(resourceScopedDirectCommandAction<SqliteTaskLifecycleStore, [string, CommanderOptionValues]>({
       command: 'task dispatch',
       emit: emitCommandResult,
-      format: (_action: string, opts: Record<string, unknown>) => opts.format,
+      format: (_action: string, opts: CommanderOptionValues) => opts.format,
       open: (_action, opts) => openTaskLifecycleStore((opts.cwd as string | undefined) || process.cwd()),
       close: closeStore,
       invocation: (store, action, opts) => taskDispatchCommand({

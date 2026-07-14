@@ -10,7 +10,7 @@ import {
   outboxShowCommand,
   outboxSupersedeCommand,
 } from './outbox.js';
-import { directCommandAction, silentCommandContext } from '../lib/command-wrapper.js';
+import {directCommandAction, silentCommandContext, type CommanderOptionValues} from '../lib/command-wrapper.js';
 import { emitCommandResult, resolveCommandFormat } from '../lib/cli-output.js';
 
 export function registerOutboxCommands(program: Command): void {
@@ -36,10 +36,10 @@ export function registerOutboxCommands(program: Command): void {
     .requiredOption('--by <id>', 'Principal composing the item')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'outbox compose',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => outboxComposeCommand({
         targetKind: opts.targetKind as string | undefined,
         targetRef: opts.targetRef as string | undefined,
@@ -67,10 +67,10 @@ export function registerOutboxCommands(program: Command): void {
     .option('--limit <n>', 'Maximum items', '20')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'outbox list',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => outboxListCommand({
         status: opts.status as string | undefined,
         targetKind: opts.targetKind as string | undefined,
@@ -89,10 +89,10 @@ export function registerOutboxCommands(program: Command): void {
       .description(description)
       .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
       .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-      .action(directCommandAction<[string, Record<string, unknown>]>({
+      .action(directCommandAction<[string, CommanderOptionValues]>({
         command: `outbox ${name}`,
         emit: emitCommandResult,
-        format: (_outboxId: string, opts: Record<string, unknown>) => opts.format,
+        format: (_outboxId: string, opts: CommanderOptionValues) => opts.format,
         invocation: (outboxId, opts) => command({
           outboxId,
           cwd: opts.cwd as string | undefined,
@@ -106,10 +106,10 @@ export function registerOutboxCommands(program: Command): void {
     .requiredOption('--by <id>', 'Principal approving the item')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[string, Record<string, unknown>]>({
+    .action(directCommandAction<[string, CommanderOptionValues]>({
       command: 'outbox approve',
       emit: emitCommandResult,
-      format: (_outboxId: string, opts: Record<string, unknown>) => opts.format,
+      format: (_outboxId: string, opts: CommanderOptionValues) => opts.format,
       invocation: (outboxId, opts) => outboxApproveCommand({
         outboxId,
         by: opts.by as string | undefined,
@@ -125,10 +125,10 @@ export function registerOutboxCommands(program: Command): void {
     .option('--evidence-ref <ref>', 'Execution evidence reference')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[string, Record<string, unknown>]>({
+    .action(directCommandAction<[string, CommanderOptionValues]>({
       command: 'outbox confirm',
       emit: emitCommandResult,
-      format: (_outboxId: string, opts: Record<string, unknown>) => opts.format,
+      format: (_outboxId: string, opts: CommanderOptionValues) => opts.format,
       invocation: (outboxId, opts) => outboxConfirmCommand({
         outboxId,
         by: opts.by as string | undefined,
@@ -145,10 +145,10 @@ export function registerOutboxCommands(program: Command): void {
     .option('--reason <text>', 'Archive reason')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[string, Record<string, unknown>]>({
+    .action(directCommandAction<[string, CommanderOptionValues]>({
       command: 'outbox archive',
       emit: emitCommandResult,
-      format: (_outboxId: string, opts: Record<string, unknown>) => opts.format,
+      format: (_outboxId: string, opts: CommanderOptionValues) => opts.format,
       invocation: (outboxId, opts) => outboxArchiveCommand({
         outboxId,
         by: opts.by as string | undefined,
@@ -164,10 +164,10 @@ export function registerOutboxCommands(program: Command): void {
     .requiredOption('--superseded-by <id>', 'Replacement outbox item id')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[string, Record<string, unknown>]>({
+    .action(directCommandAction<[string, CommanderOptionValues]>({
       command: 'outbox supersede',
       emit: emitCommandResult,
-      format: (_outboxId: string, opts: Record<string, unknown>) => opts.format,
+      format: (_outboxId: string, opts: CommanderOptionValues) => opts.format,
       invocation: (outboxId, opts) => outboxSupersedeCommand({
         outboxId,
         by: opts.by as string | undefined,
@@ -184,10 +184,10 @@ export function registerOutboxCommands(program: Command): void {
     .option('--limit <n>', 'Maximum items', '200')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'outbox export',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => outboxExportCommand({
         status: opts.status as string | undefined,
         outDir: opts.outDir as string | undefined,

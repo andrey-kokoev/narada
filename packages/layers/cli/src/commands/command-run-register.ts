@@ -4,7 +4,7 @@ import {
   commandRunInspectCommand,
   commandRunListCommand,
 } from './command-run.js';
-import { directCommandAction } from '../lib/command-wrapper.js';
+import {directCommandAction, type CommanderOptionValues} from '../lib/command-wrapper.js';
 import { emitCommandResult } from '../lib/cli-output.js';
 
 export function registerCommandRunCommands(program: Command): void {
@@ -28,7 +28,7 @@ export function registerCommandRunCommands(program: Command): void {
     .option('--output-profile <profile>', 'Output admission profile', 'bounded_excerpt')
     .option('--rationale <text>', 'Why this run is being requested')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'command-run run',
       emit: emitCommandResult,
       invocation: (opts) => commandRunCommand({
@@ -55,7 +55,7 @@ export function registerCommandRunCommands(program: Command): void {
     .requiredOption('--run-id <id>', 'Run ID to inspect')
     .option('--full', 'Include full metadata and retained artifact pointer', false)
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'command-run inspect',
       emit: emitCommandResult,
       invocation: (opts) => commandRunInspectCommand({
@@ -73,7 +73,7 @@ export function registerCommandRunCommands(program: Command): void {
     .option('--agent <id>', 'Filter by agent ID')
     .option('--limit <n>', 'Maximum rows', '20')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'command-run list',
       emit: emitCommandResult,
       invocation: (opts) => commandRunListCommand({

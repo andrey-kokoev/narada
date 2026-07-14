@@ -4,7 +4,7 @@ import {
   postureShowCommand,
   postureUpdateCommand,
 } from './posture.js';
-import { directCommandAction } from '../lib/command-wrapper.js';
+import {directCommandAction, type CommanderOptionValues} from '../lib/command-wrapper.js';
 import { emitCommandResult, resolveCommandFormat } from '../lib/cli-output.js';
 
 export function registerPostureCommands(program: Command): void {
@@ -17,10 +17,10 @@ export function registerPostureCommands(program: Command): void {
     .description('Display current CCC posture')
     .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'posture show',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => postureShowCommand({
         format: resolveCommandFormat(opts.format, 'auto'),
         cwd: opts.cwd as string | undefined,
@@ -34,10 +34,10 @@ export function registerPostureCommands(program: Command): void {
     .option('--file <path>', 'Path to posture JSON file')
     .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'posture update',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => postureUpdateCommand({
         from: opts.from as string,
         file: opts.file as string | undefined,
@@ -51,10 +51,10 @@ export function registerPostureCommands(program: Command): void {
     .description('Validate current CCC posture schema and freshness')
     .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'posture check',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => postureCheckCommand({
         format: resolveCommandFormat(opts.format, 'auto'),
         cwd: opts.cwd as string | undefined,

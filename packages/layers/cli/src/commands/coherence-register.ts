@@ -1,5 +1,5 @@
 import type { Command } from 'commander';
-import { directCommandAction } from '../lib/command-wrapper.js';
+import {directCommandAction, type CommanderOptionValues} from '../lib/command-wrapper.js';
 import { emitCommandResult, resolveCommandFormat } from '../lib/cli-output.js';
 import { coherenceScanCommand } from './coherence-scan.js';
 
@@ -16,10 +16,10 @@ export function registerCoherenceCommands(program: Command): void {
     .option('--limit <n>', 'Maximum findings', '20')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'coherence scan',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => coherenceScanCommand({
         submit: opts.submit as boolean | undefined,
         limit: opts.limit ? Number(opts.limit) : undefined,

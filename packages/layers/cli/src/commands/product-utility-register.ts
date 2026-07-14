@@ -5,7 +5,7 @@ import { demoCommand } from './demo.js';
 import { opsCommand } from './ops.js';
 import { uscInitCommand } from './usc-init.js';
 import { uscValidateCommand } from './usc-validate.js';
-import { wrapCommand } from '../lib/command-wrapper.js';
+import {wrapCommand, type CommanderOptionValues} from '../lib/command-wrapper.js';
 import { emitFiniteCommandFailure, emitFiniteCommandResult } from '../lib/cli-output.js';
 
 function outputFormat(): 'json' | 'human' | 'auto' {
@@ -29,7 +29,7 @@ export function registerProductUtilityCommands(program: Command): void {
     .option('--cis', 'Include CIS admissibility policy', false)
     .option('--principal <name>', 'Principal name', 'TBD')
     .option('--force', 'Overwrite existing files', false)
-    .action(async (targetPath: string, opts: Record<string, unknown>) => {
+    .action(async (targetPath: string, opts: CommanderOptionValues) => {
       try {
         await uscInitCommand({
           path: targetPath,

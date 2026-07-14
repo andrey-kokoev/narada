@@ -4,7 +4,7 @@ import {
   admissionListCommand,
   admissionRecordCommand,
 } from './admission.js';
-import { directCommandAction, silentCommandContext } from '../lib/command-wrapper.js';
+import {directCommandAction, silentCommandContext, type CommanderOptionValues} from '../lib/command-wrapper.js';
 import { emitCommandResult, resolveCommandFormat } from '../lib/cli-output.js';
 
 export function registerAdmissionCommands(program: Command): void {
@@ -31,10 +31,10 @@ export function registerAdmissionCommands(program: Command): void {
     .option('--observed-at <iso>', 'When the candidate was observed')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'admission record',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => admissionRecordCommand({
         candidateId: opts.candidateId as string | undefined,
         sourceKind: opts.sourceKind as string | undefined,
@@ -64,10 +64,10 @@ export function registerAdmissionCommands(program: Command): void {
     .option('--limit <n>', 'Maximum entries', '20')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'admission list',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => admissionListCommand({
         sourceKind: opts.sourceKind as string | undefined,
         candidateKind: opts.candidateKind as string | undefined,
@@ -83,10 +83,10 @@ export function registerAdmissionCommands(program: Command): void {
     .description('Explain one admission/rejection decision')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[string, Record<string, unknown>]>({
+    .action(directCommandAction<[string, CommanderOptionValues]>({
       command: 'admission explain',
       emit: emitCommandResult,
-      format: (_decisionId: string, opts: Record<string, unknown>) => opts.format,
+      format: (_decisionId: string, opts: CommanderOptionValues) => opts.format,
       invocation: (decisionId, opts) => admissionExplainCommand({
         decisionId,
         cwd: opts.cwd as string | undefined,

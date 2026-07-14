@@ -12,7 +12,7 @@ import {
   initRepo,
   type PosturePreset,
 } from '@narada2/ops-kit';
-import { directCommandAction } from '../lib/command-wrapper.js';
+import {directCommandAction, type CommanderOptionValues} from '../lib/command-wrapper.js';
 import { attachFormattedOutput, emitCommandResult, resolveCommandFormat, type CliFormat } from '../lib/cli-output.js';
 import { ExitCode } from '../lib/exit-codes.js';
 
@@ -94,7 +94,7 @@ export function registerOpsKitCommands(program: Command): void {
     .option('--local-source', 'Link to local monorepo packages instead of npm versions')
     .option('--demo', 'Create a demo repo with a pre-configured mock-backed operation (no credentials needed)', false)
     .description('Bootstrap a private Narada operations repo')
-    .action(directCommandAction<[string, Record<string, unknown>]>({
+    .action(directCommandAction<[string, CommanderOptionValues]>({
       command: 'init-repo',
       emit: emitCommandResult,
       invocation: async (repoPath, opts) => {
@@ -139,7 +139,7 @@ export function registerOpsKitCommands(program: Command): void {
       '  narada want-mailbox help@example.com --posture draft-only',
       '  narada want-mailbox support@client.com --client-service --scope-id client-correspondence --mailbox-user-id support@client.com --participant-domain client.com --attachment-policy metadata_only --draft-send-posture draft-only --material-notes-posture site_local_kb',
     ].join('\n'))
-    .action(directCommandAction<[string, Record<string, unknown>]>({
+    .action(directCommandAction<[string, CommanderOptionValues]>({
       command: 'want-mailbox',
       emit: emitCommandResult,
       invocation: async (mailboxId, opts) => {
@@ -178,7 +178,7 @@ export function registerOpsKitCommands(program: Command): void {
     .option('--primary-charter <charter>')
     .option('--posture <preset>')
     .description('Declare a timer workflow operation')
-    .action(directCommandAction<[string, Record<string, unknown>]>({
+    .action(directCommandAction<[string, CommanderOptionValues]>({
       command: 'want-workflow',
       emit: emitCommandResult,
       invocation: async (workflowId, opts) => {
@@ -201,7 +201,7 @@ export function registerOpsKitCommands(program: Command): void {
     .argument('<preset>')
     .option('-c, --config <path>')
     .description('Apply a safety posture to an operation')
-    .action(directCommandAction<[string, string, Record<string, unknown>]>({
+    .action(directCommandAction<[string, string, CommanderOptionValues]>({
       command: 'want-posture',
       emit: emitCommandResult,
       invocation: async (target, preset, opts) => {
@@ -220,7 +220,7 @@ export function registerOpsKitCommands(program: Command): void {
     .argument('[target]')
     .option('-c, --config <path>')
     .description('Scaffold directories for configured operations')
-    .action(directCommandAction<[string | undefined, Record<string, unknown>]>({
+    .action(directCommandAction<[string | undefined, CommanderOptionValues]>({
       command: 'setup',
       emit: emitCommandResult,
       invocation: async (target, opts) => {
@@ -240,7 +240,7 @@ export function registerOpsKitCommands(program: Command): void {
     .argument('<operation>')
     .option('-c, --config <path>')
     .description('Verify operation readiness')
-    .action(directCommandAction<[string, Record<string, unknown>]>({
+    .action(directCommandAction<[string, CommanderOptionValues]>({
       command: 'preflight',
       emit: emitCommandResult,
       invocation: async (scopeId, opts) => {
@@ -262,7 +262,7 @@ export function registerOpsKitCommands(program: Command): void {
     .argument('<operation>')
     .option('-c, --config <path>')
     .description('Show operation configuration')
-    .action(directCommandAction<[string, Record<string, unknown>]>({
+    .action(directCommandAction<[string, CommanderOptionValues]>({
       command: 'inspect',
       emit: emitCommandResult,
       invocation: async (scopeId, opts) => {
@@ -281,7 +281,7 @@ export function registerOpsKitCommands(program: Command): void {
     .argument('<operation>')
     .option('-c, --config <path>')
     .description('Explain what an operation will do')
-    .action(directCommandAction<[string, Record<string, unknown>]>({
+    .action(directCommandAction<[string, CommanderOptionValues]>({
       command: 'explain',
       emit: emitCommandResult,
       invocation: async (scopeId, opts) => {
@@ -300,7 +300,7 @@ export function registerOpsKitCommands(program: Command): void {
     .argument('<operation>')
     .option('-c, --config <path>')
     .description('Mark an operation as live')
-    .action(directCommandAction<[string, Record<string, unknown>]>({
+    .action(directCommandAction<[string, CommanderOptionValues]>({
       command: 'activate',
       emit: emitCommandResult,
       invocation: async (scopeId, opts) => {

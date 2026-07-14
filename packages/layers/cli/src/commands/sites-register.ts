@@ -39,7 +39,7 @@ import {
   sitesRegistryShowCommand,
   sitesRegistryStateCommand,
 } from './site-registry-management.js';
-import { directCommandAction, silentCommandContext, wrapCommand } from '../lib/command-wrapper.js';
+import {directCommandAction, silentCommandContext, wrapCommand, type CommanderOptionValues} from '../lib/command-wrapper.js';
 import { emitCommandResult, emitFiniteCommandResult, emitFormatterBackedCommandResult, resolveCommandFormat } from '../lib/cli-output.js';
 
 export function registerSitesCommands(program: Command): void {
@@ -56,10 +56,10 @@ export function registerSitesCommands(program: Command): void {
     .description('List canonical Site records, lifecycle, observation, provenance, and aliases')
     .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
     .option('-v, --verbose', 'Enable verbose output', false)
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'sites registry list',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => sitesRegistryListCommand({
         format: resolveCommandFormat(opts.format, 'auto'),
         verbose: opts.verbose as boolean | undefined,
@@ -71,10 +71,10 @@ export function registerSitesCommands(program: Command): void {
     .description('Show one Site record, management history, conflicts, and next actions')
     .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
     .option('-v, --verbose', 'Enable verbose output', false)
-    .action(directCommandAction<[string, Record<string, unknown>]>({
+    .action(directCommandAction<[string, CommanderOptionValues]>({
       command: 'sites registry show',
       emit: emitCommandResult,
-      format: (_reference: string, opts: Record<string, unknown>) => opts.format,
+      format: (_reference: string, opts: CommanderOptionValues) => opts.format,
       invocation: (reference, opts) => sitesRegistryShowCommand({
         reference,
         format: resolveCommandFormat(opts.format, 'auto'),
@@ -92,10 +92,10 @@ export function registerSitesCommands(program: Command): void {
     .option('--dry-run', 'Explicitly request planning without mutation', false)
     .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
     .option('-v, --verbose', 'Enable verbose output', false)
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'sites registry discover',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => sitesRegistryDiscoverCommand({
         source: opts.source as 'filesystem' | 'launch_registry' | 'all' | undefined,
         root: opts.root as string | undefined,
@@ -126,10 +126,10 @@ export function registerSitesCommands(program: Command): void {
     .option('--dry-run', 'Explicitly request planning without mutation', false)
     .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
     .option('-v, --verbose', 'Enable verbose output', false)
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'sites registry add',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => sitesRegistryAddCommand({
         siteId: opts.siteId as string,
         root: opts.root as string,
@@ -171,10 +171,10 @@ export function registerSitesCommands(program: Command): void {
     .option('--dry-run', 'Explicitly request planning without mutation', false)
     .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
     .option('-v, --verbose', 'Enable verbose output', false)
-    .action(directCommandAction<[string, Record<string, unknown>]>({
+    .action(directCommandAction<[string, CommanderOptionValues]>({
       command: 'sites registry edit',
       emit: emitCommandResult,
-      format: (_reference: string, opts: Record<string, unknown>) => opts.format,
+      format: (_reference: string, opts: CommanderOptionValues) => opts.format,
       invocation: (reference, opts) => sitesRegistryEditCommand({
         reference,
         root: opts.root as string | undefined,
@@ -214,10 +214,10 @@ export function registerSitesCommands(program: Command): void {
       .option('--dry-run', 'Explicitly request planning without mutation', false)
       .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
       .option('-v, --verbose', 'Enable verbose output', false);
-    command.action(directCommandAction<[string, Record<string, unknown>]>({
+    command.action(directCommandAction<[string, CommanderOptionValues]>({
       command: `sites registry ${operation}`,
       emit: emitCommandResult,
-      format: (_reference: string, opts: Record<string, unknown>) => opts.format,
+      format: (_reference: string, opts: CommanderOptionValues) => opts.format,
       invocation: (reference, opts) => sitesRegistryStateCommand(operation, {
         reference,
         reason: opts.reason as string | undefined,
@@ -248,7 +248,7 @@ export function registerSitesCommands(program: Command): void {
     .option('--output-plan <path>', 'Write the dry-run plan JSON artifact')
     .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
     .option('-v, --verbose', 'Enable verbose output', false)
-    .action(async (opts: Record<string, unknown>) => {
+    .action(async (opts: CommanderOptionValues) => {
       const result = await sitesSetupCommand({
         config: opts.config as string | undefined,
         interactive: opts.interactive as boolean | undefined,
@@ -283,7 +283,7 @@ export function registerSitesCommands(program: Command): void {
     .option('--output-plan <path>', 'Write the dry-run plan JSON artifact')
     .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
     .option('-v, --verbose', 'Enable verbose output', false)
-    .action(async (opts: Record<string, unknown>) => {
+    .action(async (opts: CommanderOptionValues) => {
       const result = await sitesCreateCommand({
         config: opts.config as string | undefined,
         interactive: opts.interactive as boolean | undefined,
@@ -307,7 +307,7 @@ export function registerSitesCommands(program: Command): void {
     .description('List greenfield create-site presets from the Narada proper template catalog')
     .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
     .option('-v, --verbose', 'Enable verbose output', false)
-    .action(async (opts: Record<string, unknown>) => {
+    .action(async (opts: CommanderOptionValues) => {
       const result = await sitesCreatePresetsCommand({
         format: resolveCommandFormat(opts.format, 'auto'),
         verbose: opts.verbose as boolean | undefined,
@@ -340,7 +340,7 @@ export function registerSitesCommands(program: Command): void {
     .option('--register-mcp', 'Test/refuse MCP registration from profile carrier', false)
     .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
     .option('-v, --verbose', 'Enable verbose output', false)
-    .action(async (opts: Record<string, unknown>) => {
+    .action(async (opts: CommanderOptionValues) => {
       const result = await sitesLiveCarrierCommand({
         carrier: opts.carrier as string | undefined,
         mode: opts.mode as string | undefined,
@@ -404,7 +404,7 @@ export function registerSitesCommands(program: Command): void {
     .option('--apply', 'Create or repair package links and provenance', false)
     .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
     .option('-v, --verbose', 'Enable verbose output', false)
-    .action(async (opts: Record<string, unknown>) => {
+    .action(async (opts: CommanderOptionValues) => {
       const result = await sitesDepsSyncCommand({
         root: opts.root as string | undefined,
         apply: opts.apply as boolean | undefined,
@@ -425,7 +425,7 @@ export function registerSitesCommands(program: Command): void {
     .option('--apply', 'Write the reconciled wrapper', false)
     .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
     .option('-v, --verbose', 'Enable verbose output', false)
-    .action(async (opts: Record<string, unknown>) => {
+    .action(async (opts: CommanderOptionValues) => {
       const result = await sitesReconcileAgentCliWrapperCommand({
         root: opts.root as string | undefined,
         apply: opts.apply as boolean | undefined,
@@ -442,7 +442,7 @@ export function registerSitesCommands(program: Command): void {
     .option('--apply', 'Write the reconciled manifest', false)
     .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
     .option('-v, --verbose', 'Enable verbose output', false)
-    .action(async (opts: Record<string, unknown>) => {
+    .action(async (opts: CommanderOptionValues) => {
       const result = await sitesReconcileToolSurfaceManifestCommand({
         root: opts.root as string | undefined,
         apply: opts.apply as boolean | undefined,
@@ -463,7 +463,7 @@ export function registerSitesCommands(program: Command): void {
     .option('--limit <n>', 'Maximum duplicate groups/candidates to show', '20')
     .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
     .option('-v, --verbose', 'Enable verbose output', false)
-    .action(async (opts: Record<string, unknown>) => {
+    .action(async (opts: CommanderOptionValues) => {
       const result = await sitesAuditToolSurfaceDuplicatesCommand({
         root: opts.root as string[] | undefined,
         limit: opts.limit ? Number(opts.limit) : undefined,
@@ -480,7 +480,7 @@ export function registerSitesCommands(program: Command): void {
     .option('--limit <n>', 'Maximum duplicate groups/candidates to show', '20')
     .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
     .option('-v, --verbose', 'Enable verbose output', false)
-    .action(async (opts: Record<string, unknown>) => {
+    .action(async (opts: CommanderOptionValues) => {
       const result = await sitesAuditToolSurfaceDuplicatesCommand({
         root: opts.root as string[] | undefined,
         limit: opts.limit ? Number(opts.limit) : undefined,
@@ -496,7 +496,7 @@ export function registerSitesCommands(program: Command): void {
     .requiredOption('--role <role>', 'Role to inspect: architect, builder, or observer')
     .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
     .option('-v, --verbose', 'Enable verbose output', false)
-    .action(async (siteIdOrRoot: string, opts: Record<string, unknown>) => {
+    .action(async (siteIdOrRoot: string, opts: CommanderOptionValues) => {
       const result = await sitesAgentBootstrapCommand(siteIdOrRoot, {
         role: opts.role as string | undefined,
         format: resolveCommandFormat(opts.format, 'auto'),
@@ -516,7 +516,7 @@ export function registerSitesCommands(program: Command): void {
     .option('--dry-run', 'Preview without making changes', false)
     .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
     .option('-v, --verbose', 'Enable verbose output', false)
-    .action(async (opts: Record<string, unknown>) => {
+    .action(async (opts: CommanderOptionValues) => {
       const result = await sitesTaskLifecycleInitCommand({
         site: opts.site as string | undefined,
         dryRun: opts.dryRun as boolean | undefined,
@@ -535,7 +535,7 @@ export function registerSitesCommands(program: Command): void {
     .description('List governed Site lifecycle transformation kinds')
     .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
     .option('-v, --verbose', 'Enable verbose output', false)
-    .action(async (opts: Record<string, unknown>) => {
+    .action(async (opts: CommanderOptionValues) => {
       const result = await sitesLifecycleKindsCommand({
         format: resolveCommandFormat(opts.format, 'auto'),
         verbose: opts.verbose as boolean | undefined,
@@ -551,7 +551,7 @@ export function registerSitesCommands(program: Command): void {
     .option('--authority-mode <mode>', 'Authority mode for this transformation')
     .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
     .option('-v, --verbose', 'Enable verbose output', false)
-    .action(async (kind: string, opts: Record<string, unknown>) => {
+    .action(async (kind: string, opts: CommanderOptionValues) => {
       const result = await sitesLifecyclePreflightCommand({
         kind,
         sourceSite: opts.sourceSite as string | undefined,
@@ -581,10 +581,10 @@ export function registerSitesCommands(program: Command): void {
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
     .option('-v, --verbose', 'Enable verbose output', false)
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'sites lifecycle execute absorb',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => sitesLifecycleExecuteAbsorbCommand({
         sourceSite: opts.sourceSite as string | undefined,
         targetSite: opts.targetSite as string | undefined,
@@ -609,7 +609,7 @@ export function registerSitesCommands(program: Command): void {
     .description('List Site provenance lineage event types and authority effects')
     .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
     .option('-v, --verbose', 'Enable verbose output', false)
-    .action(async (opts: Record<string, unknown>) => {
+    .action(async (opts: CommanderOptionValues) => {
       const result = await sitesLineageEventsCommand({
         format: resolveCommandFormat(opts.format, 'auto'),
         verbose: opts.verbose as boolean | undefined,
@@ -636,10 +636,10 @@ export function registerSitesCommands(program: Command): void {
     .requiredOption('--by <id>', 'Principal recording the relation')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'sites relation record',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => sitesRelationRecordCommand({
         kind: opts.kind as string | undefined,
         sourceSite: opts.sourceSite as string | undefined,
@@ -666,10 +666,10 @@ export function registerSitesCommands(program: Command): void {
     .option('--limit <n>', 'Maximum relations', '20')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'sites relation list',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => sitesRelationListCommand({
         kind: opts.kind as string | undefined,
         sourceSite: opts.sourceSite as string | undefined,
@@ -686,10 +686,10 @@ export function registerSitesCommands(program: Command): void {
     .description('Validate reciprocal and authority posture of Site relation records')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'sites relation validate',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => sitesRelationValidateCommand({
         cwd: opts.cwd as string | undefined,
         format: resolveCommandFormat(opts.format, 'auto'),
@@ -701,10 +701,10 @@ export function registerSitesCommands(program: Command): void {
     .description('Explain a Site relation authority and reciprocal posture')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[string, Record<string, unknown>]>({
+    .action(directCommandAction<[string, CommanderOptionValues]>({
       command: 'sites relation explain',
       emit: emitCommandResult,
-      format: (_relationId: string, opts: Record<string, unknown>) => opts.format,
+      format: (_relationId: string, opts: CommanderOptionValues) => opts.format,
       invocation: (relationId, opts) => sitesRelationExplainCommand({
         relationId,
         cwd: opts.cwd as string | undefined,
@@ -722,10 +722,10 @@ export function registerSitesCommands(program: Command): void {
     .option('--cwd <path>', 'Working directory to inspect', '.')
     .option('--mutation-family <family>', 'Mutation family: task_lifecycle, inbox, publication, secret, or site', 'task_lifecycle')
     .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'sites authority preflight',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => siteMutationAuthorityPreflightCommand({
         cwd: opts.cwd as string | undefined,
         mutationFamily: opts.mutationFamily as string | undefined,
@@ -743,10 +743,10 @@ export function registerSitesCommands(program: Command): void {
     .option('--cwd <path>', 'Site root to inspect', '.')
     .option('--limit <n>', 'Maximum findings to return', '50')
     .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'sites immune scan',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => siteImmuneScanCommand({
         cwd: opts.cwd as string | undefined,
         limit: Number(opts.limit),
@@ -762,7 +762,7 @@ export function registerSitesCommands(program: Command): void {
     .option('--kind <kind>', 'Site kind: windows, client, or project', 'windows')
     .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
     .option('-v, --verbose', 'Enable verbose output', false)
-    .action(async (siteId: string, opts: Record<string, unknown>) => {
+    .action(async (siteId: string, opts: CommanderOptionValues) => {
       const result = await sitesDoctorCommand(siteId, {
         root: opts.root as string | undefined,
         authorityLocus: opts.authorityLocus as string | undefined,
@@ -778,7 +778,7 @@ export function registerSitesCommands(program: Command): void {
     .description('Show Site metadata and last-known health')
     .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
     .option('-v, --verbose', 'Enable verbose output', false)
-    .action(async (siteId: string, opts: Record<string, unknown>) => {
+    .action(async (siteId: string, opts: CommanderOptionValues) => {
       const result = await sitesShowCommand(siteId, {
         format: resolveCommandFormat(),
         verbose: opts.verbose as boolean | undefined,
@@ -795,7 +795,7 @@ export function registerSitesCommands(program: Command): void {
     .option('--dry-run', 'Explicitly request planning without mutation', false)
     .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
     .option('-v, --verbose', 'Enable verbose output', false)
-    .action(async (siteId: string, opts: Record<string, unknown>) => {
+    .action(async (siteId: string, opts: CommanderOptionValues) => {
       const result = await sitesRemoveCommand(siteId, {
         format: resolveCommandFormat(opts.format, 'auto'),
         verbose: opts.verbose as boolean | undefined,
@@ -819,7 +819,7 @@ export function registerSitesCommands(program: Command): void {
     .option('--dry-run', 'Preview without making changes', false)
     .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
     .option('-v, --verbose', 'Enable verbose output', false)
-    .action(async (siteId: string, opts: Record<string, unknown>) => {
+    .action(async (siteId: string, opts: CommanderOptionValues) => {
       const result = await sitesInitCommand(siteId, {
         substrate: opts.substrate as string,
         operation: opts.operation as string | undefined,
@@ -843,7 +843,7 @@ export function registerSitesCommands(program: Command): void {
     .option('--execute', 'Perform mutations; default is dry-run', false)
     .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
     .option('-v, --verbose', 'Enable verbose output', false)
-    .action(async (opts: Record<string, unknown>) => {
+    .action(async (opts: CommanderOptionValues) => {
       const result = await sitesBootstrapClientCommand({
         workspace: opts.workspace as string | undefined,
         siteId: opts.siteId as string | undefined,
@@ -864,7 +864,7 @@ export function registerSitesCommands(program: Command): void {
     .option('--execute', 'Perform mutations; default is dry-run', false)
     .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
     .option('-v, --verbose', 'Enable verbose output', false)
-    .action(async (opts: Record<string, unknown>) => {
+    .action(async (opts: CommanderOptionValues) => {
       const result = await sitesBootstrapProjectCommand({
         workspace: opts.workspace as string | undefined,
         siteId: opts.siteId as string | undefined,
@@ -886,7 +886,7 @@ export function registerSitesCommands(program: Command): void {
     .option('--execute', 'Perform mutations; default is dry-run', false)
     .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
     .option('-v, --verbose', 'Enable verbose output', false)
-    .action(async (opts: Record<string, unknown>) => {
+    .action(async (opts: CommanderOptionValues) => {
       const result = await sitesBootstrapWindowsCommand({
         userSiteId: opts.userSiteId as string | undefined,
         pcSiteId: opts.pcSiteId as string | undefined,
@@ -906,7 +906,7 @@ export function registerSitesCommands(program: Command): void {
     .option('--dry-run', 'Preview without making changes', false)
     .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
     .option('-v, --verbose', 'Enable verbose output', false)
-    .action(async (siteId: string, opts: Record<string, unknown>) => {
+    .action(async (siteId: string, opts: CommanderOptionValues) => {
       const result = await sitesEnableCommand(siteId, {
         intervalMinutes: opts.intervalMinutes ? Number(opts.intervalMinutes) : undefined,
         dryRun: opts.dryRun as boolean | undefined,

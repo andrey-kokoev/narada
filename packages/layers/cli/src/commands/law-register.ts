@@ -1,5 +1,5 @@
 import type { Command } from 'commander';
-import { directCommandAction } from '../lib/command-wrapper.js';
+import {directCommandAction, type CommanderOptionValues} from '../lib/command-wrapper.js';
 import { emitCommandResult, resolveCommandFormat } from '../lib/cli-output.js';
 import {
   lawAckCommand,
@@ -35,10 +35,10 @@ export function registerLawCommands(program: Command): void {
     .option('--dry-run', 'Preview without writing a record', false)
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'law change add',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => lawChangeAddCommand({
         issuer: opts.issuer as string | undefined,
         summary: opts.summary as string | undefined,
@@ -65,10 +65,10 @@ export function registerLawCommands(program: Command): void {
     .description('List durable law changes')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'law list',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => lawListCommand({
         cwd: opts.cwd as string | undefined,
         format: resolveCommandFormat(opts.format, 'auto'),
@@ -82,10 +82,10 @@ export function registerLawCommands(program: Command): void {
     .option('--role <role>', 'Agent role for role-scoped applicability')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'law unread',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => lawUnreadCommand({
         agent: opts.agent as string | undefined,
         role: opts.role as string | undefined,
@@ -105,10 +105,10 @@ export function registerLawCommands(program: Command): void {
     .option('--questions-or-blockers <csv>', 'Optional comma-separated questions/blockers')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[string, Record<string, unknown>]>({
+    .action(directCommandAction<[string, CommanderOptionValues]>({
       command: 'law ack',
       emit: emitCommandResult,
-      format: (_changeId: string, opts: Record<string, unknown>) => opts.format,
+      format: (_changeId: string, opts: CommanderOptionValues) => opts.format,
       invocation: (changeId, opts) => lawAckCommand({
         changeId,
         agent: opts.agent as string | undefined,
@@ -129,10 +129,10 @@ export function registerLawCommands(program: Command): void {
     .option('--role <role>', 'Agent role for role-scoped applicability')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'law status',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => lawStatusCommand({
         agent: opts.agent as string | undefined,
         role: opts.role as string | undefined,

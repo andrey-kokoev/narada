@@ -8,7 +8,7 @@ import {
   taskEvidenceAssertCompleteCommand,
   taskEvidenceListCommand,
 } from './task-evidence-list.js';
-import { directCommandAction } from '../lib/command-wrapper.js';
+import {directCommandAction, type CommanderOptionValues} from '../lib/command-wrapper.js';
 import { emitCommandResult, resolveCommandFormat } from '../lib/cli-output.js';
 
 export function registerTaskEvidenceCommands(taskCmd: Command): void {
@@ -20,7 +20,7 @@ export function registerTaskEvidenceCommands(taskCmd: Command): void {
     .command('inspect <task-number>')
     .description('Inspect task completion evidence (task-authority read-only; may admit observation output)')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-    .action(directCommandAction<[string, Record<string, unknown>]>({
+    .action(directCommandAction<[string, CommanderOptionValues]>({
       command: 'task evidence inspect',
       emit: emitCommandResult,
       invocation: (taskNumber, opts) => taskEvidenceCommand({
@@ -39,7 +39,7 @@ export function registerTaskEvidenceCommands(taskCmd: Command): void {
     .option('--limit <n>', 'Maximum tasks to return/show without --full', '25')
     .option('--full', 'Return the complete list (explicitly opt into unbounded output)', false)
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'task evidence list',
       emit: emitCommandResult,
       invocation: (opts) => taskEvidenceListCommand({
@@ -57,7 +57,7 @@ export function registerTaskEvidenceCommands(taskCmd: Command): void {
     .command('assert-complete <range>')
     .description('Fail unless every task in a numeric range is evidence-complete')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-    .action(directCommandAction<[string, Record<string, unknown>]>({
+    .action(directCommandAction<[string, CommanderOptionValues]>({
       command: 'task evidence assert-complete',
       emit: emitCommandResult,
       format: () => resolveCommandFormat(undefined, 'human'),
@@ -79,10 +79,10 @@ export function registerTaskEvidenceCommands(taskCmd: Command): void {
     .option('--unbound-rationale <text>', 'Explicit rationale when criteria proof has no verification run binding')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-    .action(directCommandAction<[string, Record<string, unknown>]>({
+    .action(directCommandAction<[string, CommanderOptionValues]>({
       command: 'task evidence prove-criteria',
       emit: emitCommandResult,
-      format: (_taskNumber: string, opts: Record<string, unknown>) => opts.format,
+      format: (_taskNumber: string, opts: CommanderOptionValues) => opts.format,
       invocation: (taskNumber, opts) => taskEvidenceProveCriteriaCommand({
         taskNumber,
         by: opts.by as string,
@@ -99,10 +99,10 @@ export function registerTaskEvidenceCommands(taskCmd: Command): void {
     .requiredOption('--by <id>', 'Operator or agent ID admitting evidence')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-    .action(directCommandAction<[string, Record<string, unknown>]>({
+    .action(directCommandAction<[string, CommanderOptionValues]>({
       command: 'task evidence admit',
       emit: emitCommandResult,
-      format: (_taskNumber: string, opts: Record<string, unknown>) => opts.format,
+      format: (_taskNumber: string, opts: CommanderOptionValues) => opts.format,
       invocation: (taskNumber, opts) => taskEvidenceAdmitCommand({
         taskNumber,
         by: opts.by as string,
@@ -114,7 +114,7 @@ export function registerTaskEvidenceCommands(taskCmd: Command): void {
   evidenceCmd
     .argument('[task-number]', 'Task number to inspect (backward compatibility; prefer `inspect`)')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-    .action(directCommandAction<[string | undefined, Record<string, unknown>]>({
+    .action(directCommandAction<[string | undefined, CommanderOptionValues]>({
       command: 'task evidence',
       emit: emitCommandResult,
       invocation: (taskNumber, opts) => {

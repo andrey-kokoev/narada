@@ -8,10 +8,10 @@ import { approveDraftForSendCommand } from './approve-draft-for-send.js';
 import { approvePendingDecisionCommand } from './approve-pending-decision.js';
 import { retryAuthFailedCommand } from './retry-auth-failed.js';
 import { acknowledgeAlertCommand } from './acknowledge-alert.js';
-import { wrapCommand } from '../lib/command-wrapper.js';
+import {wrapCommand, type CommanderOptionValues} from '../lib/command-wrapper.js';
 
 type CliFormat = 'json' | 'human' | 'auto';
-type WrappedOptions = Record<string, unknown> & {
+type WrappedOptions = CommanderOptionValues & {
   config?: string;
   verbose?: boolean;
   format?: string;
@@ -29,7 +29,7 @@ export function registerOutboundActionCommands(program: Command): void {
     .option('-c, --config <path>', 'Path to config file', './config.json')
     .option('-v, --verbose', 'Enable verbose output', false)
     .option('--rationale <text>', 'Operator rationale for rejection')
-    .action((outboundId: string, opts: Record<string, unknown>) =>
+    .action((outboundId: string, opts: CommanderOptionValues) =>
       wrapCommand<WrappedOptions>('reject-draft', (merged, ctx) =>
         rejectDraftCommand({
           ...merged,
@@ -45,7 +45,7 @@ export function registerOutboundActionCommands(program: Command): void {
     .option('-c, --config <path>', 'Path to config file', './config.json')
     .option('-v, --verbose', 'Enable verbose output', false)
     .option('--notes <text>', 'Reviewer notes')
-    .action((outboundId: string, opts: Record<string, unknown>) =>
+    .action((outboundId: string, opts: CommanderOptionValues) =>
       wrapCommand<WrappedOptions>('mark-reviewed', (merged, ctx) =>
         markReviewedCommand({
           ...merged,
@@ -61,7 +61,7 @@ export function registerOutboundActionCommands(program: Command): void {
     .requiredOption('--ref <reference>', 'External reference (ticket ID, thread URL)')
     .option('-c, --config <path>', 'Path to config file', './config.json')
     .option('-v, --verbose', 'Enable verbose output', false)
-    .action((outboundId: string, opts: Record<string, unknown>) =>
+    .action((outboundId: string, opts: CommanderOptionValues) =>
       wrapCommand<WrappedOptions>('handled-externally', (merged, ctx) =>
         handledExternallyCommand({
           ...merged,
@@ -89,7 +89,7 @@ export function registerOutboundActionCommands(program: Command): void {
     .argument('<outbound-id>', 'Outbound command ID to inspect')
     .option('-c, --config <path>', 'Path to config file', './config.json')
     .option('-v, --verbose', 'Enable verbose output', false)
-    .action((outboundId: string, opts: Record<string, unknown>) =>
+    .action((outboundId: string, opts: CommanderOptionValues) =>
       wrapCommand<WrappedOptions>('show-draft', (merged, ctx) =>
         showDraftCommand({
           ...merged,
@@ -104,7 +104,7 @@ export function registerOutboundActionCommands(program: Command): void {
     .requiredOption('--by <principal>', 'Operator or agent approving the pending decision')
     .option('-c, --config <path>', 'Path to config file', './config.json')
     .option('-v, --verbose', 'Enable verbose output', false)
-    .action((decisionId: string, opts: Record<string, unknown>) =>
+    .action((decisionId: string, opts: CommanderOptionValues) =>
       wrapCommand<WrappedOptions>('approve-pending-decision', (merged, ctx) =>
         approvePendingDecisionCommand({
           ...merged,
@@ -119,7 +119,7 @@ export function registerOutboundActionCommands(program: Command): void {
     .argument('<outbound-id>', 'Outbound command ID to approve for send')
     .option('-c, --config <path>', 'Path to config file', './config.json')
     .option('-v, --verbose', 'Enable verbose output', false)
-    .action((outboundId: string, opts: Record<string, unknown>) =>
+    .action((outboundId: string, opts: CommanderOptionValues) =>
       wrapCommand<WrappedOptions>('approve-draft-for-send', (merged, ctx) =>
         approveDraftForSendCommand({
           ...merged,
@@ -134,7 +134,7 @@ export function registerOutboundActionCommands(program: Command): void {
     .option('-c, --config <path>', 'Path to config file', './config.json')
     .option('-v, --verbose', 'Enable verbose output', false)
     .option('-l, --limit <n>', 'Maximum commands to retry per scope when scanning', '50')
-    .action((outboundId: string | undefined, opts: Record<string, unknown>) =>
+    .action((outboundId: string | undefined, opts: CommanderOptionValues) =>
       wrapCommand<WrappedOptions>('retry-auth-failed', (merged, ctx) =>
         retryAuthFailedCommand({
           ...merged,
@@ -149,7 +149,7 @@ export function registerOutboundActionCommands(program: Command): void {
     .argument('<work-item-id>', 'Failed work item ID to acknowledge')
     .option('-c, --config <path>', 'Path to config file', './config.json')
     .option('-v, --verbose', 'Enable verbose output', false)
-    .action((workItemId: string, opts: Record<string, unknown>) =>
+    .action((workItemId: string, opts: CommanderOptionValues) =>
       wrapCommand<WrappedOptions>('acknowledge-alert', (merged, ctx) =>
         acknowledgeAlertCommand({
           ...merged,

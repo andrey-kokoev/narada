@@ -5,7 +5,7 @@ import {
   routingListCommand,
   routingResolveCommand,
 } from './routing.js';
-import { directCommandAction, silentCommandContext } from '../lib/command-wrapper.js';
+import {directCommandAction, silentCommandContext, type CommanderOptionValues} from '../lib/command-wrapper.js';
 import { emitCommandResult, resolveCommandFormat } from '../lib/cli-output.js';
 
 export function registerRoutingCommands(program: Command): void {
@@ -30,10 +30,10 @@ export function registerRoutingCommands(program: Command): void {
     .requiredOption('--by <id>', 'Principal creating the route')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'routing add',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => routingAddCommand({
         targetKind: opts.targetKind as string | undefined,
         targetRef: opts.targetRef as string | undefined,
@@ -62,10 +62,10 @@ export function registerRoutingCommands(program: Command): void {
     .option('--limit <n>', 'Maximum routes', '20')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'routing list',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => routingListCommand({
         targetKind: opts.targetKind as string | undefined,
         targetRef: opts.targetRef as string | undefined,
@@ -85,10 +85,10 @@ export function registerRoutingCommands(program: Command): void {
     .option('--transport <transport>', 'Transport filter')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'routing resolve',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => routingResolveCommand({
         targetKind: opts.targetKind as string | undefined,
         targetRef: opts.targetRef as string | undefined,
@@ -103,10 +103,10 @@ export function registerRoutingCommands(program: Command): void {
     .description('Explain one route address record')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[string, Record<string, unknown>]>({
+    .action(directCommandAction<[string, CommanderOptionValues]>({
       command: 'routing explain',
       emit: emitCommandResult,
-      format: (_routeId: string, opts: Record<string, unknown>) => opts.format,
+      format: (_routeId: string, opts: CommanderOptionValues) => opts.format,
       invocation: (routeId, opts) => routingExplainCommand({
         routeId,
         cwd: opts.cwd as string | undefined,

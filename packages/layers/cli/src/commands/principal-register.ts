@@ -6,7 +6,7 @@ import {
   principalDetachCommand,
 } from './principal.js';
 import { principalSyncFromTasksCommand } from './principal-sync-from-tasks.js';
-import { silentCommandContext } from '../lib/command-wrapper.js';
+import {silentCommandContext, type CommanderOptionValues} from '../lib/command-wrapper.js';
 import { emitFiniteCommandResult, emitFormatterBackedCommandResult, resolveCommandFormat } from '../lib/cli-output.js';
 
 function outputFormat(): 'json' | 'human' | 'auto' {
@@ -24,7 +24,7 @@ export function registerPrincipalCommands(program: Command): void {
     .option('-c, --config <path>', 'Path to config file', './config.json')
     .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
     .option('-v, --verbose', 'Enable verbose output', false)
-    .action(async (opts: Record<string, unknown>) => {
+    .action(async (opts: CommanderOptionValues) => {
       const result = await principalStatusCommand(
         {
           format: resolveCommandFormat(opts.format),
@@ -43,7 +43,7 @@ export function registerPrincipalCommands(program: Command): void {
     .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
     .option('--scope <id>', 'Filter by scope ID')
     .option('-v, --verbose', 'Enable verbose output', false)
-    .action(async (opts: Record<string, unknown>) => {
+    .action(async (opts: CommanderOptionValues) => {
       const result = await principalListCommand(
         {
           format: resolveCommandFormat(opts.format),
@@ -66,7 +66,7 @@ export function registerPrincipalCommands(program: Command): void {
     .option('--type <type>', 'Principal type: operator, agent, worker, external', 'operator')
     .option('--mode <mode>', 'Attachment mode: observe or interact', 'interact')
     .option('-v, --verbose', 'Enable verbose output', false)
-    .action(async (scopeId: string, opts: Record<string, unknown>) => {
+    .action(async (scopeId: string, opts: CommanderOptionValues) => {
       const result = await principalAttachCommand(
         {
           scope: scopeId,
@@ -90,7 +90,7 @@ export function registerPrincipalCommands(program: Command): void {
     .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
     .option('--reason <text>', 'Detach reason')
     .option('-v, --verbose', 'Enable verbose output', false)
-    .action(async (runtimeId: string, opts: Record<string, unknown>) => {
+    .action(async (runtimeId: string, opts: CommanderOptionValues) => {
       const result = await principalDetachCommand(
         {
           runtimeId,
@@ -111,7 +111,7 @@ export function registerPrincipalCommands(program: Command): void {
     .option('--principal-state-dir <path>', 'Directory containing PrincipalRuntime state file')
     .option('--dry-run', 'Show divergences without applying corrections', false)
     .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
-    .action(async (opts: Record<string, unknown>) => {
+    .action(async (opts: CommanderOptionValues) => {
       const result = await principalSyncFromTasksCommand({
         cwd: opts.cwd as string | undefined,
         principalStateDir: opts.principalStateDir as string | undefined,

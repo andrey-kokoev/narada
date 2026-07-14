@@ -1,3 +1,4 @@
+import type { CommanderOptionValues } from '../../src/lib/command-wrapper.js';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -140,7 +141,7 @@ describe('direct command action helper', () => {
   it('preserves nonzero command exit behavior', async () => {
     const emitted: unknown[] = [];
     let exitCode: number | null = null;
-    const action = directCommandAction<[Record<string, unknown>]>({
+    const action = directCommandAction<[CommanderOptionValues]>({
       command: 'task action',
       invocation: async () => ({ exitCode: 2, result: { status: 'error', error: 'bad' } }),
       emit: (result) => emitted.push(result),
@@ -167,7 +168,7 @@ describe('direct command action helper', () => {
 
       const emitted: unknown[] = [];
       let exitCode: number | null = null;
-      const action = directCommandAction<[Record<string, unknown>]>({
+      const action = directCommandAction<[CommanderOptionValues]>({
         command: 'task claim',
         invocation: async () => ({ exitCode: 0, result: { status: 'success' } }),
         emit: (result) => emitted.push(result),
@@ -307,7 +308,7 @@ describe('resource-scoped direct command action helper', () => {
   it('closes resources when the adapted invocation exits nonzero', async () => {
     const events: string[] = [];
     let exitCode: number | null = null;
-    const action = resourceScopedDirectCommandAction<{ id: string }, [Record<string, unknown>]>({
+    const action = resourceScopedDirectCommandAction<{ id: string }, [CommanderOptionValues]>({
       command: 'task resource action',
       open: () => {
         events.push('open');

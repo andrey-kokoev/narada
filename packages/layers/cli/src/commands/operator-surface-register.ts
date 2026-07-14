@@ -1,5 +1,5 @@
 import type { Command } from 'commander';
-import { directCommandAction, silentCommandContext } from '../lib/command-wrapper.js';
+import {directCommandAction, silentCommandContext, type CommanderOptionValues} from '../lib/command-wrapper.js';
 import { emitCommandResult, resolveCommandFormat } from '../lib/cli-output.js';
 import {
   operatorSurfaceAgentInstantiateCommand,
@@ -46,10 +46,10 @@ export function registerOperatorSurfaceCommands(program: Command): void {
     .option('--launch-binding <path>', 'Write an exact operator projection launch binding for sibling surfaces')
     .option('--launch-session-id <id>', 'Launch session id for process ownership evidence when no launch binding is used')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[string | undefined, Record<string, unknown>]>({
+    .action(directCommandAction<[string | undefined, CommanderOptionValues]>({
       command: 'operator-surface runtime start',
       emit: emitCommandResult,
-      format: (_surface: string | undefined, opts: Record<string, unknown>) => opts.format,
+      format: (_surface: string | undefined, opts: CommanderOptionValues) => opts.format,
       invocation: (surface, opts) => carrierStartCommand({
         siteRoot: opts.siteRoot as string | undefined,
         site: opts.site as string | undefined,
@@ -92,10 +92,10 @@ export function registerOperatorSurfaceCommands(program: Command): void {
     .option('--runtime-locus <locus>', 'Owning User/PC runtime locus for binding deferral')
     .option('--cwd <path>', 'Site root / working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'operator-surface agent instantiate',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => operatorSurfaceAgentInstantiateCommand({
         site: opts.site as string | undefined,
         role: opts.role as string | undefined,
@@ -129,10 +129,10 @@ export function registerOperatorSurfaceCommands(program: Command): void {
     .option('--exec', 'Request process launch; still defers to owning runtime locus in Narada proper', false)
     .option('--cwd <path>', 'Site root / working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'operator-surface agent fork',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => operatorSurfaceAgentForkCommand({
         site: opts.site as string | undefined,
         role: opts.role as string | undefined,
@@ -163,10 +163,10 @@ export function registerOperatorSurfaceCommands(program: Command): void {
     .option('--submit-strategy <strategy>', 'Submit strategy: type_only, operator_confirmed_submit, known_surface_submit', 'type_only')
     .option('--cwd <path>', 'Site root / working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[string, Record<string, unknown>]>({
+    .action(directCommandAction<[string, CommanderOptionValues]>({
       command: 'operator-surface identity add',
       emit: emitCommandResult,
-      format: (_identityName: string, opts: Record<string, unknown>) => opts.format,
+      format: (_identityName: string, opts: CommanderOptionValues) => opts.format,
       invocation: (identityName, opts) => operatorSurfaceIdentityAddCommand({
         identityName,
         role: opts.role as string | undefined,
@@ -193,10 +193,10 @@ export function registerOperatorSurfaceCommands(program: Command): void {
     .option('--allow-active-assignment', 'Intentionally migrate current roster pointer for active work', false)
     .option('--cwd <path>', 'Site root / working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'operator-surface identity rename',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => operatorSurfaceIdentityRenameCommand({
         fromIdentity: opts.from as string | undefined,
         toIdentity: opts.to as string | undefined,
@@ -216,10 +216,10 @@ export function registerOperatorSurfaceCommands(program: Command): void {
     .option('--capabilities <csv>', 'Task authority capabilities; defaults from role')
     .option('--cwd <path>', 'Site root / working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[string, Record<string, unknown>]>({
+    .action(directCommandAction<[string, CommanderOptionValues]>({
       command: 'operator-surface identity admit-task-authority',
       emit: emitCommandResult,
-      format: (_identityName: string, opts: Record<string, unknown>) => opts.format,
+      format: (_identityName: string, opts: CommanderOptionValues) => opts.format,
       invocation: (identityName, opts) => operatorSurfaceIdentityAdmitTaskAuthorityCommand({
         identityName,
         by: opts.by as string | undefined,
@@ -238,10 +238,10 @@ export function registerOperatorSurfaceCommands(program: Command): void {
     .option('--limit <n>', 'Maximum labels', '50')
     .option('--cwd <path>', 'Site root / working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'operator-surface labels build',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => operatorSurfaceLabelsBuildCommand({
         site: opts.site as string | undefined,
         limit: opts.limit ? Number(opts.limit) : undefined,
@@ -258,10 +258,10 @@ export function registerOperatorSurfaceCommands(program: Command): void {
     .option('--limit <n>', 'Maximum identities', '50')
     .option('--cwd <path>', 'Site root / working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'operator-surface inspect compact',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => operatorSurfaceInspectCompactCommand({
         site: opts.site as string | undefined,
         limit: opts.limit ? Number(opts.limit) : undefined,
@@ -277,10 +277,10 @@ export function registerOperatorSurfaceCommands(program: Command): void {
     .option('--limit <n>', 'Maximum identities', '50')
     .option('--cwd <path>', 'Site root / working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'operator-surface status',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => operatorSurfaceStatusCommand({
         site: opts.site as string | undefined,
         limit: opts.limit ? Number(opts.limit) : undefined,
@@ -297,10 +297,10 @@ export function registerOperatorSurfaceCommands(program: Command): void {
     .option('--limit <n>', 'Maximum identities', '50')
     .option('--cwd <path>', 'Site root / working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'operator-surface doctor',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => operatorSurfaceDoctorCommand({
         site: opts.site as string | undefined,
         runtimeLocus: opts.runtimeLocus as string | undefined,
@@ -334,10 +334,10 @@ export function registerOperatorSurfaceCommands(program: Command): void {
     .option('--activation-result <result>', 'Observed focus/activation attempt result: success or failed', 'success')
     .option('--cwd <path>', 'Site root / working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'operator-surface send',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => operatorSurfaceSendCommand({
         identity: opts.identity as string | undefined,
         from: opts.from as string | undefined,
@@ -374,10 +374,10 @@ export function registerOperatorSurfaceCommands(program: Command): void {
     .option('--mic-only', 'Check local microphone-only posture; no remote transcription or credential required', false)
     .option('--cwd <path>', 'Site root / working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'operator-surface voice transcription-check',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => operatorSurfaceVoiceTranscriptionCheckCommand({
         site: opts.site as string | undefined,
         principal: opts.principal as string | undefined,
@@ -404,10 +404,10 @@ export function registerOperatorSurfaceCommands(program: Command): void {
     .option('--stale-after <timestamp>', 'Optional ISO timestamp after which the binding is stale')
     .option('--cwd <path>', 'Site root / working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'operator-surface bind-focused',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => operatorSurfaceBindFocusedCommand({
         identity: opts.identity as string | undefined,
         as: opts.as as string | undefined,
@@ -431,10 +431,10 @@ export function registerOperatorSurfaceCommands(program: Command): void {
     .option('--runtime-locus <locus>', 'Owning User/PC runtime locus')
     .option('--cwd <path>', 'Site root / working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'operator-surface rebind',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => operatorSurfaceBindingDeferredCommand('rebind', {
         identity: opts.identity as string | undefined,
         runtimeLocus: opts.runtimeLocus as string | undefined,
@@ -449,10 +449,10 @@ export function registerOperatorSurfaceCommands(program: Command): void {
     .option('--runtime-locus <locus>', 'Owning User/PC runtime locus')
     .option('--cwd <path>', 'Site root / working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'operator-surface unbind-focused',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => operatorSurfaceBindingDeferredCommand('unbind', {
         runtimeLocus: opts.runtimeLocus as string | undefined,
         cwd: opts.cwd as string | undefined,
@@ -467,10 +467,10 @@ export function registerOperatorSurfaceCommands(program: Command): void {
     .option('--runtime-locus <locus>', 'Owning User/PC runtime locus')
     .option('--cwd <path>', 'Site root / working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'operator-surface bindings list',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => operatorSurfaceBindingDeferredCommand('list', {
         runtimeLocus: opts.runtimeLocus as string | undefined,
         cwd: opts.cwd as string | undefined,
@@ -484,10 +484,10 @@ export function registerOperatorSurfaceCommands(program: Command): void {
     .option('--runtime-locus <locus>', 'Owning User/PC runtime locus')
     .option('--cwd <path>', 'Site root / working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'operator-surface bindings clean-stale',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => operatorSurfaceBindingDeferredCommand('clean-stale', {
         runtimeLocus: opts.runtimeLocus as string | undefined,
         cwd: opts.cwd as string | undefined,

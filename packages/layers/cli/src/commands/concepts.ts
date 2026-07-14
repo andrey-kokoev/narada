@@ -1,5 +1,5 @@
 import type { Command } from 'commander';
-import { directCommandAction } from '../lib/command-wrapper.js';
+import {directCommandAction, type CommanderOptionValues} from '../lib/command-wrapper.js';
 import { emitCommandResult, resolveCommandFormat } from '../lib/cli-output.js';
 
 type ConceptsModule = typeof import('@narada2/concepts');
@@ -130,10 +130,10 @@ export function registerConceptCommands(program: Command): void {
     .description('List seeded ConceptRecords from the canonical registry store')
     .option('--records-dir <path>', 'Override the ConceptRegistry record directory')
     .option('--format <format>', 'Output format: json, human, or auto', 'auto')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'concepts list',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => resolveCommandFormat(opts.format, 'auto'),
+      format: (opts: CommanderOptionValues) => resolveCommandFormat(opts.format, 'auto'),
       invocation: (opts) => conceptsListCommand({
         recordsDir: opts.recordsDir as string | undefined,
         format: resolveCommandFormat(opts.format, 'auto'),
@@ -145,10 +145,10 @@ export function registerConceptCommands(program: Command): void {
     .description('Show one ConceptRecord by concept_id, canonical_name, alias, or deprecated alias')
     .option('--records-dir <path>', 'Override the ConceptRegistry record directory')
     .option('--format <format>', 'Output format: json, human, or auto', 'auto')
-    .action(directCommandAction<[string, Record<string, unknown>]>({
+    .action(directCommandAction<[string, CommanderOptionValues]>({
       command: 'concepts show',
       emit: emitCommandResult,
-      format: (_query: string, opts: Record<string, unknown>) => resolveCommandFormat(opts.format, 'auto'),
+      format: (_query: string, opts: CommanderOptionValues) => resolveCommandFormat(opts.format, 'auto'),
       invocation: (query, opts) => conceptsShowCommand({
         query,
         recordsDir: opts.recordsDir as string | undefined,
@@ -161,10 +161,10 @@ export function registerConceptCommands(program: Command): void {
     .description('Validate the ConceptRegistry store and report any structural or semantic issues')
     .option('--records-dir <path>', 'Override the ConceptRegistry record directory')
     .option('--format <format>', 'Output format: json, human, or auto', 'auto')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'concepts validate',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => resolveCommandFormat(opts.format, 'auto'),
+      format: (opts: CommanderOptionValues) => resolveCommandFormat(opts.format, 'auto'),
       invocation: (opts) => conceptsValidateCommand({
         recordsDir: opts.recordsDir as string | undefined,
         format: resolveCommandFormat(opts.format, 'auto'),
@@ -178,10 +178,10 @@ export function registerConceptCommands(program: Command): void {
     .option('--stage <stage>', 'Filter lifecycle records by promotion_lifecycle.stage')
     .option('--gaps', 'Report lifecycle gaps instead of lifecycle records')
     .option('--format <format>', 'Output format: json, human, or auto', 'auto')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'concepts lifecycle',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => resolveCommandFormat(opts.format, 'auto'),
+      format: (opts: CommanderOptionValues) => resolveCommandFormat(opts.format, 'auto'),
       invocation: (opts) => conceptsLifecycleCommand({
         recordsDir: opts.recordsDir as string | undefined,
         stage: opts.stage as string | undefined,

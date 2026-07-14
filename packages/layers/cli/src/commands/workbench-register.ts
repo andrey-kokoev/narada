@@ -1,3 +1,4 @@
+import type { CommanderOptionValues } from '../lib/command-wrapper.js';
 import type { Command } from 'commander';
 import { createHash, randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
@@ -20,7 +21,7 @@ export function registerWorkbenchCommands(program: Command): void {
     .description('Show bounded Site Operations diagnostics')
     .option('--format <format>', 'Output format: json, human, or auto', 'auto')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-    .action(async (opts: Record<string, unknown>) => {
+    .action(async (opts: CommanderOptionValues) => {
       const result = await workbenchDiagnoseCommand({
         cwd: opts.cwd as string | undefined,
         format: resolveCommandFormat(opts.format, 'human'),
@@ -36,7 +37,7 @@ export function registerWorkbenchCommands(program: Command): void {
     .option('--site-id <id>', 'Explicit registered Site id for stable Site Operations routing')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('-v, --verbose', 'Enable verbose output', false)
-    .action(async (opts: Record<string, unknown>) => {
+    .action(async (opts: CommanderOptionValues) => {
       // Long-lived process surface: keep direct lifecycle output and SIGINT handling.
       const host = (opts.host as string) ?? '127.0.0.1';
       const port = opts.port ? parseInt(String(opts.port), 10) : 0;

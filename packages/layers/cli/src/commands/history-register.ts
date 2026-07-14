@@ -1,6 +1,6 @@
 import type { Command } from 'commander';
 import { historyCaptureCommand, historyConfigureCommand, historyDiffCommand, historyEnableCommand, historyForgetCommand, historyListCommand, historyPinCommand, historyRestoreCommand, historyShowCommand, historyStartCommand, historyStatusCommand, historyStopCommand } from './history.js';
-import { directCommandAction } from '../lib/command-wrapper.js';
+import {directCommandAction, type CommanderOptionValues} from '../lib/command-wrapper.js';
 import { emitCommandResult } from '../lib/cli-output.js';
 
 function collect(value: string, values: string[]): string[] {
@@ -8,7 +8,7 @@ function collect(value: string, values: string[]): string[] {
   return values;
 }
 
-function normalizeOptions(options: Record<string, unknown>): Record<string, unknown> {
+function normalizeOptions(options: CommanderOptionValues): CommanderOptionValues {
   return {
     ...options,
     watchRoots: options.watchRoots ?? options.watchRoot,
@@ -62,29 +62,29 @@ function historySubcommand(parent: Command, definition: string): Command {
   return command;
 }
 
-function action(command: string, handler: (options: Record<string, unknown>, context: never) => Promise<{ exitCode: number; result: unknown }>) {
-  return directCommandAction<[Record<string, unknown>]>({
+function action(command: string, handler: (options: CommanderOptionValues, context: never) => Promise<{ exitCode: number; result: unknown }>) {
+  return directCommandAction<[CommanderOptionValues]>({
     command,
     emit: emitCommandResult,
-    format: (options: Record<string, unknown>) => options.format,
+    format: (options: CommanderOptionValues) => options.format,
     invocation: (options) => handler(normalizeOptions(options), undefined as never),
   });
 }
 
-function actionWithPath(command: string, handler: (options: Record<string, unknown>, context: never) => Promise<{ exitCode: number; result: unknown }>) {
-  return directCommandAction<[string, Record<string, unknown>]>({
+function actionWithPath(command: string, handler: (options: CommanderOptionValues, context: never) => Promise<{ exitCode: number; result: unknown }>) {
+  return directCommandAction<[string, CommanderOptionValues]>({
     command,
     emit: emitCommandResult,
-    format: (options: Record<string, unknown>) => options.format,
+    format: (options: CommanderOptionValues) => options.format,
     invocation: (path, options) => handler({ ...normalizeOptions(options), path }, undefined as never),
   });
 }
 
-function actionWithSnapshot(command: string, handler: (options: Record<string, unknown>, context: never) => Promise<{ exitCode: number; result: unknown }>) {
-  return directCommandAction<[string, Record<string, unknown>]>({
+function actionWithSnapshot(command: string, handler: (options: CommanderOptionValues, context: never) => Promise<{ exitCode: number; result: unknown }>) {
+  return directCommandAction<[string, CommanderOptionValues]>({
     command,
     emit: emitCommandResult,
-    format: (options: Record<string, unknown>) => options.format,
+    format: (options: CommanderOptionValues) => options.format,
     invocation: (snapshot, options) => handler({ ...normalizeOptions(options), snapshot }, undefined as never),
   });
 }

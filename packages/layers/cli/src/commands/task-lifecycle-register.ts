@@ -1,3 +1,4 @@
+import type { CommanderOptionValues } from '../lib/command-wrapper.js';
 import type { Command } from 'commander';
 import { taskClaimCommand } from './task-claim.js';
 import { taskReleaseCommand } from './task-release.js';
@@ -48,10 +49,10 @@ export function registerTaskLifecycleCommands(taskCmd: Command): void {
     .description('Read-only task lifecycle allocation and Builder done posture')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'task lifecycle status',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => taskLifecycleStatusCommand({
         cwd: opts.cwd as string | undefined,
         format: resolveCommandFormat(opts.format, 'auto'),
@@ -64,10 +65,10 @@ export function registerTaskLifecycleCommands(taskCmd: Command): void {
     .option('--output <path>', 'Snapshot output path', '.ai/task-lifecycle-snapshot.json')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'task lifecycle export',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => taskLifecycleExportCommand({
         output: opts.output as string | undefined,
         cwd: opts.cwd as string | undefined,
@@ -82,10 +83,10 @@ export function registerTaskLifecycleCommands(taskCmd: Command): void {
     .option('--raw', 'Include raw snapshot payload explicitly', false)
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'task lifecycle inspect-snapshot',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => taskLifecycleInspectSnapshotCommand({
         input: opts.input as string | undefined,
         raw: opts.raw as boolean | undefined,
@@ -100,10 +101,10 @@ export function registerTaskLifecycleCommands(taskCmd: Command): void {
     .option('--input <path>', 'Snapshot input path', '.ai/task-lifecycle-snapshot.json')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'task lifecycle import',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => taskLifecycleImportCommand({
         input: opts.input as string | undefined,
         cwd: opts.cwd as string | undefined,
@@ -119,7 +120,7 @@ export function registerTaskLifecycleCommands(taskCmd: Command): void {
     .option('--update-principal-runtime', 'Update PrincipalRuntime state after claim', false)
     .option('--principal-state-dir <path>', 'Directory containing PrincipalRuntime state file')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-    .action(directCommandAction<[string, Record<string, unknown>]>({
+    .action(directCommandAction<[string, CommanderOptionValues]>({
       command: 'task claim',
       emit: emitCommandResult,
       invocation: (taskNumber, opts) => taskClaimCommand({
@@ -140,7 +141,7 @@ export function registerTaskLifecycleCommands(taskCmd: Command): void {
     .option('--continuation <path>', 'Path to continuation packet JSON (required for budget_exhausted)')
     .option('--principal-state-dir <path>', 'Directory containing PrincipalRuntime state file')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-    .action(directCommandAction<[string, Record<string, unknown>]>({
+    .action(directCommandAction<[string, CommanderOptionValues]>({
       command: 'task release',
       emit: emitCommandResult,
       invocation: (taskNumber, opts) => taskReleaseCommand({
@@ -161,7 +162,7 @@ export function registerTaskLifecycleCommands(taskCmd: Command): void {
     .requiredOption('--unblock <text>', 'Concrete unblock condition or command')
     .option('--residuals <json>', 'JSON array or comma-separated residuals')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-    .action(directCommandAction<[string, Record<string, unknown>]>({
+    .action(directCommandAction<[string, CommanderOptionValues]>({
       command: 'task defer',
       emit: emitCommandResult,
       invocation: (taskNumber, opts) => taskDeferCommand({
@@ -182,7 +183,7 @@ export function registerTaskLifecycleCommands(taskCmd: Command): void {
     .requiredOption('--evidence <text>', 'Evidence that the deferred blocker is satisfied')
     .requiredOption('--rationale <text>', 'Why the task should re-enter normal runnable work')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-    .action(directCommandAction<[string, Record<string, unknown>]>({
+    .action(directCommandAction<[string, CommanderOptionValues]>({
       command: 'task unblock',
       emit: emitCommandResult,
       invocation: (taskNumber, opts) => taskUnblockCommand({
@@ -209,7 +210,7 @@ export function registerTaskLifecycleCommands(taskCmd: Command): void {
     .option('--override-rationale <text>', 'Explicit durable override rationale for role-guarded lifecycle actions')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('-v, --verbose', 'Show accepted-learning guidance and expanded rationale', false)
-    .action(directCommandAction<[string, Record<string, unknown>]>({
+    .action(directCommandAction<[string, CommanderOptionValues]>({
       command: 'task report',
       emit: emitCommandResult,
       invocation: (taskNumber, opts) => taskReportCommand({
@@ -236,7 +237,7 @@ export function registerTaskLifecycleCommands(taskCmd: Command): void {
     .requiredOption('--reviewer <agent-or-role>', 'Exact reviewer agent id or unique role alias')
     .option('--report <id>', 'Specific WorkResultReport ID; defaults to latest report for task')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-    .action(resourceScopedDirectCommandAction<SqliteTaskLifecycleStore, [string, Record<string, unknown>]>({
+    .action(resourceScopedDirectCommandAction<SqliteTaskLifecycleStore, [string, CommanderOptionValues]>({
       command: 'task review-request',
       emit: emitCommandResult,
       open: (_taskNumber, opts) => openTaskLifecycleStore((opts.cwd as string | undefined) || process.cwd()),
@@ -262,10 +263,10 @@ export function registerTaskLifecycleCommands(taskCmd: Command): void {
     .option('--dry-run', 'Show what would be staged without mutating Git index', false)
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[string, Record<string, unknown>]>({
+    .action(directCommandAction<[string, CommanderOptionValues]>({
       command: 'task stage',
       emit: emitCommandResult,
-      format: (_taskNumber: string, opts: Record<string, unknown>) => opts.format,
+      format: (_taskNumber: string, opts: CommanderOptionValues) => opts.format,
       invocation: (taskNumber, opts) => taskStageCommand({
         taskNumber,
         agent: opts.agent as string | undefined,
@@ -284,7 +285,7 @@ export function registerTaskLifecycleCommands(taskCmd: Command): void {
     .requiredOption('--agent <id>', 'Continuation agent ID from roster')
     .requiredOption('--reason <reason>', 'Continuation reason: evidence_repair, review_fix, handoff, blocked_agent, operator_override')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-    .action(directCommandAction<[string, Record<string, unknown>]>({
+    .action(directCommandAction<[string, CommanderOptionValues]>({
       command: 'task continue',
       emit: emitCommandResult,
       invocation: (taskNumber, opts) => taskContinueCommand({
@@ -314,7 +315,7 @@ export function registerTaskLifecycleCommands(taskCmd: Command): void {
     .option('--prove-criteria', 'Before evidence admission, prove all acceptance criteria for this task', false)
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('-v, --verbose', 'Show accepted-learning guidance and expanded rationale', false)
-    .action(directCommandAction<[string, Record<string, unknown>]>({
+    .action(directCommandAction<[string, CommanderOptionValues]>({
       command: 'task finish',
       emit: emitCommandResult,
       invocation: (taskNumber, opts) => taskFinishCommand({
@@ -348,7 +349,7 @@ export function registerTaskLifecycleCommands(taskCmd: Command): void {
     .option('--no-capa-reason <text>', 'One-line rationale when rejected findings do not warrant CAPA routing')
     .option('--principal-state-dir <path>', 'Directory containing PrincipalRuntime state file')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-    .action(resourceScopedDirectCommandAction<SqliteTaskLifecycleStore, [string, Record<string, unknown>]>({
+    .action(resourceScopedDirectCommandAction<SqliteTaskLifecycleStore, [string, CommanderOptionValues]>({
       command: 'task review',
       emit: emitCommandResult,
       open: (_taskNumber, opts) => openTaskLifecycleStore((opts.cwd as string | undefined) || process.cwd()),
@@ -376,10 +377,10 @@ export function registerTaskLifecycleCommands(taskCmd: Command): void {
     .option('--override-rationale <text>', 'Explicit durable override rationale for role-guarded lifecycle actions')
     .option('--no-continuation-needed <text>', 'One-line rationale for closing facade/prototype/spike/design-only scope without follow-up task linkage')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-    .action(resourceScopedDirectCommandAction<SqliteTaskLifecycleStore, [string, Record<string, unknown>]>({
+    .action(resourceScopedDirectCommandAction<SqliteTaskLifecycleStore, [string, CommanderOptionValues]>({
       command: 'task close',
       emit: emitCommandResult,
-      format: (_taskNumber: string, opts: Record<string, unknown>) => opts.format,
+      format: (_taskNumber: string, opts: CommanderOptionValues) => opts.format,
       open: (_taskNumber, opts) => openTaskLifecycleStore((opts.cwd as string | undefined) || process.cwd()),
       close: closeStore,
       invocation: (store, taskNumber, opts) => taskCloseCommand({
@@ -405,10 +406,10 @@ export function registerTaskLifecycleCommands(taskCmd: Command): void {
     .option('--force', 'Reopen even if the task is valid by evidence', false)
     .option('--format <fmt>', 'Output format: json or human', 'human')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-    .action(directCommandAction<[string, Record<string, unknown>]>({
+    .action(directCommandAction<[string, CommanderOptionValues]>({
       command: 'task reopen',
       emit: emitCommandResult,
-      format: (_taskNumber: string, opts: Record<string, unknown>) => opts.format,
+      format: (_taskNumber: string, opts: CommanderOptionValues) => opts.format,
       invocation: (taskNumber, opts) => taskReopenCommand({
         taskNumber,
         by: opts.by as string | undefined,
@@ -424,10 +425,10 @@ export function registerTaskLifecycleCommands(taskCmd: Command): void {
     .requiredOption('--by <id>', 'Operator or agent ID performing the confirmation')
     .option('--format <fmt>', 'Output format: json or human', 'human')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-    .action(directCommandAction<[string, Record<string, unknown>]>({
+    .action(directCommandAction<[string, CommanderOptionValues]>({
       command: 'task confirm',
       emit: emitCommandResult,
-      format: (_taskNumber: string, opts: Record<string, unknown>) => opts.format,
+      format: (_taskNumber: string, opts: CommanderOptionValues) => opts.format,
       invocation: (taskNumber, opts) => taskConfirmCommand({
         taskNumber,
         by: opts.by as string | undefined,

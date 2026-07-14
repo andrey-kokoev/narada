@@ -6,7 +6,7 @@ import { chapterInitCommand, chapterValidateTasksFileCommand } from './chapter-i
 import { chapterPreflightCommand } from './chapter-preflight.js';
 import { chapterStatusCommand } from './chapter-status.js';
 import { taskEvidenceAssertCompleteCommand } from './task-evidence-list.js';
-import { directCommandAction } from '../lib/command-wrapper.js';
+import {directCommandAction, type CommanderOptionValues} from '../lib/command-wrapper.js';
 import { emitCommandResult, resolveCommandFormat } from '../lib/cli-output.js';
 
 export function registerChapterCommands(program: Command): void {
@@ -26,10 +26,10 @@ export function registerChapterCommands(program: Command): void {
       'Structured input supports array-valued required_work and non_goals; arrays render as Markdown lists.',
       'Example: narada chapter commission --input chapter.json --dry-run --format json',
     ].join('\n'))
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'chapter commission',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => resolveCommandFormat(opts.format, 'auto'),
+      format: (opts: CommanderOptionValues) => resolveCommandFormat(opts.format, 'auto'),
       invocation: (opts) => chapterCommissionCommand({
         input: opts.input as string | undefined,
         dryRun: opts.dryRun as boolean | undefined,
@@ -47,10 +47,10 @@ export function registerChapterCommands(program: Command): void {
     .option('--details', 'Include full per-task command results', false)
     .option('--format <format>', 'Output format: json, human, or auto', 'auto')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-    .action(directCommandAction<[string, Record<string, unknown>]>({
+    .action(directCommandAction<[string, CommanderOptionValues]>({
       command: 'chapter finish-range',
       emit: emitCommandResult,
-      format: (_range: string, opts: Record<string, unknown>) => opts.format,
+      format: (_range: string, opts: CommanderOptionValues) => opts.format,
       invocation: (range, opts) => chapterFinishRangeCommand({
         range,
         agent: opts.agent as string,
@@ -67,10 +67,10 @@ export function registerChapterCommands(program: Command): void {
     .description('Fail unless every task in a numeric chapter range is evidence-complete')
     .option('--format <format>', 'Output format: json, human, or auto', 'auto')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-    .action(directCommandAction<[string, Record<string, unknown>]>({
+    .action(directCommandAction<[string, CommanderOptionValues]>({
       command: 'chapter assert-complete',
       emit: emitCommandResult,
-      format: (_range: string, opts: Record<string, unknown>) => {
+      format: (_range: string, opts: CommanderOptionValues) => {
         const localFormat = opts.format === 'auto' ? undefined : opts.format;
         return resolveCommandFormat(localFormat, 'human');
       },
@@ -96,10 +96,10 @@ export function registerChapterCommands(program: Command): void {
     .option('--dry-run', 'Preview files without writing', false)
     .option('--format <format>', 'Output format: json, human, or auto', 'auto')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-    .action(directCommandAction<[string, Record<string, unknown>]>({
+    .action(directCommandAction<[string, CommanderOptionValues]>({
       command: 'chapter init',
       emit: emitCommandResult,
-      format: (_slug: string, opts: Record<string, unknown>) => resolveCommandFormat(opts.format, 'auto'),
+      format: (_slug: string, opts: CommanderOptionValues) => resolveCommandFormat(opts.format, 'auto'),
       invocation: (slug, opts) => {
         const format = resolveCommandFormat(opts.format, 'auto');
         return chapterInitCommand({
@@ -122,10 +122,10 @@ export function registerChapterCommands(program: Command): void {
     .requiredOption('--count <n>', 'Expected number of child task specs')
     .option('--format <format>', 'Output format: json, human, or auto', 'auto')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-    .action(directCommandAction<[string, Record<string, unknown>]>({
+    .action(directCommandAction<[string, CommanderOptionValues]>({
       command: 'chapter validate-tasks-file',
       emit: emitCommandResult,
-      format: (_path: string, opts: Record<string, unknown>) => opts.format,
+      format: (_path: string, opts: CommanderOptionValues) => opts.format,
       invocation: (path, opts) => chapterValidateTasksFileCommand({
         path,
         count: opts.count ? Number(opts.count) : undefined,
@@ -139,10 +139,10 @@ export function registerChapterCommands(program: Command): void {
     .description('Derive and display chapter state from task statuses in a range')
     .option('--format <format>', 'Output format: json, human, or auto', 'auto')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-    .action(directCommandAction<[string, Record<string, unknown>]>({
+    .action(directCommandAction<[string, CommanderOptionValues]>({
       command: 'chapter status',
       emit: emitCommandResult,
-      format: (_range: string, opts: Record<string, unknown>) => resolveCommandFormat(opts.format, 'auto'),
+      format: (_range: string, opts: CommanderOptionValues) => resolveCommandFormat(opts.format, 'auto'),
       invocation: (range, opts) => {
         const format = resolveCommandFormat(opts.format, 'auto');
         return chapterStatusCommand({
@@ -160,10 +160,10 @@ export function registerChapterCommands(program: Command): void {
     .option('--expect-push', 'Check that Git metadata is writable and the branch has an upstream', false)
     .option('--format <format>', 'Output format: json, human, or auto', 'auto')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-    .action(directCommandAction<[string, Record<string, unknown>]>({
+    .action(directCommandAction<[string, CommanderOptionValues]>({
       command: 'chapter preflight',
       emit: emitCommandResult,
-      format: (_range: string, opts: Record<string, unknown>) => resolveCommandFormat(opts.format, 'auto'),
+      format: (_range: string, opts: CommanderOptionValues) => resolveCommandFormat(opts.format, 'auto'),
       invocation: (range, opts) => {
         const format = resolveCommandFormat(opts.format, 'auto');
         return chapterPreflightCommand({
@@ -187,10 +187,10 @@ export function registerChapterCommands(program: Command): void {
     .option('--reason <text>', 'Reason for reopen')
     .option('--format <format>', 'Output format: json, human, or auto', 'auto')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-    .action(directCommandAction<[string, Record<string, unknown>]>({
+    .action(directCommandAction<[string, CommanderOptionValues]>({
       command: 'chapter close',
       emit: emitCommandResult,
-      format: (_identifier: string, opts: Record<string, unknown>) => resolveCommandFormat(opts.format, 'auto'),
+      format: (_identifier: string, opts: CommanderOptionValues) => resolveCommandFormat(opts.format, 'auto'),
       invocation: (identifier, opts) => {
         const isRange = /^\d+(?:-\d+)?$/.test(identifier);
         const format = resolveCommandFormat(opts.format, 'auto');

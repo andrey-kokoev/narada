@@ -1,5 +1,5 @@
 import type { Command } from 'commander';
-import { directCommandAction } from '../lib/command-wrapper.js';
+import {directCommandAction, type CommanderOptionValues} from '../lib/command-wrapper.js';
 import { emitCommandResult } from '../lib/cli-output.js';
 import { siteRegistryRelationPlanTransitionCommand } from './site-registry.js';
 
@@ -18,7 +18,7 @@ export function registerSiteRegistryCommands(program: Command): void {
     .requiredOption('--payload-file <path>', 'Relation transition payload JSON file')
     .option('--registry-url <url>', 'Hosted registry URL override')
     .option('--credential-ref <ref>', 'Credential reference override; raw secret values are refused')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'site-registry relation plan-transition',
       emit: emitCommandResult,
       invocation: (opts) => siteRegistryRelationPlanTransitionCommand({

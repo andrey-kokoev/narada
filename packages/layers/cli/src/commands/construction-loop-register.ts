@@ -9,7 +9,7 @@ import {
   constructionLoopResumeCommand,
   constructionLoopRunCommand,
 } from './construction-loop.js';
-import { directCommandAction } from '../lib/command-wrapper.js';
+import {directCommandAction, type CommanderOptionValues} from '../lib/command-wrapper.js';
 import { emitCommandResult, resolveCommandFormat } from '../lib/cli-output.js';
 
 export function registerConstructionLoopCommands(program: Command): void {
@@ -24,10 +24,10 @@ export function registerConstructionLoopCommands(program: Command): void {
     .option('--max-tasks <n>', 'Override max tasks per cycle for this run')
     .option('--format <format>', 'Output format: json, human, or auto', 'auto')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'construction-loop plan',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => constructionLoopPlanCommand({
         policyPath: opts.policy as string | undefined,
         maxTasks: opts.maxTasks ? Number(opts.maxTasks) : undefined,
@@ -46,10 +46,10 @@ export function registerConstructionLoopCommands(program: Command): void {
     .option('--policy <path>', 'Path to policy file')
     .option('--format <format>', 'Output format: json, human, or auto', 'auto')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'construction-loop policy show',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => constructionLoopPolicyShowCommand({
         policyPath: opts.policy as string | undefined,
         format: resolveCommandFormat(opts.format, 'auto'),
@@ -64,10 +64,10 @@ export function registerConstructionLoopCommands(program: Command): void {
     .option('--policy <path>', 'Output path for policy file')
     .option('--format <format>', 'Output format: json, human, or auto', 'auto')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'construction-loop policy init',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => constructionLoopPolicyInitCommand({
         strict: opts.strict as boolean | undefined,
         policyPath: opts.policy as string | undefined,
@@ -82,10 +82,10 @@ export function registerConstructionLoopCommands(program: Command): void {
     .option('--policy <path>', 'Path to policy file')
     .option('--format <format>', 'Output format: json, human, or auto', 'auto')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'construction-loop policy validate',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => constructionLoopPolicyValidateCommand({
         policyPath: opts.policy as string | undefined,
         format: resolveCommandFormat(opts.format, 'auto'),
@@ -101,10 +101,10 @@ export function registerConstructionLoopCommands(program: Command): void {
     .option('--dry-run', 'Preview promotions without mutating state', false)
     .option('--format <format>', 'Output format: json, human, or auto', 'auto')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'construction-loop run',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => constructionLoopRunCommand({
         policyPath: opts.policy as string | undefined,
         maxTasks: opts.maxTasks ? Number(opts.maxTasks) : undefined,
@@ -120,10 +120,10 @@ export function registerConstructionLoopCommands(program: Command): void {
     .option('--reason <text>', 'Reason for pause')
     .option('--format <format>', 'Output format: json, human, or auto', 'auto')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'construction-loop pause',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => constructionLoopPauseCommand({
         reason: opts.reason as string | undefined,
         format: resolveCommandFormat(opts.format, 'auto'),
@@ -136,10 +136,10 @@ export function registerConstructionLoopCommands(program: Command): void {
     .description('Resume the construction loop')
     .option('--format <format>', 'Output format: json, human, or auto', 'auto')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'construction-loop resume',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => constructionLoopResumeCommand({
         format: resolveCommandFormat(opts.format, 'auto'),
         cwd: opts.cwd as string | undefined,
@@ -151,10 +151,10 @@ export function registerConstructionLoopCommands(program: Command): void {
     .description('Show construction loop auto-promotion metrics')
     .option('--format <format>', 'Output format: json, human, or auto', 'auto')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'construction-loop metrics',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => constructionLoopMetricsCommand({
         format: resolveCommandFormat(opts.format, 'auto'),
         cwd: opts.cwd as string | undefined,

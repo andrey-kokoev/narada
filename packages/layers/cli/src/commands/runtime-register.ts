@@ -1,5 +1,5 @@
 import type { Command } from 'commander';
-import { directCommandAction, silentCommandContext } from '../lib/command-wrapper.js';
+import {directCommandAction, silentCommandContext, type CommanderOptionValues} from '../lib/command-wrapper.js';
 import { emitCommandResult, resolveCommandFormat } from '../lib/cli-output.js';
 import {
   runtimeInstallWindowsStartupCommand,
@@ -26,10 +26,10 @@ export function registerRuntimeCommands(program: Command): void {
     .option('--by <principal>', 'Principal requesting or recording the runtime posture')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
     .description('Plan or defer Windows Task Scheduler startup for a Site operation')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'runtime windows-startup install',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => runtimeInstallWindowsStartupCommand({
         site: opts.site as string | undefined,
         operation: opts.operation as string | undefined,
@@ -48,10 +48,10 @@ export function registerRuntimeCommands(program: Command): void {
     .requiredOption('--operation <operation-id>', 'Operation ID to inspect')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
     .description('Reconcile expected Windows startup posture with deferred record and health files')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'runtime windows-startup status',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => runtimeWindowsStartupStatusCommand({
         site: opts.site as string | undefined,
         operation: opts.operation as string | undefined,

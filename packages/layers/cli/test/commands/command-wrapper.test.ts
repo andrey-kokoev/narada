@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Command } from 'commander';
-import { directCommandAction } from '../../src/lib/command-wrapper.js';
+import { directCommandAction, type CommanderOptionValues } from '../../src/lib/command-wrapper.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
 
 describe('directCommandAction commander option normalization', () => {
@@ -14,7 +14,7 @@ describe('directCommandAction commander option normalization', () => {
     evidence
       .command('inspect <task-number>')
       .option('--cwd <path>', 'Working directory', '.')
-      .action(directCommandAction<[string, Record<string, unknown>]>({
+      .action(directCommandAction<[string, CommanderOptionValues]>({
         command: 'task evidence inspect',
         emit: () => {},
         invocation: async (taskNumber, opts) => {
@@ -43,7 +43,7 @@ describe('directCommandAction commander option normalization', () => {
     task
       .command('read <task-number>')
       .option('--cwd <path>', 'Working directory', '.')
-      .action(directCommandAction<[string, Record<string, unknown>]>({
+      .action(directCommandAction<[string, CommanderOptionValues]>({
         command: 'task read',
         emit: () => {},
         invocation: async (taskNumber, opts) => {

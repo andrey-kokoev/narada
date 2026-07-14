@@ -1,6 +1,6 @@
 import type { Command } from 'commander';
 import { mutationEvidenceReconcileCommand } from './mutation-evidence.js';
-import { directCommandAction } from '../lib/command-wrapper.js';
+import {directCommandAction, type CommanderOptionValues} from '../lib/command-wrapper.js';
 import { emitCommandResult, resolveCommandFormat } from '../lib/cli-output.js';
 
 export function registerMutationEvidenceCommands(program: Command): void {
@@ -17,10 +17,10 @@ export function registerMutationEvidenceCommands(program: Command): void {
     .option('--limit <n>', 'Maximum findings to emit', '20')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'mutation-evidence reconcile',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => mutationEvidenceReconcileCommand({
         apply: Boolean(opts.apply),
         family: opts.family as string | undefined,

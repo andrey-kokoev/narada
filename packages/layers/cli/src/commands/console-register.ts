@@ -13,7 +13,7 @@ import {
   routeProjectionMatchesIdentity,
 } from '@narada2/operator-router';
 import { OPERATOR_CONSOLE_LONG_RUNNING_REQUEST_TIMEOUT_MS } from '@narada2/operator-console-contract';
-import { silentCommandContext, wrapCommand } from '../lib/command-wrapper.js';
+import {silentCommandContext, wrapCommand, type CommanderOptionValues} from '../lib/command-wrapper.js';
 import {
   emitFormatterBackedCommandResult,
   emitLongLivedCommandStartup,
@@ -46,7 +46,7 @@ export function registerConsoleCommands(program: Command): void {
     .command('approve <site-id> <outbound-id>')
     .description('Approve an outbound command')
     .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
-    .action(async (siteId: string, outboundId: string, opts: Record<string, unknown>) => {
+    .action(async (siteId: string, outboundId: string, opts: CommanderOptionValues) => {
       const result = await consoleControlCommand('approve', siteId, outboundId, {
         format: resolveCommandFormat(),
         verbose: opts.verbose as boolean | undefined,
@@ -58,7 +58,7 @@ export function registerConsoleCommands(program: Command): void {
     .command('reject <site-id> <outbound-id>')
     .description('Reject an outbound command')
     .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
-    .action(async (siteId: string, outboundId: string, opts: Record<string, unknown>) => {
+    .action(async (siteId: string, outboundId: string, opts: CommanderOptionValues) => {
       const result = await consoleControlCommand('reject', siteId, outboundId, {
         format: resolveCommandFormat(),
         verbose: opts.verbose as boolean | undefined,
@@ -70,7 +70,7 @@ export function registerConsoleCommands(program: Command): void {
     .command('retry <site-id> <work-item-id>')
     .description('Retry a work item')
     .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
-    .action(async (siteId: string, workItemId: string, opts: Record<string, unknown>) => {
+    .action(async (siteId: string, workItemId: string, opts: CommanderOptionValues) => {
       const result = await consoleControlCommand('retry', siteId, workItemId, {
         format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
         verbose: opts.verbose as boolean | undefined,
@@ -83,7 +83,7 @@ export function registerConsoleCommands(program: Command): void {
     .description('Start the local Operator Workspace host for browser UI')
     .option('--host <host>', 'Host to bind to', '127.0.0.1')
     .option('--port <port>', `Stable Operator Router port (0 for diagnostic ephemeral mode)`, String(DEFAULT_OPERATOR_CONSOLE_PORT))
-    .action(async (opts: Record<string, unknown>) => {
+    .action(async (opts: CommanderOptionValues) => {
       // Long-lived process surface: keep direct lifecycle output and SIGINT handling.
       const host = (opts.host as string) ?? '127.0.0.1';
       const port = opts.port ? parseInt(String(opts.port), 10) : 0;

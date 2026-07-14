@@ -6,7 +6,7 @@ import {
   taskReconcileRecordCommand,
   taskReconcileRepairCommand,
 } from './task-reconcile.js';
-import { directCommandAction } from '../lib/command-wrapper.js';
+import {directCommandAction, type CommanderOptionValues} from '../lib/command-wrapper.js';
 import { emitCommandResult, resolveCommandFormat } from '../lib/cli-output.js';
 
 export function registerTaskReconcileCommands(taskCmd: Command): void {
@@ -21,10 +21,10 @@ export function registerTaskReconcileCommands(taskCmd: Command): void {
     .option('--agent <id>', 'Agent whose current task should be reconciled')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'task reconcile claim',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => taskReconcileClaimCommand({
         taskNumber: opts.task as string | undefined,
         agent: opts.agent as string | undefined,
@@ -41,10 +41,10 @@ export function registerTaskReconcileCommands(taskCmd: Command): void {
     .option('--range <start-end>', 'Restrict guide to task number range')
     .option('--by <id>', 'Operator or agent who would record and repair findings', 'operator')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'task reconcile guide',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => taskReconcileGuideCommand({
         taskNumber: opts.task as string | undefined,
         by: opts.by as string | undefined,
@@ -60,10 +60,10 @@ export function registerTaskReconcileCommands(taskCmd: Command): void {
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--range <start-end>', 'Restrict inspection to task number range')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'task reconcile inspect',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => taskReconcileInspectCommand({
         cwd: opts.cwd as string | undefined,
         range: opts.range as string | undefined,
@@ -78,10 +78,10 @@ export function registerTaskReconcileCommands(taskCmd: Command): void {
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--range <start-end>', 'Restrict recording to task number range')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'task reconcile record',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => taskReconcileRecordCommand({
         by: opts.by as string | undefined,
         cwd: opts.cwd as string | undefined,
@@ -97,10 +97,10 @@ export function registerTaskReconcileCommands(taskCmd: Command): void {
     .requiredOption('--by <id>', 'Operator or agent performing repair')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'task reconcile repair',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => taskReconcileRepairCommand({
         finding: opts.finding as string | undefined,
         by: opts.by as string | undefined,

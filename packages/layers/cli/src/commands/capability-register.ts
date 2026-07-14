@@ -13,7 +13,7 @@ import {
   capabilityRequestCommand,
   capabilityRevokeCommand,
 } from './capability.js';
-import { directCommandAction, silentCommandContext } from '../lib/command-wrapper.js';
+import {directCommandAction, silentCommandContext, type CommanderOptionValues} from '../lib/command-wrapper.js';
 import { emitCommandResult, resolveCommandFormat } from '../lib/cli-output.js';
 
 export function registerCapabilityCommands(program: Command): void {
@@ -39,10 +39,10 @@ export function registerCapabilityCommands(program: Command): void {
     .requiredOption('--by <id>', 'Principal announcing the capability')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'capability announce',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => capabilityAnnouncementCreateCommand({
         id: opts.id as string | undefined,
         summary: opts.summary as string | undefined,
@@ -70,10 +70,10 @@ export function registerCapabilityCommands(program: Command): void {
     .option('--limit <n>', 'Maximum announcements', '20')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'capability announcements',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => capabilityAnnouncementListCommand({
         ownerSite: opts.ownerSite as string | undefined,
         status: opts.status as string | undefined,
@@ -92,10 +92,10 @@ export function registerCapabilityCommands(program: Command): void {
     .description('Show one typed capability announcement')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[string, Record<string, unknown>]>({
+    .action(directCommandAction<[string, CommanderOptionValues]>({
       command: 'capability announcement show',
       emit: emitCommandResult,
-      format: (_id: string, opts: Record<string, unknown>) => opts.format,
+      format: (_id: string, opts: CommanderOptionValues) => opts.format,
       invocation: (id, opts) => capabilityAnnouncementShowCommand({
         id,
         cwd: opts.cwd as string | undefined,
@@ -110,10 +110,10 @@ export function registerCapabilityCommands(program: Command): void {
     .option('--target-locus <locus>', 'Target locus routing hint')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[string, Record<string, unknown>]>({
+    .action(directCommandAction<[string, CommanderOptionValues]>({
       command: 'capability announcement publish',
       emit: emitCommandResult,
-      format: (_id: string, opts: Record<string, unknown>) => opts.format,
+      format: (_id: string, opts: CommanderOptionValues) => opts.format,
       invocation: (id, opts) => capabilityAnnouncementPublishCommand({
         id,
         by: opts.by as string | undefined,
@@ -131,10 +131,10 @@ export function registerCapabilityCommands(program: Command): void {
     .option('--reason <text>', 'Supersession reason')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[string, Record<string, unknown>]>({
+    .action(directCommandAction<[string, CommanderOptionValues]>({
       command: 'capability announcement supersede',
       emit: emitCommandResult,
-      format: (_id: string, opts: Record<string, unknown>) => opts.format,
+      format: (_id: string, opts: CommanderOptionValues) => opts.format,
       invocation: (id, opts) => capabilityAnnouncementSupersedeCommand({
         id,
         replacementId: opts.replacement as string | undefined,
@@ -160,10 +160,10 @@ export function registerCapabilityCommands(program: Command): void {
     .option('--by <id>', 'Principal recording the preflight')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'capability credential-preflight',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => capabilityCredentialPreflightCommand({
         site: opts.site as string | undefined,
         principal: opts.principal as string | undefined,
@@ -194,10 +194,10 @@ export function registerCapabilityCommands(program: Command): void {
     .option('--redaction <csv>', 'Additional redaction categories')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'capability request',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => capabilityRequestCommand({
         site: opts.site as string | undefined,
         principal: opts.principal as string | undefined,
@@ -232,10 +232,10 @@ export function registerCapabilityCommands(program: Command): void {
     .requiredOption('--by <id>', 'Principal recording the binding')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'capability bind-credential',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => capabilityBindCredentialCommand({
         site: opts.site as string | undefined,
         principal: opts.principal as string | undefined,
@@ -272,10 +272,10 @@ export function registerCapabilityCommands(program: Command): void {
     .requiredOption('--by <id>', 'Principal granting the capability')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'capability grant',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => capabilityGrantCommand({
         site: opts.site as string | undefined,
         principal: opts.principal as string | undefined,
@@ -304,10 +304,10 @@ export function registerCapabilityCommands(program: Command): void {
     .option('--limit <n>', 'Maximum grants', '20')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'capability list',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => capabilityListCommand({
         site: opts.site as string | undefined,
         principal: opts.principal as string | undefined,
@@ -325,10 +325,10 @@ export function registerCapabilityCommands(program: Command): void {
     .description('Explain whether a capability grant is currently admissible')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[string, Record<string, unknown>]>({
+    .action(directCommandAction<[string, CommanderOptionValues]>({
       command: 'capability explain',
       emit: emitCommandResult,
-      format: (_grantId: string, opts: Record<string, unknown>) => opts.format,
+      format: (_grantId: string, opts: CommanderOptionValues) => opts.format,
       invocation: (grantId, opts) => capabilityExplainCommand({
         grantId,
         cwd: opts.cwd as string | undefined,
@@ -343,10 +343,10 @@ export function registerCapabilityCommands(program: Command): void {
     .option('--reason <text>', 'Revocation reason')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[string, Record<string, unknown>]>({
+    .action(directCommandAction<[string, CommanderOptionValues]>({
       command: 'capability revoke',
       emit: emitCommandResult,
-      format: (_grantId: string, opts: Record<string, unknown>) => opts.format,
+      format: (_grantId: string, opts: CommanderOptionValues) => opts.format,
       invocation: (grantId, opts) => capabilityRevokeCommand({
         grantId,
         by: opts.by as string | undefined,

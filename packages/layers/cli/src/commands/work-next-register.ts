@@ -1,5 +1,5 @@
 import type { Command } from 'commander';
-import { directCommandAction } from '../lib/command-wrapper.js';
+import {directCommandAction, type CommanderOptionValues} from '../lib/command-wrapper.js';
 import { emitCommandResult, resolveCommandFormat } from '../lib/cli-output.js';
 import { workAvailableCommand, workNextCommand } from './work-next.js';
 
@@ -10,10 +10,10 @@ export function registerWorkNextCommands(program: Command): void {
     .requiredOption('--agent <id>', 'Agent ID')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'work-available',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => workAvailableCommand({
         agent: opts.agent as string | undefined,
         cwd: opts.cwd as string | undefined,
@@ -30,10 +30,10 @@ export function registerWorkNextCommands(program: Command): void {
     .option('--exec-task', 'With --start-task, mark dispatch start as executed', false)
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'work-next',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => workNextCommand({
         agent: opts.agent as string | undefined,
         cwd: opts.cwd as string | undefined,

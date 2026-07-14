@@ -3,7 +3,7 @@ import { verifyExplainCommand } from './verify-explain.js';
 import { verifyRunCommand } from './verify-run.js';
 import { verifyStatusCommand } from './verify-status.js';
 import { verifySuggestCommand } from './verify-suggest.js';
-import { directCommandAction, silentCommandContext } from '../lib/command-wrapper.js';
+import {directCommandAction, silentCommandContext, type CommanderOptionValues} from '../lib/command-wrapper.js';
 import { emitCommandResult } from '../lib/cli-output.js';
 
 export function registerVerifyCommands(program: Command): void {
@@ -15,7 +15,7 @@ export function registerVerifyCommands(program: Command): void {
     .command('status')
     .description('Summarize recent verification runs and outliers')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'verify status',
       emit: emitCommandResult,
       invocation: (opts) => verifyStatusCommand({
@@ -29,7 +29,7 @@ export function registerVerifyCommands(program: Command): void {
     .description('Suggest the smallest verification command for changed files')
     .requiredOption('--files <paths>', 'Comma-separated changed source files')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'verify suggest',
       emit: emitCommandResult,
       invocation: (opts) => verifySuggestCommand({
@@ -44,7 +44,7 @@ export function registerVerifyCommands(program: Command): void {
     .description('Explain verification relevant to a task')
     .requiredOption('--task <number>', 'Task number')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'verify explain',
       emit: emitCommandResult,
       invocation: (opts) => verifyExplainCommand({
@@ -62,7 +62,7 @@ export function registerVerifyCommands(program: Command): void {
     .option('--allow-multi-file', 'Allow multi-file focused tests', false)
     .option('--allow-package', 'Allow package-level test commands', false)
     .option('--allow-full-suite', 'Allow full-suite commands', false)
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'verify run',
       emit: emitCommandResult,
       invocation: (opts) => verifyRunCommand({

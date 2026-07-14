@@ -4,7 +4,7 @@ import {
   publicationListCommand,
   publicationPrepareCommand,
 } from './publication.js';
-import { directCommandAction } from '../lib/command-wrapper.js';
+import {directCommandAction, type CommanderOptionValues} from '../lib/command-wrapper.js';
 import { emitCommandResult, resolveCommandFormat } from '../lib/cli-output.js';
 
 function collectValues(value: string, previous: string[]): string[] {
@@ -29,10 +29,10 @@ export function registerPublicationCommands(program: Command): void {
     .option('--base-ref <ref>', 'Base ref for bundle range')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'publication prepare',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => publicationPrepareCommand({
         message: opts.message as string | undefined,
         by: opts.by as string | undefined,
@@ -55,10 +55,10 @@ export function registerPublicationCommands(program: Command): void {
     .option('--failure-reason <text>', 'Failure reason when status=failed')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[string, Record<string, unknown>]>({
+    .action(directCommandAction<[string, CommanderOptionValues]>({
       command: 'publication confirm',
       emit: emitCommandResult,
-      format: (_id: string, opts: Record<string, unknown>) => opts.format,
+      format: (_id: string, opts: CommanderOptionValues) => opts.format,
       invocation: (publicationId, opts) => publicationConfirmCommand({
         publicationId,
         status: opts.status as never,
@@ -77,10 +77,10 @@ export function registerPublicationCommands(program: Command): void {
     .option('--limit <n>', 'Maximum rows', '20')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'publication list',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => publicationListCommand({
         status: opts.status as never,
         limit: opts.limit ? Number(opts.limit) : undefined,

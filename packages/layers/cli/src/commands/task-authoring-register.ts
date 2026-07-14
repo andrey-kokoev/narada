@@ -3,7 +3,7 @@ import { taskAllocateCommand } from './task-allocate.js';
 import { taskCreateCommand } from './task-create.js';
 import { taskAmendCommand, taskMakeActionableCommand } from './task-amend.js';
 import { taskPromoteRecommendationCommand } from './task-promote-recommendation.js';
-import { directCommandAction } from '../lib/command-wrapper.js';
+import {directCommandAction, type CommanderOptionValues} from '../lib/command-wrapper.js';
 import { emitCommandResult, resolveCommandFormat } from '../lib/cli-output.js';
 
 export function registerTaskAuthoringCommands(taskCmd: Command): void {
@@ -14,10 +14,10 @@ export function registerTaskAuthoringCommands(taskCmd: Command): void {
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
     .option('--count <n>', 'Allocate N sequential task numbers atomically', (value) => Number(value), 1)
     .option('--dry-run', 'Preview next number without mutating registry', false)
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'task allocate',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => taskAllocateCommand({
         cwd: opts.cwd as string | undefined,
         format: opts.format as 'json' | 'human' | 'auto',
@@ -43,10 +43,10 @@ export function registerTaskAuthoringCommands(taskCmd: Command): void {
     .option('--dry-run', 'Preview task without creating files', false)
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'task create',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => {
         const cwd = opts.cwd as string | undefined;
         return taskCreateCommand({
@@ -85,10 +85,10 @@ export function registerTaskAuthoringCommands(taskCmd: Command): void {
     .option('--from-file <path>', 'Replace entire body from file')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-    .action(directCommandAction<[string, Record<string, unknown>]>({
+    .action(directCommandAction<[string, CommanderOptionValues]>({
       command: 'task amend',
       emit: emitCommandResult,
-      format: (_taskNumber: string, opts: Record<string, unknown>) => opts.format,
+      format: (_taskNumber: string, opts: CommanderOptionValues) => opts.format,
       invocation: (taskNumber, opts) => taskAmendCommand({
         taskNumber,
         by: opts.by as string,
@@ -114,10 +114,10 @@ export function registerTaskAuthoringCommands(taskCmd: Command): void {
     .requiredOption('--required-work <text>', 'Concrete executable Required Work; use shell-safe quoting or a task amend --from-file path for larger changes')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-    .action(directCommandAction<[string, Record<string, unknown>]>({
+    .action(directCommandAction<[string, CommanderOptionValues]>({
       command: 'task make-actionable',
       emit: emitCommandResult,
-      format: (_taskNumber: string, opts: Record<string, unknown>) => opts.format,
+      format: (_taskNumber: string, opts: CommanderOptionValues) => opts.format,
       invocation: (taskNumber, opts) => taskMakeActionableCommand({
         taskNumber,
         by: opts.by as string,
@@ -138,10 +138,10 @@ export function registerTaskAuthoringCommands(taskCmd: Command): void {
     .option('--dry-run', 'Validate only; do not mutate', false)
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'task promote-recommendation',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => taskPromoteRecommendationCommand({
         cwd: opts.cwd as string | undefined,
         format: opts.format as 'json' | 'human' | 'auto',

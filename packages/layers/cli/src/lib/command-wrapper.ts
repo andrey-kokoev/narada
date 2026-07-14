@@ -64,7 +64,9 @@ export function silentCommandContext(options: {
   };
 }
 
-export type CommandHandler<T extends Record<string, unknown>> = (
+export type CommanderOptionValues = Record<string, unknown>;
+
+export type CommandHandler<T extends CommanderOptionValues> = (
   options: T,
   context: CommandContext,
 ) => Promise<ExitCode | { exitCode: ExitCode; result: unknown }>;
@@ -191,8 +193,8 @@ function normalizeCommanderActionArgs<TArgs extends unknown[]>(args: TArgs): TAr
     typeof (last as { opts?: unknown }).opts === 'function'
   ) {
     const command = last as {
-      opts: () => Record<string, unknown>;
-      optsWithGlobals?: () => Record<string, unknown>;
+      opts: () => CommanderOptionValues;
+      optsWithGlobals?: () => CommanderOptionValues;
     };
     const parsedOptions = withProcessArgvCwd(command.optsWithGlobals?.() ?? command.opts());
     const maybeOptions = args[args.length - 2];
@@ -215,7 +217,7 @@ function normalizeCommanderActionArgs<TArgs extends unknown[]>(args: TArgs): TAr
   return args;
 }
 
-function withProcessArgvCwd(options: Record<string, unknown>): Record<string, unknown> {
+function withProcessArgvCwd(options: CommanderOptionValues): CommanderOptionValues {
   if (typeof options.cwd === 'string' && options.cwd !== '.') return options;
   const cwd = cwdFromArgv(process.argv);
   return cwd ? { ...options, cwd } : options;

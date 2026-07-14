@@ -14,7 +14,7 @@ import {
   taskWorkNextCommand,
 } from './task-next.js';
 import { taskWorkboardCommand } from './task-workboard.js';
-import { directCommandAction, runDirectCommand } from '../lib/command-wrapper.js';
+import {directCommandAction, runDirectCommand, type CommanderOptionValues} from '../lib/command-wrapper.js';
 import { emitCommandResult, resolveCommandFormat } from '../lib/cli-output.js';
 
 function outputFormat(format?: unknown): 'json' | 'human' | 'auto' {
@@ -42,10 +42,10 @@ export function registerTaskOperationsCommands(taskCmd: Command): void {
     .description('Bounded task authority, lifecycle, allocation, and dirty-state commissioning preflight')
     .option('--format <fmt>', 'Output format: json or human', 'human')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'task preflight',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => taskPreflightCommand({
         cwd: opts.cwd as string | undefined,
         format: outputFormat(opts.format),
@@ -64,10 +64,10 @@ export function registerTaskOperationsCommands(taskCmd: Command): void {
     .option('--format <fmt>', 'Output format: json or human')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('-v, --verbose', 'Show accepted-learning guidance and expanded rationale', false)
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'task recommend',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => taskRecommendCommand({
         taskNumber: opts.task as string | undefined,
         agent: opts.agent as string | undefined,
@@ -86,7 +86,7 @@ export function registerTaskOperationsCommands(taskCmd: Command): void {
     .description('Derive a corrective task from a review finding')
     .requiredOption('--review <review-id>', 'Review ID containing the finding')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-    .action(async (findingId: string, opts: Record<string, unknown>) => {
+    .action(async (findingId: string, opts: CommanderOptionValues) => {
       await runDirectCommand({
         command: 'task derive-from-finding',
         emit: emitCommandResult,
@@ -104,7 +104,7 @@ export function registerTaskOperationsCommands(taskCmd: Command): void {
     .description('Lint task files for structural issues (pure tool)')
     .option('--chapter <range>', 'Lint only tasks in a chapter range (e.g. 100-110)')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-    .action(async (opts: Record<string, unknown>) => {
+    .action(async (opts: CommanderOptionValues) => {
       await runDirectCommand({
         command: 'task lint',
         emit: emitCommandResult,
@@ -123,7 +123,7 @@ export function registerTaskOperationsCommands(taskCmd: Command): void {
     .option('--limit <n>', 'Maximum tasks to return (default: 20)', (value) => Number.parseInt(value, 10))
     .option('--all', 'Explicitly admit full task-list output')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-    .action(async (opts: Record<string, unknown>) => {
+    .action(async (opts: CommanderOptionValues) => {
       await runDirectCommand({
         command: 'task list',
         emit: emitCommandResult,
@@ -142,7 +142,7 @@ export function registerTaskOperationsCommands(taskCmd: Command): void {
     .description('Search task files by content (front matter + body)')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(async (query: string, opts: Record<string, unknown>) => {
+    .action(async (query: string, opts: CommanderOptionValues) => {
       await runDirectCommand({
         command: 'task search',
         emit: emitCommandResult,
@@ -161,7 +161,7 @@ export function registerTaskOperationsCommands(taskCmd: Command): void {
     .option('--format <fmt>', 'Output format: json or human', 'human')
     .option('--verbose', 'Show full sections (human mode only)', false)
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-    .action(async (taskNumber: string, opts: Record<string, unknown>) => {
+    .action(async (taskNumber: string, opts: CommanderOptionValues) => {
       await runDirectCommand({
         command: 'task read',
         emit: emitCommandResult,
@@ -181,7 +181,7 @@ export function registerTaskOperationsCommands(taskCmd: Command): void {
     .option('--format <fmt>', 'Output format: json or human', 'human')
     .option('--verbose', 'Show full sections (human mode only)', false)
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-    .action(async (taskNumber: string, opts: Record<string, unknown>) => {
+    .action(async (taskNumber: string, opts: CommanderOptionValues) => {
       await runDirectCommand({
         command: 'task show',
         emit: emitCommandResult,
@@ -206,7 +206,7 @@ export function registerTaskOperationsCommands(taskCmd: Command): void {
     .option('--view', 'Create HTML render artifacts and open browser', false)
     .option('--open', 'Open browser after creating artifacts (default true with --view)', true)
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-    .action(async (opts: Record<string, unknown>) => {
+    .action(async (opts: CommanderOptionValues) => {
       await runDirectCommand({
         command: 'task graph',
         emit: emitCommandResult,
@@ -235,7 +235,7 @@ export function registerTaskOperationsCommands(taskCmd: Command): void {
     .option('--by <principal>', 'Principal generating the handoff packet')
     .option('--target-locus <locus>', 'Message routing authority target locus for --route-inbox; defaults to local_site')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-    .action(async (taskNumber: string, opts: Record<string, unknown>) => {
+    .action(async (taskNumber: string, opts: CommanderOptionValues) => {
       await runDirectCommand({
         command: 'task handoff',
         emit: emitCommandResult,
@@ -259,10 +259,10 @@ export function registerTaskOperationsCommands(taskCmd: Command): void {
     .requiredOption('--agent <id>', 'Agent ID')
     .option('--format <fmt>', 'Output format: json or human', 'human')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'task peek-next',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => taskPeekNextCommand({
         agent: opts.agent as string,
         format: outputFormat(opts.format),
@@ -276,10 +276,10 @@ export function registerTaskOperationsCommands(taskCmd: Command): void {
     .requiredOption('--agent <id>', 'Agent ID')
     .option('--format <fmt>', 'Output format: json or human', 'human')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'task pull-next',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => taskPullNextCommand({
         agent: opts.agent as string,
         format: outputFormat(opts.format),
@@ -296,10 +296,10 @@ export function registerTaskOperationsCommands(taskCmd: Command): void {
     .option('--include-guidance', 'Include stable guidance arrays in compact output', false)
     .option('--format <fmt>', 'Output format: json or human', 'human')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'task workboard',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => taskWorkboardCommand({
         cwd: opts.cwd as string | undefined,
         limit: opts.limit ? Number(opts.limit) : undefined,
@@ -316,10 +316,10 @@ export function registerTaskOperationsCommands(taskCmd: Command): void {
     .requiredOption('--agent <id>', 'Agent ID')
     .option('--format <fmt>', 'Output format: json or human', 'human')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'task work-next',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => taskWorkNextCommand({
         agent: opts.agent as string,
         format: outputFormat(opts.format),

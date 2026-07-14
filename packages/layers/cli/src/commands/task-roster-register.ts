@@ -7,7 +7,7 @@ import {
   taskRosterReviewCommand,
   taskRosterShowCommand,
 } from './task-roster.js';
-import { directCommandAction } from '../lib/command-wrapper.js';
+import {directCommandAction, type CommanderOptionValues} from '../lib/command-wrapper.js';
 import { emitCommandResult, resolveCommandFormat } from '../lib/cli-output.js';
 
 export function registerTaskRosterCommands(taskCmd: Command): void {
@@ -20,7 +20,7 @@ export function registerTaskRosterCommands(taskCmd: Command): void {
     .description('Observe current agent roster projection')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('-v, --verbose', 'Show accepted-learning guidance and expanded rationale', false)
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'task roster show',
       emit: emitCommandResult,
       invocation: (opts) => taskRosterShowCommand({
@@ -36,7 +36,7 @@ export function registerTaskRosterCommands(taskCmd: Command): void {
     .option('--role <role>', 'Agent role', 'implementer')
     .option('--capability <name...>', 'Capability to declare for this agent; repeat or pass multiple values')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-    .action(directCommandAction<[string, Record<string, unknown>]>({
+    .action(directCommandAction<[string, CommanderOptionValues]>({
       command: 'task roster add',
       emit: emitCommandResult,
       invocation: (agentId, opts) => taskRosterAddCommand({
@@ -55,7 +55,7 @@ export function registerTaskRosterCommands(taskCmd: Command): void {
     .option('--no-claim', 'Skip claiming the task (exceptional: only for planning)')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('-v, --verbose', 'Show accepted-learning guidance and expanded rationale', false)
-    .action(directCommandAction<[string, Record<string, unknown>]>({
+    .action(directCommandAction<[string, CommanderOptionValues]>({
       command: 'task roster assign',
       emit: emitCommandResult,
       invocation: (taskNumber, opts) => taskRosterAssignCommand({
@@ -74,7 +74,7 @@ export function registerTaskRosterCommands(taskCmd: Command): void {
     .requiredOption('--agent <id>', 'Agent ID from roster')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('-v, --verbose', 'Show accepted-learning guidance and expanded rationale', false)
-    .action(directCommandAction<[string, Record<string, unknown>]>({
+    .action(directCommandAction<[string, CommanderOptionValues]>({
       command: 'task roster review',
       emit: emitCommandResult,
       invocation: (taskNumber, opts) => taskRosterReviewCommand({
@@ -94,7 +94,7 @@ export function registerTaskRosterCommands(taskCmd: Command): void {
     .option('--allow-incomplete', 'Record roster availability even when task evidence is missing', false)
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('-v, --verbose', 'Show accepted-learning guidance and expanded rationale', false)
-    .action(directCommandAction<[string, Record<string, unknown>]>({
+    .action(directCommandAction<[string, CommanderOptionValues]>({
       command: 'task roster done',
       emit: emitCommandResult,
       invocation: (taskNumber, opts) => taskRosterDoneCommand({
@@ -114,7 +114,7 @@ export function registerTaskRosterCommands(taskCmd: Command): void {
     .requiredOption('--agent <id>', 'Agent ID from roster')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('-v, --verbose', 'Show accepted-learning guidance and expanded rationale', false)
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'task roster idle',
       emit: emitCommandResult,
       invocation: (opts) => taskRosterIdleCommand({

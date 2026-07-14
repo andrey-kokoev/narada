@@ -1,5 +1,5 @@
 import type { Command } from 'commander';
-import { directCommandAction } from '../lib/command-wrapper.js';
+import {directCommandAction, type CommanderOptionValues} from '../lib/command-wrapper.js';
 import { emitCommandResult, resolveCommandFormat } from '../lib/cli-output.js';
 import {
   qualificationEffectivenessCheckCommand,
@@ -31,10 +31,10 @@ export function registerQualificationCommands(program: Command): void {
     .option('--effectiveness-interval <count>', 'Require effectiveness check every N completed tasks')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'qualification record-add',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => qualificationRecordAddCommand({
         agent: opts.agent as string | undefined,
         role: opts.role as string | undefined,
@@ -62,10 +62,10 @@ export function registerQualificationCommands(program: Command): void {
     .option('--work-class <class>', 'Governed work class', 'task_construction')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'qualification status',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => qualificationStatusCommand({
         agent: opts.agent as string | undefined,
         role: opts.role as string | undefined,
@@ -83,10 +83,10 @@ export function registerQualificationCommands(program: Command): void {
     .option('--work-class <class>', 'Governed work class', 'task_construction')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'qualification effectiveness-check',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => qualificationEffectivenessCheckCommand({
         agent: opts.agent as string | undefined,
         role: opts.role as string | undefined,
@@ -108,10 +108,10 @@ export function registerQualificationCommands(program: Command): void {
     .option('--escalation-command <cmd>', 'Escalation/CAPA command when result fails')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'qualification effectiveness-record',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => qualificationEffectivenessRecordCommand({
         agent: opts.agent as string | undefined,
         role: opts.role as string | undefined,

@@ -19,7 +19,7 @@ import {
   inboxTriageCommand,
   inboxWorkNextCommand,
 } from './inbox.js';
-import { directCommandAction } from '../lib/command-wrapper.js';
+import {directCommandAction, type CommanderOptionValues} from '../lib/command-wrapper.js';
 import { emitCommandResult, resolveCommandFormat } from '../lib/cli-output.js';
 
 function collectOption(value: string, previous: string[]): string[] {
@@ -37,10 +37,10 @@ export function registerInboxCommands(program: Command): void {
     .description('Check Canonical Inbox delivery coordinates and local readiness')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'inbox doctor',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => inboxDoctorCommand({
         cwd: opts.cwd as string | undefined,
         format: resolveCommandFormat(opts.format, 'auto'),
@@ -64,10 +64,10 @@ export function registerInboxCommands(program: Command): void {
     .option('--output <mode>', 'Output detail: compact|full|debug', 'compact')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'inbox submit',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => inboxSubmitCommand({
         sourceKind: opts.sourceKind as string | undefined,
         sourceRef: opts.sourceRef as string | undefined,
@@ -103,10 +103,10 @@ export function registerInboxCommands(program: Command): void {
     .option('--output <mode>', 'Output detail: compact|full|debug', 'compact')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'inbox submit-observation',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => inboxSubmitObservationCommand({
         sourceKind: opts.sourceKind as string | undefined,
         sourceRef: opts.sourceRef as string | undefined,
@@ -134,10 +134,10 @@ export function registerInboxCommands(program: Command): void {
     .option('--limit <n>', 'Maximum envelopes', '200')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'inbox export',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => inboxExportCommand({
         status: opts.status as string | undefined,
         kind: opts.kind as string | undefined,
@@ -159,10 +159,10 @@ export function registerInboxCommands(program: Command): void {
     .option('--message <text>', 'Commit message', 'Publish inbox envelope artifacts')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'inbox publish',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => inboxPublishCommand({
         status: opts.status as string | undefined,
         kind: opts.kind as string | undefined,
@@ -181,10 +181,10 @@ export function registerInboxCommands(program: Command): void {
     .option('--from-dir <path>', 'Input directory', '.ai/inbox-envelopes')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'inbox import',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => inboxImportCommand({
         fromDir: opts.fromDir as string | undefined,
         cwd: opts.cwd as string | undefined,
@@ -201,10 +201,10 @@ export function registerInboxCommands(program: Command): void {
     .option('--authority-level <level>', 'Default authority level for admitted envelopes', 'user_statement')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'inbox ingest-files',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => inboxIngestFilesCommand({
         fromDir: opts.from as string | undefined,
         admit: opts.admit as boolean | undefined,
@@ -223,10 +223,10 @@ export function registerInboxCommands(program: Command): void {
     .option('--limit <n>', 'Maximum envelopes', '20')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'inbox list',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => inboxListCommand({
         status: opts.status as string | undefined,
         kind: opts.kind as string | undefined,
@@ -244,10 +244,10 @@ export function registerInboxCommands(program: Command): void {
     .option('--limit <n>', 'Maximum envelopes including alternatives', '5')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'inbox next',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => inboxNextCommand({
         status: opts.status as string | undefined,
         kind: opts.kind as string | undefined,
@@ -267,10 +267,10 @@ export function registerInboxCommands(program: Command): void {
     .option('--by <principal>', 'Principal claiming the selected envelope')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'inbox work-next',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => inboxWorkNextCommand({
         status: opts.status as string | undefined,
         kind: opts.kind as string | undefined,
@@ -288,10 +288,10 @@ export function registerInboxCommands(program: Command): void {
     .requiredOption('--by <principal>', 'Principal claiming the envelope')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[string, Record<string, unknown>]>({
+    .action(directCommandAction<[string, CommanderOptionValues]>({
       command: 'inbox claim',
       emit: emitCommandResult,
-      format: (_envelopeId: string, opts: Record<string, unknown>) => opts.format,
+      format: (_envelopeId: string, opts: CommanderOptionValues) => opts.format,
       invocation: (envelopeId, opts) => inboxClaimCommand({
         envelopeId,
         by: opts.by as string | undefined,
@@ -306,10 +306,10 @@ export function registerInboxCommands(program: Command): void {
     .requiredOption('--by <principal>', 'Principal releasing the envelope')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[string, Record<string, unknown>]>({
+    .action(directCommandAction<[string, CommanderOptionValues]>({
       command: 'inbox release',
       emit: emitCommandResult,
-      format: (_envelopeId: string, opts: Record<string, unknown>) => opts.format,
+      format: (_envelopeId: string, opts: CommanderOptionValues) => opts.format,
       invocation: (envelopeId, opts) => inboxReleaseCommand({
         envelopeId,
         by: opts.by as string | undefined,
@@ -323,10 +323,10 @@ export function registerInboxCommands(program: Command): void {
     .description('Show one Canonical Inbox envelope')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[string, Record<string, unknown>]>({
+    .action(directCommandAction<[string, CommanderOptionValues]>({
       command: 'inbox show',
       emit: emitCommandResult,
-      format: (_envelopeId: string, opts: Record<string, unknown>) => opts.format,
+      format: (_envelopeId: string, opts: CommanderOptionValues) => opts.format,
       invocation: (envelopeId, opts) => inboxShowCommand({
         envelopeId,
         cwd: opts.cwd as string | undefined,
@@ -346,10 +346,10 @@ export function registerInboxCommands(program: Command): void {
     .option('--criteria <text>', 'Task acceptance criterion override (repeatable)', collectValues, [])
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[string, Record<string, unknown>]>({
+    .action(directCommandAction<[string, CommanderOptionValues]>({
       command: 'inbox promote',
       emit: emitCommandResult,
-      format: (_envelopeId: string, opts: Record<string, unknown>) => opts.format,
+      format: (_envelopeId: string, opts: CommanderOptionValues) => opts.format,
       invocation: (envelopeId, opts) => inboxPromoteCommand({
         envelopeId,
         targetKind: opts.targetKind as string | undefined,
@@ -375,10 +375,10 @@ export function registerInboxCommands(program: Command): void {
     .option('--criteria <text>', 'Task acceptance criterion override (repeatable)', collectValues, [])
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[string, Record<string, unknown>]>({
+    .action(directCommandAction<[string, CommanderOptionValues]>({
       command: 'inbox task',
       emit: emitCommandResult,
-      format: (_envelopeId: string, opts: Record<string, unknown>) => opts.format,
+      format: (_envelopeId: string, opts: CommanderOptionValues) => opts.format,
       invocation: (envelopeId, opts) => inboxTaskCommand({
         envelopeId,
         by: opts.by as string | undefined,
@@ -402,10 +402,10 @@ export function registerInboxCommands(program: Command): void {
     .option('--criteria <text>', 'Task acceptance criterion override (repeatable)', collectValues, [])
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[string, Record<string, unknown>]>({
+    .action(directCommandAction<[string, CommanderOptionValues]>({
       command: 'inbox architect-process',
       emit: emitCommandResult,
-      format: (_envelopeId: string, opts: Record<string, unknown>) => opts.format,
+      format: (_envelopeId: string, opts: CommanderOptionValues) => opts.format,
       invocation: (envelopeId, opts) => inboxArchitectProcessCommand({
         envelopeId,
         by: opts.by as string | undefined,
@@ -430,10 +430,10 @@ export function registerInboxCommands(program: Command): void {
     .option('--criteria <text>', 'Task acceptance criterion override (repeatable)', collectValues, [])
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[string, Record<string, unknown>]>({
+    .action(directCommandAction<[string, CommanderOptionValues]>({
       command: 'inbox triage',
       emit: emitCommandResult,
-      format: (_envelopeId: string, opts: Record<string, unknown>) => opts.format,
+      format: (_envelopeId: string, opts: CommanderOptionValues) => opts.format,
       invocation: (envelopeId, opts) => inboxTriageCommand({
         envelopeId,
         action: opts.action as string | undefined,
@@ -455,10 +455,10 @@ export function registerInboxCommands(program: Command): void {
     .requiredOption('--by <principal>', 'Principal recording pending crossing')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[string, Record<string, unknown>]>({
+    .action(directCommandAction<[string, CommanderOptionValues]>({
       command: 'inbox pending',
       emit: emitCommandResult,
-      format: (_envelopeId: string, opts: Record<string, unknown>) => opts.format,
+      format: (_envelopeId: string, opts: CommanderOptionValues) => opts.format,
       invocation: (envelopeId, opts) => inboxPendingCommand({
         envelopeId,
         to: opts.to as string | undefined,

@@ -4,7 +4,7 @@ import {
   testRunInspectCommand,
   testRunListCommand,
 } from './test-run.js';
-import { directCommandAction } from '../lib/command-wrapper.js';
+import {directCommandAction, type CommanderOptionValues} from '../lib/command-wrapper.js';
 import { emitCommandResult } from '../lib/cli-output.js';
 
 export function registerTestRunCommands(program: Command): void {
@@ -23,7 +23,7 @@ export function registerTestRunCommands(program: Command): void {
     .option('--requester <identity>', 'Requester identity', 'operator')
     .option('--rationale <text>', 'Why this run is being requested')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'test-run run',
       emit: emitCommandResult,
       invocation: (opts) => testRunCommand({
@@ -44,7 +44,7 @@ export function registerTestRunCommands(program: Command): void {
     .description('Inspect a test run result by ID')
     .requiredOption('--run-id <id>', 'Run ID to inspect')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'test-run inspect',
       emit: emitCommandResult,
       invocation: (opts) => testRunInspectCommand({
@@ -60,7 +60,7 @@ export function registerTestRunCommands(program: Command): void {
     .option('--task <number>', 'Filter to a specific task number')
     .option('--limit <n>', 'Maximum number of runs to show', '20')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'test-run list',
       emit: emitCommandResult,
       invocation: (opts) => testRunListCommand({

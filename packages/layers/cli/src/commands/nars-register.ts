@@ -2,7 +2,7 @@ import type { Command } from 'commander';
 import {
   operatorSurfaceKindsForProjectionCapability,
 } from '@narada2/carrier-runtime-contract/carrier-runtime-selection';
-import { directCommandAction, silentCommandContext } from '../lib/command-wrapper.js';
+import {directCommandAction, silentCommandContext, type CommanderOptionValues} from '../lib/command-wrapper.js';
 import { emitCommandResult, resolveCommandFormat } from '../lib/cli-output.js';
 import { narsAttachCommandCommand, narsAuthorityTransitionExecuteCommand, narsAuthorityTransitionPlanCommand, narsSessionsCommand } from './nars.js';
 import { narsProjectionBridgeRunCommand, narsProjectionBridgeStartCommand, narsProjectionRegisterCommand } from './nars-projection.js';
@@ -23,10 +23,10 @@ export function registerNarsCommands(program: Command): void {
     .option('--health-timeout-ms <ms>', 'Per-session health probe timeout', '500')
     .option('--limit <n>', 'Maximum sessions to print', '20')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'nars sessions',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => narsSessionsCommand({
         siteRoot: opts.siteRoot as string | undefined,
         site: opts.site as string | undefined,
@@ -53,10 +53,10 @@ export function registerNarsCommands(program: Command): void {
     .option('--site-root <path>', 'Target Site root')
     .option('--site <id>', 'Registered Site id')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'nars authority-transition plan',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => narsAuthorityTransitionPlanCommand({
         siteRoot: opts.siteRoot as string | undefined,
         site: opts.site as string | undefined,
@@ -88,10 +88,10 @@ export function registerNarsCommands(program: Command): void {
     .option('--dry-run', 'Build the registration plan without remote mutation', true)
     .option('--no-dry-run', 'Record a local pending-registration plan for a later Cloudflare write')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'nars projection register',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => narsProjectionRegisterCommand({
         siteId: opts.siteId as string | undefined,
         siteRoot: opts.siteRoot as string | undefined,
@@ -123,10 +123,10 @@ export function registerNarsCommands(program: Command): void {
     .option('--site-root <path>', 'Target Site root')
     .option('--site <id>', 'Registered Site id')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'nars authority-transition execute',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => narsAuthorityTransitionExecuteCommand({
         siteRoot: opts.siteRoot as string | undefined,
         site: opts.site as string | undefined,
@@ -146,10 +146,10 @@ export function registerNarsCommands(program: Command): void {
     .option('--max-events <n>', 'Maximum events to backfill in this pass', '200')
     .option('--max-artifacts <n>', 'Maximum artifacts to backfill in this pass', '50')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'nars projection bridge-start',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => narsProjectionBridgeStartCommand({
         siteRoot: opts.siteRoot as string | undefined,
         projectionId: opts.projectionId as string | undefined,
@@ -171,10 +171,10 @@ export function registerNarsCommands(program: Command): void {
     .option('--poll-interval-ms <n>', 'Polling interval in milliseconds', '5000')
     .option('--stop-after-iterations <n>', 'Testing/diagnostic stop condition')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'nars projection bridge-run',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => narsProjectionBridgeRunCommand({
         siteRoot: opts.siteRoot as string | undefined,
         projectionId: opts.projectionId as string | undefined,
@@ -195,10 +195,10 @@ export function registerNarsCommands(program: Command): void {
     .option('--site-root <path>', 'Target Site root')
     .option('--site <id>', 'Registered Site id')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'nars attach-command',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => narsAttachCommandCommand({
         siteRoot: opts.siteRoot as string | undefined,
         site: opts.site as string | undefined,

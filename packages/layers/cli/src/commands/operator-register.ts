@@ -1,6 +1,6 @@
 import type { Command } from 'commander';
 import { operatorStartCommand } from './operator.js';
-import { directCommandAction } from '../lib/command-wrapper.js';
+import {directCommandAction, type CommanderOptionValues} from '../lib/command-wrapper.js';
 import { emitCommandResult, resolveCommandFormat } from '../lib/cli-output.js';
 
 export function registerOperatorCommands(program: Command): void {
@@ -16,10 +16,10 @@ export function registerOperatorCommands(program: Command): void {
     .option('--role <role>', 'Role to prepare next action for', 'architect')
     .option('--execute', 'Reserved for future explicit execution; currently reports unsupported without mutating', false)
     .option('--format <fmt>', 'Output format: json|human|auto', 'human')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'operator start',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => operatorStartCommand({
         site: opts.site as string | undefined,
         operation: opts.operation as string | undefined,

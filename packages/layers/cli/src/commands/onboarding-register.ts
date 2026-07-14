@@ -1,5 +1,5 @@
 import type { Command } from 'commander';
-import { directCommandAction, silentCommandContext } from '../lib/command-wrapper.js';
+import {directCommandAction, silentCommandContext, type CommanderOptionValues} from '../lib/command-wrapper.js';
 import { emitCommandResult, resolveCommandFormat } from '../lib/cli-output.js';
 import { onboardingRoleApprovalCommand, onboardingStartCommand, onboardingStatusCommand } from './onboarding.js';
 
@@ -19,10 +19,10 @@ export function registerOnboardingCommands(program: Command): void {
     .option('--demo', 'Show the no-credential demo path without starting a resident', false)
     .option('--no-exec', 'Plan the resident launch without starting it', false)
     .option('--format <fmt>', 'Output format: json|human|auto', 'human')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'onboarding start',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => onboardingStartCommand({
         platform: opts.platform as string | undefined,
         scope: opts.scope as string | undefined,
@@ -43,10 +43,10 @@ export function registerOnboardingCommands(program: Command): void {
     .option('--site-root <path>', 'User Site root; defaults to NARADA_USER_SITE_ROOT or %USERPROFILE%\\Narada')
     .option('--session <id>', 'Verify one concrete resident session')
     .option('--format <fmt>', 'Output format: json|human|auto', 'human')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'onboarding status',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => onboardingStatusCommand({
         platform: opts.platform as string | undefined,
         scope: opts.scope as string | undefined,
@@ -69,10 +69,10 @@ export function registerOnboardingCommands(program: Command): void {
     .option('--roles <role...>', 'Roles to approve; defaults to the stored recommendation')
     .option('--confirm', 'Confirm the displayed role expansion preview', false)
     .option('--format <fmt>', 'Output format: json|human|auto', 'human')
-    .action(directCommandAction<[Record<string, unknown>]>({
+    .action(directCommandAction<[CommanderOptionValues]>({
       command: 'onboarding roles approve',
       emit: emitCommandResult,
-      format: (opts: Record<string, unknown>) => opts.format,
+      format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => onboardingRoleApprovalCommand({
         platform: opts.platform as string | undefined,
         scope: opts.scope as string | undefined,

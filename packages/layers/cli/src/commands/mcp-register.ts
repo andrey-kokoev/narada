@@ -1,3 +1,4 @@
+import type { CommanderOptionValues } from '../lib/command-wrapper.js';
 import type { Command } from 'commander';
 import { runMcpServer } from '../mcp-server.js';
 
@@ -13,7 +14,7 @@ export function registerMcpCommands(program: Command): void {
     .option('--site-id <id>', 'Explicit Site id when config.json is unavailable')
     .option('--site-kind <kind>', 'Explicit Site kind when config.json is unavailable')
     .option('--cwd <path>', 'Working directory fallback for Site root resolution')
-    .action(async (opts: Record<string, unknown>) => {
+    .action(async (opts: CommanderOptionValues) => {
       await runMcpServer({
         siteRoot: opts.siteRoot as string | undefined,
         siteId: opts.siteId as string | undefined,
