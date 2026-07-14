@@ -27,6 +27,7 @@ describe('task lifecycle handler registry', () => {
       ...listPayloadTools().map((tool) => tool.name),
       ...listOutputTools().map((tool) => tool.name),
     ];
+    const domainToolNames = taskLifecycleDomainTools().map((tool) => tool.name);
     const explicitToolNames = [
       ...PAYLOAD_OUTPUT_TOOL_NAMES,
       ...TASK_LIFECYCLE_ADMIN_TOOL_NAMES,
@@ -45,7 +46,7 @@ describe('task lifecycle handler registry', () => {
     });
     const missingAfterNormalization = toolNames
       .map((name) => TASK_LIFECYCLE_TOOL_ALIASES[name] ?? name)
-      .filter((name) => !explicitToolNames.includes(name));
+      .filter((name) => !explicitToolNames.includes(name) && !domainToolNames.includes(name));
 
     expect(assertTaskLifecycleHandlerCoverage({ toolNames, handlers })).toMatchObject({ status: 'ok', missing: [] });
     expect(missingAfterNormalization).toEqual([]);

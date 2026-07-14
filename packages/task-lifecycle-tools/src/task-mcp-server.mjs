@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { openTaskLifecycleStore } from '@narada2/task-governance/task-lifecycle-store';
+import { evaluateTaskDependencySatisfaction } from '@narada2/task-governance/task-dependency-satisfaction';
 import { finishTaskService } from '@narada2/task-governance/task-finish-service';
 import { classifyPostCloseoutContinuation, evaluatePostTransitionFollowups } from './follow-up-policy-service.mjs';
 import { closeTaskService } from '@narada2/task-governance/task-close-service';
@@ -1021,6 +1022,62 @@ async function dispatchTool(canonicalName, args, dispatchContext = {}) {
       });
     }
 
+    case 'task_lifecycle_diagnose_task_ref': {
+      const inputTaskId = stringField(args, 'task_id');
+      const inputTaskNumber = numberField(args, 'task_number');
+      if (!inputTaskId && !inputTaskNumber) throw new Error('task_ref_required');
+      const lifecycleById = inputTaskId ? store.getLifecycle(inputTaskId) : undefined;
+      const lifecycleByNumber = inputTaskNumber ? store.getLifecycleByNumber(inputTaskNumber) : undefined;
+      const collision = Boolean(lifecycleById && lifecycleByNumber && lifecycleById.task_id !== lifecycleByNumber.task_id);
+      const lifecycle = lifecycleById ?? lifecycleByNumber;
+      const taskId = lifecycle?.task_id ?? inputTaskId ?? null;
+      const taskNumber = lifecycle?.task_number ?? inputTaskNumber ?? null;
+      const spec = taskId ? store.getTaskSpec(taskId) : undefined;
+      let taskFile = null;
+      if (taskNumber !== null) {
+        try {
+          taskFile = await findTaskFile(siteRoot, String(taskNumber));
+        } catch {
+          taskFile = null;
+        }
+      }
+      const refIds = [...new Set([inputTaskId, inputTaskNumber === undefined ? null : String(inputTaskNumber)].filter(Boolean))];
+      const directiveRefs = refIds.length === 0
+        ? []
+        : store.db.prepare(`
+          SELECT dr.directive_id, dr.ref_id, dr.locus, dr.relation,
+                 CASE WHEN d.directive_id IS NULL THEN 0 ELSE 1 END AS directive_present
+          FROM directive_refs dr
+          LEFT JOIN directive_records d ON d.directive_id = dr.directive_id
+          WHERE dr.ref_kind = 'task' AND dr.ref_id IN (${refIds.map(() => '?').join(', ')})
+          ORDER BY dr.directive_id, dr.ref_id
+        `).all(...refIds);
+      const unsafeDirectiveRefs = directiveRefs.filter((ref) => !ref.directive_present || (taskId && ref.ref_id !== taskId && ref.ref_id !== String(taskNumber)));
+      return jsonToolResult({
+        schema: 'narada.task.reference_diagnosis.v0',
+        status: 'ok',
+        input: { task_id: inputTaskId ?? null, task_number: inputTaskNumber ?? null },
+        resolved: { task_id: taskId, task_number: taskNumber },
+        collision: {
+          detected: collision,
+          task_id_match: lifecycleById ? lifecycleById.task_id : null,
+          task_number_match: lifecycleByNumber ? lifecycleByNumber.task_id : null,
+        },
+        projections: {
+          lifecycle_present: Boolean(lifecycle),
+          task_spec_present: Boolean(spec),
+          task_file_present: Boolean(taskFile),
+        },
+        directive_references: {
+          count: directiveRefs.length,
+          unsafe_count: unsafeDirectiveRefs.length,
+          refs: directiveRefs,
+          unsafe_refs: unsafeDirectiveRefs,
+        },
+        safe_for_closeout: Boolean(lifecycle && spec && !collision && unsafeDirectiveRefs.length === 0),
+      });
+    }
+
     case 'task_lifecycle_show': {
       const taskNumber = numberField(args, 'task_number');
       if (!taskNumber) throw new Error('task_number_required');
@@ -1125,6 +1182,64 @@ async function dispatchTool(canonicalName, args, dispatchContext = {}) {
         }
       }
       return jsonToolResult(output, result.exitCode !== 0);
+    }
+
+    case 'task_lifecycle_dependency_disposition_record': {
+      const dependencyId = stringField(args, 'dependency_id');
+      const agentId = stringField(args, 'agent_id');
+      const kind = stringField(args, 'kind');
+      const summary = stringField(args, 'summary');
+      if (!dependencyId) throw new Error('dependency_id_required');
+      if (!agentId) throw new Error('agent_id_required');
+      if (!kind) throw new Error('kind_required');
+      if (!summary) throw new Error('summary_required');
+      enforceSessionIdentity(agentId);
+      const allowedKinds = new Set([
+        'remediation_task',
+        'covered_by_existing_task',
+        'routed_obligation',
+        'operator_decision_required',
+        'operator_deferred',
+        'out_of_scope_or_rejected',
+      ]);
+      if (!allowedKinds.has(kind)) throw new Error('invalid_dependency_disposition_kind');
+      const dependency = store.getTaskDependency(dependencyId);
+      if (!dependency) throw new Error(`dependency_not_found: ${dependencyId}`);
+      const latestOutcome = store.getLatestTaskOutcome(dependency.required_task_id);
+      const requiredOutcomeId = stringField(args, 'required_outcome_id') ?? latestOutcome?.outcome_id;
+      if (!requiredOutcomeId) throw new Error('required_outcome_id_required_without_outcome');
+      const authorityBasis = args.authority_basis ?? null;
+      if ((kind === 'operator_deferred' || kind === 'out_of_scope_or_rejected')
+        && (!authorityBasis || typeof authorityBasis !== 'object' || !authorityBasis.kind || !authorityBasis.summary)) {
+        throw new Error('authority_basis_required_for_disposition');
+      }
+      const targetTaskId = stringField(args, 'target_task_id') ?? null;
+      if (targetTaskId && !store.getLifecycle(targetTaskId)) throw new Error(`target_task_not_found: ${targetTaskId}`);
+      const routedObligationId = stringField(args, 'routed_obligation_id') ?? null;
+      if (routedObligationId && !store.getDirectedObligation(routedObligationId)) throw new Error(`routed_obligation_not_found: ${routedObligationId}`);
+      const requestedStatus = stringField(args, 'status');
+      const status = requestedStatus ?? ((kind === 'operator_deferred' || kind === 'out_of_scope_or_rejected') ? 'deferred' : 'open');
+      if (!new Set(['open', 'deferred', 'resolved', 'superseded']).has(status)) throw new Error('invalid_dependency_disposition_status');
+      const disposition = {
+        disposition_id: `tdisp_${randomUUID()}`,
+        dependency_id: dependencyId,
+        required_outcome_id: requiredOutcomeId,
+        kind,
+        status,
+        target_task_id: targetTaskId,
+        routed_obligation_id: routedObligationId,
+        authority_basis_json: authorityBasis ? JSON.stringify(authorityBasis) : JSON.stringify({ kind: 'agent_record', summary: `Recorded by ${agentId}` }),
+        summary,
+        created_by: agentId,
+        created_at: new Date().toISOString(),
+      };
+      store.upsertTaskDependencyDisposition(disposition);
+      return jsonToolResult({
+        schema: 'narada.task.dependency_disposition.v0',
+        status: 'recorded',
+        disposition,
+        dependency_satisfaction: evaluateTaskDependencySatisfaction(store, dependency.parent_task_id),
+      });
     }
 
     case 'task_lifecycle_unclaim': {

@@ -71,6 +71,10 @@ export function taskLifecycleTools() {
       limit: numberSchema('Maximum results; defaults to 50.'),
     })),
     tool('task_lifecycle_show', 'Show full task details: lifecycle, spec, assignment, and observations.', objectSchema({ task_number: numberSchema('Task number to inspect.') }, ['task_number'])),
+    tool('task_lifecycle_diagnose_task_ref', 'Diagnose task_id/task_number collisions, missing projections, and unsafe directive references before report or closeout.', objectSchema({
+      task_id: stringSchema('Optional lifecycle task_id to diagnose.'),
+      task_number: numberSchema('Optional task number to compare against task_id.'),
+    })),
     tool('task_lifecycle_roster', 'List the agent roster.', objectSchema({})),
     tool('task_lifecycle_roster_admit', 'Append an admitted roster identity event and project it into the agent_roster read model.', objectSchema({
       agent_id: stringSchema('Canonical agent identity to admit into task lifecycle roster authority.'),
@@ -87,6 +91,17 @@ export function taskLifecycleTools() {
       agent_id: stringSchema('Agent id claiming the task.'),
       authority_basis: authorityBasisSchema('Required when the task has a different preferred_agent_id.'),
     }, ['task_number', 'agent_id'])),
+    tool('task_lifecycle_dependency_disposition_record', 'Record explicit disposition for a blocking dependency outcome. Use after dependency satisfaction reports disposition_required=true; required_outcome_id is inferred from the latest outcome when omitted.', objectSchema({
+      dependency_id: stringSchema('Dependency id whose blocking outcome is being dispositioned.'),
+      agent_id: stringSchema('Agent id recording the disposition.'),
+      kind: stringSchema('Disposition kind: remediation_task, covered_by_existing_task, routed_obligation, operator_decision_required, operator_deferred, or out_of_scope_or_rejected.'),
+      summary: stringSchema('Concise disposition summary and authority rationale.'),
+      required_outcome_id: stringSchema('Optional specific task_outcomes.outcome_id. Defaults to latest outcome on the required task.'),
+      status: stringSchema('Disposition status. Defaults to open, or deferred for operator_deferred/out_of_scope_or_rejected.'),
+      target_task_id: stringSchema('Optional task_id for remediation_task or covered_by_existing_task disposition.'),
+      routed_obligation_id: stringSchema('Optional directed obligation id for routed_obligation disposition.'),
+      authority_basis: authorityBasisSchema('Required authority basis for operator_deferred and out_of_scope_or_rejected dispositions; optional otherwise.'),
+    }, ['dependency_id', 'agent_id', 'kind', 'summary'])),
     tool('task_lifecycle_continue', 'Continue a task that is in needs_continuation or evidence_repair state.', objectSchema({
       task_number: numberSchema('Task number to continue.'),
       agent_id: stringSchema('Agent id continuing the task.'),

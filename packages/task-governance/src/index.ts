@@ -12,6 +12,7 @@ export * as taskAllocateService from '@narada2/task-governance-core/task-allocat
 export * as taskAssignmentLifecycleService from '@narada2/task-governance-core/task-assignment-lifecycle-service';
 export * as taskSearchService from '@narada2/task-governance-core/task-search-service';
 export * as taskGraph from '@narada2/task-governance-core/task-graph';
+export * as taskDependencySatisfaction from '@narada2/task-governance-core/task-dependency-satisfaction';
 export * from './work-order-lifecycle.js';
 export * as taskLifecycleStore from '@narada2/task-governance-core/task-lifecycle-store';
 export * as directiveRuntimeStore from '@narada2/task-governance-core/directive-runtime-store';

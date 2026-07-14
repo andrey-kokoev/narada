@@ -66,6 +66,10 @@
       "types": "./dist/task-graph.d.ts",
       "import": "./dist/task-graph.js"
     },
+    "./task-dependency-satisfaction": {
+      "types": "./dist/task-dependency-satisfaction.d.ts",
+      "import": "./dist/task-dependency-satisfaction.js"
+    },
     "./work-order-lifecycle": {
       "types": "./dist/work-order-lifecycle.d.ts",
       "import": "./dist/work-order-lifecycle.js"

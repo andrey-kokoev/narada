@@ -260,14 +260,14 @@ describe('task review service', () => {
     });
     expect(report.exitCode).toBe(ExitCode.SUCCESS);
     expect(report.result).toMatchObject({
-      new_status: 'closed',
-      ready_for_review: false,
-      obligation_id: null,
+      new_status: 'in_review',
+      ready_for_review: true,
+      obligation_id: expect.any(String),
     });
     const reportId = report.result.report_id!;
     const reportStore = openTaskLifecycleStore(tempDir);
     try {
-      expect(reportStore.listDirectedObligationsForTask('20260420-999-test-task')).toHaveLength(0);
+      expect(reportStore.listDirectedObligationsForTask('20260420-999-test-task')).toHaveLength(1);
     } finally {
       reportStore.db.close();
     }
