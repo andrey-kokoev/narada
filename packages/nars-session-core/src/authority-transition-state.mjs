@@ -7,6 +7,7 @@ import {
   NARS_AUTHORITY_RUNTIME_SOURCE_WRITE_ADMISSIONS,
   NARS_AUTHORITY_RUNTIME_TARGET_WRITE_ADMISSIONS,
 } from '@narada2/carrier-protocol';
+import { synchronizeNarsAuthorityHandoffLifecycle } from './authority-handoff-fsm.mjs';
 import { assertNarsAuthorityRuntimeHostTransition } from './authority-transition-fsm.mjs';
 import { updateNarsSessionAuthorityTransitionState } from './session-index.mjs';
 
@@ -113,6 +114,7 @@ export function prepareTargetAuthority({ path, sessionPath, state, targetAuthori
   updateNarsSessionAuthorityTransitionState({
     sessionPath,
     authorityTransitionState: next.authority_transition_state,
+    authorityHandoffLifecycle: next.authority_handoff_lifecycle,
     sourceWriteAdmission: next.source_write_admission,
     supersededBySessionId: next.superseded_by_session_id,
     authorityLocatorRef: next.authority_locator_ref,
@@ -145,6 +147,7 @@ export function activateTargetAuthority({ path, sessionPath, state, activationId
   updateNarsSessionAuthorityTransitionState({
     sessionPath,
     authorityTransitionState: next.authority_transition_state,
+    authorityHandoffLifecycle: next.authority_handoff_lifecycle,
     sourceWriteAdmission: next.source_write_admission,
     supersededBySessionId: next.superseded_by_session_id,
     authorityLocatorRef: next.authority_locator_ref,
@@ -170,6 +173,7 @@ export function beginSourceDrain({ path, sessionPath, state, reason = null, requ
   updateNarsSessionAuthorityTransitionState({
     sessionPath,
     authorityTransitionState: next.authority_transition_state,
+    authorityHandoffLifecycle: next.authority_handoff_lifecycle,
     sourceWriteAdmission: next.source_write_admission,
     updatedAt: occurredAt,
   });
@@ -193,6 +197,7 @@ export function sealSourceAuthority({ path, sessionPath, state, sourceLastSequen
   updateNarsSessionAuthorityTransitionState({
     sessionPath,
     authorityTransitionState: next.authority_transition_state,
+    authorityHandoffLifecycle: next.authority_handoff_lifecycle,
     sourceWriteAdmission: next.source_write_admission,
     updatedAt: occurredAt,
   });
@@ -219,6 +224,7 @@ export function authorityTransitionSourceStateSnapshot(state = {}) {
     superseded_by_session_id: normalized.superseded_by_session_id,
     authority_locator_ref: normalized.authority_locator_ref,
     target_transition_plan: normalized.target_transition_plan,
+    authority_handoff_lifecycle: normalized.authority_handoff_lifecycle,
     last_transition: normalized.last_transition,
   };
 }
@@ -296,6 +302,7 @@ export function emptyAuthorityTransitionSourceState({ path = null, corrupt = fal
     superseded_by_session_id: null,
     authority_locator_ref: null,
     target_transition_plan: null,
+    authority_handoff_lifecycle: null,
     last_transition: null,
   });
 }
@@ -334,6 +341,10 @@ function normalizeAuthorityTransitionSourceState(state = {}) {
     superseded_by_session_id: normalizeOptionalString(state.superseded_by_session_id),
     authority_locator_ref: normalizeOptionalString(state.authority_locator_ref),
     target_transition_plan: normalizeOptionalObject(state.target_transition_plan),
+    authority_handoff_lifecycle: synchronizeNarsAuthorityHandoffLifecycle(
+      state.authority_handoff_lifecycle,
+      authorityTransitionState,
+    ),
     target_activation_reason: state.target_activation_reason ?? null,
     target_activation_requested_by: state.target_activation_requested_by ?? null,
     seal_reason: state.seal_reason ?? null,

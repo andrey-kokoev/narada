@@ -24,6 +24,10 @@
       "types": "./dist/contract.d.ts",
       "import": "./dist/contract.js"
     },
+    "./projection-lease-state": {
+      "types": "./dist/projection-lease-state.d.ts",
+      "import": "./dist/projection-lease-state.js"
+    },
     "./package.json": "./package.json"
   },
   "files": ["dist", "README.md"],

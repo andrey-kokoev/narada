@@ -35,6 +35,11 @@ import type {
   ProgressReporter,
   ResolvedAttachSession,
 } from './agent-web-ui-types.js';
+import {
+  createAgentWebUiAttachmentLifecycle,
+  transitionAgentWebUiAttachment,
+  type AgentWebUiAttachmentLifecycle,
+} from './agent-web-ui-attachment-state.js';
 import { narsAttachCommandCommand } from './nars.js';
 
 function allowsStaleSessionInspection(options: AgentWebUiAttachOptions): boolean {
@@ -80,6 +85,7 @@ function buildFailure(args: {
   host: string;
   port: number;
   attachability: AttachabilityResult;
+  attachmentLifecycle: AgentWebUiAttachmentLifecycle;
 }) {
   return {
     schema: 'narada.agent_web_ui.attach_refusal.v1',
@@ -96,6 +102,7 @@ function buildFailure(args: {
     port: args.port,
     override: '--inspect-stale-session',
     authority_transition: authorityTransitionSnapshot(args.attach.session),
+    attachment_lifecycle: args.attachmentLifecycle,
   };
 }
 
@@ -108,6 +115,7 @@ function buildDiscoveryFailure(args: {
   candidates?: AttachSessionCandidate[];
   detail?: string | null;
   retryable?: boolean;
+  attachmentLifecycle: AgentWebUiAttachmentLifecycle;
 }) {
   const reason = args.reason ?? 'nars_session_not_found_for_agent';
   return {
@@ -122,6 +130,7 @@ function buildDiscoveryFailure(args: {
     phase: 'session_discovery',
     detail: args.detail ?? null,
     retryable: args.retryable ?? false,
+    attachment_lifecycle: args.attachmentLifecycle,
     required_next_step: reason === 'session_discovery_failed'
       ? 'Retry while the NARS runtime is starting; if it persists, inspect the session-index/runtime error detail.'
       : 'Start the NARS runtime host for this agent, or pass --session <id> for an existing healthy session.',
@@ -138,6 +147,11 @@ function formatFailure(failure: ReturnType<typeof buildFailure>): string {
     `  Events  ${failure.event_endpoint}`,
     `  Override ${failure.override}`,
   ].join('\n');
+}
+
+function withAttachmentLifecycle(result: unknown, attachmentLifecycle: AgentWebUiAttachmentLifecycle): unknown {
+  if (!result || typeof result !== 'object' || Array.isArray(result)) return result;
+  return { ...(result as Record<string, unknown>), attachment_lifecycle: attachmentLifecycle };
 }
 
 function formatDiscoveryFailure(failure: ReturnType<typeof buildDiscoveryFailure>): string {
@@ -187,6 +201,12 @@ export async function agentWebUiAttachCommand(
   deps: AgentWebUiAttachDependencies = {},
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
   const progress = createProgressReporter(options, deps.progress);
+  let attachmentLifecycle = createAgentWebUiAttachmentLifecycle();
+  const transitionAttachment = (nextState: Parameters<typeof transitionAgentWebUiAttachment>[1]): void => {
+    attachmentLifecycle = transitionAgentWebUiAttachment(attachmentLifecycle, nextState);
+  };
+  transitionAttachment('discovering');
+  if (!options.session?.trim() && (options.waitForSessionMs ?? 0) > 0) transitionAttachment('waiting_for_session');
   let resolvedSession: ResolvedAttachSession;
   try {
     resolvedSession = await resolveAttachSessionId(
@@ -197,6 +217,7 @@ export async function agentWebUiAttachCommand(
     );
   } catch (error) {
     if (!(error instanceof AttachSessionDiscoveryError)) throw error;
+    transitionAttachment(error.retryable && attachmentLifecycle.state === 'waiting_for_session' ? 'expired' : 'refused');
     const failure = buildDiscoveryFailure({
       agentId: options.agent?.trim() || null,
       siteRoot: options.siteRoot,
@@ -206,6 +227,7 @@ export async function agentWebUiAttachCommand(
       candidates: error.candidates,
       detail: error.detail,
       retryable: error.retryable,
+      attachmentLifecycle,
     });
     return {
       exitCode: ExitCode.INVALID_CONFIG,
@@ -213,6 +235,7 @@ export async function agentWebUiAttachCommand(
     };
   }
   const sessionId = resolvedSession.sessionId;
+  transitionAttachment('resolving_endpoints');
   if (!options.dryRun) progress(`agent-web-ui: resolving attach endpoints for ${sessionId}`);
   const resolved = await resolveAttachEndpointsWithWait({
     sessionId,
@@ -221,7 +244,13 @@ export async function agentWebUiAttachCommand(
     progress,
     resolveAttachEndpoints: deps.resolveAttachEndpoints,
   });
-  if (resolved.exitCode !== ExitCode.SUCCESS) return resolved;
+  if (resolved.exitCode !== ExitCode.SUCCESS) {
+    transitionAttachment(resolved.retryable ? 'expired' : 'refused');
+    return {
+      ...resolved,
+      result: withAttachmentLifecycle(resolved.result, attachmentLifecycle),
+    };
+  }
   const attach = resolved.result as {
     command?: string;
     site_root?: string | null;
@@ -262,6 +291,7 @@ export async function agentWebUiAttachCommand(
       publicHealthEndpoint: predictedPublicHealthEndpoint,
       backendUrl: null,
       routeIds: [],
+      attachmentLifecycle,
     });
     plan.operator_projection_open_request = await buildAgentWebUiOpenRequest({
       targetRef: null,
@@ -273,6 +303,7 @@ export async function agentWebUiAttachCommand(
       result: formattedResult(plan, formatPlan(plan), options.format ?? 'auto'),
     };
   }
+  transitionAttachment('probing_health');
   const attachability = await waitForAttachability(attach.session, {
     healthEndpoint,
     healthTimeoutMs: options.healthTimeoutMs ?? 500,
@@ -280,12 +311,14 @@ export async function agentWebUiAttachCommand(
     progress,
   });
   if (!allowsStaleSessionInspection(options) && attachability.status !== 'attachable') {
-    const failure = buildFailure({ sessionId, attach, eventEndpoint, healthEndpoint, host, port, attachability });
+    transitionAttachment(attachability.reason === 'health_unavailable' ? 'expired' : 'refused');
+    const failure = buildFailure({ sessionId, attach, eventEndpoint, healthEndpoint, host, port, attachability, attachmentLifecycle });
     return {
       exitCode: ExitCode.INVALID_CONFIG,
       result: formattedResult(failure, formatFailure(failure), options.format ?? 'auto'),
     };
   }
+  transitionAttachment('registering_projection');
   progress(`agent-web-ui: starting local web UI for ${sessionId}${useOperatorRouter ? ' through Operator Router' : ''}`);
   const router = useOperatorRouter
     ? await (deps.ensureOperatorRouter ?? ensureOperatorRouter)({ host, port })
@@ -328,6 +361,7 @@ export async function agentWebUiAttachCommand(
     const existingRoutes = await readOperatorRouterRoutes({ url: router.url });
     const routePosture = inspectOperatorRouterRouteSet(existingRoutes.routes, requiredRouteIds, expectedRouteIdentities);
     if (routePosture.posture === 'healthy') {
+      transitionAttachment('attached');
       const plan = buildPlan({
         status: 'attached',
         sessionId,
@@ -346,6 +380,7 @@ export async function agentWebUiAttachCommand(
         publicHealthEndpoint,
         backendUrl: null,
         routeIds: requiredRouteIds,
+        attachmentLifecycle,
       });
       const shouldOpen = options.open !== false;
       if (shouldOpen && plan.url) {
@@ -462,6 +497,7 @@ export async function agentWebUiAttachCommand(
       throw error;
     }
   }
+  transitionAttachment('attached');
   const plan = buildPlan({
     status: 'started',
     sessionId,
@@ -480,6 +516,7 @@ export async function agentWebUiAttachCommand(
     publicHealthEndpoint,
     backendUrl: started.url,
     routeIds,
+    attachmentLifecycle,
   });
   const shouldOpen = options.open !== false;
   const browserUrl = plan.url;
@@ -506,6 +543,10 @@ export async function agentWebUiAttachCommand(
   const cleanup = async (): Promise<void> => {
     if (cleanedUp) return;
     cleanedUp = true;
+    if (attachmentLifecycle.state === 'attached') {
+      attachmentLifecycle = transitionAgentWebUiAttachment(attachmentLifecycle, 'detached');
+      plan.attachment_lifecycle = attachmentLifecycle;
+    }
     await routeSet?.stop();
     await closeStartedServer(started.server);
   };
@@ -700,6 +741,7 @@ function buildPlan(args: {
   publicHealthEndpoint: string | null;
   backendUrl: string | null;
   routeIds: string[];
+  attachmentLifecycle: AgentWebUiAttachmentLifecycle;
 }): AgentWebUiAttachPlan {
   return {
     schema: 'narada.agent_web_ui.attach_plan.v1',
@@ -722,6 +764,7 @@ function buildPlan(args: {
     route_ids: [...args.routeIds],
     command: args.attach.command ?? `narada-agent-web-ui --event-endpoint ${args.eventEndpoint}${args.healthEndpoint ? ` --health-endpoint ${args.healthEndpoint}` : ''}`,
     authority_transition: authorityTransitionSnapshot(args.session),
+    attachment_lifecycle: args.attachmentLifecycle,
     onboarding_mode: args.onboarding ? 'user-site' : null,
   };
 }

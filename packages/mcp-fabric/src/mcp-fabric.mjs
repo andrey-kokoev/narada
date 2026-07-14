@@ -2,6 +2,14 @@ import { fileURLToPath } from 'node:url';
 export { McpFabricError } from './mcp-fabric-errors.mjs';
 export { loadSiteMcpFabric } from './mcp-fabric-loader.mjs';
 export { runMcpFabricDoctor, renderMcpFabricDoctorTable } from './mcp-fabric-doctor.mjs';
+export {
+  MCP_FABRIC_RUNTIME_LIFECYCLE_SCHEMA,
+  MCP_FABRIC_RUNTIME_STATES,
+  canTransitionMcpFabricRuntime,
+  createMcpFabricRuntimeLifecycle,
+  assertMcpFabricRuntimeTransition,
+  transitionMcpFabricRuntime,
+} from './mcp-fabric-runtime-state.mjs';
 export { codexMcpEnvVarNames, projectFabricForAgentTui, projectFabricForClaudeCode, projectFabricForCodex, projectServerEnvironment, mcpServerNames } from './mcp-fabric-projection.mjs';
 
 function isMainModule() {

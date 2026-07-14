@@ -7,21 +7,32 @@ import { renderTable } from './mcp-fabric-table.mjs';
 import { loadSiteMcpFabric } from './mcp-fabric-loader.mjs';
 import { mcpFabricRepairPlan } from './mcp-fabric-repair-plans.mjs';
 import { createMcpFabricLifecycle, transitionMcpFabricLifecycle } from './mcp-fabric-state.mjs';
+import {
+  createMcpFabricRuntimeLifecycle,
+  transitionMcpFabricRuntime,
+} from './mcp-fabric-runtime-state.mjs';
 
 export async function runMcpFabricDoctor(siteRoot, options = {}) {
   const timeoutMs = Math.max(1, Number(options.timeoutMs ?? 5000));
   let fabric;
+  let runtimeLifecycle = createMcpFabricRuntimeLifecycle();
   try {
+    runtimeLifecycle = transitionMcpFabricRuntime(runtimeLifecycle, 'loading');
     fabric = loadSiteMcpFabric(siteRoot, {
       required: options.required ?? true,
       validateRegistry: options.validateRegistry ?? 'diagnostic',
     });
   } catch (error) {
+    runtimeLifecycle = transitionMcpFabricRuntime(runtimeLifecycle, 'unavailable');
     return {
       schema: 'narada.mcp.fabric.doctor.v1',
       status: 'failed',
       site_root: siteRoot,
       rows: [],
+      runtime_lifecycle_schema: runtimeLifecycle.schema,
+      runtime_lifecycle_state: runtimeLifecycle.state,
+      runtime_lifecycle_history: runtimeLifecycle.history,
+      runtime_lifecycle: runtimeLifecycle,
       diagnostics: [doctorDiagnostic(error, 'fabric_load')],
     };
   }
@@ -40,6 +51,11 @@ export async function runMcpFabricDoctor(siteRoot, options = {}) {
     }));
   }
 
+  runtimeLifecycle = transitionMcpFabricRuntime(
+    runtimeLifecycle,
+    rows.every((row) => row.initialize_status === 'ok' && row.tools_list_status === 'ok') ? 'ready' : 'degraded',
+  );
+
   return {
     schema: 'narada.mcp.fabric.doctor.v1',
     status: rows.every((row) => row.initialize_status === 'ok' && row.tools_list_status === 'ok') ? 'ok' : 'failed',
@@ -50,6 +66,10 @@ export async function runMcpFabricDoctor(siteRoot, options = {}) {
     registry_validation: fabric.registry_validation ?? null,
     lifecycle_state: fabric.lifecycle_state ?? 'loaded',
     lifecycle_history: fabric.lifecycle_history ?? ['discovered', 'loaded'],
+    runtime_lifecycle_schema: runtimeLifecycle.schema,
+    runtime_lifecycle_state: runtimeLifecycle.state,
+    runtime_lifecycle_history: runtimeLifecycle.history,
+    runtime_lifecycle: runtimeLifecycle,
     generated_config_diagnostics: configDiagnostics,
     rows,
     diagnostics: [],

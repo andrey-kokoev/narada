@@ -9,6 +9,7 @@ import {
   transitionSiteOperatingLoopHealthLifecycle,
   transitionSiteOperatingLoopTriggerLifecycle,
 } from './site-operating-loop-state.mjs';
+import { siteOperatingLoopExecutionLifecycleFromRunState } from './site-operating-loop-execution-state.mjs';
 
 export const DEFAULT_SITE_OPERATING_LOOP_ID = 'site.operating-loop';
 export const DEFAULT_SITE_OPERATING_LOOP_OWNER_ID = 'site-operating-loop';
@@ -25,7 +26,8 @@ export function ensureSiteLoopTables(db) {
       finished_at TEXT,
       summary_json TEXT,
       error_json TEXT,
-      lifecycle_json TEXT
+      lifecycle_json TEXT,
+      execution_lifecycle_json TEXT
     );
 
     CREATE TABLE IF NOT EXISTS site_loop_step_runs (
@@ -177,6 +179,7 @@ export function ensureSiteLoopTables(db) {
       ON directive_outcome_latest(loop_id, outcome, observed_at DESC, recorded_at DESC);
   `);
   ensureColumn(db, 'site_loop_runs', 'lifecycle_json', 'TEXT', repairs);
+  ensureColumn(db, 'site_loop_runs', 'execution_lifecycle_json', 'TEXT', repairs);
   ensureColumn(db, 'site_loop_health', 'lifecycle_json', 'TEXT', repairs);
   ensureColumn(db, 'site_loop_triggers', 'lifecycle_json', 'TEXT', repairs);
   ensureColumn(db, 'site_loop_escalations', 'acknowledged_at', 'TEXT', repairs);
@@ -502,8 +505,8 @@ export function getLoopHealth(store, loopId) {
 export function beginLoopRun(store, run) {
   const lifecycle = run.lifecycle ?? siteOperatingLoopRunLifecycleFromStatus(run.status);
   store.db.prepare(`
-    INSERT INTO site_loop_runs (run_id, loop_id, status, dry_run, started_at, summary_json, error_json, lifecycle_json)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO site_loop_runs (run_id, loop_id, status, dry_run, started_at, summary_json, error_json, lifecycle_json, execution_lifecycle_json)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     run.run_id,
     run.loop_id,
@@ -513,15 +516,33 @@ export function beginLoopRun(store, run) {
     stringifyJson(run.summary ?? null),
     stringifyJson(run.error ?? null),
     JSON.stringify(lifecycle),
+    run.execution_lifecycle ? JSON.stringify(run.execution_lifecycle) : null,
   );
 }
 
-export function finishLoopRun(store, runId, { status, finished_at, summary = null, error = null, lifecycle = null }) {
+export function finishLoopRun(store, runId, {
+  status,
+  finished_at,
+  summary = null,
+  error = null,
+  lifecycle = null,
+  execution_lifecycle = null,
+}) {
   store.db.prepare(`
     UPDATE site_loop_runs
-    SET status = ?, finished_at = ?, summary_json = ?, error_json = ?, lifecycle_json = COALESCE(?, lifecycle_json)
+    SET status = ?, finished_at = ?, summary_json = ?, error_json = ?,
+      lifecycle_json = COALESCE(?, lifecycle_json),
+      execution_lifecycle_json = COALESCE(?, execution_lifecycle_json)
     WHERE run_id = ?
-  `).run(status, finished_at, stringifyJson(summary), stringifyJson(error), lifecycle ? JSON.stringify(lifecycle) : null, runId);
+  `).run(
+    status,
+    finished_at,
+    stringifyJson(summary),
+    stringifyJson(error),
+    lifecycle ? JSON.stringify(lifecycle) : null,
+    execution_lifecycle ? JSON.stringify(execution_lifecycle) : null,
+    runId,
+  );
 }
 
 export function recordLoopStep(store, step) {
@@ -1181,6 +1202,10 @@ function tableExists(db, table) {
 
 function parseRunRow(row) {
   const lifecycle = parseLifecycle(row.lifecycle_json, siteOperatingLoopRunLifecycleFromStatus(row.status));
+  const executionLifecycle = parseLifecycle(
+    row.execution_lifecycle_json,
+    siteOperatingLoopExecutionLifecycleFromRunState(row.status),
+  );
   return {
     run_id: row.run_id,
     loop_id: row.loop_id,
@@ -1194,6 +1219,10 @@ function parseRunRow(row) {
     lifecycle_state: lifecycle.state,
     lifecycle_history: lifecycle.history,
     lifecycle,
+    execution_lifecycle_schema: executionLifecycle.schema,
+    execution_lifecycle_state: executionLifecycle.state,
+    execution_lifecycle_history: executionLifecycle.history,
+    execution_lifecycle: executionLifecycle,
   };
 }
 

@@ -16,6 +16,11 @@ import {
   type OperatorRouterRoutesResponse,
   validateRouteRegistration,
 } from './contract.js';
+import {
+  createOperatorRouterProjectionLeaseLifecycle,
+  transitionOperatorRouterProjectionLease,
+  type OperatorRouterProjectionLeaseLifecycle,
+} from './projection-lease-state.js';
 
 const ROUTER_TOKEN_HEADER = 'x-narada-router-token';
 
@@ -211,6 +216,7 @@ export interface OperatorRouterRouteSetReconstructionResult {
 
 export interface OperatorRouterRouteSet {
   route_ids: readonly string[];
+  readonly lease_lifecycle: OperatorRouterProjectionLeaseLifecycle;
   renew(): Promise<void>;
   stop(): Promise<void>;
 }
@@ -372,15 +378,19 @@ export async function registerOperatorRouteSet(options: OperatorRouterRouteSetOp
   const renewRoute = options.renew_fn ?? renewOperatorRoute;
   const unregister = options.unregister_fn ?? unregisterOperatorRoute;
   const registered: OperatorRouterRouteRegistration[] = [];
+  let leaseLifecycle = createOperatorRouterProjectionLeaseLifecycle();
+  leaseLifecycle = transitionOperatorRouterProjectionLease(leaseLifecycle, 'registering');
   try {
     for (const route of options.routes) registered.push(await register(options.admin, route));
   } catch (error) {
+    leaseLifecycle = transitionOperatorRouterProjectionLease(leaseLifecycle, 'degraded');
     await Promise.all(registered.map((route) => unregister(options.admin, route.route_id, {
       owner_id: route.owner_id,
       instance_nonce: route.process_evidence.instance_nonce,
     }).catch(() => undefined)));
     throw error;
   }
+  leaseLifecycle = transitionOperatorRouterProjectionLease(leaseLifecycle, 'active');
 
   let stopped = false;
   let renewal: NodeJS.Timeout | null = null;
@@ -388,7 +398,12 @@ export async function registerOperatorRouteSet(options: OperatorRouterRouteSetOp
   const renew = async (): Promise<void> => {
     if (stopped) return;
     if (renewalInFlight) return renewalInFlight;
+    leaseLifecycle = transitionOperatorRouterProjectionLease(
+      leaseLifecycle,
+      leaseLifecycle.state === 'degraded' ? 'recovering' : 'renewing',
+    );
     const work = (async (): Promise<void> => {
+      let renewalSucceeded = true;
       for (let index = 0; index < options.routes.length; index += 1) {
         if (stopped) return;
         const input = options.routes[index]!;
@@ -403,11 +418,15 @@ export async function registerOperatorRouteSet(options: OperatorRouterRouteSetOp
             try {
               registered[index] = await register(options.admin, input);
             } catch {
+              renewalSucceeded = false;
               // The next bounded renewal will retry registration while the owner remains alive.
             }
+          } else {
+            renewalSucceeded = false;
           }
         }
       }
+      leaseLifecycle = transitionOperatorRouterProjectionLease(leaseLifecycle, renewalSucceeded ? 'active' : 'degraded');
     })();
     let wrapped: Promise<void>;
     wrapped = work.finally(() => {
@@ -421,6 +440,7 @@ export async function registerOperatorRouteSet(options: OperatorRouterRouteSetOp
 
   return {
     route_ids: [...routeIds],
+    get lease_lifecycle() { return leaseLifecycle; },
     renew,
     async stop(): Promise<void> {
       if (stopped) return;
@@ -428,6 +448,9 @@ export async function registerOperatorRouteSet(options: OperatorRouterRouteSetOp
       if (renewal) clearInterval(renewal);
       renewal = null;
       await renewalInFlight?.catch(() => undefined);
+      if (leaseLifecycle.state !== 'detached' && leaseLifecycle.state !== 'expired') {
+        leaseLifecycle = transitionOperatorRouterProjectionLease(leaseLifecycle, 'detached');
+      }
       await Promise.all(registered.map((route) => unregister(options.admin, route.route_id, {
         owner_id: route.owner_id,
         instance_nonce: route.process_evidence.instance_nonce,

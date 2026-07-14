@@ -257,6 +257,54 @@ A bounded run follows `requested -> locking -> running -> completed`, with `lock
 
 Lifecycle evidence is stored in `lifecycle_json` columns beside run, trigger, and health rows. `ensureSiteLoopTables()` adds those columns to existing Site databases, so old rows remain readable through status-derived lifecycle projections.
 
+## NARS Authority Handoff
+
+Owner: `@narada2/nars-session-core`, orchestration boundary for authority transfer.
+
+Schema: `narada.nars.authority_handoff.lifecycle_state.v1`.
+
+The operator-visible handoff follows `proposed -> validating -> preparing -> draining -> source_sealed -> target_activating -> committed`. `refused`, `failed`, and `rolled_back` are terminal outcomes from the phase that can establish them. The existing `narada.nars.authority_runtime_host_transition_state.v1` machine remains the mechanical runtime-host transition; `narsAuthorityHandoffLifecycleFromRuntimeHostState()` is a compatibility projection into this higher-level vocabulary. Neither machine replaces the other.
+
+## Agent Web UI Attachment
+
+Owner: `@narada2/cli`, `agent-web-ui attach` orchestration and returned attach plan.
+
+Schema: `narada.agent_web_ui.attachment.lifecycle_state.v1`.
+
+Attachment follows `requested -> discovering -> resolving_endpoints -> probing_health -> registering_projection -> attached`. A bounded session wait is explicit as `waiting_for_session`; refusal, expiry, and cleanup are `refused`, `expired`, and `detached`. The attach plan and health/discovery refusals carry the lifecycle snapshot. Attachment history is ephemeral to the attach operation; NARS session authority remains in the session index and runtime host.
+
+## Operator Router Projection Lease
+
+Owner: `@narada2/operator-router`, route-set client lease handle.
+
+Schema: `narada.operator_router.projection_lease.lifecycle_state.v1`.
+
+A projection lease follows `requested -> registering -> active -> renewing -> active`. Renewal failure moves it through `degraded -> recovering`; owner cleanup ends at `detached`, and an observed deadline may end at `expired`. This is deliberately separate from a route’s `healthy|degraded` transport state. The route-set handle exposes the lease snapshot while the server continues to own route registration, health probing, and expiry enforcement.
+
+## Site Loop Execution
+
+Owner: `@narada2/site-operating-loop`, execution orchestration above the persisted run/trigger/health machines.
+
+Schema: `narada.site_operating_loop.execution.lifecycle_state.v1`.
+
+Execution follows `scheduled -> admitted -> running`, may pass through `waiting` or `retry`, and ends at `completed`, `failed`, or `cancelled`. The existing run lifecycle remains the durable database projection; `siteOperatingLoopExecutionLifecycleFromRunState()` maps legacy run statuses without pretending that lock acquisition or health are execution admission.
+
+## Delegated Work-Order / DAG
+
+Owner: `@narada2/delegated-task-mcp`, persisted in each delegated task result; `@narada2/task-governance` retains the Narada-side compatibility contract only.
+
+Schema: `narada.delegation.work_order.lifecycle_state.v1`.
+
+The envelope follows `requested -> admitted -> planned -> dispatched -> running -> review -> completed`. A review that requires repair uses `review -> repaired -> completed`; failure and cancellation are terminal branches. This state belongs to the work-order/DAG as a whole; individual task nodes retain their own task lifecycle and evidence. A work-order state must never be inferred solely from one node’s status. The delegated-task MCP stores the lifecycle under `task.result.work_order_lifecycle`, exposes it in run/status/advance views, and journals transition evidence alongside the existing task events. The Narada package does not maintain a second work-order state store.
+
+## MCP Fabric Runtime
+
+Owner: `@narada2/mcp-fabric`, fabric runtime orchestration above individual server loading and probing.
+
+Schema: `narada.mcp.fabric.runtime.lifecycle_state.v1`.
+
+The fabric follows `declared -> loading -> ready`. Probe or transport trouble moves it to `degraded`; a restart follows `degraded|ready -> restarting -> loading|ready`, and an unavailable fabric can return to `declared` or `loading`. The existing `narada.mcp.fabric.lifecycle_state.v1` machine remains the per-server load/start/probe/close machine. Fabric health is not a substitute for per-server tool inventory.
+
 ## Generic Site Init
 
 Owner: `@narada2/site-common-tools`, `src/site-init/site-init.mjs`.

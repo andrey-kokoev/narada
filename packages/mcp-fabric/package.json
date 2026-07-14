@@ -7,7 +7,8 @@
     "mcp_fabric_doctor": "./src/mcp-fabric.mjs"
   },
   "exports": {
-    ".": "./src/mcp-fabric.mjs"
+    ".": "./src/mcp-fabric.mjs",
+    "./runtime-state": "./src/mcp-fabric-runtime-state.mjs"
   },
   "scripts": {
     "test": "node --test src/*.test.mjs",

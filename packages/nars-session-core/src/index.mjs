@@ -13,6 +13,7 @@ export * from './turn-state.mjs';
 export * from './session-index.mjs';
 export * from './authority-transition-state.mjs';
 export * from './authority-transition-fsm.mjs';
+export * from './authority-handoff-fsm.mjs';
 export * from './recovery-attempt-state.mjs';
 export * from './session-core.mjs';
 export * from './session-supervisor.mjs';

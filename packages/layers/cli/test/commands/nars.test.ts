@@ -810,6 +810,35 @@ describe('nars CLI commands', () => {
     });
   });
 
+  it('returns attachment lifecycle evidence when endpoint resolution refuses', async () => {
+    const siteRoot = tempSite();
+    const resolveAttachEndpoints = vi.fn(async () => ({
+      exitCode: ExitCode.INVALID_CONFIG,
+      result: {
+        schema: 'narada.agent_web_ui.attach_refusal.v1',
+        status: 'refused',
+        reason: 'health_unavailable',
+        session_id: 'carrier_endpoint_refused',
+      },
+    }));
+
+    const result = await agentWebUiAttachCommand({
+      site: 'sonar',
+      siteRoot,
+      session: 'carrier_endpoint_refused',
+      format: 'json',
+    }, createMockContext(), { resolveAttachEndpoints });
+
+    expect(result.exitCode).toBe(ExitCode.INVALID_CONFIG);
+    expect(result.result).toMatchObject({
+      reason: 'health_unavailable',
+      attachment_lifecycle: {
+        state: 'refused',
+        history: ['requested', 'discovering', 'resolving_endpoints', 'refused'],
+      },
+    });
+  });
+
   it('waits for health availability before starting agent-web-ui attachment', async () => {
     const siteRoot = tempSite();
     writeSession(siteRoot);

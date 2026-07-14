@@ -8,6 +8,7 @@ import {
 } from '@narada2/carrier-protocol';
 import { buildAgentIdentityRefV2, normalizeAgentIdentityRefV2 } from '@narada2/agent-identity';
 import { narsSessionsRootFromSiteRoot as resolveNarsSessionsRootFromSiteRoot } from '@narada2/site-paths';
+import { synchronizeNarsAuthorityHandoffLifecycle } from './authority-handoff-fsm.mjs';
 
 export const NARS_SESSION_INDEX_RECORD_SCHEMA = 'narada.nars.session_index_record.v1';
 export const NARS_SESSION_INDEX_SCHEMA = 'narada.nars.session_index.v1';
@@ -161,7 +162,7 @@ export function markNarsSessionIndexClosed({ sessionPath, terminalState = 'close
   });
 }
 
-export function updateNarsSessionAuthorityTransitionState({ sessionPath, authorityTransitionState = null, sourceWriteAdmission = null, supersededBySessionId = undefined, authorityLocatorRef = undefined, updatedAt = new Date().toISOString(), siteRoot } = {}) {
+export function updateNarsSessionAuthorityTransitionState({ sessionPath, authorityTransitionState = null, authorityHandoffLifecycle = null, sourceWriteAdmission = null, supersededBySessionId = undefined, authorityLocatorRef = undefined, updatedAt = new Date().toISOString(), siteRoot } = {}) {
   const paths = narsSessionIndexPathsFromSessionPath(sessionPath);
   if (!paths || !existsSync(paths.record_path)) return null;
   const current = readJson(paths.record_path);
@@ -169,6 +170,10 @@ export function updateNarsSessionAuthorityTransitionState({ sessionPath, authori
   const next = {
     ...current,
     authority_transition_state: normalizeAuthorityTransitionState(authorityTransitionState),
+    authority_handoff_lifecycle: synchronizeNarsAuthorityHandoffLifecycle(
+      authorityHandoffLifecycle ?? current.authority_handoff_lifecycle,
+      authorityTransitionState ?? current.authority_transition_state,
+    ),
     source_write_admission: NARS_AUTHORITY_RUNTIME_SOURCE_WRITE_ADMISSIONS.includes(sourceWriteAdmission) ? sourceWriteAdmission : current.source_write_admission ?? null,
     ...(supersededBySessionId !== undefined ? { superseded_by_session_id: normalizeOptionalString(supersededBySessionId) } : {}),
     ...(authorityLocatorRef !== undefined ? { authority_locator_ref: normalizeOptionalString(authorityLocatorRef) } : {}),
@@ -310,6 +315,7 @@ function buildSessionIndexRecord({ sessionStartedEvent, sessionPath, siteRoot, p
       legacy_agent_id: sessionStartedEvent.agent_id,
     })
     : null);
+  const authorityTransitionState = normalizeAuthorityTransitionState(sessionStartedEvent.authority_transition_state);
   return {
     schema: NARS_SESSION_INDEX_RECORD_SCHEMA,
     session_id: sessionId,
@@ -344,7 +350,11 @@ function buildSessionIndexRecord({ sessionStartedEvent, sessionPath, siteRoot, p
     authority_epoch: authorityEpoch,
     authority_runtime_id: normalizeOptionalString(sessionStartedEvent.authority_runtime_id)
       ?? defaultAuthorityRuntimeId({ hostKind: authorityRuntimeHost, sessionId }),
-    authority_transition_state: normalizeAuthorityTransitionState(sessionStartedEvent.authority_transition_state),
+    authority_transition_state: authorityTransitionState,
+    authority_handoff_lifecycle: synchronizeNarsAuthorityHandoffLifecycle(
+      sessionStartedEvent.authority_handoff_lifecycle,
+      authorityTransitionState,
+    ),
     source_write_admission: NARS_AUTHORITY_RUNTIME_SOURCE_WRITE_ADMISSIONS.includes(sessionStartedEvent.source_write_admission) ? sessionStartedEvent.source_write_admission : 'active',
     superseded_by_session_id: normalizeOptionalString(sessionStartedEvent.superseded_by_session_id),
     authority_locator_ref: normalizeOptionalString(sessionStartedEvent.authority_locator_ref),
@@ -384,6 +394,10 @@ function toAggregateEntry(record) {
     authority_epoch: normalizeAuthorityEpoch(record.authority_epoch, null),
     authority_runtime_id: normalizeOptionalString(record.authority_runtime_id),
     authority_transition_state: normalizeAuthorityTransitionState(record.authority_transition_state),
+    authority_handoff_lifecycle: synchronizeNarsAuthorityHandoffLifecycle(
+      record.authority_handoff_lifecycle,
+      record.authority_transition_state,
+    ),
     source_write_admission: NARS_AUTHORITY_RUNTIME_SOURCE_WRITE_ADMISSIONS.includes(record.source_write_admission) ? record.source_write_admission : null,
     superseded_by_session_id: normalizeOptionalString(record.superseded_by_session_id),
     authority_locator_ref: normalizeOptionalString(record.authority_locator_ref),
