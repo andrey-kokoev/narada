@@ -7,7 +7,7 @@ import {
   writeOperatorProjectionLaunchBinding,
 } from '../lib/launcher-runtime.js';
 import { defaultRuntimeForCarrier as defaultRuntimeForOperatorSurface } from '@narada2/carrier-runtime-contract/carrier-runtime-selection';
-import { requireAgent, requireSiteRoot } from './carrier-support.js';
+import { requireAgent, requireSiteRoot } from './operator-surface-runtime-support.js';
 
 /**
  * Canonical Operator Surface runtime-start boundary.

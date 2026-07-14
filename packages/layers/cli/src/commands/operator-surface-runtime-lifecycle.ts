@@ -10,7 +10,7 @@ import {
   formatOperatorSurfaceRuntimeStatus,
   requireAgent,
   requireSiteRoot,
-} from './carrier-support.js';
+} from './operator-surface-runtime-support.js';
 import type { OperatorSurfaceRuntimeStartOptions } from './operator-surface-runtime-start.js';
 
 export type OperatorSurfaceRuntimeLifecycleOptions = OperatorSurfaceRuntimeStartOptions;
