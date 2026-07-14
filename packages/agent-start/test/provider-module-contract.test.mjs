@@ -130,7 +130,12 @@ test('codex subscription support runs live auth preflight for non-dry launch by 
     assert.equal(calls.length, 1);
     assert.deepEqual(calls[0].args.slice(-3, -1), ['exec', '--json']);
     assert.equal(Object.hasOwn(calls[0].options.env, 'OPENAI_API_KEY'), false);
-    assert.equal(preflight.ai_process_invocation.event, 'launch');
+    assert.equal(preflight.ai_process_invocation.event, 'release');
+    assert.equal(preflight.ai_process_invocation.lifecycle_state, 'released');
+    assert.deepEqual(
+      preflight.ai_process_invocation.lifecycle_history.map((entry) => entry.state),
+      ['admitted', 'spawned', 'exited', 'released'],
+    );
     assert.equal(preflight.ai_process_invocation.projection, 'codex-subscription');
     assert.equal(preflight.ai_process_invocation.purpose, 'auth_probe');
     assert.equal(preflight.ai_process_invocation.adapter_kind, 'codex');

@@ -8,7 +8,7 @@ import { resolveCodexSubscriptionModelCatalog } from '@narada2/carrier-provider-
 import {
   NARADA_AGENT_RUNTIME_SERVER_KIND,
   operatorSurfaceKindsForRuntimeHost,
-} from '@narada2/carrier-runtime-contract/carrier-runtime-selection';
+} from '@narada2/operator-surface-runtime-contract/operator-surface-runtime-selection';
 
 export const INTELLIGENCE_PROVIDER_CONTRACT_SCHEMA = 'narada.intelligence_provider.v1';
 const NARS_OPERATOR_SURFACE_KINDS = operatorSurfaceKindsForRuntimeHost(NARADA_AGENT_RUNTIME_SERVER_KIND);
@@ -174,7 +174,7 @@ export function resolveIntelligenceProviderLaunch(value, carrierName, inputSourc
       reason_code: 'intelligence_provider_runtime_unsupported',
       intelligence_provider: provider,
       carrier_kind: carrierName,
-      reason: '-IntelligenceProvider currently applies only to NARS operator surfaces admitted by the carrier launch matrix. Kimi and Codex CLI provider selection remains owned by their native runtime adapters.',
+      reason: 'Intelligence provider selection applies only to NARS operator surfaces such as agent-cli or agent-web-ui. Kimi and Codex CLI provider selection remains owned by their native runtime adapters.',
     }, states);
   }
   pushState('carrier_supports_provider_selection', { carrier_kind: carrierName });
