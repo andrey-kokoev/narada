@@ -435,10 +435,10 @@ describe('operator-surface commands', () => {
     const cwd = await tempRepo();
     await operatorSurfaceIdentityAddCommand({
       cwd,
-      identityName: 'narada-andrey.architect',
+      identityName: 'andrey-user.architect',
       role: 'architect',
       agentKind: 'codex_cli',
-      site: 'narada-andrey',
+      site: 'andrey-user',
       label: 'Narada Architect',
       by: 'operator',
       inputCapabilities: 'type_text,submit',
@@ -446,16 +446,16 @@ describe('operator-surface commands', () => {
       format: 'json',
     }, createMockContext());
     await writeBindings(cwd, [
-      { binding_id: 'bind-1', identity_id: 'narada-andrey.architect', runtime_locus: 'pc-site', handle: 'hwnd:1', input_capabilities: ['type_text'], status: 'active' },
+      { binding_id: 'bind-1', identity_id: 'andrey-user.architect', runtime_locus: 'pc-site', handle: 'hwnd:1', input_capabilities: ['type_text'], status: 'active' },
     ]);
     await writeVisibleLabels(cwd, [
-      { identity_id: 'narada-andrey.architect', site_id: 'narada-andrey', role: 'architect', label: 'Narada Architect', runtime_locus: 'pc-site', status: 'visible' },
+      { identity_id: 'andrey-user.architect', site_id: 'andrey-user', role: 'architect', label: 'Narada Architect', runtime_locus: 'pc-site', status: 'visible' },
     ]);
 
     const result = await operatorSurfaceIdentityRenameCommand({
       cwd,
-      fromIdentity: 'narada-andrey.architect',
-      toIdentity: 'narada-andrey.Kevin',
+      fromIdentity: 'andrey-user.architect',
+      toIdentity: 'andrey-user.Kevin',
       by: 'operator',
       label: 'Kevin',
       format: 'json',
@@ -464,27 +464,27 @@ describe('operator-surface commands', () => {
     expect(result.exitCode).toBe(ExitCode.SUCCESS);
     expect(result.result).toMatchObject({
       status: 'success',
-      old_identity_id: 'narada-andrey.architect',
-      new_identity_id: 'narada-andrey.Kevin',
+      old_identity_id: 'andrey-user.architect',
+      new_identity_id: 'andrey-user.Kevin',
       role: 'architect',
       immutable_history_preserved: true,
       projection_updates: {
         runtime_bindings: { status: 'updated' },
         visible_labels: { status: 'updated' },
       },
-      current_addressability_aliases: expect.arrayContaining(['narada-andrey.Kevin', 'narada-andrey.architect', 'architect']),
+      current_addressability_aliases: expect.arrayContaining(['andrey-user.Kevin', 'andrey-user.architect', 'architect']),
     });
     const registry = JSON.parse(await readFile(join(cwd, 'operator-surfaces', 'identities.json'), 'utf8')) as { identities: Array<Record<string, unknown>> };
     expect(registry.identities).toHaveLength(1);
     expect(registry.identities[0]).toMatchObject({
-      identity_id: 'narada-andrey.Kevin',
-      previous_identity_ids: ['narada-andrey.architect'],
+      identity_id: 'andrey-user.Kevin',
+      previous_identity_ids: ['andrey-user.architect'],
       role: 'architect',
       label: 'Kevin',
     });
     expect(existsSync(String((result.result as { migration_evidence_path: string }).migration_evidence_path))).toBe(true);
     const bindings = JSON.parse(await readFile(join(cwd, 'operator-surfaces', 'runtime-bindings.json'), 'utf8')) as { bindings: Array<Record<string, unknown>> };
-    expect(bindings.bindings[0]?.identity_id).toBe('narada-andrey.Kevin');
+    expect(bindings.bindings[0]?.identity_id).toBe('andrey-user.Kevin');
   });
 
   it('fails identity rename closed when active assignment exists without explicit consent', async () => {
@@ -536,17 +536,17 @@ describe('operator-surface commands', () => {
     const cwd = await tempRepo();
     await operatorSurfaceIdentityAddCommand({
       cwd,
-      identityName: 'narada-andrey.architect',
+      identityName: 'andrey-user.architect',
       role: 'architect',
       agentKind: 'codex_cli',
-      site: 'narada-andrey',
+      site: 'andrey-user',
       by: 'operator',
       format: 'json',
     }, createMockContext());
 
     const result = await operatorSurfaceIdentityRenameCommand({
       cwd,
-      fromIdentity: 'narada-andrey.architect',
+      fromIdentity: 'andrey-user.architect',
       toIdentity: 'other-site.Kevin',
       by: 'operator',
       format: 'json',
@@ -557,7 +557,7 @@ describe('operator-surface commands', () => {
       status: 'error',
       reason: 'site_locus_mismatch',
       mutation_performed: false,
-      old_site_id: 'narada-andrey',
+      old_site_id: 'andrey-user',
       requested_new_site_id: 'other-site',
       unblock_command: expect.stringContaining('governed cross-Site handoff'),
     });
@@ -570,7 +570,7 @@ describe('operator-surface commands', () => {
       schema: 'https://narada.dev/schemas/operator-surface-identities/v1',
       updated_at: '2026-04-30T00:00:00.000Z',
       sites: {
-        'narada-andrey': {},
+        'andrey-user': {},
       },
       identities: [{
         identity_id: 'andrey-user.architect',
@@ -599,8 +599,8 @@ describe('operator-surface commands', () => {
       reason: 'site_identity_unregistered',
       mutation_performed: false,
       old_site_id: 'andrey-user',
-      registered_site_ids: ['narada-andrey'],
-      canonical_site_id: 'narada-andrey',
+      registered_site_ids: ['andrey-user'],
+      canonical_site_id: 'andrey-user',
       unblock_command: expect.stringContaining('Reconcile operator-surface identity Site ids before rename'),
     });
   });
@@ -609,10 +609,10 @@ describe('operator-surface commands', () => {
     const cwd = await tempRepo();
     await operatorSurfaceIdentityAddCommand({
       cwd,
-      identityName: 'narada-andrey.architect',
+      identityName: 'andrey-user.architect',
       role: 'architect',
       agentKind: 'codex_cli',
-      site: 'narada-andrey',
+      site: 'andrey-user',
       siteAffinityColor: '#123456',
       by: 'operator',
       format: 'json',
@@ -620,8 +620,8 @@ describe('operator-surface commands', () => {
 
     const result = await operatorSurfaceIdentityRenameCommand({
       cwd,
-      fromIdentity: 'narada-andrey.architect',
-      toIdentity: 'narada-andrey.Kevin',
+      fromIdentity: 'andrey-user.architect',
+      toIdentity: 'andrey-user.Kevin',
       by: 'operator',
       format: 'json',
     }, createMockContext());
@@ -630,8 +630,8 @@ describe('operator-surface commands', () => {
     expect(result.result).toMatchObject({
       status: 'success',
       mutation_performed: true,
-      new_identity_id: 'narada-andrey.Kevin',
-      site_id: 'narada-andrey',
+      new_identity_id: 'andrey-user.Kevin',
+      site_id: 'andrey-user',
     });
   });
 
@@ -691,24 +691,24 @@ describe('operator-surface commands', () => {
     const cwd = await tempRepo();
     await operatorSurfaceIdentityAddCommand({
       cwd,
-      identityName: 'narada-andrey.architect',
+      identityName: 'andrey-user.architect',
       role: 'architect',
       agentKind: 'codex_cli',
-      site: 'narada-andrey',
+      site: 'andrey-user',
       by: 'operator',
       format: 'json',
     }, createMockContext());
     await operatorSurfaceIdentityRenameCommand({
       cwd,
-      fromIdentity: 'narada-andrey.architect',
-      toIdentity: 'narada-andrey.Kevin',
+      fromIdentity: 'andrey-user.architect',
+      toIdentity: 'andrey-user.Kevin',
       by: 'operator',
       format: 'json',
     }, createMockContext());
 
     const result = await operatorSurfaceIdentityAdmitTaskAuthorityCommand({
       cwd,
-      identityName: 'narada-andrey.Kevin',
+      identityName: 'andrey-user.Kevin',
       by: 'operator',
       format: 'json',
     }, createMockContext());
@@ -716,18 +716,18 @@ describe('operator-surface commands', () => {
     expect(result.exitCode).toBe(ExitCode.SUCCESS);
     expect(result.result).toMatchObject({
       status: 'success',
-      identity_id: 'narada-andrey.Kevin',
+      identity_id: 'andrey-user.Kevin',
       role: 'architect',
       capabilities: expect.arrayContaining(['review', 'architect_as_reviewer']),
       exact_identity_preserved: true,
       role_aliases_not_collapsed: true,
     });
     const roster = await loadRoster(cwd);
-    expect(roster.agents.find((agent) => agent.agent_id === 'narada-andrey.Kevin')).toMatchObject({
+    expect(roster.agents.find((agent) => agent.agent_id === 'andrey-user.Kevin')).toMatchObject({
       role: 'architect',
       capabilities: expect.arrayContaining(['review']),
     });
-    expect(roster.agents.find((agent) => agent.agent_id === 'narada-andrey.architect')).toBeUndefined();
+    expect(roster.agents.find((agent) => agent.agent_id === 'andrey-user.architect')).toBeUndefined();
   });
 
   it('returns runtime-locus deferral when focused binding is requested', async () => {
@@ -1052,9 +1052,9 @@ describe('operator-surface commands', () => {
         architect: { affinity_color: '#ff3fb7' },
       },
       identities: [{
-        identity_id: 'narada-andrey.Kevin',
-        previous_identity_ids: ['narada-andrey.architect'],
-        site_id: 'narada-andrey',
+        identity_id: 'andrey-user.Kevin',
+        previous_identity_ids: ['andrey-user.architect'],
+        site_id: 'andrey-user',
         role: 'architect',
         agent_kind: 'codex_cli',
         label: 'Kevin',
@@ -1067,7 +1067,7 @@ describe('operator-surface commands', () => {
 
     const labels = await operatorSurfaceLabelsBuildCommand({
       cwd,
-      site: 'narada-andrey',
+      site: 'andrey-user',
       format: 'json',
     }, createMockContext());
 
@@ -1075,7 +1075,7 @@ describe('operator-surface commands', () => {
     expect(labels.result).toMatchObject({
       diagnostics: [],
       labels: [{
-        identity_id: 'narada-andrey.Kevin',
+        identity_id: 'andrey-user.Kevin',
         role: 'architect',
         projection_hints: {
           role_line: {
@@ -1156,8 +1156,8 @@ describe('operator-surface commands', () => {
         architect: { affinity_color: '#ff3fb7' },
       },
       identities: [{
-        identity_id: 'narada-andrey.Kevin',
-        site_id: 'narada-andrey',
+        identity_id: 'andrey-user.Kevin',
+        site_id: 'andrey-user',
         role: 'architect',
         agent_kind: 'codex_cli',
         label: 'Kevin',
@@ -1171,7 +1171,7 @@ describe('operator-surface commands', () => {
 
     const labels = await operatorSurfaceLabelsBuildCommand({
       cwd,
-      site: 'narada-andrey',
+      site: 'andrey-user',
       format: 'json',
     }, createMockContext());
 
@@ -1391,10 +1391,10 @@ describe('operator-surface commands', () => {
     }, createMockContext());
     await operatorSurfaceIdentityAddCommand({
       cwd,
-      identityName: 'narada-andrey-builder',
+      identityName: 'andrey-user-builder',
       role: 'builder',
       agentKind: 'codex_cli',
-      site: 'narada-andrey',
+      site: 'andrey-user',
       by: 'operator',
       format: 'json',
     }, createMockContext());
@@ -1422,10 +1422,10 @@ describe('operator-surface commands', () => {
     const cwd = await tempRepo();
     await operatorSurfaceIdentityAddCommand({
       cwd,
-      identityName: 'narada-andrey.Bob',
+      identityName: 'andrey-user.Bob',
       role: 'builder',
       agentKind: 'codex_cli',
-      site: 'narada-andrey',
+      site: 'andrey-user',
       by: 'operator',
       inputCapabilities: 'type_text,submit',
       submitStrategy: 'known_surface_submit',
@@ -1433,7 +1433,7 @@ describe('operator-surface commands', () => {
     }, createMockContext());
     await writeBindings(cwd, [{
       binding_id: 'bind-bob',
-      identity_id: 'narada-andrey.Bob',
+      identity_id: 'andrey-user.Bob',
       runtime_locus: 'pc-site',
       handle: 'hwnd:456',
       transport: 'operator_surface_input',
@@ -1445,7 +1445,7 @@ describe('operator-surface commands', () => {
     const result = await operatorSurfaceSendCommand({
       cwd,
       from: 'narada-proper.builder',
-      to: 'narada-andrey.builder',
+      to: 'andrey-user.builder',
       currentSite: 'narada-proper',
       text: 'next',
       dryRun: true,
@@ -1455,42 +1455,42 @@ describe('operator-surface commands', () => {
     expect(result.exitCode).toBe(ExitCode.SUCCESS);
     expect(result.result).toMatchObject({
       status: 'success',
-      requested_address: 'narada-andrey.builder',
+      requested_address: 'andrey-user.builder',
       current_site: 'narada',
-      target_site: 'narada-andrey',
-      requested_to: 'narada-andrey.builder',
-      resolved_to: 'narada-andrey.Bob',
+      target_site: 'andrey-user',
+      requested_to: 'andrey-user.builder',
+      resolved_to: 'andrey-user.Bob',
       resolution: 'scoped_role_alias_exact_one',
       message_route: {
         sender: 'narada-proper.builder',
-        requested_recipient: 'narada-andrey.builder',
-        resolved_recipient: 'narada-andrey.Bob',
-        requested_to: 'narada-andrey.builder',
-        resolved_to: 'narada-andrey.Bob',
+        requested_recipient: 'andrey-user.builder',
+        resolved_recipient: 'andrey-user.Bob',
+        requested_to: 'andrey-user.builder',
+        resolved_to: 'andrey-user.Bob',
         resolution: 'scoped_role_alias_exact_one',
         current_site: 'narada',
-        target_site: 'narada-andrey',
+        target_site: 'andrey-user',
         binding_status: 'bound',
       },
       identity_resolution: {
-        requested_identity: 'narada-andrey.builder',
-        resolved_identity: 'narada-andrey.Bob',
+        requested_identity: 'andrey-user.builder',
+        resolved_identity: 'andrey-user.Bob',
         resolution: 'scoped_role_alias_exact_one',
         resolution_evidence: {
-          site_id: 'narada-andrey',
+          site_id: 'andrey-user',
           role: 'builder',
-          candidates: ['narada-andrey.Bob'],
+          candidates: ['andrey-user.Bob'],
         },
       },
       send: {
-        identity: 'narada-andrey.Bob',
+        identity: 'andrey-user.Bob',
         sender: 'narada-proper.builder',
-        recipient: 'narada-andrey.Bob',
-        requested_address: 'narada-andrey.builder',
-        requested_to: 'narada-andrey.builder',
-        resolved_to: 'narada-andrey.Bob',
+        recipient: 'andrey-user.Bob',
+        requested_address: 'andrey-user.builder',
+        requested_to: 'andrey-user.builder',
+        resolved_to: 'andrey-user.Bob',
         resolution: 'scoped_role_alias_exact_one',
-        target_site: 'narada-andrey',
+        target_site: 'andrey-user',
         runtime_locus: 'pc-site',
       },
     });
@@ -1500,27 +1500,27 @@ describe('operator-surface commands', () => {
     const cwd = await tempRepo();
     await operatorSurfaceIdentityAddCommand({
       cwd,
-      identityName: 'narada-andrey.builder',
+      identityName: 'andrey-user.builder',
       role: 'observer',
       agentKind: 'codex_cli',
-      site: 'narada-andrey',
+      site: 'andrey-user',
       by: 'operator',
       inputCapabilities: 'type_text',
       format: 'json',
     }, createMockContext());
     await operatorSurfaceIdentityAddCommand({
       cwd,
-      identityName: 'narada-andrey.Alice',
+      identityName: 'andrey-user.Alice',
       role: 'builder',
       agentKind: 'codex_cli',
-      site: 'narada-andrey',
+      site: 'andrey-user',
       by: 'operator',
       inputCapabilities: 'type_text',
       format: 'json',
     }, createMockContext());
     await writeBindings(cwd, [{
       binding_id: 'bind-exact',
-      identity_id: 'narada-andrey.builder',
+      identity_id: 'andrey-user.builder',
       runtime_locus: 'pc-site',
       handle: 'hwnd:exact',
       transport: 'operator_surface_input',
@@ -1530,7 +1530,7 @@ describe('operator-surface commands', () => {
 
     const result = await operatorSurfaceSendCommand({
       cwd,
-      to: 'narada-andrey.builder',
+      to: 'andrey-user.builder',
       text: 'exact',
       dryRun: true,
       format: 'json',
@@ -1539,13 +1539,13 @@ describe('operator-surface commands', () => {
     expect(result.exitCode).toBe(ExitCode.SUCCESS);
     expect(result.result).toMatchObject({
       identity_resolution: {
-        requested_identity: 'narada-andrey.builder',
-        resolved_identity: 'narada-andrey.builder',
+        requested_identity: 'andrey-user.builder',
+        resolved_identity: 'andrey-user.builder',
         resolution: 'identity_id',
       },
       send: {
-        identity: 'narada-andrey.builder',
-        recipient: 'narada-andrey.builder',
+        identity: 'andrey-user.builder',
+        recipient: 'andrey-user.builder',
       },
     });
   });
@@ -1554,26 +1554,26 @@ describe('operator-surface commands', () => {
     const cwd = await tempRepo();
     await operatorSurfaceIdentityAddCommand({
       cwd,
-      identityName: 'narada-andrey.Bob',
+      identityName: 'andrey-user.Bob',
       role: 'builder',
       agentKind: 'codex_cli',
-      site: 'narada-andrey',
+      site: 'andrey-user',
       by: 'operator',
       format: 'json',
     }, createMockContext());
     await operatorSurfaceIdentityAddCommand({
       cwd,
-      identityName: 'narada-andrey.Alice',
+      identityName: 'andrey-user.Alice',
       role: 'builder',
       agentKind: 'codex_cli',
-      site: 'narada-andrey',
+      site: 'andrey-user',
       by: 'operator',
       format: 'json',
     }, createMockContext());
 
     const result = await operatorSurfaceSendCommand({
       cwd,
-      identity: 'narada-andrey.builder',
+      identity: 'andrey-user.builder',
       text: 'next',
       dryRun: true,
       format: 'json',
@@ -1583,15 +1583,15 @@ describe('operator-surface commands', () => {
     expect(result.result).toMatchObject({
       status: 'error',
       reason: 'scoped_role_alias_ambiguous',
-      requested_to: 'narada-andrey.builder',
+      requested_to: 'andrey-user.builder',
       resolved_to: null,
       identity_resolution: {
         resolution: 'scoped_role_alias_multi_match',
         resolution_evidence: {
-          candidates: ['narada-andrey.Alice', 'narada-andrey.Bob'],
+          candidates: ['andrey-user.Alice', 'andrey-user.Bob'],
         },
       },
-      unblock_command: 'Use one concrete identity_id: narada-andrey.Alice, narada-andrey.Bob',
+      unblock_command: 'Use one concrete identity_id: andrey-user.Alice, andrey-user.Bob',
     });
   });
 
@@ -1600,7 +1600,7 @@ describe('operator-surface commands', () => {
 
     const result = await operatorSurfaceSendCommand({
       cwd,
-      to: 'narada-andrey.builder',
+      to: 'andrey-user.builder',
       text: 'next',
       dryRun: true,
       format: 'json',
@@ -1610,12 +1610,12 @@ describe('operator-surface commands', () => {
     expect(result.result).toMatchObject({
       status: 'error',
       reason: 'scoped_role_alias_unresolved',
-      requested_to: 'narada-andrey.builder',
+      requested_to: 'andrey-user.builder',
       resolved_to: null,
       identity_resolution: {
         resolution: 'scoped_role_alias_zero_match',
         resolution_evidence: {
-          site_id: 'narada-andrey',
+          site_id: 'andrey-user',
           role: 'builder',
           candidates: [],
         },

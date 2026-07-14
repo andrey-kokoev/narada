@@ -6,10 +6,10 @@
  * without turning Intelligence Context into memory.
  *
  * Usage (dry-run, default):
- *   node tools/incubation/dry-run-agent-start.mjs --identity narada-andrey.architect --runtime kimi
+ *   node tools/incubation/dry-run-agent-start.mjs --identity andrey-user.architect --runtime kimi
  *
  * Usage (write):
- *   node tools/incubation/dry-run-agent-start.mjs --identity narada-andrey.architect --runtime kimi --write
+ *   node tools/incubation/dry-run-agent-start.mjs --identity andrey-user.architect --runtime kimi --write
  */
 
 import Database from '@narada2/sqlite';

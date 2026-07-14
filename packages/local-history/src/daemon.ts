@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, stat, unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { LocalHistoryError, LocalHistoryStore, writeHealth } from './store.js';
+import { LocalHistoryError, LocalHistoryStore, writeHealth, writeJsonAtomic } from './store.js';
 import type { HistoryDaemonOptions, HistoryTarget } from './types.js';
 
 interface LockRecord {
@@ -49,40 +49,61 @@ export async function runHistoryDaemon(options: HistoryDaemonOptions): Promise<v
     started_at: startedAt,
     health_path: store.healthPath,
   };
-  await writeDaemonRecord(options.target.storeRoot, daemonRecord);
+  try {
+    await writeDaemonRecord(options.target.storeRoot, daemonRecord);
+  } catch (error) {
+    store.close();
+    await releaseOwnerLock(options.target.storeRoot, lock).catch(() => undefined);
+    throw error;
+  }
   let stopping = false;
   let timer: NodeJS.Timeout | undefined;
-  const stop = async (): Promise<void> => {
+  let scanInFlight: Promise<void> | null = null;
+  const stop = async (finalState: 'stopped' | 'failed' = 'stopped', failure?: unknown, waitForScan = true): Promise<void> => {
     if (stopping) return;
     stopping = true;
     if (timer) clearInterval(timer);
-    await writeHealth(store.healthPath, {
-      state: 'stopped',
-      pid: process.pid,
-      owner_id: lock.owner_id,
-      started_at: startedAt,
-      stopped_at: new Date().toISOString(),
-    });
-    await unlink(stopRequestPath).catch(() => undefined);
-    await removeDaemonRecord(options.target.storeRoot, lock.owner_id);
-    await releaseOwnerLock(options.target.storeRoot, lock);
-    store.close();
+    if (waitForScan && scanInFlight) await scanInFlight.catch(() => undefined);
+    try {
+      await writeHealth(store.healthPath, {
+        state: finalState,
+        pid: process.pid,
+        owner_id: lock.owner_id,
+        started_at: startedAt,
+        ...(finalState === 'stopped' ? { stopped_at: new Date().toISOString() } : {
+          last_error: failure instanceof Error ? failure.message : String(failure ?? 'local_history_daemon_failed'),
+        }),
+      });
+    } finally {
+      await unlink(stopRequestPath).catch(() => undefined);
+      await removeDaemonRecord(options.target.storeRoot, lock.owner_id).catch(() => undefined);
+      await unlink(join(options.target.storeRoot, 'heartbeat.json')).catch(() => undefined);
+      await releaseOwnerLock(options.target.storeRoot, lock).catch(() => undefined);
+      store.close();
+    }
   };
   process.once('SIGINT', () => void stop().finally(() => process.exit(0)));
   process.once('SIGTERM', () => void stop().finally(() => process.exit(0)));
-  await writeHealth(store.healthPath, {
-    state: 'running',
-    pid: process.pid,
-    owner_id: lock.owner_id,
-    started_at: startedAt,
-    last_scan_at: null,
-    last_capture_at: null,
-    last_error: null,
-  });
+  try {
+    await writeHealth(store.healthPath, {
+      state: 'running',
+      pid: process.pid,
+      owner_id: lock.owner_id,
+      started_at: startedAt,
+      last_scan_at: null,
+      last_capture_at: null,
+      last_error: null,
+    });
+  } catch (error) {
+    await removeDaemonRecord(options.target.storeRoot, lock.owner_id).catch(() => undefined);
+    await releaseOwnerLock(options.target.storeRoot, lock).catch(() => undefined);
+    store.close();
+    throw error;
+  }
 
   const scan = async (): Promise<void> => {
     try {
-      const result = await store.scanOnce();
+      const result = await store.scanOnce({ debounce_ms: options.once ? 0 : policy.debounce_ms });
       await writeHealth(store.healthPath, {
         state: 'running',
         pid: process.pid,
@@ -103,11 +124,24 @@ export async function runHistoryDaemon(options: HistoryDaemonOptions): Promise<v
         last_scan_at: new Date().toISOString(),
         last_error: error instanceof Error ? error.message : String(error),
       });
-      if (options.once) throw error;
+      if (options.once) {
+        await stop('failed', error, false);
+        throw error;
+      }
     }
   };
 
-  await scan();
+  const runScan = async (): Promise<void> => {
+    if (stopping || scanInFlight) return;
+    scanInFlight = scan();
+    try {
+      await scanInFlight;
+    } finally {
+      scanInFlight = null;
+    }
+  };
+
+  await runScan();
   if (options.once) {
     await stop();
     return;
@@ -122,7 +156,7 @@ export async function runHistoryDaemon(options: HistoryDaemonOptions): Promise<v
       process.exit(0);
       return;
     }
-    await scan();
+    await runScan();
   }
 }
 
@@ -130,32 +164,21 @@ export async function stopHistoryDaemon(target: HistoryTarget): Promise<{ status
   const daemonPath = join(target.storeRoot, 'daemon.json');
   const record = await readJsonFile<DaemonRecord>(daemonPath);
   if (!record?.pid) return { status: 'not_running', reason: 'daemon_record_missing' };
-  await writeFile(join(target.storeRoot, 'stop.request'), `${JSON.stringify({ requested_at: new Date().toISOString() })}\n`, 'utf8');
+  await writeJsonAtomic(join(target.storeRoot, 'stop.request'), { requested_at: new Date().toISOString() });
   const gracefulDeadline = Date.now() + 2000;
   while (Date.now() < gracefulDeadline) {
     if (!(await fileExists(daemonPath))) return { status: 'stop_requested', pid: record.pid };
     if (!isProcessAlive(record.pid)) {
-      await unlink(daemonPath).catch(() => undefined);
-      await unlink(join(target.storeRoot, 'stop.request')).catch(() => undefined);
+      await markDaemonMissing(target, record);
       return { status: 'not_running', pid: record.pid, reason: 'daemon_process_missing' };
     }
     await delay(50);
   }
-  try {
-    process.kill(record.pid, 'SIGTERM');
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error;
-    await unlink(daemonPath).catch(() => undefined);
-    await unlink(join(target.storeRoot, 'stop.request')).catch(() => undefined);
-    return { status: 'not_running', pid: record.pid, reason: 'daemon_process_missing' };
-  }
-  await unlink(daemonPath).catch(() => undefined);
-  await unlink(join(target.storeRoot, 'stop.request')).catch(() => undefined);
-  return { status: 'stop_requested', pid: record.pid };
+  return { status: 'stop_requested', pid: record.pid, reason: 'termination_pending' };
 }
 
 async function writeDaemonRecord(storeRoot: string, record: DaemonRecord): Promise<void> {
-  await writeFile(join(storeRoot, 'daemon.json'), `${JSON.stringify(record, null, 2)}\n`, 'utf8');
+  await writeJsonAtomic(join(storeRoot, 'daemon.json'), record);
 }
 
 async function removeDaemonRecord(storeRoot: string, ownerId: string): Promise<void> {
@@ -179,7 +202,10 @@ async function acquireOwnerLock(storeRoot: string): Promise<LockRecord> {
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
     const current = await readJsonFile<LockRecord>(lockPath);
-    if (current?.pid && isProcessAlive(current.pid)) throw new LocalHistoryError('local_history_store_busy');
+    if (!current) throw new LocalHistoryError('local_history_lock_corrupt');
+    if (current.pid && isProcessAlive(current.pid)) {
+      throw new LocalHistoryError('local_history_store_busy', 'local_history_store_busy: stop the background history process before running a mutating history command');
+    }
     await unlink(lockPath).catch(() => undefined);
     await writeFile(lockPath, `${JSON.stringify(record, null, 2)}\n`, { encoding: 'utf8', flag: 'wx' });
   }
@@ -187,7 +213,7 @@ async function acquireOwnerLock(storeRoot: string): Promise<LockRecord> {
 }
 
 async function refreshOwnerLock(storeRoot: string, record: LockRecord): Promise<void> {
-  await writeFile(join(storeRoot, 'owner.lock'), `${JSON.stringify({ ...record, heartbeat_at: new Date().toISOString() }, null, 2)}\n`, 'utf8');
+  await writeJsonAtomic(join(storeRoot, 'heartbeat.json'), { ...record, heartbeat_at: new Date().toISOString() });
 }
 
 async function releaseOwnerLock(storeRoot: string, record: LockRecord): Promise<void> {
@@ -196,12 +222,26 @@ async function releaseOwnerLock(storeRoot: string, record: LockRecord): Promise<
   if (current?.owner_id === record.owner_id) await unlink(path).catch(() => undefined);
 }
 
+async function markDaemonMissing(target: HistoryTarget, record: DaemonRecord): Promise<void> {
+  await writeHealth(join(target.storeRoot, 'health.json'), {
+    state: 'failed',
+    pid: record.pid,
+    owner_id: record.owner_id,
+    started_at: record.started_at,
+    last_error: 'local_history_daemon_process_missing',
+  }).catch(() => undefined);
+  await unlink(join(target.storeRoot, 'daemon.json')).catch(() => undefined);
+  await unlink(join(target.storeRoot, 'stop.request')).catch(() => undefined);
+  await unlink(join(target.storeRoot, 'heartbeat.json')).catch(() => undefined);
+}
+
 async function readJsonFile<T>(path: string): Promise<T | null> {
   try {
     return JSON.parse(await readFile(path, 'utf8')) as T;
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
-    return null;
+    if (error instanceof SyntaxError) throw new LocalHistoryError('local_history_metadata_corrupt', `local_history_metadata_corrupt: ${path}`);
+    throw error;
   }
 }
 

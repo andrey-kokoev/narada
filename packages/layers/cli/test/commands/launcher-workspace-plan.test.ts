@@ -396,7 +396,7 @@ describe('launcher workspace planning', () => {
     expect(commandText).toContain("& 'pnpm' '--dir' 'D:\\code\\narada' 'exec' 'narada' 'operator-surface' 'runtime' 'start'");
     expect(commandText).toContain("'agent-cli'");
     expect(commandText).toContain("'--runtime' 'narada-agent-runtime-server'");
-    expect(commandText).toContain("'--workspace-root' 'D:/code/narada.sonar'");
+    expect(commandText).toContain("'--workspace-root' 'D:\\code\\narada'");
     expect(commandText).toContain("'--launch-session-id' '");
     expect(commandText).toContain("'--exec'");
     expect(commandText).not.toContain("'--wait'");

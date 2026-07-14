@@ -608,6 +608,8 @@ writeFileSync(join(missingEntrypointSite, '.narada', 'capabilities', 'mcp-surfac
 }, null, 2)}\n`, 'utf8');
 const missingReport = await runMcpFabricDoctor(missingEntrypointSite, { timeoutMs: 1000 });
 assert.equal(missingReport.status, 'failed');
+assert.equal(missingReport.runtime_lifecycle_state, 'degraded');
+assert.deepEqual(missingReport.runtime_lifecycle_history, ['declared', 'loading', 'degraded']);
 assert.equal(missingReport.rows[0].diagnostics[0].code, 'entry_missing');
 assert.equal(missingReport.rows[0].lifecycle_state, 'closed');
 assert.deepEqual(missingReport.rows[0].lifecycle_history, ['discovered', 'loaded', 'starting', 'start_failed', 'closed']);
@@ -651,6 +653,8 @@ writeFileSync(join(doctorSite, '.ai', 'mcp', 'doctor-mcp.json'), `${JSON.stringi
 }, null, 2)}\n`, 'utf8');
 const doctorReport = await runMcpFabricDoctor(doctorSite, { timeoutMs: 1000 });
 assert.equal(doctorReport.status, 'ok');
+assert.equal(doctorReport.runtime_lifecycle_state, 'ready');
+assert.deepEqual(doctorReport.runtime_lifecycle_history, ['declared', 'loading', 'ready']);
 assert.equal(doctorReport.rows[0].file, 'doctor-mcp.json');
 assert.equal(doctorReport.rows[0].server, 'narada-doctor');
 assert.equal(doctorReport.rows[0].path_normalization, 'ok');
@@ -687,6 +691,7 @@ writeFileSync(join(failingDoctorSite, '.ai', 'mcp', 'failing-mcp.json'), `${JSON
 }, null, 2)}\n`, 'utf8');
 const failingReport = await runMcpFabricDoctor(failingDoctorSite, { timeoutMs: 25 });
 assert.equal(failingReport.status, 'failed');
+assert.equal(failingReport.runtime_lifecycle_state, 'degraded');
 assert.equal(failingReport.rows[0].initialize_status, 'timeout');
 assert.equal(failingReport.rows[0].lifecycle_state, 'closed');
 assert.deepEqual(failingReport.rows[0].lifecycle_history, ['discovered', 'loaded', 'starting', 'start_failed', 'closing', 'closed']);

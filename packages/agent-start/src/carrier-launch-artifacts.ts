@@ -5,7 +5,7 @@ import { resolveNaradaSitePaths, siteAuthorityRootFromSiteRoot } from '@narada2/
 import {
   NARADA_AGENT_RUNTIME_SERVER_KIND,
   operatorSurfaceKindsForRuntimeHost,
-} from '@narada2/carrier-runtime-contract/carrier-runtime-selection';
+} from '@narada2/operator-surface-runtime-contract/operator-surface-runtime-selection';
 
 const NARS_OPERATOR_SURFACE_KINDS = operatorSurfaceKindsForRuntimeHost(NARADA_AGENT_RUNTIME_SERVER_KIND);
 

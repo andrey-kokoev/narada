@@ -7,7 +7,7 @@ import {
 import {
   NARADA_AGENT_RUNTIME_SERVER_KIND,
   operatorSurfaceKindsForRuntimeHost,
-} from '@narada2/carrier-runtime-contract/carrier-runtime-selection';
+} from '@narada2/operator-surface-runtime-contract/operator-surface-runtime-selection';
 
 export const PROVIDER_SECRET_STORE_MODE_ENV = 'NARADA_PROVIDER_SECRET_STORE';
 export const SECRET_MANAGEMENT_LOOKUP_TIMEOUT_MS = 5000;

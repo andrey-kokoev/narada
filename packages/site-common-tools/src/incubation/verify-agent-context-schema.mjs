@@ -130,7 +130,7 @@ function main() {
   // 8. Cascade test: deleting event deletes ephemeral materializations
   try {
     const insertEvent = db.prepare(`INSERT INTO agent_start_events (event_id, identity_id, runtime, created_at, status) VALUES (?, ?, ?, ?, ?)`);
-    insertEvent.run('evt-test-001', 'narada-andrey.architect', 'kimi-cli', '2026-05-04T19:00:00Z', 'active');
+    insertEvent.run('evt-test-001', 'andrey-user.architect', 'kimi-cli', '2026-05-04T19:00:00Z', 'active');
 
     const insertIC = db.prepare(`INSERT INTO intelligence_context_materializations (materialization_id, event_id, schema_id, payload_json, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)`);
     insertIC.run('ic-test-001', 'evt-test-001', 'narada.intelligence_context.v0', '{}', '2026-05-04T19:00:00Z', '2026-05-04T20:00:00Z');
@@ -156,7 +156,7 @@ function main() {
   // 9. SET NULL test: deleting materialization leaves proposal/residual with null ref
   try {
     const insertEvent2 = db.prepare(`INSERT INTO agent_start_events (event_id, identity_id, runtime, created_at, status) VALUES (?, ?, ?, ?, ?)`);
-    insertEvent2.run('evt-test-002', 'narada-andrey.architect', 'kimi-cli', '2026-05-04T19:00:00Z', 'active');
+    insertEvent2.run('evt-test-002', 'andrey-user.architect', 'kimi-cli', '2026-05-04T19:00:00Z', 'active');
 
     const insertIC2 = db.prepare(`INSERT INTO intelligence_context_materializations (materialization_id, event_id, schema_id, payload_json, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)`);
     insertIC2.run('ic-test-002', 'evt-test-002', 'narada.intelligence_context.v0', '{}', '2026-05-04T19:00:00Z', '2026-05-04T20:00:00Z');

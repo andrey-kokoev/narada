@@ -1,4 +1,5 @@
 import { createRequire } from "node:module";
+import { existsSync } from "node:fs";
 
 type BindArgs = unknown[];
 
@@ -15,7 +16,13 @@ interface NodeSqliteDatabase {
 }
 
 interface NodeSqliteModule {
-  DatabaseSync: new (path: string) => NodeSqliteDatabase;
+  DatabaseSync: new (path: string, options?: { readOnly?: boolean }) => NodeSqliteDatabase;
+}
+
+export interface DatabaseOptions {
+  readOnly?: boolean;
+  readonly?: boolean;
+  fileMustExist?: boolean;
 }
 
 export interface RunResult {
@@ -44,9 +51,14 @@ export default class Database {
   private transactionDepth = 0;
   private savepointSequence = 0;
 
-  constructor(path: string) {
+  constructor(path: string, options: DatabaseOptions = {}) {
+    if (options.fileMustExist && !existsSync(path)) {
+      throw new Error(`sqlite_database_not_found: ${path}`);
+    }
     const { DatabaseSync } = loadNodeSqlite();
-    this.db = new DatabaseSync(path);
+    this.db = new DatabaseSync(path, {
+      readOnly: options.readOnly === true || options.readonly === true,
+    });
   }
 
   exec(sql: string): void {

@@ -1,6 +1,7 @@
 import type { EnsureOperatorRouterOptions, EnsureOperatorRouterResult, OperatorRouterAdminOptions } from '@narada2/operator-router';
 import type { CliFormat } from '../lib/cli-output.js';
 import type { JsonRecord } from '../lib/launcher-contracts.js';
+import type { AgentWebUiAttachmentLifecycle } from './agent-web-ui-attachment-state.js';
 
 export interface AgentWebUiAttachOptions {
   session?: string;
@@ -95,6 +96,7 @@ export interface AgentWebUiAttachPlan {
   route_ids: string[];
   command: string;
   authority_transition: AuthorityTransitionSnapshot;
+  attachment_lifecycle: AgentWebUiAttachmentLifecycle;
   onboarding_mode: 'user-site' | null;
   operator_projection_open_request?: JsonRecord;
 }
