@@ -73,7 +73,8 @@ import {
 } from './provider-credential-projection.ts';
 import { resolveAgentStartExecutionPosture, spawnCarrierProcessAndExit, waitForEnterBeforeCarrier } from './carrier-process-launch.ts';
 import { canonicalJson, identityToken, mcpScopeLoci, normalizeMcpScope, parseArgs } from './launcher-cli-contract.ts';
-import { buildLauncherContracts, buildRuntimeHealthPosture, startupCommandFromSequence } from './launch-result-contracts.ts';
+import { buildLauncherContractsFromAgentStartResult, buildRuntimeHealthPosture, startupCommandFromSequence } from './launch-result-contracts.ts';
+import { AgentStartResultContractError, assertAgentStartResultV0 } from './launch-result-v0-contract.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const packageRootDir = join(__dirname, '..');
@@ -1199,6 +1200,11 @@ const narsLaunch = buildNarsLaunchPacket(carrier, {
   siteCarrierControlPath,
   siteCarrierSessionPath,
 });
+const handoffSessionRef = narsLaunch?.runtime_session_id
+  ? { id: narsLaunch.runtime_session_id, kind: 'runtime' }
+  : carrierSessionRegistration?.carrier_session_id
+    ? { id: carrierSessionRegistration.carrier_session_id, kind: 'carrier' }
+    : null;
 
 const output = {
   ...startResult,
@@ -1227,6 +1233,7 @@ const output = {
   tool_fabric_adapter_kind: toolFabricAdapter.tool_fabric_adapter_kind,
   carrier_implementation_kind: toolFabricAdapter.carrier_implementation_kind,
   mcp_registry_validation: strictMcpRegistry ? 'strict' : 'diagnostic',
+  handoff: { session_ref: handoffSessionRef },
   nars_launch: narsLaunch,
   mcp_fabric: mcpFabric ? {
     source: mcpFabric.source,
@@ -1301,14 +1308,34 @@ const output = {
   launch_result_path: null,
 };
 
-output.runtime_health_posture = buildRuntimeHealthPosture(output);
-output.launcher_contracts = buildLauncherContracts(output);
-
 output.startup_command = startupCommandFromSequence(output.startup_sequence);
 output.startup_command_name = output.startup_command?.name ?? null;
 
-if (!dryRun) {
-  writeLaunchResult(output);
+try {
+  const canonicalOutput = assertAgentStartResultV0(output);
+  output.runtime_health_posture = buildRuntimeHealthPosture(canonicalOutput);
+  output.launcher_contracts = buildLauncherContractsFromAgentStartResult(canonicalOutput);
+  if (!dryRun) writeLaunchResult(output);
+} catch (error) {
+  const contractError = error instanceof AgentStartResultContractError
+    ? error
+    : new AgentStartResultContractError([{ path: [], message: String(error) }]);
+  const failure = {
+    schema: 'narada.agent_start.result_contract_error.v1',
+    status: 'refused',
+    mutation_performed: false,
+    reason_code: contractError.code,
+    reason: contractError.message,
+    issues: contractError.issues,
+    required_next_step: 'Fix the agent-start result producer before retrying the launch.',
+  };
+  if (jsonOutputFile) {
+    mkdirSync(dirname(jsonOutputFile), { recursive: true });
+    writeFileSync(jsonOutputFile, `${JSON.stringify(failure, null, 2)}\n`, 'utf8');
+  }
+  if (jsonOutput) await writeStdout(`${JSON.stringify(failure, null, 2)}\n`);
+  else console.error(`[FAIL] ${failure.reason_code}: ${failure.reason}`);
+  process.exit(1);
 }
 
 await printResult(output);

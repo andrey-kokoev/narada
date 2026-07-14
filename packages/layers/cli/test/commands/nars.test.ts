@@ -890,8 +890,9 @@ describe('nars CLI commands', () => {
     const resultPath = join(siteRoot, '.ai', 'runtime', 'operator-projection-launch-bindings', 'agent-start-result.json');
     mkdirSync(join(siteRoot, '.ai', 'runtime', 'operator-projection-launch-bindings'), { recursive: true });
     writeFileSync(resultPath, `${JSON.stringify({
-      schema: 'narada.agent_start.result.v1',
-      status: 'success',
+      schema: 'narada.agent_start.result.v0',
+      status: 'materialized',
+      handoff: { session_ref: { id: 'carrier_bound', kind: 'nars' } },
       nars_launch: { nars_session_id: 'carrier_bound' },
       required_environment: { NARADA_NARS_SESSION_ID: 'carrier_bound' },
     }, null, 2)}\n`, 'utf8');
@@ -928,6 +929,158 @@ describe('nars CLI commands', () => {
     vi.unstubAllGlobals();
   });
 
+  it('attaches from a materialized result while the launch binding is still pending', async () => {
+    const siteRoot = tempSite();
+    writeSession(siteRoot, 'carrier_pending_result', { agentId: 'sonar.resident' });
+    const launchRegistryPath = writeLaunchRegistry(siteRoot);
+    const bindingDir = join(siteRoot, '.ai', 'runtime', 'operator-projection-launch-bindings');
+    const bindingPath = join(bindingDir, 'pending-binding.json');
+    const resultPath = join(bindingDir, 'pending-agent-start-result.json');
+    mkdirSync(bindingDir, { recursive: true });
+    writeFileSync(resultPath, `${JSON.stringify({
+      schema: 'narada.agent_start.result.v0',
+      status: 'materialized',
+      handoff: { session_ref: { id: 'carrier_pending_result', kind: 'nars' } },
+      identity: 'sonar.resident',
+      target_site_root: siteRoot,
+      required_environment: {
+        NARADA_SITE_ROOT: siteRoot,
+        NARADA_LAUNCH_SESSION_ID: 'launch_pending_result',
+      },
+      nars_launch: { nars_session_id: 'carrier_pending_result' },
+    }, null, 2)}\n`, 'utf8');
+    writeFileSync(bindingPath, `${JSON.stringify({
+      schema: 'narada.operator_projection_launch_binding.v1',
+      status: 'waiting_for_agent_start',
+      updated_at: '2020-01-01T00:00:00.000Z',
+      site_root: siteRoot,
+      agent: 'sonar.resident',
+      launch_session_id: 'launch_pending_result',
+      agent_start_result_file: resultPath,
+    }, null, 2)}\n`, 'utf8');
+    const progress: string[] = [];
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true })));
+
+    const result = await agentWebUiAttachCommand({
+      launchRegistryPath,
+      siteRoot,
+      launchBindingPath: bindingPath,
+      agent: 'sonar.resident',
+      port: 0,
+      waitForSessionMs: 1000,
+      open: false,
+    }, createMockContext(), {
+      progress: (line) => progress.push(line),
+      startAgentWebUiServer: async ({ sessionId }) => ({ url: `http://127.0.0.1/${sessionId}` }),
+    });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(progress).toContain('agent-web-ui: launch result resolved NARS session carrier_pending_result');
+    expect(result.result).toMatchObject({
+      status: 'started',
+      session_id: 'carrier_pending_result',
+      url: 'http://127.0.0.1/carrier_pending_result',
+    });
+    vi.unstubAllGlobals();
+  });
+
+  it('emits a structured diagnostic for a correlated pending launch result', async () => {
+    const siteRoot = tempSite();
+    const bindingDir = join(siteRoot, '.ai', 'runtime', 'operator-projection-launch-bindings');
+    const bindingPath = join(bindingDir, 'diagnostic-binding.json');
+    const resultPath = join(bindingDir, 'diagnostic-agent-start-result.json');
+    mkdirSync(bindingDir, { recursive: true });
+    writeFileSync(resultPath, `${JSON.stringify({
+      schema: 'narada.agent_start.result.v0',
+      status: 'materialized',
+      handoff: { session_ref: { id: 'carrier_diagnostic', kind: 'nars' } },
+      identity: 'sonar.resident',
+      target_site_root: siteRoot,
+      required_environment: {
+        NARADA_SITE_ROOT: siteRoot,
+        NARADA_LAUNCH_SESSION_ID: 'launch_diagnostic',
+      },
+      nars_launch: { nars_session_id: 'carrier_diagnostic' },
+    }, null, 2)}\n`, 'utf8');
+    writeFileSync(bindingPath, `${JSON.stringify({
+      schema: 'narada.operator_projection_launch_binding.v1',
+      status: 'waiting_for_agent_start',
+      updated_at: '2020-01-01T00:00:00.000Z',
+      site_root: siteRoot,
+      agent: 'sonar.resident',
+      launch_session_id: 'launch_diagnostic',
+      agent_start_result_file: resultPath,
+    }, null, 2)}\n`, 'utf8');
+
+    const result = await agentWebUiAttachCommand({
+      diagnose: true,
+      format: 'json',
+      siteRoot,
+      launchBindingPath: bindingPath,
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      schema: 'narada.agent_web_ui.attach_diagnostic.v1',
+      status: 'resolved',
+      read_only: true,
+      phase: 'launch_binding',
+      binding: { status: 'waiting_for_agent_start', read_status: 'present' },
+      result: { status: 'materialized', session_id: 'carrier_diagnostic' },
+      correlation: { status: 'matched', agent: 'match', site_root: 'match', launch_session_id: 'match' },
+      resolution: { session_id: 'carrier_diagnostic', source: 'launch_result_file' },
+    });
+    expect(result.result).not.toHaveProperty('_formatted');
+  });
+
+  it('refuses a pending launch result when explicit correlation fields mismatch', async () => {
+    const siteRoot = tempSite();
+    writeSession(siteRoot, 'carrier_mismatched_result', { agentId: 'sonar.resident' });
+    const launchRegistryPath = writeLaunchRegistry(siteRoot);
+    const bindingDir = join(siteRoot, '.ai', 'runtime', 'operator-projection-launch-bindings');
+    const bindingPath = join(bindingDir, 'mismatched-binding.json');
+    const resultPath = join(bindingDir, 'mismatched-agent-start-result.json');
+    mkdirSync(bindingDir, { recursive: true });
+    writeFileSync(resultPath, `${JSON.stringify({
+      schema: 'narada.agent_start.result.v0',
+      status: 'materialized',
+      handoff: { session_ref: { id: 'carrier_mismatched_result', kind: 'nars' } },
+      identity: 'sonar.architect',
+      target_site_root: siteRoot,
+      required_environment: {
+        NARADA_SITE_ROOT: siteRoot,
+        NARADA_LAUNCH_SESSION_ID: 'launch_other',
+      },
+      nars_launch: { nars_session_id: 'carrier_mismatched_result' },
+    }, null, 2)}\n`, 'utf8');
+    writeFileSync(bindingPath, `${JSON.stringify({
+      schema: 'narada.operator_projection_launch_binding.v1',
+      status: 'waiting_for_agent_start',
+      updated_at: new Date().toISOString(),
+      site_root: siteRoot,
+      agent: 'sonar.resident',
+      launch_session_id: 'launch_expected',
+      agent_start_result_file: resultPath,
+    }, null, 2)}\n`, 'utf8');
+
+    const result = await agentWebUiAttachCommand({
+      launchRegistryPath,
+      siteRoot,
+      launchBindingPath: bindingPath,
+      agent: 'sonar.resident',
+      port: 0,
+      waitForSessionMs: 0,
+      open: false,
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.INVALID_CONFIG);
+    expect(result.result).toMatchObject({
+      schema: 'narada.agent_web_ui.attach_refusal.v1',
+      status: 'refused',
+      reason: 'launch_binding_unresolved',
+    });
+  });
+
   it('does not attach agent-web-ui from stale ready launch binding content before a fresh launch transition', async () => {
     const siteRoot = tempSite();
     writeSession(siteRoot, 'carrier_old', { agentId: 'sonar.resident' });
@@ -939,13 +1092,15 @@ describe('nars CLI commands', () => {
     const freshResultPath = join(bindingDir, 'fresh-agent-start-result.json');
     mkdirSync(bindingDir, { recursive: true });
     writeFileSync(oldResultPath, `${JSON.stringify({
-      schema: 'narada.agent_start.result.v1',
-      status: 'success',
+      schema: 'narada.agent_start.result.v0',
+      status: 'materialized',
+      handoff: { session_ref: { id: 'carrier_old', kind: 'nars' } },
       nars_launch: { nars_session_id: 'carrier_old' },
     }, null, 2)}\n`, 'utf8');
     writeFileSync(freshResultPath, `${JSON.stringify({
-      schema: 'narada.agent_start.result.v1',
-      status: 'success',
+      schema: 'narada.agent_start.result.v0',
+      status: 'materialized',
+      handoff: { session_ref: { id: 'carrier_fresh', kind: 'nars' } },
       nars_launch: { nars_session_id: 'carrier_fresh' },
     }, null, 2)}\n`, 'utf8');
     writeFileSync(bindingPath, `${JSON.stringify({

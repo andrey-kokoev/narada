@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join, parse, resolve } from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -7,8 +7,8 @@ import { buildLaunchProcessOwnership, launchSessionIdFromToken, type LaunchProce
 import type {
   AgentStartCommandResult,
   AgentStartOptions,
-  LaunchResultRecord,
 } from './launcher-contracts.js';
+import type { AgentStartResultV0 } from '@narada2/agent-start/launch-result-v0-contract';
 import {
   runProcess,
   runProcessDetachedUntilJson,
@@ -16,6 +16,8 @@ import {
   truncateText,
 } from './launcher-runtime-process.js';
 import { readJsonFile, stringValue } from './launcher-runtime-results.js';
+import { tryParseAgentStartResultArtifact } from './agent-start-result-reader.js';
+import { resolveAgentStartSessionProjection } from '@narada2/agent-start/launch-result-v0-contract';
 import {
   classifyAgentStartLaunchBindingStatus,
   getOperatorSurfaceRuntimeControlPath,
@@ -43,6 +45,63 @@ function tsxImportPath(): string {
 export function shouldDetachAgentStartProcess(options: Pick<AgentStartOptions, 'exec' | 'wait' | 'carrier' | 'runtime'>): boolean {
   if (options.exec !== true || options.wait === true) return false;
   return options.runtime === NARADA_AGENT_RUNTIME_SERVER_KIND;
+}
+
+export function isAgentStartAcceptedStatus(status: AgentStartCommandResult['status']): boolean {
+  return status === 'success' || status === 'starting';
+}
+
+function failAgentStartBeforeExecution(args: {
+  options: AgentStartOptions;
+  siteRoot: string;
+  workspaceRoot: string;
+  command: string[];
+  resultPath: string;
+  launchSessionId: string | null;
+  processOwnership: LaunchProcessOwnership | null;
+  reasonCode: string;
+  reason: string;
+  diagnostics?: Record<string, unknown>;
+  status?: 'failed' | 'not_available';
+}): AgentStartCommandResult {
+  const failure = {
+    schema: 'narada.agent_start.preflight_failure.v1',
+    status: 'failed',
+    mutation_performed: false,
+    reason_code: args.reasonCode,
+    reason: args.reason,
+    required_next_step: 'Fix the agent-start launch preflight failure before retrying the launch.',
+    ...(args.diagnostics ? { diagnostics: args.diagnostics } : {}),
+  };
+  writeFileSync(args.resultPath, `${JSON.stringify(failure, null, 2)}\n`, 'utf8');
+  writeOperatorProjectionLaunchBinding(args.options.launchBindingPath, {
+    status: 'failed',
+    siteRoot: args.siteRoot,
+    workspaceRoot: args.workspaceRoot,
+    agent: args.options.agent,
+    operatorSurfaceKind: args.options.carrier ?? args.options.runtime,
+    runtimeHostKind: args.options.runtime,
+    authority: args.options.authority ?? null,
+    intelligenceProvider: args.options.intelligenceProvider ?? null,
+    agentStartResultFile: args.resultPath,
+    launchSessionId: args.launchSessionId,
+    processOwnership: args.processOwnership,
+    reason: args.reasonCode,
+  });
+  return {
+    schema: 'narada.agent_start.command_result.v0',
+    status: args.status ?? 'failed',
+    mutation_performed: false,
+    site_root: args.siteRoot,
+    agent: args.options.agent,
+    carrier: args.options.carrier,
+    runtime: args.options.runtime,
+    command: args.command,
+    result_handoff: 'json_output_file',
+    result_file: args.resultPath,
+    parsed_result: failure,
+    error: args.reason,
+  };
 }
 
 export function runAgentStartCommand(options: AgentStartOptions): AgentStartCommandResult {
@@ -104,6 +163,51 @@ export function runAgentStartCommand(options: AgentStartOptions): AgentStartComm
   }
 
   mkdirSync(resultDir, { recursive: true });
+  if (!existsSync(agentStart)) {
+    return failAgentStartBeforeExecution({
+      options,
+      siteRoot,
+      workspaceRoot,
+      command: [process.execPath, ...args],
+      resultPath,
+      launchSessionId,
+      processOwnership,
+      reasonCode: 'agent_start_entrypoint_missing',
+      reason: `agent-start entrypoint not found: ${agentStart}`,
+      status: 'not_available',
+    });
+  }
+
+  if (options.dryRun !== true && shouldDetachAgentStartProcess(options)) {
+    const syntaxCheckArgs = ['--import', tsxImportPath(), '--check', agentStart];
+    const syntaxCheck = runProcess(process.execPath, syntaxCheckArgs, workspaceRoot);
+    if (syntaxCheck.status !== 'success') {
+      const detail = truncateText(
+        syntaxCheck.stderr || syntaxCheck.stdout || syntaxCheck.error || 'agent-start syntax check failed',
+        4000,
+      );
+      return failAgentStartBeforeExecution({
+        options,
+        siteRoot,
+        workspaceRoot,
+        command: [process.execPath, ...args],
+        resultPath,
+        launchSessionId,
+        processOwnership,
+        reasonCode: 'agent_start_syntax_preflight_failed',
+        reason: `agent-start syntax preflight failed: ${detail}`,
+        diagnostics: {
+          command: [process.execPath, ...syntaxCheckArgs],
+          status: syntaxCheck.status,
+          exit_code: syntaxCheck.exit_code,
+          stdout: syntaxCheck.stdout,
+          stderr: syntaxCheck.stderr,
+          error: syntaxCheck.error ?? null,
+        },
+      });
+    }
+  }
+
   writeOperatorProjectionLaunchBinding(options.launchBindingPath, {
     status: 'waiting_for_agent_start',
     siteRoot,
@@ -117,22 +221,6 @@ export function runAgentStartCommand(options: AgentStartOptions): AgentStartComm
     launchSessionId,
     processOwnership,
   });
-
-  if (!existsSync(agentStart)) {
-    return {
-      schema: 'narada.agent_start.command_result.v0',
-      status: 'not_available',
-      mutation_performed: false,
-      site_root: siteRoot,
-      agent: options.agent,
-      carrier: options.carrier,
-      runtime: options.runtime,
-      command: [process.execPath, ...args],
-      result_handoff: 'json_output_file',
-      result_file: resultPath,
-      error: `agent-start entrypoint not found: ${agentStart}`,
-    };
-  }
 
   const executionEnv = {
     NARADA_TARGET_SITE_ROOT: siteRoot,
@@ -154,8 +242,12 @@ export function runAgentStartCommand(options: AgentStartOptions): AgentStartComm
     ? runProcessInherited(process.execPath, args, workspaceRoot, executionEnv)
     : runProcess(process.execPath, args, workspaceRoot, executionEnv);
   const parsed = readJsonFile(resultPath);
-  const parsedRecord = parsed as LaunchResultRecord | null;
-  const launchBindingStatus = classifyAgentStartLaunchBindingStatus(execution.status, parsedRecord);
+  const parsedAttempt = tryParseAgentStartResultArtifact(parsed, resultPath);
+  const parsedRecord: AgentStartResultV0 | null = parsedAttempt.record;
+  const sessionProjection = parsedRecord ? resolveAgentStartSessionProjection(parsedRecord) : null;
+  const launchBindingStatus = parsedAttempt.error
+    ? { status: 'failed' as const, reason: parsedAttempt.error.reason_code }
+    : classifyAgentStartLaunchBindingStatus(execution.status, parsedRecord);
   writeOperatorProjectionLaunchBinding(options.launchBindingPath, {
     status: launchBindingStatus.status,
     siteRoot,
@@ -165,9 +257,10 @@ export function runAgentStartCommand(options: AgentStartOptions): AgentStartComm
     runtimeHostKind: options.runtime,
     intelligenceProvider: options.intelligenceProvider ?? null,
     agentStartResultFile: resultPath,
-    narsSessionId: stringValue(parsedRecord?.nars_launch?.nars_session_id ?? parsedRecord?.nars_launch?.session_id ?? parsedRecord?.required_environment?.NARADA_NARS_SESSION_ID),
-    runtimeSessionId: stringValue(parsedRecord?.nars_launch?.runtime_session_id ?? parsedRecord?.nars_launch?.session_id ?? parsedRecord?.required_environment?.NARADA_RUNTIME_SESSION_ID),
-    carrierSessionId: stringValue(parsedRecord?.carrier_session?.carrier_session_id ?? parsedRecord?.required_environment?.NARADA_CARRIER_SESSION_ID),
+    narsSessionId: sessionProjection?.nars_session_id ?? null,
+    runtimeSessionId: sessionProjection?.runtime_session_id ?? null,
+    carrierSessionId: sessionProjection?.carrier_session_id ?? null,
+    sessionRef: sessionProjection?.session_ref ?? null,
     launchSessionId,
     processOwnership,
     reason: launchBindingStatus.reason,
@@ -175,7 +268,7 @@ export function runAgentStartCommand(options: AgentStartOptions): AgentStartComm
   return {
     schema: 'narada.agent_start.command_result.v0',
     status: execution.status,
-    mutation_performed: execution.status === 'success' && options.dryRun !== true,
+    mutation_performed: isAgentStartAcceptedStatus(execution.status) && options.dryRun !== true,
     site_root: siteRoot,
     agent: options.agent,
     carrier: options.carrier,
@@ -185,11 +278,11 @@ export function runAgentStartCommand(options: AgentStartOptions): AgentStartComm
     result_file: resultPath,
     execution: {
       ...execution,
-      stdout: parsed ? '' : truncateText(execution.stdout, 1000),
+      stdout: parsedRecord ? '' : truncateText(execution.stdout, 1000),
       stderr: truncateText(execution.stderr, 1000),
     },
-    parsed_result: parsed,
-    error: execution.status === 'success' ? undefined : execution.stderr || execution.error,
+    parsed_result: parsedRecord ?? parsed,
+    error: execution.status === 'failed' ? execution.stderr || execution.error : undefined,
   };
 }
 
@@ -235,4 +328,3 @@ function findNaradaProperRoot(start: string): string | null {
   }
   return null;
 }
-

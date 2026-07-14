@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { resolveNaradaSitePaths, siteAuthorityRootFromSiteRoot } from '@narada2/site-paths';
@@ -6,6 +6,7 @@ import {
   NARADA_AGENT_RUNTIME_SERVER_KIND,
   operatorSurfaceKindsForRuntimeHost,
 } from '@narada2/operator-surface-runtime-contract/operator-surface-runtime-selection';
+import { assertAgentStartResultV0, evaluateAgentStartHandoff } from './launch-result-v0-contract.mjs';
 
 const NARS_OPERATOR_SURFACE_KINDS = operatorSurfaceKindsForRuntimeHost(NARADA_AGENT_RUNTIME_SERVER_KIND);
 
@@ -169,6 +170,21 @@ export function writeLaunchResultFile(result, { siteRoot }) {
   mkdirSync(outDir, { recursive: true });
   const path = join(outDir, `${eventId}.result.json`);
   result.launch_result_path = path;
-  writeFileSync(path, `${JSON.stringify(result, null, 2)}\n`, 'utf8');
+  const validatedResult = assertAgentStartResultV0(result);
+  if (validatedResult.status === 'materialized') {
+    const handoff = evaluateAgentStartHandoff(validatedResult);
+    if (!handoff.eligible) {
+      throw new Error(
+        `agent_start_result_handoff_invalid: ${handoff.reason ?? 'unknown'}: ${handoff.detail ?? 'The materialized result cannot be attached.'}`,
+      );
+    }
+  }
+  const temporaryPath = `${path}.${process.pid}.${randomUUID()}.tmp`;
+  try {
+    writeFileSync(temporaryPath, `${JSON.stringify(result, null, 2)}\n`, { encoding: 'utf8', flag: 'wx' });
+    renameSync(temporaryPath, path);
+  } finally {
+    if (existsSync(temporaryPath)) rmSync(temporaryPath, { force: true });
+  }
   return path;
 }

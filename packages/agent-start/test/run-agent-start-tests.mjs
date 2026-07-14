@@ -7,6 +7,12 @@ const packageRoot = resolve(__dirname, '..');
 
 await runProcessTests([
   {
+    label: 'result-contract-generated-artifacts',
+    args: ['--import', 'tsx', 'scripts/generate-result-schema.ts', '--check'],
+    cwd: packageRoot,
+    timeoutMs: 15000,
+  },
+  {
     label: 'agent-start-tsx-transform-syntax',
     args: ['--import', 'tsx', '--check', 'src/narada-agent-start.ts'],
     cwd: packageRoot,
@@ -33,6 +39,12 @@ await runProcessTests([
   {
     label: 'carrier-process-launch-contract',
     args: ['--import', 'tsx', '--test', 'test/carrier-process-launch.test.mjs'],
+    cwd: packageRoot,
+    timeoutMs: 15000,
+  },
+  {
+    label: 'launch-result-contract',
+    args: ['--import', 'tsx', '--test', 'test/launch-result-contract.test.mjs'],
     cwd: packageRoot,
     timeoutMs: 15000,
   },

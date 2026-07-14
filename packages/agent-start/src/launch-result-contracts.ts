@@ -1,4 +1,99 @@
 import { join } from 'node:path';
+import {
+  assertAgentStartResultV0,
+  resolveAgentStartSessionProjection,
+} from './launch-result-v0-contract.mjs';
+import type { AgentStartResultV0 } from './launch-result-v0-contract.mts';
+
+type OptionalRecord = Record<string, unknown> | null | undefined;
+type McpScopeInput = {
+  requested?: unknown;
+  requested_loci?: unknown[];
+  resolution?: { loaded_loci?: unknown[] } | null;
+  missing_loci?: unknown[];
+  enforcement?: {
+    status?: unknown;
+    codex_home?: unknown;
+    config_path?: unknown;
+    inherited_codex_home_allowed?: unknown;
+  } | null;
+} | null | undefined;
+type IntelligenceProviderResolutionInput = {
+  status?: unknown;
+  credential_present?: unknown;
+  credential?: { preflight?: { status?: unknown } | null } | null;
+  preflight?: { status?: unknown } | null;
+  request_adapter?: unknown;
+  credential_requirement_kind?: unknown;
+  credential_requirement?: unknown;
+  credential_source?: unknown;
+  required_next_step?: unknown;
+} | null | undefined;
+
+type LauncherContractInput = AgentStartResultV0 & {
+  launch_result_path?: unknown;
+  exec?: unknown;
+  dry_run?: unknown;
+  nars_health?: OptionalRecord;
+  nars_events?: OptionalRecord;
+  runtime_host_kind?: unknown;
+  runtime_substrate_kind?: unknown;
+  operator_surface_kind?: unknown;
+  launch_selection_kind?: unknown;
+  carrier_kind?: unknown;
+  carrier_implementation_kind?: unknown;
+  runtime_contract_schema?: unknown;
+  runtime_resolution?: unknown;
+  tool_fabric_adapter_kind?: unknown;
+  tool_fabric_adapter?: OptionalRecord;
+  mcp_scope?: McpScopeInput;
+  mcp_fabric?: OptionalRecord;
+  runtime?: unknown;
+  runtime_authority_selection?: OptionalRecord;
+  intelligence_provider?: unknown;
+  intelligence_provider_resolution?: IntelligenceProviderResolutionInput;
+  visible_runtime_terminal?: unknown;
+  agent_start_execution_mode?: unknown;
+  detach_decision?: unknown;
+  detach_refusal_reasons?: unknown[];
+  hidden_runtime_output_files?: unknown;
+  operator_projection_open_request?: unknown;
+  exec_command?: unknown;
+  runtime_args?: unknown;
+  wait?: unknown;
+  reason_code?: unknown;
+  reason?: unknown;
+  error?: unknown;
+  retryable?: unknown;
+  mutation_performed?: unknown;
+  recovery_primary_command?: unknown;
+  required_next_step_command?: unknown;
+  native_shell_exception?: unknown;
+  mcp_tool_approval?: unknown;
+};
+
+function launcherContractInput(result: AgentStartResultV0): LauncherContractInput {
+  return result as LauncherContractInput;
+}
+
+function isLaunchFailureStatus(status: unknown): boolean {
+  const normalized = typeof status === 'string' ? status.trim().toLowerCase() : '';
+  return normalized === 'failed'
+    || normalized === 'refused'
+    || normalized === 'not_available'
+    || normalized === 'error'
+    || normalized.startsWith('failed_')
+    || normalized.startsWith('refused_');
+}
+
+export function buildLauncherContractsFromAgentStartResult(result: AgentStartResultV0) {
+  const canonicalResult = assertAgentStartResultV0(result);
+  const sessionProjection = resolveAgentStartSessionProjection(canonicalResult);
+  if (canonicalResult.status === 'materialized' && !sessionProjection?.session_ref) {
+    throw new Error('agent_start_result_handoff_invalid: canonical session projection is not coherent');
+  }
+  return buildLauncherContracts(canonicalResult);
+}
 
 export function startupCommandFromSequence(startupSequence = []) {
   const firstStep = startupSequence[0];
@@ -10,10 +105,9 @@ export function startupCommandFromSequence(startupSequence = []) {
   };
 }
 
-function buildLaunchResultArtifact(result) {
-  const sessionId = result.carrier_session?.carrier_session_id
-    ?? result.carrier_actions?.carrier_session_registration?.carrier_session_id
-    ?? null;
+function buildLaunchResultArtifact(result: LauncherContractInput) {
+  const sessionProjection = resolveAgentStartSessionProjection(result);
+  const sessionId = sessionProjection?.session_id ?? null;
   const artifactPath = result.launch_result_path
     ?? (result.session_site_root && result.agent_start_event
       ? join(result.session_site_root, '.ai', 'runtime', 'agent-start-results', `${result.agent_start_event}.result.json`)
@@ -24,9 +118,10 @@ function buildLaunchResultArtifact(result) {
     artifact_path: artifactPath,
     schema_ref: result.schema ?? 'narada.agent_start.result.v0',
     owner_site_root: result.session_site_root ?? result.target_site_root ?? null,
-    runtime_session_id: sessionId,
-    nars_session_id: result.nars_launch?.nars_session_id ?? null,
-    carrier_session_id: sessionId,
+    session_ref: sessionProjection?.session_ref ?? null,
+    runtime_session_id: sessionProjection?.runtime_session_id ?? null,
+    nars_session_id: sessionProjection?.nars_session_id ?? null,
+    carrier_session_id: sessionProjection?.carrier_session_id ?? null,
     agent_start_event_id: result.agent_start_event ?? null,
     lifecycle: {
       retention: 'site_owned',
@@ -38,7 +133,7 @@ function buildLaunchResultArtifact(result) {
       session_operations: `narada-agent-cli --identity ${result.identity} --session ${sessionId} --session-operations`,
       session_events: `narada-agent-cli --identity ${result.identity} --session ${sessionId} --session-events --session-events-filter all --session-events-count 20`,
     } : null,
-    failure_reference: result.status && result.status !== 'success'
+    failure_reference: isLaunchFailureStatus(result.status)
       ? {
           status: result.status,
           reason_code: result.reason_code ?? null,
@@ -48,9 +143,10 @@ function buildLaunchResultArtifact(result) {
   };
 }
 
-export function buildRuntimeHealthPosture(result) {
-  const health = result.nars_health ?? null;
-  const events = result.nars_events ?? null;
+export function buildRuntimeHealthPosture(result: AgentStartResultV0) {
+  const input = launcherContractInput(result);
+  const health = input.nars_health ?? null;
+  const events = input.nars_events ?? null;
   if (!health && !events) return null;
 
   const summarizeEndpointStatus = (endpoint, availableAtLaunch) => {
@@ -61,13 +157,13 @@ export function buildRuntimeHealthPosture(result) {
 
   return {
     schema: 'narada.runtime_health_posture.v0',
-    operator_surface_kind: result.operator_surface_kind ?? result.carrier_kind ?? null,
-    runtime_host_kind: result.runtime_host_kind ?? result.runtime_substrate_kind ?? null,
-    launch_selection_kind: result.launch_selection_kind ?? result.carrier_kind ?? null,
-    carrier_kind: result.carrier_kind ?? null,
-    carrier_implementation_kind: result.carrier_implementation_kind ?? null,
-    runtime_substrate_kind: result.runtime_substrate_kind ?? null,
-    status: result.exec && !result.dry_run ? 'projected_for_runtime' : 'projected_for_launch',
+    operator_surface_kind: input.operator_surface_kind ?? input.carrier_kind ?? null,
+    runtime_host_kind: input.runtime_host_kind ?? input.runtime_substrate_kind ?? null,
+    launch_selection_kind: input.launch_selection_kind ?? input.carrier_kind ?? null,
+    carrier_kind: input.carrier_kind ?? null,
+    carrier_implementation_kind: input.carrier_implementation_kind ?? null,
+    runtime_substrate_kind: input.runtime_substrate_kind ?? null,
+    status: input.exec && !input.dry_run ? 'projected_for_runtime' : 'projected_for_launch',
     dimensions: {
       health: health ? {
         status: summarizeEndpointStatus(health.endpoint ?? null, health.endpoint_available_at_launch_materialization),
@@ -86,32 +182,33 @@ export function buildRuntimeHealthPosture(result) {
         supports_replay: Boolean(events.supports_replay),
         locality: events.locality ?? null,
       } : null,
-      authority: result.runtime_authority_selection ? {
-        status: result.runtime_authority_selection.effective === 'write' ? 'write_delegated' : 'read_only',
-        requested: result.runtime_authority_selection.requested ?? null,
-        effective: result.runtime_authority_selection.effective ?? null,
-        source: result.runtime_authority_selection.source ?? null,
+      authority: input.runtime_authority_selection ? {
+        status: input.runtime_authority_selection.effective === 'write' ? 'write_delegated' : 'read_only',
+        requested: input.runtime_authority_selection.requested ?? null,
+        effective: input.runtime_authority_selection.effective ?? null,
+        source: input.runtime_authority_selection.source ?? null,
       } : null,
     },
     projection: {
-      operator_surface_kind: result.operator_surface_kind ?? result.carrier_kind ?? null,
+      operator_surface_kind: input.operator_surface_kind ?? input.carrier_kind ?? null,
       chat_spam_reduction: true,
       summary: 'compact_health_projection',
     },
   };
 }
 
-export function buildLauncherContracts(result) {
-  const runtimeHostKind = result.runtime_host_kind ?? result.runtime_substrate_kind ?? null;
-  const operatorSurfaceKind = result.operator_surface_kind ?? result.nars_launch?.operator_surface_kind ?? result.carrier_kind ?? null;
-  const launchSelectionKind = result.launch_selection_kind ?? result.carrier_kind ?? null;
-  const carrierImplementationKind = result.carrier_implementation_kind ?? null;
-  const launchResultArtifact = buildLaunchResultArtifact(result);
+function buildLauncherContracts(result: AgentStartResultV0) {
+  const input = launcherContractInput(result);
+  const runtimeHostKind = input.runtime_host_kind ?? input.runtime_substrate_kind ?? null;
+  const operatorSurfaceKind = input.operator_surface_kind ?? input.nars_launch?.operator_surface_kind ?? input.carrier_kind ?? null;
+  const launchSelectionKind = input.launch_selection_kind ?? input.carrier_kind ?? null;
+  const carrierImplementationKind = input.carrier_implementation_kind ?? null;
+  const launchResultArtifact = buildLaunchResultArtifact(input);
   const runtimeHealthPosture = buildRuntimeHealthPosture(result);
-  const intelligenceProviderPreflight = result.intelligence_provider_resolution?.credential?.preflight ?? result.intelligence_provider_resolution?.preflight ?? null;
+  const intelligenceProviderPreflight = input.intelligence_provider_resolution?.credential?.preflight ?? input.intelligence_provider_resolution?.preflight ?? null;
   const intelligenceProviderPreflightStatus = intelligenceProviderPreflight?.status ?? null;
-  const intelligenceProviderReadinessStatus = result.intelligence_provider_resolution ? (
-    result.intelligence_provider_resolution.status === 'refused' || result.intelligence_provider_resolution.credential_present === false
+  const intelligenceProviderReadinessStatus = input.intelligence_provider_resolution ? (
+    input.intelligence_provider_resolution.status === 'refused' || input.intelligence_provider_resolution.credential_present === false
       ? 'blocked'
       : intelligenceProviderPreflightStatus === 'passed_cached'
         ? 'ready_cached'
@@ -124,38 +221,38 @@ export function buildLauncherContracts(result) {
       operator_surface_kind: operatorSurfaceKind,
       runtime_host_kind: runtimeHostKind,
       launch_selection_kind: launchSelectionKind,
-      carrier_kind: result.carrier_kind ?? null,
+      carrier_kind: input.carrier_kind ?? null,
       carrier_implementation_kind: carrierImplementationKind,
-      runtime_substrate_kind: result.runtime_substrate_kind ?? null,
-      runtime_contract_schema: result.runtime_contract_schema ?? null,
-      selection_source: result.runtime_resolution ?? null,
+      runtime_substrate_kind: input.runtime_substrate_kind ?? null,
+      runtime_contract_schema: input.runtime_contract_schema ?? null,
+      selection_source: input.runtime_resolution ?? null,
     },
     operator_surface_attachment: {
       schema: 'narada.operator_surface_attachment.v0',
       operator_surface_kind: operatorSurfaceKind,
       runtime_host_kind: runtimeHostKind,
       launch_selection_kind: launchSelectionKind,
-      carrier_kind: result.carrier_kind ?? null,
+      carrier_kind: input.carrier_kind ?? null,
       carrier_implementation_kind: carrierImplementationKind,
-      tool_fabric_adapter_kind: result.tool_fabric_adapter_kind ?? null,
-      tool_fabric_source: result.tool_fabric_adapter?.tool_fabric_source ?? null,
-      launch_operator_surface_kind: result.nars_launch?.launch_operator_surface_kind ?? null,
-      attachment_commands: result.nars_launch?.attach_commands ?? null,
+      tool_fabric_adapter_kind: input.tool_fabric_adapter_kind ?? null,
+      tool_fabric_source: input.tool_fabric_adapter?.tool_fabric_source ?? null,
+      launch_operator_surface_kind: input.nars_launch?.launch_operator_surface_kind ?? null,
+      attachment_commands: input.nars_launch?.attach_commands ?? null,
     },
     runtime_health_posture: runtimeHealthPosture,
-    mcp_fabric_injection_plan: result.mcp_scope ? {
+    mcp_fabric_injection_plan: input.mcp_scope ? {
       schema: 'narada.mcp_fabric_injection_plan.v0',
-      requested_scope: result.mcp_scope.requested ?? null,
-      requested_loci: result.mcp_scope.requested_loci ?? [],
-      admitted_loci: result.mcp_scope.resolution?.loaded_loci ?? [],
-      missing_loci: result.mcp_scope.missing_loci ?? [],
-      injected_server_names: result.mcp_fabric?.server_names ?? [],
-      injected_locus_fabrics: result.mcp_fabric?.locus_fabrics ?? [],
-      isolation: result.mcp_scope.enforcement ? {
-        status: result.mcp_scope.enforcement.status ?? 'planned',
-        codex_home: result.mcp_scope.enforcement.codex_home ?? null,
-        config_path: result.mcp_scope.enforcement.config_path ?? null,
-        inherited_codex_home_allowed: result.mcp_scope.enforcement.inherited_codex_home_allowed ?? null,
+      requested_scope: input.mcp_scope.requested ?? null,
+      requested_loci: input.mcp_scope.requested_loci ?? [],
+      admitted_loci: input.mcp_scope.resolution?.loaded_loci ?? [],
+      missing_loci: input.mcp_scope.missing_loci ?? [],
+      injected_server_names: input.mcp_fabric?.server_names ?? [],
+      injected_locus_fabrics: input.mcp_fabric?.locus_fabrics ?? [],
+      isolation: input.mcp_scope.enforcement ? {
+        status: input.mcp_scope.enforcement.status ?? 'planned',
+        codex_home: input.mcp_scope.enforcement.codex_home ?? null,
+        config_path: input.mcp_scope.enforcement.config_path ?? null,
+        inherited_codex_home_allowed: input.mcp_scope.enforcement.inherited_codex_home_allowed ?? null,
       } : null,
     } : null,
     launch_selection_session: {
@@ -163,68 +260,68 @@ export function buildLauncherContracts(result) {
       operator_surface_kind: operatorSurfaceKind,
       runtime_host_kind: runtimeHostKind,
       launch_selection_kind: launchSelectionKind,
-      carrier_kind: result.carrier_kind ?? null,
+      carrier_kind: input.carrier_kind ?? null,
       carrier_implementation_kind: carrierImplementationKind,
-      runtime: result.runtime ?? null,
-      runtime_substrate_kind: result.runtime_substrate_kind ?? null,
-      runtime_authority_selection: result.runtime_authority_selection ?? null,
-      intelligence_provider: result.intelligence_provider ?? null,
-      mcp_scope: result.mcp_scope?.requested ?? null,
-      target_site_root: result.target_site_root ?? null,
-      session_site_root: result.session_site_root ?? null,
-      exec: Boolean(result.exec),
-      dry_run: result.exec === false,
-      wait: Boolean(result.wait),
-      visible_runtime_terminal: Boolean(result.visible_runtime_terminal),
-      agent_start_execution_mode: result.agent_start_execution_mode ?? null,
-      detach_decision: result.detach_decision ?? null,
-      detach_refusal_reasons: result.detach_refusal_reasons ?? [],
-      hidden_runtime_output_files: result.hidden_runtime_output_files ?? null,
-      open_request: result.operator_projection_open_request ?? null,
+      runtime: input.runtime ?? null,
+      runtime_substrate_kind: input.runtime_substrate_kind ?? null,
+      runtime_authority_selection: input.runtime_authority_selection ?? null,
+      intelligence_provider: input.intelligence_provider ?? null,
+      mcp_scope: input.mcp_scope?.requested ?? null,
+      target_site_root: input.target_site_root ?? null,
+      session_site_root: input.session_site_root ?? null,
+      exec: Boolean(input.exec),
+      dry_run: input.exec === false,
+      wait: Boolean(input.wait),
+      visible_runtime_terminal: Boolean(input.visible_runtime_terminal),
+      agent_start_execution_mode: input.agent_start_execution_mode ?? null,
+      detach_decision: input.detach_decision ?? null,
+      detach_refusal_reasons: input.detach_refusal_reasons ?? [],
+      hidden_runtime_output_files: input.hidden_runtime_output_files ?? null,
+      open_request: input.operator_projection_open_request ?? null,
       launch_result_artifact_path: launchResultArtifact.artifact_path,
     },
-    intelligence_provider_readiness_check: result.intelligence_provider_resolution ? {
+    intelligence_provider_readiness_check: input.intelligence_provider_resolution ? {
       schema: 'narada.intelligence_provider_readiness_check.v0',
-      intelligence_provider: result.intelligence_provider ?? null,
+      intelligence_provider: input.intelligence_provider ?? null,
       status: intelligenceProviderReadinessStatus,
       check_kind: intelligenceProviderPreflightStatus === 'passed_cached' ? 'cached' : intelligenceProviderPreflightStatus ? 'fresh' : null,
       preflight_status: intelligenceProviderPreflightStatus,
-      request_adapter: result.intelligence_provider_resolution.request_adapter ?? null,
-      credential_requirement_kind: result.intelligence_provider_resolution.credential_requirement_kind ?? null,
-      credential_requirement: result.intelligence_provider_resolution.credential_requirement ?? null,
-      credential_present: result.intelligence_provider_resolution.credential_present ?? null,
-      credential_source: result.intelligence_provider_resolution.credential_source ?? null,
-      required_next_step: result.intelligence_provider_resolution.required_next_step ?? null,
+      request_adapter: input.intelligence_provider_resolution.request_adapter ?? null,
+      credential_requirement_kind: input.intelligence_provider_resolution.credential_requirement_kind ?? null,
+      credential_requirement: input.intelligence_provider_resolution.credential_requirement ?? null,
+      credential_present: input.intelligence_provider_resolution.credential_present ?? null,
+      credential_source: input.intelligence_provider_resolution.credential_source ?? null,
+      required_next_step: input.intelligence_provider_resolution.required_next_step ?? null,
     } : null,
-    operator_terminal_projection_plan: result.nars_launch ? {
+    operator_terminal_projection_plan: input.nars_launch ? {
       schema: 'narada.operator_terminal_projection_plan.v0',
-      terminal_kind: result.nars_launch.launch_operator_surface_kind ?? result.carrier_kind ?? null,
+      terminal_kind: input.nars_launch.launch_operator_surface_kind ?? input.carrier_kind ?? null,
       operator_surface_kind: operatorSurfaceKind,
       runtime_host_kind: runtimeHostKind,
-      command: result.exec_command ?? null,
-      raw_runtime_args: result.runtime_args ?? null,
-      session_dir: result.nars_launch.session_dir ?? null,
-      control_path: result.nars_launch.control_path ?? null,
-      session_path: result.nars_launch.session_path ?? null,
-      wait_for_enter: Boolean(result.wait),
-      agent_start_execution_mode: result.agent_start_execution_mode ?? null,
-      detach_decision: result.detach_decision ?? null,
-      detach_refusal_reasons: result.detach_refusal_reasons ?? [],
-      hidden_runtime_output_files: result.hidden_runtime_output_files ?? null,
-      hide_shell: result.agent_start_execution_mode === 'hidden_detached',
+      command: input.exec_command ?? null,
+      raw_runtime_args: input.runtime_args ?? null,
+      session_dir: input.nars_launch.session_dir ?? null,
+      control_path: input.nars_launch.control_path ?? null,
+      session_path: input.nars_launch.session_path ?? null,
+      wait_for_enter: Boolean(input.wait),
+      agent_start_execution_mode: input.agent_start_execution_mode ?? null,
+      detach_decision: input.detach_decision ?? null,
+      detach_refusal_reasons: input.detach_refusal_reasons ?? [],
+      hidden_runtime_output_files: input.hidden_runtime_output_files ?? null,
+      hide_shell: input.agent_start_execution_mode === 'hidden_detached',
     } : null,
     launch_result_artifact: launchResultArtifact,
-    operator_projection_open_request: result.operator_projection_open_request ?? null,
-    launch_failure_rendering: result.status && result.status !== 'success' ? {
+    operator_projection_open_request: input.operator_projection_open_request ?? null,
+    launch_failure_rendering: isLaunchFailureStatus(input.status) ? {
       schema: 'narada.launch_failure_rendering.v0',
-      status: result.status,
-      reason_code: result.reason_code ?? result.status,
-      summary: result.reason ?? result.error ?? 'launcher_failure',
-      retryable: Boolean(result.retryable ?? false),
-      mutation_performed: Boolean(result.mutation_performed ?? false),
-      result_path: result.launch_result_path ?? null,
-      repair_command: result.recovery_primary_command ?? result.required_next_step_command ?? null,
-      diagnostics: result.native_shell_exception ?? result.mcp_tool_approval ?? null,
+      status: input.status,
+      reason_code: input.reason_code ?? input.status,
+      summary: input.reason ?? input.error ?? 'launcher_failure',
+      retryable: Boolean(input.retryable ?? false),
+      mutation_performed: Boolean(input.mutation_performed ?? false),
+      result_path: input.launch_result_path ?? null,
+      repair_command: input.recovery_primary_command ?? input.required_next_step_command ?? null,
+      diagnostics: input.native_shell_exception ?? input.mcp_tool_approval ?? null,
     } : null,
   };
 }

@@ -1,4 +1,5 @@
 import type { LaunchProcessOwnership } from '@narada2/launch-process-ownership';
+import type { AgentStartSessionRef } from '@narada2/agent-start/launch-result-v0-contract';
 
 export type JsonRecord = Record<string, unknown>;
 
@@ -21,6 +22,7 @@ export interface LaunchResultSummary {
   runtime_session_id?: string;
   nars_session_id?: string;
   carrier_session_id?: string;
+  session_ref?: AgentStartSessionRef | null;
   control_path?: string;
   control_path_exists?: boolean;
   session_path?: string;
@@ -75,6 +77,7 @@ export interface OperatorProjectionLaunchBinding {
   nars_session_id?: string | null;
   runtime_session_id?: string | null;
   carrier_session_id?: string | null;
+  session_ref?: AgentStartSessionRef | null;
   launch_session_id?: string | null;
   process_ownership?: LaunchProcessOwnership | null;
   reason?: string | null;
@@ -88,16 +91,20 @@ export interface CommandExecutionResult {
   error?: string;
 }
 
+export interface AgentStartExecutionResult extends Omit<CommandExecutionResult, 'status'> {
+  status: 'success' | 'starting' | 'failed';
+}
+
 export interface AgentStartCommandResult {
   schema: 'narada.agent_start.command_result.v0';
-  status: 'success' | 'failed' | 'not_available';
+  status: 'success' | 'starting' | 'failed' | 'not_available';
   mutation_performed: boolean;
   site_root: string;
   agent: string;
   carrier?: string;
   runtime: string;
   command: string[];
-  execution?: CommandExecutionResult;
+  execution?: AgentStartExecutionResult;
   result_handoff?: 'json_output_file';
   result_file?: string;
   parsed_result?: unknown;
@@ -127,104 +134,6 @@ export interface SiteCommandResult {
   execution?: CommandExecutionResult;
   parsed_stdout?: unknown;
   error?: string;
-}
-
-export interface LaunchResultRecord extends JsonRecord {
-  schema?: unknown;
-  status?: unknown;
-  agent_start_event?: unknown;
-  identity?: unknown;
-  agent_identity_ref?: unknown;
-  operator_surface_kind?: unknown;
-  runtime_host_kind?: unknown;
-  carrier_kind?: unknown;
-  runtime?: unknown;
-  runtime_substrate_kind?: unknown;
-  target_site_root?: unknown;
-  session_site_root?: unknown;
-  launch_source?: unknown;
-  expires_at?: unknown;
-  nars_launch?: {
-    session_id?: unknown;
-    runtime_session_id?: unknown;
-    nars_session_id?: unknown;
-    operator_surface_kind?: unknown;
-    runtime_host_kind?: unknown;
-    control_path?: unknown;
-    session_path?: unknown;
-  };
-  required_environment?: {
-    NARADA_AGENT_ID?: unknown;
-    NARADA_RUNTIME_SESSION_ID?: unknown;
-    NARADA_NARS_SESSION_ID?: unknown;
-    NARADA_CARRIER_SESSION_ID?: unknown;
-    NARADA_SITE_ROOT?: unknown;
-  };
-  carrier_actions?: {
-    carrier_session_registration?: {
-      carrier_session_id?: unknown;
-      record?: {
-        started_at?: unknown;
-        parent_process?: { pid?: unknown };
-      };
-    };
-  };
-  carrier_session?: {
-    carrier_session_id?: unknown;
-    record?: {
-      started_at?: unknown;
-      parent_process?: { pid?: unknown };
-    };
-  };
-  runtime_args?: unknown;
-  started_at?: unknown;
-  created_at?: unknown;
-}
-
-export interface LaunchBindingContract extends JsonRecord {
-  schema?: 'narada.operator_projection_launch_binding.v1' | string;
-  status?: 'waiting_for_agent_start' | 'ready' | 'failed' | string;
-  created_at?: unknown;
-  updated_at?: unknown;
-  site_root?: unknown;
-  workspace_root?: unknown;
-  agent?: unknown;
-  operator_surface_kind?: unknown;
-  runtime_host_kind?: unknown;
-  authority?: unknown;
-  intelligence_provider?: unknown;
-  agent_start_result_file?: unknown;
-  result_file?: unknown;
-  nars_session_id?: unknown;
-  runtime_session_id?: unknown;
-  carrier_session_id?: unknown;
-  launch_session_id?: unknown;
-  process_ownership?: LaunchProcessOwnership | null;
-  reason?: unknown;
-}
-
-export interface LaunchResultContract extends JsonRecord {
-  schema?: unknown;
-  status?: unknown;
-  agent_start_event?: unknown;
-  identity?: unknown;
-  agent_identity_ref?: unknown;
-  operator_surface_kind?: unknown;
-  runtime_host_kind?: unknown;
-  carrier_kind?: unknown;
-  runtime?: unknown;
-  runtime_substrate_kind?: unknown;
-  target_site_root?: unknown;
-  session_site_root?: unknown;
-  launch_source?: unknown;
-  expires_at?: unknown;
-  nars_launch?: JsonRecord;
-  required_environment?: JsonRecord;
-  carrier_actions?: JsonRecord;
-  carrier_session?: JsonRecord;
-  runtime_args?: unknown;
-  started_at?: unknown;
-  created_at?: unknown;
 }
 
 export interface NarsSessionContract extends JsonRecord {
@@ -277,9 +186,17 @@ export function objectField(record: JsonRecord | null | undefined, field: string
 
 export function sessionIdFromContract(record: JsonRecord | null): string | null {
   if (!record) return null;
+  const sessionRef = objectField(record, 'session_ref');
   const narsLaunch = objectField(record, 'nars_launch');
   const requiredEnvironment = objectField(record, 'required_environment');
-  return stringField(record, 'nars_session_id')
+  const sessionRefKind = stringField(sessionRef, 'kind');
+  const canonicalSessionId = sessionRefKind === 'runtime'
+    || sessionRefKind === 'nars'
+    || sessionRefKind === 'carrier'
+    ? stringField(sessionRef, 'id')
+    : null;
+  return canonicalSessionId
+    ?? stringField(record, 'nars_session_id')
     ?? stringField(record, 'runtime_session_id')
     ?? stringField(record, 'session_id')
     ?? stringField(narsLaunch, 'nars_session_id')

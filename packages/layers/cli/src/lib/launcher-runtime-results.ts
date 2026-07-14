@@ -1,13 +1,294 @@
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import type { LaunchResultRecord, LaunchResultSummary } from './launcher-contracts.js';
+import { createHash, randomUUID } from 'node:crypto';
+import {
+  closeSync,
+  existsSync,
+  mkdirSync,
+  openSync,
+  readdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  statSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import {
+  evaluateAgentStartHandoff,
+  resolveAgentStartSessionProjection,
+} from '@narada2/agent-start/launch-result-v0-contract';
+import type { LaunchResultSummary } from './launcher-contracts.js';
+import type { AgentStartResultV0 } from '@narada2/agent-start/launch-result-v0-contract';
+import { AgentStartArtifactError, parseAgentStartResultText } from './agent-start-result-reader.js';
+
+const LAUNCH_RESULT_RECONCILIATION_SCHEMA = 'narada.agent_start_result_reconciliation.v1';
+const LAUNCH_RESULT_RECONCILIATION_STATUS = 'completed';
+const RECONCILIATION_LOCK_TIMEOUT_MS = 5000;
+const RECONCILIATION_LOCK_POLL_MS = 25;
+const RECONCILIATION_LOCK_STALE_MS = 30000;
+
+type LaunchResultReconciliationArtifact = {
+  path: string;
+  sha256: string;
+  reason_code: string;
+  detail: string;
+  deleted_at?: string;
+};
+
+interface LaunchResultReconciliationReceipt {
+  schema: typeof LAUNCH_RESULT_RECONCILIATION_SCHEMA;
+  status: 'pending' | 'completed';
+  version: 1;
+  launch_results_dir: string;
+  started_at: string;
+  completed_at?: string;
+  deleted_artifacts: LaunchResultReconciliationArtifact[];
+}
+
+type ReconciliationLockRecord = {
+  pid: number;
+  token: string;
+  acquired_at: string;
+};
+
+function normalizedPath(path: string): string {
+  const resolved = resolve(path);
+  return process.platform === 'win32' ? resolved.toLowerCase() : resolved;
+}
+
+function isReceiptArtifact(value: unknown, launchResultsDir: string): value is LaunchResultReconciliationArtifact {
+  if (!value || typeof value !== 'object') return false;
+  const artifact = value as Partial<LaunchResultReconciliationArtifact>;
+  const relativePath = typeof artifact.path === 'string'
+    ? relative(resolve(launchResultsDir), resolve(artifact.path))
+    : '';
+  const isWithinLaunchResultsDir = relativePath.length > 0
+    && relativePath !== '..'
+    && !relativePath.startsWith(`..${sep}`)
+    && !isAbsolute(relativePath);
+  return isWithinLaunchResultsDir
+    && typeof artifact.sha256 === 'string'
+    && /^[0-9a-f]{64}$/.test(artifact.sha256)
+    && typeof artifact.reason_code === 'string'
+    && artifact.reason_code.length > 0
+    && typeof artifact.detail === 'string'
+    && artifact.detail.length > 0
+    && (artifact.deleted_at === undefined || typeof artifact.deleted_at === 'string');
+}
+
+function isCompletedReconciliationReceipt(
+  value: unknown,
+  launchResultsDir: string,
+): value is LaunchResultReconciliationReceipt {
+  if (!value || typeof value !== 'object') return false;
+  const receipt = value as Partial<LaunchResultReconciliationReceipt>;
+  return receipt.schema === LAUNCH_RESULT_RECONCILIATION_SCHEMA
+    && receipt.status === LAUNCH_RESULT_RECONCILIATION_STATUS
+    && receipt.version === 1
+    && typeof receipt.launch_results_dir === 'string'
+    && normalizedPath(receipt.launch_results_dir) === normalizedPath(launchResultsDir)
+    && typeof receipt.started_at === 'string'
+    && typeof receipt.completed_at === 'string'
+    && Array.isArray(receipt.deleted_artifacts)
+    && receipt.deleted_artifacts.every((artifact) => isReceiptArtifact(artifact, launchResultsDir));
+}
+
+function parseLaunchResultForDiscovery(raw: string, path: string): AgentStartResultV0 {
+  const record = parseAgentStartResultText(raw, path);
+  const handoff = evaluateAgentStartHandoff(record);
+  if (record.status === 'materialized' && !handoff.eligible) {
+    throw new AgentStartArtifactError(
+      handoff.reason ?? 'agent_start_result_not_attachable',
+      handoff.detail ?? 'The materialized result cannot be attached.',
+      path,
+    );
+  }
+  return record;
+}
+
+function listInvalidLaunchResults(launchResultsDir: string): LaunchResultReconciliationArtifact[] {
+  if (!existsSync(launchResultsDir)) return [];
+  return readdirSync(launchResultsDir, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && entry.name.endsWith('.result.json'))
+    .flatMap((entry) => {
+      const path = join(launchResultsDir, entry.name);
+      const raw = readFileSync(path, 'utf8');
+      try {
+        parseLaunchResultForDiscovery(raw, path);
+        return [];
+      } catch (error) {
+        if (!(error instanceof AgentStartArtifactError)) throw error;
+        return [{
+          path,
+          sha256: createHash('sha256').update(raw).digest('hex'),
+          reason_code: error.reason_code,
+          detail: error.message,
+        }];
+      }
+    });
+}
+
+function writeJsonAtomically(path: string, value: unknown): void {
+  mkdirSync(dirname(path), { recursive: true });
+  if (existsSync(path)) throw new Error(`agent_start_result_reconciliation_target_exists: ${path}`);
+  const temporaryPath = `${path}.${process.pid}.${randomUUID()}.tmp`;
+  try {
+    writeFileSync(temporaryPath, `${JSON.stringify(value, null, 2)}\n`, { encoding: 'utf8', flag: 'wx' });
+    renameSync(temporaryPath, path);
+  } finally {
+    if (existsSync(temporaryPath)) rmSync(temporaryPath, { force: true });
+  }
+}
+
+function sleepForReconciliationLock(): void {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, RECONCILIATION_LOCK_POLL_MS);
+}
+
+function acquireReconciliationLock(lockPath: string): () => void {
+  mkdirSync(dirname(lockPath), { recursive: true });
+  const token = randomUUID();
+  const deadline = Date.now() + RECONCILIATION_LOCK_TIMEOUT_MS;
+
+  while (true) {
+    try {
+      const fd = openSync(lockPath, 'wx');
+      try {
+        writeFileSync(fd, JSON.stringify({
+          pid: process.pid,
+          token,
+          acquired_at: new Date().toISOString(),
+        } satisfies ReconciliationLockRecord));
+      } finally {
+        closeSync(fd);
+      }
+      return () => {
+        if (!existsSync(lockPath)) return;
+        let current: ReconciliationLockRecord;
+        try {
+          current = JSON.parse(readFileSync(lockPath, 'utf8')) as ReconciliationLockRecord;
+        } catch (error) {
+          const detail = error instanceof Error ? error.message : String(error);
+          throw new Error(`agent_start_result_reconciliation_lock_release_failed: ${lockPath}: ${detail}`);
+        }
+        if (current.token === token) unlinkSync(lockPath);
+      };
+    } catch (error) {
+      if ((error as { code?: string }).code !== 'EEXIST') {
+        const detail = error instanceof Error ? error.message : String(error);
+        throw new Error(`agent_start_result_reconciliation_lock_failed: ${lockPath}: ${detail}`);
+      }
+
+      let owner: ReconciliationLockRecord | null = null;
+      try {
+        const parsed = JSON.parse(readFileSync(lockPath, 'utf8')) as Partial<ReconciliationLockRecord>;
+        if (Number.isInteger(parsed.pid) && typeof parsed.token === 'string' && typeof parsed.acquired_at === 'string') {
+          owner = parsed as ReconciliationLockRecord;
+        }
+      } catch (readError) {
+        if ((readError as { code?: string }).code === 'ENOENT') continue;
+      }
+
+      if (!owner) {
+        try {
+          if (Date.now() - statSync(lockPath).mtimeMs > RECONCILIATION_LOCK_STALE_MS) {
+            unlinkSync(lockPath);
+            continue;
+          }
+        } catch (statError) {
+          if ((statError as { code?: string }).code === 'ENOENT') continue;
+          const detail = statError instanceof Error ? statError.message : String(statError);
+          throw new Error(`agent_start_result_reconciliation_lock_invalid: ${lockPath}: ${detail}`);
+        }
+        if (Date.now() >= deadline) {
+          throw new Error(`agent_start_result_reconciliation_busy: ${lockPath}`);
+        }
+        sleepForReconciliationLock();
+        continue;
+      }
+
+      if (!isProcessAlive(owner.pid)) {
+        try {
+          unlinkSync(lockPath);
+        } catch (unlinkError) {
+          if ((unlinkError as { code?: string }).code !== 'ENOENT') throw unlinkError;
+        }
+        continue;
+      }
+
+      if (Date.now() >= deadline) {
+        throw new Error(`agent_start_result_reconciliation_busy: ${lockPath}`);
+      }
+      sleepForReconciliationLock();
+    }
+  }
+}
+
+export function reconcileLaunchResults(launchResultsDir: string): LaunchResultReconciliationReceipt {
+  const reconciliationDir = join(dirname(launchResultsDir), 'agent-start-reconciliation');
+  const receiptPath = join(reconciliationDir, 'v1.json');
+  const releaseLock = acquireReconciliationLock(join(reconciliationDir, 'v1.lock'));
+  try {
+    if (existsSync(receiptPath)) {
+      let existingReceipt: unknown;
+      try {
+        existingReceipt = JSON.parse(readFileSync(receiptPath, 'utf8'));
+      } catch {
+        throw new Error(`agent_start_result_reconciliation_receipt_invalid: ${receiptPath}`);
+      }
+      if (isCompletedReconciliationReceipt(existingReceipt, launchResultsDir)) return existingReceipt;
+      throw new Error(`agent_start_result_reconciliation_receipt_invalid: ${receiptPath}`);
+    }
+
+    const startedAt = new Date().toISOString();
+    const invalidArtifacts = listInvalidLaunchResults(launchResultsDir);
+    const pendingReceipt: LaunchResultReconciliationReceipt = {
+      schema: LAUNCH_RESULT_RECONCILIATION_SCHEMA,
+      status: 'pending',
+      version: 1,
+      launch_results_dir: launchResultsDir,
+      started_at: startedAt,
+      deleted_artifacts: invalidArtifacts,
+    };
+    const pendingPath = join(reconciliationDir, 'v1.pending.json');
+    if (existsSync(pendingPath)) rmSync(pendingPath, { force: true });
+    writeJsonAtomically(pendingPath, pendingReceipt);
+
+    const deletedAt = new Date().toISOString();
+    for (const artifact of invalidArtifacts) {
+      try {
+        unlinkSync(artifact.path);
+      } catch (error) {
+        if ((error as { code?: string }).code !== 'ENOENT') throw error;
+      }
+      artifact.deleted_at = deletedAt;
+    }
+    const completedReceipt: LaunchResultReconciliationReceipt = {
+      ...pendingReceipt,
+      status: 'completed',
+      completed_at: new Date().toISOString(),
+    };
+    writeJsonAtomically(receiptPath, completedReceipt);
+    if (existsSync(pendingPath)) rmSync(pendingPath, { force: true });
+    return completedReceipt;
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    if (
+      detail.startsWith('agent_start_result_reconciliation_receipt_invalid:')
+      || detail.startsWith('agent_start_result_reconciliation_busy:')
+      || detail.startsWith('agent_start_result_reconciliation_lock_')
+      || detail.startsWith('agent_start_result_reconciliation_failed:')
+    ) throw error;
+    throw new Error(`agent_start_result_reconciliation_failed: ${detail}`);
+  } finally {
+    releaseLock();
+  }
+}
 
 export function readLaunchResults(launchResultsDir: string): LaunchResultSummary[] {
   if (!existsSync(launchResultsDir)) return [];
   return readdirSync(launchResultsDir, { withFileTypes: true })
     .filter((entry) => entry.isFile() && entry.name.endsWith('.result.json'))
-    .map((entry) => readLaunchResult(join(launchResultsDir, entry.name)))
-    .filter((summary): summary is LaunchResultSummary => Boolean(summary));
+    .map((entry) => readLaunchResult(join(launchResultsDir, entry.name)));
 }
 
 export function readJsonFile(path: string): unknown {
@@ -19,26 +300,22 @@ export function readJsonFile(path: string): unknown {
   }
 }
 
-function readLaunchResult(path: string): LaunchResultSummary | null {
-  try {
+function readLaunchResult(path: string): LaunchResultSummary {
     const stats = statSync(path);
-    const record = JSON.parse(readFileSync(path, 'utf8')) as LaunchResultRecord;
+    const record: AgentStartResultV0 = parseLaunchResultForDiscovery(readFileSync(path, 'utf8'), path);
+    const sessionProjection = resolveAgentStartSessionProjection(record);
+    const projectedSessionRef = sessionProjection?.session_ref;
+    const sessionRef = projectedSessionRef
+      && typeof projectedSessionRef.id === 'string'
+      && (projectedSessionRef.kind === 'runtime'
+        || projectedSessionRef.kind === 'nars'
+        || projectedSessionRef.kind === 'carrier')
+      ? { id: projectedSessionRef.id, kind: projectedSessionRef.kind }
+      : undefined;
     const carrierSessionRegistration = record.carrier_actions?.carrier_session_registration;
-    const runtimeSessionId = stringValue(
-      record.nars_launch?.runtime_session_id
-        ?? record.nars_launch?.session_id
-        ?? record.required_environment?.NARADA_RUNTIME_SESSION_ID,
-    );
-    const narsSessionId = stringValue(
-      record.nars_launch?.nars_session_id
-        ?? record.nars_launch?.session_id
-        ?? record.required_environment?.NARADA_NARS_SESSION_ID,
-    );
-    const carrierSessionId = stringValue(
-      record.carrier_session?.carrier_session_id
-        ?? carrierSessionRegistration?.carrier_session_id
-        ?? record.required_environment?.NARADA_CARRIER_SESSION_ID,
-    );
+    const runtimeSessionId = sessionProjection?.runtime_session_id ?? undefined;
+    const narsSessionId = sessionProjection?.nars_session_id ?? undefined;
+    const carrierSessionId = sessionProjection?.carrier_session_id ?? undefined;
     const controlPath = stringValue(
       record.nars_launch?.control_path
         ?? controlPathFromRuntimeArgs(record.runtime_args)
@@ -77,6 +354,7 @@ function readLaunchResult(path: string): LaunchResultSummary | null {
       runtime_session_id: runtimeSessionId,
       nars_session_id: narsSessionId,
       carrier_session_id: carrierSessionId,
+      session_ref: sessionRef,
       control_path: controlPath,
       control_path_exists: controlPath ? existsSync(controlPath) : false,
       session_path: sessionPath,
@@ -92,9 +370,6 @@ function readLaunchResult(path: string): LaunchResultSummary | null {
       ),
       expires_at: stringValue(record.expires_at),
     };
-  } catch {
-    return null;
-  }
 }
 
 function isProcessAlive(pid: number): boolean {

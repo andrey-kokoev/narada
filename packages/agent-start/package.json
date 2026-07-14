@@ -13,7 +13,8 @@
     "@narada2/carrier-provider-contract": "workspace:*",
     "@narada2/process-launch-posture": "workspace:*",
     "@narada2/nars-client-projection-contract": "workspace:*",
-    "@narada2/site-paths": "workspace:*"
+    "@narada2/site-paths": "workspace:*",
+    "zod": "^3.22.0"
   },
   "bin": {
     "narada-agent-start": "./src/narada-agent-start.ts",
@@ -21,14 +22,25 @@
   },
   "exports": {
     ".": "./src/narada-agent-start.ts",
+    "./launch-result-v0-contract": {
+      "types": "./src/launch-result-v0-contract.d.mts",
+      "import": "./src/launch-result-v0-contract.mjs"
+    },
     "./verify-registered-site-launchers": "./bin/verify-registered-site-launchers.mjs",
     "./package.json": "./package.json"
   },
   "scripts": {
     "syntaxcheck": "node --import tsx --check src/narada-agent-start.ts && node --check bin/verify-registered-site-launchers.mjs",
+    "generate:result-schema": "node --import tsx scripts/generate-result-schema.ts",
+    "check:result-contract": "node --import tsx scripts/generate-result-schema.ts --check",
     "test": "node test/run-agent-start-tests.mjs",
     "test:launcher-contract": "node test/run-launcher-registry-contract-shards.mjs",
     "verify": "node bin/verify-registered-site-launchers.mjs",
     "test:option-contract": "node test/run-option-contract-shards.mjs"
+  },
+  "devDependencies": {
+    "tsx": "^4.21.0",
+    "typescript": "^5.3.0",
+    "zod-to-json-schema": "^3.25.2"
   }
 }

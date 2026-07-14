@@ -269,6 +269,19 @@ importers:
       '@narada2/site-paths':
         specifier: workspace:*
         version: link:../site-paths
+      zod:
+        specifier: ^3.22.0
+        version: 3.25.76
+    devDependencies:
+      tsx:
+        specifier: ^4.21.0
+        version: 4.21.0
+      typescript:
+        specifier: ^5.3.0
+        version: 5.9.3
+      zod-to-json-schema:
+        specifier: ^3.25.2
+        version: 3.25.2(zod@3.25.76)
 
   packages/agent-start-bootstrap: {}
 
@@ -504,6 +517,9 @@ importers:
       '@narada2/agent-identity':
         specifier: workspace:*
         version: link:../../agent-identity
+      '@narada2/agent-start':
+        specifier: workspace:*
+        version: link:../../agent-start
       '@narada2/agent-web-ui':
         specifier: workspace:*
         version: link:../../agent-web-ui

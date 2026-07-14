@@ -89,7 +89,7 @@
   ],
   "scripts": {
     "prepublishOnly": "node ../../../scripts/assert-publication-admission.js",
-    "prebuild": "pnpm --filter @narada2/operator-router build && pnpm --filter @narada2/ui build && pnpm --filter @narada2/workspace-launch-ui build && pnpm --filter @narada2/operator-console-ui build",
+    "prebuild": "pnpm --filter @narada2/agent-start check:result-contract && pnpm --filter @narada2/operator-router build && pnpm --filter @narada2/ui build && pnpm --filter @narada2/workspace-launch-ui build && pnpm --filter @narada2/operator-console-ui build",
     "build": "tsc && node scripts/write-build-manifest.mjs",
     "typecheck": "tsc --noEmit",
     "test:artifact": "node --test test/lib/launch-artifact.test.mjs",
