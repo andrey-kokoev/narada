@@ -96,6 +96,38 @@ function assertRegistryContract(records, sourceLabel) {
   }
 }
 
+function buildSiteLaunchContracts(records) {
+  const contracts = new Map();
+  for (const record of records) {
+    const site = siteId(record);
+    const envelope = {
+      narada_root: normalizePath(record.NaradaRoot),
+      workspace_root: normalizePath(record.WorkspaceRoot),
+      site_root: normalizePath(record.SiteRoot),
+      launcher: normalizePath(launcherPathFor(record)),
+    };
+    const existing = contracts.get(site);
+    if (!existing) {
+      contracts.set(site, { site_id: site, agent_count: 1, envelope });
+      continue;
+    }
+    assert.deepEqual(existing.envelope, envelope, `${site}: roles must share one launch envelope`);
+    existing.agent_count += 1;
+  }
+  return [...contracts.values()].sort((left, right) => left.site_id.localeCompare(right.site_id));
+}
+
+function assertGeneratedSiteLaunchContracts(records, sourceLabel) {
+  const contracts = buildSiteLaunchContracts(records);
+  assert.equal(contracts.length > 0, true, `${sourceLabel}: at least one site launch contract is required`);
+  for (const contract of contracts) {
+    assert.equal(contract.agent_count > 0, true, `${sourceLabel}:${contract.site_id}: site must have an agent`);
+    for (const field of ['narada_root', 'workspace_root', 'site_root', 'launcher']) {
+      assert.equal(contract.envelope[field].length > 0, true, `${sourceLabel}:${contract.site_id}: ${field} is required`);
+    }
+  }
+}
+
 function assertLauncherFileShape(records, sourceLabel) {
   for (const record of records) {
     const launcherPath = launcherPathFor(record);
@@ -194,6 +226,7 @@ function assertCarrierMatrixDryRuns(records, sourceLabel) {
 test('package fixture encodes the launcher registry boundary', () => {
   const records = recordsFrom(fixtureRegistryPath);
   assertRegistryContract(records, 'fixture');
+  assertGeneratedSiteLaunchContracts(records, 'fixture');
   assertLauncherFileShape(records, 'fixture');
   const deterministicCarrierRecords = records.filter((record) => normalizePath(record.NaradaRoot) === normalizePath(naradaProperRoot));
   assert.equal(deterministicCarrierRecords.length > 0, true, 'fixture: deterministic Narada proper record is required for the carrier matrix');
@@ -204,6 +237,7 @@ test('package fixture encodes the launcher registry boundary', () => {
 test('live operator registry conforms when explicitly supplied', { skip: !process.env.NARADA_AGENT_START_LIVE_REGISTRY }, () => {
   const records = recordsFrom(process.env.NARADA_AGENT_START_LIVE_REGISTRY);
   assertRegistryContract(records, 'live');
+  assertGeneratedSiteLaunchContracts(records, 'live');
   assertLauncherFileShape(records, 'live');
 });
 
