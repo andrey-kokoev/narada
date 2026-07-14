@@ -61,7 +61,7 @@ describe('site task lifecycle admission contract', () => {
       taskSpecProjectionDir: 'D:\\code\\narada\\.ai\\do-not-open\\tasks',
       rosterInitializationSource: 'neutral_fixture',
       packageTests: [],
-      localIdentityMappings: [{ localIdentity: { identityId: 'narada-andrey.Kevin', role: 'architect' } }],
+      localIdentityMappings: [{ localIdentity: { identityId: 'andrey-user.Kevin', role: 'architect' } }],
       rejectedSourcePaths: [],
       compatibilityProjectionPolicy: buildCompatibilityProjectionPolicy(),
       admittedBy: 'narada-proper.task-0001',

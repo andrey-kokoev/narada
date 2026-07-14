@@ -9,7 +9,7 @@ import {
 import { neutralRoster } from './fixtures/neutral-site.js';
 
 describe('source import refusal', () => {
-  it('detects denied narada-andrey runtime and PC-locus inputs', () => {
+  it('detects denied andrey-user runtime and PC-locus inputs', () => {
     const findings = findDeniedSourceImports([
       'C:\\Users\\Andrey\\Narada\\.ai\\task-lifecycle.db',
       'C:\\Users\\Andrey\\Narada\\.ai\\do-not-open\\tasks\\20260501-1.md',
@@ -32,7 +32,7 @@ describe('source import refusal', () => {
 
   it('accepts neutral fixture identities and rejects source-Site identities', () => {
     expect(() => assertNeutralIdentities(neutralRoster)).not.toThrow();
-    expect(() => assertNeutralIdentities([{ identityId: 'narada-andrey.Kevin', role: 'architect' }]))
+    expect(() => assertNeutralIdentities([{ identityId: 'andrey-user.Kevin', role: 'architect' }]))
       .toThrow(NonNeutralIdentityError);
   });
 });

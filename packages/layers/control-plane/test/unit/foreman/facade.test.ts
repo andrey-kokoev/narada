@@ -976,7 +976,7 @@ describe("DefaultForemanFacade", () => {
       expect(JSON.parse(record!.secondary_charters_json)).toEqual(["helper_1", "helper_2"]);
     });
 
-    it("records pending approval decision and does not create outbound command when approval is required", async () => {
+    it("records pending approval and materializes an outbound command when approval is required", async () => {
       const policyFacade = new DefaultForemanFacade({
         coordinatorStore,
         outboundStore,
@@ -1018,14 +1018,17 @@ describe("DefaultForemanFacade", () => {
       expect(result.success).toBe(true);
       expect(result.resolution_outcome).toBe("pending_approval");
       expect(result.decision_id).toBeDefined();
-      expect(result.outbound_id).toBeUndefined();
+      expect(result.outbound_id).toBeDefined();
 
       const decision = coordinatorStore.getDecisionById(result.decision_id!);
       expect(decision).toBeDefined();
-      expect(decision!.outbound_id).toBeNull();
+      expect(decision!.approved_action).toBe("send_reply");
+      expect(decision!.outbound_id).toBe(result.outbound_id);
 
-      const commands = db.prepare("select count(*) as c from outbound_commands where conversation_id = ?").get("conv-approval") as { c: number };
-      expect(commands.c).toBe(0);
+      const command = outboundStore.getCommand(result.outbound_id!);
+      expect(command).toBeDefined();
+      expect(command!.action_type).toBe("send_reply");
+      expect(command!.status).toBe("pending");
 
       const updated = coordinatorStore.getWorkItem(workItem.work_item_id);
       expect(updated!.status).toBe("resolved");

@@ -338,7 +338,7 @@ describe("mailbox scenario library — evaluation and resolution shapes", () => 
       expectedConfidence: "medium",
       expectedEscalationCount: 0,
       expectedSummaryContains: "refund",
-      expectedResolutionOutcome: "pending_approval",
+      expectedResolutionOutcome: "action_created",
     },
     {
       name: "escalation-worthy complaint",
@@ -493,11 +493,12 @@ describe("mailbox scenario library — evaluation and resolution shapes", () => 
         expect(outboundVersion!.to).toEqual([scenario.fromAddress]);
         expect(outboundVersion!.subject).toBe(`Re: ${scenario.subject}`);
       } else if (scenario.expectedResolutionOutcome === "pending_approval") {
-        expect(resolveResult.outbound_id).toBeUndefined();
+        expect(resolveResult.outbound_id).toBeDefined();
         const outbounds = db
           .prepare("select * from outbound_handoffs where context_id = ?")
           .all(scenario.contextId) as Array<Record<string, unknown>>;
-        expect(outbounds).toHaveLength(0);
+        expect(outbounds).toHaveLength(1);
+        expect(outbounds[0]!.status).toBe("pending");
       } else if (scenario.expectedResolutionOutcome === "escalated") {
         expect(resolveResult.outbound_id).toBeUndefined();
         const outbounds = db
@@ -606,7 +607,7 @@ describe("mailbox scenario library — evaluation and resolution shapes", () => 
 
     expect(resolveResult.success).toBe(true);
     expect(resolveResult.resolution_outcome).toBe("pending_approval");
-    expect(resolveResult.outbound_id).toBeUndefined();
+    expect(resolveResult.outbound_id).toBeDefined();
 
     const resolvedItem = coordinatorStore.getWorkItem(opened.work_item_id);
     expect(resolvedItem!.status).toBe("resolved");
@@ -615,6 +616,8 @@ describe("mailbox scenario library — evaluation and resolution shapes", () => 
     const outbounds = db
       .prepare("select * from outbound_handoffs where context_id = ?")
       .all(scenario.contextId + "-safe") as Array<Record<string, unknown>>;
-    expect(outbounds).toHaveLength(0);
+    expect(outbounds).toHaveLength(1);
+    expect(outbounds[0]!.action_type).toBe("draft_reply");
+    expect(outbounds[0]!.status).toBe("pending");
   });
 });

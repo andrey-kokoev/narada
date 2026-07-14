@@ -271,7 +271,7 @@ If the loop surfaces a problem, follow this order:
 
 For rehearsed failure scenarios (kill daemon mid-sync, corrupt cursor, etc.), see [`docs/runbook.md`](runbook.md).
 
-For the **live Graph proof** (exercising real draft creation, approval, send, and reconciliation), see [`docs/live-graph-proof.md`](live-graph-proof.md).
+For the **live Graph proof** (exercising real draft creation, approval, send, and reconciliation), see [`docs/product/live-graph-proof.md`](live-graph-proof.md).
 
 ---
 

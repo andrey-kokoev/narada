@@ -67,9 +67,25 @@ For Site pub/sub doctrine, see [`site-pubsub-signal-exchange.md`](site-pubsub-si
 
 ## Current Boundary
 
-This document defines registry semantics. It does not yet implement storage, discovery, subscription management, or mutation routing.
+This document defines registry semantics. The current local implementation is the
+User Site's SQLite `SiteRegistry` read model. On native Windows user-locus
+operation its default path is `%USERPROFILE%\Narada\registry.db`, resolved by
+`resolveRegistryDbPathByLocus({ authorityLocus: 'user', variant: 'native' })`.
 
-Until a first-class command exists, manual `linked_sites` maps in User Site config are provisional authoring surfaces. They should be treated as awareness hints, not authority grants.
+`narada sites discover` is the explicit refresh operation. It combines bounded
+filesystem discovery with a projection of the User Site launch registry. The
+projection is auditable and idempotent: a conflicting Site root is reported and
+is not overwritten. Launch records remain launch mechanics, and awareness config
+remains a projection; neither is a competing Site catalog.
+
+The SQLite registry is the canonical local discovery/read-model source for
+commands such as `narada sites list`, Site-root resolution, and launcher
+selection. It remains advisory and caching: it does not own another Site's
+coordinator state, grant mutation authority, or replace the Site's own
+configuration and runtime evidence.
+
+Manual `linked_sites` maps in User Site config are still provisional authoring
+surfaces. They should be treated as awareness hints, not authority grants.
 
 ## SiteRegistry Read Model Consumption
 

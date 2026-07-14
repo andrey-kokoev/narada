@@ -140,7 +140,7 @@ function appendOriginalMessage(content: string, contentType: "Text" | "HTML", or
   return `${content.trimEnd()}\n\n${formatOriginalMessageText(original)}`;
 }
 
-async function resolveOriginalMessage(
+export async function resolveOriginalMessage(
   draftClient: GraphDraftClient,
   userId: string,
   version: OutboundVersion,
@@ -159,7 +159,7 @@ async function resolveOriginalMessage(
   }
 }
 
-function materializeDraftBody(
+export function materializeDraftBody(
   version: OutboundVersion,
   original: MessageQuoteReadResult | null,
 ): { contentType: "Text" | "HTML"; content: string } {

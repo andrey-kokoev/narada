@@ -1,16 +1,25 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import Database from "../../../src/sqlite/database.js";
-import { mkdtemp, writeFile, mkdir } from "node:fs/promises";
+import { mkdtemp } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { SqliteCoordinatorStore } from "../../../src/coordinator/store.js";
 import { SqliteOutboundStore } from "../../../src/outbound/store.js";
 import { SqliteIntentStore } from "../../../src/intent/store.js";
+import { SqliteFactStore } from "../../../src/facts/store.js";
+import { SqliteProcessExecutionStore } from "../../../src/executors/store.js";
 import { SqliteScheduler } from "../../../src/scheduler/scheduler.js";
 import { DefaultForemanFacade } from "../../../src/foreman/facade.js";
 import { MailboxContextStrategy } from "../../../src/foreman/mailbox/context-strategy.js";
 import { MailboxContextMaterializer } from "../../../src/charter/mailbox/materializer.js";
 import { FileMessageStore } from "../../../src/persistence/messages.js";
+import { FileCursorStore } from "../../../src/persistence/cursor.js";
+import { FileApplyLogStore } from "../../../src/persistence/apply-log.js";
+import { DefaultProjector } from "../../../src/projector/apply-event.js";
+import { DefaultSyncRunner } from "../../../src/runner/sync-once.js";
+import { ExchangeSource } from "../../../src/adapter/graph/exchange-source.js";
+import { DefaultWorkerRegistry } from "../../../src/workers/registry.js";
+import { ObservationPlane } from "../../../src/observability/plane.js";
 import { SendReplyWorker } from "../../../src/outbound/send-reply-worker.js";
 import {
   buildInvocationEnvelope,
@@ -18,12 +27,13 @@ import {
   persistEvaluation,
   VerticalMaterializerRegistry,
 } from "../../../src/charter/envelope.js";
-import type { Fact } from "../../../src/facts/types.js";
 import type {
   CharterRunner,
   CharterInvocationEnvelope,
   CharterOutputEnvelope,
 } from "@narada2/charters";
+import type { GraphAdapter, NormalizedBatch, NormalizedEvent } from "../../../src/types/index.js";
+import { SCHEMA_VERSION } from "../../../src/types/index.js";
 import type { GraphDraftClient, DraftReadResult } from "../../../src/outbound/graph-draft-client.js";
 import type { ParticipantResolver } from "../../../src/outbound/send-reply-worker.js";
 
@@ -32,6 +42,8 @@ describe("live operation smoke test — support-thread-login-issue", () => {
   let coordinatorStore: SqliteCoordinatorStore;
   let outboundStore: SqliteOutboundStore;
   let intentStore: SqliteIntentStore;
+  let factStore: SqliteFactStore;
+  let executionStore: SqliteProcessExecutionStore;
   let scheduler: SqliteScheduler;
   let rootDir: string;
   let messageStore: FileMessageStore;
@@ -41,9 +53,13 @@ describe("live operation smoke test — support-thread-login-issue", () => {
     coordinatorStore = new SqliteCoordinatorStore({ db });
     outboundStore = new SqliteOutboundStore({ db });
     intentStore = new SqliteIntentStore({ db });
+    factStore = new SqliteFactStore({ db });
+    executionStore = new SqliteProcessExecutionStore({ db });
     coordinatorStore.initSchema();
     outboundStore.initSchema();
     intentStore.initSchema();
+    factStore.initSchema();
+    executionStore.initSchema();
     scheduler = new SqliteScheduler(coordinatorStore, {
       leaseDurationMs: 60_000,
       runnerId: "runner-test",
@@ -51,43 +67,6 @@ describe("live operation smoke test — support-thread-login-issue", () => {
 
     rootDir = await mkdtemp(join(tmpdir(), "narada-smoke-"));
     messageStore = new FileMessageStore({ rootDir });
-
-    // Seed the support-thread-login-issue fixture on disk
-    const conversationId = "conv-support-login-001";
-    const messageId = "msg-login-001";
-    const msgDir = join(rootDir, "messages", messageId);
-    await mkdir(msgDir, { recursive: true });
-    await writeFile(
-      join(msgDir, "record.json"),
-      JSON.stringify({
-        schema_version: 1,
-        mailbox_id: "help@global-maxima.com",
-        message_id: messageId,
-        conversation_id: conversationId,
-        internet_message_id: "<msg-login-001@example.com>",
-        subject: "Can't log in to my account",
-        from: { display_name: "Alice Customer", email: "alice@external.com" },
-        sender: { display_name: "Alice Customer", email: "alice@external.com" },
-        reply_to: [],
-        to: [{ display_name: "Help", email: "help@global-maxima.com" }],
-        cc: [],
-        bcc: [],
-        receivedDateTime: "2026-04-19T10:00:00Z",
-        sentDateTime: "2026-04-19T10:00:00Z",
-        body: {
-          contentType: "text",
-          content:
-            "Hi, I've been trying to log in for the last hour but I keep getting an 'invalid credentials' error. I reset my password twice already. Can someone help?\n\n— Alice",
-        },
-        isRead: false,
-        isDraft: false,
-        hasAttachments: false,
-        folder_refs: ["inbox"],
-        category_refs: [],
-        flags: { is_read: false, is_draft: false, is_flagged: false, has_attachments: false },
-      }),
-      "utf-8",
-    );
   });
 
   afterEach(() => {
@@ -97,29 +76,78 @@ describe("live operation smoke test — support-thread-login-issue", () => {
     db.close();
   });
 
-  function makeMailFact(contextId: string, recordId: string): Fact {
+  function makeFixtureEvent(messageId: string, conversationId: string, eventId: string): NormalizedEvent {
+    const observedAt = "2026-04-19T10:00:00.000Z";
     return {
-      fact_id: `fact_mail_${contextId}_${recordId}`,
-      fact_type: "mail.message.discovered",
-      provenance: {
-        source_id: "help-global-maxima",
-        source_record_id: recordId,
-        source_version: null,
-        source_cursor: "cursor-1",
-        observed_at: "2026-04-19T10:00:00Z",
-      },
-      payload_json: JSON.stringify({
-        record_id: recordId,
-        ordinal: "2026-04-19T10:00:00Z",
-        event: {
-          event_id: recordId,
-          event_kind: "created",
-          conversation_id: contextId,
-          thread_id: contextId,
+      schema_version: SCHEMA_VERSION,
+      event_id: eventId,
+      event_kind: "created",
+      mailbox_id: "help@global-maxima.com",
+      message_id: messageId,
+      source_item_id: `source-${messageId}`,
+      source_version: "graph-v1",
+      conversation_id: conversationId,
+      observed_at: observedAt,
+      received_at: observedAt,
+      payload: {
+        schema_version: SCHEMA_VERSION,
+        mailbox_id: "help@global-maxima.com",
+        message_id: messageId,
+        event_id: eventId,
+        kind: "created",
+        source_version: "graph-v1",
+        received_at: observedAt,
+        observed_at: observedAt,
+        conversation_id: conversationId,
+        subject: "Can't log in to my account",
+        from: { display_name: "Alice Customer", email: "alice@external.com" },
+        reply_to: [],
+        to: [{ display_name: "Help", email: "help@global-maxima.com" }],
+        cc: [],
+        bcc: [],
+        folder_refs: ["inbox"],
+        category_refs: [],
+        flags: { is_read: false, is_draft: false, is_flagged: false, has_attachments: false },
+        body: {
+          body_kind: "text",
+          text:
+            "Hi, I've been trying to log in for the last hour but I keep getting an invalid credentials error. I reset my password twice already. Can someone help? - Alice",
         },
-      }),
-      created_at: "2026-04-19T10:00:00Z",
+        attachments: [],
+      },
     };
+  }
+
+  function makeFixtureSync(event: NormalizedEvent): DefaultSyncRunner {
+    const batch: NormalizedBatch = {
+      schema_version: SCHEMA_VERSION,
+      mailbox_id: event.mailbox_id,
+      adapter_scope: {
+        mailbox_id: event.mailbox_id,
+        included_container_refs: ["inbox"],
+        included_item_kinds: ["message"],
+        attachment_policy: "metadata_only",
+        body_policy: "text_only",
+      },
+      fetched_at: event.observed_at ?? "2026-04-19T10:00:00.000Z",
+      events: [event],
+      prior_cursor: null,
+      next_cursor: "cursor-1",
+      has_more: false,
+    };
+    const adapter: GraphAdapter = {
+      async fetch_since(cursor): Promise<NormalizedBatch> {
+        return { ...batch, prior_cursor: cursor ?? null };
+      },
+    };
+    return new DefaultSyncRunner({
+      rootDir,
+      source: new ExchangeSource({ adapter, sourceId: "help-global-maxima" }),
+      cursorStore: new FileCursorStore({ rootDir, scopeId: "help-global-maxima" }),
+      applyLogStore: new FileApplyLogStore({ rootDir }),
+      projector: new DefaultProjector({ rootDir }),
+      factStore,
+    });
   }
 
   // Charter runner that produces a valid draft_reply payload matching the fixture
@@ -171,6 +199,43 @@ describe("live operation smoke test — support-thread-login-issue", () => {
 
   it("full pipeline: fixture → sync → dispatch → charter → foreman → worker → confirmed draft", async () => {
     // -----------------------------------------------------------------
+    // Stage 0: Source adapter + sync runner — source record → fact + state
+    // -----------------------------------------------------------------
+    const sourceEvent = makeFixtureEvent(
+      "msg-login-001",
+      "conv-support-login-001",
+      "evt-login-001",
+    );
+    const syncRunner = makeFixtureSync(sourceEvent);
+    const syncResult = await syncRunner.syncOnce();
+
+    expect(syncResult.status).toBe("success");
+    expect(syncResult.event_count).toBe(1);
+    expect(syncResult.applied_count).toBe(1);
+    expect(syncResult.skipped_count).toBe(0);
+    expect(syncResult.next_cursor).toBe("cursor-1");
+
+    const fact = factStore.getBySourceRecord("help-global-maxima", "evt-login-001");
+    expect(fact).toBeDefined();
+    expect(fact!.fact_type).toBe("mail.message.discovered");
+    expect(fact!.provenance.source_record_id).toBe("evt-login-001");
+    expect(fact!.provenance.source_cursor).toBe("cursor-1");
+
+    const materializedMessage = await messageStore.readRecord("msg-login-001");
+    expect(materializedMessage).toBeDefined();
+    expect(materializedMessage!.conversation_id).toBe("conv-support-login-001");
+    expect(materializedMessage!.subject).toBe("Can't log in to my account");
+
+    // Re-fetching the same source delta must not duplicate facts or projections.
+    const replayResult = await syncRunner.syncOnce();
+    expect(replayResult.status).toBe("success");
+    expect(replayResult.applied_count).toBe(0);
+    expect(replayResult.skipped_count).toBe(1);
+    expect(factStore.getBySourceRecord("help-global-maxima", "evt-login-001")!.fact_id).toBe(
+      fact!.fact_id,
+    );
+
+    // -----------------------------------------------------------------
     // Stage 1: Foreman dispatch — facts → context → work item
     // -----------------------------------------------------------------
     const foreman = new DefaultForemanFacade({
@@ -194,8 +259,9 @@ describe("live operation smoke test — support-thread-login-issue", () => {
       contextFormationStrategy: new MailboxContextStrategy(),
     });
 
-    const facts = [makeMailFact("conv-support-login-001", "msg-login-001")];
-    const openResult = await foreman.onFactsAdmitted(facts, "help-global-maxima");
+    const openResult = await foreman.onFactsAdmitted([fact!], "help-global-maxima");
+    factStore.markAdmitted([fact!.fact_id]);
+    expect(factStore.getUnadmittedFacts("help-global-maxima")).toHaveLength(0);
 
     expect(openResult.opened).toHaveLength(1);
     const opened = openResult.opened[0]!;
@@ -331,13 +397,75 @@ describe("live operation smoke test — support-thread-login-issue", () => {
     expect(outboundVersion!.to).toEqual(["alice@external.com"]);
     expect(outboundVersion!.subject).toBe("Re: Can't log in to my account");
 
+    const intent = intentStore.getByTargetId(outboundId);
+    expect(intent).toBeDefined();
+    expect(intent!.intent_type).toBe("mail.draft_reply");
+    expect(intent!.executor_family).toBe("mail");
+    expect(intent!.status).toBe("admitted");
+
+    // -----------------------------------------------------------------
+    // Stage 4b: Restart recovery — committed handoff, unresolved work item
+    // -----------------------------------------------------------------
+    coordinatorStore.updateWorkItemStatus(opened.work_item_id, "executing", {
+      resolution_outcome: null,
+    });
+    const restartedForeman = new DefaultForemanFacade({
+      coordinatorStore,
+      outboundStore,
+      intentStore,
+      db,
+      foremanId: "fm-smoke-restarted",
+      getRuntimePolicy: () => ({
+        primary_charter: "support_steward",
+        allowed_actions: [
+          "draft_reply",
+          "mark_read",
+          "no_action",
+          "tool_request",
+          "extract_obligations",
+          "create_followup",
+        ],
+        require_human_approval: false,
+      }),
+      contextFormationStrategy: new MailboxContextStrategy(),
+    });
+    const recoveredResult = await restartedForeman.resolveWorkItem({
+      work_item_id: opened.work_item_id,
+      execution_id: attempt.execution_id,
+      evaluation_id: evaluation.evaluation_id,
+    });
+    expect(recoveredResult.success).toBe(true);
+    expect(recoveredResult.outbound_id).toBe(outboundId);
+    expect(coordinatorStore.getWorkItem(opened.work_item_id)!.status).toBe("resolved");
+    expect(
+      db.prepare("select count(*) as count from outbound_handoffs").get() as { count: number },
+    ).toEqual({ count: 1 });
+    expect(
+      db.prepare("select count(*) as count from intents").get() as { count: number },
+    ).toEqual({ count: 1 });
+
+    // Observation is a read-only projection over the durable state above.
+    const observation = new ObservationPlane({
+      registry: new DefaultWorkerRegistry(),
+      coordinatorStore,
+      outboundStore,
+      intentStore,
+      executionStore,
+    }).snapshot("help-global-maxima");
+    expect(observation.control_plane.work_items.total_count).toBe(1);
+    expect(observation.control_plane.outbound.total_count).toBe(1);
+    expect(observation.control_plane.outbound.by_status.pending).toBe(1);
+    expect(observation.intents.total_count).toBe(1);
+    expect(observation.intents.pending).toHaveLength(1);
+    expect(observation._meta?.source_classifications.intents).toBe("authoritative");
+
     // -----------------------------------------------------------------
     // Stage 5: Send-reply worker with mock Graph client
     // -----------------------------------------------------------------
     let createdDraftId = "";
     const mockDraftClient: GraphDraftClient = {
-      async createDraft(_userId, payload): Promise<{ id: string }> {
-        createdDraftId = `draft-${Math.random().toString(36).slice(2)}`;
+      async createDraft(_userId, _payload): Promise<{ id: string }> {
+        createdDraftId = "draft-login-001";
         return { id: createdDraftId };
       },
       async getDraft(_userId, draftId): Promise<DraftReadResult> {
@@ -429,8 +557,19 @@ describe("live operation smoke test — support-thread-login-issue", () => {
       contextFormationStrategy: new MailboxContextStrategy(),
     });
 
-    const facts = [makeMailFact("conv-support-login-002", "msg-login-002")];
-    const openResult = await foreman.onFactsAdmitted(facts, "help-global-maxima");
+    const sourceEvent = makeFixtureEvent(
+      "msg-login-002",
+      "conv-support-login-002",
+      "evt-login-002",
+    );
+    const syncResult = await makeFixtureSync(sourceEvent).syncOnce();
+    expect(syncResult.status).toBe("success");
+    expect(syncResult.applied_count).toBe(1);
+    const fact = factStore.getBySourceRecord("help-global-maxima", "evt-login-002");
+    expect(fact).toBeDefined();
+
+    const openResult = await foreman.onFactsAdmitted([fact!], "help-global-maxima");
+    factStore.markAdmitted([fact!.fact_id]);
     expect(openResult.opened).toHaveLength(1);
 
     const workItem = coordinatorStore.getWorkItem(openResult.opened[0]!.work_item_id)!;
@@ -503,16 +642,18 @@ describe("live operation smoke test — support-thread-login-issue", () => {
 
     expect(resolveResult.success).toBe(true);
     expect(resolveResult.resolution_outcome).toBe("pending_approval");
-    expect(resolveResult.outbound_id).toBeUndefined();
+    expect(resolveResult.outbound_id).toBeDefined();
 
     const resolvedItem = coordinatorStore.getWorkItem(workItem.work_item_id);
     expect(resolvedItem!.status).toBe("resolved");
     expect(resolvedItem!.resolution_outcome).toBe("pending_approval");
 
-    // No outbound command should be created
+    // The outbound command is pending and remains behind the approval boundary.
     const outbounds = db
       .prepare("select * from outbound_handoffs where context_id = ?")
       .all("conv-support-login-002") as Array<Record<string, unknown>>;
-    expect(outbounds).toHaveLength(0);
+    expect(outbounds).toHaveLength(1);
+    expect(outbounds[0]!.action_type).toBe("draft_reply");
+    expect(outbounds[0]!.status).toBe("pending");
   });
 });

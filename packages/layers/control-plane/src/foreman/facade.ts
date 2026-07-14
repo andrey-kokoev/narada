@@ -567,7 +567,11 @@ export class DefaultForemanFacade implements ForemanFacade {
       return { success: false, resolution_outcome: "failed", error: governance.reason };
     }
 
-    if (governance.approval_required) {
+    // Approval gates the effect, not the durable proposal. Materialize an
+    // accepted action so operators can inspect and approve its outbound
+    // command. Keep the pending decision-only path for approvals attached to
+    // tool requests or other outcomes without a governed action.
+    if (governance.approval_required && !governance.governed_action) {
       const decisionId = `fd_${workItem.work_item_id}_pending_approval`;
       const now = new Date().toISOString();
       const existingDecision = this.deps.coordinatorStore.getDecisionById(decisionId);
@@ -636,7 +640,9 @@ export class DefaultForemanFacade implements ForemanFacade {
       return { success: true, resolution_outcome: "no_op" };
     }
 
-    // At this point: governance.outcome === "accept" and approval_required === false
+    // At this point: governance.outcome === "accept" and a governed action is
+    // available. Approval-required actions still cross the durable intent and
+    // outbound boundaries; their execution worker remains gated by status.
 
     // Crash-recovery Path B: decision + command committed, work item not resolved
     const recoveredOutboundId = this.handoff.recoverWorkItemIfCommandExists(
@@ -655,6 +661,7 @@ export class DefaultForemanFacade implements ForemanFacade {
 
     // Normal accept path — proceed to atomic handoff
     const chosenAction = governance.governed_action!;
+    const resolutionOutcome = governance.approval_required ? "pending_approval" : "action_created";
 
     // Evaluation persistence is the caller's (runtime) responsibility.
     // The foreman only validates and governs the already-persisted evaluation.
@@ -669,7 +676,7 @@ export class DefaultForemanFacade implements ForemanFacade {
         const existingDecision = this.deps.coordinatorStore.getDecisionById(decisionId);
         if (existingDecision?.outbound_id) {
           this.deps.coordinatorStore.updateWorkItemStatus(workItem.work_item_id, "resolved", {
-            resolution_outcome: "action_created",
+            resolution_outcome: resolutionOutcome,
             updated_at: now,
           });
           this.closeSessionForWorkItem(workItem.work_item_id, "completed", now);
@@ -707,7 +714,7 @@ export class DefaultForemanFacade implements ForemanFacade {
 
         // Resolve work item
         this.deps.coordinatorStore.updateWorkItemStatus(workItem.work_item_id, "resolved", {
-          resolution_outcome: "action_created",
+          resolution_outcome: resolutionOutcome,
           updated_at: now,
         });
 
@@ -720,7 +727,7 @@ export class DefaultForemanFacade implements ForemanFacade {
         success: true,
         decision_id: decisionId,
         outbound_id: outboundId,
-        resolution_outcome: "action_created",
+        resolution_outcome: resolutionOutcome,
       };
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);

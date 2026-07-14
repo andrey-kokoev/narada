@@ -871,11 +871,11 @@ describe('task close operator', () => {
       'in_review',
       '## Execution Notes\nDone.\n\n## Verification\nOK.\n',
     );
-    writeOperatorSurfaceIdentity(tempDir, 'narada-andrey.Kevin', 'architect');
+    writeOperatorSurfaceIdentity(tempDir, 'andrey-user.Kevin', 'architect');
 
     const result = await taskCloseCommand({
       taskNumber: '303',
-      by: 'narada-andrey.Kevin',
+      by: 'andrey-user.Kevin',
       cwd: tempDir,
       format: 'json',
     });
@@ -884,10 +884,10 @@ describe('task close operator', () => {
     expect(result.result).toMatchObject({
       status: 'error',
       reason: 'operator_surface_identity_missing_task_authority',
-      repair_command: 'narada operator-surface identity admit-task-authority narada-andrey.Kevin --by <principal>',
+      repair_command: 'narada operator-surface identity admit-task-authority andrey-user.Kevin --by <principal>',
       operator_surface_task_authority: {
         status: 'missing_from_task_authority',
-        identity_id: 'narada-andrey.Kevin',
+        identity_id: 'andrey-user.Kevin',
         role: 'architect',
       },
     });
@@ -900,12 +900,12 @@ describe('task close operator', () => {
       'in_review',
       '## Execution Notes\nDone.\n\n## Verification\nOK.\n',
     );
-    writeOperatorSurfaceIdentity(tempDir, 'narada-andrey.Kevin', 'architect');
+    writeOperatorSurfaceIdentity(tempDir, 'andrey-user.Kevin', 'architect');
     await saveRoster(tempDir, {
       version: 2,
       updated_at: '2026-01-01T00:00:00Z',
       agents: [{
-        agent_id: 'narada-andrey.Kevin',
+        agent_id: 'andrey-user.Kevin',
         role: 'architect',
         capabilities: ['review', 'architect_as_reviewer'],
         first_seen_at: '2026-01-01T00:00:00Z',
@@ -918,7 +918,7 @@ describe('task close operator', () => {
     });
     const admission = await taskEvidenceAdmitCommand({
       taskNumber: '304',
-      by: 'narada-andrey.Kevin',
+      by: 'andrey-user.Kevin',
       cwd: tempDir,
       format: 'json',
     });
@@ -926,7 +926,7 @@ describe('task close operator', () => {
 
     const result = await taskCloseCommand({
       taskNumber: '304',
-      by: 'narada-andrey.Kevin',
+      by: 'andrey-user.Kevin',
       cwd: tempDir,
       format: 'json',
     });
@@ -935,7 +935,7 @@ describe('task close operator', () => {
     expect(result.result).toMatchObject({
       status: 'success',
       new_status: 'closed',
-      closed_by: 'narada-andrey.Kevin',
+      closed_by: 'andrey-user.Kevin',
     });
   });
 

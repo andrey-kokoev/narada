@@ -86,6 +86,14 @@ export function buildMcpFreshnessStatus({
   };
 }
 
+function inheritedNarsSessionEnvironment(env = process.env) {
+  for (const verificationSource of ['NARADA_NARS_SESSION_ID', 'NARADA_RUNTIME_SESSION_ID', 'NARADA_CARRIER_SESSION_ID']) {
+    const carrierSessionId = typeof env[verificationSource] === 'string' ? env[verificationSource].trim() : '';
+    if (carrierSessionId) return { carrierSessionId, verificationSource };
+  }
+  return { carrierSessionId: null, verificationSource: null };
+}
+
 export function writeMcpRuntimeInstanceObservation({
   siteRoot,
   pcSiteRoot = process.env.NARADA_PC_SITE_ROOT ?? 'C:/ProgramData/Narada/sites/pc/desktop-sunroom-2',
@@ -325,7 +333,7 @@ function summarizeSuppressedUnboundObservation(entry) {
 }
 
 function readInheritedCarrierSession({ pcRoot }) {
-  const carrierSessionId = process.env.NARADA_CARRIER_SESSION_ID?.trim() || null;
+  const { carrierSessionId, verificationSource } = inheritedNarsSessionEnvironment();
   if (!carrierSessionId) {
     return {
       carrier_session_id: null,
@@ -333,14 +341,14 @@ function readInheritedCarrierSession({ pcRoot }) {
       binding: {
         schema: 'narada.pc_runtime.mcp_child_carrier_session_binding.v0',
         status: 'legacy_unbound',
-        reason: 'NARADA_CARRIER_SESSION_ID not inherited by MCP child process.',
+        reason: 'No NARS session id was inherited by the MCP child process.',
         verification_source: 'mcp_server_inherited_carrier_environment',
         migration_guidance: {
           schema: 'narada.pc_runtime.carrier_session_migration_guidance.v0',
           status: 'legacy_unbound',
-          authority_missing: 'NARADA_CARRIER_SESSION_ID',
+          authority_missing: 'NARADA_NARS_SESSION_ID',
           allowed_observation_scope: 'observation_only_degraded',
-          migration_path: 'relaunch_through_registered_agent_start_path_to_inherit_NARADA_CARRIER_SESSION_ID',
+          migration_path: 'relaunch_through_registered_agent_start_path_to_inherit_NARADA_NARS_SESSION_ID',
           operator_guidance: 'Legacy unbound observation may continue as degraded evidence, but restart or readiness claims require relaunch through a registered carrier session.',
           forbidden_inference_sources: ['pid', 'window_title', 'window_order', 'user_memory'],
         },
@@ -356,14 +364,14 @@ function readInheritedCarrierSession({ pcRoot }) {
       carrier_session_id: carrierSessionId,
       record_path: recordPath,
       record_status: record && record.status !== 'unreadable' ? 'found' : 'missing_or_unreadable',
-      verification_source: 'NARADA_CARRIER_SESSION_ID',
+      verification_source: verificationSource,
     },
     binding: {
       schema: 'narada.pc_runtime.mcp_child_carrier_session_binding.v0',
       status: record && record.status !== 'unreadable' ? 'bound_to_parent_carrier_session' : 'inherited_id_record_missing',
       carrier_session_id: carrierSessionId,
       record_path: recordPath,
-      verification_source: 'mcp_server_inherited_carrier_environment',
+      verification_source: verificationSource,
       record_summary: record && record.status !== 'unreadable' ? {
         status: record.status ?? null,
         verified_agent_identity: record.verified_agent_identity ?? null,

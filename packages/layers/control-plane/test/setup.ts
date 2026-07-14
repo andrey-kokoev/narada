@@ -1,4 +1,5 @@
 import { vi } from 'vitest';
+import { tmpdir } from 'node:os';
 
 // Mock fs modules with memfs
 vi.mock('node:fs', async () => {
@@ -18,6 +19,7 @@ import { vol } from 'memfs';
 beforeEach(() => {
   vol.reset();
   vol.mkdirSync('/tmp', { recursive: true });
+  vol.mkdirSync(tmpdir(), { recursive: true });
 });
 
 // Database lifecycle: close all tracked databases after each test file

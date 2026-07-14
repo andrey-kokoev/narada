@@ -48,6 +48,8 @@ test('runtime executes bounded cycles with Site-provided steps', async () => {
     assert.equal(result.cycle_count, 2);
     assert.deepEqual(result.cycles.map((cycle) => cycle.status), ['ok', 'ok']);
     assert.deepEqual(result.cycles.map((cycle) => cycle.run.lifecycle_state), ['completed', 'completed']);
+    assert.deepEqual(result.cycles.map((cycle) => cycle.run.execution_lifecycle_state), ['completed', 'completed']);
+    assert.deepEqual(result.cycles[0].run.execution_lifecycle_history, ['scheduled', 'admitted', 'running', 'completed']);
     assert.deepEqual(result.cycles.map((cycle) => cycle.run.steps[0].step_id), ['cycle-1', 'cycle-2']);
     assert.deepEqual(events.map((event) => event.event), [
       'runtime_started',
@@ -92,10 +94,12 @@ test('contended run persists locked lifecycle evidence', async () => {
 
     assert.equal(result.status, 'locked');
     assert.deepEqual(result.lifecycle_history, ['requested', 'locking', 'locked']);
+    assert.deepEqual(result.execution_lifecycle_history, ['scheduled', 'admitted', 'waiting', 'cancelled']);
     const stored = getLoopRun(store, 'contended-run');
     assert.equal(stored.status, 'locked');
     assert.equal(stored.lifecycle_state, 'locked');
     assert.deepEqual(stored.lifecycle_history, ['requested', 'locking', 'locked']);
+    assert.equal(stored.execution_lifecycle_state, 'cancelled');
   } finally {
     store.close();
   }
@@ -121,6 +125,7 @@ test('aborted run persists an aborted lifecycle without degrading health', async
     assert.equal(result.status, 'aborted');
     assert.equal(result.lifecycle_state, 'aborted');
     assert.deepEqual(result.lifecycle_history, ['requested', 'locking', 'running', 'aborted']);
+    assert.deepEqual(result.execution_lifecycle_history, ['scheduled', 'admitted', 'running', 'cancelled']);
     assert.equal(result.health.status, 'unknown');
     const stored = getLoopRun(store, 'aborted-run');
     assert.equal(stored.status, 'aborted');

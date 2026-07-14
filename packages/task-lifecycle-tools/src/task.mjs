@@ -19,14 +19,14 @@ Canonical forms:
   node tools/task-lifecycle/task.mjs migrate <site-root> <assignment-consistency|roster-sync|task-specs|task-roles|task-reports|orphaned-obligations|stale-review-obligations> [--dry-run]
 
 Windows surface:
-  .\narada-andrey.ps1 task
-  .\narada-andrey.ps1 task-list -Status opened
-  .\narada-andrey.ps1 task-read -TaskNumber 388
-  .\narada-andrey.ps1 task-claim -TaskNumber 388 -Agent narada-andrey.Bob -Reason "operator authorized"
-  .\narada-andrey.ps1 task-finish -TaskNumber 388 -Agent narada-andrey.Bob -Summary "done"
-  .\narada-andrey.ps1 task-review -TaskNumber 388 -Agent narada-andrey.Kevin -Verdict accepted_with_notes -FindingsJson '[{"severity":"note","description":"Looks good.","location":"task body"}]'
-  .\narada-andrey.ps1 task-inspect -TaskNumber 388
-  .\narada-andrey.ps1 task-admin -Status --sql -Reason "SELECT status, COUNT(*) FROM task_lifecycle GROUP BY status"
+  .\andrey-user.ps1 task
+  .\andrey-user.ps1 task-list -Status opened
+  .\andrey-user.ps1 task-read -TaskNumber 388
+  .\andrey-user.ps1 task-claim -TaskNumber 388 -Agent andrey-user.Bob -Reason "operator authorized"
+  .\andrey-user.ps1 task-finish -TaskNumber 388 -Agent andrey-user.Bob -Summary "done"
+  .\andrey-user.ps1 task-review -TaskNumber 388 -Agent andrey-user.Kevin -Verdict accepted_with_notes -FindingsJson '[{"severity":"note","description":"Looks good.","location":"task body"}]'
+  .\andrey-user.ps1 task-inspect -TaskNumber 388
+  .\andrey-user.ps1 task-admin -Status --sql -Reason "SELECT status, COUNT(*) FROM task_lifecycle GROUP BY status"
 
 Legacy aliases remain supported:
   node tools/task-lifecycle/task-list.mjs <site-root> [status]

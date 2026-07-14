@@ -40,7 +40,7 @@ describe('inbox-to-task bridge', () => {
 
   it('rejects non-neutral requested-by identities', () => {
     expect(() => projectInboxEnvelopeToTaskCandidate(neutralEnvelope, {
-      identityId: 'narada-andrey.Kevin',
+      identityId: 'andrey-user.Kevin',
       role: 'architect',
     })).toThrow(NonNeutralIdentityError);
   });

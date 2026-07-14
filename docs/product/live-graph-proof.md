@@ -13,9 +13,11 @@ For the fixture-backed proof (mechanical pipeline correctness without live crede
 ## Proof Scope
 
 **Operation:** Support mailbox (`help@global-maxima.com`)  
-**Charter:** `support_steward`  
-**Posture:** `draft-only` with `require_human_approval: true`  
+**Production charter:** `support_steward`  
+**Production posture:** `draft-only` with `require_human_approval: true`  
 **Proof path:** Inbound message → fact → work item → evaluation → foreman decision → outbound command → draft creation → operator approval → send submission → reconciliation confirmation
+
+The production `support_steward` charter proves the safe draft path and does not send directly. A complete approval/send saturation run may use an explicitly approval-capable proof charter/profile with `send_reply` allowed, while retaining `require_human_approval: true`; that profile is a proof fixture, not a relaxation of the production support charter.
 
 ---
 
@@ -105,7 +107,7 @@ sqlite3 ./mailboxes/help-global-maxima/.narada/coordinator.db \
 
 ### Stage 3: Outbound Draft Created
 
-**Trigger:** Foreman resolves the work item; `DefaultForemanFacade` creates a foreman decision; `OutboundHandoff` creates an outbound command. For `draft-only` posture with `require_human_approval: true`, the decision status is `pending_approval` and the outbound command is created with `status = 'pending'`.
+**Trigger:** Foreman resolves the work item; `DefaultForemanFacade` creates a foreman decision; `OutboundHandoff` creates an outbound command. When a governed action requires approval, the decision still records the proposed action and the outbound command is created with `status = 'pending'`. Approval gates the effect, not the durable proposal.
 
 **What must exist:**
 
@@ -139,6 +141,16 @@ sqlite3 ./mailboxes/help-global-maxima/.narada/coordinator.db \
 - `foreman_decisions` row exists with `approved_action = 'draft_reply'` or `'send_reply'`
 - `outbound_handoffs` row exists with matching `outbound_id`, `status = 'pending'`
 - `outbound_versions` row exists with the draft payload (subject, body_text, to)
+
+### Inbound Pagination and Attachments
+
+The live inbound proof must use real Graph pagination rather than relying on a single response page:
+
+- The delta reader follows every `@odata.nextLink` until Graph returns an `@odata.deltaLink`.
+- Attachment hydration follows every attachment `@odata.nextLink` for each message.
+- `metadata_only` attachment policy preserves attachment manifests and metadata without committing private attachment content.
+
+These checks are part of the live proof even though attachment content forwarding and attachment mutation are not.
 
 ---
 
@@ -188,6 +200,8 @@ sqlite3 ./mailboxes/help-global-maxima/.narada/coordinator.db \
 
 **Trigger:** The dedicated `SendExecutionWorker` picks up the approved command, verifies the managed draft integrity, and performs the Graph send.
 
+Before sending, the worker deterministically materializes the body, including the quoted original when configured, and compares that materialization with the managed Graph draft. A Graph draft that has been externally changed is rejected before send.
+
 **State progression:**
 1. `SendExecutionWorker` transitions command to `sending`
 2. Graph API send succeeds → `submitted`
@@ -231,7 +245,7 @@ sqlite3 ./mailboxes/help-global-maxima/.narada/coordinator.db \
 
 ### Stage 6: Reconciliation Confirms Sent Result
 
-**Trigger:** Next sync cycle observes the sent message in the mailbox (inbound reconciliation).
+**Trigger:** A reconciliation cycle observes the sent message in the mailbox. Depending on daemon timing, this may occur in the same worker tick after submission or in the next explicit sync cycle.
 
 **What must exist:**
 
@@ -290,6 +304,17 @@ For the **live proof path** with `draft_reply` (no approval needed):
 ```
 pending → draft_creating → draft_ready → confirmed
 ```
+
+## Verified Live Run
+
+On 2026-07-13, the proof was exercised against the real Graph mailbox with isolated charter-runtime credentials and no production configuration change. The redacted structural evidence was:
+
+- Delta pagination: inbox 2 pages / 14 records and sent items 3 pages / 25 records; both returned delta links.
+- Attachment traversal: 15 attachment pages across 16 attachments, including messages in both folders.
+- Approval and send: `pending → draft_creating → draft_ready → approved_for_send → sending → submitted → confirmed`.
+- Draft integrity: the worker accepted the deterministic quoted-body materialization and rejected no mutation in the successful run.
+
+The counts are observations from that run, not fixed acceptance thresholds. Message bodies, attachment contents, Graph identifiers, and credentials remain private operational evidence.
 
 ---
 
@@ -452,7 +477,7 @@ Live Graph Proof — <date>
 
 - This proof does not exercise autonomous send (`require_human_approval: false`). The default posture is `draft-only` with approval required.
 - This proof does not test multi-vertical operations (timer, webhook).
-- This proof does not test attachment handling, HTML body rendering, or CC/BCC scenarios.
+- This proof tests delta pagination and metadata-only attachment traversal, but does not test attachment content forwarding or attachment mutation. HTML body rendering and CC/BCC scenarios remain out of scope.
 - This proof does not test failure recovery (retry_wait, failed_terminal). Those are covered by fixture tests and the runbook.
 - This proof does not store private evidence in the public repo.
 

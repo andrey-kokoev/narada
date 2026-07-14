@@ -750,17 +750,17 @@ describe('task review command', () => {
   it('identifies missing task authority for an admitted operator-surface reviewer identity', async () => {
     await operatorSurfaceIdentityAddCommand({
       cwd: tempDir,
-      identityName: 'narada-andrey.Kevin',
+      identityName: 'andrey-user.Kevin',
       role: 'architect',
       agentKind: 'codex_cli',
-      site: 'narada-andrey',
+      site: 'andrey-user',
       by: 'operator',
       format: 'json',
     }, createMockContext());
 
     const result = await taskReviewCommand({
       taskNumber: '999',
-      agent: 'narada-andrey.Kevin',
+      agent: 'andrey-user.Kevin',
       verdict: 'accepted',
       cwd: tempDir,
       format: 'json',
@@ -772,15 +772,15 @@ describe('task review command', () => {
       review_authority_repair: {
         reason: 'missing_reviewer_identity',
         commands: [
-          'narada operator-surface identity admit-task-authority narada-andrey.Kevin --by <principal>',
-          'narada task review 999 --agent narada-andrey.Kevin --verdict <accepted|accepted_with_notes|rejected>',
+          'narada operator-surface identity admit-task-authority andrey-user.Kevin --by <principal>',
+          'narada task review 999 --agent andrey-user.Kevin --verdict <accepted|accepted_with_notes|rejected>',
         ],
       },
       operator_surface_task_authority: {
         status: 'missing_from_task_authority',
-        identity_id: 'narada-andrey.Kevin',
+        identity_id: 'andrey-user.Kevin',
         role: 'architect',
-        repair_command: 'narada operator-surface identity admit-task-authority narada-andrey.Kevin --by <principal>',
+        repair_command: 'narada operator-surface identity admit-task-authority andrey-user.Kevin --by <principal>',
       },
     });
   });
@@ -788,16 +788,16 @@ describe('task review command', () => {
   it('allows an admitted renamed operator-surface architect identity to review without roster surgery', async () => {
     await operatorSurfaceIdentityAddCommand({
       cwd: tempDir,
-      identityName: 'narada-andrey.Kevin',
+      identityName: 'andrey-user.Kevin',
       role: 'architect',
       agentKind: 'codex_cli',
-      site: 'narada-andrey',
+      site: 'andrey-user',
       by: 'operator',
       format: 'json',
     }, createMockContext());
     const admitted = await operatorSurfaceIdentityAdmitTaskAuthorityCommand({
       cwd: tempDir,
-      identityName: 'narada-andrey.Kevin',
+      identityName: 'andrey-user.Kevin',
       by: 'operator',
       format: 'json',
     }, createMockContext());
@@ -807,7 +807,7 @@ describe('task review command', () => {
 
     const result = await taskReviewCommand({
       taskNumber: '1002',
-      agent: 'narada-andrey.Kevin',
+      agent: 'andrey-user.Kevin',
       verdict: 'accepted',
       cwd: tempDir,
       format: 'json',

@@ -379,16 +379,18 @@ describe("live operation draft proposal pipeline", () => {
     // With require_human_approval: true, governance returns approval_required
     expect(resolveResult.success).toBe(true);
     expect(resolveResult.resolution_outcome).toBe("pending_approval");
-    expect(resolveResult.outbound_id).toBeUndefined();
+    expect(resolveResult.outbound_id).toBeDefined();
 
     const resolvedItem = coordinatorStore.getWorkItem(workItem.work_item_id);
     expect(resolvedItem!.status).toBe("resolved");
     expect(resolvedItem!.resolution_outcome).toBe("pending_approval");
 
-    // No outbound command should be created
+    // The outbound command is pending and awaits operator approval.
     const outbounds = db
       .prepare("select * from outbound_handoffs where context_id = ?")
       .all("conv-support-login-002") as Array<Record<string, unknown>>;
-    expect(outbounds).toHaveLength(0);
+    expect(outbounds).toHaveLength(1);
+    expect(outbounds[0]!.action_type).toBe("draft_reply");
+    expect(outbounds[0]!.status).toBe("pending");
   });
 });

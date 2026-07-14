@@ -9,6 +9,7 @@ import { SendExecutionWorker } from "../../../src/outbound/send-execution-worker
 import type {
   GraphDraftClient,
   DraftReadResult,
+  MessageQuoteReadResult,
 } from "../../../src/outbound/graph-draft-client.js";
 import { ExchangeFSSyncError, ErrorCode } from "../../../src/errors.js";
 
@@ -62,6 +63,7 @@ function createVersion(
 
 class MockGraphDraftClient implements GraphDraftClient {
   drafts = new Map<string, { id: string; payload: DraftReadResult }>();
+  originalMessages = new Map<string, MessageQuoteReadResult>();
   sent = new Set<string>();
 
   reset(): void {
@@ -101,6 +103,18 @@ class MockGraphDraftClient implements GraphDraftClient {
       });
     }
     return draft.payload;
+  }
+
+  async getMessageForQuote(_userId: string, messageId: string): Promise<MessageQuoteReadResult> {
+    const message = this.originalMessages.get(messageId);
+    if (!message) {
+      throw new ExchangeFSSyncError("Not found", {
+        code: ErrorCode.GRAPH_NOT_FOUND,
+        recoverable: false,
+        phase: "test",
+      });
+    }
+    return message;
   }
 
   async sendDraft(_userId: string, draftId: string): Promise<void> {
@@ -198,6 +212,62 @@ describe("SendExecutionWorker", () => {
       ["sending", "submitted"],
     ]);
 
+    expect(draftClient.sent.has(draftId)).toBe(true);
+  });
+
+  it("verifies the quoted reply body before sending", async () => {
+    const cmd = createCommand({ status: "approved_for_send" });
+    const ver = createVersion(cmd.outbound_id, 1, { body_html: "", body_text: "Reply text" });
+    store.createCommand(cmd, ver);
+
+    draftClient.originalMessages.set("msg-1", {
+      id: "msg-1",
+      subject: "Hello",
+      receivedDateTime: "2026-01-01T00:00:00.000Z",
+      from: { emailAddress: { address: "alice@example.com" } },
+      toRecipients: [{ emailAddress: { address: "mailbox@example.com" } }],
+      body: { contentType: "Text", content: "Original body" },
+    });
+
+    const quotedBody = [
+      "Reply text",
+      "",
+      "--- Original message ---",
+      "From: alice@example.com",
+      "Sent: 2026-01-01T00:00:00.000Z",
+      "To: mailbox@example.com",
+      "Subject: Hello",
+      "",
+      "Original body",
+    ].join("\n");
+    const { id: draftId } = await draftClient.createDraft("user-mailbox-1", {
+      subject: ver.subject,
+      body: { contentType: "Text", content: quotedBody },
+      toRecipients: ver.to.map((email) => ({ emailAddress: { address: email } })),
+      ccRecipients: [],
+      bccRecipients: [],
+      internetMessageHeaders: [{ name: "X-Outbound-Id", value: cmd.outbound_id }],
+    });
+
+    store.setManagedDraft({
+      outbound_id: cmd.outbound_id,
+      version: ver.version,
+      draft_id: draftId,
+      etag: null,
+      internet_message_id: null,
+      header_outbound_id_present: true,
+      body_hash: "",
+      recipients_hash: "",
+      subject_hash: "",
+      created_at: new Date().toISOString(),
+      last_verified_at: null,
+      invalidated_reason: null,
+    });
+
+    const result = await worker.processNext();
+
+    expect(result.processed).toBe(true);
+    expect(store.getCommand(cmd.outbound_id)?.status).toBe("submitted");
     expect(draftClient.sent.has(draftId)).toBe(true);
   });
 

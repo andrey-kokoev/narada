@@ -1,6 +1,6 @@
 # Live Trial Runbook
 
-> Public trial runbook for the mailbox operational trial (Tasks 297–302). This document defines the operator sequence, evidence format, and redaction policy. Detailed stage mechanics are in [`docs/live-graph-proof.md`](live-graph-proof.md).
+> Public trial runbook for the mailbox operational trial (Tasks 297–302). This document defines the operator sequence, evidence format, and redaction policy. Detailed stage mechanics are in [`docs/product/live-graph-proof.md`](live-graph-proof.md).
 
 ---
 
@@ -29,7 +29,7 @@
 9. **Verify reconciliation** — Sync again, check `confirmed` status
 10. **Shutdown/restart** — Clean stop, verify health, restart
 
-For detailed stage descriptions, pass criteria, and canonical SQL queries, see [`docs/live-graph-proof.md`](live-graph-proof.md).
+For detailed stage descriptions, pass criteria, and canonical SQL queries, see [`docs/product/live-graph-proof.md`](live-graph-proof.md).
 
 ---
 
@@ -89,7 +89,7 @@ The trial runbook **explicitly requires human approval before send**.
 
 - The config posture for this trial is `draft-only` by default (`allowed_actions` excludes `send_reply`)
 - If `send_reply` is added to test live send, `require_human_approval` must remain `true`
-- The operator disposition step (Stage 6) is the mandatory approval gate
+- The operator disposition step is the mandatory approval gate
 - The `approve-draft-for-send` command is audited to `operator_action_requests`
 
 ---
@@ -98,7 +98,7 @@ The trial runbook **explicitly requires human approval before send**.
 
 | Artifact | Location |
 |----------|----------|
-| Proof contract and stage mechanics | [`docs/live-graph-proof.md`](live-graph-proof.md) (public) |
+| Proof contract and stage mechanics | [`docs/product/live-graph-proof.md`](live-graph-proof.md) (public) |
 | Trial runbook and evidence format | This document (public) |
 | Private operator commands and SQL | `~/src/narada.sonar/evidence/297-302-mailbox-operational-trial/TRIAL-RUNBOOK.md` (private) |
 | Filled evidence records | `~/src/narada.sonar/evidence/297-302-mailbox-operational-trial/evidence-*.md` (private) |
@@ -108,7 +108,7 @@ The trial runbook **explicitly requires human approval before send**.
 
 ## Related Documents
 
-- [`docs/live-graph-proof.md`](live-graph-proof.md) — Detailed proof stages, pass criteria, and state machine
+- [`docs/product/live-graph-proof.md`](live-graph-proof.md) — Detailed proof stages, pass criteria, and state machine
 - [`docs/operational-trial-setup-contract.md`](operational-trial-setup-contract.md) — Setup prerequisites and repo layout
 - [`docs/product/first-operation-proof.md`](first-operation-proof.md) — Fixture-backed proof without live credentials
 - [`docs/product/operator-loop.md`](operator-loop.md) — Daily operator rhythm

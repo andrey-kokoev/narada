@@ -1134,8 +1134,8 @@ describe('work-next unified next action', () => {
         schema: 'https://narada.dev/schemas/operator-surface-identities/v1',
         updated_at: '2026-01-01T00:00:00Z',
         identities: [{
-          identity_id: 'narada-andrey.Kevin',
-          site_id: 'narada-andrey',
+          identity_id: 'andrey-user.Kevin',
+          site_id: 'andrey-user',
           role: 'architect',
           agent_kind: 'codex_cli',
           label: 'Kevin',
@@ -1147,89 +1147,89 @@ describe('work-next unified next action', () => {
       }, null, 2),
     );
 
-    const result = await workNextCommand({ agent: 'narada-andrey.Kevin', cwd: tempDir, format: 'json' });
+    const result = await workNextCommand({ agent: 'andrey-user.Kevin', cwd: tempDir, format: 'json' });
 
     expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
     expect(result.result).toMatchObject({
       status: 'error',
       reason: 'agent_not_in_roster',
-      repair_command: 'narada operator-surface identity admit-task-authority narada-andrey.Kevin --by <principal>',
+      repair_command: 'narada operator-surface identity admit-task-authority andrey-user.Kevin --by <principal>',
       operator_surface_task_authority: {
         status: 'missing_from_task_authority',
-        identity_id: 'narada-andrey.Kevin',
+        identity_id: 'andrey-user.Kevin',
         role: 'architect',
       },
     });
   });
 
   it('resolves site-qualified role address to the exact-one active roster agent before claiming work', async () => {
-    seedRosterEntry(tempDir, 'narada-andrey.Bob', 'builder', 'idle', null);
+    seedRosterEntry(tempDir, 'andrey-user.Bob', 'builder', 'idle', null);
     writeFileSync(
       join(tempDir, '.ai', 'do-not-open', 'tasks', '20260430-1100-builder.md'),
       '---\ntask_id: 1100\nstatus: opened\n---\n\n# Task 1100\n\n## Acceptance Criteria\n- [ ] Do builder work.\n',
     );
 
-    const result = await workNextCommand({ agent: 'narada-andrey.builder', cwd: tempDir, format: 'json' });
+    const result = await workNextCommand({ agent: 'andrey-user.builder', cwd: tempDir, format: 'json' });
 
     expect(result.exitCode).toBe(ExitCode.SUCCESS);
     expect(result.result).toMatchObject({
       status: 'success',
       action_kind: 'task_work',
-      agent_id: 'narada-andrey.Bob',
-      requested_agent: 'narada-andrey.builder',
-      resolved_agent: 'narada-andrey.Bob',
+      agent_id: 'andrey-user.Bob',
+      requested_agent: 'andrey-user.builder',
+      resolved_agent: 'andrey-user.Bob',
       agent_address_resolution: {
         status: 'role_exact_one',
         role: 'builder',
-        site_prefix: 'narada-andrey',
-        candidates: ['narada-andrey.Bob'],
+        site_prefix: 'andrey-user',
+        candidates: ['andrey-user.Bob'],
       },
       primary: { task_number: 1100 },
       task_result: {
-        agent_id: 'narada-andrey.Bob',
-        requested_agent: 'narada-andrey.Bob',
-        resolved_agent: 'narada-andrey.Bob',
+        agent_id: 'andrey-user.Bob',
+        requested_agent: 'andrey-user.Bob',
+        resolved_agent: 'andrey-user.Bob',
       },
     });
     const store = openTaskLifecycleStore(tempDir);
     try {
-      expect(store.getRosterEntry('narada-andrey.Bob')?.task_number).toBe(1100);
+      expect(store.getRosterEntry('andrey-user.Bob')?.task_number).toBe(1100);
     } finally {
       store.db.close();
     }
   });
 
   it('keeps concrete agent ids authoritative when a same-role roster agent exists', async () => {
-    seedRosterEntry(tempDir, 'narada-andrey.Bob', 'builder', 'idle', null);
-    seedRosterEntry(tempDir, 'narada-andrey.builder', 'builder', 'idle', null);
+    seedRosterEntry(tempDir, 'andrey-user.Bob', 'builder', 'idle', null);
+    seedRosterEntry(tempDir, 'andrey-user.builder', 'builder', 'idle', null);
 
-    const result = await workNextCommand({ agent: 'narada-andrey.builder', cwd: tempDir, format: 'json', peek: true });
+    const result = await workNextCommand({ agent: 'andrey-user.builder', cwd: tempDir, format: 'json', peek: true });
 
     expect(result.exitCode).toBe(ExitCode.SUCCESS);
     expect(result.result).toMatchObject({
-      agent_id: 'narada-andrey.builder',
-      requested_agent: 'narada-andrey.builder',
-      resolved_agent: 'narada-andrey.builder',
+      agent_id: 'andrey-user.builder',
+      requested_agent: 'andrey-user.builder',
+      resolved_agent: 'andrey-user.builder',
       agent_address_resolution: {
         status: 'exact',
-        candidates: ['narada-andrey.builder'],
+        candidates: ['andrey-user.builder'],
       },
     });
   });
 
   it('fails closed when a site-qualified role address has no active roster match', async () => {
-    const result = await workNextCommand({ agent: 'narada-andrey.builder', cwd: tempDir, format: 'json' });
+    const result = await workNextCommand({ agent: 'andrey-user.builder', cwd: tempDir, format: 'json' });
 
     expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
     expect(result.result).toMatchObject({
       status: 'error',
       reason: 'agent_not_in_roster',
-      requested_agent: 'narada-andrey.builder',
+      requested_agent: 'andrey-user.builder',
       resolved_agent: null,
       agent_address_resolution: {
         status: 'zero_match',
         role: 'builder',
-        site_prefix: 'narada-andrey',
+        site_prefix: 'andrey-user',
         candidates: [],
       },
       repair_command: 'narada task roster add <agent-id> --role builder',
@@ -1237,22 +1237,22 @@ describe('work-next unified next action', () => {
   });
 
   it('fails closed with competing ids when a role-shaped address is ambiguous', async () => {
-    seedRosterEntry(tempDir, 'narada-andrey.Bob', 'builder', 'idle', null);
-    seedRosterEntry(tempDir, 'narada-andrey.Alice', 'builder', 'idle', null);
+    seedRosterEntry(tempDir, 'andrey-user.Bob', 'builder', 'idle', null);
+    seedRosterEntry(tempDir, 'andrey-user.Alice', 'builder', 'idle', null);
 
-    const result = await workNextCommand({ agent: 'narada-andrey.builder', cwd: tempDir, format: 'json' });
+    const result = await workNextCommand({ agent: 'andrey-user.builder', cwd: tempDir, format: 'json' });
 
     expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
     expect(result.result).toMatchObject({
       status: 'error',
       reason: 'agent_address_ambiguous',
-      requested_agent: 'narada-andrey.builder',
+      requested_agent: 'andrey-user.builder',
       resolved_agent: null,
       agent_address_resolution: {
         status: 'multi_match',
-        candidates: ['narada-andrey.Alice', 'narada-andrey.Bob'],
+        candidates: ['andrey-user.Alice', 'andrey-user.Bob'],
       },
-      repair_command: 'Use one concrete agent id: narada-andrey.Alice, narada-andrey.Bob',
+      repair_command: 'Use one concrete agent id: andrey-user.Alice, andrey-user.Bob',
     });
   });
 

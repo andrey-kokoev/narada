@@ -26,6 +26,7 @@ import type {
 import { isVersionEligible, isValidTransition } from "./types.js";
 import type { GraphDraftClient } from "./graph-draft-client.js";
 import { ExchangeFSSyncError, ErrorCode } from "../errors.js";
+import { materializeDraftBody, resolveOriginalMessage } from "./send-reply-worker.js";
 
 export interface ParticipantResolver {
   getParticipants(mailboxId: string, threadId: string): Promise<Set<string>>;
@@ -287,7 +288,8 @@ export class SendExecutionWorker {
       return false;
     }
 
-    const expectedBodyContent = version.body_html || version.body_text;
+    const original = await resolveOriginalMessage(draftClient, userId, version, logger);
+    const expectedBodyContent = materializeDraftBody(version, original).content;
     const expectedBodyHash = sha256(expectedBodyContent);
     const expectedRecipientsHash = computeRecipientsHash(version);
     const expectedSubjectHash = computeSubjectHash(version);

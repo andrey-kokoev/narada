@@ -124,7 +124,7 @@ describe('SQLite adapter boundary', () => {
   it('refuses non-neutral adapter admission identities', () => {
     expect(() => buildTaskDbAdapterConformanceContract({
       adapterId: 'receiving-site.adapter.sqlite',
-      admittedBy: { identityId: 'narada-andrey.Kevin', role: 'architect' },
+      admittedBy: { identityId: 'andrey-user.Kevin', role: 'architect' },
       admittedAt: '2026-05-10T18:55:00.000Z',
     })).toThrow(NonNeutralIdentityError);
   });

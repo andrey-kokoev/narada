@@ -58,24 +58,26 @@ The `support_steward` charter is a dedicated system prompt (not a generic fallba
 
 ## Fixture-Backed Proof
 
-The fixture-backed proof runs entirely without live credentials. It uses a synthetic message fixture and mock charter runner to prove the full pipeline.
+The fixture-backed proof runs entirely without live credentials. Its canonical smoke test pulls a synthetic message through `ExchangeSource` and `DefaultSyncRunner`, persists the fact and local projection, runs a mock charter, and verifies the durable handoff through draft confirmation.
 
 ### What It Proves
 
 | Pipeline Stage | Proven By |
 |----------------|-----------|
-| Sync → Normalize → Project | `sync-lifecycle.test.ts` (mock adapter, file-backed stores) |
-| Source Record → Fact | `exchange-to-facts.test.ts` (deterministic fact identity) |
+| Source → Sync → Fact → Normalize → Project | `smoke-test.test.ts` (fixture adapter, cursor, apply-log, fact store, and file-backed stores), `sync-lifecycle.test.ts` |
+| Source Record → Fact identity | `smoke-test.test.ts`, `exchange-to-facts.test.ts` (deterministic fact identity) |
 | Fact → Context Formation → Work Item | `fact-admission.test.ts`, `generalized-work.test.ts` |
 | Scheduler Lease → Execution Attempt | `smoke-test.test.ts`, `dispatch.test.ts` |
 | Charter Evaluation | `smoke-test.test.ts` (custom runner), `dispatch-real.test.ts` (mocked API) |
+| Intent Admission | `smoke-test.test.ts` (intent linked to outbound target) |
 | Foreman Decision → Outbound Handoff | `smoke-test.test.ts`, `outbound-idempotency.test.ts` |
 | Send-Reply Worker → Draft Creation | `smoke-test.test.ts` (mock Graph client) |
+| Observation Projection + Restart Recovery | `smoke-test.test.ts`, `replay-recovery.test.ts`, `plane.test.ts` |
 
 ### How to Run
 
 ```bash
-# Full fixture-backed smoke test (proves pipeline through draft creation)
+# Canonical fixture-backed proof (source through fact, recovery, observation, and draft confirmation)
 pnpm --filter @narada2/control-plane exec vitest run test/integration/live-operation/smoke-test.test.ts
 
 # Pipeline-focused proof (proves through outbound command creation)
@@ -91,13 +93,18 @@ The smoke test asserts every durable record in the pipeline:
 
 - `context_records` — context created with primary charter
 - `context_revisions` — revision ordinal advanced
+- `facts` — source record admitted once with stable provenance and fact identity
+- `state/cursor.json` + `state/apply-log/` — source checkpoint and replay guard committed
 - `work_items` — opened, then `leased`, then `executing`, then `resolved`
 - `execution_attempts` — started and completed
 - `evaluations` — charter output persisted
 - `foreman_decisions` — decision recorded with `approved_action: "draft_reply"`
+- `intents` — mail intent admitted before outbound handoff
 - `outbound_handoffs` + `outbound_versions` — command and version created
 - `managed_drafts` — draft record linked to outbound version
 - `outbound_transitions` — state transitions logged
+- observation snapshot — read-only projection reports the work item, pending outbound, and intent
+- restart recovery — repeated foreman resolution reuses the existing handoff without duplication
 
 Two modes are verified:
 1. **Full pipeline** (`require_human_approval: false`): reaches `confirmed` status
@@ -157,7 +164,7 @@ narada status
 | Responsibility | Fixture-Backed | Live-Backed |
 |----------------|---------------|-------------|
 | **Pipeline correctness** | ✅ Proven by integration tests | ✅ Exercised by live sync |
-| **Idempotency & replay** | ✅ Proven by crash-replay tests | ✅ Observed in production |
+| **Idempotency & replay** | ✅ Proven by canonical smoke and crash-replay tests | ✅ Observed in production |
 | **Charter governance** | ✅ Proven (mock runner) | ✅ Verified (real LLM) |
 | **Draft creation** | ✅ Proven (mock Graph client) | ✅ Requires real Graph API |
 | **Message normalization** | ✅ Proven (mock shapes) | ✅ Required for real data |
@@ -182,7 +189,7 @@ At each stage of the pipeline, you can inspect state:
 ls <rootDir>/messages/<message-id>/record.json
 
 # Cursor advanced?
-cat <rootDir>/cursor.json
+cat <rootDir>/state/cursor.json
 
 # Health file updated?
 cat <rootDir>/.health.json
@@ -193,7 +200,7 @@ cat <rootDir>/.health.json
 ```bash
 # Facts in coordinator DB
 sqlite3 <rootDir>/.narada/coordinator.db \
-  "SELECT fact_type, context_id, payload_json FROM facts;"
+  "SELECT fact_id, fact_type, source_id, source_record_id, admitted_at, payload_json FROM facts;"
 
 # Work items opened?
 sqlite3 <rootDir>/.narada/coordinator.db \
@@ -219,7 +226,7 @@ narada show decision <decision-id>
 
 # Outbound command created?
 sqlite3 <rootDir>/.narada/coordinator.db \
-  "SELECT command_id, action_type, status FROM outbound_handoffs;"
+  "SELECT outbound_id, action_type, status FROM outbound_handoffs;"
 ```
 
 ### After Draft Creation
@@ -227,11 +234,11 @@ sqlite3 <rootDir>/.narada/coordinator.db \
 ```bash
 # Managed draft exists?
 sqlite3 <rootDir>/.narada/coordinator.db \
-  "SELECT draft_id, outbound_id, graph_draft_id FROM managed_drafts;"
+  "SELECT outbound_id, version, draft_id, internet_message_id FROM managed_drafts;"
 
 # Outbound transitions logged?
 sqlite3 <rootDir>/.narada/coordinator.db \
-  "SELECT command_id, from_status, to_status, occurred_at FROM outbound_transitions;"
+  "SELECT outbound_id, from_status, to_status, transition_at FROM outbound_transitions;"
 ```
 
 ---
@@ -276,7 +283,7 @@ The fixture-backed proof lives in the public repo and can be run by anyone. The 
 
 ## Related Documents
 
-- [`docs/live-graph-proof.md`](live-graph-proof.md) — Live Graph API proof (draft creation, approval, send, reconciliation)
+- [`docs/product/live-graph-proof.md`](live-graph-proof.md) — Live Graph API proof (draft creation, approval, send, reconciliation)
 - [`docs/product/operator-loop.md`](operator-loop.md) — Daily operator rhythm
 - [`docs/runbook.md`](runbook.md) — Troubleshooting and setup
 - [`docs/concepts/mailbox-knowledge-model.md`](../concepts/mailbox-knowledge-model.md) — Knowledge placement, proof vs knowledge, and playbook examples

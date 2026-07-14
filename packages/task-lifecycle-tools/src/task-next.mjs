@@ -349,7 +349,7 @@ const agentId = args.agentId;
 if (!agentId) {
   console.error(
     'Usage: node task-next.mjs [<cwd>] <agent_id> [--json] [--limit <n>] [--last-workboard-check-at <iso>]\n\n' +
-    '  <agent_id>              Agent identity (e.g. narada-andrey.Bob)\n' +
+    '  <agent_id>              Agent identity (e.g. andrey-user.Bob)\n' +
     '  --json                  Emit task_lifecycle_next-compatible JSON\n' +
     '  --limit <n>             Max items per section (default: 8)\n' +
     '  --last-workboard-check-at <iso>  ISO timestamp of last check for freshness compute'

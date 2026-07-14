@@ -99,7 +99,7 @@ describe('receiving-Site setup plan', () => {
     expect(() => buildReceivingSiteSetupPlan({
       siteRoot: 'D:\\code\\narada',
       siteId: 'site-alpha',
-      initializedBy: { identityId: 'narada-andrey.Kevin', role: 'architect' },
+      initializedBy: { identityId: 'andrey-user.Kevin', role: 'architect' },
       roster: neutralRoster,
       candidate,
       admittedAt: '2026-05-10T19:03:00.000Z',
