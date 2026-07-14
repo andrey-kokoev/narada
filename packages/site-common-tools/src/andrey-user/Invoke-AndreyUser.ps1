@@ -36,7 +36,7 @@ param(
     [string]$AuthorityLevel = "agent_reported",
     [string]$TargetLocus = "local_site",
     [Alias("AgentId")]
-    [string]$Agent = "narada-andrey.Bob",
+    [string]$Agent = "andrey-user.Bob",
     [int]$Limit = 8,
     [int]$MaxHumanLines = 18,
     [int]$MaxHumanBytes = 2400,
@@ -119,11 +119,11 @@ function Test-RelativePathExists {
     }
 }
 
-function Invoke-NaradaAndreyDoctor {
+function Invoke-AndreyUserDoctor {
     param([string]$Root)
 
     $inbox = Read-TypedMcpSurface -Root $Root -SurfaceId "inbox-mcp.local"
-    $guardScript = Join-Path $Root "tools\narada-andrey\Assert-NoRawWslCrossing.ps1"
+    $guardScript = Join-Path $Root "tools\andrey-user\Assert-NoRawWslCrossing.ps1"
     $guard = if (Test-Path -LiteralPath $guardScript) {
         ConvertFrom-NaradaJson (& $guardScript -Root $Root -NoThrow -PassThru)
     } else {
@@ -224,7 +224,7 @@ function Invoke-NaradaAndreyDoctor {
             map_path = $inbox.path
             prototype = Test-RelativePathExists -Root $Root -RelativePath "tools\typed-mcp\Invoke-InboxMcpPrototype.ps1"
             server = Test-RelativePathExists -Root $Root -RelativePath "tools\typed-mcp\inbox-mcp-server.mjs"
-            submit_observation_command = ".\narada-andrey.ps1 submit-observation -Principal <identity> -SourceRef <source> -Title <title> -Summary <summary> -Evidence @('<fact 1>','<fact 2>') -Proposal @('<proposal 1>','<proposal 2>')"
+            submit_observation_command = ".\andrey-user.ps1 submit-observation -Principal <identity> -SourceRef <source> -Title <title> -Summary <summary> -Evidence @('<fact 1>','<fact 2>') -Proposal @('<proposal 1>','<proposal 2>')"
         }
         raw_wsl_crossing = [ordered]@{
             posture = "forbidden"
@@ -276,20 +276,20 @@ function Invoke-NaradaAndreyDoctor {
             note = "Both scripts must exist. The legacy alias delegates to the canonical selector."
         }
         next_commands = [ordered]@{
-            doctor = ".\narada-andrey.ps1 doctor"
-            work_next = ".\narada-andrey.ps1 work-next -BeforeMutation commit -IntendedTaskNumber <task>"
-            next_obligation = ".\narada-andrey.ps1 next-obligation -Agent <identity> -PassThru"
-            submit_observation = ".\narada-andrey.ps1 submit-observation -Principal <identity> -SourceRef <source> -Title <title> -Summary <summary> -Evidence @('<fact 1>','<fact 2>') -Proposal @('<proposal 1>','<proposal 2>')"
-            materialize_workspace = ".\narada-andrey.ps1 materialize-workspace -WorkspaceId <workspace> -MutatingAuthorized <authority> -PassThru"
-            site_build = ".\narada-andrey.ps1 site-build -SiteId <site-id> -DryRun -PassThru"
-            site_materialize = ".\narada-andrey.ps1 site-materialize -SiteId <site-id> -PassThru"
+            doctor = ".\andrey-user.ps1 doctor"
+            work_next = ".\andrey-user.ps1 work-next -BeforeMutation commit -IntendedTaskNumber <task>"
+            next_obligation = ".\andrey-user.ps1 next-obligation -Agent <identity> -PassThru"
+            submit_observation = ".\andrey-user.ps1 submit-observation -Principal <identity> -SourceRef <source> -Title <title> -Summary <summary> -Evidence @('<fact 1>','<fact 2>') -Proposal @('<proposal 1>','<proposal 2>')"
+            materialize_workspace = ".\andrey-user.ps1 materialize-workspace -WorkspaceId <workspace> -MutatingAuthorized <authority> -PassThru"
+            site_build = ".\andrey-user.ps1 site-build -SiteId <site-id> -DryRun -PassThru"
+            site_materialize = ".\andrey-user.ps1 site-materialize -SiteId <site-id> -PassThru"
             cross_site_interaction = "Use inbox-mcp.local."
             review_pickup_escalation = ".\tools\operator-surface-carriers\Invoke-ReviewPickupEscalation.ps1 -EmitOsm -PassThru"
         }
     }
 }
 
-function Invoke-NaradaAndreySubmitObservation {
+function Invoke-AndreyUserSubmitObservation {
     param(
         [string]$Root
     )
@@ -324,7 +324,7 @@ function Invoke-NaradaAndreySubmitObservation {
     & $script @args
 }
 
-function Invoke-NaradaAndreyMaterializeWorkspace {
+function Invoke-AndreyUserMaterializeWorkspace {
     param(
         [string]$Root,
         [string]$PcRoot
@@ -362,13 +362,13 @@ if (-not (Test-Path -LiteralPath $UserSiteRoot)) {
 $UserSiteRoot = (Resolve-Path -LiteralPath $UserSiteRoot).Path
 
 if ($Command -eq "doctor") {
-    $result = Invoke-NaradaAndreyDoctor -Root $UserSiteRoot
+    $result = Invoke-AndreyUserDoctor -Root $UserSiteRoot
     if ($PassThru) { ConvertTo-NaradaJson $result } else { $result | Format-List }
     return
 }
 
 if ($Command -eq "site-doctor") {
-    $script = Join-Path $UserSiteRoot "tools\narada-andrey\site-doctor.mjs"
+    $script = Join-Path $UserSiteRoot "tools\andrey-user\site-doctor.mjs"
     if (-not (Test-Path -LiteralPath $script)) { throw "site_doctor_surface_missing: $script" }
     $jsonFlag = if ($PassThru -or $Json) { "--json" } else { "" }
     if ($jsonFlag) {
@@ -420,12 +420,12 @@ if ($Command -eq "next-obligation") {
 }
 
 if ($Command -eq "materialize-workspace") {
-    Invoke-NaradaAndreyMaterializeWorkspace -Root $UserSiteRoot -PcRoot $PcSiteRoot
+    Invoke-AndreyUserMaterializeWorkspace -Root $UserSiteRoot -PcRoot $PcSiteRoot
     return
 }
 
 if ($Command -eq "site-build" -or $Command -eq "site-materialize" -or $Command -eq "setup-site" -or $Command -eq "setup-utz-site") {
-    $script = Join-Path $UserSiteRoot "tools\narada-andrey\Invoke-SiteTargetCapabilities.ps1"
+    $script = Join-Path $UserSiteRoot "tools\andrey-user\Invoke-SiteTargetCapabilities.ps1"
     if (-not (Test-Path -LiteralPath $script)) { throw "site_target_capabilities_surface_missing: $script" }
     $resolvedSiteId = if ($Command -eq "setup-utz-site") { "narada-utz" } elseif ($SiteId) { $SiteId } else { $null }
     if (-not $resolvedSiteId -and -not $DeclarationPath -and -not $TargetRoot) { throw "site_id_or_declaration_path_required: use -SiteId <site-id>, -DeclarationPath <path>, or -TargetRoot <path>" }
@@ -458,7 +458,7 @@ if ($Command -eq "switch-workspace") {
         UserSiteRoot = $UserSiteRoot
         PcSiteRoot = $PcSiteRoot
         Apply = $true
-        MutatingAuthorized = if ($MutatingAuthorized) { $MutatingAuthorized } else { "narada-andrey.Robin" }
+        MutatingAuthorized = if ($MutatingAuthorized) { $MutatingAuthorized } else { "andrey-user.Robin" }
     }
     if ($WorkspaceId) { $args.WorkspaceId = $WorkspaceId }
     if ($PassThru) { $args.PassThru = $true }
@@ -611,4 +611,4 @@ if ($Command -eq "task-obligations") {
     return
 }
 
-Invoke-NaradaAndreySubmitObservation -Root $UserSiteRoot
+Invoke-AndreyUserSubmitObservation -Root $UserSiteRoot

@@ -14,7 +14,7 @@ import {
   buildMcpRuntimeRegistryStatus,
   coordinateMcpRuntimeRestartRequest,
 } from './mcp-runtime-instance-registry.mjs';
-import { NARADA_USER_SITE_LOCUS, resolveDeprecatedNaradaAndreySiteLocus } from '../site-locus-shim.mjs';
+import { assertCanonicalSiteLocus, NARADA_USER_SITE_LOCUS } from '../site-locus-shim.mjs';
 import { buildOutputRefToolContent, enforceInlinePayloadLimit, resolveToolPayloadArgs } from '../mcp-payload-file.mjs';
 
 const PROTOCOL_VERSION = '2024-11-05';
@@ -600,22 +600,9 @@ function operatorSurfaceRegisterAgentProfile(args) {
   const role = stringField(args, 'role');
   if (!role) throw new Error('role_required');
   const explicitSiteId = stringField(args, 'site_id');
-  const siteIdResolution = explicitSiteId
-    ? resolveDeprecatedNaradaAndreySiteLocus(explicitSiteId, {
-      resolvedSiteLocus: NARADA_USER_SITE_LOCUS,
-      resolutionBasis: 'operator_surface_register_agent_profile explicit site_id compatibility input for the current User Site',
-      removalCondition: 'Remove when operator_surface_register_agent_profile callers send site_id=narada-user-site.',
-    })
-    : {
-      value: NARADA_USER_SITE_LOCUS,
-      shim: {
-        schema: 'narada.site_locus.default_resolution.v0',
-        resolved_site_locus: NARADA_USER_SITE_LOCUS,
-        resolution_basis: 'operator_surface_register_agent_profile default configured User Site; agent identity prefix is not used as Site locus evidence',
-        removal_condition: 'Keep until the API requires explicit site_id for all registrations.',
-      },
-    };
-  const siteId = siteIdResolution.value;
+  const siteId = explicitSiteId
+    ? assertCanonicalSiteLocus(explicitSiteId, 'operator_surface_register_agent_profile.site_id')
+    : NARADA_USER_SITE_LOCUS;
   const agentName = stringField(args, 'agent_name') ?? identityName.split('.').pop();
   const agentKind = stringField(args, 'agent_kind') ?? 'cli-coding-agent';
   const admittedBy = stringField(args, 'admitted_by') ?? 'operator';
@@ -639,7 +626,11 @@ function operatorSurfaceRegisterAgentProfile(args) {
     role,
     agent_kind: agentKind,
     site_id: siteId,
-    site_locus_resolution: siteIdResolution.shim,
+    site_locus_resolution: {
+      schema: 'narada.site_locus.canonical_resolution.v1',
+      site_locus: siteId,
+      source: explicitSiteId ? 'explicit' : 'configured_default',
+    },
     label: stringField(args, 'label') ?? agentName,
     display_name: stringField(args, 'display_name') ?? agentName,
     narada_site_relation: objectField(args, 'narada_site_relation') ?? {
@@ -1555,7 +1546,7 @@ function operatorSurfaceProjectIdentityRegistry(args) {
   `).all().map((row) => [row.role, { label: row.label, affinity_color: row.affinity_color }]));
   const output = {
     schema: 'narada.operator_surfaces.identities.v0',
-    owner_site_id: 'narada-andrey',
+    owner_site_id: 'andrey-user',
     description: 'Compatibility projection for operator-surface and CLI coding agent identities. SQLite is authoritative.',
     projection_authority: 'sqlite',
     projection_source: operatorSurfaceDbPath,
@@ -1616,7 +1607,7 @@ function operatorSurfaceProjectWorkspaceState(args) {
   });
   const output = {
     schema: 'narada.operator_surfaces.operator_workspaces.v0',
-    owner_site_id: 'narada-andrey',
+    owner_site_id: 'andrey-user',
     description: 'Compatibility projection for operator workspace membership. SQLite is authoritative.',
     projection_authority: 'sqlite',
     projection_source: operatorSurfaceDbPath,

@@ -63,7 +63,7 @@ describe('MCP runtime binding', () => {
   it('rejects non-Narada-proper authority', () => {
     expect(() => buildMcpRuntimeBindingRequest({
       siteRoot: 'D:\\code\\narada',
-      authorityBasis: { ...authorityBasis, siteId: 'narada-andrey' },
+      authorityBasis: { ...authorityBasis, siteId: 'andrey-user' },
     })).toThrow(McpRuntimeAuthorityError);
   });
 
@@ -72,7 +72,7 @@ describe('MCP runtime binding', () => {
       siteRoot: 'D:\\code\\narada',
       authorityBasis: {
         ...authorityBasis,
-        admittedBy: { identityId: 'narada-andrey.Kevin', role: 'architect' },
+        admittedBy: { identityId: 'andrey-user.Kevin', role: 'architect' },
       },
     })).toThrow(NonNeutralIdentityError);
   });

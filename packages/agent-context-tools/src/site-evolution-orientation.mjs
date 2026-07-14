@@ -90,7 +90,7 @@ export function createSiteEvolutionOrientationSnapshot({ siteRoot, db, reason = 
     schema: ORIENTATION_SNAPSHOT_SCHEMA,
     snapshot_id: snapshotId,
     generated_at: createdAt,
-    site_id: primitives?.site_id ?? 'narada-andrey',
+    site_id: primitives?.site_id ?? 'andrey-user',
     generator: {
       name: 'site-evolution-orientation',
       version: ORIENTATION_GENERATOR_VERSION,

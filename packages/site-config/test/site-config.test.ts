@@ -451,7 +451,7 @@ describe('site config registry awareness descriptors', () => {
     expect(current.event?.schema).toBe('narada.site_event.envelope.v0');
     expect(future.status).toBe('valid');
     expect(future.compatible_site_event_envelope).toBe(false);
-    expect(future.event?.publication_edge_id).toBe('pubedge_narada-proper_to_narada-andrey_site-telemetry');
+    expect(future.event?.publication_edge_id).toBe('pubedge_narada-proper_to_andrey-user_site-telemetry');
     expect(map.silent_widening_forbidden).toBe(true);
     expect(map.future_fields_not_inferred).toEqual(expect.arrayContaining([
       'publication_edge_id',
@@ -625,8 +625,8 @@ describe('site config registry awareness descriptors', () => {
     const input = readSiteRegistryReadModelFixture('site-registry-input-events.json') as { events: SiteRegistryReadModelInputEvent[] };
     const expected = readSiteRegistryReadModelFixture('site-registry.expected.json');
     const projection = deriveSiteRegistryReadModel({
-      registry_id: 'site-registry:narada-andrey:awareness',
-      owning_site_id: 'narada-andrey',
+      registry_id: 'site-registry:andrey-user:awareness',
+      owning_site_id: 'andrey-user',
       generated_at: '2026-05-16T20:07:00.000Z',
       events: input.events,
       stale_after_ms: 15 * 60 * 1000,
@@ -686,7 +686,7 @@ describe('site config registry awareness descriptors', () => {
     const registry = readUserSiteAwarenessFixture('site-awareness-input-registry.json') as SiteRegistryReadModel;
     const expected = readUserSiteAwarenessFixture('site-awareness.expected.json');
     const awareness = deriveUserSiteAwarenessFromRegistryReadModel({
-      user_site_id: 'narada-andrey',
+      user_site_id: 'andrey-user',
       registry,
     });
 

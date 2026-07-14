@@ -8,8 +8,8 @@ JSON and readable markdown.
 
 Usage:
     python extract_meta_arc.py \
-        ./chapters/20260425-narada-andrey-architect-evolution.md \
-        ./chapters/20260425-narada-andrey-meta-arc
+        ./chapters/20260425-andrey-user-architect-evolution.md \
+        ./chapters/20260425-andrey-user-meta-arc
 """
 import argparse
 import json
@@ -324,7 +324,7 @@ def emit_operator_card(invariants: list[ArcItem], concepts: list[ArcItem],
                        opens: list[ArcItem], tensions: list[ArcItem],
                        output_path: str) -> None:
     lines = []
-    lines.append("# Operator Card: narada-andrey.architect")
+    lines.append("# Operator Card: andrey-user.architect")
     lines.append("")
     lines.append("*Auto-generated from meta-arc. Read at session start. Consult full arc for provenance.*")
     lines.append("")

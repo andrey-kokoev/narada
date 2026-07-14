@@ -1247,7 +1247,7 @@ describe('Canonical Inbox CLI commands', () => {
       sourceRef: 'bob:stale-source-envelope-20260501-a',
       kind: 'incident',
       authorityLevel: 'agent_reported',
-      principal: 'narada-andrey.Bob',
+      principal: 'andrey-user.Bob',
       payload: JSON.stringify({
         title: 'First stale source envelope recurrence',
         summary: 'A consumed inbox envelope resurfaced as primary work.',
@@ -1264,7 +1264,7 @@ describe('Canonical Inbox CLI commands', () => {
       sourceRef: 'bob:stale-source-envelope-20260501-b',
       kind: 'incident',
       authorityLevel: 'agent_reported',
-      principal: 'narada-andrey.Bob',
+      principal: 'andrey-user.Bob',
       payload: JSON.stringify({
         title: 'Complete inbox-to-task source consumption',
         summary: 'A repeated source envelope consumption issue should become Builder work.',
@@ -1340,7 +1340,7 @@ describe('Canonical Inbox CLI commands', () => {
       payload: JSON.stringify({
         title: 'Prepare responsible identity handoff',
         summary: 'A responsible identity should receive a prepared handoff without claiming the task.',
-        responsible_identity: 'narada-andrey.Bob',
+        responsible_identity: 'andrey-user.Bob',
       }),
     });
     const envelopeId = (submitted.result as { envelope: { envelope_id: string } }).envelope.envelope_id;
@@ -1361,11 +1361,11 @@ describe('Canonical Inbox CLI commands', () => {
     };
     expect(result.assignment).toBeNull();
     expect(result.prepared_nudge).toMatchObject({
-      target: 'narada-andrey.Bob',
+      target: 'andrey-user.Bob',
       target_kind: 'identity',
-      command_args: ['task', 'claim', String(result.target.task_number), '--agent', 'narada-andrey.Bob'],
+      command_args: ['task', 'claim', String(result.target.task_number), '--agent', 'andrey-user.Bob'],
     });
-    expect(result.envelope.promotion.target_result.prepared_nudge.target).toBe('narada-andrey.Bob');
+    expect(result.envelope.promotion.target_result.prepared_nudge.target).toBe('andrey-user.Bob');
   });
 
   it('creates complete tasks directly from proposal envelopes', async () => {

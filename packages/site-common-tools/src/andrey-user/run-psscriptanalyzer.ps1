@@ -1,7 +1,7 @@
 <#PSScriptInfo
     .VERSION 1.0.0
     .GUID 275-psscriptanalyzer-runner
-    .AUTHOR narada-andrey.resident
+    .AUTHOR andrey-user.resident
     .DESCRIPTION
         Runs PSScriptAnalyzer over the User Site, producing a baseline report.
         Discovered settings from PSScriptAnalyzerSettings.psd1 at repo root.

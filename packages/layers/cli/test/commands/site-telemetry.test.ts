@@ -18,7 +18,7 @@ function edgeFile(): string {
     schema: 'narada.site_telemetry.publication_edge.v0',
     edge_id: 'pubedge_test',
     publisher_site_id: 'narada-proper',
-    owning_site_id: 'narada-andrey',
+    owning_site_id: 'andrey-user',
     surface_id: 'surface_user-site-telemetry_awareness',
     surface_endpoint: { kind: 'https', url: 'https://registry.example' },
     accepted_event_families: ['site_health'],

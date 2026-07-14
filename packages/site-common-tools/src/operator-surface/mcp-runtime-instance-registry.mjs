@@ -2,8 +2,6 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { siteControlRoot } from '../site-layout.mjs';
 import {
-  buildDeprecatedNaradaAndreyShim,
-  DEPRECATED_NARADA_ANDREY_SITE,
   NARADA_PC_SITE_LOCUS,
   NARADA_USER_SITE_LOCUS,
 } from '../site-locus-shim.mjs';
@@ -246,20 +244,12 @@ function observeDeclaredSurface({ surface, declarationSiteId, siteRoot, runtimeR
 }
 
 function buildSiteRegistryAuthority({ declarationSiteId, declarationPath, registryPath }) {
-  const deprecatedShim = declarationSiteId === DEPRECATED_NARADA_ANDREY_SITE
-    ? buildDeprecatedNaradaAndreyShim({
-      resolvedSiteLocus: NARADA_USER_SITE_LOCUS,
-      resolutionBasis: '.narada/capabilities/mcp-surfaces.json belongs to the User Site declaration registry in this checkout.',
-      removalCondition: 'Remove after capability declarations use canonical Site locus ids.',
-    })
-    : null;
   return {
     schema: 'narada.site.mcp_registry_authority.v0',
     owning_site: declarationSiteId,
-    owning_site_locus: deprecatedShim?.resolved_site_locus ?? declarationSiteId ?? NARADA_USER_SITE_LOCUS,
+    owning_site_locus: declarationSiteId ?? NARADA_USER_SITE_LOCUS,
     declared_site_id: declarationSiteId,
     pc_runtime_locus: NARADA_PC_SITE_LOCUS,
-    deprecated_owning_site_shim: deprecatedShim,
     authority_scope: 'site_local_mcp_registry',
     declaration_source: declarationPath,
     substrate_inventory_scope: 'pc_runtime_advisory_plumbing',
@@ -272,22 +262,8 @@ function buildSiteRegistryAuthority({ declarationSiteId, declarationPath, regist
 
 function buildSurfaceRegistryAuthority({ surface, declarationSiteId, registryPath }) {
   const owningSite = surface.runtime_binding?.owner_site_id ?? declarationSiteId ?? null;
-  const owningSiteShim = owningSite === DEPRECATED_NARADA_ANDREY_SITE
-    ? buildDeprecatedNaradaAndreyShim({
-      resolvedSiteLocus: NARADA_USER_SITE_LOCUS,
-      resolutionBasis: 'surface owner_site_id/declaration_site_id is the deprecated User Site label in the local registry.',
-      removalCondition: 'Remove after surface owner_site_id values use canonical Site locus ids.',
-    })
-    : null;
-  const declarationSiteShim = declarationSiteId === DEPRECATED_NARADA_ANDREY_SITE
-    ? buildDeprecatedNaradaAndreyShim({
-      resolvedSiteLocus: NARADA_USER_SITE_LOCUS,
-      resolutionBasis: '.narada/capabilities/mcp-surfaces.json belongs to the User Site declaration registry in this checkout.',
-      removalCondition: 'Remove after capability declarations use canonical Site locus ids.',
-    })
-    : null;
-  const owningSiteLocus = owningSiteShim?.resolved_site_locus ?? owningSite ?? null;
-  const declarationSiteLocus = declarationSiteShim?.resolved_site_locus ?? declarationSiteId ?? null;
+  const owningSiteLocus = owningSite ?? null;
+  const declarationSiteLocus = declarationSiteId ?? null;
   const localAuthority = Boolean(declarationSiteLocus) && owningSiteLocus === declarationSiteLocus;
   return {
     schema: 'narada.site.mcp_surface_registry_authority.v0',
@@ -296,8 +272,6 @@ function buildSurfaceRegistryAuthority({ surface, declarationSiteId, registryPat
     declaration_site: declarationSiteId,
     declaration_site_locus: declarationSiteLocus,
     pc_runtime_locus: NARADA_PC_SITE_LOCUS,
-    deprecated_owning_site_shim: owningSiteShim,
-    deprecated_declaration_site_shim: declarationSiteShim,
     authority_scope: localAuthority ? 'local_site_runtime_readiness' : 'foreign_site_status_advisory',
     substrate_inventory_scope: 'pc_runtime_advisory_plumbing',
     declaration_source: '.narada/capabilities/mcp-surfaces.json',

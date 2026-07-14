@@ -11,7 +11,7 @@ param(
     [ValidateSet("proposal", "observation", "command_request", "question", "knowledge_candidate", "task_candidate", "incident", "capa", "upstream_task_candidate")]
     [string]$Kind = "observation",
     [string]$AuthorityLevel = "agent_reported",
-    [string]$Principal = "narada-andrey.Bob",
+    [string]$Principal = "andrey-user.Bob",
     [string]$TargetLocus = "local_site",
     [string]$Title,
     [string]$Summary,
@@ -100,7 +100,7 @@ if ($Operation -eq "doctor") {
         target_site_exists = Test-Path -LiteralPath $TargetSiteRoot
         allowed_operations = @($surface.tool_contract.semantic_operations)
         rule = $surface.authority_boundary.rule
-        boundary = "postal-only: narada-andrey does not resolve Narada proper CLI. If configured, CLI is used; otherwise observations drop to local file."
+        boundary = "postal-only: andrey-user does not resolve Narada proper CLI. If configured, CLI is used; otherwise observations drop to local file."
     }
     Write-NaradaJsonFile -Path $evidencePath -Value $result
     if ($PassThru) { ConvertTo-NaradaJson $result } else { Write-Host "Inbox MCP doctor ok. Evidence: $evidencePath" }

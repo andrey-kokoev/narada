@@ -18,7 +18,7 @@ describe('Windows PowerShell package portability', () => {
     expect(doc).toContain('.ai/state/agent-context.sqlite');
   });
 
-  it('lets a future Site assemble descriptors without importing Narada proper or narada-andrey state', () => {
+  it('lets a future Site assemble descriptors without importing Narada proper or andrey-user state', () => {
     const schemaPlan = buildAgentContextSchemaInitPlan();
     const mcp = buildMcpRegistrationDescriptor();
     const capability = buildCapabilityRegistryFragment();

@@ -21,7 +21,7 @@ Discards:
 Usage:
     python distill_kimi_session.py \
         ~/.kimi/sessions/.../.../context.jsonl \
-        ./narada-andrey.architect.distilled.jsonl \
+        ./andrey-user.architect.distilled.jsonl \
         --max-preview 400
 """
 import argparse

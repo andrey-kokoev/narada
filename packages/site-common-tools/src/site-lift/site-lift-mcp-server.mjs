@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { buildDeprecatedNaradaAndreyShim, NARADA_USER_SITE_LOCUS } from '../site-locus-shim.mjs';
+import { NARADA_USER_SITE_LOCUS } from '../site-locus-shim.mjs';
 import { buildOutputRefToolContent } from '../mcp-payload-file.mjs';
 
 const PROTOCOL_VERSION = '2024-11-05';
@@ -334,11 +334,6 @@ function adoptionCommand(args) {
       schema: 'narada.site_lift_catalog.adoption_record.v0',
       artifact_id: plan.artifact_id,
       source_site_id: NARADA_USER_SITE_LOCUS,
-      deprecated_source_site_locus_shim: buildDeprecatedNaradaAndreyShim({
-        resolvedSiteLocus: NARADA_USER_SITE_LOCUS,
-        resolutionBasis: 'site-lift adoption packet is emitted from the current User Site catalog',
-        removalCondition: 'Remove when site-lift catalog records and consumers use source_site_id=narada-user-site.',
-      }),
       receiving_site_id: receivingSiteId,
       receiving_site_root: receivingSiteRoot,
       decision: 'pending_receiving_site_admission',

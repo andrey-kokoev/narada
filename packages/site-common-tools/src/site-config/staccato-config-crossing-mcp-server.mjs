@@ -2,7 +2,7 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { createHash } from 'node:crypto';
-import { buildDeprecatedNaradaAndreyShim, NARADA_USER_SITE_LOCUS } from '../site-locus-shim.mjs';
+import { NARADA_USER_SITE_LOCUS } from '../site-locus-shim.mjs';
 import { buildOutputRefToolContent } from '../mcp-payload-file.mjs';
 
 const PROTOCOL_VERSION = '2024-11-05';
@@ -221,7 +221,7 @@ function buildUpdatedConfig(original, now, authorityBasis) {
           ],
         },
         known_sites: {
-          'narada-andrey': knownAndreySite(targetSiteId, now),
+          'andrey-user': knownUserSite(targetSiteId, now),
         },
       },
       message_intake: {
@@ -253,15 +253,9 @@ function buildUpdatedConfig(original, now, authorityBasis) {
   };
 }
 
-function knownAndreySite(targetSiteId, now) {
-  const userSiteShim = buildDeprecatedNaradaAndreyShim({
-    resolvedSiteLocus: NARADA_USER_SITE_LOCUS,
-    resolutionBasis: 'staccato governed crossing references the current User Site root and architect inbox',
-    removalCondition: 'Remove when Staccato crossing config uses narada-user-site for this source Site.',
-  });
+function knownUserSite(targetSiteId, now) {
   return {
     site_id: NARADA_USER_SITE_LOCUS,
-    deprecated_site_locus_shim: userSiteShim,
     locus_type: 'user_site',
     roots: { site_root_windows: 'C:\\Users\\Andrey\\Narada' },
     authority_boundaries: {
@@ -312,9 +306,9 @@ function validateConfig(config) {
   for (const key of ['sync', 'task_substrate', 'narada_cli', 'linked_sites', 'site_awareness', 'message_intake', 'pc_locus']) {
     if (!(key in config.structural_config)) errors.push(`missing:structural_config.${key}`);
   }
-  const site = config.structural_config.site_awareness.known_sites['narada-andrey'];
+  const site = config.structural_config.site_awareness.known_sites['andrey-user'];
   for (const key of ['site_id', 'locus_type', 'roots', 'authority_boundaries', 'capability_edges', 'capability_denials', 'sync_posture', 'capabilities', 'inbox_endpoint', 'task_lifecycle', 'mcp_access', 'freshness', 'health']) {
-    if (!(key in site)) errors.push(`missing:known_sites.narada-andrey.${key}`);
+    if (!(key in site)) errors.push(`missing:known_sites.andrey-user.${key}`);
   }
   if (!site.authority_boundaries.not_granted_by_awareness.some((entry) => entry.includes('mutate'))) {
     errors.push('missing:mutation_denial');

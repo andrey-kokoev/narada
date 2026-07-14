@@ -16,8 +16,8 @@ const DENIED_INPUT_PATTERNS: Array<{
     reason: 'operator-surface runtime copying',
   },
   {
-    pattern: /narada-andrey.*(runtime|registry|mcp|surface)/i,
-    reason: 'narada-andrey runtime registry import',
+    pattern: /(?:narada-andrey|narada-user-site).*(runtime|registry|mcp|surface)/i,
+    reason: 'legacy user-site runtime registry import',
   },
   {
     pattern: /\.ai[\\/]mcp|\.ai[\\/]runtime|mcp[-_]?registry|runtime[-_]?registry/i,

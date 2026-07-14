@@ -42,8 +42,8 @@ $allowedRawWslPaths = @(
     "tools/typed-mcp/Test-TypedMcpSurfaces.ps1"
 )
 $guardImplementationPaths = @(
-    "tools/narada-andrey/Assert-NoRawWslCrossing.ps1",
-    "tools/narada-andrey/Test-RawWslCrossingGuard.ps1"
+    "tools/andrey-user/Assert-NoRawWslCrossing.ps1",
+    "tools/andrey-user/Test-RawWslCrossingGuard.ps1"
 )
 
 $rawWslCommandTokenPatterns = @(

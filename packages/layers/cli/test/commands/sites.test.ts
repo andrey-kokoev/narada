@@ -178,19 +178,41 @@ describe('sites commands', () => {
   });
 
   describe('sitesRemoveCommand', () => {
-    it('removes a site from registry', async () => {
+    it('plans retirement without deleting Site files', async () => {
       mockDb.prepare.mockImplementation((sql: string) => {
-        if (sql.includes('DELETE')) {
-          return { all: vi.fn(() => []), get: vi.fn(() => null), run: vi.fn(() => ({ changes: 1 })) };
+        if (sql.includes('SELECT site_id')) {
+          return {
+            all: vi.fn(() => []),
+            get: vi.fn(() => ({
+              site_id: 'site-c',
+              variant: 'native',
+              site_root: 'C:\\Sites\\site-c',
+              substrate: 'windows',
+              aim_json: null,
+              control_endpoint: null,
+              last_seen_at: null,
+              created_at: '2026-04-20T10:00:00Z',
+              lifecycle_status: 'active',
+              observation_status: 'present',
+              sources_json: '[]',
+              aliases_json: '[]',
+              revision: 1,
+              updated_at: '2026-04-20T10:00:00Z',
+              retired_at: null,
+              retire_reason: null,
+            })),
+            run: vi.fn(() => ({ changes: 0 })),
+          };
         }
         return { all: vi.fn(() => []), get: vi.fn(() => null), run: vi.fn(() => ({ changes: 0 })) };
       });
 
       const ctx = createMockContext();
-      const result = await sitesRemoveCommand('site-c', { format: 'json' }, ctx);
+      const result = await sitesRemoveCommand('site-c', { format: 'json', reason: 'legacy command preview' }, ctx);
 
       expect(result.exitCode).toBe(ExitCode.SUCCESS);
-      expect((result.result as { removed: string }).removed).toBe('site-c');
+      expect((result.result as { operation: string }).operation).toBe('retire');
+      expect((result.result as { mutation_performed: boolean }).mutation_performed).toBe(false);
     });
 
     it('returns error for unknown site', async () => {
@@ -202,9 +224,9 @@ describe('sites commands', () => {
       });
 
       const ctx = createMockContext();
-      const result = await sitesRemoveCommand('unknown', { format: 'json' }, ctx);
+      const result = await sitesRemoveCommand('unknown', { format: 'json', reason: 'legacy command preview' }, ctx);
 
-      expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
+      expect(result.exitCode).toBe(ExitCode.INVALID_CONFIG);
     });
   });
 

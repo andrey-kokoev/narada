@@ -81,7 +81,7 @@ describe('Narada MCP facade', () => {
     writeSiteConfig(tempDir, {
       schema: 'narada.site.config.v0',
       static_config: {
-        site_id: 'narada-andrey',
+        site_id: 'andrey-user',
         site_kind: 'user_site',
         site_root: tempDir,
         workspace_root: workspaceRoot,
@@ -90,7 +90,7 @@ describe('Narada MCP facade', () => {
     });
 
     expect(resolveMcpSiteContext({ siteRoot: tempDir })).toMatchObject({
-      site_id: 'narada-andrey',
+      site_id: 'andrey-user',
       site_kind: 'user_site',
       site_root: tempDir,
       workspace_root: workspaceRoot,

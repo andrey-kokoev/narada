@@ -66,7 +66,7 @@ describe('task admission write request', () => {
     expect(() => buildTaskAdmissionWriteRequest({
       taskDbPath: 'D:\\code\\narada\\.ai\\task-lifecycle.db',
       candidate,
-      admittedBy: { identityId: 'narada-andrey.Kevin', role: 'architect' },
+      admittedBy: { identityId: 'andrey-user.Kevin', role: 'architect' },
       admittedAt: '2026-05-10T05:06:00.000Z',
     })).toThrow(NonNeutralIdentityError);
   });

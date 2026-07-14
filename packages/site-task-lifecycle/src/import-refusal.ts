@@ -54,7 +54,7 @@ export function assertNoDeniedSourceImports(paths: string[]): void {
 export function findNonNeutralIdentities(identities: NeutralIdentity[]): string[] {
   return identities
     .map((identity) => identity.identityId)
-    .filter((identityId) => identityId === 'Andrey' || identityId.startsWith('narada-andrey.'));
+    .filter((identityId) => identityId === 'Andrey' || identityId.startsWith('andrey-user.'));
 }
 
 export function assertNeutralIdentities(identities: NeutralIdentity[]): void {

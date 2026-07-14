@@ -66,7 +66,7 @@ export const TOOLS = [
       type: 'object',
       properties: {
         event_id: { type: 'string', description: 'Exact event_id. Provide either event_id or identity.' },
-        identity: { type: 'string', description: 'Agent identity, e.g. narada-andrey.Kevin. Finds latest event for this identity.' },
+        identity: { type: 'string', description: 'Agent identity, e.g. andrey-user.Kevin. Finds latest event for this identity.' },
       },
     },
   },
@@ -76,7 +76,7 @@ export const TOOLS = [
     inputSchema: {
       type: 'object',
       properties: {
-        agent_id: { type: 'string', description: 'Agent identity, e.g. narada-andrey.Kevin' },
+        agent_id: { type: 'string', description: 'Agent identity, e.g. andrey-user.Kevin' },
         session_id: { type: 'string', description: 'Optional session identifier.' },
         active_task: { type: 'object', description: 'Active task state: { task_number, task_id, status, summary }' },
         files_touched: { type: 'array', description: 'Array of file paths touched since last checkpoint.' },
@@ -105,7 +105,7 @@ export const TOOLS = [
     inputSchema: {
       type: 'object',
       properties: {
-        agent_id: { type: 'string', description: 'Agent identity, e.g. narada-andrey.Kevin. Required.' },
+        agent_id: { type: 'string', description: 'Agent identity, e.g. andrey-user.Kevin. Required.' },
         history: { type: 'boolean', description: 'If true, return prior checkpoints from history instead of the latest.' },
         limit: { type: 'integer', description: 'Maximum number of history entries to return (1-50). Default 1. Implies history mode when > 1.' },
       },
@@ -129,7 +129,7 @@ export const TOOLS = [
     inputSchema: {
       type: 'object',
       properties: {
-        hint: { type: 'string', description: 'Optional identity hint to validate against (e.g. narada-andrey.Kevin).' },
+        hint: { type: 'string', description: 'Optional identity hint to validate against (e.g. andrey-user.Kevin).' },
       },
     },
   },
@@ -139,7 +139,7 @@ export const TOOLS = [
     inputSchema: {
       type: 'object',
       properties: {
-        identity: { type: 'string', description: 'Agent identity, e.g. narada-andrey.Bob. Required.' },
+        identity: { type: 'string', description: 'Agent identity, e.g. andrey-user.Bob. Required.' },
         runtime: { type: 'string', description: 'Substrate carrier executable name. Default: kimi.' },
         cwd: { type: 'string', description: 'Workspace directory embodied by the session. Default: site root.' },
         dry_run: { type: 'boolean', description: 'Validate and return planned materialization without writing SQLite.' },
@@ -153,7 +153,7 @@ export const TOOLS = [
     inputSchema: {
       type: 'object',
       properties: {
-        identity: { type: 'string', description: 'Optional agent identity filter, e.g. narada-andrey.Kevin.' },
+        identity: { type: 'string', description: 'Optional agent identity filter, e.g. andrey-user.Kevin.' },
         date_from: { type: 'string', description: 'Optional inclusive ISO timestamp lower bound for created_at.' },
         date_to: { type: 'string', description: 'Optional inclusive ISO timestamp upper bound for created_at.' },
         substrate: { type: 'string', description: 'Optional runtime/substrate filter, e.g. codex or kimi.' },
@@ -240,7 +240,7 @@ export const TOOLS = [
     inputSchema: {
       type: 'object',
       properties: {
-        agent_id: { type: 'string', description: 'Optional agent identity filter, e.g. narada-andrey.Kevin.' },
+        agent_id: { type: 'string', description: 'Optional agent identity filter, e.g. andrey-user.Kevin.' },
         transition: { type: 'string', description: 'Optional transition filter, e.g. hydrate.' },
         limit: { type: 'integer', description: 'Maximum rows to return (1-50). Default 10.' },
       },
@@ -392,7 +392,7 @@ export const TOOLS = [
     inputSchema: {
       type: 'object',
       properties: {
-        agent_id: { type: 'string', description: 'Agent identity, e.g. narada-andrey.Kevin. Required.' },
+        agent_id: { type: 'string', description: 'Agent identity, e.g. andrey-user.Kevin. Required.' },
       },
       required: ['agent_id'],
     },
@@ -403,7 +403,7 @@ export const TOOLS = [
     inputSchema: {
       type: 'object',
       properties: {
-        agent_id: { type: 'string', description: 'Agent identity, e.g. narada-andrey.Kevin. Required.' },
+        agent_id: { type: 'string', description: 'Agent identity, e.g. andrey-user.Kevin. Required.' },
         limit: { type: 'integer', description: 'Maximum grounding events to return (1-50). Default 10.' },
       },
       required: ['agent_id'],

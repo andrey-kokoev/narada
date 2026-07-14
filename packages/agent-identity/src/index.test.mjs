@@ -37,7 +37,7 @@ test('derives identity ref from site-local agent id and explicit site', () => {
 
 test('preserves configured site segment in canonical display identity', () => {
   assert.equal(buildAgentIdentityRef('resident', 'resident', 'narada-sonar').canonical_agent_id, 'narada-sonar.resident');
-  assert.equal(buildAgentIdentityRef('narada-andrey.Kevin', 'Kevin').canonical_agent_id, 'narada-andrey.Kevin');
+  assert.equal(buildAgentIdentityRef('andrey-user.Kevin', 'Kevin').canonical_agent_id, 'andrey-user.Kevin');
   assert.equal(buildAgentIdentityRef('narada-sonar.resident', 'resident').canonical_agent_id, 'narada-sonar.resident');
   assert.equal(buildAgentIdentityRef('sonar.resident', 'resident', 'narada-sonar').canonical_agent_id, 'sonar.resident');
   assert.equal(buildAgentIdentityRef('narada-sonar.resident', 'resident', 'sonar').canonical_agent_id, 'narada-sonar.resident');

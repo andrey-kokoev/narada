@@ -17,7 +17,7 @@ Discards:
 
 Usage:
     python distill_codex_session.py ~/.codex/sessions/.../rollout-*.jsonl \
-                                    ./narada-andrey.architect.distilled.jsonl \
+                                    ./andrey-user.architect.distilled.jsonl \
                                     --max-preview 400
 """
 import argparse

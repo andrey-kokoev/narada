@@ -2108,7 +2108,7 @@ function tools() {
       inputSchema: objectSchema({
         target_site_root: stringSchema('Explicit target Site root. Defaults to server site root.'),
         preferred_kinds: arrayStringSchema('Boost priority for these kinds.'),
-        agent_id: stringSchema('Agent identity (e.g. narada-andrey.Bob). When provided, role-based kind filtering is applied.'),
+        agent_id: stringSchema('Agent identity (e.g. andrey-user.Bob). When provided, role-based kind filtering is applied.'),
       }),
     },
     {

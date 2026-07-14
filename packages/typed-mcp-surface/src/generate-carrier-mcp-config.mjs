@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-import { existsSync, readFileSync } from 'node:fs';
-import { basename, join, resolve } from 'node:path';
-import { writeJsonFile } from '../incubation/write-file-utf8.mjs';
-import { resolveDeprecatedNaradaAndreySiteLocus } from '../site-locus-shim.mjs';
+import { createHash } from 'node:crypto';
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { basename, dirname, join, resolve } from 'node:path';
+import { assertCanonicalSiteLocus } from '../../site-common-tools/src/site-locus-shim.mjs';
 
 const args = parseArgs(process.argv.slice(2));
 const siteRoot = resolve(args.siteRoot ?? process.cwd());
@@ -13,18 +13,15 @@ const explicitCrossingSurfaceIds = new Set(asArray(args.allowCrossSiteMutationSu
 
 const carriers = carrier === 'all' ? ['kimi', 'codex'] : [carrier];
 const registry = readJson(join(siteControlRoot(siteRoot), 'capabilities', 'mcp-surfaces.json'));
-const siteIdResolution = resolveDeprecatedNaradaAndreySiteLocus(registry.site_id ?? 'narada-andrey', {
-  resolvedSiteLocus: 'narada-user-site',
-  resolutionBasis: 'carrier MCP config generated from the current User Site root',
-  removalCondition: 'Remove after .narada/capabilities/mcp-surfaces.json uses site_id=narada-user-site and carrier config filenames are regenerated.',
-});
-const boundSiteId = args.boundSiteId ?? siteIdResolution.value;
-const boundSiteLocus = args.boundSiteLocus ?? siteIdResolution.value;
+const registryFingerprint = createHash('sha256').update(canonicalJson(registry)).digest('hex');
+const siteId = assertCanonicalSiteLocus(registry.site_id ?? 'andrey-user', 'registry.site_id');
+const boundSiteId = assertCanonicalSiteLocus(args.boundSiteId ?? siteId, 'bound_site_id');
+const boundSiteLocus = assertCanonicalSiteLocus(args.boundSiteLocus ?? siteId, 'bound_site_locus');
 const snippetPolicy = {
-  default: 'local_projection_optional',
+  default: 'registry_only',
   registry_is_source_of_truth: true,
-  missing_snippets_are_informational: true,
-  tracked_exception_policy: 'Track only explicitly admitted portable snippets that contain no secrets.',
+  generated_snippets_are_never_inputs: true,
+  tracked_exception_policy: 'Generated carrier projections are disposable outputs and never configuration authority.',
 };
 const outputs = carriers.map((name) => buildCarrierConfig(name));
 const result = {
@@ -100,12 +97,7 @@ function buildCarrierConfig(carrierName) {
       intentionalExclusions.push(surface.surface_id);
       continue;
     }
-    const snippetPath = resolve(siteRoot, surface.client_config?.generated_path ?? '');
-    const snippet = existsSync(snippetPath) ? readJson(snippetPath) : null;
-    if (!snippet) missingGeneratedSnippets.push(surface.surface_id);
-    const entries = snippet?.mcpServers && Object.keys(snippet.mcpServers).length > 0
-      ? snippet.mcpServers
-      : synthesizeServer(surface);
+    const entries = synthesizeServer(surface);
     const normalizedEntries = normalizeServersForCarrier(entries, carrierName);
     Object.assign(mcpServers, normalizedEntries);
     if (carrierName === 'codex') {
@@ -114,19 +106,20 @@ function buildCarrierConfig(carrierName) {
       }
     }
   }
-  const path = join(siteRoot, '.ai', 'mcp', 'carriers', `narada-andrey-${carrierName}.mcp.json`);
+  const path = join(siteRoot, '.ai', 'mcp', 'carriers', `narada-andrey-user-${carrierName}.mcp.json`);
   return {
     carrier: carrierName,
     path,
     missing_generated_snippets: missingGeneratedSnippets,
     config: {
       schema: 'narada.mcp.carrier_client_config.v0',
-      site_id: siteIdResolution.value,
-      ...(siteIdResolution.shim ? { deprecated_site_locus_shim: siteIdResolution.shim } : {}),
+      site_id: siteId,
       carrier: carrierName,
       generated_from: {
         registry_path: '.narada/capabilities/mcp-surfaces.json',
         registry_schema: registry.schema,
+        registry_sha256: registryFingerprint,
+        generator: 'packages/typed-mcp-surface/src/generate-carrier-mcp-config.mjs',
       },
       snippet_policy: snippetPolicy,
       mcpServers,
@@ -153,6 +146,9 @@ function buildCarrierConfig(carrierName) {
 
 function synthesizeServer(surface) {
   const transport = surface.runtime_binding?.transport ?? {};
+  if (typeof transport.command !== 'string' || !Array.isArray(transport.args)) {
+    throw new Error(`carrier_generation_transport_binding_missing:${surface.surface_id}`);
+  }
   const generatedPath = surface.client_config?.generated_path ?? `${surface.surface_id}.json`;
   const name = basename(generatedPath, '.json')
     .replace(/-mcp$/, '')
@@ -173,13 +169,28 @@ function synthesizeServer(surface) {
   };
 }
 
+function canonicalJson(value) {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function writeJsonFile(path, value) {
+  mkdirSync(dirname(path), { recursive: true });
+  const temporaryPath = `${path}.tmp-${process.pid}-${Date.now()}`;
+  writeFileSync(temporaryPath, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
+  try {
+    renameSync(temporaryPath, path);
+  } finally {
+    rmSync(temporaryPath, { force: true });
+  }
+}
+
 function classifySurfaceAvailability(surface) {
   const ownerSiteId = surface.runtime_binding?.owner_site_id ?? registry.site_id ?? null;
-  const ownerSiteLocus = resolveDeprecatedNaradaAndreySiteLocus(ownerSiteId ?? '', {
-    resolvedSiteLocus: 'narada-user-site',
-    resolutionBasis: `MCP surface ${surface.surface_id} owner_site_id compatibility resolution`,
-    removalCondition: 'Remove after surface owner_site_id values use canonical Site locus identifiers.',
-  }).value;
+  const ownerSiteLocus = assertCanonicalSiteLocus(ownerSiteId ?? '', `surface.${surface.surface_id}.owner_site_id`);
   const { readOnlyTools, mutatingTools, classificationSource } = classifyTools(surface.tool_contract ?? {});
   const mutationCapability = mutatingTools.length > 0
     ? classifyMutationCapability(surface)

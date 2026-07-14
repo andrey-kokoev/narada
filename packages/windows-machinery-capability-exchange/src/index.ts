@@ -47,7 +47,7 @@ export function buildWindowsMachineryAdoptionManifest(): WindowsMachineryAdoptio
       'generated runtime projections',
       'logs and PIDs',
       'live Komorebi or YASB state',
-      'narada-andrey identity authority',
+      'andrey-user identity authority',
       'secrets or credentials',
     ],
     live_authority_not_granted: [

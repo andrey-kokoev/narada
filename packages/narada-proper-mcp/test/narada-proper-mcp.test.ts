@@ -789,7 +789,7 @@ describe('narada proper MCP surface', () => {
       writeFileSync(join(siteRoot, 'config.json'), `${JSON.stringify({
         schema: 'narada.site.config.v0',
         static_config: {
-          site_id: 'narada-andrey',
+          site_id: 'andrey-user',
           site_kind: 'user_site',
           site_root: siteRoot,
           locus: { authority_locus: 'user' },
@@ -797,7 +797,7 @@ describe('narada proper MCP surface', () => {
       }, null, 2)}\n`);
 
       expect(resolveMcpSiteContext({ siteRoot })).toMatchObject({
-        site_id: 'narada-andrey',
+        site_id: 'andrey-user',
         site_kind: 'user_site',
         site_root: siteRoot,
         authority_locus: 'user',
@@ -1100,14 +1100,14 @@ describe('narada proper MCP surface', () => {
     writeFileSync(join(target, 'config.json'), `${JSON.stringify({
       schema: 'narada.site.config.v0',
       static_config: {
-        site_id: 'narada-andrey',
+        site_id: 'andrey-user',
         site_kind: 'user_site',
         site_root: target,
         locus: { authority_locus: 'user' },
       },
     }, null, 2)}\n`);
     writeFileSync(join(targetBin, 'narada.cmd'), '@echo off\r\necho {"status":"success","envelope":{"envelope_id":"env_cross"},"source":"target_inbox"}\r\n');
-    const targetSiteId = 'narada-andrey';
+    const targetSiteId = 'andrey-user';
 
     try {
       const input = new PassThrough();

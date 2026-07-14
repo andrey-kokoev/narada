@@ -76,7 +76,7 @@ describe('OSL WebView2 panel payload contract', () => {
         projection_source: 'receiving_site_projection',
       },
       authority: {
-        site_relation: { relation: 'external_evidence', source_site: 'narada-andrey' },
+        site_relation: { relation: 'external_evidence', source_site: 'andrey-user' },
         authority_limits: ['external_evidence_only'],
         projection_authority: 'operator_surface_window_labels_projection',
         compatibility_projection: true,

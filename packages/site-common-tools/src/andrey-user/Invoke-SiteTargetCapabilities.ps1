@@ -208,7 +208,7 @@ The source User Site materialized this seed orientation so startup can distingui
 function New-NaradaSiteStartupContract {
     param($Declaration)
     $siteId = [string]$Declaration.site_id
-    $sourceLauncher = Join-Path $UserSiteRoot "narada-andrey.ps1"
+    $sourceLauncher = Join-Path $UserSiteRoot "andrey-user.ps1"
     $escapedSourceLauncher = $sourceLauncher.Replace("'", "''")
     $escapedUserSiteRoot = $UserSiteRoot.Replace("'", "''")
     $targetMcpServers = @(
@@ -610,8 +610,8 @@ $contractDoc = if ($setup.contract_doc) { [string]$setup.contract_doc } else { "
 $schemaPath = if ($setup.schema_path) { [string]$setup.schema_path } else { "schemas/narada.site-target-capabilities.declaration.v0.schema.json" }
 $packagePath = if ($setup.package_path) { [string]$setup.package_path } else { $null }
 $handoffRelativePath = if ($setup.handoff_path) { [string]$setup.handoff_path } else { "kb/site-lift/$($declaration.site_id)-site-target-capabilities-handoff.json" }
-$genericCommand = if ($setup.generic_command) { [string]$setup.generic_command } else { ".\narada-andrey.ps1 setup-site -SiteId $($declaration.site_id) -PassThru" }
-$genericDryRunCommand = if ($setup.generic_dry_run_command) { [string]$setup.generic_dry_run_command } else { ".\narada-andrey.ps1 setup-site -SiteId $($declaration.site_id) -DryRun -PassThru" }
+$genericCommand = if ($setup.generic_command) { [string]$setup.generic_command } else { ".\andrey-user.ps1 setup-site -SiteId $($declaration.site_id) -PassThru" }
+$genericDryRunCommand = if ($setup.generic_dry_run_command) { [string]$setup.generic_dry_run_command } else { ".\andrey-user.ps1 setup-site -SiteId $($declaration.site_id) -DryRun -PassThru" }
 $aliasCommand = if ($setup.alias_command) { [string]$setup.alias_command } else { $null }
 $aliasDryRunCommand = if ($setup.alias_dry_run_command) { [string]$setup.alias_dry_run_command } else { $null }
 $authorityStatement = if ($setup.authority_statement) { [string]$setup.authority_statement } else { "The source Site emits this handoff and must not write into the target root. Target-local mutation belongs to a bound target principal or explicit admitted setup path." }
@@ -678,7 +678,7 @@ $handoffPath = Resolve-NaradaRelativePath -Root $UserSiteRoot -Path $handoffRela
 $handoff = [pscustomobject][ordered]@{
     schema = "narada.site_target.setup_handoff.v0"
     generated_at = (Get-Date).ToUniversalTime().ToString("o")
-    source_site_id = if ($declaration.source_site_id) { [string]$declaration.source_site_id } else { "narada-andrey" }
+    source_site_id = if ($declaration.source_site_id) { [string]$declaration.source_site_id } else { "andrey-user" }
     target_site_id = [string]$declaration.site_id
     target_root = [string]$declaration.target_root
     declaration_path = $relativeDeclarationPath
@@ -788,11 +788,11 @@ if ($Execute -and $AdmitTarget -and $errors.Count -eq 0) {
             schema = "narada.site_target.materialization_admission.v0"
             materialized_at = (Get-Date).ToUniversalTime().ToString("o")
             status = "operator_authorized_source_site_materialization"
-            source_site_id = if ($declaration.source_site_id) { [string]$declaration.source_site_id } else { "narada-andrey" }
+            source_site_id = if ($declaration.source_site_id) { [string]$declaration.source_site_id } else { "andrey-user" }
             target_site_id = [string]$declaration.site_id
             target_root = $targetRoot
             authority_basis = "operator_explicit_execute_and_admit_target_flags"
-            write_principal = "narada-andrey.site_builder"
+            write_principal = "andrey-user.site_builder"
             source_site_write_to_target_root = $true
             declaration_path = $relativeDeclarationPath
             source_handoff_path = Get-NaradaRelativePath -Root $UserSiteRoot -Path $handoffPath

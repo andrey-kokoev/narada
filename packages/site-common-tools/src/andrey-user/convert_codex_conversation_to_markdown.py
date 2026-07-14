@@ -8,8 +8,8 @@ framework changes.
 
 Usage:
     python convert_codex_conversation_to_markdown.py \
-        ./narada-andrey.architect.conv-only.jsonl \
-        ./.ai/chapters/20260425-narada-andrey-architect-evolution.md
+        ./andrey-user.architect.conv-only.jsonl \
+        ./.ai/chapters/20260425-andrey-user-architect-evolution.md
 """
 import argparse
 import json
@@ -131,7 +131,7 @@ def convert(input_path: str, output_path: str) -> None:
     lines.append("")
     lines.append(
         "This chapter captures the high-level conceptual evolution of the "
-        "`narada-andrey.architect` session. It preserves the meta-architecture "
+        "`andrey-user.architect` session. It preserves the meta-architecture "
         "of decisions, intent shifts, and design trajectories — not implementation "
         "details."
     )
