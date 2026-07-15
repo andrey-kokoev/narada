@@ -93,7 +93,7 @@ test('NARS client projection contract owns attach commands and web UI capabiliti
     agent_cli: 'narada-agent-cli --attach ws://127.0.0.1/events',
     agent_tui: 'agent-tui --attach ws://127.0.0.1/events',
     agent_web_ui: 'narada-agent-web-ui --event-endpoint ws://127.0.0.1/events --health-endpoint http://127.0.0.1/health',
-    protocol: '{"id":"events-1","method":"session.events.subscribe","params":{"include_replay":true,"max_replay":20}}',
+    protocol: '{"id":"events-1","method":"session.events.subscribe","params":{"include_replay":true,"page_size":20}}',
     operator_input_protocol: '{"id":"input-1","method":"session.submit","params":{"content":"<operator message>","source":"manual_operator"}}',
     queued_operator_input_protocol: '{"id":"input-2","method":"session.submit","params":{"content":"<operator message>","source":"operator_steering","delivery_mode":"admit_after_active_turn"}}',
     slash_command_protocol: '{"id":"command-1","method":"session.command.execute","params":{"command":"/status","value":""}}',
@@ -104,7 +104,10 @@ test('NARS client projection contract owns attach commands and web UI capabiliti
 });
 
 test('NARS client projection contract builds the direct runtime intelligence control frame', () => {
-  assert.deepEqual(buildAgentWebUiIntelligenceReconfigureFrame({ model: 'next-model' }, { id: 'ui-reconfigure-1' }), {
+  const frame = buildAgentWebUiIntelligenceReconfigureFrame({ model: 'next-model' }, { id: 'ui-reconfigure-1' });
+  assert.equal(isAgentWebUiNarsMethod(frame?.method), true);
+  assert.equal(isAgentWebUiCloudflareProtocolFrame(frame), false);
+  assert.deepEqual(frame, {
     id: 'ui-reconfigure-1',
     method: 'runtime.intelligence.reconfigure',
     params: { request_id: 'ui-reconfigure-1', model: 'next-model' },
@@ -315,12 +318,21 @@ test('NARS client projection contract owns web UI operator input projection', ()
   assert.deepEqual(buildAgentWebUiSubscribeFrame({ id: 'events-1', maxReplay: 20, includeReplay: true }), {
     id: 'events-1',
     method: 'session.events.subscribe',
-    params: { include_replay: true, max_replay: 20 },
+    params: { include_replay: true, page_size: 20 },
   });
   assert.deepEqual(buildAgentWebUiEventsReadFrame({ id: 'events-read-1', beforeSequence: 50, direction: 'backward', limit: 25 }), {
     id: 'events-read-1',
     method: 'session.events.read',
     params: { limit: 25, before_sequence: 50, direction: 'backward' },
+  });
+  assert.deepEqual(buildAgentWebUiSubscribeFrame({ id: 'conversation-events-1', pageSize: 20, view: 'conversation' }).params, {
+    include_replay: true,
+    page_size: 20,
+    view: 'conversation',
+  });
+  assert.deepEqual(buildAgentWebUiEventsReadFrame({ id: 'operations-events-1', limit: 25, view: 'operations' }).params, {
+    limit: 25,
+    view: 'operations',
   });
   assert.deepEqual(buildAgentWebUiSopSummaryFrame({ id: 'sop-1', templateLimit: 10, runLimit: 5, includeTerminal: false }), {
     id: 'sop-1',
@@ -735,7 +747,8 @@ test('NARS client projection verbosity filters shared event classes', () => {
   assert.equal(shouldProjectNarsClientEvent(routineHealth, { verbosity: 'diagnostics' }), false);
   assert.equal(shouldProjectNarsClientEvent(routineHealth, { verbosity: 'raw' }), false);
   assert.equal(shouldProjectNarsClientEvent(routineHealth, { verbosity: 'raw', includeStateSamples: true }), true);
-  assert.equal(shouldProjectNarsClientEvent(unhealthy, { verbosity: 'operations' }), true);
+  assert.equal(classifyNarsClientEventProjection(projectNarsClientEvent(unhealthy)), 'diagnostics');
+  assert.equal(shouldProjectNarsClientEvent(unhealthy, { verbosity: 'operations' }), false);
   assert.equal(shouldProjectNarsClientEvent(unhealthy, { verbosity: 'diagnostics' }), true);
   assert.equal(shouldProjectNarsClientEvent({ event: 'authority_target_active' }, { verbosity: 'operations' }), true);
   assert.equal(shouldProjectNarsClientEvent({ event: 'authority_source_write_refused' }, { verbosity: 'conversation' }), false);

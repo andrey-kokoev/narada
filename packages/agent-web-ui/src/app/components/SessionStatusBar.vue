@@ -131,18 +131,27 @@ const modelActionId = computed(() => setModelAction.value?.id ?? 'set_model');
 const thinkingActionId = computed(() => setThinkingAction.value?.id ?? 'set_thinking');
 const providerChoices = computed(() => {
   const choices = objectField(objectField(setProviderAction.value?.raw, 'args'), 'provider')?.choices;
-  const values = Array.isArray(choices) ? choices.filter((choice): choice is string => typeof choice === 'string' && choice.length > 0) : [];
+  const values = [
+    ...(Array.isArray(choices) ? choices : []),
+    ...props.intelligence.providerChoices,
+  ].filter((choice): choice is string => typeof choice === 'string' && choice.length > 0);
   const current = props.intelligence.provider;
   return [...new Set([current, ...values].filter((value): value is string => typeof value === 'string' && value.length > 0))];
 });
 const thinkingChoices = computed(() => {
   const choices = objectField(objectField(setThinkingAction.value?.raw, 'args'), 'thinking')?.choices;
-  const values = Array.isArray(choices) ? choices.filter((choice): choice is string => typeof choice === 'string' && choice.length > 0) : [];
+  const values = [
+    ...(Array.isArray(choices) ? choices : []),
+    ...props.intelligence.thinkingChoices,
+  ].filter((choice): choice is string => typeof choice === 'string' && choice.length > 0);
   return values.length ? values : ['none', 'low', 'medium', 'high', 'xhigh'];
 });
 const modelChoices = computed(() => {
   const choices = objectField(objectField(setModelAction.value?.raw, 'args'), 'model')?.choices;
-  const values = Array.isArray(choices) ? choices.filter((choice): choice is string => typeof choice === 'string' && choice.length > 0) : [];
+  const values = [
+    ...(Array.isArray(choices) ? choices : []),
+    ...props.intelligence.modelChoices,
+  ].filter((choice): choice is string => typeof choice === 'string' && choice.length > 0);
   const current = props.intelligence.model;
   return [...new Set([current, ...values].filter((value): value is string => typeof value === 'string' && value.length > 0))];
 });
@@ -323,7 +332,7 @@ function stringField(record: Record<string, unknown>, field: string): string | n
 
       <Tooltip v-if="isStatusBoxVisible('view')">
         <TooltipTrigger as-child>
-          <div>
+          <div class="view-status-box">
             <label class="label" for="projection-verbosity">View</label>
             <ProjectionVerbositySelect :model-value="verbosity" :levels="verbosityLevels" @update:model-value="emit('update:verbosity', $event)" />
             <span v-if="summarizedStateSampleCount && (verbosity === 'diagnostics' || verbosity === 'raw')" class="retention-note">{{ summarizedStateSampleCount }} routine status update{{ summarizedStateSampleCount === 1 ? '' : 's' }} folded into State</span>

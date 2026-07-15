@@ -31,6 +31,45 @@ test('runtime session binding delegates session state to session core and turns 
   assert.equal(binding.health().lifecycle_state, 'closed');
 });
 
+test('JSONL runtime acknowledges a submit before its provider turn settles', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'session-core-early-ack-'));
+  const input = new PassThrough();
+  const output = new PassThrough();
+  let rendered = '';
+  let resolveAccepted;
+  const accepted = new Promise((resolve) => { resolveAccepted = resolve; });
+  let buffer = '';
+  output.on('data', (chunk) => {
+    rendered += String(chunk);
+    buffer += String(chunk);
+    const lines = buffer.split(/\r?\n/);
+    buffer = lines.pop() ?? '';
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      const event = JSON.parse(line);
+      if (event.event === 'session_control_accepted' && event.request_id === 'turn-early') resolveAccepted(event);
+    }
+  });
+  let releaseProvider;
+  const providerResult = new Promise((resolve) => { releaseProvider = resolve; });
+  const service = createSessionCoreRuntimeService({
+    runtimeContext: { identity: 'agent-1', session: 'early-ack-1', sessionPath: join(root, 'session.json'), eventsPath: join(root, 'events.jsonl'), siteRoot: root },
+    callChatApiFn: async () => providerResult,
+    toolGateway: { toolCatalog: () => [], operationalState: () => 'healthy' },
+  });
+  const run = service.run({ input, output });
+  input.write(`${JSON.stringify({ id: 'turn-early', method: 'session.submit', params: { content: 'slow' } })}\n`);
+  const acceptedEvent = await Promise.race([
+    accepted,
+    new Promise((_, reject) => setTimeout(() => reject(new Error('session_control_accepted_timeout')), 1000)),
+  ]);
+  assert.equal(acceptedEvent.acceptance_state, 'accepted');
+  releaseProvider({ content: 'done' });
+  input.end(`${JSON.stringify({ id: 'close-early', method: 'session.close' })}\n`);
+  await run;
+  assert.match(rendered, /session_control_response/);
+});
+
 test('session cancel aborts an active provider turn while close waits for settlement', async () => {
   const root = mkdtempSync(join(tmpdir(), 'session-core-cancel-'));
   const input = new PassThrough(); const output = new PassThrough(); let rendered = '';
@@ -74,6 +113,7 @@ test('session-core runtime service rejects non-session controls and retains the 
   await run;
   const events = rendered.trim().split('\n').map((line) => JSON.parse(line));
   assert.ok(events.some((event) => event.event === 'session_health' && event.request_id === 'health-1'));
+  assert.ok(events.some((event) => event.event === 'session_control_accepted' && event.request_id === 'turn-1' && event.acceptance_state === 'accepted'));
   assert.ok(events.some((event) => event.event === 'carrier_turn_completed'));
   assert.ok(events.some((event) => event.event === 'session_control_rejected' && event.request_id === 'bad-1'));
   assert.ok(events.some((event) => event.lifecycle_state === 'closed'));

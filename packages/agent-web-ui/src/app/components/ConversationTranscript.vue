@@ -10,8 +10,10 @@ const props = defineProps<{
   verbosity: ProjectionVerbosity;
   agentActivity: AgentActivityState;
   followLatestRevision: number;
+  hasEarlierEvents: boolean;
+  loadingEarlier: boolean;
 }>();
-const emit = defineEmits<{ 'intent-selected': [intent: string] }>();
+const emit = defineEmits<{ 'intent-selected': [intent: string]; 'load-earlier': [] }>();
 
 type ScrollAuthority = 'auto_follow' | 'operator_controlled' | 'force_follow_once';
 
@@ -23,6 +25,7 @@ const renderedRowRevision = computed(() => [
   agentActivityRevision(),
 ].filter(Boolean).join('|'));
 let scrollSettleTimer: number | null = null;
+let prependAnchor: { scrollHeight: number; scrollTop: number } | null = null;
 
 function summaryLength(summary: unknown): number {
   if (typeof summary === 'string') return summary.length;
@@ -77,6 +80,14 @@ function forceScrollToBottom() {
   scheduleScrollToBottom('force_follow_once');
 }
 
+function requestLoadEarlier() {
+  const element = scroller.value;
+  prependAnchor = element
+    ? { scrollHeight: element.scrollHeight, scrollTop: element.scrollTop }
+    : null;
+  emit('load-earlier');
+}
+
 function isAtBottom(element: HTMLElement) {
   return element.scrollHeight - element.scrollTop - element.clientHeight <= 96;
 }
@@ -99,10 +110,33 @@ watch(renderedRowRevision, () => {
 watch(() => props.followLatestRevision, () => {
   forceScrollToBottom();
 }, { flush: 'post' });
+
+watch(() => props.loadingEarlier, (loading, wasLoading) => {
+  if (loading || !wasLoading || !prependAnchor) return;
+  const anchor = prependAnchor;
+  prependAnchor = null;
+  nextTick(() => {
+    const element = scroller.value;
+    if (!element) return;
+    element.scrollTop = anchor.scrollTop + (element.scrollHeight - anchor.scrollHeight);
+    updateScrollState();
+  });
+}, { flush: 'post' });
 </script>
 
 <template>
   <div ref="scroller" class="events-scroll" @scroll="updateScrollState">
+    <div class="history-actions" aria-live="polite">
+      <button
+        v-if="hasEarlierEvents"
+        type="button"
+        class="load-earlier-button"
+        :disabled="loadingEarlier"
+        @click="requestLoadEarlier"
+      >
+        {{ loadingEarlier ? 'Loading earlier events…' : 'Load earlier events' }}
+      </button>
+    </div>
     <ol id="events" class="events narada-list-reset" aria-label="NARS session events">
       <EventRow v-for="row in rows" :key="row.key" :row="row" :verbosity="verbosity" @intent-selected="emit('intent-selected', $event)" />
       <li

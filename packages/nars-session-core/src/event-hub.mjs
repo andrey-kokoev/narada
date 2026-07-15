@@ -33,18 +33,8 @@ export function createNarsEventHub({ maxBuffer = 1000 } = {}) {
       while (buffer.length > maxBuffer) buffer.shift();
       for (const [subscriptionId, subscriber] of subscribers.entries()) {
         if (!eventMatchesNarsFilters(sequencedEvent, subscriber.filters)) continue;
-        try {
-          subscriber.send({
-            schema: 'narada.nars.events.envelope.v1',
-            event: 'session_event',
-            subscription_id: subscriptionId,
-            cursor: { sequence: assignedSequence, next_sequence: assignedSequence + 1 },
-            payload: sequencedEvent,
-          });
-        } catch {
-          subscriber.fail({ reason: 'subscriber_send_failed' });
-          subscribers.delete(subscriptionId);
-        }
+        if (subscriber.lifecycle.state === 'replaying') subscriber.pending.push(sequencedEvent);
+        else subscriber.deliver(sequencedEvent, assignedSequence);
       }
       return sequencedEvent;
     },
@@ -65,7 +55,22 @@ export function createNarsEventHub({ maxBuffer = 1000 } = {}) {
         filters,
         send,
         lifecycle,
+        pending: [],
         fail,
+        deliver(event, assignedSequence) {
+          try {
+            send({
+              schema: 'narada.nars.events.envelope.v1',
+              event: 'session_event',
+              subscription_id: subscriptionId,
+              cursor: { sequence: assignedSequence, next_sequence: assignedSequence + 1 },
+              payload: event,
+            });
+          } catch {
+            fail({ reason: 'subscriber_send_failed' });
+            subscribers.delete(subscriptionId);
+          }
+        },
       };
       subscribers.set(subscriptionId, subscription);
       return {
@@ -73,7 +78,16 @@ export function createNarsEventHub({ maxBuffer = 1000 } = {}) {
         get state() { return lifecycle.state; },
         get stateHistory() { return lifecycle.history; },
         beginReplay: (evidence = {}) => lifecycle.transition('replaying', evidence),
-        markLive: (evidence = {}) => lifecycle.transition('live', evidence),
+        markLive: (evidence = {}) => {
+          lifecycle.transition('live', evidence);
+          const replayLastSequence = Number(evidence.replay_last_sequence);
+          const pending = subscription.pending.splice(0);
+          for (const event of pending) {
+            const sequence = Number(event.event_sequence ?? event.sequence ?? 0);
+            if (Number.isFinite(replayLastSequence) && sequence <= replayLastSequence) continue;
+            subscription.deliver(event, sequence);
+          }
+        },
         fail,
         unsubscribe: remove,
       };

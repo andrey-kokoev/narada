@@ -1,7 +1,9 @@
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { runGovernedCommandSync, spawnHiddenPostureProcess, startOperatorTerminal } from '@narada2/process-launch-posture';
-import type { CommandExecutionResult } from './launcher-contracts.js';
+import type { AgentStartExecutionResult, CommandExecutionResult } from './launcher-contracts.js';
+
+export const DEFAULT_AGENT_START_HANDOFF_TIMEOUT_MS = 30_000;
 
 export function isAccessDeniedMessage(message: string): boolean {
   return /\b(access denied|unauthorized|permission denied|requires elevation)\b/i.test(message);
@@ -65,8 +67,8 @@ export function runProcessDetachedUntilJson(
   cwd: string,
   resultPath: string,
   env: Record<string, string> = {},
-  timeoutMs = 30_000,
-): CommandExecutionResult {
+  timeoutMs = DEFAULT_AGENT_START_HANDOFF_TIMEOUT_MS,
+): AgentStartExecutionResult {
   const logDir = dirname(resultPath);
   mkdirSync(logDir, { recursive: true });
   const stdoutPath = join(logDir, 'detached-stdout.log');
@@ -119,11 +121,11 @@ export function runProcessDetachedUntilJson(
   }
   const stderrTail = readTextTail(stderrPath, 2000);
   return {
-    status: 'failed',
-    exit_code: 1,
+    status: 'starting',
+    exit_code: 0,
     stdout: `detached_stdout=${stdoutPath}`,
-    stderr: `timed out waiting for agent-start JSON handoff: ${resultPath}\ndetached_stderr=${stderrPath}\n${stderrTail}`.trim(),
-    error: 'agent_start_handoff_timeout',
+    stderr: `agent-start handoff still pending after ${timeoutMs}ms: ${resultPath}\ndetached_stderr=${stderrPath}\n${stderrTail}`.trim(),
+    error: 'agent_start_handoff_pending',
   };
 }
 

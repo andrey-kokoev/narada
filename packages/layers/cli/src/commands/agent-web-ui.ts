@@ -133,9 +133,11 @@ function buildDiscoveryFailure(args: {
     detail: args.detail ?? null,
     retryable: args.retryable ?? false,
     attachment_lifecycle: args.attachmentLifecycle,
-    required_next_step: reason === 'session_discovery_failed'
-      ? 'Retry while the NARS runtime is starting; if it persists, inspect the session-index/runtime error detail.'
-      : 'Start the NARS runtime host for this agent, or pass --session <id> for an existing healthy session.',
+    required_next_step: reason === 'launch_binding_failed'
+      ? 'Inspect the launch binding/result diagnostic, fix the reported preflight failure, and start a fresh launch.'
+      : reason === 'session_discovery_failed'
+        ? 'Retry while the NARS runtime is starting; if it persists, inspect the session-index/runtime error detail.'
+        : 'Start the NARS runtime host for this agent, or pass --session <id> for an existing healthy session.',
   };
 }
 

@@ -93,11 +93,7 @@
 
 .header-box-row .box-row-items {
   align-items: center;
-  justify-content: flex-end;
-}
-
-.header-box-row .brand-lockup {
-  margin-right: auto;
+  justify-content: space-between;
 }
 
 .mcp-panel-shell {

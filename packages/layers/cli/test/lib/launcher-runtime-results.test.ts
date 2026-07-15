@@ -26,7 +26,41 @@ describe('launcher runtime result discovery', () => {
     }
   });
 
-  it('deletes invalid historical artifacts once and records a reconciliation receipt', () => {
+  it('recovers a pending receipt after deletion interrupted completion', () => {
+    const runtimeRoot = mkdtempSync(join(tmpdir(), 'launcher-runtime-root-'));
+    const launchResultsDir = join(runtimeRoot, 'agent-start-results');
+    const receiptDir = join(runtimeRoot, 'agent-start-reconciliation');
+    const pendingPath = join(receiptDir, 'v1.pending.json');
+    const deletedPath = join(launchResultsDir, 'interrupted.result.json');
+    try {
+      mkdirSync(launchResultsDir, { recursive: true });
+      mkdirSync(receiptDir, { recursive: true });
+      writeFileSync(pendingPath, JSON.stringify({
+        schema: 'narada.agent_start_result_reconciliation.v1',
+        status: 'pending',
+        version: 1,
+        launch_results_dir: launchResultsDir,
+        started_at: '2026-07-14T00:00:00.000Z',
+        deleted_artifacts: [{
+          path: deletedPath,
+          sha256: 'a'.repeat(64),
+          reason_code: 'agent_start_result_contract_invalid',
+          detail: 'legacy status',
+        }],
+      }), 'utf8');
+
+      const receipt = reconcileLaunchResults(launchResultsDir);
+      expect(receipt.status).toBe('completed');
+      expect(receipt.deleted_artifacts).toHaveLength(1);
+      expect(receipt.deleted_artifacts[0]?.path).toBe(deletedPath);
+      expect(receipt.deleted_artifacts[0]?.deleted_at).toEqual(expect.any(String));
+      expect(existsSync(pendingPath)).toBe(false);
+    } finally {
+      rmSync(runtimeRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('reconciles invalid historical artifacts and records late artifacts in the receipt', () => {
     const launchResultsDir = mkdtempSync(join(tmpdir(), 'launcher-runtime-results-'));
     const invalidPath = join(launchResultsDir, 'legacy.result.json');
     const validPath = join(launchResultsDir, 'current.result.json');
@@ -57,6 +91,16 @@ describe('launcher runtime result discovery', () => {
       const receiptPath = join(launchResultsDir, '..', 'agent-start-reconciliation', 'v1.json');
       expect(JSON.parse(readFileSync(receiptPath, 'utf8')).status).toBe('completed');
       expect(reconcileLaunchResults(launchResultsDir)).toEqual(first);
+
+      const lateInvalidPath = join(launchResultsDir, 'late-legacy.result.json');
+      writeFileSync(lateInvalidPath, JSON.stringify({
+        schema: 'narada.agent_start.result.v0',
+        status: 'launching',
+      }), 'utf8');
+      const second = reconcileLaunchResults(launchResultsDir);
+      expect(second.deleted_artifacts).toHaveLength(2);
+      expect(second.deleted_artifacts[1]?.path).toBe(lateInvalidPath);
+      expect(existsSync(lateInvalidPath)).toBe(false);
     } finally {
       rmSync(launchResultsDir, { recursive: true, force: true });
     }

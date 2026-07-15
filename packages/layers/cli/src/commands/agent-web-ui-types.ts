@@ -11,6 +11,7 @@ export interface AgentWebUiAttachOptions {
   host?: string;
   port?: number;
   dryRun?: boolean;
+  diagnose?: boolean;
   allowStaleSession?: boolean;
   inspectStaleSession?: boolean;
   healthTimeoutMs?: number;
@@ -47,7 +48,8 @@ export type AttachSessionDiscoveryReason =
   | 'nars_session_not_found_for_agent'
   | 'nars_session_ambiguous_for_agent'
   | 'session_discovery_failed'
-  | 'launch_binding_unresolved';
+  | 'launch_binding_unresolved'
+  | 'launch_binding_failed';
 
 export type ProgressReporter = (line: string) => void;
 

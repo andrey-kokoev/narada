@@ -3,6 +3,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnHiddenPostureProcess } from '@narada2/process-launch-posture';
 import { resolveNaradaSitePaths } from '@narada2/site-paths';
+import { deliverProjectionInputToNars } from './nars-session-input-client.js';
 import {
   buildProjectionRegistrationPlan,
   createBridgeState,
@@ -311,6 +312,39 @@ export async function startLocalProjectionBridgeOnce(args: {
     writeJson(registration.paths.bridge_state_path, state);
     return { status: 'degraded', reason: `health_${health}`, projection_id: args.projection_id, bridge_state: state, degraded_launch: projectionDegradedLaunchResult({ projection_id: args.projection_id, reason: `health_${health}`, local_nars_healthy: false, retry_after_ms: 10000 }) };
   }
+  let remoteInputDelivery: unknown = null;
+  if (args.cloudflare_api_base_url) {
+    try {
+      remoteInputDelivery = await deliverRemoteProjectionInputsOnce({
+        site_root: args.site_root,
+        projection_id: args.projection_id,
+        cloudflare_api_base_url: args.cloudflare_api_base_url,
+        max_inputs: 20,
+        fetch_impl: args.fetch_impl,
+        submit_nars_input: (input) => {
+          const eventEndpoint = typeof session.event_endpoint === 'string' ? session.event_endpoint : '';
+          if (!eventEndpoint) throw new Error('nars_session_event_endpoint_missing');
+          return deliverProjectionInputToNars({
+            event_endpoint: eventEndpoint,
+            session_id: String(session.session_id ?? registration.intent!.nars_session_id),
+            site_id: typeof session.site_id === 'string' ? session.site_id : registration.intent!.site_id,
+            projection_id: args.projection_id,
+            input_id: input.input_id,
+            method: input.method,
+            payload: input.payload ?? {},
+            authority_epoch: typeof session.authority_epoch === 'number' ? session.authority_epoch : null,
+            authority_runtime_id: typeof session.authority_runtime_id === 'string' ? session.authority_runtime_id : null,
+          });
+        },
+      });
+    } catch (error) {
+      remoteInputDelivery = {
+        status: 'refused',
+        reason: 'remote_input_delivery_failed',
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
   const previous = registration.bridge_state ?? createBridgeState({
     projection_id: registration.intent.projection_id,
     site_id: registration.intent.site_id,
@@ -376,7 +410,7 @@ export async function startLocalProjectionBridgeOnce(args: {
     artifact_content_status: artifactProjection.content_status,
   }, now);
   writeJson(registration.paths.bridge_state_path, state);
-  return { status: 'connected', projection_id: args.projection_id, bridge_state: state, backfill, projected_event_count: projected.length, projected_artifact_metadata_count: artifactProjection.metadata.length, projected_artifact_content_count: artifactProjection.content.length, projected_events_path: registration.paths.projected_events_path, projected_artifact_metadata_path: registration.paths.projected_artifact_metadata_path, projected_artifact_content_path: registration.paths.projected_artifact_content_path };
+  return { status: 'connected', projection_id: args.projection_id, bridge_state: state, remote_input_delivery: remoteInputDelivery, backfill, projected_event_count: projected.length, projected_artifact_metadata_count: artifactProjection.metadata.length, projected_artifact_content_count: artifactProjection.content.length, projected_events_path: registration.paths.projected_events_path, projected_artifact_metadata_path: registration.paths.projected_artifact_metadata_path, projected_artifact_content_path: registration.paths.projected_artifact_content_path };
 }
 
 function createCloudflareRemoteProjectionPublishers(args: {

@@ -329,6 +329,25 @@ Both workspace-style roots such as `D:/code/narada.sonar` and embedded `.narada`
 
 The selector should prefer active sessions, then recently closed sessions useful for recovery. It should show Site, agent id, role, started time, liveness state, and launch surface.
 
+## Event Views And Paging
+
+The NARS event journal is one durable ordered stream, but clients read semantic views of that stream. The canonical views are:
+
+| View | Membership |
+| --- | --- |
+| `conversation` | Operator and agent conversation facts. |
+| `operations` | Conversation facts plus tool and runtime operation facts. |
+| `diagnostics` | Health, transport, decode, and other diagnostic signals. |
+| `raw` | Every durable event. |
+
+View membership is decided by NARS or the projection service before the page limit is applied. A `limit=100` conversation page therefore means up to 100 conversation events, not the newest 100 raw events with diagnostics consuming the budget. This ordering is a correctness invariant for bounded replay.
+
+`session.events.subscribe` uses `view` and canonical `page_size`; `max_replay` remains an input compatibility alias for older clients. `session.events.read` uses the same `view` and cursor parameters (`before_sequence`, `direction`, and `limit`). Responses carry the resolved view, page count, `has_more`, and cursor information so a client can request earlier pages without guessing from local state.
+
+Live subscribers are registered before replay. Events published while replay is in progress are queued for that subscription and released after replay, in sequence order, without being lost or duplicated. Local NARS WebSocket transport and Cloudflare projection transport apply the same view contract to initial replay, backward paging, and live fanout.
+
+Agent Web UI keeps the active view as a browser projection choice, requests that view from the transport, and exposes a bounded `Load earlier events` action. Prepending an earlier page preserves the operator's visible scroll anchor; it must not jump the transcript or insert a layout-shifting loading row.
+
 ## Implementation Slices
 
 1. Keep the NARS session-index helper in `@narada2/nars-session-core/src/session-index.mjs`, writing `session-index-record.json` from the `session_started` payload.

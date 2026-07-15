@@ -6,7 +6,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import { buildLauncherContractsFromAgentStartResult } from '../src/launch-result-contracts.ts';
-import { writeLaunchResultFile } from '../src/carrier-launch-artifacts.ts';
+import { writeJsonFileAtomically, writeLaunchResultFile } from '../src/carrier-launch-artifacts.ts';
 import {
   AgentStartResultV0Schema,
   assertAgentStartResultV0,
@@ -142,6 +142,25 @@ test('publishes only validated launch results through an atomic final path', () 
       nars_launch: { runtime_session_id: 'runtime_other' },
     }, { siteRoot }), /agent_start_result_handoff_invalid/);
     assert.deepEqual(readdirSync(resultDir), ['evt_atomic.result.json']);
+  } finally {
+    rmSync(siteRoot, { recursive: true, force: true });
+  }
+});
+
+test('publishes command result JSON through an atomic replacement', () => {
+  const siteRoot = mkdtempSync('narada-json-output-');
+  const resultPath = join(siteRoot, 'result.json');
+  try {
+    writeJsonFileAtomically(resultPath, { status: 'materialized', handoff: { session_ref: { id: 'runtime_json' } } });
+    assert.deepEqual(JSON.parse(readFileSync(resultPath, 'utf8')), {
+      status: 'materialized',
+      handoff: { session_ref: { id: 'runtime_json' } },
+    });
+    assert.deepEqual(readdirSync(siteRoot), ['result.json']);
+
+    writeJsonFileAtomically(resultPath, { status: 'materialized', handoff: { session_ref: { id: 'runtime_replaced' } } });
+    assert.equal(JSON.parse(readFileSync(resultPath, 'utf8')).handoff.session_ref.id, 'runtime_replaced');
+    assert.deepEqual(readdirSync(siteRoot), ['result.json']);
   } finally {
     rmSync(siteRoot, { recursive: true, force: true });
   }

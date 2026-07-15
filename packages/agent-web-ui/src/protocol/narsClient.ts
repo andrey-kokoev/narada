@@ -1,4 +1,4 @@
-import { buildAgentWebUiEventsReadFrame, isAgentWebUiCloudflareProtocolFrame } from '@narada2/nars-client-projection-contract';
+import { buildAgentWebUiEventsReadFrame, isAgentWebUiCloudflareProtocolFrame, isAgentWebUiNarsMethod, normalizeNarsClientProjectionVerbosity } from '@narada2/nars-client-projection-contract';
 import { toSessionProtocolFrame, type SessionProtocolFrame, type SessionTransport } from './sessionTransport';
 import { startCloudflareSessionTransport } from './cloudflareSessionTransport';
 import { startLocalSessionTransport } from './localSessionTransport';
@@ -10,6 +10,7 @@ export interface NarsClientOptions {
   inputEndpoint?: string | null;
   browserToken?: string | null;
   maxReplay?: number;
+  view?: string;
   WebSocketCtor?: typeof WebSocket;
   fetchFn?: typeof fetch;
   timers?: Pick<typeof globalThis, 'setTimeout' | 'clearTimeout'>;
@@ -24,6 +25,7 @@ export function createNarsClient(options: NarsClientOptions): NarsClientConnecti
   const WebSocketCtor = options.WebSocketCtor ?? globalThis.WebSocket;
   const setTimeoutFn = options.timers?.setTimeout ?? globalThis.setTimeout;
   const clearTimeoutFn = options.timers?.clearTimeout ?? globalThis.clearTimeout;
+  const isCloudflareTransport = /^https?:/i.test(options.endpoint ?? '');
   const state = {
     socket: null as WebSocket | null,
     lifecycle: createNarsTransportLifecycle(Boolean(options.endpoint)),
@@ -33,6 +35,8 @@ export function createNarsClient(options: NarsClientOptions): NarsClientConnecti
     remotePageTimer: null as ReturnType<typeof setTimeout> | null,
     reconcileTimer: null as ReturnType<typeof setTimeout> | null,
     socketGeneration: 0,
+    view: normalizeNarsClientProjectionVerbosity(options.view ?? 'conversation'),
+    subscribeView: undefined as ((view: string) => boolean) | undefined,
   };
   const connection: NarsClientConnection = {
     kind: /^https?:/i.test(options.endpoint ?? '') ? 'cloudflare-projection' : 'local-websocket',
@@ -40,6 +44,10 @@ export function createNarsClient(options: NarsClientOptions): NarsClientConnecti
     get lifecycle() { return state.lifecycle; },
     get activeTurnId() { return state.activeTurnId; },
     get lastSequence() { return state.lastSequence; },
+    subscribeView(view) {
+      state.view = normalizeNarsClientProjectionVerbosity(view);
+      return state.subscribeView?.(state.view) ?? false;
+    },
     getSocket() { return state.socket; },
     requestHealth(fetchFn = globalThis.fetch) {
       if (!options.healthEndpoint) return null;
@@ -51,7 +59,10 @@ export function createNarsClient(options: NarsClientOptions): NarsClientConnecti
     },
     sendFrame(frame: SessionProtocolFrame) {
       const admittedFrame = toSessionProtocolFrame(frame);
-      if (!admittedFrame || !isAgentWebUiCloudflareProtocolFrame(admittedFrame)) throw new Error('unsupported_agent_web_ui_protocol_frame');
+      const admittedByTransport = isCloudflareTransport
+        ? isAgentWebUiCloudflareProtocolFrame(admittedFrame)
+        : Boolean(admittedFrame && isAgentWebUiNarsMethod(admittedFrame.method));
+      if (!admittedFrame || !admittedByTransport) throw new Error('unsupported_agent_web_ui_protocol_frame');
       const socket = state.socket;
       const openState = WebSocketCtor.OPEN ?? 1;
       if (!socket || socket.readyState !== openState) return false;

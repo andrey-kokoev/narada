@@ -17,6 +17,13 @@ import {
   workspaceLaunchSmokeCommandSpec,
 } from './workspace-launch-command-spec.js';
 import { unique } from './workspace-launch-support.js';
+import {
+  workspaceLaunchPowerShellCommand,
+  workspaceLaunchPowerShellHostMessage,
+  workspaceLaunchRuntimeHandoffCommand,
+  workspaceLaunchTerminalArgs,
+  type WorkspaceLaunchTerminalTab,
+} from './workspace-launch-terminal.js';
 
 function normalizeMcpScope(value: string | undefined): string {
   const normalized = String(value ?? 'all').trim().toLowerCase();
@@ -98,25 +105,22 @@ export function buildAgentPlan(record: WorkspaceLaunchRecord, options: Workspace
     ? 'hidden_detached'
     : 'operator_terminal';
 
-  const base = [
-    'new-tab',
-    '--title', `${qualifiedAgentId} runtime`,
-    '-d', runtimeStartCwd,
-    'pwsh',
-    waitForEnter ? '-NoExit' : '-NoProfile',
-    '-Command',
-    toPowerShellCommand(operatorSurfaceStartCommand),
-  ];
-  const wtArgs = [...base];
+  const terminalTabs: WorkspaceLaunchTerminalTab[] = [{
+    title: `${qualifiedAgentId} runtime`,
+    cwd: runtimeStartCwd,
+    keepOpen: waitForEnter,
+    command: workspaceLaunchRuntimeHandoffCommand(operatorSurfaceStartCommand, qualifiedAgentId, waitForEnter),
+  }];
   if (launchOperatorSurface === 'agent-web-ui') {
-    wtArgs.push(';', ...agentWebUiAttachWtArgs(record, naradaProper, cloudflareApiBaseUrl, launchBindingPath, onboarding));
+    terminalTabs.push(agentWebUiAttachTerminalTab(record, naradaProper, cloudflareApiBaseUrl, launchBindingPath, onboarding));
   }
   for (const extraOperatorSurface of launchOperatorSurfaces.filter((surface) => surface !== launchOperatorSurface)) {
     if (extraOperatorSurface !== 'agent-web-ui') {
       throw new Error(`unsupported_multi_operator_surface_projection: ${extraOperatorSurface}`);
     }
-    wtArgs.push(';', ...agentWebUiAttachWtArgs(record, naradaProper, cloudflareApiBaseUrl, launchBindingPath, onboarding));
+    terminalTabs.push(agentWebUiAttachTerminalTab(record, naradaProper, cloudflareApiBaseUrl, launchBindingPath, onboarding));
   }
+  const wtArgs = workspaceLaunchTerminalArgs(terminalTabs);
 
   const smokeCommand = workspaceLaunchCommandArgv(workspaceLaunchSmokeCommandSpec(workspaceLaunchRuntimeCommandSpec({
     ...runtimeCommandOptions,
@@ -195,7 +199,7 @@ function workspaceLaunchQualifiedAgentId(record: WorkspaceLaunchRecord): string 
   return record.agent.includes('.') || !siteId ? record.agent : `${siteId}.${localAgentId}`;
 }
 
-function agentWebUiAttachWtArgs(record: WorkspaceLaunchRecord, naradaProper: string, cloudflareApiBaseUrl: string | null, launchBindingPath: string | null, onboarding: boolean): string[] {
+function agentWebUiAttachTerminalTab(record: WorkspaceLaunchRecord, naradaProper: string, cloudflareApiBaseUrl: string | null, launchBindingPath: string | null, onboarding: boolean): WorkspaceLaunchTerminalTab {
   const agentDisplay = workspaceLaunchQualifiedAgentId(record);
   const attachCommand = [
     'pnpm',
@@ -211,16 +215,12 @@ function agentWebUiAttachWtArgs(record: WorkspaceLaunchRecord, naradaProper: str
   ];
   if (onboarding) attachCommand.push('--onboarding');
   if (cloudflareApiBaseUrl) attachCommand.push('--cloudflare-api-base-url', cloudflareApiBaseUrl);
-  const prelude = `Write-Host ${quotePowerShellArgument(`agent-web-ui: waiting for ${agentDisplay} launch binding, then starting browser projection`)}`;
-  return [
-    'new-tab',
-    '--title', `${agentDisplay} web ui`,
-    '-d', record.workspace_root ?? record.narada_root,
-    'pwsh',
-    '-NoExit',
-    '-Command',
-    `${prelude}\n${toPowerShellCommand(attachCommand)}`,
-  ];
+  return {
+    title: `${agentDisplay} web ui`,
+    cwd: record.workspace_root ?? record.narada_root,
+    keepOpen: true,
+    command: `${workspaceLaunchPowerShellHostMessage(`agent-web-ui: waiting for ${agentDisplay} launch binding, then starting browser projection`)}\n${workspaceLaunchPowerShellCommand(attachCommand)}`,
+  };
 }
 
 function plannedAgentWebUiProjectionOpenRequest(record: WorkspaceLaunchRecord): WorkspaceLaunchOperatorProjectionOpenRequest {
@@ -242,14 +242,6 @@ function plannedAgentWebUiProjectionOpenRequest(record: WorkspaceLaunchRecord): 
 
 function nonEmpty(value: unknown): string | null {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
-}
-
-function toPowerShellCommand(args: string[]): string {
-  return `& ${args.map(quotePowerShellArgument).join(' ')}`;
-}
-
-function quotePowerShellArgument(value: string): string {
-  return `'${value.replace(/'/g, "''")}'`;
 }
 
 function quoteShArgument(value: string): string {

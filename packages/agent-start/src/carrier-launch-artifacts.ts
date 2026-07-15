@@ -26,6 +26,17 @@ export function newCarrierSessionId() {
   return `carrier_${new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14)}_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
 }
 
+export function writeJsonFileAtomically(path, value) {
+  mkdirSync(dirname(path), { recursive: true });
+  const temporaryPath = `${path}.${process.pid}.${randomUUID()}.tmp`;
+  try {
+    writeFileSync(temporaryPath, `${JSON.stringify(value, null, 2)}\n`, { encoding: 'utf8', flag: 'wx' });
+    renameSync(temporaryPath, path);
+  } finally {
+    if (existsSync(temporaryPath)) rmSync(temporaryPath, { force: true });
+  }
+}
+
 export function materializeCarrierLaunchFiles({
   siteRoot,
   sessionId,
@@ -179,12 +190,6 @@ export function writeLaunchResultFile(result, { siteRoot }) {
       );
     }
   }
-  const temporaryPath = `${path}.${process.pid}.${randomUUID()}.tmp`;
-  try {
-    writeFileSync(temporaryPath, `${JSON.stringify(result, null, 2)}\n`, { encoding: 'utf8', flag: 'wx' });
-    renameSync(temporaryPath, path);
-  } finally {
-    if (existsSync(temporaryPath)) rmSync(temporaryPath, { force: true });
-  }
+  writeJsonFileAtomically(path, result);
   return path;
 }

@@ -28,6 +28,19 @@ test('session core owns journal sequencing, queue persistence, artifacts, health
     const queue = core.createQueue({ drain: async () => ({ terminal_state: 'completed' }) });
     await queue.enqueue({ source: 'programmatic_operator', content: 'queued' });
     assert.equal(core.recoverySnapshot().operator_input_queue.pending_count, 1);
+    const acceptedOperatorMessage = readFileSync(eventsPath, 'utf8')
+      .trim()
+      .split(/\r?\n/)
+      .map((line) => JSON.parse(line))
+      .find((event) => event.event === 'user_message');
+    assert.deepEqual(
+      {
+        content: acceptedOperatorMessage?.content,
+        input_id: acceptedOperatorMessage?.input_id,
+        source_kind: acceptedOperatorMessage?.source_kind,
+      },
+      { content: 'queued', input_id: acceptedOperatorMessage?.input_id, source_kind: 'operator' },
+    );
 
     const artifact = core.registerArtifact({ sourcePath: artifactPath, kind: 'text', title: 'Briefing' });
     assert.equal(artifact.public_record.source_path, undefined);
@@ -38,7 +51,7 @@ test('session core owns journal sequencing, queue persistence, artifacts, health
     assert.equal(core.lifecycleState, 'closed');
     assert.throws(() => core.appendEvent({ event: 'late_event' }), /nars_session_closed/);
     const persisted = readFileSync(eventsPath, 'utf8').trim().split(/\r?\n/).map((line) => JSON.parse(line));
-    assert.deepEqual(persisted.map((event) => event.event_sequence), [1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    assert.deepEqual(persisted.map((event) => event.event_sequence), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
     const artifactEvent = persisted.find((event) => event.event === 'session_artifact_registered');
     assert.deepEqual(artifactEvent?.artifact, artifact.public_record);
     assert.equal(core.recoverySnapshot().artifacts.artifacts.length, 1);
@@ -157,9 +170,9 @@ test('recreated session core preserves queued input and continues durable event 
     await queue.enqueue({ content: 'resume me' });
     const second = createNarsSessionCore({ sessionId: 'recover-1', sessionPath, eventsPath, siteRoot: root });
     assert.equal(second.recoverySnapshot().operator_input_queue.pending_count, 1);
-    assert.equal(second.appendEvent({ event: 'recovery_observed' }).event_sequence, 5);
+    assert.equal(second.appendEvent({ event: 'recovery_observed' }).event_sequence, 6);
     const events = readFileSync(eventsPath, 'utf8').trim().split(/\r?\n/).map((line) => JSON.parse(line));
-    assert.deepEqual(events.map((event) => event.event_sequence), [1, 2, 3, 4, 5]);
+    assert.deepEqual(events.map((event) => event.event_sequence), [1, 2, 3, 4, 5, 6]);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

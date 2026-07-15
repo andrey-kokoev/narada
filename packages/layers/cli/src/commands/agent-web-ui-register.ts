@@ -28,6 +28,7 @@ export function registerAgentWebUiCommands(program: Command): void {
     .option('--host <host>', 'Host to bind to', '127.0.0.1')
     .option('--port <port>', 'Stable Operator Router port (0 for direct diagnostic mode)', String(DEFAULT_OPERATOR_ROUTER_PORT))
     .option('--dry-run', 'Resolve attachment without starting the web UI', false)
+    .option('--diagnose', 'Read-only structured attach diagnostic; does not start the web UI', false)
     .option('--inspect-stale-session', 'Open AgentWebUI in diagnostic mode for a closed, unhealthy, or superseded NARS session', false)
     .option('--allow-stale-session', 'Deprecated alias for --inspect-stale-session', false)
     .option('--open', 'Open the web UI in the default browser after startup', true)
@@ -47,6 +48,7 @@ export function registerAgentWebUiCommands(program: Command): void {
         host: opts.host,
         port: opts.port ? Number(opts.port) : undefined,
         dryRun: opts.dryRun,
+        diagnose: opts.diagnose,
         allowStaleSession: opts.allowStaleSession,
         inspectStaleSession: opts.inspectStaleSession,
         open: opts.open,
@@ -56,7 +58,7 @@ export function registerAgentWebUiCommands(program: Command): void {
         cloudflareApiBaseUrl: opts.cloudflareApiBaseUrl,
         format: resolveCommandFormat(opts.format, 'auto'),
       }, silentCommandContext());
-      if (opts.dryRun || result.exitCode !== ExitCode.SUCCESS) {
+      if (opts.diagnose || opts.dryRun || result.exitCode !== ExitCode.SUCCESS) {
         emitFiniteCommandResult(result, { format: opts.format });
         return;
       }

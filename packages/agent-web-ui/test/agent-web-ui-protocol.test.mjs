@@ -29,12 +29,22 @@ import {
 test('agent-web-ui emits admitted NARS methods for event attach and operator input', () => {
   const subscribe = buildSubscribeFrame({ id: 'sub-1', maxReplay: 25, includeReplay: true });
   assert.equal(subscribe.method, 'session.events.subscribe');
-  assert.deepEqual(subscribe.params, { include_replay: true, max_replay: 25 });
+  assert.deepEqual(subscribe.params, { include_replay: true, page_size: 25 });
   assert.equal(isAgentWebUiProtocolFrame(subscribe), true);
 
   const readPage = buildEventsReadFrame({ id: 'read-1', beforeSequence: 50, direction: 'backward', limit: 25 });
   assert.deepEqual(readPage, { id: 'read-1', method: 'session.events.read', params: { limit: 25, before_sequence: 50, direction: 'backward' } });
   assert.equal(isAgentWebUiProtocolFrame(readPage), true);
+
+  assert.deepEqual(buildSubscribeFrame({ id: 'conversation-sub-1', pageSize: 25, view: 'conversation' }).params, {
+    include_replay: true,
+    page_size: 25,
+    view: 'conversation',
+  });
+  assert.deepEqual(buildEventsReadFrame({ id: 'operations-read-1', limit: 25, view: 'operations' }).params, {
+    limit: 25,
+    view: 'operations',
+  });
 
   assert.deepEqual(buildSopSummaryRequestFrame({ id: 'sop-1', templateLimit: 10, runLimit: 5, includeTerminal: false }), {
     id: 'sop-1',

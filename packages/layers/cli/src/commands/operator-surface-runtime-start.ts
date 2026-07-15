@@ -3,6 +3,7 @@ import { formattedResult, type CliFormat } from '../lib/cli-output.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import {
   getOperatorSurfaceRuntimeStatus,
+  isAgentStartAcceptedStatus,
   runAgentStartCommand,
   writeOperatorProjectionLaunchBinding,
 } from '../lib/launcher-runtime.js';
@@ -132,7 +133,7 @@ export async function operatorSurfaceRuntimeStartCommand(
     operator_projection_open_request: parsedAgentStart?.launcher_contracts?.operator_projection_open_request ?? null,
   };
   return {
-    exitCode: start.status === 'success' ? ExitCode.SUCCESS : ExitCode.GENERAL_ERROR,
+    exitCode: isAgentStartAcceptedStatus(start.status) ? ExitCode.SUCCESS : ExitCode.GENERAL_ERROR,
     result: formattedResult(result, formatOperatorSurfaceRuntimeStartResult(result), options.format ?? 'auto'),
   };
 }

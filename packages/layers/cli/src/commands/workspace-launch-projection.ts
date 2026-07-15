@@ -1,5 +1,4 @@
 import { existsSync } from 'node:fs';
-import { startOperatorTerminal } from '@narada2/process-launch-posture';
 import type { WorkspaceLaunchAttemptRecord, WorkspaceLaunchProjectionObservationRecord } from './workspace-launch-types.js';
 import * as support from './workspace-launch-support.js';
 import {
@@ -9,6 +8,7 @@ import {
 } from './workspace-launch-process.js';
 import {
   captureWorkspaceLaunchTerminalInvocation,
+  startWorkspaceLaunchWindowsTerminal,
 } from './workspace-launch-terminal.js';
 import { workspaceLaunchRequestRuntimeStop } from './workspace-launch-cleanup.js';
 
@@ -64,7 +64,7 @@ export async function workspaceLaunchExecuteProjectionAction(
   try {
     const launch = terminalCaptureLog
       ? await captureWorkspaceLaunchTerminalInvocation(terminalCaptureLog, effectiveWtArgs)
-      : startOperatorTerminal('wt', effectiveWtArgs).result;
+      : startWorkspaceLaunchWindowsTerminal(effectiveWtArgs);
     if (launch.error) throw launch.error;
     if (launch.status !== 0) throw new Error(`projection_terminal_launch_failed: wt exited ${launch.status ?? 'unknown'}`);
     return {

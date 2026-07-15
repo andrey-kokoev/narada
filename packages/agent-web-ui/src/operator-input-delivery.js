@@ -144,7 +144,7 @@ export function reduceOperatorInputDelivery(state, message) {
     return state;
   }
 
-  if (kind === 'session_control_response') {
+  if (kind === 'session_control_accepted' || kind === 'session_control_response') {
     if (!isTrackedOperatorFrame(event.method)) return state;
     const record = findOrCreateRuntimeRecord(state, requestId, event);
     if (!record || isTerminal(record.phase)) return state;

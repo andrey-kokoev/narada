@@ -293,6 +293,7 @@ test('web UI projection normalizes nested provider events and suppresses status 
   assert.equal(shouldRenderRuntimeEvent({ event: 'session_health', status: 'healthy' }), false);
   assert.equal(shouldRenderRuntimeEvent({ event: 'session_health', status: 'healthy' }, { verbosity: 'diagnostics' }), false);
   assert.equal(shouldRenderRuntimeEvent({ event: 'session_health', status: 'healthy' }, { verbosity: 'raw' }), false);
+  assert.equal(shouldRenderRuntimeEvent({ event: 'session_health', status: 'degraded' }, { verbosity: 'operations' }), false);
   assert.equal(shouldRenderRuntimeEvent({ event: 'session_health', status: 'degraded' }, { verbosity: 'diagnostics' }), true);
   assert.equal(shouldRenderRuntimeEvent({ event: 'websocket_connected' }, { verbosity: 'raw' }), false);
   assert.equal(shouldRenderRuntimeEvent({ event: 'session_event', payload: { event: 'assistant_message', content: 'ok' } }), true);
@@ -584,6 +585,7 @@ test('diagnostics projection shows fault signals without routine transcript and 
 test('operator input delivery projects submission through NARS acknowledgment and completion', () => {
   const projection = createOperatorInputDeliveryProjection([
     { event: 'operator_input_submitted', request_id: 'input-1', method: 'session.submit', content: 'run startup sequence', operator_delivery_mode: 'default', timestamp: '2026-07-11T12:00:00.000Z' },
+    { event: 'session_control_accepted', request_id: 'input-1', method: 'session.submit', acceptance_state: 'accepted', timestamp: '2026-07-11T12:00:00.050Z' },
     { event: 'input_event_queued', request_id: 'input-1', event_id: 'nars-input-1', source: 'manual_operator', timestamp: '2026-07-11T12:00:00.100Z' },
     { event: 'input_event_started', request_id: 'input-1', event_id: 'nars-input-1', source: 'manual_operator', timestamp: '2026-07-11T12:00:00.200Z' },
     { event: 'carrier_turn_started', turn_id: 'nars-input-1', timestamp: '2026-07-11T12:00:00.300Z' },

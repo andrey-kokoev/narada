@@ -157,6 +157,14 @@ A v0 carrier launch packet should include:
 | `pc_runtime_ref` | Optional host/runtime record for window/process/restart coordination. |
 | `not_claimed` | Explicit non-claims such as exact resume binding, credential access, or source-state import. |
 
+## Launch-Result File Lifecycle
+
+Launch-result files are published only after the v0 result contract and canonical handoff coherence validate. The publisher writes a uniquely named temporary sibling file and renames it into the active result directory, so readers never observe a partially written `.result.json`.
+
+At every runtime status/start boundary, the launcher scans the active result directory under a per-directory lock. Legacy or contract-invalid result files, including semantically incoherent handoffs, are deleted and appended by path, hash, reason, and timestamp to the adjacent reconciliation receipt. Valid current results remain audit history. If reconciliation cannot complete, the launcher fails closed with the exact artifact and remediation instead of silently ignoring it.
+
+After each reconciliation pass, result discovery remains strict: an invalid artifact is an error, not a record to skip. The reconciliation receipt is strictly bound to its result directory and is an append-only audit trail of cleanup; its presence does not suppress later scans. The pass is idempotent when no new invalid artifacts appear.
+
 ## Locus Factorization
 
 Carrier work splits across loci:

@@ -74,9 +74,11 @@ test.describe('agent-web-ui live slash commands', () => {
       await waitForRenderedEventCount(page, null, 0, 'slash_clear_render_timeout');
 
       await expect.poll(async () => await setProjectionView(page, 'raw')).toEqual({ ok: true, value: 'raw' });
+      await waitForRenderedEventCount(page, 'session_events_subscription_started', 1, 'raw_view_replay_render_timeout');
+      const replayRowsBeforeEventsCommand = (await renderedEventRows(page, 'session_events_subscription_started')).length;
 
       await submitOperatorInputText(page, '/events');
-      await waitForRenderedEventCount(page, 'session_events_subscription_started', 1, 'slash_events_render_timeout');
+      await waitForRenderedEventCount(page, 'session_events_subscription_started', replayRowsBeforeEventsCommand + 1, 'slash_events_render_timeout');
       const eventsRow = (await renderedEventRows(page, 'session_events_subscription_started')).at(-1);
       expect(eventsRow?.text ?? '').toMatch(/Replay attached|replayed event\(s\)/);
 

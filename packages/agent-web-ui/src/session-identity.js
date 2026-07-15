@@ -11,34 +11,43 @@ export function summarizeSessionIdentity(events = [], fallback = undefined) {
   let agentId = fallback?.agentId ?? null;
   let role = fallback?.role ?? null;
   let sessionId = fallback?.sessionId ?? null;
+  const fallbackFields = {
+    siteId: Boolean(fallback?.siteId),
+    agentId: Boolean(fallback?.agentId),
+    role: Boolean(fallback?.role),
+    sessionId: Boolean(fallback?.sessionId),
+  };
   let identityRef = null;
   for (const message of events) {
     const event = unwrapRuntimeEvent(message);
     if (!event || typeof event !== 'object') continue;
     identityRef = normalizeAgentIdentityRef(objectField(event, 'agent_identity_ref')) ?? identityRef;
-    siteId = stringField(event, 'site_id') ?? siteId;
-    agentId = stringField(event, 'agent_id') ?? agentId;
-    role = stringField(event, 'role') ?? role;
-    sessionId = stringField(event, 'session_id') ?? sessionId;
+    if (!fallbackFields.siteId) siteId = stringField(event, 'site_id') ?? siteId;
+    if (!fallbackFields.agentId) agentId = stringField(event, 'agent_id') ?? agentId;
+    if (!fallbackFields.role) role = stringField(event, 'role') ?? role;
+    if (!fallbackFields.sessionId) sessionId = stringField(event, 'session_id') ?? sessionId;
     const whoami = objectField(event, 'whoami');
     identityRef = normalizeAgentIdentityRef(objectField(whoami, 'agent_identity_ref')) ?? identityRef;
-    agentId = stringField(whoami, 'identity') ?? agentId;
-    role = stringField(whoami, 'role') ?? role;
+    if (!fallbackFields.agentId) agentId = stringField(whoami, 'identity') ?? agentId;
+    if (!fallbackFields.role) role = stringField(whoami, 'role') ?? role;
     const checkpoint = objectField(event, 'checkpoint');
-    siteId = stringField(checkpoint, 'site_id') ?? siteId;
+    if (!fallbackFields.siteId) siteId = stringField(checkpoint, 'site_id') ?? siteId;
     const nested = event.event;
     if (nested && typeof nested === 'object') {
       identityRef = normalizeAgentIdentityRef(objectField(nested, 'agent_identity_ref')) ?? identityRef;
-      agentId = stringField(nested, 'agent_id') ?? agentId;
-      role = stringField(nested, 'role') ?? role;
-      sessionId = stringField(nested, 'session_id') ?? sessionId;
-      siteId = stringField(nested, 'site_id') ?? siteId;
+      if (!fallbackFields.agentId) agentId = stringField(nested, 'agent_id') ?? agentId;
+      if (!fallbackFields.role) role = stringField(nested, 'role') ?? role;
+      if (!fallbackFields.sessionId) sessionId = stringField(nested, 'session_id') ?? sessionId;
+      if (!fallbackFields.siteId) siteId = stringField(nested, 'site_id') ?? siteId;
     }
   }
-  const displayAgentId = identityRef ? agentIdentityDisplay(identityRef, agentId) : null;
+  // Health already supplied the authoritative display identity when present;
+  // do not let an older retained event's identity reference rewrite it.
+  const displayIdentityRef = fallbackFields.agentId && fallback?.agentId ? null : identityRef;
+  const displayAgentId = displayIdentityRef ? agentIdentityDisplay(displayIdentityRef, agentId) : null;
   const resolvedAgentId = displayAgentId ?? agentId;
   const fallbackTitle = resolvedAgentId && resolvedAgentId.includes('.') ? resolvedAgentId : [siteId, resolvedAgentId].filter(Boolean).join('.') || resolvedAgentId;
-  const title = agentIdentityDisplay(identityRef, fallbackTitle) || 'Narada Session';
+  const title = agentIdentityDisplay(displayIdentityRef, fallbackTitle) || 'Narada Session';
   const subtitleParts = [];
   if (role) subtitleParts.push(`Role: ${role}`);
   subtitleParts.push('Browser projection attached to one NARS runtime.');

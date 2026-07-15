@@ -143,48 +143,54 @@ function actionIcon(action: string): typeof RefreshCw {
     <form id="form" class="launcher-form" @submit.prevent="submitLaunch">
       <fieldset class="ui-fieldset">
         <legend>Site</legend>
-        <label class="mode-toggle"><input id="allow-multi-site" type="checkbox" :checked="allowMultiSiteLaunch" @change="onMultiSiteToggle">Allow multi-site launch</label>
-        <div id="sites">
-          <div id="site-single" v-show="!allowMultiSiteLaunch">
-            <select id="site-select" class="ui-select" aria-label="Site" :value="selectedSingleSite()" @change="onSingleSiteChange">
-              <option v-for="choice in siteChoices" :key="choice" :value="choice">{{ choice }}</option>
-            </select>
+        <div class="selection-control-row">
+          <div id="sites">
+            <div id="site-single" v-show="!allowMultiSiteLaunch">
+              <select id="site-select" class="ui-select" aria-label="Site" :value="selectedSingleSite()" @change="onSingleSiteChange">
+                <option v-for="choice in siteChoices" :key="choice" :value="choice">{{ choice }}</option>
+              </select>
+            </div>
+            <div id="sites-multi" v-show="allowMultiSiteLaunch" class="multi-options">
+              <label v-for="choice in siteChoices" :key="choice"><input type="checkbox" :value="choice" :checked="selectedSites.has(choice)" @change="onSiteToggle(choice, $event)">{{ choice }}</label>
+            </div>
           </div>
-          <div id="sites-multi" v-show="allowMultiSiteLaunch" class="multi-options">
-            <label v-for="choice in siteChoices" :key="choice"><input type="checkbox" :value="choice" :checked="selectedSites.has(choice)" @change="onSiteToggle(choice, $event)">{{ choice }}</label>
-          </div>
+          <label class="mode-toggle"><input id="allow-multi-site" type="checkbox" :checked="allowMultiSiteLaunch" @change="onMultiSiteToggle">Allow multi-site launch</label>
         </div>
       </fieldset>
 
       <fieldset class="ui-fieldset">
         <legend>Role</legend>
-        <label class="mode-toggle"><input id="allow-multi-role" type="checkbox" :checked="allowMultiRoleLaunch" @change="onMultiRoleToggle">Allow multi-role launch</label>
-        <div id="roles">
-          <div id="role-single" v-show="!allowMultiRoleLaunch">
-            <select id="role-select" class="ui-select" aria-label="Role" :value="selectedSingleRole()" @change="onSingleRoleChange">
-              <option v-for="choice in roleChoices" :key="choice" :value="choice">{{ choice }}</option>
-            </select>
+        <div class="selection-control-row">
+          <div id="roles">
+            <div id="role-single" v-show="!allowMultiRoleLaunch">
+              <select id="role-select" class="ui-select" aria-label="Role" :value="selectedSingleRole()" @change="onSingleRoleChange">
+                <option v-for="choice in roleChoices" :key="choice" :value="choice">{{ choice }}</option>
+              </select>
+            </div>
+            <div id="roles-multi" v-show="allowMultiRoleLaunch" class="multi-options">
+              <label v-for="choice in roleChoices" :key="choice"><input type="checkbox" :value="choice" :checked="selectedRoles.has(choice)" @change="onRoleToggle(choice, $event)">{{ choice }}</label>
+            </div>
           </div>
-          <div id="roles-multi" v-show="allowMultiRoleLaunch" class="multi-options">
-            <label v-for="choice in roleChoices" :key="choice"><input type="checkbox" :value="choice" :checked="selectedRoles.has(choice)" @change="onRoleToggle(choice, $event)">{{ choice }}</label>
-          </div>
+          <label class="mode-toggle"><input id="allow-multi-role" type="checkbox" :checked="allowMultiRoleLaunch" @change="onMultiRoleToggle">Allow multi-role launch</label>
         </div>
       </fieldset>
 
       <fieldset class="ui-fieldset">
         <legend>Operator Surface</legend>
-        <label class="mode-toggle"><input id="allow-multi-surface" type="checkbox" :checked="allowMultiSurfaceLaunch" @change="onMultiSurfaceToggle">Allow multiple operator surfaces</label>
-        <div id="surfaces">
-          <div id="surface-single" v-show="!allowMultiSurfaceLaunch">
-            <select id="surface-select" class="ui-select" aria-label="Operator Surface" :value="selectedSingleSurface()" @change="onSingleSurfaceChange">
-              <option v-for="option in surfaceOptions" :key="option.value" :value="option.value" :title="option.hint">{{ option.label }}</option>
-            </select>
+        <div class="selection-control-row">
+          <div id="surfaces">
+            <div id="surface-single" v-show="!allowMultiSurfaceLaunch">
+              <select id="surface-select" class="ui-select" aria-label="Operator Surface" :value="selectedSingleSurface()" @change="onSingleSurfaceChange">
+                <option v-for="option in surfaceOptions" :key="option.value" :value="option.value" :title="option.hint">{{ option.label }}</option>
+              </select>
+            </div>
+            <div id="surfaces-multi" v-show="allowMultiSurfaceLaunch" class="multi-options">
+              <label v-for="option in surfaceOptions.filter((item) => item.value === 'registry default' || model.narsOperatorSurfaceChoices.includes(item.value))" :key="option.value">
+                <input type="checkbox" :value="option.value" :checked="selectedSurfaces.has(option.value)" @change="onSurfaceToggle(option.value, $event)">{{ option.label }}
+              </label>
+            </div>
           </div>
-          <div id="surfaces-multi" v-show="allowMultiSurfaceLaunch" class="multi-options">
-            <label v-for="option in surfaceOptions.filter((item) => item.value === 'registry default' || model.narsOperatorSurfaceChoices.includes(item.value))" :key="option.value">
-              <input type="checkbox" :value="option.value" :checked="selectedSurfaces.has(option.value)" @change="onSurfaceToggle(option.value, $event)">{{ option.label }}
-            </label>
-          </div>
+          <label class="mode-toggle"><input id="allow-multi-surface" type="checkbox" :checked="allowMultiSurfaceLaunch" @change="onMultiSurfaceToggle">Allow multiple operator surfaces</label>
         </div>
         <p class="field-hint">Explicit choices override the registry default. Multiple surfaces are parallel projections of one NARS runtime.</p>
       </fieldset>
@@ -399,6 +405,21 @@ function actionIcon(action: string): typeof RefreshCw {
   margin-bottom: 8px;
   color: var(--text);
   font-weight: 600;
+}
+
+.selection-control-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 16px;
+}
+
+.selection-control-row > [id] {
+  min-width: 0;
+}
+
+.selection-control-row > .mode-toggle {
+  margin: 1px 0 0;
 }
 
 .ui-select {
@@ -677,6 +698,22 @@ pre {
 @media (max-width: 760px) {
   .launcher-header {
     display: grid;
+  }
+
+  .selection-control-row {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+
+  .selection-control-row > [id] {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .selection-control-row > .mode-toggle {
+    grid-column: 1;
+    grid-row: 1;
+    margin-bottom: 8px;
   }
 
   .stage-strip {

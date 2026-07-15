@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { admittedProviderNames, loadProviderMetadata } from '@narada2/carrier-provider-contract';
 import { resolveNaradaSitePaths } from '@narada2/site-paths';
 import { markNarsSessionIndexClosed, writeNarsSessionStartedIndex } from '@narada2/nars-session-core/session-index';
 import { buildLaunchProcessOwnershipEvidence } from '@narada2/launch-process-ownership';
@@ -10,7 +11,17 @@ import { isNarsRuntimeServerMethod } from './runtime-control-contract.mjs';
 
 const DEFAULT_HEARTBEAT_INTERVAL_MS = 10_000;
 const NARS_HEARTBEAT_SCHEMA = 'narada.nars.heartbeat.v1';
+const PROVIDER_METADATA = loadProviderMetadata();
+const ADMITTED_PROVIDER_NAMES = admittedProviderNames();
 let heartbeatWriteSequence = 0;
+
+export function shouldPersistNarsRuntimeRequestTransition(record) {
+  if (record?.method !== 'session.health') return true;
+  return record.request_state === 'failed'
+    || record.request_state === 'rejected'
+    || record.terminal_state === 'failed'
+    || record.terminal_state === 'rejected';
+}
 
 function createJsonLineWriter(output) {
   let failure = null;
@@ -102,6 +113,25 @@ function runtimeHostSnapshot(runtimeContext) {
   return runtimeContext.runtimeHostState ?? null;
 }
 
+function intelligenceChoices(provider, currentModel, currentThinking) {
+  const metadata = PROVIDER_METADATA[provider] ?? {};
+  return {
+    providerChoices: ADMITTED_PROVIDER_NAMES.filter((name) => PROVIDER_METADATA[name]),
+    modelChoices: uniqueStrings([
+      currentModel,
+      ...(Array.isArray(metadata.available_models) ? metadata.available_models : []),
+    ]),
+    thinkingChoices: uniqueStrings([
+      currentThinking,
+      ...Object.keys(metadata.cognition_defaults ?? {}),
+    ]),
+  };
+}
+
+function uniqueStrings(values) {
+  return [...new Set(values.filter((value) => typeof value === 'string' && value.trim()))];
+}
+
 function requestContent(request) {
   if (typeof request === 'string') return request;
   if (!request || typeof request !== 'object') return null;
@@ -138,6 +168,10 @@ function projectRuntimeHealth(snapshot, runtimeContext, toolGateway, requestLife
         : 'degraded';
   const heartbeat = readHeartbeatProjection(heartbeatPathForRuntimeContext(runtimeContext));
   const intelligenceSnapshot = providerRuntime?.snapshot?.() ?? {};
+  const intelligenceProvider = intelligenceSnapshot.provider ?? runtimeContext.intelligenceProvider ?? null;
+  const intelligenceModel = intelligenceSnapshot.model ?? runtimeContext.providerSettings?.model ?? null;
+  const intelligenceThinking = intelligenceSnapshot.thinking ?? runtimeContext.providerSettings?.thinking ?? null;
+  const choices = intelligenceChoices(intelligenceProvider, intelligenceModel, intelligenceThinking);
   return {
     ...snapshot,
     schema: 'narada.nars.health.v1',
@@ -153,9 +187,12 @@ function projectRuntimeHealth(snapshot, runtimeContext, toolGateway, requestLife
     runtime_host_state: runtimeHostSnapshot(runtimeContext),
     heartbeat,
     intelligence: {
-      provider: intelligenceSnapshot.provider ?? runtimeContext.intelligenceProvider ?? null,
-      model: intelligenceSnapshot.model ?? runtimeContext.providerSettings?.model ?? null,
-      thinking: intelligenceSnapshot.thinking ?? runtimeContext.providerSettings?.thinking ?? null,
+      provider: intelligenceProvider,
+      model: intelligenceModel,
+      thinking: intelligenceThinking,
+      provider_choices: choices.providerChoices,
+      model_choices: choices.modelChoices,
+      thinking_choices: choices.thinkingChoices,
       provider_runtime_binding: intelligenceSnapshot.provider_runtime_binding ?? null,
       reconfiguration: intelligenceSnapshot.reconfiguration ?? null,
     },
@@ -226,7 +263,9 @@ export function createSessionCoreRuntimeService({
   let supervisor = null;
   const requestLifecycle = createNarsRuntimeRequestRegistry({
     metadata: { transport: 'jsonl_stdio' },
-    onTransition: (record) => supervisor?.core.appendEvent(record),
+    onTransition: (record) => {
+      if (shouldPersistNarsRuntimeRequestTransition(record)) supervisor?.core.appendEvent(record);
+    },
   });
   const gateway = toolGateway ? null : createNarsCapabilityGateway({
     siteRoot: runtimeContext.siteRoot,
@@ -287,7 +326,7 @@ export function createSessionCoreRuntimeService({
           isBusy: () => Boolean(supervisor.activeTurnId)
             || Number(supervisor.health().operator_input_queue?.pending_count ?? 0) > 0,
         });
-        await writer.write({
+        supervisor.core.appendEvent({
           event: 'runtime_intelligence_reconfiguration',
           request_id: requestId,
           ...result,
@@ -325,6 +364,13 @@ export function createSessionCoreRuntimeService({
       if (request?.parse_error === 'invalid_json') throw new Error('invalid_json');
       if (method !== 'session.submit') throw new Error('unsupported_session_control');
       if (requestContent(request) == null) throw new Error('unsupported_session_control');
+      supervisor.core.appendEvent({
+        event: 'session_control_accepted',
+        request_id: requestId,
+        method,
+        acceptance_state: 'accepted',
+        transport: 'jsonl_stdio',
+      });
       const result = await supervisor.dispatch(request);
       supervisor.core.appendEvent({
         event: 'session_control_response',

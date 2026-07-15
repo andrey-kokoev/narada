@@ -13,6 +13,9 @@ export interface HealthIntelligenceSummary {
   provider: string | null;
   model: string | null;
   thinking: string | null;
+  providerChoices: readonly string[];
+  modelChoices: readonly string[];
+  thinkingChoices: readonly string[];
 }
 
 export interface HealthStatusOptions {
@@ -27,7 +30,7 @@ export function useHealthStatus(options: HealthStatusOptions) {
   const hasEndpoint = Boolean(options.transport?.healthEndpoint ?? options.endpoint);
   const text = ref(hasEndpoint ? 'checking' : 'health endpoint not configured');
   const identity = ref<HealthIdentitySummary>({ siteId: null, agentId: null, role: null, sessionId: null });
-  const intelligence = ref<HealthIntelligenceSummary>({ provider: null, model: null, thinking: null });
+  const intelligence = ref<HealthIntelligenceSummary>(emptyIntelligence());
   const body = ref<Record<string, unknown> | null>(null);
   const fetchFn = options.fetchFn ?? globalThis.fetch;
   let timer: ReturnType<typeof setInterval> | null = null;
@@ -60,7 +63,7 @@ export function useHealthStatus(options: HealthStatusOptions) {
       text.value = healthStatusText(parsed, response.status);
     } catch (error) {
       body.value = null;
-      intelligence.value = { provider: null, model: null, thinking: null };
+      intelligence.value = emptyIntelligence();
       text.value = `health unavailable · ${error instanceof Error ? error.message : String(error)}`;
     }
   }
@@ -103,5 +106,17 @@ function healthIntelligence(record: Record<string, unknown>): HealthIntelligence
     provider: stringField(intelligence, 'provider') ?? stringField(record, 'provider'),
     model: stringField(intelligence, 'model') ?? stringField(record, 'model'),
     thinking: stringField(intelligence, 'thinking') ?? stringField(record, 'thinking'),
+    providerChoices: stringArrayField(intelligence, 'provider_choices'),
+    modelChoices: stringArrayField(intelligence, 'model_choices'),
+    thinkingChoices: stringArrayField(intelligence, 'thinking_choices'),
   };
+}
+
+function emptyIntelligence(): HealthIntelligenceSummary {
+  return { provider: null, model: null, thinking: null, providerChoices: [], modelChoices: [], thinkingChoices: [] };
+}
+
+function stringArrayField(record: Record<string, unknown> | null, field: string): readonly string[] {
+  const value = record?.[field];
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string' && item.length > 0) : [];
 }

@@ -2,6 +2,7 @@ import {
   createCloudflareNarsAuthorityService,
   createCloudflareNarsRemoteAccessRecord,
   createCloudflareNarsProjectionWorkerService,
+  projectedEventMatchesView,
   type CloudflareNarsAuthorityWorkerState,
   type CloudflareNarsProjectionIntent,
   type CloudflareNarsRemoteAccessRecord,
@@ -17,6 +18,7 @@ export interface CloudflareNarsProjectionWorkerEnv {
 
 interface SseSubscriber {
   projectionId: string;
+  view: string;
   controller: ReadableStreamDefaultController<Uint8Array>;
 }
 
@@ -133,7 +135,10 @@ export function createCloudflareNarsProjectionWorker(options: CloudflareNarsProj
           projection_id: projectionId,
           browser_token_fingerprint: requireBrowserToken(request),
           since_sequence: numberParam(url, 'since_sequence'),
+          before_sequence: numberParam(url, 'before_sequence'),
+          direction: url.searchParams.get('direction') === 'backward' ? 'backward' : 'forward',
           max_events: numberParam(url, 'max_events') ?? undefined,
+          view: url.searchParams.get('view') ?? undefined,
           now: now(),
         }));
       }
@@ -208,7 +213,7 @@ export class NarsProjectionState {
   private static readonly authorityStorageKey = 'narada.cloudflare_nars_authority.worker_state.v1';
   private readonly fallbackWorker = createCloudflareNarsProjectionWorker({ service: createCloudflareNarsProjectionWorkerService() });
   private readonly subscribers = new Set<SseSubscriber>();
-  private readonly sockets = new Set<{ projectionId: string; socket: WorkerWebSocket }>();
+  private readonly sockets = new Set<{ projectionId: string; view: string; socket: WorkerWebSocket }>();
   private readonly authoritySockets = new Set<{ sessionId: string; socket: WorkerWebSocket }>();
 
   constructor(private readonly state?: DurableObjectStateLike) {}
@@ -256,10 +261,12 @@ export class NarsProjectionState {
     service: ReturnType<typeof createCloudflareNarsProjectionWorkerService>;
   }): Response {
     const url = new URL(args.request.url);
+    const view = url.searchParams.get('view') ?? 'raw';
     const read = args.service.readEvents({
       projection_id: args.projectionId,
       browser_token_fingerprint: requireBrowserToken(args.request),
       since_sequence: numberParam(url, 'since_sequence'),
+      view,
       max_events: numberParam(url, 'max_events') ?? undefined,
       now: new Date().toISOString(),
     });
@@ -273,9 +280,9 @@ export class NarsProjectionState {
     let subscriber: SseSubscriber | null = null;
     const stream = new ReadableStream<Uint8Array>({
       start: (controller) => {
-        subscriber = { projectionId: args.projectionId, controller };
+        subscriber = { projectionId: args.projectionId, view, controller };
         subscribers.add(subscriber);
-        controller.enqueue(encoder.encode(`event: nars-stream-connected\ndata: ${JSON.stringify({ projection_id: args.projectionId, cursor: read.cursor ?? null })}\n\n`));
+        controller.enqueue(encoder.encode(`event: nars-stream-connected\ndata: ${JSON.stringify({ projection_id: args.projectionId, view, cursor: read.cursor ?? null })}\n\n`));
         for (const entry of read.events ?? []) {
           const payload = objectRecord((entry as { payload?: unknown }).payload) ?? objectRecord(entry) ?? {};
           controller.enqueue(encoder.encode(`event: nars-event\ndata: ${JSON.stringify(payload)}\n\n`));
@@ -290,6 +297,7 @@ export class NarsProjectionState {
               projection_id: args.projectionId,
               browser_token_fingerprint: browserToken,
               since_sequence: lastSequence ?? undefined,
+              view,
               max_events: numberParam(url, 'max_events') ?? undefined,
               now: new Date().toISOString(),
             });
@@ -330,7 +338,7 @@ export class NarsProjectionState {
     if (!event || body?.status !== 'published') return;
     const encoder = new TextEncoder();
     for (const subscriber of [...this.subscribers]) {
-      if (subscriber.projectionId !== event.projection_id) continue;
+      if (subscriber.projectionId !== event.projection_id || !projectedEventMatchesView(event, subscriber.view)) continue;
       try {
         subscriber.controller.enqueue(encoder.encode(`event: nars-event\ndata: ${JSON.stringify(event.payload)}\n\n`));
       } catch {
@@ -338,7 +346,7 @@ export class NarsProjectionState {
       }
     }
     for (const subscriber of [...this.sockets]) {
-      if (subscriber.projectionId !== event.projection_id) continue;
+      if (subscriber.projectionId !== event.projection_id || !projectedEventMatchesView(event, subscriber.view)) continue;
       try {
         subscriber.socket.send(JSON.stringify(event.payload));
       } catch {
@@ -390,10 +398,12 @@ export class NarsProjectionState {
     }
     const url = new URL(args.request.url);
     const browserToken = url.searchParams.get('browser_token') ?? requireBrowserToken(args.request);
+    const view = url.searchParams.get('view') ?? 'raw';
     const read = args.service.readEvents({
       projection_id: args.projectionId,
       browser_token_fingerprint: browserToken,
       since_sequence: numberParam(url, 'since_sequence'),
+      view,
       max_events: numberParam(url, 'max_events') ?? undefined,
       now: new Date().toISOString(),
     });
@@ -401,7 +411,7 @@ export class NarsProjectionState {
     const pair = new WebSocketPair();
     const client = pair[0];
     const server = pair[1];
-    const subscriber = { projectionId: args.projectionId, socket: server };
+    const subscriber = { projectionId: args.projectionId, view, socket: server };
     server.accept();
     this.sockets.add(subscriber);
     server.addEventListener('close', () => this.sockets.delete(subscriber));
@@ -410,6 +420,7 @@ export class NarsProjectionState {
       event: 'websocket_connected',
       transport: 'cloudflare_projection_websocket',
       projection_id: args.projectionId,
+      view,
       cursor: read.cursor ?? null,
     }));
     for (const entry of read.events ?? []) {

@@ -23,7 +23,7 @@ async function copyText() {
 </script>
 
 <template>
-  <button type="button" class="copyable-text" :class="className" :title="title" :aria-label="`Copy ${text}`" @click="copyText">
+  <button type="button" class="copyable-text" :class="className" :title="title" :aria-label="`Copy ${text}`" @click.stop="copyText">
     <slot>{{ text }}</slot>
   </button>
 </template>

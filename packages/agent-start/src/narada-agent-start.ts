@@ -37,6 +37,7 @@ import {
   materializeCarrierSessionRecord as materializeCarrierSessionRecordArtifact,
   siteNaradaRoot,
   writeLaunchResultFile,
+  writeJsonFileAtomically,
 } from './carrier-launch-artifacts.ts';
 import {
   buildNarsLaunchPacket,
@@ -968,8 +969,7 @@ function writeStdout(payload) {
 
 async function printResult(result) {
   if (jsonOutputFile) {
-    mkdirSync(dirname(jsonOutputFile), { recursive: true });
-    writeFileSync(jsonOutputFile, `${JSON.stringify(displayLaunchResult(result), null, 2)}\n`, 'utf8');
+    writeJsonFileAtomically(jsonOutputFile, displayLaunchResult(result));
   }
   if (jsonOutput) {
     const sentinel = result.exec && !dryRun && result.agent_start_event
@@ -1330,8 +1330,7 @@ try {
     required_next_step: 'Fix the agent-start result producer before retrying the launch.',
   };
   if (jsonOutputFile) {
-    mkdirSync(dirname(jsonOutputFile), { recursive: true });
-    writeFileSync(jsonOutputFile, `${JSON.stringify(failure, null, 2)}\n`, 'utf8');
+    writeJsonFileAtomically(jsonOutputFile, failure);
   }
   if (jsonOutput) await writeStdout(`${JSON.stringify(failure, null, 2)}\n`);
   else console.error(`[FAIL] ${failure.reason_code}: ${failure.reason}`);

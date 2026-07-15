@@ -85,7 +85,13 @@ export function classifyRuntimeMessage(message) {
   if (event.event === 'runtime_intelligence_reconfiguration' || event.event === 'provider_runtime_reconfiguration_state_transition') return 'diagnostic_signal';
   if (event.event === 'assistant_message' || event.event === 'assistant_message_stream' || event.event === 'user_message' || event.event === 'operator_input_submitted' || event.event === 'agent_web_ui_message' || event.event === 'agent_web_ui_help' || event.event === 'session_artifact_registered' || event.event === 'session_artifact_read') return 'conversation_fact';
   if (event.event === 'error' || event.event === 'websocket_error' || event.event === 'web_ui_decode_error' || event.event === 'web_ui_input_not_sent' || event.event === 'turn_failed' || event.event === 'authority_session_revoked' || event.event === 'projection_revoked' || event.event === 'runtime_projection_failure' || event.event === 'runtime_control_input_bridge_error') return 'diagnostic_signal';
-  if (event.event === 'tool_call' || event.event === 'tool_result' || event.event === 'turn_started' || event.event === 'turn_complete') return 'operation_fact';
+  if (event.event === 'tool_call' || event.event === 'tool_result' || event.event === 'turn_started' || event.event === 'turn_complete'
+    || event.event === 'conversation_enqueue_requested' || event.event === 'input_queued_for_turn_boundary' || event.event === 'input_admitted_to_turn'
+    || event.event === 'input_dropped_by_operator' || event.event === 'input_abandoned_on_session_end' || event.event === 'input_completed'
+    || event.event === 'session_started' || event.event === 'session_closed' || event.event === 'session_status'
+    || event.event === 'session_recovery' || event.event === 'session_operations' || event.event === 'session_sync'
+    || event.event === 'observer_status' || event.event === 'observers_status' || event.event === 'carrier_command_result'
+    || event.event?.startsWith?.('authority_source_') || event.event?.startsWith?.('authority_target_')) return 'operation_fact';
   if (event.event === 'directive_received' || event.event === 'directive_receipt_recorded' || event.event === 'directive_carrier_accepted_recorded' || event.event === 'directive_complete' || event.event === 'session_events_subscription_started') return 'protocol_evidence';
   const providerEvent = event.event;
   if (providerEvent && typeof providerEvent === 'object') {

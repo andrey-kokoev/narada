@@ -1,11 +1,10 @@
-import { startOperatorTerminal } from '@narada2/process-launch-posture';
 import { formattedResult } from '../lib/cli-output.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import * as support from './workspace-launch-support.js';
 import { finalizeWorkspaceLaunchResult } from './workspace-launch-result.js';
 import { writeWorkspacePlanResult } from './workspace-launch-persistence.js';
 import { workspaceLaunchStartHiddenRuntimeHost } from './workspace-launch-process.js';
-import { captureWorkspaceLaunchTerminalInvocation } from './workspace-launch-terminal.js';
+import { captureWorkspaceLaunchTerminalInvocation, startWorkspaceLaunchWindowsTerminal } from './workspace-launch-terminal.js';
 import type {
   WorkspaceLaunchCommandResult,
   WorkspaceLaunchLaunchResult,
@@ -68,7 +67,7 @@ export async function executeWorkspaceLaunchPlan(
   const terminalCaptureLog = process.env.NARADA_WORKSPACE_LAUNCH_TERMINAL_LOG;
   const launch = terminalCaptureLog
     ? (await captureWorkspaceLaunchTerminalInvocation(terminalCaptureLog, effectiveWtArgs))
-    : startOperatorTerminal('wt', effectiveWtArgs).result;
+    : startWorkspaceLaunchWindowsTerminal(effectiveWtArgs);
   if (launch.error) throw launch.error;
   if (launch.status !== 0) {
     throw new Error(`windows_terminal_launch_failed: wt exited ${launch.status ?? 'unknown'}`);

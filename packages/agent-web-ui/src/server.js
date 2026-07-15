@@ -1,6 +1,6 @@
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
-import { extname, resolve } from 'node:path';
+import { extname, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { buildAgentWebUiCloudflareAuthorityConfig, buildAgentWebUiCloudflareProjectionConfig } from '@narada2/cloudflare-nars-projection';
 import { readProjectionRegistration, registerProjectionRemotely, startLocalProjectionBridgeOnce, startLocalProjectionBridgeRunProcess } from '@narada2/cloudflare-nars-projection/node';
@@ -340,7 +340,9 @@ async function tryReadStaticRoot(root, relativePath) {
 
 function resolveDistRoot(artifactRoot) {
   if (!artifactRoot) return DIST_ROOT;
-  return new URL('./', pathToFileURL(resolve(String(artifactRoot))).href);
+  // `artifactRoot` is a directory. Preserve its trailing separator so the
+  // file URL resolver does not treat it as a file and move up one level.
+  return pathToFileURL(`${resolve(String(artifactRoot))}${sep}`);
 }
 
 async function readStaticFile(pathname, clientConfig, distRoot) {

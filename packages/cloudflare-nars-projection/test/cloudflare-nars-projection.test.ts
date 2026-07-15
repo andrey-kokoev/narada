@@ -1186,6 +1186,31 @@ describe('event projection and cache', () => {
     expect(replay.truncated).toBe(false);
   });
 
+  test('filters semantic views before applying the replay page limit', () => {
+    const cache = createBoundedProjectionCache(20);
+    const sourceEvents = [
+      { event: 'session_health', event_sequence: 1, event_id: 'evt_1', status: 'healthy' },
+      { event: 'tool_call', event_sequence: 2, event_id: 'evt_2', tool: 'surface.inspect' },
+      { event: 'assistant_message', event_sequence: 3, event_id: 'evt_3', text: 'conversation event' },
+      { event: 'assistant_message', event_sequence: 4, event_id: 'evt_4', text: 'later conversation event' },
+    ];
+    for (const sourceEvent of sourceEvents) {
+      const event = projectNarsEventForCloudflare({
+        projection_id: 'proj_1',
+        site_id: 'narada.sonar',
+        nars_session_id: 'carrier_123',
+        policy: 'raw',
+        event: sourceEvent,
+      });
+      if (event) cache.push(event);
+    }
+
+    expect(cache.read('proj_1', { view: 'conversation', max_events: 1 }).events.map((event) => event.event_sequence)).toEqual([3]);
+    expect(cache.read('proj_1', { view: 'operations', max_events: 1 }).events.map((event) => event.event_sequence)).toEqual([2]);
+    expect(cache.read('proj_1', { view: 'diagnostics', max_events: 1 }).events.map((event) => event.event_sequence)).toEqual([1]);
+    expect(cache.read('proj_1', { view: 'conversation', before_sequence: 5, direction: 'backward', max_events: 1 }).events.map((event) => event.event_sequence)).toEqual([4]);
+  });
+
   test('deduplicates overlapping bridge replay by sequence or event id', () => {
     const cache = createBoundedProjectionCache(10);
     const first = projectNarsEventForCloudflare({

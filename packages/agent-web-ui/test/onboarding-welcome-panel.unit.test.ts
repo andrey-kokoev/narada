@@ -20,7 +20,15 @@ function makeIdentity(overrides: Partial<SessionIdentitySummary> = {}): SessionI
 }
 
 function makeIntelligence(overrides: Partial<HealthIntelligenceSummary> = {}): HealthIntelligenceSummary {
-  return { provider: 'codex-subscription', model: 'gpt-5.5', thinking: 'medium', ...overrides };
+  return {
+    provider: 'codex-subscription',
+    model: 'gpt-5.5',
+    thinking: 'medium',
+    providerChoices: [],
+    modelChoices: [],
+    thinkingChoices: [],
+    ...overrides,
+  };
 }
 
 function makeActivity(overrides: Partial<AgentActivityState> = {}): AgentActivityState {

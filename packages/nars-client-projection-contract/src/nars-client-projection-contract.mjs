@@ -1,5 +1,6 @@
 import { agentIdentityDisplay, agentIdentityGroupKey } from '@narada2/agent-identity';
 import { NARS_SESSION_CORE_METHOD_LIST, NARS_SESSION_CORE_METHODS, isNarsSessionCoreMethod } from '@narada2/nars-session-core/session-control-contract';
+import { NARS_SESSION_EVENT_DEFAULT_VIEW, NARS_SESSION_EVENT_VIEWS, normalizeNarsSessionEventView as normalizeSessionEventView } from '@narada2/nars-session-core/event-log';
 import {
   NARS_RUNTIME_INTELLIGENCE_RECONFIGURE_METHOD,
   NARS_RUNTIME_SERVER_METHOD_LIST,
@@ -9,6 +10,10 @@ import {
 } from '@narada2/nars-runtime-contract';
 
 export { NARS_SESSION_CORE_METHOD_LIST, NARS_SESSION_CORE_METHODS, isNarsSessionCoreMethod };
+export { NARS_SESSION_EVENT_DEFAULT_VIEW, NARS_SESSION_EVENT_VIEWS };
+export function normalizeNarsSessionEventView(view = NARS_SESSION_EVENT_DEFAULT_VIEW) {
+  return normalizeSessionEventView(view);
+}
 export {
   NARS_RUNTIME_INTELLIGENCE_RECONFIGURE_METHOD,
   NARS_RUNTIME_SERVER_METHOD_LIST,
@@ -57,12 +62,7 @@ export const NARS_AFFORDANCE_ACTION_REFUSAL_CODES = Object.freeze({
   confirmationNotFound: 'affordance_action_confirmation_not_found',
 });
 
-export const NARS_CLIENT_PROJECTION_VERBOSITY_LEVELS = Object.freeze([
-  'conversation',
-  'operations',
-  'diagnostics',
-  'raw',
-]);
+export const NARS_CLIENT_PROJECTION_VERBOSITY_LEVELS = NARS_SESSION_EVENT_VIEWS;
 
 export const NARS_CLIENT_PROJECTION_DEFAULT_VERBOSITY = 'conversation';
 
@@ -303,6 +303,7 @@ export function buildAgentWebUiEventsReadFrame(options = {}) {
   if (options.beforeSequence !== undefined) params.before_sequence = options.beforeSequence;
   if (options.sinceTimestamp !== undefined) params.since_timestamp = options.sinceTimestamp;
   if (options.direction !== undefined) params.direction = options.direction;
+  if (options.view !== undefined) params.view = normalizeNarsSessionEventView(options.view) ?? NARS_SESSION_EVENT_DEFAULT_VIEW;
   if (options.filters && typeof options.filters === 'object') params.filters = options.filters;
   return {
     id: options.id ?? `agent-web-ui-events-read-${Date.now()}`,
@@ -624,8 +625,11 @@ export function buildAgentWebUiConversationSteerFrame(text, options = {}) {
 export function buildAgentWebUiSubscribeFrame(options = {}) {
   const params = {
     include_replay: options.includeReplay !== false,
-    max_replay: Number.isFinite(options.maxReplay) ? options.maxReplay : 100,
+    page_size: Number.isFinite(options.pageSize)
+      ? options.pageSize
+      : Number.isFinite(options.maxReplay) ? options.maxReplay : 100,
   };
+  if (options.view !== undefined) params.view = normalizeNarsSessionEventView(options.view) ?? NARS_SESSION_EVENT_DEFAULT_VIEW;
   if (options.sinceSequence !== undefined) params.since_sequence = options.sinceSequence;
   if (options.sinceTimestamp !== undefined) params.since_timestamp = options.sinceTimestamp;
   if (options.subscriptionId !== undefined) params.subscription_id = options.subscriptionId;
@@ -991,7 +995,7 @@ export function classifyNarsClientEventProjection(projection) {
   if (kind === 'tool_call' || kind === 'tool_result' || kind === 'turn_failed') return 'operations';
   if (kind === 'session_artifact_registered' || kind === 'session_artifact_read') return 'conversation';
   if (kind === 'conversation_enqueue_requested' || kind === 'input_queued_for_turn_boundary' || kind === 'input_admitted_to_turn' || kind === 'input_dropped_by_operator' || kind === 'input_abandoned_on_session_end' || kind === 'input_completed') return 'operations';
-  if (kind === 'session_health') return isRoutineHealthyNarsSessionHealth(event) ? 'diagnostics' : 'operations';
+  if (kind === 'session_health') return 'diagnostics';
   if (kind?.startsWith?.('authority_source_') || kind?.startsWith?.('authority_target_')) return 'operations';
   if (kind === 'session_started' || kind === 'session_closed' || kind === 'session_status' || kind === 'session_recovery' || kind === 'session_operations' || kind === 'session_sync' || kind === 'observer_status' || kind === 'observers_status' || kind === 'carrier_command_result') return 'operations';
   if (kind === 'turn_started' || kind === 'turn_complete' || kind === 'directive_received' || kind === 'directive_receipt_recorded' || kind === 'directive_carrier_accepted_recorded' || kind === 'directive_complete' || kind === 'session_events_subscription_started' || kind === 'websocket_connected') return 'diagnostics';
@@ -1333,7 +1337,7 @@ export function buildNarsAttachCommands({ eventEndpoint = '<session_started.even
     agent_cli: `narada-agent-cli --attach ${event}`,
     agent_tui: `agent-tui --attach ${event}`,
     agent_web_ui: `narada-agent-web-ui --event-endpoint ${event}${agentWebUiHealth}`,
-    protocol: '{"id":"events-1","method":"session.events.subscribe","params":{"include_replay":true,"max_replay":20}}',
+    protocol: '{"id":"events-1","method":"session.events.subscribe","params":{"include_replay":true,"page_size":20}}',
     operator_input_protocol: '{"id":"input-1","method":"session.submit","params":{"content":"<operator message>","source":"manual_operator"}}',
     queued_operator_input_protocol: '{"id":"input-2","method":"session.submit","params":{"content":"<operator message>","source":"operator_steering","delivery_mode":"admit_after_active_turn"}}',
     slash_command_protocol: '{"id":"command-1","method":"session.command.execute","params":{"command":"/status","value":""}}',

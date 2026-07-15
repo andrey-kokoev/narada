@@ -7,6 +7,39 @@
   overscroll-behavior: contain;
 }
 
+.history-actions {
+  position: absolute;
+  top: 8px;
+  left: 0;
+  right: 0;
+  z-index: 4;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.load-earlier-button {
+  pointer-events: auto;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  padding: 6px 10px;
+  background: color-mix(in srgb, var(--control-bg) 94%, transparent);
+  color: var(--muted);
+  box-shadow: 0 6px 18px var(--event-shadow);
+  font: 11px/1.2 var(--mono);
+  cursor: pointer;
+}
+
+.load-earlier-button:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.load-earlier-button:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
 .shell .events {
   display: flex;
   flex-direction: column;

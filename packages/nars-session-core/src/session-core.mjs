@@ -375,6 +375,21 @@ export function createNarsSessionCore({
           inputRef: inputRefFromInput(event),
           authorityPosture: event.authority_posture ?? event.metadata?.authority_posture ?? null,
         });
+        if (event.source_kind === 'operator') {
+          appendEvent({
+            event: 'user_message',
+            type: 'user_message',
+            input_id: event.event_id,
+            input_event_id: event.event_id,
+            ...(event.request_id ? { request_id: event.request_id } : {}),
+            content: event.content,
+            source: event.source,
+            source_kind: event.source_kind,
+            transport: event.transport,
+            delivery_mode: event.delivery_mode,
+            ...(event.authority_ref ? { authority_ref: event.authority_ref } : {}),
+          });
+        }
         options.onInputAcceptedFn?.(event);
       },
       onQueueStateChangedFn: (queueState) => {

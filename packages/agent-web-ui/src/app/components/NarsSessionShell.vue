@@ -94,6 +94,8 @@ const props = defineProps<{
   authorityTransition: Record<string, unknown> | null;
   cloudflareProjection: ReturnType<typeof useCloudflareProjection>;
   followLatestRevision: number;
+  hasEarlierEvents: boolean;
+  loadingEarlier: boolean;
 }>();
 const draft = defineModel<string>('draft', { required: true });
 const emit = defineEmits<{
@@ -125,6 +127,7 @@ const emit = defineEmits<{
   'confirm-affordance-action': [item: AffordanceConfirmationItem];
   'cancel-affordance-action': [item: AffordanceConfirmationItem];
   'intent-selected': [intent: string];
+  'load-earlier': [];
 }>();
 const STATUS_ROW_OPEN_STORAGE_KEY = AGENT_WEB_UI_PREFERENCE_KEYS.statusRowOpen;
 const HEADER_ITEM_STORAGE_KEY = AGENT_WEB_UI_PREFERENCE_KEYS.headerItems;
@@ -338,6 +341,7 @@ function resetHeaderItems() {
             </TooltipTrigger>
             <TooltipContent side="bottom" align="start">{{ headerTooltips.identity }}</TooltipContent>
           </Tooltip>
+          <div class="shell-header-actions">
           <Tooltip v-if="isHeaderItemVisible('snippets')">
             <TooltipTrigger as-child>
               <OperatorSnippetPanel v-model:open="snippetPanelOpen" :snippets="operatorSnippets" :export-json="operatorSnippetsExportJson" :feedback="operatorSnippetFeedback" :open-request="operatorSnippetOpenRequest" @run="(snippet, mode) => emit('run-snippet', snippet, mode)" @save="(name, body, mode) => emit('save-snippet', name, body, mode)" @restore="emit('restore-snippet', $event)" @rename="(oldName, newName, body) => emit('rename-snippet', oldName, newName, body)" @delete="emit('delete-snippet', $event)" @pin="emit('pin-snippet', $event)" @import="emit('import-snippets', $event)" @fill="emit('fill-snippet', $event)" />
@@ -405,6 +409,7 @@ function resetHeaderItems() {
             </TooltipTrigger>
             <TooltipContent side="bottom" align="end">{{ headerTooltips.status_toggle }}</TooltipContent>
           </Tooltip>
+          </div>
           <template #controls>
             <Tooltip>
               <TooltipTrigger as-child>
@@ -490,7 +495,7 @@ function resetHeaderItems() {
       :intelligence="intelligence"
       @intent-selected="emit('intent-selected', $event)"
     />
-    <ConversationTranscript :rows="rows" :verbosity="verbosity" :agent-activity="agentActivity" :follow-latest-revision="followLatestRevision" @intent-selected="emit('intent-selected', $event)" />
+    <ConversationTranscript :rows="rows" :verbosity="verbosity" :agent-activity="agentActivity" :follow-latest-revision="followLatestRevision" :has-earlier-events="hasEarlierEvents" :loading-earlier="loadingEarlier" @intent-selected="emit('intent-selected', $event)" @load-earlier="emit('load-earlier')" />
     <AffordanceConfirmationPanel :items="affordanceConfirmations" @confirm="emit('confirm-affordance-action', $event)" @cancel="emit('cancel-affordance-action', $event)" />
     <OperatorQueuePanel :items="operatorQueueItems" :active-turn-id="activeTurnId" :can-steer-active-turn="canSteerActiveTurn" @edit="emit('edit-queued', $event)" @remove="emit('remove-queued', $event)" @steer="emit('steer-queued', $event)" />
     <OperatorComposer v-model="draft" :operator-snippets="operatorSnippets" :disabled="composerDisabled" :can-interrupt="canInterruptModel" :disabled-reason="composerDisabledReason" :target-label="composerTargetLabel" :target-state="composerTargetState" :operator-delivery="operatorDelivery" :supports-protocol-method="supportsProtocolMethod" @submit="emit('submit', $event)" @run-snippet="(snippet, mode) => emit('run-snippet', snippet, mode)" @interrupt="emit('interrupt')" />  </main>

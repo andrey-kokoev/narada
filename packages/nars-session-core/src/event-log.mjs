@@ -1,13 +1,141 @@
 import { existsSync, readFileSync } from 'node:fs';
 
 export const NARS_EVENTS_READ_SCHEMA = 'narada.nars.events.read.v1';
+export const NARS_SESSION_EVENT_VIEWS = Object.freeze([
+  'conversation',
+  'operations',
+  'diagnostics',
+  'raw',
+]);
+export const NARS_SESSION_EVENT_DEFAULT_VIEW = 'raw';
 
 const DEFAULT_LIMIT = 100;
 const MAX_LIMIT = 1000;
 
+const CONVERSATION_EVENT_KINDS = new Set([
+  'assistant_message',
+  'assistant_message_stream',
+  'user_message',
+  'operator_input_submitted',
+  // Delivery acknowledgements are transport facts required by a conversation
+  // client to settle its composer and activity state. They remain hidden from
+  // the normal Chat projection by the client projection contract.
+  'conversation_enqueue_requested',
+  'input_event_queued',
+  'input_event_started',
+  'input_event_completed',
+  'input_queued_for_turn_boundary',
+  'input_admitted_to_turn',
+  'input_dropped_by_operator',
+  'input_abandoned_on_session_end',
+  'input_completed',
+  'session_control_accepted',
+  'session_control_response',
+  'session_control_rejected',
+  'session_cancel',
+  'carrier_turn_started',
+  'carrier_turn_completed',
+  'carrier_turn_failed',
+  'carrier_turn_interrupted',
+  // Confirmation state is consumed by the browser affordance reducer. Keep
+  // it on the conversation transport even though the normal Chat renderer
+  // intentionally omits these control records.
+  'session_affordance_action_requested',
+  'session_affordance_action_result',
+  'session_affordance_action_refused',
+  'session_affordance_confirmation_required',
+  'session_affordance_action_confirmed',
+  'session_affordance_action_cancelled',
+  'agent_web_ui_message',
+  'agent_web_ui_help',
+  'session_artifact_registered',
+  'session_artifact_read',
+  'error',
+  'websocket_error',
+  'web_ui_decode_error',
+  'web_ui_input_not_sent',
+  'runtime_error',
+]);
+
+const OPERATION_EVENT_KINDS = new Set([
+  'tool_call',
+  'tool_result',
+  'turn_failed',
+  'conversation_enqueue_requested',
+  'input_queued_for_turn_boundary',
+  'input_admitted_to_turn',
+  'input_dropped_by_operator',
+  'input_abandoned_on_session_end',
+  'input_completed',
+  'session_started',
+  'session_closed',
+  'session_status',
+  'session_recovery',
+  'session_operations',
+  'session_sync',
+  'observer_status',
+  'observers_status',
+  'carrier_command_result',
+  'turn_started',
+  'turn_complete',
+  'directive_received',
+  'directive_receipt_recorded',
+  'directive_carrier_accepted_recorded',
+  'directive_complete',
+]);
+
+const DIAGNOSTIC_EVENT_KINDS = new Set([
+  'authority_session_revoked',
+  'projection_revoked',
+  'carrier_diagnostic_recorded',
+  'mcp_runtime_fault',
+  'runtime_projection_failure',
+  'runtime_control_input_bridge_error',
+  'runtime_intelligence_reconfiguration',
+  'provider_runtime_reconfiguration_state_transition',
+  'provider_runtime_fault',
+  'provider_error',
+  'session_health',
+  'websocket_connected',
+  'session_events_subscription_started',
+  'session_events_replay_completed',
+]);
+
+export function normalizeNarsSessionEventView(view = NARS_SESSION_EVENT_DEFAULT_VIEW) {
+  const normalized = String(view ?? NARS_SESSION_EVENT_DEFAULT_VIEW).trim().toLowerCase();
+  return NARS_SESSION_EVENT_VIEWS.includes(normalized) ? normalized : null;
+}
+
+export function getNarsEventKind(event) {
+  const eventValue = event?.event ?? event?.event_kind;
+  if (typeof eventValue === 'string') return eventValue;
+  if (eventValue && typeof eventValue === 'object' && typeof eventValue.type === 'string') return eventValue.type;
+  return typeof event?.type === 'string' ? event.type : null;
+}
+
+export function eventMatchesNarsView(event, view = NARS_SESSION_EVENT_DEFAULT_VIEW) {
+  const normalizedView = normalizeNarsSessionEventView(view);
+  if (!normalizedView || normalizedView === 'raw') return normalizedView === 'raw';
+  const kind = getNarsEventKind(event);
+  if (normalizedView === 'conversation') return CONVERSATION_EVENT_KINDS.has(kind);
+  if (normalizedView === 'operations') {
+    return CONVERSATION_EVENT_KINDS.has(kind)
+      || OPERATION_EVENT_KINDS.has(kind)
+      || kind?.startsWith?.('authority_source_')
+      || kind?.startsWith?.('authority_target_')
+      || kind === 'item.started'
+      || kind === 'item.completed'
+      || kind === 'turn.started'
+      || kind === 'turn.completed';
+  }
+  return DIAGNOSTIC_EVENT_KINDS.has(kind)
+    || kind?.startsWith?.('provider_');
+}
+
 export function eventMatchesNarsFilters(event, filters = {}) {
   if (!filters || typeof filters !== 'object') return true;
-  const eventKind = event?.event ?? event?.event_kind ?? null;
+  const eventKind = getNarsEventKind(event);
+  if (filters.view !== undefined && !eventMatchesNarsView(event, filters.view)) return false;
   const kinds = Array.isArray(filters.event_kinds) ? filters.event_kinds : Array.isArray(filters.kinds) ? filters.kinds : null;
   if (kinds && !kinds.includes(eventKind)) return false;
   const families = Array.isArray(filters.families) ? filters.families : null;
@@ -26,14 +154,17 @@ export function readNarsEventLogPage({
   beforeSequence = null,
   sinceTimestamp = null,
   filters = {},
+  view = NARS_SESSION_EVENT_DEFAULT_VIEW,
   limit = DEFAULT_LIMIT,
   direction = null,
 } = {}) {
+  const normalizedView = normalizeNarsSessionEventView(view);
+  if (!normalizedView) throw new TypeError(`invalid_nars_session_event_view:${String(view)}`);
   const boundedLimit = boundedPositiveInteger(limit, DEFAULT_LIMIT, MAX_LIMIT);
   const requestedDirection = direction ?? (beforeSequence == null ? 'forward' : 'backward');
   const allEvents = readNarsEventLog(eventsPath);
   const effectiveSinceTimestamp = hasSequenceCursor(afterSequence) ? null : sinceTimestamp;
-  const filtered = allEvents.events.filter((event) => eventInPageWindow(event, { afterSequence, beforeSequence, sinceTimestamp: effectiveSinceTimestamp }) && eventMatchesNarsFilters(event, filters));
+  const filtered = allEvents.events.filter((event) => eventInPageWindow(event, { afterSequence, beforeSequence, sinceTimestamp: effectiveSinceTimestamp }) && eventMatchesNarsFilters(event, { ...filters, view: normalizedView }));
   let events;
   let hasMore = false;
   if (requestedDirection === 'backward') {
@@ -52,6 +183,7 @@ export function readNarsEventLogPage({
     source: 'events_jsonl',
     events_path: eventsPath ?? null,
     direction: requestedDirection,
+    view: normalizedView,
     limit: boundedLimit,
     event_count: events.length,
     has_more: hasMore,

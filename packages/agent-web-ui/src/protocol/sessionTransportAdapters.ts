@@ -96,6 +96,8 @@ export interface NarsClientState {
   remotePageTimer: ReturnType<typeof setTimeout> | null;
   reconcileTimer: ReturnType<typeof setTimeout> | null;
   socketGeneration: number;
+  view: string;
+  subscribeView?: (view: string) => boolean;
 }
 
 export interface NarsClientAdapterContext {

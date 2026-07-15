@@ -31,12 +31,13 @@ export function startCloudflareSessionTransport(context: NarsClientAdapterContex
   const fetchFn = options.fetchFn ?? globalThis.fetch;
   const makeSubscribeFrame = (sinceSequence: number | null = state.lastSequence) => buildAgentWebUiSubscribeFrame({
     maxReplay: options.maxReplay,
+    view: state.view,
     includeReplay: true,
     ...(sinceSequence === null ? {} : { sinceSequence }),
   });
-  const processRuntimeMessage = (message: unknown, fallbackSequence: unknown = null, emit = true) => {
+  const processRuntimeMessage = (message: unknown, fallbackSequence: unknown = null, emit = true, updateCursor = true) => {
     const sequence = sequenceFromRuntimeMessage(message) ?? (typeof fallbackSequence === 'number' ? fallbackSequence : null);
-    if (sequence !== null) state.lastSequence = sequence;
+    if (updateCursor && sequence !== null) state.lastSequence = sequence;
     applyRuntimeEventToWebUiState(state, message);
     if (emit) options.onEvent?.(message);
   };
@@ -46,11 +47,12 @@ export function startCloudflareSessionTransport(context: NarsClientAdapterContex
     try {
       const subscribeFrame = makeSubscribeFrame(sinceSequence);
       const url = new URL(options.endpoint as string);
-      const params = (subscribeFrame as { params?: { since_sequence?: number; max_replay?: number } }).params;
+      const params = (subscribeFrame as { params?: { since_sequence?: number; page_size?: number; view?: string } }).params;
       if (params?.since_sequence != null) url.searchParams.set('since_sequence', String(params.since_sequence));
-      url.searchParams.set('max_events', String(params?.max_replay ?? options.maxReplay ?? 100));
+      url.searchParams.set('max_events', String(params?.page_size ?? options.maxReplay ?? 100));
+      if (params?.view) url.searchParams.set('view', params.view);
       const response = await fetchFn(url.href, { method: 'GET', headers: contextHeaders(context) });
-      const body = await response.json() as { events?: unknown[]; has_more?: boolean; event_count?: number; cursor?: unknown };
+      const body = await response.json() as { events?: unknown[]; has_more?: boolean; event_count?: number; view?: string; cursor?: unknown };
       const messages: unknown[] = [];
       for (const item of body.events ?? []) {
         const message = cloudflareEventItemToRuntimeMessage((item ?? {}) as Record<string, unknown>);
@@ -66,6 +68,7 @@ export function startCloudflareSessionTransport(context: NarsClientAdapterContex
         events: messages,
         event_count: body.event_count ?? messages.length,
         has_more: hasMore,
+        view: body.view ?? params?.view ?? state.view,
         cursor: body.cursor ?? null,
       });
       options.onStatus?.(response.ok ? 'replay connected' : `remote projection ${response.status}`);
@@ -137,10 +140,11 @@ export function startCloudflareSessionTransport(context: NarsClientAdapterContex
       await drainRemotePages();
       if (isNarsTransportClosed(state.lifecycle)) return;
       const subscribeFrame = makeSubscribeFrame();
-      const params = (subscribeFrame as { params?: { since_sequence?: number; max_replay?: number } }).params;
+      const params = (subscribeFrame as { params?: { since_sequence?: number; page_size?: number; view?: string } }).params;
       const url = new URL(cloudflareWebSocketEndpoint(options.endpoint as string, options.browserToken));
       if (params?.since_sequence != null) url.searchParams.set('since_sequence', String(params.since_sequence));
-      url.searchParams.set('max_events', String(params?.max_replay ?? options.maxReplay ?? 100));
+      url.searchParams.set('max_events', String(params?.page_size ?? options.maxReplay ?? 100));
+      if (params?.view) url.searchParams.set('view', params.view);
       const socket = new WebSocketCtor(url.href);
       const socketGeneration = ++state.socketGeneration;
       state.socket = socket;
@@ -195,6 +199,41 @@ export function startCloudflareSessionTransport(context: NarsClientAdapterContex
       options.onEvent?.({ event: 'projection_input_response', status: response.ok ? 'ok' : 'failed', ...body });
       if (response.ok) scheduleRemoteInputCatchUp();
     }).catch((error) => options.onEvent?.({ event: 'projection_input_failed', message: error instanceof Error ? error.message : String(error) }));
+    return true;
+  };
+  connection.readEventsPage = (page) => {
+    if (!options.endpoint || isNarsTransportClosed(state.lifecycle)) return false;
+    const url = new URL(options.endpoint);
+    if (page.afterSequence != null) url.searchParams.set('since_sequence', String(page.afterSequence));
+    if (page.beforeSequence != null) url.searchParams.set('before_sequence', String(page.beforeSequence));
+    if (page.direction) url.searchParams.set('direction', page.direction);
+    url.searchParams.set('max_events', String(page.limit ?? options.maxReplay ?? 100));
+    if (page.view) url.searchParams.set('view', page.view);
+    fetchFn(url.href, { method: 'GET', headers: contextHeaders(context) }).then(async (response) => {
+      const body = await response.json() as { events?: unknown[]; event_count?: number; has_more?: boolean; view?: string; cursor?: unknown };
+      const messages: unknown[] = [];
+      for (const item of body.events ?? []) {
+        const message = cloudflareEventItemToRuntimeMessage((item ?? {}) as Record<string, unknown>);
+        messages.push(message);
+        processRuntimeMessage(message, null, false, page.direction !== 'backward');
+      }
+      options.onEvent?.({
+        event: 'session_events_read',
+        transport: 'cloudflare-projection-page',
+        method: 'session.events.read',
+        events: messages,
+        event_count: body.event_count ?? messages.length,
+        has_more: Boolean(body.has_more),
+        view: body.view ?? page.view ?? state.view,
+        cursor: body.cursor ?? null,
+      });
+    }).catch((error) => options.onEvent?.({ event: 'projection_page_failed', message: error instanceof Error ? error.message : String(error) }));
+    return true;
+  };
+  state.subscribeView = (view) => {
+    state.view = view;
+    state.lastSequence = null;
+    scheduleRemoteReconnect('event_view_changed');
     return true;
   };
   options.onStatus?.('opening remote stream');

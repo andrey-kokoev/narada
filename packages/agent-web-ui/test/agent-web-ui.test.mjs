@@ -149,7 +149,7 @@ function createFakeDocument() {
 }
 
 const AGENT_WEB_UI_CSS_IMPORTS = [
-  ['@narada2/ui/styles.css', null],
+  ['@narada2/ui/styles.css', 'narada-vendor'],
   ['@narada2/ui-vue/components.css', 'narada-vue-primitives'],
   ['styles/base.css', 'narada-base'],
   ['styles/operator-surfaces.css', 'narada-operator'],
@@ -793,6 +793,28 @@ test('session identity projection keeps canonical identity stable across mixed l
   assert.deepEqual(summarizeSessionTitleParts(summary), { siteLabel: 'sonar', agentLabel: 'resident' });
 });
 
+test('session identity projection keeps current health identity ahead of stale retained events', () => {
+  const summary = summarizeSessionIdentity([
+    {
+      event: 'session_started',
+      site_id: 'narada.ux',
+      agent_id: 'ux.agent',
+      role: 'resident',
+      session_id: 'stale_session_a',
+    },
+  ], {
+    siteId: 'narada.ux',
+    agentId: 'ux.agent',
+    role: 'resident',
+    sessionId: 'current_session_b',
+  });
+
+  assert.equal(summary.siteId, 'narada.ux');
+  assert.equal(summary.agentId, 'ux.agent');
+  assert.equal(summary.role, 'resident');
+  assert.equal(summary.sessionId, 'current_session_b');
+});
+
 test('session title parts do not duplicate an explicit Site id when agent id is canonical', () => {
   assert.deepEqual(summarizeSessionTitleParts({ siteId: 'sonar', agentId: 'sonar.resident' }), {
     siteLabel: 'sonar',
@@ -813,7 +835,7 @@ test('agent-web-ui CSS entry imports logical modules in cascade order', async ()
     assert.ok(currentIndex > previousIndex, expectedImport);
     previousIndex = currentIndex;
   }
-  assert.match(entry, /@layer narada-theme, narada-base, narada-vue-primitives, narada-operator, narada-shell, narada-panels, narada-layout, narada-content, narada-composer, narada-responsive, narada-dark-overrides;/);
+  assert.match(entry, /@layer narada-vendor, narada-theme, narada-base, narada-vue-primitives, narada-operator, narada-shell, narada-panels, narada-layout, narada-content, narada-composer, narada-responsive, narada-dark-overrides;/);
   assert.doesNotMatch(entry, /styles\/(theme|primitives|dark-theme)\.css/);
 });
 
@@ -1165,6 +1187,27 @@ test('package server serves browser-loadable modules without workspace bare impo
   }
 });
 
+test('package server serves an explicit artifact directory before compatibility fallback', async () => {
+  const artifactRoot = mkdtempSync(join(tmpdir(), 'narada-web-ui-artifact-'));
+  writeFileSync(join(artifactRoot, 'index.html'), '<!doctype html><html><body data-test="built-artifact">built artifact</body><script type="application/json" id="nars-config">__NARADA_AGENT_WEB_UI_CONFIG__</script></html>');
+  const web = await startAgentWebUiServer({
+    host: '127.0.0.1',
+    port: 0,
+    eventEndpoint: 'ws://127.0.0.1:1234/events',
+    healthEndpoint: 'http://127.0.0.1:1235/health',
+    artifactRoot,
+  });
+  try {
+    const html = await fetch(web.url).then((response) => response.text());
+    assert.match(html, /data-test="built-artifact"/);
+    assert.match(html, /id="nars-config"/);
+    assert.doesNotMatch(html, /id="events"/);
+  } finally {
+    await new Promise((resolve) => web.server.close(resolve));
+    rmSync(artifactRoot, { recursive: true, force: true });
+  }
+});
+
 test('served web UI config attaches to live NARS health and event projections', async () => {
   await withRealNarsWebServer(async ({ web, eventProjection, healthProjection, events, providerCalls }) => {
     const client = await connectWebSocket(eventProjection.url);
@@ -1278,6 +1321,15 @@ test('local client config is public-base aware for Operator Router session mount
     assert.equal((await response.json()).healthEndpoint, '/sessions/carrier_demo/api/health');
     const html = await (await fetch(web.url)).text();
     assert.match(html, /\/sessions\/carrier_demo\/assets\//);
+    const stylesheetPath = html.match(/href="([^\"]+\.css)"/)?.[1];
+    assert.ok(stylesheetPath, 'mounted UI must advertise a stylesheet');
+    const backendStylesheetPath = stylesheetPath.replace('/sessions/carrier_demo', '').replace(/^\//, '');
+    const stylesheetResponse = await fetch(`${web.url}${backendStylesheetPath}`);
+    assert.equal(stylesheetResponse.status, 200);
+    assert.match(stylesheetResponse.headers.get('content-type') ?? '', /text\/css/);
+    const stylesheetText = await stylesheetResponse.text();
+    assert.match(stylesheetText, /padding|\.shell-header/);
+    assert.match(stylesheetText, /justify-content:\s*space-between/);
   } finally {
     await new Promise((resolve) => web.server.close(resolve));
   }

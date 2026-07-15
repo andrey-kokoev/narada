@@ -22,7 +22,6 @@ import type { AgentStartResultV0 } from '@narada2/agent-start/launch-result-v0-c
 import { AgentStartArtifactError, parseAgentStartResultText } from './agent-start-result-reader.js';
 
 const LAUNCH_RESULT_RECONCILIATION_SCHEMA = 'narada.agent_start_result_reconciliation.v1';
-const LAUNCH_RESULT_RECONCILIATION_STATUS = 'completed';
 const RECONCILIATION_LOCK_TIMEOUT_MS = 5000;
 const RECONCILIATION_LOCK_POLL_MS = 25;
 const RECONCILIATION_LOCK_STALE_MS = 30000;
@@ -80,17 +79,69 @@ function isCompletedReconciliationReceipt(
   value: unknown,
   launchResultsDir: string,
 ): value is LaunchResultReconciliationReceipt {
+  return isReconciliationReceipt(value, launchResultsDir, 'completed');
+}
+
+function isPendingReconciliationReceipt(
+  value: unknown,
+  launchResultsDir: string,
+): value is LaunchResultReconciliationReceipt {
+  return isReconciliationReceipt(value, launchResultsDir, 'pending');
+}
+
+function isReconciliationReceipt(
+  value: unknown,
+  launchResultsDir: string,
+  status: LaunchResultReconciliationReceipt['status'],
+): value is LaunchResultReconciliationReceipt {
   if (!value || typeof value !== 'object') return false;
   const receipt = value as Partial<LaunchResultReconciliationReceipt>;
   return receipt.schema === LAUNCH_RESULT_RECONCILIATION_SCHEMA
-    && receipt.status === LAUNCH_RESULT_RECONCILIATION_STATUS
+    && receipt.status === status
     && receipt.version === 1
     && typeof receipt.launch_results_dir === 'string'
     && normalizedPath(receipt.launch_results_dir) === normalizedPath(launchResultsDir)
     && typeof receipt.started_at === 'string'
-    && typeof receipt.completed_at === 'string'
+    && (status === 'pending' ? receipt.completed_at === undefined : typeof receipt.completed_at === 'string')
     && Array.isArray(receipt.deleted_artifacts)
     && receipt.deleted_artifacts.every((artifact) => isReceiptArtifact(artifact, launchResultsDir));
+}
+
+function reconciliationArtifactKey(artifact: LaunchResultReconciliationArtifact): string {
+  return `${normalizedPath(artifact.path)}\u0000${artifact.sha256}\u0000${artifact.reason_code}`;
+}
+
+function mergeReconciliationArtifacts(
+  ...groups: LaunchResultReconciliationArtifact[][]
+): LaunchResultReconciliationArtifact[] {
+  const merged = new Map<string, LaunchResultReconciliationArtifact>();
+  for (const group of groups) {
+    for (const artifact of group) {
+      const key = reconciliationArtifactKey(artifact);
+      const existing = merged.get(key);
+      if (existing) {
+        if (!existing.deleted_at && artifact.deleted_at) existing.deleted_at = artifact.deleted_at;
+        continue;
+      }
+      merged.set(key, { ...artifact });
+    }
+  }
+  return [...merged.values()];
+}
+
+function recoverPendingArtifacts(
+  receipt: LaunchResultReconciliationReceipt | null,
+  recoveredAt: string,
+  activeInvalidArtifacts: LaunchResultReconciliationArtifact[],
+): LaunchResultReconciliationArtifact[] {
+  if (!receipt) return [];
+  const activeInvalidKeys = new Set(activeInvalidArtifacts.map(reconciliationArtifactKey));
+  return receipt.deleted_artifacts.flatMap((artifact) => {
+    if (artifact.deleted_at || !existsSync(artifact.path)) {
+      return [{ ...artifact, deleted_at: artifact.deleted_at ?? recoveredAt }];
+    }
+    return activeInvalidKeys.has(reconciliationArtifactKey(artifact)) ? [{ ...artifact }] : [];
+  });
 }
 
 function parseLaunchResultForDiscovery(raw: string, path: string): AgentStartResultV0 {
@@ -128,9 +179,11 @@ function listInvalidLaunchResults(launchResultsDir: string): LaunchResultReconci
     });
 }
 
-function writeJsonAtomically(path: string, value: unknown): void {
+function writeJsonAtomically(path: string, value: unknown, options: { replaceExisting?: boolean } = {}): void {
   mkdirSync(dirname(path), { recursive: true });
-  if (existsSync(path)) throw new Error(`agent_start_result_reconciliation_target_exists: ${path}`);
+  if (!options.replaceExisting && existsSync(path)) {
+    throw new Error(`agent_start_result_reconciliation_target_exists: ${path}`);
+  }
   const temporaryPath = `${path}.${process.pid}.${randomUUID()}.tmp`;
   try {
     writeFileSync(temporaryPath, `${JSON.stringify(value, null, 2)}\n`, { encoding: 'utf8', flag: 'wx' });
@@ -226,32 +279,55 @@ function acquireReconciliationLock(lockPath: string): () => void {
 export function reconcileLaunchResults(launchResultsDir: string): LaunchResultReconciliationReceipt {
   const reconciliationDir = join(dirname(launchResultsDir), 'agent-start-reconciliation');
   const receiptPath = join(reconciliationDir, 'v1.json');
+  const pendingPath = join(reconciliationDir, 'v1.pending.json');
   const releaseLock = acquireReconciliationLock(join(reconciliationDir, 'v1.lock'));
   try {
+    let existingReceipt: LaunchResultReconciliationReceipt | null = null;
     if (existsSync(receiptPath)) {
-      let existingReceipt: unknown;
+      let rawReceipt: unknown;
       try {
-        existingReceipt = JSON.parse(readFileSync(receiptPath, 'utf8'));
+        rawReceipt = JSON.parse(readFileSync(receiptPath, 'utf8'));
       } catch {
         throw new Error(`agent_start_result_reconciliation_receipt_invalid: ${receiptPath}`);
       }
-      if (isCompletedReconciliationReceipt(existingReceipt, launchResultsDir)) return existingReceipt;
-      throw new Error(`agent_start_result_reconciliation_receipt_invalid: ${receiptPath}`);
+      if (!isCompletedReconciliationReceipt(rawReceipt, launchResultsDir)) {
+        throw new Error(`agent_start_result_reconciliation_receipt_invalid: ${receiptPath}`);
+      }
+      existingReceipt = rawReceipt;
+    }
+
+    let pendingReceipt: LaunchResultReconciliationReceipt | null = null;
+    if (existsSync(pendingPath)) {
+      let rawPendingReceipt: unknown;
+      try {
+        rawPendingReceipt = JSON.parse(readFileSync(pendingPath, 'utf8'));
+      } catch {
+        throw new Error(`agent_start_result_reconciliation_pending_invalid: ${pendingPath}`);
+      }
+      if (!isPendingReconciliationReceipt(rawPendingReceipt, launchResultsDir)) {
+        throw new Error(`agent_start_result_reconciliation_pending_invalid: ${pendingPath}`);
+      }
+      pendingReceipt = rawPendingReceipt;
     }
 
     const startedAt = new Date().toISOString();
     const invalidArtifacts = listInvalidLaunchResults(launchResultsDir);
-    const pendingReceipt: LaunchResultReconciliationReceipt = {
+    const recoveredAt = new Date().toISOString();
+    const recoveredPendingArtifacts = recoverPendingArtifacts(pendingReceipt, recoveredAt, invalidArtifacts);
+    if (existingReceipt && !pendingReceipt && invalidArtifacts.length === 0) return existingReceipt;
+    const pendingReceiptToWrite: LaunchResultReconciliationReceipt = {
       schema: LAUNCH_RESULT_RECONCILIATION_SCHEMA,
       status: 'pending',
       version: 1,
-      launch_results_dir: launchResultsDir,
-      started_at: startedAt,
-      deleted_artifacts: invalidArtifacts,
+      launch_results_dir: existingReceipt?.launch_results_dir ?? pendingReceipt?.launch_results_dir ?? launchResultsDir,
+      started_at: existingReceipt?.started_at ?? pendingReceipt?.started_at ?? startedAt,
+      deleted_artifacts: mergeReconciliationArtifacts(
+        existingReceipt?.deleted_artifacts ?? [],
+        recoveredPendingArtifacts,
+        invalidArtifacts,
+      ),
     };
-    const pendingPath = join(reconciliationDir, 'v1.pending.json');
-    if (existsSync(pendingPath)) rmSync(pendingPath, { force: true });
-    writeJsonAtomically(pendingPath, pendingReceipt);
+    writeJsonAtomically(pendingPath, pendingReceiptToWrite, { replaceExisting: true });
 
     const deletedAt = new Date().toISOString();
     for (const artifact of invalidArtifacts) {
@@ -262,18 +338,25 @@ export function reconcileLaunchResults(launchResultsDir: string): LaunchResultRe
       }
       artifact.deleted_at = deletedAt;
     }
+    const completedArtifacts = mergeReconciliationArtifacts(
+      existingReceipt?.deleted_artifacts ?? [],
+      recoveredPendingArtifacts,
+      invalidArtifacts,
+    );
     const completedReceipt: LaunchResultReconciliationReceipt = {
-      ...pendingReceipt,
+      ...pendingReceiptToWrite,
       status: 'completed',
       completed_at: new Date().toISOString(),
+      deleted_artifacts: completedArtifacts,
     };
-    writeJsonAtomically(receiptPath, completedReceipt);
+    writeJsonAtomically(receiptPath, completedReceipt, { replaceExisting: Boolean(existingReceipt) });
     if (existsSync(pendingPath)) rmSync(pendingPath, { force: true });
     return completedReceipt;
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
     if (
       detail.startsWith('agent_start_result_reconciliation_receipt_invalid:')
+      || detail.startsWith('agent_start_result_reconciliation_pending_invalid:')
       || detail.startsWith('agent_start_result_reconciliation_busy:')
       || detail.startsWith('agent_start_result_reconciliation_lock_')
       || detail.startsWith('agent_start_result_reconciliation_failed:')

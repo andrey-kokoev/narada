@@ -1,4 +1,16 @@
-import { classifyNarsClientEventProjection, projectNarsClientEvent } from '@narada2/nars-client-projection-contract';
+import { classifyNarsClientEventProjection, normalizeNarsSessionEventView, projectNarsClientEvent } from '@narada2/nars-client-projection-contract';
+
+function normalizeProjectionEventView(view: unknown): string | null {
+  return normalizeNarsSessionEventView(typeof view === 'string' ? view : 'raw');
+}
+
+export function projectedEventMatchesView(event: ProjectedEvent, view: string): boolean {
+  if (view === 'raw') return true;
+  if (view === 'conversation') return event.event_class === 'conversation';
+  if (view === 'operations') return event.event_class === 'conversation' || event.event_class === 'operations';
+  if (view === 'diagnostics') return event.event_class === 'diagnostics';
+  return false;
+}
 
 export const CLOUDFLARE_NARS_PROJECTION_INTENT_SCHEMA = 'narada.cloudflare_nars_projection.intent.v1';
 export const CLOUDFLARE_NARS_PROJECTION_ACCESS_SCHEMA = 'narada.cloudflare_nars_projection.remote_access.v1';
@@ -572,19 +584,33 @@ export function createCloudflareNarsProjectionWorkerService(options: {
       projection_id: string;
       browser_token_fingerprint: string;
       since_sequence?: number | null;
+      before_sequence?: number | null;
+      direction?: 'forward' | 'backward';
       max_events?: number;
+      view?: string;
       now?: string;
     }): CloudflareNarsProjectionWorkerReadResult {
+      const view = normalizeProjectionEventView(args.view);
       const record = accessRecords.get(args.projection_id);
-      if (!record) return refusedCacheRead(args.projection_id, 'projection_not_found', args.since_sequence ?? null);
+      if (!record) return refusedCacheRead(args.projection_id, 'projection_not_found', args.since_sequence ?? null, view ?? args.view ?? 'raw');
+      if (!view) return refusedCacheRead(args.projection_id, 'invalid_session_event_view', args.since_sequence ?? null, String(args.view));
       const access = validateProjectionCredential(record, {
         credential_kind: 'browser',
         token_fingerprint: args.browser_token_fingerprint,
         action: 'subscribe_events',
         now: args.now,
       });
-      if (!access.ok) return refusedCacheRead(args.projection_id, access.code ?? 'access_refused', args.since_sequence ?? null);
-      return { status: 'ok', ...cache.read(args.projection_id, { since_sequence: args.since_sequence ?? null, max_events: args.max_events }) };
+      if (!access.ok) return refusedCacheRead(args.projection_id, access.code ?? 'access_refused', args.since_sequence ?? null, view);
+      return {
+        status: 'ok',
+        ...cache.read(args.projection_id, {
+          since_sequence: args.since_sequence ?? null,
+          before_sequence: args.before_sequence ?? null,
+          direction: args.direction ?? 'forward',
+          max_events: args.max_events,
+          view,
+        }),
+      };
     },
     readArtifactMetadata(args: {
       projection_id: string;
@@ -1340,13 +1366,14 @@ export function projectionDegradedLaunchResult(args: {
   };
 }
 
-function refusedCacheRead(projectionId: string, code: string, sinceSequence: number | null): CloudflareNarsProjectionWorkerReadResult {
+function refusedCacheRead(projectionId: string, code: string, sinceSequence: number | null, view = 'raw'): CloudflareNarsProjectionWorkerReadResult {
   return {
     schema: CLOUDFLARE_NARS_PROJECTION_CACHE_SCHEMA,
     status: 'refused',
     code,
     projection_id: projectionId,
     source: 'cloudflare_projection_cache',
+    view,
     events: [],
     event_count: 0,
     has_more: false,
@@ -1474,12 +1501,14 @@ export interface BoundedProjectionCacheRead {
   schema: typeof CLOUDFLARE_NARS_PROJECTION_CACHE_SCHEMA;
   projection_id: string;
   source: 'cloudflare_projection_cache';
+  view: string;
   events: ProjectedEvent[];
   event_count: number;
   has_more: boolean;
   truncated: boolean;
   cursor: {
     since_sequence: number | null;
+    before_sequence?: number | null;
     last_sequence: number | null;
     next_sequence: number | null;
   };
@@ -1886,10 +1915,31 @@ export function createBoundedProjectionCache(maxEvents = 200) {
       entries.set(event.projection_id, current);
       return { status: duplicateIndex >= 0 ? 'deduplicated' : 'cached', projection_id: event.projection_id, retained: current.length, max_events: limit };
     },
-    read(projectionId: string, { since_sequence = null, max_events = limit }: { since_sequence?: number | null; max_events?: number } = {}): BoundedProjectionCacheRead {
+    read(projectionId: string, {
+      since_sequence = null,
+      before_sequence = null,
+      direction = 'forward',
+      max_events = limit,
+      view = 'raw',
+    }: {
+      since_sequence?: number | null;
+      before_sequence?: number | null;
+      direction?: 'forward' | 'backward';
+      max_events?: number;
+      view?: string;
+    } = {}): BoundedProjectionCacheRead {
       const current = entries.get(projectionId) ?? [];
-      const filtered = since_sequence == null ? current : current.filter((entry) => entry.event_sequence == null || entry.event_sequence > since_sequence);
-      const selected = filtered.slice(0, Math.max(0, Math.min(max_events, limit)));
+      const viewFiltered = current.filter((entry) => projectedEventMatchesView(entry.event, view));
+      const bounded = since_sequence == null
+        ? viewFiltered
+        : viewFiltered.filter((entry) => entry.event_sequence == null || entry.event_sequence > since_sequence);
+      const filtered = before_sequence == null
+        ? bounded
+        : bounded.filter((entry) => entry.event_sequence == null || entry.event_sequence < before_sequence);
+      const pageLimit = Math.max(0, Math.min(max_events, limit));
+      const selected = direction === 'backward'
+        ? filtered.slice(Math.max(0, filtered.length - pageLimit))
+        : filtered.slice(0, pageLimit);
       const lastSequence = selected.reduce<number | null>((max, entry) => {
         if (entry.event_sequence == null) return max;
         return max == null ? entry.event_sequence : Math.max(max, entry.event_sequence);
@@ -1898,12 +1948,16 @@ export function createBoundedProjectionCache(maxEvents = 200) {
         schema: CLOUDFLARE_NARS_PROJECTION_CACHE_SCHEMA,
         projection_id: projectionId,
         source: 'cloudflare_projection_cache',
+        view,
         events: selected.map((entry) => entry.event),
         event_count: selected.length,
         has_more: filtered.length > selected.length,
         truncated: current.length === limit && (since_sequence == null || current[0]?.event_sequence != null && current[0].event_sequence > since_sequence + 1),
         cursor: {
           since_sequence,
+          before_sequence: direction === 'backward'
+            ? selected.at(0)?.event_sequence ?? before_sequence
+            : before_sequence,
           last_sequence: lastSequence,
           next_sequence: lastSequence == null ? null : lastSequence + 1,
         },

@@ -6,6 +6,7 @@ import { NARADA_AGENT_RUNTIME_SERVER_KIND } from '@narada2/operator-surface-runt
 import { buildLaunchProcessOwnership, launchSessionIdFromToken, type LaunchProcessOwnership } from '@narada2/launch-process-ownership';
 import type {
   AgentStartCommandResult,
+  AgentStartExecutionResult,
   AgentStartOptions,
 } from './launcher-contracts.js';
 import type { AgentStartResultV0 } from '@narada2/agent-start/launch-result-v0-contract';
@@ -49,6 +50,16 @@ export function shouldDetachAgentStartProcess(options: Pick<AgentStartOptions, '
 
 export function isAgentStartAcceptedStatus(status: AgentStartCommandResult['status']): boolean {
   return status === 'success' || status === 'starting';
+}
+
+export function classifyAgentStartLaunchBindingResult(
+  executionStatus: AgentStartExecutionResult['status'],
+  parsedRecord: AgentStartResultV0 | null,
+  parseErrorReason: string | null,
+) {
+  if (parsedRecord) return classifyAgentStartLaunchBindingStatus(executionStatus, parsedRecord);
+  if (executionStatus === 'starting') return classifyAgentStartLaunchBindingStatus(executionStatus, null);
+  return { status: 'failed' as const, reason: parseErrorReason ?? 'agent_start_failed' };
 }
 
 function failAgentStartBeforeExecution(args: {
@@ -245,9 +256,11 @@ export function runAgentStartCommand(options: AgentStartOptions): AgentStartComm
   const parsedAttempt = tryParseAgentStartResultArtifact(parsed, resultPath);
   const parsedRecord: AgentStartResultV0 | null = parsedAttempt.record;
   const sessionProjection = parsedRecord ? resolveAgentStartSessionProjection(parsedRecord) : null;
-  const launchBindingStatus = parsedAttempt.error
-    ? { status: 'failed' as const, reason: parsedAttempt.error.reason_code }
-    : classifyAgentStartLaunchBindingStatus(execution.status, parsedRecord);
+  const launchBindingStatus = classifyAgentStartLaunchBindingResult(
+    execution.status,
+    parsedRecord,
+    parsedAttempt.error?.reason_code ?? null,
+  );
   writeOperatorProjectionLaunchBinding(options.launchBindingPath, {
     status: launchBindingStatus.status,
     siteRoot,

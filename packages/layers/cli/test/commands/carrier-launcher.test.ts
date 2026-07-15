@@ -3,7 +3,7 @@ import { vi } from 'vitest';
 vi.unmock('node:fs');
 vi.unmock('node:fs/promises');
 
-import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Command } from 'commander';
@@ -25,7 +25,7 @@ import {
   schedulerSiteDaemonInstallCommand,
   schedulerSiteDaemonStatusCommand,
 } from '../../src/commands/scheduler.js';
-import { classifyAgentStartLaunchBindingStatus, runAgentStartCommand, shouldDetachAgentStartProcess } from '../../src/lib/launcher-runtime.js';
+import { classifyAgentStartLaunchBindingResult, classifyAgentStartLaunchBindingStatus, isAgentStartAcceptedStatus, runAgentStartCommand, shouldDetachAgentStartProcess } from '../../src/lib/launcher-runtime.js';
 import { getSchedulerSiteDaemonStatus } from '../../src/lib/launcher-runtime-scheduler.js';
 import type { CommandContext } from '../../src/lib/command-wrapper.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
@@ -85,16 +85,18 @@ async function writeLaunchResult(siteRoot: string, name: string, identity: strin
     carrier_kind: 'agent-cli',
     runtime: 'narada-agent-runtime-server',
     runtime_substrate_kind: 'narada-agent-runtime-server',
+    handoff: {
+      session_ref: { id: 'carrier_test', kind: 'carrier' },
+    },
     target_site_root: siteRoot,
     required_environment: {
       NARADA_SITE_ROOT: siteRoot,
       NARADA_CARRIER_SESSION_ID: 'carrier_test',
     },
     nars_launch: {
-      control_path: controlPath,
-      session_path: sitePaths.narsSessionPath,
-    },
-    nars_launch: {
+      session_id: 'carrier_test',
+      runtime_session_id: 'carrier_test',
+      nars_session_id: 'carrier_test',
       control_path: controlPath,
       session_path: sitePaths.narsSessionPath,
     },
@@ -119,9 +121,15 @@ async function writeLaunchResultWithoutControlFile(siteRoot: string, name: strin
     schema: 'narada.agent_start.result.v0',
     status: 'materialized',
     agent_start_event: name,
+    handoff: {
+      session_ref: { id: 'carrier_missing_control', kind: 'carrier' },
+    },
     required_environment: {
       NARADA_AGENT_ID: 'sonar.resident',
       NARADA_CARRIER_SESSION_ID: 'carrier_missing_control',
+    },
+    carrier_session: {
+      carrier_session_id: 'carrier_missing_control',
     },
     runtime_args: [
       'agent-cli',
@@ -167,6 +175,34 @@ describe('carrier launcher CLI commands', () => {
 
     expect(control.exitCode).toBe(ExitCode.SUCCESS);
     expect((control.result as { control_path: string }).control_path).toBe(controlPath);
+  });
+
+  it('reconciles an invalid historical artifact at the status boundary', async () => {
+    const siteRoot = await tempSite();
+    const resultDir = join(siteRoot, '.ai', 'runtime', 'agent-start-results');
+    const invalidPath = join(resultDir, 'evt-invalid.result.json');
+    await mkdir(resultDir, { recursive: true });
+    await writeFile(invalidPath, JSON.stringify({
+      schema: 'narada.agent_start.result.v0',
+      status: 'materialized',
+      carrier_session: { carrier_session_id: 'legacy_status' },
+    }), 'utf8');
+
+    const status = await carrierStatusCommand({
+      siteRoot,
+      agent: 'sonar.resident',
+      format: 'json',
+    }, createMockContext());
+
+    expect(status.exitCode).toBe(ExitCode.SUCCESS);
+    expect((status.result as { status: string }).status).toBe('not_found');
+    await expect(readFile(invalidPath, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
+    const receipt = JSON.parse(await readFile(
+      join(resultDir, '..', 'agent-start-reconciliation', 'v1.json'),
+      'utf8',
+    )) as { status: string; deleted_artifacts: Array<{ path: string }> };
+    expect(receipt.status).toBe('completed');
+    expect(receipt.deleted_artifacts[0]?.path).toBe(invalidPath);
   });
 
   it('renders carrier status identity through agent identity ref when available', async () => {
@@ -243,6 +279,7 @@ describe('carrier launcher CLI commands', () => {
       siteRoot,
       agent: 'sonar.resident',
       carrier: 'agent-cli',
+      mcpScope: 'none',
       format: 'json',
     }, createMockContext());
 
@@ -309,11 +346,8 @@ describe('carrier launcher CLI commands', () => {
 
   it('passes workspace root and intelligence provider through canonical agent-start', async () => {
     const workspaceRoot = naradaProperRoot;
-    const siteRoot = workspaceRoot;
-    const agentStartDir = join(workspaceRoot, 'packages', 'agent-start', 'src');
-    const agentStartPath = join(agentStartDir, 'narada-agent-start.ts');
-    await mkdir(agentStartDir, { recursive: true });
-    await writeFile(agentStartPath, '', 'utf8');
+    const siteRoot = await tempSite();
+    const agentStartPath = join(workspaceRoot, 'packages', 'agent-start', 'src', 'narada-agent-start.ts');
     const previousNaradaProperRoot = process.env.NARADA_PROPER_ROOT;
     process.env.NARADA_PROPER_ROOT = naradaProperRoot;
 
@@ -326,6 +360,7 @@ describe('carrier launcher CLI commands', () => {
         agent: 'narada.architect',
         carrier: 'agent-cli',
         intelligenceProvider: 'codex-subscription',
+        mcpScope: 'none',
         dryRun: true,
         format: 'json',
       }, createMockContext());
@@ -389,14 +424,43 @@ describe('carrier launcher CLI commands', () => {
 
   it('treats materialized NARS handoff as ready even when wrapper execution reports failure', () => {
     const status = classifyAgentStartLaunchBindingStatus('failed', {
-      schema: 'narada.agent_start.result.v1',
+      schema: 'narada.agent_start.result.v0',
       status: 'materialized',
+      handoff: {
+        session_ref: { id: 'carrier_materialized', kind: 'nars' },
+      },
       nars_launch: {
         nars_session_id: 'carrier_materialized',
       },
     });
 
     expect(status).toEqual({ status: 'ready', reason: null });
+  });
+
+  it('does not make legacy agent-start results ready through the launch binding', () => {
+    expect(classifyAgentStartLaunchBindingStatus('success', {
+      schema: 'narada.agent_start.result.v0',
+      status: 'success',
+      nars_launch: { nars_session_id: 'carrier_legacy_status' },
+    })).toEqual({ status: 'failed', reason: 'agent_start_result_contract_invalid' });
+    expect(classifyAgentStartLaunchBindingStatus('success', {
+      schema: 'narada.agent_start.result.v1',
+      status: 'materialized',
+      nars_launch: { nars_session_id: 'carrier_legacy_schema' },
+    })).toEqual({ status: 'failed', reason: 'agent_start_result_contract_invalid' });
+  });
+
+  it('keeps a slow detached handoff pending instead of failing the projection binding', () => {
+    expect(classifyAgentStartLaunchBindingStatus('starting', null)).toEqual({
+      status: 'waiting_for_agent_start',
+      reason: 'agent_start_handoff_pending',
+    });
+    expect(classifyAgentStartLaunchBindingResult('starting', null, 'agent_start_result_contract_invalid')).toEqual({
+      status: 'waiting_for_agent_start',
+      reason: 'agent_start_handoff_pending',
+    });
+    expect(isAgentStartAcceptedStatus('starting')).toBe(true);
+    expect(isAgentStartAcceptedStatus('failed')).toBe(false);
   });
 
   it('detaches long-lived NARS operator-surface exec launches unless wait requests inherited control', () => {

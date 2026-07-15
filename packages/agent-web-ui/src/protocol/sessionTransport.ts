@@ -19,6 +19,7 @@ export interface SessionTransport {
   getSocket(): WebSocket | null;
   requestHealth(fetchFn?: typeof fetch): Promise<Response> | null;
   sendFrame(frame: SessionProtocolFrame): boolean;
-  readEventsPage(options: { beforeSequence?: number; afterSequence?: number; direction?: 'forward' | 'backward'; limit?: number }): boolean;
+  subscribeView(view: string): boolean;
+  readEventsPage(options: { view?: string; beforeSequence?: number; afterSequence?: number; direction?: 'forward' | 'backward'; limit?: number }): boolean;
   close(): void;
 }

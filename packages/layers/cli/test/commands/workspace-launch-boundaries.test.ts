@@ -55,8 +55,10 @@ describe('workspace launch module boundaries', () => {
     expect(registry).toContain('readWorkspaceLaunchRecords');
     expect(registry).not.toContain('buildAgentPlan');
     expect(planBuilder).toContain('buildAgentPlan');
+    expect(planBuilder).toContain("from './workspace-launch-terminal.js'");
     expect(planBuilder).not.toContain('readWorkspaceLaunchRecords');
     expect(executor).toContain('executeWorkspaceLaunchPlan');
+    expect(executor).toContain('startWorkspaceLaunchWindowsTerminal');
     expect(result).toContain('finalizeWorkspaceLaunchResult');
     expect(selectionAdapters).toContain('resolveInteractiveSelectionOptions');
     expect(command).toContain("from './workspace-launch-executor.js'");

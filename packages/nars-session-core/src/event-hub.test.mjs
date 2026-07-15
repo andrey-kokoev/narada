@@ -21,6 +21,22 @@ test('event hub attachment exposes replay, live, and closed states', () => {
   assert.equal(hub.subscriberCount(), 0);
 });
 
+test('event hub queues live events during replay and flushes them in order', () => {
+  const hub = createNarsEventHub();
+  const received = [];
+  const subscription = hub.subscribe({
+    subscriptionId: 'sub-order',
+    send: (envelope) => received.push(envelope.payload.event_sequence),
+  });
+  subscription.beginReplay({ source: 'event_log' });
+  hub.publish({ event: 'session_status', event_sequence: 2 });
+  assert.deepEqual(received, []);
+  subscription.markLive({ replay_last_sequence: 1 });
+  assert.deepEqual(received, [2]);
+  hub.publish({ event: 'session_status', event_sequence: 3 });
+  assert.deepEqual(received, [2, 3]);
+});
+
 test('event hub marks a failed sender attachment as failed and removes it', () => {
   const hub = createNarsEventHub();
   const subscription = hub.subscribe({

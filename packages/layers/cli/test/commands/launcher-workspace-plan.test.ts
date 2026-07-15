@@ -393,6 +393,9 @@ describe('launcher workspace planning', () => {
       '-Command',
     ]));
     const commandText = result.selected_agents[0].wt_args[result.selected_agents[0].wt_args.indexOf('-Command') + 1];
+    expect(commandText).toContain("agent-runtime-server: starting sonar.resident");
+    expect(commandText).toContain("This terminal closes when the runtime host exits.");
+    expect(commandText).not.toContain(';');
     expect(commandText).toContain("& 'pnpm' '--dir' 'D:\\code\\narada' 'exec' 'narada' 'operator-surface' 'runtime' 'start'");
     expect(commandText).toContain("'agent-cli'");
     expect(commandText).toContain("'--runtime' 'narada-agent-runtime-server'");

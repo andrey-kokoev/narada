@@ -21,6 +21,7 @@ export function startLocalSessionTransport(context: NarsClientAdapterContext): v
       options.onStatus?.('subscribing');
       const frame = toSessionProtocolFrame(buildAgentWebUiSubscribeFrame({
         maxReplay: options.maxReplay,
+        view: state.view,
         ...(state.lastSequence === null ? {} : { sinceSequence: state.lastSequence }),
       }));
       if (!frame) {
@@ -65,6 +66,16 @@ export function startLocalSessionTransport(context: NarsClientAdapterContext): v
     socket.addEventListener('error', () => {
       if (isCurrent()) options.onStatus?.('error');
     });
+  };
+
+  state.subscribeView = (view) => {
+    state.lastSequence = null;
+    const frame = toSessionProtocolFrame(buildAgentWebUiSubscribeFrame({
+      maxReplay: options.maxReplay,
+      view,
+      includeReplay: true,
+    }));
+    return frame ? connection.sendFrame(frame) : false;
   };
 
   connect();

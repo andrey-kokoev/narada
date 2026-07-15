@@ -27,6 +27,7 @@ export function useSessionState(
       inputEndpoint: config.inputEndpoint,
       browserToken: config.browserToken,
       maxReplay: config.maxReplay,
+      view: verbosity,
     },
     retained.retain,
     retained.retainMany,
@@ -43,6 +44,9 @@ export function useSessionState(
     ...projection,
     health,
     connection,
+    hasEarlierEvents: connection.hasEarlierEvents,
+    loadingEarlier: connection.loadingEarlier,
+    loadEarlier: connection.loadEarlier,
     streamText: connection.streamText,
   };
 }

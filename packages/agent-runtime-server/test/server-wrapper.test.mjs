@@ -284,9 +284,9 @@ test('spawned runtime exposes active and completed FIFO queue state without prov
       .map((event) => event.request_state);
     assert.deepEqual(requestStates('turn-first'), ['received', 'scheduled', 'running', 'completed']);
     assert.deepEqual(requestStates('turn-second'), ['received', 'scheduled', 'running', 'completed']);
-    assert.deepEqual(requestStates('health-active'), ['received', 'scheduled', 'running', 'completed']);
+    assert.deepEqual(requestStates('health-active'), []);
     assert.deepEqual(requestStates('recovery-active'), ['received', 'scheduled', 'running', 'completed']);
-    assert.deepEqual(requestStates('health-completed'), ['received', 'scheduled', 'running', 'completed']);
+    assert.deepEqual(requestStates('health-completed'), []);
     assert.deepEqual(requestStates('recovery-completed'), ['received', 'scheduled', 'running', 'completed']);
     assert.deepEqual(requestStates('close-1'), ['received', 'scheduled', 'waiting', 'running', 'completed']);
   } finally {
@@ -799,11 +799,18 @@ test('WebSocket /events replays and reads durable events.jsonl beyond memory buf
       assert.equal(started.replay_source, 'events_jsonl');
       assert.equal(started.replay_count, 3);
       assert.deepEqual([(await client.nextJson()).payload.event_sequence, (await client.nextJson()).payload.event_sequence, (await client.nextJson()).payload.event_sequence], [2, 3, 4]);
+      assert.equal((await client.nextJson()).event, 'session_events_replay_completed');
       client.sendJson({ id: 'read-1', method: 'session.events.read', params: { before_sequence: 4, direction: 'backward', limit: 2 } });
       const read = await client.nextJson();
       assert.equal(read.event, 'session_events_read');
       assert.equal(read.source, 'events_jsonl');
       assert.deepEqual(read.events.map((event) => event.event_sequence), [2, 3]);
+      client.sendJson({ id: 'conversation-read-1', method: 'session.events.read', params: { view: 'conversation', limit: 1 } });
+      const conversationRead = await client.nextJson();
+      assert.equal(conversationRead.event, 'session_events_read');
+      assert.equal(conversationRead.view, 'conversation');
+      assert.equal(conversationRead.has_more, true);
+      assert.deepEqual(conversationRead.events.map((event) => event.event_sequence), [2]);
       const latestClient = await connectWebSocket(projection.url);
       try {
         await latestClient.nextJson();
@@ -813,6 +820,17 @@ test('WebSocket /events replays and reads durable events.jsonl beyond memory buf
         assert.deepEqual([(await latestClient.nextJson()).payload.event_sequence, (await latestClient.nextJson()).payload.event_sequence], [3, 4]);
       } finally {
         latestClient.close();
+      }
+      const operationsClient = await connectWebSocket(projection.url);
+      try {
+        await operationsClient.nextJson();
+        operationsClient.sendJson({ id: 'operations-1', method: 'session.events.subscribe', params: { include_replay: true, page_size: 1, view: 'operations' } });
+        const operationsStarted = await operationsClient.nextJson();
+        assert.equal(operationsStarted.view, 'operations');
+        assert.equal(operationsStarted.replay_count, 1);
+        assert.equal((await operationsClient.nextJson()).payload.event_sequence, 4);
+      } finally {
+        operationsClient.close();
       }
     } finally {
       client.close();
@@ -1137,6 +1155,7 @@ test('WebSocket /events subscribes with replay and forwards protocol frames', as
     const replay = await client.nextJson();
     assert.equal(replay.event, 'session_event');
     assert.equal(replay.payload.event, 'session_started');
+    assert.equal((await client.nextJson()).event, 'session_events_replay_completed');
     hub.publish({ event: 'assistant_message', request_id: 'input_1', content: 'hello' });
     const live = await client.nextJson();
     assert.equal(live.payload.event, 'assistant_message');

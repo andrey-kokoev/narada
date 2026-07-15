@@ -18,6 +18,9 @@ export const NARS_AFFORDANCE_ACTION_POSTURES: Readonly<{
 }>;
 export const NARS_AFFORDANCE_ACTION_REFUSAL_CODES: Readonly<Record<string, string>>;
 export const NARS_CLIENT_PROJECTION_VERBOSITY_LEVELS: readonly ['conversation', 'operations', 'diagnostics', 'raw'];
+export const NARS_SESSION_EVENT_VIEWS: readonly ['conversation', 'operations', 'diagnostics', 'raw'];
+export const NARS_SESSION_EVENT_DEFAULT_VIEW: 'raw';
+export function normalizeNarsSessionEventView(view?: unknown): NarsClientProjectionVerbosity | null;
 export type NarsClientProjectionVerbosity = typeof NARS_CLIENT_PROJECTION_VERBOSITY_LEVELS[number];
 export type NarsClientProjectionClass = 'conversation' | 'operations' | 'diagnostics' | 'raw';
 export const NARS_CLIENT_PROJECTION_DEFAULT_VERBOSITY: NarsClientProjectionVerbosity;
