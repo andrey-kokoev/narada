@@ -205,6 +205,9 @@ test.describe('agent-web-ui live slash commands', () => {
       await expect(page.locator('#operator-form')).toHaveAttribute('data-operator-delivery-phase', 'completed');
       await expect(page.locator('#operator-form')).toHaveAttribute('data-operator-delivery-request-id', queued.request_id);
       await expect(page.locator('.composer-delivery-status')).toContainText('Input delivered');
+      await expect(page.locator('[data-event-kind^="activity_"]')).toHaveCount(0);
+      await expect(page.locator('.composer-delivery-status')).not.toContainText('Waiting for agent');
+      await expect(page.locator('.composer-delivery-status')).not.toContainText('Steering the active turn');
     } finally {
       await page.close().catch(() => {});
       await runtime.close();

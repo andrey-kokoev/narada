@@ -37,14 +37,26 @@ export function isTerminalRuntimeEvent(message) {
 export function applyRuntimeEventToWebUiState(state, message) {
   const runtimeEvent = unwrapRuntimeEvent(message);
   if (!state || !runtimeEvent || typeof runtimeEvent !== 'object') return state;
-  if (runtimeEvent.event === 'turn_started') {
+  if (runtimeEvent.event === 'turn_started' || runtimeEvent.event === 'carrier_turn_started') {
     state.activeTurnId = runtimeEvent.turn_id ?? true;
-  } else if (runtimeEvent.event === 'turn_complete' || runtimeEvent.event === 'turn_failed') {
-    if (!runtimeEvent.turn_id || state.activeTurnId === runtimeEvent.turn_id) state.activeTurnId = null;
+  } else if (isActiveTurnTerminalEvent(runtimeEvent)) {
+    const terminalTurnId = runtimeEvent.turn_id ?? runtimeEvent.input_event_id ?? runtimeEvent.event_id ?? null;
+    if (!terminalTurnId || state.activeTurnId === terminalTurnId) state.activeTurnId = null;
   } else if (runtimeEvent.event === 'session_closed') {
     state.activeTurnId = null;
   }
   return state;
+}
+
+function isActiveTurnTerminalEvent(event) {
+  return event.event === 'turn_complete'
+    || event.event === 'turn_failed'
+    || event.event === 'carrier_turn_completed'
+    || event.event === 'carrier_turn_failed'
+    || event.event === 'carrier_turn_interrupted'
+    || event.event === 'turn_interrupted'
+    || event.event === 'input_event_completed'
+    || event.event === 'input_completed';
 }
 
 function withRenderIdentity(projected) {

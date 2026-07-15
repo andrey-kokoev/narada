@@ -513,6 +513,29 @@ test('conversation projection keeps chat compact while activity summarizes top-l
   assert.equal(completedProjection.activity.active, false);
 });
 
+test('custom projection views filter rendered rows by presentation facet while keeping activity state intact', () => {
+  const events = [
+    { event: 'user_message', request_id: 'view-input', content: 'show me the result' },
+    { event: 'tool_call', request_id: 'view-input', tool_name: 'narada.example.lookup' },
+    { event: 'error', request_id: 'view-input', message: 'example failure' },
+    { event: 'directive_received', request_id: 'view-input', directive_id: 'directive-1' },
+    { event: 'unclassified_event', request_id: 'view-input', value: 'raw record' },
+  ];
+
+  const conversationOnly = createSessionProjection(events, {
+    verbosity: 'raw',
+    customView: { facets: ['conversation'] },
+  });
+  assert.deepEqual(conversationOnly.rows.map((row) => row.disposition), ['conversation_fact']);
+  assert.equal(conversationOnly.rows[0].kind, 'user_message');
+
+  const operationsAndDiagnostics = createSessionProjection(events, {
+    verbosity: 'raw',
+    customView: { facets: ['operations', 'diagnostics'] },
+  });
+  assert.deepEqual(operationsAndDiagnostics.rows.map((row) => row.disposition), ['operation_fact', 'diagnostic_signal']);
+});
+
 test('session projection reduces routine health into state and clears completed tool activity', () => {
   const agentIdentityRef = {
     schema: 'narada.agent_identity_ref.v1',
@@ -553,6 +576,40 @@ test('session projection clears stale activity when health reports no running tu
   const projection = createSessionProjection(events, { verbosity: 'conversation', nowMs: Date.parse('2026-06-30T15:10:01.000Z') });
   assert.equal(projection.activity.active, false);
   assert.equal(projection.activity.state, 'idle');
+});
+
+test('session projection settles carrier completion aliases after retained-tab replay', () => {
+  const prefix = [
+    { event: 'operator_input_submitted', request_id: 'input-carrier', method: 'session.submit', content: 'run', timestamp: '2026-07-11T12:10:00.000Z' },
+    { event: 'input_event_queued', request_id: 'input-carrier', event_id: 'turn-carrier', timestamp: '2026-07-11T12:10:00.100Z' },
+    { event: 'input_event_started', request_id: 'input-carrier', event_id: 'turn-carrier', timestamp: '2026-07-11T12:10:00.200Z' },
+    { event: 'carrier_turn_started', request_id: 'input-carrier', turn_id: 'turn-carrier', timestamp: '2026-07-11T12:10:00.300Z' },
+  ];
+  const carrierCompleted = createSessionProjection([
+    ...prefix,
+    { event: 'carrier_turn_completed', turn_id: 'turn-carrier', terminal_state: 'completed', timestamp: '2026-07-11T12:11:00.000Z' },
+  ], { verbosity: 'conversation', nowMs: Date.parse('2026-07-11T12:11:01.000Z') });
+  assert.equal(carrierCompleted.activity.active, false);
+  assert.equal(carrierCompleted.activity.state, TURN_ACTIVITY_PHASES.IDLE);
+
+  const inputCompleted = createSessionProjection([
+    ...prefix,
+    { event: 'input_completed', input_event_id: 'turn-carrier', terminal_state: 'completed', timestamp: '2026-07-11T12:11:00.000Z' },
+  ], {
+    verbosity: 'conversation',
+    nowMs: Date.parse('2026-07-11T12:11:01.000Z'),
+    healthSnapshot: { active_turn_state: null, active_turn_id: null },
+  });
+  assert.equal(inputCompleted.activity.active, false);
+  assert.equal(inputCompleted.operatorDelivery.phase, OPERATOR_INPUT_DELIVERY_PHASES.COMPLETED);
+  assert.equal(inputCompleted.operatorDelivery.label, 'Input delivered');
+
+  const nullHealth = createSessionProjection([
+    { event: 'turn_started', turn_id: 'turn-stale', timestamp: '2026-07-11T12:10:00.000Z' },
+  ], {
+    healthSnapshot: { active_turn_state: null, active_turn_id: null },
+  });
+  assert.equal(nullHealth.activity.active, false);
 });
 
 test('session projection clears activity on turn interruption', () => {
@@ -603,6 +660,19 @@ test('operator input delivery projects submission through NARS acknowledgment an
   ]);
   assert.equal(projection.requestId, 'input-1');
   assert.equal(projection.activeTurnId, 'nars-input-1');
+});
+
+test('operator input delivery recognizes carrier input completion evidence', () => {
+  const projection = createOperatorInputDeliveryProjection([
+    { event: 'operator_input_submitted', request_id: 'input-carrier', method: 'session.submit', content: 'run', timestamp: '2026-07-11T12:12:00.000Z' },
+    { event: 'input_event_queued', request_id: 'input-carrier', event_id: 'nars-input-carrier', timestamp: '2026-07-11T12:12:00.100Z' },
+    { event: 'input_event_started', request_id: 'input-carrier', event_id: 'nars-input-carrier', timestamp: '2026-07-11T12:12:00.200Z' },
+    { event: 'input_completed', input_event_id: 'nars-input-carrier', terminal_state: 'completed', timestamp: '2026-07-11T12:13:00.000Z' },
+  ], Date.parse('2026-07-11T12:13:01.000Z'));
+
+  assert.equal(projection.phase, OPERATOR_INPUT_DELIVERY_PHASES.COMPLETED);
+  assert.equal(projection.label, 'Input delivered');
+  assert.equal(projection.terminalState, 'completed');
 });
 
 test('operator input delivery distinguishes explicit queueing before turn admission', () => {

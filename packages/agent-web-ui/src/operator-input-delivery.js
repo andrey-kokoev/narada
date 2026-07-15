@@ -136,7 +136,7 @@ export function reduceOperatorInputDelivery(state, message) {
     return state;
   }
 
-  if (kind === 'input_event_completed') {
+  if (kind === 'input_event_completed' || kind === 'input_completed') {
     const record = findOrCreateRuntimeRecord(state, requestId, event);
     if (!record || isTerminal(record.phase)) return state;
     absorbRuntimeMetadata(record, event);

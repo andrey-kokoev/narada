@@ -54,7 +54,7 @@ function normalizeActivity(value: AgentActivityState): AgentActivityState {
 
 function reconcileActivityWithHealth(activity: AgentActivityState, health: Record<string, unknown> | null): AgentActivityState {
   if (!activity.active || !health) return activity;
-  const activeTurnState = typeof health.active_turn_state === 'string' ? health.active_turn_state : null;
-  if (activeTurnState && activeTurnState !== 'running') return { ...IDLE_ACTIVITY };
+  if (!Object.prototype.hasOwnProperty.call(health, 'active_turn_state')) return activity;
+  if (health.active_turn_state !== 'running') return { ...IDLE_ACTIVITY };
   return activity;
 }

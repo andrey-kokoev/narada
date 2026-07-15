@@ -90,7 +90,7 @@ export function reduceTurnActivity(state, message) {
   if (!event || typeof event !== 'object') return state;
   if (event.event === 'operator_input_submitted') return transitionTurnActivity(state, TURN_ACTIVITY_PHASES.QUEUED, timestampMs, 'Waiting for agent...', null);
   if (event.event === 'directive_received' || event.event === 'directive_carrier_accepted_recorded') return transitionTurnActivity(state, TURN_ACTIVITY_PHASES.QUEUED, timestampMs, 'Waiting for agent...', 'directive accepted');
-  if (event.event === 'turn_started') {
+  if (event.event === 'turn_started' || event.event === 'carrier_turn_started') {
     if (isLateCompletedActivityEvent(state, event)) return state;
     return startTurnActivity(state, timestampMs, agentLabel(event, 'is thinking...'), providerDetail(event), event.turn_id ?? true, eventRequestId(event));
   }
@@ -114,8 +114,17 @@ export function reduceTurnActivity(state, message) {
     if (state.activeTurnId && event.lifecycle_event !== 'assistant_message') return state;
     return resetTurnActivity(state, event);
   }
-  if (event.event === 'turn_complete' || event.event === 'turn_interrupted' || event.event === 'directive_complete' || event.event === 'session_closed') return resetTurnActivity(state, event);
-  if (event.event === 'turn_failed') return transitionTurnActivity(state, TURN_ACTIVITY_PHASES.FAILED, timestampMs, 'Turn failed', terminalDetail(event), event.turn_id ?? state.activeTurnId);
+  if (event.event === 'turn_complete'
+    || event.event === 'carrier_turn_completed'
+    || event.event === 'input_event_completed'
+    || event.event === 'input_completed'
+    || event.event === 'turn_interrupted'
+    || event.event === 'carrier_turn_interrupted'
+    || event.event === 'directive_complete'
+    || event.event === 'session_closed') return resetTurnActivity(state, event);
+  if (event.event === 'turn_failed' || event.event === 'carrier_turn_failed') {
+    return transitionTurnActivity(state, TURN_ACTIVITY_PHASES.FAILED, timestampMs, 'Turn failed', terminalDetail(event), event.turn_id ?? state.activeTurnId);
+  }
   return state;
 }
 
@@ -127,14 +136,14 @@ function adoptActivityIdentity(state, event) {
 }
 
 function isLateCompletedActivityEvent(state, event) {
-  const turnId = typeof event?.turn_id === 'string' && event.turn_id ? event.turn_id : null;
+  const turnId = activityTurnId(event);
   const requestId = eventRequestId(event);
   return Boolean((turnId && turnId === state.lastTerminalTurnId) || (requestId && requestId === state.lastTerminalRequestId));
 }
 
 function isStaleTurnActivityEvent(state, event) {
   if (isLateCompletedActivityEvent(state, event)) return true;
-  const turnId = typeof event?.turn_id === 'string' && event.turn_id ? event.turn_id : null;
+  const turnId = activityTurnId(event);
   const requestId = eventRequestId(event);
   if (state.activeTurnId && turnId && turnId !== state.activeTurnId) return true;
   if (state.activeRequestId && requestId && requestId !== state.activeRequestId) return true;
@@ -161,7 +170,8 @@ export function materializeTurnActivity(state, nowMs) {
 
 export function reconcileTurnActivityWithHealth(state, event) {
   if (!event || typeof event !== 'object') return state;
-  const activeTurnState = typeof event.active_turn_state === 'string' ? event.active_turn_state : null;
+  if (!Object.prototype.hasOwnProperty.call(event, 'active_turn_state')) return state;
+  const activeTurnState = event.active_turn_state;
   if (activeTurnState === 'running') {
     const activeTurnId = event.active_turn_id ?? true;
     const differentTurn = event.active_turn_id && state.activeTurnId && event.active_turn_id !== state.activeTurnId;
@@ -169,7 +179,7 @@ export function reconcileTurnActivityWithHealth(state, event) {
       return startTurnActivity(state, timestampFromEvent(event) ?? Date.now(), agentLabel(event, 'is thinking...'), providerDetail(event), activeTurnId, null);
     }
   }
-  if (activeTurnState && activeTurnState !== 'running') return resetTurnActivity(state, {});
+  if (activeTurnState !== 'running') return resetTurnActivity(state, event);
   return state;
 }
 
@@ -274,7 +284,7 @@ function startTurnActivity(state, timestampMs, label, detail, activeTurnId, acti
 
 function resetTurnActivity(state, event) {
   if (isStaleTurnActivityEvent(state, event)) return state;
-  const terminalTurnId = event.turn_id ?? state.activeTurnId;
+  const terminalTurnId = activityTurnId(event) ?? state.activeTurnId;
   const terminalRequestId = eventRequestId(event) ?? state.activeRequestId;
   if (terminalTurnId || terminalRequestId) {
     state.lastTerminalTurnId = terminalTurnId ?? null;
@@ -290,6 +300,16 @@ function resetTurnActivity(state, event) {
   state.toolFailureCount = 0;
   state.latestToolName = null;
   return state;
+}
+
+function activityTurnId(event) {
+  const directTurnId = typeof event?.turn_id === 'string' && event.turn_id ? event.turn_id : null;
+  if (directTurnId) return directTurnId;
+  if (event?.event === 'input_event_completed' || event?.event === 'input_completed') {
+    const inputEventId = event.input_event_id ?? event.event_id;
+    return typeof inputEventId === 'string' && inputEventId ? inputEventId : null;
+  }
+  return null;
 }
 
 function agentLabel(event, suffix) {
@@ -327,4 +347,3 @@ function timestampFromEvent(value) {
   const parsed = Date.parse(timestamp);
   return Number.isFinite(parsed) ? parsed : null;
 }
-

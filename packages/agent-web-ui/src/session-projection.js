@@ -54,6 +54,20 @@ export function createSessionProjection(events = [], options = {}) {
   return projection;
 }
 
+function customViewIncludesDisposition(view, disposition) {
+  const facet = facetForProjectionDisposition(disposition);
+  return Boolean(facet && Array.isArray(view.facets) && view.facets.includes(facet));
+}
+
+function facetForProjectionDisposition(disposition) {
+  if (disposition === 'conversation_fact') return 'conversation';
+  if (disposition === 'operation_fact') return 'operations';
+  if (disposition === 'diagnostic_signal') return 'diagnostics';
+  if (disposition === 'protocol_evidence') return 'protocol';
+  if (disposition === 'raw_record') return 'raw';
+  return null;
+}
+
 function supersededLifecycleAssistantAggregate(row, state) {
   if (row.kind !== 'assistant_message') return false;
   const event = row.event;
@@ -84,8 +98,8 @@ export function classifyRuntimeMessage(message) {
   if (event.event === 'session_health') return 'diagnostic_signal';
   if (event.event === 'runtime_intelligence_reconfiguration' || event.event === 'provider_runtime_reconfiguration_state_transition') return 'diagnostic_signal';
   if (event.event === 'assistant_message' || event.event === 'assistant_message_stream' || event.event === 'user_message' || event.event === 'operator_input_submitted' || event.event === 'agent_web_ui_message' || event.event === 'agent_web_ui_help' || event.event === 'session_artifact_registered' || event.event === 'session_artifact_read') return 'conversation_fact';
-  if (event.event === 'error' || event.event === 'websocket_error' || event.event === 'web_ui_decode_error' || event.event === 'web_ui_input_not_sent' || event.event === 'turn_failed' || event.event === 'authority_session_revoked' || event.event === 'projection_revoked' || event.event === 'runtime_projection_failure' || event.event === 'runtime_control_input_bridge_error') return 'diagnostic_signal';
-  if (event.event === 'tool_call' || event.event === 'tool_result' || event.event === 'turn_started' || event.event === 'turn_complete'
+  if (event.event === 'error' || event.event === 'websocket_error' || event.event === 'web_ui_decode_error' || event.event === 'web_ui_input_not_sent' || event.event === 'turn_failed' || event.event === 'carrier_turn_failed' || event.event === 'carrier_turn_interrupted' || event.event === 'authority_session_revoked' || event.event === 'projection_revoked' || event.event === 'runtime_projection_failure' || event.event === 'runtime_control_input_bridge_error') return 'diagnostic_signal';
+  if (event.event === 'tool_call' || event.event === 'tool_result' || event.event === 'turn_started' || event.event === 'carrier_turn_started' || event.event === 'carrier_turn_completed' || event.event === 'turn_complete'
     || event.event === 'conversation_enqueue_requested' || event.event === 'input_queued_for_turn_boundary' || event.event === 'input_admitted_to_turn'
     || event.event === 'input_dropped_by_operator' || event.event === 'input_abandoned_on_session_end' || event.event === 'input_completed'
     || event.event === 'session_started' || event.event === 'session_closed' || event.event === 'session_status'
@@ -108,7 +122,9 @@ function createRowProjectionState() {
 
 function projectMessageRow(message, options, state) {
   let projection = projectRuntimeEvent(message);
+  const disposition = classifyRuntimeMessage(message);
   if (!shouldRenderRuntimeProjection(projection, options)) return null;
+  if (options.customView && !customViewIncludesDisposition(options.customView, disposition)) return null;
   // Primary path: contract-provided render keys carry the identity contract.
   const key = projection.renderKey ?? projectionIdentityKey(message, projection) ?? `event:${state.renderedByKey.size}`;
   if (projection.kind === 'assistant_message_stream') {
@@ -125,7 +141,7 @@ function projectMessageRow(message, options, state) {
     event: projection.event,
     renderKey: projection.renderKey,
     streamContent: projection.streamContent,
-    disposition: classifyRuntimeMessage(message),
+    disposition,
   };
   if (supersededLifecycleAssistantAggregate(row, state)) return null;
   pruneSupersededAssistantStreams(row, state);
