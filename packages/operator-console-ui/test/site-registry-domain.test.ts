@@ -58,6 +58,7 @@ test('request construction keeps the contract boundary explicit', () => {
     substrate: 'windows',
     source: undefined,
     source_ref: undefined,
+    reason: 'moved',
     control_endpoint: undefined,
     aliases: ['primary', 'scheduling'],
     aim_json: undefined,
