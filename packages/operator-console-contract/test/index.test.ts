@@ -8,6 +8,7 @@ import {
   primaryProjectedOperatorSurfaceRoute,
   primaryOperatorSurfaceRoute,
   projectOperatorSurfaceCatalog,
+  projectOperatorSurfaceRouteBinding,
   projectOperatorSurfaceNavigation,
   projectOperatorWorkspaceRouteDirectory,
 } from '../src/index.ts';
@@ -19,6 +20,42 @@ test('operator surface catalog describes canonical registry and launcher routes'
   assert.equal(findOperatorSurfaceRoute('/console/launch')?.surface.id, 'launcher');
   assert.equal(primaryOperatorSurfaceRoute(operatorSurfaceDescriptors[0])?.path, '/console/registry');
   assert.equal(operatorSurfaceRoutePath('agent-sessions', 'sessions'), '/console/sessions');
+  assert.equal(operatorSurfaceDescriptors.find((surface) => surface.id === 'launcher')?.authority.kind, 'operator-console');
+  assert.equal(operatorSurfaceDescriptors.find((surface) => surface.id === 'launcher')?.projection.kind, 'launcher');
+});
+
+test('workspace route directory maps concrete session routes to session authority', () => {
+  const directory = projectOperatorWorkspaceRouteDirectory({
+    workspaceHost: { kind: 'cloudflare', id: 'worker', origin: 'https://workspace.example.test' },
+    availability: { 'agent-sessions': 'available' },
+    additionalRoutes: {
+      'agent-sessions': [{
+        id: 'router-session-demo',
+        path: '/sessions/session-demo',
+        kind: 'page',
+        label: 'Session session-demo',
+        target: { kind: 'session', id: 'session-demo' },
+      }],
+    },
+  });
+  const route = directory.surfaces.find((surface) => surface.id === 'agent-sessions')?.projectedRoutes.find((candidate) => candidate.id === 'router-session-demo');
+  assert.deepEqual(route?.authority, { kind: 'nars-session', id: 'session-demo' });
+  assert.deepEqual(route?.authorityHost, { kind: 'local', id: 'operator-console', origin: null });
+  assert.deepEqual(directory.workspaceHost, { kind: 'cloudflare', id: 'worker', origin: 'https://workspace.example.test' });
+});
+
+test('live route binding derives scoped authority without changing surface ownership', () => {
+  const siteOperations = operatorSurfaceDescriptors.find((surface) => surface.id === 'site-operations')!;
+  const route = siteOperations.routes[0];
+  const binding = projectOperatorSurfaceRouteBinding(siteOperations, {
+    ...route,
+    target: { kind: 'site', id: 'site-demo' },
+  });
+  assert.deepEqual(binding.authority, { kind: 'site', id: 'site-demo' });
+  assert.deepEqual(binding.authorityHost, { kind: 'local', id: 'operator-console', origin: null });
+  assert.equal(binding.projection.owner, '@narada2/cli');
+  assert.equal(binding.intent.kind, 'site-control');
+  assert.equal(binding.diagnosticOnly, false);
 });
 
 test('navigation projection follows descriptor availability and labels', () => {
@@ -64,13 +101,15 @@ test('workspace route directory preserves concrete and template route availabili
       artifacts: { artifact: 'available' },
     },
   });
-  assert.equal(directory.schema, 'narada.operator_workspace.route_directory.v1');
+  assert.equal(directory.schema, 'narada.operator_workspace.route_directory.v3');
+  assert.deepEqual(directory.workspaceHost, { kind: 'local', id: 'operator-console', origin: null });
   const registry = directory.surfaces.find((surface) => surface.id === 'site-registry');
   assert.equal(registry?.projectedRoutes.find((route) => route.id === 'sites')?.availability, 'available');
   assert.equal(registry?.projectedRoutes.find((route) => route.id === 'add')?.availability, 'unavailable');
   const artifacts = directory.surfaces.find((surface) => surface.id === 'artifacts');
   assert.equal(primaryProjectedOperatorSurfaceRoute(artifacts!)?.path, '/artifacts/<session-id>/<artifact-id>/');
   assert.equal(artifacts?.projectedRoutes[0]?.availability, 'available');
+  assert.equal(artifacts?.projectedRoutes[0]?.authority.kind, 'artifact');
   assert.deepEqual(projectOperatorSurfaceNavigation({
     availability: { artifacts: 'available' },
     routeAvailability: { artifacts: { artifact: 'available' } },

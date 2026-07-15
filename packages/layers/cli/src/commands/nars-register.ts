@@ -73,6 +73,8 @@ export function registerNarsCommands(program: Command): void {
     .requiredOption('--session <id>', 'Concrete NARS session id')
     .option('--site-root <path>', 'Local Site root')
     .option('--projection-id <id>', 'Stable projection id')
+    .option('--carrier-session-id <id>', 'Explicit Cloudflare carrier session id linked to this projection')
+    .option('--operation-id <id>', 'Explicit Cloudflare operation id linked to this projection')
     .option('--event-policy <policy>', 'Event policy: conversation|operator|diagnostic|raw', 'operator')
     .option('--input-verb <method...>', 'Allowed Cloudflare adapter input verb(s); repeat or comma-separate values', ['conversation.send', 'conversation.enqueue', 'conversation.steer', 'conversation.interrupt', 'session.close'])
     .option('--cache-policy <policy>', 'Cache policy: short_bounded|durable_archive', 'short_bounded')
@@ -97,6 +99,8 @@ export function registerNarsCommands(program: Command): void {
         siteRoot: opts.siteRoot as string | undefined,
         session: opts.session as string | undefined,
         projectionId: opts.projectionId as string | undefined,
+        carrierSessionId: opts.carrierSessionId as string | undefined,
+        operationId: opts.operationId as string | undefined,
         eventPolicy: opts.eventPolicy as string | undefined,
         inputVerb: opts.inputVerb as string[] | undefined,
         cachePolicy: opts.cachePolicy as string | undefined,

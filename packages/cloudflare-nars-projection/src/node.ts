@@ -3,6 +3,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnHiddenPostureProcess } from '@narada2/process-launch-posture';
 import { resolveNaradaSitePaths } from '@narada2/site-paths';
+import type { OperatorSurfaceHostRef, OperatorSurfaceId, OperatorSurfaceRouteDescriptor } from '@narada2/operator-console-contract';
 import { deliverProjectionInputToNars } from './nars-session-input-client.js';
 import {
   buildProjectionRegistrationPlan,
@@ -19,6 +20,7 @@ import {
   type ProjectedArtifactMetadata,
   type ProjectedEvent,
 } from './index.js';
+import type { CloudflareNarsWorkspaceRouteRegistration, CloudflareNarsWorkspaceUiConfig } from './workspace-directory.js';
 
 export const CLOUDFLARE_NARS_PROJECTION_STORE_SCHEMA = 'narada.cloudflare_nars_projection.store.v1';
 export const CLOUDFLARE_NARS_PROJECTION_PREFLIGHT_SCHEMA = 'narada.cloudflare_nars_projection.preflight.v1';
@@ -204,7 +206,10 @@ export async function registerProjectionRemotely(input: Parameters<typeof buildP
     });
     if (preflight.status !== 'ok') return { status: 'remote_registration_preflight_refused' as const, preflight };
   }
-  const local = writeProjectionRegistrationPlan(input);
+  const local = writeProjectionRegistrationPlan({
+    ...input,
+    projection_api_base_url: input.projection_api_base_url ?? input.cloudflare_api_base_url,
+  });
   const endpoint = `${input.cloudflare_api_base_url.replace(/\/+$/, '')}/api/nars/projections/register`;
   const response = await fetchImpl(endpoint, {
     method: 'POST',
@@ -215,10 +220,81 @@ export async function registerProjectionRemotely(input: Parameters<typeof buildP
   if (!response.ok || !body?.remote_access) {
     return { ...local, status: 'remote_registration_failed' as const, remote_registration_endpoint: endpoint, remote_registration_status: response.status, remote_registration_response: body };
   }
+  const remoteAccess: CloudflareNarsRemoteAccessRecord = {
+    ...body.remote_access,
+    source_ref: body.remote_access.source_ref ?? local.local_intent.source_ref,
+    projection_api_base_url: body.remote_access.projection_api_base_url ?? local.local_intent.projection_api_base_url,
+  };
   const paths = projectionStorePaths(input.site_root, local.projection_id);
-  writeJson(paths.remote_access_path, body.remote_access);
+  writeJson(paths.remote_access_path, remoteAccess);
   writeJson(paths.intent_path, { ...local.local_intent, remote_registration: { endpoint, registered_at: new Date().toISOString(), status: 'registered' } });
-  return { ...local, status: 'registered_remotely' as const, remote_access: body.remote_access, remote_registration_endpoint: endpoint, remote_registration_status: response.status, remote_registration_response: body };
+  return { ...local, status: 'registered_remotely' as const, remote_access: remoteAccess, remote_registration_endpoint: endpoint, remote_registration_status: response.status, remote_registration_response: body };
+}
+
+export async function publishWorkspaceRouteRemotely(args: {
+  site_root: string;
+  projection_id: string;
+  cloudflare_api_base_url: string;
+  lease_id: string;
+  surface_id: OperatorSurfaceId;
+  route: OperatorSurfaceRouteDescriptor;
+  authority_host?: OperatorSurfaceHostRef | null;
+  expires_at?: string | null;
+  ui_config?: CloudflareNarsWorkspaceUiConfig | null;
+  fetch_impl?: typeof fetch;
+}) {
+  const registration = readProjectionRegistration(args.site_root, args.projection_id);
+  const remoteAccess = registration.remote_access;
+  const bridgeToken = remoteAccess?.bridge_credential?.token_fingerprint;
+  if (!bridgeToken) return { status: 'refused' as const, reason: 'bridge_credential_not_found', lease_id: args.lease_id, projection_id: args.projection_id };
+  const browserToken = remoteAccess.browser_access_tokens.find((token) => token.status === 'active')?.token_fingerprint ?? null;
+  const base = normalizeBaseUrl(args.cloudflare_api_base_url);
+  if (!base) return { status: 'refused' as const, reason: 'cloudflare_api_base_url_invalid', lease_id: args.lease_id, projection_id: args.projection_id };
+  const fetchImpl = args.fetch_impl ?? fetch;
+  const body: CloudflareNarsWorkspaceRouteRegistration = {
+    schema: 'narada.cloudflare_nars_workspace.route_lease.v1',
+    lease_id: args.lease_id,
+    projection_id: args.projection_id,
+    surface_id: args.surface_id,
+    route: args.route,
+    authority_host: args.authority_host ?? { kind: 'cloudflare', id: 'worker', origin: base },
+    expires_at: args.expires_at ?? null,
+    ui_config: args.ui_config ?? {
+      cloudflare_projection_id: args.projection_id,
+      cloudflare_api_base_url: base,
+      ...(browserToken ? { cloudflare_browser_token: browserToken } : {}),
+    },
+  };
+  const endpoint = `${base}/api/nars/workspace/routes/register`;
+  const response = await fetchImpl(endpoint, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-narada-bridge-token-fingerprint': bridgeToken },
+    body: JSON.stringify(body),
+  });
+  const payload = await response.json().catch(() => null);
+  return { status: response.ok ? 'published' as const : 'refused' as const, endpoint, lease_id: args.lease_id, projection_id: args.projection_id, response_status: response.status, response: payload };
+}
+
+export async function revokeWorkspaceRouteRemotely(args: {
+  site_root: string;
+  projection_id: string;
+  cloudflare_api_base_url: string;
+  lease_id: string;
+  fetch_impl?: typeof fetch;
+}) {
+  const registration = readProjectionRegistration(args.site_root, args.projection_id);
+  const bridgeToken = registration.remote_access?.bridge_credential?.token_fingerprint;
+  if (!bridgeToken) return { status: 'refused' as const, reason: 'bridge_credential_not_found', lease_id: args.lease_id, projection_id: args.projection_id };
+  const base = normalizeBaseUrl(args.cloudflare_api_base_url);
+  if (!base) return { status: 'refused' as const, reason: 'cloudflare_api_base_url_invalid', lease_id: args.lease_id, projection_id: args.projection_id };
+  const endpoint = `${base}/api/nars/workspace/routes/revoke`;
+  const response = await (args.fetch_impl ?? fetch)(endpoint, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-narada-bridge-token-fingerprint': bridgeToken },
+    body: JSON.stringify({ projection_id: args.projection_id, lease_id: args.lease_id }),
+  });
+  const payload = await response.json().catch(() => null);
+  return { status: response.ok ? 'revoked' as const : 'refused' as const, endpoint, lease_id: args.lease_id, projection_id: args.projection_id, response_status: response.status, response: payload };
 }
 
 export async function deliverRemoteProjectionInputsOnce(args: {

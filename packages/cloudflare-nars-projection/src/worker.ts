@@ -3,6 +3,7 @@ import {
   createCloudflareNarsRemoteAccessRecord,
   createCloudflareNarsProjectionWorkerService,
   projectedEventMatchesView,
+  validateProjectionCredential,
   type CloudflareNarsAuthorityWorkerState,
   type CloudflareNarsProjectionIntent,
   type CloudflareNarsRemoteAccessRecord,
@@ -10,10 +11,88 @@ import {
   type CloudflareNarsAuthorityEvent,
   type ProjectedEvent,
 } from './index.js';
+import {
+  createCloudflareNarsWorkspaceDirectoryService,
+  handleCloudflareNarsWorkspaceDirectoryRequest,
+  NarsWorkspaceDirectory,
+  type CloudflareNarsWorkspaceDirectoryService,
+} from './workspace-directory.js';
 
 export interface CloudflareNarsProjectionWorkerEnv {
   ASSETS?: { fetch(request: Request): Promise<Response> | Response };
   NARS_PROJECTION_STATE?: DurableObjectNamespaceLike;
+  NARS_WORKSPACE_DIRECTORY?: DurableObjectNamespaceLike;
+}
+
+async function lookupWorkspaceRouteInDurableObject(path: string, env: CloudflareNarsProjectionWorkerEnv): Promise<Record<string, unknown> | null> {
+  const namespace = env.NARS_WORKSPACE_DIRECTORY;
+  if (!namespace) return null;
+  const url = new URL('https://workspace.internal/internal/workspace/route');
+  url.searchParams.set('path', path);
+  const response = await namespace.get(namespace.idFromName('workspace')).fetch(new Request(url));
+  const body = await response.json().catch(() => null) as { status?: string; lease?: Record<string, unknown> | null } | null;
+  return body?.status === 'ok' ? body.lease ?? null : null;
+}
+
+export { NarsWorkspaceDirectory };
+
+async function routeWorkspaceDirectoryRequestToDurableObject(request: Request, env: CloudflareNarsProjectionWorkerEnv): Promise<Response | null> {
+  const namespace = env.NARS_WORKSPACE_DIRECTORY;
+  if (!namespace) return null;
+  return namespace.get(namespace.idFromName('workspace')).fetch(request);
+}
+
+async function authorizeWorkspaceRequest(args: {
+  request: Request;
+  env: CloudflareNarsProjectionWorkerEnv;
+  path: string;
+  service: ReturnType<typeof createCloudflareNarsProjectionWorkerService>;
+  options: CloudflareNarsProjectionWorkerOptions;
+  now: () => string;
+}): Promise<Response | null> {
+  if (args.path === 'api/nars/workspace/routes' && args.request.method === 'GET') {
+    const projectionId = new URL(args.request.url).searchParams.get('projection_id');
+    return validateWorkspaceCapability({ ...args, projectionId: projectionId ?? undefined, credentialKind: 'browser', action: 'read_workspace_routes', token: requireBrowserToken(args.request) });
+  }
+  if ((args.path === 'api/nars/workspace/routes/register' || args.path === 'api/nars/workspace/routes/health' || args.path === 'api/nars/workspace/routes/revoke') && args.request.method === 'POST') {
+    const body = await readJson(args.request.clone());
+    return validateWorkspaceCapability({ ...args, projectionId: stringOrUndefined(body.projection_id), credentialKind: 'bridge', action: 'publish_workspace_route', token: requireBridgeToken(args.request) });
+  }
+  return json(refusal('workspace_route_method_not_allowed'), 405);
+}
+
+async function validateWorkspaceCapability(args: {
+  request: Request;
+  env: CloudflareNarsProjectionWorkerEnv;
+  service: ReturnType<typeof createCloudflareNarsProjectionWorkerService>;
+  options: CloudflareNarsProjectionWorkerOptions;
+  now: () => string;
+  projectionId?: string;
+  credentialKind: 'browser' | 'bridge';
+  action: 'read_workspace_routes' | 'publish_workspace_route';
+  token: string;
+}): Promise<Response | null> {
+  if (!args.projectionId) return json(refusal('projection_id_required'), 400);
+  if (!args.token) return json(refusal('workspace_capability_required'), 401);
+  let validation: { ok: boolean; code?: string };
+  if (!args.options.service && !args.options.authority_service && args.env.NARS_PROJECTION_STATE) {
+    const url = new URL(args.request.url);
+    url.pathname = `/api/nars/projections/${encodeURIComponent(args.projectionId)}/workspace-capability`;
+    const capabilityRequest = new Request(url, {
+      method: 'POST',
+      headers: args.request.headers,
+      body: JSON.stringify({ credential_kind: args.credentialKind, token_fingerprint: args.token, action: args.action }),
+    });
+    const response = await routeProjectionRequestToDurableObject(capabilityRequest, args.env, trimPath(url.pathname));
+    const payload = await response?.json().catch(() => null) as { ok?: boolean; code?: string; [key: string]: unknown } | null;
+    validation = payload ? { ok: payload.ok === true, code: payload.code } : { ok: false, code: 'workspace_capability_validation_unavailable' };
+  } else {
+    const record = args.service.snapshot().access_records.find((candidate) => candidate.projection_id === args.projectionId);
+    validation = record
+      ? validateProjectionCredential(record, { credential_kind: args.credentialKind, token_fingerprint: args.token, action: args.action, now: args.now() })
+      : { ok: false, code: 'projection_not_found' };
+  }
+  return validation.ok ? null : json(validation, 403);
 }
 
 interface SseSubscriber {
@@ -49,24 +128,52 @@ interface DurableObjectStateLike {
 export interface CloudflareNarsProjectionWorkerOptions {
   service?: ReturnType<typeof createCloudflareNarsProjectionWorkerService>;
   authority_service?: ReturnType<typeof createCloudflareNarsAuthorityService>;
+  workspace_directory_service?: CloudflareNarsWorkspaceDirectoryService;
   now?: () => string;
 }
 
 export function createCloudflareNarsProjectionWorker(options: CloudflareNarsProjectionWorkerOptions = {}) {
   const service = options.service ?? createCloudflareNarsProjectionWorkerService();
   const authorityService = options.authority_service ?? createCloudflareNarsAuthorityService();
+  const workspaceDirectory = options.workspace_directory_service ?? createCloudflareNarsWorkspaceDirectoryService();
   const now = options.now ?? (() => new Date().toISOString());
   return {
     async fetch(request: Request, env: CloudflareNarsProjectionWorkerEnv = {}): Promise<Response> {
       const url = new URL(request.url);
       const path = trimPath(url.pathname);
-      if (!path.startsWith('api/nars/')) return serveStaticAsset(request, env);
+      if (!path.startsWith('api/nars/')) return serveStaticAsset(request, env, workspaceDirectory, now);
       if (request.method === 'OPTIONS') return corsResponse();
       if (request.method === 'GET' && path === 'api/nars/authority/health') {
         return json({ schema: 'narada.cloudflare_nars_authority.service_health.v1', status: 'healthy', execution: authorityService.execution_mode });
       }
+      const capabilityRoute = projectionRoute(request);
+      if (request.method === 'POST' && capabilityRoute?.suffix === 'workspace-capability') {
+        const body = await readJson(request);
+        const record = service.snapshot().access_records.find((candidate) => candidate.projection_id === capabilityRoute.projectionId);
+        const validation = record
+          ? validateProjectionCredential(record, {
+            credential_kind: body.credential_kind === 'browser' ? 'browser' : 'bridge',
+            token_fingerprint: String(body.token_fingerprint ?? ''),
+            action: body.action === 'read_workspace_routes' ? 'read_workspace_routes' : 'publish_workspace_route',
+            now: now(),
+          })
+          : { ok: false, code: 'projection_not_found', projection_id: capabilityRoute.projectionId };
+        return json(validation, validation.ok ? 200 : 403);
+      }
       if (request.method === 'GET' && path === 'api/nars/projections/health') {
         return json({ schema: 'narada.cloudflare_nars_projection.service_health.v1', status: 'healthy' });
+      }
+      if (path === 'api/nars/workspace/health' && request.method === 'GET') {
+        return json(workspaceDirectory.health(now()));
+      }
+      if (path === 'api/nars/workspace/routes' || path === 'api/nars/workspace/routes/register' || path === 'api/nars/workspace/routes/health' || path === 'api/nars/workspace/routes/revoke') {
+        const capabilityFailure = await authorizeWorkspaceRequest({ request, env, path, service, options, now });
+        if (capabilityFailure) return capabilityFailure;
+        if (!options.service && !options.authority_service && env.NARS_WORKSPACE_DIRECTORY) {
+          const durableResponse = await routeWorkspaceDirectoryRequestToDurableObject(request, env);
+          if (durableResponse) return durableResponse;
+        }
+        return handleCloudflareNarsWorkspaceDirectoryRequest(request, workspaceDirectory, now);
       }
       if (!options.service && !options.authority_service && env.NARS_PROJECTION_STATE) {
         const authorityResponse = await routeAuthorityRequestToDurableObject(request, env, path);
@@ -143,15 +250,11 @@ export function createCloudflareNarsProjectionWorker(options: CloudflareNarsProj
         }));
       }
       if (request.method === 'GET' && suffix === 'health') {
-        const read = service.readEvents({
+        return json(service.readHealth({
           projection_id: projectionId,
           browser_token_fingerprint: requireBrowserToken(request),
-          max_events: 0,
           now: now(),
-        });
-        return json(read.status === 'ok'
-          ? { schema: 'narada.cloudflare_nars_projection.health.v1', status: 'healthy', projection_id: projectionId }
-          : { schema: 'narada.cloudflare_nars_projection.health.v1', status: 'refused', projection_id: projectionId, code: read.code });
+        }));
       }
       if (request.method === 'POST' && suffix === 'input') {
         const body = await readJson(request);
@@ -659,9 +762,54 @@ function withCorsHeaders(headers: HeadersInit): Headers {
   return next;
 }
 
-async function serveStaticAsset(request: Request, env: CloudflareNarsProjectionWorkerEnv): Promise<Response> {
-  if (env.ASSETS?.fetch) return env.ASSETS.fetch(request);
-  return json(refusal('static_assets_not_configured'), 404);
+async function serveStaticAsset(request: Request, env: CloudflareNarsProjectionWorkerEnv, workspaceDirectory: CloudflareNarsWorkspaceDirectoryService, now: () => string): Promise<Response> {
+  if (!env.ASSETS?.fetch) return json(refusal('static_assets_not_configured'), 404);
+  const url = new URL(request.url);
+  const directProjectionEntry = url.pathname === '/'
+    && url.searchParams.has('cloudflare_projection_id');
+  if (url.pathname === '/' && !directProjectionEntry) return Response.redirect(`${url.origin}/console/registry/`, 302);
+  const sessionDocument = url.pathname === '/sessions' || url.pathname === '/sessions/' || url.pathname.startsWith('/sessions/');
+  const consoleDocument = isDocumentPath(url.pathname, '/console');
+  const assetUrl = new URL(url);
+  if (directProjectionEntry) assetUrl.pathname = '/sessions/index.html';
+  if (consoleDocument) assetUrl.pathname = '/console/registry/index.html';
+  if (sessionDocument && !hasFileExtension(url.pathname)) assetUrl.pathname = '/sessions/index.html';
+  const response = await env.ASSETS.fetch(new Request(assetUrl, request));
+  if ((!sessionDocument && !consoleDocument) || !isHtmlResponse(response)) return response;
+  const lease = env.NARS_WORKSPACE_DIRECTORY
+    ? await lookupWorkspaceRouteInDurableObject(url.pathname, env)
+    : workspaceDirectory.findByPath(url.pathname, now());
+  const uiConfig = objectRecord(lease?.ui_config);
+  if (sessionDocument && !uiConfig) return json(refusal('workspace_session_route_not_found'), 404);
+  const consoleRouteDirectory = objectRecord(uiConfig?.workspace_route_directory);
+  const consoleConfig = consoleRouteDirectory
+    ? {
+      routeDirectory: {
+        endpoint: stringOrUndefined(consoleRouteDirectory.endpoint) ?? null,
+        projectionId: stringOrUndefined(consoleRouteDirectory.projection_id) ?? null,
+        browserToken: stringOrUndefined(consoleRouteDirectory.browser_token) ?? null,
+      },
+    }
+    : {};
+  const content = await response.text();
+  return new Response(content
+    .replace('__NARADA_AGENT_WEB_UI_CONFIG__', JSON.stringify(uiConfig ?? {}))
+    .replace('__NARADA_OPERATOR_CONSOLE_CONFIG__', JSON.stringify(consoleConfig)), {
+    status: response.status,
+    headers: response.headers,
+  });
+}
+
+function isDocumentPath(pathname: string, prefix: string): boolean {
+  return pathname === prefix || pathname === `${prefix}/` || (pathname.startsWith(`${prefix}/`) && !hasFileExtension(pathname) && !pathname.includes('/assets/'));
+}
+
+function hasFileExtension(pathname: string): boolean {
+  return /\.[a-z0-9]+$/i.test(pathname);
+}
+
+function isHtmlResponse(response: Response): boolean {
+  return (response.headers.get('content-type') ?? '').toLowerCase().includes('text/html');
 }
 
 function refusal(code: string) {

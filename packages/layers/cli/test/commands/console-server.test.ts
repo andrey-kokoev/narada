@@ -222,7 +222,7 @@ describe('console server', () => {
       const workspaceRoutes = await httpGet(`${url}/console/routes`);
       expect(workspaceRoutes.status).toBe(200);
       expect((workspaceRoutes.body as { schema: string; surfaces: unknown[] }).schema)
-        .toBe('narada.operator_workspace.route_directory.v1');
+        .toBe('narada.operator_workspace.route_directory.v2');
       expect(Array.isArray((workspaceRoutes.body as { surfaces: unknown[] }).surfaces)).toBe(true);
       await server.stop();
     });
@@ -292,13 +292,39 @@ describe('console server', () => {
 
       const directory = await httpGet(`${url}/console/routes`);
       expect(directory.status).toBe(200);
-      const surfaces = (directory.body as { surfaces: Array<{ id: string; availability: string; projectedRoutes: Array<{ path: string; availability: string; target?: { kind: string; id: string } }> }> }).surfaces;
+      const surfaces = (directory.body as { surfaces: Array<{
+        id: string;
+        availability: string;
+        authority: { kind: string; id: string | null };
+        projection: { kind: string; owner: string };
+        intent: { kind: string; endpoint: string | null; protocols: string[] };
+        diagnosticOnly: boolean;
+        projectedRoutes: Array<{
+          path: string;
+          availability: string;
+          authority: { kind: string; id: string | null };
+          projection: { kind: string; owner: string };
+          intent: { kind: string; endpoint: string | null; protocols: string[] };
+          diagnosticOnly: boolean;
+          target?: { kind: string; id: string };
+        }>;
+      }> }).surfaces;
+      expect(surfaces.find((surface) => surface.id === 'site-operations')).toEqual(expect.objectContaining({
+        authority: { kind: 'local-site', id: null },
+        projection: { kind: 'site-operations', owner: '@narada2/cli' },
+        intent: { kind: 'site-control', endpoint: '/sites/<site-id>/operations/', protocols: ['http'] },
+        diagnosticOnly: false,
+      }));
       expect(surfaces.find((surface) => surface.id === 'site-operations')?.availability).toBe('available');
       expect(surfaces.find((surface) => surface.id === 'site-operations')?.projectedRoutes)
         .toEqual(expect.arrayContaining([expect.objectContaining({
           path: '/sites/site-a/operations',
           availability: 'available',
           target: { kind: 'site', id: 'site-a' },
+          authority: { kind: 'local-site', id: 'site-a' },
+          projection: { kind: 'site-operations', owner: '@narada2/cli' },
+          intent: { kind: 'site-control', endpoint: '/sites/<site-id>/operations/', protocols: ['http'] },
+          diagnosticOnly: false,
         })]));
       expect(surfaces.find((surface) => surface.id === 'agent-sessions')?.projectedRoutes)
         .toEqual(expect.arrayContaining([expect.objectContaining({

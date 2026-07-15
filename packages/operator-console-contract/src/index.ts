@@ -1,5 +1,5 @@
-export const OPERATOR_SURFACE_DESCRIPTOR_SCHEMA = 'narada.operator.surface_descriptor.v1' as const;
-export const OPERATOR_WORKSPACE_ROUTE_DIRECTORY_SCHEMA = 'narada.operator_workspace.route_directory.v1' as const;
+export const OPERATOR_SURFACE_DESCRIPTOR_SCHEMA = 'narada.operator.surface_descriptor.v3' as const;
+export const OPERATOR_WORKSPACE_ROUTE_DIRECTORY_SCHEMA = 'narada.operator_workspace.route_directory.v3' as const;
 export const OPERATOR_WORKSPACE_ROUTE_DIRECTORY_PATH = '/console/routes' as const;
 export const OPERATOR_CONSOLE_LONG_RUNNING_REQUEST_TIMEOUT_MS = 120_000;
 
@@ -15,6 +15,61 @@ export type OperatorSurfaceScope =
   | 'operator-console'
   | 'local-site'
   | 'nars-session';
+
+export type OperatorSurfaceAuthorityKind =
+  | 'user-site'
+  | 'operator-console'
+  | 'site'
+  | 'nars-session-index'
+  | 'nars-session'
+  | 'artifact';
+
+export interface OperatorSurfaceAuthorityRef {
+  kind: OperatorSurfaceAuthorityKind;
+  id: string | null;
+}
+
+export type OperatorSurfaceHostKind = 'local' | 'cloudflare';
+
+export interface OperatorSurfaceHostRef {
+  kind: OperatorSurfaceHostKind;
+  id: string;
+  origin: string | null;
+}
+
+export type OperatorSurfaceProjectionKind =
+  | 'workspace'
+  | 'registry'
+  | 'launcher'
+  | 'site-operations'
+  | 'session-inventory'
+  | 'agent-session'
+  | 'artifact'
+  | 'diagnostic';
+
+export interface OperatorSurfaceProjectionBinding {
+  kind: OperatorSurfaceProjectionKind;
+  owner: string;
+}
+
+export type OperatorSurfaceIntentKind =
+  | 'none'
+  | 'registry-workflow'
+  | 'launcher-control'
+  | 'site-control'
+  | 'session-input'
+  | 'artifact-open';
+
+export type OperatorSurfaceIntentProtocol = 'http' | 'websocket' | 'mcp';
+
+export type OperatorSurfaceIntentEndpointBase = 'workspace' | 'authority';
+
+export interface OperatorSurfaceIntentBinding {
+  kind: OperatorSurfaceIntentKind;
+  endpoint: string | null;
+  endpointBase: OperatorSurfaceIntentEndpointBase | null;
+  protocols: readonly OperatorSurfaceIntentProtocol[];
+}
 
 export type OperatorSurfaceAvailability = 'available' | 'unavailable' | 'planned';
 
@@ -60,6 +115,12 @@ export interface OperatorSurfaceRouteTarget {
 export interface OperatorSurfaceRouteProjection extends OperatorSurfaceRouteDescriptor {
   availability: OperatorSurfaceAvailability;
   projectedDetail: string;
+  authority: OperatorSurfaceAuthorityRef;
+  authorityHost: OperatorSurfaceHostRef;
+  projection: OperatorSurfaceProjectionBinding;
+  intent: OperatorSurfaceIntentBinding;
+  diagnosticOnly: boolean;
+  legacyReplacement?: string;
 }
 
 export interface OperatorSessionWireRecord {
@@ -104,6 +165,12 @@ export interface OperatorSurfaceDescriptor {
   name: string;
   scope: OperatorSurfaceScope;
   owner: string;
+  authority: OperatorSurfaceAuthorityRef;
+  authorityHost: OperatorSurfaceHostRef;
+  projection: OperatorSurfaceProjectionBinding;
+  intent: OperatorSurfaceIntentBinding;
+  diagnosticOnly: boolean;
+  legacyReplacement?: string;
   routes: readonly OperatorSurfaceRouteDescriptor[];
   defaultAvailability: 'available' | 'planned';
   detail: OperatorSurfaceAvailabilityDetail;
@@ -129,6 +196,8 @@ export type OperatorSurfaceAdditionalRouteOverrides = Partial<
 >;
 
 export interface OperatorSurfaceCatalogProjectionInput {
+  workspaceHost?: OperatorSurfaceHostRef;
+  authorityHost?: Partial<Record<OperatorSurfaceId, OperatorSurfaceHostRef>>;
   availability?: OperatorSurfaceAvailabilityOverrides;
   routeAvailability?: OperatorSurfaceRouteAvailabilityOverrides;
   additionalRoutes?: OperatorSurfaceAdditionalRouteOverrides;
@@ -136,7 +205,38 @@ export interface OperatorSurfaceCatalogProjectionInput {
 
 export interface OperatorWorkspaceRouteDirectory {
   schema: typeof OPERATOR_WORKSPACE_ROUTE_DIRECTORY_SCHEMA;
+  workspaceHost: OperatorSurfaceHostRef;
   surfaces: readonly OperatorSurfaceProjection[];
+}
+
+function authorityForRoute(
+  surface: OperatorSurfaceDescriptor,
+  route: OperatorSurfaceRouteDescriptor,
+): OperatorSurfaceAuthorityRef {
+  if (route.target?.kind === 'site' && surface.authority.kind === 'site') {
+    return { kind: surface.authority.kind, id: route.target.id };
+  }
+  if (route.target?.kind === 'session' && (surface.authority.kind === 'nars-session' || surface.authority.kind === 'nars-session-index')) {
+    return { kind: 'nars-session', id: route.target.id };
+  }
+  if (route.target?.kind === 'artifact' && surface.authority.kind === 'artifact') {
+    return { kind: surface.authority.kind, id: route.target.id };
+  }
+  return surface.authority;
+}
+
+export function projectOperatorSurfaceRouteBinding(
+  surface: OperatorSurfaceDescriptor,
+  route: OperatorSurfaceRouteDescriptor,
+): Pick<OperatorSurfaceRouteProjection, 'authority' | 'authorityHost' | 'projection' | 'intent' | 'diagnosticOnly' | 'legacyReplacement'> {
+  return {
+    authority: authorityForRoute(surface, route),
+    authorityHost: surface.authorityHost,
+    projection: surface.projection,
+    intent: surface.intent,
+    diagnosticOnly: surface.diagnosticOnly,
+    ...(surface.legacyReplacement === undefined ? {} : { legacyReplacement: surface.legacyReplacement }),
+  };
 }
 
 export const operatorSurfaceDescriptors: readonly OperatorSurfaceDescriptor[] = [
@@ -146,6 +246,11 @@ export const operatorSurfaceDescriptors: readonly OperatorSurfaceDescriptor[] = 
     name: 'Site Registry',
     scope: 'user-site',
     owner: 'Canonical Site Registry',
+    authority: { kind: 'user-site', id: null },
+    authorityHost: { kind: 'local', id: 'user-site', origin: null },
+    projection: { kind: 'registry', owner: '@narada2/operator-console-ui' },
+    intent: { kind: 'registry-workflow', endpoint: '/console/registry', endpointBase: 'workspace', protocols: ['http'] },
+    diagnosticOnly: false,
     routes: [
       { id: 'sites', path: '/console/registry', kind: 'page', label: 'Sites', navigationKey: 'sites' },
       { id: 'add', path: '/console/registry/add', kind: 'workflow', label: 'Add Site', navigationKey: 'add' },
@@ -164,6 +269,11 @@ export const operatorSurfaceDescriptors: readonly OperatorSurfaceDescriptor[] = 
     name: 'Agent Launcher',
     scope: 'operator-console',
     owner: 'Narada CLI workspace-launch',
+    authority: { kind: 'operator-console', id: '@narada2/cli' },
+    authorityHost: { kind: 'local', id: 'operator-console', origin: null },
+    projection: { kind: 'launcher', owner: '@narada2/workspace-launch-ui' },
+    intent: { kind: 'launcher-control', endpoint: '/console/launch', endpointBase: 'workspace', protocols: ['http'] },
+    diagnosticOnly: false,
     routes: [
       { id: 'launcher', path: '/console/launch', kind: 'page', label: 'Launcher', navigationKey: 'launcher' },
     ],
@@ -180,6 +290,11 @@ export const operatorSurfaceDescriptors: readonly OperatorSurfaceDescriptor[] = 
     name: 'Site Operations',
     scope: 'local-site',
     owner: 'Task and Agent Operations',
+    authority: { kind: 'site', id: null },
+    authorityHost: { kind: 'local', id: 'operator-console', origin: null },
+    projection: { kind: 'site-operations', owner: '@narada2/cli' },
+    intent: { kind: 'site-control', endpoint: '/sites/<site-id>/operations/', endpointBase: 'workspace', protocols: ['http'] },
+    diagnosticOnly: false,
     routes: [
       { id: 'operations', path: '/sites/<site-id>/operations/', kind: 'page', label: 'Operations' },
     ],
@@ -197,6 +312,11 @@ export const operatorSurfaceDescriptors: readonly OperatorSurfaceDescriptor[] = 
     name: 'Agent Sessions',
     scope: 'nars-session',
     owner: 'Agent Web UI',
+    authority: { kind: 'nars-session-index', id: null },
+    authorityHost: { kind: 'local', id: 'operator-console', origin: null },
+    projection: { kind: 'session-inventory', owner: '@narada2/operator-console-ui' },
+    intent: { kind: 'none', endpoint: null, endpointBase: null, protocols: [] },
+    diagnosticOnly: false,
     routes: [
       { id: 'sessions', path: '/console/sessions', kind: 'page', label: 'Sessions', navigationKey: 'sessions' },
     ],
@@ -213,6 +333,11 @@ export const operatorSurfaceDescriptors: readonly OperatorSurfaceDescriptor[] = 
     name: 'Artifacts',
     scope: 'nars-session',
     owner: 'Artifact projection',
+    authority: { kind: 'artifact', id: null },
+    authorityHost: { kind: 'local', id: 'operator-console', origin: null },
+    projection: { kind: 'artifact', owner: '@narada2/agent-web-ui' },
+    intent: { kind: 'artifact-open', endpoint: '/artifacts/<session-id>/<artifact-id>/', endpointBase: 'workspace', protocols: ['http'] },
+    diagnosticOnly: false,
     routes: [
       { id: 'artifact', path: '/artifacts/<session-id>/<artifact-id>/', kind: 'page', label: 'Artifact' },
     ],
@@ -235,6 +360,10 @@ export function projectOperatorSurfaceCatalog(
   input: OperatorSurfaceCatalogProjectionInput = {},
 ): OperatorSurfaceProjection[] {
   return operatorSurfaceDescriptors.map((descriptor) => {
+    const projectedDescriptor = {
+      ...descriptor,
+      authorityHost: input.authorityHost?.[descriptor.id] ?? descriptor.authorityHost,
+    };
     const availability = input.availability?.[descriptor.id] ?? descriptor.defaultAvailability;
     const routes = [...descriptor.routes, ...(input.additionalRoutes?.[descriptor.id] ?? [])];
     const routeIds = new Set<string>();
@@ -249,12 +378,13 @@ export function projectOperatorSurfaceCatalog(
         : availability;
       return {
         ...route,
+        ...projectOperatorSurfaceRouteBinding(projectedDescriptor, route),
         availability: routeAvailability,
         projectedDetail: projectedRouteDetail(routeAvailability),
       } satisfies OperatorSurfaceRouteProjection;
     });
     return {
-      ...descriptor,
+      ...projectedDescriptor,
       routes,
       availability,
       projectedDetail: descriptor.detail[availability],
@@ -268,6 +398,7 @@ export function projectOperatorWorkspaceRouteDirectory(
 ): OperatorWorkspaceRouteDirectory {
   return {
     schema: OPERATOR_WORKSPACE_ROUTE_DIRECTORY_SCHEMA,
+    workspaceHost: input.workspaceHost ?? { kind: 'local', id: 'operator-console', origin: null },
     surfaces: projectOperatorSurfaceCatalog(input),
   };
 }

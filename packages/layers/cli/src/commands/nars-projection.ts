@@ -8,6 +8,8 @@ export interface NarsProjectionRegisterOptions {
   siteRoot?: string;
   session?: string;
   projectionId?: string;
+  carrierSessionId?: string;
+  operationId?: string;
   eventPolicy?: string;
   inputVerb?: string[];
   cachePolicy?: string;
@@ -67,6 +69,13 @@ export async function narsProjectionRegisterCommand(options: NarsProjectionRegis
     site_root: siteRoot,
     nars_session_id: session,
     projection_id: options.projectionId,
+    source_ref: options.carrierSessionId || options.operationId
+      ? {
+        kind: 'cloudflare_carrier' as const,
+        carrier_session_id: options.carrierSessionId ?? null,
+        operation_id: options.operationId ?? null,
+      }
+      : null,
     event_stream_policy: normalizeEventPolicy(options.eventPolicy),
     operator_input_policy: inputPolicy,
     replica_cache_policy: normalizeCachePolicy(options.cachePolicy),

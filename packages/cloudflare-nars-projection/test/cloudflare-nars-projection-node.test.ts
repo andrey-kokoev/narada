@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { describe, expect, test } from 'vitest';
 import { resolveNaradaSitePaths } from '@narada2/site-paths';
 import { createCloudflareNarsProjectionWorker } from '../src/worker.js';
-import { deliverRemoteProjectionInputsOnce, preflightCloudflareProjectionRegistration, registerProjectionRemotely, writeProjectionRegistrationPlan, readProjectionRegistration, startLocalProjectionBridgeLoop, startLocalProjectionBridgeOnce, startLocalProjectionBridgeRunProcess } from '../src/node.js';
+import { deliverRemoteProjectionInputsOnce, preflightCloudflareProjectionRegistration, publishWorkspaceRouteRemotely, registerProjectionRemotely, revokeWorkspaceRouteRemotely, writeProjectionRegistrationPlan, readProjectionRegistration, startLocalProjectionBridgeLoop, startLocalProjectionBridgeOnce, startLocalProjectionBridgeRunProcess } from '../src/node.js';
 
 const now = '2026-06-30T21:30:00.000Z';
 
@@ -161,6 +161,7 @@ describe('node projection store and bridge', () => {
       projection_id: 'proj_remote_test',
       dry_run: false,
       created_at: now,
+      source_ref: { kind: 'cloudflare_carrier', carrier_session_id: 'carrier_remote_test', operation_id: 'operation_remote_test' },
       cloudflare_api_base_url: 'https://projection.example.test',
       fetch_impl: (input, init) => worker.fetch(new Request(input, init)),
     });
@@ -169,8 +170,60 @@ describe('node projection store and bridge', () => {
     const stored = readProjectionRegistration(siteRoot, 'proj_remote_test');
     expect(stored.intent?.remote_registration).toMatchObject({ status: 'registered', endpoint: result.remote_registration_endpoint });
     expect(stored.remote_access?.projection_id).toBe('proj_remote_test');
+    expect(stored.intent?.source_ref).toEqual({ kind: 'cloudflare_carrier', carrier_session_id: 'carrier_remote_test', operation_id: 'operation_remote_test' });
+    expect(stored.intent?.projection_api_base_url).toBe('https://projection.example.test');
+    expect(stored.remote_access?.source_ref).toEqual({ kind: 'cloudflare_carrier', carrier_session_id: 'carrier_remote_test', operation_id: 'operation_remote_test' });
+    expect(stored.remote_access?.projection_api_base_url).toBe('https://projection.example.test');
     expect(stored.remote_access?.bridge_credential.kind).toBe('bridge');
     expect(stored.remote_access?.browser_access_tokens[0].kind).toBe('browser');
+  });
+
+  test('publishes and revokes a workspace route through the Cloudflare directory', async () => {
+    const { siteRoot, sessionId } = createSiteWithSession();
+    const worker = createCloudflareNarsProjectionWorker({ now: () => now });
+    const registration = await registerProjectionRemotely({
+      site_id: 'narada.sonar',
+      site_root: siteRoot,
+      nars_session_id: sessionId,
+      projection_id: 'proj_workspace_node_test',
+      dry_run: false,
+      created_at: now,
+      cloudflare_api_base_url: 'https://projection.example.test',
+      fetch_impl: (input, init) => worker.fetch(new Request(input, init)),
+    });
+    const browserToken = registration.remote_access.browser_access_tokens[0].token_fingerprint;
+    const route = {
+      id: 'session-detail',
+      path: `/sessions/${sessionId}`,
+      kind: 'page' as const,
+      label: 'Session',
+      target: { kind: 'session' as const, id: sessionId },
+    };
+    const published = await publishWorkspaceRouteRemotely({
+      site_root: siteRoot,
+      projection_id: 'proj_workspace_node_test',
+      cloudflare_api_base_url: 'https://projection.example.test',
+      lease_id: 'lease_workspace_node_test',
+      surface_id: 'agent-sessions',
+      route,
+      fetch_impl: (input, init) => worker.fetch(new Request(input, init)),
+    });
+    expect(published).toMatchObject({ status: 'published', lease_id: 'lease_workspace_node_test', response_status: 200 });
+
+    const directory = await (await worker.fetch(new Request('https://projection.example.test/api/nars/workspace/routes?projection_id=proj_workspace_node_test', {
+      headers: { 'x-narada-browser-token-fingerprint': browserToken },
+    }))).json();
+    expect(directory.surfaces.find((surface: { id: string }) => surface.id === 'agent-sessions').projectedRoutes)
+      .toContainEqual(expect.objectContaining({ id: 'session-detail', availability: 'available' }));
+
+    const revoked = await revokeWorkspaceRouteRemotely({
+      site_root: siteRoot,
+      projection_id: 'proj_workspace_node_test',
+      cloudflare_api_base_url: 'https://projection.example.test',
+      lease_id: 'lease_workspace_node_test',
+      fetch_impl: (input, init) => worker.fetch(new Request(input, init)),
+    });
+    expect(revoked).toMatchObject({ status: 'revoked', lease_id: 'lease_workspace_node_test', response_status: 200 });
   });
 
   test('delivers queued remote projection input to local NARS admission callback', async () => {

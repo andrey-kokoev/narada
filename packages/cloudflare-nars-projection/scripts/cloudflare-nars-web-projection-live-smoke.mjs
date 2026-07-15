@@ -63,6 +63,13 @@ async function run() {
     site_root: args.siteRoot,
     nars_session_id: args.session,
     projection_id: projectionId,
+    source_ref: args.carrierSessionId || args.operationId
+      ? {
+        kind: 'cloudflare_carrier',
+        carrier_session_id: args.carrierSessionId ?? null,
+        operation_id: args.operationId ?? null,
+      }
+      : null,
     dry_run: false,
     cloudflare_api_base_url: args.cloudflareApiBaseUrl,
     cloudflare_carrier_api_base_url: args.cloudflareCarrierUrl,

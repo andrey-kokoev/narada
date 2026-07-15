@@ -4,6 +4,37 @@ function normalizeProjectionEventView(view: unknown): string | null {
   return normalizeNarsSessionEventView(typeof view === 'string' ? view : 'raw');
 }
 
+export * from './workspace-directory.js';
+
+export interface CloudflareNarsProjectionSourceRef {
+  kind: 'cloudflare_carrier';
+  carrier_session_id: string | null;
+  operation_id: string | null;
+}
+
+function normalizeProjectionBaseUrl(value: unknown): string | null {
+  const raw = String(value ?? '').trim().replace(/\/+$/, '');
+  if (!raw) return null;
+  try {
+    const parsed = new URL(raw);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
+    return parsed.toString().replace(/\/+$/, '');
+  } catch {
+    return null;
+  }
+}
+
+function normalizeProjectionSourceRef(value: CloudflareNarsProjectionSourceRef | null | undefined): CloudflareNarsProjectionSourceRef | null {
+  if (!value || value.kind !== 'cloudflare_carrier') return null;
+  const carrierSessionId = String(value.carrier_session_id ?? '').trim();
+  const operationId = String(value.operation_id ?? '').trim();
+  return {
+    kind: 'cloudflare_carrier',
+    carrier_session_id: carrierSessionId || null,
+    operation_id: operationId || null,
+  };
+}
+
 export function projectedEventMatchesView(event: ProjectedEvent, view: string): boolean {
   if (view === 'raw') return true;
   if (view === 'conversation') return event.event_class === 'conversation';
@@ -453,6 +484,8 @@ export interface CloudflareNarsProjectionIntentInput {
   site_id: string;
   site_root?: string | null;
   nars_session_id: string;
+  source_ref?: CloudflareNarsProjectionSourceRef | null;
+  projection_api_base_url?: string | null;
   local_bridge_id?: string;
   target?: 'cloudflare';
   event_stream_policy?: ProjectionEventPolicyMode;
@@ -610,6 +643,52 @@ export function createCloudflareNarsProjectionWorkerService(options: {
           max_events: args.max_events,
           view,
         }),
+      };
+    },
+    readHealth(args: {
+      projection_id: string;
+      browser_token_fingerprint: string;
+      now?: string;
+    }): CloudflareNarsProjectionHealthReadResult {
+      const record = accessRecords.get(args.projection_id);
+      if (!record) {
+        return {
+          schema: 'narada.cloudflare_nars_projection.health.v1',
+          status: 'refused',
+          code: 'projection_not_found',
+          projection_id: args.projection_id,
+        };
+      }
+      const read = service.readEvents({
+        projection_id: args.projection_id,
+        browser_token_fingerprint: args.browser_token_fingerprint,
+        direction: 'backward',
+        max_events: 1,
+        view: 'raw',
+        now: args.now,
+      });
+      if (read.status !== 'ok') {
+        return {
+          schema: 'narada.cloudflare_nars_projection.health.v1',
+          status: 'refused',
+          code: read.code,
+          projection_id: args.projection_id,
+        };
+      }
+      const lastEvent = read.events[0] ?? null;
+      return {
+        schema: 'narada.cloudflare_nars_projection.health.v1',
+        status: 'healthy',
+        projection_id: args.projection_id,
+        site_id: record.site_id,
+        nars_session_id: record.nars_session_id,
+        source_ref: record.source_ref ?? null,
+        lifecycle_state: projectionLifecycleStatus(record, args.now),
+        expires_at: record.expires_at,
+        revoked_at: record.revoked_at,
+        last_event_sequence: read.cursor.last_sequence,
+        last_projected_at: lastEvent?.projected_at ?? null,
+        cursor: read.cursor,
       };
     },
     readArtifactMetadata(args: {
@@ -1388,6 +1467,8 @@ export interface CloudflareNarsProjectionIntent {
   site_id: string;
   site_root: string | null;
   nars_session_id: string;
+  source_ref: CloudflareNarsProjectionSourceRef | null;
+  projection_api_base_url: string | null;
   local_bridge_id: string;
   target: 'cloudflare';
   event_stream_policy: ProjectionEventPolicyMode;
@@ -1412,11 +1493,29 @@ export interface ProjectionCredentialRecord {
   revoked_at: string | null;
 }
 
+export interface CloudflareNarsProjectionHealthReadResult {
+  schema: 'narada.cloudflare_nars_projection.health.v1';
+  status: 'healthy' | 'refused';
+  code?: string;
+  projection_id: string;
+  site_id?: string;
+  nars_session_id?: string;
+  source_ref?: CloudflareNarsProjectionSourceRef | null;
+  lifecycle_state?: ProjectionLifecycleState;
+  expires_at?: string | null;
+  revoked_at?: string | null;
+  last_event_sequence?: number | null;
+  last_projected_at?: string | null;
+  cursor?: BoundedProjectionCacheRead['cursor'];
+}
+
 export interface CloudflareNarsRemoteAccessRecord {
   schema: typeof CLOUDFLARE_NARS_PROJECTION_ACCESS_SCHEMA;
   projection_id: string;
   site_id: string;
   nars_session_id: string;
+  source_ref: CloudflareNarsProjectionSourceRef | null;
+  projection_api_base_url: string | null;
   lifecycle_state: ProjectionLifecycleState;
   event_stream_policy: ProjectionEventPolicyMode;
   artifact_projection_policy: ArtifactProjectionPolicy;
@@ -1767,7 +1866,7 @@ const DEFAULT_ARTIFACT_POLICY: ArtifactProjectionPolicy = {
   cache_ttl_seconds: 3600,
   redact_local_paths: true,
 };
-type ProjectionCredentialAction = 'publish_event' | 'subscribe_events' | 'submit_input' | 'serve_cache' | 'publish_artifact' | 'read_artifact' | 'deliver_input';
+export type ProjectionCredentialAction = 'publish_event' | 'subscribe_events' | 'submit_input' | 'serve_cache' | 'publish_artifact' | 'read_artifact' | 'deliver_input' | 'publish_workspace_route' | 'read_workspace_routes';
 
 export function createCloudflareNarsProjectionIntent(input: CloudflareNarsProjectionIntentInput, now = new Date().toISOString()): CloudflareNarsProjectionIntent {
   const siteId = requireNonEmpty(input.site_id, 'site_id');
@@ -1779,6 +1878,8 @@ export function createCloudflareNarsProjectionIntent(input: CloudflareNarsProjec
     site_id: siteId,
     site_root: input.site_root ?? null,
     nars_session_id: sessionId,
+    source_ref: normalizeProjectionSourceRef(input.source_ref),
+    projection_api_base_url: normalizeProjectionBaseUrl(input.projection_api_base_url),
     local_bridge_id: input.local_bridge_id?.trim() || `bridge_${safeToken(projectionId)}`,
     target: 'cloudflare',
     event_stream_policy: normalizeEventPolicy(input.event_stream_policy),
@@ -1808,6 +1909,8 @@ export function createCloudflareNarsRemoteAccessRecord(input: {
     projection_id: input.intent.projection_id,
     site_id: input.intent.site_id,
     nars_session_id: input.intent.nars_session_id,
+    source_ref: input.intent.source_ref ?? null,
+    projection_api_base_url: input.intent.projection_api_base_url ?? null,
     lifecycle_state: input.intent.lifecycle_state ?? 'active',
     event_stream_policy: input.intent.event_stream_policy,
     artifact_projection_policy: input.intent.artifact_projection_policy,
@@ -1842,10 +1945,10 @@ export function validateProjectionCredential(record: CloudflareNarsRemoteAccessR
   if (credential.expires_at && args.now && credential.expires_at <= args.now) {
     return { ok: false, code: 'credential_expired', credential_kind: args.credential_kind, action: args.action, projection_id: record.projection_id };
   }
-  if ((args.action === 'publish_event' || args.action === 'publish_artifact' || args.action === 'deliver_input') !== (args.credential_kind === 'bridge')) {
+  if ((args.action === 'publish_event' || args.action === 'publish_artifact' || args.action === 'deliver_input' || args.action === 'publish_workspace_route') !== (args.credential_kind === 'bridge')) {
     return { ok: false, code: 'credential_kind_not_authorized_for_action', credential_kind: args.credential_kind, action: args.action, projection_id: record.projection_id };
   }
-  if ((args.action === 'subscribe_events' || args.action === 'submit_input' || args.action === 'serve_cache' || args.action === 'read_artifact') && args.credential_kind !== 'browser') {
+  if ((args.action === 'subscribe_events' || args.action === 'submit_input' || args.action === 'serve_cache' || args.action === 'read_artifact' || args.action === 'read_workspace_routes') && args.credential_kind !== 'browser') {
     return { ok: false, code: 'credential_kind_not_authorized_for_action', credential_kind: args.credential_kind, action: args.action, projection_id: record.projection_id };
   }
   if (args.action === 'submit_input') {
@@ -2104,7 +2207,7 @@ export function buildProjectionRegistrationPlan(input: CloudflareNarsProjectionI
     },
     agent_web_ui_cloudflare_config: buildAgentWebUiCloudflareProjectionConfig({
       projection_id: intent.projection_id,
-      api_base_url: 'https://<cloudflare-projection-host>',
+      api_base_url: intent.projection_api_base_url ?? 'https://<cloudflare-projection-host>',
     }),
   };
 }

@@ -1,17 +1,26 @@
 name = "narada-nars-projection"
 main = "dist/worker.js"
 compatibility_date = "2026-06-30"
+compatibility_flags = ["nodejs_compat"]
 workers_dev = true
 
 [[durable_objects.bindings]]
 name = "NARS_PROJECTION_STATE"
 class_name = "NarsProjectionState"
 
+[[durable_objects.bindings]]
+name = "NARS_WORKSPACE_DIRECTORY"
+class_name = "NarsWorkspaceDirectory"
+
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["NarsProjectionState"]
 
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["NarsWorkspaceDirectory"]
+
 [assets]
-directory = "../agent-web-ui/dist"
+directory = "public"
 binding = "ASSETS"
 not_found_handling = "single-page-application"

@@ -433,6 +433,9 @@ importers:
       '@narada2/nars-client-projection-contract':
         specifier: workspace:*
         version: link:../nars-client-projection-contract
+      '@narada2/operator-console-contract':
+        specifier: workspace:*
+        version: link:../operator-console-contract
       '@narada2/process-launch-posture':
         specifier: workspace:*
         version: link:../process-launch-posture

@@ -850,9 +850,18 @@ describe('Cloudflare Worker routes', () => {
     expect(content.status).toBe(200);
     expect(await content.text()).toBe('# Report');
 
-    expect(await jsonOf(worker.fetch(new Request(`${base}/health`, {
+    const projectionHealth = await jsonOf(worker.fetch(new Request(`${base}/health`, {
       headers: { 'x-narada-browser-token-fingerprint': access.browser_access_tokens[0].token_fingerprint },
-    })))).toMatchObject({ status: 'healthy', projection_id: intent.projection_id });
+    })));
+    expect(projectionHealth).toMatchObject({
+      status: 'healthy',
+      projection_id: intent.projection_id,
+      site_id: intent.site_id,
+      nars_session_id: intent.nars_session_id,
+      lifecycle_state: 'active',
+      last_event_sequence: 1,
+      last_projected_at: now,
+    });
     expect(await jsonOf(worker.fetch(new Request('https://projection.example.test/api/nars/projections/health')))).toMatchObject({
       schema: 'narada.cloudflare_nars_projection.service_health.v1',
       status: 'healthy',
