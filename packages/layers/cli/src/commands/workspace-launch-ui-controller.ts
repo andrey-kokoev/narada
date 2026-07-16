@@ -184,13 +184,22 @@ export async function runPersistentWorkspaceLaunchSelectionUi(
           { cleanupStaleSessions: false, pollBudgetMs: 0 },
         );
         attempt.actions = handoff.workspaceLaunchActionsForAttempt(attempt);
+        attempt.activity_state = workspaceLaunchAttemptActivityState(attempt);
         attempt.updated_at = new Date().toISOString();
         changed = true;
       } catch {
-        // Preserve the last observation when dashboard revalidation cannot complete.
+        // An unverifiable runtime is historical until NARS confirms it again.
+        attempt.activity_state = 'historical';
+        changed = true;
       }
     }));
-    if (changed) await persistWorkspaceLaunchDashboardState(persistenceDir, uiSession, attempts);
+    if (changed) {
+      try {
+        await persistWorkspaceLaunchDashboardState(persistenceDir, uiSession, attempts);
+      } catch {
+        // The response still reflects fresh in-memory authority; persistence can recover on the next request.
+      }
+    }
     return dashboardState();
   };
 

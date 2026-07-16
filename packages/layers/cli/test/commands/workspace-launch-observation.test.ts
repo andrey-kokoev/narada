@@ -1,62 +1,50 @@
 import { describe, expect, it } from 'vitest';
+import type {
+  WorkspaceLaunchAttemptRecord,
+  WorkspaceLaunchObservationRecord,
+} from '../../src/commands/workspace-launch-types.js';
 import { workspaceLaunchAttemptActivityState } from '../../src/commands/workspace-launch-observation.js';
 
-const now = Date.parse('2026-07-12T12:00:00.000Z');
+const now = Date.parse('2026-07-16T12:00:00.000Z');
 
-function observation(overrides: Partial<{
-  health: 'waiting' | 'healthy' | 'ambiguous' | 'stale' | 'failed' | 'unowned';
-  session_id: string | null;
-  last_checked_at: string;
-  ownership_posture: 'not_yet_observed' | 'owned_by_runtime_authority' | 'observed_unowned';
-}> = {}) {
+function attempt(
+  observation: Partial<WorkspaceLaunchObservationRecord> = {},
+): Pick<WorkspaceLaunchAttemptRecord, 'status' | 'expected_launch_session_ids' | 'observations'> {
   return {
-    schema: 'narada.workspace_launch.observed_runtime.v1' as const,
-    observation_id: 'observation-1',
-    launch_attempt_id: 'attempt-1',
-    kind: 'nars' as const,
-    session_id: 'session-live',
-    site_root: 'D:\\code\\smart-scheduling',
-    health: 'healthy' as const,
-    authority: 'nars_session_management' as const,
-    ownership_posture: 'owned_by_runtime_authority' as const,
-    last_checked_at: '2026-07-12T11:59:30.000Z',
-    message: 'NARS session is healthy.',
-    ...overrides,
+    status: 'launched',
+    expected_launch_session_ids: ['session-1'],
+    observations: [{
+      schema: 'narada.workspace_launch.observed_runtime.v1',
+      observation_id: 'observation-1',
+      launch_attempt_id: 'attempt-1',
+      kind: 'nars',
+      session_id: 'session-1',
+      site_root: 'D:/code/site',
+      health: 'healthy',
+      authority: 'nars_session_management',
+      ownership_posture: 'owned_by_runtime_authority',
+      last_checked_at: '2026-07-16T11:59:30.000Z',
+      message: 'NARS session session-1 is healthy.',
+      ...observation,
+    }],
   };
 }
 
-describe('workspace launch activity observation', () => {
-  it('requires a fresh healthy observation owned by the expected launch', () => {
-    expect(workspaceLaunchAttemptActivityState({
-      status: 'launched',
-      expected_launch_session_ids: ['session-live'],
-      observations: [observation()],
-    }, now)).toBe('active');
-
-    expect(workspaceLaunchAttemptActivityState({
-      status: 'launched',
-      expected_launch_session_ids: ['session-other'],
-      observations: [observation()],
-    }, now)).toBe('historical');
-
-    expect(workspaceLaunchAttemptActivityState({
-      status: 'failed',
-      expected_launch_session_ids: ['session-live'],
-      observations: [observation()],
-    }, now)).toBe('historical');
+describe('workspace launch activity authority', () => {
+  it('marks a fresh owned healthy expected session active', () => {
+    expect(workspaceLaunchAttemptActivityState(attempt(), now)).toBe('active');
   });
 
-  it('classifies stale, unhealthy, and unowned observations as historical', () => {
-    for (const candidate of [
-      observation({ last_checked_at: '2026-07-12T08:00:00.000Z' }),
-      observation({ health: 'failed' }),
-      observation({ ownership_posture: 'observed_unowned' }),
-    ]) {
-      expect(workspaceLaunchAttemptActivityState({
-        status: 'launched',
-        expected_launch_session_ids: ['session-live'],
-        observations: [candidate],
-      }, now)).toBe('historical');
-    }
+  it('marks stale, unowned, failed, mismatched, and future observations historical', () => {
+    expect(workspaceLaunchAttemptActivityState(attempt({ last_checked_at: '2026-07-16T11:00:00.000Z' }), now)).toBe('historical');
+    expect(workspaceLaunchAttemptActivityState(attempt({ ownership_posture: 'observed_unowned' }), now)).toBe('historical');
+    expect(workspaceLaunchAttemptActivityState(attempt({ health: 'failed' }), now)).toBe('historical');
+    expect(workspaceLaunchAttemptActivityState(attempt({ session_id: 'session-2' }), now)).toBe('historical');
+    expect(workspaceLaunchAttemptActivityState(attempt({ last_checked_at: '2026-07-16T12:00:01.000Z' }), now)).toBe('historical');
+  });
+
+  it('never treats a completed or unobserved attempt as active', () => {
+    expect(workspaceLaunchAttemptActivityState({ ...attempt(), status: 'failed' }, now)).toBe('historical');
+    expect(workspaceLaunchAttemptActivityState({ ...attempt(), expected_launch_session_ids: [], observations: [] }, now)).toBe('historical');
   });
 });

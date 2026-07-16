@@ -175,6 +175,29 @@ test('only a fresh owned NARS observation is active', () => {
   assert.deepEqual(workspaceLaunchAttemptsForView(parsed, true, now).map((attempt) => attempt.launchAttemptId), ['attempt-stale']);
 });
 
+test('uses server activity state as the dashboard authority', () => {
+  const parsed = parseWorkspaceLaunchDashboardAttempts({
+    attempts: [{
+      launch_attempt_id: 'attempt-authority',
+      selection,
+      status: 'launched',
+      result_summary: 'Launch completed',
+      activity_state: 'historical',
+      expected_launch_session_ids: ['session-live'],
+      observations: [{
+        health: 'healthy',
+        session_id: 'session-live',
+        last_checked_at: '2026-07-16T11:59:30.000Z',
+        ownership_posture: 'owned_by_runtime_authority',
+      }],
+    }],
+  });
+
+  assert.ok(parsed);
+  assert.equal(isWorkspaceLaunchAttemptActive(parsed[0]!, Date.parse('2026-07-16T12:00:00.000Z')), false);
+  assert.deepEqual(workspaceLaunchAttemptsForView(parsed, true, Date.parse('2026-07-16T12:00:00.000Z')).map((attempt) => attempt.launchAttemptId), ['attempt-authority']);
+});
+
 test('keeps shared launcher helpers deterministic', () => {
   assert.deepEqual(unique([' codex ', 'codex', '', 'agent-cli']), ['codex', 'agent-cli']);
   assert.deepEqual(parseWorkspaceLaunchSelectorModelPayload(selectorModel).selected, {
