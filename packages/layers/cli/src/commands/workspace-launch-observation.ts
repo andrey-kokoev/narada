@@ -3,8 +3,12 @@ import {
   discoverNarsSessions,
   type NarsSessionObservation,
 } from '@narada2/nars-session-core/session-index';
-import type { WorkspaceLaunchObservationRecord, WorkspaceLaunchRecord } from './workspace-launch-types.js';
-import type { WorkspaceLaunchSelection as WorkspaceLaunchBrowserSelection } from '@narada2/workspace-launch-contract';
+import { WORKSPACE_LAUNCH_ACTIVE_OBSERVATION_MAX_AGE_MS } from '@narada2/workspace-launch-contract';
+import type { WorkspaceLaunchAttemptRecord, WorkspaceLaunchObservationRecord, WorkspaceLaunchRecord } from './workspace-launch-types.js';
+import type {
+  WorkspaceLaunchAttemptActivityState,
+  WorkspaceLaunchSelection as WorkspaceLaunchBrowserSelection,
+} from '@narada2/workspace-launch-contract';
 import * as support from './workspace-launch-support.js';
 import { workspaceLaunchRequestStaleSessionCleanup } from './workspace-launch-cleanup.js';
 import {
@@ -20,12 +24,36 @@ import {
   workspaceLaunchString,
 } from './workspace-launch-session.js';
 
+export interface WorkspaceLaunchRuntimeObservationOptions {
+  cleanupStaleSessions?: boolean;
+  pollBudgetMs?: number;
+  pollIntervalMs?: number;
+}
+
+export function workspaceLaunchAttemptActivityState(
+  attempt: Pick<WorkspaceLaunchAttemptRecord, 'status' | 'expected_launch_session_ids' | 'observations'>,
+  now = Date.now(),
+): WorkspaceLaunchAttemptActivityState {
+  if (attempt.status !== 'launched' || attempt.expected_launch_session_ids.length === 0) return 'historical';
+  const observation = attempt.observations.at(-1);
+  if (!observation
+    || observation.health !== 'healthy'
+    || observation.ownership_posture !== 'owned_by_runtime_authority'
+    || !observation.session_id
+    || !attempt.expected_launch_session_ids.includes(observation.session_id)) return 'historical';
+  const checkedAt = Date.parse(observation.last_checked_at);
+  if (!Number.isFinite(checkedAt)) return 'historical';
+  const ageMs = now - checkedAt;
+  return ageMs >= 0 && ageMs <= WORKSPACE_LAUNCH_ACTIVE_OBSERVATION_MAX_AGE_MS ? 'active' : 'historical';
+}
+
 export async function workspaceLaunchRuntimeObservations(
   launchAttemptId: string,
   selection: WorkspaceLaunchBrowserSelection,
   records: WorkspaceLaunchRecord[],
   expectedLaunchSessionIds: string[] = [],
   launchSiteRoots: string[] = [],
+  options: WorkspaceLaunchRuntimeObservationOptions = {},
 ): Promise<WorkspaceLaunchObservationRecord[]> {
   const siteRoots = support.unique(
     (launchSiteRoots.length > 0 ? launchSiteRoots : workspaceLaunchSiteRootsForSelection(selection, records))
@@ -33,8 +61,8 @@ export async function workspaceLaunchRuntimeObservations(
   );
   if (siteRoots.length === 0) return [workspaceLaunchWaitingObservation(launchAttemptId, selection)];
   const expectedLaunchSessionIdSet = new Set(expectedLaunchSessionIds.map((value) => value.trim()).filter(Boolean));
-  const pollBudgetMs = workspaceLaunchRuntimeObservationPollBudgetMs();
-  const pollIntervalMs = workspaceLaunchRuntimeObservationPollIntervalMs();
+  const pollBudgetMs = options.pollBudgetMs ?? workspaceLaunchRuntimeObservationPollBudgetMs();
+  const pollIntervalMs = options.pollIntervalMs ?? workspaceLaunchRuntimeObservationPollIntervalMs();
   const deadline = Date.now() + pollBudgetMs;
   let sawDiscoveredSession = false;
   const staleCleanupAttempted = new Set<string>();
@@ -53,7 +81,7 @@ export async function workspaceLaunchRuntimeObservations(
           if (!workspaceLaunchSessionMatchesSelection(normalized, selection)) continue;
           if (workspaceLaunchSessionMatchesExpectedLaunch(normalized, expectedLaunchSessionIdSet)) {
             candidates.push(normalized);
-          } else if (workspaceLaunchSessionIsStaleSessionOwnedCandidate(normalized, expectedLaunchSessionIdSet)) {
+          } else if (options.cleanupStaleSessions !== false && workspaceLaunchSessionIsStaleSessionOwnedCandidate(normalized, expectedLaunchSessionIdSet)) {
             await workspaceLaunchRequestStaleSessionCleanup(normalized, staleCleanupAttempted);
           }
         }

@@ -1,11 +1,13 @@
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 import type { WorkspaceLaunchAction, WorkspaceLaunchOption } from '@narada2/workspace-launch-contract';
 import {
   arrayValues,
+  isWorkspaceLaunchAttemptActive,
   parseWorkspaceLaunchBootstrapPayload,
   parseWorkspaceLaunchDashboardAttempts,
   parseWorkspaceLaunchSelectorModelPayload,
   unique,
+  workspaceLaunchAttemptsForView,
   type Bootstrap,
   type LaunchAttempt,
   type LaunchOption,
@@ -86,6 +88,7 @@ export function useWorkspaceLaunchWorkflow() {
   const stopConfirmationAttemptId = ref<string | null>(null);
   const attempts = ref<LaunchAttempt[]>([]);
   const finishedView = ref<'submitted' | 'cancelled' | null>(null);
+  const showHistory = ref(false);
 
   const siteChoices = computed(() => unique(model.siteChoices.length ? model.siteChoices : model.records.map((record) => record.site)));
   const roleChoices = computed(() => unique(model.records
@@ -109,6 +112,11 @@ export function useWorkspaceLaunchWorkflow() {
   const submitLabel = computed(() => (
     matchedRecords.value.length > 0 ? `Start ${plural(matchedRecords.value.length, 'Agent Launch')}` : 'Start Selected Launches'
   ));
+  const activeAttempts = computed(() => workspaceLaunchAttemptsForView(attempts.value, false));
+  const historicalAttempts = computed(() => workspaceLaunchAttemptsForView(attempts.value, true));
+  const visibleAttempts = computed(() => workspaceLaunchAttemptsForView(attempts.value, showHistory.value));
+  const activeAttemptCount = computed(() => activeAttempts.value.length);
+  const historicalAttemptCount = computed(() => historicalAttempts.value.length);
 
   function ensureSiteSelection(): void {
     const choices = siteChoices.value;
@@ -123,6 +131,8 @@ export function useWorkspaceLaunchWorkflow() {
     const retained = [...selectedSites.value].filter((value) => choices.includes(value));
     replaceSet(selectedSites, retained.length ? retained : [choices[0]]);
   }
+
+  let dashboardRefreshTimer: ReturnType<typeof setInterval> | undefined;
 
   function ensureRoleSelection(): void {
     const choices = roleChoices.value;
@@ -319,9 +329,7 @@ export function useWorkspaceLaunchWorkflow() {
   }
 
   function attemptIsHistorical(attempt: LaunchAttempt): boolean {
-    const liveObservation = attempt.observations.some((value) => /ok|healthy|ready|busy|running|observed/i.test(value.health || ''));
-    const liveProjection = attempt.projections.some((value) => /handed off|handed_off|planned/i.test(value.status || ''));
-    return !(liveObservation || liveProjection);
+    return !isWorkspaceLaunchAttemptActive(attempt);
   }
 
   function attemptTitle(attempt: LaunchAttempt): string {
@@ -390,6 +398,10 @@ export function useWorkspaceLaunchWorkflow() {
       return 'Recheck this launch before using last-observed attach actions.';
     }
     return actionScope(action);
+  }
+
+  function toggleHistory(): void {
+    showHistory.value = !showHistory.value;
   }
 
   function updateDashboard(value: unknown): void {
@@ -471,6 +483,13 @@ export function useWorkspaceLaunchWorkflow() {
     ensureSurfaceSelection();
     void refreshSelectorControls();
     void loadLaunches();
+    dashboardRefreshTimer = setInterval(() => {
+      void loadLaunches();
+    }, 30_000);
+  });
+
+  onUnmounted(() => {
+    if (dashboardRefreshTimer !== undefined) clearInterval(dashboardRefreshTimer);
   });
 
   return {
@@ -490,6 +509,10 @@ export function useWorkspaceLaunchWorkflow() {
     submitting,
     stopConfirmationAttemptId,
     attempts,
+    showHistory,
+    visibleAttempts,
+    activeAttemptCount,
+    historicalAttemptCount,
     finishedView,
     siteChoices,
     roleChoices,
@@ -523,6 +546,7 @@ export function useWorkspaceLaunchWorkflow() {
     visibleActions,
     actionButtonLabel,
     actionButtonScope,
+    toggleHistory,
     statusLabel,
     runLaunchAction,
     submitLaunch,

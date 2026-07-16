@@ -61,6 +61,8 @@ export interface WorkspaceLaunchWireHandoff {
 export interface WorkspaceLaunchWireObservation {
   health?: string;
   session_id?: string | null;
+  last_checked_at?: string;
+  ownership_posture?: string;
 }
 
 export interface WorkspaceLaunchWireProjection {
@@ -68,11 +70,17 @@ export interface WorkspaceLaunchWireProjection {
   status?: string;
 }
 
+export const WORKSPACE_LAUNCH_ACTIVE_OBSERVATION_MAX_AGE_MS = 2 * 60 * 1000;
+
+export type WorkspaceLaunchAttemptActivityState = 'active' | 'historical';
+
 export interface WorkspaceLaunchWireAttempt {
   launch_attempt_id: string;
   selection: WorkspaceLaunchSelection;
   status: string;
   result_summary: string;
+  activity_state?: WorkspaceLaunchAttemptActivityState;
+  expected_launch_session_ids?: string[];
   updated_at?: string;
   created_at?: string;
   started_at?: string;
@@ -219,6 +227,7 @@ export interface WorkspaceLaunchAttemptRecord {
   updated_at: string;
   selection: WorkspaceLaunchSelection;
   status: WorkspaceLaunchAttemptStatus;
+  activity_state?: WorkspaceLaunchAttemptActivityState;
   lifecycle_schema?: 'narada.workspace_launch.attempt.lifecycle_state.v1';
   lifecycle_state?: WorkspaceLaunchAttemptLifecycleState;
   lifecycle_history?: WorkspaceLaunchAttemptLifecycleState[];
@@ -331,7 +340,9 @@ function isHandoff(value: unknown): value is WorkspaceLaunchWireHandoff {
 function isObservation(value: unknown): value is WorkspaceLaunchWireObservation {
   if (!isRecord(value)) return false;
   return isOptionalString(value.health)
-    && (value.session_id === undefined || value.session_id === null || isString(value.session_id));
+    && (value.session_id === undefined || value.session_id === null || isString(value.session_id))
+    && isOptionalString(value.last_checked_at)
+    && isOptionalString(value.ownership_posture);
 }
 
 function isProjection(value: unknown): value is WorkspaceLaunchWireProjection {
@@ -346,12 +357,14 @@ function isAttempt(value: unknown): value is WorkspaceLaunchWireAttempt {
     && isSelection(value.selection)
     && isString(value.status)
     && isString(value.result_summary)
+    && (value.activity_state === undefined || value.activity_state === 'active' || value.activity_state === 'historical')
     && isOptionalString(value.updated_at)
     && isOptionalString(value.created_at)
     && isOptionalString(value.started_at)
     && (value.handoffs === undefined || (Array.isArray(value.handoffs) && value.handoffs.every(isHandoff)))
     && (value.observations === undefined || (Array.isArray(value.observations) && value.observations.every(isObservation)))
     && (value.projections === undefined || (Array.isArray(value.projections) && value.projections.every(isProjection)))
+    && (value.expected_launch_session_ids === undefined || isStringArray(value.expected_launch_session_ids))
     && (value.actions === undefined || isStringArray(value.actions));
 }
 

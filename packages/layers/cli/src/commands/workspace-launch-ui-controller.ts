@@ -41,6 +41,7 @@ import {
 import { createWorkspaceLaunchAttemptRunner } from './workspace-launch-ui-attempts.js';
 import { executeWorkspaceLaunchUiAction } from './workspace-launch-ui-actions.js';
 import { setWorkspaceLaunchUiSessionLifecycle } from './workspace-launch-ui-lifecycle.js';
+import { workspaceLaunchAttemptActivityState } from './workspace-launch-observation.js';
 import { ensureLaunchArtifact, naradaProperRoot } from '../lib/launch-artifact.js';
 
 export async function runWorkspaceLaunchSelectionUi(
@@ -156,10 +157,42 @@ export async function runPersistentWorkspaceLaunchSelectionUi(
   const dashboardState = (): WorkspaceLaunchDashboardState => ({
     schema: 'narada.workspace_launch.ui_session_state.v1',
     ui_session: uiSession,
-    attempts: attempts.filter((attempt) => attempt.status !== 'forgotten'),
+    attempts: attempts
+      .filter((attempt) => attempt.status !== 'forgotten')
+      .map((attempt) => ({
+        ...attempt,
+        activity_state: workspaceLaunchAttemptActivityState(attempt),
+      })),
     observed_unowned: [],
     actions: ['submit', 'cancel'],
   });
+
+  const refreshDashboardState = async (): Promise<WorkspaceLaunchDashboardState> => {
+    const candidates = attempts.filter((attempt) => (
+      attempt.status === 'launched'
+      && attempt.expected_launch_session_ids.length > 0
+    ));
+    let changed = false;
+    await Promise.all(candidates.map(async (attempt) => {
+      try {
+        attempt.observations = await handoff.workspaceLaunchRuntimeObservations(
+          attempt.launch_attempt_id,
+          attempt.selection,
+          records,
+          attempt.expected_launch_session_ids,
+          support.workspaceLaunchSiteRootsFromLaunchResult(attempt.diagnostic),
+          { cleanupStaleSessions: false, pollBudgetMs: 0 },
+        );
+        attempt.actions = handoff.workspaceLaunchActionsForAttempt(attempt);
+        attempt.updated_at = new Date().toISOString();
+        changed = true;
+      } catch {
+        // Preserve the last observation when dashboard revalidation cannot complete.
+      }
+    }));
+    if (changed) await persistWorkspaceLaunchDashboardState(persistenceDir, uiSession, attempts);
+    return dashboardState();
+  };
 
   const runLaunchAttempt = createWorkspaceLaunchAttemptRunner({
     uiSession,
@@ -178,7 +211,7 @@ export async function runPersistentWorkspaceLaunchSelectionUi(
     server = createWorkspaceLaunchUiServer({
       page: () => html,
       asset: (pathname) => readWorkspaceLaunchUiAsset(pathname, workspaceLaunchArtifact.artifact_root),
-      dashboard: dashboardState,
+      dashboard: refreshDashboardState,
       selectorModel: (payload) => selectionServices.workspaceLaunchSelectorModel(records, payload as Partial<WorkspaceLaunchBrowserSelection>, siteCatalog),
       submit: async (payload) => {
         const selection = selectionServices.normalizeWorkspaceLaunchBrowserSelection(payload as Partial<WorkspaceLaunchBrowserSelection>);

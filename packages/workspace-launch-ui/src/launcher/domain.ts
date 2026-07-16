@@ -2,8 +2,10 @@ import {
   parseWorkspaceLaunchBootstrap,
   parseWorkspaceLaunchDashboard,
   parseWorkspaceLaunchSelectorModel,
+  WORKSPACE_LAUNCH_ACTIVE_OBSERVATION_MAX_AGE_MS,
 } from '@narada2/workspace-launch-contract';
 import type {
+  WorkspaceLaunchAttemptActivityState,
   WorkspaceLaunchOption,
   WorkspaceLaunchSelection,
   WorkspaceLaunchSelectionMode,
@@ -27,6 +29,35 @@ export interface LaunchRecord {
   runtime: string;
   operatorSurface: string;
   agentIdentityRef?: { canonicalAgentId: string };
+}
+
+export const ACTIVE_LAUNCH_OBSERVATION_MAX_AGE_MS = WORKSPACE_LAUNCH_ACTIVE_OBSERVATION_MAX_AGE_MS;
+
+export function isWorkspaceLaunchAttemptActive(attempt: LaunchAttempt, now = Date.now()): boolean {
+  if (attempt.activityState !== undefined) return attempt.activityState === 'active';
+  if (attempt.status !== 'launched' || attempt.expectedLaunchSessionIds.length === 0) return false;
+  const observation = [...attempt.observations]
+    .filter((candidate) => candidate.health || candidate.sessionId || candidate.lastCheckedAt)
+    .sort((left, right) => {
+      const leftCheckedAt = Date.parse(left.lastCheckedAt || '');
+      const rightCheckedAt = Date.parse(right.lastCheckedAt || '');
+      return (Number.isFinite(leftCheckedAt) ? leftCheckedAt : Number.NEGATIVE_INFINITY)
+        - (Number.isFinite(rightCheckedAt) ? rightCheckedAt : Number.NEGATIVE_INFINITY);
+    })
+    .at(-1);
+  if (!observation || observation.health !== 'healthy' || !observation.sessionId) return false;
+  if (!attempt.expectedLaunchSessionIds.includes(observation.sessionId)) return false;
+  if (observation.ownershipPosture !== 'owned_by_runtime_authority') return false;
+  const lastCheckedAt = Date.parse(observation.lastCheckedAt || '');
+  if (!Number.isFinite(lastCheckedAt)) return false;
+  const age = now - lastCheckedAt;
+  return age >= 0 && age <= ACTIVE_LAUNCH_OBSERVATION_MAX_AGE_MS;
+}
+
+export function workspaceLaunchAttemptsForView(attempts: LaunchAttempt[], showHistory: boolean, now = Date.now()): LaunchAttempt[] {
+  return attempts.filter((attempt) => showHistory
+    ? !isWorkspaceLaunchAttemptActive(attempt, now)
+    : isWorkspaceLaunchAttemptActive(attempt, now));
 }
 
 export interface SelectorModel {
@@ -66,6 +97,8 @@ export interface Handoff {
 export interface RuntimeObservation {
   health?: string;
   sessionId?: string | null;
+  lastCheckedAt?: string | null;
+  ownershipPosture?: string | null;
 }
 
 export interface ProjectionObservation {
@@ -79,6 +112,8 @@ export interface LaunchAttempt {
   status: string;
   resultSummary: string;
   updatedAt: string | null;
+  activityState?: WorkspaceLaunchAttemptActivityState;
+  expectedLaunchSessionIds: string[];
   handoffs: Handoff[];
   observations: RuntimeObservation[];
   projections: ProjectionObservation[];
@@ -172,7 +207,12 @@ function parseHandoff(value: WorkspaceLaunchWireHandoff): Handoff {
 }
 
 function parseObservation(value: WorkspaceLaunchWireObservation): RuntimeObservation {
-  return { health: value.health, sessionId: value.session_id };
+  return {
+    health: value.health,
+    sessionId: value.session_id,
+    ...(value.last_checked_at ? { lastCheckedAt: value.last_checked_at } : {}),
+    ...(value.ownership_posture ? { ownershipPosture: value.ownership_posture } : {}),
+  };
 }
 
 function parseProjection(value: WorkspaceLaunchWireProjection): ProjectionObservation {
@@ -189,6 +229,8 @@ function parseAttempt(value: WorkspaceLaunchWireAttempt): LaunchAttempt {
     status: value.status,
     resultSummary: value.result_summary,
     updatedAt: value.updated_at || value.created_at || value.started_at || null,
+    ...(value.activity_state ? { activityState: value.activity_state } : {}),
+    expectedLaunchSessionIds: value.expected_launch_session_ids ?? [],
     handoffs: value.handoffs?.map(parseHandoff) ?? [],
     observations: value.observations?.map(parseObservation) ?? [],
     projections: value.projections?.map(parseProjection) ?? [],

@@ -1,0 +1,90 @@
+# Operator Console Runbook
+
+This is the operator-facing recovery guide for the local Operator Console and
+its Workspace route directory. The architecture and ownership target is
+defined in [`operator-workspace-target.md`](../architecture/operator-workspace-target.md).
+
+## Normal Entry Point
+
+Start the local Workspace host through the Narada CLI:
+
+```powershell
+narada console serve
+```
+
+Open the Workspace URL printed by the command. The normal Registry entry point
+is `/console/registry/`. The Workspace route directory is read from
+`/console/routes`; it describes which Console surfaces and routes are actually
+available from the current host.
+
+The browser is a projection client. It does not invent routes, replace the
+route authority, or bypass the CLI-owned server.
+
+The Launcher defaults to active launches. Completed or stale launch results are
+retained as evidence but remain behind the low-emphasis **History** control;
+they are not presented as current runtime sessions. An active launch requires a
+fresh, owned, healthy NARS observation checked within the canonical two-minute
+freshness window; a terminal or projection handoff alone does not make a launch
+active. The dashboard revalidates persisted launches through NARS session
+management when it is read, without performing stale-session cleanup.
+
+## Route-directory States
+
+| Browser state | Meaning | Operator action |
+| --- | --- | --- |
+| `Loading operator workspace routes...` | The first live directory read is in progress. | Wait for the bounded read to finish. |
+| Live directory unavailable, no prior snapshot | The live navigation projection has not produced a valid directory yet. Safe read navigation may be limited; already-open registry mutations still use the canonical registry authority. | Use **Retry route directory** after confirming the host is running. |
+| Live directory unavailable, last known routes shown | A refresh failed, but the last valid directory is retained. The banner shows when it was last verified; already-open registry mutations remain governed by the canonical registry authority. | Continue reading if needed, then retry when convenient. |
+| No warning | The current route directory was read successfully. | Continue normally. |
+
+Failures are rendered with a bounded error code and HTTP status when one is
+available. They are not silently converted into a new route set.
+
+## Recovery
+
+1. Confirm that the Console host is still running and that its printed URL is
+   reachable.
+2. Select **Retry route directory** in the warning banner.
+3. If the browser was offline or backgrounded, return it online or visible;
+   the UI retries automatically in those cases.
+4. If the refresh succeeds, the warning clears and the new directory replaces
+   the previous snapshot.
+5. If the warning persists, inspect the bounded code:
+   - `timeout`: the route read exceeded its deadline.
+   - `http_error`: the authority returned a non-success HTTP status.
+   - `invalid_json`: the response was not JSON.
+   - `invalid_response`: JSON did not match the route-directory contract.
+   - `unavailable`: the transport failed before a more specific code was known.
+
+Do not repair the browser by hardcoding a missing route. Fix the owning Console
+or Router boundary, then retry the directory read.
+
+## Draft and Selection Safety
+
+Registry changes are draft-first. Leaving an Add or Manage page with unsaved
+changes prompts before navigation, and closing or reloading the browser exposes
+the standard unsaved-work warning. Preview and Apply remain separate actions;
+the canonical registry API admits or refuses them using its operation,
+revision, and confirmation rules. Route-directory loss affects discovery and
+navigation only; it is never a mutation-authority signal.
+
+Site selection is reflected in the Registry URL as `?site=<site-id>`. This
+means refresh, browser history, and a copied Registry URL reopen the same
+canonical Site selection. If the selected record disappears during refresh,
+the query is removed rather than pointing at a nonexistent record.
+
+## Verification
+
+Run the focused checks from `D:\code\narada`:
+
+```powershell
+pnpm --filter @narada2/operator-console-ui test
+pnpm --filter @narada2/cloudflare-nars-projection test
+pnpm --filter @narada2/cloudflare-nars-projection typecheck
+pnpm --filter @narada2/cli exec vitest run --silent test/commands/console-server.test.ts
+pnpm --filter @narada2/cli build
+```
+
+The route-directory behavior is covered by the UI route-state tests and the
+Cloudflare projection tests. The CLI build is required because the Console UI
+is a launch artifact consumed by the CLI and Cloudflare asset pipeline.

@@ -2,6 +2,7 @@
 import { OperatorSurfaceShell, cn } from '@narada2/ui-vue';
 import {
   ExternalLink,
+  History,
   Play,
   RefreshCw,
   RotateCcw,
@@ -27,6 +28,10 @@ const {
   statusText,
   submitting,
   attempts,
+  showHistory,
+  visibleAttempts,
+  activeAttemptCount,
+  historicalAttemptCount,
   finishedView,
   siteChoices,
   roleChoices,
@@ -59,6 +64,7 @@ const {
   visibleActions,
   actionButtonLabel,
   actionButtonScope,
+  toggleHistory,
   runLaunchAction,
   submitLaunch,
   cancel,
@@ -223,10 +229,28 @@ function actionIcon(action: string): typeof RefreshCw {
     </form>
 
     <section class="dashboard" aria-labelledby="launches-title">
-      <div class="section-heading"><div><p class="eyebrow">Evidence</p><h2 id="launches-title">Launch Results</h2></div><span class="result-count">{{ attempts.length }}</span></div>
+      <div class="section-heading">
+        <div><p class="eyebrow">Activity</p><h2 id="launches-title">{{ showHistory ? 'Launch History' : 'Active Launches' }}</h2></div>
+        <div class="dashboard-controls">
+          <span class="result-count">{{ showHistory ? historicalAttemptCount : activeAttemptCount }}</span>
+          <button
+            v-if="historicalAttemptCount > 0 || showHistory"
+            id="toggle-history"
+            class="history-toggle"
+            type="button"
+            aria-controls="launches"
+            :aria-expanded="showHistory"
+            @click="toggleHistory"
+          >
+            <History :size="14" aria-hidden="true" />
+            {{ showHistory ? 'Hide history' : 'History' }}
+            <span class="history-count">{{ historicalAttemptCount }}</span>
+          </button>
+        </div>
+      </div>
       <div id="launches" class="attempt-list">
-        <p v-if="attempts.length === 0" class="field-hint">No launches yet.</p>
-        <article v-for="attempt in attempts" :key="attempt.launchAttemptId" class="attempt" :data-launch-attempt-id="attempt.launchAttemptId">
+        <p v-if="visibleAttempts.length === 0" class="field-hint">{{ showHistory ? 'No historical launch results.' : 'No active launches.' }}</p>
+        <article v-for="attempt in visibleAttempts" :key="attempt.launchAttemptId" class="attempt" :data-launch-attempt-id="attempt.launchAttemptId">
           <header class="attempt-header">
             <div><div class="attempt-title">{{ attemptTitle(attempt) }}</div><div class="attempt-meta">{{ attemptMeta(attempt) }}</div></div>
             <span :class="cn('status-chip', attempt.status)">{{ statusLabel(attempt.status) }}</span>
@@ -564,6 +588,38 @@ input:focus-visible {
 .section-heading h2 {
   margin: 0;
   font-size: 18px;
+}
+
+.dashboard-controls {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.history-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 0;
+  padding: 3px 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.history-toggle:hover {
+  color: var(--text);
+}
+
+.history-toggle:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+
+.history-count {
+  font-variant-numeric: tabular-nums;
 }
 
 .attempt-list {
