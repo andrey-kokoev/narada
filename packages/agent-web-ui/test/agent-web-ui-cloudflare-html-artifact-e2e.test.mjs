@@ -21,6 +21,7 @@ import { startSessionCoreRuntime, waitFor } from './e2e/nars-runtime-fixture.mjs
 
 const now = '2026-07-01T12:00:00.000Z';
 const speechMcpMain = fileURLToPath(new URL('../../../../mcp-surfaces/packages/speech-mcp/dist/src/main.js', import.meta.url));
+const speechProviderRegistryPath = fileURLToPath(new URL('../../../../mcp-surfaces/packages/speech-mcp/config/provider-registry.v2.json', import.meta.url));
 
 async function createRealNarsSiteWithHtmlArtifact() {
   const runtime = await startSessionCoreRuntime({
@@ -29,58 +30,64 @@ async function createRealNarsSiteWithHtmlArtifact() {
     siteId: 'narada.e2e',
     responseContent: 'unused',
   });
-  const { siteRoot, sessionId } = runtime;
-  const htmlPath = join(siteRoot, 'preview.html');
-  writeFileSync(htmlPath, [
-    '<!doctype html>',
-    '<html lang="en">',
-    '<body>',
-    '<main id="local-html-artifact-e2e">Local NARS HTML artifact rendered through remote surface</main>',
-    '</body>',
-    '</html>',
-  ].join(''), 'utf8');
-  const audioPath = join(siteRoot, 'spoken.wav');
-  assert.ok(existsSync(speechMcpMain), `expected built speech-mcp at ${speechMcpMain}; run pnpm --dir D:/code/mcp-surfaces --filter @narada2/speech-mcp build`);
-  const speech = await callLiveSpeechMcp({
-    siteRoot,
-    outputPath: audioPath,
-    text: 'Narada Cloudflare speech audio projection end to end test.',
-  });
-  assert.equal(speech.status, 'spoken');
-  assert.equal(speech.provider, 'sapi');
-  assert.equal(speech.retained_audio?.path, audioPath);
-  assert.equal(speech.retained_audio?.content_type, 'audio/wav');
-  assert.equal(existsSync(audioPath), true);
-  assert.ok(statSync(audioPath).size > 44, 'expected speech MCP to retain a non-empty WAV file');
-
-  async function registerArtifact(sourcePath, kind, title, contentType = undefined) {
-    const response = await fetch(new URL(`/sessions/${sessionId}/artifacts`, runtime.healthProjection.url), {
-      method: 'POST',
-      body: JSON.stringify({
-        source_path: sourcePath,
-        kind,
-        title,
-        render_hint: 'inline',
-        ...(contentType ? { content_type: contentType } : {}),
-      }),
+  try {
+    const { siteRoot, sessionId } = runtime;
+    const htmlPath = join(siteRoot, 'preview.html');
+    writeFileSync(htmlPath, [
+      '<!doctype html>',
+      '<html lang="en">',
+      '<body>',
+      '<main id="local-html-artifact-e2e">Local NARS HTML artifact rendered through remote surface</main>',
+      '</body>',
+      '</html>',
+    ].join(''), 'utf8');
+    const audioPath = join(siteRoot, 'spoken.wav');
+    assert.ok(existsSync(speechMcpMain), `expected built speech-mcp at ${speechMcpMain}; run pnpm --dir D:/code/mcp-surfaces --filter @narada2/speech-mcp build`);
+    assert.ok(existsSync(speechProviderRegistryPath), `expected speech provider registry at ${speechProviderRegistryPath}`);
+    const speech = await callLiveSpeechMcp({
+      siteRoot,
+      outputPath: audioPath,
+      text: 'Narada Cloudflare speech audio projection end to end test.',
     });
-    assert.equal(response.status, 201);
-    return (await response.json()).artifact;
-  }
+    assert.equal(speech.status, 'spoken');
+    assert.equal(speech.provider, 'sapi');
+    assert.equal(speech.retained_audio?.path, audioPath);
+    assert.equal(speech.retained_audio?.content_type, 'audio/wav');
+    assert.equal(existsSync(audioPath), true);
+    assert.ok(statSync(audioPath).size > 44, 'expected speech MCP to retain a non-empty WAV file');
 
-  const artifact = await registerArtifact(htmlPath, 'html', 'Remote HTML Preview', 'text/html; charset=utf-8');
-  const audioArtifact = await registerArtifact(audioPath, 'audio', 'Remote Audio Briefing');
-  const presentedAudioResponse = await fetch(new URL(`/sessions/${sessionId}/artifacts/${audioArtifact.artifact_id}/message`, runtime.healthProjection.url), {
-    method: 'POST',
-    body: JSON.stringify({ text: 'Spoken version is ready.' }),
-  });
-  assert.equal(presentedAudioResponse.status, 201);
-  return {
-    ...runtime,
-    artifactId: artifact.artifact_id,
-    audioArtifactId: audioArtifact.artifact_id,
-    audioPath,
-  };
+    async function registerArtifact(sourcePath, kind, title, contentType = undefined) {
+      const response = await fetch(new URL(`/sessions/${sessionId}/artifacts`, runtime.healthProjection.url), {
+        method: 'POST',
+        body: JSON.stringify({
+          source_path: sourcePath,
+          kind,
+          title,
+          render_hint: 'inline',
+          ...(contentType ? { content_type: contentType } : {}),
+        }),
+      });
+      assert.equal(response.status, 201);
+      return (await response.json()).artifact;
+    }
+
+    const artifact = await registerArtifact(htmlPath, 'html', 'Remote HTML Preview', 'text/html; charset=utf-8');
+    const audioArtifact = await registerArtifact(audioPath, 'audio', 'Remote Audio Briefing');
+    const presentedAudioResponse = await fetch(new URL(`/sessions/${sessionId}/artifacts/${audioArtifact.artifact_id}/message`, runtime.healthProjection.url), {
+      method: 'POST',
+      body: JSON.stringify({ text: 'Spoken version is ready.' }),
+    });
+    assert.equal(presentedAudioResponse.status, 201);
+    return {
+      ...runtime,
+      artifactId: artifact.artifact_id,
+      audioArtifactId: audioArtifact.artifact_id,
+      audioPath,
+    };
+  } catch (error) {
+    await runtime.close();
+    throw error;
+  }
 }
 
 function listen(server, host = '127.0.0.1') {
@@ -143,6 +150,7 @@ async function callLiveSpeechMcp({ siteRoot, outputPath, text }) {
       ...process.env,
       NARADA_SITE_ROOT: siteRoot,
       NARADA_WORKSPACE_ROOT: siteRoot,
+      NARADA_PROVIDER_REGISTRY_PATH: speechProviderRegistryPath,
       NARADA_SPEECH_ANNOUNCE_SPEAKER: 'false',
     },
     stdio: ['pipe', 'pipe', 'pipe'],
@@ -187,7 +195,7 @@ async function callLiveSpeechMcp({ siteRoot, outputPath, text }) {
       name: 'speech_speak',
       arguments: {
         text,
-        provider: 'sapi',
+        selection: { provider: 'sapi', model: 'default' },
         announce_speaker: false,
         output_path: outputPath,
       },
@@ -223,7 +231,8 @@ test('hosted Cloudflare projection web UI renders explicitly admitted local NARS
     ASSETS: {
       fetch(request) {
         const url = new URL(request.url);
-        return fetch(`${assetBaseUrl}${url.pathname}${url.search}`);
+        const assetPath = url.pathname === '/sessions/index.html' ? '/' : url.pathname;
+        return fetch(`${assetBaseUrl}${assetPath}${url.search}`);
       },
     },
   };

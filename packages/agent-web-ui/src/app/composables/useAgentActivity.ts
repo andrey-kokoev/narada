@@ -55,6 +55,18 @@ function normalizeActivity(value: AgentActivityState): AgentActivityState {
 function reconcileActivityWithHealth(activity: AgentActivityState, health: Record<string, unknown> | null): AgentActivityState {
   if (!activity.active || !health) return activity;
   if (!Object.prototype.hasOwnProperty.call(health, 'active_turn_state')) return activity;
-  if (health.active_turn_state !== 'running') return { ...IDLE_ACTIVITY };
+  if (health.active_turn_state !== 'running') {
+    const observedAtMs = parseHealthTimestamp(health.health_observed_at)
+      ?? parseHealthTimestamp(health.generated_at)
+      ?? parseHealthTimestamp(health.timestamp);
+    if (observedAtMs !== null && activity.startedAtMs !== null && activity.startedAtMs > observedAtMs) return activity;
+    return { ...IDLE_ACTIVITY };
+  }
   return activity;
+}
+
+function parseHealthTimestamp(value: unknown): number | null {
+  if (typeof value !== 'string') return null;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : null;
 }

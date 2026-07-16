@@ -275,9 +275,12 @@ try {
   // Keep the provider turn active long enough for the real Worker poll, bridge
   // WebSocket admission, and cancellation to cross the process boundary.
   provider = await startFixtureProvider({
-    responseDelayMs: scenario === 'external_input' ? 500 : 0,
+    // The external-input assertion observes a transient browser activity
+    // state. Keep the real provider turn open long enough for the browser's
+    // event subscription and Vue projection to render it deterministically.
+    responseDelayMs: scenario === 'external_input' ? 3_000 : 0,
     responseDelayForRequest: scenario === 'external_input'
-      ? (request) => JSON.stringify(request).includes('Cloudflare direct interrupt') ? 15_000 : 500
+      ? (request) => JSON.stringify(request).includes('Cloudflare direct interrupt') ? 15_000 : 3_000
       : null,
   });
   if (scenario === 'external_input') {
@@ -373,7 +376,12 @@ try {
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   const webUiOutput = collectProcessOutput(webUiProcess);
-  const urlMatch = await waitForTextMatch(webUiOutput.all, /agent-web-ui:\s+(http:\/\/127\.0\.0\.1:\d+)/, { timeoutMs, label: 'agent_web_ui_url' });
+  let urlMatch;
+  try {
+    urlMatch = await waitForTextMatch(webUiOutput.all, /agent-web-ui:\s+(http:\/\/127\.0\.0\.1:\d+)/, { timeoutMs, label: 'agent_web_ui_url' });
+  } catch (error) {
+    throw new Error(`${error instanceof Error ? error.message : String(error)}: agent_web_ui_output=${webUiOutput.all().slice(0, 8000)}`);
+  }
   const webUrl = urlMatch[1];
 
   console.log(`live-e2e: opening browser projection ${webUrl}`);
@@ -731,17 +739,27 @@ async function openCdpPage({ browserPath, url, workDir }) {
       await send('Input.dispatchMouseEvent', { type: 'mousePressed', button: 'left', clickCount: 1, ...point });
       await send('Input.dispatchMouseEvent', { type: 'mouseReleased', button: 'left', clickCount: 1, ...point });
     },
+    async clickInputForText(containerSelector, text, { textSelector = '*' } = {}) {
+      const clicked = await this.evaluate(`(() => {
+        const container = document.querySelector(${JSON.stringify(containerSelector)});
+        const textElement = Array.from(container?.querySelectorAll(${JSON.stringify(textSelector)}) ?? [])
+          .find((element) => element.textContent?.trim() === ${JSON.stringify(text)});
+        const input = textElement?.closest('li')?.querySelector('input[type="checkbox"]');
+        if (!(input instanceof HTMLInputElement) || input.disabled) return false;
+        input.click();
+        return true;
+      })()`);
+      if (!clicked) throw new Error(`cdp_click_input_target_not_found:${containerSelector}:${text}`);
+    },
     async scrollToTop(selector) {
-      const point = await this.evaluate(`(() => {
+      const scrollTop = await this.evaluate(`(() => {
         const element = document.querySelector(${JSON.stringify(selector)});
         if (!(element instanceof HTMLElement)) return null;
-        const rect = element.getBoundingClientRect();
-        if (rect.width <= 0 || rect.height <= 0) return null;
-        return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+        element.scrollTop = 0;
+        element.scrollTo?.(0, 0);
+        element.dispatchEvent(new Event('scroll', { bubbles: true }));
+        return element.scrollTop;
       })()`);
-      if (!point) throw new Error(`cdp_scroll_target_not_found:${selector}`);
-      await send('Input.dispatchMouseEvent', { type: 'mouseWheel', deltaY: -100_000, deltaX: 0, ...point });
-      const scrollTop = await this.evaluate(`document.querySelector(${JSON.stringify(selector)})?.scrollTop ?? null`);
       if (scrollTop !== 0) throw new Error(`cdp_scroll_to_top_failed:${selector}:${scrollTop}`);
       return scrollTop;
     },
@@ -1449,10 +1467,30 @@ async function publishCloudflareProjectionFromBox({
   await page.waitForExpression("document.querySelector('button[aria-label=\\\"Choose Status boxes\\\"]') !== null", timeoutMs);
   await page.click('button[aria-label="Choose Status boxes"]');
   await page.waitForExpression("document.querySelector('#status-row-box-selector-panel') !== null", timeoutMs);
-  await page.clickText('#status-row-box-selector-panel', 'Cloudflare Projection', {
+  await page.clickInputForText('#status-row-box-selector-panel', 'Cloudflare Projection', {
     textSelector: 'strong',
-    clickSelector: 'label',
   });
+  try {
+    await page.waitForExpression(`(() => {
+      const item = Array.from(document.querySelectorAll('#status-row-box-selector-panel li'))
+        .find((candidate) => candidate.querySelector('strong')?.textContent?.trim() === 'Cloudflare Projection');
+      return item?.querySelector('input[type="checkbox"]')?.checked === true;
+    })()`, timeoutMs);
+  } catch (error) {
+    const state = await page.evaluate(`(() => {
+      const item = Array.from(document.querySelectorAll('#status-row-box-selector-panel li'))
+        .find((candidate) => candidate.querySelector('strong')?.textContent?.trim() === 'Cloudflare Projection');
+      const input = item?.querySelector('input[type="checkbox"]');
+      return {
+        item: Boolean(item),
+        checked: input?.checked ?? null,
+        disabled: input?.disabled ?? null,
+        dataVisible: item?.getAttribute('data-visible') ?? null,
+        outerHTML: item?.outerHTML?.slice(0, 1200) ?? null,
+      };
+    })()`);
+    throw new Error(`cloudflare_box_toggle_timeout:${error instanceof Error ? error.message : ''}:${JSON.stringify(state)}`);
+  }
   const selected = await page.evaluate(`(() => {
     const item = Array.from(document.querySelectorAll('#status-row-box-selector-panel li'))
       .find((candidate) => candidate.querySelector('strong')?.textContent?.trim() === 'Cloudflare Projection');
@@ -1475,12 +1513,25 @@ async function publishCloudflareProjectionFromBox({
     };
   })()`);
   await page.fill('#cloudflare-api-base-url', cloudflareApiBaseUrl);
-  await page.click('.projection-control button');
+  await page.waitForExpression("document.querySelector('.projection-control button')?.disabled === false", timeoutMs);
+  const publishClicked = await page.evaluate("(() => { const button = document.querySelector('.projection-control button'); if (!(button instanceof HTMLButtonElement) || button.disabled) return false; button.click(); return true; })()");
+  if (!publishClicked) throw new Error('cloudflare_publish_button_not_clickable');
 
-  const publication = await page.waitForExpression(`(() => {
-    const result = window.__liveE2eProjectionStart;
-    return result?.status === 'published' && result.projection_id && result.remote_url ? result : false;
-  })()`, timeoutMs);
+  let publication;
+  try {
+    publication = await page.waitForExpression(`(() => {
+      const result = window.__liveE2eProjectionStart;
+      return result?.status === 'published' && result.projection_id && result.remote_url ? result : false;
+    })()`, timeoutMs);
+  } catch (error) {
+    const state = await page.evaluate(`(() => ({
+      projectionStart: window.__liveE2eProjectionStart,
+      statusLabels: Array.from(document.querySelectorAll('.projection-status-label')).map((element) => element.textContent?.trim() ?? ''),
+      apiBaseUrl: document.querySelector('#cloudflare-api-base-url')?.value ?? null,
+      bodyText: document.body.textContent?.slice(0, 1200) ?? '',
+    }))()`);
+    throw new Error(`cloudflare_publication_response_timeout:${error instanceof Error ? error.message : ''}:${JSON.stringify({ state, cloudflareResponses })}`);
+  }
   assert.equal(publication.status, 'published', JSON.stringify(publication));
   assert.equal(publication.registration_status, 'registered_remotely', JSON.stringify(publication));
   assert.equal(publication.bridge_once_status, 'connected', JSON.stringify(publication));
@@ -1488,7 +1539,16 @@ async function publishCloudflareProjectionFromBox({
   assert.equal(publication.bridge_state?.status, 'connected', JSON.stringify(publication));
   projectionBridgePid = publication.bridge_process?.pid ?? null;
   assert.ok(projectionBridgePid, JSON.stringify(publication));
-  await page.waitForExpression("document.querySelector('.projection-status-label')?.textContent?.trim() === 'Published'", timeoutMs);
+  try {
+    await page.waitForExpression("document.querySelector('.projection-status-label')?.textContent?.trim() === 'Published'", timeoutMs);
+  } catch (error) {
+    const state = await page.evaluate(`(() => ({
+      labels: Array.from(document.querySelectorAll('.projection-status-label')).map((element) => element.textContent?.trim() ?? ''),
+      projectionStart: window.__liveE2eProjectionStart,
+      bodyText: document.body.textContent?.slice(0, 1200) ?? '',
+    }))()`);
+    throw new Error(`cloudflare_publication_ui_timeout:${error instanceof Error ? error.message : ''}:${JSON.stringify(state)}`);
+  }
 
   const remoteUrl = new URL(publication.remote_url);
   assert.equal(remoteUrl.searchParams.get('cloudflare_projection_id'), publication.projection_id);
@@ -1510,7 +1570,12 @@ async function publishCloudflareProjectionFromBox({
     ASSETS: {
       fetch(request) {
         const url = new URL(request.url);
-        return fetch(`${assetBaseUrl}${url.pathname}${url.search}`);
+        const assetPath = url.pathname === '/sessions/index.html'
+          ? '/'
+          : url.pathname.startsWith('/sessions/assets/')
+            ? url.pathname.replace(/^\/sessions/, '')
+            : url.pathname;
+        return fetch(`${assetBaseUrl}${assetPath}${url.search}`);
       },
     },
   };

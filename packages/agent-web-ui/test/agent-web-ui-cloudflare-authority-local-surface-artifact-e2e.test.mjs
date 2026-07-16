@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import test from 'node:test';
-import { createCloudflareNarsAuthorityService } from '@narada2/cloudflare-nars-projection';
+import {
+  createCloudflareNarsAuthorityService,
+  createCloudflareNarsWorkspaceDirectoryService,
+} from '@narada2/cloudflare-nars-projection';
 import { createCloudflareNarsProjectionWorker } from '@narada2/cloudflare-nars-projection/worker';
 import { startAgentWebUiServer } from '../src/server.js';
 import {
@@ -90,6 +93,7 @@ test('local agent-web-ui submits to Cloudflare-hosted NARS authority and renders
       session_id: sessionId,
       site_id: 'narada.cloudflare.e2e',
       agent_id: 'cloudflare.resident',
+      mcp_fabric: { scope: 'all' },
     }),
   })));
   assert.equal(created.status, 'created');
@@ -176,7 +180,8 @@ test('hosted Cloudflare web UI submits to Cloudflare-hosted NARS authority and r
   assert.ok(browserPath, 'expected an installed Chromium-family browser for Cloudflare authority hosted-surface artifact E2E');
 
   const sessionId = 'cf_authority_hosted_surface_artifact_e2e';
-  const worker = createCloudflareNarsProjectionWorker({ now: () => now });
+  const workspaceDirectory = createCloudflareNarsWorkspaceDirectoryService();
+  const worker = createCloudflareNarsProjectionWorker({ now: () => now, workspace_directory_service: workspaceDirectory });
   const envRef = { current: {} };
   const servedResponses = [];
   const workerServer = createWorkerHttpServer(worker, envRef, servedResponses);
@@ -188,10 +193,31 @@ test('hosted Cloudflare web UI submits to Cloudflare-hosted NARS authority and r
       session_id: sessionId,
       site_id: 'narada.cloudflare.e2e',
       agent_id: 'cloudflare.resident',
+      mcp_fabric: { scope: 'all' },
     }),
   })));
   assert.equal(created.status, 'created');
   assert.equal(created.session_id, sessionId);
+
+  const routePath = `/sessions/${sessionId}`;
+  const routeRegistration = workspaceDirectory.register({
+    lease_id: `lease_${sessionId}`,
+    projection_id: sessionId,
+    surface_id: 'agent-sessions',
+    route: {
+      id: `route_${sessionId}`,
+      path: routePath,
+      kind: 'page',
+      label: `Session ${sessionId}`,
+      target: { kind: 'session', id: sessionId },
+    },
+    authority_host: { kind: 'cloudflare', id: 'authority', origin: workerBaseUrl },
+    ui_config: {
+      cloudflare_authority_session_id: sessionId,
+      cloudflare_api_base_url: workerBaseUrl,
+    },
+  }, now);
+  assert.equal(routeRegistration.status, 'registered', JSON.stringify(routeRegistration));
 
   const assetServerResult = await startAgentWebUiServer({
     host: '127.0.0.1',
@@ -204,16 +230,21 @@ test('hosted Cloudflare web UI submits to Cloudflare-hosted NARS authority and r
     ASSETS: {
       fetch(request) {
         const url = new URL(request.url);
-        return fetch(`${assetBaseUrl}${url.pathname}${url.search}`);
+        const assetPath = url.pathname === '/sessions/index.html'
+          ? '/'
+          : url.pathname.startsWith('/sessions/assets/')
+            ? url.pathname.replace(/^\/sessions/, '')
+            : url.pathname;
+        return fetch(`${assetBaseUrl}${assetPath}${url.search}`);
       },
     },
   };
 
   let page = null;
   try {
-    page = await openCdpPage({ browserPath, url: `${workerBaseUrl}/`, userDataPrefix: 'narada-cf-authority-hosted-surface-artifact-' });
+    page = await openCdpPage({ browserPath, url: `${workerBaseUrl}${routePath}`, userDataPrefix: 'narada-cf-authority-hosted-surface-artifact-' });
     const initialReplay = await waitForPageText(page, 'cloudflare.resident', 15000);
-    assert.equal(initialReplay.found, true, JSON.stringify(initialReplay));
+    assert.equal(initialReplay.found, true, JSON.stringify({ initialReplay, servedResponses }));
 
     await page.fill('#operator-input', 'Create an HTML artifact in the Cloudflare authority runtime from hosted UI');
     await page.click('.composer-submit');

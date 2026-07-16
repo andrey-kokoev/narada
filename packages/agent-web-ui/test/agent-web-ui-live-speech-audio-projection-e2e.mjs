@@ -15,11 +15,13 @@ import {
 
 const now = '2026-07-05T12:00:00.000Z';
 const speechMcpMain = fileURLToPath(new URL('../../../../mcp-surfaces/packages/speech-mcp/dist/src/main.js', import.meta.url));
+const speechProviderRegistryPath = fileURLToPath(new URL('../../../../mcp-surfaces/packages/speech-mcp/config/provider-registry.v2.json', import.meta.url));
 
 test('live speech MCP retained audio projects as a NARS audio artifact in agent-web-ui', async () => {
   const browserPath = findHeadlessBrowser();
   assert.ok(browserPath, 'expected an installed Chromium-family browser for live speech audio projection E2E');
   assert.ok(existsSync(speechMcpMain), `expected built speech-mcp at ${speechMcpMain}; run pnpm --dir D:/code/mcp-surfaces --filter @narada2/speech-mcp build`);
+  assert.ok(existsSync(speechProviderRegistryPath), `expected speech provider registry at ${speechProviderRegistryPath}`);
 
   const runtime = await startLiveNarsRuntime();
   const audioPath = join(runtime.siteRoot, 'speech-output', 'live-speech-audio-projection.wav');
@@ -115,6 +117,7 @@ async function callLiveSpeechMcp({ siteRoot, outputPath, text }) {
       ...process.env,
       NARADA_SITE_ROOT: siteRoot,
       NARADA_WORKSPACE_ROOT: siteRoot,
+      NARADA_PROVIDER_REGISTRY_PATH: speechProviderRegistryPath,
       NARADA_SPEECH_ANNOUNCE_SPEAKER: 'false',
     },
     stdio: ['pipe', 'pipe', 'pipe'],
@@ -159,7 +162,7 @@ async function callLiveSpeechMcp({ siteRoot, outputPath, text }) {
       name: 'speech_speak',
       arguments: {
         text,
-        provider: 'sapi',
+        selection: { provider: 'sapi', model: 'default' },
         announce_speaker: false,
         output_path: outputPath,
       },

@@ -179,7 +179,13 @@ export function reconcileTurnActivityWithHealth(state, event) {
       return startTurnActivity(state, timestampFromEvent(event) ?? Date.now(), agentLabel(event, 'is thinking...'), providerDetail(event), activeTurnId, null);
     }
   }
-  if (activeTurnState !== 'running') return resetTurnActivity(state, event);
+  if (activeTurnState !== 'running') {
+    // Health is polled independently from the event stream. An idle sample
+    // observed before the current turn started must not erase newer live
+    // activity while the next health sample is still in flight.
+    if (healthSamplePredatesActivity(state, event)) return state;
+    return resetTurnActivity(state, event);
+  }
   return state;
 }
 
@@ -342,8 +348,20 @@ function objectField(record, field) {
 
 function timestampFromEvent(value) {
   if (!value || typeof value !== 'object') return null;
-  const timestamp = value.timestamp;
-  if (typeof timestamp !== 'string') return null;
-  const parsed = Date.parse(timestamp);
+  return parseTimestamp(value.timestamp);
+}
+
+function healthSamplePredatesActivity(state, event) {
+  const observedAtMs = parseTimestamp(event?.health_observed_at)
+    ?? parseTimestamp(event?.generated_at)
+    ?? timestampFromEvent(event);
+  return observedAtMs !== null
+    && state.startedAtMs !== null
+    && state.startedAtMs > observedAtMs;
+}
+
+function parseTimestamp(value) {
+  if (typeof value !== 'string') return null;
+  const parsed = Date.parse(value);
   return Number.isFinite(parsed) ? parsed : null;
 }

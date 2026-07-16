@@ -146,7 +146,8 @@ test('local runtime input renders artifact and MCP lanes on local and Cloudflare
     ASSETS: {
       fetch(request) {
         const url = new URL(request.url);
-        return fetch(`${assetBaseUrl}${url.pathname}${url.search}`);
+        const assetPath = url.pathname === '/sessions/index.html' ? '/' : url.pathname;
+        return fetch(`${assetBaseUrl}${assetPath}${url.search}`);
       },
     },
   };
