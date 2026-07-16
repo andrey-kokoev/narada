@@ -16,8 +16,9 @@ function healthSnapshot(event) {
 }
 
 async function submitOperatorInputText(page, value) {
-  await page.locator('#operator-input').fill(value);
-  await page.locator('#operator-form').evaluate((form) => form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })));
+  const input = page.locator('#operator-input');
+  await input.fill(value);
+  await page.locator('.composer-submit').click();
 }
 
 async function setComposerDraft(page, value) {
@@ -55,6 +56,14 @@ const SNIPPET_ACTION_PALETTE_PROBES = Object.freeze({
 });
 
 test.describe('agent-web-ui slash and snippet palette', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.clear();
+      localStorage.setItem('narada:agent-web-ui:status-row-open.v1', 'true');
+      localStorage.setItem('narada:agent-web-ui:header-items.v2', JSON.stringify(['identity', 'runtime', 'session', 'status_toggle']));
+      localStorage.setItem('narada:agent-web-ui:status-boxes.v3', JSON.stringify(['events', 'health', 'intelligence', 'view']));
+    });
+  });
 
   test('browser and attach-client slash health commands project the same session snapshot without raw CDP', async ({ page }) => {
     const runtime = await startSharedRuntime();
@@ -82,6 +91,11 @@ test.describe('agent-web-ui slash and snippet palette', () => {
         5_000,
         () => ({ browser_events: runtime.events.slice(browserFromIndex).map((event) => ({ event: event.event, request_id: event.request_id, session_id: event.session_id, status: event.status })) }),
       );
+      expect(runtime.outboundFrames.find((frame) => frame.method === 'session.health')).toMatchObject({
+        method: 'session.health',
+        params: {},
+      });
+      await expect(page.locator('.session-chip[data-state="healthy"]')).toBeVisible();
 
       const cliFromIndex = runtime.events.length;
       attachInput.write('/health\n');
@@ -166,6 +180,10 @@ test.describe('agent-web-ui slash and snippet palette', () => {
         5_000,
         () => ({ events: runtime.events.slice(runFromIndex).map((event) => ({ event: event.event, content: event.content, message: event.message, method: event.method })) }),
       );
+      expect(runtime.inputFrameAttempts.at(-1)?.frame).toMatchObject({
+        method: 'session.submit',
+        params: { content: 'Run from snippet submenu', source: 'manual_operator' },
+      });
       await expect(page.locator('#operator-input')).toHaveValue('');
       await expect(page.getByText(/Ran snippet: palette-sample/)).toBeVisible();
 
@@ -179,6 +197,10 @@ test.describe('agent-web-ui slash and snippet palette', () => {
         5_000,
         () => ({ events: runtime.events.slice(clickRunFromIndex).map((event) => ({ event: event.event, content: event.content, message: event.message, method: event.method })) }),
       );
+      expect(runtime.inputFrameAttempts.at(-1)?.frame).toMatchObject({
+        method: 'session.submit',
+        params: { content: 'Run from snippet submenu', source: 'manual_operator' },
+      });
       await expect(page.locator('#operator-input')).toHaveValue('');
       await expect(page.getByText(/Ran snippet: palette-sample/).last()).toBeVisible();
 
@@ -193,6 +215,10 @@ test.describe('agent-web-ui slash and snippet palette', () => {
         5_000,
         () => ({ events: runtime.events.slice(clickQueueFromIndex).map((event) => ({ event: event.event, content: event.content, message: event.message, method: event.method })) }),
       );
+      expect(runtime.inputFrameAttempts.at(-1)?.frame).toMatchObject({
+        method: 'session.submit',
+        params: { content: 'Run from snippet submenu', source: 'operator_steering', delivery_mode: 'admit_after_active_turn' },
+      });
       await expect(page.locator('#operator-input')).toHaveValue('');
       await expect(page.getByText(/Queued snippet: palette-sample/).last()).toBeVisible();
 
@@ -246,6 +272,7 @@ test.describe('agent-web-ui slash and snippet palette', () => {
         await submitOperatorInputText(page, `/snippet ${verb} registry-run`);
         await expect(page.locator('#operator-snippet-panel')).toBeVisible();
         await expect(page.locator('#operator-snippet-panel')).toContainText('registry-run');
+        await expect(page.locator('#operator-snippet-panel')).not.toContainText('registry-delete');
         await page.locator('#operator-snippet-panel .mcp-panel-close').click();
         await expect(page.locator('#operator-snippet-panel')).toHaveCount(0);
       }
@@ -264,6 +291,7 @@ test.describe('agent-web-ui slash and snippet palette', () => {
       for (const verb of editAction.verbs) {
         await submitOperatorInputText(page, `/snippet ${verb} registry-run Registry run body edited by ${verb}`);
         await expect(page.getByText(/Updated snippet: registry-run/)).toBeVisible();
+        await expect.poll(() => page.evaluate(() => JSON.parse(window.localStorage.getItem('narada:agent-web-ui:operator-snippets.v1') ?? '[]').find((entry) => entry.name === 'registry-run')?.body)).toBe(`Registry run body edited by ${verb}`);
       }
 
       const runAction = AGENT_WEB_UI_SNIPPET_ACTIONS.find((action) => action.id === 'run');
@@ -300,6 +328,7 @@ test.describe('agent-web-ui slash and snippet palette', () => {
         }
         await submitOperatorInputText(page, `/snippet ${verb} ${name}`);
         await expect(page.getByText(new RegExp(`Deleted snippet: ${name}`)).last()).toBeVisible();
+        await expect.poll(() => page.evaluate((snippetName) => JSON.parse(window.localStorage.getItem('narada:agent-web-ui:operator-snippets.v1') ?? '[]').some((entry) => entry.name === snippetName), name)).toBe(false);
       }
 
       await submitOperatorInputText(page, '/snippet unknown-action registry-run');

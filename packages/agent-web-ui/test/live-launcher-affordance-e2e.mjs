@@ -411,15 +411,8 @@ try {
     }
   }
 
-  await page.evaluate(`(() => {
-    const input = document.querySelector('#operator-input');
-    const form = document.querySelector('#operator-form');
-    if (!input || !form) throw new Error('live_e2e_composer_not_found');
-    input.value = 'What can you help me with?';
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-    form.requestSubmit();
-    return true;
-  })()`);
+  await page.fill('#operator-input', 'What can you help me with?');
+  await page.click('.composer-submit');
   await waitFor(() => readJsonlFile(record.events_path).some((event) => event.event === 'carrier_turn_completed'), { timeoutMs, label: 'first_assistant_turn' });
   await page.waitForExpression("document.body.textContent.includes('Live launcher fixture response')", timeoutMs);
   assert.equal(provider.requests.length, 1);
@@ -680,6 +673,78 @@ async function openCdpPage({ browserPath, url, workDir }) {
       if (result?.exceptionDetails) throw new Error(`cdp_evaluate_failed:${JSON.stringify(result.exceptionDetails)}`);
       return result?.result?.value;
     },
+    async click(selector) {
+      const point = await this.evaluate(`(() => {
+        const element = document.querySelector(${JSON.stringify(selector)});
+        if (!(element instanceof HTMLElement)) return null;
+        const rect = element.getBoundingClientRect();
+        if (rect.width <= 0 || rect.height <= 0) return null;
+        return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+      })()`);
+      if (!point) throw new Error(`cdp_click_target_not_found:${selector}`);
+      await send('Input.dispatchMouseEvent', { type: 'mousePressed', button: 'left', clickCount: 1, ...point });
+      await send('Input.dispatchMouseEvent', { type: 'mouseReleased', button: 'left', clickCount: 1, ...point });
+    },
+    async fill(selector, value) {
+      await this.click(selector);
+      const modifiers = 2;
+      await send('Input.dispatchKeyEvent', { type: 'keyDown', modifiers, key: 'a', code: 'KeyA', windowsVirtualKeyCode: 65, nativeVirtualKeyCode: 65 });
+      await send('Input.dispatchKeyEvent', { type: 'keyUp', modifiers, key: 'a', code: 'KeyA', windowsVirtualKeyCode: 65, nativeVirtualKeyCode: 65 });
+      await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Backspace', code: 'Backspace', windowsVirtualKeyCode: 8, nativeVirtualKeyCode: 8 });
+      await send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Backspace', code: 'Backspace', windowsVirtualKeyCode: 8, nativeVirtualKeyCode: 8 });
+      await send('Input.insertText', { text: String(value) });
+    },
+    async selectOption(selector, value) {
+      const optionIndex = await this.evaluate(`(() => {
+        const select = document.querySelector(${JSON.stringify(selector)});
+        if (!(select instanceof HTMLSelectElement)) return -1;
+        return Array.from(select.options).findIndex((option) => option.value === ${JSON.stringify(String(value))});
+      })()`);
+      if (optionIndex < 0) throw new Error(`cdp_select_option_not_found:${selector}:${value}`);
+      await this.click(selector);
+      const pressKey = async ({ key, code, windowsVirtualKeyCode }) => {
+        await send('Input.dispatchKeyEvent', { type: 'keyDown', key, code, windowsVirtualKeyCode, nativeVirtualKeyCode: windowsVirtualKeyCode });
+        await send('Input.dispatchKeyEvent', { type: 'keyUp', key, code, windowsVirtualKeyCode, nativeVirtualKeyCode: windowsVirtualKeyCode });
+      };
+      await pressKey({ key: 'Home', code: 'Home', windowsVirtualKeyCode: 36 });
+      for (let index = 0; index < optionIndex; index += 1) {
+        await pressKey({ key: 'ArrowDown', code: 'ArrowDown', windowsVirtualKeyCode: 40 });
+      }
+      await pressKey({ key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 });
+      const selectedValue = await this.evaluate(`document.querySelector(${JSON.stringify(selector)})?.value ?? null`);
+      if (selectedValue !== String(value)) throw new Error(`cdp_select_option_failed:${selector}:${value}:${selectedValue}`);
+      return { ok: true, value: selectedValue };
+    },
+    async clickText(containerSelector, text, { textSelector = '*', clickSelector = null } = {}) {
+      const point = await this.evaluate(`(() => {
+        const container = document.querySelector(${JSON.stringify(containerSelector)});
+        const textElement = Array.from(container?.querySelectorAll(${JSON.stringify(textSelector)}) ?? [])
+          .find((element) => element.textContent?.trim() === ${JSON.stringify(text)});
+        if (!(textElement instanceof HTMLElement)) return null;
+        const target = ${clickSelector ? `textElement.closest(${JSON.stringify(clickSelector)}) ?? textElement.querySelector(${JSON.stringify(clickSelector)}) ?? textElement` : 'textElement'};
+        if (!(target instanceof HTMLElement)) return null;
+        const rect = target.getBoundingClientRect();
+        if (rect.width <= 0 || rect.height <= 0) return null;
+        return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+      })()`);
+      if (!point) throw new Error(`cdp_click_text_target_not_found:${containerSelector}:${text}`);
+      await send('Input.dispatchMouseEvent', { type: 'mousePressed', button: 'left', clickCount: 1, ...point });
+      await send('Input.dispatchMouseEvent', { type: 'mouseReleased', button: 'left', clickCount: 1, ...point });
+    },
+    async scrollToTop(selector) {
+      const point = await this.evaluate(`(() => {
+        const element = document.querySelector(${JSON.stringify(selector)});
+        if (!(element instanceof HTMLElement)) return null;
+        const rect = element.getBoundingClientRect();
+        if (rect.width <= 0 || rect.height <= 0) return null;
+        return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+      })()`);
+      if (!point) throw new Error(`cdp_scroll_target_not_found:${selector}`);
+      await send('Input.dispatchMouseEvent', { type: 'mouseWheel', deltaY: -100_000, deltaX: 0, ...point });
+      const scrollTop = await this.evaluate(`document.querySelector(${JSON.stringify(selector)})?.scrollTop ?? null`);
+      if (scrollTop !== 0) throw new Error(`cdp_scroll_to_top_failed:${selector}:${scrollTop}`);
+      return scrollTop;
+    },
     async waitForExpression(expression, timeoutMs = 10_000) {
       return waitFor(async () => this.evaluate(expression), { timeoutMs, label: 'cdp_expression' });
     },
@@ -883,14 +948,8 @@ async function runIntelligenceReconfigurationScenario({ record, page, provider, 
 
   const requestCountBeforeFinalTurn = provider.requests.length;
   const finalPrompt = 'verify the final intelligence binding';
-  await page.evaluate(`(() => {
-    const input = document.querySelector('#operator-input');
-    const form = document.querySelector('#operator-form');
-    if (!input || !form) throw new Error('live_intelligence_reconfiguration_composer_not_found');
-    input.value = ${JSON.stringify(finalPrompt)};
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-    form.requestSubmit();
-  })()`);
+  await page.fill('#operator-input', finalPrompt);
+  await page.click('.composer-submit');
   await waitFor(() => provider.requests.length > requestCountBeforeFinalTurn, {
     timeoutMs,
     label: 'final_reconfigured_provider_request',
@@ -907,17 +966,7 @@ function responseText() {
 
 async function changeIntelligenceSelector({ page, record, selector, value, target, timeoutMs, label }) {
   const baselineSequence = Math.max(0, ...readJsonlFile(record.events_path).map((event) => Number(event.event_sequence ?? event.sequence ?? 0)));
-  await page.evaluate(`(() => {
-    const selectorValue = ${JSON.stringify(selector)};
-    const nextValue = ${JSON.stringify(value)};
-    const control = document.querySelector(selectorValue);
-    if (!(control instanceof HTMLSelectElement)) throw new Error('intelligence_selector_not_found:' + selectorValue);
-    if (!Array.from(control.options).some((option) => option.value === nextValue)) {
-      throw new Error('intelligence_selector_value_not_found:' + selectorValue + ':' + nextValue);
-    }
-    control.value = nextValue;
-    control.dispatchEvent(new Event('change', { bubbles: true }));
-  })()`);
+  await page.selectOption(selector, value);
 
   const browserFrame = await page.waitForExpression(`(() => {
     const target = ${JSON.stringify(target)};
@@ -1082,15 +1131,8 @@ async function runParallelSurfaceScenario({
 
   const browserBaselineSequence = latestSequence();
   const providerRequestsBeforeBrowser = provider.requests.length;
-  await page.evaluate('(() => {'
-    + 'const input = document.querySelector("#operator-input");'
-    + 'const form = document.querySelector("#operator-form");'
-    + 'if (!input || !form) throw new Error("live_parallel_browser_composer_not_found");'
-    + 'input.value = ' + JSON.stringify(browserInput) + ';'
-    + 'input.dispatchEvent(new Event("input", { bubbles: true }));'
-    + 'form.requestSubmit();'
-    + 'return true;'
-    + '})()');
+  await page.fill('#operator-input', browserInput);
+  await page.click('.composer-submit');
   await waitFor(() => provider.requests.length > providerRequestsBeforeBrowser, {
     timeoutMs,
     label: 'parallel_browser_provider_request',
@@ -1270,21 +1312,14 @@ async function runReplayReconnectScenario({ record, page, narsSessionMcp, provid
   const initialScrollState = await page.evaluate('(() => { const scroller = document.querySelector(".events-scroll"); return { scrollTop: scroller?.scrollTop ?? null, scrollHeight: scroller?.scrollHeight ?? null, clientHeight: scroller?.clientHeight ?? null }; })()');
   assert.ok(initialScrollState.scrollHeight > initialScrollState.clientHeight, JSON.stringify(initialScrollState));
 
-  await page.evaluate('(() => { const scroller = document.querySelector(".events-scroll"); if (!scroller) throw new Error("live_long_session_scroller_not_found"); scroller.scrollTop = 0; scroller.dispatchEvent(new Event("scroll", { bubbles: true })); })()');
+  await page.scrollToTop('.events-scroll');
   await page.waitForExpression('document.querySelector(".events-scroll")?.scrollTop <= 1', timeoutMs);
   const followInput = 'long-session follow latest ' + Date.now();
   const followResponse = 'Live launcher fixture response';
   const followBaseline = Math.max(0, ...readJsonlFile(record.events_path).map((event) => Number(event.event_sequence ?? event.sequence ?? 0)));
   const providerRequestsBeforeFollow = provider.requests.length;
-  await page.evaluate('(() => {'
-    + 'const input = document.querySelector("#operator-input");'
-    + 'const form = document.querySelector("#operator-form");'
-    + 'if (!input || !form) throw new Error("live_long_session_composer_not_found");'
-    + 'input.value = ' + JSON.stringify(followInput) + ';'
-    + 'input.dispatchEvent(new Event("input", { bubbles: true }));'
-    + 'form.requestSubmit();'
-    + 'return true;'
-    + '})()');
+  await page.fill('#operator-input', followInput);
+  await page.click('.composer-submit');
   await waitFor(() => provider.requests.length > providerRequestsBeforeFollow, { timeoutMs, label: 'long_session_follow_provider_request' });
   await waitFor(() => {
     const events = readJsonlFile(record.events_path);
@@ -1300,7 +1335,7 @@ async function runReplayReconnectScenario({ record, page, narsSessionMcp, provid
   await page.waitForExpression('document.querySelector(".new-messages-button") !== null', timeoutMs);
   const unseenState = await page.evaluate('(() => { const scroller = document.querySelector(".events-scroll"); const button = document.querySelector(".new-messages-button"); return { button: Boolean(button), scrollTop: scroller?.scrollTop ?? null, scrollHeight: scroller?.scrollHeight ?? null, clientHeight: scroller?.clientHeight ?? null }; })()');
   assert.equal(unseenState.button, true, JSON.stringify(unseenState));
-  await page.evaluate('document.querySelector(".new-messages-button")?.click()');
+  await page.click('.new-messages-button');
   await page.waitForExpression('(() => { const scroller = document.querySelector(".events-scroll"); return Boolean(scroller && scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 4 && !document.querySelector(".new-messages-button")); })()', timeoutMs);
   rows = await readConversationProjectionRows(page);
   assert.ok(rows.length <= 500, 'browser retained event projection must stay bounded: ' + rows.length);
@@ -1412,20 +1447,19 @@ async function publishCloudflareProjectionFromBox({
   assert.ok(cloudflareEnvRef, 'live Cloudflare projection fixture must provide an environment reference');
 
   await page.waitForExpression("document.querySelector('button[aria-label=\\\"Choose Status boxes\\\"]') !== null", timeoutMs);
-  await page.evaluate("document.querySelector('button[aria-label=\\\"Choose Status boxes\\\"]')?.click()");
+  await page.click('button[aria-label="Choose Status boxes"]');
   await page.waitForExpression("document.querySelector('#status-row-box-selector-panel') !== null", timeoutMs);
+  await page.clickText('#status-row-box-selector-panel', 'Cloudflare Projection', {
+    textSelector: 'strong',
+    clickSelector: 'label',
+  });
   const selected = await page.evaluate(`(() => {
-    const panel = document.querySelector('#status-row-box-selector-panel');
-    const item = Array.from(panel?.querySelectorAll('li') ?? []).find((candidate) => (
-      candidate.querySelector('strong')?.textContent?.trim() === 'Cloudflare Projection'
-    ));
-    const checkbox = item?.querySelector('input[type="checkbox"]');
-    if (!(checkbox instanceof HTMLInputElement)) return { ok: false, reason: 'cloudflare_projection_box_not_advertised' };
-    if (!checkbox.checked) checkbox.click();
-    return { ok: true, checked: true };
+    const item = Array.from(document.querySelectorAll('#status-row-box-selector-panel li'))
+      .find((candidate) => candidate.querySelector('strong')?.textContent?.trim() === 'Cloudflare Projection');
+    return { ok: Boolean(item), checked: item?.querySelector('input[type="checkbox"]')?.checked === true };
   })()`);
   assert.deepEqual(selected, { ok: true, checked: true });
-  await page.evaluate("document.querySelector('#status-row-box-selector-panel button[aria-label=\\\"Close status boxes\\\"]')?.click()");
+  await page.click('#status-row-box-selector-panel button[aria-label="Close status boxes"]');
   await page.waitForExpression("document.querySelector('#cloudflare-api-base-url') !== null", timeoutMs);
 
   await page.evaluate(`(() => {
@@ -1440,15 +1474,8 @@ async function publishCloudflareProjectionFromBox({
       return response;
     };
   })()`);
-  await page.evaluate(`(() => {
-    const input = document.querySelector('#cloudflare-api-base-url');
-    if (!(input instanceof HTMLInputElement)) throw new Error('live_cloudflare_projection_input_not_found');
-    input.value = ${JSON.stringify(cloudflareApiBaseUrl)};
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-    const button = input.closest('.projection-control')?.querySelector('button');
-    if (!(button instanceof HTMLButtonElement)) throw new Error('live_cloudflare_projection_publish_button_not_found');
-    button.click();
-  })()`);
+  await page.fill('#cloudflare-api-base-url', cloudflareApiBaseUrl);
+  await page.click('.projection-control button');
 
   const publication = await page.waitForExpression(`(() => {
     const result = window.__liveE2eProjectionStart;
@@ -1507,19 +1534,8 @@ async function publishCloudflareProjectionFromBox({
     0,
     ...readJsonlFile(record.events_path).map((event) => Number(event.event_sequence ?? event.sequence ?? 0)),
   );
-  const remoteSubmitted = await projectionRemotePage.evaluate(`(() => {
-    const input = document.querySelector('#operator-input');
-    const form = document.querySelector('#operator-form');
-    if (!(input instanceof HTMLTextAreaElement) || !(form instanceof HTMLFormElement)) {
-      return { ok: false, reason: 'remote_composer_not_found' };
-    }
-    const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
-    setter?.call(input, ${JSON.stringify(remoteContent)});
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-    form.requestSubmit();
-    return { ok: true };
-  })()`);
-  assert.deepEqual(remoteSubmitted, { ok: true });
+  await projectionRemotePage.fill('#operator-input', remoteContent);
+  await projectionRemotePage.click('.composer-submit');
 
   await waitFor(() => cloudflareResponses.some((entry) => (
     entry.url.includes(`/api/nars/projections/${encodeURIComponent(publication.projection_id)}/input`)
@@ -1643,12 +1659,7 @@ async function publishCloudflareProjectionFromBox({
 }
 
 async function selectProjectionView({ page, view, timeoutMs }) {
-  await page.evaluate(`(() => {
-    const select = document.querySelector('#projection-verbosity');
-    if (!(select instanceof HTMLSelectElement)) throw new Error('live_external_input_projection_select_not_found');
-    select.value = ${JSON.stringify(view)};
-    select.dispatchEvent(new Event('change', { bubbles: true }));
-  })()`);
+  await page.selectOption('#projection-verbosity', view);
   await page.waitForExpression(`document.querySelector('#projection-verbosity')?.value === ${JSON.stringify(view)}`, timeoutMs);
 }
 

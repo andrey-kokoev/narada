@@ -1,7 +1,7 @@
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { PassThrough } from 'node:stream';
+import { PassThrough, Writable } from 'node:stream';
 import { createSessionCoreRuntimeService } from '@narada2/agent-runtime-server/session-core-runtime-service';
 import { createEventHub, startEventStreamProjection, startHealthProjection } from '@narada2/agent-runtime-server/test-fixtures';
 import { resolveNaradaSitePaths } from '@narada2/site-paths';
@@ -49,11 +49,38 @@ export async function startSessionCoreRuntime({
   startWeb = true,
   providerDelayMs = 0,
   providerError = null,
+  swallowInputFrames = false,
 } = {}) {
   const siteRoot = mkdtempSync(join(tmpdir(), 'narada-agent-web-ui-session-core-'));
   const sessionPaths = resolveNaradaSitePaths({ siteRoot, sessionId });
   mkdirSync(sessionPaths.narsSessionDir, { recursive: true });
   const runtimeInput = new PassThrough();
+  let shouldSwallowInputFrames = Boolean(swallowInputFrames);
+  let controlInputBuffer = '';
+  const outboundFrames = [];
+  const inputFrameAttempts = [];
+  const controlInput = new Writable({
+    write(chunk, encoding, callback) {
+      controlInputBuffer += Buffer.isBuffer(chunk) ? chunk.toString() : String(chunk);
+      const lines = controlInputBuffer.split(/\r?\n/);
+      controlInputBuffer = lines.pop() ?? '';
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        let frame = null;
+        try {
+          frame = JSON.parse(line);
+        } catch {
+          // Forward malformed or partial control input to the real runtime.
+        }
+        if (frame) outboundFrames.push(frame);
+        const isOperatorInput = ['session.submit', 'conversation.send', 'conversation.enqueue', 'conversation.steer'].includes(frame?.method);
+        const swallowed = shouldSwallowInputFrames && isOperatorInput;
+        if (isOperatorInput) inputFrameAttempts.push({ frame, swallowed });
+        if (!swallowed) runtimeInput.write(`${line}\n`);
+      }
+      callback();
+    },
+  });
   const runtimeOutput = new PassThrough();
   const eventHub = createEventHub();
   const events = [];
@@ -89,7 +116,7 @@ export async function startSessionCoreRuntime({
       runtimeContext: healthRuntimeContext,
     });
     eventProjection = await startEventStreamProjection({
-      childStdin: () => runtimeInput,
+      childStdin: () => controlInput,
       eventHub,
       host: '127.0.0.1',
       port: 0,
@@ -135,12 +162,16 @@ export async function startSessionCoreRuntime({
         port: 0,
         eventEndpoint: eventProjection.url,
         healthEndpoint: healthProjection.url,
+        sessionId,
       });
     }
     return {
       eventProjection,
+      eventHub,
       events,
+      outboundFrames,
       providerCalls,
+      inputFrameAttempts,
       healthProjection,
       localWeb,
       runtimeInput,
@@ -148,6 +179,9 @@ export async function startSessionCoreRuntime({
       siteRoot,
       sessionId,
       eventsPath: runtimeContext.eventsPath,
+      setSwallowInputFrames(value) {
+        shouldSwallowInputFrames = Boolean(value);
+      },
       get outputText() {
         return outputBuffer;
       },

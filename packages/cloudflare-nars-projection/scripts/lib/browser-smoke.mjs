@@ -177,6 +177,90 @@ export async function openCdpPage({ browserPath, url, userDataPrefix = 'narada-b
       if (result.exceptionDetails) throw new Error(JSON.stringify(result.exceptionDetails));
       return result.result?.value;
     },
+    async click(selector) {
+      const point = await this.evaluate(`(() => {
+        const element = document.querySelector(${JSON.stringify(selector)});
+        if (!(element instanceof HTMLElement)) return null;
+        const rect = element.getBoundingClientRect();
+        if (rect.width <= 0 || rect.height <= 0) return null;
+        return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+      })()`);
+      if (!point) throw new Error(`cdp_click_target_not_found:${selector}`);
+      await send('Input.dispatchMouseEvent', { type: 'mousePressed', button: 'left', clickCount: 1, ...point });
+      await send('Input.dispatchMouseEvent', { type: 'mouseReleased', button: 'left', clickCount: 1, ...point });
+    },
+    async fill(selector, value) {
+      await this.click(selector);
+      const modifiers = 2;
+      await send('Input.dispatchKeyEvent', {
+        type: 'keyDown',
+        modifiers,
+        key: 'a',
+        code: 'KeyA',
+        windowsVirtualKeyCode: 65,
+        nativeVirtualKeyCode: 65,
+      });
+      await send('Input.dispatchKeyEvent', {
+        type: 'keyUp',
+        modifiers,
+        key: 'a',
+        code: 'KeyA',
+        windowsVirtualKeyCode: 65,
+        nativeVirtualKeyCode: 65,
+      });
+      await send('Input.dispatchKeyEvent', {
+        type: 'keyDown',
+        key: 'Backspace',
+        code: 'Backspace',
+        windowsVirtualKeyCode: 8,
+        nativeVirtualKeyCode: 8,
+      });
+      await send('Input.dispatchKeyEvent', {
+        type: 'keyUp',
+        key: 'Backspace',
+        code: 'Backspace',
+        windowsVirtualKeyCode: 8,
+        nativeVirtualKeyCode: 8,
+      });
+      await send('Input.insertText', { text: String(value) });
+    },
+    async selectOption(selector, value) {
+      const optionIndex = await this.evaluate(`(() => {
+        const select = document.querySelector(${JSON.stringify(selector)});
+        if (!(select instanceof HTMLSelectElement)) return -1;
+        return Array.from(select.options).findIndex((option) => option.value === ${JSON.stringify(String(value))});
+      })()`);
+      if (optionIndex < 0) throw new Error(`cdp_select_option_not_found:${selector}:${value}`);
+      await this.click(selector);
+      const pressKey = async ({ key, code, windowsVirtualKeyCode }) => {
+        await send('Input.dispatchKeyEvent', { type: 'keyDown', key, code, windowsVirtualKeyCode, nativeVirtualKeyCode: windowsVirtualKeyCode });
+        await send('Input.dispatchKeyEvent', { type: 'keyUp', key, code, windowsVirtualKeyCode, nativeVirtualKeyCode: windowsVirtualKeyCode });
+      };
+      await pressKey({ key: 'Home', code: 'Home', windowsVirtualKeyCode: 36 });
+      for (let index = 0; index < optionIndex; index += 1) {
+        await pressKey({ key: 'ArrowDown', code: 'ArrowDown', windowsVirtualKeyCode: 40 });
+      }
+      await pressKey({ key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 });
+      const selectedValue = await this.evaluate(`document.querySelector(${JSON.stringify(selector)})?.value ?? null`);
+      if (selectedValue !== String(value)) throw new Error(`cdp_select_option_failed:${selector}:${value}:${selectedValue}`);
+      return { ok: true, value: selectedValue };
+    },
+    async clickText(containerSelector, text, { textSelector = '*', clickSelector = null } = {}) {
+      const point = await this.evaluate(`(() => {
+        const container = document.querySelector(${JSON.stringify(containerSelector)});
+        const textElement = Array.from(container?.querySelectorAll(${JSON.stringify(textSelector)}) ?? [])
+          .find((element) => element.textContent?.trim() === ${JSON.stringify(text)});
+        if (!(textElement instanceof HTMLElement)) return null;
+        const target = ${clickSelector ? `textElement.closest(${JSON.stringify(clickSelector)}) ?? textElement.querySelector(${JSON.stringify(clickSelector)}) ?? textElement` : 'textElement'};
+        if (!(target instanceof HTMLElement)) return null;
+        const rect = target.getBoundingClientRect();
+        if (rect.width <= 0 || rect.height <= 0) return null;
+        return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+      })()`);
+      if (!point) throw new Error(`cdp_click_text_target_not_found:${containerSelector}:${text}`);
+      await send('Input.dispatchMouseEvent', { type: 'mousePressed', button: 'left', clickCount: 1, ...point });
+      await send('Input.dispatchMouseEvent', { type: 'mouseReleased', button: 'left', clickCount: 1, ...point });
+    },
     async evaluateInFrameByUrl(urlPart, expression) {
       const frames = await this.listFrames();
       const frame = frames.find((candidate) => String(candidate.url ?? '').includes(urlPart));

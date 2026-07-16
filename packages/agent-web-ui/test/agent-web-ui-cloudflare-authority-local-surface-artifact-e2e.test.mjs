@@ -69,13 +69,7 @@ async function jsonOf(responseOrPromise) {
   return response.json();
 }
 async function setProjectionView(page, value) {
-  return page.evaluate(String.raw`((nextValue) => {
-    const select = document.querySelector('#projection-verbosity');
-    if (!select) return { ok: false, reason: 'missing_projection_verbosity_select' };
-    select.value = nextValue;
-    select.dispatchEvent(new Event('change', { bubbles: true }));
-    return { ok: true, value: select.value };
-  })(${JSON.stringify(value)})`);
+  return page.selectOption('#projection-verbosity', value);
 }
 
 test('local agent-web-ui submits to Cloudflare-hosted NARS authority and renders authority HTML artifact', async () => {
@@ -114,16 +108,8 @@ test('local agent-web-ui submits to Cloudflare-hosted NARS authority and renders
     const initialReplay = await waitForPageText(page, 'cloudflare.resident', 15000);
     assert.equal(initialReplay.found, true, JSON.stringify(initialReplay));
 
-    const submitted = await page.evaluate(String.raw`(async () => {
-      const input = document.querySelector('#operator-input');
-      const form = document.querySelector('#operator-form');
-      if (!input || !form) return { ok: false, reason: 'missing_composer' };
-      input.value = 'Create an HTML artifact in the Cloudflare authority runtime';
-      input.dispatchEvent(new Event('input', { bubbles: true }));
-      form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-      return { ok: true };
-    })()`);
-    assert.equal(submitted.ok, true, JSON.stringify(submitted));
+    await page.fill('#operator-input', 'Create an HTML artifact in the Cloudflare authority runtime');
+    await page.click('.composer-submit');
 
     assert.equal((await waitForPageText(page, 'Cloudflare Authority HTML Preview', 15000)).found, true);
     const iframe = await waitForPageTextWithAction(
@@ -229,16 +215,8 @@ test('hosted Cloudflare web UI submits to Cloudflare-hosted NARS authority and r
     const initialReplay = await waitForPageText(page, 'cloudflare.resident', 15000);
     assert.equal(initialReplay.found, true, JSON.stringify(initialReplay));
 
-    const submitted = await page.evaluate(String.raw`(async () => {
-      const input = document.querySelector('#operator-input');
-      const form = document.querySelector('#operator-form');
-      if (!input || !form) return { ok: false, reason: 'missing_composer' };
-      input.value = 'Create an HTML artifact in the Cloudflare authority runtime from hosted UI';
-      input.dispatchEvent(new Event('input', { bubbles: true }));
-      form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-      return { ok: true };
-    })()`);
-    assert.equal(submitted.ok, true, JSON.stringify(submitted));
+    await page.fill('#operator-input', 'Create an HTML artifact in the Cloudflare authority runtime from hosted UI');
+    await page.click('.composer-submit');
 
     assert.equal((await waitForPageText(page, 'Cloudflare Authority HTML Preview', 15000)).found, true);
     const iframe = await waitForPageTextWithAction(

@@ -3,7 +3,7 @@ import { startSharedRuntime, waitFor } from './nars-runtime-fixture.mjs';
 
 async function submitOperatorInputText(page, value) {
   await page.locator('#operator-input').fill(value);
-  await page.locator('#operator-form').evaluate((form) => form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })));
+  await page.locator('#operator-input').press('Enter');
 }
 
 async function renderedEventRows(page, kind = null) {
@@ -27,13 +27,10 @@ async function waitForRenderedEventCount(page, kind, count, label, timeoutMs = 5
 }
 
 async function setProjectionView(page, value) {
-  return page.evaluate((nextValue) => {
-    const select = document.querySelector('#projection-verbosity');
-    if (!select) return { ok: false, reason: 'missing_projection_verbosity_select' };
-    select.value = nextValue;
-    select.dispatchEvent(new Event('change', { bubbles: true }));
-    return { ok: true, value: select.value };
-  }, value);
+  const select = page.locator('#projection-verbosity');
+  if (await select.count() === 0) return { ok: false, reason: 'missing_projection_verbosity_select' };
+  await select.selectOption(value);
+  return { ok: true, value: await select.inputValue() };
 }
 
 async function waitForRuntimeEvent(runtime, fromIndex, predicate, label, timeoutMs = 5_000) {
@@ -54,7 +51,7 @@ async function waitForRuntimeEvent(runtime, fromIndex, predicate, label, timeout
   );
 }
 
-test.describe('agent-web-ui live slash commands', () => {
+test.describe('agent-web-ui session-core runtime slash commands', () => {
   test('projects local UI slash actions and runtime control events through Playwright', async ({ page }) => {
     const runtime = await startSharedRuntime();
 
@@ -160,6 +157,11 @@ test.describe('agent-web-ui live slash commands', () => {
         (event) => event.event === 'input_event_queued' && Boolean(event.request_id),
         'operator_input_queued_timeout',
       );
+      const submittedFrame = runtime.outboundFrames.find((frame) => frame.id === queued.request_id);
+      expect(submittedFrame).toMatchObject({
+        method: 'session.submit',
+        params: { content: 'run startup sequence', source: 'manual_operator' },
+      });
       const started = await waitForRuntimeEvent(
         runtime,
         fromIndex,
@@ -202,12 +204,146 @@ test.describe('agent-web-ui live slash commands', () => {
       expect(turnCompleted.turn_id).toBe(queued.event_id);
       expect(inputCompleted.terminal_state).toBe('completed');
       expect(response.terminal_state).toBe('completed');
+      expect(runtime.providerCalls.at(-1)?.messages.at(-1)).toMatchObject({ role: 'user', content: 'run startup sequence' });
       await expect(page.locator('#operator-form')).toHaveAttribute('data-operator-delivery-phase', 'completed');
       await expect(page.locator('#operator-form')).toHaveAttribute('data-operator-delivery-request-id', queued.request_id);
       await expect(page.locator('.composer-delivery-status')).toContainText('Input delivered');
       await expect(page.locator('[data-event-kind^="activity_"]')).toHaveCount(0);
       await expect(page.locator('.composer-delivery-status')).not.toContainText('Waiting for agent');
       await expect(page.locator('.composer-delivery-status')).not.toContainText('Steering the active turn');
+    } finally {
+      await page.close().catch(() => {});
+      await runtime.close();
+    }
+  });
+
+  test('replays terminal input outcome after the event stream reconnects', async ({ page }) => {
+    const runtime = await startSharedRuntime({
+      sessionId: 'web-ui-playwright-reconnect-e2e',
+      providerDelayMs: 2_500,
+      responseContent: 'replayed after reconnect',
+    });
+    const eventSockets = [];
+    page.on('websocket', (socket) => {
+      if (socket.url() !== runtime.eventProjection.url) return;
+      eventSockets.push(socket);
+    });
+
+    try {
+      await page.goto(runtime.localWeb.url);
+      await expect(page.locator('#operator-input')).toBeVisible();
+      await expect.poll(() => runtime.eventProjection.subscribeRequests.length, { timeout: 5_000 }).toBeGreaterThan(0);
+
+      const fromIndex = runtime.events.length;
+      await page.locator('#operator-input').fill('complete after event stream reconnect');
+      await page.locator('.composer-submit').click();
+      const queued = await waitForRuntimeEvent(
+        runtime,
+        fromIndex,
+        (event) => event.event === 'input_event_queued' && Boolean(event.request_id),
+        'reconnect_input_queued_timeout',
+      );
+      const completion = waitForRuntimeEvent(
+        runtime,
+        fromIndex,
+        (event) => event.event === 'input_event_completed' && event.request_id === queued.request_id,
+        'reconnect_input_completed_timeout',
+        10_000,
+      );
+
+      const firstSubscribe = runtime.eventProjection.subscribeRequests[0];
+      runtime.eventProjection.closeConnections();
+      await expect.poll(() => eventSockets.length, { timeout: 5_000 }).toBeGreaterThan(1);
+      await expect.poll(() => runtime.eventProjection.subscribeRequests.length, { timeout: 5_000 }).toBeGreaterThan(1);
+
+      // Force the terminal event to land during the second disconnect, so the
+      // UI can only learn the outcome from the event-log replay on reconnect.
+      runtime.eventProjection.closeConnections();
+      const completed = await completion;
+      expect(completed.terminal_state).toBe('completed');
+      await expect.poll(() => eventSockets.length, { timeout: 5_000 }).toBeGreaterThan(2);
+      await expect.poll(() => runtime.eventProjection.subscribeRequests.length, { timeout: 5_000 }).toBeGreaterThan(2);
+
+      const replaySubscribe = runtime.eventProjection.subscribeRequests.at(-1);
+      expect(firstSubscribe.params.since_sequence).toBeUndefined();
+      expect(replaySubscribe.params.since_sequence).toEqual(expect.any(Number));
+      expect(replaySubscribe.params.since_sequence).toBeGreaterThan(0);
+      expect(runtime.outboundFrames.filter((frame) => frame.id === queued.request_id)).toHaveLength(1);
+      expect(runtime.providerCalls).toHaveLength(1);
+      const replayBatch = runtime.eventProjection.replayBatches.at(-1);
+      expect(replayBatch.events).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          event: 'input_event_completed',
+          request_id: queued.request_id,
+          terminal_state: 'completed',
+        }),
+      ]));
+      await expect(page.locator('#operator-form')).toHaveAttribute('data-operator-delivery-phase', 'completed', { timeout: 5_000 });
+      await expect(page.locator('.composer-delivery-status')).toContainText('Input delivered');
+      await expect(page.locator('.composer-delivery-status')).not.toContainText('Waiting for NARS acknowledgment');
+      await expect(page.locator('.composer-delivery-status')).not.toContainText('Steering the active turn');
+    } finally {
+      await page.close().catch(() => {});
+      await runtime.close();
+    }
+  });
+
+  test('keeps an unacknowledged input recoverable across reload without automatic resend', async ({ page }) => {
+    const runtime = await startSharedRuntime({
+      sessionId: 'web-ui-playwright-timeout-e2e',
+      swallowInputFrames: true,
+      responseContent: 'explicit retry response',
+    });
+
+    try {
+      await page.goto(runtime.localWeb.url);
+      await submitOperatorInputText(page, 'proceed');
+
+      await expect.poll(
+        () => page.locator('#operator-form').getAttribute('data-operator-delivery-phase'),
+        { timeout: 10_000 },
+      ).toBe('timed_out');
+      await expect(page.locator('.composer-delivery-status')).toContainText('Input not acknowledged');
+      await expect(page.locator('.composer-retry')).toBeVisible();
+      expect(runtime.inputFrameAttempts).toHaveLength(1);
+      expect(runtime.inputFrameAttempts[0].swallowed).toBe(true);
+      expect(runtime.inputFrameAttempts[0].frame).toMatchObject({ method: 'session.submit', params: { content: 'proceed', source: 'manual_operator' } });
+      expect(runtime.providerCalls).toHaveLength(0);
+
+      await page.reload();
+      await expect(page.locator('#operator-form')).toHaveAttribute('data-operator-delivery-phase', 'timed_out');
+      await expect(page.locator('.composer-retry')).toBeVisible();
+      expect(runtime.inputFrameAttempts).toHaveLength(1);
+      expect(runtime.providerCalls).toHaveLength(0);
+
+      await page.locator('.composer-retry').click();
+      await expect(page.locator('#operator-input')).toHaveValue('proceed');
+      await expect(page.locator('#operator-form')).toHaveAttribute('data-operator-delivery-phase', 'reviewing');
+      expect(runtime.inputFrameAttempts).toHaveLength(1);
+      expect(runtime.providerCalls).toHaveLength(0);
+
+      runtime.setSwallowInputFrames(false);
+      const fromIndex = runtime.events.length;
+      await submitOperatorInputText(page, 'proceed');
+      const queued = await waitForRuntimeEvent(
+        runtime,
+        fromIndex,
+        (event) => event.event === 'input_event_queued' && Boolean(event.request_id),
+        'explicit_retry_input_queued_timeout',
+        10_000,
+      );
+      await waitForRuntimeEvent(
+        runtime,
+        fromIndex,
+        (event) => event.event === 'input_event_completed' && event.request_id === queued.request_id,
+        'explicit_retry_input_completed_timeout',
+        10_000,
+      );
+      expect(runtime.inputFrameAttempts).toHaveLength(2);
+      expect(runtime.inputFrameAttempts[1].swallowed).toBe(false);
+      expect(runtime.inputFrameAttempts[1].frame).toMatchObject({ method: 'session.submit', params: { content: 'proceed', source: 'manual_operator' } });
+      expect(runtime.providerCalls).toHaveLength(1);
+      await expect(page.locator('#operator-form')).toHaveAttribute('data-operator-delivery-phase', 'completed');
     } finally {
       await page.close().catch(() => {});
       await runtime.close();
@@ -240,6 +376,10 @@ test.describe('agent-web-ui live slash commands', () => {
       await expect(page.locator('#operator-form')).toHaveAttribute('data-operator-delivery-phase', 'queued');
       await expect(page.locator('#operator-form')).toHaveAttribute('data-operator-delivery-request-id', secondQueued.request_id);
       await expect(page.locator('.composer-delivery-status')).toContainText('Queued for the next turn');
+      expect(runtime.outboundFrames.find((frame) => frame.id === secondQueued.request_id)).toMatchObject({
+        method: 'session.submit',
+        params: { content: 'second turn', source: 'operator_steering', delivery_mode: 'admit_after_active_turn' },
+      });
 
       await waitForRuntimeEvent(
         runtime,
@@ -283,6 +423,10 @@ test.describe('agent-web-ui live slash commands', () => {
 
       expect(failedTurn.error).toBe('fixture_provider_failure');
       expect(rejected.code).toBe('request_dispatch_failed');
+      expect(runtime.outboundFrames.find((frame) => frame.id === queued.request_id)).toMatchObject({
+        method: 'session.submit',
+        params: { content: 'run failing turn', source: 'manual_operator' },
+      });
       await expect(page.locator('#operator-form')).toHaveAttribute('data-operator-delivery-phase', 'failed');
       await expect(page.locator('.composer-delivery-status')).toContainText('Input failed');
       await expect(page.locator('.composer-delivery-status')).toContainText('fixture_provider_failure');

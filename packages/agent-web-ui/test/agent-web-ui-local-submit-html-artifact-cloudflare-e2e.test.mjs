@@ -78,13 +78,7 @@ async function jsonOf(responsePromise) {
 }
 
 async function setProjectionView(page, value) {
-  return page.evaluate(String.raw`((nextValue) => {
-    const select = document.querySelector('#projection-verbosity');
-    if (!select) return { ok: false, reason: 'missing_projection_verbosity_select' };
-    select.value = nextValue;
-    select.dispatchEvent(new Event('change', { bubbles: true }));
-    return { ok: true, value: select.value };
-  })(${JSON.stringify(value)})`);
+  return page.selectOption('#projection-verbosity', value);
 }
 
 async function startRealLocalNarsRuntime() {
@@ -162,16 +156,8 @@ test('local runtime input renders artifact and MCP lanes on local and Cloudflare
   try {
     localPage = await openCdpPage({ browserPath, url: localWeb.url, userDataPrefix: 'narada-local-submit-artifact-local-' });
     assert.equal((await waitForPageText(localPage, 'resident', 15000)).found, true);
-    const submitted = await localPage.evaluate(String.raw`(async () => {
-      const input = document.querySelector('#operator-input');
-      const form = document.querySelector('#operator-form');
-      if (!input || !form) return { ok: false, reason: 'missing_composer' };
-      input.value = 'Create an HTML artifact from the local surface';
-      input.dispatchEvent(new Event('input', { bubbles: true }));
-      form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-      return { ok: true };
-    })()`);
-    assert.equal(submitted.ok, true, JSON.stringify(submitted));
+    await localPage.fill('#operator-input', 'Create an HTML artifact from the local surface');
+    await localPage.click('.composer-submit');
 
     await waitFor(
       () => localRuntime.providerCalls.length === 1,
@@ -276,16 +262,8 @@ test('local runtime input renders artifact and MCP lanes on local and Cloudflare
     const switchedToOperations = await setProjectionView(remotePage, 'operations');
     assert.deepEqual(switchedToOperations, { ok: true, value: 'operations' });
 
-    const remoteSubmitted = await remotePage.evaluate(String.raw`(async () => {
-      const input = document.querySelector('#operator-input');
-      const form = document.querySelector('#operator-form');
-      if (!input || !form) return { ok: false, reason: 'missing_composer' };
-      input.value = 'Remote Cloudflare surface message for local NARS admission';
-      input.dispatchEvent(new Event('input', { bubbles: true }));
-      form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-      return { ok: true };
-    })()`);
-    assert.equal(remoteSubmitted.ok, true, JSON.stringify(remoteSubmitted));
+    await remotePage.fill('#operator-input', 'Remote Cloudflare surface message for local NARS admission');
+    await remotePage.click('.composer-submit');
 
     const admittedInputs = [];
     let delivery = null;

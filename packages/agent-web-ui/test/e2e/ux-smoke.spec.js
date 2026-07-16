@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { PassThrough } from 'node:stream';
-import { test } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 import { createEventHub, startEventStreamProjection } from '@narada2/agent-runtime-server/test-fixtures';
 import { AGENT_WEB_UI_NARS_METHOD_LIST } from '@narada2/nars-client-projection-contract';
 import { startAgentWebUiServer } from '../../src/server.js';
@@ -31,6 +31,8 @@ async function withHealthServer(fn, options = {}) {
   }
 }
 
+// Projection-only fixture events for layout/rendering assertions. Runtime
+// delivery, turn completion, and terminal outcomes belong in live-slash-smoke.
 function publishScenarioEvents(eventHub, scenario, sessionId = `ux_${scenario}`) {
   const base = { agent_id: 'ux.agent', session_id: sessionId, timestamp: new Date().toISOString(), provider: 'codex-subscription' };
   eventHub.publish({ ...base, event: 'session_started', site_id: 'narada.ux', role: 'resident', model: 'gpt-5.5', mcp_server_count: 15, mcp_operational_state: 'healthy' });
@@ -133,9 +135,6 @@ async function withScenarioServer(scenario, fn, options = {}) {
       } finally {
         web.server.close();
       }
-      if (scenario.name === 'confirmation') {
-        assert.match(result.text, /control is not admitted by the attached runtime/i, 'expected local rejection feedback for legacy affordance controls');
-      }
     });
   }
 
@@ -227,6 +226,10 @@ const UX_ASSERTION_SCRIPT = String.raw`(() => {
     if (seen.has(key)) failures.push('duplicate_message:' + row.kind);
     seen.add(key);
   }
+  const visibleText = [...document.querySelectorAll('body *')]
+    .filter(visible)
+    .map((element) => element.textContent ?? '')
+    .join('\n');
   return {
     ok: failures.length === 0,
     failures,
@@ -234,59 +237,47 @@ const UX_ASSERTION_SCRIPT = String.raw`(() => {
     viewportHeight,
     scrollWidth: doc.scrollWidth,
     bodyScrollWidth: body.scrollWidth,
-    text: body.textContent,
+    text: visibleText,
     messages,
     markdownListItemCount: document.querySelectorAll('.rendered-part-render li, .message-content li').length,
     markdownListCodeCount: document.querySelectorAll('.rendered-part-render li code, .message-content li code').length,
   };
 })()`;
-const SUBMIT_SCROLL_ASSERTION_SCRIPT = String.raw`(async () => {
-  const scroller = document.querySelector('.events-scroll');
-  const input = document.querySelector('#operator-input');
-  const form = document.querySelector('#operator-form');
-  if (!scroller || !input || !form) return { ok: false, reason: 'missing_composer_or_scroller' };
-  scroller.scrollTop = 0;
-  input.value = 'Follow latest after submit';
-  input.dispatchEvent(new Event('input', { bubbles: true }));
-  form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-  await new Promise((resolve) => setTimeout(resolve, 350));
-  const distanceFromBottom = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight;
-  return {
-    ok: distanceFromBottom < 4,
-    distanceFromBottom,
-    scrollTop: scroller.scrollTop,
-    scrollHeight: scroller.scrollHeight,
-    clientHeight: scroller.clientHeight,
-    text: document.body.textContent,
-  };
-})()`;
+async function scrollTranscriptToTop(page) {
+  const scroller = page.locator('.events-scroll');
+  await scroller.hover();
+  await page.mouse.wheel(0, -100_000);
+  await expect.poll(() => scroller.evaluate((element) => element.scrollTop), { timeout: 5_000 }).toBe(0);
+}
+
 async function runScenarioViewport({ page, scenario, viewport }) {
-  return withScenarioServer(scenario.name, async (url, publishEvents = () => {}, inputFrames = []) => {
+  return withScenarioServer(scenario.name, async (url, publishEvents = () => {}, inputFrames = [], eventHub = null) => {
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    await page.addInitScript(({ view }) => {
+      localStorage.setItem('narada:agent-web-ui:status-row-open.v1', 'true');
+      if (view) localStorage.setItem('narada:agent-web-ui:projection-verbosity.v1', view);
+    }, { view: scenario.view ?? null });
     await page.goto(url);
     await page.waitForLoadState('domcontentloaded');
     try {
       if (scenario.view) {
-        await page.evaluate(`((view) => { const select = document.querySelector('#projection-verbosity'); select.value = view; select.dispatchEvent(new Event('change', { bubbles: true })); })(${JSON.stringify(scenario.view)})`);
         await new Promise((resolve) => setTimeout(resolve, 250));
       }
       publishEvents();
       await new Promise((resolve) => setTimeout(resolve, 500));
       if (scenario.name === 'snippets') {
-        await page.evaluate(String.raw`(() => {
-          const input = document.querySelector('#operator-input');
-          const form = document.querySelector('#operator-form');
-          input.value = '/snippet save "ux drawer" First reusable operator instruction for screenshot coverage';
-          input.dispatchEvent(new Event('input', { bubbles: true }));
-          form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-          input.value = '/snippets ux';
-          input.dispatchEvent(new Event('input', { bubbles: true }));
-          form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-        })()`);
-        await new Promise((resolve) => setTimeout(resolve, 500));
+        await page.locator('#operator-input').fill('/snippet save "ux drawer" First reusable operator instruction for screenshot coverage');
+        await page.locator('.composer-submit').click();
+        await page.waitForFunction(() => {
+          const stored = JSON.parse(window.localStorage.getItem('narada:agent-web-ui:operator-snippets.v1') ?? '[]');
+          return Array.isArray(stored) && stored.some((snippet) => snippet.name === 'ux-drawer');
+        });
+        await page.locator('#operator-input').fill('/snippets ux');
+        await page.locator('.composer-submit').click();
+        await page.waitForSelector('.operator-snippet-panel');
       }
       if (scenario.name === 'confirmation') {
-        const actionResult = await page.evaluate(String.raw`(async () => {
+        const confirmationResult = await page.evaluate(String.raw`(async () => {
           let panel = null;
           let items = [];
           const started = Date.now();
@@ -296,32 +287,27 @@ async function runScenarioViewport({ page, scenario, viewport }) {
             if (panel && items.length >= 2) break;
             await new Promise((resolve) => setTimeout(resolve, 100));
           }
-          const textBefore = document.body.textContent;
+          const textBefore = panel?.textContent ?? '';
           const confirm = items[0]?.querySelector('.affordance-confirmation-confirm');
           const cancel = items[1]?.querySelector('.affordance-confirmation-cancel');
-          confirm?.click();
-          cancel?.click();
-          await new Promise((resolve) => setTimeout(resolve, 300));
           return {
             panelVisible: Boolean(panel && panel.getBoundingClientRect().height > 0),
-            itemCount: items.length,
+            itemCount: document.querySelectorAll('.affordance-confirmation-item').length,
             textBefore,
             confirmText: confirm?.textContent ?? null,
             cancelText: cancel?.textContent ?? null,
           };
         })()`);
-        assert.equal(actionResult.panelVisible, true, `${scenario.name}/${viewport.name}: expected confirmation panel to be visible: ${actionResult.textBefore}`);
-        assert.equal(actionResult.itemCount, 2, `${scenario.name}/${viewport.name}: expected two pending confirmations: ${actionResult.textBefore}`);
-        assert.match(actionResult.textBefore, /Confirmation Required[\s\S]*fixture\.filesystem \/ delete_temp_output/i);
-        assert.match(actionResult.textBefore, /fixture\.mail \/ send_draft/i);
-        assert.match(actionResult.confirmText ?? '', /Confirm/);
-        assert.match(actionResult.cancelText ?? '', /Cancel/);
-        await new Promise((resolve) => setTimeout(resolve, 250));
-        assert.deepEqual(inputFrames.filter((frame) => String(frame.method ?? '').startsWith('session.affordance.')), [], `${scenario.name}/${viewport.name}: local session-core transport must not receive legacy affordance frames`);
+        assert.equal(confirmationResult.panelVisible, true, `${scenario.name}/${viewport.name}: expected confirmation panel to be visible: ${confirmationResult.textBefore}`);
+        assert.equal(confirmationResult.itemCount, 2, `${scenario.name}/${viewport.name}: expected two pending confirmations: ${confirmationResult.textBefore}`);
+        assert.match(confirmationResult.textBefore, /Confirmation Required[\s\S]*fixture\.filesystem \/ delete_temp_output/i);
+        assert.match(confirmationResult.textBefore, /fixture\.mail \/ send_draft/i);
+        assert.match(confirmationResult.confirmText ?? '', /Confirm/);
+        assert.match(confirmationResult.cancelText ?? '', /Cancel/);
       }
-      const screenshot = await page.screenshot({ fullPage: false });
-      assert.deepEqual([...screenshot.subarray(0, 8)], [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], `${scenario.name}-${viewport.name}.png`);
-      assert.ok(screenshot.length > 5000, `expected non-empty screenshot: ${scenario.name}-${viewport.name}.png`);
+      if (scenario.name === 'markdown') {
+        await page.locator('.mermaid-diagram, .mermaid-fallback').first().waitFor({ state: 'visible', timeout: 10_000 });
+      }
       const result = await page.evaluate(UX_ASSERTION_SCRIPT);
       assert.deepEqual(result.failures, [], `${scenario.name}/${viewport.name}: ${JSON.stringify({ failures: result.failures, messages: result.messages })}`);
       if (!scenario.onboarding) {
@@ -352,24 +338,38 @@ async function runScenarioViewport({ page, scenario, viewport }) {
         assert.match(result.text, /Mermaid|Start|Decision/);
         assert.ok(result.markdownListItemCount >= 4, `expected markdown list items to render as list DOM: ${JSON.stringify(result)}`);
         assert.ok(result.markdownListCodeCount >= 8, `expected inline code inside markdown list items to render as code DOM: ${JSON.stringify(result)}`);
-        const intentResult = await page.evaluate(String.raw`(async () => {
+        await page.locator('.markdown-intent-button[data-intent="entity_number:dismiss"]').click();
+        await page.waitForTimeout(150);
+        const intentResult = await page.evaluate(() => {
           const button = document.querySelector('.markdown-intent-button[data-intent="entity_number:dismiss"]');
           const input = document.querySelector('#operator-input');
           if (!button || !input) return { ok: false, reason: 'missing_intent_button_or_input', text: document.body.textContent };
-          button.click();
-          await new Promise((resolve) => setTimeout(resolve, 150));
           return {
             ok: input.value === 'entity_number:dismiss' && document.activeElement === input,
             value: input.value,
             activeId: document.activeElement?.id ?? null,
             status: button.dataset.status ?? null,
           };
-        })()`);
+        });
         assert.equal(intentResult.ok, true, `${scenario.name}/${viewport.name}: expected markdown intent click to stage composer input: ${JSON.stringify(intentResult)}`);
       }
       if (scenario.name === 'normal') {
         assert.doesNotMatch(result.text, /routine status updates? folded into State/i, 'expected Chat view to hide debug state-sample note');
-        const submitScroll = await page.evaluate(SUBMIT_SCROLL_ASSERTION_SCRIPT);
+        await scrollTranscriptToTop(page);
+        await page.locator('#operator-input').fill('Follow latest after submit');
+        await page.locator('.composer-submit').click();
+        await page.waitForTimeout(350);
+        const submitScroll = await page.evaluate(() => {
+          const scroller = document.querySelector('.events-scroll');
+          const distanceFromBottom = scroller ? scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight : Number.POSITIVE_INFINITY;
+          return {
+            ok: distanceFromBottom < 4,
+            distanceFromBottom,
+            scrollTop: scroller?.scrollTop ?? null,
+            scrollHeight: scroller?.scrollHeight ?? null,
+            clientHeight: scroller?.clientHeight ?? null,
+          };
+        });
         assert.equal(submitScroll.ok, true, `${scenario.name}/${viewport.name}: expected submit to scroll transcript to bottom: ${JSON.stringify(submitScroll)}`);
       }
       if (scenario.name === 'snippets') {
@@ -387,7 +387,7 @@ async function runScenarioViewport({ page, scenario, viewport }) {
   });
 }
 
-test('agent-web-ui browser UX matrix has no obvious layout regressions', async ({ page }) => {
+test('agent-web-ui projection UX matrix has no obvious layout regressions', async ({ page }) => {
   const scenarios = [
     { name: 'normal' },
     { name: 'snippets' },
@@ -403,11 +403,9 @@ test('agent-web-ui browser UX matrix has no obvious layout regressions', async (
     { name: 'desktop', width: 1280, height: 900 },
     { name: 'mobile', width: 390, height: 844 },
   ];
-  const screenshots = [];
   for (const scenario of scenarios) {
-    for (const viewport of viewports) screenshots.push(await runScenarioViewport({ page, scenario, viewport }));
+    for (const viewport of viewports) await runScenarioViewport({ page, scenario, viewport });
   }
-  assert.equal(screenshots.length, scenarios.length * viewports.length);
 });
 
 test('agent-web-ui User Site onboarding makes the first-use path explicit', async ({ page }) => {
@@ -509,12 +507,7 @@ test('agent-web-ui transcript scroll authority preserves operator-controlled his
       publishAssistant(index, `Initial transcript row ${index}.\n\nThis row gives the transcript enough vertical height for scroll authority coverage.`);
     }
     await page.waitForFunction(() => document.querySelectorAll('#events > .event').length >= 20);
-    await page.evaluate(() => {
-      const scroller = document.querySelector('.events-scroll');
-      if (!scroller) throw new Error('missing_scroller');
-      scroller.scrollTop = 0;
-      scroller.dispatchEvent(new Event('scroll', { bubbles: true }));
-    });
+    await scrollTranscriptToTop(page);
     await page.waitForTimeout(150);
     const before = await page.evaluate(() => {
       const scroller = document.querySelector('.events-scroll');
@@ -595,37 +588,38 @@ test('agent-web-ui operator footer selector hides and restores target and input 
     assert.ok(Math.abs((selectorLayout.statusCollapseCenter ?? 0) - (selectorLayout.statusSelectorCenter ?? 100)) < 1, `expected status controls to share a horizontal center: ${JSON.stringify(selectorLayout)}`);
     assert.ok(Math.abs((selectorLayout.statusCollapseTop ?? 0) - (selectorLayout.statusItemsTop ?? 100)) < 1, `expected status controls to align to the status content top: ${JSON.stringify(selectorLayout)}`);
     await page.locator('button[aria-label="Choose Operator footer items"]').click();
-    const clickFooterSelectorItem = async (label) => {
-      await page.evaluate((itemLabel) => {
-        const rows = [...document.querySelectorAll('#operator-footer-item-selector-panel .box-visibility-selector-item')];
-        const row = rows.find((entry) => entry.querySelector('strong')?.textContent?.trim() === itemLabel);
-        const checkbox = row?.querySelector('input[type="checkbox"]');
-        if (!(checkbox instanceof HTMLInputElement)) throw new Error(`missing_footer_selector_item:${itemLabel}`);
-        checkbox.click();
-      }, label);
+    const setFooterSelectorItem = async (label, visible) => {
+      const row = page.locator('#operator-footer-item-selector-panel .box-visibility-selector-item').filter({
+        has: page.getByText(label, { exact: true }),
+      });
+      await expect(row).toHaveCount(1);
+      const checkbox = row.locator('input[type="checkbox"]');
+      if ((await checkbox.isChecked()) !== visible) await checkbox.setChecked(visible);
     };
-    await clickFooterSelectorItem('Target');
+    await setFooterSelectorItem('Target', false);
     await page.waitForTimeout(150);
     assert.equal(await page.locator('.composer-target').count(), 0, 'expected target box to hide');
     assert.equal(await page.locator('#operator-input').count(), 1, 'expected input box to remain visible after hiding target');
-    await clickFooterSelectorItem('Operator Input');
+    await setFooterSelectorItem('Operator Input', false);
     await page.waitForTimeout(150);
     assert.equal(await page.locator('#operator-input').count(), 0, 'expected input box to hide');
     assert.equal(await page.locator('button[aria-label="Choose Operator footer items"]').count(), 1, 'expected selector to remain available when boxes are hidden');
-    await clickFooterSelectorItem('Operator Input');
-    await clickFooterSelectorItem('Target');
+    await setFooterSelectorItem('Operator Input', true);
+    await setFooterSelectorItem('Target', true);
     await page.waitForTimeout(150);
     assert.equal(await page.locator('.composer-target').count(), 1, 'expected target box to restore');
     assert.equal(await page.locator('#operator-input').count(), 1, 'expected input box to restore');
     const stored = await page.evaluate(() => window.localStorage.getItem('narada:agent-web-ui:operator-footer-items.v1'));
     assert.equal(stored, JSON.stringify(['target', 'input']), `expected footer selector state to persist in canonical order: ${stored}`);
-    await page.evaluate(() => window.localStorage.setItem('narada:agent-web-ui:operator-footer-items.v1', '[]'));
+    await setFooterSelectorItem('Operator Input', false);
+    await setFooterSelectorItem('Target', false);
+    await page.waitForTimeout(150);
     await page.reload();
     await page.waitForLoadState('domcontentloaded');
     assert.equal(await page.locator('.composer-target').count(), 0, 'expected persisted empty footer to hide target after reload');
     assert.equal(await page.locator('#operator-input').count(), 0, 'expected persisted empty footer to hide input after reload');
     await page.locator('button[aria-label="Choose Operator footer items"]').click();
-    await clickFooterSelectorItem('Operator Input');
+    await setFooterSelectorItem('Operator Input', true);
     await page.waitForSelector('#operator-input');
     assert.equal(await page.locator('#operator-input').count(), 1, 'expected selector to recover input from persisted empty footer state');
     await page.setViewportSize({ width: 360, height: 560 });
