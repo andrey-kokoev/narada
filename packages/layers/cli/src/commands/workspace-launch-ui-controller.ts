@@ -41,7 +41,11 @@ import {
 import { createWorkspaceLaunchAttemptRunner } from './workspace-launch-ui-attempts.js';
 import { executeWorkspaceLaunchUiAction } from './workspace-launch-ui-actions.js';
 import { setWorkspaceLaunchUiSessionLifecycle } from './workspace-launch-ui-lifecycle.js';
-import { workspaceLaunchAttemptActivityState } from './workspace-launch-observation.js';
+import { createWorkspaceLaunchRefreshGate } from './workspace-launch-refresh-gate.js';
+import {
+  workspaceLaunchAttemptActivityState,
+  workspaceLaunchAttemptDashboardActivityState,
+} from './workspace-launch-observation.js';
 import { ensureLaunchArtifact, naradaProperRoot } from '../lib/launch-artifact.js';
 
 export async function runWorkspaceLaunchSelectionUi(
@@ -161,47 +165,50 @@ export async function runPersistentWorkspaceLaunchSelectionUi(
       .filter((attempt) => attempt.status !== 'forgotten')
       .map((attempt) => ({
         ...attempt,
-        activity_state: workspaceLaunchAttemptActivityState(attempt),
+        activity_state: workspaceLaunchAttemptDashboardActivityState(attempt),
       })),
     observed_unowned: [],
     actions: ['submit', 'cancel'],
   });
 
-  const refreshDashboardState = async (): Promise<WorkspaceLaunchDashboardState> => {
-    const candidates = attempts.filter((attempt) => (
-      attempt.status === 'launched'
-      && attempt.expected_launch_session_ids.length > 0
-    ));
-    let changed = false;
-    await Promise.all(candidates.map(async (attempt) => {
-      try {
-        attempt.observations = await handoff.workspaceLaunchRuntimeObservations(
-          attempt.launch_attempt_id,
-          attempt.selection,
-          records,
-          attempt.expected_launch_session_ids,
-          support.workspaceLaunchSiteRootsFromLaunchResult(attempt.diagnostic),
-          { cleanupStaleSessions: false, pollBudgetMs: 0 },
-        );
-        attempt.actions = handoff.workspaceLaunchActionsForAttempt(attempt);
-        attempt.activity_state = workspaceLaunchAttemptActivityState(attempt);
-        attempt.updated_at = new Date().toISOString();
-        changed = true;
-      } catch {
-        // An unverifiable runtime is historical until NARS confirms it again.
-        attempt.activity_state = 'historical';
-        changed = true;
+  const dashboardRefreshGate = createWorkspaceLaunchRefreshGate<WorkspaceLaunchDashboardState>(1000);
+  const refreshDashboardState = (): Promise<WorkspaceLaunchDashboardState> => dashboardRefreshGate.run(async () => {
+      const candidates = attempts.filter((attempt) => (
+        attempt.status === 'launched'
+        && attempt.expected_launch_session_ids.length > 0
+      ));
+      let changed = false;
+      await Promise.all(candidates.map(async (attempt) => {
+        try {
+          attempt.observations = await handoff.workspaceLaunchRuntimeObservations(
+            attempt.launch_attempt_id,
+            attempt.selection,
+            records,
+            attempt.expected_launch_session_ids,
+            support.workspaceLaunchSiteRootsFromLaunchResult(attempt.diagnostic),
+            { cleanupStaleSessions: false, pollBudgetMs: 0 },
+          );
+          attempt.activity_state = workspaceLaunchAttemptActivityState(attempt);
+          attempt.actions = handoff.workspaceLaunchActionsForAttempt(attempt);
+          attempt.updated_at = new Date().toISOString();
+          changed = true;
+        } catch {
+          // An unverifiable runtime is historical until NARS confirms it again.
+          attempt.activity_state = 'historical';
+          attempt.actions = handoff.workspaceLaunchActionsForAttempt(attempt);
+          attempt.updated_at = new Date().toISOString();
+          changed = true;
+        }
+      }));
+      if (changed) {
+        try {
+          await persistWorkspaceLaunchDashboardState(persistenceDir, uiSession, attempts);
+        } catch {
+          // The response still reflects fresh in-memory authority; persistence can recover on the next request.
+        }
       }
-    }));
-    if (changed) {
-      try {
-        await persistWorkspaceLaunchDashboardState(persistenceDir, uiSession, attempts);
-      } catch {
-        // The response still reflects fresh in-memory authority; persistence can recover on the next request.
-      }
-    }
-    return dashboardState();
-  };
+      return dashboardState();
+    }, dashboardState);
 
   const runLaunchAttempt = createWorkspaceLaunchAttemptRunner({
     uiSession,

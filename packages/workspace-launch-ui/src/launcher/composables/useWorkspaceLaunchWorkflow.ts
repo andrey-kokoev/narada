@@ -89,6 +89,7 @@ export function useWorkspaceLaunchWorkflow() {
   const attempts = ref<LaunchAttempt[]>([]);
   const finishedView = ref<'submitted' | 'cancelled' | null>(null);
   const showHistory = ref(false);
+  const dashboardUnavailable = ref(false);
 
   const siteChoices = computed(() => unique(model.siteChoices.length ? model.siteChoices : model.records.map((record) => record.site)));
   const roleChoices = computed(() => unique(model.records
@@ -112,9 +113,9 @@ export function useWorkspaceLaunchWorkflow() {
   const submitLabel = computed(() => (
     matchedRecords.value.length > 0 ? `Start ${plural(matchedRecords.value.length, 'Agent Launch')}` : 'Start Selected Launches'
   ));
-  const activeAttempts = computed(() => workspaceLaunchAttemptsForView(attempts.value, false));
-  const historicalAttempts = computed(() => workspaceLaunchAttemptsForView(attempts.value, true));
-  const visibleAttempts = computed(() => workspaceLaunchAttemptsForView(attempts.value, showHistory.value));
+  const activeAttempts = computed(() => workspaceLaunchAttemptsForView(attempts.value, false, Date.now(), !dashboardUnavailable.value));
+  const historicalAttempts = computed(() => workspaceLaunchAttemptsForView(attempts.value, true, Date.now(), !dashboardUnavailable.value));
+  const visibleAttempts = computed(() => workspaceLaunchAttemptsForView(attempts.value, showHistory.value, Date.now(), !dashboardUnavailable.value));
   const activeAttemptCount = computed(() => activeAttempts.value.length);
   const historicalAttemptCount = computed(() => historicalAttempts.value.length);
 
@@ -329,7 +330,7 @@ export function useWorkspaceLaunchWorkflow() {
   }
 
   function attemptIsHistorical(attempt: LaunchAttempt): boolean {
-    return !isWorkspaceLaunchAttemptActive(attempt);
+    return dashboardUnavailable.value || !isWorkspaceLaunchAttemptActive(attempt, Date.now(), !dashboardUnavailable.value);
   }
 
   function attemptTitle(attempt: LaunchAttempt): string {
@@ -404,17 +405,23 @@ export function useWorkspaceLaunchWorkflow() {
     showHistory.value = !showHistory.value;
   }
 
-  function updateDashboard(value: unknown): void {
+  function updateDashboard(value: unknown): boolean {
     const parsed = parseWorkspaceLaunchDashboardAttempts(value);
-    if (parsed) attempts.value = parsed;
+    if (!parsed) return false;
+    attempts.value = parsed;
+    return true;
   }
 
   async function loadLaunches(): Promise<void> {
     try {
       const response = await transport.launches();
-      if (response.ok && response.payload) updateDashboard(response.payload);
+      if (response.ok && response.payload && updateDashboard(response.payload)) {
+        dashboardUnavailable.value = false;
+        return;
+      }
+      dashboardUnavailable.value = true;
     } catch {
-      // The launcher page remains usable if the optional recovery read is unavailable.
+      dashboardUnavailable.value = true;
     }
   }
 
@@ -435,12 +442,13 @@ export function useWorkspaceLaunchWorkflow() {
     try {
       const response = await transport.action(launchAttemptId, normalizedAction);
       const result = response.payload;
-      if (result?.dashboard) updateDashboard(result.dashboard);
+      if (result?.dashboard && updateDashboard(result.dashboard)) dashboardUnavailable.value = false;
       statusText.value = response.ok
         ? result?.message || `${actionLabel(action)} completed.`
         : `Action refused: ${result?.message || result?.reason_code || `HTTP ${response.status}`}`;
       if (result?.command) statusText.value += `\\n${result.command}`;
     } catch (error) {
+      dashboardUnavailable.value = true;
       statusText.value = `Action failed: ${error instanceof Error ? error.message : String(error)}`;
     }
   }
@@ -456,13 +464,14 @@ export function useWorkspaceLaunchWorkflow() {
         statusText.value = persistent
           ? 'New launch accepted. Open or attach only from the specific result card below.'
           : 'New launch submitted. You can return to the terminal.';
-        if (result?.dashboard) updateDashboard(result.dashboard);
+        if (result?.dashboard && updateDashboard(result.dashboard)) dashboardUnavailable.value = false;
         if (!persistent) finishedView.value = 'submitted';
       } else {
         statusText.value = `Launch failed: ${result?.error || result?.status || `HTTP ${response.status}`}`;
         if (result?.dashboard) updateDashboard(result.dashboard);
       }
     } catch (error) {
+      dashboardUnavailable.value = true;
       statusText.value = `Launch failed: ${error instanceof Error ? error.message : String(error)}`;
     } finally {
       submitting.value = false;
@@ -509,6 +518,7 @@ export function useWorkspaceLaunchWorkflow() {
     submitting,
     stopConfirmationAttemptId,
     attempts,
+    dashboardUnavailable,
     showHistory,
     visibleAttempts,
     activeAttemptCount,

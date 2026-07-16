@@ -196,6 +196,9 @@ test('uses server activity state as the dashboard authority', () => {
   assert.ok(parsed);
   assert.equal(isWorkspaceLaunchAttemptActive(parsed[0]!, Date.parse('2026-07-16T12:00:00.000Z')), false);
   assert.deepEqual(workspaceLaunchAttemptsForView(parsed, true, Date.parse('2026-07-16T12:00:00.000Z')).map((attempt) => attempt.launchAttemptId), ['attempt-authority']);
+  assert.equal(isWorkspaceLaunchAttemptActive(parsed[0]!, Date.parse('2026-07-16T12:00:00.000Z'), false), false);
+  assert.deepEqual(workspaceLaunchAttemptsForView(parsed, false, Date.parse('2026-07-16T12:00:00.000Z'), false), []);
+  assert.deepEqual(workspaceLaunchAttemptsForView(parsed, true, Date.parse('2026-07-16T12:00:00.000Z'), false).map((attempt) => attempt.launchAttemptId), ['attempt-authority']);
 });
 
 test('keeps shared launcher helpers deterministic', () => {

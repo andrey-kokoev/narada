@@ -11,6 +11,11 @@ import type {
 } from './workspace-launch-types.js';
 import type { WorkspaceLaunchUiAction, WorkspaceLaunchUiResponse } from './workspace-launch-ui-server.js';
 import { setWorkspaceLaunchAttemptLifecycle } from './workspace-launch-ui-lifecycle.js';
+import {
+  workspaceLaunchAttemptActivityState,
+  workspaceLaunchAttemptDashboardActivityState,
+  workspaceLaunchLatestObservation,
+} from './workspace-launch-observation.js';
 
 export interface WorkspaceLaunchUiActionContext {
   uiSession: WorkspaceLaunchUiSessionRecord;
@@ -53,8 +58,10 @@ export async function executeWorkspaceLaunchUiAction(
         support.workspaceLaunchSiteRootsFromLaunchResult(attempt.diagnostic),
       );
       setWorkspaceLaunchAttemptLifecycle(attempt, 'launched');
+      attempt.activity_state = workspaceLaunchAttemptActivityState(attempt);
     } catch (error) {
       setWorkspaceLaunchAttemptLifecycle(attempt, 'failed');
+      attempt.activity_state = 'historical';
       attempt.diagnostic = { error: error instanceof Error ? error.message : String(error) };
     }
     attempt.actions = handoff.workspaceLaunchActionsForAttempt(attempt);
@@ -62,6 +69,13 @@ export async function executeWorkspaceLaunchUiAction(
     return { status: 200, payload: { schema: 'narada.workspace_launch.action_result.v1', status: 'rechecked', attempt, dashboard: context.dashboardState() } };
   }
   if (action === 'open-web-ui' || action === 'attach-cli') {
+    await refreshWorkspaceLaunchProjectionAuthority(context, attempt);
+    if (!workspaceLaunchAttachActionAdmitted(attempt, action)) return actionRefusal(
+      'runtime_not_current',
+      `${action === 'open-web-ui' ? 'Open This UI' : 'Attach CLI To This Session'} requires a fresh healthy NARS observation owned by this launch attempt.`,
+      409,
+      context.dashboardState(),
+    );
     const command = attachCommandForAction(attempt, action);
     if (!command) return actionRefusal(
       'attach_command_not_available',
@@ -97,14 +111,46 @@ export async function executeWorkspaceLaunchUiAction(
   return actionRefusal('projection_lifecycle_not_admitted', 'Stop Projection requires admitted projection lifecycle authority.', 409, context.dashboardState());
 }
 
+export function workspaceLaunchAttachActionAdmitted(
+  attempt: WorkspaceLaunchAttemptRecord,
+  action: WorkspaceLaunchUiAction,
+  now = Date.now(),
+): boolean {
+  return (action === 'open-web-ui' || action === 'attach-cli')
+    && workspaceLaunchAttemptDashboardActivityState(attempt, now) === 'active'
+    && Boolean(attachCommandForAction(attempt, action));
+}
+
+async function refreshWorkspaceLaunchProjectionAuthority(
+  context: WorkspaceLaunchUiActionContext,
+  attempt: WorkspaceLaunchAttemptRecord,
+): Promise<void> {
+  try {
+    attempt.observations = await handoff.workspaceLaunchRuntimeObservations(
+      attempt.launch_attempt_id,
+      attempt.selection,
+      context.records,
+      attempt.expected_launch_session_ids,
+      support.workspaceLaunchSiteRootsFromLaunchResult(attempt.diagnostic),
+      { cleanupStaleSessions: false, pollBudgetMs: 0 },
+    );
+    attempt.activity_state = workspaceLaunchAttemptActivityState(attempt);
+  } catch {
+    attempt.activity_state = 'historical';
+  }
+  attempt.actions = handoff.workspaceLaunchActionsForAttempt(attempt);
+  attempt.updated_at = new Date().toISOString();
+  try {
+    await persistWorkspaceLaunchDashboardState(context.persistenceDir, context.uiSession, context.attempts);
+  } catch {
+    // The in-memory observation remains authoritative for this request.
+  }
+}
+
 function attachCommandForAction(attempt: WorkspaceLaunchAttemptRecord, action: WorkspaceLaunchUiAction): string | null {
   const key = action === 'open-web-ui' ? 'agent_web_ui' : action === 'attach-cli' ? 'agent_cli' : null;
   if (!key) return null;
-  for (const observation of attempt.observations) {
-    const command = observation.attach_commands?.[key];
-    if (command) return command;
-  }
-  return null;
+  return workspaceLaunchLatestObservation(attempt.observations)?.attach_commands?.[key] ?? null;
 }
 
 function actionRefusal(
@@ -118,6 +164,9 @@ function actionRefusal(
     status: 'refused',
     reason_code,
     message,
+    required_next_step: 'Choose an admitted projection action or refresh the launch dashboard.',
+    artifact_path: null,
+    retryable: false,
     ...(dashboard ? { dashboard } : {}),
   };
   return { status, payload };

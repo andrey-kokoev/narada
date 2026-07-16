@@ -33,7 +33,12 @@ export interface LaunchRecord {
 
 export const ACTIVE_LAUNCH_OBSERVATION_MAX_AGE_MS = WORKSPACE_LAUNCH_ACTIVE_OBSERVATION_MAX_AGE_MS;
 
-export function isWorkspaceLaunchAttemptActive(attempt: LaunchAttempt, now = Date.now()): boolean {
+export function isWorkspaceLaunchAttemptActive(
+  attempt: LaunchAttempt,
+  now = Date.now(),
+  dashboardAvailable = true,
+): boolean {
+  if (!dashboardAvailable) return false;
   if (attempt.activityState !== undefined) return attempt.activityState === 'active';
   if (attempt.status !== 'launched' || attempt.expectedLaunchSessionIds.length === 0) return false;
   const observation = [...attempt.observations]
@@ -54,10 +59,16 @@ export function isWorkspaceLaunchAttemptActive(attempt: LaunchAttempt, now = Dat
   return age >= 0 && age <= ACTIVE_LAUNCH_OBSERVATION_MAX_AGE_MS;
 }
 
-export function workspaceLaunchAttemptsForView(attempts: LaunchAttempt[], showHistory: boolean, now = Date.now()): LaunchAttempt[] {
+export function workspaceLaunchAttemptsForView(
+  attempts: LaunchAttempt[],
+  showHistory: boolean,
+  now = Date.now(),
+  dashboardAvailable = true,
+): LaunchAttempt[] {
+  if (!dashboardAvailable) return showHistory ? attempts : [];
   return attempts.filter((attempt) => showHistory
-    ? !isWorkspaceLaunchAttemptActive(attempt, now)
-    : isWorkspaceLaunchAttemptActive(attempt, now));
+    ? !isWorkspaceLaunchAttemptActive(attempt, now, dashboardAvailable)
+    : isWorkspaceLaunchAttemptActive(attempt, now, dashboardAvailable));
 }
 
 export interface SelectorModel {

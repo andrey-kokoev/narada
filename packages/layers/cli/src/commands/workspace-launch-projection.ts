@@ -11,13 +11,18 @@ import {
   startWorkspaceLaunchWindowsTerminal,
 } from './workspace-launch-terminal.js';
 import { workspaceLaunchRequestRuntimeStop } from './workspace-launch-cleanup.js';
+import {
+  workspaceLaunchAttemptDashboardActivityState,
+  workspaceLaunchLatestObservation,
+} from './workspace-launch-observation.js';
 
 export { workspaceLaunchRequestRuntimeStop } from './workspace-launch-cleanup.js';
 
 export function workspaceLaunchActionsForAttempt(attempt: WorkspaceLaunchAttemptRecord): string[] {
   const actions = ['recheck'];
-  if (workspaceLaunchAttachCommandForAction(attempt, 'open-web-ui')) actions.push('open-web-ui');
-  if (workspaceLaunchAttachCommandForAction(attempt, 'attach-cli')) actions.push('attach-cli');
+  const activityState = workspaceLaunchAttemptDashboardActivityState(attempt);
+  if (activityState === 'active' && workspaceLaunchAttachCommandForAction(attempt, 'open-web-ui')) actions.push('open-web-ui');
+  if (activityState === 'active' && workspaceLaunchAttachCommandForAction(attempt, 'attach-cli')) actions.push('attach-cli');
   actions.push('retry');
   if (workspaceLaunchRuntimeStopControlPath(attempt)) actions.push('stop-runtime');
   actions.push('forget');
@@ -88,27 +93,21 @@ export async function workspaceLaunchExecuteProjectionAction(
 function workspaceLaunchAttachCommandForAction(attempt: WorkspaceLaunchAttemptRecord, action: string): string | null {
   const commandKey = action === 'open-web-ui' ? 'agent_web_ui' : action === 'attach-cli' ? 'agent_cli' : null;
   if (!commandKey) return null;
-  for (const observation of attempt.observations) {
-    const command = observation.attach_commands?.[commandKey];
-    if (command) return command;
-  }
-  return null;
+  return workspaceLaunchLatestObservation(attempt.observations)?.attach_commands?.[commandKey] ?? null;
 }
 
 function workspaceLaunchRuntimeStopControlPath(attempt: WorkspaceLaunchAttemptRecord): string | null {
-  for (const observation of attempt.observations) {
-    if (observation.control_path && existsSync(observation.control_path)) return observation.control_path;
-  }
-  return null;
+  const controlPath = workspaceLaunchLatestObservation(attempt.observations)?.control_path;
+  return controlPath && existsSync(controlPath) ? controlPath : null;
 }
 
 function workspaceLaunchProjectionSessionId(attempt: WorkspaceLaunchAttemptRecord): string | null {
-  for (const observation of attempt.observations) if (observation.session_id) return observation.session_id;
-  return null;
+  return workspaceLaunchLatestObservation(attempt.observations)?.session_id ?? null;
 }
 
 function workspaceLaunchProjectionCwd(attempt: WorkspaceLaunchAttemptRecord): string | null {
-  for (const observation of attempt.observations) if (observation.site_root) return observation.site_root;
+  const siteRoot = workspaceLaunchLatestObservation(attempt.observations)?.site_root;
+  if (siteRoot) return siteRoot;
   for (const handoff of attempt.handoffs) if (handoff.cwd) return handoff.cwd;
   return null;
 }

@@ -27,7 +27,7 @@ const {
   currentProvider,
   statusText,
   submitting,
-  attempts,
+  dashboardUnavailable,
   showHistory,
   visibleAttempts,
   activeAttemptCount,
@@ -130,6 +130,7 @@ function actionIcon(action: string): typeof RefreshCw {
       </div>
       <span class="posture">Local launcher</span>
     </header>
+    <p v-if="dashboardUnavailable" class="field-hint" role="alert">Launch dashboard unavailable. Active sessions are not assumed; attach actions are paused until the launcher reconnects.</p>
 
     <section class="stage-strip" aria-label="Launch stages">
       <article class="stage-card">

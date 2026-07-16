@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs';
-import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
 import { dirname, join, resolve } from 'node:path';
 import { siteAuthorityRootFromSiteRoot } from '@narada2/site-paths';
 import { normalizeWorkspaceLaunchBrowserSelection } from './workspace-launch-selection.js';
@@ -145,11 +146,21 @@ export function normalizeWorkspaceLaunchAttemptRecord(
 }
 
 async function writeJsonFile(path: string, value: unknown): Promise<void> {
-  await writeFile(path, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
+  await writeTextFileAtomically(path, `${JSON.stringify(value, null, 2)}\n`);
 }
 
 async function writeJsonLinesFile(path: string, values: unknown[]): Promise<void> {
-  await writeFile(path, values.map((value) => JSON.stringify(value)).join('\n') + (values.length > 0 ? '\n' : ''), 'utf8');
+  await writeTextFileAtomically(path, values.map((value) => JSON.stringify(value)).join('\n') + (values.length > 0 ? '\n' : ''));
+}
+
+async function writeTextFileAtomically(path: string, content: string): Promise<void> {
+  const temporaryPath = `${path}.${process.pid}.${randomUUID()}.tmp`;
+  try {
+    await writeFile(temporaryPath, content, 'utf8');
+    await rename(temporaryPath, path);
+  } finally {
+    await rm(temporaryPath, { force: true }).catch(() => undefined);
+  }
 }
 
 async function readJsonFile(path: string): Promise<unknown> {

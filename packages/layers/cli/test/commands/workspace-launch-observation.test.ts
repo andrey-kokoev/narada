@@ -3,7 +3,10 @@ import type {
   WorkspaceLaunchAttemptRecord,
   WorkspaceLaunchObservationRecord,
 } from '../../src/commands/workspace-launch-types.js';
-import { workspaceLaunchAttemptActivityState } from '../../src/commands/workspace-launch-observation.js';
+import {
+  workspaceLaunchAttemptActivityState,
+  workspaceLaunchAttemptDashboardActivityState,
+} from '../../src/commands/workspace-launch-observation.js';
 
 const now = Date.parse('2026-07-16T12:00:00.000Z');
 
@@ -46,5 +49,18 @@ describe('workspace launch activity authority', () => {
   it('never treats a completed or unobserved attempt as active', () => {
     expect(workspaceLaunchAttemptActivityState({ ...attempt(), status: 'failed' }, now)).toBe('historical');
     expect(workspaceLaunchAttemptActivityState({ ...attempt(), expected_launch_session_ids: [], observations: [] }, now)).toBe('historical');
+  });
+
+  it('honors a failed-refresh historical override and chooses the newest observation', () => {
+    const current = attempt();
+    const outOfOrder = {
+      ...current,
+      observations: [
+        { ...current.observations[0]!, last_checked_at: '2026-07-16T11:00:00.000Z' },
+        current.observations[0]!,
+      ],
+    };
+    expect(workspaceLaunchAttemptActivityState(outOfOrder, now)).toBe('active');
+    expect(workspaceLaunchAttemptDashboardActivityState({ ...outOfOrder, activity_state: 'historical' }, now)).toBe('historical');
   });
 });

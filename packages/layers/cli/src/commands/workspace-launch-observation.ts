@@ -35,7 +35,7 @@ export function workspaceLaunchAttemptActivityState(
   now = Date.now(),
 ): WorkspaceLaunchAttemptActivityState {
   if (attempt.status !== 'launched' || attempt.expected_launch_session_ids.length === 0) return 'historical';
-  const observation = attempt.observations.at(-1);
+  const observation = workspaceLaunchLatestObservation(attempt.observations);
   if (!observation
     || observation.health !== 'healthy'
     || observation.ownership_posture !== 'owned_by_runtime_authority'
@@ -45,6 +45,27 @@ export function workspaceLaunchAttemptActivityState(
   if (!Number.isFinite(checkedAt)) return 'historical';
   const ageMs = now - checkedAt;
   return ageMs >= 0 && ageMs <= WORKSPACE_LAUNCH_ACTIVE_OBSERVATION_MAX_AGE_MS ? 'active' : 'historical';
+}
+
+export function workspaceLaunchAttemptDashboardActivityState(
+  attempt: Pick<WorkspaceLaunchAttemptRecord, 'status' | 'expected_launch_session_ids' | 'observations' | 'activity_state'>,
+  now = Date.now(),
+): WorkspaceLaunchAttemptActivityState {
+  if (attempt.activity_state === 'historical') return 'historical';
+  return workspaceLaunchAttemptActivityState(attempt, now);
+}
+
+export function workspaceLaunchLatestObservation(
+  observations: WorkspaceLaunchObservationRecord[],
+): WorkspaceLaunchObservationRecord | undefined {
+  return [...observations]
+    .sort((left, right) => {
+      const leftCheckedAt = Date.parse(left.last_checked_at);
+      const rightCheckedAt = Date.parse(right.last_checked_at);
+      return (Number.isFinite(leftCheckedAt) ? leftCheckedAt : Number.NEGATIVE_INFINITY)
+        - (Number.isFinite(rightCheckedAt) ? rightCheckedAt : Number.NEGATIVE_INFINITY);
+    })
+    .at(-1);
 }
 
 export async function workspaceLaunchRuntimeObservations(
