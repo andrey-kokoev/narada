@@ -71,6 +71,28 @@ async function connectWebSocket(url) {
   };
 }
 
+async function nextWebSocketJson(client, timeoutMs = 5000) {
+  let timer;
+  try {
+    return await Promise.race([
+      client.nextJson(),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error('websocket_message_timeout')), timeoutMs);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function waitForCondition(predicate, timeoutMs = 1000) {
+  const deadline = Date.now() + timeoutMs;
+  while (!predicate()) {
+    if (Date.now() >= deadline) throw new Error('condition_timeout');
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+}
+
 test('package owns the Narada agent runtime server bins and exports', () => {
   assert.equal(packageJson.name, '@narada2/agent-runtime-server');
   assert.equal(packageJson.narada.package_role, 'nars_runtime_server');
@@ -842,6 +864,41 @@ test('WebSocket /events replays and reads durable events.jsonl beyond memory buf
   }
 });
 
+test('WebSocket /events isolates same subscription IDs across connections', async () => {
+  const hub = createEventHub();
+  const projection = await startEventStreamProjection({
+    childStdin: new PassThrough(),
+    eventHub: hub,
+    host: '127.0.0.1',
+    port: 0,
+  });
+  const firstClient = await connectWebSocket(projection.url);
+  const secondClient = await connectWebSocket(projection.url);
+  try {
+    assert.equal((await firstClient.nextJson()).event, 'websocket_connected');
+    assert.equal((await secondClient.nextJson()).event, 'websocket_connected');
+    const params = { include_replay: false, subscription_id: 'shared' };
+    firstClient.sendJson({ id: 'first-subscribe', method: 'session.events.subscribe', params });
+    secondClient.sendJson({ id: 'second-subscribe', method: 'session.events.subscribe', params });
+    assert.equal((await firstClient.nextJson()).subscription_id, 'shared');
+    assert.equal((await secondClient.nextJson()).subscription_id, 'shared');
+    assert.equal((await firstClient.nextJson()).event, 'session_events_replay_completed');
+    assert.equal((await secondClient.nextJson()).event, 'session_events_replay_completed');
+    assert.equal(hub.subscriberCount(), 2);
+    firstClient.close();
+    await waitForCondition(() => hub.subscriberCount() === 1);
+    hub.publish({ event: 'session_status', session_id: 'second-client' });
+    const delivered = await secondClient.nextJson();
+    assert.equal(delivered.event, 'session_event');
+    assert.equal(delivered.subscription_id, 'shared');
+    assert.equal(delivered.payload.session_id, 'second-client');
+  } finally {
+    firstClient.close();
+    secondClient.close();
+    projection.server.close();
+  }
+});
+
 test('carrier runtime package boundary forbids agent-cli adapter imports', () => {
   const runtimePackage = JSON.parse(readFileSync(new URL('../../carrier-runtime/package.json', import.meta.url), 'utf8'));
   assert.equal(runtimePackage.dependencies?.['@narada2/agent-cli'], undefined);
@@ -1116,6 +1173,19 @@ test('event hub assigns monotonic sequences when incoming events collide with cu
   assert.equal(hub.publish({ event_sequence: 46, sequence: 46, event: 'assistant_message', content: 'late provider aggregate' }).event_sequence, 49);
   assert.deepEqual(hub.replayFor({ maxReplay: 10 }).map((event) => event.event_sequence), [47, 48, 49]);
   assert.deepEqual(hub.cursor(), { last_sequence: 49, next_sequence: 50 });
+});
+
+test('endpoint option parsing does not consume a following flag as a value', () => {
+  assert.deepEqual(parseEventStreamOptions([
+    '--event-host', '--event-port', '123', '--identity', 'agent',
+  ], {}).events, {
+    enabled: true,
+    host: '127.0.0.1',
+    port: 123,
+  });
+  assert.deepEqual(parseEventStreamOptions([
+    '--event-host', '--event-port', '123', '--identity', 'agent',
+  ], {}).forwardedArgs, ['--identity', 'agent']);
 });
 
 test('WebSocket /events subscribes with replay and forwards protocol frames', async () => {
@@ -1755,6 +1825,117 @@ test('narada-owned entrypoint runs the session-core control runtime in process',
     assert.equal(events.some((event) => event.event === 'session_closed' && event.request_id === 'close-1'), true);
     assert.equal(stderr.includes('Fatal error'), false);
   } finally {
+    rmSync(siteRoot, { recursive: true, force: true });
+  }
+});
+
+test('spawned runtime serves health and durable/live events through advertised projections', { timeout: 15000 }, async () => {
+  const siteRoot = mkdtempSync(join(tmpdir(), 'narada-runtime-projection-e2e-'));
+  const sessionId = 'projection-e2e';
+  let child = null;
+  let client = null;
+  try {
+    const binPath = fileURLToPath(new URL('../bin/narada-agent-runtime-server.mjs', import.meta.url));
+    child = spawnTestChild(process.execPath, [
+      binPath,
+      '--raw-jsonl',
+      '--health-port', '0',
+      '--event-host',
+      '--event-port', '0',
+      '--identity', 'narada.test',
+      '--session', sessionId,
+    ], {
+      env: {
+        ...process.env,
+        NARADA_SITE_ROOT: siteRoot,
+        NARADA_INTELLIGENCE_PROVIDER: 'codex-subscription',
+        NARADA_AUTHORITY_REF: 'task:projection-e2e',
+        NARADA_AGENT_RUNTIME_HEALTH_ENABLED: '1',
+        NARADA_AGENT_RUNTIME_EVENTS_ENABLED: '1',
+        NARADA_AGENT_RUNTIME_HEALTH_HOST: '127.0.0.1',
+        NARADA_AGENT_RUNTIME_EVENTS_HOST: '127.0.0.1',
+      },
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.setEncoding('utf8');
+    child.stderr.setEncoding('utf8');
+    child.stdout.on('data', (chunk) => { stdout += chunk; });
+    child.stderr.on('data', (chunk) => { stderr += chunk; });
+    const readEvents = () => stdout.trim().split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
+    await waitForCapturedOutput(child, () => stdout, (text) => text
+      .split(/\r?\n/)
+      .filter(Boolean)
+      .some((line) => {
+        try {
+          return JSON.parse(line).event === 'session_started';
+        } catch {
+          return false;
+        }
+      }));
+    const started = readEvents().find((event) => event.event === 'session_started');
+    assert.match(started?.health_endpoint, /^http:\/\/127\.0\.0\.1:\d+\/health$/);
+    assert.match(started?.event_endpoint, /^ws:\/\/127\.0\.0\.1:\d+\/events$/);
+
+    const healthResponse = await fetch(started.health_endpoint);
+    assert.equal(healthResponse.status, 200);
+    const health = await healthResponse.json();
+    assert.equal(health.schema, 'narada.nars.health.v1');
+    assert.equal(health.status, 'healthy');
+    assert.equal(health.mcp_tools, undefined);
+    assert.equal(health.mcp?.tools, undefined);
+
+    client = await connectWebSocket(started.event_endpoint);
+    assert.equal((await nextWebSocketJson(client)).event, 'websocket_connected');
+    client.sendJson({
+      id: 'events-1',
+      method: 'session.events.subscribe',
+      params: { include_replay: true, max_replay: 50, subscription_id: 'events-1' },
+    });
+    const subscriptionStarted = await nextWebSocketJson(client);
+    assert.equal(subscriptionStarted.event, 'session_events_subscription_started');
+    assert.equal(subscriptionStarted.replay_source, 'events_jsonl');
+    assert.ok(subscriptionStarted.replay_count > 0);
+    const replayEvents = [];
+    for (let index = 0; index < subscriptionStarted.replay_count; index += 1) {
+      const replay = await nextWebSocketJson(client);
+      assert.equal(replay.event, 'session_event');
+      assert.equal(replay.subscription_id, 'events-1');
+      replayEvents.push(replay.payload);
+    }
+    const replayCompleted = await nextWebSocketJson(client);
+    assert.equal(replayCompleted.event, 'session_events_replay_completed');
+    assert.equal(replayCompleted.subscription_id, 'events-1');
+    assert.ok(replayEvents.some((event) => event?.event === 'session_started'));
+
+    child.stdin.write(`${JSON.stringify({ id: 'live-health', method: 'session.health', params: {} })}\n`);
+    let liveEvent = null;
+    for (let index = 0; index < 10; index += 1) {
+      const frame = await nextWebSocketJson(client);
+      if (frame.event === 'session_event' && frame.payload?.request_id === 'live-health') {
+        liveEvent = frame;
+        break;
+      }
+    }
+    assert.equal(liveEvent?.subscription_id, 'events-1');
+    assert.equal(liveEvent?.payload?.event, 'session_health');
+
+    client.close();
+    client = null;
+    child.stdin.end(`${JSON.stringify({ id: 'close-1', method: 'session.close', params: {} })}\n`);
+    assert.equal(await new Promise((resolve) => child.on('exit', resolve)), 0, stderr);
+    const durableEvents = readFileSync(resolveNaradaSitePaths({ siteRoot, sessionId }).narsEventsPath, 'utf8')
+      .trim()
+      .split(/\r?\n/)
+      .filter(Boolean)
+      .map((line) => JSON.parse(line));
+    assert.ok(durableEvents.some((event) => event.event === 'session_started'));
+    assert.ok(durableEvents.some((event) => event.event === 'session_closed'));
+    assert.equal(durableEvents.some((event) => event.event === 'session_health' && event.request_id === 'live-health'), false);
+  } finally {
+    client?.close();
+    if (child && child.exitCode === null) child.kill();
     rmSync(siteRoot, { recursive: true, force: true });
   }
 });

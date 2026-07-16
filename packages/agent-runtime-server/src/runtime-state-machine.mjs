@@ -14,6 +14,26 @@ export function createNarsStateMachine({
 } = {}) {
   let state = initialState;
   const history = [];
+  const reservedCanonicalFieldNames = new Set([
+    'schema',
+    'event',
+    'timestamp',
+    'previous_state',
+    'terminal_state',
+    stateField,
+  ]);
+  const conflictingIdentityField = Object.keys(identityFields)
+    .find((fieldName) => reservedCanonicalFieldNames.has(fieldName));
+  if (conflictingIdentityField) {
+    throw new Error(`narada_state_machine_reserved_identity_field:${conflictingIdentityField}`);
+  }
+  const canonicalFieldNames = new Set([
+    ...reservedCanonicalFieldNames,
+    ...Object.keys(identityFields),
+  ]);
+  const extensionFields = (fields) => Object.fromEntries(
+    Object.entries(fields ?? {}).filter(([key]) => !canonicalFieldNames.has(key)),
+  );
 
   function transition(nextState, evidence = {}) {
     assertTransition(state, nextState);
@@ -30,8 +50,8 @@ export function createNarsStateMachine({
       ...(includeTerminalState
         ? { terminal_state: isTerminalState(nextState) ? nextState : null }
         : {}),
-      ...metadata,
-      ...evidence,
+      ...extensionFields(metadata),
+      ...extensionFields(evidence),
     };
     history.push(record);
     onTransition(record);
@@ -48,7 +68,7 @@ export function createNarsStateMachine({
       ...(includeTerminalState
         ? { terminal_state: isTerminalState(state) ? state : null }
         : {}),
-      ...metadata,
+      ...extensionFields(metadata),
     }),
     history: () => history.slice(),
   });

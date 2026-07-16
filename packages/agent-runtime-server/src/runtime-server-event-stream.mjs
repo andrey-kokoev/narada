@@ -10,6 +10,8 @@ import { decodeWebSocketFrames, encodeWebSocketTextFrame, websocketAcceptValue }
 import { isNarsRuntimeServerMethod } from './runtime-control-contract.mjs';
 import { parseEndpointOptions } from './runtime-server-options.mjs';
 
+let eventStreamConnectionSequence = 0;
+
 export function translateCarrierInputDelivery(message) {
   if (message?.method !== 'carrier.input.deliver') return { ok: true, request: message };
   const rawInput = message?.params?.input;
@@ -70,23 +72,42 @@ function websocketError(send, { requestId, code, message, view, method } = {}) {
 }
 
 function unsubscribeAll(subscriptions) {
-  for (const subscription of subscriptions) subscription.unsubscribe();
+  for (const subscription of subscriptions.values()) subscription.unsubscribe();
   subscriptions.clear();
 }
 
-function subscribeToEventStream({ eventHub, subscriptions, send, message, eventsPath }) {
+function subscribeToEventStream({
+  eventHub,
+  subscriptions,
+  send,
+  message,
+  eventsPath,
+  connectionId,
+  nextSubscriptionId,
+}) {
   const params = message.params ?? {};
   const streamParams = resolveEventStreamParams(params);
   if (!streamParams.ok) return streamParams;
   const { filters, view, pageSize } = streamParams;
-  const subscriptionId = params.subscription_id ?? `sub_${message.id ?? Date.now()}`;
-  for (const existing of subscriptions) {
-    if (existing.subscriptionId !== subscriptionId) continue;
+  const subscriptionId = String(params.subscription_id ?? `sub_${connectionId}_${nextSubscriptionId()}`);
+  const existing = subscriptions.get(subscriptionId);
+  if (existing) {
     existing.unsubscribe();
-    subscriptions.delete(existing);
+    subscriptions.delete(subscriptionId);
   }
-  const subscription = eventHub.subscribe({ subscriptionId, filters, send });
-  subscriptions.add(subscription);
+  const hubSubscriptionId = `${connectionId}:${subscriptionId}`;
+  const subscription = eventHub.subscribe({
+    subscriptionId: hubSubscriptionId,
+    filters,
+    send: (payload) => {
+      if (payload?.subscription_id !== hubSubscriptionId) {
+        send(payload);
+        return;
+      }
+      send({ ...payload, subscription_id: subscriptionId });
+    },
+  });
+  subscriptions.set(subscriptionId, subscription);
   if (params.include_replay === false) subscription.markLive({ source: 'subscription_without_replay' });
   else subscription.beginReplay({ source: eventsPath ? 'event_log' : 'memory_event_hub' });
   const replayPage = params.include_replay === false || !eventsPath ? null : readNarsEventLogPage({
@@ -141,7 +162,7 @@ function subscribeToEventStream({ eventHub, subscriptions, send, message, events
     has_more: replayPage?.has_more ?? false,
     cursor: replayPage?.cursor ?? eventHub.cursor(),
   });
-  return { ok: true };
+  return { ok: true, replayEvents: replay };
 }
 
 function readEventStreamPage({ eventsPath, message }) {
@@ -169,6 +190,9 @@ export function startEventStreamProjection({ childStdin, eventHub, host, port, e
     response.writeHead(426, { 'content-type': 'application/json' });
     response.end(`${JSON.stringify({ error: 'upgrade_required', transport: 'websocket', path: '/events' })}\n`);
   });
+  const sockets = new Set();
+  const subscribeRequests = [];
+  const replayBatches = [];
   server.on('upgrade', (request, socket) => {
     if (request.url?.split('?')[0] !== '/events') {
       socket.end('HTTP/1.1 404 Not Found\r\n\r\n');
@@ -179,6 +203,8 @@ export function startEventStreamProjection({ childStdin, eventHub, host, port, e
       socket.end('HTTP/1.1 400 Bad Request\r\n\r\n');
       return;
     }
+    const connectionId = `ws_${++eventStreamConnectionSequence}`;
+    sockets.add(socket);
     socket.write([
       'HTTP/1.1 101 Switching Protocols',
       'Upgrade: websocket',
@@ -188,7 +214,8 @@ export function startEventStreamProjection({ childStdin, eventHub, host, port, e
       '',
     ].join('\r\n'));
     const send = (payload) => socket.write(encodeWebSocketTextFrame(JSON.stringify(payload)));
-    const subscriptions = new Set();
+    const subscriptions = new Map();
+    let nextSubscriptionId = 0;
     let pending = Buffer.alloc(0);
     send({ schema: 'narada.nars.websocket.v1', event: 'websocket_connected', transport: 'websocket', cursor: eventHub.cursor() });
     socket.on('data', (chunk) => {
@@ -209,7 +236,17 @@ export function startEventStreamProjection({ childStdin, eventHub, host, port, e
           continue;
         }
         if (message.method === 'session.events.subscribe') {
-          const result = subscribeToEventStream({ eventHub, subscriptions, send, message, eventsPath });
+          subscribeRequests.push(message);
+          const result = subscribeToEventStream({
+            eventHub,
+            subscriptions,
+            send,
+            message,
+            eventsPath,
+            connectionId,
+            nextSubscriptionId: () => ++nextSubscriptionId,
+          });
+          if (result.ok) replayBatches.push({ request: message, events: result.replayEvents ?? [] });
           if (!result.ok) websocketError(send, { requestId: message.id ?? null, code: result.code, view: result.view });
           continue;
         }
@@ -258,9 +295,11 @@ export function startEventStreamProjection({ childStdin, eventHub, host, port, e
       }
     });
     socket.on('close', () => {
+      sockets.delete(socket);
       unsubscribeAll(subscriptions);
     });
     socket.on('error', () => {
+      sockets.delete(socket);
       unsubscribeAll(subscriptions);
     });
   });
@@ -270,7 +309,15 @@ export function startEventStreamProjection({ childStdin, eventHub, host, port, e
       server.off('error', reject);
       const address = server.address();
       const boundPort = typeof address === 'object' && address ? address.port : port;
-      resolve({ server, url: `ws://${host}:${boundPort}/events` });
+      resolve({
+        server,
+        url: `ws://${host}:${boundPort}/events`,
+        subscribeRequests,
+        replayBatches,
+        closeConnections() {
+          for (const socket of sockets) socket.destroy();
+        },
+      });
     });
   });
 }

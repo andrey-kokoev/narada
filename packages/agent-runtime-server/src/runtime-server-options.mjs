@@ -24,13 +24,19 @@ export function parseEndpointOptions(
       continue;
     }
     if (arg === hostFlag) {
-      host = args[index + 1] || host;
-      index += 1;
+      const value = args[index + 1];
+      if (value && !String(value).startsWith('--')) {
+        host = String(value);
+        index += 1;
+      }
       continue;
     }
     if (arg === portFlag) {
-      port = Number.parseInt(args[index + 1] || '0', 10);
-      index += 1;
+      const value = args[index + 1];
+      if (value && !String(value).startsWith('--')) {
+        port = Number.parseInt(String(value), 10);
+        index += 1;
+      }
       continue;
     }
     forwardedArgs.push(arg);
