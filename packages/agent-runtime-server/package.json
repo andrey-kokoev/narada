@@ -44,6 +44,7 @@
   },
   "scripts": {
     "test": "node --test test/*.test.mjs src/*.test.mjs",
+    "test:live:codex-provider-admission": "pnpm --filter @narada2/cli build && node test/live-codex-provider-admission-e2e.mjs --enable-live-codex",
     "typecheck": "tsc --noEmit --allowJs --checkJs false bin/narada-agent-runtime-server.mjs src/server-wrapper.mjs src/runtime-context.mjs src/control-input-bridge.mjs src/runtime-host-state.mjs src/runtime-request-state.mjs src/health-projection-request-state.mjs src/runtime-session-binding.mjs src/session-core-runtime-service.mjs src/runtime-server-events.mjs src/runtime-control-contract.mjs src/provider-runtime-reconfiguration-state.mjs src/provider-runtime-controller.mjs src/test-fixtures.mjs"
   },
   "dependencies": {
