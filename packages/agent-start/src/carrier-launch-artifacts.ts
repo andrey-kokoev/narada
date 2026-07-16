@@ -97,6 +97,7 @@ export function materializeCarrierSessionRecord({
   operatorSurfaceKind = carrier,
   carrierImplementationKind = null,
   startResult,
+  sessionId = null,
   dryRun = false,
   pcSiteRoot,
   userSiteRoot,
@@ -106,7 +107,7 @@ export function materializeCarrierSessionRecord({
   processId,
   writeJsonFile,
 } = {}) {
-  const carrierSessionId = newCarrierSessionId();
+  const carrierSessionId = sessionId ?? newCarrierSessionId();
   const recordPath = join(pcSiteRoot, 'runtime', 'carrier-sessions', `${carrierSessionId}.json`);
   const startedAt = new Date().toISOString();
   const record = {

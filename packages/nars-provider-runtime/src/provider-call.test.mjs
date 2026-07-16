@@ -1,6 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { EventEmitter } from 'node:events';
+import { mkdtempSync } from 'node:fs';
 import { createServer } from 'node:http';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { AiProcessInvocationRefusalError } from '@narada2/carrier-provider-support/ai-process-invocation';
 import { createProviderCall } from './provider-call.mjs';
 import { REQUEST_ADAPTERS } from './provider-adapters.mjs';
 import { resolveProviderAdapter } from './provider-resolution.mjs';
@@ -15,6 +20,90 @@ async function withServer(handler, run) {
     await new Promise((resolve) => server.close(resolve));
   }
 }
+
+function codexRuntimeContext(siteRoot, session = 'carrier_provider_test_session') {
+  return {
+    identity: 'sonar.resident',
+    agentIdentityRef: { schema: 'narada.agent_identity_ref.v2', site_id: 'sonar', local_agent_id: 'resident' },
+    siteId: 'sonar',
+    siteRoot,
+    session,
+    intelligenceProvider: 'codex-subscription',
+    providerSettings: { model: 'gpt-5.5' },
+  };
+}
+
+function fakeCodexOwner() {
+  const child = new EventEmitter();
+  child.stdin = {
+    end() {
+      setImmediate(() => {
+        child.stdout.emit('data', `${JSON.stringify({ type: 'thread.started', thread_id: 'thread-provider-test' })}\n`);
+        child.stdout.emit('data', `${JSON.stringify({ type: 'item.completed', item: { type: 'agent_message', text: 'ok' } })}\n`);
+        child.emit('exit', 0);
+      });
+    },
+  };
+  child.stdout = new EventEmitter();
+  child.stderr = new EventEmitter();
+  child.stdout.setEncoding = () => {};
+  child.stderr.setEncoding = () => {};
+  return {
+    child,
+    aiProcessInvocation: { admitted: true, lifecycle_state: 'admitted', invocation_scope: null },
+    terminateTree() {},
+  };
+}
+
+test('Codex provider admission carries the canonical runtime-session scope before receiving', async () => {
+  const siteRoot = mkdtempSync(join(tmpdir(), 'narada-provider-admission-'));
+  const events = [];
+  let invocation;
+  const owner = fakeCodexOwner();
+  const call = createProviderCall({ runtimeContext: codexRuntimeContext(siteRoot) });
+  const result = await call([{ role: 'user', content: 'hello' }], [], {
+    invocationEventSink: (event) => events.push(event),
+    spawnAiProcessInvocation: (request) => {
+      invocation = request;
+      return owner;
+    },
+  });
+
+  assert.equal(result.choices[0].message.content, 'ok');
+  assert.equal(invocation.siteRoot, siteRoot);
+  assert.equal(invocation.invocationScope.kind, 'narada_runtime_session');
+  assert.equal(invocation.invocationScope.site_root, siteRoot);
+  assert.equal(invocation.invocationScope.runtime_session_id, 'carrier_provider_test_session');
+  assert.deepEqual(events.map((event) => event.invocation_state), ['requested', 'validated', 'shaped', 'dispatched', 'admitting', 'admitted', 'receiving', 'completed']);
+});
+
+test('Codex admission refusal is recorded at admitting with the original refusal reason', async () => {
+  const siteRoot = mkdtempSync(join(tmpdir(), 'narada-provider-admission-'));
+  const events = [];
+  const admission = {
+    admitted: false,
+    reason: 'codex_live_invocation_cap_exceeded',
+    site_root: siteRoot,
+    invocation_scope: {
+      schema: 'narada.ai_process_invocation_scope.v1',
+      kind: 'narada_runtime_session',
+      site_root: siteRoot,
+      runtime_session_id: 'carrier_provider_test_session',
+    },
+  };
+  const call = createProviderCall({ runtimeContext: codexRuntimeContext(siteRoot) });
+
+  await assert.rejects(
+    () => call([{ role: 'user', content: 'hello' }], [], {
+      invocationEventSink: (event) => events.push(event),
+      spawnAiProcessInvocation: () => { throw new AiProcessInvocationRefusalError(admission); },
+    }),
+    /codex ai process invocation refused: codex_live_invocation_cap_exceeded/,
+  );
+  assert.deepEqual(events.map((event) => event.invocation_state), ['requested', 'validated', 'shaped', 'dispatched', 'admitting', 'refused']);
+  assert.equal(events.at(-1).reason, 'codex_live_invocation_cap_exceeded');
+  assert.equal(events.at(-1).admission.reason, 'codex_live_invocation_cap_exceeded');
+});
 
 test('provider call shapes and sends an OpenAI-compatible request', async () => {
   await withServer((request, response) => {

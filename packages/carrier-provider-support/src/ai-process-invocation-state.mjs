@@ -1,4 +1,4 @@
-export const NARADA_AI_PROCESS_INVOCATION_STATE_SCHEMA = 'narada.ai_process_invocation_state.v1';
+export const NARADA_AI_PROCESS_INVOCATION_STATE_SCHEMA = 'narada.ai_process_invocation_state.v2';
 
 export const NARADA_AI_PROCESS_INVOCATION_STATES = Object.freeze([
   'planned',

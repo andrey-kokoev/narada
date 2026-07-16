@@ -32,20 +32,33 @@ export function createProviderCall({ runtimeContext = {}, env = process.env, inv
       thinking: explicitSettings.thinking,
     },
   });
+  const siteRoot = resolve(runtimeContext.siteRoot ?? env.NARADA_SITE_ROOT ?? process.cwd());
+  const invocationScope = explicitSettings.invocationScope ?? explicitSettings.invocation_scope ?? {
+    schema: 'narada.ai_process_invocation_scope.v1',
+    kind: 'narada_runtime_session',
+    site_id: runtimeContext.siteId ?? null,
+    site_root: siteRoot,
+    runtime_session_id: runtimeContext.session ?? runtimeContext.runtimeSessionId ?? runtimeContext.runtime_session_id ?? null,
+    agent_identity_ref: runtimeContext.agentIdentityRef ?? null,
+    launch_session_id: runtimeContext.launchSessionId ?? runtimeContext.launch_session_id ?? null,
+  };
   const settings = {
     provider: binding.provider_id,
     apiKey: binding.api_key,
     baseUrl: binding.base_url,
-    siteRoot: resolve(runtimeContext.siteRoot ?? env.NARADA_SITE_ROOT ?? process.cwd()),
+    siteRoot,
+    identity: runtimeContext.identity ?? null,
     model: binding.model,
     thinking: binding.reasoning_effort,
     stream: explicitSettings.stream !== false,
     providerRuntimeBinding: redactProviderRuntimeBinding(binding),
     codexSessionState: { threadId: null },
+    sessionDir: resolve(explicitSettings.sessionDir ?? runtimeContext.sessionDir ?? resolve(siteRoot, '.ai', 'runtime', 'ai-process-invocation')),
     siteId: runtimeContext.siteId ?? null,
     runtimeSessionId: runtimeContext.session ?? runtimeContext.runtimeSessionId ?? runtimeContext.runtime_session_id ?? null,
     launchSessionId: runtimeContext.launchSessionId ?? runtimeContext.launch_session_id ?? null,
     agentIdentityRef: runtimeContext.agentIdentityRef ?? null,
+    invocationScope,
   };
   configureProviderAdapterContext(settings);
   return (messages, tools, overrides = {}) => callProvider(messages, tools, {
@@ -70,14 +83,7 @@ async function callProvider(messages, tools, settings) {
     input_event_id: settings.inputEventId ?? settings.input_event_id ?? null,
     request_id: settings.requestId ?? settings.request_id ?? null,
     thread_id: null,
-    invocation_scope: settings.runtimeSessionId ? {
-      kind: 'narada_runtime_session',
-      site_id: settings.siteId ?? null,
-      site_root: settings.siteRoot,
-      runtime_session_id: settings.runtimeSessionId,
-      agent_identity_ref: settings.agentIdentityRef ?? null,
-      launch_session_id: settings.launchSessionId ?? null,
-    } : null,
+    invocation_scope: settings.invocationScope ?? null,
   };
   let record = null;
   const transition = async (nextState, evidence = {}) => {
@@ -195,7 +201,26 @@ async function sendCodex(request, settings, onAdmitted = null) {
   const command = codexCommand(); const cwd = request.arguments?.cwd ?? settings.siteRoot;
   let owner;
   try {
-    owner = spawnAiProcessInvocation({ adapterKind: 'codex', projection: 'codex-subscription', purpose: 'provider_request', siteRoot: cwd, cwd, command: command.command, argv: [...command.prefixArgs, ...buildCodexExecArgs(request, settings)], env: buildCodexSubprocessEnv(codexRequestMcpServers(request, settings), settings), sessionId: settings.runtimeSessionId, invocationScope: { site_id: settings.siteId, runtime_session_id: settings.runtimeSessionId, agent_identity_ref: settings.agentIdentityRef, launch_session_id: settings.launchSessionId } }, { spawnProcess: spawnOwnedProcess, spawnOptions: { cwd, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] } });
+    const spawnInvocation = settings.spawnAiProcessInvocation ?? spawnAiProcessInvocation;
+    owner = spawnInvocation({
+      adapterKind: 'codex',
+      projection: 'codex-subscription',
+      purpose: 'provider_request',
+      siteRoot: settings.siteRoot,
+      cwd,
+      workspaceRoot: settings.siteRoot,
+      agentId: settings.identity,
+      command: command.command,
+      argv: [...command.prefixArgs, ...buildCodexExecArgs(request, settings)],
+      env: buildCodexSubprocessEnv(codexRequestMcpServers(request, settings), settings),
+      sessionId: settings.runtimeSessionId,
+      agentIdentityRef: settings.agentIdentityRef,
+      launchSessionId: settings.launchSessionId,
+      invocationScope: settings.invocationScope,
+    }, {
+      spawnProcess: settings.spawnProcess ?? spawnOwnedProcess,
+      spawnOptions: { cwd, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] },
+    });
   } catch (error) {
     throw error instanceof AiProcessInvocationRefusalError
       ? new NarsProviderInvocationRefusalError(`codex ai process invocation refused: ${error.admission.reason}`, { reason: error.admission.reason, admission: error.admission })

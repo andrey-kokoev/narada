@@ -14,7 +14,7 @@
  * with NARADA_AGENT_ID and NARADA_AGENT_START_EVENT_ID in the environment.
  *
  * Usage:
- *   narada-agent-start <identity> [--operator-surface <surface>] [--carrier <legacy-carrier>] [--runtime <runtime>] [--authority <auto|read|write>] [--db <path>] [--json] [--dry-run] [--exec] [--wait] [--visible-runtime-terminal] [--yolo] [--enable-native-shell] [--strict-mcp-registry] [--target-site-id <site-id>] [--target-site-root <path>]
+ *   narada-agent-start <identity> [--operator-surface <surface>] [--carrier <legacy-carrier>] [--runtime <runtime>] [--authority <auto|read|write>] [--db <path>] [--json] [--preflight-only] [--dry-run] [--exec] [--wait] [--visible-runtime-terminal] [--yolo] [--enable-native-shell] [--strict-mcp-registry] [--target-site-id <site-id>] [--target-site-root <path>]
  */
 
 import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
@@ -35,6 +35,7 @@ import {
   carrierSessionPath,
   materializeCarrierLaunchFiles as materializeCarrierLaunchFilesArtifact,
   materializeCarrierSessionRecord as materializeCarrierSessionRecordArtifact,
+  newCarrierSessionId,
   siteNaradaRoot,
   writeLaunchResultFile,
   writeJsonFileAtomically,
@@ -131,13 +132,14 @@ if (operatorSurfaceInput && legacyCarrierInput && String(operatorSurfaceInput) !
 }
 const carrierInput = operatorSurfaceInput ?? legacyCarrierInput;
 const execFlag = !!args.exec;
+const preflightOnly = !!args.preflight_only;
 const dryRun = !!args.dry_run;
 const waitFlag = !!args.wait || process.env.NARADA_AGENT_START_WAIT === '1';
 const visibleRuntimeTerminalFlag = !!args.visible_runtime_terminal;
 const yoloFlag = !!args.yolo;
 const enableNativeShellFlag = !!args.enable_native_shell;
 const ADMITTED_MCP_SCOPES = Object.freeze(['all', 'host', 'user-site', 'local-site', 'none']);
-const mcpScope = normalizeMcpScope(args.mcp_scope ?? process.env.NARADA_MCP_SCOPE ?? 'all');
+const mcpScope = normalizeMcpScope(args.mcp_scope ?? process.env.NARADA_MCP_SCOPE ?? 'none');
 const mcpRuntimeKind = runtimeInput === 'nars' ? 'nars' : null;
 const strictMcpRegistry = !!args.strict_mcp_registry;
 const pcSiteRoot = args.pc_site_root ?? process.env.NARADA_PC_SITE_ROOT ?? 'C:/ProgramData/Narada/sites/pc/desktop-sunroom-2';
@@ -276,6 +278,10 @@ function codexSubscriptionPreflight(provider) {
     processEnv: process.env,
     processPlatform: process.platform,
     sessionSiteRoot,
+    siteId: targetSiteId,
+    runtimeSessionId: plannedCarrierSessionId,
+    agentIdentityRef: identity,
+    launchSessionId: null,
     userSiteRoot,
     dryRun,
   });
@@ -391,10 +397,11 @@ if (intelligenceProviderResolution?.status === 'refused') {
 }
 
 if (!identity) {
-  console.error('Usage: node start-agent.mjs <identity> [--operator-surface <surface>] [--carrier <legacy-carrier>] [--runtime <runtime>] [--authority <auto|read|write>] [--db <path>] [--json] [--dry-run] [--exec] [--wait] [--visible-runtime-terminal] [--yolo] [--enable-native-shell] [--strict-mcp-registry] [--target-site-id <site-id>] [--target-site-root <path>]');
+  console.error('Usage: node start-agent.mjs <identity> [--operator-surface <surface>] [--carrier <legacy-carrier>] [--runtime <runtime>] [--authority <auto|read|write>] [--db <path>] [--json] [--preflight-only] [--dry-run] [--exec] [--wait] [--visible-runtime-terminal] [--yolo] [--enable-native-shell] [--strict-mcp-registry] [--target-site-id <site-id>] [--target-site-root <path>]');
   process.exit(1);
 }
 
+const plannedCarrierSessionId = newCarrierSessionId();
 const intelligenceProviderProjection = intelligenceProviderEnvironmentProjection(intelligenceProviderResolution);
 const intelligenceProviderEnv = intelligenceProviderProjection.env;
 const intelligenceProviderCredential = intelligenceProviderProjection.credential;
@@ -404,6 +411,57 @@ const intelligenceProviderOutputResolution = {
 };
 if (intelligenceProviderCredential?.credential_required && !intelligenceProviderCredential.credential_present) {
   await failIntelligenceProviderRefusal(providerCredentialRefusal(intelligenceProviderOutputResolution, intelligenceProviderCredential));
+}
+
+if (preflightOnly) {
+  await printResult({
+    schema: 'narada.agent_start.provider_preflight.v1',
+    status: intelligenceProviderResolution ? 'ready' : 'not_applicable',
+    mutation_performed: false,
+    site_root: sessionSiteRoot,
+    agent: identity,
+    operator_surface_kind: carrier,
+    runtime_host_kind: runtime,
+    intelligence_provider: intelligenceProviderResolution?.intelligence_provider ?? null,
+    provider_resolution: intelligenceProviderOutputResolution,
+  });
+  process.exit(0);
+}
+
+let startResult;
+try {
+  startResult = materializeAgentSessionStart({
+    siteRoot: sessionSiteRoot,
+    identity,
+    runtime,
+    dbPath,
+    cwd: process.cwd(),
+    dryRun,
+  });
+} catch (error) {
+  console.error(`[FAIL] ${error.message}`);
+  process.exit(1);
+}
+
+const carrierSessionPlanOnly = dryRun || !execFlag;
+let carrierSessionRegistration;
+try {
+  carrierSessionRegistration = materializeCarrierSessionRecord({
+    identity,
+    carrier,
+    runtime,
+    startResult,
+    sessionId: plannedCarrierSessionId,
+    dryRun: carrierSessionPlanOnly,
+  });
+} catch (error) {
+  console.error(JSON.stringify({
+    schema: 'narada.pc_runtime.carrier_session.registration.v0',
+    status: 'refused',
+    reason_code: 'carrier_session_registration_failed',
+    reason: error instanceof Error ? error.message : String(error),
+  }, null, 2));
+  process.exit(1);
 }
 
 function kimiSessionDir(identity) {
@@ -505,12 +563,13 @@ function resolveCarrierExecutableCommand(carrierName) {
   });
 }
 
-function materializeCarrierSessionRecord({ identity, carrier, runtime, startResult, dryRun = false } = {}) {
+function materializeCarrierSessionRecord({ identity, carrier, runtime, startResult, sessionId, dryRun = false } = {}) {
   return materializeCarrierSessionRecordArtifact({
     identity,
     carrier,
     runtime,
     startResult,
+    sessionId,
     dryRun,
     pcSiteRoot,
     userSiteRoot,
@@ -1041,35 +1100,6 @@ const output = {
   }
 }
 
-let startResult;
-try {
-  startResult = materializeAgentSessionStart({
-    siteRoot: sessionSiteRoot,
-    identity,
-    runtime,
-    dbPath,
-    cwd: process.cwd(),
-    dryRun,
-  });
-} catch (error) {
-  console.error(`[FAIL] ${error.message}`);
-  process.exit(1);
-}
-
-const carrierSessionPlanOnly = dryRun || !execFlag;
-let carrierSessionRegistration;
-try {
-  carrierSessionRegistration = materializeCarrierSessionRecord({ identity, carrier, runtime, startResult, dryRun: carrierSessionPlanOnly });
-} catch (error) {
-  console.error(JSON.stringify({
-    schema: 'narada.pc_runtime.carrier_session.registration.v0',
-    status: 'refused',
-    reason_code: 'carrier_session_registration_failed',
-    reason: error instanceof Error ? error.message : String(error),
-  }, null, 2));
-  process.exit(1);
-}
-
 if (carrier !== 'kimi' && carrier !== 'opencode') {
   try {
     mcpFabric = loadScopedMcpFabric();
@@ -1403,6 +1433,15 @@ const aiProcessInvocation = carrier === 'codex'
       agentId: identity,
       sessionId: carrierSessionRegistration.carrier_session_id,
       threadId: startResult.agent_start_event,
+      invocationScope: {
+        schema: 'narada.ai_process_invocation_scope.v1',
+        kind: 'narada_runtime_session',
+        site_id: targetSiteId,
+        site_root: sessionSiteRoot,
+        runtime_session_id: carrierSessionRegistration.carrier_session_id,
+        agent_identity_ref: agentIdentityRef,
+        launch_session_id: process.env.NARADA_LAUNCH_SESSION_ID ?? null,
+      },
     }
   : null;
 

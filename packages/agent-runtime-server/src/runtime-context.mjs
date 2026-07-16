@@ -34,6 +34,15 @@ export function createNarsRuntimeContext({
   const agentIdentityRef = inputAgentIdentityRef && typeof inputAgentIdentityRef === 'object'
     ? normalizeAgentIdentityRefV2(inputAgentIdentityRef, { site_id: siteId, agent_id: identity })
     : resolved.status === 'resolved' ? resolved.value : null;
+  const invocationScope = providerSettings.invocationScope ?? providerSettings.invocation_scope ?? {
+    schema: 'narada.ai_process_invocation_scope.v1',
+    kind: 'narada_runtime_session',
+    site_id: siteId,
+    site_root: siteRoot,
+    runtime_session_id: session,
+    agent_identity_ref: agentIdentityRef,
+    launch_session_id: optionalString(rest.launchSessionId),
+  };
   const maxToolRounds = normalizeMaxToolRounds(providerSettings.maxToolRounds ?? process.env.NARADA_MAX_TOOL_ROUNDS);
   return Object.freeze({
     ...rest,
@@ -64,6 +73,7 @@ export function createNarsRuntimeContext({
       stream: providerSettings.stream !== false,
       goal: providerSettings.goal ?? null,
       runtimeBinding: providerSettings.runtimeBinding ?? null,
+      invocationScope,
     }),
   });
 }

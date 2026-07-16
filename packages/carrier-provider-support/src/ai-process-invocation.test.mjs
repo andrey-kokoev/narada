@@ -56,7 +56,7 @@ test('launch and refusal artifacts are structured, redacted, and actionable', ()
   assert.equal(refusalArtifact.env.OPENAI_API_KEY, '<redacted>');
 });
 
-test('codex site/session live cap refuses a different command before spawn', () => {
+test('codex runtime-session live cap refuses a different command before spawn', () => {
   const root = mkdtempSync(join(tmpdir(), 'narada-ai-invocation-'));
   const first = admitAiProcessInvocation(invocation(root), { ownerPid: 123, isPidAlive: (pid) => pid === 123 });
   assert.equal(first.admitted, true);
@@ -70,6 +70,58 @@ test('codex site/session live cap refuses a different command before spawn', () 
   assert.equal(second.reason, 'codex_live_invocation_cap_exceeded');
   assert.equal(second.existing_invocations.length, 1);
   assert.match(second.cleanup_hint, /existing Codex invocation/);
+});
+
+test('runtime-session scope allows a live Codex invocation in a different session', () => {
+  const root = mkdtempSync(join(tmpdir(), 'narada-ai-invocation-'));
+  const first = admitAiProcessInvocation(invocation(root), { ownerPid: 123, isPidAlive: (pid) => pid === 123 || pid === 456 });
+  assert.equal(first.admitted, true);
+  const second = admitAiProcessInvocation({
+    ...invocation(root),
+    sessionId: 'carrier_other_session',
+    purpose: 'provider_request',
+  }, {
+    ownerPid: 456,
+    isPidAlive: (pid) => pid === 123 || pid === 456,
+  });
+  assert.equal(second.admitted, true);
+  assert.equal(second.invocation_scope.runtime_session_id, 'carrier_other_session');
+});
+
+test('PID reuse with a different process-start identity is reported as unverified and does not block admission', () => {
+  const root = mkdtempSync(join(tmpdir(), 'narada-ai-invocation-'));
+  const invocationRoot = join(root, '.ai', 'runtime', 'ai-process-invocation');
+  const leaseDir = join(invocationRoot, 'leases');
+  const processDir = join(invocationRoot, 'processes');
+  mkdirSync(leaseDir, { recursive: true });
+  mkdirSync(processDir, { recursive: true });
+  writeFileSync(join(processDir, '123.json'), JSON.stringify({
+    schema: 'narada.ai_process_process_identity.v1',
+    pid: 123,
+    start_identity: 'process-start-new',
+  }));
+  writeFileSync(join(leaseDir, 'reused-pid.json'), JSON.stringify({
+    schema: 'narada.ai_process_invocation.v2',
+    id: 'reused-pid',
+    owner_pid: 123,
+    owner_process_start_identity: 'process-start-old',
+    adapter_kind: 'codex',
+    site_root: root,
+    invocation_scope: {
+      schema: 'narada.ai_process_invocation_scope.v1',
+      kind: 'narada_runtime_session',
+      site_root: root,
+      runtime_session_id: 'carrier_test_session',
+    },
+    admitted: true,
+  }));
+
+  const admitted = admitAiProcessInvocation(invocation(root), {
+    ownerPid: 456,
+    isPidAlive: (pid) => pid === 123 || pid === 456,
+  });
+  assert.equal(admitted.admitted, true);
+  assert.equal(admitted.admission_diagnostics.unverified_live_invocation_count, 1);
 });
 
 test('legacy live leases are reported as unverified and do not block a scoped admission', () => {

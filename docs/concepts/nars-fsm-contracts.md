@@ -20,11 +20,21 @@ The transition guard is in `packages/nars-session-core/src/authority-transition-
 
 Owner: `@narada2/carrier-provider-support`.
 
-Schema: `narada.ai_process_invocation_state.v1`, embedded in the existing `narada.ai_process_invocation.v1` evidence artifacts.
+Schema: `narada.ai_process_invocation_state.v2`, embedded in the existing `narada.ai_process_invocation.v2` evidence artifacts.
 
 `planned -> admitted -> spawned -> exited -> released`
 
 Pre-spawn refusal is `planned -> refused`. Execution failure and interruption are terminal outcomes after lease cleanup. The launch artifact remains `event: launch` at `admitted`; a spawn artifact makes process creation explicit; exit and release artifacts record process completion and lease removal separately.
+
+## NARS Provider Invocation
+
+Owner: `@narada2/nars-provider-runtime`.
+
+Schema: `narada.nars.provider_invocation_state.v2`.
+
+`requested -> validated -> shaped -> dispatched -> admitting -> admitted -> receiving -> completed`
+
+Admission refusal is `admitting -> refused`; it preserves the lower-level refusal reason such as `codex_live_invocation_cap_exceeded` or `invocation_scope_missing`. This boundary is deliberately before `receiving`, so a rejected Codex process cannot be reported as a provider receive failure. The provider record carries the same canonical `narada_runtime_session` scope as the lower-level AI-process lease.
 
 ## Owned Subprocess
 

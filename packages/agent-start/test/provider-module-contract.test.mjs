@@ -69,6 +69,7 @@ test('credential projection redacts API secrets while projecting required env', 
     metadataByProvider,
     processEnv: {
       NARADA_PROVIDER_SECRET_STORE: 'disabled',
+      NARADA_PROVIDER_ENV_FALLBACK: '1',
       KIMI_API_KEY: 'module-secret-value',
       OPENAI_API_KEY: 'unrelated-openai-decoy',
       KIMI_CODE_API_KEY: 'unrelated-kimi-code-decoy',
@@ -117,6 +118,7 @@ test('codex subscription support runs live auth preflight for non-dry launch by 
     processEnv: { USERPROFILE: 'C:/Users/Andrey' },
     processPlatform: 'linux',
     sessionSiteRoot: siteRoot,
+    runtimeSessionId: 'preflight-test-session',
     dryRun: false,
     spawnSync(command, args, options) {
       calls.push({ command, args, options });
@@ -139,6 +141,31 @@ test('codex subscription support runs live auth preflight for non-dry launch by 
     assert.equal(preflight.ai_process_invocation.projection, 'codex-subscription');
     assert.equal(preflight.ai_process_invocation.purpose, 'auth_probe');
     assert.equal(preflight.ai_process_invocation.adapter_kind, 'codex');
+    assert.equal(preflight.ai_process_invocation.invocation_scope.kind, 'narada_runtime_session');
+    assert.equal(preflight.ai_process_invocation.invocation_scope.runtime_session_id, 'preflight-test-session');
+  } finally {
+    rmSync(siteRoot, { recursive: true, force: true });
+  }
+});
+
+test('codex subscription preflight fails closed without a NARS runtime-session scope', () => {
+  const siteRoot = mkdtempSync(join(tmpdir(), 'narada-codex-preflight-scope-missing-'));
+  let called = false;
+  try {
+    const preflight = codexSupport.codexSubscriptionPreflight('codex-subscription', {
+      processEnv: { USERPROFILE: 'C:/Users/Andrey' },
+      processPlatform: 'linux',
+      sessionSiteRoot: siteRoot,
+      dryRun: false,
+      spawnSync() {
+        called = true;
+        return { status: 0, stdout: '{"event":"ok"}\n', stderr: '', signal: null, error: null };
+      },
+    });
+    assert.equal(preflight.status, 'failed_invocation_scope_missing');
+    assert.equal(preflight.ok, false);
+    assert.equal(preflight.ai_process_invocation.reason, 'invocation_scope_missing');
+    assert.equal(called, false);
   } finally {
     rmSync(siteRoot, { recursive: true, force: true });
   }
@@ -162,6 +189,11 @@ test('codex subscription preflight refuses duplicate AiProcessInvocation before 
     command: command.command,
     argv,
     env,
+    invocationScope: {
+      kind: 'narada_runtime_session',
+      site_root: siteRoot,
+      runtime_session_id: 'preflight-test-session',
+    },
   }, { ownerPid: process.pid });
   let called = false;
   try {
@@ -169,6 +201,7 @@ test('codex subscription preflight refuses duplicate AiProcessInvocation before 
       processEnv,
       processPlatform: 'linux',
       sessionSiteRoot: siteRoot,
+      runtimeSessionId: 'preflight-test-session',
       dryRun: false,
       spawnSync() {
         called = true;
@@ -196,6 +229,7 @@ test('codex subscription support caches successful live auth preflight in User S
     processEnv: { USERPROFILE: 'C:/Users/Andrey', CODEX_MODEL: 'gpt-5.5' },
     processPlatform: 'linux',
     sessionSiteRoot: siteRoot,
+    runtimeSessionId: 'preflight-test-session',
     userSiteRoot,
     dryRun: false,
     now: () => 1000,
@@ -232,6 +266,7 @@ test('codex subscription support refresh mode bypasses successful cache', () => 
     processEnv: { USERPROFILE: 'C:/Users/Andrey' },
     processPlatform: 'linux',
     sessionSiteRoot: siteRoot,
+    runtimeSessionId: 'preflight-test-session',
     dryRun: false,
     now: () => 1000,
     spawnSync() {
@@ -266,6 +301,7 @@ test('codex subscription support invalidates cache when the codex command identi
     },
     processPlatform: 'linux',
     sessionSiteRoot: siteRoot,
+    runtimeSessionId: 'preflight-test-session',
     userSiteRoot,
     dryRun: false,
     now: () => 1000,
@@ -311,6 +347,7 @@ test('codex subscription support refuses cached readiness when auth home disappe
     },
     processPlatform: 'linux',
     sessionSiteRoot: siteRoot,
+    runtimeSessionId: 'preflight-test-session',
     userSiteRoot,
     dryRun: false,
     now: () => 1000,

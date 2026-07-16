@@ -46,6 +46,10 @@ export function codexSubscriptionPreflight(provider, {
   processEnv = process.env,
   processPlatform = process.platform,
   sessionSiteRoot,
+  siteId,
+  runtimeSessionId,
+  agentIdentityRef,
+  launchSessionId,
   userSiteRoot,
   dryRun = false,
   spawnSync = defaultSpawnSync,
@@ -71,6 +75,25 @@ export function codexSubscriptionPreflight(provider, {
       reason: dryRun
         ? 'Dry-run validates launch shape without making a provider call.'
         : 'Launch-time local Codex subscription auth validation was explicitly deferred by NARADA_CODEX_SUBSCRIPTION_PREFLIGHT.',
+    };
+  }
+  if (!runtimeSessionId) {
+    return {
+      schema: 'narada.codex_subscription.preflight.v1',
+      status: 'failed_invocation_scope_missing',
+      ok: false,
+      provider,
+      command: 'codex exec --json',
+      mode: mode || 'default',
+      environment_variable: CODEX_SUBSCRIPTION_PREFLIGHT_ENV,
+      ai_process_invocation: {
+        schema: 'narada.ai_process_invocation.v2',
+        event: 'refusal',
+        lifecycle_state: 'refused',
+        reason: 'invocation_scope_missing',
+      },
+      reason: 'Codex subscription preflight requires the canonical NARS runtime-session scope before it may spawn a provider process.',
+      required_next_step: 'Start the provider preflight from a registered NARS runtime session.',
     };
   }
   const command = codexPreflightCommand(processEnv, processPlatform);
@@ -111,6 +134,15 @@ export function codexSubscriptionPreflight(provider, {
     command: command.command,
     argv,
     env,
+    invocationScope: {
+      schema: 'narada.ai_process_invocation_scope.v1',
+      kind: 'narada_runtime_session',
+      site_id: siteId ?? processEnv.NARADA_SITE_ID ?? null,
+      site_root: sessionSiteRoot,
+      runtime_session_id: runtimeSessionId,
+      agent_identity_ref: agentIdentityRef ?? null,
+      launch_session_id: launchSessionId ?? null,
+    },
   }, {
     spawnSync,
     spawnOptions: {

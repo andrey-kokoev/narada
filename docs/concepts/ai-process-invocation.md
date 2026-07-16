@@ -19,7 +19,7 @@ All projections share one admission, lease, evidence, and cleanup interpretation
 
 An AiProcessInvocation record contains:
 
-- `schema`: stable schema id, currently `narada.ai_process_invocation.v1`.
+- `schema`: stable schema id, currently `narada.ai_process_invocation.v2`.
 - `id`: compact stable id derived from the lease key.
 - `key`: full lease key hash.
 - `key_parts`: structured lease-key material.
@@ -30,17 +30,20 @@ An AiProcessInvocation record contains:
 - `workspace_root` or `cwd`: execution workspace.
 - `agent_id`: owning agent identity when available.
 - `session_id`: owning NARS/session id when available.
+- `invocation_scope`: canonical runtime-session scope. A Codex live cap is evaluated only against invocations with the same `kind`, `site_root`, and `runtime_session_id`; a missing scope is refused rather than treated as a shared null scope.
 - `thread_id`: optional provider thread id when relevant.
 - `command` and `argv`: command shape after resolution but before spawn.
 - `env`: redacted environment summary, never raw secrets.
 - `policy`: duplicate-admission and cap policy inputs.
 - `owner_pid`: process that owns the invocation lease.
+- `owner_process_start_identity`: identity recorded for the owning process start. PID liveness without a matching start identity is unverified and cannot block a new admission.
+- `admission_diagnostics`: bounded diagnostics, including the count of live but unverified legacy or PID-reuse candidates.
 - `lease_path`: path to the live lease artifact.
 - `artifact_path`: path to the launch/refusal/exit evidence artifact.
 - `created_at`, `exited_at`: lifecycle timestamps.
 - `cleanup_hint`: operator-readable next action when admission is refused or a stale lease is found.
 
-The lease key is built from the identity of the adapter/projection/purpose and the owning execution locus. It must not be a raw process-count heuristic.
+The lease key is built from the identity of the adapter/projection/purpose and the owning execution locus. It must not be a raw process-count heuristic. The default Codex cap is `1` per canonical NARS runtime-session scope, not per site or host.
 
 The evidence artifact is historical truth. The lease artifact is the live admission lock. Deleting evidence does not fix admission. Stale lease cleanup is valid only when the recorded owner is no longer live or the operator deliberately overrides the duplicate policy.
 
@@ -56,6 +59,26 @@ An invocation moves through these states:
 6. `released`: live lease was removed or made non-live.
 
 Refusal is a terminal pre-spawn state for that request. It must not create a subprocess.
+
+## Admission Scope And Compatibility
+
+The authoritative live-admission scope is:
+
+```json
+{
+  "schema": "narada.ai_process_invocation_scope.v1",
+  "kind": "narada_runtime_session",
+  "site_id": "sonar",
+  "site_root": "D:/code/narada.sonar",
+  "runtime_session_id": "carrier_...",
+  "agent_identity_ref": {},
+  "launch_session_id": "..."
+}
+```
+
+The launcher allocates the runtime-session identity before provider credential readiness is projected, so a launch-time Codex auth probe and the eventual provider turn carry the same scope. The carrier session record is persisted only after provider readiness succeeds. The provider runtime creates the scope before it dispatches a Codex subprocess. The provider lifecycle exposes the boundary explicitly as `dispatched -> admitting -> admitted -> receiving`; a live-cap refusal therefore records `admitting -> refused` with its original reason instead of being misclassified as a receiving failure.
+
+Legacy leases and artifacts remain readable. A live legacy lease without a process-start identity is reported as unverified evidence and is excluded from positive cap matches. It cannot block an explicitly scoped admission, and a missing runtime-session scope fails closed with `invocation_scope_missing`.
 
 ## Required Callers
 
@@ -107,6 +130,8 @@ The normal remediation is to stop or wait for the existing invocation. If the du
 The architecture is covered by focused checks rather than a single broad launcher test:
 
 - substrate unit tests for lease acquisition, duplicate refusal, stale cleanup, explicit override, and redaction;
+- substrate tests for per-runtime-session isolation, missing-scope refusal, legacy/unverified leases, and PID-reuse identity mismatch;
+- provider-runtime tests for canonical scope propagation and the `admitting -> refused` Codex cap path;
 - direct carrier option tests proving `Carrier=codex` enters the substrate;
 - `codex-subscription` preflight duplicate-refusal tests;
 - provider command-resolution and module-contract tests proving runtime provider calls use the substrate path;
