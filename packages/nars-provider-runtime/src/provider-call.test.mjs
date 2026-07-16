@@ -38,7 +38,7 @@ test('provider call shapes and sends an OpenAI-compatible request', async () => 
       invocationEventSink: (event) => events.push(event),
     });
     assert.equal(result.choices[0].message.content, 'ok');
-    assert.deepEqual(events.map((event) => event.invocation_state), ['requested', 'validated', 'shaped', 'dispatched', 'receiving', 'completed']);
+    assert.deepEqual(events.map((event) => event.invocation_state), ['requested', 'validated', 'shaped', 'dispatched', 'admitting', 'admitted', 'receiving', 'completed']);
     assert.equal(new Set(events.map((event) => event.invocation_id)).size, 1);
     assert.equal(events.at(-1).invocation_id, 'prov_inv_success');
     assert.equal(events.at(-1).turn_id, 'turn-success');
@@ -202,4 +202,3 @@ test('provider call rejects provider error payloads', async () => {
     assert.equal(events.at(-1).invocation_state, 'failed');
   });
 });
-

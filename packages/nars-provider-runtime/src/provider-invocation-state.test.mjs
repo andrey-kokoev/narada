@@ -8,7 +8,7 @@ import {
 } from './provider-invocation-state.mjs';
 
 test('provider invocation FSM admits the complete successful lifecycle', () => {
-  const states = [null, 'requested', 'validated', 'shaped', 'dispatched', 'receiving', 'completed'];
+  const states = [null, 'requested', 'validated', 'shaped', 'dispatched', 'admitting', 'admitted', 'receiving', 'completed'];
   for (let index = 1; index < states.length; index += 1) {
     assert.equal(canTransitionNarsProviderInvocation(states[index - 1], states[index]), true);
     assert.equal(assertNarsProviderInvocationTransition(states[index - 1], states[index]), states[index]);

@@ -1,12 +1,14 @@
 import { randomUUID } from 'node:crypto';
 
-export const NARS_PROVIDER_INVOCATION_STATE_SCHEMA = 'narada.nars.provider_invocation_state.v1';
+export const NARS_PROVIDER_INVOCATION_STATE_SCHEMA = 'narada.nars.provider_invocation_state.v2';
 
 export const NARS_PROVIDER_INVOCATION_STATES = Object.freeze([
   'requested',
   'validated',
   'shaped',
   'dispatched',
+  'admitting',
+  'admitted',
   'receiving',
   'completed',
   'refused',
@@ -25,7 +27,9 @@ export const NARS_PROVIDER_INVOCATION_TRANSITIONS = Object.freeze({
   requested: Object.freeze(['validated', 'refused', 'interrupted', 'failed']),
   validated: Object.freeze(['shaped', 'refused', 'interrupted', 'failed']),
   shaped: Object.freeze(['dispatched', 'refused', 'interrupted', 'failed']),
-  dispatched: Object.freeze(['receiving', 'interrupted', 'failed']),
+  dispatched: Object.freeze(['admitting', 'interrupted', 'failed']),
+  admitting: Object.freeze(['admitted', 'refused', 'interrupted', 'failed']),
+  admitted: Object.freeze(['receiving', 'interrupted', 'failed']),
   receiving: Object.freeze(['completed', 'interrupted', 'failed']),
   completed: Object.freeze([]),
   refused: Object.freeze([]),
@@ -39,10 +43,12 @@ const TRANSITIONS = new Map(
 );
 
 export class NarsProviderInvocationRefusalError extends Error {
-  constructor(message) {
+  constructor(message, details = {}) {
     super(message);
     this.name = 'NarsProviderInvocationRefusalError';
     this.code = 'provider_invocation_refused';
+    this.reason = details.reason ?? details.admission?.reason ?? null;
+    this.admission = details.admission ?? null;
   }
 }
 
@@ -95,6 +101,8 @@ export function normalizeNarsProviderInvocationRecord(record = {}) {
     input_event_id: record.input_event_id ?? null,
     request_id: record.request_id ?? null,
     thread_id: record.thread_id ?? null,
+    invocation_scope: record.invocation_scope ?? null,
+    admission: record.admission ?? null,
     invocation_state: invocationState,
     terminal_state: terminalStateForNarsProviderInvocation(invocationState),
     reason: record.reason ?? null,

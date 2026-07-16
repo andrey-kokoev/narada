@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, readdirSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { admitAiProcessInvocation, runAiProcessInvocationSync, spawnAiProcessInvocation } from './ai-process-invocation.mjs';
@@ -41,7 +41,7 @@ test('launch and refusal artifacts are structured, redacted, and actionable', ()
   const root = mkdtempSync(join(tmpdir(), 'narada-ai-invocation-'));
   const first = admitAiProcessInvocation(invocation(root), { ownerPid: 123, isPidAlive: (pid) => pid === 123 });
   const launchArtifact = JSON.parse(readFileSync(first.artifact_path, 'utf8'));
-  assert.equal(launchArtifact.schema, 'narada.ai_process_invocation.v1');
+  assert.equal(launchArtifact.schema, 'narada.ai_process_invocation.v2');
   assert.equal(launchArtifact.event, 'launch');
   assert.equal(launchArtifact.lifecycle_state, 'admitted');
   assert.equal(launchArtifact.env.OPENAI_API_KEY, '<redacted>');
@@ -70,6 +70,37 @@ test('codex site/session live cap refuses a different command before spawn', () 
   assert.equal(second.reason, 'codex_live_invocation_cap_exceeded');
   assert.equal(second.existing_invocations.length, 1);
   assert.match(second.cleanup_hint, /existing Codex invocation/);
+});
+
+test('legacy live leases are reported as unverified and do not block a scoped admission', () => {
+  const root = mkdtempSync(join(tmpdir(), 'narada-ai-invocation-'));
+  const leaseDir = join(root, '.ai', 'runtime', 'ai-process-invocation', 'leases');
+  mkdirSync(leaseDir, { recursive: true });
+  writeFileSync(join(leaseDir, 'legacy.json'), JSON.stringify({
+    schema: 'narada.ai_process_invocation.v1',
+    id: 'legacy-live',
+    owner_pid: 999,
+    adapter_kind: 'codex',
+    site_root: root,
+    invocation_scope: null,
+    admitted: true,
+  }));
+  const admitted = admitAiProcessInvocation(invocation(root), {
+    ownerPid: 123,
+    isPidAlive: (pid) => pid === 123 || pid === 999,
+  });
+  assert.equal(admitted.admitted, true);
+  assert.equal(admitted.admission_diagnostics.unverified_live_invocation_count, 1);
+});
+
+test('Codex admission refuses when the runtime-session scope is absent', () => {
+  const root = mkdtempSync(join(tmpdir(), 'narada-ai-invocation-'));
+  const refused = admitAiProcessInvocation({ ...invocation(root), sessionId: null }, {
+    ownerPid: 123,
+    isPidAlive: () => true,
+  });
+  assert.equal(refused.admitted, false);
+  assert.equal(refused.reason, 'invocation_scope_missing');
 });
 
 test('runAiProcessInvocationSync refuses duplicate without calling spawnSync', () => {

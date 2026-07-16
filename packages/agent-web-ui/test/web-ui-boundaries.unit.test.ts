@@ -10,6 +10,11 @@ import {
   createNarsTransportLifecycle,
   transitionNarsTransport,
 } from '../src/protocol/sessionTransportAdapters';
+import {
+  PENDING_OPERATOR_INPUT_PHASES,
+  canTransitionPendingOperatorInput,
+  transitionPendingOperatorInput,
+} from '../src/protocol/operatorInputLifecycle';
 import { buildMessageContentPipeline } from '../src/app/lib/contentPipeline';
 import {
   SESSION_PANEL_REGISTRY,
@@ -27,9 +32,20 @@ import {
 import { createNarsClient } from '../src/protocol/narsClient';
 import { useRuntimeTopology } from '../src/app/composables/useRuntimeTopology';
 import { buildIntelligenceReconfigureFrame } from '../src/app/lib/narsFrames';
+import { isOperatorInputTransportReady, isTransportLive, operatorInputNotReadyReason } from '../src/app/lib/operatorInputReadiness';
 import type { SessionProtocolFrame, SessionTransport } from '../src/protocol/sessionTransport';
 
 describe('agent-web-ui runtime boundaries', () => {
+  it('keeps operator input gated by transport state, not display-status text', () => {
+    expect(isTransportLive('live')).toBe(true);
+    expect(isTransportLive('opening')).toBe(false);
+    expect(isTransportLive('input acknowledgment timed out after 5s')).toBe(false);
+    expect(isOperatorInputTransportReady(true, null)).toBe(true);
+    expect(isOperatorInputTransportReady(false, 'https://projection.example/input')).toBe(true);
+    expect(isOperatorInputTransportReady(false, null)).toBe(false);
+    expect(operatorInputNotReadyReason('subscribing')).toContain('subscribing');
+  });
+
   it('models transport lifecycle transitions explicitly', () => {
     const lifecycle = createNarsTransportLifecycle(true);
     expect(lifecycle.phase).toBe('idle');
@@ -61,6 +77,18 @@ describe('agent-web-ui runtime boundaries', () => {
     expect(lifecycle.phase).toBe('replaying');
     transitionNarsTransport(lifecycle, { type: 'open_requested' });
     expect(lifecycle.phase).toBe('replaying');
+  });
+
+  it('models correlated operator input recovery as a closed transition machine', () => {
+    const lifecycle = { phase: PENDING_OPERATOR_INPUT_PHASES.SENT, updated_at: '2026-07-15T21:00:00.000Z' };
+    expect(canTransitionPendingOperatorInput(lifecycle.phase, PENDING_OPERATOR_INPUT_PHASES.RELAY_PENDING)).toBe(true);
+    expect(canTransitionPendingOperatorInput(lifecycle.phase, PENDING_OPERATOR_INPUT_PHASES.RETRIED)).toBe(false);
+    expect(transitionPendingOperatorInput(lifecycle, PENDING_OPERATOR_INPUT_PHASES.RELAY_PENDING)).toBe(true);
+    expect(transitionPendingOperatorInput(lifecycle, PENDING_OPERATOR_INPUT_PHASES.TIMED_OUT)).toBe(true);
+    expect(transitionPendingOperatorInput(lifecycle, PENDING_OPERATOR_INPUT_PHASES.REVIEWING)).toBe(true);
+    expect(transitionPendingOperatorInput(lifecycle, PENDING_OPERATOR_INPUT_PHASES.RETRIED)).toBe(true);
+    expect(lifecycle.phase).toBe(PENDING_OPERATOR_INPUT_PHASES.RETRIED);
+    expect(transitionPendingOperatorInput(lifecycle, PENDING_OPERATOR_INPUT_PHASES.TIMED_OUT)).toBe(false);
   });
 
   it('builds the Intelligence box action as a direct local runtime control', () => {
@@ -248,6 +276,422 @@ describe('agent-web-ui runtime boundaries', () => {
     client.close();
     expect(timers.some((timer) => timer.cleared)).toBe(true);
   });
+
+  it('times out an unacknowledged operator input without resending and reconciles a late acknowledgment', () => {
+    const sockets: FakeSocket[] = [];
+    const timers: Array<{ id: number; delay: number; handler: () => void; cleared: boolean }> = [];
+    const storageValues = new Map<string, string>();
+    let nextTimerId = 0;
+    const WebSocketCtor = class extends FakeSocket {
+      static OPEN = 1;
+      constructor(url: string) {
+        super(url);
+        sockets.push(this);
+      }
+    } as unknown as typeof WebSocket;
+    const clientEvents: unknown[] = [];
+    const client = createNarsClient({
+      endpoint: 'ws://127.0.0.1/events',
+      sessionId: 'session-timeout',
+      pendingInputStorageKey: 'pending-input-test',
+      pendingInputStorage: {
+        getItem: (key) => storageValues.get(key) ?? null,
+        setItem: (key, value) => { storageValues.set(key, value); },
+        removeItem: (key) => { storageValues.delete(key); },
+      },
+      operatorInputAckTimeoutMs: 5000,
+      WebSocketCtor,
+      timers: {
+        setTimeout(handler: TimerHandler, delay?: number) {
+          const timer = { id: ++nextTimerId, delay: delay ?? 0, handler: handler as () => void, cleared: false };
+          timers.push(timer);
+          return timer.id;
+        },
+        clearTimeout(id: number) {
+          const timer = timers.find((candidate) => candidate.id === id);
+          if (timer) timer.cleared = true;
+        },
+      },
+      onEvent: (event) => clientEvents.push(event),
+    });
+
+    sockets[0].open();
+    expect(client.sendFrame({
+      id: 'request-timeout',
+      method: 'session.submit',
+      params: { message: 'proceed', source: 'agent-web-ui' },
+    })).toBe(true);
+    expect(JSON.parse(sockets[0].sentFrames.at(-1) ?? '{}')).toMatchObject({
+      id: 'request-timeout',
+      method: 'session.submit',
+    });
+    expect(storageValues.get('pending-input-test')).toContain('request-timeout');
+
+    timers.find((timer) => timer.delay === 5000)?.handler();
+    expect(clientEvents).toContainEqual(expect.objectContaining({
+      event: 'web_ui_input_ack_timeout',
+      request_id: 'request-timeout',
+      reason_code: 'nars_ack_timeout',
+    }));
+    expect(timers.filter((timer) => timer.delay === 5000 && !timer.cleared)).toHaveLength(0);
+    expect(sockets[0].sentFrames.filter((frame) => JSON.parse(frame).id === 'request-timeout')).toHaveLength(1);
+    expect(JSON.parse(storageValues.get('pending-input-test') ?? '[]')).toEqual([
+      expect.objectContaining({ request_id: 'request-timeout', phase: 'timed_out' }),
+    ]);
+
+    sockets[0].emit('message', { data: JSON.stringify({
+      event: 'input_event_queued',
+      request_id: 'request-timeout',
+      event_id: 'nars-input-timeout',
+    }) });
+    expect(clientEvents).toContainEqual(expect.objectContaining({
+      event: 'operator_input_late_acknowledged',
+      request_id: 'request-timeout',
+      recovery_state: 'timed_out',
+      acknowledged_event: 'input_event_queued',
+    }));
+    expect(storageValues.has('pending-input-test')).toBe(false);
+    client.close();
+  });
+
+  it('supports explicit review, retry, and discard transitions without automatic resend', () => {
+    const sockets: FakeSocket[] = [];
+    const timers: Array<{ id: number; delay: number; handler: () => void; cleared: boolean }> = [];
+    const storageValues = new Map<string, string>();
+    let nextTimerId = 0;
+    const WebSocketCtor = class extends FakeSocket {
+      static OPEN = 1;
+      constructor(url: string) {
+        super(url);
+        sockets.push(this);
+      }
+    } as unknown as typeof WebSocket;
+    const events: unknown[] = [];
+    const client = createNarsClient({
+      endpoint: 'ws://127.0.0.1/events',
+      sessionId: 'session-recovery',
+      pendingInputStorageKey: 'recovery-input-test',
+      pendingInputStorage: {
+        getItem: (key) => storageValues.get(key) ?? null,
+        setItem: (key, value) => { storageValues.set(key, value); },
+        removeItem: (key) => { storageValues.delete(key); },
+      },
+      operatorInputAckTimeoutMs: 5000,
+      WebSocketCtor,
+      timers: {
+        setTimeout(handler: TimerHandler, delay?: number) {
+          const timer = { id: ++nextTimerId, delay: delay ?? 0, handler: handler as () => void, cleared: false };
+          timers.push(timer);
+          return timer.id;
+        },
+        clearTimeout(id: number) {
+          const timer = timers.find((candidate) => candidate.id === id);
+          if (timer) timer.cleared = true;
+        },
+      },
+      onEvent: (event) => events.push(event),
+    });
+
+    sockets[0].open();
+    expect(client.sendFrame({ id: 'request-review', method: 'session.submit', params: { message: 'review me' } })).toBe(true);
+    expect(client.reviewPendingOperatorInput('request-review')).toBe(true);
+    expect(JSON.parse(storageValues.get('recovery-input-test') ?? '[]')).toEqual([
+      expect.objectContaining({ request_id: 'request-review', phase: 'reviewing' }),
+    ]);
+    expect(events).toContainEqual(expect.objectContaining({ event: 'operator_input_reviewed', request_id: 'request-review' }));
+    expect(client.markPendingOperatorInputRetried('request-review', 'request-retry')).toBe(true);
+    expect(JSON.parse(storageValues.get('recovery-input-test') ?? '[]')).toEqual([
+      expect.objectContaining({ request_id: 'request-review', phase: 'retried', superseded_by_request_id: 'request-retry' }),
+    ]);
+    expect(events).toContainEqual(expect.objectContaining({ event: 'operator_input_retried', request_id: 'request-review', retry_request_id: 'request-retry' }));
+    expect(sockets[0].sentFrames.filter((frame) => JSON.parse(frame).id === 'request-review')).toHaveLength(1);
+
+    expect(client.sendFrame({ id: 'request-discard', method: 'session.submit', params: { message: 'discard me' } })).toBe(true);
+    expect(client.reviewPendingOperatorInput('request-discard')).toBe(true);
+    expect(client.discardPendingOperatorInput('request-discard')).toBe(true);
+    expect(JSON.parse(storageValues.get('recovery-input-test') ?? '[]')).toEqual([
+      expect.objectContaining({ request_id: 'request-review', phase: 'retried' }),
+    ]);
+    expect(events).toContainEqual(expect.objectContaining({ event: 'operator_input_discarded', request_id: 'request-discard' }));
+    client.close();
+  });
+
+  it('restores pending operator input metadata from tab storage for explicit review after reload', () => {
+    const sockets: FakeSocket[] = [];
+    const storageValues = new Map([
+      ['pending-input-test', JSON.stringify([{
+        request_id: 'request-restored',
+        method: 'session.submit',
+        content: 'proceed',
+        source: 'agent-web-ui',
+        delivery_mode: 'default',
+        active_turn_id: null,
+        created_at: '2026-07-15T21:00:00.000Z',
+      }])],
+    ]);
+    const WebSocketCtor = class extends FakeSocket {
+      static OPEN = 1;
+      constructor(url: string) {
+        super(url);
+        sockets.push(this);
+      }
+    } as unknown as typeof WebSocket;
+    const restoredEvents: unknown[] = [];
+    const client = createNarsClient({
+      endpoint: 'ws://127.0.0.1/events',
+      sessionId: 'session-restored',
+      pendingInputStorageKey: 'pending-input-test',
+      pendingInputStorage: {
+        getItem: (key) => storageValues.get(key) ?? null,
+        setItem: (key, value) => { storageValues.set(key, value); },
+        removeItem: (key) => { storageValues.delete(key); },
+      },
+      WebSocketCtor,
+      onEvent: (event) => restoredEvents.push(event),
+    });
+
+    expect(restoredEvents).toContainEqual(expect.objectContaining({
+      event: 'operator_input_pending_restored',
+      request_id: 'request-restored',
+      content: 'proceed',
+      pending_state: 'timed_out',
+    }));
+    expect(storageValues.has('pending-input-test')).toBe(true);
+    client.close();
+  });
+
+  it('expires stale recovery records and emits an explicit expiry event', () => {
+    const sockets: FakeSocket[] = [];
+    const storageValues = new Map([
+      ['expired-input-test', JSON.stringify([{
+        request_id: 'request-expired',
+        method: 'session.submit',
+        content: 'old input',
+        updated_at: '2000-01-01T00:00:00.000Z',
+        created_at: '2000-01-01T00:00:00.000Z',
+        phase: 'timed_out',
+      }])],
+    ]);
+    const WebSocketCtor = class extends FakeSocket {
+      static OPEN = 1;
+      constructor(url: string) {
+        super(url);
+        sockets.push(this);
+      }
+    } as unknown as typeof WebSocket;
+    const events: unknown[] = [];
+    const client = createNarsClient({
+      endpoint: 'ws://127.0.0.1/events',
+      sessionId: 'session-expiry',
+      pendingInputStorageKey: 'expired-input-test',
+      pendingInputRetentionMs: 1000,
+      pendingInputStorage: {
+        getItem: (key) => storageValues.get(key) ?? null,
+        setItem: (key, value) => { storageValues.set(key, value); },
+        removeItem: (key) => { storageValues.delete(key); },
+      },
+      WebSocketCtor,
+      onEvent: (event) => events.push(event),
+    });
+
+    expect(events).toContainEqual(expect.objectContaining({
+      event: 'operator_input_pending_expired',
+      request_id: 'request-expired',
+      reason_code: 'pending_input_retention_elapsed',
+    }));
+    expect(storageValues.has('expired-input-test')).toBe(false);
+    client.close();
+  });
+
+  it('applies the same acknowledgment watchdog to Cloudflare input POST transport', async () => {
+    const sockets: FakeSocket[] = [];
+    const timers: Array<{ id: number; delay: number; handler: () => void; cleared: boolean }> = [];
+    const storageValues = new Map<string, string>();
+    let nextTimerId = 0;
+    const WebSocketCtor = class extends FakeSocket {
+      static OPEN = 1;
+      constructor(url: string) {
+        super(url);
+        sockets.push(this);
+      }
+    } as unknown as typeof WebSocket;
+    const fetchFn = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      async json() { return { events: [], has_more: false }; },
+    }));
+    const events: unknown[] = [];
+    const client = createNarsClient({
+      endpoint: 'https://projection.example/events',
+      inputEndpoint: 'https://projection.example/input',
+      pendingInputStorageKey: 'cloudflare-pending-input-test',
+      pendingInputStorage: {
+        getItem: (key) => storageValues.get(key) ?? null,
+        setItem: (key, value) => { storageValues.set(key, value); },
+        removeItem: (key) => { storageValues.delete(key); },
+      },
+      operatorInputAckTimeoutMs: 7000,
+      WebSocketCtor,
+      fetchFn: fetchFn as unknown as typeof fetch,
+      timers: {
+        setTimeout(handler: TimerHandler, delay?: number) {
+          const timer = { id: ++nextTimerId, delay: delay ?? 0, handler: handler as () => void, cleared: false };
+          timers.push(timer);
+          return timer.id;
+        },
+        clearTimeout(id: number) {
+          const timer = timers.find((candidate) => candidate.id === id);
+          if (timer) timer.cleared = true;
+        },
+      },
+      onEvent: (event) => events.push(event),
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(sockets).toHaveLength(1);
+    sockets[0].open();
+    expect(client.sendFrame({
+      id: 'cloudflare-request-timeout',
+      method: 'session.submit',
+      params: { message: 'proceed', source: 'agent-web-ui' },
+    })).toBe(true);
+    await Promise.resolve();
+    expect(fetchFn).toHaveBeenCalledWith('https://projection.example/input', expect.objectContaining({ method: 'POST' }));
+    expect(storageValues.get('cloudflare-pending-input-test')).toContain('cloudflare-request-timeout');
+
+    timers.find((timer) => timer.delay === 7000)?.handler();
+    expect(events).toContainEqual(expect.objectContaining({
+      event: 'web_ui_input_ack_timeout',
+      request_id: 'cloudflare-request-timeout',
+    }));
+    expect(fetchFn.mock.calls.filter(([url]) => String(url) === 'https://projection.example/input')).toHaveLength(1);
+    client.close();
+  });
+
+  it('correlates a Cloudflare relay failure to the pending input and clears recovery state', async () => {
+    const sockets: FakeSocket[] = [];
+    const storageValues = new Map<string, string>();
+    const WebSocketCtor = class extends FakeSocket {
+      static OPEN = 1;
+      constructor(url: string) {
+        super(url);
+        sockets.push(this);
+      }
+    } as unknown as typeof WebSocket;
+    const fetchFn = vi.fn(async (url: string | URL) => {
+      if (String(url) === 'https://projection.example/input') {
+        return {
+          ok: false,
+          status: 503,
+          async json() { return { message: 'relay unavailable' }; },
+        };
+      }
+      return {
+        ok: true,
+        status: 200,
+        async json() { return { events: [], has_more: false }; },
+      };
+    });
+    const events: unknown[] = [];
+    const client = createNarsClient({
+      endpoint: 'https://projection.example/events',
+      inputEndpoint: 'https://projection.example/input',
+      pendingInputStorageKey: 'cloudflare-failed-input-test',
+      pendingInputStorage: {
+        getItem: (key) => storageValues.get(key) ?? null,
+        setItem: (key, value) => { storageValues.set(key, value); },
+        removeItem: (key) => { storageValues.delete(key); },
+      },
+      WebSocketCtor,
+      fetchFn: fetchFn as unknown as typeof fetch,
+      onEvent: (event) => events.push(event),
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    sockets[0].open();
+    expect(client.sendFrame({
+      id: 'cloudflare-request-failed',
+      method: 'session.submit',
+      params: { message: 'relay me' },
+    })).toBe(true);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await Promise.resolve();
+
+    expect(events).toContainEqual(expect.objectContaining({
+      event: 'projection_input_response',
+      request_id: 'cloudflare-request-failed',
+      http_status: 503,
+      status: 'failed',
+    }));
+    expect(events).toContainEqual(expect.objectContaining({
+      event: 'web_ui_input_transport_failed',
+      request_id: 'cloudflare-request-failed',
+      reason_code: 'projection_input_failed',
+      message: 'relay unavailable',
+    }));
+    expect(storageValues.has('cloudflare-failed-input-test')).toBe(false);
+    client.close();
+  });
+
+  it('binds submit and pending recovery evidence to the endpoint, session, and socket generation', () => {
+    const sockets: FakeSocket[] = [];
+    const storageValues = new Map<string, string>();
+    const events: unknown[] = [];
+    const WebSocketCtor = class extends FakeSocket {
+      static OPEN = 1;
+      constructor(url: string) {
+        super(url);
+        sockets.push(this);
+      }
+    } as unknown as typeof WebSocket;
+    const client = createNarsClient({
+      endpoint: 'ws://127.0.0.1/correlation-events',
+      sessionId: 'session-correlated',
+      pendingInputStorageKey: 'correlation-input-test',
+      pendingInputStorage: {
+        getItem: (key) => storageValues.get(key) ?? null,
+        setItem: (key, value) => { storageValues.set(key, value); },
+        removeItem: (key) => { storageValues.delete(key); },
+      },
+      WebSocketCtor,
+      onEvent: (event) => events.push(event),
+    });
+
+    sockets[0].open();
+    const submitted = submitOperatorInput('run startup sequence', client);
+    expect(submitted.localEvent).toMatchObject({
+      event: 'operator_input_submitted',
+      request_id: submitted.requestId,
+      transport: 'local-websocket',
+      endpoint: 'ws://127.0.0.1/correlation-events',
+      session_id: 'session-correlated',
+      socket_generation: 1,
+    });
+    expect(JSON.parse(storageValues.get('correlation-input-test') ?? '[]')).toEqual([
+      expect.objectContaining({
+        request_id: submitted.requestId,
+        transport: 'local-websocket',
+        endpoint: 'ws://127.0.0.1/correlation-events',
+        session_id: 'session-correlated',
+        socket_generation: 1,
+      }),
+    ]);
+
+    sockets[0].emit('message', { data: JSON.stringify({
+      event: 'input_event_queued',
+      request_id: submitted.requestId,
+      event_id: 'wrong-session-event',
+      session_id: 'session-other',
+    }) });
+    expect(events).toContainEqual(expect.objectContaining({
+      event: 'web_ui_session_correlation_mismatch',
+      expected_session_id: 'session-correlated',
+      observed_session_id: 'session-other',
+      socket_generation: 1,
+    }));
+    expect(storageValues.get('correlation-input-test')).toContain(submitted.requestId);
+    client.close();
+  });
 });
 
 class FakeSocket {
@@ -277,5 +721,9 @@ class FakeSocket {
     this.emit('close');
   }
 
-  send() {}
+  sentFrames: string[] = [];
+
+  send(payload: string) {
+    this.sentFrames.push(payload);
+  }
 }

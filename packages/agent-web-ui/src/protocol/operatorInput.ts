@@ -1,10 +1,11 @@
 import { buildAgentWebUiHelpText, buildAgentWebUiOperatorInputAction } from '@narada2/nars-client-projection-contract';
 import type { NarsClientConnection } from './narsClient';
-import { toSessionProtocolFrame, type SessionProtocolFrame } from './sessionTransport';
+import { toSessionProtocolFrame, type SessionProtocolFrame, type SessionTransportCorrelation } from './sessionTransport';
 
 export interface OperatorInputResult {
   handled: boolean;
   shouldClearDraft: boolean;
+  requestId?: string;
   localEvent?: unknown;
 }
 
@@ -87,7 +88,8 @@ export function submitOperatorInput(text: string, connection: NarsClientConnecti
   return {
     handled: true,
     shouldClearDraft: true,
-    localEvent: operatorInputSubmittedEvent(frame, deliveryMode),
+    requestId: frame.id,
+    localEvent: operatorInputSubmittedEvent(frame, deliveryMode, connection?.transportCorrelation),
   };
 }
 
@@ -128,7 +130,8 @@ export function submitOperatorConversationText(text: string, connection: NarsCli
   return {
     handled: true,
     shouldClearDraft: true,
-    localEvent: operatorInputSubmittedEvent(frame, deliveryMode),
+    requestId: frame.id,
+    localEvent: operatorInputSubmittedEvent(frame, deliveryMode, connection?.transportCorrelation),
   };
 }
 
@@ -148,7 +151,7 @@ function authorityTransitionRefusesInput(frame: { method?: string }, authorityTr
   return authorityTransition.input_policy === 'disabled_source_sealed' || authorityTransition.stale_source === true;
 }
 
-function operatorInputSubmittedEvent(frame: SessionProtocolFrame, operatorDeliveryMode: OperatorInputDeliveryMode) {
+function operatorInputSubmittedEvent(frame: SessionProtocolFrame, operatorDeliveryMode: OperatorInputDeliveryMode, correlation: SessionTransportCorrelation | undefined) {
   const params = frame.params && typeof frame.params === 'object' ? frame.params : {};
   return {
     event: 'operator_input_submitted',
@@ -159,5 +162,9 @@ function operatorInputSubmittedEvent(frame: SessionProtocolFrame, operatorDelive
     delivery_mode: params.delivery_mode ?? null,
     operator_delivery_mode: operatorDeliveryMode,
     active_turn_id: params.active_turn_id ?? null,
+    transport: correlation?.transport ?? null,
+    endpoint: correlation?.endpoint ?? null,
+    session_id: correlation?.session_id ?? null,
+    socket_generation: correlation?.socket_generation ?? null,
   };
 }

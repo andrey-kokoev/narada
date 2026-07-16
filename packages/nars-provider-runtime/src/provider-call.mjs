@@ -42,6 +42,10 @@ export function createProviderCall({ runtimeContext = {}, env = process.env, inv
     stream: explicitSettings.stream !== false,
     providerRuntimeBinding: redactProviderRuntimeBinding(binding),
     codexSessionState: { threadId: null },
+    siteId: runtimeContext.siteId ?? null,
+    runtimeSessionId: runtimeContext.session ?? runtimeContext.runtimeSessionId ?? runtimeContext.runtime_session_id ?? null,
+    launchSessionId: runtimeContext.launchSessionId ?? runtimeContext.launch_session_id ?? null,
+    agentIdentityRef: runtimeContext.agentIdentityRef ?? null,
   };
   configureProviderAdapterContext(settings);
   return (messages, tools, overrides = {}) => callProvider(messages, tools, {
@@ -66,6 +70,14 @@ async function callProvider(messages, tools, settings) {
     input_event_id: settings.inputEventId ?? settings.input_event_id ?? null,
     request_id: settings.requestId ?? settings.request_id ?? null,
     thread_id: null,
+    invocation_scope: settings.runtimeSessionId ? {
+      kind: 'narada_runtime_session',
+      site_id: settings.siteId ?? null,
+      site_root: settings.siteRoot,
+      runtime_session_id: settings.runtimeSessionId,
+      agent_identity_ref: settings.agentIdentityRef ?? null,
+      launch_session_id: settings.launchSessionId ?? null,
+    } : null,
   };
   let record = null;
   const transition = async (nextState, evidence = {}) => {
@@ -109,15 +121,29 @@ async function callProvider(messages, tools, settings) {
     await transition('shaped', { adapter_kind: metadata.adapter_kind });
     const transport = metadata.adapter_kind === 'codex-mcp-server' ? 'codex_subprocess' : 'http';
     await transition('dispatched', { adapter_kind: metadata.adapter_kind, transport });
-    await transition('receiving', { adapter_kind: metadata.adapter_kind, transport });
 
     if (metadata.adapter_kind === 'codex-mcp-server') {
-      const response = await sendCodex(request, settings);
+      await transition('admitting', { adapter_kind: metadata.adapter_kind, transport });
+      const response = await sendCodex(request, settings, async (admission) => {
+        await transition('admitted', {
+          adapter_kind: metadata.adapter_kind,
+          transport,
+          admission: summarizeAdmission(admission),
+        });
+        await transition('receiving', { adapter_kind: metadata.adapter_kind, transport });
+      });
       if (response?.threadId && settings.codexSessionState) settings.codexSessionState.threadId = response.threadId;
       const result = parseCodexMcpResponse(response);
       await transition('completed', { transport, thread_id: response?.threadId ?? null });
       return result;
     }
+    await transition('admitting', { adapter_kind: metadata.adapter_kind, transport });
+    await transition('admitted', {
+      adapter_kind: metadata.adapter_kind,
+      transport,
+      admission: { kind: 'provider_transport', admitted: true, reason: 'transport_ready' },
+    });
+    await transition('receiving', { adapter_kind: metadata.adapter_kind, transport });
     const response = await sendHttp(request, settings);
     const result = metadata.adapter_kind === 'anthropic-messages' ? parseAnthropicMessagesResponse(response) : response;
     await transition('completed', { transport });
@@ -126,8 +152,9 @@ async function callProvider(messages, tools, settings) {
     const terminalState = providerInvocationTerminalState(error, settings);
     if (!isNarsProviderInvocationTerminalState(record?.invocation_state)) {
       await transition(terminalState, {
-        reason: providerInvocationTerminalReason(terminalState),
+        reason: providerInvocationTerminalReason(terminalState, error),
         error: providerInvocationErrorMessage(error),
+        ...(error?.admission ? { admission: summarizeAdmission(error.admission) } : {}),
       });
     }
     throw error;
@@ -140,8 +167,8 @@ function providerInvocationTerminalState(error, settings) {
   return 'failed';
 }
 
-function providerInvocationTerminalReason(state) {
-  if (state === 'refused') return 'admission_refused';
+function providerInvocationTerminalReason(state, error) {
+  if (state === 'refused') return error?.reason ?? error?.admission?.reason ?? 'admission_refused';
   if (state === 'interrupted') return 'aborted';
   return 'provider_failure';
 }
@@ -163,16 +190,38 @@ function sendHttp({ url, body, headers }, settings) {
   });
 }
 
-function sendCodex(request, settings) {
+async function sendCodex(request, settings, onAdmitted = null) {
+  if (settings.abortSignal?.aborted) throw new Error('provider_request_aborted');
+  const command = codexCommand(); const cwd = request.arguments?.cwd ?? settings.siteRoot;
+  let owner;
+  try {
+    owner = spawnAiProcessInvocation({ adapterKind: 'codex', projection: 'codex-subscription', purpose: 'provider_request', siteRoot: cwd, cwd, command: command.command, argv: [...command.prefixArgs, ...buildCodexExecArgs(request, settings)], env: buildCodexSubprocessEnv(codexRequestMcpServers(request, settings), settings), sessionId: settings.runtimeSessionId, invocationScope: { site_id: settings.siteId, runtime_session_id: settings.runtimeSessionId, agent_identity_ref: settings.agentIdentityRef, launch_session_id: settings.launchSessionId } }, { spawnProcess: spawnOwnedProcess, spawnOptions: { cwd, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] } });
+  } catch (error) {
+    throw error instanceof AiProcessInvocationRefusalError
+      ? new NarsProviderInvocationRefusalError(`codex ai process invocation refused: ${error.admission.reason}`, { reason: error.admission.reason, admission: error.admission })
+      : error;
+  }
+  try {
+    await onAdmitted?.(owner.aiProcessInvocation ?? owner);
+  } catch (error) {
+    owner.terminateTree?.('codex_provider_admission_transition_failed');
+    throw error;
+  }
   return new Promise((resolveRequest, rejectRequest) => {
-    if (settings.abortSignal?.aborted) return rejectRequest(new Error('provider_request_aborted'));
-    const command = codexCommand(); const cwd = request.arguments?.cwd ?? settings.siteRoot;
-    let owner;
-    try { owner = spawnAiProcessInvocation({ adapterKind: 'codex', projection: 'codex-subscription', purpose: 'provider_request', siteRoot: cwd, cwd, command: command.command, argv: [...command.prefixArgs, ...buildCodexExecArgs(request, settings)], env: buildCodexSubprocessEnv(codexRequestMcpServers(request, settings), settings) }, { spawnProcess: spawnOwnedProcess, spawnOptions: { cwd, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] } }); } catch (error) { return rejectRequest(error instanceof AiProcessInvocationRefusalError ? new NarsProviderInvocationRefusalError(`codex ai process invocation refused: ${error.admission.reason}`) : error); }
     const abortChild = () => owner.terminateTree('codex_provider_abort');
     settings.abortSignal?.addEventListener?.('abort', abortChild, { once: true });
     owner.child.stdin.end(codexExecPrompt(request)); let stdout = ''; let stderr = '';
     owner.child.stdout.setEncoding('utf8'); owner.child.stderr.setEncoding('utf8'); owner.child.stdout.on('data', (chunk) => { stdout += chunk; }); owner.child.stderr.on('data', (chunk) => { stderr += chunk; }); owner.child.on('error', (error) => rejectRequest(codexCliSpawnError(error, command)));
     owner.child.on('exit', (code) => { settings.abortSignal?.removeEventListener?.('abort', abortChild); if (settings.abortSignal?.aborted) return rejectRequest(new Error('provider_request_aborted')); if (code !== 0) return rejectRequest(new Error(`codex exec --json failed with exit ${code}${stderr.trim() ? `; ${stderr.trim().slice(0, 1000)}` : ''}`)); let state = createCodexExecTextAccumulator(); let threadId = null; let parsedEvents = 0; for (const line of stdout.split(/\r?\n/)) { const event = parseCodexExecJsonLine(line); if (!event) continue; parsedEvents += 1; if (event.type === 'thread.started') threadId = event.thread_id ?? threadId; state = accumulateCodexExecEvent(state, event).state; } if (stdout.trim() && parsedEvents === 0) return rejectRequest(new Error('Invalid JSONL from codex exec')); resolveRequest({ threadId, content: state.content, streaming_rendered: false }); });
   });
+}
+
+function summarizeAdmission(admission) {
+  if (!admission || typeof admission !== 'object') return admission ?? null;
+  const {
+    env: _env,
+    lifecycle_history: _history,
+    ...safe
+  } = admission;
+  return safe;
 }
