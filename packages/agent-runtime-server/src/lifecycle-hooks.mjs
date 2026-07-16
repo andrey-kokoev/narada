@@ -5,6 +5,7 @@ import {
   validateNarsLifecycleHookPayload,
 } from '@narada2/carrier-protocol';
 import { buildAgentIdentityRefV2, resolveAgentIdentityRef } from '@narada2/agent-identity';
+import { valueAfterFlag } from './runtime-server-options.mjs';
 
 const SECRET_PATTERN = /(api[_-]?key|token|secret|password|authorization)\s*[:=]\s*[^\s,;]+/giu;
 
@@ -90,13 +91,8 @@ export async function dispatchNarsLifecycleHooksForEvent(dispatcher, event) {
 }
 
 export function lifecycleBindingFromArgs(args = [], env = process.env) {
-  const valueAfter = (flag) => {
-    const index = args.indexOf(flag);
-    const value = index >= 0 ? args[index + 1] : undefined;
-    return typeof value === 'string' && value.trim() && !value.startsWith('--') ? value.trim() : undefined;
-  };
   const bindRequired = ({ name, flag, envNames }) => {
-    const argvValue = valueAfter(flag);
+    const argvValue = valueAfterFlag(args, flag, { trim: true });
     const envValues = (envNames ?? [])
       .map((envName) => typeof env[envName] === 'string' && env[envName].trim() ? env[envName].trim() : undefined)
       .filter(Boolean);

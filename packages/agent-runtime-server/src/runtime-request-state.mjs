@@ -1,3 +1,5 @@
+import { createNarsStateMachine } from './runtime-state-machine.mjs';
+
 export const NARS_RUNTIME_REQUEST_STATE_SCHEMA = 'narada.nars.runtime_request_state.v1';
 
 export const NARS_RUNTIME_REQUEST_STATES = Object.freeze([
@@ -62,48 +64,25 @@ export function createNarsRuntimeRequestStateMachine({
   onTransition = () => {},
 } = {}) {
   if (!runtimeRequestId) throw new Error('narada_runtime_request_id_required');
-  let state = null;
-  const history = [];
-
-  function transition(nextState, evidence = {}) {
-    assertNarsRuntimeRequestTransition(state, nextState);
-    if (state === nextState) return history.at(-1) ?? null;
-    const previousState = state;
-    state = nextState;
-    const record = {
-      schema: NARS_RUNTIME_REQUEST_STATE_SCHEMA,
-      event: 'runtime_request_state_transition',
-      timestamp: now(),
-      runtime_request_id: runtimeRequestId,
-      request_id: requestId,
-      method,
-      previous_state: previousState,
-      request_state: nextState,
-      terminal_state: isNarsRuntimeRequestTerminalState(nextState) ? nextState : null,
-      ...metadata,
-      ...evidence,
-    };
-    history.push(record);
-    onTransition(record);
-    return record;
-  }
-
+  const machine = createNarsStateMachine({
+    identityFields: { runtime_request_id: runtimeRequestId, request_id: requestId, method },
+    metadata,
+    schema: NARS_RUNTIME_REQUEST_STATE_SCHEMA,
+    event: 'runtime_request_state_transition',
+    stateField: 'request_state',
+    isTerminalState: isNarsRuntimeRequestTerminalState,
+    assertTransition: assertNarsRuntimeRequestTransition,
+    now,
+    onTransition,
+  });
   return Object.freeze({
-    get state() { return state; },
+    get state() { return machine.state; },
     runtimeRequestId,
     requestId,
     method,
-    transition,
-    snapshot: () => ({
-      schema: NARS_RUNTIME_REQUEST_STATE_SCHEMA,
-      runtime_request_id: runtimeRequestId,
-      request_id: requestId,
-      method,
-      request_state: state,
-      terminal_state: isNarsRuntimeRequestTerminalState(state) ? state : null,
-      ...metadata,
-    }),
-    history: () => history.slice(),
+    transition: machine.transition,
+    snapshot: machine.snapshot,
+    history: machine.history,
   });
 }
 

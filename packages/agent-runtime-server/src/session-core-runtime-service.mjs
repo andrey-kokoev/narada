@@ -118,13 +118,23 @@ function intelligenceChoices(provider, currentModel, currentThinking) {
   return {
     providerChoices: ADMITTED_PROVIDER_NAMES.filter((name) => PROVIDER_METADATA[name]),
     modelChoices: uniqueStrings([
-      currentModel,
       ...(Array.isArray(metadata.available_models) ? metadata.available_models : []),
+      currentModel,
     ]),
     thinkingChoices: uniqueStrings([
       currentThinking,
       ...Object.keys(metadata.cognition_defaults ?? {}),
     ]),
+  };
+}
+
+function currentIntelligenceSnapshot(providerRuntime, runtimeContext) {
+  const snapshot = providerRuntime?.snapshot?.() ?? {};
+  return {
+    ...snapshot,
+    provider: snapshot.provider ?? runtimeContext.intelligenceProvider ?? null,
+    model: snapshot.model ?? runtimeContext.providerSettings?.model ?? null,
+    thinking: snapshot.thinking ?? runtimeContext.providerSettings?.thinking ?? null,
   };
 }
 
@@ -152,7 +162,9 @@ function parseRequest(line) {
 }
 
 function projectRuntimeHealth(snapshot, runtimeContext, toolGateway, requestLifecycle = null, providerRuntime = null) {
-  const mcpScope = runtimeContext.mcpScope ?? 'all';
+  // MCP authority is opt-in. A runtime that did not receive an explicit scope
+  // must report disabled rather than silently projecting the composed fabric.
+  const mcpScope = runtimeContext.mcpScope ?? 'none';
   const mcpOperationalState = mcpScope === 'none'
     ? 'disabled'
     : snapshot.mcp_operational_state
@@ -167,10 +179,10 @@ function projectRuntimeHealth(snapshot, runtimeContext, toolGateway, requestLife
         ? 'healthy'
         : 'degraded';
   const heartbeat = readHeartbeatProjection(heartbeatPathForRuntimeContext(runtimeContext));
-  const intelligenceSnapshot = providerRuntime?.snapshot?.() ?? {};
-  const intelligenceProvider = intelligenceSnapshot.provider ?? runtimeContext.intelligenceProvider ?? null;
-  const intelligenceModel = intelligenceSnapshot.model ?? runtimeContext.providerSettings?.model ?? null;
-  const intelligenceThinking = intelligenceSnapshot.thinking ?? runtimeContext.providerSettings?.thinking ?? null;
+  const intelligence = currentIntelligenceSnapshot(providerRuntime, runtimeContext);
+  const intelligenceProvider = intelligence.provider;
+  const intelligenceModel = intelligence.model;
+  const intelligenceThinking = intelligence.thinking;
   const choices = intelligenceChoices(intelligenceProvider, intelligenceModel, intelligenceThinking);
   return {
     ...snapshot,
@@ -193,8 +205,8 @@ function projectRuntimeHealth(snapshot, runtimeContext, toolGateway, requestLife
       provider_choices: choices.providerChoices,
       model_choices: choices.modelChoices,
       thinking_choices: choices.thinkingChoices,
-      provider_runtime_binding: intelligenceSnapshot.provider_runtime_binding ?? null,
-      reconfiguration: intelligenceSnapshot.reconfiguration ?? null,
+      provider_runtime_binding: intelligence.provider_runtime_binding ?? null,
+      reconfiguration: intelligence.reconfiguration ?? null,
     },
     mcp_operational_state: mcpOperationalState,
     mcp_scope: mcpScope,
@@ -302,7 +314,7 @@ export function createSessionCoreRuntimeService({
     callChatApiFn: runtimeCall,
     toolGateway: providerToolGateway,
     buildTurnContext: (input) => {
-      const intelligence = providerRuntime?.snapshot?.() ?? {};
+      const intelligence = currentIntelligenceSnapshot(providerRuntime, runtimeContext);
       return {
         turnId: input.event_id,
         messages: [{ role: 'user', content: input.content }],
@@ -407,7 +419,7 @@ export function createSessionCoreRuntimeService({
       send: (envelope) => writer.write(envelope.payload),
     });
     subscription.markLive({ source: 'jsonl_stdio_ready' });
-    const initialIntelligence = providerRuntime?.snapshot?.() ?? {};
+    const initialIntelligence = currentIntelligenceSnapshot(providerRuntime, runtimeContext);
     const sessionStartedEvent = supervisor.core.appendEvent({
       event: 'session_started',
       runtime: 'narada-agent-runtime-server',
@@ -423,7 +435,7 @@ export function createSessionCoreRuntimeService({
       provider: initialIntelligence.provider ?? runtimeContext.intelligenceProvider ?? null,
       model: initialIntelligence.model ?? runtimeContext.providerSettings?.model ?? null,
       thinking: initialIntelligence.thinking ?? runtimeContext.providerSettings?.thinking ?? null,
-      mcp_scope: runtimeContext.mcpScope ?? 'all',
+      mcp_scope: runtimeContext.mcpScope ?? 'none',
       mcp_server_count: runtimeContext.mcpScope === 'none' ? 0 : null,
       mcp_operational_state: runtimeContext.mcpScope === 'none' ? 'disabled' : 'starting',
       delegated_authority_handoff: runtimeContext.narsDelegatedAuthorityHandoff ?? null,
@@ -481,6 +493,16 @@ export function createSessionCoreRuntimeService({
       requestLifecycle.track(requestState.runtimeRequestId, operation);
       return Promise.resolve(false);
     };
+    const drainInputLines = async () => {
+      while (true) {
+        const newline = buffer.indexOf('\n');
+        if (newline === -1) return false;
+        const request = parseRequest(buffer.slice(0, newline));
+        buffer = buffer.slice(newline + 1);
+        if (request) closed = await schedule(request);
+        if (closed) return true;
+      }
+    };
     try {
       writeRuntimeHeartbeat(runtimeContext, { reason: 'session_started', now: now() });
       if (heartbeatCadenceMs > 0) {
@@ -498,14 +520,7 @@ export function createSessionCoreRuntimeService({
       }
       for await (const chunk of input) {
         buffer += String(chunk);
-        while (true) {
-          const newline = buffer.indexOf('\n');
-          if (newline === -1) break;
-          const request = parseRequest(buffer.slice(0, newline));
-          buffer = buffer.slice(newline + 1);
-          if (request) closed = await schedule(request);
-          if (closed) return;
-        }
+        if (await drainInputLines()) return;
       }
       const request = parseRequest(buffer);
       if (request) closed = await schedule(request);

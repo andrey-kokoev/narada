@@ -37,15 +37,9 @@ import { createDelegatedAuthorityHandoff } from './runtime-server-authority.mjs'
 import { handleArtifactHttpRequest } from './runtime-server-artifacts.mjs';
 import { createNarsRuntimeHostStateMachine } from './runtime-host-state.mjs';
 import { createNarsHealthProjectionRequestStateMachine } from './health-projection-request-state.mjs';
+import { parseEndpointOptions, valueAfterFlag } from './runtime-server-options.mjs';
 
 export { formatHostStatusEvent } from './runtime-server-events.mjs';
-
-function valueAfterFlag(args, flag) {
-  const index = args.indexOf(flag);
-  if (index === -1 || index + 1 >= args.length) return null;
-  const value = args[index + 1];
-  return value && !String(value).startsWith('--') ? String(value) : null;
-}
 
 function agentIdentitySiteId(agentIdentityRef) {
   if (!agentIdentityRef || typeof agentIdentityRef !== 'object') return null;
@@ -55,6 +49,21 @@ function agentIdentitySiteId(agentIdentityRef) {
     ? agentIdentityRef.identity_scope.site_id
     : null;
   return typeof identityScopeSiteId === 'string' && identityScopeSiteId.trim() ? identityScopeSiteId.trim() : null;
+}
+
+function baseRuntimeContextOptions({ lifecycleBinding, operatorSurfaceKind, launchProcessContext, runtimeHost }) {
+  return {
+    identity: lifecycleBinding.agent_id,
+    agentIdentityRef: lifecycleBinding.agent_identity_ref,
+    session: lifecycleBinding.session_id,
+    siteRoot: lifecycleBinding.metadata.site_root,
+    siteId: agentIdentitySiteId(lifecycleBinding.agent_identity_ref) ?? process.env.NARADA_SITE_ID ?? null,
+    siteConfig: parseSiteConfigEnv(process.env.NARADA_SITE_CONFIG),
+    operatorSurfaceKind,
+    mcpScope: process.env.NARADA_MCP_SCOPE?.trim() || 'none',
+    runtimeHostState: () => runtimeHost.snapshot(),
+    ...launchProcessContext,
+  };
 }
 
 async function loadRuntimeDependencies(runtimeContext = {}) {
@@ -77,36 +86,15 @@ async function loadRuntimeDependencies(runtimeContext = {}) {
 }
 
 function parseHealthOptions(args, env = process.env) {
-  const forwardedArgs = [];
-  let enabled = env.NARADA_AGENT_RUNTIME_HEALTH_ENABLED !== '0';
-  let host = env.NARADA_AGENT_RUNTIME_HEALTH_HOST || '127.0.0.1';
-  let port = Number.parseInt(env.NARADA_AGENT_RUNTIME_HEALTH_PORT || '0', 10);
-  for (let index = 0; index < args.length; index += 1) {
-    const arg = args[index];
-    if (arg === '--no-health') {
-      enabled = false;
-      continue;
-    }
-    if (arg === '--health-host') {
-      host = args[index + 1] || host;
-      index += 1;
-      continue;
-    }
-    if (arg === '--health-port') {
-      port = Number.parseInt(args[index + 1] || '0', 10);
-      index += 1;
-      continue;
-    }
-    forwardedArgs.push(arg);
-  }
-  return {
-    forwardedArgs,
-    health: {
-      enabled,
-      host,
-      port: Number.isFinite(port) && port >= 0 ? port : 0,
-    },
-  };
+  return parseEndpointOptions(args, env, {
+    disableFlag: '--no-health',
+    hostFlag: '--health-host',
+    portFlag: '--health-port',
+    enabledEnv: 'NARADA_AGENT_RUNTIME_HEALTH_ENABLED',
+    hostEnv: 'NARADA_AGENT_RUNTIME_HEALTH_HOST',
+    portEnv: 'NARADA_AGENT_RUNTIME_HEALTH_PORT',
+    resultKey: 'health',
+  });
 }
 
 function parseSiteConfigEnv(value) {
@@ -277,6 +265,40 @@ function renderWrapperEvents({ event, wrapperEventsJsonl, state }) {
   }
 }
 
+function handleRuntimeOutputEvent({
+  event,
+  healthProjection,
+  eventHub,
+  lifecycleDispatcher,
+  useInteractiveTerminalProjection,
+  renderProjectedEvent,
+  writeProjectedOutput,
+  rawJsonl,
+  wrapperEventsJsonl,
+  state,
+}) {
+  healthProjection?.observe(event);
+  eventHub.publish(event);
+  dispatchNarsLifecycleHooksForEvent(lifecycleDispatcher, event)
+    .then((result) => {
+      for (const failure of result.failures) console.error(lifecycleHookFailureLine(failure));
+    })
+    .catch((error) => console.error(`[agent-runtime-server] lifecycle hook dispatch failed: ${error instanceof Error ? error.message : String(error)}`));
+  if (useInteractiveTerminalProjection) {
+    for (const rendered of renderProjectedEvent(event)) {
+      if (typeof rendered === 'string') {
+        writeProjectedOutput(`${rendered}\n`, { preserveCurrentLine: rendered.startsWith('\n') });
+      } else if (rendered?.raw) {
+        writeProjectedOutput(rendered.raw, { preserveCurrentLine: rendered.raw.startsWith('\n'), prompt: rendered.newline !== false });
+        if (rendered.newline) writeProjectedOutput('\n', { preserveCurrentLine: true });
+      }
+    }
+  } else if (!rawJsonl) {
+    for (const rendered of formatHostStatusEvent(event)) process.stdout.write(`${rendered}\n`);
+  }
+  renderWrapperEvents({ event, wrapperEventsJsonl, state });
+}
+
 async function main() {
   const requestedArgs = process.argv.slice(2);
   const wrapperEventsJsonl = requestedArgs.includes('--wrapper-events-jsonl');
@@ -287,7 +309,7 @@ async function main() {
   const operatorSurfaceKind = valueAfterFlag(args, '--operator-surface') ?? process.env.NARADA_OPERATOR_SURFACE_KIND ?? 'agent-cli';
   const lifecycleDispatcher = createNarsLifecycleHookDispatcher();
   const lifecycleBinding = lifecycleBindingFromArgs(args, process.env);
-  const delegatedAuthorityHandoff = createDelegatedAuthorityHandoff({ args, env: process.env });
+  const delegatedAuthorityHandoff = createDelegatedAuthorityHandoff({ args, env: process.env, binding: lifecycleBinding });
   const launchProcessContext = {
     launchSessionId: process.env.NARADA_LAUNCH_SESSION_ID ?? null,
     processOwnership: process.env.NARADA_PROCESS_OWNERSHIP ?? null,
@@ -323,18 +345,12 @@ async function main() {
   const runtimeOutput = new PassThrough();
   let preliminaryRuntimeContext;
   try {
-    preliminaryRuntimeContext = createNarsRuntimeContext({
-      identity: lifecycleBinding.agent_id,
-      agentIdentityRef: lifecycleBinding.agent_identity_ref,
-      session: lifecycleBinding.session_id,
-      siteRoot: lifecycleBinding.metadata.site_root,
-      siteId: agentIdentitySiteId(lifecycleBinding.agent_identity_ref) ?? process.env.NARADA_SITE_ID ?? null,
-      siteConfig: parseSiteConfigEnv(process.env.NARADA_SITE_CONFIG),
+    preliminaryRuntimeContext = createNarsRuntimeContext(baseRuntimeContextOptions({
+      lifecycleBinding,
       operatorSurfaceKind,
-      mcpScope: process.env.NARADA_MCP_SCOPE?.trim() || 'all',
-      runtimeHostState: () => runtimeHost.snapshot(),
-      ...launchProcessContext,
-    });
+      launchProcessContext,
+      runtimeHost,
+    }));
   } catch (error) {
     runtimeHost.transition('failed', {
       reason: 'runtime_context_binding_failed',
@@ -386,8 +402,7 @@ async function main() {
       reason: 'projection_start_failed',
       error: error instanceof Error ? error.message : String(error),
     });
-    await closeServer(healthProjection?.server);
-    await closeServer(eventStreamProjection?.server);
+    await closeProjections({ healthProjection, eventStreamProjection });
     runtimeHost.transition('stopped', { reason: 'startup_cleanup_complete' });
     throw error;
   }
@@ -402,16 +417,12 @@ async function main() {
     const providerRuntimeBinding = resolveProviderRuntimeBinding(intelligenceProvider, { env: process.env });
 
     runtimeContext = createNarsRuntimeContext({
-      identity: lifecycleBinding.agent_id,
-      agentIdentityRef: lifecycleBinding.agent_identity_ref,
-      session: lifecycleBinding.session_id,
-      siteRoot: lifecycleBinding.metadata.site_root,
-      siteId: agentIdentitySiteId(lifecycleBinding.agent_identity_ref) ?? process.env.NARADA_SITE_ID ?? null,
-      siteConfig: parseSiteConfigEnv(process.env.NARADA_SITE_CONFIG),
-      operatorSurfaceKind,
-      mcpScope: process.env.NARADA_MCP_SCOPE?.trim() || 'all',
-      runtimeHostState: () => runtimeHost.snapshot(),
-      ...launchProcessContext,
+      ...baseRuntimeContextOptions({
+        lifecycleBinding,
+        operatorSurfaceKind,
+        launchProcessContext,
+        runtimeHost,
+      }),
       intelligenceProvider: providerRuntimeBinding.provider_id,
       narsDelegatedAuthorityHandoff: delegatedAuthorityHandoff,
       providerSettings: {
@@ -461,8 +472,7 @@ async function main() {
       reason: 'runtime_binding_failed',
       error: error instanceof Error ? error.message : String(error),
     });
-    await closeServer(healthProjection?.server);
-    await closeServer(eventStreamProjection?.server);
+    await closeProjections({ healthProjection, eventStreamProjection });
     runtimeHost.transition('stopped', { reason: 'startup_cleanup_complete' });
     throw error;
   }
@@ -528,26 +538,18 @@ async function main() {
       if (!line) continue;
       try {
         const event = JSON.parse(line);
-        healthProjection?.observe(event);
-        eventHub.publish(event);
-        dispatchNarsLifecycleHooksForEvent(lifecycleDispatcher, event)
-          .then((result) => {
-            for (const failure of result.failures) console.error(lifecycleHookFailureLine(failure));
-          })
-          .catch((error) => console.error(`[agent-runtime-server] lifecycle hook dispatch failed: ${error instanceof Error ? error.message : String(error)}`));
-        if (useInteractiveTerminalProjection) {
-          for (const rendered of renderProjectedEvent(event)) {
-            if (typeof rendered === 'string') {
-              writeProjectedOutput(`${rendered}\n`, { preserveCurrentLine: rendered.startsWith('\n') });
-            } else if (rendered?.raw) {
-              writeProjectedOutput(rendered.raw, { preserveCurrentLine: rendered.raw.startsWith('\n'), prompt: rendered.newline !== false });
-              if (rendered.newline) writeProjectedOutput('\n', { preserveCurrentLine: true });
-            }
-          }
-        } else if (!rawJsonl) {
-          for (const rendered of formatHostStatusEvent(event)) process.stdout.write(`${rendered}\n`);
-        }
-        renderWrapperEvents({ event, wrapperEventsJsonl, state });
+        handleRuntimeOutputEvent({
+          event,
+          healthProjection,
+          eventHub,
+          lifecycleDispatcher,
+          useInteractiveTerminalProjection,
+          renderProjectedEvent,
+          writeProjectedOutput,
+          rawJsonl,
+          wrapperEventsJsonl,
+          state,
+        });
       } catch {}
     }
   });
@@ -581,8 +583,7 @@ async function main() {
         exit_code: exitCode,
       });
     }
-    await closeServer(healthProjection?.server);
-    await closeServer(eventStreamProjection?.server);
+    await closeProjections({ healthProjection, eventStreamProjection });
     if (runtimeHost.state === 'closing') {
       runtimeHost.transition('stopped', { reason: 'projections_closed', exit_code: exitCode });
     }
@@ -593,6 +594,11 @@ async function main() {
 function closeServer(server) {
   if (!server?.listening) return Promise.resolve();
   return new Promise((resolve) => server.close(resolve));
+}
+
+async function closeProjections({ healthProjection, eventStreamProjection } = {}) {
+  await closeServer(healthProjection?.server);
+  await closeServer(eventStreamProjection?.server);
 }
 
 export {

@@ -1,13 +1,9 @@
-import { appendFileSync } from 'node:fs';
 import {
   publicNarsArtifactRecord,
   readNarsArtifact,
   readNarsArtifactContent,
   readNarsArtifactIndex,
-  registerNarsArtifact,
-  transitionNarsArtifact,
 } from '@narada2/nars-session-core/artifacts';
-import { readNarsEventLog } from '@narada2/nars-session-core/event-log';
 
 function sendJsonResponse(response, statusCode, payload) {
   response.writeHead(statusCode, { 'content-type': 'application/json; charset=utf-8' });
@@ -25,12 +21,24 @@ function artifactHttpError(response, error) {
   const code = error?.code ?? 'artifact_error';
   const status = code === 'artifact_not_found' || code === 'artifact_content_missing'
     ? 404
+    : code === 'session_core_unavailable'
+      ? 503
     : code === 'artifact_path_outside_admitted_roots'
       ? 403
       : code === 'invalid_nars_artifact_lifecycle_transition'
         ? 409
         : 400;
   sendJsonResponse(response, status, { schema: 'narada.nars.artifact_error.v1', error: code, message: error instanceof Error ? error.message : String(error), details: error?.details ?? null });
+}
+
+function requireSessionCore(runtimeContext, method) {
+  const sessionCore = runtimeContext?.sessionCore;
+  if (!sessionCore || typeof sessionCore[method] !== 'function') {
+    const error = new Error(`session_core_unavailable:${method}`);
+    error.code = 'session_core_unavailable';
+    throw error;
+  }
+  return sessionCore;
 }
 
 export async function handleArtifactHttpRequest({ request, response, runtimeContext }) {
@@ -49,20 +57,10 @@ export async function handleArtifactHttpRequest({ request, response, runtimeCont
     if (request.method === 'PATCH' && artifactId && !content && !message) {
       const params = await readRequestJson(request);
       const nextState = params.lifecycle_state ?? params.state;
-      const transition = runtimeContext.sessionCore?.transitionArtifact
-        ? runtimeContext.sessionCore.transitionArtifact(artifactId, nextState, {
-          reason: params.reason,
-          requested_by: params.requested_by,
-        })
-        : transitionNarsArtifact({
-          sessionPath: runtimeContext.sessionPath,
-          artifactId,
-          nextState,
-          evidence: {
-            reason: params.reason,
-            requested_by: params.requested_by,
-          },
-        });
+      const transition = requireSessionCore(runtimeContext, 'transitionArtifact').transitionArtifact(artifactId, nextState, {
+        reason: params.reason,
+        requested_by: params.requested_by,
+      });
       sendJsonResponse(response, 200, {
         schema: 'narada.nars.artifact_lifecycle_transition.v1',
         changed: transition.changed,
@@ -86,9 +84,7 @@ export async function handleArtifactHttpRequest({ request, response, runtimeCont
         renderHint: params.render_hint,
         accessScope: params.access?.scope ?? params.access_scope,
       };
-      const registered = runtimeContext.sessionCore?.registerArtifact
-        ? runtimeContext.sessionCore.registerArtifact(artifactOptions)
-        : registerNarsArtifact(artifactOptions);
+      const registered = requireSessionCore(runtimeContext, 'registerArtifact').registerArtifact(artifactOptions);
       sendJsonResponse(response, 201, { schema: 'narada.nars.artifact_registered.v1', artifact: registered.public_record });
       return true;
     }
@@ -96,7 +92,7 @@ export async function handleArtifactHttpRequest({ request, response, runtimeCont
       const params = await readRequestJson(request);
       const artifact = publicNarsArtifactRecord(readNarsArtifact({ sessionPath: runtimeContext.sessionPath, artifactId }));
       const messageEvent = buildArtifactAssistantMessageEvent({ runtimeContext, artifact, params });
-      const published = publishRuntimeEvent({ eventHub: runtimeContext.eventHub, runtimeContext, event: messageEvent });
+      const published = requireSessionCore(runtimeContext, 'appendEvent').appendEvent(messageEvent);
       sendJsonResponse(response, 201, {
         schema: 'narada.nars.artifact_message_presented.v1',
         status: 'presented',
@@ -156,27 +152,6 @@ function artifactMessagePartFromRecord(artifact, params = {}) {
     ...(artifact.title || params.title ? { title: String(artifact.title ?? params.title) } : {}),
     ...(artifact.render_hint || params.render_hint ? { render_hint: String(artifact.render_hint ?? params.render_hint) } : { render_hint: 'inline' }),
   };
-}
-
-function publishRuntimeEvent({ eventHub, runtimeContext, event }) {
-  if (runtimeContext.sessionCore?.appendEvent) {
-    return runtimeContext.sessionCore.appendEvent(event);
-  }
-  const sequencedEvent = withNextEventLogSequence(event, runtimeContext.eventsPath);
-  const published = eventHub?.publish(sequencedEvent) ?? sequencedEvent;
-  if (runtimeContext.eventsPath) appendFileSync(runtimeContext.eventsPath, `${JSON.stringify(published)}\n`, 'utf8');
-  return published;
-}
-
-function withNextEventLogSequence(event, eventsPath) {
-  if (!eventsPath) return event;
-  const currentSequence = Number(event?.event_sequence ?? event?.sequence);
-  const maxSequence = readNarsEventLog(eventsPath).events.reduce((max, entry, index) => {
-    const sequence = Number(entry?.event_sequence ?? entry?.sequence);
-    return Math.max(max, Number.isFinite(sequence) ? sequence : index + 1);
-  }, 0);
-  if (Number.isFinite(currentSequence) && currentSequence > maxSequence) return event;
-  return { ...event, event_sequence: maxSequence + 1, sequence: maxSequence + 1 };
 }
 
 function optionalText(value) {

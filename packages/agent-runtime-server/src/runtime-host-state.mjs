@@ -1,3 +1,5 @@
+import { createNarsStateMachine } from './runtime-state-machine.mjs';
+
 export const NARS_RUNTIME_HOST_STATE_SCHEMA = 'narada.nars.runtime_host_state.v1';
 
 export const NARS_RUNTIME_HOST_STATES = Object.freeze([
@@ -47,35 +49,17 @@ export function createNarsRuntimeHostStateMachine({
   onTransition = () => {},
 } = {}) {
   if (!isNarsRuntimeHostState(initialState)) throw new Error(`invalid_nars_runtime_host_state:${initialState}`);
-  let state = initialState;
-  const history = [];
-
-  function transition(nextState, evidence = {}) {
-    assertNarsRuntimeHostTransition(state, nextState);
-    const previousState = state;
-    state = nextState;
-    const record = {
-      schema: NARS_RUNTIME_HOST_STATE_SCHEMA,
-      event: 'runtime_host_lifecycle_transition',
-      timestamp: now(),
-      previous_state: previousState,
-      runtime_host_state: nextState,
-      ...metadata,
-      ...evidence,
-    };
-    history.push(record);
-    onTransition(record);
-    return record;
-  }
-
-  return Object.freeze({
-    get state() { return state; },
-    transition,
-    snapshot: () => ({
-      schema: NARS_RUNTIME_HOST_STATE_SCHEMA,
-      runtime_host_state: state,
-      ...metadata,
-    }),
-    history: () => history.slice(),
-  });
+  return Object.freeze(createNarsStateMachine({
+    initialState,
+    metadata,
+    schema: NARS_RUNTIME_HOST_STATE_SCHEMA,
+    event: 'runtime_host_lifecycle_transition',
+    stateField: 'runtime_host_state',
+    includeTerminalState: false,
+    isTerminalState: () => false,
+    assertTransition: assertNarsRuntimeHostTransition,
+    recordSameState: true,
+    now,
+    onTransition,
+  }));
 }

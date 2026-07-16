@@ -8,6 +8,7 @@ import {
 import { isNarsSessionCoreMethod } from '@narada2/nars-session-core/session-control-contract';
 import { decodeWebSocketFrames, encodeWebSocketTextFrame, websocketAcceptValue } from './runtime-server-websocket.mjs';
 import { isNarsRuntimeServerMethod } from './runtime-control-contract.mjs';
+import { parseEndpointOptions } from './runtime-server-options.mjs';
 
 export function translateCarrierInputDelivery(message) {
   if (message?.method !== 'carrier.input.deliver') return { ok: true, request: message };
@@ -56,6 +57,113 @@ function resolveEventStreamParams(params = {}) {
   return { ok: true, view, pageSize, filters };
 }
 
+function websocketError(send, { requestId, code, message, view, method } = {}) {
+  send({
+    schema: 'narada.nars.websocket.error.v1',
+    event: 'websocket_error',
+    ...(requestId === undefined ? {} : { request_id: requestId }),
+    code,
+    ...(message === undefined ? {} : { message }),
+    ...(view === undefined ? {} : { view }),
+    ...(method === undefined ? {} : { method }),
+  });
+}
+
+function unsubscribeAll(subscriptions) {
+  for (const subscription of subscriptions) subscription.unsubscribe();
+  subscriptions.clear();
+}
+
+function subscribeToEventStream({ eventHub, subscriptions, send, message, eventsPath }) {
+  const params = message.params ?? {};
+  const streamParams = resolveEventStreamParams(params);
+  if (!streamParams.ok) return streamParams;
+  const { filters, view, pageSize } = streamParams;
+  const subscriptionId = params.subscription_id ?? `sub_${message.id ?? Date.now()}`;
+  for (const existing of subscriptions) {
+    if (existing.subscriptionId !== subscriptionId) continue;
+    existing.unsubscribe();
+    subscriptions.delete(existing);
+  }
+  const subscription = eventHub.subscribe({ subscriptionId, filters, send });
+  subscriptions.add(subscription);
+  if (params.include_replay === false) subscription.markLive({ source: 'subscription_without_replay' });
+  else subscription.beginReplay({ source: eventsPath ? 'event_log' : 'memory_event_hub' });
+  const replayPage = params.include_replay === false || !eventsPath ? null : readNarsEventLogPage({
+    eventsPath,
+    afterSequence: params.since_sequence,
+    sinceTimestamp: params.since_timestamp,
+    filters,
+    view,
+    limit: pageSize,
+    direction: params.since_sequence != null || params.since_timestamp ? 'forward' : 'backward',
+  });
+  const replay = params.include_replay === false
+    ? []
+    : replayPage ? replayPage.events : eventHub.replayFor({
+      sinceSequence: params.since_sequence,
+      sinceTimestamp: params.since_timestamp,
+      filters,
+      maxReplay: pageSize,
+    });
+  send({
+    schema: 'narada.nars.events.subscription.v1',
+    event: 'session_events_subscription_started',
+    request_id: message.id ?? null,
+    subscription_id: subscriptionId,
+    transport: 'websocket',
+    view,
+    page_size: replayPage?.limit ?? pageSize,
+    replay_count: replay.length,
+    event_count: replayPage?.event_count ?? replay.length,
+    has_more: replayPage?.has_more ?? false,
+    replay_source: replayPage ? replayPage.source : 'memory_event_hub',
+    cursor: replayPage?.cursor ?? eventHub.cursor(),
+    filters,
+  });
+  for (const event of replay) {
+    send({ schema: 'narada.nars.events.envelope.v1', event: 'session_event', subscription_id: subscriptionId, cursor: { sequence: event.event_sequence, next_sequence: event.event_sequence + 1 }, payload: event });
+  }
+  if (subscription.state === 'replaying') {
+    subscription.markLive({
+      source: 'replay_complete',
+      replay_last_sequence: replayPage?.last_sequence ?? replay.at(-1)?.event_sequence ?? replay.at(-1)?.sequence ?? null,
+    });
+  }
+  send({
+    schema: 'narada.nars.events.subscription.v1',
+    event: 'session_events_replay_completed',
+    request_id: message.id ?? null,
+    subscription_id: subscriptionId,
+    transport: 'websocket',
+    view,
+    replay_count: replay.length,
+    has_more: replayPage?.has_more ?? false,
+    cursor: replayPage?.cursor ?? eventHub.cursor(),
+  });
+  return { ok: true };
+}
+
+function readEventStreamPage({ eventsPath, message }) {
+  const params = message.params ?? {};
+  const streamParams = resolveEventStreamParams(params);
+  if (!streamParams.ok) return streamParams;
+  return {
+    ok: true,
+    streamParams,
+    page: readNarsEventLogPage({
+      eventsPath,
+      afterSequence: params.after_sequence ?? params.since_sequence,
+      beforeSequence: params.before_sequence,
+      sinceTimestamp: params.since_timestamp,
+      filters: streamParams.filters,
+      view: streamParams.view,
+      limit: params.limit ?? streamParams.pageSize,
+      direction: params.direction,
+    }),
+  };
+}
+
 export function startEventStreamProjection({ childStdin, eventHub, host, port, eventsPath = null }) {
   const server = createServer((request, response) => {
     response.writeHead(426, { 'content-type': 'application/json' });
@@ -101,95 +209,18 @@ export function startEventStreamProjection({ childStdin, eventHub, host, port, e
           continue;
         }
         if (message.method === 'session.events.subscribe') {
-          const params = message.params ?? {};
-          const streamParams = resolveEventStreamParams(params);
-          if (!streamParams.ok) {
-            send({ schema: 'narada.nars.websocket.error.v1', event: 'websocket_error', request_id: message.id ?? null, code: streamParams.code, view: streamParams.view });
-            continue;
-          }
-          const { filters, view, pageSize } = streamParams;
-          const subscriptionId = params.subscription_id ?? `sub_${message.id ?? Date.now()}`;
-          for (const existing of subscriptions) {
-            if (existing.subscriptionId !== subscriptionId) continue;
-            existing.unsubscribe();
-            subscriptions.delete(existing);
-          }
-          const subscription = eventHub.subscribe({ subscriptionId, filters, send });
-          subscriptions.add(subscription);
-          if (params.include_replay === false) subscription.markLive({ source: 'subscription_without_replay' });
-          else subscription.beginReplay({ source: eventsPath ? 'event_log' : 'memory_event_hub' });
-          const replayPage = params.include_replay === false || !eventsPath ? null : readNarsEventLogPage({
-            eventsPath,
-            afterSequence: params.since_sequence,
-            sinceTimestamp: params.since_timestamp,
-            filters,
-            view,
-            limit: pageSize,
-            direction: params.since_sequence != null || params.since_timestamp ? 'forward' : 'backward',
-          });
-          const replay = params.include_replay === false
-            ? []
-            : replayPage ? replayPage.events : eventHub.replayFor({
-              sinceSequence: params.since_sequence,
-              sinceTimestamp: params.since_timestamp,
-              filters,
-              maxReplay: pageSize,
-            });
-          send({
-            schema: 'narada.nars.events.subscription.v1',
-            event: 'session_events_subscription_started',
-            request_id: message.id ?? null,
-            subscription_id: subscriptionId,
-            transport: 'websocket',
-            view,
-            page_size: replayPage?.limit ?? pageSize,
-            replay_count: replay.length,
-            event_count: replayPage?.event_count ?? replay.length,
-            has_more: replayPage?.has_more ?? false,
-            replay_source: replayPage ? replayPage.source : 'memory_event_hub',
-            cursor: replayPage?.cursor ?? eventHub.cursor(),
-            filters,
-          });
-          for (const event of replay) {
-            send({ schema: 'narada.nars.events.envelope.v1', event: 'session_event', subscription_id: subscriptionId, cursor: { sequence: event.event_sequence, next_sequence: event.event_sequence + 1 }, payload: event });
-          }
-          if (subscription.state === 'replaying') {
-            subscription.markLive({
-              source: 'replay_complete',
-              replay_last_sequence: replayPage?.last_sequence ?? replay.at(-1)?.event_sequence ?? replay.at(-1)?.sequence ?? null,
-            });
-          }
-          send({
-            schema: 'narada.nars.events.subscription.v1',
-            event: 'session_events_replay_completed',
-            request_id: message.id ?? null,
-            subscription_id: subscriptionId,
-            transport: 'websocket',
-            view,
-            replay_count: replay.length,
-            has_more: replayPage?.has_more ?? false,
-            cursor: replayPage?.cursor ?? eventHub.cursor(),
-          });
+          const result = subscribeToEventStream({ eventHub, subscriptions, send, message, eventsPath });
+          if (!result.ok) websocketError(send, { requestId: message.id ?? null, code: result.code, view: result.view });
           continue;
         }
         if (message.method === 'session.events.read') {
-          const params = message.params ?? {};
-          const streamParams = resolveEventStreamParams(params);
-          if (!streamParams.ok) {
-            send({ schema: 'narada.nars.websocket.error.v1', event: 'websocket_error', request_id: message.id ?? null, code: streamParams.code, view: streamParams.view });
+          const result = readEventStreamPage({ eventsPath, message });
+          if (!result.ok) {
+            websocketError(send, { requestId: message.id ?? null, code: result.code, view: result.view });
             continue;
           }
           send({
-            ...readNarsEventLogPage({
-              eventsPath,
-              afterSequence: params.after_sequence ?? params.since_sequence,
-              beforeSequence: params.before_sequence,
-              sinceTimestamp: params.since_timestamp,
-              filters: streamParams.filters,
-              view: streamParams.view,
-              limit: params.limit ?? streamParams.pageSize,
-              direction: params.direction,
-            }),
+            ...result.page,
             event: 'session_events_read',
             request_id: message.id ?? null,
             transport: 'websocket',
@@ -227,12 +258,10 @@ export function startEventStreamProjection({ childStdin, eventHub, host, port, e
       }
     });
     socket.on('close', () => {
-      for (const subscription of subscriptions) subscription.unsubscribe();
-      subscriptions.clear();
+      unsubscribeAll(subscriptions);
     });
     socket.on('error', () => {
-      for (const subscription of subscriptions) subscription.unsubscribe();
-      subscriptions.clear();
+      unsubscribeAll(subscriptions);
     });
   });
   return new Promise((resolve, reject) => {
@@ -247,35 +276,14 @@ export function startEventStreamProjection({ childStdin, eventHub, host, port, e
 }
 
 export function parseEventStreamOptions(args, env = process.env) {
-  const forwardedArgs = [];
-  let enabled = env.NARADA_AGENT_RUNTIME_EVENTS_ENABLED !== '0';
-  let host = env.NARADA_AGENT_RUNTIME_EVENTS_HOST || '127.0.0.1';
-  let port = Number.parseInt(env.NARADA_AGENT_RUNTIME_EVENTS_PORT || '0', 10);
-  for (let index = 0; index < args.length; index += 1) {
-    const arg = args[index];
-    if (arg === '--no-events') {
-      enabled = false;
-      continue;
-    }
-    if (arg === '--event-host') {
-      host = args[index + 1] || host;
-      index += 1;
-      continue;
-    }
-    if (arg === '--event-port') {
-      port = Number.parseInt(args[index + 1] || '0', 10);
-      index += 1;
-      continue;
-    }
-    forwardedArgs.push(arg);
-  }
-  return {
-    forwardedArgs,
-    events: {
-      enabled,
-      host,
-      port: Number.isFinite(port) && port >= 0 ? port : 0,
-    },
-  };
+  return parseEndpointOptions(args, env, {
+    disableFlag: '--no-events',
+    hostFlag: '--event-host',
+    portFlag: '--event-port',
+    enabledEnv: 'NARADA_AGENT_RUNTIME_EVENTS_ENABLED',
+    hostEnv: 'NARADA_AGENT_RUNTIME_EVENTS_HOST',
+    portEnv: 'NARADA_AGENT_RUNTIME_EVENTS_PORT',
+    resultKey: 'events',
+  });
 }
 

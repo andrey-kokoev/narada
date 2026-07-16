@@ -1,3 +1,5 @@
+import { createNarsStateMachine } from './runtime-state-machine.mjs';
+
 export const NARS_HEALTH_PROJECTION_REQUEST_STATE_SCHEMA = 'narada.nars.health_projection_request_state.v1';
 
 export const NARS_HEALTH_PROJECTION_REQUEST_STATES = Object.freeze([
@@ -58,41 +60,22 @@ export function createNarsHealthProjectionRequestStateMachine({
   onTransition = () => {},
 } = {}) {
   if (!requestId) throw new Error('narada_health_projection_request_id_required');
-  let state = null;
-  const history = [];
-
-  function transition(nextState, evidence = {}) {
-    assertNarsHealthProjectionRequestTransition(state, nextState);
-    if (state === nextState) return history.at(-1) ?? null;
-    const previousState = state;
-    state = nextState;
-    const record = {
-      schema: NARS_HEALTH_PROJECTION_REQUEST_STATE_SCHEMA,
-      event: 'health_projection_request_state_transition',
-      timestamp: now(),
-      request_id: requestId,
-      previous_state: previousState,
-      request_state: nextState,
-      terminal_state: isNarsHealthProjectionRequestTerminalState(nextState) ? nextState : null,
-      ...metadata,
-      ...evidence,
-    };
-    history.push(record);
-    onTransition(record);
-    return record;
-  }
-
+  const machine = createNarsStateMachine({
+    identityFields: { request_id: requestId },
+    metadata,
+    schema: NARS_HEALTH_PROJECTION_REQUEST_STATE_SCHEMA,
+    event: 'health_projection_request_state_transition',
+    stateField: 'request_state',
+    isTerminalState: isNarsHealthProjectionRequestTerminalState,
+    assertTransition: assertNarsHealthProjectionRequestTransition,
+    now,
+    onTransition,
+  });
   return Object.freeze({
-    get state() { return state; },
+    get state() { return machine.state; },
     requestId,
-    transition,
-    snapshot: () => ({
-      schema: NARS_HEALTH_PROJECTION_REQUEST_STATE_SCHEMA,
-      request_id: requestId,
-      request_state: state,
-      terminal_state: isNarsHealthProjectionRequestTerminalState(state) ? state : null,
-      ...metadata,
-    }),
-    history: () => history.slice(),
+    transition: machine.transition,
+    snapshot: machine.snapshot,
+    history: machine.history,
   });
 }

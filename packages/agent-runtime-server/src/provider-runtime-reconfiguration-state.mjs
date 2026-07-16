@@ -1,3 +1,5 @@
+import { createNarsStateMachine } from './runtime-state-machine.mjs';
+
 export const NARS_PROVIDER_RUNTIME_RECONFIGURATION_STATE_SCHEMA = 'narada.nars.provider_runtime_reconfiguration_state.v1';
 
 export const NARS_PROVIDER_RUNTIME_RECONFIGURATION_STATES = Object.freeze([
@@ -60,42 +62,23 @@ export function createNarsProviderRuntimeReconfigurationStateMachine({
   onTransition = () => {},
 } = {}) {
   if (!requestId) throw new Error('narada_provider_runtime_reconfiguration_request_id_required');
-  let state = null;
-  const history = [];
-
-  function transition(nextState, evidence = {}) {
-    assertNarsProviderRuntimeReconfigurationTransition(state, nextState);
-    if (state === nextState) return history.at(-1) ?? null;
-    const previousState = state;
-    state = nextState;
-    const record = {
-      schema: NARS_PROVIDER_RUNTIME_RECONFIGURATION_STATE_SCHEMA,
-      event: 'provider_runtime_reconfiguration_state_transition',
-      timestamp: now(),
-      request_id: requestId,
-      previous_state: previousState,
-      reconfiguration_state: nextState,
-      terminal_state: isNarsProviderRuntimeReconfigurationTerminalState(nextState) ? nextState : null,
-      ...metadata,
-      ...evidence,
-    };
-    history.push(record);
-    onTransition(record);
-    return record;
-  }
-
+  const machine = createNarsStateMachine({
+    identityFields: { request_id: requestId },
+    metadata,
+    schema: NARS_PROVIDER_RUNTIME_RECONFIGURATION_STATE_SCHEMA,
+    event: 'provider_runtime_reconfiguration_state_transition',
+    stateField: 'reconfiguration_state',
+    isTerminalState: isNarsProviderRuntimeReconfigurationTerminalState,
+    assertTransition: assertNarsProviderRuntimeReconfigurationTransition,
+    now,
+    onTransition,
+  });
   return Object.freeze({
-    get state() { return state; },
+    get state() { return machine.state; },
     requestId,
-    transition,
-    snapshot: () => ({
-      schema: NARS_PROVIDER_RUNTIME_RECONFIGURATION_STATE_SCHEMA,
-      request_id: requestId,
-      reconfiguration_state: state,
-      terminal_state: isNarsProviderRuntimeReconfigurationTerminalState(state) ? state : null,
-      ...metadata,
-    }),
-    history: () => history.slice(),
+    transition: machine.transition,
+    snapshot: machine.snapshot,
+    history: machine.history,
   });
 }
 

@@ -1,13 +1,14 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { once } from 'node:events';
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { createServer, request as httpRequest } from 'node:http';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { PassThrough } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 import { spawnTestChild } from '@narada2/process-launch-posture';
+import { registerNarsArtifact } from '@narada2/nars-session-core/artifacts';
 import { resolveNaradaSitePaths } from '@narada2/site-paths';
 import * as canonicalRuntimeEvents from '../src/runtime-server-events.mjs';
 import {
@@ -1558,6 +1559,17 @@ test('HTTP artifact endpoints register and serve session-scoped HTML and audio a
   writeFileSync(sourcePath, '<!doctype html><h1>NARS Artifact</h1>', 'utf8');
   const childStdin = new PassThrough();
   const eventHub = createEventHub();
+  let eventSequence = 0;
+  const sessionCore = {
+    registerArtifact: (options) => registerNarsArtifact(options),
+    appendEvent: (event) => {
+      const sequence = ++eventSequence;
+      const published = { ...event, event_sequence: sequence, sequence };
+      appendFileSync(eventsPath, `${JSON.stringify(published)}\n`, 'utf8');
+      eventHub.publish(published);
+      return published;
+    },
+  };
   const agentIdentityRef = {
     schema: 'narada.agent_identity_ref.v2',
     identity_scope: { kind: 'narada_site', site_id: 'carrier_artifact_http' },
@@ -1580,6 +1592,7 @@ test('HTTP artifact endpoints register and serve session-scoped HTML and audio a
       sessionPath,
       eventsPath,
       eventHub,
+      sessionCore,
     },
   });
   try {
@@ -1657,6 +1670,37 @@ test('HTTP artifact endpoints register and serve session-scoped HTML and audio a
   }
 });
 
+test('HTTP artifact mutations refuse before session-core authority binding', async () => {
+  const siteRoot = mkdtempSync(join(tmpdir(), 'narada-runtime-artifact-authority-'));
+  const sessionPath = resolveNaradaSitePaths({ siteRoot, sessionId: 'carrier_artifact_unbound' }).narsSessionPath;
+  const sourcePath = join(dirname(sessionPath), 'report.html');
+  mkdirSync(dirname(sourcePath), { recursive: true });
+  writeFileSync(sourcePath, '<!doctype html><h1>Unbound artifact</h1>', 'utf8');
+  const projection = await startHealthProjection({
+    childStdin: new PassThrough(),
+    host: '127.0.0.1',
+    port: 0,
+    runtimeContext: {
+      identity: 'resident',
+      session: 'carrier_artifact_unbound',
+      siteRoot,
+      sessionPath,
+      eventsPath: join(dirname(sessionPath), 'events.jsonl'),
+    },
+  });
+  try {
+    const response = await fetch(new URL('/sessions/carrier_artifact_unbound/artifacts', projection.url), {
+      method: 'POST',
+      body: JSON.stringify({ source_path: sourcePath, kind: 'html', title: 'Unbound artifact' }),
+    });
+    assert.equal(response.status, 503);
+    assert.equal((await response.json()).error, 'session_core_unavailable');
+  } finally {
+    projection.server.close();
+    rmSync(siteRoot, { recursive: true, force: true });
+  }
+});
+
 test('narada-owned entrypoint runs the session-core control runtime in process', async () => {
   const siteRoot = mkdtempSync(join(tmpdir(), 'narada-agent-runtime-server-package-'));
   mkdirSync(join(siteRoot, '.ai', 'mcp'), { recursive: true });
@@ -1693,8 +1737,8 @@ test('narada-owned entrypoint runs the session-core control runtime in process',
     assert.equal(events[0].event, 'session_started');
     assert.equal(events[0].agent_id, 'narada.test');
     assert.equal(events[0].provider, 'codex-subscription');
-    assert.equal(events[0].mcp_scope, 'all');
-    assert.equal(events[0].mcp_operational_state, 'starting');
+    assert.equal(events[0].mcp_scope, 'none');
+    assert.equal(events[0].mcp_operational_state, 'disabled');
     assert.equal(events[0].delegated_authority_handoff?.schema, 'narada.nars.delegated_authority_handoff.v1');
     assert.equal(events[0].delegated_authority_handoff?.crossing_regime, 'nars_runtime_server_to_carrier_substrate');
     assert.equal(events[0].delegated_authority_handoff?.target?.package, '@narada2/carrier-runtime');

@@ -22,6 +22,18 @@ function identityProjectionFields(event) {
   return fields;
 }
 
+function wrapperEventEnvelope(event, eventName, { includeRequestId = false, includeSourceEvent = false } = {}) {
+  return {
+    schema: 'narada.agent_runtime_server.wrapper_event.v1',
+    event: eventName,
+    timestamp: event.timestamp ?? new Date().toISOString(),
+    ...(includeSourceEvent ? { source_event: event.event } : {}),
+    ...(includeRequestId ? { request_id: event.request_id ?? null } : {}),
+    ...identityProjectionFields(event),
+    session_id: event.session_id ?? null,
+  };
+}
+
 function formatAgentWebUiLaunchCommand(event) {
   const eventEndpoint = event?.event_endpoint ? String(event.event_endpoint) : null;
   if (!eventEndpoint) return null;
@@ -76,11 +88,7 @@ export function formatStartupMcpEvent(event) {
   if (event.mcp_operational_state == null) return null;
   if (event.mcp_operational_state === 'healthy') return null;
   return {
-    schema: 'narada.agent_runtime_server.wrapper_event.v1',
-    event: 'mcp_startup_status',
-    timestamp: event.timestamp ?? new Date().toISOString(),
-    ...identityProjectionFields(event),
-    session_id: event.session_id ?? null,
+    ...wrapperEventEnvelope(event, 'mcp_startup_status'),
     mcp_operational_state: event.mcp_operational_state ?? null,
     mcp_startup_failure_count: event.mcp_startup_failure_count ?? 0,
     mcp_startup_failure_summary: event.mcp_startup_failure_summary ?? '0',
@@ -102,11 +110,7 @@ export function formatRuntimeMcpFaultEvent(event) {
   if (!event || event.event !== 'carrier_diagnostic_recorded') return null;
   if (event.diagnostic_code !== 'mcp_runtime_fault') return null;
   return {
-    schema: 'narada.agent_runtime_server.wrapper_event.v1',
-    event: 'mcp_runtime_fault',
-    timestamp: event.timestamp ?? new Date().toISOString(),
-    ...identityProjectionFields(event),
-    session_id: event.session_id ?? null,
+    ...wrapperEventEnvelope(event, 'mcp_runtime_fault'),
     diagnostic_code: event.diagnostic_code,
     server_name: event.server_name ?? 'unknown',
     tool_name: event.tool_name ?? '<missing>',
@@ -125,12 +129,7 @@ export function formatRuntimeProjectionFailureSummary(event) {
 export function formatRuntimeProjectionFailureEvent(event) {
   if (!event || event.event !== 'runtime_projection_failure') return null;
   return {
-    schema: 'narada.agent_runtime_server.wrapper_event.v1',
-    event: 'runtime_projection_failure',
-    timestamp: event.timestamp ?? new Date().toISOString(),
-    ...identityProjectionFields(event),
-    session_id: event.session_id ?? null,
-    request_id: event.request_id ?? null,
+    ...wrapperEventEnvelope(event, 'runtime_projection_failure', { includeRequestId: true }),
     projection: event.projection ?? null,
     request_state: event.request_state ?? null,
     terminal_state: event.terminal_state ?? null,
@@ -148,11 +147,7 @@ export function formatControlInputBridgeErrorSummary(event) {
 export function formatControlInputBridgeErrorEvent(event) {
   if (!event || event.event !== 'runtime_control_input_bridge_error') return null;
   return {
-    schema: 'narada.agent_runtime_server.wrapper_event.v1',
-    event: 'control_input_bridge_error',
-    timestamp: event.timestamp ?? new Date().toISOString(),
-    ...identityProjectionFields(event),
-    session_id: event.session_id ?? null,
+    ...wrapperEventEnvelope(event, 'control_input_bridge_error'),
     control_path: event.control_path ?? null,
     error_code: event.error_code ?? null,
     error: event.error ?? null,
@@ -179,13 +174,7 @@ export function formatSessionWorkflowEvent(event) {
   if (!event.recommended_action || event.recommended_action === 'review_session_summary') return null;
   if (!event.recommended_command) return null;
   return {
-    schema: 'narada.agent_runtime_server.wrapper_event.v1',
-    event: 'session_workflow_recommendation',
-    timestamp: event.timestamp ?? new Date().toISOString(),
-    source_event: event.event,
-    request_id: event.request_id ?? null,
-    ...identityProjectionFields(event),
-    session_id: event.session_id ?? null,
+    ...wrapperEventEnvelope(event, 'session_workflow_recommendation', { includeRequestId: true, includeSourceEvent: true }),
     operational_posture: event.operational_posture ?? null,
     operational_posture_display: event.operational_posture_display ?? null,
     recommended_action: event.recommended_action ?? null,
@@ -202,13 +191,7 @@ export function formatSessionWorkflowEvent(event) {
 export function formatSessionOperationsEvent(event) {
   if (!event || event.event !== 'session_operations') return null;
   return {
-    schema: 'narada.agent_runtime_server.wrapper_event.v1',
-    event: 'session_operations_snapshot',
-    timestamp: event.timestamp ?? new Date().toISOString(),
-    source_event: event.event,
-    request_id: event.request_id ?? null,
-    ...identityProjectionFields(event),
-    session_id: event.session_id ?? null,
+    ...wrapperEventEnvelope(event, 'session_operations_snapshot', { includeRequestId: true, includeSourceEvent: true }),
     terminal_state: event.terminal_state ?? null,
     active_turn_state: event.active_turn_state ?? null,
     active_turn_id: event.active_turn_id ?? null,
@@ -248,13 +231,7 @@ export function formatPreflightWorkflowEvent(event) {
   if (!event.mcp_preflight_recommended_action || event.mcp_preflight_recommended_action === 'start_session') return null;
   if (!event.mcp_preflight_recommended_command) return null;
   return {
-    schema: 'narada.agent_runtime_server.wrapper_event.v1',
-    event: 'preflight_workflow_recommendation',
-    timestamp: event.timestamp ?? new Date().toISOString(),
-    source_event: event.event,
-    request_id: event.request_id ?? null,
-    ...identityProjectionFields(event),
-    session_id: event.session_id ?? null,
+    ...wrapperEventEnvelope(event, 'preflight_workflow_recommendation', { includeRequestId: true, includeSourceEvent: true }),
     mcp_preflight_operational_state: event.mcp_preflight_operational_state ?? null,
     mcp_preflight_recommended_action: event.mcp_preflight_recommended_action ?? null,
     mcp_preflight_recommended_action_display: event.mcp_preflight_recommended_action_display ?? null,
@@ -270,11 +247,7 @@ export function formatPreflightWorkflowEvent(event) {
 export function formatWrapperStatusEvent(event) {
   if (!event || (!isSessionLifecycleEvent(event) && event.event !== 'session_operations')) return null;
   return {
-    schema: 'narada.agent_runtime_server.wrapper_event.v1',
-    event: 'session_status_snapshot',
-    timestamp: event.timestamp ?? new Date().toISOString(),
-    source_event: event.event,
-    request_id: event.request_id ?? null,
+    ...wrapperEventEnvelope(event, 'session_status_snapshot', { includeRequestId: true, includeSourceEvent: true }),
     terminal_state: event.terminal_state ?? null,
     ...identityProjectionFields(event),
     session_id: event.session_id ?? null,
