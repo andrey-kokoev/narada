@@ -4,10 +4,13 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { vol } from 'memfs';
 import { buildWorkspaceLaunchSelectionHtml } from '../../src/commands/launcher-selection-ui.js';
+import { createWorkspaceLaunchAdmissionPolicy } from '../../src/commands/workspace-launch-admission.js';
 import { listenWorkspaceLaunchUiServer } from '../../src/commands/workspace-launch-ui-server.js';
 import { workspaceLaunchCommand, workspaceLaunchPlanCommand } from '../../src/commands/workspace-launch-application.js';
+import { buildAgentPlan } from '../../src/commands/workspace-launch-plan-builder.js';
+import { workspaceLaunchOptionsFromBrowserSelection } from '../../src/commands/workspace-launch-selection-adapters.js';
 import { buildWorkspaceLaunchSelectionUiModel, explainMcpCommand, initialOperatorSurfaceValues, initialRoleValuesForInteractiveSelection, intelligenceProviderChoices, intelligenceProviderChoicesForLaunchSelection, normalizeInteractiveOperatorSurfaceValues, readWorkspaceLaunchRememberedSelection, registryDefaultIntelligenceProviderLabel, registryDefaultOperatorSurfaceLabel, registryDefaultRuntimeLabel, roleChoicesForSelectedSites, workspaceLaunchSelectorModel, writeWorkspaceLaunchRememberedSelection, type WorkspaceLaunchBrowserSelection } from '../../src/commands/workspace-launch-application.js';
-import { hasWorkspaceLaunchSelectionIntent } from '../../src/commands/workspace-launch-registry.js';
+import { hasWorkspaceLaunchSelectionIntent, readLaunchRegistry } from '../../src/commands/workspace-launch-registry.js';
 import { workspaceLaunchReapStaleSessionOwnedDescendants, workspaceLaunchRuntimeObservations } from '../../src/commands/workspace-launch-handoff.js';
 import { resolveWorkspaceLaunchUiIngress, resolveWorkspaceLaunchUiPortPolicy } from '../../src/commands/workspace-launch-ingress.js';
 import type { WorkspaceLaunchRecord } from '../../src/commands/workspace-launch-types.js';
@@ -16,10 +19,32 @@ import { ExitCode } from '../../src/lib/exit-codes.js';
 import { projectOperatorWorkspaceRouteDirectory } from '@narada2/operator-console-contract';
 
 const discoverNarsSessionsMock = vi.hoisted(() => vi.fn());
+const runAgentStartCommandMock = vi.hoisted(() => vi.fn(() => ({
+  schema: 'narada.agent_start.command_result.v0',
+  status: 'success',
+  mutation_performed: false,
+  site_root: 'D:/code/test-site',
+  agent: 'test.agent',
+  carrier: 'agent-cli',
+  runtime: 'narada-agent-runtime-server',
+  command: [],
+  parsed_result: {
+    schema: 'narada.agent_start.provider_preflight.v1',
+    status: 'ready',
+  },
+})));
 
 vi.mock('@narada2/nars-session-core/session-index', () => ({
   discoverNarsSessions: discoverNarsSessionsMock,
 }));
+
+vi.mock('../../src/lib/launcher-runtime.js', async () => {
+  const actual = await vi.importActual<typeof import('../../src/lib/launcher-runtime.js')>('../../src/lib/launcher-runtime.js');
+  return {
+    ...actual,
+    runAgentStartCommand: runAgentStartCommandMock,
+  };
+});
 
 function createMockContext(): CommandContext {
   const logger = {
@@ -88,6 +113,7 @@ async function tempSiteWithDivergentMcpAuthority(): Promise<string> {
 const tempDirs: string[] = [];
 
 beforeEach(() => {
+  runAgentStartCommandMock.mockClear();
   vol.fromJSON({
     'D:/code/narada/packages/workspace-launch-ui/dist/index.html': '<script type="application/json" id="narada-workspace-launch-bootstrap">__NARADA_WORKSPACE_LAUNCH_BOOTSTRAP__</script>',
   });
@@ -100,6 +126,7 @@ async function tempRegistry(): Promise<string> {
   const registry = join(dir, 'agents.json');
   await writeFile(registry, JSON.stringify({
     NaradaRoot: 'C:/Users/Andrey/Narada',
+    McpScope: 'all',
     Runtime: 'codex',
     Agents: [
       {
@@ -121,6 +148,7 @@ async function tempRegistry(): Promise<string> {
         SiteRoot: 'D:/code/smart-scheduling/.narada',
         WorkspaceRoot: 'D:/code/smart-scheduling',
         LauncherPath: 'D:/code/smart-scheduling/narada-smart-scheduling.ps1',
+        OperatorSurface: 'codex',
       },
       {
         Agent: 'narada.architect',
@@ -130,6 +158,7 @@ async function tempRegistry(): Promise<string> {
         SiteRoot: 'D:/code/narada',
         WorkspaceRoot: 'D:/code/narada',
         LauncherPath: 'D:/code/narada/narada.ps1',
+        OperatorSurface: 'codex',
       },
     ],
   }), 'utf8');
@@ -310,6 +339,42 @@ async function withObservationPollBudget<T>(budgetMs: number, fn: () => Promise<
 }
 
 describe('launcher workspace planning', () => {
+  it('preserves explicit registry-default intent across browser selection handoff', () => {
+    const options = workspaceLaunchOptionsFromBrowserSelection({}, {
+      site: ['sonar'],
+      role: ['resident'],
+      operatorSurface: ['registry default'],
+      runtime: 'registry default',
+      intelligenceProvider: 'registry default',
+    } as WorkspaceLaunchBrowserSelection);
+
+    expect(options.operatorSurface).toBe('registry default');
+    expect(options.runtime).toBe('registry default');
+    expect(options.intelligenceProvider).toBe('registry default');
+  });
+
+  it('refuses launch registry records without explicit operator surface or runtime', async () => {
+    const dir = join(process.cwd(), '.ai', 'tmp-tests', `launcher-registry-contract-${Date.now()}-${Math.random().toString(16).slice(2)}`);
+    await mkdir(dir, { recursive: true });
+    tempDirs.push(dir);
+    const base = {
+      Agent: 'example.resident',
+      Role: 'resident',
+      Site: 'example',
+      NaradaRoot: 'D:/code/example',
+      SiteRoot: 'D:/code/example/.narada',
+      WorkspaceRoot: 'D:/code/example',
+      LauncherPath: 'D:/code/example/narada-example.ps1',
+    };
+    const missingSurfacePath = join(dir, 'missing-surface.json');
+    await writeFile(missingSurfacePath, JSON.stringify({ Agents: [base] }), 'utf8');
+    await expect(readLaunchRegistry(missingSurfacePath)).rejects.toThrow('launch_registry_operator_surface_missing');
+
+    const missingRuntimePath = join(dir, 'missing-runtime.json');
+    await writeFile(missingRuntimePath, JSON.stringify({ Agents: [{ ...base, OperatorSurface: 'agent-web-ui' }] }), 'utf8');
+    await expect(readLaunchRegistry(missingRuntimePath)).rejects.toThrow('launch_registry_runtime_missing');
+  });
+
   it('moves registry selection and Windows Terminal planning into Narada CLI', async () => {
     const registryPath = await tempRegistry();
     const plan = await workspaceLaunchPlanCommand({
@@ -490,6 +555,7 @@ describe('launcher workspace planning', () => {
     expect(result.windows_terminal_invoked).toBe(false);
     expect(result.selected_agents.map((agent) => agent.agent)).toEqual(['sonar.resident']);
     expect(result.wt_args[0]).toBe('new-tab');
+    expect(runAgentStartCommandMock).not.toHaveBeenCalled();
   });
 
   it('launches NARS runtime starts through hidden posture instead of Windows Terminal', async () => {
@@ -526,7 +592,8 @@ describe('launcher workspace planning', () => {
         selected_agents: Array<{ runtime_start_execution_mode: string }>;
         selected_agents_authority: string;
         wt_args?: string[];
-        operator_terminal_handoff: { authority: string; wt_args: string[] };
+        operator_terminal_handoff?: { authority: string; wt_args: string[] };
+        attachment: { status: string; exact_session: boolean };
       };
       expect(result.schema).toBe('narada.workspace_launch.launch_result.v1');
       expect(result.status).toBe('launched');
@@ -535,12 +602,22 @@ describe('launcher workspace planning', () => {
       expect(result.windows_terminal_invoked).toBe(false);
       expect(result.hidden_runtime_invoked).toBe(true);
       expect(result.wt_args).toBeUndefined();
-      expect(result.operator_terminal_handoff.authority).toBe('narada-cli.workspace-launch-executor');
-      expect(result.operator_terminal_handoff.wt_args[0]).toBe('new-tab');
+      expect(result.operator_terminal_handoff).toBeUndefined();
+      expect(result.attachment).toMatchObject({
+        status: 'not_checked',
+        exact_session: false,
+      });
       expect(result.launch_agents).toEqual(result.selected_agents);
       expect(result.selected_agents_authority).toBe('narada-cli.plan_selection');
       expect(result.selected_agents[0].runtime_start_execution_mode).toBe('hidden_detached');
       expect(result.hidden_runtime_launches[0]).toMatchObject({ posture: 'agent_runtime_server', windowsHide: true });
+      expect(runAgentStartCommandMock).toHaveBeenCalledWith(expect.objectContaining({
+        siteRoot: 'D:/code/narada.sonar',
+        agent: 'sonar.resident',
+        runtime: 'narada-agent-runtime-server',
+        preflightOnly: true,
+      }));
+      expect(runAgentStartCommandMock.mock.calls[0]?.[0]).not.toHaveProperty('workspaceRoot');
       const hiddenLogText = await readFile(hiddenLog, 'utf8');
       expect(hiddenLogText).toContain('operator-surface');
       const writtenResult = JSON.parse(await readFile(resultPath, 'utf8')) as typeof result;
@@ -558,6 +635,58 @@ describe('launcher workspace planning', () => {
       if (previousTerminalLog === undefined) delete process.env.NARADA_WORKSPACE_LAUNCH_TERMINAL_LOG;
       else process.env.NARADA_WORKSPACE_LAUNCH_TERMINAL_LOG = previousTerminalLog;
     }
+  });
+
+  it('surfaces a provider preflight refusal before spawning a NARS runtime', async () => {
+    const registryPath = await tempRegistry();
+    const resultPath = join(tempDirs[0], 'provider-preflight-failure.json');
+    runAgentStartCommandMock.mockReturnValueOnce({
+      schema: 'narada.agent_start.command_result.v0',
+      status: 'failed',
+      mutation_performed: false,
+      site_root: 'D:/code/narada.sonar',
+      agent: 'sonar.resident',
+      carrier: 'agent-cli',
+      runtime: 'narada-agent-runtime-server',
+      command: [],
+      parsed_result: {
+        schema: 'narada.provider.credential_refusal.v1',
+        reason_code: 'local_codex_subscription_auth_unavailable',
+        reason: 'Codex subscription auth is not available.',
+      },
+    });
+
+    await expect(workspaceLaunchCommand({
+      registryPath,
+      site: ['sonar'],
+      role: ['resident'],
+      operatorSurface: 'agent-cli',
+      runtime: 'narada-agent-runtime-server',
+      resultPath,
+      format: 'json',
+    }, createMockContext())).rejects.toThrow(
+      'workspace_launch_provider_preflight_failed: sonar.resident: local_codex_subscription_auth_unavailable: Codex subscription auth is not available.',
+    );
+    const failure = JSON.parse(await readFile(resultPath, 'utf8')) as {
+      schema: string;
+      status: string;
+      mutation_performed: boolean;
+      transaction: { state: string; history: string[] };
+      failure: { schema: string; stage: string; reason_code: string; artifact_status: string; rollback: { completed: boolean } };
+    };
+    expect(failure).toMatchObject({
+      schema: 'narada.workspace_launch.failure.v1',
+      status: 'failed',
+      mutation_performed: false,
+      transaction: { state: 'failed', history: ['planned', 'failed'] },
+      failure: {
+        schema: 'narada.workspace_launch.failure_evidence.v1',
+        stage: 'provider_preflight',
+        reason_code: 'workspace_launch_provider_preflight_failed',
+        artifact_status: 'written',
+        rollback: { completed: true },
+      },
+    });
   });
 
   it('launches NARS runtime starts through a visible terminal when explicitly requested', async () => {
@@ -671,11 +800,13 @@ describe('launcher workspace planning', () => {
     }, createMockContext());
 
     expect(plan.exitCode).toBe(ExitCode.SUCCESS);
-    const result = plan.result as { selected_agents: Array<{ launch_operator_surfaces: string[]; launch_runtime_host: string; launch_runtime_hosts: string[]; wt_args: string[]; smoke_command: string[]; operator_projection_launch_binding: { path: string; exact_attach_required: boolean }; operator_projection_open_requests: Array<Record<string, unknown>> }>; wt_args: string[] };
+    const result = plan.result as { selected_agents: Array<{ launch_operator_surfaces: string[]; launch_runtime_host: string; launch_runtime_hosts: string[]; runtime_start_execution_mode: string; wt_args: string[]; smoke_command: string[]; operator_projection_launch_binding: { path: string; exact_attach_required: boolean }; operator_projection_open_requests: Array<Record<string, unknown>> }>; wt_args: string[] };
     const agent = result.selected_agents[0];
     expect(agent.launch_operator_surfaces).toEqual(['agent-cli', 'agent-web-ui']);
     expect(agent.launch_runtime_host).toBe('narada-agent-runtime-server');
     expect(agent.launch_runtime_hosts).toEqual(['narada-agent-runtime-server']);
+    expect(agent.runtime_start_execution_mode).toBe('operator_terminal');
+    expect(agent.runtime_start_execution_mode).toBe('operator_terminal');
     expect(agent.launch_operator_surfaces).toEqual(['agent-cli', 'agent-web-ui']);
     expect(agent.operator_projection_open_requests).toHaveLength(1);
     expect(agent.operator_projection_open_requests[0]).toMatchObject({
@@ -726,6 +857,7 @@ describe('launcher workspace planning', () => {
     const registryPath = join(dir, 'agents.json');
     await writeFile(registryPath, JSON.stringify({
       Site: 'sonar',
+      McpScope: 'all',
       NaradaRoot: 'D:/code/narada.sonar',
       SiteRoot: 'D:/code/narada.sonar',
       WorkspaceRoot: 'D:/code/narada.sonar',
@@ -773,6 +905,7 @@ describe('launcher workspace planning', () => {
     const registryPath = join(dir, 'agents.json');
     await writeFile(registryPath, JSON.stringify({
       NaradaRoot: 'D:/code/narada',
+      McpScope: 'all',
       Agents: [{
         Agent: 'smart-scheduling.resident',
         Role: 'resident',
@@ -1304,7 +1437,7 @@ describe('launcher workspace planning', () => {
     expect(normalizeInteractiveOperatorSurfaceValues(['registry default', 'agent-cli', 'agent-web-ui'])).toEqual(['agent-cli', 'agent-web-ui']);
   });
 
-  it('admits agent-web-ui as a launch carrier over the NARS runtime host', async () => {
+  it('admits agent-web-ui as a projection over the NARS runtime host', async () => {
     const registryPath = await tempRegistry();
     const plan = await workspaceLaunchPlanCommand({
       registryPath,
@@ -1318,20 +1451,62 @@ describe('launcher workspace planning', () => {
     }, createMockContext());
 
     expect(plan.exitCode).toBe(ExitCode.SUCCESS);
-    const result = plan.result as { selected_agents: Array<{ operator_surface: string; launch_operator_surface: string; launch_operator_surfaces: string[]; launch_runtime_host: string; launch_runtime_hosts: string[]; wt_args: string[] }> };
+    const result = plan.result as { wt_args: string[]; selected_agents: Array<{ operator_surface: string; launch_operator_surface: string; launch_operator_surfaces: string[]; launch_runtime_host: string; launch_runtime_hosts: string[]; runtime_start_execution_mode: string; terminal_tabs: unknown[]; operator_projection_start_command?: string[] }> };
     const agent = result.selected_agents[0];
     expect(agent.operator_surface).toBe('agent-web-ui');
     expect(agent.launch_operator_surface).toBe('agent-web-ui');
     expect(agent.launch_operator_surfaces).toEqual(['agent-web-ui']);
     expect(agent.launch_runtime_host).toBe('narada-agent-runtime-server');
     expect(agent.launch_runtime_hosts).toEqual(['narada-agent-runtime-server']);
-    const commandText = agent.wt_args.join(' ');
-    expect(commandText).toContain('sonar.resident runtime');
-    expect(commandText).toContain('sonar.resident web ui');
-    expect(commandText).toContain("'operator-surface' 'runtime' 'start' 'agent-web-ui'");
-    expect(commandText).toContain("'--target-site-id' 'sonar'");
-    expect(commandText).toContain("'agent-web-ui' 'attach'");
-    expect(commandText).not.toContain("'--wait'");
+    expect(result.wt_args).toEqual([]);
+    expect(agent.runtime_start_execution_mode).toBe('hidden_detached');
+    expect(agent.terminal_tabs).toEqual([]);
+    expect(agent.operator_projection_start_command).toEqual(expect.arrayContaining([
+      'agent-web-ui',
+      'attach',
+      '--launch-binding',
+      '--ready-file',
+    ]));
+  });
+
+  it('plans Web UI-only launches as a hidden shared runtime plus structured projection', async () => {
+    const registryPath = await tempRegistry();
+    const plan = await workspaceLaunchPlanCommand({
+      registryPath,
+      all: true,
+      site: ['sonar'],
+      role: ['resident'],
+      operatorSurface: 'agent-web-ui',
+      runtime: 'narada-agent-runtime-server',
+      intelligenceProvider: 'codex-subscription',
+      dryRun: true,
+      format: 'json',
+    }, createMockContext());
+
+    expect(plan.exitCode).toBe(ExitCode.SUCCESS);
+    const result = plan.result as {
+      wt_args: string[];
+      selected_agents: Array<{
+        runtime_start_execution_mode: string;
+        terminal_tabs: unknown[];
+        operator_projection_start_command?: string[];
+        launch_operator_surfaces: string[];
+      }>;
+    };
+    expect(result.wt_args).toEqual([]);
+    expect(result.selected_agents).toHaveLength(1);
+    expect(result.selected_agents[0].runtime_start_execution_mode).toBe('hidden_detached');
+    expect(result.selected_agents[0].terminal_tabs).toEqual([]);
+    expect(result.selected_agents[0].launch_operator_surfaces).toEqual(['agent-web-ui']);
+    expect(result.selected_agents[0].operator_projection_start_command).toEqual(expect.arrayContaining([
+      'pnpm',
+      'exec',
+      'narada',
+      'agent-web-ui',
+      'attach',
+      '--launch-binding',
+      '--ready-file',
+    ]));
   });
 
   it('propagates User Site onboarding mode only to the browser projection', async () => {
@@ -1349,10 +1524,24 @@ describe('launcher workspace planning', () => {
     }, createMockContext());
 
     expect(plan.exitCode).toBe(ExitCode.SUCCESS);
-    const result = plan.result as { selected_agents: Array<{ onboarding_mode: string | null; wt_args: string[] }> };
+    const result = plan.result as { selected_agents: Array<{ onboarding_mode: string | null; operator_projection_start_command?: string[] }> };
     const agent = result.selected_agents[0];
     expect(agent.onboarding_mode).toBe('user-site');
-    expect(agent.wt_args.join(' ')).toContain("'--onboarding'");
+    expect(agent.operator_projection_start_command).toContain('--onboarding');
+  });
+
+  it('refuses direct CLI multi-surface selections that cross runtime families', async () => {
+    const registryPath = await tempRegistry();
+    await expect(workspaceLaunchPlanCommand({
+      registryPath,
+      all: true,
+      site: ['sonar'],
+      role: ['resident'],
+      operatorSurface: 'codex,agent-web-ui',
+      runtime: 'codex',
+      dryRun: true,
+      format: 'json',
+    }, createMockContext())).rejects.toThrow('workspace_launch_operator_surface_runtime_mismatch');
   });
 
   it('classifies runtime observations as waiting, healthy, stale, failed, unowned, or ambiguous', async () => {
@@ -1590,13 +1779,18 @@ describe('launcher workspace planning', () => {
     }, createMockContext());
 
     expect(plan.exitCode).toBe(ExitCode.SUCCESS);
-    const result = plan.result as { selected_agents: Array<{ agent: string; launch_operator_surface: string; launch_runtime: string; launch_runtime_host: string; intelligence_provider: string | null; wt_args: string[]; smoke_command: string[] }> };
+    const result = plan.result as { selected_agents: Array<{ agent: string; launch_operator_surface: string; launch_runtime: string; launch_runtime_host: string; intelligence_provider: string | null; selection_resolution: Record<string, unknown>; wt_args: string[]; smoke_command: string[] }> };
     const sonar = result.selected_agents.find((agent) => agent.agent === 'sonar.resident');
     const smartScheduling = result.selected_agents.find((agent) => agent.agent === 'smart-scheduling.resident');
     expect(sonar?.launch_operator_surface).toBe('agent-cli');
     expect(sonar?.launch_runtime).toBe('narada-agent-runtime-server');
     expect(sonar?.launch_runtime_host).toBe('narada-agent-runtime-server');
     expect(sonar?.intelligence_provider).toBe('codex-subscription');
+    expect(sonar?.selection_resolution).toMatchObject({
+      operator_surfaces: { requested: null, resolved: ['agent-cli'], source: 'registry_record' },
+      runtime: { requested: null, resolved: 'narada-agent-runtime-server', source: 'registry_record' },
+      intelligence_provider: { requested: 'codex-subscription', resolved: 'codex-subscription', source: 'explicit_selection' },
+    });
     expect(sonar?.wt_args.join(' ')).toContain('--intelligence-provider');
     expect(sonar?.smoke_command).toContain('--intelligence-provider');
     expect(smartScheduling?.launch_operator_surface).toBe('codex');
@@ -1618,12 +1812,45 @@ describe('launcher workspace planning', () => {
     }, createMockContext());
 
     expect(plan.exitCode).toBe(ExitCode.SUCCESS);
-    const result = plan.result as { selected_agents: Array<{ intelligence_provider: string | null; wt_args: string[]; smoke_command: string[] }> };
+    const result = plan.result as { selected_agents: Array<{ intelligence_provider: string | null; selection_resolution: Record<string, unknown>; runtime_start_command: string[]; smoke_command: string[] }> };
     const selected = result.selected_agents[0];
     expect(selected.intelligence_provider).toBe('kimi-code-api');
-    expect(selected.wt_args.join(' ')).toContain('--intelligence-provider');
-    expect(selected.wt_args.join(' ')).toContain('kimi-code-api');
+    expect(selected.selection_resolution).toMatchObject({
+      intelligence_provider: { requested: null, resolved: 'kimi-code-api', source: 'registry_default' },
+    });
+    expect(selected.runtime_start_command).toContain('--intelligence-provider');
+    expect(selected.runtime_start_command).toContain('kimi-code-api');
     expect(selected.smoke_command).toContain('kimi-code-api');
+  });
+
+  it('refuses launch planning when the NARS provider registry has no default', () => {
+    const record = {
+      ...launchSelectionFixtureRecords()[0],
+      agent_identity_ref: { canonical_agent_id: 'sonar.resident' },
+    } as unknown as WorkspaceLaunchRecord;
+    const context = {
+      admission: createWorkspaceLaunchAdmissionPolicy({ providerRegistry: { providers: {} } }),
+    };
+
+    expect(() => buildAgentPlan(record, {
+      operatorSurface: 'agent-cli',
+      runtime: 'narada-agent-runtime-server',
+    }, context)).toThrow('workspace_launch_intelligence_provider_registry_default_missing');
+  });
+
+  it('refuses launch planning when canonical identity is absent', () => {
+    const record = {
+      ...launchSelectionFixtureRecords()[0],
+      agent_identity_ref: undefined,
+    } as unknown as WorkspaceLaunchRecord;
+    const context = {
+      admission: createWorkspaceLaunchAdmissionPolicy({ providerRegistry: { default_provider: 'kimi-code-api' } }),
+    };
+
+    expect(() => buildAgentPlan(record, {
+      operatorSurface: 'agent-cli',
+      runtime: 'narada-agent-runtime-server',
+    }, context)).toThrow('workspace_launch_agent_identity_missing: sonar.resident');
   });
 
   it('fences nars as a compatibility alias for narada-agent-runtime-server', async () => {

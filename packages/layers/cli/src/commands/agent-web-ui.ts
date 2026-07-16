@@ -1,5 +1,7 @@
 import type { CommandContext } from '../lib/command-wrapper.js';
 import { createHash, randomUUID } from 'node:crypto';
+import { mkdir, rename, writeFile } from 'node:fs/promises';
+import { dirname } from 'node:path';
 import { executeOperatorProjectionOpenRequest } from '@narada2/process-launch-posture';
 import { agentIdentityDisplay } from '@narada2/agent-identity';
 import {
@@ -46,6 +48,25 @@ import { ensureLaunchArtifact, naradaProperRoot } from '../lib/launch-artifact.j
 
 function allowsStaleSessionInspection(options: AgentWebUiAttachOptions): boolean {
   return options.inspectStaleSession === true || options.allowStaleSession === true;
+}
+
+async function writeAgentWebUiReadiness(path: string | undefined, plan: AgentWebUiAttachPlan): Promise<void> {
+  if (!path) return;
+  if (!plan.url) throw new Error('agent_web_ui_readiness_url_missing');
+  const readiness = {
+    schema: 'narada.agent_web_ui.readiness.v1',
+    status: 'ready',
+    session_id: plan.session_id,
+    site_id: plan.site_id,
+    url: plan.url,
+    event_endpoint: plan.public_event_endpoint ?? plan.event_endpoint,
+    health_endpoint: plan.public_health_endpoint ?? plan.health_endpoint,
+    written_at: new Date().toISOString(),
+  };
+  await mkdir(dirname(path), { recursive: true });
+  const temporaryPath = `${path}.${process.pid}.${Date.now()}.tmp`;
+  await writeFile(temporaryPath, `${JSON.stringify(readiness, null, 2)}\n`, 'utf8');
+  await rename(temporaryPath, path);
 }
 
 function operatorRouterSessionKey(sessionId: string): string {
@@ -387,6 +408,7 @@ export async function agentWebUiAttachCommand(
         routeIds: requiredRouteIds,
         attachmentLifecycle,
       });
+      await writeAgentWebUiReadiness(options.readyFile, plan);
       const shouldOpen = options.open !== false;
       if (shouldOpen && plan.url) {
         progress(`agent-web-ui: opening browser ${plan.url}`);
@@ -527,6 +549,13 @@ export async function agentWebUiAttachCommand(
     routeIds,
     attachmentLifecycle,
   });
+  try {
+    await writeAgentWebUiReadiness(options.readyFile, plan);
+  } catch (error) {
+    await routeSet?.stop();
+    await closeStartedServer(started.server);
+    throw error;
+  }
   const shouldOpen = options.open !== false;
   const browserUrl = plan.url;
   let operatorProjectionOpenRequest: JsonRecord | undefined;

@@ -54,6 +54,37 @@ export interface WorkspaceLaunchPlanOptions {
   smoke?: boolean;
   dryRun?: boolean;
   format?: CliFormat;
+  /** Internal execution binding; never supplied by the public CLI parser. */
+  executionAttemptId?: string;
+  /** Internal durable attempt path; never exposed as an execution authority. */
+  executionAttemptPath?: string;
+}
+
+export type WorkspaceLaunchSelectionResolutionSource =
+  | 'explicit_selection'
+  | 'registry_record'
+  | 'registry_default'
+  | 'command_default'
+  | 'not_applicable';
+
+export interface WorkspaceLaunchSelectionResolution {
+  schema: 'narada.workspace_launch.selection_resolution.v1';
+  operator_surfaces: {
+    requested: string | null;
+    resolved: string[];
+    source: Exclude<WorkspaceLaunchSelectionResolutionSource, 'not_applicable'>;
+  };
+  runtime: {
+    requested: string | null;
+    resolved: string;
+    source: Exclude<WorkspaceLaunchSelectionResolutionSource, 'not_applicable'>;
+  };
+  intelligence_provider: {
+    requested: string | null;
+    resolved: string | null;
+    source: WorkspaceLaunchSelectionResolutionSource;
+  };
+  hidden_projection_launches?: WorkspaceLaunchProcessLaunch[];
 }
 
 export interface WorkspaceLaunchRuntimeStartResult {
@@ -118,6 +149,7 @@ export interface WorkspaceLaunchResultRecord {
   selected_agents: WorkspaceLaunchResultAgentInput[];
   wt_args?: unknown;
   operator_terminal_handoff?: WorkspaceLaunchResultTerminalHandoffInput | null;
+  attachment?: unknown;
 }
 
 export interface WorkspaceLaunchSelectionSiteCatalogEntry {
@@ -162,6 +194,10 @@ export interface WorkspaceLaunchActionRefusalPayload {
   status: 'refused';
   reason_code: string;
   message: string;
+  required_next_step: string;
+  artifact_path: string | null;
+  retryable: boolean;
+  command?: string;
   dashboard?: WorkspaceLaunchDashboardState;
 }
 
@@ -177,12 +213,25 @@ export interface WorkspaceLaunchAgentPlan extends WorkspaceLaunchRecord {
   launch_session_id: string | null;
   process_ownership: LaunchProcessOwnership | null;
   intelligence_provider: string | null;
+  capability_admission: Record<string, unknown>;
+  path_provenance: Record<string, unknown>;
+  selection_resolution: WorkspaceLaunchSelectionResolution;
   authority: string | null;
   wait_for_enter_before_exec: boolean;
   runtime_start_execution_mode: 'hidden_detached' | 'operator_terminal';
   runtime_start_command: string[];
   hidden_runtime_start_command: string[];
+  operator_projection_start_command?: string[];
   runtime_start_cwd: string;
+  terminal_tabs: Array<{
+    title: string;
+    cwd: string;
+    command: string;
+    command_argv: string[];
+    command_authority: 'projection_only';
+    keepOpen: boolean;
+  }>;
+  transaction: Record<string, unknown>;
   mcp_scope: string;
   wt_args: string[];
   smoke_command: string[];
@@ -194,6 +243,14 @@ export interface WorkspaceLaunchOperatorProjectionLaunchBinding {
   schema: 'narada.operator_projection_launch_binding_ref.v1';
   path: string;
   exact_attach_required: true;
+  lease: {
+    schema: 'narada.operator_projection_attachment_lease.v1';
+    launch_session_id: string | null;
+    binding_path: string;
+    exact_session: true;
+    exact_endpoint: true;
+    endpoint_resolution: 'session_started.health_endpoint_and_events_endpoint';
+  };
 }
 
 export interface WorkspaceLaunchOperatorProjectionOpenRequest {
@@ -234,6 +291,7 @@ export interface WorkspaceLaunchPlanResult {
   windows_terminal_invoked: false;
   registry_paths: string[];
   selected_agents: WorkspaceLaunchAgentPlan[];
+  transaction: Record<string, unknown>;
   wt_args: string[];
   ownership: {
     planner: 'narada-cli';
@@ -241,11 +299,13 @@ export interface WorkspaceLaunchPlanResult {
     migrated_from: string;
   };
   result_path?: string;
+  launch_attempt_id?: string;
   suppress_result_output?: boolean;
 }
 
 export interface WorkspaceLaunchProcessLaunch {
   posture: string;
+  execution_authority: 'structured_argv' | 'projection_shell_string';
   command: string;
   args: string[];
   cwd: string;
@@ -253,7 +313,63 @@ export interface WorkspaceLaunchProcessLaunch {
   stdio: string;
   windowsHide: boolean;
   pid: number | null;
+  owner_ref: string | null;
+  agent_id?: string | null;
+  launch_session_id?: string | null;
+  launch_binding_path?: string | null;
+  readiness_path?: string | null;
+  readiness?: 'spawned' | 'spawned_and_alive' | 'not_checked';
+  readiness_checked_at?: string | null;
   capture_log?: string;
+}
+
+export type WorkspaceLaunchAttachmentStatus = 'attached' | 'handoff_pending' | 'not_checked';
+
+export interface WorkspaceLaunchAttachmentEvidence {
+  schema: 'narada.workspace_launch.attachment.v1';
+  status: WorkspaceLaunchAttachmentStatus;
+  exact_session: boolean;
+  launch_session_ids: string[];
+  sessions: Array<{
+    launch_session_id: string;
+    session_id: string | null;
+    health_session_id: string | null;
+    health_identity_match: boolean;
+    expected_agent_id?: string | null;
+    observed_agent_id?: string | null;
+    expected_site_id?: string | null;
+    observed_site_id?: string | null;
+    health_agent_id?: string | null;
+    health_site_id?: string | null;
+    canonical_identity_match?: boolean;
+    site_root: string | null;
+    health_endpoint: string | null;
+    health_status: 'healthy' | 'unavailable' | 'not_checked';
+    attempts: number;
+    reason?: string;
+  }>;
+  required_next_step: string | null;
+}
+
+export interface WorkspaceLaunchFailureEvidence {
+  schema: 'narada.workspace_launch.failure_evidence.v1';
+  stage: string;
+  reason_code: string;
+  message: string;
+  error_type: string;
+  required_next_step: string;
+  retryable: boolean;
+  artifact_path: string | null;
+  artifact_status: 'written' | 'not_requested' | 'write_failed';
+  rollback: import('./workspace-launch-contracts.js').WorkspaceLaunchRollbackEvidence;
+  hidden_runtime_launches: WorkspaceLaunchProcessLaunch[];
+  hidden_projection_launches: WorkspaceLaunchProcessLaunch[];
+  attachment: WorkspaceLaunchAttachmentEvidence | null;
+  operator_terminal_handoff: {
+    status: 'not_attempted' | 'accepted' | 'failed';
+    wt_exit_code: number | null;
+    wt_args: string[];
+  };
 }
 
 export interface WorkspaceLaunchTerminalHandoff {
@@ -266,7 +382,9 @@ export interface WorkspaceLaunchInvocationDetails {
   windows_terminal_invoked: boolean;
   hidden_runtime_invoked: boolean;
   hidden_runtime_launches?: WorkspaceLaunchProcessLaunch[];
+  hidden_projection_launches?: WorkspaceLaunchProcessLaunch[];
   wt_exit_code?: number;
+  attachment: WorkspaceLaunchAttachmentEvidence;
 }
 
 export type WorkspaceLaunchLaunchResult = Omit<
@@ -285,7 +403,28 @@ export type WorkspaceLaunchLaunchResult = Omit<
   launcher_execution_owner: 'narada-cli';
   wt_exit_code?: number;
   operator_terminal_handoff?: WorkspaceLaunchTerminalHandoff;
+  attachment: WorkspaceLaunchAttachmentEvidence;
+  hidden_projection_launches?: WorkspaceLaunchProcessLaunch[];
 };
+
+export interface WorkspaceLaunchFailureResult {
+  schema: 'narada.workspace_launch.failure.v1';
+  status: 'failed';
+  mutation_performed: false;
+  mode: 'launch';
+  interactive_selection: boolean;
+  interactive_selection_surface: 'browser' | 'terminal' | null;
+  count: number;
+  windows_terminal_invoked: boolean;
+  registry_paths: string[];
+  selected_agents: WorkspaceLaunchAgentPlan[];
+  transaction: Record<string, unknown>;
+  wt_args: string[];
+  ownership: WorkspaceLaunchPlanResult['ownership'];
+  result_path?: string;
+  suppress_result_output?: boolean;
+  failure: WorkspaceLaunchFailureEvidence;
+}
 
 export interface WorkspaceLaunchExecutionResult {
   plan: WorkspaceLaunchPlanResult;

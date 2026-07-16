@@ -24,38 +24,69 @@ import {
   workspaceLaunchTerminalArgs,
   type WorkspaceLaunchTerminalTab,
 } from './workspace-launch-terminal.js';
+import { resolveWorkspaceLaunchSelection } from './workspace-launch-resolution.js';
+import {
+  buildWorkspaceLaunchCapabilityAdmission,
+  buildWorkspaceLaunchPathProvenance,
+  createWorkspaceLaunchTransaction,
+  normalizeExplicitWorkspaceLaunchMcpScope,
+  normalizeWorkspaceLaunchAuthority,
+} from './workspace-launch-contracts.js';
+import { WorkspaceLaunchContractError } from './workspace-launch-contracts.js';
+import { workspaceLaunchProjectionReadinessPath } from './workspace-launch-process.js';
 
 function normalizeMcpScope(value: string | undefined): string {
-  const normalized = String(value ?? 'all').trim().toLowerCase();
-  if (['all', 'host', 'user-site', 'local-site', 'none'].includes(normalized)) return normalized;
-  throw new Error(`mcp_scope_not_admitted: ${normalized}. Admitted scopes: all, host, user-site, local-site, none`);
+  return normalizeExplicitWorkspaceLaunchMcpScope(value, 'the Site/agent launch record or explicit launcher option');
 }
 
 function normalizeRuntimeAuthority(value: string | undefined | null): string {
-  const normalized = String(value ?? 'auto').trim().toLowerCase();
-  if (['auto', 'read', 'write'].includes(normalized)) return normalized;
-  throw new Error(`runtime_authority_not_admitted: ${normalized}. Admitted values: auto, read, write`);
+  return normalizeWorkspaceLaunchAuthority(value);
 }
 
 export function buildAgentPlan(record: WorkspaceLaunchRecord, options: WorkspaceLaunchPlanOptions, context: WorkspaceLaunchRegistryContext): WorkspaceLaunchAgentPlan {
-  const operatorSurfaceInput = options.operatorSurface ?? record.operator_surface;
-  const launchOperatorSurfaces = normalizeOperatorSurfaceList(operatorSurfaceInput);
-  const primaryOperatorSurfaceInput = launchOperatorSurfaces.includes('agent-cli') ? 'agent-cli' : launchOperatorSurfaces[0] ?? operatorSurfaceInput;
-  const runtimeInput = options.runtime ?? record.runtime;
-  const runtimeSelection = context.admission.resolveOperatorSurfaceRuntimeSelection(primaryOperatorSurfaceInput, runtimeInput);
+  // Identity is a launch invariant. Validate it before capability admission so a malformed
+  // record cannot be reported as an unrelated provider or runtime refusal.
+  const qualifiedAgentId = workspaceLaunchQualifiedAgentId(record);
+  const operatorSurfaceSelection = resolveWorkspaceLaunchSelection(options.operatorSurface, record.operator_surface, 'operator_surface');
+  const launchOperatorSurfaces = normalizeOperatorSurfaceList(operatorSurfaceSelection.value);
+  const primaryOperatorSurfaceInput = launchOperatorSurfaces.includes('agent-cli') ? 'agent-cli' : launchOperatorSurfaces[0];
+  const runtimeSelectionInput = resolveWorkspaceLaunchSelection(options.runtime, record.runtime, 'runtime');
+  const runtimeSelection = context.admission.resolveOperatorSurfaceRuntimeSelection(primaryOperatorSurfaceInput, runtimeSelectionInput.value);
   const launchOperatorSurface = runtimeSelection.operator_surface_kind;
   const operatorSurfaceKind = runtimeSelection.operator_surface_kind;
   const launchRuntime = runtimeSelection.runtime_substrate_kind;
   const runtimeHostKind = runtimeSelection.runtime_host_kind;
+  assertOperatorSurfaceRuntimeCoherence(launchOperatorSurfaces, launchRuntime, runtimeHostKind, context);
   const onboarding = options.onboarding === true;
   const enableNativeShell = options.enableNativeShell === true || record.enable_native_shell;
   const mcpScope = normalizeMcpScope(options.mcpScope ?? record.mcp_scope ?? undefined);
   const authority = normalizeRuntimeAuthority(options.authority ?? record.authority ?? undefined);
   const isNarsRuntimeHost = runtimeHostKind === NARADA_AGENT_RUNTIME_SERVER_KIND;
+  const hasProjectionBearingOperatorSurface = launchOperatorSurfaces.includes('agent-web-ui');
+  const webUiOnly = hasProjectionBearingOperatorSurface && !launchOperatorSurfaces.includes('agent-cli');
   const waitForEnter = options.noWaitForEnterBeforeExec !== true && launchOperatorSurfaces[0] !== 'agent-web-ui' && !isNarsRuntimeHost;
-  const intelligenceProvider = isNarsRuntimeHost
-    ? (options.intelligenceProvider ?? context.admission.providerRegistry.default_provider ?? null)
-    : null;
+  const intelligenceProviderSelection = isNarsRuntimeHost
+    ? resolveWorkspaceLaunchSelection(
+      options.intelligenceProvider,
+      context.admission.providerRegistry.default_provider,
+      'intelligence_provider',
+      'registry_default',
+    )
+    : {
+        requested: nonEmpty(options.intelligenceProvider),
+        value: null,
+        source: 'not_applicable' as const,
+      };
+  const intelligenceProvider = intelligenceProviderSelection.value;
+  const capabilityAdmission = buildWorkspaceLaunchCapabilityAdmission({
+    operatorSurface: launchOperatorSurface,
+    runtime: launchRuntime,
+    intelligenceProvider,
+    mcpScope,
+    authority,
+    providerRegistry: context.admission.providerRegistry,
+    admittedProviders: context.admission.admittedProviders,
+  });
   const cloudflareApiBaseUrl = options.cloudflareApiBaseUrl?.trim()
     || process.env.NARADA_CLOUDFLARE_NARS_PROJECTION_URL
     || process.env.CLOUDFLARE_NARS_PROJECTION_URL
@@ -78,7 +109,6 @@ export function buildAgentPlan(record: WorkspaceLaunchRecord, options: Workspace
         createdByPid: process.pid,
       })
     : null;
-  const qualifiedAgentId = workspaceLaunchQualifiedAgentId(record);
   const runtimeStartCwd = record.workspace_root ?? record.narada_root;
   const runtimeCommandOptions = {
     operatorSurface: launchOperatorSurface,
@@ -100,18 +130,39 @@ export function buildAgentPlan(record: WorkspaceLaunchRecord, options: Workspace
   const hiddenRuntimeStartCommandSpec = workspaceLaunchNodeNaradaCommandSpec(naradaProper, runtimeCommandSpec);
   const operatorSurfaceStartCommand = workspaceLaunchCommandArgv(operatorSurfaceStartCommandSpec);
   const hiddenRuntimeStartCommand = workspaceLaunchCommandArgv(hiddenRuntimeStartCommandSpec);
+  const selectionResolution = {
+    schema: 'narada.workspace_launch.selection_resolution.v1' as const,
+    operator_surfaces: {
+      requested: operatorSurfaceSelection.requested,
+      resolved: launchOperatorSurfaces,
+      source: operatorSurfaceSelection.source,
+    },
+    runtime: {
+      requested: runtimeSelectionInput.requested,
+      resolved: launchRuntime,
+      source: runtimeSelectionInput.source,
+    },
+    intelligence_provider: {
+      requested: intelligenceProviderSelection.requested,
+      resolved: intelligenceProvider,
+      source: intelligenceProviderSelection.source,
+    },
+  };
   const runtimeStartExecutionMode: WorkspaceLaunchAgentPlan['runtime_start_execution_mode'] = isNarsRuntimeHost
     && options.visibleRuntimeTerminal !== true
+    && (!hasProjectionBearingOperatorSurface || webUiOnly)
     ? 'hidden_detached'
     : 'operator_terminal';
 
-  const terminalTabs: WorkspaceLaunchTerminalTab[] = [{
+  const terminalTabs: WorkspaceLaunchTerminalTab[] = webUiOnly ? [] : [{
     title: `${qualifiedAgentId} runtime`,
     cwd: runtimeStartCwd,
     keepOpen: waitForEnter,
     command: workspaceLaunchRuntimeHandoffCommand(operatorSurfaceStartCommand, qualifiedAgentId, waitForEnter),
+    command_argv: operatorSurfaceStartCommand,
+    command_authority: 'projection_only',
   }];
-  if (launchOperatorSurface === 'agent-web-ui') {
+  if (!webUiOnly && launchOperatorSurface === 'agent-web-ui') {
     terminalTabs.push(agentWebUiAttachTerminalTab(record, naradaProper, cloudflareApiBaseUrl, launchBindingPath, onboarding));
   }
   for (const extraOperatorSurface of launchOperatorSurfaces.filter((surface) => surface !== launchOperatorSurface)) {
@@ -121,6 +172,9 @@ export function buildAgentPlan(record: WorkspaceLaunchRecord, options: Workspace
     terminalTabs.push(agentWebUiAttachTerminalTab(record, naradaProper, cloudflareApiBaseUrl, launchBindingPath, onboarding));
   }
   const wtArgs = workspaceLaunchTerminalArgs(terminalTabs);
+  const operatorProjectionStartCommand = webUiOnly
+    ? agentWebUiAttachCommand(record, naradaProper, cloudflareApiBaseUrl, launchBindingPath, onboarding)
+    : undefined;
 
   const smokeCommand = workspaceLaunchCommandArgv(workspaceLaunchSmokeCommandSpec(workspaceLaunchRuntimeCommandSpec({
     ...runtimeCommandOptions,
@@ -144,12 +198,18 @@ export function buildAgentPlan(record: WorkspaceLaunchRecord, options: Workspace
     launch_session_id: launchSessionId,
     process_ownership: processOwnership,
     intelligence_provider: intelligenceProvider,
+    capability_admission: capabilityAdmission,
+    path_provenance: buildWorkspaceLaunchPathProvenance(record),
+    selection_resolution: selectionResolution,
     authority,
     wait_for_enter_before_exec: waitForEnter,
     runtime_start_execution_mode: runtimeStartExecutionMode,
     runtime_start_command: operatorSurfaceStartCommand,
     hidden_runtime_start_command: hiddenRuntimeStartCommand,
+    ...(operatorProjectionStartCommand ? { operator_projection_start_command: operatorProjectionStartCommand } : {}),
     runtime_start_cwd: runtimeStartCwd,
+    terminal_tabs: terminalTabs,
+    transaction: createWorkspaceLaunchTransaction(launchSessionId),
     mcp_scope: mcpScope,
     enable_native_shell: enableNativeShell,
     wt_args: wtArgs,
@@ -159,18 +219,27 @@ export function buildAgentPlan(record: WorkspaceLaunchRecord, options: Workspace
           schema: 'narada.operator_projection_launch_binding_ref.v1',
           path: launchBindingPath,
           exact_attach_required: true,
+          lease: {
+            schema: 'narada.operator_projection_attachment_lease.v1',
+            launch_session_id: launchSessionId,
+            binding_path: launchBindingPath,
+            exact_session: true,
+            exact_endpoint: true,
+            endpoint_resolution: 'session_started.health_endpoint_and_events_endpoint',
+          },
         }
       : null,
     operator_projection_open_requests: operatorProjectionOpenRequests,
   };
 }
 
-export function normalizeOperatorSurfaceList(value: string | undefined): string[] {
-  const operatorSurfaces = String(value ?? 'agent-cli')
+export function normalizeOperatorSurfaceList(value: string): string[] {
+  const operatorSurfaces = value
     .split(',')
     .map((item) => nonEmpty(item))
     .filter((item): item is string => Boolean(item));
-  return unique(operatorSurfaces.length > 0 ? operatorSurfaces : ['agent-cli']);
+  if (operatorSurfaces.length === 0) throw new Error('workspace_launch_operator_surface_selection_empty');
+  return unique(operatorSurfaces);
 }
 
 function workspaceLaunchSessionToken(record: WorkspaceLaunchRecord): string {
@@ -191,16 +260,25 @@ function safePathToken(value: string): string {
 function workspaceLaunchQualifiedAgentId(record: WorkspaceLaunchRecord): string {
   const canonical = record.agent_identity_ref?.canonical_agent_id;
   if (typeof canonical === 'string' && canonical.trim()) return canonical.trim();
-  const localAgentId = record.agent_identity_ref?.local_agent_id
-    ?? record.agent.split('.').filter(Boolean).at(-1)
-    ?? record.agent;
-  const identityScope = record.agent_identity_ref?.identity_scope;
-  const siteId = identityScope?.kind === 'narada_site' ? identityScope.site_id : record.site;
-  return record.agent.includes('.') || !siteId ? record.agent : `${siteId}.${localAgentId}`;
+  throw new Error(`workspace_launch_agent_identity_missing: ${record.agent}`);
 }
 
 function agentWebUiAttachTerminalTab(record: WorkspaceLaunchRecord, naradaProper: string, cloudflareApiBaseUrl: string | null, launchBindingPath: string | null, onboarding: boolean): WorkspaceLaunchTerminalTab {
   const agentDisplay = workspaceLaunchQualifiedAgentId(record);
+  const attachCommand = agentWebUiAttachCommand(record, naradaProper, cloudflareApiBaseUrl, launchBindingPath, onboarding);
+  return {
+    title: `${agentDisplay} web ui`,
+    cwd: record.workspace_root ?? record.narada_root,
+    keepOpen: true,
+    command: `${workspaceLaunchPowerShellHostMessage(`agent-web-ui: waiting for ${agentDisplay} launch binding, then starting browser projection`)}\n${workspaceLaunchPowerShellCommand(attachCommand)}`,
+    command_argv: attachCommand,
+    command_authority: 'projection_only',
+  };
+}
+
+function agentWebUiAttachCommand(record: WorkspaceLaunchRecord, naradaProper: string, cloudflareApiBaseUrl: string | null, launchBindingPath: string | null, onboarding: boolean): string[] {
+  const agentDisplay = workspaceLaunchQualifiedAgentId(record);
+  if (!launchBindingPath) throw new Error(`workspace_launch_web_ui_launch_binding_required: ${agentDisplay}`);
   const attachCommand = [
     'pnpm',
     '--dir', naradaProper,
@@ -209,18 +287,14 @@ function agentWebUiAttachTerminalTab(record: WorkspaceLaunchRecord, naradaProper
     'agent-web-ui',
     'attach',
     '--site-root', record.site_root,
-    ...(launchBindingPath ? ['--launch-binding', launchBindingPath] : ['--agent', record.agent]),
+    '--launch-binding', launchBindingPath,
+    '--ready-file', workspaceLaunchProjectionReadinessPath(launchBindingPath),
     '--wait-for-session-ms', '60000',
     '--open',
   ];
   if (onboarding) attachCommand.push('--onboarding');
   if (cloudflareApiBaseUrl) attachCommand.push('--cloudflare-api-base-url', cloudflareApiBaseUrl);
-  return {
-    title: `${agentDisplay} web ui`,
-    cwd: record.workspace_root ?? record.narada_root,
-    keepOpen: true,
-    command: `${workspaceLaunchPowerShellHostMessage(`agent-web-ui: waiting for ${agentDisplay} launch binding, then starting browser projection`)}\n${workspaceLaunchPowerShellCommand(attachCommand)}`,
-  };
+  return attachCommand;
 }
 
 function plannedAgentWebUiProjectionOpenRequest(record: WorkspaceLaunchRecord): WorkspaceLaunchOperatorProjectionOpenRequest {
@@ -246,4 +320,25 @@ function nonEmpty(value: unknown): string | null {
 
 function quoteShArgument(value: string): string {
   return `'${value.replace(/'/g, `'"'"'`)}'`;
+}
+
+function assertOperatorSurfaceRuntimeCoherence(
+  operatorSurfaces: string[],
+  runtime: string,
+  runtimeHost: string,
+  context: WorkspaceLaunchRegistryContext,
+): void {
+  for (const operatorSurface of operatorSurfaces) {
+    try {
+      const selection = context.admission.resolveOperatorSurfaceRuntimeSelection(operatorSurface, runtime);
+      if (selection.runtime_substrate_kind === runtime && selection.runtime_host_kind === runtimeHost) continue;
+    } catch {
+      // Normalize every incompatible sibling surface to one launcher-level refusal.
+    }
+    throw new WorkspaceLaunchContractError(
+      'workspace_launch_operator_surface_runtime_mismatch',
+      `Operator surface ${operatorSurface} is not admitted on runtime ${runtime} with host ${runtimeHost}.`,
+      'Select operator surfaces that share one admitted runtime substrate and runtime host.',
+    );
+  }
 }

@@ -17,6 +17,7 @@ export interface AgentWebUiAttachOptions {
   healthTimeoutMs?: number;
   waitForSessionMs?: number;
   launchBindingPath?: string;
+  readyFile?: string;
   format?: CliFormat;
   launchRegistryPath?: string;
   open?: boolean;

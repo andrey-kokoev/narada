@@ -572,7 +572,7 @@ describe('nars CLI commands', () => {
     });
   });
 
-  it('discovers the newest matching agent session for direct agent-web-ui attachment', async () => {
+  it('refuses direct agent-web-ui attachment when multiple matching sessions exist', async () => {
     const siteRoot = tempSite();
     writeSession(siteRoot, 'carrier_old');
     retimeSession(siteRoot, 'carrier_old', '2026-06-23T00:00:00.000Z');
@@ -587,10 +587,14 @@ describe('nars CLI commands', () => {
       format: 'json',
     }, createMockContext());
 
-    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.exitCode).toBe(ExitCode.INVALID_CONFIG);
     expect(result.result).toMatchObject({
-      session_id: 'carrier_new',
+      schema: 'narada.agent_web_ui.attach_refusal.v1',
+      reason: 'nars_session_ambiguous_for_agent',
+      agent_id: 'sonar.resident',
     });
+    const body = result.result as { candidates: Array<Record<string, unknown>> };
+    expect(body.candidates.map((candidate) => candidate.session_id)).toEqual(expect.arrayContaining(['carrier_old', 'carrier_new']));
   });
 
   it('plans direct agent-web-ui attachment for a role alias inside an explicit Site root', async () => {
@@ -1209,6 +1213,34 @@ describe('nars CLI commands', () => {
 
     expect(result.exitCode).toBe(ExitCode.SUCCESS);
     expect(openedUrls).toEqual(['http://127.0.0.1:4545']);
+    vi.unstubAllGlobals();
+  });
+
+  it('writes a session-bound readiness artifact after starting the projection', async () => {
+    const siteRoot = tempSite();
+    writeSession(siteRoot);
+    const launchRegistryPath = writeLaunchRegistry(siteRoot);
+    const readyFile = join(siteRoot, '.ai', 'runtime', 'projection.ready.json');
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true })));
+
+    const result = await agentWebUiAttachCommand({
+      launchRegistryPath,
+      port: 0,
+      session: 'carrier_cli_test',
+      open: false,
+      readyFile,
+    }, createMockContext(), {
+      startAgentWebUiServer: async () => ({ url: 'http://127.0.0.1:4545' }),
+    });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(JSON.parse(readFileSync(readyFile, 'utf8'))).toMatchObject({
+      schema: 'narada.agent_web_ui.readiness.v1',
+      status: 'ready',
+      session_id: 'carrier_cli_test',
+      site_id: 'sonar',
+      url: 'http://127.0.0.1:4545',
+    });
     vi.unstubAllGlobals();
   });
 
