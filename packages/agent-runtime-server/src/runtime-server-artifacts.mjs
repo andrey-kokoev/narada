@@ -18,17 +18,18 @@ async function readRequestJson(request) {
 }
 
 function artifactHttpError(response, error) {
+  const message = error instanceof Error ? error.message : String(error ?? '');
   const code = error?.code ?? 'artifact_error';
   const status = code === 'artifact_not_found' || code === 'artifact_content_missing'
     ? 404
     : code === 'session_core_unavailable'
       ? 503
-    : code === 'artifact_path_outside_admitted_roots'
-      ? 403
-      : code === 'invalid_nars_artifact_lifecycle_transition'
-        ? 409
-        : 400;
-  sendJsonResponse(response, status, { schema: 'narada.nars.artifact_error.v1', error: code, message: error instanceof Error ? error.message : String(error), details: error?.details ?? null });
+      : code === 'artifact_path_outside_admitted_roots'
+        ? 403
+        : code === 'invalid_nars_artifact_lifecycle_transition'
+          ? 409
+          : 400;
+  sendJsonResponse(response, status, { schema: 'narada.nars.artifact_error.v1', error: code, message, details: error?.details ?? null });
 }
 
 function requireSessionCore(runtimeContext, method) {

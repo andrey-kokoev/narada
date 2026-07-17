@@ -1,6 +1,7 @@
 import { createNarsStateMachine } from './runtime-state-machine.mjs';
 
 export const NARS_RUNTIME_REQUEST_STATE_SCHEMA = 'narada.nars.runtime_request_state.v1';
+export const NARS_RUNTIME_REQUEST_RETENTION_LIMIT = 100;
 
 export const NARS_RUNTIME_REQUEST_STATES = Object.freeze([
   'received',
@@ -95,6 +96,29 @@ export function createNarsRuntimeRequestRegistry({
   const requests = new Map();
   const operations = new Map();
 
+  function pruneRetainedRequests() {
+    let terminalCount = [...requests.values()]
+      .filter((machine) => isNarsRuntimeRequestTerminalState(machine.state))
+      .length;
+    if (terminalCount <= NARS_RUNTIME_REQUEST_RETENTION_LIMIT) return;
+    for (const [runtimeRequestId, machine] of requests) {
+      if (!isNarsRuntimeRequestTerminalState(machine.state)) continue;
+      requests.delete(runtimeRequestId);
+      terminalCount -= 1;
+      if (terminalCount <= NARS_RUNTIME_REQUEST_RETENTION_LIMIT) break;
+    }
+  }
+
+  function requestRefMachines() {
+    const machines = [...requests.values()];
+    const activeMachines = machines.filter((machine) => !isNarsRuntimeRequestTerminalState(machine.state));
+    const terminalMachines = machines.filter((machine) => isNarsRuntimeRequestTerminalState(machine.state));
+    const activeRefs = activeMachines.slice(-NARS_RUNTIME_REQUEST_RETENTION_LIMIT);
+    const terminalCapacity = Math.max(0, NARS_RUNTIME_REQUEST_RETENTION_LIMIT - activeRefs.length);
+    const terminalRefs = terminalCapacity > 0 ? terminalMachines.slice(-terminalCapacity) : [];
+    return [...activeRefs, ...terminalRefs];
+  }
+
   function receive({ requestId = null, method = null, requestMetadata = {} } = {}) {
     const runtimeRequestId = `runtime_request_${nextRequestNumber++}`;
     const machine = createNarsRuntimeRequestStateMachine({
@@ -103,7 +127,13 @@ export function createNarsRuntimeRequestRegistry({
       method,
       metadata: { ...metadata, ...requestMetadata },
       now,
-      onTransition,
+      onTransition: (record) => {
+        try {
+          onTransition(record);
+        } finally {
+          pruneRetainedRequests();
+        }
+      },
     });
     requests.set(runtimeRequestId, machine);
     machine.transition('received');
@@ -135,14 +165,31 @@ export function createNarsRuntimeRequestRegistry({
     for (const machine of requests.values()) {
       if (machine.state) stateCounts[machine.state] += 1;
     }
+    const activeRequestCount = NARS_RUNTIME_REQUEST_STATES
+      .filter((state) => !isNarsRuntimeRequestTerminalState(state))
+      .reduce((count, state) => count + stateCounts[state], 0);
+    const terminalRequestCount = NARS_RUNTIME_REQUEST_TERMINAL_STATES
+      .reduce((count, state) => count + stateCounts[state], 0);
     return {
       schema: NARS_RUNTIME_REQUEST_STATE_SCHEMA,
       request_count: requests.size,
-      active_request_count: NARS_RUNTIME_REQUEST_STATES
-        .filter((state) => !isNarsRuntimeRequestTerminalState(state))
-        .reduce((count, state) => count + stateCounts[state], 0),
+      retained_request_count: requests.size,
+      retention_limit: NARS_RUNTIME_REQUEST_RETENTION_LIMIT,
+      retention_scope: 'terminal_requests_only',
+      active_request_count: activeRequestCount,
+      terminal_request_count: terminalRequestCount,
       pending_operation_count: operations.size,
       state_counts: stateCounts,
+      request_refs: requestRefMachines().map((machine) => {
+        const current = machine.snapshot();
+        return {
+          runtime_request_id: current.runtime_request_id,
+          request_id: current.request_id ?? null,
+          method: current.method ?? null,
+          request_state: current.request_state ?? null,
+          terminal_state: current.terminal_state ?? null,
+        };
+      }),
     };
   }
 

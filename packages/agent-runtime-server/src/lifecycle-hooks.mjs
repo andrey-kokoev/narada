@@ -5,6 +5,8 @@ import {
   validateNarsLifecycleHookPayload,
 } from '@narada2/carrier-protocol';
 import { buildAgentIdentityRefV2, resolveAgentIdentityRef } from '@narada2/agent-identity';
+import { resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { valueAfterFlag } from './runtime-server-options.mjs';
 
 const SECRET_PATTERN = /(api[_-]?key|token|secret|password|authorization)\s*[:=]\s*[^\s,;]+/giu;
@@ -16,6 +18,60 @@ function sanitizeHookFailure(error) {
     name,
     message: rawMessage.replace(SECRET_PATTERN, '$1=<redacted>'),
   };
+}
+
+function lifecycleHookModuleSpecifier(args = [], env = process.env) {
+  const argumentValue = valueAfterFlag(args, '--lifecycle-hook-module', { trim: true });
+  const environmentValue = typeof env.NARADA_LIFECYCLE_HOOK_MODULE === 'string'
+    ? env.NARADA_LIFECYCLE_HOOK_MODULE.trim() || null
+    : null;
+  if (argumentValue && environmentValue && argumentValue !== environmentValue) {
+    throw new Error('contradictory_nars_lifecycle_hook_module');
+  }
+  return argumentValue ?? environmentValue;
+}
+
+function moduleSource(moduleNamespace) {
+  const defaultExport = moduleNamespace?.default;
+  if (isObject(defaultExport) && (Object.hasOwn(defaultExport, 'hooks') || Object.hasOwn(defaultExport, 'onFailure'))) {
+    return defaultExport;
+  }
+  return moduleNamespace;
+}
+
+function normalizeLifecycleHooks(rawHooks) {
+  if (rawHooks === undefined) throw new Error('nars_lifecycle_hook_module_missing_hooks');
+  const hooks = Array.isArray(rawHooks) ? rawHooks : [rawHooks];
+  if (!hooks.every((hook) => typeof hook === 'function' || isObject(hook))) {
+    throw new Error('nars_lifecycle_hook_module_invalid_hooks');
+  }
+  return hooks;
+}
+
+export async function loadNarsLifecycleHookDispatcher({ args = [], env = process.env, clock } = {}) {
+  const specifier = lifecycleHookModuleSpecifier(args, env);
+  if (!specifier) return createNarsLifecycleHookDispatcher({ clock });
+  const moduleUrl = specifier.startsWith('file:') ? specifier : pathToFileURL(resolve(specifier)).href;
+  let moduleNamespace;
+  try {
+    moduleNamespace = await import(moduleUrl);
+  } catch (error) {
+    throw new Error(
+      `nars_lifecycle_hook_module_load_failed:${specifier}:${error instanceof Error ? error.message : String(error)}`,
+      { cause: error },
+    );
+  }
+  const source = moduleSource(moduleNamespace);
+  const rawHooks = Object.hasOwn(source, 'hooks') ? source.hooks : moduleNamespace.default;
+  const onFailure = source.onFailure ?? null;
+  if (onFailure !== null && typeof onFailure !== 'function') {
+    throw new Error('nars_lifecycle_hook_module_invalid_on_failure');
+  }
+  return createNarsLifecycleHookDispatcher({
+    hooks: normalizeLifecycleHooks(rawHooks),
+    onFailure,
+    clock,
+  });
 }
 
 function isObject(value) {

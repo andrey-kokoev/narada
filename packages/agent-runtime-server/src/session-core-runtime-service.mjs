@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileS
 import { dirname, join } from 'node:path';
 import { admittedProviderNames, loadProviderMetadata } from '@narada2/carrier-provider-contract';
 import { resolveNaradaSitePaths } from '@narada2/site-paths';
+import { readNarsEventLog } from '@narada2/nars-session-core/event-log';
 import { markNarsSessionIndexClosed, writeNarsSessionStartedIndex } from '@narada2/nars-session-core/session-index';
 import { buildLaunchProcessOwnershipEvidence } from '@narada2/launch-process-ownership';
 import { createRuntimeSessionBinding } from './runtime-session-binding.mjs';
@@ -10,9 +11,17 @@ import { createNarsRuntimeRequestRegistry } from './runtime-request-state.mjs';
 import { isNarsRuntimeServerMethod } from './runtime-control-contract.mjs';
 
 const DEFAULT_HEARTBEAT_INTERVAL_MS = 10_000;
+const HEARTBEAT_FRESH_MS = 30_000;
 const NARS_HEARTBEAT_SCHEMA = 'narada.nars.heartbeat.v1';
 const PROVIDER_METADATA = loadProviderMetadata();
 const ADMITTED_PROVIDER_NAMES = admittedProviderNames();
+const SESSION_CONTROL_METHODS = new Set([
+  'session.submit',
+  'session.health',
+  'session.cancel',
+  'session.recovery',
+  'session.close',
+]);
 let heartbeatWriteSequence = 0;
 
 export function shouldPersistNarsRuntimeRequestTransition(record) {
@@ -113,13 +122,13 @@ function runtimeHostSnapshot(runtimeContext) {
   return runtimeContext.runtimeHostState ?? null;
 }
 
-function intelligenceChoices(provider, currentModel, currentThinking) {
+export function intelligenceChoices(provider, currentModel, currentThinking) {
   const metadata = PROVIDER_METADATA[provider] ?? {};
   return {
     providerChoices: ADMITTED_PROVIDER_NAMES.filter((name) => PROVIDER_METADATA[name]),
     modelChoices: uniqueStrings([
-      ...(Array.isArray(metadata.available_models) ? metadata.available_models : []),
       currentModel,
+      ...(Array.isArray(metadata.available_models) ? metadata.available_models : []),
     ]),
     thinkingChoices: uniqueStrings([
       currentThinking,
@@ -146,6 +155,58 @@ function requestContent(request) {
   if (typeof request === 'string') return request;
   if (!request || typeof request !== 'object') return null;
   return request.content ?? request.params?.content ?? request.params?.message ?? null;
+}
+
+function providerContentPart(part) {
+  if (typeof part === 'string') return part;
+  if (!part || typeof part !== 'object') return '';
+  if (part.type === 'text' && typeof part.text === 'string') return part.text;
+  if (part.type === 'artifact_ref') {
+    const title = typeof part.title === 'string' && part.title.trim() ? ` ${part.title.trim()}` : '';
+    const kind = typeof part.kind === 'string' && part.kind.trim() ? ` (${part.kind.trim()})` : '';
+    const artifactId = typeof part.artifact_id === 'string' && part.artifact_id.trim()
+      ? part.artifact_id.trim()
+      : 'unknown';
+    return `[Artifact${title}${kind}; id=${artifactId}]`;
+  }
+  if (typeof part.text === 'string') return part.text;
+  return JSON.stringify(part);
+}
+
+export function normalizeProviderConversationContent(content) {
+  if (typeof content === 'string') return content.trim();
+  if (Array.isArray(content)) {
+    return content.map(providerContentPart).filter(Boolean).join('\n').trim();
+  }
+  if (content == null) return '';
+  return providerContentPart(content).trim();
+}
+
+export function requestRejectionCode(method, message) {
+  if (message === 'invalid_json') return 'invalid_json';
+  if (method === 'session.submit') return 'request_dispatch_failed';
+  if (method === 'runtime.intelligence.reconfigure') return 'runtime_reconfiguration_failed';
+  if (SESSION_CONTROL_METHODS.has(method) || isNarsRuntimeServerMethod(method)) return 'session_control_failed';
+  return 'unsupported_session_control';
+}
+
+function providerConversationMessages({ eventsPath, currentInput } = {}) {
+  const currentInputId = currentInput?.event_id == null ? null : String(currentInput.event_id);
+  const messages = [];
+  for (const event of readNarsEventLog(eventsPath).events) {
+    const eventTurnId = String(event.turn_id ?? event.input_event_id ?? event.event_id ?? '');
+    if (event?.event === 'user_message' && eventTurnId !== currentInputId) {
+      const content = normalizeProviderConversationContent(event.content);
+      if (content) messages.push({ role: 'user', content });
+    }
+    if (event?.event === 'assistant_message') {
+      const content = normalizeProviderConversationContent(event.content);
+      if (content) messages.push({ role: 'assistant', content });
+    }
+  }
+  const content = String(currentInput?.content ?? '').trim();
+  if (content) messages.push({ role: 'user', content });
+  return messages;
 }
 
 function parseRequest(line) {
@@ -179,6 +240,7 @@ function projectRuntimeHealth(snapshot, runtimeContext, toolGateway, requestLife
         ? 'healthy'
         : 'degraded';
   const heartbeat = readHeartbeatProjection(heartbeatPathForRuntimeContext(runtimeContext));
+  const generatedAt = new Date().toISOString();
   const intelligence = currentIntelligenceSnapshot(providerRuntime, runtimeContext);
   const intelligenceProvider = intelligence.provider;
   const intelligenceModel = intelligence.model;
@@ -188,7 +250,8 @@ function projectRuntimeHealth(snapshot, runtimeContext, toolGateway, requestLife
     ...snapshot,
     schema: 'narada.nars.health.v1',
     status,
-    generated_at: new Date().toISOString(),
+    generated_at: generatedAt,
+    health_observed_at: generatedAt,
     agent_id: runtimeContext.identity ?? null,
     session_id: snapshot.session_id ?? runtimeContext.session ?? null,
     site_root: runtimeContext.siteRoot ?? null,
@@ -231,6 +294,13 @@ function projectRuntimeHealth(snapshot, runtimeContext, toolGateway, requestLife
       ? runtimeContext.controlInputBridgeState()
       : null,
     runtime_requests: requestLifecycle?.snapshot?.() ?? null,
+    request_accounting: {
+      schema: 'narada.nars.request_accounting.v1',
+      source: 'narada-agent-runtime-server',
+      correlation_fields: ['runtime_request_id', 'request_id', 'input_event_id', 'turn_id'],
+      runtime_requests: requestLifecycle?.snapshot?.() ?? null,
+      operator_input_queue: snapshot.operator_input_queue ?? null,
+    },
   };
 }
 
@@ -249,10 +319,13 @@ function readHeartbeatProjection(path) {
       path,
       last_written_at: lastWrittenAt,
       age_ms: Number.isFinite(parsedAt) ? Math.max(0, Date.now() - parsedAt) : null,
-      freshness: 'unknown',
+      freshness: Number.isFinite(parsedAt)
+        ? Date.now() - parsedAt <= HEARTBEAT_FRESH_MS ? 'fresh' : 'stale'
+        : 'unknown',
+      freshness_threshold_ms: HEARTBEAT_FRESH_MS,
     };
   } catch {
-    return { path, last_written_at: null, age_ms: null, freshness: 'unknown' };
+    return { path, last_written_at: null, age_ms: null, freshness: 'unknown', freshness_threshold_ms: HEARTBEAT_FRESH_MS };
   }
 }
 
@@ -317,7 +390,7 @@ export function createSessionCoreRuntimeService({
       const intelligence = currentIntelligenceSnapshot(providerRuntime, runtimeContext);
       return {
         turnId: input.event_id,
-        messages: [{ role: 'user', content: input.content }],
+        messages: providerConversationMessages({ eventsPath: runtimeContext.eventsPath, currentInput: input }),
         provider: intelligence.provider ?? runtimeContext.intelligenceProvider ?? null,
         settings: {
           model: intelligence.model ?? runtimeContext.providerSettings?.model ?? null,
@@ -398,11 +471,7 @@ export function createSessionCoreRuntimeService({
         event: 'session_control_rejected',
         request_id: requestId,
         method,
-        code: message === 'invalid_json'
-          ? 'invalid_json'
-          : method === 'session.submit'
-            ? 'request_dispatch_failed'
-            : 'unsupported_session_control',
+        code: requestRejectionCode(method, message),
         error: message,
       });
       const terminalState = message === 'invalid_json' || method !== 'session.submit' ? 'rejected' : 'failed';

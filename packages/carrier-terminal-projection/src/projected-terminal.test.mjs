@@ -4,6 +4,7 @@ import test from 'node:test';
 import {
   bracketedPasteControlSequences,
   createExplicitJsonControlFrame,
+  createOperatorSteeringFrame,
   createOperatorStyle,
   createProjectedTerminalBridge,
   createProjectedSlashCommandAction,
@@ -27,6 +28,12 @@ test('projected slash commands produce NARS protocol frames', () => {
   assert.equal(createExplicitJsonControlFrame('/json {"id":"health-1","method":"session.health","params":{}}').frame.method, 'session.health');
   assert.equal(createExplicitJsonControlFrame('/json {"id":"bad-1","method":"bad.method","params":{}}').error, '/json unsupported session-core method: bad.method');
   assert.match(projectedHelpText(), /\/interrupt\s+Cancel the active request/);
+  const steering = createOperatorSteeringFrame('change course', { activeTurnId: 'turn_active' });
+  assert.equal(steering.method, 'session.submit');
+  assert.equal(steering.params.content, 'change course');
+  assert.equal(steering.params.source, 'operator_steering');
+  assert.equal(steering.params.delivery_mode, 'admit_after_active_turn');
+  assert.equal(steering.params.active_turn_id, 'turn_active');
 });
 
 test('startup event renders operator-facing runtime summary rows', () => {
@@ -184,6 +191,23 @@ test('bracketed paste composer emits one paste payload and suppresses readline s
   assert.equal(composer.isActive(), false);
 });
 
+test('bracketed paste composer handles split control markers', () => {
+  const pasted = 'line 1\nline 2\nline 3';
+  const seen = [];
+  let suppressed = 0;
+  const composer = createBracketedPasteComposer({
+    onSuppressLines: (count) => { suppressed += count; },
+    onPaste: (text) => { seen.push(text); },
+  });
+
+  assert.equal(composer.feed('\x1b['), false);
+  assert.equal(composer.feed(`200~${pasted}\x1b[20`), true);
+  assert.equal(composer.feed('1~'), true);
+  assert.deepEqual(seen, [pasted]);
+  assert.equal(suppressed, 2);
+  assert.equal(composer.isActive(), false);
+});
+
 test('projected terminal bridge inserts bracketed multiline paste and submits on enter', async () => {
   const input = new PassThrough();
   input.isTTY = true;
@@ -205,6 +229,42 @@ test('projected terminal bridge inserts bracketed multiline paste and submits on
   });
   const pasted = 'Commit: f08e99bd\nMessage: Move synced email workflow behind SOP shell\n\nWhat changed:\n- Refactored loop body';
   input.write(`${bracketedPasteControlSequences.start}${pasted}${bracketedPasteControlSequences.end}`);
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(frames.length, 0);
+  assert.equal(bridge.composer.getDraft(), pasted);
+
+  input.write('\r');
+  await new Promise((resolve) => setImmediate(resolve));
+  bridge.close();
+
+  assert.equal(input.isPaused(), true);
+  assert.equal(frames.length, 1);
+  assert.equal(frames[0].method, 'session.submit');
+  assert.equal(frames[0].params.content, pasted);
+});
+
+test('projected terminal bridge keeps unframed multiline burst as draft until enter', async () => {
+  const input = new PassThrough();
+  input.isTTY = true;
+  input.setRawMode = () => input;
+  const output = new PassThrough();
+  output.isTTY = true;
+  output.columns = 100;
+  const childStdin = new PassThrough();
+  const frames = [];
+  childStdin.on('data', (chunk) => {
+    for (const line of chunk.toString('utf8').trim().split(/\n/).filter(Boolean)) frames.push(JSON.parse(line));
+  });
+
+  const bridge = createProjectedTerminalBridge({
+    input,
+    output,
+    childStdin,
+    style: createOperatorStyle({ enabled: false }),
+  });
+  const pasted = 'line 1\nline 2\nline 3';
+  input.write(pasted);
   await new Promise((resolve) => setImmediate(resolve));
 
   assert.equal(frames.length, 0);
@@ -354,6 +414,10 @@ test('projected terminal bridge enqueues ordinary input while a turn is active',
   assert.equal(frames.length, 2);
   assert.equal(frames[0].method, 'session.submit');
   assert.equal(frames[0].params.content, 'steer this turn');
+  assert.equal(frames[0].params.source, 'operator_steering');
+  assert.equal(frames[0].params.delivery_mode, 'admit_after_active_turn');
+  assert.equal(frames[0].params.active_turn_id, 'turn_active');
   assert.equal(frames[1].method, 'session.submit');
   assert.equal(frames[1].params.content, 'new turn');
+  assert.equal(frames[1].params.source, 'programmatic_operator');
 });

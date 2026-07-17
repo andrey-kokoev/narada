@@ -38,15 +38,21 @@ export function countReadlineSubmissionsForPaste(value) {
 export function createBracketedPasteComposer({ onPaste = () => {}, onSuppressLines = () => {} } = {}) {
   let active = false;
   let buffer = '';
+  let pendingMarker = '';
 
   return {
     feed(chunk) {
-      let text = Buffer.isBuffer(chunk) ? chunk.toString('utf8') : String(chunk ?? '');
-      let observedPaste = false;
+      let text = `${pendingMarker}${Buffer.isBuffer(chunk) ? chunk.toString('utf8') : String(chunk ?? '')}`;
+      pendingMarker = '';
+      let observedPaste = active;
       while (text) {
         if (!active) {
           const startIndex = text.indexOf(BRACKETED_PASTE_START);
-          if (startIndex === -1) return observedPaste;
+          if (startIndex === -1) {
+            const keep = trailingMarkerPrefixLength(text, BRACKETED_PASTE_START);
+            pendingMarker = keep ? text.slice(-keep) : '';
+            return observedPaste;
+          }
           observedPaste = true;
           active = true;
           buffer = '';
@@ -56,7 +62,9 @@ export function createBracketedPasteComposer({ onPaste = () => {}, onSuppressLin
 
         const endIndex = text.indexOf(BRACKETED_PASTE_END);
         if (endIndex === -1) {
-          buffer += text;
+          const keep = trailingMarkerPrefixLength(text, BRACKETED_PASTE_END);
+          buffer += keep ? text.slice(0, -keep) : text;
+          pendingMarker = keep ? text.slice(-keep) : '';
           return true;
         }
 
@@ -74,6 +82,14 @@ export function createBracketedPasteComposer({ onPaste = () => {}, onSuppressLin
       return active;
     },
   };
+}
+
+function trailingMarkerPrefixLength(text, marker) {
+  const value = String(text ?? '');
+  for (let length = Math.min(marker.length - 1, value.length); length > 0; length -= 1) {
+    if (marker.startsWith(value.slice(-length))) return length;
+  }
+  return 0;
 }
 
 export function createProjectedSlashCommandAction(line) {
@@ -112,18 +128,25 @@ export function projectedHelpText() {
 }
 
 export function createOperatorConversationFrame(line) {
-  return createSubmitFrame(line, 'operator-submit');
+  return createSubmitFrame(line, 'operator-submit', {
+    source: 'programmatic_operator',
+    source_id: 'agent-runtime-server.operator_terminal',
+  });
 }
 
-export function createOperatorConversationEnqueueFrame(line) {
-  return createSubmitFrame(line, 'operator-queue');
+export function createOperatorConversationEnqueueFrame(line, options = {}) {
+  return createOperatorSteeringFrame(line, options);
 }
 
-export function createOperatorSteeringFrame(line) {
-  return createSubmitFrame(line, 'operator-steer');
+export function createOperatorSteeringFrame(line, { activeTurnId = null } = {}) {
+  return createSubmitFrame(line, 'operator-steer', {
+    source: 'operator_steering',
+    delivery_mode: 'admit_after_active_turn',
+    ...(activeTurnId ? { active_turn_id: activeTurnId } : {}),
+  });
 }
 
-function createSubmitFrame(line, requestKind) {
+function createSubmitFrame(line, requestKind, params = {}) {
   const content = String(line ?? '');
   if (!content.trim()) return null;
   const requestId = `${requestKind}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -133,8 +156,7 @@ function createSubmitFrame(line, requestKind) {
     params: {
       request_id: requestId,
       content,
-      source: 'programmatic_operator',
-      source_id: 'agent-runtime-server.operator_terminal',
+      ...params,
     },
   };
 }

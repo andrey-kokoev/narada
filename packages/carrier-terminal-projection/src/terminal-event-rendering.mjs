@@ -1,4 +1,4 @@
-import { normalizeNarsClientProjectionVerbosity, projectNarsClientEvent, shouldProjectNarsClientProjection } from '@narada2/nars-client-projection-contract';
+import { isRoutineHealthyNarsSessionHealth, normalizeNarsClientProjectionVerbosity, projectNarsClientEvent, shouldProjectNarsClientProjection } from '@narada2/nars-client-projection-contract';
 import { agentIdentityDisplay, agentIdentityRefMatchesRequest, renderOperatorValue } from '@narada2/agent-identity';
 import { createTerminalStyle, formatTerminalMessageBlockLines } from './terminal-style.mjs';
 import {
@@ -303,7 +303,10 @@ export function renderOperatorEvent(event, state = {}) {
   }
   applyTurnLifecycleState(event, state);
   const projectionVerbosity = normalizeNarsClientProjectionVerbosity(state.projectionVerbosity ?? state.verbosity ?? TERMINAL_PROJECTION_DEFAULT_VERBOSITY);
-  if (!shouldProjectNarsClientProjection(projectedEvent, { verbosity: projectionVerbosity })) return [];
+  const forceProjectTerminalEvent = event.event === 'carrier_tool_requested'
+    || event.event === 'carrier_tool_completed'
+    || (event.event === 'session_health' && !isRoutineHealthyNarsSessionHealth(event));
+  if (!forceProjectTerminalEvent && !shouldProjectNarsClientProjection(projectedEvent, { verbosity: projectionVerbosity })) return [];
   switch (event.event) {
     case 'session_started':
       state.agentId = event.agent_id ?? state.agentId;
@@ -395,11 +398,13 @@ export function renderOperatorEvent(event, state = {}) {
       appendSuffixToLastLine(block, timestampSuffix(state, style));
       return [...thinkingClear, ...withStreamBoundary(state, block)];
     }
+    case 'carrier_tool_requested':
     case 'tool_call': {
       if (state.toolOutputs === 'hidden') return withRenderedThinkingCleared(state, []);
       const tool = toolDisplayName(event);
       return withRenderedThinkingCleared(state, routedBodyLines({ label: `${eventAgentDisplay(event, 'agent')} -> agent-cli`, body: `${tool}${summarizeToolCall(event)}`, labelStyle: () => `${agentLabel(event, style)} ${style.muted('->')} ${style.tool('agent-cli')}`, bodyStyle: style.muted, state, style }));
     }
+    case 'carrier_tool_completed':
     case 'tool_result': {
       if (state.toolOutputs === 'hidden') return withRenderedThinkingCleared(state, []);
       const status = String(event.status ?? '').toLowerCase();

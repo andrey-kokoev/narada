@@ -49,14 +49,77 @@ export function translateCarrierInputDelivery(message) {
 }
 
 function resolveEventStreamParams(params = {}) {
+  if (!params || typeof params !== 'object' || Array.isArray(params)) {
+    return { ok: false, code: 'invalid_session_event_params' };
+  }
   const requestedView = params.view ?? NARS_SESSION_EVENT_DEFAULT_VIEW;
   const view = normalizeNarsSessionEventView(requestedView);
   if (!view) return { ok: false, code: 'invalid_session_event_view', view: requestedView };
-  const pageSize = params.page_size ?? params.max_replay ?? 100;
-  const filters = params.filters && typeof params.filters === 'object'
-    ? { ...params.filters, view }
-    : { view };
+  for (const field of ['page_size', 'max_replay', 'limit']) {
+    if (params[field] === undefined) continue;
+    const value = Number(params[field]);
+    if (!Number.isInteger(value) || value < 0) {
+      return { ok: false, code: 'invalid_session_event_page_size' };
+    }
+  }
+  if (params.filters !== undefined && (!params.filters || typeof params.filters !== 'object' || Array.isArray(params.filters))) {
+    return { ok: false, code: 'invalid_session_event_filters' };
+  }
+  if (params.include_replay !== undefined && typeof params.include_replay !== 'boolean') {
+    return { ok: false, code: 'invalid_session_event_include_replay' };
+  }
+  if (params.subscription_id !== undefined
+    && (typeof params.subscription_id !== 'string' || !params.subscription_id.trim())) {
+    return { ok: false, code: 'invalid_session_event_subscription_id' };
+  }
+  const pageSize = Number(params.page_size ?? params.max_replay ?? params.limit ?? 100);
+  const filters = params.filters === undefined ? { view } : { ...params.filters, view };
   return { ok: true, view, pageSize, filters };
+}
+
+function streamCursor({ replayPage, eventHub, eventsPath }) {
+  if (replayPage?.cursor) return { namespace: 'durable', ...replayPage.cursor };
+  if (!eventsPath) return { namespace: 'live', ...eventHub.cursor() };
+  return { namespace: 'durable', last_sequence: null, next_sequence: 1 };
+}
+
+function liveSubscriptionPayload(payload, { subscriptionId, eventsPath }) {
+  if (!eventsPath || payload?.event !== 'session_event') {
+    return { ...payload, subscription_id: subscriptionId };
+  }
+  const event = payload?.payload;
+  const durableSequence = Number(event?.durable_event_sequence);
+  if (Number.isFinite(durableSequence)) {
+    const durableEvent = { ...event };
+    delete durableEvent.durable_event_sequence;
+    durableEvent.event_sequence = durableSequence;
+    durableEvent.sequence = durableSequence;
+    return {
+      ...payload,
+      subscription_id: subscriptionId,
+      cursor: {
+        namespace: 'durable',
+        sequence: durableSequence,
+        next_sequence: durableSequence + 1,
+      },
+      payload: durableEvent,
+    };
+  }
+  const liveEvent = { ...event };
+  delete liveEvent.durable_event_sequence;
+  delete liveEvent.event_sequence;
+  delete liveEvent.sequence;
+  return {
+    ...payload,
+    subscription_id: subscriptionId,
+    cursor: {
+      namespace: 'live',
+      sequence: null,
+      next_sequence: null,
+      live_sequence: payload?.cursor?.sequence ?? null,
+    },
+    payload: liveEvent,
+  };
 }
 
 function websocketError(send, { requestId, code, message, view, method } = {}) {
@@ -85,7 +148,7 @@ function subscribeToEventStream({
   connectionId,
   nextSubscriptionId,
 }) {
-  const params = message.params ?? {};
+  const params = message.params === undefined ? {} : message.params;
   const streamParams = resolveEventStreamParams(params);
   if (!streamParams.ok) return streamParams;
   const { filters, view, pageSize } = streamParams;
@@ -104,7 +167,7 @@ function subscribeToEventStream({
         send(payload);
         return;
       }
-      send({ ...payload, subscription_id: subscriptionId });
+      send(liveSubscriptionPayload(payload, { subscriptionId, eventsPath }));
     },
   });
   subscriptions.set(subscriptionId, subscription);
@@ -139,16 +202,28 @@ function subscribeToEventStream({
     event_count: replayPage?.event_count ?? replay.length,
     has_more: replayPage?.has_more ?? false,
     replay_source: replayPage ? replayPage.source : 'memory_event_hub',
-    cursor: replayPage?.cursor ?? eventHub.cursor(),
+    cursor: streamCursor({ replayPage, eventHub, eventsPath }),
     filters,
   });
   for (const event of replay) {
-    send({ schema: 'narada.nars.events.envelope.v1', event: 'session_event', subscription_id: subscriptionId, cursor: { sequence: event.event_sequence, next_sequence: event.event_sequence + 1 }, payload: event });
+    const sequence = Number(event.event_sequence ?? event.sequence);
+    send({
+      schema: 'narada.nars.events.envelope.v1',
+      event: 'session_event',
+      subscription_id: subscriptionId,
+      cursor: {
+        namespace: 'durable',
+        sequence,
+        next_sequence: Number.isFinite(sequence) ? sequence + 1 : null,
+      },
+      payload: event,
+    });
   }
   if (subscription.state === 'replaying') {
     subscription.markLive({
       source: 'replay_complete',
       replay_last_sequence: replayPage?.last_sequence ?? replay.at(-1)?.event_sequence ?? replay.at(-1)?.sequence ?? null,
+      ...(eventsPath ? { replay_sequence_field: 'durable_event_sequence' } : {}),
     });
   }
   send({
@@ -160,13 +235,13 @@ function subscribeToEventStream({
     view,
     replay_count: replay.length,
     has_more: replayPage?.has_more ?? false,
-    cursor: replayPage?.cursor ?? eventHub.cursor(),
+    cursor: streamCursor({ replayPage, eventHub, eventsPath }),
   });
   return { ok: true, replayEvents: replay };
 }
 
 function readEventStreamPage({ eventsPath, message }) {
-  const params = message.params ?? {};
+  const params = message.params === undefined ? {} : message.params;
   const streamParams = resolveEventStreamParams(params);
   if (!streamParams.ok) return streamParams;
   return {
@@ -217,7 +292,14 @@ export function startEventStreamProjection({ childStdin, eventHub, host, port, e
     const subscriptions = new Map();
     let nextSubscriptionId = 0;
     let pending = Buffer.alloc(0);
-    send({ schema: 'narada.nars.websocket.v1', event: 'websocket_connected', transport: 'websocket', cursor: eventHub.cursor() });
+    send({
+      schema: 'narada.nars.websocket.v1',
+      event: 'websocket_connected',
+      transport: 'websocket',
+      cursor: eventsPath
+        ? { namespace: 'durable', last_sequence: null, next_sequence: 1 }
+        : { namespace: 'live', ...eventHub.cursor() },
+    });
     socket.on('data', (chunk) => {
       pending = Buffer.concat([pending, chunk]);
       const decoded = decodeWebSocketFrames(pending);
@@ -233,6 +315,10 @@ export function startEventStreamProjection({ childStdin, eventHub, host, port, e
           message = JSON.parse(frame.text);
         } catch (error) {
           send({ schema: 'narada.nars.websocket.error.v1', event: 'websocket_error', code: 'invalid_json', message: error instanceof Error ? error.message : String(error) });
+          continue;
+        }
+        if (!message || typeof message !== 'object' || Array.isArray(message)) {
+          websocketError(send, { code: 'invalid_websocket_request', message: 'WebSocket request must be a JSON object.' });
           continue;
         }
         if (message.method === 'session.events.subscribe') {
@@ -261,6 +347,7 @@ export function startEventStreamProjection({ childStdin, eventHub, host, port, e
             event: 'session_events_read',
             request_id: message.id ?? null,
             transport: 'websocket',
+            cursor: result.page.cursor ? { namespace: 'durable', ...result.page.cursor } : result.page.cursor,
           });
           continue;
         }

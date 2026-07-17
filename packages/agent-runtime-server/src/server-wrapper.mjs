@@ -14,6 +14,8 @@ import {
   formatControlInputBridgeErrorSummary,
   formatRuntimeMcpFaultEvent,
   formatRuntimeMcpFaultSummary,
+  formatRuntimeOutputFailureEvent,
+  formatRuntimeOutputFailureSummary,
   formatRuntimeProjectionFailureEvent,
   formatRuntimeProjectionFailureSummary,
   formatSessionOperationsEvent,
@@ -30,6 +32,7 @@ import {
   dispatchNarsLifecycleHooksForEvent,
   lifecycleBindingFromArgs,
   lifecycleHookFailureLine,
+  loadNarsLifecycleHookDispatcher,
 } from './lifecycle-hooks.mjs';
 import { startEventStreamProjection, parseEventStreamOptions } from './runtime-server-event-stream.mjs';
 import { createEventHub } from './runtime-server-event-hub.mjs';
@@ -40,6 +43,18 @@ import { createNarsHealthProjectionRequestStateMachine } from './health-projecti
 import { parseEndpointOptions, valueAfterFlag } from './runtime-server-options.mjs';
 
 export { formatHostStatusEvent } from './runtime-server-events.mjs';
+
+export function shouldUseInteractiveTerminalProjection({
+  rawJsonl = false,
+  operatorSurfaceKind = 'agent-cli',
+  input = process.stdin,
+  output = process.stdout,
+} = {}) {
+  return !rawJsonl
+    && operatorSurfaceKind === 'agent-cli'
+    && input?.isTTY === true
+    && output?.isTTY === true;
+}
 
 function agentIdentitySiteId(agentIdentityRef) {
   if (!agentIdentityRef || typeof agentIdentityRef !== 'object') return null;
@@ -244,14 +259,15 @@ function renderWrapperEvents({ event, wrapperEventsJsonl, state }) {
     }
     state.runtimeFaultSummaries.add(runtimeFaultSummary);
   }
-  for (const [failureSummary, wrapperEvent] of [
-    [formatRuntimeProjectionFailureSummary(event), formatRuntimeProjectionFailureEvent(event)],
-    [formatControlInputBridgeErrorSummary(event), formatControlInputBridgeErrorEvent(event)],
+  for (const [failureSummary, wrapperEvent, summarySet] of [
+    [formatRuntimeProjectionFailureSummary(event), formatRuntimeProjectionFailureEvent(event), state.projectionFailureSummaries],
+    [formatControlInputBridgeErrorSummary(event), formatControlInputBridgeErrorEvent(event), state.projectionFailureSummaries],
+    [formatRuntimeOutputFailureSummary(event), formatRuntimeOutputFailureEvent(event), state.outputFailureSummaries],
   ]) {
-    if (!failureSummary || state.projectionFailureSummaries.has(failureSummary)) continue;
+    if (!failureSummary || summarySet.has(failureSummary)) continue;
     console.error(failureSummary);
     if (wrapperEventsJsonl && wrapperEvent) console.error(JSON.stringify(wrapperEvent));
-    state.projectionFailureSummaries.add(failureSummary);
+    summarySet.add(failureSummary);
   }
   for (const [workflowSummary, wrapperEvent] of [
     [formatSessionWorkflowSummary(event), formatSessionWorkflowEvent(event)],
@@ -269,7 +285,7 @@ function handleRuntimeOutputEvent({
   event,
   healthProjection,
   eventHub,
-  lifecycleDispatcher,
+  dispatchLifecycleEvent,
   useInteractiveTerminalProjection,
   renderProjectedEvent,
   writeProjectedOutput,
@@ -278,12 +294,11 @@ function handleRuntimeOutputEvent({
   state,
 }) {
   healthProjection?.observe(event);
-  eventHub.publish(event);
-  dispatchNarsLifecycleHooksForEvent(lifecycleDispatcher, event)
-    .then((result) => {
-      for (const failure of result.failures) console.error(lifecycleHookFailureLine(failure));
-    })
-    .catch((error) => console.error(`[agent-runtime-server] lifecycle hook dispatch failed: ${error instanceof Error ? error.message : String(error)}`));
+  const durableSequence = Number(event?.event_sequence ?? event?.sequence);
+  eventHub.publish(Number.isFinite(durableSequence)
+    ? { ...event, durable_event_sequence: durableSequence }
+    : event);
+  dispatchLifecycleEvent(event);
   if (useInteractiveTerminalProjection) {
     for (const rendered of renderProjectedEvent(event)) {
       if (typeof rendered === 'string') {
@@ -307,7 +322,6 @@ async function main() {
   const parsedEvents = parseEventStreamOptions(parsedHealth.forwardedArgs);
   const args = parsedEvents.forwardedArgs;
   const operatorSurfaceKind = valueAfterFlag(args, '--operator-surface') ?? process.env.NARADA_OPERATOR_SURFACE_KIND ?? 'agent-cli';
-  const lifecycleDispatcher = createNarsLifecycleHookDispatcher();
   const lifecycleBinding = lifecycleBindingFromArgs(args, process.env);
   const delegatedAuthorityHandoff = createDelegatedAuthorityHandoff({ args, env: process.env, binding: lifecycleBinding });
   const launchProcessContext = {
@@ -325,7 +339,9 @@ async function main() {
     },
     onTransition: (event) => eventHub.publish(event),
   });
+  let lifecycleDispatcher;
   try {
+    lifecycleDispatcher = await loadNarsLifecycleHookDispatcher({ args, env: process.env });
     const result = await dispatchNarsLifecycleHook(lifecycleDispatcher, 'beforeSessionBind', lifecycleBinding);
     for (const failure of result.failures) console.error(lifecycleHookFailureLine(failure));
   } catch (error) {
@@ -370,10 +386,10 @@ async function main() {
         onRequestTransition: (transition) => {
           if (transition.request_state !== 'timed_out' && transition.request_state !== 'failed') return;
           eventHub.publish({
+            ...transition,
             schema: 'narada.nars.runtime_projection_failure.v1',
             event: 'runtime_projection_failure',
             projection: 'health',
-            ...transition,
           });
         },
       });
@@ -502,17 +518,20 @@ async function main() {
     startupSummaryPrinted: false,
     runtimeFaultSummaries: new Set(),
     projectionFailureSummaries: new Set(),
+    outputFailureSummaries: new Set(),
     workflowSummaries: new Set(),
   };
   let stdoutBuffer = '';
   let writeProjectedOutput = (text) => process.stdout.write(text);
   let renderProjectedEvent = () => [];
-  const useInteractiveTerminalProjection = !rawJsonl
-    && operatorSurfaceKind === 'agent-cli'
-    && process.stdin.isTTY === true;
+  let projectedTerminal = null;
+  const useInteractiveTerminalProjection = shouldUseInteractiveTerminalProjection({
+    rawJsonl,
+    operatorSurfaceKind,
+  });
 
   if (useInteractiveTerminalProjection) {
-    const projectedTerminal = createProjectedTerminalBridge({
+    projectedTerminal = createProjectedTerminalBridge({
       input: process.stdin,
       output: process.stdout,
       childStdin: runtimeInput,
@@ -526,6 +545,38 @@ async function main() {
     }
     else process.stdin.resume?.();
   }
+  let runtimeOutputFailure = null;
+  let exitCode = 0;
+  let lifecycleDispatchTail = Promise.resolve();
+  const dispatchLifecycleEvent = (event) => {
+    lifecycleDispatchTail = lifecycleDispatchTail
+      .then(() => dispatchNarsLifecycleHooksForEvent(lifecycleDispatcher, event))
+      .then((result) => {
+        for (const failure of result.failures) console.error(lifecycleHookFailureLine(failure));
+      })
+      .catch((error) => console.error(`[agent-runtime-server] lifecycle hook dispatch failed: ${error instanceof Error ? error.message : String(error)}`));
+    return lifecycleDispatchTail;
+  };
+  const reportRuntimeOutputFailure = (error, line, errorCode = null) => {
+    const code = errorCode
+      ?? (error instanceof SyntaxError ? 'runtime_output_invalid_json' : 'runtime_output_handler_failed');
+    const failure = {
+      schema: 'narada.nars.runtime_output_failure.v1',
+      event: 'runtime_output_failure',
+      timestamp: new Date().toISOString(),
+      agent_id: runtimeContext.identity,
+      session_id: runtimeContext.session,
+      error_code: code,
+      error: (error instanceof Error ? error.message : String(error ?? 'unknown_error')).slice(0, 240),
+      line_length: String(line ?? '').length,
+    };
+    runtimeOutputFailure ??= failure;
+    eventHub.publish(failure);
+    renderWrapperEvents({ event: failure, wrapperEventsJsonl, state });
+    if (!runtimeInput.destroyed && !runtimeInput.writableEnded) {
+      runtimeInput.destroy(new Error(`${code}:${failure.error}`));
+    }
+  };
   runtimeOutput.on('data', (chunk) => {
     const text = String(chunk);
     if (rawJsonl) process.stdout.write(text);
@@ -542,7 +593,7 @@ async function main() {
           event,
           healthProjection,
           eventHub,
-          lifecycleDispatcher,
+          dispatchLifecycleEvent,
           useInteractiveTerminalProjection,
           renderProjectedEvent,
           writeProjectedOutput,
@@ -550,17 +601,23 @@ async function main() {
           wrapperEventsJsonl,
           state,
         });
-      } catch {}
+      } catch (error) {
+        reportRuntimeOutputFailure(error, line);
+        break;
+      }
     }
   });
 
-  let exitCode = 0;
   try {
     runtimeHost.transition('serving', { reason: 'runtime_service_started' });
     await runtimeService.run({
       input: runtimeInput,
       output: runtimeOutput,
     });
+    if (stdoutBuffer.trim()) {
+      reportRuntimeOutputFailure(new Error('runtime_output_incomplete_line'), stdoutBuffer, 'runtime_output_incomplete_line');
+    }
+    if (runtimeOutputFailure) exitCode = 1;
   } catch (error) {
     exitCode = 1;
     if (runtimeHost.state !== 'failed') {
@@ -572,10 +629,12 @@ async function main() {
     healthProjection?.rejectAll(error);
     console.error(`[agent-runtime-server] carrier runtime failed: ${error instanceof Error ? error.message : String(error)}`);
   } finally {
+    await lifecycleDispatchTail;
     process.off('SIGINT', onSigint);
     process.off('SIGTERM', onSigterm);
     process.stdin.unpipe?.(runtimeInput);
     controlInputBridge?.close();
+    projectedTerminal?.close();
     healthProjection?.rejectAll(new Error('carrier_closed'));
     if (runtimeHost.state === 'serving' || runtimeHost.state === 'failed') {
       runtimeHost.transition('closing', {
@@ -615,6 +674,8 @@ export {
   formatControlInputBridgeErrorSummary,
   formatRuntimeMcpFaultEvent,
   formatRuntimeMcpFaultSummary,
+  formatRuntimeOutputFailureEvent,
+  formatRuntimeOutputFailureSummary,
   formatRuntimeProjectionFailureEvent,
   formatRuntimeProjectionFailureSummary,
   formatSessionOperationsEvent,
@@ -629,5 +690,6 @@ export {
   dispatchNarsLifecycleHooksForEvent,
   lifecycleBindingFromArgs,
   lifecycleHookFailureLine,
+  loadNarsLifecycleHookDispatcher,
   main,
 };

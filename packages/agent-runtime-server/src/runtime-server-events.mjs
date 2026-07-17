@@ -138,6 +138,23 @@ export function formatRuntimeProjectionFailureEvent(event) {
   };
 }
 
+export function formatRuntimeOutputFailureSummary(event) {
+  if (!event || event.event !== 'runtime_output_failure') return null;
+  const code = event.error_code ?? 'runtime_output_failure';
+  const error = event.error ?? 'unknown_error';
+  return `[agent-runtime-server] Runtime output failure ${String(code).slice(0, 120)} ${String(error).slice(0, 240)}`;
+}
+
+export function formatRuntimeOutputFailureEvent(event) {
+  if (!event || event.event !== 'runtime_output_failure') return null;
+  return {
+    ...wrapperEventEnvelope(event, 'runtime_output_failure'),
+    error_code: event.error_code ?? null,
+    error: event.error ?? null,
+    line_length: event.line_length ?? null,
+  };
+}
+
 export function formatControlInputBridgeErrorSummary(event) {
   if (!event || event.event !== 'runtime_control_input_bridge_error') return null;
   const code = event.error_code ?? 'control_input_bridge_error';

@@ -119,6 +119,28 @@ test('session-core runtime service rejects non-session controls and retains the 
   assert.ok(events.some((event) => event.lifecycle_state === 'closed'));
 });
 
+test('session-core runtime classifies a supported reconfiguration failure distinctly from an unsupported control', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'session-core-runtime-reconfiguration-failure-'));
+  const input = new PassThrough();
+  const output = new PassThrough();
+  let rendered = '';
+  output.on('data', (chunk) => { rendered += String(chunk); });
+  const service = createSessionCoreRuntimeService({
+    runtimeContext: {
+      identity: 'agent-1', session: 'session-reconfiguration-failure', sessionPath: join(root, 'session.json'), eventsPath: join(root, 'events.jsonl'), siteRoot: root,
+    },
+    providerRuntime: {
+      reconfigure: async () => { throw new Error('fixture_reconfiguration_failure'); },
+    },
+    callChatApiFn: async () => ({ content: 'unused' }),
+  });
+  const run = service.run({ input, output });
+  input.end(`${JSON.stringify({ id: 'reconfigure-failed', method: 'runtime.intelligence.reconfigure', params: { provider: 'openai-api' } })}\n${JSON.stringify({ id: 'close-1', method: 'session.close' })}\n`);
+  await run;
+  const events = rendered.trim().split(/\r?\n/).map((line) => JSON.parse(line));
+  assert.equal(events.find((event) => event.event === 'session_control_rejected' && event.request_id === 'reconfigure-failed')?.code, 'runtime_reconfiguration_failed');
+});
+
 test('session-core turn persists carrier and gateway evidence for a provider tool call', async () => {
   const root = mkdtempSync(join(tmpdir(), 'session-core-tool-turn-'));
   let providerCalls = 0;

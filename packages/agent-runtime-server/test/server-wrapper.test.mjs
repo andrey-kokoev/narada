@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { once } from 'node:events';
-import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { connect as netConnect } from 'node:net';
 import { createServer, request as httpRequest } from 'node:http';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -23,6 +24,7 @@ import {
   formatWrapperStatusEvent,
   lifecycleBindingFromArgs,
   parseEventStreamOptions,
+  shouldUseInteractiveTerminalProjection,
   startHealthProjection,
   startEventStreamProjection,
 } from '../src/server-wrapper.mjs';
@@ -36,6 +38,37 @@ function waitForOutput(child, predicate, timeoutMs = 5000) {
     const onData = (chunk) => { text += String(chunk); if (predicate(text)) { cleanup(); resolve(text); } };
     const cleanup = () => { clearTimeout(timer); child.stdout.off('data', onData); };
     child.stdout.on('data', onData);
+  });
+}
+
+function readRawUpgradeResponse(endpoint, requestPath) {
+  const target = new URL(endpoint);
+  return new Promise((resolve, reject) => {
+    const socket = netConnect({ host: target.hostname, port: Number(target.port) });
+    let settled = false;
+    let response = '';
+    const finish = (callback) => {
+      if (settled) return;
+      settled = true;
+      socket.destroy();
+      callback();
+    };
+    socket.setTimeout(5000, () => finish(() => reject(new Error(`raw_upgrade_timeout:${requestPath}`))));
+    socket.once('error', (error) => finish(() => reject(error)));
+    socket.on('data', (chunk) => {
+      response += String(chunk);
+      if (response.includes('\r\n\r\n')) finish(() => resolve(response));
+    });
+    socket.once('connect', () => {
+      socket.write([
+        `GET ${requestPath} HTTP/1.1`,
+        `Host: ${target.host}`,
+        'Connection: Upgrade',
+        'Upgrade: websocket',
+        '',
+        '',
+      ].join('\r\n'));
+    });
   });
 }
 
@@ -61,6 +94,9 @@ async function connectWebSocket(url) {
     sendJson(payload) {
       socket.send(JSON.stringify(payload));
     },
+    sendText(text) {
+      socket.send(text);
+    },
     async nextJson() {
       if (queue.length) return queue.shift();
       return new Promise((resolve) => waiters.push(resolve));
@@ -83,6 +119,45 @@ async function nextWebSocketJson(client, timeoutMs = 5000) {
   } finally {
     clearTimeout(timer);
   }
+}
+
+async function waitForFileCondition(path, predicate, timeoutMs = 5000) {
+  return waitForCondition(() => {
+    if (!existsSync(path)) return false;
+    return predicate(readFileSync(path, 'utf8'));
+  }, timeoutMs);
+}
+
+function readJsonlFile(path) {
+  return readJsonlFileFromText(readFileSync(path, 'utf8'));
+}
+
+function readJsonlFileFromText(text) {
+  return String(text)
+    .trim()
+    .split(/\r?\n/)
+    .filter(Boolean)
+    .map((line) => JSON.parse(line));
+}
+
+function hasCapturedJsonEvent(text, predicate) {
+  return String(text).split(/\r?\n/).some((line) => {
+    if (!line.trim()) return false;
+    try {
+      return predicate(JSON.parse(line));
+    } catch {
+      return false;
+    }
+  });
+}
+
+async function nextWebSocketUntil(client, predicate, timeoutMs = 5000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const frame = await nextWebSocketJson(client, Math.max(1, deadline - Date.now()));
+    if (predicate(frame)) return frame;
+  }
+  throw new Error('websocket_predicate_timeout');
 }
 
 async function waitForCondition(predicate, timeoutMs = 1000) {
@@ -175,6 +250,167 @@ test('wrapper diagnostics preserve projection and control-input failure details'
   });
 });
 
+test('wrapper diagnostics surface runtime output failures and require a real terminal pair', () => {
+  const outputFailure = {
+    event: 'runtime_output_failure',
+    timestamp: '2026-07-13T12:00:02.000Z',
+    agent_id: 'narada.test',
+    session_id: 'diagnostics-session',
+    error_code: 'runtime_output_invalid_json',
+    error: 'Unexpected token',
+    line_length: 17,
+  };
+  assert.equal(
+    canonicalRuntimeEvents.formatRuntimeOutputFailureSummary(outputFailure),
+    '[agent-runtime-server] Runtime output failure runtime_output_invalid_json Unexpected token',
+  );
+  assert.deepEqual(canonicalRuntimeEvents.formatRuntimeOutputFailureEvent(outputFailure), {
+    schema: 'narada.agent_runtime_server.wrapper_event.v1',
+    event: 'runtime_output_failure',
+    timestamp: '2026-07-13T12:00:02.000Z',
+    agent_id: 'narada.test',
+    session_id: 'diagnostics-session',
+    error_code: 'runtime_output_invalid_json',
+    error: 'Unexpected token',
+    line_length: 17,
+  });
+  assert.equal(shouldUseInteractiveTerminalProjection({
+    rawJsonl: false,
+    operatorSurfaceKind: 'agent-cli',
+    input: { isTTY: true },
+    output: { isTTY: true },
+  }), true);
+  assert.equal(shouldUseInteractiveTerminalProjection({
+    rawJsonl: false,
+    operatorSurfaceKind: 'agent-cli',
+    input: { isTTY: true },
+    output: { isTTY: false },
+  }), false);
+});
+
+test('spawned non-raw runtime uses the interactive terminal projection for a TTY pair', { timeout: 15000 }, async () => {
+  const siteRoot = mkdtempSync(join(tmpdir(), 'narada-runtime-tty-e2e-'));
+  const provider = createServer((request, response) => {
+    request.resume();
+    request.on('end', () => {
+      response.setHeader('content-type', 'application/json');
+      response.end(JSON.stringify({ choices: [{ message: { role: 'assistant', content: 'tty response' } }] }));
+    });
+  });
+  await new Promise((resolve) => provider.listen(0, '127.0.0.1', resolve));
+  const providerAddress = provider.address();
+  let child = null;
+  try {
+    const binPath = fileURLToPath(new URL('../bin/narada-agent-runtime-server.mjs', import.meta.url));
+    const launcher = [
+      '--input-type=module',
+      '--eval',
+      [
+        "import { pathToFileURL } from 'node:url';",
+        "Object.defineProperty(process.stdin, 'isTTY', { value: true, configurable: true });",
+        "Object.defineProperty(process.stdout, 'isTTY', { value: true, configurable: true });",
+        "Object.defineProperty(process.stdin, 'setRawMode', { value: () => process.stdin, configurable: true });",
+        'process.stdout.columns = 100;',
+        'await import(pathToFileURL(process.argv[1]).href);',
+      ].join(' '),
+      binPath,
+      '--no-health',
+      '--no-events',
+      '--identity', 'narada.test',
+      '--session', 'tty-e2e',
+    ];
+    child = spawnTestChild(process.execPath, launcher, {
+      env: {
+        ...process.env,
+        NARADA_SITE_ROOT: siteRoot,
+        NARADA_INTELLIGENCE_PROVIDER: 'openai-api',
+        OPENAI_BASE_URL: `http://127.0.0.1:${providerAddress.port}/`,
+        OPENAI_API_KEY: 'tty-e2e-key',
+        NARADA_AGENT_CLI_COLOR: '0',
+      },
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.setEncoding('utf8');
+    child.stderr.setEncoding('utf8');
+    child.stdout.on('data', (chunk) => { stdout += chunk; });
+    child.stderr.on('data', (chunk) => { stderr += chunk; });
+    await waitForCapturedOutput(child, () => stdout, (text) => text.includes('operator >'));
+    child.stdin.write('hello\r');
+    await waitForCapturedOutput(child, () => stdout, (text) => text.includes('tty response'));
+    child.kill('SIGTERM');
+    const [exitCode] = await once(child, 'exit');
+    assert.equal(exitCode, null, stderr);
+    assert.equal(stderr.includes('runtime_output_failure'), false, stderr);
+  } finally {
+    if (child && child.exitCode === null) child.kill();
+    await new Promise((resolve) => provider.close(resolve));
+    rmSync(siteRoot, { recursive: true, force: true });
+  }
+});
+
+test('spawned event projection rejects plain HTTP and malformed WebSocket upgrades', { timeout: 15000 }, async () => {
+  const siteRoot = mkdtempSync(join(tmpdir(), 'narada-runtime-event-admission-e2e-'));
+  const sessionId = 'event-admission-e2e';
+  const binPath = fileURLToPath(new URL('../bin/narada-agent-runtime-server.mjs', import.meta.url));
+  let child = null;
+  try {
+    child = spawnTestChild(process.execPath, [
+      binPath,
+      '--raw-jsonl',
+      '--health-port', '0',
+      '--event-host', '127.0.0.1',
+      '--event-port', '0',
+      '--identity', 'narada.test',
+      '--session', sessionId,
+    ], {
+      env: {
+        ...process.env,
+        NARADA_SITE_ROOT: siteRoot,
+        NARADA_INTELLIGENCE_PROVIDER: 'codex-subscription',
+        NARADA_AGENT_RUNTIME_HEALTH_ENABLED: '1',
+        NARADA_AGENT_RUNTIME_EVENTS_ENABLED: '1',
+        NARADA_AGENT_RUNTIME_HEALTH_HOST: '127.0.0.1',
+        NARADA_AGENT_RUNTIME_EVENTS_HOST: '127.0.0.1',
+      },
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.setEncoding('utf8');
+    child.stderr.setEncoding('utf8');
+    child.stdout.on('data', (chunk) => { stdout += chunk; });
+    child.stderr.on('data', (chunk) => { stderr += chunk; });
+    await waitForCapturedOutput(child, () => stdout, (text) => hasCapturedJsonEvent(text, (event) => event.event === 'session_started'));
+    const started = readJsonlFileFromText(stdout).find((event) => event.event === 'session_started');
+    assert.ok(started?.event_endpoint);
+
+    const plainHttpUrl = new URL(started.event_endpoint);
+    plainHttpUrl.protocol = 'http:';
+    const plainResponse = await fetch(plainHttpUrl);
+    assert.equal(plainResponse.status, 426);
+    assert.deepEqual(await plainResponse.json(), {
+      error: 'upgrade_required',
+      transport: 'websocket',
+      path: '/events',
+    });
+
+    const wrongPathResponse = await readRawUpgradeResponse(started.event_endpoint, '/not-events');
+    assert.match(wrongPathResponse, /^HTTP\/1\.1 404 Not Found\r\n/m);
+
+    const missingKeyResponse = await readRawUpgradeResponse(started.event_endpoint, '/events');
+    assert.match(missingKeyResponse, /^HTTP\/1\.1 400 Bad Request\r\n/m);
+
+    child.stdin.end(`${JSON.stringify({ id: 'event-admission-close', method: 'session.close', params: {} })}\n`);
+    const exitCode = await new Promise((resolve) => child.on('exit', resolve));
+    assert.equal(exitCode, 0, stderr);
+  } finally {
+    if (child && child.exitCode === null) child.kill();
+    rmSync(siteRoot, { recursive: true, force: true });
+  }
+});
+
 test('health projection tracks resolved, timed-out, and failed request lifecycles', { timeout: 10000 }, async () => {
   const resolvedTransitions = [];
   const resolvedInput = new PassThrough();
@@ -248,6 +484,952 @@ test('health projection tracks resolved, timed-out, and failed request lifecycle
   }
 });
 
+test('spawned health projection exposes a real supervisor transport failure', async () => {
+  const fixturePath = fileURLToPath(new URL('./fixtures/health-projection-failure-server.mjs', import.meta.url));
+  const child = spawnTestChild(process.execPath, [fixturePath], { stdio: ['ignore', 'pipe', 'pipe'] });
+  let stdout = '';
+  let stderr = '';
+  child.stdout.setEncoding('utf8');
+  child.stderr.setEncoding('utf8');
+  child.stdout.on('data', (chunk) => { stdout += chunk; });
+  child.stderr.on('data', (chunk) => { stderr += chunk; });
+  const [exitCode] = await once(child, 'exit');
+  assert.equal(exitCode, 0, stderr);
+  const result = JSON.parse(stdout.trim());
+  assert.deepEqual(result.body, {
+    schema: 'narada.nars.health.v1',
+    status: 'unhealthy',
+    error: 'fixture_health_transport_failure',
+  });
+  assert.deepEqual(result.transitions.map((transition) => transition.request_state), [
+    'requested', 'dispatched', 'awaiting_response', 'failed',
+  ]);
+});
+
+test('spawned runtime enforces startup bindings, projection startup, disabled projections, and wrapper JSONL output', { timeout: 20000 }, async () => {
+  const binPath = fileURLToPath(new URL('../bin/narada-agent-runtime-server.mjs', import.meta.url));
+  const siteRoots = [];
+  const createSiteRoot = (suffix) => {
+    const siteRoot = mkdtempSync(join(tmpdir(), `narada-runtime-startup-${suffix}-`));
+    siteRoots.push(siteRoot);
+    return siteRoot;
+  };
+  const runStartupFailure = async (siteRoot, args, env) => {
+    const child = spawnTestChild(process.execPath, [binPath, ...args], {
+      env: { ...process.env, ...env, NARADA_SITE_ROOT: siteRoot },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.setEncoding('utf8');
+    child.stderr.setEncoding('utf8');
+    child.stdout.on('data', (chunk) => { stdout += chunk; });
+    child.stderr.on('data', (chunk) => { stderr += chunk; });
+    const [exitCode] = await once(child, 'exit');
+    return { exitCode, stdout, stderr };
+  };
+
+  try {
+    const missingProvider = await runStartupFailure(
+      createSiteRoot('missing-provider'),
+      ['--no-health', '--no-events', '--identity', 'narada.test', '--session', 'missing-provider'],
+      {
+        NARADA_INTELLIGENCE_PROVIDER: '',
+        NARADA_AGENT_RUNTIME_HEALTH_ENABLED: '0',
+        NARADA_AGENT_RUNTIME_EVENTS_ENABLED: '0',
+      },
+    );
+    assert.equal(missingProvider.exitCode, 1);
+    assert.match(missingProvider.stderr, /intelligenceProvider is required|provider_runtime_provider_required/);
+
+    const missingBinding = await runStartupFailure(
+      createSiteRoot('missing-binding'),
+      ['--no-health', '--no-events', '--identity', 'narada.test'],
+      {
+        NARADA_INTELLIGENCE_PROVIDER: 'codex-subscription',
+        NARADA_NARS_SESSION_ID: '',
+        NARADA_RUNTIME_SESSION_ID: '',
+        NARADA_CARRIER_SESSION_ID: '',
+        NARADA_AGENT_RUNTIME_HEALTH_ENABLED: '0',
+        NARADA_AGENT_RUNTIME_EVENTS_ENABLED: '0',
+      },
+    );
+    assert.equal(missingBinding.exitCode, 1);
+    assert.match(missingBinding.stderr, /missing_nars_binding:session_id/);
+
+    const occupied = createServer();
+    await new Promise((resolve) => occupied.listen(0, '127.0.0.1', resolve));
+    const occupiedPort = occupied.address().port;
+    const projectionStartupFailure = await runStartupFailure(
+      createSiteRoot('projection-failure'),
+      [
+        '--health-host', '127.0.0.1',
+        '--health-port', String(occupiedPort),
+        '--no-events',
+        '--identity', 'narada.test',
+        '--session', 'projection-startup-failure',
+      ],
+      {
+        NARADA_INTELLIGENCE_PROVIDER: 'codex-subscription',
+        NARADA_AGENT_RUNTIME_HEALTH_ENABLED: '1',
+        NARADA_AGENT_RUNTIME_EVENTS_ENABLED: '0',
+      },
+    );
+    await new Promise((resolve) => occupied.close(resolve));
+    assert.equal(projectionStartupFailure.exitCode, 1);
+    assert.match(projectionStartupFailure.stderr, /EADDRINUSE|address already in use/i);
+
+    const disabledSiteRoot = createSiteRoot('disabled');
+    const disabledChild = spawnTestChild(process.execPath, [
+      binPath,
+      '--raw-jsonl',
+      '--no-health',
+      '--no-events',
+      '--identity', 'narada.test',
+      '--session', 'disabled-projections',
+    ], {
+      env: {
+        ...process.env,
+        NARADA_SITE_ROOT: disabledSiteRoot,
+        NARADA_INTELLIGENCE_PROVIDER: 'codex-subscription',
+        NARADA_AGENT_RUNTIME_HEALTH_ENABLED: '0',
+        NARADA_AGENT_RUNTIME_EVENTS_ENABLED: '0',
+      },
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    let disabledStdout = '';
+    let disabledStderr = '';
+    disabledChild.stdout.setEncoding('utf8');
+    disabledChild.stderr.setEncoding('utf8');
+    disabledChild.stdout.on('data', (chunk) => { disabledStdout += chunk; });
+    disabledChild.stderr.on('data', (chunk) => { disabledStderr += chunk; });
+    try {
+      await waitForCapturedOutput(disabledChild, () => disabledStdout, (text) => text.includes('"event":"session_started"'));
+      disabledChild.stdin.end(`${JSON.stringify({ id: 'disabled-close', method: 'session.close', params: {} })}\n`);
+      assert.equal(await new Promise((resolve) => disabledChild.on('exit', resolve)), 0, disabledStderr);
+      const disabledEvents = readJsonlFileFromText(disabledStdout);
+      const disabledStarted = disabledEvents.find((event) => event.event === 'session_started');
+      assert.equal(disabledStarted?.health_endpoint, null);
+      assert.equal(disabledStarted?.event_endpoint, null);
+      assert.equal(disabledEvents.some((event) => event.event === 'session_closed' && event.request_id === 'disabled-close'), true);
+    } finally {
+      if (disabledChild.exitCode === null) disabledChild.kill();
+    }
+
+    const wrapperSiteRoot = createSiteRoot('wrapper-events');
+    const wrapperChild = spawnTestChild(process.execPath, [
+      binPath,
+      '--raw-jsonl',
+      '--no-health',
+      '--no-events',
+      '--wrapper-events-jsonl',
+      '--identity', 'narada.test',
+      '--session', 'wrapper-events',
+    ], {
+      env: {
+        ...process.env,
+        NARADA_SITE_ROOT: wrapperSiteRoot,
+        NARADA_INTELLIGENCE_PROVIDER: 'codex-subscription',
+        NARADA_AGENT_RUNTIME_HEALTH_ENABLED: '0',
+        NARADA_AGENT_RUNTIME_EVENTS_ENABLED: '0',
+      },
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    let wrapperStdout = '';
+    let wrapperStderr = '';
+    wrapperChild.stdout.setEncoding('utf8');
+    wrapperChild.stderr.setEncoding('utf8');
+    wrapperChild.stdout.on('data', (chunk) => { wrapperStdout += chunk; });
+    wrapperChild.stderr.on('data', (chunk) => { wrapperStderr += chunk; });
+    try {
+      await waitForCapturedOutput(wrapperChild, () => wrapperStdout, (text) => text.includes('"event":"session_started"'));
+      wrapperChild.stdin.end(`${JSON.stringify({ id: 'wrapper-close', method: 'session.close', params: {} })}\n`);
+      assert.equal(await new Promise((resolve) => wrapperChild.on('exit', resolve)), 0, wrapperStderr);
+      const wrapperEvents = wrapperStderr.split(/\r?\n/).filter(Boolean).flatMap((line) => {
+        try {
+          const parsed = JSON.parse(line);
+          return parsed?.schema === 'narada.agent_runtime_server.wrapper_event.v1' ? [parsed] : [];
+        } catch {
+          return [];
+        }
+      });
+      assert.equal(wrapperEvents.some((event) => event.event === 'session_status_snapshot' && event.source_event === 'session_started'), true);
+      assert.equal(wrapperEvents.some((event) => event.event === 'session_status_snapshot' && event.source_event === 'session_closed'), true);
+    } finally {
+      if (wrapperChild.exitCode === null) wrapperChild.kill();
+    }
+  } finally {
+    for (const siteRoot of siteRoots) rmSync(siteRoot, { recursive: true, force: true });
+  }
+});
+
+test('spawned runtime loads a lifecycle hook module and dispatches hooks through the canonical entrypoint', { timeout: 15000 }, async () => {
+  const siteRoot = mkdtempSync(join(tmpdir(), 'narada-runtime-lifecycle-hook-e2e-'));
+  const hookModulePath = join(siteRoot, 'lifecycle-hooks.mjs');
+  const hookLogPath = join(siteRoot, 'lifecycle-hook-events.jsonl');
+  writeFileSync(hookModulePath, [
+    "import { appendFileSync } from 'node:fs';",
+    "const record = (hook) => async (payload) => { appendFileSync(process.env.NARADA_TEST_HOOK_LOG, JSON.stringify({ hook, phase: 'start', payload }) + '\\n'); if (hook === 'afterSessionStarted') await new Promise((resolve) => setTimeout(resolve, 25)); appendFileSync(process.env.NARADA_TEST_HOOK_LOG, JSON.stringify({ hook, phase: 'end', payload }) + '\\n'); };",
+    "export const hooks = [{ beforeSessionBind: record('beforeSessionBind'), afterSessionStarted: record('afterSessionStarted'), afterSessionClosed: record('afterSessionClosed') }];",
+  ].join('\n'));
+  const binPath = fileURLToPath(new URL('../bin/narada-agent-runtime-server.mjs', import.meta.url));
+  let child = null;
+  try {
+    child = spawnTestChild(process.execPath, [
+      binPath,
+      '--raw-jsonl',
+      '--no-health',
+      '--no-events',
+      '--lifecycle-hook-module', hookModulePath,
+      '--identity', 'narada.test',
+      '--session', 'lifecycle-hook-e2e',
+    ], {
+      env: {
+        ...process.env,
+        NARADA_SITE_ROOT: siteRoot,
+        NARADA_INTELLIGENCE_PROVIDER: 'codex-subscription',
+        NARADA_TEST_HOOK_LOG: hookLogPath,
+      },
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.setEncoding('utf8');
+    child.stderr.setEncoding('utf8');
+    child.stdout.on('data', (chunk) => { stdout += chunk; });
+    child.stderr.on('data', (chunk) => { stderr += chunk; });
+    await waitForCapturedOutput(child, () => stdout, (text) => hasCapturedJsonEvent(text, (event) => event.event === 'session_started'));
+    await waitForFileCondition(hookLogPath, (text) => text.includes('"hook":"afterSessionStarted"'));
+    child.stdin.end(`${JSON.stringify({ id: 'hook-close', method: 'session.close', params: {} })}\n`);
+    const exitCode = await new Promise((resolve) => child.on('exit', resolve));
+    assert.equal(exitCode, 0, stderr);
+    const hookEvents = readJsonlFile(hookLogPath);
+    assert.deepEqual(hookEvents.map((entry) => `${entry.hook}:${entry.phase}`), [
+      'beforeSessionBind:start',
+      'beforeSessionBind:end',
+      'afterSessionStarted:start',
+      'afterSessionStarted:end',
+      'afterSessionClosed:start',
+      'afterSessionClosed:end',
+    ]);
+    assert.equal(hookEvents[0].payload.schema, 'narada.nars.lifecycle_hook.v1');
+    assert.equal(hookEvents[0].payload.hook, 'beforeSessionBind');
+    assert.equal(hookEvents[0].payload.agent_id, 'narada.test');
+    assert.equal(hookEvents[2].payload.event_kind, 'session_started');
+    assert.equal(hookEvents[4].payload.event_kind, 'session_closed');
+  } finally {
+    if (child && child.exitCode === null) child.kill();
+    rmSync(siteRoot, { recursive: true, force: true });
+  }
+});
+
+test('spawned runtime projects a health timeout as HTTP 503 and cleans up after the blocked turn', { timeout: 20000 }, async () => {
+  const siteRoot = mkdtempSync(join(tmpdir(), 'narada-runtime-projection-failure-e2e-'));
+  const sessionId = 'projection-failure-e2e';
+  let heldResponse = null;
+  let requestReceived;
+  const providerRequest = new Promise((resolve) => { requestReceived = resolve; });
+  const provider = createServer((request, response) => {
+    request.resume();
+    request.on('end', () => {
+      heldResponse = response;
+      requestReceived();
+    });
+  });
+  await new Promise((resolve) => provider.listen(0, '127.0.0.1', resolve));
+  const address = provider.address();
+  let child = null;
+  let client = null;
+  const releaseProvider = () => {
+    if (!heldResponse) return;
+    heldResponse.setHeader('content-type', 'application/json');
+    heldResponse.end(JSON.stringify({ choices: [{ message: { role: 'assistant', content: 'projection fixture complete' } }] }));
+    heldResponse = null;
+  };
+  try {
+    const binPath = fileURLToPath(new URL('../bin/narada-agent-runtime-server.mjs', import.meta.url));
+    child = spawnTestChild(process.execPath, [
+      binPath,
+      '--raw-jsonl',
+      '--health-host', '127.0.0.1',
+      '--health-port', '0',
+      '--event-host',
+      '127.0.0.1',
+      '--event-port', '0',
+      '--identity', 'narada.test',
+      '--session', sessionId,
+    ], {
+      env: {
+        ...process.env,
+        NARADA_SITE_ROOT: siteRoot,
+        NARADA_INTELLIGENCE_PROVIDER: 'openai-api',
+        OPENAI_BASE_URL: `http://127.0.0.1:${address.port}/`,
+        OPENAI_API_KEY: 'projection-failure-key',
+        OPENAI_MODEL: 'fixture-openai',
+        NARADA_AGENT_RUNTIME_HEALTH_ENABLED: '1',
+        NARADA_AGENT_RUNTIME_EVENTS_ENABLED: '1',
+        NARADA_AGENT_RUNTIME_HEALTH_HOST: '127.0.0.1',
+        NARADA_AGENT_RUNTIME_EVENTS_HOST: '127.0.0.1',
+      },
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.setEncoding('utf8');
+    child.stderr.setEncoding('utf8');
+    child.stdout.on('data', (chunk) => { stdout += chunk; });
+    child.stderr.on('data', (chunk) => { stderr += chunk; });
+    await waitForCapturedOutput(child, () => stdout, (text) => text.split(/\r?\n/).some((line) => {
+      try {
+        return JSON.parse(line).event === 'session_started';
+      } catch {
+        return false;
+      }
+    }));
+    const started = readJsonlFileFromText(stdout).find((event) => event.event === 'session_started');
+    assert.match(started?.health_endpoint, /^http:\/\/127\.0\.0\.1:\d+\/health$/);
+    assert.match(started?.event_endpoint, /^ws:\/\/127\.0\.0\.1:\d+\/events$/);
+    client = await connectWebSocket(started.event_endpoint);
+    assert.equal((await nextWebSocketJson(client)).event, 'websocket_connected');
+    client.sendJson({
+      id: 'projection-failure-watch',
+      method: 'session.events.subscribe',
+      params: { include_replay: false, subscription_id: 'projection-failure-watch', view: 'diagnostics' },
+    });
+    assert.equal((await nextWebSocketJson(client)).event, 'session_events_subscription_started');
+
+    child.stdin.write(`${JSON.stringify({ id: 'blocked-turn', method: 'session.submit', params: { content: 'hold the provider' } })}\n`);
+    await providerRequest;
+    child.stdin.write(`${JSON.stringify({ id: 'close-after-failure', method: 'session.close', params: {} })}\n`);
+    const failurePromise = nextWebSocketUntil(client, (frame) => frame.event === 'session_event'
+      && frame.payload?.event === 'runtime_projection_failure', 6000);
+    const healthResponse = await fetch(started.health_endpoint);
+    assert.equal(healthResponse.status, 503);
+    const unhealthy = await healthResponse.json();
+    assert.deepEqual(unhealthy, {
+      schema: 'narada.nars.health.v1',
+      status: 'unhealthy',
+      error: 'session_health_timeout',
+    });
+    let failure;
+    try {
+      failure = await failurePromise;
+    } catch (error) {
+      throw new Error(`${error instanceof Error ? error.message : String(error)} stdout=${stdout} stderr=${stderr}`);
+    }
+    assert.equal(failure.subscription_id, 'projection-failure-watch');
+    assert.equal(failure.payload.projection, 'health');
+    assert.equal(failure.payload.request_state, 'timed_out');
+    assert.equal(failure.payload.error, 'session_health_timeout');
+
+    client.close();
+    client = null;
+    releaseProvider();
+    await waitForCapturedOutput(child, () => stdout, (text) => text.includes('"event":"carrier_turn_completed"'));
+    let exitTimer;
+    const exitCode = await Promise.race([
+      new Promise((resolve) => child.once('exit', resolve)),
+      new Promise((_, reject) => {
+        exitTimer = setTimeout(() => reject(new Error(`child_exit_timeout stdout=${stdout} stderr=${stderr}`)), 5000);
+      }),
+    ]).finally(() => clearTimeout(exitTimer));
+    assert.equal(exitCode, 0, stderr);
+    const durableEvents = readJsonlFile(resolveNaradaSitePaths({ siteRoot, sessionId }).narsEventsPath);
+    assert.equal(durableEvents.some((event) => event.event === 'session_started'), true);
+    assert.equal(durableEvents.some((event) => event.event === 'session_closed'), true);
+  } finally {
+    releaseProvider();
+    client?.close();
+    if (child && child.exitCode === null) child.kill();
+    await new Promise((resolve) => provider.close(resolve));
+    rmSync(siteRoot, { recursive: true, force: true });
+  }
+});
+
+test('spawned runtime switches providers, refuses invalid targets, and binds the next health and turn', { timeout: 15000 }, async () => {
+  const siteRoot = mkdtempSync(join(tmpdir(), 'narada-runtime-provider-switch-e2e-'));
+  const observedModels = [];
+  const provider = createServer((request, response) => {
+    let body = '';
+    request.setEncoding('utf8');
+    request.on('data', (chunk) => { body += chunk; });
+    request.on('end', () => {
+      observedModels.push(JSON.parse(body).model);
+      response.setHeader('content-type', 'application/json');
+      response.end(JSON.stringify({ choices: [{ message: { role: 'assistant', content: 'switched provider fixture' } }] }));
+    });
+  });
+  await new Promise((resolve) => provider.listen(0, '127.0.0.1', resolve));
+  const address = provider.address();
+  let child = null;
+  try {
+    const binPath = fileURLToPath(new URL('../bin/narada-agent-runtime-server.mjs', import.meta.url));
+    child = spawnTestChild(process.execPath, [
+      binPath,
+      '--raw-jsonl',
+      '--no-health',
+      '--no-events',
+      '--identity', 'narada.test',
+      '--session', 'provider-switch-e2e',
+    ], {
+      env: {
+        ...process.env,
+        NARADA_SITE_ROOT: siteRoot,
+        NARADA_INTELLIGENCE_PROVIDER: 'openai-api',
+        OPENAI_BASE_URL: `http://127.0.0.1:${address.port}/`,
+        OPENAI_API_KEY: 'provider-switch-openai-key',
+        OPENAI_MODEL: 'fixture-openai',
+        KIMI_API_BASE_URL: `http://127.0.0.1:${address.port}/`,
+        KIMI_API_KEY: 'provider-switch-kimi-key',
+        KIMI_MODEL: 'fixture-kimi',
+      },
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.setEncoding('utf8');
+    child.stderr.setEncoding('utf8');
+    child.stdout.on('data', (chunk) => { stdout += chunk; });
+    child.stderr.on('data', (chunk) => { stderr += chunk; });
+    await waitForCapturedOutput(child, () => stdout, (text) => text.includes('"event":"session_started"'));
+
+    child.stdin.write(`${JSON.stringify({
+      id: 'invalid-target-request',
+      method: 'runtime.intelligence.reconfigure',
+      params: { request_id: 'invalid-target', provider: 'missing-provider' },
+    })}\n`);
+    await waitForCapturedOutput(child, () => stdout, (text) => hasCapturedJsonEvent(text, (event) => event.event === 'runtime_intelligence_reconfiguration'
+      && event.request_id === 'invalid-target'
+      && event.terminal_state === 'refused'));
+
+    child.stdin.write(`${JSON.stringify({
+      id: 'switch-provider-request',
+      method: 'runtime.intelligence.reconfigure',
+      params: { request_id: 'switch-provider', provider: 'kimi-api', model: 'fixture-kimi', thinking: 'low' },
+    })}\n`);
+    await waitForCapturedOutput(child, () => stdout, (text) => hasCapturedJsonEvent(text, (event) => event.event === 'runtime_intelligence_reconfiguration'
+      && event.request_id === 'switch-provider'
+      && event.terminal_state === 'active'));
+
+    child.stdin.write(`${JSON.stringify({ id: 'turn-after-switch', method: 'session.submit', params: { content: 'use the switched provider' } })}\n`);
+    await waitForCapturedOutput(child, () => stdout, (text) => text.includes('"event":"carrier_turn_completed"'));
+    child.stdin.write(`${JSON.stringify({ id: 'health-after-switch', method: 'session.health', params: {} })}\n`);
+    await waitForCapturedOutput(child, () => stdout, (text) => text.includes('"event":"session_health"') && text.includes('"request_id":"health-after-switch"'));
+    child.stdin.end(`${JSON.stringify({ id: 'close-after-switch', method: 'session.close', params: {} })}\n`);
+    const exitCode = await new Promise((resolve) => child.on('exit', resolve));
+    assert.equal(exitCode, 0, stderr);
+
+    const events = readJsonlFileFromText(stdout);
+    const invalid = events.find((event) => event.event === 'runtime_intelligence_reconfiguration' && event.request_id === 'invalid-target');
+    const switched = events.find((event) => event.event === 'runtime_intelligence_reconfiguration' && event.request_id === 'switch-provider');
+    const health = events.find((event) => event.event === 'session_health' && event.request_id === 'health-after-switch');
+    assert.equal(invalid?.terminal_state, 'refused');
+    assert.equal(invalid?.reason, 'target_not_admitted');
+    assert.deepEqual(events
+      .filter((event) => event.event === 'provider_runtime_reconfiguration_state_transition' && event.request_id === 'switch-provider')
+      .map((event) => event.reconfiguration_state), ['requested', 'validating', 'admitted', 'switching', 'active']);
+    assert.equal(switched?.terminal_state, 'active');
+    assert.equal(switched?.active?.provider, 'kimi-api');
+    assert.equal(health?.intelligence?.provider, 'kimi-api');
+    assert.equal(health?.intelligence?.model, 'fixture-kimi');
+    assert.deepEqual(observedModels, ['fixture-kimi']);
+    assert.equal(stdout.includes('provider-switch-openai-key'), false);
+    assert.equal(stdout.includes('provider-switch-kimi-key'), false);
+  } finally {
+    if (child && child.exitCode === null) child.kill();
+    await new Promise((resolve) => provider.close(resolve));
+    rmSync(siteRoot, { recursive: true, force: true });
+  }
+});
+
+test('spawned runtime refuses provider reconfiguration across a busy turn boundary', { timeout: 15000 }, async () => {
+  const siteRoot = mkdtempSync(join(tmpdir(), 'narada-runtime-provider-busy-e2e-'));
+  let heldResponse = null;
+  let requestReceived;
+  const providerRequest = new Promise((resolve) => { requestReceived = resolve; });
+  const provider = createServer((request, response) => {
+    request.resume();
+    request.on('end', () => {
+      heldResponse = response;
+      requestReceived();
+    });
+  });
+  await new Promise((resolve) => provider.listen(0, '127.0.0.1', resolve));
+  const address = provider.address();
+  let child = null;
+  const releaseProvider = () => {
+    if (!heldResponse) return;
+    heldResponse.setHeader('content-type', 'application/json');
+    heldResponse.end(JSON.stringify({ choices: [{ message: { role: 'assistant', content: 'busy fixture complete' } }] }));
+    heldResponse = null;
+  };
+  try {
+    const binPath = fileURLToPath(new URL('../bin/narada-agent-runtime-server.mjs', import.meta.url));
+    child = spawnTestChild(process.execPath, [
+      binPath,
+      '--raw-jsonl',
+      '--no-health',
+      '--no-events',
+      '--identity', 'narada.test',
+      '--session', 'provider-busy-e2e',
+    ], {
+      env: {
+        ...process.env,
+        NARADA_SITE_ROOT: siteRoot,
+        NARADA_INTELLIGENCE_PROVIDER: 'openai-api',
+        OPENAI_BASE_URL: `http://127.0.0.1:${address.port}/`,
+        OPENAI_API_KEY: 'provider-busy-openai-key',
+        OPENAI_MODEL: 'fixture-openai',
+        KIMI_API_BASE_URL: `http://127.0.0.1:${address.port}/`,
+        KIMI_API_KEY: 'provider-busy-kimi-key',
+        KIMI_MODEL: 'fixture-kimi',
+      },
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.setEncoding('utf8');
+    child.stderr.setEncoding('utf8');
+    child.stdout.on('data', (chunk) => { stdout += chunk; });
+    child.stderr.on('data', (chunk) => { stderr += chunk; });
+    await waitForCapturedOutput(child, () => stdout, (text) => text.includes('"event":"session_started"'));
+    child.stdin.write(`${JSON.stringify({ id: 'busy-turn', method: 'session.submit', params: { content: 'hold the turn' } })}\n`);
+    await providerRequest;
+    child.stdin.write(`${JSON.stringify({
+      id: 'busy-reconfigure-request',
+      method: 'runtime.intelligence.reconfigure',
+      params: { request_id: 'busy-reconfigure', provider: 'kimi-api', model: 'fixture-kimi' },
+    })}\n`);
+    await waitForCapturedOutput(child, () => stdout, (text) => hasCapturedJsonEvent(text, (event) => event.event === 'runtime_intelligence_reconfiguration'
+      && event.request_id === 'busy-reconfigure'
+      && event.terminal_state === 'refused'));
+    const busyEvents = readJsonlFileFromText(stdout);
+    const busy = busyEvents.find((event) => event.event === 'runtime_intelligence_reconfiguration' && event.request_id === 'busy-reconfigure');
+    assert.equal(busy?.terminal_state, 'refused', stdout);
+    assert.equal(busy?.reason, 'runtime_not_at_clean_turn_boundary', stdout);
+
+    releaseProvider();
+    await waitForCapturedOutput(child, () => stdout, (text) => text.includes('"event":"carrier_turn_completed"'));
+    child.stdin.end(`${JSON.stringify({ id: 'close-after-busy', method: 'session.close', params: {} })}\n`);
+    assert.equal(await new Promise((resolve) => child.on('exit', resolve)), 0, stderr);
+    assert.equal(readJsonlFileFromText(stdout).some((event) => event.event === 'session_closed'), true);
+  } finally {
+    releaseProvider();
+    if (child && child.exitCode === null) child.kill();
+    await new Promise((resolve) => provider.close(resolve));
+    rmSync(siteRoot, { recursive: true, force: true });
+  }
+});
+
+test('spawned runtime serves the complete session-scoped artifact HTTP surface', { timeout: 15000 }, async () => {
+  const siteRoot = mkdtempSync(join(tmpdir(), 'narada-runtime-artifact-e2e-'));
+  const sessionId = 'artifact-e2e';
+  const htmlPath = join(siteRoot, 'report.html');
+  const audioPath = join(siteRoot, 'briefing.wav');
+  const outsideRoot = mkdtempSync(join(tmpdir(), 'narada-runtime-artifact-outside-'));
+  const outsidePath = join(outsideRoot, 'outside.html');
+  writeFileSync(htmlPath, '<!doctype html><h1>Spawned artifact</h1>', 'utf8');
+  writeFileSync(audioPath, Buffer.from('RIFF____WAVEfmt data'));
+  writeFileSync(outsidePath, '<!doctype html><h1>Outside</h1>', 'utf8');
+  const providerBodies = [];
+  const provider = createServer((request, response) => {
+    let body = '';
+    request.setEncoding('utf8');
+    request.on('data', (chunk) => { body += chunk; });
+    request.on('end', () => {
+      providerBodies.push(JSON.parse(body));
+      response.setHeader('content-type', 'application/json');
+      response.end(JSON.stringify({ choices: [{ message: { role: 'assistant', content: 'artifact follow-up complete' } }] }));
+    });
+  });
+  await new Promise((resolve) => provider.listen(0, '127.0.0.1', resolve));
+  const providerAddress = provider.address();
+  let child = null;
+  try {
+    const binPath = fileURLToPath(new URL('../bin/narada-agent-runtime-server.mjs', import.meta.url));
+    child = spawnTestChild(process.execPath, [
+      binPath,
+      '--raw-jsonl',
+      '--health-port', '0',
+      '--no-events',
+      '--identity', 'narada.test',
+      '--session', sessionId,
+    ], {
+      env: {
+        ...process.env,
+        NARADA_SITE_ROOT: siteRoot,
+        NARADA_INTELLIGENCE_PROVIDER: 'openai-api',
+        OPENAI_BASE_URL: `http://127.0.0.1:${providerAddress.port}/`,
+        OPENAI_API_KEY: 'artifact-e2e-key',
+      },
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.setEncoding('utf8');
+    child.stderr.setEncoding('utf8');
+    child.stdout.on('data', (chunk) => { stdout += chunk; });
+    child.stderr.on('data', (chunk) => { stderr += chunk; });
+    await waitForCapturedOutput(child, () => stdout, (text) => text.split(/\r?\n/).some((line) => {
+      try {
+        return JSON.parse(line).event === 'session_started';
+      } catch {
+        return false;
+      }
+    }));
+    const started = readJsonlFileFromText(stdout).find((event) => event.event === 'session_started');
+    const endpoint = started.health_endpoint;
+    const register = async (payload) => fetch(new URL(`/sessions/${sessionId}/artifacts`, endpoint), {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    const htmlRegistration = await register({ source_path: htmlPath, kind: 'html', title: 'Spawned report' });
+    assert.equal(htmlRegistration.status, 201);
+    const htmlRegistered = await htmlRegistration.json();
+    const htmlArtifactId = htmlRegistered.artifact.artifact_id;
+
+    const indexResponse = await fetch(new URL(`/sessions/${sessionId}/artifacts`, endpoint));
+    assert.equal(indexResponse.status, 200);
+    const index = await indexResponse.json();
+    assert.ok(index.artifacts.some((artifact) => artifact.artifact_id === htmlArtifactId));
+    const metadataResponse = await fetch(new URL(`/sessions/${sessionId}/artifacts/${htmlArtifactId}`, endpoint));
+    assert.equal(metadataResponse.status, 200);
+    const metadata = await metadataResponse.json();
+    assert.equal(metadata.artifact.artifact_id, htmlArtifactId);
+    assert.equal(metadata.artifact.render.sandbox.allow_top_navigation, false);
+
+    const htmlContent = await fetch(new URL(`/sessions/${sessionId}/artifacts/${htmlArtifactId}/content`, endpoint));
+    assert.equal(htmlContent.status, 200);
+    assert.equal(htmlContent.headers.get('content-type'), 'text/html; charset=utf-8');
+    assert.match(await htmlContent.text(), /Spawned artifact/);
+    const presented = await fetch(new URL(`/sessions/${sessionId}/artifacts/${htmlArtifactId}/message`, endpoint), {
+      method: 'POST',
+      body: JSON.stringify({ text: 'The spawned report is ready.', request_id: 'artifact-message-1' }),
+    });
+    assert.equal(presented.status, 201);
+    const presentedBody = await presented.json();
+    assert.equal(presentedBody.event.event, 'assistant_message');
+    assert.equal(presentedBody.event.request_id, 'artifact-message-1');
+    assert.equal(presentedBody.event.content.at(-1).artifact_id, htmlArtifactId);
+
+    child.stdin.write(`${JSON.stringify({ id: 'artifact-follow-up', method: 'session.submit', params: { content: 'Summarize the report artifact.' } })}\n`);
+    await waitForCapturedOutput(child, () => stdout, (text) => hasCapturedJsonEvent(text, (event) => event.event === 'carrier_turn_completed'));
+    const followUpRequest = providerBodies.at(-1);
+    const presentedAssistantMessage = followUpRequest?.messages?.find((message) => message.role === 'assistant');
+    assert.match(presentedAssistantMessage?.content ?? '', /The spawned report is ready\./);
+    assert.match(presentedAssistantMessage?.content ?? '', new RegExp(htmlArtifactId));
+    assert.equal((presentedAssistantMessage?.content ?? '').includes('[object Object]'), false);
+
+    const audioRegistration = await register({ source_path: audioPath, kind: 'audio', title: 'Spawned briefing' });
+    assert.equal(audioRegistration.status, 201);
+    const audioRegistered = await audioRegistration.json();
+    const audioArtifactId = audioRegistered.artifact.artifact_id;
+    const audioContent = await fetch(new URL(`/sessions/${sessionId}/artifacts/${audioArtifactId}/content`, endpoint));
+    assert.equal(audioContent.status, 200);
+    assert.equal(audioContent.headers.get('content-type'), 'audio/wav');
+    assert.equal(Buffer.from(await audioContent.arrayBuffer()).toString('utf8'), 'RIFF____WAVEfmt data');
+    const audioMessage = await fetch(new URL(`/sessions/${sessionId}/artifacts/${audioArtifactId}/message`, endpoint), {
+      method: 'POST',
+      body: JSON.stringify({ text: 'The audio briefing is ready.' }),
+    });
+    assert.equal(audioMessage.status, 201);
+
+    const mismatch = await fetch(new URL('/sessions/other-session/artifacts', endpoint));
+    assert.equal(mismatch.status, 404);
+    const missing = await fetch(new URL(`/sessions/${sessionId}/artifacts/missing-artifact`, endpoint));
+    assert.equal(missing.status, 404);
+    const traversal = await fetch(new URL(`/sessions/${sessionId}/artifacts/${encodeURIComponent('../outside')}/content`, endpoint));
+    assert.equal(traversal.status, 404);
+    const outside = await register({ source_path: outsidePath, kind: 'html', title: 'Outside root' });
+    assert.equal(outside.status, 403);
+
+    const revoke = await fetch(new URL(`/sessions/${sessionId}/artifacts/${htmlArtifactId}`, endpoint), {
+      method: 'PATCH',
+      body: JSON.stringify({ state: 'revoked', reason: 'spawned_artifact_revoke' }),
+    });
+    assert.equal(revoke.status, 200);
+    const archive = await fetch(new URL(`/sessions/${sessionId}/artifacts/${htmlArtifactId}`, endpoint), {
+      method: 'PATCH',
+      body: JSON.stringify({ state: 'archived', reason: 'spawned_artifact_archive' }),
+    });
+    assert.equal(archive.status, 200);
+    const invalidTransition = await fetch(new URL(`/sessions/${sessionId}/artifacts/${htmlArtifactId}`, endpoint), {
+      method: 'PATCH',
+      body: JSON.stringify({ state: 'active', reason: 'spawned_artifact_invalid_transition' }),
+    });
+    assert.equal(invalidTransition.status, 409);
+
+    const exited = once(child, 'exit');
+    child.stdin.end(`${JSON.stringify({ id: 'close-artifact', method: 'session.close' })}\n`);
+    const [exitCode] = await exited;
+    assert.equal(exitCode, 0, stderr);
+    const eventsPath = resolveNaradaSitePaths({ siteRoot, sessionId }).narsEventsPath;
+    const events = readJsonlFile(eventsPath);
+    assert.ok(events.some((event) => event.event === 'assistant_message' && event.artifact_id === htmlArtifactId));
+    assert.ok(events.some((event) => event.event === 'session_artifact_lifecycle_transition' && event.artifact_id === htmlArtifactId));
+  } finally {
+    if (child && child.exitCode === null) child.kill();
+    await new Promise((resolve) => provider.close(resolve));
+    rmSync(outsideRoot, { recursive: true, force: true });
+    rmSync(siteRoot, { recursive: true, force: true });
+  }
+});
+
+test('spawned runtime consumes the detached control sideband without raw JSONL', { timeout: 15000 }, async () => {
+  const siteRoot = mkdtempSync(join(tmpdir(), 'narada-runtime-detached-control-e2e-'));
+  const sessionId = 'detached-control-e2e';
+  const paths = resolveNaradaSitePaths({ siteRoot, sessionId });
+  mkdirSync(dirname(paths.narsControlPath), { recursive: true });
+  writeFileSync(paths.narsControlPath, '', 'utf8');
+  let providerCalls = 0;
+  let providerBody = null;
+  const provider = createServer((request, response) => {
+    let body = '';
+    request.setEncoding('utf8');
+    request.on('data', (chunk) => { body += chunk; });
+    request.on('end', () => {
+      providerCalls += 1;
+      providerBody = JSON.parse(body);
+      response.setHeader('content-type', 'application/json');
+      response.end(JSON.stringify({ choices: [{ message: { role: 'assistant', content: 'sideband complete' } }] }));
+    });
+  });
+  await new Promise((resolve) => provider.listen(0, '127.0.0.1', resolve));
+  const address = provider.address();
+  let child = null;
+  try {
+    const binPath = fileURLToPath(new URL('../bin/narada-agent-runtime-server.mjs', import.meta.url));
+    child = spawnTestChild(process.execPath, [
+      binPath,
+      '--identity', 'narada.test',
+      '--session', sessionId,
+    ], {
+      env: {
+        ...process.env,
+        NARADA_SITE_ROOT: siteRoot,
+        NARADA_INTELLIGENCE_PROVIDER: 'openai-api',
+        OPENAI_BASE_URL: `http://127.0.0.1:${address.port}/`,
+        OPENAI_API_KEY: 'detached-control-key',
+        NARADA_AGENT_RUNTIME_HEALTH_ENABLED: '0',
+        NARADA_AGENT_RUNTIME_EVENTS_ENABLED: '0',
+      },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.setEncoding('utf8');
+    child.stderr.setEncoding('utf8');
+    child.stdout.on('data', (chunk) => { stdout += chunk; });
+    child.stderr.on('data', (chunk) => { stderr += chunk; });
+    await waitForFileCondition(paths.narsEventsPath, (text) => text.includes('"event":"session_started"'));
+
+    const createdAt = new Date().toISOString();
+    const controlRecord = {
+      schema: 'narada.carrier.control.input_event.v1',
+      control_event_id: 'control_detached_1',
+      input_event_id: 'input_detached_1',
+      written_at: createdAt,
+      input: {
+        schema: 'narada.carrier.input_event.v1',
+        event_id: 'input_detached_1',
+        source_kind: 'operator',
+        source_id: 'detached-control-test',
+        transport: 'control_jsonl',
+        delivery_mode: 'admit_for_current_turn',
+        hold_condition: null,
+        content: 'detached sideband input',
+        created_at: createdAt,
+        authority_ref: 'detached-control-authority',
+        directive_id: null,
+        metadata: {},
+      },
+    };
+    const serialized = JSON.stringify(controlRecord);
+    appendFileSync(paths.narsControlPath, serialized.slice(0, -1), 'utf8');
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    assert.equal(providerCalls, 0);
+    appendFileSync(paths.narsControlPath, `${serialized.slice(-1)}\n`, 'utf8');
+    await waitForCondition(() => providerCalls === 1, 5000);
+    await waitForFileCondition(paths.narsEventsPath, (text) => text.includes('"event":"carrier_turn_completed"'));
+    assert.equal(providerBody?.messages?.at(-1)?.content, 'detached sideband input');
+
+    const exited = once(child, 'exit');
+    appendFileSync(paths.narsControlPath, `${JSON.stringify({
+      id: 'close-detached',
+      method: 'session.close',
+      params: { source: 'detached-control-test' },
+    })}\n`, 'utf8');
+    const [exitCode] = await exited;
+    assert.equal(exitCode, 0, stderr);
+    assert.match(stdout, /Session/);
+    const events = readJsonlFile(paths.narsEventsPath);
+    assert.ok(events.some((event) => event.event === 'session_control_accepted' && event.request_id === 'input_detached_1'));
+    assert.ok(events.some((event) => event.event === 'carrier_turn_completed'));
+    assert.ok(events.some((event) => event.event === 'session_closed' && event.request_id === 'close-detached'));
+  } finally {
+    if (child && child.exitCode === null) child.kill();
+    await new Promise((resolve) => provider.close(resolve));
+    rmSync(siteRoot, { recursive: true, force: true });
+  }
+});
+
+test('spawned runtime handles WebSocket reads, controls, errors, and isolated subscriptions', { timeout: 20000 }, async () => {
+  const siteRoot = mkdtempSync(join(tmpdir(), 'narada-runtime-websocket-control-e2e-'));
+  const sessionId = 'websocket-control-e2e';
+  let providerCalls = 0;
+  const provider = createServer((request, response) => {
+    request.resume();
+    request.on('end', () => {
+      providerCalls += 1;
+      response.setHeader('content-type', 'application/json');
+      response.end(JSON.stringify({ choices: [{ message: { role: 'assistant', content: 'websocket complete' } }] }));
+    });
+  });
+  await new Promise((resolve) => provider.listen(0, '127.0.0.1', resolve));
+  const address = provider.address();
+  let child = null;
+  let first = null;
+  let second = null;
+  try {
+    const binPath = fileURLToPath(new URL('../bin/narada-agent-runtime-server.mjs', import.meta.url));
+    child = spawnTestChild(process.execPath, [
+      binPath,
+      '--raw-jsonl',
+      '--health-port', '0',
+      '--event-host',
+      '--event-port', '0',
+      '--identity', 'narada.test',
+      '--session', sessionId,
+    ], {
+      env: {
+        ...process.env,
+        NARADA_SITE_ROOT: siteRoot,
+        NARADA_INTELLIGENCE_PROVIDER: 'openai-api',
+        OPENAI_BASE_URL: `http://127.0.0.1:${address.port}/`,
+        OPENAI_API_KEY: 'websocket-control-key',
+        NARADA_AGENT_RUNTIME_HEALTH_ENABLED: '1',
+        NARADA_AGENT_RUNTIME_EVENTS_ENABLED: '1',
+        NARADA_AGENT_RUNTIME_HEALTH_HOST: '127.0.0.1',
+        NARADA_AGENT_RUNTIME_EVENTS_HOST: '127.0.0.1',
+      },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.setEncoding('utf8');
+    child.stderr.setEncoding('utf8');
+    child.stdout.on('data', (chunk) => { stdout += chunk; });
+    child.stderr.on('data', (chunk) => { stderr += chunk; });
+    await waitForCapturedOutput(child, () => stdout, (text) => text.split(/\r?\n/).some((line) => {
+      try {
+        const event = JSON.parse(line);
+        return event.event === 'session_started';
+      } catch {
+        return false;
+      }
+    }));
+    const started = readJsonlFileFromText(stdout).find((event) => event.event === 'session_started');
+    assert.match(started?.event_endpoint, /^ws:\/\/127\.0\.0\.1:\d+\/events$/);
+
+    first = await connectWebSocket(started.event_endpoint);
+    second = await connectWebSocket(started.event_endpoint);
+    assert.equal((await nextWebSocketJson(first)).event, 'websocket_connected');
+    assert.equal((await nextWebSocketJson(second)).event, 'websocket_connected');
+    for (const client of [first, second]) {
+      client.sendJson({
+        id: `subscribe-${client === first ? 'first' : 'second'}`,
+        method: 'session.events.subscribe',
+        params: { include_replay: false, subscription_id: 'shared-subscription' },
+      });
+    }
+    for (const client of [first, second]) {
+      const subscribed = await nextWebSocketJson(client);
+      assert.equal(subscribed.event, 'session_events_subscription_started');
+      assert.equal(subscribed.subscription_id, 'shared-subscription');
+      assert.equal((await nextWebSocketJson(client)).event, 'session_events_replay_completed');
+    }
+
+    first.sendText('{');
+    const invalidJson = await nextWebSocketUntil(first, (frame) => frame.event === 'websocket_error' && frame.code === 'invalid_json');
+    assert.equal(invalidJson.code, 'invalid_json');
+    first.sendJson({ id: 'bad-view', method: 'session.events.subscribe', params: { view: 'not-a-view' } });
+    const malformedSubscription = await nextWebSocketUntil(first, (frame) => frame.request_id === 'bad-view');
+    assert.equal(malformedSubscription.code, 'invalid_session_event_view');
+    first.sendJson({ id: 'bad-params', method: 'session.events.subscribe', params: null });
+    const malformedParams = await nextWebSocketUntil(first, (frame) => frame.request_id === 'bad-params');
+    assert.equal(malformedParams.code, 'invalid_session_event_params');
+    first.sendJson({ id: 'bad-page-size', method: 'session.events.read', params: { page_size: 'not-a-number' } });
+    const malformedPageSize = await nextWebSocketUntil(first, (frame) => frame.request_id === 'bad-page-size');
+    assert.equal(malformedPageSize.code, 'invalid_session_event_page_size');
+    first.sendText('null');
+    const invalidRequest = await nextWebSocketUntil(first, (frame) => frame.code === 'invalid_websocket_request');
+    assert.equal(invalidRequest.code, 'invalid_websocket_request');
+    first.sendJson({ id: 'read-1', method: 'session.events.read', params: { direction: 'backward', limit: 2 } });
+    const readPage = await nextWebSocketUntil(first, (frame) => frame.event === 'session_events_read' && frame.request_id === 'read-1');
+    assert.equal(readPage.source, 'events_jsonl');
+    assert.equal(readPage.cursor.namespace, 'durable');
+    assert.ok(readPage.events.some((event) => event.event === 'session_started'));
+
+    first.sendJson({
+      id: 'bad-carrier',
+      method: 'carrier.input.deliver',
+      params: { input: 'not-an-input-event' },
+    });
+    const badCarrier = await nextWebSocketUntil(first, (frame) => frame.request_id === 'bad-carrier');
+    assert.equal(badCarrier.code, 'invalid_carrier_input');
+    first.sendJson({ id: 'unsupported-1', method: 'legacy.mutate', params: {} });
+    const unsupported = await nextWebSocketUntil(first, (frame) => frame.request_id === 'unsupported-1');
+    assert.equal(unsupported.code, 'unsupported_session_control');
+
+    first.sendJson({
+      id: 'replace-first-subscription',
+      method: 'session.events.subscribe',
+      params: { include_replay: false, subscription_id: 'shared-subscription', view: 'conversation' },
+    });
+    assert.equal((await nextWebSocketJson(first)).event, 'session_events_subscription_started');
+    assert.equal((await nextWebSocketJson(first)).event, 'session_events_replay_completed');
+    first.close();
+    first = null;
+
+    second.sendJson({
+      id: 'carrier-input-1',
+      method: 'carrier.input.deliver',
+      params: {
+        input: {
+          schema: 'narada.carrier.input_event.v1',
+          event_id: 'input_websocket_1',
+          source_kind: 'operator',
+          source_id: 'websocket-control-test',
+          transport: 'carrier_server_api',
+          delivery_mode: 'admit_for_current_turn',
+          hold_condition: null,
+          content: 'websocket carrier input',
+          created_at: '2026-07-16T00:00:00.000Z',
+          authority_ref: null,
+          directive_id: null,
+          metadata: {},
+        },
+      },
+    });
+    const secondCompleted = await nextWebSocketUntil(second, (frame) => frame.event === 'session_event' && frame.payload?.event === 'carrier_turn_completed');
+    assert.equal(secondCompleted.subscription_id, 'shared-subscription');
+    assert.equal(providerCalls, 1);
+
+    const exited = once(child, 'exit');
+    second.sendJson({ id: 'close-websocket', method: 'session.close', params: {} });
+    await nextWebSocketUntil(second, (frame) => frame.event === 'session_event' && frame.payload?.event === 'session_closed');
+    second.close();
+    const [exitCode] = await exited;
+    assert.equal(exitCode, 0, stderr);
+  } finally {
+    first?.close();
+    second?.close();
+    if (child && child.exitCode === null) child.kill();
+    await new Promise((resolve) => provider.close(resolve));
+    rmSync(siteRoot, { recursive: true, force: true });
+  }
+});
+
 test('spawned runtime exposes active and completed FIFO queue state without provider overlap', { timeout: 10000 }, async () => {
   const siteRoot = mkdtempSync(join(tmpdir(), 'narada-runtime-fifo-e2e-'));
   let releaseFirst;
@@ -263,7 +1445,7 @@ test('spawned runtime exposes active and completed FIFO queue state without prov
       providerCalls += 1;
       if (providerCalls === 1) markFirstRequest();
       const parsed = JSON.parse(body);
-      providerOrder.push(parsed.messages.find((message) => message.role === 'user')?.content);
+      providerOrder.push(parsed.messages.filter((message) => message.role === 'user').at(-1)?.content);
       const complete = () => {
         response.setHeader('content-type', 'application/json');
         response.end(JSON.stringify({ choices: [{ message: { role: 'assistant', content: `done-${providerCalls}` } }] }));
@@ -521,6 +1703,7 @@ test('spawned runtime executes every HTTP provider adapter against local endpoin
     ['kimi-api', 'authorization', 'Bearer SECRET_SENTINEL_KIMI', { KIMI_API_KEY: 'SECRET_SENTINEL_KIMI', KIMI_API_BASE_URL: baseUrl, KIMI_MODEL: 'fixture-kimi' }],
     ['kimi-code-api', 'authorization', 'Bearer SECRET_SENTINEL_KIMI_CODE', { KIMI_CODE_API_KEY: 'SECRET_SENTINEL_KIMI_CODE', KIMI_CODE_API_BASE_URL: baseUrl, KIMI_CODE_MODEL: 'fixture-kimi-code' }],
     ['deepseek-api', 'authorization', 'Bearer SECRET_SENTINEL_DEEPSEEK', { DEEPSEEK_API_KEY: 'SECRET_SENTINEL_DEEPSEEK', DEEPSEEK_API_BASE_URL: baseUrl, DEEPSEEK_MODEL: 'fixture-deepseek' }],
+    ['glm-api', 'authorization', 'Bearer SECRET_SENTINEL_GLM', { GLM_API_KEY: 'SECRET_SENTINEL_GLM', GLM_API_BASE_URL: baseUrl, GLM_MODEL: 'fixture-glm' }],
     ['openrouter-api', 'authorization', 'Bearer SECRET_SENTINEL_OPENROUTER', { OPENROUTER_API_KEY: 'SECRET_SENTINEL_OPENROUTER', OPENROUTER_BASE_URL: baseUrl, OPENROUTER_MODEL: 'fixture-openrouter' }],
     ['anthropic-api', 'x-api-key', 'SECRET_SENTINEL_ANTHROPIC', { ANTHROPIC_API_KEY: 'SECRET_SENTINEL_ANTHROPIC', ANTHROPIC_BASE_URL: baseUrl, ANTHROPIC_MODEL: 'fixture-anthropic' }],
   ];
@@ -781,7 +1964,7 @@ test('spawned runtime submits a turn through the configured local provider endpo
     assert.ok(events.some((event) => event.event === 'carrier_turn_completed'));
     assert.ok(events.some((event) => event.event === 'session_control_response' && event.request_id === 'turn-1'));
     const invocationEvents = events.filter((event) => event.event === 'provider_invocation_state_transition');
-    assert.deepEqual(invocationEvents.map((event) => event.invocation_state), ['requested', 'validated', 'shaped', 'dispatched', 'receiving', 'completed']);
+    assert.deepEqual(invocationEvents.map((event) => event.invocation_state), ['requested', 'validated', 'shaped', 'dispatched', 'admitting', 'admitted', 'receiving', 'completed']);
     assert.equal(new Set(invocationEvents.map((event) => event.invocation_id)).size, 1);
     assert.ok(invocationEvents.every((event) => event.turn_id && event.turn_id === event.input_event_id));
   } finally {
@@ -1907,6 +3090,7 @@ test('spawned runtime serves health and durable/live events through advertised p
     const replayCompleted = await nextWebSocketJson(client);
     assert.equal(replayCompleted.event, 'session_events_replay_completed');
     assert.equal(replayCompleted.subscription_id, 'events-1');
+    assert.equal(replayCompleted.cursor.namespace, 'durable');
     assert.ok(replayEvents.some((event) => event?.event === 'session_started'));
 
     child.stdin.write(`${JSON.stringify({ id: 'live-health', method: 'session.health', params: {} })}\n`);
@@ -1920,6 +3104,29 @@ test('spawned runtime serves health and durable/live events through advertised p
     }
     assert.equal(liveEvent?.subscription_id, 'events-1');
     assert.equal(liveEvent?.payload?.event, 'session_health');
+    assert.equal(liveEvent?.cursor?.namespace, 'live');
+    assert.equal(liveEvent?.cursor?.sequence, null);
+    assert.equal(liveEvent?.payload?.event_sequence, undefined);
+
+    client.close();
+    client = await connectWebSocket(started.event_endpoint);
+    assert.equal((await nextWebSocketJson(client)).event, 'websocket_connected');
+    client.sendJson({
+      id: 'events-reconnect',
+      method: 'session.events.subscribe',
+      params: {
+        include_replay: true,
+        since_sequence: liveEvent.cursor.sequence,
+        subscription_id: 'events-reconnect',
+      },
+    });
+    const reconnectStarted = await nextWebSocketJson(client);
+    const reconnectEvents = [];
+    for (let index = 0; index < reconnectStarted.replay_count; index += 1) {
+      reconnectEvents.push((await nextWebSocketJson(client)).payload);
+    }
+    await nextWebSocketJson(client);
+    assert.equal(reconnectEvents.some((event) => event.event === 'session_started'), true);
 
     client.close();
     client = null;
@@ -1936,6 +3143,122 @@ test('spawned runtime serves health and durable/live events through advertised p
   } finally {
     client?.close();
     if (child && child.exitCode === null) child.kill();
+    rmSync(siteRoot, { recursive: true, force: true });
+  }
+});
+
+test('spawned runtime exposes bounded terminal request retention and preserves active request readback', { timeout: 60000 }, async () => {
+  const siteRoot = mkdtempSync(join(tmpdir(), 'narada-runtime-request-retention-e2e-'));
+  let holdResponse = null;
+  const provider = createServer((request, response) => {
+    let body = '';
+    request.setEncoding('utf8');
+    request.on('data', (chunk) => { body += chunk; });
+    request.on('end', () => {
+      const payload = JSON.parse(body);
+      const content = payload.messages?.filter((message) => message.role === 'user').at(-1)?.content;
+      if (content === 'hold-active-request') {
+        holdResponse = response;
+        return;
+      }
+      response.setHeader('content-type', 'application/json');
+      response.end(JSON.stringify({ choices: [{ message: { role: 'assistant', content: 'retention-ok' } }] }));
+    });
+  });
+  await new Promise((resolve) => provider.listen(0, '127.0.0.1', resolve));
+  const address = provider.address();
+  let child = null;
+  try {
+    const binPath = fileURLToPath(new URL('../bin/narada-agent-runtime-server.mjs', import.meta.url));
+    child = spawnTestChild(process.execPath, [
+      binPath,
+      '--raw-jsonl',
+      '--health-port', '0',
+      '--identity', 'narada.test',
+      '--session', 'runtime-request-retention-e2e',
+    ], {
+      env: {
+        ...process.env,
+        NARADA_SITE_ROOT: siteRoot,
+        NARADA_INTELLIGENCE_PROVIDER: 'openai-api',
+        OPENAI_BASE_URL: `http://127.0.0.1:${address.port}/`,
+        OPENAI_API_KEY: 'retention-key',
+        NARADA_AGENT_RUNTIME_HEALTH_ENABLED: '1',
+      },
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.setEncoding('utf8');
+    child.stderr.setEncoding('utf8');
+    child.stdout.on('data', (chunk) => { stdout += chunk; });
+    child.stderr.on('data', (chunk) => { stderr += chunk; });
+    const readEvents = () => stdout.split(/\r?\n/).filter(Boolean).flatMap((line) => {
+      try {
+        return [JSON.parse(line)];
+      } catch {
+        return [];
+      }
+    });
+    await waitForCapturedOutput(child, () => stdout, (text) => hasCapturedJsonEvent(text, (event) => event.event === 'session_started'));
+    const started = readEvents().find((event) => event.event === 'session_started');
+    assert.match(started?.health_endpoint, /^http:\/\/127\.0\.0\.1:\d+\/health$/);
+
+    const terminalRequestIds = Array.from({ length: 101 }, (_, index) => `retention-${index + 1}`);
+    child.stdin.write(terminalRequestIds.map((requestId) => `${JSON.stringify({
+      id: requestId,
+      method: 'session.submit',
+      params: { content: requestId },
+    })}\n`).join(''));
+    await waitForCapturedOutput(child, () => stdout, (text) => {
+      const completed = new Set(readEvents()
+        .filter((event) => event.event === 'input_event_completed' && event.terminal_state === 'completed')
+        .map((event) => event.request_id));
+      return terminalRequestIds.every((requestId) => completed.has(requestId));
+    }, 30000);
+
+    const health = async () => {
+      const response = await fetch(started.health_endpoint);
+      assert.equal(response.status, 200);
+      return response.json();
+    };
+    const completedHealth = await health();
+    const completedRequests = completedHealth.runtime_requests;
+    assert.equal(completedRequests.retention_limit, 100);
+    assert.equal(completedRequests.retention_scope, 'terminal_requests_only');
+    assert.equal(completedRequests.terminal_request_count, 100);
+    assert.ok(completedRequests.retained_request_count >= completedRequests.terminal_request_count);
+    assert.equal(completedRequests.state_counts.completed, 100);
+    assert.equal(completedRequests.request_refs.some((ref) => ref.request_id === 'retention-1'), false);
+    assert.equal(completedRequests.request_refs.some((ref) => ref.request_id === 'retention-101'), true);
+
+    child.stdin.write(`${JSON.stringify({
+      id: 'retention-active',
+      method: 'session.submit',
+      params: { content: 'hold-active-request' },
+    })}\n`);
+    await waitForCapturedOutput(child, () => stdout, (text) => hasCapturedJsonEvent(text, (event) => event.event === 'input_event_started' && event.request_id === 'retention-active'));
+    assert.ok(holdResponse);
+
+    const activeHealth = await health();
+    const activeRequests = activeHealth.runtime_requests;
+    assert.equal(activeRequests.retention_limit, 100);
+    assert.equal(activeRequests.retention_scope, 'terminal_requests_only');
+    assert.equal(activeRequests.terminal_request_count, 100);
+    assert.ok(activeRequests.active_request_count >= 1);
+    const activeRef = activeRequests.request_refs.find((ref) => ref.request_id === 'retention-active');
+    assert.ok(activeRef);
+    assert.equal(activeRef.terminal_state, null);
+    assert.ok(['scheduled', 'running'].includes(activeRef.request_state));
+
+    holdResponse.setHeader('content-type', 'application/json');
+    holdResponse.end(JSON.stringify({ choices: [{ message: { role: 'assistant', content: 'active-completed' } }] }));
+    await waitForCapturedOutput(child, () => stdout, (text) => hasCapturedJsonEvent(text, (event) => event.event === 'input_event_completed' && event.request_id === 'retention-active' && event.terminal_state === 'completed'));
+    child.stdin.end(`${JSON.stringify({ id: 'close-1', method: 'session.close', params: {} })}\n`);
+    assert.equal(await new Promise((resolve) => child.on('exit', resolve)), 0, stderr);
+  } finally {
+    if (child && child.exitCode === null) child.kill();
+    await new Promise((resolve) => provider.close(resolve));
     rmSync(siteRoot, { recursive: true, force: true });
   }
 });

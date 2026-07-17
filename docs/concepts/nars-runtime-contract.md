@@ -124,6 +124,11 @@ The transition event is:
 The runtime health projection includes aggregate runtime_requests counts.
 This is transport evidence: it must not be used as a replacement for
 session-core input, turn, recovery, artifact, or shutdown state.
+The retained request registry bounds terminal history to 100 entries while
+preserving active requests. `request_count` and `retained_request_count`
+include active and retained terminal entries; `retention_scope` identifies
+that the limit applies to terminal requests, and `request_refs` prioritizes
+active requests when the bounded reference list is full.
 
 ## Protocol Shape
 
@@ -354,14 +359,27 @@ The former `agent-cli` runtime-server adapter has been removed. Reintroduction r
 | Direct `agent-cli` runtime/server mode | none; removed | already correctly owned | `agent-cli` reports that non-server conversation runtime has been removed; NARS is the runtime path | low |
 | `agent-cli` runtime ownership | `@narada2/agent-runtime-server` | correctly narrowed | separate `D:/code/agent-cli` is a client/projection package with no carrier-runtime, provider-runtime, or MCP-hosting dependency; it attaches to an existing NARS session | low |
 
-Fast verification should use focused package tests:
+Fast verification should use focused package tests that do not create a real
+Windows launch chain:
 
 - `pnpm --filter @narada2/agent-runtime-server test`
 - `pnpm --filter @narada2/agent-runtime-server typecheck`
+- `pnpm --filter @narada2/agent-runtime-server run test:e2e:pty` (explicit real-PTY coverage; requires `node-pty`)
 - `pnpm --filter @narada2/agent-start test`
-- `node --test packages/layers/cli/test/integration/operator-launch-journey.test.mjs`
 
-Browser/E2E projection tests and full recursive repo tests are not default fast evidence. They must stay behind explicit selectors such as `@narada2/agent-web-ui test:browser`, `test:all`, or root broad test commands with a declared reason and timeout budget.
+The operator launch journey is explicit Windows E2E evidence, not a fast test:
+
+```text
+node --test --test-concurrency=1 packages/layers/cli/test/integration/operator-launch-journey.test.mjs
+```
+
+It invokes the User Site PowerShell launcher, starts a real NARS runtime and
+Web UI projection, proves exact Site/session correlation, then closes the
+processes. Expect roughly 30-60 seconds and run it only when launch-chain
+behavior is in scope. Browser/E2E projection tests and full recursive repo
+tests are likewise not default fast evidence; they must stay behind explicit
+selectors such as `@narada2/agent-web-ui test:browser`, `test:all`, or root
+broad test commands with a declared reason and timeout budget.
 
 Residual launch-option risk: the launcher tests are representative, not a full Cartesian product. Coverage should prioritize alias normalization, mutually exclusive legacy/modern options, multi-surface launch, site/role filtering, provider selection/preflight, and stale-dist behavior. Full Cartesian coverage is not practical unless a generated pairwise matrix with bounded cases is introduced.
 
@@ -603,13 +621,16 @@ NARS event subscription is owned by `@narada2/agent-runtime-server`. The canonic
       "event_kinds": ["assistant_message", "tool_call", "tool_result"],
       "families": ["session", "turn"],
       "request_id": "input_...",
-      "turn_id": "turn_..."
+      "turn_id": "turn_...",
+      "any_of": {"request_id": "input_...", "input_event_id": "input_...", "directive_id": "dir_..."}
     }
   }
 }
 ```
 
 `since_sequence` is preferred over `since_timestamp` when both are present. Sequence numbers are monotonically increasing within one NARS session and are exposed as both `event_sequence` and `sequence` during vocabulary convergence. `include_replay=false` starts at the next live event. `max_replay` is bounded by runtime policy; implementations must not replay unbounded transcripts to a slow or newly attached client.
+
+Durable `session.events.read` pages accept the same event-kind, family, view, request, and turn selectors. `filters.any_of` is an explicit OR selector for `request_id`, `turn_id`, `input_event_id`, and `directive_id`; it is intended for bounded input-status lookups that may need to match more than one durable identifier. Direct filter fields retain AND semantics.
 
 The subscription acknowledgement schema is `narada.nars.events.subscription.v1`:
 
@@ -633,7 +654,7 @@ Live and replayed events are wrapped for subscription transports using `narada.n
   "schema": "narada.nars.events.envelope.v1",
   "event": "session_event",
   "subscription_id": "sub_events-1",
-  "cursor": { "sequence": 46, "next_sequence": 47 },
+  "cursor": { "namespace": "durable", "sequence": 46, "next_sequence": 47 },
   "payload": { "event": "assistant_message", "event_sequence": 46 }
 }
 ```
@@ -657,7 +678,7 @@ Live and replayed events are wrapped for subscription transports using `narada.n
 
 The response schema is `narada.nars.events.read.v1` with `event: "session_events_read"`, `source: "events_jsonl"`, ordered `events`, `event_count`, `has_more`, and a cursor containing `before_sequence`, `after_sequence`, `last_sequence`, and `next_sequence`. Backward reads return events in chronological order within the returned page. Clients merge pages by event sequence and must de-duplicate replayed or overlapping events.
 
-Backpressure is local-runtime policy. The minimum contract is deterministic bounded buffering: slow subscribers may be dropped or receive a structured error, but must not block the carrier event loop or corrupt durable `events.jsonl`. Reconnect uses the last acknowledged `cursor.sequence` as `since_sequence`; clients should tolerate idempotent replay of the last seen event and de-duplicate by sequence.
+Backpressure is local-runtime policy. The minimum contract is deterministic bounded buffering: slow subscribers may be dropped or receive a structured error, but must not block the carrier event loop or corrupt durable `events.jsonl`. A `durable` cursor is the only cursor that may be reused as `since_sequence`; clients should tolerate idempotent replay of the last seen event and de-duplicate by durable event sequence. Wrapper-only diagnostics such as runtime-host transitions and projection failures use the separate `live` cursor namespace and must not advance the durable reconnect cursor. A live diagnostic envelope therefore carries `cursor.namespace: "live"`, a null durable `sequence`, and an optional `live_sequence` for local ordering.
 
 WebSocket `ws://127.0.0.1:<port>/events` is the durable co-presence projection. It is local-bound by default and sends replayed and live event envelopes. It is an observation transport, not a second control protocol; control uses the session-core JSONL contract. It must not synthesize another provider/carrier runtime or fall back to ambient global MCP or Codex configuration.
 
@@ -680,6 +701,8 @@ Invoker owner:
 ```
 
 The current implementation invokes hooks at the runtime-server boundary while carrier execution runs through `@narada2/carrier-runtime` in-process. Future carrier adapters must map their native events into the same NARS lifecycle vocabulary before dispatching hooks.
+
+The runtime-server may load process-local hook handlers before session binding with `--lifecycle-hook-module <path>` or `NARADA_LIFECYCLE_HOOK_MODULE`. The module exports `hooks` (one handler or an array of handlers) and may export `onFailure`; a default export may provide either the handler or the `{ hooks, onFailure }` configuration. A handler is a function or an object with named lifecycle-hook methods. Module loading is startup-fatal when configured, while individual hook failures are reported through the bounded hook-failure path. Hook handlers receive validated lifecycle payloads only and do not become a durable authority surface.
 
 ### Hook Payload
 

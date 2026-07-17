@@ -5,7 +5,6 @@ import {
   BRACKETED_PASTE_START,
   createExplicitJsonControlFrame,
   createOperatorConversationFrame,
-  createOperatorConversationEnqueueFrame,
   createOperatorSteeringFrame,
   createProjectedSlashCommandAction,
   projectedHelpText,
@@ -148,7 +147,7 @@ export function createProjectedTerminalBridge({
     }
 
     const frame = operatorState.activeTurnId
-      ? createOperatorConversationEnqueueFrame(line)
+      ? createOperatorSteeringFrame(line, { activeTurnId: operatorState.activeTurnId })
       : createOperatorConversationFrame(line);
     if (frame && interactive) {
       writeSubmittedOperatorPrompt({ output, operatorState, line, style });
@@ -176,7 +175,8 @@ export function createProjectedTerminalBridge({
     input.resume?.();
     const inputFilter = createBracketedPasteInputFilter({
       onText: (text) => {
-        composer.feed(text);
+        if (isUnframedMultilinePasteBurst(text)) composer.insert(normalizeDraftForDisplay(text));
+        else composer.feed(text);
       },
       onPaste: (text) => {
         composer.insert(text);
@@ -199,6 +199,7 @@ export function createProjectedTerminalBridge({
   const close = () => {
     if (interactive && onInputData) input.off('data', onInputData);
     if (interactive) {
+      input.pause?.();
       composer?.clear();
       output.write('\x1b[?2004l');
     }
@@ -408,6 +409,10 @@ function normalizeDraftForDisplay(draft) {
   return String(draft ?? '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
 }
 
+function isUnframedMultilinePasteBurst(text) {
+  return /(?:\r\n|\r|\n)./s.test(String(text ?? ''));
+}
+
 function composerRenderedRows(rendered, columns) {
   const width = Math.max(1, Number(columns) || 80);
   return String(rendered ?? '').split('\n').reduce((count, line) => (
@@ -428,15 +433,20 @@ function clearRenderedComposerRows(rows) {
 function createBracketedPasteInputFilter({ onText = () => {}, onPaste = () => {} } = {}) {
   let active = false;
   let buffer = '';
+  let pendingMarker = '';
 
   return {
     feed(chunk) {
-      let text = Buffer.isBuffer(chunk) ? chunk.toString('utf8') : String(chunk ?? '');
+      let text = `${pendingMarker}${Buffer.isBuffer(chunk) ? chunk.toString('utf8') : String(chunk ?? '')}`;
+      pendingMarker = '';
       while (text) {
         if (!active) {
           const startIndex = text.indexOf(BRACKETED_PASTE_START);
           if (startIndex === -1) {
-            onText(text);
+            const keep = trailingMarkerPrefixLength(text, BRACKETED_PASTE_START);
+            const body = keep ? text.slice(0, -keep) : text;
+            if (body) onText(body);
+            pendingMarker = keep ? text.slice(-keep) : '';
             return;
           }
           if (startIndex > 0) onText(text.slice(0, startIndex));
@@ -448,7 +458,9 @@ function createBracketedPasteInputFilter({ onText = () => {}, onPaste = () => {}
 
         const endIndex = text.indexOf(BRACKETED_PASTE_END);
         if (endIndex === -1) {
-          buffer += text;
+          const keep = trailingMarkerPrefixLength(text, BRACKETED_PASTE_END);
+          buffer += keep ? text.slice(0, -keep) : text;
+          pendingMarker = keep ? text.slice(-keep) : '';
           return;
         }
 
@@ -460,6 +472,14 @@ function createBracketedPasteInputFilter({ onText = () => {}, onPaste = () => {}
       }
     },
   };
+}
+
+function trailingMarkerPrefixLength(text, marker) {
+  const value = String(text ?? '');
+  for (let length = Math.min(marker.length - 1, value.length); length > 0; length -= 1) {
+    if (marker.startsWith(value.slice(-length))) return length;
+  }
+  return 0;
 }
 
 export const bracketedPasteControlSequences = {

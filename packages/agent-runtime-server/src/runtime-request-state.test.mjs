@@ -4,6 +4,7 @@ import {
   canTransitionNarsRuntimeRequest,
   createNarsRuntimeRequestRegistry,
   createNarsRuntimeRequestStateMachine,
+  NARS_RUNTIME_REQUEST_RETENTION_LIMIT,
 } from './runtime-request-state.mjs';
 
 test('runtime request FSM distinguishes normal execution from close waiting', () => {
@@ -35,4 +36,31 @@ test('runtime request FSM rejects terminal re-entry and the registry tracks pend
   request.transition('completed');
   assert.throws(() => request.transition('failed'), /invalid_nars_runtime_request_transition:completed:failed/);
   assert.equal(transitions.at(-1).request_state, 'completed');
+});
+
+test('runtime request registry bounds retained terminal requests without evicting active requests', () => {
+  const registry = createNarsRuntimeRequestRegistry();
+  const active = registry.receive({ requestId: 'active-request', method: 'session.submit' });
+  active.transition('scheduled');
+  active.transition('running');
+  for (let index = 0; index < NARS_RUNTIME_REQUEST_RETENTION_LIMIT + 5; index += 1) {
+    const request = registry.receive({ requestId: `request-${index}`, method: 'session.health' });
+    request.transition('scheduled');
+    request.transition('running');
+    request.transition('completed');
+  }
+
+  const snapshot = registry.snapshot();
+  assert.equal(snapshot.request_count, NARS_RUNTIME_REQUEST_RETENTION_LIMIT + 1);
+  assert.equal(snapshot.retained_request_count, NARS_RUNTIME_REQUEST_RETENTION_LIMIT + 1);
+  assert.equal(snapshot.retention_limit, NARS_RUNTIME_REQUEST_RETENTION_LIMIT);
+  assert.equal(snapshot.retention_scope, 'terminal_requests_only');
+  assert.equal(snapshot.active_request_count, 1);
+  assert.equal(snapshot.terminal_request_count, NARS_RUNTIME_REQUEST_RETENTION_LIMIT);
+  assert.equal(snapshot.request_refs.length, NARS_RUNTIME_REQUEST_RETENTION_LIMIT);
+  assert.equal(snapshot.request_refs[0].request_id, 'active-request');
+  assert.equal(snapshot.request_refs.at(-1).request_id, 'request-104');
+  assert.ok(registry.request(active.runtimeRequestId));
+  assert.equal(registry.request('runtime_request_2'), null);
+  assert.ok(registry.request('runtime_request_106'));
 });

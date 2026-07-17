@@ -51,6 +51,12 @@ importers:
       '@narada2/agent-runtime-server':
         specifier: workspace:*
         version: link:../narada/packages/agent-runtime-server
+      '@xterm/headless':
+        specifier: ^6.0.0
+        version: 6.0.0
+      node-pty:
+        specifier: ^1.0.0
+        version: 1.1.0
 
   ../agent-tui: {}
 
@@ -136,6 +142,9 @@ importers:
       '@narada2/mcp-telemetry':
         specifier: workspace:*
         version: link:../shared/mcp-telemetry
+      '@narada2/mcp-transport':
+        specifier: workspace:*
+        version: link:../shared/mcp-transport
     devDependencies:
       '@narada2/mcp-e2e-harness':
         specifier: workspace:*
@@ -236,6 +245,10 @@ importers:
       '@narada2/site-paths':
         specifier: workspace:*
         version: link:../site-paths
+    devDependencies:
+      node-pty:
+        specifier: ^1.1.0
+        version: 1.1.0
 
   packages/agent-start:
     dependencies:
@@ -308,6 +321,9 @@ importers:
       '@narada2/ui':
         specifier: workspace:*
         version: link:../ui
+      '@narada2/ui-vue':
+        specifier: workspace:*
+        version: link:../ui-vue
       lucide-vue-next:
         specifier: ^0.563.0
         version: 0.563.0(vue@3.5.39(typescript@5.9.3))
@@ -330,9 +346,6 @@ importers:
       '@narada2/process-launch-posture':
         specifier: workspace:*
         version: link:../process-launch-posture
-      '@narada2/ui-vue':
-        specifier: workspace:*
-        version: link:../ui-vue
       '@playwright/test':
         specifier: ^1.61.1
         version: 1.61.1
@@ -433,6 +446,9 @@ importers:
       '@narada2/nars-client-projection-contract':
         specifier: workspace:*
         version: link:../nars-client-projection-contract
+      '@narada2/nars-session-core':
+        specifier: workspace:*
+        version: link:../nars-session-core
       '@narada2/operator-console-contract':
         specifier: workspace:*
         version: link:../operator-console-contract
@@ -514,21 +530,42 @@ importers:
       '@clack/prompts':
         specifier: ^0.7.0
         version: 0.7.0
+      '@narada2/agent-context-mcp':
+        specifier: workspace:*
+        version: link:../../../../mcp-surfaces/packages/agent-context-mcp
       '@narada2/agent-context-memory':
         specifier: workspace:*
         version: link:../../agent-context-memory
       '@narada2/agent-identity':
         specifier: workspace:*
         version: link:../../agent-identity
+      '@narada2/agent-runtime-server':
+        specifier: workspace:*
+        version: link:../../agent-runtime-server
       '@narada2/agent-start':
         specifier: workspace:*
         version: link:../../agent-start
       '@narada2/agent-web-ui':
         specifier: workspace:*
         version: link:../../agent-web-ui
+      '@narada2/carrier-action-admission':
+        specifier: workspace:*
+        version: link:../../carrier-action-admission
+      '@narada2/carrier-protocol':
+        specifier: workspace:*
+        version: link:../../carrier-protocol
       '@narada2/carrier-provider-contract':
         specifier: workspace:*
         version: link:../../carrier-provider-contract
+      '@narada2/carrier-provider-support':
+        specifier: workspace:*
+        version: link:../../carrier-provider-support
+      '@narada2/carrier-runtime':
+        specifier: workspace:*
+        version: link:../../carrier-runtime
+      '@narada2/carrier-terminal-projection':
+        specifier: workspace:*
+        version: link:../../carrier-terminal-projection
       '@narada2/charters':
         specifier: workspace:*
         version: link:../../domains/charters
@@ -559,9 +596,21 @@ importers:
       '@narada2/macos-site':
         specifier: workspace:*
         version: link:../../sites/macos
+      '@narada2/mcp-fabric':
+        specifier: workspace:*
+        version: link:../../mcp-fabric
+      '@narada2/mcp-transport':
+        specifier: workspace:*
+        version: link:../../../../mcp-surfaces/packages/shared/mcp-transport
+      '@narada2/nars-capability-gateway':
+        specifier: workspace:*
+        version: link:../../nars-capability-gateway
       '@narada2/nars-client-projection-contract':
         specifier: workspace:*
         version: link:../../nars-client-projection-contract
+      '@narada2/nars-provider-runtime':
+        specifier: workspace:*
+        version: link:../../nars-provider-runtime
       '@narada2/nars-runtime-contract':
         specifier: workspace:*
         version: link:../../nars-runtime-contract
@@ -589,9 +638,18 @@ importers:
       '@narada2/search':
         specifier: workspace:*
         version: link:../../verticals/search
+      '@narada2/site-common-tools':
+        specifier: workspace:*
+        version: link:../../site-common-tools
       '@narada2/site-config':
         specifier: workspace:*
         version: link:../../site-config
+      '@narada2/site-continuity':
+        specifier: workspace:*
+        version: link:../../site-continuity
+      '@narada2/site-inbox':
+        specifier: workspace:*
+        version: link:../../site-inbox
       '@narada2/site-paths':
         specifier: workspace:*
         version: link:../../site-paths
@@ -601,12 +659,18 @@ importers:
       '@narada2/site-registry-contract':
         specifier: workspace:*
         version: link:../../site-registry-contract
+      '@narada2/sqlite':
+        specifier: workspace:*
+        version: link:../../sqlite
       '@narada2/task-governance-core':
         specifier: workspace:*
         version: link:../../../../narada-core/packages/task-governance-core
       '@narada2/ui':
         specifier: workspace:*
         version: link:../../ui
+      '@narada2/ui-vue':
+        specifier: workspace:*
+        version: link:../../ui-vue
       '@narada2/windows-site':
         specifier: workspace:*
         version: link:../../sites/windows
@@ -625,6 +689,24 @@ importers:
       commander:
         specifier: ^11.1.0
         version: 11.1.0
+      lucide-vue-next:
+        specifier: ^0.563.0
+        version: 0.563.0(vue@3.5.39(typescript@5.9.3))
+      markdown-it:
+        specifier: ^14.2.0
+        version: 14.2.0
+      mermaid:
+        specifier: ^11.16.0
+        version: 11.16.0
+      tsx:
+        specifier: ^4.21.0
+        version: 4.21.0
+      vue:
+        specifier: ^3.5.0
+        version: 3.5.39(typescript@5.9.3)
+      zod:
+        specifier: ^3.25.76
+        version: 3.25.76
     devDependencies:
       '@playwright/test':
         specifier: ^1.61.1
@@ -2840,6 +2922,9 @@ packages:
     peerDependencies:
       vue: ^3.5.0
 
+  '@xterm/headless@6.0.0':
+    resolution: {integrity: sha512-5Yj1QINYCyzrZtf8OFIHi47iQtI+0qYFPHmouEfG8dHNxbZ9Tb9YGSuLcsEwj9Z+OL75GJqPyJbyoFer80a2Hw==}
+
   abbrev@2.0.0:
     resolution: {integrity: sha512-6/mh1E2u2YgEsCHdY0Yx5oW+61gZU+1vXaoiHHrpKeuRNNgFvS+/jrwHiQhB5apAf5oB7UB7E19ol2R2LKH8hQ==}
     engines: {node: ^14.17.0 || ^16.13.0 || >=18.0.0}
@@ -4471,11 +4556,17 @@ packages:
     resolution: {integrity: sha512-8Ofs/AUQh8MaEcrlq5xOX0CQ9ypTF5dl78mjlMNfOK08fzpgTHQRQPBxcPlEtIw0yRpws+Zo/3r+5WRby7u3Gg==}
     engines: {node: '>= 0.6'}
 
+  node-addon-api@7.1.1:
+    resolution: {integrity: sha512-5m3bsyrjFWE1xf7nz7YXdN4udnVtXK6/Yfgn5qnahL6bCkf2yKt4k3nuTKAtT4r3IG8JNR2ncsIMdZuAzJjHQQ==}
+
   node-fetch-native@1.6.7:
     resolution: {integrity: sha512-g9yhqoedzIUm0nTnTqAQvueMPVOuIY16bqgAJJC8XOOubYFNwz6IER9qs0Gq2Xd0+CecCKFjtdDTMA4u4xG06Q==}
 
   node-html-parser@7.1.0:
     resolution: {integrity: sha512-iJo8b2uYGT40Y8BTyy5ufL6IVbN8rbm/1QK2xffXU/1a/v3AAa0d1YAoqBNYqaS4R/HajkWIpIfdE6KcyFh1AQ==}
+
+  node-pty@1.1.0:
+    resolution: {integrity: sha512-20JqtutY6JPXTUnL0ij1uad7Qe1baT46lyolh2sSENDd4sTzKZ4nmAFkeAARDKwmlLjPx6XKRlwRUxwjOy+lUg==}
 
   node-releases@2.0.50:
     resolution: {integrity: sha512-J6l92tKHX6w8Jy5nO1Vuc01NoIiRGi/d6qBKVxh+IQ8Cr3b6HbVNfKiF8ZpFKufTwpwxMmce2W3iQZ861ZRyTg==}
@@ -6990,6 +7081,8 @@ snapshots:
     dependencies:
       vue: 3.5.39(typescript@5.9.3)
 
+  '@xterm/headless@6.0.0': {}
+
   abbrev@2.0.0: {}
 
   accepts@2.0.0:
@@ -8629,12 +8722,18 @@ snapshots:
 
   negotiator@1.0.0: {}
 
+  node-addon-api@7.1.1: {}
+
   node-fetch-native@1.6.7: {}
 
   node-html-parser@7.1.0:
     dependencies:
       css-select: 5.2.2
       he: 1.2.0
+
+  node-pty@1.1.0:
+    dependencies:
+      node-addon-api: 7.1.1
 
   node-releases@2.0.50: {}
 
