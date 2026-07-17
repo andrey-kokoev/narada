@@ -94,10 +94,6 @@ jobs:
         run: pnpm typecheck
         working-directory: packages/layers/cli
 
-      - name: Run launcher verification gate
-        run: pnpm test:launcher:focused -- test/commands/workspace-launch-admission.test.ts
-        working-directory: packages/layers/cli
-
       - name: Run tests
         run: pnpm test
         working-directory: packages/layers/cli
