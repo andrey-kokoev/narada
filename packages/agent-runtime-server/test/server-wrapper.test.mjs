@@ -2047,6 +2047,66 @@ test('WebSocket /events replays and reads durable events.jsonl beyond memory buf
   }
 });
 
+test('conversation event streams carry input acknowledgment evidence through replay and live delivery', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'runtime-conversation-ack-test-'));
+  try {
+    const eventsPath = join(root, 'events.jsonl');
+    writeFileSync(eventsPath, `${[
+      { event_sequence: 1, sequence: 1, event: 'session_started', session_id: 'conversation-ack-test' },
+      { event_sequence: 2, sequence: 2, event: 'session_control_accepted', request_id: 'request-1', method: 'session.submit', acceptance_state: 'accepted' },
+      { event_sequence: 3, sequence: 3, event: 'input_event_started', request_id: 'request-1', input_event_id: 'input-1' },
+      { event_sequence: 4, sequence: 4, event: 'session_control_response', request_id: 'request-1', method: 'session.submit', terminal_state: 'completed' },
+    ].map((event) => JSON.stringify(event)).join('\n')}\n`, 'utf8');
+    const hub = createEventHub({ maxBuffer: 1 });
+    const projection = await startEventStreamProjection({
+      childStdin: new PassThrough(),
+      eventHub: hub,
+      host: '127.0.0.1',
+      port: 0,
+      eventsPath,
+    });
+    const client = await connectWebSocket(projection.url);
+    try {
+      assert.equal((await client.nextJson()).event, 'websocket_connected');
+      client.sendJson({
+        id: 'conversation-ack-subscribe',
+        method: 'session.events.subscribe',
+        params: { include_replay: true, max_replay: 100, view: 'conversation' },
+      });
+      const started = await client.nextJson();
+      assert.equal(started.view, 'conversation');
+      assert.equal(started.replay_count, 3);
+      const replay = [];
+      for (let index = 0; index < started.replay_count; index += 1) replay.push((await client.nextJson()).payload);
+      assert.deepEqual(replay.map((event) => event.event), [
+        'session_control_accepted',
+        'input_event_started',
+        'session_control_response',
+      ]);
+      assert.equal((await client.nextJson()).event, 'session_events_replay_completed');
+
+      hub.publish({
+        event_sequence: 5,
+        sequence: 5,
+        event: 'runtime_request_state_transition',
+        request_id: 'request-1',
+        method: 'session.submit',
+        request_state: 'completed',
+        terminal_state: 'completed',
+      });
+      const live = await client.nextJson();
+      assert.equal(live.event, 'session_event');
+      assert.equal(live.payload.event, 'runtime_request_state_transition');
+      assert.equal(live.payload.request_state, 'completed');
+    } finally {
+      client.close();
+      projection.server.close();
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('WebSocket /events isolates same subscription IDs across connections', async () => {
   const hub = createEventHub();
   const projection = await startEventStreamProjection({

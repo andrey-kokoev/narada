@@ -1,6 +1,7 @@
-const REQUEST_ID_FIELDS = Object.freeze(['request_id', 'requestId', 'input_request_id']);
-const INPUT_EVENT_ID_FIELDS = Object.freeze(['input_event_id', 'inputEventId', 'event_id']);
+const REQUEST_ID_FIELDS = Object.freeze(['request_id', 'requestId', 'input_request_id', 'authority_request_id']);
+const INPUT_EVENT_ID_FIELDS = Object.freeze(['input_event_id', 'inputEventId', 'input_id', 'inputId', 'event_id']);
 const SESSION_ID_FIELDS = Object.freeze(['session_id', 'sessionId', 'runtime_session_id', 'carrier_session_id']);
+const OPERATOR_INPUT_METHODS = new Set(['session.submit', 'conversation.send', 'conversation.enqueue', 'conversation.steer']);
 
 export function normalizeInputCorrelationId(value) {
   if (typeof value === 'string' && value.trim()) return value.trim();
@@ -39,7 +40,7 @@ export function findCorrelatedInput(records, event, { allowUniqueMethod = false,
   if (allowUniqueMethod && correlation.method) {
     const methodMatches = candidates.filter((record) => {
       const candidateCorrelation = inputCorrelationFromValue(record);
-      return candidateCorrelation.method === correlation.method
+      return methodsCompatible(candidateCorrelation.method, correlation.method)
         && sessionsCompatible(candidateCorrelation.sessionId, correlation.sessionId);
     });
     if (methodMatches.length === 1) return { record: methodMatches[0], matchedBy: 'unique_method', ambiguous: false };
@@ -81,6 +82,11 @@ function firstNormalized(candidate, fields) {
 
 function normalizeMethod(value) {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+function methodsCompatible(left, right) {
+  if (left === right) return true;
+  return Boolean(left && right && OPERATOR_INPUT_METHODS.has(left) && OPERATOR_INPUT_METHODS.has(right));
 }
 
 function sessionsCompatible(left, right) {

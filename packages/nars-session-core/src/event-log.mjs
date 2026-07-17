@@ -24,6 +24,9 @@ const CONVERSATION_EVENT_KINDS = new Set([
   'input_event_queued',
   'input_event_started',
   'input_event_completed',
+  // Request lifecycle evidence lets a conversation transport settle a
+  // pending browser input even when an earlier admission event was missed.
+  'runtime_request_state_transition',
   'input_queued_for_turn_boundary',
   'input_admitted_to_turn',
   'input_dropped_by_operator',

@@ -319,6 +319,18 @@ test('classifies replay completion as a diagnostic signal', () => {
   assert.equal(classifyRuntimeMessage({ event: 'session_events_replay_completed', replay_count: 0 }), 'diagnostic_signal');
 });
 
+test('classifies input acknowledgment evidence as operations without adding it to conversation rows', () => {
+  assert.equal(classifyRuntimeMessage({ event: 'session_control_accepted', request_id: 'input-1' }), 'operation_fact');
+  assert.equal(classifyRuntimeMessage({ event: 'session_control_response', request_id: 'input-1' }), 'operation_fact');
+  assert.equal(classifyRuntimeMessage({ event: 'input_event_completed', request_id: 'input-1' }), 'operation_fact');
+  assert.equal(classifyRuntimeMessage({ event: 'runtime_request_state_transition', request_id: 'input-1', request_state: 'completed' }), 'operation_fact');
+  const projection = createSessionProjection([
+    { event: 'operator_input_submitted', request_id: 'input-1', content: 'run' },
+    { event: 'session_control_accepted', request_id: 'input-1', acceptance_state: 'accepted' },
+  ], { verbosity: 'conversation' });
+  assert.deepEqual(projection.rows.map((row) => row.kind), ['operator_input_submitted']);
+});
+
 test('web UI projection renders stale authority reattach target distinctly', () => {
   const projection = projectRuntimeEvent({
     event: 'authority_source_write_refused',

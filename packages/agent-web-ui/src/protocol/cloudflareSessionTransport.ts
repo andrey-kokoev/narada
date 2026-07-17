@@ -208,17 +208,42 @@ export function startCloudflareSessionTransport(context: NarsClientAdapterContex
     }).then(async (response) => {
       const body = await response.json().catch(() => ({ event: 'projection_input_response', status: response.ok ? 'ok' : 'failed' }));
       const bodyRecord = body && typeof body === 'object' && !Array.isArray(body) ? body as Record<string, unknown> : {};
-      const authorityStatus = typeof bodyRecord.status === 'string' && bodyRecord.status.trim()
-        ? bodyRecord.status
-        : response.ok ? 'ok' : 'failed';
+      const narsAdmission = recordFrom(bodyRecord.nars_admission);
+      const admissionEvidence = recordFrom(narsAdmission.evidence);
+      const authorityStatus = firstString(narsAdmission.status, bodyRecord.status)
+        ?? (response.ok ? 'ok' : 'failed');
       const authorityMethod = typeof bodyRecord.method === 'string' && bodyRecord.method.trim()
         ? bodyRecord.method
         : remoteFrame.method;
+      const authorityRequestId = firstString(
+        bodyRecord.authority_request_id,
+        bodyRecord.request_id,
+        narsAdmission.request_id,
+        admissionEvidence.request_id,
+      );
+      const inputEventId = firstString(
+        bodyRecord.input_event_id,
+        bodyRecord.inputEventId,
+        narsAdmission.input_event_id,
+        narsAdmission.inputEventId,
+        admissionEvidence.input_event_id,
+        admissionEvidence.inputEventId,
+      );
+      const inputId = firstString(
+        bodyRecord.input_id,
+        bodyRecord.inputId,
+        narsAdmission.input_id,
+        narsAdmission.inputId,
+        admissionEvidence.input_id,
+        admissionEvidence.inputId,
+      );
       options.onEvent?.({
         ...bodyRecord,
         event: 'projection_input_response',
         request_id: admittedFrame.id,
-        authority_request_id: typeof bodyRecord.request_id === 'string' ? bodyRecord.request_id : null,
+        authority_request_id: authorityRequestId,
+        input_event_id: inputEventId,
+        input_id: inputId,
         method: authorityMethod,
         transport_method: admittedFrame.method,
         remote_method: authorityMethod,
@@ -278,4 +303,15 @@ export function startCloudflareSessionTransport(context: NarsClientAdapterContex
 
 function contextHeaders(context: NarsClientAdapterContext): Record<string, string> {
   return context.options.browserToken ? { 'x-narada-browser-token-fingerprint': context.options.browserToken } : {};
+}
+
+function recordFrom(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function firstString(...values: unknown[]): string | null {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim()) return value.trim();
+  }
+  return null;
 }

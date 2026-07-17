@@ -132,6 +132,10 @@ describe('agent-web-ui runtime boundaries', () => {
       requestId: 'request-1',
       inputEventId: 'event-1',
     });
+    expect(inputCorrelationFromEvent({ authority_request_id: 'authority-1', input_id: 'input-1' })).toMatchObject({
+      requestId: 'authority-1',
+      inputEventId: 'input-1',
+    });
     expect(findCorrelatedInput([
       { request_id: 'request-1', method: 'session.submit', phase: 'sent' },
       { request_id: 'request-2', method: 'session.submit', phase: 'sent' },
@@ -145,6 +149,13 @@ describe('agent-web-ui runtime boundaries', () => {
     ], { request_id: 'request-1', session_id: 'session-2' })).toMatchObject({
       record: null,
       matchedBy: null,
+      ambiguous: false,
+    });
+    expect(findCorrelatedInput([
+      { request_id: 'request-3', method: 'session.submit', phase: 'sent' },
+    ], { method: 'conversation.send' }, { allowUniqueMethod: true })).toMatchObject({
+      record: expect.objectContaining({ request_id: 'request-3' }),
+      matchedBy: 'unique_method',
       ambiguous: false,
     });
   });
@@ -412,6 +423,74 @@ describe('agent-web-ui runtime boundaries', () => {
     client.close();
   });
 
+  it('reconciles a wrapped completed request transition before the acknowledgment timeout', () => {
+    const sockets: FakeSocket[] = [];
+    const timers: Array<{ id: number; delay: number; handler: () => void; cleared: boolean }> = [];
+    const storageValues = new Map<string, string>();
+    let nextTimerId = 0;
+    const WebSocketCtor = class extends FakeSocket {
+      static OPEN = 1;
+      constructor(url: string) {
+        super(url);
+        sockets.push(this);
+      }
+    } as unknown as typeof WebSocket;
+    const clientEvents: unknown[] = [];
+    const client = createNarsClient({
+      endpoint: 'ws://127.0.0.1/events',
+      sessionId: 'session-terminal',
+      pendingInputStorageKey: 'pending-terminal-input-test',
+      pendingInputStorage: {
+        getItem: (key) => storageValues.get(key) ?? null,
+        setItem: (key, value) => { storageValues.set(key, value); },
+        removeItem: (key) => { storageValues.delete(key); },
+      },
+      operatorInputAckTimeoutMs: 5000,
+      WebSocketCtor,
+      timers: {
+        setTimeout(handler: TimerHandler, delay?: number) {
+          const timer = { id: ++nextTimerId, delay: delay ?? 0, handler: handler as () => void, cleared: false };
+          timers.push(timer);
+          return timer.id;
+        },
+        clearTimeout(id: number) {
+          const timer = timers.find((candidate) => candidate.id === id);
+          if (timer) timer.cleared = true;
+        },
+      },
+      onEvent: (event) => clientEvents.push(event),
+    });
+
+    sockets[0].open();
+    expect(client.sendFrame({
+      id: 'request-terminal',
+      method: 'session.submit',
+      params: { message: 'complete this', source: 'agent-web-ui' },
+    })).toBe(true);
+    expect(storageValues.get('pending-terminal-input-test')).toContain('request-terminal');
+
+    sockets[0].emit('message', { data: JSON.stringify({
+      event: 'session_event',
+      payload: {
+        event: 'runtime_request_state_transition',
+        request_id: 'request-terminal',
+        method: 'session.submit',
+        request_state: 'completed',
+        terminal_state: 'completed',
+        session_id: 'session-terminal',
+      },
+    }) });
+
+    expect(clientEvents).toContainEqual(expect.objectContaining({
+      event: 'session_event',
+      payload: expect.objectContaining({ event: 'runtime_request_state_transition' }),
+    }));
+    expect(storageValues.has('pending-terminal-input-test')).toBe(false);
+    expect(timers.find((timer) => timer.delay === 5000)?.cleared).toBe(true);
+    expect(clientEvents.some((event) => (event as { event?: string })?.event === 'web_ui_input_ack_timeout')).toBe(false);
+    client.close();
+  });
+
   it('supports explicit review, retry, and discard transitions without automatic resend', () => {
     const sockets: FakeSocket[] = [];
     const timers: Array<{ id: number; delay: number; handler: () => void; cleared: boolean }> = [];
@@ -629,6 +708,7 @@ describe('agent-web-ui runtime boundaries', () => {
 
   it('preserves Cloudflare replay evidence and remote admission semantics', async () => {
     const sockets: FakeSocket[] = [];
+    const storageValues = new Map<string, string>();
     let inputResponseCount = 0;
     const WebSocketCtor = class extends FakeSocket {
       static OPEN = 1;
@@ -646,7 +726,16 @@ describe('agent-web-ui runtime boundaries', () => {
           status: 200,
           async json() {
             return inputResponseCount === 1
-              ? { status: 'admitted', method: 'conversation.send', request_id: 'remote-admitted-1' }
+              ? {
+                status: 'admitted',
+                method: 'conversation.send',
+                nars_admission: {
+                  status: 'admitted',
+                  request_id: 'remote-admitted-1',
+                  input_event_id: 'input-cloudflare-1',
+                  evidence: { event: 'input_event_queued', request_id: 'remote-admitted-1', input_id: 'carrier-input-1' },
+                },
+              }
               : { status: 'refused', method: 'conversation.send', request_id: 'remote-refused-1', message: 'authority refused input' };
           },
         };
@@ -670,9 +759,9 @@ describe('agent-web-ui runtime boundaries', () => {
       inputEndpoint: 'https://projection.example/input',
       pendingInputStorageKey: 'cloudflare-admission-semantics-test',
       pendingInputStorage: {
-        getItem: () => null,
-        setItem: () => undefined,
-        removeItem: () => undefined,
+        getItem: (key) => storageValues.get(key) ?? null,
+        setItem: (key, value) => { storageValues.set(key, value); },
+        removeItem: (key) => { storageValues.delete(key); },
       },
       WebSocketCtor,
       fetchFn: fetchFn as unknown as typeof fetch,
@@ -703,11 +792,25 @@ describe('agent-web-ui runtime boundaries', () => {
       event: 'projection_input_response',
       request_id: 'cloudflare-admitted',
       authority_request_id: 'remote-admitted-1',
+      input_event_id: 'input-cloudflare-1',
+      input_id: 'carrier-input-1',
       status: 'admitted',
       method: 'conversation.send',
       transport_method: 'session.submit',
       remote_method: 'conversation.send',
       http_ok: true,
+    }));
+
+    sockets[0].emit('message', { data: JSON.stringify({
+      event: 'input_event_queued',
+      request_id: 'remote-admitted-1',
+      event_id: 'input-cloudflare-1',
+      method: 'conversation.send',
+    }) });
+    expect(storageValues.has('cloudflare-admission-semantics-test')).toBe(false);
+    expect(events).not.toContainEqual(expect.objectContaining({
+      event: 'web_ui_input_ack_timeout',
+      request_id: 'cloudflare-admitted',
     }));
 
     expect(client.sendFrame({ id: 'cloudflare-refused', method: 'session.submit', params: { message: 'refuse me' } })).toBe(true);

@@ -234,6 +234,7 @@ export function createNarsClient(options: NarsClientOptions): NarsClientConnecti
     const event = unwrapTransportEvent(message);
     if (!event || typeof event !== 'object') return true;
     const kind = typeof event.event === 'string' ? event.event : null;
+    const requestState = typeof event.request_state === 'string' ? event.request_state.trim().toLowerCase() : '';
     const correlation = inputCorrelationFromEvent(event);
     const pendingMatch = findCorrelatedInput(pendingOperatorInputs.values(), event, { allowUniqueMethod: true });
     const pending = pendingMatch.record as PendingOperatorInput | null;
@@ -245,6 +246,15 @@ export function createNarsClient(options: NarsClientOptions): NarsClientConnecti
         method: correlation.method,
         message: 'The runtime event matched more than one pending input; it was not applied to a browser recovery record.',
       });
+    }
+
+    if (pending && correlation.inputEventId) {
+      mergeInputCorrelation(pending, event, {
+        requestKey: 'request_id',
+        inputEventKey: 'input_event_id',
+        sessionKey: 'session_id',
+      });
+      persistPendingOperatorInputs(pendingInputStorage, pendingInputStorageKey, pendingOperatorInputs.values());
     }
 
     if (kind === 'projection_input_response') {
@@ -264,15 +274,7 @@ export function createNarsClient(options: NarsClientOptions): NarsClientConnecti
       return true;
     }
 
-    if (pending && correlation.inputEventId) {
-      mergeInputCorrelation(pending, event, {
-        requestKey: 'request_id',
-        inputEventKey: 'input_event_id',
-        sessionKey: 'session_id',
-      });
-      persistPendingOperatorInputs(pendingInputStorage, pendingInputStorageKey, pendingOperatorInputs.values());
-    }
-    if (kind === 'session_control_accepted' || kind === 'input_event_queued' || kind === 'input_event_started' || kind === 'input_admitted_to_turn' || kind === 'session_control_rejected' || kind === 'session_control_response' || (kind === 'runtime_request_state_transition' && ['failed', 'rejected'].includes(String(event.request_state ?? '')))) {
+    if (kind === 'session_control_accepted' || kind === 'input_event_queued' || kind === 'input_event_started' || kind === 'input_admitted_to_turn' || kind === 'session_control_rejected' || kind === 'session_control_response' || (kind === 'runtime_request_state_transition' && ['completed', 'failed', 'rejected', 'interrupted'].includes(requestState))) {
       if (pending) {
         if (pending.phase === PENDING_OPERATOR_INPUT_PHASES.TIMED_OUT || pending.phase === PENDING_OPERATOR_INPUT_PHASES.REVIEWING || pending.phase === PENDING_OPERATOR_INPUT_PHASES.RETRIED) {
           emitLocalEvent(options.onEvent, pendingLifecycleEvent('operator_input_late_acknowledged', pending, {

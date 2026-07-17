@@ -190,6 +190,10 @@ export const NARS_CLIENT_EVENT_LABELS = Object.freeze({
   agent_web_ui_help: 'Help',
   agent_web_ui_message: 'Message',
   operator_input_submitted: 'Operator input',
+  session_control_accepted: 'Input accepted',
+  session_control_response: 'Input response',
+  session_control_rejected: 'Input rejected',
+  runtime_request_state_transition: 'Request state',
   conversation_enqueue_requested: 'Input queued',
   authority_source_draining: 'Authority draining',
   authority_source_sealed: 'Authority sealed',
@@ -201,6 +205,9 @@ export const NARS_CLIENT_EVENT_LABELS = Object.freeze({
   authority_source_status: 'Authority status',
   authority_target_status: 'Authority status',
   input_queued_for_turn_boundary: 'Queued input',
+  input_event_queued: 'Input queued',
+  input_event_started: 'Input started',
+  input_event_completed: 'Input complete',
   input_admitted_to_turn: 'Input admitted',
   input_dropped_by_operator: 'Input dropped',
   input_abandoned_on_session_end: 'Input abandoned',
@@ -1009,7 +1016,7 @@ export function classifyNarsClientEventProjection(projection) {
   if (kind === 'operator_input_pending_restored' || kind === 'operator_input_pending_expired' || kind === 'operator_input_discarded' || kind === 'operator_input_reviewed' || kind === 'operator_input_retried' || kind === 'operator_input_late_acknowledged') return 'diagnostics';
   if (kind === 'tool_call' || kind === 'tool_result' || kind === 'turn_failed') return 'operations';
   if (kind === 'session_artifact_registered' || kind === 'session_artifact_read') return 'conversation';
-  if (kind === 'conversation_enqueue_requested' || kind === 'input_queued_for_turn_boundary' || kind === 'input_admitted_to_turn' || kind === 'input_dropped_by_operator' || kind === 'input_abandoned_on_session_end' || kind === 'input_completed') return 'operations';
+  if (kind === 'session_control_accepted' || kind === 'session_control_response' || kind === 'session_control_rejected' || kind === 'runtime_request_state_transition' || kind === 'conversation_enqueue_requested' || kind === 'input_event_queued' || kind === 'input_event_started' || kind === 'input_event_completed' || kind === 'input_queued_for_turn_boundary' || kind === 'input_admitted_to_turn' || kind === 'input_dropped_by_operator' || kind === 'input_abandoned_on_session_end' || kind === 'input_completed') return 'operations';
   if (kind === 'session_health') return 'diagnostics';
   if (kind?.startsWith?.('authority_source_') || kind?.startsWith?.('authority_target_')) return 'operations';
   if (kind === 'session_started' || kind === 'session_closed' || kind === 'session_status' || kind === 'session_recovery' || kind === 'session_operations' || kind === 'session_sync' || kind === 'observer_status' || kind === 'observers_status' || kind === 'carrier_command_result') return 'operations';
@@ -1047,6 +1054,9 @@ function eventTone(kind, event = null) {
   if (kind === 'user_message') return NARS_CLIENT_EVENT_TONES.operator;
   if (kind === 'tool_call' || kind === 'tool_result') return NARS_CLIENT_EVENT_TONES.tool;
   if (kind === 'session_artifact_registered' || kind === 'session_artifact_read') return NARS_CLIENT_EVENT_TONES.status;
+  if (kind === 'session_control_rejected') return NARS_CLIENT_EVENT_TONES.error;
+  if (kind === 'session_control_accepted' || kind === 'session_control_response') return NARS_CLIENT_EVENT_TONES.status;
+  if (kind === 'runtime_request_state_transition') return ['failed', 'rejected', 'interrupted'].includes(String(event?.request_state ?? '').trim().toLowerCase()) ? NARS_CLIENT_EVENT_TONES.error : NARS_CLIENT_EVENT_TONES.status;
   if (kind === 'error' || kind === 'websocket_error' || kind === 'web_ui_decode_error' || kind === 'turn_failed' || kind === 'authority_session_revoked' || kind === 'projection_revoked' || kind === 'mcp_runtime_fault' || kind === 'runtime_projection_failure' || kind === 'runtime_control_input_bridge_error' || kind === 'web_ui_input_ack_timeout' || kind === 'web_ui_input_transport_failed' || kind === 'web_ui_input_ack_ignored' || kind === 'web_ui_input_correlation_ambiguous' || kind === 'web_ui_session_correlation_mismatch') return NARS_CLIENT_EVENT_TONES.error;
   if (kind === 'runtime_intelligence_reconfiguration' || kind === 'provider_runtime_reconfiguration_state_transition') {
     const state = event?.terminal_state ?? event?.reconfiguration_state;
@@ -1083,6 +1093,10 @@ function eventSummary(event, kind) {
   if (kind === 'turn_complete') return event.terminal_state ?? 'turn complete';
   if (kind === 'turn_failed') return errorSummary(event) ?? event.terminal_state ?? 'turn failed';
   if (kind === 'turn_started') return event.turn_id ?? 'turn started';
+  if (kind === 'session_control_accepted') return event.acceptance_state ?? 'accepted';
+  if (kind === 'session_control_response') return event.terminal_state ?? 'completed';
+  if (kind === 'session_control_rejected') return errorSummary(event) ?? event.code ?? 'rejected';
+  if (kind === 'runtime_request_state_transition') return event.request_state ?? event.terminal_state ?? 'request state';
   if (kind === 'conversation_enqueue_requested') return event.delivery_semantics ?? 'queued for next turn';
   if (kind?.startsWith?.('authority_source_') || kind?.startsWith?.('authority_target_')) return authorityTransitionSummary(event, kind);
   if (kind?.startsWith?.('input_')) return `${event.input_event_id ?? event.event_id ?? 'input'}${event.terminal_state ? ` ${event.terminal_state}` : ''}`;

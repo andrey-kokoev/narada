@@ -720,6 +720,10 @@ test('NARS client projection verbosity filters shared event classes', () => {
   const assistant = { event: 'assistant_message', content: 'hello' };
   const toolCall = { event: 'tool_call', tool_name: 'narada-site.whoami' };
   const toolResult = { event: 'tool_result', tool_name: 'narada-site.whoami', status: 'ok' };
+  const inputAccepted = { event: 'session_control_accepted', request_id: 'input-1', method: 'session.submit', acceptance_state: 'accepted' };
+  const inputResponse = { event: 'session_control_response', request_id: 'input-1', method: 'session.submit', terminal_state: 'completed' };
+  const inputRejected = { event: 'session_control_rejected', request_id: 'input-1', method: 'session.submit', code: 'request_dispatch_failed', error: 'provider unavailable' };
+  const requestTransition = { event: 'runtime_request_state_transition', request_id: 'input-1', request_state: 'completed', terminal_state: 'completed' };
   const mcpRuntimeFault = { event: 'mcp_runtime_fault', server_name: 'narada-site', tool_name: 'fixture_fail', error_code: 'fixture_mcp_forced_failure' };
   const projectionFailure = { event: 'runtime_projection_failure', projection: 'health', request_state: 'failed', error: 'session_health_timeout' };
   const turnComplete = { event: 'turn_complete', terminal_state: 'completed' };
@@ -734,6 +738,16 @@ test('NARS client projection verbosity filters shared event classes', () => {
   assert.equal(shouldProjectNarsClientEvent(toolResult, { verbosity: 'conversation' }), false);
   assert.equal(shouldProjectNarsClientEvent(toolCall, { verbosity: 'operations' }), true);
   assert.equal(shouldProjectNarsClientEvent(toolResult, { verbosity: 'operations' }), true);
+  assert.equal(classifyNarsClientEventProjection(projectNarsClientEvent(inputAccepted)), 'operations');
+  assert.equal(classifyNarsClientEventProjection(projectNarsClientEvent(inputResponse)), 'operations');
+  assert.equal(classifyNarsClientEventProjection(projectNarsClientEvent(inputRejected)), 'operations');
+  assert.equal(classifyNarsClientEventProjection(projectNarsClientEvent(requestTransition)), 'operations');
+  assert.equal(projectNarsClientEvent(inputAccepted).summary, 'accepted');
+  assert.equal(projectNarsClientEvent(inputResponse).summary, 'completed');
+  assert.equal(projectNarsClientEvent(inputRejected).summary, 'provider unavailable');
+  assert.equal(projectNarsClientEvent(requestTransition).summary, 'completed');
+  assert.equal(shouldProjectNarsClientEvent(inputAccepted, { verbosity: 'conversation' }), false);
+  assert.equal(shouldProjectNarsClientEvent(inputAccepted, { verbosity: 'operations' }), true);
   assert.equal(shouldProjectNarsClientEvent(assistant, { verbosity: 'diagnostics' }), false);
   assert.equal(shouldProjectNarsClientEvent(toolCall, { verbosity: 'diagnostics' }), false);
   assert.equal(shouldProjectNarsClientEvent(toolResult, { verbosity: 'diagnostics' }), false);
