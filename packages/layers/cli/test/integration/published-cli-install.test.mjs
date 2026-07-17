@@ -169,6 +169,12 @@ test('published CLI installs into a blank Windows profile and provisions the Use
     assert.equal(doctorPayload.summary.fail, 0);
     assert.equal(doctorPayload.installation_profile, 'minimal');
     assert.ok(doctorPayload.provider_readiness.some((row) => row.provider === 'demo' && row.status === 'ready'));
+    const codexReadiness = doctorPayload.provider_readiness.find((row) => row.provider === 'codex-subscription');
+    assert.equal(codexReadiness?.status, 'needs_setup');
+    const apiReadiness = doctorPayload.provider_readiness.filter((row) => row.credential_kind === 'api_key_secret');
+    assert.ok(apiReadiness.length > 0);
+    assert.ok(apiReadiness.every((row) => row.status !== 'ready'));
+    assert.ok(doctorPayload.provider_readiness.every((row) => !Object.hasOwn(row, 'value')));
 
     const demo = run(process.execPath, [
       installedCliEntrypoint,
