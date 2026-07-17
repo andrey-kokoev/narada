@@ -14,7 +14,7 @@ const packageManagerEntrypoint = process.env.npm_execpath ?? null;
 const packageManagerUsesNode = packageManagerEntrypoint !== null && /\.(?:cjs|mjs|js)$/i.test(packageManagerEntrypoint);
 const packageManager = packageManagerEntrypoint
   ? packageManagerUsesNode ? process.execPath : packageManagerEntrypoint
-  : process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
+  : 'pnpm';
 
 function packageManagerArgs(args) {
   return packageManagerUsesNode ? [packageManagerEntrypoint, ...args] : args;
