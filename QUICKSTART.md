@@ -6,11 +6,51 @@ For the full bootstrap contract (artifact expectations, validation gates, and pa
 
 ## Install
 
-```bash
-pnpm add -g @narada2/cli
+### Windows User Site (recommended first install)
+
+Prerequisite: Node.js 22 or newer.
+
+Install the published CLI, provision the User Site, then run the bounded bootstrap check:
+
+```powershell
+npm install --global @narada2/cli
+narada install windows-user-site
+narada doctor --bootstrap
 ```
 
-Or, if working from source:
+Start the credential-free demonstration first, or start the resident assistant:
+
+```powershell
+narada onboarding start --platform windows --scope user-site --demo
+narada onboarding start --platform windows --scope user-site
+```
+
+The install command places the package-owned launcher at
+`%USERPROFILE%\Narada\Start-NaradaWorkspace.ps1` and the provider-secret helpers under
+`%USERPROFILE%\Narada\tools\operator-secrets`.
+
+For a live provider, use `codex login` for the Codex subscription path, or configure an API provider with the installed
+PowerShell helper. The helper uses the Windows SecretManagement/SecretStore vault and never prints the secret:
+
+```powershell
+Pwsh -File "$env:USERPROFILE\Narada\tools\operator-secrets\Set-NaradaProviderSecret.ps1" -Provider kimi-code-api -InstallModules
+```
+
+Then launch through the User Site launcher or the interactive launcher UI:
+
+```powershell
+Pwsh -File "$env:USERPROFILE\Narada\Start-NaradaWorkspace.ps1" -InteractiveSelectionUI
+```
+
+If the installation is incomplete, `narada doctor --bootstrap` reports one repair command:
+
+```powershell
+narada install windows-user-site --repair
+```
+
+### Advanced: source checkout (contributors)
+
+The source checkout path is for Narada development, not required for ordinary User Site use:
 
 ```bash
 git clone https://github.com/andrey-kokoev/narada.git

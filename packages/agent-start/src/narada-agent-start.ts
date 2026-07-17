@@ -81,6 +81,15 @@ import { AgentStartResultContractError, assertAgentStartResultV0 } from './launc
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const packageRootDir = join(__dirname, '..');
 const naradaProperRoot = join(packageRootDir, '..', '..');
+const agentStartRequire = createRequire(import.meta.url);
+
+function resolvePackagedModule(specifier: string): string | null {
+  try {
+    return agentStartRequire.resolve(specifier);
+  } catch {
+    return null;
+  }
+}
 
 const SITE_ENV_BINDINGS = new Map();
 
@@ -91,12 +100,12 @@ const NARADA_PROPER_ROOT = process.env.NARADA_PROPER_ROOT ?? naradaProperRoot;
 const candidateSiteToolsRoot = args.site_tools_root ?? join(rootDir, 'tools');
 const siteLocalToolsRoot = join(siteNaradaRoot(rootDir), 'tools');
 const packagedCommonToolsRoot = join(NARADA_PROPER_ROOT, 'packages', 'site-common-tools', 'src');
-let packagedAgentContextSessionStartPath;
-try {
-  packagedAgentContextSessionStartPath = require.resolve('@narada2/agent-context-mcp/session-start');
-} catch {
-  packagedAgentContextSessionStartPath = join(NARADA_PROPER_ROOT, 'packages', 'agent-context-tools', 'src', 'session-start.mjs');
-}
+const packagedAgentContextSessionStartPath = resolvePackagedModule('@narada2/agent-context-mcp/session-start')
+  ?? join(NARADA_PROPER_ROOT, 'packages', 'agent-context-tools', 'src', 'session-start.mjs');
+const packagedWriteFileModulePath = resolvePackagedModule('@narada2/site-common-tools/incubation/write-file-utf8.mjs')
+  ?? join(packagedCommonToolsRoot, 'incubation', 'write-file-utf8.mjs');
+const packagedMcpFabricModulePath = resolvePackagedModule('@narada2/mcp-fabric')
+  ?? join(NARADA_PROPER_ROOT, 'packages', 'mcp-fabric', 'src', 'mcp-fabric.mjs');
 const commonToolsRoot = existsSync(join(candidateSiteToolsRoot, 'incubation', 'write-file-utf8.mjs'))
   ? candidateSiteToolsRoot
   : existsSync(join(siteLocalToolsRoot, 'incubation', 'write-file-utf8.mjs'))
@@ -108,9 +117,15 @@ const explicitAgentContextSessionStartPath = args.site_tools_root
 const agentContextSessionStartPath = explicitAgentContextSessionStartPath && existsSync(explicitAgentContextSessionStartPath)
   ? explicitAgentContextSessionStartPath
   : packagedAgentContextSessionStartPath;
-const { writeJsonFile } = await import(pathToFileURL(join(commonToolsRoot, 'incubation', 'write-file-utf8.mjs')));
+const writeFileModulePath = existsSync(join(commonToolsRoot, 'incubation', 'write-file-utf8.mjs'))
+  ? join(commonToolsRoot, 'incubation', 'write-file-utf8.mjs')
+  : packagedWriteFileModulePath;
+const { writeJsonFile } = await import(pathToFileURL(writeFileModulePath));
 const { beginCodexSessionAdmission, getCodexSessionAdmission, materializeAgentSessionStart } = await import(pathToFileURL(agentContextSessionStartPath));
-const { McpFabricError, loadSiteMcpFabric, mcpServerNames, projectFabricForAgentTui, projectFabricForClaudeCode, projectFabricForCodex } = await import(pathToFileURL(join(NARADA_PROPER_ROOT, 'packages', 'mcp-fabric', 'src', 'mcp-fabric.mjs')));
+const mcpFabricModulePath = existsSync(join(NARADA_PROPER_ROOT, 'packages', 'mcp-fabric', 'src', 'mcp-fabric.mjs'))
+  ? join(NARADA_PROPER_ROOT, 'packages', 'mcp-fabric', 'src', 'mcp-fabric.mjs')
+  : packagedMcpFabricModulePath;
+const { McpFabricError, loadSiteMcpFabric, mcpServerNames, projectFabricForAgentTui, projectFabricForClaudeCode, projectFabricForCodex } = await import(pathToFileURL(mcpFabricModulePath));
 const runtimeInput = args.runtime ?? null;
 const jsonOutput = !!args.json;
 const jsonOutputFile = args.json_output_file ? resolve(String(args.json_output_file)) : null;

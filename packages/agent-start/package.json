@@ -22,6 +22,7 @@
   },
   "exports": {
     ".": "./src/narada-agent-start.ts",
+    "./narada-agent-start": "./src/narada-agent-start.ts",
     "./launch-result-v0-contract": {
       "types": "./src/launch-result-v0-contract.d.mts",
       "import": "./src/launch-result-v0-contract.mjs"

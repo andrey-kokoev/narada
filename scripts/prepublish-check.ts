@@ -100,7 +100,7 @@ function runPackSmokeCheck(): CheckResult {
         return {
           name: 'Pack smoke check',
           passed: false,
-          error: `Failed to pack ${pkgPath}`,
+          error: `Failed to pack ${pkgPath}: ${result.output.slice(-2000)}`,
         };
       }
 
@@ -128,6 +128,25 @@ function runPackSmokeCheck(): CheckResult {
             name: 'Pack smoke check',
             passed: false,
             error: `CLI tarball failed isolated installation: ${install.output.slice(-2000)}`,
+          };
+        }
+
+        const installedCliEntrypoint = join(consumer, 'node_modules', '@narada2', 'cli', 'dist', 'main.js');
+        const consumerSiteRoot = mkdtempSync(join(tmp, 'cli-consumer-site-'));
+        const bootstrap = runCommand(
+          `${JSON.stringify(process.execPath)} ${JSON.stringify(installedCliEntrypoint)} install windows-user-site --site-root ${JSON.stringify(consumerSiteRoot)} --format json`,
+          consumer,
+        );
+        const requiredAssets = [
+          join(consumerSiteRoot, 'Start-NaradaWorkspace.ps1'),
+          join(consumerSiteRoot, 'tools', 'operator-secrets', 'Set-NaradaProviderSecret.ps1'),
+          join(consumerSiteRoot, 'tools', 'operator-secrets', 'Test-NaradaProviderSecrets.ps1'),
+        ];
+        if (!bootstrap.success || !requiredAssets.every((path) => existsSync(path))) {
+          return {
+            name: 'Pack smoke check',
+            passed: false,
+            error: `CLI tarball installed but did not complete the published User Site boundary: ${bootstrap.output.slice(-2000)}`,
           };
         }
       }

@@ -159,11 +159,11 @@ interface OnboardingResult {
   next_action: string;
 }
 
-function userSiteRoot(input?: string): string {
+export function userSiteRoot(input?: string): string {
   return resolve(input ?? process.env.NARADA_USER_SITE_ROOT ?? join(homedir(), 'Narada'));
 }
 
-function userSiteRegistryPath(root: string, input?: string): string {
+export function userSiteRegistryPath(root: string, input?: string): string {
   if (input) return resolve(input);
   const configuredUserSiteRoot = process.env.NARADA_USER_SITE_ROOT ? resolve(process.env.NARADA_USER_SITE_ROOT) : null;
   return configuredUserSiteRoot && configuredUserSiteRoot.toLowerCase() === root.toLowerCase()
@@ -392,13 +392,15 @@ function userSiteLaunchRegistryText(root: string): string {
   ].join('\n') + '\n';
 }
 
-async function ensureUserSiteProvisioned(
+export async function ensureUserSiteProvisioned(
   root: string,
   registryPath: string,
   context: CommandContext,
 ): Promise<{ site_created: boolean; launch_registry_created: boolean }> {
   let siteCreated = false;
-  if (!existsSync(root)) {
+  // The install target may already exist as an empty directory. The Site
+  // contract is established by config.json, not by directory existence.
+  if (!existsSync(join(root, 'config.json'))) {
     const { sitesInitCommand } = await import('./sites.js');
     const initialized = await sitesInitCommand(defaultUserSiteId(root), {
       substrate: 'windows-native',

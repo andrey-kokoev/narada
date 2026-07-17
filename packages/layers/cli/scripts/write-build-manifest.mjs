@@ -1,4 +1,4 @@
-import { copyFileSync, mkdirSync, writeFileSync } from 'node:fs';
+import { copyFileSync, cpSync, mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { BUILD_MANIFEST_PATH, BUILD_MANIFEST_SCHEMA, computeCliBuildSourceHash } from './build-manifest-lib.mjs';
 import { writeLaunchArtifactManifest } from './launch-artifact-lib.mjs';
@@ -9,6 +9,9 @@ const workbenchSourcePath = join(packageRoot, 'src', 'ui', 'workbench.html');
 const workbenchTargetPath = join(packageRoot, 'dist', 'ui', 'workbench.html');
 mkdirSync(dirname(workbenchTargetPath), { recursive: true });
 copyFileSync(workbenchSourcePath, workbenchTargetPath);
+const windowsAssetsSourcePath = join(packageRoot, 'src', 'assets', 'windows');
+const windowsAssetsTargetPath = join(packageRoot, 'dist', 'assets', 'windows');
+cpSync(windowsAssetsSourcePath, windowsAssetsTargetPath, { recursive: true });
 const current = computeCliBuildSourceHash(siteRoot);
 writeLaunchArtifactManifest({ siteRoot, target: 'narada-cli', packageRoot });
 const manifestPath = join(siteRoot, BUILD_MANIFEST_PATH);

@@ -118,6 +118,41 @@ Status: target UX contract with the CLI first slice and User Site browser onboar
 
 The default path is User Site first. A first-time user should become productive without creating a Project Site, naming a PC Site, registering a remote Site, or understanding the full Site topology.
 
+### Supported Install Boundary
+
+The supported first-time Windows install boundary is the published `@narada2/cli` package. A source checkout is a contributor path and is not required for ordinary User Site use.
+
+Prerequisite: Node.js 22 or newer.
+
+```powershell
+npm install --global @narada2/cli
+narada install windows-user-site
+narada doctor --bootstrap
+```
+
+The install command provisions the User Site launch registry, the package-owned PowerShell launcher, and the provider-secret helpers under `%USERPROFILE%\Narada`. `narada doctor --bootstrap` is the bounded readiness check; when repair is needed it returns the single repair command:
+
+```powershell
+narada install windows-user-site --repair
+```
+
+Provider setup is an explicit branch, not an implicit install side effect:
+
+| Path | Credential posture | Next command |
+| --- | --- | --- |
+| Demo | No credentials; synthetic data | `narada onboarding start --platform windows --scope user-site --demo` |
+| Codex subscription | Local Codex authentication | `codex login`, then `narada doctor --bootstrap` |
+| API provider | User Site SecretManagement/SecretStore entry | `Pwsh -File "$env:USERPROFILE\Narada\tools\operator-secrets\Set-NaradaProviderSecret.ps1" -Provider <provider> -InstallModules` |
+
+API provider readiness can be inspected without printing secrets:
+
+```powershell
+Pwsh -File "$env:USERPROFILE\Narada\tools\operator-secrets\Test-NaradaProviderSecrets.ps1"
+narada doctor --bootstrap
+```
+
+The first-use page must preserve these branches and must not imply that a source checkout, a Site-specific MCP file, or an API key is required for the credential-free demo.
+
 ### Front Door
 
 Once the CLI is available, the canonical command is:

@@ -57,6 +57,7 @@ import { registerQualificationCommands } from './commands/qualification-register
 import { registerSiteTelemetryCommands } from './commands/site-telemetry-register.js';
 import { registerSiteRegistryCommands } from './commands/site-registry-register.js';
 import { registerOnboardingCommands } from './commands/onboarding-register.js';
+import { registerInstallCommands } from './commands/install-register.js';
 import { registerHistoryCommands } from './commands/history-register.js';
 
 loadEnvFile('./.env');
@@ -108,6 +109,7 @@ registerQualificationCommands(program);
 registerSiteTelemetryCommands(program);
 registerSiteRegistryCommands(program);
 registerOnboardingCommands(program);
+registerInstallCommands(program);
 
 const taskCmd = program
   .command('task')
