@@ -1,4 +1,6 @@
+import { closeSync, mkdirSync, openSync } from 'node:fs';
 import { appendFile, readFile, unlink } from 'node:fs/promises';
+import { dirname } from 'node:path';
 import { runGovernedCommandSync, spawnHiddenPostureProcess } from '@narada2/process-launch-posture';
 import type { WorkspaceLaunchProcessLaunch } from './workspace-launch-types.js';
 import type { WorkspaceLaunchRollbackEvidence, WorkspaceLaunchRollbackTargetEvidence } from './workspace-launch-contracts.js';
@@ -8,6 +10,7 @@ const ownedProcessRegistry = new Map<number, WorkspaceLaunchProcessLaunch>();
 export interface WorkspaceLaunchProcessIdentity {
   agent_id?: string | null;
   launch_session_id?: string | null;
+  nars_session_id?: string | null;
   launch_binding_path?: string | null;
   readiness_path?: string | null;
 }
@@ -78,7 +81,7 @@ function workspaceLaunchProcessMatchesPersistedLaunch(launch: WorkspaceLaunchPro
   return markers.some((marker) => normalizedCommandLine.includes(marker));
 }
 
-function workspaceLaunchReadProcessCommandLine(pid: number): string | null {
+export function workspaceLaunchReadProcessCommandLine(pid: number): string | null {
   try {
     if (process.platform !== 'win32') {
       const result = runGovernedCommandSync('ps', ['-p', String(pid), '-o', 'args='], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
@@ -126,6 +129,7 @@ export async function workspaceLaunchStartHiddenRuntimeHost(
       owner_ref: ownerRef,
       agent_id: identity.agent_id ?? null,
       launch_session_id: identity.launch_session_id ?? null,
+      nars_session_id: identity.nars_session_id ?? null,
       launch_binding_path: identity.launch_binding_path ?? null,
       readiness_path: identity.readiness_path ?? null,
       readiness: 'not_checked',
@@ -161,6 +165,7 @@ export async function workspaceLaunchStartHiddenRuntimeHost(
     owner_ref: ownerRef,
     agent_id: identity.agent_id ?? null,
     launch_session_id: identity.launch_session_id ?? null,
+    nars_session_id: identity.nars_session_id ?? null,
     launch_binding_path: null,
     readiness_path: null,
     readiness: 'spawned',
@@ -191,60 +196,72 @@ export async function workspaceLaunchStartHiddenProjectionHost(command: string |
       if (code !== 'ENOENT') throw error;
     }
   }
-  const child = spawnHiddenPostureProcess(hostCommand, hostArgs, {
-    posture: 'operator_projection_host',
-    cwd,
-    detached: true,
-    stdio: 'ignore',
-    env: process.env,
-  });
-  await new Promise<void>((resolvePromise, rejectPromise) => {
-    child.once('error', rejectPromise);
-    child.once('spawn', () => resolvePromise());
-  });
-  child.unref();
-  const pid = typeof child.pid === 'number' ? child.pid : null;
-  const provisionalLaunch: WorkspaceLaunchProcessLaunch = {
-    posture: 'operator_projection_host',
-    execution_authority: structuredArgv ? 'structured_argv' : 'projection_shell_string',
-    command: hostCommand,
-    args: redactWorkspaceLaunchArgv(hostArgs),
-    cwd,
-    detached: true,
-    stdio: 'ignore',
-    windowsHide: true,
-    pid,
-    owner_ref: ownerRef,
-    agent_id: identity.agent_id ?? null,
-    launch_session_id: identity.launch_session_id ?? null,
-    launch_binding_path: identity.launch_binding_path ?? null,
-    readiness_path: identity.readiness_path ?? null,
-    readiness: pid === null ? 'not_checked' : 'spawned',
-    readiness_checked_at: null,
-  };
-  if (provisionalLaunch.pid !== null && ownerRef) ownedProcessRegistry.set(provisionalLaunch.pid, provisionalLaunch);
-  let readiness: 'spawned_and_alive' | 'not_checked' = 'not_checked';
+  const captureLog = process.env.NARADA_WORKSPACE_LAUNCH_HIDDEN_PROJECTION_LOG;
+  let captureFd: number | null = null;
   try {
-    readiness = pid === null
-      ? 'not_checked'
-      : await workspaceLaunchWaitForProcessReadiness(pid, identity.readiness_path, identity.launch_session_id);
-  } catch (error) {
-    const cleanup = provisionalLaunch.pid !== null && ownerRef
-      ? terminateOwnedProcess(provisionalLaunch)
-      : { status: 'refused' as const };
-    throw new WorkspaceLaunchProcessReadinessError(
-      error instanceof Error ? error.message : 'workspace_launch_projection_process_not_ready',
-      provisionalLaunch,
-      cleanup.status,
-    );
+    if (captureLog) {
+      mkdirSync(dirname(captureLog), { recursive: true });
+      captureFd = openSync(captureLog, 'a');
+    }
+    const child = spawnHiddenPostureProcess(hostCommand, hostArgs, {
+      posture: 'operator_projection_host',
+      cwd,
+      detached: true,
+      stdio: captureFd === null ? 'ignore' : ['ignore', captureFd, captureFd],
+      env: process.env,
+    });
+    await new Promise<void>((resolvePromise, rejectPromise) => {
+      child.once('error', rejectPromise);
+      child.once('spawn', () => resolvePromise());
+    });
+    child.unref();
+    const pid = typeof child.pid === 'number' ? child.pid : null;
+    const provisionalLaunch: WorkspaceLaunchProcessLaunch = {
+      posture: 'operator_projection_host',
+      execution_authority: structuredArgv ? 'structured_argv' : 'projection_shell_string',
+      command: hostCommand,
+      args: redactWorkspaceLaunchArgv(hostArgs),
+      cwd,
+      detached: true,
+      stdio: captureFd === null ? 'ignore' : 'captured',
+      windowsHide: true,
+      pid,
+      owner_ref: ownerRef,
+      agent_id: identity.agent_id ?? null,
+      launch_session_id: identity.launch_session_id ?? null,
+      nars_session_id: identity.nars_session_id ?? null,
+      launch_binding_path: identity.launch_binding_path ?? null,
+      readiness_path: identity.readiness_path ?? null,
+      readiness: pid === null ? 'not_checked' : 'spawned',
+      readiness_checked_at: null,
+      ...(captureLog ? { capture_log: captureLog } : {}),
+    };
+    if (provisionalLaunch.pid !== null && ownerRef) ownedProcessRegistry.set(provisionalLaunch.pid, provisionalLaunch);
+    let readiness: 'spawned_and_alive' | 'not_checked' = 'not_checked';
+    try {
+      readiness = pid === null
+        ? 'not_checked'
+        : await workspaceLaunchWaitForProcessReadiness(pid, identity.readiness_path, identity.nars_session_id ?? null);
+    } catch (error) {
+      const cleanup = provisionalLaunch.pid !== null && ownerRef
+        ? terminateOwnedProcess(provisionalLaunch)
+        : { status: 'refused' as const };
+      throw new WorkspaceLaunchProcessReadinessError(
+        error instanceof Error ? error.message : 'workspace_launch_projection_process_not_ready',
+        provisionalLaunch,
+        cleanup.status,
+      );
+    }
+    const launch: WorkspaceLaunchProcessLaunch = {
+      ...provisionalLaunch,
+      readiness,
+      readiness_checked_at: pid === null ? null : new Date().toISOString(),
+    };
+    if (launch.pid !== null && ownerRef) ownedProcessRegistry.set(launch.pid, launch);
+    return launch;
+  } finally {
+    if (captureFd !== null) closeSync(captureFd);
   }
-  const launch: WorkspaceLaunchProcessLaunch = {
-    ...provisionalLaunch,
-    readiness,
-    readiness_checked_at: pid === null ? null : new Date().toISOString(),
-  };
-  if (launch.pid !== null && ownerRef) ownedProcessRegistry.set(launch.pid, launch);
-  return launch;
 }
 
 export function workspaceLaunchTerminateProcess(launch: WorkspaceLaunchProcessLaunch): 'terminated' | 'not_running' | 'refused' {

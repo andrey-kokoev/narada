@@ -5,7 +5,12 @@ import { siteAuthorityRootFromSiteRoot } from '@narada2/site-paths';
 import type { WorkspaceLaunchPlanOptions, WorkspaceLaunchProcessLaunch } from './workspace-launch-types.js';
 import { workspaceLaunchId } from './workspace-launch-support.js';
 import { workspaceLaunchUserSiteRoot } from './workspace-launch-session-store.js';
-import { redactWorkspaceLaunchArgv, redactWorkspaceLaunchCommand, redactWorkspaceLaunchText } from './workspace-launch-process.js';
+import {
+  redactWorkspaceLaunchArgv,
+  redactWorkspaceLaunchCommand,
+  redactWorkspaceLaunchText,
+  workspaceLaunchReadProcessCommandLine,
+} from './workspace-launch-process.js';
 
 export const WORKSPACE_LAUNCH_EXECUTION_ATTEMPT_SCHEMA = 'narada.workspace_launch.execution_attempt.v1' as const;
 
@@ -24,9 +29,22 @@ export type WorkspaceLaunchExecutionAttemptState =
 export interface WorkspaceLaunchExecutionAttemptLease {
   lease_id: string;
   owner_pid: number | null;
+  owner_command_line?: string | null;
   acquired_at: string;
   heartbeat_at: string;
   expires_at: string;
+}
+
+function normalizeProcessIdentity(value: string): string {
+  return redactWorkspaceLaunchText(value).replace(/[\\/]+/g, '/').replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
+function looksLikeWorkspaceLaunchOwner(commandLine: string): boolean {
+  const normalized = normalizeProcessIdentity(commandLine);
+  const launcherCommand = /(?:^|[ /\\])start-naradaworkspace\.ps1(?:\s|$)/i.test(normalized)
+    || /(?:^|[ /\\])launcher\s+workspace-launch(?:\s|$)/i.test(normalized);
+  return /(?:^|[ /\\])(?:node|node\.exe|pnpm|pnpm\.cmd|pwsh|pwsh\.exe)(?:\s|$)/i.test(normalized)
+    && launcherCommand;
 }
 
 export const WORKSPACE_LAUNCH_EXECUTION_LEASE_MS = 30_000;
@@ -144,6 +162,14 @@ export async function writeWorkspaceLaunchExecutionAttempt(
       ...record.terminal_handoff,
       wt_args: redactWorkspaceLaunchArgv(record.terminal_handoff.wt_args),
     },
+    lease: record.lease
+      ? {
+        ...record.lease,
+        owner_command_line: record.lease.owner_command_line
+          ? redactWorkspaceLaunchText(record.lease.owner_command_line)
+          : record.lease.owner_command_line,
+      }
+      : record.lease,
     failure: record.failure
       ? { ...record.failure, message: redactWorkspaceLaunchText(record.failure.message), required_next_step: redactWorkspaceLaunchText(record.failure.required_next_step) }
       : null,
@@ -238,9 +264,25 @@ export function workspaceLaunchExecutionAttemptLeaseIsStale(
 ): boolean {
   const lease = record.lease;
   if (!lease) return true;
-  if (lease.owner_pid === process.pid) return false;
+  if (lease.owner_pid === process.pid) {
+    const observedCommandLine = workspaceLaunchReadProcessCommandLine(process.pid);
+    if (observedCommandLine && lease.owner_command_line) {
+      return normalizeProcessIdentity(observedCommandLine) !== normalizeProcessIdentity(lease.owner_command_line);
+    }
+    if (observedCommandLine && !looksLikeWorkspaceLaunchOwner(observedCommandLine)) return true;
+    return false;
+  }
   if (Date.parse(lease.expires_at) > now) return false;
-  if (lease.owner_pid && isProcessAlive(lease.owner_pid)) return false;
+  if (lease.owner_pid && isProcessAlive(lease.owner_pid)) {
+    const observedCommandLine = workspaceLaunchReadProcessCommandLine(lease.owner_pid);
+    if (observedCommandLine && lease.owner_command_line) {
+      return normalizeProcessIdentity(observedCommandLine) !== normalizeProcessIdentity(lease.owner_command_line);
+    }
+    // Legacy attempts did not persist an owner command line. Reject obvious PID
+    // reuse while remaining conservative when process identity is unavailable.
+    if (observedCommandLine && !looksLikeWorkspaceLaunchOwner(observedCommandLine)) return true;
+    return false;
+  }
   return true;
 }
 
@@ -248,6 +290,7 @@ function createLease(now: string): WorkspaceLaunchExecutionAttemptLease {
   return {
     lease_id: workspaceLaunchId('lease'),
     owner_pid: process.pid,
+    owner_command_line: workspaceLaunchReadProcessCommandLine(process.pid),
     acquired_at: now,
     heartbeat_at: now,
     expires_at: new Date(Date.parse(now) + WORKSPACE_LAUNCH_EXECUTION_LEASE_MS).toISOString(),
@@ -255,7 +298,14 @@ function createLease(now: string): WorkspaceLaunchExecutionAttemptLease {
 }
 
 function refreshLease(lease: WorkspaceLaunchExecutionAttemptLease | undefined, now: string): WorkspaceLaunchExecutionAttemptLease {
-  if (!lease) return { ...createLease(now), owner_pid: null, lease_id: workspaceLaunchId('legacy-lease') };
+  if (!lease) {
+    return {
+      ...createLease(now),
+      owner_pid: null,
+      owner_command_line: null,
+      lease_id: workspaceLaunchId('legacy-lease'),
+    };
+  }
   return {
     ...lease,
     owner_pid: lease.owner_pid ?? process.pid,
@@ -332,6 +382,7 @@ function isLease(value: unknown): value is WorkspaceLaunchExecutionAttemptLease 
   const lease = value as Partial<WorkspaceLaunchExecutionAttemptLease>;
   return typeof lease.lease_id === 'string'
     && (lease.owner_pid === null || (typeof lease.owner_pid === 'number' && Number.isInteger(lease.owner_pid) && lease.owner_pid > 0))
+    && (lease.owner_command_line === undefined || lease.owner_command_line === null || typeof lease.owner_command_line === 'string')
     && isIsoDate(lease.acquired_at)
     && isIsoDate(lease.heartbeat_at)
     && isIsoDate(lease.expires_at);

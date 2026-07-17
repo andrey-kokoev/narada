@@ -152,6 +152,16 @@ export async function executeWorkspaceLaunchPlan(
               'Regenerate the launch plan with agent-web-ui admitted as a hidden projection.',
             );
           }
+          const attachedSessionId = attachment.sessions.find((session) => (
+            session.launch_session_id === agent.launch_session_id
+          ))?.session_id;
+          if (!attachedSessionId) {
+            throw new WorkspaceLaunchContractError(
+              'workspace_launch_projection_session_id_missing',
+              `The exact NARS session id is missing for ${agent.agent}; the Web UI projection cannot be correlated safely.`,
+              'Retry after the runtime attachment evidence contains the exact NARS session id.',
+            );
+          }
           try {
             hiddenProjectionLaunches.push(await workspaceLaunchStartHiddenProjectionHost(
               projectionCommand,
@@ -160,6 +170,7 @@ export async function executeWorkspaceLaunchPlan(
               {
                 agent_id: agent.agent,
                 launch_session_id: agent.launch_session_id,
+                nars_session_id: attachedSessionId,
                 launch_binding_path: agent.operator_projection_launch_binding?.path ?? null,
                 readiness_path: agent.operator_projection_launch_binding?.path
                   ? workspaceLaunchProjectionReadinessPath(agent.operator_projection_launch_binding.path)
@@ -167,6 +178,8 @@ export async function executeWorkspaceLaunchPlan(
               },
             ));
           } catch (projectionError) {
+            // A readiness failure may already have cleaned the projection child. Only
+            // carry it into outer rollback when that cleanup was explicitly refused.
             if (projectionError instanceof WorkspaceLaunchProcessReadinessError
               && projectionError.cleanup_status === 'refused') {
               hiddenProjectionLaunches.push(projectionError.launch);

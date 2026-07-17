@@ -9,6 +9,7 @@ import {
   readWorkspaceLaunchExecutionAttempt,
   writeWorkspaceLaunchExecutionAttempt,
   updateWorkspaceLaunchExecutionAttempt,
+  workspaceLaunchExecutionAttemptLeaseIsStale,
   workspaceLaunchExecutionAttemptPath,
 } from '../../src/commands/workspace-launch-execution-attempt-store.js';
 
@@ -213,6 +214,31 @@ describe('workspace launch execution attempts', () => {
       else process.env.NARADA_USER_SITE_ROOT = previous;
       await rm(root, { recursive: true, force: true });
     }
+  });
+
+  it('treats an expired lease with a reused PID as stale when command identity changes', () => {
+    expect(workspaceLaunchExecutionAttemptLeaseIsStale({
+      lease: {
+        lease_id: 'pid-reuse-test',
+        owner_pid: process.ppid,
+        owner_command_line: 'C:/Windows/System32/conhost.exe 0x4',
+        acquired_at: new Date(0).toISOString(),
+        heartbeat_at: new Date(0).toISOString(),
+        expires_at: new Date(0).toISOString(),
+      },
+    } as never)).toBe(true);
+  });
+
+  it('treats a legacy lease on the current reused PID as stale for a non-launch process', () => {
+    expect(workspaceLaunchExecutionAttemptLeaseIsStale({
+      lease: {
+        lease_id: 'legacy-pid-reuse-test',
+        owner_pid: process.pid,
+        acquired_at: new Date(0).toISOString(),
+        heartbeat_at: new Date(0).toISOString(),
+        expires_at: new Date(0).toISOString(),
+      },
+    } as never)).toBe(true);
   });
 
   it('keeps a requested close pending until a later observation proves the session is gone', async () => {
