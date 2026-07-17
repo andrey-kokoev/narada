@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 export default defineConfig({
   root: 'src',
-  base: '/console/registry/',
+  base: '/console/',
   plugins: [vue(), tailwindcss()],
   build: {
     outDir: '../dist',

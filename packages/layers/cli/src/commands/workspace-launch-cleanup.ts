@@ -27,6 +27,7 @@ export async function workspaceLaunchReapStaleSessionOwnedDescendants(
   const siteRoots = workspaceLaunchSiteRootsForSelection(selection, records);
   const attempted = new Set<string>();
   let scanned = 0;
+  let cleanupRequested = 0;
   for (const siteRoot of siteRoots) {
     try {
       const discovery = discoverNarsSessions({ siteRoot });
@@ -36,13 +37,41 @@ export async function workspaceLaunchReapStaleSessionOwnedDescendants(
         if (!workspaceLaunchSessionMatchesSelection(normalized, selection)) continue;
         if (!workspaceLaunchSessionOwnedCleanupAllowed(normalized)) continue;
         if (!workspaceLaunchSessionIsTerminalForCleanup(normalized)) continue;
-        await workspaceLaunchRequestStaleSessionCleanup(normalized, attempted);
+        const cleanup = await workspaceLaunchRequestStaleSessionCleanup(normalized, attempted);
+        if (cleanup.status === 'requested') cleanupRequested += 1;
       }
     } catch {
       // Reaper preflight is best-effort; unreadable indexes must not block a fresh launch.
     }
   }
-  return { scanned, cleanup_requested: attempted.size };
+  return { scanned, cleanup_requested: cleanupRequested };
+}
+
+function workspaceLaunchProcessMatchesSession(pid: number, session: NarsSessionObservation): boolean {
+  const launchSessionId = workspaceLaunchSessionLaunchSessionId(session);
+  const siteRoot = workspaceLaunchString(session.site_root ?? session.record?.site_root);
+  if (!launchSessionId && !siteRoot) return false;
+  try {
+    if (process.platform !== 'win32') {
+      const result = runGovernedCommandSync('ps', ['-p', String(pid), '-o', 'args='], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+      const commandLine = String(result.stdout ?? '').toLowerCase();
+      return launchSessionId
+        ? commandLine.includes(launchSessionId.toLowerCase())
+        : Boolean(siteRoot && commandLine.includes(siteRoot.replace(/[\\/]+/g, '/').toLowerCase()));
+    }
+    const query = `$p=Get-CimInstance Win32_Process -Filter \"ProcessId = ${pid}\"; if ($p) { $p.CommandLine }`;
+    const result = runGovernedCommandSync('pwsh', ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', query], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+    const commandLine = String(result.stdout ?? '').toLowerCase();
+    const normalizedSiteRoot = siteRoot?.replace(/[\\/]+/g, '/').toLowerCase();
+    return launchSessionId
+      ? commandLine.includes(launchSessionId.toLowerCase())
+      : Boolean(normalizedSiteRoot && commandLine.includes(normalizedSiteRoot));
+  } catch {
+    return false;
+  }
 }
 
 export async function workspaceLaunchRequestRuntimeStop(attempt: WorkspaceLaunchAttemptRecord): Promise<WorkspaceLaunchRuntimeActionResult> {
@@ -85,11 +114,22 @@ export interface WorkspaceLaunchRuntimeActionResult {
   message: string;
 }
 
-export async function workspaceLaunchRequestStaleSessionCleanup(session: NarsSessionObservation, attempted: Set<string>): Promise<void> {
+export interface WorkspaceLaunchStaleCleanupEvidence {
+  status: 'requested' | 'refused';
+  control_path: string | null;
+  control_request_written: boolean;
+  process_identity_proven: boolean;
+  process_cleanup_requested: boolean;
+}
+
+export async function workspaceLaunchRequestStaleSessionCleanup(session: NarsSessionObservation, attempted: Set<string>): Promise<WorkspaceLaunchStaleCleanupEvidence> {
   const sessionId = workspaceLaunchString(session.session_id) ?? workspaceLaunchString(session.carrier_session_id) ?? workspaceLaunchSessionLaunchSessionId(session);
-  if (!sessionId || attempted.has(sessionId)) return;
+  if (!sessionId || attempted.has(sessionId)) {
+    return { status: 'refused', control_path: null, control_request_written: false, process_identity_proven: false, process_cleanup_requested: false };
+  }
   attempted.add(sessionId);
   const controlPath = workspaceLaunchControlPathFromSession(session);
+  let controlRequestWritten = false;
   if (controlPath && existsSync(controlPath)) {
     const frame = {
       id: support.workspaceLaunchId('stale_cleanup'),
@@ -102,13 +142,24 @@ export async function workspaceLaunchRequestStaleSessionCleanup(session: NarsSes
     };
     try {
       await appendFile(controlPath, `${JSON.stringify(frame)}\n`, 'utf8');
+      controlRequestWritten = true;
     } catch {
       // Process-tree termination below is the hard cleanup fallback for session-owned stale runtime processes.
     }
   }
   const ownership = workspaceLaunchSessionOwnership(session);
   const pid = workspaceLaunchInteger(session.pid) ?? workspaceLaunchInteger(ownership?.pid);
-  if (pid && pid !== process.pid) workspaceLaunchTerminateStaleProcessTree(pid);
+  const processIdentityProven = Boolean(pid && pid !== process.pid && workspaceLaunchProcessMatchesSession(pid, session));
+  if (processIdentityProven && pid) {
+    workspaceLaunchTerminateStaleProcessTree(pid);
+  }
+  return {
+    status: controlRequestWritten || processIdentityProven ? 'requested' : 'refused',
+    control_path: controlPath ?? null,
+    control_request_written: controlRequestWritten,
+    process_identity_proven: processIdentityProven,
+    process_cleanup_requested: processIdentityProven,
+  };
 }
 
 function workspaceLaunchRuntimeStopControlPath(attempt: WorkspaceLaunchAttemptRecord): string | null {

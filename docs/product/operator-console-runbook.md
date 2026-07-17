@@ -20,13 +20,15 @@ available from the current host.
 The browser is a projection client. It does not invent routes, replace the
 route authority, or bypass the CLI-owned server.
 
-The Launcher defaults to active launches. Completed or stale launch results are
-retained as evidence but remain behind the low-emphasis **History** control;
-they are not presented as current runtime sessions. An active launch requires a
-fresh, owned, healthy NARS observation checked within the canonical two-minute
-freshness window; a terminal or projection handoff alone does not make a launch
-active. The dashboard revalidates persisted launches through NARS session
-management when it is read, without performing stale-session cleanup.
+The Launcher defaults to active launches that the CLI has freshly revalidated
+against NARS. Completed, stale, or otherwise unverified launch results are
+retained as evidence behind the low-emphasis **History** control; they are not
+presented as current runtime sessions. An active launch requires a fresh, owned,
+healthy NARS observation checked within the canonical two-minute freshness
+window; a terminal or projection handoff alone does not make a launch active.
+The dashboard revalidates persisted launches through NARS session management
+when it is read and while it remains open, without performing stale-session
+cleanup. Recheck a historical result before attaching.
 
 ## Route-directory States
 

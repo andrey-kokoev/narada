@@ -1,8 +1,10 @@
 import { provide, inject, ref, type InjectionKey, type Ref } from 'vue';
 import {
   OPERATOR_SURFACE_DESCRIPTOR_SCHEMA,
+  OPERATOR_WORKSPACE_ROUTE_DIRECTORY_TIMEOUT_MS,
   OPERATOR_WORKSPACE_ROUTE_DIRECTORY_PATH,
   OPERATOR_WORKSPACE_ROUTE_DIRECTORY_SCHEMA,
+  isOperatorWorkspaceRoutePath,
   type OperatorSurfaceAvailability,
   type OperatorSurfaceAuthorityKind,
   type OperatorSurfaceHostKind,
@@ -33,6 +35,7 @@ export interface OperatorWorkspaceRouteDirectoryTransport {
 export interface OperatorWorkspaceRouteDirectoryRequestOptions {
   projectionId?: string | null;
   browserToken?: string | null;
+  timeoutMs?: number;
 }
 
 function isAuthorityKind(value: unknown): value is OperatorSurfaceAuthorityKind {
@@ -120,8 +123,13 @@ export class OperatorWorkspaceRouteDirectoryError extends Error {
 export interface OperatorWorkspaceRouteDirectoryState {
   directory: Ref<OperatorWorkspaceRouteDirectory | null>;
   loading: Ref<boolean>;
+  hasAttempted: Ref<boolean>;
   error: Ref<string | null>;
+  errorCode: Ref<string | null>;
+  errorStatus: Ref<number | null>;
+  lastSuccessfulLoadAt: Ref<string | null>;
   load: () => Promise<void>;
+  retry: () => Promise<void>;
 }
 
 const routeDirectoryKey: InjectionKey<OperatorWorkspaceRouteDirectoryState> = Symbol('operator-workspace-route-directory');
@@ -173,7 +181,7 @@ function parseTarget(value: unknown): OperatorSurfaceRouteTarget | undefined | n
 function parseRouteDescriptor(value: unknown): OperatorSurfaceRouteDescriptor | null {
   if (!isRecord(value)
     || !isString(value.id)
-    || !isString(value.path)
+    || !isOperatorWorkspaceRoutePath(value.path)
     || !isRouteKind(value.kind)
     || !isString(value.label)) {
     return null;
@@ -259,7 +267,7 @@ function parseSurface(value: unknown): OperatorSurfaceProjection | null {
   }
   const nextAction = value.nextAction === undefined
     ? undefined
-    : isRecord(value.nextAction) && isString(value.nextAction.href) && isString(value.nextAction.label)
+    : isRecord(value.nextAction) && isOperatorWorkspaceRoutePath(value.nextAction.href) && isString(value.nextAction.label)
       ? { href: value.nextAction.href, label: value.nextAction.label }
       : null;
   if (nextAction === null) return null;
@@ -299,10 +307,16 @@ export function parseOperatorWorkspaceRouteDirectory(value: unknown): OperatorWo
   const surfaces = value.surfaces.map(parseSurface);
   if (surfaces.some((surface) => surface === null)) return null;
   const surfaceIds = new Set<string>();
+  const navigationKeys = new Set<string>();
   const parsedSurfaces = surfaces.filter((surface): surface is OperatorSurfaceProjection => surface !== null);
   for (const surface of parsedSurfaces) {
     if (surfaceIds.has(surface.id)) return null;
     surfaceIds.add(surface.id);
+    for (const route of surface.projectedRoutes) {
+      if (!route.navigationKey) continue;
+      if (navigationKeys.has(route.navigationKey)) return null;
+      navigationKeys.add(route.navigationKey);
+    }
   }
   return { schema: OPERATOR_WORKSPACE_ROUTE_DIRECTORY_SCHEMA, workspaceHost: parseHost(value.workspaceHost)!, surfaces: parsedSurfaces };
 }
@@ -321,33 +335,71 @@ export function createOperatorWorkspaceRouteDirectoryTransport(
         : `${requestUrl.pathname}${requestUrl.search}${requestUrl.hash}`;
       const headers = new Headers({ Accept: 'application/json' });
       if (requestOptions.browserToken) headers.set('x-narada-browser-token-fingerprint', requestOptions.browserToken);
-      const response = await fetchLike(input, { headers });
-      let payload: unknown;
+      const timeoutMs = requestOptions.timeoutMs ?? OPERATOR_WORKSPACE_ROUTE_DIRECTORY_TIMEOUT_MS;
+      if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+        throw new OperatorWorkspaceRouteDirectoryError(
+          'invalid_timeout',
+          `Operator route directory timeout must be a positive finite number; received ${timeoutMs}.`,
+        );
+      }
+      const controller = new AbortController();
+      let timedOut = false;
+      let timeoutId: ReturnType<typeof setTimeout> | undefined;
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(() => {
+          timedOut = true;
+          controller.abort();
+          reject(new OperatorWorkspaceRouteDirectoryError(
+            'timeout',
+            `Operator route directory timed out after ${timeoutMs} ms.`,
+          ));
+        }, timeoutMs);
+      });
       try {
-        payload = await response.json();
-      } catch {
-        throw new OperatorWorkspaceRouteDirectoryError(
-          'invalid_json',
-          `Operator route directory returned HTTP ${response.status} without valid JSON.`,
-          response.status,
-        );
+        const { response, payload } = await Promise.race([
+          (async () => {
+            const response = await fetchLike(input, { headers, signal: controller.signal });
+            let payload: unknown;
+            try {
+              payload = await response.json();
+            } catch {
+              throw new OperatorWorkspaceRouteDirectoryError(
+                'invalid_json',
+                `Operator route directory returned HTTP ${response.status} without valid JSON.`,
+                response.status,
+              );
+            }
+            return { response, payload };
+          })(),
+          timeoutPromise,
+        ]);
+        if (!response.ok) {
+          throw new OperatorWorkspaceRouteDirectoryError(
+            'http_error',
+            `Operator route directory failed with HTTP ${response.status}.`,
+            response.status,
+          );
+        }
+        const directory = parseOperatorWorkspaceRouteDirectory(payload);
+        if (!directory) {
+          throw new OperatorWorkspaceRouteDirectoryError(
+            'invalid_response',
+            'Operator route directory did not match its contract.',
+            response.status,
+          );
+        }
+        return directory;
+      } catch (cause) {
+        if (timedOut) {
+          throw new OperatorWorkspaceRouteDirectoryError(
+            'timeout',
+            `Operator route directory timed out after ${timeoutMs} ms.`,
+          );
+        }
+        throw cause;
+      } finally {
+        if (timeoutId !== undefined) clearTimeout(timeoutId);
       }
-      if (!response.ok) {
-        throw new OperatorWorkspaceRouteDirectoryError(
-          'http_error',
-          `Operator route directory failed with HTTP ${response.status}.`,
-          response.status,
-        );
-      }
-      const directory = parseOperatorWorkspaceRouteDirectory(payload);
-      if (!directory) {
-        throw new OperatorWorkspaceRouteDirectoryError(
-          'invalid_response',
-          'Operator route directory did not match its contract.',
-          response.status,
-        );
-      }
-      return directory;
     },
   };
 }
@@ -356,23 +408,57 @@ export function createOperatorWorkspaceRouteDirectoryState(
   transport: OperatorWorkspaceRouteDirectoryTransport = createOperatorWorkspaceRouteDirectoryTransport(),
 ): OperatorWorkspaceRouteDirectoryState {
   const directory = ref<OperatorWorkspaceRouteDirectory | null>(null);
-  const loading = ref(false);
+  const loading = ref(true);
+  const hasAttempted = ref(false);
   const error = ref<string | null>(null);
+  const errorCode = ref<string | null>(null);
+  const errorStatus = ref<number | null>(null);
+  const lastSuccessfulLoadAt = ref<string | null>(null);
+  let inFlight: Promise<void> | null = null;
 
-  async function load(): Promise<void> {
-    loading.value = true;
-    error.value = null;
-    try {
-      directory.value = await transport.read();
-    } catch (cause) {
-      directory.value = null;
-      error.value = cause instanceof Error ? cause.message : 'Operator route directory is unavailable.';
-    } finally {
-      loading.value = false;
-    }
+  function load(): Promise<void> {
+    if (inFlight) return inFlight;
+    inFlight = (async () => {
+      loading.value = true;
+      try {
+        directory.value = await transport.read();
+        lastSuccessfulLoadAt.value = new Date().toISOString();
+        error.value = null;
+        errorCode.value = null;
+        errorStatus.value = null;
+      } catch (cause) {
+        // Keep the last valid directory during a refresh failure. The UI can
+        // continue operating while the operator retries the live authority.
+        const failure = cause instanceof OperatorWorkspaceRouteDirectoryError
+          ? cause
+          : new OperatorWorkspaceRouteDirectoryError(
+            'unavailable',
+            cause instanceof Error ? cause.message : 'Operator route directory is unavailable.',
+          );
+        error.value = failure.message;
+        errorCode.value = failure.code;
+        errorStatus.value = failure.status;
+      } finally {
+        hasAttempted.value = true;
+        loading.value = false;
+      }
+    })().finally(() => {
+      inFlight = null;
+    });
+    return inFlight;
   }
 
-  return { directory, loading, error, load };
+  return {
+    directory,
+    loading,
+    hasAttempted,
+    error,
+    errorCode,
+    errorStatus,
+    lastSuccessfulLoadAt,
+    load,
+    retry: load,
+  };
 }
 
 export function provideOperatorWorkspaceRouteDirectory(

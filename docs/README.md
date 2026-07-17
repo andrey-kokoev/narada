@@ -25,7 +25,11 @@ Implementation-facing architecture and ownership contracts.
 - [`agent-web-ui-architecture.md`](architecture/agent-web-ui-architecture.md) — Agent Web UI layers, ownership boundaries, target source shape, and migration seams
 - [`agent-web-ui-command-ux.md`](architecture/agent-web-ui-command-ux.md) — Browser command palette and slash-command UX target
 - [`launch-artifact-integrity.md`](architecture/launch-artifact-integrity.md) — Source-closure, manifest, and launch-admission contract for generated artifacts
+- [`workspace-launch-enforcement.md`](architecture/workspace-launch-enforcement.md) — Mechanical enforcement map for the workspace launch contract
 - [`nars-session-input-contract.md`](architecture/nars-session-input-contract.md) — NARS session input and operator command boundary
+- [`operator-console-concept-surfaces.md`](architecture/operator-console-concept-surfaces.md) — Operator Console concept-to-surface ownership map
+- [`operator-workspace-target.md`](architecture/operator-workspace-target.md) — Workspace route authority, projection, fallback, recovery, and acceptance target
+- [`operator-router-target.md`](architecture/operator-router-target.md) — Stable local Router projection and route-admission target
 
 ## `product/`
 
@@ -43,6 +47,8 @@ User-facing product proofs, onboarding, operator loop, and runbooks. These are t
 - [`cloudflare-nars-web-projection-live-smoke.md`](product/cloudflare-nars-web-projection-live-smoke.md) — Deployed Cloudflare agent-web-ui proof against live local NARS
 - [`first-operation-proof.md`](product/first-operation-proof.md) — Canonical mailbox operation product proof
 - [`operator-loop.md`](product/operator-loop.md) — Minimal operator rhythm for live operations
+- [`operator-console-runbook.md`](product/operator-console-runbook.md) — Operator Console entry point and route-directory recovery procedure
+- [`operator-console-site-registry.md`](product/operator-console-site-registry.md) — Operator Console and Site Registry product boundary
 - [`runbook.md`](product/runbook.md) — Troubleshooting, setup, and lifecycle runbook
 - [`live-graph-proof.md`](product/live-graph-proof.md) — Live Graph API proof stages and pass criteria
 - [`live-trial-runbook.md`](product/live-trial-runbook.md) — Trial runbook, evidence format, and redaction policy
@@ -66,6 +72,12 @@ Site materialization and deployment target docs.
 
 - [`cloudflare-site-materialization.md`](deployment/cloudflare-site-materialization.md) — Cloudflare Site materialization design
 - [`systemd/`](deployment/systemd/) — systemd unit files and service configuration
+
+## `testing/`
+
+Focused verification contracts for bounded implementation slices.
+
+- [`operator-console-route-directory.md`](testing/operator-console-route-directory.md) — Route-directory failure, recovery, projection, and CLI verification matrix
 
 ## `diagrams/`
 

@@ -316,6 +316,7 @@ export interface WorkspaceLaunchProcessLaunch {
   owner_ref: string | null;
   agent_id?: string | null;
   launch_session_id?: string | null;
+  nars_session_id?: string | null;
   launch_binding_path?: string | null;
   readiness_path?: string | null;
   readiness?: 'spawned' | 'spawned_and_alive' | 'not_checked';

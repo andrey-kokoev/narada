@@ -1,4 +1,8 @@
 import { describe, expect, test } from 'vitest';
+import {
+  OPERATOR_CONSOLE_ASSET_PATH,
+  OPERATOR_CONSOLE_PATH,
+} from '@narada2/operator-console-contract';
 import { CLOUDFLARE_NARS_PROJECTION_INTENT_SCHEMA } from '../src/index.js';
 import { createCloudflareNarsWorkspaceDirectoryService, NarsWorkspaceDirectory } from '../src/workspace-directory.js';
 import { createCloudflareNarsProjectionWorker, NarsProjectionState } from '../src/worker.js';
@@ -186,7 +190,7 @@ describe('Cloudflare Workspace Route Directory', () => {
       route: { id: 'sites', path: '/console/registry', kind: 'page', label: 'Sites' },
       ui_config: {
         workspace_route_directory: {
-          endpoint: 'https://workspace.example.test/api/nars/workspace/routes',
+          endpoint: 'https://workspace.example.test/api/<script>&',
           projection_id: 'proj_console',
           browser_token: 'browser-fingerprint',
         },
@@ -195,15 +199,62 @@ describe('Cloudflare Workspace Route Directory', () => {
     const worker = createCloudflareNarsProjectionWorker({ now: () => now, workspace_directory_service: directory });
     const response = await worker.fetch(new Request('https://workspace.example.test/console/registry'), {
       ASSETS: {
-        fetch: () => new Response('<script id="operator-console-config">__NARADA_OPERATOR_CONSOLE_CONFIG__</script>', { headers: { 'content-type': 'text/html; charset=utf-8' } }),
+        fetch: () => new Response('<script id="operator-console-config">__NARADA_OPERATOR_CONSOLE_CONFIG__</script>', {
+          headers: {
+            'content-type': 'text/html; charset=utf-8',
+            'content-length': '999',
+            'content-encoding': 'gzip',
+            etag: 'asset-etag',
+            digest: 'sha-256=asset',
+          },
+        }),
       },
     });
-    expect(await response.text()).toContain(JSON.stringify({
-      routeDirectory: {
-        endpoint: 'https://workspace.example.test/api/nars/workspace/routes',
-        projectionId: 'proj_console',
-        browserToken: 'browser-fingerprint',
+    const body = await response.text();
+    expect(body).toContain('https://workspace.example.test/api/\\u003cscript\\u003e\\u0026');
+    expect(response.headers.get('content-type')).toContain('text/html');
+    expect(response.headers.get('content-length')).toBeNull();
+    expect(response.headers.get('content-encoding')).toBeNull();
+    expect(response.headers.get('etag')).toBeNull();
+    expect(response.headers.get('digest')).toBeNull();
+    expect(response.headers.get('cache-control')).toBe('no-store');
+  });
+
+  test('serves a route-directory landing and refuses unleased Console routes', async () => {
+    const requestedPaths: string[] = [];
+    const worker = createCloudflareNarsProjectionWorker({ now: () => now });
+    const env = {
+      ASSETS: {
+        fetch: (request: Request) => {
+          const pathname = new URL(request.url).pathname;
+          requestedPaths.push(pathname);
+          return pathname === `${OPERATOR_CONSOLE_ASSET_PATH}/index.js`
+            ? new Response('asset', { headers: { 'content-type': 'application/javascript' } })
+            : new Response('not found', { status: 404 });
+        },
       },
-    }));
+    };
+
+    const root = await worker.fetch(new Request('https://workspace.example.test/'), env);
+    expect(root.status).toBe(200);
+    expect(await root.text()).toContain('Narada Cloudflare Workspace');
+    const consoleLanding = await worker.fetch(new Request(`https://workspace.example.test${OPERATOR_CONSOLE_PATH}/`), env);
+    expect(consoleLanding.status).toBe(200);
+    expect(await consoleLanding.text()).toContain('Only routes currently leased');
+
+    const unleased = await worker.fetch(new Request('https://workspace.example.test/console/registry'), env);
+    expect(unleased.status).toBe(404);
+    expect(await unleased.json()).toEqual({ status: 'refused', code: 'operator_console_route_not_leased' });
+
+    const asset = await worker.fetch(new Request(`https://workspace.example.test${OPERATOR_CONSOLE_ASSET_PATH}/index.js`), env);
+    expect(asset.status).toBe(200);
+    expect(await asset.text()).toBe('asset');
+
+    const legacyAsset = await worker.fetch(new Request('https://workspace.example.test/console/registry/assets/index.js'), env);
+    expect(legacyAsset.status).toBe(404);
+    expect(requestedPaths).toEqual([
+      `${OPERATOR_CONSOLE_ASSET_PATH}/index.js`,
+      '/console/registry/assets/index.js',
+    ]);
   });
 });

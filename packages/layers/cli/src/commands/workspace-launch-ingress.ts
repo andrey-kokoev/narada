@@ -9,6 +9,7 @@ import {
   type EnsureOperatorRouterResult,
 } from '@narada2/operator-router';
 import {
+  OPERATOR_CONSOLE_LAUNCH_PATH,
   OPERATOR_WORKSPACE_ROUTE_DIRECTORY_PATH,
   OPERATOR_WORKSPACE_ROUTE_DIRECTORY_SCHEMA,
   type OperatorWorkspaceRouteDirectory,
@@ -96,7 +97,7 @@ function workspaceLaunchRouteDirectoryHealthy(directory: OperatorWorkspaceRouteD
   const launcher = directory.surfaces.find((surface) => surface.id === 'launcher');
   return launcher?.availability === 'available'
     && launcher.projectedRoutes.some((route) => route.id === 'launcher'
-      && route.path === '/console/launch'
+      && route.path === OPERATOR_CONSOLE_LAUNCH_PATH
       && route.availability === 'available');
 }
 

@@ -15,6 +15,7 @@ import type {
 import type { WorkspaceLaunchSelection as WorkspaceLaunchBrowserSelection } from '@narada2/workspace-launch-contract';
 import { createWorkspaceLaunchAttemptLifecycle } from './workspace-launch-lifecycle.js';
 import { setWorkspaceLaunchAttemptLifecycle } from './workspace-launch-ui-lifecycle.js';
+import { workspaceLaunchAttemptActivityState } from './workspace-launch-observation.js';
 
 export interface WorkspaceLaunchAttemptRunnerContext {
   uiSession: WorkspaceLaunchUiSessionRecord;
@@ -81,10 +82,12 @@ export function createWorkspaceLaunchAttemptRunner(context: WorkspaceLaunchAttem
         );
         setWorkspaceLaunchAttemptLifecycle(attempt, 'launched');
         attempt.actions = handoff.workspaceLaunchActionsForAttempt(attempt);
+        attempt.activity_state = workspaceLaunchAttemptActivityState(attempt);
       } else {
         setWorkspaceLaunchAttemptLifecycle(attempt, 'failed');
         attempt.expected_launch_session_ids = [];
         attempt.observations = [];
+        attempt.activity_state = 'historical';
         attempt.actions = ['retry', 'forget'];
       }
       attempt.diagnostic = launch.result;
@@ -103,6 +106,7 @@ export function createWorkspaceLaunchAttemptRunner(context: WorkspaceLaunchAttem
       setWorkspaceLaunchAttemptLifecycle(attempt, 'failed');
       attempt.result_summary = error instanceof Error ? error.message : String(error);
       attempt.handoffs = [handoff.workspaceLaunchFailedHandoff(attempt.launch_attempt_id, error)];
+      attempt.activity_state = 'historical';
       attempt.actions = ['retry', 'forget'];
       attempt.diagnostic = { error: attempt.result_summary };
       attempt.updated_at = new Date().toISOString();

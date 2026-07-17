@@ -223,6 +223,8 @@ export function createInputQueue({
     return pending.map((event, index) => ({
       index: index + 1,
       event_id: event.event_id,
+      request_id: event.request_id ?? null,
+      directive_id: event.directive_id ?? null,
       source: event.source,
       source_kind: event.source_kind,
       source_id: event.source_id,

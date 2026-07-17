@@ -39,7 +39,13 @@ export function canTransitionNarsArtifactLifecycle(previousState, nextState) {
 
 export function assertNarsArtifactLifecycleTransition(previousState, nextState) {
   if (!canTransitionNarsArtifactLifecycle(previousState, nextState)) {
-    throw new Error(`invalid_nars_artifact_lifecycle_transition:${previousState}:${nextState}`);
+    const error = new Error(`invalid_nars_artifact_lifecycle_transition:${previousState}:${nextState}`);
+    error.code = 'invalid_nars_artifact_lifecycle_transition';
+    error.details = {
+      previous_state: previousState ?? null,
+      next_state: nextState ?? null,
+    };
+    throw error;
   }
   return nextState;
 }
@@ -69,7 +75,10 @@ export function createNarsArtifactLifecycle({
 export function normalizeNarsArtifactLifecycle(lifecycle = {}) {
   const state = lifecycle.state ?? 'active';
   if (!isNarsArtifactLifecycleState(state)) {
-    throw new Error(`invalid_nars_artifact_lifecycle_state:${state}`);
+    const error = new Error(`invalid_nars_artifact_lifecycle_state:${state}`);
+    error.code = 'invalid_nars_artifact_lifecycle_state';
+    error.details = { state };
+    throw error;
   }
   const createdAt = lifecycle.created_at ?? null;
   const updatedAt = lifecycle.updated_at ?? createdAt;

@@ -78,6 +78,11 @@ test.describe('agent-web-ui session-core runtime slash commands', () => {
       await waitForRenderedEventCount(page, 'session_events_subscription_started', replayRowsBeforeEventsCommand + 1, 'slash_events_render_timeout');
       const eventsRow = (await renderedEventRows(page, 'session_events_subscription_started')).at(-1);
       expect(eventsRow?.text ?? '').toMatch(/Replay attached|replayed event\(s\)/);
+      const replayCompletedRows = await renderedEventRows(page, 'session_events_replay_completed');
+      expect(replayCompletedRows.length).toBeGreaterThanOrEqual(2);
+      expect(replayCompletedRows.at(-1)?.text ?? '').toContain('Replay complete');
+      expect(replayCompletedRows.at(-1)?.text ?? '').toContain('replayed event(s)');
+      expect(replayCompletedRows.at(-1)?.text ?? '').not.toContain('[object Object]');
 
       const runtimeCases = [
         {
@@ -430,6 +435,69 @@ test.describe('agent-web-ui session-core runtime slash commands', () => {
       await expect(page.locator('#operator-form')).toHaveAttribute('data-operator-delivery-phase', 'failed');
       await expect(page.locator('.composer-delivery-status')).toContainText('Input failed');
       await expect(page.locator('.composer-delivery-status')).toContainText('fixture_provider_failure');
+    } finally {
+      await page.close().catch(() => {});
+      await runtime.close();
+    }
+  });
+
+  test('correlates missing request IDs and converges duplicate out-of-order delivery events', async ({ page }) => {
+    const runtime = await startSharedRuntime({
+      sessionId: 'web-ui-playwright-correlation-e2e',
+      swallowInputFrames: true,
+    });
+
+    try {
+      await page.goto(runtime.localWeb.url);
+      await submitOperatorInputText(page, 'correlate this runtime input');
+      const attempt = await waitFor(() => runtime.inputFrameAttempts.at(-1), 5_000);
+      const inputEventId = 'input-event-only-e2e';
+      const eventBase = {
+        method: 'session.submit',
+        input_event_id: inputEventId,
+        session_id: runtime.sessionId,
+      };
+
+      runtime.eventHub.publish({ event: 'input_event_queued', ...eventBase });
+      await expect(page.locator('#operator-form')).toHaveAttribute('data-operator-delivery-phase', 'steering');
+      await expect(page.locator('.composer-delivery-status')).not.toContainText('Waiting for NARS acknowledgment');
+
+      runtime.eventHub.publish({ event: 'input_event_completed', ...eventBase, terminal_state: 'completed' });
+      runtime.eventHub.publish({ event: 'input_event_started', ...eventBase });
+      runtime.eventHub.publish({ event: 'input_event_queued', ...eventBase });
+
+      await expect(page.locator('#operator-form')).toHaveAttribute('data-operator-delivery-phase', 'completed');
+      await expect(page.locator('.composer-delivery-status')).toContainText('Input delivered');
+      expect(attempt.frame.id).toBeTruthy();
+      expect(runtime.inputFrameAttempts).toHaveLength(1);
+    } finally {
+      await page.close().catch(() => {});
+      await runtime.close();
+    }
+  });
+
+  test('keeps pending input state unchanged when an event comes from another session', async ({ page }) => {
+    const runtime = await startSharedRuntime({
+      sessionId: 'web-ui-playwright-session-mismatch-e2e',
+      swallowInputFrames: true,
+    });
+
+    try {
+      await page.goto(runtime.localWeb.url);
+      await submitOperatorInputText(page, 'do not accept another session');
+      const attempt = await waitFor(() => runtime.inputFrameAttempts.at(-1), 5_000);
+      runtime.eventHub.publish({
+        event: 'input_event_queued',
+        request_id: attempt.frame.id,
+        input_event_id: 'wrong-session-input-event',
+        method: 'session.submit',
+        session_id: 'web-ui-playwright-different-session',
+      });
+
+      await expect(page.locator('[data-event-kind="web_ui_session_correlation_mismatch"]')).toHaveCount(1);
+      await expect(page.locator('#operator-form')).toHaveAttribute('data-operator-delivery-phase', 'submitting');
+      await expect(page.locator('.composer-delivery-status')).toContainText('Waiting for NARS acknowledgment');
+      expect(runtime.inputFrameAttempts).toHaveLength(1);
     } finally {
       await page.close().catch(() => {});
       await runtime.close();

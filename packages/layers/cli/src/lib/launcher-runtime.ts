@@ -153,6 +153,7 @@ export function runAgentStartCommand(options: AgentStartOptions): AgentStartComm
   if (options.authority) args.push('--authority', options.authority);
   if (options.intelligenceProvider) args.push('--intelligence-provider', options.intelligenceProvider);
   if (options.mcpScope) args.push('--mcp-scope', options.mcpScope);
+  if (options.preflightOnly) args.push('--preflight-only');
   if (options.dryRun) args.push('--dry-run');
   if (options.exec) args.push('--exec');
   if (options.wait) args.push('--wait');

@@ -251,6 +251,7 @@ export function buildClientConfig(options) {
       cloudflareAuthoritySessionId: options.cloudflareAuthoritySessionId,
       cloudflareApiBaseUrl: options.cloudflareApiBaseUrl,
       authoritySessionId: options.cloudflareAuthoritySessionId,
+      sessionId: options.cloudflareAuthoritySessionId,
       apiBaseUrl: options.cloudflareApiBaseUrl,
       eventEndpoint: config.event_endpoint,
       healthEndpoint: config.health_endpoint,
@@ -272,6 +273,7 @@ export function buildClientConfig(options) {
       cloudflareProjectionId: options.cloudflareProjectionId,
       cloudflareApiBaseUrl: options.cloudflareApiBaseUrl,
       projectionId: options.cloudflareProjectionId,
+      sessionId: options.sessionId ?? options.cloudflareProjectionId,
       apiBaseUrl: options.cloudflareApiBaseUrl,
       healthTransport: 'cloudflare-projection',
       artifactBasePath: `${String(options.cloudflareApiBaseUrl).replace(/\/+$/, '')}/api/nars/projections/${encodeURIComponent(options.cloudflareProjectionId)}/artifacts`,
@@ -289,6 +291,7 @@ export function buildClientConfig(options) {
   return {
     ...(publicBasePath ? { publicBasePath } : {}),
     eventEndpoint: options.publicEventEndpoint ?? options.eventEndpoint ?? null,
+    sessionId: options.sessionId ?? null,
     healthEndpoint: options.healthEndpoint ? options.publicHealthEndpoint ?? localPublicPath('/api/health') : null,
     healthTransport: options.healthEndpoint ? 'http-proxy' : 'not-configured',
     artifactBasePath: options.healthEndpoint ? options.publicArtifactBasePath ?? localPublicPath('/api/nars') : null,

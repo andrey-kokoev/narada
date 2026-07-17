@@ -2,11 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
 import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
-import { spawn } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
 import { createInterface } from 'node:readline';
+import { spawnTestChild } from '@narada2/process-launch-posture';
 import { checkTaskRoleEligibilityLocal } from './agent-role-resolution.mjs';
 import { resolveTaskRolePolicy } from './task-role-policy.mjs';
 import { openTaskLifecycleStore } from '@narada2/task-governance/task-lifecycle-store';
@@ -139,7 +139,7 @@ test('governance MCP exposes and executes reference diagnosis and dependency dis
     store.db.close();
   }
 
-  const server = spawn(process.execPath, [join(root, 'task-mcp-server.mjs'), '--site-root', siteRoot], {
+  const server = spawnTestChild(process.execPath, [join(root, 'task-mcp-server.mjs'), '--site-root', siteRoot], {
     cwd: root,
     env: { ...process.env, NARADA_AGENT_ID: 'agent.test' },
     stdio: ['pipe', 'pipe', 'pipe'],

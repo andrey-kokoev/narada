@@ -1,5 +1,6 @@
 export const AGENT_WEB_UI_PREFERENCE_KEYS = Object.freeze({
   projectionVerbosity: 'narada:agent-web-ui:projection-verbosity.v1',
+  projectionViews: 'narada:agent-web-ui:projection-views.v1',
   headerItems: 'narada:agent-web-ui:header-items.v2',
   statusBoxes: 'narada:agent-web-ui:status-boxes.v3',
   statusRowOpen: 'narada:agent-web-ui:status-row-open.v1',

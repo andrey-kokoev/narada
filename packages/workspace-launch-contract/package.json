@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "main": "./dist/index.js",
   "narada": {
     "package_role": "shared_wire_contract",
     "surface": "launcher_session_dashboard",
@@ -15,14 +16,18 @@
     ]
   },
   "exports": {
-    ".": "./src/index.ts",
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
-    "src",
+    "dist",
     "README.md"
   ],
   "scripts": {
+    "build": "tsc -p tsconfig.build.json",
     "test": "node --import tsx --test test/index.test.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },

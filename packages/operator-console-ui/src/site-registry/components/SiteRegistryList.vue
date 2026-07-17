@@ -9,8 +9,16 @@ const props = defineProps<{
   selectedSiteId: string | null;
   loading: boolean;
   error: string | null;
+  listStale: boolean;
+  lastSuccessfulLoadAt: string | null;
 }>();
 const emit = defineEmits<{ select: [siteId: string]; refresh: [] }>();
+
+function formatTimestamp(value: string | null): string {
+  if (!value) return 'unknown';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+}
 </script>
 
 <template>
@@ -18,7 +26,10 @@ const emit = defineEmits<{ select: [siteId: string]; refresh: [] }>();
     <header class="registry-list__header">
       <div>
         <h2 id="registry-list-title">Registered Sites</h2>
-        <p>{{ loading ? 'Refreshing inventory...' : `${sites.length} Site${sites.length === 1 ? '' : 's'}` }}</p>
+        <p v-if="loading">Refreshing inventory...</p>
+        <p v-else-if="listStale && lastSuccessfulLoadAt">Showing last successful inventory from {{ formatTimestamp(lastSuccessfulLoadAt) }}.</p>
+        <p v-else-if="listStale">Site inventory is unavailable.</p>
+        <p v-else>{{ sites.length }} Site{{ sites.length === 1 ? '' : 's' }}</p>
       </div>
       <button class="icon-button" type="button" title="Refresh Site Registry" aria-label="Refresh Site Registry" :disabled="loading" @click="emit('refresh')">
         <RefreshCw :size="16" aria-hidden="true" />

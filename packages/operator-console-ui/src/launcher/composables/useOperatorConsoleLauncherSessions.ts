@@ -7,6 +7,7 @@ import {
 
 export interface UseOperatorConsoleLauncherSessionsState {
   sessions: Ref<WorkspaceLaunchUiSession[]>;
+  history: Ref<WorkspaceLaunchUiSession[]>;
   loading: Ref<boolean>;
   error: Ref<string | null>;
   load: () => Promise<void>;
@@ -16,6 +17,7 @@ export function useOperatorConsoleLauncherSessions(
   transport: OperatorConsoleLauncherSessionTransport = createOperatorConsoleLauncherSessionTransport(),
 ): UseOperatorConsoleLauncherSessionsState {
   const sessions = ref<WorkspaceLaunchUiSession[]>([]);
+  const history = ref<WorkspaceLaunchUiSession[]>([]);
   const loading = ref(true);
   const error = ref<string | null>(null);
 
@@ -23,7 +25,9 @@ export function useOperatorConsoleLauncherSessions(
     loading.value = true;
     error.value = null;
     try {
-      sessions.value = await transport.list();
+      const inventory = await transport.list();
+      sessions.value = inventory.sessions;
+      history.value = inventory.history ?? [];
     } catch (cause) {
       error.value = cause instanceof Error
         ? cause.message
@@ -35,5 +39,5 @@ export function useOperatorConsoleLauncherSessions(
 
   onMounted(() => { void load(); });
 
-  return { sessions, loading, error, load };
+  return { sessions, history, loading, error, load };
 }

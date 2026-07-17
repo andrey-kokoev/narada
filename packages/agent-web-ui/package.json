@@ -42,10 +42,12 @@
     "README.md"
   ],
   "scripts": {
-    "prebuild": "pnpm --filter @narada2/ui build",
+    "prebuild": "pnpm --filter @narada2/ui build && pnpm --filter @narada2/cloudflare-nars-projection build",
     "build": "vite build",
     "postbuild": "node ../layers/cli/scripts/write-launch-artifact.mjs --target agent-web-ui --package-root . --site-root ../..",
+    "pretest": "pnpm --filter @narada2/cloudflare-nars-projection build",
     "test": "node --test test/agent-web-ui.test.mjs test/agent-web-ui-projection.test.mjs test/agent-web-ui-protocol.test.mjs && pnpm run test:unit",
+    "pretest:unit": "pnpm --filter @narada2/cloudflare-nars-projection build",
     "test:unit": "vitest run --config vitest.config.mjs",
     "test:unit:coverage": "vitest run --config vitest.config.mjs --coverage",
     "test:browser": "pnpm run test:e2e && pnpm run test:projection",
@@ -58,6 +60,7 @@
     "test:live:launcher-onboarding": "pnpm run build && node test/live-launcher-affordance-e2e.mjs",
     "test:live:delegated-task": "pnpm run build && node test/live-delegated-task-launcher-e2e.mjs",
     "test:all": "pnpm run test && pnpm run test:browser",
+    "pretypecheck": "pnpm --filter @narada2/cloudflare-nars-projection build",
     "typecheck": "vue-tsc --noEmit -p tsconfig.json",
     "test:e2e": "pnpm run build && playwright test --config playwright.config.js",
     "test:projection": "pnpm run build && playwright test --config playwright.projection.config.js",

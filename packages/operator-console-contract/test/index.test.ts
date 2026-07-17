@@ -11,6 +11,7 @@ import {
   projectOperatorSurfaceRouteBinding,
   projectOperatorSurfaceNavigation,
   projectOperatorWorkspaceRouteDirectory,
+  isOperatorWorkspaceRoutePath,
 } from '../src/index.ts';
 
 test('operator surface catalog describes canonical registry and launcher routes', () => {
@@ -149,3 +150,45 @@ test('workspace route directory admits live concrete routes without replacing te
   assert.equal(siteOperations?.projectedRoutes.find((route) => route.id === 'operations')?.availability, 'unavailable');
   assert.equal(artifacts?.projectedRoutes.find((route) => route.id === 'artifact')?.availability, 'unavailable');
 });
+
+test('workspace route directory rejects duplicate navigation keys across surfaces', () => {
+  assert.throws(
+    () => projectOperatorWorkspaceRouteDirectory({
+      additionalRoutes: {
+        launcher: [{
+          id: 'duplicate-navigation-key',
+          path: '/console/launch/duplicate',
+          kind: 'page',
+          label: 'Duplicate navigation key',
+          navigationKey: 'sites',
+        }],
+      },
+    }),
+    /operator_workspace_navigation_key_duplicate:sites/,
+  );
+});
+
+test('workspace route paths are restricted to same-origin relative paths', () => {
+  assert.equal(isOperatorWorkspaceRoutePath('/console/registry'), true);
+  assert.equal(isOperatorWorkspaceRoutePath('/sites/demo/operations'), true);
+  assert.equal(isOperatorWorkspaceRoutePath('https://outside.example/'), false);
+  assert.equal(isOperatorWorkspaceRoutePath('//outside.example/'), false);
+  assert.equal(isOperatorWorkspaceRoutePath('\\\\outside\\route'), false);
+  assert.throws(
+    () => projectOperatorSurfaceWorkspaceRouteDirectoryWithInvalidPath(),
+    /operator_surface_route_path_invalid:launcher:invalid/,
+  );
+});
+
+function projectOperatorSurfaceWorkspaceRouteDirectoryWithInvalidPath() {
+  return projectOperatorWorkspaceRouteDirectory({
+    additionalRoutes: {
+      launcher: [{
+        id: 'invalid',
+        path: 'https://outside.example/',
+        kind: 'page',
+        label: 'Outside',
+      }],
+    },
+  });
+}

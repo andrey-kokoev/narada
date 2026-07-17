@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { chromium } from '@playwright/test';
+import { projectOperatorWorkspaceRouteDirectory } from '@narada2/operator-console-contract';
 import { readOperatorConsoleUiAsset, readOperatorConsoleUiDocument } from '../../dist/commands/console-ui-assets.js';
 
 const site = {
@@ -89,6 +90,10 @@ function projectLauncherSessions(sessions) {
   }));
 }
 
+function projectLauncherHistory(sessions) {
+  return sessions.map((session) => ({ ...session, url: null }));
+}
+
 function mutationResponse(input, applied) {
   const operation = input.operation;
   const siteId = input.site_id || input.reference || 'site-a';
@@ -140,12 +145,18 @@ function mutationResponse(input, applied) {
   };
 }
 
-async function startFixtureServer({ launcherSessions = [], agentSessions = [] } = {}) {
+async function startFixtureServer({ launcherSessions = [], launcherHistory = [], agentSessions = [] } = {}) {
   const requests = [];
   const launcherRequests = [];
   const server = createServer(async (req, res) => {
     try {
       const pathname = new URL(req.url || '/', 'http://127.0.0.1').pathname;
+      if (req.method === 'GET' && pathname === '/console/routes') {
+        sendJson(res, 200, projectOperatorWorkspaceRouteDirectory({
+          workspaceHost: { kind: 'local', id: 'fixture', origin: null },
+        }));
+        return;
+      }
       if (req.method === 'GET' && ['/console/registry', '/console/registry/add', '/console/registry/manage', '/console/launch', '/console/sessions'].includes(pathname)) {
         const body = readOperatorConsoleUiDocument();
         res.writeHead(200, {
@@ -171,10 +182,11 @@ async function startFixtureServer({ launcherSessions = [], agentSessions = [] } 
         sendJson(res, 200, {
           schema: 'narada.workspace_launch.ui_session_list.v1',
           sessions: projectLauncherSessions(launcherSessions),
+          history: projectLauncherHistory(launcherHistory),
         });
         return;
       }
-      if (req.method === 'GET' && pathname.startsWith('/console/registry/assets/')) {
+      if (req.method === 'GET' && pathname.startsWith('/console/assets/')) {
         const asset = readOperatorConsoleUiAsset(pathname);
         if (!asset) {
           sendJson(res, 404, { error: 'asset_not_found' });
@@ -305,12 +317,24 @@ test('Operator Console session inventory renders canonical lifecycle posture wit
 });
 
 test('Operator Console opens active CLI sessions through a stable route and fails closed on malformed inventory', async () => {
-  const activeFixture = await startFixtureServer({ launcherSessions: [activeLauncherSession] });
+  const historicalLauncherSession = {
+    ...activeLauncherSession,
+    ui_session_id: 'ui-session-history',
+    status: 'closed',
+    url: null,
+  };
+  const activeFixture = await startFixtureServer({
+    launcherSessions: [activeLauncherSession],
+    launcherHistory: [historicalLauncherSession],
+  });
   const browser = await chromium.launch();
   try {
     const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
     await page.goto(activeFixture.url + '/console/launch');
     await page.getByRole('link', { name: 'Open launcher' }).waitFor();
+    assert.equal(await page.getByText('ui-session-history').count(), 0);
+    await page.getByRole('button', { name: /History/ }).click();
+    await page.getByText('ui-session-history').waitFor();
     assert.equal(
       await page.getByRole('link', { name: 'Open launcher' }).getAttribute('href'),
       '/console/launch/sessions/ui-session-active',

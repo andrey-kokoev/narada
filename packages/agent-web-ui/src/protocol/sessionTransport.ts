@@ -8,6 +8,12 @@ export interface SessionProtocolFrame {
 
 export { toSessionProtocolFrame } from './session-frame.js';
 
+export function isProjectionInputAdmissionAccepted(event: Record<string, unknown>): boolean {
+  const status = typeof event.status === 'string' ? event.status.trim().toLowerCase() : '';
+  if (!status) return event.http_ok === true;
+  return ['ok', 'accepted', 'admitted', 'admitted_to_turn', 'queued'].includes(status);
+}
+
 export type SessionTransportKind = 'local-websocket' | 'cloudflare-projection';
 
 export interface SessionTransportCorrelation {

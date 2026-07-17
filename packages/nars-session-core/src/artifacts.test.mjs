@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
@@ -51,6 +51,27 @@ test('artifact registry persists revoke, expire, and archive transitions', () =>
     assert.equal(expireResult.record.lifecycle.state, 'expired');
     assert.equal(readNarsArtifactIndex({ sessionPath }).artifacts.length, 2);
     assert.equal(readNarsArtifactIndex({ sessionPath }).artifacts.find((entry) => entry.artifact_id === expired.record.artifact_id).lifecycle.state, 'expired');
+  } finally {
+    rmSync(siteRoot, { recursive: true, force: true });
+  }
+});
+
+test('artifact content reader refuses forged paths outside admitted roots', () => {
+  const siteRoot = mkdtempSync(join(tmpdir(), 'nars-artifact-path-guard-'));
+  const sessionPath = join(siteRoot, 'session.jsonl');
+  const sourcePath = join(siteRoot, 'report.txt');
+  const forgedPath = join(siteRoot, '..', 'forged-secret.txt');
+  writeFileSync(sourcePath, 'artifact content\n', 'utf8');
+  try {
+    const registered = registerNarsArtifact({ sessionPath, sessionId: 'artifact-path-test', siteRoot, sourcePath, kind: 'text' });
+    const indexPath = join(siteRoot, 'artifacts', 'index.json');
+    const index = JSON.parse(readFileSync(indexPath, 'utf8'));
+    index.artifacts[0].source_path = forgedPath;
+    writeFileSync(indexPath, JSON.stringify(index, null, 2) + '\n', 'utf8');
+    assert.throws(
+      () => readNarsArtifactContent({ sessionPath, artifactId: registered.record.artifact_id, siteRoot }),
+      (error) => error.code === 'artifact_path_outside_admitted_roots',
+    );
   } finally {
     rmSync(siteRoot, { recursive: true, force: true });
   }

@@ -222,7 +222,7 @@ describe('console server', () => {
       const workspaceRoutes = await httpGet(`${url}/console/routes`);
       expect(workspaceRoutes.status).toBe(200);
       expect((workspaceRoutes.body as { schema: string; surfaces: unknown[] }).schema)
-        .toBe('narada.operator_workspace.route_directory.v2');
+        .toBe('narada.operator_workspace.route_directory.v3');
       expect(Array.isArray((workspaceRoutes.body as { surfaces: unknown[] }).surfaces)).toBe(true);
       await server.stop();
     });
@@ -310,9 +310,9 @@ describe('console server', () => {
         }>;
       }> }).surfaces;
       expect(surfaces.find((surface) => surface.id === 'site-operations')).toEqual(expect.objectContaining({
-        authority: { kind: 'local-site', id: null },
+        authority: { kind: 'site', id: null },
         projection: { kind: 'site-operations', owner: '@narada2/cli' },
-        intent: { kind: 'site-control', endpoint: '/sites/<site-id>/operations/', protocols: ['http'] },
+        intent: { kind: 'site-control', endpoint: '/sites/<site-id>/operations/', endpointBase: 'workspace', protocols: ['http'] },
         diagnosticOnly: false,
       }));
       expect(surfaces.find((surface) => surface.id === 'site-operations')?.availability).toBe('available');
@@ -321,9 +321,9 @@ describe('console server', () => {
           path: '/sites/site-a/operations',
           availability: 'available',
           target: { kind: 'site', id: 'site-a' },
-          authority: { kind: 'local-site', id: 'site-a' },
+          authority: { kind: 'site', id: 'site-a' },
           projection: { kind: 'site-operations', owner: '@narada2/cli' },
-          intent: { kind: 'site-control', endpoint: '/sites/<site-id>/operations/', protocols: ['http'] },
+          intent: { kind: 'site-control', endpoint: '/sites/<site-id>/operations/', endpointBase: 'workspace', protocols: ['http'] },
           diagnosticOnly: false,
         })]));
       expect(surfaces.find((surface) => surface.id === 'agent-sessions')?.projectedRoutes)
@@ -857,7 +857,7 @@ describe('console server', () => {
       const pageHtml = pageBody;
       expect(pageHtml).toContain('<div id="app"></div>');
       expect(pageHtml).toContain('Operator Console - Sites');
-      expect(pageHtml).toContain('/console/registry/assets/');
+      expect(pageHtml).toContain('/console/assets/');
       expect(pageHtml).not.toContain('href="/workbench"');
 
       const assetMatch = pageHtml.match(/src="([^"]+\.js)"/);
@@ -866,31 +866,35 @@ describe('console server', () => {
       expect(asset.status).toBe(200);
       expect(asset.headers.get('content-type')).toContain('text/javascript');
       const assetBody = await asset.text();
-      expect(assetBody).toContain('/console/registry/add');
-      expect(assetBody).toContain('/console/registry/api');
+      expect(assetBody.length).toBeGreaterThan(0);
 
       const addPage = await fetch(`${url}/console/registry/add`);
       const addHtml = await addPage.text();
       expect(addPage.status, addHtml).toBe(200);
       expect(addHtml).toContain('<div id="app"></div>');
-      expect(addHtml).toContain('/console/registry/assets/');
+      expect(addHtml).toContain('/console/assets/');
 
       const managePage = await fetch(`${url}/console/registry/manage`);
       const manageHtml = await managePage.text();
       expect(managePage.status, manageHtml).toBe(200);
       expect(manageHtml).toContain('<div id="app"></div>');
-      expect(manageHtml).toContain('/console/registry/assets/');
+      expect(manageHtml).toContain('/console/assets/');
 
       const launcherPage = await fetch(`${url}/console/launch`);
       const launcherHtml = await launcherPage.text();
       expect(launcherPage.status, launcherHtml).toBe(200);
       expect(launcherHtml).toContain('<div id="app"></div>');
-      expect(launcherHtml).toContain('/console/registry/assets/');
+      expect(launcherHtml).toContain('/console/assets/');
 
       const sessionsPage = await fetch(`${url}/console/sessions`);
       const sessionsHtml = await sessionsPage.text();
       expect(sessionsPage.status, sessionsHtml).toBe(200);
       expect(sessionsHtml).toContain('<div id="app"></div>');
+
+      for (const pagePath of ['/console/registry', '/console/registry/add', '/console/registry/manage', '/console/launch', '/console/sessions']) {
+        const trailingSlashPage = await fetch(`${url}${pagePath}/`);
+        expect(trailingSlashPage.status, `${pagePath}/ should be accepted`).toBe(200);
+      }
 
       const sessionList = await httpGet(`${url}/console/sessions/api/sessions`);
       expect(sessionList.status).toBe(200);
@@ -901,6 +905,7 @@ describe('console server', () => {
       expect(launcherSessions.status).toBe(200);
       expect((launcherSessions.body as { schema: string; sessions: unknown[] }).schema).toBe('narada.workspace_launch.ui_session_list.v1');
       expect(Array.isArray((launcherSessions.body as { sessions: unknown[] }).sessions)).toBe(true);
+      expect(Array.isArray((launcherSessions.body as { history: unknown[] }).history)).toBe(true);
 
       const unknownRoute = await fetch(`${url}/console/not-found`);
       expect(unknownRoute.status).toBe(404);
@@ -1021,10 +1026,16 @@ describe('console server', () => {
           surface: 'interactive-selection-ui',
         },
       } as const;
+      const historicalSession = {
+        ...session,
+        ui_session_id: 'ui-session-history',
+        status: 'closed',
+        url: targetUrl,
+      } as const;
       const server = await createConsoleServer({
         port: 0,
         host: '127.0.0.1',
-        workspaceLaunchSessions: async () => [session],
+        workspaceLaunchSessions: async () => [session, historicalSession],
       });
       try {
         const url = await server.start();
@@ -1032,6 +1043,8 @@ describe('console server', () => {
         expect(inventory.status).toBe(200);
         expect((inventory.body as { sessions: Array<{ url: string | null }> }).sessions[0]?.url)
           .toBe('/console/launch/sessions/ui-session-active');
+        expect((inventory.body as { history: Array<{ ui_session_id: string; url: string | null }> }).history)
+          .toEqual([{ ...historicalSession, url: null }]);
 
         const page = await fetch(`${url}/console/launch/sessions/ui-session-active`);
         const html = await page.text();

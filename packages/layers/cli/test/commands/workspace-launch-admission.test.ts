@@ -8,6 +8,13 @@ import {
   type WorkspaceLaunchSelectionContext,
 } from '../../src/commands/workspace-launch-selection.js';
 import type { WorkspaceLaunchRecord } from '../../src/commands/workspace-launch-types.js';
+import {
+  advanceWorkspaceLaunchTransaction,
+  completeWorkspaceLaunchTransaction,
+  createWorkspaceLaunchTransaction,
+  failWorkspaceLaunchTransaction,
+} from '../../src/commands/workspace-launch-contracts.js';
+import { workspaceLaunchRollbackOwnedProcesses } from '../../src/commands/workspace-launch-process.js';
 
 const providerRegistry: WorkspaceLaunchProviderRegistry = {
   default_provider: 'kimi-code-api',
@@ -77,5 +84,76 @@ describe('workspace launch admission policy', () => {
       'kimi-code-api',
       'openrouter-api',
     ]);
+  });
+
+  it('enforces ordered launch transaction transitions and makes completion idempotent', () => {
+    const planned = createWorkspaceLaunchTransaction('launch_test');
+    const preflighted = advanceWorkspaceLaunchTransaction(planned, 'preflighted');
+    const spawned = advanceWorkspaceLaunchTransaction(preflighted, 'spawned');
+    const attached = advanceWorkspaceLaunchTransaction(spawned, 'attached');
+    const completed = completeWorkspaceLaunchTransaction(attached);
+
+    expect(completed.history).toEqual(['planned', 'preflighted', 'spawned', 'attached', 'completed']);
+    expect(completeWorkspaceLaunchTransaction(completed)).toEqual(completed);
+    expect(() => advanceWorkspaceLaunchTransaction(planned, 'attached')).toThrow('workspace_launch_transaction_transition_invalid');
+    const handedOff = advanceWorkspaceLaunchTransaction(
+      advanceWorkspaceLaunchTransaction(
+        advanceWorkspaceLaunchTransaction(createWorkspaceLaunchTransaction('handoff_test'), 'preflighted'),
+        'spawned',
+      ),
+      'handed_off',
+    );
+    expect(completeWorkspaceLaunchTransaction(handedOff).history).toEqual([
+      'planned', 'preflighted', 'spawned', 'handed_off', 'completed',
+    ]);
+    expect(() => completeWorkspaceLaunchTransaction(spawned)).toThrow('workspace_launch_transaction_invalid');
+    expect(() => advanceWorkspaceLaunchTransaction({
+      ...planned,
+      state: 'unknown',
+      history: ['unknown'],
+    }, 'preflighted')).toThrow('workspace_launch_transaction_invalid');
+  });
+
+  it('records failed transactions and bounded rollback evidence', () => {
+    const preflighted = advanceWorkspaceLaunchTransaction(
+      createWorkspaceLaunchTransaction('launch_failure'),
+      'preflighted',
+    );
+    const rollback = workspaceLaunchRollbackOwnedProcesses([
+      {
+        posture: 'agent_runtime_server',
+        execution_authority: 'structured_argv',
+        command: 'capture',
+        args: [],
+        cwd: 'D:/code/site',
+        detached: true,
+        stdio: 'ignore',
+        windowsHide: true,
+        pid: null,
+        owner_ref: 'launch_failure',
+      },
+    ]);
+    const failed = failWorkspaceLaunchTransaction(preflighted, rollback);
+
+    expect(rollback).toEqual({
+      attempted: true,
+      completed: true,
+      orphan_count: 0,
+      statuses: ['not_running'],
+      targets: [{
+        index: 0,
+        agent_id: null,
+        launch_session_id: null,
+        pid: null,
+        owner_ref: 'launch_failure',
+        status: 'not_running',
+        reason: 'no live process id was recorded',
+      }],
+    });
+    expect(failed).toMatchObject({
+      state: 'failed',
+      history: ['planned', 'preflighted', 'failed'],
+      rollback,
+    });
   });
 });

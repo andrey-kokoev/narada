@@ -21,6 +21,7 @@
   },
   "scripts": {
     "build": "tsc",
+    "prebuild:assets": "node scripts/clean-cloudflare-assets.mjs",
     "build:assets": "pnpm --filter @narada2/operator-console-ui build && pnpm --filter @narada2/agent-web-ui build && node scripts/build-cloudflare-assets.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
@@ -32,6 +33,7 @@
     "smoke:authority-live": "pnpm run smoke:cloudflare-origin-live"
   },
   "dependencies": {
+    "@narada2/nars-session-core": "workspace:*",
     "@narada2/operator-console-contract": "workspace:*",
     "@narada2/process-launch-posture": "workspace:*",
     "@narada2/nars-client-projection-contract": "workspace:*",

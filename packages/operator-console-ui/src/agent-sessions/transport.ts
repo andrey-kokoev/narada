@@ -1,3 +1,5 @@
+import { OPERATOR_CONSOLE_SESSIONS_API_PATH } from '@narada2/operator-console-contract';
+
 export type AgentSessionsFetch = (input: string, init?: RequestInit) => Promise<Response>;
 
 export interface AgentSessionsTransport {
@@ -29,7 +31,7 @@ async function readJson(response: Response): Promise<unknown> {
 }
 
 export function createAgentSessionsTransport(
-  basePath = '/console/sessions/api',
+  basePath = OPERATOR_CONSOLE_SESSIONS_API_PATH,
   fetchLike: AgentSessionsFetch = (input, init) => fetch(input, init),
 ): AgentSessionsTransport {
   return {

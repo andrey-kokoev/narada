@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import OperatorConsoleShell from './OperatorConsoleShell.vue';
-import { siteRegistryNavigation } from '../console/routes';
 
 defineProps<{ path: string }>();
 </script>
@@ -9,9 +8,9 @@ defineProps<{ path: string }>();
   <OperatorConsoleShell
     eyebrow="Operator Console"
     title="Page not found"
-    back-href="/console/registry"
+    back-navigation-key="sites"
     back-label="Back to Site Registry"
-    :nav-items="siteRegistryNavigation('sites')"
+    navigation-key="sites"
   >
     <main class="not-found">
       <h2>Operator Console page not found</h2>

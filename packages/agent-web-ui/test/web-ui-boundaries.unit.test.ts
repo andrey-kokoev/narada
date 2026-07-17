@@ -12,9 +12,18 @@ import {
 } from '../src/protocol/sessionTransportAdapters';
 import {
   PENDING_OPERATOR_INPUT_PHASES,
+  PENDING_OPERATOR_INPUT_TRANSITIONS,
   canTransitionPendingOperatorInput,
   transitionPendingOperatorInput,
 } from '../src/protocol/operatorInputLifecycle';
+import {
+  OPERATOR_INPUT_PHASES,
+  OPERATOR_INPUT_TRANSITIONS,
+} from '../src/operator-input-lifecycle.js';
+import {
+  OPERATOR_INPUT_DELIVERY_PHASES,
+  OPERATOR_INPUT_DELIVERY_TRANSITIONS,
+} from '../src/operator-input-delivery.js';
 import { buildMessageContentPipeline } from '../src/app/lib/contentPipeline';
 import {
   SESSION_PANEL_REGISTRY,
@@ -30,9 +39,11 @@ import {
   writeBooleanPreference,
 } from '../src/app/lib/browserPreferences.js';
 import { createNarsClient } from '../src/protocol/narsClient';
+import { createSessionProjection } from '../src/session-projection.js';
 import { useRuntimeTopology } from '../src/app/composables/useRuntimeTopology';
 import { buildIntelligenceReconfigureFrame } from '../src/app/lib/narsFrames';
 import { isOperatorInputTransportReady, isTransportLive, operatorInputNotReadyReason } from '../src/app/lib/operatorInputReadiness';
+import { findCorrelatedInput, inputCorrelationFromEvent } from '../src/operator-input-correlation.js';
 import type { SessionProtocolFrame, SessionTransport } from '../src/protocol/sessionTransport';
 
 describe('agent-web-ui runtime boundaries', () => {
@@ -44,6 +55,22 @@ describe('agent-web-ui runtime boundaries', () => {
     expect(isOperatorInputTransportReady(false, 'https://projection.example/input')).toBe(true);
     expect(isOperatorInputTransportReady(false, null)).toBe(false);
     expect(operatorInputNotReadyReason('subscribing')).toContain('subscribing');
+  });
+
+  it('renders browser-local correlation diagnostics in the default conversation projection', () => {
+    const projection = createSessionProjection([
+      {
+        event: 'web_ui_session_correlation_mismatch',
+        message: 'The attached transport reported a different NARS session; the event was ignored.',
+      },
+    ]);
+
+    expect(projection.rows).toHaveLength(1);
+    expect(projection.rows[0]).toMatchObject({
+      kind: 'web_ui_session_correlation_mismatch',
+      disposition: 'diagnostic_signal',
+      summary: 'The attached transport reported a different NARS session; the event was ignored.',
+    });
   });
 
   it('models transport lifecycle transitions explicitly', () => {
@@ -89,6 +116,37 @@ describe('agent-web-ui runtime boundaries', () => {
     expect(transitionPendingOperatorInput(lifecycle, PENDING_OPERATOR_INPUT_PHASES.RETRIED)).toBe(true);
     expect(lifecycle.phase).toBe(PENDING_OPERATOR_INPUT_PHASES.RETRIED);
     expect(transitionPendingOperatorInput(lifecycle, PENDING_OPERATOR_INPUT_PHASES.TIMED_OUT)).toBe(false);
+  });
+
+  it('uses one canonical input transition graph for recovery and delivery projections', () => {
+    expect(OPERATOR_INPUT_DELIVERY_PHASES).toBe(OPERATOR_INPUT_PHASES);
+    expect(OPERATOR_INPUT_DELIVERY_TRANSITIONS).toBe(OPERATOR_INPUT_TRANSITIONS);
+    expect(PENDING_OPERATOR_INPUT_TRANSITIONS[PENDING_OPERATOR_INPUT_PHASES.RELAY_PENDING]).toEqual([
+      PENDING_OPERATOR_INPUT_PHASES.TIMED_OUT,
+      PENDING_OPERATOR_INPUT_PHASES.REVIEWING,
+    ]);
+  });
+
+  it('keeps request IDs distinct from input-event IDs and refuses ambiguous method fallback', () => {
+    expect(inputCorrelationFromEvent({ request_id: 'request-1', input_event_id: 'event-1' })).toMatchObject({
+      requestId: 'request-1',
+      inputEventId: 'event-1',
+    });
+    expect(findCorrelatedInput([
+      { request_id: 'request-1', method: 'session.submit', phase: 'sent' },
+      { request_id: 'request-2', method: 'session.submit', phase: 'sent' },
+    ], { method: 'session.submit' }, { allowUniqueMethod: true })).toMatchObject({
+      record: null,
+      matchedBy: 'unique_method',
+      ambiguous: true,
+    });
+    expect(findCorrelatedInput([
+      { request_id: 'request-1', session_id: 'session-1', method: 'session.submit', phase: 'sent' },
+    ], { request_id: 'request-1', session_id: 'session-2' })).toMatchObject({
+      record: null,
+      matchedBy: null,
+      ambiguous: false,
+    });
   });
 
   it('builds the Intelligence box action as a direct local runtime control', () => {
@@ -417,6 +475,7 @@ describe('agent-web-ui runtime boundaries', () => {
   });
 
   it('restores pending operator input metadata from tab storage for explicit review after reload', () => {
+    const recentCreatedAt = new Date(Date.now() - 60_000).toISOString();
     const sockets: FakeSocket[] = [];
     const storageValues = new Map([
       ['pending-input-test', JSON.stringify([{
@@ -426,7 +485,7 @@ describe('agent-web-ui runtime boundaries', () => {
         source: 'agent-web-ui',
         delivery_mode: 'default',
         active_turn_id: null,
-        created_at: '2026-07-15T21:00:00.000Z',
+        created_at: recentCreatedAt,
       }])],
     ]);
     const WebSocketCtor = class extends FakeSocket {
@@ -568,6 +627,101 @@ describe('agent-web-ui runtime boundaries', () => {
     client.close();
   });
 
+  it('preserves Cloudflare replay evidence and remote admission semantics', async () => {
+    const sockets: FakeSocket[] = [];
+    let inputResponseCount = 0;
+    const WebSocketCtor = class extends FakeSocket {
+      static OPEN = 1;
+      constructor(url: string) {
+        super(url);
+        sockets.push(this);
+      }
+    } as unknown as typeof WebSocket;
+    const events: unknown[] = [];
+    const fetchFn = vi.fn(async (url: string | URL) => {
+      if (String(url) === 'https://projection.example/input') {
+        inputResponseCount += 1;
+        return {
+          ok: true,
+          status: 200,
+          async json() {
+            return inputResponseCount === 1
+              ? { status: 'admitted', method: 'conversation.send', request_id: 'remote-admitted-1' }
+              : { status: 'refused', method: 'conversation.send', request_id: 'remote-refused-1', message: 'authority refused input' };
+          },
+        };
+      }
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return {
+            events: [{ event_sequence: 1, payload: { event: 'session_started' } }],
+            event_count: 1,
+            has_more: false,
+            truncated: true,
+            cursor: { last_sequence: 1, next_sequence: 2 },
+          };
+        },
+      };
+    });
+    const client = createNarsClient({
+      endpoint: 'https://projection.example/events',
+      inputEndpoint: 'https://projection.example/input',
+      pendingInputStorageKey: 'cloudflare-admission-semantics-test',
+      pendingInputStorage: {
+        getItem: () => null,
+        setItem: () => undefined,
+        removeItem: () => undefined,
+      },
+      WebSocketCtor,
+      fetchFn: fetchFn as unknown as typeof fetch,
+      onEvent: (event) => events.push(event),
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(sockets).toHaveLength(1);
+    expect(events).toContainEqual(expect.objectContaining({
+      event: 'session_events_subscription_started',
+      transport: 'cloudflare-projection',
+    }));
+    expect(events).toContainEqual(expect.objectContaining({
+      event: 'session_events_read',
+      method: 'session.events.read',
+      history_truncated: true,
+    }));
+    expect(events).toContainEqual(expect.objectContaining({
+      event: 'session_events_replay_completed',
+      replay_count: 1,
+      history_truncated: true,
+    }));
+
+    sockets[0].open();
+    expect(client.sendFrame({ id: 'cloudflare-admitted', method: 'session.submit', params: { message: 'admit me' } })).toBe(true);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(events).toContainEqual(expect.objectContaining({
+      event: 'projection_input_response',
+      request_id: 'cloudflare-admitted',
+      authority_request_id: 'remote-admitted-1',
+      status: 'admitted',
+      method: 'conversation.send',
+      transport_method: 'session.submit',
+      remote_method: 'conversation.send',
+      http_ok: true,
+    }));
+
+    expect(client.sendFrame({ id: 'cloudflare-refused', method: 'session.submit', params: { message: 'refuse me' } })).toBe(true);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(events).toContainEqual(expect.objectContaining({
+      event: 'projection_input_response',
+      request_id: 'cloudflare-refused',
+      status: 'refused',
+      method: 'conversation.send',
+      http_ok: true,
+    }));
+    client.close();
+  });
+
   it('correlates a Cloudflare relay failure to the pending input and clears recovery state', async () => {
     const sockets: FakeSocket[] = [];
     const storageValues = new Map<string, string>();
@@ -690,6 +844,48 @@ describe('agent-web-ui runtime boundaries', () => {
       socket_generation: 1,
     }));
     expect(storageValues.get('correlation-input-test')).toContain(submitted.requestId);
+    client.close();
+  });
+
+  it('clears a pending input when NARS omits request_id but supplies input_event_id', () => {
+    const sockets: FakeSocket[] = [];
+    const storageValues = new Map<string, string>();
+    const events: unknown[] = [];
+    const WebSocketCtor = class extends FakeSocket {
+      static OPEN = 1;
+      constructor(url: string) {
+        super(url);
+        sockets.push(this);
+      }
+    } as unknown as typeof WebSocket;
+    const client = createNarsClient({
+      endpoint: 'ws://127.0.0.1/missing-request-id-events',
+      sessionId: 'session-missing-request-id',
+      pendingInputStorageKey: 'missing-request-id-test',
+      pendingInputStorage: {
+        getItem: (key) => storageValues.get(key) ?? null,
+        setItem: (key, value) => { storageValues.set(key, value); },
+        removeItem: (key) => { storageValues.delete(key); },
+      },
+      WebSocketCtor,
+      onEvent: (event) => events.push(event),
+    });
+
+    sockets[0].open();
+    const submitted = submitOperatorInput('correlate by input event id', client);
+    expect(storageValues.get('missing-request-id-test')).toContain(submitted.requestId);
+    sockets[0].emit('message', { data: JSON.stringify({
+      event: 'input_event_queued',
+      input_event_id: 'input-event-only-1',
+      method: 'session.submit',
+      session_id: 'session-missing-request-id',
+    }) });
+
+    expect(events).toContainEqual(expect.objectContaining({
+      event: 'input_event_queued',
+      input_event_id: 'input-event-only-1',
+    }));
+    expect(storageValues.has('missing-request-id-test')).toBe(false);
     client.close();
   });
 });

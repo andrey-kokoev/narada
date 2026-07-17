@@ -14,7 +14,8 @@ import { useSessionActions } from './composables/useSessionActions';
 import { useOperatorInput, type OperatorQueueItem } from './composables/useOperatorInput';
 import { useOperatorQueue } from './composables/useOperatorQueue';
 import { useOperatorSnippets, type OperatorSnippet, type OperatorSnippetCommandEvent, type OperatorSnippetFeedback, type OperatorSnippetOpenRequest } from './composables/useOperatorSnippets';
-import { useProjectionVerbosity, type ProjectionVerbosity } from './composables/useProjectionVerbosity';
+import { useProjectionVerbosity } from './composables/useProjectionVerbosity';
+import type { ProjectionViewDraft } from './lib/projectionViews';
 import { useRuntimeTopology } from './composables/useRuntimeTopology';
 import { useResolvedFavicon } from './composables/useResolvedFavicon.js';
 import { useSchedulerSummary } from './composables/useSchedulerSummary';
@@ -28,6 +29,7 @@ import { buildAffordanceActionCancelFrame, buildAffordanceActionConfirmFrame, bu
 interface AgentWebUiConfig {
   eventEndpoint: string | null;
   healthEndpoint: string | null;
+  sessionId?: string | null;
   healthTransport: string;
   inputEndpoint?: string | null;
   browserToken?: string | null;
@@ -60,10 +62,11 @@ const projection = useProjectionVerbosity();
 const session = useSessionState(projection.verbosity, {
   eventEndpoint: props.config.eventEndpoint,
   healthEndpoint: props.config.healthEndpoint,
+  sessionId: props.config.sessionId ?? null,
   inputEndpoint: props.config.inputEndpoint,
   browserToken: props.config.browserToken ?? null,
   maxReplay: props.config.maxReplay,
-});
+}, projection.activeView);
 const sessionActions = useSessionActions(session.connection.connection, session.retain, supportsProtocolMethod);
 const affordanceConfirmations = useAffordanceConfirmations(session.events);
 const mcpInventory = useMcpInventory(session.events, session.health.body);
@@ -98,7 +101,10 @@ const canSteerActiveTurn = computed(() => (
 ));
 const input = useOperatorInput(session.connection.connection, session.retain, session.clear, props.config.authorityTransition ?? null, () => canSteerActiveTurn.value, preferSessionCoreInput, supportsProtocolMethod, sessionActions.send, () => session.activeTurnId.value);
 const draft = input.draft;
+const reviewedPendingInput = ref<{ requestId: string; content: string } | null>(null);
 const followLatestRevision = ref(0);
+const lastSubmittedDraft = ref('');
+const submittedDraftRevision = ref(0);
 const surfaceAffordancesRequested = ref(false);
 const operatorSnippetFeedback = ref<OperatorSnippetFeedback | null>(null);
 const operatorSnippetOpenRequest = ref<OperatorSnippetOpenRequest | null>(null);
@@ -109,6 +115,11 @@ function followLatestTranscript() {
   followLatestRevision.value += 1;
 }
 
+function recordSubmittedDraft(content: string) {
+  lastSubmittedDraft.value = content;
+  submittedDraftRevision.value += 1;
+}
+
 watch(session.streamText, (status) => {
   if (surfaceAffordancesRequested.value || status !== 'connected' || !supportsProtocolMethod('session.surface.affordances')) return;
   surfaceAffordancesRequested.value = sessionActions.send(buildSurfaceAffordancesRequestFrame());
@@ -116,6 +127,9 @@ watch(session.streamText, (status) => {
 
 function submitOperatorDraft(deliveryMode: 'default' | 'enqueue' = 'default') {
   const trimmedDraft = draft.value.trim();
+  const retryCandidate = reviewedPendingInput.value && reviewedPendingInput.value.content === trimmedDraft
+    ? reviewedPendingInput.value
+    : null;
   const snippetsMatch = /^\/snippets(?:\s+([\s\S]+))?$/i.exec(trimmedDraft);
   if (snippetsMatch) {
     openOperatorSnippets(snippetsMatch[1] ?? '', 'list');
@@ -145,6 +159,7 @@ function submitOperatorDraft(deliveryMode: 'default' | 'enqueue' = 'default') {
     }
     if (action.kind === 'run') {
       if (input.submitConversationText(action.snippet.body, action.deliveryMode ?? deliveryMode)) {
+        recordSubmittedDraft(action.snippet.body);
         operatorSnippets.markSnippetUsed(action.snippet.name);
         retainSnippetRunEvent(action.snippet, action.deliveryMode ?? deliveryMode);
         draft.value = '';
@@ -153,11 +168,28 @@ function submitOperatorDraft(deliveryMode: 'default' | 'enqueue' = 'default') {
       return;
     }
   }
-  if (input.submit(deliveryMode)) followLatestTranscript();
+  const submittedContent = draft.value;
+  if (input.submit(deliveryMode)) {
+    recordSubmittedDraft(submittedContent);
+    if (retryCandidate) {
+      session.connection.connection.value?.markPendingOperatorInputRetried(retryCandidate.requestId, input.lastSubmittedRequestId.value);
+      reviewedPendingInput.value = null;
+    }
+    followLatestTranscript();
+  }
 }
 
-function setProjectionVerbosity(value: ProjectionVerbosity) {
-  projection.setVerbosity(value);
+function setProjectionView(value: string) {
+  projection.setView(value);
+  followLatestTranscript();
+}
+
+function saveProjectionView(view: ProjectionViewDraft) {
+  if (projection.saveCustomView(view)) followLatestTranscript();
+}
+
+function deleteProjectionView(id: string) {
+  projection.deleteCustomView(id);
   followLatestTranscript();
 }
 
@@ -178,6 +210,7 @@ function retainSnippetEvent(event: OperatorSnippetCommandEvent) {
 
 function runOperatorSnippet(snippet: OperatorSnippet, deliveryMode: 'default' | 'enqueue' = 'default') {
   if (input.submitConversationText(snippet.body, deliveryMode)) {
+    recordSubmittedDraft(snippet.body);
     operatorSnippets.markSnippetUsed(snippet.name);
     retainSnippetRunEvent(snippet, deliveryMode);
     draft.value = '';
@@ -240,6 +273,27 @@ function fillIntentRef(intentText: string) {
 
 function interruptModel() {
   if (input.interrupt()) followLatestTranscript();
+}
+
+function reviewTimedOutInput(content: string, requestId: string | null) {
+  if (requestId) {
+    session.connection.connection.value?.reviewPendingOperatorInput(requestId);
+    reviewedPendingInput.value = { requestId, content };
+  }
+  draft.value = content;
+  followLatestTranscript();
+  nextTick(() => {
+    const inputElement = document.querySelector<HTMLTextAreaElement>('#operator-input');
+    inputElement?.focus();
+    inputElement?.setSelectionRange(inputElement.value.length, inputElement.value.length);
+  });
+}
+
+function discardRecoverableInput(requestId: string | null) {
+  session.connection.connection.value?.discardPendingOperatorInput(requestId);
+  if (requestId && reviewedPendingInput.value?.requestId === requestId) reviewedPendingInput.value = null;
+  if (requestId && draft.value.trim() === session.operatorDelivery.value.content?.trim()) draft.value = '';
+  followLatestTranscript();
 }
 
 function requestSopSummary() {
@@ -310,11 +364,15 @@ function cancelAffordanceAction(item: AffordanceConfirmationItem) {
     :health-body="session.health.body.value"
     :onboarding="config.onboarding?.mode === 'user-site'"
     :stream-text="session.streamText.value"
+    :stream-live="session.streamLive.value"
     :health-text="session.health.text.value"
     :intelligence="session.health.intelligence.value"
     :summarized-state-sample-count="session.summarizedStateSampleCount.value"
     :verbosity="projection.verbosity.value"
-    :verbosity-levels="projection.levels"
+    :view-id="projection.viewId.value"
+    :view-options="projection.viewOptions.value"
+    :custom-views="projection.customViews.value"
+    :view-facet-options="projection.facetOptions"
     :rows="session.rows.value"
     :session-identity="session.sessionIdentity.value"
     :operator-delivery="session.operatorDelivery.value"
@@ -341,12 +399,19 @@ function cancelAffordanceAction(item: AffordanceConfirmationItem) {
     :authority-transition="config.authorityTransition ?? null"
     :cloudflare-projection="cloudflareProjection"
     :follow-latest-revision="followLatestRevision"
+    :last-submitted-draft="lastSubmittedDraft"
+    :submitted-draft-revision="submittedDraftRevision"
     :has-earlier-events="session.hasEarlierEvents.value"
+    :history-truncated="session.historyTruncated.value"
     :loading-earlier="session.loadingEarlier.value"
-    @update:verbosity="setProjectionVerbosity"
+    @update:view="setProjectionView"
+    @save-view="saveProjectionView"
+    @delete-view="deleteProjectionView"
     @publish-cloudflare="cloudflareProjection.publish"
     @submit="submitOperatorDraft"
     @run-snippet="runOperatorSnippet"
+    @retry-input="reviewTimedOutInput"
+    @discard-input="discardRecoverableInput"
     @save-snippet="saveOperatorSnippet"
     @restore-snippet="restoreOperatorSnippet"
     @rename-snippet="renameOperatorSnippet"

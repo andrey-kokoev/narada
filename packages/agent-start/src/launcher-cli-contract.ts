@@ -35,7 +35,7 @@ export function identityToken(identity) {
 }
 
 export function normalizeMcpScope(value) {
-  const normalized = String(value ?? 'all').trim().toLowerCase();
+  const normalized = String(value ?? 'none').trim().toLowerCase();
   if (ADMITTED_MCP_SCOPES.includes(normalized)) return normalized;
   throw new Error(`mcp_scope_not_admitted: ${normalized}. Admitted scopes: ${ADMITTED_MCP_SCOPES.join(', ')}`);
 }

@@ -90,6 +90,7 @@ const DIAGNOSTIC_EVENT_KINDS = new Set([
   'carrier_diagnostic_recorded',
   'mcp_runtime_fault',
   'runtime_projection_failure',
+  'runtime_output_failure',
   'runtime_control_input_bridge_error',
   'runtime_intelligence_reconfiguration',
   'provider_runtime_reconfiguration_state_transition',
@@ -143,9 +144,25 @@ export function eventMatchesNarsFilters(event, filters = {}) {
     const family = String(eventKind ?? '').startsWith('session_') ? 'session' : 'turn';
     if (!families.includes(family)) return false;
   }
-  if (filters.request_id && event?.request_id !== filters.request_id) return false;
-  if (filters.turn_id && event?.turn_id !== filters.turn_id) return false;
+  if (filters.request_id && !eventMatchesNarsSelector(event, 'request_id', filters.request_id)) return false;
+  if (filters.turn_id && !eventMatchesNarsSelector(event, 'turn_id', filters.turn_id)) return false;
+  const anyOf = filters.any_of;
+  if (anyOf && typeof anyOf === 'object' && !Array.isArray(anyOf)) {
+    const selectors = ['request_id', 'turn_id', 'input_event_id', 'directive_id']
+      .filter((field) => anyOf[field] !== undefined && anyOf[field] !== null && anyOf[field] !== '');
+    if (selectors.length > 0 && !selectors.some((field) => eventMatchesNarsSelector(event, field, anyOf[field]))) return false;
+  }
   return true;
+}
+
+function eventMatchesNarsSelector(event, field, expected) {
+  const payload = event?.payload && typeof event.payload === 'object' && !Array.isArray(event.payload)
+    ? event.payload
+    : {};
+  const values = field === 'input_event_id'
+    ? [event?.input_event_id, event?.event_id, payload.input_event_id, payload.event_id]
+    : [event?.[field], payload[field]];
+  return values.some((value) => value !== undefined && value !== null && String(value) === String(expected));
 }
 
 export function readNarsEventLogPage({

@@ -4,7 +4,7 @@ import { summarizeSessionIdentity as summarizeProjectedSessionIdentity } from '.
 import type { ProjectedEventRow } from '../lib/eventProjection';
 import type { HealthIdentitySummary } from './useHealthStatus';
 import type { AgentActivityState } from './useAgentActivity';
-import type { ProjectionVerbosity } from './useProjectionVerbosity';
+import type { ProjectionVerbosity, ProjectionViewOption } from './useProjectionVerbosity';
 
 export interface SessionIdentitySummary {
   siteId: string | null;
@@ -16,7 +16,7 @@ export interface SessionIdentitySummary {
 }
 
 export interface OperatorInputDeliveryProjection {
-  phase: 'draft' | 'submitting' | 'accepted' | 'rejected' | 'queued' | 'steering' | 'completed' | 'failed';
+  phase: 'draft' | 'submitting' | 'accepted' | 'rejected' | 'queued' | 'steering' | 'completed' | 'failed' | 'timed_out' | 'relay_pending' | 'reviewing' | 'retried' | 'late_reconciled' | 'discarded' | 'expired';
   requestId: string | null;
   content: string | null;
   method: string | null;
@@ -35,7 +35,8 @@ export interface OperatorInputDeliveryProjection {
 
 export function useNarsEvents(
   events: unknown[],
-  verbosity: Ref<ProjectionVerbosity>,
+  verbosity: Readonly<Ref<ProjectionVerbosity>>,
+  activeView: Readonly<Ref<ProjectionViewOption>> | undefined,
   healthIdentity?: Ref<HealthIdentitySummary>,
   healthBody?: Ref<Record<string, unknown> | null>,
 ) {
@@ -52,6 +53,7 @@ export function useNarsEvents(
 
   const projection = computed(() => createSessionProjection(events, {
     verbosity: verbosity.value,
+    customView: activeView?.value && !activeView.value.builtIn ? activeView.value : null,
     nowMs: nowMs.value,
     healthSnapshot: healthBody?.value ?? null,
   }));

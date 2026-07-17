@@ -6,6 +6,7 @@ import {
   canTransitionNarsArtifactLifecycle,
   createNarsArtifactLifecycle,
   isNarsArtifactLifecycleTerminalState,
+  normalizeNarsArtifactLifecycle,
   transitionNarsArtifactLifecycle,
   transitionNarsArtifactRecord,
 } from './artifact-lifecycle-state.mjs';
@@ -37,8 +38,15 @@ test('artifact lifecycle FSM allows deactivation and final archival without reac
   assert.equal(isNarsArtifactLifecycleTerminalState('archived'), true);
   assert.equal(canTransitionNarsArtifactLifecycle('archived', 'active'), false);
   assert.throws(
+    () => normalizeNarsArtifactLifecycle({ state: 'unknown' }),
+    (error) => error?.code === 'invalid_nars_artifact_lifecycle_state'
+      && error?.details?.state === 'unknown',
+  );
+  assert.throws(
     () => assertNarsArtifactLifecycleTransition('revoked', 'active'),
-    /invalid_nars_artifact_lifecycle_transition/,
+    (error) => error?.code === 'invalid_nars_artifact_lifecycle_transition'
+      && error?.details?.previous_state === 'revoked'
+      && error?.details?.next_state === 'active',
   );
 });
 
@@ -56,6 +64,8 @@ test('artifact lifecycle record transition preserves artifact identity and rejec
   assert.equal(expired.lifecycle.history.length, 2);
   assert.throws(
     () => transitionNarsArtifactRecord(expired, 'revoked'),
-    /invalid_nars_artifact_lifecycle_transition/,
+    (error) => error?.code === 'invalid_nars_artifact_lifecycle_transition'
+      && error?.details?.previous_state === 'expired'
+      && error?.details?.next_state === 'revoked',
   );
 });

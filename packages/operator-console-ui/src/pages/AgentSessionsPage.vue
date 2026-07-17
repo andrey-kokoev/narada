@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import OperatorConsoleShell from '../components/OperatorConsoleShell.vue';
-import { findOperatorRouteTarget, operatorConsoleNavigation } from '../console/routes';
+import { findOperatorRouteTarget } from '../console/routes';
 import { useOperatorWorkspaceRouteDirectory } from '../console/route-directory';
 import { useAgentSessions } from '../agent-sessions/composables/useAgentSessions';
 
@@ -25,7 +25,7 @@ function formatTimestamp(value: string | null): string {
     title="Agent Sessions"
     back-href="/"
     back-label="Back to Operator Workspace"
-    :nav-items="operatorConsoleNavigation('sessions')"
+    navigation-key="sessions"
   >
     <main class="console-main">
       <div class="intro">

@@ -1,6 +1,18 @@
 export const OPERATOR_SURFACE_DESCRIPTOR_SCHEMA = 'narada.operator.surface_descriptor.v3' as const;
 export const OPERATOR_WORKSPACE_ROUTE_DIRECTORY_SCHEMA = 'narada.operator_workspace.route_directory.v3' as const;
 export const OPERATOR_WORKSPACE_ROUTE_DIRECTORY_PATH = '/console/routes' as const;
+export const OPERATOR_CONSOLE_PATH = '/console' as const;
+export const OPERATOR_CONSOLE_REGISTRY_PATH = '/console/registry' as const;
+export const OPERATOR_CONSOLE_REGISTRY_API_PATH = `${OPERATOR_CONSOLE_REGISTRY_PATH}/api` as const;
+export const OPERATOR_CONSOLE_REGISTRY_ADD_PATH = `${OPERATOR_CONSOLE_REGISTRY_PATH}/add` as const;
+export const OPERATOR_CONSOLE_REGISTRY_MANAGE_PATH = `${OPERATOR_CONSOLE_REGISTRY_PATH}/manage` as const;
+export const OPERATOR_CONSOLE_LAUNCH_PATH = `${OPERATOR_CONSOLE_PATH}/launch` as const;
+export const OPERATOR_CONSOLE_LAUNCH_API_PATH = `${OPERATOR_CONSOLE_LAUNCH_PATH}/api` as const;
+export const OPERATOR_CONSOLE_LAUNCH_SESSIONS_PATH = `${OPERATOR_CONSOLE_LAUNCH_PATH}/sessions` as const;
+export const OPERATOR_CONSOLE_SESSIONS_PATH = `${OPERATOR_CONSOLE_PATH}/sessions` as const;
+export const OPERATOR_CONSOLE_SESSIONS_API_PATH = `${OPERATOR_CONSOLE_SESSIONS_PATH}/api` as const;
+export const OPERATOR_CONSOLE_ASSET_PATH = '/console/assets' as const;
+export const OPERATOR_WORKSPACE_ROUTE_DIRECTORY_TIMEOUT_MS = 10_000;
 export const OPERATOR_CONSOLE_LONG_RUNNING_REQUEST_TIMEOUT_MS = 120_000;
 
 export type OperatorSurfaceId =
@@ -81,6 +93,17 @@ export interface OperatorSurfaceNavigationItem {
   key: OperatorSurfaceNavigationKey;
   label: string;
   href: string;
+}
+
+export function isOperatorWorkspaceRoutePath(value: unknown): value is string {
+  if (typeof value !== 'string'
+    || value.length === 0
+    || value.trim() !== value
+    || !value.startsWith('/')
+    || value.startsWith('//')
+    || value.includes('\\')
+    || /[\u0000-\u001f\u007f]/.test(value)) return false;
+  return true;
 }
 
 function projectedRouteDetail(availability: OperatorSurfaceAvailability): string {
@@ -249,12 +272,12 @@ export const operatorSurfaceDescriptors: readonly OperatorSurfaceDescriptor[] = 
     authority: { kind: 'user-site', id: null },
     authorityHost: { kind: 'local', id: 'user-site', origin: null },
     projection: { kind: 'registry', owner: '@narada2/operator-console-ui' },
-    intent: { kind: 'registry-workflow', endpoint: '/console/registry', endpointBase: 'workspace', protocols: ['http'] },
+    intent: { kind: 'registry-workflow', endpoint: OPERATOR_CONSOLE_REGISTRY_PATH, endpointBase: 'workspace', protocols: ['http'] },
     diagnosticOnly: false,
     routes: [
-      { id: 'sites', path: '/console/registry', kind: 'page', label: 'Sites', navigationKey: 'sites' },
-      { id: 'add', path: '/console/registry/add', kind: 'workflow', label: 'Add Site', navigationKey: 'add' },
-      { id: 'manage', path: '/console/registry/manage', kind: 'workflow', label: 'Manage', navigationKey: 'manage' },
+      { id: 'sites', path: OPERATOR_CONSOLE_REGISTRY_PATH, kind: 'page', label: 'Sites', navigationKey: 'sites' },
+      { id: 'add', path: `${OPERATOR_CONSOLE_REGISTRY_PATH}/add`, kind: 'workflow', label: 'Add Site', navigationKey: 'add' },
+      { id: 'manage', path: `${OPERATOR_CONSOLE_REGISTRY_PATH}/manage`, kind: 'workflow', label: 'Manage', navigationKey: 'manage' },
     ],
     defaultAvailability: 'available',
     detail: {
@@ -368,6 +391,9 @@ export function projectOperatorSurfaceCatalog(
     const routes = [...descriptor.routes, ...(input.additionalRoutes?.[descriptor.id] ?? [])];
     const routeIds = new Set<string>();
     const projectedRoutes = routes.map((route) => {
+      if (!isOperatorWorkspaceRoutePath(route.path)) {
+        throw new Error(`operator_surface_route_path_invalid:${descriptor.id}:${route.id}`);
+      }
       if (routeIds.has(route.id)) {
         throw new Error(`operator_surface_route_duplicate:${descriptor.id}:${route.id}`);
       }
@@ -396,10 +422,21 @@ export function projectOperatorSurfaceCatalog(
 export function projectOperatorWorkspaceRouteDirectory(
   input: OperatorSurfaceCatalogProjectionInput = {},
 ): OperatorWorkspaceRouteDirectory {
+  const surfaces = projectOperatorSurfaceCatalog(input);
+  const navigationKeys = new Set<string>();
+  for (const surface of surfaces) {
+    for (const route of surface.projectedRoutes) {
+      if (!route.navigationKey) continue;
+      if (navigationKeys.has(route.navigationKey)) {
+        throw new Error(`operator_workspace_navigation_key_duplicate:${route.navigationKey}`);
+      }
+      navigationKeys.add(route.navigationKey);
+    }
+  }
   return {
     schema: OPERATOR_WORKSPACE_ROUTE_DIRECTORY_SCHEMA,
     workspaceHost: input.workspaceHost ?? { kind: 'local', id: 'operator-console', origin: null },
-    surfaces: projectOperatorSurfaceCatalog(input),
+    surfaces,
   };
 }
 

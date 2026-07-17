@@ -5,7 +5,6 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const naradaRoot = resolve(packageRoot, '..', '..');
 const uiVueRoot = resolve(packageRoot, '..', 'ui-vue');
 const agentWebUiRoot = resolve(packageRoot, '..', 'agent-web-ui');
 const operatorConsoleUiRoot = resolve(packageRoot, '..', 'operator-console-ui');
@@ -63,13 +62,15 @@ test('shared UI package exports and consumer direction are explicit', async () =
 test('consumers import shared foundation before app-specific layers', async () => {
   const agentStyles = await readFile(resolve(agentWebUiRoot, 'src/agent-web-ui.css'), 'utf8');
   const agentBaseStyles = await readFile(resolve(agentWebUiRoot, 'src/styles/base.css'), 'utf8');
-  const registryPage = await readFile(resolve(naradaRoot, 'packages/layers/cli/src/commands/console-site-registry-page.ts'), 'utf8');
+  const operatorConsoleMain = await readFile(resolve(operatorConsoleUiRoot, 'src/main.ts'), 'utf8');
+  const operatorConsoleShell = await readFile(resolve(operatorConsoleUiRoot, 'src/components/OperatorConsoleShell.vue'), 'utf8');
+  const siteRegistryPage = await readFile(resolve(operatorConsoleUiRoot, 'src/pages/SiteRegistryPage.vue'), 'utf8');
 
   assert.match(agentStyles, /@import "@narada2\/ui\/styles\.css"(?:\s+layer\([^)]*\))?;/);
   assert.match(agentStyles, /@import "@narada2\/ui-vue\/components\.css"(?:\s+layer\([^)]*\))?;/);
-  assert.match(registryPage, /require\.resolve\('@narada2\/ui\/styles\.css'\)/);
-  assert.match(registryPage, /data-narada-ui-foundation/);
-  assert.doesNotMatch(registryPage, /#17212b|#d7dfe5|#f4f6f8/);
+  assert.match(operatorConsoleMain, /@narada2\/ui-vue\/styles\.css/);
+  assert.match(operatorConsoleShell, /OperatorSurfaceShell/);
+  assert.match(siteRegistryPage, /OperatorConsoleShell/);
   assert.match(agentBaseStyles, /height: 100vh/);
   assert.doesNotMatch(agentBaseStyles, /(?:margin|background):/);
 });

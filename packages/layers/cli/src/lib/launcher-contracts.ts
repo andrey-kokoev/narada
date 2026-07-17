@@ -52,6 +52,7 @@ export interface AgentStartOptions {
   authority?: string;
   intelligenceProvider?: string;
   mcpScope?: string;
+  preflightOnly?: boolean;
   dryRun?: boolean;
   exec?: boolean;
   wait?: boolean;

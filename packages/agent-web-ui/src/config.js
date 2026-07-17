@@ -25,6 +25,7 @@ export function resolveAttachConfig(search = '', injectedConfig = {}) {
   const cloudflareAuthoritySessionId = value('cloudflare_authority_session_id', 'cloudflareAuthoritySessionId', 'authority_session_id', 'authoritySessionId');
   const cloudflareApiBaseUrl = value('cloudflare_api_base_url', 'cloudflareApiBaseUrl', 'api_base_url', 'apiBaseUrl');
   const browserToken = value('cloudflare_browser_token', 'cloudflareBrowserToken', 'browser_token_fingerprint', 'browserTokenFingerprint', 'browserToken');
+  const sessionId = value('session_id', 'sessionId', 'nars_session_id', 'narsSessionId') ?? cloudflareAuthoritySessionId ?? cloudflareProjectionId;
   const cloudflareAuthorityConfig = cloudflareAuthoritySessionId && cloudflareApiBaseUrl
     ? buildAgentWebUiCloudflareAuthorityConfig({ session_id: cloudflareAuthoritySessionId, api_base_url: cloudflareApiBaseUrl })
     : null;
@@ -38,6 +39,7 @@ export function resolveAttachConfig(search = '', injectedConfig = {}) {
     mode: remoteConfig?.mode ?? 'local_nars_projection',
     ...(Array.isArray(injectedConfig.admittedMethods) ? { admittedMethods: [...injectedConfig.admittedMethods] } : {}),
     projectionId: cloudflareProjectionId,
+    sessionId,
     ...(cloudflareAuthoritySessionId ? { authoritySessionId: cloudflareAuthoritySessionId } : {}),
     cloudflareApiBaseUrl,
     browserToken: cloudflareConfig?.browser_token_fingerprint ?? browserToken,

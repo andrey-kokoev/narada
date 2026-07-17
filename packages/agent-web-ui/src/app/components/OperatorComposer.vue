@@ -1,19 +1,31 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref } from 'vue';
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import BoxRowShell from './BoxRowShell.vue';
 import BoxVisibilitySelector, { type BoxVisibilitySelectorItem } from './BoxVisibilitySelector.vue';
 import OperatorCommandPalette from './OperatorCommandPalette.vue';
 import { useBoxVisibilityPreference } from '../composables/useBoxVisibilityPreference';
 import { useOperatorCommandPalette } from '../composables/useOperatorCommandPalette';
 import { useOperatorInterruptPrompt } from '../composables/useOperatorInterruptPrompt';
+import { isCaretOnFirstLine, isCaretOnLastLine, useComposerHistory } from '../composables/useComposerHistory';
 import { AGENT_WEB_UI_PREFERENCE_KEYS } from '../lib/browserPreferences.js';
 import type { OperatorSnippet, OperatorSnippetDeliveryMode } from '../composables/useOperatorSnippets';
 import type { OperatorInputDeliveryProjection } from '../composables/useNarsEvents';
 
 const draft = defineModel<string>({ required: true });
-const props = defineProps<{ disabled?: boolean; disabledReason?: string; canInterrupt?: boolean; operatorSnippets?: OperatorSnippet[]; targetLabel?: string; targetState?: string; operatorDelivery: OperatorInputDeliveryProjection; supportsProtocolMethod?: (method: string) => boolean }>();
-const emit = defineEmits<{ submit: [deliveryMode?: OperatorSnippetDeliveryMode]; 'run-snippet': [snippet: OperatorSnippet, deliveryMode?: OperatorSnippetDeliveryMode]; interrupt: [] }>();
+const props = defineProps<{ disabled?: boolean; disabledReason?: string; canInterrupt?: boolean; operatorSnippets?: OperatorSnippet[]; targetLabel?: string; targetState?: string; operatorDelivery: OperatorInputDeliveryProjection; supportsProtocolMethod?: (method: string) => boolean; lastSubmittedDraft: string; submittedDraftRevision: number }>();
+const emit = defineEmits<{ submit: [deliveryMode?: OperatorSnippetDeliveryMode]; 'run-snippet': [snippet: OperatorSnippet, deliveryMode?: OperatorSnippetDeliveryMode]; 'retry-input': [content: string, requestId: string | null]; 'discard-input': [requestId: string | null]; interrupt: [] }>();
 const inputRef = ref<HTMLTextAreaElement | null>(null);
+const composerHistory = useComposerHistory();
+let suppressDraftWatch = false;
+
+watch(() => props.submittedDraftRevision, (revision, previousRevision) => {
+  if (previousRevision === undefined || revision === previousRevision) return;
+  composerHistory.recordSubmission(props.lastSubmittedDraft);
+}, { flush: 'sync' });
+
+watch(draft, () => {
+  if (!suppressDraftWatch) composerHistory.leaveNavigation();
+}, { flush: 'sync' });
 
 const FOOTER_ITEM_STORAGE_KEY = AGENT_WEB_UI_PREFERENCE_KEYS.operatorFooterItems;
 const FOOTER_ITEM_IDS = ['target', 'input'] as const;
@@ -78,8 +90,47 @@ function resetFooterItems() {
   footerVisibility.reset();
 }
 
+function reviewRecoverableInput() {
+  const content = props.operatorDelivery.content?.trim();
+  if (!content) return;
+  emit('retry-input', content, props.operatorDelivery.requestId);
+}
+
+function discardRecoverableInput() {
+  emit('discard-input', props.operatorDelivery.requestId);
+}
+
+function replaceDraftFromHistory(value: string) {
+  suppressDraftWatch = true;
+  draft.value = value;
+  suppressDraftWatch = false;
+  nextTick(() => {
+    focusInput();
+    const textarea = inputRef.value;
+    if (textarea) textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+  });
+}
+
+function handleHistoryKeydown(event: KeyboardEvent): boolean {
+  if (props.disabled || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return false;
+  if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return false;
+  const textarea = event.currentTarget as HTMLTextAreaElement | null;
+  if (!textarea || textarea.tagName !== 'TEXTAREA' || textarea.selectionStart !== textarea.selectionEnd) return false;
+  const caretPosition = textarea.selectionStart;
+  const lineEligible = event.key === 'ArrowUp'
+    ? isCaretOnFirstLine(textarea.value, caretPosition)
+    : isCaretOnLastLine(textarea.value, caretPosition);
+  if (!lineEligible) return false;
+  const result = composerHistory.navigate(event.key === 'ArrowUp' ? 'older' : 'newer', draft.value);
+  if (!result.handled) return false;
+  event.preventDefault();
+  replaceDraftFromHistory(result.draft ?? '');
+  return true;
+}
+
 function handleKeydown(event: KeyboardEvent) {
   if (handlePaletteKeydown(event)) return;
+  if (handleHistoryKeydown(event)) return;
   if (event.key === 'Tab') {
     event.preventDefault();
     emit('submit', 'enqueue');
@@ -162,6 +213,24 @@ function handleKeydown(event: KeyboardEvent) {
     >
       <strong>{{ props.operatorDelivery.label }}</strong>
       <span v-if="props.operatorDelivery.detail">· {{ props.operatorDelivery.detail }}</span>
+      <button
+        v-if="(props.operatorDelivery.phase === 'timed_out' || props.operatorDelivery.phase === 'reviewing') && props.operatorDelivery.content"
+        type="button"
+        class="composer-retry"
+        :disabled="disabled"
+        @click="reviewRecoverableInput"
+      >
+        Load for retry
+      </button>
+      <button
+        v-if="(props.operatorDelivery.phase === 'timed_out' || props.operatorDelivery.phase === 'reviewing') && props.operatorDelivery.content"
+        type="button"
+        class="composer-discard"
+        :disabled="disabled"
+        @click="discardRecoverableInput"
+      >
+        Discard
+      </button>
     </p>
     <p v-if="disabled" class="composer-status">{{ disabledReason }}</p>
   </form>
@@ -194,11 +263,37 @@ function handleKeydown(event: KeyboardEvent) {
 }
 
 .composer-delivery-status[data-state="rejected"],
-.composer-delivery-status[data-state="failed"] {
+.composer-delivery-status[data-state="failed"],
+.composer-delivery-status[data-state="timed_out"] {
   color: var(--danger);
 }
 
 .composer-delivery-status[data-state="completed"] {
   color: var(--success, var(--muted));
+}
+
+.composer-retry {
+  border: 0;
+  padding: 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.composer-discard {
+  border: 0;
+  padding: 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.composer-retry:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 </style>

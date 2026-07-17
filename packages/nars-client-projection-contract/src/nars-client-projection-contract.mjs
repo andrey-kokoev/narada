@@ -150,6 +150,7 @@ export const NARS_CLIENT_EVENT_LABELS = Object.freeze({
   turn_complete: 'Turn complete',
   turn_failed: 'Turn failed',
   session_events_subscription_started: 'Replay attached',
+  session_events_replay_completed: 'Replay complete',
   session_artifact_registered: 'Artifact registered',
   session_artifact_read: 'Artifact',
   session_health: 'Health',
@@ -175,6 +176,17 @@ export const NARS_CLIENT_EVENT_LABELS = Object.freeze({
   websocket_error: 'WebSocket error',
   web_ui_decode_error: 'Decode error',
   web_ui_input_not_sent: 'Input not sent',
+  web_ui_input_ack_timeout: 'Input acknowledgment timeout',
+  web_ui_input_transport_failed: 'Input transport failed',
+  web_ui_input_ack_ignored: 'Input acknowledgment ignored',
+  web_ui_input_correlation_ambiguous: 'Input correlation ambiguous',
+  web_ui_session_correlation_mismatch: 'Session correlation mismatch',
+  operator_input_pending_restored: 'Pending input restored',
+  operator_input_pending_expired: 'Pending input expired',
+  operator_input_discarded: 'Pending input discarded',
+  operator_input_reviewed: 'Pending input under review',
+  operator_input_retried: 'Pending input retried',
+  operator_input_late_acknowledged: 'Late input acknowledgment',
   agent_web_ui_help: 'Help',
   agent_web_ui_message: 'Message',
   operator_input_submitted: 'Operator input',
@@ -976,6 +988,7 @@ export function normalizeNarsClientProjectionVerbosity(verbosity = NARS_CLIENT_P
 
 export function isRoutineHealthyNarsSessionHealth(event) {
   if (!event || event.event !== 'session_health') return false;
+  if (event.request_id) return false;
   const status = String(event.status ?? '').toLowerCase();
   const mcpState = String(event.mcp?.operational_state ?? event.mcp_operational_state ?? '').toLowerCase();
   const startupFailures = Number(event.mcp_startup_failure_count ?? event.mcp?.startup_failure_count ?? 0);
@@ -992,13 +1005,15 @@ export function classifyNarsClientEventProjection(projection) {
   if (kind === 'authority_session_revoked' || kind === 'projection_revoked') return 'diagnostics';
   if (kind === 'carrier_diagnostic_recorded' || kind === 'mcp_runtime_fault') return 'diagnostics';
   if (kind === 'runtime_projection_failure' || kind === 'runtime_control_input_bridge_error' || kind === 'runtime_intelligence_reconfiguration' || kind === 'provider_runtime_reconfiguration_state_transition') return 'diagnostics';
+  if (kind === 'web_ui_input_ack_timeout' || kind === 'web_ui_input_transport_failed' || kind === 'web_ui_input_ack_ignored' || kind === 'web_ui_input_correlation_ambiguous' || kind === 'web_ui_session_correlation_mismatch') return 'conversation';
+  if (kind === 'operator_input_pending_restored' || kind === 'operator_input_pending_expired' || kind === 'operator_input_discarded' || kind === 'operator_input_reviewed' || kind === 'operator_input_retried' || kind === 'operator_input_late_acknowledged') return 'diagnostics';
   if (kind === 'tool_call' || kind === 'tool_result' || kind === 'turn_failed') return 'operations';
   if (kind === 'session_artifact_registered' || kind === 'session_artifact_read') return 'conversation';
   if (kind === 'conversation_enqueue_requested' || kind === 'input_queued_for_turn_boundary' || kind === 'input_admitted_to_turn' || kind === 'input_dropped_by_operator' || kind === 'input_abandoned_on_session_end' || kind === 'input_completed') return 'operations';
   if (kind === 'session_health') return 'diagnostics';
   if (kind?.startsWith?.('authority_source_') || kind?.startsWith?.('authority_target_')) return 'operations';
   if (kind === 'session_started' || kind === 'session_closed' || kind === 'session_status' || kind === 'session_recovery' || kind === 'session_operations' || kind === 'session_sync' || kind === 'observer_status' || kind === 'observers_status' || kind === 'carrier_command_result') return 'operations';
-  if (kind === 'turn_started' || kind === 'turn_complete' || kind === 'directive_received' || kind === 'directive_receipt_recorded' || kind === 'directive_carrier_accepted_recorded' || kind === 'directive_complete' || kind === 'session_events_subscription_started' || kind === 'websocket_connected') return 'diagnostics';
+  if (kind === 'turn_started' || kind === 'turn_complete' || kind === 'directive_received' || kind === 'directive_receipt_recorded' || kind === 'directive_carrier_accepted_recorded' || kind === 'directive_complete' || kind === 'session_events_subscription_started' || kind === 'session_events_replay_completed' || kind === 'websocket_connected') return 'diagnostics';
   if (kind?.startsWith?.('provider_')) return 'diagnostics';
   return 'raw';
 }
@@ -1032,7 +1047,7 @@ function eventTone(kind, event = null) {
   if (kind === 'user_message') return NARS_CLIENT_EVENT_TONES.operator;
   if (kind === 'tool_call' || kind === 'tool_result') return NARS_CLIENT_EVENT_TONES.tool;
   if (kind === 'session_artifact_registered' || kind === 'session_artifact_read') return NARS_CLIENT_EVENT_TONES.status;
-  if (kind === 'error' || kind === 'websocket_error' || kind === 'web_ui_decode_error' || kind === 'turn_failed' || kind === 'authority_session_revoked' || kind === 'projection_revoked' || kind === 'mcp_runtime_fault' || kind === 'runtime_projection_failure' || kind === 'runtime_control_input_bridge_error') return NARS_CLIENT_EVENT_TONES.error;
+  if (kind === 'error' || kind === 'websocket_error' || kind === 'web_ui_decode_error' || kind === 'turn_failed' || kind === 'authority_session_revoked' || kind === 'projection_revoked' || kind === 'mcp_runtime_fault' || kind === 'runtime_projection_failure' || kind === 'runtime_control_input_bridge_error' || kind === 'web_ui_input_ack_timeout' || kind === 'web_ui_input_transport_failed' || kind === 'web_ui_input_ack_ignored' || kind === 'web_ui_input_correlation_ambiguous' || kind === 'web_ui_session_correlation_mismatch') return NARS_CLIENT_EVENT_TONES.error;
   if (kind === 'runtime_intelligence_reconfiguration' || kind === 'provider_runtime_reconfiguration_state_transition') {
     const state = event?.terminal_state ?? event?.reconfiguration_state;
     return state === 'refused' || state === 'failed' ? NARS_CLIENT_EVENT_TONES.error : NARS_CLIENT_EVENT_TONES.status;
@@ -1056,6 +1071,7 @@ function eventSummary(event, kind) {
   if (kind === 'authority_session_revoked') return event.code ?? 'session_revoked';
   if (kind === 'projection_revoked') return event.code ?? 'projection_revoked';
   if (kind === 'session_events_subscription_started') return `${event.replay_count ?? 0} replayed event(s)`;
+  if (kind === 'session_events_replay_completed') return `${event.replay_count ?? 0} replayed event(s); replay complete`;
   if (kind === 'session_artifact_registered') return artifactSummary(event, 'artifact registered');
   if (kind === 'session_artifact_read') return artifactSummary(event, 'artifact');
   if (kind === 'session_health') return `${event.status ?? 'health'} · ${eventAgentDisplay(event)} · ${event.session_id ?? 'session'}`;

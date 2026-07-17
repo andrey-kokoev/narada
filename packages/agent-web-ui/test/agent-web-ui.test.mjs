@@ -206,6 +206,7 @@ async function withRealNarsWebServer(fn) {
       siteRoot,
       siteId: 'narada.fixture',
       operatorSurfaceKind: 'agent-web-ui',
+      mcpScope: 'all',
       sessionPath: join(sessionDir, 'session.jsonl'),
       eventsPath: join(sessionDir, 'events.jsonl'),
       intelligenceProvider: 'codex-subscription',
@@ -358,10 +359,11 @@ test('ordinary Agent Web UI browser UX tests stay Playwright-owned', async () =>
     'agent-web-ui-ux-smoke.test.mjs',
   ];
   assert.deepEqual(testFiles.filter((file) => legacyRawBrowserTests.includes(file)), []);
-  assert.equal(packageJson.scripts?.['test:browser'], 'pnpm run test:e2e');
+  assert.equal(packageJson.scripts?.['test:browser'], 'pnpm run test:e2e && pnpm run test:projection');
   assert.match(packageJson.scripts?.['test:e2e'] ?? '', /playwright test/);
-  assert.match(packageJson.scripts?.['test:live:slash-commands'] ?? '', /playwright test test\/e2e\/live-slash-smoke\.spec\.js/);
-  assert.doesNotMatch(packageJson.scripts?.['test:live:slash-commands'] ?? '', /agent-web-ui-local-submit-html-artifact-cloudflare-e2e/);
+  assert.match(packageJson.scripts?.['test:runtime:slash-commands'] ?? '', /playwright test --config playwright\.config\.js test\/e2e\/live-slash-smoke\.spec\.js/);
+  assert.equal(packageJson.scripts?.['test:live:slash-commands'], undefined);
+  assert.match(packageJson.scripts?.['test:projection'] ?? '', /playwright test --config playwright\.projection\.config\.js/);
   assert.match(packageJson.scripts?.['test:browser:cdp'] ?? '', /agent-web-ui-cloudflare-authority-local-surface-artifact-e2e\.test\.mjs/);
   assert.match(packageJson.scripts?.['test:browser:cdp'] ?? '', /agent-web-ui-cloudflare-html-artifact-e2e\.test\.mjs/);
   assert.match(packageJson.scripts?.['test:browser:cdp'] ?? '', /agent-web-ui-local-submit-html-artifact-cloudflare-e2e\.test\.mjs/);
@@ -873,7 +875,9 @@ test('Vue layout smoke covers shell, status, event list, composer, and event ton
   assert.match(sessionActions, /invalid_session_control/);
   assert.match(sessionActions, /unsupported_session_control/);
   assert.match(sessionActions, /event stream is not open/);
-  assert.match(activity, /active_turn_state/);
+  assert.match(activity, /createSessionProjection/);
+  assert.match(activity, /healthSnapshot/);
+  assert.doesNotMatch(activity, /reconcileActivityWithHealth/);
   assert.match(shell, /AGENT_WEB_UI_PREFERENCE_KEYS\.headerItems/);
   assert.match(shell, /Connection: \{\{ runtimeTopology\.verdictLabel \}\}/);
   assert.match(status, /AGENT_WEB_UI_PREFERENCE_KEYS\.statusBoxes/);
@@ -935,8 +939,8 @@ test('Vue layout smoke covers shell, status, event list, composer, and event ton
   assert.match(status, /projection-publish-stack/);
   assert.match(status, /projection-status-label/);
   assert.match(app, /function followLatestTranscript\(\)/);
-  assert.match(app, /function setProjectionVerbosity/);
-  assert.match(app, /@update:verbosity="setProjectionVerbosity"/);
+  assert.match(app, /function setProjectionView/);
+  assert.match(app, /@update:view="setProjectionView"/);
   assert.match(app, /function steerQueuedNow/);
   assert.match(app, /@steer-queued="steerQueuedNow"/);
   const queuePanel = await readFile(new URL('../src/app/components/OperatorQueuePanel.vue', import.meta.url), 'utf8');
@@ -1270,6 +1274,7 @@ test('CLI args and client config keep runtime authority outside the web package'
   });
   assert.deepEqual(buildClientConfig(options), {
     eventEndpoint: 'ws://nars/events',
+    sessionId: null,
     healthEndpoint: '/api/health',
     healthTransport: 'http-proxy',
     artifactBasePath: '/api/nars',

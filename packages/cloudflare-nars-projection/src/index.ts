@@ -90,7 +90,9 @@ export type CloudflareMcpScope = 'none' | CloudflareMcpLocus | 'all';
 export type CloudflareNativeMcpAdapterKind = 'cf-authority' | 'cf-authority-artifacts';
 
 export const CLOUDFLARE_MCP_LOCI: CloudflareMcpLocus[] = ['cloudflare-host', 'cloudflare-account-or-user', 'cloudflare-site', 'session-native'];
-export const DEFAULT_CLOUDFLARE_MCP_SCOPE: CloudflareMcpScope = 'all';
+// Cloudflare authority must receive an explicit MCP scope. Missing scope is
+// intentionally inert; callers that need the composed fabric pass `all`.
+export const DEFAULT_CLOUDFLARE_MCP_SCOPE: CloudflareMcpScope = 'none';
 
 const DEFAULT_CLOUDFLARE_NATIVE_MCP_ADAPTERS: CloudflareMcpServerDescriptor[] = [
   { locus: 'cloudflare-site', adapter_kind: 'cf-authority', server_name: 'cf-authority', mutation_posture: 'read_only_with_diagnostic_fault_probe' },

@@ -17,7 +17,9 @@ export interface OperatorQueueItem {
 
 export function useOperatorInput(connection: ShallowRef<NarsClientConnection | null>, retain: (event: unknown) => void, clearEvents: () => void, authorityTransition: AuthorityTransitionInputPolicy | null = null, canSteerActiveTurn: () => boolean = () => Boolean(connection.value?.activeTurnId), preferSessionCore = false, supportsProtocolMethod: ProtocolMethodSupport | null = null, sendFrame: SessionFrameSender | null = null, activeTurnIdReader: ActiveTurnIdReader = () => connection.value?.activeTurnId ?? null) {
   const draft = ref('');
+  const lastSubmittedRequestId = ref<string | null>(null);
   function handleResult(result: ReturnType<typeof submitOperatorInput>, clearDraft = true): boolean {
+    if (result.requestId) lastSubmittedRequestId.value = result.requestId;
     if (result.localEvent) {
       if ((result.localEvent as { event?: string }).event === 'agent_web_ui_clear_requested') clearEvents();
       else retain(result.localEvent);
@@ -84,5 +86,5 @@ export function useOperatorInput(connection: ShallowRef<NarsClientConnection | n
     return sendFrame ? sendFrame(frame) : currentConnection.sendFrame(frame);
   }
 
-  return { draft, submit, submitText, submitConversationText, retainLocal, interrupt, dropQueued, editQueued, steerQueuedNow };
+  return { draft, lastSubmittedRequestId, submit, submitText, submitConversationText, retainLocal, interrupt, dropQueued, editQueued, steerQueuedNow };
 }

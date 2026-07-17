@@ -17,6 +17,20 @@ D:\code\narada\packages\mcp-fabric\src\mcp-fabric.mjs
 Agent Runtime Server mode. Site-local launcher code may point at a Site `.ai\mcp` fabric,
 but it must not fork MCP fabric parsing or projection behavior.
 
+## Source of truth and regeneration
+
+The Site binding authority is `.narada/capabilities/mcp-surfaces.json`.
+Carrier/client projections are disposable outputs: regenerate them from that
+registry with:
+
+```powershell
+pnpm --filter @narada2/typed-mcp-surface exec node src/generate-carrier-mcp-config.mjs --site-root <site-root> --carrier all --write
+```
+
+Use the same command with `--check` to verify generated files without writing.
+The loader's registry validation also rejects stale server names in `.ai\mcp`
+files, so renamed bindings are repaired by regeneration rather than hand edits.
+
 ## Boundary
 
 This package describes available MCP servers and tool metadata. It does not grant

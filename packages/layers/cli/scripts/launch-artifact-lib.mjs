@@ -7,6 +7,7 @@ export const LAUNCH_ARTIFACT_MANIFEST_NAME = 'narada-launch-artifact.json';
 
 const IGNORED_DIRECTORIES = new Set([
   '.git',
+  '.ai',
   '.narada',
   'build',
   'coverage',

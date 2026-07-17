@@ -1,9 +1,10 @@
 import { buildAgentWebUiEventsReadFrame, isAgentWebUiCloudflareProtocolFrame, isAgentWebUiNarsMethod, normalizeNarsClientProjectionVerbosity } from '@narada2/nars-client-projection-contract';
-import { sessionIdFromTransportMessage, toSessionProtocolFrame, type SessionProtocolFrame, type SessionTransport, type SessionTransportCorrelation } from './sessionTransport';
+import { isProjectionInputAdmissionAccepted, sessionIdFromTransportMessage, toSessionProtocolFrame, type SessionProtocolFrame, type SessionTransport, type SessionTransportCorrelation } from './sessionTransport';
 import { startCloudflareSessionTransport } from './cloudflareSessionTransport';
 import { startLocalSessionTransport } from './localSessionTransport';
 import { createNarsTransportLifecycle, isNarsTransportClosed, projectionHeaders, transitionNarsTransport, type NarsClientState, type NarsTransportPhase } from './sessionTransportAdapters';
 import { PENDING_OPERATOR_INPUT_PHASES, transitionPendingOperatorInput, type PendingOperatorInputLifecycle, type PendingOperatorInputPhase } from './operatorInputLifecycle';
+import { findCorrelatedInput, inputCorrelationFromEvent, mergeInputCorrelation, normalizeInputCorrelationId as normalizeRequestId } from '../operator-input-correlation.js';
 
 export interface NarsClientOptions {
   endpoint: string | null;
@@ -211,8 +212,8 @@ export function createNarsClient(options: NarsClientOptions): NarsClientConnecti
     const expectedSessionId = normalizeRequestId(options.sessionId);
     if (observedSessionId && expectedSessionId && observedSessionId !== expectedSessionId) {
       const event = unwrapTransportEvent(message);
-      const requestId = normalizeRequestId(event?.request_id ?? event?.requestId ?? event?.input_request_id);
-      const pending = requestId ? pendingOperatorInputs.get(requestId) : null;
+      const pendingMatch = findCorrelatedInput(pendingOperatorInputs.values(), event, { allowUniqueMethod: true });
+      const pending = pendingMatch.record as PendingOperatorInput | null;
       if (pending) {
         emitLocalEvent(options.onEvent, pendingLifecycleEvent('web_ui_input_ack_ignored', pending, {
           reason_code: 'session_correlation_mismatch',
@@ -233,60 +234,67 @@ export function createNarsClient(options: NarsClientOptions): NarsClientConnecti
     const event = unwrapTransportEvent(message);
     if (!event || typeof event !== 'object') return true;
     const kind = typeof event.event === 'string' ? event.event : null;
-    const requestId = normalizeRequestId(event.request_id ?? event.requestId ?? event.input_request_id);
-    const inputEventId = normalizeRequestId(event.event_id ?? event.input_event_id);
-    const pending = requestId ? pendingOperatorInputs.get(requestId) : null;
+    const correlation = inputCorrelationFromEvent(event);
+    const pendingMatch = findCorrelatedInput(pendingOperatorInputs.values(), event, { allowUniqueMethod: true });
+    const pending = pendingMatch.record as PendingOperatorInput | null;
+    if (pendingMatch.ambiguous) {
+      emitLocalEvent(options.onEvent, {
+        event: 'web_ui_input_correlation_ambiguous',
+        request_id: correlation.requestId,
+        input_event_id: correlation.inputEventId,
+        method: correlation.method,
+        message: 'The runtime event matched more than one pending input; it was not applied to a browser recovery record.',
+      });
+    }
 
     if (kind === 'projection_input_response') {
-      if (event.status === 'ok' || event.http_ok === true) {
+      if (isProjectionInputAdmissionAccepted(event)) {
         if (pending && transitionPendingOperatorInput(pending, PENDING_OPERATOR_INPUT_PHASES.RELAY_PENDING)) {
           persistPendingOperatorInputs(pendingInputStorage, pendingInputStorageKey, pendingOperatorInputs.values());
           if (pending.phase === PENDING_OPERATOR_INPUT_PHASES.RELAY_PENDING) armPendingOperatorInputTimeout(pending.request_id);
         }
-      } else if (requestId) {
-        failPendingOperatorInput(requestId, event.message ?? event.error ?? event.code ?? 'Cloudflare input relay failed');
+      } else if (pending) {
+        failPendingOperatorInput(pending.request_id, event.message ?? event.error ?? event.code ?? 'Cloudflare input relay failed');
       }
       return true;
     }
 
     if (kind === 'projection_input_failed') {
-      if (requestId) failPendingOperatorInput(requestId, event.message ?? event.error ?? 'Cloudflare input relay failed');
+      if (pending) failPendingOperatorInput(pending.request_id, event.message ?? event.error ?? 'Cloudflare input relay failed');
       return true;
     }
 
-    if (kind === 'input_event_queued' && requestId && inputEventId) {
-      if (pending) {
-        pending.input_event_id = inputEventId;
-        persistPendingOperatorInputs(pendingInputStorage, pendingInputStorageKey, pendingOperatorInputs.values());
-      }
+    if (pending && correlation.inputEventId) {
+      mergeInputCorrelation(pending, event, {
+        requestKey: 'request_id',
+        inputEventKey: 'input_event_id',
+        sessionKey: 'session_id',
+      });
+      persistPendingOperatorInputs(pendingInputStorage, pendingInputStorageKey, pendingOperatorInputs.values());
     }
-    if (kind === 'session_control_accepted' || kind === 'input_event_queued' || kind === 'input_event_started' || kind === 'input_admitted_to_turn' || kind === 'session_control_rejected' || kind === 'session_control_response') {
-      if (requestId) {
-        if (pending && (pending.phase === PENDING_OPERATOR_INPUT_PHASES.TIMED_OUT || pending.phase === PENDING_OPERATOR_INPUT_PHASES.REVIEWING || pending.phase === PENDING_OPERATOR_INPUT_PHASES.RETRIED)) {
+    if (kind === 'session_control_accepted' || kind === 'input_event_queued' || kind === 'input_event_started' || kind === 'input_admitted_to_turn' || kind === 'session_control_rejected' || kind === 'session_control_response' || (kind === 'runtime_request_state_transition' && ['failed', 'rejected'].includes(String(event.request_state ?? '')))) {
+      if (pending) {
+        if (pending.phase === PENDING_OPERATOR_INPUT_PHASES.TIMED_OUT || pending.phase === PENDING_OPERATOR_INPUT_PHASES.REVIEWING || pending.phase === PENDING_OPERATOR_INPUT_PHASES.RETRIED) {
           emitLocalEvent(options.onEvent, pendingLifecycleEvent('operator_input_late_acknowledged', pending, {
             acknowledged_event: kind,
             recovery_state: pending.phase,
             message: 'NARS acknowledged this input after the browser had entered recovery.',
           }));
         }
-        clearPendingOperatorInput(requestId);
+        clearPendingOperatorInput(pending.request_id);
       }
       return true;
     }
     if (kind === 'input_event_completed' || kind === 'input_completed') {
-      if (requestId) {
-        if (pending && (pending.phase === PENDING_OPERATOR_INPUT_PHASES.TIMED_OUT || pending.phase === PENDING_OPERATOR_INPUT_PHASES.REVIEWING || pending.phase === PENDING_OPERATOR_INPUT_PHASES.RETRIED)) {
+      if (pending) {
+        if (pending.phase === PENDING_OPERATOR_INPUT_PHASES.TIMED_OUT || pending.phase === PENDING_OPERATOR_INPUT_PHASES.REVIEWING || pending.phase === PENDING_OPERATOR_INPUT_PHASES.RETRIED) {
           emitLocalEvent(options.onEvent, pendingLifecycleEvent('operator_input_late_acknowledged', pending, {
             acknowledged_event: kind,
             recovery_state: pending.phase,
             message: 'NARS completed this input after the browser had entered recovery.',
           }));
         }
-        clearPendingOperatorInput(requestId);
-      }
-      else if (inputEventId) {
-        const pending = [...pendingOperatorInputs.values()].find((candidate) => candidate.input_event_id === inputEventId);
-        if (pending) clearPendingOperatorInput(pending.request_id);
+        clearPendingOperatorInput(pending.request_id);
       }
     }
     return true;
@@ -421,10 +429,6 @@ function isTrackedOperatorInputMethod(method: string): boolean {
     || method === 'conversation.send'
     || method === 'conversation.enqueue'
     || method === 'conversation.steer';
-}
-
-function normalizeRequestId(value: unknown): string | null {
-  return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
 
 function pendingInputFromFrame(requestId: string, frame: SessionProtocolFrame, correlation: SessionTransportCorrelation): PendingOperatorInput {

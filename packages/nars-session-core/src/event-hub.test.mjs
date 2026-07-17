@@ -37,6 +37,21 @@ test('event hub queues live events during replay and flushes them in order', () 
   assert.deepEqual(received, [2, 3]);
 });
 
+test('event hub keeps durable replay deduplication separate from live wrapper events', () => {
+  const hub = createNarsEventHub();
+  const received = [];
+  const subscription = hub.subscribe({
+    subscriptionId: 'sub-durable-replay',
+    send: (envelope) => received.push(envelope.payload.event),
+  });
+  subscription.beginReplay({ source: 'event_log' });
+  hub.publish({ event: 'runtime_host_state', event_sequence: 10 });
+  hub.publish({ event: 'session_started', durable_event_sequence: 1, event_sequence: 11 });
+  hub.publish({ event: 'assistant_message', durable_event_sequence: 2, event_sequence: 12 });
+  subscription.markLive({ replay_last_sequence: 1, replay_sequence_field: 'durable_event_sequence' });
+  assert.deepEqual(received, ['runtime_host_state', 'assistant_message']);
+});
+
 test('event hub marks a failed sender attachment as failed and removes it', () => {
   const hub = createNarsEventHub();
   const subscription = hub.subscribe({

@@ -1,5 +1,6 @@
 import {
   redactWorkspaceLaunchArgv,
+  redactWorkspaceLaunchCommand,
 } from './workspace-launch-process.js';
 import { workspaceLaunchTerminalHandoffArgs } from './workspace-launch-terminal.js';
 import type {
@@ -12,12 +13,15 @@ import type {
 } from './workspace-launch-types.js';
 import * as support from './workspace-launch-support.js';
 import { workspaceLaunchString } from './workspace-launch-session.js';
+import { assertWorkspaceLaunchPlanPreflight } from './workspace-launch-preflight.js';
+import { completeWorkspaceLaunchTransaction } from './workspace-launch-contracts.js';
 
 export function finalizeWorkspaceLaunchResult(
   plan: WorkspaceLaunchPlanResult,
   invocation: WorkspaceLaunchInvocationDetails,
 ): WorkspaceLaunchLaunchResult {
   const { wt_args: wtArgs, ...planWithoutTopLevelTerminalPlan } = plan;
+  const persistedAgents = plan.selected_agents.map(redactWorkspaceLaunchAgentPlan);
   const launchResult: WorkspaceLaunchLaunchResult = {
     ...planWithoutTopLevelTerminalPlan,
     schema: 'narada.workspace_launch.launch_result.v1',
@@ -25,24 +29,79 @@ export function finalizeWorkspaceLaunchResult(
     mode: 'launch',
     mutation_performed: true,
     windows_terminal_invoked: invocation.windows_terminal_invoked,
-    launch_agents: plan.selected_agents,
+    selected_agents: persistedAgents,
+    launch_agents: persistedAgents,
     selected_agents_authority: 'narada-cli.plan_selection',
     hidden_runtime_invoked: invocation.hidden_runtime_invoked,
     launcher_execution_owner: 'narada-cli',
+    transaction: completeWorkspaceLaunchTransaction(plan.transaction),
+    attachment: invocation.attachment,
     ...(invocation.hidden_runtime_launches ? { hidden_runtime_launches: invocation.hidden_runtime_launches } : {}),
+    ...(invocation.hidden_projection_launches ? { hidden_projection_launches: invocation.hidden_projection_launches } : {}),
     ...(invocation.wt_exit_code === undefined ? {} : { wt_exit_code: invocation.wt_exit_code }),
-    ...(wtArgs.length > 0
+    ...(invocation.windows_terminal_invoked && wtArgs.length > 0
       ? {
           operator_terminal_handoff: {
             schema: 'narada.workspace_launch.operator_terminal_handoff.v1',
             authority: 'narada-cli.workspace-launch-executor',
-            wt_args: wtArgs,
+            wt_args: redactWorkspaceLaunchArgv(wtArgs),
           },
         }
       : {}),
   };
   assertWorkspaceLaunchResultInvariants(launchResult);
   return launchResult;
+}
+
+function redactWorkspaceLaunchAgentPlan(agent: WorkspaceLaunchPlanResult['selected_agents'][number]): WorkspaceLaunchPlanResult['selected_agents'][number] {
+  return {
+    ...agent,
+    runtime_start_command: redactWorkspaceLaunchArgv(agent.runtime_start_command),
+    hidden_runtime_start_command: redactWorkspaceLaunchArgv(agent.hidden_runtime_start_command),
+    ...(agent.operator_projection_start_command
+      ? { operator_projection_start_command: redactWorkspaceLaunchArgv(agent.operator_projection_start_command) }
+      : {}),
+    wt_args: redactWorkspaceLaunchArgv(agent.wt_args),
+    smoke_command: redactWorkspaceLaunchArgv(agent.smoke_command),
+    terminal_tabs: agent.terminal_tabs.map((tab) => ({
+      ...tab,
+      command: redactWorkspaceLaunchCommand(tab.command),
+      command_argv: redactWorkspaceLaunchArgv(tab.command_argv),
+    })),
+  };
+}
+
+export function assertWorkspaceLaunchPlanInvariants(result: WorkspaceLaunchPlanResult): void {
+  if (result.schema !== 'narada.workspace_launch.plan.v1') {
+    throw new Error(`workspace_launch_plan_schema_invalid: ${String(result.schema ?? '')}`);
+  }
+  if (result.status !== 'planned' || result.mutation_performed !== false) {
+    throw new Error('workspace_launch_plan_mutation_or_status_invalid');
+  }
+  if (result.windows_terminal_invoked !== false) {
+    throw new Error('workspace_launch_plan_windows_terminal_invocation_forbidden');
+  }
+  if (!Array.isArray(result.registry_paths)
+    || !Array.isArray(result.selected_agents)
+    || !Array.isArray(result.wt_args)
+    || !result.transaction
+    || result.transaction.schema !== 'narada.workspace_launch.transaction.v1'
+    || result.transaction.state !== 'planned'
+    || !Number.isInteger(result.count)
+    || result.count < 0
+    || typeof result.interactive_selection !== 'boolean'
+    || ![null, 'browser', 'terminal'].includes(result.interactive_selection_surface)) {
+    throw new Error('workspace_launch_plan_persisted_shape_invalid');
+  }
+  if (result.count !== result.selected_agents.length) {
+    throw new Error('workspace_launch_plan_count_mismatch');
+  }
+  if (!result.ownership
+    || result.ownership.planner !== 'narada-cli'
+    || result.ownership.executor !== 'narada-cli.workspace-launch') {
+    throw new Error('workspace_launch_plan_ownership_invalid');
+  }
+  assertWorkspaceLaunchPlanPreflight(result.selected_agents);
 }
 
 export function assertWorkspaceLaunchResultInvariants(result: WorkspaceLaunchLaunchResult): void {
@@ -70,11 +129,77 @@ export function assertWorkspaceLaunchResultInvariants(result: WorkspaceLaunchLau
   if (windowsTerminalInvoked && (!terminalHandoff || terminalHandoff.authority !== 'narada-cli.workspace-launch-executor')) {
     throw new Error('workspace_launch_result_operator_terminal_handoff_required');
   }
+  if (windowsTerminalInvoked && result.selected_agents.some((agent) => agent.runtime_start_execution_mode !== 'operator_terminal')) {
+    throw new Error('workspace_launch_result_terminal_handoff_runtime_mode_invalid');
+  }
   if (!Array.isArray(result.launch_agents)) {
     throw new Error('workspace_launch_result_launch_agents_required');
   }
+  if (result.count !== result.selected_agents.length || result.launch_agents.length !== result.selected_agents.length) {
+    throw new Error('workspace_launch_result_agent_cardinality_invalid');
+  }
+  for (const [index, agent] of result.selected_agents.entries()) {
+    const launched = result.launch_agents[index];
+    if (!launched || launched.agent !== agent.agent || launched.site !== agent.site
+      || launched.launch_session_id !== agent.launch_session_id) {
+      throw new Error(`workspace_launch_result_agent_binding_mismatch: ${index}`);
+    }
+    if (agent.runtime_start_command.some((value) => value.includes('<redacted>') === false && /(?:api[-_]?key|token|secret|password)=/i.test(value))) {
+      throw new Error(`workspace_launch_result_unredacted_command_evidence: ${agent.agent}`);
+    }
+  }
+  if (!result.transaction
+    || result.transaction.schema !== 'narada.workspace_launch.transaction.v1'
+    || result.transaction.state !== 'completed'
+    || !Array.isArray(result.transaction.history)) {
+    throw new Error('workspace_launch_result_transaction_incomplete');
+  }
+  const transactionHistory = result.transaction.history as unknown[];
+  if (!result.attachment
+    || result.attachment.schema !== 'narada.workspace_launch.attachment.v1'
+    || typeof result.attachment.exact_session !== 'boolean'
+    || !Array.isArray(result.attachment.sessions)) {
+    throw new Error('workspace_launch_result_attachment_evidence_required');
+  }
+  const expectedLaunchSessionIds = result.selected_agents
+    .map((agent) => agent.launch_session_id)
+    .filter((value): value is string => typeof value === 'string' && value.trim().length > 0);
+  if (expectedLaunchSessionIds.length !== result.selected_agents.length
+    || result.attachment.launch_session_ids.length !== expectedLaunchSessionIds.length
+    || new Set(result.attachment.launch_session_ids).size !== result.attachment.launch_session_ids.length
+    || expectedLaunchSessionIds.some((id) => !result.attachment.launch_session_ids.includes(id))
+    || result.attachment.sessions.length !== expectedLaunchSessionIds.length) {
+    throw new Error('workspace_launch_result_attachment_cardinality_invalid');
+  }
+  for (const session of result.attachment.sessions) {
+    if (!result.attachment.launch_session_ids.includes(session.launch_session_id)
+      || (result.attachment.status === 'attached' && session.canonical_identity_match === false)) {
+      throw new Error(`workspace_launch_result_attachment_binding_invalid: ${session.launch_session_id}`);
+    }
+  }
+  if (windowsTerminalInvoked) {
+    if (result.attachment.status !== 'handoff_pending' || result.attachment.exact_session !== false || !transactionHistory.includes('handed_off')) {
+      throw new Error('workspace_launch_result_terminal_handoff_attachment_state_invalid');
+    }
+  } else {
+    if (terminalHandoff) throw new Error('workspace_launch_result_hidden_runtime_terminal_handoff_forbidden');
+    const captureOnly = Array.isArray(result.hidden_runtime_launches)
+      && result.hidden_runtime_launches.length > 0
+      && result.hidden_runtime_launches.every((launch) => Boolean(launch.capture_log));
+    if (captureOnly) {
+      if (result.attachment.status !== 'not_checked' || result.attachment.exact_session !== false) {
+        throw new Error('workspace_launch_result_capture_attachment_state_invalid');
+      }
+    } else if (result.attachment.status !== 'attached' || result.attachment.exact_session !== true || !transactionHistory.includes('attached')) {
+      throw new Error('workspace_launch_result_hidden_runtime_attachment_required');
+    }
+  }
   if (hiddenRuntimeInvoked && result.selected_agents.some((agent) => agent.runtime_start_execution_mode !== 'hidden_detached')) {
     throw new Error('workspace_launch_result_hidden_runtime_requires_hidden_agent_modes');
+  }
+  if (Array.isArray(result.hidden_projection_launches)
+    && result.hidden_projection_launches.some((launch) => launch.execution_authority !== 'structured_argv')) {
+    throw new Error('workspace_launch_result_projection_execution_authority_invalid');
   }
 }
 

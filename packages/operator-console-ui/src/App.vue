@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { onMounted } from 'vue';
+import { computed, onMounted, onUnmounted } from 'vue';
 import OperatorConsoleNotFound from './components/OperatorConsoleNotFound.vue';
+import OperatorConsoleLoading from './components/OperatorConsoleLoading.vue';
 import OperatorConsoleLaunchPage from './pages/OperatorConsoleLaunchPage.vue';
 import AgentSessionsPage from './pages/AgentSessionsPage.vue';
 import SiteRegistryMutationPage from './pages/SiteRegistryMutationPage.vue';
@@ -31,7 +32,6 @@ function readOperatorConsoleRuntimeConfig(): OperatorConsoleRuntimeConfig {
   }
 }
 
-const route = resolveOperatorConsoleRoute(window.location.pathname, window.location.search);
 const runtimeConfig = readOperatorConsoleRuntimeConfig();
 const routeDirectory = createOperatorWorkspaceRouteDirectoryState(createOperatorWorkspaceRouteDirectoryTransport(
   runtimeConfig.routeDirectory?.endpoint ?? undefined,
@@ -43,11 +43,37 @@ const routeDirectory = createOperatorWorkspaceRouteDirectoryState(createOperator
 ));
 provideOperatorWorkspaceRouteDirectory(routeDirectory);
 
-onMounted(() => { void routeDirectory.load(); });
+const route = computed(() => resolveOperatorConsoleRoute(
+  window.location.pathname,
+  window.location.search,
+  routeDirectory.directory.value ?? undefined,
+));
+
+function retryRouteDirectoryWhenVisible(): void {
+  if (document.visibilityState === 'visible' && routeDirectory.error.value) {
+    void routeDirectory.retry();
+  }
+}
+
+function retryRouteDirectoryWhenOnline(): void {
+  void routeDirectory.retry();
+}
+
+onMounted(() => {
+  void routeDirectory.load();
+  document.addEventListener('visibilitychange', retryRouteDirectoryWhenVisible);
+  window.addEventListener('online', retryRouteDirectoryWhenOnline);
+});
+
+onUnmounted(() => {
+  document.removeEventListener('visibilitychange', retryRouteDirectoryWhenVisible);
+  window.removeEventListener('online', retryRouteDirectoryWhenOnline);
+});
 </script>
 
 <template>
-  <SiteRegistryPage v-if="route.kind === 'site-registry'" />
+  <OperatorConsoleLoading v-if="routeDirectory.loading.value && !routeDirectory.directory.value && !routeDirectory.hasAttempted.value" />
+  <SiteRegistryPage v-else-if="route.kind === 'site-registry'" />
   <SiteRegistryMutationPage v-else-if="route.kind === 'site-registry-add'" mode="add" />
   <SiteRegistryMutationPage v-else-if="route.kind === 'site-registry-manage'" mode="manage" />
   <OperatorConsoleLaunchPage v-else-if="route.kind === 'launcher'" />

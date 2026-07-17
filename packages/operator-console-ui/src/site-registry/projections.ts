@@ -1,4 +1,5 @@
 import type { RegistrySiteRecord } from '@narada2/site-registry-contract';
+import { OPERATOR_CONSOLE_REGISTRY_PATH } from '@narada2/operator-console-contract';
 
 export type SiteProjectionTone = 'positive' | 'neutral' | 'warning' | 'danger';
 
@@ -51,6 +52,10 @@ export interface SiteDetailProjection {
   actions: SiteActionProjection[];
 }
 
+export interface SiteProjectionPaths {
+  registryPath?: string;
+}
+
 function displayTimestamp(value: string | null, now: number): string {
   if (!value) return 'Never observed';
   const timestamp = Date.parse(value);
@@ -83,8 +88,9 @@ function statusTone(site: RegistrySiteRecord): SiteProjectionTone {
   }
 }
 
-function action(id: SiteActionId, site: RegistrySiteRecord): SiteActionProjection {
-  const href = id === 'open' ? `/console/registry?site=${encodeURIComponent(site.siteId)}` : null;
+function action(id: SiteActionId, site: RegistrySiteRecord, paths: SiteProjectionPaths): SiteActionProjection {
+  const registryPath = paths.registryPath ?? OPERATOR_CONSOLE_REGISTRY_PATH;
+  const href = id === 'open' ? `${registryPath}?site=${encodeURIComponent(site.siteId)}` : null;
   const available = id === 'open'
     || (id === 'edit' && site.lifecycleStatus === 'active')
     || (id === 'retire' && site.lifecycleStatus === 'active')
@@ -100,7 +106,7 @@ function action(id: SiteActionId, site: RegistrySiteRecord): SiteActionProjectio
   return { id, label: labels[id], href, available };
 }
 
-export function toSiteListProjection(site: RegistrySiteRecord, now = Date.now()): SiteListProjection {
+export function toSiteListProjection(site: RegistrySiteRecord, now = Date.now(), paths: SiteProjectionPaths = {}): SiteListProjection {
   return {
     siteId: site.siteId,
     label: site.siteId,
@@ -112,12 +118,12 @@ export function toSiteListProjection(site: RegistrySiteRecord, now = Date.now())
     lastSeen: displayTimestamp(site.lastSeenAt, now),
     revision: site.revision,
     aliasCount: site.aliases.length,
-    primaryAction: action('open', site),
+    primaryAction: action('open', site, paths),
   };
 }
 
-export function toSiteTileProjection(site: RegistrySiteRecord, now = Date.now()): SiteTileProjection {
-  const list = toSiteListProjection(site, now);
+export function toSiteTileProjection(site: RegistrySiteRecord, now = Date.now(), paths: SiteProjectionPaths = {}): SiteTileProjection {
+  const list = toSiteListProjection(site, now, paths);
   const sourceKinds = [...new Set(site.sources.map((source) => source.kind))];
   return {
     ...list,
@@ -127,9 +133,9 @@ export function toSiteTileProjection(site: RegistrySiteRecord, now = Date.now())
   };
 }
 
-export function toSiteDetailProjection(site: RegistrySiteRecord, now = Date.now()): SiteDetailProjection {
+export function toSiteDetailProjection(site: RegistrySiteRecord, now = Date.now(), paths: SiteProjectionPaths = {}): SiteDetailProjection {
   return {
-    ...toSiteListProjection(site, now),
+    ...toSiteListProjection(site, now, paths),
     substrate: site.substrate,
     createdAt: displayDate(site.createdAt),
     updatedAt: displayDate(site.updatedAt),
@@ -143,6 +149,6 @@ export function toSiteDetailProjection(site: RegistrySiteRecord, now = Date.now(
       ref: source.ref,
       observedAt: displayDate(source.observedAt),
     })),
-    actions: [action('edit', site), action('retire', site), action('restore', site), action('purge', site)],
+    actions: [action('edit', site, paths), action('retire', site, paths), action('restore', site, paths), action('purge', site, paths)],
   };
 }

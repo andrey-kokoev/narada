@@ -10,6 +10,7 @@ import {
   runDirectCommand,
   runDirectCommandWithResource,
 } from '../../src/lib/command-wrapper.js';
+import { WorkspaceLaunchContractError } from '../../src/commands/workspace-launch-contracts.js';
 
 describe('command error normalization', () => {
   it('normalizes SQLITE_BUSY into a terse retryable operator error', () => {
@@ -108,6 +109,39 @@ describe('direct command runner', () => {
       status: 'error',
       command: 'task test',
       error: 'boom',
+      retryable: false,
+    }]);
+    expect(exitCode).toBe(1);
+  });
+
+  it('preserves launcher contract refusals as stable redacted action envelopes', async () => {
+    const emitted: unknown[] = [];
+    let exitCode: number | null = null;
+
+    await expect(runDirectCommand({
+      command: 'launcher workspace-launch',
+      invocation: async () => {
+        throw new WorkspaceLaunchContractError(
+          'workspace_launch_mcp_scope_missing',
+          'MCP scope must be explicitly admitted.',
+          'Set McpScope on the launch record.',
+        );
+      },
+      emit: (result) => emitted.push(result),
+      exit: (code): never => {
+        exitCode = code;
+        throw new Error('exit');
+      },
+    })).rejects.toThrow('exit');
+
+    expect(emitted).toEqual([{
+      schema: 'narada.workspace_launch.action_refusal.v1',
+      status: 'refused',
+      command: 'launcher workspace-launch',
+      reason_code: 'workspace_launch_mcp_scope_missing',
+      message: 'MCP scope must be explicitly admitted.',
+      required_next_step: 'Set McpScope on the launch record.',
+      artifact_path: null,
       retryable: false,
     }]);
     expect(exitCode).toBe(1);

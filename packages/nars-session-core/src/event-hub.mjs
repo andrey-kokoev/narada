@@ -81,11 +81,18 @@ export function createNarsEventHub({ maxBuffer = 1000 } = {}) {
         markLive: (evidence = {}) => {
           lifecycle.transition('live', evidence);
           const replayLastSequence = Number(evidence.replay_last_sequence);
+          const replaySequenceField = evidence.replay_sequence_field ?? null;
           const pending = subscription.pending.splice(0);
           for (const event of pending) {
-            const sequence = Number(event.event_sequence ?? event.sequence ?? 0);
-            if (Number.isFinite(replayLastSequence) && sequence <= replayLastSequence) continue;
-            subscription.deliver(event, sequence);
+            const sequence = replaySequenceField
+              ? Number(event?.[replaySequenceField])
+              : Number(event.event_sequence ?? event.sequence ?? 0);
+            if (Number.isFinite(replayLastSequence)
+              && (replaySequenceField ? Number.isFinite(sequence) && sequence <= replayLastSequence : sequence <= replayLastSequence)) continue;
+            subscription.deliver(
+              event,
+              Number.isFinite(sequence) ? sequence : Number(event.event_sequence ?? event.sequence ?? 0),
+            );
           }
         },
         fail,

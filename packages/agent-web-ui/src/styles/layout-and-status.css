@@ -31,14 +31,23 @@
   background: var(--surface);
 }
 
-.shell .status .intelligence-status-box,
-.shell .status .view-status-box {
-  flex: 0 1 min(100%, 200px);
-  max-width: 200px;
+.shell .status .intelligence-status-box {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  flex: 0 0 auto;
 }
 
-.shell .status .projection-control {
-  flex-basis: 260px;
+.shell .status .intelligence-status-box .label {
+  align-self: flex-start;
+}
+
+.intelligence-control-stack {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: stretch;
+  width: max-content;
+  max-width: none;
 }
 
 .shell .status .box-row-controls {
@@ -386,6 +395,323 @@
   background: var(--surface);
 }
 
+.shell .status .box-row-items > div.intelligence-status-box {
+  flex: 0 0 max-content;
+  width: max-content;
+  max-width: 100%;
+}
+
+.shell .status .box-row-items > div.projection-control {
+  box-sizing: border-box;
+  flex: 0 1 auto;
+  inline-size: min(100%, clamp(260px, 38vw, 520px));
+  max-inline-size: 100%;
+}
+
+.shell .status .box-row-items > div.view-status-box {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 0 0 max-content;
+  width: max-content;
+  max-width: 100%;
+}
+
+.shell .status .view-status-box-row > select {
+  width: auto;
+}
+
+.view-status-box-header {
+  display: flex;
+  flex-flow: row nowrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  inline-size: 100%;
+}
+
+.view-status-box-row {
+  display: flex;
+  flex-flow: row nowrap;
+  inline-size: 100%;
+}
+
+.view-status-box-header .label {
+  margin-bottom: 0;
+}
+
+.view-customize-trigger {
+  display: grid;
+  inline-size: 16px;
+  block-size: 16px;
+  flex: 0 0 16px;
+  align-self: flex-start;
+  place-items: center;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  cursor: pointer;
+  background: transparent;
+  color: var(--muted);
+}
+
+.view-customize-trigger:hover {
+  color: var(--text);
+}
+
+.view-customize-trigger:focus-visible,
+.projection-view-dialog-content button:focus-visible,
+.projection-view-dialog-content input:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.view-customize-corner {
+  inline-size: 9px;
+  block-size: 9px;
+  border-block-start: 1px solid currentColor;
+  border-inline-end: 1px solid currentColor;
+}
+
+.projection-view-dialog-content {
+  width: min(760px, calc(100vw - 32px));
+}
+
+.projection-view-dialog-body {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.85fr) minmax(270px, 1.15fr);
+  gap: 20px;
+  min-height: 0;
+}
+
+.projection-view-library,
+.projection-view-editor {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  min-width: 0;
+}
+
+.projection-view-section-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.projection-view-section-heading h3 {
+  margin: 0;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.projection-view-active-note {
+  color: var(--muted);
+  font: 11px/1.3 var(--mono);
+}
+
+.projection-view-options {
+  display: grid;
+  gap: 6px;
+  max-height: 340px;
+  overflow: auto;
+}
+
+.projection-view-option {
+  display: flex;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface-muted);
+}
+
+.projection-view-option-active {
+  border-color: var(--accent);
+}
+
+.projection-view-option-select,
+.projection-view-option-edit,
+.projection-view-new-button,
+.projection-view-delete-button,
+.projection-view-cancel-button,
+.projection-view-save-button {
+  border: 1px solid transparent;
+  border-radius: 5px;
+  cursor: pointer;
+  font: 12px/1.3 var(--sans);
+}
+
+.projection-view-option-select {
+  display: grid;
+  flex: 1 1 auto;
+  gap: 3px;
+  min-width: 0;
+  border: 0;
+  border-radius: 5px 0 0 5px;
+  padding: 9px 10px;
+  text-align: left;
+  background: transparent;
+  color: var(--text);
+}
+
+.projection-view-option-select:hover {
+  background: var(--surface);
+}
+
+.projection-view-option-label {
+  font-weight: 700;
+}
+
+.projection-view-option-description {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.projection-view-option-state {
+  color: var(--accent);
+  font: 10px/1.2 var(--mono);
+  text-transform: uppercase;
+}
+
+.projection-view-option-edit {
+  flex: 0 0 auto;
+  border-width: 0 0 0 1px;
+  border-radius: 0 5px 5px 0;
+  border-color: var(--line);
+  padding: 0 9px;
+  background: transparent;
+  color: var(--muted);
+}
+
+.projection-view-option-edit:hover {
+  background: var(--surface);
+  color: var(--text);
+}
+
+.projection-view-new-button {
+  justify-self: start;
+  border-color: var(--line-strong);
+  padding: 7px 10px;
+  background: var(--surface);
+  color: var(--text);
+}
+
+.projection-view-new-button:hover,
+.projection-view-cancel-button:hover {
+  border-color: var(--accent);
+}
+
+.projection-view-field-label,
+.projection-view-facets legend {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.projection-view-name-input {
+  width: 100%;
+  min-height: 32px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  padding: 6px 8px;
+  background: var(--control-bg);
+  color: var(--text);
+  font: 12px/1.3 var(--sans);
+}
+
+.projection-view-facets {
+  display: grid;
+  gap: 7px;
+  margin: 2px 0 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 10px;
+}
+
+.projection-view-facets legend {
+  padding: 0 4px;
+}
+
+.projection-view-facet {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.projection-view-facet input {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 15px;
+  margin: 2px 0 0;
+  accent-color: var(--accent);
+}
+
+.projection-view-facet span {
+  display: grid;
+  gap: 2px;
+}
+
+.projection-view-facet strong {
+  color: var(--text);
+  font-size: 12px;
+}
+
+.projection-view-facet small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.projection-view-validation {
+  margin: 0;
+  color: var(--error);
+  font-size: 12px;
+}
+
+.projection-view-delete-button,
+.projection-view-cancel-button,
+.projection-view-save-button {
+  padding: 7px 11px;
+}
+
+.projection-view-delete-button {
+  margin-right: auto;
+  border-color: var(--error-border);
+  background: transparent;
+  color: var(--error);
+}
+
+.projection-view-cancel-button {
+  border-color: var(--line-strong);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.projection-view-save-button {
+  border-color: var(--button-border);
+  background: var(--button-border);
+  color: var(--button-text);
+}
+
+.projection-view-save-button:hover {
+  background: var(--button-hover-bg);
+}
+
+@media (max-width: 720px) {
+  .projection-view-dialog-body {
+    grid-template-columns: 1fr;
+  }
+
+  .projection-view-options {
+    max-height: 220px;
+  }
+}
+
 .shell .label {
   display: block;
   margin-bottom: 5px;
@@ -418,6 +744,7 @@
 .intelligence-control-line {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 5px;
 }
 
@@ -437,10 +764,17 @@
 }
 
 .intelligence-model-input,
-.intelligence-model-select,
-.intelligence-provider-input,
-.intelligence-provider-select {
+.intelligence-provider-input {
   flex: 1 1 90px;
+}
+
+.intelligence-provider-select {
+  flex: 0 0 auto;
+  width: 100%;
+}
+
+.intelligence-model-select {
+  flex: 0 0 auto;
 }
 
 .intelligence-thinking-select {
@@ -456,8 +790,15 @@
   font: 11px/1.25 var(--mono);
 }
 
-.shell .status .intelligence-model-select {
+.shell .status .intelligence-provider-select {
   width: 100%;
+  min-height: 22px;
+  border-color: var(--line);
+  font: 11px/1.25 var(--mono);
+}
+
+.shell .status .intelligence-model-select {
+  width: auto;
 }
 
 .retention-note {
@@ -514,6 +855,7 @@
 }
 
 .projection-control input {
+  box-sizing: border-box;
   min-width: 0;
   width: 100%;
   min-height: 30px;

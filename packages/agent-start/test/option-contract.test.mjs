@@ -39,6 +39,7 @@ const baseArgs = [
 ];
 const baseTestEnv = {
   NARADA_PROVIDER_SECRET_STORE: 'disabled',
+  NARADA_PROVIDER_ENV_FALLBACK: '1',
   NARADA_CODEX_SUBSCRIPTION_PREFLIGHT: 'defer',
   KIMI_CODE_API_KEY: 'test-key',
 };
@@ -489,7 +490,7 @@ test('agent-cli fails launcher preflight when API provider credential is missing
   assert.equal(refusal.credential_requirement.kind, 'api_key_secret');
   assert.equal(refusal.credential_secret_ref, 'narada/provider/kimi-code-api/api-key');
   assert.deepEqual(refusal.credential_env_names, ['KIMI_CODE_API_KEY']);
-  assert.equal(refusal.required_next_step, "Store the key with PowerShell SecretManagement as 'narada/provider/kimi-code-api/api-key' or set one of: KIMI_CODE_API_KEY");
+  assert.equal(refusal.required_next_step, "Store the key with PowerShell SecretManagement as 'narada/provider/kimi-code-api/api-key' or, for an explicit diagnostic fallback only, set NARADA_PROVIDER_ENV_FALLBACK=1 and one of: KIMI_CODE_API_KEY");
   assert.equal(refusal.resolution_states.at(-1).reason_code, 'intelligence_provider_credential_missing');
 });
 

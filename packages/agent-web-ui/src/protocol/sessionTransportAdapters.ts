@@ -1,4 +1,5 @@
 import type { NarsClientConnection, NarsClientOptions } from './narsClient';
+import type { SessionProtocolFrame } from './sessionTransport';
 
 export type NarsTransportPhase = 'unconfigured' | 'idle' | 'opening' | 'replaying' | 'live' | 'reconnecting' | 'closing' | 'closed';
 
@@ -97,6 +98,7 @@ export interface NarsClientState {
   reconcileTimer: ReturnType<typeof setTimeout> | null;
   socketGeneration: number;
   view: string;
+  sendFrameImpl?: (frame: SessionProtocolFrame) => boolean;
   subscribeView?: (view: string) => boolean;
 }
 

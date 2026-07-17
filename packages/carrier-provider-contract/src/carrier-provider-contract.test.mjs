@@ -29,6 +29,13 @@ test('provider registry exposes carrier-level defaults and support states', () =
   assert.deepEqual(registry.providers['kimi-api'].credential_requirement.env_names, ['KIMI_API_KEY']);
   assert.equal(registry.providers['openai-api'].credential_secret_ref, 'narada/provider/openai-api/api-key');
   assert.equal(registry.providers['deepseek-api'].support_state, PROVIDER_SUPPORT_STATES.VERIFIED_SUPPORTED);
+  assert.equal(registry.providers['deepseek-api'].default_model, 'deepseek-v4-flash');
+  assert.deepEqual(registry.providers['deepseek-api'].available_models, ['deepseek-v4-flash', 'deepseek-v4-pro']);
+  assert.deepEqual(registry.providers['deepseek-api'].cognition_defaults, {
+    low: { model: 'deepseek-v4-flash', reasoning_effort: 'low' },
+    medium: { model: 'deepseek-v4-flash', reasoning_effort: 'medium' },
+    high: { model: 'deepseek-v4-pro', reasoning_effort: 'high' },
+  });
   assert.equal(registry.providers['glm-api'].support_state, PROVIDER_SUPPORT_STATES.VERIFIED_SUPPORTED);
   assert.equal(registry.providers['openrouter-api'].credential_secret_ref, 'narada/provider/openrouter-api/api-key');
   assert.equal(registry.providers['openrouter-api'].credential_requirement.kind, PROVIDER_CREDENTIAL_REQUIREMENT_KINDS.API_KEY_SECRET);
@@ -38,8 +45,8 @@ test('provider registry exposes carrier-level defaults and support states', () =
   assert.equal(registry.providers['codex-subscription'].default_model, 'gpt-5.6-sol');
   assert.equal(registry.providers['codex-subscription'].default_thinking, 'low');
   assert.deepEqual(registry.providers['codex-subscription'].model_catalog, { kind: 'codex_local_cache', max_age_ms: 86400000 });
-  assert.deepEqual(registry.providers['kimi-api'].cognition_defaults.low, { model: 'kimi-k2.7', reasoning_effort: 'low' });
-  assert.deepEqual(registry.providers['kimi-code-api'].cognition_defaults.low, { model: 'kimi-k2.7', reasoning_effort: 'low' });
+  assert.deepEqual(registry.providers['kimi-api'].cognition_defaults.low, { model: 'kimi-k3', reasoning_effort: 'low' });
+  assert.deepEqual(registry.providers['kimi-code-api'].cognition_defaults.low, { model: 'k3', reasoning_effort: 'low' });
   assert.deepEqual(registry.providers['openai-api'].cognition_defaults, {
     low: { model: 'gpt-5.6-luna', reasoning_effort: 'low' },
     medium: { model: 'gpt-5.6-terra', reasoning_effort: 'medium' },
@@ -129,14 +136,14 @@ test('provider environment uses provider-specific env precedence', () => {
   assert.equal(kimi.baseUrl, 'https://kimi.example');
   assert.equal(kimi.model, 'kimi-custom');
   assert.equal(kimi.apiKey, 'kimi-native-key');
-  assert.deepEqual(kimi.availableModels, ['kimi-k2.6', 'kimi-k2.7']);
+  assert.deepEqual(kimi.availableModels, ['kimi-k2.5', 'kimi-k2.6', 'kimi-k2.7-code', 'kimi-k2.7-code-highspeed', 'kimi-k3']);
 
   const kimiCode = providerEnvironment('kimi-code-api', metadata, {
     KIMI_CODE_API_KEY: 'kimi-code-native-key',
   });
 
   assert.equal(kimiCode.baseUrl, 'https://api.kimi.com/coding/');
-  assert.equal(kimiCode.model, 'kimi-k2.7');
+  assert.equal(kimiCode.model, 'k3');
   assert.equal(kimiCode.apiKey, 'kimi-code-native-key');
 
   const glm = providerEnvironment('glm-api', metadata, {

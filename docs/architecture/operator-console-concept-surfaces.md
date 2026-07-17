@@ -22,6 +22,13 @@ without changing the descriptor authority. The CLI workspace directory and
 the Vue route/navigation model both consume this catalog; neither maintains a
 parallel list.
 
+The route-directory failure and recovery behavior is part of this contract,
+not incidental page bootstrap behavior. See
+[`operator-workspace-target.md`](operator-workspace-target.md#route-directory-recovery-semantics)
+for the target semantics and
+[`../product/operator-console-runbook.md`](../product/operator-console-runbook.md)
+for operator recovery.
+
 The catalog is a route and concept contract, not a generic page registry. A
 concept still earns a page through the contract, transport, adapter,
 composable, page, and projection chain below.

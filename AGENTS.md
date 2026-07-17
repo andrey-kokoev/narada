@@ -236,11 +236,21 @@ pnpm test:focused "pnpm --filter @narada2/control-plane exec vitest run test/uni
 # Single CLI test file
 pnpm --dir packages/layers/cli exec vitest run test/commands/task-report.test.ts
 
+# Launcher verification: typecheck first, then one focused launcher test
+pnpm --filter @narada2/cli test:launcher:focused -- test/commands/workspace-launch-admission.test.ts
+
 # Inbox tests (integration-heavy; keep bounded)
 pnpm --dir packages/layers/cli exec vitest run test/commands/inbox.test.ts test/commands/inbox-mutation-evidence.test.ts
 ```
 
 `pnpm test:focused` records timing and classification to `.ai/metrics/test-runtimes.json`.
+
+For launcher work, direct Vitest invocation is behavioral exploration only. Use
+`pnpm --filter @narada2/cli test:launcher:focused -- <one-test-file>` when the
+result must count as verification; this command runs CLI typecheck first and
+does not start the behavioral test if compilation fails. The broad
+`test:launcher` command remains the launcher suite and includes the workspace
+launch admission tests.
 
 ### Known test teardown noise
 

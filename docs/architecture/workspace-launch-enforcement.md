@@ -70,6 +70,24 @@ listening URL; the launcher validates that artifact before recording
 that includes `agent-cli` uses the visible terminal projection for the shared
 runtime and attaches Web UI through its explicit terminal projection tab.
 
+### Identity Correlation
+
+The launch path carries three different identifiers and must never substitute
+one for another:
+
+| Identifier | Owner | Meaning | Where it is used |
+| --- | --- | --- | --- |
+| `launch_session_id` | Narada CLI launcher | Per-launch ownership and correlation token allocated before the runtime starts. | Launch binding, process ownership, attachment lookup, and recovery. |
+| `nars_session_id` | NARS runtime | Exact durable runtime session identifier discovered after the runtime registers. | Attachment evidence, projection process evidence, and readiness validation. |
+| readiness `session_id` | Web UI projection | The NARS session represented by `narada.agent_web_ui.readiness.v1`. | Must equal `nars_session_id` before projection readiness is accepted. |
+
+`narada.workspace_launch.attachment.v1` is the authoritative join from
+`launch_session_id` to `session_id`. The executor resolves that join after
+healthy attachment, passes the resulting `nars_session_id` to the projection
+process, and records it on `WorkspaceLaunchProcessLaunch`. A projection is
+never ready merely because its URL exists: its readiness artifact must also
+identify the exact NARS session selected by the attachment evidence.
+
 ## Enforced Constraints
 
 | # | Constraint | Enforcement owner | Evidence or test |

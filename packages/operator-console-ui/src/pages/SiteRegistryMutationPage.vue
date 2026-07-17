@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue';
+import { computed, onMounted, onUnmounted } from 'vue';
 import { Check, Eye, RotateCcw, Save, Search, ShieldAlert } from 'lucide-vue-next';
 import type { SiteRegistryManagementResponse } from '@narada2/site-registry-contract';
 import OperatorConsoleShell from '../components/OperatorConsoleShell.vue';
-import { siteRegistryNavigation } from '../console/routes';
 import { useSiteRegistryWorkflow } from '../site-registry/composables/useSiteRegistryWorkflow';
+import { useOperatorWorkspaceRouteDirectory } from '../console/route-directory';
 
 const props = defineProps<{ mode: 'add' | 'manage' }>();
 const workflow = useSiteRegistryWorkflow(props.mode);
@@ -43,6 +43,8 @@ const {
   preview,
   apply,
 } = workflow;
+const routeDirectory = useOperatorWorkspaceRouteDirectory();
+const routeDirectoryUnavailable = computed(() => Boolean(routeDirectory?.error.value));
 
 const operationTitle = computed(() => {
   switch (operation.value) {
@@ -75,8 +77,25 @@ function technicalDetails(result: SiteRegistryManagementResponse | null): string
   return result ? JSON.stringify(result, null, 2) : '';
 }
 
+function allowNavigation(): boolean {
+  return !draftDirty.value
+    || typeof window === 'undefined'
+    || window.confirm('Discard unsaved registry change?');
+}
+
+function handleBeforeUnload(event: BeforeUnloadEvent): void {
+  if (!draftDirty.value) return;
+  event.preventDefault();
+  event.returnValue = '';
+}
+
 onMounted(() => {
   void workflow.initializeFromLocation();
+  window.addEventListener('beforeunload', handleBeforeUnload);
+});
+
+onUnmounted(() => {
+  window.removeEventListener('beforeunload', handleBeforeUnload);
 });
 </script>
 
@@ -85,9 +104,10 @@ onMounted(() => {
   <OperatorConsoleShell
     eyebrow="Operator Console / Sites"
     :title="operationTitle"
-    back-href="/console/registry"
+    back-navigation-key="sites"
     back-label="Back to Site Registry"
-    :nav-items="siteRegistryNavigation(props.mode === 'add' ? 'add' : 'manage')"
+    :navigation-key="props.mode === 'add' ? 'add' : 'manage'"
+    :navigation-guard="allowNavigation"
   >
     <main class="mutation-layout">
       <section class="form-panel" aria-labelledby="mutation-title">
@@ -99,6 +119,9 @@ onMounted(() => {
           <span class="draft-state" :data-dirty="draftDirty">{{ draftDirty ? 'Unsaved changes' : 'No unsaved changes' }}</span>
         </header>
         <p class="workflow-note">{{ operationHelp }} Preview never changes the registry; applying requires explicit confirmation.</p>
+        <p v-if="routeDirectoryUnavailable" class="recovery-note" role="status">
+          Live route directory unavailable. Navigation and discovery may be limited, but this page remains governed by the canonical registry authority.
+        </p>
 
         <form class="mutation-form" novalidate @submit.prevent="preview">
           <label v-if="props.mode === 'manage'" class="field">

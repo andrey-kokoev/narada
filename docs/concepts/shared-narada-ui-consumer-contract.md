@@ -140,8 +140,8 @@ The following checks are the durable evidence for this boundary:
    `pnpm --filter @narada2/cli typecheck` and the focused
    `console-server.test.ts` run prove the standalone CLI delivery
    path from a built checkout.
-5. `node --import tsx --test test/integration/site-registry-ui-e2e.test.mjs`
-   from `packages/layers/cli` proves the Registry workflow at
+5. `node --import tsx --test test/integration/operator-console-ui-e2e.test.mjs`
+   from `packages/layers/cli` proves the modern Operator Console Registry workflow at
    1280x900 and 390x844, including overflow, hidden fields, refresh-preserved
    drafts, discard restoration, lifecycle blocking, and confirmation-gated
    apply.

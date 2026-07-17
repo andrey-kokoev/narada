@@ -40,3 +40,14 @@ test('Operator Console pages stay behind the route and workflow boundaries', () 
   assert.match(launchComposable, /createOperatorConsoleLauncherSessionTransport/);
   assert.match(mutationPage, /useSiteRegistryWorkflow/);
 });
+
+test('route discovery never gates canonical registry mutation admission', () => {
+  const mutationPage = read('pages/SiteRegistryMutationPage.vue');
+
+  assert.match(mutationPage, /routeDirectoryUnavailable/);
+  assert.match(mutationPage, /@submit\.prevent="preview"/);
+  assert.match(mutationPage, /@click="apply"/);
+  assert.match(mutationPage, /:disabled="!canPlan"/);
+  assert.match(mutationPage, /:disabled="!canApply \|\| busy"/);
+  assert.doesNotMatch(mutationPage, /routeAuthorityAvailable|previewWithRouteAuthority|applyWithRouteAuthority/);
+});

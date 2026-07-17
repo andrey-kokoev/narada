@@ -20,7 +20,7 @@ export function loadSiteMcpFabric(siteRoot, options = {}) {
       empty.source = fabricDirectory.source;
       empty.candidate_mcp_dirs = fabricDirectory.candidates;
       if (validateRegistry !== false) {
-        empty.registry_validation = validateFabricAgainstRegistry(siteRoot, mcpDir, [], {});
+        empty.registry_validation = validateFabricAgainstRegistry(siteRoot, mcpDir, [], {}, {});
       }
       return empty;
     }
@@ -180,7 +180,7 @@ export function loadSiteMcpFabric(siteRoot, options = {}) {
     );
   }
 
-  const registryValidation = validateFabricAgainstRegistry(siteRoot, mcpDir, activeFiles, servers);
+  const registryValidation = validateFabricAgainstRegistry(siteRoot, mcpDir, activeFiles, servers, sources);
   if (validateRegistry === true && registryValidation.status === 'mismatch') {
     const details = {
       siteRoot,
@@ -188,6 +188,7 @@ export function loadSiteMcpFabric(siteRoot, options = {}) {
       registryPath: registryValidation.registry_path,
       missing: registryValidation.missing,
       unexpected: registryValidation.unexpected,
+      server_name_mismatches: registryValidation.server_name_mismatches,
     };
     details.repair_plan = mcpFabricRepairPlan('mcp_fabric_registry_mismatch', details);
     throw new McpFabricError('mcp_fabric_registry_mismatch', `MCP fabric does not match registry ${normalize(registryValidation.registry_path)}`, details);
@@ -439,13 +440,14 @@ function isPathInside(candidate, root) {
   return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel));
 }
 
-function validateFabricAgainstRegistry(siteRoot, mcpDir, files, servers) {
+function validateFabricAgainstRegistry(siteRoot, mcpDir, files, servers, sources) {
   const registryPath = join(siteControlRoot(siteRoot), 'capabilities', 'mcp-surfaces.json');
   if (!existsSync(registryPath)) {
     return {
       status: 'missing',
       registry_path: registryPath,
       missing: [],
+      server_name_mismatches: [],
     };
   }
 
@@ -455,9 +457,11 @@ function validateFabricAgainstRegistry(siteRoot, mcpDir, files, servers) {
     const generatedPath = surface?.client_config?.generated_path;
     const surfaceId = surface?.surface_id;
     if (!generatedPath || !surfaceId) continue;
+    const configuredServerName = String(surface?.server_name ?? surface?.client_config?.server_name ?? '').trim();
     expectedSurfaces.push({
       surface_id: String(surfaceId),
       generated_file: basename(String(generatedPath)),
+      ...(configuredServerName ? { server_name: configuredServerName } : {}),
     });
   }
 
@@ -469,12 +473,40 @@ function validateFabricAgainstRegistry(siteRoot, mcpDir, files, servers) {
   const unexpected = files
     .filter((file) => !expectedFiles.has(file))
     .map((file) => ({ generated_file: file }));
+  const expectedNamedSurfacesByFile = new Map();
+  for (const surface of expectedSurfaces) {
+    if (!surface.server_name) continue;
+    const surfacesForFile = expectedNamedSurfacesByFile.get(surface.generated_file) ?? [];
+    surfacesForFile.push(surface);
+    expectedNamedSurfacesByFile.set(surface.generated_file, surfacesForFile);
+  }
+  const serverNameMismatches = [];
+  for (const [actualServerName, server] of Object.entries(servers)) {
+    const generatedFile = sources?.[actualServerName];
+    const expectedNamedSurfaces = expectedNamedSurfacesByFile.get(generatedFile) ?? [];
+    if (expectedNamedSurfaces.length === 0) continue;
+    const expectedSurfaceForId = server.surface_id
+      ? expectedNamedSurfaces.find((surface) => surface.surface_id === String(server.surface_id))
+      : null;
+    const expectedServerNames = expectedSurfaceForId
+      ? [expectedSurfaceForId.server_name]
+      : expectedNamedSurfaces.map((surface) => surface.server_name);
+    if (expectedServerNames.includes(actualServerName)) continue;
+    serverNameMismatches.push({
+      generated_file: generatedFile,
+      surface_id: expectedSurfaceForId?.surface_id ?? server.surface_id ?? null,
+      actual_server_name: actualServerName,
+      expected_server_name: expectedSurfaceForId?.server_name ?? (expectedServerNames.length === 1 ? expectedServerNames[0] : null),
+      expected_server_names: expectedServerNames,
+    });
+  }
   return {
-    status: missing.length === 0 && unexpected.length === 0 ? 'ok' : 'mismatch',
+    status: missing.length === 0 && unexpected.length === 0 && serverNameMismatches.length === 0 ? 'ok' : 'mismatch',
     registry_path: registryPath,
     expected_count: expectedSurfaces.length,
     missing,
     unexpected,
+    server_name_mismatches: serverNameMismatches,
   };
 }
 

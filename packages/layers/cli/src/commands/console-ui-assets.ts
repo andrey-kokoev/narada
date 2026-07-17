@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, extname, resolve, sep } from 'node:path';
+import { OPERATOR_CONSOLE_ASSET_PATH } from '@narada2/operator-console-contract';
 
 const require = createRequire(import.meta.url);
 
@@ -18,7 +19,7 @@ export function readOperatorConsoleUiDocument(artifactRoot?: string | null): str
 }
 
 export function readOperatorConsoleUiAsset(pathname: string, artifactRoot?: string | null): ConsoleUiAsset | null {
-  const prefix = '/console/registry/assets/';
+  const prefix = `${OPERATOR_CONSOLE_ASSET_PATH}/`;
   if (!pathname.startsWith(prefix)) return null;
   const relativePath = pathname.slice(prefix.length);
   if (!relativePath || relativePath.includes('\\') || relativePath.split('/').some((part) => part === '..' || part === '.')) return null;

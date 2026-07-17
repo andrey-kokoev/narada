@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs';
 import { readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { siteAuthorityRootFromSiteRoot } from '@narada2/site-paths';
+import { OPERATOR_CONSOLE_LAUNCH_SESSIONS_PATH } from '@narada2/operator-console-contract';
 import {
   workspaceLaunchUiSessionLifecycleFromStatus,
   type WorkspaceLaunchUiSessionLifecycleState,
@@ -22,6 +23,10 @@ export interface WorkspaceLaunchUiSessionRecord {
     command: 'launcher workspace-launch';
     surface: 'interactive-selection-ui';
   };
+}
+
+export function isWorkspaceLaunchUiSessionActive(session: Pick<WorkspaceLaunchUiSessionRecord, 'status'>): boolean {
+  return session.status === 'open' || session.status === 'closing';
 }
 
 export function normalizeWorkspaceLaunchUiSessionRecord(value: unknown): WorkspaceLaunchUiSessionRecord | null {
@@ -54,11 +59,11 @@ export function workspaceLaunchUiSessionPersistenceRoot(): string {
 }
 
 export function workspaceLaunchUiSessionRoute(uiSessionId: string): string {
-  return `/console/launch/sessions/${encodeURIComponent(uiSessionId)}`;
+  return `${OPERATOR_CONSOLE_LAUNCH_SESSIONS_PATH}/${encodeURIComponent(uiSessionId)}`;
 }
 
 export function isWorkspaceLaunchUiSessionProxyable(session: WorkspaceLaunchUiSessionRecord): boolean {
-  if (!session.url || (session.status !== 'open' && session.status !== 'closing')) return false;
+  if (!isWorkspaceLaunchUiSessionActive(session) || !session.url) return false;
   try {
     const target = new URL(session.url);
     return (target.protocol === 'http:' || target.protocol === 'https:')

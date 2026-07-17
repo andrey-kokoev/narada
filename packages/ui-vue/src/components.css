@@ -1,4 +1,96 @@
 @layer narada-vue-primitives {
+  .narada-dialog-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    background: var(--drawer-backdrop);
+  }
+
+  .narada-dialog-content {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    z-index: 110;
+    display: grid;
+    width: min(520px, calc(100vw - 32px));
+    max-height: min(760px, calc(100vh - 32px));
+    gap: 16px;
+    overflow: auto;
+    transform: translate(-50%, -50%);
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius);
+    padding: 20px;
+    outline: none;
+    background: var(--surface);
+    color: var(--text);
+    box-shadow: 0 20px 60px var(--drawer-shadow);
+  }
+
+  .narada-dialog-header {
+    display: grid;
+    gap: 6px;
+    padding-right: 28px;
+  }
+
+  .narada-dialog-title {
+    margin: 0;
+    color: var(--text);
+    font: 600 18px/1.2 var(--sans);
+  }
+
+  .narada-dialog-description {
+    margin: 0;
+    color: var(--muted);
+    font: 13px/1.45 var(--sans);
+  }
+
+  .narada-dialog-footer {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+
+  .narada-dialog-close {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    display: grid;
+    width: 28px;
+    height: 28px;
+    place-items: center;
+    border: 0;
+    border-radius: 6px;
+    padding: 0;
+    cursor: pointer;
+    background: transparent;
+    color: var(--muted);
+  }
+
+  .narada-dialog-close:hover {
+    background: var(--surface-muted);
+    color: var(--text);
+  }
+
+  .narada-dialog-close:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
+
+  .narada-dialog-close-icon {
+    width: 16px;
+    height: 16px;
+  }
+
+  .narada-sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+  }
+
   .narada-tooltip-content {
     z-index: 80;
     max-width: min(340px, calc(100vw - 40px));

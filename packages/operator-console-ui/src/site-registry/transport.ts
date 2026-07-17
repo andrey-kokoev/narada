@@ -1,4 +1,5 @@
 import type { SiteRegistryMutationRequest } from '@narada2/site-registry-contract';
+import { OPERATOR_CONSOLE_REGISTRY_API_PATH } from '@narada2/operator-console-contract';
 
 export type SiteRegistryFetch = (input: string, init?: RequestInit) => Promise<Response>;
 
@@ -34,7 +35,7 @@ async function readJson(response: Response): Promise<unknown> {
 }
 
 export function createSiteRegistryTransport(
-  basePath = '/console/registry/api',
+  basePath = OPERATOR_CONSOLE_REGISTRY_API_PATH,
   fetchLike: SiteRegistryFetch = (input, init) => fetch(input, init),
 ): SiteRegistryTransport {
   async function get(path: string): Promise<unknown> {

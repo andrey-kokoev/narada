@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue';
 import BoxVisibilitySelector, { type BoxVisibilitySelectorItem } from './BoxVisibilitySelector.vue';
 import BoxRowShell from './BoxRowShell.vue';
 import ProjectionVerbositySelect from './ProjectionVerbositySelect.vue';
+import ProjectionViewCustomizer from './ProjectionViewCustomizer.vue';
 import { useBoxVisibilityPreference } from '../composables/useBoxVisibilityPreference';
 import { AGENT_WEB_UI_PREFERENCE_KEYS } from '../lib/browserPreferences.js';
 import { NARS_RUNTIME_INTELLIGENCE_RECONFIGURE_METHOD } from '@narada2/nars-client-projection-contract';
@@ -13,6 +14,8 @@ import type { HealthIntelligenceSummary } from '../composables/useHealthStatus';
 import type { ProjectionVerbosity } from '../composables/useProjectionVerbosity';
 import type { SessionIdentitySummary } from '../composables/useNarsEvents';
 import type { SurfaceAffordanceSummary } from '../composables/useSurfaceAffordances';
+import type { CustomProjectionView } from '../composables/useProjectionVerbosity';
+import type { ProjectionViewDraft, ProjectionViewFacetOption, ProjectionViewOption } from '../lib/projectionViews';
 
 const props = defineProps<{
   eventEndpoint: string | null;
@@ -24,7 +27,10 @@ const props = defineProps<{
   sessionIdentity: SessionIdentitySummary;
   summarizedStateSampleCount: number;
   verbosity: ProjectionVerbosity;
-  verbosityLevels: readonly ProjectionVerbosity[];
+  viewId: string;
+  viewOptions: readonly ProjectionViewOption[];
+  customViews: readonly CustomProjectionView[];
+  viewFacetOptions: readonly ProjectionViewFacetOption[];
   agentActivity: AgentActivityState;
   authorityTransition: Record<string, unknown> | null;
   surfaceAffordances: SurfaceAffordanceSummary;
@@ -33,7 +39,9 @@ const props = defineProps<{
   collapsible?: boolean;
 }>();
 const emit = defineEmits<{
-  'update:verbosity': [value: ProjectionVerbosity];
+  'update:view': [value: string];
+  'save-view': [view: ProjectionViewDraft];
+  'delete-view': [id: string];
   'publish-cloudflare': [cloudflareApiBaseUrl: string];
   'request-affordance-action': [request: { surfaceId: string; actionId: string; args: Record<string, unknown> }];
   'request-intelligence-reconfiguration': [change: { provider?: string; model?: string; thinking?: string }];
@@ -149,15 +157,33 @@ const thinkingChoices = computed(() => {
 const modelChoices = computed(() => {
   const choices = objectField(objectField(setModelAction.value?.raw, 'args'), 'model')?.choices;
   const values = [
-    ...(Array.isArray(choices) ? choices : []),
     ...props.intelligence.modelChoices,
+    ...(Array.isArray(choices) ? choices : []),
   ].filter((choice): choice is string => typeof choice === 'string' && choice.length > 0);
   const current = props.intelligence.model;
-  return [...new Set([current, ...values].filter((value): value is string => typeof value === 'string' && value.length > 0))];
+  return [...new Set([...values, current].filter((value): value is string => typeof value === 'string' && value.length > 0))];
 });
 const providerInputValue = computed(() => pendingProvider.value ?? props.intelligence.provider ?? '');
 const modelInputValue = computed(() => pendingModel.value ?? props.intelligence.model ?? '');
 const thinkingInputValue = computed(() => pendingThinking.value ?? props.intelligence.thinking ?? 'medium');
+const modelSelectStyle = computed(() => ({
+  inlineSize: selectInlineSize(modelChoices.value, modelInputValue.value),
+}));
+const thinkingSelectStyle = computed(() => ({
+  minInlineSize: selectInlineSize(thinkingChoices.value, thinkingInputValue.value),
+}));
+const intelligenceControlStackStyle = computed(() => ({
+  minInlineSize: selectInlineSize(providerChoices.value, providerInputValue.value),
+}));
+
+function selectInlineSize(choices: readonly string[], currentValue: string): string {
+  return selectInlineSizeValue(choices, currentValue);
+}
+
+function selectInlineSizeValue(choices: readonly string[], currentValue: string): string {
+  const longest = Math.max(1, ...[currentValue, ...choices].map((choice) => [...choice].length));
+  return `calc(${longest}ch + 28px)`;
+}
 
 watch(() => props.intelligence.provider, (provider) => {
   if (pendingProvider.value && pendingProvider.value === provider) pendingProvider.value = null;
@@ -253,66 +279,71 @@ function stringField(record: Record<string, unknown>, field: string): string | n
         <TooltipTrigger as-child>
           <div class="intelligence-status-box">
             <span class="label">Intelligence</span>
-            <select
-              v-if="providerChoices.length"
-              class="intelligence-provider-select"
-              :value="providerInputValue"
-              aria-label="Provider"
-              @change="requestProviderChange"
-              @click.stop
-              @keydown.stop
-            >
-              <option v-for="choice in providerChoices" :key="choice" :value="choice">{{ choice }}</option>
-            </select>
-            <input
-              v-else
-              class="intelligence-provider-input"
-              :value="providerInputValue"
-              placeholder="Provider name"
-              aria-label="Provider"
-              @change="requestProviderChange"
-              @click.stop
-              @keydown.stop
-            >
-            <span class="status-token-line status-secondary-token-line intelligence-control-line">
+            <div class="intelligence-control-stack" :style="intelligenceControlStackStyle">
               <select
-                v-if="modelChoices.length"
-                class="intelligence-model-select"
-                :value="modelInputValue"
-                aria-label="Model"
-                @change="requestModelChange"
+                v-if="providerChoices.length"
+                class="intelligence-provider-select"
+                :value="providerInputValue"
+                aria-label="Provider"
+                @change="requestProviderChange"
                 @click.stop
                 @keydown.stop
               >
-                <option v-for="choice in modelChoices" :key="choice" :value="choice">{{ choice }}</option>
+                <option v-for="choice in providerChoices" :key="choice" :value="choice">{{ choice }}</option>
               </select>
               <input
                 v-else
-                class="intelligence-model-input"
-                :value="modelInputValue"
-                placeholder="model"
-                aria-label="Model"
-                @change="requestModelChange"
+                class="intelligence-provider-input"
+                :value="providerInputValue"
+                placeholder="Provider name"
+                aria-label="Provider"
+                @change="requestProviderChange"
                 @click.stop
                 @keydown.stop
-              />
-              <template v-if="modelChoices.length && thinkingChoices.length">
-                <span class="session-token-separator">·</span>
-              </template>
-              <select
-                v-if="thinkingChoices.length"
-                class="intelligence-thinking-select"
-                :value="thinkingInputValue"
-                aria-label="Thinking level"
-                @change="requestThinkingChange"                @click.stop
-                @keydown.stop
               >
-                <option v-for="choice in thinkingChoices" :key="choice" :value="choice">{{ choice }}</option>
-              </select>
-              <template v-else-if="intelligence.thinking">
-                <span>{{ intelligence.thinking }}</span>
-              </template>
-            </span>
+              <span class="status-token-line status-secondary-token-line intelligence-control-line">
+                <select
+                  v-if="modelChoices.length"
+                  class="intelligence-model-select"
+                  :style="modelSelectStyle"
+                  :value="modelInputValue"
+                  aria-label="Model"
+                  @change="requestModelChange"
+                  @click.stop
+                  @keydown.stop
+                >
+                  <option v-for="choice in modelChoices" :key="choice" :value="choice">{{ choice }}</option>
+                </select>
+                <input
+                  v-else
+                  class="intelligence-model-input"
+                  :value="modelInputValue"
+                  placeholder="model"
+                  aria-label="Model"
+                  @change="requestModelChange"
+                  @click.stop
+                  @keydown.stop
+                />
+                <template v-if="modelChoices.length && thinkingChoices.length">
+                  <span class="session-token-separator">·</span>
+                </template>
+                <select
+                  v-if="thinkingChoices.length"
+                  class="intelligence-thinking-select"
+                  :style="thinkingSelectStyle"
+                  :value="thinkingInputValue"
+                  aria-label="Thinking level"
+                  @change="requestThinkingChange"
+                  @click.stop
+                  @keydown.stop
+                >
+                  <option v-for="choice in thinkingChoices" :key="choice" :value="choice">{{ choice }}</option>
+                </select>
+                <template v-else-if="intelligence.thinking">
+                  <span>{{ intelligence.thinking }}</span>
+                </template>
+              </span>
+            </div>
             <span v-if="pendingProvider || pendingModel || pendingThinking" class="retention-note">change requested</span>
           </div>
         </TooltipTrigger>
@@ -330,16 +361,29 @@ function stringField(record: Record<string, unknown>, field: string): string | n
         <TooltipContent side="bottom" align="start">{{ statusTooltips.authority }}</TooltipContent>
       </Tooltip>
 
-      <Tooltip v-if="isStatusBoxVisible('view')">
-        <TooltipTrigger as-child>
-          <div class="view-status-box">
-            <label class="label" for="projection-verbosity">View</label>
-            <ProjectionVerbositySelect :model-value="verbosity" :levels="verbosityLevels" @update:model-value="emit('update:verbosity', $event)" />
-            <span v-if="summarizedStateSampleCount && (verbosity === 'diagnostics' || verbosity === 'raw')" class="retention-note">{{ summarizedStateSampleCount }} routine status update{{ summarizedStateSampleCount === 1 ? '' : 's' }} folded into State</span>
-          </div>
-        </TooltipTrigger>
-        <TooltipContent side="bottom" align="start">{{ statusTooltips.view }}</TooltipContent>
-      </Tooltip>
+      <div v-if="isStatusBoxVisible('view')" class="view-status-box">
+        <div class="view-status-box-header">
+          <Tooltip>
+            <TooltipTrigger as-child>
+              <label class="label" for="projection-verbosity">View</label>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" align="start">{{ statusTooltips.view }}</TooltipContent>
+          </Tooltip>
+          <ProjectionViewCustomizer
+            :active-view-id="viewId"
+            :view-options="viewOptions"
+            :custom-views="customViews"
+            :facet-options="viewFacetOptions"
+            @select="emit('update:view', $event)"
+            @save="emit('save-view', $event)"
+            @delete="emit('delete-view', $event)"
+          />
+        </div>
+        <div class="view-status-box-row">
+          <ProjectionVerbositySelect :model-value="viewId" :options="viewOptions" @update:model-value="emit('update:view', $event)" />
+        </div>
+        <span v-if="summarizedStateSampleCount && (verbosity === 'diagnostics' || verbosity === 'raw')" class="retention-note">{{ summarizedStateSampleCount }} routine status update{{ summarizedStateSampleCount === 1 ? '' : 's' }} folded into State</span>
+      </div>
 
       <Tooltip v-if="isStatusBoxVisible('cloudflare')">
         <TooltipTrigger as-child>

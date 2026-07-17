@@ -2,20 +2,32 @@
 import { ArrowLeft } from 'lucide-vue-next';
 import type { OperatorSurfaceNavItem } from './types';
 
-defineProps<{
+const props = defineProps<{
   eyebrow: string;
   title: string;
   backHref: string;
   backLabel: string;
   navItems: readonly OperatorSurfaceNavItem[];
+  navigationGuard?: (href: string) => boolean;
 }>();
+
+function guardNavigation(event: MouseEvent, href: string): void {
+  if (!props.navigationGuard
+    || event.defaultPrevented
+    || event.button !== 0
+    || event.metaKey
+    || event.ctrlKey
+    || event.shiftKey
+    || event.altKey) return;
+  if (!props.navigationGuard(href)) event.preventDefault();
+}
 </script>
 
 <template>
   <div class="operator-surface-shell">
     <header class="surface-bar">
       <div class="surface-bar__identity">
-        <a class="icon-link" :href="backHref" :title="backLabel" :aria-label="backLabel">
+        <a class="icon-link" :href="backHref" :title="backLabel" :aria-label="backLabel" @click="guardNavigation($event, backHref)">
           <ArrowLeft :size="16" aria-hidden="true" />
         </a>
         <div>
@@ -30,6 +42,7 @@ defineProps<{
           class="action-link"
           :href="item.href"
           :aria-current="item.current ? 'page' : undefined"
+          @click="guardNavigation($event, item.href)"
         >
           {{ item.label }}
         </a>

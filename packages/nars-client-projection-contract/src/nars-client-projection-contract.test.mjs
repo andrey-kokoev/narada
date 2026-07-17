@@ -531,6 +531,13 @@ test('NARS client projection contract owns shared event rendering vocabulary', (
     summary: 'hello',
     event: { event: 'assistant_message', content: 'hello' },
   });
+  assert.deepEqual(projectNarsClientEvent({ event: 'session_events_replay_completed', replay_count: 0, has_more: false }), {
+    kind: 'session_events_replay_completed',
+    label: 'Replay complete',
+    tone: 'session',
+    summary: '0 replayed event(s); replay complete',
+    event: { event: 'session_events_replay_completed', replay_count: 0, has_more: false },
+  });
   assert.deepEqual(projectNarsClientEvent({ event: 'assistant_message_stream', request_id: 'input_1', turn_id: 'turn_1', content: 'partial' }), {
     kind: 'assistant_message_stream',
     label: 'Agent',
@@ -716,6 +723,7 @@ test('NARS client projection verbosity filters shared event classes', () => {
   const mcpRuntimeFault = { event: 'mcp_runtime_fault', server_name: 'narada-site', tool_name: 'fixture_fail', error_code: 'fixture_mcp_forced_failure' };
   const projectionFailure = { event: 'runtime_projection_failure', projection: 'health', request_state: 'failed', error: 'session_health_timeout' };
   const turnComplete = { event: 'turn_complete', terminal_state: 'completed' };
+  const replayCompleted = { event: 'session_events_replay_completed', replay_count: 0, has_more: false };
 
   assert.equal(shouldProjectNarsClientEvent(assistant, { verbosity: 'conversation' }), true);
   assert.equal(shouldProjectNarsClientEvent(sessionStarted, { verbosity: 'conversation' }), false);
@@ -742,11 +750,15 @@ test('NARS client projection verbosity filters shared event classes', () => {
   assert.equal(shouldProjectNarsClientEvent(turnComplete, { verbosity: 'conversation' }), false);
   assert.equal(shouldProjectNarsClientEvent(turnComplete, { verbosity: 'operations' }), false);
   assert.equal(shouldProjectNarsClientEvent(turnComplete, { verbosity: 'diagnostics' }), true);
+  assert.equal(classifyNarsClientEventProjection(projectNarsClientEvent(replayCompleted)), 'diagnostics');
+  assert.equal(shouldProjectNarsClientEvent(replayCompleted, { verbosity: 'conversation' }), false);
+  assert.equal(shouldProjectNarsClientEvent(replayCompleted, { verbosity: 'diagnostics' }), true);
 
   assert.equal(shouldProjectNarsClientEvent(routineHealth, { verbosity: 'operations' }), false);
   assert.equal(shouldProjectNarsClientEvent(routineHealth, { verbosity: 'diagnostics' }), false);
   assert.equal(shouldProjectNarsClientEvent(routineHealth, { verbosity: 'raw' }), false);
   assert.equal(shouldProjectNarsClientEvent(routineHealth, { verbosity: 'raw', includeStateSamples: true }), true);
+  assert.equal(shouldProjectNarsClientEvent({ ...routineHealth, request_id: 'health-request-1' }, { verbosity: 'diagnostics' }), true);
   assert.equal(classifyNarsClientEventProjection(projectNarsClientEvent(unhealthy)), 'diagnostics');
   assert.equal(shouldProjectNarsClientEvent(unhealthy, { verbosity: 'operations' }), false);
   assert.equal(shouldProjectNarsClientEvent(unhealthy, { verbosity: 'diagnostics' }), true);

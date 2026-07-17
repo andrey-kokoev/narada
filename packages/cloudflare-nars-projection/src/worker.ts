@@ -17,11 +17,49 @@ import {
   NarsWorkspaceDirectory,
   type CloudflareNarsWorkspaceDirectoryService,
 } from './workspace-directory.js';
+import {
+  OPERATOR_CONSOLE_PATH,
+} from '@narada2/operator-console-contract';
+import type { OperatorWorkspaceRouteDirectory } from '@narada2/operator-console-contract';
+import { renderCloudflareWorkspacePage } from './cloudflare-workspace-page.js';
 
 export interface CloudflareNarsProjectionWorkerEnv {
   ASSETS?: { fetch(request: Request): Promise<Response> | Response };
   NARS_PROJECTION_STATE?: DurableObjectNamespaceLike;
   NARS_WORKSPACE_DIRECTORY?: DurableObjectNamespaceLike;
+}
+
+function isWorkspaceRouteDirectory(value: unknown): value is OperatorWorkspaceRouteDirectory {
+  const record = objectRecord(value);
+  return record !== null
+    && record.schema === 'narada.operator_workspace.route_directory.v3'
+    && objectRecord(record.workspaceHost) !== null
+    && Array.isArray(record.surfaces);
+}
+
+async function readWorkspaceDirectoryForPage(
+  request: Request,
+  env: CloudflareNarsProjectionWorkerEnv,
+  workspaceDirectory: CloudflareNarsWorkspaceDirectoryService,
+  now: () => string,
+): Promise<OperatorWorkspaceRouteDirectory> {
+  const requestUrl = new URL(request.url);
+  const projectionId = requestUrl.searchParams.get('projection_id');
+  if (env.NARS_WORKSPACE_DIRECTORY) {
+    const directoryUrl = new URL(request.url);
+    directoryUrl.pathname = '/api/nars/workspace/routes';
+    directoryUrl.search = projectionId ? `?projection_id=${encodeURIComponent(projectionId)}` : '';
+    const response = await env.NARS_WORKSPACE_DIRECTORY
+      .get(env.NARS_WORKSPACE_DIRECTORY.idFromName('workspace'))
+      .fetch(new Request(directoryUrl));
+    const payload = await response.json().catch(() => null);
+    if (isWorkspaceRouteDirectory(payload)) return payload;
+  }
+  return workspaceDirectory.projectDirectory({
+    workspace_host: { kind: 'cloudflare', id: 'worker', origin: requestUrl.origin },
+    projection_id: projectionId,
+    now: now(),
+  });
 }
 
 async function lookupWorkspaceRouteInDurableObject(path: string, env: CloudflareNarsProjectionWorkerEnv): Promise<Record<string, unknown> | null> {
@@ -143,6 +181,9 @@ export function createCloudflareNarsProjectionWorker(options: CloudflareNarsProj
       const path = trimPath(url.pathname);
       if (!path.startsWith('api/nars/')) return serveStaticAsset(request, env, workspaceDirectory, now);
       if (request.method === 'OPTIONS') return corsResponse();
+      if (request.method === 'GET' && path === 'api/nars/assets/manifest') {
+        return serveAssetManifest(request, env);
+      }
       if (request.method === 'GET' && path === 'api/nars/authority/health') {
         return json({ schema: 'narada.cloudflare_nars_authority.service_health.v1', status: 'healthy', execution: authorityService.execution_mode });
       }
@@ -762,23 +803,62 @@ function withCorsHeaders(headers: HeadersInit): Headers {
   return next;
 }
 
-async function serveStaticAsset(request: Request, env: CloudflareNarsProjectionWorkerEnv, workspaceDirectory: CloudflareNarsWorkspaceDirectoryService, now: () => string): Promise<Response> {
+async function serveAssetManifest(request: Request, env: CloudflareNarsProjectionWorkerEnv): Promise<Response> {
   if (!env.ASSETS?.fetch) return json(refusal('static_assets_not_configured'), 404);
+  const assetUrl = new URL(request.url);
+  assetUrl.pathname = '/narada-cloudflare-assets.json';
+  assetUrl.search = '';
+  const response = await env.ASSETS.fetch(new Request(assetUrl, {
+    method: 'GET',
+    headers: request.headers,
+  }));
+  if (!response.ok) return json(refusal('asset_manifest_not_found'), 404);
+  const headers = new Headers(response.headers);
+  headers.set('content-type', 'application/json; charset=utf-8');
+  headers.set('cache-control', 'no-store');
+  headers.delete('content-length');
+  headers.delete('content-encoding');
+  headers.delete('etag');
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: withCorsHeaders(headers),
+  });
+}
+
+async function serveStaticAsset(request: Request, env: CloudflareNarsProjectionWorkerEnv, workspaceDirectory: CloudflareNarsWorkspaceDirectoryService, now: () => string): Promise<Response> {
   const url = new URL(request.url);
   const directProjectionEntry = url.pathname === '/'
     && url.searchParams.has('cloudflare_projection_id');
-  if (url.pathname === '/' && !directProjectionEntry) return Response.redirect(`${url.origin}/console/registry/`, 302);
+  const workspaceLanding = !directProjectionEntry
+    && (url.pathname === '/' || url.pathname === OPERATOR_CONSOLE_PATH || url.pathname === `${OPERATOR_CONSOLE_PATH}/`);
+  if (workspaceLanding) {
+    const directory = await readWorkspaceDirectoryForPage(request, env, workspaceDirectory, now);
+    return new Response(renderCloudflareWorkspacePage(directory, url.origin), {
+      status: 200,
+      headers: withCorsHeaders({ 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' }),
+    });
+  }
+  if (!env.ASSETS?.fetch) return json(refusal('static_assets_not_configured'), 404);
   const sessionDocument = url.pathname === '/sessions' || url.pathname === '/sessions/' || url.pathname.startsWith('/sessions/');
-  const consoleDocument = isDocumentPath(url.pathname, '/console');
+  const consoleDocument = isDocumentPath(url.pathname, OPERATOR_CONSOLE_PATH);
+  const consoleLease = consoleDocument
+    ? (env.NARS_WORKSPACE_DIRECTORY
+      ? await lookupWorkspaceRouteInDurableObject(url.pathname, env)
+      : workspaceDirectory.findByPath(url.pathname, now()))
+    : null;
+  const consoleUiConfig = objectRecord(consoleLease?.ui_config);
+  if (consoleDocument && !consoleLease) return json(refusal('operator_console_route_not_leased'), 404);
+  if (consoleDocument && !consoleUiConfig) return json(refusal('operator_console_route_configuration_unavailable'), 503);
   const assetUrl = new URL(url);
   if (directProjectionEntry) assetUrl.pathname = '/sessions/index.html';
-  if (consoleDocument) assetUrl.pathname = '/console/registry/index.html';
+  if (consoleDocument) assetUrl.pathname = `${OPERATOR_CONSOLE_PATH}/index.html`;
   if (sessionDocument && !hasFileExtension(url.pathname)) assetUrl.pathname = '/sessions/index.html';
   const response = await env.ASSETS.fetch(new Request(assetUrl, request));
   if ((!sessionDocument && !consoleDocument) || !isHtmlResponse(response)) return response;
-  const lease = env.NARS_WORKSPACE_DIRECTORY
+  const lease = consoleDocument ? consoleLease : (env.NARS_WORKSPACE_DIRECTORY
     ? await lookupWorkspaceRouteInDurableObject(url.pathname, env)
-    : workspaceDirectory.findByPath(url.pathname, now());
+    : workspaceDirectory.findByPath(url.pathname, now()));
   const uiConfig = objectRecord(lease?.ui_config);
   if (sessionDocument && !uiConfig) return json(refusal('workspace_session_route_not_found'), 404);
   const consoleRouteDirectory = objectRecord(uiConfig?.workspace_route_directory);
@@ -792,11 +872,21 @@ async function serveStaticAsset(request: Request, env: CloudflareNarsProjectionW
     }
     : {};
   const content = await response.text();
+  const headers = new Headers(response.headers);
+  // The body is no longer the immutable asset returned by ASSETS. Do not
+  // retain validators or encoding metadata that describe that old body.
+  headers.delete('content-length');
+  headers.delete('content-encoding');
+  headers.delete('etag');
+  headers.delete('content-md5');
+  headers.delete('digest');
+  headers.set('cache-control', 'no-store');
   return new Response(content
-    .replace('__NARADA_AGENT_WEB_UI_CONFIG__', JSON.stringify(uiConfig ?? {}))
-    .replace('__NARADA_OPERATOR_CONSOLE_CONFIG__', JSON.stringify(consoleConfig)), {
+    .replace('__NARADA_AGENT_WEB_UI_CONFIG__', serializeHtmlJson(uiConfig ?? {}))
+    .replace('__NARADA_OPERATOR_CONSOLE_CONFIG__', serializeHtmlJson(consoleConfig)), {
     status: response.status,
-    headers: response.headers,
+    statusText: response.statusText,
+    headers,
   });
 }
 
@@ -810,6 +900,16 @@ function hasFileExtension(pathname: string): boolean {
 
 function isHtmlResponse(response: Response): boolean {
   return (response.headers.get('content-type') ?? '').toLowerCase().includes('text/html');
+}
+
+function serializeHtmlJson(value: unknown): string {
+  const serialized = JSON.stringify(value) ?? '{}';
+  return serialized
+    .replace(/</g, '\\u003c')
+    .replace(/>/g, '\\u003e')
+    .replace(/&/g, '\\u0026')
+    .replace(/\u2028/g, '\\u2028')
+    .replace(/\u2029/g, '\\u2029');
 }
 
 function refusal(code: string) {

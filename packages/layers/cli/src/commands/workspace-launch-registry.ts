@@ -3,7 +3,6 @@ import { readFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { runGovernedCommandSync } from '@narada2/process-launch-posture';
 import { buildAgentIdentityRefV2, resolveAgentIdentityRef } from '@narada2/agent-identity';
-import { defaultRuntimeForOperatorSurface } from '@narada2/operator-surface-runtime-contract/operator-surface-runtime-selection';
 import type { WorkspaceLaunchAdmissionPolicy } from './workspace-launch-admission.js';
 import {
   canonicalizeWorkspaceLaunchRecords as canonicalizeWorkspaceLaunchRecordsDomain,
@@ -189,9 +188,14 @@ function normalizeAgentRecord(registry: RawLaunchRegistry, agent: RawAgentRecord
   const operatorSurface = nonEmpty(agent.OperatorSurface)
     ?? nonEmpty(registry.OperatorSurface)
     ?? nonEmpty(agent.Carrier)
-    ?? nonEmpty(registry.Carrier)
-    ?? 'codex';
-  const runtime = nonEmpty(agent.Runtime) ?? nonEmpty(registry.Runtime) ?? defaultRuntimeForOperatorSurface(operatorSurface);
+    ?? nonEmpty(registry.Carrier);
+  if (!operatorSurface || operatorSurface === 'registry default') {
+    throw new Error(`launch_registry_operator_surface_missing: ${agentId} in ${configPath}; set OperatorSurface (Carrier is a legacy alias)`);
+  }
+  const runtime = nonEmpty(agent.Runtime) ?? nonEmpty(registry.Runtime);
+  if (!runtime || runtime === 'registry default') {
+    throw new Error(`launch_registry_runtime_missing: ${agentId} in ${configPath}; set Runtime explicitly`);
+  }
   const authority = nonEmpty(agent.Authority) ?? nonEmpty(registry.Authority) ?? null;
   const role = nonEmpty(agent.Role) ?? (agentId.split('.').at(-1) ?? agentId).replace(/\d+$/, '');
   const resolvedAgentIdentityRef = resolveAgentIdentityRef(agentId, { site_id: explicitSite, role });

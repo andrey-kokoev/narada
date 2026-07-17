@@ -73,6 +73,21 @@ Cloudflare-hosted browser UI
 
 Cloudflare is a remote projection host. It is not a second NARS process.
 
+## Cloudflare Workspace Entry
+
+The Cloudflare worker and the local operator workspace have symmetric entry
+semantics, but they do not share authority. The Cloudflare root (`/`) and
+`/console/` are route-directory landing pages: they show only routes currently
+leased to that Cloudflare workspace. They do not redirect into the local Site
+Registry and they do not imply that Cloudflare owns site or runtime state.
+
+Cloudflare Console pages are served only when a matching workspace route lease
+exists and carries the page's route-directory configuration. An unleased page
+returns a typed refusal rather than an HTML shell whose API calls cannot work.
+The Site Registry remains a local-authority surface unless a separately leased
+remote backend is explicitly supplied. The Cloudflare landing page never
+exposes route-directory credentials.
+
 ## Live Smoke Lineages
 
 There are two live smoke lineages and they prove different authority shapes:
@@ -545,12 +560,12 @@ Automated tests should use local/fake projection services and must not require l
    The bounded opt-in script is:
 
    ```text
-   pnpm --filter @narada2/cloudflare-nars-projection build
+   pnpm --filter @narada2/cloudflare-nars-projection build:assets
    pnpm --filter @narada2/cloudflare-nars-projection smoke:local-origin-live -- --cloudflare-api-base-url https://<projection-host> --site-root <site-root> --site-id <site-id> --session <nars-session-id>
-   pnpm --filter @narada2/cloudflare-nars-projection smoke:local-origin-live -- --live --cloudflare-api-base-url https://<projection-host> --site-root <site-root> --site-id <site-id> --session <nars-session-id> --evidence-path <path>
+   pnpm --filter @narada2/cloudflare-nars-projection smoke:local-origin-live -- --live --cloudflare-api-base-url https://<projection-host> --site-root <site-root> --site-id <site-id> --session <nars-session-id> --expected-assets-manifest packages/cloudflare-nars-projection/public/narada-cloudflare-assets.json --evidence-path <path>
    ```
 
-   Without `--live`, the smoke prints the required live arguments and performs no mutation. With `--live`, it writes a concise evidence JSON covering registration, bridge replay, deployed hosted browser attachment, Cloudflare WebSocket projection, artifact metadata/content read when available, one operator input relay, local NARS admission, bridge replication back to Cloudflare, revocation, and post-revocation refusal.
+   Without `--live`, the smoke prints the required live arguments and performs no mutation. With `--live`, it also compares the deployed `narada.cloudflare_assets_manifest.v1` against the local build manifest, then writes a concise evidence JSON covering registration, bridge replay, deployed hosted browser attachment, Cloudflare WebSocket projection, artifact metadata/content read when available, one operator input relay, local NARS admission, bridge replication back to Cloudflare, revocation, and post-revocation refusal.
 
 If Cloudflare registration or bridge connectivity is unavailable, the expected result is a typed degraded/local-only projection status. Local NARS launch and local session health must remain successful.
 

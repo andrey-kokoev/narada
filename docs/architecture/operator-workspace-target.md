@@ -167,6 +167,22 @@ now require the live Workspace route directory for stable handoff. In Router
 mode the Workspace landing page chooses a healthy concrete route when one
 exists.
 
+### Route-directory recovery semantics
+
+Route-directory availability is recoverable runtime state, not a one-shot page
+bootstrap decision. Before the first successful read, the Console may use its
+static route fallback while the live directory is loading. After a valid
+snapshot exists, a failed refresh preserves that snapshot so navigation and
+already-open workflows remain usable. The UI surfaces the bounded failure code
+and HTTP status when available, offers an explicit retry, and retries when the
+browser returns online or becomes visible again. A successful retry clears the
+diagnostic and replaces the snapshot atomically.
+
+The operator procedure is in
+[`docs/product/operator-console-runbook.md`](../product/operator-console-runbook.md);
+the focused contract and verification commands are in
+[`docs/testing/operator-console-route-directory.md`](../testing/operator-console-route-directory.md).
+
 The remaining Router/workspace work is explicit:
 
 1. complete Host, Origin, CSRF, and browser mutation acceptance coverage;
@@ -187,9 +203,11 @@ commands use the stable router.
 1. The normal operator starts from one bookmarkable Workspace origin.
 2. Registry inventory and Site creation are separate workflows and URLs.
 3. Workspace navigation never bypasses projection ownership or policy.
-4. Route links are explicit, scope-preserving, and health-aware.
-5. Session links use canonical NARS session ids, not agent ids.
-6. A backing failure is visible and actionable, not silently substituted.
+4. A route-directory outage never silently erases the last valid navigation;
+   it produces an actionable, bounded diagnostic and a retry path.
+5. Route links are explicit, scope-preserving, and health-aware.
+6. Session links use canonical NARS session ids, not agent ids.
+7. A backing failure is visible and actionable, not silently substituted.
 7. Direct ephemeral servers remain diagnostics rather than normal UX.
 
 ## Related Contracts

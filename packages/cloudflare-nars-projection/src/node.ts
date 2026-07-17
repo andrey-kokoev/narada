@@ -3,6 +3,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnHiddenPostureProcess } from '@narada2/process-launch-posture';
 import { resolveNaradaSitePaths } from '@narada2/site-paths';
+import { readNarsArtifactContent, readNarsArtifactIndex } from '@narada2/nars-session-core/artifacts';
 import type { OperatorSurfaceHostRef, OperatorSurfaceId, OperatorSurfaceRouteDescriptor } from '@narada2/operator-console-contract';
 import { deliverProjectionInputToNars } from './nars-session-input-client.js';
 import {
@@ -450,6 +451,8 @@ export async function startLocalProjectionBridgeOnce(args: {
     for (const event of projected) await publishAll(event, args.publish_event, remotePublishers?.publish_event);
     artifactProjection = await projectLocalArtifacts({
       session,
+      site_root: args.site_root,
+      session_path: resolveSessionPath(session) ?? '',
       intent: registration.intent,
       paths: registration.paths,
       max_artifacts: args.max_artifacts ?? 200,
@@ -626,6 +629,8 @@ function findSessionRecord(siteRoot: string, sessionId: string) {
 
 async function projectLocalArtifacts(args: {
   session: Record<string, unknown>;
+  site_root: string;
+  session_path: string;
   intent: CloudflareNarsProjectionIntent;
   paths: ProjectionStorePaths;
   max_artifacts: number;
@@ -633,7 +638,7 @@ async function projectLocalArtifacts(args: {
   publish_artifact_metadata?: (metadata: ProjectedArtifactMetadata) => Promise<unknown> | unknown;
   publish_artifact_content?: (content: ProjectedArtifactContent) => Promise<unknown> | unknown;
 }) {
-  const artifacts = readLocalArtifactRecords(args.session).slice(0, Math.max(0, args.max_artifacts));
+  const artifacts = readLocalArtifactRecords(args.session_path).slice(0, Math.max(0, args.max_artifacts));
   const metadata: ProjectedArtifactMetadata[] = [];
   const content: ProjectedArtifactContent[] = [];
   let metadataRefused = 0;
@@ -651,26 +656,40 @@ async function projectLocalArtifacts(args: {
     });
     if (!projectedMetadata.ok) {
       metadataRefused += 1;
-      lastMetadataError = projectedMetadata.code;
+      lastMetadataError ??= projectedMetadata.code;
+      if (projectedMetadata.code !== 'artifact_metadata_policy_refused') {
+        contentRefused += 1;
+        lastContentError ??= projectedMetadata.code;
+      }
       continue;
     }
     metadata.push(projectedMetadata.metadata);
     await args.publish_artifact_metadata?.(projectedMetadata.metadata);
-    const sourcePath = typeof artifact.source_path === 'string' ? artifact.source_path : null;
-    if (!sourcePath || !existsSync(sourcePath)) continue;
+    let artifactContent;
+    try {
+      artifactContent = readNarsArtifactContent({
+        sessionPath: args.session_path,
+        artifactId: String(artifact.artifact_id ?? ''),
+        siteRoot: args.site_root,
+      });
+    } catch (error) {
+      contentRefused += 1;
+      lastContentError ??= artifactContentReadErrorCode(error);
+      continue;
+    }
     const projectedContent = projectNarsArtifactContentForCloudflare({
       projection_id: args.intent.projection_id,
       site_id: args.intent.site_id,
       nars_session_id: args.intent.nars_session_id,
       policy: args.intent.artifact_projection_policy,
       artifact,
-      content: readFileSync(sourcePath),
-      headers: artifactContentHeadersForRecord(artifact),
+      content: artifactContent.content,
+      headers: artifactContent.headers,
       projected_at: args.now,
     });
     if (!projectedContent.ok) {
       contentRefused += 1;
-      lastContentError = projectedContent.code;
+      lastContentError ??= projectedContent.code;
       continue;
     }
     content.push(projectedContent.content);
@@ -686,12 +705,12 @@ async function projectLocalArtifacts(args: {
   };
 }
 
-function readLocalArtifactRecords(session: Record<string, unknown>): Record<string, unknown>[] {
-  const sessionPath = resolveSessionPath(session);
+function readLocalArtifactRecords(sessionPath: string): Record<string, unknown>[] {
   if (!sessionPath) return [];
-  const indexPath = join(dirname(sessionPath), 'artifacts', 'index.json');
-  const index = readJson(indexPath) as { artifacts?: unknown[] } | null;
-  return Array.isArray(index?.artifacts) ? index.artifacts.flatMap((entry) => entry && typeof entry === 'object' && !Array.isArray(entry) ? [entry as Record<string, unknown>] : []) : [];
+  const index = readNarsArtifactIndex({ sessionPath });
+  return Array.isArray(index.artifacts)
+    ? index.artifacts.flatMap((entry) => entry && typeof entry === 'object' && !Array.isArray(entry) ? [entry as Record<string, unknown>] : [])
+    : [];
 }
 
 function resolveSessionPath(session: Record<string, unknown>): string | null {
@@ -701,13 +720,11 @@ function resolveSessionPath(session: Record<string, unknown>): string | null {
   return null;
 }
 
-function artifactContentHeadersForRecord(record: Record<string, unknown>): Record<string, string> {
-  if (record.kind !== 'html') return {};
-  return {
-    'content-security-policy': "sandbox allow-scripts allow-forms; default-src 'self' data: blob:; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'none'; base-uri 'none'; form-action 'none'",
-    'x-narada-artifact-id': String(record.artifact_id ?? ''),
-    'x-narada-artifact-kind': String(record.kind ?? ''),
-  };
+function artifactContentReadErrorCode(error: unknown): string {
+  if (error && typeof error === 'object' && 'code' in error && typeof error.code === 'string' && error.code) {
+    return error.code;
+  }
+  return 'artifact_content_read_failed';
 }
 
 function laneStatus(args: { projected_count: number; refused_count: number; last_error_code: string | null; now: string; disabled?: boolean }) {

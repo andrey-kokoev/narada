@@ -4,6 +4,7 @@ import { emitCommandResult, resolveCommandFormat } from '../lib/cli-output.js';
 import { explainMcpCommand } from './launcher-mcp-authority.js';
 import { launcherArtifactCheckCommand, launcherArtifactEnsureCommand } from './launcher-artifact.js';
 import { workspaceLaunchCommand, workspaceLaunchPlanCommand } from './workspace-launch-application.js';
+import { workspaceLaunchRecoveryCommand, type WorkspaceLaunchRecoveryOptions } from './workspace-launch-recovery.js';
 import type { ExplainMcpOptions } from './launcher-mcp-authority.js';
 import type { LauncherArtifactOptions } from './launcher-artifact.js';
 import type { WorkspaceLaunchPlanOptions } from './workspace-launch-types.js';
@@ -196,6 +197,23 @@ export function registerLauncherCommands(program: Command): void {
         dryRun: opts.dryRun,
         format: resolveCommandFormat(opts.format, 'auto'),
       }, silentCommandContext()),
+    }));
+
+  launcher
+    .command('workspace-recover')
+    .description('Recover durable workspace launch attempts through exact NARS session ownership')
+    .option('--attempt <id...>', 'Recover only the named durable launch attempts')
+    .option('--dry-run', 'Show exact recovery actions without mutating attempts', false)
+    .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
+    .action(directCommandAction<[WorkspaceLaunchRecoveryOptions]>({
+      command: 'launcher workspace-recover',
+      emit: emitCommandResult,
+      format: (opts: WorkspaceLaunchRecoveryOptions) => opts.format,
+      invocation: (opts) => workspaceLaunchRecoveryCommand({
+        attempt: opts.attempt,
+        dryRun: opts.dryRun,
+        format: resolveCommandFormat(opts.format, 'auto'),
+      }),
     }));
 
   launcher

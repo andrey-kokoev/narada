@@ -30,12 +30,30 @@ export function operatorConsoleNavigationFromDirectory(
 ): OperatorConsoleNavItem[] {
   const keys = new Set<OperatorConsoleNavigationKey>();
   return directory.surfaces.flatMap((surface) => surface.projectedRoutes.flatMap((route) => {
-    if (surface.availability !== 'available' || route.availability !== 'available' || !route.navigationKey || keys.has(route.navigationKey)) {
+    if (surface.availability !== 'available' || route.availability !== 'available' || !route.navigationKey) {
       return [];
+    }
+    if (keys.has(route.navigationKey)) {
+      throw new Error(`operator_workspace_navigation_key_duplicate:${route.navigationKey}`);
     }
     keys.add(route.navigationKey);
     return [{ key: route.navigationKey, label: route.label, href: route.path, current: current === route.navigationKey }];
   }));
+}
+
+export function operatorConsoleNavigationHref(
+  directory: OperatorWorkspaceRouteDirectory | null | undefined,
+  key: OperatorConsoleNavigationKey,
+  fallback: string,
+): string {
+  if (!directory) return fallback;
+  for (const surface of directory.surfaces) {
+    if (surface.availability !== 'available') continue;
+    const route = surface.projectedRoutes.find((candidate) =>
+      candidate.availability === 'available' && candidate.navigationKey === key);
+    if (route) return route.path;
+  }
+  return fallback;
 }
 
 export function findOperatorRouteTarget(
@@ -74,24 +92,51 @@ function managementOperation(value: string | null): RegistryManagementOperation 
     : undefined;
 }
 
+interface MatchedOperatorRoute {
+  surfaceId: string;
+  routeId: string;
+}
+
+function findDirectoryRoute(
+  directory: OperatorWorkspaceRouteDirectory,
+  path: string,
+): MatchedOperatorRoute | undefined {
+  for (const surface of directory.surfaces) {
+    if (surface.availability !== 'available') continue;
+    const route = surface.projectedRoutes.find((candidate) =>
+      candidate.availability === 'available'
+      && normalizedPathname(candidate.path) === path);
+    if (route) return { surfaceId: surface.id, routeId: route.id };
+  }
+  return undefined;
+}
+
 export function resolveOperatorConsoleRoute(
   pathname: string,
   search = '',
+  directory?: OperatorWorkspaceRouteDirectory,
 ): OperatorConsoleRoute {
   const path = normalizedPathname(pathname);
   const query = new URLSearchParams(search);
   const siteId = query.get('site') || undefined;
 
-  const matched = findOperatorSurfaceRoute(path);
-  if (matched?.surface.id === 'site-registry') {
-    if (matched.route.id === 'sites') {
+  const matched = directory
+    ? findDirectoryRoute(directory, path)
+    : (() => {
+      const staticMatch = findOperatorSurfaceRoute(path);
+      return staticMatch
+        ? { surfaceId: staticMatch.surface.id, routeId: staticMatch.route.id }
+        : undefined;
+    })();
+  if (matched?.surfaceId === 'site-registry') {
+    if (matched.routeId === 'sites') {
       return {
         kind: 'site-registry',
         path,
         ...(siteId ? { siteId } : {}),
       };
     }
-    if (matched.route.id === 'add') {
+    if (matched.routeId === 'add') {
       return { kind: 'site-registry-add', path };
     }
     const operation = managementOperation(query.get('operation'));
@@ -102,13 +147,13 @@ export function resolveOperatorConsoleRoute(
       ...(operation ? { operation } : {}),
     };
   }
-  if (matched?.surface.id === 'launcher') {
+  if (matched?.surfaceId === 'launcher') {
     return { kind: 'launcher', path };
   }
-  if (matched?.surface.id === 'agent-sessions') {
+  if (matched?.surfaceId === 'agent-sessions') {
     return { kind: 'agent-sessions', path };
   }
-  if (matched?.surface.id === 'artifacts') {
+  if (matched?.surfaceId === 'artifacts') {
     return { kind: 'artifacts', path };
   }
   return { kind: 'not-found', path };

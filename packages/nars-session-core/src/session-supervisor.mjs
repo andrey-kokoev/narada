@@ -30,12 +30,22 @@ export function createNarsSessionSupervisor({
 
   function queueSnapshot() {
     const snapshot = queue?.state?.() ?? {};
+    const pendingInputRefs = typeof queue?.items === 'function'
+      ? queue.items().slice(0, 100).map((item) => ({
+        event_id: item.event_id ?? null,
+        request_id: item.request_id ?? null,
+        directive_id: item.directive_id ?? null,
+        admission_state: item.admission_state ?? null,
+        created_at: item.created_at ?? null,
+      }))
+      : [];
     return {
       running: Boolean(snapshot.running),
       pending_count: Number(snapshot.pendingCount ?? 0),
       pending_system_directive_count: Number(snapshot.pendingSystemDirectiveCount ?? 0),
       pending_operator_directive_count: Number(snapshot.pendingOperatorDirectiveCount ?? 0),
       pending_observer_count: Number(snapshot.pendingObserverCount ?? 0),
+      pending_input_refs: pendingInputRefs,
     };
   }
 

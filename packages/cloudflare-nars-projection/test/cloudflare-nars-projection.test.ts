@@ -480,6 +480,7 @@ describe('worker boundary service', () => {
       session_id: 'cf_authority_runtime_service_e2e',
       site_id: 'narada.cloudflare.test',
       agent_id: 'cloudflare.resident',
+      mcp_fabric: { scope: 'all' },
     }, now);
     expect(created.session.execution_mode).toBe('cloudflare_runtime_tool_adapter');
 
@@ -519,10 +520,10 @@ describe('worker boundary service', () => {
   test('Cloudflare/local MCP fabric symmetry normalizes none single-locus all scopes and duplicate conflicts', () => {
     expect(normalizeCloudflareMcpFabricConfig(null)).toMatchObject({
       status: 'ok',
-      requested_scope: 'all',
-      effective_loci: ['cloudflare-site', 'session-native'],
-      server_count: 2,
-      server_names: ['cf-authority', 'cf-authority-artifacts'],
+      requested_scope: 'none',
+      effective_loci: [],
+      server_count: 0,
+      server_names: [],
     });
     expect(normalizeCloudflareMcpFabricConfig({ scope: 'none' })).toMatchObject({
       status: 'ok',
@@ -616,6 +617,7 @@ describe('worker boundary service', () => {
       session_id: 'cf_authority_artifact_mcp_e2e',
       site_id: 'narada.cloudflare.test',
       agent_id: 'cloudflare.resident',
+      mcp_fabric: { scope: 'all' },
     }, now);
     const registry = createCloudflareNarsAuthorityMcpRegistry({ authority: service, fabric: created.session.mcp_fabric });
     expect(registry.listServers()).toEqual(['cf-authority', 'cf-authority-artifacts']);
@@ -656,6 +658,7 @@ describe('worker boundary service', () => {
       session_id: 'cf_authority_input_methods_e2e',
       site_id: 'narada.cloudflare.test',
       agent_id: 'cloudflare.resident',
+      mcp_fabric: { scope: 'all' },
     }, now);
 
     const send = service.submitInput({ session_id: created.session_id, method: 'conversation.send', payload: { message: 'send' }, now });
@@ -799,6 +802,29 @@ describe('Cloudflare Worker routes', () => {
     expect(response.status).toBe(200);
     expect(await response.text()).toContain('<div id="app"></div>');
     expect(requested[0]).toContain('cloudflare_projection_id=proj_1');
+  });
+
+  test('serves the immutable Cloudflare asset fingerprint through an explicit no-store route', async () => {
+    const requested: string[] = [];
+    const manifest = {
+      schema: 'narada.cloudflare_assets_manifest.v1',
+      target: 'narada-nars-projection',
+      source_hash: 'source-hash-1',
+      asset_tree_hash: 'asset-tree-hash-1',
+    };
+    const worker = createCloudflareNarsProjectionWorker();
+    const response = await worker.fetch(new Request('https://projection.example.test/api/nars/assets/manifest'), {
+      ASSETS: {
+        fetch(request) {
+          requested.push(new URL(request.url).pathname);
+          return new Response(JSON.stringify(manifest), { headers: { 'content-type': 'application/json' } });
+        },
+      },
+    });
+    expect(response.status).toBe(200);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(await response.json()).toEqual(manifest);
+    expect(requested).toEqual(['/narada-cloudflare-assets.json']);
   });
 
   test('registers projection, publishes bridge events/artifacts, and serves browser routes', async () => {

@@ -12,7 +12,11 @@ import {
   registerOperatorRouteSet,
   routeProjectionMatchesIdentity,
 } from '@narada2/operator-router';
-import { OPERATOR_CONSOLE_LONG_RUNNING_REQUEST_TIMEOUT_MS } from '@narada2/operator-console-contract';
+import {
+  OPERATOR_CONSOLE_LAUNCH_PATH,
+  OPERATOR_CONSOLE_LONG_RUNNING_REQUEST_TIMEOUT_MS,
+  OPERATOR_CONSOLE_REGISTRY_PATH,
+} from '@narada2/operator-console-contract';
 import {silentCommandContext, wrapCommand, type CommanderOptionValues} from '../lib/command-wrapper.js';
 import {
   emitFormatterBackedCommandResult,
@@ -92,8 +96,8 @@ export function registerConsoleCommands(program: Command): void {
         const url = await server.start();
         emitLongLivedCommandStartup([
           `Operator Workspace diagnostic host: ${url}/`,
-          `Operator Console Site Registry: ${url}/console/registry`,
-          `Operator Console Agent Launcher: ${url}/console/launch`,
+          `Operator Console Site Registry: ${url}${OPERATOR_CONSOLE_REGISTRY_PATH}`,
+          `Operator Console Agent Launcher: ${url}${OPERATOR_CONSOLE_LAUNCH_PATH}`,
           `Operator Console API base: ${url}/console`,
           'Operator Console ownership: diagnostic',
           'Press Ctrl+C to stop',
@@ -122,8 +126,8 @@ export function registerConsoleCommands(program: Command): void {
         emitLongLivedCommandStartup([
           `Operator Router: ${router.url}/`,
           `Operator Workspace: ${router.url}/`,
-          `Operator Console Site Registry: ${router.url}/console/registry`,
-          `Operator Console Agent Launcher: ${router.url}/console/launch`,
+          `Operator Console Site Registry: ${router.url}${OPERATOR_CONSOLE_REGISTRY_PATH}`,
+          `Operator Console Agent Launcher: ${router.url}${OPERATOR_CONSOLE_LAUNCH_PATH}`,
           `Operator Console API base: ${router.url}/console`,
           `Operator Router ownership: ${router.ownership}`,
           'Operator Console projection: attached',
@@ -165,8 +169,8 @@ export function registerConsoleCommands(program: Command): void {
       emitLongLivedCommandStartup([
         `Operator Router: ${router.url}/`,
         `Operator Workspace: ${router.url}/`,
-        `Operator Console Site Registry: ${router.url}/console/registry`,
-        `Operator Console Agent Launcher: ${router.url}/console/launch`,
+        `Operator Console Site Registry: ${router.url}${OPERATOR_CONSOLE_REGISTRY_PATH}`,
+        `Operator Console Agent Launcher: ${router.url}${OPERATOR_CONSOLE_LAUNCH_PATH}`,
         `Operator Console API base: ${router.url}/console`,
         `Operator Router ownership: ${router.ownership}`,
         'Operator Console projection: started',

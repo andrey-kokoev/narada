@@ -193,18 +193,40 @@ export function archiveNarsArtifact(options = {}) {
   return transitionNarsArtifact({ ...options, nextState: 'archived' });
 }
 
-export function readNarsArtifactContent({ sessionPath, artifactId } = {}) {
+export function readNarsArtifactContent({ sessionPath, artifactId, siteRoot } = {}) {
   const record = readNarsArtifact({ sessionPath, artifactId });
   if (record.lifecycle?.state && record.lifecycle.state !== 'active') {
     throw artifactError('artifact_not_active', `Artifact is ${record.lifecycle.state}.`, { lifecycle_state: record.lifecycle.state });
   }
-  const sourcePath = resolve(String(record.source_path ?? ''));
-  if (!sourcePath || !existsSync(sourcePath) || !statSync(sourcePath).isFile()) {
+  const rawSourcePath = typeof record.source_path === 'string' ? record.source_path.trim() : '';
+  if (!rawSourcePath) {
     throw artifactError('artifact_content_missing', 'Artifact content is missing.');
+  }
+  const sourcePath = resolve(rawSourcePath);
+  const admittedRoots = siteRoot == null ? [] : admittedArtifactRoots({ sessionPath, siteRoot });
+  if (siteRoot != null && !pathIsWithinAnyRoot(sourcePath, admittedRoots)) {
+    throw artifactError('artifact_path_outside_admitted_roots', 'Artifact source path is outside admitted NARS roots.', { admitted_roots: admittedRoots });
+  }
+  let isFile = false;
+  try {
+    isFile = existsSync(sourcePath) && statSync(sourcePath).isFile();
+  } catch {
+    isFile = false;
+  }
+  if (!isFile) {
+    throw artifactError('artifact_content_missing', 'Artifact content is missing.');
+  }
+  let content;
+  try {
+    content = readFileSync(sourcePath);
+  } catch (error) {
+    throw artifactError('artifact_content_unreadable', 'Artifact content could not be read.', {
+      cause_code: error && typeof error === 'object' && 'code' in error ? error.code : null,
+    });
   }
   return {
     record,
-    content: readFileSync(sourcePath),
+    content,
     content_type: contentTypeForRecord(record),
     headers: artifactContentHeaders(record),
   };

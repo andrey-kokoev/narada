@@ -27,6 +27,11 @@ The console is **not**:
 
 The console is an **operator surface** that aggregates read-only observation and routes audited control requests to Site-owned APIs. Registry management is a separate User Site read-model operation defined in section 3.1.
 
+For the normal local Workspace entry point, route-directory failure states, and
+operator recovery, see [`operator-console-runbook.md`](operator-console-runbook.md).
+The route authority, fallback, and retry target is defined in
+[`operator-workspace-target.md`](../architecture/operator-workspace-target.md).
+
 ---
 
 ## 2. What the Site Registry Owns
@@ -459,7 +464,7 @@ The server prints its bound URL on startup. `--port 0` binds to an ephemeral por
 | Method | Path | Behavior |
 |--------|------|----------|
 | GET | `/console/registry` | Read-only canonical Site Registry browser page |
-| GET | `/console/registry/assets/:asset` | Bounded static asset route for the Operator Console bundle |
+| GET | `/console/assets/:asset` | Bounded static asset route for the shared Operator Console bundle |
 | GET | `/console/registry/api/sites` | Canonical registry list envelope (`narada.site_registry.management.v0`) |
 | GET | `/console/registry/api/sites/:reference` | Complete registry record and next actions envelope |
 | GET | `/console/registry/api/discover-plan` | Bounded dry-run discovery envelope; accepts `source`, `root`, and `actor` |

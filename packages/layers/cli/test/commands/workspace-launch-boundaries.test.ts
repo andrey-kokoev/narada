@@ -65,10 +65,10 @@ describe('workspace launch module boundaries', () => {
     expect(executor).toContain("from './workspace-launch-result.js'");
     expect(command).not.toContain('startOperatorTerminal');
     expect(command).not.toContain('prompts.');
-    expect(admission).toContain('resolveOperatorSurfaceRuntimeSelection');
+    expect(admission).toContain('resolveCanonicalOperatorSurfaceRuntimeSelection');
     expect(providerContext).toContain("from './workspace-launch-admission.js'");
-    expect(providerContext).not.toContain('resolveOperatorSurfaceRuntimeSelection');
+    expect(providerContext).not.toContain("from '@narada2/operator-surface-runtime-contract");
     expect(selection).toContain("from './workspace-launch-admission.js'");
-    expect(selection).not.toContain('resolveOperatorSurfaceRuntimeSelection');
+    expect(selection).not.toContain("from '@narada2/operator-surface-runtime-contract");
   });
 });

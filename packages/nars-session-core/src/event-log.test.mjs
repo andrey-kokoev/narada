@@ -19,6 +19,7 @@ test('event views filter before applying the page limit', () => {
     { event: 'assistant_message', event_sequence: 7, text: 'second' },
     { event: 'tool_result', event_sequence: 8 },
     { event: 'assistant_message', event_sequence: 9, text: 'third' },
+    { event: 'runtime_output_failure', event_sequence: 10 },
   ];
   writeFileSync(eventsPath, events.map((event) => JSON.stringify(event)).join('\n'));
 
@@ -31,11 +32,35 @@ test('event views filter before applying the page limit', () => {
     assert.deepEqual(operations.events.map((event) => event.event_sequence), [3, 4, 5, 7, 8, 9]);
 
     const diagnostics = readNarsEventLogPage({ eventsPath, view: 'diagnostics', limit: 20 });
-    assert.deepEqual(diagnostics.events.map((event) => event.event_sequence), [1, 2, 6]);
+    assert.deepEqual(diagnostics.events.map((event) => event.event_sequence), [1, 2, 6, 10]);
 
     const earlier = readNarsEventLogPage({ eventsPath, view: 'conversation', beforeSequence: 9, direction: 'backward', limit: 1 });
     assert.deepEqual(earlier.events.map((event) => event.event_sequence), [7]);
     assert.equal(earlier.cursor.before_sequence, 7);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('selector filters find an old input event beyond the raw event tail', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'narada-event-log-selector-'));
+  const eventsPath = join(directory, 'events.jsonl');
+  const events = [
+    { event: 'user_message', event_sequence: 1, request_id: 'target-request', input_event_id: 'target-input' },
+    ...Array.from({ length: 120 }, (_, index) => ({ event: 'session_health', event_sequence: index + 2 })),
+  ];
+  writeFileSync(eventsPath, events.map((event) => JSON.stringify(event)).join('\n'));
+
+  try {
+    const result = readNarsEventLogPage({
+      eventsPath,
+      view: 'conversation',
+      direction: 'backward',
+      limit: 10,
+      filters: { any_of: { request_id: 'target-request', input_event_id: 'target-input' } },
+    });
+    assert.deepEqual(result.events.map((event) => event.event_sequence), [1]);
+    assert.equal(result.has_more, false);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }

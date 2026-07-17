@@ -9,6 +9,8 @@ import {
 } from '../lib/launcher-runtime.js';
 import { defaultRuntimeForOperatorSurface } from '@narada2/operator-surface-runtime-contract/operator-surface-runtime-selection';
 import { requireAgent, requireSiteRoot } from './operator-surface-runtime-support.js';
+import { resolveWorkspaceLaunchSelection } from './workspace-launch-resolution.js';
+import { normalizeExplicitWorkspaceLaunchMcpScope } from './workspace-launch-contracts.js';
 
 /**
  * Canonical Operator Surface runtime-start boundary.
@@ -37,13 +39,46 @@ export interface OperatorSurfaceRuntimeStartOptions {
   format?: CliFormat;
 }
 
+function buildDirectSelectionResolution(
+  carrierSelection: { requested: string | null; value: string; source: string },
+  runtimeSelection: { requested: string | null; value: string; source: string },
+  intelligenceProvider: string | undefined,
+) {
+  return {
+    schema: 'narada.operator_surface_runtime.selection_resolution.v1',
+    operator_surface: {
+      requested: carrierSelection.requested,
+      resolved: carrierSelection.value,
+      source: carrierSelection.source,
+    },
+    runtime: {
+      requested: runtimeSelection.requested,
+      resolved: runtimeSelection.value,
+      source: runtimeSelection.source,
+    },
+    intelligence_provider: {
+      requested: intelligenceProvider ?? null,
+      resolved: intelligenceProvider ?? null,
+      source: intelligenceProvider ? 'explicit_selection' : 'delegated_to_agent_start',
+    },
+  };
+}
+
 export async function operatorSurfaceRuntimeStartCommand(
   options: OperatorSurfaceRuntimeStartOptions,
   _context: CommandContext,
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
   const siteRoot = requireSiteRoot(options);
-  const carrier = options.carrier ?? 'agent-cli';
-  const runtime = options.runtime ?? defaultRuntimeForOperatorSurface(carrier);
+  const carrierSelection = resolveWorkspaceLaunchSelection(options.carrier, 'agent-cli', 'operator_surface', 'command_default');
+  const carrier = carrierSelection.value;
+  const runtimeSelection = resolveWorkspaceLaunchSelection(
+    options.runtime,
+    defaultRuntimeForOperatorSurface(carrier),
+    'runtime',
+    'command_default',
+  );
+  const runtime = runtimeSelection.value;
+  const mcpScope = normalizeExplicitWorkspaceLaunchMcpScope(options.mcpScope ?? 'none', 'operator-surface runtime start safe default');
   const agent = requireAgent(options);
   const existing = getOperatorSurfaceRuntimeStatus({
     siteRoot,
@@ -79,6 +114,7 @@ export async function operatorSurfaceRuntimeStartCommand(
       runtime,
       operator_surface_status: existing,
       carrier_status: existing,
+      selection_resolution: buildDirectSelectionResolution(carrierSelection, runtimeSelection, options.intelligenceProvider),
     };
     return {
       exitCode: ExitCode.SUCCESS,
@@ -94,7 +130,7 @@ export async function operatorSurfaceRuntimeStartCommand(
     runtime,
     authority: options.authority,
     intelligenceProvider: options.intelligenceProvider,
-    mcpScope: options.mcpScope,
+    mcpScope,
     dryRun: options.dryRun ?? (!options.materializeOnly && !options.exec),
     exec: options.exec,
     wait: options.wait,
@@ -125,12 +161,13 @@ export async function operatorSurfaceRuntimeStartCommand(
     runtime,
     authority: options.authority ?? null,
     intelligence_provider: options.intelligenceProvider ?? null,
-    mcp_scope: options.mcpScope ?? 'all',
+    mcp_scope: mcpScope,
     mode: options.exec ? 'exec' : options.materializeOnly ? 'materialize_only' : 'dry_run',
     agent_start: start,
     launcher_contracts: parsedAgentStart?.launcher_contracts ?? null,
     launch_result_artifact: parsedAgentStart?.launcher_contracts?.launch_result_artifact ?? null,
     operator_projection_open_request: parsedAgentStart?.launcher_contracts?.operator_projection_open_request ?? null,
+    selection_resolution: buildDirectSelectionResolution(carrierSelection, runtimeSelection, options.intelligenceProvider),
   };
   return {
     exitCode: isAgentStartAcceptedStatus(start.status) ? ExitCode.SUCCESS : ExitCode.GENERAL_ERROR,

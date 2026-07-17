@@ -1,0 +1,94 @@
+const REQUEST_ID_FIELDS = Object.freeze(['request_id', 'requestId', 'input_request_id']);
+const INPUT_EVENT_ID_FIELDS = Object.freeze(['input_event_id', 'inputEventId', 'event_id']);
+const SESSION_ID_FIELDS = Object.freeze(['session_id', 'sessionId', 'runtime_session_id', 'carrier_session_id']);
+
+export function normalizeInputCorrelationId(value) {
+  if (typeof value === 'string' && value.trim()) return value.trim();
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+  return null;
+}
+
+export function inputCorrelationFromEvent(value) {
+  return inputCorrelationFromValue(value);
+}
+
+export function findCorrelatedInput(records, event, { allowUniqueMethod = false, activeOnly = () => true } = {}) {
+  const correlation = inputCorrelationFromEvent(event);
+  const candidates = Array.from(records ?? []).filter((record) => record && activeOnly(record));
+
+  const requestMatches = correlation.requestId
+    ? candidates.filter((record) => {
+      const candidateCorrelation = inputCorrelationFromValue(record);
+      return candidateCorrelation.requestId === correlation.requestId
+        && sessionsCompatible(candidateCorrelation.sessionId, correlation.sessionId);
+    })
+    : [];
+  const requestResult = selectCorrelationMatch(requestMatches, 'request_id');
+  if (requestResult) return requestResult;
+
+  const inputEventMatches = correlation.inputEventId
+    ? candidates.filter((record) => {
+      const candidateCorrelation = inputCorrelationFromValue(record);
+      return candidateCorrelation.inputEventId === correlation.inputEventId
+        && sessionsCompatible(candidateCorrelation.sessionId, correlation.sessionId);
+    })
+    : [];
+  const inputEventResult = selectCorrelationMatch(inputEventMatches, 'input_event_id');
+  if (inputEventResult) return inputEventResult;
+
+  if (allowUniqueMethod && correlation.method) {
+    const methodMatches = candidates.filter((record) => {
+      const candidateCorrelation = inputCorrelationFromValue(record);
+      return candidateCorrelation.method === correlation.method
+        && sessionsCompatible(candidateCorrelation.sessionId, correlation.sessionId);
+    });
+    if (methodMatches.length === 1) return { record: methodMatches[0], matchedBy: 'unique_method', ambiguous: false };
+    if (methodMatches.length > 1) return { record: null, matchedBy: 'unique_method', ambiguous: true };
+  }
+
+  return { record: null, matchedBy: null, ambiguous: false };
+}
+
+export function mergeInputCorrelation(target, event, { requestKey, inputEventKey, sessionKey } = {}) {
+  if (!target || typeof target !== 'object') return target;
+  const correlation = inputCorrelationFromEvent(event);
+  const resolvedRequestKey = requestKey ?? (Object.prototype.hasOwnProperty.call(target, 'request_id') ? 'request_id' : 'requestId');
+  const resolvedInputEventKey = inputEventKey ?? (Object.prototype.hasOwnProperty.call(target, 'input_event_id') ? 'input_event_id' : 'inputEventId');
+  const resolvedSessionKey = sessionKey ?? (Object.prototype.hasOwnProperty.call(target, 'session_id') ? 'session_id' : 'sessionId');
+  if (correlation.requestId && !target[resolvedRequestKey]) target[resolvedRequestKey] = correlation.requestId;
+  if (correlation.inputEventId && !target[resolvedInputEventKey]) target[resolvedInputEventKey] = correlation.inputEventId;
+  if (correlation.sessionId && !target[resolvedSessionKey]) target[resolvedSessionKey] = correlation.sessionId;
+  return target;
+}
+
+function inputCorrelationFromValue(value) {
+  const candidate = value && typeof value === 'object' ? value : {};
+  return {
+    requestId: firstNormalized(candidate, REQUEST_ID_FIELDS),
+    inputEventId: firstNormalized(candidate, INPUT_EVENT_ID_FIELDS),
+    sessionId: firstNormalized(candidate, SESSION_ID_FIELDS),
+    method: normalizeMethod(candidate.method),
+  };
+}
+
+function firstNormalized(candidate, fields) {
+  for (const field of fields) {
+    const value = normalizeInputCorrelationId(candidate[field]);
+    if (value) return value;
+  }
+  return null;
+}
+
+function normalizeMethod(value) {
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+function sessionsCompatible(left, right) {
+  return !left || !right || left === right;
+}
+
+function selectCorrelationMatch(matches, matchedBy) {
+  if (matches.length === 1) return { record: matches[0], matchedBy, ambiguous: false };
+  if (matches.length > 1) return { record: null, matchedBy, ambiguous: true };
+  return null;
+}

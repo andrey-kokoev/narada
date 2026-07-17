@@ -42,7 +42,7 @@ function createSiteWithSession() {
   return { siteRoot, sessionId };
 }
 
-function addArtifacts(siteRoot, sessionId) {
+function addArtifacts(siteRoot, sessionId, sourcePathOverrides = {}) {
   const sessionDir = resolveNaradaSitePaths({ siteRoot, sessionId }).narsSessionDir;
   const artifactsDir = join(sessionDir, 'artifacts');
   const markdownPath = join(artifactsDir, 'report.md');
@@ -54,8 +54,8 @@ function addArtifacts(siteRoot, sessionId) {
     schema: 'narada.nars.artifact_index.v1',
     session_id: sessionId,
     artifacts: [
-      { schema: 'narada.nars.artifact_record.v1', artifact_id: 'art_md', session_id: sessionId, agent_id: 'resident', kind: 'markdown', title: 'Report', source_path: markdownPath, content_type: 'text/markdown; charset=utf-8', created_at: now, access: { scope: 'session', token_required: false }, render: { preferred: 'inline' }, lifecycle: { state: 'active', owner: 'nars-session' } },
-      { schema: 'narada.nars.artifact_record.v1', artifact_id: 'art_html', session_id: sessionId, agent_id: 'resident', kind: 'html', title: 'Preview', source_path: htmlPath, content_type: 'text/html; charset=utf-8', created_at: now, access: { scope: 'session', token_required: false }, render: { preferred: 'inline', sandbox: { allow_scripts: true, allow_top_navigation: false } }, lifecycle: { state: 'active', owner: 'nars-session' } },
+      { schema: 'narada.nars.artifact_record.v1', artifact_id: 'art_md', session_id: sessionId, agent_id: 'resident', kind: 'markdown', title: 'Report', source_path: sourcePathOverrides.art_md ?? markdownPath, content_type: 'text/markdown; charset=utf-8', created_at: now, access: { scope: 'session', token_required: false }, render: { preferred: 'inline' }, lifecycle: { state: 'active', owner: 'nars-session' } },
+      { schema: 'narada.nars.artifact_record.v1', artifact_id: 'art_html', session_id: sessionId, agent_id: 'resident', kind: 'html', title: 'Preview', source_path: sourcePathOverrides.art_html ?? htmlPath, content_type: 'text/html; charset=utf-8', created_at: now, access: { scope: 'session', token_required: false }, render: { preferred: 'inline', sandbox: { allow_scripts: true, allow_top_navigation: false } }, lifecycle: { state: 'active', owner: 'nars-session' } },
     ],
   }, null, 2)}\n`);
 }
@@ -288,6 +288,29 @@ describe('node projection store and bridge', () => {
     expect(publishedContent.map((artifact) => artifact.artifact_id)).toEqual(['art_md']);
     expect(publishedMetadata.every((artifact) => artifact.source_path === undefined)).toBe(true);
     expect(JSON.stringify(publishedMetadata)).not.toContain('report.md');
+  });
+
+  test('bridge refuses forged artifact source paths without publishing content bytes', async () => {
+    const { siteRoot, sessionId } = createSiteWithSession();
+    addArtifacts(siteRoot, sessionId, { art_md: join(siteRoot, '..', 'forged-secret.md') });
+    const plan = writeProjectionRegistrationPlan({ site_id: 'narada.sonar', site_root: siteRoot, nars_session_id: sessionId, dry_run: false, created_at: now });
+    const publishedContent = [];
+    const result = await startLocalProjectionBridgeOnce({
+      site_root: siteRoot,
+      projection_id: plan.projection_id,
+      health_probe: () => 'healthy',
+      publish_artifact_content: (artifact) => publishedContent.push(artifact),
+      now,
+    });
+    expect(result.status).toBe('connected');
+    expect(result.projected_artifact_metadata_count).toBe(2);
+    expect(result.projected_artifact_content_count).toBe(0);
+    expect(result.bridge_state.artifact_content_status).toMatchObject({
+      status: 'degraded',
+      refused_count: 2,
+      last_error_code: 'artifact_path_outside_admitted_roots',
+    });
+    expect(publishedContent).toEqual([]);
   });
 
   test('bridge publishes projected events and artifacts to the registered Cloudflare projection', async () => {

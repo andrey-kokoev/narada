@@ -23,16 +23,26 @@ import type { SiteRegistryReadModel } from './site-registry-read-model.js';
 import type { RegistryMutationGateway, RegistryMutationInput, RegistryMutationOperation } from './site-registry-management-gateway.js';
 import type { AgentSessionReadModel } from './agent-session-read-model.js';
 import {
+  OPERATOR_CONSOLE_ASSET_PATH,
+  OPERATOR_CONSOLE_PATH,
+  OPERATOR_CONSOLE_REGISTRY_PATH,
+  OPERATOR_CONSOLE_REGISTRY_ADD_PATH,
+  OPERATOR_CONSOLE_REGISTRY_MANAGE_PATH,
+  OPERATOR_CONSOLE_LAUNCH_PATH,
+  OPERATOR_CONSOLE_SESSIONS_PATH,
   OPERATOR_CONSOLE_LONG_RUNNING_REQUEST_TIMEOUT_MS,
-  operatorSurfaceRoutePath,
 } from '@narada2/operator-console-contract';
 import {
   isWorkspaceLaunchUiSessionProxyable,
+  isWorkspaceLaunchUiSessionActive,
   readWorkspaceLaunchUiSessions,
   workspaceLaunchUiSessionRoute,
   type WorkspaceLaunchUiSessionRecord,
 } from './workspace-launch-session-store.js';
-import { readOperatorConsoleUiAsset, readOperatorConsoleUiDocument } from './console-ui-assets.js';
+import {
+  readOperatorConsoleUiAsset,
+  readOperatorConsoleUiDocument,
+} from './console-ui-assets.js';
 
 export interface RouteHandler {
   method: string;
@@ -45,18 +55,25 @@ export interface RouteHandler {
   ) => Promise<void>;
 }
 
-const OPERATOR_CONSOLE_REGISTRY_PATH = operatorSurfaceRoutePath('site-registry', 'sites');
-const OPERATOR_CONSOLE_REGISTRY_ADD_PATH = operatorSurfaceRoutePath('site-registry', 'add');
-const OPERATOR_CONSOLE_REGISTRY_MANAGE_PATH = operatorSurfaceRoutePath('site-registry', 'manage');
-const OPERATOR_CONSOLE_LAUNCH_PATH = operatorSurfaceRoutePath('launcher', 'launcher');
-const OPERATOR_CONSOLE_SESSIONS_PATH = operatorSurfaceRoutePath('agent-sessions', 'sessions');
+function consoleLauncherSessionInventory(sessions: WorkspaceLaunchUiSessionRecord[]) {
+  const active: WorkspaceLaunchUiSessionRecord[] = [];
+  const history: WorkspaceLaunchUiSessionRecord[] = [];
+  for (const session of sessions) {
+    (isWorkspaceLaunchUiSessionActive(session) ? active : history).push(session);
+  }
+  return {
+    schema: 'narada.workspace_launch.ui_session_list.v1' as const,
+    sessions: active.map(consoleLauncherSessionProjection),
+    history: history.map(consoleLauncherSessionProjection),
+  };
+}
 
 function regexEscape(value: string): string {
   return value.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&');
 }
 
 function exactPathPattern(path: string): RegExp {
-  return new RegExp(`^${regexEscape(path)}$`);
+  return new RegExp(`^${regexEscape(path)}/?$`);
 }
 
 function suffixPathPattern(path: string, suffix: string): RegExp {
@@ -348,6 +365,31 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
       },
     },
 
+    // The bundle has a neutral mount; Site Registry remains the canonical console entry.
+    {
+      method: 'GET',
+      pattern: new RegExp(`^${regexEscape(OPERATOR_CONSOLE_PATH)}/?$`),
+      handler: async (_req, res) => {
+        res.writeHead(302, { Location: `${OPERATOR_CONSOLE_REGISTRY_PATH}/`, 'Content-Length': '0' });
+        res.end();
+      },
+    },
+
+    // Shared Operator Console bundle assets are independent of any one page route.
+    {
+      method: 'GET',
+      pattern: suffixPathPattern(OPERATOR_CONSOLE_ASSET_PATH, '/(.+)$'),
+      handler: async (_req, res, params) => {
+        const asset = readOperatorConsoleUiAsset(`${OPERATOR_CONSOLE_ASSET_PATH}/${params[1]!}`, ctx.operatorConsoleUiRoot);
+        if (!asset) {
+          jsonResponse(res, 404, { error: 'Operator Console asset not found' });
+          return;
+        }
+        res.writeHead(200, { 'Content-Type': asset.contentType, 'Content-Length': asset.body.byteLength, 'Cache-Control': 'no-cache' });
+        res.end(asset.body);
+      },
+    },
+
     // ── CLI-owned launcher routing surface ──
     {
       method: 'GET',
@@ -370,10 +412,7 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
           jsonResponse(res, 403, { error: 'Origin not allowed' });
           return;
         }
-        jsonResponse(res, 200, {
-          schema: 'narada.workspace_launch.ui_session_list.v1',
-          sessions: (await (ctx.workspaceLaunchSessions ?? readWorkspaceLaunchUiSessions)()).map(consoleLauncherSessionProjection),
-        });
+        jsonResponse(res, 200, consoleLauncherSessionInventory(await (ctx.workspaceLaunchSessions ?? readWorkspaceLaunchUiSessions)()));
       },
     },
     {
@@ -506,19 +545,6 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
           return;
         }
         htmlResponse(res, 200, readOperatorConsoleUiDocument(ctx.operatorConsoleUiRoot));
-      },
-    },
-    {
-      method: 'GET',
-      pattern: suffixPathPattern(OPERATOR_CONSOLE_REGISTRY_PATH, '/assets/(.+)$'),
-      handler: async (_req, res, params) => {
-        const asset = readOperatorConsoleUiAsset(`${OPERATOR_CONSOLE_REGISTRY_PATH}/assets/${params[1]!}`, ctx.operatorConsoleUiRoot);
-        if (!asset) {
-          jsonResponse(res, 404, { error: 'Operator Console asset not found' });
-          return;
-        }
-        res.writeHead(200, { 'Content-Type': asset.contentType, 'Content-Length': asset.body.byteLength, 'Cache-Control': 'no-cache' });
-        res.end(asset.body);
       },
     },
     {

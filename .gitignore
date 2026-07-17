@@ -52,6 +52,9 @@ inputs/
 packages/*/target/
 packages/*/.narada/
 packages/*/.ai/runtime/
+# Cloudflare deployment assets are assembled by the package build.
+packages/cloudflare-nars-projection/public/
+packages/mcp-fabric/test/fixtures/site-valid/.ai/runtime/agent-start-reconciliation/
 packages/layers/cli/.ai/inbox.db
 packages/layers/cli/.ai/inbox.db-*
 packages/layers/cli/.ai/mutation-evidence/

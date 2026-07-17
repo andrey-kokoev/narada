@@ -56,6 +56,16 @@ async function run() {
   if (preflight.status !== 'ok') {
     return evidence({ schema: 'narada.cloudflare_nars_projection.live_smoke.v1', status: 'refused', code: 'preflight_refused', preflight, evidence_path: evidencePath }, evidencePaths, true);
   }
+  const expectedAssetManifest = readJsonFile(args.expectedAssetsManifest);
+  if (!expectedAssetManifest || expectedAssetManifest.schema !== 'narada.cloudflare_assets_manifest.v1') {
+    return evidence({
+      schema: 'narada.cloudflare_nars_projection.live_smoke.v1',
+      status: 'refused',
+      code: 'expected_asset_manifest_invalid',
+      expected_assets_manifest: args.expectedAssetsManifest,
+      evidence_path: evidencePath,
+    }, evidencePaths, true);
+  }
 
   const projectionId = args.projectionId ?? `proj_live_${Date.now()}`;
   const registration = await registerProjectionRemotely({
@@ -94,6 +104,8 @@ async function run() {
   });
   const replay = await getJson(`${base}/events?since_sequence=0`, { 'x-narada-browser-token-fingerprint': browserToken });
   const hostedShell = await getText(hostedWebUrl);
+  const deployedAssetManifest = await getJson(`${args.cloudflareApiBaseUrl.replace(/\/+$/, '')}/api/nars/assets/manifest`);
+  const assetFingerprint = compareAssetManifests(expectedAssetManifest, deployedAssetManifest);
   const metadata = await getJson(`${base}/artifacts`, { 'x-narada-browser-token-fingerprint': browserToken });
   let artifactContent = { status: 'not_checked', reason: 'no_projected_artifact_metadata' };
   const artifactId = metadata?.artifacts?.[0]?.artifact_id;
@@ -113,7 +125,7 @@ async function run() {
   const replayEventCount = Number(replay.event_count ?? 0);
   const remoteReplayCaughtUp = projectedEventCount === 0 || replayEventCount > 0;
   const inputAccepted = input?.input_response?.body?.ok === true;
-  const passed = bridge.status === 'connected' && replay.status === 'ok' && remoteReplayCaughtUp && hostedShell.ok === true && hostedBrowser.status === 'passed' && metadata.status === 'ok' && inputAccepted && delivery.status === 'delivered' && revoke.status === 'revoked' && refusedAfterRevoke.status === 'refused';
+  const passed = bridge.status === 'connected' && replay.status === 'ok' && remoteReplayCaughtUp && hostedShell.ok === true && assetFingerprint.status === 'passed' && hostedBrowser.status === 'passed' && metadata.status === 'ok' && inputAccepted && delivery.status === 'delivered' && revoke.status === 'revoked' && refusedAfterRevoke.status === 'refused';
   return evidence({
     schema: 'narada.cloudflare_nars_projection.live_smoke.v1',
     status: passed ? 'passed' : 'failed',
@@ -124,9 +136,9 @@ async function run() {
     hosted_web_url: hostedWebUrl,
     hosted_shell_check_kind: 'http_html_shell_only',
     hosted_browser_check_kind: 'browser_level_local_origin_projection_e2e',
-    strongest_hosted_web_ui_evidence: strongestHostedWebUiEvidence({ hostedShell, hostedBrowser }),
-    hosted_web_ui_evidence: hostedWebUiEvidence({ hostedShell, hostedBrowser }),
-    checks: { preflight, registration_status: registration.status, bridge, replay, remote_replay_caught_up: remoteReplayCaughtUp, hosted_shell: hostedShell, hosted_browser: hostedBrowser, metadata, artifact_content: artifactContent, input, delivery, revoke, refused_after_revoke: refusedAfterRevoke },
+    strongest_hosted_web_ui_evidence: strongestHostedWebUiEvidence({ hostedShell, hostedBrowser, assetFingerprint }),
+    hosted_web_ui_evidence: hostedWebUiEvidence({ hostedShell, hostedBrowser, assetFingerprint }),
+    checks: { preflight, registration_status: registration.status, bridge, replay, remote_replay_caught_up: remoteReplayCaughtUp, hosted_shell: hostedShell, expected_asset_manifest: args.expectedAssetsManifest, deployed_asset_manifest: deployedAssetManifest, asset_fingerprint: assetFingerprint, hosted_browser: hostedBrowser, metadata, artifact_content: artifactContent, input, delivery, revoke, refused_after_revoke: refusedAfterRevoke },
     evidence_path: evidencePath,
     evidence_latest_path: evidencePaths.latestPath,
     evidence_index_path: evidencePaths.indexPath,
@@ -383,6 +395,40 @@ async function getText(url, headers = {}) {
   return { ok: response.ok, status: response.status, content_type: response.headers.get('content-type'), contains_app_root: text.includes('id="app"') || text.includes("id='app'") };
 }
 
+function compareAssetManifests(expected, deployed) {
+  const mismatches = [];
+  for (const field of ['schema', 'target', 'source_hash', 'asset_tree_hash']) {
+    if (expected?.[field] !== deployed?.[field]) mismatches.push({ field, expected: expected?.[field] ?? null, deployed: deployed?.[field] ?? null });
+  }
+  if (expected?.git_commit && expected.git_commit !== deployed?.git_commit) {
+    mismatches.push({ field: 'git_commit', expected: expected.git_commit, deployed: deployed?.git_commit ?? null });
+  }
+  for (const scope of ['console', 'sessions']) {
+    const expectedArtifact = expected?.source_artifacts?.[scope] ?? {};
+    const deployedArtifact = deployed?.source_artifacts?.[scope] ?? {};
+    for (const field of ['source_hash', 'recipe_hash', 'output_tree_hash']) {
+      if (expectedArtifact[field] !== deployedArtifact[field]) mismatches.push({ field: `source_artifacts.${scope}.${field}`, expected: expectedArtifact[field] ?? null, deployed: deployedArtifact[field] ?? null });
+    }
+  }
+  return {
+    status: mismatches.length === 0 ? 'passed' : 'failed',
+    mismatches,
+    expected: assetManifestSummary(expected),
+    deployed: assetManifestSummary(deployed),
+  };
+}
+
+function assetManifestSummary(manifest) {
+  return {
+    schema: manifest?.schema ?? null,
+    target: manifest?.target ?? null,
+    source_hash: manifest?.source_hash ?? null,
+    asset_tree_hash: manifest?.asset_tree_hash ?? null,
+    git_commit: manifest?.git_commit ?? null,
+    source_artifacts: manifest?.source_artifacts ?? null,
+  };
+}
+
 function resolveEvidencePaths(lineage, options) {
   const root = resolve(process.cwd(), '.narada/crew/nars-projections');
   return {
@@ -392,11 +438,12 @@ function resolveEvidencePaths(lineage, options) {
   };
 }
 
-function hostedWebUiEvidence({ hostedShell, hostedBrowser }) {
+function hostedWebUiEvidence({ hostedShell, hostedBrowser, assetFingerprint }) {
   return {
     schema: 'narada.hosted_web_ui_evidence.v1',
     levels: [
       { level: 'html_shell_available', status: hostedShell?.ok === true ? 'passed' : 'failed' },
+      { level: 'deployed_asset_fingerprint_verified', status: assetFingerprint?.status === 'passed' ? 'passed' : 'failed' },
       { level: 'browser_booted', status: hostedBrowser?.initial?.found === true ? 'passed' : 'failed' },
       { level: 'replay_rendered', status: hostedBrowser?.stream?.found === true ? 'passed' : 'failed' },
       { level: 'live_stream_rendered', status: hostedBrowser?.stream?.found === true ? 'passed' : 'failed' },
@@ -411,7 +458,8 @@ function hostedWebUiEvidence({ hostedShell, hostedBrowser }) {
   };
 }
 
-function strongestHostedWebUiEvidence({ hostedShell, hostedBrowser }) {
+function strongestHostedWebUiEvidence({ hostedShell, hostedBrowser, assetFingerprint }) {
+  if (assetFingerprint?.status === 'passed' && hostedBrowser?.status === 'passed') return 'browser_level_deployed_artifact_fingerprint_verified';
   if (hostedBrowser?.status === 'passed') return 'browser_level_local_origin_projection_e2e';
   if (hostedShell?.ok === true) return 'http_html_shell_only';
   return 'none';
@@ -440,7 +488,7 @@ function evidence(payload, paths, write) {
 }
 
 function requiredArgs() {
-  return ['--cloudflare-api-base-url', '--site-root', '--site-id', '--session'];
+  return ['--cloudflare-api-base-url', '--site-root', '--site-id', '--session', '--expected-assets-manifest'];
 }
 
 function optionKey(option) {

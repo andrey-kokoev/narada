@@ -515,6 +515,55 @@ assert.throws(
 );
 rmSync(legacyRegistrySite, { recursive: true, force: true });
 
+const staleServerNameSite = mkdtempSync(join(tmpdir(), 'narada-mcp-fabric-stale-server-name-'));
+mkdirSync(join(staleServerNameSite, '.ai', 'mcp'), { recursive: true });
+mkdirSync(join(staleServerNameSite, '.narada', 'capabilities'), { recursive: true });
+try {
+  writeFileSync(join(staleServerNameSite, '.ai', 'mcp', 'narada-sonar-site-loop-mcp.json'), `${JSON.stringify({
+    mcpServers: {
+      'narada-sonar-site-ops': {
+        command: 'node',
+        args: ['site-loop.mjs'],
+        surface_id: 'sonar.site-loop',
+      },
+    },
+  }, null, 2)}\n`, 'utf8');
+  writeFileSync(join(staleServerNameSite, '.narada', 'capabilities', 'mcp-surfaces.json'), `${JSON.stringify({
+    schema: 'narada.site.capabilities.mcp_surfaces.v1',
+    surfaces: [{
+      surface_id: 'sonar.site-loop',
+      server_name: 'narada-sonar-site-loop',
+      client_config: { generated_path: '.ai/mcp/narada-sonar-site-loop-mcp.json' },
+      tool_contract: { read_only_tools: ['site_loop_status'] },
+    }],
+  }, null, 2)}\n`, 'utf8');
+
+  const staleServerNameFabric = loadSiteMcpFabric(staleServerNameSite, { required: true });
+  assert.equal(staleServerNameFabric.registry_validation.status, 'mismatch');
+  assert.deepEqual(staleServerNameFabric.registry_validation.missing, []);
+  assert.deepEqual(staleServerNameFabric.registry_validation.unexpected, []);
+  assert.deepEqual(staleServerNameFabric.registry_validation.server_name_mismatches, [{
+    generated_file: 'narada-sonar-site-loop-mcp.json',
+    surface_id: 'sonar.site-loop',
+    actual_server_name: 'narada-sonar-site-ops',
+    expected_server_name: 'narada-sonar-site-loop',
+    expected_server_names: ['narada-sonar-site-loop'],
+  }]);
+  assert.throws(
+    () => loadSiteMcpFabric(staleServerNameSite, { required: true, validateRegistry: true }),
+    (error) => {
+      assert.equal(error instanceof McpFabricError, true);
+      assert.equal(error.code, 'mcp_fabric_registry_mismatch');
+      assert.equal(error.details.server_name_mismatches[0].actual_server_name, 'narada-sonar-site-ops');
+      assert.equal(error.details.repair_plan.server_name_mismatches[0].expected_server_name, 'narada-sonar-site-loop');
+      assert.match(error.details.repair_plan.recommended_actions.join('\\n'), /do not hand-edit generated MCP client or carrier files/);
+      return true;
+    },
+  );
+} finally {
+  rmSync(staleServerNameSite, { recursive: true, force: true });
+}
+
 const namedServerSite = mkdtempSync(join(tmpdir(), 'narada-mcp-fabric-server-name-'));
 mkdirSync(join(namedServerSite, '.ai', 'mcp'), { recursive: true });
 mkdirSync(join(namedServerSite, '.narada', 'capabilities'), { recursive: true });

@@ -1,16 +1,42 @@
 <script setup lang="ts">
-import { onMounted } from 'vue';
+import { onMounted, onUnmounted } from 'vue';
 import OperatorConsoleShell from '../components/OperatorConsoleShell.vue';
 import SiteRegistryList from '../site-registry/components/SiteRegistryList.vue';
 import SiteDetail from '../site-registry/components/SiteDetail.vue';
-import { siteRegistryNavigation } from '../console/routes';
 import { useSiteRegistry } from '../site-registry/composables/useSiteRegistry';
 
 const registry = useSiteRegistry();
 
-onMounted(() => {
+function updateSelectedSiteUrl(siteId: string | null): void {
+  const url = new URL(window.location.href);
+  if (siteId) url.searchParams.set('site', siteId);
+  else url.searchParams.delete('site');
+  window.history.replaceState(window.history.state, '', url);
+}
+
+async function selectSite(siteId: string): Promise<void> {
+  await registry.select(siteId);
+  updateSelectedSiteUrl(registry.selectedSiteId.value);
+}
+
+async function refreshRegistry(): Promise<void> {
+  await registry.load();
+  updateSelectedSiteUrl(registry.selectedSiteId.value);
+}
+
+function syncSelectedSiteFromLocation(): void {
   const site = new URLSearchParams(window.location.search).get('site');
-  if (site) void registry.select(site);
+  if (site) void selectSite(site);
+  else registry.clearSelection();
+}
+
+onMounted(() => {
+  syncSelectedSiteFromLocation();
+  window.addEventListener('popstate', syncSelectedSiteFromLocation);
+});
+
+onUnmounted(() => {
+  window.removeEventListener('popstate', syncSelectedSiteFromLocation);
 });
 </script>
 
@@ -20,7 +46,7 @@ onMounted(() => {
     title="Sites"
     back-href="/"
     back-label="Back to Operator Workspace"
-    :nav-items="siteRegistryNavigation('sites')"
+    navigation-key="sites"
   >
     <main class="console-main">
       <div class="intro">
@@ -34,8 +60,10 @@ onMounted(() => {
           :selected-site-id="registry.selectedSiteId.value"
           :loading="registry.loading.value"
           :error="registry.error.value"
-          @select="registry.select"
-          @refresh="registry.load"
+          :list-stale="registry.listStale.value"
+          :last-successful-load-at="registry.lastSuccessfulLoadAt.value"
+          @select="selectSite"
+          @refresh="refreshRegistry"
         />
         <SiteDetail :site="registry.selected.value" :loading="registry.loadingDetail.value" />
       </div>

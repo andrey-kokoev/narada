@@ -18,7 +18,7 @@ test('runtime contract owns the admitted method registry', () => {
 test('runtime contract builds credential-free intelligence reconfiguration frames', () => {
   assert.deepEqual(buildNarsRuntimeIntelligenceReconfigureFrame({
     provider: 'deepseek-api',
-    model: 'deepseek-chat',
+    model: 'deepseek-v4-flash',
     thinking: 'medium',
   }, { id: 'reconfigure-7' }), {
     id: 'reconfigure-7',
@@ -26,7 +26,7 @@ test('runtime contract builds credential-free intelligence reconfiguration frame
     params: {
       request_id: 'reconfigure-7',
       provider: 'deepseek-api',
-      model: 'deepseek-chat',
+      model: 'deepseek-v4-flash',
       thinking: 'medium',
     },
   });

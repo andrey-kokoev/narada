@@ -62,7 +62,6 @@ export function createWorkspaceLaunchAdmissionPolicy(args: {
     runtime: string,
   ): WorkspaceLaunchRuntimeSelection => {
     const selection = resolveCanonicalOperatorSurfaceRuntimeSelection({
-      carrierValue: operatorSurface,
       operatorSurfaceValue: operatorSurface,
       runtimeValue: runtime,
       admittedRuntimeSubstrateKinds: [...ADMITTED_RUNTIME_SUBSTRATE_KINDS],
@@ -70,15 +69,13 @@ export function createWorkspaceLaunchAdmissionPolicy(args: {
     });
     if (selection.status === 'refused') {
       throw commandResultError({
-        status: 'error',
+        schema: 'narada.workspace_launch.action_refusal.v1',
+        status: 'refused',
         command: 'launcher workspace-plan',
-        error: selection.reason,
-        _formatted: `[FAIL] ${selection.reason_code}: ${selection.reason}`,
         reason_code: selection.reason_code,
-        reason: selection.reason,
-        candidate_carrier_kind: selection.candidate_carrier_kind,
-        candidate_operator_surface_kind: selection.candidate_operator_surface_kind,
-        candidate_runtime_substrate_kind: selection.candidate_runtime_substrate_kind,
+        message: selection.reason,
+        required_next_step: selection.required_next_step,
+        artifact_path: null,
         retryable: false,
       }, selection.reason_code);
     }

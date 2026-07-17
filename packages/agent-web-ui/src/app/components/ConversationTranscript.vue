@@ -11,6 +11,7 @@ const props = defineProps<{
   agentActivity: AgentActivityState;
   followLatestRevision: number;
   hasEarlierEvents: boolean;
+  historyTruncated: boolean;
   loadingEarlier: boolean;
 }>();
 const emit = defineEmits<{ 'intent-selected': [intent: string]; 'load-earlier': [] }>();
@@ -136,6 +137,9 @@ watch(() => props.loadingEarlier, (loading, wasLoading) => {
       >
         {{ loadingEarlier ? 'Loading earlier events…' : 'Load earlier events' }}
       </button>
+      <p v-if="historyTruncated" class="history-gap-notice" role="status">
+        Earlier history is unavailable because the remote projection cache has evicted events.
+      </p>
     </div>
     <ol id="events" class="events narada-list-reset" aria-label="NARS session events">
       <EventRow v-for="row in rows" :key="row.key" :row="row" :verbosity="verbosity" @intent-selected="emit('intent-selected', $event)" />

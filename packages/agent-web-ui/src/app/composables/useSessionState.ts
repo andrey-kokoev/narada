@@ -2,7 +2,7 @@ import type { Ref } from 'vue';
 import { useHealthStatus } from './useHealthStatus';
 import { useNarsConnection, type NarsConnectionConfig } from './useNarsConnection';
 import { useNarsEvents, type SessionIdentitySummary } from './useNarsEvents';
-import type { ProjectionVerbosity } from './useProjectionVerbosity';
+import type { ProjectionVerbosity, ProjectionViewOption } from './useProjectionVerbosity';
 import { useRetainedEvents } from './useRetainedEvents';
 
 export interface SessionStateConfig extends NarsConnectionConfig {
@@ -18,6 +18,7 @@ export interface SessionStateConfig extends NarsConnectionConfig {
 export function useSessionState(
   verbosity: Ref<ProjectionVerbosity>,
   config: SessionStateConfig,
+  activeView?: Readonly<Ref<ProjectionViewOption>>,
 ) {
   const retained = useRetainedEvents(config.maxRetainedEvents);
   const connection = useNarsConnection(
@@ -26,6 +27,7 @@ export function useSessionState(
       healthEndpoint: config.healthEndpoint,
       inputEndpoint: config.inputEndpoint,
       browserToken: config.browserToken,
+      sessionId: config.sessionId,
       maxReplay: config.maxReplay,
       view: verbosity,
     },
@@ -37,7 +39,7 @@ export function useSessionState(
     browserToken: config.browserToken ?? null,
     transport: connection.connection.value ?? undefined,
   });
-  const projection = useNarsEvents(retained.events, verbosity, health.identity, health.body);
+  const projection = useNarsEvents(retained.events, verbosity, activeView, health.identity, health.body);
 
   return {
     ...retained,
@@ -45,9 +47,11 @@ export function useSessionState(
     health,
     connection,
     hasEarlierEvents: connection.hasEarlierEvents,
+    historyTruncated: connection.historyTruncated,
     loadingEarlier: connection.loadingEarlier,
     loadEarlier: connection.loadEarlier,
     streamText: connection.streamText,
+    streamLive: connection.streamLive,
   };
 }
 

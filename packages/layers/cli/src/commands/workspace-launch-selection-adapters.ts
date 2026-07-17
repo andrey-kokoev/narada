@@ -4,6 +4,7 @@ import * as support from './workspace-launch-support.js';
 import type { WorkspaceLaunchSelectionServices } from './workspace-launch-context.js';
 import type { WorkspaceLaunchPlanOptions, WorkspaceLaunchRecord } from './workspace-launch-types.js';
 import { normalizeOperatorSurfaceList } from './workspace-launch-plan-builder.js';
+import { REGISTRY_DEFAULT_SELECTION } from './workspace-launch-resolution.js';
 import {
   runWorkspaceLaunchSelectionUi as runWorkspaceLaunchSelectionUiController,
 } from './workspace-launch-ui-controller.js';
@@ -72,7 +73,7 @@ export async function resolveInteractiveSelectionOptions(
     runtime: selectedRuntime as string,
     intelligenceProvider: options.intelligenceProvider ?? 'registry default',
   }, siteCatalog);
-  let selectedProvider: string | undefined;
+  let selectedProvider: string | undefined = providerSelectorModel.selected.intelligenceProvider;
   if (providerSelectorModel.intelligenceProviderOptions.length > 1) {
     const selectedProviderValue = await prompts.select({
       message: 'Select Intelligence Provider',
@@ -88,9 +89,9 @@ export async function resolveInteractiveSelectionOptions(
     all: false,
     site: selectedSiteValues,
     role: selectedRoleValues,
-    operatorSurface: selectedOperatorSurfaceValues.includes('registry default') ? undefined : selectedOperatorSurfaceValues.join(','),
-    runtime: selectedRuntime === 'registry default' ? undefined : selectedRuntime,
-    intelligenceProvider: selectedProvider === 'registry default' ? undefined : selectedProvider,
+    operatorSurface: serializeOperatorSurfaceSelection(selectedOperatorSurfaceValues),
+    runtime: selectedRuntime === REGISTRY_DEFAULT_SELECTION ? REGISTRY_DEFAULT_SELECTION : selectedRuntime,
+    intelligenceProvider: selectedProvider === REGISTRY_DEFAULT_SELECTION ? REGISTRY_DEFAULT_SELECTION : selectedProvider,
   };
 }
 
@@ -113,8 +114,16 @@ export function workspaceLaunchOptionsFromBrowserSelection(
     all: false,
     site: selection.site,
     role: selection.role,
-    operatorSurface: selection.operatorSurface.includes('registry default') ? undefined : selection.operatorSurface.join(','),
-    runtime: selection.runtime === 'registry default' ? undefined : selection.runtime,
-    intelligenceProvider: selection.intelligenceProvider === 'registry default' ? undefined : selection.intelligenceProvider,
+    operatorSurface: serializeOperatorSurfaceSelection(selection.operatorSurface),
+    runtime: selection.runtime === REGISTRY_DEFAULT_SELECTION ? REGISTRY_DEFAULT_SELECTION : selection.runtime,
+    intelligenceProvider: selection.intelligenceProvider === REGISTRY_DEFAULT_SELECTION ? REGISTRY_DEFAULT_SELECTION : selection.intelligenceProvider,
   };
+}
+
+function serializeOperatorSurfaceSelection(values: string[]): string {
+  if (values.includes(REGISTRY_DEFAULT_SELECTION)) {
+    if (values.length !== 1) throw new Error('workspace_launch_operator_surface_registry_default_must_be_exclusive');
+    return REGISTRY_DEFAULT_SELECTION;
+  }
+  return values.join(',');
 }

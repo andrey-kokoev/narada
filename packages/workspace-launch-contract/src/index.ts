@@ -130,6 +130,8 @@ export interface WorkspaceLaunchUiSession {
 export interface WorkspaceLaunchUiSessionList {
   schema: 'narada.workspace_launch.ui_session_list.v1';
   sessions: WorkspaceLaunchUiSession[];
+  /** Historical records are intentionally separate from attachable sessions. */
+  history?: WorkspaceLaunchUiSession[];
 }
 
 export interface WorkspaceLaunchResultEnvelope {
@@ -397,9 +399,13 @@ function isWorkspaceLaunchUiSession(value: unknown): value is WorkspaceLaunchUiS
 
 export function parseWorkspaceLaunchUiSessionList(value: unknown): WorkspaceLaunchUiSessionList | null {
   if (!isRecord(value) || value.schema !== 'narada.workspace_launch.ui_session_list.v1') return null;
-  return Array.isArray(value.sessions) && value.sessions.every(isWorkspaceLaunchUiSession)
-    ? { schema: value.schema, sessions: value.sessions }
-    : null;
+  if (!Array.isArray(value.sessions) || !value.sessions.every(isWorkspaceLaunchUiSession)) return null;
+  if (value.history !== undefined && (!Array.isArray(value.history) || !value.history.every(isWorkspaceLaunchUiSession))) return null;
+  return {
+    schema: value.schema,
+    sessions: value.sessions,
+    history: value.history === undefined ? [] : value.history,
+  };
 }
 
 function optionalNumber(value: unknown): number | undefined {

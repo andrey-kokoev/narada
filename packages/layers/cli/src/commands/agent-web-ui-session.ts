@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises';
-import { agentIdentityGroupKey, agentIdentityRefMatchesRequest, normalizeSiteToken, roleSegment, siteSegment } from '@narada2/agent-identity';
+import { agentIdentityRefMatchesRequest, normalizeSiteToken, roleSegment, siteSegment } from '@narada2/agent-identity';
 import { evaluateAgentStartHandoff } from '@narada2/agent-start/launch-result-v0-contract';
 import type { CommandContext } from '../lib/command-wrapper.js';
 import { formattedResult } from '../lib/cli-output.js';
@@ -482,15 +482,17 @@ async function discoverAttachSessionIdOnce(
       candidates.map(toAttachSessionCandidate),
     );
   }
-  const ambiguityGroups = distinctAttachIdentityGroups(matches);
-  if (ambiguityGroups.size > 1) {
+  if (matches.length > 1) {
+    const sessionIds = matches
+      .map((session) => stringField(session, 'session_id') ?? stringField(session, 'carrier_session_id'))
+      .filter((sessionId): sessionId is string => Boolean(sessionId));
     throw new AttachSessionDiscoveryError(
-      `nars_session_ambiguous_for_agent: ${agentId}: ${Array.from(ambiguityGroups).join(', ')}`,
+      `nars_session_ambiguous_for_agent: ${agentId}: ${sessionIds.join(', ')}`,
       'nars_session_ambiguous_for_agent',
       matches.map(toAttachSessionCandidate),
     );
   }
-  const selected = matches.sort(compareSessionsNewestFirst)[0];
+  const selected = matches[0];
   const sessionId = stringField(selected, 'session_id') ?? stringField(selected, 'carrier_session_id');
   if (!sessionId) {
     throw new AttachSessionDiscoveryError(
@@ -517,14 +519,6 @@ function agentIdMatchesSession(requestedAgentId: string, session: JsonRecord): b
   return !requestedAgentId.includes('.');
 }
 
-function distinctAttachIdentityGroups(sessions: JsonRecord[]): Set<string> {
-  return new Set(sessions.map((session) => agentIdentityGroupKey(
-    objectField(session, 'agent_identity_ref'),
-    stringField(session, 'agent_id'),
-    stringField(session, 'site_id'),
-  )));
-}
-
 function toAttachSessionCandidate(session: JsonRecord): AttachSessionCandidate {
   return {
     session_id: stringField(session, 'session_id') ?? stringField(session, 'carrier_session_id'),
@@ -542,20 +536,6 @@ function toAttachSessionCandidate(session: JsonRecord): AttachSessionCandidate {
 function isDiscoverableAttachSessionState(displayState: string | null, options: { requireActive: boolean }): boolean {
   if (options.requireActive) return displayState === 'active';
   return displayState === 'active' || displayState === 'starting_or_degraded';
-}
-
-function compareSessionsNewestFirst(left: JsonRecord, right: JsonRecord): number {
-  return sessionTimestampMs(right) - sessionTimestampMs(left);
-}
-
-function sessionTimestampMs(session: JsonRecord): number {
-  for (const field of ['last_seen_at', 'started_at', 'projection_generated_at']) {
-    const value = stringField(session, field);
-    if (!value) continue;
-    const parsed = Date.parse(value);
-    if (Number.isFinite(parsed)) return parsed;
-  }
-  return 0;
 }
 
 export async function assessAttachability(

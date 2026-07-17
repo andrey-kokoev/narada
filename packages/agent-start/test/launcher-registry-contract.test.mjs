@@ -145,11 +145,13 @@ function dryRunEnv(carrier) {
   if (operatorSurfaceLaunchMatrixRow(carrier)?.runtime_host_kind === NARADA_AGENT_RUNTIME_SERVER_KIND) return {
     NARADA_INTELLIGENCE_PROVIDER: 'kimi-code-api',
     NARADA_PROVIDER_SECRET_STORE: 'disabled',
+    NARADA_PROVIDER_ENV_FALLBACK: '1',
     NARADA_CODEX_SUBSCRIPTION_PREFLIGHT: 'defer',
     KIMI_CODE_API_KEY: 'test-key',
   };
   if (carrier === 'agent-tui') return {
     NARADA_PROVIDER_SECRET_STORE: 'disabled',
+    NARADA_PROVIDER_ENV_FALLBACK: '1',
     NARADA_CODEX_SUBSCRIPTION_PREFLIGHT: 'defer',
     NARADA_INTELLIGENCE_PROVIDER: 'kimi-code-api',
     KIMI_CODE_API_BASE_URL: 'https://api.kimi.com/coding/',

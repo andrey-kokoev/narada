@@ -36,6 +36,33 @@ export function commandResultError(result: unknown, message?: string): CommandRe
 
 function normalizeUnhandledCommandError(command: string, error: unknown): NormalizedCommandError {
   const err = error instanceof Error ? error : new Error(String(error));
+  const contract = error as {
+    reasonCode?: unknown;
+    reason?: unknown;
+    requiredNextStep?: unknown;
+    artifactPath?: unknown;
+  } | null;
+  if (
+    typeof contract?.reasonCode === 'string'
+    && contract.reasonCode.trim()
+    && typeof contract.requiredNextStep === 'string'
+    && contract.requiredNextStep.trim()
+  ) {
+    return {
+      schema: 'narada.workspace_launch.action_refusal.v1',
+      status: 'refused',
+      command,
+      reason_code: contract.reasonCode.trim(),
+      message: typeof contract.reason === 'string' && contract.reason.trim()
+        ? contract.reason.trim()
+        : err.message,
+      required_next_step: contract.requiredNextStep.trim(),
+      artifact_path: typeof contract.artifactPath === 'string' && contract.artifactPath.trim()
+        ? contract.artifactPath.trim()
+        : null,
+      retryable: false,
+    };
+  }
   return {
     status: 'error',
     command,
@@ -71,12 +98,21 @@ export type CommandHandler<T extends CommanderOptionValues> = (
   context: CommandContext,
 ) => Promise<ExitCode | { exitCode: ExitCode; result: unknown }>;
 
-export interface NormalizedCommandError {
+export type NormalizedCommandError = {
   status: 'error';
   command: string;
   error: string;
   retryable: boolean;
-}
+} | {
+  schema: 'narada.workspace_launch.action_refusal.v1';
+  status: 'refused';
+  command: string;
+  reason_code: string;
+  message: string;
+  required_next_step: string;
+  artifact_path: string | null;
+  retryable: false;
+};
 
 export interface CommandResultEnvelope {
   exitCode: number;

@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 
 import { appendEvent } from '../src/render.js';
 import { refreshHttpHealthStatus } from '../src/health.js';
-import { createSessionProjection } from '../src/session-projection.js';
+import { classifyRuntimeMessage, createSessionProjection } from '../src/session-projection.js';
 import {
   TURN_ACTIVITY_PHASES,
   createTurnActivityState,
@@ -99,7 +99,68 @@ test('operator input delivery exposes an explicit monotonic transition table', (
   assert.equal(canTransitionOperatorInputDelivery(OPERATOR_INPUT_DELIVERY_PHASES.ACCEPTED, OPERATOR_INPUT_DELIVERY_PHASES.QUEUED), true);
   assert.equal(canTransitionOperatorInputDelivery(OPERATOR_INPUT_DELIVERY_PHASES.QUEUED, OPERATOR_INPUT_DELIVERY_PHASES.ACCEPTED), false);
   assert.equal(canTransitionOperatorInputDelivery(OPERATOR_INPUT_DELIVERY_PHASES.COMPLETED, OPERATOR_INPUT_DELIVERY_PHASES.STEERING), false);
+  assert.equal(canTransitionOperatorInputDelivery(OPERATOR_INPUT_DELIVERY_PHASES.SUBMITTING, OPERATOR_INPUT_DELIVERY_PHASES.RELAY_PENDING), true);
+  assert.equal(canTransitionOperatorInputDelivery(OPERATOR_INPUT_DELIVERY_PHASES.RELAY_PENDING, OPERATOR_INPUT_DELIVERY_PHASES.TIMED_OUT), true);
+  assert.equal(canTransitionOperatorInputDelivery(OPERATOR_INPUT_DELIVERY_PHASES.TIMED_OUT, OPERATOR_INPUT_DELIVERY_PHASES.ACCEPTED), true);
+  assert.equal(canTransitionOperatorInputDelivery(OPERATOR_INPUT_DELIVERY_PHASES.TIMED_OUT, OPERATOR_INPUT_DELIVERY_PHASES.REVIEWING), true);
+  assert.equal(canTransitionOperatorInputDelivery(OPERATOR_INPUT_DELIVERY_PHASES.REVIEWING, OPERATOR_INPUT_DELIVERY_PHASES.RETRIED), true);
+  assert.equal(canTransitionOperatorInputDelivery(OPERATOR_INPUT_DELIVERY_PHASES.RETRIED, OPERATOR_INPUT_DELIVERY_PHASES.COMPLETED), false);
   assert.deepEqual(OPERATOR_INPUT_DELIVERY_TRANSITIONS[OPERATOR_INPUT_DELIVERY_PHASES.FAILED], []);
+});
+
+test('operator input delivery makes an unacknowledged submission recoverable and accepts late runtime evidence', () => {
+  const timedOut = createOperatorInputDeliveryProjection([
+    { event: 'operator_input_submitted', request_id: 'input-timeout', method: 'session.submit', content: 'proceed', timestamp: '2026-07-15T21:00:00.000Z' },
+    { event: 'web_ui_input_ack_timeout', request_id: 'input-timeout', method: 'session.submit', content: 'proceed', message: 'ack timeout', timestamp: '2026-07-15T21:00:05.000Z' },
+  ], Date.parse('2026-07-15T21:00:05.000Z'));
+  assert.equal(timedOut.phase, OPERATOR_INPUT_DELIVERY_PHASES.TIMED_OUT);
+  assert.equal(timedOut.content, 'proceed');
+  assert.equal(timedOut.label, 'Input not acknowledged');
+  assert.match(timedOut.detail, /no automatic resend/);
+
+  const lateAck = createOperatorInputDeliveryProjection([
+    { event: 'operator_input_submitted', request_id: 'input-timeout', method: 'session.submit', content: 'proceed', timestamp: '2026-07-15T21:00:00.000Z' },
+    { event: 'web_ui_input_ack_timeout', request_id: 'input-timeout', method: 'session.submit', content: 'proceed', message: 'ack timeout', timestamp: '2026-07-15T21:00:05.000Z' },
+    { event: 'operator_input_late_acknowledged', request_id: 'input-timeout', method: 'session.submit', content: 'proceed', acknowledged_event: 'input_event_queued', timestamp: '2026-07-15T21:00:06.000Z' },
+    { event: 'input_event_queued', request_id: 'input-timeout', event_id: 'nars-input-timeout', timestamp: '2026-07-15T21:00:06.000Z' },
+  ]);
+  assert.equal(lateAck.phase, OPERATOR_INPUT_DELIVERY_PHASES.LATE_RECONCILED);
+  assert.equal(lateAck.error, null);
+  assert.equal(lateAck.terminalState, 'late_acknowledged');
+  assert.deepEqual(lateAck.history, [
+    OPERATOR_INPUT_DELIVERY_PHASES.DRAFT,
+    OPERATOR_INPUT_DELIVERY_PHASES.SUBMITTING,
+    OPERATOR_INPUT_DELIVERY_PHASES.TIMED_OUT,
+    OPERATOR_INPUT_DELIVERY_PHASES.LATE_RECONCILED,
+  ]);
+
+  const restored = createOperatorInputDeliveryProjection([
+    { event: 'operator_input_pending_restored', request_id: 'input-restored', method: 'session.submit', content: 'review me', message: 'review before retry', created_at: '2026-07-15T21:00:05.000Z' },
+  ]);
+  assert.equal(restored.phase, OPERATOR_INPUT_DELIVERY_PHASES.TIMED_OUT);
+  assert.equal(restored.content, 'review me');
+
+  const restoredForReview = createOperatorInputDeliveryProjection([
+    { event: 'operator_input_pending_restored', request_id: 'input-reviewing', method: 'session.submit', content: 'review me', pending_state: 'reviewing', message: 'already under review', created_at: '2026-07-15T21:00:05.000Z' },
+  ]);
+  assert.equal(restoredForReview.phase, OPERATOR_INPUT_DELIVERY_PHASES.REVIEWING);
+
+  const retried = createOperatorInputDeliveryProjection([
+    { event: 'operator_input_submitted', request_id: 'input-retry', method: 'session.submit', content: 'retry me' },
+    { event: 'web_ui_input_ack_timeout', request_id: 'input-retry', method: 'session.submit', content: 'retry me' },
+    { event: 'operator_input_reviewed', request_id: 'input-retry', method: 'session.submit', content: 'retry me' },
+    { event: 'operator_input_retried', request_id: 'input-retry', method: 'session.submit', content: 'retry me', retry_request_id: 'input-retry-2' },
+  ]);
+  assert.equal(retried.phase, OPERATOR_INPUT_DELIVERY_PHASES.RETRIED);
+  assert.equal(retried.terminalState, 'retried');
+
+  const expired = createOperatorInputDeliveryProjection([
+    { event: 'operator_input_submitted', request_id: 'input-expired', method: 'session.submit', content: 'expire me' },
+    { event: 'web_ui_input_ack_timeout', request_id: 'input-expired', method: 'session.submit', content: 'expire me' },
+    { event: 'operator_input_pending_expired', request_id: 'input-expired', method: 'session.submit', content: 'expire me' },
+  ]);
+  assert.equal(expired.phase, OPERATOR_INPUT_DELIVERY_PHASES.EXPIRED);
+  assert.equal(expired.terminalState, 'expired');
 });
 
 test('operator input delivery ignores backward runtime evidence after admission', () => {
@@ -218,6 +279,7 @@ test('attach config resolves one event endpoint and one health endpoint from que
     healthEndpoint: 'http://nars/health',
     inputEndpoint: null,
     cacheEndpoint: null,
+    sessionId: null,
     healthTransport: 'http-proxy',
     artifactBasePath: '/api/nars',
     artifactTransport: 'local-nars-proxy',
@@ -235,6 +297,7 @@ test('attach config resolves one event endpoint and one health endpoint from que
     healthEndpoint: '/api/health',
     inputEndpoint: null,
     cacheEndpoint: null,
+    sessionId: null,
     healthTransport: 'http-proxy',
     artifactBasePath: '/api/nars',
     artifactTransport: 'local-nars-proxy',
@@ -247,8 +310,13 @@ test('attach config resolves one event endpoint and one health endpoint from que
 
 test('runtime event summaries unwrap NARS session_event envelopes', () => {
   assert.equal(summarizeRuntimeEvent({ event: 'session_events_subscription_started', replay_count: 3 }), '3 replayed event(s)');
+  assert.equal(summarizeRuntimeEvent({ event: 'session_events_replay_completed', replay_count: 0 }), '0 replayed event(s); replay complete');
   assert.equal(summarizeRuntimeEvent({ event: 'session_event', payload: { event: 'assistant_message', content: 'hello' } }), 'hello');
   assert.equal(summarizeRuntimeEvent({ event: 'session_event', payload: { event: 'tool_call', tool_name: 'narada-site.whoami' } }), 'narada-site.whoami');
+});
+
+test('classifies replay completion as a diagnostic signal', () => {
+  assert.equal(classifyRuntimeMessage({ event: 'session_events_replay_completed', replay_count: 0 }), 'diagnostic_signal');
 });
 
 test('web UI projection renders stale authority reattach target distinctly', () => {
@@ -662,6 +730,22 @@ test('operator input delivery projects submission through NARS acknowledgment an
   assert.equal(projection.activeTurnId, 'nars-input-1');
 });
 
+test('operator input delivery advances a relayed submission when NARS acknowledges it', () => {
+  const projection = createOperatorInputDeliveryProjection([
+    { event: 'operator_input_submitted', request_id: 'input-relay', method: 'session.submit', content: 'relay this', timestamp: '2026-07-11T12:00:00.000Z' },
+    { event: 'projection_input_response', request_id: 'input-relay', method: 'session.submit', status: 'ok', http_ok: true, timestamp: '2026-07-11T12:00:00.050Z' },
+    { event: 'session_control_accepted', request_id: 'input-relay', method: 'session.submit', acceptance_state: 'accepted', timestamp: '2026-07-11T12:00:00.100Z' },
+  ]);
+
+  assert.equal(projection.phase, OPERATOR_INPUT_DELIVERY_PHASES.ACCEPTED);
+  assert.deepEqual(projection.history, [
+    OPERATOR_INPUT_DELIVERY_PHASES.DRAFT,
+    OPERATOR_INPUT_DELIVERY_PHASES.SUBMITTING,
+    OPERATOR_INPUT_DELIVERY_PHASES.RELAY_PENDING,
+    OPERATOR_INPUT_DELIVERY_PHASES.ACCEPTED,
+  ]);
+});
+
 test('operator input delivery recognizes carrier input completion evidence', () => {
   const projection = createOperatorInputDeliveryProjection([
     { event: 'operator_input_submitted', request_id: 'input-carrier', method: 'session.submit', content: 'run', timestamp: '2026-07-11T12:12:00.000Z' },
@@ -692,13 +776,13 @@ test('operator input delivery distinguishes explicit queueing before turn admiss
   assert.match(projection.detail, /holding it for the next turn/);
 });
 
-test('operator input delivery correlates unlabelled runtime queue evidence to the local submission', () => {
+test('operator input delivery correlates runtime queue evidence by unique method and preserves event identity', () => {
   const projection = createOperatorInputDeliveryProjection([
     { event: 'operator_input_submitted', request_id: 'input-fallback', method: 'session.submit', content: 'run', operator_delivery_mode: 'default' },
-    { event: 'input_event_queued', event_id: 'nars-input-fallback', source: 'manual_operator' },
-    { event: 'input_event_started', event_id: 'nars-input-fallback', source: 'manual_operator' },
+    { event: 'input_event_queued', event_id: 'nars-input-fallback', method: 'session.submit', source: 'manual_operator' },
+    { event: 'input_event_started', event_id: 'nars-input-fallback', method: 'session.submit', source: 'manual_operator' },
     { event: 'carrier_turn_started', turn_id: 'nars-input-fallback' },
-    { event: 'input_event_completed', event_id: 'nars-input-fallback', terminal_state: 'completed' },
+    { event: 'input_event_completed', event_id: 'nars-input-fallback', method: 'session.submit', terminal_state: 'completed' },
     { event: 'session_control_response', request_id: 'input-fallback', method: 'session.submit', terminal_state: 'completed' },
   ]);
 
@@ -724,5 +808,12 @@ test('operator input delivery keeps rejection and runtime failure terminal state
   assert.equal(failed.phase, OPERATOR_INPUT_DELIVERY_PHASES.FAILED);
   assert.equal(failed.error, 'provider unavailable');
   assert.equal(failed.terminalState, 'failed');
-});
 
+  const requestStateFailed = createOperatorInputDeliveryProjection([
+    { event: 'operator_input_submitted', request_id: 'input-state-failed', method: 'session.submit', content: 'run', operator_delivery_mode: 'default' },
+    { event: 'runtime_request_state_transition', request_id: 'input-state-failed', method: 'session.submit', request_state: 'failed', terminal_state: 'failed', error: 'dispatch failed' },
+  ]);
+  assert.equal(requestStateFailed.phase, OPERATOR_INPUT_DELIVERY_PHASES.FAILED);
+  assert.equal(requestStateFailed.terminalState, 'failed');
+  assert.equal(requestStateFailed.error, 'dispatch failed');
+});

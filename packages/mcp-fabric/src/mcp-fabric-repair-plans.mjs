@@ -33,13 +33,21 @@ export function mcpFabricRepairPlan(code, details = {}) {
         generated_file: item.generated_file,
         expected_path: details.mcpDir && item.generated_file ? join(details.mcpDir, item.generated_file) : item.generated_file,
       })),
+      server_name_mismatches: (details.serverNameMismatches ?? details.server_name_mismatches ?? []).map((item) => ({
+        generated_file: item.generated_file,
+        surface_id: item.surface_id ?? null,
+        actual_server_name: item.actual_server_name,
+        expected_server_name: item.expected_server_name ?? null,
+        expected_server_names: item.expected_server_names ?? [],
+      })),
       recommended_actions: [
         'Regenerate missing MCP client config files from the authoritative Site surface registry.',
         'If a registry surface is obsolete, remove or retire that registry entry instead of leaving a missing generated file.',
+        'Regenerate stale server names from the authoritative Site surface registry; do not hand-edit generated MCP client or carrier files.',
       ],
       verification: [
         'Run MCP fabric doctor with registry validation enabled.',
-        'Confirm registry_validation.status is ok.',
+        'Confirm registry_validation.status is ok and server_name_mismatches is empty.',
       ],
     };
   }

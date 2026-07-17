@@ -1,8 +1,9 @@
-import type { WorkspaceLaunchUiSession } from '@narada2/workspace-launch-contract';
+import type { WorkspaceLaunchUiSessionList } from '@narada2/workspace-launch-contract';
+import { OPERATOR_CONSOLE_LAUNCH_API_PATH } from '@narada2/operator-console-contract';
 import { parseOperatorConsoleLauncherSessions } from './session-domain';
 
 export interface OperatorConsoleLauncherSessionTransport {
-  list(): Promise<WorkspaceLaunchUiSession[]>;
+  list(): Promise<WorkspaceLaunchUiSessionList>;
 }
 
 type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
@@ -18,11 +19,11 @@ export class OperatorConsoleLauncherSessionApiError extends Error {
 }
 
 export function createOperatorConsoleLauncherSessionTransport(
-  basePath = '/console/launch/api',
+  basePath = OPERATOR_CONSOLE_LAUNCH_API_PATH,
   fetchLike: FetchLike = (input, init) => fetch(input, init),
 ): OperatorConsoleLauncherSessionTransport {
   return {
-    async list(): Promise<WorkspaceLaunchUiSession[]> {
+    async list(): Promise<WorkspaceLaunchUiSessionList> {
       const response = await fetchLike(basePath + '/sessions', {
         headers: { Accept: 'application/json' },
       });
@@ -41,14 +42,14 @@ export function createOperatorConsoleLauncherSessionTransport(
           'Launcher session inventory failed with HTTP ' + response.status + '.',
         );
       }
-      const sessions = parseOperatorConsoleLauncherSessions(payload);
-      if (!sessions) {
+      const inventory = parseOperatorConsoleLauncherSessions(payload);
+      if (!inventory) {
         throw new OperatorConsoleLauncherSessionApiError(
           'invalid_response',
           'Launcher session inventory did not match its contract.',
         );
       }
-      return sessions;
+      return inventory;
     },
   };
 }

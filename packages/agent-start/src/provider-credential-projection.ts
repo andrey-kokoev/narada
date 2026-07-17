@@ -10,6 +10,7 @@ import {
 } from '@narada2/operator-surface-runtime-contract/operator-surface-runtime-selection';
 
 export const PROVIDER_SECRET_STORE_MODE_ENV = 'NARADA_PROVIDER_SECRET_STORE';
+export const PROVIDER_ENV_FALLBACK_MODE_ENV = 'NARADA_PROVIDER_ENV_FALLBACK';
 export const SECRET_MANAGEMENT_LOOKUP_TIMEOUT_MS = 5000;
 const NARS_OPERATOR_SURFACE_KINDS = operatorSurfaceKindsForRuntimeHost(NARADA_AGENT_RUNTIME_SERVER_KIND);
 export const SECRET_MANAGEMENT_LOOKUP_SCRIPT = `
@@ -41,6 +42,11 @@ export function providerCredentialRequirement(provider, metadata) {
     secret_ref: providerCredentialSecretRef(provider, metadata),
     env_names: credentialEnvNames,
   };
+}
+
+export function providerEnvironmentFallbackEnabled(processEnv = process.env) {
+  const mode = String(processEnv[PROVIDER_ENV_FALLBACK_MODE_ENV] ?? '').trim().toLowerCase();
+  return ['1', 'true', 'on', 'enabled'].includes(mode);
 }
 
 export function redactProviderCredentialRequirement(requirement) {
@@ -148,11 +154,14 @@ export function resolveProviderCredential(provider, metadata, {
       primary_credential_env: primaryCredentialEnv,
       credential_env_names: credentialEnvNames,
       source_env: null,
+      environment_fallback: 'not_needed',
       value: secretValue,
     };
   }
 
-  const envValue = firstEnvironmentValueWithName(credentialEnvNames, processEnv);
+  const envValue = providerEnvironmentFallbackEnabled(processEnv)
+    ? firstEnvironmentValueWithName(credentialEnvNames, processEnv)
+    : null;
   if (envValue) {
     return {
       credential_required: true,
@@ -164,6 +173,7 @@ export function resolveProviderCredential(provider, metadata, {
       primary_credential_env: primaryCredentialEnv,
       credential_env_names: credentialEnvNames,
       source_env: envValue.name,
+      environment_fallback: 'explicit_opt_in',
       value: envValue.value,
     };
   }
@@ -178,6 +188,7 @@ export function resolveProviderCredential(provider, metadata, {
     primary_credential_env: primaryCredentialEnv,
     credential_env_names: credentialEnvNames,
     source_env: null,
+    environment_fallback: providerEnvironmentFallbackEnabled(processEnv) ? 'enabled_but_missing' : 'not_admitted',
     value: '',
   };
 }
@@ -311,6 +322,6 @@ export function providerCredentialRefusal(providerResolution, credential, { sche
     credential_source: 'missing',
     credential_present: false,
     reason: `No API key credential is available for provider '${providerResolution?.intelligence_provider}'.`,
-    required_next_step: `Store the key with PowerShell SecretManagement as '${credential.credential_secret_ref}' or set one of: ${credential.credential_env_names.join(' or ')}`,
+    required_next_step: `Store the key with PowerShell SecretManagement as '${credential.credential_secret_ref}' or, for an explicit diagnostic fallback only, set ${PROVIDER_ENV_FALLBACK_MODE_ENV}=1 and one of: ${credential.credential_env_names.join(' or ')}`,
   }, states);
 }

@@ -12,6 +12,8 @@ export interface WorkspaceLaunchTerminalTab {
   title: string;
   cwd: string;
   command: string;
+  command_argv: string[];
+  command_authority: 'projection_only';
   keepOpen: boolean;
 }
 
@@ -93,4 +95,3 @@ export function writeWorkspaceLaunchCommandOutput(outputs: WorkspaceLauncherOutp
   }
   if (lines.length > 0) emitCliOutputAdmission({ zone: 'finite', lines });
 }
-

@@ -1,11 +1,22 @@
 <script setup lang="ts">
+import { computed } from 'vue';
 import { Archive, Pencil, RotateCcw, Trash2 } from 'lucide-vue-next';
+import { OPERATOR_CONSOLE_REGISTRY_MANAGE_PATH } from '@narada2/operator-console-contract';
 import type { SiteDetailProjection } from '../projections';
+import { operatorConsoleNavigationHref } from '../../console/routes';
+import { useOperatorWorkspaceRouteDirectory } from '../../console/route-directory';
 
 const props = defineProps<{ site: SiteDetailProjection | null; loading: boolean }>();
+const routeDirectory = useOperatorWorkspaceRouteDirectory();
+const actionsBlocked = computed(() => Boolean(routeDirectory?.error.value));
 
 function actionHref(actionId: string, siteId: string): string {
-  return '/console/registry/manage?site=' + encodeURIComponent(siteId) + '&operation=' + encodeURIComponent(actionId);
+  const managePath = operatorConsoleNavigationHref(
+    routeDirectory?.error.value ? undefined : routeDirectory?.directory.value,
+    'manage',
+    OPERATOR_CONSOLE_REGISTRY_MANAGE_PATH,
+  );
+  return managePath + '?site=' + encodeURIComponent(siteId) + '&operation=' + encodeURIComponent(actionId);
 }
 </script>
 
@@ -23,7 +34,7 @@ function actionHref(actionId: string, siteId: string): string {
         </div>
         <span class="site-status" :data-tone="site.statusTone">{{ site.observation }}</span>
       </header>
-      <nav v-if="site.actions.some((action) => action.available)" class="detail-actions" aria-label="Selected Site actions">
+      <nav v-if="site.actions.some((action) => action.available) && !actionsBlocked" class="detail-actions" aria-label="Selected Site actions">
         <template v-for="action in site.actions" :key="action.id">
           <a v-if="action.available" class="detail-action" :href="actionHref(action.id, site.siteId)">
             <Pencil v-if="action.id === 'edit'" :size="14" aria-hidden="true" />
@@ -34,6 +45,9 @@ function actionHref(actionId: string, siteId: string): string {
           </a>
         </template>
       </nav>
+      <p v-if="site.actions.some((action) => action.available) && actionsBlocked" class="detail-muted action-recovery-note">
+        Site changes are paused while the live route directory is unavailable. Retry the route directory above before opening a mutation workflow.
+      </p>
       <dl class="detail-grid">
         <dt>Root</dt><dd><code>{{ site.root }}</code></dd>
         <dt>Variant</dt><dd>{{ site.variant }} / {{ site.substrate }}</dd>
@@ -64,6 +78,7 @@ function actionHref(actionId: string, siteId: string): string {
 .site-status[data-tone="warning"] { color: var(--warning, #996500); }
 .site-status[data-tone="danger"] { color: var(--danger, #b42318); }
 .detail-actions { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; margin: 0 0 18px; }
+.action-recovery-note { margin: 0 0 18px; line-height: 1.45; }
 .detail-action { display: inline-flex; align-items: center; gap: 6px; padding: 6px 8px; border: 1px solid var(--line); border-radius: var(--radius); color: var(--text); font-size: 12px; text-decoration: none; }
 .detail-action:hover { border-color: var(--operator); background: var(--surface-muted); }
 .detail-grid { display: grid; grid-template-columns: 82px minmax(0, 1fr); gap: 8px 12px; margin: 0; font-size: 12px; }

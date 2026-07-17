@@ -26,6 +26,7 @@ import SurfaceFeedbackPanel from './SurfaceFeedbackPanel.vue';
 import TaskLifecyclePanel from './TaskLifecyclePanel.vue';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@narada2/ui-vue';
 import { summarizeSessionTitleParts } from '../../session-identity.js';
+import { isOperatorInputTransportReady, operatorInputNotReadyReason } from '../lib/operatorInputReadiness';
 import { useBoxVisibilityPreference } from '../composables/useBoxVisibilityPreference';
 import { useSessionPanels } from '../composables/useSessionPanels';
 import { AGENT_WEB_UI_PREFERENCE_KEYS, readBooleanPreference, writeBooleanPreference } from '../lib/browserPreferences.js';
@@ -42,7 +43,7 @@ import type { McpInventorySummary } from '../composables/useMcpInventory';
 import type { MailboxSummary } from '../composables/useMailboxSummary';
 import type { OperatorQueueItem } from '../composables/useOperatorInput';
 import type { OperatorSnippet, OperatorSnippetFeedback, OperatorSnippetOpenRequest } from '../composables/useOperatorSnippets';
-import type { ProjectionVerbosity } from '../composables/useProjectionVerbosity';
+import type { CustomProjectionView, ProjectionVerbosity, ProjectionViewOption } from '../composables/useProjectionVerbosity';
 import type { RuntimeTopologySummary } from '../composables/useRuntimeTopology';
 import type { SchedulerSummary } from '../composables/useSchedulerSummary';
 import type { OperatorInputDeliveryProjection, SessionIdentitySummary } from '../composables/useNarsEvents';
@@ -51,6 +52,7 @@ import type { SurfaceAffordanceSummary } from '../composables/useSurfaceAffordan
 import type { SurfaceFeedbackSummary } from '../composables/useSurfaceFeedbackSummary';
 import type { TaskLifecycleSummary } from '../composables/useTaskLifecycleSummary';
 import type { ProjectedEventRow } from '../lib/eventProjection';
+import type { ProjectionViewDraft, ProjectionViewFacetOption } from '../lib/projectionViews';
 
 const props = defineProps<{
   eventEndpoint: string | null;
@@ -62,11 +64,15 @@ const props = defineProps<{
   healthBody: Record<string, unknown> | null;
   onboarding: boolean;
   streamText: string;
+  streamLive: boolean;
   healthText: string;
   intelligence: HealthIntelligenceSummary;
   summarizedStateSampleCount: number;
   verbosity: ProjectionVerbosity;
-  verbosityLevels: readonly ProjectionVerbosity[];
+  viewId: string;
+  viewOptions: readonly ProjectionViewOption[];
+  customViews: readonly CustomProjectionView[];
+  viewFacetOptions: readonly ProjectionViewFacetOption[];
   rows: ProjectedEventRow[];
   sessionIdentity: SessionIdentitySummary;
   operatorDelivery: OperatorInputDeliveryProjection;
@@ -94,14 +100,22 @@ const props = defineProps<{
   authorityTransition: Record<string, unknown> | null;
   cloudflareProjection: ReturnType<typeof useCloudflareProjection>;
   followLatestRevision: number;
+  lastSubmittedDraft: string;
+  submittedDraftRevision: number;
   hasEarlierEvents: boolean;
+  historyTruncated: boolean;
   loadingEarlier: boolean;
 }>();
 const draft = defineModel<string>('draft', { required: true });
 const emit = defineEmits<{
-  'update:verbosity': [value: ProjectionVerbosity];  'publish-cloudflare': [cloudflareApiBaseUrl: string];
+  'update:view': [value: string];
+  'save-view': [view: ProjectionViewDraft];
+  'delete-view': [id: string];
+  'publish-cloudflare': [cloudflareApiBaseUrl: string];
   submit: [deliveryMode?: 'default' | 'enqueue'];
   'run-snippet': [snippet: OperatorSnippet, deliveryMode?: 'default' | 'enqueue'];
+  'retry-input': [content: string, requestId: string | null];
+  'discard-input': [requestId: string | null];
   'save-snippet': [name: string, body: string, mode: 'save' | 'edit'];
   'restore-snippet': [snippet: OperatorSnippet];
   'rename-snippet': [oldName: string, newName: string, body: string];
@@ -167,10 +181,15 @@ const canInterruptModel = computed(() => (
 ));
 const canSteerActiveTurn = computed(() => canInterruptModel.value);
 const staleAuthority = computed(() => props.authorityTransition?.stale_source === true);
-const composerDisabled = computed(() => staleAuthority.value || props.authorityTransition?.input_policy === 'disabled_source_sealed');
+const inputTransportReady = computed(() => isOperatorInputTransportReady(props.streamLive, props.inputEndpoint));
+const composerDisabled = computed(() => staleAuthority.value
+  || props.authorityTransition?.input_policy === 'disabled_source_sealed'
+  || !inputTransportReady.value);
 const composerDisabledReason = computed(() => staleAuthority.value
   ? 'This browser is attached to stale authority. Start a new session or explicitly attach to the live authority before sending.'
-  : 'Source authority is sealed. Reattach to the target authority before sending.');
+  : props.authorityTransition?.input_policy === 'disabled_source_sealed'
+    ? 'Source authority is sealed. Reattach to the target authority before sending.'
+    : operatorInputNotReadyReason(props.streamText));
 const sessionChipStreamText = computed(() => props.streamText && props.streamText !== 'connected' ? props.streamText : null);
 const composerTargetLabel = computed(() => {
   const agent = props.sessionIdentity.agentId ?? 'agent';
@@ -473,14 +492,19 @@ function resetHeaderItems() {
         :session-identity="sessionIdentity"
         :summarized-state-sample-count="summarizedStateSampleCount"
         :verbosity="verbosity"
-        :verbosity-levels="verbosityLevels"
+        :view-id="viewId"
+        :view-options="viewOptions"
+        :custom-views="customViews"
+        :view-facet-options="viewFacetOptions"
         :agent-activity="agentActivity"
         :authority-transition="authorityTransition"
         :surface-affordances="surfaceAffordances"
         :supports-protocol-method="supportsProtocolMethod"
         :cloudflare-projection="cloudflareProjection"
         collapsible
-        @update:verbosity="emit('update:verbosity', $event)"
+        @update:view="emit('update:view', $event)"
+        @save-view="emit('save-view', $event)"
+        @delete-view="emit('delete-view', $event)"
         @publish-cloudflare="emit('publish-cloudflare', $event)"
         @request-affordance-action="emit('request-affordance-action', $event)"
         @request-intelligence-reconfiguration="emit('request-intelligence-reconfiguration', $event)"
@@ -495,8 +519,8 @@ function resetHeaderItems() {
       :intelligence="intelligence"
       @intent-selected="emit('intent-selected', $event)"
     />
-    <ConversationTranscript :rows="rows" :verbosity="verbosity" :agent-activity="agentActivity" :follow-latest-revision="followLatestRevision" :has-earlier-events="hasEarlierEvents" :loading-earlier="loadingEarlier" @intent-selected="emit('intent-selected', $event)" @load-earlier="emit('load-earlier')" />
+    <ConversationTranscript :rows="rows" :verbosity="verbosity" :agent-activity="agentActivity" :follow-latest-revision="followLatestRevision" :has-earlier-events="hasEarlierEvents" :history-truncated="historyTruncated" :loading-earlier="loadingEarlier" @intent-selected="emit('intent-selected', $event)" @load-earlier="emit('load-earlier')" />
     <AffordanceConfirmationPanel :items="affordanceConfirmations" @confirm="emit('confirm-affordance-action', $event)" @cancel="emit('cancel-affordance-action', $event)" />
     <OperatorQueuePanel :items="operatorQueueItems" :active-turn-id="activeTurnId" :can-steer-active-turn="canSteerActiveTurn" @edit="emit('edit-queued', $event)" @remove="emit('remove-queued', $event)" @steer="emit('steer-queued', $event)" />
-    <OperatorComposer v-model="draft" :operator-snippets="operatorSnippets" :disabled="composerDisabled" :can-interrupt="canInterruptModel" :disabled-reason="composerDisabledReason" :target-label="composerTargetLabel" :target-state="composerTargetState" :operator-delivery="operatorDelivery" :supports-protocol-method="supportsProtocolMethod" @submit="emit('submit', $event)" @run-snippet="(snippet, mode) => emit('run-snippet', snippet, mode)" @interrupt="emit('interrupt')" />  </main>
+    <OperatorComposer v-model="draft" :operator-snippets="operatorSnippets" :disabled="composerDisabled" :can-interrupt="canInterruptModel" :disabled-reason="composerDisabledReason" :target-label="composerTargetLabel" :target-state="composerTargetState" :operator-delivery="operatorDelivery" :supports-protocol-method="supportsProtocolMethod" :last-submitted-draft="lastSubmittedDraft" :submitted-draft-revision="submittedDraftRevision" @submit="emit('submit', $event)" @run-snippet="(snippet, mode) => emit('run-snippet', snippet, mode)" @retry-input="(content, requestId) => emit('retry-input', content, requestId)" @discard-input="(requestId) => emit('discard-input', requestId)" @interrupt="emit('interrupt')" />  </main>
 </template>

@@ -117,17 +117,22 @@ test('session supervisor drains concurrent submissions FIFO without overlapping 
     } },
   });
   supervisor.start();
-  const first = supervisor.submit({ event_id: 'input_first', content: 'first' });
+  const first = supervisor.submit({ event_id: 'input_first', request_id: 'request_first', content: 'first' });
   await firstStarted;
-  const second = supervisor.submit({ event_id: 'input_second', content: 'second' });
+  const second = supervisor.submit({ event_id: 'input_second', request_id: 'request_second', content: 'second' });
   await Promise.resolve();
-  assert.deepEqual(supervisor.health().operator_input_queue, {
+  const { pending_input_refs: pendingInputRefs, ...queueHealth } = supervisor.health().operator_input_queue;
+  assert.deepEqual(queueHealth, {
     running: true,
     pending_count: 2,
     pending_system_directive_count: 0,
     pending_operator_directive_count: 0,
     pending_observer_count: 0,
   });
+  assert.deepEqual(pendingInputRefs.map(({ event_id, request_id, admission_state }) => ({ event_id, request_id, admission_state })), [
+    { event_id: 'input_first', request_id: 'request_first', admission_state: 'admitted' },
+    { event_id: 'input_second', request_id: 'request_second', admission_state: 'queued' },
+  ]);
   assert.equal(supervisor.recovery().operator_input_queue.pending_count, 2);
   releaseFirst();
   await Promise.all([first, second]);
