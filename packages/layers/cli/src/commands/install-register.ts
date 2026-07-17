@@ -13,6 +13,7 @@ export function registerInstallCommands(program: Command): void {
     .description('Provision the Windows User Site and install its launcher/provider helpers')
     .option('--site-root <path>', 'User Site root; defaults to NARADA_USER_SITE_ROOT or %USERPROFILE%\\Narada')
     .option('--registry-path <path>', 'User Site launch registry path')
+    .option('--profile <profile>', 'Install profile: minimal|advanced; repair preserves the existing profile when omitted')
     .option('--repair', 'Rewrite package-owned assets and repair missing User Site files', false)
     .option('--format <fmt>', 'Output format: json|human|auto', 'human')
     .action(directCommandAction<[CommanderOptionValues]>({
@@ -22,9 +23,9 @@ export function registerInstallCommands(program: Command): void {
       invocation: (opts) => windowsUserSiteInstallCommand({
         siteRoot: opts.siteRoot as string | undefined,
         registryPath: opts.registryPath as string | undefined,
+        profile: opts.profile as string | undefined,
         repair: opts.repair as boolean | undefined,
         format: resolveCommandFormat(opts.format, 'human'),
       }, silentCommandContext()),
     }));
 }
-

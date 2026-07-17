@@ -18,6 +18,16 @@ narada install windows-user-site
 narada doctor --bootstrap
 ```
 
+The default `minimal` profile installs the User Site, one `resident` assistant, and the normal operator-surface path. Use
+the `advanced` profile only when you intentionally need Cloudflare, extra roles, MCP development, or Site administration:
+
+```powershell
+narada install windows-user-site --profile advanced
+```
+
+The profile records the optional capability families in the installation manifest; it does not silently create extra roles,
+publish a remote Site, or enable unattended execution.
+
 Start the credential-free demonstration first, or start the resident assistant:
 
 ```powershell
@@ -35,6 +45,10 @@ PowerShell helper. The helper uses the Windows SecretManagement/SecretStore vaul
 ```powershell
 Pwsh -File "$env:USERPROFILE\Narada\tools\operator-secrets\Set-NaradaProviderSecret.ps1" -Provider kimi-code-api -InstallModules
 ```
+
+`narada doctor --bootstrap --format json` reports one row per supported provider. `demo` is ready without credentials;
+`codex-subscription` requires the local Codex auth home; API providers report SecretStore presence or the exact setup action.
+The doctor never prints secret values and does not perform a live provider request.
 
 Then launch through the User Site launcher or the interactive launcher UI:
 

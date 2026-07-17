@@ -1,3 +1,4 @@
+# narada-managed-asset: windows-user-site.v1
 [CmdletBinding()]
 param(
   [switch]$Onboarding,

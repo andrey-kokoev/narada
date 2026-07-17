@@ -1,13 +1,26 @@
+import { createRequire } from 'node:module';
+import { execFile } from 'node:child_process';
 import { dirname, resolve, join } from 'node:path';
 import { access, readFile, stat } from 'node:fs/promises';
+import { homedir } from 'node:os';
+import { promisify } from 'node:util';
 import type { CommandContext } from '../lib/command-wrapper.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
-import { coordinatorDbPathForRoot } from '../lib/site-authority-paths.js';
+import { coordinatorDbPathForRoot, siteAuthorityRootForRoot } from '../lib/site-authority-paths.js';
 import { inspectAuthorityClonePosture } from '../lib/narada-proper-authority.js';
 import { loadConfig, isMultiMailboxConfig, loadMultiMailboxConfig, loadCharterEnv, loadEnvFile } from '@narada2/control-plane';
 import { CodexCharterRunner, MockCharterRunner, KimiCliCharterRunner, getRecoveryGuidance } from '@narada2/charters';
 import { detectNodeSqliteAvailability, selectSqliteRuntime } from '@narada2/task-governance-core/sqlite-runtime';
+import {
+  WINDOWS_USER_SITE_ASSET_MARKER,
+  WINDOWS_USER_SITE_INSTALL_SCHEMA,
+  WINDOWS_USER_SITE_PROFILES,
+  type WindowsUserSiteInstallProfile,
+} from '../lib/windows-user-site-install-contract.js';
+
+const packageRequire = createRequire(import.meta.url);
+const execFileAsync = promisify(execFile);
 
 export interface DoctorOptions {
   config?: string;
@@ -19,6 +32,326 @@ export interface DoctorOptions {
   bootstrap?: boolean;
   cwd?: string;
   strict?: boolean;
+}
+
+interface ProviderReadiness {
+  provider: string;
+  status: 'ready' | 'needs_setup' | 'check_required';
+  credential_kind: string;
+  evidence: string;
+  next_action: string | null;
+}
+
+interface ProviderRegistryRequirement {
+  kind?: unknown;
+  env_names?: unknown;
+  secret_ref?: unknown;
+}
+
+interface ProviderRegistryMetadata {
+  credential_requirement?: ProviderRegistryRequirement;
+}
+
+function loadProviderRegistry(): Record<string, ProviderRegistryMetadata> | null {
+  try {
+    const loaded = packageRequire('@narada2/carrier-provider-contract/provider-registry') as {
+      providers?: Record<string, ProviderRegistryMetadata>;
+      default?: { providers?: Record<string, ProviderRegistryMetadata> };
+    };
+    return loaded.providers ?? loaded.default?.providers ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function managedAsset(path: string): Promise<boolean> {
+  try {
+    return (await readFile(path, 'utf8')).includes(WINDOWS_USER_SITE_ASSET_MARKER);
+  } catch {
+    return false;
+  }
+}
+
+async function readJsonRecord(path: string): Promise<Record<string, unknown> | null> {
+  try {
+    return asRecord(JSON.parse(await readFile(path, 'utf8')));
+  } catch {
+    return null;
+  }
+}
+
+function providerAction(providerHelperPath: string, provider: string): string {
+  return `Run \`${providerHelperPath} -Provider ${provider}\`, or enable the explicit environment fallback.`;
+}
+
+async function inspectInstalledProviderReadiness(
+  providerHelperPath: string,
+  providerStatusHelperPath: string,
+): Promise<ProviderReadiness[]> {
+  const rows: ProviderReadiness[] = [{
+    provider: 'demo',
+    status: 'ready',
+    credential_kind: 'none',
+    evidence: 'Credential-free synthetic onboarding is available.',
+    next_action: null,
+  }];
+  const providers = loadProviderRegistry();
+  if (!providers) {
+    rows.push({
+      provider: 'registry',
+      status: 'check_required',
+      credential_kind: 'unknown',
+      evidence: 'The installed provider registry could not be loaded.',
+      next_action: 'Reinstall @narada2/cli, then rerun `narada doctor --bootstrap`.',
+    });
+    return rows;
+  }
+
+  const userRoot = process.env.USERPROFILE ?? process.env.HOME ?? homedir();
+  const codexAuthHome = process.env.NARADA_CODEX_AUTH_HOME ?? join(userRoot, '.codex');
+  const environmentFallbackEnabled = ['1', 'true', 'on', 'enabled']
+    .includes(String(process.env.NARADA_PROVIDER_ENV_FALLBACK ?? '').trim().toLowerCase());
+  const apiProviders = Object.entries(providers).filter(([, metadata]) => {
+    return String(metadata.credential_requirement?.kind ?? '') === 'api_key_secret';
+  });
+
+  const statusByProvider = new Map<string, { present: boolean; status: ProviderReadiness['status']; secretRef: string; evidence: string }>();
+  if (apiProviders.length > 0 && process.platform === 'win32' && await managedAsset(providerStatusHelperPath)) {
+    const providerNames = apiProviders.map(([provider]) => provider);
+    try {
+      const result = await execFileAsync('pwsh', [
+        '-NoProfile',
+        '-NonInteractive',
+        '-ExecutionPolicy',
+        'Bypass',
+        '-File',
+        providerStatusHelperPath,
+        '-Provider',
+        ...providerNames,
+      ], { timeout: 15_000, windowsHide: true, maxBuffer: 256 * 1024 });
+      const parsed = JSON.parse(result.stdout) as unknown;
+      const values = Array.isArray(parsed) ? parsed : [parsed];
+      for (const value of values) {
+        const row = asRecord(value);
+        if (!row || typeof row.provider !== 'string') continue;
+        const provider = row.provider;
+        statusByProvider.set(provider, {
+          present: row.present === true,
+          status: row.status === 'ready' || row.status === 'needs_setup' || row.status === 'check_required'
+            ? row.status
+            : row.present === true ? 'ready' : 'needs_setup',
+          secretRef: typeof row.secret_ref === 'string' ? row.secret_ref : `narada/provider/${provider}/api-key`,
+          evidence: typeof row.evidence === 'string' ? row.evidence : 'SecretStore status was returned without evidence.',
+        });
+      }
+    } catch {
+      // The readiness row below remains check_required and never exposes secret values.
+    }
+  }
+
+  for (const [provider, metadata] of Object.entries(providers)) {
+    const requirement = metadata.credential_requirement ?? {};
+    const kind = String(requirement.kind ?? 'none');
+    if (kind === 'local_codex_subscription') {
+      const authHomeReady = await pathExists(codexAuthHome);
+      rows.push({
+        provider,
+        status: authHomeReady ? 'ready' : 'needs_setup',
+        credential_kind: kind,
+        evidence: authHomeReady ? `Local Codex auth home exists: ${codexAuthHome}` : `Local Codex auth home is missing: ${codexAuthHome}`,
+        next_action: authHomeReady ? null : 'Run `codex login`, then rerun `narada doctor --bootstrap`.',
+      });
+      continue;
+    }
+    if (kind !== 'api_key_secret') continue;
+    const envNames = Array.isArray(requirement.env_names) ? requirement.env_names.map(String) : [];
+    const presentEnv = envNames.find((name) => Boolean(process.env[name]));
+    const configured = statusByProvider.get(provider);
+    const secretRef = configured?.secretRef ?? String(requirement.secret_ref ?? `narada/provider/${provider}/api-key`);
+    if (configured) {
+      rows.push({
+        provider,
+        status: configured.status,
+        credential_kind: kind,
+        evidence: configured.present ? `${configured.evidence} (${secretRef})` : `${configured.evidence} (${secretRef})`,
+        next_action: configured.status === 'ready' ? null : providerAction(providerHelperPath, provider),
+      });
+      continue;
+    }
+    const envReady = Boolean(presentEnv && environmentFallbackEnabled);
+    rows.push({
+      provider,
+      status: envReady ? 'ready' : 'check_required',
+      credential_kind: kind,
+      evidence: envReady
+        ? `Explicit environment fallback is enabled via ${presentEnv}.`
+        : `Credential is expected in SecretManagement/SecretStore: ${secretRef}`,
+      next_action: envReady ? null : providerAction(providerHelperPath, provider),
+    });
+  }
+  return rows;
+}
+
+async function doctorInstalledUserSite(
+  fmt: ReturnType<typeof createFormatter>,
+): Promise<{ exitCode: ExitCode; result: unknown }> {
+  const root = resolve(process.env.NARADA_USER_SITE_ROOT ?? join(homedir(), 'Narada'));
+  const checks: DoctorCheck[] = [];
+  const nodeMajor = Number(process.versions.node.split('.')[0] ?? '0');
+  const cliEntry = process.argv[1] ? resolve(process.argv[1]) : null;
+  const registryPath = join(root, 'config', 'launch', 'agents.psd1');
+  const launcherPath = join(root, 'Start-NaradaWorkspace.ps1');
+  const providerHelperPath = join(root, 'tools', 'operator-secrets', 'Set-NaradaProviderSecret.ps1');
+  const providerStatusHelperPath = join(root, 'tools', 'operator-secrets', 'Test-NaradaProviderSecrets.ps1');
+  const manifestPath = join(siteAuthorityRootForRoot(root), 'runtime', 'installation', 'user-site-install.json');
+  const repairCommand = 'narada install windows-user-site --repair';
+  const repairArgs = ['narada', 'install', 'windows-user-site', '--repair'];
+  const rootReady = await pathExists(root);
+  const registryReady = await pathExists(registryPath);
+  const launcherReady = await managedAsset(launcherPath);
+  const providerHelperReady = await managedAsset(providerHelperPath);
+  const providerStatusHelperReady = await managedAsset(providerStatusHelperPath);
+  const manifest = await readJsonRecord(manifestPath);
+  const manifestPackage = asRecord(manifest?.package);
+  const bundledComponents = asRecord(manifestPackage?.bundled_components);
+  const runtimeComponent = asRecord(bundledComponents?.runtime_server);
+  const webUiComponent = asRecord(bundledComponents?.web_ui);
+  const manifestProfile = typeof manifest?.installation_profile === 'string'
+    && Object.prototype.hasOwnProperty.call(WINDOWS_USER_SITE_PROFILES, manifest.installation_profile)
+    ? manifest.installation_profile as WindowsUserSiteInstallProfile
+    : null;
+  const manifestReady = manifest?.schema === WINDOWS_USER_SITE_INSTALL_SCHEMA
+    && manifestProfile !== null
+    && typeof manifestPackage?.name === 'string'
+    && typeof manifestPackage?.version === 'string'
+    && typeof runtimeComponent?.name === 'string'
+    && typeof runtimeComponent?.version === 'string'
+    && typeof webUiComponent?.name === 'string'
+    && typeof webUiComponent?.version === 'string';
+
+  checks.push({
+    name: 'node-version',
+    status: nodeMajor >= 22 ? 'pass' : 'fail',
+    detail: `Installed CLI requires Node >=22; observed Node ${process.versions.node}`,
+    remediation: nodeMajor >= 22 ? undefined : 'Install Node.js 22 or newer, then rerun the doctor.',
+  });
+  checks.push({
+    name: 'cli-package-boundary',
+    status: cliEntry && await pathExists(cliEntry) ? 'pass' : 'fail',
+    detail: cliEntry && await pathExists(cliEntry) ? `CLI entry: ${cliEntry}` : 'The installed CLI entrypoint is unavailable',
+    remediation: cliEntry && await pathExists(cliEntry) ? undefined : 'Reinstall @narada2/cli from the package registry.',
+  });
+  checks.push({
+    name: 'user-site-root',
+    status: rootReady ? 'pass' : 'fail',
+    detail: rootReady ? `User Site root: ${root}` : `User Site root is missing: ${root}`,
+    remediation: rootReady ? undefined : `Run \`${repairCommand}\`.`,
+    remediation_command: rootReady ? undefined : repairCommand,
+    remediation_args: rootReady ? undefined : repairArgs,
+  });
+  checks.push({
+    name: 'launch-registry',
+    status: registryReady ? 'pass' : 'fail',
+    detail: registryReady ? `Launch registry: ${registryPath}` : `Launch registry is missing: ${registryPath}`,
+    remediation: registryReady ? undefined : `Run \`${repairCommand}\`.`,
+    remediation_command: registryReady ? undefined : repairCommand,
+    remediation_args: registryReady ? undefined : repairArgs,
+  });
+  checks.push({
+    name: 'installation-manifest',
+    status: manifestReady ? 'pass' : 'fail',
+    detail: manifestReady
+      ? `Managed install: profile=${manifestProfile}; package=${String(manifestPackage?.name)}@${String(manifestPackage?.version)}; runtime=${String(runtimeComponent?.version)}; web-ui=${String(webUiComponent?.version)}`
+      : `Managed installation manifest is missing or invalid: ${manifestPath}`,
+    remediation: manifestReady ? undefined : `Run \`${repairCommand}\`.`,
+    remediation_command: manifestReady ? undefined : repairCommand,
+    remediation_args: manifestReady ? undefined : repairArgs,
+  });
+  checks.push({
+    name: 'windows-launcher',
+    status: launcherReady ? 'pass' : 'fail',
+    detail: launcherReady
+      ? `Managed launcher: ${launcherPath}`
+      : `Managed launcher is missing or stale: ${launcherPath}`,
+    remediation: launcherReady ? undefined : `Run \`${repairCommand}\`.`,
+    remediation_command: launcherReady ? undefined : repairCommand,
+    remediation_args: launcherReady ? undefined : repairArgs,
+  });
+  checks.push({
+    name: 'provider-secret-helper',
+    status: providerHelperReady ? 'pass' : 'fail',
+    detail: providerHelperReady
+      ? `Managed provider helper: ${providerHelperPath}`
+      : `Managed provider helper is missing or stale: ${providerHelperPath}`,
+    remediation: providerHelperReady ? undefined : `Run \`${repairCommand}\`.`,
+    remediation_command: providerHelperReady ? undefined : repairCommand,
+    remediation_args: providerHelperReady ? undefined : repairArgs,
+  });
+  checks.push({
+    name: 'provider-status-helper',
+    status: providerStatusHelperReady ? 'pass' : 'fail',
+    detail: providerStatusHelperReady
+      ? `Managed provider status helper: ${providerStatusHelperPath}`
+      : `Managed provider status helper is missing or stale: ${providerStatusHelperPath}`,
+    remediation: providerStatusHelperReady ? undefined : `Run \`${repairCommand}\`.`,
+    remediation_command: providerStatusHelperReady ? undefined : repairCommand,
+    remediation_args: providerStatusHelperReady ? undefined : repairArgs,
+  });
+  const providerReadiness = await inspectInstalledProviderReadiness(providerHelperPath, providerStatusHelperPath);
+  const providerNeedsAttention = providerReadiness.some((row) => row.status !== 'ready');
+  checks.push({
+    name: 'provider-readiness',
+    status: providerNeedsAttention ? 'warn' : 'pass',
+    detail: providerNeedsAttention
+      ? 'One or more providers require setup or a bounded readiness check; the credential-free demo path remains available.'
+      : 'Configured provider readiness checks passed; the credential-free demo path remains available.',
+    remediation: providerNeedsAttention ? 'Review provider_readiness in JSON output, then configure only the provider you intend to use.' : undefined,
+  });
+
+  const pass = checks.filter((check) => check.status === 'pass').length;
+  const fail = checks.filter((check) => check.status === 'fail').length;
+  const warn = checks.filter((check) => check.status === 'warn').length;
+  const status = fail > 0 ? 'degraded' : 'healthy';
+  const repairRequired = fail > 0;
+  const repairPlan = repairRequired ? [{ check: 'windows-user-site-installation', command: repairCommand, args: repairArgs }] : [];
+  const report = {
+    schema: 'narada.doctor.bootstrap.v1',
+    status,
+    installation_boundary: 'published_cli',
+    user_site_root: root,
+    installation_profile: manifestProfile,
+    installation_manifest_path: manifestPath,
+    provider_readiness: providerReadiness,
+    checks,
+    repair_command: repairRequired ? repairCommand : null,
+    repair_args: repairRequired ? repairArgs : [],
+    repair_plan: repairPlan,
+    summary: { pass, fail, warn },
+  };
+
+  if (fmt.getFormat() === 'json') {
+    return { exitCode: status === 'healthy' ? ExitCode.SUCCESS : ExitCode.GENERAL_ERROR, result: report };
+  }
+  fmt.message(`Bootstrap Doctor: ${status.toUpperCase()}`, status === 'healthy' ? 'success' : 'error');
+  fmt.message(`${pass} pass, ${fail} fail, ${warn} warn`, 'info');
+  for (const check of checks) {
+    const icon = check.status === 'pass' ? '✓' : check.status === 'warn' ? '⚠' : '✗';
+    const fmtType = check.status === 'pass' ? 'success' : check.status === 'fail' ? 'error' : 'warning';
+    fmt.message(`${icon} ${check.name}: ${check.detail}`, fmtType);
+    if (check.remediation) fmt.message(`  → ${check.remediation}`, 'info');
+  }
+  for (const provider of providerReadiness) {
+    const icon = provider.status === 'ready' ? '✓' : provider.status === 'needs_setup' ? '⚠' : '?';
+    fmt.message(`${icon} provider ${provider.provider}: ${provider.status} — ${provider.evidence}`, provider.status === 'ready' ? 'success' : 'warning');
+    if (provider.next_action) fmt.message(`  → ${provider.next_action}`, 'info');
+  }
+  if (repairRequired) fmt.message(`Repair: ${repairCommand}`, 'info');
+  return { exitCode: status === 'healthy' ? ExitCode.SUCCESS : ExitCode.GENERAL_ERROR, result: report };
+}
+
+async function isNaradaSourceWorkspace(root: string): Promise<boolean> {
+  return await pathExists(join(root, 'packages', 'layers', 'cli', 'package.json'))
+    && await pathExists(join(root, 'pnpm-lock.yaml'));
 }
 
 interface DoctorCheck {
@@ -854,7 +1187,10 @@ export async function doctorCommand(
   const staleThresholdMinutes = options.staleThresholdMinutes ?? 60;
 
   if (options.bootstrap) {
-    return doctorBootstrap(options.cwd ?? process.cwd(), fmt, { strict: options.strict });
+    const bootstrapRoot = resolve(options.cwd ?? process.cwd());
+    return await isNaradaSourceWorkspace(bootstrapRoot)
+      ? doctorBootstrap(bootstrapRoot, fmt, { strict: options.strict })
+      : doctorInstalledUserSite(fmt);
   }
 
   // Site path: --site takes precedence over config

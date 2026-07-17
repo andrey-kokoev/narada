@@ -126,9 +126,20 @@ Prerequisite: Node.js 22 or newer.
 
 ```powershell
 npm install --global @narada2/cli
-narada install windows-user-site
+narada install windows-user-site --profile minimal
 narada doctor --bootstrap
 ```
+
+`minimal` is the ordinary-user profile: it provisions the User Site, one `resident` assistant, and the default operator
+surface path. `advanced` is an explicit capability profile for Operators who need Cloudflare, additional roles, MCP
+development, or Site administration:
+
+```powershell
+narada install windows-user-site --profile advanced
+```
+
+The profile is recorded in the User Site installation manifest alongside the CLI, runtime-server, and Web UI package
+versions. It does not create roles, publish a Site, or enable unattended execution by itself.
 
 The install command provisions the User Site launch registry, the package-owned PowerShell launcher, and the provider-secret helpers under `%USERPROFILE%\Narada`. `narada doctor --bootstrap` is the bounded readiness check; when repair is needed it returns the single repair command:
 
@@ -150,6 +161,11 @@ API provider readiness can be inspected without printing secrets:
 Pwsh -File "$env:USERPROFILE\Narada\tools\operator-secrets\Test-NaradaProviderSecrets.ps1"
 narada doctor --bootstrap
 ```
+
+The doctor emits provider-specific readiness rows in JSON. `demo` is always ready; `codex-subscription` checks only the
+local Codex auth home; API providers use the managed SecretStore status helper when available and otherwise report
+`check_required` with the provider-specific setup command. The doctor does not make a live provider request and never
+copies secret values into the report.
 
 The first-use page must preserve these branches and must not imply that a source checkout, a Site-specific MCP file, or an API key is required for the credential-free demo.
 

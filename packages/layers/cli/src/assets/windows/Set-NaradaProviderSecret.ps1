@@ -1,3 +1,4 @@
+# narada-managed-asset: windows-user-site.v1
 [CmdletBinding()]
 param(
   [Parameter(Mandatory = $true)][ValidateSet('openai-api','kimi-api','kimi-code-api','anthropic-api','deepseek-api','glm-api','openrouter-api')][string]$Provider,

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -36,6 +36,8 @@ function cleanProfileEnv(consumerRoot, siteRoot) {
     'KIMI_API_KEY',
     'KIMI_CODE_API_KEY',
     'DEEPSEEK_API_KEY',
+    'NARADA_PROVIDER_ENV_FALLBACK',
+    'NARADA_CODEX_AUTH_HOME',
   ]) delete env[key];
   return env;
 }
@@ -52,6 +54,29 @@ function run(command, args, options = {}) {
 
 function outputOf(result) {
   return `status=${String(result.status)}\nerror=${String(result.error ?? '')}\nstdout=${String(result.stdout ?? '')}\nstderr=${String(result.stderr ?? '')}`;
+}
+
+function findInstalledPackageRoot(root, packageName) {
+  const parts = packageName.split('/');
+  const pending = [root];
+  const seen = new Set();
+  while (pending.length > 0) {
+    const current = pending.pop();
+    if (!current || seen.has(current)) continue;
+    seen.add(current);
+    const candidate = join(current, ...parts);
+    if (existsSync(join(candidate, 'package.json'))) return candidate;
+    let entries;
+    try {
+      entries = readdirSync(current, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      if (entry.isDirectory() && !entry.isSymbolicLink()) pending.push(join(current, entry.name));
+    }
+  }
+  return null;
 }
 
 function parseJsonOutput(result, label) {
@@ -100,6 +125,19 @@ test('published CLI installs into a blank Windows profile and provisions the Use
 
     const installedCliEntrypoint = join(consumerRoot, 'node_modules', '@narada2', 'cli', 'dist', 'main.js');
     assert.equal(existsSync(installedCliEntrypoint), true, `installed CLI entrypoint missing: ${installedCliEntrypoint}`);
+    const installedCliRoot = join(consumerRoot, 'node_modules', '@narada2', 'cli');
+    const packagedAsset = join(installedCliRoot, 'dist', 'assets', 'windows', 'Start-NaradaWorkspace.ps1');
+    assert.equal(existsSync(packagedAsset), true, `published launcher asset missing: ${packagedAsset}`);
+    assert.match(readFileSync(packagedAsset, 'utf8'), /narada-managed-asset: windows-user-site\.v1/);
+    for (const packageName of ['agent-runtime-server', 'agent-web-ui']) {
+      const packageRoot = findInstalledPackageRoot(join(consumerRoot, 'node_modules'), `@narada2/${packageName}`);
+      assert.ok(packageRoot, `published runtime/UI package missing from bundled dependency tree: @narada2/${packageName}`);
+      assert.equal(JSON.parse(readFileSync(join(packageRoot, 'package.json'), 'utf8')).name, `@narada2/${packageName}`);
+      const requiredOutput = packageName === 'agent-runtime-server'
+        ? join(packageRoot, 'bin', 'narada-agent-runtime-server.mjs')
+        : join(packageRoot, 'dist', 'index.html');
+      assert.equal(existsSync(requiredOutput), true, `published ${packageName} output missing: ${requiredOutput}`);
+    }
 
     const installSite = run(process.execPath, [
       installedCliEntrypoint,
@@ -111,6 +149,10 @@ test('published CLI installs into a blank Windows profile and provisions the Use
     const installPayload = parseJsonOutput(installSite, 'published User Site install');
     assert.equal(installPayload.schema, 'narada.install.windows_user_site.v1');
     assert.equal(installPayload.status, 'installed');
+    assert.equal(installPayload.installation_profile, 'minimal');
+    assert.deepEqual(installPayload.optional_modules, []);
+    assert.equal(installPayload.package.bundled_components.runtime_server.name, '@narada2/agent-runtime-server');
+    assert.equal(installPayload.package.bundled_components.web_ui.name, '@narada2/agent-web-ui');
     assert.equal(existsSync(join(siteRoot, 'Start-NaradaWorkspace.ps1')), true);
     assert.equal(existsSync(join(siteRoot, 'tools', 'operator-secrets', 'Set-NaradaProviderSecret.ps1')), true);
 
@@ -125,6 +167,8 @@ test('published CLI installs into a blank Windows profile and provisions the Use
     assert.equal(doctorPayload.schema, 'narada.doctor.bootstrap.v1');
     assert.equal(doctorPayload.installation_boundary, 'published_cli');
     assert.equal(doctorPayload.summary.fail, 0);
+    assert.equal(doctorPayload.installation_profile, 'minimal');
+    assert.ok(doctorPayload.provider_readiness.some((row) => row.provider === 'demo' && row.status === 'ready'));
 
     const demo = run(process.execPath, [
       installedCliEntrypoint,
