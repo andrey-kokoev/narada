@@ -25,6 +25,7 @@ import {
   isAgentWebUiNarsMethod,
   isAgentWebUiProtocolFrame,
 } from '../src/agent-web-ui.js';
+import { applyCloudflareEventQuery, cloudflareEventItemToRuntimeMessage, cloudflareWebSocketEndpoint } from '../src/protocol/cloudflare-session-contract.js';
 
 test('agent-web-ui emits admitted NARS methods for event attach and operator input', () => {
   const subscribe = buildSubscribeFrame({ id: 'sub-1', maxReplay: 25, includeReplay: true });
@@ -173,4 +174,28 @@ test('agent-web-ui emits admitted NARS methods for event attach and operator inp
     assert.equal(isAgentWebUiNarsMethod(method), false, method);
     assert.equal(isAgentWebUiProtocolFrame({ id: 'blocked', method, params: {} }), false, method);
   }
+});
+
+test('legacy and Vue Cloudflare transports share replay query and event normalization', () => {
+  const frame = buildSubscribeFrame({ id: 'parity-1', maxReplay: 25, includeReplay: true, view: 'operations' });
+  const replayUrl = applyCloudflareEventQuery(new URL('https://projection.example/events'), frame, 100);
+  assert.equal(replayUrl.searchParams.get('max_events'), '25');
+  assert.equal(replayUrl.searchParams.get('view'), 'operations');
+  assert.equal(replayUrl.searchParams.has('max_replay'), false);
+
+  const websocketUrl = new URL(cloudflareWebSocketEndpoint('https://projection.example/events', 'browser-fingerprint'));
+  assert.equal(websocketUrl.protocol, 'wss:');
+  assert.equal(websocketUrl.pathname, '/events/websocket');
+  assert.equal(websocketUrl.searchParams.get('browser_token'), 'browser-fingerprint');
+  const idempotentWebsocketUrl = new URL(cloudflareWebSocketEndpoint('https://projection.example/events/websocket', null));
+  assert.equal(idempotentWebsocketUrl.pathname, '/events/websocket');
+
+  assert.deepEqual(cloudflareEventItemToRuntimeMessage({
+    event_sequence: 17,
+    payload: { event: 'assistant_message', content: 'parity' },
+  }), {
+    event: 'session_event',
+    payload: { event: 'assistant_message', content: 'parity' },
+    cursor: { sequence: 17 },
+  });
 });

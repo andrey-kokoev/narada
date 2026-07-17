@@ -1,6 +1,7 @@
 import { buildAgentWebUiSubscribeFrame, isAgentWebUiCloudflareProtocolFrame, translateAgentWebUiFrameForCloudflare } from '@narada2/nars-client-projection-contract';
 import { applyRuntimeEventToWebUiState, sequenceFromRuntimeMessage } from './runtime-events.js';
 import { appendEvent, setText } from './render.js';
+import { applyCloudflareEventQuery, cloudflareEventItemToRuntimeMessage, cloudflareEventsRead, cloudflareReplayCompleted, cloudflareSubscriptionStarted, cloudflareWebSocketEndpoint } from './protocol/cloudflare-session-contract.js';
 
 export const buildSubscribeFrame = buildAgentWebUiSubscribeFrame;
 
@@ -13,13 +14,25 @@ function projectionHeaders(browserToken) {
   return browserToken ? { 'x-narada-browser-token-fingerprint': browserToken } : {};
 }
 
-function cloudflareWebSocketEndpoint(endpoint, browserToken) {
-  const url = new URL(endpoint);
-  url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
-  const path = url.pathname.replace(/\/events$/, '/events/websocket');
-  url.pathname = path === url.pathname ? `${url.pathname.replace(/\/+$/, '')}/websocket` : path;
-  if (browserToken) url.searchParams.set('browser_token', browserToken);
-  return url.href;
+function projectionInputResponse(body, response, requestId, transportMethod, remoteMethod) {
+  const bodyRecord = body && typeof body === 'object' && !Array.isArray(body) ? body : {};
+  const authorityMethod = typeof bodyRecord.method === 'string' && bodyRecord.method.trim()
+    ? bodyRecord.method
+    : remoteMethod;
+  return {
+    ...bodyRecord,
+    event: 'projection_input_response',
+    request_id: requestId,
+    authority_request_id: typeof bodyRecord.request_id === 'string' ? bodyRecord.request_id : null,
+    method: authorityMethod,
+    transport_method: transportMethod,
+    remote_method: authorityMethod,
+    http_status: response.status,
+    http_ok: response.ok,
+    status: typeof bodyRecord.status === 'string' && bodyRecord.status.trim()
+      ? bodyRecord.status
+      : response.ok ? 'ok' : 'failed',
+  };
 }
 
 function disconnectedDurationText(disconnectedAt, now = Date.now()) {
@@ -69,7 +82,7 @@ export function connectEvents(endpointOrConfig, maxReplay, documentRef = documen
         body: JSON.stringify({ method: remoteFrame.method, payload: remoteFrame.params ?? {}, request_id: frame.id }),
       }).then(async (response) => {
         const body = await response.json().catch(() => ({ event: 'projection_input_response', status: response.ok ? 'ok' : 'failed' }));
-        appendEvent({ event: 'projection_input_response', status: response.ok ? 'ok' : 'failed', ...body }, documentRef);
+        appendEvent(projectionInputResponse(body, response, frame.id, frame.method, remoteFrame.method), documentRef);
       }).catch((error) => appendEvent({ event: 'projection_input_failed', message: error instanceof Error ? error.message : String(error) }, documentRef));
       return true;
     },
@@ -88,23 +101,48 @@ export function connectEvents(endpointOrConfig, maxReplay, documentRef = documen
       appendEvent(message, documentRef);
     };
     const readRemote = async () => {
+      const replayRequestId = `cloudflare_replay_${Date.now()}`;
+      const subscriptionId = `sub_${replayRequestId}`;
+      appendEvent({
+        ...cloudflareSubscriptionStarted({
+          requestId: replayRequestId,
+          subscriptionId,
+          view: 'conversation',
+          pageSize: maxReplay ?? 100,
+        }),
+      }, documentRef);
       try {
         const subscribeFrame = buildSubscribeFrame({
           maxReplay,
           includeReplay: true,
           ...(connection.lastSequence === null ? {} : { sinceSequence: connection.lastSequence }),
         });
-        const url = new URL(endpoint);
-        if (subscribeFrame.params?.since_sequence != null) url.searchParams.set('since_sequence', String(subscribeFrame.params.since_sequence));
-        url.searchParams.set('max_events', String(subscribeFrame.params?.max_replay ?? maxReplay ?? 100));
+        const url = applyCloudflareEventQuery(new URL(endpoint), subscribeFrame, maxReplay ?? 100);
         const response = await fetchFn(url.href, { method: 'GET', headers: projectionHeaders(browserToken) });
         const body = await response.json();
+        const messages = [];
         for (const item of body.events ?? []) {
-          const message = item?.payload ?? item;
-          const sequence = sequenceFromRuntimeMessage(message) ?? item?.event_sequence ?? item?.sequence ?? null;
-          if (sequence !== null && message && typeof message === 'object' && message.event_sequence == null) message.event_sequence = sequence;
+          const message = cloudflareEventItemToRuntimeMessage(item);
+          messages.push(message);
           processRemoteMessage(message);
         }
+        appendEvent(cloudflareEventsRead({
+          messages,
+          eventCount: body.event_count ?? messages.length,
+          hasMore: body.has_more,
+          historyTruncated: body.truncated,
+          view: body.view ?? 'conversation',
+          cursor: body.cursor ?? null,
+        }), documentRef);
+        appendEvent(cloudflareReplayCompleted({
+          requestId: replayRequestId,
+          subscriptionId,
+          view: body.view ?? 'conversation',
+          replayCount: body.event_count ?? messages.length,
+          hasMore: body.has_more,
+          historyTruncated: body.truncated,
+          cursor: body.cursor ?? null,
+        }), documentRef);
         setText('stream', response.ok ? 'long-poll connected' : `remote projection ${response.status}`, documentRef);
       } catch (error) {
         setText('stream', 'remote projection unavailable', documentRef);
