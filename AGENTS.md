@@ -110,6 +110,16 @@ The workspace is declared in [`pnpm-workspace.yaml`](pnpm-workspace.yaml). It in
 | `@narada2/operator-surface-carriers` / `@narada2/window-surface-overlay` / `@narada2/windows-operator-surface` | `packages/operator-surface-carriers`, `packages/window-surface-overlay`, `packages/windows-operator-surface` | Windows operator-surface machinery |
 | `@narada2/mcp-shell-windows` | `packages/mcp-shell-windows` | Packaged shell MCP server |
 
+Operator-facing browser UI stack:
+
+| Package | Path | Responsibility |
+|---------|------|----------------|
+| `@narada2/operator-console-ui` | `packages/operator-console-ui` | Browser Operator Console UI (`/console/registry` and related pages); presentation-only |
+| `@narada2/operator-console-contract` | `packages/operator-console-contract` | Shared operator surface catalog, v3 route directory, redacted session wire records |
+| `@narada2/agent-web-ui` | `packages/agent-web-ui` | Production per-session browser UI for one NARS session |
+
+The workspace landing page (`/`) and console HTTP server live in `@narada2/cli` (`packages/layers/cli/src/commands/operator-workspace-page.ts`, `console-server.ts`, `console-server-routes.ts`, `console-register.ts`).
+
 Archived, contract, and carrier packages live under `packages/_archive/`, `packages/carrier-*`, `packages/mcp-*`, etc. Treat each as a focused package with its own `package.json`, `tsconfig.json`, and `vitest.config.ts` where present.
 
 ### Key Directories
@@ -475,6 +485,7 @@ This is a summary. The full contract is in [`.ai/task-contracts/agent-task-execu
 | Add a new persistence store | `packages/layers/control-plane/src/persistence/` + docs/03-persistence.md |
 | Modify the sync loop | `packages/layers/control-plane/src/runner/sync-once.ts` |
 | Add a CLI command | `packages/layers/cli/src/commands/` + `packages/layers/cli/src/main.ts` |
+| Change workspace landing page (`/`) or console routes (`/console/*`) | `packages/layers/cli/src/commands/{operator-workspace-page,console-server,console-server-routes,console-register}.ts` + `packages/operator-console-contract/src/` (route directory) + `packages/operator-console-ui/src/` (pages) |
 | Change Graph API handling | `packages/layers/control-plane/src/adapter/graph/` |
 | Change coordinator SQLite schema | `packages/layers/control-plane/src/coordinator/store.ts` |
 | Recover control plane from facts | `packages/layers/cli/src/commands/recover.ts` + `packages/layers/control-plane/src/foreman/facade.ts` |
