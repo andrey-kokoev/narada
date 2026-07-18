@@ -21,6 +21,7 @@ import {
   MAX_OPERATOR_ROUTER_LEASE_MS,
   MAX_OPERATOR_ROUTER_ROUTES,
   MIN_OPERATOR_ROUTER_LEASE_MS,
+  type OperatorRouterWebSocketLiveness,
   projectRouteRegistration,
   type OperatorRouterHealthResponse,
   type OperatorRouterRouteRegistration,
@@ -48,6 +49,18 @@ export interface OperatorRouterServerConfig {
   fetch_fn?: typeof fetch;
   health_interval_ms?: number;
   maintenance_interval_ms?: number;
+  websocket_lifecycle_sink?: (event: OperatorRouterWebSocketLifecycleEvent) => void;
+}
+
+export interface OperatorRouterWebSocketLifecycleEvent {
+  schema: 'narada.operator_router.websocket_lifecycle.v1';
+  connection_id: string;
+  route_id: string;
+  session_id: string | null;
+  phase: 'client_connected' | 'upstream_connected' | 'upstream_upgraded' | 'ping_sent' | 'pong_received' | 'closed';
+  leg?: 'client' | 'upstream';
+  reason?: string;
+  occurred_at: string;
 }
 
 function routesOverlap(left: OperatorRouterRouteRegistration, right: OperatorRouterRouteRegistration): boolean {
@@ -444,6 +457,47 @@ async function resolveArtifactContent(route: OperatorRouterRouteRegistration, pa
   return { content: body, contentType: 'application/json; charset=utf-8', headers: {} };
 }
 
+interface WebSocketControlTracker {
+  buffer: Buffer;
+}
+
+function trackWebSocketControlFrames(tracker: WebSocketControlTracker, chunk: Buffer, onPong: () => void): void {
+  tracker.buffer = Buffer.concat([tracker.buffer, chunk]);
+  while (tracker.buffer.length >= 2) {
+    const first = tracker.buffer[0]!;
+    const second = tracker.buffer[1]!;
+    const opcode = first & 0x0f;
+    const masked = (second & 0x80) !== 0;
+    const lengthCode = second & 0x7f;
+    let headerLength = 2;
+    let payloadLength = lengthCode;
+    if (lengthCode === 126) {
+      if (tracker.buffer.length < 4) return;
+      payloadLength = tracker.buffer.readUInt16BE(2);
+      headerLength = 4;
+    } else if (lengthCode === 127) {
+      if (tracker.buffer.length < 10) return;
+      const wideLength = tracker.buffer.readBigUInt64BE(2);
+      if (wideLength > BigInt(Number.MAX_SAFE_INTEGER)) {
+        tracker.buffer = Buffer.alloc(0);
+        return;
+      }
+      payloadLength = Number(wideLength);
+      headerLength = 10;
+    }
+    const frameLength = headerLength + (masked ? 4 : 0) + payloadLength;
+    if (tracker.buffer.length < frameLength) return;
+    if (opcode === 0x0a) onPong();
+    tracker.buffer = tracker.buffer.subarray(frameLength);
+  }
+}
+
+function websocketPingFrame(masked: boolean): Buffer {
+  if (!masked) return Buffer.from([0x89, 0x00]);
+  const mask = randomBytes(4);
+  return Buffer.concat([Buffer.from([0x89, 0x80]), mask]);
+}
+
 function proxySocketRequest(
   client: Duplex,
   req: IncomingMessage,
@@ -451,7 +505,25 @@ function proxySocketRequest(
   target: URL,
   timeoutMs: number,
   activeSockets?: Set<Duplex>,
+  liveness: OperatorRouterWebSocketLiveness,
+  lifecycleSink: ((event: OperatorRouterWebSocketLifecycleEvent) => void) | undefined,
+  routeId: string,
+  sessionId: string | null,
 ): void {
+  const connectionId = randomBytes(12).toString('hex');
+  const occurredAt = () => new Date().toISOString();
+  const emitLifecycle = (
+    phase: OperatorRouterWebSocketLifecycleEvent['phase'],
+    details: Pick<OperatorRouterWebSocketLifecycleEvent, 'leg' | 'reason'> = {},
+  ) => lifecycleSink?.({
+    schema: 'narada.operator_router.websocket_lifecycle.v1',
+    connection_id: connectionId,
+    route_id: routeId,
+    session_id: sessionId,
+    phase,
+    ...details,
+    occurred_at: occurredAt(),
+  });
   const port = Number(target.port) || (target.protocol === 'wss:' ? 443 : 80);
   const connectOptions = { host: target.hostname, port };
   const upstream = target.protocol === 'wss:'
@@ -459,6 +531,7 @@ function proxySocketRequest(
     : connectTcp(connectOptions);
   activeSockets?.add(upstream);
   upstream.once('close', () => activeSockets?.delete(upstream));
+  emitLifecycle('client_connected');
   const requestHeaders = [
     `GET ${target.pathname || '/'}${target.search} HTTP/1.1`,
     `Host: ${target.host}`,
@@ -473,17 +546,97 @@ function proxySocketRequest(
     ...(headerValue(req.headers.cookie) ? [`Cookie: ${headerValue(req.headers.cookie)}`] : []),
     '\r\n',
   ].join('\r\n');
-  upstream.setTimeout(timeoutMs, () => upstream.destroy());
-  const fail = () => { client.destroy(); upstream.destroy(); };
-  upstream.once('error', fail);
+  let closed = false;
+  let handshakeComplete = false;
+  let handshakeBuffer = Buffer.alloc(0);
+  let clientPingSentAt: number | null = null;
+  let upstreamPingSentAt: number | null = null;
+  let heartbeatTimer: NodeJS.Timeout | null = null;
+  const clientTracker: WebSocketControlTracker = { buffer: Buffer.alloc(0) };
+  const upstreamTracker: WebSocketControlTracker = { buffer: Buffer.alloc(0) };
+  const fail = (reason: string) => {
+    if (closed) return;
+    closed = true;
+    if (heartbeatTimer) clearInterval(heartbeatTimer);
+    heartbeatTimer = null;
+    emitLifecycle('closed', { reason });
+    client.destroy();
+    upstream.destroy();
+  };
+  const markPong = (leg: 'client' | 'upstream') => {
+    if (leg === 'client') clientPingSentAt = null;
+    else upstreamPingSentAt = null;
+    emitLifecycle('pong_received', { leg });
+  };
+  const startHeartbeat = () => {
+    if (heartbeatTimer) return;
+    heartbeatTimer = setInterval(() => {
+      if (closed) return;
+      const now = Date.now();
+      if (clientPingSentAt !== null && now - clientPingSentAt >= liveness.pong_timeout_ms) {
+        fail('client_pong_timeout');
+        return;
+      }
+      if (upstreamPingSentAt !== null && now - upstreamPingSentAt >= liveness.pong_timeout_ms) {
+        fail('upstream_pong_timeout');
+        return;
+      }
+      try {
+        if (clientPingSentAt === null) {
+          client.write(websocketPingFrame(false));
+          clientPingSentAt = now;
+          emitLifecycle('ping_sent', { leg: 'client' });
+        }
+        if (upstreamPingSentAt === null) {
+          upstream.write(websocketPingFrame(true));
+          upstreamPingSentAt = now;
+          emitLifecycle('ping_sent', { leg: 'upstream' });
+        }
+      } catch {
+        fail('heartbeat_write_failed');
+      }
+    }, liveness.ping_interval_ms);
+    heartbeatTimer.unref();
+  };
+  upstream.setTimeout(timeoutMs, () => fail('upstream_handshake_timeout'));
+  upstream.once('error', () => fail('upstream_error'));
+  client.once('error', () => fail('client_error'));
+  client.once('close', () => fail('client_closed'));
+  upstream.once('close', () => fail('upstream_closed'));
   upstream.once(target.protocol === 'wss:' ? 'secureConnect' : 'connect', () => {
+    emitLifecycle('upstream_connected');
     upstream.write(requestHeaders);
     if (head.length) upstream.write(head);
-    client.pipe(upstream);
-    upstream.pipe(client);
+    client.on('data', (chunk: Buffer) => {
+      if (handshakeComplete) trackWebSocketControlFrames(clientTracker, chunk, () => markPong('client'));
+      if (!upstream.write(chunk)) client.pause();
+    });
+    upstream.on('data', (chunk: Buffer) => {
+      if (!handshakeComplete) {
+        handshakeBuffer = Buffer.concat([handshakeBuffer, chunk]);
+        const headerEnd = handshakeBuffer.indexOf(Buffer.from('\r\n\r\n'));
+        if (headerEnd >= 0) {
+          const header = handshakeBuffer.subarray(0, headerEnd).toString('latin1');
+          if (!/^HTTP\/1\.1 101(?:\s|$)/u.test(header)) {
+            client.write(chunk);
+            fail('upstream_upgrade_rejected');
+            return;
+          }
+          handshakeComplete = true;
+          upstream.setTimeout(0);
+          emitLifecycle('upstream_upgraded');
+          startHeartbeat();
+          trackWebSocketControlFrames(upstreamTracker, handshakeBuffer.subarray(headerEnd + 4), () => markPong('upstream'));
+          handshakeBuffer = Buffer.alloc(0);
+        }
+      } else {
+        trackWebSocketControlFrames(upstreamTracker, chunk, () => markPong('upstream'));
+      }
+      if (!client.write(chunk)) upstream.pause();
+    });
+    client.on('drain', () => upstream.resume());
+    upstream.on('drain', () => client.resume());
   });
-  client.once('error', () => upstream.destroy());
-  client.once('close', () => upstream.destroy());
 }
 
 function routeLeaseValid(route: OperatorRouterRouteRegistration, now: Date): boolean {
@@ -500,6 +653,7 @@ export async function createOperatorRouterServer(config: Partial<OperatorRouterS
     fetch_fn: config.fetch_fn ?? fetch,
     health_interval_ms: config.health_interval_ms ?? HEALTH_INTERVAL_MS,
     maintenance_interval_ms: config.maintenance_interval_ms ?? MAINTENANCE_INTERVAL_MS,
+    websocket_lifecycle_sink: config.websocket_lifecycle_sink,
   };
   if (!isLoopbackHost(resolved.host)) throw new Error('operator_router_host_not_loopback');
   if (!Number.isInteger(resolved.port) || resolved.port < 0 || resolved.port > 65_535) throw new Error('operator_router_port_invalid');
@@ -777,7 +931,18 @@ export async function createOperatorRouterServer(config: Partial<OperatorRouterS
     if (!target || (target.protocol !== 'ws:' && target.protocol !== 'wss:')) { socket.destroy(); return; }
     activeUpgradeSockets.add(socket);
     socket.once('close', () => activeUpgradeSockets.delete(socket));
-    proxySocketRequest(socket, req, head, target, route.timeout_ms, activeUpgradeSockets);
+    proxySocketRequest(
+      socket,
+      req,
+      head,
+      target,
+      route.timeout_ms,
+      activeUpgradeSockets,
+      route.websocket_liveness,
+      resolved.websocket_lifecycle_sink,
+      route.route_id,
+      route.session_id,
+    );
   }
 
   return {

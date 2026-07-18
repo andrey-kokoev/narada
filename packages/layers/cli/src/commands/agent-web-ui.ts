@@ -103,6 +103,7 @@ function closeStartedServer(server: unknown): Promise<void> {
 function buildFailure(args: {
   sessionId: string;
   attach: { site_root?: string | null; site_root_source?: string | null; site_id?: string | null; session?: JsonRecord | null };
+  selectionResolution: ResolvedAttachSession['selection'];
   eventEndpoint: string;
   healthEndpoint: string | null;
   host: string;
@@ -118,6 +119,7 @@ function buildFailure(args: {
     site_root: args.attach.site_root ?? null,
     site_root_source: args.attach.site_root_source ?? null,
     site_id: args.attach.site_id ?? null,
+    selection_resolution: args.selectionResolution,
     event_endpoint: args.eventEndpoint,
     health_endpoint: args.healthEndpoint,
     health_status: args.attachability.health_status,
@@ -154,12 +156,25 @@ function buildDiscoveryFailure(args: {
     detail: args.detail ?? null,
     retryable: args.retryable ?? false,
     attachment_lifecycle: args.attachmentLifecycle,
-    required_next_step: reason === 'launch_binding_failed'
-      ? 'Inspect the launch binding/result diagnostic, fix the reported preflight failure, and start a fresh launch.'
-      : reason === 'session_discovery_failed'
-        ? 'Retry while the NARS runtime is starting; if it persists, inspect the session-index/runtime error detail.'
-        : 'Start the NARS runtime host for this agent, or pass --session <id> for an existing healthy session.',
+    required_next_step: discoveryRequiredNextStep(reason),
   };
+}
+
+function discoveryRequiredNextStep(reason: string): string {
+  switch (reason) {
+    case 'launch_binding_failed':
+      return 'Inspect the launch binding/result diagnostic, fix the reported preflight failure, and start a fresh launch.';
+    case 'nars_latest_selector_requires_agent':
+      return 'Pass --agent <agent-id> when selecting --session latest.';
+    case 'nars_latest_selector_requires_site_scope':
+      return 'Pass --site <site-id> or --site-root <path> when selecting --session latest.';
+    case 'nars_latest_selector_conflicts_with_launch_binding':
+      return 'Remove --launch-binding or use a concrete --session <id> with the launch binding.';
+    case 'session_discovery_failed':
+      return 'Retry while the NARS runtime is starting; if it persists, inspect the session-index/runtime error detail.';
+    default:
+      return 'Start the NARS runtime host for this agent, or pass --session <id> for an existing healthy session.';
+  }
 }
 
 function formatFailure(failure: ReturnType<typeof buildFailure>): string {
@@ -303,6 +318,7 @@ export async function agentWebUiAttachCommand(
       status: 'planned',
       sessionId,
       attach,
+      selectionResolution: resolvedSession.selection,
       eventEndpoint,
       healthEndpoint,
       host,
@@ -338,7 +354,7 @@ export async function agentWebUiAttachCommand(
   });
   if (!allowsStaleSessionInspection(options) && attachability.status !== 'attachable') {
     transitionAttachment(attachability.reason === 'health_unavailable' ? 'expired' : 'refused');
-    const failure = buildFailure({ sessionId, attach, eventEndpoint, healthEndpoint, host, port, attachability, attachmentLifecycle });
+    const failure = buildFailure({ sessionId, attach, selectionResolution: resolvedSession.selection, eventEndpoint, healthEndpoint, host, port, attachability, attachmentLifecycle });
     return {
       exitCode: ExitCode.INVALID_CONFIG,
       result: formattedResult(failure, formatFailure(failure), options.format ?? 'auto'),
@@ -392,6 +408,7 @@ export async function agentWebUiAttachCommand(
         status: 'attached',
         sessionId,
         attach,
+        selectionResolution: resolvedSession.selection,
         eventEndpoint,
         healthEndpoint,
         host,
@@ -533,6 +550,7 @@ export async function agentWebUiAttachCommand(
     status: 'started',
     sessionId,
     attach,
+    selectionResolution: resolvedSession.selection,
     eventEndpoint,
     healthEndpoint,
     host,
@@ -771,6 +789,7 @@ function buildPlan(args: {
   port: number;
   url: string | null;
   session?: JsonRecord | null;
+  selectionResolution: ResolvedAttachSession['selection'];
   onboarding?: boolean;
   ingressMode: 'operator-router' | 'diagnostic';
   routerUrl: string | null;
@@ -801,6 +820,7 @@ function buildPlan(args: {
     backend_url: args.backendUrl,
     route_ids: [...args.routeIds],
     command: args.attach.command ?? `narada-agent-web-ui --event-endpoint ${args.eventEndpoint}${args.healthEndpoint ? ` --health-endpoint ${args.healthEndpoint}` : ''}`,
+    selection_resolution: args.selectionResolution,
     authority_transition: authorityTransitionSnapshot(args.session),
     attachment_lifecycle: args.attachmentLifecycle,
     onboarding_mode: args.onboarding ? 'user-site' : null,
@@ -808,6 +828,10 @@ function buildPlan(args: {
 }
 
 function formatPlan(plan: AgentWebUiAttachPlan): string {
+  const selectionLine = plan.selection_resolution?.requested_selector === 'latest'
+    && plan.selection_resolution.resolved_session_id
+    ? `  Selection latest -> ${plan.selection_resolution.resolved_session_id}`
+    : null;
   if (plan.status !== 'planned') {
     const lines = [
       `agent-web-ui: ${plan.url}`,
@@ -819,12 +843,14 @@ function formatPlan(plan: AgentWebUiAttachPlan): string {
       `  Authority ${formatAuthorityTransition(plan.authority_transition)}`,
       '  Input   session.submit/session.cancel/session.close; Cloudflare adapters translate as needed',
     ];
+    if (selectionLine) lines.splice(1, 0, selectionLine);
     if (plan.onboarding_mode) lines.splice(1, 0, '  Mode    User Site onboarding');
     return lines.join('\n');
   }
   return [
     'agent-web-ui attach plan',
     `  Session ${plan.session_id}`,
+    ...(selectionLine ? [selectionLine] : []),
     `  Site    ${plan.site_id ?? plan.site_root ?? 'unknown'}`,
     `  Authority ${formatAuthorityTransition(plan.authority_transition)}`,
     `  Command ${plan.command}`,

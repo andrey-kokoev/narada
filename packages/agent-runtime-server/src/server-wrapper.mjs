@@ -656,6 +656,7 @@ function closeServer(server) {
 }
 
 async function closeProjections({ healthProjection, eventStreamProjection } = {}) {
+  eventStreamProjection?.closeConnections?.();
   await closeServer(healthProjection?.server);
   await closeServer(eventStreamProjection?.server);
 }

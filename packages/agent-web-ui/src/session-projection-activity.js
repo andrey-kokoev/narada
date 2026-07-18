@@ -88,7 +88,14 @@ export function reduceTurnActivity(state, message) {
   const event = unwrapRuntimeEvent(message);
   const timestampMs = timestampFromEvent(event) ?? timestampFromEvent(message) ?? state.startedAtMs ?? Date.now();
   if (!event || typeof event !== 'object') return state;
-  if (event.event === 'operator_input_submitted') return transitionTurnActivity(state, TURN_ACTIVITY_PHASES.QUEUED, timestampMs, 'Waiting for agent...', null);
+  // A browser-local send is transport evidence only. Turn activity becomes
+  // visible after durable NARS admission, so a half-open socket cannot make
+  // the session look queued forever.
+  if (event.event === 'operator_input_submitted') return state;
+  if (event.event === 'session_control_accepted' && event.method === 'session.submit') {
+    return transitionTurnActivity(state, TURN_ACTIVITY_PHASES.QUEUED, timestampMs, 'Waiting for agent...', 'NARS accepted the input');
+  }
+  if (event.event === 'input_event_queued') return transitionTurnActivity(state, TURN_ACTIVITY_PHASES.QUEUED, timestampMs, 'Waiting for agent...', 'NARS accepted the input');
   if (event.event === 'directive_received' || event.event === 'directive_carrier_accepted_recorded') return transitionTurnActivity(state, TURN_ACTIVITY_PHASES.QUEUED, timestampMs, 'Waiting for agent...', 'directive accepted');
   if (event.event === 'turn_started' || event.event === 'carrier_turn_started') {
     if (isLateCompletedActivityEvent(state, event)) return state;

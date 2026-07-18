@@ -30,3 +30,18 @@ Browser-local preferences are owned by their feature and use the registry in
 browser-local snippets; they are never session authority, durable event state,
 or protocol input. Provider, model, and thinking changes are NARS session
 actions and therefore are deliberately not persisted as browser preferences.
+
+Operator input delivery contract:
+
+- A browser-local WebSocket write is only a transport attempt. It is not an
+  acknowledgment and does not advance the delivery phase.
+- The durable phase begins at NARS admission (`input_event_queued` or the
+  corresponding control acceptance). Turn start and terminal events are then
+  projected from durable NARS evidence.
+- Reconnect and reload reconcile pending input from durable session events. The
+  UI never resends automatically after a timeout; the operator chooses Retry.
+- A retry keeps the original `idempotency_key`, so NARS can record a duplicate
+  admission without creating a second operation. `session.close` is projected
+  through accepted, response, and closed evidence.
+- A local socket failure is surfaced as `websocket_error`; it is distinct from
+  durable admission and is actionable evidence for the operator.

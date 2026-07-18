@@ -9,6 +9,34 @@ export interface OperatorInputResult {
   localEvent?: unknown;
 }
 
+function withOperatorInputIdempotencyKey(frame: SessionProtocolFrame | null, override: OperatorInputIdempotencyKey | null): SessionProtocolFrame | null {
+  if (!frame || !isIdempotentOperatorMethod(frame.method)) return frame;
+  const params = frame.params && typeof frame.params === 'object' ? frame.params : {};
+  const existing = typeof params.idempotency_key === 'string' && params.idempotency_key.trim()
+    ? params.idempotency_key.trim()
+    : null;
+  const idempotencyKey = normalizeIdempotencyKey(override) ?? existing ?? createIdempotencyKey(frame.method);
+  return { ...frame, params: { ...params, idempotency_key: idempotencyKey } };
+}
+
+function isIdempotentOperatorMethod(method: string): boolean {
+  return method === 'session.submit'
+    || method === 'conversation.send'
+    || method === 'conversation.enqueue'
+    || method === 'conversation.steer'
+    || method === 'session.close';
+}
+
+function normalizeIdempotencyKey(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+function createIdempotencyKey(method: string): string {
+  const randomUuid = globalThis.crypto?.randomUUID;
+  if (typeof randomUuid === 'function') return `agent-web-ui:${method}:${randomUuid.call(globalThis.crypto)}`;
+  return `agent-web-ui:${method}:${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
+}
+
 export interface AuthorityTransitionInputPolicy {
   input_policy?: string | null;
   stale_source?: boolean | null;
@@ -17,10 +45,11 @@ export interface AuthorityTransitionInputPolicy {
 }
 
 export type OperatorInputDeliveryMode = 'default' | 'enqueue';
+export type OperatorInputIdempotencyKey = string;
 export type ProtocolMethodSupport = (method: string) => boolean;
 export type SessionFrameSender = (frame: SessionProtocolFrame) => boolean;
 
-export function submitOperatorInput(text: string, connection: NarsClientConnection | null, authorityTransition: AuthorityTransitionInputPolicy | null = null, deliveryMode: OperatorInputDeliveryMode = 'default', canSteerActiveTurn: boolean | null = null, supportsProtocolMethod: ProtocolMethodSupport | null = null, sendFrame: SessionFrameSender | null = null, activeTurnIdOverride: string | boolean | null | undefined = undefined): OperatorInputResult {
+export function submitOperatorInput(text: string, connection: NarsClientConnection | null, authorityTransition: AuthorityTransitionInputPolicy | null = null, deliveryMode: OperatorInputDeliveryMode = 'default', canSteerActiveTurn: boolean | null = null, supportsProtocolMethod: ProtocolMethodSupport | null = null, sendFrame: SessionFrameSender | null = null, activeTurnIdOverride: string | boolean | null | undefined = undefined, idempotencyKeyOverride: OperatorInputIdempotencyKey | null = null): OperatorInputResult {
   const activeTurnId = activeTurnIdOverride === undefined ? connection?.activeTurnId : activeTurnIdOverride;
   const activeTurn = canSteerActiveTurn ?? Boolean(activeTurnId);
   const action = buildAgentWebUiOperatorInputAction(text, {
@@ -44,7 +73,7 @@ export function submitOperatorInput(text: string, connection: NarsClientConnecti
   if (action.kind === 'snippet_panel_command') {
     return { handled: false, shouldClearDraft: false, localEvent: { event: 'agent_web_ui_message', message: 'Open snippets from the Agent Web UI composer with /snippets.' } };
   }
-  const frame = toSessionProtocolFrame(action.frame);
+  const frame = withOperatorInputIdempotencyKey(toSessionProtocolFrame(action.frame), idempotencyKeyOverride);
   if (!frame) {
     return {
       handled: false,
@@ -93,10 +122,10 @@ export function submitOperatorInput(text: string, connection: NarsClientConnecti
   };
 }
 
-export function submitOperatorConversationText(text: string, connection: NarsClientConnection | null, authorityTransition: AuthorityTransitionInputPolicy | null = null, deliveryMode: OperatorInputDeliveryMode = 'default', supportsProtocolMethod: ProtocolMethodSupport | null = null, sendFrame: SessionFrameSender | null = null): OperatorInputResult {
-  const frame = toSessionProtocolFrame(deliveryMode === 'enqueue'
+export function submitOperatorConversationText(text: string, connection: NarsClientConnection | null, authorityTransition: AuthorityTransitionInputPolicy | null = null, deliveryMode: OperatorInputDeliveryMode = 'default', supportsProtocolMethod: ProtocolMethodSupport | null = null, sendFrame: SessionFrameSender | null = null, idempotencyKeyOverride: OperatorInputIdempotencyKey | null = null): OperatorInputResult {
+  const frame = withOperatorInputIdempotencyKey(toSessionProtocolFrame(deliveryMode === 'enqueue'
     ? buildConversationInputFrame('conversation.enqueue', text)
-    : buildConversationInputFrame('conversation.send', text));
+    : buildConversationInputFrame('conversation.send', text)), idempotencyKeyOverride);
   if (!frame) return { handled: false, shouldClearDraft: false };
   if (supportsProtocolMethod && !supportsProtocolMethod(frame.method)) {
     return {
@@ -161,6 +190,7 @@ function operatorInputSubmittedEvent(frame: SessionProtocolFrame, operatorDelive
     source: params.source ?? null,
     delivery_mode: params.delivery_mode ?? null,
     operator_delivery_mode: operatorDeliveryMode,
+    idempotency_key: typeof params.idempotency_key === 'string' ? params.idempotency_key : null,
     active_turn_id: params.active_turn_id ?? null,
     transport: correlation?.transport ?? null,
     endpoint: correlation?.endpoint ?? null,

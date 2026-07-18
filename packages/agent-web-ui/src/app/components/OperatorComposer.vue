@@ -13,7 +13,7 @@ import type { OperatorInputDeliveryProjection } from '../composables/useNarsEven
 
 const draft = defineModel<string>({ required: true });
 const props = defineProps<{ disabled?: boolean; disabledReason?: string; canInterrupt?: boolean; operatorSnippets?: OperatorSnippet[]; targetLabel?: string; targetState?: string; operatorDelivery: OperatorInputDeliveryProjection; supportsProtocolMethod?: (method: string) => boolean; lastSubmittedDraft: string; submittedDraftRevision: number }>();
-const emit = defineEmits<{ submit: [deliveryMode?: OperatorSnippetDeliveryMode]; 'run-snippet': [snippet: OperatorSnippet, deliveryMode?: OperatorSnippetDeliveryMode]; 'retry-input': [content: string, requestId: string | null]; 'discard-input': [requestId: string | null]; interrupt: [] }>();
+const emit = defineEmits<{ submit: [deliveryMode?: OperatorSnippetDeliveryMode]; 'run-snippet': [snippet: OperatorSnippet, deliveryMode?: OperatorSnippetDeliveryMode]; 'retry-input': [content: string, requestId: string | null, idempotencyKey: string | null]; 'discard-input': [requestId: string | null]; interrupt: [] }>();
 const inputRef = ref<HTMLTextAreaElement | null>(null);
 const composerHistory = useComposerHistory();
 let suppressDraftWatch = false;
@@ -93,7 +93,7 @@ function resetFooterItems() {
 function reviewRecoverableInput() {
   const content = props.operatorDelivery.content?.trim();
   if (!content) return;
-  emit('retry-input', content, props.operatorDelivery.requestId);
+  emit('retry-input', content, props.operatorDelivery.requestId, props.operatorDelivery.idempotencyKey);
 }
 
 function discardRecoverableInput() {

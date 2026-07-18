@@ -512,6 +512,7 @@ test('websocket route forwards the stable session event upgrade', { timeout: 5_0
   const upstreamPort = new URL(upstreamUrl).port;
   const router = await createOperatorRouterServer({ host: '127.0.0.1', port: 0, state_root: stateRoot, health_interval_ms: 60_000 });
   let client: ReturnType<typeof connectTcp> | null = null;
+  let clientClosed = false;
   try {
     const routerUrl = await router.start();
     await registerOperatorRoute({ url: routerUrl, registration_token: router.getRegistrationToken() }, {
@@ -564,6 +565,79 @@ test('websocket route forwards the stable session event upgrade', { timeout: 5_0
       });
     });
     assert.match(response.toString('latin1'), /101 Switching Protocols/);
+  } finally {
+    client?.destroy();
+    await router.stop();
+    upstreamSocket?.destroy();
+    await close(upstream);
+    await rm(stateRoot, { recursive: true, force: true });
+  }
+});
+
+test('websocket liveness closes both legs after an unanswered pong deadline', { timeout: 8_000 }, async () => {
+  const stateRoot = await mkdtemp(join(tmpdir(), 'narada-operator-router-websocket-liveness-'));
+  const lifecycle: Array<Record<string, unknown>> = [];
+  let upstreamSocket: { destroyed: boolean; destroy(): void } | null = null;
+  const upstream = createServer();
+  upstream.on('upgrade', (request, socket) => {
+    upstreamSocket = socket;
+    const key = request.headers['sec-websocket-key'];
+    const accept = createHash('sha1').update(`${key}258EAFA5-E914-47DA-95CA-C5AB0DC85B11`).digest('base64');
+    socket.write([
+      'HTTP/1.1 101 Switching Protocols',
+      'Upgrade: websocket',
+      'Connection: Upgrade',
+      `Sec-WebSocket-Accept: ${accept}`,
+      '',
+      '',
+    ].join('\r\n'));
+  });
+  const upstreamUrl = await listen(upstream);
+  const upstreamPort = new URL(upstreamUrl).port;
+  const router = await createOperatorRouterServer({
+    host: '127.0.0.1',
+    port: 0,
+    state_root: stateRoot,
+    health_interval_ms: 60_000,
+    websocket_lifecycle_sink: (event) => lifecycle.push(event as unknown as Record<string, unknown>),
+  });
+  let client: ReturnType<typeof connectTcp> | null = null;
+  try {
+    const routerUrl = await router.start();
+    await registerOperatorRoute({ url: routerUrl, registration_token: router.getRegistrationToken() }, {
+      route_id: 'agent-web-ui-websocket-liveness-demo',
+      route_class: 'agent-web-ui',
+      public_path: '/sessions/websocket_liveness_demo/events',
+      route_mode: 'exact',
+      websocket_target_url: `ws://127.0.0.1:${upstreamPort}/events`,
+      owner_id: 'agent-web-ui:websocket-liveness-demo',
+      session_id: 'websocket_liveness_demo',
+      process_evidence: { instance_nonce: 'websocketliveness123', pid: null, started_at: new Date().toISOString() },
+      protocols: ['websocket'],
+      methods: ['GET'],
+      lease_ms: 60_000,
+      websocket_liveness: { mode: 'ping_pong', ping_interval_ms: 1_000, pong_timeout_ms: 1_000 },
+    });
+    const routerPort = new URL(routerUrl).port;
+    client = connectTcp(Number(routerPort), '127.0.0.1');
+    await new Promise<void>((resolve) => {
+      client?.once('error', () => {});
+      client?.once('connect', () => {
+        client?.write([
+          'GET /sessions/websocket_liveness_demo/events HTTP/1.1',
+          `Host: 127.0.0.1:${routerPort}`,
+          'Connection: Upgrade',
+          'Upgrade: websocket',
+          'Sec-WebSocket-Version: 13',
+          'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==',
+          '',
+          '',
+        ].join('\r\n'));
+      });
+      setTimeout(resolve, 2_500);
+    });
+    assert.ok(lifecycle.some((event) => event.phase === 'ping_sent'));
+    assert.ok(lifecycle.some((event) => event.phase === 'closed' && String(event.reason).includes('pong_timeout')));
   } finally {
     client?.destroy();
     await router.stop();

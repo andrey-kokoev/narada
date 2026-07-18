@@ -519,6 +519,7 @@ test('Vue operator components expose composer without hidden privileged controls
   assert.match(shell, /:can-steer-active-turn="canSteerActiveTurn"/);
   assert.match(shell, /:can-interrupt="canInterruptModel"/);
   assert.match(input, /canSteerActiveTurn\(\)/);
+  assert.match(app, /const preferSessionCoreInput = supportsProtocolMethod\('session\.submit'\);/);
   assert.match(app, /@interrupt="interruptModel"/);
   assert.match(input, /buildAgentWebUiOperatorInputAction\('\/interrupt'/);
   assert.match(app, /buildMailboxSummaryRequestFrame/);

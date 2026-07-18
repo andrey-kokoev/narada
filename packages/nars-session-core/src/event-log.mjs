@@ -22,6 +22,7 @@ const CONVERSATION_EVENT_KINDS = new Set([
   // the normal Chat projection by the client projection contract.
   'conversation_enqueue_requested',
   'input_event_queued',
+  'input_event_deduplicated',
   'input_event_started',
   'input_event_completed',
   // Request lifecycle evidence lets a conversation transport settle a

@@ -114,7 +114,7 @@ const emit = defineEmits<{
   'publish-cloudflare': [cloudflareApiBaseUrl: string];
   submit: [deliveryMode?: 'default' | 'enqueue'];
   'run-snippet': [snippet: OperatorSnippet, deliveryMode?: 'default' | 'enqueue'];
-  'retry-input': [content: string, requestId: string | null];
+  'retry-input': [content: string, requestId: string | null, idempotencyKey: string | null];
   'discard-input': [requestId: string | null];
   'save-snippet': [name: string, body: string, mode: 'save' | 'edit'];
   'restore-snippet': [snippet: OperatorSnippet];
@@ -522,5 +522,5 @@ function resetHeaderItems() {
     <ConversationTranscript :rows="rows" :verbosity="verbosity" :agent-activity="agentActivity" :follow-latest-revision="followLatestRevision" :has-earlier-events="hasEarlierEvents" :history-truncated="historyTruncated" :loading-earlier="loadingEarlier" @intent-selected="emit('intent-selected', $event)" @load-earlier="emit('load-earlier')" />
     <AffordanceConfirmationPanel :items="affordanceConfirmations" @confirm="emit('confirm-affordance-action', $event)" @cancel="emit('cancel-affordance-action', $event)" />
     <OperatorQueuePanel :items="operatorQueueItems" :active-turn-id="activeTurnId" :can-steer-active-turn="canSteerActiveTurn" @edit="emit('edit-queued', $event)" @remove="emit('remove-queued', $event)" @steer="emit('steer-queued', $event)" />
-    <OperatorComposer v-model="draft" :operator-snippets="operatorSnippets" :disabled="composerDisabled" :can-interrupt="canInterruptModel" :disabled-reason="composerDisabledReason" :target-label="composerTargetLabel" :target-state="composerTargetState" :operator-delivery="operatorDelivery" :supports-protocol-method="supportsProtocolMethod" :last-submitted-draft="lastSubmittedDraft" :submitted-draft-revision="submittedDraftRevision" @submit="emit('submit', $event)" @run-snippet="(snippet, mode) => emit('run-snippet', snippet, mode)" @retry-input="(content, requestId) => emit('retry-input', content, requestId)" @discard-input="(requestId) => emit('discard-input', requestId)" @interrupt="emit('interrupt')" />  </main>
+    <OperatorComposer v-model="draft" :operator-snippets="operatorSnippets" :disabled="composerDisabled" :can-interrupt="canInterruptModel" :disabled-reason="composerDisabledReason" :target-label="composerTargetLabel" :target-state="composerTargetState" :operator-delivery="operatorDelivery" :supports-protocol-method="supportsProtocolMethod" :last-submitted-draft="lastSubmittedDraft" :submitted-draft-revision="submittedDraftRevision" @submit="emit('submit', $event)" @run-snippet="(snippet, mode) => emit('run-snippet', snippet, mode)" @retry-input="(content, requestId, idempotencyKey) => emit('retry-input', content, requestId, idempotencyKey)" @discard-input="(requestId) => emit('discard-input', requestId)" @interrupt="emit('interrupt')" />  </main>
 </template>

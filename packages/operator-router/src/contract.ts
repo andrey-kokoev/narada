@@ -10,6 +10,8 @@ export const DEFAULT_OPERATOR_ROUTER_LEASE_MS = 60_000;
 export const MIN_OPERATOR_ROUTER_LEASE_MS = 5_000;
 export const MAX_OPERATOR_ROUTER_LEASE_MS = 24 * 60 * 60 * 1000;
 export const DEFAULT_OPERATOR_ROUTER_TIMEOUT_MS = 15_000;
+export const DEFAULT_OPERATOR_ROUTER_WS_PING_INTERVAL_MS = 5_000;
+export const DEFAULT_OPERATOR_ROUTER_WS_PONG_TIMEOUT_MS = 10_000;
 export const MAX_OPERATOR_ROUTER_BODY_BYTES = 10 * 1024 * 1024;
 export const MAX_OPERATOR_ROUTER_ROUTES = 1_024;
 
@@ -23,6 +25,27 @@ export type OperatorRouterBackendKind = 'http' | 'nars-artifact';
 export type OperatorRouterRouteMode = 'prefix' | 'exact';
 export type OperatorRouterRouteState = 'healthy' | 'degraded';
 export type OperatorRouterProtocol = 'http' | 'websocket';
+
+export interface OperatorRouterWebSocketLiveness {
+  mode: 'ping_pong';
+  ping_interval_ms: number;
+  pong_timeout_ms: number;
+}
+
+function normalizeWebSocketLiveness(value: Partial<OperatorRouterWebSocketLiveness> | null | undefined): OperatorRouterWebSocketLiveness {
+  if (value !== undefined && value !== null && typeof value !== 'object') throw new Error('operator_router_websocket_liveness_invalid');
+  const mode = value?.mode ?? 'ping_pong';
+  if (mode !== 'ping_pong') throw new Error('operator_router_websocket_liveness_mode_invalid');
+  const pingIntervalMs = value?.ping_interval_ms ?? DEFAULT_OPERATOR_ROUTER_WS_PING_INTERVAL_MS;
+  const pongTimeoutMs = value?.pong_timeout_ms ?? DEFAULT_OPERATOR_ROUTER_WS_PONG_TIMEOUT_MS;
+  if (!Number.isInteger(pingIntervalMs) || pingIntervalMs < 1_000 || pingIntervalMs > 60_000) {
+    throw new Error('operator_router_websocket_ping_interval_invalid');
+  }
+  if (!Number.isInteger(pongTimeoutMs) || pongTimeoutMs < 1_000 || pongTimeoutMs > 120_000 || pongTimeoutMs < pingIntervalMs) {
+    throw new Error('operator_router_websocket_pong_timeout_invalid');
+  }
+  return { mode, ping_interval_ms: pingIntervalMs, pong_timeout_ms: pongTimeoutMs };
+}
 
 export interface OperatorRouterProcessEvidence {
   instance_nonce: string;
@@ -60,6 +83,7 @@ export interface OperatorRouterRouteRegistration {
   methods: readonly string[];
   max_body_bytes: number;
   timeout_ms: number;
+  websocket_liveness: OperatorRouterWebSocketLiveness;
   lease_ms: number;
   lease_expires_at: string;
   state: OperatorRouterRouteState;
@@ -85,6 +109,7 @@ export interface OperatorRouterRouteRegistrationInput {
   methods?: readonly string[];
   max_body_bytes?: number;
   timeout_ms?: number;
+  websocket_liveness?: Partial<OperatorRouterWebSocketLiveness> | null;
   lease_ms?: number;
   reconstruction?: OperatorRouterReconstructionSource | null;
 }
@@ -298,6 +323,7 @@ export function validateRouteRegistration(
     throw new Error('operator_router_session_identity_mismatch');
   }
   const leaseMs = normalizeLeaseMs(input.lease_ms);
+  const websocketLiveness = normalizeWebSocketLiveness(input.websocket_liveness);
   const expires = new Date(now.getTime() + leaseMs).toISOString();
   const ownerId = input.owner_id.trim();
   if (!ownerId) throw new Error('operator_router_owner_required');
@@ -319,6 +345,7 @@ export function validateRouteRegistration(
     methods,
     max_body_bytes: normalizeBodyBytes(input.max_body_bytes),
     timeout_ms: normalizeTimeoutMs(input.timeout_ms),
+    websocket_liveness: websocketLiveness,
     lease_ms: leaseMs,
     lease_expires_at: expires,
     state: 'healthy',

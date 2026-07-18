@@ -1,7 +1,7 @@
 const REQUEST_ID_FIELDS = Object.freeze(['request_id', 'requestId', 'input_request_id', 'authority_request_id']);
 const INPUT_EVENT_ID_FIELDS = Object.freeze(['input_event_id', 'inputEventId', 'input_id', 'inputId', 'event_id']);
 const SESSION_ID_FIELDS = Object.freeze(['session_id', 'sessionId', 'runtime_session_id', 'carrier_session_id']);
-const OPERATOR_INPUT_METHODS = new Set(['session.submit', 'conversation.send', 'conversation.enqueue', 'conversation.steer']);
+const OPERATOR_INPUT_METHODS = new Set(['session.submit', 'conversation.send', 'conversation.enqueue', 'conversation.steer', 'session.close']);
 
 export function normalizeInputCorrelationId(value) {
   if (typeof value === 'string' && value.trim()) return value.trim();

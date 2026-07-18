@@ -1,5 +1,4 @@
 import { readFile } from 'node:fs/promises';
-import { agentIdentityRefMatchesRequest, normalizeSiteToken, roleSegment, siteSegment } from '@narada2/agent-identity';
 import { evaluateAgentStartHandoff } from '@narada2/agent-start/launch-result-v0-contract';
 import type { CommandContext } from '../lib/command-wrapper.js';
 import { formattedResult } from '../lib/cli-output.js';
@@ -13,7 +12,14 @@ import {
 } from '../lib/launcher-contracts.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { parseAgentStartResultArtifact } from '../lib/agent-start-result-reader.js';
-import { narsSessionsCommand } from './nars.js';
+import {
+  agentIdMatchesSession,
+  hasExplicitNarsSiteScope,
+  isLatestSessionSelector,
+  isNarsAttachableSession,
+  narsSessionsCommand,
+  selectLatestNarsSession,
+} from './nars.js';
 import type {
   AgentWebUiAttachOptions,
   AttachabilityResult,
@@ -45,10 +51,42 @@ export async function diagnoseAttachSession(
   dependencies: { discoverSessions?: NarsSessionsCommand } = {},
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
   const bindingPath = options.launchBindingPath?.trim();
+  const requestedSession = options.session?.trim();
+  if (requestedSession && isLatestSessionSelector(requestedSession)) {
+    try {
+      const resolved = await resolveAttachSessionId({ ...options, dryRun: true, diagnose: false }, context, () => {}, dependencies);
+      const diagnostic = buildAttachDiagnostic({
+        status: 'resolved',
+        phase: 'session_discovery',
+        request: diagnosticRequest(options),
+        binding: null,
+        result: null,
+        correlation: { status: 'not_checked', agent: 'not_checked', site_root: 'not_checked', launch_session_id: 'not_checked' },
+        resolution: { session_id: resolved.sessionId, source: resolved.selection.source, reason: null },
+        next_step: 'Run agent-web-ui attach with the same --session latest, --agent, and Site scope.',
+      });
+      return { exitCode: ExitCode.SUCCESS, result: formattedResult(diagnostic, formatAttachDiagnostic(diagnostic), options.format ?? 'auto') };
+    } catch (error) {
+      const detail = error instanceof AttachSessionDiscoveryError
+        ? error.message
+        : error instanceof Error ? error.message : String(error);
+      const diagnostic = buildAttachDiagnostic({
+        status: error instanceof AttachSessionDiscoveryError && error.retryable ? 'waiting' : 'refused',
+        phase: 'session_discovery',
+        request: diagnosticRequest(options),
+        binding: null,
+        result: null,
+        correlation: { status: 'not_checked', agent: 'not_checked', site_root: 'not_checked', launch_session_id: 'not_checked' },
+        resolution: { session_id: null, source: null, reason: detail },
+        next_step: latestSelectorDiagnosticNextStep(error),
+      });
+      return { exitCode: ExitCode.SUCCESS, result: formattedResult(diagnostic, formatAttachDiagnostic(diagnostic), options.format ?? 'auto') };
+    }
+  }
   if (bindingPath) {
     return diagnoseLaunchBinding(bindingPath, options);
   }
-  if (options.session?.trim()) {
+  if (requestedSession) {
     const diagnostic = buildAttachDiagnostic({
       status: 'resolved',
       phase: 'session_selection',
@@ -56,7 +94,7 @@ export async function diagnoseAttachSession(
       binding: null,
       result: null,
       correlation: { status: 'not_checked', agent: 'not_checked', site_root: 'not_checked', launch_session_id: 'not_checked' },
-      resolution: { session_id: options.session.trim(), source: 'explicit_session', reason: null },
+      resolution: { session_id: requestedSession, source: 'explicit_session', reason: null },
       next_step: 'Run agent-web-ui attach with the same session selector.',
     });
     return { exitCode: ExitCode.SUCCESS, result: formattedResult(diagnostic, formatAttachDiagnostic(diagnostic), options.format ?? 'auto') };
@@ -289,7 +327,49 @@ export async function resolveAttachSessionId(
   progress: ProgressReporter,
   dependencies: { discoverSessions?: NarsSessionsCommand } = {},
 ): Promise<ResolvedAttachSession> {
-  if (options.session) return { sessionId: options.session, reason: null };
+  const requestedSession = options.session?.trim();
+  const latest = isLatestSessionSelector(requestedSession);
+  if (latest && options.launchBindingPath?.trim()) {
+    throw new AttachSessionDiscoveryError(
+      'nars_latest_selector_conflicts_with_launch_binding: --session latest cannot be combined with --launch-binding',
+      'nars_latest_selector_conflicts_with_launch_binding',
+      [],
+      'Use --session <concrete-session-id> with --launch-binding, or remove --launch-binding when selecting latest.',
+      false,
+    );
+  }
+  if (latest && !options.agent?.trim()) {
+    throw new AttachSessionDiscoveryError(
+      'nars_latest_selector_requires_agent: pass --agent <agent-id>',
+      'nars_latest_selector_requires_agent',
+      [],
+      'The latest selector requires --agent <agent-id>.',
+      false,
+    );
+  }
+  if (latest && !hasExplicitNarsSiteScope(options)) {
+    throw new AttachSessionDiscoveryError(
+      'nars_latest_selector_requires_site_scope: pass --site <site-id> or --site-root <path>',
+      'nars_latest_selector_requires_site_scope',
+      [],
+      'The latest selector requires --site <site-id> or --site-root <path>.',
+      false,
+    );
+  }
+  if (requestedSession && !latest) {
+    return {
+      sessionId: requestedSession,
+      reason: null,
+      selection: {
+        requested_selector: requestedSession,
+        resolved_session_id: requestedSession,
+        source: 'explicit_session',
+        selection_basis: 'exact_session_id',
+        agent_id: options.agent?.trim() || null,
+        started_at: null,
+      },
+    };
+  }
   if (options.launchBindingPath) return resolveAttachSessionIdFromLaunchBinding(options, progress);
   const agentId = options.agent?.trim();
   if (!agentId) throw new Error('nars_session_required: pass --session <session-id> or --agent <agent-id>');
@@ -346,7 +426,11 @@ async function resolveAttachSessionIdFromLaunchBinding(
     const directSession = sessionIdFromContract(binding);
     if (directSession && readyBinding) {
       if (!options.dryRun) progress(`agent-web-ui: launch binding resolved NARS session ${directSession}`);
-      return { sessionId: directSession, reason: 'launch_binding' };
+      return {
+        sessionId: directSession,
+        reason: 'launch_binding',
+        selection: launchBindingSelection(directSession, options),
+      };
     }
     const resultPath = stringField(binding, 'agent_start_result_file') ?? stringField(binding, 'result_file');
     // A detached agent-start process can materialize its result after the
@@ -363,7 +447,11 @@ async function resolveAttachSessionIdFromLaunchBinding(
           && launchResultMatchesBinding(binding, result));
       if (resultSession && resultHandoffEligible) {
         if (!options.dryRun) progress(`agent-web-ui: launch result resolved NARS session ${resultSession}`);
-        return { sessionId: resultSession, reason: 'launch_binding_result_file' };
+        return {
+          sessionId: resultSession,
+          reason: 'launch_binding_result_file',
+          selection: launchBindingSelection(resultSession, options),
+        };
       }
       if (resultRead.status === 'invalid') lastReason = resultRead.error ?? 'agent_start_result_contract_invalid';
       else if (resultHandoff?.status === 'ineligible') lastReason = resultHandoff.reason ?? 'agent_start_result_not_attachable';
@@ -464,16 +552,36 @@ async function discoverAttachSessionIdOnce(
   }
   const body = sessionsResult.result as { sessions?: JsonRecord[] };
   const candidates = body.sessions ?? [];
+  const requireActive = options.dryRun !== true && !(Number(options.waitForSessionMs ?? 0) > 0);
+  if (isLatestSessionSelector(options.session)) {
+    const selection = selectLatestNarsSession(candidates, agentId, { requireActive });
+    const selected = selection.selected;
+    const sessionId = selected ? (stringField(selected, 'session_id') ?? stringField(selected, 'carrier_session_id')) : null;
+    if (!sessionId) {
+      throw new AttachSessionDiscoveryError(
+        `nars_session_not_found_for_agent: ${agentId}`,
+        'nars_session_not_found_for_agent',
+        candidates.map(toAttachSessionCandidate),
+      );
+    }
+    return {
+      sessionId,
+      reason: 'discovered_by_latest',
+      selection: {
+        requested_selector: 'latest',
+        resolved_session_id: sessionId,
+        source: 'explicit_latest',
+        selection_basis: 'newest_attachable_matching_session',
+        agent_id: agentId,
+        started_at: stringField(selected, 'started_at'),
+      },
+    };
+  }
   const matches = candidates.filter((session) => {
     const sessionId = stringField(session, 'session_id') ?? stringField(session, 'carrier_session_id');
-    const displayState = stringField(session, 'display_state');
-    const terminalState = stringField(session, 'terminal_state');
     return agentIdMatchesSession(agentId, session)
       && Boolean(sessionId)
-      && isDiscoverableAttachSessionState(displayState, {
-        requireActive: options.dryRun !== true && !(Number(options.waitForSessionMs ?? 0) > 0),
-      })
-      && (!terminalState || terminalState === 'running');
+      && isNarsAttachableSession(session, { requireActive });
   });
   if (matches.length === 0) {
     throw new AttachSessionDiscoveryError(
@@ -501,22 +609,18 @@ async function discoverAttachSessionIdOnce(
       candidates.map(toAttachSessionCandidate),
     );
   }
-  return { sessionId, reason: 'discovered_by_agent' };
-}
-
-function agentIdMatchesSession(requestedAgentId: string, session: JsonRecord): boolean {
-  const identityRef = objectField(session, 'agent_identity_ref');
-  if (identityRef && agentIdentityRefMatchesRequest(identityRef, requestedAgentId)) return true;
-  const candidateAgent = stringField(session, 'agent_id');
-  if (!candidateAgent) return false;
-  if (candidateAgent === requestedAgentId) return true;
-  const requestedRole = roleSegment(requestedAgentId);
-  const candidateRole = roleSegment(candidateAgent);
-  if (!requestedRole || requestedRole !== candidateRole) return false;
-  const requestedSite = siteSegment(requestedAgentId);
-  const candidateSite = stringField(session, 'site_id') ?? siteSegment(candidateAgent);
-  if (requestedSite && candidateSite) return normalizeSiteToken(requestedSite) === normalizeSiteToken(candidateSite);
-  return !requestedAgentId.includes('.');
+  return {
+    sessionId,
+    reason: 'discovered_by_agent',
+    selection: {
+      requested_selector: agentId,
+      resolved_session_id: sessionId,
+      source: 'agent_discovery',
+      selection_basis: 'unique_matching_session',
+      agent_id: agentId,
+      started_at: stringField(selected, 'started_at'),
+    },
+  };
 }
 
 function toAttachSessionCandidate(session: JsonRecord): AttachSessionCandidate {
@@ -533,9 +637,29 @@ function toAttachSessionCandidate(session: JsonRecord): AttachSessionCandidate {
   };
 }
 
-function isDiscoverableAttachSessionState(displayState: string | null, options: { requireActive: boolean }): boolean {
-  if (options.requireActive) return displayState === 'active';
-  return displayState === 'active' || displayState === 'starting_or_degraded';
+function launchBindingSelection(sessionId: string, options: AgentWebUiAttachOptions) {
+  return {
+    requested_selector: 'launch_binding',
+    resolved_session_id: sessionId,
+    source: 'launch_binding' as const,
+    selection_basis: 'launch_binding' as const,
+    agent_id: options.agent?.trim() || null,
+    started_at: null,
+  };
+}
+
+function latestSelectorDiagnosticNextStep(error: unknown): string {
+  if (!(error instanceof AttachSessionDiscoveryError)) return 'Inspect the session discovery detail before retrying.';
+  switch (error.reason) {
+    case 'nars_latest_selector_requires_agent':
+      return 'Pass --agent <agent-id> when selecting --session latest.';
+    case 'nars_latest_selector_requires_site_scope':
+      return 'Pass --site <site-id> or --site-root <path> when selecting --session latest.';
+    case 'nars_latest_selector_conflicts_with_launch_binding':
+      return 'Remove --launch-binding or use a concrete --session <id> with the launch binding.';
+    default:
+      return 'Start the NARS runtime host or inspect the session discovery detail before retrying.';
+  }
 }
 
 export async function assessAttachability(

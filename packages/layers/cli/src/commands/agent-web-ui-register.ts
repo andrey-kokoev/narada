@@ -20,8 +20,8 @@ export function registerAgentWebUiCommands(program: Command): void {
   agentWebUi
     .command('attach')
     .description('Start agent-web-ui attached to a discovered NARS session')
-    .option('--session <id>', 'NARS session id')
-    .option('--agent <id>', 'Agent identity used to discover the live NARS session when --session is omitted')
+    .option('--session <id>', 'NARS session id or explicit latest selector; latest requires --agent and Site scope')
+    .option('--agent <id>', 'Agent identity used to discover the live NARS session when --session is omitted or latest is selected')
     .option('--launch-binding <path>', 'Exact operator projection launch binding to wait on before attaching')
     .option('--site-root <path>', 'Target Site root')
     .option('--site <id>', 'Registered Site id')

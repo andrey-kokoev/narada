@@ -52,7 +52,7 @@ function requestIntelligenceReconfiguration(change: { provider?: string; model?:
 
 const props = defineProps<{ config: AgentWebUiConfig }>();
 const supportsProtocolMethod = (method: string) => !props.config.admittedMethods || props.config.admittedMethods.includes(method);
-const preferSessionCoreInput = supportsProtocolMethod('session.submit') && !supportsProtocolMethod('conversation.send');
+const preferSessionCoreInput = supportsProtocolMethod('session.submit');
 provide(ArtifactRenderingConfigKey, {
   artifactBasePath: props.config.artifactBasePath ?? null,
   artifactTransport: props.config.artifactTransport ?? null,
@@ -101,7 +101,7 @@ const canSteerActiveTurn = computed(() => (
 ));
 const input = useOperatorInput(session.connection.connection, session.retain, session.clear, props.config.authorityTransition ?? null, () => canSteerActiveTurn.value, preferSessionCoreInput, supportsProtocolMethod, sessionActions.send, () => session.activeTurnId.value);
 const draft = input.draft;
-const reviewedPendingInput = ref<{ requestId: string; content: string } | null>(null);
+const reviewedPendingInput = ref<{ requestId: string; content: string; idempotencyKey: string | null } | null>(null);
 const followLatestRevision = ref(0);
 const lastSubmittedDraft = ref('');
 const submittedDraftRevision = ref(0);
@@ -169,7 +169,7 @@ function submitOperatorDraft(deliveryMode: 'default' | 'enqueue' = 'default') {
     }
   }
   const submittedContent = draft.value;
-  if (input.submit(deliveryMode)) {
+  if (input.submit(deliveryMode, retryCandidate?.idempotencyKey ?? null)) {
     recordSubmittedDraft(submittedContent);
     if (retryCandidate) {
       session.connection.connection.value?.markPendingOperatorInputRetried(retryCandidate.requestId, input.lastSubmittedRequestId.value);
@@ -275,10 +275,10 @@ function interruptModel() {
   if (input.interrupt()) followLatestTranscript();
 }
 
-function reviewTimedOutInput(content: string, requestId: string | null) {
+function reviewTimedOutInput(content: string, requestId: string | null, idempotencyKey: string | null = null) {
   if (requestId) {
     session.connection.connection.value?.reviewPendingOperatorInput(requestId);
-    reviewedPendingInput.value = { requestId, content };
+    reviewedPendingInput.value = { requestId, content, idempotencyKey };
   }
   draft.value = content;
   followLatestTranscript();

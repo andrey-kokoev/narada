@@ -39,6 +39,7 @@ test('JSONL runtime acknowledges a submit before its provider turn settles', asy
   let resolveAccepted;
   const accepted = new Promise((resolve) => { resolveAccepted = resolve; });
   let buffer = '';
+  const observedEvents = [];
   output.on('data', (chunk) => {
     rendered += String(chunk);
     buffer += String(chunk);
@@ -47,6 +48,7 @@ test('JSONL runtime acknowledges a submit before its provider turn settles', asy
     for (const line of lines) {
       if (!line.trim()) continue;
       const event = JSON.parse(line);
+      observedEvents.push(event);
       if (event.event === 'session_control_accepted' && event.request_id === 'turn-early') resolveAccepted(event);
     }
   });
@@ -67,7 +69,13 @@ test('JSONL runtime acknowledges a submit before its provider turn settles', asy
   releaseProvider({ content: 'done' });
   input.end(`${JSON.stringify({ id: 'close-early', method: 'session.close' })}\n`);
   await run;
-  assert.match(rendered, /session_control_response/);
+  const closeEvents = observedEvents;
+  const closeAcceptedIndex = closeEvents.findIndex((event) => event.event === 'session_control_accepted' && event.request_id === 'close-early');
+  const closeResponseIndex = closeEvents.findIndex((event) => event.event === 'session_control_response' && event.request_id === 'close-early');
+  const closeTerminalIndex = closeEvents.findIndex((event) => event.event === 'session_closed');
+  assert.ok(closeAcceptedIndex >= 0);
+  assert.ok(closeResponseIndex > closeAcceptedIndex);
+  assert.ok(closeTerminalIndex > closeResponseIndex);
 });
 
 test('session cancel aborts an active provider turn while close waits for settlement', async () => {

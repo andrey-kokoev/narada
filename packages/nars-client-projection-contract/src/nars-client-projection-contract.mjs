@@ -687,6 +687,7 @@ export function translateAgentWebUiFrameForCloudflare(frame) {
         message: params.content ?? params.message ?? '',
         source: params.source ?? 'agent-web-ui',
         ...(params.active_turn_id ? { active_turn_id: params.active_turn_id } : {}),
+        ...(typeof params.idempotency_key === 'string' && params.idempotency_key.trim() ? { idempotency_key: params.idempotency_key.trim() } : {}),
       },
     };
   }

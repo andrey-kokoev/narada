@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { describe, expect, test } from 'vitest';
 import { resolveNaradaSitePaths } from '@narada2/site-paths';
 import { createCloudflareNarsProjectionWorker } from '../src/worker.js';
+import { buildProjectionInputForNars } from '../src/nars-session-input-client.js';
 import { deliverRemoteProjectionInputsOnce, preflightCloudflareProjectionRegistration, publishWorkspaceRouteRemotely, registerProjectionRemotely, revokeWorkspaceRouteRemotely, writeProjectionRegistrationPlan, readProjectionRegistration, startLocalProjectionBridgeLoop, startLocalProjectionBridgeOnce, startLocalProjectionBridgeRunProcess } from '../src/node.js';
 
 const now = '2026-06-30T21:30:00.000Z';
@@ -258,6 +259,28 @@ describe('node projection store and bridge', () => {
     });
     expect(result).toMatchObject({ status: 'delivered', delivered_count: 1 });
     expect(admitted[0]).toMatchObject({ method: 'conversation.enqueue', payload: { message: 'next' } });
+  });
+
+  test('carries the WebUI idempotency key into the top-level NARS input', () => {
+    const built = buildProjectionInputForNars({
+      session_id: 'carrier_test',
+      site_id: 'narada.sonar',
+      projection_id: 'proj_input_idempotency',
+      input_id: 'cloudflare_pending_input_random_id',
+      method: 'conversation.enqueue',
+      payload: {
+        message: 'next',
+        idempotency_key: 'agent-web-ui:session.submit:original',
+      },
+    });
+    expect(built.input.metadata.cloudflare_projection_input).toMatchObject({
+      input_id: 'cloudflare_pending_input_random_id',
+      idempotency_key: 'agent-web-ui:session.submit:original',
+    });
+    expect(built.inputKey).toBe('agent-web-ui:session.submit:original');
+    expect(built.input.idempotency_key).toBe('agent-web-ui:session.submit:original');
+    expect((built.input.metadata.nars_session_input as { idempotency_key: string }).idempotency_key)
+      .toBe('agent-web-ui:session.submit:original');
   });
 
   test('bridge verifies health, backfills local events, and reports connected state', async () => {

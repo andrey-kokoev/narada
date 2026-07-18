@@ -403,6 +403,9 @@ export function createSessionCoreRuntimeService({
   async function handleRequest(request, writer, requestState) {
     const requestId = request?.id ?? request?.request_id ?? null;
     const method = request?.method ?? (requestContent(request) != null ? 'session.submit' : null);
+    const idempotencyKey = typeof request?.idempotency_key === 'string' && request.idempotency_key.trim()
+      ? request.idempotency_key.trim()
+      : (typeof request?.params?.idempotency_key === 'string' && request.params.idempotency_key.trim() ? request.params.idempotency_key.trim() : null);
     requestState.transition('running');
     try {
       if (isNarsRuntimeServerMethod(method)) {
@@ -440,8 +443,25 @@ export function createSessionCoreRuntimeService({
         return false;
       }
       if (method === 'session.close') {
+        supervisor.core.appendEvent({
+          event: 'session_control_accepted',
+          request_id: requestId,
+          method,
+          idempotency_key: idempotencyKey,
+          acceptance_state: 'accepted',
+          transport: 'jsonl_stdio',
+        });
         await supervisor.close({ request_id: requestId, reason: 'control_request' }, {
-          beforeSessionClosed: () => requestState.transition('completed', { terminal_reason: 'control_request' }),
+          beforeSessionClosed: () => {
+            supervisor.core.appendEvent({
+              event: 'session_control_response',
+              request_id: requestId,
+              method,
+              idempotency_key: idempotencyKey,
+              terminal_state: 'completed',
+            });
+            requestState.transition('completed', { terminal_reason: 'control_request' });
+          },
         });
         markSessionClosed(runtimeContext, 'control_request', now());
         return true;
@@ -453,6 +473,7 @@ export function createSessionCoreRuntimeService({
         event: 'session_control_accepted',
         request_id: requestId,
         method,
+        idempotency_key: idempotencyKey,
         acceptance_state: 'accepted',
         transport: 'jsonl_stdio',
       });
@@ -461,6 +482,7 @@ export function createSessionCoreRuntimeService({
         event: 'session_control_response',
         request_id: requestId,
         method,
+        idempotency_key: idempotencyKey,
         terminal_state: result?.terminal_state ?? 'completed',
       });
       requestState.transition('completed', { terminal_state: result?.terminal_state ?? 'completed' });
@@ -471,6 +493,7 @@ export function createSessionCoreRuntimeService({
         event: 'session_control_rejected',
         request_id: requestId,
         method,
+        idempotency_key: idempotencyKey,
         code: requestRejectionCode(method, message),
         error: message,
       });

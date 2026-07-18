@@ -59,6 +59,7 @@
     "test:live:launcher-affordance": "pnpm run build && node test/live-launcher-affordance-e2e.mjs",
     "test:live:launcher-onboarding": "pnpm run build && node test/live-launcher-affordance-e2e.mjs",
     "test:live:delegated-task": "pnpm run build && node test/live-delegated-task-launcher-e2e.mjs",
+    "test:live:full-router-nars-provider": "pnpm --filter @narada2/operator-router build && pnpm --filter @narada2/cli build && pnpm run build && node test/full-live-router-nars-provider-e2e.mjs",
     "test:all": "pnpm run test && pnpm run test:browser",
     "pretypecheck": "pnpm --filter @narada2/cloudflare-nars-projection build",
     "typecheck": "vue-tsc --noEmit -p tsconfig.json",

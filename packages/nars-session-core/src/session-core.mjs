@@ -365,6 +365,7 @@ export function createNarsSessionCore({
       identity: options.identity ?? agentId,
       session: options.session ?? sessionId,
       initialPending: options.initialPending ?? persisted.pending,
+      initialIdempotencyRecords: options.initialIdempotencyRecords ?? existing,
       assertEnqueueAllowedFn: (event, enqueueOptions) => {
         if (state.lifecycle !== 'ready') throw new Error(`nars_session_not_accepting_input:${state.lifecycle}`);
         options.assertEnqueueAllowedFn?.(event, enqueueOptions);

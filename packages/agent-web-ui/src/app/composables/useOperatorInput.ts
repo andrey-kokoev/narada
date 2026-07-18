@@ -1,6 +1,6 @@
 import { ref, type ShallowRef } from 'vue';
 import { buildAgentWebUiConversationSteerFrame, buildAgentWebUiOperatorInputAction } from '@narada2/nars-client-projection-contract';
-import { submitOperatorConversationText, submitOperatorInput, type AuthorityTransitionInputPolicy, type OperatorInputDeliveryMode, type ProtocolMethodSupport, type SessionFrameSender } from '../../protocol/operatorInput';
+import { submitOperatorConversationText, submitOperatorInput, type AuthorityTransitionInputPolicy, type OperatorInputDeliveryMode, type OperatorInputIdempotencyKey, type ProtocolMethodSupport, type SessionFrameSender } from '../../protocol/operatorInput';
 import type { NarsClientConnection } from '../../protocol/narsClient';
 import { toSessionProtocolFrame, type SessionProtocolFrame } from '../../protocol/sessionTransport';
 
@@ -28,18 +28,18 @@ export function useOperatorInput(connection: ShallowRef<NarsClientConnection | n
     return result.handled;
   }
 
-  function submit(deliveryMode: OperatorInputDeliveryMode = 'default') {
-    return handleResult(submitOperatorInput(draft.value, connection.value, authorityTransition, deliveryMode, canSteerActiveTurn(), supportsProtocolMethod, sendFrame, activeTurnIdReader()));
+  function submit(deliveryMode: OperatorInputDeliveryMode = 'default', idempotencyKeyOverride: OperatorInputIdempotencyKey | null = null) {
+    return handleResult(submitOperatorInput(draft.value, connection.value, authorityTransition, deliveryMode, canSteerActiveTurn(), supportsProtocolMethod, sendFrame, activeTurnIdReader(), idempotencyKeyOverride));
   }
 
-  function submitText(text: string, deliveryMode: OperatorInputDeliveryMode = 'default') {
-    return handleResult(submitOperatorInput(text, connection.value, authorityTransition, deliveryMode, canSteerActiveTurn(), supportsProtocolMethod, sendFrame, activeTurnIdReader()), false);
+  function submitText(text: string, deliveryMode: OperatorInputDeliveryMode = 'default', idempotencyKeyOverride: OperatorInputIdempotencyKey | null = null) {
+    return handleResult(submitOperatorInput(text, connection.value, authorityTransition, deliveryMode, canSteerActiveTurn(), supportsProtocolMethod, sendFrame, activeTurnIdReader(), idempotencyKeyOverride), false);
   }
 
-  function submitConversationText(text: string, deliveryMode: OperatorInputDeliveryMode = 'default') {
+  function submitConversationText(text: string, deliveryMode: OperatorInputDeliveryMode = 'default', idempotencyKeyOverride: OperatorInputIdempotencyKey | null = null) {
     const result = preferSessionCore
-      ? submitOperatorInput(text, connection.value, authorityTransition, deliveryMode, canSteerActiveTurn(), supportsProtocolMethod, sendFrame, activeTurnIdReader())
-      : submitOperatorConversationText(text, connection.value, authorityTransition, deliveryMode, supportsProtocolMethod, sendFrame);
+      ? submitOperatorInput(text, connection.value, authorityTransition, deliveryMode, canSteerActiveTurn(), supportsProtocolMethod, sendFrame, activeTurnIdReader(), idempotencyKeyOverride)
+      : submitOperatorConversationText(text, connection.value, authorityTransition, deliveryMode, supportsProtocolMethod, sendFrame, idempotencyKeyOverride);
     return handleResult(result, false);
   }
 

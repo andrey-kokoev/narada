@@ -1,7 +1,13 @@
 import type { CommandContext } from '../lib/command-wrapper.js';
 import { formattedResult, type CliFormat } from '../lib/cli-output.js';
 import { ExitCode } from '../lib/exit-codes.js';
-import { agentIdentityDisplay } from '@narada2/agent-identity';
+import {
+  agentIdentityDisplay,
+  agentIdentityRefMatchesRequest,
+  normalizeSiteToken,
+  roleSegment,
+  siteSegment,
+} from '@narada2/agent-identity';
 import { prepareTargetAuthority, readAuthorityTransitionSourceState, authorityTransitionStatePathFromSessionPath } from '@narada2/nars-session-core/authority-transition-state';
 import { discoverNarsSessions } from '@narada2/nars-session-core/session-index';
 import { resolveNaradaSitePaths } from '@narada2/site-paths';
@@ -20,6 +26,23 @@ export interface NarsSessionsOptions {
   limit?: number;
   format?: CliFormat;
   launchRegistryPath?: string;
+}
+
+export const NARS_LATEST_SESSION_SELECTOR = 'latest';
+
+export interface NarsSessionSelectionResolution {
+  requested_selector: string;
+  resolved_session_id: string | null;
+  source: 'explicit_session' | 'explicit_latest' | 'agent_discovery' | 'launch_binding';
+  selection_basis: 'exact_session_id' | 'newest_attachable_matching_session' | 'unique_matching_session' | 'launch_binding';
+  agent_id: string | null;
+  started_at: string | null;
+}
+
+export interface NarsLatestSessionSelection {
+  selected: Record<string, unknown> | null;
+  matches: Record<string, unknown>[];
+  candidates: Record<string, unknown>[];
 }
 
 function formatAuthorityTransitionPlan(plan: Record<string, unknown>): string {
@@ -313,6 +336,74 @@ function normalizeLimit(limit: number): number {
   return Math.min(Math.trunc(limit), 200);
 }
 
+export function isLatestSessionSelector(value: string | null | undefined): boolean {
+  return value?.trim().toLowerCase() === NARS_LATEST_SESSION_SELECTOR;
+}
+
+export function agentIdMatchesSession(requestedAgentId: string, session: Record<string, unknown>): boolean {
+  const identityRef = isRecord(session.agent_identity_ref) ? session.agent_identity_ref : null;
+  if (identityRef && agentIdentityRefMatchesRequest(identityRef, requestedAgentId)) return true;
+  const candidateAgent = typeof session.agent_id === 'string' ? session.agent_id : null;
+  if (!candidateAgent) return false;
+  if (candidateAgent === requestedAgentId) return true;
+  const requestedRole = roleSegment(requestedAgentId);
+  const candidateRole = roleSegment(candidateAgent);
+  if (!requestedRole || requestedRole !== candidateRole) return false;
+  const requestedSite = siteSegment(requestedAgentId);
+  const candidateSite = typeof session.site_id === 'string' ? session.site_id : siteSegment(candidateAgent);
+  if (requestedSite && candidateSite) return normalizeSiteToken(requestedSite) === normalizeSiteToken(candidateSite);
+  return !requestedAgentId.includes('.');
+}
+
+export function isNarsAttachableSession(
+  session: Record<string, unknown>,
+  options: { requireActive: boolean },
+): boolean {
+  const displayState = typeof session.display_state === 'string' ? session.display_state : null;
+  const terminalState = typeof session.terminal_state === 'string' ? session.terminal_state : null;
+  const stateEligible = options.requireActive
+    ? displayState === 'active'
+    : displayState === 'active' || displayState === 'starting_or_degraded';
+  return stateEligible && (!terminalState || terminalState === 'running');
+}
+
+export function selectLatestNarsSession(
+  sessions: Array<Record<string, unknown>>,
+  requestedAgentId: string,
+  options: { requireActive: boolean },
+): NarsLatestSessionSelection {
+  const candidates = [...sessions];
+  const matches = candidates
+    .filter((session) => agentIdMatchesSession(requestedAgentId, session) && isNarsAttachableSession(session, options))
+    .sort(compareNarsSessionRecency);
+  return {
+    selected: matches[0] ?? null,
+    matches,
+    candidates,
+  };
+}
+
+function compareNarsSessionRecency(left: Record<string, unknown>, right: Record<string, unknown>): number {
+  const leftStartedAt = parseSessionTimestamp(left.started_at);
+  const rightStartedAt = parseSessionTimestamp(right.started_at);
+  if (leftStartedAt !== rightStartedAt) return rightStartedAt - leftStartedAt;
+  const leftId = sessionIdValue(left) ?? '';
+  const rightId = sessionIdValue(right) ?? '';
+  if (leftId === rightId) return 0;
+  return leftId < rightId ? 1 : -1;
+}
+
+function parseSessionTimestamp(value: unknown): number {
+  if (typeof value !== 'string') return Number.NEGATIVE_INFINITY;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : Number.NEGATIVE_INFINITY;
+}
+
+function sessionIdValue(session: Record<string, unknown>): string | null {
+  const sessionId = session.session_id ?? session.carrier_session_id;
+  return typeof sessionId === 'string' && sessionId.trim() ? sessionId : null;
+}
+
 function buildAuthorityTransitionPlan({
   matched,
   sessionId,
@@ -511,6 +602,7 @@ function asNonEmptyString(value: unknown): string | null {
 
 export interface NarsAttachCommandOptions extends NarsSessionsOptions {
   session?: string;
+  agent?: string;
   surface?: string;
 }
 
@@ -581,13 +673,103 @@ export async function narsSessionsCommand(
 
 export async function narsAttachCommandCommand(
   options: NarsAttachCommandOptions,
-  _context: CommandContext,
+  context: CommandContext,
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
-  const sessionId = options.session;
-  if (!sessionId) throw new Error('nars_session_required: pass --session <session-id>');
-  const siteResolutions = await resolveNarsSiteRoots(options);
-  const matched = findSessionInSites(siteResolutions, sessionId);
+  const requestedSession = options.session?.trim();
+  if (!requestedSession) throw new Error('nars_session_required: pass --session <session-id>');
+  const latest = isLatestSessionSelector(requestedSession);
+  const requestedSessionSelector = latest ? NARS_LATEST_SESSION_SELECTOR : requestedSession;
   const surface = normalizeSurface(options.surface ?? 'agent-web-ui');
+  const selectionResolution: NarsSessionSelectionResolution = {
+    requested_selector: requestedSessionSelector,
+    resolved_session_id: latest ? null : requestedSessionSelector,
+    source: latest ? 'explicit_latest' : 'explicit_session',
+    selection_basis: latest ? 'newest_attachable_matching_session' : 'exact_session_id',
+    agent_id: options.agent?.trim() || null,
+    started_at: null,
+  };
+  if (latest && !options.agent?.trim()) {
+    return narsAttachSelectionRefusal({
+      options,
+      surface,
+      sessionId: null,
+      selectionResolution,
+      reason: 'nars_latest_selector_requires_agent',
+      detail: 'The latest selector requires --agent <agent-id>.',
+      candidates: [],
+    });
+  }
+  if (latest && !hasExplicitNarsSiteScope(options)) {
+    return narsAttachSelectionRefusal({
+      options,
+      surface,
+      sessionId: null,
+      selectionResolution,
+      reason: 'nars_latest_selector_requires_site_scope',
+      detail: 'The latest selector requires --site <site-id> or --site-root <path>.',
+      candidates: [],
+    });
+  }
+
+  const siteResolutions = await resolveNarsSiteRoots(options);
+  let sessionId = requestedSessionSelector;
+  let selectedCandidate: Record<string, unknown> | null = null;
+  let candidates: Record<string, unknown>[] = [];
+  if (latest) {
+    const discovery = await narsSessionsCommand({
+      ...options,
+      health: true,
+      healthTimeoutMs: options.healthTimeoutMs ?? 500,
+      limit: 200,
+      format: 'json',
+    }, context);
+    if (discovery.exitCode !== ExitCode.SUCCESS) {
+      return narsAttachSelectionRefusal({
+        options,
+        surface,
+        sessionId: null,
+        selectionResolution,
+        reason: 'session_discovery_failed',
+        detail: 'NARS session discovery returned a non-success result.',
+        candidates: [],
+      });
+    }
+    const discoveryBody = isRecord(discovery.result) ? discovery.result : {};
+    const discoveredSessions = Array.isArray(discoveryBody.sessions)
+      ? discoveryBody.sessions.filter(isRecord)
+      : [];
+    const selection = selectLatestNarsSession(discoveredSessions, options.agent!.trim(), { requireActive: true });
+    candidates = selection.candidates;
+    selectedCandidate = selection.selected;
+    if (!selectedCandidate) {
+      return narsAttachSelectionRefusal({
+        options,
+        surface,
+        sessionId: null,
+        selectionResolution,
+        reason: 'nars_session_not_found_for_agent',
+        detail: `No active attachable NARS session was found for ${options.agent!.trim()}.`,
+        candidates,
+      });
+    }
+    const selectedSessionId = selectedCandidate ? sessionIdValue(selectedCandidate) : null;
+    if (!selectedSessionId) {
+      return narsAttachSelectionRefusal({
+        options,
+        surface,
+        sessionId: null,
+        selectionResolution,
+        reason: 'nars_session_not_found_for_agent',
+        detail: `No active attachable NARS session was found for ${options.agent!.trim()}.`,
+        candidates,
+      });
+    }
+    sessionId = selectedSessionId;
+    selectionResolution.resolved_session_id = sessionId;
+    selectionResolution.started_at = typeof selectedCandidate.started_at === 'string' ? selectedCandidate.started_at : null;
+  }
+
+  const matched = findSessionInSites(siteResolutions, sessionId);
   const command = matched ? attachCommandForSession(matched.session, surface) : null;
   const result = {
     schema: 'narada.nars.attach_command.v1',
@@ -596,19 +778,73 @@ export async function narsAttachCommandCommand(
     site_root_source: matched?.siteResolution.source ?? null,
     site_id: matched?.siteResolution.site_id ?? null,
     session_id: sessionId,
+    requested_session_selector: requestedSessionSelector,
+    selection_resolution: selectionResolution,
     surface,
     command,
     session: matched?.session ?? null,
     reason: matched ? null : 'session_not_found',
+    ...(latest ? { candidates } : {}),
   };
   return {
     exitCode: command ? ExitCode.SUCCESS : ExitCode.INVALID_CONFIG,
     result: formattedResult(
       result,
-      command ?? `No attach command found for ${sessionId} on ${surface}`,
+      formatNarsAttachCommandResult(result),
       options.format ?? 'auto',
     ),
   };
+}
+
+export function hasExplicitNarsSiteScope(options: NarsSessionsOptions): boolean {
+  return Boolean(options.siteRoot?.trim() || options.site?.trim());
+}
+
+function narsAttachSelectionRefusal(args: {
+  options: NarsAttachCommandOptions;
+  surface: string;
+  sessionId: string | null;
+  selectionResolution: NarsSessionSelectionResolution;
+  reason: string;
+  detail: string;
+  candidates: Record<string, unknown>[];
+}): { exitCode: ExitCode; result: unknown } {
+  const result = {
+    schema: 'narada.nars.attach_command.v1',
+    status: 'not_available',
+    site_root: args.options.siteRoot ?? null,
+    site_root_source: null,
+    site_id: args.options.site ?? null,
+    session_id: args.sessionId,
+    requested_session_selector: args.selectionResolution.requested_selector,
+    selection_resolution: args.selectionResolution,
+    surface: args.surface,
+    command: null,
+    session: null,
+    reason: args.reason,
+    detail: args.detail,
+    candidates: args.candidates,
+  };
+  return {
+    exitCode: ExitCode.INVALID_CONFIG,
+    result: formattedResult(result, formatNarsAttachCommandResult(result), args.options.format ?? 'auto'),
+  };
+}
+
+function formatNarsAttachCommandResult(result: Record<string, unknown>): string {
+  const command = typeof result.command === 'string' ? result.command : null;
+  const selection = isRecord(result.selection_resolution) ? result.selection_resolution : null;
+  const requested = typeof selection?.requested_selector === 'string' ? selection.requested_selector : null;
+  const resolved = typeof selection?.resolved_session_id === 'string' ? selection.resolved_session_id : null;
+  const lines: string[] = [];
+  if (requested === NARS_LATEST_SESSION_SELECTOR && resolved) lines.push(`Resolved ${requested} -> ${resolved}`);
+  if (command) lines.push(command);
+  else lines.push(`No attach command found for ${result.session_id ?? requested ?? 'unknown'} on ${result.surface ?? 'unknown'}`);
+  if (typeof result.reason === 'string'
+    && (requested === NARS_LATEST_SESSION_SELECTOR || result.reason !== 'session_not_found')) {
+    lines.push(`Reason ${result.reason}${typeof result.detail === 'string' ? `: ${result.detail}` : ''}`);
+  }
+  return lines.join('\n');
 }
 
 async function probeSessionHealth(sessions: Array<Record<string, unknown>>, timeoutMs: number): Promise<Record<string, string>> {

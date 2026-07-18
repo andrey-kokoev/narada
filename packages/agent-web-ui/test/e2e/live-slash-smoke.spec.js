@@ -167,6 +167,8 @@ test.describe('agent-web-ui session-core runtime slash commands', () => {
         method: 'session.submit',
         params: { content: 'run startup sequence', source: 'manual_operator' },
       });
+      expect(submittedFrame.params.idempotency_key).toMatch(/^agent-web-ui:session\.submit:/);
+      expect(queued.idempotency_key).toBe(submittedFrame.params.idempotency_key);
       const started = await waitForRuntimeEvent(
         runtime,
         fromIndex,
@@ -216,6 +218,119 @@ test.describe('agent-web-ui session-core runtime slash commands', () => {
       await expect(page.locator('[data-event-kind^="activity_"]')).toHaveCount(0);
       await expect(page.locator('.composer-delivery-status')).not.toContainText('Waiting for agent');
       await expect(page.locator('.composer-delivery-status')).not.toContainText('Steering the active turn');
+    } finally {
+      await page.close().catch(() => {});
+      await runtime.close();
+    }
+  });
+
+  test('keeps a durably completed turn visible when live terminal events are lost', async ({ page }) => {
+    const response = 'startup sequence response after live terminal gap';
+    const runtime = await startSharedRuntime({
+      sessionId: 'web-ui-playwright-live-terminal-gap-e2e',
+      providerDelayMs: 1_000,
+      responseContent: response,
+    });
+    const droppedLiveKinds = new Set([
+      'assistant_message',
+      'turn_lifecycle_transition',
+      'carrier_turn_completed',
+      'turn_complete',
+      'input_event_completed',
+      'input_completed',
+      'session_control_response',
+      'runtime_request_state_transition',
+    ]);
+    const publishLiveEvent = runtime.eventHub.publish.bind(runtime.eventHub);
+    let dropLiveTerminalEvents = false;
+    runtime.eventHub.publish = (event) => {
+      const kind = event?.event ?? event?.event_kind;
+      if (dropLiveTerminalEvents && droppedLiveKinds.has(kind)) return null;
+      return publishLiveEvent(event);
+    };
+
+    try {
+      await page.goto(runtime.localWeb.url);
+      await expect(page.locator('#operator-input')).toBeVisible();
+      const initialSubscribeCount = runtime.eventProjection.subscribeRequests.length;
+      const fromIndex = runtime.events.length;
+      await submitOperatorInputText(page, 'run startup sequence');
+
+      const queued = await waitForRuntimeEvent(
+        runtime,
+        fromIndex,
+        (event) => event.event === 'input_event_queued' && Boolean(event.request_id),
+        'live_gap_input_queued_timeout',
+      );
+      const started = await waitForRuntimeEvent(
+        runtime,
+        fromIndex,
+        (event) => event.event === 'input_event_started' && event.request_id === queued.request_id,
+        'live_gap_input_started_timeout',
+      );
+      const turnStarted = await waitForRuntimeEvent(
+        runtime,
+        fromIndex,
+        (event) => event.event === 'carrier_turn_started' && event.turn_id === queued.event_id,
+        'live_gap_turn_started_timeout',
+      );
+      dropLiveTerminalEvents = true;
+
+      const assistant = await waitForRuntimeEvent(
+        runtime,
+        fromIndex,
+        (event) => event.event === 'assistant_message' && event.turn_id === turnStarted.turn_id,
+        'live_gap_assistant_message_timeout',
+      );
+      const turnCompleted = await waitForRuntimeEvent(
+        runtime,
+        fromIndex,
+        (event) => event.event === 'carrier_turn_completed' && event.turn_id === turnStarted.turn_id,
+        'live_gap_turn_completed_timeout',
+      );
+      const inputCompleted = await waitForRuntimeEvent(
+        runtime,
+        fromIndex,
+        (event) => event.event === 'input_event_completed' && event.request_id === queued.request_id,
+        'live_gap_input_completed_timeout',
+        10_000,
+      );
+      const responseEvent = await waitForRuntimeEvent(
+        runtime,
+        fromIndex,
+        (event) => event.event === 'session_control_response' && event.request_id === queued.request_id,
+        'live_gap_control_response_timeout',
+        10_000,
+      );
+
+      expect(started.request_id).toBe(queued.request_id);
+      expect(assistant.content).toBe(response);
+      expect(turnCompleted.turn_id).toBe(turnStarted.turn_id);
+      expect(inputCompleted.terminal_state).toBe('completed');
+      expect(responseEvent.terminal_state).toBe('completed');
+
+      const expectedSequence = [queued, started, turnStarted, assistant, turnCompleted, inputCompleted, responseEvent]
+        .map((event) => Number(event.event_sequence ?? event.sequence));
+      expect(expectedSequence.every(Number.isFinite)).toBe(true);
+      for (let index = 1; index < expectedSequence.length; index += 1) {
+        expect(expectedSequence[index]).toBeGreaterThan(expectedSequence[index - 1]);
+      }
+      expect(runtime.eventProjection.subscribeRequests.length).toBe(initialSubscribeCount);
+      expect(runtime.eventProjection.readRequests.length).toBeGreaterThan(0);
+
+      let liveProjectionFailure = null;
+      try {
+        await expect(page.locator('body')).toContainText(response, { timeout: 6_000 });
+        await expect(page.locator('#operator-form')).toHaveAttribute('data-operator-delivery-phase', 'completed', { timeout: 6_000 });
+        await expect(page.locator('.composer-delivery-status')).toContainText('Input delivered');
+      } catch (error) {
+        liveProjectionFailure = error;
+      }
+
+      await page.reload();
+      await expect(page.locator('#operator-input')).toBeVisible();
+      await expect(page.locator('body')).toContainText(response);
+      if (liveProjectionFailure) throw liveProjectionFailure;
     } finally {
       await page.close().catch(() => {});
       await runtime.close();
@@ -313,6 +428,8 @@ test.describe('agent-web-ui session-core runtime slash commands', () => {
       expect(runtime.inputFrameAttempts).toHaveLength(1);
       expect(runtime.inputFrameAttempts[0].swallowed).toBe(true);
       expect(runtime.inputFrameAttempts[0].frame).toMatchObject({ method: 'session.submit', params: { content: 'proceed', source: 'manual_operator' } });
+      const originalIdempotencyKey = runtime.inputFrameAttempts[0].frame.params.idempotency_key;
+      expect(originalIdempotencyKey).toMatch(/^agent-web-ui:session\.submit:/);
       expect(runtime.providerCalls).toHaveLength(0);
 
       await page.reload();
@@ -347,6 +464,7 @@ test.describe('agent-web-ui session-core runtime slash commands', () => {
       expect(runtime.inputFrameAttempts).toHaveLength(2);
       expect(runtime.inputFrameAttempts[1].swallowed).toBe(false);
       expect(runtime.inputFrameAttempts[1].frame).toMatchObject({ method: 'session.submit', params: { content: 'proceed', source: 'manual_operator' } });
+      expect(runtime.inputFrameAttempts[1].frame.params.idempotency_key).toBe(originalIdempotencyKey);
       expect(runtime.providerCalls).toHaveLength(1);
       await expect(page.locator('#operator-form')).toHaveAttribute('data-operator-delivery-phase', 'completed');
     } finally {

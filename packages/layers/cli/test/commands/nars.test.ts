@@ -198,6 +198,7 @@ function writeLaunchRegistryWithoutExplicitSite(registryDir: string, siteRoot: s
 }
 
 afterEach(() => {
+  vi.unstubAllGlobals();
   registrySites.splice(0);
   for (const dir of tempDirs.splice(0)) rmSync(dir, { recursive: true, force: true });
 });
@@ -1330,6 +1331,132 @@ describe('nars CLI commands', () => {
 
     expect(result.exitCode).toBe(ExitCode.SUCCESS);
     expect((result.result as { command: string }).command).toBe('narada-agent-web-ui --event-endpoint ws://127.0.0.1:12345/events --health-endpoint http://127.0.0.1:12346/health');
+  });
+
+  it('resolves --session latest to the newest active matching NARS session', async () => {
+    const siteRoot = tempSite();
+    writeSession(siteRoot, 'carrier_old');
+    retimeSession(siteRoot, 'carrier_old', '2026-06-23T00:00:00.000Z');
+    writeSession(siteRoot, 'carrier_new');
+    retimeSession(siteRoot, 'carrier_new', '2026-06-23T00:10:00.000Z');
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true })));
+
+    const result = await narsAttachCommandCommand({
+      siteRoot,
+      agent: 'sonar.resident',
+      session: 'latest',
+      surface: 'agent-web-ui',
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      session_id: 'carrier_new',
+      requested_session_selector: 'latest',
+      selection_resolution: {
+        requested_selector: 'latest',
+        resolved_session_id: 'carrier_new',
+        source: 'explicit_latest',
+        selection_basis: 'newest_attachable_matching_session',
+        agent_id: 'sonar.resident',
+        started_at: '2026-06-23T00:10:00.000Z',
+      },
+    });
+  });
+
+  it('uses the session id as a deterministic tie-break for --session latest', async () => {
+    const siteRoot = tempSite();
+    writeSession(siteRoot, 'carrier_alpha');
+    writeSession(siteRoot, 'carrier_zulu');
+    retimeSession(siteRoot, 'carrier_alpha', '2026-06-23T00:10:00.000Z');
+    retimeSession(siteRoot, 'carrier_zulu', '2026-06-23T00:10:00.000Z');
+
+    const result = await agentWebUiAttachCommand({
+      siteRoot,
+      agent: 'sonar.resident',
+      session: 'latest',
+      dryRun: true,
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      session_id: 'carrier_zulu',
+      selection_resolution: {
+        requested_selector: 'latest',
+        resolved_session_id: 'carrier_zulu',
+        source: 'explicit_latest',
+      },
+    });
+  });
+
+  it('excludes closed sessions from --session latest selection', async () => {
+    const siteRoot = tempSite();
+    writeSession(siteRoot, 'carrier_running');
+    retimeSession(siteRoot, 'carrier_running', '2026-06-23T00:00:00.000Z');
+    writeClosedSession(siteRoot, 'carrier_closed');
+    retimeSession(siteRoot, 'carrier_closed', '2026-06-23T00:10:00.000Z');
+
+    const result = await agentWebUiAttachCommand({
+      siteRoot,
+      agent: 'sonar.resident',
+      session: 'latest',
+      dryRun: true,
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      session_id: 'carrier_running',
+      selection_resolution: {
+        resolved_session_id: 'carrier_running',
+      },
+    });
+  });
+
+  it('refuses --session latest without an agent or explicit Site scope', async () => {
+    const siteRoot = tempSite();
+    writeSession(siteRoot);
+
+    const missingAgent = await narsAttachCommandCommand({
+      siteRoot,
+      session: 'latest',
+      format: 'json',
+    }, createMockContext());
+    expect(missingAgent.exitCode).toBe(ExitCode.INVALID_CONFIG);
+    expect(missingAgent.result).toMatchObject({ reason: 'nars_latest_selector_requires_agent' });
+
+    const missingSite = await agentWebUiAttachCommand({
+      agent: 'sonar.resident',
+      session: 'latest',
+      dryRun: true,
+      format: 'json',
+    }, createMockContext());
+    expect(missingSite.exitCode).toBe(ExitCode.INVALID_CONFIG);
+    expect(missingSite.result).toMatchObject({
+      reason: 'nars_latest_selector_requires_site_scope',
+      required_next_step: 'Pass --site <site-id> or --site-root <path> when selecting --session latest.',
+    });
+  });
+
+  it('refuses --session latest with a launch binding', async () => {
+    const siteRoot = tempSite();
+    writeSession(siteRoot);
+
+    const result = await agentWebUiAttachCommand({
+      siteRoot,
+      agent: 'sonar.resident',
+      session: 'latest',
+      launchBindingPath: join(siteRoot, 'launch-binding.json'),
+      dryRun: true,
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.INVALID_CONFIG);
+    expect(result.result).toMatchObject({
+      reason: 'nars_latest_selector_conflicts_with_launch_binding',
+      required_next_step: 'Remove --launch-binding or use a concrete --session <id> with the launch binding.',
+    });
   });
 
   it('resolves recorded attach commands for non-web surfaces', async () => {

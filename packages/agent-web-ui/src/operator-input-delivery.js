@@ -22,6 +22,7 @@ export const IDLE_OPERATOR_INPUT_DELIVERY = Object.freeze({
   requestId: null,
   content: null,
   method: null,
+  idempotencyKey: null,
   source: null,
   deliveryMode: null,
   activeTurnId: null,
@@ -68,8 +69,17 @@ export function reduceOperatorInputDelivery(state, message) {
     record.source = event.source ?? record.source;
     record.operatorDeliveryMode = event.operator_delivery_mode ?? record.operatorDeliveryMode;
     record.deliveryMode = event.delivery_mode ?? record.deliveryMode;
+    record.idempotencyKey = event.idempotency_key ?? record.idempotencyKey;
     record.activeTurnId = event.active_turn_id ?? record.activeTurnId;
     transition(record, OPERATOR_INPUT_DELIVERY_PHASES.SUBMITTING, event);
+    return state;
+  }
+
+  if (kind === 'input_event_deduplicated') {
+    const record = findOrCreateRuntimeRecord(state, requestId, event);
+    if (!record || isFinalTerminal(record.phase)) return state;
+    absorbRuntimeMetadata(record, event);
+    transition(record, OPERATOR_INPUT_DELIVERY_PHASES.COMPLETED, event, null, 'deduplicated');
     return state;
   }
 
@@ -194,6 +204,11 @@ export function reduceOperatorInputDelivery(state, message) {
       transition(record, phase, event, event.error ?? event.message ?? event.terminal_state, event.terminal_state);
       return state;
     }
+    if (kind === 'session_control_response' && event.terminal_state === 'completed') {
+      absorbRuntimeMetadata(record, event);
+      transition(record, OPERATOR_INPUT_DELIVERY_PHASES.COMPLETED, event, null, 'completed');
+      return state;
+    }
     if (record.phase === OPERATOR_INPUT_DELIVERY_PHASES.DRAFT
       || record.phase === OPERATOR_INPUT_DELIVERY_PHASES.SUBMITTING
       || record.phase === OPERATOR_INPUT_DELIVERY_PHASES.RELAY_PENDING
@@ -257,6 +272,7 @@ export function materializeOperatorInputDelivery(state, nowMs = Date.now()) {
     requestId: record.requestId,
     content: record.content,
     method: record.method,
+    idempotencyKey: record.idempotencyKey,
     source: record.source,
     deliveryMode: record.deliveryMode,
     activeTurnId: record.activeTurnId,
@@ -266,7 +282,7 @@ export function materializeOperatorInputDelivery(state, nowMs = Date.now()) {
     terminalState: record.terminalState,
     error: record.error,
     history: [...record.history],
-    label: deliveryLabel(record.phase),
+    label: deliveryLabel(record.phase, record),
     detail: deliveryDetail(record, nowMs),
   };
 }
@@ -282,6 +298,7 @@ function ensureRecord(state, requestId, event) {
       phase: OPERATOR_INPUT_DELIVERY_PHASES.DRAFT,
       content: event.content ?? null,
       method: event.method ?? null,
+      idempotencyKey: event.idempotency_key ?? null,
       source: event.source ?? null,
       operatorDeliveryMode: event.operator_delivery_mode ?? null,
       deliveryMode: event.delivery_mode ?? null,
@@ -341,6 +358,7 @@ function absorbRuntimeMetadata(record, event) {
   record.deliveryMode ??= event.delivery_mode ?? null;
   record.activeTurnId ??= event.active_turn_id ?? event.turn_id ?? null;
   record.method ??= event.method ?? null;
+  record.idempotencyKey ??= event.idempotency_key ?? null;
 }
 
 function transition(record, phase, event, error = null, terminalState = null) {
@@ -389,7 +407,7 @@ function isFinalTerminal(phase) {
 }
 
 function isTrackedOperatorFrame(method) {
-  return method === 'session.submit' || method === 'conversation.send' || method === 'conversation.enqueue' || method === 'conversation.steer';
+  return method === 'session.submit' || method === 'conversation.send' || method === 'conversation.enqueue' || method === 'conversation.steer' || method === 'session.close';
 }
 
 function requestIdFromEvent(event) {
@@ -401,7 +419,17 @@ function timestampFromEvent(event) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function deliveryLabel(phase) {
+function deliveryLabel(phase, record = null) {
+  if (record?.method === 'session.close') {
+    const closeLabel = {
+      [OPERATOR_INPUT_DELIVERY_PHASES.SUBMITTING]: 'Closing session…',
+      [OPERATOR_INPUT_DELIVERY_PHASES.ACCEPTED]: 'Session close accepted',
+      [OPERATOR_INPUT_DELIVERY_PHASES.COMPLETED]: 'Session closed',
+      [OPERATOR_INPUT_DELIVERY_PHASES.REJECTED]: 'Session close rejected',
+      [OPERATOR_INPUT_DELIVERY_PHASES.FAILED]: 'Session close failed',
+    }[phase];
+    if (closeLabel) return closeLabel;
+  }
   return {
     [OPERATOR_INPUT_DELIVERY_PHASES.DRAFT]: 'Enter a message',
     [OPERATOR_INPUT_DELIVERY_PHASES.SUBMITTING]: 'Submitting input…',
@@ -422,6 +450,8 @@ function deliveryLabel(phase) {
 }
 
 function deliveryDetail(record, nowMs) {
+  if (record.method === 'session.close' && record.phase === OPERATOR_INPUT_DELIVERY_PHASES.SUBMITTING) return 'Waiting for NARS session.close acknowledgment';
+  if (record.method === 'session.close' && record.phase === OPERATOR_INPUT_DELIVERY_PHASES.ACCEPTED) return 'NARS accepted the close request; waiting for session closed';
   if (record.phase === OPERATOR_INPUT_DELIVERY_PHASES.TIMED_OUT) return 'No acknowledgment was observed; the input may still have been admitted. Review before retrying manually; no automatic resend was attempted';
   if (record.error) return String(record.error);
   if (record.phase === OPERATOR_INPUT_DELIVERY_PHASES.SUBMITTING) return 'Waiting for NARS acknowledgment';

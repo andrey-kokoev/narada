@@ -41,6 +41,7 @@ interface PendingOperatorInput extends PendingOperatorInputLifecycle {
   source: string | null;
   delivery_mode: string | null;
   active_turn_id: string | boolean | null;
+  idempotency_key: string | null;
   created_at: string;
   superseded_by_request_id?: string | null;
   input_event_id?: string | null;
@@ -165,13 +166,14 @@ export function createNarsClient(options: NarsClientOptions): NarsClientConnecti
     pendingOperatorInputTimers.set(requestId, timer);
   };
 
-  const failPendingOperatorInput = (requestId: string, message: unknown) => {
+  const failPendingOperatorInput = (requestId: string, message: unknown, extra: Record<string, unknown> = {}) => {
     const pending = pendingOperatorInputs.get(requestId);
     if (!pending) return;
     removePendingOperatorInput(requestId);
     emitLocalEvent(options.onEvent, pendingLifecycleEvent('web_ui_input_transport_failed', pending, {
       reason_code: 'projection_input_failed',
       message: String(message ?? 'Cloudflare input relay failed'),
+      ...extra,
     }));
   };
 
@@ -234,6 +236,10 @@ export function createNarsClient(options: NarsClientOptions): NarsClientConnecti
     const event = unwrapTransportEvent(message);
     if (!event || typeof event !== 'object') return true;
     const kind = typeof event.event === 'string' ? event.event : null;
+    if (kind === 'session_events_read' && Array.isArray(event.events)) {
+      for (const nestedEvent of event.events) reconcilePendingOperatorInput(nestedEvent);
+      return true;
+    }
     const requestState = typeof event.request_state === 'string' ? event.request_state.trim().toLowerCase() : '';
     const correlation = inputCorrelationFromEvent(event);
     const pendingMatch = findCorrelatedInput(pendingOperatorInputs.values(), event, { allowUniqueMethod: true });
@@ -274,7 +280,19 @@ export function createNarsClient(options: NarsClientOptions): NarsClientConnecti
       return true;
     }
 
-    if (kind === 'session_control_accepted' || kind === 'input_event_queued' || kind === 'input_event_started' || kind === 'input_admitted_to_turn' || kind === 'session_control_rejected' || kind === 'session_control_response' || (kind === 'runtime_request_state_transition' && ['completed', 'failed', 'rejected', 'interrupted'].includes(requestState))) {
+    if (kind === 'websocket_error') {
+      if (pending) {
+        const websocketCode = typeof event.code === 'string' && event.code.trim() ? event.code.trim() : 'websocket_error';
+        failPendingOperatorInput(pending.request_id, event.message ?? event.error ?? `NARS WebSocket rejected ${pending.method}`, {
+          reason_code: 'nars_websocket_error',
+          websocket_code: websocketCode,
+          rejected_method: typeof event.method === 'string' ? event.method : pending.method,
+        });
+      }
+      return true;
+    }
+
+    if (kind === 'session_control_accepted' || kind === 'input_event_queued' || kind === 'input_event_started' || kind === 'input_admitted_to_turn' || kind === 'input_event_deduplicated' || kind === 'session_control_rejected' || kind === 'session_control_response' || (kind === 'runtime_request_state_transition' && ['completed', 'failed', 'rejected', 'interrupted'].includes(requestState))) {
       if (pending) {
         if (pending.phase === PENDING_OPERATOR_INPUT_PHASES.TIMED_OUT || pending.phase === PENDING_OPERATOR_INPUT_PHASES.REVIEWING || pending.phase === PENDING_OPERATOR_INPUT_PHASES.RETRIED) {
           emitLocalEvent(options.onEvent, pendingLifecycleEvent('operator_input_late_acknowledged', pending, {
@@ -430,7 +448,8 @@ function isTrackedOperatorInputMethod(method: string): boolean {
   return method === 'session.submit'
     || method === 'conversation.send'
     || method === 'conversation.enqueue'
-    || method === 'conversation.steer';
+    || method === 'conversation.steer'
+    || method === 'session.close';
 }
 
 function pendingInputFromFrame(requestId: string, frame: SessionProtocolFrame, correlation: SessionTransportCorrelation): PendingOperatorInput {
@@ -444,6 +463,7 @@ function pendingInputFromFrame(requestId: string, frame: SessionProtocolFrame, c
     source: typeof params.source === 'string' ? params.source : null,
     delivery_mode: typeof params.delivery_mode === 'string' ? params.delivery_mode : null,
     active_turn_id: typeof params.active_turn_id === 'string' || typeof params.active_turn_id === 'boolean' ? params.active_turn_id : null,
+    idempotency_key: typeof params.idempotency_key === 'string' && params.idempotency_key.trim() ? params.idempotency_key.trim() : null,
     created_at: new Date().toISOString(),
     transport: correlation.transport,
     endpoint: correlation.endpoint,
@@ -496,6 +516,7 @@ function readPendingOperatorInputs(storage: PendingInputStorage | null, key: str
         source: typeof candidate.source === 'string' ? candidate.source : null,
         delivery_mode: typeof candidate.delivery_mode === 'string' ? candidate.delivery_mode : null,
         active_turn_id: typeof candidate.active_turn_id === 'string' || typeof candidate.active_turn_id === 'boolean' ? candidate.active_turn_id : null,
+        idempotency_key: typeof candidate.idempotency_key === 'string' && candidate.idempotency_key.trim() ? candidate.idempotency_key.trim() : null,
         transport: typeof candidate.transport === 'string' ? candidate.transport : null,
         endpoint: typeof candidate.endpoint === 'string' ? candidate.endpoint : null,
         session_id: typeof candidate.session_id === 'string' ? candidate.session_id : null,
@@ -547,6 +568,7 @@ function pendingLifecycleEvent(
     source: pending.source,
     delivery_mode: pending.delivery_mode,
     active_turn_id: pending.active_turn_id,
+    idempotency_key: pending.idempotency_key,
     created_at: pending.created_at,
     pending_state: pending.phase,
     input_event_id: pending.input_event_id ?? null,

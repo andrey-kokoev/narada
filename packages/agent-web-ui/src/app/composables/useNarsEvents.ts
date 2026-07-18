@@ -20,6 +20,7 @@ export interface OperatorInputDeliveryProjection {
   requestId: string | null;
   content: string | null;
   method: string | null;
+  idempotencyKey: string | null;
   source: string | null;
   deliveryMode: string | null;
   activeTurnId: string | boolean | null;

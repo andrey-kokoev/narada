@@ -194,7 +194,8 @@ export function registerNarsCommands(program: Command): void {
   nars
     .command('attach-command')
     .description('Resolve the command for attaching a projection to one NARS session')
-    .requiredOption('--session <id>', 'NARS session id')
+    .requiredOption('--session <id>', 'NARS session id or the explicit latest selector')
+    .option('--agent <id>', 'Agent identity required when --session latest is used')
     .option('--surface <surface>', `Projection surface: ${NARS_PROJECTION_SURFACE_KINDS.join('|')}`, 'agent-web-ui')
     .option('--site-root <path>', 'Target Site root')
     .option('--site <id>', 'Registered Site id')
@@ -207,6 +208,7 @@ export function registerNarsCommands(program: Command): void {
         siteRoot: opts.siteRoot as string | undefined,
         site: opts.site as string | undefined,
         session: opts.session as string | undefined,
+        agent: opts.agent as string | undefined,
         surface: opts.surface as string | undefined,
         format: resolveCommandFormat(opts.format, 'auto'),
       }, silentCommandContext()),

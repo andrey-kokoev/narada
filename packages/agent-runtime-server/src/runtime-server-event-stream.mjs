@@ -35,6 +35,7 @@ export function translateCarrierInputDelivery(message) {
         hold_condition: input.hold_condition,
         authority_ref: input.authority_ref,
         directive_id: input.directive_id,
+        idempotency_key: input.idempotency_key ?? null,
         metadata: input.metadata,
         carrier_input_method: 'carrier.input.deliver',
       },
@@ -267,6 +268,7 @@ export function startEventStreamProjection({ childStdin, eventHub, host, port, e
   });
   const sockets = new Set();
   const subscribeRequests = [];
+  const readRequests = [];
   const replayBatches = [];
   server.on('upgrade', (request, socket) => {
     if (request.url?.split('?')[0] !== '/events') {
@@ -337,6 +339,7 @@ export function startEventStreamProjection({ childStdin, eventHub, host, port, e
           continue;
         }
         if (message.method === 'session.events.read') {
+          readRequests.push(message);
           const result = readEventStreamPage({ eventsPath, message });
           if (!result.ok) {
             websocketError(send, { requestId: message.id ?? null, code: result.code, view: result.view });
@@ -400,6 +403,7 @@ export function startEventStreamProjection({ childStdin, eventHub, host, port, e
         server,
         url: `ws://${host}:${boundPort}/events`,
         subscribeRequests,
+        readRequests,
         replayBatches,
         closeConnections() {
           for (const socket of sockets) socket.destroy();

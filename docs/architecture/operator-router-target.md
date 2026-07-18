@@ -184,6 +184,7 @@ Normal commands converge on stable URLs:
 
     narada console open
     narada agent-web-ui attach --session <session-id>
+    narada agent-web-ui attach --site <site-id> --agent <agent-id> --session latest
     narada artifacts open <artifact-id>
 
 Expected results:
@@ -207,7 +208,8 @@ direct diagnostic endpoints.
   `--port 0` as explicitly labeled diagnostic mode.
 - `narada agent-web-ui attach` defaults to the router, registers a session HTTP
   route and an exact event-WebSocket route, and returns a stable
-  `/sessions/<session-id>/` URL. Its browser config is base-path aware for
+  `/sessions/<session-id>/` URL. When `--session latest` is used, selection is
+  resolved once before routing and the concrete session id is used. Its browser config is base-path aware for
   assets, APIs, WebSockets, and direct artifact URLs.
 - Session-owned artifacts register at
   `/artifacts/<session-id>/<artifact-id>/*` and reconstruct from the NARS

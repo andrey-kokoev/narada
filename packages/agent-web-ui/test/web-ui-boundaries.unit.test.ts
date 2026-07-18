@@ -295,6 +295,57 @@ describe('agent-web-ui runtime boundaries', () => {
     });
   });
 
+  it('preserves durable idempotency keys across input, session close, and manual retry frames', () => {
+    const frames: SessionProtocolFrame[] = [];
+    const sendFrame = (frame: SessionProtocolFrame) => {
+      frames.push(frame);
+      return true;
+    };
+
+    const initial = submitOperatorInput(
+      'run startup sequence',
+      null,
+      null,
+      'default',
+      false,
+      (method) => method === 'session.submit',
+      sendFrame,
+    );
+    expect(initial.handled).toBe(true);
+    const initialKey = (frames[0].params as { idempotency_key?: string }).idempotency_key;
+    expect(initialKey).toMatch(/^agent-web-ui:session\.submit:/);
+    expect(initial.localEvent).toMatchObject({ idempotency_key: initialKey });
+
+    const close = submitOperatorInput(
+      '/exit',
+      null,
+      null,
+      'default',
+      false,
+      (method) => method === 'session.close',
+      sendFrame,
+    );
+    expect(close.handled).toBe(true);
+    const closeKey = (frames[1].params as { idempotency_key?: string }).idempotency_key;
+    expect(closeKey).toMatch(/^agent-web-ui:session\.close:/);
+    expect(close.localEvent).toMatchObject({ method: 'session.close', idempotency_key: closeKey });
+
+    const retried = submitOperatorInput(
+      'run startup sequence',
+      null,
+      null,
+      'default',
+      false,
+      (method) => method === 'session.submit',
+      sendFrame,
+      undefined,
+      initialKey ?? null,
+    );
+    expect(retried.handled).toBe(true);
+    expect((frames[2].params as { idempotency_key?: string }).idempotency_key).toBe(initialKey);
+    expect(retried.localEvent).toMatchObject({ idempotency_key: initialKey });
+  });
+
   it('survives throwing browser storage reads and writes', () => {
     const storage = {
       getItem: vi.fn(() => { throw new Error('storage blocked'); }),
@@ -420,6 +471,73 @@ describe('agent-web-ui runtime boundaries', () => {
       acknowledged_event: 'input_event_queued',
     }));
     expect(storageValues.has('pending-input-test')).toBe(false);
+    client.close();
+  });
+
+  it('surfaces a correlated local NARS websocket rejection before the acknowledgment timeout', () => {
+    const sockets: FakeSocket[] = [];
+    const timers: Array<{ id: number; delay: number; handler: () => void; cleared: boolean }> = [];
+    const storageValues = new Map<string, string>();
+    let nextTimerId = 0;
+    const WebSocketCtor = class extends FakeSocket {
+      static OPEN = 1;
+      constructor(url: string) {
+        super(url);
+        sockets.push(this);
+      }
+    } as unknown as typeof WebSocket;
+    const clientEvents: unknown[] = [];
+    const client = createNarsClient({
+      endpoint: 'ws://127.0.0.1/events',
+      sessionId: 'session-websocket-error',
+      pendingInputStorageKey: 'websocket-error-input-test',
+      pendingInputStorage: {
+        getItem: (key) => storageValues.get(key) ?? null,
+        setItem: (key, value) => { storageValues.set(key, value); },
+        removeItem: (key) => { storageValues.delete(key); },
+      },
+      operatorInputAckTimeoutMs: 5000,
+      WebSocketCtor,
+      timers: {
+        setTimeout(handler: TimerHandler, delay?: number) {
+          const timer = { id: ++nextTimerId, delay: delay ?? 0, handler: handler as () => void, cleared: false };
+          timers.push(timer);
+          return timer.id;
+        },
+        clearTimeout(id: number) {
+          const timer = timers.find((candidate) => candidate.id === id);
+          if (timer) timer.cleared = true;
+        },
+      },
+      onEvent: (event) => clientEvents.push(event),
+    });
+
+    sockets[0].open();
+    expect(client.sendFrame({
+      id: 'request-websocket-error',
+      method: 'session.submit',
+      params: { message: 'reject me', source: 'agent-web-ui' },
+    })).toBe(true);
+
+    sockets[0].emit('message', { data: JSON.stringify({
+      schema: 'narada.nars.websocket.error.v1',
+      event: 'websocket_error',
+      request_id: 'request-websocket-error',
+      code: 'unsupported_session_control',
+      method: 'conversation.send',
+      message: 'Unsupported session control method.',
+    }) });
+
+    expect(clientEvents).toContainEqual(expect.objectContaining({
+      event: 'web_ui_input_transport_failed',
+      request_id: 'request-websocket-error',
+      reason_code: 'nars_websocket_error',
+      websocket_code: 'unsupported_session_control',
+      rejected_method: 'conversation.send',
+    }));
+    expect(storageValues.has('websocket-error-input-test')).toBe(false);
+    expect(timers.find((timer) => timer.delay === 5000)?.cleared).toBe(true);
+    expect(clientEvents.some((event) => (event as { event?: string })?.event === 'web_ui_input_ack_timeout')).toBe(false);
     client.close();
   });
 

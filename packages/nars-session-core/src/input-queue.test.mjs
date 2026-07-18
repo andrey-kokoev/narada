@@ -74,3 +74,48 @@ test('input queue refuses admission before it mutates durable queue state', asyn
   await queue.enqueue({ event_id: 'input_allowed', content: 'accepted input' });
   assert.equal(queue.pendingCount, 1);
 });
+
+test('input queue deduplicates a manual retry by durable idempotency key', async () => {
+  const events = [];
+  let drainCalls = 0;
+  const queue = createInputQueue({
+    shouldDefer: () => false,
+    drain: async () => {
+      drainCalls += 1;
+      return { terminal_state: 'completed' };
+    },
+    appendSessionFn: (event) => events.push(event),
+    sessionEventEntryFn: (event, payload) => ({ event, ...payload }),
+  });
+
+  await queue.enqueue({ event_id: 'input_original', request_id: 'request_original', content: 'once', idempotency_key: 'retry-key-1' }, { drain: true });
+  const retry = await queue.enqueue({ event_id: 'input_retry', request_id: 'request_retry', content: 'once', idempotency_key: 'retry-key-1' }, { drain: true });
+
+  assert.equal(drainCalls, 1);
+  assert.equal(queue.pendingCount, 0);
+  assert.equal(retry.deduplicated, true);
+  assert.equal(retry.original_event_id, 'input_original');
+  assert.equal(retry.original_request_id, 'request_original');
+  assert.equal(retry.terminal_state, 'completed');
+  assert.deepEqual(events.filter((event) => event.event === 'input_event_queued').map((event) => event.idempotency_key), ['retry-key-1']);
+  assert.equal(events.filter((event) => event.event === 'input_event_started').length, 1);
+  assert.equal(events.filter((event) => event.event === 'input_event_deduplicated').length, 1);
+});
+
+test('input queue rehydrates the original operation identity after deduplication evidence', async () => {
+  const queue = createInputQueue({
+    initialIdempotencyRecords: [
+      { event: 'input_event_queued', event_id: 'input_original', request_id: 'request_original', idempotency_key: 'retry-key-2' },
+      { event: 'input_event_completed', event_id: 'input_original', request_id: 'request_original', idempotency_key: 'retry-key-2', terminal_state: 'completed' },
+      { event: 'input_event_deduplicated', event_id: 'input_retry', request_id: 'request_retry', original_event_id: 'input_original', original_request_id: 'request_original', idempotency_key: 'retry-key-2', terminal_state: 'completed' },
+    ],
+    drain: async () => ({ terminal_state: 'completed' }),
+  });
+
+  const retry = await queue.enqueue({ event_id: 'input_retry_again', request_id: 'request_retry_again', content: 'once', idempotency_key: 'retry-key-2' });
+
+  assert.equal(retry.deduplicated, true);
+  assert.equal(retry.original_event_id, 'input_original');
+  assert.equal(retry.original_request_id, 'request_original');
+  assert.equal(retry.terminal_state, 'completed');
+});

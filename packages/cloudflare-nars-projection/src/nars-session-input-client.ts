@@ -3,6 +3,16 @@ import { Socket } from 'node:net';
 
 type JsonRecord = Record<string, unknown>;
 type ProjectionInputMethod = 'conversation.send' | 'conversation.enqueue' | 'conversation.steer' | 'conversation.interrupt';
+type ProjectionInputBuildArgs = {
+  session_id: string;
+  site_id: string | null;
+  projection_id: string;
+  input_id: string;
+  method: string;
+  payload: Record<string, unknown>;
+  authority_epoch?: number | null;
+  authority_runtime_id?: string | null;
+};
 
 const INPUT_EVENT_SCHEMA = 'narada.carrier.input_event.v1';
 const MAX_INLINE_CONTENT = 20_000;
@@ -20,53 +30,14 @@ export async function deliverProjectionInputToNars(args: {
   authority_runtime_id?: string | null;
   timeout_ms?: number;
 }) {
-  const inputKey = args.input_id.trim();
-  if (!inputKey) throw new Error('cloudflare_projection_input_id_required');
-  const digest = createHash('sha256').update(`${args.projection_id}:${inputKey}`).digest('hex').slice(0, 32);
-  const inputEventId = `input_cloudflare_${digest}`;
-  const directiveId = `dir_cloudflare_projection_${digest}`;
-  const requestId = `cloudflare_projection_input_${digest}`;
   const method = projectionInputMethod(args.method);
   if (method === 'conversation.interrupt') {
-    return deliverProjectionInterruptToNars(args, { inputKey, inputEventId, directiveId, requestId });
+    const identity = projectionInputIdentity(args);
+    const { inputKey, inputEventId, directiveId, requestId, inputId } = identity;
+    return deliverProjectionInterruptToNars(args, { inputKey, inputEventId, directiveId, requestId, inputId });
   }
-  const delivery = deliveryForMethod(method);
-  const content = inputContent(args.payload);
-  const input = {
-    schema: INPUT_EVENT_SCHEMA,
-    event_id: inputEventId,
-    source_kind: 'operator',
-    source_id: `cloudflare-projection:${args.projection_id}`,
-    source: delivery === 'steer' ? 'operator_steering' : 'operator_control',
-    transport: 'carrier_server_api',
-    delivery_mode: delivery === 'send' ? 'admit_for_current_turn' : 'admit_after_active_turn',
-    hold_condition: null,
-    content,
-    created_at: new Date().toISOString(),
-    authority_ref: `cloudflare-projection:${args.site_id ?? 'site'}:${args.session_id}:${args.authority_epoch ?? 'unknown'}`,
-    directive_id: directiveId,
-    metadata: {
-      input_source: 'cloudflare_projection',
-      directive_provenance: {
-        kind: 'explicit_operator_directive_surface',
-        surface_id: 'cloudflare-nars-projection',
-      },
-      nars_session_input: {
-        delivery_constructor: delivery,
-        idempotency_key: inputKey,
-        target_session_id: args.session_id,
-        target_site_id: args.site_id,
-        authority_epoch: args.authority_epoch ?? null,
-        authority_runtime_id: args.authority_runtime_id ?? null,
-        caller_carrier_session_id: null,
-      },
-      cloudflare_projection_input: {
-        input_id: inputKey,
-        method,
-        projection_id: args.projection_id,
-      },
-    },
-  };
+  const built = buildProjectionInputForNars(args);
+  const { inputKey, inputEventId, directiveId, requestId, inputId, delivery, input } = built;
   const response = await requestWebSocket(args.event_endpoint, {
     id: requestId,
     method: 'carrier.input.deliver',
@@ -90,7 +61,70 @@ export async function deliverProjectionInputToNars(args: {
     directive_id: directiveId,
     delivery,
     protocol_method: 'carrier.input.deliver',
-    evidence: { event, request_id: requestId, input_id: inputKey },
+    evidence: { event, request_id: requestId, input_id: inputId, idempotency_key: inputKey },
+  };
+}
+
+export function buildProjectionInputForNars(args: ProjectionInputBuildArgs) {
+  const identity = projectionInputIdentity(args);
+  const method = projectionInputMethod(args.method);
+  if (method === 'conversation.interrupt') throw new Error('cloudflare_projection_interrupt_is_not_input_event');
+  const delivery = deliveryForMethod(method);
+  const content = inputContent(args.payload);
+  const input = {
+    schema: INPUT_EVENT_SCHEMA,
+    event_id: identity.inputEventId,
+    idempotency_key: identity.inputKey,
+    source_kind: 'operator',
+    source_id: `cloudflare-projection:${args.projection_id}`,
+    source: delivery === 'steer' ? 'operator_steering' : 'operator_control',
+    transport: 'carrier_server_api',
+    delivery_mode: delivery === 'send' ? 'admit_for_current_turn' : 'admit_after_active_turn',
+    hold_condition: null,
+    content,
+    created_at: new Date().toISOString(),
+    authority_ref: `cloudflare-projection:${args.site_id ?? 'site'}:${args.session_id}:${args.authority_epoch ?? 'unknown'}`,
+    directive_id: identity.directiveId,
+    metadata: {
+      input_source: 'cloudflare_projection',
+      directive_provenance: {
+        kind: 'explicit_operator_directive_surface',
+        surface_id: 'cloudflare-nars-projection',
+      },
+      nars_session_input: {
+        delivery_constructor: delivery,
+        idempotency_key: identity.inputKey,
+        target_session_id: args.session_id,
+        target_site_id: args.site_id,
+        authority_epoch: args.authority_epoch ?? null,
+        authority_runtime_id: args.authority_runtime_id ?? null,
+        caller_carrier_session_id: null,
+      },
+      cloudflare_projection_input: {
+        input_id: identity.inputId,
+        idempotency_key: identity.inputKey,
+        method,
+        projection_id: args.projection_id,
+      },
+    },
+  };
+  return { ...identity, method, delivery, input };
+}
+
+function projectionInputIdentity(args: Pick<ProjectionInputBuildArgs, 'input_id' | 'payload' | 'projection_id'>) {
+  const payloadIdempotencyKey = typeof args.payload.idempotency_key === 'string' && args.payload.idempotency_key.trim()
+    ? args.payload.idempotency_key.trim()
+    : null;
+  const inputId = args.input_id.trim();
+  if (!inputId) throw new Error('cloudflare_projection_input_id_required');
+  const inputKey = payloadIdempotencyKey ?? inputId;
+  const digest = createHash('sha256').update(`${args.projection_id}:${inputKey}`).digest('hex').slice(0, 32);
+  return {
+    inputId,
+    inputKey,
+    inputEventId: `input_cloudflare_${digest}`,
+    directiveId: `dir_cloudflare_projection_${digest}`,
+    requestId: `cloudflare_projection_input_${digest}`,
   };
 }
 
@@ -117,7 +151,7 @@ async function deliverProjectionInterruptToNars(args: {
   projection_id: string;
   payload: Record<string, unknown>;
   timeout_ms?: number;
-}, identity: { inputKey: string; inputEventId: string; directiveId: string; requestId: string }) {
+}, identity: { inputId: string; inputKey: string; inputEventId: string; directiveId: string; requestId: string }) {
   const response = await requestWebSocket(args.event_endpoint, {
     id: identity.requestId,
     method: 'session.cancel',
@@ -147,7 +181,7 @@ async function deliverProjectionInterruptToNars(args: {
     directive_id: identity.directiveId,
     delivery: 'interrupt' as const,
     protocol_method: 'session.cancel',
-    evidence: { event, request_id: identity.requestId, input_id: identity.inputKey },
+    evidence: { event, request_id: identity.requestId, input_id: identity.inputId, idempotency_key: identity.inputKey },
   };
 }
 

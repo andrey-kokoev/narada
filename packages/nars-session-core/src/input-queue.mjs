@@ -17,6 +17,10 @@ export function shouldDeferQueuedInput(event, { rl, promptState } = {}) {
   }).should_defer;
 }
 
+function normalizeIdempotencyKey(value) {
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
 export function normalizeInputEvent(input, defaults = {}, { randomIdFn = defaultRandomId } = {}) {
   const record = normalizeInputRecord(input);
   const receivedAt = defaults.received_at ?? input?.received_at ?? new Date().toISOString();
@@ -51,6 +55,7 @@ export function normalizeInputEvent(input, defaults = {}, { randomIdFn = default
     authority_ref: record.authority_ref,
     directive_id: protocolEvent.directive_id,
     request_id: input?.request_id ?? null,
+    idempotency_key: normalizeIdempotencyKey(input?.idempotency_key ?? input?.params?.idempotency_key),
     transport: protocolEvent.transport,
   };
 }
@@ -132,6 +137,7 @@ export function createInputQueue({
   assertEnqueueAllowedFn = () => {},
   onQueueStateChangedFn = () => {},
   initialPending = [],
+  initialIdempotencyRecords = [],
   classifyInputRuntimeQueueAdmissionFn = () => ({ queue_events: [] }),
   classifyInputRuntimeAdmissionFn = () => ({ admission_events: [] }),
   classifyInputRuntimeHoldFn = (event, state) => classifyCarrierInputHold(inputWithObserverMetadata(event), state),
@@ -145,6 +151,18 @@ export function createInputQueue({
   const pending = Array.isArray(initialPending)
     ? initialPending.map((event) => normalizeQueuedInputEvent(event, randomIdFn))
     : [];
+  const idempotencyRecords = new Map();
+  for (const event of initialIdempotencyRecords ?? []) rememberIdempotencyEvent(event);
+  for (const event of pending) {
+    if (event.idempotency_key && !idempotencyRecords.has(event.idempotency_key)) {
+      idempotencyRecords.set(event.idempotency_key, {
+        event_id: event.event_id,
+        request_id: event.request_id ?? null,
+        idempotency_key: event.idempotency_key,
+        terminal_state: null,
+      });
+    }
+  }
   const state = {
     running: false,
     activeDrainPromise: null,
@@ -161,7 +179,37 @@ export function createInputQueue({
     enqueue: async (event, options = {}) => {
       assertEnqueueAllowedFn(event, options);
       const normalized = normalizeInputEvent(event, {}, { randomIdFn });
+      const existingIdempotency = normalized.idempotency_key ? idempotencyRecords.get(normalized.idempotency_key) : null;
+      if (existingIdempotency) {
+        appendSessionFn(sessionEventEntryFn('input_event_deduplicated', {
+          event_id: normalized.event_id,
+          input_event_id: normalized.event_id,
+          ...(normalized.request_id ? { request_id: normalized.request_id } : {}),
+          method: event?.method ?? 'session.submit',
+          idempotency_key: normalized.idempotency_key,
+          original_event_id: existingIdempotency.event_id ?? null,
+          original_request_id: existingIdempotency.request_id ?? null,
+          terminal_state: existingIdempotency.terminal_state ?? null,
+          deduplication_state: 'reused_existing_operation',
+        }));
+        if (options.drain) await waitForIdle();
+        const settled = normalized.idempotency_key ? idempotencyRecords.get(normalized.idempotency_key) : existingIdempotency;
+        return {
+          ...normalized,
+          admission_state: 'accepted',
+          deduplicated: true,
+          original_event_id: settled?.event_id ?? existingIdempotency.event_id ?? null,
+          original_request_id: settled?.request_id ?? existingIdempotency.request_id ?? null,
+          terminal_state: settled?.terminal_state ?? 'completed',
+        };
+      }
       normalized.admission_state = null;
+      if (normalized.idempotency_key) idempotencyRecords.set(normalized.idempotency_key, {
+        event_id: normalized.event_id,
+        request_id: normalized.request_id ?? null,
+        idempotency_key: normalized.idempotency_key,
+        terminal_state: null,
+      });
       pending.push(normalized);
       transitionAdmission(normalized, 'accepted', { reason: 'input_received' });
       persistQueueState('accepted', normalized);
@@ -176,6 +224,7 @@ export function createInputQueue({
         source_kind: normalized.source_kind,
         authority_ref: normalized.authority_ref,
         directive_id: normalized.directive_id,
+        idempotency_key: normalized.idempotency_key,
         turn_id: normalized.event_id,
         turn_state: 'accepted',
         admission_state_schema: NARS_INPUT_ADMISSION_STATE_SCHEMA,
@@ -230,6 +279,7 @@ export function createInputQueue({
       source_id: event.source_id,
       transport: event.transport,
       delivery_mode: event.delivery_mode,
+      idempotency_key: event.idempotency_key ?? null,
       hold_condition: event.hold_condition ?? null,
       admission_state: event.admission_state ?? null,
       created_at: event.created_at,
@@ -297,6 +347,7 @@ export function createInputQueue({
   function recordDroppedByOperator(event, dropReason, admission) {
     appendSessionFn(carrierSessionEventEntryFn('input_dropped_by_operator', {
       input_event_id: event.event_id,
+      ...(event.idempotency_key ? { idempotency_key: event.idempotency_key } : {}),
       drop_reason: dropReason,
       admission_state_schema: NARS_INPUT_ADMISSION_STATE_SCHEMA,
       admission_previous_state: admission.previous_state,
@@ -310,6 +361,7 @@ export function createInputQueue({
       const admission = transitionAdmission(event, 'abandoned', { reason: 'session_finalize' });
       appendSessionFn(carrierSessionEventEntryFn('input_abandoned_on_session_end', {
         input_event_id: event.event_id,
+        ...(event.idempotency_key ? { idempotency_key: event.idempotency_key } : {}),
         admission_state_schema: NARS_INPUT_ADMISSION_STATE_SCHEMA,
         admission_previous_state: admission.previous_state,
         admission_state: admission.admission_state,
@@ -371,6 +423,7 @@ export function createInputQueue({
         transport: event.transport,
         authority_ref: event.authority_ref,
         directive_id: event.directive_id,
+        idempotency_key: event.idempotency_key ?? null,
         admission_state_schema: NARS_INPUT_ADMISSION_STATE_SCHEMA,
         admission_previous_state: admission.previous_state,
         admission_state: admission.admission_state,
@@ -400,6 +453,7 @@ export function createInputQueue({
         event_id: event.event_id,
         ...(event.request_id ? { request_id: event.request_id } : {}),
         terminal_state: result?.terminal_state ?? 'completed',
+        idempotency_key: event.idempotency_key ?? null,
         admission_state_schema: NARS_INPUT_ADMISSION_STATE_SCHEMA,
         admission_state: event.admission_state,
       }));
@@ -407,10 +461,15 @@ export function createInputQueue({
         input_event_id: event.event_id,
         ...(event.request_id ? { request_id: event.request_id } : {}),
         terminal_state: result?.terminal_state ?? 'completed',
+        ...(event.idempotency_key ? { idempotency_key: event.idempotency_key } : {}),
         admission_state_schema: NARS_INPUT_ADMISSION_STATE_SCHEMA,
         admission_state: event.admission_state,
       }));
       pending.shift();
+      if (event.idempotency_key) {
+        const idempotencyRecord = idempotencyRecords.get(event.idempotency_key);
+        if (idempotencyRecord) idempotencyRecord.terminal_state = result?.terminal_state ?? 'completed';
+      }
       persistQueueState('completed', event);
       return result;
     } finally {
@@ -516,6 +575,23 @@ export function createInputQueue({
       reason: evidence.reason ?? null,
       recovery: evidence.recovery === true,
     };
+  }
+
+  function rememberIdempotencyEvent(event) {
+    const key = normalizeIdempotencyKey(event?.idempotency_key ?? event?.params?.idempotency_key);
+    if (!key) return;
+    const existing = idempotencyRecords.get(key) ?? {};
+    const isDeduplicationRecord = event?.event === 'input_event_deduplicated' || event?.event_kind === 'input_event_deduplicated';
+    idempotencyRecords.set(key, {
+      event_id: isDeduplicationRecord
+        ? event?.original_event_id ?? existing.event_id ?? null
+        : event?.event_id ?? event?.input_event_id ?? existing.event_id ?? null,
+      request_id: isDeduplicationRecord
+        ? event?.original_request_id ?? existing.request_id ?? null
+        : event?.request_id ?? existing.request_id ?? null,
+      idempotency_key: key,
+      terminal_state: event?.terminal_state ?? existing.terminal_state ?? null,
+    });
   }
 }
 

@@ -181,9 +181,11 @@ test('operator input delivery ignores backward runtime evidence after admission'
   ]);
 });
 
-test('turn activity reducer exposes the canonical queued, thinking, tool, and idle phases', () => {
+test('turn activity reducer waits for durable admission before showing queued state', () => {
   const state = createTurnActivityState();
   reduceTurnActivity(state, { event: 'operator_input_submitted', timestamp: '2026-07-11T12:00:00.000Z' });
+  assert.equal(state.state, TURN_ACTIVITY_PHASES.IDLE);
+  reduceTurnActivity(state, { event: 'session_control_accepted', method: 'session.submit', request_id: 'request-1', timestamp: '2026-07-11T12:00:00.500Z' });
   assert.equal(state.state, TURN_ACTIVITY_PHASES.QUEUED);
   reduceTurnActivity(state, { event: 'turn_started', turn_id: 'turn-1', agent_id: 'resident', timestamp: '2026-07-11T12:00:01.000Z' });
   assert.equal(state.state, TURN_ACTIVITY_PHASES.THINKING);
@@ -742,6 +744,26 @@ test('operator input delivery projects submission through NARS acknowledgment an
   assert.equal(projection.activeTurnId, 'nars-input-1');
 });
 
+test('operator input delivery projects session.close through accepted to session closed', () => {
+  const projection = createOperatorInputDeliveryProjection([
+    { event: 'operator_input_submitted', request_id: 'close-1', method: 'session.close', content: '/exit', idempotency_key: 'close-key', timestamp: '2026-07-11T12:20:00.000Z' },
+    { event: 'session_control_accepted', request_id: 'close-1', method: 'session.close', idempotency_key: 'close-key', acceptance_state: 'accepted', timestamp: '2026-07-11T12:20:00.050Z' },
+    { event: 'session_control_response', request_id: 'close-1', method: 'session.close', idempotency_key: 'close-key', terminal_state: 'completed', timestamp: '2026-07-11T12:20:00.100Z' },
+    { event: 'session_closed', request_id: 'close-1', timestamp: '2026-07-11T12:20:00.150Z' },
+  ]);
+
+  assert.equal(projection.phase, OPERATOR_INPUT_DELIVERY_PHASES.COMPLETED);
+  assert.equal(projection.label, 'Session closed');
+  assert.equal(projection.terminalState, 'completed');
+  assert.equal(projection.idempotencyKey, 'close-key');
+  assert.deepEqual(projection.history, [
+    OPERATOR_INPUT_DELIVERY_PHASES.DRAFT,
+    OPERATOR_INPUT_DELIVERY_PHASES.SUBMITTING,
+    OPERATOR_INPUT_DELIVERY_PHASES.ACCEPTED,
+    OPERATOR_INPUT_DELIVERY_PHASES.COMPLETED,
+  ]);
+});
+
 test('operator input delivery advances a relayed submission when NARS acknowledges it', () => {
   const projection = createOperatorInputDeliveryProjection([
     { event: 'operator_input_submitted', request_id: 'input-relay', method: 'session.submit', content: 'relay this', timestamp: '2026-07-11T12:00:00.000Z' },
@@ -778,14 +800,15 @@ test('operator input delivery distinguishes explicit queueing before turn admiss
     { event: 'session_control_response', request_id: 'input-queue-1', method: 'session.submit', terminal_state: 'completed', timestamp: '2026-07-11T12:01:00.200Z' },
   ]);
 
-  assert.equal(projection.phase, OPERATOR_INPUT_DELIVERY_PHASES.QUEUED);
+  assert.equal(projection.phase, OPERATOR_INPUT_DELIVERY_PHASES.COMPLETED);
   assert.deepEqual(projection.history, [
     OPERATOR_INPUT_DELIVERY_PHASES.DRAFT,
     OPERATOR_INPUT_DELIVERY_PHASES.SUBMITTING,
     OPERATOR_INPUT_DELIVERY_PHASES.ACCEPTED,
     OPERATOR_INPUT_DELIVERY_PHASES.QUEUED,
+    OPERATOR_INPUT_DELIVERY_PHASES.COMPLETED,
   ]);
-  assert.match(projection.detail, /holding it for the next turn/);
+  assert.equal(projection.detail, 'completed');
 });
 
 test('operator input delivery correlates runtime queue evidence by unique method and preserves event identity', () => {

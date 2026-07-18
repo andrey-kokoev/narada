@@ -2,6 +2,7 @@ import type { EnsureOperatorRouterOptions, EnsureOperatorRouterResult, OperatorR
 import type { CliFormat } from '../lib/cli-output.js';
 import type { JsonRecord } from '../lib/launcher-contracts.js';
 import type { AgentWebUiAttachmentLifecycle } from './agent-web-ui-attachment-state.js';
+import type { NarsSessionSelectionResolution } from './nars.js';
 
 export interface AgentWebUiAttachOptions {
   session?: string;
@@ -31,6 +32,7 @@ export type NarsAttachCommand = typeof import('./nars.js').narsAttachCommandComm
 export interface ResolvedAttachSession {
   sessionId: string;
   reason: string | null;
+  selection: NarsSessionSelectionResolution;
 }
 
 export interface AttachSessionCandidate {
@@ -48,6 +50,9 @@ export interface AttachSessionCandidate {
 export type AttachSessionDiscoveryReason =
   | 'nars_session_not_found_for_agent'
   | 'nars_session_ambiguous_for_agent'
+  | 'nars_latest_selector_requires_agent'
+  | 'nars_latest_selector_requires_site_scope'
+  | 'nars_latest_selector_conflicts_with_launch_binding'
   | 'session_discovery_failed'
   | 'launch_binding_unresolved'
   | 'launch_binding_failed';
@@ -98,6 +103,7 @@ export interface AgentWebUiAttachPlan {
   backend_url: string | null;
   route_ids: string[];
   command: string;
+  selection_resolution: NarsSessionSelectionResolution | null;
   authority_transition: AuthorityTransitionSnapshot;
   attachment_lifecycle: AgentWebUiAttachmentLifecycle;
   onboarding_mode: 'user-site' | null;
