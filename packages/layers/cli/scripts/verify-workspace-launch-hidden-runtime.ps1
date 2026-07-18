@@ -1,5 +1,5 @@
 param(
-  [string]$WorkspaceLauncherPath = 'C:\Users\Andrey\Narada\Start-NaradaWorkspace.ps1',
+  [string]$WorkspaceLauncherPath = (Join-Path ($env:NARADA_USER_SITE_ROOT ? $env:NARADA_USER_SITE_ROOT : (Join-Path $HOME 'Narada')) 'Start-NaradaWorkspace.Dev.ps1'),
   [string]$Site = 'smart-scheduling',
   [string]$Role = 'resident',
   [string]$OperatorSurface = 'agent-cli',
@@ -18,10 +18,10 @@ Remove-Item -LiteralPath $terminalLog -Force -ErrorAction SilentlyContinue
 $env:NARADA_WORKSPACE_LAUNCH_HIDDEN_RUNTIME_LOG = $hiddenLog
 $env:NARADA_WORKSPACE_LAUNCH_TERMINAL_LOG = $terminalLog
 
-& $WorkspaceLauncherPath -Site $Site -Role $Role -OperatorSurface $OperatorSurface -Runtime $Runtime -IntelligenceProvider $IntelligenceProvider -NonInteractive -McpScope all
+& $WorkspaceLauncherPath -Site $Site -Role $Role -OperatorSurface $OperatorSurface -Runtime $Runtime -IntelligenceProvider $IntelligenceProvider -McpScope all
 $exitCode = $LASTEXITCODE
 
-$resultRoot = 'C:\Users\Andrey\Narada\.narada\runtime\workspace-launch-results'
+$resultRoot = Join-Path ($env:NARADA_USER_SITE_ROOT ? $env:NARADA_USER_SITE_ROOT : (Join-Path $HOME 'Narada')) '.narada\runtime\workspace-launch-results'
 $latest = Get-ChildItem -LiteralPath $resultRoot -Filter 'workspace-launch-*.json' | Sort-Object LastWriteTime -Descending | Select-Object -First 1
 $result = if ($latest) { Get-Content -LiteralPath $latest.FullName -Raw | ConvertFrom-Json } else { $null }
 $hasTopLevelWtArgs = $false

@@ -185,7 +185,7 @@ The installed Windows handoff is equivalent:
 Pwsh -File "$env:USERPROFILE\Narada\Start-NaradaWorkspace.ps1" -Onboarding
 ```
 
-`-Onboarding` is the thin bootstrap path. Explicit Site, role, operator-surface, runtime, and provider selection remains on the advanced workspace launcher path.
+`-Onboarding` is the thin bootstrap path. Explicit Site, role, operator-surface, runtime, and provider selection remains on the advanced workspace launcher path. On source checkouts, the installed `Start-NaradaWorkspace.Dev.ps1` (next to the plain shim in the User Site) is the development launcher: it drives the CLI from the checkout with dist-freshness and carrier-projection checks and exposes the full selection surface.
 
 When the onboarding launch selects the browser surface, the launcher passes an explicit User Site onboarding mode into
 Agent Web UI. The browser then shows a compact first-use panel with the resolved workspace, `resident` General assistant,

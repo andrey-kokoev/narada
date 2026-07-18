@@ -4,12 +4,12 @@ import { spawnSync } from 'node:child_process';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { homedir, tmpdir } from 'node:os';
+import { tmpdir } from 'node:os';
 import { discoverNarsSessions, writeNarsSessionStartedIndex } from '@narada2/nars-session-core/session-index';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const naradaProperRoot = resolve(__dirname, '..', '..', '..', '..', '..');
-const workspaceLauncher = resolve(process.env.NARADA_USER_SITE_ROOT ?? resolve(homedir(), 'Narada'), 'Start-NaradaWorkspace.ps1');
+const workspaceLauncher = resolve(__dirname, '..', '..', 'src', 'assets', 'windows', 'Start-NaradaWorkspace.Dev.ps1');
 
 function parseJsonOutput(stdout) {
   const text = String(stdout);
@@ -139,86 +139,128 @@ async function removeFixtureRoot(fixtureRoot, timeoutMs = 15_000) {
 
 test('operator launch journey dry-run maps one agent to agent-cli and agent-web-ui sibling projections', { skip: process.platform !== 'win32' }, () => {
   assert.equal(existsSync(workspaceLauncher), true, `User Site launcher not found: ${workspaceLauncher}`);
-  const result = spawnSync('pwsh', [
-    '-File', workspaceLauncher,
-    '-All',
-    '-Runtime', 'nars',
-    '-Carrier', 'agent-cli,agent-web-ui',
-    '-Site', 'sonar',
-    '-Role', 'resident',
-    '-DryRun',
-  ], {
-    cwd: naradaProperRoot,
-    encoding: 'utf8',
-    timeout: 30_000,
-    env: {
-      ...process.env,
-      NARADA_PROPER_ROOT: naradaProperRoot,
-    },
-  });
+  const fixtureRoot = mkdtempSync(resolve(tmpdir(), 'narada-launcher-plan-'));
+  try {
+    const registryPath = resolve(fixtureRoot, 'agents.json');
+    writeFileSync(registryPath, JSON.stringify({
+      Agents: [{
+        Agent: 'resident',
+        Role: 'resident',
+        Site: 'sonar',
+        NaradaRoot: fixtureRoot,
+        SiteRoot: fixtureRoot,
+        WorkspaceRoot: fixtureRoot,
+        LauncherPath: resolve(fixtureRoot, 'sonar.ps1'),
+        OperatorSurface: 'agent-cli',
+        Runtime: 'narada-agent-runtime-server',
+      }],
+    }), 'utf8');
+    const result = spawnSync('pwsh', [
+      '-File', workspaceLauncher,
+      '-All',
+      '-Runtime', 'nars',
+      '-Carrier', 'agent-cli,agent-web-ui',
+      '-Site', 'sonar',
+      '-Role', 'resident',
+      '-ConfigPath', registryPath,
+      '-DryRun',
+    ], {
+      cwd: naradaProperRoot,
+      encoding: 'utf8',
+      timeout: 30_000,
+      env: {
+        ...process.env,
+        NARADA_PROPER_ROOT: naradaProperRoot,
+        NARADA_USER_SITE_ROOT: fixtureRoot,
+      },
+    });
 
-  assert.equal(result.status, 0, `stderr:\n${result.stderr}\nstdout:\n${result.stdout}`);
-  assert.doesNotMatch(result.stderr, /narada_cli_dist_stale|source_hash_mismatch/i);
-  const plan = parseJsonOutput(result.stdout);
+    assert.equal(result.status, 0, `stderr:\n${result.stderr}\nstdout:\n${result.stdout}`);
+    assert.doesNotMatch(result.stderr, /narada_cli_dist_stale|source_hash_mismatch/i);
+    const plan = parseJsonOutput(result.stdout);
 
-  assert.equal(plan.schema, 'narada.workspace_launch.plan.v1');
-  assert.equal(plan.mode, 'dry_run');
-  assert.equal(plan.mutation_performed, false);
-  assert.equal(plan.windows_terminal_invoked, false);
-  assert.equal(plan.launcher_execution_owner, 'narada-cli');
-  assert.equal(plan.selected_agents.length, 1);
+    assert.equal(plan.schema, 'narada.workspace_launch.plan.v1');
+    assert.equal(plan.mode, 'dry_run');
+    assert.equal(plan.mutation_performed, false);
+    assert.equal(plan.windows_terminal_invoked, false);
+    assert.equal(plan.launcher_execution_owner, 'narada-cli');
+    assert.equal(plan.selected_agents.length, 1);
 
-  const agent = plan.selected_agents[0];
-  assert.deepEqual(agent.launch_operator_surfaces, ['agent-cli', 'agent-web-ui']);
-  assert.equal(agent.launch_operator_surface, 'agent-cli');
-  assert.equal(agent.launch_runtime, 'narada-agent-runtime-server');
+    const agent = plan.selected_agents[0];
+    assert.deepEqual(agent.launch_operator_surfaces, ['agent-cli', 'agent-web-ui']);
+    assert.equal(agent.launch_operator_surface, 'agent-cli');
+    assert.equal(agent.launch_runtime, 'narada-agent-runtime-server');
 
-  const separatorCount = agent.wt_args.filter((arg) => arg === ';').length;
-  assert.equal(separatorCount, 1, JSON.stringify(agent.wt_args, null, 2));
-  const commandText = agent.wt_args.join(' ');
-  assert.match(commandText, /'operator-surface' 'runtime' 'start' 'agent-cli'/);
-  assert.match(commandText, /'--runtime' 'narada-agent-runtime-server'/);
-  assert.match(commandText, /'agent-web-ui' 'attach'/);
-  assert.match(commandText, /'--agent' 'resident'/);
-  assert.match(commandText, /'--wait-for-session-ms' '60000'/);
+    const separatorCount = agent.wt_args.filter((arg) => arg === ';').length;
+    assert.equal(separatorCount, 1, JSON.stringify(agent.wt_args, null, 2));
+    const commandText = agent.wt_args.join(' ');
+    assert.match(commandText, /'operator-surface' 'runtime' 'start' 'agent-cli'/);
+    assert.match(commandText, /'--runtime' 'narada-agent-runtime-server'/);
+    assert.match(commandText, /'agent-web-ui' 'attach'/);
+    assert.match(commandText, /'--agent' 'resident'/);
+    assert.match(commandText, /'--wait-for-session-ms' '60000'/);
+  } finally {
+    rmSync(fixtureRoot, { recursive: true, force: true });
+  }
 });
 
 test('operator launch journey dry-run admits agent-web-ui as the primary NARS launch carrier', { skip: process.platform !== 'win32' }, () => {
   assert.equal(existsSync(workspaceLauncher), true, `User Site launcher not found: ${workspaceLauncher}`);
-  const result = spawnSync('pwsh', [
-    '-File', workspaceLauncher,
-    '-All',
-    '-Runtime', 'nars',
-    '-Carrier', 'agent-web-ui',
-    '-Site', 'sonar',
-    '-Role', 'resident',
-    '-DryRun',
-  ], {
-    cwd: naradaProperRoot,
-    encoding: 'utf8',
-    timeout: 30_000,
-    env: {
-      ...process.env,
-      NARADA_PROPER_ROOT: naradaProperRoot,
-    },
-  });
+  const fixtureRoot = mkdtempSync(resolve(tmpdir(), 'narada-launcher-plan-'));
+  try {
+    const registryPath = resolve(fixtureRoot, 'agents.json');
+    writeFileSync(registryPath, JSON.stringify({
+      Agents: [{
+        Agent: 'sonar.resident',
+        Role: 'resident',
+        Site: 'sonar',
+        NaradaRoot: fixtureRoot,
+        SiteRoot: fixtureRoot,
+        WorkspaceRoot: fixtureRoot,
+        LauncherPath: resolve(fixtureRoot, 'sonar.ps1'),
+        OperatorSurface: 'agent-web-ui',
+        Runtime: 'narada-agent-runtime-server',
+      }],
+    }), 'utf8');
+    const result = spawnSync('pwsh', [
+      '-File', workspaceLauncher,
+      '-All',
+      '-Runtime', 'nars',
+      '-Carrier', 'agent-web-ui',
+      '-Site', 'sonar',
+      '-Role', 'resident',
+      '-ConfigPath', registryPath,
+      '-DryRun',
+    ], {
+      cwd: naradaProperRoot,
+      encoding: 'utf8',
+      timeout: 30_000,
+      env: {
+        ...process.env,
+        NARADA_PROPER_ROOT: naradaProperRoot,
+        NARADA_USER_SITE_ROOT: fixtureRoot,
+      },
+    });
 
-  assert.equal(result.status, 0, `stderr:\n${result.stderr}\nstdout:\n${result.stdout}`);
-  const plan = parseJsonOutput(result.stdout);
-  const agent = plan.selected_agents[0];
-  assert.deepEqual(agent.launch_operator_surfaces, ['agent-web-ui']);
-  assert.equal(agent.launch_operator_surface, 'agent-web-ui');
-  assert.equal(agent.launch_runtime, 'narada-agent-runtime-server');
-  assert.deepEqual(agent.wt_args, []);
-  assert.equal(agent.runtime_start_execution_mode, 'hidden_detached');
-  assert.deepEqual(agent.terminal_tabs, []);
-  const hiddenRuntimeCommandText = agent.hidden_runtime_start_command.join(' ');
-  assert.match(hiddenRuntimeCommandText, /operator-surface.*runtime.*start/);
-  assert.match(hiddenRuntimeCommandText, /agent-web-ui/);
-  assert.match(hiddenRuntimeCommandText, /narada-agent-runtime-server/);
-  const projectionCommandText = agent.operator_projection_start_command.join(' ');
-  assert.match(projectionCommandText, /agent-web-ui.*attach/);
-  assert.match(projectionCommandText, /--launch-binding/);
+    assert.equal(result.status, 0, `stderr:\n${result.stderr}\nstdout:\n${result.stdout}`);
+    const plan = parseJsonOutput(result.stdout);
+    const agent = plan.selected_agents[0];
+    assert.deepEqual(agent.launch_operator_surfaces, ['agent-web-ui']);
+    assert.equal(agent.launch_operator_surface, 'agent-web-ui');
+    assert.equal(agent.launch_runtime, 'narada-agent-runtime-server');
+    assert.deepEqual(agent.wt_args, []);
+    assert.equal(agent.runtime_start_execution_mode, 'hidden_detached');
+    assert.deepEqual(agent.terminal_tabs, []);
+    const hiddenRuntimeCommandText = agent.hidden_runtime_start_command.join(' ');
+    assert.match(hiddenRuntimeCommandText, /operator-surface.*runtime.*start/);
+    assert.match(hiddenRuntimeCommandText, /agent-web-ui/);
+    assert.match(hiddenRuntimeCommandText, /narada-agent-runtime-server/);
+    const projectionCommandText = agent.operator_projection_start_command.join(' ');
+    assert.match(projectionCommandText, /agent-web-ui.*attach/);
+    assert.match(projectionCommandText, /--launch-binding/);
+  } finally {
+    rmSync(fixtureRoot, { recursive: true, force: true });
+  }
 });
 
 test('PowerShell launcher executes a fresh NARS session and attaches the Web UI projection', { skip: process.platform !== 'win32' }, async () => {

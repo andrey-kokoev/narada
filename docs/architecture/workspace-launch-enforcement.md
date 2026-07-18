@@ -6,6 +6,15 @@ selection, admission, plan construction, process handoff, and launch evidence;
 the runtime host owns the session, provider, MCP execution, and runtime events;
 operator surfaces own presentation and attachment.
 
+## Terminology
+
+`workspace-launch` is the launch-registry-driven command name, kept for
+compatibility. "Workspace" scopes the registry the selection comes from; it
+does not imply multi-agent grouping. The interactive grouping product was
+removed in task #2041 (decision 20260718-2038). The two supported shapes are
+single-agent launch (`narada launcher workspace-launch --agent <id>`) and
+Site-level launch (`narada sites launch <site-id>`).
+
 ## Canonical Launch Shape
 
 The canonical selection tuple is:
@@ -126,6 +135,13 @@ consumers require them. Compatibility fields must be labeled as such and must
 not become new source-of-truth inputs. In particular, `carrier_kind` and related
 aliases are accepted at the migration edge but new launcher code selects
 `operator_surface_kind`.
+
+Schema field removal is a contract change. Removing a field from a `v1` schema
+without a version bump is admissible only with recorded evidence that the field
+was a dead constant with zero typed, scripted, or test consumers; otherwise the
+schema version must be bumped. Precedent: the `interactive_selection` /
+`interactive_selection_surface` removal from `narada.workspace_launch.plan.v1`
+and `narada.workspace_launch.failure.v1` (2026-07-18, consumer audit clean).
 
 Likewise, the runtime server and Cloudflare projection must receive an explicit
 MCP scope. A missing value is intentionally inert. This prevents a newly added

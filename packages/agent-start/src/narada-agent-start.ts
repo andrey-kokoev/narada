@@ -100,8 +100,15 @@ const NARADA_PROPER_ROOT = process.env.NARADA_PROPER_ROOT ?? naradaProperRoot;
 const candidateSiteToolsRoot = args.site_tools_root ?? join(rootDir, 'tools');
 const siteLocalToolsRoot = join(siteNaradaRoot(rootDir), 'tools');
 const packagedCommonToolsRoot = join(NARADA_PROPER_ROOT, 'packages', 'site-common-tools', 'src');
-const packagedAgentContextSessionStartPath = resolvePackagedModule('@narada2/agent-context-mcp/session-start')
-  ?? join(NARADA_PROPER_ROOT, 'packages', 'agent-context-tools', 'src', 'session-start.mjs');
+// The narada workspace source copy of session-start is canonical in source
+// checkouts: the packaged @narada2/agent-context-mcp copy currently resolves
+// to a divergent older implementation (strict roster DB requirement, no
+// inferred fallback) and must only serve published installs where the source
+// tree is absent.
+const sourceAgentContextSessionStartPath = join(NARADA_PROPER_ROOT, 'packages', 'agent-context-tools', 'src', 'session-start.mjs');
+const packagedAgentContextSessionStartPath = existsSync(sourceAgentContextSessionStartPath)
+  ? sourceAgentContextSessionStartPath
+  : resolvePackagedModule('@narada2/agent-context-mcp/session-start');
 const packagedWriteFileModulePath = resolvePackagedModule('@narada2/site-common-tools/incubation/write-file-utf8.mjs')
   ?? join(packagedCommonToolsRoot, 'incubation', 'write-file-utf8.mjs');
 const packagedMcpFabricModulePath = resolvePackagedModule('@narada2/mcp-fabric')

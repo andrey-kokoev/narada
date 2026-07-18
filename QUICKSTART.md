@@ -73,6 +73,12 @@ pnpm install
 pnpm build
 ```
 
+Source checkouts also get a development launcher, `Start-NaradaWorkspace.Dev.ps1`, installed next to
+`Start-NaradaWorkspace.ps1` in the User Site. The dev launcher drives `pnpm --dir <checkout> exec narada`
+directly from your checkout, checks CLI dist freshness (rebuilding when stale), verifies carrier
+projections, and exposes the full selection surface (`-All`, `-Carrier`, `-ConfigPath`, `-Smoke`, ...).
+Use it when working from a checkout; use the plain shim for published installs.
+
 ## Personal User Site — first-time Windows path
 
 This is the recommended starting point when you do not yet have a project, mailbox operation, or separate Site to configure.

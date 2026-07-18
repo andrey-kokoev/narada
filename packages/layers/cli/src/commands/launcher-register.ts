@@ -17,7 +17,7 @@ type LauncherExplainMcpOptions = Omit<ExplainMcpOptions, 'format'> & { format?: 
 export function registerLauncherCommands(program: Command): void {
   const launcher = program
     .command('launcher')
-    .description('Narada launcher planning and workspace orchestration commands');
+    .description('Narada launcher planning and launch-registry execution commands');
 
   const artifact = launcher
     .command('artifact')

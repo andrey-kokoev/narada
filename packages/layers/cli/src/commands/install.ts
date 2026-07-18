@@ -34,6 +34,7 @@ interface InstalledAsset {
 
 const WINDOWS_ASSETS = [
   { name: 'Start-NaradaWorkspace.ps1', relativePath: join('Start-NaradaWorkspace.ps1') },
+  { name: 'Start-NaradaWorkspace.Dev.ps1', relativePath: join('Start-NaradaWorkspace.Dev.ps1') },
   { name: 'Set-NaradaProviderSecret.ps1', relativePath: join('tools', 'operator-secrets', 'Set-NaradaProviderSecret.ps1') },
   { name: 'Test-NaradaProviderSecrets.ps1', relativePath: join('tools', 'operator-secrets', 'Test-NaradaProviderSecrets.ps1') },
 ] as const;
