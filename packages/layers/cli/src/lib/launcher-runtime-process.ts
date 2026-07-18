@@ -1,6 +1,6 @@
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { runGovernedCommandSync, spawnHiddenPostureProcess, startOperatorTerminal } from '@narada2/process-launch-posture';
+import { execFileGoverned, runGovernedCommandSync, spawnHiddenPostureProcess, startOperatorTerminal } from '@narada2/process-launch-posture';
 import type { AgentStartExecutionResult, CommandExecutionResult } from './launcher-contracts.js';
 
 export const DEFAULT_AGENT_START_HANDOFF_TIMEOUT_MS = 30_000;
@@ -59,6 +59,50 @@ export function runProcess(
     stderr: String(result.stderr ?? '').trim(),
     error: result.error ? result.error.message : undefined,
   };
+}
+
+/**
+ * Async analogue of runProcess for HTTP handlers and other event-loop-sensitive
+ * callers: same governed posture, env, and 120s timeout, but the child runs
+ * without blocking the loop. Rejections (non-zero exit, timeout) are mapped to
+ * a failed CommandExecutionResult with stdout/stderr preserved when present.
+ */
+export async function runProcessAsync(
+  command: string,
+  args: string[],
+  cwd: string,
+  env: Record<string, string> = {},
+): Promise<CommandExecutionResult> {
+  try {
+    const result = await execFileGoverned(command, args, {
+      cwd,
+      encoding: 'utf8',
+      timeout: 120_000,
+      windowsHide: true,
+      env: {
+        ...process.env,
+        NODE_OPTIONS: appendNodeOption(process.env.NODE_OPTIONS, '--disable-warning=ExperimentalWarning'),
+        OUTPUT_FORMAT: 'json',
+        ...env,
+      },
+    });
+    return {
+      status: 'success',
+      exit_code: 0,
+      stdout: String(result.stdout ?? '').trim(),
+      stderr: String(result.stderr ?? '').trim(),
+    };
+  } catch (error) {
+    const failure = error as NodeJS.ErrnoException & { code?: number | string; stdout?: unknown; stderr?: unknown };
+    const exitCode = typeof failure.code === 'number' ? failure.code : 1;
+    return {
+      status: 'failed',
+      exit_code: exitCode,
+      stdout: String(failure.stdout ?? '').trim(),
+      stderr: String(failure.stderr ?? '').trim(),
+      error: failure instanceof Error ? failure.message : String(error),
+    };
+  }
 }
 
 export function runProcessDetachedUntilJson(

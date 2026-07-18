@@ -39,6 +39,7 @@ import {
   sitesRegistryShowCommand,
   sitesRegistryStateCommand,
 } from './site-registry-management.js';
+import { sitesLaunchCommand } from './sites-launch.js';
 import {directCommandAction, silentCommandContext, wrapCommand, type CommanderOptionValues} from '../lib/command-wrapper.js';
 import { emitCommandResult, emitFiniteCommandResult, emitFormatterBackedCommandResult, resolveCommandFormat } from '../lib/cli-output.js';
 
@@ -231,6 +232,24 @@ export function registerSitesCommands(program: Command): void {
       }, silentCommandContext({ verbose: !!opts.verbose })),
     }));
   }
+
+  sitesCmd
+    .command('launch <site-id>')
+    .description('Ensure a Site\'s declared runtime posture (resident carrier, MCP surfaces, scheduler, console)')
+    .option('--dry-run', 'Plan and check only; no mutation', false)
+    .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
+    .option('-v, --verbose', 'Enable verbose output', false)
+    .action(directCommandAction<[string, CommanderOptionValues]>({
+      command: 'sites launch',
+      emit: emitCommandResult,
+      format: (_siteId: string, opts: CommanderOptionValues) => opts.format,
+      invocation: (siteId, opts) => sitesLaunchCommand({
+        siteId,
+        dryRun: opts.dryRun as boolean | undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
+        verbose: opts.verbose as boolean | undefined,
+      }, silentCommandContext({ verbose: !!opts.verbose })),
+    }));
 
   sitesCmd
     .command('setup')

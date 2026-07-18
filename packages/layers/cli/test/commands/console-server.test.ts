@@ -146,6 +146,11 @@ vi.mock('@narada2/linux-site', () => ({
   },
 }));
 
+const sitesLaunchCommandMock = vi.fn();
+vi.mock('../../src/commands/sites-launch.js', () => ({
+  sitesLaunchCommand: (...args: unknown[]) => sitesLaunchCommandMock(...args),
+}));
+
 async function httpGet(url: string, headers?: Record<string, string>): Promise<{ status: number; body: unknown }> {
   const response = await fetch(url, { headers });
   const text = await response.text();
@@ -1046,9 +1051,15 @@ describe('console server', () => {
         expect((inventory.body as { history: Array<{ ui_session_id: string; url: string | null }> }).history)
           .toEqual([{ ...historicalSession, url: null }]);
 
+        // Grouping-era endpoints signal deprecation at the API level until removal (task #2041).
+        const inventoryRaw = await fetch(`${url}/console/launch/api/sessions`);
+        expect(inventoryRaw.headers.get('deprecation')).toBe('true');
+        expect(inventoryRaw.headers.get('warning')).toContain('299');
+
         const page = await fetch(`${url}/console/launch/sessions/ui-session-active`);
         const html = await page.text();
         expect(page.status, html).toBe(200);
+        expect(page.headers.get('deprecation')).toBe('true');
         expect(html).toContain('"basePath":"/console/launch/sessions/ui-session-active"');
         expect(html).toContain('/console/launch/sessions/ui-session-active/assets/index.js');
 
@@ -1091,6 +1102,85 @@ describe('console server', () => {
         expect((inventory.body as { sessions: Array<{ url: string | null }> }).sessions[0]?.url).toBeNull();
         const proxied = await httpGet(`${url}/console/launch/sessions/ui-session-external`);
         expect(proxied.status).toBe(409);
+      } finally {
+        await server.stop();
+      }
+    });
+  });
+  describe('per-site launch route', () => {
+    it('defaults to dry-run and forwards an explicit apply request', async () => {
+      sitesLaunchCommandMock.mockImplementation(async (options: { siteId: string; dryRun: boolean }) => ({
+        exitCode: 0,
+        result: {
+          schema: 'narada.sites.launch.result.v0',
+          status: options.dryRun ? 'dry_run' : 'ok',
+          dry_run: options.dryRun,
+          mutation_performed: !options.dryRun,
+          site_id: options.siteId,
+          site_root: '/tmp/site-a',
+          checks: [],
+          actions: [],
+          console_url: 'http://127.0.0.1:61729/console/registry',
+        },
+      }));
+      const server = await createConsoleServer({ port: 0, host: '127.0.0.1' });
+      try {
+        const url = await server.start();
+
+        const planned = await httpPost(`${url}/console/registry/api/sites/site-a/launch`, {});
+        expect(planned.status).toBe(200);
+        expect((planned.body as { status: string }).status).toBe('dry_run');
+        expect(sitesLaunchCommandMock).toHaveBeenLastCalledWith(
+          expect.objectContaining({ siteId: 'site-a', dryRun: true, format: 'json' }),
+          expect.anything(),
+        );
+
+        const applied = await httpPost(`${url}/console/registry/api/sites/site-a/launch`, { dry_run: false });
+        expect(applied.status).toBe(200);
+        expect((applied.body as { status: string }).status).toBe('ok');
+        expect(sitesLaunchCommandMock).toHaveBeenLastCalledWith(
+          expect.objectContaining({ siteId: 'site-a', dryRun: false, format: 'json' }),
+          expect.anything(),
+        );
+
+        // An unparseable body fails safe: treated as a dry-run plan request.
+        const response = await fetch(`${url}/console/registry/api/sites/site-a/launch`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: '{not json',
+        });
+        expect(response.status).toBe(200);
+        expect(sitesLaunchCommandMock).toHaveBeenLastCalledWith(
+          expect.objectContaining({ siteId: 'site-a', dryRun: true }),
+          expect.anything(),
+        );
+      } finally {
+        await server.stop();
+      }
+    });
+
+    it('maps a failed ensure onto a 400 with the command result', async () => {
+      sitesLaunchCommandMock.mockResolvedValue({
+        exitCode: 1,
+        result: {
+          schema: 'narada.sites.launch.result.v0',
+          status: 'failed',
+          dry_run: false,
+          mutation_performed: true,
+          site_id: 'site-a',
+          site_root: '/tmp/site-a',
+          checks: [{ id: 'resident_ensure', status: 'fail', summary: 'boom' }],
+          actions: [],
+          console_url: 'http://127.0.0.1:61729/console/registry',
+        },
+      });
+      const server = await createConsoleServer({ port: 0, host: '127.0.0.1' });
+      try {
+        const url = await server.start();
+        const failed = await httpPost(`${url}/console/registry/api/sites/site-a/launch`, { dry_run: false });
+        expect(failed.status).toBe(400);
+        expect((failed.body as { status: string }).status).toBe('failed');
+        expect((failed.body as { mutation_performed: boolean }).mutation_performed).toBe(true);
       } finally {
         await server.stop();
       }

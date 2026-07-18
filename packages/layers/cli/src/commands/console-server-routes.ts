@@ -7,7 +7,10 @@
  * Authority boundary:
  * - GET routes are strictly read-only; they never mutate registry or Site state.
  * - POST /console/sites/:site_id/control delegates through ControlRequestRouter.
- * - No direct Site mutation from route handlers.
+ * - POST /console/registry/api/sites/:id/launch runs the plan-first sites-launch ensure
+ *   (dry-run unless the body explicitly sets dry_run: false).
+ * - Registry plan/apply POSTs delegate through the RegistryMutationGateway.
+ * - No other direct Site mutation from route handlers.
  */
 
 import type { ServerResponse, IncomingMessage } from 'http';
@@ -43,6 +46,8 @@ import {
   readOperatorConsoleUiAsset,
   readOperatorConsoleUiDocument,
 } from './console-ui-assets.js';
+import { sitesLaunchCommand } from './sites-launch.js';
+import { silentCommandContext } from '../lib/command-wrapper.js';
 
 export interface RouteHandler {
   method: string;
@@ -113,6 +118,16 @@ function commandResponse(res: ServerResponse, command: { exitCode: number; resul
         ? 200
         : 400;
   jsonResponse(res, status, command.result);
+}
+
+/**
+ * The grouping-era launcher session API (sessions inventory + session reverse
+ * proxy) is deprecated by decision 20260718-2038; physical removal is tracked
+ * in task #2041. Until then, signal the deprecation at the API level.
+ */
+function setGroupingDeprecationHeaders(res: ServerResponse): void {
+  res.setHeader('Deprecation', 'true');
+  res.setHeader('Warning', '299 - "Deprecated: grouping-era launcher session API; see decision 20260718-2038 (removal task #2041)"');
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -293,6 +308,7 @@ async function proxyLauncherSessionRequest(
   proxyPath: string,
   searchParams: URLSearchParams,
 ): Promise<void> {
+  setGroupingDeprecationHeaders(res);
   if (!launcherProxyPathAllowed(req.method ?? '', proxyPath)) {
     jsonResponse(res, 404, { error: 'Launcher session path not found' });
     return;
@@ -412,6 +428,7 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
           jsonResponse(res, 403, { error: 'Origin not allowed' });
           return;
         }
+        setGroupingDeprecationHeaders(res);
         jsonResponse(res, 200, consoleLauncherSessionInventory(await (ctx.workspaceLaunchSessions ?? readWorkspaceLaunchUiSessions)()));
       },
     },
@@ -593,6 +610,25 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
           return;
         }
         commandResponse(res, await ctx.registryReadModel.show(decodeURIComponent(params[1]!)));
+      },
+    },
+    // Per-site launch/ensure action; plan-first (dry-run) unless explicitly told to apply.
+    {
+      method: 'POST',
+      pattern: suffixPathPattern(OPERATOR_CONSOLE_REGISTRY_PATH, '/api/sites/([^/]+)/launch$'),
+      handler: async (req, res, params) => {
+        const origin = req.headers.origin;
+        if (!setCorsHeaders(res, origin)) {
+          jsonResponse(res, 403, { error: 'Origin not allowed' });
+          return;
+        }
+        const payload = (await requestJson(req)) ?? {};
+        const dryRun = payload.dry_run !== false;
+        commandResponse(res, await sitesLaunchCommand({
+          siteId: decodeURIComponent(params[1]!),
+          dryRun,
+          format: 'json',
+        }, silentCommandContext({})));
       },
     },
     {

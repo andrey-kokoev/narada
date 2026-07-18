@@ -8,7 +8,8 @@ Commands in `src/commands/` that host browser-facing surfaces:
 
 - `operator-workspace-page.ts` — workspace landing page (`/`); renders navigation from `projectOperatorSurfaceNavigation()` in `@narada2/operator-console-contract`, never a hand-written surface list.
 - `console-server.ts` — Operator Console HTTP server (observation + audited control routing); also projects operator-router routes and ensures the console launch artifact.
-- `console-server-routes.ts` — route table. GET routes are strictly read-only; the single POST control endpoint delegates through `ControlRequestRouter`. No direct Site mutation from route handlers.
+- `console-server-routes.ts` — route table. GET routes are strictly read-only; mutating POSTs are the registry plan/apply boundary (via `RegistryMutationGateway`), the `ControlRequestRouter` control endpoint, and the plan-first site launch ensure (`POST /console/registry/api/sites/:id/launch` → `sitesLaunchCommand`, dry-run unless the body explicitly sets `dry_run: false`).
+- `sites-launch.ts` — `sitesLaunchCommand`: ensures a Site's declared runtime posture (registry resolution, MCP surface materialization drift via `@narada2/mcp-fabric`, resident ensure via the Site's own CLI when a loop declares one, scheduler posture check, console URL). Registered as `narada sites launch <site-id>` in `sites-register.ts`.
 - `console-register.ts` — CLI command registration for the console surface.
 - Supporting modules in the same directory: `site-registry-read-model.ts`, `site-registry-management-gateway.ts`, `agent-session-read-model.ts`, `workspace-launch-session-store.ts`, `console-ui-assets.ts`.
 

@@ -34,7 +34,7 @@ test('Operator Console pages stay behind the route and workflow boundaries', () 
   assert.match(registryTransport, /fetchLike/);
   assert.match(registryAdapter, /parseSiteRegistryListResponse/);
   assert.match(registryAdapter, /createSiteRegistryAdapter/);
-  assert.match(launchPage, /useOperatorConsoleLauncherSessions/);
+  assert.match(launchPage, /useSiteRegistry/);
   assert.match(launchDomain, /parseWorkspaceLaunchUiSessionList/);
   assert.match(launchTransport, /parseOperatorConsoleLauncherSessions/);
   assert.match(launchComposable, /createOperatorConsoleLauncherSessionTransport/);

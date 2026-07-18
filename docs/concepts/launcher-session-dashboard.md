@@ -1,5 +1,12 @@
 # Launcher Session Dashboard
 
+> **Deprecated (2026-07-18):** this document describes the grouping-era interactive
+> launcher product. Per `.ai/decisions/20260718-2038-launcher-realignment-single-agent-and-site-level.md`
+> the supported launch shapes are single-agent launch (default primitive) and
+> site-level launch (`narada sites launch`); the interactive selection UI and its
+> session dashboard are demoted and slated for removal. Kept as historical
+> reference only — do not implement new work against this target.
+
 ## Purpose
 
 This document defines the target shape for the browser page opened by `workspace-launch --interactive-selection-ui`.

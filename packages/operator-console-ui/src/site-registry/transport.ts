@@ -8,6 +8,7 @@ export interface SiteRegistryTransport {
   show(reference: string): Promise<unknown>;
   plan(request: SiteRegistryMutationRequest): Promise<unknown>;
   apply(request: SiteRegistryMutationRequest): Promise<unknown>;
+  launch(reference: string, dryRun: boolean): Promise<unknown>;
 }
 
 export class SiteRegistryTransportError extends Error {
@@ -68,10 +69,28 @@ export function createSiteRegistryTransport(
     return payload;
   }
 
+  async function postLaunch(path: string, dryRun: boolean): Promise<unknown> {
+    const response = await fetchLike(`${basePath}${path}`, {
+      method: 'POST',
+      headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dry_run: dryRun }),
+    });
+    const payload = await readJson(response);
+    if (!response.ok) {
+      throw new SiteRegistryTransportError(
+        'http_error',
+        response.status,
+        `Site launch request failed with HTTP ${response.status}.`,
+      );
+    }
+    return payload;
+  }
+
   return {
     list: () => get('/sites'),
     show: (reference) => get(`/sites/${encodeURIComponent(reference)}`),
     plan: (request) => post('/operations/plan', request, false),
     apply: (request) => post('/operations/apply', request, true),
+    launch: (reference, dryRun) => postLaunch(`/sites/${encodeURIComponent(reference)}/launch`, dryRun),
   };
 }

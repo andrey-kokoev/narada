@@ -64,7 +64,7 @@ test('navigation projection follows descriptor availability and labels', () => {
     'Sites',
     'Add Site',
     'Manage',
-    'Launcher',
+    'Site Runtime',
     'Sessions',
   ]);
   assert.deepEqual(projectOperatorSurfaceNavigation({ availability: { launcher: 'unavailable' } }).map((item) => item.key), [
@@ -73,6 +73,12 @@ test('navigation projection follows descriptor availability and labels', () => {
     'manage',
     'sessions',
   ]);
+});
+
+test('launcher descriptor projection is owned by the console UI, not the grouping-era package', () => {
+  const launcher = operatorSurfaceDescriptors.find((surface) => surface.id === 'launcher')!;
+  assert.equal(launcher.name, 'Site Runtime');
+  assert.equal(launcher.projection.owner, '@narada2/operator-console-ui');
 });
 
 test('navigation projection excludes routes that are unavailable within an available surface', () => {

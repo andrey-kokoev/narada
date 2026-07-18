@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import type { SiteCommandResult } from './launcher-contracts.js';
-import { runProcess, truncateText } from './launcher-runtime-process.js';
+import { runProcess, runProcessAsync, truncateText } from './launcher-runtime-process.js';
 import { tryParseJson } from './launcher-runtime-results.js';
 
 export function runSiteCliCommand(siteRootInput: string, args: string[]): SiteCommandResult {
@@ -18,6 +18,36 @@ export function runSiteCliCommand(siteRootInput: string, args: string[]): SiteCo
     };
   }
   const execution = runProcess(process.execPath, [cli, ...args, '--format', 'json'], siteRoot);
+  return siteCommandResultFromExecution(siteRoot, args, execution);
+}
+
+/**
+ * Async analogue of runSiteCliCommand for event-loop-sensitive callers (e.g.
+ * console HTTP handlers). Identical semantics; the child process no longer
+ * blocks the event loop.
+ */
+export async function runSiteCliCommandAsync(siteRootInput: string, args: string[]): Promise<SiteCommandResult> {
+  const siteRoot = resolve(siteRootInput);
+  const cli = join(siteRoot, 'scripts', 'narada-sonar.ts');
+  if (!existsSync(cli)) {
+    return {
+      schema: 'narada.site_command_result.v0',
+      status: 'not_available',
+      mutation_performed: false,
+      site_root: siteRoot,
+      command: args,
+      error: `Site CLI not found: ${cli}`,
+    };
+  }
+  const execution = await runProcessAsync(process.execPath, [cli, ...args, '--format', 'json'], siteRoot);
+  return siteCommandResultFromExecution(siteRoot, args, execution);
+}
+
+function siteCommandResultFromExecution(
+  siteRoot: string,
+  args: string[],
+  execution: ReturnType<typeof runProcess>,
+): SiteCommandResult {
   const parsed = tryParseJson(execution.stdout);
   return {
     schema: 'narada.site_command_result.v0',
