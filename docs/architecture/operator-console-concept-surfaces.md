@@ -56,24 +56,16 @@ composable, page, and projection chain below.
 
 The registry page is a collection and selection surface. Add and manage are separate workflow pages. They reuse the same domain and server plan/apply gateway, but they do not merge collection browsing and mutation into one page.
 
-### Workspace Launch
+### Site Runtime (Launch)
 
 | Concern | Owner |
 | --- | --- |
-| Canonical launch selector and dashboard wire types | `@narada2/workspace-launch-contract` |
-| Launch authority and HTTP endpoints | `@narada2/cli` |
-| Browser domain adapter | `workspace-launch-ui/src/launcher/domain.ts` |
-| Typed browser transport and base-path binding | `workspace-launch-ui/src/launcher/transport.ts` |
-| Selection, submit, cancel, retry, and dashboard state | `useWorkspaceLaunchWorkflow` |
-| Launcher presentation | `workspace-launch-ui/src/App.vue` |
-| Repeated projection | Launch attempt cards and stage rows |
-| Serving boundary | CLI launcher server root and its bounded asset route |
+| Launch authority | `@narada2/cli` (`narada launcher workspace-launch`, `narada sites launch`) |
+| Launch page presentation | `operator-console-ui/src/pages/OperatorConsoleLaunchPage.vue` |
+| Site collection domain | Shared site-registry transport and `useSiteRegistry` composable |
+| Repeated projection | `SiteTileProjection` rendered by the registry list |
 
-Workspace Launch shares the Narada UI design system with Operator Console, but it is not a Site Registry page and does not acquire registry authority. The CLI remains the owner of launch policy and runtime handoff.
-
-### Operator Console Launcher Router
-
-`/console/launch` is a console-owned routing projection for CLI-owned persistent launcher sessions. The CLI session store owns the read-only persisted session projection; the page reaches it through its typed transport and composable. The inventory exposes stable `/console/launch/sessions/:ui_session_id` links, while the console server forwards only active loopback sessions and the launcher's known browser paths to the CLI-owned server. The console rewrites the launcher bootstrap and asset paths for that stable prefix; it does not start agents, submit launch selections, or duplicate launch authority. The CLI launcher remains the only authority for launch policy, runtime handoff, and session mutation.
+`/console/launch` is a console-owned Site Runtime page, not a launcher session router. It renders the Site registry collection and per-Site launch guidance, and links each Site to its registry entry for posture checks and ensure runs. It does not start agents or duplicate launch authority. The interactive group-launch selector, its CLI-owned session dashboard, and the `@narada2/workspace-launch-contract` / `@narada2/workspace-launch-ui` packages were removed (decision 20260718-2038, task #2041).
 
 ### Agent Session Inventory
 

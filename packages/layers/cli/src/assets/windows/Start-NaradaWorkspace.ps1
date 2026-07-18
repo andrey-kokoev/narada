@@ -2,8 +2,6 @@
 [CmdletBinding()]
 param(
   [switch]$Onboarding,
-  [switch]$InteractiveSelection,
-  [switch]$InteractiveSelectionUI,
   [switch]$DryRun,
   [switch]$NoWaitForEnterBeforeExec,
   [string[]]$Site,
@@ -32,8 +30,6 @@ if ($Onboarding) {
 }
 
 $args = @('launcher', 'workspace-launch')
-if ($InteractiveSelection) { $args += '--interactive-selection' }
-if ($InteractiveSelectionUI) { $args += '--interactive-selection-ui' }
 if ($DryRun) { $args += '--dry-run' }
 if ($NoWaitForEnterBeforeExec) { $args += '--no-wait-for-enter-before-exec' }
 if ($SuppressResultOutput) { $args += '--suppress-result-output' }

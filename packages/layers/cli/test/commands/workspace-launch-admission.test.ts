@@ -3,10 +3,6 @@ import {
   createWorkspaceLaunchAdmissionPolicy,
   type WorkspaceLaunchProviderRegistry,
 } from '../../src/commands/workspace-launch-admission.js';
-import {
-  workspaceLaunchSelectorModel,
-  type WorkspaceLaunchSelectionContext,
-} from '../../src/commands/workspace-launch-selection.js';
 import type { WorkspaceLaunchRecord } from '../../src/commands/workspace-launch-types.js';
 import {
   advanceWorkspaceLaunchTransaction,
@@ -50,7 +46,6 @@ describe('workspace launch admission policy', () => {
       providerRegistry,
       admittedProviders: ['kimi-code-api', 'openrouter-api'],
     });
-    const context: WorkspaceLaunchSelectionContext = { admission };
 
     expect(admission.narsOperatorSurfaceKinds).toEqual(['agent-cli', 'agent-web-ui']);
     expect(admission.resolveOperatorSurfaceRuntimeSelection('agent-web-ui', 'narada-agent-runtime-server')).toMatchObject({
@@ -59,27 +54,6 @@ describe('workspace launch admission policy', () => {
     });
     expect(admission.roleChoicesForSelectedSites([record], ['sonar'])).toEqual(['resident']);
     expect(admission.intelligenceProviderChoices().map((choice) => choice.value)).toEqual([
-      'registry default',
-      'kimi-code-api',
-      'openrouter-api',
-    ]);
-
-    const model = workspaceLaunchSelectorModel(
-      [record],
-      {
-        site: ['sonar'],
-        role: ['resident'],
-        operatorSurface: ['agent-web-ui'],
-        runtime: 'narada-agent-runtime-server',
-        intelligenceProvider: 'kimi-code-api',
-      },
-      [],
-      context,
-    );
-
-    expect(model.selected.operatorSurface).toEqual(['agent-web-ui']);
-    expect(model.selected.intelligenceProvider).toBe('kimi-code-api');
-    expect(model.intelligenceProviderOptions.map((choice) => choice.value)).toEqual([
       'registry default',
       'kimi-code-api',
       'openrouter-api',

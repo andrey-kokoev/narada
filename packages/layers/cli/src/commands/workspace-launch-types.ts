@@ -1,29 +1,8 @@
 import type { AgentIdentityRefV2 } from '@narada2/agent-identity';
 import type { LaunchProcessOwnership } from '@narada2/launch-process-ownership';
-import type {
-  WorkspaceLaunchAttemptRecord,
-  WorkspaceLaunchAttemptStatus,
-  WorkspaceLaunchDashboardState,
-  WorkspaceLaunchHandoffRecord,
-  WorkspaceLaunchObservationRecord,
-  WorkspaceLaunchProjectionObservationRecord,
-} from '@narada2/workspace-launch-contract';
-export type {
-  WorkspaceLaunchAttemptRecord,
-  WorkspaceLaunchAttemptStatus,
-  WorkspaceLaunchDashboardState,
-  WorkspaceLaunchHandoffRecord,
-  WorkspaceLaunchObservationRecord,
-  WorkspaceLaunchProjectionObservationRecord,
-} from '@narada2/workspace-launch-contract';
 import type { CliFormat } from '../lib/cli-output.js';
 import type { ExitCode } from '../lib/exit-codes.js';
 import type { ResolvedSiteRoot } from '../lib/site-root-resolver.js';
-import type {
-  WorkspaceLaunchSelection,
-  WorkspaceLaunchSelectionMode,
-  WorkspaceLaunchSelectorModel,
-} from '@narada2/workspace-launch-contract';
 
 export interface WorkspaceLaunchPlanOptions {
   agent?: string[];
@@ -39,13 +18,6 @@ export interface WorkspaceLaunchPlanOptions {
   intelligenceProvider?: string;
   mcpScope?: string;
   cloudflareApiBaseUrl?: string;
-  interactiveSelection?: boolean;
-  interactiveSelectionUi?: boolean;
-  launcherUiPort?: number;
-  launcherUiPortFallback?: boolean;
-  operatorRouterPort?: number;
-  launcherOutput?: string[];
-  defaultInteractiveSelection?: boolean;
   resultPath?: string;
   suppressResultOutput?: boolean;
   enableNativeShell?: boolean;
@@ -54,10 +26,6 @@ export interface WorkspaceLaunchPlanOptions {
   smoke?: boolean;
   dryRun?: boolean;
   format?: CliFormat;
-  /** Internal execution binding; never supplied by the public CLI parser. */
-  executionAttemptId?: string;
-  /** Internal durable attempt path; never exposed as an execution authority. */
-  executionAttemptPath?: string;
 }
 
 export type WorkspaceLaunchSelectionResolutionSource =
@@ -96,8 +64,6 @@ export interface WorkspaceLaunchRuntimeStartResult {
   runtime_host_kind: string;
   target_site_id: string | null;
 }
-
-export type WorkspaceLauncherOutputProjection = 'summary' | 'events' | 'commands' | 'json' | 'quiet';
 
 export type WorkspaceLaunchFormattedResult<T extends object> = T | (T & { _formatted: string });
 
@@ -150,55 +116,6 @@ export interface WorkspaceLaunchResultRecord {
   wt_args?: unknown;
   operator_terminal_handoff?: WorkspaceLaunchResultTerminalHandoffInput | null;
   attachment?: unknown;
-}
-
-export interface WorkspaceLaunchSelectionSiteCatalogEntry {
-  site_id: string | null;
-  site_root: string;
-  source: string;
-}
-
-export interface WorkspaceLaunchRememberedSelectionSemantics {
-  schema: 'narada.workspace_launch.remembered_selection_semantics.v1';
-  role: 'form_defaults_only';
-  binds_runtime_session: false;
-  binds_launch_session: false;
-  launch_submission: 'always_creates_new_launch_session';
-}
-
-export interface WorkspaceLaunchSelectionUiModel {
-  records: WorkspaceLaunchRecord[];
-  siteChoices: string[];
-  siteCatalog: WorkspaceLaunchSelectionSiteCatalogEntry[];
-  rememberedSelection: WorkspaceLaunchSelection | null;
-  rememberedSelectionSemantics: WorkspaceLaunchRememberedSelectionSemantics;
-  initialSites: string[];
-  initialRoles: string[];
-  initialOperatorSurfaces: string[];
-  initialRuntime: string;
-  initialIntelligenceProvider: string;
-  initialSelectionMode: WorkspaceLaunchSelectionMode;
-  narsOperatorSurfaceChoices: string[];
-  selectorModel: WorkspaceLaunchSelectorModel;
-  explicitSelection: {
-    site: boolean;
-    role: boolean;
-    operatorSurface: boolean;
-    runtime: boolean;
-    intelligenceProvider: boolean;
-  };
-}
-
-export interface WorkspaceLaunchActionRefusalPayload {
-  schema: 'narada.workspace_launch.action_refusal.v1';
-  status: 'refused';
-  reason_code: string;
-  message: string;
-  required_next_step: string;
-  artifact_path: string | null;
-  retryable: boolean;
-  command?: string;
-  dashboard?: WorkspaceLaunchDashboardState;
 }
 
 export interface WorkspaceLaunchAgentPlan extends WorkspaceLaunchRecord {
@@ -299,7 +216,6 @@ export interface WorkspaceLaunchPlanResult {
     migrated_from: string;
   };
   result_path?: string;
-  launch_attempt_id?: string;
   suppress_result_output?: boolean;
 }
 
@@ -465,28 +381,9 @@ export interface WorkspaceLaunchSmokeResult {
   suppress_result_output?: boolean;
 }
 
-export interface WorkspaceLaunchUiSessionResult {
-  schema: 'narada.workspace_launch.interactive_selection_ui_session.v1';
-  status: string;
-  mutation_performed: boolean;
-  url: string;
-  direct_url: string;
-  router_url: string | null;
-  stable_url: string | null;
-  ingress_mode: string;
-  ingress_reason: string | null;
-  launch_count: number;
-  registry_paths: string[];
-  ownership: {
-    planner: 'narada-cli';
-    executor: 'narada-cli.workspace-launch';
-    interactive_selection_surface: 'browser';
-  };
-}
-
 export type WorkspaceLaunchPlanningResult = WorkspaceLaunchPlanResult | WorkspaceLaunchSmokeResult;
 
-export type WorkspaceLaunchCommandOutput = WorkspaceLaunchPlanningResult | WorkspaceLaunchUiSessionResult | WorkspaceLaunchLaunchResult;
+export type WorkspaceLaunchCommandOutput = WorkspaceLaunchPlanningResult | WorkspaceLaunchLaunchResult;
 
 export function isWorkspaceLaunchPlanResult(value: unknown): value is WorkspaceLaunchPlanResult {
   if (!value || typeof value !== 'object') return false;

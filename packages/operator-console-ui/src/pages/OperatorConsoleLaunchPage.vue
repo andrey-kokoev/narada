@@ -30,7 +30,7 @@ function openSiteLaunchActions(siteId: string): void {
           <h2>Site Runtime</h2>
           <p class="subtitle">
             Launch is per-Site or per-agent: ensure a Site's declared runtime posture from its registry entry,
-            or launch a single agent. Interactive group launching is deprecated.
+            or launch a single agent. Interactive group launching was removed (task #2041).
           </p>
         </div>
       </header>
@@ -64,8 +64,9 @@ function openSiteLaunchActions(siteId: string): void {
           </dd>
         </dl>
         <p class="guidance-note">
-          Deprecated: interactive group selection (<code>--interactive-selection*</code>),
-          <code>narada launcher workspace-recover</code>, and the CLI-owned launcher session dashboard.
+          Removed: interactive group selection (<code>--interactive-selection*</code>),
+          <code>narada launcher workspace-recover</code>, and the CLI-owned launcher session dashboard
+          (decision 20260718-2038, task #2041).
           Boot-time fleet bring-up continues through <code>narada onboarding start</code>.
         </p>
       </section>

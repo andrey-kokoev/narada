@@ -177,3 +177,50 @@ reviewed:
 - If site ensures prove slow in practice, the console action should move to a
   202 + job-polling pattern; the current async-exec form keeps the server
   responsive but the request open for the ensure's duration.
+
+**2026-07-18 (physical removal, task #2041).** The grouping stack was
+physically removed: 24 `workspace-launch-*` grouping modules, 8 grouping unit
+tests, 2 grouping e2e files, the `workspace-launch-contract` and
+`workspace-launch-ui` packages, the console session API + reverse proxy, and
+the interactive/grouping CLI flags (`--interactive-selection*`,
+`--default-interactive-selection`, `--launcher-ui-port*`, `--launcher-output`)
+plus `narada launcher workspace-recover`. Verified: CLI `tsc --noEmit` clean,
+operator-console-ui `vue-tsc` clean, 87/87 focused CLI vitest, 17/17
+operator-router tests, 3/3 ui consumer-contract tests, CLI full build, and a
+live smoke (`/console/launch` 200, `/console/launch/api/sessions` and the
+session proxy 404, registry API 200, site launch dry-run 200 plan-only,
+`launcher workspace-plan --agent narada.architect --dry-run` OK).
+
+Deviation log (where #2041 departed from the verdict table above):
+
+- **`workspace-launch-attachment.ts` was KEPT** (table said demote → remove):
+  it is the hidden-runtime session health verification used by the surviving
+  executor path and imports only `@narada2/nars-session-core/session-index`
+  plus launcher types — not grouping machinery.
+- **Result-schema contraction deferred**: `interactive_selection` /
+  `interactive_selection_surface` remain in plan and failure result schemas as
+  constant `false` / `null`; consumers read these fields, so the schema
+  contract is preserved for now.
+- **`Start-NaradaWorkspace.ps1` could not wait for "simplify later"**: both the
+  repo asset and the installed User Site copy
+  (`C:\Users\Andrey\Narada\Start-NaradaWorkspace.ps1`) passed removed CLI flags
+  on every invocation (`--default-interactive-selection` unconditionally), so
+  both were stripped in this change. The installed copy was edited in place
+  (machine-local, outside the repo) because the launcher acceptance e2e drives
+  it.
+- **E2E re-anchors**: the `operator-console-ui-e2e` launcher-sessions test was
+  replaced with a Site Runtime render test; the interactive-launcher segment
+  (169 lines) was removed from `operator-journey-acceptance-e2e` along with its
+  now-dead helpers; `operator-launch-router-e2e` and
+  `workspace-selection-ui-e2e` were deleted outright;
+  `operator-launch-journey` (non-interactive, drives the installed ps1) is the
+  surviving launcher acceptance layer.
+- **No contract-type relocation was needed**: after surgery zero kept files
+  imported `@narada2/workspace-launch-contract`, so the package was deleted
+  outright. `packages/ui/test/consumer-contract.test.mjs` dropped its
+  `workspace-launch-ui` consumer entry.
+- **Unrelated build repair in the same change**: `operator-router/src/server.ts`
+  had a pre-existing TS1016 at HEAD (optional `activeSockets?` before required
+  parameters, introduced by f85a3616 and masked by incremental build state).
+  Fixed minimally (parameter made required; its only caller always passes it)
+  because it blocked the CLI prebuild chain.

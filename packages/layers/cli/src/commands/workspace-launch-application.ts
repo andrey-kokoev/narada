@@ -1,10 +1,9 @@
 import { explainMcpCommand } from './launcher-mcp-authority.js';
-import {
-  readWorkspaceLaunchRememberedSelection,
-  writeWorkspaceLaunchRememberedSelection,
-} from './workspace-launch-attempt-store.js';
+import { workspaceLaunchApplicationContext } from './workspace-launch-application-context.js';
 
 export { explainMcpCommand };
-export { readWorkspaceLaunchRememberedSelection, writeWorkspaceLaunchRememberedSelection };
 export * from './workspace-launch-application-execution.js';
-export * from './workspace-launch-application-selection.js';
+
+export function registryDefaultIntelligenceProvider(): string {
+  return workspaceLaunchApplicationContext().selectionContext.admission.providerRegistry.default_provider ?? 'registry default';
+}

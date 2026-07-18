@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { chromium } from '@playwright/test';
 import { createAgentWebUiServer } from '@narada2/agent-web-ui/server';
 import { registerNarsArtifact } from '@narada2/nars-session-core/artifacts';
-import { discoverNarsSessions, writeNarsSessionStartedIndex } from '@narada2/nars-session-core/session-index';
+import { writeNarsSessionStartedIndex } from '@narada2/nars-session-core/session-index';
 import { OPERATOR_CONSOLE_LONG_RUNNING_REQUEST_TIMEOUT_MS } from '@narada2/operator-console-contract';
 import { SiteRegistry, openRegistryDb, resolveRegistryDbPathByLocus } from '@narada2/windows-site';
 import { ensureOperatorRouter, registerOperatorRouteSet } from '@narada2/operator-router';
@@ -392,52 +392,6 @@ async function waitForChildOutput(readOutput, needle, timeoutMs = 5_000) {
   throw new Error('operator_console_startup_output_timeout:' + needle);
 }
 
-async function waitForNarsSessionClosed(siteRoot, sessionId, timeoutMs = 10_000) {
-  const deadline = Date.now() + timeoutMs;
-  let lastSession = null;
-  while (Date.now() < deadline) {
-    const discovery = discoverNarsSessions({ siteRoot });
-    lastSession = discovery.sessions.find((session) => session.session_id === sessionId) ?? null;
-    if (!lastSession || lastSession.display_state === 'closed' || lastSession.terminal_state === 'closed') return;
-    await new Promise((resolve) => setTimeout(resolve, 100));
-  }
-  throw new Error(`nars_session_close_timeout:${sessionId}:${JSON.stringify(lastSession)}`);
-}
-
-async function waitForOwnedProcessExit(pid, timeoutMs = 10_000) {
-  assert.equal(Number.isInteger(pid) && pid > 0, true, `invalid_owned_process_pid:${pid}`);
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    try {
-      process.kill(pid, 0);
-    } catch {
-      return;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 100));
-  }
-  throw new Error(`owned_process_exit_timeout:${pid}`);
-}
-
-async function terminateOwnedProcess(pid) {
-  if (!Number.isInteger(pid) || pid <= 0) return;
-  try {
-    process.kill(pid, 'SIGTERM');
-  } catch {
-    return;
-  }
-  try {
-    await waitForOwnedProcessExit(pid, 5_000);
-    return;
-  } catch {
-    try {
-      process.kill(pid, 'SIGKILL');
-    } catch {
-      return;
-    }
-    await waitForOwnedProcessExit(pid, 2_000).catch(() => undefined);
-  }
-}
-
 test('canonical operator journey remains usable through the stable Router', async () => {
   const fixtureParent = join(process.cwd(), '.ai', 'tmp', 'operator-journey');
   await mkdir(fixtureParent, { recursive: true });
@@ -456,8 +410,6 @@ test('canonical operator journey remains usable through the stable Router', asyn
   let agentServer = null;
   let runtime = null;
   let browser = null;
-  let launcherProcess = null;
-  let launchedRuntimePid = null;
   try {
     const session = await seedSession(siteRoot);
     await seedRegistry(root, siteRoot);
@@ -648,175 +600,6 @@ test('canonical operator journey remains usable through the stable Router', asyn
     assert.equal(await agentPage.locator('body').innerText(), 'router journey artifact content\n');
     assertNoBackingUrl(await agentPage.content(), backingUrls);
 
-    const cliPackageRoot = fileURLToPath(new URL('../..', import.meta.url));
-    const cliEntrypoint = fileURLToPath(new URL('../../dist/main.js', import.meta.url));
-    const launcherPort = await reservePort();
-    const launcherRegistryPath = join(root, 'launcher-agents.json');
-    await writeFile(launcherRegistryPath, JSON.stringify({
-      Agents: [
-        {
-          Agent: SITE_ID + '.resident',
-          Role: 'resident',
-          Site: SITE_ID,
-          NaradaRoot: siteRoot,
-          SiteRoot: siteRoot,
-          WorkspaceRoot: siteRoot,
-          LauncherPath: join(siteRoot, 'narada-router-journey.ps1'),
-          OperatorSurface: 'agent-cli',
-          Runtime: 'narada-agent-runtime-server',
-          McpScope: 'none',
-        },
-        {
-          Agent: SECOND_SITE_ID + '.resident',
-          Role: 'resident',
-          Site: SECOND_SITE_ID,
-          NaradaRoot: secondarySiteRoot,
-          SiteRoot: secondarySiteRoot,
-          WorkspaceRoot: secondarySiteRoot,
-          LauncherPath: join(secondarySiteRoot, 'narada-router-journey.ps1'),
-          OperatorSurface: 'agent-cli',
-          Runtime: 'narada-agent-runtime-server',
-          McpScope: 'none',
-        },
-      ],
-    }), 'utf8');
-    let launcherStdout = '';
-    let launcherStderr = '';
-    launcherProcess = spawn(process.execPath, [
-      cliEntrypoint,
-      'launcher',
-      'workspace-launch',
-      '--interactive-selection-ui',
-      '--launcher-ui-port',
-      String(launcherPort),
-      '--launcher-ui-port-fallback',
-      '--operator-router-port',
-      String(routerPort),
-      '--config-path',
-      launcherRegistryPath,
-      '--format',
-      'json',
-    ], {
-      cwd: cliPackageRoot,
-      env: {
-        ...process.env,
-        NARADA_OPERATOR_ROUTER_STATE_ROOT: routerStateRoot,
-        NARADA_NO_BROWSER: '1',
-        KIMI_CODE_API_KEY: 'operator-journey-fixture-key',
-        KIMI_CODE_API_BASE_URL: 'http://127.0.0.1:1',
-        NARADA_WORKSPACE_LAUNCH_OBSERVATION_POLL_MS: '15000',
-        NARADA_WORKSPACE_LAUNCH_OBSERVATION_POLL_INTERVAL_MS: '250',
-        NARADA_WORKSPACE_LAUNCH_UI_SESSION_RETENTION: '1',
-      },
-      stdio: ['ignore', 'pipe', 'pipe'],
-      windowsHide: true,
-    });
-    launcherProcess.stdout?.on('data', (chunk) => { launcherStdout += String(chunk); });
-    launcherProcess.stderr?.on('data', (chunk) => { launcherStderr += String(chunk); });
-    await waitForChildOutput(() => launcherStdout, 'Narada launcher selection UI: ', 15_000);
-    const launcherOutput = launcherStdout.match(/Narada launcher selection UI: (http:\/\/127\.0\.0\.1:\d+\/console\/launch\/sessions\/[^\r\n]+)/);
-    assert.ok(launcherOutput, `launcher output did not contain a stable URL\nstdout:\n${launcherStdout}\nstderr:\n${launcherStderr}`);
-    const launcherStableUrl = launcherOutput[1];
-    const launcherStable = new URL(launcherStableUrl);
-    assert.equal(launcherStable.origin, routerUrl);
-    assert.match(launcherStable.pathname, /^\/console\/launch\/sessions\/[^/]+$/);
-    assert.notEqual(launcherStable.port, String(launcherPort));
-    const launcherDirectResponse = await fetch('http://127.0.0.1:' + launcherPort + '/');
-    assert.equal(launcherDirectResponse.status, 200);
-    const launcherRoutes = await fetchJson(routerUrl + '/routes');
-    assert.equal(launcherRoutes.response.status, 200);
-    const launcherRoutesText = JSON.stringify(launcherRoutes.body);
-    assert.doesNotMatch(launcherRoutesText, /target_url|health_url/);
-    assert.doesNotMatch(launcherRoutesText, new RegExp('127\\.0\\.0\\.1:' + launcherPort));
-    await page.goto(launcherStableUrl, { waitUntil: 'domcontentloaded' });
-    await page.locator('#sites').waitFor({ state: 'attached', timeout: 15_000 });
-    assert.match(await page.locator('body').innerText(), /Agent Launcher/);
-    assertNoBackingUrl(await page.content(), [...backingUrls, 'http://127.0.0.1:' + launcherPort]);
-    assert.equal(await page.locator('#site-select option').count(), 2);
-    const siteSelectorRefresh = page.waitForResponse((response) => response.url().includes('/selector-model'));
-    await page.locator('#site-select').selectOption(SECOND_SITE_ID);
-    await siteSelectorRefresh;
-    assert.equal(await page.locator('#site-select').inputValue(), SECOND_SITE_ID);
-    const surfaceSelectorRefresh = page.waitForResponse((response) => response.url().includes('/selector-model'));
-    await page.locator('#surface-select').selectOption('agent-cli');
-    await surfaceSelectorRefresh;
-    const runtimeSelectorRefresh = page.waitForResponse((response) => response.url().includes('/selector-model'));
-    await page.locator('#runtime').selectOption('narada-agent-runtime-server');
-    await runtimeSelectorRefresh;
-    await page.locator('#provider').selectOption('kimi-code-api');
-    const preLaunchSessionIds = new Set(
-      discoverNarsSessions({ siteRoot: secondarySiteRoot }).sessions.map((session) => session.session_id),
-    );
-    const launchResponsePromise = page.waitForResponse((response) => response.url().includes('/submit'));
-    await page.locator('#submit-launch').click();
-    const launchResponse = await launchResponsePromise;
-    const launchResponseBodyText = await launchResponse.text();
-    assert.equal(launchResponse.status(), 200, launchResponseBodyText);
-    const launchBody = JSON.parse(launchResponseBodyText);
-    assert.equal(launchBody.status, 'launched');
-    assert.equal(launchBody.attempt.selection.site[0], SECOND_SITE_ID);
-    assert.equal(launchBody.attempt.selection.operatorSurface[0], 'agent-cli');
-    assert.equal(launchBody.attempt.selection.intelligenceProvider, 'kimi-code-api');
-    assert.equal(launchBody.attempt.expected_launch_session_ids.length, 1);
-    assert.equal(launchBody.attempt.diagnostic.selected_agents[0].mcp_scope, 'none');
-    const launchedObservation = launchBody.attempt.observations.find((observation) => observation.site_id === SECOND_SITE_ID);
-    assert.ok(launchedObservation, JSON.stringify({
-      status: launchBody.status,
-      attempt_status: launchBody.attempt.status,
-      result_summary: launchBody.attempt.result_summary,
-      expected_launch_session_ids: launchBody.attempt.expected_launch_session_ids,
-      selected_agents: Array.isArray(launchBody.attempt.diagnostic?.selected_agents)
-        ? launchBody.attempt.diagnostic.selected_agents.map((agent) => ({
-          site: agent.site,
-          site_root: agent.site_root,
-          launch_session_id: agent.launch_session_id,
-          runtime_start_execution_mode: agent.runtime_start_execution_mode,
-          hidden_runtime_start_command: Array.isArray(agent.hidden_runtime_start_command)
-            ? agent.hidden_runtime_start_command.slice(0, 2)
-            : null,
-        }))
-        : launchBody.attempt.diagnostic,
-      observations: launchBody.attempt.observations.map((observation) => ({
-        site_id: observation.site_id,
-        site_root: observation.site_root,
-        health: observation.health,
-        ownership_posture: observation.ownership_posture,
-        session_id: observation.session_id,
-        message: observation.message,
-      })),
-    }));
-    assert.equal(launchedObservation.health, 'healthy');
-    assert.equal(launchedObservation.ownership_posture, 'owned_by_runtime_authority');
-    assert.equal(typeof launchedObservation.session_id, 'string');
-    assert.equal(Number.isInteger(launchedObservation.runtime_pid), true);
-    launchedRuntimePid = launchedObservation.runtime_pid;
-    assert.equal(preLaunchSessionIds.has(launchedObservation.session_id), false);
-    const expectedLaunchSessionId = launchBody.attempt.expected_launch_session_ids[0];
-    const discoveredLaunchedSession = discoverNarsSessions({ siteRoot: secondarySiteRoot }).sessions.find(
-      (session) => session.session_id === launchedObservation.session_id,
-    );
-    assert.ok(discoveredLaunchedSession, `newly launched session was not indexed: ${launchedObservation.session_id}`);
-    assert.equal(discoveredLaunchedSession.record?.launch_session_id, expectedLaunchSessionId);
-    assert.equal(discoveredLaunchedSession.record?.site_id, SECOND_SITE_ID);
-    assert.equal(discoveredLaunchedSession.record?.agent_id, SECOND_SITE_ID + '.resident');
-    assert.equal(discoveredLaunchedSession.record?.runtime_kind, 'narada-agent-runtime-server');
-    const stopRuntimeResponse = await page.request.post(
-      launcherStable.origin + launcherStable.pathname + '/launches/' + launchBody.attempt.launch_attempt_id + '/stop-runtime',
-    );
-    assert.equal(stopRuntimeResponse.status(), 200);
-    const stopRuntimeBody = await stopRuntimeResponse.json();
-    assert.equal(stopRuntimeBody.status, 'requested');
-    assert.equal(stopRuntimeBody.control_path, launchedObservation.control_path);
-    assert.match(await readFile(launchedObservation.control_path, 'utf8'), /"method":"session\.close"/);
-    await waitForNarsSessionClosed(secondarySiteRoot, launchedObservation.session_id);
-    await waitForOwnedProcessExit(launchedObservation.runtime_pid);
-    await page.getByRole('button', { name: 'Cancel', exact: true }).click();
-    await page.getByRole('heading', { name: 'Cancelled', exact: true }).waitFor({ timeout: 15_000 });
-    await waitForChildExit(launcherProcess, 15_000);
-    assert.equal(launcherProcess.exitCode, 0, `launcher exited unsuccessfully\nstdout:\n${launcherStdout}\nstderr:\n${launcherStderr}`);
-    const closedLauncherResponse = await fetch(launcherStableUrl);
-    assert.equal(closedLauncherResponse.status, 409);
-
     await agentPage.close();
     const stableRouterUrl = routerUrl;
     const stableRouterPort = Number(new URL(routerUrl).port);
@@ -856,8 +639,6 @@ test('canonical operator journey remains usable through the stable Router', asyn
     assertNoBackingUrl(await restartedAgentPage.content(), backingUrls);
   } finally {
     await browser?.close();
-    await stopChildProcess(launcherProcess).catch(() => undefined);
-    await terminateOwnedProcess(launchedRuntimePid);
     await routeSet?.stop();
     await stopEnsuredRouter(routerOwner).catch(() => {
       if (routerOwner?.child && !routerOwner.child.killed) routerOwner.child.kill();

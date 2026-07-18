@@ -4,15 +4,12 @@ import { emitCommandResult, resolveCommandFormat } from '../lib/cli-output.js';
 import { explainMcpCommand } from './launcher-mcp-authority.js';
 import { launcherArtifactCheckCommand, launcherArtifactEnsureCommand } from './launcher-artifact.js';
 import { workspaceLaunchCommand, workspaceLaunchPlanCommand } from './workspace-launch-application.js';
-import { workspaceLaunchRecoveryCommand, type WorkspaceLaunchRecoveryOptions } from './workspace-launch-recovery.js';
 import type { ExplainMcpOptions } from './launcher-mcp-authority.js';
 import type { LauncherArtifactOptions } from './launcher-artifact.js';
 import type { WorkspaceLaunchPlanOptions } from './workspace-launch-types.js';
 
-type LauncherCommandOptions = Omit<WorkspaceLaunchPlanOptions, 'format' | 'launcherUiPort' | 'operatorRouterPort'> & {
+type LauncherCommandOptions = Omit<WorkspaceLaunchPlanOptions, 'format'> & {
   format?: string;
-  launcherUiPort?: string;
-  operatorRouterPort?: string;
 };
 
 type LauncherExplainMcpOptions = Omit<ExplainMcpOptions, 'format'> & { format?: string };
@@ -71,12 +68,6 @@ export function registerLauncherCommands(program: Command): void {
     .option('--intelligence-provider <provider>', 'NARS operator-surface intelligence provider')
     .option('--mcp-scope <scope>', 'Override MCP injection scope: all|host|user-site|local-site|none; otherwise use each registry entry')
     .option('--cloudflare-api-base-url <url>', 'Default Cloudflare NARS projection Worker URL for agent-web-ui publish controls')
-    .option('--interactive-selection', 'Deprecated: prefer single-agent launch or `narada sites launch`; interactively select Site, Role, Operator Surface, Runtime, and applicable Intelligence Provider before planning', false)
-    .option('--interactive-selection-ui', 'Deprecated: use a local browser page for interactive launch selection before planning', false)
-    .option('--launcher-ui-port <port>', 'Deprecated: use a stable localhost port for the interactive selection UI')
-    .option('--launcher-ui-port-fallback', 'Deprecated: allow an ephemeral fallback port if the preferred UI port is occupied', false)
-    .option('--operator-router-port <port>', 'Stable Operator Router port used for launcher browser ingress')
-    .option('--default-interactive-selection', 'Deprecated: use interactive selection when no selection flags are supplied', false)
     .option('--result-path <path>', 'Write the workspace plan JSON to a file')
     .option('--suppress-result-output', 'Do not print the final result envelope after writing --result-path', false)
     .option('--enable-native-shell', 'Break-glass: permit native shell posture where supported', false)
@@ -109,13 +100,6 @@ export function registerLauncherCommands(program: Command): void {
         intelligenceProvider: opts.intelligenceProvider,
         mcpScope: opts.mcpScope,
         cloudflareApiBaseUrl: opts.cloudflareApiBaseUrl,
-        interactiveSelection: opts.interactiveSelection,
-        interactiveSelectionUi: opts.interactiveSelectionUi,
-        launcherUiPort: opts.launcherUiPort === undefined ? undefined : Number(opts.launcherUiPort),
-        launcherUiPortFallback: opts.launcherUiPortFallback,
-        operatorRouterPort: opts.operatorRouterPort === undefined ? undefined : Number(opts.operatorRouterPort),
-        launcherOutput: opts.launcherOutput,
-        defaultInteractiveSelection: opts.defaultInteractiveSelection,
         resultPath: opts.resultPath,
         suppressResultOutput: opts.suppressResultOutput,
         enableNativeShell: opts.enableNativeShell,
@@ -129,7 +113,7 @@ export function registerLauncherCommands(program: Command): void {
 
   launcher
     .command('workspace-launch')
-    .description('Plan and launch agents from the User Site launch registry (single agent or non-interactive sets; interactive grouping is deprecated)')
+    .description('Plan and launch agents from the User Site launch registry (single agent or non-interactive sets)')
     .option('--agent <id...>', 'Agent identity to launch')
     .option('--all', 'Select all registry agents', false)
     .option('--role <role...>', 'Role filter')
@@ -142,13 +126,6 @@ export function registerLauncherCommands(program: Command): void {
     .option('--intelligence-provider <provider>', 'NARS operator-surface intelligence provider')
     .option('--mcp-scope <scope>', 'Override MCP injection scope: all|host|user-site|local-site|none; otherwise use each registry entry')
     .option('--cloudflare-api-base-url <url>', 'Default Cloudflare NARS projection Worker URL for agent-web-ui publish controls')
-    .option('--interactive-selection', 'Deprecated: prefer single-agent launch or `narada sites launch`; interactively select Site, Role, Operator Surface, Runtime, and applicable Intelligence Provider before launching', false)
-    .option('--interactive-selection-ui', 'Deprecated: use a local browser page for interactive launch selection before launching', false)
-    .option('--launcher-ui-port <port>', 'Deprecated: use a stable localhost port for the interactive selection UI')
-    .option('--launcher-ui-port-fallback', 'Deprecated: allow an ephemeral fallback port if the preferred UI port is occupied', false)
-    .option('--operator-router-port <port>', 'Stable Operator Router port used for launcher browser ingress')
-    .option('--launcher-output <projection...>', 'Terminal launcher output projections: summary|events|commands|json|quiet')
-    .option('--default-interactive-selection', 'Deprecated: use interactive selection when no selection flags are supplied', false)
     .option('--result-path <path>', 'Write the workspace plan JSON to a file')
     .option('--suppress-result-output', 'Do not print the final result envelope after writing --result-path', false)
     .option('--enable-native-shell', 'Break-glass: permit native shell posture where supported', false)
@@ -181,13 +158,6 @@ export function registerLauncherCommands(program: Command): void {
         intelligenceProvider: opts.intelligenceProvider,
         mcpScope: opts.mcpScope,
         cloudflareApiBaseUrl: opts.cloudflareApiBaseUrl,
-        interactiveSelection: opts.interactiveSelection,
-        interactiveSelectionUi: opts.interactiveSelectionUi,
-        launcherUiPort: opts.launcherUiPort === undefined ? undefined : Number(opts.launcherUiPort),
-        launcherUiPortFallback: opts.launcherUiPortFallback,
-        operatorRouterPort: opts.operatorRouterPort === undefined ? undefined : Number(opts.operatorRouterPort),
-        launcherOutput: opts.launcherOutput,
-        defaultInteractiveSelection: opts.defaultInteractiveSelection,
         resultPath: opts.resultPath,
         suppressResultOutput: opts.suppressResultOutput,
         enableNativeShell: opts.enableNativeShell,
@@ -197,23 +167,6 @@ export function registerLauncherCommands(program: Command): void {
         dryRun: opts.dryRun,
         format: resolveCommandFormat(opts.format, 'auto'),
       }, silentCommandContext()),
-    }));
-
-  launcher
-    .command('workspace-recover')
-    .description('Deprecated: recover durable workspace launch attempts (grouping-era machinery; re-launch single agents instead)')
-    .option('--attempt <id...>', 'Recover only the named durable launch attempts')
-    .option('--dry-run', 'Show exact recovery actions without mutating attempts', false)
-    .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-    .action(directCommandAction<[WorkspaceLaunchRecoveryOptions]>({
-      command: 'launcher workspace-recover',
-      emit: emitCommandResult,
-      format: (opts: WorkspaceLaunchRecoveryOptions) => opts.format,
-      invocation: (opts) => workspaceLaunchRecoveryCommand({
-        attempt: opts.attempt,
-        dryRun: opts.dryRun,
-        format: resolveCommandFormat(opts.format, 'auto'),
-      }),
     }));
 
   launcher

@@ -41,15 +41,12 @@ describe('workspace launch module boundaries', () => {
     const planBuilder = readFileSync(resolve(commandsRoot, 'workspace-launch-plan-builder.ts'), 'utf8');
     const executor = readFileSync(resolve(commandsRoot, 'workspace-launch-executor.ts'), 'utf8');
     const result = readFileSync(resolve(commandsRoot, 'workspace-launch-result.ts'), 'utf8');
-    const selectionAdapters = readFileSync(resolve(commandsRoot, 'workspace-launch-selection-adapters.ts'), 'utf8');
     const admission = readFileSync(resolve(commandsRoot, 'workspace-launch-admission.ts'), 'utf8');
     const providerContext = readFileSync(resolve(commandsRoot, 'workspace-launch-provider-context.ts'), 'utf8');
-    const selection = readFileSync(resolve(commandsRoot, 'workspace-launch-selection.ts'), 'utf8');
 
     expect(application).toContain("from './workspace-launch-application-execution.js'");
     expect(applicationExecution).toContain("from './workspace-launch-command.js'");
     expect(applicationExecution).toContain("from './workspace-launch-application-context.js'");
-    expect(command).toContain('selectionServices: WorkspaceLaunchSelectionServices');
     expect(command).toContain('registryContext: WorkspaceLaunchRegistryContext');
     expect(context).toContain('createWorkspaceLaunchContext');
     expect(registry).toContain('readWorkspaceLaunchRecords');
@@ -60,7 +57,6 @@ describe('workspace launch module boundaries', () => {
     expect(executor).toContain('executeWorkspaceLaunchPlan');
     expect(executor).toContain('startWorkspaceLaunchWindowsTerminal');
     expect(result).toContain('finalizeWorkspaceLaunchResult');
-    expect(selectionAdapters).toContain('resolveInteractiveSelectionOptions');
     expect(command).toContain("from './workspace-launch-executor.js'");
     expect(executor).toContain("from './workspace-launch-result.js'");
     expect(command).not.toContain('startOperatorTerminal');
@@ -68,7 +64,5 @@ describe('workspace launch module boundaries', () => {
     expect(admission).toContain('resolveCanonicalOperatorSurfaceRuntimeSelection');
     expect(providerContext).toContain("from './workspace-launch-admission.js'");
     expect(providerContext).not.toContain("from '@narada2/operator-surface-runtime-contract");
-    expect(selection).toContain("from './workspace-launch-admission.js'");
-    expect(selection).not.toContain("from '@narada2/operator-surface-runtime-contract");
   });
 });

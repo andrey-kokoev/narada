@@ -8,7 +8,6 @@ const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const uiVueRoot = resolve(packageRoot, '..', 'ui-vue');
 const agentWebUiRoot = resolve(packageRoot, '..', 'agent-web-ui');
 const operatorConsoleUiRoot = resolve(packageRoot, '..', 'operator-console-ui');
-const workspaceLaunchUiRoot = resolve(packageRoot, '..', 'workspace-launch-ui');
 
 const browserSurfaceConsumers = [
   {
@@ -19,11 +18,6 @@ const browserSurfaceConsumers = [
   {
     name: 'operator-console-ui',
     root: operatorConsoleUiRoot,
-    runtimeDependencies: ['@narada2/ui-vue'],
-  },
-  {
-    name: 'workspace-launch-ui',
-    root: workspaceLaunchUiRoot,
     runtimeDependencies: ['@narada2/ui-vue'],
   },
 ];

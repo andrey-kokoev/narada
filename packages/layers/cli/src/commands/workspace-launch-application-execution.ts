@@ -15,7 +15,7 @@ export async function workspaceLaunchCommand(
   context: CommandContext,
 ): Promise<WorkspaceLaunchCommandResult<WorkspaceLaunchCommandOutput>> {
   const applicationContext = workspaceLaunchApplicationContext();
-  return workspaceLaunchCommandImpl(options, context, applicationContext.selectionServices, applicationContext.registryContext);
+  return workspaceLaunchCommandImpl(options, context, applicationContext.registryContext);
 }
 
 export async function workspaceLaunchPlanCommand(
@@ -23,5 +23,5 @@ export async function workspaceLaunchPlanCommand(
   context: CommandContext,
 ): Promise<WorkspaceLaunchCommandResult<WorkspaceLaunchCommandOutput>> {
   const applicationContext = workspaceLaunchApplicationContext();
-  return workspaceLaunchPlanCommandImpl(options, context, applicationContext.selectionServices, applicationContext.registryContext);
+  return workspaceLaunchPlanCommandImpl(options, context, applicationContext.registryContext);
 }

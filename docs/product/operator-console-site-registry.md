@@ -470,12 +470,7 @@ The server prints its bound URL on startup. `--port 0` binds to an ephemeral por
 | GET | `/console/registry/api/discover-plan` | Bounded dry-run discovery envelope; accepts `source`, `root`, and `actor` |
 | POST | `/console/registry/api/operations/plan` | Registry add/edit/retire/restore/purge preview using the canonical command envelope |
 | POST | `/console/registry/api/operations/apply` | Explicitly confirmed registry apply; revalidates command invariants, revision, and purge identity |
-| GET | `/console/launch` | Read-only launcher-session router page |
-| GET | `/console/launch/api/sessions` | CLI-owned launcher session inventory projected to stable console links |
-| GET | `/console/launch/sessions/:ui_session_id` | Bounded proxy for an active loopback CLI launcher document and assets |
-| POST | `/console/launch/sessions/:ui_session_id/selector-model` | Forwarded launcher selector refresh; launch policy remains in the CLI session |
-| POST | `/console/launch/sessions/:ui_session_id/submit` | Forwarded launch submission; launch mutation remains in the CLI session |
-| POST | `/console/launch/sessions/:ui_session_id/launches/:attempt/:action` | Forwarded bounded attempt action; launch mutation remains in the CLI session |
+| GET | `/console/launch` | Read-only Site Runtime page (Site collection plus per-Site and single-agent launch guidance) |
 | GET | `/console/sites` | List all registered Sites |
 | GET | `/console/sites/:site_id` | Site metadata + current health |
 | GET | `/console/health` | Cross-Site health aggregation |

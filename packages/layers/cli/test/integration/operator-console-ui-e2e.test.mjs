@@ -50,19 +50,6 @@ const retiredSite = {
   retire_reason: 'fixture retirement',
 };
 
-const activeLauncherSession = {
-  schema: 'narada.workspace_launch.ui_session.v1',
-  ui_session_id: 'ui-session-active',
-  started_at: '2026-07-12T00:00:00.000Z',
-  status: 'open',
-  url: 'http://127.0.0.1:47320/',
-  registry_paths: ['D:/code/registry.sqlite'],
-  owner: {
-    package: '@narada2/cli',
-    command: 'launcher workspace-launch',
-    surface: 'interactive-selection-ui',
-  },
-};
 
 function sendJson(res, status, payload) {
   const body = JSON.stringify(payload);
@@ -83,16 +70,6 @@ function wireSite(overrides = {}) {
   return { ...site, ...overrides };
 }
 
-function projectLauncherSessions(sessions) {
-  return sessions.map((session) => ({
-    ...session,
-    url: `/console/launch/sessions/${encodeURIComponent(session.ui_session_id)}`,
-  }));
-}
-
-function projectLauncherHistory(sessions) {
-  return sessions.map((session) => ({ ...session, url: null }));
-}
 
 function mutationResponse(input, applied) {
   const operation = input.operation;
@@ -145,9 +122,8 @@ function mutationResponse(input, applied) {
   };
 }
 
-async function startFixtureServer({ launcherSessions = [], launcherHistory = [], agentSessions = [] } = {}) {
+async function startFixtureServer({ agentSessions = [] } = {}) {
   const requests = [];
-  const launcherRequests = [];
   const server = createServer(async (req, res) => {
     try {
       const pathname = new URL(req.url || '/', 'http://127.0.0.1').pathname;
@@ -174,15 +150,6 @@ async function startFixtureServer({ launcherSessions = [], launcherHistory = [],
           count: agentSessions.length,
           sessions: agentSessions,
           refusals: [],
-        });
-        return;
-      }
-      if (req.method === 'GET' && pathname === '/console/launch/api/sessions') {
-        launcherRequests.push(pathname);
-        sendJson(res, 200, {
-          schema: 'narada.workspace_launch.ui_session_list.v1',
-          sessions: projectLauncherSessions(launcherSessions),
-          history: projectLauncherHistory(launcherHistory),
         });
         return;
       }
@@ -255,7 +222,6 @@ async function startFixtureServer({ launcherSessions = [], launcherHistory = [],
   return {
     url,
     requests,
-    launcherRequests,
     close: () => new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve())),
   };
 }
@@ -316,61 +282,16 @@ test('Operator Console session inventory renders canonical lifecycle posture wit
   }
 });
 
-test('Operator Console opens active CLI sessions through a stable route and fails closed on malformed inventory', async () => {
-  const historicalLauncherSession = {
-    ...activeLauncherSession,
-    ui_session_id: 'ui-session-history',
-    status: 'closed',
-    url: null,
-  };
-  const activeFixture = await startFixtureServer({
-    launcherSessions: [activeLauncherSession],
-    launcherHistory: [historicalLauncherSession],
-  });
-  const browser = await chromium.launch();
-  try {
-    const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
-    await page.goto(activeFixture.url + '/console/launch');
-    await page.getByRole('link', { name: 'Open launcher' }).waitFor();
-    assert.equal(await page.getByText('ui-session-history').count(), 0);
-    await page.getByRole('button', { name: /History/ }).click();
-    await page.getByText('ui-session-history').waitFor();
-    assert.equal(
-      await page.getByRole('link', { name: 'Open launcher' }).getAttribute('href'),
-      '/console/launch/sessions/ui-session-active',
-    );
-    assert.deepEqual(activeFixture.launcherRequests, ['/console/launch/api/sessions']);
-  } finally {
-    await browser.close();
-    await activeFixture.close();
-  }
-
-  const malformedFixture = await startFixtureServer({
-    launcherSessions: [{ ...activeLauncherSession, status: 'running' }],
-  });
-  const malformedBrowser = await chromium.launch();
-  try {
-    const page = await malformedBrowser.newPage({ viewport: { width: 1280, height: 900 } });
-    await page.goto(malformedFixture.url + '/console/launch');
-    await page.getByRole('alert').waitFor();
-    assert.match(await page.getByRole('alert').textContent(), /did not match its contract/);
-    assert.equal(await page.getByRole('link', { name: 'Open launcher' }).count(), 0);
-  } finally {
-    await malformedBrowser.close();
-    await malformedFixture.close();
-  }
-});
-
-test('Operator Console routes launcher sessions through its base-path API and rejects unknown routes', async () => {
+test('Operator Console launch page renders the site runtime view and rejects unknown routes', async () => {
   const fixture = await startFixtureServer();
   const browser = await chromium.launch();
   try {
     const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
     const response = await page.goto(fixture.url + '/console/launch');
     assert.equal(response?.status(), 200);
-    await page.getByRole('heading', { name: 'Start the launcher from the CLI' }).waitFor();
-    assert.equal(await page.getByRole('link', { name: 'Launcher' }).getAttribute('href'), '/console/launch');
-    assert.deepEqual(fixture.launcherRequests, ['/console/launch/api/sessions']);
+    await page.getByRole('heading', { name: 'Site Runtime' }).waitFor();
+    await page.locator('.site-tile').waitFor();
+    assert.equal(await page.locator('.site-tile__name').textContent(), 'site-a');
 
     const unknown = await fetch(fixture.url + '/console/not-found');
     assert.equal(unknown.status, 404);

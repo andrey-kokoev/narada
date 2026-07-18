@@ -11,7 +11,7 @@ Commands in `src/commands/` that host browser-facing surfaces:
 - `console-server-routes.ts` — route table. GET routes are strictly read-only; mutating POSTs are the registry plan/apply boundary (via `RegistryMutationGateway`), the `ControlRequestRouter` control endpoint, and the plan-first site launch ensure (`POST /console/registry/api/sites/:id/launch` → `sitesLaunchCommand`, dry-run unless the body explicitly sets `dry_run: false`).
 - `sites-launch.ts` — `sitesLaunchCommand`: ensures a Site's declared runtime posture (registry resolution, MCP surface materialization drift via `@narada2/mcp-fabric`, resident ensure via the Site's own CLI when a loop declares one, scheduler posture check, console URL). Registered as `narada sites launch <site-id>` in `sites-register.ts`.
 - `console-register.ts` — CLI command registration for the console surface.
-- Supporting modules in the same directory: `site-registry-read-model.ts`, `site-registry-management-gateway.ts`, `agent-session-read-model.ts`, `workspace-launch-session-store.ts`, `console-ui-assets.ts`.
+- Supporting modules in the same directory: `site-registry-read-model.ts`, `site-registry-management-gateway.ts`, `agent-session-read-model.ts`, `console-ui-assets.ts`.
 
 Boundary rules:
 

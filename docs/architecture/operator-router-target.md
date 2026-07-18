@@ -235,17 +235,13 @@ direct diagnostic endpoints.
   evidence; Console, Agent Web UI, and Site Operations owners remain
   responsible for restarting their own backing services and re-registering
   them.
-- The persistent launcher selection session now consumes the route inventory:
-  when the Console projection is healthy it returns and opens
-  `/console/launch/sessions/<id>`; its private listener remains persisted as a
-  backing target only. If the Console projection is unavailable, the command
-  returns the direct listener explicitly as a diagnostic fallback with a
-  reason code. The stable Console projection publishes the typed Workspace
-  route directory at `/console/routes`, and the launcher requires its concrete
-  launcher route before selecting the stable handoff. The Workspace root uses
-  the same directory to select concrete live Site Operations and session or
-  artifact routes.
-- One-shot launcher selection and local task-graph/observation file renders
+- The interactive launcher selection session and its stable
+  `/console/launch/sessions/<id>` projection were removed with the
+  group-launch stack (decision 20260718-2038, task #2041). The stable Console
+  projection publishes the typed Workspace route directory at
+  `/console/routes`, and the Workspace root uses that directory to select
+  concrete live Site Operations and session or artifact routes.
+- Launcher plan output and local task-graph/observation file renders
   remain diagnostic local-file projections. They are not falsely presented as
   Router artifacts; session-owned NARS artifacts already use the Router
   artifact route.

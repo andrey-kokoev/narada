@@ -625,43 +625,22 @@ Acceptance coverage:
 - Runtime host, loop definition, watch definition, and Loop Run remain separate objects.
 - Trigger admission and step execution remain runtime responsibilities, not definition responsibilities.
 
-## 1710 - LauncherSessionDashboard
+## 1710 - LauncherSessionDashboard (removed)
 
-CL: 0.99
+Removed with the interactive group-launch stack (decision 20260718-2038, task
+#2041): the persistent browser dashboard session opened by
+`workspace-launch --interactive-selection-ui` no longer exists. Launch is
+single-agent by default (`narada launcher workspace-launch --agent <id>`);
+Site-level runtime bring-up is owned by `narada sites launch` and the Site
+Operating Loop. This entry remains only as a historical pointer — do not
+implement new work against it.
 
-First-class object: the persistent browser dashboard session opened by `workspace-launch --interactive-selection-ui`, distinct from a single launch attempt, a process handoff, a NARS session, or an operator projection.
-
-Authority contracts:
-
-- [`launcher-session-dashboard.md`](launcher-session-dashboard.md)
-- [`process-launch-posture.md`](../architecture/process-launch-posture.md)
-- [`nars-session-management.md`](nars-session-management.md)
-- [`nars-client-projection-contract.md`](nars-client-projection-contract.md)
-
-Current implementation posture:
-
-- The launcher already has a persistent browser selection page that can submit multiple launches over time.
-- The current page renders in-memory launch-attempt rows, handoff evidence, live-probed NARS session-index runtime observations, admitted safe actions (`Recheck`, `Retry`, `Forget`), and projection handoff actions for attachable sessions.
-- A Playwright-backed E2E proves the multi-submit page remains available after one launch, records handoff/dashboard rows, writes User Site runtime dashboard files, reloads compatible persisted dashboard rows after restart, prunes old dashboard sessions under bounded retention, hides stop actions without authority, supports `Forget`, executes projection handoffs from session-authority attach commands, records projection observations, admits `Stop Runtime` only through an existing NARS control path, verifies healthy state through a live health endpoint, and exits after cancel.
-
-Future authority extensions:
-
-- If a future projection authority exposes attach/detach lifecycle ownership beyond terminal handoff evidence, the dashboard may add owned projection observations and `Stop Projection` admission through that authority.
-- Raw process killing remains outside ordinary Launcher Session Dashboard UX.
-
-Acceptance coverage:
-
-- Launcher dashboard is named as a first-class object separate from launch attempts and NARS sessions.
-- The dashboard may show what it launched, handed off, discovered, owns, and can stop.
-- The dashboard must not infer process ownership from Windows Terminal handoff alone.
-- Stop actions are lifecycle requests against runtime/projection authority, not unscoped process kills.
-
-Runtime-start posture:
+Runtime-start posture (still authoritative for the surviving launcher):
 
 - `narada-agent-runtime-server` background starts are governed by [`Agent Runtime Start Posture`](../architecture/process-launch-posture.md#agent-runtime-start-posture).
 - For `runtime = narada-agent-runtime-server`, `exec = true`, and `wait != true`, the default execution mode is `hidden_detached` unless an explicit `visible_runtime_terminal` request is present.
 - Hidden runtime-start selection is independent of operator-surface or compatibility carrier naming. Operator-surface names may affect projection behavior; they must not decide whether the runtime host opens a terminal.
-- Launch results should expose `agent_start_execution_mode`, `detach_decision`, and `detach_refusal_reasons` so dashboard and operator diagnostics do not need to infer posture from process trees.
+- Launch results should expose `agent_start_execution_mode`, `detach_decision`, and `detach_refusal_reasons` so operator diagnostics do not need to infer posture from process trees.
 
 ## 1709 - ProjectionTopology
 

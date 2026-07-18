@@ -3,11 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { runGovernedCommandSync } from '@narada2/process-launch-posture';
 import { buildAgentIdentityRefV2, resolveAgentIdentityRef } from '@narada2/agent-identity';
-import type { WorkspaceLaunchAdmissionPolicy } from './workspace-launch-admission.js';
-import {
-  canonicalizeWorkspaceLaunchRecords as canonicalizeWorkspaceLaunchRecordsDomain,
-  selectLaunchRecords as selectLaunchRecordsDomain,
-} from './workspace-launch-selection.js';
+import { recordMatchesSiteSelectors, type WorkspaceLaunchAdmissionPolicy } from './workspace-launch-admission.js';
 import { defaultLaunchRegistryPath, listKnownSiteRootsForCli, type ResolvedSiteRoot } from '../lib/site-root-resolver.js';
 import type {
   WorkspaceLaunchPlanOptions,
@@ -52,10 +48,6 @@ interface RawAgentRecord {
   EnableNativeShell?: boolean;
 }
 
-function unique(values: string[]): string[] {
-  return [...new Set(values)];
-}
-
 function nonEmpty(value: unknown): string | null {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
 }
@@ -72,7 +64,7 @@ export async function readWorkspaceLaunchRecords(options: WorkspaceLaunchPlanOpt
     siteCatalog = await listKnownSiteRootsForCli({ launchRegistryPath: registryPaths[0] });
   } catch {
     // Keep launch planning usable for explicit non-interactive compatibility
-    // paths; interactive selection reports the missing catalog below.
+    // paths; the site catalog is advisory for single-agent and filter launches.
   }
   return {
     records: canonicalizeWorkspaceLaunchRecords(records, siteCatalog),
@@ -84,27 +76,31 @@ function canonicalizeWorkspaceLaunchRecords(
   records: WorkspaceLaunchRecord[],
   siteCatalog: ResolvedSiteRoot[],
 ): WorkspaceLaunchRecord[] {
-  return canonicalizeWorkspaceLaunchRecordsDomain(records, siteCatalog);
+  const byRoot = new Map(
+    siteCatalog
+      .filter((site): site is ResolvedSiteRoot & { site_id: string } => typeof site.site_id === 'string' && site.site_id.length > 0)
+      .map((site) => [resolve(site.site_root).toLowerCase(), site.site_id] as const),
+  );
+  if (byRoot.size === 0) return records;
+  return records.map((record) => {
+    const canonicalSiteId = byRoot.get(resolve(record.site_root).toLowerCase());
+    if (!canonicalSiteId || canonicalSiteId === record.site) return record;
+    const identityRef = record.agent_identity_ref
+      ? buildAgentIdentityRefV2({
+          identity_scope: { kind: 'narada_site', site_id: canonicalSiteId },
+          local_agent_id: record.agent_identity_ref.local_agent_id,
+          role: record.agent_identity_ref.role,
+          legacy_agent_id: record.agent_identity_ref.legacy_agent_id ?? record.agent,
+        })
+      : record.agent_identity_ref;
+    return {
+      ...record,
+      agent_identity_ref: identityRef,
+      site: canonicalSiteId,
+      legacy_site: record.legacy_site ?? record.site,
+    };
+  });
 }
-
-export function requireSiteCatalogForInteractiveSelection(
-  options: WorkspaceLaunchPlanOptions,
-  siteCatalog: ResolvedSiteRoot[],
-  records: WorkspaceLaunchRecord[],
-): void {
-  if ((options.interactiveSelection === true || options.interactiveSelectionUi === true) && siteCatalog.length === 0) {
-    throw new Error('site_registry_empty_for_interactive_selection: run `narada sites discover` before opening launcher selection');
-  }
-  if (options.interactiveSelection !== true && options.interactiveSelectionUi !== true) return;
-  const catalogRoots = new Set(siteCatalog.map((site) => resolve(site.site_root).toLowerCase()));
-  const unregisteredRoots = unique(records
-    .filter((record) => !catalogRoots.has(resolve(record.site_root).toLowerCase()))
-    .map((record) => record.site_root));
-  if (unregisteredRoots.length > 0) {
-    throw new Error(`site_registry_missing_launch_roots: run 'narada sites discover' before opening launcher selection (${unregisteredRoots.join(', ')})`);
-  }
-}
-
 
 export function resolveRegistryPaths(options: WorkspaceLaunchPlanOptions): string[] {
   const configPaths = nonEmptyStringArray(options.configPath);
@@ -123,17 +119,13 @@ export function hasWorkspaceLaunchSelectionIntent(options: WorkspaceLaunchPlanOp
 }
 
 export function normalizeWorkspaceLaunchPlanOptions(options: WorkspaceLaunchPlanOptions): WorkspaceLaunchPlanOptions {
-  const normalized: WorkspaceLaunchPlanOptions = {
+  return {
     ...options,
     agent: nonEmptyStringArray(options.agent),
     role: nonEmptyStringArray(options.role),
     site: nonEmptyStringArray(options.site),
     configPath: nonEmptyStringArray(options.configPath),
   };
-  if (normalized.defaultInteractiveSelection === true && !hasWorkspaceLaunchSelectionIntent(normalized)) {
-    return { ...normalized, interactiveSelection: true };
-  }
-  return normalized;
 }
 
 export async function readLaunchRegistry(path: string): Promise<WorkspaceLaunchRecord[]> {
@@ -228,6 +220,35 @@ function normalizeAgentRecord(registry: RawLaunchRegistry, agent: RawAgentRecord
 }
 
 export function selectLaunchRecords(records: WorkspaceLaunchRecord[], options: WorkspaceLaunchPlanOptions): WorkspaceLaunchRecord[] {
-  return selectLaunchRecordsDomain(records, options);
+  let selected: WorkspaceLaunchRecord[];
+  const agentSelectors = nonEmptyStringArray(options.agent);
+  const roleSelectors = nonEmptyStringArray(options.role);
+  const siteSelectors = nonEmptyStringArray(options.site);
+  const configPathSelectors = nonEmptyStringArray(options.configPath);
+  const hasRoleSelector = roleSelectors.length > 0;
+  const hasSiteSelector = siteSelectors.length > 0;
+  const hasConfigPathSelector = configPathSelectors.length > 0;
+  if (agentSelectors.length > 0) {
+    selected = [];
+    for (const agent of agentSelectors) {
+      const matches = records.filter((record) => record.agent === agent);
+      if (matches.length === 0) throw new Error(`agent_not_found_in_launch_registry: ${agent}`);
+      if (matches.length > 1) throw new Error(`agent_duplicate_in_launch_registry: ${agent}`);
+      selected.push(matches[0]);
+    }
+  } else if (options.all || hasConfigPathSelector || hasRoleSelector || hasSiteSelector) {
+    selected = records;
+  } else {
+    throw new Error('launch_selection_required: specify --agent, --all, --site, --role, or --config-path');
+  }
+  if (hasRoleSelector) {
+    const roles = new Set(roleSelectors.map((role) => role.toLowerCase()));
+    selected = selected.filter((record) => roles.has(record.role.toLowerCase()));
+    if (selected.length === 0) throw new Error(`no_agents_match_role_filter: ${roleSelectors.join(', ')}`);
+  }
+  if (hasSiteSelector) {
+    selected = selected.filter((record) => recordMatchesSiteSelectors(record, siteSelectors));
+    if (selected.length === 0) throw new Error(`no_agents_match_site_filter: ${siteSelectors.join(', ')}`);
+  }
+  return selected;
 }
-

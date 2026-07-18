@@ -18,9 +18,6 @@ test('Operator Console pages stay behind the route and workflow boundaries', () 
   const registryAdapter = read('site-registry/adapter.ts');
   const registryTransport = read('site-registry/transport.ts');
   const launchPage = read('pages/OperatorConsoleLaunchPage.vue');
-  const launchDomain = read('launcher/session-domain.ts');
-  const launchTransport = read('launcher/session-transport.ts');
-  const launchComposable = read('launcher/composables/useOperatorConsoleLauncherSessions.ts');
   const routes = read('console/routes.ts');
 
   assert.match(app, /resolveOperatorConsoleRoute/);
@@ -35,9 +32,6 @@ test('Operator Console pages stay behind the route and workflow boundaries', () 
   assert.match(registryAdapter, /parseSiteRegistryListResponse/);
   assert.match(registryAdapter, /createSiteRegistryAdapter/);
   assert.match(launchPage, /useSiteRegistry/);
-  assert.match(launchDomain, /parseWorkspaceLaunchUiSessionList/);
-  assert.match(launchTransport, /parseOperatorConsoleLauncherSessions/);
-  assert.match(launchComposable, /createOperatorConsoleLauncherSessionTransport/);
   assert.match(mutationPage, /useSiteRegistryWorkflow/);
 });
 

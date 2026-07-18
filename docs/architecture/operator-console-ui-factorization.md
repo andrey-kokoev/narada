@@ -39,9 +39,9 @@ type-safe wrapper. Shared framing leaves domain state to page composables.
 Unknown paths render a bounded not-found projection instead of silently
 falling back to the registry.
 
-The launcher is a separate `@narada2/workspace-launch-ui` presentation package. Its `domain.ts` adapter, typed `transport.ts`, and `useWorkspaceLaunchWorkflow` own client state while `@narada2/cli` remains the authority for launch policy, runtime handoff, and endpoint behavior. The transport accepts an explicit base path so the same page can run at the standalone root or a mounted route without endpoint drift.
+The interactive launcher presentation package (`@narada2/workspace-launch-ui`), its selector workflow, and the CLI-owned launcher session dashboard were removed with the interactive group-launch stack (decision 20260718-2038, task #2041). Launch authority stays in `@narada2/cli` through the non-interactive `narada launcher workspace-launch` command.
 
-The console route `/console/launch` is intentionally a router for persistent CLI-owned sessions. The CLI session store exposes the read-only session-list projection, and the UI reaches it through a typed transport and composable before linking to a stable console session route. The console route proxies only active loopback launcher sessions and known launcher paths, rewriting the bootstrap and asset prefix while leaving launch authority in the CLI. This preserves the boundary `contract -> transport -> adapter -> composable -> page -> projection` without introducing a generic page registry.
+The console route `/console/launch` is a console-owned Site Runtime page. It renders the Site registry collection through the shared site-registry domain and links each Site to its registry entry for launch actions (`Check posture` / `Ensure now`, backed by `narada sites launch`), alongside guidance for single-agent launch. It no longer proxies CLI-owned launcher sessions.
 
 The concept-to-page map is maintained in `docs/architecture/operator-console-concept-surfaces.md`.
 

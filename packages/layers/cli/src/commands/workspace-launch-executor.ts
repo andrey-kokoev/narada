@@ -18,11 +18,6 @@ import {
 import { captureWorkspaceLaunchTerminalInvocation, startWorkspaceLaunchWindowsTerminal, workspaceLaunchTerminalArgs } from './workspace-launch-terminal.js';
 import { runAgentStartCommand, isAgentStartAcceptedStatus } from '../lib/launcher-runtime.js';
 import { NARADA_AGENT_RUNTIME_SERVER_KIND } from '@narada2/operator-surface-runtime-contract/operator-surface-runtime-selection';
-import {
-  readWorkspaceLaunchExecutionAttempt,
-  updateWorkspaceLaunchExecutionAttempt,
-  workspaceLaunchExecutionAttemptPath,
-} from './workspace-launch-execution-attempt-store.js';
 import type {
   WorkspaceLaunchAgentPlan,
   WorkspaceLaunchAttachmentEvidence,
@@ -79,27 +74,8 @@ export async function executeWorkspaceLaunchPlan(
     wt_args: string[];
   } = { status: 'not_attempted', wt_exit_code: null, wt_args: [] };
   let wtArgs: string[] = [];
-  const launchAttemptId = typeof source.launch_attempt_id === 'string' ? source.launch_attempt_id : null;
-  const durableAttempt = launchAttemptId
-    ? await readWorkspaceLaunchExecutionAttempt(workspaceLaunchExecutionAttemptPath(launchAttemptId))
-    : null;
-  const updateDurableAttempt = async (
-    state: Parameters<typeof updateWorkspaceLaunchExecutionAttempt>[1],
-    patch: Parameters<typeof updateWorkspaceLaunchExecutionAttempt>[2] = {},
-  ): Promise<void> => {
-    if (durableAttempt) await updateWorkspaceLaunchExecutionAttempt(durableAttempt, state, patch);
-  };
 
   try {
-    await updateDurableAttempt('planning', {
-      bindings: selectedAgents.map((agent) => ({
-        agent: agent.agent,
-        site: agent.site,
-        site_root: agent.site_root,
-        launch_session_id: agent.launch_session_id,
-        owner_ref: agent.launch_session_id,
-      })),
-    });
     assertWorkspaceLaunchPlanInvariants(result);
     wtArgs = workspaceLaunchTerminalArgs(terminalTabs);
     if (!canUseHiddenRuntimeStart && wtArgs.length === 0) {
@@ -112,7 +88,6 @@ export async function executeWorkspaceLaunchPlan(
 
     stage = 'provider_preflight';
     runWorkspaceLaunchProviderPreflight(selectedAgents);
-    await updateDurableAttempt('launching');
     transaction = advanceWorkspaceLaunchTransaction(transaction, 'preflighted');
 
     if (canUseHiddenRuntimeStart) {
@@ -130,7 +105,6 @@ export async function executeWorkspaceLaunchPlan(
           { agent_id: agent.agent, launch_session_id: agent.launch_session_id },
         );
         hiddenLaunches.push(launch);
-        await updateDurableAttempt('launching', { processes: [...hiddenLaunches] });
       }
       transaction = advanceWorkspaceLaunchTransaction(transaction, 'spawned');
 
@@ -139,7 +113,6 @@ export async function executeWorkspaceLaunchPlan(
         ? notCheckedAttachment(hiddenRuntimeAgents, 'Attachment was intentionally not checked while launch capture mode was enabled.')
         : await awaitWorkspaceLaunchSessionAttachments(hiddenRuntimeAgents);
       transaction = advanceWorkspaceLaunchTransaction(transaction, attachment.status === 'attached' ? 'attached' : 'handed_off');
-      await updateDurableAttempt('observing', { processes: [...hiddenLaunches] });
 
       if (attachment.status === 'attached') {
         stage = hiddenProjectionAgents.length > 0 ? 'projection_start' : 'session_attachment';
@@ -186,7 +159,6 @@ export async function executeWorkspaceLaunchPlan(
             }
             throw projectionError;
           }
-          await updateDurableAttempt('observing', { processes: [...hiddenLaunches, ...hiddenProjectionLaunches] });
         }
       }
 
@@ -199,7 +171,6 @@ export async function executeWorkspaceLaunchPlan(
         attachment,
       });
       await writeWorkspacePlanResult(options.resultPath, launchResult);
-      await updateDurableAttempt('launched', { processes: [...hiddenLaunches, ...hiddenProjectionLaunches] });
       return {
         exitCode: ExitCode.SUCCESS,
         result: formattedResult(launchResult, `launched ${result.count ?? 0} hidden runtime start(s)`, options.format ?? 'auto'),
@@ -234,7 +205,6 @@ export async function executeWorkspaceLaunchPlan(
 
     transaction = advanceWorkspaceLaunchTransaction(transaction, 'spawned');
     transaction = advanceWorkspaceLaunchTransaction(transaction, 'handed_off');
-    await updateDurableAttempt('handoff_recorded', { terminal_handoff: terminalHandoff });
     attachment = visibleHandoffAttachment(selectedAgents);
     stage = 'result_persistence';
     const launchResult = finalizeWorkspaceLaunchResult({ ...result, transaction }, {
@@ -244,7 +214,6 @@ export async function executeWorkspaceLaunchPlan(
       attachment,
     });
     await writeWorkspacePlanResult(options.resultPath, launchResult);
-    await updateDurableAttempt('launched', { terminal_handoff: terminalHandoff });
     return {
       exitCode: ExitCode.SUCCESS,
       result: formattedResult(launchResult, `launched ${result.count} workspace launch(es)`, options.format ?? 'auto'),
@@ -272,17 +241,6 @@ export async function executeWorkspaceLaunchPlan(
       failure.failure.message = `${failure.failure.message} Failure artifact could not be written: ${redactWorkspaceLaunchText(artifactError instanceof Error ? artifactError.message : String(artifactError))}`;
     }
     failure.failure.artifact_status = artifactStatus;
-    await updateDurableAttempt(rollback.completed ? 'failed' : 'recoverable', {
-      processes: [...hiddenLaunches, ...hiddenProjectionLaunches],
-      terminal_handoff: terminalHandoff,
-      failure: {
-        reason_code: rollback.completed ? failureDetails.reason_code : 'workspace_launch_rollback_incomplete',
-        message: failure.failure.message,
-        required_next_step: rollback.completed
-          ? failureDetails.required_next_step
-          : 'Run workspace launch recovery against the durable attempt before retrying.',
-      },
-    }).catch(() => undefined);
     const reason = rollback.completed
       ? failureDetails.reason
       : `${failureDetails.reason} ${rollback.orphan_count} owned child process(es) remain unresolved; use the artifact to recover them.`;

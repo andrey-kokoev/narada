@@ -50,10 +50,10 @@ Pwsh -File "$env:USERPROFILE\Narada\tools\operator-secrets\Set-NaradaProviderSec
 `codex-subscription` requires the local Codex auth home; API providers report SecretStore presence or the exact setup action.
 The doctor never prints secret values and does not perform a live provider request.
 
-Then launch through the User Site launcher or the interactive launcher UI:
+Then launch one agent through the User Site launcher (preview the plan with `-DryRun` first if you like):
 
 ```powershell
-Pwsh -File "$env:USERPROFILE\Narada\Start-NaradaWorkspace.ps1" -InteractiveSelectionUI
+Pwsh -File "$env:USERPROFILE\Narada\Start-NaradaWorkspace.ps1" -Agent <agent-id>
 ```
 
 If the installation is incomplete, `narada doctor --bootstrap` reports one repair command:

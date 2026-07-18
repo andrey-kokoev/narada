@@ -14,7 +14,6 @@ import { createConsoleServerRoutes } from './console-server-routes.js';
 import { createSiteRegistryReadModel, type SiteRegistryReadModel } from './site-registry-read-model.js';
 import { createRegistryMutationGateway, type RegistryMutationGateway } from './site-registry-management-gateway.js';
 import { renderOperatorWorkspacePage } from './operator-workspace-page.js';
-import type { WorkspaceLaunchUiSessionRecord } from './workspace-launch-session-store.js';
 import { createAgentSessionReadModel, type AgentSessionReadModel } from './agent-session-read-model.js';
 import { ensureLaunchArtifact, naradaProperRoot } from '../lib/launch-artifact.js';
 import {
@@ -162,7 +161,6 @@ export interface ConsoleServerConfig {
   readOperatorRouterRoutes?: typeof readOperatorRouterRoutes;
   registryReadModel?: SiteRegistryReadModel;
   registryMutationGateway?: RegistryMutationGateway;
-  workspaceLaunchSessions?: () => Promise<WorkspaceLaunchUiSessionRecord[]>;
   agentSessions?: AgentSessionReadModel;
   operatorConsoleUiRoot?: string;
 }
@@ -247,7 +245,6 @@ export async function createConsoleServer(config: ConsoleServerConfig): Promise<
     controlClientFactory,
     registryReadModel,
     registryMutationGateway: config.registryMutationGateway ?? createRegistryMutationGateway(),
-    workspaceLaunchSessions: config.workspaceLaunchSessions,
     agentSessions: config.agentSessions ?? createAgentSessionReadModel(registryReadModel),
     operatorConsoleUiRoot,
   };

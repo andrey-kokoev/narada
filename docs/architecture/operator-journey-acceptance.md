@@ -3,31 +3,31 @@
 The canonical operator journey is accepted only when the operator can stay on
 one stable Operator Router origin while moving through the live projections:
 
-Router -> Workspace -> Registry -> Site Operations -> Agent Web UI -> artifact -> Launcher
+Router -> Workspace -> Registry -> Site Operations -> Agent Web UI -> artifact
 
-The acceptance suite has three complementary layers. The real-start test
+The acceptance suite has complementary layers. The real-start test
 launches the compiled `narada console serve` command as a child process and
-verifies its stable Router projection. The launcher journey test separately
-starts the real compiled `narada launcher workspace-launch` process with
-`--interactive-selection-ui` alongside that Console, opens the returned browser
-page through the stable Router session path, and closes the session through the
-same path. The canonical journey test also starts that real
-launcher against the already-running Router after artifact delivery, adds a
-second Site through the governed Registry workflow, selects that Site in the
-launcher, proves a real hidden-detached runtime host with an attachable
-`agent-cli` projection through a healthy new NARS session, requests runtime
-shutdown through the admitted control path consumed by the runtime wrapper,
-and only then closes the launcher and tests Router restart. The runtime control
-sideband accepts either governed carrier-input envelopes or the narrow NARS
-session-core control methods; it does not accept arbitrary commands. That test
+verifies its stable Router projection. The canonical journey test
 starts the Router through the production `ensureOperatorRouter` path, which
 exercises hidden detached ownership and same-port restart; it starts the real
 Console, Site Operations,
 and Agent Web UI servers in-process, seeds one User Site registry record and
-one NARS session-owned artifact, creates a second registry record through the
-live add workflow, and registers the corresponding
-production-shaped routes with that Router. Both tests keep browser navigation
+one NARS session-owned artifact, edits that record and creates a second
+registry record through the governed plan/apply workflow, and registers the
+corresponding production-shaped routes with that Router. The runtime control
+sideband accepts either governed carrier-input envelopes or the narrow NARS
+session-core control methods; it does not accept arbitrary commands.
+Both tests keep browser navigation
 on the Router origin, not on any backing server URL.
+
+The launcher acceptance layer (`test:launcher-acceptance`) drives the real
+installed User Site `Start-NaradaWorkspace.ps1` against the compiled
+`narada launcher workspace-launch` command: dry-run plans map one selected
+agent to its admitted operator-surface projections, and a live launch proves a
+real hidden-detached NARS runtime host with an attached agent-web-ui
+projection, an exact healthy session attachment, and a clean shutdown through
+the NARS session control path. The earlier interactive launcher UI journey was
+removed with the group-launch stack (decision 20260718-2038, task #2041).
 
 The bounded acceptance commands are:
 
@@ -95,20 +95,15 @@ The test records these acceptance properties as assertions:
   operator projection, serves Workspace and Registry through that origin, and
   leaves no backing target or health URL in the public route inventory; after
   the real child terminates, its Router projection is no longer healthy;
-- the canonical journey's real launcher process reports a session URL on the
-  same stable Router origin used by Workspace, Registry, Site Operations,
-  Agent Web UI, and the artifact; it serves the browser UI through
-  `/console/launch/sessions/<id>`, keeps its direct localhost port out of
-  operator-facing output, selects the second Site, starts a real hidden-
-  detached runtime host, observes its newly-created NARS session as healthy and
-  launch-owned, links the logical launch-session ID to the distinct carrier/NARS
-  session record, stops it through the durable session control path, and exits
-  cleanly after the operator cancels through that Router. The acceptance waits
-  for the session-owned runtime PID to exit before removing the temporary Site root;
-  the closed session no longer serves launcher content;
-- the separate launcher acceptance test repeats the real Console-plus-launcher
-  projection with an independently started Router, covering the launcher
-  process boundary without relying on the in-process journey fixture;
+- the launcher acceptance layer proves the compiled launcher through the
+  installed User Site PowerShell wrapper: dry-run plans carry the admitted
+  operator-surface projection set and never open Windows Terminal, and the
+  live launch starts a real hidden-detached runtime host, observes its
+  newly-created NARS session as healthy and launch-owned, links the logical
+  launch-session ID to the distinct NARS session record, proves projection
+  readiness through the published health endpoint, and stops the runtime
+  through the durable session control path. The acceptance waits for the
+  session-owned runtime PID to exit before removing the temporary Site root;
 - the Workspace route directory exposes Registry, Site Operations, and the
   session route from the live Router inventory;
 - Registry edit and add each use the canonical preview, explicit confirmation,
@@ -140,9 +135,10 @@ Status: accepted for the representative continuous operator journey across
 two Sites and two Registry mutation classes.
 
 Proven: hidden Router start and same-port restart, stable-origin navigation,
-live WebSocket and artifact delivery, real launcher projection, hidden-
-detached launch-to-session observation and shutdown, governed registry edit and
-add mutations, CSRF boundaries, route reconstruction, and cleanup.
+live WebSocket and artifact delivery, hidden-detached launch-to-session
+observation and shutdown through the launcher acceptance layer, governed
+registry edit and add mutations, CSRF boundaries, route reconstruction, and
+cleanup.
 
 Remaining by design: live end-to-end journeys for external carrier processes,
 the agent-tui terminal loop, and a separately selected agent-web-ui carrier

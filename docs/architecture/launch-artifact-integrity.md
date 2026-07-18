@@ -90,25 +90,25 @@ been produced and verified. The minimum shape is:
 ```json
 {
   "schema": "narada.launch_artifact.v1",
-  "target": "workspace-launch",
-  "package": "@narada2/workspace-launch-ui",
-  "package_root": "packages/workspace-launch-ui",
+  "target": "narada-cli",
+  "package": "@narada2/cli",
+  "package_root": "packages/layers/cli",
   "output_root": "dist",
-  "required_outputs": ["index.html", "assets/**"],
+  "required_outputs": ["main.js", "index.js", "mcp-main.js", "ui/workbench.html"],
   "build_script": "build",
   "built_at": "2026-07-14T00:00:00.000Z",
   "source_closure": {
     "algorithm": "sha256",
     "source_hash": "...",
     "input_count": 42,
-    "inputs": ["packages/workspace-launch-ui/src/App.vue"],
-    "packages": ["@narada2/workspace-launch-ui"]
+    "inputs": ["packages/layers/cli/src/main.ts"],
+    "packages": ["@narada2/cli"]
   },
   "toolchain": {
     "node": "...",
     "package_manager": "pnpm@..."
   },
-  "recipe": {"package": "@narada2/workspace-launch-ui", "build_script": "build"},
+  "recipe": {"package": "@narada2/cli", "build_script": "build"},
   "recipe_hash": "...",
   "outputs": {
     "algorithm": "sha256",

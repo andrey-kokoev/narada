@@ -504,7 +504,7 @@ function proxySocketRequest(
   head: Buffer,
   target: URL,
   timeoutMs: number,
-  activeSockets?: Set<Duplex>,
+  activeSockets: Set<Duplex>,
   liveness: OperatorRouterWebSocketLiveness,
   lifecycleSink: ((event: OperatorRouterWebSocketLifecycleEvent) => void) | undefined,
   routeId: string,
