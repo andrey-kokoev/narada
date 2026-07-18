@@ -304,9 +304,6 @@ function createWorkspaceLaunchFailureResult(
         return [];
       }
     });
-  const interactiveSelectionSurface = source.interactive_selection_surface === 'browser' || source.interactive_selection_surface === 'terminal'
-    ? source.interactive_selection_surface
-    : null;
   const ownership = support.isRecord(source.ownership)
     && source.ownership.planner === 'narada-cli'
     && source.ownership.executor === 'narada-cli.workspace-launch'
@@ -321,8 +318,6 @@ function createWorkspaceLaunchFailureResult(
     status: 'failed',
     mutation_performed: false,
     mode: 'launch',
-    interactive_selection: source.interactive_selection === true,
-    interactive_selection_surface: interactiveSelectionSurface,
     count: Number.isInteger(source.count) && Number(source.count) >= 0 ? Number(source.count) : selectedAgents.length,
     windows_terminal_invoked: failure.operator_terminal_handoff.status !== 'not_attempted',
     registry_paths: support.stringArray(source.registry_paths),

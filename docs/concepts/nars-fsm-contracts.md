@@ -247,15 +247,13 @@ Schema: `narada.site_registry_bootstrap.lifecycle_state.v1`.
 
 Registry management uses `requested -> preflighted -> planned -> applying -> verified`, with explicit `advisory` and `refused` outcomes. Paired Windows receiving-site bootstrap uses `requested -> preflighted -> planned -> applying -> user_site_created -> pc_site_created -> paired -> verified`. If the User Site exists but PC creation is not confirmed, the lifecycle ends at `partial`; it is not reported as a successful pair. Preflight refusal, failed execution, and partial evidence are returned with lifecycle state and history while preserving the existing command status and repair guidance.
 
-## Workspace Launch Session and Attempt
+## Workspace Launch Plan and Execution
 
-Owner: `@narada2/cli`, persistent workspace-launch UI controller and attempt store.
+Owner: `@narada2/cli`, workspace-launch planning and execution boundary.
 
-Schemas: `narada.workspace_launch.ui_session.lifecycle_state.v1` and `narada.workspace_launch.attempt.lifecycle_state.v1`.
+Schemas: `narada.workspace_launch.plan.v1`, `narada.workspace_launch.smoke.v1`, and `narada.workspace_launch.action_refusal.v1`.
 
-The persistent launcher session follows `created -> starting -> open -> closing -> closed`. Timeout and server failure are explicit branches: `open -> timeout` and `created|starting|open -> failed`. Recovered sessions without lifecycle fields are normalized from their existing public status.
-
-A launch attempt follows `queued -> planning -> launching -> handoff_recorded -> observing -> launched`. Launch failure is terminal from an active attempt, and `launched -> observing -> launched` records an explicit recheck. Forgetting is terminal for the attempt. The existing `status` field remains the compatibility projection; lifecycle history is durable in the session JSON and attempts JSONL.
+The workspace launcher requires an explicit agent, site, role, `--all`, or config-path selection. It resolves registry defaults only for fields within the selected records and produces a noninteractive plan. The executor advances the in-memory launch transaction through `planned -> preflighted -> spawned -> handed_off|attached -> completed`; pre-completion failures are `failed` with bounded rollback and best-effort redacted artifact evidence. Workspace launch does not persist interactive selector sessions or execution attempts, expose a browser grouping UI, recover detached attempts, or own a `workspace-recover` command. NARS session authority remains in the runtime host, and attachment history remains scoped to the attach operation.
 
 ## Site Operating Loop Run, Trigger, and Health
 

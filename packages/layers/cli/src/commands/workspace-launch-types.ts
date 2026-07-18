@@ -202,8 +202,6 @@ export interface WorkspaceLaunchPlanResult {
   status: 'planned';
   mutation_performed: false;
   mode: 'plan' | 'dry_run';
-  interactive_selection: boolean;
-  interactive_selection_surface: 'browser' | 'terminal' | null;
   count: number;
   windows_terminal_invoked: false;
   registry_paths: string[];
@@ -329,8 +327,6 @@ export interface WorkspaceLaunchFailureResult {
   status: 'failed';
   mutation_performed: false;
   mode: 'launch';
-  interactive_selection: boolean;
-  interactive_selection_surface: 'browser' | 'terminal' | null;
   count: number;
   windows_terminal_invoked: boolean;
   registry_paths: string[];

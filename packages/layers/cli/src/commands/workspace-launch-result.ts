@@ -85,9 +85,7 @@ export function assertWorkspaceLaunchPlanInvariants(result: WorkspaceLaunchPlanR
     || result.transaction.schema !== 'narada.workspace_launch.transaction.v1'
     || result.transaction.state !== 'planned'
     || !Number.isInteger(result.count)
-    || result.count < 0
-    || typeof result.interactive_selection !== 'boolean'
-    || ![null, 'browser', 'terminal'].includes(result.interactive_selection_surface)) {
+    || result.count < 0) {
     throw new Error('workspace_launch_plan_persisted_shape_invalid');
   }
   if (result.count !== result.selected_agents.length) {

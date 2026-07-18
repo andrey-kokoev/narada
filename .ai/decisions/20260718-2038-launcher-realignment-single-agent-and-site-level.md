@@ -197,10 +197,11 @@ Deviation log (where #2041 departed from the verdict table above):
   it is the hidden-runtime session health verification used by the surviving
   executor path and imports only `@narada2/nars-session-core/session-index`
   plus launcher types — not grouping machinery.
-- **Result-schema contraction deferred**: `interactive_selection` /
-  `interactive_selection_surface` remain in plan and failure result schemas as
-  constant `false` / `null`; consumers read these fields, so the schema
-  contract is preserved for now.
+- **Result-schema contraction deferred, then completed**: `interactive_selection` /
+  `interactive_selection_surface` were initially kept in plan and failure result
+  schemas as constant `false` / `null`. They were removed outright as a fast
+  follow-up on 2026-07-18 after a consumer audit showed no typed, scripted, or
+  test reader depended on them.
 - **`Start-NaradaWorkspace.ps1` could not wait for "simplify later"**: both the
   repo asset and the installed User Site copy
   (`C:\Users\Andrey\Narada\Start-NaradaWorkspace.ps1`) passed removed CLI flags
