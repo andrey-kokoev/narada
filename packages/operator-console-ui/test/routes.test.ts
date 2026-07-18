@@ -6,7 +6,7 @@ import {
   siteRegistryNavigation,
 } from '../src/console/routes.ts';
 
-test('operator console route resolver admits canonical registry and launcher routes', () => {
+test('operator console route resolver admits canonical registry, launcher, and onboarding routes', () => {
   assert.deepEqual(resolveOperatorConsoleRoute('/console/registry/'), {
     kind: 'site-registry',
     path: '/console/registry',
@@ -34,6 +34,10 @@ test('operator console route resolver admits canonical registry and launcher rou
     kind: 'launcher',
     path: '/console/launch',
   });
+  assert.deepEqual(resolveOperatorConsoleRoute('/console/onboarding/'), {
+    kind: 'onboarding',
+    path: '/console/onboarding',
+  });
   assert.deepEqual(resolveOperatorConsoleRoute('/console/sessions/'), {
     kind: 'agent-sessions',
     path: '/console/sessions',
@@ -54,4 +58,8 @@ test('operator navigation marks exactly one current route and includes launcher 
   const launcherItems = operatorConsoleNavigation('launcher');
   assert.equal(launcherItems.filter((item) => item.current).length, 1);
   assert.equal(launcherItems.find((item) => item.current)?.href, '/console/launch');
+
+  const onboardingItems = operatorConsoleNavigation('onboarding');
+  assert.equal(onboardingItems.filter((item) => item.current).length, 1);
+  assert.equal(onboardingItems.find((item) => item.current)?.href, '/console/onboarding');
 });

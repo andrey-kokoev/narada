@@ -17,6 +17,11 @@ is `/console/registry/`. The Workspace route directory is read from
 `/console/routes`; it describes which Console surfaces and routes are actually
 available from the current host.
 
+For a first-time personal User Site, use `/console/onboarding` (the **First
+Use** route). It projects the CLI-owned doctor and onboarding contracts and
+offers only the resident-first live start or the credential-free demo. It does
+not accept secrets or replace `narada onboarding` as the mutation authority.
+
 The browser is a projection client. It does not invent routes, replace the
 route authority, or bypass the CLI-owned server.
 

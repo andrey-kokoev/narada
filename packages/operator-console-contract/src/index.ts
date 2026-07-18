@@ -9,6 +9,8 @@ export const OPERATOR_CONSOLE_REGISTRY_MANAGE_PATH = `${OPERATOR_CONSOLE_REGISTR
 export const OPERATOR_CONSOLE_LAUNCH_PATH = `${OPERATOR_CONSOLE_PATH}/launch` as const;
 export const OPERATOR_CONSOLE_LAUNCH_API_PATH = `${OPERATOR_CONSOLE_LAUNCH_PATH}/api` as const;
 export const OPERATOR_CONSOLE_LAUNCH_SESSIONS_PATH = `${OPERATOR_CONSOLE_LAUNCH_PATH}/sessions` as const;
+export const OPERATOR_CONSOLE_ONBOARDING_PATH = `${OPERATOR_CONSOLE_PATH}/onboarding` as const;
+export const OPERATOR_CONSOLE_ONBOARDING_API_PATH = `${OPERATOR_CONSOLE_ONBOARDING_PATH}/api` as const;
 export const OPERATOR_CONSOLE_SESSIONS_PATH = `${OPERATOR_CONSOLE_PATH}/sessions` as const;
 export const OPERATOR_CONSOLE_SESSIONS_API_PATH = `${OPERATOR_CONSOLE_SESSIONS_PATH}/api` as const;
 export const OPERATOR_CONSOLE_ASSET_PATH = '/console/assets' as const;
@@ -20,7 +22,8 @@ export type OperatorSurfaceId =
   | 'launcher'
   | 'site-operations'
   | 'agent-sessions'
-  | 'artifacts';
+  | 'artifacts'
+  | 'onboarding';
 
 export type OperatorSurfaceScope =
   | 'user-site'
@@ -68,6 +71,7 @@ export type OperatorSurfaceIntentKind =
   | 'none'
   | 'registry-workflow'
   | 'launcher-control'
+  | 'onboarding-control'
   | 'site-control'
   | 'session-input'
   | 'artifact-open';
@@ -87,7 +91,7 @@ export type OperatorSurfaceAvailability = 'available' | 'unavailable' | 'planned
 
 export type OperatorSurfaceRouteKind = 'page' | 'workflow';
 
-export type OperatorSurfaceNavigationKey = 'sites' | 'add' | 'manage' | 'launcher' | 'sessions';
+export type OperatorSurfaceNavigationKey = 'sites' | 'add' | 'manage' | 'launcher' | 'sessions' | 'onboarding';
 
 export interface OperatorSurfaceNavigationItem {
   key: OperatorSurfaceNavigationKey;
@@ -305,6 +309,27 @@ export const operatorSurfaceDescriptors: readonly OperatorSurfaceDescriptor[] = 
       available: 'Review Site runtime posture and open per-Site launch/ensure actions.',
       unavailable: 'The Site Runtime view is not reachable from this host.',
       planned: 'The Site Runtime route is not yet available from this host.',
+    },
+  },
+  {
+    schema: OPERATOR_SURFACE_DESCRIPTOR_SCHEMA,
+    id: 'onboarding',
+    name: 'First Use',
+    scope: 'user-site',
+    owner: 'Narada CLI onboarding',
+    authority: { kind: 'user-site', id: null },
+    authorityHost: { kind: 'local', id: 'operator-console', origin: null },
+    projection: { kind: 'workspace', owner: '@narada2/operator-console-ui' },
+    intent: { kind: 'onboarding-control', endpoint: OPERATOR_CONSOLE_ONBOARDING_PATH, endpointBase: 'workspace', protocols: ['http'] },
+    diagnosticOnly: false,
+    routes: [
+      { id: 'onboarding', path: OPERATOR_CONSOLE_ONBOARDING_PATH, kind: 'page', label: 'First Use', navigationKey: 'onboarding' },
+    ],
+    defaultAvailability: 'available',
+    detail: {
+      available: 'Check the installed User Site and start its resident General assistant.',
+      unavailable: 'The first-use onboarding projection is not available from this host.',
+      planned: 'The first-use onboarding route is not yet available from this host.',
     },
   },
   {

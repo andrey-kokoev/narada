@@ -15,6 +15,7 @@ import {
 import {
   OPERATOR_CONSOLE_LAUNCH_PATH,
   OPERATOR_CONSOLE_LONG_RUNNING_REQUEST_TIMEOUT_MS,
+  OPERATOR_CONSOLE_ONBOARDING_PATH,
   OPERATOR_CONSOLE_REGISTRY_PATH,
 } from '@narada2/operator-console-contract';
 import {silentCommandContext, wrapCommand, type CommanderOptionValues} from '../lib/command-wrapper.js';
@@ -98,6 +99,7 @@ export function registerConsoleCommands(program: Command): void {
           `Operator Workspace diagnostic host: ${url}/`,
           `Operator Console Site Registry: ${url}${OPERATOR_CONSOLE_REGISTRY_PATH}`,
           `Operator Console Site Runtime: ${url}${OPERATOR_CONSOLE_LAUNCH_PATH}`,
+          `Operator Console First Use: ${url}${OPERATOR_CONSOLE_ONBOARDING_PATH}`,
           `Operator Console API base: ${url}/console`,
           'Operator Console ownership: diagnostic',
           'Press Ctrl+C to stop',
@@ -128,6 +130,7 @@ export function registerConsoleCommands(program: Command): void {
           `Operator Workspace: ${router.url}/`,
           `Operator Console Site Registry: ${router.url}${OPERATOR_CONSOLE_REGISTRY_PATH}`,
           `Operator Console Site Runtime: ${router.url}${OPERATOR_CONSOLE_LAUNCH_PATH}`,
+          `Operator Console First Use: ${router.url}${OPERATOR_CONSOLE_ONBOARDING_PATH}`,
           `Operator Console API base: ${router.url}/console`,
           `Operator Router ownership: ${router.ownership}`,
           'Operator Console projection: attached',
@@ -171,6 +174,7 @@ export function registerConsoleCommands(program: Command): void {
         `Operator Workspace: ${router.url}/`,
         `Operator Console Site Registry: ${router.url}${OPERATOR_CONSOLE_REGISTRY_PATH}`,
         `Operator Console Site Runtime: ${router.url}${OPERATOR_CONSOLE_LAUNCH_PATH}`,
+        `Operator Console First Use: ${router.url}${OPERATOR_CONSOLE_ONBOARDING_PATH}`,
         `Operator Console API base: ${router.url}/console`,
         `Operator Router ownership: ${router.ownership}`,
         'Operator Console projection: started',

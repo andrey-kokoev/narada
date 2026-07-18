@@ -177,6 +177,20 @@ Once the CLI is available, the canonical command is:
 narada onboarding start --platform windows --scope user-site --interactive
 ```
 
+For a browser-guided local path, start the CLI-owned Operator Console and open
+the First Use page at `/console/onboarding`:
+
+```powershell
+narada console serve
+```
+
+Open the URL printed by the command, then choose **First Use**. The page is a
+projection of `narada doctor --bootstrap` and `narada onboarding`; it does not
+create a second onboarding authority or handle provider secrets in the browser.
+It keeps the advanced Site/runtime launcher available, but the first-use path
+asks only for confirmation to start the personal `resident` assistant or to
+try the credential-free demo.
+
 The one-time PowerShell bootstrapper may install or locate the CLI and create or locate the User Site, then hand off to this command. It must not own onboarding policy, runtime selection, MCP assembly, provider logic, or terminal orchestration.
 
 The installed Windows handoff is equivalent:

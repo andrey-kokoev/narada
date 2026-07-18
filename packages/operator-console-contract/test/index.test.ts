@@ -15,10 +15,11 @@ import {
 } from '../src/index.ts';
 
 test('operator surface catalog describes canonical registry and launcher routes', () => {
-  assert.equal(operatorSurfaceDescriptors.length, 5);
+  assert.equal(operatorSurfaceDescriptors.length, 6);
   assert.equal(findOperatorSurfaceRoute('/console/registry/')?.surface.id, 'site-registry');
   assert.equal(findOperatorSurfaceRoute('/console/registry/add')?.route.kind, 'workflow');
   assert.equal(findOperatorSurfaceRoute('/console/launch')?.surface.id, 'launcher');
+  assert.equal(findOperatorSurfaceRoute('/console/onboarding')?.surface.id, 'onboarding');
   assert.equal(primaryOperatorSurfaceRoute(operatorSurfaceDescriptors[0])?.path, '/console/registry');
   assert.equal(operatorSurfaceRoutePath('agent-sessions', 'sessions'), '/console/sessions');
   assert.equal(operatorSurfaceDescriptors.find((surface) => surface.id === 'launcher')?.authority.kind, 'operator-console');
@@ -65,12 +66,14 @@ test('navigation projection follows descriptor availability and labels', () => {
     'Add Site',
     'Manage',
     'Site Runtime',
+    'First Use',
     'Sessions',
   ]);
   assert.deepEqual(projectOperatorSurfaceNavigation({ availability: { launcher: 'unavailable' } }).map((item) => item.key), [
     'sites',
     'add',
     'manage',
+    'onboarding',
     'sessions',
   ]);
 });
@@ -84,7 +87,7 @@ test('launcher descriptor projection is owned by the console UI, not the groupin
 test('navigation projection excludes routes that are unavailable within an available surface', () => {
   assert.deepEqual(projectOperatorSurfaceNavigation({
     routeAvailability: { 'site-registry': { add: 'unavailable', manage: 'unavailable' } },
-  }).map((item) => item.key), ['sites', 'launcher', 'sessions']);
+  }).map((item) => item.key), ['sites', 'launcher', 'onboarding', 'sessions']);
 });
 
 test('availability projection preserves planned and unavailable states', () => {
@@ -120,7 +123,7 @@ test('workspace route directory preserves concrete and template route availabili
   assert.deepEqual(projectOperatorSurfaceNavigation({
     availability: { artifacts: 'available' },
     routeAvailability: { artifacts: { artifact: 'available' } },
-  }).map((item) => item.key), ['sites', 'add', 'manage', 'launcher', 'sessions']);
+  }).map((item) => item.key), ['sites', 'add', 'manage', 'launcher', 'onboarding', 'sessions']);
 });
 
 test('workspace route directory admits live concrete routes without replacing templates', () => {

@@ -13,6 +13,7 @@ export type OperatorConsoleRouteKind =
   | 'site-registry-add'
   | 'site-registry-manage'
   | 'launcher'
+  | 'onboarding'
   | 'agent-sessions'
   | 'artifacts'
   | 'not-found';
@@ -149,6 +150,9 @@ export function resolveOperatorConsoleRoute(
   }
   if (matched?.surfaceId === 'launcher') {
     return { kind: 'launcher', path };
+  }
+  if (matched?.surfaceId === 'onboarding') {
+    return { kind: 'onboarding', path };
   }
   if (matched?.surfaceId === 'agent-sessions') {
     return { kind: 'agent-sessions', path };

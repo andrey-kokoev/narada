@@ -31,6 +31,8 @@ import {
   OPERATOR_CONSOLE_REGISTRY_ADD_PATH,
   OPERATOR_CONSOLE_REGISTRY_MANAGE_PATH,
   OPERATOR_CONSOLE_LAUNCH_PATH,
+  OPERATOR_CONSOLE_ONBOARDING_PATH,
+  OPERATOR_CONSOLE_ONBOARDING_API_PATH,
   OPERATOR_CONSOLE_SESSIONS_PATH,
 } from '@narada2/operator-console-contract';
 import {
@@ -38,6 +40,8 @@ import {
   readOperatorConsoleUiDocument,
 } from './console-ui-assets.js';
 import { sitesLaunchCommand } from './sites-launch.js';
+import { doctorCommand } from './doctor.js';
+import { onboardingStartCommand, onboardingStatusCommand } from './onboarding.js';
 import { silentCommandContext } from '../lib/command-wrapper.js';
 
 export interface RouteHandler {
@@ -121,6 +125,72 @@ async function requestJson(req: IncomingMessage): Promise<Record<string, unknown
   } catch {
     return null;
   }
+}
+
+function commandResultRecord(command: { result: unknown }): Record<string, unknown> | null {
+  return isRecord(command.result) ? command.result : null;
+}
+
+function redactOnboardingResult(value: Record<string, unknown> | null): Record<string, unknown> | null {
+  if (!value) return null;
+  // Launch internals can contain process commands and environment metadata. The
+  // first-use page needs posture and next action, not a second launch artifact.
+  return { ...value, launch: null };
+}
+
+function onboardingUiState(
+  doctor: Record<string, unknown> | null,
+  onboarding: Record<string, unknown> | null,
+  start: Record<string, unknown> | null = null,
+): 'checking' | 'ready' | 'starting' | 'healthy' | 'needs-provider-setup' | 'blocked' | 'failed' {
+  const startStatus = optionalString(start?.status);
+  const startReason = optionalString(start?.reason_code);
+  if (startStatus === 'launched') return 'starting';
+  if (startReason === 'provider_auth_required') return 'needs-provider-setup';
+  if (startStatus === 'blocked') return 'blocked';
+  if (startStatus === 'error') return 'failed';
+
+  const onboardingStatus = optionalString(onboarding?.status);
+  const session = isRecord(onboarding?.session) ? onboarding.session : null;
+  const verification = isRecord(onboarding?.verification) ? onboarding.verification : null;
+  if (onboardingStatus === 'first_use_verified' || verification?.status === 'verified') return 'healthy';
+  if (onboardingStatus === 'launch_requested') return 'starting';
+
+  const providerReadiness = Array.isArray(doctor?.provider_readiness) ? doctor.provider_readiness : [];
+  if (providerReadiness.some((row) => isRecord(row) && row.status === 'needs_setup')) return 'needs-provider-setup';
+  if (doctor?.status === 'degraded' || onboardingStatus === 'blocked') return 'blocked';
+  if (session?.health_status === 'healthy') return 'starting';
+  return 'ready';
+}
+
+function onboardingProjection(
+  doctorCommandResult: { result: unknown },
+  onboardingCommandResult: { result: unknown },
+  startCommandResult?: { result: unknown; exitCode: number },
+): Record<string, unknown> {
+  const doctor = commandResultRecord(doctorCommandResult);
+  const onboarding = commandResultRecord(onboardingCommandResult);
+  const start = startCommandResult ? commandResultRecord(startCommandResult) : null;
+  const uiState = onboardingUiState(doctor, onboarding, start);
+  const projectedOnboarding = redactOnboardingResult(start ?? onboarding);
+  const nextAction = optionalString(projectedOnboarding?.next_action)
+    ?? 'Refresh the status to continue.';
+  return {
+    schema: 'narada.operator_console.onboarding.v1',
+    status: startCommandResult && startCommandResult.exitCode !== 0 ? 'failed' : 'success',
+    ui_state: uiState,
+    posture: uiState,
+    doctor,
+    onboarding: projectedOnboarding,
+    next_action: nextAction,
+    actions: {
+      start: uiState === 'ready' || uiState === 'starting',
+      demo: true,
+    },
+    ...(startCommandResult && startCommandResult.exitCode !== 0
+      ? { error: optionalString(start?.message) ?? optionalString(start?.reason_code) ?? 'onboarding_start_failed' }
+      : {}),
+  };
 }
 
 function registryMutationInput(payload: Record<string, unknown>): RegistryMutationInput | null {
@@ -227,6 +297,112 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
         }
         res.writeHead(200, { 'Content-Type': asset.contentType, 'Content-Length': asset.body.byteLength, 'Cache-Control': 'no-cache' });
         res.end(asset.body);
+      },
+    },
+
+    // ── CLI-owned first-use onboarding projection ──
+    {
+      method: 'GET',
+      pattern: exactPathPattern(OPERATOR_CONSOLE_ONBOARDING_PATH),
+      handler: async (req, res) => {
+        const origin = req.headers.origin;
+        if (!setCorsHeaders(res, origin)) {
+          jsonResponse(res, 403, { error: 'Origin not allowed' });
+          return;
+        }
+        htmlResponse(res, 200, readOperatorConsoleUiDocument(ctx.operatorConsoleUiRoot));
+      },
+    },
+    {
+      method: 'GET',
+      pattern: suffixPathPattern(OPERATOR_CONSOLE_ONBOARDING_API_PATH, '/status$'),
+      handler: async (req, res) => {
+        const origin = req.headers.origin;
+        if (!setCorsHeaders(res, origin)) {
+          jsonResponse(res, 403, { error: 'Origin not allowed' });
+          return;
+        }
+        try {
+          const commandContext = silentCommandContext();
+          const doctor = await doctorCommand({ bootstrap: true, format: 'json' }, commandContext);
+          const onboarding = await onboardingStatusCommand({
+            platform: 'windows',
+            scope: 'user-site',
+            format: 'json',
+          }, commandContext);
+          jsonResponse(res, 200, onboardingProjection(doctor, onboarding));
+        } catch (error) {
+          jsonResponse(res, 500, {
+            schema: 'narada.operator_console.onboarding.v1',
+            status: 'failed',
+            ui_state: 'failed',
+            posture: 'failed',
+            doctor: null,
+            onboarding: null,
+            next_action: 'Run `narada doctor --bootstrap` and `narada onboarding status` in the terminal.',
+            actions: { start: false, demo: true },
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      },
+    },
+    {
+      method: 'POST',
+      pattern: suffixPathPattern(OPERATOR_CONSOLE_ONBOARDING_API_PATH, '/start$'),
+      handler: async (req, res) => {
+        const origin = req.headers.origin;
+        if (!setCorsHeaders(res, origin)) {
+          jsonResponse(res, 403, { error: 'Origin not allowed' });
+          return;
+        }
+        const payload = await requestJson(req);
+        const mode = optionalString(payload?.mode) ?? 'live';
+        if (!payload || payload.confirm !== true || (mode !== 'live' && mode !== 'demo')) {
+          jsonResponse(res, 400, {
+            schema: 'narada.operator_console.onboarding.v1',
+            status: 'failed',
+            ui_state: 'blocked',
+            posture: 'blocked',
+            doctor: null,
+            onboarding: null,
+            next_action: 'Confirm an onboarding action with mode `live` or `demo`.',
+            actions: { start: false, demo: true },
+            error: 'confirmed_onboarding_action_required',
+          });
+          return;
+        }
+        try {
+          const commandContext = silentCommandContext();
+          const doctor = await doctorCommand({ bootstrap: true, format: 'json' }, commandContext);
+          const start = await onboardingStartCommand({
+            platform: 'windows',
+            scope: 'user-site',
+            demo: mode === 'demo',
+            interactive: false,
+            noExec: false,
+            format: 'json',
+          }, commandContext);
+          const onboarding = await onboardingStatusCommand({
+            platform: 'windows',
+            scope: 'user-site',
+            format: 'json',
+          }, commandContext);
+          const projection = onboardingProjection(doctor, onboarding, start);
+          const status = start.exitCode === 0 ? 200 : 422;
+          jsonResponse(res, status, projection);
+        } catch (error) {
+          jsonResponse(res, 500, {
+            schema: 'narada.operator_console.onboarding.v1',
+            status: 'failed',
+            ui_state: 'failed',
+            posture: 'failed',
+            doctor: null,
+            onboarding: null,
+            next_action: 'Run `narada onboarding start` in the terminal to inspect the refusal.',
+            actions: { start: false, demo: true },
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
       },
     },
 

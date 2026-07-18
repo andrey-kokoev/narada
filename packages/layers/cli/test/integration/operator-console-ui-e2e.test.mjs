@@ -124,6 +124,7 @@ function mutationResponse(input, applied) {
 
 async function startFixtureServer({ agentSessions = [] } = {}) {
   const requests = [];
+  let onboardingStarted = false;
   const server = createServer(async (req, res) => {
     try {
       const pathname = new URL(req.url || '/', 'http://127.0.0.1').pathname;
@@ -133,13 +134,70 @@ async function startFixtureServer({ agentSessions = [] } = {}) {
         }));
         return;
       }
-      if (req.method === 'GET' && ['/console/registry', '/console/registry/add', '/console/registry/manage', '/console/launch', '/console/sessions'].includes(pathname)) {
+      if (req.method === 'GET' && ['/console/registry', '/console/registry/add', '/console/registry/manage', '/console/launch', '/console/onboarding', '/console/sessions'].includes(pathname)) {
         const body = readOperatorConsoleUiDocument();
         res.writeHead(200, {
           'Content-Type': 'text/html; charset=utf-8',
           'Content-Length': Buffer.byteLength(body),
         });
         res.end(body);
+        return;
+      }
+      if (req.method === 'GET' && pathname === '/console/onboarding/api/status') {
+        sendJson(res, 200, {
+          schema: 'narada.operator_console.onboarding.v1',
+          status: 'success',
+          ui_state: onboardingStarted ? 'healthy' : 'ready',
+          posture: onboardingStarted ? 'healthy' : 'ready',
+          doctor: {
+            schema: 'narada.doctor.bootstrap.v1',
+            status: 'ready',
+            provider_readiness: [{ provider: 'codex-subscription', status: 'ready' }],
+          },
+          onboarding: onboardingStarted
+            ? {
+                schema: 'narada.onboarding.status.v1',
+                status: 'first_use_verified',
+                user_site: { root: 'D:/Narada', resident_agent: 'resident' },
+                verification: { status: 'verified' },
+                next_action: 'Continue to Agent Sessions.',
+              }
+            : {
+                schema: 'narada.onboarding.status.v1',
+                status: 'not_started',
+                user_site: { root: 'D:/Narada', resident_agent: 'resident' },
+                session: null,
+                verification: null,
+                next_action: 'Start your assistant.',
+              },
+          next_action: onboardingStarted ? 'Continue to Agent Sessions.' : 'Start your assistant.',
+          actions: { start: !onboardingStarted, demo: true },
+        });
+        return;
+      }
+      if (req.method === 'POST' && pathname === '/console/onboarding/api/start') {
+        const input = await readJson(req);
+        requests.push({ pathname, input });
+        onboardingStarted = true;
+        sendJson(res, 200, {
+          schema: 'narada.operator_console.onboarding.v1',
+          status: 'success',
+          ui_state: 'starting',
+          posture: 'starting',
+          doctor: {
+            schema: 'narada.doctor.bootstrap.v1',
+            status: 'ready',
+            provider_readiness: [{ provider: 'codex-subscription', status: 'ready' }],
+          },
+          onboarding: {
+            schema: 'narada.onboarding.start.v1',
+            status: 'launched',
+            next_action: 'Wait for the resident session.',
+            launch: null,
+          },
+          next_action: 'Wait for the resident session.',
+          actions: { start: true, demo: true },
+        });
         return;
       }
       if (req.method === 'GET' && pathname === '/console/sessions/api/sessions') {
@@ -289,12 +347,38 @@ test('Operator Console launch page renders the site runtime view and rejects unk
     const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
     const response = await page.goto(fixture.url + '/console/launch');
     assert.equal(response?.status(), 200);
-    await page.getByRole('heading', { name: 'Site Runtime' }).waitFor();
+    await page.getByRole('main').getByRole('heading', { name: 'Site Runtime' }).waitFor();
     await page.locator('.site-tile').waitFor();
     assert.equal(await page.locator('.site-tile__name').textContent(), 'site-a');
 
     const unknown = await fetch(fixture.url + '/console/not-found');
     assert.equal(unknown.status, 404);
+  } finally {
+    await browser.close();
+    await fixture.close();
+  }
+});
+
+test('Operator Console first-use onboarding projects ready, starting, and healthy states', async () => {
+  const fixture = await startFixtureServer();
+  const browser = await chromium.launch();
+  try {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+    const response = await page.goto(fixture.url + '/console/onboarding');
+    assert.equal(response?.status(), 200);
+    await page.getByRole('heading', { level: 2, name: 'Start with one assistant' }).waitFor();
+    await page.getByText('Ready to start', { exact: true }).waitFor();
+    await page.getByRole('button', { name: 'Start my assistant' }).click();
+    await page.getByText('Starting your assistant').waitFor();
+    await page.getByText('Assistant is ready').waitFor({ timeout: 5000 });
+    assert.deepEqual(fixture.requests[0], {
+      pathname: '/console/onboarding/api/start',
+      input: { mode: 'live', confirm: true },
+    });
+    await assertNoHorizontalOverflow(page, 'first-use onboarding desktop');
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await assertNoHorizontalOverflow(page, 'first-use onboarding mobile');
   } finally {
     await browser.close();
     await fixture.close();

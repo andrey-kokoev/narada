@@ -151,6 +151,17 @@ vi.mock('../../src/commands/sites-launch.js', () => ({
   sitesLaunchCommand: (...args: unknown[]) => sitesLaunchCommandMock(...args),
 }));
 
+const doctorCommandMock = vi.fn();
+const onboardingStatusCommandMock = vi.fn();
+const onboardingStartCommandMock = vi.fn();
+vi.mock('../../src/commands/doctor.js', () => ({
+  doctorCommand: (...args: unknown[]) => doctorCommandMock(...args),
+}));
+vi.mock('../../src/commands/onboarding.js', () => ({
+  onboardingStatusCommand: (...args: unknown[]) => onboardingStatusCommandMock(...args),
+  onboardingStartCommand: (...args: unknown[]) => onboardingStartCommandMock(...args),
+}));
+
 async function httpGet(url: string, headers?: Record<string, string>): Promise<{ status: number; body: unknown }> {
   const response = await fetch(url, { headers });
   const text = await response.text();
@@ -188,6 +199,35 @@ describe('console server', () => {
       all: vi.fn(() => []),
       get: vi.fn(() => null),
       run: vi.fn(() => ({ changes: 0 })),
+    });
+    doctorCommandMock.mockResolvedValue({
+      exitCode: 0,
+      result: {
+        schema: 'narada.doctor.bootstrap.v1',
+        status: 'ready',
+        provider_readiness: [{ provider: 'codex-subscription', status: 'ready' }],
+        checks: [],
+      },
+    });
+    onboardingStatusCommandMock.mockResolvedValue({
+      exitCode: 0,
+      result: {
+        schema: 'narada.onboarding.status.v1',
+        status: 'not_started',
+        user_site: { root: 'D:/Narada', resident_agent: 'resident' },
+        session: null,
+        verification: null,
+        next_action: 'Start your assistant.',
+      },
+    });
+    onboardingStartCommandMock.mockResolvedValue({
+      exitCode: 0,
+      result: {
+        schema: 'narada.onboarding.start.v1',
+        status: 'launched',
+        next_action: 'Wait for the resident session.',
+        launch: { command: ['secret-process-detail'] },
+      },
     });
   });
 
@@ -795,6 +835,62 @@ describe('console server', () => {
       });
       // Audit is logged regardless of client result; status reflects Site response
       expect(status).toBe(502);
+      await server.stop();
+    });
+  });
+
+  describe('first-use onboarding projection', () => {
+    it('serves the CLI-owned page, requires confirmation, and redacts launch internals', async () => {
+      const server = await createConsoleServer({ port: 0, host: '127.0.0.1' });
+      const url = await server.start();
+
+      const page = await fetch(`${url}/console/onboarding`);
+      const pageBody = await page.text();
+      expect(page.status, pageBody).toBe(200);
+      expect(page.headers.get('content-type')).toContain('text/html');
+      expect(pageBody).toContain('<div id="app"></div>');
+
+      const status = await httpGet(`${url}/console/onboarding/api/status`);
+      expect(status.status).toBe(200);
+      expect((status.body as { schema: string }).schema).toBe('narada.operator_console.onboarding.v1');
+      expect((status.body as { ui_state: string }).ui_state).toBe('ready');
+      expect((status.body as { onboarding: { launch: unknown } }).onboarding.launch).toBeNull();
+
+      const unconfirmed = await httpPost(`${url}/console/onboarding/api/start`, { mode: 'live' });
+      expect(unconfirmed.status).toBe(400);
+      expect((unconfirmed.body as { error: string }).error).toBe('confirmed_onboarding_action_required');
+      expect(onboardingStartCommandMock).not.toHaveBeenCalled();
+
+      const started = await httpPost(`${url}/console/onboarding/api/start`, { mode: 'live', confirm: true });
+      expect(started.status).toBe(200);
+      expect((started.body as { ui_state: string }).ui_state).toBe('starting');
+      expect((started.body as { onboarding: { launch: unknown } }).onboarding.launch).toBeNull();
+      expect(doctorCommandMock).toHaveBeenCalledWith(
+        expect.objectContaining({ bootstrap: true, format: 'json' }),
+        expect.anything(),
+      );
+      expect(onboardingStartCommandMock).toHaveBeenCalledWith(
+        expect.objectContaining({ platform: 'windows', scope: 'user-site', demo: false, interactive: false, noExec: false, format: 'json' }),
+        expect.anything(),
+      );
+
+      onboardingStartCommandMock.mockResolvedValueOnce({
+        exitCode: 0,
+        result: {
+          schema: 'narada.onboarding.start.v1',
+          status: 'demo_available',
+          next_action: 'Open the demo session.',
+          launch: { command: ['secret-demo-process-detail'] },
+        },
+      });
+      const demo = await httpPost(`${url}/console/onboarding/api/start`, { mode: 'demo', confirm: true });
+      expect(demo.status).toBe(200);
+      expect((demo.body as { onboarding: { launch: unknown } }).onboarding.launch).toBeNull();
+      expect(onboardingStartCommandMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({ platform: 'windows', scope: 'user-site', demo: true, interactive: false, noExec: false, format: 'json' }),
+        expect.anything(),
+      );
+
       await server.stop();
     });
   });

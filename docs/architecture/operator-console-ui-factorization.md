@@ -16,7 +16,7 @@ The Operator Console Site Registry UI has one canonical domain model and one exp
 
 ## Serving Boundary
 
-The CLI serves the same built Vue document at `/console/registry`, `/console/registry/add`, `/console/registry/manage`, and `/console/launch`. The bundle is mounted at the neutral `/console/assets/:asset` path; Site Registry remains the canonical console entry and does not own the application bundle. The mutation page selects its initial mode from the request path; it does not create a second app.
+The CLI serves the same built Vue document at `/console/registry`, `/console/registry/add`, `/console/registry/manage`, `/console/launch`, and `/console/onboarding`. The bundle is mounted at the neutral `/console/assets/:asset` path; Site Registry remains the canonical console entry and does not own the application bundle. The mutation page and First Use page select their initial behavior from the request path; neither creates a second app.
 
 ## Invariants
 
