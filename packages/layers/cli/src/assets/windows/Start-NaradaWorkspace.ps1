@@ -3,14 +3,23 @@
 param(
   [switch]$Onboarding,
   [switch]$DryRun,
+  [switch]$All,
   [switch]$NoWaitForEnterBeforeExec,
+  [switch]$EnableNativeShell,
+  [switch]$VisibleRuntimeTerminal,
+  [switch]$Smoke,
+  [string[]]$ConfigPath,
   [string[]]$Site,
   [string[]]$Role,
   [string[]]$Agent,
   [string[]]$OperatorSurface,
   [string]$Runtime,
   [string]$IntelligenceProvider,
-  [string]$McpScope,
+  [ValidateSet('all', 'host', 'user-site', 'local-site', 'none')]
+  [string]$McpScope = 'all',
+  [string]$RegistryPath,
+  [ValidateSet('json', 'human', 'auto')]
+  [string]$Format = 'auto',
   [string]$ResultPath,
   [switch]$SuppressResultOutput
 )
@@ -31,8 +40,15 @@ if ($Onboarding) {
 
 $args = @('launcher', 'workspace-launch')
 if ($DryRun) { $args += '--dry-run' }
+if ($All) { $args += '--all' }
 if ($NoWaitForEnterBeforeExec) { $args += '--no-wait-for-enter-before-exec' }
+if ($EnableNativeShell) { $args += '--enable-native-shell' }
+if ($VisibleRuntimeTerminal) { $args += '--visible-runtime-terminal' }
+if ($Smoke) { $args += '--smoke' }
 if ($SuppressResultOutput) { $args += '--suppress-result-output' }
+foreach ($value in @($ConfigPath)) { if ($value) { $args += @('--config-path', $value) } }
+if ($RegistryPath) { $args += @('--registry-path', $RegistryPath) }
+if ($Format) { $args += @('--format', $Format) }
 if ($Runtime) { $args += @('--runtime', $Runtime) }
 if ($IntelligenceProvider) { $args += @('--intelligence-provider', $IntelligenceProvider) }
 if ($McpScope) { $args += @('--mcp-scope', $McpScope) }

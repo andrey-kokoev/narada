@@ -1,3 +1,4 @@
+import { resolve } from 'node:path';
 import { operatorSurfaceRuntimeStartCommand as runOperatorSurfaceRuntimeStart } from './operator-surface-runtime-start.js';
 import { formattedResult } from '../lib/cli-output.js';
 import { ExitCode } from '../lib/exit-codes.js';
@@ -19,11 +20,15 @@ export async function runWorkspaceLaunchSmoke(
   registryPaths: string[],
 ): Promise<WorkspaceLaunchCommandResult<WorkspaceLaunchSmokeResult>> {
   const agents: WorkspaceLaunchSmokeAgentResult[] = [];
+  const naradaProperRoot = resolve(process.env.NARADA_PROPER_ROOT ?? process.cwd());
   for (const plan of plans) {
     const smoke = await runOperatorSurfaceRuntimeStart({
       siteRoot: plan.site_root,
       targetSiteId: plan.site,
-      workspaceRoot: plan.workspace_root ?? undefined,
+      // `workspaceRoot` is the Narada proper package workspace consumed by
+      // agent-start. The selected record's workspace_root is the target Site
+      // workspace and may not contain Narada's package graph.
+      workspaceRoot: naradaProperRoot,
       agent: plan.agent,
       carrier: plan.launch_operator_surface,
       runtime: plan.launch_runtime_host,
