@@ -1,4 +1,5 @@
 import { buildAgentWebUiCloudflareAuthorityConfig, buildAgentWebUiCloudflareProjectionConfig } from '@narada2/cloudflare-nars-projection';
+import { buildNarsCapabilityProfile, deriveNarsRuntimeQuadrant } from '@narada2/nars-runtime-contract/runtime-surface-contract';
 
 export function readInjectedConfig(documentRef = globalThis.document) {
   const element = documentRef?.getElementById?.('nars-config');
@@ -35,8 +36,18 @@ export function resolveAttachConfig(search = '', injectedConfig = {}) {
   const remoteConfig = cloudflareAuthorityConfig ?? cloudflareConfig;
   const eventEndpoint = remoteConfig?.event_endpoint ?? value('event_endpoint', 'eventEndpoint', 'events');
   const healthEndpoint = remoteConfig?.health_endpoint ?? value('health_endpoint', 'healthEndpoint', 'health');
+  // Declared, not inferred: runtime_origin comes from the explicit attach mode;
+  // surface_origin defaults per mode and may be pinned by an explicit
+  // surface_origin declaration (e.g. the Cloudflare-hosted authority page).
+  const runtimeOrigin = cloudflareAuthorityConfig ? 'cloudflare' : 'local';
+  const surfaceOrigin = value('surface_origin', 'surfaceOrigin')
+    ?? (cloudflareAuthorityConfig ? 'local' : cloudflareConfig ? 'cloudflare' : 'local');
   return {
     mode: remoteConfig?.mode ?? 'local_nars_projection',
+    runtimeOrigin,
+    surfaceOrigin,
+    quadrant: deriveNarsRuntimeQuadrant(runtimeOrigin, surfaceOrigin),
+    capabilityProfile: buildNarsCapabilityProfile(runtimeOrigin),
     ...(Array.isArray(injectedConfig.admittedMethods) ? { admittedMethods: [...injectedConfig.admittedMethods] } : {}),
     projectionId: cloudflareProjectionId,
     sessionId,

@@ -274,6 +274,10 @@ test('HTTP health renderer prefers scoped agent identity ref for status text', a
 test('attach config resolves one event endpoint and one health endpoint from query or injected config', () => {
   assert.deepEqual(resolveAttachConfig('?event_endpoint=ws://nars/events&health_endpoint=http://nars/health&max_replay=7'), {
     mode: 'local_nars_projection',
+    runtimeOrigin: 'local',
+    surfaceOrigin: 'local',
+    quadrant: 'local/local',
+    capabilityProfile: localCapabilityProfile(),
     projectionId: null,
     cloudflareApiBaseUrl: null,
     browserToken: null,
@@ -292,6 +296,10 @@ test('attach config resolves one event endpoint and one health endpoint from que
   });
   assert.deepEqual(resolveAttachConfig('', { eventEndpoint: 'ws://injected/events', healthEndpoint: '/api/health' }), {
     mode: 'local_nars_projection',
+    runtimeOrigin: 'local',
+    surfaceOrigin: 'local',
+    quadrant: 'local/local',
+    capabilityProfile: localCapabilityProfile(),
     projectionId: null,
     cloudflareApiBaseUrl: null,
     browserToken: null,
@@ -309,6 +317,47 @@ test('attach config resolves one event endpoint and one health endpoint from que
     maxReplay: 100,
   });
 });
+
+test('attach config declares runtime origin, surface origin, quadrant, and capability profile per mode', () => {
+  const localDefault = resolveAttachConfig('');
+  assert.equal(localDefault.mode, 'local_nars_projection');
+  assert.equal(localDefault.quadrant, 'local/local');
+  assert.equal(localDefault.capabilityProfile.provider_execution, 'present');
+
+  const projection = resolveAttachConfig('?cloudflare_projection_id=proj_1&cloudflare_api_base_url=https://projection.example.test');
+  assert.equal(projection.mode, 'cloudflare_projection');
+  assert.equal(projection.runtimeOrigin, 'local');
+  assert.equal(projection.surfaceOrigin, 'cloudflare');
+  assert.equal(projection.quadrant, 'local/cloudflare');
+  assert.equal(projection.capabilityProfile.provider_execution, 'present');
+
+  const authorityLocal = resolveAttachConfig('?cloudflare_authority_session_id=cf_1&cloudflare_api_base_url=https://authority.example.test');
+  assert.equal(authorityLocal.mode, 'cloudflare_authority');
+  assert.equal(authorityLocal.runtimeOrigin, 'cloudflare');
+  assert.equal(authorityLocal.surfaceOrigin, 'local');
+  assert.equal(authorityLocal.quadrant, 'cloudflare/local');
+  assert.equal(authorityLocal.capabilityProfile.provider_execution, 'absent');
+  assert.equal(authorityLocal.capabilityProfile.local_tool_execution, 'absent');
+  assert.equal(authorityLocal.capabilityProfile.local_filesystem_authority, 'absent');
+
+  const authorityHosted = resolveAttachConfig('?cloudflare_authority_session_id=cf_1&cloudflare_api_base_url=https://authority.example.test&surface_origin=cloudflare');
+  assert.equal(authorityHosted.quadrant, 'cloudflare/cloudflare');
+  assert.equal(authorityHosted.capabilityProfile.local_mcp, 'absent');
+});
+
+function localCapabilityProfile() {
+  return {
+    provider_execution: 'present',
+    local_tool_execution: 'present',
+    local_mcp: 'present',
+    local_filesystem_authority: 'present',
+    local_artifact_authority: 'present',
+    cloudflare_native_mcp: 'absent',
+    replay: 'present',
+    input_admission: 'present',
+    revocation: 'present',
+  };
+}
 
 test('runtime event summaries unwrap NARS session_event envelopes', () => {
   assert.equal(summarizeRuntimeEvent({ event: 'session_events_subscription_started', replay_count: 3 }), '3 replayed event(s)');

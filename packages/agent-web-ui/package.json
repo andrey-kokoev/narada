@@ -73,6 +73,7 @@
     "@narada2/agent-identity": "workspace:*",
     "@narada2/cloudflare-nars-projection": "workspace:*",
     "@narada2/nars-client-projection-contract": "workspace:*",
+    "@narada2/nars-runtime-contract": "workspace:*",
     "@narada2/site-paths": "workspace:*",
     "@narada2/ui": "workspace:*",
     "@narada2/ui-vue": "workspace:*",

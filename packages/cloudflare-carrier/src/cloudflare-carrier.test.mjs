@@ -10101,3 +10101,32 @@ function jsonRequest(body, { token = null, cookie = null, path = '/control' } = 
     body: JSON.stringify(body),
   });
 }
+
+test('cloudflare-carrier stays a separate carrier: no NARS session-semantics ownership', async () => {
+  const { readdirSync } = await import('node:fs');
+  const { join, dirname } = await import('node:path');
+  const { fileURLToPath } = await import('node:url');
+  const packageDir = join(dirname(fileURLToPath(import.meta.url)), '..');
+  const manifest = JSON.parse(readFileSync(join(packageDir, 'package.json'), 'utf8'));
+  const dependencyNames = Object.keys(manifest.dependencies ?? {});
+  const narsSessionSemanticsPackages = [
+    '@narada2/nars-session-core',
+    '@narada2/nars-runtime-contract',
+    '@narada2/cloudflare-nars-projection',
+    '@narada2/agent-runtime-server',
+    '@narada2/agent-web-ui',
+  ];
+  assert.deepEqual(
+    dependencyNames.filter((name) => narsSessionSemanticsPackages.includes(name)),
+    [],
+    'cloudflare-carrier must not depend on NARS session authority/projection packages',
+  );
+  const srcDir = join(packageDir, 'src');
+  for (const file of readdirSync(srcDir)) {
+    if (!file.endsWith('.mjs') || file.endsWith('.test.mjs')) continue;
+    const source = readFileSync(join(srcDir, file), 'utf8');
+    for (const name of narsSessionSemanticsPackages) {
+      assert.equal(source.includes(name), false, `${file} must not import ${name}`);
+    }
+  }
+});
