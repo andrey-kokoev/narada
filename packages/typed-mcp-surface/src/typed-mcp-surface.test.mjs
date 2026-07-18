@@ -56,7 +56,7 @@ test('carrier projections derive only from registry authority', () => {
         },
         client_config: { generated_path: '.ai/mcp/stale-fixture-mcp.json' },
         authority_boundary: { posture: 'site_local' },
-        tool_contract: { read_only_tools: ['fixture_read'], mutating_tools: [] },
+        tool_contract: { read_only_tools: ['fixture_read'], mutating_tools: ['fixture_write'] },
       }],
     };
     writeFileSync(join(siteRoot, '.narada', 'capabilities', 'mcp-surfaces.json'), `${JSON.stringify(registry, null, 2)}\n`, 'utf8');
@@ -74,9 +74,52 @@ test('carrier projections derive only from registry authority', () => {
       assert.doesNotMatch(text, /removed\/legacy-server/);
       assert.match(projection.generated_from.registry_sha256, /^[a-f0-9]{64}$/);
       assert.equal(projection.snippet_policy.default, 'registry_only');
+      if (carrier === 'kimi') {
+        const permissionsPath = join(siteRoot, '.ai', 'mcp', 'carriers', 'narada-andrey-user-kimi.permissions.toml');
+        const permissions = readFileSync(permissionsPath, 'utf8');
+        assert.match(permissions, /mcp__stale-fixture__fixture_read/);
+        assert.doesNotMatch(permissions, /pattern = "mcp__stale-fixture__fixture_write"/);
+        assert.match(permissions, /Mutation-capable tools left manual/);
+        assert.equal(projection.carrier_policy.kimi_permission_projection.auto_allowed_tool_count, 1);
+        assert.equal(projection.carrier_policy.kimi_permission_projection.manual_tool_count, 1);
+      }
     }
     const checkResult = spawnSync(process.execPath, [generator, '--site-root', siteRoot, '--carrier', 'all', '--check'], { encoding: 'utf8' });
     assert.equal(checkResult.status, 0, checkResult.stderr);
+
+    const kimiConfigPath = join(siteRoot, 'kimi-config.toml');
+    writeFileSync(kimiConfigPath, 'default_permission_mode = "manual"\r\n', 'utf8');
+    const materializeArgs = [
+      generator,
+      '--site-root', siteRoot,
+      '--carrier', 'kimi',
+      '--kimi-config-path', kimiConfigPath,
+      '--materialize-kimi-permissions',
+      '--write',
+    ];
+    const materializeResult = spawnSync(process.execPath, materializeArgs, { encoding: 'utf8' });
+    assert.equal(materializeResult.status, 0, materializeResult.stderr);
+    const materialized = readFileSync(kimiConfigPath, 'utf8');
+    assert.match(materialized, /default_permission_mode = "manual"/);
+    assert.match(materialized, /BEGIN NARADA GENERATED KIMI MCP PERMISSIONS/);
+    assert.match(materialized, /mcp__stale-fixture__fixture_read/);
+    assert.equal(materialized.includes('\r\n'), true);
+    assert.doesNotMatch(materialized.replace(/\r\n/g, ''), /\n/);
+
+    const repeatMaterializeResult = spawnSync(process.execPath, materializeArgs, { encoding: 'utf8' });
+    assert.equal(repeatMaterializeResult.status, 0, repeatMaterializeResult.stderr);
+    const repeatedMaterialized = readFileSync(kimiConfigPath, 'utf8');
+    assert.equal((repeatedMaterialized.match(/BEGIN NARADA GENERATED KIMI MCP PERMISSIONS/g) ?? []).length, 1);
+
+    const materializeCheck = spawnSync(process.execPath, [
+      generator,
+      '--site-root', siteRoot,
+      '--carrier', 'kimi',
+      '--kimi-config-path', kimiConfigPath,
+      '--materialize-kimi-permissions',
+      '--check',
+    ], { encoding: 'utf8' });
+    assert.equal(materializeCheck.status, 0, materializeCheck.stderr);
   } finally {
     rmSync(siteRoot, { recursive: true, force: true });
   }

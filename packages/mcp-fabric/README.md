@@ -31,6 +31,26 @@ Use the same command with `--check` to verify generated files without writing.
 The loader's registry validation also rejects stale server names in `.ai\mcp`
 files, so renamed bindings are repaired by regeneration rather than hand edits.
 
+For Kimi Code, the same generation also writes
+`.ai/mcp/carriers/narada-andrey-user-kimi.permissions.toml`. It contains
+qualified per-tool permission rules for read-only MCP tools only; mutation-capable
+tools remain under Kimi's normal approval policy. The permission projection is
+derived from the same registry and is not a second authority.
+
+Materializing those rules into a private Kimi config is explicit and opt-in:
+
+```powershell
+pnpm --filter @narada2/typed-mcp-surface exec node src/generate-carrier-mcp-config.mjs `
+  --site-root <site-root> --carrier kimi --write `
+  --kimi-config-path <path-to-kimi-config.toml> `
+  --materialize-kimi-permissions
+```
+
+The command replaces only its marked generated block and preserves the rest of
+the target file. It never guesses or overwrites a Kimi config path. For current
+Kimi Code, pass `$env:KIMI_CODE_HOME\config.toml` or the default
+`~/.kimi-code/config.toml`; older installations may use `~/.kimi/config.toml`.
+
 ## Boundary
 
 This package describes available MCP servers and tool metadata. It does not grant
