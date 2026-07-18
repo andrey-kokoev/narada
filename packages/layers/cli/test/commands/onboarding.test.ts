@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const workspaceLaunchMock = vi.hoisted(() => vi.fn());
 const narsSessionsMock = vi.hoisted(() => vi.fn());
+const sitesInitMock = vi.hoisted(() => vi.fn());
 
 vi.mock('../../src/commands/workspace-launch-application.js', () => ({
   registryDefaultIntelligenceProvider: () => 'kimi-code-api',
@@ -11,6 +12,11 @@ vi.mock('../../src/commands/workspace-launch-application.js', () => ({
 }));
 
 vi.mock('../../src/commands/nars.js', () => ({ narsSessionsCommand: narsSessionsMock }));
+
+// The memfs-backed suite cannot exercise the native sqlite SiteRegistry that
+// the real sitesInitCommand opens; the onboarding flow only needs a successful
+// provisioning boundary here.
+vi.mock('../../src/commands/sites.js', () => ({ sitesInitCommand: sitesInitMock }));
 
 import { onboardingRoleApprovalCommand, onboardingStartCommand, onboardingStatusCommand } from '../../src/commands/onboarding.js';
 import type { CommandContext } from '../../src/lib/command-wrapper.js';
@@ -51,11 +57,13 @@ async function tempUserSite(withRegistry = true, residentCount = 1): Promise<{ r
 afterEach(async () => {
   workspaceLaunchMock.mockReset();
   narsSessionsMock.mockReset();
+  sitesInitMock.mockReset();
   await Promise.all(tempDirs.splice(0).map((path) => rm(path, { recursive: true, force: true })));
 });
 
 beforeEach(() => {
   workspaceLaunchMock.mockResolvedValue({ exitCode: ExitCode.SUCCESS, result: { status: 'planned' } });
+  sitesInitMock.mockResolvedValue({ exitCode: ExitCode.SUCCESS, result: { status: 'initialized' } });
 });
 
 describe('User Site onboarding', () => {
