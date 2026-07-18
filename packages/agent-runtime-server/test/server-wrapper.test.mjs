@@ -385,6 +385,12 @@ test('spawned event projection rejects plain HTTP and malformed WebSocket upgrad
     await waitForCapturedOutput(child, () => stdout, (text) => hasCapturedJsonEvent(text, (event) => event.event === 'session_started'));
     const started = readJsonlFileFromText(stdout).find((event) => event.event === 'session_started');
     assert.ok(started?.event_endpoint);
+    assert.equal(started.runtime_origin, 'local');
+    assert.equal(started.authority_runtime_host, 'local');
+    assert.equal(started.runtime_surface_contract?.quadrant, 'local/local');
+    assert.equal(started.runtime_surface_contract?.authority?.authority_runtime_host, 'local');
+    assert.equal(started.runtime_surface_contract?.authority?.canonicity, 'canonical');
+    assert.equal(started.runtime_surface_contract?.projection, null);
 
     const plainHttpUrl = new URL(started.event_endpoint);
     plainHttpUrl.protocol = 'http:';

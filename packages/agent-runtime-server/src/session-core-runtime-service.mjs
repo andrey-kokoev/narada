@@ -4,6 +4,7 @@ import { admittedProviderNames, loadProviderMetadata } from '@narada2/carrier-pr
 import { resolveNaradaSitePaths } from '@narada2/site-paths';
 import { readNarsEventLog } from '@narada2/nars-session-core/event-log';
 import { markNarsSessionIndexClosed, writeNarsSessionStartedIndex } from '@narada2/nars-session-core/session-index';
+import { buildNarsRuntimeSurfaceContract } from '@narada2/nars-runtime-contract/runtime-surface-contract';
 import { buildLaunchProcessOwnershipEvidence } from '@narada2/launch-process-ownership';
 import { createRuntimeSessionBinding } from './runtime-session-binding.mjs';
 import { createNarsCapabilityGateway } from '@narada2/nars-capability-gateway/capability-gateway';
@@ -23,6 +24,25 @@ const SESSION_CONTROL_METHODS = new Set([
   'session.close',
 ]);
 let heartbeatWriteSequence = 0;
+
+function buildLocalRuntimeSurfaceContract(runtimeContext, generatedAt = new Date().toISOString()) {
+  const sessionId = runtimeContext?.session ?? runtimeContext?.launchSessionId ?? 'runtime';
+  return buildNarsRuntimeSurfaceContract({
+    runtime_origin: 'local',
+    surface_origin: 'local',
+    authority: {
+      authority_runtime_host: 'local',
+      authority_epoch: Number.isInteger(runtimeContext?.authorityEpoch) && runtimeContext.authorityEpoch >= 1
+        ? runtimeContext.authorityEpoch
+        : 1,
+      authority_runtime_id: runtimeContext?.authorityRuntimeId?.trim() || `local-nars:${sessionId}`,
+      canonicity: 'canonical',
+      authority_transition_state: 'not_requested',
+      source_write_admission: 'active',
+    },
+    generated_at: generatedAt,
+  });
+}
 
 export function shouldPersistNarsRuntimeRequestTransition(record) {
   if (record?.method !== 'session.health') return true;
@@ -257,6 +277,9 @@ function projectRuntimeHealth(snapshot, runtimeContext, toolGateway, requestLife
     site_root: runtimeContext.siteRoot ?? null,
     runtime: 'narada-agent-runtime-server',
     runtime_mode: 'server',
+    runtime_origin: 'local',
+    authority_runtime_host: 'local',
+    runtime_surface_contract: buildLocalRuntimeSurfaceContract(runtimeContext, generatedAt),
     health_endpoint: runtimeContext.healthUrl ?? null,
     event_endpoint: runtimeContext.eventStreamUrl ?? null,
     runtime_host_state: runtimeHostSnapshot(runtimeContext),
@@ -517,6 +540,9 @@ export function createSessionCoreRuntimeService({
       runtime: 'narada-agent-runtime-server',
       transport: 'jsonl_stdio',
       runtime_contract: 'nars_session_core_control.v1',
+      runtime_origin: 'local',
+      authority_runtime_host: 'local',
+      runtime_surface_contract: buildLocalRuntimeSurfaceContract(runtimeContext, now()),
       agent_identity_ref: runtimeContext.agentIdentityRef ?? null,
       site_id: runtimeContext.siteId ?? null,
       site_root: runtimeContext.siteRoot ?? null,

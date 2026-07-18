@@ -7,7 +7,8 @@
     "package_role": "nars_runtime_contract",
     "owns": [
       "runtime_control_method_registry",
-      "runtime_intelligence_reconfiguration_request_schema"
+      "runtime_intelligence_reconfiguration_request_schema",
+      "runtime_surface_origin_authority_capability_contract"
     ],
     "does_not_own": [
       "runtime_execution",
@@ -20,10 +21,17 @@
       "types": "./src/nars-runtime-contract.d.ts",
       "import": "./src/nars-runtime-contract.mjs"
     },
+    "./runtime-surface-contract": {
+      "types": "./src/runtime-surface-contract.d.ts",
+      "import": "./src/runtime-surface-contract.mjs"
+    },
     "./package.json": "./package.json"
   },
   "types": "./src/nars-runtime-contract.d.ts",
   "scripts": {
     "test": "node --test src/*.test.mjs"
+  },
+  "dependencies": {
+    "@narada2/carrier-protocol": "workspace:*"
   }
 }

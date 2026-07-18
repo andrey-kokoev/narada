@@ -315,6 +315,9 @@ importers:
       '@narada2/nars-client-projection-contract':
         specifier: workspace:*
         version: link:../nars-client-projection-contract
+      '@narada2/nars-runtime-contract':
+        specifier: workspace:*
+        version: link:../nars-runtime-contract
       '@narada2/site-paths':
         specifier: workspace:*
         version: link:../site-paths
@@ -446,6 +449,9 @@ importers:
       '@narada2/nars-client-projection-contract':
         specifier: workspace:*
         version: link:../nars-client-projection-contract
+      '@narada2/nars-runtime-contract':
+        specifier: workspace:*
+        version: link:../nars-runtime-contract
       '@narada2/nars-session-core':
         specifier: workspace:*
         version: link:../nars-session-core
@@ -911,7 +917,11 @@ importers:
         specifier: workspace:*
         version: link:../process-launch-posture
 
-  packages/nars-runtime-contract: {}
+  packages/nars-runtime-contract:
+    dependencies:
+      '@narada2/carrier-protocol':
+        specifier: workspace:*
+        version: link:../carrier-protocol
 
   packages/nars-session-core:
     dependencies:
@@ -921,6 +931,9 @@ importers:
       '@narada2/carrier-protocol':
         specifier: workspace:*
         version: link:../carrier-protocol
+      '@narada2/nars-runtime-contract':
+        specifier: workspace:*
+        version: link:../nars-runtime-contract
       '@narada2/site-paths':
         specifier: workspace:*
         version: link:../site-paths

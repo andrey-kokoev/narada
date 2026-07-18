@@ -35,6 +35,11 @@ export interface NarsSessionIndexRecord {
   last_seen_at?: string | null;
   terminal_state?: string | null;
   status_hint?: string | null;
+  authority_runtime_host?: 'local' | 'cloudflare-host' | 'unknown_authority_metadata' | null;
+  authority_epoch?: number | null;
+  runtime_origin?: 'local' | 'cloudflare' | null;
+  authority_runtime_id?: string | null;
+  runtime_surface_contract?: Record<string, unknown> | null;
   launch_operator_surface_kind?: string | null;
   attach_commands?: NarsSessionAttachCommands | null;
   [key: string]: unknown;

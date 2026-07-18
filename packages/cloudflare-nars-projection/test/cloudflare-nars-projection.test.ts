@@ -4,6 +4,7 @@ import {
   CLOUDFLARE_NARS_PROJECTION_INTENT_SCHEMA,
   buildAgentWebUiCloudflareAuthorityConfig,
   buildAgentWebUiCloudflareProjectionConfig,
+  buildCloudflareNarsAuthorityRuntimeSurfaceContract,
   buildProjectionRegistrationPlan,
   classifyCloudflareInputRelay,
   createArtifactProjectionCache,
@@ -25,6 +26,7 @@ import {
   validateProjectionCredential,
 } from '../src/index.js';
 import { createCloudflareNarsProjectionWorker, NarsProjectionState } from '../src/worker.js';
+import { validateNarsRuntimeSurfaceContract } from '@narada2/nars-runtime-contract/runtime-surface-contract';
 
 const now = '2026-06-30T21:00:00.000Z';
 
@@ -51,6 +53,93 @@ describe('Cloudflare NARS projection schemas', () => {
     expect(access.bridge_credential.kind).toBe('bridge');
     expect(access.browser_access_tokens[0].kind).toBe('browser');
     expect(JSON.stringify(access)).not.toContain('secret');
+  });
+
+  test('canonical runtime surface contract covers projected and synthetic surface quadrants', () => {
+    const intent = sampleIntent();
+    const access = createCloudflareNarsRemoteAccessRecord({ intent, created_at: now });
+    const projection = createCloudflareNarsProjectionWorkerService();
+    projection.register(access);
+
+    const localToCloudflare = projection.readHealth({
+      projection_id: intent.projection_id,
+      browser_token_fingerprint: access.browser_access_tokens[0].token_fingerprint,
+      now,
+    });
+    expect(localToCloudflare.runtime_surface_contract).toMatchObject({
+      runtime_origin: 'local',
+      surface_origin: 'cloudflare',
+      quadrant: 'local/cloudflare',
+      authority: {
+        authority_runtime_host: 'local',
+        authority_epoch: 1,
+        authority_runtime_id: 'local-nars:carrier_123',
+      },
+      projection: {
+        projection_id: intent.projection_id,
+        route_kind: 'projection_edge',
+        posture: 'non_canonical_projection',
+      },
+      crossing: {
+        authority_owner: 'local',
+        admissibility_regime: 'projected_input_returns_to_local_nars',
+        confirmation_rule: 'projection_crossing_artifact_only',
+      },
+    });
+    expect(validateNarsRuntimeSurfaceContract(localToCloudflare.runtime_surface_contract).ok).toBe(true);
+    expect(classifyCloudflareInputRelay(access, {
+      token_fingerprint: access.browser_access_tokens[0].token_fingerprint,
+      method: 'conversation.send',
+      now,
+    })).toMatchObject({
+      ok: true,
+      acknowledgement: 'requires_nars_admission',
+      semantic_success_point: 'nars_admission',
+    });
+
+    const authority = createCloudflareNarsAuthorityService({ max_events: 50 });
+    const created = authority.createSession({
+      session_id: 'cf_runtime_surface_contract',
+      site_id: 'narada.cloudflare.test',
+      agent_id: 'cloudflare.resident',
+      mcp_fabric: { scope: 'none' },
+    }, now);
+    expect(created.status).toBe('created');
+    const synthetic = created.session.runtime_surface_contract;
+    expect(synthetic).toMatchObject({
+      runtime_origin: 'cloudflare',
+      surface_origin: 'cloudflare',
+      quadrant: 'cloudflare/cloudflare',
+      authority: {
+        authority_runtime_host: 'cloudflare-host',
+        authority_epoch: 1,
+        authority_runtime_id: 'cloudflare-nars-authority:cf_runtime_surface_contract',
+        canonicity: 'synthetic_canonical',
+      },
+      projection: { route_kind: 'intent_route', posture: 'synthetic_authority' },
+      capability_profile: {
+        provider_execution: 'absent',
+        local_tool_execution: 'absent',
+        local_mcp: 'absent',
+        local_filesystem_authority: 'absent',
+        local_artifact_authority: 'absent',
+        cloudflare_native_mcp: 'absent',
+      },
+    });
+    expect(validateNarsRuntimeSurfaceContract(synthetic).ok).toBe(true);
+
+    const cloudflareToLocal = authority.readHealth(created.session_id, 'local');
+    expect(cloudflareToLocal.runtime_surface_contract).toMatchObject({
+      runtime_origin: 'cloudflare',
+      surface_origin: 'local',
+      quadrant: 'cloudflare/local',
+      projection: { route_kind: 'intent_route', posture: 'synthetic_authority' },
+      crossing: {
+        authority_owner: 'cloudflare-host',
+        confirmation_rule: 'cloudflare_authority_durable_evidence',
+      },
+    });
+    expect(validateNarsRuntimeSurfaceContract(cloudflareToLocal.runtime_surface_contract).ok).toBe(true);
   });
 
   test('Worker registration from raw intent remains active and can publish/replay', async () => {
@@ -721,7 +810,22 @@ describe('Cloudflare Worker routes', () => {
       expect(created).toMatchObject({ status: 'created', session_id: 'cf_session_runtime_1', session: { execution_mode: 'cloudflare_runtime_tool_adapter', mcp_fabric: { requested_scope: 'all', server_count: 2, server_names: ['cf-authority', 'cf-authority-artifacts'] } } });
 
       const base = 'https://projection.example.test/api/nars/authority/sessions/cf_session_runtime_1';
-      expect(await jsonOf(outerWorker.fetch(new Request(`${base}/health`), env))).toMatchObject({ status: 'healthy', session_id: 'cf_session_runtime_1', execution_mode: 'cloudflare_runtime_tool_adapter', mcp_fabric: { requested_scope: 'all', server_count: 2, server_names: ['cf-authority', 'cf-authority-artifacts'] } });
+      expect(await jsonOf(outerWorker.fetch(new Request(`${base}/health?surface_origin=local`), env))).toMatchObject({
+        status: 'healthy',
+        session_id: 'cf_session_runtime_1',
+        execution_mode: 'cloudflare_runtime_tool_adapter',
+        mcp_fabric: { requested_scope: 'all', server_count: 2, server_names: ['cf-authority', 'cf-authority-artifacts'] },
+        runtime_surface_contract: {
+          runtime_origin: 'cloudflare',
+          surface_origin: 'local',
+          quadrant: 'cloudflare/local',
+          authority: { authority_runtime_host: 'cloudflare-host', authority_epoch: 1 },
+        },
+      });
+      expect(await jsonOf(outerWorker.fetch(new Request(`${base}/health?surface_origin=cloudflare`), env))).toMatchObject({
+        status: 'healthy',
+        runtime_surface_contract: { quadrant: 'cloudflare/cloudflare' },
+      });
 
       const replay = await jsonOf(outerWorker.fetch(new Request(`${base}/events?since_sequence=0`), env));
       expect(replay).toMatchObject({ status: 'ok', event_count: 1 });

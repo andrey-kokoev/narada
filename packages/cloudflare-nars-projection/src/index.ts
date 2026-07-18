@@ -1,4 +1,9 @@
 import { classifyNarsClientEventProjection, normalizeNarsSessionEventView, projectNarsClientEvent } from '@narada2/nars-client-projection-contract';
+import {
+  buildNarsCapabilityProfile,
+  buildNarsRuntimeSurfaceContract,
+} from '@narada2/nars-runtime-contract/runtime-surface-contract';
+import type { NarsRuntimeSurfaceContract } from '@narada2/nars-runtime-contract/runtime-surface-contract';
 
 function normalizeProjectionEventView(view: unknown): string | null {
   return normalizeNarsSessionEventView(typeof view === 'string' ? view : 'raw');
@@ -33,6 +38,59 @@ function normalizeProjectionSourceRef(value: CloudflareNarsProjectionSourceRef |
     carrier_session_id: carrierSessionId || null,
     operation_id: operationId || null,
   };
+}
+
+function buildLocalProjectionRuntimeSurfaceContract(record: {
+  projection_id: string;
+  nars_session_id: string;
+  authority_epoch?: number | null;
+  authority_runtime_id?: string | null;
+}, generatedAt?: string): NarsRuntimeSurfaceContract {
+  return buildNarsRuntimeSurfaceContract({
+    runtime_origin: 'local',
+    surface_origin: 'cloudflare',
+    authority: {
+      authority_runtime_host: 'local',
+      authority_epoch: Number.isInteger(record.authority_epoch) && record.authority_epoch! >= 1 ? record.authority_epoch : 1,
+      authority_runtime_id: record.authority_runtime_id?.trim() || `local-nars:${record.nars_session_id}`,
+      canonicity: 'canonical',
+      authority_transition_state: 'not_requested',
+      source_write_admission: 'active',
+    },
+    projection: {
+      projection_id: record.projection_id,
+      authority_session_id: record.nars_session_id,
+      route_kind: 'projection_edge',
+      posture: 'non_canonical_projection',
+    },
+    generated_at: generatedAt,
+  });
+}
+
+export function buildCloudflareNarsAuthorityRuntimeSurfaceContract(
+  session: Pick<CloudflareNarsAuthoritySession, 'session_id' | 'mcp_fabric' | 'authority_epoch' | 'authority_runtime_id'>,
+  surfaceOrigin: 'local' | 'cloudflare' = 'cloudflare',
+): NarsRuntimeSurfaceContract {
+  return buildNarsRuntimeSurfaceContract({
+    runtime_origin: 'cloudflare',
+    surface_origin: surfaceOrigin,
+    authority: {
+      authority_runtime_host: 'cloudflare-host',
+      authority_epoch: Number.isInteger(session.authority_epoch) && session.authority_epoch >= 1 ? session.authority_epoch : 1,
+      authority_runtime_id: session.authority_runtime_id?.trim() || `cloudflare-nars-authority:${session.session_id}`,
+      canonicity: 'synthetic_canonical',
+      authority_transition_state: 'not_requested',
+      source_write_admission: 'active',
+    },
+    projection: {
+      authority_session_id: session.session_id,
+      route_kind: 'intent_route',
+      posture: 'synthetic_authority',
+    },
+    capability_profile: buildNarsCapabilityProfile('cloudflare', {
+      cloudflare_native_mcp: session.mcp_fabric?.status === 'ok' && session.mcp_fabric.server_count > 0 ? 'fabric_summary' : 'absent',
+    }),
+  });
 }
 
 export function projectedEventMatchesView(event: ProjectedEvent, view: string): boolean {
@@ -691,6 +749,7 @@ export function createCloudflareNarsProjectionWorkerService(options: {
         last_event_sequence: read.cursor.last_sequence,
         last_projected_at: lastEvent?.projected_at ?? null,
         cursor: read.cursor,
+        runtime_surface_contract: buildLocalProjectionRuntimeSurfaceContract(record, args.now),
       };
     },
     readArtifactMetadata(args: {
@@ -843,6 +902,23 @@ export function createCloudflareNarsAuthorityService(options: {
       const sessionId = args.session_id?.trim() || `cf_nars_${safeToken(siteId)}_${safeToken(agentId)}_${safeToken(now)}`;
       const mcpFabric = normalizeCloudflareMcpFabricConfig(args.mcp_fabric ?? options.mcp_fabric);
       if (mcpFabric.status !== 'ok') return { status: 'refused', code: mcpFabric.code ?? 'cloudflare_mcp_fabric_refused', session_id: sessionId, mcp_fabric: mcpFabric };
+      // Durable refusal of ambiguous dual-host operation: a session identity
+      // already owned by this authority (active or revoked) must not be
+      // re-minted. Re-creating it would silently replace the authority record
+      // and wipe its ordered event log.
+      const existing = sessions.get(sessionId);
+      if (existing) {
+        return {
+          status: 'refused',
+          code: 'dual_host_authority_conflict',
+          session_id: sessionId,
+          conflict: {
+            existing_authority_runtime_id: existing.authority_runtime_id,
+            existing_authority_epoch: existing.authority_epoch,
+            existing_lifecycle_state: existing.lifecycle_state,
+          },
+        };
+      }
       const session: CloudflareNarsAuthoritySession = {
         schema: CLOUDFLARE_NARS_AUTHORITY_SESSION_SCHEMA,
         session_id: sessionId,
@@ -855,6 +931,15 @@ export function createCloudflareNarsAuthorityService(options: {
         updated_at: now,
         revoked_at: null,
         mcp_fabric: mcpFabric,
+        authority_runtime_host: 'cloudflare-host',
+        authority_epoch: 1,
+        authority_runtime_id: `cloudflare-nars-authority:${sessionId}`,
+        runtime_surface_contract: buildCloudflareNarsAuthorityRuntimeSurfaceContract({
+          session_id: sessionId,
+          mcp_fabric: mcpFabric,
+          authority_epoch: 1,
+          authority_runtime_id: `cloudflare-nars-authority:${sessionId}`,
+        }),
       };
       sessions.set(sessionId, session);
       sessionMcpFabrics.set(sessionId, mcpFabric);
@@ -867,11 +952,11 @@ export function createCloudflareNarsAuthorityService(options: {
       }, now);
       return { status: 'created', session_id: sessionId, session };
     },
-    readHealth(sessionId: string): CloudflareNarsAuthorityHealthResult {
+    readHealth(sessionId: string, surfaceOrigin: 'local' | 'cloudflare' = 'cloudflare'): CloudflareNarsAuthorityHealthResult {
       const session = sessions.get(sessionId);
       if (!session) return { schema: CLOUDFLARE_NARS_AUTHORITY_HEALTH_SCHEMA, status: 'refused', code: 'session_not_found', session_id: sessionId };
       if (session.lifecycle_state !== 'active') return { schema: CLOUDFLARE_NARS_AUTHORITY_HEALTH_SCHEMA, status: 'refused', code: `session_${session.lifecycle_state}`, session_id: sessionId };
-      return { schema: CLOUDFLARE_NARS_AUTHORITY_HEALTH_SCHEMA, status: 'healthy', session_id: sessionId, site_id: session.site_id, agent_id: session.agent_id, execution_mode: session.execution_mode, mcp_fabric: sessionMcpFabrics.get(sessionId) ?? session.mcp_fabric };
+      return { schema: CLOUDFLARE_NARS_AUTHORITY_HEALTH_SCHEMA, status: 'healthy', session_id: sessionId, site_id: session.site_id, agent_id: session.agent_id, execution_mode: session.execution_mode, mcp_fabric: sessionMcpFabrics.get(sessionId) ?? session.mcp_fabric, runtime_surface_contract: buildCloudflareNarsAuthorityRuntimeSurfaceContract(session, surfaceOrigin) };
     },
     readEvents(args: { session_id: string; since_sequence?: number | null; max_events?: number }): CloudflareNarsAuthorityReadEventsResult {
       const session = sessions.get(args.session_id);
@@ -1483,6 +1568,10 @@ export interface CloudflareNarsProjectionIntent {
   expires_at: string | null;
   revoked_at: string | null;
   remote_registration: Record<string, unknown> | null;
+  authority_runtime_host?: 'local';
+  authority_epoch?: number;
+  authority_runtime_id?: string;
+  runtime_surface_contract?: NarsRuntimeSurfaceContract;
 }
 
 export interface ProjectionCredentialRecord {
@@ -1493,6 +1582,10 @@ export interface ProjectionCredentialRecord {
   created_at: string;
   expires_at: string | null;
   revoked_at: string | null;
+  authority_runtime_host?: 'local';
+  authority_epoch?: number;
+  authority_runtime_id?: string;
+  runtime_surface_contract?: NarsRuntimeSurfaceContract;
 }
 
 export interface CloudflareNarsProjectionHealthReadResult {
@@ -1509,6 +1602,7 @@ export interface CloudflareNarsProjectionHealthReadResult {
   last_event_sequence?: number | null;
   last_projected_at?: string | null;
   cursor?: BoundedProjectionCacheRead['cursor'];
+  runtime_surface_contract?: NarsRuntimeSurfaceContract;
 }
 
 export interface CloudflareNarsRemoteAccessRecord {
@@ -1528,6 +1622,10 @@ export interface CloudflareNarsRemoteAccessRecord {
   created_at: string;
   expires_at: string | null;
   revoked_at: string | null;
+  authority_runtime_host?: 'local';
+  authority_epoch?: number;
+  authority_runtime_id?: string;
+  runtime_surface_contract?: NarsRuntimeSurfaceContract;
 }
 
 export interface ProjectionAccessValidation {
@@ -1703,6 +1801,10 @@ export interface CloudflareNarsAuthoritySession {
   updated_at: string;
   revoked_at: string | null;
   mcp_fabric: CloudflareMcpFabricSummary;
+  authority_runtime_host: 'cloudflare-host';
+  authority_epoch: number;
+  authority_runtime_id: string;
+  runtime_surface_contract: NarsRuntimeSurfaceContract;
 }
 
 export interface CloudflareNarsAuthorityEvent {
@@ -1722,6 +1824,11 @@ export interface CloudflareNarsAuthorityCreateSessionResult {
   session_id: string;
   session?: CloudflareNarsAuthoritySession;
   mcp_fabric?: CloudflareMcpFabricSummary;
+  conflict?: {
+    existing_authority_runtime_id: string;
+    existing_authority_epoch: number;
+    existing_lifecycle_state: CloudflareNarsAuthoritySession['lifecycle_state'];
+  };
 }
 
 export interface CloudflareNarsAuthorityHealthResult {
@@ -1733,6 +1840,7 @@ export interface CloudflareNarsAuthorityHealthResult {
   agent_id?: string;
   execution_mode?: CloudflareNarsAuthorityExecutionMode;
   mcp_fabric?: CloudflareMcpFabricSummary;
+  runtime_surface_contract?: NarsRuntimeSurfaceContract;
 }
 
 export interface CloudflareNarsAuthorityReadEventsResult {
@@ -1894,6 +2002,15 @@ export function createCloudflareNarsProjectionIntent(input: CloudflareNarsProjec
     expires_at: input.expires_at ?? null,
     revoked_at: null,
     remote_registration: input.remote_registration ?? null,
+    authority_runtime_host: 'local',
+    authority_epoch: 1,
+    authority_runtime_id: `local-nars:${sessionId}`,
+    runtime_surface_contract: buildLocalProjectionRuntimeSurfaceContract({
+      projection_id: projectionId,
+      nars_session_id: sessionId,
+      authority_epoch: 1,
+      authority_runtime_id: `local-nars:${sessionId}`,
+    }, now),
   };
 }
 
@@ -1923,6 +2040,15 @@ export function createCloudflareNarsRemoteAccessRecord(input: {
     created_at: now,
     expires_at: input.intent.expires_at,
     revoked_at: input.intent.revoked_at,
+    authority_runtime_host: input.intent.authority_runtime_host ?? 'local',
+    authority_epoch: input.intent.authority_epoch ?? 1,
+    authority_runtime_id: input.intent.authority_runtime_id ?? `local-nars:${input.intent.nars_session_id}`,
+    runtime_surface_contract: input.intent.runtime_surface_contract ?? buildLocalProjectionRuntimeSurfaceContract({
+      projection_id: input.intent.projection_id,
+      nars_session_id: input.intent.nars_session_id,
+      authority_epoch: input.intent.authority_epoch ?? 1,
+      authority_runtime_id: input.intent.authority_runtime_id ?? `local-nars:${input.intent.nars_session_id}`,
+    }, now),
   };
 }
 

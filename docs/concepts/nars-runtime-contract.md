@@ -10,6 +10,35 @@ The full target for session discovery, liveness, attachment, and recovery is [`n
 
 NARS is the Narada-owned runtime server contract for durable, machine-addressable agent sessions. It is not a synonym for Codex, `agent-cli`, a terminal, a transcript, or a model SDK.
 
+## Canonical Runtime / Surface / Authority Contract
+
+The shared origin and authority vocabulary is owned by
+`@narada2/nars-runtime-contract/runtime-surface-contract` under schema
+`narada.nars.runtime_surface_contract.v1`. Runtime, projection, and client
+code must consume this contract instead of inferring authority from a
+transport, UI, cache, or endpoint. Each report carries `runtime_origin`,
+`surface_origin`, the derived `quadrant`, authority host/epoch/runtime id,
+projection identity and route when applicable, a capability profile, and an
+explicit crossing declaration.
+
+The supported quadrants are closed:
+
+| Quadrant | Evidence and authority posture |
+| --- | --- |
+| `local/local` | Genuine local NARS evidence; local authority; no projection object. |
+| `local/cloudflare` | Projected local evidence; local authority; `projection_edge`; bridge/browser acknowledgment is only a crossing artifact. |
+| `cloudflare/local` | Synthetic Cloudflare-origin authority; `intent_route` to the synthetic authority; local surface cannot grant provider authority. |
+| `cloudflare/cloudflare` | Synthetic Cloudflare-origin authority and Cloudflare surface; the same explicit intent route and synthetic evidence. |
+
+The local runtime emits the contract in `session_started` and health
+projections, and the session discovery index preserves it as projection
+metadata. The Cloudflare projection and Worker/DO authority health routes
+emit the same contract. A Cloudflare-origin synthetic slice explicitly marks
+local provider execution, local tools/MCP, local filesystem, and local
+artifact authority as absent; an explicitly configured Cloudflare-native MCP
+fabric is reported only as a fabric summary. Projection acknowledgment never
+confirms canonical mutation or provider completion.
+
 ## Package Authority
 
 Canonical package:

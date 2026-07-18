@@ -64,6 +64,7 @@
   "dependencies": {
     "@narada2/agent-identity": "workspace:*",
     "@narada2/carrier-protocol": "workspace:*",
+    "@narada2/nars-runtime-contract": "workspace:*",
     "@narada2/site-paths": "workspace:*"
   }
 }

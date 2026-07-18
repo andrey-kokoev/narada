@@ -233,7 +233,10 @@ export function createCloudflareNarsProjectionWorker(options: CloudflareNarsProj
       }
       const authority = authorityRoute(request);
       if (authority) {
-        if (request.method === 'GET' && authority.suffix === 'health') return json(authorityService.readHealth(authority.sessionId));
+        if (request.method === 'GET' && authority.suffix === 'health') {
+          const surfaceOrigin = url.searchParams.get('surface_origin') === 'local' ? 'local' : 'cloudflare';
+          return json(authorityService.readHealth(authority.sessionId, surfaceOrigin));
+        }
         if (request.method === 'GET' && authority.suffix === 'events') {
           return json(authorityService.readEvents({
             session_id: authority.sessionId,

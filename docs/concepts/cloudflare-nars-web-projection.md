@@ -43,6 +43,30 @@ The architecture has split authority:
 
 The joining object is a `projection_id`. It connects a local projection intent to Cloudflare remote access state without making either registry pretend to own the other's authority.
 
+## Canonical Symmetry Contract
+
+Runtime and surface identity is reported through
+`narada.nars.runtime_surface_contract.v1`, owned by
+`@narada2/nars-runtime-contract/runtime-surface-contract`. The report is
+explicit at every boundary: runtime origin, surface origin, authority host and
+epoch, authority runtime id, projection identity/route, capability profile,
+and crossing rule. A browser or Worker must not infer canonical authority from
+the fact that it can read a cache or deliver an input envelope.
+
+The local-origin path is `local/cloudflare`: the local NARS event log remains
+canonical, the Cloudflare state is `non_canonical_projection`, and input
+acknowledgment means only `requires_nars_admission` until the local bridge and
+NARS authority produce admission evidence. The Cloudflare-origin synthetic
+slice reports `cloudflare/local` or `cloudflare/cloudflare` explicitly through
+the authority health route (`surface_origin=local|cloudflare`). It may expose
+an explicitly configured Cloudflare-native MCP fabric summary, but it reports
+local provider execution, local tool/MCP, local filesystem, and local artifact
+authority as absent. Revocation and close/refusal remain authority-boundary
+facts.
+
+The four-quadrant implementation/evidence matrix is maintained in
+[`cloudflare-local-nars-projection-symmetry-matrix.md`](../operations/cloudflare-local-nars-projection-symmetry-matrix.md).
+
 ## Target Topology
 
 In graph terms, this slice maps local NARS as `authority_runtime`, the local bridge as a `projection_edge`, the Cloudflare projection service as `projection_store`, the Cloudflare-hosted browser UI as `projection_surface`, and browser input relay as an `intent_route` back to local NARS.

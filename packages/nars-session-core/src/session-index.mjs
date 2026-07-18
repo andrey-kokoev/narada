@@ -6,6 +6,7 @@ import {
   NARS_AUTHORITY_RUNTIME_HOST_TRANSITION_STATES,
   NARS_AUTHORITY_RUNTIME_SOURCE_WRITE_ADMISSIONS,
 } from '@narada2/carrier-protocol';
+import { runtimeOriginFromAuthorityHost } from '@narada2/nars-runtime-contract/runtime-surface-contract';
 import { buildAgentIdentityRefV2, normalizeAgentIdentityRefV2 } from '@narada2/agent-identity';
 import { narsSessionsRootFromSiteRoot as resolveNarsSessionsRootFromSiteRoot } from '@narada2/site-paths';
 import { synchronizeNarsAuthorityHandoffLifecycle } from './authority-handoff-fsm.mjs';
@@ -348,6 +349,8 @@ function buildSessionIndexRecord({ sessionStartedEvent, sessionPath, siteRoot, p
     status_hint_authority: NARS_SESSION_STATUS_HINT_AUTHORITY.DISCOVERY_PROJECTION_ONLY,
     authority_runtime_host: authorityRuntimeHost,
     authority_epoch: authorityEpoch,
+    runtime_origin: runtimeOriginFromAuthorityHost(authorityRuntimeHost),
+    runtime_surface_contract: sessionStartedEvent.runtime_surface_contract ?? null,
     authority_runtime_id: normalizeOptionalString(sessionStartedEvent.authority_runtime_id)
       ?? defaultAuthorityRuntimeId({ hostKind: authorityRuntimeHost, sessionId }),
     authority_transition_state: authorityTransitionState,
@@ -392,6 +395,8 @@ function toAggregateEntry(record) {
     status_hint_authority: record.status_hint_authority ?? NARS_SESSION_STATUS_HINT_AUTHORITY.DISCOVERY_PROJECTION_ONLY,
     authority_runtime_host: normalizeAuthorityRuntimeHost(record.authority_runtime_host, NARS_SESSION_AUTHORITY_RUNTIME_HOST.UNKNOWN_AUTHORITY_METADATA),
     authority_epoch: normalizeAuthorityEpoch(record.authority_epoch, null),
+    runtime_origin: runtimeOriginFromAuthorityHost(record.authority_runtime_host) ?? null,
+    runtime_surface_contract: record.runtime_surface_contract ?? null,
     authority_runtime_id: normalizeOptionalString(record.authority_runtime_id),
     authority_transition_state: normalizeAuthorityTransitionState(record.authority_transition_state),
     authority_handoff_lifecycle: synchronizeNarsAuthorityHandoffLifecycle(
