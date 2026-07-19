@@ -86,6 +86,7 @@ function buildTaskSpec(options: {
     ].join('\n'),
     acceptance_criteria: criteria && criteria.length > 0 ? criteria : ['TBD'],
     dependencies: dependsOn ?? [],
+    tags: [],
     updated_at: new Date().toISOString(),
   };
 }

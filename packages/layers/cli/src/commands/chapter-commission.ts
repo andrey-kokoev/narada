@@ -240,6 +240,7 @@ function taskSpecFor(input: {
     ].join('\n'),
     acceptance_criteria: input.task.acceptance_criteria,
     dependencies: [...input.chapterDependsOn, ...dependencies],
+    tags: [],
     updated_at: new Date().toISOString(),
   };
 }
