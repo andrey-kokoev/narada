@@ -1,5 +1,5 @@
 ---
-status: corrective_complete_pending_review
+status: in_review
 depends_on: []
 chapter_id: site-agent-overview
 ---
@@ -58,7 +58,7 @@ flowchart TD
 | 5 | 2149 | Implement agent start and inspection interactions | closed |
 | 6 | 2150 | Promote Sites and Agents to normal Operator Workspace ingress | closed |
 | 7 | 2151 | Verify the Sites-and-Agents operator journey end to end | closed |
-| 8 | 2152 | Document and package the Sites-and-Agents Operator Workspace | corrective complete; durability pending |
+| 8 | 2152 | Document and package the Sites-and-Agents Operator Workspace | in review; SQLite review transition retry pending |
 
 ## Closure Criteria
 
