@@ -238,6 +238,28 @@ so the source of a failure is visible instead of silent. Modes via
 CI/release), `off`. Decision record:
 `.ai/decisions/20260719-2067-agent-context-session-start-convergence.md`.
 
+### Fabric tool-list drift check (site hygiene)
+
+Site fabric tool declarations go stale as MCP servers evolve. After changing
+a surface's tools, the registrar catalog, or when a surface seems to be
+missing tools, run per site:
+
+```
+mcp_loader_site_tool_inventory_check({ site_root: <root>, surface_ids: ["<surface>"] })
+```
+
+Verdicts: `ok` | `drift` (declared ≠ exposed; includes `probe_failed` when
+the child won't even start, and `surface_not_declared` when the fabric
+resolution finds nothing — check `<site>/.ai/tmp/mcp-payloads/workspace/site-tools-*`
+for the full findings). Repair: `registrar_site_bind({ site_id, surface_id })`
+rewrites the fabric from the catalog; verify the catalog first with
+`registrar_compare_surface_tools`. Watch for: retired `config.json` stubs
+shadowing aggregate fabrics (loader resolution prefers `config.json`), and
+old-generation fabric files (`<site>-agent-context-mcp.json` vs
+`narada-<site>-agent-context-mcp.json`) causing duplicate-surface or
+site_id-mismatch errors. Full-fabric checks (all surfaces) can exceed the
+MCP transport budget — run per-surface.
+
 ### Testing
 
 Root `pnpm test` is intentionally disabled. Use the escalation ladder:
