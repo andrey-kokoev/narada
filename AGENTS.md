@@ -113,6 +113,7 @@ The workspace is declared in [`pnpm-workspace.yaml`](pnpm-workspace.yaml). It in
 | `@narada2/invokable-intelligence-registry` | `packages/invokable-intelligence-registry` | Portable intelligence registry storage: one store contract over node:sqlite and Cloudflare D1, typed relational schema, supersession history, shared conformance suite (#2181) |
 | `@narada2/invokable-intelligence-resolver` | `packages/invokable-intelligence-resolver` | Deterministic hierarchical resolver: cumulative hard eligibility across target/User/Host loci, preference ranking with stable tie-breakers, explainable plans and typed refusals (#2182) |
 | `@narada2/invokable-intelligence-management` | `packages/invokable-intelligence-management` | Intelligence catalog/policy management: `narada-intelligence` CLI, host-agnostic MCP tools, idempotent legacy provider-registry migration, temporary read-only compat projection (#2183) |
+| `@narada2/invokable-intelligence-runtime` | `packages/invokable-intelligence-runtime` | Local invocation gateway and evidence recorder: per-invocation resolution, injected adapter dispatch, Intent→Plan→Attempt→Evidence persistence with replay/restart idempotency, legacy binding bridge (#2184) |
 
 Operator-facing browser UI stack:
 

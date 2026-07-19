@@ -428,9 +428,57 @@ async function main() {
   let runtimeService;
   let controlInputBridge = null;
   try {
-    const intelligenceProvider = process.env.NARADA_INTELLIGENCE_PROVIDER?.trim();
+    // Plan-driven provider resolution: when a registry DB and explicit site
+    // context are configured, the invokable-intelligence resolver selects the
+    // model/inference path and env vars carry no selection authority.
+    let intelligenceProvider;
+    let providerSettingsOverrides = {};
+    let planResolution = null;
+    const intelligenceRegistryDb = process.env.NARADA_INTELLIGENCE_REGISTRY_DB?.trim();
+    const intelligenceTargetSite = process.env.NARADA_INTELLIGENCE_TARGET_SITE?.trim();
+    const intelligenceUserSite = process.env.NARADA_INTELLIGENCE_USER_SITE?.trim();
+    const intelligenceHostSite = process.env.NARADA_INTELLIGENCE_HOST_SITE?.trim();
+    if (intelligenceRegistryDb && intelligenceTargetSite && intelligenceUserSite && intelligenceHostSite) {
+      const { SqliteRegistryStore } = await import('@narada2/invokable-intelligence-registry');
+      const { resolveInvocation } = await import('@narada2/invokable-intelligence-resolver');
+      const { planToLegacyBindingOverrides } = await import('@narada2/invokable-intelligence-runtime');
+      const store = await SqliteRegistryStore.open(intelligenceRegistryDb);
+      try {
+        const intent = {
+          schema: 'narada.invokable-intelligence.invocation-intent.v1',
+          id: `intent:agent-session-${process.env.NARADA_SESSION_ID ?? 'default'}`,
+          created_at: new Date().toISOString(),
+          purpose: 'agent-session',
+        };
+        const resolved = await resolveInvocation(intent, {
+          targetSite: { kind: 'site', id: intelligenceTargetSite },
+          userSite: { kind: 'site', id: intelligenceUserSite },
+          hostSite: { kind: 'site', id: intelligenceHostSite },
+          runtime: 'node',
+          time: new Date().toISOString(),
+        }, { store });
+        if (resolved.schema === 'narada.invokable-intelligence.invocation-refusal.v1') {
+          throw new Error(`intelligence_resolution_refused:${resolved.reason_code}:${resolved.explanation}`);
+        }
+        const modelResource = await store.getResource(resolved.selected.model.id);
+        const bridge = planToLegacyBindingOverrides(resolved, modelResource);
+        intelligenceProvider = bridge.provider;
+        providerSettingsOverrides = bridge.overrides;
+        planResolution = {
+          plan_id: resolved.id,
+          resolver_version: resolved.resolver_version,
+          model: resolved.selected.model.id,
+          endpoint: resolved.selected.endpoint.id,
+          adapter: resolved.selected.adapter.id,
+        };
+      } finally {
+        await store.close();
+      }
+    } else {
+      intelligenceProvider = process.env.NARADA_INTELLIGENCE_PROVIDER?.trim();
+    }
     if (!intelligenceProvider) throw new Error('provider_runtime_provider_required');
-    const providerRuntimeBinding = resolveProviderRuntimeBinding(intelligenceProvider, { env: process.env });
+    const providerRuntimeBinding = resolveProviderRuntimeBinding(intelligenceProvider, { env: process.env, overrides: providerSettingsOverrides });
 
     runtimeContext = createNarsRuntimeContext({
       ...baseRuntimeContextOptions({
@@ -448,6 +496,7 @@ async function main() {
         baseUrl: providerRuntimeBinding.base_url,
         apiKey: providerRuntimeBinding.api_key,
         runtimeBinding: redactProviderRuntimeBinding(providerRuntimeBinding),
+        ...(planResolution ? { resolution: planResolution } : {}),
       },
       displaySettings: {
         toolOutputs: process.env.NARADA_AGENT_CLI_TOOL_OUTPUTS !== '0',

@@ -1,0 +1,39 @@
+{
+  "name": "@narada2/invokable-intelligence-runtime",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "narada": {
+    "package_role": "local_invocation_gateway_and_evidence_recorder",
+    "surface": "invokable_intelligence",
+    "presentation_only": false,
+    "authority_owner": "@narada2/cli"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "node --import tsx --test test/index.test.ts"
+  },
+  "dependencies": {
+    "@narada2/invokable-intelligence-contract": "workspace:*",
+    "@narada2/invokable-intelligence-registry": "workspace:*",
+    "@narada2/invokable-intelligence-resolver": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.5.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.0"
+  }
+}
