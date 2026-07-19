@@ -15,7 +15,7 @@ export interface WorkspaceLaunchRegistryContext {
   admission: WorkspaceLaunchAdmissionPolicy;
 }
 
-interface RawLaunchRegistry {
+export interface RawLaunchRegistry {
   NaradaRoot?: string;
   Site?: string;
   SiteRoot?: string;
@@ -30,7 +30,7 @@ interface RawLaunchRegistry {
   Agents?: RawAgentRecord[] | RawAgentRecord;
 }
 
-interface RawAgentRecord {
+export interface RawAgentRecord {
   Agent?: string;
   Title?: string;
   Role?: string;
@@ -128,13 +128,20 @@ export function normalizeWorkspaceLaunchPlanOptions(options: WorkspaceLaunchPlan
   };
 }
 
-export async function readLaunchRegistry(path: string): Promise<WorkspaceLaunchRecord[]> {
+export async function readLaunchRegistryRaw(path: string): Promise<RawLaunchRegistry> {
   if (!existsSync(path)) throw new Error(`launch_registry_missing: ${path}`);
-  const raw = path.toLowerCase().endsWith('.json')
+  return path.toLowerCase().endsWith('.json')
     ? JSON.parse(await readFile(path, 'utf8')) as RawLaunchRegistry
     : readPowerShellDataFile(path);
-  const agents = Array.isArray(raw.Agents) ? raw.Agents : raw.Agents ? [raw.Agents] : [];
-  return agents.map((agent) => normalizeAgentRecord(raw, agent, path));
+}
+
+export function rawLaunchRegistryAgents(raw: RawLaunchRegistry): RawAgentRecord[] {
+  return Array.isArray(raw.Agents) ? raw.Agents : raw.Agents ? [raw.Agents] : [];
+}
+
+export async function readLaunchRegistry(path: string): Promise<WorkspaceLaunchRecord[]> {
+  const raw = await readLaunchRegistryRaw(path);
+  return rawLaunchRegistryAgents(raw).map((agent) => normalizeAgentRecord(raw, agent, path));
 }
 
 function readPowerShellDataFile(path: string): RawLaunchRegistry {

@@ -10,7 +10,7 @@ import { formattedResult, type CliFormat } from '../lib/cli-output.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { registryDefaultIntelligenceProvider, workspaceLaunchCommand } from './workspace-launch-application.js';
 import type { WorkspaceLaunchPlanOptions, WorkspaceLaunchRecord } from './workspace-launch-types.js';
-import { readWorkspaceLaunchRecords } from './workspace-launch-registry.js';
+import { readWorkspaceLaunchRecords, readLaunchRegistryRaw, rawLaunchRegistryAgents, type RawAgentRecord } from './workspace-launch-registry.js';
 import { narsSessionsCommand } from './nars.js';
 import type { CommandContext } from '../lib/command-wrapper.js';
 
@@ -25,8 +25,8 @@ export interface OnboardingStartOptions {
   format?: CliFormat;
 }
 
-function userSiteLaunchRegistryJson(root: string): string {
-  return `${JSON.stringify({ NaradaRoot: root, Agents: [userSiteLaunchRegistryAgent(root)] }, null, 2)}\n`;
+function userSiteLaunchRegistryJson(root: string, agents?: Record<string, unknown>[]): string {
+  return `${JSON.stringify({ NaradaRoot: root, Agents: agents ?? [userSiteLaunchRegistryAgent(root)] }, null, 2)}\n`;
 }
 
 export interface OnboardingStatusOptions {
@@ -78,12 +78,13 @@ interface OnboardingState {
 }
 
 interface OnboardingRoleExpansionRecommendation {
-  status: 'available' | 'not_needed' | 'unavailable' | 'approved';
+  status: 'available' | 'not_needed' | 'unavailable' | 'approved' | 'materialized';
   recommended_roles: string[];
   requires_operator_confirmation: boolean;
   trigger: 'after_first_useful_interaction' | 'after_resident_ready';
   next_action: string;
   approved_roles?: string[];
+  materialized_roles?: string[];
 }
 
 interface OnboardingStatusResult {
@@ -126,6 +127,28 @@ interface OnboardingRoleApprovalResult {
   user_site: { root: string; resident_agent: string | null };
   approved_roles: string[];
   preview: { action: 'add_roles'; roles: string[]; roster_mutation_performed: false };
+  approval_path: string | null;
+  state_path: string | null;
+  next_action: string;
+  reason_code?: string;
+}
+
+export interface OnboardingRoleMaterializeOptions {
+  platform?: string;
+  scope?: string;
+  siteRoot?: string;
+  roles?: string[];
+  format?: CliFormat;
+}
+
+interface OnboardingRoleMaterializeResult {
+  schema: 'narada.onboarding.role_expansion_materialization.v1';
+  status: 'materialized' | 'already_materialized' | 'blocked';
+  mutation_performed: boolean;
+  user_site: { root: string; resident_agent: string | null };
+  materialized_roles: string[];
+  pending_roles: string[];
+  registry_path: string | null;
   approval_path: string | null;
   state_path: string | null;
   next_action: string;
@@ -219,7 +242,7 @@ function roleExpansionRecommendation(
     next_action: recommendedRoles.length > 0
       ? 'After the first useful interaction, offer the operator an explicit Add recommended roles action.'
       : cumulativeApprovedRoles.length > 0
-        ? 'Materialize the approved roles through the Site roster authority; this approval does not mutate the launch registry.'
+        ? 'Materialize the approved roles with narada onboarding roles materialize; approval alone does not mutate the launch registry.'
         : 'Keep the current role roster; no default expansion is needed.',
     ...(cumulativeApprovedRoles.length > 0 ? { approved_roles: cumulativeApprovedRoles } : {}),
   };
@@ -268,12 +291,13 @@ function isReadiness(value: unknown): value is OnboardingReadiness {
 
 function isRoleExpansion(value: unknown): value is OnboardingRoleExpansionRecommendation {
   return isRecord(value)
-    && (value.status === 'available' || value.status === 'not_needed' || value.status === 'unavailable' || value.status === 'approved')
+    && (value.status === 'available' || value.status === 'not_needed' || value.status === 'unavailable' || value.status === 'approved' || value.status === 'materialized')
     && stringArray(value.recommended_roles)
     && typeof value.requires_operator_confirmation === 'boolean'
     && (value.trigger === 'after_first_useful_interaction' || value.trigger === 'after_resident_ready')
     && typeof value.next_action === 'string'
-    && (value.approved_roles === undefined || stringArray(value.approved_roles));
+    && (value.approved_roles === undefined || stringArray(value.approved_roles))
+    && (value.materialized_roles === undefined || stringArray(value.materialized_roles));
 }
 
 function parseOnboardingState(value: unknown): OnboardingState {
@@ -366,30 +390,61 @@ function userSiteLaunchRegistryAgent(root: string): Record<string, unknown> {
   };
 }
 
-function userSiteLaunchRegistryText(root: string): string {
-  const agent = userSiteLaunchRegistryAgent(root);
-  const values: Array<[string, string]> = [
-    ['Agent', String(agent.Agent)],
-    ['Title', String(agent.Title)],
-    ['Role', String(agent.Role)],
-    ['Site', String(agent.Site)],
-    ['NaradaRoot', String(agent.NaradaRoot)],
-    ['WorkspaceRoot', String(agent.WorkspaceRoot)],
-    ['SiteRoot', String(agent.SiteRoot)],
-    ['Launcher', String(agent.Launcher)],
-    ['OperatorSurface', String(agent.OperatorSurface)],
-    ['Runtime', String(agent.Runtime)],
-  ];
+const LAUNCH_REGISTRY_STRING_FIELDS = [
+  'Agent',
+  'Title',
+  'Role',
+  'Site',
+  'NaradaRoot',
+  'WorkspaceRoot',
+  'SiteRoot',
+  'Launcher',
+  'LauncherPath',
+  'OperatorSurface',
+  'Carrier',
+  'Runtime',
+  'Authority',
+  'McpScope',
+] as const;
+
+function renderLaunchRegistryAgentBlock(agent: Record<string, unknown>): string[] {
+  const lines = ['    @{'];
+  for (const field of LAUNCH_REGISTRY_STRING_FIELDS) {
+    const value = agent[field];
+    if (typeof value === 'string' && value.length > 0) lines.push(`      ${field} = ${powerShellDataString(value)}`);
+  }
+  lines.push(`      EnableNativeShell = ${agent.EnableNativeShell === true ? '$true' : '$false'}`);
+  lines.push('    }');
+  return lines;
+}
+
+function userSiteLaunchRegistryText(root: string, agents?: Record<string, unknown>[]): string {
+  const list = agents ?? [userSiteLaunchRegistryAgent(root)];
   return [
     '@{',
     '  Agents = @(',
-    '    @{',
-    ...values.map(([key, value]) => `      ${key} = ${powerShellDataString(value)}`),
-    '      EnableNativeShell = $false',
-    '    }',
+    ...list.flatMap((agent) => renderLaunchRegistryAgentBlock(agent)),
     '  )',
     '}',
   ].join('\n') + '\n';
+}
+
+function userSiteLaunchRegistryRoleAgent(root: string, role: 'architect' | 'builder'): Record<string, unknown> {
+  const siteId = defaultUserSiteId(root);
+  const launcher = siteId.endsWith('-user') ? `${siteId}.ps1` : 'narada-user.ps1';
+  return {
+    Agent: `${siteId}.${role}`,
+    Title: role === 'architect' ? 'Architect' : 'Builder',
+    Role: role,
+    Site: siteId,
+    NaradaRoot: root,
+    WorkspaceRoot: root,
+    SiteRoot: root,
+    Launcher: launcher,
+    OperatorSurface: 'agent-cli',
+    Runtime: 'narada-agent-runtime-server',
+    EnableNativeShell: false,
+  };
 }
 
 export async function ensureUserSiteProvisioned(
@@ -434,7 +489,7 @@ async function refreshRoleExpansionRecommendation(
   state: OnboardingState,
   firstUseVerified: boolean,
 ): Promise<OnboardingRoleExpansionRecommendation> {
-  if (state.role_expansion.status === 'approved') return state.role_expansion;
+  if (state.role_expansion.status === 'approved' || state.role_expansion.status === 'materialized') return state.role_expansion;
   try {
     const registryPath = state.launch_registry_path ?? userSiteRegistryPath(root);
     if (!existsSync(registryPath)) return state.role_expansion;
@@ -740,6 +795,219 @@ export async function onboardingRoleApprovalCommand(
       reason_code: message,
     };
     return { exitCode: ExitCode.GENERAL_ERROR, result: formattedResult(result, onboardingRoleApprovalHuman(result), options.format ?? 'human') };
+  }
+}
+
+interface OnboardingRoleExpansionApproval {
+  schema: 'narada.onboarding.role_expansion_approval.v1';
+  status: 'approved_pending_materialization' | 'materialized';
+  approved_at: string;
+  approved_by: string;
+  user_site_root: string;
+  resident_agent: string;
+  approved_roles: string[];
+  cumulative_approved_roles: string[];
+  preview: { action: string; roles: string[]; roster_mutation_performed: boolean };
+  source_readiness: unknown;
+  next_action: string;
+  materialized_roles?: string[];
+  materialized_at?: string;
+}
+
+function readRoleExpansionApproval(path: string): OnboardingRoleExpansionApproval | null {
+  if (!existsSync(path)) return null;
+  let value: unknown;
+  try {
+    value = JSON.parse(readFileSync(path, 'utf8')) as unknown;
+  } catch {
+    return null;
+  }
+  if (!isRecord(value) || value.schema !== 'narada.onboarding.role_expansion_approval.v1') return null;
+  if (value.status !== 'approved_pending_materialization' && value.status !== 'materialized') return null;
+  if (!stringArray(value.cumulative_approved_roles)) return null;
+  if (value.materialized_roles !== undefined && !stringArray(value.materialized_roles)) return null;
+  return value as unknown as OnboardingRoleExpansionApproval;
+}
+
+function rawString(value: unknown): string | null {
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
+}
+
+function rawAgentSiteRoot(raw: { SiteRoot?: string; NaradaRoot?: string }, agent: RawAgentRecord): string | null {
+  const value = rawString(agent.SiteRoot) ?? rawString(raw.SiteRoot) ?? rawString(agent.NaradaRoot) ?? rawString(raw.NaradaRoot);
+  return value ? resolve(value) : null;
+}
+
+function rawAgentRole(agent: RawAgentRecord): string {
+  const explicit = rawString(agent.Role);
+  if (explicit) return explicit.toLowerCase();
+  const id = rawString(agent.Agent) ?? '';
+  return (id.split('.').at(-1) ?? id).replace(/\d+$/, '').toLowerCase();
+}
+
+function onboardingRoleMaterializeHuman(result: OnboardingRoleMaterializeResult): string[] {
+  return [
+    'Narada onboarding role materialization',
+    `Workspace: ${result.user_site.root}`,
+    `Resident: ${result.user_site.resident_agent ?? 'not configured'}`,
+    `Materialized: ${result.materialized_roles.join(', ') || 'none'}`,
+    `Pending: ${result.pending_roles.join(', ') || 'none'}`,
+    result.registry_path ? `Registry: ${result.registry_path}` : '',
+    `Next: ${result.next_action}`,
+  ].filter(Boolean);
+}
+
+export async function onboardingRoleMaterializeCommand(
+  options: OnboardingRoleMaterializeOptions,
+  _context: CommandContext,
+): Promise<{ exitCode: ExitCode; result: unknown }> {
+  try {
+    const platform = (options.platform ?? 'windows').trim().toLowerCase();
+    const scope = (options.scope ?? 'user-site').trim().toLowerCase();
+    if (platform !== 'windows') throw new Error(`onboarding_platform_unsupported: ${platform}`);
+    if (scope !== 'user-site') throw new Error(`onboarding_scope_unsupported: ${scope}`);
+
+    const root = userSiteRoot(options.siteRoot);
+    const state = readOnboardingState(root);
+    const blocked = (reasonCode: string, nextAction: string): { exitCode: ExitCode; result: unknown } => {
+      const result: OnboardingRoleMaterializeResult = {
+        schema: 'narada.onboarding.role_expansion_materialization.v1',
+        status: 'blocked',
+        mutation_performed: false,
+        user_site: { root, resident_agent: state?.resident_agent ?? null },
+        materialized_roles: [],
+        pending_roles: [],
+        registry_path: null,
+        approval_path: null,
+        state_path: state ? onboardingStatePath(root) : null,
+        next_action: nextAction,
+        reason_code: reasonCode,
+      };
+      return { exitCode: ExitCode.SUCCESS, result: formattedResult(result, onboardingRoleMaterializeHuman(result), options.format ?? 'human') };
+    };
+    if (!state) return blocked('onboarding_state_missing', 'Run onboarding start, then verify first use before materializing roles.');
+
+    const approvalPath = onboardingRoleApprovalPath(root);
+    const approval = readRoleExpansionApproval(approvalPath);
+    if (!approval) {
+      return blocked('role_materialization_requires_approval', 'Run narada onboarding roles approve --confirm before materializing roles.');
+    }
+
+    const approvedSet: string[] = [...new Set(approval.cumulative_approved_roles
+      .map((role) => role.trim().toLowerCase())
+      .filter((role) => role === 'architect' || role === 'builder'))];
+    const requestedRoles = [...new Set((options.roles?.length ? options.roles : approvedSet)
+      .map((role) => role.trim().toLowerCase()).filter(Boolean))];
+    const notApproved = requestedRoles.filter((role) => !approvedSet.includes(role));
+    if (requestedRoles.length === 0 || notApproved.length > 0) {
+      return blocked('role_materialization_roles_not_approved', `Only previously approved roles can be materialized: ${approvedSet.join(', ') || 'none'}.`);
+    }
+
+    const registryPath = state.launch_registry_path ?? userSiteRegistryPath(root);
+    if (!existsSync(registryPath)) {
+      return blocked('launch_registry_missing', `Restore the launch registry at ${registryPath}, then retry materialization.`);
+    }
+    const raw = await readLaunchRegistryRaw(registryPath);
+    const existingAgents = rawLaunchRegistryAgents(raw);
+    const presentRoles = new Set(
+      existingAgents
+        .filter((agent) => rawAgentSiteRoot(raw, agent)?.toLowerCase() === root.toLowerCase())
+        .map((agent) => rawAgentRole(agent)),
+    );
+    const toMaterialize = requestedRoles.filter((role) => !presentRoles.has(role));
+    const pendingRoles = approvedSet.filter((role) => !presentRoles.has(role) && !toMaterialize.includes(role));
+    const quietDone = 'Approved roles have quiet background launcher entries; start them from the advanced launcher when needed. Resident remains your assistant.';
+
+    if (toMaterialize.length === 0) {
+      const result: OnboardingRoleMaterializeResult = {
+        schema: 'narada.onboarding.role_expansion_materialization.v1',
+        status: 'already_materialized',
+        mutation_performed: false,
+        user_site: { root, resident_agent: state.resident_agent },
+        materialized_roles: [],
+        pending_roles: pendingRoles,
+        registry_path: registryPath,
+        approval_path: approvalPath,
+        state_path: onboardingStatePath(root),
+        next_action: pendingRoles.length > 0
+          ? `Materialize the remaining approved roles with narada onboarding roles materialize: ${pendingRoles.join(', ')}.`
+          : quietDone,
+      };
+      return { exitCode: ExitCode.SUCCESS, result: formattedResult(result, onboardingRoleMaterializeHuman(result), options.format ?? 'human') };
+    }
+
+    const previousRegistryText = readFileSync(registryPath, 'utf8');
+    const previousApprovalText = readFileSync(approvalPath, 'utf8');
+    const newAgents = toMaterialize.map((role) => userSiteLaunchRegistryRoleAgent(root, role as 'architect' | 'builder'));
+    const mergedAgents = [...existingAgents.map((agent) => ({ ...agent })), ...newAgents];
+    const registryText = registryPath.toLowerCase().endsWith('.json')
+      ? userSiteLaunchRegistryJson(root, mergedAgents)
+      : userSiteLaunchRegistryText(root, mergedAgents);
+    await atomicWriteText(registryPath, registryText);
+
+    const materializedCumulative = [...new Set([...(approval.materialized_roles ?? []), ...toMaterialize])];
+    const fullyMaterialized = pendingRoles.length === 0;
+    const nextAction = fullyMaterialized
+      ? quietDone
+      : `Materialize the remaining approved roles with narada onboarding roles materialize: ${pendingRoles.join(', ')}.`;
+    const updatedApproval: OnboardingRoleExpansionApproval = {
+      ...approval,
+      status: fullyMaterialized ? 'materialized' : 'approved_pending_materialization',
+      materialized_roles: materializedCumulative,
+      materialized_at: new Date().toISOString(),
+      next_action: nextAction,
+    };
+    await atomicWriteJson(approvalPath, updatedApproval);
+
+    const roleExpansion: OnboardingRoleExpansionRecommendation = {
+      ...state.role_expansion,
+      status: fullyMaterialized ? 'materialized' : 'approved',
+      recommended_roles: [],
+      requires_operator_confirmation: false,
+      approved_roles: approvedSet,
+      materialized_roles: materializedCumulative,
+      next_action: nextAction,
+    };
+    let statePath: string;
+    try {
+      statePath = await persistOnboardingState(root, state.resident_agent, state.readiness, roleExpansion, {
+        verification: state.verification,
+      });
+    } catch (error) {
+      await atomicWriteText(approvalPath, previousApprovalText).catch(() => undefined);
+      await atomicWriteText(registryPath, previousRegistryText).catch(() => undefined);
+      throw error;
+    }
+
+    const result: OnboardingRoleMaterializeResult = {
+      schema: 'narada.onboarding.role_expansion_materialization.v1',
+      status: 'materialized',
+      mutation_performed: true,
+      user_site: { root, resident_agent: state.resident_agent },
+      materialized_roles: toMaterialize,
+      pending_roles: pendingRoles,
+      registry_path: registryPath,
+      approval_path: approvalPath,
+      state_path: statePath,
+      next_action: nextAction,
+    };
+    return { exitCode: ExitCode.SUCCESS, result: formattedResult(result, onboardingRoleMaterializeHuman(result), options.format ?? 'human') };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const result: OnboardingRoleMaterializeResult = {
+      schema: 'narada.onboarding.role_expansion_materialization.v1',
+      status: 'blocked',
+      mutation_performed: false,
+      user_site: { root: userSiteRoot(options.siteRoot), resident_agent: null },
+      materialized_roles: [],
+      pending_roles: [],
+      registry_path: null,
+      approval_path: null,
+      state_path: null,
+      next_action: 'Resolve the reported role materialization failure, then retry.',
+      reason_code: message,
+    };
+    return { exitCode: ExitCode.GENERAL_ERROR, result: formattedResult(result, onboardingRoleMaterializeHuman(result), options.format ?? 'human') };
   }
 }
 

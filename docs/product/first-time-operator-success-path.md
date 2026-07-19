@@ -114,7 +114,7 @@ Observed result for the onboarding proof: the fixture walks from an absent Site 
 
 ## User-First Windows Onboarding UX
 
-Status: target UX contract with the CLI first slice and User Site browser onboarding composition implemented. The PowerShell handoff, resident-first launch, deterministic defaults, demo fallback, and NARS-backed first-use status projection exist; explicit roster materialization remains a separate governed crossing.
+Status: target UX contract with the CLI first slice and User Site browser onboarding composition implemented. The PowerShell handoff, resident-first launch, deterministic defaults, demo fallback, and NARS-backed first-use status projection exist; approved roles are materialized into the launch registry through the explicit `narada onboarding roles materialize` crossing.
 
 The default path is User Site first. A first-time user should become productive without creating a Project Site, naming a PC Site, registering a remote Site, or understanding the full Site topology.
 
@@ -280,7 +280,13 @@ The current CLI approval boundary is explicit and non-destructive:
 narada onboarding roles approve --scope user-site --confirm
 ```
 
-It records the Operator's approval and a role preview in the User Site onboarding state, but does not silently mutate the launch registry or start additional roles. Roster materialization remains a separate governed crossing.
+It records the Operator's approval and a role preview in the User Site onboarding state, but does not silently mutate the launch registry or start additional roles. Materialization is the follow-up governed crossing:
+
+```powershell
+narada onboarding roles materialize --scope user-site
+```
+
+It consumes the recorded approval and writes the approved roles into the User Site launch registry as quiet `agent-cli` background entries. Roles are deliberately not prominent: the resident assistant remains the single browser front door, materialized roles never start automatically, and launching them stays an explicit advanced-launcher action. Task-roster and identity instantiation remain their own crossings.
 
 The role progression is:
 
@@ -290,6 +296,7 @@ user_site_ready
   -> first_work_verified
   -> role_posture_reviewed
   -> optional architect/builder roster expansion
+  -> optional quiet registry materialization (roles materialize)
 ```
 
 ### Deferred Expansion

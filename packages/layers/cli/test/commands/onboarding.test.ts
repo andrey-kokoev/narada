@@ -18,7 +18,7 @@ vi.mock('../../src/commands/nars.js', () => ({ narsSessionsCommand: narsSessions
 // provisioning boundary here.
 vi.mock('../../src/commands/sites.js', () => ({ sitesInitCommand: sitesInitMock }));
 
-import { onboardingRoleApprovalCommand, onboardingStartCommand, onboardingStatusCommand } from '../../src/commands/onboarding.js';
+import { onboardingRoleApprovalCommand, onboardingRoleMaterializeCommand, onboardingStartCommand, onboardingStatusCommand } from '../../src/commands/onboarding.js';
 import type { CommandContext } from '../../src/lib/command-wrapper.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
 
@@ -355,5 +355,121 @@ describe('User Site onboarding', () => {
       preview: { roles: ['builder'], roster_mutation_performed: false },
     });
     expect(JSON.stringify(finalApproval.result)).not.toMatch(/api[_-]?key|secret|token/i);
+
+    const approvalPath = join(root, '.narada', 'runtime', 'onboarding', 'role-expansion-approval.json');
+
+    const unapprovedRole = await onboardingRoleMaterializeCommand({ siteRoot: root, roles: ['observer'], format: 'json' }, createMockContext());
+    expect(unapprovedRole.exitCode).toBe(ExitCode.SUCCESS);
+    expect(unapprovedRole.result).toMatchObject({
+      schema: 'narada.onboarding.role_expansion_materialization.v1',
+      status: 'blocked',
+      mutation_performed: false,
+      reason_code: 'role_materialization_roles_not_approved',
+    });
+
+    const partialMaterialize = await onboardingRoleMaterializeCommand({ siteRoot: root, roles: ['architect'], format: 'json' }, createMockContext());
+    expect(partialMaterialize.exitCode).toBe(ExitCode.SUCCESS);
+    expect(partialMaterialize.result).toMatchObject({
+      schema: 'narada.onboarding.role_expansion_materialization.v1',
+      status: 'materialized',
+      mutation_performed: true,
+      materialized_roles: ['architect'],
+      pending_roles: ['builder'],
+      registry_path: registry,
+      approval_path: approvalPath,
+    });
+    const partialRegistry = JSON.parse(await readFile(registry, 'utf8')) as { Agents: Array<Record<string, unknown>> };
+    expect(partialRegistry.Agents).toHaveLength(2);
+    expect(partialRegistry.Agents[0]).toMatchObject({ Agent: 'user.resident', Role: 'resident', OperatorSurface: 'agent-cli' });
+    expect(partialRegistry.Agents[1]).toMatchObject({
+      Agent: 'user-site.architect',
+      Title: 'Architect',
+      Role: 'architect',
+      Site: 'user-site',
+      NaradaRoot: root,
+      SiteRoot: root,
+      WorkspaceRoot: root,
+      OperatorSurface: 'agent-cli',
+      Runtime: 'narada-agent-runtime-server',
+      EnableNativeShell: false,
+    });
+    expect(JSON.parse(await readFile(approvalPath, 'utf8'))).toMatchObject({
+      status: 'approved_pending_materialization',
+      materialized_roles: ['architect'],
+    });
+    expect(JSON.parse(await readFile(startedValue.state_path, 'utf8'))).toMatchObject({
+      role_expansion: {
+        status: 'approved',
+        recommended_roles: [],
+        approved_roles: ['architect', 'builder'],
+        materialized_roles: ['architect'],
+      },
+    });
+
+    const finalMaterialize = await onboardingRoleMaterializeCommand({ siteRoot: root, format: 'json' }, createMockContext());
+    expect(finalMaterialize.exitCode).toBe(ExitCode.SUCCESS);
+    expect(finalMaterialize.result).toMatchObject({
+      schema: 'narada.onboarding.role_expansion_materialization.v1',
+      status: 'materialized',
+      mutation_performed: true,
+      materialized_roles: ['builder'],
+      pending_roles: [],
+    });
+    expect(JSON.stringify(finalMaterialize.result)).not.toMatch(/api[_-]?key|secret|token/i);
+    const finalRegistry = JSON.parse(await readFile(registry, 'utf8')) as { Agents: Array<Record<string, unknown>> };
+    expect(finalRegistry.Agents).toHaveLength(3);
+    expect(finalRegistry.Agents[0]).toMatchObject({ Agent: 'user.resident', Role: 'resident', OperatorSurface: 'agent-cli' });
+    expect(finalRegistry.Agents[2]).toMatchObject({
+      Agent: 'user-site.builder',
+      Title: 'Builder',
+      Role: 'builder',
+      OperatorSurface: 'agent-cli',
+      Runtime: 'narada-agent-runtime-server',
+      EnableNativeShell: false,
+    });
+    expect(JSON.parse(await readFile(approvalPath, 'utf8'))).toMatchObject({
+      status: 'materialized',
+      materialized_roles: ['architect', 'builder'],
+    });
+    expect(JSON.parse(await readFile(startedValue.state_path, 'utf8'))).toMatchObject({
+      role_expansion: {
+        status: 'materialized',
+        recommended_roles: [],
+        approved_roles: ['architect', 'builder'],
+        materialized_roles: ['architect', 'builder'],
+      },
+    });
+
+    const refreshedAfterMaterialize = await onboardingStatusCommand({ siteRoot: root, format: 'json' }, createMockContext());
+    expect(refreshedAfterMaterialize.result).toMatchObject({
+      role_expansion: { status: 'materialized', materialized_roles: ['architect', 'builder'] },
+    });
+
+    const registryTextBeforeRerun = await readFile(registry, 'utf8');
+    const rerun = await onboardingRoleMaterializeCommand({ siteRoot: root, format: 'json' }, createMockContext());
+    expect(rerun.exitCode).toBe(ExitCode.SUCCESS);
+    expect(rerun.result).toMatchObject({
+      schema: 'narada.onboarding.role_expansion_materialization.v1',
+      status: 'already_materialized',
+      mutation_performed: false,
+      pending_roles: [],
+    });
+    expect(await readFile(registry, 'utf8')).toBe(registryTextBeforeRerun);
+  });
+
+  it('blocks role materialization when no approval was recorded', async () => {
+    const { root, registry } = await tempUserSite();
+    const started = await onboardingStartCommand({ siteRoot: root, registryPath: registry, format: 'json' }, createMockContext());
+    expect(started.exitCode).toBe(ExitCode.SUCCESS);
+    const registryBefore = await readFile(registry, 'utf8');
+    const result = await onboardingRoleMaterializeCommand({ siteRoot: root, format: 'json' }, createMockContext());
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      schema: 'narada.onboarding.role_expansion_materialization.v1',
+      status: 'blocked',
+      mutation_performed: false,
+      reason_code: 'role_materialization_requires_approval',
+    });
+    expect(await readFile(registry, 'utf8')).toBe(registryBefore);
   });
 });

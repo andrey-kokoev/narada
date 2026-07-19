@@ -1,7 +1,7 @@
 import type { Command } from 'commander';
 import {directCommandAction, silentCommandContext, type CommanderOptionValues} from '../lib/command-wrapper.js';
 import { emitCommandResult, resolveCommandFormat } from '../lib/cli-output.js';
-import { onboardingRoleApprovalCommand, onboardingStartCommand, onboardingStatusCommand } from './onboarding.js';
+import { onboardingRoleApprovalCommand, onboardingRoleMaterializeCommand, onboardingStartCommand, onboardingStatusCommand } from './onboarding.js';
 
 export function registerOnboardingCommands(program: Command): void {
   const onboarding = program
@@ -79,6 +79,27 @@ export function registerOnboardingCommands(program: Command): void {
         siteRoot: opts.siteRoot as string | undefined,
         roles: opts.roles as string[] | undefined,
         confirm: opts.confirm as boolean | undefined,
+        format: resolveCommandFormat(opts.format, 'human'),
+      }, silentCommandContext()),
+    }));
+
+  roles
+    .command('materialize')
+    .description('Write approved roles into the launch registry as quiet background entries')
+    .option('--platform <platform>', 'Onboarding platform', 'windows')
+    .option('--scope <scope>', 'Onboarding scope', 'user-site')
+    .option('--site-root <path>', 'User Site root; defaults to NARADA_USER_SITE_ROOT or %USERPROFILE%\\Narada')
+    .option('--roles <role...>', 'Approved roles to materialize; defaults to all approved roles')
+    .option('--format <fmt>', 'Output format: json|human|auto', 'human')
+    .action(directCommandAction<[CommanderOptionValues]>({
+      command: 'onboarding roles materialize',
+      emit: emitCommandResult,
+      format: (opts: CommanderOptionValues) => opts.format,
+      invocation: (opts) => onboardingRoleMaterializeCommand({
+        platform: opts.platform as string | undefined,
+        scope: opts.scope as string | undefined,
+        siteRoot: opts.siteRoot as string | undefined,
+        roles: opts.roles as string[] | undefined,
         format: resolveCommandFormat(opts.format, 'human'),
       }, silentCommandContext()),
     }));
