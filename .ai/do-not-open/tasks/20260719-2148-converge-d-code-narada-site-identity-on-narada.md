@@ -35,3 +35,7 @@ Set config.json site_id and mcp --site-id arg to narada (keep locus and server k
 - [ ] config.json declares site_id narada
 - [ ] sites registry list shows active narada with alias narada-proper, no narada-proper row
 - [ ] tsc and focused vitest suites green
+
+## Notes
+
+Fabric-layout context (2026-07-19, incoherency sweep): three fabric layouts coexist across sites — per-surface files at repo-root `.ai/mcp/`, per-surface under `.narada/`, and single aggregate `<site>-mcp.json`. Loader resolution order (`resolveSiteFabricPaths`, `packages/mcp-loader-mcp/src/main.ts` ~lines 1103-1126): `config.json` > `<siteBase>-mcp.json` > per-surface scan. Site-id convergence must keep the chosen layout's resolution path intact; a retired `config.json` stub shadows the aggregate fabric (feedback sfb_6d4c7019-596).

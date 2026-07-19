@@ -260,6 +260,15 @@ old-generation fabric files (`<site>-agent-context-mcp.json` vs
 site_id-mismatch errors. Full-fabric checks (all surfaces) can exceed the
 MCP transport budget — run per-surface.
 
+Env delivery has two independent channels and both must be right: fabric
+`env_vars` inject variables into **carrier** processes at launch, while the
+loader's `allowedEnvVars` policy governs **probe children** (inventory/drift
+checks). A surface can pass loader checks while broken for carriers (missing
+fabric `env_vars`) or vice versa — diagnose against the channel that is
+actually failing. Registrar rebinds can silently drop fabric `env_vars` when
+the catalog lacks them; re-check after catalog edits (fixed in mcp-surfaces
+b8b0dcb; feedback sfb_6889eb33-243).
+
 ### Testing
 
 Root `pnpm test` is intentionally disabled. Use the escalation ladder:
