@@ -182,6 +182,7 @@ export interface OperatorSessionListWireResponse {
 
 export type OperatorSiteAgentGroupId = 'personal-infrastructure' | 'sites';
 export type OperatorSiteKind = 'user_site' | 'pc_site' | 'site';
+export type OperatorSiteClassificationSource = 'declared' | 'registry' | 'fallback' | 'registry_only';
 export type OperatorAgentRuntimeState = 'running' | 'degraded' | 'stopped' | 'ambiguous';
 
 export interface OperatorSiteAgentRuntimeWireState {
@@ -216,6 +217,7 @@ export interface OperatorSiteAgentSiteWireRecord {
   site_id: string;
   display_name: string;
   site_kind: OperatorSiteKind;
+  classification_source?: OperatorSiteClassificationSource;
   group_id: OperatorSiteAgentGroupId;
   observation_status: string;
   agents: OperatorSiteAgentWireRecord[];
@@ -293,6 +295,8 @@ function parseSiteAgentSite(value: unknown): OperatorSiteAgentSiteWireRecord | n
     || !nonEmptyWireString(row.site_id)
     || !nonEmptyWireString(row.display_name)
     || !['user_site', 'pc_site', 'site'].includes(String(row.site_kind))
+    || (row.classification_source !== undefined
+      && !['declared', 'registry', 'fallback', 'registry_only'].includes(String(row.classification_source)))
     || !['personal-infrastructure', 'sites'].includes(String(row.group_id))
     || !nonEmptyWireString(row.observation_status)
     || !Array.isArray(row.agents)) return null;
