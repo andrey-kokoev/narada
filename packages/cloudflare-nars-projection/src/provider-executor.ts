@@ -98,26 +98,67 @@ export function createCloudflareNarsProviderRuntimeExecutor(options: CloudflareN
     return true;
   }
 
-  function fabricToolDescriptors(input: CloudflareNarsAuthorityRuntimeExecutionInput) {
+  interface FabricToolEntry {
+    qualified: string;
+    server_name: string;
+    tool_name: string;
+    description?: string;
+    input_schema?: Record<string, unknown>;
+  }
+
+  // Advertise tools under qualified `<server>__<tool_name>` function names so
+  // provider tool_calls resolve to the owning server deterministically.
+  // Qualified names stay identifier-safe for provider function-name rules.
+  function fabricTools(input: CloudflareNarsAuthorityRuntimeExecutionInput): FabricToolEntry[] {
     const seen = new Set<string>();
-    const descriptors: Array<{ type: 'function'; function: { name: string; description: string; parameters: Record<string, unknown> } }> = [];
+    const entries: FabricToolEntry[] = [];
     for (const serverName of input.tool_registry.listServers()) {
       for (const tool of input.tool_registry.listTools(serverName)) {
-        if (seen.has(tool.tool_name)) continue;
-        seen.add(tool.tool_name);
-        descriptors.push({
-          type: 'function',
-          function: {
-            name: tool.tool_name,
-            // Qualified `server.tool` identity is carried in the description;
-            // OpenAI function names must stay identifier-safe.
-            description: tool.description ? `${tool.tool}: ${tool.description}` : `Cloudflare session fabric tool ${tool.tool}`,
-            parameters: tool.input_schema ?? { type: 'object' },
-          },
+        const qualified = `${serverName}__${tool.tool_name}`;
+        if (seen.has(qualified)) continue;
+        seen.add(qualified);
+        entries.push({
+          qualified,
+          server_name: serverName,
+          tool_name: tool.tool_name,
+          description: tool.description,
+          input_schema: tool.input_schema,
         });
       }
     }
-    return descriptors;
+    return entries;
+  }
+
+  // session_id is authority identity, never model input: it is stripped from
+  // advertised schemas and injected by the executor at call time.
+  function advertisedSchema(entry: FabricToolEntry): Record<string, unknown> {
+    const schema = entry.input_schema;
+    if (!schema || typeof schema !== 'object') return { type: 'object' };
+    const properties = schema.properties && typeof schema.properties === 'object' ? schema.properties as Record<string, unknown> : {};
+    const required = Array.isArray(schema.required) ? schema.required : null;
+    if (!('session_id' in properties) && !(required && required.includes('session_id'))) return schema;
+    const { session_id: _dropped, ...restProperties } = properties;
+    return {
+      ...schema,
+      properties: restProperties,
+      ...(required ? { required: required.filter((name) => name !== 'session_id') } : {}),
+    };
+  }
+
+  function schemaDeclaresSessionId(entry: FabricToolEntry): boolean {
+    const properties = entry.input_schema?.properties;
+    return Boolean(properties && typeof properties === 'object' && 'session_id' in properties);
+  }
+
+  function advertisedToolDescriptors(entries: FabricToolEntry[]) {
+    return entries.map((entry) => ({
+      type: 'function' as const,
+      function: {
+        name: entry.qualified,
+        description: `${entry.server_name}.${entry.tool_name}: ${entry.description ?? 'Cloudflare session fabric tool'}${schemaDeclaresSessionId(entry) ? ' Session identity is injected by the authority runtime; do not supply session_id.' : ''}`,
+        parameters: advertisedSchema(entry),
+      },
+    }));
   }
 
   async function executeProviderTurn(input: CloudflareNarsAuthorityRuntimeExecutionInput): Promise<CloudflareNarsAuthorityRuntimeExecutionResult> {
@@ -164,9 +205,11 @@ export function createCloudflareNarsProviderRuntimeExecutor(options: CloudflareN
       },
     ];
     try {
+      const fabricToolEntries = fabricTools(input);
+      const fabricToolByQualified = new Map(fabricToolEntries.map((entry) => [entry.qualified, entry]));
       const request = buildOpenAiChatRequest(
         [{ role: 'user', content: input.message }],
-        fabricToolDescriptors(input),
+        advertisedToolDescriptors(fabricToolEntries),
         {
           baseUrl: binding.api_base_url,
           model: binding.model ?? undefined,
@@ -200,37 +243,51 @@ export function createCloudflareNarsProviderRuntimeExecutor(options: CloudflareN
       const reply: ProviderTurnReply = extractOpenAiChatReply(await response.json().catch(() => null));
       const registry = input.tool_registry;
       for (const call of reply.tool_calls) {
-        const serverName = call.server_name ?? registry.listServers()[0] ?? null;
-        const admitted = serverName != null && registry.listTools(serverName).some((tool) => tool.tool_name === call.tool_name);
+        // Resolve through the advertised qualified names first; fall back to a
+        // first-server match on bare tool names the provider may emit anyway.
+        const mapped = fabricToolByQualified.get(call.tool_name)
+          ?? fabricToolEntries.find((entry) => entry.tool_name === call.tool_name)
+          ?? null;
+        const serverName = mapped?.server_name ?? null;
+        const toolName = mapped?.tool_name ?? call.tool_name;
+        const admitted = mapped != null;
+        const effectiveArguments: Record<string, unknown> = { ...(call.arguments ?? {}) };
+        let sessionIdInjected = false;
+        if (mapped && schemaDeclaresSessionId(mapped)) {
+          // Authority identity is injected, never trusted from the model.
+          effectiveArguments.session_id = input.session.session_id;
+          sessionIdInjected = true;
+        }
         payloads.push({
           event: 'tool_call',
           type: 'tool.call',
           input_id: input.input_id,
           request_id: requestId,
           server_name: serverName,
-          tool_name: call.tool_name,
-          tool: serverName ? `${serverName}.${call.tool_name}` : call.tool_name,
-          decision: admitted ? (call.tool_name.startsWith('artifact_') ? 'authority_mutation_admitted' : 'read_only_admitted') : 'refused',
-          argument_summary: call.arguments ?? {},
+          tool_name: toolName,
+          tool: serverName ? `${serverName}.${toolName}` : toolName,
+          decision: admitted ? (toolName.startsWith('artifact_') ? 'authority_mutation_admitted' : 'read_only_admitted') : 'refused',
+          argument_summary: effectiveArguments,
+          ...(sessionIdInjected ? { session_id_injected: true } : {}),
           authority_origin: 'cloudflare',
           mcp_fabric_scope: input.mcp_fabric.requested_scope,
         });
         if (admitted && serverName) {
-          const result = registry.callTool({ server_name: serverName, tool_name: call.tool_name, tool: `${serverName}.${call.tool_name}`, arguments: call.arguments ?? {} });
+          const result = registry.callTool({ server_name: serverName, tool_name: toolName, tool: `${serverName}.${toolName}`, arguments: effectiveArguments });
           payloads.push({
             event: 'tool_result',
             type: 'tool.result',
             input_id: input.input_id,
             request_id: requestId,
             server_name: serverName,
-            tool_name: call.tool_name,
-            tool: `${serverName}.${call.tool_name}`,
+            tool_name: toolName,
+            tool: `${serverName}.${toolName}`,
             status: result.status,
             ...(result.error ? { error: result.error } : {}),
             ...(result.error_code ? { error_code: result.error_code } : {}),
             ...(result.content !== undefined ? { content: result.content } : {}),
             duration_ms: result.duration_ms ?? 0,
-            decision: call.tool_name.startsWith('artifact_') ? 'authority_mutation_admitted' : 'read_only_admitted',
+            decision: toolName.startsWith('artifact_') ? 'authority_mutation_admitted' : 'read_only_admitted',
             authority_origin: 'cloudflare',
             mcp_fabric_scope: input.mcp_fabric.requested_scope,
           });
@@ -241,8 +298,8 @@ export function createCloudflareNarsProviderRuntimeExecutor(options: CloudflareN
             input_id: input.input_id,
             request_id: requestId,
             server_name: serverName,
-            tool_name: call.tool_name,
-            tool: serverName ? `${serverName}.${call.tool_name}` : call.tool_name,
+            tool_name: toolName,
+            tool: serverName ? `${serverName}.${toolName}` : toolName,
             status: 'refused',
             error: 'cloudflare_tool_not_admitted',
             error_code: 'cloudflare_tool_not_admitted',

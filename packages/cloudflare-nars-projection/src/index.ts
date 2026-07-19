@@ -909,6 +909,10 @@ export function createCloudflareNarsAuthorityService(options: {
   const artifactContent = new Map<string, CloudflareNarsAuthorityArtifactContent>();
   const sessionMcpFabrics = new Map<string, CloudflareMcpFabricSummary>();
   const sequenceOverrides = new Map<string, number>();
+  // Ordered mutation lane: conversation.send/enqueue inputs serialize per
+  // session; session.close drains this queue before appending session_closed.
+  const sessionInputQueues = new Map<string, Promise<unknown>>();
+  const sessionClosing = new Set<string>();
   const maxEvents = Math.max(1, Math.floor(options.max_events ?? 500));
   const runtimeExecutor = options.runtime_executor ?? createCloudflareNarsAuthorityRuntimeExecutor();
   function refuseTransition(transitionId: string | null, code: string, detail: string, now: string) {
@@ -1011,8 +1015,14 @@ export function createCloudflareNarsAuthorityService(options: {
       };
     },
     async submitInput(args: { session_id: string; method: string; payload?: Record<string, unknown>; now?: string }): Promise<CloudflareNarsAuthorityInputResult> {
+      if (args.method === 'session.close') {
+        if (sessionClosing.has(args.session_id)) return { schema: CLOUDFLARE_NARS_AUTHORITY_INPUT_SCHEMA, status: 'refused', code: 'session_closing', session_id: args.session_id, method: args.method };
+        sessionClosing.add(args.session_id);
+      }
+      const executeBody = async (): Promise<CloudflareNarsAuthorityInputResult> => {
       const session = sessions.get(args.session_id);
       if (!session) return { schema: CLOUDFLARE_NARS_AUTHORITY_INPUT_SCHEMA, status: 'refused', code: 'session_not_found', session_id: args.session_id, method: args.method };
+      if ((args.method === 'conversation.send' || args.method === 'conversation.enqueue') && sessionClosing.has(args.session_id)) return { schema: CLOUDFLARE_NARS_AUTHORITY_INPUT_SCHEMA, status: 'refused', code: 'session_closing', session_id: args.session_id, method: args.method };
       if (session.lifecycle_state !== 'active') return { schema: CLOUDFLARE_NARS_AUTHORITY_INPUT_SCHEMA, status: 'refused', code: `session_${session.lifecycle_state}`, session_id: args.session_id, method: args.method };
       if (session.transition_state === 'target_prepared') return { schema: CLOUDFLARE_NARS_AUTHORITY_INPUT_SCHEMA, status: 'refused', code: 'target_not_activated', session_id: args.session_id, method: args.method };
       if (!isCloudflareNarsInputMethod(args.method)) return { schema: CLOUDFLARE_NARS_AUTHORITY_INPUT_SCHEMA, status: 'refused', code: 'unsupported_operator_input_method', session_id: args.session_id, method: args.method };
@@ -1034,6 +1044,12 @@ export function createCloudflareNarsAuthorityService(options: {
         tool_registry: createCloudflareNarsAuthorityMcpRegistry({ authority: service, fabric: sessionMcpFabrics.get(args.session_id) ?? session.mcp_fabric }),
         mcp_fabric: sessionMcpFabrics.get(args.session_id) ?? session.mcp_fabric,
       });
+      if (args.method === 'session.close') {
+        // Drain the session's queued inputs first so in-flight terminal events
+        // append before session_closed (ordered mutation lane).
+        const queuedInputs = sessionInputQueues.get(args.session_id);
+        if (queuedInputs) await queuedInputs.catch(() => {});
+      }
       for (const payload of execution.event_payloads) admitted.push(appendAuthorityEvent(args.session_id, payload, now));
       // Provider-capable sessions graduate provider_execution to present only
       // from executed turn evidence (completed provider turn at the authority
@@ -1065,6 +1081,22 @@ export function createCloudflareNarsAuthorityService(options: {
       };
       sessions.set(args.session_id, nextSession);
       return { schema: CLOUDFLARE_NARS_AUTHORITY_INPUT_SCHEMA, status: 'admitted', session_id: args.session_id, input_id: inputId, method: args.method as CloudflareNarsInputMethod, execution_kind: execution.execution_kind, events: admitted };
+      };
+      try {
+        if (args.method === 'conversation.send' || args.method === 'conversation.enqueue') {
+          // Turn inputs serialize per session: admission, execution, and event
+          // append run as one chained segment.
+          const prior = sessionInputQueues.get(args.session_id) ?? Promise.resolve();
+          const run = prior.then(executeBody);
+          sessionInputQueues.set(args.session_id, run.catch(() => {}));
+          return await run;
+        }
+        // conversation.interrupt / conversation.steer / session.close act
+        // immediately and never queue behind an in-flight turn.
+        return await executeBody();
+      } finally {
+        if (args.method === 'session.close') sessionClosing.delete(args.session_id);
+      }
     },
     readArtifactMetadata(args: { session_id: string; artifact_id?: string | null }): CloudflareNarsAuthorityArtifactReadResult {
       const session = sessions.get(args.session_id);
