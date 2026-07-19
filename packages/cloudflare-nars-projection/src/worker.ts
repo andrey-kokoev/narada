@@ -29,11 +29,15 @@ export interface CloudflareNarsProjectionWorkerEnv {
   ASSETS?: { fetch(request: Request): Promise<Response> | Response };
   NARS_PROJECTION_STATE?: DurableObjectNamespaceLike;
   NARS_WORKSPACE_DIRECTORY?: DurableObjectNamespaceLike;
-  NARS_PROVIDER_API_BASE_URL?: string;
-  NARS_PROVIDER_NAME?: string;
-  NARS_PROVIDER_MODEL?: string;
-  NARS_PROVIDER_THINKING?: string;
-  NARS_PROVIDER_API_KEY?: string;
+  // Provider binding reuses the canonical Narada provider vocabulary
+  // (@narada2/carrier-provider-contract / local NARS / pwsh SecretStore).
+  // The API key value mirrors the pwsh SecretStore entry
+  // `narada/provider/<provider>/api-key`, carried here as a Worker secret.
+  NARADA_AI_BASE_URL?: string;
+  NARADA_INTELLIGENCE_PROVIDER?: string;
+  NARADA_AI_MODEL?: string;
+  NARADA_AI_THINKING?: string;
+  NARADA_AI_API_KEY?: string;
 }
 
 function isWorkspaceRouteDirectory(value: unknown): value is OperatorWorkspaceRouteDirectory {
@@ -178,17 +182,19 @@ export interface CloudflareNarsProjectionWorkerOptions {
 }
 
 export function authorityExecutorFromEnv(env: CloudflareNarsProjectionWorkerEnv | undefined): CloudflareNarsAuthorityRuntimeExecutor | undefined {
-  const apiBaseUrl = env?.NARS_PROVIDER_API_BASE_URL?.trim();
+  const apiBaseUrl = env?.NARADA_AI_BASE_URL?.trim();
   if (!apiBaseUrl) return undefined;
+  const configuredProvider = env?.NARADA_INTELLIGENCE_PROVIDER?.trim();
   return createCloudflareNarsProviderRuntimeExecutor({
     binding: {
-      provider: env?.NARS_PROVIDER_NAME?.trim() || 'cloudflare-provider',
-      model: env?.NARS_PROVIDER_MODEL?.trim() || null,
-      thinking: env?.NARS_PROVIDER_THINKING?.trim() || null,
+      provider: configuredProvider || 'cloudflare-provider',
+      model: env?.NARADA_AI_MODEL?.trim() || null,
+      thinking: env?.NARADA_AI_THINKING?.trim() || null,
       api_base_url: apiBaseUrl,
-      api_key_env: 'NARS_PROVIDER_API_KEY',
+      api_key_env: 'NARADA_AI_API_KEY',
+      credential_secret_ref: configuredProvider ? `narada/provider/${configuredProvider}/api-key` : null,
     },
-    env: { NARS_PROVIDER_API_KEY: env?.NARS_PROVIDER_API_KEY },
+    env: { NARADA_AI_API_KEY: env?.NARADA_AI_API_KEY },
   });
 }
 

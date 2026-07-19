@@ -10,12 +10,12 @@ async function jsonOf(response: Response) {
 }
 
 describe('worker provider env binding', () => {
-  test('authority service health reports provider adapter when NARS_PROVIDER_* env is bound', async () => {
+  test('authority service health reports provider adapter when NARADA_AI_* env is bound', async () => {
     const worker = createCloudflareNarsProjectionWorker({ now: () => now });
     const health = await jsonOf(await worker.fetch(new Request('https://authority.example.test/api/nars/authority/health'), {
-      NARS_PROVIDER_API_BASE_URL: 'https://provider.example.test/v1/chat',
-      NARS_PROVIDER_NAME: 'openai-api',
-      NARS_PROVIDER_MODEL: 'gpt-5.5',
+      NARADA_AI_BASE_URL: 'https://provider.example.test/v1/chat',
+      NARADA_INTELLIGENCE_PROVIDER: 'openai-api',
+      NARADA_AI_MODEL: 'gpt-5.5',
     }));
     expect(health).toMatchObject({ status: 'healthy', execution: 'cloudflare_provider_http_adapter' });
   });
@@ -29,9 +29,9 @@ describe('worker provider env binding', () => {
   test('provider-bound worker declares provider capability on created sessions without exposing the key', async () => {
     const worker = createCloudflareNarsProjectionWorker({ now: () => now });
     const env = {
-      NARS_PROVIDER_API_BASE_URL: 'https://provider.example.test/v1/chat',
-      NARS_PROVIDER_NAME: 'openai-api',
-      NARS_PROVIDER_API_KEY: 'sk-should-not-leak',
+      NARADA_AI_BASE_URL: 'https://provider.example.test/v1/chat',
+      NARADA_INTELLIGENCE_PROVIDER: 'openai-api',
+      NARADA_AI_API_KEY: 'sk-should-not-leak',
     };
     const created = await jsonOf(await worker.fetch(new Request('https://authority.example.test/api/nars/authority/sessions', {
       method: 'POST',
@@ -50,7 +50,7 @@ describe('worker provider env binding', () => {
         get<T = unknown>(key: string) { return storage.get(key) as T | undefined; },
         put(key: string, value: unknown) { storage.set(key, value); },
       },
-    }, { NARS_PROVIDER_API_BASE_URL: 'https://provider.example.test/v1/chat' });
+    }, { NARADA_AI_BASE_URL: 'https://provider.example.test/v1/chat' });
     const response = await object.fetch(new Request('https://authority.example.test/api/nars/authority/sessions', {
       method: 'POST',
       body: JSON.stringify({ session_id: 'cf_do_provider', site_id: 'narada.test', agent_id: 'cloudflare.resident' }),

@@ -16,6 +16,9 @@ export interface CloudflareNarsProviderBinding {
   // value itself is resolved from the provided env map and is never emitted
   // into events, diagnostics, or this binding record.
   api_key_env?: string | null;
+  // Canonical Narada credential reference (`narada/provider/<provider>/api-key`)
+  // naming the pwsh SecretStore entry this binding mirrors. Metadata only.
+  credential_secret_ref?: string | null;
   timeout_ms?: number | null;
 }
 
@@ -43,6 +46,7 @@ function normalizeBinding(binding: CloudflareNarsProviderBinding): CloudflareNar
     thinking: binding.thinking?.trim() || null,
     api_base_url: apiBaseUrl,
     api_key_env: binding.api_key_env?.trim() || null,
+    credential_secret_ref: binding.credential_secret_ref?.trim() || null,
     timeout_ms: Number.isFinite(timeout) && timeout >= 1000 ? Math.floor(timeout) : CLOUDFLARE_NARS_PROVIDER_DEFAULT_TIMEOUT_MS,
   };
 }
@@ -109,6 +113,7 @@ export function createCloudflareNarsProviderRuntimeExecutor(options: CloudflareN
         provider: binding.provider,
         model: binding.model,
         thinking: binding.thinking,
+        credential_secret_ref: binding.credential_secret_ref,
         authority_origin: 'cloudflare',
       },
     ];

@@ -13,7 +13,7 @@ function printHelp() {
   process.stdout.write(`Safe planning mode (no mutation):\n  pnpm --filter @narada2/cloudflare-nars-projection smoke:provider-capable-live\n\n`);
   process.stdout.write(`Live deployed smoke (requires operator authorization and provider-backed Worker env):\n  ${liveCommand('https://narada-nars-projection.andrei-kokoev.workers.dev')}\n\n`);
   process.stdout.write(`Prerequisites for a live run:\n`);
-  process.stdout.write(`  - The deployed Worker must carry NARS_PROVIDER_API_BASE_URL and NARS_PROVIDER_API_KEY (secret) bindings.\n`);
+  process.stdout.write(`  - The deployed Worker must carry NARADA_AI_BASE_URL and NARADA_AI_API_KEY (secret) bindings.\n`);
   process.stdout.write(`  - Deploy dry-run first: pnpm --filter @narada2/cloudflare-nars-projection deploy:dry-run\n`);
   process.stdout.write(`  - Record the operator authorization for the live run in the task file before executing.\n\n`);
   process.stdout.write(`Options:\n`);
@@ -76,7 +76,7 @@ async function run() {
         status: 'failed',
         code: 'provider_adapter_not_bound',
         smoke_lineage: 'provider-capable-live',
-        detail: `Deployed Worker reports execution ${serviceHealth.execution ?? 'unknown'}; provider-capable smoke requires cloudflare_provider_http_adapter (NARS_PROVIDER_* env bindings).`,
+        detail: `Deployed Worker reports execution ${serviceHealth.execution ?? 'unknown'}; provider-capable smoke requires cloudflare_provider_http_adapter (NARADA_AI_* env bindings).`,
         service_health: serviceHealth,
         cloudflare_api_base_url: baseUrl,
         evidence_path: evidencePaths.evidencePath,
