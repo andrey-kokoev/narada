@@ -36,6 +36,7 @@
   "dependencies": {
     "@narada2/nars-session-core": "workspace:*",
     "@narada2/carrier-protocol": "workspace:*",
+    "@narada2/carrier-provider-contract": "workspace:*",
     "@narada2/nars-runtime-contract": "workspace:*",
     "@narada2/operator-console-contract": "workspace:*",
     "@narada2/process-launch-posture": "workspace:*",

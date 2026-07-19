@@ -2,6 +2,11 @@ import { copyFileSync, existsSync, mkdirSync, statSync, writeFileSync } from 'no
 import { join, resolve } from 'node:path';
 import { codexAuthHome } from '@narada2/carrier-provider-support/codex-subscription-auth';
 import { codexMcpEnvVarNames } from '@narada2/mcp-fabric';
+import {
+  buildOpenAiChatRequest as coreBuildOpenAiChatRequest,
+  cleanOpenAiMessages as coreCleanOpenAiMessages,
+  reasoningEffort,
+} from '@narada2/carrier-provider-contract/openai-compatible-chat';
 function stripAnsi(value) {
   return String(value ?? '').replace(/\u001b\[[0-?]*[ -/]*[@-~]/g, '');
 }
@@ -50,13 +55,6 @@ const REQUEST_ADAPTERS = Object.freeze({
   'anthropic-messages': { buildRequest: buildAnthropicMessagesRequest, parseResponse: parseAnthropicMessagesResponse },
   'codex-mcp-server': { buildRequest: buildCodexMcpRequest, parseResponse: parseCodexMcpResponse },
 });
-
-function reasoningEffort(thinking) {
-  if (thinking === 'none') return null;
-  if (thinking === 'low') return 'low';
-  if (thinking === 'high') return 'high';
-  return 'medium';
-}
 
 function buildCodexMcpRequest(messages, tools = [], options = {}) {
   const { model = providerAdapterContext.model, thinking = providerAdapterContext.thinking, siteRoot = providerAdapterContext.siteRoot, nativeMcpTools = providerAdapterContext.nativeMcpTools, mcpServers = {}, codexSessionState = null } = options;
@@ -234,119 +232,30 @@ function extractJsonObject(text) {
   return start >= 0 && end > start ? text.slice(start, end + 1) : null;
 }
 
+// The canonical OpenAI-compatible request shape lives in
+// @narada2/carrier-provider-contract/openai-compatible-chat (pure, worker-safe).
+// These wrappers preserve this module's providerAdapterContext default
+// semantics: explicit options win; undefined option values fall back to the
+// configured context, matching the original destructuring-default behavior.
+function definedOptions(options) {
+  return Object.fromEntries(Object.entries(options).filter(([, value]) => value !== undefined));
+}
+
 function buildOpenAiChatRequest(messages, tools, options = {}) {
-  const { baseUrl = providerAdapterContext.baseUrl, model = providerAdapterContext.model, apiKey = providerAdapterContext.apiKey, thinking = providerAdapterContext.thinking, provider = providerAdapterContext.provider, openrouterSiteUrl = providerAdapterContext.openrouterSiteUrl, openrouterTitle = providerAdapterContext.openrouterTitle } = options;
-  const isKimiProvider = provider === 'kimi-api' || provider === 'kimi-code-api';
-  const requestTools = normalizeOpenAiCompatibleTools(tools, { provider });
-  const body = {
-    model,
-    messages: cleanOpenAiMessages(messages, { provider }),
-    tools: requestTools.length > 0 ? requestTools : undefined,
-    tool_choice: requestTools.length > 0 ? 'auto' : undefined,
-    temperature: isKimiProvider ? 1 : 0.2,
-  };
-  const effort = reasoningEffort(thinking);
-  if (effort && provider === 'openai-api') body.reasoning_effort = effort;
-  if (provider === 'deepseek-api') {
-    body.thinking = { type: thinking === 'none' ? 'disabled' : 'enabled' };
-    if (thinking !== 'none') {
-      body.reasoning_effort = thinking === 'xhigh' ? 'max' : 'high';
-    }
-  }
-  const headers = {
-    'Content-Type': 'application/json',
-    'Authorization': `Bearer ${apiKey}`,
-  };
-  if (provider === 'kimi-code-api') {
-    headers['User-Agent'] = 'KimiCLI/1.0';
-  }
-  if (provider === 'openrouter-api') {
-    if (openrouterSiteUrl) headers['HTTP-Referer'] = String(openrouterSiteUrl);
-    if (openrouterTitle) headers['X-Title'] = String(openrouterTitle);
-    body.metadata = {
-      ...(body.metadata ?? {}),
-      narada_provider: 'openrouter-api',
-      narada_model: model,
-    };
-  }
-  return {
-    url: new URL('v1/chat/completions', baseUrl),
-    body,
-    headers,
-  };
-}
-
-function normalizeOpenAiCompatibleTools(tools = [], { provider = providerAdapterContext.provider } = {}) {
-  if (!Array.isArray(tools) || tools.length === 0) return [];
-  if (provider !== 'kimi-api' && provider !== 'kimi-code-api') return tools;
-  return tools.map((tool) => {
-    const fn = tool?.function;
-    if (!fn || typeof fn !== 'object') return tool;
-    return {
-      ...tool,
-      function: {
-        ...fn,
-        parameters: normalizeKimiToolParameters(fn.parameters ?? { type: 'object', properties: {} }),
-      },
-    };
+  return coreBuildOpenAiChatRequest(messages, tools, {
+    baseUrl: providerAdapterContext.baseUrl,
+    model: providerAdapterContext.model,
+    apiKey: providerAdapterContext.apiKey,
+    thinking: providerAdapterContext.thinking,
+    provider: providerAdapterContext.provider,
+    openrouterSiteUrl: providerAdapterContext.openrouterSiteUrl,
+    openrouterTitle: providerAdapterContext.openrouterTitle,
+    ...definedOptions(options),
   });
-}
-
-function normalizeKimiToolParameters(schema) {
-  const normalized = normalizeKimiJsonSchema(schema);
-  if (!normalized || typeof normalized !== 'object' || Array.isArray(normalized)) return { type: 'object', properties: {} };
-  if (Array.isArray(normalized.anyOf)) return flattenKimiRootAnyOf(normalized);
-  return { ...normalized, type: 'object' };
-}
-
-function flattenKimiRootAnyOf(schema) {
-  const properties = { ...(schema.properties && typeof schema.properties === 'object' && !Array.isArray(schema.properties) ? schema.properties : {}) };
-  for (const branch of schema.anyOf) {
-    if (!branch || typeof branch !== 'object' || Array.isArray(branch)) continue;
-    if (branch.properties && typeof branch.properties === 'object' && !Array.isArray(branch.properties)) Object.assign(properties, branch.properties);
-  }
-  const { anyOf, oneOf, allOf, type, required, ...rest } = schema;
-  return {
-    ...rest,
-    type: 'object',
-    properties,
-  };
-}
-
-function normalizeKimiJsonSchema(schema) {
-  if (Array.isArray(schema)) return schema.map((item) => normalizeKimiJsonSchema(item));
-  if (!schema || typeof schema !== 'object') return schema;
-  const normalized = Object.fromEntries(Object.entries(schema).map(([key, value]) => [key, normalizeKimiJsonSchema(value)]));
-  if (Array.isArray(normalized.anyOf) && normalized.type !== undefined) {
-    const parentType = normalized.type;
-    delete normalized.type;
-    normalized.anyOf = normalized.anyOf.map((item) => {
-      if (!item || typeof item !== 'object' || Array.isArray(item) || item.type !== undefined) return item;
-      return { type: parentType, ...item };
-    });
-  }
-  return normalized;
 }
 
 function cleanOpenAiMessages(messages, { provider = providerAdapterContext.provider } = {}) {
-  return messages.map((m) => {
-    const clean = { role: m.role };
-    if (m.role === 'tool') {
-      clean.content = m.content ?? '';
-      clean.tool_call_id = m.tool_call_id ?? '';
-    } else if (m.role === 'assistant') {
-      clean.content = m.content ?? null;
-      if (m.tool_calls && m.tool_calls.length > 0) {
-        clean.tool_calls = m.tool_calls;
-        if (provider === 'kimi-api' || provider === 'kimi-code-api' || provider === 'deepseek-api') {
-          clean.reasoning_content = m.reasoning_content ?? '';
-        }
-      }
-    } else {
-      clean.content = m.content ?? '';
-    }
-    return clean;
-  });
+  return coreCleanOpenAiMessages(messages, { provider });
 }
 
 function buildAnthropicMessagesRequest(messages, tools, options = {}) {

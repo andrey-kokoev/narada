@@ -10,12 +10,13 @@ async function jsonOf(response: Response) {
 }
 
 describe('worker provider env binding', () => {
-  test('authority service health reports provider adapter when NARADA_AI_* env is bound', async () => {
+  test('authority service health reports provider adapter when NARADA_* provider env is bound', async () => {
     const worker = createCloudflareNarsProjectionWorker({ now: () => now });
     const health = await jsonOf(await worker.fetch(new Request('https://authority.example.test/api/nars/authority/health'), {
       NARADA_AI_BASE_URL: 'https://provider.example.test/v1/chat',
       NARADA_INTELLIGENCE_PROVIDER: 'openai-api',
       NARADA_AI_MODEL: 'gpt-5.5',
+      NARADA_AI_API_KEY: 'sk-test-key',
     }));
     expect(health).toMatchObject({ status: 'healthy', execution: 'cloudflare_provider_http_adapter' });
   });
@@ -23,6 +24,14 @@ describe('worker provider env binding', () => {
   test('authority service health reports the synthetic default when no provider env is bound', async () => {
     const worker = createCloudflareNarsProjectionWorker({ now: () => now });
     const health = await jsonOf(await worker.fetch(new Request('https://authority.example.test/api/nars/authority/health'), {}));
+    expect(health).toMatchObject({ status: 'healthy', execution: 'cloudflare_runtime_tool_adapter' });
+  });
+
+  test('provider id without a resolvable credential stays on the synthetic default', async () => {
+    const worker = createCloudflareNarsProjectionWorker({ now: () => now });
+    const health = await jsonOf(await worker.fetch(new Request('https://authority.example.test/api/nars/authority/health'), {
+      NARADA_INTELLIGENCE_PROVIDER: 'openai-api',
+    }));
     expect(health).toMatchObject({ status: 'healthy', execution: 'cloudflare_runtime_tool_adapter' });
   });
 
@@ -50,7 +59,7 @@ describe('worker provider env binding', () => {
         get<T = unknown>(key: string) { return storage.get(key) as T | undefined; },
         put(key: string, value: unknown) { storage.set(key, value); },
       },
-    }, { NARADA_AI_BASE_URL: 'https://provider.example.test/v1/chat' });
+    }, { NARADA_INTELLIGENCE_PROVIDER: 'openai-api', NARADA_AI_API_KEY: 'sk-do-key', NARADA_AI_BASE_URL: 'https://provider.example.test/v1/chat' });
     const response = await object.fetch(new Request('https://authority.example.test/api/nars/authority/sessions', {
       method: 'POST',
       body: JSON.stringify({ session_id: 'cf_do_provider', site_id: 'narada.test', agent_id: 'cloudflare.resident' }),

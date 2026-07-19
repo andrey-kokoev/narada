@@ -5,6 +5,8 @@
   "type": "module",
   "exports": {
     ".": "./src/carrier-provider-contract.mjs",
+    "./provider-runtime-binding-core": "./src/provider-runtime-binding-core.mjs",
+    "./openai-compatible-chat": "./src/openai-compatible-chat.mjs",
     "./provider-registry": "./contracts/provider-registry.json",
     "./provider-adapters": "./contracts/provider-adapters.json",
     "./narada-tool-call-envelope": "./contracts/narada-tool-call-envelope.json"

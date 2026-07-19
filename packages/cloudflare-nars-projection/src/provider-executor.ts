@@ -1,3 +1,7 @@
+import {
+  buildOpenAiChatRequest,
+  extractOpenAiChatReply,
+} from '@narada2/carrier-provider-contract/openai-compatible-chat';
 import type {
   CloudflareNarsAuthorityRuntimeExecutionInput,
   CloudflareNarsAuthorityRuntimeExecutionResult,
@@ -6,16 +10,19 @@ import type {
 
 export const CLOUDFLARE_NARS_PROVIDER_EXECUTION_MODE = 'cloudflare_provider_http_adapter';
 export const CLOUDFLARE_NARS_PROVIDER_DEFAULT_TIMEOUT_MS = 120000;
+export const CLOUDFLARE_NARS_PROVIDER_SUPPORTED_ADAPTER_KIND = 'openai-compatible-chat-completions';
 
 export interface CloudflareNarsProviderBinding {
   provider: string;
+  // Registry adapter kind; only CLOUDFLARE_NARS_PROVIDER_SUPPORTED_ADAPTER_KIND
+  // is dispatched on this surface, others refuse turns with typed evidence.
+  adapter_kind?: string | null;
   model: string | null;
   thinking: string | null;
   api_base_url: string;
-  // Name of the environment/secret binding that holds the API key. The key
-  // value itself is resolved from the provided env map and is never emitted
-  // into events, diagnostics, or this binding record.
-  api_key_env?: string | null;
+  // Resolved API key. Sent only as the provider Authorization header and never
+  // emitted into events, diagnostics, or this binding record.
+  api_key?: string | null;
   // Canonical Narada credential reference (`narada/provider/<provider>/api-key`)
   // naming the pwsh SecretStore entry this binding mirrors. Metadata only.
   credential_secret_ref?: string | null;
@@ -25,7 +32,6 @@ export interface CloudflareNarsProviderBinding {
 export interface CloudflareNarsProviderExecutorOptions {
   binding: CloudflareNarsProviderBinding;
   fetch_impl?: typeof fetch;
-  env?: Record<string, string | undefined>;
 }
 
 interface ProviderTurnReply {
@@ -34,7 +40,7 @@ interface ProviderTurnReply {
   raw: unknown;
 }
 
-function normalizeBinding(binding: CloudflareNarsProviderBinding): CloudflareNarsProviderBinding & { timeout_ms: number } {
+function normalizeBinding(binding: CloudflareNarsProviderBinding): CloudflareNarsProviderBinding & { adapter_kind: string; timeout_ms: number } {
   const provider = String(binding.provider ?? '').trim();
   const apiBaseUrl = String(binding.api_base_url ?? '').trim();
   if (!provider) throw new Error('provider_binding_provider_required');
@@ -42,37 +48,14 @@ function normalizeBinding(binding: CloudflareNarsProviderBinding): CloudflareNar
   const timeout = Number(binding.timeout_ms);
   return {
     provider,
+    adapter_kind: binding.adapter_kind?.trim() || CLOUDFLARE_NARS_PROVIDER_SUPPORTED_ADAPTER_KIND,
     model: binding.model?.trim() || null,
     thinking: binding.thinking?.trim() || null,
     api_base_url: apiBaseUrl,
-    api_key_env: binding.api_key_env?.trim() || null,
+    api_key: binding.api_key?.trim() || null,
     credential_secret_ref: binding.credential_secret_ref?.trim() || null,
     timeout_ms: Number.isFinite(timeout) && timeout >= 1000 ? Math.floor(timeout) : CLOUDFLARE_NARS_PROVIDER_DEFAULT_TIMEOUT_MS,
   };
-}
-
-function extractProviderReply(body: unknown): ProviderTurnReply {
-  const root = (body && typeof body === 'object' ? body : {}) as Record<string, unknown>;
-  const toolCallsRaw = Array.isArray(root.tool_calls) ? root.tool_calls : [];
-  const tool_calls = toolCallsRaw.flatMap((entry) => {
-    if (!entry || typeof entry !== 'object') return [];
-    const record = entry as Record<string, unknown>;
-    const toolName = typeof record.tool_name === 'string' ? record.tool_name : typeof record.name === 'string' ? record.name : null;
-    if (!toolName) return [];
-    return [{
-      server_name: typeof record.server_name === 'string' ? record.server_name : undefined,
-      tool_name: toolName,
-      arguments: record.arguments && typeof record.arguments === 'object' ? record.arguments as Record<string, unknown> : {},
-    }];
-  });
-  const content = typeof root.content === 'string'
-    ? root.content
-    : typeof root.output_text === 'string'
-      ? root.output_text
-      : typeof root.message === 'string'
-        ? root.message
-        : '';
-  return { content, tool_calls, raw: body };
 }
 
 function isAbortError(error: unknown): boolean {
@@ -82,19 +65,49 @@ function isAbortError(error: unknown): boolean {
 export function createCloudflareNarsProviderRuntimeExecutor(options: CloudflareNarsProviderExecutorOptions): CloudflareNarsAuthorityRuntimeExecutor & { provider_binding_summary: string } {
   const binding = normalizeBinding(options.binding);
   const fetchImpl = options.fetch_impl ?? fetch;
-  const env = options.env ?? {};
   const inflight = new Map<string, AbortController>();
   const bindingSummary = `${binding.provider}:${binding.model ?? 'default'}:${binding.thinking ?? 'default'}`;
 
-  function authorizationHeaders(): Record<string, string> {
-    if (!binding.api_key_env) return {};
-    const key = env[binding.api_key_env];
-    if (typeof key !== 'string' || !key.trim()) return {};
-    return { authorization: `Bearer ${key.trim()}` };
+  function fabricToolDescriptors(input: CloudflareNarsAuthorityRuntimeExecutionInput) {
+    const seen = new Set<string>();
+    const descriptors: Array<{ type: 'function'; function: { name: string; description: string; parameters: Record<string, unknown> } }> = [];
+    for (const serverName of input.tool_registry.listServers()) {
+      for (const tool of input.tool_registry.listTools(serverName)) {
+        if (seen.has(tool.tool_name)) continue;
+        seen.add(tool.tool_name);
+        descriptors.push({
+          type: 'function',
+          function: {
+            name: tool.tool_name,
+            description: `Cloudflare session fabric tool ${tool.tool}`,
+            parameters: { type: 'object' },
+          },
+        });
+      }
+    }
+    return descriptors;
   }
 
   async function executeProviderTurn(input: CloudflareNarsAuthorityRuntimeExecutionInput): Promise<CloudflareNarsAuthorityRuntimeExecutionResult> {
     const requestId = `provider_${input.input_id}`;
+    if (binding.adapter_kind !== CLOUDFLARE_NARS_PROVIDER_SUPPORTED_ADAPTER_KIND) {
+      const refused: Record<string, unknown>[] = [
+        { event: 'turn_started', type: 'turn.started', input_id: input.input_id },
+        {
+          event: 'provider_error',
+          type: 'provider.error',
+          input_id: input.input_id,
+          request_id: requestId,
+          provider: binding.provider,
+          adapter_kind: binding.adapter_kind,
+          error: `provider_adapter_unsupported_on_cloudflare:${binding.adapter_kind}`,
+          error_code: 'provider_adapter_unsupported_on_cloudflare',
+          authority_origin: 'cloudflare',
+        },
+        { event: 'turn_complete', type: 'turn.completed', input_id: input.input_id, terminal_state: 'failed', request_id: requestId },
+      ];
+      return { execution_kind: CLOUDFLARE_NARS_PROVIDER_EXECUTION_MODE, event_payloads: refused, provider_turn: { request_id: requestId, terminal_state: 'failed' } } as CloudflareNarsAuthorityRuntimeExecutionResult;
+    }
     const controller = new AbortController();
     inflight.set(input.session.session_id, controller);
     let timedOut = false;
@@ -111,6 +124,7 @@ export function createCloudflareNarsProviderRuntimeExecutor(options: CloudflareN
         request_id: requestId,
         idempotency_key: input.input_id,
         provider: binding.provider,
+        adapter_kind: binding.adapter_kind,
         model: binding.model,
         thinking: binding.thinking,
         credential_secret_ref: binding.credential_secret_ref,
@@ -118,16 +132,21 @@ export function createCloudflareNarsProviderRuntimeExecutor(options: CloudflareN
       },
     ];
     try {
-      const response = await fetchImpl(binding.api_base_url, {
+      const request = buildOpenAiChatRequest(
+        [{ role: 'user', content: input.message }],
+        fabricToolDescriptors(input),
+        {
+          baseUrl: binding.api_base_url,
+          model: binding.model ?? undefined,
+          apiKey: binding.api_key ?? '',
+          thinking: binding.thinking ?? undefined,
+          provider: binding.provider,
+        },
+      );
+      const response = await fetchImpl(request.url, {
         method: 'POST',
-        headers: { 'content-type': 'application/json', ...authorizationHeaders() },
-        body: JSON.stringify({
-          model: binding.model,
-          thinking: binding.thinking,
-          input: input.message,
-          request_id: requestId,
-          idempotency_key: input.input_id,
-        }),
+        headers: request.headers as Record<string, string>,
+        body: JSON.stringify(request.body),
         signal: controller.signal,
       });
       if (!response.ok) {
@@ -145,7 +164,7 @@ export function createCloudflareNarsProviderRuntimeExecutor(options: CloudflareN
         payloads.push({ event: 'turn_complete', type: 'turn.completed', input_id: input.input_id, terminal_state: 'failed', request_id: requestId });
         return { execution_kind: CLOUDFLARE_NARS_PROVIDER_EXECUTION_MODE, event_payloads: payloads, provider_turn: { request_id: requestId, terminal_state: 'failed' } } as CloudflareNarsAuthorityRuntimeExecutionResult;
       }
-      const reply = extractProviderReply(await response.json().catch(() => null));
+      const reply: ProviderTurnReply = extractOpenAiChatReply(await response.json().catch(() => null));
       const registry = input.tool_registry;
       for (const call of reply.tool_calls) {
         const serverName = call.server_name ?? registry.listServers()[0] ?? null;

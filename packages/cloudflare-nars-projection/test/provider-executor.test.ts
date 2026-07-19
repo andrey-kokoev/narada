@@ -17,10 +17,27 @@ interface FixtureBehavior {
   never_respond?: boolean;
 }
 
+function chatReply(content: string, tool_calls: Array<{ name: string; arguments?: Record<string, unknown> }> = []) {
+  return {
+    choices: [{
+      message: {
+        role: 'assistant',
+        content,
+        tool_calls: tool_calls.map((call, index) => ({
+          id: `call_${index + 1}`,
+          type: 'function',
+          function: { name: call.name, arguments: JSON.stringify(call.arguments ?? {}) },
+        })),
+      },
+      finish_reason: 'stop',
+    }],
+  };
+}
+
 let server: Server;
 let baseUrl: string;
 let behavior: FixtureBehavior = {};
-const requests: Array<{ body: Record<string, unknown>; authorization: string | null }> = [];
+const requests: Array<{ body: Record<string, any>; authorization: string | null }> = [];
 
 beforeAll(async () => {
   server = createServer((req, res) => {
@@ -32,7 +49,7 @@ beforeAll(async () => {
       if (behavior.delay_ms) await sleep(behavior.delay_ms);
       const status = behavior.status ?? 200;
       res.writeHead(status, { 'content-type': 'application/json' });
-      res.end(JSON.stringify(behavior.body ?? { content: 'provider reply', tool_calls: [] }));
+      res.end(JSON.stringify(behavior.body ?? chatReply('provider reply')));
     });
   });
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -43,24 +60,25 @@ afterAll(async () => {
   await new Promise((resolve) => server.close(resolve));
 });
 
-function providerService(options: { timeout_ms?: number; env?: Record<string, string> } = {}) {
+function providerService(options: { timeout_ms?: number; api_key?: string } = {}) {
   const executor = createCloudflareNarsProviderRuntimeExecutor({
     binding: {
       provider: 'fixture-provider',
+      adapter_kind: 'openai-compatible-chat-completions',
       model: 'fixture-model',
       thinking: 'low',
       api_base_url: baseUrl,
-      api_key_env: 'FIXTURE_PROVIDER_KEY',
+      api_key: options.api_key ?? null,
+      credential_secret_ref: 'narada/provider/fixture-provider/api-key',
       timeout_ms: options.timeout_ms ?? null,
     },
-    env: options.env ?? {},
   });
   return createCloudflareNarsAuthorityService({ max_events: 50, runtime_executor: executor, mcp_fabric: { scope: 'all' } });
 }
 
 describe('cloudflare provider http adapter', () => {
   test('provider capability is declared (not present) from configuration alone, and graduates only on executed turn evidence', async () => {
-    behavior = { body: { content: 'hello from provider', tool_calls: [] } };
+    behavior = { body: chatReply('hello from provider') };
     const service = providerService();
     const created = service.createSession({ session_id: 'cf_provider_1', site_id: 'narada.test', agent_id: 'cloudflare.resident' }, now);
     expect(created.status).toBe('created');
@@ -95,31 +113,37 @@ describe('cloudflare provider http adapter', () => {
     expect(validateNarsRuntimeSurfaceContract(graduated.runtime_surface_contract)).toEqual({ ok: true, violations: [] });
   });
 
-  test('provider request carries idempotency key and binding metadata but never the api key', async () => {
-    behavior = { body: { content: 'secret check', tool_calls: [] } };
+  test('provider request uses the canonical chat-completions wire shape with binding metadata on the event, never the api key', async () => {
+    behavior = { body: chatReply('secret check') };
     requests.length = 0;
-    const service = providerService({ env: { FIXTURE_PROVIDER_KEY: 'sk-fixture-secret-value' } });
+    const service = providerService({ api_key: 'sk-fixture-secret-value' });
     service.createSession({ session_id: 'cf_provider_secret', site_id: 'narada.test', agent_id: 'cloudflare.resident' }, now);
     const admitted = await service.submitInput({ session_id: 'cf_provider_secret', method: 'conversation.send', payload: { message: 'check secret handling' }, now });
     expect(admitted.status).toBe('admitted');
     expect(requests).toHaveLength(1);
     expect(requests[0].authorization).toBe('Bearer sk-fixture-secret-value');
-    expect(requests[0].body.idempotency_key).toBe(admitted.input_id);
-    expect(requests[0].body.request_id).toBe(`provider_${admitted.input_id}`);
+    expect(requests[0].body.model).toBe('fixture-model');
+    expect(requests[0].body.messages).toEqual([{ role: 'user', content: 'check secret handling' }]);
+    const providerRequest = admitted.events?.find((event) => event.payload.event === 'provider_request');
+    expect(providerRequest?.payload).toMatchObject({
+      idempotency_key: admitted.input_id,
+      request_id: `provider_${admitted.input_id}`,
+      provider: 'fixture-provider',
+      adapter_kind: 'openai-compatible-chat-completions',
+      credential_secret_ref: 'narada/provider/fixture-provider/api-key',
+    });
     const serializedEvents = JSON.stringify(admitted.events ?? []);
     expect(serializedEvents).not.toContain('sk-fixture-secret-value');
   });
 
   test('provider-driven tool calls execute only through the session fabric; unknown tools are refused', async () => {
     behavior = {
-      body: {
-        content: 'used tools',
-        tool_calls: [
-          { server_name: 'cf-authority', tool_name: 'session_context_read', arguments: {} },
-          { server_name: 'cf-authority', tool_name: 'local_shell_exec', arguments: { cmd: 'rm -rf /' } },
-        ],
-      },
+      body: chatReply('used tools', [
+        { name: 'session_context_read', arguments: {} },
+        { name: 'local_shell_exec', arguments: { cmd: 'rm -rf /' } },
+      ]),
     };
+    requests.length = 0;
     const service = providerService();
     service.createSession({ session_id: 'cf_provider_tools', site_id: 'narada.test', agent_id: 'cloudflare.resident' }, now);
     const admitted = await service.submitInput({ session_id: 'cf_provider_tools', method: 'conversation.send', payload: { message: 'call tools' }, now });
@@ -132,6 +156,9 @@ describe('cloudflare provider http adapter', () => {
     expect(refusedResult?.payload).toMatchObject({ status: 'refused', error_code: 'cloudflare_tool_not_admitted' });
     const admittedResult = admitted.events?.find((event) => event.payload.event === 'tool_result' && event.payload.tool_name === 'session_context_read');
     expect(admittedResult?.payload.status).toBe('ok');
+    const offeredTools = (requests[0].body.tools ?? []).map((tool: any) => tool.function?.name);
+    expect(offeredTools).toContain('session_context_read');
+    expect(requests[0].body.tool_choice).toBe('auto');
   });
 
   test('provider http failure completes the turn as failed and does not graduate capability', async () => {
@@ -153,8 +180,31 @@ describe('cloudflare provider http adapter', () => {
     expect(service.readHealth('cf_provider_fail').runtime_surface_contract!.capability_profile.provider_execution).toBe('declared');
   });
 
+  test('providers with unsupported adapter kinds refuse turns with typed evidence', async () => {
+    const executor = createCloudflareNarsProviderRuntimeExecutor({
+      binding: {
+        provider: 'anthropic-api',
+        adapter_kind: 'anthropic-messages',
+        model: 'claude-fixture',
+        thinking: 'medium',
+        api_base_url: baseUrl,
+        api_key: 'sk-unused',
+        credential_secret_ref: 'narada/provider/anthropic-api/api-key',
+      },
+    });
+    const service = createCloudflareNarsAuthorityService({ max_events: 50, runtime_executor: executor, mcp_fabric: { scope: 'all' } });
+    service.createSession({ session_id: 'cf_provider_unsupported', site_id: 'narada.test', agent_id: 'cloudflare.resident' }, now);
+    const admitted = await service.submitInput({ session_id: 'cf_provider_unsupported', method: 'conversation.send', payload: { message: 'turn' }, now });
+    const providerError = admitted.events?.find((event) => event.payload.event === 'provider_error');
+    expect(providerError?.payload).toMatchObject({
+      error_code: 'provider_adapter_unsupported_on_cloudflare',
+      adapter_kind: 'anthropic-messages',
+    });
+    expect(admitted.events?.find((event) => event.payload.event === 'turn_complete')?.payload.terminal_state).toBe('failed');
+  });
+
   test('operator interrupt aborts an in-flight provider call with interrupted evidence', async () => {
-    behavior = { body: { content: 'too late', tool_calls: [] }, delay_ms: 500 };
+    behavior = { body: chatReply('too late'), delay_ms: 500 };
     const service = providerService();
     service.createSession({ session_id: 'cf_provider_interrupt', site_id: 'narada.test', agent_id: 'cloudflare.resident' }, now);
     const sendPromise = service.submitInput({ session_id: 'cf_provider_interrupt', method: 'conversation.send', payload: { message: 'slow turn' }, now });

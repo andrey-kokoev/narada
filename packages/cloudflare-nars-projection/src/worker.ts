@@ -12,7 +12,9 @@ import {
   type CloudflareNarsAuthorityEvent,
   type ProjectedEvent,
 } from './index.js';
-import { createCloudflareNarsProviderRuntimeExecutor } from './provider-executor.js';
+import { createCloudflareNarsProviderRuntimeExecutor, CLOUDFLARE_NARS_PROVIDER_SUPPORTED_ADAPTER_KIND } from './provider-executor.js';
+import providerRegistry from '@narada2/carrier-provider-contract/provider-registry';
+import { resolveProviderRuntimeBinding } from '@narada2/carrier-provider-contract/provider-runtime-binding-core';
 import {
   createCloudflareNarsWorkspaceDirectoryService,
   handleCloudflareNarsWorkspaceDirectoryRequest,
@@ -182,19 +184,34 @@ export interface CloudflareNarsProjectionWorkerOptions {
 }
 
 export function authorityExecutorFromEnv(env: CloudflareNarsProjectionWorkerEnv | undefined): CloudflareNarsAuthorityRuntimeExecutor | undefined {
-  const apiBaseUrl = env?.NARADA_AI_BASE_URL?.trim();
-  if (!apiBaseUrl) return undefined;
-  const configuredProvider = env?.NARADA_INTELLIGENCE_PROVIDER?.trim();
+  const provider = env?.NARADA_INTELLIGENCE_PROVIDER?.trim();
+  if (!provider) return undefined;
+  const metadata = (providerRegistry as { providers?: Record<string, Record<string, unknown>> }).providers ?? {};
+  let resolved;
+  try {
+    resolved = resolveProviderRuntimeBinding(provider, {
+      metadata,
+      env: env as Record<string, string | undefined>,
+    });
+  } catch (error) {
+    // Unresolvable binding (unknown provider, missing key/base/model) stays on
+    // the synthetic default adapter; the reason is logged, never secret-bearing.
+    console.warn(`cloudflare provider binding unresolved: ${error instanceof Error ? error.message : String(error)}`);
+    return undefined;
+  }
+  const adapterKind = typeof metadata[provider]?.adapter_kind === 'string' && String(metadata[provider].adapter_kind).trim()
+    ? String(metadata[provider].adapter_kind).trim()
+    : CLOUDFLARE_NARS_PROVIDER_SUPPORTED_ADAPTER_KIND;
   return createCloudflareNarsProviderRuntimeExecutor({
     binding: {
-      provider: configuredProvider || 'cloudflare-provider',
-      model: env?.NARADA_AI_MODEL?.trim() || null,
-      thinking: env?.NARADA_AI_THINKING?.trim() || null,
-      api_base_url: apiBaseUrl,
-      api_key_env: 'NARADA_AI_API_KEY',
-      credential_secret_ref: configuredProvider ? `narada/provider/${configuredProvider}/api-key` : null,
+      provider: resolved.provider_id,
+      adapter_kind: adapterKind,
+      model: resolved.model,
+      thinking: resolved.reasoning_effort,
+      api_base_url: resolved.base_url,
+      api_key: resolved.api_key,
+      credential_secret_ref: resolved.credential_secret_ref,
     },
-    env: { NARADA_AI_API_KEY: env?.NARADA_AI_API_KEY },
   });
 }
 
