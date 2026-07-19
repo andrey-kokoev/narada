@@ -236,11 +236,37 @@ Evidence Status:
 | Last verified command | `pnpm --filter @narada2/cloudflare-nars-projection smoke:cloudflare-origin-live -- --live --cloudflare-api-base-url https://narada-nars-projection.andrei-kokoev.workers.dev` |
 | Strongest evidence | `browser_level_authority_e2e` |
 | Evidence fields | `hosted_web_ui_evidence.levels[]`, `strongest_hosted_web_ui_evidence`, `evidence_path`, `evidence_latest_path`, `evidence_index_path` |
-| Known gaps | Cloudflare-origin authority remains synthetic/no-provider/no-tools; provider/tool-capable Cloudflare authority is a separate design decision. |
+| Known gaps | This lineage covers the synthetic runtime slice. The provider/tool-capable Cloudflare authority slice is decided and implemented (Tasks 2112–2115) with its own lineage; see Deployed Provider-Capable Authority Smoke below. |
 
-The next goal after resolution of #4 is to decide whether Cloudflare-origin authority remains a synthetic/no-provider runtime slice or grows into a real provider/tool-capable authority runtime. That is a separate authority-design decision, not part of the browser-level proof.
+The provider/tool-capable growth of Cloudflare-origin authority is decided (Task 2112) and implemented (Tasks 2113–2115); see Deployed Provider-Capable Authority Smoke below for its lineage, binding, and live-evidence status.
 
 If the smoke fails after creating a synthetic session, it performs a best-effort cleanup revoke before writing evidence. A successful run leaves the synthetic session revoked.
+
+### Deployed Provider-Capable Authority Smoke
+
+The provider-capable Cloudflare-origin authority runtime (`cloudflare_provider_http_adapter`, decided in Task 2112, implemented in Tasks 2113–2115) has its own live smoke lineage:
+
+```bash
+pnpm --filter @narada2/cloudflare-nars-projection smoke:provider-capable-live
+```
+
+Running without `--live` is a safe planning mode: no mutation, prints the required arguments.
+
+**Provider binding (canonical Narada provider vocabulary).** The Worker activates the provider adapter only when `NARADA_AI_BASE_URL` is bound. These are the same names used by local NARS and `packages/nars-provider-runtime`/`@narada2/carrier-provider-contract` — there is one provider vocabulary across local and Cloudflare embodiments:
+
+| Binding | Kind | Meaning |
+| --- | --- | --- |
+| `NARADA_AI_BASE_URL` | `[vars]` in `wrangler.toml` | Provider endpoint URL the adapter POSTs turn requests to. |
+| `NARADA_AI_API_KEY` | Worker secret (`wrangler secret put NARADA_AI_API_KEY`) | Bearer credential. Mirrors the pwsh SecretStore entry `narada/provider/<provider>/api-key`; the value never appears in events, health, or diagnostics. |
+| `NARADA_INTELLIGENCE_PROVIDER` | `[vars]`, optional | Provider id (e.g. `kimi-code-api`). Sets the recorded `credential_secret_ref` lineage metadata. |
+| `NARADA_AI_MODEL` | `[vars]`, optional | Model id sent on each provider request. |
+| `NARADA_AI_THINKING` | `[vars]`, optional | Reasoning-effort label sent on each provider request. |
+
+Without `NARADA_AI_BASE_URL` the Worker stays on the synthetic default adapter (`cloudflare_runtime_tool_adapter`); health at `/api/nars/authority/health` reports which executor is bound.
+
+A live run creates a provider-capable session, verifies `provider_execution` capability graduates `declared → present` only on executed turn evidence, checks replay for `provider_request`/`provider_response`/`assistant_message`/`turn_complete`, revokes, and verifies post-revoke refusals. Evidence follows the same append-only + latest + index contract under `.narada/crew/nars-projections/`.
+
+**Current status (2026-07-19):** deployed Worker is provider-capable (commit `fa7e2712`), but no provider endpoint is bound — the adapter contract (`POST {model, thinking, input, request_id, idempotency_key}` → `{content|output_text|message, tool_calls?}`) is Narada-specific, so a live run waits on a designated endpoint + key. Tracked as Task 2120; run the live smoke only with recorded operator authorization.
 
 ## Projection Instance
 

@@ -24,3 +24,20 @@ new_sqlite_classes = ["NarsWorkspaceDirectory"]
 directory = "public"
 binding = "ASSETS"
 not_found_handling = "single-page-application"
+
+# Provider-capable authority (cloudflare_provider_http_adapter) — optional.
+# The Worker activates the provider adapter only when NARADA_AI_BASE_URL is set;
+# without it the synthetic default adapter (cloudflare_runtime_tool_adapter) runs.
+# Uses the canonical Narada provider vocabulary (same names as local NARS and
+# @narada2/carrier-provider-contract). The API key is a Worker secret, never a var:
+#   wrangler secret put NARADA_AI_API_KEY
+# whose value mirrors the pwsh SecretStore entry:
+#   narada/provider/<provider>/api-key   (e.g. narada/provider/kimi-code-api/api-key)
+# See docs/concepts/cloudflare-nars-web-projection.md
+# "Deployed Provider-Capable Authority Smoke". Live evidence: Task 2120.
+#
+# [vars]
+# NARADA_AI_BASE_URL = "https://<provider-endpoint>"
+# NARADA_INTELLIGENCE_PROVIDER = "<provider-id>"
+# NARADA_AI_MODEL = "<model-id>"
+# NARADA_AI_THINKING = "<low|medium|high>"

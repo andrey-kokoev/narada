@@ -1,6 +1,6 @@
 # Provider-Capable Cloudflare NARS Authority
 
-Status: decided (Task 2112); implemented as decided (Task 2113 — in review). Live evidence: Task 2115.
+Status: decided (Task 2112); implemented as decided (Task 2113 — closed). Binding vocabulary aligned with the canonical Narada provider names (commit `fa7e2712`). Live evidence: Task 2120 (deferred pending a designated provider endpoint).
 
 This document is the binding authority-design decision for growing the Cloudflare-origin NARS slice from synthetic/no-provider into a provider/tool-capable authority runtime. It preserves the principled asymmetry and the authority invariants established by the canonical runtime surface contract (`narada.nars.runtime_surface_contract.v1`, `packages/nars-runtime-contract/src/runtime-surface-contract.mjs`) and by [`cloudflare-nars-web-projection.md`](cloudflare-nars-web-projection.md).
 
@@ -13,7 +13,8 @@ Provider execution on Cloudflare is an **in-Durable-Object HTTPS provider adapte
 - **Timeout and abort**: each provider call runs under an `AbortController` with a bounded timeout (default 120s, configurable per session). Operator `session.cancel`/`conversation.interrupt` aborts the in-flight call and appends `turn_interrupted` before `turn_complete`. Abort vocabulary reuses the local provider runtime's `interrupted`/`aborted` states (`packages/nars-provider-runtime/src/provider-call.mjs`).
 - **Idempotency and cost**: provider calls carry a request id derived from the admitted `input_id`. Failed or aborted turns complete with terminal evidence (`failed`/`interrupted`); the authority never auto-retries a provider call — the operator resubmits. No silent double-billing.
 - **Credentials**: provider keys live in Worker secrets/environment bindings, referenced by binding name only. Raw keys never appear in session events, projections, health, or diagnostics.
-- **Provider binding**: provider/model/thinking settings reuse the local provider-resolution vocabulary (`packages/nars-provider-runtime`), resolved per session at creation or by explicit reconfiguration, and reported in diagnostics as binding metadata (name/model/thinking), never secrets.
+- **Provider binding**: provider/model/thinking settings reuse the local provider-resolution vocabulary (`packages/nars-provider-runtime`, `@narada2/carrier-provider-contract`), resolved per session at creation or by explicit reconfiguration, and reported in diagnostics as binding metadata (name/model/thinking), never secrets.
+- **Binding names** (canonical Narada provider vocabulary, same as local NARS and the pwsh SecretStore setup): `NARADA_AI_BASE_URL` (var, activates the adapter), `NARADA_AI_API_KEY` (Worker secret, Bearer credential), optional `NARADA_INTELLIGENCE_PROVIDER` / `NARADA_AI_MODEL` / `NARADA_AI_THINKING` (vars). The Worker secret value mirrors the pwsh SecretStore entry `narada/provider/<provider>/api-key`; that ref is recorded as `credential_secret_ref` metadata in `provider_request` events for lineage, never the value. Operator setup: `docs/concepts/cloudflare-nars-web-projection.md` → Deployed Provider-Capable Authority Smoke; `wrangler.toml` carries a commented `[vars]` template.
 
 ## Decision 2 — Governed Tool-Execution Boundary
 
