@@ -19,6 +19,7 @@ import { renderOperatorWorkspacePage } from './operator-workspace-page.js';
 import { createAgentSessionReadModel, type AgentSessionReadModel } from './agent-session-read-model.js';
 import { createSiteAgentOverviewReadModel, type SiteAgentOverviewReadModel } from './site-agent-overview-read-model.js';
 import { createSiteAgentLaunchGateway, type SiteAgentLaunchGateway } from './site-agent-launch-gateway.js';
+import { createSiteAgentPendingTracker, type SiteAgentPendingTracker } from './site-agent-pending-tracker.js';
 import { ensureLaunchArtifact, naradaProperRoot } from '../lib/launch-artifact.js';
 import {
   DEFAULT_OPERATOR_ROUTER_PORT,
@@ -33,6 +34,7 @@ import {
   type OperatorSurfaceAdditionalRouteOverrides,
   type OperatorSurfaceAvailability,
   type OperatorSurfaceAvailabilityOverrides,
+  type OperatorWorkspaceRouteDirectory,
   type OperatorSurfaceId,
   type OperatorSurfaceRouteDescriptor,
   type OperatorSurfaceRouteAvailabilityOverrides,
@@ -183,6 +185,8 @@ export interface ConsoleServerConfig {
   agentSessions?: AgentSessionReadModel;
   siteAgentOverview?: SiteAgentOverviewReadModel;
   siteAgentLaunch?: SiteAgentLaunchGateway;
+  siteAgentPending?: SiteAgentPendingTracker;
+  workspaceRouteDirectory?: () => Promise<OperatorWorkspaceRouteDirectory>;
   operatorConsoleUiRoot?: string;
 }
 
@@ -278,6 +282,8 @@ export async function createConsoleServer(config: ConsoleServerConfig): Promise<
     agentSessions,
     siteAgentOverview,
     siteAgentLaunch: config.siteAgentLaunch ?? createSiteAgentLaunchGateway({ overview: siteAgentOverview }),
+    siteAgentPending: config.siteAgentPending ?? createSiteAgentPendingTracker(),
+    workspaceRouteDirectory: config.workspaceRouteDirectory ?? currentWorkspaceRouteDirectory,
     operatorConsoleUiRoot,
   };
 
@@ -309,6 +315,15 @@ export async function createConsoleServer(config: ConsoleServerConfig): Promise<
       routeAvailability: mergeWorkspaceRouteAvailability(routeAvailability, live.routeAvailability),
       surfaceAvailability: mergeWorkspaceSurfaceAvailability(surfaceAvailability, live.surfaceAvailability),
     };
+  }
+
+  async function currentWorkspaceRouteDirectory(): Promise<OperatorWorkspaceRouteDirectory> {
+    const workspaceProjection = await currentWorkspaceProjection();
+    return projectOperatorWorkspaceRouteDirectory({
+      availability: workspaceProjection.surfaceAvailability,
+      routeAvailability: workspaceProjection.routeAvailability,
+      additionalRoutes: workspaceProjection.additionalRoutes,
+    });
   }
 
   let server: Server | null = null;

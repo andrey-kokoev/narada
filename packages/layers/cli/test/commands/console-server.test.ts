@@ -1166,6 +1166,98 @@ describe('console server', () => {
       await server.stop();
     });
   });
+  describe('site-agent pending and session-route handoff', () => {
+    it('records pending launches, resolves session routes, and clears on ready', async () => {
+      let runtimeState: 'stopped' | 'running' | 'ambiguous' = 'stopped';
+      let selectedSession: string | null = null;
+      const siteAgentOverview = {
+        read: vi.fn(async () => ({
+          schema: 'narada.operator_console.site_agent_overview.v1' as const,
+          status: 'success' as const,
+          generated_at: '2026-07-19T00:00:00.000Z',
+          refusals: [],
+          groups: [{
+            id: 'sites' as const,
+            label: 'Sites',
+            sites: [{
+              site_id: 'sonar',
+              display_name: 'Sonar',
+              site_kind: 'site' as const,
+              group_id: 'sites' as const,
+              observation_status: 'present',
+              agents: [{
+                agent_id: 'sonar.resident',
+                local_agent_id: 'resident',
+                title: 'Resident',
+                role: 'resident',
+                admission_status: 'admitted' as const,
+                runtime: {
+                  state: runtimeState,
+                  session_count: selectedSession ? 1 : 0,
+                  healthy_session_ids: runtimeState === 'ambiguous' ? ['session-a', 'session-b'] : selectedSession ? [selectedSession] : [],
+                  selected_session_id: runtimeState === 'running' ? selectedSession : null,
+                },
+                work: { state: 'unavailable', detail: null, source: 'unavailable' as const },
+                actions: { start: runtimeState === 'stopped', inspect: runtimeState === 'running', inspect_reason: null },
+              }],
+            }],
+          }],
+        })),
+      };
+      const siteAgentLaunch = {
+        launch: vi.fn(async () => ({
+          schema: 'narada.operator_console.agent_launch.v1' as const,
+          status: 'launched' as const,
+          site_id: 'sonar',
+          agent_id: 'sonar.resident',
+          session_id: 'session-new',
+          reason: null,
+        })),
+      };
+      const workspaceRouteDirectory = async () => ({
+        schema: 'narada.operator_workspace.route_directory.v1',
+        workspaceHost: { kind: 'local', id: 'operator-console', origin: null },
+        surfaces: [{
+          id: 'agent-sessions',
+          projectedRoutes: [{
+            id: 'route-session-new',
+            path: '/sessions/session-new',
+            kind: 'page',
+            label: 'Session session-new',
+            availability: 'available',
+            target: { kind: 'session', id: 'session-new' },
+          }],
+        }],
+      } as never);
+      const server = await createConsoleServer({ port: 0, host: '127.0.0.1', siteAgentOverview, siteAgentLaunch, workspaceRouteDirectory });
+      const url = await server.start();
+
+      const launch = await httpPost(`${url}/console/agents/api/launch`, { site_id: 'sonar', agent_id: 'sonar.resident' });
+      expect(launch.status).toBe(200);
+      const pending = await httpGet(`${url}/console/agents/api/pending`);
+      expect((pending.body as { pending: Array<{ agent_id: string; session_id: string | null }> }).pending)
+        .toEqual([{ site_id: 'sonar', agent_id: 'sonar.resident', session_id: 'session-new', started_at: expect.any(String) }]);
+
+      const pendingRoute = await httpGet(`${url}/console/agents/api/session-route?site_id=sonar&agent_id=sonar.resident`);
+      expect(pendingRoute.status).toBe(200);
+      expect(pendingRoute.body).toMatchObject({ status: 'pending', sessions_path: '/console/sessions?site=sonar&agent=sonar.resident' });
+
+      runtimeState = 'running';
+      selectedSession = 'session-new';
+      const readyRoute = await httpGet(`${url}/console/agents/api/session-route?site_id=sonar&agent_id=sonar.resident`);
+      expect(readyRoute.body).toMatchObject({ status: 'ready', url: '/sessions/session-new', session_id: 'session-new' });
+      const pendingAfter = await httpGet(`${url}/console/agents/api/pending`);
+      expect((pendingAfter.body as { pending: unknown[] }).pending).toHaveLength(0);
+
+      runtimeState = 'ambiguous';
+      const ambiguousRoute = await httpGet(`${url}/console/agents/api/session-route?site_id=sonar&agent_id=sonar.resident`);
+      expect(ambiguousRoute.body).toMatchObject({ status: 'ambiguous', sessions_path: '/console/sessions?site=sonar&agent=sonar.resident' });
+
+      const missing = await httpGet(`${url}/console/agents/api/session-route?site_id=sonar&agent_id=sonar.nope`);
+      expect(missing.status).toBe(404);
+      await server.stop();
+    });
+  });
   describe('per-site launch route', () => {
     it('defaults to dry-run and forwards an explicit apply request', async () => {
       sitesLaunchCommandMock.mockImplementation(async (options: { siteId: string; dryRun: boolean }) => ({

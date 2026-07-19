@@ -3,12 +3,13 @@ import type {
   OperatorSiteAgentGroupWireRecord,
   OperatorSiteAgentLaunchWireResponse,
 } from '@narada2/operator-console-contract';
-import { createSiteAgentsAdapter, type SiteAgentsClient } from '../adapter';
+import { createSiteAgentsAdapter, type SiteAgentsClient, type SiteAgentsPendingEntry } from '../adapter';
 
 export interface UseSiteAgentsState {
   groups: Ref<OperatorSiteAgentGroupWireRecord[]>;
   refusals: Ref<string[]>;
   generatedAt: Ref<string | null>;
+  pending: Ref<SiteAgentsPendingEntry[]>;
   loading: Ref<boolean>;
   error: Ref<string | null>;
   load(): Promise<void>;
@@ -19,6 +20,7 @@ export function useSiteAgents(client: SiteAgentsClient = createSiteAgentsAdapter
   const groups = ref<OperatorSiteAgentGroupWireRecord[]>([]);
   const refusals = ref<string[]>([]);
   const generatedAt = ref<string | null>(null);
+  const pending = ref<SiteAgentsPendingEntry[]>([]);
   const loading = ref(false);
   const error = ref<string | null>(null);
   let refreshTimer: ReturnType<typeof setInterval> | null = null;
@@ -38,6 +40,11 @@ export function useSiteAgents(client: SiteAgentsClient = createSiteAgentsAdapter
     } finally {
       loading.value = false;
     }
+    try {
+      pending.value = await client.pending();
+    } catch {
+      // Pending launch state is best-effort; keep the last known value.
+    }
   }
 
   async function launch(siteId: string, agentId: string): Promise<OperatorSiteAgentLaunchWireResponse> {
@@ -52,5 +59,5 @@ export function useSiteAgents(client: SiteAgentsClient = createSiteAgentsAdapter
     if (refreshTimer) clearInterval(refreshTimer);
   });
 
-  return { groups, refusals, generatedAt, loading, error, load, launch };
+  return { groups, refusals, generatedAt, pending, loading, error, load, launch };
 }

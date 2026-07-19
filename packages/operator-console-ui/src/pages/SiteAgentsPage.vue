@@ -15,6 +15,7 @@ import { findOperatorRouteTarget } from '../console/routes';
 import { useOperatorWorkspaceRouteDirectory } from '../console/route-directory';
 import { useSiteAgents } from '../site-agents/composables/useSiteAgents';
 import { decideAgentInspection, decideAgentPrimaryAction } from '../site-agents/interactions';
+import { buildPendingProjectionDocument } from '../site-agents/projection-handoff';
 
 interface AgentMenuState {
   siteId: string;
@@ -62,20 +63,19 @@ function pendingProjectionWindow(agentId: string): Window | null {
   return target;
 }
 
-async function waitForSessionRoute(siteId: string, agentId: string, initialSessionId: string | null): Promise<string | null> {
-  for (let attempt = 0; attempt < 20; attempt += 1) {
-    await routeDirectory?.retry();
-    if (initialSessionId && sessionUrl(initialSessionId)) return initialSessionId;
-    await siteAgents.load();
-    const agent = siteAgents.groups.value
-      .flatMap((group) => group.sites)
-      .find((site) => site.site_id === siteId)
-      ?.agents.find((candidate) => candidate.agent_id === agentId);
-    const selected = agent?.runtime.selected_session_id ?? null;
-    if (selected && sessionUrl(selected)) return selected;
-    await new Promise((resolve) => setTimeout(resolve, 500));
-  }
-  return null;
+function drivePendingWindow(target: Window | null, siteId: string, agent: OperatorSiteAgentWireRecord, sessionId: string | null): void {
+  if (!target || target.closed) return;
+  target.document.open();
+  target.document.write(buildPendingProjectionDocument({ siteId, agentId: agent.agent_id, sessionId }));
+  target.document.close();
+}
+
+function isStarting(siteId: string, agent: OperatorSiteAgentWireRecord): boolean {
+  if (agent.runtime.state === 'running') return false;
+  if (busyAgentId.value === agent.agent_id) return true;
+  return siteAgents.pending.value.some((entry) =>
+    entry.site_id.toLowerCase() === siteId.toLowerCase()
+    && entry.agent_id.toLowerCase() === agent.agent_id.toLowerCase());
 }
 
 async function startAgent(siteId: string, agent: OperatorSiteAgentWireRecord): Promise<void> {
@@ -96,16 +96,12 @@ async function startAgent(siteId: string, agent: OperatorSiteAgentWireRecord): P
       actionMessage.value = result.reason ?? `Could not start ${agent.agent_id}.`;
       return;
     }
-    actionMessage.value = result.status === 'reused'
-      ? `Opening ${agent.agent_id}...`
-      : `${agent.agent_id} started. Waiting for its Web UI route...`;
-    const sessionId = await waitForSessionRoute(siteId, agent.agent_id, result.session_id);
-    if (sessionId && openSession(sessionId, target)) {
-      actionMessage.value = `${agent.agent_id} is open.`;
-    } else {
-      target?.close();
-      actionMessage.value = `${agent.agent_id} started, but its Web UI route is not available yet.`;
+    if (result.status === 'reused' && result.session_id && openSession(result.session_id, target)) {
+      actionMessage.value = `Opened ${agent.agent_id}.`;
+      return;
     }
+    drivePendingWindow(target, siteId, agent, result.session_id);
+    actionMessage.value = `${agent.agent_id} started. Its Web UI opens when the route is ready.`;
   } catch (cause) {
     target?.close();
     actionMessage.value = cause instanceof Error ? cause.message : `Could not start ${agent.agent_id}.`;
@@ -219,7 +215,7 @@ onUnmounted(() => document.removeEventListener('click', closeMenu));
                   </span>
                   <span class="agent-copy">
                     <strong>{{ agent.local_agent_id }}</strong>
-                    <span>{{ busyAgentId === agent.agent_id ? 'starting' : agent.work.state }}</span>
+                    <span>{{ isStarting(site.site_id, agent) ? 'starting' : agent.work.state }}</span>
                   </span>
                 </button>
                 <button

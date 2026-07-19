@@ -41,7 +41,9 @@ import {
   formatOperatorSiteAgentInvariantViolation,
   validateOperatorSiteAgentOverviewInvariants,
   type OperatorSiteAgentOverviewWireResponse,
+  type OperatorWorkspaceRouteDirectory,
 } from '@narada2/operator-console-contract';
+import type { SiteAgentPendingTracker } from './site-agent-pending-tracker.js';
 import {
   readOperatorConsoleUiAsset,
   readOperatorConsoleUiDocument,
@@ -83,6 +85,8 @@ export interface ConsoleServerRouteContext {
   agentSessions?: AgentSessionReadModel;
   siteAgentOverview?: SiteAgentOverviewReadModel;
   siteAgentLaunch?: SiteAgentLaunchGateway;
+  siteAgentPending?: SiteAgentPendingTracker;
+  workspaceRouteDirectory?: () => Promise<OperatorWorkspaceRouteDirectory>;
   operatorConsoleUiRoot?: string;
 }
 
@@ -128,6 +132,21 @@ function withInvariantDiagnostics(overview: OperatorSiteAgentOverviewWireRespons
   if (violations.length === 0) return overview;
   const diagnostics = violations.map(formatOperatorSiteAgentInvariantViolation);
   return { ...overview, refusals: [...overview.refusals, ...diagnostics] };
+}
+
+function sessionRoutePath(directory: OperatorWorkspaceRouteDirectory, sessionId: string): string | null {
+  for (const surface of directory.surfaces) {
+    const route = surface.projectedRoutes.find((candidate) =>
+      candidate.availability === 'available'
+      && candidate.target?.kind === 'session'
+      && candidate.target.id === sessionId);
+    if (route) return route.path;
+  }
+  return null;
+}
+
+export function scopedAgentSessionsPath(siteId: string, agentId: string): string {
+  return `/console/sessions?site=${encodeURIComponent(siteId)}&agent=${encodeURIComponent(agentId)}`;
 }
 
 async function requestJson(req: IncomingMessage): Promise<Record<string, unknown> | null> {
@@ -510,8 +529,96 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
           return;
         }
         const result = await ctx.siteAgentLaunch.launch({ siteId, agentId });
+        if (result.status === 'launched') {
+          ctx.siteAgentPending?.record({
+            site_id: siteId,
+            agent_id: agentId,
+            session_id: result.session_id,
+            started_at: new Date().toISOString(),
+          });
+        }
         const status = result.status === 'refused' ? 409 : result.status === 'failed' ? 500 : 200;
         jsonResponse(res, status, result);
+      },
+    },
+    {
+      method: 'GET',
+      pattern: suffixPathPattern(OPERATOR_CONSOLE_AGENTS_API_PATH, '/pending$'),
+      handler: async (req, res) => {
+        const origin = req.headers.origin;
+        if (!setCorsHeaders(res, origin)) {
+          jsonResponse(res, 403, { error: 'Origin not allowed' });
+          return;
+        }
+        jsonResponse(res, 200, {
+          schema: 'narada.operator_console.agent_pending.v1',
+          status: 'success',
+          generated_at: new Date().toISOString(),
+          pending: ctx.siteAgentPending?.list() ?? [],
+        });
+      },
+    },
+    {
+      method: 'GET',
+      pattern: suffixPathPattern(OPERATOR_CONSOLE_AGENTS_API_PATH, '/session-route$'),
+      handler: async (req, res, _params, searchParams) => {
+        const origin = req.headers.origin;
+        if (!setCorsHeaders(res, origin)) {
+          jsonResponse(res, 403, { error: 'Origin not allowed' });
+          return;
+        }
+        const siteId = searchParams.get('site_id')?.trim();
+        const agentId = searchParams.get('agent_id')?.trim();
+        const requestedSessionId = searchParams.get('session_id')?.trim() || null;
+        if (!siteId || !agentId) {
+          jsonResponse(res, 400, { error: 'site_id and agent_id are required' });
+          return;
+        }
+        const sessionRouteResponse = (
+          status: 'ready' | 'pending' | 'ambiguous' | 'refused',
+          sessionId: string | null,
+          url: string | null,
+          reason: string | null,
+        ) => ({
+          schema: 'narada.operator_console.agent_session_route.v1',
+          status,
+          site_id: siteId,
+          agent_id: agentId,
+          session_id: sessionId,
+          url,
+          sessions_path: scopedAgentSessionsPath(siteId, agentId),
+          reason,
+        });
+        if (!ctx.siteAgentOverview) {
+          jsonResponse(res, 503, sessionRouteResponse('refused', null, null, 'site_agent_overview_unavailable'));
+          return;
+        }
+        const overview = await ctx.siteAgentOverview.read();
+        const agent = overview.groups
+          .flatMap((group) => group.sites)
+          .find((site) => site.site_id === siteId)
+          ?.agents.find((candidate) => candidate.agent_id === agentId);
+        if (!agent) {
+          jsonResponse(res, 404, sessionRouteResponse('refused', null, null, 'agent_not_found'));
+          return;
+        }
+        if (agent.runtime.state === 'ambiguous') {
+          jsonResponse(res, 200, sessionRouteResponse('ambiguous', null, null, 'multiple_healthy_sessions'));
+          return;
+        }
+        const candidateSessionId = requestedSessionId ?? agent.runtime.selected_session_id;
+        if (!candidateSessionId) {
+          jsonResponse(res, 200, sessionRouteResponse('pending', null, null, null));
+          return;
+        }
+        const directory = ctx.workspaceRouteDirectory ? await ctx.workspaceRouteDirectory() : null;
+        const routePath = directory ? sessionRoutePath(directory, candidateSessionId) : null;
+        if (!routePath) {
+          jsonResponse(res, 200, sessionRouteResponse('pending', candidateSessionId, null, null));
+          return;
+        }
+        ctx.siteAgentPending?.remove(siteId, agentId);
+        jsonResponse(res, 200, sessionRouteResponse('ready', candidateSessionId, routePath, null));
       },
     },
     {

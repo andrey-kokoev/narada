@@ -5,6 +5,7 @@ export type SiteAgentsFetch = (input: string, init?: RequestInit) => Promise<Res
 export interface SiteAgentsTransport {
   overview(): Promise<unknown>;
   launch(siteId: string, agentId: string): Promise<unknown>;
+  pending(): Promise<unknown>;
 }
 
 export class SiteAgentsTransportError extends Error {
@@ -43,6 +44,12 @@ export function createSiteAgentsTransport(
       if (!response.ok && response.status !== 409) {
         throw new SiteAgentsTransportError(response.status, `Agent launch failed with HTTP ${response.status}.`);
       }
+      return payload;
+    },
+    async pending(): Promise<unknown> {
+      const response = await fetchLike(`${basePath}/pending`, { headers: { Accept: 'application/json' } });
+      const payload = await readJson(response);
+      if (!response.ok) throw new SiteAgentsTransportError(response.status, `Sites and Agents pending failed with HTTP ${response.status}.`);
       return payload;
     },
   };

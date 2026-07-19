@@ -30,7 +30,7 @@
     "build": "vite build --config vite.config.mjs",
     "postbuild": "node ../layers/cli/scripts/write-launch-artifact.mjs --target operator-console --package-root . --site-root ../..",
     "typecheck": "vue-tsc --noEmit -p tsconfig.json",
-    "test": "pnpm run typecheck && node --import tsx --test test/projections.test.ts test/site-registry-domain.test.ts test/site-registry-adapter.test.ts test/agent-sessions-adapter.test.ts test/site-agents-adapter.test.ts test/site-agents-interactions.test.ts test/routes.test.ts test/route-directory.test.ts test/site-registry-workflow.test.ts test/architecture-boundary.test.ts"
+    "test": "pnpm run typecheck && node --import tsx --test test/projections.test.ts test/site-registry-domain.test.ts test/site-registry-adapter.test.ts test/agent-sessions-adapter.test.ts test/site-agents-adapter.test.ts test/site-agents-interactions.test.ts test/projection-handoff.test.ts test/routes.test.ts test/route-directory.test.ts test/site-registry-workflow.test.ts test/architecture-boundary.test.ts"
   },
   "dependencies": {
     "@narada2/operator-console-contract": "workspace:*",
