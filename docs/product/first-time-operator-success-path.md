@@ -259,7 +259,7 @@ After the Operator sends the first request, the bounded readiness readback is:
 narada onboarding status --scope user-site
 ```
 
-The status command correlates the resident launch session binding with the Site-local NARS session index, probes `/health`, and reads a bounded tail of the session `events.jsonl` projection. It reports healthy session, identity hydration evidence from a successful startup tool result, input readiness, an operator-sourced admitted input, and a useful or explicit no-work response. It writes only non-secret readiness evidence to `.narada/runtime/onboarding/user-site-onboarding.json`; it never copies provider output or credentials into that artifact. A legacy state without an exact launch/session binding remains pending until the operator supplies `--session`.
+The status command correlates the resident launch session binding with the Site-local NARS session index, probes `/health`, and reads a bounded tail of the session `events.jsonl` projection. It reports healthy session, identity hydration evidence (a successful startup tool result on tool-driven carriers, or the session start plus ready lifecycle transition on the narada-agent-runtime-server carrier), input readiness, an operator-sourced admitted input (`input_admitted_to_turn` or the runtime's `input_event_started`), and a useful or explicit no-work response. It writes only non-secret readiness evidence to `.narada/runtime/onboarding/user-site-onboarding.json`; it never copies provider output or credentials into that artifact. A legacy state without an exact launch/session binding remains pending until the operator supplies `--session`.
 
 ### Contextual Role Expansion
 

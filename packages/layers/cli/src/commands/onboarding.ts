@@ -1273,7 +1273,7 @@ function buildFirstUseVerification(
       .map((event) => [String(eventValue(event, 'event_id')), event] as const),
   );
   const admitted = events
-    .filter((event) => kinds(event) === 'input_admitted_to_turn')
+    .filter((event) => kinds(event) === 'input_admitted_to_turn' || kinds(event) === 'input_event_started')
     .find((event) => {
       const inputId = eventInputId(event);
       const queued = inputId ? queuedInputs.get(inputId) : null;
@@ -1305,7 +1305,12 @@ function buildFirstUseVerification(
     return (kind === 'tool_result' || kind === 'carrier_tool_completed' || kind === 'item.completed')
       && eventToolName(event).includes('agent_context_startup_sequence')
       && eventSucceeded(event);
-  });
+  }) || (
+    // narada-agent-runtime-server does not run an MCP startup tool; its hydration
+    // proof is the session start followed by a ready lifecycle transition.
+    events.some((event) => kinds(event) === 'session_started')
+    && events.some((event) => kinds(event) === 'session_lifecycle_transition' && eventValue(event, 'lifecycle_state') === 'ready')
+  );
   const assistantMessages = relevant
     .filter(isAssistantMessageEvent)
     .map(eventText)

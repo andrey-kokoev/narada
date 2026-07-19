@@ -472,6 +472,69 @@ describe('User Site onboarding', () => {
     });
     expect(await readFile(registry, 'utf8')).toBe(registryBefore);
   });
+
+  it('verifies first use from the narada-agent-runtime-server event vocabulary', async () => {
+    const { root, registry } = await tempUserSite();
+    workspaceLaunchMock.mockResolvedValueOnce({
+      exitCode: ExitCode.SUCCESS,
+      result: {
+        status: 'launched',
+        launch_agents: [{ agent: 'user.resident', launch_session_id: 'launch-runtime-carrier-test' }],
+      },
+    });
+    const started = await onboardingStartCommand({ siteRoot: root, registryPath: registry, format: 'json' }, createMockContext());
+    const startedValue = started.result as { state_path: string };
+    const sessionDir = join(root, '.narada', 'crew', 'nars-sessions', 'session-runtime-carrier-test');
+    await mkdir(sessionDir, { recursive: true });
+    await writeFile(join(sessionDir, 'events.jsonl'), [
+      { event_sequence: 1, sequence: 1, event: 'session_started', runtime: 'narada-agent-runtime-server', agent_id: 'user.resident' },
+      { event_sequence: 2, sequence: 2, event: 'session_lifecycle_transition', lifecycle_state: 'ready', agent_id: 'user.resident' },
+      { event_sequence: 3, sequence: 3, event: 'input_event_queued', event_id: 'input-runtime-test', source: 'manual_operator', source_kind: 'operator' },
+      { event_sequence: 4, sequence: 4, event: 'input_event_started', event_id: 'input-runtime-test' },
+      { event_sequence: 5, sequence: 5, event: 'turn_started', turn_id: 'turn-runtime-test', input_event_id: 'input-runtime-test' },
+      { event_sequence: 6, sequence: 6, event: 'assistant_message', content: 'Online and ready to work.' },
+      { event_sequence: 7, sequence: 7, event: 'turn_complete', turn_id: 'turn-runtime-test', terminal_state: 'completed' },
+      { event_sequence: 8, sequence: 8, event: 'input_event_completed', event_id: 'input-runtime-test', terminal_state: 'completed' },
+    ].map((event) => JSON.stringify(event)).join('\n') + '\n', 'utf8');
+    narsSessionsMock.mockResolvedValue({
+      exitCode: ExitCode.SUCCESS,
+      result: {
+        sessions: [{
+          session_id: 'session-runtime-carrier-test',
+          session_dir: sessionDir,
+          agent_id: 'user.resident',
+          launch_session_id: 'launch-runtime-carrier-test',
+          started_at: new Date().toISOString(),
+          display_state: 'active',
+          health_status: 'healthy',
+          agent_identity_ref: { schema: 'narada.agent_identity_ref.v2' },
+        }],
+      },
+    });
+
+    const result = await onboardingStatusCommand({ siteRoot: root, format: 'json' }, createMockContext());
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      schema: 'narada.onboarding.status.v1',
+      status: 'first_use_verified',
+      readiness: { status: 'first_use_verified', first_useful_interaction: 'verified' },
+      verification: {
+        status: 'verified',
+        response_kind: 'useful',
+        checks: {
+          healthy_session: true,
+          identity_hydrated: true,
+          input_ready: true,
+          admitted_message: true,
+          useful_or_no_work_response: true,
+        },
+      },
+    });
+    expect(JSON.parse(await readFile(startedValue.state_path, 'utf8'))).toMatchObject({
+      readiness: { status: 'first_use_verified', first_useful_interaction: 'verified' },
+      verification: { status: 'verified' },
+    });
+  });
 });
 
 describe('launch registry agent append', () => {
