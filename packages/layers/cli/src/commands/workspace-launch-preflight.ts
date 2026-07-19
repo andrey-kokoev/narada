@@ -74,9 +74,25 @@ export function assertWorkspaceLaunchAgentPreflight(plan: WorkspaceLaunchAgentPl
   const hiddenWebUiProjection = plan.launch_operator_surfaces.includes('agent-web-ui')
     && plan.runtime_start_execution_mode === 'hidden_detached'
     && Array.isArray(plan.operator_projection_start_command);
+  const visibleAgentTuiProjection = plan.launch_operator_surfaces.includes('agent-tui')
+    && plan.runtime_start_execution_mode === 'hidden_detached'
+    && plan.terminal_tabs.some((tab) => tab.command_argv.includes('--launch-binding'));
+  const visibleWebUiProjection = plan.launch_operator_surfaces.includes('agent-web-ui')
+    && plan.runtime_start_execution_mode === 'hidden_detached'
+    && plan.terminal_tabs.some((tab) => tab.command_argv.includes('--launch-binding'));
+  if (plan.launch_operator_surfaces.includes('agent-tui')
+    && plan.runtime_start_execution_mode !== 'operator_terminal'
+    && !visibleAgentTuiProjection) {
+    throw new WorkspaceLaunchContractError(
+      'workspace_launch_runtime_start_mode_inconsistent',
+      `agent-tui requires an exact visible projection terminal when the NARS host is detached for ${plan.agent}.`,
+      'Regenerate the launch plan with an agent-tui attach terminal.',
+    );
+  }
   if (plan.launch_operator_surfaces.includes('agent-web-ui')
     && plan.runtime_start_execution_mode !== 'operator_terminal'
-    && !hiddenWebUiProjection) {
+    && !hiddenWebUiProjection
+    && !visibleWebUiProjection) {
     throw new WorkspaceLaunchContractError(
       'workspace_launch_runtime_start_mode_inconsistent',
       `agent-web-ui requires either a durable hidden projection command or an explicit operator-terminal handoff for ${plan.agent}.`,
@@ -93,7 +109,9 @@ export function assertWorkspaceLaunchAgentPreflight(plan: WorkspaceLaunchAgentPl
   assertStructuredWorkspaceLaunchArgv(plan.runtime_start_command, 'runtime_start_command');
   assertStructuredWorkspaceLaunchArgv(plan.hidden_runtime_start_command, 'hidden_runtime_start_command');
   if (!Array.isArray(plan.wt_args) || !Array.isArray(plan.terminal_tabs)
-    || (plan.terminal_tabs.length === 0 && !hiddenWebUiProjection)) {
+    || (plan.terminal_tabs.length === 0
+      && plan.runtime_start_execution_mode !== 'hidden_detached'
+      && !hiddenWebUiProjection)) {
     throw new Error(`workspace_launch_runtime_command_missing: ${plan.agent}`);
   }
   for (const [index, tab] of plan.terminal_tabs.entries()) {
@@ -134,6 +152,25 @@ export function assertWorkspaceLaunchAgentPreflight(plan: WorkspaceLaunchAgentPl
     ].join('\n');
     if (!projectionEvidence.includes(binding.path)) {
       throw new Error(`workspace_launch_web_ui_binding_not_handed_off: ${plan.agent}`);
+    }
+  }
+  if (plan.launch_operator_surfaces.includes('agent-tui')) {
+    const binding = plan.operator_projection_launch_binding;
+    if (!binding
+      || binding.schema !== 'narada.operator_projection_launch_binding_ref.v1'
+      || typeof binding.path !== 'string'
+      || !binding.path
+      || binding.exact_attach_required !== true
+      || !binding.lease
+      || binding.lease.schema !== 'narada.operator_projection_attachment_lease.v1'
+      || binding.lease.binding_path !== binding.path
+      || binding.lease.exact_session !== true
+      || binding.lease.exact_endpoint !== true) {
+      throw new Error(`workspace_launch_agent_tui_binding_invalid: ${plan.agent}`);
+    }
+    const projectionEvidence = plan.wt_args.join('\n');
+    if (!projectionEvidence.includes(binding.path)) {
+      throw new Error(`workspace_launch_agent_tui_binding_not_handed_off: ${plan.agent}`);
     }
   }
 }

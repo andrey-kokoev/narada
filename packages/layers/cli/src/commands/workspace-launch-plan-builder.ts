@@ -39,6 +39,33 @@ function normalizeMcpScope(value: string | undefined): string {
   return normalizeExplicitWorkspaceLaunchMcpScope(value, 'the Site/agent launch record or explicit launcher option');
 }
 
+function agentTuiAttachTerminalTab(record: WorkspaceLaunchRecord, naradaProper: string, launchBindingPath: string | null): WorkspaceLaunchTerminalTab {
+  const agentDisplay = workspaceLaunchQualifiedAgentId(record);
+  if (!launchBindingPath) throw new Error(`workspace_launch_agent_tui_launch_binding_required: ${agentDisplay}`);
+  const tuiRoot = resolve(process.env.NARADA_AGENT_TUI_ROOT ?? join(naradaProper, '..', 'agent-tui'));
+  const attachCommand = [
+    'cargo',
+    'run',
+    '--manifest-path',
+    join(tuiRoot, 'Cargo.toml'),
+    '--bin',
+    'narada-agent-tui',
+    '--',
+    '--launch-binding',
+    launchBindingPath,
+    '--identity',
+    agentDisplay,
+  ];
+  return {
+    title: `${agentDisplay} agent-tui`,
+    cwd: tuiRoot,
+    keepOpen: true,
+    command: `${workspaceLaunchPowerShellHostMessage(`agent-tui: waiting for ${agentDisplay} NARS event endpoint`)}\n${workspaceLaunchPowerShellCommand(attachCommand)}`,
+    command_argv: attachCommand,
+    command_authority: 'projection_only',
+  };
+}
+
 function normalizeRuntimeAuthority(value: string | undefined | null): string {
   return normalizeWorkspaceLaunchAuthority(value);
 }
@@ -62,8 +89,12 @@ export function buildAgentPlan(record: WorkspaceLaunchRecord, options: Workspace
   const mcpScope = normalizeMcpScope(options.mcpScope ?? record.mcp_scope ?? undefined);
   const authority = normalizeRuntimeAuthority(options.authority ?? record.authority ?? undefined);
   const isNarsRuntimeHost = runtimeHostKind === NARADA_AGENT_RUNTIME_SERVER_KIND;
-  const hasProjectionBearingOperatorSurface = launchOperatorSurfaces.includes('agent-web-ui');
-  const webUiOnly = hasProjectionBearingOperatorSurface && !launchOperatorSurfaces.includes('agent-cli');
+  const hasAgentTuiOperatorSurface = launchOperatorSurfaces.includes('agent-tui');
+  const hasAgentWebUiOperatorSurface = launchOperatorSurfaces.includes('agent-web-ui');
+  const hasProjectionBearingOperatorSurface = hasAgentTuiOperatorSurface || hasAgentWebUiOperatorSurface;
+  const webUiOnly = hasAgentWebUiOperatorSurface
+    && !launchOperatorSurfaces.includes('agent-cli')
+    && !hasAgentTuiOperatorSurface;
   const waitForEnter = options.noWaitForEnterBeforeExec !== true && launchOperatorSurfaces[0] !== 'agent-web-ui' && !isNarsRuntimeHost;
   const intelligenceProviderSelection = isNarsRuntimeHost
     ? resolveWorkspaceLaunchSelection(
@@ -94,7 +125,7 @@ export function buildAgentPlan(record: WorkspaceLaunchRecord, options: Workspace
   const naradaProper = resolve(process.env.NARADA_PROPER_ROOT ?? 'D:/code/narada');
   const launchSessionToken = workspaceLaunchSessionToken(record);
   const launchSessionId = launchSessionIdFromToken(launchSessionToken);
-  const launchBindingPath = launchOperatorSurfaces.includes('agent-web-ui')
+  const launchBindingPath = hasProjectionBearingOperatorSurface
     ? operatorProjectionLaunchBindingPath(record, launchSessionToken)
     : null;
   const runtimeWorkspaceRoot = isNarsRuntimeHost
@@ -150,26 +181,31 @@ export function buildAgentPlan(record: WorkspaceLaunchRecord, options: Workspace
   };
   const runtimeStartExecutionMode: WorkspaceLaunchAgentPlan['runtime_start_execution_mode'] = isNarsRuntimeHost
     && options.visibleRuntimeTerminal !== true
-    && (!hasProjectionBearingOperatorSurface || webUiOnly)
     ? 'hidden_detached'
     : 'operator_terminal';
 
-  const terminalTabs: WorkspaceLaunchTerminalTab[] = webUiOnly ? [] : [{
-    title: `${qualifiedAgentId} runtime`,
-    cwd: runtimeStartCwd,
-    keepOpen: waitForEnter,
-    command: workspaceLaunchRuntimeHandoffCommand(operatorSurfaceStartCommand, qualifiedAgentId, waitForEnter),
-    command_argv: operatorSurfaceStartCommand,
-    command_authority: 'projection_only',
-  }];
+  const terminalTabs: WorkspaceLaunchTerminalTab[] = runtimeStartExecutionMode === 'operator_terminal' ? [{
+      title: `${qualifiedAgentId} runtime`,
+      cwd: runtimeStartCwd,
+      keepOpen: waitForEnter,
+      command: workspaceLaunchRuntimeHandoffCommand(operatorSurfaceStartCommand, qualifiedAgentId, waitForEnter),
+      command_argv: operatorSurfaceStartCommand,
+      command_authority: 'projection_only',
+    }] : [];
+  if (hasAgentTuiOperatorSurface) {
+    terminalTabs.push(agentTuiAttachTerminalTab(record, naradaProper, launchBindingPath));
+  }
   if (!webUiOnly && launchOperatorSurface === 'agent-web-ui') {
     terminalTabs.push(agentWebUiAttachTerminalTab(record, naradaProper, cloudflareApiBaseUrl, launchBindingPath, onboarding));
   }
   for (const extraOperatorSurface of launchOperatorSurfaces.filter((surface) => surface !== launchOperatorSurface)) {
-    if (extraOperatorSurface !== 'agent-web-ui') {
+    if (extraOperatorSurface === 'agent-web-ui') {
+      terminalTabs.push(agentWebUiAttachTerminalTab(record, naradaProper, cloudflareApiBaseUrl, launchBindingPath, onboarding));
+    } else if (extraOperatorSurface === 'agent-tui' && !hasAgentTuiOperatorSurface) {
+      terminalTabs.push(agentTuiAttachTerminalTab(record, naradaProper, launchBindingPath));
+    } else if (extraOperatorSurface !== 'agent-tui') {
       throw new Error(`unsupported_multi_operator_surface_projection: ${extraOperatorSurface}`);
     }
-    terminalTabs.push(agentWebUiAttachTerminalTab(record, naradaProper, cloudflareApiBaseUrl, launchBindingPath, onboarding));
   }
   const wtArgs = workspaceLaunchTerminalArgs(terminalTabs);
   const operatorProjectionStartCommand = webUiOnly
