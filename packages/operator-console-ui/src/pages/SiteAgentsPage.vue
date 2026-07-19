@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref, type Component } from 'vue';
+import { nextTick, onMounted, onUnmounted, ref, type Component } from 'vue';
 import type { OperatorSiteAgentWireRecord } from '@narada2/operator-console-contract';
 import {
   Bot,
@@ -16,12 +16,14 @@ import { useOperatorWorkspaceRouteDirectory } from '../console/route-directory';
 import { useSiteAgents } from '../site-agents/composables/useSiteAgents';
 import { decideAgentInspection, decideAgentPrimaryAction } from '../site-agents/interactions';
 import { buildPendingProjectionDocument, scopedAgentSessionsPath } from '../site-agents/projection-handoff';
+import { isAgentMenuKeyboardOpen, isAgentMenuNavigationKey, nextAgentMenuItemIndex } from '../site-agents/menu';
 
 interface AgentMenuState {
   siteId: string;
   agent: OperatorSiteAgentWireRecord;
   x: number;
   y: number;
+  invoker: HTMLElement | null;
 }
 
 const siteAgents = useSiteAgents();
@@ -135,23 +137,56 @@ function openMenu(event: MouseEvent, siteId: string, agent: OperatorSiteAgentWir
     agent,
     x: Math.max(8, Math.min(event.clientX, window.innerWidth - 222)),
     y: Math.max(8, Math.min(event.clientY, window.innerHeight - 160)),
+    invoker: event.currentTarget instanceof HTMLElement ? event.currentTarget : null,
   };
+  void focusFirstMenuItem();
 }
 
 function openKeyboardMenu(event: KeyboardEvent, siteId: string, agent: OperatorSiteAgentWireRecord): void {
-  if (event.key !== 'ContextMenu' && !(event.shiftKey && event.key === 'F10')) return;
+  if (!isAgentMenuKeyboardOpen(event)) return;
   event.preventDefault();
   const element = event.currentTarget as HTMLElement;
   const bounds = element.getBoundingClientRect();
-  menu.value = { siteId, agent, x: bounds.left + 16, y: bounds.top + 32 };
+  menu.value = { siteId, agent, x: bounds.left + 16, y: bounds.top + 32, invoker: element };
+  void focusFirstMenuItem();
 }
 
-function closeMenu(): void {
+async function focusFirstMenuItem(): Promise<void> {
+  await nextTick();
+  document.querySelector<HTMLElement>('.agent-menu [role="menuitem"]:not([disabled])')?.focus();
+}
+
+function enabledMenuItems(): HTMLElement[] {
+  return Array.from(document.querySelectorAll<HTMLElement>('.agent-menu [role="menuitem"]:not([disabled])'));
+}
+
+function onMenuKeydown(event: KeyboardEvent): void {
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    event.stopPropagation();
+    closeMenu(true);
+    return;
+  }
+  if (!isAgentMenuNavigationKey(event.key)) return;
+  event.preventDefault();
+  const items = enabledMenuItems();
+  const next = nextAgentMenuItemIndex(items.length, items.indexOf(document.activeElement as HTMLElement), event.key);
+  if (next >= 0) items[next]?.focus();
+}
+
+function isMenuFor(siteId: string, agent: OperatorSiteAgentWireRecord): boolean {
+  return menu.value?.siteId === siteId && menu.value?.agent.agent_id === agent.agent_id;
+}
+
+function closeMenu(restoreFocus = false): void {
+  const invoker = menu.value?.invoker ?? null;
   menu.value = null;
+  if (restoreFocus) invoker?.focus();
 }
 
-onMounted(() => document.addEventListener('click', closeMenu));
-onUnmounted(() => document.removeEventListener('click', closeMenu));
+const closeMenuOnOutsideClick = () => closeMenu();
+onMounted(() => document.addEventListener('click', closeMenuOnOutsideClick));
+onUnmounted(() => document.removeEventListener('click', closeMenuOnOutsideClick));
 </script>
 
 <template>
@@ -199,14 +234,16 @@ onUnmounted(() => document.removeEventListener('click', closeMenu));
                 class="agent-cell"
                 :data-runtime="agent.runtime.state"
                 :data-work="agent.work.state"
+                @contextmenu="openMenu($event, site.site_id, agent)"
               >
                 <button
                   type="button"
                   class="agent-button"
                   :disabled="busyAgentId !== null"
                   :aria-label="`${agent.agent_id}: ${agent.runtime.state}, work ${agent.work.state}`"
+                  aria-haspopup="menu"
+                  :aria-expanded="isMenuFor(site.site_id, agent)"
                   @click="startAgent(site.site_id, agent)"
-                  @contextmenu="openMenu($event, site.site_id, agent)"
                   @keydown="openKeyboardMenu($event, site.site_id, agent)"
                 >
                   <span class="agent-icon" aria-hidden="true">
@@ -223,6 +260,8 @@ onUnmounted(() => document.removeEventListener('click', closeMenu));
                   class="agent-menu-button"
                   :aria-label="`Inspect ${agent.agent_id}`"
                   title="Agent actions"
+                  aria-haspopup="menu"
+                  :aria-expanded="isMenuFor(site.site_id, agent)"
                   @click="openMenu($event, site.site_id, agent)"
                 >
                   <MoreVertical :size="15" aria-hidden="true" />
@@ -238,10 +277,13 @@ onUnmounted(() => document.removeEventListener('click', closeMenu));
       v-if="menu"
       class="agent-menu"
       role="menu"
+      tabindex="-1"
+      :aria-label="`${menu.agent.agent_id} actions`"
       :style="{ left: `${menu.x}px`, top: `${menu.y}px` }"
       @click.stop
+      @keydown="onMenuKeydown"
     >
-      <div class="menu-heading">{{ menu.agent.agent_id }}</div>
+      <div class="menu-heading" aria-hidden="true">{{ menu.agent.agent_id }}</div>
       <button type="button" role="menuitem" :disabled="!menu.agent.actions.inspect && menu.agent.runtime.state !== 'ambiguous'" @click="inspectAgent(menu.siteId, menu.agent)">
         Open Web UI
       </button>
