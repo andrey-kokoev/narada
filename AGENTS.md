@@ -182,6 +182,19 @@ narada/
 └── .github/workflows/                 # CI/CD pipelines
 ```
 
+### `.ai/` tracking boundary (deliberate)
+
+Under `.ai/`, **durable coordination artifacts are tracked in git; machine
+state is ignored**. Tracked: `do-not-open/tasks/` (task files are working
+documents — agents edit them and lifecycle gates read them), `decisions/`,
+`chapters/`, `handoffs/`, `observations/`, `mutation-evidence/`,
+`task-contracts/`, `inbox-envelopes/`, `learning/`, `law/`, `continuations/`.
+Ignored (`.gitignore`): `task-lifecycle.db*`, `inbox.db*`, `state/`, `tmp/`,
+`runtime/`, `metrics/`, `mcp/`, `publications/`, `agents/roster.json`,
+`operator-surface-send-queue/`. When a new `.ai/` artifact class appears,
+decide which side it belongs to; if it is machine state, add it to
+`.gitignore` in the same change that introduces it.
+
 ---
 
 ## Build, Typecheck, and Verification
@@ -470,6 +483,7 @@ This is a summary. The full contract is in [`.ai/task-contracts/agent-task-execu
 - **Artifact discipline**: Update the original task file; do not create derivative status files (`-EXECUTED.md`, `-DONE.md`, `-RESULT.md`, `-FINAL.md`, `-SUPERSEDED.md`).
 - **Task numbers**: Never allocate by filename sorting. Use `scripts/task-reserve.ts` or scan `# Task NNN` headings in `.ai/do-not-open/tasks/*.md`.
 - **Target locus before mutation**: Identify the target Site/locus/path before mutating task, inbox, roster, lifecycle, or publication state. `/home/andrey/src/narada` defaults to read-only doctrine inspection unless Narada proper is explicitly named as the mutation target.
+- **Task-store routing**: Every site has its own task-lifecycle store and MCP binding; there is no cross-store list view. Tasks about a site's internals go in that site's store; cross-site or meta work (sweeps, registry hygiene, release decisions) goes in the andrey-user store. When looking for existing work, check the store of the site it concerns.
 - **Completion**: Submit a WorkResultReport with `narada task report` or `narada task finish`. Chat "done" is not lifecycle authority.
 - **Closure invariants**: A task may close only when all acceptance criteria are checked, execution notes exist, verification notes exist, and no derivative status files exist.
 - **Authority boundaries**: Do not bypass `ForemanFacade`, `Scheduler`, `IntentHandoff`, `OutboundHandoff`, outbound workers, or observation/control separation.
