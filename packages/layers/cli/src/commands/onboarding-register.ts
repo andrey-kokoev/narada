@@ -17,7 +17,7 @@ export function registerOnboardingCommands(program: Command): void {
     .option('--registry-path <path>', 'User Site launch registry path')
     .option('--interactive', 'Ask for confirmation before starting the resident', false)
     .option('--demo', 'Show the no-credential demo path without starting a resident', false)
-    .option('--no-exec', 'Plan the resident launch without starting it', false)
+    .option('--no-exec', 'Plan the resident launch without starting it')
     .option('--format <fmt>', 'Output format: json|human|auto', 'human')
     .action(directCommandAction<[CommanderOptionValues]>({
       command: 'onboarding start',
