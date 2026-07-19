@@ -29,11 +29,13 @@
     "deploy:live": "pnpm run build:assets && wrangler deploy --config wrangler.toml",
     "smoke:local-origin-live": "node scripts/cloudflare-nars-web-projection-live-smoke.mjs",
     "smoke:cloudflare-origin-live": "node scripts/cloudflare-nars-authority-live-smoke.mjs",
+    "smoke:provider-capable-live": "node scripts/cloudflare-nars-provider-live-smoke.mjs",
     "smoke:live": "pnpm run smoke:local-origin-live",
     "smoke:authority-live": "pnpm run smoke:cloudflare-origin-live"
   },
   "dependencies": {
     "@narada2/nars-session-core": "workspace:*",
+    "@narada2/carrier-protocol": "workspace:*",
     "@narada2/nars-runtime-contract": "workspace:*",
     "@narada2/operator-console-contract": "workspace:*",
     "@narada2/process-launch-posture": "workspace:*",

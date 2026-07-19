@@ -446,6 +446,9 @@ importers:
 
   packages/cloudflare-nars-projection:
     dependencies:
+      '@narada2/carrier-protocol':
+        specifier: workspace:*
+        version: link:../carrier-protocol
       '@narada2/nars-client-projection-contract':
         specifier: workspace:*
         version: link:../nars-client-projection-contract

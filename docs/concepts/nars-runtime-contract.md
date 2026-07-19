@@ -36,8 +36,13 @@ metadata. The Cloudflare projection and Worker/DO authority health routes
 emit the same contract. A Cloudflare-origin synthetic slice explicitly marks
 local provider execution, local tools/MCP, local filesystem, and local
 artifact authority as absent; an explicitly configured Cloudflare-native MCP
-fabric is reported only as a fabric summary. Projection acknowledgment never
-confirms canonical mutation or provider completion.
+fabric is reported only as a fabric summary. Capability dimensions graduate
+`absent → declared → present` only with configuration or executed evidence:
+`provider_execution` may graduate on the Cloudflare slice (declared from a
+provider binding, present after a completed provider turn, per
+[`cloudflare-nars-provider-capable-authority.md`](cloudflare-nars-provider-capable-authority.md));
+the local machine-authority dimensions never graduate there. Projection
+acknowledgment never confirms canonical mutation or provider completion.
 
 ## Package Authority
 

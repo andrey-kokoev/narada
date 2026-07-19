@@ -563,7 +563,7 @@ describe('worker boundary service', () => {
     }).code).toBe('projection_revoked');
   });
 
-  test('Cloudflare authority runtime executes tool adapter success and failure paths from admitted input', () => {
+  test('Cloudflare authority runtime executes tool adapter success and failure paths from admitted input', async () => {
     const service = createCloudflareNarsAuthorityService({ max_events: 50 });
     const created = service.createSession({
       session_id: 'cf_authority_runtime_service_e2e',
@@ -573,7 +573,7 @@ describe('worker boundary service', () => {
     }, now);
     expect(created.session.execution_mode).toBe('cloudflare_runtime_tool_adapter');
 
-    const admitted = service.submitInput({
+    const admitted = await service.submitInput({
       session_id: created.session_id,
       method: 'conversation.send',
       payload: { message: 'exercise Cloudflare tool adapter' },
@@ -659,7 +659,7 @@ describe('worker boundary service', () => {
     expect(registry.register({ server_name: 'test-server', list_tools: () => [], call_tool: () => ({ status: 'ok' }) })).toMatchObject({ status: 'refused', code: 'cloudflare_mcp_duplicate_server_conflict' });
   });
 
-  test('Cloudflare authority runtime obeys MCP fabric scope without silent hardcoded adapter injection', () => {
+  test('Cloudflare authority runtime obeys MCP fabric scope without silent hardcoded adapter injection', async () => {
     const service = createCloudflareNarsAuthorityService({ max_events: 50 });
     const created = service.createSession({
       session_id: 'cf_authority_no_mcp_scope',
@@ -669,7 +669,7 @@ describe('worker boundary service', () => {
     }, now);
     expect(created).toMatchObject({ status: 'created', session: { mcp_fabric: { requested_scope: 'none', server_count: 0 } } });
 
-    const admitted = service.submitInput({ session_id: created.session_id, method: 'conversation.send', payload: { message: 'no mcp' }, now });
+    const admitted = await service.submitInput({ session_id: created.session_id, method: 'conversation.send', payload: { message: 'no mcp' }, now });
     expect(admitted).toMatchObject({ status: 'admitted' });
     expect(admitted.events?.some((entry) => entry.payload.event === 'tool_call')).toBe(false);
     expect(admitted.events).toContainEqual(expect.objectContaining({ payload: expect.objectContaining({ event: 'turn_complete', terminal_state: 'completed_without_tool' }) }));
@@ -741,7 +741,7 @@ describe('worker boundary service', () => {
     expect(registry.callTool({ server_name: 'cf-authority-artifacts', tool_name: 'artifact_read', tool: 'cf-authority-artifacts.artifact_read', arguments: { session_id: created.session_id } })).toMatchObject({ status: 'failed', error_code: 'session_revoked' });
   });
 
-  test('Cloudflare authority input methods have distinct adapter semantics', () => {
+  test('Cloudflare authority input methods have distinct adapter semantics', async () => {
     const service = createCloudflareNarsAuthorityService({ max_events: 80 });
     const created = service.createSession({
       session_id: 'cf_authority_input_methods_e2e',
@@ -750,11 +750,11 @@ describe('worker boundary service', () => {
       mcp_fabric: { scope: 'all' },
     }, now);
 
-    const send = service.submitInput({ session_id: created.session_id, method: 'conversation.send', payload: { message: 'send' }, now });
-    const enqueue = service.submitInput({ session_id: created.session_id, method: 'conversation.enqueue', payload: { message: 'enqueue' }, now });
-    const steer = service.submitInput({ session_id: created.session_id, method: 'conversation.steer', payload: { message: 'steer' }, now });
-    const interrupt = service.submitInput({ session_id: created.session_id, method: 'conversation.interrupt', payload: { message: 'interrupt' }, now });
-    const status = service.submitInput({ session_id: created.session_id, method: 'session.status', payload: {}, now });
+    const send = await service.submitInput({ session_id: created.session_id, method: 'conversation.send', payload: { message: 'send' }, now });
+    const enqueue = await service.submitInput({ session_id: created.session_id, method: 'conversation.enqueue', payload: { message: 'enqueue' }, now });
+    const steer = await service.submitInput({ session_id: created.session_id, method: 'conversation.steer', payload: { message: 'steer' }, now });
+    const interrupt = await service.submitInput({ session_id: created.session_id, method: 'conversation.interrupt', payload: { message: 'interrupt' }, now });
+    const status = await service.submitInput({ session_id: created.session_id, method: 'session.status', payload: {}, now });
     expect([send, enqueue, steer, interrupt, status].map((result) => result.status)).toEqual(['admitted', 'admitted', 'admitted', 'admitted', 'admitted']);
     expect(send.events?.some((entry) => entry.payload.event === 'tool_call')).toBe(true);
     expect(enqueue.events?.some((entry) => entry.payload.tool_name === 'cf-authority-artifacts.artifact_register')).toBe(true);
@@ -763,11 +763,11 @@ describe('worker boundary service', () => {
     expect(interrupt.events?.map((entry) => entry.payload.event)).toEqual(['operator_input_admitted', 'user_message', 'turn_interrupted', 'turn_complete']);
     expect(status.events?.map((entry) => entry.payload.event)).toEqual(['operator_input_admitted', 'user_message', 'turn_started', 'assistant_message', 'turn_complete']);
 
-    const close = service.submitInput({ session_id: created.session_id, method: 'session.close', payload: { message: 'close' }, now });
+    const close = await service.submitInput({ session_id: created.session_id, method: 'session.close', payload: { message: 'close' }, now });
     expect(close).toMatchObject({ status: 'admitted', method: 'session.close' });
     expect(close.events?.map((entry) => entry.payload.event)).toEqual(['operator_input_admitted', 'user_message', 'session_closed']);
     expect(service.readHealth(created.session_id)).toMatchObject({ status: 'refused', code: 'session_revoked' });
-    expect(service.submitInput({ session_id: created.session_id, method: 'conversation.send', payload: { message: 'after close' }, now })).toMatchObject({ status: 'refused', code: 'session_revoked' });
+    expect(await service.submitInput({ session_id: created.session_id, method: 'conversation.send', payload: { message: 'after close' }, now })).toMatchObject({ status: 'refused', code: 'session_revoked' });
   });
 });
 

@@ -222,3 +222,11 @@ Implementation-readiness details live in [`nars-authority-runtime-host-transitio
 6. Add browser/local surface reattach tests through authority discovery.
 7. Add Cloudflare-to-local transition as a second governed transition.
 8. Define provider/tool-capable authority transition separately.
+
+## Implementation Status (Task 2114)
+
+- Steps 1–5 are implemented. The local source FSM (drain/seal/prepare/activate, durable state, refusal paths) lives in `packages/nars-session-core/src/authority-transition-state.mjs`; the Cloudflare target side (`prepareTransitionTarget`, `activateTransitionTarget`, `refuseTransitionSource`) lives in `packages/cloudflare-nars-projection/src/index.ts`.
+- Target activation requires the authority epoch token (target epoch strictly greater than source epoch), source seal evidence (`sealed_at` + `source_last_sequence`), and the replay boundary (`target_first_sequence = source_last_sequence + 1`). The full transition record is validated by `validateNarsAuthorityRuntimeHostTransitionRecord` from `packages/carrier-protocol`; refusal evidence is durable on the target session and never enters the canonical event log, which begins at the replay boundary with `authority_target_prepared` → `authority_target_active` → `session_started`.
+- Prepared targets refuse operator input with `target_not_activated`; ambiguous dual-host creation stays refused with `dual_host_authority_conflict`.
+- The `cloudflare-host → local` direction (step 7) is explicitly refused with `transition_direction_refused` until implemented; provider-capable transition (step 8) follows the Task 2112 decision's seal rule (in-flight provider turns resolve before seal).
+- Harness evidence: `packages/cloudflare-nars-projection/test/authority-host-transition.test.ts` (real local FSM driven to sealed + target activation at the replay boundary, refusal paths, epoch/boundary violations, snapshot/load recovery). Live transfer operations are Task 2115 scope.

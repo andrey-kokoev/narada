@@ -4,6 +4,7 @@ import {
   createCloudflareNarsProjectionWorkerService,
   projectedEventMatchesView,
   validateProjectionCredential,
+  type CloudflareNarsAuthorityRuntimeExecutor,
   type CloudflareNarsAuthorityWorkerState,
   type CloudflareNarsProjectionIntent,
   type CloudflareNarsRemoteAccessRecord,
@@ -11,6 +12,7 @@ import {
   type CloudflareNarsAuthorityEvent,
   type ProjectedEvent,
 } from './index.js';
+import { createCloudflareNarsProviderRuntimeExecutor } from './provider-executor.js';
 import {
   createCloudflareNarsWorkspaceDirectoryService,
   handleCloudflareNarsWorkspaceDirectoryRequest,
@@ -27,6 +29,11 @@ export interface CloudflareNarsProjectionWorkerEnv {
   ASSETS?: { fetch(request: Request): Promise<Response> | Response };
   NARS_PROJECTION_STATE?: DurableObjectNamespaceLike;
   NARS_WORKSPACE_DIRECTORY?: DurableObjectNamespaceLike;
+  NARS_PROVIDER_API_BASE_URL?: string;
+  NARS_PROVIDER_NAME?: string;
+  NARS_PROVIDER_MODEL?: string;
+  NARS_PROVIDER_THINKING?: string;
+  NARS_PROVIDER_API_KEY?: string;
 }
 
 function isWorkspaceRouteDirectory(value: unknown): value is OperatorWorkspaceRouteDirectory {
@@ -170,9 +177,28 @@ export interface CloudflareNarsProjectionWorkerOptions {
   now?: () => string;
 }
 
+export function authorityExecutorFromEnv(env: CloudflareNarsProjectionWorkerEnv | undefined): CloudflareNarsAuthorityRuntimeExecutor | undefined {
+  const apiBaseUrl = env?.NARS_PROVIDER_API_BASE_URL?.trim();
+  if (!apiBaseUrl) return undefined;
+  return createCloudflareNarsProviderRuntimeExecutor({
+    binding: {
+      provider: env?.NARS_PROVIDER_NAME?.trim() || 'cloudflare-provider',
+      model: env?.NARS_PROVIDER_MODEL?.trim() || null,
+      thinking: env?.NARS_PROVIDER_THINKING?.trim() || null,
+      api_base_url: apiBaseUrl,
+      api_key_env: 'NARS_PROVIDER_API_KEY',
+    },
+    env: { NARS_PROVIDER_API_KEY: env?.NARS_PROVIDER_API_KEY },
+  });
+}
+
 export function createCloudflareNarsProjectionWorker(options: CloudflareNarsProjectionWorkerOptions = {}) {
   const service = options.service ?? createCloudflareNarsProjectionWorkerService();
-  const authorityService = options.authority_service ?? createCloudflareNarsAuthorityService();
+  let authorityService = options.authority_service ?? null;
+  const resolveAuthorityService = (env: CloudflareNarsProjectionWorkerEnv) => {
+    if (!authorityService) authorityService = createCloudflareNarsAuthorityService({ runtime_executor: authorityExecutorFromEnv(env) });
+    return authorityService;
+  };
   const workspaceDirectory = options.workspace_directory_service ?? createCloudflareNarsWorkspaceDirectoryService();
   const now = options.now ?? (() => new Date().toISOString());
   return {
@@ -185,7 +211,7 @@ export function createCloudflareNarsProjectionWorker(options: CloudflareNarsProj
         return serveAssetManifest(request, env);
       }
       if (request.method === 'GET' && path === 'api/nars/authority/health') {
-        return json({ schema: 'narada.cloudflare_nars_authority.service_health.v1', status: 'healthy', execution: authorityService.execution_mode });
+        return json({ schema: 'narada.cloudflare_nars_authority.service_health.v1', status: 'healthy', execution: resolveAuthorityService(env).execution_mode });
       }
       const capabilityRoute = projectionRoute(request);
       if (request.method === 'POST' && capabilityRoute?.suffix === 'workspace-capability') {
@@ -224,7 +250,7 @@ export function createCloudflareNarsProjectionWorker(options: CloudflareNarsProj
       }
       if (request.method === 'POST' && path === 'api/nars/authority/sessions') {
         const body = await readJson(request);
-        return json(authorityService.createSession({
+        return json(resolveAuthorityService(env).createSession({
           session_id: stringOrUndefined(body.session_id),
           site_id: stringOrUndefined(body.site_id) ?? '',
           agent_id: stringOrUndefined(body.agent_id) ?? '',
@@ -235,10 +261,10 @@ export function createCloudflareNarsProjectionWorker(options: CloudflareNarsProj
       if (authority) {
         if (request.method === 'GET' && authority.suffix === 'health') {
           const surfaceOrigin = url.searchParams.get('surface_origin') === 'local' ? 'local' : 'cloudflare';
-          return json(authorityService.readHealth(authority.sessionId, surfaceOrigin));
+          return json(resolveAuthorityService(env).readHealth(authority.sessionId, surfaceOrigin));
         }
         if (request.method === 'GET' && authority.suffix === 'events') {
-          return json(authorityService.readEvents({
+          return json(resolveAuthorityService(env).readEvents({
             session_id: authority.sessionId,
             since_sequence: numberParam(url, 'since_sequence'),
             max_events: numberParam(url, 'max_events') ?? undefined,
@@ -248,25 +274,25 @@ export function createCloudflareNarsProjectionWorker(options: CloudflareNarsProj
         if (authorityArtifact) {
           const artifactId = authorityArtifact[1] ? decodeURIComponent(authorityArtifact[1]) : null;
           if (request.method === 'GET' && authorityArtifact[2] === 'content' && artifactId) {
-            const read = authorityService.readArtifactContent({ session_id: authority.sessionId, artifact_id: artifactId });
+            const read = resolveAuthorityService(env).readArtifactContent({ session_id: authority.sessionId, artifact_id: artifactId });
             if (read.status !== 'ok' || !read.content) return json(read, 404);
             return new Response(read.content.body, { status: 200, headers: withCorsHeaders(read.content.headers) });
           }
           if (request.method === 'GET') {
-            const read = authorityService.readArtifactMetadata({ session_id: authority.sessionId, artifact_id: artifactId });
+            const read = resolveAuthorityService(env).readArtifactMetadata({ session_id: authority.sessionId, artifact_id: artifactId });
             return json(artifactId && read.status === 'ok' ? { ...read, artifact: read.artifacts[0] ?? null } : read);
           }
         }
         if (request.method === 'POST' && authority.suffix === 'input') {
           const body = await readJson(request);
-          return json(authorityService.submitInput({
+          return json(await resolveAuthorityService(env).submitInput({
             session_id: authority.sessionId,
             method: String(body.method ?? ''),
             payload: objectRecord(body.payload) ?? {},
             now: now(),
           }));
         }
-        if (request.method === 'DELETE' && authority.suffix === '') return json(authorityService.revokeSession(authority.sessionId, now()));
+        if (request.method === 'DELETE' && authority.suffix === '') return json(resolveAuthorityService(env).revokeSession(authority.sessionId, now()));
       }
       if (request.method === 'POST' && path === 'api/nars/projections/register') {
         const body = await readJson(request);
@@ -363,7 +389,7 @@ export class NarsProjectionState {
   private readonly sockets = new Set<{ projectionId: string; view: string; socket: WorkerWebSocket }>();
   private readonly authoritySockets = new Set<{ sessionId: string; socket: WorkerWebSocket }>();
 
-  constructor(private readonly state?: DurableObjectStateLike) {}
+  constructor(private readonly state?: DurableObjectStateLike, private readonly env?: CloudflareNarsProjectionWorkerEnv) {}
 
   async fetch(request: Request): Promise<Response> {
     if (!this.state?.storage) {
@@ -372,7 +398,7 @@ export class NarsProjectionState {
     const stored = await this.state.storage.get<CloudflareNarsProjectionWorkerState>(NarsProjectionState.storageKey);
     const storedAuthority = await this.state.storage.get<CloudflareNarsAuthorityWorkerState>(NarsProjectionState.authorityStorageKey);
     const service = createCloudflareNarsProjectionWorkerService({ initial_state: stored ?? null });
-    const authorityService = createCloudflareNarsAuthorityService({ initial_state: storedAuthority ?? null });
+    const authorityService = createCloudflareNarsAuthorityService({ initial_state: storedAuthority ?? null, runtime_executor: authorityExecutorFromEnv(this.env) });
     const authority = authorityRoute(request);
     if (authority && request.method === 'GET' && authority.suffix === 'events/websocket') {
       return this.openAuthorityEventWebSocket({ request, sessionId: authority.sessionId, service: authorityService });

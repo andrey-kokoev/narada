@@ -12,8 +12,10 @@ export const NARS_RUNTIME_EVIDENCE_CLASSES: readonly ['genuine', 'projected', 's
 export const NARS_AUTHORITY_CANONICITY: readonly ['canonical', 'synthetic_canonical'];
 export const NARS_PROJECTION_POSTURES: readonly ['non_canonical_projection', 'synthetic_authority'];
 export const NARS_PROJECTION_ROUTE_KINDS: readonly ['projection_edge', 'intent_route'];
-export const NARS_CAPABILITY_STATES: readonly ['present', 'absent'];
+export const NARS_CAPABILITY_STATES: readonly ['absent', 'declared', 'present'];
 export const NARS_CLOUDFLARE_NATIVE_MCP_STATES: readonly ['absent', 'fabric_summary'];
+export const NARS_CLOUDFLARE_HARD_ABSENT_CAPABILITIES: readonly ['local_tool_execution', 'local_mcp', 'local_filesystem_authority', 'local_artifact_authority'];
+export const NARS_CLOUDFLARE_GRADUABLE_CAPABILITIES: readonly ['provider_execution'];
 export const NARS_CROSSING_AUTHORITY_OWNERS: readonly ['local', 'cloudflare-host'];
 
 export {
@@ -29,7 +31,15 @@ export type NarsRuntimeEvidenceClass = 'genuine' | 'projected' | 'synthetic';
 export type NarsAuthorityCanonicity = 'canonical' | 'synthetic_canonical';
 export type NarsProjectionPosture = 'non_canonical_projection' | 'synthetic_authority';
 export type NarsProjectionRouteKind = 'projection_edge' | 'intent_route';
-export type NarsCapabilityState = 'present' | 'absent';
+export type NarsCapabilityState = 'absent' | 'declared' | 'present';
+
+export interface NarsCapabilityEvidenceEntry {
+  state: NarsCapabilityState;
+  evidence_ref: string;
+  graduated_at: string | null;
+}
+
+export type NarsCapabilityEvidence = Record<string, NarsCapabilityEvidenceEntry>;
 
 export interface NarsCapabilityProfile {
   provider_execution: NarsCapabilityState;
@@ -93,6 +103,7 @@ export interface NarsRuntimeSurfaceContract {
   projection: NarsRuntimeSurfaceProjection | null;
   crossing: NarsRuntimeSurfaceCrossing | null;
   capability_profile: NarsCapabilityProfile;
+  capability_evidence: NarsCapabilityEvidence | null;
   generated_at: string;
 }
 
@@ -116,6 +127,7 @@ export function buildNarsRuntimeSurfaceContract(input?: {
   authority?: Partial<NarsRuntimeSurfaceAuthority>;
   projection?: Partial<NarsRuntimeSurfaceProjection> | null;
   capability_profile?: NarsCapabilityProfile | null;
+  capability_evidence?: NarsCapabilityEvidence | null;
   crossing?: NarsRuntimeSurfaceCrossing | null;
   generated_at?: string | null;
 }): NarsRuntimeSurfaceContract;

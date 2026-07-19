@@ -19,8 +19,20 @@ export const NARS_RUNTIME_EVIDENCE_CLASSES = Object.freeze(['genuine', 'projecte
 export const NARS_AUTHORITY_CANONICITY = Object.freeze(['canonical', 'synthetic_canonical']);
 export const NARS_PROJECTION_POSTURES = Object.freeze(['non_canonical_projection', 'synthetic_authority']);
 export const NARS_PROJECTION_ROUTE_KINDS = Object.freeze(['projection_edge', 'intent_route']);
-export const NARS_CAPABILITY_STATES = Object.freeze(['present', 'absent']);
+export const NARS_CAPABILITY_STATES = Object.freeze(['absent', 'declared', 'present']);
 export const NARS_CLOUDFLARE_NATIVE_MCP_STATES = Object.freeze(['absent', 'fabric_summary']);
+// Dimensions that must never graduate on a Cloudflare-origin authority:
+// machine-local tool/MCP/filesystem/local-artifact authority is hard-absent
+// (principled asymmetry, Task 2112 decision 2/3/4).
+export const NARS_CLOUDFLARE_HARD_ABSENT_CAPABILITIES = Object.freeze([
+  'local_tool_execution',
+  'local_mcp',
+  'local_filesystem_authority',
+  'local_artifact_authority',
+]);
+// Dimensions that may graduate absent -> declared -> present on Cloudflare-origin
+// with configuration/executed evidence (Task 2112 decision 3).
+export const NARS_CLOUDFLARE_GRADUABLE_CAPABILITIES = Object.freeze(['provider_execution']);
 export const NARS_CROSSING_AUTHORITY_OWNERS = Object.freeze(['local', 'cloudflare-host']);
 
 export const NARS_RUNTIME_SURFACE_CROSSINGS = Object.freeze({
@@ -160,6 +172,7 @@ export function buildNarsRuntimeSurfaceContract({
   authority,
   projection = null,
   capability_profile = null,
+  capability_evidence = null,
   crossing = null,
   generated_at = null,
 } = {}) {
@@ -189,6 +202,7 @@ export function buildNarsRuntimeSurfaceContract({
       },
     crossing: crossing ?? (quadrant ? NARS_RUNTIME_SURFACE_CROSSINGS[quadrant] : null),
     capability_profile: capability_profile ?? buildNarsCapabilityProfile(runtime_origin),
+    capability_evidence: capability_evidence ?? null,
     generated_at: generated_at ?? new Date().toISOString(),
   };
 }
@@ -309,16 +323,52 @@ export function validateNarsRuntimeSurfaceContract(candidate) {
   } else {
     for (const key of ['provider_execution', 'local_tool_execution', 'local_mcp', 'local_filesystem_authority', 'local_artifact_authority', 'replay', 'input_admission', 'revocation']) {
       if (!NARS_CAPABILITY_STATES.includes(capability[key])) {
-        push(`$.capability_profile.${key}`, 'invalid_capability_state', `Expected present or absent.`);
+        push(`$.capability_profile.${key}`, 'invalid_capability_state', `Expected absent, declared, or present.`);
       }
     }
     if (!NARS_CLOUDFLARE_NATIVE_MCP_STATES.includes(capability.cloudflare_native_mcp)) {
       push('$.capability_profile.cloudflare_native_mcp', 'invalid_cloudflare_native_mcp', `Expected one of ${NARS_CLOUDFLARE_NATIVE_MCP_STATES.join(', ')}.`);
     }
+    const evidence = candidate.capability_evidence;
+    if (evidence != null) {
+      if (typeof evidence !== 'object' || Array.isArray(evidence)) {
+        push('$.capability_evidence', 'invalid_capability_evidence', 'capability_evidence must be an object when present.');
+      } else {
+        for (const [dimension, entry] of Object.entries(evidence)) {
+          if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+            push(`$.capability_evidence.${dimension}`, 'invalid_capability_evidence_entry', 'Evidence entry must be an object.');
+            continue;
+          }
+          if (!NARS_CAPABILITY_STATES.includes(entry.state)) {
+            push(`$.capability_evidence.${dimension}.state`, 'invalid_capability_evidence_state', 'Expected absent, declared, or present.');
+          }
+          if (typeof entry.evidence_ref !== 'string' || !entry.evidence_ref.trim()) {
+            push(`$.capability_evidence.${dimension}.evidence_ref`, 'capability_evidence_ref_required', 'Evidence entries require a non-empty evidence_ref (configuration ref for declared, executed-turn ref for present).');
+          }
+          if (entry.state === 'present' && (typeof entry.graduated_at !== 'string' || !entry.graduated_at.trim())) {
+            push(`$.capability_evidence.${dimension}.graduated_at`, 'capability_graduated_at_required', 'present state requires graduated_at.');
+          }
+          if (entry.state && capability[dimension] && entry.state !== capability[dimension]) {
+            push(`$.capability_evidence.${dimension}.state`, 'capability_evidence_state_mismatch', `Evidence state ${entry.state} does not match capability_profile ${capability[dimension]}.`);
+          }
+        }
+      }
+    }
     if (candidate.runtime_origin === 'cloudflare') {
-      for (const key of ['provider_execution', 'local_tool_execution', 'local_mcp', 'local_filesystem_authority', 'local_artifact_authority']) {
-        if (capability[key] === 'present') {
-          push(`$.capability_profile.${key}`, 'cloudflare_capability_must_be_absent', `Cloudflare-origin synthetic slice must report ${key} as absent.`);
+      for (const key of NARS_CLOUDFLARE_HARD_ABSENT_CAPABILITIES) {
+        if (capability[key] != null && capability[key] !== 'absent') {
+          push(`$.capability_profile.${key}`, 'cloudflare_capability_hard_absent', `Cloudflare-origin slice must keep ${key} absent (machine-local authority never graduates here).`);
+        }
+      }
+      for (const key of NARS_CLOUDFLARE_GRADUABLE_CAPABILITIES) {
+        const state = capability[key];
+        if (state === 'declared' || state === 'present') {
+          const entry = evidence && typeof evidence === 'object' && !Array.isArray(evidence) ? evidence[key] : null;
+          if (!entry || typeof entry !== 'object') {
+            push(`$.capability_profile.${key}`, 'cloudflare_capability_evidence_required', `${key} ${state} requires a capability_evidence entry.`);
+          } else if (entry.state !== state) {
+            push(`$.capability_profile.${key}`, 'cloudflare_capability_evidence_required', `${key} ${state} requires capability_evidence state ${state}.`);
+          }
         }
       }
     }

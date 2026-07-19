@@ -133,7 +133,7 @@ test('validator rejects authority host/runtime origin mismatch (dual-host ambigu
   assert.ok(validation.violations.some((v) => v.code === 'authority_host_origin_mismatch'));
 });
 
-test('validator rejects cloudflare-origin capability presence claims', () => {
+test('validator rejects cloudflare-origin capability presence claims without evidence', () => {
   const contract = buildNarsRuntimeSurfaceContract({
     runtime_origin: 'cloudflare',
     surface_origin: 'cloudflare',
@@ -144,7 +144,66 @@ test('validator rejects cloudflare-origin capability presence claims', () => {
   });
   const validation = validateNarsRuntimeSurfaceContract(contract);
   assert.equal(validation.ok, false);
-  assert.ok(validation.violations.some((v) => v.code === 'cloudflare_capability_must_be_absent'));
+  assert.ok(validation.violations.some((v) => v.code === 'cloudflare_capability_evidence_required'));
+});
+
+test('validator keeps local tool/mcp/filesystem/artifact authority hard-absent on cloudflare origin', () => {
+  for (const dimension of ['local_tool_execution', 'local_mcp', 'local_filesystem_authority', 'local_artifact_authority']) {
+    const contract = buildNarsRuntimeSurfaceContract({
+      runtime_origin: 'cloudflare',
+      surface_origin: 'cloudflare',
+      authority: CLOUDFLARE_AUTHORITY,
+      projection: { authority_session_id: 'cf_nars_1', route_kind: 'intent_route' },
+      capability_profile: buildNarsCapabilityProfile('cloudflare', { [dimension]: 'declared' }),
+      generated_at: '2026-07-18T00:00:00.000Z',
+    });
+    const validation = validateNarsRuntimeSurfaceContract(contract);
+    assert.equal(validation.ok, false, dimension);
+    assert.ok(validation.violations.some((v) => v.code === 'cloudflare_capability_hard_absent'), dimension);
+  }
+});
+
+test('validator accepts graduated cloudflare provider execution with configuration and executed evidence', () => {
+  const declared = buildNarsRuntimeSurfaceContract({
+    runtime_origin: 'cloudflare',
+    surface_origin: 'cloudflare',
+    authority: CLOUDFLARE_AUTHORITY,
+    projection: { authority_session_id: 'cf_nars_1', route_kind: 'intent_route' },
+    capability_profile: buildNarsCapabilityProfile('cloudflare', { provider_execution: 'declared' }),
+    capability_evidence: {
+      provider_execution: { state: 'declared', evidence_ref: 'provider-binding:openai-api:gpt-5.5', graduated_at: null },
+    },
+    generated_at: '2026-07-18T00:00:00.000Z',
+  });
+  assert.deepEqual(validateNarsRuntimeSurfaceContract(declared), { ok: true, violations: [] });
+
+  const presented = buildNarsRuntimeSurfaceContract({
+    runtime_origin: 'cloudflare',
+    surface_origin: 'cloudflare',
+    authority: CLOUDFLARE_AUTHORITY,
+    projection: { authority_session_id: 'cf_nars_1', route_kind: 'intent_route' },
+    capability_profile: buildNarsCapabilityProfile('cloudflare', { provider_execution: 'present' }),
+    capability_evidence: {
+      provider_execution: { state: 'present', evidence_ref: 'cf_evt_provider_turn_7', graduated_at: '2026-07-18T00:00:00.000Z' },
+    },
+    generated_at: '2026-07-18T00:00:00.000Z',
+  });
+  assert.deepEqual(validateNarsRuntimeSurfaceContract(presented), { ok: true, violations: [] });
+
+  const mismatchedEvidence = buildNarsRuntimeSurfaceContract({
+    runtime_origin: 'cloudflare',
+    surface_origin: 'cloudflare',
+    authority: CLOUDFLARE_AUTHORITY,
+    projection: { authority_session_id: 'cf_nars_1', route_kind: 'intent_route' },
+    capability_profile: buildNarsCapabilityProfile('cloudflare', { provider_execution: 'present' }),
+    capability_evidence: {
+      provider_execution: { state: 'declared', evidence_ref: 'provider-binding:openai-api', graduated_at: null },
+    },
+    generated_at: '2026-07-18T00:00:00.000Z',
+  });
+  const validation = validateNarsRuntimeSurfaceContract(mismatchedEvidence);
+  assert.equal(validation.ok, false);
+  assert.ok(validation.violations.some((v) => v.code === 'capability_evidence_state_mismatch' || v.code === 'cloudflare_capability_evidence_required'));
 });
 
 test('validator rejects non-canonical posture on local/local and projected posture violations', () => {

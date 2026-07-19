@@ -110,11 +110,11 @@ describe('negative authority cases', () => {
     });
   });
 
-  test('ambiguous dual-host authority creation is durably refused and preserves the existing event log', () => {
+  test('ambiguous dual-host authority creation is durably refused and preserves the existing event log', async () => {
     const service = createCloudflareNarsAuthorityService({ max_events: 10 });
     const first = service.createSession({ session_id: 'cf_dual_host', site_id: 'narada.test', agent_id: 'cloudflare.resident' }, now);
     expect(first.status).toBe('created');
-    service.submitInput({ session_id: 'cf_dual_host', method: 'conversation.send', payload: { message: 'durable evidence' }, now });
+    await service.submitInput({ session_id: 'cf_dual_host', method: 'conversation.send', payload: { message: 'durable evidence' }, now });
     const before = service.readEvents({ session_id: 'cf_dual_host' });
     expect(before.events.length).toBeGreaterThan(1);
 
@@ -155,12 +155,12 @@ describe('negative authority cases', () => {
     });
   });
 
-  test('cloudflare-origin revocation blocks health, replay, and input with typed refusals', () => {
+  test('cloudflare-origin revocation blocks health, replay, and input with typed refusals', async () => {
     const service = createCloudflareNarsAuthorityService({ max_events: 10 });
     const created = service.createSession({ session_id: 'cf_revoke_1', site_id: 'narada.test', agent_id: 'cloudflare.resident' }, now);
     expect(service.revokeSession(created.session_id, now)).toMatchObject({ status: 'revoked' });
     expect(service.readHealth(created.session_id)).toMatchObject({ status: 'refused', code: 'session_revoked' });
     expect(service.readEvents({ session_id: created.session_id })).toMatchObject({ status: 'refused', code: 'session_revoked' });
-    expect(service.submitInput({ session_id: created.session_id, method: 'conversation.send', payload: {}, now })).toMatchObject({ status: 'refused', code: 'session_revoked' });
+    expect(await service.submitInput({ session_id: created.session_id, method: 'conversation.send', payload: {}, now })).toMatchObject({ status: 'refused', code: 'session_revoked' });
   });
 });
