@@ -9,6 +9,9 @@ and operator recovery steps are in
 ## Required Behaviors
 
 - The response is parsed against the typed route-directory contract.
+- The browser parser accepts every surface, projection, intent, and navigation
+  key emitted by the shared contract; a contract-generated fixture prevents
+  closed-enum drift.
 - Duplicate navigation keys and malformed authority/intent bindings are
   rejected.
 - External, protocol-relative, and otherwise unsafe route paths are rejected
@@ -26,7 +29,11 @@ and operator recovery steps are in
   parameter.
 - Console HTML projection escapes injected JSON for HTML-script context.
 - Transformed HTML does not retain stale asset validators or encoding metadata.
-- Root and `/console/` redirects resolve to the canonical Registry route.
+- Root and `/console/` redirects resolve to `/console/agents`.
+- The built-browser Sites and Agents journey proves User/Host versus ordinary
+  Site grouping, admitted-agent state labels, mouse and keyboard inspection,
+  ambiguity routing, stopped-agent launch, healthy session discovery, Agent
+  Web UI handoff, and desktop/mobile overflow constraints.
 - CLI route handlers consume shared contract path constants.
 
 ## Focused Commands
@@ -36,6 +43,7 @@ Run from `D:\code\narada`:
 ```powershell
 pnpm --filter @narada2/operator-console-contract test
 pnpm --filter @narada2/operator-console-ui test
+node --test --test-name-pattern "Sites and Agents" packages/layers/cli/test/integration/operator-console-ui-e2e.test.mjs
 pnpm --filter @narada2/cloudflare-nars-projection test
 pnpm --filter @narada2/cloudflare-nars-projection typecheck
 pnpm --filter @narada2/cli exec vitest run --silent test/commands/console-server.test.ts

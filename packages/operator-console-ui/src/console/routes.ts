@@ -12,6 +12,7 @@ export type OperatorConsoleRouteKind =
   | 'site-registry'
   | 'site-registry-add'
   | 'site-registry-manage'
+  | 'site-agents'
   | 'launcher'
   | 'onboarding'
   | 'agent-sessions'
@@ -129,6 +130,9 @@ export function resolveOperatorConsoleRoute(
         ? { surfaceId: staticMatch.surface.id, routeId: staticMatch.route.id }
         : undefined;
     })();
+  if (matched?.surfaceId === 'site-agents') {
+    return { kind: 'site-agents', path };
+  }
   if (matched?.surfaceId === 'site-registry') {
     if (matched.routeId === 'sites') {
       return {

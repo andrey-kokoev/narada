@@ -6,7 +6,11 @@ import {
   siteRegistryNavigation,
 } from '../src/console/routes.ts';
 
-test('operator console route resolver admits canonical registry, launcher, and onboarding routes', () => {
+test('operator console route resolver admits canonical agents, registry, launcher, and onboarding routes', () => {
+  assert.deepEqual(resolveOperatorConsoleRoute('/console/agents/'), {
+    kind: 'site-agents',
+    path: '/console/agents',
+  });
   assert.deepEqual(resolveOperatorConsoleRoute('/console/registry/'), {
     kind: 'site-registry',
     path: '/console/registry',

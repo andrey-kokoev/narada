@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { projectOperatorWorkspaceRouteDirectory } from '@narada2/operator-console-contract';
 import {
   createOperatorWorkspaceRouteDirectoryTransport,
   createOperatorWorkspaceRouteDirectoryState,
@@ -12,6 +13,14 @@ import {
   operatorConsoleNavigationFromDirectory,
   resolveOperatorConsoleRoute,
 } from '../src/console/routes.ts';
+
+test('route-directory parser stays aligned with the contract surface vocabulary', () => {
+  const projected = projectOperatorWorkspaceRouteDirectory();
+  const directory = parseOperatorWorkspaceRouteDirectory(projected);
+  assert.ok(directory);
+  assert.equal(directory.surfaces.some((surface) => surface.id === 'site-agents'), true);
+  assert.equal(operatorConsoleNavigationHref(directory, 'agents', '/fallback'), '/console/agents');
+});
 
 const directoryPayload = {
   schema: 'narada.operator_workspace.route_directory.v3',

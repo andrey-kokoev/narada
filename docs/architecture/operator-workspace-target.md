@@ -13,7 +13,9 @@ its authority locus, projection owner, intent binding, and diagnostic/legacy
 posture. Consumers reject incomplete entries rather than inferring ownership
 from a URL or the browser's current directory.
 The Vue console consumes the directory for navigation and concrete session
-links; broader browser acceptance remains.
+links. Built-browser acceptance covers the Sites and Agents overview, stopped
+agent launch, session inspection, ambiguity recovery, and responsive layout;
+broader artifact and mutation acceptance remains explicit below.
 
 Cloudflare NARS Projection now hosts the same directory contract through its
 `NarsWorkspaceDirectory` Durable Object. Local projection bridges publish and
@@ -64,7 +66,8 @@ The canonical route families are:
 
 | Route | Projection | Scope |
 | --- | --- | --- |
-| `/` | Workspace entry | Surface directory routing to the next-level projections. |
+| `/` | Workspace entry | Redirects to the Sites and Agents overview. |
+| `/console/agents` | Sites and Agents | Cross-Site composition of admitted agents, runtime posture, and work posture. |
 | `/sites/<site-id>/operations/*` | Site Operations | Local Site task, assignment, review, and agent projection. |
 | `/console/registry` | Site Registry | User Site cross-Site inventory and governed management. |
 | `/sessions/<session-id>/*` | Agent Web UI | One NARS session, identified by session id. |
@@ -110,11 +113,14 @@ Each page declares its scope explicitly as a tuple:
 
 The normal navigation flow is:
 
-1. Workspace -> Launcher Session Dashboard when a new agent launch is needed.
-2. Workspace Site Registry -> select a Site -> Site Operations.
-3. Site Operations item -> a session route when a live session exists.
-4. Session route -> session-owned artifact route or the originating Site view.
-5. Registry remains User Site inventory; it does not become task authority.
+1. Workspace -> Sites and Agents for the cross-Site operating overview.
+2. Select a stopped admitted agent to ensure one runtime and open its session.
+3. Inspect a running agent to open its canonical session route; choose from
+   Agent Sessions when more than one healthy session exists.
+4. Workspace Site Registry -> select a Site -> Site Operations.
+5. Site Operations item -> a session route when a live session exists.
+6. Session route -> session-owned artifact route or the originating Site view.
+7. Registry remains User Site inventory; it does not become task authority.
 
 Every transition preserves a bounded return path. A missing or expired backing
 projection renders an unavailable state with its evidence and recovery action;
@@ -149,12 +155,30 @@ evidence, never credentials, raw message bodies, or arbitrary local paths.
 
 ## Current Implementation Slice
 
-The Console server is the first composed local workspace host. Its root serves
-a read-only surface directory and exposes the Registry through the dedicated
+The Console server is the first composed local workspace host. Its root and
+`/console/` redirect to `/console/agents`; the same host serves the typed
+surface directory and exposes Registry workflows through the dedicated
 Operator Router. The existing task and agent dashboard is now available as a
 Site-scoped projection at `/sites/<site-id>/operations/` when started with
 `narada workbench serve --site-id <site-id>`; port 0 remains its direct
 diagnostic mode.
+
+The Sites and Agents page is a composition, not an authority. The CLI read
+model joins registered launch records, explicit Site kind, Principal Runtime
+work posture, and the NARS session index into a browser-safe overview. It does
+not infer Site kind from a path and it includes only agents admitted by the
+launch registry. Runtime state has four explicit values: `stopped`, `running`
+for exactly one healthy session, `degraded` for unhealthy evidence, and
+`ambiguous` for multiple healthy sessions. Work state is a separate projection
+and remains text-visible rather than encoded only by color.
+
+Selecting a stopped agent sends one typed ensure-running intent through the
+CLI launch gateway. Selecting an already running agent reuses its healthy
+session. Degraded and ambiguous states refuse a second launch. Inspection
+opens Agent Web UI only through a concrete session route from the Workspace
+directory; ambiguity routes to Agent Sessions, and no-session states remain
+unavailable. Right-click, the visible actions button, and `Shift+F10` expose
+the same inspection menu.
 
 The Launcher Session Dashboard is a separate Vue/shadcn presentation package
 served by the CLI launcher. Its launch authority, dashboard records, and
@@ -208,7 +232,7 @@ commands use the stable router.
 5. Route links are explicit, scope-preserving, and health-aware.
 6. Session links use canonical NARS session ids, not agent ids.
 7. A backing failure is visible and actionable, not silently substituted.
-7. Direct ephemeral servers remain diagnostics rather than normal UX.
+8. Direct ephemeral servers remain diagnostics rather than normal UX.
 
 ## Related Contracts
 

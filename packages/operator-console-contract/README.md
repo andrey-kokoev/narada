@@ -8,6 +8,13 @@ availability into `OperatorSurfaceProjection` records and resolves scoped
 authority for live Site, session, and artifact routes. The CLI and browser UI
 consume the same catalog; neither owns a second list of operator surfaces.
 
+The contract also carries the browser-safe Sites and Agents overview and
+launch-result envelopes. The overview is explicitly compositional: Site and
+agent admission, Principal Runtime work posture, and NARS session posture keep
+their original authorities. The CLI joins those projections and admits launch
+intents; the browser parses and renders the result without inferring Site kind,
+inventing sessions, or launching a second runtime for ambiguous/degraded state.
+
 The `v3` route directory is authoritative for browser workspace handoff. A
 surface entry identifies its authority locus, projection owner, intent binding,
 and whether it is diagnostic or a replacement for a legacy surface. A consumer

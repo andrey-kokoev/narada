@@ -17,6 +17,8 @@ import { createSiteRegistryReadModel, type SiteRegistryReadModel } from './site-
 import { createRegistryMutationGateway, type RegistryMutationGateway } from './site-registry-management-gateway.js';
 import { renderOperatorWorkspacePage } from './operator-workspace-page.js';
 import { createAgentSessionReadModel, type AgentSessionReadModel } from './agent-session-read-model.js';
+import { createSiteAgentOverviewReadModel, type SiteAgentOverviewReadModel } from './site-agent-overview-read-model.js';
+import { createSiteAgentLaunchGateway, type SiteAgentLaunchGateway } from './site-agent-launch-gateway.js';
 import { ensureLaunchArtifact, naradaProperRoot } from '../lib/launch-artifact.js';
 import {
   DEFAULT_OPERATOR_ROUTER_PORT,
@@ -24,6 +26,7 @@ import {
   type OperatorRouterRouteProjection,
 } from '@narada2/operator-router';
 import {
+  OPERATOR_CONSOLE_AGENTS_PATH,
   OPERATOR_WORKSPACE_ROUTE_DIRECTORY_PATH,
   operatorSurfaceDescriptors,
   projectOperatorWorkspaceRouteDirectory,
@@ -178,6 +181,8 @@ export interface ConsoleServerConfig {
   registryReadModel?: SiteRegistryReadModel;
   registryMutationGateway?: RegistryMutationGateway;
   agentSessions?: AgentSessionReadModel;
+  siteAgentOverview?: SiteAgentOverviewReadModel;
+  siteAgentLaunch?: SiteAgentLaunchGateway;
   operatorConsoleUiRoot?: string;
 }
 
@@ -258,6 +263,11 @@ export async function createConsoleServer(config: ConsoleServerConfig): Promise<
   const observationFactory = createObservationFactory();
   const controlClientFactory = createControlClientFactory(registry);
   const registryReadModel = config.registryReadModel ?? createSiteRegistryReadModel();
+  const agentSessions = config.agentSessions ?? createAgentSessionReadModel(registryReadModel);
+  const siteAgentOverview = config.siteAgentOverview ?? createSiteAgentOverviewReadModel({
+    registryReadModel,
+    agentSessions,
+  });
 
   const routeContext = {
     registry,
@@ -265,7 +275,9 @@ export async function createConsoleServer(config: ConsoleServerConfig): Promise<
     controlClientFactory,
     registryReadModel,
     registryMutationGateway: config.registryMutationGateway ?? createRegistryMutationGateway(),
-    agentSessions: config.agentSessions ?? createAgentSessionReadModel(registryReadModel),
+    agentSessions,
+    siteAgentOverview,
+    siteAgentLaunch: config.siteAgentLaunch ?? createSiteAgentLaunchGateway({ overview: siteAgentOverview }),
     operatorConsoleUiRoot,
   };
 
@@ -378,7 +390,13 @@ export async function createConsoleServer(config: ConsoleServerConfig): Promise<
         return;
       }
 
-      if (pathname === '/') {
+      if (pathname === '/' && (config.ingressMode ?? 'diagnostic') === 'router') {
+        res.writeHead(302, { Location: OPERATOR_CONSOLE_AGENTS_PATH, 'Content-Length': '0' });
+        res.end();
+        return;
+      }
+
+      if (pathname === '/' || pathname === '/console/surfaces') {
         const workspaceProjection = await currentWorkspaceProjection();
         htmlResponse(res, 200, renderOperatorWorkspacePage({
           ingressMode: config.ingressMode ?? 'diagnostic',

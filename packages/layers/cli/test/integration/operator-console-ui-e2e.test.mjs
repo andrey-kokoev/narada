@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
+import { mkdir } from 'node:fs/promises';
 import { chromium } from '@playwright/test';
 import { projectOperatorWorkspaceRouteDirectory } from '@narada2/operator-console-contract';
 import { readOperatorConsoleUiAsset, readOperatorConsoleUiDocument } from '../../dist/commands/console-ui-assets.js';
@@ -23,6 +24,86 @@ const site = {
   retired_at: null,
   retire_reason: null,
 };
+
+const launchedAgentSessionId = 'session-agent-launched';
+
+function siteAgent(agentId, role, runtimeState, workState, sessionId = null) {
+  return {
+    agent_id: agentId,
+    local_agent_id: agentId.split('.').at(-1),
+    title: role[0].toUpperCase() + role.slice(1),
+    role,
+    admission_status: 'admitted',
+    runtime: {
+      state: runtimeState,
+      session_count: runtimeState === 'stopped' ? 0 : runtimeState === 'ambiguous' ? 2 : 1,
+      healthy_session_ids: sessionId ? [sessionId] : runtimeState === 'ambiguous' ? ['session-a', 'session-b'] : [],
+      selected_session_id: sessionId,
+    },
+    work: { state: workState, detail: null, source: 'principal-runtime' },
+    actions: {
+      start: runtimeState === 'stopped',
+      inspect: runtimeState === 'running' && Boolean(sessionId),
+      inspect_reason: runtimeState === 'ambiguous'
+        ? 'Multiple healthy sessions exist.'
+        : 'No single healthy session is available.',
+    },
+  };
+}
+
+function siteAgentOverview(launched) {
+  return {
+    schema: 'narada.operator_console.site_agent_overview.v1',
+    status: 'success',
+    generated_at: '2026-07-18T00:00:00.000Z',
+    refusals: [],
+    groups: [
+      {
+        id: 'personal-infrastructure',
+        label: 'User and Host',
+        sites: [
+          {
+            site_id: 'user-site',
+            display_name: 'User Site',
+            site_kind: 'user_site',
+            group_id: 'personal-infrastructure',
+            observation_status: 'present',
+            agents: [siteAgent('user-site.resident', 'resident', 'running', 'available', 'session-user-resident')],
+          },
+          {
+            site_id: 'desktop-host',
+            display_name: 'Desktop Host',
+            site_kind: 'pc_site',
+            group_id: 'personal-infrastructure',
+            observation_status: 'present',
+            agents: [],
+          },
+        ],
+      },
+      {
+        id: 'sites',
+        label: 'Sites',
+        sites: [{
+          site_id: 'site-a',
+          display_name: 'Site A',
+          site_kind: 'site',
+          group_id: 'sites',
+          observation_status: 'present',
+          agents: [
+            siteAgent(
+              'site-a.resident',
+              'resident',
+              launched ? 'running' : 'stopped',
+              launched ? 'executing' : 'available',
+              launched ? launchedAgentSessionId : null,
+            ),
+            siteAgent('site-a.architect', 'architect', 'ambiguous', 'claiming'),
+          ],
+        }],
+      },
+    ],
+  };
+}
 
 const activeAgentSession = {
   session_id: 'session-agent-active',
@@ -125,22 +206,70 @@ function mutationResponse(input, applied) {
 async function startFixtureServer({ agentSessions = [] } = {}) {
   const requests = [];
   let onboardingStarted = false;
+  let siteAgentLaunched = false;
   const server = createServer(async (req, res) => {
     try {
       const pathname = new URL(req.url || '/', 'http://127.0.0.1').pathname;
       if (req.method === 'GET' && pathname === '/console/routes') {
         sendJson(res, 200, projectOperatorWorkspaceRouteDirectory({
           workspaceHost: { kind: 'local', id: 'fixture', origin: null },
+          additionalRoutes: siteAgentLaunched ? {
+            'agent-sessions': [{
+              id: `router-${launchedAgentSessionId}`,
+              path: `/sessions/${launchedAgentSessionId}`,
+              kind: 'page',
+              label: `Session ${launchedAgentSessionId}`,
+              target: { kind: 'session', id: launchedAgentSessionId },
+            }],
+          } : undefined,
         }));
         return;
       }
-      if (req.method === 'GET' && ['/console/registry', '/console/registry/add', '/console/registry/manage', '/console/launch', '/console/onboarding', '/console/sessions'].includes(pathname)) {
+      if (req.method === 'GET' && ['/console/agents', '/console/registry', '/console/registry/add', '/console/registry/manage', '/console/launch', '/console/onboarding', '/console/sessions'].includes(pathname)) {
         const body = readOperatorConsoleUiDocument();
         res.writeHead(200, {
           'Content-Type': 'text/html; charset=utf-8',
           'Content-Length': Buffer.byteLength(body),
         });
         res.end(body);
+        return;
+      }
+      if (req.method === 'GET' && pathname === `/sessions/${launchedAgentSessionId}`) {
+        const body = `<!doctype html><html><body><main><h1>Agent Web UI</h1><p>${launchedAgentSessionId}</p></main></body></html>`;
+        res.writeHead(200, {
+          'Content-Type': 'text/html; charset=utf-8',
+          'Content-Length': Buffer.byteLength(body),
+        });
+        res.end(body);
+        return;
+      }
+      if (req.method === 'GET' && pathname === '/console/agents/api/overview') {
+        sendJson(res, 200, siteAgentOverview(siteAgentLaunched));
+        return;
+      }
+      if (req.method === 'POST' && pathname === '/console/agents/api/launch') {
+        const input = await readJson(req);
+        requests.push({ pathname, input });
+        if (input.site_id !== 'site-a' || input.agent_id !== 'site-a.resident') {
+          sendJson(res, 409, {
+            schema: 'narada.operator_console.agent_launch.v1',
+            status: 'refused',
+            site_id: input.site_id,
+            agent_id: input.agent_id,
+            session_id: null,
+            reason: 'agent_not_admitted',
+          });
+          return;
+        }
+        siteAgentLaunched = true;
+        sendJson(res, 200, {
+          schema: 'narada.operator_console.agent_launch.v1',
+          status: 'launched',
+          site_id: input.site_id,
+          agent_id: input.agent_id,
+          session_id: launchedAgentSessionId,
+          reason: null,
+        });
         return;
       }
       if (req.method === 'GET' && pathname === '/console/onboarding/api/status') {
@@ -312,6 +441,64 @@ test('Operator Console Vue registry projection works at desktop and mobile width
     await page.reload();
     await page.locator('.site-tile').waitFor();
     await assertNoHorizontalOverflow(page, 'operator console mobile');
+  } finally {
+    await browser.close();
+    await fixture.close();
+  }
+});
+
+test('Operator Console Sites and Agents groups authority, launches admitted agents, and routes inspection', async () => {
+  const fixture = await startFixtureServer();
+  const browser = await chromium.launch();
+  try {
+    await mkdir('test-results', { recursive: true });
+    const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+    const response = await page.goto(fixture.url + '/console/agents');
+    assert.equal(response?.status(), 200);
+    await page.getByRole('heading', { level: 2, name: 'Sites and Agents' }).waitFor();
+    await page.getByRole('heading', { level: 3, name: 'User and Host' }).waitFor();
+    await page.getByRole('heading', { level: 3, name: 'Sites' }).waitFor();
+    assert.equal(await page.locator('.site-box').count(), 3);
+    assert.equal(await page.locator('.agent-cell').count(), 3);
+    await page.getByRole('button', { name: 'site-a.resident: stopped, work available' }).waitFor();
+    await page.getByRole('button', { name: 'site-a.architect: ambiguous, work claiming' }).waitFor();
+    await assertNoHorizontalOverflow(page, 'sites and agents desktop');
+    await page.screenshot({ path: 'test-results/operator-console-sites-agents-desktop.png', fullPage: true });
+
+    const resident = page.getByRole('button', { name: 'site-a.resident: stopped, work available' });
+    await resident.focus();
+    await resident.press('Shift+F10');
+    await page.getByRole('menu').waitFor();
+    assert.ok((await page.getByRole('menu').textContent()).includes('Runtime: stopped'));
+    await page.keyboard.press('Escape');
+    await page.locator('body').click({ position: { x: 2, y: 2 } });
+
+    const architect = page.getByRole('button', { name: 'site-a.architect: ambiguous, work claiming' });
+    await architect.click({ button: 'right' });
+    await page.getByRole('menuitem', { name: 'Open Web UI' }).click();
+    await page.waitForURL('**/console/sessions');
+
+    await page.goto(fixture.url + '/console/agents');
+    await page.getByRole('button', { name: 'site-a.resident: stopped, work available' }).waitFor();
+    const popupPromise = page.waitForEvent('popup');
+    await page.getByRole('button', { name: 'site-a.resident: stopped, work available' }).click();
+    const popup = await popupPromise;
+    await popup.waitForURL(`**/sessions/${launchedAgentSessionId}`);
+    await popup.getByRole('heading', { name: 'Agent Web UI' }).waitFor();
+    assert.equal(await popup.getByText(launchedAgentSessionId).isVisible(), true);
+    assert.deepEqual(fixture.requests.at(-1), {
+      pathname: '/console/agents/api/launch',
+      input: { site_id: 'site-a', agent_id: 'site-a.resident' },
+    });
+    await page.getByText('site-a.resident is open.').waitFor();
+    await page.getByRole('button', { name: 'site-a.resident: running, work executing' }).waitFor();
+    await popup.close();
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.reload();
+    await page.getByRole('button', { name: 'site-a.resident: running, work executing' }).waitFor();
+    await assertNoHorizontalOverflow(page, 'sites and agents mobile');
+    await page.screenshot({ path: 'test-results/operator-console-sites-agents-mobile.png', fullPage: true });
   } finally {
     await browser.close();
     await fixture.close();

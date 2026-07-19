@@ -35,6 +35,29 @@ composable, page, and projection chain below.
 
 ## Current Map
 
+### Sites and Agents
+
+| Concern | Owner |
+| --- | --- |
+| Surface and wire contracts | `@narada2/operator-console-contract` |
+| Admitted agent inventory | User Site launch registry, read by `@narada2/cli` |
+| Site kind | Explicit Site configuration (`user_site`, `pc_site`, or `site`) |
+| Work posture | Principal Runtime projection |
+| Runtime/session posture | `@narada2/nars-session-core` session index |
+| Cross-authority read model and launch admission | `@narada2/cli` |
+| Browser transport and parser | `operator-console-ui/src/site-agents/transport.ts` and `adapter.ts` |
+| Refresh and launch client state | `useSiteAgents` |
+| Collection page | `/console/agents` |
+| Repeated projection | Site boxes containing admitted agent controls |
+
+This page composes existing authority projections; it is not an agent, Site,
+work, or session authority. A primary activation ensures a stopped agent or
+reuses one uniquely healthy session. Degraded and ambiguous runtime states are
+refusals, not invitations to start another process. Inspection resolves a
+concrete session route from the Workspace directory. One healthy session opens
+Agent Web UI, multiple healthy sessions route to Agent Sessions, and zero
+healthy sessions do not produce a guessed URL.
+
 ### User Site Registry
 
 | Concern | Owner |

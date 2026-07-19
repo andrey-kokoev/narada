@@ -12,8 +12,10 @@ Start the local Workspace host through the Narada CLI:
 narada console serve
 ```
 
-Open the Workspace URL printed by the command. The normal Registry entry point
-is `/console/registry/`. The Workspace route directory is read from
+Open the Workspace URL printed by the command. The normal entry point is
+`/console/agents`; it groups the User Site and Host/PC Site separately from
+ordinary Sites and shows only admitted agents. The Registry remains available
+at `/console/registry/`. The Workspace route directory is read from
 `/console/routes`; it describes which Console surfaces and routes are actually
 available from the current host.
 
@@ -25,15 +27,27 @@ not accept secrets or replace `narada onboarding` as the mutation authority.
 The browser is a projection client. It does not invent routes, replace the
 route authority, or bypass the CLI-owned server.
 
-The Launcher defaults to active launches that the CLI has freshly revalidated
-against NARS. Completed, stale, or otherwise unverified launch results are
-retained as evidence behind the low-emphasis **History** control; they are not
-presented as current runtime sessions. An active launch requires a fresh, owned,
-healthy NARS observation checked within the canonical two-minute freshness
-window; a terminal or projection handoff alone does not make a launch active.
-The dashboard revalidates persisted launches through NARS session management
-when it is read and while it remains open, without performing stale-session
-cleanup. Recheck a historical result before attaching.
+## Sites and Agents
+
+Each Site box identifies its explicit Site kind and admitted agents. The dot
+shows runtime posture, while the text under the role icon shows independent
+work posture. Do not interpret color alone.
+
+- Select a stopped agent to start it and open Agent Web UI when its healthy
+  session route appears.
+- Select a running agent to reuse its one healthy session; this does not start
+  a duplicate runtime.
+- Right-click an agent, use its visible actions button, or press `Shift+F10`
+  to inspect it. A uniquely healthy session opens Agent Web UI.
+- Multiple healthy sessions are `ambiguous`; use Agent Sessions to choose one.
+- A degraded runtime must be inspected or recovered before another launch.
+- A missing session route leaves the launch visible but refuses to guess an
+  Agent Web UI URL. Refresh the route directory after the runtime becomes
+  healthy.
+
+Agent Web UI remains session-scoped. The overview never substitutes an agent
+id for a NARS session id, and it does not mutate Principal Runtime or the NARS
+session index directly.
 
 ## Route-directory States
 
@@ -93,5 +107,7 @@ pnpm --filter @narada2/cli build
 ```
 
 The route-directory behavior is covered by the UI route-state tests and the
-Cloudflare projection tests. The CLI build is required because the Console UI
-is a launch artifact consumed by the CLI and Cloudflare asset pipeline.
+Cloudflare projection tests. The built-browser Sites and Agents journey is in
+`packages/layers/cli/test/integration/operator-console-ui-e2e.test.mjs`. The
+CLI build is required because the Console UI is a launch artifact consumed by
+the CLI and Cloudflare asset pipeline.

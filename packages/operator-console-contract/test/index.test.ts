@@ -12,15 +12,17 @@ import {
   projectOperatorSurfaceNavigation,
   projectOperatorWorkspaceRouteDirectory,
   isOperatorWorkspaceRoutePath,
+  parseOperatorSiteAgentOverviewWireResponse,
 } from '../src/index.ts';
 
 test('operator surface catalog describes canonical registry and launcher routes', () => {
-  assert.equal(operatorSurfaceDescriptors.length, 6);
+  assert.equal(operatorSurfaceDescriptors.length, 7);
+  assert.equal(findOperatorSurfaceRoute('/console/agents')?.surface.id, 'site-agents');
   assert.equal(findOperatorSurfaceRoute('/console/registry/')?.surface.id, 'site-registry');
   assert.equal(findOperatorSurfaceRoute('/console/registry/add')?.route.kind, 'workflow');
   assert.equal(findOperatorSurfaceRoute('/console/launch')?.surface.id, 'launcher');
   assert.equal(findOperatorSurfaceRoute('/console/onboarding')?.surface.id, 'onboarding');
-  assert.equal(primaryOperatorSurfaceRoute(operatorSurfaceDescriptors[0])?.path, '/console/registry');
+  assert.equal(primaryOperatorSurfaceRoute(operatorSurfaceDescriptors[0])?.path, '/console/agents');
   assert.equal(operatorSurfaceRoutePath('agent-sessions', 'sessions'), '/console/sessions');
   assert.equal(operatorSurfaceDescriptors.find((surface) => surface.id === 'launcher')?.authority.kind, 'operator-console');
   assert.equal(operatorSurfaceDescriptors.find((surface) => surface.id === 'launcher')?.projection.kind, 'launcher');
@@ -62,6 +64,7 @@ test('live route binding derives scoped authority without changing surface owner
 
 test('navigation projection follows descriptor availability and labels', () => {
   assert.deepEqual(projectOperatorSurfaceNavigation().map((item) => item.label), [
+    'Agents',
     'Sites',
     'Add Site',
     'Manage',
@@ -70,6 +73,7 @@ test('navigation projection follows descriptor availability and labels', () => {
     'Sessions',
   ]);
   assert.deepEqual(projectOperatorSurfaceNavigation({ availability: { launcher: 'unavailable' } }).map((item) => item.key), [
+    'agents',
     'sites',
     'add',
     'manage',
@@ -87,7 +91,7 @@ test('launcher descriptor projection is owned by the console UI, not the groupin
 test('navigation projection excludes routes that are unavailable within an available surface', () => {
   assert.deepEqual(projectOperatorSurfaceNavigation({
     routeAvailability: { 'site-registry': { add: 'unavailable', manage: 'unavailable' } },
-  }).map((item) => item.key), ['sites', 'launcher', 'onboarding', 'sessions']);
+  }).map((item) => item.key), ['agents', 'sites', 'launcher', 'onboarding', 'sessions']);
 });
 
 test('availability projection preserves planned and unavailable states', () => {
@@ -123,7 +127,7 @@ test('workspace route directory preserves concrete and template route availabili
   assert.deepEqual(projectOperatorSurfaceNavigation({
     availability: { artifacts: 'available' },
     routeAvailability: { artifacts: { artifact: 'available' } },
-  }).map((item) => item.key), ['sites', 'add', 'manage', 'launcher', 'onboarding', 'sessions']);
+  }).map((item) => item.key), ['agents', 'sites', 'add', 'manage', 'launcher', 'onboarding', 'sessions']);
 });
 
 test('workspace route directory admits live concrete routes without replacing templates', () => {
@@ -158,6 +162,42 @@ test('workspace route directory admits live concrete routes without replacing te
   assert.equal(firstAvailableConcreteProjectedOperatorSurfaceRoute(artifacts!)?.path, '/artifacts/session-demo');
   assert.equal(siteOperations?.projectedRoutes.find((route) => route.id === 'operations')?.availability, 'unavailable');
   assert.equal(artifacts?.projectedRoutes.find((route) => route.id === 'artifact')?.availability, 'unavailable');
+});
+
+test('site-agent overview parser preserves orthogonal runtime and work state', () => {
+  const parsed = parseOperatorSiteAgentOverviewWireResponse({
+    schema: 'narada.operator_console.site_agent_overview.v1',
+    status: 'success',
+    generated_at: '2026-07-18T00:00:00.000Z',
+    refusals: [],
+    groups: [{
+      id: 'sites',
+      label: 'Sites',
+      sites: [{
+        site_id: 'sonar',
+        display_name: 'Sonar',
+        site_kind: 'site',
+        group_id: 'sites',
+        observation_status: 'present',
+        agents: [{
+          agent_id: 'sonar.resident',
+          local_agent_id: 'resident',
+          title: 'Resident',
+          role: 'resident',
+          admission_status: 'admitted',
+          runtime: { state: 'running', session_count: 1, healthy_session_ids: ['session-1'], selected_session_id: 'session-1' },
+          work: { state: 'executing', detail: 'task-1', source: 'principal-runtime' },
+          actions: { start: false, inspect: true, inspect_reason: null },
+        }],
+      }],
+    }],
+  });
+  assert.equal(parsed?.groups[0]?.sites[0]?.agents[0]?.work.state, 'executing');
+  assert.equal(parsed?.groups[0]?.sites[0]?.agents[0]?.runtime.state, 'running');
+  assert.equal(parseOperatorSiteAgentOverviewWireResponse({
+    ...parsed,
+    groups: [{ id: 'sites', label: 'Sites', sites: [{ agents: [] }] }],
+  }), null);
 });
 
 test('workspace route directory rejects duplicate navigation keys across surfaces', () => {

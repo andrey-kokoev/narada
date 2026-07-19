@@ -269,6 +269,14 @@ describe('console server', () => {
       expect((workspaceRoutes.body as { schema: string; surfaces: unknown[] }).schema)
         .toBe('narada.operator_workspace.route_directory.v3');
       expect(Array.isArray((workspaceRoutes.body as { surfaces: unknown[] }).surfaces)).toBe(true);
+
+      const ingress = await fetch(url, { redirect: 'manual' });
+      expect(ingress.status).toBe(302);
+      expect(ingress.headers.get('location')).toBe('/console/agents');
+
+      const surfaces = await fetch(`${url}/console/surfaces`);
+      expect(surfaces.status).toBe(200);
+      expect(await surfaces.text()).toContain('Operator Workspace');
       await server.stop();
     });
 
@@ -381,9 +389,8 @@ describe('console server', () => {
         .toEqual(expect.arrayContaining([expect.objectContaining({ path: '/artifacts/session-a', availability: 'available' })]));
 
       const root = await fetch(url);
-      const rootHtml = await root.text();
-      expect(rootHtml).toContain('href="/sites/site-a/operations"');
-      expect(rootHtml).not.toContain('href="/sites/<site-id>/operations/"');
+      expect(root.status).toBe(200);
+      expect(root.url).toBe(`${url}/console/agents`);
       await server.stop();
     });
 
@@ -948,7 +955,33 @@ describe('console server', () => {
         plan: vi.fn(async (input: unknown) => ({ exitCode: 0, result: { status: 'planned', operation: 'retire', mutation_performed: false, before: { revision: 4 }, input } })),
         apply: vi.fn(async (input: unknown) => ({ exitCode: 0, result: { status: 'applied', operation: 'retire', mutation_performed: true, input } })),
       };
-      const server = await createConsoleServer({ port: 0, host: '127.0.0.1', registryReadModel, registryMutationGateway });
+      const siteAgentOverview = {
+        read: vi.fn(async () => ({
+          schema: 'narada.operator_console.site_agent_overview.v1' as const,
+          status: 'success' as const,
+          generated_at: '2026-07-18T00:00:00.000Z',
+          groups: [],
+          refusals: [],
+        })),
+      };
+      const siteAgentLaunch = {
+        launch: vi.fn(async ({ siteId, agentId }: { siteId: string; agentId: string }) => ({
+          schema: 'narada.operator_console.agent_launch.v1' as const,
+          status: 'launched' as const,
+          site_id: siteId,
+          agent_id: agentId,
+          session_id: 'session-new',
+          reason: null,
+        })),
+      };
+      const server = await createConsoleServer({
+        port: 0,
+        host: '127.0.0.1',
+        registryReadModel,
+        registryMutationGateway,
+        siteAgentOverview,
+        siteAgentLaunch,
+      });
       const url = await server.start();
 
       const page = await fetch(`${url}/console/registry`);
@@ -992,7 +1025,15 @@ describe('console server', () => {
       expect(sessionsPage.status, sessionsHtml).toBe(200);
       expect(sessionsHtml).toContain('<div id="app"></div>');
 
-      for (const pagePath of ['/console/registry', '/console/registry/add', '/console/registry/manage', '/console/launch', '/console/sessions']) {
+      const agentsPage = await fetch(`${url}/console/agents`);
+      expect(agentsPage.status).toBe(200);
+      expect(await agentsPage.text()).toContain('<div id="app"></div>');
+
+      const neutralConsole = await fetch(`${url}/console`, { redirect: 'manual' });
+      expect(neutralConsole.status).toBe(302);
+      expect(neutralConsole.headers.get('location')).toBe('/console/agents');
+
+      for (const pagePath of ['/console/agents', '/console/registry', '/console/registry/add', '/console/registry/manage', '/console/launch', '/console/sessions']) {
         const trailingSlashPage = await fetch(`${url}${pagePath}/`);
         expect(trailingSlashPage.status, `${pagePath}/ should be accepted`).toBe(200);
       }
@@ -1001,6 +1042,18 @@ describe('console server', () => {
       expect(sessionList.status).toBe(200);
       expect((sessionList.body as { schema: string; status: string }).schema).toBe('narada.operator_console.agent_sessions.v1');
       expect((sessionList.body as { status: string }).status).toBe('success');
+
+      const agentOverview = await httpGet(`${url}/console/agents/api/overview`);
+      expect(agentOverview.status).toBe(200);
+      expect((agentOverview.body as { schema: string }).schema).toBe('narada.operator_console.site_agent_overview.v1');
+
+      const agentLaunch = await httpPost(`${url}/console/agents/api/launch`, {
+        site_id: 'sonar',
+        agent_id: 'sonar.resident',
+      });
+      expect(agentLaunch.status).toBe(200);
+      expect((agentLaunch.body as { session_id: string }).session_id).toBe('session-new');
+      expect(siteAgentLaunch.launch).toHaveBeenCalledWith({ siteId: 'sonar', agentId: 'sonar.resident' });
 
       const unknownRoute = await fetch(`${url}/console/not-found`);
       expect(unknownRoute.status).toBe(404);

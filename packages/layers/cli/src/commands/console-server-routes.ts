@@ -24,7 +24,11 @@ import type { ConsoleControlRequest } from '@narada2/windows-site';
 import type { SiteRegistryReadModel } from './site-registry-read-model.js';
 import type { RegistryMutationGateway, RegistryMutationInput, RegistryMutationOperation } from './site-registry-management-gateway.js';
 import type { AgentSessionReadModel } from './agent-session-read-model.js';
+import type { SiteAgentOverviewReadModel } from './site-agent-overview-read-model.js';
+import type { SiteAgentLaunchGateway } from './site-agent-launch-gateway.js';
 import {
+  OPERATOR_CONSOLE_AGENTS_API_PATH,
+  OPERATOR_CONSOLE_AGENTS_PATH,
   OPERATOR_CONSOLE_ASSET_PATH,
   OPERATOR_CONSOLE_PATH,
   OPERATOR_CONSOLE_REGISTRY_PATH,
@@ -74,6 +78,8 @@ export interface ConsoleServerRouteContext {
   registryReadModel: SiteRegistryReadModel;
   registryMutationGateway: RegistryMutationGateway;
   agentSessions?: AgentSessionReadModel;
+  siteAgentOverview?: SiteAgentOverviewReadModel;
+  siteAgentLaunch?: SiteAgentLaunchGateway;
   operatorConsoleUiRoot?: string;
 }
 
@@ -275,12 +281,12 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
       },
     },
 
-    // The bundle has a neutral mount; Site Registry remains the canonical console entry.
+    // The bundle has a neutral mount; Sites and Agents is the operational entry.
     {
       method: 'GET',
       pattern: new RegExp(`^${regexEscape(OPERATOR_CONSOLE_PATH)}/?$`),
       handler: async (_req, res) => {
-        res.writeHead(302, { Location: `${OPERATOR_CONSOLE_REGISTRY_PATH}/`, 'Content-Length': '0' });
+        res.writeHead(302, { Location: OPERATOR_CONSOLE_AGENTS_PATH, 'Content-Length': '0' });
         res.end();
       },
     },
@@ -429,6 +435,72 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
           return;
         }
         htmlResponse(res, 200, readOperatorConsoleUiDocument(ctx.operatorConsoleUiRoot));
+      },
+    },
+    {
+      method: 'GET',
+      pattern: exactPathPattern(OPERATOR_CONSOLE_AGENTS_PATH),
+      handler: async (req, res) => {
+        const origin = req.headers.origin;
+        if (!setCorsHeaders(res, origin)) {
+          jsonResponse(res, 403, { error: 'Origin not allowed' });
+          return;
+        }
+        htmlResponse(res, 200, readOperatorConsoleUiDocument(ctx.operatorConsoleUiRoot));
+      },
+    },
+    {
+      method: 'GET',
+      pattern: suffixPathPattern(OPERATOR_CONSOLE_AGENTS_API_PATH, '/overview$'),
+      handler: async (req, res) => {
+        const origin = req.headers.origin;
+        if (!setCorsHeaders(res, origin)) {
+          jsonResponse(res, 403, { error: 'Origin not allowed' });
+          return;
+        }
+        if (!ctx.siteAgentOverview) {
+          jsonResponse(res, 503, {
+            schema: 'narada.operator_console.site_agent_overview.v1',
+            status: 'refused',
+            generated_at: new Date().toISOString(),
+            groups: [],
+            refusals: ['site_agent_overview_unavailable'],
+          });
+          return;
+        }
+        jsonResponse(res, 200, await ctx.siteAgentOverview.read());
+      },
+    },
+    {
+      method: 'POST',
+      pattern: suffixPathPattern(OPERATOR_CONSOLE_AGENTS_API_PATH, '/launch$'),
+      handler: async (req, res) => {
+        const origin = req.headers.origin;
+        if (!setCorsHeaders(res, origin)) {
+          jsonResponse(res, 403, { error: 'Origin not allowed' });
+          return;
+        }
+        const payload = await requestJson(req);
+        const siteId = optionalString(payload?.site_id)?.trim();
+        const agentId = optionalString(payload?.agent_id)?.trim();
+        if (!siteId || !agentId) {
+          jsonResponse(res, 400, { error: 'site_id and agent_id are required' });
+          return;
+        }
+        if (!ctx.siteAgentLaunch) {
+          jsonResponse(res, 503, {
+            schema: 'narada.operator_console.agent_launch.v1',
+            status: 'failed',
+            site_id: siteId,
+            agent_id: agentId,
+            session_id: null,
+            reason: 'site_agent_launch_unavailable',
+          });
+          return;
+        }
+        const result = await ctx.siteAgentLaunch.launch({ siteId, agentId });
+        const status = result.status === 'refused' ? 409 : result.status === 'failed' ? 500 : 200;
+        jsonResponse(res, status, result);
       },
     },
     {

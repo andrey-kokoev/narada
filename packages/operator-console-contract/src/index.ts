@@ -9,6 +9,8 @@ export const OPERATOR_CONSOLE_REGISTRY_MANAGE_PATH = `${OPERATOR_CONSOLE_REGISTR
 export const OPERATOR_CONSOLE_LAUNCH_PATH = `${OPERATOR_CONSOLE_PATH}/launch` as const;
 export const OPERATOR_CONSOLE_LAUNCH_API_PATH = `${OPERATOR_CONSOLE_LAUNCH_PATH}/api` as const;
 export const OPERATOR_CONSOLE_LAUNCH_SESSIONS_PATH = `${OPERATOR_CONSOLE_LAUNCH_PATH}/sessions` as const;
+export const OPERATOR_CONSOLE_AGENTS_PATH = `${OPERATOR_CONSOLE_PATH}/agents` as const;
+export const OPERATOR_CONSOLE_AGENTS_API_PATH = `${OPERATOR_CONSOLE_AGENTS_PATH}/api` as const;
 export const OPERATOR_CONSOLE_ONBOARDING_PATH = `${OPERATOR_CONSOLE_PATH}/onboarding` as const;
 export const OPERATOR_CONSOLE_ONBOARDING_API_PATH = `${OPERATOR_CONSOLE_ONBOARDING_PATH}/api` as const;
 export const OPERATOR_CONSOLE_SESSIONS_PATH = `${OPERATOR_CONSOLE_PATH}/sessions` as const;
@@ -19,6 +21,7 @@ export const OPERATOR_CONSOLE_LONG_RUNNING_REQUEST_TIMEOUT_MS = 120_000;
 
 export type OperatorSurfaceId =
   | 'site-registry'
+  | 'site-agents'
   | 'launcher'
   | 'site-operations'
   | 'agent-sessions'
@@ -55,6 +58,7 @@ export interface OperatorSurfaceHostRef {
 export type OperatorSurfaceProjectionKind =
   | 'workspace'
   | 'registry'
+  | 'site-agent-overview'
   | 'launcher'
   | 'site-operations'
   | 'session-inventory'
@@ -70,6 +74,7 @@ export interface OperatorSurfaceProjectionBinding {
 export type OperatorSurfaceIntentKind =
   | 'none'
   | 'registry-workflow'
+  | 'agent-launch'
   | 'launcher-control'
   | 'onboarding-control'
   | 'site-control'
@@ -91,7 +96,7 @@ export type OperatorSurfaceAvailability = 'available' | 'unavailable' | 'planned
 
 export type OperatorSurfaceRouteKind = 'page' | 'workflow';
 
-export type OperatorSurfaceNavigationKey = 'sites' | 'add' | 'manage' | 'launcher' | 'sessions' | 'onboarding';
+export type OperatorSurfaceNavigationKey = 'agents' | 'sites' | 'add' | 'manage' | 'launcher' | 'sessions' | 'onboarding';
 
 export interface OperatorSurfaceNavigationItem {
   key: OperatorSurfaceNavigationKey;
@@ -173,6 +178,150 @@ export interface OperatorSessionListWireResponse {
   count: number;
   sessions: OperatorSessionWireRecord[];
   refusals: string[];
+}
+
+export type OperatorSiteAgentGroupId = 'personal-infrastructure' | 'sites';
+export type OperatorSiteKind = 'user_site' | 'pc_site' | 'site';
+export type OperatorAgentRuntimeState = 'running' | 'degraded' | 'stopped' | 'ambiguous';
+
+export interface OperatorSiteAgentRuntimeWireState {
+  state: OperatorAgentRuntimeState;
+  session_count: number;
+  healthy_session_ids: string[];
+  selected_session_id: string | null;
+}
+
+export interface OperatorSiteAgentWorkWireState {
+  state: string;
+  detail: string | null;
+  source: 'principal-runtime' | 'unavailable';
+}
+
+export interface OperatorSiteAgentWireRecord {
+  agent_id: string;
+  local_agent_id: string;
+  title: string;
+  role: string;
+  admission_status: 'admitted';
+  runtime: OperatorSiteAgentRuntimeWireState;
+  work: OperatorSiteAgentWorkWireState;
+  actions: {
+    start: boolean;
+    inspect: boolean;
+    inspect_reason: string | null;
+  };
+}
+
+export interface OperatorSiteAgentSiteWireRecord {
+  site_id: string;
+  display_name: string;
+  site_kind: OperatorSiteKind;
+  group_id: OperatorSiteAgentGroupId;
+  observation_status: string;
+  agents: OperatorSiteAgentWireRecord[];
+}
+
+export interface OperatorSiteAgentGroupWireRecord {
+  id: OperatorSiteAgentGroupId;
+  label: string;
+  sites: OperatorSiteAgentSiteWireRecord[];
+}
+
+export interface OperatorSiteAgentOverviewWireResponse {
+  schema: 'narada.operator_console.site_agent_overview.v1';
+  status: 'success' | 'refused';
+  generated_at: string;
+  groups: OperatorSiteAgentGroupWireRecord[];
+  refusals: string[];
+}
+
+export interface OperatorSiteAgentLaunchWireResponse {
+  schema: 'narada.operator_console.agent_launch.v1';
+  status: 'launched' | 'reused' | 'refused' | 'failed';
+  site_id: string;
+  agent_id: string;
+  session_id: string | null;
+  reason: string | null;
+}
+
+function recordValue(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+function nonEmptyWireString(value: unknown): string | null {
+  return typeof value === 'string' && value.trim().length > 0 ? value : null;
+}
+
+function parseSiteAgentRuntime(value: unknown): OperatorSiteAgentRuntimeWireState | null {
+  const row = recordValue(value);
+  if (!row
+    || !['running', 'degraded', 'stopped', 'ambiguous'].includes(String(row.state))
+    || typeof row.session_count !== 'number'
+    || !Number.isInteger(row.session_count)
+    || row.session_count < 0
+    || !Array.isArray(row.healthy_session_ids)
+    || !row.healthy_session_ids.every((item) => nonEmptyWireString(item) !== null)
+    || (row.selected_session_id !== null && nonEmptyWireString(row.selected_session_id) === null)) return null;
+  return row as unknown as OperatorSiteAgentRuntimeWireState;
+}
+
+function parseSiteAgent(value: unknown): OperatorSiteAgentWireRecord | null {
+  const row = recordValue(value);
+  const runtime = parseSiteAgentRuntime(row?.runtime);
+  const work = recordValue(row?.work);
+  const actions = recordValue(row?.actions);
+  if (!row || !runtime || !work || !actions
+    || !nonEmptyWireString(row.agent_id)
+    || !nonEmptyWireString(row.local_agent_id)
+    || !nonEmptyWireString(row.title)
+    || !nonEmptyWireString(row.role)
+    || row.admission_status !== 'admitted'
+    || !nonEmptyWireString(work.state)
+    || (work.detail !== null && typeof work.detail !== 'string')
+    || (work.source !== 'principal-runtime' && work.source !== 'unavailable')
+    || typeof actions.start !== 'boolean'
+    || typeof actions.inspect !== 'boolean'
+    || (actions.inspect_reason !== null && typeof actions.inspect_reason !== 'string')) return null;
+  return row as unknown as OperatorSiteAgentWireRecord;
+}
+
+function parseSiteAgentSite(value: unknown): OperatorSiteAgentSiteWireRecord | null {
+  const row = recordValue(value);
+  if (!row
+    || !nonEmptyWireString(row.site_id)
+    || !nonEmptyWireString(row.display_name)
+    || !['user_site', 'pc_site', 'site'].includes(String(row.site_kind))
+    || !['personal-infrastructure', 'sites'].includes(String(row.group_id))
+    || !nonEmptyWireString(row.observation_status)
+    || !Array.isArray(row.agents)) return null;
+  const agents = row.agents.map(parseSiteAgent);
+  if (agents.some((agent) => agent === null)) return null;
+  return { ...row, agents: agents as OperatorSiteAgentWireRecord[] } as unknown as OperatorSiteAgentSiteWireRecord;
+}
+
+export function parseOperatorSiteAgentOverviewWireResponse(value: unknown): OperatorSiteAgentOverviewWireResponse | null {
+  const row = recordValue(value);
+  if (!row
+    || row.schema !== 'narada.operator_console.site_agent_overview.v1'
+    || (row.status !== 'success' && row.status !== 'refused')
+    || !nonEmptyWireString(row.generated_at)
+    || !Array.isArray(row.groups)
+    || !Array.isArray(row.refusals)
+    || !row.refusals.every((item) => typeof item === 'string')) return null;
+  const groups = row.groups.map((group): OperatorSiteAgentGroupWireRecord | null => {
+    const groupRow = recordValue(group);
+    if (!groupRow
+      || !['personal-infrastructure', 'sites'].includes(String(groupRow.id))
+      || !nonEmptyWireString(groupRow.label)
+      || !Array.isArray(groupRow.sites)) return null;
+    const sites = groupRow.sites.map(parseSiteAgentSite);
+    if (sites.some((site) => site === null)) return null;
+    return { ...groupRow, sites: sites as OperatorSiteAgentSiteWireRecord[] } as unknown as OperatorSiteAgentGroupWireRecord;
+  });
+  if (groups.some((group) => group === null)) return null;
+  return { ...row, groups: groups as OperatorSiteAgentGroupWireRecord[] } as unknown as OperatorSiteAgentOverviewWireResponse;
 }
 
 export interface OperatorSurfaceAvailabilityDetail {
@@ -267,6 +416,27 @@ export function projectOperatorSurfaceRouteBinding(
 }
 
 export const operatorSurfaceDescriptors: readonly OperatorSurfaceDescriptor[] = [
+  {
+    schema: OPERATOR_SURFACE_DESCRIPTOR_SCHEMA,
+    id: 'site-agents',
+    name: 'Sites and Agents',
+    scope: 'operator-console',
+    owner: 'Operator Workspace',
+    authority: { kind: 'operator-console', id: '@narada2/cli' },
+    authorityHost: { kind: 'local', id: 'operator-console', origin: null },
+    projection: { kind: 'site-agent-overview', owner: '@narada2/operator-console-ui' },
+    intent: { kind: 'agent-launch', endpoint: OPERATOR_CONSOLE_AGENTS_API_PATH, endpointBase: 'workspace', protocols: ['http'] },
+    diagnosticOnly: false,
+    routes: [
+      { id: 'agents', path: OPERATOR_CONSOLE_AGENTS_PATH, kind: 'page', label: 'Agents', navigationKey: 'agents' },
+    ],
+    defaultAvailability: 'available',
+    detail: {
+      available: 'Inspect admitted agents by Site, start stopped agents, and open healthy sessions.',
+      unavailable: 'The Sites and Agents projection is not reachable from this host.',
+      planned: 'The Sites and Agents projection is not yet available from this host.',
+    },
+  },
   {
     schema: OPERATOR_SURFACE_DESCRIPTOR_SCHEMA,
     id: 'site-registry',
