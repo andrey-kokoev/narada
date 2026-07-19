@@ -62,7 +62,11 @@ afterAll(async () => {
   await new Promise((resolve) => server.close(resolve));
 });
 
-function providerService(options: { timeout_ms?: number; api_key?: string } = {}) {
+function providerService(options: { timeout_ms?: number; api_key?: string; on_abort?: () => void } = {}) {
+  const fetchImpl: typeof fetch = (input, init) => {
+    init?.signal?.addEventListener('abort', () => options.on_abort?.(), { once: true });
+    return fetch(input, init);
+  };
   const executor = createCloudflareNarsProviderRuntimeExecutor({
     binding: {
       provider: 'fixture-provider',
@@ -74,6 +78,7 @@ function providerService(options: { timeout_ms?: number; api_key?: string } = {}
       credential_secret_ref: 'narada/provider/fixture-provider/api-key',
       timeout_ms: options.timeout_ms ?? null,
     },
+    fetch_impl: fetchImpl,
   });
   return createCloudflareNarsAuthorityService({ max_events: 50, runtime_executor: executor, mcp_fabric: { scope: 'all' } });
 }
@@ -333,9 +338,57 @@ describe('cloudflare provider http adapter', () => {
     expect(after.code).toBe('session_revoked');
   });
 
+  test('provider tool admission is fenced when revocation arrives after the provider response', async () => {
+    behavior = { body: chatReply('too late', [{ name: 'server-a__mutate', arguments: {} }]) };
+    let active = true;
+    let toolInvocations = 0;
+    const controller = new AbortController();
+    const executor = createCloudflareNarsProviderRuntimeExecutor({
+      binding: {
+        provider: 'fixture-provider',
+        adapter_kind: 'openai-compatible-chat-completions',
+        model: 'fixture-model',
+        thinking: 'low',
+        api_base_url: baseUrl,
+        api_key: null,
+        credential_secret_ref: 'narada/provider/fixture-provider/api-key',
+        timeout_ms: null,
+      },
+      fetch_impl: async (input, init) => {
+        const response = await fetch(input, init);
+        active = false;
+        controller.abort();
+        return response;
+      },
+    });
+    const service = createCloudflareNarsAuthorityService({ runtime_executor: executor });
+    const created = service.createSession({ session_id: 'cf_provider_tool_revoke', site_id: 'narada.test', agent_id: 'cloudflare.resident' }, now);
+    const toolRegistry = {
+      register: () => ({ status: 'refused' as const, code: 'not_used', server_name: 'server-a' }),
+      listServers: () => ['server-a'],
+      listTools: () => [{ server_name: 'server-a', tool_name: 'mutate', tool: 'server-a.mutate' }],
+      callTool: () => { toolInvocations += 1; return { status: 'ok' as const, duration_ms: 0 }; },
+    };
+    const result = await executor.execute({
+      session: created.session!,
+      input_id: 'input_tool_revoke',
+      method: 'conversation.send',
+      payload: { message: 'call a mutating tool' },
+      message: 'call a mutating tool',
+      now,
+      tool_registry: toolRegistry,
+      mcp_fabric: created.session!.mcp_fabric,
+      session_control: { signal: controller.signal, isActive: () => active },
+    });
+    expect(toolInvocations).toBe(0);
+    expect(result.event_payloads.some((payload) => payload.event === 'tool_call')).toBe(false);
+    expect(result.event_payloads.find((payload) => payload.event === 'provider_error')?.error_code).toBe('provider_request_aborted');
+  });
+
   test('revoke racing an in-flight send cannot resurrect revoked state; the turn is refused and suppressed', async () => {
     behavior = { body: chatReply('too late'), delay_ms: 300 };
-    const service = providerService();
+    let abortObserved = false;
+    const service = providerService({ on_abort: () => { abortObserved = true; } });
     service.createSession({ session_id: 'cf_provider_revoke_race', site_id: 'narada.test', agent_id: 'cloudflare.resident' }, now);
     const sendPromise = service.submitInput({ session_id: 'cf_provider_revoke_race', method: 'conversation.send', payload: { message: 'slow turn' }, now });
     await sleep(50);
@@ -343,6 +396,8 @@ describe('cloudflare provider http adapter', () => {
     const send = await sendPromise;
     expect(send.status).toBe('refused');
     expect(send.code).toBe('session_revoked');
+    expect(abortObserved).toBe(true);
+    expect(send.events).toBeUndefined();
     // The revoked authority record must survive: no stale pre-revoke write-back.
     expect(service.readHealth('cf_provider_revoke_race')).toMatchObject({ status: 'refused', code: 'session_revoked' });
     const after = await service.submitInput({ session_id: 'cf_provider_revoke_race', method: 'conversation.send', payload: { message: 'after revoke' }, now });
@@ -386,6 +441,7 @@ describe('cloudflare provider http adapter', () => {
       now,
       tool_registry: duplicateRegistry,
       mcp_fabric: created.session!.mcp_fabric,
+      session_control: { signal: new AbortController().signal, isActive: () => true },
     });
     const toolCall = result.event_payloads.find((payload) => payload.event === 'tool_call');
     expect(toolCall).toMatchObject({ decision: 'refused', tool_name: 'search', ambiguity_candidates: ['server-a__search', 'server-b__search'] });

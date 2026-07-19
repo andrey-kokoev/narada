@@ -98,6 +98,10 @@ export function createCloudflareNarsProviderRuntimeExecutor(options: CloudflareN
     return true;
   }
 
+  function assertSessionExecutionActive(input: CloudflareNarsAuthorityRuntimeExecutionInput): void {
+    if (input.session_control.signal.aborted || !input.session_control.isActive()) throw new Error('session_revoked');
+  }
+
   interface FabricToolEntry {
     qualified: string;
     server_name: string;
@@ -182,6 +186,10 @@ export function createCloudflareNarsProviderRuntimeExecutor(options: CloudflareN
       return { execution_kind: CLOUDFLARE_NARS_PROVIDER_EXECUTION_MODE, event_payloads: refused, provider_turn: { request_id: requestId, terminal_state: 'failed' } } as CloudflareNarsAuthorityRuntimeExecutionResult;
     }
     const controller = new AbortController();
+    const sessionSignal = input.session_control.signal;
+    const onSessionAbort = () => controller.abort(new Error('session_revoked'));
+    if (sessionSignal.aborted) onSessionAbort();
+    else sessionSignal.addEventListener('abort', onSessionAbort, { once: true });
     registerInflight(input.session.session_id, input.input_id, controller);
     let timedOut = false;
     const timeout = setTimeout(() => {
@@ -219,12 +227,14 @@ export function createCloudflareNarsProviderRuntimeExecutor(options: CloudflareN
           chatPath: binding.chat_path ?? undefined,
         },
       );
+      assertSessionExecutionActive(input);
       const response = await fetchImpl(request.url, {
         method: 'POST',
         headers: request.headers as Record<string, string>,
         body: JSON.stringify(request.body),
         signal: controller.signal,
       });
+      assertSessionExecutionActive(input);
       if (!response.ok) {
         const detail = await response.text().catch(() => '');
         payloads.push({
@@ -243,6 +253,7 @@ export function createCloudflareNarsProviderRuntimeExecutor(options: CloudflareN
       const reply: ProviderTurnReply = extractOpenAiChatReply(await response.json().catch(() => null));
       const registry = input.tool_registry;
       for (const call of reply.tool_calls) {
+        assertSessionExecutionActive(input);
         // Resolve through the advertised qualified names first. A bare tool
         // name must be unique across servers: duplicates refuse with a typed
         // ambiguity refusal naming the qualified candidates, never a silent
@@ -277,7 +288,18 @@ export function createCloudflareNarsProviderRuntimeExecutor(options: CloudflareN
           mcp_fabric_scope: input.mcp_fabric.requested_scope,
         });
         if (admitted && serverName) {
-          const result = registry.callTool({ server_name: serverName, tool_name: toolName, tool: `${serverName}.${toolName}`, arguments: effectiveArguments });
+          // This check is the mutation admission/commit fence. Once an
+          // adapter has committed an external effect it must use this key for
+          // idempotency or provide a compensating operation; cancellation is
+          // not a rollback mechanism.
+          assertSessionExecutionActive(input);
+          const result = registry.callTool({
+            server_name: serverName,
+            tool_name: toolName,
+            tool: `${serverName}.${toolName}`,
+            arguments: effectiveArguments,
+            idempotency_key: input.input_id,
+          });
           payloads.push({
             event: 'tool_result',
             type: 'tool.result',
@@ -339,6 +361,7 @@ export function createCloudflareNarsProviderRuntimeExecutor(options: CloudflareN
     } catch (error) {
       const aborted = isAbortError(error) || controller.signal.aborted;
       const code = timedOut ? 'provider_request_timeout' : aborted ? 'provider_request_aborted' : 'provider_request_failed';
+      const sessionAborted = input.session_control.signal.aborted || !input.session_control.isActive();
       payloads.push({
         event: 'provider_error',
         type: 'provider.error',
@@ -350,7 +373,7 @@ export function createCloudflareNarsProviderRuntimeExecutor(options: CloudflareN
         authority_origin: 'cloudflare',
       });
       if (aborted) {
-        payloads.push({ event: 'turn_interrupted', type: 'turn.interrupted', input_id: input.input_id, reason: timedOut ? 'provider_request_timeout' : 'operator_interrupt', request_id: requestId });
+        payloads.push({ event: 'turn_interrupted', type: 'turn.interrupted', input_id: input.input_id, reason: timedOut ? 'provider_request_timeout' : sessionAborted ? 'session_revoked' : 'operator_interrupt', request_id: requestId });
         payloads.push({ event: 'turn_complete', type: 'turn.completed', input_id: input.input_id, terminal_state: 'interrupted', request_id: requestId });
       } else {
         payloads.push({ event: 'turn_complete', type: 'turn.completed', input_id: input.input_id, terminal_state: 'failed', request_id: requestId });
@@ -358,6 +381,7 @@ export function createCloudflareNarsProviderRuntimeExecutor(options: CloudflareN
       return { execution_kind: CLOUDFLARE_NARS_PROVIDER_EXECUTION_MODE, event_payloads: payloads, provider_turn: { request_id: requestId, terminal_state: aborted ? 'interrupted' : 'failed' } } as CloudflareNarsAuthorityRuntimeExecutionResult;
     } finally {
       clearTimeout(timeout);
+      sessionSignal.removeEventListener('abort', onSessionAbort);
       releaseInflight(input.session.session_id, input.input_id);
     }
   }
@@ -365,6 +389,9 @@ export function createCloudflareNarsProviderRuntimeExecutor(options: CloudflareN
   return {
     execution_mode: CLOUDFLARE_NARS_PROVIDER_EXECUTION_MODE,
     provider_binding_summary: bindingSummary,
+    abortSession(sessionId, error = new Error('session_revoked')) {
+      return abortInflight(sessionId, error);
+    },
     execute(input: CloudflareNarsAuthorityRuntimeExecutionInput) {
       if (input.method === 'conversation.interrupt') {
         if (abortInflight(input.session.session_id, new Error('operator_interrupt'))) {

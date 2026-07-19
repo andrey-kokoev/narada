@@ -169,6 +169,10 @@ export interface CloudflareNarsAuthorityToolCall {
   tool_name: string;
   tool: string;
   arguments?: Record<string, unknown>;
+  // Stable per-turn key for adapters that need idempotent or compensatable
+  // external effects. Revocation fences admission; it cannot roll back an
+  // effect that an adapter has already committed.
+  idempotency_key?: string;
 }
 
 export interface CloudflareNarsAuthorityToolResult {
@@ -246,6 +250,11 @@ export interface CloudflareNarsAuthorityArtifactToolAuthority {
   presentArtifact(args: { session_id: string; artifact_id: string; text?: string | null; now?: string }): CloudflareNarsAuthorityArtifactPresentResult;
 }
 
+export interface CloudflareNarsAuthoritySessionExecutionControl {
+  signal: AbortSignal;
+  isActive(): boolean;
+}
+
 export interface CloudflareNarsAuthorityRuntimeExecutionInput {
   session: CloudflareNarsAuthoritySession;
   input_id: string;
@@ -255,6 +264,7 @@ export interface CloudflareNarsAuthorityRuntimeExecutionInput {
   now: string;
   tool_registry: CloudflareToolAdapterRegistry;
   mcp_fabric: CloudflareMcpFabricSummary;
+  session_control: CloudflareNarsAuthoritySessionExecutionControl;
 }
 
 export interface CloudflareNarsAuthorityRuntimeExecutionResult {
@@ -266,6 +276,7 @@ export interface CloudflareNarsAuthorityRuntimeExecutionResult {
 export interface CloudflareNarsAuthorityRuntimeExecutor {
   execution_mode: CloudflareNarsAuthorityExecutionMode;
   execute(input: CloudflareNarsAuthorityRuntimeExecutionInput): CloudflareNarsAuthorityRuntimeExecutionResult | Promise<CloudflareNarsAuthorityRuntimeExecutionResult>;
+  abortSession?(sessionId: string, error?: Error): boolean;
 }
 
 export interface ArtifactProjectionPolicy {
@@ -913,8 +924,48 @@ export function createCloudflareNarsAuthorityService(options: {
   // session; session.close drains this queue before appending session_closed.
   const sessionInputQueues = new Map<string, Promise<unknown>>();
   const sessionClosing = new Set<string>();
+  const sessionExecutionControllers = new Map<string, AbortController>();
   const maxEvents = Math.max(1, Math.floor(options.max_events ?? 500));
   const runtimeExecutor = options.runtime_executor ?? createCloudflareNarsAuthorityRuntimeExecutor();
+  function sessionExecutionController(sessionId: string): AbortController {
+    let controller = sessionExecutionControllers.get(sessionId);
+    if (!controller) {
+      controller = new AbortController();
+      sessionExecutionControllers.set(sessionId, controller);
+    }
+    return controller;
+  }
+  function sessionExecutionControl(sessionId: string): CloudflareNarsAuthoritySessionExecutionControl {
+    const controller = sessionExecutionController(sessionId);
+    return {
+      signal: controller.signal,
+      isActive: () => sessions.get(sessionId)?.lifecycle_state === 'active',
+    };
+  }
+  function abortSessionExecution(sessionId: string, error: Error): boolean {
+    const controller = sessionExecutionController(sessionId);
+    const wasRunning = !controller.signal.aborted;
+    controller.abort();
+    const providerAborted = runtimeExecutor.abortSession?.(sessionId, error) ?? false;
+    return wasRunning || providerAborted;
+  }
+  function sessionToolRegistry(sessionId: string, control: CloudflareNarsAuthoritySessionExecutionControl): CloudflareToolAdapterRegistry {
+    const registry = createCloudflareNarsAuthorityMcpRegistry({
+      authority: service,
+      fabric: sessionMcpFabrics.get(sessionId) ?? sessions.get(sessionId)?.mcp_fabric ?? emptyCloudflareMcpFabricSummary('none', [], 'session_not_found'),
+    });
+    return {
+      register: (adapter) => registry.register(adapter),
+      listServers: () => registry.listServers(),
+      listTools: (serverName) => registry.listTools(serverName),
+      callTool(call) {
+        if (control.signal.aborted || !control.isActive()) {
+          return { status: 'failed', error: 'session_revoked', error_code: 'session_revoked', duration_ms: 0 };
+        }
+        return registry.callTool(call);
+      },
+    };
+  }
   function refuseTransition(transitionId: string | null, code: string, detail: string, now: string) {
     return { status: 'refused' as const, code, transition_id: transitionId, detail, occurred_at: now };
   }
@@ -1030,6 +1081,7 @@ export function createCloudflareNarsAuthorityService(options: {
       const inputId = `input_${safeToken(now)}_${Math.random().toString(36).slice(2, 8)}`;
       const payload = args.payload ?? {};
       const message = typeof payload.message === 'string' ? payload.message : typeof payload.text === 'string' ? payload.text : '';
+      const sessionControl = sessionExecutionControl(args.session_id);
       const admitted = [
         appendAuthorityEvent(args.session_id, { event: 'operator_input_admitted', type: 'operator_input.admitted', input_id: inputId, method: args.method, payload }, now),
         appendAuthorityEvent(args.session_id, { event: 'user_message', type: 'user_message', input_id: inputId, content: message }, now),
@@ -1041,8 +1093,9 @@ export function createCloudflareNarsAuthorityService(options: {
         payload,
         message,
         now,
-        tool_registry: createCloudflareNarsAuthorityMcpRegistry({ authority: service, fabric: sessionMcpFabrics.get(args.session_id) ?? session.mcp_fabric }),
+        tool_registry: sessionToolRegistry(args.session_id, sessionControl),
         mcp_fabric: sessionMcpFabrics.get(args.session_id) ?? session.mcp_fabric,
+        session_control: sessionControl,
       });
       // Revoke is terminal: if the session left the active state while this
       // input executed (e.g. DELETE revoke racing an in-flight send), suppress
@@ -1182,6 +1235,10 @@ export function createCloudflareNarsAuthorityService(options: {
       const session = sessions.get(sessionId);
       if (!session) return { status: 'refused', code: 'session_not_found', session_id: sessionId };
       sessions.set(sessionId, { ...session, lifecycle_state: 'revoked', revoked_at: revokedAt, updated_at: revokedAt });
+      // Lifecycle state is the linearization point. Abort after recording it
+      // so every cancellation observer sees the terminal state, and use both
+      // the shared session signal and provider-specific in-flight handles.
+      abortSessionExecution(sessionId, new Error('session_revoked'));
       return { status: 'revoked', session_id: sessionId };
     },
     prepareTransitionTarget(args: {
