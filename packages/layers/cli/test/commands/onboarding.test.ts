@@ -18,7 +18,7 @@ vi.mock('../../src/commands/nars.js', () => ({ narsSessionsCommand: narsSessions
 // provisioning boundary here.
 vi.mock('../../src/commands/sites.js', () => ({ sitesInitCommand: sitesInitMock }));
 
-import { onboardingRoleApprovalCommand, onboardingRoleMaterializeCommand, onboardingStartCommand, onboardingStatusCommand } from '../../src/commands/onboarding.js';
+import { appendAgentsToJsonRegistryText, appendAgentsToPsd1RegistryText, onboardingRoleApprovalCommand, onboardingRoleMaterializeCommand, onboardingStartCommand, onboardingStatusCommand } from '../../src/commands/onboarding.js';
 import type { CommandContext } from '../../src/lib/command-wrapper.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
 
@@ -471,5 +471,79 @@ describe('User Site onboarding', () => {
       reason_code: 'role_materialization_requires_approval',
     });
     expect(await readFile(registry, 'utf8')).toBe(registryBefore);
+  });
+});
+
+describe('launch registry agent append', () => {
+  const psd1Fixture = [
+    '@{',
+    '  # Explicitly admit the composed host/user-site/local-site MCP fabric.',
+    '  McpScope = "all"',
+    '',
+    '  CarrierPolicy = @{',
+    '    DirectCarrierStartEnabled = $true',
+    '    Shims = @{',
+    '      Enabled = $true',
+    '    }',
+    '  }',
+    '',
+    '  Agents = @(',
+    '    @{',
+    '      Agent = "andrey-user.resident"',
+    '      Title = "Andrey Resident"',
+    '      NaradaRoot = "C:\\Users\\Andrey\\Narada"',
+    '      OperatorSurface = "agent-web-ui"',
+    '      Runtime = "narada-agent-runtime-server"',
+    '      EnableNativeShell = $false',
+    '    }',
+    '  )',
+    '}',
+    '',
+  ].join('\n');
+
+  const architectBlock = [
+    '    @{',
+    '      Agent = "andrey-user.architect"',
+    '      Title = "Architect"',
+    '      Role = "architect"',
+    '      OperatorSurface = "agent-cli"',
+    '      Runtime = "narada-agent-runtime-server"',
+    '      EnableNativeShell = $false',
+    '    }',
+  ];
+
+  it('appends psd1 agent blocks without disturbing policy content or comments', () => {
+    const merged = appendAgentsToPsd1RegistryText(psd1Fixture, [architectBlock]);
+    expect(merged.slice(0, merged.indexOf('Agents = @('))).toBe(psd1Fixture.slice(0, psd1Fixture.indexOf('Agents = @(')));
+    expect(merged).toContain('CarrierPolicy = @{');
+    expect(merged).toContain('Shims = @{');
+    expect(merged).toContain('McpScope = "all"');
+    expect(merged).toContain('Agent = "andrey-user.resident"');
+    expect(merged.indexOf('Agent = "andrey-user.architect"')).toBeGreaterThan(merged.indexOf('Agent = "andrey-user.resident"'));
+    expect(merged.split('    @{').length - 1).toBe(2);
+    expect(merged.slice(merged.indexOf('\n  )'))).toBe(psd1Fixture.slice(psd1Fixture.indexOf('\n  )')));
+  });
+
+  it('matches the line-ending style of the psd1 file', () => {
+    const crlfFixture = psd1Fixture.replace(/\n/g, '\r\n');
+    const merged = appendAgentsToPsd1RegistryText(crlfFixture, [architectBlock]);
+    expect(merged).toContain('Agent = "andrey-user.architect"\r\n');
+    expect(merged).toContain('    }\r\n  )\r\n}');
+  });
+
+  it('refuses psd1 content without a detectable Agents array', () => {
+    expect(() => appendAgentsToPsd1RegistryText('@{\n  McpScope = "all"\n}\n', [architectBlock])).toThrow('launch_registry_agents_array_not_found');
+  });
+
+  it('preserves unrelated top-level json keys when appending agents', () => {
+    const merged = JSON.parse(appendAgentsToJsonRegistryText(
+      `${JSON.stringify({ NaradaRoot: '/x', Policy: { keep: true }, Agents: [{ Agent: 'site.resident' }] })}\n`,
+      [{ Agent: 'site.architect', Role: 'architect', OperatorSurface: 'agent-cli' }],
+    )) as Record<string, unknown>;
+    expect(merged).toMatchObject({
+      NaradaRoot: '/x',
+      Policy: { keep: true },
+      Agents: [{ Agent: 'site.resident' }, { Agent: 'site.architect', Role: 'architect' }],
+    });
   });
 });

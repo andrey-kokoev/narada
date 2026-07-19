@@ -25,8 +25,8 @@ export interface OnboardingStartOptions {
   format?: CliFormat;
 }
 
-function userSiteLaunchRegistryJson(root: string, agents?: Record<string, unknown>[]): string {
-  return `${JSON.stringify({ NaradaRoot: root, Agents: agents ?? [userSiteLaunchRegistryAgent(root)] }, null, 2)}\n`;
+function userSiteLaunchRegistryJson(root: string): string {
+  return `${JSON.stringify({ NaradaRoot: root, Agents: [userSiteLaunchRegistryAgent(root)] }, null, 2)}\n`;
 }
 
 export interface OnboardingStatusOptions {
@@ -418,12 +418,11 @@ function renderLaunchRegistryAgentBlock(agent: Record<string, unknown>): string[
   return lines;
 }
 
-function userSiteLaunchRegistryText(root: string, agents?: Record<string, unknown>[]): string {
-  const list = agents ?? [userSiteLaunchRegistryAgent(root)];
+function userSiteLaunchRegistryText(root: string): string {
   return [
     '@{',
     '  Agents = @(',
-    ...list.flatMap((agent) => renderLaunchRegistryAgentBlock(agent)),
+    ...renderLaunchRegistryAgentBlock(userSiteLaunchRegistryAgent(root)),
     '  )',
     '}',
   ].join('\n') + '\n';
@@ -445,6 +444,26 @@ function userSiteLaunchRegistryRoleAgent(root: string, role: 'architect' | 'buil
     Runtime: 'narada-agent-runtime-server',
     EnableNativeShell: false,
   };
+}
+
+export function appendAgentsToPsd1RegistryText(text: string, agentBlocks: string[][]): string {
+  if (agentBlocks.length === 0) return text;
+  const openMatch = /(^|\n)[ \t]*Agents[ \t]*=[ \t]*@\([ \t]*(\r?\n|$)/.exec(text);
+  if (!openMatch) throw new Error('launch_registry_agents_array_not_found');
+  const searchFrom = openMatch.index + openMatch[0].length;
+  const closeMatch = /(^|\n)([ \t]*\)[ \t]*(\r?\n|$))/.exec(text.slice(searchFrom));
+  if (!closeMatch) throw new Error('launch_registry_agents_array_not_found');
+  const lineEnding = text.includes('\r\n') ? '\r\n' : '\n';
+  const insertAt = searchFrom + closeMatch.index + (closeMatch[1] ? closeMatch[1].length : 0);
+  const insertion = agentBlocks.map((block) => block.join(lineEnding) + lineEnding).join('');
+  return `${text.slice(0, insertAt)}${insertion}${text.slice(insertAt)}`;
+}
+
+export function appendAgentsToJsonRegistryText(text: string, newAgents: Record<string, unknown>[]): string {
+  if (newAgents.length === 0) return text;
+  const parsed = JSON.parse(text) as Record<string, unknown>;
+  const existing = Array.isArray(parsed.Agents) ? parsed.Agents : parsed.Agents ? [parsed.Agents] : [];
+  return `${JSON.stringify({ ...parsed, Agents: [...existing, ...newAgents] }, null, 2)}\n`;
 }
 
 export async function ensureUserSiteProvisioned(
@@ -939,10 +958,9 @@ export async function onboardingRoleMaterializeCommand(
     const previousRegistryText = readFileSync(registryPath, 'utf8');
     const previousApprovalText = readFileSync(approvalPath, 'utf8');
     const newAgents = toMaterialize.map((role) => userSiteLaunchRegistryRoleAgent(root, role as 'architect' | 'builder'));
-    const mergedAgents = [...existingAgents.map((agent) => ({ ...agent })), ...newAgents];
     const registryText = registryPath.toLowerCase().endsWith('.json')
-      ? userSiteLaunchRegistryJson(root, mergedAgents)
-      : userSiteLaunchRegistryText(root, mergedAgents);
+      ? appendAgentsToJsonRegistryText(previousRegistryText, newAgents)
+      : appendAgentsToPsd1RegistryText(previousRegistryText, newAgents.map((agent) => renderLaunchRegistryAgentBlock(agent)));
     await atomicWriteText(registryPath, registryText);
 
     const materializedCumulative = [...new Set([...(approval.materialized_roles ?? []), ...toMaterialize])];
