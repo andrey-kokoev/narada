@@ -164,21 +164,46 @@ Site-scoped projection at `/sites/<site-id>/operations/` when started with
 diagnostic mode.
 
 The Sites and Agents page is a composition, not an authority. The CLI read
-model joins registered launch records, explicit Site kind, Principal Runtime
-work posture, and the NARS session index into a browser-safe overview. It does
-not infer Site kind from a path and it includes only agents admitted by the
-launch registry. Runtime state has four explicit values: `stopped`, `running`
-for exactly one healthy session, `degraded` for unhealthy evidence, and
-`ambiguous` for multiple healthy sessions. Work state is a separate projection
-and remains text-visible rather than encoded only by color.
+model joins registered launch records, declared Site kind, Principal Runtime
+work posture, and the NARS session index into a browser-safe overview. Work
+posture is read from the canonical Site authority locus (the Site authority
+root and its `.ai` state convention), never from the agent's workspace root.
+Site kind comes from the declared Site descriptor or the registry authority
+locus; every Site carries an explicit `classification_source` (`declared`,
+`registry`, `fallback`, `registry_only`), unreadable descriptors are diagnosed,
+and duplicate canonical agent identities surface as diagnostics rather than
+silent rows. Canonical agent identity is `<site>.<local-agent-id>`; it outranks
+bare and legacy ids when binding principal runtime state, and bare ids never
+bind across Sites. The shared contract validates semantic invariants between
+Site, agent, runtime, and session state (running means exactly one selected
+healthy session, stopped means none, actions mirror state, group matches kind,
+identity is well-formed and unique); the Console server appends violations to
+the overview refusals as diagnostics and the UI adapter flags them as well.
+Runtime state has four explicit values: `stopped`, `running` for exactly one
+healthy session, `degraded` for unhealthy evidence, and `ambiguous` for
+multiple healthy sessions. Work state is a separate projection and remains
+text-visible rather than encoded only by color.
 
 Selecting a stopped agent sends one typed ensure-running intent through the
-CLI launch gateway. Selecting an already running agent reuses its healthy
-session. Degraded and ambiguous states refuse a second launch. Inspection
-opens Agent Web UI only through a concrete session route from the Workspace
-directory; ambiguity routes to Agent Sessions, and no-session states remain
-unavailable. Right-click, the visible actions button, and `Shift+F10` expose
-the same inspection menu.
+CLI launch gateway, which admits launches atomically: concurrent intents for
+the same agent join a single in-flight admission, re-validate state inside it,
+and share one idempotent `launched`/`reused` outcome; a failed admission
+releases so a retry can succeed. Selecting an already running agent reuses its
+healthy session. Degraded and ambiguous states refuse a second launch. A
+successful launch is recorded as server-side pending state, so the page keeps
+showing a visible "starting" state across reloads until the runtime appears.
+The pending projection window is self-driving: it polls the Console
+session-route endpoint on its own, redirects itself to the Agent Web UI route
+when it exists, and on sustained latency renders an explicit terminal state
+with a scoped Agent Sessions path instead of dying silently. Inspection opens
+Agent Web UI only through a concrete session route from the Workspace
+directory; ambiguity routes to the Agent Sessions view scoped by `?site=` and
+`?agent=`, which filters the index and offers clear-scope; no-session states
+remain unavailable. Right-click anywhere on the agent cell, the visible
+actions button, the ContextMenu key, and `Shift+F10` expose the same
+inspection menu; triggers carry `aria-haspopup`/`aria-expanded`, opening moves
+focus to the first enabled item, Escape closes and returns focus, and arrow
+keys with Home/End navigate enabled items.
 
 The Launcher Session Dashboard is a separate Vue/shadcn presentation package
 served by the CLI launcher. Its launch authority, dashboard records, and
