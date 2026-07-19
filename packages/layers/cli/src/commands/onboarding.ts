@@ -747,7 +747,7 @@ export async function onboardingRoleApprovalCommand(
     const remainingRoles = currentRecommendation.recommended_roles.filter((role) => !approvedRoles.includes(role));
     const nextAction = remainingRoles.length > 0
       ? `Approval recorded for ${requestedRoles.join(', ')}. Review and approve the remaining roles: ${remainingRoles.join(', ')}.`
-      : 'Materialize the approved roles through the Site roster authority; this approval does not mutate the launch registry.';
+      : 'Materialize the approved roles with narada onboarding roles materialize; this approval does not mutate the launch registry.';
     const approval = {
       schema: 'narada.onboarding.role_expansion_approval.v1',
       status: 'approved_pending_materialization',
