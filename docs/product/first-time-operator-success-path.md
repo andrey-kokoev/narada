@@ -288,16 +288,20 @@ narada onboarding roles materialize --scope user-site
 
 It consumes the recorded approval and writes the approved roles into the User Site launch registry as quiet `agent-cli` background entries. Roles are deliberately not prominent: the resident assistant remains the single browser front door, materialized roles never start automatically, and launching them stays an explicit advanced-launcher action. Task-roster and identity instantiation remain their own crossings.
 
-The role progression is:
+The progression, in the vocabulary the onboarding state machine actually persists (`narada.user_site_onboarding_state.v1`), is:
 
 ```text
-user_site_ready
-  -> resident_session_ready
-  -> first_work_verified
-  -> role_posture_reviewed
-  -> optional architect/builder roster expansion
-  -> optional quiet registry materialization (roles materialize)
+not_started
+  -> launch_requested             (onboarding start launches the resident; demo_available marks the demo path)
+  -> first_use_verified           (first useful interaction verified; blocked if verification fails)
+  -> role_expansion: available    (contextual architect/builder recommendation)
+  -> role_expansion: approved     (roles approve --confirm; recorded, nothing launched)
+  -> role_expansion: materialized (roles materialize; quiet registry entries)
 ```
+
+Every step past `first_use_verified` is optional and requires explicit Operator action.
+
+Agent naming conventions: personae such as Kevin, Bob, Robin, and Stuart are callsigns mapped onto the role taxonomy (architect, builder, operator, resident), not roles of their own; the launch-registry `Role` field is optional. The canonical agent-id form is `<site-prefix>.<name>` (for example `andrey-user.resident`); sonar's bare names (`architect`, `builder`, `resident`, `operator` with `Site = "sonar"`) are a legacy exception, not a pattern to copy. The mcp-surfaces records intentionally use `WorkspaceRoot = D:\code` because those agents manage MCP surfaces across repositories. The retired v1 roster projection (`.ai/agents/roster.json`, pre-rename `narada-andrey.*` ids) is superseded by the launch registry; the task-roster crossing remains deferred.
 
 ### Deferred Expansion
 
