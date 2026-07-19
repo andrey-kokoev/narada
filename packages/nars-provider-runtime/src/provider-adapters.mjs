@@ -250,6 +250,7 @@ function buildOpenAiChatRequest(messages, tools, options = {}) {
     provider: providerAdapterContext.provider,
     openrouterSiteUrl: providerAdapterContext.openrouterSiteUrl,
     openrouterTitle: providerAdapterContext.openrouterTitle,
+    chatPath: providerAdapterContext.providerRuntimeBinding?.chat_completions_path ?? undefined,
     ...definedOptions(options),
   });
 }

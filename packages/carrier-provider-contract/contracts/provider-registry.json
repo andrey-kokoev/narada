@@ -142,6 +142,7 @@
       "model_env_names": ["GLM_MODEL"],
       "credential_env_names": ["GLM_API_KEY"],
       "credential_secret_ref": "narada/provider/glm-api/api-key",
+      "chat_completions_path": "chat/completions",
       "credential_requirement": {
         "kind": "api_key_secret",
         "secret_ref": "narada/provider/glm-api/api-key",

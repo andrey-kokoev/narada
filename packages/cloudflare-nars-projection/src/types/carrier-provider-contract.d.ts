@@ -15,6 +15,7 @@ declare module '@narada2/carrier-provider-contract/provider-runtime-binding-core
     api_key: string | null;
     credential_requirement_kind: string;
     credential_secret_ref: string | null;
+    chat_completions_path: string | null;
     credential_env_names: readonly string[];
     base_url_env_names: readonly string[];
     model_env_names: readonly string[];
@@ -55,6 +56,7 @@ declare module '@narada2/carrier-provider-contract/openai-compatible-chat' {
       provider?: string;
       openrouterSiteUrl?: string | null;
       openrouterTitle?: string | null;
+      chatPath?: string;
     },
   ): OpenAiChatRequest;
   export function extractOpenAiChatReply(body: unknown): {

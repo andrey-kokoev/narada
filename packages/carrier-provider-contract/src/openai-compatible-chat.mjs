@@ -88,7 +88,7 @@ export function cleanOpenAiMessages(messages, { provider } = {}) {
 }
 
 export function buildOpenAiChatRequest(messages, tools, options = {}) {
-  const { baseUrl, model, apiKey, thinking, provider, openrouterSiteUrl, openrouterTitle } = options;
+  const { baseUrl, model, apiKey, thinking, provider, openrouterSiteUrl, openrouterTitle, chatPath } = options;
   const requestTools = normalizeOpenAiCompatibleTools(tools, { provider });
   const body = {
     model,
@@ -122,7 +122,7 @@ export function buildOpenAiChatRequest(messages, tools, options = {}) {
     };
   }
   return {
-    url: new URL('v1/chat/completions', baseUrl),
+    url: new URL(chatPath?.trim() || 'v1/chat/completions', baseUrl),
     body,
     headers,
   };

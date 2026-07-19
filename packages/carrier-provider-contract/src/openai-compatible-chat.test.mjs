@@ -5,6 +5,7 @@ import {
   extractOpenAiChatReply,
   reasoningEffort,
 } from './openai-compatible-chat.mjs';
+import { resolveProviderRuntimeBinding } from './provider-runtime-binding-core.mjs';
 
 test('reasoningEffort maps thinking levels', () => {
   assert.equal(reasoningEffort('none'), null);
@@ -54,6 +55,24 @@ test('buildOpenAiChatRequest applies deepseek thinking mapping', () => {
   assert.equal(request.body.reasoning_effort, 'max');
 });
 
+test('buildOpenAiChatRequest honors a provider chatPath override (GLM versioned path)', () => {
+  const request = buildOpenAiChatRequest(
+    [{ role: 'user', content: 'hi' }],
+    [],
+    { baseUrl: 'https://open.bigmodel.cn/api/paas/v4/', model: 'GLM-5.2', apiKey: 'sk-glm', thinking: 'medium', provider: 'glm-api', chatPath: 'chat/completions' },
+  );
+  assert.equal(request.url.toString(), 'https://open.bigmodel.cn/api/paas/v4/chat/completions');
+});
+
+test('buildOpenAiChatRequest keeps the v1 convention when chatPath is unset', () => {
+  const request = buildOpenAiChatRequest(
+    [{ role: 'user', content: 'hi' }],
+    [],
+    { baseUrl: 'https://open.bigmodel.cn/api/paas/v4/', model: 'GLM-5.2', apiKey: 'sk-glm', provider: 'glm-api' },
+  );
+  assert.equal(request.url.toString(), 'https://open.bigmodel.cn/api/paas/v4/v1/chat/completions');
+});
+
 test('extractOpenAiChatReply parses content and tool calls with JSON arguments', () => {
   const reply = extractOpenAiChatReply({
     choices: [{
@@ -79,4 +98,28 @@ test('extractOpenAiChatReply tolerates empty and malformed bodies', () => {
   assert.deepEqual(extractOpenAiChatReply(null).tool_calls, []);
   assert.equal(extractOpenAiChatReply({}).content, '');
   assert.equal(extractOpenAiChatReply({ output_text: 'alt' }).content, 'alt');
+});
+
+test('resolveProviderRuntimeBinding surfaces chat_completions_path from registry metadata', () => {
+  const metadata = {
+    'glm-api': {
+      adapter_kind: 'openai-compatible-chat-completions',
+      base_url: 'https://open.bigmodel.cn/api/paas/v4/',
+      default_model: 'GLM-5.2',
+      chat_completions_path: 'chat/completions',
+      credential_env_names: ['GLM_API_KEY'],
+      credential_secret_ref: 'narada/provider/glm-api/api-key',
+    },
+    'openai-api': {
+      adapter_kind: 'openai-compatible-chat-completions',
+      base_url: 'https://api.openai.com',
+      default_model: 'gpt-5.5',
+      credential_env_names: ['OPENAI_API_KEY'],
+    },
+  };
+  const glm = resolveProviderRuntimeBinding('glm-api', { metadata, env: { GLM_API_KEY: 'sk-glm' } });
+  assert.equal(glm.chat_completions_path, 'chat/completions');
+  assert.equal(glm.credential_secret_ref, 'narada/provider/glm-api/api-key');
+  const openai = resolveProviderRuntimeBinding('openai-api', { metadata, env: { OPENAI_API_KEY: 'sk-oai' } });
+  assert.equal(openai.chat_completions_path, null);
 });

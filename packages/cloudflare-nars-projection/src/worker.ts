@@ -209,6 +209,7 @@ export function authorityExecutorFromEnv(env: CloudflareNarsProjectionWorkerEnv 
       model: resolved.model,
       thinking: resolved.reasoning_effort,
       api_base_url: resolved.base_url,
+      chat_path: resolved.chat_completions_path,
       api_key: resolved.api_key,
       credential_secret_ref: resolved.credential_secret_ref,
     },

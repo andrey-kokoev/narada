@@ -37,14 +37,14 @@ function chatReply(content: string, tool_calls: Array<{ name: string; arguments?
 let server: Server;
 let baseUrl: string;
 let behavior: FixtureBehavior = {};
-const requests: Array<{ body: Record<string, any>; authorization: string | null }> = [];
+const requests: Array<{ path: string; body: Record<string, any>; authorization: string | null }> = [];
 
 beforeAll(async () => {
   server = createServer((req, res) => {
     let raw = '';
     req.on('data', (chunk) => { raw += chunk; });
     req.on('end', async () => {
-      requests.push({ body: raw ? JSON.parse(raw) : {}, authorization: typeof req.headers.authorization === 'string' ? req.headers.authorization : null });
+      requests.push({ path: req.url ?? '', body: raw ? JSON.parse(raw) : {}, authorization: typeof req.headers.authorization === 'string' ? req.headers.authorization : null });
       if (behavior.never_respond) return;
       if (behavior.delay_ms) await sleep(behavior.delay_ms);
       const status = behavior.status ?? 200;
@@ -53,7 +53,7 @@ beforeAll(async () => {
     });
   });
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
-  baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}/v1/provider`;
+  baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}/`;
 });
 
 afterAll(async () => {
@@ -121,6 +121,7 @@ describe('cloudflare provider http adapter', () => {
     const admitted = await service.submitInput({ session_id: 'cf_provider_secret', method: 'conversation.send', payload: { message: 'check secret handling' }, now });
     expect(admitted.status).toBe('admitted');
     expect(requests).toHaveLength(1);
+    expect(requests[0].path).toBe('/v1/chat/completions');
     expect(requests[0].authorization).toBe('Bearer sk-fixture-secret-value');
     expect(requests[0].body.model).toBe('fixture-model');
     expect(requests[0].body.messages).toEqual([{ role: 'user', content: 'check secret handling' }]);
@@ -159,6 +160,39 @@ describe('cloudflare provider http adapter', () => {
     const offeredTools = (requests[0].body.tools ?? []).map((tool: any) => tool.function?.name);
     expect(offeredTools).toContain('session_context_read');
     expect(requests[0].body.tool_choice).toBe('auto');
+    const advertised = requests[0].body.tools ?? [];
+    const artifactRegister = advertised.find((tool: any) => tool.function?.name === 'artifact_register');
+    expect(artifactRegister).toBeDefined();
+    expect(artifactRegister.function.description).toContain('cf-authority-artifacts.artifact_register');
+    expect(artifactRegister.function.parameters?.required).toContain('session_id');
+    const contextRead = advertised.find((tool: any) => tool.function?.name === 'session_context_read');
+    expect(contextRead.function.description).toContain('cf-authority.session_context_read');
+    expect(contextRead.function.parameters?.properties?.topic).toBeDefined();
+  });
+
+  test('binding chat_path drives the provider URL (GLM versioned endpoint)', async () => {
+    behavior = { body: chatReply('glm reply') };
+    requests.length = 0;
+    const port = new URL(baseUrl).port;
+    const executor = createCloudflareNarsProviderRuntimeExecutor({
+      binding: {
+        provider: 'glm-api',
+        adapter_kind: 'openai-compatible-chat-completions',
+        model: 'GLM-5.2',
+        thinking: 'medium',
+        api_base_url: `http://127.0.0.1:${port}/api/paas/v4/`,
+        chat_path: 'chat/completions',
+        api_key: 'sk-glm',
+        credential_secret_ref: 'narada/provider/glm-api/api-key',
+      },
+    });
+    const service = createCloudflareNarsAuthorityService({ max_events: 50, runtime_executor: executor, mcp_fabric: { scope: 'all' } });
+    service.createSession({ session_id: 'cf_provider_glm', site_id: 'narada.test', agent_id: 'cloudflare.resident' }, now);
+    const admitted = await service.submitInput({ session_id: 'cf_provider_glm', method: 'conversation.send', payload: { message: 'glm turn' }, now });
+    expect(admitted.status).toBe('admitted');
+    expect(requests).toHaveLength(1);
+    expect(requests[0].path).toBe('/api/paas/v4/chat/completions');
+    expect(admitted.events?.find((event) => event.payload.event === 'assistant_message')?.payload.content).toBe('glm reply');
   });
 
   test('provider http failure completes the turn as failed and does not graduate capability', async () => {
@@ -215,6 +249,22 @@ describe('cloudflare provider http adapter', () => {
     expect(send.events?.find((event) => event.payload.event === 'provider_error')?.payload.error_code).toBe('provider_request_aborted');
     expect(send.events?.find((event) => event.payload.event === 'turn_interrupted')).toBeDefined();
     expect(send.events?.find((event) => event.payload.event === 'turn_complete')?.payload.terminal_state).toBe('interrupted');
+  });
+
+  test('concurrent turns keep independent abort controllers; one interrupt aborts all in-flight turns', async () => {
+    behavior = { body: chatReply('too late'), delay_ms: 500 };
+    const service = providerService();
+    service.createSession({ session_id: 'cf_provider_concurrent', site_id: 'narada.test', agent_id: 'cloudflare.resident' }, now);
+    const firstPromise = service.submitInput({ session_id: 'cf_provider_concurrent', method: 'conversation.send', payload: { message: 'turn one' }, now });
+    const secondPromise = service.submitInput({ session_id: 'cf_provider_concurrent', method: 'conversation.send', payload: { message: 'turn two' }, now });
+    await sleep(50);
+    const interrupt = await service.submitInput({ session_id: 'cf_provider_concurrent', method: 'conversation.interrupt', payload: { message: 'stop all' }, now });
+    expect(interrupt.events?.map((event) => event.payload.event)).toContain('operator_interrupt_admitted');
+    const [first, second] = await Promise.all([firstPromise, secondPromise]);
+    for (const send of [first, second]) {
+      expect(send.events?.find((event) => event.payload.event === 'provider_error')?.payload.error_code).toBe('provider_request_aborted');
+      expect(send.events?.find((event) => event.payload.event === 'turn_complete')?.payload.terminal_state).toBe('interrupted');
+    }
   });
 
   test('provider call timeout aborts with provider_request_timeout evidence', async () => {

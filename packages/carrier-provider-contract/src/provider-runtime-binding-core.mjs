@@ -94,6 +94,7 @@ export function resolveProviderRuntimeBinding(provider, {
     api_key: apiKey,
     credential_requirement_kind: requirement.kind,
     credential_secret_ref: requirement.secret_ref ?? providerDefault.credential_secret_ref ?? null,
+    chat_completions_path: typeof providerDefault.chat_completions_path === 'string' && providerDefault.chat_completions_path.trim() ? providerDefault.chat_completions_path.trim() : null,
     credential_env_names: credentialEnvNames,
     base_url_env_names: baseUrlEnvNames,
     model_env_names: modelEnvNames,

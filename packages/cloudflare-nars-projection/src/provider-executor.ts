@@ -20,6 +20,9 @@ export interface CloudflareNarsProviderBinding {
   model: string | null;
   thinking: string | null;
   api_base_url: string;
+  // Provider chat-completions path relative to api_base_url when it deviates
+  // from the OpenAI convention (e.g. GLM: 'chat/completions'). Registry-sourced.
+  chat_path?: string | null;
   // Resolved API key. Sent only as the provider Authorization header and never
   // emitted into events, diagnostics, or this binding record.
   api_key?: string | null;
@@ -52,6 +55,7 @@ function normalizeBinding(binding: CloudflareNarsProviderBinding): CloudflareNar
     model: binding.model?.trim() || null,
     thinking: binding.thinking?.trim() || null,
     api_base_url: apiBaseUrl,
+    chat_path: binding.chat_path?.trim() || null,
     api_key: binding.api_key?.trim() || null,
     credential_secret_ref: binding.credential_secret_ref?.trim() || null,
     timeout_ms: Number.isFinite(timeout) && timeout >= 1000 ? Math.floor(timeout) : CLOUDFLARE_NARS_PROVIDER_DEFAULT_TIMEOUT_MS,
@@ -65,8 +69,34 @@ function isAbortError(error: unknown): boolean {
 export function createCloudflareNarsProviderRuntimeExecutor(options: CloudflareNarsProviderExecutorOptions): CloudflareNarsAuthorityRuntimeExecutor & { provider_binding_summary: string } {
   const binding = normalizeBinding(options.binding);
   const fetchImpl = options.fetch_impl ?? fetch;
-  const inflight = new Map<string, AbortController>();
+  // Per-session map of input_id -> AbortController: concurrent turns in one
+  // session never clobber each other's abort handles.
+  const inflight = new Map<string, Map<string, AbortController>>();
   const bindingSummary = `${binding.provider}:${binding.model ?? 'default'}:${binding.thinking ?? 'default'}`;
+
+  function registerInflight(sessionId: string, inputId: string, controller: AbortController): Map<string, AbortController> {
+    let sessionInflight = inflight.get(sessionId);
+    if (!sessionInflight) {
+      sessionInflight = new Map();
+      inflight.set(sessionId, sessionInflight);
+    }
+    sessionInflight.set(inputId, controller);
+    return sessionInflight;
+  }
+
+  function releaseInflight(sessionId: string, inputId: string): void {
+    const sessionInflight = inflight.get(sessionId);
+    if (!sessionInflight) return;
+    sessionInflight.delete(inputId);
+    if (sessionInflight.size === 0) inflight.delete(sessionId);
+  }
+
+  function abortInflight(sessionId: string, error: Error): boolean {
+    const sessionInflight = inflight.get(sessionId);
+    if (!sessionInflight || sessionInflight.size === 0) return false;
+    for (const controller of sessionInflight.values()) controller.abort(error);
+    return true;
+  }
 
   function fabricToolDescriptors(input: CloudflareNarsAuthorityRuntimeExecutionInput) {
     const seen = new Set<string>();
@@ -79,8 +109,10 @@ export function createCloudflareNarsProviderRuntimeExecutor(options: CloudflareN
           type: 'function',
           function: {
             name: tool.tool_name,
-            description: `Cloudflare session fabric tool ${tool.tool}`,
-            parameters: { type: 'object' },
+            // Qualified `server.tool` identity is carried in the description;
+            // OpenAI function names must stay identifier-safe.
+            description: tool.description ? `${tool.tool}: ${tool.description}` : `Cloudflare session fabric tool ${tool.tool}`,
+            parameters: tool.input_schema ?? { type: 'object' },
           },
         });
       }
@@ -109,7 +141,7 @@ export function createCloudflareNarsProviderRuntimeExecutor(options: CloudflareN
       return { execution_kind: CLOUDFLARE_NARS_PROVIDER_EXECUTION_MODE, event_payloads: refused, provider_turn: { request_id: requestId, terminal_state: 'failed' } } as CloudflareNarsAuthorityRuntimeExecutionResult;
     }
     const controller = new AbortController();
-    inflight.set(input.session.session_id, controller);
+    registerInflight(input.session.session_id, input.input_id, controller);
     let timedOut = false;
     const timeout = setTimeout(() => {
       timedOut = true;
@@ -141,6 +173,7 @@ export function createCloudflareNarsProviderRuntimeExecutor(options: CloudflareN
           apiKey: binding.api_key ?? '',
           thinking: binding.thinking ?? undefined,
           provider: binding.provider,
+          chatPath: binding.chat_path ?? undefined,
         },
       );
       const response = await fetchImpl(request.url, {
@@ -262,7 +295,7 @@ export function createCloudflareNarsProviderRuntimeExecutor(options: CloudflareN
       return { execution_kind: CLOUDFLARE_NARS_PROVIDER_EXECUTION_MODE, event_payloads: payloads, provider_turn: { request_id: requestId, terminal_state: aborted ? 'interrupted' : 'failed' } } as CloudflareNarsAuthorityRuntimeExecutionResult;
     } finally {
       clearTimeout(timeout);
-      inflight.delete(input.session.session_id);
+      releaseInflight(input.session.session_id, input.input_id);
     }
   }
 
@@ -271,9 +304,7 @@ export function createCloudflareNarsProviderRuntimeExecutor(options: CloudflareN
     provider_binding_summary: bindingSummary,
     execute(input: CloudflareNarsAuthorityRuntimeExecutionInput) {
       if (input.method === 'conversation.interrupt') {
-        const controller = inflight.get(input.session.session_id);
-        if (controller) {
-          controller.abort(new Error('operator_interrupt'));
+        if (abortInflight(input.session.session_id, new Error('operator_interrupt'))) {
           return {
             execution_kind: CLOUDFLARE_NARS_PROVIDER_EXECUTION_MODE,
             event_payloads: [
@@ -299,8 +330,7 @@ export function createCloudflareNarsProviderRuntimeExecutor(options: CloudflareN
         };
       }
       if (input.method === 'session.close') {
-        const controller = inflight.get(input.session.session_id);
-        controller?.abort(new Error('session_close'));
+        abortInflight(input.session.session_id, new Error('session_close'));
         return {
           execution_kind: CLOUDFLARE_NARS_PROVIDER_EXECUTION_MODE,
           event_payloads: [

@@ -179,9 +179,15 @@ export interface CloudflareNarsAuthorityToolResult {
   duration_ms?: number;
 }
 
+export interface CloudflareNarsAuthorityToolDescription {
+  description: string;
+  input_schema: Record<string, unknown>;
+}
+
 export interface CloudflareNarsAuthorityToolAdapter {
   server_name: string;
   list_tools(): string[];
+  describe_tools?(): Record<string, CloudflareNarsAuthorityToolDescription>;
   call_tool(call: CloudflareNarsAuthorityToolCall): CloudflareNarsAuthorityToolResult;
 }
 
@@ -202,6 +208,8 @@ export interface CloudflareToolAdapterRegistryToolDescriptor {
   server_name: string;
   tool_name: string;
   tool: string;
+  description?: string;
+  input_schema?: Record<string, unknown>;
 }
 
 export interface CloudflareMcpServerDescriptor {
@@ -1409,12 +1417,45 @@ export function createCloudflareNarsAuthorityService(options: {
   return service;
 }
 
+const CLOUDFLARE_AUTHORITY_TOOL_DESCRIPTIONS: Record<string, CloudflareNarsAuthorityToolDescription> = {
+  session_context_read: {
+    description: 'Read Cloudflare authority session context (site, agent, topic).',
+    input_schema: { type: 'object', properties: { site_id: { type: 'string' }, agent_id: { type: 'string' }, topic: { type: 'string' } } },
+  },
+  diagnostic_probe: {
+    description: 'Diagnostic fault probe for the Cloudflare authority surface; always fails by design.',
+    input_schema: { type: 'object', properties: { topic: { type: 'string' } } },
+  },
+};
+
+const CLOUDFLARE_ARTIFACT_TOOL_DESCRIPTIONS: Record<string, CloudflareNarsAuthorityToolDescription> = {
+  artifact_register: {
+    description: 'Register a session artifact in the Cloudflare authority artifact registry.',
+    input_schema: { type: 'object', properties: { session_id: { type: 'string' }, artifact_id: { type: 'string' }, kind: { type: 'string' }, title: { type: 'string' }, content: { type: 'string' }, content_type: { type: 'string' }, input_id: { type: 'string' } }, required: ['session_id'] },
+  },
+  artifact_read: {
+    description: 'Read session artifact metadata.',
+    input_schema: { type: 'object', properties: { session_id: { type: 'string' }, artifact_id: { type: 'string' } }, required: ['session_id', 'artifact_id'] },
+  },
+  artifact_content_read: {
+    description: 'Read session artifact content through the policy-gated projection.',
+    input_schema: { type: 'object', properties: { session_id: { type: 'string' }, artifact_id: { type: 'string' } }, required: ['session_id', 'artifact_id'] },
+  },
+  artifact_present: {
+    description: 'Present a session artifact to the operator.',
+    input_schema: { type: 'object', properties: { session_id: { type: 'string' }, artifact_id: { type: 'string' }, text: { type: 'string' } }, required: ['session_id', 'artifact_id'] },
+  },
+};
+
 export function createCloudflareNarsTestToolAdapter(): CloudflareNarsAuthorityToolAdapter {
   const serverName = 'cf-authority';
   return {
     server_name: serverName,
     list_tools() {
       return ['session_context_read', 'diagnostic_probe'];
+    },
+    describe_tools() {
+      return CLOUDFLARE_AUTHORITY_TOOL_DESCRIPTIONS;
     },
     call_tool(call) {
       if (call.server_name !== serverName) {
@@ -1436,6 +1477,9 @@ export function createCloudflareNarsAuthorityToolAdapter(serverName = 'cf-author
     server_name: serverName,
     list_tools() {
       return ['session_context_read', 'diagnostic_probe'];
+    },
+    describe_tools() {
+      return CLOUDFLARE_AUTHORITY_TOOL_DESCRIPTIONS;
     },
     call_tool(call) {
       if (call.server_name !== serverName) {
@@ -1474,6 +1518,9 @@ export function createCloudflareNarsAuthorityArtifactToolAdapter(authority: Clou
     server_name: serverName,
     list_tools() {
       return ['artifact_register', 'artifact_read', 'artifact_content_read', 'artifact_present'];
+    },
+    describe_tools() {
+      return CLOUDFLARE_ARTIFACT_TOOL_DESCRIPTIONS;
     },
     call_tool(call) {
       if (call.server_name !== serverName) {
@@ -1534,7 +1581,15 @@ export function createCloudflareToolAdapterRegistry(adapters: CloudflareNarsAuth
     },
     listTools(serverName) {
       const selected = serverName ? [[serverName, servers.get(serverName)] as const] : [...servers.entries()].sort(([left], [right]) => left.localeCompare(right));
-      return selected.flatMap(([name, adapter]) => adapter ? adapter.list_tools().map((toolName) => ({ server_name: name, tool_name: toolName, tool: `${name}.${toolName}` })) : []);
+      return selected.flatMap(([name, adapter]) => adapter ? adapter.list_tools().map((toolName) => {
+        const described = adapter.describe_tools?.()[toolName];
+        return {
+          server_name: name,
+          tool_name: toolName,
+          tool: `${name}.${toolName}`,
+          ...(described ? { description: described.description, input_schema: described.input_schema } : {}),
+        };
+      }) : []);
     },
     callTool(call) {
       const adapter = servers.get(call.server_name);
