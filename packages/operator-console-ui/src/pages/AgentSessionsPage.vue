@@ -1,11 +1,16 @@
 <script setup lang="ts">
+import { computed } from 'vue';
 import OperatorConsoleShell from '../components/OperatorConsoleShell.vue';
 import { findOperatorRouteTarget } from '../console/routes';
 import { useOperatorWorkspaceRouteDirectory } from '../console/route-directory';
 import { useAgentSessions } from '../agent-sessions/composables/useAgentSessions';
+import { filterAgentSessionsByScope, isAgentSessionsScopeActive, parseAgentSessionsScope } from '../agent-sessions/scope';
 
 const sessions = useAgentSessions();
 const routeDirectory = useOperatorWorkspaceRouteDirectory();
+const scope = parseAgentSessionsScope(window.location.search);
+const scopedSessions = computed(() => filterAgentSessionsByScope(sessions.sessions.value, scope));
+const scopeActive = isAgentSessionsScopeActive(scope);
 
 function sessionUrl(sessionId: string): string | undefined {
   const directory = routeDirectory?.directory.value;
@@ -42,8 +47,13 @@ function formatTimestamp(value: string | null): string {
 
       <p v-if="sessions.error.value" class="notice error" role="alert">{{ sessions.error.value }}</p>
       <p v-if="sessions.refusals.value.length" class="notice warning">Some Site projections were unavailable: {{ sessions.refusals.value.join(', ') }}</p>
+      <p v-if="scopeActive" class="notice scope">
+        Showing sessions{{ scope.agent ? ` for ${scope.agent}` : '' }}{{ scope.site ? ` on ${scope.site}` : '' }}.
+        <a class="clear-scope" href="/console/sessions">Clear scope</a>
+      </p>
       <p v-if="sessions.loading.value" class="empty">Reading the session index...</p>
       <p v-else-if="!sessions.sessions.value.length" class="empty">No NARS sessions are currently discoverable.</p>
+      <p v-else-if="scopeActive && !scopedSessions.length" class="empty">No sessions match this scope yet. The agent may still be starting.</p>
 
       <div v-else class="table-wrap">
         <table>
@@ -51,7 +61,7 @@ function formatTimestamp(value: string | null): string {
             <tr><th scope="col">Session</th><th scope="col">Site</th><th scope="col">State</th><th scope="col">Runtime</th><th scope="col">Last seen</th><th scope="col">Health</th><th scope="col">Open</th></tr>
           </thead>
           <tbody>
-            <tr v-for="session in sessions.sessions.value" :key="session.sessionId">
+            <tr v-for="session in scopedSessions" :key="session.sessionId">
               <th scope="row"><code>{{ session.sessionId }}</code><small>{{ session.agentId ?? 'Agent identity unavailable' }}</small></th>
               <td>{{ session.siteId ?? 'Unknown' }}</td>
               <td><span class="status" :data-state="session.displayState">{{ session.displayState }}</span><small>{{ session.displayStateReason }}</small></td>
@@ -85,6 +95,9 @@ function formatTimestamp(value: string | null): string {
 .notice, .empty { margin: 12px 0; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--radius); font-size: 13px; line-height: 1.4; }
 .notice.error { color: var(--danger); }
 .notice.warning { color: var(--muted); background: var(--surface-muted); }
+.notice.scope { color: var(--muted); background: var(--surface-muted); }
+.clear-scope { margin-left: 8px; color: var(--operator); font-weight: 650; text-decoration: none; }
+.clear-scope:hover { text-decoration: underline; }
 .empty { color: var(--muted); }
 .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
 table { width: 100%; border-collapse: collapse; min-width: 760px; font-size: 12px; }

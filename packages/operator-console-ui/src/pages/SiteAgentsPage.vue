@@ -15,7 +15,7 @@ import { findOperatorRouteTarget } from '../console/routes';
 import { useOperatorWorkspaceRouteDirectory } from '../console/route-directory';
 import { useSiteAgents } from '../site-agents/composables/useSiteAgents';
 import { decideAgentInspection, decideAgentPrimaryAction } from '../site-agents/interactions';
-import { buildPendingProjectionDocument } from '../site-agents/projection-handoff';
+import { buildPendingProjectionDocument, scopedAgentSessionsPath } from '../site-agents/projection-handoff';
 
 interface AgentMenuState {
   siteId: string;
@@ -111,7 +111,7 @@ async function startAgent(siteId: string, agent: OperatorSiteAgentWireRecord): P
   }
 }
 
-function inspectAgent(agent: OperatorSiteAgentWireRecord): void {
+function inspectAgent(siteId: string, agent: OperatorSiteAgentWireRecord): void {
   closeMenu();
   const decision = decideAgentInspection(agent);
   if (decision.kind === 'open-session' && openSession(decision.sessionId)) {
@@ -119,7 +119,7 @@ function inspectAgent(agent: OperatorSiteAgentWireRecord): void {
     return;
   }
   if (decision.kind === 'choose-session') {
-    window.location.href = '/console/sessions';
+    window.location.href = scopedAgentSessionsPath(siteId, agent.agent_id);
     return;
   }
   actionMessage.value = decision.kind === 'unavailable'
@@ -242,7 +242,7 @@ onUnmounted(() => document.removeEventListener('click', closeMenu));
       @click.stop
     >
       <div class="menu-heading">{{ menu.agent.agent_id }}</div>
-      <button type="button" role="menuitem" :disabled="!menu.agent.actions.inspect && menu.agent.runtime.state !== 'ambiguous'" @click="inspectAgent(menu.agent)">
+      <button type="button" role="menuitem" :disabled="!menu.agent.actions.inspect && menu.agent.runtime.state !== 'ambiguous'" @click="inspectAgent(menu.siteId, menu.agent)">
         Open Web UI
       </button>
       <button type="button" role="menuitem" :disabled="busyAgentId !== null || !menu.agent.actions.start" @click="startAgent(menu.siteId, menu.agent)">
