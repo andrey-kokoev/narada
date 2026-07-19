@@ -106,6 +106,8 @@ describe('cloudflare provider http adapter', () => {
     ]);
     const assistant = admitted.events?.find((event) => event.payload.event === 'assistant_message');
     expect(assistant?.payload.content).toBe('hello from provider');
+    const providerResponse = admitted.events?.find((event) => event.payload.event === 'provider_response');
+    expect(providerResponse?.payload.content).toBe('hello from provider');
 
     const graduated = service.readHealth('cf_provider_1');
     expect(graduated.runtime_surface_contract!.capability_profile.provider_execution).toBe('present');
@@ -329,6 +331,67 @@ describe('cloudflare provider http adapter', () => {
     const after = await service.submitInput({ session_id: 'cf_provider_drain', method: 'conversation.send', payload: { message: 'after close' }, now });
     expect(after.status).toBe('refused');
     expect(after.code).toBe('session_revoked');
+  });
+
+  test('revoke racing an in-flight send cannot resurrect revoked state; the turn is refused and suppressed', async () => {
+    behavior = { body: chatReply('too late'), delay_ms: 300 };
+    const service = providerService();
+    service.createSession({ session_id: 'cf_provider_revoke_race', site_id: 'narada.test', agent_id: 'cloudflare.resident' }, now);
+    const sendPromise = service.submitInput({ session_id: 'cf_provider_revoke_race', method: 'conversation.send', payload: { message: 'slow turn' }, now });
+    await sleep(50);
+    expect(service.revokeSession('cf_provider_revoke_race', now)).toMatchObject({ status: 'revoked' });
+    const send = await sendPromise;
+    expect(send.status).toBe('refused');
+    expect(send.code).toBe('session_revoked');
+    // The revoked authority record must survive: no stale pre-revoke write-back.
+    expect(service.readHealth('cf_provider_revoke_race')).toMatchObject({ status: 'refused', code: 'session_revoked' });
+    const after = await service.submitInput({ session_id: 'cf_provider_revoke_race', method: 'conversation.send', payload: { message: 'after revoke' }, now });
+    expect(after.status).toBe('refused');
+    expect(after.code).toBe('session_revoked');
+  });
+
+  test('duplicate bare tool names refuse with a typed ambiguity refusal naming the qualified candidates', async () => {
+    behavior = { body: chatReply('ambiguous tools', [{ name: 'search', arguments: {} }]) };
+    const service = providerService();
+    const created = service.createSession({ session_id: 'cf_provider_ambiguous', site_id: 'narada.test', agent_id: 'cloudflare.resident' }, now);
+    let callToolInvocations = 0;
+    const duplicateRegistry = {
+      register: () => ({ status: 'refused' as const, code: 'not_used', server_name: 'server-a' }),
+      listServers: () => ['server-a', 'server-b'],
+      listTools: (serverName?: string) => serverName === 'server-a'
+        ? [{ server_name: 'server-a', tool_name: 'search', tool: 'server-a.search' }]
+        : serverName === 'server-b'
+          ? [{ server_name: 'server-b', tool_name: 'search', tool: 'server-b.search' }]
+          : [],
+      callTool: () => { callToolInvocations += 1; return { status: 'ok' as const, duration_ms: 0 }; },
+    };
+    const executor = createCloudflareNarsProviderRuntimeExecutor({
+      binding: {
+        provider: 'fixture-provider',
+        adapter_kind: 'openai-compatible-chat-completions',
+        model: 'fixture-model',
+        thinking: 'low',
+        api_base_url: baseUrl,
+        api_key: null,
+        credential_secret_ref: 'narada/provider/fixture-provider/api-key',
+        timeout_ms: null,
+      },
+    });
+    const result = await executor.execute({
+      session: created.session!,
+      input_id: 'input_ambiguous',
+      method: 'conversation.send',
+      payload: { message: 'call a duplicated tool' },
+      message: 'call a duplicated tool',
+      now,
+      tool_registry: duplicateRegistry,
+      mcp_fabric: created.session!.mcp_fabric,
+    });
+    const toolCall = result.event_payloads.find((payload) => payload.event === 'tool_call');
+    expect(toolCall).toMatchObject({ decision: 'refused', tool_name: 'search', ambiguity_candidates: ['server-a__search', 'server-b__search'] });
+    const toolResult = result.event_payloads.find((payload) => payload.event === 'tool_result');
+    expect(toolResult).toMatchObject({ status: 'refused', error_code: 'cloudflare_tool_ambiguous', ambiguity_candidates: ['server-a__search', 'server-b__search'] });
+    expect(callToolInvocations).toBe(0);
   });
 
   test('provider call timeout aborts with provider_request_timeout evidence', async () => {

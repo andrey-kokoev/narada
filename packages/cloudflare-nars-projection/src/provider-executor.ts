@@ -243,11 +243,14 @@ export function createCloudflareNarsProviderRuntimeExecutor(options: CloudflareN
       const reply: ProviderTurnReply = extractOpenAiChatReply(await response.json().catch(() => null));
       const registry = input.tool_registry;
       for (const call of reply.tool_calls) {
-        // Resolve through the advertised qualified names first; fall back to a
-        // first-server match on bare tool names the provider may emit anyway.
-        const mapped = fabricToolByQualified.get(call.tool_name)
-          ?? fabricToolEntries.find((entry) => entry.tool_name === call.tool_name)
-          ?? null;
+        // Resolve through the advertised qualified names first. A bare tool
+        // name must be unique across servers: duplicates refuse with a typed
+        // ambiguity refusal naming the qualified candidates, never a silent
+        // first-server fallback.
+        const qualifiedHit = fabricToolByQualified.get(call.tool_name) ?? null;
+        const bareMatches = qualifiedHit ? [] : fabricToolEntries.filter((entry) => entry.tool_name === call.tool_name);
+        const ambiguityCandidates = !qualifiedHit && bareMatches.length > 1 ? bareMatches.map((entry) => entry.qualified) : null;
+        const mapped = qualifiedHit ?? (bareMatches.length === 1 ? bareMatches[0]! : null);
         const serverName = mapped?.server_name ?? null;
         const toolName = mapped?.tool_name ?? call.tool_name;
         const admitted = mapped != null;
@@ -269,6 +272,7 @@ export function createCloudflareNarsProviderRuntimeExecutor(options: CloudflareN
           decision: admitted ? (toolName.startsWith('artifact_') ? 'authority_mutation_admitted' : 'read_only_admitted') : 'refused',
           argument_summary: effectiveArguments,
           ...(sessionIdInjected ? { session_id_injected: true } : {}),
+          ...(ambiguityCandidates ? { ambiguity_candidates: ambiguityCandidates } : {}),
           authority_origin: 'cloudflare',
           mcp_fabric_scope: input.mcp_fabric.requested_scope,
         });
@@ -301,8 +305,9 @@ export function createCloudflareNarsProviderRuntimeExecutor(options: CloudflareN
             tool_name: toolName,
             tool: serverName ? `${serverName}.${toolName}` : toolName,
             status: 'refused',
-            error: 'cloudflare_tool_not_admitted',
-            error_code: 'cloudflare_tool_not_admitted',
+            error: ambiguityCandidates ? 'cloudflare_tool_ambiguous' : 'cloudflare_tool_not_admitted',
+            error_code: ambiguityCandidates ? 'cloudflare_tool_ambiguous' : 'cloudflare_tool_not_admitted',
+            ...(ambiguityCandidates ? { ambiguity_candidates: ambiguityCandidates } : {}),
             duration_ms: 0,
             decision: 'refused',
             authority_origin: 'cloudflare',
@@ -318,6 +323,7 @@ export function createCloudflareNarsProviderRuntimeExecutor(options: CloudflareN
         provider: binding.provider,
         model: binding.model,
         status: 'ok',
+        content: reply.content,
         authority_origin: 'cloudflare',
       });
       payloads.push({

@@ -1044,6 +1044,14 @@ export function createCloudflareNarsAuthorityService(options: {
         tool_registry: createCloudflareNarsAuthorityMcpRegistry({ authority: service, fabric: sessionMcpFabrics.get(args.session_id) ?? session.mcp_fabric }),
         mcp_fabric: sessionMcpFabrics.get(args.session_id) ?? session.mcp_fabric,
       });
+      // Revoke is terminal: if the session left the active state while this
+      // input executed (e.g. DELETE revoke racing an in-flight send), suppress
+      // the turn's terminal events and never write back the stale pre-revoke
+      // record captured above.
+      const current = sessions.get(args.session_id);
+      if (!current || current.lifecycle_state !== 'active') {
+        return { schema: CLOUDFLARE_NARS_AUTHORITY_INPUT_SCHEMA, status: 'refused', code: current ? `session_${current.lifecycle_state}` : 'session_not_found', session_id: args.session_id, input_id: inputId, method: args.method };
+      }
       if (args.method === 'session.close') {
         // Drain the session's queued inputs first so in-flight terminal events
         // append before session_closed (ordered mutation lane).
