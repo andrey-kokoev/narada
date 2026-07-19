@@ -1,6 +1,6 @@
 {
   "schema": "narada.process_launch_posture.baseline.v2",
-  "generated_at": "2026-07-19T02:25:11.878Z",
+  "generated_at": "2026-07-19T04:28:29.054Z",
   "id_basis": "file + child-process api + local source context sha256/16; line is metadata only",
   "note": "Migration baseline for raw process launch sites. New sites must use @narada2/process-launch-posture wrappers or be intentionally added here.",
   "entries": [
@@ -79,7 +79,7 @@
     {
       "id": "packages/cloudflare-nars-projection/test/worker-provider-binding.test.ts:child_process.execFileSync:32fa36f2a7637d80",
       "file": "packages/cloudflare-nars-projection/test/worker-provider-binding.test.ts",
-      "line": 67,
+      "line": 76,
       "api": "child_process.execFileSync",
       "posture": "test_child",
       "text": "const output = execFileSync(process.execPath, ['scripts/cloudflare-nars-provider-live-smoke.mjs', '--format', 'json'], {"

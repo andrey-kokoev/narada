@@ -147,12 +147,18 @@ function baselineEntry(finding) {
 const findings = scan();
 
 if (updateBaseline) {
+  const entries = findings.map(baselineEntry);
+  const existing = loadBaseline();
+  if (JSON.stringify(existing.entries ?? []) === JSON.stringify(entries)) {
+    console.log(`process-launch-posture baseline unchanged: ${entries.length} entries`);
+    process.exit(0);
+  }
   const baseline = {
     schema: 'narada.process_launch_posture.baseline.v2',
     generated_at: new Date().toISOString(),
     id_basis: 'file + child-process api + local source context sha256/16; line is metadata only',
     note: 'Migration baseline for raw process launch sites. New sites must use @narada2/process-launch-posture wrappers or be intentionally added here.',
-    entries: findings.map(baselineEntry),
+    entries,
   };
   writeFileSync(baselinePath, `${JSON.stringify(baseline, null, 2)}\n`, 'utf8');
   console.log(`process-launch-posture baseline updated: ${baseline.entries.length} entries`);
