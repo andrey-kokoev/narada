@@ -26,7 +26,13 @@ export interface LaunchArtifactCheck {
   [key: string]: unknown;
 }
 
+export interface LaunchArtifactCheckOptions {
+  packageRoot?: string;
+  // Published bundles retain the built output and manifest but not the source workspace closure.
+  published?: boolean;
+}
+
 export function resolveLaunchArtifactDescriptor(siteRoot: string, target: string, options?: { packageRoot?: string }): LaunchArtifactDescriptor;
 export function computeLaunchArtifactSourceClosure(siteRoot: string, descriptor: LaunchArtifactDescriptor): { algorithm: string; source_hash: string; input_count: number; inputs: string[]; packages: string[] };
-export function checkLaunchArtifact(siteRoot: string, target: string): LaunchArtifactCheck;
+export function checkLaunchArtifact(siteRoot: string, target: string, options?: LaunchArtifactCheckOptions): LaunchArtifactCheck;
 export function writeLaunchArtifactManifest(options: { siteRoot: string; target: string; packageRoot?: string }): Record<string, unknown>;

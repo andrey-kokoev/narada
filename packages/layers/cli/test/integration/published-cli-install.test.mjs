@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -56,6 +56,66 @@ function outputOf(result) {
   return `status=${String(result.status)}\nerror=${String(result.error ?? '')}\nstdout=${String(result.stdout ?? '')}\nstderr=${String(result.stderr ?? '')}`;
 }
 
+function waitForConsoleStartup(child, timeout = 30_000) {
+  return new Promise((resolveStartup, rejectStartup) => {
+    let stdout = '';
+    let stderr = '';
+    const timer = setTimeout(() => {
+      cleanup();
+      rejectStartup(new Error(`packed console did not announce a diagnostic host\nstdout=${stdout}\nstderr=${stderr}`));
+    }, timeout);
+
+    const cleanup = () => {
+      clearTimeout(timer);
+      child.stdout?.off('data', onStdout);
+      child.stderr?.off('data', onStderr);
+      child.off('error', onError);
+      child.off('exit', onExit);
+    };
+    const onStdout = (chunk) => {
+      stdout += String(chunk);
+      const match = stdout.match(/Operator Workspace diagnostic host: (http:\/\/127\.0\.0\.1:\d+)\//);
+      if (!match) return;
+      cleanup();
+      resolveStartup({ url: match[1], stdout, stderr });
+    };
+    const onStderr = (chunk) => {
+      stderr += String(chunk);
+    };
+    const onError = (error) => {
+      cleanup();
+      rejectStartup(error);
+    };
+    const onExit = (code, signal) => {
+      cleanup();
+      rejectStartup(new Error(`packed console exited before startup: code=${String(code)} signal=${String(signal)}\nstdout=${stdout}\nstderr=${stderr}`));
+    };
+
+    child.stdout?.on('data', onStdout);
+    child.stderr?.on('data', onStderr);
+    child.once('error', onError);
+    child.once('exit', onExit);
+  });
+}
+
+function stopProcess(child) {
+  return new Promise((resolveStop) => {
+    if (child.exitCode !== null || child.signalCode !== null) {
+      resolveStop();
+      return;
+    }
+    const timer = setTimeout(() => {
+      child.kill();
+      resolveStop();
+    }, 5_000);
+    child.once('exit', () => {
+      clearTimeout(timer);
+      resolveStop();
+    });
+    child.kill();
+  });
+}
+
 function findInstalledPackageRoot(root, packageName) {
   const parts = packageName.split('/');
   const pending = [root];
@@ -86,7 +146,7 @@ function parseJsonOutput(result, label) {
   return JSON.parse(text.slice(start));
 }
 
-test('published CLI installs into a blank Windows profile and provisions the User Site', { skip: !runPublicationE2e }, () => {
+test('published CLI installs into a blank Windows profile and provisions the User Site', { skip: !runPublicationE2e }, async () => {
   const tempRoot = mkdtempSync(join(tmpdir(), 'narada-publication-e2e-'));
   const packRoot = join(tempRoot, 'pack');
   const consumerRoot = join(tempRoot, 'consumer');
@@ -189,6 +249,48 @@ test('published CLI installs into a blank Windows profile and provisions the Use
     const demoPayload = parseJsonOutput(demo, 'published onboarding demo');
     assert.equal(demoPayload.schema, 'narada.onboarding.start.v1');
     assert.equal(demoPayload.status, 'demo_available');
+
+    const consoleProcess = spawn(process.execPath, [
+      installedCliEntrypoint,
+      'console', 'serve',
+      '--host', '127.0.0.1',
+      '--port', '0',
+    ], {
+      cwd: consumerRoot,
+      env,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    try {
+      const startup = await waitForConsoleStartup(consoleProcess);
+      const page = await fetch(`${startup.url}/console/onboarding`);
+      const pageBody = await page.text();
+      assert.equal(page.status, 200, pageBody);
+      assert.match(page.headers.get('content-type') ?? '', /text\/html/);
+      assert.match(pageBody, /<div id="app"><\/div>/);
+      assert.match(pageBody, /\/console\/assets\//);
+
+      const statusResponse = await fetch(`${startup.url}/console/onboarding/api/status`);
+      const statusPayload = await statusResponse.json();
+      assert.equal(statusResponse.status, 200, JSON.stringify(statusPayload));
+      assert.equal(statusPayload.schema, 'narada.operator_console.onboarding.v1');
+      assert.ok(['ready', 'needs-provider-setup', 'blocked'].includes(statusPayload.ui_state));
+      assert.equal(statusPayload.onboarding?.launch, null);
+      assert.ok(statusPayload.doctor?.provider_readiness?.every((row) => !Object.hasOwn(row, 'value')));
+
+      const demoResponse = await fetch(`${startup.url}/console/onboarding/api/start`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ mode: 'demo', confirm: true }),
+      });
+      const demoProjection = await demoResponse.json();
+      assert.equal(demoResponse.status, 200, JSON.stringify(demoProjection));
+      assert.equal(demoProjection.schema, 'narada.operator_console.onboarding.v1');
+      assert.equal(demoProjection.status, 'success');
+      assert.equal(demoProjection.onboarding?.status, 'demo_available');
+      assert.equal(demoProjection.onboarding?.launch, null);
+    } finally {
+      await stopProcess(consoleProcess);
+    }
   } finally {
     rmSync(tempRoot, { recursive: true, force: true });
   }

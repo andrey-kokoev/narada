@@ -107,11 +107,11 @@ export function computeLaunchArtifactSourceClosure(siteRoot, descriptor) {
   };
 }
 
-export function checkLaunchArtifact(siteRoot, target) {
+export function checkLaunchArtifact(siteRoot, target, options = {}) {
   const root = resolve(siteRoot);
   let descriptor;
   try {
-    descriptor = resolveLaunchArtifactDescriptor(root, target);
+    descriptor = resolveLaunchArtifactDescriptor(root, target, options);
   } catch (error) {
     return {
       status: 'not_applicable',
@@ -141,10 +141,11 @@ export function checkLaunchArtifact(siteRoot, target) {
   } catch (error) {
     return { ...base, status: 'stale', reason: 'launch_artifact_manifest_invalid', detail: String(error) };
   }
+  const published = options.published === true;
   const manifestIdentityMatches = manifest.schema === LAUNCH_ARTIFACT_SCHEMA
     && manifest.target === target
     && manifest.package === descriptor.package_name
-    && manifest.package_root === descriptor.package_root_relative
+    && (published || manifest.package_root === descriptor.package_root_relative)
     && manifest.output_root === descriptor.output_root_relative
     && manifest.build_script === descriptor.build_script
     && stableStringify(manifest.required_outputs) === stableStringify(descriptor.required_outputs);
@@ -152,14 +153,14 @@ export function checkLaunchArtifact(siteRoot, target) {
     return { ...base, status: 'stale', reason: 'launch_artifact_manifest_identity_mismatch', manifest };
   }
 
-  const sourceClosure = computeLaunchArtifactSourceClosure(root, descriptor);
-  const toolchain = computeToolchainFingerprint(root);
-  const recipe = computeBuildRecipe(descriptor);
+  const sourceClosure = published ? null : computeLaunchArtifactSourceClosure(root, descriptor);
+  const toolchain = published ? null : computeToolchainFingerprint(root);
+  const recipe = published ? null : computeBuildRecipe(descriptor);
   const outputSnapshot = snapshotOutputs(descriptor);
   const checks = [
-    [manifest.source_closure?.source_hash === sourceClosure.source_hash, 'source_closure_changed'],
-    [stableStringify(manifest.toolchain) === stableStringify(toolchain), 'toolchain_changed'],
-    [manifest.recipe_hash === recipe.recipe_hash, 'build_recipe_changed'],
+    [published || manifest.source_closure?.source_hash === sourceClosure.source_hash, 'source_closure_changed'],
+    [published || stableStringify(manifest.toolchain) === stableStringify(toolchain), 'toolchain_changed'],
+    [published || manifest.recipe_hash === recipe.recipe_hash, 'build_recipe_changed'],
     [manifest.outputs?.tree_hash === outputSnapshot.tree_hash, 'published_outputs_changed'],
     [outputSnapshot.required_missing.length === 0, 'required_outputs_missing'],
   ];
@@ -180,8 +181,8 @@ export function checkLaunchArtifact(siteRoot, target) {
     ...base,
     status: 'current',
     built_at: manifest.built_at ?? null,
-    source_hash: sourceClosure.source_hash,
-    input_count: sourceClosure.input_count,
+    source_hash: sourceClosure?.source_hash,
+    input_count: sourceClosure?.input_count,
     source_closure: sourceClosure,
     toolchain,
     recipe,

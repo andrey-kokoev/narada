@@ -14,23 +14,32 @@ export function naradaProperRoot(): string {
   return resolve(process.env.NARADA_PROPER_ROOT ?? DEFAULT_NARADA_PROPER_ROOT);
 }
 
-export function ensureLaunchArtifact(siteRoot: string, target: string): LaunchArtifactCheck & { status: 'current' } {
+export interface EnsureLaunchArtifactOptions {
+  packageRoot?: string;
+  published?: boolean;
+}
+
+export function ensureLaunchArtifact(
+  siteRoot: string,
+  target: string,
+  options: EnsureLaunchArtifactOptions = {},
+): LaunchArtifactCheck & { status: 'current' } {
   const root = resolve(siteRoot);
-  let result = checkLaunchArtifact(root, target);
+  let result = checkLaunchArtifact(root, target, options);
   if (result.status === 'current') return result as LaunchArtifactCheck & { status: 'current' };
-  if (result.status !== 'stale') {
+  if (result.status !== 'stale' || options.published) {
     throw new Error(`narada_launch_artifact_unavailable:${target}:${result.reason ?? 'not_applicable'}`);
   }
 
   const release = acquireLaunchArtifactBuildLock(root, target);
   try {
-    result = checkLaunchArtifact(root, target);
+    result = checkLaunchArtifact(root, target, options);
     if (result.status === 'current') return result as LaunchArtifactCheck & { status: 'current' };
     if (result.status !== 'stale') {
       throw new Error(`narada_launch_artifact_unavailable:${target}:${result.reason ?? 'not_applicable'}`);
     }
 
-    const descriptor = resolveLaunchArtifactDescriptor(root, target);
+    const descriptor = resolveLaunchArtifactDescriptor(root, target, options);
     const build = runGovernedCommandSync('pnpm', ['--filter', descriptor.package_name, descriptor.build_script], {
       cwd: root,
       encoding: 'utf8',
@@ -44,7 +53,7 @@ export function ensureLaunchArtifact(siteRoot: string, target: string): LaunchAr
       throw new Error(`narada_launch_artifact_build_failed:${target}:exit_${build.status}:${stderr || stdout}`);
     }
 
-    result = checkLaunchArtifact(root, target);
+    result = checkLaunchArtifact(root, target, options);
     if (result.status !== 'current') {
       throw new Error(`narada_launch_artifact_stale_after_build:${target}:${result.reason ?? 'unknown'}`);
     }

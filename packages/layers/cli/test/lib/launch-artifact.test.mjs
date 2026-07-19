@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -53,6 +53,14 @@ test('launch artifact manifest detects source and published output drift', async
   const current = checkLaunchArtifact(fixture.root, 'fixture-ui');
   assert.equal(current.status, 'current');
   assert.equal(current.source_closure.inputs.includes('packages/fixture/src/main.js'), true);
+
+  const publishedPackageRoot = join(fixture.root, 'node_modules', '@fixture', 'ui');
+  await cp(fixture.packageRoot, publishedPackageRoot, { recursive: true });
+  const published = checkLaunchArtifact(fixture.root, 'fixture-ui', {
+    packageRoot: publishedPackageRoot,
+    published: true,
+  });
+  assert.equal(published.status, 'current');
 
   await writeFile(join(fixture.packageRoot, '.ai', 'runtime', 'volatile.json'), '{"status":"changed"}\n');
   const generatedStateChange = checkLaunchArtifact(fixture.root, 'fixture-ui');

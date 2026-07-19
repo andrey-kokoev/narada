@@ -332,6 +332,7 @@ test('PowerShell launcher executes a fresh NARS session and attaches the Web UI 
         NARADA_PROPER_ROOT: naradaProperRoot,
         NARADA_USER_SITE_ROOT: userSiteRoot,
         NARADA_OPERATOR_ROUTER_STATE_ROOT: routerStateRoot,
+        NARADA_OPERATOR_ROUTER_PORT: '0',
         NARADA_NODE_EXECUTABLE: process.execPath,
         NARADA_NO_BROWSER: '1',
         KIMI_CODE_API_KEY: 'launcher-e2e-fixture-key',

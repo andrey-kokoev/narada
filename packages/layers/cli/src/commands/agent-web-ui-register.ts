@@ -26,7 +26,7 @@ export function registerAgentWebUiCommands(program: Command): void {
     .option('--site-root <path>', 'Target Site root')
     .option('--site <id>', 'Registered Site id')
     .option('--host <host>', 'Host to bind to', '127.0.0.1')
-    .option('--port <port>', 'Stable Operator Router port (0 for direct diagnostic mode)', String(DEFAULT_OPERATOR_ROUTER_PORT))
+    .option('--port <port>', 'Stable Operator Router port (0 for direct diagnostic mode)', process.env.NARADA_OPERATOR_ROUTER_PORT ?? String(DEFAULT_OPERATOR_ROUTER_PORT))
     .option('--dry-run', 'Resolve attachment without starting the web UI', false)
     .option('--diagnose', 'Read-only structured attach diagnostic; does not start the web UI', false)
     .option('--inspect-stale-session', 'Open AgentWebUI in diagnostic mode for a closed, unhealthy, or superseded NARS session', false)

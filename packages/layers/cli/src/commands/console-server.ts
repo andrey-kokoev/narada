@@ -9,6 +9,8 @@
  */
 
 import { createServer, type Server, type IncomingMessage, type ServerResponse } from 'http';
+import { createRequire } from 'node:module';
+import { dirname, resolve, sep } from 'node:path';
 import { openRegistry, createObservationFactory, createControlClientFactory } from '../lib/console-core.js';
 import { createConsoleServerRoutes } from './console-server-routes.js';
 import { createSiteRegistryReadModel, type SiteRegistryReadModel } from './site-registry-read-model.js';
@@ -38,6 +40,20 @@ export const OPERATOR_CONSOLE_IDENTITY = 'narada.operator-console';
 const OPERATOR_CONSOLE_HEALTH_SCHEMA = 'narada.operator_console.health.v1';
 const OPERATOR_CONSOLE_ROUTES_SCHEMA = 'narada.operator_console.routes.v1';
 const OPERATOR_CONSOLE_PROBE_TIMEOUT_MS = 800;
+const moduleRequire = createRequire(import.meta.url);
+
+function resolveOperatorConsoleArtifactOptions(): { packageRoot: string; published: boolean } | undefined {
+  try {
+    const packageRoot = dirname(moduleRequire.resolve('@narada2/operator-console-ui/package.json'));
+    const sourcePackagesRoot = `${resolve(naradaProperRoot(), 'packages')}${sep}`.toLowerCase();
+    return {
+      packageRoot,
+      published: !packageRoot.toLowerCase().startsWith(sourcePackagesRoot),
+    };
+  } catch {
+    return undefined;
+  }
+}
 
 function concreteWorkspaceRoutePath(path: string): boolean {
   return !path.includes('<') && !path.includes('>');
@@ -232,7 +248,11 @@ export async function createConsoleServer(config: ConsoleServerConfig): Promise<
   const host = config.host ?? '127.0.0.1';
   const port = config.port;
   const operatorConsoleUiRoot = config.operatorConsoleUiRoot
-    ?? ensureLaunchArtifact(naradaProperRoot(), 'operator-console').artifact_root;
+    ?? ensureLaunchArtifact(
+      naradaProperRoot(),
+      'operator-console',
+      resolveOperatorConsoleArtifactOptions(),
+    ).artifact_root;
   const registry = await openRegistry();
 
   const observationFactory = createObservationFactory();
