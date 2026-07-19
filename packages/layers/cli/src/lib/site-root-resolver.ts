@@ -90,9 +90,12 @@ function parseLaunchRegistry(content: string): Array<Record<string, string>> {
 }
 
 function inferSiteId(record: Record<string, string>): string | null {
+  // An explicit Site field in the launch record is an operator-authored
+  // declaration and always wins. Without one, the site's own config.json is
+  // the canonical identity declaration; directory-name inference is last.
+  if (record.Site) return record.Site;
   const configuredSiteId = siteIdFromSiteRoot(record.SiteRoot ?? record.NaradaRoot);
   if (configuredSiteId) return configuredSiteId;
-  if (record.Site) return record.Site;
   const root = record.SiteRoot?.replace(/[\\/]+$/, '').split(/[\\/]/).pop() === '.narada'
     ? record.NaradaRoot
     : record.SiteRoot ?? record.NaradaRoot;
@@ -115,12 +118,15 @@ function siteIdFromSiteRoot(siteRoot: string | undefined): string | null {
       const config = JSON.parse(readFileSync(configPath, 'utf8')) as {
         site_id?: unknown;
         site?: { site_id?: unknown };
+        static_config?: { site_id?: unknown };
       };
       const siteId = typeof config.site_id === 'string'
         ? config.site_id
         : typeof config.site?.site_id === 'string'
           ? config.site.site_id
-          : null;
+          : typeof config.static_config?.site_id === 'string'
+            ? config.static_config.site_id
+            : null;
       if (siteId?.trim()) return siteId.trim();
     } catch {
       // Keep the launch-record identity fallback when a Site config is unreadable.
