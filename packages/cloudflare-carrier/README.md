@@ -97,6 +97,24 @@ These fields are evidence of adapter posture. Capability records describe the ef
 
 Workers AI is available through `createCloudflareAiProviderAdapter` when the Worker environment provides `env.AI.run`.
 
+**Resolver-driven selection (invokable intelligence).** When the Worker
+environment provides all of the following, model and inference path are
+resolved per turn from the D1-backed invokable-intelligence ontology, and
+`CLOUDFLARE_CARRIER_AI_MODEL`, `AI_MODEL`, and the hardcoded default are
+NOT consulted:
+
+- `INTELLIGENCE_REGISTRY_DB` — D1 binding holding the intelligence registry
+- `INTELLIGENCE_TARGET_SITE`, `INTELLIGENCE_USER_SITE`, `INTELLIGENCE_HOST_SITE` — explicit locus context
+- `INTELLIGENCE_WORKERS_AI_MODELS` (optional) — comma-separated catalog seed, default `@cf/meta/llama-3.1-8b-instruct`
+
+Each turn records the full Intent → Plan → Attempt → Evidence chain in D1.
+Resolution refusals throw `intelligence_resolution_refused:<reason_code>`
+before any provider call (distinct from operator-session/auth failures and
+from `cloudflare_workers_ai_provider_failed`). See
+`src/cloudflare-intelligence-resolution.mjs`.
+
+**Legacy env selection (until cutover #2186).** Without that configuration:
+
 Default model:
 
 - `@cf/meta/llama-3.1-8b-instruct`

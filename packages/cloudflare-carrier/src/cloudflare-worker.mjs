@@ -18,6 +18,7 @@ import {
   createSiteContinuityBinding,
 } from '../../site-continuity/src/site-continuity.mjs';
 
+import { cloudflareIntelligenceResolutionConfigured, createCarrierIntelligenceGateway } from './cloudflare-intelligence-resolution.mjs';
 const SNAPSHOT_KEY = 'cloudflare_carrier_session_snapshot_v1';
 const DEFAULT_WORKERS_AI_MODEL = '@cf/meta/llama-3.1-8b-instruct';
 const CLOUDFLARE_RUNTIME_METADATA_READ_CAPABILITY_REF = 'cloudflare-carrier:capability/runtime-metadata-read:v1';
@@ -14253,35 +14254,77 @@ function validateOperatorCaptureReturnTo(value) {
 
 export function createCloudflareAiProviderAdapter(env = {}) {
   if (!env.AI || typeof env.AI.run !== 'function') return null;
+  const resolutionConfigured = cloudflareIntelligenceResolutionConfigured(env);
   const model = env.CLOUDFLARE_CARRIER_AI_MODEL ?? env.AI_MODEL ?? DEFAULT_WORKERS_AI_MODEL;
   const timeoutMs = clampInteger(env.CLOUDFLARE_CARRIER_AI_TIMEOUT_MS, 1000, 30000, 15000);
   const maxRetries = clampInteger(env.CLOUDFLARE_CARRIER_AI_MAX_RETRIES, 0, 3, 1);
   const toolEffectConfig = cloudflareToolEffectConfig(env);
+  const invokeWorkersAi = async (modelSlug, input, tool_results) => {
+    let lastError = null;
+    for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+      try {
+        const request = tool_results.length > 0
+          ? { messages: createWorkersAiToolResultMessages(input, tool_results) }
+          : {
+              messages: createWorkersAiInitialMessages(input),
+              tools: toolEffectConfig.tool_definitions.map((tool) => ({ ...tool })),
+            };
+        const result = await withTimeout(env.AI.run(modelSlug, request), timeoutMs);
+        return {
+          text: extractWorkersAiText(result),
+          tool_calls: extractWorkersAiToolCalls(result),
+        };
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    throw lastError ?? new Error('cloudflare_workers_ai_provider_failed');
+  };
+  let gatewayPromise = null;
+  const ensureGateway = () => {
+    gatewayPromise ??= createCarrierIntelligenceGateway(env, (store) => ({
+      async invoke({ plan, messages }) {
+        const modelResource = await store.getResource(plan.selected.model.id);
+        const modelSlug = modelResource?.metadata?.workers_ai_model ?? modelResource?.display_name ?? plan.selected.model.id;
+        const { input, tool_results = [] } = messages ?? {};
+        try {
+          const response = await invokeWorkersAi(modelSlug, input, tool_results);
+          return { response };
+        } catch (error) {
+          return {
+            error: {
+              code: 'cloudflare_workers_ai_provider_failed',
+              message: error instanceof Error ? error.message : String(error),
+            },
+          };
+        }
+      },
+    }));
+    return gatewayPromise;
+  };
   return {
     posture: 'cloudflare-workers-ai',
     adapter_kind: 'cloudflare-workers-ai',
     provider: 'cloudflare-workers-ai',
-    model,
+    model: resolutionConfigured ? null : model,
+    resolution: resolutionConfigured ? 'invokable-intelligence' : 'legacy-env',
     async run({ input, tool_results = [] }) {
-      let lastError = null;
-      for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
-        try {
-          const request = tool_results.length > 0
-            ? { messages: createWorkersAiToolResultMessages(input, tool_results) }
-            : {
-                messages: createWorkersAiInitialMessages(input),
-                tools: toolEffectConfig.tool_definitions.map((tool) => ({ ...tool })),
-              };
-          const result = await withTimeout(env.AI.run(model, request), timeoutMs);
-          return {
-            text: extractWorkersAiText(result),
-            tool_calls: extractWorkersAiToolCalls(result),
-          };
-        } catch (error) {
-          lastError = error;
-        }
+      if (!resolutionConfigured) {
+        return invokeWorkersAi(model, input, tool_results);
       }
-      throw lastError ?? new Error('cloudflare_workers_ai_provider_failed');
+      const { gateway } = await ensureGateway();
+      const result = await gateway.invoke({ purpose: 'carrier-turn', messages: { input, tool_results } });
+      if (result.kind === 'refusal') {
+        const error = new Error('intelligence_resolution_refused:' + result.refusal.reason_code + ':' + result.refusal.explanation);
+        error.refusal = result.refusal;
+        throw error;
+      }
+      if (result.adapterOutcome.error) {
+        const error = new Error(result.adapterOutcome.error.message);
+        error.code = result.adapterOutcome.error.code;
+        throw error;
+      }
+      return result.adapterOutcome.response;
     },
   };
 }
