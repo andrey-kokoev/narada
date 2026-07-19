@@ -269,6 +269,11 @@ actually failing. Registrar rebinds can silently drop fabric `env_vars` when
 the catalog lacks them; re-check after catalog edits (fixed in mcp-surfaces
 b8b0dcb; feedback sfb_6889eb33-243).
 
+Coverage note: the 2026-07-19 sweep (#2143) inventoried only the
+agent-context surface across all registered sites; other surfaces remain
+unchecked. When a surface's tools change, run the same per-surface check for
+it across every registered site root, not just the site you are working in.
+
 ### Testing
 
 Root `pnpm test` is intentionally disabled. Use the escalation ladder:
