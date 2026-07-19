@@ -39,8 +39,8 @@ not_found_handling = "single-page-application"
 # See docs/concepts/cloudflare-nars-web-projection.md
 # "Deployed Provider-Capable Authority Smoke". Live evidence: Task 2120.
 #
-# [vars]
-# NARADA_INTELLIGENCE_PROVIDER = "<provider-id>"   # required to activate
+[vars]
+NARADA_INTELLIGENCE_PROVIDER = "deepseek-api"   # required to activate
 # NARADA_AI_BASE_URL = "https://<override>"        # optional; registry default otherwise
 # NARADA_AI_MODEL = "<model-id>"                   # optional; registry default otherwise
 # NARADA_AI_THINKING = "<low|medium|high>"         # optional
