@@ -35,7 +35,8 @@ export interface ResolvedSelection {
   inference_provider: ResourceRef;
   endpoint: ResourceRef;
   adapter: ResourceRef;
-  credential: ResourceRef;
+  /** Present when the selected endpoint authenticates with a credential. */
+  credential?: ResourceRef;
 }
 
 export interface ProvenanceEntry {

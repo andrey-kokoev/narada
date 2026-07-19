@@ -56,6 +56,7 @@ function extractRelations(resource: Resource): Array<{ relation: string; to_id: 
         { relation: "owned-by", to_id: resource.inference_provider.id },
         { relation: "driven-by", to_id: resource.adapter.id },
         ...resource.serves.map((ref) => ({ relation: "serves", to_id: ref.id })),
+        ...(resource.credential ? [{ relation: "authenticated-by", to_id: resource.credential.id as ResourceId }] : []),
       ];
     case "narada.invokable-intelligence.credential-locator.v1":
       return [{ relation: "held-by", to_id: resource.holder.id }];

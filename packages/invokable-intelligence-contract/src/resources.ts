@@ -48,6 +48,8 @@ export interface InferenceEndpoint extends ResourceBase {
   adapter: ResourceRef;
   /** Refs to Models this endpoint can serve. */
   serves: ResourceRef[];
+  /** Ref to the CredentialLocator this endpoint authenticates with, when required. */
+  credential?: ResourceRef;
 }
 
 /** Runtime-specific invocation driver. */

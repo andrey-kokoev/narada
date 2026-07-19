@@ -136,6 +136,9 @@ export function validateResource(record: unknown): ContractError[] {
       } else {
         (record.serves as unknown[]).forEach((ref, i) => checkRef(ref, `$.serves[${i}]`, "model", errors));
       }
+      if (record.credential !== undefined) {
+        checkRef(record.credential, "$.credential", "credential-locator", errors);
+      }
       break;
     }
     case ADAPTER_SCHEMA:
@@ -345,7 +348,9 @@ export function validateInvocation(record: unknown): ContractError[] {
         checkRef(record.selected.inference_provider, "$.selected.inference_provider", "inference-provider", errors);
         checkRef(record.selected.endpoint, "$.selected.endpoint", "inference-endpoint", errors);
         checkRef(record.selected.adapter, "$.selected.adapter", "adapter", errors);
-        checkRef(record.selected.credential, "$.selected.credential", "credential-locator", errors);
+        if (record.selected.credential !== undefined) {
+          checkRef(record.selected.credential, "$.selected.credential", "credential-locator", errors);
+        }
       }
       if (!isPlainObject(record.options)) err(errors, "$.options", "invalid-invocation", "options must be an object");
       checkProvenance(record.provenance, "$.provenance", errors);
@@ -485,6 +490,7 @@ export function validateBundle(bundle: ContractBundle): ContractError[] {
       checkResolvable(record.inference_provider, `$.resources[${i}].inference_provider`);
       checkResolvable(record.adapter, `$.resources[${i}].adapter`);
       record.serves.forEach((ref, j) => checkResolvable(ref, `$.resources[${i}].serves[${j}]`));
+      if (record.credential) checkResolvable(record.credential, `$.resources[${i}].credential`);
     }
     if (record.schema === CREDENTIAL_LOCATOR_SCHEMA) checkResolvable(record.holder, `$.resources[${i}].holder`);
   });

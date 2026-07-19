@@ -37,6 +37,7 @@ export const CLOUDFLARE_KIMI: FixtureBundle = {
       inference_provider: { kind: "inference-provider", id: "inference-provider:cloudflare-workers-ai" },
       adapter: { kind: "adapter", id: "adapter:workers-ai-binding" },
       serves: [{ kind: "model", id: "model:kimi-k2-thinking" }],
+      credential: { kind: "credential-locator", id: "credential-locator:cf-account-token" },
     },
     {
       schema: "narada.invokable-intelligence.credential-locator.v1",

@@ -69,7 +69,12 @@ export function defineRegistryConformanceSuite(label: string, makeTarget: () => 
         const relations = await store.listRelations("inference-endpoint:cf-workers-ai-default");
         assert.deepEqual(
           relations.map((r) => `${r.relation}:${r.to_id}`),
-          ["driven-by:adapter:workers-ai-binding", "owned-by:inference-provider:cloudflare-workers-ai", "serves:model:kimi-k2-thinking"],
+          [
+            "authenticated-by:credential-locator:cf-account-token",
+            "driven-by:adapter:workers-ai-binding",
+            "owned-by:inference-provider:cloudflare-workers-ai",
+            "serves:model:kimi-k2-thinking",
+          ],
         );
       });
 
