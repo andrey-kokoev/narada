@@ -52,7 +52,9 @@ await runProcessTests([
     label: 'launcher-registry-contract-shards',
     args: ['test/run-launcher-registry-contract-shards.mjs'],
     cwd: packageRoot,
-    timeoutMs: 15000,
+    // The shard chain takes ~18s standalone; under the 9-way parallel runner
+    // on a loaded machine the old 15s ceiling killed it before any assertion ran.
+    timeoutMs: 60000,
   },
   {
     label: 'option-contract-shards',

@@ -8,6 +8,7 @@
     "typecheck": "node --input-type=module -e \"import { readdirSync } from 'node:fs'; import { join } from 'node:path'; import { runHiddenPostureCommandSync } from '@narada2/process-launch-posture'; const files = readdirSync('src').filter((file) => file.endsWith('.mjs')).sort(); for (const file of files) { const result = runHiddenPostureCommandSync(process.execPath, ['--check', join('src', file)], { stdio: 'inherit', posture: 'test_child' }); if (result.status !== 0) process.exit(result.status ?? 1); }\""
   },
   "dependencies": {
+    "@narada2/agent-context-mcp": "workspace:*",
     "@narada2/agent-identity": "workspace:*",
     "@narada2/agent-start-bootstrap": "workspace:*",
     "@narada2/process-launch-posture": "workspace:*",

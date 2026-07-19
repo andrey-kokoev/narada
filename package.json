@@ -48,6 +48,8 @@
     "version-packages": "changeset version",
     "release": "tsx scripts/publish-local.ts",
     "control-plane-lint": "tsx scripts/control-plane-lint.ts",
+    "prebuild": "node scripts/sibling-workspace-state-guard.mjs",
+    "pretypecheck": "node scripts/sibling-workspace-state-guard.mjs",
     "prepublish-check": "tsx scripts/prepublish-check.ts",
     "pack:check": "tsx scripts/prepublish-check.ts --pack-only",
     "toolchain:oxbuild-probe": "node scripts/oxbuild-probe.mjs"

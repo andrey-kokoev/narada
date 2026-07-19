@@ -27,7 +27,10 @@ const commands = testNames.map((name, index) => ({
     testFile,
   ],
   cwd: packageRoot,
-  timeoutMs: 15000,
+  // Shards run concurrently and each re-pays full module load; the cold first
+  // shard starves past 15s on a loaded machine. 45s keeps this an infra ceiling,
+  // not a flake generator.
+  timeoutMs: 45000,
 }));
 
 await runProcessTests(commands);

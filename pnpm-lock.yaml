@@ -192,6 +192,9 @@ importers:
 
   packages/agent-context-tools:
     dependencies:
+      '@narada2/agent-context-mcp':
+        specifier: workspace:*
+        version: link:../../../mcp-surfaces/packages/agent-context-mcp
       '@narada2/agent-identity':
         specifier: workspace:*
         version: link:../agent-identity

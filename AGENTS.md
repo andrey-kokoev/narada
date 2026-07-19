@@ -223,6 +223,21 @@ Control-plane build also regenerates `config.schema.json`:
 pnpm --filter @narada2/control-plane generate:config-schema
 ```
 
+### Multi-repo workspace state (accepted fragility, guarded)
+
+The pnpm workspace deliberately spans sibling repos (`../narada-core`,
+`../mcp-surfaces`, `../agent-cli`, `../agent-tui`), so builds, typechecks, and
+tests consume those checkouts' **live, possibly uncommitted** state. An
+uncommitted sibling change can break narada's build mid-session (this happened
+on 2026-07-18 via narada-core `TaskSpecRecord.tags`).
+
+`pnpm build` and `pnpm typecheck` run `scripts/sibling-workspace-state-guard.mjs`
+first (`prebuild`/`pretypecheck`), which lists every sibling repo's dirty files
+so the source of a failure is visible instead of silent. Modes via
+`NARADA_SIBLING_GUARD`: `warn` (default), `strict` (fail when dirty, for
+CI/release), `off`. Decision record:
+`.ai/decisions/20260719-2067-agent-context-session-start-convergence.md`.
+
 ### Testing
 
 Root `pnpm test` is intentionally disabled. Use the escalation ladder:

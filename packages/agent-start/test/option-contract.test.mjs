@@ -1091,7 +1091,7 @@ test('agent-tui materializes provider env without requiring ambient provider env
   assert.equal(env.NARADA_AGENT_TUI_MCP_CONFIG.includes(`${sep}agent-tui${sep}carrier_`), true);
   assert.equal(env.NARADA_INTELLIGENCE_PROVIDER, 'kimi-code-api');
   assert.equal(env.KIMI_CODE_API_BASE_URL, 'https://api.kimi.com/coding/');
-  assert.equal(env.KIMI_CODE_MODEL, 'kimi-k2.7');
+  assert.equal(env.KIMI_CODE_MODEL, 'k3');
   assert.equal(Object.hasOwn(env, 'KIMI_CODE_API_KEY'), true);
   assert.equal(output.tool_fabric_adapter.expected_tools.includes('agent_context_startup_sequence'), true);
   assert.equal(output.tool_fabric_adapter.expected_tools.includes('mcp_output_show'), true);
