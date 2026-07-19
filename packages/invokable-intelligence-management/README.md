@@ -47,12 +47,6 @@ Writes are locus-checked against the session's owning Site:
 `materializeRecord` is the explicit authorized materialization operation
 and stamps provenance so cross-locus effects are auditable.
 
-## Compatibility projection (temporary)
-
-`projectLegacyRegistry` renders registry state back into the legacy
-provider-registry shape for unmigrated consumers. Read-only, covered by
-tests, and removed in #2186 once consumers reach zero. Do not extend it.
-
 ## CLI
 
 ```sh
@@ -63,7 +57,6 @@ narada-intelligence migrate --registry provider-registry.json \
   --target site:X --user site:Y --host site:Z            # dry-run
 narada-intelligence migrate ... --apply                  # writes
 narada-intelligence explain --intent intent.json --target ... --user ... --host ...
-narada-intelligence compat                               # legacy projection
 ```
 
 ## MCP surface
@@ -71,10 +64,9 @@ narada-intelligence compat                               # legacy projection
 `createManagementTools(session)` returns host-agnostic tool definitions
 (`intelligence_list_resources`, `intelligence_show_resource`,
 `intelligence_list_assertions`, `intelligence_list_policies`,
-`intelligence_validate_store`, `intelligence_explain_resolution`,
-`intelligence_compat_projection`) with structured handlers and
-`{ error: { code, message } }` failure shape. Any MCP host can register
-them; errors are data, not throws.
+`intelligence_validate_store`, `intelligence_explain_resolution`) with
+structured handlers and `{ error: { code, message } }` failure shape. Any
+MCP host can register them; errors are data, not throws.
 
 ## Scripts
 

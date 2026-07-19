@@ -9,7 +9,6 @@ import { dirname } from "node:path";
 import type { InvocationIntent } from "@narada2/invokable-intelligence-contract";
 import { SqliteRegistryStore } from "@narada2/invokable-intelligence-registry";
 
-import { projectLegacyRegistry } from "./compat.js";
 import { parseLegacyRegistry } from "./legacy.js";
 import { applyMigration, buildMigrationPlan, dryRunMigration } from "./migrate.js";
 import { explainResolution, listAssertions, listPolicies, listResources, showResource, validateStore } from "./operations.js";
@@ -60,7 +59,6 @@ Commands:
   validate
   explain --intent <file.json> --target site:S --user site:S --host site:S [--time ISO]
   migrate --registry <provider-registry.json> --target site:S --user site:S --host site:S [--apply]
-  compat                      Read-only legacy provider-registry projection (temporary)
 
 Defaults: --db .ai/intelligence-registry.db; migrate is dry-run unless --apply.`;
 
@@ -146,10 +144,6 @@ export async function main(argv: string[]): Promise<number> {
         const plan = buildMigrationPlan(legacy, loci, { reference: registryPath, plannedAt });
         const result = flags.has("apply") ? await applyMigration(store, plan) : await dryRunMigration(store, plan);
         console.log(JSON.stringify({ applied: flags.has("apply"), planned_at: plannedAt, counts: result.counts, diff: result.diff }, null, 2));
-        return 0;
-      }
-      case "compat": {
-        console.log(JSON.stringify(await projectLegacyRegistry(store), null, 2));
         return 0;
       }
       default:

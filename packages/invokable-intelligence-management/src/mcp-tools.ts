@@ -7,7 +7,6 @@
 
 import type { InvocationIntent, ResourceRef } from "@narada2/invokable-intelligence-contract";
 
-import { projectLegacyRegistry } from "./compat.js";
 import { explainResolution, listAssertions, listPolicies, listResources, showResource, validateStore } from "./operations.js";
 import type { ManagementSession } from "./operations.js";
 
@@ -123,12 +122,6 @@ export function createManagementTools(session: ManagementSession): ManagementToo
             time: typeof input.time === "string" ? input.time : new Date().toISOString(),
           }),
         ),
-    },
-    {
-      name: "intelligence_compat_projection",
-      description: "Read-only legacy provider-registry projection (temporary, for unmigrated consumers).",
-      inputSchema: { type: "object", properties: {} },
-      handler: () => wrap(() => projectLegacyRegistry(session.store)),
     },
   ];
 }

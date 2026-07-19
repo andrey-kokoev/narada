@@ -4,10 +4,9 @@ import { join } from "node:path";
 import test from "node:test";
 
 import type { CapabilityAssertion, PolicyDocument } from "@narada2/invokable-intelligence-contract";
-import { SqliteRegistryStore } from "@narada2/invokable-intelligence-registry";
+import { createFakeD1, D1RegistryStore, SqliteRegistryStore } from "@narada2/invokable-intelligence-registry";
 import type { IntelligenceRegistryStore } from "@narada2/invokable-intelligence-registry";
 
-import { projectLegacyRegistry } from "../src/compat.js";
 import { parseLegacyRegistry } from "../src/legacy.js";
 import type { MigrationLoci } from "../src/migrate.js";
 import { applyMigration, buildMigrationPlan, dryRunMigration } from "../src/migrate.js";
@@ -73,7 +72,7 @@ test("representative legacy config maps without conflating provider kinds", asyn
   // openai-api: inference provider ≠ model provider ≠ models, explicit adapter + credential locator.
   assert.equal(byId.get("inference-provider:openai-api")?.schema, "narada.invokable-intelligence.inference-provider.v1");
   assert.equal(byId.get("model-provider:openai")?.schema, "narada.invokable-intelligence.model-provider.v1");
-  const model = byId.get("model:openai-api-gpt-5.6-sol");
+  const model = byId.get("model:openai-gpt-5.6-sol");
   assert.equal(model?.schema, "narada.invokable-intelligence.model.v1");
   if (model?.schema === "narada.invokable-intelligence.model.v1") {
     assert.equal(model.provider.id, "model-provider:openai");
@@ -87,8 +86,8 @@ test("representative legacy config maps without conflating provider kinds", asyn
   }
   const credential = byId.get("credential-locator:openai-api");
   if (credential?.schema === "narada.invokable-intelligence.credential-locator.v1") {
-    assert.equal(credential.store, "env");
-    assert.equal(credential.reference, "OPENAI_API_KEY");
+    assert.equal(credential.store, "site-secret");
+    assert.equal(credential.reference, "narada/provider/openai-api/api-key");
     assert.equal(credential.holder.id, "site:andrey-pc");
   } else {
     assert.fail("credential locator missing");
@@ -103,9 +102,33 @@ test("representative legacy config maps without conflating provider kinds", asyn
     assert.fail("codex credential missing");
   }
 
-  // default_provider lands as a target-Site default, not an env-var name.
+  // The same OpenAI model is shared by API and subscription offerings.
+  assert.equal(plan.resources.filter(({ id }) => id === "model:openai-gpt-5.6-sol").length, 1);
+  assert.ok(plan.resources.some(({ id }) => id === "model-offering:openai-api-gpt-5.6-sol"));
+  assert.ok(plan.resources.some(({ id }) => id === "model-offering:codex-subscription-gpt-5.6-sol"));
+  assert.ok(plan.routes.some(({ id }) => id === "route:openai-api-gpt-5.6-sol-local"));
+  assert.ok(plan.accessRecords.some(({ id }) => id === "account:openai-api"));
+
+  // default_provider lands as an explicit offering/route default, not an env-var name.
   const defaults = plan.policies.find((p) => p.kind === "defaults");
+  assert.ok(defaults?.rules.some((r) => r.type === "default-option" && r.option === "model_offering" && r.value === "model-offering:kimi-code-api-k3"));
+  assert.ok(defaults?.rules.some((r) => r.type === "default-option" && r.option === "route" && r.value === "route:kimi-code-api-k3-local"));
   assert.ok(defaults?.rules.some((r) => r.type === "default-option" && r.option === "inference_provider" && r.value === "inference-provider:kimi-code-api"));
+
+  // Every admitted record carries explicit provenance, authority, revision, and validation evidence.
+  assert.ok(plan.seed.records.length > 0);
+  for (const record of plan.seed.records) {
+    assert.equal(record.source.reference, "provider-registry.json");
+    assert.ok(record.source.revision);
+    assert.ok(record.source.digest.startsWith("sha256:"));
+    assert.ok(record.authority.kind);
+    assert.ok(record.authority.locus);
+    assert.equal(record.revision, 1);
+    assert.equal(record.validation.status, "accepted");
+    assert.ok(record.validation.evidence.length > 0);
+  }
+  assert.ok(plan.residuals.some(({ code }) => code === "legacy-runtime-selection-not-authoritative"));
+  assert.ok(plan.residuals.some(({ code }) => code === "authority-escalation"));
 
   // Migrated state validates clean against the contract.
   const store = await openStore();
@@ -192,7 +215,7 @@ test("management tools and explain produce structured output", async () => {
       id: "intent:test-explain",
       created_at: PLANNED_AT,
       purpose: "test",
-      requested_model: { kind: "model", id: "model:openai-api-gpt-5.6-sol" },
+      requested_model: { kind: "model", id: "model:openai-gpt-5.6-sol" },
     },
     targetSite: "site:thoughts-project",
     userSite: "site:andrey-user",
@@ -200,29 +223,56 @@ test("management tools and explain produce structured output", async () => {
     time: PLANNED_AT,
   })) as { result: { schema: string }; lines: string[] };
   assert.equal(explanation.result.schema, "narada.invokable-intelligence.invocation-plan.v1");
-  assert.ok(explanation.lines.some((line) => line.includes("selected model model:openai-api-gpt-5.6-sol")));
+  assert.ok(explanation.lines.some((line) => line.includes("selected model model:openai-gpt-5.6-sol")));
   await store.close();
 });
 
-test("compat projection is read-only and round-trips the migrated registry", async () => {
-  const legacy = await realLegacy();
-  const plan = buildMigrationPlan(legacy, LOCI, { reference: "provider-registry.json", plannedAt: PLANNED_AT });
-  const store = await openStore();
-  await applyMigration(store, plan);
+test("SQLite and D1 admit identical canonical migration seeds", async () => {
+  const plan = buildMigrationPlan(await realLegacy(), LOCI, { reference: "provider-registry.json", plannedAt: PLANNED_AT });
+  const sqlite = await SqliteRegistryStore.open(":memory:");
+  const fake = createFakeD1(":memory:");
+  const d1 = await D1RegistryStore.open(fake);
+  try {
+    await applyMigration(sqlite, plan);
+    await applyMigration(d1, plan);
+    assert.deepEqual(await sqlite.listCatalogRecords(), await d1.listCatalogRecords());
+    assert.deepEqual(await sqlite.listCatalogResiduals(), await d1.listCatalogResiduals());
+    assert.deepEqual(await sqlite.listResources(), await d1.listResources());
+  } finally {
+    await sqlite.close();
+    fake.close();
+  }
+});
 
-  const before = await store.listResources();
-  const projected = await projectLegacyRegistry(store);
-  assert.deepEqual(await store.listResources(), before, "projection must not mutate");
+test("secret-bearing and authority-escalating legacy inputs become structured residuals", () => {
+  const secretBearing = parseLegacyRegistry({
+    schema: "narada.carrier.provider_registry.v1",
+    default_provider: "bad-api",
+    providers: {
+      "bad-api": {
+        adapter_kind: "openai-compatible-chat-completions",
+        available_models: ["bad-model"],
+        default_model: "bad-model",
+        api_key: "raw-secret-must-not-migrate",
+      },
+    },
+  });
+  const plan = buildMigrationPlan(secretBearing, LOCI, { reference: "bad.json", plannedAt: PLANNED_AT });
+  assert.equal(plan.resources.some(({ id }) => id === "inference-provider:bad-api"), false);
+  assert.ok(plan.residuals.some(({ code, disposition }) => code === "secret-bearing-input" && disposition === "rejected"));
 
-  assert.equal(projected.schema, "narada.carrier.provider_registry.v1");
-  assert.equal(projected.default_provider, "kimi-code-api");
-  const openai = projected.providers["openai-api"];
-  assert.ok(openai);
-  assert.equal(openai.base_url, "https://api.openai.com");
-  assert.ok(openai.available_models?.includes("gpt-5.6-sol"));
-  assert.equal(openai.default_model, "gpt-5.6-sol");
-  assert.deepEqual(openai.credential_env_names, ["OPENAI_API_KEY"]);
-  await store.close();
+  const ambiguous = parseLegacyRegistry({
+    schema: "narada.carrier.provider_registry.v1",
+    providers: {
+      "unknown-api": {
+        adapter_kind: "openai-compatible-chat-completions",
+        available_models: ["mystery-model"],
+      },
+    },
+  });
+  const ambiguousPlan = buildMigrationPlan(ambiguous, LOCI, { reference: "ambiguous.json", plannedAt: PLANNED_AT });
+  assert.equal(ambiguousPlan.resources.some(({ id }) => id === "inference-provider:unknown-api"), false);
+  assert.ok(ambiguousPlan.residuals.some(({ code, disposition }) => code === "ambiguous-model-provider" && disposition === "rejected"));
 });
 
 test("CLI validate runs against a store file", async () => {
