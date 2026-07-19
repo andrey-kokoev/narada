@@ -110,6 +110,7 @@ The workspace is declared in [`pnpm-workspace.yaml`](pnpm-workspace.yaml). It in
 | `@narada2/operator-surface-carriers` / `@narada2/window-surface-overlay` / `@narada2/windows-operator-surface` | `packages/operator-surface-carriers`, `packages/window-surface-overlay`, `packages/windows-operator-surface` | Windows operator-surface machinery |
 | `@narada2/mcp-shell-windows` | `packages/mcp-shell-windows` | Packaged shell MCP server |
 | `@narada2/invokable-intelligence-contract` | `packages/invokable-intelligence-contract` | Versioned invokable-intelligence ontology: typed resources, qualified capability assertions, typed policies, invocation Intent→Plan→Attempt→Evidence contracts (#2180) |
+| `@narada2/invokable-intelligence-registry` | `packages/invokable-intelligence-registry` | Portable intelligence registry storage: one store contract over node:sqlite and Cloudflare D1, typed relational schema, supersession history, shared conformance suite (#2181) |
 
 Operator-facing browser UI stack:
 
