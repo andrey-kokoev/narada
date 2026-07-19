@@ -1,5 +1,5 @@
 {
-  "site_id": "narada-proper",
+  "site_id": "narada",
   "site_kind": "project",
   "locus": {
     "authority_locus": "narada_proper"
@@ -12,7 +12,7 @@
           "--site-root",
           "${siteRoot}",
           "--site-id",
-          "narada-proper"
+          "narada"
         ],
         "provider_locus": "target_site_mcp",
         "target_locus": "narada_proper",
