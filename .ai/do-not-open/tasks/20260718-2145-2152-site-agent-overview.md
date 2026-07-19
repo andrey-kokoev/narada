@@ -1,5 +1,5 @@
 ---
-status: in_review
+status: closed
 depends_on: []
 chapter_id: site-agent-overview
 ---
@@ -58,11 +58,11 @@ flowchart TD
 | 5 | 2149 | Implement agent start and inspection interactions | closed |
 | 6 | 2150 | Promote Sites and Agents to normal Operator Workspace ingress | closed |
 | 7 | 2151 | Verify the Sites-and-Agents operator journey end to end | closed |
-| 8 | 2152 | Document and package the Sites-and-Agents Operator Workspace | in review; SQLite review transition retry pending |
+| 8 | 2152 | Document and package the Sites-and-Agents Operator Workspace | closed |
 
 ## Closure Criteria
 
-- [ ] Tasks 2145-2152 are closed or confirmed through lifecycle authority.
+- [x] Tasks 2145-2152 are closed or confirmed through lifecycle authority.
 - [x] Focused contract, CLI, UI, browser, and Windows launch tests pass.
 - [x] The normal Operator Workspace ingress reaches the overview.
 - [x] Unrelated provider/Cloudflare worktree changes remain untouched.
