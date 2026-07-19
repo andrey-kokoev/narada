@@ -1,0 +1,57 @@
+{
+  "concept_id": "task_executability_assessment",
+  "canonical_name": "TaskExecutabilityAssessment",
+  "short_definition": "An intelligence-backed, strictly bounded, read-only assessment of whether a governed task is executable in a declared environment.",
+  "description": "TaskExecutabilityAssessment captures a low-cognition, read-only evaluator's structured judgment about a task snapshot and the declared environment in which it would be executed. The result is a verdict (executable, needs_revision, or not_executable) with findings that must be mechanically derivable from evidence. It is not a guarantee of correctness, success, or value; it only answers whether the task as written can be attempted with the declared authority and tools.",
+  "kind": "policy",
+  "status": "active",
+  "aliases": ["executability check", "shoshin assessment", "task readiness"],
+  "deprecated_aliases": [],
+  "anti_aliases": ["task correctness proof", "success guarantee", "worker assignment recommendation", "unstructured prose review"],
+  "boundaries": [
+    "Task Lifecycle owns assessment truth and policy, not Delegation or NARS.",
+    "Delegation owns outcome orchestration; Worker Delegation owns provider/runtime execution.",
+    "NARS and Site Loop dispatch and reconcile, but never own the request authority.",
+    "Provider/model selection is resolved by Delegation registry, not Task Lifecycle policy.",
+    "A missing or failed evaluator is not a verdict about the task; execution state is separate from assessment verdict."
+  ],
+  "relations": [
+    { "kind": "depends_on", "concept_id": "task_lifecycle" },
+    { "kind": "depends_on", "concept_id": "delegation_dag_template" },
+    { "kind": "observes", "concept_id": "concept_registry" },
+    { "kind": "observes", "concept_id": "canonical_outbox" }
+  ],
+  "owner_surface": "@narada2/task-governance-core task lifecycle authority",
+  "authority": {
+    "kind": "package",
+    "ref": "narada-core/packages/task-governance-core",
+    "notes": "Contracts, deterministic digests, policy resolution, and mechanical verdict derivation live in the neutral task-governance-core package. Storage, MCP tools, NARS hooks, Site Loop steps, and Delegated Task templates are owned by their respective surfaces."
+  },
+  "schemas": [
+    "narada-core/packages/task-governance-core/src/task-executability-contract.ts"
+  ],
+  "docs": [
+    "docs/concepts/task-executability-assessment.md"
+  ],
+  "tasks": ["2223", "2224", "2225", "2226", "2227", "2228", "2229", "2230"],
+  "code_refs": [
+    "narada-core/packages/task-governance-core/src/task-executability-contract.ts",
+    "narada-core/packages/task-governance-core/test/lib/task-executability-contract.test.ts"
+  ],
+  "tests": [
+    "narada-core/packages/task-governance-core/test/lib/task-executability-contract.test.ts"
+  ],
+  "examples": [
+    "on_create policy triggers an assessment request when a task is created",
+    "strict enforcement refuses a task-linked delegation when no current executable assessment exists",
+    "one-shot operator override authorizes a single dispatch with a changed environment"
+  ],
+  "counterexamples": [
+    "asking a worker whether the task is a good idea",
+    "treating a failed provider as a needs_revision verdict",
+    "embedding provider/model names in Task Lifecycle policy"
+  ],
+  "open_questions": [],
+  "confidence": { "cl": 0.95, "basis": "Contracts, policy resolution, digests, and tests are implemented; downstream storage, orchestration, and enforcement are pending as tasks 2224-2230." },
+  "reviewed_at": "2026-07-19T00:00:00.000Z"
+}
