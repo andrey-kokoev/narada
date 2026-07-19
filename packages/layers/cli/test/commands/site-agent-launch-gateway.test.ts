@@ -105,4 +105,60 @@ describe('site-agent launch gateway', () => {
     });
     expect(launchCommand).not.toHaveBeenCalled();
   });
+
+  it('serializes concurrent launches into one atomic admission', async () => {
+    let resolveLaunch: ((value: unknown) => void) | null = null;
+    const launchCommand = vi.fn(() => new Promise((resolve) => { resolveLaunch = resolve; }));
+    const gateway = createSiteAgentLaunchGateway({
+      overview: overview('stopped'),
+      readLaunchRecords: async () => ({ records: [launchRecord], siteCatalog: [] }),
+      launchCommand: launchCommand as never,
+    });
+    const request = { siteId: 'sonar', agentId: 'sonar.resident' };
+    const launches = [gateway.launch(request), gateway.launch(request), gateway.launch(request)];
+    await new Promise((resolve) => { setTimeout(resolve, 0); });
+    expect(launchCommand).toHaveBeenCalledTimes(1);
+    resolveLaunch!({ exitCode: 0, result: { attachment: { sessions: [{ session_id: 'session-9' }] } } });
+    const results = await Promise.all(launches);
+    expect(launchCommand).toHaveBeenCalledTimes(1);
+    for (const result of results) {
+      expect(result).toMatchObject({ status: 'launched', session_id: 'session-9' });
+    }
+  });
+
+  it('reuses a session that appears after a completed admission', async () => {
+    let state: 'running' | 'stopped' = 'stopped';
+    let sessionId: string | null = null;
+    const dynamicOverview = { read: async () => overview(state, sessionId).read() };
+    const launchCommand = vi.fn(async () => ({
+      exitCode: 0,
+      result: { attachment: { sessions: [{ session_id: 'session-2' }] } },
+    }));
+    const gateway = createSiteAgentLaunchGateway({
+      overview: dynamicOverview,
+      readLaunchRecords: async () => ({ records: [launchRecord], siteCatalog: [] }),
+      launchCommand: launchCommand as never,
+    });
+    const request = { siteId: 'sonar', agentId: 'sonar.resident' };
+    expect(await gateway.launch(request)).toMatchObject({ status: 'launched', session_id: 'session-2' });
+    state = 'running';
+    sessionId = 'session-2';
+    expect(await gateway.launch(request)).toMatchObject({ status: 'reused', session_id: 'session-2' });
+    expect(launchCommand).toHaveBeenCalledTimes(1);
+  });
+
+  it('releases the admission after a failed launch so a retry can succeed', async () => {
+    const launchCommand = vi.fn()
+      .mockResolvedValueOnce({ exitCode: 1, result: null })
+      .mockResolvedValueOnce({ exitCode: 0, result: { attachment: { sessions: [{ session_id: 'session-3' }] } } });
+    const gateway = createSiteAgentLaunchGateway({
+      overview: overview('stopped'),
+      readLaunchRecords: async () => ({ records: [launchRecord], siteCatalog: [] }),
+      launchCommand: launchCommand as never,
+    });
+    const request = { siteId: 'sonar', agentId: 'sonar.resident' };
+    expect(await gateway.launch(request)).toMatchObject({ status: 'failed', reason: 'workspace_launch_failed' });
+    expect(await gateway.launch(request)).toMatchObject({ status: 'launched', session_id: 'session-3' });
+    expect(launchCommand).toHaveBeenCalledTimes(2);
+  });
 });
