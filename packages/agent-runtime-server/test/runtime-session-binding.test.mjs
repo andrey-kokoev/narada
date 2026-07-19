@@ -15,7 +15,7 @@ test('runtime session binding delegates session state to session core and turns 
     runtimeContext: {
       identity: 'agent-1', session: 'session-1', sessionPath: join(root, 'session.json'), eventsPath: join(root, 'events.jsonl'), siteRoot: root,
     },
-    callChatApiFn: async (messages, tools, settings) => {
+    invokeIntelligenceFn: async (messages, tools, settings) => {
       providerSettings = settings;
       return { content: messages[0].content, tool_count: tools.length };
     },
@@ -56,7 +56,7 @@ test('JSONL runtime acknowledges a submit before its provider turn settles', asy
   const providerResult = new Promise((resolve) => { releaseProvider = resolve; });
   const service = createSessionCoreRuntimeService({
     runtimeContext: { identity: 'agent-1', session: 'early-ack-1', sessionPath: join(root, 'session.json'), eventsPath: join(root, 'events.jsonl'), siteRoot: root },
-    callChatApiFn: async () => providerResult,
+    invokeIntelligenceFn: async () => providerResult,
     toolGateway: { toolCatalog: () => [], operationalState: () => 'healthy' },
   });
   const run = service.run({ input, output });
@@ -78,15 +78,15 @@ test('JSONL runtime acknowledges a submit before its provider turn settles', asy
   assert.ok(closeTerminalIndex > closeResponseIndex);
 });
 
-test('session cancel aborts an active provider turn while close waits for settlement', async () => {
+test('session cancel interrupts an active intelligence turn while close waits for settlement', async () => {
   const root = mkdtempSync(join(tmpdir(), 'session-core-cancel-'));
   const input = new PassThrough(); const output = new PassThrough(); let rendered = '';
   output.on('data', (chunk) => { rendered += String(chunk); });
   const service = createSessionCoreRuntimeService({
     runtimeContext: { identity: 'agent-1', session: 'cancel-1', sessionPath: join(root, 'session.json'), eventsPath: join(root, 'events.jsonl'), siteRoot: root },
-    callChatApiFn: (_messages, _tools, settings) => new Promise((_resolve, reject) => {
-      if (settings.abortSignal.aborted) reject(new Error('provider_request_aborted'));
-      else settings.abortSignal.addEventListener('abort', () => reject(new Error('provider_request_aborted')), { once: true });
+    invokeIntelligenceFn: (_messages, _tools, settings) => new Promise((_resolve, reject) => {
+      if (settings.abortSignal.aborted) reject(new Error('intelligence_invocation_aborted'));
+      else settings.abortSignal.addEventListener('abort', () => reject(new Error('intelligence_invocation_aborted')), { once: true });
     }),
     toolGateway: { toolCatalog: () => [], operationalState: () => 'healthy' },
   });
@@ -95,7 +95,10 @@ test('session cancel aborts an active provider turn while close waits for settle
   await run;
   const events = rendered.trim().split('\n').map((line) => JSON.parse(line));
   assert.ok(events.some((event) => event.event === 'session_cancel' && event.cancelled === true));
-  assert.ok(events.some((event) => event.event === 'carrier_turn_failed' && event.error === 'provider_request_aborted'));
+  assert.ok(events.some((event) => event.event === 'carrier_turn_interrupted'
+    && event.error.includes('aborted')
+    && event.cause === 'intelligence_invocation_aborted'),
+  events.map((event) => `${event.event}:${event.error ?? ''}`).join(','));
   assert.ok(events.some((event) => event.event === 'session_closed'));
 });
 
@@ -109,7 +112,7 @@ test('session-core runtime service rejects non-session controls and retains the 
     runtimeContext: {
       identity: 'agent-1', session: 'session-1', sessionPath: join(root, 'session.json'), eventsPath: join(root, 'events.jsonl'), siteRoot: root,
     },
-    callChatApiFn: async () => ({ content: 'ok' }),
+    invokeIntelligenceFn: async () => ({ content: 'ok' }),
   });
   const run = service.run({ input, output });
   input.end([
@@ -127,6 +130,46 @@ test('session-core runtime service rejects non-session controls and retains the 
   assert.ok(events.some((event) => event.lifecycle_state === 'closed'));
 });
 
+test('JSONL runtime executes shared carrier command aliases without provider dispatch', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'session-core-command-'));
+  const input = new PassThrough();
+  const output = new PassThrough();
+  let rendered = '';
+  let providerCalls = 0;
+  output.on('data', (chunk) => { rendered += String(chunk); });
+  const service = createSessionCoreRuntimeService({
+    runtimeContext: {
+      identity: 'agent-1', session: 'command-1', sessionPath: join(root, 'session.json'), eventsPath: join(root, 'events.jsonl'), siteRoot: root,
+    },
+    invokeIntelligenceFn: async () => { providerCalls += 1; return { content: 'unexpected' }; },
+    toolGateway: { toolCatalog: () => [], operationalState: () => 'healthy' },
+  });
+  const run = service.run({ input, output });
+  input.end([
+    JSON.stringify({ id: 'command-1', method: 'session.command.execute', params: { command: '/tool' } }),
+    JSON.stringify({ id: 'close-1', method: 'session.close' }),
+  ].join('\n') + '\n');
+  await run;
+  const events = rendered.trim().split(/\r?\n/).map((line) => JSON.parse(line));
+  const result = events.find((event) => event.event === 'command_result' && event.request_id === 'command-1');
+  assert.deepEqual({
+    command: result?.command,
+    command_name: result?.command_name,
+    status: result?.status,
+    terminal_state: result?.terminal_state,
+  }, {
+    command: '/tools',
+    command_name: 'tools',
+    status: 'ok',
+    terminal_state: 'completed',
+  });
+  assert.equal(providerCalls, 0);
+  assert.ok(events.some((event) => event.event === 'carrier_command_executed'
+    && event.request_id === 'command-1'
+    && event.command === '/tools'
+    && event.status === 'ok'));
+});
+
 test('session-core runtime classifies a supported reconfiguration failure distinctly from an unsupported control', async () => {
   const root = mkdtempSync(join(tmpdir(), 'session-core-runtime-reconfiguration-failure-'));
   const input = new PassThrough();
@@ -137,13 +180,13 @@ test('session-core runtime classifies a supported reconfiguration failure distin
     runtimeContext: {
       identity: 'agent-1', session: 'session-reconfiguration-failure', sessionPath: join(root, 'session.json'), eventsPath: join(root, 'events.jsonl'), siteRoot: root,
     },
-    providerRuntime: {
+    intelligenceRuntime: {
       reconfigure: async () => { throw new Error('fixture_reconfiguration_failure'); },
     },
-    callChatApiFn: async () => ({ content: 'unused' }),
+    invokeIntelligenceFn: async () => ({ content: 'unused' }),
   });
   const run = service.run({ input, output });
-  input.end(`${JSON.stringify({ id: 'reconfigure-failed', method: 'runtime.intelligence.reconfigure', params: { provider: 'openai-api' } })}\n${JSON.stringify({ id: 'close-1', method: 'session.close' })}\n`);
+  input.end(`${JSON.stringify({ id: 'reconfigure-failed', method: 'runtime.intelligence.reconfigure', params: { requested_model: { kind: 'model', id: 'model:fixture' } } })}\n${JSON.stringify({ id: 'close-1', method: 'session.close' })}\n`);
   await run;
   const events = rendered.trim().split(/\r?\n/).map((line) => JSON.parse(line));
   assert.equal(events.find((event) => event.event === 'session_control_rejected' && event.request_id === 'reconfigure-failed')?.code, 'runtime_reconfiguration_failed');
@@ -155,7 +198,7 @@ test('session-core turn persists carrier and gateway evidence for a provider too
   const invoked = [];
   const service = createSessionCoreRuntimeService({
     runtimeContext: { identity: 'agent-1', session: 'session-1', sessionPath: join(root, 'session.json'), eventsPath: join(root, 'events.jsonl'), siteRoot: root },
-    callChatApiFn: async () => {
+    invokeIntelligenceFn: async () => {
       providerCalls += 1;
       return providerCalls === 1
         ? { choices: [{ message: { role: 'assistant', tool_calls: [{ id: 'call-1', function: { name: 'fs_read_file', arguments: '{"path":"note.txt"}' } }] } }] }
@@ -195,7 +238,7 @@ test('JSONL transport handles partial and multiple frames while rejecting malfor
   output.on('data', (chunk) => { rendered += String(chunk); });
   const service = createSessionCoreRuntimeService({
     runtimeContext: { identity: 'agent-1', session: 'frames-1', sessionPath: join(root, 'session.json'), eventsPath: join(root, 'events.jsonl'), siteRoot: root },
-    callChatApiFn: async () => { providerCalls += 1; return { content: 'ok' }; },
+    invokeIntelligenceFn: async () => { providerCalls += 1; return { content: 'ok' }; },
     toolGateway: { toolCatalog: () => [], operationalState: () => 'healthy' },
   });
   const run = service.run({ input, output });
@@ -222,7 +265,7 @@ test('JSONL output preserves order under backpressure and propagates stream fail
   });
   const service = createSessionCoreRuntimeService({
     runtimeContext: { identity: 'agent-1', session: 'backpressure-1', sessionPath: join(root, 'session.json'), eventsPath: join(root, 'events.jsonl'), siteRoot: root },
-    callChatApiFn: async () => ({ content: 'ok' }),
+    invokeIntelligenceFn: async () => ({ content: 'ok' }),
     toolGateway: { toolCatalog: () => [], operationalState: () => 'healthy' },
   });
   const input = new PassThrough();
@@ -236,7 +279,7 @@ test('JSONL output preserves order under backpressure and propagates stream fail
   const failingRoot = mkdtempSync(join(tmpdir(), 'session-core-jsonl-output-failure-'));
   const failingService = createSessionCoreRuntimeService({
     runtimeContext: { identity: 'agent-1', session: 'output-failure-1', sessionPath: join(failingRoot, 'session.json'), eventsPath: join(failingRoot, 'events.jsonl'), siteRoot: failingRoot },
-    callChatApiFn: async () => ({ content: 'unused' }),
+    invokeIntelligenceFn: async () => ({ content: 'unused' }),
     toolGateway: { toolCatalog: () => [], operationalState: () => 'healthy' },
   });
   const failingInput = new PassThrough();
@@ -250,7 +293,7 @@ test('session close propagates capability-gateway shutdown failure', async () =>
   const root = mkdtempSync(join(tmpdir(), 'session-core-close-failure-'));
   const service = createSessionCoreRuntimeService({
     runtimeContext: { identity: 'agent-1', session: 'close-failure-1', sessionPath: join(root, 'session.json'), eventsPath: join(root, 'events.jsonl'), siteRoot: root },
-    callChatApiFn: async () => ({ content: 'unused' }),
+    invokeIntelligenceFn: async () => ({ content: 'unused' }),
     toolGateway: {
       toolCatalog: () => [],
       operationalState: () => 'healthy',
@@ -278,7 +321,7 @@ test('runtime writes heartbeat evidence and records natural input exhaustion as 
       eventsPath: paths.narsEventsPath,
       siteRoot: root,
     },
-    callChatApiFn: async () => ({ content: 'unused' }),
+    invokeIntelligenceFn: async () => ({ content: 'unused' }),
     toolGateway: { toolCatalog: () => [], operationalState: () => 'healthy' },
     heartbeatIntervalMs: 1,
   });

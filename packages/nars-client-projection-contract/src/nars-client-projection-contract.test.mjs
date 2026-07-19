@@ -71,6 +71,7 @@ test('NARS client projection contract owns attach commands and web UI capabiliti
     'session.events.subscribe',
     'session.events.read',
     'session.submit',
+    'session.command.execute',
     'session.health',
     'session.recovery',
     'session.cancel',
@@ -83,6 +84,7 @@ test('NARS client projection contract owns attach commands and web UI capabiliti
   assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes(NARS_AFFORDANCE_ACTION_REQUEST_METHOD), false);
   assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('session.sop.summary'), false);
   assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('conversation.steer'), false);
+  assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes(NARS_COMMAND_METHOD), true);
   assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('command.execute'), false);
   assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('carrier.command.execute'), false);
   assert.equal(NARS_CLIENT_PROJECTION_REGISTRY.clients.agent_web_ui.admitted_methods, AGENT_WEB_UI_NARS_METHOD_LIST);
@@ -425,18 +427,18 @@ test('NARS client projection contract owns web UI operator input projection', ()
   assert.equal(buildAgentWebUiOperatorInputAction('/ops', { id: 'ops-1' }).frame.method, 'session.operations');
   assert.equal(buildAgentWebUiOperatorInputAction('/interrupt', { id: 'interrupt-1' }).frame.method, 'session.cancel');
   assert.equal(buildAgentWebUiOperatorInputAction('/tools mcp', { id: 'tools-1' }).frame.method, 'session.command.execute');
-  assert.equal(buildAgentWebUiOperatorInputAction('/tool', { id: 'tool-1' }).message, 'Unknown command: /tool. Type /help.');
-  assert.equal(buildAgentWebUiOperatorInputAction('/tool-outputs', { id: 'tool-output-1' }).message, 'Unknown command: /tool-outputs. Type /help.');
+  assert.equal(buildAgentWebUiOperatorInputAction('/tool', { id: 'tool-1' }).frame.method, 'session.command.execute');
+  assert.equal(buildAgentWebUiOperatorInputAction('/tool-outputs', { id: 'tool-output-1' }).frame.method, 'session.command.execute');
   assert.equal(buildAgentWebUiOperatorInputAction('/queue clear', { id: 'queue-1' }).frame.params.command, '/queue');
   assert.deepEqual(buildAgentWebUiOperatorInputAction('/observer mute', { id: 'mute-1' }).frame, { id: 'mute-1', method: 'observer.mute', params: {} });
   assert.equal(buildAgentWebUiOperatorInputAction('/observer').message, 'Usage: /observer mute|unmute');
   assert.equal(buildAgentWebUiOperatorInputAction('/snippet save launch run startup sequence').kind, 'snippet_command');
   assert.equal(buildAgentWebUiOperatorInputAction('/snippets launch').kind, 'snippet_panel_command');
-  assert.equal(buildAgentWebUiOperatorInputAction('/quit', { id: 'quit-1' }).message, 'Unknown command: /quit. Type /help.');
+  assert.equal(buildAgentWebUiOperatorInputAction('/quit', { id: 'quit-1' }).frame.method, 'session.close');
   assert.equal(buildAgentWebUiOperatorInputAction('/exit', { id: 'exit-1' }).frame.method, 'session.close');
-  assert.equal(buildAgentWebUiOperatorInputAction('exit', { id: 'exit-2' }).frame.method, 'session.submit');
+  assert.equal(buildAgentWebUiOperatorInputAction('exit', { id: 'exit-2' }).frame.method, 'session.close');
   assert.equal(buildAgentWebUiOperatorInputAction('/snippety').message, 'Unknown command: /snippety. Type /help.');
-  assert.equal(isAgentWebUiNarsMethod('session.command.execute'), false);
+  assert.equal(isAgentWebUiNarsMethod('session.command.execute'), true);
   assert.equal(isAgentWebUiNarsMethod('carrier.command.execute'), false);
   assert.equal(isAgentWebUiNarsMethod('command.execute'), false);
   assert.equal(isAgentWebUiProtocolFrame({ id: 'ok', method: 'conversation.send', params: {} }), true);
@@ -471,8 +473,8 @@ test('Agent Web UI commands are first-class static registry entries', () => {
   assert.equal(filterAgentWebUiCommands('snippet').some((command) => command.slash === '/snippets'), true);
   assert.equal(filterAgentWebUiCommands('snippets')[0].slash, '/snippets');
   assert.equal(filterAgentWebUiCommands('mute').some((command) => command.slash === '/observer'), true);
-  assert.equal(findAgentWebUiCommand('/quit'), null);
-  assert.equal(findAgentWebUiCommand('/tool'), null);
+  assert.equal(findAgentWebUiCommand('/quit').id, 'exit');
+  assert.equal(findAgentWebUiCommand('/tool').id, 'tools');
   assert.equal(findAgentWebUiCommand('/queue').id, 'queue');
   assert.equal(findAgentWebUiCommand('/missing'), null);
   assert.equal(filterAgentWebUiCommands('stat')[0].slash, '/status');
@@ -485,8 +487,8 @@ test('Agent Web UI commands are first-class static registry entries', () => {
   const localCommands = filterAgentWebUiCommands('', { supportsProtocolMethod: isNarsSessionCoreMethod });
   assert.equal(localCommands.some((command) => command.slash === '/status'), true);
   assert.equal(localCommands.some((command) => command.slash === '/ops'), false);
-  assert.equal(localCommands.some((command) => command.slash === '/queue'), false);
-  assert.doesNotMatch(buildAgentWebUiHelpText({ supportsProtocolMethod: isNarsSessionCoreMethod }), /\/ops|\/queue|\/observer/);
+  assert.equal(localCommands.some((command) => command.slash === '/queue'), true);
+  assert.doesNotMatch(buildAgentWebUiHelpText({ supportsProtocolMethod: isNarsSessionCoreMethod }), /\/ops|\/observer/);
   assert.equal(buildAgentWebUiOperatorInputAction('/json {"id":"bad","method":"bad.method","params":{}}').message, 'JSON frame method is not admitted by the local session-core contract.');
   assert.equal(buildAgentWebUiOperatorInputAction('/does-not-exist').message, 'Unknown command: /does-not-exist. Type /help.');
 });
@@ -623,12 +625,12 @@ test('NARS client projection contract owns shared event rendering vocabulary', (
     summary: 'control input bridge control_input_record_invalid · Unexpected token',
     event: { event: 'runtime_control_input_bridge_error', error_code: 'control_input_record_invalid', error: 'Unexpected token' },
   });
-  assert.deepEqual(projectNarsClientEvent({ event: 'provider_runtime_reconfiguration_state_transition', request_id: 'switch-1', previous_state: 'validating', reconfiguration_state: 'admitted', target: { provider: 'deepseek-api' } }), {
-    kind: 'provider_runtime_reconfiguration_state_transition',
+  assert.deepEqual(projectNarsClientEvent({ event: 'intelligence_runtime_reconfiguration_state_transition', request_id: 'switch-1', previous_state: 'validating', reconfiguration_state: 'admitted', target: { requestedModel: { kind: 'model', id: 'model:deepseek-chat' }, requestedOptions: { thinking: 'low' } } }), {
+    kind: 'intelligence_runtime_reconfiguration_state_transition',
     label: 'Intelligence reconfiguration state',
     tone: 'status',
-    summary: 'intelligence reconfiguration validating -> admitted · deepseek-api',
-    event: { event: 'provider_runtime_reconfiguration_state_transition', request_id: 'switch-1', previous_state: 'validating', reconfiguration_state: 'admitted', target: { provider: 'deepseek-api' } },
+    summary: 'intelligence reconfiguration validating -> admitted · model:deepseek-chat · thinking=low',
+    event: { event: 'intelligence_runtime_reconfiguration_state_transition', request_id: 'switch-1', previous_state: 'validating', reconfiguration_state: 'admitted', target: { requestedModel: { kind: 'model', id: 'model:deepseek-chat' }, requestedOptions: { thinking: 'low' } } },
   });
   assert.deepEqual(projectNarsClientEvent({ event: 'runtime_intelligence_reconfiguration', request_id: 'switch-1', reconfiguration_state: 'refused', terminal_state: 'refused', reason: 'runtime_not_at_clean_turn_boundary' }), {
     kind: 'runtime_intelligence_reconfiguration',

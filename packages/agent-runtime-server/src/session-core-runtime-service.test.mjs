@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
-  intelligenceChoices,
   normalizeProviderConversationContent,
   requestRejectionCode,
+  sessionCommandResult,
   shouldPersistNarsRuntimeRequestTransition,
 } from './session-core-runtime-service.mjs';
 
@@ -23,10 +23,17 @@ test('supported control failures retain method-specific rejection codes', () => 
   assert.equal(requestRejectionCode('legacy.mutate', 'unsupported_session_control'), 'unsupported_session_control');
 });
 
-test('intelligence choices keep the current model first', () => {
-  const choices = intelligenceChoices('openai-api', 'fixture-model', 'medium');
-  assert.equal(choices.modelChoices[0], 'fixture-model');
-  assert.equal(new Set(choices.modelChoices).size, choices.modelChoices.length);
+test('session command execution resolves shared aliases without provider dispatch', () => {
+  const supervisor = { health: () => ({ lifecycle_state: 'ready' }) };
+  const result = sessionCommandResult('/tool', '', supervisor, {}, {}, {}, null);
+  assert.deepEqual(result, {
+    command: '/tools',
+    value: '',
+    command_name: 'tools',
+    status: 'ok',
+    summary: 'Show discovered MCP tools and input schemas',
+    terminal_state: 'completed',
+  });
 });
 
 test('routine session health transitions stay out of the durable session event stream', () => {

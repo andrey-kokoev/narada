@@ -10,12 +10,14 @@ test('session-core control inventory is narrow and explicit', () => {
     'session.events.subscribe',
     'session.events.read',
     'session.submit',
+    'session.command.execute',
     'session.health',
     'session.recovery',
     'session.cancel',
     'session.close',
   ]);
   assert.equal(isNarsSessionCoreMethod('session.submit'), true);
+  assert.equal(isNarsSessionCoreMethod('session.command.execute'), true);
   assert.equal(isNarsSessionCoreMethod('conversation.send'), false);
   assert.equal(isNarsSessionCoreMethod('session.affordance.action.request'), false);
 });

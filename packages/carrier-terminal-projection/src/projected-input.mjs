@@ -1,3 +1,5 @@
+import { commandRecords, resolveCommandInput } from '@narada2/carrier-command-contract';
+
 const TERMINAL_PROTOCOL_COMMANDS = Object.freeze([
   Object.freeze({ primary: '/status', help: 'Show runtime health', method: 'session.health' }),
   Object.freeze({ primary: '/health', help: 'Show runtime health', method: 'session.health' }),
@@ -17,6 +19,7 @@ const TERMINAL_RAW_JSON_COMMAND = Object.freeze({
 });
 const NARROW_CONTROL_METHODS = new Set([
   'session.submit',
+  'session.command.execute',
   'session.health',
   'session.cancel',
   'session.recovery',
@@ -95,6 +98,13 @@ function trailingMarkerPrefixLength(text, marker) {
 export function createProjectedSlashCommandAction(line) {
   const trimmed = String(line ?? '').trim();
   if (!trimmed) return null;
+  const lower = trimmed.toLowerCase();
+  if (lower === '/exit' || lower === '/quit' || lower === 'exit') {
+    return {
+      kind: 'frame',
+      frame: controlFrame('exit', 'session.close', {}),
+    };
+  }
   if (!trimmed.startsWith('/')) return null;
   const [rawCommand] = trimmed.split(/\s+/);
   const command = rawCommand.toLowerCase();
@@ -111,6 +121,17 @@ export function createProjectedSlashCommandAction(line) {
       ),
     };
   }
+  const value = trimmed.slice(rawCommand.length).trim();
+  const carrierCommand = resolveCommandInput(rawCommand, value);
+  if (carrierCommand && !['help', 'clear', 'exit'].includes(carrierCommand.name)) {
+    return {
+      kind: 'frame',
+      frame: controlFrame(carrierCommand.name, 'session.command.execute', {
+        command: carrierCommand.primary,
+        value: carrierCommand.argument ?? '',
+      }),
+    };
+  }
   return { kind: 'message', message: `Unknown command: ${command}. Type /help.` };
 }
 
@@ -122,7 +143,17 @@ export function projectedHelpText() {
   return [
     'Commands',
     '',
-    ...[...local, ...TERMINAL_PROTOCOL_COMMANDS, TERMINAL_RAW_JSON_COMMAND]
+    ...[
+      ...local,
+      ...TERMINAL_PROTOCOL_COMMANDS,
+      ...commandRecords()
+        .filter((command) => !['help', 'clear', 'exit'].includes(command.name))
+        .map((command) => ({
+          primary: [command.primary, ...(command.aliases ?? [])].join(', '),
+          help: command.help,
+        })),
+      TERMINAL_RAW_JSON_COMMAND,
+    ]
       .map((command) => `${command.primary.padEnd(21)} ${command.help}`),
   ].join('\n');
 }

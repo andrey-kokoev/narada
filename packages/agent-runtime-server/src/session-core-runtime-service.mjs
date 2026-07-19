@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { admittedProviderNames, loadProviderMetadata } from '@narada2/carrier-provider-contract';
 import { resolveNaradaSitePaths } from '@narada2/site-paths';
+import { resolveCommandInput } from '@narada2/carrier-command-contract';
 import { readNarsEventLog } from '@narada2/nars-session-core/event-log';
 import { markNarsSessionIndexClosed, writeNarsSessionStartedIndex } from '@narada2/nars-session-core/session-index';
 import { buildNarsRuntimeSurfaceContract } from '@narada2/nars-runtime-contract/runtime-surface-contract';
@@ -14,10 +14,9 @@ import { isNarsRuntimeServerMethod } from './runtime-control-contract.mjs';
 const DEFAULT_HEARTBEAT_INTERVAL_MS = 10_000;
 const HEARTBEAT_FRESH_MS = 30_000;
 const NARS_HEARTBEAT_SCHEMA = 'narada.nars.heartbeat.v1';
-const PROVIDER_METADATA = loadProviderMetadata();
-const ADMITTED_PROVIDER_NAMES = admittedProviderNames();
 const SESSION_CONTROL_METHODS = new Set([
   'session.submit',
+  'session.command.execute',
   'session.health',
   'session.cancel',
   'session.recovery',
@@ -42,6 +41,25 @@ function buildLocalRuntimeSurfaceContract(runtimeContext, generatedAt = new Date
     },
     generated_at: generatedAt,
   });
+}
+
+export function sessionCommandResult(command, value, supervisor, runtimeContext, intelligenceToolGateway, requestLifecycle, intelligenceRuntime) {
+  const resolved = resolveCommandInput(command, value);
+  if (!resolved) throw new Error('unsupported_session_command');
+  const summary = resolved.name === 'status'
+    ? `session ${supervisor.health().lifecycle_state ?? 'unknown'}`
+    : resolved.record.help;
+  return {
+    command: resolved.primary,
+    value: resolved.argument ?? '',
+    command_name: resolved.name,
+    status: 'ok',
+    summary,
+    terminal_state: 'completed',
+    ...(resolved.name === 'status'
+      ? { health: projectRuntimeHealth(supervisor.health(), runtimeContext, intelligenceToolGateway, requestLifecycle, intelligenceRuntime) }
+      : {}),
+  };
 }
 
 export function shouldPersistNarsRuntimeRequestTransition(record) {
@@ -142,33 +160,19 @@ function runtimeHostSnapshot(runtimeContext) {
   return runtimeContext.runtimeHostState ?? null;
 }
 
-export function intelligenceChoices(provider, currentModel, currentThinking) {
-  const metadata = PROVIDER_METADATA[provider] ?? {};
-  return {
-    providerChoices: ADMITTED_PROVIDER_NAMES.filter((name) => PROVIDER_METADATA[name]),
-    modelChoices: uniqueStrings([
-      currentModel,
-      ...(Array.isArray(metadata.available_models) ? metadata.available_models : []),
-    ]),
-    thinkingChoices: uniqueStrings([
-      currentThinking,
-      ...Object.keys(metadata.cognition_defaults ?? {}),
-    ]),
+function currentIntelligenceSnapshot(intelligenceRuntime, runtimeContext) {
+  return intelligenceRuntime?.snapshot?.() ?? {
+    schema: 'narada.nars.intelligence_runtime_snapshot.v1',
+    authority: 'unavailable',
+    principal: runtimeContext.intelligence?.principal ?? null,
+    requested_model: runtimeContext.intelligence?.requestedModel ?? null,
+    requested_options: runtimeContext.intelligence?.requestedOptions ?? {},
+    latest_plan: null,
+    latest_outcome: null,
+    latest_attempt_id: null,
+    latest_replayed: null,
+    reconfiguration: null,
   };
-}
-
-function currentIntelligenceSnapshot(providerRuntime, runtimeContext) {
-  const snapshot = providerRuntime?.snapshot?.() ?? {};
-  return {
-    ...snapshot,
-    provider: snapshot.provider ?? runtimeContext.intelligenceProvider ?? null,
-    model: snapshot.model ?? runtimeContext.providerSettings?.model ?? null,
-    thinking: snapshot.thinking ?? runtimeContext.providerSettings?.thinking ?? null,
-  };
-}
-
-function uniqueStrings(values) {
-  return [...new Set(values.filter((value) => typeof value === 'string' && value.trim()))];
 }
 
 function requestContent(request) {
@@ -242,7 +246,7 @@ function parseRequest(line) {
   }
 }
 
-function projectRuntimeHealth(snapshot, runtimeContext, toolGateway, requestLifecycle = null, providerRuntime = null) {
+function projectRuntimeHealth(snapshot, runtimeContext, toolGateway, requestLifecycle = null, intelligenceRuntime = null) {
   // MCP authority is opt-in. A runtime that did not receive an explicit scope
   // must report disabled rather than silently projecting the composed fabric.
   const mcpScope = runtimeContext.mcpScope ?? 'none';
@@ -261,11 +265,7 @@ function projectRuntimeHealth(snapshot, runtimeContext, toolGateway, requestLife
         : 'degraded';
   const heartbeat = readHeartbeatProjection(heartbeatPathForRuntimeContext(runtimeContext));
   const generatedAt = new Date().toISOString();
-  const intelligence = currentIntelligenceSnapshot(providerRuntime, runtimeContext);
-  const intelligenceProvider = intelligence.provider;
-  const intelligenceModel = intelligence.model;
-  const intelligenceThinking = intelligence.thinking;
-  const choices = intelligenceChoices(intelligenceProvider, intelligenceModel, intelligenceThinking);
+  const intelligence = currentIntelligenceSnapshot(intelligenceRuntime, runtimeContext);
   return {
     ...snapshot,
     schema: 'narada.nars.health.v1',
@@ -284,16 +284,7 @@ function projectRuntimeHealth(snapshot, runtimeContext, toolGateway, requestLife
     event_endpoint: runtimeContext.eventStreamUrl ?? null,
     runtime_host_state: runtimeHostSnapshot(runtimeContext),
     heartbeat,
-    intelligence: {
-      provider: intelligenceProvider,
-      model: intelligenceModel,
-      thinking: intelligenceThinking,
-      provider_choices: choices.providerChoices,
-      model_choices: choices.modelChoices,
-      thinking_choices: choices.thinkingChoices,
-      provider_runtime_binding: intelligence.provider_runtime_binding ?? null,
-      reconfiguration: intelligence.reconfiguration ?? null,
-    },
+    intelligence,
     mcp_operational_state: mcpOperationalState,
     mcp_scope: mcpScope,
     mcp: {
@@ -354,12 +345,12 @@ function readHeartbeatProjection(path) {
 
 /**
  * Narrow JSONL control service. Session-core owns all durable session state;
- * the runtime server supplies only the provider callable and tool gateway.
+ * the runtime server supplies only the canonical intelligence callable and tool gateway.
  */
 export function createSessionCoreRuntimeService({
   runtimeContext,
-  callChatApiFn,
-  providerRuntime = null,
+  invokeIntelligenceFn,
+  intelligenceRuntime = null,
   toolGateway = null,
   admitCapability = null,
   heartbeatIntervalMs = DEFAULT_HEARTBEAT_INTERVAL_MS,
@@ -386,7 +377,7 @@ export function createSessionCoreRuntimeService({
     ...(admitCapability ? { admit: admitCapability } : {}),
     recordEvidence: async (event) => supervisor?.core.appendEvent({ event: event.kind, ...event }),
   });
-  const providerToolGateway = toolGateway ?? {
+  const intelligenceToolGateway = toolGateway ?? {
     toolCatalog: async () => (await gateway.start()).map((tool) => ({
       type: 'function',
       function: {
@@ -404,21 +395,15 @@ export function createSessionCoreRuntimeService({
     operationalState: () => gateway.operationalState?.() ?? 'unknown',
     close: () => gateway.close(),
   };
-  const runtimeCall = providerRuntime?.callProvider ?? callChatApiFn;
+  const runtimeCall = intelligenceRuntime?.callIntelligence ?? invokeIntelligenceFn;
   supervisor = createRuntimeSessionBinding({
     runtimeContext,
-    callChatApiFn: runtimeCall,
-    toolGateway: providerToolGateway,
+    invokeIntelligenceFn: runtimeCall,
+    toolGateway: intelligenceToolGateway,
     buildTurnContext: (input) => {
-      const intelligence = currentIntelligenceSnapshot(providerRuntime, runtimeContext);
       return {
         turnId: input.event_id,
         messages: providerConversationMessages({ eventsPath: runtimeContext.eventsPath, currentInput: input }),
-        provider: intelligence.provider ?? runtimeContext.intelligenceProvider ?? null,
-        settings: {
-          model: intelligence.model ?? runtimeContext.providerSettings?.model ?? null,
-          thinking: intelligence.thinking ?? runtimeContext.providerSettings?.thinking ?? null,
-        },
       };
     },
   });
@@ -432,8 +417,8 @@ export function createSessionCoreRuntimeService({
     requestState.transition('running');
     try {
       if (isNarsRuntimeServerMethod(method)) {
-        if (!providerRuntime?.reconfigure) throw new Error('runtime_intelligence_reconfiguration_unavailable');
-        const result = await providerRuntime.reconfigure(request?.params ?? {}, {
+        if (!intelligenceRuntime?.reconfigure) throw new Error('runtime_intelligence_reconfiguration_unavailable');
+        const result = await intelligenceRuntime.reconfigure(request?.params ?? {}, {
           isBusy: () => Boolean(supervisor.activeTurnId)
             || Number(supervisor.health().operator_input_queue?.pending_count ?? 0) > 0,
         });
@@ -449,7 +434,7 @@ export function createSessionCoreRuntimeService({
         await writer.write({
           event: 'session_health',
           request_id: requestId,
-          ...projectRuntimeHealth(supervisor.health(), runtimeContext, providerToolGateway, requestLifecycle, providerRuntime),
+          ...projectRuntimeHealth(supervisor.health(), runtimeContext, intelligenceToolGateway, requestLifecycle, intelligenceRuntime),
         });
         requestState.transition('completed');
         return false;
@@ -463,6 +448,47 @@ export function createSessionCoreRuntimeService({
       if (method === 'session.recovery') {
         await writer.write({ event: 'session_recovery', request_id: requestId, ...supervisor.recovery() });
         requestState.transition('completed');
+        return false;
+      }
+      if (method === 'session.command.execute') {
+        const command = String(request?.params?.command ?? request?.command ?? '').trim();
+        const value = String(request?.params?.value ?? request?.value ?? '').trim();
+        if (!command) throw new Error('missing_session_command');
+        supervisor.core.appendEvent({
+          event: 'session_control_accepted',
+          request_id: requestId,
+          method,
+          command,
+          value,
+          idempotency_key: idempotencyKey,
+          acceptance_state: 'accepted',
+          transport: 'jsonl_stdio',
+        });
+        const result = sessionCommandResult(
+          command,
+          value,
+          supervisor,
+          runtimeContext,
+          intelligenceToolGateway,
+          requestLifecycle,
+          intelligenceRuntime,
+        );
+        supervisor.core.appendEvent({
+          event: 'carrier_command_executed',
+          request_id: requestId,
+          method,
+          idempotency_key: idempotencyKey,
+          ...result,
+        });
+        await writer.write({ event: 'command_result', request_id: requestId, ...result });
+        supervisor.core.appendEvent({
+          event: 'session_control_response',
+          request_id: requestId,
+          method,
+          idempotency_key: idempotencyKey,
+          terminal_state: 'completed',
+        });
+        requestState.transition('completed', { terminal_state: 'completed' });
         return false;
       }
       if (method === 'session.close') {
@@ -512,6 +538,18 @@ export function createSessionCoreRuntimeService({
       return false;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
+      if (method === 'session.command.execute') {
+        const command = String(request?.params?.command ?? request?.command ?? '').trim() || 'unknown';
+        supervisor.core.appendEvent({
+          event: 'carrier_command_executed',
+          request_id: requestId,
+          method,
+          command,
+          status: 'error',
+          summary: message,
+          terminal_state: 'failed',
+        });
+      }
       supervisor.core.appendEvent({
         event: 'session_control_rejected',
         request_id: requestId,
@@ -534,7 +572,7 @@ export function createSessionCoreRuntimeService({
       send: (envelope) => writer.write(envelope.payload),
     });
     subscription.markLive({ source: 'jsonl_stdio_ready' });
-    const initialIntelligence = currentIntelligenceSnapshot(providerRuntime, runtimeContext);
+    const initialIntelligence = currentIntelligenceSnapshot(intelligenceRuntime, runtimeContext);
     const sessionStartedEvent = supervisor.core.appendEvent({
       event: 'session_started',
       runtime: 'narada-agent-runtime-server',
@@ -550,9 +588,8 @@ export function createSessionCoreRuntimeService({
       session_path: runtimeContext.sessionPath ?? null,
       events_path: runtimeContext.eventsPath ?? null,
       operator_surface_kind: runtimeContext.operatorSurfaceKind ?? null,
-      provider: initialIntelligence.provider ?? runtimeContext.intelligenceProvider ?? null,
-      model: initialIntelligence.model ?? runtimeContext.providerSettings?.model ?? null,
-      thinking: initialIntelligence.thinking ?? runtimeContext.providerSettings?.thinking ?? null,
+      provider: initialIntelligence.latest_plan?.inference_provider?.id?.replace(/^inference-provider:/, '') ?? null,
+      intelligence: initialIntelligence,
       mcp_scope: runtimeContext.mcpScope ?? 'none',
       mcp_server_count: runtimeContext.mcpScope === 'none' ? 0 : null,
       mcp_operational_state: runtimeContext.mcpScope === 'none' ? 'disabled' : 'starting',
@@ -661,7 +698,7 @@ export function createSessionCoreRuntimeService({
   return Object.freeze({
     supervisor,
     runtimeContext,
-    providerRuntime,
+    intelligenceRuntime,
     requestLifecycle,
     run,
   });

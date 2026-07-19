@@ -22,12 +22,26 @@ test('projected slash commands produce NARS protocol frames', () => {
   assert.equal(createProjectedSlashCommandAction('/events').frame.method, 'session.events.subscribe');
   assert.equal(createProjectedSlashCommandAction('/interrupt').frame.method, 'session.cancel');
   assert.equal(createProjectedSlashCommandAction('/exit').frame.method, 'session.close');
-  assert.equal(createProjectedSlashCommandAction('/tool').kind, 'message');
-  assert.equal(createProjectedSlashCommandAction('/queue clear').kind, 'message');
-  assert.equal(createProjectedSlashCommandAction('exit'), null);
+  assert.equal(createProjectedSlashCommandAction('/quit').frame.method, 'session.close');
+  assert.equal(createProjectedSlashCommandAction('exit').frame.method, 'session.close');
+  assert.equal(createProjectedSlashCommandAction('/tool').frame.method, 'session.command.execute');
+  assert.deepEqual(createProjectedSlashCommandAction('/tool').frame.params, {
+    command: '/tools',
+    value: '',
+  });
+  assert.deepEqual(createProjectedSlashCommandAction('/tool-outputs on').frame.params, {
+    command: '/tool-output',
+    value: 'on',
+  });
+  assert.deepEqual(createProjectedSlashCommandAction('/queue clear').frame.params, {
+    command: '/queue clear',
+    value: '',
+  });
   assert.equal(createExplicitJsonControlFrame('/json {"id":"health-1","method":"session.health","params":{}}').frame.method, 'session.health');
+  assert.equal(createExplicitJsonControlFrame('/json {"id":"command-1","method":"session.command.execute","params":{"command":"/tool","value":""}}').frame.method, 'session.command.execute');
   assert.equal(createExplicitJsonControlFrame('/json {"id":"bad-1","method":"bad.method","params":{}}').error, '/json unsupported session-core method: bad.method');
   assert.match(projectedHelpText(), /\/interrupt\s+Cancel the active request/);
+  assert.match(projectedHelpText(), /\/tools, \/tool/);
   const steering = createOperatorSteeringFrame('change course', { activeTurnId: 'turn_active' });
   assert.equal(steering.method, 'session.submit');
   assert.equal(steering.params.content, 'change course');

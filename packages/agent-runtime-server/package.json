@@ -35,9 +35,11 @@
     "./runtime-request-state": "./src/runtime-request-state.mjs",
     "./health-projection-request-state": "./src/health-projection-request-state.mjs",
     "./runtime-control-contract": "./src/runtime-control-contract.mjs",
-    "./provider-runtime-reconfiguration-state": "./src/provider-runtime-reconfiguration-state.mjs",
-    "./provider-runtime-controller": "./src/provider-runtime-controller.mjs",
+    "./intelligence-runtime-reconfiguration-state": "./src/intelligence-runtime-reconfiguration-state.mjs",
+    "./intelligence-runtime-controller": "./src/intelligence-runtime-controller.mjs",
+    "./local-intelligence-runtime": "./src/local-intelligence-runtime.mjs",
     "./runtime-server-events": "./src/runtime-server-events.mjs",
+    "./task-executability-dispatch": "./src/task-executability-dispatch.mjs",
     "./test-fixtures": "./src/test-fixtures.mjs",
     "./agent-cli-windows-wrapper-template": "./templates/Start-AgentCliSession.ps1",
     "./package.json": "./package.json"
@@ -46,13 +48,13 @@
     "test": "node --test test/*.test.mjs src/*.test.mjs",
     "test:e2e:pty": "node test/pty-e2e.mjs",
     "test:live:codex-provider-admission": "pnpm --filter @narada2/cli build && node test/live-codex-provider-admission-e2e.mjs --enable-live-codex",
-    "typecheck": "tsc --noEmit --allowJs --checkJs false bin/narada-agent-runtime-server.mjs src/server-wrapper.mjs src/runtime-context.mjs src/control-input-bridge.mjs src/runtime-host-state.mjs src/runtime-request-state.mjs src/health-projection-request-state.mjs src/runtime-session-binding.mjs src/session-core-runtime-service.mjs src/runtime-server-events.mjs src/runtime-control-contract.mjs src/provider-runtime-reconfiguration-state.mjs src/provider-runtime-controller.mjs src/test-fixtures.mjs src/lifecycle-hooks.mjs"
+    "typecheck": "tsc --noEmit --allowJs --checkJs false bin/narada-agent-runtime-server.mjs src/server-wrapper.mjs src/runtime-context.mjs src/local-intelligence-runtime.mjs src/control-input-bridge.mjs src/runtime-host-state.mjs src/runtime-request-state.mjs src/health-projection-request-state.mjs src/runtime-session-binding.mjs src/session-core-runtime-service.mjs src/runtime-server-events.mjs src/runtime-control-contract.mjs src/intelligence-runtime-reconfiguration-state.mjs src/intelligence-runtime-controller.mjs src/test-fixtures.mjs src/lifecycle-hooks.mjs"
   },
   "dependencies": {
     "@narada2/agent-identity": "workspace:*",
+    "@narada2/carrier-command-contract": "workspace:*",
     "@narada2/carrier-runtime": "workspace:*",
     "@narada2/carrier-protocol": "workspace:*",
-    "@narada2/carrier-provider-contract": "workspace:*",
     "@narada2/carrier-terminal-projection": "workspace:*",
     "@narada2/invokable-intelligence-registry": "workspace:*",
     "@narada2/invokable-intelligence-resolver": "workspace:*",
@@ -66,6 +68,7 @@
     "@narada2/site-paths": "workspace:*"
   },
   "devDependencies": {
+    "@narada2/invokable-intelligence-contract": "workspace:*",
     "node-pty": "^1.1.0"
   }
 }

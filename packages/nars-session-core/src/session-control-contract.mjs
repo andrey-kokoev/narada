@@ -3,6 +3,7 @@ export const NARS_SESSION_CORE_METHOD_LIST = Object.freeze([
   'session.events.subscribe',
   'session.events.read',
   'session.submit',
+  'session.command.execute',
   'session.health',
   'session.recovery',
   'session.cancel',

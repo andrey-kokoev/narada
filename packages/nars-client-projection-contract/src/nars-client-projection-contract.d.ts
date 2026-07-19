@@ -36,7 +36,7 @@ export type AgentWebUiCommandGroup = 'conversation' | 'session' | 'diagnostics' 
 export interface AgentWebUiCommand {
   id: string;
   slash: `/${string}`;
-  aliases: readonly `/${string}`[];
+  aliases: readonly (`/${string}` | 'exit')[];
   kind: AgentWebUiCommandKind;
   group: AgentWebUiCommandGroup;
   title: string;

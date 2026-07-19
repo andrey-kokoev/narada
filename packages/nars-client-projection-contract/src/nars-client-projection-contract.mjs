@@ -106,7 +106,6 @@ export const AGENT_WEB_UI_LEGACY_METHOD_LIST = Object.freeze([
   'observers.status',
   'observer.mute',
   'observer.unmute',
-  NARS_COMMAND_METHOD,
   'conversation.interrupt',
   'conversation.steer',
 ]);
@@ -121,9 +120,9 @@ export const AGENT_WEB_UI_SESSION_COMMANDS = Object.freeze([
   '/stats',
   '/model',
   '/thinking',
-  '/tool-output',
-  '/tools',
-  '/help, /clear, /status, /health, /events, /recovery, /ops, /interrupt, /tools, /queue, /goal, /model, /thinking, /exit',
+  '/tool-output, /tool-outputs',
+  '/tools, /tool',
+  '/help, /clear, /status, /health, /events, /recovery, /ops, /interrupt, /tools, /tool, /queue, /goal, /model, /thinking, /exit, /quit, exit',
   'Ordinary text is submitted with session.submit. Active-turn queueing uses delivery_mode=admit_after_active_turn.',
 ]);
 
@@ -157,7 +156,7 @@ export const NARS_CLIENT_EVENT_LABELS = Object.freeze({
   runtime_projection_failure: 'Runtime projection failure',
   runtime_control_input_bridge_error: 'Control-input bridge error',
   runtime_intelligence_reconfiguration: 'Intelligence reconfiguration',
-  provider_runtime_reconfiguration_state_transition: 'Intelligence reconfiguration state',
+  intelligence_runtime_reconfiguration_state_transition: 'Intelligence reconfiguration state',
   carrier_diagnostic_recorded: 'Diagnostic',
   mcp_runtime_fault: 'MCP runtime fault',
   authority_session_revoked: 'Session revoked',
@@ -832,7 +831,7 @@ export const AGENT_WEB_UI_COMMANDS = Object.freeze([
     },
   }),
   frameCommand('interrupt', '/interrupt', 'session.cancel', { title: 'Interrupt response', description: 'Ask NARS to interrupt the active model turn.', group: 'conversation', rank: 200, danger: true }),
-  frameCommand('exit', '/exit', 'session.close', { title: 'Close session', description: 'Close this NARS session.', group: 'session', rank: 900, danger: true }),
+  frameCommand('exit', '/exit', 'session.close', { aliases: ['/quit', 'exit'], title: 'Close session', description: 'Close this NARS session.', group: 'session', rank: 900, danger: true }),
   localCommand('json', '/json', {
     kind: 'raw_protocol_frame',
     title: 'Send JSON frame',
@@ -856,8 +855,8 @@ export const AGENT_WEB_UI_COMMANDS = Object.freeze([
   sessionCommand('stats', '/stats', { title: 'Stats command', description: 'Run the NARS-compatible stats session command.', group: 'diagnostics', rank: 310 }),
   sessionCommand('model', '/model', { title: 'Model command', description: 'Run the NARS-compatible model session command.', group: 'settings', rank: 320 }),
   sessionCommand('thinking', '/thinking', { title: 'Thinking command', description: 'Run the NARS-compatible thinking session command.', group: 'settings', rank: 330 }),
-  sessionCommand('tool-output', '/tool-output', { title: 'Tool output command', description: 'Run the NARS-compatible tool-output session command.', group: 'settings', rank: 340 }),
-  sessionCommand('tools', '/tools', { title: 'Tools command', description: 'Run the NARS-compatible tools session command.', group: 'diagnostics', rank: 350 }),
+  sessionCommand('tool-output', '/tool-output', { aliases: ['/tool-outputs'], title: 'Tool output command', description: 'Run the NARS-compatible tool-output session command.', group: 'settings', rank: 340 }),
+  sessionCommand('tools', '/tools', { aliases: ['/tool'], title: 'Tools command', description: 'Run the NARS-compatible tools session command.', group: 'diagnostics', rank: 350 }),
   localCommand('snippet', '/snippet', {
     title: 'Snippet command',
     description: 'Save, edit, delete, search, or run local operator snippets.',
@@ -961,7 +960,7 @@ export function buildAgentWebUiOperatorInputAction(text, options = {}) {
   const content = String(text ?? '').trim();
   if (!content) return null;
   const lower = content.toLowerCase();
-  if (lower === '/exit') {
+  if (lower === '/exit' || lower === '/quit' || lower === 'exit') {
     return findAgentWebUiCommand('/exit').buildAction({ raw: content, command: '/exit', value: '' }, options);
   }
   if (!content.startsWith('/')) {
@@ -1012,7 +1011,7 @@ export function classifyNarsClientEventProjection(projection) {
   if (kind === 'error' || kind === 'websocket_error' || kind === 'web_ui_decode_error' || kind === 'web_ui_input_not_sent' || kind === 'runtime_error') return 'conversation';
   if (kind === 'authority_session_revoked' || kind === 'projection_revoked') return 'diagnostics';
   if (kind === 'carrier_diagnostic_recorded' || kind === 'mcp_runtime_fault') return 'diagnostics';
-  if (kind === 'runtime_projection_failure' || kind === 'runtime_control_input_bridge_error' || kind === 'runtime_intelligence_reconfiguration' || kind === 'provider_runtime_reconfiguration_state_transition') return 'diagnostics';
+  if (kind === 'runtime_projection_failure' || kind === 'runtime_control_input_bridge_error' || kind === 'runtime_intelligence_reconfiguration' || kind === 'intelligence_runtime_reconfiguration_state_transition') return 'diagnostics';
   if (kind === 'web_ui_input_ack_timeout' || kind === 'web_ui_input_transport_failed' || kind === 'web_ui_input_ack_ignored' || kind === 'web_ui_input_correlation_ambiguous' || kind === 'web_ui_session_correlation_mismatch') return 'conversation';
   if (kind === 'operator_input_pending_restored' || kind === 'operator_input_pending_expired' || kind === 'operator_input_discarded' || kind === 'operator_input_reviewed' || kind === 'operator_input_retried' || kind === 'operator_input_late_acknowledged') return 'diagnostics';
   if (kind === 'tool_call' || kind === 'tool_result' || kind === 'turn_failed') return 'operations';
@@ -1059,7 +1058,7 @@ function eventTone(kind, event = null) {
   if (kind === 'session_control_accepted' || kind === 'session_control_response') return NARS_CLIENT_EVENT_TONES.status;
   if (kind === 'runtime_request_state_transition') return ['failed', 'rejected', 'interrupted'].includes(String(event?.request_state ?? '').trim().toLowerCase()) ? NARS_CLIENT_EVENT_TONES.error : NARS_CLIENT_EVENT_TONES.status;
   if (kind === 'error' || kind === 'websocket_error' || kind === 'web_ui_decode_error' || kind === 'turn_failed' || kind === 'authority_session_revoked' || kind === 'projection_revoked' || kind === 'mcp_runtime_fault' || kind === 'runtime_projection_failure' || kind === 'runtime_control_input_bridge_error' || kind === 'web_ui_input_ack_timeout' || kind === 'web_ui_input_transport_failed' || kind === 'web_ui_input_ack_ignored' || kind === 'web_ui_input_correlation_ambiguous' || kind === 'web_ui_session_correlation_mismatch') return NARS_CLIENT_EVENT_TONES.error;
-  if (kind === 'runtime_intelligence_reconfiguration' || kind === 'provider_runtime_reconfiguration_state_transition') {
+  if (kind === 'runtime_intelligence_reconfiguration' || kind === 'intelligence_runtime_reconfiguration_state_transition') {
     const state = event?.terminal_state ?? event?.reconfiguration_state;
     return state === 'refused' || state === 'failed' ? NARS_CLIENT_EVENT_TONES.error : NARS_CLIENT_EVENT_TONES.status;
   }
@@ -1089,7 +1088,7 @@ function eventSummary(event, kind) {
   if (kind === 'runtime_projection_failure') return runtimeProjectionFailureSummary(event);
   if (kind === 'runtime_control_input_bridge_error') return runtimeControlInputBridgeErrorSummary(event);
   if (kind === 'runtime_intelligence_reconfiguration') return runtimeIntelligenceReconfigurationSummary(event);
-  if (kind === 'provider_runtime_reconfiguration_state_transition') return providerRuntimeReconfigurationStateSummary(event);
+  if (kind === 'intelligence_runtime_reconfiguration_state_transition') return intelligenceRuntimeReconfigurationStateSummary(event);
   if (kind === 'mcp_runtime_fault' || kind === 'carrier_diagnostic_recorded') return diagnosticSummary(event, kind);
   if (kind === 'turn_complete') return event.terminal_state ?? 'turn complete';
   if (kind === 'turn_failed') return errorSummary(event) ?? event.terminal_state ?? 'turn failed';
@@ -1154,16 +1153,25 @@ function runtimeControlInputBridgeErrorSummary(event) {
 function runtimeIntelligenceReconfigurationSummary(event) {
   const state = event?.terminal_state ?? event?.reconfiguration_state ?? 'unknown';
   const active = event?.active ?? event?.target ?? null;
-  const provider = active?.provider ?? event?.provider ?? null;
-  const model = active?.model ?? event?.model ?? null;
-  const target = [provider, model].filter((value) => typeof value === 'string' && value).join(' / ');
+  const target = intelligenceReconfigurationTargetSummary(active);
   return `intelligence reconfiguration ${state}${target ? ` · ${target}` : ''}`;
 }
 
-function providerRuntimeReconfigurationStateSummary(event) {
+function intelligenceReconfigurationTargetSummary(target) {
+  if (!target || typeof target !== 'object') return '';
+  const model = target.requestedModel?.id ?? target.requested_model?.id ?? null;
+  const options = target.requestedOptions ?? target.requested_options ?? null;
+  const optionSummary = options && typeof options === 'object' && !Array.isArray(options)
+    ? Object.entries(options).sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, value]) => `${key}=${String(value)}`).join(', ')
+    : '';
+  return [model, optionSummary].filter(Boolean).join(' · ');
+}
+
+function intelligenceRuntimeReconfigurationStateSummary(event) {
   const previous = event?.previous_state ?? 'new';
   const next = event?.reconfiguration_state ?? 'unknown';
-  const target = event?.target?.provider ?? event?.active?.provider ?? null;
+  const target = intelligenceReconfigurationTargetSummary(event?.target ?? event?.active);
   return `intelligence reconfiguration ${previous} -> ${next}${target ? ` · ${target}` : ''}`;
 }
 

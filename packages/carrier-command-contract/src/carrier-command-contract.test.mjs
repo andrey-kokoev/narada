@@ -31,7 +31,9 @@ test('command contract exposes carrier command vocabulary', () => {
     '/model',
     '/thinking',
     '/tool-output',
+    '/tool-outputs',
     '/tools',
+    '/tool',
     '/observers',
     '/observer mute',
     '/observer unmute',
@@ -40,6 +42,8 @@ test('command contract exposes carrier command vocabulary', () => {
     '/queue drop <index>',
     '/clear',
     '/exit',
+    '/quit',
+    'exit',
   ]);
   const goal = commandRecords(contract).find((command) => command.name === 'goal');
   assert.equal(goal.argument, 'text|pause|resume|clear');
@@ -52,7 +56,9 @@ test('command resolver handles aliases and multi-word commands', () => {
   assert.equal(drop?.name, 'queue_drop');
   assert.equal(drop.argument, '2');
   assert.equal(resolveCommandInput('/model', 'GPT-5.5')?.argument, 'GPT-5.5');
-  assert.equal(resolveCommandInput('/tool', ''), null);
-  assert.equal(resolveCommandInput('exit', ''), null);
+  assert.equal(resolveCommandInput('/tool', '')?.name, 'tools');
+  assert.equal(resolveCommandInput('/tool-outputs', '')?.name, 'tool_output');
+  assert.equal(resolveCommandInput('exit', '')?.name, 'exit');
+  assert.equal(resolveCommandInput('/quit', '')?.name, 'exit');
   assert.equal(resolveCommandInput('/missing', ''), null);
 });
