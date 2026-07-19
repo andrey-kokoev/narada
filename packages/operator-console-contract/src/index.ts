@@ -246,6 +246,80 @@ export interface OperatorSiteAgentLaunchWireResponse {
   reason: string | null;
 }
 
+export interface OperatorSiteAgentInvariantViolation {
+  invariant: string;
+  path: string;
+  detail: string;
+}
+
+/**
+ * Semantic invariants between Site, agent, runtime, and session state. Shape
+ * parsing alone cannot catch these: a well-formed payload can still claim a
+ * running agent with no healthy session or a stopped agent with one attached.
+ */
+export function validateOperatorSiteAgentOverviewInvariants(
+  overview: OperatorSiteAgentOverviewWireResponse,
+): OperatorSiteAgentInvariantViolation[] {
+  const violations: OperatorSiteAgentInvariantViolation[] = [];
+  const push = (invariant: string, path: string, detail: string) => {
+    violations.push({ invariant, path, detail });
+  };
+  overview.groups.forEach((group, groupIndex) => {
+    group.sites.forEach((site, siteIndex) => {
+      const sitePath = `groups[${groupIndex}].sites[${siteIndex}]`;
+      const expectedGroup: OperatorSiteAgentGroupId = site.site_kind === 'site' ? 'sites' : 'personal-infrastructure';
+      if (group.id !== expectedGroup || site.group_id !== expectedGroup) {
+        push('group_kind_mismatch', sitePath, `${site.site_id}: kind ${site.site_kind} does not belong in group ${group.id}`);
+      }
+      const seenAgentIds = new Set<string>();
+      site.agents.forEach((agent, agentIndex) => {
+        const agentPath = `${sitePath}.agents[${agentIndex}]`;
+        const expectedAgentId = `${site.site_id}.${agent.local_agent_id}`;
+        if (agent.agent_id !== expectedAgentId) {
+          push('agent_id_form', agentPath, `${agent.agent_id} is not the canonical ${expectedAgentId}`);
+        }
+        const agentKey = agent.agent_id.toLowerCase();
+        if (seenAgentIds.has(agentKey)) push('duplicate_agent_id', agentPath, `${agent.agent_id} appears more than once in ${site.site_id}`);
+        seenAgentIds.add(agentKey);
+        const runtime = agent.runtime;
+        if (runtime.selected_session_id !== null && !runtime.healthy_session_ids.includes(runtime.selected_session_id)) {
+          push('selected_not_healthy', agentPath, `selected session ${runtime.selected_session_id} is not among the healthy sessions`);
+        }
+        if (runtime.state === 'running') {
+          if (runtime.healthy_session_ids.length !== 1 || runtime.selected_session_id !== runtime.healthy_session_ids[0]) {
+            push('runtime_running_shape', agentPath, 'running requires exactly one healthy session selected');
+          }
+          if (runtime.session_count < 1) push('runtime_running_shape', agentPath, 'running requires at least one session');
+          if (!agent.actions.inspect) push('action_state_mismatch', agentPath, 'running implies inspect is available');
+          if (agent.actions.start) push('action_state_mismatch', agentPath, 'running forbids start');
+        }
+        if (runtime.state === 'stopped') {
+          if (runtime.session_count !== 0 || runtime.healthy_session_ids.length !== 0 || runtime.selected_session_id !== null) {
+            push('runtime_stopped_shape', agentPath, 'stopped forbids sessions');
+          }
+          if (!agent.actions.start) push('action_state_mismatch', agentPath, 'stopped implies start is available');
+          if (agent.actions.inspect) push('action_state_mismatch', agentPath, 'stopped forbids inspect');
+        }
+        if (runtime.state === 'ambiguous') {
+          if (runtime.healthy_session_ids.length < 2) push('runtime_ambiguous_shape', agentPath, 'ambiguous requires more than one healthy session');
+          if (runtime.selected_session_id !== null) push('runtime_ambiguous_shape', agentPath, 'ambiguous forbids a selected session');
+        }
+        if (runtime.state === 'degraded' && runtime.selected_session_id !== null) {
+          push('runtime_degraded_shape', agentPath, 'degraded forbids a selected session');
+        }
+        if ((runtime.state === 'ambiguous' || runtime.state === 'degraded') && (agent.actions.start || agent.actions.inspect)) {
+          push('action_state_mismatch', agentPath, `${runtime.state} forbids start and inspect`);
+        }
+      });
+    });
+  });
+  return violations;
+}
+
+export function formatOperatorSiteAgentInvariantViolation(violation: OperatorSiteAgentInvariantViolation): string {
+  return `invariant_violation:${violation.invariant}:${violation.path}`;
+}
+
 function recordValue(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
     ? value as Record<string, unknown>

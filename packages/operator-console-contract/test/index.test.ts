@@ -13,6 +13,8 @@ import {
   projectOperatorWorkspaceRouteDirectory,
   isOperatorWorkspaceRoutePath,
   parseOperatorSiteAgentOverviewWireResponse,
+  validateOperatorSiteAgentOverviewInvariants,
+  formatOperatorSiteAgentInvariantViolation,
 } from '../src/index.ts';
 
 test('operator surface catalog describes canonical registry and launcher routes', () => {
@@ -241,3 +243,77 @@ function projectOperatorSurfaceWorkspaceRouteDirectoryWithInvalidPath() {
     },
   });
 }
+
+function validSiteAgentOverview() {
+  return {
+    schema: 'narada.operator_console.site_agent_overview.v1' as const,
+    status: 'success' as const,
+    generated_at: '2026-07-19T00:00:00.000Z',
+    refusals: [],
+    groups: [{
+      id: 'sites' as const,
+      label: 'Sites',
+      sites: [{
+        site_id: 'sonar',
+        display_name: 'Sonar',
+        site_kind: 'site' as const,
+        group_id: 'sites' as const,
+        observation_status: 'present',
+        agents: [{
+          agent_id: 'sonar.resident',
+          local_agent_id: 'resident',
+          title: 'Resident',
+          role: 'resident',
+          admission_status: 'admitted' as const,
+          runtime: { state: 'running' as const, session_count: 1, healthy_session_ids: ['session-1'], selected_session_id: 'session-1' },
+          work: { state: 'executing', detail: 'task-1', source: 'principal-runtime' as const },
+          actions: { start: false, inspect: true, inspect_reason: null },
+        }],
+      }],
+    }],
+  };
+}
+
+test('site agent invariants accept a semantically valid overview', () => {
+  assert.deepEqual(validateOperatorSiteAgentOverviewInvariants(validSiteAgentOverview()), []);
+});
+
+test('site agent invariants catch running agents without a healthy selected session', () => {
+  const overview = validSiteAgentOverview();
+  overview.groups[0]!.sites[0]!.agents[0]!.runtime = { state: 'running', session_count: 0, healthy_session_ids: [], selected_session_id: null };
+  overview.groups[0]!.sites[0]!.agents[0]!.actions = { start: true, inspect: false, inspect_reason: null };
+  const violations = validateOperatorSiteAgentOverviewInvariants(overview);
+  assert.ok(violations.some((violation) => violation.invariant === 'runtime_running_shape'));
+  assert.ok(violations.some((violation) => violation.invariant === 'action_state_mismatch'));
+});
+
+test('site agent invariants catch stopped agents carrying sessions', () => {
+  const overview = validSiteAgentOverview();
+  overview.groups[0]!.sites[0]!.agents[0]!.runtime = { state: 'stopped', session_count: 1, healthy_session_ids: [], selected_session_id: 'session-1' };
+  overview.groups[0]!.sites[0]!.agents[0]!.actions = { start: false, inspect: true, inspect_reason: null };
+  const violations = validateOperatorSiteAgentOverviewInvariants(overview);
+  assert.ok(violations.some((violation) => violation.invariant === 'runtime_stopped_shape'));
+  assert.ok(violations.some((violation) => violation.invariant === 'selected_not_healthy'));
+  assert.ok(violations.some((violation) => violation.invariant === 'action_state_mismatch'));
+});
+
+test('site agent invariants catch ambiguous agents with fewer than two healthy sessions', () => {
+  const overview = validSiteAgentOverview();
+  overview.groups[0]!.sites[0]!.agents[0]!.runtime = { state: 'ambiguous', session_count: 1, healthy_session_ids: ['session-1'], selected_session_id: null };
+  overview.groups[0]!.sites[0]!.agents[0]!.actions = { start: false, inspect: false, inspect_reason: 'Choose a session.' };
+  const violations = validateOperatorSiteAgentOverviewInvariants(overview);
+  assert.ok(violations.some((violation) => violation.invariant === 'runtime_ambiguous_shape'));
+});
+
+test('site agent invariants catch identity form, duplicates, and group mismatch', () => {
+  const overview = validSiteAgentOverview();
+  const site = overview.groups[0]!.sites[0]!;
+  site.agents[0]!.agent_id = 'other.resident';
+  site.agents.push({ ...site.agents[0]! });
+  site.group_id = 'personal-infrastructure';
+  const violations = validateOperatorSiteAgentOverviewInvariants(overview);
+  assert.ok(violations.some((violation) => violation.invariant === 'agent_id_form'));
+  assert.ok(violations.some((violation) => violation.invariant === 'duplicate_agent_id'));
+  assert.ok(violations.some((violation) => violation.invariant === 'group_kind_mismatch'));
+  assert.equal(formatOperatorSiteAgentInvariantViolation(violations[0]!), `invariant_violation:${violations[0]!.invariant}:${violations[0]!.path}`);
+});

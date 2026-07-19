@@ -1,5 +1,7 @@
 import {
+  formatOperatorSiteAgentInvariantViolation,
   parseOperatorSiteAgentOverviewWireResponse,
+  validateOperatorSiteAgentOverviewInvariants,
   type OperatorSiteAgentLaunchWireResponse,
   type OperatorSiteAgentOverviewWireResponse,
 } from '@narada2/operator-console-contract';
@@ -39,6 +41,12 @@ export function createSiteAgentsAdapter(
     async overview() {
       const response = parseOperatorSiteAgentOverviewWireResponse(await transport.overview());
       if (!response) throw new SiteAgentsApiError('invalid_overview', 'Sites and Agents overview did not match its contract.');
+      if (response.status === 'success') {
+        const flagged = validateOperatorSiteAgentOverviewInvariants(response).map(formatOperatorSiteAgentInvariantViolation);
+        if (flagged.length > 0) {
+          return { ...response, refusals: [...new Set([...response.refusals, ...flagged])] };
+        }
+      }
       return response;
     },
     async launch(siteId, agentId) {

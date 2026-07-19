@@ -1125,6 +1125,47 @@ describe('console server', () => {
       await server.stop();
     });
   });
+  describe('site-agent overview invariant diagnostics', () => {
+    it('appends semantic invariant violations to the overview refusals', async () => {
+      const siteAgentOverview = {
+        read: vi.fn(async () => ({
+          schema: 'narada.operator_console.site_agent_overview.v1' as const,
+          status: 'success' as const,
+          generated_at: '2026-07-18T00:00:00.000Z',
+          refusals: [],
+          groups: [{
+            id: 'sites' as const,
+            label: 'Sites',
+            sites: [{
+              site_id: 'sonar',
+              display_name: 'Sonar',
+              site_kind: 'site' as const,
+              group_id: 'sites' as const,
+              observation_status: 'present',
+              agents: [{
+                agent_id: 'sonar.resident',
+                local_agent_id: 'resident',
+                title: 'Resident',
+                role: 'resident',
+                admission_status: 'admitted' as const,
+                runtime: { state: 'running' as const, session_count: 0, healthy_session_ids: [], selected_session_id: null },
+                work: { state: 'unavailable', detail: null, source: 'unavailable' as const },
+                actions: { start: true, inspect: false, inspect_reason: null },
+              }],
+            }],
+          }],
+        })),
+      };
+      const server = await createConsoleServer({ port: 0, host: '127.0.0.1', siteAgentOverview });
+      const url = await server.start();
+      const overviewResponse = await httpGet(`${url}/console/agents/api/overview`);
+      expect(overviewResponse.status).toBe(200);
+      const refusals = (overviewResponse.body as { refusals: string[] }).refusals;
+      expect(refusals.some((entry) => entry.startsWith('invariant_violation:runtime_running_shape:'))).toBe(true);
+      expect(refusals.some((entry) => entry.startsWith('invariant_violation:action_state_mismatch:'))).toBe(true);
+      await server.stop();
+    });
+  });
   describe('per-site launch route', () => {
     it('defaults to dry-run and forwards an explicit apply request', async () => {
       sitesLaunchCommandMock.mockImplementation(async (options: { siteId: string; dryRun: boolean }) => ({

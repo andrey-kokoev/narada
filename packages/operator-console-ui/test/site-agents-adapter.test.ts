@@ -51,3 +51,25 @@ test('site agents adapter refuses malformed authority projections', async () => 
   await assert.rejects(() => adapter.overview(), (error: unknown) => error instanceof SiteAgentsApiError && error.code === 'invalid_overview');
   await assert.rejects(() => adapter.launch('sonar', 'sonar.resident'), (error: unknown) => error instanceof SiteAgentsApiError && error.code === 'invalid_launch');
 });
+
+test('site agents adapter flags semantically invalid overview payloads', async () => {
+  const violating = {
+    ...overview,
+    groups: [{
+      id: 'sites',
+      label: 'Sites',
+      sites: [{
+        ...overview.groups[0].sites[0],
+        agents: [{
+          ...overview.groups[0].sites[0].agents[0],
+          runtime: { state: 'running', session_count: 0, healthy_session_ids: [], selected_session_id: null },
+          actions: { start: true, inspect: false, inspect_reason: null },
+        }],
+      }],
+    }],
+  };
+  const adapter = createSiteAgentsAdapter({ overview: async () => violating, launch: async () => null });
+  const response = await adapter.overview();
+  assert.ok(response.refusals.some((entry) => entry.startsWith('invariant_violation:runtime_running_shape:')));
+  assert.ok(response.refusals.some((entry) => entry.startsWith('invariant_violation:action_state_mismatch:')));
+});

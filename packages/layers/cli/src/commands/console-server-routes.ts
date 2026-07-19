@@ -38,6 +38,9 @@ import {
   OPERATOR_CONSOLE_ONBOARDING_PATH,
   OPERATOR_CONSOLE_ONBOARDING_API_PATH,
   OPERATOR_CONSOLE_SESSIONS_PATH,
+  formatOperatorSiteAgentInvariantViolation,
+  validateOperatorSiteAgentOverviewInvariants,
+  type OperatorSiteAgentOverviewWireResponse,
 } from '@narada2/operator-console-contract';
 import {
   readOperatorConsoleUiAsset,
@@ -117,6 +120,14 @@ function optionalString(value: unknown): string | undefined {
 
 function optionalStringArray(value: unknown): string[] | undefined {
   return Array.isArray(value) && value.every((item) => typeof item === 'string') ? value : undefined;
+}
+
+function withInvariantDiagnostics(overview: OperatorSiteAgentOverviewWireResponse): OperatorSiteAgentOverviewWireResponse {
+  if (overview.status !== 'success') return overview;
+  const violations = validateOperatorSiteAgentOverviewInvariants(overview);
+  if (violations.length === 0) return overview;
+  const diagnostics = violations.map(formatOperatorSiteAgentInvariantViolation);
+  return { ...overview, refusals: [...overview.refusals, ...diagnostics] };
 }
 
 async function requestJson(req: IncomingMessage): Promise<Record<string, unknown> | null> {
@@ -468,7 +479,7 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
           });
           return;
         }
-        jsonResponse(res, 200, await ctx.siteAgentOverview.read());
+        jsonResponse(res, 200, withInvariantDiagnostics(await ctx.siteAgentOverview.read()));
       },
     },
     {
