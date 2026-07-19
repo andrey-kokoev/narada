@@ -252,21 +252,21 @@ pnpm --filter @narada2/cloudflare-nars-projection smoke:provider-capable-live
 
 Running without `--live` is a safe planning mode: no mutation, prints the required arguments.
 
-**Provider binding (canonical Narada provider vocabulary).** The Worker activates the provider adapter only when `NARADA_AI_BASE_URL` is bound. These are the same names used by local NARS and `packages/nars-provider-runtime`/`@narada2/carrier-provider-contract` — there is one provider vocabulary across local and Cloudflare embodiments:
+**Provider binding (canonical Narada provider vocabulary).** The Worker resolves the provider binding from the shared registry through `@narada2/carrier-provider-contract` — exactly like local NARS — and activates the provider adapter only when `NARADA_INTELLIGENCE_PROVIDER` resolves with a credential:
 
 | Binding | Kind | Meaning |
 | --- | --- | --- |
-| `NARADA_AI_BASE_URL` | `[vars]` in `wrangler.toml` | Provider endpoint URL the adapter POSTs turn requests to. |
+| `NARADA_INTELLIGENCE_PROVIDER` | `[vars]` in `wrangler.toml` | Provider id from the registry (e.g. `kimi-code-api`, `openai-api`). Activates the adapter. |
 | `NARADA_AI_API_KEY` | Worker secret (`wrangler secret put NARADA_AI_API_KEY`) | Bearer credential. Mirrors the pwsh SecretStore entry `narada/provider/<provider>/api-key`; the value never appears in events, health, or diagnostics. |
-| `NARADA_INTELLIGENCE_PROVIDER` | `[vars]`, optional | Provider id (e.g. `kimi-code-api`). Sets the recorded `credential_secret_ref` lineage metadata. |
-| `NARADA_AI_MODEL` | `[vars]`, optional | Model id sent on each provider request. |
-| `NARADA_AI_THINKING` | `[vars]`, optional | Reasoning-effort label sent on each provider request. |
+| `NARADA_AI_BASE_URL` | `[vars]`, optional | Overrides the registry default provider base URL. |
+| `NARADA_AI_MODEL` | `[vars]`, optional | Overrides the registry default model. |
+| `NARADA_AI_THINKING` | `[vars]`, optional | Reasoning-effort label (`low`/`medium`/`high`). |
 
-Without `NARADA_AI_BASE_URL` the Worker stays on the synthetic default adapter (`cloudflare_runtime_tool_adapter`); health at `/api/nars/authority/health` reports which executor is bound.
+Without a resolvable `NARADA_INTELLIGENCE_PROVIDER` binding the Worker stays on the synthetic default adapter (`cloudflare_runtime_tool_adapter`); health at `/api/nars/authority/health` reports which executor is bound. The provider turn uses the canonical OpenAI-compatible chat-completions shape from the shared core, so any OpenAI-compatible provider binds directly — providers with other registry adapter kinds refuse turns with typed `provider_adapter_unsupported_on_cloudflare` evidence.
 
 A live run creates a provider-capable session, verifies `provider_execution` capability graduates `declared → present` only on executed turn evidence, checks replay for `provider_request`/`provider_response`/`assistant_message`/`turn_complete`, revokes, and verifies post-revoke refusals. Evidence follows the same append-only + latest + index contract under `.narada/crew/nars-projections/`.
 
-**Current status (2026-07-19):** deployed Worker is provider-capable (commit `fa7e2712`), but no provider endpoint is bound — the adapter contract (`POST {model, thinking, input, request_id, idempotency_key}` → `{content|output_text|message, tool_calls?}`) is Narada-specific, so a live run waits on a designated endpoint + key. Tracked as Task 2120; run the live smoke only with recorded operator authorization.
+**Current status (2026-07-19):** deployed Worker runs the provider-capable code (commit `fa7e2712`); the in-repo worker build speaks the canonical OpenAI-compatible contract via the shared core (Task 2144, commit `4e36604a`) — that build is not yet deployed. No provider is bound, so the Worker stays on the synthetic default adapter. The live smoke run waits on a bound provider (any OpenAI-compatible provider in the pwsh SecretStore works directly) plus recorded operator authorization: Task 2120.
 
 ## Projection Instance
 
