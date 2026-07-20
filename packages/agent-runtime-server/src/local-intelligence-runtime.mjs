@@ -6,6 +6,7 @@ import { SqliteRegistryStore } from '@narada2/invokable-intelligence-registry';
 import { buildResolverContext, createLocalInvocationGateway } from '@narada2/invokable-intelligence-runtime';
 import { deterministicId, resolveInvocation } from '@narada2/invokable-intelligence-resolver';
 import { createCanonicalInvocationAdapter } from '@narada2/nars-provider-runtime/canonical-invocation-adapter';
+import { createLocalTopologyObserver } from './local-topology-observer.mjs';
 
 function nonEmpty(value) {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
@@ -72,6 +73,7 @@ export async function createLocalIntelligenceRuntime({
   materialization: inputMaterialization = null,
   clock = () => executionSiteDecisionClock(`runtime:${runtimeContext?.session ?? 'unknown'}`),
   adapter = null,
+  topologyObserver: inputTopologyObserver = null,
 } = {}) {
   const intelligence = runtimeContext?.intelligence;
   if (!intelligence || typeof intelligence !== 'object') throw new Error('local_intelligence_context_required');
@@ -85,9 +87,10 @@ export async function createLocalIntelligenceRuntime({
   if (!intelligence.access || typeof intelligence.access !== 'object') {
     throw new Error('local_intelligence_access_context_required');
   }
-  const topologyObservations = Array.isArray(intelligence.topologyObservations)
+  const admittedTopologyObservations = Array.isArray(intelligence.topologyObservations)
+    && intelligence.topologyObservations.length > 0
     ? intelligence.topologyObservations
-    : [];
+    : null;
   const registryDbPath = nonEmpty(intelligence.registryDbPath)
     ?? join(runtimeContext.siteRoot, '.ai', 'intelligence-registry.db');
   const store = inputStore ?? await openLocalIntelligenceRegistry({
@@ -112,12 +115,23 @@ export async function createLocalIntelligenceRuntime({
     admittedBy: `runtime:${runtimeContext.session}`,
     admissionRef: `runtime-intelligence:${runtimeContext.session}`,
   });
-  const contextForClock = (decisionClock) => buildResolverContext(sites, {
-    clock: decisionClock,
-    runtime: 'node',
-    access: intelligence.access,
-    topologyObservations,
-  });
+  const topologyObserver = admittedTopologyObservations
+    ? null
+    : inputTopologyObserver ?? createLocalTopologyObserver({
+      store,
+      runtimeContext,
+      source: intelligence.topologyObservationSource,
+    });
+  const contextForClock = async (decisionClock) => {
+    const topologyObservations = admittedTopologyObservations
+      ?? await topologyObserver.observe({ decisionClock });
+    return buildResolverContext(sites, {
+      clock: decisionClock,
+      runtime: 'node',
+      access: intelligence.access,
+      topologyObservations,
+    });
+  };
   const materializationFor = (intent, context) => materialization.acquire({
     destination_site_id: context.targetSite.id,
     resolver: 'local',
@@ -176,7 +190,7 @@ export async function createLocalIntelligenceRuntime({
         ...(requestedModel ? { requested_model: requestedModel } : {}),
         ...(Object.keys(requestedOptions).length ? { requested_options: requestedOptions } : {}),
       };
-      const context = contextForClock(decisionClock);
+      const context = await contextForClock(decisionClock);
       const materializedInputs = await materializationFor(intent, context);
       const result = await resolveInvocation(intent, context, { store, materializedInputs });
       if (result.schema === 'narada.invokable-intelligence.invocation-refusal.v1') {

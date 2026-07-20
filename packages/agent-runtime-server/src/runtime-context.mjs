@@ -17,6 +17,9 @@ function frozenIntelligenceContext(value) {
     }) : null,
     access: value.access ? Object.freeze({ ...value.access }) : null,
     topologyObservations: Object.freeze([...(value.topologyObservations ?? [])]),
+    topologyObservationSource: value.topologyObservationSource
+      ? Object.freeze({ ...value.topologyObservationSource })
+      : null,
     requestedOptions: Object.freeze({ ...(value.requestedOptions ?? {}) }),
   });
 }

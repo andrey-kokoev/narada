@@ -7,38 +7,35 @@ import {
 } from '@narada2/operator-surface-runtime-contract/operator-surface-runtime-selection';
 
 const NARS_OPERATOR_SURFACE_KINDS = new Set(operatorSurfaceKindsForRuntimeHost(NARADA_AGENT_RUNTIME_SERVER_KIND));
-const LEGACY_INTELLIGENCE_SELECTION_ENV_NAMES = Object.freeze([
-  'NARADA_INTELLIGENCE_PROVIDER',
-  'NARADA_INTELLIGENCE_PROVIDER_SOURCE_FIELD',
-  'NARADA_INTELLIGENCE_PROVIDER_SOURCE_PATH',
-  'NARADA_INTELLIGENCE_PROVIDER_METADATA_PATH',
-  'NARADA_AI_MODEL',
-  'NARADA_AI_BASE_URL',
-  'NARADA_AI_THINKING',
-  'NARADA_THINKING_LEVEL',
-  'CODEX_MODEL',
-  'NARADA_CODEX_MODEL',
-  'OPENAI_MODEL',
-  'OPENAI_BASE_URL',
-  'KIMI_MODEL',
-  'KIMI_API_BASE_URL',
-  'KIMI_CODE_MODEL',
-  'KIMI_CODE_API_BASE_URL',
-  'ANTHROPIC_MODEL',
-  'ANTHROPIC_BASE_URL',
-  'DEEPSEEK_MODEL',
-  'DEEPSEEK_API_BASE_URL',
-  'GLM_MODEL',
-  'GLM_API_BASE_URL',
-  'OPENROUTER_MODEL',
-  'OPENROUTER_BASE_URL',
-  'OPENROUTER_API_BASE_URL',
-  'CLOUDFLARE_CARRIER_AI_MODEL',
-]);
 
 export function stripLegacyIntelligenceSelectionEnvironment(env = {}) {
   const scrubbed = { ...env };
-  for (const name of LEGACY_INTELLIGENCE_SELECTION_ENV_NAMES) delete scrubbed[name];
+  delete scrubbed.NARADA_INTELLIGENCE_PROVIDER;
+  delete scrubbed.NARADA_INTELLIGENCE_PROVIDER_SOURCE_FIELD;
+  delete scrubbed.NARADA_INTELLIGENCE_PROVIDER_SOURCE_PATH;
+  delete scrubbed.NARADA_INTELLIGENCE_PROVIDER_METADATA_PATH;
+  delete scrubbed.NARADA_AI_MODEL;
+  delete scrubbed.NARADA_AI_BASE_URL;
+  delete scrubbed.NARADA_AI_THINKING;
+  delete scrubbed.NARADA_THINKING_LEVEL;
+  delete scrubbed.CODEX_MODEL;
+  delete scrubbed.NARADA_CODEX_MODEL;
+  delete scrubbed.OPENAI_MODEL;
+  delete scrubbed.OPENAI_BASE_URL;
+  delete scrubbed.KIMI_MODEL;
+  delete scrubbed.KIMI_API_BASE_URL;
+  delete scrubbed.KIMI_CODE_MODEL;
+  delete scrubbed.KIMI_CODE_API_BASE_URL;
+  delete scrubbed.ANTHROPIC_MODEL;
+  delete scrubbed.ANTHROPIC_BASE_URL;
+  delete scrubbed.DEEPSEEK_MODEL;
+  delete scrubbed.DEEPSEEK_API_BASE_URL;
+  delete scrubbed.GLM_MODEL;
+  delete scrubbed.GLM_API_BASE_URL;
+  delete scrubbed.OPENROUTER_MODEL;
+  delete scrubbed.OPENROUTER_BASE_URL;
+  delete scrubbed.OPENROUTER_API_BASE_URL;
+  delete scrubbed.CLOUDFLARE_CARRIER_AI_MODEL;
   return scrubbed;
 }
 

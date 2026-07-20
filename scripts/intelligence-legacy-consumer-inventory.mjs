@@ -49,11 +49,16 @@ const NEGATIVE_BOUNDARY_PATHS = new Set([
 const NEGATIVE_PACKAGE_ASSERTION_PATHS = new Set([
   'packages/layers/cli/test/commands/workspace-launch-boundaries.test.ts',
 ]);
-const DOCUMENTATION_NEGATION = /\b(?:deprecated|drop(?:ped)?|forbid(?:den)?|ignored|legacy|must not|never|no longer|not an? |remove(?:d)?|retire(?:d)?|scrub(?:bed)?|without)\b/iu;
 const TEST_PATH = /(?:^|\/)(?:__tests__|test|tests)(?:\/|$)|\.(?:spec|test)\.[cm]?[jt]sx?$/iu;
+const GOVERNANCE_EVIDENCE_PATH = /^\.ai\/(?:continuations|do-not-open|inbox-drop|inbox-envelopes|mutation-evidence|operator-surface-delivery-queue|operator-surface-events|reviews|tmp|work-result-reports)(?:\/|$)/u;
 
 function normalizePath(path) {
   return String(path).replaceAll('\\', '/').replace(/^\.\//u, '');
+}
+
+function isStructuredDocumentationNegative(line, symbol) {
+  const marker = /^\s*<!--\s*narada:legacy-selection-negative:v1\s+symbol="([^"]+)"\s+disposition="(deprecated|forbidden|ignored|removed|retired)"\s*-->\s*$/u.exec(line);
+  return marker?.[1] === symbol;
 }
 
 function escapeRegExp(value) {
@@ -74,27 +79,37 @@ const SCANNED_SYMBOLS = Object.freeze([
 ].sort((left, right) => right.length - left.length));
 const SYMBOL_PATTERNS = new Map(SCANNED_SYMBOLS.map((symbol) => [symbol, symbolPattern(symbol)]));
 
-function isQuotedSymbolDeclaration(line, symbol) {
-  return new RegExp('^\\s*[\'"]' + escapeRegExp(symbol) + '[\'"],?\\s*$', 'u').test(line);
+function isDirectSymbolDelete(line, symbol) {
+  const objectPath = '[A-Za-z_$][\\w$]*(?:\\.[A-Za-z_$][\\w$]*)*';
+  const member = '(?:\\.' + escapeRegExp(symbol) + '|\\[\\s*[\'"]' + escapeRegExp(symbol) + '[\'"]\\s*\\])';
+  return new RegExp('^\\s*delete\\s+' + objectPath + member + '\\s*;?\\s*$', 'u').test(line);
 }
 
-function isNegativeBoundaryReference({ content, line, symbol }) {
-  if (/\bdelete\b/u.test(line)) return true;
-  if (!isQuotedSymbolDeclaration(line, symbol)) return false;
-  return /delete\s+[A-Za-z_$][\w$]*\s*\[/u.test(content)
-    || (/\.filter\s*\(/u.test(content) && /Object\.hasOwn/u.test(content));
+function isImmediateSymbolRefusal(line, symbol) {
+  const quotedSymbol = '[\'"]' + escapeRegExp(symbol) + '[\'"]';
+  return new RegExp(
+    '^\\s*if\\s*\\(\\s*Object\\.hasOwn\\(\\s*[A-Za-z_$][\\w$]*\\s*,\\s*' + quotedSymbol
+      + '\\s*\\)\\s*\\)\\s*failures\\.push\\(\\s*\\{\\s*reason\\s*:\\s*'
+      + '[\'"]legacy_intelligence_selection_env_present[\'"]\\s*,\\s*environment_names\\s*:\\s*'
+      + '\\[\\s*' + quotedSymbol + '\\s*\\]\\s*\\}\\s*\\)\\s*;?\\s*$',
+    'u',
+  ).test(line);
+}
+
+function isNegativeBoundaryReference({ line, symbol }) {
+  return isDirectSymbolDelete(line, symbol) || isImmediateSymbolRefusal(line, symbol);
 }
 
 function classifyReference({ path, content, line, symbol }) {
   if (path === SELF_PATH) return { classification: 'guard_definition', classification_reason: 'symbol is declared by the zero-consumer guard itself', admitted: true, authoritative: false };
   if (path === MIGRATION_FIXTURE_PATH) return { classification: 'frozen_migration_fixture', classification_reason: 'legacy values are inert migration test input and never loaded as runtime authority', admitted: true, authoritative: false };
-  if (path.startsWith('.ai/') && !path.startsWith('.ai/decisions/')) {
-    return { classification: 'governance_evidence', classification_reason: 'reference is retained only in task, review, or continuation evidence', admitted: true, authoritative: false };
+  if (GOVERNANCE_EVIDENCE_PATH.test(path)) {
+    return { classification: 'governance_evidence', classification_reason: 'reference is retained in an explicitly bounded evidence-only path', admitted: true, authoritative: false };
   }
 
   const retiredReference = symbol === RETIRED_PACKAGE_NAME || symbol === RETIRED_PACKAGE_PATH;
   if (retiredReference) {
-    if (path.startsWith('.ai/decisions/') && DOCUMENTATION_NEGATION.test(line)) {
+    if (path.startsWith('.ai/decisions/') && isStructuredDocumentationNegative(line, symbol)) {
       return { classification: 'governance_negative_contract', classification_reason: 'authoritative governance explicitly retires the legacy package reference', admitted: true, authoritative: false };
     }
     if (NEGATIVE_PACKAGE_ASSERTION_PATHS.has(path) && /not\.toContain|forbid|retired/iu.test(line)) {
@@ -107,20 +122,20 @@ function classifyReference({ path, content, line, symbol }) {
   if (NEGATIVE_BOUNDARY_PATHS.has(path) && isNegativeBoundaryReference({ content, line, symbol })) {
     return { classification: 'runtime_rejection_boundary', classification_reason: 'runtime boundary explicitly deletes, filters, or refuses the legacy key', admitted: true, authoritative: false };
   }
-  if (path.endsWith('.md') && DOCUMENTATION_NEGATION.test(line)) {
+  if (path.endsWith('.md') && isStructuredDocumentationNegative(line, symbol)) {
     return {
-      classification: path.startsWith('.ai/decisions/') ? 'governance_negative_contract' : 'documentation_negative_contract',
-      classification_reason: path.startsWith('.ai/decisions/')
-        ? 'authoritative governance explicitly marks the legacy symbol retired, ignored, or forbidden'
-        : 'documentation explicitly marks the legacy symbol retired, ignored, or forbidden',
+      classification: path.startsWith('.ai/') ? 'governance_negative_contract' : 'documentation_negative_contract',
+      classification_reason: path.startsWith('.ai/')
+        ? 'authoritative governance carries an exact machine-readable negative contract for the legacy symbol'
+        : 'documentation carries an exact machine-readable negative contract for the legacy symbol',
       admitted: true,
       authoritative: false,
     };
   }
   if (path.endsWith('.md')) {
     return {
-      classification: path.startsWith('.ai/decisions/') ? 'stale_governance_authority' : 'stale_documentation_authority',
-      classification_reason: path.startsWith('.ai/decisions/')
+      classification: path.startsWith('.ai/') ? 'stale_governance_authority' : 'stale_documentation_authority',
+      classification_reason: path.startsWith('.ai/')
         ? 'authoritative governance mentions the legacy symbol without an explicit negative contract'
         : 'documentation mentions the legacy symbol without an explicit negative contract',
       admitted: false,

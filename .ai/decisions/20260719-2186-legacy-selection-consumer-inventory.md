@@ -5,24 +5,33 @@ the env var decides which provider/model/path runs. Credential *transport*
 (secrets, base URLs) is out of scope — those keep flowing; they carry
 material, not selection.
 
-## Selection-authoritative consumers (retire)
+## Retired selection-authority paths (verified absent)
 
-| # | Consumer | Read | Cutover disposition |
-|---|----------|------|---------------------|
-| 1 | `packages/agent-runtime-server/src/server-wrapper.mjs` | `NARADA_INTELLIGENCE_PROVIDER` fallback branch | Remove fallback; resolution becomes the only path; absent or uninitialized canonical authority is explicitly refused |
-| 2 | `packages/nars-provider-runtime/src/provider-call.mjs:22` | `env.NARADA_INTELLIGENCE_PROVIDER` | Remove env fallback; `runtimeContext` carries the resolved binding only |
-| 3 | `packages/nars-provider-runtime/src/provider-adapters.mjs:24,27` | module-level env seeding (`NARADA_INTELLIGENCE_PROVIDER`, `CODEX_MODEL`) | Remove seeding; per-call settings only |
-| 4 | `packages/agent-runtime-server/src/runtime-context.mjs:17` | default param env read | Remove default |
-| 5 | `packages/agent-start/src/narada-agent-start.ts:407` | launch input from env | Read from resolved plan instead |
-| 6 | `packages/agent-start/src/provider-resolution.ts:72-78` | source attribution from env | Attribute to resolver/plan |
-| 7 | `packages/agent-start/src/carrier-launch-adapter.ts:275,305,406` | codex scrub decisions keyed on provider env | Drive from resolved binding, not env name |
-| 8 | `packages/agent-start/src/provider-credential-projection.ts:202-235` | projects `NARADA_INTELLIGENCE_PROVIDER`/`NARADA_AI_*` into child env | Remove selection projection; pass only the registry database path and Site context |
-| 9 | `packages/layers/cli/src/lib/launcher-runtime.ts:237-250` | passes `NARADA_INTELLIGENCE_PROVIDER` to subprocess | Drop |
-| 10 | `packages/agent-runtime-server/templates/Start-AgentCliSession.ps1:201` | template sets the var | Remove line |
-| 11 | `packages/agent-start/bin/verify-registered-site-launchers.mjs:297` | verifier requires the env var | Verify registry config instead |
-| 12 | `packages/carrier-provider-contract/src/provider-runtime-binding-core.mjs:62-144` | env fallback chain (`NARADA_AI_*`, `model_env_names`) | Remove the retired package; credential/base-url transport remains elsewhere, while model/provider selection comes only from the canonical plan |
-| 13 | `packages/cloudflare-carrier/src/cloudflare-worker.mjs` | legacy-env branch (`CLOUDFLARE_CARRIER_AI_MODEL`, `AI_MODEL`, `DEFAULT_WORKERS_AI_MODEL`) | Remove branch; resolver mode is the only mode; an uninitialized D1 catalog is explicitly refused |
-| 14 | `packages/nars-capability-gateway/src/mcp-runtime.mjs:39-51` | env allowlist forwarding provider env names | Keep forwarding credential names only; drop selection names |
+The exact retired symbols are recorded only as strict negative-contract markers;
+ordinary prose containing one of these symbols fails the zero-consumer guard.
+
+<!-- narada:legacy-selection-negative:v1 symbol="NARADA_INTELLIGENCE_PROVIDER" disposition="retired" -->
+<!-- narada:legacy-selection-negative:v1 symbol="CODEX_MODEL" disposition="retired" -->
+<!-- narada:legacy-selection-negative:v1 symbol="CLOUDFLARE_CARRIER_AI_MODEL" disposition="retired" -->
+<!-- narada:legacy-selection-negative:v1 symbol="@narada2/carrier-provider-contract" disposition="removed" -->
+<!-- narada:legacy-selection-negative:v1 symbol="packages/carrier-provider-contract" disposition="removed" -->
+
+| # | Former consumer | Negative contract |
+|---|-----------------|-------------------|
+| 1 | `packages/agent-runtime-server/src/server-wrapper.mjs` | The former provider selector is never read as fallback authority; canonical resolution is the only path |
+| 2 | `packages/nars-provider-runtime/src/provider-call.mjs` | The former provider selector is never read from the environment; `runtimeContext` carries only the resolved binding |
+| 3 | `packages/nars-provider-runtime/src/provider-adapters.mjs` | Provider/model environment seeding is absent |
+| 4 | `packages/agent-runtime-server/src/runtime-context.mjs` | The former environment-derived default parameter is removed |
+| 5 | `packages/agent-start/src/narada-agent-start.ts` | Launch selection is read only from the resolved plan |
+| 6 | `packages/agent-start/src/provider-resolution.ts` | Source attribution is derived from resolver/plan evidence |
+| 7 | `packages/agent-start/src/carrier-launch-adapter.ts` | Codex scrubbing is driven by resolved binding, not an environment-selected provider |
+| 8 | `packages/agent-start/src/provider-credential-projection.ts` | Selection values are never projected into child environments; only secret transport and Site context remain |
+| 9 | `packages/layers/cli/src/lib/launcher-runtime.ts` | Selection values are never passed to subprocesses |
+| 10 | `packages/agent-runtime-server/templates/Start-AgentCliSession.ps1` | The former selection variable assignment is removed |
+| 11 | `packages/agent-start/bin/verify-registered-site-launchers.mjs` | The verifier admits registry configuration, never a selection environment variable |
+| 12 | Retired carrier/provider projection package | The package is removed; credential/base-url transport remains elsewhere, while selection comes only from the canonical plan |
+| 13 | `packages/cloudflare-carrier/src/cloudflare-worker.mjs` | The former model selector is never selected; resolver mode is the only mode and uninitialized D1 authority is refused |
+| 14 | `packages/nars-capability-gateway/src/mcp-runtime.mjs` | Selection values are never forwarded; only credential names remain in the allowlist |
 
 ## Keep (credential/material transport, not selection)
 
@@ -36,8 +45,8 @@ material, not selection.
 
 ## Test fixtures (allowed)
 
-Test-file reads of retired symbols such as `NARADA_INTELLIGENCE_PROVIDER`
-are explicit legacy fixtures and out of scope per the task's
+Test-file references to retired selection symbols are explicit legacy fixtures
+and out of scope per the task's
 "outside explicit migration fixtures" carve-out. Tests that assert the
 *projection* of selection env (agent-start option-contract,
 provider-module-contract, launcher-runtime tests) will be updated with the

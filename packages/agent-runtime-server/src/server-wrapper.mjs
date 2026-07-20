@@ -485,7 +485,12 @@ async function main() {
           expected_usage: { amount: 1, unit: 'requests' },
           expected_cost: { amount: 1, currency: 'USD' },
         },
-        topologyObservations: [],
+        topologyObservationSource: {
+          schema: 'narada.invokable-intelligence.local-topology-observation-source.v1',
+          authority_ref: `runtime:${lifecycleBinding.session_id}`,
+          probe_timeout_ms: 1500,
+          cache_ttl_ms: 1000,
+        },
       },
       displaySettings: {
         toolOutputs: process.env.NARADA_AGENT_CLI_TOOL_OUTPUTS !== '0',

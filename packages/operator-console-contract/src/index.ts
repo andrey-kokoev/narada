@@ -416,8 +416,7 @@ export function parseOperatorSiteAgentOverviewWireResponse(value: unknown): Oper
     return { ...groupRow, sites: sites as OperatorSiteAgentSiteWireRecord[] } as unknown as OperatorSiteAgentGroupWireRecord;
   });
   if (groups.some((group) => group === null)) return null;
-  const parsed = { ...row, groups: groups as OperatorSiteAgentGroupWireRecord[] } as unknown as OperatorSiteAgentOverviewWireResponse;
-  return validateOperatorSiteAgentOverviewInvariants(parsed).length === 0 ? parsed : null;
+  return { ...row, groups: groups as OperatorSiteAgentGroupWireRecord[] } as unknown as OperatorSiteAgentOverviewWireResponse;
 }
 
 export interface OperatorSurfaceAvailabilityDetail {

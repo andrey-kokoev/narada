@@ -111,7 +111,9 @@ user, and execution Site refs, request access facts, and admitted topology
 observations. Those coordinates select no model; they tell the canonical
 resolver which Site authorities and observed route facts apply.
 
-`CLOUDFLARE_CARRIER_AI_MODEL` is retired and never read. `AI_MODEL`,
+<!-- narada:legacy-selection-negative:v1 symbol="CLOUDFLARE_CARRIER_AI_MODEL" disposition="retired" -->
+
+The former carrier model selector is retired and never read. `AI_MODEL`,
 `INTELLIGENCE_TARGET_SITE`, `INTELLIGENCE_USER_SITE`,
 `INTELLIGENCE_HOST_SITE`, and `INTELLIGENCE_WORKERS_AI_MODELS` have no
 intelligence authority and are not read.

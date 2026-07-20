@@ -208,13 +208,6 @@ function rewriteCanonicalProvider(value, providerId) {
   if (rewritten.schema === 'narada.invokable-intelligence.inference-endpoint.v1' && providerId === 'codex-subscription') {
     rewritten.address = { kind: 'runtime-service', service: 'codex-subscription' };
   }
-  if (rewritten.schema === 'narada.invokable-intelligence.invocation-route-candidate.v1') {
-    rewritten.topology = {
-      ...rewritten.topology,
-      nodes: rewritten.topology.nodes.map((node) => ({ ...node, required_feasibility: [] })),
-      edges: rewritten.topology.edges.map((edge) => ({ ...edge, required_feasibility: [] })),
-    };
-  }
   if (rewritten.schema === 'narada.invokable-intelligence.access-grant.v1') {
     rewritten.scope = { ...rewritten.scope, purposes: [...new Set([...rewritten.scope.purposes, 'agent-session'])] };
   }
@@ -1981,7 +1974,7 @@ test('spawned runtime cancels a hanging Codex subprocess', async () => {
   }
 });
 
-test('spawned runtime executes every HTTP provider adapter against local endpoints', async () => {
+test('spawned runtime proves live local topology for success and typed pre-provider refusal', async () => {
   let expectedCredentialHeader = null;
   let expectedCredentialValue = null;
   const provider = createServer((request, response) => {
@@ -2029,6 +2022,36 @@ test('spawned runtime executes every HTTP provider adapter against local endpoin
         assert.equal(await new Promise((resolve) => child.on('exit', resolve)), 0, providerId);
         const events = stdout.trim().split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
         assert.ok(events.some((event) => event.event === 'carrier_turn_completed'), providerId);
+        const terminal = events.find((event) => event.event === 'invokable_intelligence_terminal');
+        assert.ok(terminal?.intent_id && terminal?.plan_id && terminal?.attempt_id && terminal?.outcome_id, providerId);
+        assert.equal(terminal.outcome_kind, 'success', providerId);
+        const verificationStore = await SqliteRegistryStore.open(join(siteRoot, '.ai', 'intelligence-registry.db'));
+        try {
+          const [intent, plan, snapshot, attempt, outcome, results, observations, audit, telemetry] = await Promise.all([
+            verificationStore.getIntent(terminal.intent_id),
+            verificationStore.getPlan(terminal.plan_id),
+            verificationStore.getPlanSnapshot(terminal.plan_id),
+            verificationStore.getExecutionAttempt(terminal.attempt_id),
+            verificationStore.getTerminalOutcome(terminal.outcome_id),
+            verificationStore.listResultEnvelopes(terminal.attempt_id),
+            verificationStore.listInvocationObservations(terminal.attempt_id),
+            verificationStore.listInvocationAuditEvidence(terminal.attempt_id),
+            verificationStore.listInvocationTelemetry(terminal.attempt_id),
+          ]);
+          assert.equal(intent?.id, terminal.intent_id, providerId);
+          assert.equal(plan?.route.topology_id, 'topology:local-openai-compatible', providerId);
+          assert.equal(snapshot?.plan_id, terminal.plan_id, providerId);
+          assert.ok(snapshot?.digests?.topology, providerId);
+          assert.ok(snapshot?.referenced_revisions?.some(({ kind }) => kind === 'topology'), providerId);
+          assert.equal(attempt?.plan_id, terminal.plan_id, providerId);
+          assert.equal(outcome?.attempt_id, terminal.attempt_id, providerId);
+          assert.equal(results.length, 1, providerId);
+          assert.equal(observations.some(({ kind, status }) => kind === 'provider-event' && status === 'observed'), true, providerId);
+          assert.equal(audit.some(({ evidence_type }) => evidence_type === 'terminal-outcome'), true, providerId);
+          assert.equal(telemetry.length > 0, true, providerId);
+        } finally {
+          await verificationStore.close();
+        }
         const eventsPath = resolveNaradaSitePaths({ siteRoot, sessionId: `${providerId}-e2e` }).narsEventsPath;
         const durableEvents = readFileSync(eventsPath, 'utf8');
         const credential = String(credentialValue).replace(/^Bearer /, '');
@@ -2039,6 +2062,69 @@ test('spawned runtime executes every HTTP provider adapter against local endpoin
       } finally {
         rmSync(siteRoot, { recursive: true, force: true });
       }
+    }
+
+    let providerCalls = 0;
+    const disappearingProvider = createServer((_request, response) => {
+      providerCalls += 1;
+      response.statusCode = 500;
+      response.end();
+    });
+    await new Promise((resolve) => disappearingProvider.listen(0, '127.0.0.1', resolve));
+    const disappearingAddress = disappearingProvider.address();
+    const refusalSiteRoot = mkdtempSync(join(tmpdir(), 'narada-topology-refusal-e2e-'));
+    await seedIntelligenceRegistry(refusalSiteRoot, {
+      providerId: 'openai-api',
+      endpointBaseUrl: `http://127.0.0.1:${disappearingAddress.port}`,
+      credentialReference: 'OPENAI_API_KEY',
+    });
+    let refusalChild = null;
+    try {
+      const binPath = fileURLToPath(new URL('../bin/narada-agent-runtime-server.mjs', import.meta.url));
+      refusalChild = spawnTestChild(process.execPath, [binPath, '--raw-jsonl', '--identity', 'narada.test', '--session', 'topology-refusal-e2e'], {
+        env: { ...process.env, NARADA_SITE_ROOT: refusalSiteRoot, OPENAI_API_KEY: 'unused-topology-refusal-key' },
+        stdio: ['pipe', 'pipe', 'pipe'],
+      });
+      let refusalStdout = '';
+      let refusalStderr = '';
+      refusalChild.stdout.setEncoding('utf8');
+      refusalChild.stdout.on('data', (chunk) => { refusalStdout += chunk; });
+      refusalChild.stderr.setEncoding('utf8');
+      refusalChild.stderr.on('data', (chunk) => { refusalStderr += chunk; });
+      await waitForCapturedOutput(
+        refusalChild,
+        () => refusalStdout,
+        (text) => hasCapturedJsonEvent(text, (event) => event.event === 'session_started'),
+      );
+      disappearingProvider.closeAllConnections?.();
+      await new Promise((resolve) => disappearingProvider.close(resolve));
+      await new Promise((resolve) => setTimeout(resolve, 1100));
+      refusalChild.stdin.end(`${JSON.stringify({ id: 'turn-refused', method: 'session.submit', params: { content: 'must not reach provider' } })}\n${JSON.stringify({ id: 'close-refused', method: 'session.close' })}\n`);
+      assert.equal(await new Promise((resolve) => refusalChild.on('exit', resolve)), 0, refusalStderr);
+      const refusalEvents = refusalStdout.trim().split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
+      const refusal = refusalEvents.find((event) => event.event === 'invokable_intelligence_refused');
+      assert.ok(refusal?.intent_id && refusal?.refusal_id && refusal?.outcome_id, refusalStderr);
+      assert.equal(typeof refusal.reason_code, 'string');
+      assert.equal(providerCalls, 0, 'topology refusal must occur before an HTTP provider request');
+      const refusalStore = await SqliteRegistryStore.open(join(refusalSiteRoot, '.ai', 'intelligence-registry.db'));
+      try {
+        assert.equal((await refusalStore.getIntent(refusal.intent_id))?.id, refusal.intent_id);
+        assert.equal((await refusalStore.getRefusal(refusal.refusal_id))?.id, refusal.refusal_id);
+        assert.equal((await refusalStore.getTerminalOutcome(refusal.outcome_id))?.kind, 'pre-invocation-refusal');
+      } finally {
+        await refusalStore.close();
+      }
+    } finally {
+      if (refusalChild && refusalChild.exitCode === null) {
+        const exited = once(refusalChild, 'exit');
+        refusalChild.kill();
+        await exited;
+      }
+      if (disappearingProvider.listening) {
+        disappearingProvider.closeAllConnections?.();
+        await new Promise((resolve) => disappearingProvider.close(resolve));
+      }
+      rmSync(refusalSiteRoot, { recursive: true, force: true });
     }
   } finally {
     provider.closeAllConnections?.();
@@ -2168,7 +2254,7 @@ test('spawned runtime refuses to redispatch an admission-unknown turn after forc
 });
 test('spawned runtime records required MCP startup failure without calling the provider', async () => {
   const siteRoot = mkdtempSync(join(tmpdir(), 'narada-runtime-mcp-failure-'));
-  await seedIntelligenceRegistry(siteRoot, { providerId: 'openai-api' });
+  await seedIntelligenceRegistry(siteRoot, { providerId: 'codex-subscription' });
   mkdirSync(join(siteRoot, '.ai', 'mcp'), { recursive: true });
   const fixturePath = fileURLToPath(new URL('./fixtures/mcp-exit-server.mjs', import.meta.url));
   writeFileSync(join(siteRoot, '.ai', 'mcp', 'fixture.json'), JSON.stringify({ mcpServers: { broken: { command: process.execPath, args: [fixturePath], surface_id: 'broken.surface', startup_timeout_sec: 1 } } }), 'utf8');
@@ -2178,6 +2264,7 @@ test('spawned runtime records required MCP startup failure without calling the p
       env: { ...process.env, NARADA_SITE_ROOT: siteRoot, OPENAI_BASE_URL: 'http://127.0.0.1:1/', OPENAI_API_KEY: 'unused', NARADA_AGENT_CLI_REQUIRE_MCP_FABRIC: '1' }, stdio: ['pipe', 'pipe', 'pipe'],
     });
     let stdout = ''; child.stdout.setEncoding('utf8'); child.stdout.on('data', (chunk) => { stdout += chunk; });
+    let stderr = ''; child.stderr.setEncoding('utf8'); child.stderr.on('data', (chunk) => { stderr += chunk; });
     child.stdin.end(`${JSON.stringify({ id: 'turn-1', method: 'session.submit', params: { content: 'hello' } })}\n${JSON.stringify({ id: 'close-1', method: 'session.close' })}\n`);
     assert.equal(await new Promise((resolve) => child.on('exit', resolve)), 0);
     const events = stdout.trim().split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));

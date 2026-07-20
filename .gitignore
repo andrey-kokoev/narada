@@ -24,8 +24,11 @@ inputs/
 .ai/inbox.db-*
 .ai/task-lifecycle.db
 .ai/task-lifecycle.db-*
+.ai/intelligence-registry.db
+.ai/intelligence-registry.db-*
 .ai/state/
 .ai/tmp/
+.ai/tmp-tests/
 .ai/runtime/
 .ai/mcp/
 .ai/operator-surface-send-queue/

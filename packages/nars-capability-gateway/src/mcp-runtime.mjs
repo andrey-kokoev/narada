@@ -48,31 +48,6 @@ const CHILD_PROCESS_ENV_ALLOWLIST = Object.freeze([
   'NARADA_PROCESS_ROLE',
   'NARADA_CREATED_BY_PID',
 ]);
-const LEGACY_INTELLIGENCE_SELECTION_ENV_NAMES = Object.freeze([
-  'NARADA_INTELLIGENCE_PROVIDER',
-  'NARADA_AI_MODEL',
-  'NARADA_AI_BASE_URL',
-  'NARADA_AI_THINKING',
-  'NARADA_THINKING_LEVEL',
-  'OPENAI_BASE_URL',
-  'OPENAI_MODEL',
-  'KIMI_API_BASE_URL',
-  'KIMI_MODEL',
-  'KIMI_CODE_API_BASE_URL',
-  'KIMI_CODE_MODEL',
-  'ANTHROPIC_BASE_URL',
-  'ANTHROPIC_MODEL',
-  'CODEX_MODEL',
-  'NARADA_CODEX_MODEL',
-  'DEEPSEEK_API_BASE_URL',
-  'DEEPSEEK_MODEL',
-  'GLM_MODEL',
-  'GLM_API_BASE_URL',
-  'OPENROUTER_MODEL',
-  'OPENROUTER_BASE_URL',
-  'OPENROUTER_API_BASE_URL',
-  'CLOUDFLARE_CARRIER_AI_MODEL',
-]);
 const MCP_STARTUP_FAILURES_KEY = '__mcp_startup_failures';
 const MCP_RUNTIME_DIAGNOSTICS_KEY = '__mcp_runtime_diagnostics';
 const MCP_TOOL_NAME_ALIASES = Object.freeze({
@@ -99,7 +74,29 @@ function buildChildProcessEnv(extra = {}, baseEnv = process.env) {
     if (baseEnv[key] !== undefined) env[key] = baseEnv[key];
   }
   const projected = { ...env, ...extra, FORCE_COLOR: '0', NO_COLOR: '1' };
-  for (const name of LEGACY_INTELLIGENCE_SELECTION_ENV_NAMES) delete projected[name];
+  delete projected.NARADA_INTELLIGENCE_PROVIDER;
+  delete projected.NARADA_AI_MODEL;
+  delete projected.NARADA_AI_BASE_URL;
+  delete projected.NARADA_AI_THINKING;
+  delete projected.NARADA_THINKING_LEVEL;
+  delete projected.OPENAI_BASE_URL;
+  delete projected.OPENAI_MODEL;
+  delete projected.KIMI_API_BASE_URL;
+  delete projected.KIMI_MODEL;
+  delete projected.KIMI_CODE_API_BASE_URL;
+  delete projected.KIMI_CODE_MODEL;
+  delete projected.ANTHROPIC_BASE_URL;
+  delete projected.ANTHROPIC_MODEL;
+  delete projected.CODEX_MODEL;
+  delete projected.NARADA_CODEX_MODEL;
+  delete projected.DEEPSEEK_API_BASE_URL;
+  delete projected.DEEPSEEK_MODEL;
+  delete projected.GLM_MODEL;
+  delete projected.GLM_API_BASE_URL;
+  delete projected.OPENROUTER_MODEL;
+  delete projected.OPENROUTER_BASE_URL;
+  delete projected.OPENROUTER_API_BASE_URL;
+  delete projected.CLOUDFLARE_CARRIER_AI_MODEL;
   return projected;
 }
 

@@ -1,7 +1,7 @@
 ---
 number: 2217
 governed_by: dependencies
-status: claimed
+status: in_review
 tags: invokable-intelligence, live-e2e, local, runtime
 creation_payload_ref: mcp_payload:invokable-intelligence-local-runtime-v2@v1
 creation_payload_sha256: eb674dbf76b91bdbd1a7890270dd55c525b2e711e49ae12a30247c9005ce7e6e

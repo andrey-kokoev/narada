@@ -176,14 +176,6 @@
       "posture": "nars_carrier_runtime_substrate"
     },
     {
-      "package": "@narada2/carrier-runtime-contract",
-      "path": "packages/carrier-runtime-contract",
-      "roles": [
-        "descriptor_contract"
-      ],
-      "posture": "carrier_runtime_contracts"
-    },
-    {
       "package": "@narada2/carrier-terminal-projection",
       "path": "packages/carrier-terminal-projection",
       "roles": [
@@ -302,6 +294,15 @@
         "runtime_authority"
       ],
       "posture": "invokable_intelligence_catalog_policy_management"
+    },
+    {
+      "package": "@narada2/invokable-intelligence-materialization",
+      "path": "packages/invokable-intelligence-materialization",
+      "roles": [
+        "runtime_authority",
+        "descriptor_contract"
+      ],
+      "posture": "invokable_intelligence_portable_materialization_storage"
     },
     {
       "package": "@narada2/invokable-intelligence-registry",

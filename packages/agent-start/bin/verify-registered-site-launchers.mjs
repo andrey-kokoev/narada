@@ -45,32 +45,6 @@ const launchTimeoutMs = optionalPositiveIntegerArg('--launch-timeout-ms') ?? 300
 const jobs = optionalPositiveIntegerArg('--jobs') ?? 1;
 const retries = optionalNonnegativeIntegerArg('--retries', 1);
 const progressEnabled = process.argv.includes('--progress');
-const LEGACY_INTELLIGENCE_SELECTION_ENV_NAMES = Object.freeze([
-  'NARADA_INTELLIGENCE_PROVIDER',
-  'NARADA_AI_MODEL',
-  'NARADA_AI_BASE_URL',
-  'NARADA_AI_THINKING',
-  'NARADA_THINKING_LEVEL',
-  'CODEX_MODEL',
-  'NARADA_CODEX_MODEL',
-  'OPENAI_MODEL',
-  'OPENAI_BASE_URL',
-  'KIMI_MODEL',
-  'KIMI_API_BASE_URL',
-  'KIMI_CODE_MODEL',
-  'KIMI_CODE_API_BASE_URL',
-  'ANTHROPIC_MODEL',
-  'ANTHROPIC_BASE_URL',
-  'DEEPSEEK_MODEL',
-  'DEEPSEEK_API_BASE_URL',
-  'GLM_MODEL',
-  'GLM_API_BASE_URL',
-  'OPENROUTER_MODEL',
-  'OPENROUTER_BASE_URL',
-  'OPENROUTER_API_BASE_URL',
-  'CLOUDFLARE_CARRIER_AI_MODEL',
-]);
-
 function progress(message) {
   if (progressEnabled) process.stderr.write(`${message}\n`);
 }
@@ -319,14 +293,29 @@ function validateLaunch(record, carrier, runtime, launch) {
     if (env.NARADA_AGENT_TUI_TERMINAL_MODE !== 'interactive_loop') failures.push({ reason: 'agent_tui_terminal_mode_env_mismatch', actual: env.NARADA_AGENT_TUI_TERMINAL_MODE });
     if (env.NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION !== 'true') failures.push({ reason: 'agent_tui_provider_execution_env_missing', actual: env.NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION });
     if (env.NARADA_AGENT_TUI_PROVIDER_ADAPTER_KIND !== 'codex_subscription_adapter') failures.push({ reason: 'agent_tui_provider_adapter_env_mismatch', actual: env.NARADA_AGENT_TUI_PROVIDER_ADAPTER_KIND });
-    const leakedSelectionEnvironment = LEGACY_INTELLIGENCE_SELECTION_ENV_NAMES
-      .filter((name) => Object.hasOwn(env, name));
-    if (leakedSelectionEnvironment.length > 0) {
-      failures.push({
-        reason: 'legacy_intelligence_selection_env_present',
-        environment_names: leakedSelectionEnvironment,
-      });
-    }
+    if (Object.hasOwn(env, 'NARADA_INTELLIGENCE_PROVIDER')) failures.push({ reason: 'legacy_intelligence_selection_env_present', environment_names: ['NARADA_INTELLIGENCE_PROVIDER'] });
+    if (Object.hasOwn(env, 'NARADA_AI_MODEL')) failures.push({ reason: 'legacy_intelligence_selection_env_present', environment_names: ['NARADA_AI_MODEL'] });
+    if (Object.hasOwn(env, 'NARADA_AI_BASE_URL')) failures.push({ reason: 'legacy_intelligence_selection_env_present', environment_names: ['NARADA_AI_BASE_URL'] });
+    if (Object.hasOwn(env, 'NARADA_AI_THINKING')) failures.push({ reason: 'legacy_intelligence_selection_env_present', environment_names: ['NARADA_AI_THINKING'] });
+    if (Object.hasOwn(env, 'NARADA_THINKING_LEVEL')) failures.push({ reason: 'legacy_intelligence_selection_env_present', environment_names: ['NARADA_THINKING_LEVEL'] });
+    if (Object.hasOwn(env, 'CODEX_MODEL')) failures.push({ reason: 'legacy_intelligence_selection_env_present', environment_names: ['CODEX_MODEL'] });
+    if (Object.hasOwn(env, 'NARADA_CODEX_MODEL')) failures.push({ reason: 'legacy_intelligence_selection_env_present', environment_names: ['NARADA_CODEX_MODEL'] });
+    if (Object.hasOwn(env, 'OPENAI_MODEL')) failures.push({ reason: 'legacy_intelligence_selection_env_present', environment_names: ['OPENAI_MODEL'] });
+    if (Object.hasOwn(env, 'OPENAI_BASE_URL')) failures.push({ reason: 'legacy_intelligence_selection_env_present', environment_names: ['OPENAI_BASE_URL'] });
+    if (Object.hasOwn(env, 'KIMI_MODEL')) failures.push({ reason: 'legacy_intelligence_selection_env_present', environment_names: ['KIMI_MODEL'] });
+    if (Object.hasOwn(env, 'KIMI_API_BASE_URL')) failures.push({ reason: 'legacy_intelligence_selection_env_present', environment_names: ['KIMI_API_BASE_URL'] });
+    if (Object.hasOwn(env, 'KIMI_CODE_MODEL')) failures.push({ reason: 'legacy_intelligence_selection_env_present', environment_names: ['KIMI_CODE_MODEL'] });
+    if (Object.hasOwn(env, 'KIMI_CODE_API_BASE_URL')) failures.push({ reason: 'legacy_intelligence_selection_env_present', environment_names: ['KIMI_CODE_API_BASE_URL'] });
+    if (Object.hasOwn(env, 'ANTHROPIC_MODEL')) failures.push({ reason: 'legacy_intelligence_selection_env_present', environment_names: ['ANTHROPIC_MODEL'] });
+    if (Object.hasOwn(env, 'ANTHROPIC_BASE_URL')) failures.push({ reason: 'legacy_intelligence_selection_env_present', environment_names: ['ANTHROPIC_BASE_URL'] });
+    if (Object.hasOwn(env, 'DEEPSEEK_MODEL')) failures.push({ reason: 'legacy_intelligence_selection_env_present', environment_names: ['DEEPSEEK_MODEL'] });
+    if (Object.hasOwn(env, 'DEEPSEEK_API_BASE_URL')) failures.push({ reason: 'legacy_intelligence_selection_env_present', environment_names: ['DEEPSEEK_API_BASE_URL'] });
+    if (Object.hasOwn(env, 'GLM_MODEL')) failures.push({ reason: 'legacy_intelligence_selection_env_present', environment_names: ['GLM_MODEL'] });
+    if (Object.hasOwn(env, 'GLM_API_BASE_URL')) failures.push({ reason: 'legacy_intelligence_selection_env_present', environment_names: ['GLM_API_BASE_URL'] });
+    if (Object.hasOwn(env, 'OPENROUTER_MODEL')) failures.push({ reason: 'legacy_intelligence_selection_env_present', environment_names: ['OPENROUTER_MODEL'] });
+    if (Object.hasOwn(env, 'OPENROUTER_BASE_URL')) failures.push({ reason: 'legacy_intelligence_selection_env_present', environment_names: ['OPENROUTER_BASE_URL'] });
+    if (Object.hasOwn(env, 'OPENROUTER_API_BASE_URL')) failures.push({ reason: 'legacy_intelligence_selection_env_present', environment_names: ['OPENROUTER_API_BASE_URL'] });
+    if (Object.hasOwn(env, 'CLOUDFLARE_CARRIER_AI_MODEL')) failures.push({ reason: 'legacy_intelligence_selection_env_present', environment_names: ['CLOUDFLARE_CARRIER_AI_MODEL'] });
   }
 
   return failures;
