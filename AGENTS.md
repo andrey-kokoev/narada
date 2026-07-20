@@ -112,7 +112,7 @@ Cross-cutting runtime, contract, MCP, carrier, NARS, agent, operator, and UI pac
 | `@narada2/site-config` | `packages/site-config` | Site configuration contracts |
 | `@narada2/site-task-lifecycle` | `packages/site-task-lifecycle` | Task lifecycle bindings for Sites |
 | `@narada2/task-lifecycle-kernel` | `packages/task-lifecycle-kernel` | Lightweight MCP-style task lifecycle kernel (`.mjs`) |
-| `@narada2/task-governance` / `@narada2/task-governance-core` | `packages/task-governance`, `packages/task-governance-core` | Task governance primitives |
+| `@narada2/task-governance` | `packages/task-governance` | Task governance primitives |
 | `@narada2/agent-context-memory` | `packages/agent-context-memory` | Agent checkpoint memory contracts |
 | `@narada2/narada-proper-mcp` | `packages/narada-proper-mcp` | Target-local Narada MCP facade |
 | `@narada2/mcp-fabric` / `@narada2/typed-mcp-surface` | `packages/mcp-fabric`, `packages/typed-mcp-surface` | MCP surface plumbing |
