@@ -17,6 +17,7 @@ const digests: PlanSnapshotDigests = {
   assertions: digest("4"),
   topology: digest("5"),
   access: digest("6"),
+  materialization: digest("7"),
 };
 const clock = (instant: string, time: string, weekday: AuthoritativeDecisionClock["local"]["weekday"]): AuthoritativeDecisionClock => ({
   source: "test-clock",
@@ -35,7 +36,7 @@ const snapshot: PlanDecisionSnapshot = {
   digests,
   snapshot_digest: digest("a"),
   valid_until: "2026-07-20T05:00:00Z",
-  revalidation_triggers: ["before-queued-attempt", "at-scheduled-window", "before-retry", "before-resume", "policy-change"],
+  revalidation_triggers: ["before-queued-attempt", "at-scheduled-window", "before-retry", "before-resume", "before-replay", "policy-change"],
   referenced_revisions: [{ kind: "policy", record_id: "policy:target", revision: "7", digest: digest("3"), immutable_ref: "content:policy:3" }],
   lineage: { relation: "initial" },
 };
@@ -50,6 +51,7 @@ test("immediate plans reuse while queued, retry, and resume attempts revalidate 
     ["queued-batch", "before-queued-attempt"],
     ["retry", "before-retry"],
     ["resume", "before-resume"],
+    ["replay", "before-replay"],
   ] as const) {
     const instant = "2026-07-19T06:00:00Z";
     const result = evaluatePlanUse(snapshot, {
@@ -59,7 +61,7 @@ test("immediate plans reuse while queued, retry, and resume attempts revalidate 
       current_digests: digests,
       observed_triggers: trigger ? [trigger] : [],
       replan_available: true,
-      ...(mode === "retry" || mode === "resume" ? { predecessor_attempt_id: "attempt:prior" } : {}),
+      ...(["retry", "resume", "replay"].includes(mode) ? { predecessor_attempt_id: "attempt:prior" } : {}),
     });
     assert.equal(result.decision, mode === "immediate" ? "reuse" : "revalidated");
     assert.equal(result.reasons.length, 0);

@@ -54,6 +54,7 @@ export type PlanRevalidationTrigger =
   | "at-scheduled-window"
   | "before-retry"
   | "before-resume"
+  | "before-replay"
   | "catalog-change"
   | "policy-change"
   | "assertion-expiry"
@@ -82,7 +83,7 @@ export interface PlanDecisionSnapshot {
   };
 }
 
-export type PlanAttemptMode = "immediate" | "queued-batch" | "delayed" | "retry" | "resume";
+export type PlanAttemptMode = "immediate" | "queued-batch" | "delayed" | "retry" | "resume" | "replay";
 
 export interface PlanUseContext {
   evaluated_at: string;
@@ -227,6 +228,7 @@ const revalidationTriggerForMode: Record<Exclude<PlanAttemptMode, "immediate">, 
   delayed: "at-scheduled-window",
   retry: "before-retry",
   resume: "before-resume",
+  replay: "before-replay",
 };
 
 const changedDigestReasons: Array<[keyof PlanSnapshotDigests, PlanStalenessReason]> = [

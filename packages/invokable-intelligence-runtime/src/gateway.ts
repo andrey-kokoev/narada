@@ -202,6 +202,7 @@ const modeTrigger: Partial<Record<PlanAttemptMode, PlanRevalidationTrigger>> = {
   delayed: "at-scheduled-window",
   retry: "before-retry",
   resume: "before-resume",
+  replay: "before-replay",
 };
 
 function normalizedIntentShape(intent: InvocationIntent): unknown {

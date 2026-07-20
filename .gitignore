@@ -18,6 +18,7 @@ codex-home/
 executions/
 inputs/
 .ai/metrics/
+.ai/observations/
 .ai/agents/roster.json
 .ai/publications/
 .ai/inbox.db
@@ -34,15 +35,15 @@ inputs/
 .ai/operator-surface-send-queue/
 .feedback/
 .sop/
+.sop/
 .crew/agent-shortcuts/
 .narada/crew/agent-start-events/
 .narada/crew/agent-start-results/
 .narada/crew/agent-tui-live-turn-acceptance/
 .narada/crew/agent-tui-live-turn-*.json
 .narada/crew/agent-tui-live-turn-*.txt
-.narada/crew/codex-home/
-.narada/crew/nars-sessions/
 .narada/crew/nars-projections/
+.narada/crew/nars-sessions/
 .narada/auth/
 .narada/site-continuity/
 .narada/site-tool-surface.manifest.json
@@ -50,14 +51,17 @@ inputs/
 .narada/runtime/local-history/
 .narada/runtime/mcp-audit/
 .narada/runtime/launch-artifact-locks/
+.narada/runtime/worker-delegation/
 .narada/local-filesystem-mcp/patch-outcomes/
 .narada/local-history-workspace.json
 packages/*/target/
 packages/*/.narada/
 packages/*/.ai/runtime/
+packages/*/.tmp-*.db
 # Cloudflare deployment assets are assembled by the package build.
 packages/cloudflare-nars-projection/public/
 packages/mcp-fabric/test/fixtures/site-valid/.ai/runtime/agent-start-reconciliation/
+packages/mcp-fabric/test/fixtures/site-valid/.ai/runtime/agent-start-command-results/
 packages/layers/cli/.ai/inbox.db
 packages/layers/cli/.ai/inbox.db-*
 packages/layers/cli/.ai/mutation-evidence/

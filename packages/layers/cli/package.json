@@ -109,7 +109,7 @@
     "pretypecheck": "pnpm --filter @narada2/cloudflare-nars-projection build",
     "typecheck": "tsc --noEmit",
     "test:artifact": "node --test test/lib/launch-artifact.test.mjs",
-    "pretest": "pnpm --filter @narada2/cloudflare-nars-projection build && pnpm --filter @narada2/operator-router build && pnpm --filter @narada2/ui build && pnpm --filter @narada2/operator-console-ui build",
+    "pretest": "pnpm run build && pnpm --filter @narada2/cloudflare-nars-projection build && pnpm --filter @narada2/operator-router build && pnpm --filter @narada2/ui build && pnpm --filter @narada2/operator-console-ui build",
     "test": "node scripts/run-vitest-quiet.mjs run --silent && pnpm run test:realfs",
     "test:launcher": "pnpm run build && node scripts/run-vitest-quiet.mjs run --silent test/commands/carrier-launcher.test.ts test/commands/launcher-workspace-plan.test.ts test/commands/nars.test.ts test/commands/workspace-launch-admission.test.ts && pnpm run test:realfs",
     "test:launcher:focused": "node scripts/run-launcher-focused.mjs",

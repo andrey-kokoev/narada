@@ -120,7 +120,7 @@ function classifyReference({ path, content, line, symbol }) {
 
   if (TEST_PATH.test(path)) return { classification: 'verification_fixture', classification_reason: 'reference exists only in a test or fixture that verifies rejection/scrubbing', admitted: true, authoritative: false };
   if (NEGATIVE_BOUNDARY_PATHS.has(path) && isNegativeBoundaryReference({ content, line, symbol })) {
-    return { classification: 'runtime_rejection_boundary', classification_reason: 'runtime boundary explicitly deletes, filters, or refuses the legacy key', admitted: true, authoritative: false };
+    return { classification: 'runtime_rejection_boundary', classification_reason: 'runtime boundary explicitly deletes or immediately refuses the legacy key', admitted: true, authoritative: false };
   }
   if (path.endsWith('.md') && isStructuredDocumentationNegative(line, symbol)) {
     return {

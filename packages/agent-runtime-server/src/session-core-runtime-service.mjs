@@ -6,6 +6,7 @@ import { readNarsEventLog } from '@narada2/nars-session-core/event-log';
 import { markNarsSessionIndexClosed, writeNarsSessionStartedIndex } from '@narada2/nars-session-core/session-index';
 import { buildNarsRuntimeSurfaceContract } from '@narada2/nars-runtime-contract/runtime-surface-contract';
 import { buildLaunchProcessOwnershipEvidence } from '@narada2/launch-process-ownership';
+import { normalizeIntelligenceInvocationControl } from '@narada2/invokable-intelligence-contract';
 import { createRuntimeSessionBinding } from './runtime-session-binding.mjs';
 import { createNarsCapabilityGateway } from '@narada2/nars-capability-gateway/capability-gateway';
 import { createNarsRuntimeRequestRegistry } from './runtime-request-state.mjs';
@@ -214,6 +215,11 @@ export function normalizeProviderConversationContent(content) {
 
 export function requestRejectionCode(method, message) {
   if (message === 'invalid_json') return 'invalid_json';
+  if (String(message).includes('IntelligenceInvocationControlError')
+    || String(message).includes('invalid-intelligence-invocation-control')
+    || (method === 'session.submit' && String(message).startsWith('$.'))) {
+    return 'invalid_intelligence_invocation_control';
+  }
   if (method === 'session.submit') return 'request_dispatch_failed';
   if (method === 'runtime.intelligence.reconfigure') return 'runtime_reconfiguration_failed';
   if (SESSION_CONTROL_METHODS.has(method) || isNarsRuntimeServerMethod(method)) return 'session_control_failed';
@@ -237,6 +243,34 @@ function providerConversationMessages({ eventsPath, currentInput } = {}) {
   const content = String(currentInput?.content ?? '').trim();
   if (content) messages.push({ role: 'user', content });
   return messages;
+}
+
+const CURRENT_INPUT_ONLY_MODES = new Set(['retry', 'resume', 'replay']);
+
+export function sessionSubmitInvocationControl(request) {
+  const value = request?.params?.intelligence_invocation;
+  return value === undefined ? null : normalizeIntelligenceInvocationControl(value);
+}
+
+export function buildProviderTurnContext({ eventsPath, input } = {}) {
+  const control = input?.metadata?.intelligence_invocation ?? null;
+  const content = String(input?.content ?? '').trim();
+  const messages = control && CURRENT_INPUT_ONLY_MODES.has(control.mode)
+    ? (content ? [{ role: 'user', content }] : [])
+    : providerConversationMessages({ eventsPath, currentInput: input });
+  return {
+    turnId: input.event_id,
+    messages,
+    ...(control ? {
+      settings: {
+        ...(control.intent_id ? { intentId: control.intent_id } : {}),
+        ...(control.operation_id ? { operationId: control.operation_id } : {}),
+        mode: control.mode,
+        allowReplan: control.allow_replan,
+        ...(input.request_id ? { requestId: input.request_id } : {}),
+      },
+    } : {}),
+  };
 }
 
 function parseRequest(line) {
@@ -407,10 +441,7 @@ export function createSessionCoreRuntimeService({
     invokeIntelligenceFn: runtimeCall,
     toolGateway: intelligenceToolGateway,
     buildTurnContext: (input) => {
-      return {
-        turnId: input.event_id,
-        messages: providerConversationMessages({ eventsPath: runtimeContext.eventsPath, currentInput: input }),
-      };
+      return buildProviderTurnContext({ eventsPath: runtimeContext.eventsPath, input });
     },
   });
 
@@ -524,6 +555,7 @@ export function createSessionCoreRuntimeService({
       if (request?.parse_error === 'invalid_json') throw new Error('invalid_json');
       if (method !== 'session.submit') throw new Error('unsupported_session_control');
       if (requestContent(request) == null) throw new Error('unsupported_session_control');
+      const invocationControl = sessionSubmitInvocationControl(request);
       supervisor.core.appendEvent({
         event: 'session_control_accepted',
         request_id: requestId,
@@ -531,8 +563,18 @@ export function createSessionCoreRuntimeService({
         idempotency_key: idempotencyKey,
         acceptance_state: 'accepted',
         transport: 'jsonl_stdio',
+        ...(invocationControl ? { intelligence_invocation: invocationControl } : {}),
       });
-      const result = await supervisor.dispatch(request);
+      const dispatchRequest = invocationControl
+        ? {
+            ...request,
+            metadata: {
+              ...(request?.metadata ?? {}),
+              intelligence_invocation: invocationControl,
+            },
+          }
+        : request;
+      const result = await supervisor.dispatch(dispatchRequest);
       const terminalState = result?.terminal_state ?? 'completed';
       const requestOutcome = requestOutcomeForTurnResult(terminalState);
       supervisor.core.appendEvent({

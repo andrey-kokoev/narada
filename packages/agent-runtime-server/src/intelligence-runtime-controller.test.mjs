@@ -70,6 +70,25 @@ test('controller invokes the canonical gateway with stable delivery identity and
   assert.equal('provider' in fixture.controller.snapshot(), false);
 });
 
+test('controller forwards explicit intent and operation identities for transport-level retry and replay', async () => {
+  const fixture = createFixture();
+  await fixture.controller.callIntelligence(
+    [{ role: 'user', content: 'same payload' }],
+    [],
+    {
+      intentId: 'intent:stable',
+      operationId: 'operation:stable:retry-1',
+      mode: 'retry',
+      allowReplan: false,
+      inputEventId: 'input-retry',
+    },
+  );
+  assert.equal(fixture.calls[0].intentId, 'intent:stable');
+  assert.equal(fixture.calls[0].operationId, 'operation:stable:retry-1');
+  assert.equal(fixture.calls[0].mode, 'retry');
+  assert.equal(fixture.calls[0].allowReplan, false);
+});
+
 test('controller preserves typed canonical refusal and does not manufacture an invocation result', async () => {
   const refusal = {
     kind: 'refusal',

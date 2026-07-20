@@ -1,4 +1,8 @@
 import { connect as netConnect } from 'node:net';
+import {
+  canonicalJson,
+  validateCanonicalCatalogRecord,
+} from '@narada2/invokable-intelligence-contract';
 
 const SOURCE_SCHEMA = 'narada.invokable-intelligence.local-topology-observation-source.v1';
 const ROUTE_SCHEMA = 'narada.invokable-intelligence.invocation-route-candidate.v1';
@@ -6,6 +10,7 @@ const ENDPOINT_SCHEMA = 'narada.invokable-intelligence.inference-endpoint.v1';
 const ADAPTER_SCHEMA = 'narada.invokable-intelligence.adapter.v1';
 const EXECUTION_LOCUS_SCHEMA = 'narada.invokable-intelligence.execution-locus.v1';
 const OBSERVATION_SCHEMA = 'narada.invokable-intelligence.topology-feasibility.v1';
+const RUNTIME_SERVICE_EVIDENCE_SCHEMA = 'narada.invokable-intelligence.local-runtime-service-evidence.v1';
 
 function nonEmpty(value) {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
@@ -18,7 +23,7 @@ function boundedInteger(value, fallback, minimum, maximum) {
     : fallback;
 }
 
-function currentCatalogDocuments(records) {
+function currentCatalogEntries(records) {
   const latest = new Map();
   for (const record of records) {
     if (record?.validation?.status !== 'accepted' || !nonEmpty(record.record_id)) continue;
@@ -27,7 +32,77 @@ function currentCatalogDocuments(records) {
       latest.set(record.record_id, record);
     }
   }
-  return [...latest.values()].map((record) => record.document);
+  return [...latest.values()].map((record) => ({ record, document: record.document }));
+}
+
+function uniqueMap(items, label) {
+  if (!Array.isArray(items)) throw new Error(`local_topology_${label}_array_required`);
+  const mapped = new Map();
+  for (const item of items) {
+    const id = nonEmpty(item?.id);
+    if (!id) throw new Error(`local_topology_${label}_id_required`);
+    if (mapped.has(id)) throw new Error(`local_topology_duplicate_${label}_id:${id}`);
+    mapped.set(id, item);
+  }
+  return mapped;
+}
+
+function uniqueRefs(values, label) {
+  if (!Array.isArray(values)) throw new Error(`local_topology_route_${label}_array_required`);
+  const refs = [];
+  const seen = new Set();
+  for (const value of values) {
+    const id = nonEmpty(value);
+    if (!id) throw new Error(`local_topology_route_${label}_id_required`);
+    if (seen.has(id)) throw new Error(`local_topology_duplicate_route_${label}_id:${id}`);
+    seen.add(id);
+    refs.push(id);
+  }
+  return refs;
+}
+
+function validatedRouteEntry(entry) {
+  const diagnostics = validateCanonicalCatalogRecord(entry.record);
+  if (diagnostics.length) {
+    throw new Error(`local_topology_route_catalog_record_invalid:${entry.record?.id ?? 'unknown'}:${diagnostics[0].code}`);
+  }
+  const route = entry.document;
+  const topology = route?.topology;
+  if (!nonEmpty(route?.id) || !nonEmpty(route?.endpoint?.id) || !nonEmpty(route?.adapter?.id)) {
+    throw new Error(`local_topology_route_coordinates_required:${route?.id ?? 'unknown'}`);
+  }
+  if (!topology || !nonEmpty(topology.id) || !topology.route) {
+    throw new Error(`local_topology_route_document_invalid:${route.id}`);
+  }
+  const nodes = uniqueMap(topology.nodes, 'node');
+  const edges = uniqueMap(topology.edges, 'edge');
+  const nodeIds = uniqueRefs(topology.route.node_ids, 'node');
+  const edgeIds = uniqueRefs(topology.route.edge_ids, 'edge');
+  for (const id of nodeIds) {
+    if (!nodes.has(id)) throw new Error(`local_topology_route_node_not_found:${topology.id}:${id}`);
+  }
+  for (const id of edgeIds) {
+    if (!edges.has(id)) throw new Error(`local_topology_route_edge_not_found:${topology.id}:${id}`);
+  }
+  for (const edge of edges.values()) {
+    if (!nodes.has(edge.from) || !nodes.has(edge.to)) {
+      throw new Error(`local_topology_edge_node_not_found:${topology.id}:${edge.id}`);
+    }
+  }
+  return {
+    record: entry.record,
+    route,
+    topology,
+    nodes,
+    edges,
+    nodeIds,
+    edgeIds,
+    selectionShape: canonicalJson({
+      endpoint: route.endpoint,
+      adapter: route.adapter,
+      topology,
+    }),
+  };
 }
 
 function socketCoordinate(address) {
@@ -114,7 +189,7 @@ function observationFor({
   });
 }
 
-function endpointAssessment(endpoint, adapter, probeResult) {
+function endpointAssessment(endpoint, adapter, probeResult, runtimeServices, runtimeSession) {
   if (!endpoint || endpoint.schema !== ENDPOINT_SCHEMA) {
     return {
       status: 'unknown',
@@ -130,14 +205,27 @@ function endpointAssessment(endpoint, adapter, probeResult) {
     };
   }
   if (endpoint.address?.kind === 'runtime-service') {
-    const supported = endpoint.address.service === 'codex-subscription'
+    const runtimeEvidence = runtimeServices.find((entry) =>
+      entry?.schema === RUNTIME_SERVICE_EVIDENCE_SCHEMA
+      && entry.status === 'available'
+      && entry.service === endpoint.address.service
+      && entry.runtime_family === adapter?.runtime_family
+      && entry.protocol_family === adapter?.protocol?.family
+      && entry.observed_for_session === runtimeSession
+      && nonEmpty(entry.evidence_ref));
+    const supported = Boolean(runtimeEvidence)
+      && endpoint.address.service === 'codex-subscription'
       && adapter?.schema === ADAPTER_SCHEMA
       && adapter.runtime_family === 'node'
       && adapter.protocol?.family === 'codex-subscription';
     return {
       status: supported ? 'feasible' : 'infeasible',
-      reason_code: supported ? null : 'runtime-service-adapter-unsupported',
-      evidence: [{ kind: 'run', ref: `local-runtime-service:${endpoint.address.service ?? 'unknown'}` }],
+      reason_code: supported ? null : 'runtime-service-not-observed',
+      evidence: [{
+        kind: 'run',
+        ref: runtimeEvidence?.evidence_ref
+          ?? `local-runtime-service:not-observed:${endpoint.address.service ?? 'unknown'}`,
+      }],
     };
   }
   return {
@@ -205,7 +293,14 @@ function assessNode({ node, route, endpoint, adapter, resources, runtimeContext,
   };
 }
 
-function assessEdge({ edge, route, nodes, resources, runtimeContext, endpointStatus }) {
+function routeAdmissionEvidence(routeRecord) {
+  return [
+    { kind: 'document', ref: routeRecord.id },
+    ...routeRecord.validation.evidence.map((entry) => ({ ...entry })),
+  ];
+}
+
+function assessEdge({ edge, route, routeRecord, nodes, resources, runtimeContext, endpointStatus }) {
   return (requirement) => {
     if (requirement === 'network-reachable') return endpointStatus;
     if (requirement === 'boundary-admitted') {
@@ -215,7 +310,7 @@ function assessEdge({ edge, route, nodes, resources, runtimeContext, endpointSta
         return {
           status: admitted ? 'feasible' : 'infeasible',
           reason_code: admitted ? null : 'network-boundary-policy-incomplete',
-          evidence: [{ kind: 'document', ref: `canonical-route:${route.id}:boundary:${edge.id}` }],
+          evidence: routeAdmissionEvidence(routeRecord),
         };
       }
       if (edge.boundary?.kinds?.includes('process')) {
@@ -249,6 +344,7 @@ export function createLocalTopologyObserver({
   runtimeContext,
   source,
   probeEndpoint = probeTcpEndpoint,
+  runtimeServices = [],
   now = () => Date.now(),
 } = {}) {
   if (!store || typeof store.listCatalogRecords !== 'function' || typeof store.listResources !== 'function') {
@@ -258,51 +354,43 @@ export function createLocalTopologyObserver({
     throw new Error('local_topology_observation_source_required');
   }
   const timeoutMs = boundedInteger(source.probe_timeout_ms, 1500, 50, 10000);
-  const cacheTtlMs = boundedInteger(source.cache_ttl_ms, 5000, 0, 60000);
-  const probeCache = new Map();
+  const observationValidityMs = boundedInteger(source.observation_validity_ms, 1000, 100, 10000);
 
   const probeFor = async (endpoint) => {
     if (endpoint?.address?.kind !== 'url') return null;
-    const key = endpoint.address.url;
-    const cached = probeCache.get(key);
-    const current = now();
-    if (cached && cached.expires_at > current) return cached.result;
-    const result = await probeEndpoint(endpoint.address, { timeoutMs });
-    probeCache.set(key, { result, expires_at: current + cacheTtlMs });
-    return result;
+    return probeEndpoint(endpoint.address, { timeoutMs });
   };
 
   return Object.freeze({
     async observe({ decisionClock } = {}) {
       const observedAt = nonEmpty(decisionClock?.instant) ?? new Date(now()).toISOString();
-      const validUntil = new Date(Date.parse(observedAt) + Math.max(cacheTtlMs, 1000)).toISOString();
+      const validUntil = new Date(Date.parse(observedAt) + observationValidityMs).toISOString();
       const [records, resourceList] = await Promise.all([
         store.listCatalogRecords(),
         store.listResources(),
       ]);
-      const routes = currentCatalogDocuments(records)
-        .filter((document) => document?.schema === ROUTE_SCHEMA);
+      const routes = currentCatalogEntries(records)
+        .filter(({ document }) => document?.schema === ROUTE_SCHEMA)
+        .map(validatedRouteEntry);
       if (routes.length === 0) throw new Error('local_topology_routes_not_initialized');
       const routeByTopology = new Map();
-      for (const route of routes) {
-        const existing = routeByTopology.get(route.topology?.id);
-        if (existing && existing.endpoint?.id !== route.endpoint?.id) {
-          throw new Error(`local_topology_ambiguous_route_topology:${route.topology?.id}`);
+      for (const entry of routes) {
+        const existing = routeByTopology.get(entry.topology.id);
+        if (existing && existing.selectionShape !== entry.selectionShape) {
+          throw new Error(`local_topology_ambiguous_route_topology:${entry.topology.id}`);
         }
-        routeByTopology.set(route.topology?.id, route);
+        if (!existing) routeByTopology.set(entry.topology.id, entry);
       }
-      const resources = new Map(resourceList.map((resource) => [resource.id, resource]));
+      const resources = uniqueMap(resourceList, 'resource');
       const observations = [];
-      for (const route of routeByTopology.values()) {
-        const topology = route.topology;
+      for (const entry of routeByTopology.values()) {
+        const { route, record: routeRecord, topology, nodes, edges, nodeIds, edgeIds } = entry;
         const endpoint = resources.get(route.endpoint?.id);
         const adapter = resources.get(route.adapter?.id);
         const probeResult = await probeFor(endpoint);
-        const endpointStatus = endpointAssessment(endpoint, adapter, probeResult);
-        const nodes = new Map(topology.nodes.map((node) => [node.id, node]));
-        for (const nodeId of topology.route.node_ids) {
+        const endpointStatus = endpointAssessment(endpoint, adapter, probeResult, runtimeServices, runtimeContext?.session);
+        for (const nodeId of nodeIds) {
           const node = nodes.get(nodeId);
-          if (!node) continue;
           const assess = assessNode({ node, route, endpoint, adapter, resources, runtimeContext, endpointStatus });
           for (const requirement of node.required_feasibility) {
             observations.push(observationFor({
@@ -316,11 +404,9 @@ export function createLocalTopologyObserver({
             }));
           }
         }
-        const edges = new Map(topology.edges.map((edge) => [edge.id, edge]));
-        for (const edgeId of topology.route.edge_ids) {
+        for (const edgeId of edgeIds) {
           const edge = edges.get(edgeId);
-          if (!edge) continue;
-          const assess = assessEdge({ edge, route, nodes, resources, runtimeContext, endpointStatus });
+          const assess = assessEdge({ edge, route, routeRecord, nodes, resources, runtimeContext, endpointStatus });
           for (const requirement of edge.required_feasibility) {
             observations.push(observationFor({
               topology,
@@ -340,3 +426,4 @@ export function createLocalTopologyObserver({
 }
 
 export const LOCAL_TOPOLOGY_OBSERVATION_SOURCE_SCHEMA = SOURCE_SCHEMA;
+export const LOCAL_RUNTIME_SERVICE_EVIDENCE_SCHEMA = RUNTIME_SERVICE_EVIDENCE_SCHEMA;

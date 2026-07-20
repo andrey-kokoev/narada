@@ -489,7 +489,7 @@ async function main() {
           schema: 'narada.invokable-intelligence.local-topology-observation-source.v1',
           authority_ref: `runtime:${lifecycleBinding.session_id}`,
           probe_timeout_ms: 1500,
-          cache_ttl_ms: 1000,
+          observation_validity_ms: 1000,
         },
       },
       displaySettings: {

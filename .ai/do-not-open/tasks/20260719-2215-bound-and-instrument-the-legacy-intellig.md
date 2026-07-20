@@ -1,7 +1,7 @@
 ---
 number: 2215
-governed_by: dependencies
-status: in_review
+governed_by: task_close:narada.architect
+status: closed
 tags: compatibility, consumer-inventory, deprecation, invokable-intelligence
 creation_payload_ref: mcp_payload:invokable-intelligence-compatibility-projection-v2@v1
 creation_payload_sha256: 88e28f60265cda2f19c2856e3ec85074f99594b535886d9a59c00df49aa9eaee
@@ -14,6 +14,9 @@ criteria_proof_verification:
   verification_run_id: structured_command_execution:e_c991da0d62344a6cba9864e0
 amended_by: operator
 amended_at: 2026-07-20T06:25:03.964Z
+closed_at: 2026-07-20T15:30:40.024Z
+closed_by: narada.architect
+closure_mode: peer_reviewed
 ---
 
 # Bound and instrument the legacy intelligence compatibility projection

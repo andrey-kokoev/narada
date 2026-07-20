@@ -7,6 +7,7 @@ import { buildResolverContext, createLocalInvocationGateway } from '@narada2/inv
 import { deterministicId, resolveInvocation } from '@narada2/invokable-intelligence-resolver';
 import { createCanonicalInvocationAdapter } from '@narada2/nars-provider-runtime/canonical-invocation-adapter';
 import { createLocalTopologyObserver } from './local-topology-observer.mjs';
+import { LOCAL_RUNTIME_SERVICE_EVIDENCE_SCHEMA } from './local-topology-observer.mjs';
 
 function nonEmpty(value) {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
@@ -74,6 +75,7 @@ export async function createLocalIntelligenceRuntime({
   clock = () => executionSiteDecisionClock(`runtime:${runtimeContext?.session ?? 'unknown'}`),
   adapter = null,
   topologyObserver: inputTopologyObserver = null,
+  runtimeServices: inputRuntimeServices = null,
 } = {}) {
   const intelligence = runtimeContext?.intelligence;
   if (!intelligence || typeof intelligence !== 'object') throw new Error('local_intelligence_context_required');
@@ -111,6 +113,15 @@ export async function createLocalIntelligenceRuntime({
     },
     env,
   });
+  const runtimeServices = inputRuntimeServices ?? (adapter ? [] : [{
+    schema: LOCAL_RUNTIME_SERVICE_EVIDENCE_SCHEMA,
+    service: 'codex-subscription',
+    runtime_family: 'node',
+    protocol_family: 'codex-subscription',
+    status: typeof invocationAdapter.invoke === 'function' ? 'available' : 'unavailable',
+    observed_for_session: runtimeContext.session,
+    evidence_ref: `local-runtime-adapter:${runtimeContext.session}:codex-subscription:${process.pid}`,
+  }]);
   const auditAuthority = Object.freeze({
     admittedBy: `runtime:${runtimeContext.session}`,
     admissionRef: `runtime-intelligence:${runtimeContext.session}`,
@@ -121,6 +132,7 @@ export async function createLocalIntelligenceRuntime({
       store,
       runtimeContext,
       source: intelligence.topologyObservationSource,
+      runtimeServices,
     });
   const contextForClock = async (decisionClock) => {
     const topologyObservations = admittedTopologyObservations

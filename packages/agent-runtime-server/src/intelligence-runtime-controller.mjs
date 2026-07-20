@@ -122,9 +122,11 @@ export function createNarsIntelligenceRuntimeController({
     const deliveryRef = nonEmpty(overrides.inputEventId)
       ?? nonEmpty(overrides.turnId)
       ?? 'unscoped-turn';
-    const operationId = `operation:nars:${runtimeContext.session}:${deliveryRef}:${inputDigest.slice('sha256:'.length)}`;
+    const operationId = nonEmpty(overrides.operationId)
+      ?? `operation:nars:${runtimeContext.session}:${deliveryRef}:${inputDigest.slice('sha256:'.length)}`;
     const result = await gateway.invoke({
       operationId,
+      ...(nonEmpty(overrides.intentId) ? { intentId: overrides.intentId.trim() } : {}),
       purpose: 'operator-chat',
       principal,
       ...(selection.requestedModel ? { requestedModel: selection.requestedModel } : {}),
