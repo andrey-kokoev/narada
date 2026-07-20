@@ -38,5 +38,14 @@
     "tsx": "^4.7.0",
     "typescript": "^5.3.0"
   },
-  "description": "Portable persistence for the invokable-intelligence ontology"
+  "description": "Portable persistence for the invokable-intelligence ontology",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "directory": "packages/invokable-intelligence-registry"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
 }

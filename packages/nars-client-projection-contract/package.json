@@ -35,5 +35,14 @@
     "test": "node --test src/*.test.mjs",
     "typecheck": "tsc --noEmit --allowJs --checkJs false src/nars-client-projection-contract.mjs"
   },
-  "description": "NARS client projection capability contracts"
+  "description": "NARS client projection capability contracts",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "directory": "packages/nars-client-projection-contract"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
 }

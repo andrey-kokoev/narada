@@ -14,5 +14,14 @@
     "d1:migrations:local": "wrangler d1 migrations apply narada-cloudflare-site-registry --local --config wrangler.toml",
     "d1:migrations:remote": "wrangler d1 migrations apply narada-cloudflare-site-registry --remote --config wrangler.toml",
     "ship": "pnpm test && pnpm deploy:check"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "directory": "packages/cloudflare-site-registry"
+  },
+  "engines": {
+    "node": ">=22.0.0"
   }
 }

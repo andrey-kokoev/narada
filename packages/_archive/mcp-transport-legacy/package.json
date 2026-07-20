@@ -12,5 +12,14 @@
   },
   "files": [
     "src/"
-  ]
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "directory": "packages/_archive/mcp-transport-legacy"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
 }

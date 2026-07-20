@@ -11,5 +11,14 @@
     "test": "node --test src/mcp-protocol-contract.test.mjs",
     "typecheck": "tsc --noEmit --allowJs --checkJs false src/mcp-protocol-contract.mjs"
   },
-  "description": "MCP protocol contracts"
+  "description": "MCP protocol contracts",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "directory": "packages/mcp-protocol-contract"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
 }

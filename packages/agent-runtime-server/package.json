@@ -37,7 +37,10 @@
     "./runtime-control-contract": "./src/runtime-control-contract.mjs",
     "./intelligence-runtime-reconfiguration-state": "./src/intelligence-runtime-reconfiguration-state.mjs",
     "./intelligence-runtime-controller": "./src/intelligence-runtime-controller.mjs",
-    "./local-intelligence-runtime": "./src/local-intelligence-runtime.mjs",
+    "./local-intelligence-runtime": {
+      "types": "./src/local-intelligence-runtime.d.mts",
+      "import": "./src/local-intelligence-runtime.mjs"
+    },
     "./runtime-server-events": "./src/runtime-server-events.mjs",
     "./task-executability-dispatch": "./src/task-executability-dispatch.mjs",
     "./test-fixtures": "./src/test-fixtures.mjs",
@@ -72,5 +75,14 @@
     "@narada2/invokable-intelligence-contract": "workspace:*",
     "node-pty": "^1.1.0"
   },
-  "description": "NARS runtime server for session and carrier handoff"
+  "description": "NARS runtime server for session and carrier handoff",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "directory": "packages/agent-runtime-server"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
 }

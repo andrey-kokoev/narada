@@ -46,5 +46,14 @@
     "tsx": "^4.7.0",
     "vite": "^8.1.1",
     "vue-tsc": "^2.2.0"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "directory": "packages/operator-console-ui"
+  },
+  "engines": {
+    "node": ">=22.0.0"
   }
 }

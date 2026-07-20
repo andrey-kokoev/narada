@@ -14,5 +14,14 @@
   "files": [
     "src/"
   ],
-  "description": "Task lifecycle kernel runtime"
+  "description": "Task lifecycle kernel runtime",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "directory": "packages/task-lifecycle-kernel"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
 }

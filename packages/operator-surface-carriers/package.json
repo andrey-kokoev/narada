@@ -9,5 +9,14 @@
   "dependencies": {
     "@narada2/process-launch-posture": "workspace:*"
   },
-  "description": "Operator surface carrier templates"
+  "description": "Operator surface carrier templates",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "directory": "packages/operator-surface-carriers"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
 }

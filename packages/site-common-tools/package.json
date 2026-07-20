@@ -18,5 +18,11 @@
   "scripts": {
     "test": "node --test src/site-common-tools.test.mjs src/task-lifecycle-mcp-resolution.test.mjs src/site-init/site-live-carrier-state.test.mjs src/site-init/site-init-lifecycle.test.mjs src/site-init/site-init.test.mjs src/site-lift/site-lift-lifecycle.test.mjs src/site-lift/site-lift.test.mjs"
   },
-  "description": "Site common tools runtime surface"
+  "description": "Site common tools runtime surface",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "directory": "packages/site-common-tools"
+  }
 }

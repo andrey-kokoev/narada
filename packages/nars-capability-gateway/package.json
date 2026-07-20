@@ -6,8 +6,19 @@
   "type": "module",
   "narada": {
     "package_role": "nars_capability_gateway",
-    "owns": ["mcp_server_lifecycle", "gateway_lifecycle_state", "tool_catalog_projection", "tool_dispatch", "tool_execution_lifecycle_state", "tool_admission_evidence"],
-    "does_not_own": ["session_journal", "provider_turn_execution", "operator_transport"]
+    "owns": [
+      "mcp_server_lifecycle",
+      "gateway_lifecycle_state",
+      "tool_catalog_projection",
+      "tool_dispatch",
+      "tool_execution_lifecycle_state",
+      "tool_admission_evidence"
+    ],
+    "does_not_own": [
+      "session_journal",
+      "provider_turn_execution",
+      "operator_transport"
+    ]
   },
   "exports": {
     ".": "./src/index.mjs",
@@ -24,5 +35,14 @@
     "@narada2/launch-process-ownership": "workspace:*",
     "@narada2/mcp-fabric": "workspace:*",
     "@narada2/process-launch-posture": "workspace:*"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "directory": "packages/nars-capability-gateway"
+  },
+  "engines": {
+    "node": ">=22.0.0"
   }
 }

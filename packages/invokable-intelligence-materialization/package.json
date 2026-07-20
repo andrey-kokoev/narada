@@ -35,5 +35,14 @@
     "tsx": "^4.7.0",
     "typescript": "^5.3.0"
   },
-  "description": "Portable node:sqlite and Cloudflare D1 embodiments of governed invokable intelligence"
+  "description": "Portable node:sqlite and Cloudflare D1 embodiments of governed invokable intelligence",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "directory": "packages/invokable-intelligence-materialization"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
 }

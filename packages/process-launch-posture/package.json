@@ -14,5 +14,14 @@
     "test": "node --test src/*.test.mjs",
     "typecheck": "tsc --noEmit --allowJs --checkJs false src/index.mjs"
   },
-  "description": "Process launch posture contracts"
+  "description": "Process launch posture contracts",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "directory": "packages/process-launch-posture"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
 }

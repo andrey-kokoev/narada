@@ -11,5 +11,14 @@
     "test": "node --test src/carrier-routing-contract.test.mjs",
     "typecheck": "tsc --noEmit --allowJs --checkJs false src/carrier-routing-contract.mjs"
   },
-  "description": "Carrier routing contracts"
+  "description": "Carrier routing contracts",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "directory": "packages/carrier-routing-contract"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
 }

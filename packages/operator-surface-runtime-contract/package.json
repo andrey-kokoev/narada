@@ -20,5 +20,14 @@
     "test": "node --test src/operator-surface-runtime-contract.test.mjs",
     "typecheck": "tsc --noEmit --allowJs --checkJs false src/operator-surface-runtime-contract.mjs src/operator-surface-runtime-selection.mjs"
   },
-  "description": "Shared runtime launch, MCP runtime, terminal runtime, heartbeat, and session identity contracts for Narada operator surfaces"
+  "description": "Shared runtime launch, MCP runtime, terminal runtime, heartbeat, and session identity contracts for Narada operator surfaces",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "directory": "packages/operator-surface-runtime-contract"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
 }

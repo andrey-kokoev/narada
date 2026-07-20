@@ -13,5 +13,14 @@
   "scripts": {
     "test": "node --test src/window-surface-overlay.test.mjs"
   },
-  "description": "Window surface overlay runtime"
+  "description": "Window surface overlay runtime",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "directory": "packages/window-surface-overlay"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
 }

@@ -1,13 +1,13 @@
 import { CloudflareCarrierSession } from './cloudflare-carrier.mjs';
-import { classifyCarrierInputAdmission, classifyToolEffectAdmission } from '../../carrier-protocol/src/carrier-protocol.mjs';
-import { createCloudflareSiteRegistryAdapter } from '../../cloudflare-site-registry/src/cloudflare-site-registry.mjs';
+import { classifyCarrierInputAdmission, classifyToolEffectAdmission } from '@narada2/carrier-protocol';
+import { createCloudflareSiteRegistryAdapter } from '@narada2/cloudflare-site-registry';
 import {
   SITE_AUTHORITY_ACTIONS,
   SITE_EMBODIMENT_KINDS,
   SITE_MUTATION_CLASSES,
   classifySiteAuthorityRequest,
   createCloudflareSiteAuthorityMap,
-} from '../../site-authority-map/src/site-authority-map.mjs';
+} from '@narada2/site-authority-map';
 import {
   SITE_CONTINUITY_EMBODIMENT_KINDS,
   SITE_CONTINUITY_EXCHANGE_CLASSES,
@@ -16,11 +16,11 @@ import {
   createSiteContinuityExchangePacket,
   createSiteContinuityPacketId,
   createSiteContinuityBinding,
-} from '../../site-continuity/src/site-continuity.mjs';
+} from '@narada2/site-continuity';
 
-import { cloudflareIntelligenceResolutionConfigured, createCarrierIntelligenceGateway } from './cloudflare-intelligence-resolution.mjs';
+import { createCarrierIntelligenceGateway } from './cloudflare-intelligence-resolution.mjs';
+import { executeCloudflareIntelligenceManagement } from './cloudflare-intelligence-management-api.mjs';
 const SNAPSHOT_KEY = 'cloudflare_carrier_session_snapshot_v1';
-const DEFAULT_WORKERS_AI_MODEL = '@cf/meta/llama-3.1-8b-instruct';
 const CLOUDFLARE_RUNTIME_METADATA_READ_CAPABILITY_REF = 'cloudflare-carrier:capability/runtime-metadata-read:v1';
 const CLOUDFLARE_RUNTIME_METADATA_READ_EFFECT_SCOPE = 'cloudflare-carrier/runtime-metadata:read-only';
 const CLOUDFLARE_KV_GET_CAPABILITY_REF = 'cloudflare-carrier:capability/kv-get:v1';
@@ -283,6 +283,7 @@ export class CloudflareCarrierDurableObject {
       request_id: `request_operation_heartbeat_alarm_${Date.now()}`,
       carrier_session_id: session.state.carrier_session_id,
       principal: { principal_id: 'principal:service' },
+      internal_authority: 'cloudflare-durable-object-alarm',
       params: {
         operation_id: session.state.operation_id ?? null,
         reason: 'operation_continuity_heartbeat',
@@ -4208,6 +4209,13 @@ export default {
     if (request.method === 'GET' && url.pathname === '/health') {
       return jsonResponse({ ok: true, carrier_kind: 'cloudflare-carrier', product_surface: 'web-console' });
     }
+    if (url.pathname === '/api/intelligence') {
+      if (request.method !== 'POST') return jsonResponse({ ok: false, code: 'method_not_allowed' }, 405);
+      const auth = await authenticateCarrierApiRequest(request, env);
+      if (!auth.ok) return jsonResponse({ ok: false, code: auth.code }, auth.status);
+      const result = await executeCloudflareIntelligenceManagement(await request.json(), auth.principal, env);
+      return jsonResponse(result.body, result.status);
+    }
     if (request.method !== 'POST') {
       return jsonResponse({ ok: false, code: 'method_not_allowed' }, 405);
     }
@@ -6221,17 +6229,95 @@ async function buildCloudflareOperationProductProjection(env, registry, principa
       resident_dispatch_windows_fallback_request_authority: residentDispatchWindowsFallbackRequests.length > 0 ? CLOUDFLARE_RESIDENT_DISPATCH_WINDOWS_FALLBACK_REQUEST_AUTHORITY : 'not_observed',
       resident_dispatch_windows_fallback_evidence_count: residentDispatchWindowsFallbackEvidence.length,
       resident_dispatch_windows_fallback_execution_authority: residentDispatchWindowsFallbackEvidence.length > 0 ? WINDOWS_LOCAL_SITE_RESIDENT_LOOP_AUTHORITY : 'not_observed',
+      resident_dispatch_windows_fallback_session_start_admission: residentDispatchWindowsFallbackEvidence[0]?.local_session_start_admission ?? 'not_observed',
       local_resident_carrier_bridge_record_count: localResidentCarrierBridgeRecords.length,
+      local_ingress_request_count: localIngressOperationPosture.local_ingress_request_count,
+      local_ingress_evidence_count: localIngressOperationPosture.local_ingress_evidence_count,
+      local_ingress_provider_heartbeat_count: localIngressOperationPosture.local_ingress_provider_heartbeat_count,
+      local_ingress_request_authority: localIngressOperationPosture.request_authority,
+      local_ingress_executor_authority: localIngressOperationPosture.executor_authority,
+      local_ingress_evidence_authority: localIngressOperationPosture.evidence_authority,
+      local_ingress_evidence_store_authority: localIngressOperationPosture.evidence_store_authority,
+      local_ingress_provider_liveness_authority: localIngressOperationPosture.provider_liveness_authority,
+      local_ingress_provider_liveness: localIngressOperationPosture.provider_liveness,
+      local_ingress_execution_admission: localIngressOperationPosture.local_ingress_evidence_count > 0
+        ? 'completed_by_windows_local_ingress'
+        : localIngressOperationPosture.local_ingress_request_count > 0 ? 'pending_windows_admission' : 'not_observed',
+      local_ingress_direct_cloudflare_filesystem_mutation_admission: localIngressOperationPosture.direct_cloudflare_filesystem_mutation_admission,
+      local_ingress_repository_publication_admission: localIngressOperationPosture.repository_publication_admission,
+      repository_publication_request_count: repositoryPublicationOperationPosture.repository_publication_request_count,
+      repository_publication_admission_count: repositoryPublicationOperationPosture.repository_publication_admission_count,
+      repository_publication_execution_count: repositoryPublicationOperationPosture.repository_publication_execution_count,
+      repository_publication_evidence_count: repositoryPublicationOperationPosture.repository_publication_evidence_count,
+      repository_publication_provider_heartbeat_count: repositoryPublicationOperationPosture.repository_publication_provider_heartbeat_count,
+      repository_publication_request_authority: repositoryPublicationOperationPosture.request_authority,
+      repository_publication_admission_authority: repositoryPublicationOperationPosture.admission_authority,
+      repository_publication_executor_authority: repositoryPublicationOperationPosture.executor_authority,
+      repository_publication_provider_liveness_authority: repositoryPublicationOperationPosture.provider_liveness_authority,
+      repository_publication_provider_liveness: repositoryPublicationOperationPosture.provider_liveness,
+      repository_publication_evidence_store_authority: repositoryPublicationOperationPosture.evidence_store_authority,
+      repository_publication_execution_admission: repositoryPublicationOperationPosture.repository_publication_admission,
+      repository_publication_cloudflare_git_push_admission: repositoryPublicationOperationPosture.cloudflare_git_push_admission,
+      repository_publication_direct_cloudflare_repository_mutation_admission: repositoryPublicationOperationPosture.direct_cloudflare_repository_mutation_admission,
       mailbox_status_shadow_read_count: mailboxStatusShadowReads.length,
       mailbox_status_source_read_count: mailboxStatusSourceReads.length,
+      mailbox_status_authority: mailboxStatusSourceReads.length > 0
+        ? CLOUDFLARE_MAILBOX_STATUS_SOURCE_AUTHORITY
+        : mailboxStatusShadowReads.length > 0 ? 'windows_mailbox_status_source' : 'not_observed',
+      mailbox_shadow_target_locus: mailboxStatusShadowReads.length > 0 ? 'cloudflare_carrier_site' : 'not_observed',
+      mailbox_send_admission: mailboxSendAcceptedRecords.length > 0 ? 'admitted' : 'not_admitted',
+      mailbox_send_delivery_confirmation_admission: mailboxSendConfirmations.length > 0 ? 'admitted' : 'not_admitted',
+      mailbox_mutation_admission: 'not_admitted',
+      mailbox_authority_partition: authorityTransferPosture.domains.find((domain) => domain.domain === 'mailbox_status')?.authority_partition ?? 'mailbox_windows_owned',
       mailbox_draft_reply_proposal_count: mailboxDraftReplyProposals.length,
+      mailbox_draft_reply_proposal_authority: mailboxDraftReplyProposals.length > 0 ? CLOUDFLARE_MAILBOX_DRAFT_REPLY_PROPOSAL_AUTHORITY : 'not_observed',
+      mailbox_outlook_draft_create_admission: mailboxOutlookDraftCreates.length > 0 ? 'admitted' : 'not_admitted',
+      mailbox_draft_reply_authority_partition: authorityTransferPosture.domains.find((domain) => domain.domain === 'mailbox_draft_reply')?.authority_partition ?? 'mailbox_draft_reply_windows_owned',
       mailbox_outlook_draft_create_count: mailboxOutlookDraftCreates.length,
+      mailbox_outlook_draft_create_authority_partition: authorityTransferPosture.domains.find((domain) => domain.domain === 'mailbox_outlook_draft_create')?.authority_partition ?? 'mailbox_outlook_draft_create_not_observed',
       mailbox_send_accepted_record_count: mailboxSendAcceptedRecords.length,
+      mailbox_send_accepted_count: mailboxSendAcceptedRecords.length,
       mailbox_send_confirmation_count: mailboxSendConfirmations.length,
       mailbox_send_review_count: mailboxSendReviews.length,
+      mailbox_send_review_authority: mailboxSendReviews.length > 0 ? CLOUDFLARE_MAILBOX_SEND_REVIEW_AUTHORITY : 'not_observed',
+      mailbox_send_review_admission: mailboxSendReviews.length > 0 ? 'admitted' : 'not_observed',
+      operation_focus_review_count: operationFocusReviews.length,
+      operation_focus_review_authority: operationFocusReviews.length > 0 ? CLOUDFLARE_OPERATION_FOCUS_REVIEW_AUTHORITY : 'not_observed',
+      operation_focus_review_admission: operationFocusReviews.length > 0 ? 'admitted' : 'not_observed',
+      site_file_change_proposal_count: siteFileChangeProposals.length,
+      site_file_change_proposal_authority: siteFileChangeProposals.length > 0 ? 'cloudflare_carrier_site' : 'not_observed',
+      filesystem_executor_authority: siteFileChangeProposals.length > 0 ? 'windows_filesystem_executor' : 'not_observed',
+      filesystem_mutation_admission: siteFileChangeProposals.length > 0 ? 'not_admitted' : 'retained',
+      repository_publication_admission: siteFileChangeProposals.length > 0 ? 'not_admitted' : 'retained',
+      site_file_change_authority_partition: authorityTransferPosture.domains.find((domain) => domain.domain === 'site_file_change_proposal')?.authority_partition ?? 'filesystem_and_publication_windows_owned',
+      site_file_materialization_count: siteFileMaterializations.length,
+      site_file_materialization_authority: siteFileMaterializations.length > 0 ? 'cloudflare_carrier_site' : 'not_observed',
+      cloudflare_site_file_materialization_admission: siteFileMaterializations.length > 0 ? 'admitted' : 'not_observed',
+      cloudflare_site_file_materialization_executor_authority: siteFileMaterializations.length > 0 ? 'cloudflare_site_file_store' : 'not_observed',
+      windows_filesystem_mutation_admission: siteFileMaterializations.length > 0 ? 'not_admitted' : 'retained',
+      site_file_materialization_repository_publication_admission: siteFileMaterializations.length > 0 ? 'not_admitted' : 'retained',
+      site_file_materialization_authority_partition: authorityTransferPosture.domains.find((domain) => domain.domain === 'site_file_materialization')?.authority_partition ?? 'materialization_not_observed_filesystem_and_publication_windows_owned',
       task_lifecycle_shadow_read_count: taskLifecycleShadowReads.length,
       task_lifecycle_write_admission_count: taskLifecycleWriteAdmissions.length,
+      task_lifecycle_write_admission_posture: taskLifecycleSurfaceWriteAdmissionPosture,
       task_lifecycle_task_count: taskLifecycleTasks.length,
+      task_lifecycle_task_claim_count: taskLifecycleTasks.filter((task) => task.claimed_at || task.claimed_by_agent_id || task.claimed_by_principal_id).length,
+      task_lifecycle_task_report_count: taskLifecycleTasks.filter((task) => task.report_id).length,
+      task_lifecycle_task_finish_count: taskLifecycleTasks.filter((task) => task.finish_id).length,
+      task_lifecycle_changed_file_evidence_count: taskLifecycleTasks.reduce((count, task) => count + Number(task.changed_file_evidence_count ?? 0), 0),
+      task_lifecycle_projection_write_count: taskLifecycleTasks.reduce((count, task) => count + Number(task.task_lifecycle_projection_write_count ?? 0), 0),
+      task_lifecycle_source_state_write_count: taskLifecycleTasks.reduce((count, task) => count + Number(task.task_lifecycle_source_state_write_count ?? 0), 0),
+      task_lifecycle_assignment_write_count: taskLifecycleTasks.reduce((count, task) => count + Number(task.task_lifecycle_assignment_write_count ?? 0), 0),
+      task_lifecycle_role_resolution_write_count: taskLifecycleTasks.reduce((count, task) => count + Number(task.task_lifecycle_role_resolution_write_count ?? 0), 0),
+      task_lifecycle_roster_mutation_write_count: taskLifecycleTasks.reduce((count, task) => count + Number(task.task_lifecycle_roster_mutation_write_count ?? 0), 0),
+      task_lifecycle_default_mutation_authority: taskLifecycleTasks.length > 0 ? 'cloudflare_task_lifecycle_d1' : 'windows_task_lifecycle_sqlite',
+      task_lifecycle_default_cloudflare_write_admission: taskLifecycleTasks.some((task) => task.task_lifecycle_source_state_write_count > 0)
+        ? taskLifecycleExternalEffectsReady ? 'source_state_and_external_effects_admitted' : 'source_state_admitted_external_effects_not_admitted'
+        : 'not_admitted',
+      task_lifecycle_task_create_authority: taskLifecycleTasks.length > 0 ? 'cloudflare_task_lifecycle_d1' : 'not_observed',
+      task_lifecycle_task_claim_authority: taskLifecycleTasks.some((task) => task.claimed_at || task.claimed_by_agent_id || task.claimed_by_principal_id) ? 'cloudflare_task_lifecycle_d1' : 'not_observed',
+      task_lifecycle_task_report_authority: taskLifecycleTasks.some((task) => task.report_id) ? 'cloudflare_task_lifecycle_d1' : 'not_observed',
+      task_lifecycle_task_finish_authority: taskLifecycleTasks.some((task) => task.finish_id) ? 'cloudflare_task_lifecycle_d1' : 'not_observed',
       task_lifecycle_surface_write_admission_posture: taskLifecycleSurfaceWriteAdmissionPosture,
       task_lifecycle_surface_authority_partition: taskLifecycleSurfaceAuthorityPartition,
       task_lifecycle_changed_file_evidence_authority: taskLifecycleTasks.some((task) => task.changed_file_evidence_count > 0) ? 'cloudflare_task_lifecycle_d1' : 'not_observed',
@@ -14254,48 +14340,41 @@ function validateOperatorCaptureReturnTo(value) {
 
 export function createCloudflareAiProviderAdapter(env = {}) {
   if (!env.AI || typeof env.AI.run !== 'function') return null;
-  const resolutionConfigured = cloudflareIntelligenceResolutionConfigured(env);
-  const model = env.CLOUDFLARE_CARRIER_AI_MODEL ?? env.AI_MODEL ?? DEFAULT_WORKERS_AI_MODEL;
-  const timeoutMs = clampInteger(env.CLOUDFLARE_CARRIER_AI_TIMEOUT_MS, 1000, 30000, 15000);
-  const maxRetries = clampInteger(env.CLOUDFLARE_CARRIER_AI_MAX_RETRIES, 0, 3, 1);
   const toolEffectConfig = cloudflareToolEffectConfig(env);
-  const invokeWorkersAi = async (modelSlug, input, tool_results) => {
-    let lastError = null;
-    for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
-      try {
-        const request = tool_results.length > 0
-          ? { messages: createWorkersAiToolResultMessages(input, tool_results) }
-          : {
-              messages: createWorkersAiInitialMessages(input),
-              tools: toolEffectConfig.tool_definitions.map((tool) => ({ ...tool })),
-            };
-        const result = await withTimeout(env.AI.run(modelSlug, request), timeoutMs);
-        return {
-          text: extractWorkersAiText(result),
-          tool_calls: extractWorkersAiToolCalls(result),
-        };
-      } catch (error) {
-        lastError = error;
-      }
-    }
-    throw lastError ?? new Error('cloudflare_workers_ai_provider_failed');
-  };
+  const workersAiRequest = (input, tool_results) => tool_results.length > 0
+    ? { messages: createWorkersAiToolResultMessages(input, tool_results) }
+    : {
+        messages: createWorkersAiInitialMessages(input),
+        tools: toolEffectConfig.tool_definitions.map((tool) => ({ ...tool })),
+      };
   let gatewayPromise = null;
   const ensureGateway = () => {
     gatewayPromise ??= createCarrierIntelligenceGateway(env, (store) => ({
-      async invoke({ plan, messages }) {
-        const modelResource = await store.getResource(plan.selected.model.id);
-        const modelSlug = modelResource?.metadata?.workers_ai_model ?? modelResource?.display_name ?? plan.selected.model.id;
+      async invoke({ plan, offering, messages }) {
+        const modelSlug = offering.invocation_model_key;
+        const timeoutMs = clampInteger(plan.options.timeout_ms, 1000, 30000, 15000);
         const { input, tool_results = [] } = messages ?? {};
         try {
-          const response = await invokeWorkersAi(modelSlug, input, tool_results);
-          return { response };
+          const result = await withTimeout(env.AI.run(modelSlug, workersAiRequest(input, tool_results)), timeoutMs);
+          return {
+            response: {
+              text: extractWorkersAiText(result),
+              tool_calls: extractWorkersAiToolCalls(result),
+            },
+            admission: 'acknowledged',
+            transportSubmitted: true,
+            providerRequestRef: result?.request_id ?? result?.requestId ?? undefined,
+          };
         } catch (error) {
+          const timedOut = error instanceof Error && error.message === 'cloudflare_workers_ai_provider_timeout';
           return {
             error: {
-              code: 'cloudflare_workers_ai_provider_failed',
+              code: timedOut ? 'cloudflare_workers_ai_timeout' : 'cloudflare_workers_ai_provider_failed',
               message: error instanceof Error ? error.message : String(error),
+              retryable: true,
             },
+            admission: timedOut ? 'uncertain' : 'acknowledged',
+            transportSubmitted: true,
           };
         }
       },
@@ -14306,25 +14385,68 @@ export function createCloudflareAiProviderAdapter(env = {}) {
     posture: 'cloudflare-workers-ai',
     adapter_kind: 'cloudflare-workers-ai',
     provider: 'cloudflare-workers-ai',
-    model: resolutionConfigured ? null : model,
-    resolution: resolutionConfigured ? 'invokable-intelligence' : 'legacy-env',
-    async run({ input, tool_results = [] }) {
-      if (!resolutionConfigured) {
-        return invokeWorkersAi(model, input, tool_results);
-      }
+    model: null,
+    resolution: 'invokable-intelligence',
+    async run({
+      input,
+      tool_results = [],
+      turn_id = null,
+      carrier_session_id = null,
+      site_id = null,
+      operation_id = null,
+      carrier_context = null,
+    }) {
       const { gateway } = await ensureGateway();
-      const result = await gateway.invoke({ purpose: 'carrier-turn', messages: { input, tool_results } });
+      const result = await gateway.invoke({
+        purpose: 'carrier-turn',
+        operationId: `${carrier_session_id ?? 'unbound'}:${turn_id ?? input?.event_id ?? 'turn'}:${tool_results.length > 0 ? 'tool-results' : 'initial'}`,
+        messages: { input, tool_results },
+        turnId: turn_id ?? undefined,
+        inputEventId: input?.event_id ?? undefined,
+        requestId: input?.event_id ?? undefined,
+        invocationScope: { carrier_session_id, site_id, operation_id },
+        carrierContext: carrier_context,
+      });
       if (result.kind === 'refusal') {
         const error = new Error('intelligence_resolution_refused:' + result.refusal.reason_code + ':' + result.refusal.explanation);
+        error.code = `intelligence_resolver_${result.refusal.reason_code.replaceAll('-', '_')}`;
         error.refusal = result.refusal;
+        throw error;
+      }
+      const intelligence = {
+        intent_id: result.intent.id,
+        plan_id: result.plan.id,
+        attempt_id: result.attempt.id,
+        result_id: result.result?.id ?? null,
+        outcome_id: result.outcome.id,
+        outcome_kind: result.outcome.kind,
+        selection: result.plan.selected,
+        offering_id: result.plan.route.offering.id,
+        route_id: result.plan.route.route_id,
+        topology_id: result.plan.route.topology_id,
+        access: result.plan.access,
+        audit_evidence_ids: result.auditEvidence.map(({ id }) => id),
+        observation_ids: result.observations.map(({ id }) => id),
+        telemetry_ids: result.telemetry.map(({ id }) => id),
+        replayed: result.replayed,
+        authority_binding: result.intent.authority_binding ?? null,
+      };
+      if (result.replayed && !result.adapterOutcome) {
+        const error = new Error('intelligence_result_payload_not_available_on_replay');
+        error.code = 'intelligence_result_payload_not_available_on_replay';
+        error.intelligence = intelligence;
         throw error;
       }
       if (result.adapterOutcome.error) {
         const error = new Error(result.adapterOutcome.error.message);
         error.code = result.adapterOutcome.error.code;
+        error.intelligence = intelligence;
         throw error;
       }
-      return result.adapterOutcome.response;
+      return {
+        ...result.adapterOutcome.response,
+        intelligence,
+      };
     },
   };
 }
@@ -22139,12 +22261,22 @@ function clampInteger(value, min, max, fallback) {
 }
 
 function withTimeout(promise, timeoutMs) {
-  return Promise.race([
-    promise,
-    new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('cloudflare_workers_ai_provider_timeout')), timeoutMs);
-    }),
-  ]);
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error('cloudflare_workers_ai_provider_timeout')),
+      timeoutMs,
+    );
+    Promise.resolve(promise).then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
 }
 
 function extractWorkersAiText(result) {

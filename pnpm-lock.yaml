@@ -260,9 +260,15 @@ importers:
       '@narada2/process-launch-posture':
         specifier: workspace:*
         version: link:../process-launch-posture
+      '@narada2/site-common-tools':
+        specifier: workspace:*
+        version: link:../site-common-tools
       '@narada2/task-lifecycle-mcp':
         specifier: workspace:*
         version: link:../../../mcp-surfaces/packages/task-lifecycle-mcp
+      '@narada2/task-lifecycle-tools':
+        specifier: workspace:*
+        version: link:../task-lifecycle-tools
 
   packages/agent-identity: {}
 
@@ -338,12 +344,12 @@ importers:
       '@narada2/carrier-protocol':
         specifier: workspace:*
         version: link:../carrier-protocol
-      '@narada2/carrier-provider-contract':
-        specifier: workspace:*
-        version: link:../carrier-provider-contract
       '@narada2/carrier-provider-support':
         specifier: workspace:*
         version: link:../carrier-provider-support
+      '@narada2/invokable-intelligence-contract':
+        specifier: workspace:*
+        version: link:../invokable-intelligence-contract
       '@narada2/nars-client-projection-contract':
         specifier: workspace:*
         version: link:../nars-client-projection-contract
@@ -466,13 +472,21 @@ importers:
         specifier: ^2.2.0
         version: 2.2.12(typescript@5.9.3)
 
-  packages/carrier-action-admission: {}
+  packages/carrier-action-admission:
+    dependencies:
+      '@narada2/site-common-tools':
+        specifier: workspace:*
+        version: link:../site-common-tools
 
   packages/carrier-command-contract: {}
 
   packages/carrier-protocol: {}
 
-  packages/carrier-protocol-contract: {}
+  packages/carrier-protocol-contract:
+    devDependencies:
+      '@narada2/carrier-protocol':
+        specifier: workspace:*
+        version: link:../carrier-protocol
 
   packages/carrier-provider-contract: {}
 
@@ -544,6 +558,9 @@ importers:
       '@narada2/carrier-protocol':
         specifier: workspace:*
         version: link:../carrier-protocol
+      '@narada2/carrier-provider-contract':
+        specifier: workspace:*
+        version: link:../carrier-provider-contract
       '@narada2/nars-client-projection-contract':
         specifier: workspace:*
         version: link:../nars-client-projection-contract
@@ -768,9 +785,6 @@ importers:
       '@narada2/carrier-protocol':
         specifier: workspace:*
         version: link:../../carrier-protocol
-      '@narada2/carrier-provider-contract':
-        specifier: workspace:*
-        version: link:../../carrier-provider-contract
       '@narada2/carrier-provider-support':
         specifier: workspace:*
         version: link:../../carrier-provider-support
@@ -798,6 +812,9 @@ importers:
       '@narada2/intent-zones':
         specifier: workspace:*
         version: link:../../intent-zones
+      '@narada2/invokable-intelligence-contract':
+        specifier: workspace:*
+        version: link:../../invokable-intelligence-contract
       '@narada2/launch-process-ownership':
         specifier: workspace:*
         version: link:../../launch-process-ownership
@@ -1490,6 +1507,9 @@ importers:
       '@narada2/process-launch-posture':
         specifier: workspace:*
         version: link:../process-launch-posture
+      '@narada2/site-common-tools':
+        specifier: workspace:*
+        version: link:../site-common-tools
       '@narada2/sqlite':
         specifier: workspace:*
         version: link:../sqlite
@@ -1502,6 +1522,9 @@ importers:
       '@narada2/process-launch-posture':
         specifier: workspace:*
         version: link:../process-launch-posture
+      '@narada2/site-common-tools':
+        specifier: workspace:*
+        version: link:../site-common-tools
 
   packages/ui:
     devDependencies:

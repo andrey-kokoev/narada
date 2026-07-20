@@ -34,5 +34,14 @@
   "dependencies": {
     "@narada2/carrier-protocol": "workspace:*"
   },
-  "description": "NARS runtime contracts"
+  "description": "NARS runtime contracts",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "directory": "packages/nars-runtime-contract"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
 }

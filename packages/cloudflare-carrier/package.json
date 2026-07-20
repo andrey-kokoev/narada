@@ -297,11 +297,23 @@
     "@narada2/carrier-command-contract": "workspace:*",
     "@narada2/carrier-protocol": "workspace:*",
     "@narada2/cloudflare-site-registry": "workspace:*",
+    "@narada2/invokable-intelligence-contract": "workspace:*",
+    "@narada2/invokable-intelligence-management": "workspace:*",
+    "@narada2/invokable-intelligence-materialization": "workspace:*",
     "@narada2/invokable-intelligence-registry": "workspace:*",
     "@narada2/invokable-intelligence-resolver": "workspace:*",
     "@narada2/invokable-intelligence-runtime": "workspace:*",
     "@narada2/process-launch-posture": "workspace:*",
     "@narada2/site-authority-map": "workspace:*",
     "@narada2/site-continuity": "workspace:*"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "directory": "packages/cloudflare-carrier"
+  },
+  "engines": {
+    "node": ">=22.0.0"
   }
 }

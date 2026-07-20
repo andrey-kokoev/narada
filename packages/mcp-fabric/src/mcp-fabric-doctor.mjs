@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { spawnHiddenPostureProcess } from '@narada2/process-launch-posture';
-import { loadMcpSurfaceRegistry, registrySurfaces, siteControlRoot } from '../../carrier-action-admission/src/tool-metadata.mjs';
+import { loadMcpSurfaceRegistry, registrySurfaces, siteControlRoot } from '@narada2/carrier-action-admission/tool-metadata';
 import { projectServerEnvironment } from './mcp-fabric-projection.mjs';
 import { renderTable } from './mcp-fabric-table.mjs';
 import { loadSiteMcpFabric } from './mcp-fabric-loader.mjs';

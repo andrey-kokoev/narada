@@ -7,10 +7,10 @@
     "@narada2/agent-context-mcp": "workspace:*",
     "@narada2/agent-identity": "workspace:*",
     "@narada2/agent-runtime-server": "workspace:*",
+    "@narada2/invokable-intelligence-contract": "workspace:*",
     "@narada2/operator-surface-runtime-contract": "workspace:*",
     "@narada2/carrier-protocol": "workspace:*",
     "@narada2/carrier-provider-support": "workspace:*",
-    "@narada2/carrier-provider-contract": "workspace:*",
     "@narada2/process-launch-posture": "workspace:*",
     "@narada2/nars-client-projection-contract": "workspace:*",
     "@narada2/site-paths": "workspace:*",
@@ -44,5 +44,14 @@
     "typescript": "^5.3.0",
     "zod-to-json-schema": "^3.25.2"
   },
-  "description": "Operator surface runtime for starting Narada agents"
+  "description": "Operator surface runtime for starting Narada agents",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "directory": "packages/agent-start"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
 }

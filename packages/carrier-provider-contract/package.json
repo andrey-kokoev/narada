@@ -15,5 +15,14 @@
     "test": "node --test src/carrier-provider-contract.test.mjs",
     "typecheck": "tsc --noEmit --allowJs --checkJs false src/carrier-provider-contract.mjs"
   },
-  "description": "Shared carrier provider/admission contracts for Narada carrier surfaces"
+  "description": "Shared carrier provider/admission contracts for Narada carrier surfaces",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "directory": "packages/carrier-provider-contract"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
 }

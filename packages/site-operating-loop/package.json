@@ -43,5 +43,14 @@
     "./execution-state": {
       "import": "./dist/site-operating-loop-execution-state.mjs"
     }
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "directory": "packages/site-operating-loop"
+  },
+  "engines": {
+    "node": ">=22.0.0"
   }
 }

@@ -23,5 +23,11 @@
   },
   "engines": {
     "node": ">=18.0.0"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "directory": "packages/mcp-surface-carrier-supervisor"
   }
 }

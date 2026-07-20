@@ -6,8 +6,14 @@
   "type": "module",
   "narada": {
     "package_role": "carrier_provider_support",
-    "owns": ["ai_process_invocation_state"],
-    "does_not_own": ["session_persistence", "provider_turn_lifecycle", "mcp_hosting"]
+    "owns": [
+      "ai_process_invocation_state"
+    ],
+    "does_not_own": [
+      "session_persistence",
+      "provider_turn_lifecycle",
+      "mcp_hosting"
+    ]
   },
   "exports": {
     ".": "./src/index.mjs",
@@ -24,5 +30,14 @@
   },
   "dependencies": {
     "@narada2/process-launch-posture": "workspace:*"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "directory": "packages/carrier-provider-support"
+  },
+  "engines": {
+    "node": ">=22.0.0"
   }
 }

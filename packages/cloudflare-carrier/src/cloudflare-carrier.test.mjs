@@ -5,7 +5,14 @@ import test from 'node:test';
 import {
   TOOL_EFFECT_ADMISSION_CASES_SCHEMA,
   validateSessionEvent,
-} from '../../carrier-protocol/src/carrier-protocol.mjs';
+} from '@narada2/carrier-protocol';
+import {
+  deployManagementBundle,
+  MANAGEMENT_DEPLOYMENT_BUNDLE_SCHEMA,
+} from '@narada2/invokable-intelligence-management';
+import { D1MaterializationStore } from '@narada2/invokable-intelligence-materialization';
+import { createFakeD1 } from '@narada2/invokable-intelligence-registry';
+import { D1RegistryStore } from '@narada2/invokable-intelligence-registry/d1';
 import worker, {
   authenticateCarrierRequest,
   classifyCloudflareAuthorityCommandState,
@@ -37,6 +44,57 @@ import {
 const inputPipelineCases = JSON.parse(readFileSync(new URL('../../carrier-protocol/fixtures/carrier-input-pipeline-cases.json', import.meta.url), 'utf8'));
 const directiveEmitterRegistryCases = JSON.parse(readFileSync(new URL('../../carrier-protocol/fixtures/carrier-directive-emitter-registry-cases.json', import.meta.url), 'utf8'));
 const toolEffectAdmissionCases = JSON.parse(readFileSync(new URL('../../carrier-protocol/fixtures/tool-effect-admission-cases.json', import.meta.url), 'utf8'));
+const CLOUDFLARE_INTELLIGENCE_SITE_ID = 'site:narada-cloudflare';
+const CLOUDFLARE_REGISTRY_SITE_ID = 'site_narada_cloudflare';
+const CLOUDFLARE_INTELLIGENCE_PRINCIPAL_ID = 'principal:admin';
+const CLOUDFLARE_INTELLIGENCE_CONSENT_REF = 'authorization:narada-cloudflare:intelligence-deployment:revision-1';
+const CLOUDFLARE_INTELLIGENCE_AUTHORITY_REF = 'authority:site:narada-cloudflare:catalog';
+const CLOUDFLARE_INTELLIGENCE_CATALOG = JSON.parse(readFileSync(
+  new URL('../config/invokable-intelligence.catalog.json', import.meta.url),
+  'utf8',
+));
+const CLOUDFLARE_INTELLIGENCE_MATERIALIZATIONS = JSON.parse(readFileSync(
+  new URL('../config/invokable-intelligence.materializations.json', import.meta.url),
+  'utf8',
+));
+
+async function canonicalCloudflareIntelligenceD1() {
+  const binding = createFakeD1(':memory:');
+  const store = await D1RegistryStore.open(binding);
+  const materialization = await D1MaterializationStore.open(binding);
+  try {
+    const result = await deployManagementBundle({
+      store,
+      materialization,
+      owningSite: { kind: 'site', id: CLOUDFLARE_INTELLIGENCE_SITE_ID },
+    }, {
+      schema: MANAGEMENT_DEPLOYMENT_BUNDLE_SCHEMA,
+      id: 'deployment:narada-cloudflare:invokable-intelligence:revision-1',
+      owning_site: { kind: 'site', id: CLOUDFLARE_INTELLIGENCE_SITE_ID },
+      actor_id: 'site-operator:narada-cloudflare',
+      principal_id: CLOUDFLARE_INTELLIGENCE_PRINCIPAL_ID,
+      consent_ref: CLOUDFLARE_INTELLIGENCE_CONSENT_REF,
+      destination_authority: {
+        site_id: CLOUDFLARE_INTELLIGENCE_SITE_ID,
+        locus: 'target-site',
+        authority_ref: CLOUDFLARE_INTELLIGENCE_AUTHORITY_REF,
+      },
+      decided_at: '2026-07-19T12:00:00.000Z',
+      evidence_refs: [
+        CLOUDFLARE_INTELLIGENCE_CONSENT_REF,
+        CLOUDFLARE_INTELLIGENCE_AUTHORITY_REF,
+        'site-config:narada-cloudflare:invokable-intelligence:revision-1',
+      ],
+      catalog: structuredClone(CLOUDFLARE_INTELLIGENCE_CATALOG),
+      materializations: structuredClone(CLOUDFLARE_INTELLIGENCE_MATERIALIZATIONS.materializations),
+    });
+    assert.equal(result.diagnostics.length, 0);
+  } finally {
+    await materialization.close();
+    await store.close();
+  }
+  return binding;
+}
 
 function clock() {
   return '2026-06-06T00:00:00.000Z';
@@ -839,8 +897,15 @@ test('durable object alarm emits operation heartbeat directive through input del
   const durableObject = new CloudflareCarrierDurableObject({ storage }, {
     NARADA_OPERATION_HEARTBEAT_DIRECTIVE_INTERVAL_MS: '60000',
   });
-  const request = startRequest({ request_id: 'request_alarm_heartbeat_start' });
-  request.params = { ...request.params, operation_id: 'operation_alarm_heartbeat' };
+  const request = startRequest({
+    request_id: 'request_alarm_heartbeat_start',
+    principal: { principal_id: 'operator.fixture', auth_type: 'user' },
+  });
+  request.params = {
+    ...request.params,
+    operation_id: 'operation_alarm_heartbeat',
+    site_binding_evidence: { site_id: 'site_fixture', role: 'operator' },
+  };
   const start = await durableObject.handle(request);
   assert.equal(start.ok, true);
   assert.equal(storage.alarms().length, 1);
@@ -873,7 +938,10 @@ test('durable object facade serializes mutations while provider work is pending'
   const storage = fakeStorage();
   const providerEntered = deferred();
   const providerGate = deferred();
+  const intelligenceDb = await canonicalCloudflareIntelligenceD1();
+  const actor = { principal_id: 'operator.fixture', auth_type: 'user' };
   const durableObject = new CloudflareCarrierDurableObject({ storage }, {
+    INTELLIGENCE_REGISTRY_DB: intelligenceDb,
     AI: {
       async run() {
         providerEntered.resolve();
@@ -882,17 +950,29 @@ test('durable object facade serializes mutations while provider work is pending'
       },
     },
   });
-  await durableObject.handle(startRequest());
+  const start = startRequest({ principal: actor });
+  start.params = {
+    ...start.params,
+    site_id: CLOUDFLARE_REGISTRY_SITE_ID,
+    site_binding_evidence: { site_id: CLOUDFLARE_REGISTRY_SITE_ID, role: 'operator' },
+  };
+  await durableObject.handle(start);
   const input = {
     ...inputPipelineCases.cases.find((entry) => entry.name === 'manual_operator_admitted').input,
     event_id: 'input_provider_gate_ordered_lane_1',
     content: 'Hold provider turn open while another mutation arrives.',
   };
 
-  const inputPromise = durableObject.handle(inputRequest(input, { request_id: 'request_provider_gate_ordered_lane_1' }));
+  const inputPromise = durableObject.handle(inputRequest(input, {
+    request_id: 'request_provider_gate_ordered_lane_1',
+    principal: actor,
+  }));
   await providerEntered.promise;
   let commandSettled = false;
-  const commandPromise = durableObject.handle(commandRequest('/goal', ['after', 'provider'], { request_id: 'request_goal_after_provider_gate' }))
+  const commandPromise = durableObject.handle(commandRequest('/goal', ['after', 'provider'], {
+    request_id: 'request_goal_after_provider_gate',
+    principal: actor,
+  }))
     .then((response) => {
       commandSettled = true;
       return response;
@@ -989,6 +1069,7 @@ test('worker validates session.start site binding through configured Cloudflare 
   assert.equal(startBody.event.payload.site_binding_evidence.schema, 'narada.cloudflare_site_registry.v1');
   assert.equal(startBody.event.payload.site_binding_evidence.action, 'admit');
   assert.equal(startBody.event.payload.site_binding_evidence.site_id, 'site_fixture');
+  assert.equal(startBody.event.payload.site_binding_evidence.role, 'owner');
   assert.equal(startBody.event.payload.site_authority_decision.action, 'admit');
   assert.equal(startBody.event.payload.site_authority_decision.mutation_class, 'hosted_carrier_session_events');
   assert.equal(startBody.event.payload.site_authority_decision.authority_locus_kind, 'cloudflare_carrier_session_event_store');
@@ -1210,7 +1291,7 @@ test('worker site.read composes site sessions tasks authority events and carrier
   assert.equal(body.site_product_status.site_id, 'site_fixture');
   assert.equal(body.site_product_status.health, 'attention');
   assert.deepEqual(body.site_product_status.missing, ['continuity_packet']);
-  assert.deepEqual(body.site_product_status.attention, ['open_tasks']);
+  assert.deepEqual(body.site_product_status.attention, ['operation_posture', 'open_tasks']);
   assert.equal(body.site_product_status.operation_count, 1);
   assert.equal(body.site_product_status.active_operation_count, 1);
   assert.equal(body.site_product_status.active_membership_count, 1);
@@ -2795,7 +2876,7 @@ test('worker site.read surfaces degraded carrier evidence replay when session ev
   assert.deepEqual(body.carrier_evidence_read_status.missing_session_ids, ['carrier_session_missing_events']);
   assert.equal(body.site_product_status.carrier_evidence_read_status.state, 'degraded');
   assert.deepEqual(body.site_product_status.missing, ['carrier_evidence', 'continuity_packet']);
-  assert.deepEqual(body.site_product_status.attention, ['carrier_evidence_read_degraded']);
+  assert.deepEqual(body.site_product_status.attention, ['operation_posture', 'carrier_evidence_read_degraded']);
   assert.equal(body.site_product_status.next_action, 'carrier_evidence');
 });
 
@@ -4178,11 +4259,11 @@ test('worker records webhook delay observations as Cloudflare shadow-read eviden
     site_id: 'site_fixture',
     operation_id: 'operation_webhook_delay',
     command_state: 'operation_workflow_attention',
-    command_action: 'review_persistence_posture',
-    next_action: 'review_persistence_posture',
-    target: 'task_lifecycle_store',
+    command_action: 'start_or_select_session',
+    next_action: 'start_or_select_session',
+    target: 'operation_webhook_delay',
     status: 'needs_attention',
-    reason: 'persistence_posture_needs_attention',
+    reason: 'operation_lifecycle_missing_session',
     lifecycle_next_action: 'session',
     continuity_direction_state: 'no_packet_observed',
     continuity_direction_missing: ['cloudflare_to_local_windows', 'local_windows_to_cloudflare'],
@@ -4700,9 +4781,10 @@ test('worker records webhook delay directive intent as dual-recorded carrier inp
 });
 
 test('worker delivers webhook delay directive as Cloudflare primary with Windows fallback recorded', async () => {
+  const intelligenceDb = await canonicalCloudflareIntelligenceD1();
   const siteDb = fakeD1SiteRegistryDatabase({
     sites: [{
-      site_id: 'site_fixture',
+      site_id: CLOUDFLARE_REGISTRY_SITE_ID,
       site_ref: 'site://fixture',
       display_name: 'Fixture Site',
       status: 'active',
@@ -4711,7 +4793,7 @@ test('worker delivers webhook delay directive as Cloudflare primary with Windows
       created_by_principal_id: 'admin',
     }],
     memberships: [{
-      site_id: 'site_fixture',
+      site_id: CLOUDFLARE_REGISTRY_SITE_ID,
       principal_id: 'admin',
       role: 'owner',
       status: 'active',
@@ -4720,7 +4802,7 @@ test('worker delivers webhook delay directive as Cloudflare primary with Windows
     }],
     operations: [{
       operation_id: 'operation_webhook_delay',
-      site_id: 'site_fixture',
+      site_id: CLOUDFLARE_REGISTRY_SITE_ID,
       display_name: 'Webhook Delay Operation',
       operation_kind: 'operating_layer_update',
       status: 'active',
@@ -4730,6 +4812,7 @@ test('worker delivers webhook delay directive as Cloudflare primary with Windows
     }],
   });
   const durableEnv = {
+    INTELLIGENCE_REGISTRY_DB: intelligenceDb,
     AI: {
       async run() {
         return { response: 'Operation: Update on webhook delays acknowledged.' };
@@ -4759,7 +4842,7 @@ test('worker delivers webhook delay directive as Cloudflare primary with Windows
     operation: 'webhook_delay.directive.primary_with_fallback.deliver',
     request_id: 'request_webhook_delay_directive_delivery',
     params: {
-      site_id: 'site_fixture',
+      site_id: CLOUDFLARE_REGISTRY_SITE_ID,
       site_ref: 'site://fixture',
       operation_id: 'operation_webhook_delay',
       carrier_session_id: 'carrier_session_webhook_delay_directive_fixture',
@@ -4791,7 +4874,7 @@ test('worker delivers webhook delay directive as Cloudflare primary with Windows
   assert.equal(deliveredBody.carrier_admission.directive_render_to_agent, true);
   assert.equal(deliveredBody.carrier_admission.creates_turn, true);
   assert.equal(deliveredBody.delivery.admitted, true);
-  assert.equal(deliveredBody.delivery.terminal_state, 'completed');
+  assert.equal(deliveredBody.delivery.terminal_state, 'completed', JSON.stringify(deliveredBody.delivery));
   assert.equal(deliveredBody.delivery.events.some((event) => event.event_kind === 'carrier_session_started'), false);
   assert.equal(deliveredBody.delivery.events.some((event) => event.event_kind === 'directive_receipt_recorded'), true);
   assert.equal(deliveredBody.delivery.events.some((event) => event.event_kind === 'input_admitted_to_turn'), true);
@@ -4809,7 +4892,7 @@ test('worker delivers webhook delay directive as Cloudflare primary with Windows
   const listed = await worker.fetch(jsonRequest({
     operation: 'webhook_delay.directive.primary_with_fallback.list',
     request_id: 'request_webhook_delay_directive_delivery_list',
-    params: { site_id: 'site_fixture', limit: 10 },
+    params: { site_id: CLOUDFLARE_REGISTRY_SITE_ID, limit: 10 },
   }, { token: 'test-admin-token', path: '/api/carrier' }), env);
   assert.equal(listed.status, 200);
   const listedBody = await listed.json();
@@ -4821,7 +4904,7 @@ test('worker delivers webhook delay directive as Cloudflare primary with Windows
   const operationRead = await worker.fetch(jsonRequest({
     operation: 'operation.read',
     request_id: 'request_webhook_delay_directive_delivery_operation_read',
-    params: { site_id: 'site_fixture', operation_id: 'operation_webhook_delay', webhook_delay_directive_delivery_limit: 10, carrier_event_limit: 20 },
+    params: { site_id: CLOUDFLARE_REGISTRY_SITE_ID, operation_id: 'operation_webhook_delay', webhook_delay_directive_delivery_limit: 10, carrier_event_limit: 20 },
   }, { token: 'test-admin-token', path: '/api/carrier' }), env);
   assert.equal(operationRead.status, 200);
   const operationReadBody = await operationRead.json();
@@ -7521,8 +7604,6 @@ test('worker starts Microsoft login with PKCE and signed pending cookie', async 
   assert.equal(response.status, 302);
   const location = new URL(response.headers.get('location'));
   assert.equal(location.origin, 'https://login.microsoftonline.com');
-});
-test('worker starts Microsoft login with PKCE and signed pending cookie', async () => {
   assert.equal(location.searchParams.get('response_type'), 'code');
   assert.equal(location.searchParams.get('redirect_uri'), 'https://carrier.test/auth/microsoft/callback');
   assert.equal(location.searchParams.get('code_challenge_method'), 'S256');

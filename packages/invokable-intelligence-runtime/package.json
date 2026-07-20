@@ -36,5 +36,14 @@
     "tsx": "^4.7.0",
     "typescript": "^5.3.0"
   },
-  "description": "Local Narada runtime integration for invokable intelligence"
+  "description": "Local Narada runtime integration for invokable intelligence",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "directory": "packages/invokable-intelligence-runtime"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
 }

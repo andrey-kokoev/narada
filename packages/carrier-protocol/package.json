@@ -10,5 +10,14 @@
   "scripts": {
     "test": "node --test src/carrier-protocol.test.mjs"
   },
-  "description": "Shared protocol types, constructors, fixtures, and validators for Narada interactive carriers"
+  "description": "Shared protocol types, constructors, fixtures, and validators for Narada interactive carriers",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "directory": "packages/carrier-protocol"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
 }

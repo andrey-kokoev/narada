@@ -11,5 +11,17 @@
     "test": "node --test src/carrier-protocol-contract.test.mjs",
     "typecheck": "tsc --noEmit --allowJs --checkJs false src/carrier-protocol-contract.mjs"
   },
-  "description": "Carrier protocol contracts"
+  "devDependencies": {
+    "@narada2/carrier-protocol": "workspace:*"
+  },
+  "description": "Carrier protocol contracts",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "directory": "packages/carrier-protocol-contract"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
 }

@@ -12,7 +12,18 @@
     "@narada2/agent-identity": "workspace:*",
     "@narada2/agent-start-bootstrap": "workspace:*",
     "@narada2/process-launch-posture": "workspace:*",
-    "@narada2/task-lifecycle-mcp": "workspace:*"
+    "@narada2/site-common-tools": "workspace:*",
+    "@narada2/task-lifecycle-mcp": "workspace:*",
+    "@narada2/task-lifecycle-tools": "workspace:*"
   },
-  "description": "Agent session materialization helpers and the agent-context MCP server implementation"
+  "description": "Agent session materialization helpers and the agent-context MCP server implementation",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "directory": "packages/agent-context-tools"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
 }

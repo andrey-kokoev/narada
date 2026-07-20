@@ -67,5 +67,14 @@
     "@narada2/nars-runtime-contract": "workspace:*",
     "@narada2/site-paths": "workspace:*"
   },
-  "description": "NARS session core"
+  "description": "NARS session core",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "directory": "packages/nars-session-core"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
 }

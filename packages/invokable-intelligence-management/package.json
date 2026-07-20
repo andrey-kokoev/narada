@@ -41,5 +41,14 @@
     "tsx": "^4.7.0",
     "typescript": "^5.3.0"
   },
-  "description": "Application-service boundary for managing Narada's invokable-intelligence catalog, policy, and topology"
+  "description": "Application-service boundary for managing Narada's invokable-intelligence catalog, policy, and topology",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "directory": "packages/invokable-intelligence-management"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
 }

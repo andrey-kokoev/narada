@@ -14,8 +14,8 @@ import {
   observerPayload,
   SESSION_EVENT_SCHEMA,
   validateSessionEvent,
-} from '../../carrier-protocol/src/carrier-protocol.mjs';
-import { commandTokens } from '../../carrier-command-contract/src/carrier-command-contract.mjs';
+} from '@narada2/carrier-protocol';
+import { commandTokens } from '@narada2/carrier-command-contract';
 
 export const CLOUDFLARE_CARRIER_KIND = 'cloudflare-carrier';
 export const CLOUDFLARE_CARRIER_HOST = 'cloudflare-durable-object';
@@ -134,6 +134,7 @@ export class CloudflareCarrierSession {
       observer_interjections_muted: false,
       queue: [],
       active_turn: null,
+      invocation_authority_context: null,
       closed: false,
       provider_posture: providerAdapter?.posture ?? 'refused',
       tool_effect_posture: this.toolEffectPosture.posture,
@@ -152,6 +153,26 @@ export class CloudflareCarrierSession {
   handle(request) {
     const operation = request?.operation;
     if (!SUPPORTED_OPERATIONS.has(operation)) return { ok: false, code: 'unsupported_operation', operation };
+    const boundActorId = this.state.invocation_authority_context?.authenticated_actor?.principal_id ?? null;
+    const requestActorId = request?.principal?.principal_id ?? null;
+    const trustedInternalHeartbeat = operation === 'directive.heartbeat.emit'
+      && requestActorId === 'principal:service'
+      && request?.internal_authority === 'cloudflare-durable-object-alarm';
+    if (
+      operation !== 'session.start'
+      && MUTATING_OPERATIONS.has(operation)
+      && boundActorId
+      && !trustedInternalHeartbeat
+      && requestActorId !== boundActorId
+    ) {
+      return {
+        ok: false,
+        code: 'carrier_session_authenticated_actor_mismatch',
+        operation,
+        expected_principal_id: boundActorId,
+        actual_principal_id: requestActorId,
+      };
+    }
     const previousPrincipal = this.currentPrincipal;
     this.currentPrincipal = request?.principal ?? null;
     let restoreNow = true;
@@ -264,6 +285,7 @@ export class CloudflareCarrierSession {
       directive_emission_rules: clone(snapshot.state.directive_emission_rules ?? []),
       directive_emission_sequence: snapshot.state.directive_emission_sequence ?? 0,
       processed_requests: new Map((snapshot.processed_requests ?? []).map(([key, value]) => [key, clone(value)])),
+      invocation_authority_context: clone(snapshot.state.invocation_authority_context ?? null),
     };
     session.events = (snapshot.events ?? []).map((event) => clone(event));
     return session;
@@ -300,6 +322,32 @@ export class CloudflareCarrierSession {
   }
 
   #start(request) {
+    const siteBinding = request.params?.site_binding_evidence ?? null;
+    const actor = request.principal ?? null;
+    if (
+      actor?.principal_id
+      && actor?.auth_type
+      && siteBinding?.site_id === this.state.site_id
+      && siteBinding?.role
+    ) {
+      this.state.invocation_authority_context = {
+        source: 'cloudflare-carrier-site-admission',
+        authenticated_actor: {
+          principal_id: String(actor.principal_id),
+          auth_type: String(actor.auth_type),
+        },
+        target_registry_site: {
+          registry: 'narada.cloudflare-site-registry.v1',
+          subject_id: String(siteBinding.site_id),
+        },
+        site_membership: {
+          registry: 'narada.cloudflare-site-registry.v1',
+          site_id: String(siteBinding.site_id),
+          role: String(siteBinding.role),
+          evidence_ref: `site-binding:${request.request_id ?? this.state.carrier_session_id}`,
+        },
+      };
+    }
     const payload = {
       carrier_kind: this.state.carrier_kind,
       carrier_host: this.state.carrier_host,
@@ -519,7 +567,15 @@ export class CloudflareCarrierSession {
       content_preview: input.content,
     }));
     try {
-      let result = await this.providerAdapter.run({ input, turn_id: turnId });
+      let result = await this.providerAdapter.run({
+        input,
+        turn_id: turnId,
+        carrier_session_id: this.state.carrier_session_id,
+        site_id: this.state.site_id,
+        operation_id: this.state.operation_id ?? null,
+        principal: this.currentPrincipal ?? null,
+        carrier_context: clone(this.state.invocation_authority_context),
+      });
       let textSequence = 1;
       let toolSequence = 2;
       for (let iteration = 0; iteration <= MAX_PROVIDER_TOOL_ITERATIONS; iteration += 1) {
@@ -531,6 +587,7 @@ export class CloudflareCarrierSession {
           sequence: textSequence,
           text_delta: text,
           text_delta_ref: null,
+          intelligence: result.intelligence ?? null,
         }));
         textSequence += 1;
         const recorded = await this.#recordProviderToolCalls(result.tool_calls, turnId, events, toolSequence);
@@ -559,6 +616,11 @@ export class CloudflareCarrierSession {
           input,
           turn_id: turnId,
           tool_results: recorded.toolResults,
+          carrier_session_id: this.state.carrier_session_id,
+          site_id: this.state.site_id,
+          operation_id: this.state.operation_id ?? null,
+          principal: this.currentPrincipal ?? null,
+          carrier_context: clone(this.state.invocation_authority_context),
         });
       }
       events.push(this.#appendEvent('turn_completed', {
@@ -568,6 +630,7 @@ export class CloudflareCarrierSession {
         provider_request_status: 'completed',
         terminal_status: 'completed',
         provider_execution_enabled: true,
+        intelligence: result.intelligence ?? null,
       }));
       events.push(this.#appendEvent('input_completed', {
         input_event_id: input.event_id,

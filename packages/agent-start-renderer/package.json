@@ -14,5 +14,14 @@
     "test": "node --test src/agent-start-renderer.test.mjs",
     "typecheck": "tsc --noEmit --allowJs --checkJs false src/agent-start-renderer.mjs"
   },
-  "description": "Shared renderer for Narada agent-start pre-carrier launch output"
+  "description": "Shared renderer for Narada agent-start pre-carrier launch output",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "directory": "packages/agent-start-renderer"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
 }

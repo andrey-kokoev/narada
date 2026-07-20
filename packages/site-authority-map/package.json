@@ -10,5 +10,14 @@
   "scripts": {
     "test": "node --test src/site-authority-map.test.mjs"
   },
-  "description": "Shared v1 vocabulary and pure classifier for Narada Site authority routing"
+  "description": "Shared v1 vocabulary and pure classifier for Narada Site authority routing",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "directory": "packages/site-authority-map"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
 }

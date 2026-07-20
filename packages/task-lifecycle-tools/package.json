@@ -5,6 +5,7 @@
   "type": "module",
   "dependencies": {
     "@narada2/process-launch-posture": "workspace:*",
+    "@narada2/site-common-tools": "workspace:*",
     "@narada2/sqlite": "workspace:*",
     "@narada2/task-governance": "workspace:*"
   },
@@ -14,5 +15,11 @@
   "scripts": {
     "test": "node --test src/task-lifecycle-tools.test.mjs"
   },
-  "description": "Task lifecycle tool surface"
+  "description": "Task lifecycle tool surface",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "directory": "packages/task-lifecycle-tools"
+  }
 }

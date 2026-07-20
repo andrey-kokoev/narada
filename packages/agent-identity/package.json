@@ -24,5 +24,14 @@
     "test": "node --test src/*.test.mjs",
     "typecheck": "tsc --noEmit --allowJs --checkJs false src/index.mjs"
   },
-  "description": "Agent identity projection contracts"
+  "description": "Agent identity projection contracts",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "directory": "packages/agent-identity"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
 }

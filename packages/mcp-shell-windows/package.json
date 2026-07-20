@@ -36,5 +36,11 @@
     "server.mjs",
     "support/",
     "README.md"
-  ]
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "directory": "packages/mcp-shell-windows"
+  }
 }

@@ -41,5 +41,14 @@
     "tailwindcss": "^4.1.18",
     "vite": "^8.1.1",
     "vue-tsc": "^2.2.0"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "directory": "packages/ui-vue"
+  },
+  "engines": {
+    "node": ">=22.0.0"
   }
 }

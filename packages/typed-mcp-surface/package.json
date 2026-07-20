@@ -19,7 +19,17 @@
     "test": "node --test src/typed-mcp-surface.test.mjs"
   },
   "dependencies": {
-    "@narada2/process-launch-posture": "workspace:*"
+    "@narada2/process-launch-posture": "workspace:*",
+    "@narada2/site-common-tools": "workspace:*"
   },
-  "description": "Typed MCP surface contracts"
+  "description": "Typed MCP surface contracts",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "directory": "packages/typed-mcp-surface"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
 }

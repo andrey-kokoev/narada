@@ -23,5 +23,14 @@
     "test": "node --test src/*.test.mjs",
     "typecheck": "tsc --noEmit --allowJs --checkJs false src/index.mjs src/carrier-turn-adapter.mjs"
   },
-  "description": "NARS carrier runtime substrate"
+  "description": "NARS carrier runtime substrate",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "directory": "packages/carrier-runtime"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
 }

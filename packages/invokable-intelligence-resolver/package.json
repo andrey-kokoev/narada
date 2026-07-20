@@ -35,5 +35,14 @@
     "tsx": "^4.7.0",
     "typescript": "^5.3.0"
   },
-  "description": "Deterministic hierarchical resolution for invokable intelligence"
+  "description": "Deterministic hierarchical resolution for invokable intelligence",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "directory": "packages/invokable-intelligence-resolver"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
 }

@@ -101,5 +101,14 @@
     "vitest": "^1.6.1",
     "vue-tsc": "^2.2.0"
   },
-  "description": "Production Agent Web UI browser surface for one NARS session"
+  "description": "Production Agent Web UI browser surface for one NARS session",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "directory": "packages/agent-web-ui"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
 }

@@ -18,5 +18,14 @@
     "@narada2/carrier-action-admission": "workspace:*",
     "@narada2/process-launch-posture": "workspace:*"
   },
-  "description": "MCP fabric runtime boundary"
+  "description": "MCP fabric runtime boundary",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "directory": "packages/mcp-fabric"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
 }

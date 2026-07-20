@@ -42,5 +42,14 @@
     "@narada2/mcp-fabric": "workspace:*",
     "@narada2/process-launch-posture": "workspace:*"
   },
-  "description": "NARS provider runtime"
+  "description": "NARS provider runtime",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "directory": "packages/nars-provider-runtime"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
 }

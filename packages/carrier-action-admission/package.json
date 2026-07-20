@@ -13,5 +13,17 @@
     "test": "node --test src/carrier-action-admission.test.mjs",
     "typecheck": "tsc --noEmit --allowJs --checkJs false src/carrier-action-admission.mjs src/tool-metadata.mjs src/evidence-reader.mjs"
   },
-  "description": "Carrier-neutral v0 implementation of the Carrier Action Admission Boundary"
+  "dependencies": {
+    "@narada2/site-common-tools": "workspace:*"
+  },
+  "description": "Carrier-neutral v0 implementation of the Carrier Action Admission Boundary",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "directory": "packages/carrier-action-admission"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
 }

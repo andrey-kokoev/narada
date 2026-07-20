@@ -11,5 +11,14 @@
     "test": "node --test src/carrier-command-contract.test.mjs",
     "typecheck": "tsc --noEmit --allowJs --checkJs false src/carrier-command-contract.mjs"
   },
-  "description": "Shared carrier command vocabulary and semantic effect contract"
+  "description": "Shared carrier command vocabulary and semantic effect contract",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "directory": "packages/carrier-command-contract"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
 }

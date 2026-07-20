@@ -23,5 +23,14 @@
     "test": "node --test src/*.test.mjs",
     "typecheck": "tsc --noEmit --allowJs --checkJs false src/index.mjs"
   },
-  "description": "Launch process ownership contracts and helpers"
+  "description": "Launch process ownership contracts and helpers",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "directory": "packages/launch-process-ownership"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
 }
