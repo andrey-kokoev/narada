@@ -55,7 +55,7 @@ export const TASK_LIFECYCLE_TOOL_ALIASES = {
   task_mcp_replay_test_evidence: 'task_lifecycle_replay_test_evidence',
 };
 
-import { listCommandTools, listPayloadTools } from '../../site-common-tools/compat/mcp-payload-file.legacy-site.mjs';
+import { listCommandTools, listPayloadTools } from '@narada2/site-common-tools/compat/mcp-payload-file.legacy-site';
 
 export function taskLifecycleTools() {
   return [

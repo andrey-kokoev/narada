@@ -1,4 +1,4 @@
-import { listCommandTools, listOutputTools, listPayloadTools } from '../../site-common-tools/compat/mcp-payload-file.legacy-site.mjs';
+import { listCommandTools, listOutputTools, listPayloadTools } from '@narada2/site-common-tools/compat/mcp-payload-file.legacy-site';
 
 export const STARTUP_TOOL_INLINE_LIMIT = 100_000;
 export const PERMISSIVE_OBJECT_OUTPUT_SCHEMA = { type: 'object', additionalProperties: true };

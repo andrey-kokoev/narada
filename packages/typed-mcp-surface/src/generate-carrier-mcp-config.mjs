@@ -2,7 +2,7 @@
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
-import { assertCanonicalSiteLocus } from '../../site-common-tools/src/site-locus-shim.mjs';
+import { assertCanonicalSiteLocus } from '@narada2/site-common-tools/site-locus-shim';
 
 const args = parseArgs(process.argv.slice(2));
 const siteRoot = resolve(args.siteRoot ?? process.cwd());

@@ -71,7 +71,7 @@ import {
   payloadValidate,
   resultShow,
   resolveToolPayloadArgs,
-} from '../../site-common-tools/compat/mcp-payload-file.legacy-site.mjs';
+} from '@narada2/site-common-tools/compat/mcp-payload-file.legacy-site';
 import {
   acknowledgeMcpRestartRequest,
   buildMcpFreshnessStatus,
@@ -79,7 +79,7 @@ import {
   reconcileNoRequestMcpFreshnessMarker,
   writeMcpRestartRequest,
   writeMcpRuntimeInstanceObservation,
-} from '../../site-common-tools/src/mcp-freshness-service.mjs';
+} from '@narada2/site-common-tools/mcp-freshness-service';
 import { discoverCodexSessionEvidence, extractCodexSessionEvidencePacket, verifyCodexExactResume } from './codex-session-evidence.mjs';
 import {
   buildRoleBindingProjection,
@@ -100,13 +100,13 @@ import {
   loadRehydrationOnboardingCard,
   showSiteEvolutionOrientation,
 } from './site-evolution-orientation.mjs';
-import { buildMcpRuntimeRegistryStatus } from '../../site-common-tools/src/operator-surface/mcp-runtime-instance-registry.mjs';
+import { buildMcpRuntimeRegistryStatus } from '@narada2/site-common-tools/operator-surface/mcp-runtime-instance-registry';
 import {
   NARADA_PC_SITE_LOCUS,
   NARADA_USER_SITE_LOCUS,
-} from '../../site-common-tools/src/site-locus-shim.mjs';
-import { taskLifecycleTools } from '../../task-lifecycle-tools/src/task-mcp-tool-registry.mjs';
-import { resolveTaskLifecycleMcpServer as resolveTaskLifecycleMcpServerForSite } from '../../site-common-tools/src/task-lifecycle-mcp-resolution.mjs';
+} from '@narada2/site-common-tools/site-locus-shim';
+import { taskLifecycleTools } from '@narada2/task-lifecycle-tools/src/task-mcp-tool-registry.mjs';
+import { resolveTaskLifecycleMcpServer as resolveTaskLifecycleMcpServerForSite } from '@narada2/site-common-tools/task-lifecycle-mcp-resolution';
 import {
   AGENT_CONTEXT_MCP_SESSION_STATE_SCHEMA,
   canTransitionAgentContextMcpSession,

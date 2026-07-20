@@ -6,7 +6,7 @@
  */
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve, join } from 'node:path';
-import { buildOutputRefToolContent, listOutputTools, outputShow } from '../../site-common-tools/compat/mcp-payload-file.legacy-site.mjs';
+import { buildOutputRefToolContent, listOutputTools, outputShow } from '@narada2/site-common-tools/compat/mcp-payload-file.legacy-site';
 
 const PROTOCOL_VERSION = '2024-11-05';
 let activeOutputToolName = null;

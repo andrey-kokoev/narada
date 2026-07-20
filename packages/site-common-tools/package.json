@@ -12,6 +12,12 @@
     "node": ">=22.0.0"
   },
   "exports": {
+    "./compat/mcp-payload-file.legacy-site": "./compat/mcp-payload-file.legacy-site.mjs",
+    "./generic-command-registry": "./src/generic-command-registry.mjs",
+    "./mcp-freshness-service": "./src/mcp-freshness-service.mjs",
+    "./operator-surface/mcp-runtime-instance-registry": "./src/operator-surface/mcp-runtime-instance-registry.mjs",
+    "./site-layout": "./src/site-layout.mjs",
+    "./site-locus-shim": "./src/site-locus-shim.mjs",
     "./task-lifecycle-mcp-resolution": "./src/task-lifecycle-mcp-resolution.mjs",
     "./incubation/write-file-utf8.mjs": "./src/incubation/write-file-utf8.mjs"
   },

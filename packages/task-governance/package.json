@@ -109,7 +109,11 @@
     "./sqlite-database": {
       "types": "./dist/sqlite-database.d.ts",
       "import": "./dist/sqlite-database.js"
-    }
+    },
+    "./runtime/inbox/admission-log": "./runtime/inbox/admission-log.mjs",
+    "./runtime/inbox/inbox-index": "./runtime/inbox/inbox-index.mjs",
+    "./runtime/inbox/inbox-policy": "./runtime/inbox/inbox-policy.mjs",
+    "./runtime/mcp-freshness-service": "./runtime/mcp-freshness-service.mjs"
   },
   "scripts": {
     "build": "tsc",

@@ -6,7 +6,7 @@ import { spawnSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { assertCanonicalSiteLocus } from '../../site-common-tools/src/site-locus-shim.mjs';
+import { assertCanonicalSiteLocus } from '@narada2/site-common-tools/site-locus-shim';
 
 const root = dirname(fileURLToPath(import.meta.url));
 const scripts = [

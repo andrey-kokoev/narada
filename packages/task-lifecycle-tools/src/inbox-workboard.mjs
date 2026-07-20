@@ -2,8 +2,8 @@
  * Inbox workboard — surface unprocessed envelopes as first-class work items.
  */
 
-import { readIndexedInboxBacklog } from '../../task-governance/runtime/inbox/inbox-index.mjs';
-import { hasEnvelopeCoverageEvidence } from '../../task-governance/runtime/inbox/inbox-policy.mjs';
+import { readIndexedInboxBacklog } from '@narada2/task-governance/runtime/inbox/inbox-index';
+import { hasEnvelopeCoverageEvidence } from '@narada2/task-governance/runtime/inbox/inbox-policy';
 import { evaluateEnvelopeSeverity } from './inbox-bridge.mjs';
 
 function findExactLinkedTask(store, envelope) {

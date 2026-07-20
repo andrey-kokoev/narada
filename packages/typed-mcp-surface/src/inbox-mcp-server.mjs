@@ -27,7 +27,7 @@ import {
   payloadRefMetadataFromEntry,
   resultShow,
   resolveToolPayloadArgs,
-} from '../../site-common-tools/compat/mcp-payload-file.legacy-site.mjs';
+} from '@narada2/site-common-tools/compat/mcp-payload-file.legacy-site';
 
 const PROTOCOL_VERSION = '2024-11-05';
 let activeOutputToolName = null;

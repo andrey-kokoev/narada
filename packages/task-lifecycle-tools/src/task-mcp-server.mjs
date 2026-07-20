@@ -23,8 +23,8 @@ import { relative, resolve, join } from 'path';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { runGovernedCommandSync, spawnMcpServer } from '@narada2/process-launch-posture';
 import { pollInboxBridge, targetInboxEnvelope, readUnprocessedEnvelopes, evaluateEnvelopeSeverity } from './inbox-bridge.mjs';
-import { readAdmissionLog, resolveEnvelopeStatus } from '../../task-governance/runtime/inbox/admission-log.mjs';
-import { refreshInboxIndex } from '../../task-governance/runtime/inbox/inbox-index.mjs';
+import { readAdmissionLog, resolveEnvelopeStatus } from '@narada2/task-governance/runtime/inbox/admission-log';
+import { refreshInboxIndex } from '@narada2/task-governance/runtime/inbox/inbox-index';
 import { emitCheckpoint } from './emit-checkpoint.mjs';
 import {
   buildReviewAcceptanceProvenanceAnnotation,
@@ -63,8 +63,8 @@ import {
   payloadValidate,
   resultShow,
   resolveToolPayloadArgs,
-} from '../../site-common-tools/compat/mcp-payload-file.legacy-site.mjs';
-import { genericCommandRegistrySummary } from '../../site-common-tools/src/generic-command-registry.mjs';
+} from '@narada2/site-common-tools/compat/mcp-payload-file.legacy-site';
+import { genericCommandRegistrySummary } from '@narada2/site-common-tools/generic-command-registry';
 import {
   acknowledgeMcpRestartRequest,
   buildMcpFreshnessStatus,
@@ -74,7 +74,7 @@ import {
   readJsonFile as readMcpFreshnessJsonFile,
   writeMcpRuntimeInstanceObservation,
   writeMcpRestartRequest,
-} from '../../task-governance/runtime/mcp-freshness-service.mjs';
+} from '@narada2/task-governance/runtime/mcp-freshness-service';
 import { agentExistsWithRole, checkTaskRoleEligibilityLocal, resolveAgentRole, resolveAgentRoleWithDiagnostics, roleExistsInRoster } from './agent-role-resolution.mjs';
 import { resolveTaskRolePolicy } from './task-role-policy.mjs';
 

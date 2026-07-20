@@ -10,13 +10,13 @@ import { join, relative, resolve } from 'node:path';
 import { allocateTaskNumbers } from '@narada2/task-governance/task-governance';
 import { renderTaskBodyFromSpec } from '@narada2/task-governance/task-spec';
 import { openTaskLifecycleStore } from '@narada2/task-governance/task-lifecycle-store';
-import { readAdmissionLog, getLatestEventsByEnvelope, appendAdmissionEvent, acknowledgeEnvelope, dismissEnvelope } from '../../task-governance/runtime/inbox/admission-log.mjs';
+import { readAdmissionLog, getLatestEventsByEnvelope, appendAdmissionEvent, acknowledgeEnvelope, dismissEnvelope } from '@narada2/task-governance/runtime/inbox/admission-log';
 import {
   evaluateEnvelopeSeverity,
   findDuplicateTaskRows,
   hasEnvelopeCoverageEvidence,
   levenshteinDistance,
-} from '../../task-governance/runtime/inbox/inbox-policy.mjs';
+} from '@narada2/task-governance/runtime/inbox/inbox-policy';
 
 const INBOX_DIR = '.ai/inbox-envelopes';
 const TASKS_DIR = '.ai/do-not-open/tasks';

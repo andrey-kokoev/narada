@@ -2,7 +2,7 @@
 import { existsSync, readFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { buildOutputRefToolContent } from '../../site-common-tools/compat/mcp-payload-file.legacy-site.mjs';
+import { buildOutputRefToolContent } from '@narada2/site-common-tools/compat/mcp-payload-file.legacy-site';
 import { runGovernedCommandSync } from '@narada2/process-launch-posture';
 
 const PROTOCOL_VERSION = '2024-11-05';

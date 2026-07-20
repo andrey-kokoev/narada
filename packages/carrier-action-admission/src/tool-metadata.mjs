@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
-import { siteControlRoot } from '../../site-common-tools/src/site-layout.mjs';
+import { siteControlRoot } from '@narada2/site-common-tools/site-layout';
 
 function loadMcpSurfaceRegistry(siteRoot) {
   const path = join(siteControlRoot(siteRoot), 'capabilities', 'mcp-surfaces.json');
