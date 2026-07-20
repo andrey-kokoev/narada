@@ -362,7 +362,7 @@ export async function resolveInvocation(intent: InvocationIntent, context: Resol
     resolver_version: RESOLVER_VERSION,
     digests,
     valid_until: validUntil,
-    revalidation_triggers: ["before-queued-attempt", "at-scheduled-window", "before-retry", "before-resume", "catalog-change", "policy-change", "assertion-expiry", "topology-change", "access-change", "materialization-change", "credential-change", "quota-change"] as PlanDecisionSnapshot["revalidation_triggers"],
+    revalidation_triggers: ["before-queued-attempt", "at-scheduled-window", "before-retry", "before-resume", "before-replay", "catalog-change", "policy-change", "assertion-expiry", "topology-change", "access-change", "materialization-change", "credential-change", "quota-change"] as PlanDecisionSnapshot["revalidation_triggers"],
     referenced_revisions: [...state.records.map((record) => ({
       kind: record.record_kind === "resource" ? "catalog" as const : record.record_kind === "policy" || record.record_kind === "authority-statement" ? "policy" as const : record.record_kind === "assertion" ? "assertion" as const : record.record_kind === "route" ? "topology" as const : record.record_kind === "access" ? "access" as const : "catalog" as const,
       record_id: record.record_id,

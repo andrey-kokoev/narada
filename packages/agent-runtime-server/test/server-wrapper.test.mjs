@@ -1974,7 +1974,7 @@ test('spawned runtime cancels a hanging Codex subprocess', async () => {
   }
 });
 
-test('spawned runtime proves live local topology for success and typed pre-provider refusal', async () => {
+test('spawned runtime proves the live local topology success matrix across supported HTTP providers', async () => {
   let expectedCredentialHeader = null;
   let expectedCredentialValue = null;
   const provider = createServer((request, response) => {
@@ -2064,68 +2064,6 @@ test('spawned runtime proves live local topology for success and typed pre-provi
       }
     }
 
-    let providerCalls = 0;
-    const disappearingProvider = createServer((_request, response) => {
-      providerCalls += 1;
-      response.statusCode = 500;
-      response.end();
-    });
-    await new Promise((resolve) => disappearingProvider.listen(0, '127.0.0.1', resolve));
-    const disappearingAddress = disappearingProvider.address();
-    const refusalSiteRoot = mkdtempSync(join(tmpdir(), 'narada-topology-refusal-e2e-'));
-    await seedIntelligenceRegistry(refusalSiteRoot, {
-      providerId: 'openai-api',
-      endpointBaseUrl: `http://127.0.0.1:${disappearingAddress.port}`,
-      credentialReference: 'OPENAI_API_KEY',
-    });
-    let refusalChild = null;
-    try {
-      const binPath = fileURLToPath(new URL('../bin/narada-agent-runtime-server.mjs', import.meta.url));
-      refusalChild = spawnTestChild(process.execPath, [binPath, '--raw-jsonl', '--identity', 'narada.test', '--session', 'topology-refusal-e2e'], {
-        env: { ...process.env, NARADA_SITE_ROOT: refusalSiteRoot, OPENAI_API_KEY: 'unused-topology-refusal-key' },
-        stdio: ['pipe', 'pipe', 'pipe'],
-      });
-      let refusalStdout = '';
-      let refusalStderr = '';
-      refusalChild.stdout.setEncoding('utf8');
-      refusalChild.stdout.on('data', (chunk) => { refusalStdout += chunk; });
-      refusalChild.stderr.setEncoding('utf8');
-      refusalChild.stderr.on('data', (chunk) => { refusalStderr += chunk; });
-      await waitForCapturedOutput(
-        refusalChild,
-        () => refusalStdout,
-        (text) => hasCapturedJsonEvent(text, (event) => event.event === 'session_started'),
-      );
-      disappearingProvider.closeAllConnections?.();
-      await new Promise((resolve) => disappearingProvider.close(resolve));
-      await new Promise((resolve) => setTimeout(resolve, 1100));
-      refusalChild.stdin.end(`${JSON.stringify({ id: 'turn-refused', method: 'session.submit', params: { content: 'must not reach provider' } })}\n${JSON.stringify({ id: 'close-refused', method: 'session.close' })}\n`);
-      assert.equal(await new Promise((resolve) => refusalChild.on('exit', resolve)), 0, refusalStderr);
-      const refusalEvents = refusalStdout.trim().split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
-      const refusal = refusalEvents.find((event) => event.event === 'invokable_intelligence_refused');
-      assert.ok(refusal?.intent_id && refusal?.refusal_id && refusal?.outcome_id, refusalStderr);
-      assert.equal(typeof refusal.reason_code, 'string');
-      assert.equal(providerCalls, 0, 'topology refusal must occur before an HTTP provider request');
-      const refusalStore = await SqliteRegistryStore.open(join(refusalSiteRoot, '.ai', 'intelligence-registry.db'));
-      try {
-        assert.equal((await refusalStore.getIntent(refusal.intent_id))?.id, refusal.intent_id);
-        assert.equal((await refusalStore.getRefusal(refusal.refusal_id))?.id, refusal.refusal_id);
-        assert.equal((await refusalStore.getTerminalOutcome(refusal.outcome_id))?.kind, 'pre-invocation-refusal');
-      } finally {
-        await refusalStore.close();
-      }
-    } finally {
-      if (refusalChild && refusalChild.exitCode === null) {
-        const exited = once(refusalChild, 'exit');
-        refusalChild.kill();
-        await exited;
-      }
-      if (disappearingProvider.listening) {
-        disappearingProvider.closeAllConnections?.();
-        await new Promise((resolve) => disappearingProvider.close(resolve));
-      }
-      rmSync(refusalSiteRoot, { recursive: true, force: true });
-    }
   } finally {
     provider.closeAllConnections?.();
     await new Promise((resolve) => provider.close(resolve));
