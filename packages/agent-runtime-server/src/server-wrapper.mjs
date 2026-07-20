@@ -1,11 +1,11 @@
 import { createServer } from 'node:http';
 import { PassThrough } from 'node:stream';
-import { redactProviderRuntimeBinding, resolveProviderRuntimeBinding } from '@narada2/carrier-provider-contract';
 import { createProjectedTerminalBridge } from '@narada2/carrier-terminal-projection/projected-terminal';
 import { createControlInputBridge } from './control-input-bridge.mjs';
 import { createSessionCoreRuntimeService } from './session-core-runtime-service.mjs';
-import { createNarsProviderRuntimeController } from './provider-runtime-controller.mjs';
+import { createNarsIntelligenceRuntimeController } from './intelligence-runtime-controller.mjs';
 import { createNarsRuntimeContext } from './runtime-context.mjs';
+import { createLocalIntelligenceRuntime } from './local-intelligence-runtime.mjs';
 import {
   formatPreflightWorkflowEvent,
   formatPreflightWorkflowSummary,
@@ -84,20 +84,32 @@ function baseRuntimeContextOptions({ lifecycleBinding, operatorSurfaceKind, laun
 async function loadRuntimeDependencies(runtimeContext = {}) {
   const deniedTools = new Set(String(process.env.NARADA_DENIED_CAPABILITY_TOOLS ?? '').split(',').map((value) => value.trim()).filter(Boolean));
   let appendRuntimeEvent = () => {};
-  const providerRuntime = createNarsProviderRuntimeController({
-    runtimeContext,
-    onTransition: (event) => appendRuntimeEvent(event),
-  });
-  const runtimeService = createSessionCoreRuntimeService({
-    runtimeContext,
-    providerRuntime,
-    callChatApiFn: providerRuntime.callProvider,
-    admitCapability: ({ toolName }) => deniedTools.has(toolName)
-      ? { admitted: false, reason: 'denied_by_runtime_policy' }
-      : { admitted: true, reason: 'admitted_by_runtime_policy' },
-  });
-  appendRuntimeEvent = (event) => runtimeService.supervisor.core.appendEvent(event);
-  return runtimeService;
+  const intelligenceRuntime = await createLocalIntelligenceRuntime({ runtimeContext });
+  try {
+    const intelligenceController = createNarsIntelligenceRuntimeController({
+      runtimeContext,
+      gateway: intelligenceRuntime.gateway,
+      validateSelection: intelligenceRuntime.preflightSelection,
+      close: intelligenceRuntime.close,
+      onTransition: (event) => appendRuntimeEvent(event),
+    });
+    // Fail fast if the default invocation context cannot resolve an eligible
+    // canonical route. This preserves the historic startup-time binding check.
+    const preflight = await intelligenceRuntime.preflightSelection({ requestedModel: null, requestedOptions: {} });
+    intelligenceController.primePreflight(preflight);
+    const runtimeService = createSessionCoreRuntimeService({
+      runtimeContext,
+      intelligenceRuntime: intelligenceController,
+      admitCapability: ({ toolName }) => deniedTools.has(toolName)
+        ? { admitted: false, reason: 'denied_by_runtime_policy' }
+        : { admitted: true, reason: 'admitted_by_runtime_policy' },
+    });
+    appendRuntimeEvent = (event) => runtimeService.supervisor.core.appendEvent(event);
+    return runtimeService;
+  } catch (error) {
+    await intelligenceRuntime.close();
+    throw error;
+  }
 }
 
 function parseHealthOptions(args, env = process.env) {
@@ -428,57 +440,29 @@ async function main() {
   let runtimeService;
   let controlInputBridge = null;
   try {
-    // Plan-driven provider resolution: when a registry DB and explicit site
-    // context are configured, the invokable-intelligence resolver selects the
-    // model/inference path and env vars carry no selection authority.
-    let intelligenceProvider;
-    let providerSettingsOverrides = {};
-    let planResolution = null;
-    const intelligenceRegistryDb = process.env.NARADA_INTELLIGENCE_REGISTRY_DB?.trim();
-    const intelligenceTargetSite = process.env.NARADA_INTELLIGENCE_TARGET_SITE?.trim();
-    const intelligenceUserSite = process.env.NARADA_INTELLIGENCE_USER_SITE?.trim();
-    const intelligenceHostSite = process.env.NARADA_INTELLIGENCE_HOST_SITE?.trim();
-    if (intelligenceRegistryDb && intelligenceTargetSite && intelligenceUserSite && intelligenceHostSite) {
-      const { SqliteRegistryStore } = await import('@narada2/invokable-intelligence-registry');
-      const { resolveInvocation } = await import('@narada2/invokable-intelligence-resolver');
-      const { planToLegacyBindingOverrides } = await import('@narada2/invokable-intelligence-runtime');
-      const store = await SqliteRegistryStore.open(intelligenceRegistryDb);
-      try {
-        const intent = {
-          schema: 'narada.invokable-intelligence.invocation-intent.v1',
-          id: `intent:agent-session-${process.env.NARADA_SESSION_ID ?? 'default'}`,
-          created_at: new Date().toISOString(),
-          purpose: 'agent-session',
-        };
-        const resolved = await resolveInvocation(intent, {
-          targetSite: { kind: 'site', id: intelligenceTargetSite },
-          userSite: { kind: 'site', id: intelligenceUserSite },
-          hostSite: { kind: 'site', id: intelligenceHostSite },
-          runtime: 'node',
-          time: new Date().toISOString(),
-        }, { store });
-        if (resolved.schema === 'narada.invokable-intelligence.invocation-refusal.v1') {
-          throw new Error(`intelligence_resolution_refused:${resolved.reason_code}:${resolved.explanation}`);
-        }
-        const modelResource = await store.getResource(resolved.selected.model.id);
-        const bridge = planToLegacyBindingOverrides(resolved, modelResource);
-        intelligenceProvider = bridge.provider;
-        providerSettingsOverrides = bridge.overrides;
-        planResolution = {
-          plan_id: resolved.id,
-          resolver_version: resolved.resolver_version,
-          model: resolved.selected.model.id,
-          endpoint: resolved.selected.endpoint.id,
-          adapter: resolved.selected.adapter.id,
-        };
-      } finally {
-        await store.close();
-      }
-    } else {
-      intelligenceProvider = process.env.NARADA_INTELLIGENCE_PROVIDER?.trim();
+    // Launch transports only explicit Site/principal/request context. Runtime
+    // provider/model selection occurs per invocation through the canonical
+    // registry and gateway; no provider binding or startup-time plan exists.
+    const siteIdForLoci = agentIdentitySiteId(lifecycleBinding.agent_identity_ref) ?? process.env.NARADA_SITE_ID ?? null;
+    const canonicalSiteId = (value) => {
+      if (typeof value !== 'string' || !value.trim()) return null;
+      const id = value.trim();
+      return id.startsWith('site:') ? id : `site:${id}`;
+    };
+    const targetSiteId = canonicalSiteId(process.env.NARADA_INTELLIGENCE_TARGET_SITE) ?? canonicalSiteId(siteIdForLoci);
+    const userSiteId = canonicalSiteId(process.env.NARADA_INTELLIGENCE_USER_SITE);
+    const hostSiteId = canonicalSiteId(process.env.NARADA_INTELLIGENCE_HOST_SITE);
+    const loci = {
+      targetSite: { kind: 'site', id: targetSiteId },
+      userSite: { kind: 'site', id: userSiteId },
+      hostSite: { kind: 'site', id: hostSiteId },
+    };
+    if (!loci.targetSite.id || !loci.userSite.id || !loci.hostSite.id) {
+      throw new Error('intelligence_site_context_required');
     }
-    if (!intelligenceProvider) throw new Error('provider_runtime_provider_required');
-    const providerRuntimeBinding = resolveProviderRuntimeBinding(intelligenceProvider, { env: process.env, overrides: providerSettingsOverrides });
+    const registryDbPath = process.env.NARADA_INTELLIGENCE_REGISTRY_DB?.trim() || null;
+    const principal = process.env.NARADA_INTELLIGENCE_PRINCIPAL_ID?.trim() || null;
+    if (!principal) throw new Error('intelligence_principal_required');
 
     runtimeContext = createNarsRuntimeContext({
       ...baseRuntimeContextOptions({
@@ -487,16 +471,21 @@ async function main() {
         launchProcessContext,
         runtimeHost,
       }),
-      intelligenceProvider: providerRuntimeBinding.provider_id,
       narsDelegatedAuthorityHandoff: delegatedAuthorityHandoff,
-      providerSettings: {
-        model: providerRuntimeBinding.model,
-        thinking: providerRuntimeBinding.reasoning_effort,
-        stream: process.env.NARADA_AGENT_CLI_STREAM !== '0',
-        baseUrl: providerRuntimeBinding.base_url,
-        apiKey: providerRuntimeBinding.api_key,
-        runtimeBinding: redactProviderRuntimeBinding(providerRuntimeBinding),
-        ...(planResolution ? { resolution: planResolution } : {}),
+      intelligence: {
+        registryDbPath,
+        sites: loci,
+        principal,
+        access: {
+          action: 'invoke',
+          requested_region: 'global',
+          data_classification: 'internal',
+          requested_retention_days: 0,
+          provider_training: 'prohibited',
+          expected_usage: { amount: 1, unit: 'requests' },
+          expected_cost: { amount: 1, currency: 'USD' },
+        },
+        topologyObservations: [],
       },
       displaySettings: {
         toolOutputs: process.env.NARADA_AGENT_CLI_TOOL_OUTPUTS !== '0',
@@ -537,6 +526,7 @@ async function main() {
       reason: 'runtime_binding_failed',
       error: error instanceof Error ? error.message : String(error),
     });
+    await runtimeService?.intelligenceRuntime?.close?.();
     await closeProjections({ healthProjection, eventStreamProjection });
     runtimeHost.transition('stopped', { reason: 'startup_cleanup_complete' });
     throw error;
@@ -679,12 +669,14 @@ async function main() {
     console.error(`[agent-runtime-server] carrier runtime failed: ${error instanceof Error ? error.message : String(error)}`);
   } finally {
     await lifecycleDispatchTail;
+    await lifecycleDispatcher?.taskExecutabilityDispatch?.close?.({ reason: 'runtime_shutdown' });
     process.off('SIGINT', onSigint);
     process.off('SIGTERM', onSigterm);
     process.stdin.unpipe?.(runtimeInput);
     controlInputBridge?.close();
     projectedTerminal?.close();
     healthProjection?.rejectAll(new Error('carrier_closed'));
+    await runtimeService?.intelligenceRuntime?.close?.();
     if (runtimeHost.state === 'serving' || runtimeHost.state === 'failed') {
       runtimeHost.transition('closing', {
         reason: runtimeHost.state === 'failed' ? 'runtime_failure_cleanup' : 'runtime_service_stopped',

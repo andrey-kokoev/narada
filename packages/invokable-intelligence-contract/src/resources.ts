@@ -10,6 +10,7 @@ import type { ResourceId, ResourceRef } from "./ids.js";
 export const INFERENCE_PROVIDER_SCHEMA = "narada.invokable-intelligence.inference-provider.v1" as const;
 export const MODEL_PROVIDER_SCHEMA = "narada.invokable-intelligence.model-provider.v1" as const;
 export const MODEL_SCHEMA = "narada.invokable-intelligence.model.v1" as const;
+export const MODEL_OFFERING_SCHEMA = "narada.invokable-intelligence.model-offering.v1" as const;
 export const INFERENCE_ENDPOINT_SCHEMA = "narada.invokable-intelligence.inference-endpoint.v1" as const;
 export const ADAPTER_SCHEMA = "narada.invokable-intelligence.adapter.v1" as const;
 export const CREDENTIAL_LOCATOR_SCHEMA = "narada.invokable-intelligence.credential-locator.v1" as const;
@@ -20,6 +21,38 @@ interface ResourceBase {
   id: ResourceId;
   display_name?: string;
   metadata?: Record<string, string>;
+}
+
+/** Versioned invocation wire contract implemented by an adapter. */
+export type InferenceProtocol =
+  | { family: "openai"; operation: "chat-completions" | "responses"; version: string }
+  | { family: "anthropic"; operation: "messages"; version: string }
+  | { family: "cloudflare-workers-ai"; operation: "run"; version: string }
+  | { family: "codex-subscription"; operation: "responses"; version: string }
+  | { family: "narada"; operation: "invoke"; version: string };
+
+/** Concrete endpoint coordinate. Selection never depends on ambient process configuration. */
+export type InferenceEndpointAddress =
+  | { kind: "url"; url: string }
+  | { kind: "workers-binding"; binding: string }
+  | { kind: "runtime-service"; service: string };
+
+/**
+ * One model as offered through one inference service and endpoint.  This is
+ * the narrowest durable catalog identity for service-specific capability,
+ * pricing, availability, version, or region assertions.
+ */
+export interface ModelOffering extends ResourceBase {
+  schema: typeof MODEL_OFFERING_SCHEMA;
+  model: ResourceRef;
+  model_provider: ResourceRef;
+  inference_provider: ResourceRef;
+  endpoint: ResourceRef;
+  /** Service-specific model identifier sent over this offering (not the canonical model id). */
+  invocation_model_key: string;
+  service_class: string;
+  version?: string;
+  region?: string;
 }
 
 /** Who runs inference, e.g. Cloudflare Workers AI, a remote gateway. */
@@ -46,6 +79,7 @@ export interface InferenceEndpoint extends ResourceBase {
   inference_provider: ResourceRef;
   /** Ref to the Adapter used to drive this endpoint. */
   adapter: ResourceRef;
+  address: InferenceEndpointAddress;
   /** Refs to Models this endpoint can serve. */
   serves: ResourceRef[];
   /** Ref to the CredentialLocator this endpoint authenticates with, when required. */
@@ -56,6 +90,7 @@ export interface InferenceEndpoint extends ResourceBase {
 export interface InferenceAdapter extends ResourceBase {
   schema: typeof ADAPTER_SCHEMA;
   runtime_family: "node" | "workers" | "test";
+  protocol: InferenceProtocol;
 }
 
 /**
@@ -86,6 +121,7 @@ export type Resource =
   | InferenceProvider
   | ModelProvider
   | Model
+  | ModelOffering
   | InferenceEndpoint
   | InferenceAdapter
   | CredentialLocator
@@ -96,6 +132,7 @@ export const RESOURCE_SCHEMAS = [
   INFERENCE_PROVIDER_SCHEMA,
   MODEL_PROVIDER_SCHEMA,
   MODEL_SCHEMA,
+  MODEL_OFFERING_SCHEMA,
   INFERENCE_ENDPOINT_SCHEMA,
   ADAPTER_SCHEMA,
   CREDENTIAL_LOCATOR_SCHEMA,
@@ -110,6 +147,7 @@ export const SCHEMA_ID_KIND: Record<ResourceSchema, import("./ids.js").ResourceK
   [INFERENCE_PROVIDER_SCHEMA]: "inference-provider",
   [MODEL_PROVIDER_SCHEMA]: "model-provider",
   [MODEL_SCHEMA]: "model",
+  [MODEL_OFFERING_SCHEMA]: "model-offering",
   [INFERENCE_ENDPOINT_SCHEMA]: "inference-endpoint",
   [ADAPTER_SCHEMA]: "adapter",
   [CREDENTIAL_LOCATOR_SCHEMA]: "credential-locator",

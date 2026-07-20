@@ -1,77 +1,63 @@
 # @narada2/invokable-intelligence-management
 
-Governed intelligence catalog and policy management, plus the legacy
-provider-registry migration (#2183). Ships the `narada-intelligence` CLI
-and a host-agnostic MCP tool surface over the registry (#2181) and
-resolver (#2182).
+Canonical application-service boundary for managing Narada's invokable-intelligence catalog, policy, access, topology, and cross-Site materializations.
 
-## Migration (legacy → canonical)
+`IntelligenceManagementService` owns the operation semantics. The typed library helpers, CLI, and host-agnostic MCP definitions are projections of that service and use the same:
 
-`buildMigrationPlan` untangles the legacy
-`narada.carrier.provider_registry.v1` shape — which conflates inference
-provider, model provider, model, adapter, credentials, and defaults —
-into canonical records:
-
-- one `InferenceProvider`, `InferenceEndpoint`, and (shared)
-  `InferenceAdapter` per legacy provider id;
-- `ModelProvider` per vendor and one `Model` per available model, related
-  explicitly;
-- `CredentialLocator` per provider (`env` store for api_key_secret,
-  `none` for codex local subscription) held by the Host Site — never any
-  secret material;
-- capability assertions for support state and thinking levels, stamped
-  `provenance.source = "migration"` with the source reference;
-- a target-Site `defaults` policy carrying `default_provider`,
-  per-provider `default_model`, and cognition-tier defaults — as policy,
-  not environment variables.
-
-Guarantees:
-
-- **Dry-run by default.** `dryRunMigration` diffs the deterministic plan
-  against store state (`add` / `update` / `unchanged`) without mutating.
-- **Idempotent apply.** The CLI derives provenance time from the source
-  file's mtime, so re-running over unchanged content replans byte
-  identically and applies zero writes.
-- **No fabricated feasibility.** Migration never asserts credential
-  feasibility — that belongs to host probes, admitted per locus.
+- `narada.invokable-intelligence.management-result.v1` success/result envelope;
+- `narada.invokable-intelligence.management-error.v1` structured refusal envelope;
+- explicit Site, authority-locus, actor, principal-consent, destination, target, decision-time, and evidence context for mutations;
+- registry and materialization adapters rather than direct SQLite/D1 writes;
+- secret-bearing input/output refusal.
 
 ## Operations
 
-`listResources` / `showResource` (with derived relations) /
-`listAssertions` / `listPolicies` / `validateStore` (full contract +
-reference integrity) / `explainResolution` (resolve + operator-readable
-provenance lines).
+Read operations cover canonical resources, model offerings, assertions, policies, catalog records, executable routes, topologies, authority statements, access records, materialized projections, and materialization audit events. All list operations are bounded and paged.
 
-Writes are locus-checked against the session's owning Site:
-`writeRecord` rejects cross-locus writes (`cross-locus-write`);
-`materializeRecord` is the explicit authorized materialization operation
-and stamps provenance so cross-locus effects are auditable.
+Mutation operations are:
+
+- `admit-catalog-record` for a same-locus, validated canonical record;
+- `materialize`, `refresh`, and `reject-materialization` through the dedicated provenance-preserving materialization store;
+- `revoke-materialization` for origin-authorized revocation.
+
+Direct foreign-locus catalog writes are refused. Materialization identity, transitions, evidence, and audit remain queryable through `inspect-materialization` and `explain-materialization`. Resolution explanation requires an explicit decision time; it never substitutes wall-clock time.
 
 ## CLI
 
-```sh
-narada-intelligence --db .ai/intelligence-registry.db validate
-narada-intelligence list resources --kind model
-narada-intelligence show model:openai-api-gpt-5.6-sol
-narada-intelligence migrate --registry provider-registry.json \
-  --target site:X --user site:Y --host site:Z            # dry-run
-narada-intelligence migrate ... --apply                  # writes
-narada-intelligence explain --intent intent.json --target ... --user ... --host ...
-```
-
-## MCP surface
-
-`createManagementTools(session)` returns host-agnostic tool definitions
-(`intelligence_list_resources`, `intelligence_show_resource`,
-`intelligence_list_assertions`, `intelligence_list_policies`,
-`intelligence_validate_store`, `intelligence_explain_resolution`) with
-structured handlers and `{ error: { code, message } }` failure shape. Any
-MCP host can register them; errors are data, not throws.
-
-## Scripts
+The CLI accepts canonical payloads and mutation contexts only by JSON file reference, keeping raw payloads and secrets out of command arguments.
 
 ```sh
-pnpm build       # tsc → dist/
-pnpm typecheck
-pnpm test        # node --import tsx --test
+narada-intelligence --db .ai/intelligence.db list catalog-records --limit 50
+narada-intelligence --db .ai/intelligence.db show catalog-record catalog-record:...
+narada-intelligence --db .ai/intelligence.db validate
+
+narada-intelligence --db .ai/intelligence.db --owning-site site:target \
+  admit-catalog-record --record record.json --context mutation-context.json
+
+narada-intelligence --db .ai/intelligence.db --owning-site site:target \
+  materialize --envelope envelope.json --admission admission.json --context mutation-context.json
+
+narada-intelligence --db .ai/intelligence.db explain-resolution \
+  --intent intent.json --target site:target --user site:user --host site:host \
+  --runtime node --time 2026-07-19T00:00:00Z
 ```
+
+Use `narada-intelligence help` for the complete collection and operation list. Every canonical operation prints one management result or management error JSON document.
+
+## MCP
+
+`createManagementTools(session)` returns host-agnostic definitions named `intelligence_management_*`. Canonical records, intents, materialization envelopes, admissions, and revocations are accepted only through immutable input references resolved by the MCP host. Mutation context remains explicit and schema-labelled.
+
+## Legacy migration
+
+The package temporarily retains the dry-run-by-default provider-registry migration used for cutover. It factorizes legacy provider entries into canonical inference providers, model providers, models, offerings, adapters, credential locators, routes, access records, policies, and provenance-bearing catalog records. It does not grant legacy configuration runtime authority. The migration surface is removed after verified zero-consumer cutover.
+
+## Verification
+
+```sh
+pnpm --filter @narada2/invokable-intelligence-management typecheck
+pnpm --filter @narada2/invokable-intelligence-management test
+pnpm --filter @narada2/invokable-intelligence-management build
+```
+
+The focused suite covers SQLite and D1 parity, library/CLI/MCP semantics, list/show/validate/mutate/explain, every materialization transition, replay idempotency, cross-locus refusal, explicit time, secret refusal, and evidence/audit readback.

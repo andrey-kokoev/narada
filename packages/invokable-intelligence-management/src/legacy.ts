@@ -14,6 +14,7 @@ export interface LegacyCredentialRequirement {
 export interface LegacyProviderEntry {
   meaning?: string;
   base_url?: string;
+  chat_completions_path?: string;
   default_model?: string;
   default_thinking?: string;
   available_models?: string[];
@@ -60,13 +61,22 @@ export function parseLegacyRegistry(raw: unknown): LegacyProviderRegistry {
   return doc as unknown as LegacyProviderRegistry;
 }
 
-/** Slugify a legacy model name for use in a ResourceId, scoped by the legacy provider id. */
+/**
+ * Canonical model identity is scoped by the model publisher, never by the
+ * inference-provider entry through which the model happened to be offered.
+ */
 export function legacyModelResourceId(legacyProviderId: string, modelName: string): string {
-  const slug = modelName
+  const namespace = legacyProviderId === "openrouter-api" && modelName.includes("/")
+    ? modelName.slice(0, modelName.indexOf("/"))
+    : legacyVendorSlug(legacyProviderId);
+  const publisherModelName = legacyProviderId === "openrouter-api" && modelName.includes("/")
+    ? modelName.slice(modelName.indexOf("/") + 1)
+    : modelName;
+  const slug = publisherModelName
     .toLowerCase()
     .replace(/[^a-z0-9._-]+/g, "-")
     .replace(/^-+|-+$/g, "");
-  return `model:${legacyProviderId}-${slug}`;
+  return `model:${namespace}-${slug}`;
 }
 
 /** Map a legacy provider id to the vendor (model provider) slug. */

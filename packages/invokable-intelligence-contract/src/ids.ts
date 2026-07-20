@@ -8,6 +8,7 @@ export const RESOURCE_KINDS = [
   "inference-provider",
   "model-provider",
   "model",
+  "model-offering",
   "inference-endpoint",
   "adapter",
   "credential-locator",

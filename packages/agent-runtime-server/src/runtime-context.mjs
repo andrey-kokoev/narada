@@ -5,7 +5,23 @@ function optionalString(value) {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
 
-/** Build only the launch binding required by the server and session core. */
+function frozenIntelligenceContext(value) {
+  if (value == null) return null;
+  if (typeof value !== 'object' || Array.isArray(value)) throw new TypeError('intelligence must be an object');
+  return Object.freeze({
+    ...value,
+    sites: value.sites ? Object.freeze({
+      targetSite: value.sites.targetSite ? Object.freeze({ ...value.sites.targetSite }) : null,
+      userSite: value.sites.userSite ? Object.freeze({ ...value.sites.userSite }) : null,
+      hostSite: value.sites.hostSite ? Object.freeze({ ...value.sites.hostSite }) : null,
+    }) : null,
+    access: value.access ? Object.freeze({ ...value.access }) : null,
+    topologyObservations: Object.freeze([...(value.topologyObservations ?? [])]),
+    requestedOptions: Object.freeze({ ...(value.requestedOptions ?? {}) }),
+  });
+}
+
+/** Build launch/session context. Intelligence carries only canonical context and request constraints. */
 export function createNarsRuntimeContext({
   identity,
   agentIdentityRef: inputAgentIdentityRef = null,
@@ -14,14 +30,13 @@ export function createNarsRuntimeContext({
   siteId = null,
   sessionPath = null,
   eventsPath = null,
-  intelligenceProvider = process.env.NARADA_INTELLIGENCE_PROVIDER,
-  providerSettings = {},
+  intelligence = null,
+  invocationSettings = {},
   ...rest
 } = {}) {
   if (!identity) throw new TypeError('identity is required');
   if (!session) throw new TypeError('session is required');
   if (!siteRoot) throw new TypeError('siteRoot is required');
-  if (!intelligenceProvider) throw new TypeError('intelligenceProvider is required');
   const resolvedPaths = resolveNaradaSitePaths({ siteRoot, sessionId: session });
   const paths = sessionPath && eventsPath
     ? { controlPath: resolvedPaths.narsControlPath, sessionPath, eventsPath }
@@ -34,7 +49,7 @@ export function createNarsRuntimeContext({
   const agentIdentityRef = inputAgentIdentityRef && typeof inputAgentIdentityRef === 'object'
     ? normalizeAgentIdentityRefV2(inputAgentIdentityRef, { site_id: siteId, agent_id: identity })
     : resolved.status === 'resolved' ? resolved.value : null;
-  const invocationScope = providerSettings.invocationScope ?? providerSettings.invocation_scope ?? {
+  const invocationScope = invocationSettings.invocationScope ?? invocationSettings.invocation_scope ?? {
     schema: 'narada.ai_process_invocation_scope.v1',
     kind: 'narada_runtime_session',
     site_id: siteId,
@@ -43,7 +58,7 @@ export function createNarsRuntimeContext({
     agent_identity_ref: agentIdentityRef,
     launch_session_id: optionalString(rest.launchSessionId),
   };
-  const maxToolRounds = normalizeMaxToolRounds(providerSettings.maxToolRounds ?? process.env.NARADA_MAX_TOOL_ROUNDS);
+  const maxToolRounds = normalizeMaxToolRounds(invocationSettings.maxToolRounds ?? process.env.NARADA_MAX_TOOL_ROUNDS);
   return Object.freeze({
     ...rest,
     identity,
@@ -59,20 +74,14 @@ export function createNarsRuntimeContext({
     controlPath: paths.controlPath,
     sessionPath: paths.sessionPath,
     eventsPath: paths.eventsPath,
-    intelligenceProvider,
+    intelligence: frozenIntelligenceContext(intelligence),
     maxToolRounds,
     launchSessionId: optionalString(rest.launchSessionId),
     processOwnership: optionalString(rest.processOwnership),
     processRole: optionalString(rest.processRole),
     createdByPid: rest.createdByPid ?? null,
-    providerSettings: Object.freeze({
-      model: providerSettings.model ?? process.env.NARADA_AI_MODEL ?? null,
-      apiKey: providerSettings.apiKey ?? process.env.NARADA_AI_API_KEY ?? null,
-      baseUrl: providerSettings.baseUrl ?? process.env.NARADA_AI_BASE_URL ?? null,
-      thinking: providerSettings.thinking ?? process.env.NARADA_AI_THINKING ?? 'medium',
-      stream: providerSettings.stream !== false,
-      goal: providerSettings.goal ?? null,
-      runtimeBinding: providerSettings.runtimeBinding ?? null,
+    invocationSettings: Object.freeze({
+      goal: invocationSettings.goal ?? null,
       invocationScope,
     }),
   });

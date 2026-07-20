@@ -291,6 +291,7 @@ export const NARS_RUNTIME_EVENT_ALIASES = Object.freeze({
   carrier_command_result: 'command_result',
   directive_complete: 'turn_complete',
   error: 'runtime_error',
+  'item.completed': 'tool_result',
 });
 export const NARS_TURN_TERMINAL_STATES = Object.freeze([
   'accepted',
@@ -1919,7 +1920,9 @@ export function isNarsRuntimeEventKind(eventKind) {
 }
 
 export function narsLifecycleHooksForEvent(event) {
-  const eventKind = normalizeNarsRuntimeEventKind(isObject(event) ? event.event : event);
+  const rawEventKind = isObject(event) ? event.event : event;
+  if (rawEventKind === 'item.completed' && event?.item?.type !== 'mcp_tool_call') return Object.freeze([]);
+  const eventKind = normalizeNarsRuntimeEventKind(rawEventKind);
   return NARS_EVENT_TO_LIFECYCLE_HOOKS[eventKind] ?? Object.freeze([]);
 }
 

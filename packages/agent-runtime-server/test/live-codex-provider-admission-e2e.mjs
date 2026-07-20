@@ -1,13 +1,74 @@
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
-import { existsSync, readFileSync, rmSync } from 'node:fs';
-import { mkdtemp, mkdir } from 'node:fs/promises';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { mkdtemp, mkdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { buildCanonicalLocalTestSeed, CANONICAL_LOCAL_TEST_IDS } from '@narada2/invokable-intelligence-contract';
+import { SqliteRegistryStore } from '@narada2/invokable-intelligence-registry';
 import { spawnTestChild } from '@narada2/process-launch-posture';
 
 const { readNarsSessionIndex } = await import('../../nars-session-core/src/session-index.mjs');
+
+async function seedIntelligenceRegistry(siteRoot) {
+  const dbPath = join(siteRoot, '.ai', 'intelligence-registry.db');
+  await mkdir(join(siteRoot, '.ai'), { recursive: true });
+  const store = await SqliteRegistryStore.open(dbPath);
+  try {
+    const now = new Date().toISOString();
+    const validUntil = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    const seed = JSON.parse(JSON.stringify(buildCanonicalLocalTestSeed({
+      adapterProtocol: { family: 'codex-subscription', operation: 'responses', version: '1' },
+      credentialStore: 'none',
+      credentialReference: 'codex-subscription-session',
+      invocationModelKey: 'gpt-5.5',
+      now,
+      validUntil,
+    })));
+    const replacements = new Map([
+      ['model-provider:kimi', 'model-provider:openai'],
+      ['model:kimi-k2-thinking', 'model:openai-gpt-5.5'],
+      ['model-offering:kimi-via-local-api', 'model-offering:gpt-5.5-via-codex-subscription'],
+      ['route:kimi-local-api', 'route:gpt-5.5-codex-subscription'],
+      ['adapter:openai-compatible-http', 'adapter:codex-subscription'],
+      ['inference-endpoint:remote-default', 'inference-endpoint:codex-subscription'],
+      ['inference-provider:remote-api', 'inference-provider:codex-subscription'],
+      ['local-api', 'codex-subscription'],
+      ['Kimi K2 Thinking', 'GPT-5.5'],
+      ['model-owner:kimi', 'model-owner:openai'],
+    ]);
+    for (const record of seed.records) {
+      let serialized = JSON.stringify(record.document);
+      for (const [from, to] of replacements) serialized = serialized.replaceAll(from, to);
+      record.document = JSON.parse(serialized);
+      record.record_id = record.document.id;
+      if (record.document.schema === 'narada.invokable-intelligence.adapter.v1') {
+        record.document.protocol = { family: 'codex-subscription', operation: 'responses', version: '1' };
+      }
+      if (record.document.schema === 'narada.invokable-intelligence.inference-endpoint.v1') {
+        record.document.address = { kind: 'runtime-service', service: 'codex-subscription' };
+      }
+      if (record.document.schema === 'narada.invokable-intelligence.model-offering.v1') {
+        record.document.invocation_model_key = 'gpt-5.5';
+      }
+      if (record.document.schema === 'narada.invokable-intelligence.invocation-route-candidate.v1') {
+        record.document.topology.nodes = record.document.topology.nodes.map((node) => ({ ...node, required_feasibility: [] }));
+        record.document.topology.edges = record.document.topology.edges.map((edge) => ({ ...edge, required_feasibility: [] }));
+      }
+      if (record.document.schema === 'narada.invokable-intelligence.access-grant.v1') {
+        record.document.scope.purposes = [...new Set([...record.document.scope.purposes, 'agent-session'])];
+      }
+      if (record.document.schema === 'narada.invokable-intelligence.data-governance-requirement.v1') {
+        record.document.purposes = [...new Set([...record.document.purposes, 'agent-session'])];
+      }
+    }
+    await store.loadCatalogSeed(seed);
+  } finally {
+    await store.close();
+  }
+  return dbPath;
+}
 
 const REPO_ROOT = fileURLToPath(new URL('../../..', import.meta.url));
 const CLI_ENTRYPOINT = resolve(REPO_ROOT, 'packages', 'layers', 'cli', 'dist', 'main.js');
@@ -94,13 +155,15 @@ async function runLiveCodexAdmissionE2e() {
   } finally {
     for (const client of clients.reverse()) client.close();
     for (const runtime of runtimes.reverse()) await closeRuntime(runtime);
-    rmSync(siteRoot, { recursive: true, force: true });
+    await rm(siteRoot, { recursive: true, force: true, maxRetries: 10, retryDelay: 250 });
   }
 }
 
 async function createEphemeralSiteRoot() {
   const root = await mkdtemp(join(tmpdir(), 'narada-live-codex-admission-'));
   await mkdir(join(root, '.narada', 'crew', 'nars-sessions'), { recursive: true });
+  await mkdir(join(root, '.narada', 'runtime'), { recursive: true });
+  await seedIntelligenceRegistry(root);
   return root;
 }
 
@@ -113,11 +176,11 @@ async function startRuntime({ siteRoot, agentId }) {
     'agent-web-ui',
     '--site-root', siteRoot,
     '--target-site-id', SITE_ID,
-    '--workspace-root', siteRoot,
+    '--workspace-root', REPO_ROOT,
     '--agent', agentId,
     '--runtime', 'narada-agent-runtime-server',
-    '--intelligence-provider', 'codex-subscription',
     '--mcp-scope', 'none',
+    '--launch-binding', join(siteRoot, '.narada', 'runtime', 'codex-live-launch-binding.json'),
     '--exec',
     '--format', 'json',
   ], {
@@ -125,11 +188,14 @@ async function startRuntime({ siteRoot, agentId }) {
     env: {
       ...process.env,
       NARADA_SITE_ROOT: siteRoot,
-      NARADA_WORKSPACE_ROOT: siteRoot,
+      NARADA_WORKSPACE_ROOT: REPO_ROOT,
       NARADA_SITE_ID: SITE_ID,
-      NARADA_INTELLIGENCE_PROVIDER: 'codex-subscription',
       NARADA_MCP_SCOPE: 'none',
-      CODEX_MODEL: process.env.CODEX_MODEL ?? 'gpt-5.5',
+      NARADA_INTELLIGENCE_REGISTRY_DB: join(siteRoot, '.ai', 'intelligence-registry.db'),
+      NARADA_INTELLIGENCE_TARGET_SITE: CANONICAL_LOCAL_TEST_IDS.targetSite,
+      NARADA_INTELLIGENCE_USER_SITE: CANONICAL_LOCAL_TEST_IDS.userSite,
+      NARADA_INTELLIGENCE_HOST_SITE: CANONICAL_LOCAL_TEST_IDS.hostSite,
+      NARADA_INTELLIGENCE_PRINCIPAL_ID: CANONICAL_LOCAL_TEST_IDS.principal,
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -151,9 +217,67 @@ async function waitForSessionRecord(runtime, siteRoot) {
       return record?.event_endpoint && record?.health_endpoint ? record : false;
     }, `session_record:${runtime.agentId}`, STARTUP_TIMEOUT_MS);
   } catch (error) {
-    throw new Error(`${error instanceof Error ? error.message : String(error)}:${runtimeOutput(runtime)}`);
+    const diagnostics = sessionRecordDiagnostics(siteRoot);
+    throw new Error(`${error instanceof Error ? error.message : String(error)}:session_record_diagnostics=${JSON.stringify(diagnostics)}:${runtimeOutput(runtime)}`);
   }
 }
+function sessionRecordDiagnostics(siteRoot) {
+  const sessionRoots = [
+    join(siteRoot, '.narada', 'crew', 'nars-sessions'),
+    join(siteRoot, 'crew', 'nars-sessions'),
+  ];
+  const sessionRootDiagnostics = sessionRoots.map((root) => {
+    let relativeFiles = [];
+    try {
+      if (existsSync(root)) relativeFiles = readdirSync(root, { recursive: true }).map(String).slice(0, 80);
+    } catch {}
+    const recordFiles = relativeFiles.filter((relativePath) => relativePath.endsWith('session-index-record.json'));
+    return {
+      root,
+      exists: existsSync(root),
+      entries: relativeFiles,
+      records: recordFiles.map((relativePath) => {
+        const record = readJsonFile(join(root, relativePath));
+        const sessionLogPath = join(root, relativePath.replace(/session-index-record\.json$/, 'session.jsonl'));
+        return {
+          path: join(root, relativePath),
+          agent_id: record?.agent_id ?? null,
+          session_id: record?.session_id ?? null,
+          runtime_session_id: record?.runtime_session_id ?? null,
+          event_endpoint: record?.event_endpoint ?? null,
+          health_endpoint: record?.health_endpoint ?? null,
+          session_path: record?.session_path ?? null,
+          events_path: record?.events_path ?? null,
+          session_events_tail: readJsonlFile(sessionLogPath).slice(-20),
+        };
+      }),
+      index: readJsonFile(join(root, 'index.json')),
+    };
+  });
+  const runtimeProcessRoot = join(siteRoot, '.ai', 'runtime', 'agent-start-processes');
+  let runtimeProcessEntries = [];
+  try {
+    if (existsSync(runtimeProcessRoot)) runtimeProcessEntries = readdirSync(runtimeProcessRoot, { recursive: true }).map(String).slice(0, 120);
+  } catch {}
+  const runtimeProcessFiles = Object.fromEntries(runtimeProcessEntries
+    .filter((relativePath) => /\.(log|json)$/i.test(relativePath))
+    .slice(0, 40)
+    .map((relativePath) => {
+      const path = join(runtimeProcessRoot, relativePath);
+      let content = '';
+      try { content = readFileSync(path, 'utf8').slice(-8000); } catch {}
+      return [relativePath, content];
+    }));
+  return {
+    session_roots: sessionRootDiagnostics,
+    runtime_process_root: runtimeProcessRoot,
+    runtime_process_entries: runtimeProcessEntries,
+    runtime_process_files: runtimeProcessFiles,
+    reconciliation: readJsonFile(join(siteRoot, '.ai', 'runtime', 'agent-start-reconciliation', 'v1.json')),
+  };
+}
+
+
 
 function findLatestSessionRecord(siteRoot, agentId) {
   const records = [];
@@ -168,6 +292,14 @@ function findLatestSessionRecord(siteRoot, agentId) {
         if (entry?.agent_id !== agentId) continue;
         const recordPath = entry.record_path ?? (entry.session_dir ? join(entry.session_dir, 'session-index-record.json') : null);
         if (!recordPath || !existsSync(recordPath)) continue;
+        const record = readJsonFile(recordPath);
+        if (record?.agent_id === agentId) records.push(record);
+      }
+    } catch {}
+    try {
+      for (const relativePath of readdirSync(sessionsRoot, { recursive: true })) {
+        if (!String(relativePath).endsWith('session-index-record.json')) continue;
+        const recordPath = join(sessionsRoot, String(relativePath));
         const record = readJsonFile(recordPath);
         if (record?.agent_id === agentId) records.push(record);
       }
@@ -277,6 +409,16 @@ function assertInvocationLifecycle(record, invocationId) {
 }
 
 async function closeRuntime(runtime) {
+  const ownedPid = Number(runtime?.record?.process_ownership?.pid);
+  if (Number.isInteger(ownedPid) && ownedPid > 0 && ownedPid !== process.pid) {
+    if (process.platform === 'win32') {
+      const killer = spawnTestChild('taskkill.exe', ['/PID', String(ownedPid), '/T', '/F'], { stdio: 'ignore' });
+      await Promise.race([once(killer, 'exit'), delay(5000)]);
+      if (killer.exitCode === null) killer.kill('SIGKILL');
+    } else {
+      try { process.kill(ownedPid, 'SIGTERM'); } catch {}
+    }
+  }
   if (!runtime?.child || runtime.child.exitCode !== null) return;
   const pid = Number(runtime.child.pid);
   if (process.platform === 'win32' && Number.isInteger(pid) && pid > 0) {

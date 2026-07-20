@@ -156,6 +156,8 @@ assert.equal(NARS_RUNTIME_EVENT_KINDS.includes('command_result'), true);
 assert.equal(normalizeNarsRuntimeEventKind('carrier_command_result'), 'command_result');
 assert.equal(normalizeNarsRuntimeEventKind('directive_complete'), 'turn_complete');
 assert.deepEqual(narsLifecycleHooksForEvent({ event: 'tool_call' }), ['onToolCall']);
+assert.deepEqual(narsLifecycleHooksForEvent({ event: 'item.completed', item: { type: 'mcp_tool_call' } }), ['onToolResult']);
+assert.deepEqual(narsLifecycleHooksForEvent({ event: 'item.completed', item: { type: 'agent_message' } }), []);
 assert.deepEqual(narsLifecycleHooksForEvent({ event: 'carrier_command_result' }), ['onCommandResult']);
 assert.deepEqual(narsLifecycleHooksForEvent({ event: 'session_health' }), ['afterSessionStatus']);
 assert.deepEqual(narsLifecycleHooksForEvent({ event: 'session_resume' }), ['afterSessionStatus']);

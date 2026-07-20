@@ -28,10 +28,11 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "node --import tsx --test test/index.test.ts"
+    "test": "node --import tsx --test test/*.test.ts"
   },
   "dependencies": {
     "@narada2/invokable-intelligence-contract": "workspace:*",
+    "@narada2/invokable-intelligence-materialization": "workspace:*",
     "@narada2/invokable-intelligence-registry": "workspace:*",
     "@narada2/invokable-intelligence-resolver": "workspace:*"
   },
@@ -39,5 +40,6 @@
     "@types/node": "^22.5.0",
     "tsx": "^4.7.0",
     "typescript": "^5.3.0"
-  }
+  },
+  "description": "Application-service boundary for managing Narada's invokable-intelligence catalog, policy, and topology"
 }

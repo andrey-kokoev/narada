@@ -85,11 +85,23 @@ function hookHandlersFor(hookEntry, hook) {
   return typeof handler === 'function' ? [handler.bind(hookEntry)] : [];
 }
 
-export function createNarsLifecycleHookDispatcher({ hooks = [], onFailure = null, clock = () => new Date().toISOString() } = {}) {
+export function createNarsLifecycleHookDispatcher({
+  hooks = [],
+  onFailure = null,
+  clock = () => new Date().toISOString(),
+  taskExecutabilityDispatch = null,
+} = {}) {
+  const normalizedHooks = Array.isArray(hooks) ? [...hooks] : [];
+  if (taskExecutabilityDispatch && typeof taskExecutabilityDispatch.onToolResult === 'function') {
+    normalizedHooks.push({
+      onToolResult: (payload) => taskExecutabilityDispatch.onToolResult(payload),
+    });
+  }
   return {
-    hooks: Array.isArray(hooks) ? [...hooks] : [],
+    hooks: normalizedHooks,
     onFailure: typeof onFailure === 'function' ? onFailure : null,
     clock,
+    taskExecutabilityDispatch,
     dispatched: [],
     failures: [],
   };

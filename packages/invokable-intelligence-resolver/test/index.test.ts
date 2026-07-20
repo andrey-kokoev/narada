@@ -2,240 +2,270 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  BATCH_OFFPEAK,
-  CLOUDFLARE_KIMI,
-  fixtureBundle,
+  CANONICAL_LOCAL_TEST_IDS,
+  buildCanonicalLocalTestSeed,
+  canonicalTestClock,
+  feasibleTopologyObservations,
 } from "@narada2/invokable-intelligence-contract";
-import type { CapabilityAssertion, FixtureBundle, InvocationIntent, InvocationPlan } from "@narada2/invokable-intelligence-contract";
+import type {
+  CanonicalCatalogSeed,
+  InvocationIntent,
+  InvocationPlan,
+  InvocationRefusal,
+  ResolverMaterializedInputs,
+} from "@narada2/invokable-intelligence-contract";
 import { SqliteRegistryStore } from "@narada2/invokable-intelligence-registry";
 import type { IntelligenceRegistryStore } from "@narada2/invokable-intelligence-registry";
 
-import { resolveInvocation } from "../src/index.js";
+import { computeResolverStateDigests, resolveInvocation } from "../src/index.js";
 import type { ResolverContext } from "../src/index.js";
 
-const CONTEXT: ResolverContext = {
-  targetSite: { kind: "site", id: "site:thoughts-project" },
-  userSite: { kind: "site", id: "site:andrey-user" },
-  hostSite: { kind: "site", id: "site:andrey-pc" },
-  runtime: "workers",
-  time: "2026-07-19T03:00:00Z",
-};
+const AT = "2026-07-19T12:00:00.000Z";
+const IDS = CANONICAL_LOCAL_TEST_IDS;
 
-async function makeStore(fixture: FixtureBundle, mutate?: (f: FixtureBundle) => void): Promise<IntelligenceRegistryStore> {
-  const copy = fixtureBundle(fixture);
-  if (mutate) mutate(copy);
+function context(instant = AT): ResolverContext {
+  return {
+    targetSite: { kind: "site", id: IDS.targetSite },
+    userSite: { kind: "site", id: IDS.userSite },
+    hostSite: { kind: "site", id: IDS.hostSite },
+    runtime: "node",
+    clock: canonicalTestClock(instant),
+    access: {
+      action: "invoke",
+      requested_region: "global",
+      data_classification: "internal",
+      requested_retention_days: 0,
+      provider_training: "prohibited",
+      expected_usage: { amount: 1, unit: "requests" },
+      expected_cost: { amount: 1, currency: "USD" },
+    },
+    topology_observations: feasibleTopologyObservations(),
+  };
+}
+
+function materializedForeignConsent(seed: CanonicalCatalogSeed): ResolverMaterializedInputs {
+  const statementRecord = seed.records.find(({ record_id }) => record_id === "authority-statement:andrey-local-consent")!;
+  const payloadRecord = seed.records.find(({ record_id }) => record_id === IDS.grant)!;
+  assert.equal(statementRecord.document.schema, "narada.invokable-intelligence.authority-statement.v1");
+  if (statementRecord.document.schema !== "narada.invokable-intelligence.authority-statement.v1") throw new Error("test statement missing");
+  statementRecord.document.origin.site_id = IDS.userSite;
+  statementRecord.authority.site_id = IDS.userSite;
+  const envelope = {
+    schema: "narada.invokable-intelligence.materialization-envelope.v1" as const,
+    id: "materialization:andrey-local-consent:r1",
+    mode: "durable-projection" as const,
+    origin: {
+      site_id: IDS.userSite,
+      locus: statementRecord.document.origin.locus,
+      authority_ref: statementRecord.document.origin.authority_ref,
+    },
+    destination: { site_id: IDS.targetSite, resolver: "local" as const, store: "sqlite" as const },
+    statement: {
+      id: statementRecord.document.id,
+      kind: statementRecord.document.kind,
+      effect: statementRecord.document.effect,
+      source_revision: statementRecord.document.revision,
+      payload_digest: payloadRecord.source.digest,
+      payload_ref: payloadRecord.id,
+    },
+    allowed_scope: {
+      purposes: ["operator-chat"],
+      target_site_ids: [IDS.targetSite],
+      principal_ids: [IDS.principal],
+    },
+    issued_at: "2026-07-19T00:00:00.000Z",
+    expires_at: "2026-07-20T00:00:00.000Z",
+    provenance_refs: ["evidence:test-user-site-consent"],
+    authorization_ref: "grant:test-materialize-consent",
+  };
+  const admission = {
+    schema: "narada.invokable-intelligence.materialization-admission.v1" as const,
+    id: "admission:andrey-local-consent:r1",
+    envelope_id: envelope.id,
+    destination_site_id: IDS.targetSite,
+    decision: "admitted" as const,
+    decided_at: AT,
+    decided_by: "site-operator:test",
+    reason_codes: [],
+    evidence_refs: ["evidence:test-destination-admission"],
+    admitted_digest: payloadRecord.source.digest,
+  };
+  const projection = {
+    projection_key: `${IDS.targetSite}|${IDS.userSite}|principal|${statementRecord.document.id}`,
+    envelope,
+    admission,
+    status: "active" as const,
+    materialized_at: AT,
+  };
+  return { admitted: [projection], excluded: [], acquisition_refs: [admission.id] };
+}
+
+function intent(overrides: Partial<InvocationIntent> = {}): InvocationIntent {
+  return {
+    schema: "narada.invokable-intelligence.invocation-intent.v1",
+    id: "intent:canonical-resolver-test",
+    created_at: AT,
+    principal: IDS.principal,
+    purpose: "operator-chat",
+    input_digest: `sha256:${"a".repeat(64)}`,
+    requested_options: { thinking: "low" },
+    ...overrides,
+  };
+}
+
+async function makeStore(
+  mutate?: (seed: CanonicalCatalogSeed) => void,
+): Promise<IntelligenceRegistryStore> {
+  const seed = buildCanonicalLocalTestSeed();
+  mutate?.(seed);
   const store = await SqliteRegistryStore.open(":memory:");
-  await store.loadBundle(copy);
+  await store.loadCatalogSeed(seed);
   return store;
 }
 
-function asPlan(result: InvocationPlan | import("@narada2/invokable-intelligence-contract").InvocationRefusal): InvocationPlan {
-  assert.equal(result.schema, "narada.invokable-intelligence.invocation-plan.v1", JSON.stringify(result, null, 2));
+function asPlan(result: InvocationPlan | InvocationRefusal): InvocationPlan {
+  assert.equal(result.schema, "narada.invokable-intelligence.invocation-plan.v2", JSON.stringify(result, null, 2));
   return result as InvocationPlan;
 }
 
-test("identical canonical inputs produce byte-stable plans", async () => {
-  const store = await makeStore(CLOUDFLARE_KIMI);
-  const intent = CLOUDFLARE_KIMI.intents[0];
-  const first = asPlan(await resolveInvocation(intent, CONTEXT, { store }));
-  const second = asPlan(await resolveInvocation(intent, CONTEXT, { store }));
+function asRefusal(result: InvocationPlan | InvocationRefusal): InvocationRefusal {
+  assert.equal(result.schema, "narada.invokable-intelligence.invocation-refusal.v1", JSON.stringify(result, null, 2));
+  return result as InvocationRefusal;
+}
+
+test("identical canonical inputs produce byte-stable v2 plans and digests", async () => {
+  const store = await makeStore();
+  const input = intent();
+  const first = asPlan(await resolveInvocation(input, context(), { store }));
+  const second = asPlan(await resolveInvocation(input, context(), { store }));
   assert.equal(JSON.stringify(first), JSON.stringify(second));
-  assert.equal(first.id, second.id);
+  assert.deepEqual(
+    await computeResolverStateDigests(input, context(), { store }),
+    first.snapshot.digests,
+  );
   await store.close();
 });
 
-test("happy path: selects Kimi model via Cloudflare endpoint with merged options and provenance", async () => {
-  const store = await makeStore(CLOUDFLARE_KIMI);
-  const plan = asPlan(await resolveInvocation(CLOUDFLARE_KIMI.intents[0], CONTEXT, { store }));
-  assert.equal(plan.selected.model.id, "model:kimi-k2-thinking");
-  assert.equal(plan.selected.model_provider.id, "model-provider:kimi");
-  assert.equal(plan.selected.inference_provider.id, "inference-provider:cloudflare-workers-ai");
-  assert.equal(plan.selected.credential?.id, "credential-locator:cf-account-token");
+test("foreign consent is inert until its exact materialization is admitted", async () => {
+  const seed = buildCanonicalLocalTestSeed();
+  const materializedInputs = materializedForeignConsent(seed);
+  const store = await SqliteRegistryStore.open(":memory:");
+  await store.loadCatalogSeed(seed);
+
+  assert.equal(
+    asRefusal(await resolveInvocation(intent(), context(), { store })).reason_code,
+    "principal-consent-required",
+  );
+  const plan = asPlan(await resolveInvocation(intent(), context(), { store, materializedInputs }));
+  assert.ok(plan.snapshot.referenced_revisions.some(({ kind, immutable_ref }) =>
+    kind === "materialization" && immutable_ref === "materialization:andrey-local-consent:r1"));
+
+  const mismatched = structuredClone(materializedInputs);
+  mismatched.admitted[0]!.envelope.statement.payload_digest = `sha256:${"f".repeat(64)}`;
+  assert.equal(
+    asRefusal(await resolveInvocation(intent(), context(), { store, materializedInputs: mismatched })).reason_code,
+    "principal-consent-required",
+  );
+  await store.close();
+});
+
+test("plan names explicit offering, route, topology, access, authority, and bounded snapshot", async () => {
+  const store = await makeStore();
+  const plan = asPlan(await resolveInvocation(intent(), context(), { store }));
+  assert.equal(plan.selected.model.id, IDS.model);
+  assert.equal(plan.route.offering.id, IDS.offering);
+  assert.equal(plan.route.route_id, IDS.route);
+  assert.equal(plan.route.topology_id, "topology:local-openai-compatible");
+  assert.equal(plan.access.account_id, IDS.account);
+  assert.equal(plan.access.credential_binding_id, "credential-binding:local-api");
+  assert.equal(plan.access.grant_id, IDS.grant);
+  assert.equal(plan.access.entitlement_id, "entitlement:local-api");
+  assert.equal(plan.access.quota_id, "quota:local-api");
+  assert.equal(plan.access.budget_id, "budget:narada-local-api");
+  assert.deepEqual(plan.access.governance_requirement_ids, ["governance:narada-local-api"]);
+  assert.ok(plan.authority_provenance.decisions.some(({ statement_kind, disposition }) =>
+    statement_kind === "principal-consent" && disposition === "applied"));
+  assert.ok(Date.parse(plan.snapshot.valid_until) > Date.parse(plan.created_at));
   assert.equal(plan.options.thinking, "low");
-  assert.ok(plan.provenance.applied_constraints.length > 0);
-  assert.ok(plan.provenance.applied_preferences.length > 0);
-  assert.ok(plan.provenance.applied_defaults.length > 0);
   await store.close();
 });
 
-test("hard constraints accumulate and preferences cannot override them", async () => {
-  const store = await makeStore(CLOUDFLARE_KIMI, (f) => {
-    f.policies.push({
-      schema: "narada.invokable-intelligence.policy.v1",
-      id: "policy:thoughts-target-forbid-kimi",
-      locus: "target-site",
-      site: { kind: "site", id: "site:thoughts-project" },
-      kind: "hard-constraints",
-      revision: 1,
-      rules: [{ type: "forbid-resource", resource: { kind: "model", id: "model:kimi-k2-thinking" }, reason: "banned" }],
-    });
+test("absence of explicit route refuses before ranking", async () => {
+  const store = await makeStore((seed) => {
+    seed.records = seed.records.filter(({ record_kind }) => record_kind !== "route");
   });
-  const result = await resolveInvocation(CLOUDFLARE_KIMI.intents[0], CONTEXT, { store });
-  assert.equal(result.schema, "narada.invokable-intelligence.invocation-refusal.v1");
-  if (result.schema === "narada.invokable-intelligence.invocation-refusal.v1") {
-    assert.equal(result.reason_code, "no-candidates");
-    assert.ok(result.rejected_candidates[0].reasons.some((r) => r.includes("policy:thoughts-target-forbid-kimi")));
-  }
+  assert.equal(asRefusal(await resolveInvocation(intent(), context(), { store })).reason_code, "explicit-route-required");
   await store.close();
 });
 
-test("user preferences rank eligible candidates; ties break by lowest model id", async () => {
-  const store = await makeStore(CLOUDFLARE_KIMI, (f) => {
-    f.resources.push(
-      { schema: "narada.invokable-intelligence.model-provider.v1", id: "model-provider:other" },
-      {
-        schema: "narada.invokable-intelligence.model.v1",
-        id: "model:aaa-alternative",
-        provider: { kind: "model-provider", id: "model-provider:other" },
-      },
-      {
-        schema: "narada.invokable-intelligence.inference-endpoint.v1",
-        id: "inference-endpoint:cf-workers-ai-alt",
-        inference_provider: { kind: "inference-provider", id: "inference-provider:cloudflare-workers-ai" },
-        adapter: { kind: "adapter", id: "adapter:workers-ai-binding" },
-        serves: [{ kind: "model", id: "model:aaa-alternative" }],
-        credential: { kind: "credential-locator", id: "credential-locator:cf-account-token" },
-      },
-    );
-    f.assertions.push({
-      schema: "narada.invokable-intelligence.capability-assertion.v1",
-      id: "assert:aaa-thinking-levels",
-      subject: { kind: "model", id: "model:aaa-alternative" },
-      capability: { family: "thinking", name: "levels" },
-      value: { levels: ["off", "low", "medium", "high"] },
-      scope: { locus: "global" },
-      provenance: { source: "probe", recorded_at: "2026-07-19T00:00:00Z" },
-      validity: { fresh_as_of: "2026-07-19T00:00:00Z" },
-      confidence: 0.9,
-      evidence: [],
-    });
+test("principal identity and explicit principal consent are independent gates", async () => {
+  const missingPrincipal = await makeStore();
+  assert.equal(
+    asRefusal(await resolveInvocation(intent({ principal: undefined }), context(), { store: missingPrincipal })).reason_code,
+    "principal-required",
+  );
+  await missingPrincipal.close();
+
+  const missingConsent = await makeStore((seed) => {
+    seed.records = seed.records.filter(({ record_id }) => record_id !== "authority-statement:andrey-local-consent");
   });
-  // With the fixture preference for kimi-k2-thinking (0.8), kimi wins despite the higher id.
-  const preferred = asPlan(await resolveInvocation(CLOUDFLARE_KIMI.intents[0], CONTEXT, { store }));
-  assert.equal(preferred.selected.model.id, "model:kimi-k2-thinking");
-  // Without preferences, the lexicographically smaller model id wins the tie.
-  const storeNoPrefs = await makeStore(CLOUDFLARE_KIMI, (f) => {
-    f.resources.push(
-      { schema: "narada.invokable-intelligence.model-provider.v1", id: "model-provider:other" },
-      {
-        schema: "narada.invokable-intelligence.model.v1",
-        id: "model:aaa-alternative",
-        provider: { kind: "model-provider", id: "model-provider:other" },
-      },
-      {
-        schema: "narada.invokable-intelligence.inference-endpoint.v1",
-        id: "inference-endpoint:cf-workers-ai-alt",
-        inference_provider: { kind: "inference-provider", id: "inference-provider:cloudflare-workers-ai" },
-        adapter: { kind: "adapter", id: "adapter:workers-ai-binding" },
-        serves: [{ kind: "model", id: "model:aaa-alternative" }],
-        credential: { kind: "credential-locator", id: "credential-locator:cf-account-token" },
-      },
-    );
-    f.assertions.push({
-      schema: "narada.invokable-intelligence.capability-assertion.v1",
-      id: "assert:aaa-thinking-levels",
-      subject: { kind: "model", id: "model:aaa-alternative" },
-      capability: { family: "thinking", name: "levels" },
-      value: { levels: ["off", "low", "medium", "high"] },
-      scope: { locus: "global" },
-      provenance: { source: "probe", recorded_at: "2026-07-19T00:00:00Z" },
-      validity: { fresh_as_of: "2026-07-19T00:00:00Z" },
-      confidence: 0.9,
-      evidence: [],
-    });
-    f.policies = f.policies.filter((p) => p.kind !== "preferences");
-  });
-  const tied = asPlan(await resolveInvocation(CLOUDFLARE_KIMI.intents[0], CONTEXT, { store: storeNoPrefs }));
-  assert.equal(tied.selected.model.id, "model:aaa-alternative");
-  assert.equal(tied.selected.endpoint.id, "inference-endpoint:cf-workers-ai-alt");
-  await store.close();
-  await storeNoPrefs.close();
+  assert.equal(
+    asRefusal(await resolveInvocation(intent(), context(), { store: missingConsent })).reason_code,
+    "principal-consent-required",
+  );
+  await missingConsent.close();
 });
 
-test("unavailable credentials refuse before invocation", async () => {
-  const store = await makeStore(CLOUDFLARE_KIMI, (f) => {
-    f.assertions = f.assertions.filter((a) => a.id !== "assert:cf-token-feasible-on-pc");
-  });
-  const result = await resolveInvocation(CLOUDFLARE_KIMI.intents[0], CONTEXT, { store });
-  assert.equal(result.schema, "narada.invokable-intelligence.invocation-refusal.v1");
-  if (result.schema === "narada.invokable-intelligence.invocation-refusal.v1") {
-    assert.equal(result.reason_code, "credentials-unavailable");
-  }
-  await store.close();
-});
-
-test("stale capability assertions refuse with stale-capabilities", async () => {
-  const store = await makeStore(CLOUDFLARE_KIMI, (f) => {
-    const thinking = f.assertions.find((a) => a.capability.family === "thinking") as CapabilityAssertion;
-    thinking.validity = { valid_from: "2026-01-01T00:00:00Z", valid_until: "2026-06-01T00:00:00Z" };
-  });
-  const result = await resolveInvocation(CLOUDFLARE_KIMI.intents[0], CONTEXT, { store });
-  assert.equal(result.schema, "narada.invokable-intelligence.invocation-refusal.v1");
-  if (result.schema === "narada.invokable-intelligence.invocation-refusal.v1") {
-    assert.equal(result.reason_code, "stale-capabilities");
-  }
-  await store.close();
-});
-
-test("contradictory hard constraints refuse with policy-conflict", async () => {
-  const store = await makeStore(CLOUDFLARE_KIMI, (f) => {
-    f.policies.push({
-      schema: "narada.invokable-intelligence.policy.v1",
-      id: "policy:thoughts-target-forbid-thinking",
-      locus: "target-site",
-      site: { kind: "site", id: "site:thoughts-project" },
-      kind: "hard-constraints",
-      revision: 1,
-      rules: [{ type: "forbid-capability", capability: { family: "credential", name: "feasible" } }],
-    });
-  });
-  const result = await resolveInvocation(CLOUDFLARE_KIMI.intents[0], CONTEXT, { store });
-  assert.equal(result.schema, "narada.invokable-intelligence.invocation-refusal.v1");
-  if (result.schema === "narada.invokable-intelligence.invocation-refusal.v1") {
-    assert.equal(result.reason_code, "policy-conflict");
-    assert.ok(result.explanation.includes("credential/feasible"));
-  }
-  await store.close();
-});
-
-test("unsupported requested options refuse with unsupported-options", async () => {
-  const store = await makeStore(CLOUDFLARE_KIMI);
-  const intent: InvocationIntent = {
-    ...CLOUDFLARE_KIMI.intents[0],
-    requested_options: { thinking: "extreme" },
+test("topology infeasibility and access denial reject before provider selection", async () => {
+  const topologyStore = await makeStore();
+  const topologyContext = context();
+  topologyContext.topology_observations[0] = {
+    ...topologyContext.topology_observations[0],
+    status: "infeasible",
+    reason_code: "test-unreachable",
   };
-  const result = await resolveInvocation(intent, CONTEXT, { store });
-  assert.equal(result.schema, "narada.invokable-intelligence.invocation-refusal.v1");
-  if (result.schema === "narada.invokable-intelligence.invocation-refusal.v1") {
-    assert.equal(result.reason_code, "unsupported-options");
-  }
+  assert.equal(
+    asRefusal(await resolveInvocation(intent(), topologyContext, { store: topologyStore })).reason_code,
+    "topology-infeasible",
+  );
+  await topologyStore.close();
+
+  const accessStore = await makeStore((seed) => {
+    const binding = seed.records.find(({ record_id }) => record_id === "credential-binding:local-api");
+    if (binding?.document.schema === "narada.invokable-intelligence.credential-binding.v1") {
+      binding.document.presence = "missing";
+    }
+  });
+  assert.equal(
+    asRefusal(await resolveInvocation(intent(), context(), { store: accessStore })).reason_code,
+    "access-denied",
+  );
+  await accessStore.close();
+});
+
+test("unsupported route option and unknown model produce typed pre-provider refusals", async () => {
+  const store = await makeStore();
+  assert.equal(
+    asRefusal(await resolveInvocation(intent({ requested_options: { thinking: "extreme" } }), context(), { store })).reason_code,
+    "unsupported-options",
+  );
+  assert.equal(
+    asRefusal(await resolveInvocation(intent({ requested_model: { kind: "model", id: "model:does-not-exist" } }), context(), { store })).reason_code,
+    "no-candidates",
+  );
   await store.close();
 });
 
-test("batch/off-peak: inside the window resolves, outside refuses", async () => {
-  const store = await makeStore(BATCH_OFFPEAK);
-  const inside = asPlan(await resolveInvocation(BATCH_OFFPEAK.intents[0], CONTEXT, { store }));
-  assert.equal(inside.selected.model.id, "model:llama-4-scout");
-  assert.equal(inside.options.batch, true);
-
-  const outside = await resolveInvocation(BATCH_OFFPEAK.intents[0], { ...CONTEXT, time: "2026-07-19T12:00:00Z" }, { store });
-  assert.equal(outside.schema, "narada.invokable-intelligence.invocation-refusal.v1");
-  if (outside.schema === "narada.invokable-intelligence.invocation-refusal.v1") {
-    assert.equal(outside.reason_code, "unsupported-options");
-  }
-  await store.close();
-});
-
-test("unknown requested model refuses with no-candidates", async () => {
-  const store = await makeStore(CLOUDFLARE_KIMI);
-  const intent: InvocationIntent = {
-    ...CLOUDFLARE_KIMI.intents[0],
-    requested_model: { kind: "model", id: "model:does-not-exist" },
-  };
-  const result = await resolveInvocation(intent, CONTEXT, { store });
-  assert.equal(result.schema, "narada.invokable-intelligence.invocation-refusal.v1");
-  if (result.schema === "narada.invokable-intelligence.invocation-refusal.v1") {
-    assert.equal(result.reason_code, "no-candidates");
-  }
+test("the same intent may be explicitly replanned later without falsifying its creation time", async () => {
+  const store = await makeStore();
+  const first = asPlan(await resolveInvocation(intent(), context(), { store }));
+  const replacement = asPlan(await resolveInvocation(
+    intent(),
+    context("2026-07-19T12:01:00.000Z"),
+    { store, predecessorPlanId: first.id },
+  ));
+  assert.notEqual(replacement.id, first.id);
+  assert.equal(replacement.snapshot.lineage.relation, "replan-of");
+  assert.equal(replacement.snapshot.lineage.predecessor_plan_id, first.id);
   await store.close();
 });

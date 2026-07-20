@@ -8,10 +8,13 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { PassThrough } from 'node:stream';
 import { fileURLToPath } from 'node:url';
+import { buildCanonicalLocalTestSeed, CANONICAL_LOCAL_TEST_IDS, canonicalSha256 } from '@narada2/invokable-intelligence-contract';
 import { spawnTestChild } from '@narada2/process-launch-posture';
+import { SqliteRegistryStore } from '@narada2/invokable-intelligence-registry';
 import { registerNarsArtifact } from '@narada2/nars-session-core/artifacts';
 import { resolveNaradaSitePaths } from '@narada2/site-paths';
 import * as canonicalRuntimeEvents from '../src/runtime-server-events.mjs';
+import { createNarsTaskExecutabilityDispatchHook } from '../src/task-executability-dispatch.mjs';
 import {
   createDelegatedAuthorityHandoff,
   createEventHub,
@@ -74,7 +77,11 @@ function readRawUpgradeResponse(endpoint, requestPath) {
 
 async function waitForCapturedOutput(child, readCaptured, predicate, timeoutMs = 5000) {
   if (predicate(readCaptured())) return readCaptured();
-  await waitForOutput(child, () => predicate(readCaptured()), timeoutMs);
+  try {
+    await waitForOutput(child, () => predicate(readCaptured()), timeoutMs);
+  } catch (error) {
+    throw new Error(`${error instanceof Error ? error.message : String(error)}:${readCaptured().slice(-1000)}`);
+  }
   return readCaptured();
 }
 
@@ -168,6 +175,178 @@ async function waitForCondition(predicate, timeoutMs = 1000) {
   }
 }
 
+function canonicalAdapterProtocol(providerId) {
+  return providerId === 'anthropic-api'
+    ? { family: 'anthropic', operation: 'messages', version: '1' }
+    : providerId === 'codex-subscription'
+      ? { family: 'codex-subscription', operation: 'responses', version: '1' }
+      : { family: 'openai', operation: 'chat-completions', version: '1' };
+}
+
+function canonicalCredentialReference(providerId) {
+  return {
+    'kimi-api': 'KIMI_API_KEY',
+    'kimi-code-api': 'KIMI_CODE_API_KEY',
+    'deepseek-api': 'DEEPSEEK_API_KEY',
+    'glm-api': 'GLM_API_KEY',
+    'openrouter-api': 'OPENROUTER_API_KEY',
+    'anthropic-api': 'ANTHROPIC_API_KEY',
+    'openai-api': 'OPENAI_API_KEY',
+  }[providerId] ?? 'OPENAI_API_KEY';
+}
+
+function rewriteCanonicalProvider(value, providerId) {
+  if (typeof value === 'string') {
+    return value === 'inference-provider:remote-api' ? `inference-provider:${providerId}` : value;
+  }
+  if (Array.isArray(value)) return value.map((entry) => rewriteCanonicalProvider(entry, providerId));
+  if (!value || typeof value !== 'object') return value;
+  const rewritten = Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, rewriteCanonicalProvider(entry, providerId)]));
+  if (rewritten.schema === 'narada.invokable-intelligence.adapter.v1') {
+    rewritten.protocol = canonicalAdapterProtocol(providerId);
+  }
+  if (rewritten.schema === 'narada.invokable-intelligence.inference-endpoint.v1' && providerId === 'codex-subscription') {
+    rewritten.address = { kind: 'runtime-service', service: 'codex-subscription' };
+  }
+  if (rewritten.schema === 'narada.invokable-intelligence.invocation-route-candidate.v1') {
+    rewritten.topology = {
+      ...rewritten.topology,
+      nodes: rewritten.topology.nodes.map((node) => ({ ...node, required_feasibility: [] })),
+      edges: rewritten.topology.edges.map((edge) => ({ ...edge, required_feasibility: [] })),
+    };
+  }
+  if (rewritten.schema === 'narada.invokable-intelligence.access-grant.v1') {
+    rewritten.scope = { ...rewritten.scope, purposes: [...new Set([...rewritten.scope.purposes, 'agent-session'])] };
+  }
+  if (rewritten.schema === 'narada.invokable-intelligence.data-governance-requirement.v1') {
+    rewritten.purposes = [...new Set([...rewritten.purposes, 'agent-session'])];
+  }
+  return rewritten;
+}
+
+async function seedIntelligenceRegistry(siteRoot, {
+  providerId = 'openai-api',
+  refuseAll = false,
+  endpointBaseUrl = null,
+  endpointUrl = null,
+  credentialStore = providerId === 'codex-subscription' ? 'none' : 'env',
+  credentialReference = providerId === 'codex-subscription' ? null : canonicalCredentialReference(providerId),
+} = {}) {
+  // This fixture is intentionally complete and explicit. The production
+  // bootstrap preserves migration residuals and never invents principal
+  // consent, credentials, quota, budget, or governance authority.
+  const testNow = new Date().toISOString();
+  const testValidUntil = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+  const dbPath = join(siteRoot, '.ai', 'intelligence-registry.db');
+  mkdirSync(dirname(dbPath), { recursive: true });
+  const canonicalEndpointUrl = endpointUrl ?? (endpointBaseUrl
+    ? `${endpointBaseUrl.endsWith('/') ? endpointBaseUrl.slice(0, -1) : endpointBaseUrl}${providerId === 'anthropic-api' ? '/v1/messages' : '/v1/chat/completions'}`
+    : null);
+  const seed = rewriteCanonicalProvider(buildCanonicalLocalTestSeed({
+    endpointBaseUrl,
+    endpointUrl: canonicalEndpointUrl,
+    adapterProtocol: canonicalAdapterProtocol(providerId),
+    credentialStore,
+    now: testNow,
+    validUntil: testValidUntil,
+    ...(credentialReference ? { credentialReference } : {}),
+  }), providerId);
+  for (const record of seed.records) {
+    record.record_id = record.document.id;
+    record.source.digest = canonicalSha256(record.document);
+  }
+  const store = await SqliteRegistryStore.open(dbPath);
+  try {
+    await store.loadCatalogSeed(seed);
+    if (refuseAll) {
+      const forbidPolicy = {
+        schema: 'narada.invokable-intelligence.policy.v1',
+        id: 'policy:test-forbid-provider',
+        locus: 'target-site',
+        site: { kind: 'site', id: CANONICAL_LOCAL_TEST_IDS.targetSite },
+        kind: 'hard-constraints',
+        revision: 1,
+        rules: [
+          { type: 'forbid-resource', resource: { kind: 'inference-provider', id: `inference-provider:${providerId}` } },
+        ],
+      };
+      const forbidStatement = {
+        schema: 'narada.invokable-intelligence.authority-statement.v1',
+        id: 'authority-statement:test-forbid-provider',
+        kind: 'target-governance-constraint',
+        origin: { locus: 'target-site', site_id: CANONICAL_LOCAL_TEST_IDS.targetSite, authority_ref: 'authority:site:narada' },
+        effect: 'eligibility-constraint',
+        revision: 1,
+        issued_at: new Date().toISOString(),
+        payload_ref: forbidPolicy.id,
+      };
+      const nextIndex = seed.records.length + 1;
+      seed.records.push({
+        schema: 'narada.invokable-intelligence.canonical-catalog-record.v1',
+        id: `catalog-record:canonical-local:${String(nextIndex).padStart(3, '0')}`,
+        record_kind: 'policy',
+        record_id: forbidPolicy.id,
+        revision: 1,
+        source: {
+          schema: 'narada.test.canonical-intelligence.v1',
+          reference: 'test-forbid-policy',
+          revision: '1',
+          digest: `sha256:${'00'.repeat(32)}`,
+        },
+        authority: {
+          kind: 'catalog-definition',
+          locus: 'target-site',
+          site_id: CANONICAL_LOCAL_TEST_IDS.targetSite,
+          authority_ref: 'authority:site:narada:canonical-fixture',
+        },
+        validation: {
+          status: 'accepted',
+          validator: 'canonical-fixture-validator/1',
+          validated_at: new Date().toISOString(),
+          evidence: [{ kind: 'test', ref: 'canonical-local-fixture' }],
+        },
+        document: forbidPolicy,
+      });
+      seed.records.push({
+        schema: 'narada.invokable-intelligence.canonical-catalog-record.v1',
+        id: `catalog-record:canonical-local:${String(nextIndex + 1).padStart(3, '0')}`,
+        record_kind: 'authority-statement',
+        record_id: forbidStatement.id,
+        revision: 1,
+        source: {
+          schema: 'narada.test.canonical-intelligence.v1',
+          reference: 'test-forbid-policy',
+          revision: '1',
+          digest: `sha256:${'01'.repeat(32)}`,
+        },
+        authority: {
+          kind: 'target-governance-constraint',
+          locus: 'target-site',
+          site_id: CANONICAL_LOCAL_TEST_IDS.targetSite,
+          authority_ref: 'authority:site:narada',
+        },
+        validation: {
+          status: 'accepted',
+          validator: 'canonical-fixture-validator/1',
+          validated_at: new Date().toISOString(),
+          evidence: [{ kind: 'test', ref: 'canonical-local-fixture' }],
+        },
+        document: forbidStatement,
+      });
+    }
+  } finally {
+    await store.close();
+  }
+  Object.assign(process.env, {
+    NARADA_INTELLIGENCE_REGISTRY_DB: dbPath,
+    NARADA_INTELLIGENCE_TARGET_SITE: CANONICAL_LOCAL_TEST_IDS.targetSite,
+    NARADA_INTELLIGENCE_USER_SITE: CANONICAL_LOCAL_TEST_IDS.userSite,
+    NARADA_INTELLIGENCE_HOST_SITE: CANONICAL_LOCAL_TEST_IDS.hostSite,
+    NARADA_INTELLIGENCE_PRINCIPAL_ID: CANONICAL_LOCAL_TEST_IDS.principal,
+  });
+  delete process.env.NARADA_INTELLIGENCE_PROVIDER;
+}
+
 test('package owns the Narada agent runtime server bins and exports', () => {
   assert.equal(packageJson.name, '@narada2/agent-runtime-server');
   assert.equal(packageJson.narada.package_role, 'nars_runtime_server');
@@ -188,8 +367,8 @@ test('package owns the Narada agent runtime server bins and exports', () => {
   assert.equal(packageJson.exports['./runtime-request-state'], './src/runtime-request-state.mjs');
   assert.equal(packageJson.exports['./health-projection-request-state'], './src/health-projection-request-state.mjs');
   assert.equal(packageJson.exports['./runtime-control-contract'], './src/runtime-control-contract.mjs');
-  assert.equal(packageJson.exports['./provider-runtime-reconfiguration-state'], './src/provider-runtime-reconfiguration-state.mjs');
-  assert.equal(packageJson.exports['./provider-runtime-controller'], './src/provider-runtime-controller.mjs');
+  assert.equal(packageJson.exports['./intelligence-runtime-reconfiguration-state'], './src/intelligence-runtime-reconfiguration-state.mjs');
+  assert.equal(packageJson.exports['./intelligence-runtime-controller'], './src/intelligence-runtime-controller.mjs');
   assert.equal(packageJson.dependencies['@narada2/agent-cli'], undefined);
   assert.equal(packageJson.dependencies['@narada2/carrier-terminal-projection'], 'workspace:*');
 });
@@ -299,6 +478,11 @@ test('spawned non-raw runtime uses the interactive terminal projection for a TTY
   });
   await new Promise((resolve) => provider.listen(0, '127.0.0.1', resolve));
   const providerAddress = provider.address();
+  await seedIntelligenceRegistry(siteRoot, {
+    providerId: 'openai-api',
+    endpointBaseUrl: `http://127.0.0.1:${providerAddress.port}`,
+    credentialReference: 'OPENAI_API_KEY',
+  });
   let child = null;
   try {
     const binPath = fileURLToPath(new URL('../bin/narada-agent-runtime-server.mjs', import.meta.url));
@@ -323,7 +507,6 @@ test('spawned non-raw runtime uses the interactive terminal projection for a TTY
       env: {
         ...process.env,
         NARADA_SITE_ROOT: siteRoot,
-        NARADA_INTELLIGENCE_PROVIDER: 'openai-api',
         OPENAI_BASE_URL: `http://127.0.0.1:${providerAddress.port}/`,
         OPENAI_API_KEY: 'tty-e2e-key',
         NARADA_AGENT_CLI_COLOR: '0',
@@ -344,7 +527,14 @@ test('spawned non-raw runtime uses the interactive terminal projection for a TTY
     assert.equal(exitCode, null, stderr);
     assert.equal(stderr.includes('runtime_output_failure'), false, stderr);
   } finally {
-    if (child && child.exitCode === null) child.kill();
+    if (child && child.exitCode === null) {
+      const exited = once(child, 'exit');
+      child.kill();
+      await Promise.race([
+        exited,
+        new Promise((resolve) => setTimeout(resolve, 1000)),
+      ]);
+    }
     await new Promise((resolve) => provider.close(resolve));
     rmSync(siteRoot, { recursive: true, force: true });
   }
@@ -352,6 +542,7 @@ test('spawned non-raw runtime uses the interactive terminal projection for a TTY
 
 test('spawned event projection rejects plain HTTP and malformed WebSocket upgrades', { timeout: 15000 }, async () => {
   const siteRoot = mkdtempSync(join(tmpdir(), 'narada-runtime-event-admission-e2e-'));
+  await seedIntelligenceRegistry(siteRoot, { providerId: 'codex-subscription' });
   const sessionId = 'event-admission-e2e';
   const binPath = fileURLToPath(new URL('../bin/narada-agent-runtime-server.mjs', import.meta.url));
   let child = null;
@@ -368,7 +559,6 @@ test('spawned event projection rejects plain HTTP and malformed WebSocket upgrad
       env: {
         ...process.env,
         NARADA_SITE_ROOT: siteRoot,
-        NARADA_INTELLIGENCE_PROVIDER: 'codex-subscription',
         NARADA_AGENT_RUNTIME_HEALTH_ENABLED: '1',
         NARADA_AGENT_RUNTIME_EVENTS_ENABLED: '1',
         NARADA_AGENT_RUNTIME_HEALTH_HOST: '127.0.0.1',
@@ -536,23 +726,27 @@ test('spawned runtime enforces startup bindings, projection startup, disabled pr
   };
 
   try {
-    const missingProvider = await runStartupFailure(
-      createSiteRoot('missing-provider'),
-      ['--no-health', '--no-events', '--identity', 'narada.test', '--session', 'missing-provider'],
+    const missingRegistrySiteRoot = createSiteRoot('missing-registry');
+    const missingRegistry = await runStartupFailure(
+      missingRegistrySiteRoot,
+      ['--no-health', '--no-events', '--identity', 'narada.test', '--session', 'missing-registry'],
       {
-        NARADA_INTELLIGENCE_PROVIDER: '',
         NARADA_AGENT_RUNTIME_HEALTH_ENABLED: '0',
         NARADA_AGENT_RUNTIME_EVENTS_ENABLED: '0',
+        NARADA_INTELLIGENCE_REGISTRY_DB: '',
+        NARADA_INTELLIGENCE_TARGET_SITE: CANONICAL_LOCAL_TEST_IDS.targetSite,
+        NARADA_INTELLIGENCE_USER_SITE: CANONICAL_LOCAL_TEST_IDS.userSite,
+        NARADA_INTELLIGENCE_HOST_SITE: CANONICAL_LOCAL_TEST_IDS.hostSite,
+        NARADA_INTELLIGENCE_PRINCIPAL_ID: CANONICAL_LOCAL_TEST_IDS.principal,
       },
     );
-    assert.equal(missingProvider.exitCode, 1);
-    assert.match(missingProvider.stderr, /intelligenceProvider is required|provider_runtime_provider_required/);
+    assert.equal(missingRegistry.exitCode, 1);
+    assert.match(missingRegistry.stderr, /intelligence_registry_not_initialized/);
 
     const missingBinding = await runStartupFailure(
       createSiteRoot('missing-binding'),
       ['--no-health', '--no-events', '--identity', 'narada.test'],
       {
-        NARADA_INTELLIGENCE_PROVIDER: 'codex-subscription',
         NARADA_NARS_SESSION_ID: '',
         NARADA_RUNTIME_SESSION_ID: '',
         NARADA_CARRIER_SESSION_ID: '',
@@ -566,8 +760,10 @@ test('spawned runtime enforces startup bindings, projection startup, disabled pr
     const occupied = createServer();
     await new Promise((resolve) => occupied.listen(0, '127.0.0.1', resolve));
     const occupiedPort = occupied.address().port;
+    const projectionFailureSiteRoot = createSiteRoot('projection-failure');
+    await seedIntelligenceRegistry(projectionFailureSiteRoot, { providerId: 'codex-subscription' });
     const projectionStartupFailure = await runStartupFailure(
-      createSiteRoot('projection-failure'),
+      projectionFailureSiteRoot,
       [
         '--health-host', '127.0.0.1',
         '--health-port', String(occupiedPort),
@@ -576,7 +772,6 @@ test('spawned runtime enforces startup bindings, projection startup, disabled pr
         '--session', 'projection-startup-failure',
       ],
       {
-        NARADA_INTELLIGENCE_PROVIDER: 'codex-subscription',
         NARADA_AGENT_RUNTIME_HEALTH_ENABLED: '1',
         NARADA_AGENT_RUNTIME_EVENTS_ENABLED: '0',
       },
@@ -586,6 +781,7 @@ test('spawned runtime enforces startup bindings, projection startup, disabled pr
     assert.match(projectionStartupFailure.stderr, /EADDRINUSE|address already in use/i);
 
     const disabledSiteRoot = createSiteRoot('disabled');
+    await seedIntelligenceRegistry(disabledSiteRoot, { providerId: 'codex-subscription' });
     const disabledChild = spawnTestChild(process.execPath, [
       binPath,
       '--raw-jsonl',
@@ -597,7 +793,6 @@ test('spawned runtime enforces startup bindings, projection startup, disabled pr
       env: {
         ...process.env,
         NARADA_SITE_ROOT: disabledSiteRoot,
-        NARADA_INTELLIGENCE_PROVIDER: 'codex-subscription',
         NARADA_AGENT_RUNTIME_HEALTH_ENABLED: '0',
         NARADA_AGENT_RUNTIME_EVENTS_ENABLED: '0',
       },
@@ -623,6 +818,7 @@ test('spawned runtime enforces startup bindings, projection startup, disabled pr
     }
 
     const wrapperSiteRoot = createSiteRoot('wrapper-events');
+    await seedIntelligenceRegistry(wrapperSiteRoot, { providerId: 'codex-subscription' });
     const wrapperChild = spawnTestChild(process.execPath, [
       binPath,
       '--raw-jsonl',
@@ -635,7 +831,6 @@ test('spawned runtime enforces startup bindings, projection startup, disabled pr
       env: {
         ...process.env,
         NARADA_SITE_ROOT: wrapperSiteRoot,
-        NARADA_INTELLIGENCE_PROVIDER: 'codex-subscription',
         NARADA_AGENT_RUNTIME_HEALTH_ENABLED: '0',
         NARADA_AGENT_RUNTIME_EVENTS_ENABLED: '0',
       },
@@ -671,6 +866,7 @@ test('spawned runtime enforces startup bindings, projection startup, disabled pr
 
 test('spawned runtime loads a lifecycle hook module and dispatches hooks through the canonical entrypoint', { timeout: 15000 }, async () => {
   const siteRoot = mkdtempSync(join(tmpdir(), 'narada-runtime-lifecycle-hook-e2e-'));
+  await seedIntelligenceRegistry(siteRoot, { providerId: 'codex-subscription' });
   const hookModulePath = join(siteRoot, 'lifecycle-hooks.mjs');
   const hookLogPath = join(siteRoot, 'lifecycle-hook-events.jsonl');
   writeFileSync(hookModulePath, [
@@ -693,7 +889,6 @@ test('spawned runtime loads a lifecycle hook module and dispatches hooks through
       env: {
         ...process.env,
         NARADA_SITE_ROOT: siteRoot,
-        NARADA_INTELLIGENCE_PROVIDER: 'codex-subscription',
         NARADA_TEST_HOOK_LOG: hookLogPath,
       },
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -744,6 +939,15 @@ test('spawned runtime projects a health timeout as HTTP 503 and cleans up after 
   });
   await new Promise((resolve) => provider.listen(0, '127.0.0.1', resolve));
   const address = provider.address();
+  await seedIntelligenceRegistry(siteRoot, {
+    providerId: 'openai-api',
+    endpointBaseUrl: `http://127.0.0.1:${address.port}`,
+    credentialReference: 'OPENAI_API_KEY',
+  });
+  const seededStore = await SqliteRegistryStore.open(join(siteRoot, '.ai', 'intelligence-registry.db'));
+  assert.ok((await seededStore.listCatalogRecords()).length > 0);
+  assert.ok((await seededStore.listResources()).length > 0);
+  await seededStore.close();
   let child = null;
   let client = null;
   const releaseProvider = () => {
@@ -768,7 +972,6 @@ test('spawned runtime projects a health timeout as HTTP 503 and cleans up after 
       env: {
         ...process.env,
         NARADA_SITE_ROOT: siteRoot,
-        NARADA_INTELLIGENCE_PROVIDER: 'openai-api',
         OPENAI_BASE_URL: `http://127.0.0.1:${address.port}/`,
         OPENAI_API_KEY: 'projection-failure-key',
         OPENAI_MODEL: 'fixture-openai',
@@ -852,7 +1055,7 @@ test('spawned runtime projects a health timeout as HTTP 503 and cleans up after 
   }
 });
 
-test('spawned runtime switches providers, refuses invalid targets, and binds the next health and turn', { timeout: 15000 }, async () => {
+test('spawned runtime reconfigures canonical invocation constraints and binds the next health and turn', { timeout: 15000 }, async () => {
   const siteRoot = mkdtempSync(join(tmpdir(), 'narada-runtime-provider-switch-e2e-'));
   const observedModels = [];
   const provider = createServer((request, response) => {
@@ -867,6 +1070,11 @@ test('spawned runtime switches providers, refuses invalid targets, and binds the
   });
   await new Promise((resolve) => provider.listen(0, '127.0.0.1', resolve));
   const address = provider.address();
+  await seedIntelligenceRegistry(siteRoot, {
+    providerId: 'openai-api',
+    endpointBaseUrl: `http://127.0.0.1:${address.port}`,
+    credentialReference: 'OPENAI_API_KEY',
+  });
   let child = null;
   try {
     const binPath = fileURLToPath(new URL('../bin/narada-agent-runtime-server.mjs', import.meta.url));
@@ -881,13 +1089,12 @@ test('spawned runtime switches providers, refuses invalid targets, and binds the
       env: {
         ...process.env,
         NARADA_SITE_ROOT: siteRoot,
-        NARADA_INTELLIGENCE_PROVIDER: 'openai-api',
-        OPENAI_BASE_URL: `http://127.0.0.1:${address.port}/`,
+        NARADA_INTELLIGENCE_REGISTRY_DB: join(siteRoot, '.ai', 'intelligence-registry.db'),
+        NARADA_INTELLIGENCE_TARGET_SITE: CANONICAL_LOCAL_TEST_IDS.targetSite,
+        NARADA_INTELLIGENCE_USER_SITE: CANONICAL_LOCAL_TEST_IDS.userSite,
+        NARADA_INTELLIGENCE_HOST_SITE: CANONICAL_LOCAL_TEST_IDS.hostSite,
+        NARADA_INTELLIGENCE_PRINCIPAL_ID: CANONICAL_LOCAL_TEST_IDS.principal,
         OPENAI_API_KEY: 'provider-switch-openai-key',
-        OPENAI_MODEL: 'fixture-openai',
-        KIMI_API_BASE_URL: `http://127.0.0.1:${address.port}/`,
-        KIMI_API_KEY: 'provider-switch-kimi-key',
-        KIMI_MODEL: 'fixture-kimi',
       },
       stdio: ['pipe', 'pipe', 'pipe'],
     });
@@ -897,12 +1104,12 @@ test('spawned runtime switches providers, refuses invalid targets, and binds the
     child.stderr.setEncoding('utf8');
     child.stdout.on('data', (chunk) => { stdout += chunk; });
     child.stderr.on('data', (chunk) => { stderr += chunk; });
-    await waitForCapturedOutput(child, () => stdout, (text) => text.includes('"event":"session_started"'));
+    await waitForCapturedOutput(child, () => `${stdout}\n[stderr]\n${stderr}`, (text) => text.includes('"event":"session_started"'));
 
     child.stdin.write(`${JSON.stringify({
       id: 'invalid-target-request',
       method: 'runtime.intelligence.reconfigure',
-      params: { request_id: 'invalid-target', provider: 'missing-provider' },
+      params: { request_id: 'invalid-target', provider: 'forbidden-legacy-provider' },
     })}\n`);
     await waitForCapturedOutput(child, () => stdout, (text) => hasCapturedJsonEvent(text, (event) => event.event === 'runtime_intelligence_reconfiguration'
       && event.request_id === 'invalid-target'
@@ -911,7 +1118,11 @@ test('spawned runtime switches providers, refuses invalid targets, and binds the
     child.stdin.write(`${JSON.stringify({
       id: 'switch-provider-request',
       method: 'runtime.intelligence.reconfigure',
-      params: { request_id: 'switch-provider', provider: 'kimi-api', model: 'fixture-kimi', thinking: 'low' },
+      params: {
+        request_id: 'switch-provider',
+        requested_model: { kind: 'model', id: CANONICAL_LOCAL_TEST_IDS.model },
+        requested_options: { thinking: 'low' },
+      },
     })}\n`);
     await waitForCapturedOutput(child, () => stdout, (text) => hasCapturedJsonEvent(text, (event) => event.event === 'runtime_intelligence_reconfiguration'
       && event.request_id === 'switch-provider'
@@ -932,23 +1143,28 @@ test('spawned runtime switches providers, refuses invalid targets, and binds the
     assert.equal(invalid?.terminal_state, 'refused');
     assert.equal(invalid?.reason, 'target_not_admitted');
     assert.deepEqual(events
-      .filter((event) => event.event === 'provider_runtime_reconfiguration_state_transition' && event.request_id === 'switch-provider')
+      .filter((event) => event.event === 'intelligence_runtime_reconfiguration_state_transition' && event.request_id === 'switch-provider')
       .map((event) => event.reconfiguration_state), ['requested', 'validating', 'admitted', 'switching', 'active']);
     assert.equal(switched?.terminal_state, 'active');
-    assert.equal(switched?.active?.provider, 'kimi-api');
-    assert.equal(health?.intelligence?.provider, 'kimi-api');
-    assert.equal(health?.intelligence?.model, 'fixture-kimi');
-    assert.deepEqual(observedModels, ['fixture-kimi']);
+    assert.equal(switched?.active?.requestedModel?.id, CANONICAL_LOCAL_TEST_IDS.model);
+    assert.deepEqual(switched?.active?.requestedOptions, { thinking: 'low' });
+    assert.equal(health?.intelligence?.requested_model?.id, CANONICAL_LOCAL_TEST_IDS.model);
+    assert.equal(health?.intelligence?.latest_plan?.model?.id, CANONICAL_LOCAL_TEST_IDS.model);
+    assert.equal(health?.intelligence?.latest_plan?.options?.thinking, 'low');
+    assert.deepEqual(observedModels, ['kimi-k2-thinking']);
     assert.equal(stdout.includes('provider-switch-openai-key'), false);
-    assert.equal(stdout.includes('provider-switch-kimi-key'), false);
   } finally {
-    if (child && child.exitCode === null) child.kill();
+    if (child && child.exitCode === null) {
+      const exited = once(child, 'exit');
+      child.kill();
+      await exited;
+    }
     await new Promise((resolve) => provider.close(resolve));
     rmSync(siteRoot, { recursive: true, force: true });
   }
 });
 
-test('spawned runtime refuses provider reconfiguration across a busy turn boundary', { timeout: 15000 }, async () => {
+test('spawned runtime refuses canonical intelligence reconfiguration across a busy turn boundary', { timeout: 15000 }, async () => {
   const siteRoot = mkdtempSync(join(tmpdir(), 'narada-runtime-provider-busy-e2e-'));
   let heldResponse = null;
   let requestReceived;
@@ -962,6 +1178,11 @@ test('spawned runtime refuses provider reconfiguration across a busy turn bounda
   });
   await new Promise((resolve) => provider.listen(0, '127.0.0.1', resolve));
   const address = provider.address();
+  await seedIntelligenceRegistry(siteRoot, {
+    providerId: 'openai-api',
+    endpointBaseUrl: `http://127.0.0.1:${address.port}`,
+    credentialReference: 'OPENAI_API_KEY',
+  });
   let child = null;
   const releaseProvider = () => {
     if (!heldResponse) return;
@@ -982,13 +1203,12 @@ test('spawned runtime refuses provider reconfiguration across a busy turn bounda
       env: {
         ...process.env,
         NARADA_SITE_ROOT: siteRoot,
-        NARADA_INTELLIGENCE_PROVIDER: 'openai-api',
-        OPENAI_BASE_URL: `http://127.0.0.1:${address.port}/`,
+        NARADA_INTELLIGENCE_REGISTRY_DB: join(siteRoot, '.ai', 'intelligence-registry.db'),
+        NARADA_INTELLIGENCE_TARGET_SITE: CANONICAL_LOCAL_TEST_IDS.targetSite,
+        NARADA_INTELLIGENCE_USER_SITE: CANONICAL_LOCAL_TEST_IDS.userSite,
+        NARADA_INTELLIGENCE_HOST_SITE: CANONICAL_LOCAL_TEST_IDS.hostSite,
+        NARADA_INTELLIGENCE_PRINCIPAL_ID: CANONICAL_LOCAL_TEST_IDS.principal,
         OPENAI_API_KEY: 'provider-busy-openai-key',
-        OPENAI_MODEL: 'fixture-openai',
-        KIMI_API_BASE_URL: `http://127.0.0.1:${address.port}/`,
-        KIMI_API_KEY: 'provider-busy-kimi-key',
-        KIMI_MODEL: 'fixture-kimi',
       },
       stdio: ['pipe', 'pipe', 'pipe'],
     });
@@ -998,13 +1218,17 @@ test('spawned runtime refuses provider reconfiguration across a busy turn bounda
     child.stderr.setEncoding('utf8');
     child.stdout.on('data', (chunk) => { stdout += chunk; });
     child.stderr.on('data', (chunk) => { stderr += chunk; });
-    await waitForCapturedOutput(child, () => stdout, (text) => text.includes('"event":"session_started"'));
+    await waitForCapturedOutput(child, () => `${stdout}\n[stderr]\n${stderr}`, (text) => text.includes('"event":"session_started"'));
     child.stdin.write(`${JSON.stringify({ id: 'busy-turn', method: 'session.submit', params: { content: 'hold the turn' } })}\n`);
     await providerRequest;
     child.stdin.write(`${JSON.stringify({
       id: 'busy-reconfigure-request',
       method: 'runtime.intelligence.reconfigure',
-      params: { request_id: 'busy-reconfigure', provider: 'kimi-api', model: 'fixture-kimi' },
+      params: {
+        request_id: 'busy-reconfigure',
+        requested_model: { kind: 'model', id: CANONICAL_LOCAL_TEST_IDS.model },
+        requested_options: { thinking: 'low' },
+      },
     })}\n`);
     await waitForCapturedOutput(child, () => stdout, (text) => hasCapturedJsonEvent(text, (event) => event.event === 'runtime_intelligence_reconfiguration'
       && event.request_id === 'busy-reconfigure'
@@ -1017,7 +1241,7 @@ test('spawned runtime refuses provider reconfiguration across a busy turn bounda
     releaseProvider();
     await waitForCapturedOutput(child, () => stdout, (text) => text.includes('"event":"carrier_turn_completed"'));
     child.stdin.end(`${JSON.stringify({ id: 'close-after-busy', method: 'session.close', params: {} })}\n`);
-    assert.equal(await new Promise((resolve) => child.on('exit', resolve)), 0, stderr);
+    assert.equal(await new Promise((resolve) => child.on('exit', resolve)), 0, `${stderr}\n[stdout tail]\n${stdout.slice(-2000)}`);
     assert.equal(readJsonlFileFromText(stdout).some((event) => event.event === 'session_closed'), true);
   } finally {
     releaseProvider();
@@ -1050,6 +1274,11 @@ test('spawned runtime serves the complete session-scoped artifact HTTP surface',
   });
   await new Promise((resolve) => provider.listen(0, '127.0.0.1', resolve));
   const providerAddress = provider.address();
+  await seedIntelligenceRegistry(siteRoot, {
+    providerId: 'openai-api',
+    endpointBaseUrl: `http://127.0.0.1:${providerAddress.port}`,
+    credentialReference: 'OPENAI_API_KEY',
+  });
   let child = null;
   try {
     const binPath = fileURLToPath(new URL('../bin/narada-agent-runtime-server.mjs', import.meta.url));
@@ -1064,7 +1293,6 @@ test('spawned runtime serves the complete session-scoped artifact HTTP surface',
       env: {
         ...process.env,
         NARADA_SITE_ROOT: siteRoot,
-        NARADA_INTELLIGENCE_PROVIDER: 'openai-api',
         OPENAI_BASE_URL: `http://127.0.0.1:${providerAddress.port}/`,
         OPENAI_API_KEY: 'artifact-e2e-key',
       },
@@ -1202,6 +1430,11 @@ test('spawned runtime consumes the detached control sideband without raw JSONL',
   });
   await new Promise((resolve) => provider.listen(0, '127.0.0.1', resolve));
   const address = provider.address();
+  await seedIntelligenceRegistry(siteRoot, {
+    providerId: 'openai-api',
+    endpointBaseUrl: `http://127.0.0.1:${address.port}`,
+    credentialReference: 'OPENAI_API_KEY',
+  });
   let child = null;
   try {
     const binPath = fileURLToPath(new URL('../bin/narada-agent-runtime-server.mjs', import.meta.url));
@@ -1213,7 +1446,6 @@ test('spawned runtime consumes the detached control sideband without raw JSONL',
       env: {
         ...process.env,
         NARADA_SITE_ROOT: siteRoot,
-        NARADA_INTELLIGENCE_PROVIDER: 'openai-api',
         OPENAI_BASE_URL: `http://127.0.0.1:${address.port}/`,
         OPENAI_API_KEY: 'detached-control-key',
         NARADA_AGENT_RUNTIME_HEALTH_ENABLED: '0',
@@ -1293,6 +1525,11 @@ test('spawned runtime handles WebSocket reads, controls, errors, and isolated su
   });
   await new Promise((resolve) => provider.listen(0, '127.0.0.1', resolve));
   const address = provider.address();
+  await seedIntelligenceRegistry(siteRoot, {
+    providerId: 'openai-api',
+    endpointBaseUrl: `http://127.0.0.1:${address.port}`,
+    credentialReference: 'OPENAI_API_KEY',
+  });
   let child = null;
   let first = null;
   let second = null;
@@ -1310,7 +1547,6 @@ test('spawned runtime handles WebSocket reads, controls, errors, and isolated su
       env: {
         ...process.env,
         NARADA_SITE_ROOT: siteRoot,
-        NARADA_INTELLIGENCE_PROVIDER: 'openai-api',
         OPENAI_BASE_URL: `http://127.0.0.1:${address.port}/`,
         OPENAI_API_KEY: 'websocket-control-key',
         NARADA_AGENT_RUNTIME_HEALTH_ENABLED: '1',
@@ -1463,14 +1699,22 @@ test('spawned runtime exposes active and completed FIFO queue state without prov
   });
   await new Promise((resolve) => provider.listen(0, '127.0.0.1', resolve));
   const address = provider.address();
+  await seedIntelligenceRegistry(siteRoot, {
+    providerId: 'openai-api',
+    endpointBaseUrl: `http://127.0.0.1:${address.port}`,
+    credentialReference: 'OPENAI_API_KEY',
+  });
+  let child = null;
   try {
     const binPath = fileURLToPath(new URL('../bin/narada-agent-runtime-server.mjs', import.meta.url));
-    const child = spawnTestChild(process.execPath, [binPath, '--raw-jsonl', '--identity', 'narada.test', '--session', 'fifo-e2e'], {
-      env: { ...process.env, NARADA_SITE_ROOT: siteRoot, NARADA_INTELLIGENCE_PROVIDER: 'openai-api', OPENAI_BASE_URL: `http://127.0.0.1:${address.port}/`, OPENAI_API_KEY: 'fifo-key' },
+    child = spawnTestChild(process.execPath, [binPath, '--raw-jsonl', '--identity', 'narada.test', '--session', 'fifo-e2e'], {
+      env: { ...process.env, NARADA_SITE_ROOT: siteRoot, OPENAI_API_KEY: 'fifo-key' },
       stdio: ['pipe', 'pipe', 'pipe'],
     });
     let stdout = '';
+    let stderr = '';
     child.stdout.setEncoding('utf8'); child.stdout.on('data', (chunk) => { stdout += chunk; });
+    child.stderr.setEncoding('utf8'); child.stderr.on('data', (chunk) => { stderr += chunk; });
     child.stdin.write(`${JSON.stringify({ id: 'turn-first', method: 'session.submit', params: { content: 'first' } })}\n${JSON.stringify({ id: 'turn-second', method: 'session.submit', params: { content: 'second' } })}\n${JSON.stringify({ id: 'health-active', method: 'session.health' })}\n${JSON.stringify({ id: 'recovery-active', method: 'session.recovery' })}\n`);
     await firstRequest;
     await waitForCapturedOutput(child, () => stdout, (text) => text.includes('health-active') && text.includes('recovery-active'));
@@ -1483,8 +1727,11 @@ test('spawned runtime exposes active and completed FIFO queue state without prov
     assert.equal(activeEvents.find((event) => event.event === 'session_recovery' && event.request_id === 'recovery-active')?.operator_input_queue?.pending_count, 2);
     releaseFirst();
     await waitForCapturedOutput(child, () => stdout, (text) => (text.match(/carrier_turn_completed/g) ?? []).length === 2);
-    child.stdin.end(`${JSON.stringify({ id: 'health-completed', method: 'session.health' })}\n${JSON.stringify({ id: 'recovery-completed', method: 'session.recovery' })}\n${JSON.stringify({ id: 'close-1', method: 'session.close' })}\n`);
-    assert.equal(await new Promise((resolve) => child.on('exit', resolve)), 0);
+    await waitForCapturedOutput(child, () => stdout, (text) => (text.match(/input_event_completed/g) ?? []).length === 2);
+    child.stdin.write(`${JSON.stringify({ id: 'health-completed', method: 'session.health' })}\n${JSON.stringify({ id: 'recovery-completed', method: 'session.recovery' })}\n`);
+    await waitForCapturedOutput(child, () => stdout, (text) => text.includes('\"request_id\":\"health-completed\"') && text.includes('\"request_id\":\"recovery-completed\"'));
+    child.stdin.end(`${JSON.stringify({ id: 'close-1', method: 'session.close' })}\n`);
+    assert.equal(await new Promise((resolve) => child.on('exit', resolve)), 0, `${stderr}\n[stdout tail]\n${stdout.slice(-2000)}`);
     const events = stdout.trim().split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
     assert.deepEqual(providerOrder, ['first', 'second']);
     assert.equal(providerCalls, 2);
@@ -1501,6 +1748,11 @@ test('spawned runtime exposes active and completed FIFO queue state without prov
     assert.deepEqual(requestStates('recovery-completed'), ['received', 'scheduled', 'running', 'completed']);
     assert.deepEqual(requestStates('close-1'), ['received', 'scheduled', 'waiting', 'running', 'completed']);
   } finally {
+    if (child && child.exitCode === null) {
+      const exited = once(child, 'exit');
+      child.kill();
+      await exited;
+    }
     await new Promise((resolve) => provider.close(resolve));
     rmSync(siteRoot, { recursive: true, force: true });
   }
@@ -1521,16 +1773,24 @@ test('spawned runtime keeps close request waiting until active request is settle
   });
   await new Promise((resolve) => provider.listen(0, '127.0.0.1', resolve));
   const address = provider.address();
+  await seedIntelligenceRegistry(siteRoot, {
+    providerId: 'openai-api',
+    endpointBaseUrl: `http://127.0.0.1:${address.port}`,
+    credentialReference: 'OPENAI_API_KEY',
+  });
   let child = null;
   try {
     const binPath = fileURLToPath(new URL('../bin/narada-agent-runtime-server.mjs', import.meta.url));
     child = spawnTestChild(process.execPath, [binPath, '--raw-jsonl', '--identity', 'narada.test', '--session', 'close-wait-e2e'], {
-      env: { ...process.env, NARADA_SITE_ROOT: siteRoot, NARADA_INTELLIGENCE_PROVIDER: 'openai-api', OPENAI_BASE_URL: 'http://127.0.0.1:' + address.port + '/', OPENAI_API_KEY: 'close-wait-key' },
+      env: { ...process.env, NARADA_SITE_ROOT: siteRoot, OPENAI_BASE_URL: 'http://127.0.0.1:' + address.port + '/', OPENAI_API_KEY: 'close-wait-key' },
       stdio: ['pipe', 'pipe', 'pipe'],
     });
     let stdout = '';
+    let stderr = '';
     child.stdout.setEncoding('utf8');
     child.stdout.on('data', (chunk) => { stdout += chunk; });
+    child.stderr.setEncoding('utf8');
+    child.stderr.on('data', (chunk) => { stderr += chunk; });
     child.stdin.write(JSON.stringify({ id: 'turn-active', method: 'session.submit', params: { content: 'hold' } }) + '\n');
     await requestReceived;
     child.stdin.write(JSON.stringify({ id: 'close-wait', method: 'session.close' }) + '\n');
@@ -1545,7 +1805,8 @@ test('spawned runtime keeps close request waiting until active request is settle
       && text.includes('"request_state":"completed"')
     ));
     child.stdin.end();
-    assert.equal(await new Promise((resolve) => child.on('exit', resolve)), 0);
+    const exitCode = await new Promise((resolve) => child.on('exit', resolve));
+    assert.equal(exitCode, 0, `child exited ${exitCode}\nstdout:\n${stdout}\nstderr:\n${stderr}`);
     const events = stdout.trim().split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
     const closeStates = events
       .filter((event) => event.event === 'runtime_request_state_transition' && event.request_id === 'close-wait')
@@ -1575,10 +1836,16 @@ test('spawned runtime exposes failed input as recoverable', async () => {
   });
   await new Promise((resolve) => provider.listen(0, '127.0.0.1', resolve));
   const address = provider.address();
+  await seedIntelligenceRegistry(siteRoot, {
+    providerId: 'openai-api',
+    endpointBaseUrl: `http://127.0.0.1:${address.port}`,
+    credentialReference: 'OPENAI_API_KEY',
+  });
+  let child = null;
   try {
     const binPath = fileURLToPath(new URL('../bin/narada-agent-runtime-server.mjs', import.meta.url));
-    const child = spawnTestChild(process.execPath, [binPath, '--raw-jsonl', '--identity', 'narada.test', '--session', 'failed-health-e2e'], {
-      env: { ...process.env, NARADA_SITE_ROOT: siteRoot, NARADA_INTELLIGENCE_PROVIDER: 'openai-api', OPENAI_BASE_URL: `http://127.0.0.1:${address.port}/`, OPENAI_API_KEY: 'failed-key' },
+    child = spawnTestChild(process.execPath, [binPath, '--raw-jsonl', '--identity', 'narada.test', '--session', 'failed-health-e2e'], {
+      env: { ...process.env, NARADA_SITE_ROOT: siteRoot, OPENAI_BASE_URL: `http://127.0.0.1:${address.port}/`, OPENAI_API_KEY: 'failed-key' },
       stdio: ['pipe', 'pipe', 'pipe'],
     });
     let stdout = '';
@@ -1586,13 +1853,19 @@ test('spawned runtime exposes failed input as recoverable', async () => {
     child.stdin.write(`${JSON.stringify({ id: 'turn-failed', method: 'session.submit', params: { content: 'fail' } })}\n`);
     await waitForOutput(child, (text) => text.includes('session_control_rejected'));
     child.stdin.end(`${JSON.stringify({ id: 'health-failed', method: 'session.health' })}\n${JSON.stringify({ id: 'recovery-failed', method: 'session.recovery' })}\n${JSON.stringify({ id: 'close-1', method: 'session.close' })}\n`);
-    assert.equal(await new Promise((resolve) => child.on('exit', resolve)), 0);
+    const exitCode = await new Promise((resolve) => child.on('exit', resolve));
+    assert.equal(exitCode, 0, `child exited ${exitCode}`);
     const events = stdout.trim().split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
     const failedHealth = events.find((event) => event.event === 'session_health' && event.request_id === 'health-failed');
     assert.equal(failedHealth?.operator_input_queue?.pending_count, 1);
     assert.equal(failedHealth?.operational_posture, 'request_runtime_failures');
     assert.equal(events.find((event) => event.event === 'session_recovery' && event.request_id === 'recovery-failed')?.operator_input_queue?.pending_count, 1);
   } finally {
+    if (child && child.exitCode === null) {
+      const exited = once(child, 'exit');
+      child.kill();
+      await exited;
+    }
     await new Promise((resolve) => provider.close(resolve));
     rmSync(siteRoot, { recursive: true, force: true });
   }
@@ -1618,11 +1891,16 @@ test('spawned runtime handles SIGINT and SIGTERM by closing active provider and 
     });
     await new Promise((resolve) => provider.listen(0, '127.0.0.1', resolve));
     const address = provider.address();
+    await seedIntelligenceRegistry(siteRoot, {
+      providerId: 'openai-api',
+      endpointBaseUrl: `http://127.0.0.1:${address.port}`,
+      credentialReference: 'OPENAI_API_KEY',
+    });
     try {
       const signalRelay = process.platform === 'win32';
       const entrypoint = fileURLToPath(new URL(signalRelay ? './fixtures/signal-relay-runtime.mjs' : '../bin/narada-agent-runtime-server.mjs', import.meta.url));
       const child = spawnTestChild(process.execPath, [entrypoint, '--raw-jsonl', '--identity', 'narada.test', '--session', `signal-${signal.toLowerCase()}`], {
-        env: { ...process.env, NARADA_SITE_ROOT: siteRoot, NARADA_INTELLIGENCE_PROVIDER: 'openai-api', OPENAI_BASE_URL: `http://127.0.0.1:${address.port}/`, OPENAI_API_KEY: 'signal-fixture-key' },
+        env: { ...process.env, NARADA_SITE_ROOT: siteRoot, OPENAI_BASE_URL: `http://127.0.0.1:${address.port}/`, OPENAI_API_KEY: 'signal-fixture-key' },
         stdio: signalRelay ? ['pipe', 'pipe', 'pipe', 'ipc'] : ['pipe', 'pipe', 'pipe'],
       });
       let stdout = '';
@@ -1638,8 +1916,8 @@ test('spawned runtime handles SIGINT and SIGTERM by closing active provider and 
       assert.equal(exitCode, 0, `${signal}: ${stderr}`);
       const events = stdout.trim().split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
       assert.ok(events.some((event) => event.event === 'tool_execution_completed' && event.tool_name === 'fixture_echo'), signal);
-      assert.ok(events.some((event) => event.event === 'session_turn_cancel_requested'), signal);
-      assert.ok(events.some((event) => event.event === 'carrier_turn_failed' && /abort/i.test(event.error)), signal);
+      assert.ok(events.some((event) => event.event === 'session_turn_cancel_requested'), `${signal}: ${events.map((event) => event.event).join(',')}`);
+      assert.ok(events.some((event) => event.event === 'carrier_turn_interrupted' && /abort/i.test(event.error)), `${signal}: ${events.map((event) => `${event.event}:${event.error ?? ''}`).join(',')}`);
       assert.ok(events.some((event) => event.event === 'session_closed' && event.request_id === `signal-close-${signal.toLowerCase()}`), signal);
     } finally {
       await new Promise((resolve) => provider.close(resolve));
@@ -1652,10 +1930,11 @@ test('spawned runtime handles Codex subprocess success, malformed JSONL, and non
   const fixturePath = fileURLToPath(new URL('./fixtures/codex-exec-fixture.mjs', import.meta.url));
   for (const mode of ['success', 'malformed', 'exit']) {
     const siteRoot = mkdtempSync(join(tmpdir(), `narada-codex-${mode}-e2e-`));
+    await seedIntelligenceRegistry(siteRoot, { providerId: 'codex-subscription' });
     try {
       const binPath = fileURLToPath(new URL('../bin/narada-agent-runtime-server.mjs', import.meta.url));
       const child = spawnTestChild(process.execPath, [binPath, '--raw-jsonl', '--identity', 'narada.test', '--session', `codex-${mode}`], {
-        env: { ...process.env, NARADA_SITE_ROOT: siteRoot, NARADA_INTELLIGENCE_PROVIDER: 'codex-subscription', NARADA_CODEX_EXEC_COMMAND: process.execPath, NARADA_CODEX_EXEC_PREFIX_ARGS: JSON.stringify([fixturePath, mode]), CODEX_MODEL: 'fixture-codex' }, stdio: ['pipe', 'pipe', 'pipe'],
+        env: { ...process.env, NARADA_SITE_ROOT: siteRoot, NARADA_CODEX_EXEC_COMMAND: process.execPath, NARADA_CODEX_EXEC_PREFIX_ARGS: JSON.stringify([fixturePath, mode]), CODEX_MODEL: 'fixture-codex' }, stdio: ['pipe', 'pipe', 'pipe'],
       });
       let stdout = ''; child.stdout.setEncoding('utf8'); child.stdout.on('data', (chunk) => { stdout += chunk; });
       child.stdin.end(`${JSON.stringify({ id: 'turn-1', method: 'session.submit', params: { content: 'hello' } })}\n${JSON.stringify({ id: 'close-1', method: 'session.close' })}\n`);
@@ -1671,23 +1950,33 @@ test('spawned runtime handles Codex subprocess success, malformed JSONL, and non
 
 test('spawned runtime cancels a hanging Codex subprocess', async () => {
   const siteRoot = mkdtempSync(join(tmpdir(), 'narada-codex-cancel-e2e-'));
+  await seedIntelligenceRegistry(siteRoot, { providerId: 'codex-subscription' });
   const fixturePath = fileURLToPath(new URL('./fixtures/codex-exec-fixture.mjs', import.meta.url));
+  let child = null;
   try {
     const binPath = fileURLToPath(new URL('../bin/narada-agent-runtime-server.mjs', import.meta.url));
-    const child = spawnTestChild(process.execPath, [binPath, '--raw-jsonl', '--identity', 'narada.test', '--session', 'codex-cancel'], { env: { ...process.env, NARADA_SITE_ROOT: siteRoot, NARADA_INTELLIGENCE_PROVIDER: 'codex-subscription', NARADA_CODEX_EXEC_COMMAND: process.execPath, NARADA_CODEX_EXEC_PREFIX_ARGS: JSON.stringify([fixturePath, 'hang']), CODEX_MODEL: 'fixture-codex' }, stdio: ['pipe', 'pipe', 'pipe'] });
-    let stdout = ''; child.stdout.setEncoding('utf8'); child.stdout.on('data', (chunk) => { stdout += chunk; });
+    child = spawnTestChild(process.execPath, [binPath, '--raw-jsonl', '--identity', 'narada.test', '--session', 'codex-cancel'], { env: { ...process.env, NARADA_SITE_ROOT: siteRoot, NARADA_CODEX_EXEC_COMMAND: process.execPath, NARADA_CODEX_EXEC_PREFIX_ARGS: JSON.stringify([fixturePath, 'hang']) }, stdio: ['pipe', 'pipe', 'pipe'] });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.setEncoding('utf8'); child.stdout.on('data', (chunk) => { stdout += chunk; });
+    child.stderr.setEncoding('utf8'); child.stderr.on('data', (chunk) => { stderr += chunk; });
     child.stdin.write(`${JSON.stringify({ id: 'turn-1', method: 'session.submit', params: { content: 'wait' } })}\n`);
     await waitForOutput(child, (text) => text.includes('carrier_turn_started'));
     child.stdin.write(`${JSON.stringify({ id: 'cancel-1', method: 'session.cancel' })}\n`);
-    await waitForCapturedOutput(child, () => stdout, (text) => text.includes('carrier_turn_failed'));
+    await waitForCapturedOutput(child, () => stdout, (text) => text.includes('carrier_turn_interrupted'));
     child.stdin.end(`${JSON.stringify({ id: 'health-cancelled', method: 'session.health' })}\n${JSON.stringify({ id: 'recovery-cancelled', method: 'session.recovery' })}\n${JSON.stringify({ id: 'close-1', method: 'session.close' })}\n`);
-    assert.equal(await new Promise((resolve) => child.on('exit', resolve)), 0);
+    assert.equal(await new Promise((resolve) => child.on('exit', resolve)), 0, stderr);
     const events = stdout.trim().split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
     assert.ok(events.some((event) => event.event === 'session_cancel' && event.cancelled === true));
-    assert.ok(events.some((event) => event.event === 'carrier_turn_failed' && /abort/i.test(event.error)));
+    assert.ok(events.some((event) => event.event === 'carrier_turn_interrupted' && /abort/i.test(event.error)));
     assert.equal(events.find((event) => event.event === 'session_health' && event.request_id === 'health-cancelled')?.operator_input_queue?.pending_count, 1);
     assert.equal(events.find((event) => event.event === 'session_recovery' && event.request_id === 'recovery-cancelled')?.operator_input_queue?.pending_count, 1);
   } finally {
+    if (child && child.exitCode === null) {
+      const exited = once(child, 'exit');
+      child.kill();
+      await exited;
+    }
     rmSync(siteRoot, { recursive: true, force: true });
   }
 });
@@ -1718,6 +2007,10 @@ test('spawned runtime executes every HTTP provider adapter against local endpoin
       expectedCredentialHeader = credentialHeader;
       expectedCredentialValue = credentialValue;
       const siteRoot = mkdtempSync(join(tmpdir(), `narada-${providerId}-e2e-`));
+      await seedIntelligenceRegistry(siteRoot, {
+        providerId,
+        endpointBaseUrl: `http://127.0.0.1:${address.port}`,
+      });
       try {
         const binPath = fileURLToPath(new URL('../bin/narada-agent-runtime-server.mjs', import.meta.url));
         const child = spawnTestChild(process.execPath, [binPath, '--raw-jsonl', '--identity', 'narada.test', '--session', `${providerId}-e2e`], { env: {
@@ -1726,7 +2019,6 @@ test('spawned runtime executes every HTTP provider adapter against local endpoin
           OPENAI_BASE_URL: 'http://127.0.0.1:1/decoy',
           ...providerEnv,
           NARADA_SITE_ROOT: siteRoot,
-          NARADA_INTELLIGENCE_PROVIDER: providerId,
           NARADA_AI_API_KEY: String(credentialValue).replace(/^Bearer /, ''),
           NARADA_AI_BASE_URL: baseUrl,
         }, stdio: ['pipe', 'pipe', 'pipe'] });
@@ -1749,6 +2041,7 @@ test('spawned runtime executes every HTTP provider adapter against local endpoin
       }
     }
   } finally {
+    provider.closeAllConnections?.();
     await new Promise((resolve) => provider.close(resolve));
   }
 });
@@ -1760,21 +2053,30 @@ test('spawned runtime cancels an in-flight provider request through JSONL contro
   const provider = createServer(() => { requestReceived(); });
   await new Promise((resolve) => provider.listen(0, '127.0.0.1', resolve));
   const address = provider.address();
+  await seedIntelligenceRegistry(siteRoot, {
+    providerId: 'openai-api',
+    endpointBaseUrl: `http://127.0.0.1:${address.port}`,
+    credentialReference: 'OPENAI_API_KEY',
+  });
+  let child = null;
   try {
     const binPath = fileURLToPath(new URL('../bin/narada-agent-runtime-server.mjs', import.meta.url));
-    const child = spawnTestChild(process.execPath, [binPath, '--raw-jsonl', '--identity', 'narada.test', '--session', 'cancel-e2e'], {
-      env: { ...process.env, NARADA_SITE_ROOT: siteRoot, NARADA_INTELLIGENCE_PROVIDER: 'openai-api', OPENAI_BASE_URL: `http://127.0.0.1:${address.port}/`, OPENAI_API_KEY: 'fixture-key' }, stdio: ['pipe', 'pipe', 'pipe'],
+    child = spawnTestChild(process.execPath, [binPath, '--raw-jsonl', '--identity', 'narada.test', '--session', 'cancel-e2e'], {
+      env: { ...process.env, NARADA_SITE_ROOT: siteRoot, OPENAI_API_KEY: 'fixture-key' }, stdio: ['pipe', 'pipe', 'pipe'],
     });
-    let stdout = ''; child.stdout.setEncoding('utf8'); child.stdout.on('data', (chunk) => { stdout += chunk; });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.setEncoding('utf8'); child.stdout.on('data', (chunk) => { stdout += chunk; });
+    child.stderr.setEncoding('utf8'); child.stderr.on('data', (chunk) => { stderr += chunk; });
     child.stdin.write(`${JSON.stringify({ id: 'turn-1', method: 'session.submit', params: { content: 'wait' } })}\n`);
     await received;
     child.stdin.write(`${JSON.stringify({ id: 'cancel-1', method: 'session.cancel' })}\n`);
-    await waitForOutput(child, (text) => text.includes('carrier_turn_failed'));
+    await waitForOutput(child, (text) => text.includes('carrier_turn_interrupted'));
     child.stdin.end(`${JSON.stringify({ id: 'health-cancelled', method: 'session.health' })}\n${JSON.stringify({ id: 'recovery-cancelled', method: 'session.recovery' })}\n${JSON.stringify({ id: 'close-1', method: 'session.close' })}\n`);
-    assert.equal(await new Promise((resolve) => child.on('exit', resolve)), 0);
+    assert.equal(await new Promise((resolve) => child.on('exit', resolve)), 0, stderr);
     const events = stdout.trim().split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
     assert.ok(events.some((event) => event.event === 'session_cancel' && event.cancelled === true));
-    assert.ok(events.some((event) => event.event === 'carrier_turn_failed' && /abort/i.test(event.error)));
+    assert.ok(events.some((event) => event.event === 'carrier_turn_interrupted' && /abort/i.test(event.error)));
     const invocationEvents = events.filter((event) => event.event === 'provider_invocation_state_transition');
     assert.equal(invocationEvents.at(-1)?.invocation_state, 'interrupted');
     assert.ok(invocationEvents.every((event) => event.turn_id && event.turn_id === event.input_event_id));
@@ -1784,56 +2086,96 @@ test('spawned runtime cancels an in-flight provider request through JSONL contro
   }
 });
 
-test('spawned runtime recovers an in-flight queued turn exactly once after forced exit', async () => {
+test('spawned runtime refuses to redispatch an admission-unknown turn after forced exit', async () => {
   const siteRoot = mkdtempSync(join(tmpdir(), 'narada-runtime-recovery-e2e-'));
-  let recover = false; let providerCalls = 0;
+  let recover = false;
+  let providerCalls = 0;
   let firstRequestReceived;
   const firstRequest = new Promise((resolve) => { firstRequestReceived = resolve; });
   const provider = createServer((_request, response) => {
     providerCalls += 1;
-    if (!recover) { firstRequestReceived(); return; }
+    if (!recover) {
+      firstRequestReceived();
+      return;
+    }
     response.setHeader('content-type', 'application/json');
-    response.end(JSON.stringify({ choices: [{ message: { role: 'assistant', content: 'recovered' } }] }));
+    response.end(JSON.stringify({ choices: [{ message: { role: 'assistant', content: 'unsafe redispatch' } }] }));
   });
   await new Promise((resolve) => provider.listen(0, '127.0.0.1', resolve));
   const address = provider.address();
+  await seedIntelligenceRegistry(siteRoot, {
+    providerId: 'openai-api',
+    endpointBaseUrl: `http://127.0.0.1:${address.port}`,
+    credentialReference: 'OPENAI_API_KEY',
+  });
   const binPath = fileURLToPath(new URL('../bin/narada-agent-runtime-server.mjs', import.meta.url));
   const args = [binPath, '--raw-jsonl', '--identity', 'narada.test', '--session', 'recovery-e2e'];
-  const options = { env: { ...process.env, NARADA_SITE_ROOT: siteRoot, NARADA_INTELLIGENCE_PROVIDER: 'openai-api', OPENAI_BASE_URL: `http://127.0.0.1:${address.port}/`, OPENAI_API_KEY: 'fixture-key' }, stdio: ['pipe', 'pipe', 'pipe'] };
+  const options = { env: { ...process.env, NARADA_SITE_ROOT: siteRoot, OPENAI_API_KEY: 'fixture-key' }, stdio: ['pipe', 'pipe', 'pipe'] };
+  let first = null;
+  let second = null;
   try {
-    const first = spawnTestChild(process.execPath, args, options);
+    first = spawnTestChild(process.execPath, args, options);
     first.stdin.write(`${JSON.stringify({ id: 'turn-1', method: 'session.submit', params: { content: 'recover me' } })}\n`);
     await firstRequest;
     const firstExit = once(first, 'exit');
     first.kill();
     await firstExit;
     recover = true;
-    const second = spawnTestChild(process.execPath, args, options);
+
+    second = spawnTestChild(process.execPath, args, options);
     let secondStdout = '';
-    second.stdout.setEncoding('utf8'); second.stdout.on('data', (chunk) => { secondStdout += chunk; });
-    const recoveredOutput = await waitForOutput(second, (text) => text.includes('carrier_turn_completed'));
-    second.stdin.end(`${JSON.stringify({ id: 'health-recovered', method: 'session.health' })}\n${JSON.stringify({ id: 'recovery-recovered', method: 'session.recovery' })}\n${JSON.stringify({ id: 'close-1', method: 'session.close' })}\n`);
-    assert.equal(await new Promise((resolve) => second.on('exit', resolve)), 0);
-    assert.equal(providerCalls, 2);
-    assert.equal((recoveredOutput.match(/"event":"carrier_turn_completed"/g) ?? []).length, 1);
-    const recoveredEvents = secondStdout.trim().split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
-    assert.equal(recoveredEvents.find((event) => event.event === 'session_health' && event.request_id === 'health-recovered')?.operator_input_queue?.pending_count, 0);
-    assert.equal(recoveredEvents.find((event) => event.event === 'session_recovery' && event.request_id === 'recovery-recovered')?.operator_input_queue?.pending_count, 0);
+    let secondStderr = '';
+    second.stdout.setEncoding('utf8');
+    second.stdout.on('data', (chunk) => { secondStdout += chunk; });
+    second.stderr.setEncoding('utf8');
+    second.stderr.on('data', (chunk) => { secondStderr += chunk; });
+    const replayOutput = await waitForCapturedOutput(
+      second,
+      () => `${secondStdout}\n[stderr]\n${secondStderr}`,
+      (text) => text.includes('session_recovery_drain_failed'),
+    );
+
+    second.stdin.write(`${JSON.stringify({ id: 'health-recovered', method: 'session.health' })}\n${JSON.stringify({ id: 'recovery-recovered', method: 'session.recovery' })}\n`);
+    await waitForCapturedOutput(second, () => secondStdout, (text) => text.includes('\"request_id\":\"health-recovered\"') && text.includes('\"request_id\":\"recovery-recovered\"'));
+    second.stdin.end(`${JSON.stringify({ id: 'close-1', method: 'session.close' })}\n`);
+    assert.equal(await new Promise((resolve) => second.on('exit', resolve)), 0, secondStderr);
+
+    assert.equal(providerCalls, 1);
+    assert.equal((replayOutput.match(/\"event\":\"carrier_turn_completed\"/g) ?? []).length, 0);
+    const replayEvents = secondStdout.trim().split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
+    assert.ok(replayEvents.some((event) => event.event === 'invokable_intelligence_terminal'
+      && event.outcome_kind === 'admission-unknown'
+      && event.replayed === true));
+    assert.ok(replayEvents.some((event) => event.event === 'recovery_attempt_state_transition'
+      && event.recovery_attempt_state === 'failed'
+      && event.reason === 'recovery_replay_failed'));
+    assert.ok(replayEvents.some((event) => event.event === 'session_recovery_drain_failed'
+      && event.error.includes('admission-unknown')));
+    assert.equal(replayEvents.find((event) => event.event === 'session_health' && event.request_id === 'health-recovered')?.operator_input_queue?.pending_count, 1);
+    assert.equal(replayEvents.find((event) => event.event === 'session_recovery' && event.request_id === 'recovery-recovered')?.operator_input_queue?.pending_count, 1);
   } finally {
+    for (const child of [first, second]) {
+      if (child && child.exitCode === null && child.signalCode === null) {
+        const exited = once(child, 'exit');
+        child.kill();
+        await exited;
+      }
+    }
+    provider.closeAllConnections?.();
     await new Promise((resolve) => provider.close(resolve));
     rmSync(siteRoot, { recursive: true, force: true });
   }
 });
-
 test('spawned runtime records required MCP startup failure without calling the provider', async () => {
   const siteRoot = mkdtempSync(join(tmpdir(), 'narada-runtime-mcp-failure-'));
+  await seedIntelligenceRegistry(siteRoot, { providerId: 'openai-api' });
   mkdirSync(join(siteRoot, '.ai', 'mcp'), { recursive: true });
   const fixturePath = fileURLToPath(new URL('./fixtures/mcp-exit-server.mjs', import.meta.url));
   writeFileSync(join(siteRoot, '.ai', 'mcp', 'fixture.json'), JSON.stringify({ mcpServers: { broken: { command: process.execPath, args: [fixturePath], surface_id: 'broken.surface', startup_timeout_sec: 1 } } }), 'utf8');
   try {
     const binPath = fileURLToPath(new URL('../bin/narada-agent-runtime-server.mjs', import.meta.url));
     const child = spawnTestChild(process.execPath, [binPath, '--raw-jsonl', '--identity', 'narada.test', '--session', 'mcp-failure'], {
-      env: { ...process.env, NARADA_SITE_ROOT: siteRoot, NARADA_INTELLIGENCE_PROVIDER: 'openai-api', OPENAI_BASE_URL: 'http://127.0.0.1:1/', OPENAI_API_KEY: 'unused', NARADA_AGENT_CLI_REQUIRE_MCP_FABRIC: '1' }, stdio: ['pipe', 'pipe', 'pipe'],
+      env: { ...process.env, NARADA_SITE_ROOT: siteRoot, OPENAI_BASE_URL: 'http://127.0.0.1:1/', OPENAI_API_KEY: 'unused', NARADA_AGENT_CLI_REQUIRE_MCP_FABRIC: '1' }, stdio: ['pipe', 'pipe', 'pipe'],
     });
     let stdout = ''; child.stdout.setEncoding('utf8'); child.stdout.on('data', (chunk) => { stdout += chunk; });
     child.stdin.end(`${JSON.stringify({ id: 'turn-1', method: 'session.submit', params: { content: 'hello' } })}\n${JSON.stringify({ id: 'close-1', method: 'session.close' })}\n`);
@@ -1867,10 +2209,15 @@ test('spawned runtime executes a provider-requested tool through the site MCP ga
   });
   await new Promise((resolve) => provider.listen(0, '127.0.0.1', resolve));
   const address = provider.address();
+  await seedIntelligenceRegistry(siteRoot, {
+    providerId: 'openai-api',
+    endpointBaseUrl: `http://127.0.0.1:${address.port}`,
+    credentialReference: 'OPENAI_API_KEY',
+  });
   try {
     const binPath = fileURLToPath(new URL('../bin/narada-agent-runtime-server.mjs', import.meta.url));
     const child = spawnTestChild(process.execPath, [binPath, '--raw-jsonl', '--health-port', '0', '--identity', 'narada.test', '--session', 'mcp-e2e'], {
-      env: { ...process.env, NARADA_SITE_ROOT: siteRoot, NARADA_INTELLIGENCE_PROVIDER: 'openai-api', OPENAI_BASE_URL: `http://127.0.0.1:${address.port}/`, OPENAI_API_KEY: 'fixture-key', NARADA_DENIED_CAPABILITY_TOOLS: 'fixture_denied' }, stdio: ['pipe', 'pipe', 'pipe'],
+      env: { ...process.env, NARADA_SITE_ROOT: siteRoot, OPENAI_BASE_URL: `http://127.0.0.1:${address.port}/`, OPENAI_API_KEY: 'fixture-key', NARADA_DENIED_CAPABILITY_TOOLS: 'fixture_denied' }, stdio: ['pipe', 'pipe', 'pipe'],
     });
     let stdout = '';
     child.stdout.setEncoding('utf8'); child.stdout.on('data', (chunk) => { stdout += chunk; });
@@ -1953,24 +2300,33 @@ test('spawned runtime submits a turn through the configured local provider endpo
   });
   await new Promise((resolve) => provider.listen(0, '127.0.0.1', resolve));
   const address = provider.address();
+  await seedIntelligenceRegistry(siteRoot, {
+    providerId: 'openai-api',
+    endpointBaseUrl: `http://127.0.0.1:${address.port}`,
+    credentialReference: 'OPENAI_API_KEY',
+  });
   try {
     const binPath = fileURLToPath(new URL('../bin/narada-agent-runtime-server.mjs', import.meta.url));
     const child = spawnTestChild(process.execPath, [binPath, '--raw-jsonl', '--identity', 'narada.test', '--session', 'provider-e2e'], {
-      env: { ...process.env, NARADA_SITE_ROOT: siteRoot, NARADA_INTELLIGENCE_PROVIDER: 'openai-api', OPENAI_BASE_URL: `http://127.0.0.1:${address.port}/`, OPENAI_API_KEY: 'fixture-key' },
+      env: { ...process.env, NARADA_SITE_ROOT: siteRoot, OPENAI_BASE_URL: `http://127.0.0.1:${address.port}/`, OPENAI_API_KEY: 'fixture-key' },
       stdio: ['pipe', 'pipe', 'pipe'],
     });
     let stdout = '';
+    let stderr = '';
     child.stdout.setEncoding('utf8');
     child.stdout.on('data', (chunk) => { stdout += chunk; });
+    child.stderr.setEncoding('utf8');
+    child.stderr.on('data', (chunk) => { stderr += chunk; });
     child.stdin.write(`${JSON.stringify({ id: 'turn-1', method: 'session.submit', params: { content: 'hello' } })}\n`);
     child.stdin.write(`${JSON.stringify({ id: 'close-1', method: 'session.close' })}\n`);
     child.stdin.end();
-    assert.equal(await new Promise((resolve) => child.on('exit', resolve)), 0);
+    const providerExitCode = await new Promise((resolve) => child.on('exit', resolve));
+    assert.equal(providerExitCode, 0, `child exited ${providerExitCode}\\nstdout:\\n${stdout}\\nstderr:\\n${stderr}`);
     const events = stdout.trim().split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
     assert.ok(events.some((event) => event.event === 'carrier_turn_completed'));
     assert.ok(events.some((event) => event.event === 'session_control_response' && event.request_id === 'turn-1'));
     const invocationEvents = events.filter((event) => event.event === 'provider_invocation_state_transition');
-    assert.deepEqual(invocationEvents.map((event) => event.invocation_state), ['requested', 'validated', 'shaped', 'dispatched', 'admitting', 'admitted', 'receiving', 'completed']);
+    assert.deepEqual(invocationEvents.map((event) => event.invocation_state), ['requested', 'validated', 'shaped', 'dispatched', 'admitting', 'admitted', 'receiving', 'completed'], stdout);
     assert.equal(new Set(invocationEvents.map((event) => event.invocation_id)).size, 1);
     assert.ok(invocationEvents.every((event) => event.turn_id && event.turn_id === event.input_event_id));
   } finally {
@@ -1985,7 +2341,7 @@ test('default server path does not construct the legacy server runtime or legacy
   assert.equal(source.includes('createLegacyRuntimeService'), false);
   assert.equal(source.includes('createCarrierRuntimeContext'), false);
   assert.equal(source.includes('createLegacyProviderCall'), false);
-  assert.equal(source.includes('createNarsProviderRuntimeController'), true);
+  assert.equal(source.includes('createNarsIntelligenceRuntimeController'), true);
 });
 
 test('WebSocket /events replays and reads durable events.jsonl beyond memory buffer', async () => {
@@ -2696,6 +3052,111 @@ test('lifecycle dispatcher reports bounded redacted hook failures', async () => 
   assert.equal(result.failures[0].error.message.includes('<redacted>'), true);
 });
 
+test('task executability dispatch hook admits only structured successful follow-ups and deduplicates', async () => {
+  const emitted = [];
+  const dispatched = [];
+  const scheduled = [];
+  const hook = createNarsTaskExecutabilityDispatchHook({
+    dispatch: async (request) => { dispatched.push(request); return { status: 'completed' }; },
+    emit: (event) => emitted.push(event),
+    schedule: (callback) => scheduled.push(callback),
+    clock: () => '2026-07-19T00:00:00.000Z',
+  });
+  const followUp = {
+    schema: 'narada.task.executability.follow_up.v1',
+    version: 1,
+    source: { surface: 'task_lifecycle', operation: 'task_lifecycle_create' },
+    trigger: 'on_create',
+    status: 'enqueued',
+    request_id: 'request-1',
+    task_id: 'task-1',
+    task_number: 1,
+    task_spec_digest: 'a'.repeat(64),
+    environment_digest: 'b'.repeat(64),
+    evaluator_profile: 'shoshin-task-executability-v1',
+    evaluator_profile_version: '1.0.0',
+  };
+  const payload = {
+    source_event: {
+      event: 'item.completed',
+      item: { type: 'mcp_tool_call', status: 'completed', result: { structuredContent: followUp } },
+    },
+  };
+  assert.deepEqual(hook.onToolResult(payload), { status: 'accepted', request_id: 'request-1' });
+  assert.deepEqual(hook.onToolResult(payload), { status: 'duplicate', request_id: 'request-1' });
+  assert.equal(scheduled.length, 1);
+  await scheduled.shift()();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(dispatched.length, 1);
+  assert.deepEqual(emitted.map((event) => event.event), [
+    'task_executability_assessment_accepted',
+    'task_executability_assessment_dispatched',
+    'task_executability_assessment_completed',
+  ]);
+  assert.equal(hook.onToolResult({ source_event: { event: 'item.completed', item: { type: 'agent_message', status: 'completed', result: { structuredContent: followUp } } } }).status, 'ignored');
+});
+
+test('task executability dispatch hook unwraps the Task Lifecycle create result follow-up', async () => {
+  const dispatched = [];
+  const scheduled = [];
+  const hook = createNarsTaskExecutabilityDispatchHook({
+    dispatch: async (request) => { dispatched.push(request); return { status: 'completed' }; },
+    schedule: (callback) => scheduled.push(callback),
+  });
+  const followUp = {
+    schema: 'narada.task.executability.follow_up.v1', version: 1,
+    source: { surface: 'task_lifecycle', operation: 'task_lifecycle_create' }, trigger: 'on_create', status: 'enqueued',
+    request_id: 'request-nested', task_id: 'task-nested', task_number: 3,
+    task_spec_digest: 'e'.repeat(64), environment_digest: 'f'.repeat(64),
+    evaluator_profile: 'shoshin-task-executability-v1', evaluator_profile_version: '1.0.0',
+  };
+  const payload = {
+    source_event: {
+      event: 'item.completed',
+      item: {
+        type: 'mcp_tool_call',
+        status: 'completed',
+        result: {
+          structuredContent: {
+            schema: 'narada.task.create.v0',
+            status: 'created',
+            follow_up: followUp,
+          },
+        },
+      },
+    },
+  };
+  assert.deepEqual(hook.onToolResult(payload), { status: 'accepted', request_id: 'request-nested' });
+  await scheduled.shift()();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(dispatched.length, 1);
+  assert.deepEqual(dispatched[0].follow_up, followUp);
+});
+
+test('task executability dispatch hook defers scheduled work on shutdown', async () => {
+  const emitted = [];
+  const scheduled = [];
+  const hook = createNarsTaskExecutabilityDispatchHook({
+    dispatch: async () => { throw new Error('must_not_run'); },
+    emit: (event) => emitted.push(event),
+    schedule: (callback) => scheduled.push(callback),
+  });
+  const followUp = {
+    schema: 'narada.task.executability.follow_up.v1', version: 1,
+    source: { surface: 'task_lifecycle', operation: 'task_lifecycle_create' }, trigger: 'on_create', status: 'enqueued',
+    request_id: 'request-2', task_id: 'task-2', task_number: 2,
+    task_spec_digest: 'c'.repeat(64), environment_digest: 'd'.repeat(64),
+    evaluator_profile: 'shoshin-task-executability-v1', evaluator_profile_version: '1.0.0',
+  };
+  hook.onToolResult({ source_event: { event: 'item.completed', item: { type: 'mcp_tool_call', status: 'completed', result: { structuredContent: followUp } } } });
+  await hook.close();
+  await scheduled.shift()();
+  assert.deepEqual(emitted.map((event) => event.event), [
+    'task_executability_assessment_accepted',
+    'task_executability_assessment_deferred_to_reconciliation',
+  ]);
+});
+
 test('lifecycle binding is derived from runtime args before session bind', () => {
   const binding = lifecycleBindingFromArgs(['--identity', 'narada.test', '--session', 'runtime-package-test'], {
     NARADA_SITE_ROOT: 'D:/code/narada.test',
@@ -3023,6 +3484,7 @@ test('HTTP artifact mutations refuse before session-core authority binding', asy
 test('narada-owned entrypoint runs the session-core control runtime in process', async () => {
   const siteRoot = mkdtempSync(join(tmpdir(), 'narada-agent-runtime-server-package-'));
   mkdirSync(join(siteRoot, '.ai', 'mcp'), { recursive: true });
+  await seedIntelligenceRegistry(siteRoot, { providerId: 'codex-subscription' });
   try {
     const binPath = fileURLToPath(new URL('../bin/narada-agent-runtime-server.mjs', import.meta.url));
     const child = spawnTestChild(process.execPath, [
@@ -3034,7 +3496,6 @@ test('narada-owned entrypoint runs the session-core control runtime in process',
       env: {
         ...process.env,
         NARADA_SITE_ROOT: siteRoot,
-        NARADA_INTELLIGENCE_PROVIDER: 'codex-subscription',
         NARADA_AUTHORITY_REF: 'task:1328',
       },
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -3080,6 +3541,7 @@ test('narada-owned entrypoint runs the session-core control runtime in process',
 
 test('spawned runtime serves health and durable/live events through advertised projections', { timeout: 15000 }, async () => {
   const siteRoot = mkdtempSync(join(tmpdir(), 'narada-runtime-projection-e2e-'));
+  await seedIntelligenceRegistry(siteRoot, { providerId: 'codex-subscription' });
   const sessionId = 'projection-e2e';
   let child = null;
   let client = null;
@@ -3097,7 +3559,6 @@ test('spawned runtime serves health and durable/live events through advertised p
       env: {
         ...process.env,
         NARADA_SITE_ROOT: siteRoot,
-        NARADA_INTELLIGENCE_PROVIDER: 'codex-subscription',
         NARADA_AUTHORITY_REF: 'task:projection-e2e',
         NARADA_AGENT_RUNTIME_HEALTH_ENABLED: '1',
         NARADA_AGENT_RUNTIME_EVENTS_ENABLED: '1',
@@ -3233,6 +3694,11 @@ test('spawned runtime exposes bounded terminal request retention and preserves a
   });
   await new Promise((resolve) => provider.listen(0, '127.0.0.1', resolve));
   const address = provider.address();
+  await seedIntelligenceRegistry(siteRoot, {
+    providerId: 'openai-api',
+    endpointBaseUrl: `http://127.0.0.1:${address.port}`,
+    credentialReference: 'OPENAI_API_KEY',
+  });
   let child = null;
   try {
     const binPath = fileURLToPath(new URL('../bin/narada-agent-runtime-server.mjs', import.meta.url));
@@ -3246,7 +3712,6 @@ test('spawned runtime exposes bounded terminal request retention and preserves a
       env: {
         ...process.env,
         NARADA_SITE_ROOT: siteRoot,
-        NARADA_INTELLIGENCE_PROVIDER: 'openai-api',
         OPENAI_BASE_URL: `http://127.0.0.1:${address.port}/`,
         OPENAI_API_KEY: 'retention-key',
         NARADA_AGENT_RUNTIME_HEALTH_ENABLED: '1',
@@ -3304,6 +3769,7 @@ test('spawned runtime exposes bounded terminal request retention and preserves a
       params: { content: 'hold-active-request' },
     })}\n`);
     await waitForCapturedOutput(child, () => stdout, (text) => hasCapturedJsonEvent(text, (event) => event.event === 'input_event_started' && event.request_id === 'retention-active'));
+    await waitForCondition(() => Boolean(holdResponse), 5000);
     assert.ok(holdResponse);
 
     const activeHealth = await health();
@@ -3329,67 +3795,3 @@ test('spawned runtime exposes bounded terminal request retention and preserves a
   }
 });
 
-test('spawned runtime applies provider reconfiguration before the next turn', { timeout: 10000 }, async () => {
-  const siteRoot = mkdtempSync(join(tmpdir(), 'narada-runtime-provider-reconfigure-e2e-'));
-  const observedModels = [];
-  const provider = createServer((request, response) => {
-    let body = '';
-    request.setEncoding('utf8');
-    request.on('data', (chunk) => { body += chunk; });
-    request.on('end', () => {
-      const payload = JSON.parse(body);
-      observedModels.push(payload.model);
-      response.setHeader('content-type', 'application/json');
-      response.end(JSON.stringify({ choices: [{ message: { role: 'assistant', content: 'provider switched' } }] }));
-    });
-  });
-  await new Promise((resolve) => provider.listen(0, '127.0.0.1', resolve));
-  const address = provider.address();
-  let child = null;
-  try {
-    const binPath = fileURLToPath(new URL('../bin/narada-agent-runtime-server.mjs', import.meta.url));
-    child = spawnTestChild(process.execPath, [
-      binPath,
-      '--raw-jsonl',
-      '--identity', 'narada.test',
-      '--session', 'provider-reconfigure-e2e',
-    ], {
-      env: {
-        ...process.env,
-        NARADA_SITE_ROOT: siteRoot,
-        NARADA_INTELLIGENCE_PROVIDER: 'openai-api',
-        OPENAI_BASE_URL: `http://127.0.0.1:${address.port}/`,
-        OPENAI_API_KEY: 'provider-reconfigure-key',
-      },
-      stdio: ['pipe', 'pipe', 'pipe'],
-    });
-    let stdout = '';
-    let stderr = '';
-    child.stdout.setEncoding('utf8');
-    child.stderr.setEncoding('utf8');
-    child.stdout.on('data', (chunk) => { stdout += chunk; });
-    child.stderr.on('data', (chunk) => { stderr += chunk; });
-    child.stdin.write(`${JSON.stringify({ id: 'reconfigure-1', method: 'runtime.intelligence.reconfigure', params: { model: 'new-model' } })}\n`);
-    child.stdin.write(`${JSON.stringify({ id: 'turn-1', method: 'session.submit', params: { content: 'use the new model' } })}\n`);
-    await waitForCapturedOutput(child, () => stdout, (text) => text.includes('runtime_intelligence_reconfiguration') && text.includes('carrier_turn_completed'));
-    child.stdin.write(`${JSON.stringify({ id: 'health-1', method: 'session.health', params: {} })}\n`);
-    await waitForCapturedOutput(child, () => stdout, (text) => text.includes('"request_id":"health-1"'));
-    child.stdin.end(`${JSON.stringify({ id: 'close-1', method: 'session.close', params: {} })}\n`);
-    const exitCode = await new Promise((resolveExit) => child.on('exit', resolveExit));
-    assert.equal(exitCode, 0, stderr);
-    const events = stdout.trim().split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
-    const reconfiguration = events.find((event) => event.event === 'runtime_intelligence_reconfiguration');
-    const health = events.find((event) => event.event === 'session_health' && event.request_id === 'health-1');
-    assert.deepEqual(events
-      .filter((event) => event.event === 'provider_runtime_reconfiguration_state_transition')
-      .map((event) => event.reconfiguration_state), ['requested', 'validating', 'admitted', 'switching', 'active']);
-    assert.equal(reconfiguration?.terminal_state, 'active');
-    assert.equal(health?.intelligence?.model, 'new-model');
-    assert.deepEqual(observedModels, ['new-model']);
-    assert.equal(stdout.includes('provider-reconfigure-key'), false);
-  } finally {
-    if (child && child.exitCode === null) child.kill();
-    await new Promise((resolve) => provider.close(resolve));
-    rmSync(siteRoot, { recursive: true, force: true });
-  }
-});

@@ -5,8 +5,14 @@
   "type": "module",
   "narada": {
     "package_role": "nars_carrier_turn_adapter",
-    "owns": ["stateless_provider_turn_adapter"],
-    "does_not_own": ["session_persistence", "mcp_hosting", "transport_supervision"]
+    "owns": [
+      "stateless_intelligence_invocation_turn_adapter"
+    ],
+    "does_not_own": [
+      "session_persistence",
+      "mcp_hosting",
+      "transport_supervision"
+    ]
   },
   "exports": {
     ".": "./src/index.mjs",
@@ -16,5 +22,6 @@
   "scripts": {
     "test": "node --test src/*.test.mjs",
     "typecheck": "tsc --noEmit --allowJs --checkJs false src/index.mjs src/carrier-turn-adapter.mjs"
-  }
+  },
+  "description": "NARS carrier runtime substrate"
 }

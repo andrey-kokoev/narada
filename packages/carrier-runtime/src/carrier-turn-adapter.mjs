@@ -1,10 +1,10 @@
 /**
- * Stateless provider boundary. Session state, journals, and tool-process
+ * Stateless intelligence-invocation boundary. Session state, journals, and tool-process
  * ownership are intentionally supplied by the caller rather than retained here.
  */
 export async function runTurn(context = {}, eventSink = () => {}, toolGateway = {}) {
-  const callProvider = context.callProvider;
-  if (typeof callProvider !== 'function') throw new Error('carrier_turn_call_provider_required');
+  const invokeIntelligence = context.invokeIntelligence;
+  if (typeof invokeIntelligence !== 'function') throw new Error('carrier_turn_invoke_intelligence_required');
   const maxToolRounds = normalizeMaxToolRounds(context.maxToolRounds ?? context.settings?.maxToolRounds);
 
   const tools = typeof toolGateway.toolCatalog === 'function'
@@ -12,15 +12,13 @@ export async function runTurn(context = {}, eventSink = () => {}, toolGateway = 
     : Array.isArray(context.tools) ? context.tools : [];
   const turn = {
     turn_id: context.turnId ?? null,
-    provider: context.provider ?? null,
-    model: context.settings?.model ?? null,
   };
   await eventSink({ kind: 'carrier_turn_started', ...turn });
   try {
     const messages = [...(Array.isArray(context.messages) ? context.messages : [])];
     let result = null;
     for (let round = 0; round < maxToolRounds; round += 1) {
-      result = await callProvider({
+      result = await invokeIntelligence({
         messages,
         tools,
         settings: context.settings ?? {},
@@ -66,7 +64,18 @@ export async function runTurn(context = {}, eventSink = () => {}, toolGateway = 
     return result;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    await eventSink({ kind: 'carrier_turn_failed', ...turn, error: message });
+    const interrupted = context.abortSignal?.aborted === true
+      || error?.name === 'AbortError'
+      || error?.code === 'ABORT_ERR'
+      || message === 'carrier_tool_interrupted';
+    const interruptionReason = context.abortSignal?.aborted
+      ? context.abortSignal.reason instanceof Error
+        ? context.abortSignal.reason.message
+        : String(context.abortSignal.reason ?? 'abort_requested')
+      : message;
+    await eventSink(interrupted
+      ? { kind: 'carrier_turn_interrupted', ...turn, error: `carrier_turn_aborted:${interruptionReason}`, cause: message }
+      : { kind: 'carrier_turn_failed', ...turn, error: message });
     throw error;
   }
 }
@@ -98,9 +107,9 @@ function parseToolArguments(value) {
   }
 }
 
-export function createCarrierTurnAdapter({ callProvider } = {}) {
-  if (typeof callProvider !== 'function') throw new Error('carrier_turn_call_provider_required');
+export function createCarrierTurnAdapter({ invokeIntelligence } = {}) {
+  if (typeof invokeIntelligence !== 'function') throw new Error('carrier_turn_invoke_intelligence_required');
   return Object.freeze({
-    runTurn: (context, eventSink, toolGateway) => runTurn({ ...context, callProvider }, eventSink, toolGateway),
+    runTurn: (context, eventSink, toolGateway) => runTurn({ ...context, invokeIntelligence }, eventSink, toolGateway),
   });
 }

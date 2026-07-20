@@ -6,10 +6,13 @@
  */
 
 import type { CapabilityKey } from "./assertions.js";
+import type { IntelligenceAuthorityResolutionProvenance } from "./authority.js";
 import type { ResourceRef } from "./ids.js";
+import type { SelectedOfferingRoute } from "./offerings.js";
+import type { ContentDigest, PlanDecisionSnapshot } from "./temporal.js";
 
 export const INVOCATION_INTENT_SCHEMA = "narada.invokable-intelligence.invocation-intent.v1" as const;
-export const INVOCATION_PLAN_SCHEMA = "narada.invokable-intelligence.invocation-plan.v1" as const;
+export const INVOCATION_PLAN_SCHEMA = "narada.invokable-intelligence.invocation-plan.v2" as const;
 export const INVOCATION_ATTEMPT_SCHEMA = "narada.invokable-intelligence.invocation-attempt.v1" as const;
 export const INVOCATION_EVIDENCE_SCHEMA = "narada.invokable-intelligence.invocation-evidence.v1" as const;
 export const INVOCATION_REFUSAL_SCHEMA = "narada.invokable-intelligence.invocation-refusal.v1" as const;
@@ -21,6 +24,8 @@ export interface InvocationIntent {
   principal?: string;
   /** What the invocation is for, e.g. "operator-chat", "worker-step", "transcription". */
   purpose: string;
+  /** Digest of admitted request payload material; raw payload is not part of the intent record. */
+  input_digest?: ContentDigest;
   /** Capabilities the invocation requires (hard requirement, not preference). */
   required_capabilities?: CapabilityKey[];
   /** Explicitly requested model; resolver treats this as a hard filter. */
@@ -64,6 +69,22 @@ export interface InvocationPlan {
   created_at: string;
   resolver_version: string;
   selected: ResolvedSelection;
+  /** Explicit executable offering/route/topology/account/grant selection. */
+  route: SelectedOfferingRoute;
+  /** Access facts that passed before ranking; IDs remain independently queryable. */
+  access: {
+    account_id: string;
+    credential_binding_id?: string;
+    grant_id: string;
+    entitlement_id: string;
+    quota_id: string;
+    budget_id: string;
+    governance_requirement_ids: string[];
+  };
+  /** Authority-bearing inputs and their applied/rejected disposition. */
+  authority_provenance: IntelligenceAuthorityResolutionProvenance;
+  /** Immutable, time-bounded decision snapshot used for reuse/revalidation. */
+  snapshot: PlanDecisionSnapshot;
   /** Effective invocation options after policy/default resolution. */
   options: Record<string, unknown>;
   provenance: DecisionProvenance;
@@ -96,6 +117,15 @@ export interface InvocationEvidence {
 
 export type RefusalReasonCode =
   | "no-candidates"
+  | "explicit-route-required"
+  | "principal-required"
+  | "principal-consent-required"
+  | "principal-prohibited"
+  | "authority-policy-conflict"
+  | "topology-infeasible"
+  | "access-denied"
+  | "temporal-input-required"
+  | "stale-plan"
   | "credentials-unavailable"
   | "stale-capabilities"
   | "policy-conflict"

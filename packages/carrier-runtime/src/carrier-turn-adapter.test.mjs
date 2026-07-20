@@ -4,30 +4,30 @@ import { createCarrierTurnAdapter } from './carrier-turn-adapter.mjs';
 
 test('carrier turn adapter retains no session state and reports turn events', async () => {
   const events = [];
-  let providerRequest;
+  let invocationRequest;
   const adapter = createCarrierTurnAdapter({
-    callProvider: async (request) => {
-      providerRequest = request;
+    invokeIntelligence: async (request) => {
+      invocationRequest = request;
       return { messages: request.messages, tools: request.tools };
     },
   });
   const result = await adapter.runTurn(
-    { turnId: 'turn-1', provider: 'codex', messages: [{ role: 'user', content: 'hi' }] },
+    { turnId: 'turn-1', messages: [{ role: 'user', content: 'hi' }] },
     async (event) => events.push(event),
     { toolCatalog: () => [{ name: 'fs_read_file' }] },
   );
   assert.equal(result.messages[0].content, 'hi');
   assert.equal(result.tools[0].name, 'fs_read_file');
-  assert.equal(providerRequest.turnId, 'turn-1');
-  assert.equal(providerRequest.inputEventId, null);
-  assert.equal(typeof providerRequest.invocationEventSink, 'function');
+  assert.equal(invocationRequest.turnId, 'turn-1');
+  assert.equal(invocationRequest.inputEventId, null);
+  assert.equal(typeof invocationRequest.invocationEventSink, 'function');
   assert.deepEqual(events.map((event) => event.kind), ['carrier_turn_started', 'assistant_message', 'carrier_turn_completed']);
 });
 
 test('carrier tool loop bounds repeated tool requests and normalizes malformed arguments', async () => {
   let invocations = 0;
   const adapter = createCarrierTurnAdapter({
-    callProvider: async () => ({ choices: [{ message: { role: 'assistant', tool_calls: [{ id: 'call', function: { name: 'read', arguments: '{bad json' } }] } }] }),
+    invokeIntelligence: async () => ({ choices: [{ message: { role: 'assistant', tool_calls: [{ id: 'call', function: { name: 'read', arguments: '{bad json' } }] } }] }),
   });
   await assert.rejects(() => adapter.runTurn({}, async () => {}, {
     toolCatalog: () => [{ type: 'function', function: { name: 'read' } }],
@@ -39,7 +39,7 @@ test('carrier tool loop bounds repeated tool requests and normalizes malformed a
 test('carrier tool loop accepts a bounded explicit round budget', async () => {
   let invocations = 0;
   const adapter = createCarrierTurnAdapter({
-    callProvider: async () => ({ choices: [{ message: { role: 'assistant', tool_calls: [{ id: 'call', function: { name: 'read', arguments: '{}' } }] } }] }),
+    invokeIntelligence: async () => ({ choices: [{ message: { role: 'assistant', tool_calls: [{ id: 'call', function: { name: 'read', arguments: '{}' } }] } }] }),
   });
   await assert.rejects(() => adapter.runTurn({ maxToolRounds: 3 }, async () => {}, {
     toolCatalog: () => [{ type: 'function', function: { name: 'read' } }],
@@ -50,7 +50,7 @@ test('carrier tool loop accepts a bounded explicit round budget', async () => {
 
 test('carrier turn adapter emits failure without converting provider errors into state', async () => {
   const events = [];
-  const adapter = createCarrierTurnAdapter({ callProvider: async () => { throw new Error('provider_unavailable'); } });
+  const adapter = createCarrierTurnAdapter({ invokeIntelligence: async () => { throw new Error('provider_unavailable'); } });
   await assert.rejects(() => adapter.runTurn({}, async (event) => events.push(event)), /provider_unavailable/);
   assert.equal(events.at(-1).kind, 'carrier_turn_failed');
 });
@@ -60,7 +60,7 @@ test('carrier turn adapter completes provider-requested tools through the inject
   let calls = 0;
   let invocation;
   const adapter = createCarrierTurnAdapter({
-    callProvider: async ({ messages }) => {
+    invokeIntelligence: async ({ messages }) => {
       calls += 1;
       if (calls === 1) return {
         choices: [{ message: { role: 'assistant', tool_calls: [{ id: 'call-1', function: { name: 'fs_read_file', arguments: '{"path":"x"}' } }] } }],
@@ -90,7 +90,7 @@ test('carrier turn adapter completes provider-requested tools through the inject
 test('carrier turn adapter aborts the turn after an interrupted tool attempt', async () => {
   const events = [];
   const adapter = createCarrierTurnAdapter({
-    callProvider: async () => ({
+    invokeIntelligence: async () => ({
       choices: [{ message: { role: 'assistant', tool_calls: [{ id: 'call-interrupt', function: { name: 'read', arguments: '{}' } }] } }],
     }),
   });
@@ -107,6 +107,6 @@ test('carrier turn adapter aborts the turn after an interrupted tool attempt', a
     'carrier_turn_started',
     'carrier_tool_requested',
     'carrier_tool_completed',
-    'carrier_turn_failed',
+    'carrier_turn_interrupted',
   ]);
 });

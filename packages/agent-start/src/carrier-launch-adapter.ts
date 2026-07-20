@@ -217,9 +217,9 @@ export function resolveCarrierCommand(carrierName, {
 }) {
   const launchSelectionKind = carrierName === agentTuiCarrier ? 'agent-tui' : carrierName;
   const matrixRow = requireCarrierLaunchMatrixRow(launchSelectionKind);
-  if (carrierName === agentTuiCarrier) return 'cargo';
   if (processPlatform === 'win32' && carrierName === 'codex') return processExecPath;
   if (matrixRow.runtime_host_kind === NARADA_AGENT_RUNTIME_SERVER_KIND) return processExecPath;
+  if (carrierName === agentTuiCarrier) return 'cargo';
   if (carrierName === 'pi') return stableNodeCommand();
   if (carrierName === 'claude-code') return claudeCodeCommand ?? defaultClaudeCodeCommand;
   if (carrierName === 'opencode') return opencodeCommand ?? 'opencode';

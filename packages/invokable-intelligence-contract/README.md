@@ -2,22 +2,26 @@
 
 Versioned top-level contract for Narada's invokable-intelligence ontology:
 typed resources, qualified capability assertions, typed policy documents,
-and the runtime chain **Invocation Intent → Plan → Attempt → Evidence**.
+and the runtime chain **Intent → Plan Snapshot → Attempt → Result → Outcome**,
+with observations, admitted evidence, and telemetry kept distinct.
 
-Task: #2180. Later tasks build on this package: portable storage (#2181),
-the deterministic resolver (#2182), management/migration surfaces (#2183),
-local runtime integration (#2184), Cloudflare carrier integration (#2185),
-and cutover (#2186).
+The original ontology, storage, and resolver work was delivered by
+#2180–#2182. The contract was then hardened by Narada-proper tasks
+#2204–#2210; implementation continues through the repository-local
+`invokable-intelligence-implementation-v2` chapter.
 
 ## What it models (and what it refuses to model)
 
-The core move is to stop collapsing five different things into
+The core move is to stop collapsing an executable route into
 "provider/model" name pairs:
 
 - **Inference provider** — who runs inference (e.g. Cloudflare Workers AI).
 - **Model provider** — who publishes the model (e.g. Kimi/Moonshot, Meta).
 - **Model** — what is invoked, explicitly related to its model provider.
-- **Inference endpoint / adapter** — how invocation is reached and driven.
+- **Model offering** — a model as offered by one inference provider with
+  offering-specific capabilities, limits, and commercial properties.
+- **Inference endpoint / adapter / execution route** — where invocation is
+  reached, how it is driven, and the exact executable composition selected.
 - **Credential locator** — where a credential is *looked up*; the contract
   structurally refuses secret material (validators reject `secret`,
   `token`, `value`, ... fields on locators).
@@ -34,8 +38,8 @@ What a resource can do is stated as `CapabilityAssertion` with:
 - `capability: { family, name }` — an open vocabulary (`thinking/levels`,
   `batch/available`, `off-peak/window`, ...). New families need no
   contract change.
-- `scope` — `global` or a specific authority locus with an explicit Site
-  reference.
+- `scope` — model, offering, route component, route composition, or an
+  authority locus with an explicit Site reference.
 - `provenance`, `validity` (interval + freshness), `confidence`, and
   `evidence` references.
 
@@ -57,17 +61,62 @@ constraint — is rejected by validation. Precedence is never inferred
 from insertion order or environment variables; each document carries an
 explicit `revision`.
 
+The machine-readable authority matrix also separates target governance,
+principal consent and prohibition, User preference, target defaults,
+execution feasibility, declared capability, and observed capability. A
+foreign locus cannot escalate its effect merely by copying a record.
+
+## Offerings, routes, and execution topology
+
+An executable candidate is a `ModelOffering` plus an explicit route through
+client, launcher, carrier, runtime, adapter, inference service, and endpoint.
+Process, network, trust, account, and Site boundaries are first-class.
+Capabilities compose by typed scope: hard capability claims intersect, while
+narrower descriptive facts may override only within their declared scope.
+
+Local and Cloudflare routes therefore share one ontology while retaining
+structurally different topology and feasibility evidence.
+
+## Materialization and access
+
+Cross-locus effects use a versioned materialization envelope that preserves
+origin, destination, statement revision and digest, scope, validity,
+provenance, and authorization. Destination admission is idempotent and
+supports refresh, conflict refusal, supersession, revocation, expiry, and
+request-scoped signature verification. Portable SQLite/D1 DDL and operation
+contracts are included; concrete adapters remain runtime-owned.
+
+Route eligibility is evaluated before ranking. Service accounts, principals,
+credential bindings, grants and consent, entitlements, quotas, budgets, and
+governance constraints produce independent typed refusals. Credential
+bindings carry secret-transport handles, never raw secret values.
+
+## Time and invocation outcomes
+
+Plans are immutable snapshots with an explicit authoritative clock, timezone,
+validity interval, source revisions, and digest. Immediate, queued, delayed,
+retry, and resume use is deterministic; stale or policy-changed plans require
+re-planning before provider invocation.
+
+Attempts, result envelopes, terminal outcomes, observations, admitted
+evidence, and telemetry are separate records. Acknowledgment timeout is an
+explicit unknown-admission outcome, not provider failure. Retry and replay
+append lineage without overwriting prior attempts or results; payload
+deletion preserves digest and audit tombstones.
+
 ## Invocation chain
 
 - `InvocationIntent` — purpose, required capabilities, optional requested
   model/options. Produced by callers, carries no resolution.
-- `InvocationPlan` — the resolver's output: explicit resolved refs
-  (model, model provider, inference provider, endpoint, adapter,
-  credential), effective options, resolver version, and full decision
+- `InvocationPlan` / temporal plan snapshot — the resolver's output:
+  explicit offering and executable-route refs, effective options, resolver
+  version, clock/validity data, and full decision
   provenance (applied constraints/preferences/defaults, rejected
   candidates with reasons).
-- `InvocationAttempt` / `InvocationEvidence` — execution record and
-  usage/timing evidence.
+- `InvocationAttempt`, result envelope, and terminal outcome — distinct,
+  append-only execution states.
+- Observation, admitted evidence, and telemetry — distinct truth,
+  admission, and operational-reporting surfaces.
 - `InvocationRefusal` — typed no-plan outcome with a machine-readable
   `reason_code`.
 
@@ -86,9 +135,9 @@ every ref must resolve to a resource in the bundle.
 
 Both validate clean and are used as conformance seeds by later tasks.
 
-## Non-goals (v1)
+## Non-goals
 
-- No storage adapters, no resolver — those are #2181/#2182.
+- No concrete runtime storage adapter or resolver implementation.
 - No generic key/value settings or EAV ontology.
 - No provider/model environment variables as part of the canonical
   contract.
@@ -98,5 +147,5 @@ Both validate clean and are used as conformance seeds by later tasks.
 ```sh
 pnpm build       # tsc → dist/
 pnpm typecheck
-pnpm test        # node --import tsx --test
+pnpm test        # all test/*.test.ts suites
 ```

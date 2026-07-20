@@ -1,13 +1,57 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync } from 'node:fs';
+import { mkdirSync, mkdtempSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { buildCanonicalLocalTestSeed, CANONICAL_LOCAL_TEST_IDS } from '@narada2/invokable-intelligence-contract';
+import { SqliteRegistryStore } from '@narada2/invokable-intelligence-registry';
 
 const packageRoot = fileURLToPath(new URL('..', import.meta.url));
 const binPath = fileURLToPath(new URL('../bin/narada-agent-runtime-server.mjs', import.meta.url));
+
+async function seedIntelligenceRegistry(siteRoot, providerId, endpointBaseUrl) {
+  const dbPath = join(siteRoot, '.ai', 'intelligence-registry.db');
+  mkdirSync(join(siteRoot, '.ai'), { recursive: true });
+  const store = await SqliteRegistryStore.open(dbPath);
+  try {
+    const seed = JSON.parse(JSON.stringify(buildCanonicalLocalTestSeed({
+      endpointBaseUrl,
+      adapterProtocol: { family: 'openai', operation: 'chat-completions', version: '1' },
+      credentialStore: 'env',
+      credentialReference: 'OPENAI_API_KEY',
+    })));
+    for (const record of seed.records) {
+      const serialized = JSON.stringify(record.document).replaceAll('inference-provider:remote-api', `inference-provider:${providerId}`);
+      record.document = JSON.parse(serialized);
+      record.record_id = record.document.id;
+      if (record.document.schema === 'narada.invokable-intelligence.adapter.v1') {
+        record.document.protocol = { family: 'openai', operation: 'chat-completions', version: '1' };
+      }
+      if (record.document.schema === 'narada.invokable-intelligence.invocation-route-candidate.v1') {
+        record.document.topology.nodes = record.document.topology.nodes.map((node) => ({ ...node, required_feasibility: [] }));
+        record.document.topology.edges = record.document.topology.edges.map((edge) => ({ ...edge, required_feasibility: [] }));
+      }
+      if (record.document.schema === 'narada.invokable-intelligence.access-grant.v1') {
+        record.document.scope.purposes = [...new Set([...record.document.scope.purposes, 'agent-session'])];
+      }
+      if (record.document.schema === 'narada.invokable-intelligence.data-governance-requirement.v1') {
+        record.document.purposes = [...new Set([...record.document.purposes, 'agent-session'])];
+      }
+    }
+    await store.loadCatalogSeed(seed);
+  } finally {
+    await store.close();
+  }
+  Object.assign(process.env, {
+    NARADA_INTELLIGENCE_REGISTRY_DB: dbPath,
+    NARADA_INTELLIGENCE_TARGET_SITE: CANONICAL_LOCAL_TEST_IDS.targetSite,
+    NARADA_INTELLIGENCE_USER_SITE: CANONICAL_LOCAL_TEST_IDS.userSite,
+    NARADA_INTELLIGENCE_HOST_SITE: CANONICAL_LOCAL_TEST_IDS.hostSite,
+    NARADA_INTELLIGENCE_PRINCIPAL_ID: CANONICAL_LOCAL_TEST_IDS.principal,
+  });
+}
 
 let ptyModule;
 try {
@@ -60,6 +104,7 @@ async function runPtyE2E() {
   await new Promise((resolve) => provider.listen(0, '127.0.0.1', resolve));
   provider.unref();
   const providerAddress = provider.address();
+  await seedIntelligenceRegistry(siteRoot, 'openai-api', `http://127.0.0.1:${providerAddress.port}`);
   let terminal = null;
   let terminalExited = false;
   let terminalReleased = false;
@@ -93,8 +138,6 @@ async function runPtyE2E() {
       env: {
         ...process.env,
         NARADA_SITE_ROOT: siteRoot,
-        NARADA_INTELLIGENCE_PROVIDER: 'openai-api',
-        OPENAI_BASE_URL: `http://127.0.0.1:${providerAddress.port}/`,
         OPENAI_API_KEY: 'real-pty-e2e-key',
         NARADA_AGENT_CLI_COLOR: '0',
         NO_COLOR: '1',

@@ -23,10 +23,13 @@ import {
   EXECUTION_LOCUS_SCHEMA,
   INFERENCE_ENDPOINT_SCHEMA,
   MODEL_SCHEMA,
+  MODEL_OFFERING_SCHEMA,
   RESOURCE_SCHEMAS,
   SCHEMA_ID_KIND,
 } from "./resources.js";
 import type { Resource, ResourceSchema } from "./resources.js";
+import { validatePlanDecisionSnapshot } from "./temporal.js";
+import type { PlanDecisionSnapshot } from "./temporal.js";
 
 export interface ContractError {
   code: string;
@@ -128,9 +131,41 @@ export function validateResource(record: unknown): ContractError[] {
     case MODEL_SCHEMA:
       checkRef(record.provider, "$.provider", "model-provider", errors);
       break;
+    case MODEL_OFFERING_SCHEMA:
+      checkRef(record.model, "$.model", "model", errors);
+      checkRef(record.model_provider, "$.model_provider", "model-provider", errors);
+      checkRef(record.inference_provider, "$.inference_provider", "inference-provider", errors);
+      checkRef(record.endpoint, "$.endpoint", "inference-endpoint", errors);
+      if (!isNonEmptyString(record.service_class)) {
+        err(errors, "$.service_class", "invalid-resource", "model offering requires a service_class");
+      }
+      if (!isNonEmptyString(record.invocation_model_key)) {
+        err(errors, "$.invocation_model_key", "invalid-resource", "model offering requires its service-specific invocation_model_key");
+      }
+      break;
     case INFERENCE_ENDPOINT_SCHEMA: {
       checkRef(record.inference_provider, "$.inference_provider", "inference-provider", errors);
       checkRef(record.adapter, "$.adapter", "adapter", errors);
+      if (!isPlainObject(record.address) || !["url", "workers-binding", "runtime-service"].includes(String(record.address.kind))) {
+        err(errors, "$.address", "invalid-resource", "endpoint address must be a typed URL, Workers binding, or runtime service coordinate");
+      } else if (record.address.kind === "url") {
+        if (!isNonEmptyString(record.address.url)) {
+          err(errors, "$.address.url", "invalid-resource", "URL endpoint address requires url");
+        } else {
+          try {
+            const parsedUrl = new URL(record.address.url);
+            if (!["http:", "https:"].includes(parsedUrl.protocol) || parsedUrl.username || parsedUrl.password || parsedUrl.hash) {
+              err(errors, "$.address.url", "invalid-resource", "URL endpoint must be HTTP(S) and cannot contain credentials or a fragment");
+            }
+          } catch {
+            err(errors, "$.address.url", "invalid-resource", "URL endpoint address must be an absolute URL");
+          }
+        }
+      } else if (record.address.kind === "workers-binding" && !isNonEmptyString(record.address.binding)) {
+        err(errors, "$.address.binding", "invalid-resource", "Workers endpoint address requires binding");
+      } else if (record.address.kind === "runtime-service" && !isNonEmptyString(record.address.service)) {
+        err(errors, "$.address.service", "invalid-resource", "runtime-service endpoint address requires service");
+      }
       if (!Array.isArray(record.serves)) {
         err(errors, "$.serves", "invalid-resource", "serves must be an array of model refs");
       } else {
@@ -144,6 +179,20 @@ export function validateResource(record: unknown): ContractError[] {
     case ADAPTER_SCHEMA:
       if (!["node", "workers", "test"].includes(String(record.runtime_family))) {
         err(errors, "$.runtime_family", "invalid-resource", "runtime_family must be node | workers | test");
+      }
+      if (!isPlainObject(record.protocol) || !isNonEmptyString(record.protocol.version)) {
+        err(errors, "$.protocol", "invalid-resource", "adapter requires a typed, versioned invocation protocol");
+      } else {
+        const operations: Record<string, readonly string[]> = {
+          openai: ["chat-completions", "responses"],
+          anthropic: ["messages"],
+          "cloudflare-workers-ai": ["run"],
+          "codex-subscription": ["responses"],
+          narada: ["invoke"],
+        };
+        if (!operations[String(record.protocol.family)]?.includes(String(record.protocol.operation))) {
+          err(errors, "$.protocol", "invalid-resource", "adapter protocol family and operation must be a supported pair");
+        }
       }
       break;
     case CREDENTIAL_LOCATOR_SCHEMA: {
@@ -319,6 +368,9 @@ export function validateInvocation(record: unknown): ContractError[] {
       if (!isNonEmptyString(record.id)) err(errors, "$.id", "invalid-invocation", "id is required");
       if (!isIsoTimestamp(record.created_at)) err(errors, "$.created_at", "invalid-invocation", "created_at must be ISO-8601");
       if (!isNonEmptyString(record.purpose)) err(errors, "$.purpose", "invalid-invocation", "purpose is required");
+      if (record.input_digest !== undefined && (typeof record.input_digest !== "string" || !/^sha256:[a-f0-9]{64}$/.test(record.input_digest))) {
+        err(errors, "$.input_digest", "invalid-invocation", "input_digest must be a lowercase sha256 content digest");
+      }
       if (record.required_capabilities !== undefined) {
         if (!Array.isArray(record.required_capabilities)) {
           err(errors, "$.required_capabilities", "invalid-invocation", "required_capabilities must be an array");
@@ -337,6 +389,7 @@ export function validateInvocation(record: unknown): ContractError[] {
     case INVOCATION_PLAN_SCHEMA: {
       if (!isNonEmptyString(record.id)) err(errors, "$.id", "invalid-invocation", "id is required");
       if (!isNonEmptyString(record.intent_id)) err(errors, "$.intent_id", "invalid-invocation", "intent_id is required");
+      if (!isIsoTimestamp(record.created_at)) err(errors, "$.created_at", "invalid-invocation", "created_at must be ISO-8601");
       if (!isNonEmptyString(record.resolver_version)) {
         err(errors, "$.resolver_version", "invalid-invocation", "resolver_version is required");
       }
@@ -350,6 +403,49 @@ export function validateInvocation(record: unknown): ContractError[] {
         checkRef(record.selected.adapter, "$.selected.adapter", "adapter", errors);
         if (record.selected.credential !== undefined) {
           checkRef(record.selected.credential, "$.selected.credential", "credential-locator", errors);
+        }
+      }
+      if (!isPlainObject(record.route)) {
+        err(errors, "$.route", "invalid-invocation", "explicit offering/route selection is required");
+      } else {
+        checkRef(record.route.offering, "$.route.offering", "model-offering", errors);
+        checkRef(record.route.endpoint, "$.route.endpoint", "inference-endpoint", errors);
+        checkRef(record.route.adapter, "$.route.adapter", "adapter", errors);
+        if (!isNonEmptyString(record.route.route_id) || !isNonEmptyString(record.route.topology_id) || !isNonEmptyString(record.route.composition_digest)) {
+          err(errors, "$.route", "invalid-invocation", "route id, topology id, and composition digest are required");
+        }
+        if (!Array.isArray(record.route.execution_loci) || record.route.execution_loci.length === 0) {
+          err(errors, "$.route.execution_loci", "invalid-invocation", "at least one execution locus is required");
+        } else {
+          (record.route.execution_loci as unknown[]).forEach((ref, index) => checkRef(ref, `$.route.execution_loci[${index}]`, "execution-locus", errors));
+        }
+        if (!isNonEmptyString(record.route.account_ref) || !Array.isArray(record.route.grant_refs) || record.route.grant_refs.length === 0) {
+          err(errors, "$.route", "invalid-invocation", "route account and grant refs are required");
+        }
+        if (record.route.credential !== undefined) checkRef(record.route.credential, "$.route.credential", "credential-locator", errors);
+      }
+      if (!isPlainObject(record.access)
+        || !isNonEmptyString(record.access.account_id)
+        || !isNonEmptyString(record.access.grant_id)
+        || !isNonEmptyString(record.access.entitlement_id)
+        || !isNonEmptyString(record.access.quota_id)
+        || !isNonEmptyString(record.access.budget_id)
+        || !Array.isArray(record.access.governance_requirement_ids)) {
+        err(errors, "$.access", "invalid-invocation", "complete access/entitlement/quota/budget/governance provenance is required");
+      }
+      if (!isPlainObject(record.authority_provenance)
+        || record.authority_provenance.schema !== "narada.invokable-intelligence.authority-resolution-provenance.v1"
+        || !Array.isArray(record.authority_provenance.decisions)) {
+        err(errors, "$.authority_provenance", "invalid-invocation", "authority resolution provenance is required");
+      }
+      if (!isPlainObject(record.snapshot)) {
+        err(errors, "$.snapshot", "invalid-invocation", "immutable plan snapshot is required");
+      } else {
+        for (const diagnostic of validatePlanDecisionSnapshot(record.snapshot as unknown as PlanDecisionSnapshot)) {
+          err(errors, `$.snapshot${diagnostic.path === "$" ? "" : diagnostic.path.slice(1)}`, diagnostic.code, diagnostic.message);
+        }
+        if (record.snapshot.plan_id !== record.id || record.snapshot.intent_id !== record.intent_id) {
+          err(errors, "$.snapshot", "invalid-plan-snapshot", "snapshot plan/intent identities must match the enclosing plan");
         }
       }
       if (!isPlainObject(record.options)) err(errors, "$.options", "invalid-invocation", "options must be an object");
@@ -393,7 +489,7 @@ export function validateInvocation(record: unknown): ContractError[] {
       if (!isNonEmptyString(record.id)) err(errors, "$.id", "invalid-invocation", "id is required");
       if (!isNonEmptyString(record.intent_id)) err(errors, "$.intent_id", "invalid-invocation", "intent_id is required");
       if (
-        !["no-candidates", "credentials-unavailable", "stale-capabilities", "policy-conflict", "unsupported-options"].includes(
+        !["no-candidates", "explicit-route-required", "principal-required", "principal-consent-required", "principal-prohibited", "authority-policy-conflict", "topology-infeasible", "access-denied", "temporal-input-required", "stale-plan", "credentials-unavailable", "stale-capabilities", "policy-conflict", "unsupported-options"].includes(
           String(record.reason_code),
         )
       ) {
@@ -486,6 +582,12 @@ export function validateBundle(bundle: ContractBundle): ContractError[] {
 
   resources.forEach((record, i) => {
     if (record.schema === MODEL_SCHEMA) checkResolvable(record.provider, `$.resources[${i}].provider`);
+    if (record.schema === MODEL_OFFERING_SCHEMA) {
+      checkResolvable(record.model, `$.resources[${i}].model`);
+      checkResolvable(record.model_provider, `$.resources[${i}].model_provider`);
+      checkResolvable(record.inference_provider, `$.resources[${i}].inference_provider`);
+      checkResolvable(record.endpoint, `$.resources[${i}].endpoint`);
+    }
     if (record.schema === INFERENCE_ENDPOINT_SCHEMA) {
       checkResolvable(record.inference_provider, `$.resources[${i}].inference_provider`);
       checkResolvable(record.adapter, `$.resources[${i}].adapter`);

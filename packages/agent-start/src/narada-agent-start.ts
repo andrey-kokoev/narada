@@ -179,16 +179,11 @@ const naradaPackages = createNaradaPackageResolver({
 const RUNTIME_SUBSTRATE_KINDS_PACKET = Object.freeze(JSON.parse(readFileSync(resolveNaradaPackageExport('@narada2/operator-surface-runtime-contract', './runtime-substrate-kinds'), 'utf8')));
 const RUNTIME_CONTRACT_SCHEMA = RUNTIME_SUBSTRATE_KINDS_PACKET.schema;
 const AGENT_TUI_CARRIER = 'agent-tui';
-const AGENT_TUI_TERMINAL_RENDERING_ENV = 'NARADA_AGENT_TUI_ENABLE_TERMINAL_RENDERING';
-const AGENT_TUI_TERMINAL_MODE_ENV = 'NARADA_AGENT_TUI_TERMINAL_MODE';
-const AGENT_TUI_TERMINAL_MODE = 'interactive_loop';
-const AGENT_TUI_INTERACTIVE_LOOP_MAX_STEPS = '100000';
 const ADMITTED_RUNTIME_SUBSTRATE_KINDS = Object.freeze(RUNTIME_SUBSTRATE_KINDS_PACKET.admitted_runtime_substrate_kinds);
 const TOOL_FABRIC_ADAPTER_CONTRACT_SCHEMA = 'narada.tool_fabric_adapter_kind.v1';
 const ADMITTED_TOOL_FABRIC_ADAPTER_KINDS = Object.freeze([
   'codex-native-mcp',
   'narada-agent-runtime-server-mcp-client',
-  'narada-agent-tui-terminal-interactive-loop',
   'pi-extension-mcp-bridge',
   'claude-code-native-mcp',
   'opencode-native-mcp',
@@ -280,7 +275,9 @@ function resolveRuntimeAuthority(value, carrierName) {
   if (!['auto', 'read', 'write'].includes(normalized)) {
     throw new Error(`runtime_authority_not_admitted: ${normalized}. Admitted values: auto, read, write`);
   }
-  const narsOperatorSurface = carrierName === AGENT_CLI_OPERATOR_SURFACE_KIND || carrierName === 'agent-web-ui';
+  const narsOperatorSurface = carrierName === AGENT_CLI_OPERATOR_SURFACE_KIND
+    || carrierName === 'agent-web-ui'
+    || carrierName === AGENT_TUI_CARRIER;
   const effective = normalized === 'auto'
     ? (narsOperatorSurface ? 'write' : 'read')
     : normalized;
@@ -354,19 +351,9 @@ function materializeAgentTuiMcpConfig() {
 }
 
 function agentTuiTerminalEnvironment() {
-  if (carrier !== AGENT_TUI_CARRIER) return {};
-  const mcpConfigPath = materializeAgentTuiMcpConfig();
-  const providerEnv = intelligenceProviderEnvironment({ intelligence_provider: DEFAULT_AGENT_CLI_INTELLIGENCE_PROVIDER });
-  return {
-    [AGENT_TUI_TERMINAL_RENDERING_ENV]: 'yes',
-    [AGENT_TUI_TERMINAL_MODE_ENV]: AGENT_TUI_TERMINAL_MODE,
-    NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION: 'true',
-    NARADA_AGENT_TUI_PROVIDER_ADAPTER_KIND: 'codex_subscription_adapter',
-    ...providerEnv,
-    NARADA_AGENT_TUI_ENABLE_MCP_FABRIC: 'yes',
-    NARADA_AGENT_TUI_MCP_CONFIG: mcpConfigPath,
-    NARADA_SITE_MCP_FABRIC: join(sessionSiteRoot, '.ai', 'mcp'),
-  };
+  // agent-tui is a projection client. The child launched for this surface is
+  // NARS, so provider and MCP ownership stays in the runtime server.
+  return {};
 }
 function firstEnvironmentValue(names = []) {
   for (const name of names) {
@@ -1004,9 +991,9 @@ function buildSpawnArgs(carrierName, identity, carrierSessionRegistration = null
     naradaPackageRoot,
     siteCarrierControlPath,
     siteCarrierSessionPath,
-    agentTuiRuntimeLoop: args.agent_tui_runtime_loop,
-    agentTuiMaxSteps: args.agent_tui_max_steps,
-    agentTuiInteractiveLoopMaxSteps: AGENT_TUI_INTERACTIVE_LOOP_MAX_STEPS,
+    agentTuiRuntimeLoop: false,
+    agentTuiMaxSteps: null,
+    agentTuiInteractiveLoopMaxSteps: null,
     piCliScriptPath,
     rootDir,
     piProvider: process.env.NARADA_PI_PROVIDER ?? DEFAULT_PI_PROVIDER,
@@ -1330,7 +1317,7 @@ const output = {
   runtime_args: spawnArgs,
   exec_command: execFlag ? execCommand : null,
   context_isolation: carrier === 'codex' ? codexContextIsolationStatus({ exec: execFlag, dryRun }) : { status: 'isolated', carrier, runtime },
-  nars_health: carrier === 'agent-cli' || carrier === 'agent-web-ui' ? {
+  nars_health: carrier === 'agent-cli' || carrier === 'agent-web-ui' || carrier === AGENT_TUI_CARRIER ? {
     schema: 'narada.agent_start.nars_health_discovery.v1',
     owner: '@narada2/agent-runtime-server',
     method: 'session.health',
@@ -1340,7 +1327,7 @@ const output = {
     discovery_field: 'session_started.health_endpoint',
     note: 'The loopback HTTP endpoint is bound by the runtime server after process start; inspect session_started.health_endpoint or session.health for the live URL.',
   } : null,
-  nars_events: carrier === 'agent-cli' || carrier === 'agent-web-ui' ? {
+  nars_events: carrier === 'agent-cli' || carrier === 'agent-web-ui' || carrier === AGENT_TUI_CARRIER ? {
     schema: 'narada.agent_start.nars_event_stream_discovery.v1',
     owner: '@narada2/agent-runtime-server',
     method: 'session.events.subscribe',

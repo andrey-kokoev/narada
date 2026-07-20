@@ -7,14 +7,27 @@
 
 import type {
   AssertionLocus,
+  CanonicalCatalogRecord,
+  CanonicalCatalogRecordKind,
+  CanonicalCatalogSeed,
+  CatalogAdmissionResidual,
   CapabilityAssertion,
   ContractError,
   FixtureBundle,
   InvocationAttempt,
+  InvocationAuditEvidence,
   InvocationEvidence,
+  InvocationExecutionAttempt,
+  InvocationExecutionTransition,
   InvocationIntent,
+  InvocationObservation,
+  InvocationOperationalTelemetry,
   InvocationPlan,
   InvocationRefusal,
+  InvocationResultEnvelope,
+  InvocationTerminalOutcome,
+  PlanDecisionSnapshot,
+  PlanRevalidationEvidence,
   PolicyDocument,
   PolicyKind,
   PolicyLocus,
@@ -33,6 +46,17 @@ export class RegistryError extends Error {
     this.code = code;
     this.contractErrors = contractErrors;
   }
+}
+
+export interface CatalogRecordFilter {
+  recordKind?: CanonicalCatalogRecordKind;
+  recordId?: string;
+  authorityLocus?: string;
+}
+
+export interface CatalogResidualFilter {
+  code?: string;
+  disposition?: "rejected" | "not-authoritative";
 }
 
 export interface ResourceFilter {
@@ -94,18 +118,51 @@ export interface IntelligenceRegistryStore {
   /** Subject bindings derived from a policy's resource rules. */
   listPolicyBindings(policyId: string): Promise<PolicyBindingRow[]>;
 
+  /** Immutable canonical envelopes and structured migration residuals. */
+  getCatalogRecord(id: string): Promise<CanonicalCatalogRecord | null>;
+  listCatalogRecords(filter?: CatalogRecordFilter): Promise<CanonicalCatalogRecord[]>;
+  listCatalogResiduals(filter?: CatalogResidualFilter): Promise<CatalogAdmissionResidual[]>;
+  /** Validate and atomically project one complete canonical seed. */
+  loadCatalogSeed(seed: CanonicalCatalogSeed): Promise<void>;
+
   putIntent(intent: InvocationIntent): Promise<void>;
   getIntent(id: string): Promise<InvocationIntent | null>;
   recordPlan(plan: InvocationPlan): Promise<void>;
   getPlan(id: string): Promise<InvocationPlan | null>;
   getPlanByIntent(intentId: string): Promise<InvocationPlan | null>;
+  listPlansByIntent(intentId: string): Promise<InvocationPlan[]>;
+  recordPlanSnapshot(snapshot: PlanDecisionSnapshot): Promise<void>;
+  getPlanSnapshot(planId: string): Promise<PlanDecisionSnapshot | null>;
+  recordPlanRevalidation(evidence: PlanRevalidationEvidence): Promise<void>;
+  listPlanRevalidations(planId: string): Promise<PlanRevalidationEvidence[]>;
   recordRefusal(refusal: InvocationRefusal): Promise<void>;
+  getRefusal(id: string): Promise<InvocationRefusal | null>;
   getRefusalByIntent(intentId: string): Promise<InvocationRefusal | null>;
+  listRefusalsByIntent(intentId: string): Promise<InvocationRefusal[]>;
   /** Upsert by id: attempt state transitions rewrite the same row. */
   recordAttempt(attempt: InvocationAttempt): Promise<void>;
   listAttempts(planId: string): Promise<InvocationAttempt[]>;
   recordEvidence(evidence: InvocationEvidence): Promise<void>;
   listEvidence(attemptId: string): Promise<InvocationEvidence[]>;
+
+  /** V2 execution history. These records are immutable and never conflate payload, outcome, evidence, or telemetry. */
+  recordExecutionAttempt(attempt: InvocationExecutionAttempt): Promise<void>;
+  getExecutionAttempt(id: string): Promise<InvocationExecutionAttempt | null>;
+  listExecutionAttempts(planId: string): Promise<InvocationExecutionAttempt[]>;
+  recordExecutionTransition(transition: InvocationExecutionTransition): Promise<void>;
+  listExecutionTransitions(attemptId: string): Promise<InvocationExecutionTransition[]>;
+  recordResultEnvelope(result: InvocationResultEnvelope): Promise<void>;
+  listResultEnvelopes(attemptId: string): Promise<InvocationResultEnvelope[]>;
+  recordTerminalOutcome(outcome: InvocationTerminalOutcome): Promise<void>;
+  getTerminalOutcome(id: string): Promise<InvocationTerminalOutcome | null>;
+  getTerminalOutcomeByAttempt(attemptId: string): Promise<InvocationTerminalOutcome | null>;
+  listTerminalOutcomesByIntent(intentId: string): Promise<InvocationTerminalOutcome[]>;
+  recordInvocationObservation(observation: InvocationObservation): Promise<void>;
+  listInvocationObservations(subjectId: string): Promise<InvocationObservation[]>;
+  recordInvocationAuditEvidence(evidence: InvocationAuditEvidence): Promise<void>;
+  listInvocationAuditEvidence(subjectId?: string): Promise<InvocationAuditEvidence[]>;
+  recordInvocationTelemetry(telemetry: InvocationOperationalTelemetry): Promise<void>;
+  listInvocationTelemetry(attemptId: string): Promise<InvocationOperationalTelemetry[]>;
 
   /** Atomic load of a full fixture/bundle (resources, assertions, policies, intents). */
   loadBundle(bundle: FixtureBundle): Promise<void>;

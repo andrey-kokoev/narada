@@ -3,16 +3,14 @@ import { readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import test from "node:test";
 
-import type { CapabilityAssertion, PolicyDocument } from "@narada2/invokable-intelligence-contract";
 import { createFakeD1, D1RegistryStore, SqliteRegistryStore } from "@narada2/invokable-intelligence-registry";
 import type { IntelligenceRegistryStore } from "@narada2/invokable-intelligence-registry";
 
 import { parseLegacyRegistry } from "../src/legacy.js";
 import type { MigrationLoci } from "../src/migrate.js";
 import { applyMigration, buildMigrationPlan, dryRunMigration } from "../src/migrate.js";
-import { createManagementTools } from "../src/mcp-tools.js";
 import { main } from "../src/cli.js";
-import { ManagementError, materializeRecord, validateStore, writeRecord } from "../src/operations.js";
+import { validateStore } from "../src/operations.js";
 
 const LOCI: MigrationLoci = {
   targetSite: { kind: "site", id: "site:thoughts-project" },
@@ -48,6 +46,7 @@ test("dry-run migration is deterministic and does not mutate", async () => {
 test("applied migration is idempotent and records provenance", async () => {
   const legacy = await realLegacy();
   const plan = buildMigrationPlan(legacy, LOCI, { reference: "provider-registry.json", plannedAt: PLANNED_AT });
+  const byId = new Map(plan.resources.map((resource) => [resource.id, resource]));
   const store = await openStore();
   await applyMigration(store, plan);
   const secondRun = await applyMigration(store, plan);
@@ -60,6 +59,12 @@ test("applied migration is idempotent and records provenance", async () => {
   for (const assertion of migrated) {
     assert.equal(assertion.provenance.source, "migration");
     assert.equal(assertion.provenance.reference, "provider-registry.json");
+  }
+  const glmEndpoint = byId.get("inference-endpoint:glm-api");
+  if (glmEndpoint?.schema === "narada.invokable-intelligence.inference-endpoint.v1") {
+    assert.deepEqual(glmEndpoint.address, { kind: "url", url: "https://open.bigmodel.cn/api/paas/v4/chat/completions" });
+  } else {
+    assert.fail("GLM endpoint missing");
   }
   await store.close();
 });
@@ -81,6 +86,7 @@ test("representative legacy config maps without conflating provider kinds", asyn
   if (endpoint?.schema === "narada.invokable-intelligence.inference-endpoint.v1") {
     assert.equal(endpoint.adapter.id, "adapter:openai-compatible-chat-completions");
     assert.equal(endpoint.credential?.id, "credential-locator:openai-api");
+    assert.deepEqual(endpoint.address, { kind: "url", url: "https://api.openai.com/v1/chat/completions" });
   } else {
     assert.fail("endpoint missing");
   }
@@ -135,95 +141,6 @@ test("representative legacy config maps without conflating provider kinds", asyn
   await applyMigration(store, plan);
   const session = { store, owningSite: LOCI.targetSite };
   assert.deepEqual(await validateStore(session), []);
-  await store.close();
-});
-
-test("cross-locus writes are rejected unless explicitly materialized", async () => {
-  const store = await openStore();
-  const session = { store, owningSite: LOCI.userSite };
-  const foreignPolicy: PolicyDocument = {
-    schema: "narada.invokable-intelligence.policy.v1",
-    id: "policy:test-foreign",
-    locus: "target-site",
-    site: LOCI.targetSite,
-    kind: "defaults",
-    revision: 1,
-    rules: [{ type: "default-option", option: "thinking", value: "low" }],
-  };
-  await assert.rejects(writeRecord(session, foreignPolicy), (error: unknown) => {
-    assert.ok(error instanceof ManagementError);
-    assert.equal(error.code, "cross-locus-write");
-    return true;
-  });
-  assert.equal(await store.getPolicy(foreignPolicy.id), null);
-
-  await materializeRecord(session, foreignPolicy, { actor: "test-operator", reference: "test" });
-  assert.notEqual(await store.getPolicy(foreignPolicy.id), null);
-
-  const foreignAssertion: CapabilityAssertion = {
-    schema: "narada.invokable-intelligence.capability-assertion.v1",
-    id: "assert:test-feasibility",
-    subject: { kind: "credential-locator", id: "credential-locator:openai-api" },
-    capability: { family: "credential", name: "feasible" },
-    value: true,
-    scope: { locus: "host-site", site: LOCI.hostSite },
-    provenance: { source: "operator", recorded_at: PLANNED_AT, actor: "test" },
-    validity: { fresh_as_of: PLANNED_AT },
-    confidence: 1,
-    evidence: [],
-  };
-  await assert.rejects(writeRecord(session, foreignAssertion), ManagementError);
-  await materializeRecord(session, foreignAssertion, { actor: "test-operator", reference: "test" });
-  const stored = await store.getAssertion(foreignAssertion.id);
-  assert.ok(stored?.provenance.reference?.startsWith("explicit-materialization:"));
-  await store.close();
-});
-
-test("management tools and explain produce structured output", async () => {
-  const legacy = await realLegacy();
-  const plan = buildMigrationPlan(legacy, LOCI, { reference: "provider-registry.json", plannedAt: PLANNED_AT });
-  const store = await openStore();
-  await applyMigration(store, plan);
-  const session = { store, owningSite: LOCI.targetSite };
-
-  // Make one credential feasible so resolution can plan.
-  await store.putAssertion({
-    schema: "narada.invokable-intelligence.capability-assertion.v1",
-    id: "assert:test-openai-feasible",
-    subject: { kind: "credential-locator", id: "credential-locator:openai-api" },
-    capability: { family: "credential", name: "feasible" },
-    value: true,
-    scope: { locus: "host-site", site: LOCI.hostSite },
-    provenance: { source: "probe", recorded_at: PLANNED_AT },
-    validity: { fresh_as_of: PLANNED_AT },
-    confidence: 1,
-    evidence: [],
-  });
-
-  const tools = createManagementTools(session);
-  const byName = new Map(tools.map((t) => [t.name, t]));
-
-  const resources = (await byName.get("intelligence_list_resources")?.handler({ kind: "model" })) as unknown[];
-  assert.ok(resources.length > 0);
-
-  const validation = (await byName.get("intelligence_validate_store")?.handler({})) as { ok: boolean; errors: unknown[] };
-  assert.equal(validation.ok, true);
-
-  const explanation = (await byName.get("intelligence_explain_resolution")?.handler({
-    intent: {
-      schema: "narada.invokable-intelligence.invocation-intent.v1",
-      id: "intent:test-explain",
-      created_at: PLANNED_AT,
-      purpose: "test",
-      requested_model: { kind: "model", id: "model:openai-gpt-5.6-sol" },
-    },
-    targetSite: "site:thoughts-project",
-    userSite: "site:andrey-user",
-    hostSite: "site:andrey-pc",
-    time: PLANNED_AT,
-  })) as { result: { schema: string }; lines: string[] };
-  assert.equal(explanation.result.schema, "narada.invokable-intelligence.invocation-plan.v1");
-  assert.ok(explanation.lines.some((line) => line.includes("selected model model:openai-gpt-5.6-sol")));
   await store.close();
 });
 

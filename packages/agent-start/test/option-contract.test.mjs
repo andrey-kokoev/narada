@@ -198,7 +198,7 @@ test('launcher option contract consumes shared carrier runtime and provider cont
   assert.equal(sharedRuntimeContract.admitted_runtime_substrate_kinds.includes('codex'), true);
   assert.equal(sharedRuntimeContract.admitted_runtime_substrate_kinds.includes('agent-cli'), false);
   assert.equal(sharedRuntimeContract.admitted_runtime_substrate_kinds.includes('narada-agent-runtime-server'), true);
-  assert.equal(sharedRuntimeContract.admitted_runtime_substrate_kinds.includes('agent-tui'), true);
+  assert.equal(sharedRuntimeContract.admitted_runtime_substrate_kinds.includes('agent-tui'), false);
   assert.equal(sharedRuntimeContract.codex_context_isolation.forbidden_resume_modes.includes('codex resume --last'), true);
   assert.equal(sharedProviderContract.providers['codex-subscription'].adapter_kind, 'codex-mcp-server');
   assert.equal(sharedProviderContract.providers['codex-subscription'].support_state, 'verified_supported');
@@ -1081,49 +1081,23 @@ test('enable native shell removes codex shell disable argument', () => {
   assert.equal(output.runtime_args.includes('apps'), true);
 });
 
-test('agent-tui materializes provider env without requiring ambient provider env', () => {
-  const output = runOk(['--runtime', 'agent-tui', '--agent-tui-max-steps', '42']);
+test('agent-tui delegates provider and MCP ownership to the NARS runtime server', () => {
+  const output = runOk(['--carrier', 'agent-tui', '--runtime', 'narada-agent-runtime-server'], agentTuiEnv());
   const env = output.required_environment;
-  assert.equal(env.NARADA_AGENT_TUI_ENABLE_MCP_FABRIC, 'yes');
-  assert.equal(env.NARADA_SITE_MCP_FABRIC, join(naradaProperRoot, '.ai', 'mcp'));
-  assert.equal(env.NARADA_AGENT_TUI_MCP_CONFIG, join(env.NARADA_SITE_MCP_FABRIC, 'agent-tui', env.NARADA_CARRIER_SESSION_ID, 'mcp-config.json'));
-  assert.equal(env.NARADA_AGENT_TUI_MCP_CONFIG.startsWith(`${env.NARADA_SITE_MCP_FABRIC}${sep}`), true);
-  assert.equal(env.NARADA_AGENT_TUI_MCP_CONFIG.includes(`${sep}agent-tui${sep}carrier_`), true);
+  assert.equal(Object.hasOwn(env, 'NARADA_AGENT_TUI_ENABLE_MCP_FABRIC'), false);
+  assert.equal(Object.hasOwn(env, 'NARADA_AGENT_TUI_MCP_CONFIG'), false);
   assert.equal(env.NARADA_INTELLIGENCE_PROVIDER, 'kimi-code-api');
   assert.equal(env.KIMI_CODE_API_BASE_URL, 'https://api.kimi.com/coding/');
-  assert.equal(env.KIMI_CODE_MODEL, 'k3');
+  assert.equal(env.KIMI_CODE_MODEL, 'kimi-k2.7');
   assert.equal(Object.hasOwn(env, 'KIMI_CODE_API_KEY'), true);
   assert.equal(output.tool_fabric_adapter.expected_tools.includes('agent_context_startup_sequence'), true);
   assert.equal(output.tool_fabric_adapter.expected_tools.includes('mcp_output_show'), true);
   assert.equal(output.tool_fabric_adapter.expected_tools.includes('task_lifecycle_next'), true);
-  assert.equal(output.runtime_args.includes('--max-steps'), true);
-  assert.equal(output.runtime_args.includes('42'), true);
-  const sessionId = output.carrier_session.carrier_session_id;
-  const manifestPath = output.runtime_args[output.runtime_args.indexOf('--manifest-path') + 1];
-  assert.equal(manifestPath.endsWith(join('agent-tui', 'Cargo.toml')), true);
-  assert.notEqual(manifestPath, join(naradaProperRoot, 'packages', 'agent-tui', 'Cargo.toml'));
-  assert.deepEqual(output.runtime_args, [
-    'run',
-    '--manifest-path',
-    manifestPath,
-    '--bin',
-    'narada-agent-tui',
-    '--',
-    '--identity',
-    identity,
-    '--session',
-    sessionId,
-    '--site-root',
-    naradaProperRoot,
-    '--control-jsonl',
-    resolveNaradaSitePaths({ siteRoot: naradaProperRoot, sessionId }).narsControlPath,
-    '--session-jsonl',
-    resolveNaradaSitePaths({ siteRoot: naradaProperRoot, sessionId }).narsSessionPath,
-    '--interactive-loop',
-    '--max-steps',
-    '42',
-  ]);
-  assert.equal(existsSync(env.NARADA_AGENT_TUI_MCP_CONFIG), false, 'dry-run must not write generated agent-tui config');
+  assert.equal(output.runtime_args.includes('--operator-surface'), true);
+  assert.equal(output.runtime_args.includes('agent-tui'), true);
+  assert.equal(output.runtime_args.includes('--interactive-loop'), false);
+  assert.equal(output.runtime_args.includes('--control-jsonl'), false);
+  assert.equal(output.runtime_args.includes('--session-jsonl'), false);
 });
 
 test('starting carrier input is runtime-neutral for agent-cli', () => {
@@ -1136,7 +1110,7 @@ test('starting carrier input is runtime-neutral for agent-cli', () => {
 test('starting carrier input file is runtime-neutral for agent-tui', () => {
   const directivePath = join(mkdtempSync(join(tmpdir(), 'narada-agent-start-input-')), 'directive.md');
   writeFileSync(directivePath, 'Operation: file startup input', 'utf8');
-  const output = runOk(['--runtime', 'agent-tui', '--starting-carrier-input-file', directivePath], agentTuiEnv());
+  const output = runOk(['--carrier', 'agent-tui', '--runtime', 'narada-agent-runtime-server', '--starting-carrier-input-file', directivePath], agentTuiEnv());
   assert.equal(output.starting_carrier_input.status, 'configured');
   assert.equal(output.starting_carrier_input.source, 'starting_carrier_input_file');
   assert.equal(output.starting_carrier_input.file, directivePath);
@@ -1179,10 +1153,12 @@ test('site-tools-root option is visible in dry-run output', () => {
   assert.equal(output.site_tools_root, siteToolsRoot);
 });
 
-test('agent-tui runtime loop option selects runtime-loop args', () => {
-  const output = runOk(['--runtime', 'agent-tui', '--agent-tui-runtime-loop'], agentTuiEnv());
-  assert.equal(output.runtime_args.includes('--runtime-loop'), true);
+test('agent-tui selects the NARS runtime server and exposes attach discovery', () => {
+  const output = runOk(['--carrier', 'agent-tui', '--runtime', 'narada-agent-runtime-server'], agentTuiEnv());
   assert.equal(output.runtime_args.includes('--interactive-loop'), false);
+  assert.equal(output.runtime_args.includes('--control-jsonl'), false);
+  assert.equal(output.tool_fabric_adapter_kind, 'narada-agent-runtime-server-mcp-client');
+  assert.equal(output.nars_events.attach_commands.agent_tui, 'agent-tui --attach <session_started.event_endpoint>');
 });
 
 

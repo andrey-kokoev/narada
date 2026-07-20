@@ -4,7 +4,7 @@
  * provider or model selections.
  */
 
-import type { ResourceRef } from "@narada2/invokable-intelligence-contract";
+import type { AuthoritativeDecisionClock, ResourceRef } from "@narada2/invokable-intelligence-contract";
 import type { ResolverContext } from "@narada2/invokable-intelligence-resolver";
 
 export interface LocalSiteContext {
@@ -15,13 +15,20 @@ export interface LocalSiteContext {
 
 export function buildResolverContext(
   sites: LocalSiteContext,
-  options: { time?: string; runtime?: ResolverContext["runtime"] } = {},
+  input: {
+    clock: AuthoritativeDecisionClock;
+    runtime: ResolverContext["runtime"];
+    access: ResolverContext["access"];
+    topologyObservations: ResolverContext["topology_observations"];
+  },
 ): ResolverContext {
   return {
     targetSite: sites.targetSite,
     userSite: sites.userSite,
     hostSite: sites.hostSite,
-    runtime: options.runtime ?? "node",
-    time: options.time ?? new Date().toISOString(),
+    runtime: input.runtime,
+    clock: input.clock,
+    access: input.access,
+    topology_observations: input.topologyObservations,
   };
 }
