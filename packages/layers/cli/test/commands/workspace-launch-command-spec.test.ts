@@ -15,7 +15,6 @@ const options = {
   runtime: 'narada-agent-runtime-server',
   workspaceRoot: 'D:/code/example',
   authority: 'local',
-  intelligenceProvider: 'codex-subscription',
   mcpScope: 'local-site',
   enableNativeShell: false,
   launchSessionId: 'launch-1',

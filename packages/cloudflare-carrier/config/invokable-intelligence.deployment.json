@@ -1,0 +1,30 @@
+{
+  "schema": "narada.cloudflare.invokable-intelligence.deployment-manifest.v1",
+  "id": "deployment:narada-cloudflare:invokable-intelligence:revision-1",
+  "owning_site": {
+    "kind": "site",
+    "id": "site:narada-cloudflare"
+  },
+  "actor_id": "site-operator:narada-cloudflare",
+  "principal_id": "principal:admin",
+  "consent_ref": "authorization:narada-cloudflare:intelligence-deployment:revision-1",
+  "destination_authority": {
+    "site_id": "site:narada-cloudflare",
+    "locus": "target-site",
+    "authority_ref": "authority:site:narada-cloudflare:catalog"
+  },
+  "decided_at": "2026-07-19T12:00:00.000Z",
+  "evidence_refs": [
+    "authorization:narada-cloudflare:intelligence-deployment:revision-1",
+    "authority:site:narada-cloudflare:catalog",
+    "site-config:narada-cloudflare:invokable-intelligence:revision-1"
+  ],
+  "catalog": {
+    "path": "invokable-intelligence.catalog.json",
+    "sha256": "100530e2a5993451fad0922ca30f0d4937f6ca2da1dd014fb1847f9dec3263cb"
+  },
+  "materializations": {
+    "path": "invokable-intelligence.materializations.json",
+    "sha256": "90d0f9d71228aa6abf60abf6bbfbb9885d5dbbf2fc4bc45b388a82a9c91311d9"
+  }
+}

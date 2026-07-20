@@ -12,6 +12,7 @@ import {
   carrierSpawnOptions,
   resolveCarrierCommand,
   resolveToolFabricAdapter,
+  stripLegacyIntelligenceSelectionEnvironment,
 } from '../src/carrier-launch-adapter.ts';
 
 const require = createRequire(import.meta.url);
@@ -23,8 +24,6 @@ const tsxLoaderPath = pathToFileURL(require.resolve('tsx')).href;
 const identity = 'narada.architect';
 const sharedRuntimeContract = JSON.parse(readFileSync(resolve(naradaProperRoot, 'packages', 'operator-surface-runtime-contract', 'contracts', 'runtime-substrate-kinds.json'), 'utf8'));
 const sharedCarrierLaunchMatrix = JSON.parse(readFileSync(resolve(naradaProperRoot, 'packages', 'operator-surface-runtime-contract', 'contracts', 'operator-surface-launch-matrix.json'), 'utf8'));
-const sharedProviderContract = JSON.parse(readFileSync(resolve(naradaProperRoot, 'packages', 'carrier-provider-contract', 'contracts', 'provider-registry.json'), 'utf8'));
-const sharedProviderAdapterContract = JSON.parse(readFileSync(resolve(naradaProperRoot, 'packages', 'carrier-provider-contract', 'contracts', 'provider-adapters.json'), 'utf8'));
 const baseArgs = [
   '--import',
   tsxLoaderPath,
@@ -38,9 +37,6 @@ const baseArgs = [
   '--json',
 ];
 const baseTestEnv = {
-  NARADA_PROVIDER_SECRET_STORE: 'disabled',
-  NARADA_PROVIDER_ENV_FALLBACK: '1',
-  NARADA_CODEX_SUBSCRIPTION_PREFLIGHT: 'defer',
   KIMI_CODE_API_KEY: 'test-key',
 };
 
@@ -193,20 +189,13 @@ function agentTuiEnv() {
   };
 }
 
-test('launcher option contract consumes shared carrier runtime and provider contracts', () => {
+test('launcher option contract consumes the shared runtime contract without intelligence selection', () => {
   assert.equal(sharedRuntimeContract.schema, 'narada.runtime_substrate_kind.v1');
   assert.equal(sharedRuntimeContract.admitted_runtime_substrate_kinds.includes('codex'), true);
   assert.equal(sharedRuntimeContract.admitted_runtime_substrate_kinds.includes('agent-cli'), false);
   assert.equal(sharedRuntimeContract.admitted_runtime_substrate_kinds.includes('narada-agent-runtime-server'), true);
   assert.equal(sharedRuntimeContract.admitted_runtime_substrate_kinds.includes('agent-tui'), false);
   assert.equal(sharedRuntimeContract.codex_context_isolation.forbidden_resume_modes.includes('codex resume --last'), true);
-  assert.equal(sharedProviderContract.providers['codex-subscription'].adapter_kind, 'codex-mcp-server');
-  assert.equal(sharedProviderContract.providers['codex-subscription'].support_state, 'verified_supported');
-  assert.deepEqual(sharedProviderContract.credential_requirement_kinds, ['none', 'api_key_secret', 'local_codex_subscription']);
-  assert.equal(sharedProviderContract.default_provider, 'kimi-code-api');
-  assert.equal(sharedProviderContract.providers['kimi-api'].credential_requirement.kind, 'api_key_secret');
-  assert.equal(sharedProviderContract.providers['codex-subscription'].credential_requirement.kind, 'local_codex_subscription');
-  assert.equal(sharedProviderAdapterContract.production_provider_adapter_kind, 'codex_subscription_adapter');
 });
 
 test('agent-start restamps launch ownership for the runtime child process', () => {
@@ -381,8 +370,8 @@ test('Codex McpScope none materializes isolated config with no MCP servers', () 
   assert.equal(configText.includes('McpScope=none'), true);
 });
 
-test('agent-start output bundles first-class launcher contracts for operator surfaces and selections', () => {
-  const output = runOk(['--carrier', 'agent-cli', '--runtime', 'narada-agent-runtime-server', '--mcp-scope', 'none', '--intelligence-provider', 'kimi-code-api']);
+test('agent-start output bundles first-class launcher contracts without launch-time intelligence selection', () => {
+  const output = runOk(['--carrier', 'agent-cli', '--runtime', 'narada-agent-runtime-server', '--mcp-scope', 'none']);
   expectLauncherContracts(output);
 });
 
@@ -435,27 +424,6 @@ test('pc site root option is exposed in dry-run output when supplied', () => {
   assert.equal(output.pc_site_root, pcRoot);
 });
 
-test('agent-cli resolves provider credential from environment source and redacts output', () => {
-  const output = runOk(['--carrier', 'agent-cli', '--runtime', 'narada-agent-runtime-server', '--intelligence-provider', 'kimi-api'], { KIMI_API_KEY: 'super-secret-test-key' });
-  const env = output.required_environment;
-  assert.equal(output.intelligence_provider_resolution.source_field, 'cli_argument');
-  assert.equal(output.intelligence_provider_resolution.credential_present, true);
-  assert.equal(output.intelligence_provider_resolution.credential_source, 'environment');
-  assert.equal(output.intelligence_provider_resolution.credential_requirement_kind, 'api_key_secret');
-  assert.equal(output.intelligence_provider_resolution.credential_requirement.kind, 'api_key_secret');
-  assert.equal(output.intelligence_provider_resolution.credential_secret_ref, 'narada/provider/kimi-api/api-key');
-  assert.equal(output.intelligence_provider_resolution.credential.source_env, 'KIMI_API_KEY');
-  assert.equal(output.intelligence_provider_resolution.runtime_binding.schema, 'narada.carrier.provider_runtime_binding.v1');
-  assert.equal(output.intelligence_provider_resolution.runtime_binding.provider_id, 'kimi-api');
-  assert.equal(output.intelligence_provider_resolution.runtime_binding.base_url, 'https://api.moonshot.ai');
-  assert.match(output.intelligence_provider_resolution.runtime_binding.credential_fingerprint, /^sha256:[a-f0-9]{12}$/);
-  assert.equal(Object.hasOwn(output.intelligence_provider_resolution.runtime_binding, 'api_key'), false);
-  assert.equal(env.NARADA_INTELLIGENCE_PROVIDER, 'kimi-api');
-  assert.equal(env.NARADA_AI_API_KEY, '<set>');
-  assert.equal(env.KIMI_API_KEY, '<set>');
-  assert.doesNotMatch(JSON.stringify(output), /super-secret-test-key/);
-});
-
 function expectLauncherContracts(output) {
   assert.equal(output.launcher_contracts.schema, 'narada.launcher_contract_bundle.v0');
   assert.equal(output.launcher_contracts.launch_result_artifact.schema, 'narada.launch_result_artifact.v0');
@@ -464,162 +432,62 @@ function expectLauncherContracts(output) {
   assert.equal(output.launcher_contracts.runtime_health_posture.schema, 'narada.runtime_health_posture.v0');
   assert.equal(output.launcher_contracts.mcp_fabric_injection_plan.schema, 'narada.mcp_fabric_injection_plan.v0');
   assert.equal(output.launcher_contracts.launch_selection_session.schema, 'narada.launch_selection_session.v0');
-  assert.equal(output.launcher_contracts.intelligence_provider_readiness_check.schema, 'narada.intelligence_provider_readiness_check.v0');
+  assert.equal(output.launcher_contracts.launch_selection_session.intelligence_selection_authority.launcher_selection, false);
   assert.equal(output.launcher_contracts.operator_terminal_projection_plan.schema, 'narada.operator_terminal_projection_plan.v0');
 }
 
-test('agent-cli projects provider credentials for MCP child surfaces without leaking values', () => {
-  const output = runOk(['--carrier', 'agent-cli', '--runtime', 'narada-agent-runtime-server', '--intelligence-provider', 'codex-subscription'], {
-    DEEPSEEK_API_KEY: 'deepseek-secret-test-key',
-    DEEPSEEK_API_BASE_URL: 'https://deepseek.example.test',
-  });
-  assert.equal(output.required_environment.DEEPSEEK_API_KEY, '<set>');
-  assert.equal(output.required_environment.DEEPSEEK_API_BASE_URL, 'https://deepseek.example.test');
-  assert.doesNotMatch(JSON.stringify(output), /deepseek-secret-test-key/);
-});
-
-test('agent-cli fails launcher preflight when API provider credential is missing', () => {
-  const result = runFailed(['--carrier', 'agent-cli', '--runtime', 'narada-agent-runtime-server'], {
-    NARADA_PROVIDER_SECRET_STORE: 'disabled',
-    KIMI_CODE_API_KEY: '',
-  });
+test('agent launcher refuses explicit provider selection', () => {
+  const result = runFailed(['--carrier', 'agent-cli', '--runtime', 'narada-agent-runtime-server', '--intelligence-provider', 'codex-subscription']);
   const refusal = JSON.parse(result.stdout);
-  assert.equal(refusal.reason_code, 'intelligence_provider_credential_missing');
-  assert.equal(refusal.intelligence_provider, 'kimi-code-api');
-  assert.equal(refusal.credential_requirement_kind, 'api_key_secret');
-  assert.equal(refusal.credential_requirement.kind, 'api_key_secret');
-  assert.equal(refusal.credential_secret_ref, 'narada/provider/kimi-code-api/api-key');
-  assert.deepEqual(refusal.credential_env_names, ['KIMI_CODE_API_KEY']);
-  assert.equal(refusal.required_next_step, "Store the key with PowerShell SecretManagement as 'narada/provider/kimi-code-api/api-key' or, for an explicit diagnostic fallback only, set NARADA_PROVIDER_ENV_FALLBACK=1 and one of: KIMI_CODE_API_KEY");
-  assert.equal(refusal.resolution_states.at(-1).reason_code, 'intelligence_provider_credential_missing');
+  assert.equal(refusal.reason_code, 'launcher_intelligence_selection_removed');
+  assert.match(refusal.required_next_step, /catalog/);
 });
 
-test('agent-cli accepts explicit intelligence provider and materializes provider env', () => {
-  const output = runOk(['--carrier', 'agent-cli', '--runtime', 'narada-agent-runtime-server', '--intelligence-provider', 'codex-subscription']);
-  assert.equal(output.intelligence_provider_resolution.support_state, 'verified_supported');
-  assert.equal(output.intelligence_provider_resolution.credential_source, 'deferred_for_dry_run');
-  assert.equal(output.intelligence_provider_resolution.credential_present, true);
-  assert.equal(output.intelligence_provider_resolution.credential.preflight.status, 'deferred_for_dry_run');
-  assert.equal(output.intelligence_provider_resolution.credential_requirement_kind, 'local_codex_subscription');
-  assert.equal(output.intelligence_provider_resolution.credential_requirement.kind, 'local_codex_subscription');
-  assert.equal(output.intelligence_provider_resolution.credential_secret_ref, null);
-  assert.deepEqual(output.intelligence_provider_resolution.credential_env_names, []);
-  assert.equal(output.required_environment.NARADA_INTELLIGENCE_PROVIDER, 'codex-subscription');
-  assert.equal(output.required_environment.CODEX_MODEL, 'gpt-5.6-sol');
-  assert.equal(output.required_environment.NARADA_AI_THINKING, 'low');
-  assert.equal(['live_codex_cache', 'declared_registry_fallback'].includes(output.intelligence_provider_resolution.model_catalog.source), true);
+test('NARS launch declares runtime catalog authority and scrubs ambient selection variables', () => {
+  const output = runOk(['--carrier', 'agent-cli', '--runtime', 'narada-agent-runtime-server'], {
+    NARADA_INTELLIGENCE_PROVIDER: 'codex-subscription',
+    NARADA_AI_MODEL: 'decoy-narada-model',
+    NARADA_AI_THINKING: 'decoy-thinking',
+    CODEX_MODEL: 'decoy-codex-model',
+    OPENAI_MODEL: 'decoy-openai-model',
+    KIMI_CODE_MODEL: 'decoy-kimi-model',
+  });
+  assert.equal(output.intelligence_selection_authority.owner, '@narada2/invokable-intelligence-runtime');
+  assert.equal(output.intelligence_selection_authority.launcher_selection, false);
+  for (const name of ['NARADA_INTELLIGENCE_PROVIDER', 'NARADA_AI_MODEL', 'NARADA_AI_THINKING', 'CODEX_MODEL', 'OPENAI_MODEL', 'KIMI_CODE_MODEL']) {
+    assert.equal(output.required_environment[name], undefined);
+    assert.equal(output.would_set_environment[name], undefined);
+  }
+  assert.equal(output.required_environment.KIMI_CODE_API_KEY, undefined);
 });
 
-test('agent-cli can resolve intelligence provider from target site env file', () => {
+test('NARS launch scrubs provider selection loaded from a target Site env file', () => {
   const siteRoot = mkdtempSync(join(tmpdir(), 'narada-agent-start-site-env-'));
-  mkdirSync(join(siteRoot, '.ai'), { recursive: true });
-  mkdirSync(join(siteRoot, '.ai', 'mcp'), { recursive: true });
-  copyFileSync(join(naradaProperRoot, '.ai', 'task-lifecycle.db'), join(siteRoot, '.ai', 'task-lifecycle.db'));
-  writeFileSync(join(siteRoot, '.ai', 'mcp', 'config.json'), JSON.stringify({
-    mcpServers: {
-      'narada-site-env-fixture': {
-        transport: 'stdio',
-        command: 'node',
-        args: ['--version'],
-        tools: ['agent_context_startup_sequence'],
-      },
-    },
-  }, null, 2), 'utf8');
-  writeFileSync(join(siteRoot, '.env'), 'NARADA_INTELLIGENCE_PROVIDER=codex-subscription\n', 'utf8');
+  writeMinimalMcpFabric(siteRoot, 'narada-site-env-fixture');
+  writeFileSync(join(siteRoot, '.env'), 'NARADA_INTELLIGENCE_PROVIDER=codex-subscription\nCODEX_MODEL=decoy-model\n', 'utf8');
   const output = runOk(['--carrier', 'agent-cli', '--runtime', 'narada-agent-runtime-server', '--target-site-root', siteRoot], { NARADA_INTELLIGENCE_PROVIDER: '' });
   assert.equal(output.target_site_root, siteRoot);
-  assert.equal(output.intelligence_provider_resolution.source_field, 'site_env');
-  assert.equal(output.intelligence_provider_resolution.source_path, join(siteRoot, '.env'));
-  assert.equal(output.intelligence_provider_resolution.support_state, 'verified_supported');
-  assert.equal(output.required_environment.NARADA_INTELLIGENCE_PROVIDER, 'codex-subscription');
+  assert.equal(output.required_environment.NARADA_INTELLIGENCE_PROVIDER, undefined);
+  assert.equal(output.required_environment.CODEX_MODEL, undefined);
 });
 
-test('agent-cli can resolve intelligence provider from ambient environment', () => {
+test('launcher does not preselect or preflight a credential', () => {
   const output = runOk(['--carrier', 'agent-cli', '--runtime', 'narada-agent-runtime-server'], {
-    NARADA_INTELLIGENCE_PROVIDER: 'codex-subscription',
     KIMI_CODE_API_KEY: '',
   });
-  assert.equal(output.intelligence_provider_resolution.source_field, 'environment');
-  assert.equal(output.required_environment.NARADA_INTELLIGENCE_PROVIDER, 'codex-subscription');
+  assert.equal(output.intelligence_selection_authority.launcher_selection, false);
+  assert.equal(Object.hasOwn(output, 'intelligence_provider_resolution'), false);
 });
 
-test('agent-cli reports launcher env provider source when supplied by workspace launcher', () => {
-  const output = runOk(['--carrier', 'agent-cli', '--runtime', 'narada-agent-runtime-server'], {
-    NARADA_INTELLIGENCE_PROVIDER: 'codex-subscription',
-    NARADA_INTELLIGENCE_PROVIDER_SOURCE_FIELD: 'launcher_env',
-    NARADA_INTELLIGENCE_PROVIDER_SOURCE_PATH: 'C:/Users/Andrey/Narada/.env',
-    KIMI_CODE_API_KEY: '',
+test('selection scrub preserves credentials as transport only', () => {
+  const env = stripLegacyIntelligenceSelectionEnvironment({
+    NARADA_INTELLIGENCE_PROVIDER: 'decoy',
+    NARADA_AI_MODEL: 'decoy-model',
+    OPENAI_API_KEY: 'credential',
   });
-  assert.equal(output.intelligence_provider_resolution.source_field, 'launcher_env');
-  assert.equal(output.intelligence_provider_resolution.source_path, 'C:/Users/Andrey/Narada/.env');
-  assert.equal(output.required_environment.NARADA_INTELLIGENCE_PROVIDER, 'codex-subscription');
-});
-
-test('agent-cli refuses codex-subscription when Codex local auth preflight fails', () => {
-  const fakeBin = mkdtempSync(join(tmpdir(), 'narada-codex-preflight-'));
-  const fakeCodex = join(fakeBin, process.platform === 'win32' ? 'codex.cmd' : 'codex');
-  const script = process.platform === 'win32'
-    ? '@echo off\r\necho HTTP error: 401 Unauthorized 1>&2\r\nexit /b 1\r\n'
-    : '#!/bin/sh\necho "HTTP error: 401 Unauthorized" >&2\nexit 1\n';
-  writeFileSync(fakeCodex, script, 'utf8');
-
-  const result = runRealLaunch(['--carrier', 'agent-cli', '--runtime', 'narada-agent-runtime-server', '--intelligence-provider', 'codex-subscription'], {
-    NARADA_CODEX_SUBSCRIPTION_PREFLIGHT: 'force',
-    NARADA_CODEX_COMMAND: fakeCodex,
-  });
-  assert.notEqual(result.status, 0, 'launcher should fail');
-  const refusal = JSON.parse(result.stdout);
-  assert.equal(refusal.reason_code, 'local_codex_subscription_auth_unavailable');
-  assert.equal(refusal.intelligence_provider, 'codex-subscription');
-  assert.equal(refusal.preflight.ok, false);
-  assert.match(refusal.preflight.status, /^failed/);
-  assert.equal(Object.hasOwn(refusal.preflight, 'stderr_first_line'), true);
-  assert.equal(Object.hasOwn(refusal.preflight, 'stdout_first_line'), true);
-  assert.equal(refusal.required_next_step, 'Run codex login or repair local Codex subscription auth, then retry the launcher. For diagnostics only, set NARADA_CODEX_SUBSCRIPTION_PREFLIGHT=defer to skip the launch-time probe.');
-});
-
-test('agent-cli non-dry launch runs codex-subscription preflight by default before handoff', () => {
-  const fakeBin = mkdtempSync(join(tmpdir(), 'narada-codex-preflight-default-'));
-  const fakeCodex = join(fakeBin, process.platform === 'win32' ? 'codex.cmd' : 'codex');
-  const script = process.platform === 'win32'
-    ? '@echo off\r\necho HTTP error: 401 Unauthorized 1>&2\r\nexit /b 1\r\n'
-    : '#!/bin/sh\necho "HTTP error: 401 Unauthorized" >&2\nexit 1\n';
-  writeFileSync(fakeCodex, script, 'utf8');
-
-  const result = runRealLaunch(['--carrier', 'agent-cli', '--runtime', 'narada-agent-runtime-server', '--intelligence-provider', 'codex-subscription'], {
-    NARADA_CODEX_SUBSCRIPTION_PREFLIGHT: '',
-    NARADA_CODEX_COMMAND: fakeCodex,
-  });
-  assert.notEqual(result.status, 0, 'launcher should fail before carrier handoff');
-  const refusal = JSON.parse(result.stdout);
-  assert.equal(refusal.reason_code, 'local_codex_subscription_auth_unavailable');
-  assert.match(refusal.preflight.status, /^failed/);
-  assert.equal(refusal.preflight.command.includes('exec --json'), true);
-});
-
-test('agent-cli codex-subscription preflight reports canonical dry-run command and scrubs OpenAI API env', () => {
-  const output = runOk(['--carrier', 'agent-cli', '--runtime', 'narada-agent-runtime-server', '--intelligence-provider', 'codex-subscription'], {
-    NARADA_CODEX_SUBSCRIPTION_PREFLIGHT: 'force',
-    NARADA_CODEX_COMMAND: '',
-    OPENAI_API_KEY: 'stale-key-must-not-reach-preflight',
-    OPENAI_BASE_URL: 'https://stale.example',
-    OPENAI_MODEL: 'stale-model',
-  });
-  assert.equal(output.intelligence_provider_resolution.credential.preflight.status, 'deferred_for_dry_run');
-  assert.equal(output.intelligence_provider_resolution.credential.preflight.command, 'codex exec --json');
-  assert.equal(output.would_set_environment.OPENAI_API_KEY, '<set>');
-  assert.equal(output.would_set_environment.OPENAI_BASE_URL, 'https://stale.example');
-  assert.equal(output.would_set_environment.OPENAI_MODEL, undefined);
-});
-
-test('agent-cli default provider uses registry default', () => {
-  const output = runOk(['--carrier', 'agent-cli', '--runtime', 'narada-agent-runtime-server'], {
-    NARADA_INTELLIGENCE_PROVIDER: '',
-    KIMI_CODE_API_KEY: 'kimi-code-test-key',
-  });
-  assert.equal(output.intelligence_provider_resolution.source_field, 'default_for_nars_operator_surface');
-  assert.equal(output.required_environment.NARADA_INTELLIGENCE_PROVIDER, 'kimi-code-api');
-  assert.equal(output.required_environment.KIMI_CODE_API_KEY, '<set>');
+  assert.equal(env.NARADA_INTELLIGENCE_PROVIDER, undefined);
+  assert.equal(env.NARADA_AI_MODEL, undefined);
+  assert.equal(env.OPENAI_API_KEY, 'credential');
 });
 
 test('agent-cli exec launches package bin through node, not PowerShell', () => {
@@ -849,10 +717,13 @@ test('runtime spawn environment carries site-qualified identity binding lossless
     legacy_agent_id: 'resident',
   };
   const env = buildCarrierProcessEnvironment({
-    processEnvironment: { PATH: 'test-path' },
-    intelligenceProviderEnv: { NARADA_INTELLIGENCE_PROVIDER: 'kimi-code-api' },
-    mcpProviderCredentialEnv: { KIMI_CODE_API_KEY: 'test-key' },
-    runtimeEnvironment: { NARADA_AI_MODEL: 'kimi-k2.7' },
+    processEnvironment: {
+      PATH: 'test-path',
+      NARADA_INTELLIGENCE_PROVIDER: 'kimi-code-api',
+      NARADA_AI_MODEL: 'kimi-k2.7',
+      KIMI_CODE_MODEL: 'kimi-k2.7',
+      KIMI_CODE_API_KEY: 'test-key',
+    },
     carrierName: 'agent-web-ui',
     identity: 'resident',
     role: 'resident',
@@ -872,6 +743,10 @@ test('runtime spawn environment carries site-qualified identity binding lossless
   assert.equal(env.NARADA_SITE_ID, 'sonar');
   assert.equal(env.NARADA_OPERATOR_SURFACE_KIND, 'agent-web-ui');
   assert.equal(env.NARADA_SITE_ROOT, 'D:/code/narada.sonar');
+  assert.equal(env.NARADA_INTELLIGENCE_PROVIDER, undefined);
+  assert.equal(env.NARADA_AI_MODEL, undefined);
+  assert.equal(env.KIMI_CODE_MODEL, undefined);
+  assert.equal(env.KIMI_CODE_API_KEY, 'test-key');
   assert.deepEqual(JSON.parse(env.NARADA_AGENT_IDENTITY_REF), agentIdentityRef);
 });
 
@@ -1021,13 +896,13 @@ test('MCP registry mismatch fails closed before launch', () => {
   assert.match(refusal.required_next_step, /matches the Site surface registry/);
 });
 
-test('non-agent-cli carrier refuses explicit intelligence provider selection', () => {
+test('all carriers refuse explicit launcher intelligence provider selection', () => {
   const result = runFailed(['--runtime', 'codex', '--intelligence-provider', 'codex-subscription'], {
     NARADA_CODEX_CLI_SCRIPT: launcherPath,
   });
   const refusal = JSON.parse(result.stdout);
-  assert.equal(refusal.reason_code, 'intelligence_provider_runtime_unsupported');
-  assert.equal(refusal.carrier_kind, 'codex');
+  assert.equal(refusal.reason_code, 'launcher_intelligence_selection_removed');
+  assert.equal(Object.hasOwn(refusal, 'carrier_kind'), false);
 });
 
 test('unsupported runtime fails with runtime contract refusal', () => {
@@ -1081,15 +956,16 @@ test('enable native shell removes codex shell disable argument', () => {
   assert.equal(output.runtime_args.includes('apps'), true);
 });
 
-test('agent-tui delegates provider and MCP ownership to the NARS runtime server', () => {
+test('agent-tui delegates intelligence selection and MCP ownership to the NARS runtime server', () => {
   const output = runOk(['--carrier', 'agent-tui', '--runtime', 'narada-agent-runtime-server'], agentTuiEnv());
   const env = output.required_environment;
   assert.equal(Object.hasOwn(env, 'NARADA_AGENT_TUI_ENABLE_MCP_FABRIC'), false);
   assert.equal(Object.hasOwn(env, 'NARADA_AGENT_TUI_MCP_CONFIG'), false);
-  assert.equal(env.NARADA_INTELLIGENCE_PROVIDER, 'kimi-code-api');
-  assert.equal(env.KIMI_CODE_API_BASE_URL, 'https://api.kimi.com/coding/');
-  assert.equal(env.KIMI_CODE_MODEL, 'kimi-k2.7');
-  assert.equal(Object.hasOwn(env, 'KIMI_CODE_API_KEY'), true);
+  assert.equal(env.NARADA_INTELLIGENCE_PROVIDER, undefined);
+  assert.equal(env.KIMI_CODE_API_BASE_URL, undefined);
+  assert.equal(env.KIMI_CODE_MODEL, undefined);
+  assert.equal(Object.hasOwn(env, 'KIMI_CODE_API_KEY'), false);
+  assert.equal(output.intelligence_selection_authority.launcher_selection, false);
   assert.equal(output.tool_fabric_adapter.expected_tools.includes('agent_context_startup_sequence'), true);
   assert.equal(output.tool_fabric_adapter.expected_tools.includes('mcp_output_show'), true);
   assert.equal(output.tool_fabric_adapter.expected_tools.includes('task_lifecycle_next'), true);

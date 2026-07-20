@@ -11,6 +11,7 @@ const routeDirectory = useOperatorWorkspaceRouteDirectory();
 const scope = parseAgentSessionsScope(window.location.search);
 const scopedSessions = computed(() => filterAgentSessionsByScope(sessions.sessions.value, scope));
 const scopeActive = isAgentSessionsScopeActive(scope);
+const scopeInvalid = scope.status === 'invalid';
 
 function sessionUrl(sessionId: string): string | undefined {
   const directory = routeDirectory?.directory.value;
@@ -47,13 +48,18 @@ function formatTimestamp(value: string | null): string {
 
       <p v-if="sessions.error.value" class="notice error" role="alert">{{ sessions.error.value }}</p>
       <p v-if="sessions.refusals.value.length" class="notice warning">Some Site projections were unavailable: {{ sessions.refusals.value.join(', ') }}</p>
-      <p v-if="scopeActive" class="notice scope">
+      <p v-if="scopeInvalid" class="notice error" role="alert">
+        Invalid session scope: {{ scope.reason }}. A complete canonical Site and agent pair is required.
+        <a class="clear-scope" href="/console/sessions">Clear scope</a>
+      </p>
+      <p v-else-if="scopeActive" class="notice scope">
         Showing sessions{{ scope.agent ? ` for ${scope.agent}` : '' }}{{ scope.site ? ` on ${scope.site}` : '' }}.
         <a class="clear-scope" href="/console/sessions">Clear scope</a>
       </p>
       <p v-if="sessions.loading.value" class="empty">Reading the session index...</p>
       <p v-else-if="!sessions.sessions.value.length" class="empty">No NARS sessions are currently discoverable.</p>
-      <p v-else-if="scopeActive && !scopedSessions.length" class="empty">No sessions match this scope yet. The agent may still be starting.</p>
+      <p v-else-if="scopeInvalid" class="empty">No session attachment is permitted for an invalid scope.</p>
+      <p v-else-if="scopeActive && !scopedSessions.length" class="empty">No sessions match this canonical Site agent. The agent may still be starting.</p>
 
       <div v-else class="table-wrap">
         <table>

@@ -40,6 +40,90 @@ export interface InvocationPrincipal {
   id: string;
   kind: "human" | "agent" | "workload" | "site";
   authority: AccessAuthorityRef;
+  /** Governed ways an authenticated actor may embody this invocation principal. */
+  admission_bindings?: PrincipalAdmissionBinding[];
+}
+
+export type PrincipalAdmissionBinding =
+  | {
+      id: string;
+      kind: "authenticated-principal";
+      auth_type: string;
+      principal_id: string;
+    }
+  | {
+      id: string;
+      kind: "site-membership";
+      registry: string;
+      site_id: string;
+      roles: string[];
+      auth_types?: string[];
+    };
+
+export interface AuthenticatedActorIdentity {
+  principal_id: string;
+  auth_type: string;
+}
+
+export interface AdmittedSiteMembershipIdentity {
+  registry: string;
+  site_id: string;
+  role: string;
+  evidence_ref: string;
+}
+
+export interface PrincipalAdmissionContext {
+  actor: AuthenticatedActorIdentity;
+  memberships: AdmittedSiteMembershipIdentity[];
+}
+
+export type PrincipalAdmissionResolution =
+  | {
+      ok: true;
+      principal: InvocationPrincipal;
+      binding: PrincipalAdmissionBinding;
+      evidence_refs: string[];
+    }
+  | {
+      ok: false;
+      code: "principal-binding-missing" | "principal-binding-ambiguous";
+      candidate_principal_ids: string[];
+    };
+
+function admissionEvidence(
+  binding: PrincipalAdmissionBinding,
+  context: PrincipalAdmissionContext,
+): string[] | null {
+  if (binding.kind === "authenticated-principal") {
+    return binding.auth_type === context.actor.auth_type
+      && binding.principal_id === context.actor.principal_id
+      ? [`authenticated-actor:${context.actor.auth_type}:${context.actor.principal_id}`]
+      : null;
+  }
+  const membership = context.memberships.find((candidate) =>
+    candidate.registry === binding.registry
+    && candidate.site_id === binding.site_id
+    && binding.roles.includes(candidate.role)
+    && (!binding.auth_types || binding.auth_types.includes(context.actor.auth_type)));
+  return membership ? [membership.evidence_ref] : null;
+}
+
+/** Resolve an authenticated actor to one canonical principal without interpreting any name. */
+export function resolveInvocationPrincipalAdmission(
+  principals: readonly InvocationPrincipal[],
+  context: PrincipalAdmissionContext,
+): PrincipalAdmissionResolution {
+  const matches = principals.flatMap((principal) =>
+    (principal.admission_bindings ?? []).flatMap((binding) => {
+      const evidenceRefs = admissionEvidence(binding, context);
+      return evidenceRefs ? [{ principal, binding, evidence_refs: evidenceRefs }] : [];
+    }));
+  if (matches.length === 1) return { ok: true, ...matches[0]! };
+  return {
+    ok: false,
+    code: matches.length === 0 ? "principal-binding-missing" : "principal-binding-ambiguous",
+    candidate_principal_ids: [...new Set(matches.map(({ principal }) => principal.id))].sort(),
+  };
 }
 
 export interface SecretTransportRef {

@@ -18,7 +18,6 @@ test('carrier start dry-run uses real filesystem result-file handoff', async () 
       workspaceRoot: naradaProperRoot,
       agent: 'narada.architect',
       carrier: 'agent-cli',
-      intelligenceProvider: 'codex-subscription',
       dryRun: true,
       format: 'json',
     }, {});
@@ -45,7 +44,6 @@ test('carrier start dry-run uses real filesystem result-file handoff', async () 
       workspaceRoot: naradaProperRoot,
       agent: 'narada.architect',
       carrier: 'agent-cli',
-      intelligenceProvider: 'codex-subscription',
       dryRun: true,
       format: 'human',
     }, {});

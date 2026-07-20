@@ -9,7 +9,6 @@ vi.unmock('node:fs/promises');
 const workspaceLaunchMock = vi.hoisted(() => vi.fn());
 
 vi.mock('../../src/commands/workspace-launch-application.js', () => ({
-  registryDefaultIntelligenceProvider: () => 'kimi-code-api',
   workspaceLaunchCommand: workspaceLaunchMock,
 }));
 

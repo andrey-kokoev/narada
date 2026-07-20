@@ -4,6 +4,12 @@ import { ExitCode } from '../../src/lib/exit-codes.js';
 import { vol } from 'memfs';
 import type { CommandContext } from '../../src/lib/command-wrapper.js';
 
+const openLocalIntelligenceRegistryMock = vi.hoisted(() => vi.fn());
+
+vi.mock('@narada2/agent-runtime-server/local-intelligence-runtime', () => ({
+  openLocalIntelligenceRegistry: openLocalIntelligenceRegistryMock,
+}));
+
 function createMockLogger() {
   return {
     debug: vi.fn(),
@@ -104,6 +110,11 @@ describe('doctor command', () => {
     vol.mkdirSync('/tmp', { recursive: true });
     vol.mkdirSync('/test', { recursive: true });
     vi.clearAllMocks();
+    openLocalIntelligenceRegistryMock.mockResolvedValue({
+      listCatalogRecords: vi.fn().mockResolvedValue([]),
+      listResources: vi.fn().mockResolvedValue([]),
+      close: vi.fn().mockResolvedValue(undefined),
+    });
   });
 
   it('reports healthy with warnings when no daemon is running yet', async () => {
@@ -308,6 +319,7 @@ describe('doctor command', () => {
   it('reports bootstrap readiness checks without requiring config', async () => {
     vol.fromJSON({
       '/repo/package.json': '{}',
+      '/repo/packages/layers/cli/package.json': '{}',
       '/repo/pnpm-lock.yaml': '',
       '/repo/node_modules/.bin/narada': '',
       '/repo/packages/layers/cli/dist/main.js': '',
@@ -346,6 +358,7 @@ describe('doctor command', () => {
   it('reports stale CLI dist as permissive bootstrap warning by default', async () => {
     vol.fromJSON({
       '/repo/package.json': '{}',
+      '/repo/packages/layers/cli/package.json': '{}',
       '/repo/pnpm-lock.yaml': '',
       '/repo/node_modules/.bin/narada': '',
       '/repo/packages/layers/cli/dist/main.js': '',
@@ -392,6 +405,7 @@ describe('doctor command', () => {
   it('fails stale CLI dist only in explicit strict bootstrap mode', async () => {
     vol.fromJSON({
       '/repo/package.json': '{}',
+      '/repo/packages/layers/cli/package.json': '{}',
       '/repo/pnpm-lock.yaml': '',
       '/repo/node_modules/.bin/narada': '',
       '/repo/packages/layers/cli/dist/main.js': '',
@@ -419,6 +433,7 @@ describe('doctor command', () => {
   it('reports degraded bootstrap readiness with bounded remediations', async () => {
     vol.fromJSON({
       '/repo/package.json': '{}',
+      '/repo/packages/layers/cli/package.json': '{}',
     });
 
     const result = await doctorCommand({ bootstrap: true, cwd: '/repo', format: 'json' }, createMockContext());

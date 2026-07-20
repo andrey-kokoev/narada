@@ -36,7 +36,22 @@ const CHILD_PROCESS_ENV_ALLOWLIST = Object.freeze([
   'NARADA_MCP_SCOPE',
   'NARADA_PC_SITE_ROOT',
   'NARADA_PROPER_ROOT',
+  'NARADA_CODEX_SUBSCRIPTION_TRANSPORT',
+  'OPENAI_API_KEY',
+  'KIMI_API_KEY',
+  'ANTHROPIC_API_KEY',
+  'KIMI_CODE_API_KEY',
+  'DEEPSEEK_API_KEY',
+  'NARADA_WORKER_MCP_CONFIG',
+  'NARADA_LAUNCH_SESSION_ID',
+  'NARADA_PROCESS_OWNERSHIP',
+  'NARADA_PROCESS_ROLE',
+  'NARADA_CREATED_BY_PID',
+]);
+const LEGACY_INTELLIGENCE_SELECTION_ENV_NAMES = Object.freeze([
   'NARADA_INTELLIGENCE_PROVIDER',
+  'NARADA_AI_MODEL',
+  'NARADA_AI_BASE_URL',
   'NARADA_AI_THINKING',
   'NARADA_THINKING_LEVEL',
   'OPENAI_BASE_URL',
@@ -49,18 +64,14 @@ const CHILD_PROCESS_ENV_ALLOWLIST = Object.freeze([
   'ANTHROPIC_MODEL',
   'CODEX_MODEL',
   'NARADA_CODEX_MODEL',
-  'NARADA_CODEX_SUBSCRIPTION_TRANSPORT',
-  'OPENAI_API_KEY',
-  'KIMI_API_KEY',
-  'ANTHROPIC_API_KEY',
-  'KIMI_CODE_API_KEY',
-  'DEEPSEEK_API_KEY',
   'DEEPSEEK_API_BASE_URL',
-  'NARADA_WORKER_MCP_CONFIG',
-  'NARADA_LAUNCH_SESSION_ID',
-  'NARADA_PROCESS_OWNERSHIP',
-  'NARADA_PROCESS_ROLE',
-  'NARADA_CREATED_BY_PID',
+  'DEEPSEEK_MODEL',
+  'GLM_MODEL',
+  'GLM_API_BASE_URL',
+  'OPENROUTER_MODEL',
+  'OPENROUTER_BASE_URL',
+  'OPENROUTER_API_BASE_URL',
+  'CLOUDFLARE_CARRIER_AI_MODEL',
 ]);
 const MCP_STARTUP_FAILURES_KEY = '__mcp_startup_failures';
 const MCP_RUNTIME_DIAGNOSTICS_KEY = '__mcp_runtime_diagnostics';
@@ -87,7 +98,9 @@ function buildChildProcessEnv(extra = {}, baseEnv = process.env) {
   for (const key of CHILD_PROCESS_ENV_ALLOWLIST) {
     if (baseEnv[key] !== undefined) env[key] = baseEnv[key];
   }
-  return { ...env, ...extra, FORCE_COLOR: '0', NO_COLOR: '1' };
+  const projected = { ...env, ...extra, FORCE_COLOR: '0', NO_COLOR: '1' };
+  for (const name of LEGACY_INTELLIGENCE_SELECTION_ENV_NAMES) delete projected[name];
+  return projected;
 }
 
 function mcpChildOwnershipEnvironment(ownershipContext = {}) {
@@ -769,19 +782,25 @@ function workerMcpToolAllowed({ serverName, tool, allowed, seenProviderNames }) 
 }
 
 function aggregateToolBindings(mcpServers) {
-  const all = [];
-  const seenProviderNames = new Set();
-  const seenOriginalNames = new Set();
-  for (const [serverName, server] of Object.entries(mcpServers)) {
-    for (const tool of server.tools) {
-      if (seenOriginalNames.has(tool.name)) continue;
-      seenOriginalNames.add(tool.name);
-      const providerToolName = providerSafeToolName(tool.name, seenProviderNames);
-      seenProviderNames.add(providerToolName);
-      all.push({ serverName, server, tool, providerToolName });
+  const candidates = [];
+  const originalNameCounts = new Map();
+  for (const [serverName, server] of Object.entries(mcpServers ?? {})) {
+    for (const tool of server.tools ?? []) {
+      if (!tool?.name) continue;
+      candidates.push({ serverName, server, tool });
+      originalNameCounts.set(tool.name, (originalNameCounts.get(tool.name) ?? 0) + 1);
     }
   }
-  return all;
+
+  const seenProviderNames = new Set();
+  return candidates.map(({ serverName, server, tool }) => {
+    const providerIdentity = originalNameCounts.get(tool.name) > 1
+      ? `mcp__${serverName}__${tool.name}`
+      : tool.name;
+    const providerToolName = providerSafeToolName(providerIdentity, seenProviderNames);
+    seenProviderNames.add(providerToolName);
+    return { serverName, server, tool, providerToolName };
+  });
 }
 
 function canonicalMcpToolName(name) {
@@ -826,8 +845,9 @@ function shortStableHash(value) {
 }
 
 function providerToolNameForOriginal(toolName, mcpServers) {
-  const binding = aggregateToolBindings(mcpServers).find(({ tool }) => tool.name === toolName);
-  return binding?.providerToolName ?? providerSafeToolName(toolName);
+  const bindings = aggregateToolBindings(mcpServers).filter(({ tool }) => tool.name === toolName);
+  if (bindings.length > 1) return null;
+  return bindings[0]?.providerToolName ?? providerSafeToolName(toolName);
 }
 
 function originalToolNameForProvider(providerToolName, mcpServers) {
@@ -840,13 +860,19 @@ function findToolServer(name, mcpServers) {
 }
 
 function findToolBinding(name, mcpServers) {
-  for (const [serverName, server] of Object.entries(mcpServers)) {
-    const tool = server.tools.find((t) => t.name === name);
-    if (tool) return { server: { ...server, name: serverName }, tool };
+  const bindings = aggregateToolBindings(mcpServers);
+  const providerBinding = bindings.find(({ providerToolName }) => providerToolName === name);
+  if (providerBinding) {
+    return {
+      server: { ...providerBinding.server, name: providerBinding.serverName },
+      tool: providerBinding.tool,
+    };
   }
-  const originalName = originalToolNameForProvider(name, mcpServers);
-  if (originalName !== name) return findToolBinding(originalName, mcpServers);
-  return null;
+
+  const originalBindings = bindings.filter(({ tool }) => tool.name === name);
+  if (originalBindings.length !== 1) return null;
+  const [binding] = originalBindings;
+  return { server: { ...binding.server, name: binding.serverName }, tool: binding.tool };
 }
 async function sendMcpRequest(server, request, abortSignal = null) {
   if (abortSignal?.aborted) {

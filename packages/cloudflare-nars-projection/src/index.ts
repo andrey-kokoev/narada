@@ -14,7 +14,6 @@ function normalizeProjectionEventView(view: unknown): string | null {
 }
 
 export * from './workspace-directory.js';
-export * from './provider-executor.js';
 
 export interface CloudflareNarsProjectionSourceRef {
   kind: 'cloudflare_carrier';
@@ -149,7 +148,7 @@ export type ProjectionCachePolicy = 'short_bounded' | 'durable_archive';
 export type ProjectionEventPolicyMode = 'conversation' | 'operator' | 'diagnostic' | 'raw';
 export type ArtifactKind = 'html' | 'markdown' | 'image' | 'audio' | 'json' | 'text';
 export type ArtifactProjectionContentMode = 'none' | 'metadata_only' | 'selected_kinds' | 'explicit_artifacts';
-export type CloudflareNarsAuthorityExecutionMode = 'cloudflare_runtime_tool_adapter' | 'cloudflare_provider_http_adapter';
+export type CloudflareNarsAuthorityExecutionMode = 'canonical_invokable_intelligence_gateway' | 'cloudflare_test_fixture';
 export type CloudflareMcpLocus = 'cloudflare-host' | 'cloudflare-account-or-user' | 'cloudflare-site' | 'session-native';
 export type CloudflareMcpScope = 'none' | CloudflareMcpLocus | 'all';
 export type CloudflareNativeMcpAdapterKind = 'cf-authority' | 'cf-authority-artifacts';
@@ -270,11 +269,14 @@ export interface CloudflareNarsAuthorityRuntimeExecutionInput {
 export interface CloudflareNarsAuthorityRuntimeExecutionResult {
   execution_kind: CloudflareNarsAuthorityExecutionMode;
   event_payloads: Record<string, unknown>[];
-  provider_turn?: { request_id: string; terminal_state: 'completed' | 'failed' | 'interrupted' };
+  invocation?: { invocation_id: string; terminal_state: 'completed' | 'failed' | 'interrupted' };
 }
 
 export interface CloudflareNarsAuthorityRuntimeExecutor {
   execution_mode: CloudflareNarsAuthorityExecutionMode;
+  availability?: 'available' | 'unavailable';
+  unavailable_code?: string;
+  intelligence_authority_ref?: string;
   execute(input: CloudflareNarsAuthorityRuntimeExecutionInput): CloudflareNarsAuthorityRuntimeExecutionResult | Promise<CloudflareNarsAuthorityRuntimeExecutionResult>;
   abortSession?(sessionId: string, error?: Error): boolean;
 }
@@ -314,7 +316,14 @@ export function createCloudflareNarsTestRuntimeExecutor(): CloudflareNarsAuthori
 }
 
 export function createCloudflareNarsAuthorityRuntimeExecutor(): CloudflareNarsAuthorityRuntimeExecutor {
-  return createCloudflareNarsToolAdapterRuntimeExecutor();
+  return {
+    execution_mode: 'canonical_invokable_intelligence_gateway',
+    availability: 'unavailable',
+    unavailable_code: 'canonical_invokable_intelligence_gateway_required',
+    execute() {
+      throw new Error('canonical_invokable_intelligence_gateway_required');
+    },
+  };
 }
 
 export function normalizeCloudflareMcpFabricConfig(config: CloudflareMcpFabricConfig | null | undefined): CloudflareMcpFabricSummary {
@@ -971,6 +980,8 @@ export function createCloudflareNarsAuthorityService(options: {
   }
   const service = {
     execution_mode: runtimeExecutor.execution_mode,
+    execution_availability: runtimeExecutor.availability ?? 'available',
+    execution_unavailable_code: runtimeExecutor.unavailable_code ?? null,
     createSession(args: CloudflareNarsAuthoritySessionInput, now = new Date().toISOString()): CloudflareNarsAuthorityCreateSessionResult {
       const siteId = requireNonEmpty(args.site_id, 'site_id');
       const agentId = requireNonEmpty(args.agent_id, 'agent_id');
@@ -994,14 +1005,13 @@ export function createCloudflareNarsAuthorityService(options: {
           },
         };
       }
-      // A provider-capable executor declares provider_execution with its
-      // binding ref (no secrets); graduation to present requires executed
-      // turn evidence (Task 2112 decision 3).
-      const withSummary = runtimeExecutor as unknown as { provider_binding_summary?: unknown };
-      const providerBindingSummary = typeof withSummary.provider_binding_summary === 'string' ? withSummary.provider_binding_summary : null;
-      const providerExecutionState: NarsCapabilityState = providerBindingSummary ? 'declared' : 'absent';
-      const capabilityEvidence: NarsCapabilityEvidence | null = providerBindingSummary
-        ? { provider_execution: { state: 'declared', evidence_ref: `provider-binding:${providerBindingSummary}`, graduated_at: null } }
+      // Intelligence execution is declared only by an explicitly injected
+      // canonical gateway. Projection deployment variables never mint this
+      // capability or select an inference/model tuple.
+      const intelligenceAuthorityRef = runtimeExecutor.intelligence_authority_ref?.trim() || null;
+      const providerExecutionState: NarsCapabilityState = intelligenceAuthorityRef ? 'declared' : 'absent';
+      const capabilityEvidence: NarsCapabilityEvidence | null = intelligenceAuthorityRef
+        ? { provider_execution: { state: 'declared', evidence_ref: intelligenceAuthorityRef, graduated_at: null } }
         : null;
       const session: CloudflareNarsAuthoritySession = {
         schema: CLOUDFLARE_NARS_AUTHORITY_SESSION_SCHEMA,
@@ -1044,7 +1054,23 @@ export function createCloudflareNarsAuthorityService(options: {
       const session = sessions.get(sessionId);
       if (!session) return { schema: CLOUDFLARE_NARS_AUTHORITY_HEALTH_SCHEMA, status: 'refused', code: 'session_not_found', session_id: sessionId };
       if (session.lifecycle_state !== 'active') return { schema: CLOUDFLARE_NARS_AUTHORITY_HEALTH_SCHEMA, status: 'refused', code: `session_${session.lifecycle_state}`, session_id: sessionId };
-      return { schema: CLOUDFLARE_NARS_AUTHORITY_HEALTH_SCHEMA, status: 'healthy', session_id: sessionId, site_id: session.site_id, agent_id: session.agent_id, execution_mode: session.execution_mode, mcp_fabric: sessionMcpFabrics.get(sessionId) ?? session.mcp_fabric, authority_epoch: session.authority_epoch, transition_state: session.transition_state ?? null, runtime_surface_contract: buildCloudflareNarsAuthorityRuntimeSurfaceContract(session, surfaceOrigin) };
+      const executionAvailability = runtimeExecutor.availability ?? 'available';
+      return {
+        schema: CLOUDFLARE_NARS_AUTHORITY_HEALTH_SCHEMA,
+        status: executionAvailability === 'available' ? 'healthy' : 'degraded',
+        ...(executionAvailability === 'unavailable' && runtimeExecutor.unavailable_code
+          ? { code: runtimeExecutor.unavailable_code }
+          : {}),
+        session_id: sessionId,
+        site_id: session.site_id,
+        agent_id: session.agent_id,
+        execution_mode: session.execution_mode,
+        execution_availability: executionAvailability,
+        mcp_fabric: sessionMcpFabrics.get(sessionId) ?? session.mcp_fabric,
+        authority_epoch: session.authority_epoch,
+        transition_state: session.transition_state ?? null,
+        runtime_surface_contract: buildCloudflareNarsAuthorityRuntimeSurfaceContract(session, surfaceOrigin),
+      };
     },
     readEvents(args: { session_id: string; since_sequence?: number | null; max_events?: number }): CloudflareNarsAuthorityReadEventsResult {
       const session = sessions.get(args.session_id);
@@ -1077,6 +1103,7 @@ export function createCloudflareNarsAuthorityService(options: {
       if (session.lifecycle_state !== 'active') return { schema: CLOUDFLARE_NARS_AUTHORITY_INPUT_SCHEMA, status: 'refused', code: `session_${session.lifecycle_state}`, session_id: args.session_id, method: args.method };
       if (session.transition_state === 'target_prepared') return { schema: CLOUDFLARE_NARS_AUTHORITY_INPUT_SCHEMA, status: 'refused', code: 'target_not_activated', session_id: args.session_id, method: args.method };
       if (!isCloudflareNarsInputMethod(args.method)) return { schema: CLOUDFLARE_NARS_AUTHORITY_INPUT_SCHEMA, status: 'refused', code: 'unsupported_operator_input_method', session_id: args.session_id, method: args.method };
+      if (runtimeExecutor.availability === 'unavailable') return { schema: CLOUDFLARE_NARS_AUTHORITY_INPUT_SCHEMA, status: 'refused', code: runtimeExecutor.unavailable_code ?? 'canonical_invokable_intelligence_gateway_required', session_id: args.session_id, method: args.method };
       const now = args.now ?? new Date().toISOString();
       const inputId = `input_${safeToken(now)}_${Math.random().toString(36).slice(2, 8)}`;
       const payload = args.payload ?? {};
@@ -1112,16 +1139,15 @@ export function createCloudflareNarsAuthorityService(options: {
         if (queuedInputs) await queuedInputs.catch(() => {});
       }
       for (const payload of execution.event_payloads) admitted.push(appendAuthorityEvent(args.session_id, payload, now));
-      // Provider-capable sessions graduate provider_execution to present only
-      // from executed turn evidence (completed provider turn at the authority
-      // boundary), never from configuration alone.
+      // Canonical invokable-intelligence execution graduates the historical
+      // NARS capability field only from completed invocation evidence.
       let providerExecutionState = session.provider_execution_state ?? 'absent';
       let capabilityEvidence = session.capability_evidence ?? null;
-      if (execution.provider_turn?.terminal_state === 'completed' && providerExecutionState !== 'present') {
+      if (execution.invocation?.terminal_state === 'completed' && providerExecutionState !== 'present') {
         providerExecutionState = 'present';
         capabilityEvidence = {
           ...(capabilityEvidence ?? {}),
-          provider_execution: { state: 'present', evidence_ref: execution.provider_turn.request_id, graduated_at: now },
+          provider_execution: { state: 'present', evidence_ref: execution.invocation.invocation_id, graduated_at: now },
         };
       }
       const nextSession: CloudflareNarsAuthoritySession = {
@@ -1750,19 +1776,20 @@ export function createCloudflareNarsToolAdapterRuntimeExecutor(toolRegistryOrAda
     mcp_fabric_scope: input.mcp_fabric.requested_scope,
   });
   const simpleCompletion = (input: CloudflareNarsAuthorityRuntimeExecutionInput, message: string, terminalState = 'completed') => ({
-    execution_kind: 'cloudflare_runtime_tool_adapter' as const,
+    execution_kind: 'cloudflare_test_fixture' as const,
     event_payloads: [
       { event: 'turn_started', type: 'turn.started', input_id: input.input_id },
-      { event: 'assistant_message', type: 'assistant_message', input_id: input.input_id, content: message, execution_kind: 'cloudflare_runtime_tool_adapter' },
+      { event: 'assistant_message', type: 'assistant_message', input_id: input.input_id, content: message, execution_kind: 'cloudflare_test_fixture' },
       { event: 'turn_complete', type: 'turn.completed', input_id: input.input_id, terminal_state: terminalState },
     ],
   });
   return {
-    execution_mode: 'cloudflare_runtime_tool_adapter',
+    execution_mode: 'cloudflare_test_fixture',
+    availability: 'available',
     execute(input) {
       if (input.method === 'conversation.steer') {
         return {
-          execution_kind: 'cloudflare_runtime_tool_adapter',
+          execution_kind: 'cloudflare_test_fixture',
           event_payloads: [
             { event: 'operator_steer_admitted', type: 'operator_input.steer_admitted', input_id: input.input_id, method: input.method, payload: input.payload },
             { event: 'turn_complete', type: 'turn.completed', input_id: input.input_id, terminal_state: 'steered' },
@@ -1771,7 +1798,7 @@ export function createCloudflareNarsToolAdapterRuntimeExecutor(toolRegistryOrAda
       }
       if (input.method === 'conversation.interrupt') {
         return {
-          execution_kind: 'cloudflare_runtime_tool_adapter',
+          execution_kind: 'cloudflare_test_fixture',
           event_payloads: [
             { event: 'turn_interrupted', type: 'turn.interrupted', input_id: input.input_id, reason: input.message || 'operator_interrupt' },
             { event: 'turn_complete', type: 'turn.completed', input_id: input.input_id, terminal_state: 'interrupted' },
@@ -1780,7 +1807,7 @@ export function createCloudflareNarsToolAdapterRuntimeExecutor(toolRegistryOrAda
       }
       if (input.method === 'session.close') {
         return {
-          execution_kind: 'cloudflare_runtime_tool_adapter',
+          execution_kind: 'cloudflare_test_fixture',
           event_payloads: [
             { event: 'session_closed', type: 'session.closed', input_id: input.input_id, reason: input.message || 'operator_close' },
           ],
@@ -1848,10 +1875,10 @@ export function createCloudflareNarsToolAdapterRuntimeExecutor(toolRegistryOrAda
           { type: 'text', text: `Cloudflare runtime tool adapter executed ${input.method}.` },
           ...(artifact ? [{ type: 'artifact_ref', artifact_id: artifact.artifact_id, kind: artifact.kind, title: artifact.title, render_hint: 'inline' }] : []),
         ],
-        execution_kind: 'cloudflare_runtime_tool_adapter',
+        execution_kind: 'cloudflare_test_fixture',
       }, { event: 'turn_complete', type: 'turn.completed', input_id: input.input_id, terminal_state: 'completed' });
       return {
-        execution_kind: 'cloudflare_runtime_tool_adapter',
+        execution_kind: 'cloudflare_test_fixture',
         event_payloads: eventPayloads,
       };
     },
@@ -2287,12 +2314,13 @@ export interface CloudflareNarsAuthorityCreateSessionResult {
 
 export interface CloudflareNarsAuthorityHealthResult {
   schema: typeof CLOUDFLARE_NARS_AUTHORITY_HEALTH_SCHEMA;
-  status: 'healthy' | 'refused';
+  status: 'healthy' | 'degraded' | 'refused';
   code?: string;
   session_id: string;
   site_id?: string;
   agent_id?: string;
   execution_mode?: CloudflareNarsAuthorityExecutionMode;
+  execution_availability?: 'available' | 'unavailable';
   mcp_fabric?: CloudflareMcpFabricSummary;
   authority_epoch?: number;
   transition_state?: 'target_prepared' | 'target_active' | null;

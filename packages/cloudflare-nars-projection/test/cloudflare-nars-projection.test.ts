@@ -10,7 +10,8 @@ import {
   createArtifactProjectionCache,
   createBoundedProjectionCache,
   createCloudflareNarsAuthorityMcpRegistry,
-  createCloudflareNarsAuthorityService,
+  createCloudflareNarsAuthorityService as createCloudflareNarsAuthorityServiceCore,
+  createCloudflareNarsTestRuntimeExecutor,
   createCloudflareNarsProjectionWorkerService,
   createCloudflareToolAdapterRegistry,
   createBridgeState,
@@ -29,6 +30,15 @@ import { createCloudflareNarsProjectionWorker, NarsProjectionState } from '../sr
 import { validateNarsRuntimeSurfaceContract } from '@narada2/nars-runtime-contract/runtime-surface-contract';
 
 const now = '2026-06-30T21:00:00.000Z';
+
+function createCloudflareNarsAuthorityService(
+  options: Parameters<typeof createCloudflareNarsAuthorityServiceCore>[0] = {},
+) {
+  return createCloudflareNarsAuthorityServiceCore({
+    ...options,
+    runtime_executor: createCloudflareNarsTestRuntimeExecutor(),
+  });
+}
 
 function sampleIntent() {
   return createCloudflareNarsProjectionIntent({
@@ -173,7 +183,10 @@ describe('Cloudflare NARS projection schemas', () => {
   });
 
   test('Worker Durable Object routing keeps projection state across register publish and replay', async () => {
-    const outerWorker = createCloudflareNarsProjectionWorker({ now: () => now });
+    const outerWorker = createCloudflareNarsProjectionWorker({
+      now: () => now,
+      authority_service: createCloudflareNarsAuthorityService({ max_events: 500 }),
+    });
     const objects = new Map<string, NarsProjectionState>();
     const env = {
       NARS_PROJECTION_STATE: {
@@ -186,6 +199,8 @@ describe('Cloudflare NARS projection schemas', () => {
                 get<T = unknown>(key: string) { return storage.get(key) as T | undefined; },
                 put(key: string, value: unknown) { storage.set(key, value); },
               },
+            }, undefined, {
+              authority_runtime_executor: createCloudflareNarsTestRuntimeExecutor(),
             }));
           }
           return objects.get(id)!;
@@ -571,7 +586,7 @@ describe('worker boundary service', () => {
       agent_id: 'cloudflare.resident',
       mcp_fabric: { scope: 'all' },
     }, now);
-    expect(created.session.execution_mode).toBe('cloudflare_runtime_tool_adapter');
+    expect(created.session.execution_mode).toBe('cloudflare_test_fixture');
 
     const admitted = await service.submitInput({
       session_id: created.session_id,
@@ -579,7 +594,7 @@ describe('worker boundary service', () => {
       payload: { message: 'exercise Cloudflare tool adapter' },
       now,
     });
-    expect(admitted).toMatchObject({ status: 'admitted', execution_kind: 'cloudflare_runtime_tool_adapter' });
+    expect(admitted).toMatchObject({ status: 'admitted', execution_kind: 'cloudflare_test_fixture' });
     expect(admitted.events?.map((entry) => entry.payload.event)).toEqual([
       'operator_input_admitted',
       'user_message',
@@ -786,6 +801,8 @@ describe('Cloudflare Worker routes', () => {
                 get<T = unknown>(key: string) { return storage.get(key) as T | undefined; },
                 put(key: string, value: unknown) { storage.set(key, value); },
               },
+            }, undefined, {
+              authority_runtime_executor: createCloudflareNarsTestRuntimeExecutor(),
             }));
           }
           return objects.get(id)!;
@@ -807,13 +824,13 @@ describe('Cloudflare Worker routes', () => {
         method: 'POST',
         body: JSON.stringify({ session_id: 'cf_session_runtime_1', site_id: 'narada.cloudflare.test', agent_id: 'cloudflare.resident', mcp_fabric: { scope: 'all' } }),
       }), env));
-      expect(created).toMatchObject({ status: 'created', session_id: 'cf_session_runtime_1', session: { execution_mode: 'cloudflare_runtime_tool_adapter', mcp_fabric: { requested_scope: 'all', server_count: 2, server_names: ['cf-authority', 'cf-authority-artifacts'] } } });
+      expect(created).toMatchObject({ status: 'created', session_id: 'cf_session_runtime_1', session: { execution_mode: 'cloudflare_test_fixture', mcp_fabric: { requested_scope: 'all', server_count: 2, server_names: ['cf-authority', 'cf-authority-artifacts'] } } });
 
       const base = 'https://projection.example.test/api/nars/authority/sessions/cf_session_runtime_1';
       expect(await jsonOf(outerWorker.fetch(new Request(`${base}/health?surface_origin=local`), env))).toMatchObject({
         status: 'healthy',
         session_id: 'cf_session_runtime_1',
-        execution_mode: 'cloudflare_runtime_tool_adapter',
+        execution_mode: 'cloudflare_test_fixture',
         mcp_fabric: { requested_scope: 'all', server_count: 2, server_names: ['cf-authority', 'cf-authority-artifacts'] },
         runtime_surface_contract: {
           runtime_origin: 'cloudflare',
@@ -843,7 +860,7 @@ describe('Cloudflare Worker routes', () => {
         method: 'POST',
         body: JSON.stringify({ method: 'conversation.send', payload: { message: 'hello from local operator surface' } }),
       }), env));
-      expect(input).toMatchObject({ status: 'admitted', execution_kind: 'cloudflare_runtime_tool_adapter', method: 'conversation.send' });
+      expect(input).toMatchObject({ status: 'admitted', execution_kind: 'cloudflare_test_fixture', method: 'conversation.send' });
       expect(JSON.stringify(input)).not.toContain('provider_call');
       expect(input.events.map((entry: { payload: { event: string } }) => entry.payload.event)).toEqual([
         'operator_input_admitted',
@@ -867,7 +884,7 @@ describe('Cloudflare Worker routes', () => {
       expect(liveMessages).toContainEqual(expect.objectContaining({ event: 'tool_result', tool_name: 'cf-authority.diagnostic_probe', status: 'failed' }));
       expect(liveMessages).toContainEqual(expect.objectContaining({ event: 'tool_result', tool_name: 'cf-authority-artifacts.artifact_register', status: 'ok', mcp_fabric_scope: 'all' }));
       expect(liveMessages).toContainEqual(expect.objectContaining({ event: 'mcp_runtime_fault', error_code: 'cloudflare_authority_diagnostic_probe_failed' }));
-      expect(liveMessages).toContainEqual(expect.objectContaining({ event: 'assistant_message', execution_kind: 'cloudflare_runtime_tool_adapter' }));
+      expect(liveMessages).toContainEqual(expect.objectContaining({ event: 'assistant_message', execution_kind: 'cloudflare_test_fixture' }));
       expect(liveMessages).toContainEqual(expect.objectContaining({ event: 'turn_complete', terminal_state: 'completed' }));
 
       const replayAfterInput = await jsonOf(outerWorker.fetch(new Request(`${base}/events?since_sequence=1`), env));

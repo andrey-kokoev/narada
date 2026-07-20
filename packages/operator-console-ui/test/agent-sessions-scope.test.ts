@@ -15,26 +15,27 @@ const sessions = [
 ];
 
 test('parse agent sessions scope from the query string', () => {
-  assert.deepEqual(parseAgentSessionsScope('?site=sonar&agent=sonar.resident'), { site: 'sonar', agent: 'sonar.resident' });
-  assert.deepEqual(parseAgentSessionsScope('?agent=sonar.resident'), { site: null, agent: 'sonar.resident' });
-  assert.deepEqual(parseAgentSessionsScope(''), { site: null, agent: null });
+  assert.deepEqual(parseAgentSessionsScope('?site=sonar&agent=sonar.resident'), { site: 'sonar', agent: 'sonar.resident', status: 'valid', reason: null });
+  assert.deepEqual(parseAgentSessionsScope('?agent=sonar.resident'), { site: null, agent: 'sonar.resident', status: 'invalid', reason: 'site_and_agent_scope_required' });
+  assert.deepEqual(parseAgentSessionsScope('?site=sonar&agent=other.resident'), { site: 'sonar', agent: 'other.resident', status: 'invalid', reason: 'canonical_agent_scope_mismatch' });
+  assert.deepEqual(parseAgentSessionsScope(''), { site: null, agent: null, status: 'unscoped', reason: null });
   assert.equal(isAgentSessionsScopeActive(parseAgentSessionsScope('?site=sonar')), true);
   assert.equal(isAgentSessionsScopeActive(parseAgentSessionsScope('')), false);
 });
 
 test('scope filters to exactly the matching site and agent sessions', () => {
-  const scoped = filterAgentSessionsByScope(sessions, { site: 'sonar', agent: 'sonar.resident' });
+  const scoped = filterAgentSessionsByScope(sessions, { site: 'sonar', agent: 'sonar.resident', status: 'valid', reason: null });
   assert.deepEqual(scoped.map((session) => session.sessionId), ['session-1']);
-  const siteOnly = filterAgentSessionsByScope(sessions, { site: 'sonar', agent: null });
-  assert.deepEqual(siteOnly.map((session) => session.sessionId), ['session-1', 'session-2']);
-  const unscoped = filterAgentSessionsByScope(sessions, { site: null, agent: null });
+  const invalid = filterAgentSessionsByScope(sessions, { site: 'sonar', agent: null, status: 'invalid', reason: 'site_and_agent_scope_required' });
+  assert.deepEqual(invalid, []);
+  const unscoped = filterAgentSessionsByScope(sessions, { site: null, agent: null, status: 'unscoped', reason: null });
   assert.equal(unscoped.length, sessions.length);
 });
 
-test('agent scope accepts canonical ids and bare local ids', () => {
-  assert.equal(agentSessionMatchesScope(sessions[0]!, { site: null, agent: 'sonar.resident' }), true);
-  assert.equal(agentSessionMatchesScope(sessions[0]!, { site: null, agent: 'resident' }), true);
-  assert.equal(agentSessionMatchesScope(sessions[2]!, { site: null, agent: 'resident' }), true);
-  assert.equal(agentSessionMatchesScope(sessions[0]!, { site: null, agent: 'builder' }), false);
-  assert.equal(agentSessionMatchesScope(sessions[3]!, { site: null, agent: 'resident' }), false);
+test('agent scope requires an exact canonical Site-agent match', () => {
+  const scope = { site: 'sonar', agent: 'sonar.resident', status: 'valid', reason: null } as const;
+  assert.equal(agentSessionMatchesScope(sessions[0]!, scope), true);
+  assert.equal(agentSessionMatchesScope(sessions[2]!, scope), false);
+  assert.equal(agentSessionMatchesScope(sessions[1]!, scope), false);
+  assert.equal(agentSessionMatchesScope(sessions[3]!, scope), false);
 });

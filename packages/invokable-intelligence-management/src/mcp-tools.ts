@@ -9,6 +9,8 @@ import type {
 } from "@narada2/invokable-intelligence-contract";
 import type { ResolverContext } from "@narada2/invokable-intelligence-resolver";
 
+import { deployManagementBundle } from "./deployment.js";
+import type { ManagementDeploymentBundle } from "./deployment.js";
 import {
   MANAGEMENT_AUTHORITY_LOCI,
   MANAGEMENT_MUTATION_CONTEXT_SCHEMA,
@@ -151,6 +153,20 @@ export function createManagementTools(session: ManagementSession): ManagementToo
       description: "Validate canonical registry, catalog, and materialized projections.",
       inputSchema: { type: "object", additionalProperties: false, properties: {} },
       handler: () => wrap(() => service.execute({ operation: "validate" })),
+    },
+    {
+      name: "intelligence_management_deploy",
+      description: "Deploy one complete digest-bound Site catalog and its authorized foreign materializations from an immutable bundle reference.",
+      inputSchema: {
+        type: "object",
+        additionalProperties: false,
+        properties: { bundle_ref: { type: "string" } },
+        required: ["bundle_ref"],
+      },
+      handler: (input) => wrap(async () => deployManagementBundle(
+        session,
+        await resolveRef<ManagementDeploymentBundle>(session, input.bundle_ref),
+      )),
     },
     {
       name: "intelligence_management_admit_catalog_record",

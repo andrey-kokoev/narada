@@ -1,0 +1,125 @@
+{
+  "schema": "narada.site.invokable-intelligence.materialization-seed.v1",
+  "id": "materialization-seed:narada-cloudflare:revision-1",
+  "created_at": "2026-07-19T12:00:00.000Z",
+  "materializations": [
+    {
+      "envelope": {
+        "schema": "narada.invokable-intelligence.materialization-envelope.v1",
+        "id": "materialization:narada-cloudflare:authority-statement:andrey-cloudflare-preferences:r1",
+        "mode": "durable-projection",
+        "origin": {
+          "site_id": "site:andrey-user",
+          "locus": "user-site",
+          "authority_ref": "authority:site:andrey-user"
+        },
+        "destination": {
+          "site_id": "site:narada-cloudflare",
+          "resolver": "cloudflare",
+          "store": "d1"
+        },
+        "statement": {
+          "id": "authority-statement:andrey-cloudflare-preferences",
+          "kind": "user-preference",
+          "effect": "ranking",
+          "source_revision": 1,
+          "payload_digest": "sha256:bec188a939cf93d26f98babee29ffa43cddd584c0bd561971e34703389775c47",
+          "payload_ref": "catalog-record:narada-cloudflare:r1:012"
+        },
+        "allowed_scope": {
+          "purposes": [
+            "operator-chat",
+            "carrier-turn"
+          ],
+          "target_site_ids": [
+            "site:narada-cloudflare"
+          ],
+          "principal_ids": [
+            "principal:admin"
+          ]
+        },
+        "issued_at": "2026-07-19T12:00:00.000Z",
+        "expires_at": "2036-07-19T12:00:00.000Z",
+        "provenance_refs": [
+          "site-config:narada-cloudflare:invokable-intelligence:revision-1",
+          "authority:site:andrey-user"
+        ],
+        "authorization_ref": "authorization:narada-cloudflare:materialize:authority-statement:andrey-cloudflare-preferences"
+      },
+      "admission": {
+        "schema": "narada.invokable-intelligence.materialization-admission.v1",
+        "id": "admission:narada-cloudflare:authority-statement:andrey-cloudflare-preferences:r1",
+        "envelope_id": "materialization:narada-cloudflare:authority-statement:andrey-cloudflare-preferences:r1",
+        "destination_site_id": "site:narada-cloudflare",
+        "decision": "admitted",
+        "decided_at": "2026-07-19T12:00:00.000Z",
+        "decided_by": "site-operator:narada-cloudflare",
+        "reason_codes": [],
+        "evidence_refs": [
+          "site-config:narada-cloudflare:invokable-intelligence:revision-1",
+          "admission-policy:narada-cloudflare:user-preference"
+        ],
+        "admitted_digest": "sha256:bec188a939cf93d26f98babee29ffa43cddd584c0bd561971e34703389775c47"
+      }
+    },
+    {
+      "envelope": {
+        "schema": "narada.invokable-intelligence.materialization-envelope.v1",
+        "id": "materialization:narada-cloudflare:authority-statement:admin-cloudflare-consent:r1",
+        "mode": "durable-projection",
+        "origin": {
+          "site_id": "site:andrey-user",
+          "locus": "principal",
+          "authority_ref": "authority:principal:admin"
+        },
+        "destination": {
+          "site_id": "site:narada-cloudflare",
+          "resolver": "cloudflare",
+          "store": "d1"
+        },
+        "statement": {
+          "id": "authority-statement:admin-cloudflare-consent",
+          "kind": "principal-consent",
+          "effect": "consent-gate",
+          "source_revision": 1,
+          "payload_digest": "sha256:11f79d9bb98124053deafc602bb96ec4858071f19063c74c136857e61b8c85eb",
+          "payload_ref": "catalog-record:narada-cloudflare:r1:018"
+        },
+        "allowed_scope": {
+          "purposes": [
+            "operator-chat",
+            "carrier-turn"
+          ],
+          "target_site_ids": [
+            "site:narada-cloudflare"
+          ],
+          "principal_ids": [
+            "principal:admin"
+          ]
+        },
+        "issued_at": "2026-07-19T12:00:00.000Z",
+        "expires_at": "2036-07-19T12:00:00.000Z",
+        "provenance_refs": [
+          "site-config:narada-cloudflare:invokable-intelligence:revision-1",
+          "authority:principal:admin"
+        ],
+        "authorization_ref": "authorization:narada-cloudflare:materialize:authority-statement:admin-cloudflare-consent"
+      },
+      "admission": {
+        "schema": "narada.invokable-intelligence.materialization-admission.v1",
+        "id": "admission:narada-cloudflare:authority-statement:admin-cloudflare-consent:r1",
+        "envelope_id": "materialization:narada-cloudflare:authority-statement:admin-cloudflare-consent:r1",
+        "destination_site_id": "site:narada-cloudflare",
+        "decision": "admitted",
+        "decided_at": "2026-07-19T12:00:00.000Z",
+        "decided_by": "site-operator:narada-cloudflare",
+        "reason_codes": [],
+        "evidence_refs": [
+          "site-config:narada-cloudflare:invokable-intelligence:revision-1",
+          "admission-policy:narada-cloudflare:principal-consent"
+        ],
+        "admitted_digest": "sha256:11f79d9bb98124053deafc602bb96ec4858071f19063c74c136857e61b8c85eb"
+      }
+    }
+  ]
+}

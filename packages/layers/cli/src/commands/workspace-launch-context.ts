@@ -1,14 +1,19 @@
 import {
-  createWorkspaceLaunchSelectionContext,
-  type WorkspaceLaunchSelectionContext,
-} from './workspace-launch-provider-context.js';
+  createWorkspaceLaunchAdmissionPolicy,
+  type WorkspaceLaunchAdmissionPolicy,
+  type WorkspaceLaunchRuntimeSelection,
+} from './workspace-launch-admission.js';
 import type { WorkspaceLaunchRegistryContext } from './workspace-launch-registry.js';
 
-export type {
-  WorkspaceLaunchProviderRegistry,
-  WorkspaceLaunchRuntimeSelection,
-  WorkspaceLaunchSelectionContext,
-} from './workspace-launch-provider-context.js';
+export type { WorkspaceLaunchRuntimeSelection };
+
+export interface WorkspaceLaunchSelectionContext {
+  admission: WorkspaceLaunchAdmissionPolicy;
+}
+
+export function createWorkspaceLaunchSelectionContext(): WorkspaceLaunchSelectionContext {
+  return { admission: createWorkspaceLaunchAdmissionPolicy() };
+}
 
 export interface WorkspaceLaunchContext {
   selectionContext: WorkspaceLaunchSelectionContext;

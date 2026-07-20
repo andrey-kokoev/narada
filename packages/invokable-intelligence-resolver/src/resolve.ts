@@ -79,8 +79,9 @@ function materializationForStatement(
   materializedInputs: ResolverMaterializedInputs,
 ): MaterializedProjection | "local" | null {
   const statement = record.document as IntelligenceAuthorityStatement;
-  const originSiteId = statement.origin.site_id ?? record.authority.site_id;
-  if (!originSiteId || originSiteId === destinationSiteId) return "local";
+  const originSiteId = statement.origin.site_id;
+  if (!originSiteId) return null;
+  if (originSiteId === destinationSiteId) return "local";
   const payload = recordsById.get(statement.payload_ref);
   if (!payload) return null;
   return materializedInputs.admitted.find(({ envelope }) =>
@@ -162,12 +163,12 @@ async function stateDigests(state: CanonicalResolverState, intent: InvocationInt
 export async function computeResolverStateDigests(
   intent: InvocationIntent,
   context: ResolverContext,
-  options: { store: IntelligenceRegistryStore; materializedInputs?: ResolverMaterializedInputs },
+  options: { store: IntelligenceRegistryStore; materializedInputs: ResolverMaterializedInputs },
 ): Promise<PlanSnapshotDigests> {
   return stateDigests(await loadCanonicalState(
     options.store,
     context.targetSite.id,
-    options.materializedInputs ?? { admitted: [], excluded: [], acquisition_refs: [] },
+    options.materializedInputs,
   ), intent, context);
 }
 
@@ -216,7 +217,7 @@ function expectedStatementKind(policy: PolicyDocument): IntelligenceAuthoritySta
 function applicableStatements(state: CanonicalResolverState, intent: InvocationIntent, context: ResolverContext): IntelligenceAuthorityStatement[] {
   const siteIds = new Set([context.targetSite.id, context.userSite.id, context.hostSite.id]);
   return state.authorityStatements.filter(({ origin }) =>
-    origin.locus === "principal" ? origin.principal_id === intent.principal : !origin.site_id || siteIds.has(origin.site_id));
+    origin.locus === "principal" ? origin.principal_id === intent.principal : siteIds.has(origin.site_id));
 }
 
 function authorityProvenance(statements: IntelligenceAuthorityStatement[], usedPayloadRefs: Set<string>): IntelligenceAuthorityResolutionProvenance {
@@ -248,7 +249,7 @@ function selectRefusalCode(evaluations: CandidateEvaluation[]): RefusalReasonCod
 export interface ResolveOptions {
   store: IntelligenceRegistryStore;
   predecessorPlanId?: string;
-  materializedInputs?: ResolverMaterializedInputs;
+  materializedInputs: ResolverMaterializedInputs;
 }
 
 export async function resolveInvocation(intent: InvocationIntent, context: ResolverContext, options: ResolveOptions): Promise<InvocationPlan | InvocationRefusal> {
@@ -265,7 +266,7 @@ export async function resolveInvocation(intent: InvocationIntent, context: Resol
   const state = await loadCanonicalState(
     options.store,
     context.targetSite.id,
-    options.materializedInputs ?? { admitted: [], excluded: [], acquisition_refs: [] },
+    options.materializedInputs,
   );
   if (!state.routes.length) return refusal(intent, context, "explicit-route-required", "no canonical invocation route records are admitted");
   const validUntil = chooseValidUntil(state, context.clock.instant);

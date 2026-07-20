@@ -27,8 +27,11 @@ function structuredResultCandidates(result) {
 }
 
 function followUpFromResult(result) {
-  return structuredResultCandidates(result)
-    .find((candidate) => candidate.schema === TASK_EXECUTABILITY_FOLLOW_UP_SCHEMA) ?? null;
+  for (const candidate of structuredResultCandidates(result)) {
+    if (candidate.schema === TASK_EXECUTABILITY_FOLLOW_UP_SCHEMA) return candidate;
+    if (candidate.schema === 'narada.task.create.v0' && isObject(candidate.follow_up)) return candidate.follow_up;
+  }
+  return null;
 }
 
 function successfulToolResultFromEvent(event) {

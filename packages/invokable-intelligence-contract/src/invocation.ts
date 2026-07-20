@@ -1,7 +1,9 @@
 /**
- * The invocation chain: InvocationIntent -> InvocationPlan ->
- * InvocationAttempt -> InvocationEvidence, plus typed InvocationRefusal
- * when no eligible plan exists. Plans carry explicit resolved resource
+ * The invocation chain starts with InvocationIntent and an immutable
+ * InvocationPlan, plus typed InvocationRefusal when no eligible plan exists.
+ * Execution attempts, transitions, results, outcomes, observations, admitted
+ * evidence, and telemetry are distinct append-only contracts in outcomes.ts.
+ * Plans carry explicit resolved resource
  * references and full decision provenance — never provider/model names.
  */
 
@@ -13,15 +15,23 @@ import type { ContentDigest, PlanDecisionSnapshot } from "./temporal.js";
 
 export const INVOCATION_INTENT_SCHEMA = "narada.invokable-intelligence.invocation-intent.v1" as const;
 export const INVOCATION_PLAN_SCHEMA = "narada.invokable-intelligence.invocation-plan.v2" as const;
-export const INVOCATION_ATTEMPT_SCHEMA = "narada.invokable-intelligence.invocation-attempt.v1" as const;
-export const INVOCATION_EVIDENCE_SCHEMA = "narada.invokable-intelligence.invocation-evidence.v1" as const;
 export const INVOCATION_REFUSAL_SCHEMA = "narada.invokable-intelligence.invocation-refusal.v1" as const;
+
+export interface InvocationAuthorityBinding {
+  /** Exact authenticated transport actor; distinct from the authorized invocation principal. */
+  actor_id: string;
+  auth_type: string;
+  principal_id: string;
+  binding_ref: string;
+  evidence_refs: string[];
+}
 
 export interface InvocationIntent {
   schema: typeof INVOCATION_INTENT_SCHEMA;
   id: string;
   created_at: string;
   principal?: string;
+  authority_binding?: InvocationAuthorityBinding;
   /** What the invocation is for, e.g. "operator-chat", "worker-step", "transcription". */
   purpose: string;
   /** Digest of admitted request payload material; raw payload is not part of the intent record. */
@@ -88,31 +98,6 @@ export interface InvocationPlan {
   /** Effective invocation options after policy/default resolution. */
   options: Record<string, unknown>;
   provenance: DecisionProvenance;
-}
-
-export type AttemptState = "started" | "succeeded" | "failed" | "cancelled";
-
-export interface InvocationAttempt {
-  schema: typeof INVOCATION_ATTEMPT_SCHEMA;
-  id: string;
-  plan_id: string;
-  state: AttemptState;
-  started_at: string;
-  ended_at?: string;
-  error?: { code: string; message: string };
-}
-
-export interface InvocationEvidence {
-  schema: typeof INVOCATION_EVIDENCE_SCHEMA;
-  id: string;
-  attempt_id: string;
-  recorded_at: string;
-  usage?: {
-    input_tokens?: number;
-    output_tokens?: number;
-    latency_ms?: number;
-  };
-  evidence: import("./assertions.js").EvidenceRef[];
 }
 
 export type RefusalReasonCode =

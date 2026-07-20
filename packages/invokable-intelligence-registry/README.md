@@ -18,8 +18,9 @@ is validated against the contract before it touches the store.
   implementation.
 - **Typed domain tables.** `resources`, `resource_relations`,
   `assertions`, `policies`, `policy_bindings`, `invocation_intents`,
-  `invocation_plans`, `invocation_refusals`, `invocation_attempts`,
-  `invocation_evidence`, `schema_migrations`. No generic settings/EAV
+  `invocation_plans`, `invocation_refusals`, immutable execution attempts
+  and transitions, result envelopes, terminal outcomes, observations,
+  admitted audit evidence, telemetry, and `schema_migrations`. No generic settings/EAV
   table. Full records are stored as contract JSON in `doc` columns;
   query-relevant fields (kind, locus, site, capability family/name,
   supersession) are real columns.
@@ -44,7 +45,8 @@ is validated against the contract before it touches the store.
 
 `migrate()` applies versioned steps gated by `schema_migrations`;
 idempotent and safe on an empty or previously initialized store.
-`SCHEMA_VERSION = 1`. Rollback: the SQLite adapter runs migration in a
+Current schema version is 5; v5 removes the superseded mutable attempt and
+evidence tables. Rollback: the SQLite adapter runs migration in a
 single transaction (failure leaves the store untouched); D1 `batch()` is
 the best-effort equivalent — D1 does not offer interactive DDL
 transactions, and this is documented rather than hidden.

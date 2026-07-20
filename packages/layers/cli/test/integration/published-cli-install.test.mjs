@@ -273,9 +273,10 @@ test('published CLI installs into a blank Windows profile and provisions the Use
       const statusPayload = await statusResponse.json();
       assert.equal(statusResponse.status, 200, JSON.stringify(statusPayload));
       assert.equal(statusPayload.schema, 'narada.operator_console.onboarding.v1');
-      assert.ok(['ready', 'needs-provider-setup', 'blocked'].includes(statusPayload.ui_state));
+      assert.ok(['ready', 'needs-intelligence-setup', 'blocked'].includes(statusPayload.ui_state));
       assert.equal(statusPayload.onboarding?.launch, null);
-      assert.ok(statusPayload.doctor?.provider_readiness?.every((row) => !Object.hasOwn(row, 'value')));
+      assert.equal(statusPayload.doctor?.intelligence_catalog_readiness?.schema, 'narada.doctor.intelligence_catalog_readiness.v1');
+      assert.equal(Object.hasOwn(statusPayload.doctor?.intelligence_catalog_readiness ?? {}, 'value'), false);
 
       const demoResponse = await fetch(`${startup.url}/console/onboarding/api/start`, {
         method: 'POST',

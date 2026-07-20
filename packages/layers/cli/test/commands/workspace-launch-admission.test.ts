@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  createWorkspaceLaunchAdmissionPolicy,
-  type WorkspaceLaunchProviderRegistry,
-} from '../../src/commands/workspace-launch-admission.js';
+import { createWorkspaceLaunchAdmissionPolicy } from '../../src/commands/workspace-launch-admission.js';
 import type { WorkspaceLaunchRecord } from '../../src/commands/workspace-launch-types.js';
 import {
   advanceWorkspaceLaunchTransaction,
@@ -11,16 +8,6 @@ import {
   failWorkspaceLaunchTransaction,
 } from '../../src/commands/workspace-launch-contracts.js';
 import { workspaceLaunchRollbackOwnedProcesses } from '../../src/commands/workspace-launch-process.js';
-
-const providerRegistry: WorkspaceLaunchProviderRegistry = {
-  default_provider: 'kimi-code-api',
-  providers: {
-    'kimi-code-api': { meaning: 'Kimi Code', support_state: 'verified_supported' },
-    'codex-subscription': { meaning: 'Codex subscription', support_state: 'verified_supported' },
-    'openrouter-api': { meaning: 'OpenRouter', support_state: 'verified_supported' },
-    'retired-provider': { meaning: 'Retired', support_state: 'retired' },
-  },
-};
 
 const record = {
   agent: 'sonar.resident',
@@ -41,23 +28,17 @@ const record = {
 } satisfies WorkspaceLaunchRecord;
 
 describe('workspace launch admission policy', () => {
-  it('centralizes runtime, surface, role, and provider admission', () => {
-    const admission = createWorkspaceLaunchAdmissionPolicy({
-      providerRegistry,
-      admittedProviders: ['kimi-code-api', 'openrouter-api'],
-    });
+  it('centralizes runtime, surface, and role admission without launcher intelligence selection', () => {
+    const admission = createWorkspaceLaunchAdmissionPolicy();
 
-    expect(admission.narsOperatorSurfaceKinds).toEqual(['agent-cli', 'agent-web-ui']);
+    expect(admission.narsOperatorSurfaceKinds).toEqual(['agent-cli', 'agent-web-ui', 'agent-tui']);
     expect(admission.resolveOperatorSurfaceRuntimeSelection('agent-web-ui', 'narada-agent-runtime-server')).toMatchObject({
       operator_surface_kind: 'agent-web-ui',
       runtime_host_kind: 'narada-agent-runtime-server',
     });
     expect(admission.roleChoicesForSelectedSites([record], ['sonar'])).toEqual(['resident']);
-    expect(admission.intelligenceProviderChoices().map((choice) => choice.value)).toEqual([
-      'registry default',
-      'kimi-code-api',
-      'openrouter-api',
-    ]);
+    expect(admission).not.toHaveProperty('providerRegistry');
+    expect(admission).not.toHaveProperty('intelligenceProviderChoices');
   });
 
   it('enforces ordered launch transaction transitions and makes completion idempotent', () => {

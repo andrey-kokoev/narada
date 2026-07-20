@@ -1,0 +1,1610 @@
+{
+  "schema": "narada.invokable-intelligence.canonical-catalog-seed.v1",
+  "id": "catalog-seed:narada-cloudflare:revision-1",
+  "created_at": "2026-07-19T12:00:00.000Z",
+  "records": [
+    {
+      "schema": "narada.invokable-intelligence.canonical-catalog-record.v1",
+      "id": "catalog-record:narada-cloudflare:r1:001",
+      "record_kind": "resource",
+      "record_id": "site:narada-cloudflare",
+      "revision": 1,
+      "source": {
+        "schema": "narada.site.invokable-intelligence.catalog-source.v1",
+        "reference": "site-config:narada-cloudflare:invokable-intelligence:revision-1",
+        "revision": "1",
+        "digest": "sha256:75f2fcf9117ca930c757cb353568893d7012a6bf3c72a000f034fa3b3fd9f128"
+      },
+      "authority": {
+        "kind": "catalog-definition",
+        "locus": "target-site",
+        "site_id": "site:narada-cloudflare",
+        "authority_ref": "authority:site:narada-cloudflare:catalog"
+      },
+      "validation": {
+        "status": "accepted",
+        "validator": "narada-invokable-intelligence-management/1",
+        "validated_at": "2026-07-19T12:00:00.000Z",
+        "evidence": [
+          {
+            "kind": "site-configuration",
+            "ref": "site-config:narada-cloudflare:invokable-intelligence:revision-1"
+          }
+        ]
+      },
+      "document": {
+        "schema": "narada.invokable-intelligence.site.v1",
+        "id": "site:narada-cloudflare",
+        "registry_bindings": [
+          {
+            "registry": "narada.cloudflare-site-registry.v1",
+            "subject_id": "site_narada_cloudflare"
+          }
+        ]
+      }
+    },
+    {
+      "schema": "narada.invokable-intelligence.canonical-catalog-record.v1",
+      "id": "catalog-record:narada-cloudflare:r1:002",
+      "record_kind": "resource",
+      "record_id": "site:andrey-user",
+      "revision": 1,
+      "source": {
+        "schema": "narada.site.invokable-intelligence.catalog-source.v1",
+        "reference": "site-config:narada-cloudflare:invokable-intelligence:revision-1",
+        "revision": "1",
+        "digest": "sha256:e0c86964494539871907e032642614ab571dae72bf8ccc50bc525a8808bef034"
+      },
+      "authority": {
+        "kind": "catalog-definition",
+        "locus": "target-site",
+        "site_id": "site:narada-cloudflare",
+        "authority_ref": "authority:site:narada-cloudflare:catalog"
+      },
+      "validation": {
+        "status": "accepted",
+        "validator": "narada-invokable-intelligence-management/1",
+        "validated_at": "2026-07-19T12:00:00.000Z",
+        "evidence": [
+          {
+            "kind": "site-configuration",
+            "ref": "site-config:narada-cloudflare:invokable-intelligence:revision-1"
+          }
+        ]
+      },
+      "document": {
+        "schema": "narada.invokable-intelligence.site.v1",
+        "id": "site:andrey-user"
+      }
+    },
+    {
+      "schema": "narada.invokable-intelligence.canonical-catalog-record.v1",
+      "id": "catalog-record:narada-cloudflare:r1:003",
+      "record_kind": "resource",
+      "record_id": "model-provider:kimi",
+      "revision": 1,
+      "source": {
+        "schema": "narada.site.invokable-intelligence.catalog-source.v1",
+        "reference": "site-config:narada-cloudflare:invokable-intelligence:revision-1",
+        "revision": "1",
+        "digest": "sha256:d572b22a4ecb5de9ec7e7e0436b48c63ddd36bc3b00750b72c276cff837cd062"
+      },
+      "authority": {
+        "kind": "catalog-definition",
+        "locus": "target-site",
+        "site_id": "site:narada-cloudflare",
+        "authority_ref": "authority:site:narada-cloudflare:catalog"
+      },
+      "validation": {
+        "status": "accepted",
+        "validator": "narada-invokable-intelligence-management/1",
+        "validated_at": "2026-07-19T12:00:00.000Z",
+        "evidence": [
+          {
+            "kind": "site-configuration",
+            "ref": "site-config:narada-cloudflare:invokable-intelligence:revision-1"
+          }
+        ]
+      },
+      "document": {
+        "schema": "narada.invokable-intelligence.model-provider.v1",
+        "id": "model-provider:kimi"
+      }
+    },
+    {
+      "schema": "narada.invokable-intelligence.canonical-catalog-record.v1",
+      "id": "catalog-record:narada-cloudflare:r1:004",
+      "record_kind": "resource",
+      "record_id": "model:kimi-k2-instruct",
+      "revision": 1,
+      "source": {
+        "schema": "narada.site.invokable-intelligence.catalog-source.v1",
+        "reference": "site-config:narada-cloudflare:invokable-intelligence:revision-1",
+        "revision": "1",
+        "digest": "sha256:4d6665d03031c48454b5eec531597a1987301cd8ac22dcad1090d420151ae8dd"
+      },
+      "authority": {
+        "kind": "catalog-definition",
+        "locus": "target-site",
+        "site_id": "site:narada-cloudflare",
+        "authority_ref": "authority:site:narada-cloudflare:catalog"
+      },
+      "validation": {
+        "status": "accepted",
+        "validator": "narada-invokable-intelligence-management/1",
+        "validated_at": "2026-07-19T12:00:00.000Z",
+        "evidence": [
+          {
+            "kind": "site-configuration",
+            "ref": "site-config:narada-cloudflare:invokable-intelligence:revision-1"
+          }
+        ]
+      },
+      "document": {
+        "schema": "narada.invokable-intelligence.model.v1",
+        "id": "model:kimi-k2-instruct",
+        "display_name": "Kimi K2 Instruct",
+        "provider": {
+          "kind": "model-provider",
+          "id": "model-provider:kimi"
+        }
+      }
+    },
+    {
+      "schema": "narada.invokable-intelligence.canonical-catalog-record.v1",
+      "id": "catalog-record:narada-cloudflare:r1:005",
+      "record_kind": "resource",
+      "record_id": "inference-provider:cloudflare-workers-ai",
+      "revision": 1,
+      "source": {
+        "schema": "narada.site.invokable-intelligence.catalog-source.v1",
+        "reference": "site-config:narada-cloudflare:invokable-intelligence:revision-1",
+        "revision": "1",
+        "digest": "sha256:b3e1e557230b7911bbd32b443d2707e6212ee414b2e58af7c3116861cc87be02"
+      },
+      "authority": {
+        "kind": "catalog-definition",
+        "locus": "target-site",
+        "site_id": "site:narada-cloudflare",
+        "authority_ref": "authority:site:narada-cloudflare:catalog"
+      },
+      "validation": {
+        "status": "accepted",
+        "validator": "narada-invokable-intelligence-management/1",
+        "validated_at": "2026-07-19T12:00:00.000Z",
+        "evidence": [
+          {
+            "kind": "site-configuration",
+            "ref": "site-config:narada-cloudflare:invokable-intelligence:revision-1"
+          }
+        ]
+      },
+      "document": {
+        "schema": "narada.invokable-intelligence.inference-provider.v1",
+        "id": "inference-provider:cloudflare-workers-ai"
+      }
+    },
+    {
+      "schema": "narada.invokable-intelligence.canonical-catalog-record.v1",
+      "id": "catalog-record:narada-cloudflare:r1:006",
+      "record_kind": "resource",
+      "record_id": "adapter:workers-ai-binding",
+      "revision": 1,
+      "source": {
+        "schema": "narada.site.invokable-intelligence.catalog-source.v1",
+        "reference": "site-config:narada-cloudflare:invokable-intelligence:revision-1",
+        "revision": "1",
+        "digest": "sha256:12db6bf87af3bb7daf9284351f807299111cea8d93c7e0eb575884b7a06617c8"
+      },
+      "authority": {
+        "kind": "catalog-definition",
+        "locus": "target-site",
+        "site_id": "site:narada-cloudflare",
+        "authority_ref": "authority:site:narada-cloudflare:catalog"
+      },
+      "validation": {
+        "status": "accepted",
+        "validator": "narada-invokable-intelligence-management/1",
+        "validated_at": "2026-07-19T12:00:00.000Z",
+        "evidence": [
+          {
+            "kind": "site-configuration",
+            "ref": "site-config:narada-cloudflare:invokable-intelligence:revision-1"
+          }
+        ]
+      },
+      "document": {
+        "schema": "narada.invokable-intelligence.adapter.v1",
+        "id": "adapter:workers-ai-binding",
+        "runtime_family": "workers",
+        "protocol": {
+          "family": "cloudflare-workers-ai",
+          "operation": "run",
+          "version": "1"
+        }
+      }
+    },
+    {
+      "schema": "narada.invokable-intelligence.canonical-catalog-record.v1",
+      "id": "catalog-record:narada-cloudflare:r1:007",
+      "record_kind": "resource",
+      "record_id": "credential-locator:cloudflare-worker-binding",
+      "revision": 1,
+      "source": {
+        "schema": "narada.site.invokable-intelligence.catalog-source.v1",
+        "reference": "site-config:narada-cloudflare:invokable-intelligence:revision-1",
+        "revision": "1",
+        "digest": "sha256:db40660c89011d00bd6c2bcd9a35074a2638fd9b0a7cba805b9c9142f30194fc"
+      },
+      "authority": {
+        "kind": "catalog-definition",
+        "locus": "target-site",
+        "site_id": "site:narada-cloudflare",
+        "authority_ref": "authority:site:narada-cloudflare:catalog"
+      },
+      "validation": {
+        "status": "accepted",
+        "validator": "narada-invokable-intelligence-management/1",
+        "validated_at": "2026-07-19T12:00:00.000Z",
+        "evidence": [
+          {
+            "kind": "site-configuration",
+            "ref": "site-config:narada-cloudflare:invokable-intelligence:revision-1"
+          }
+        ]
+      },
+      "document": {
+        "schema": "narada.invokable-intelligence.credential-locator.v1",
+        "id": "credential-locator:cloudflare-worker-binding",
+        "store": "none",
+        "reference": "binding:AI",
+        "holder": {
+          "kind": "site",
+          "id": "site:narada-cloudflare"
+        }
+      }
+    },
+    {
+      "schema": "narada.invokable-intelligence.canonical-catalog-record.v1",
+      "id": "catalog-record:narada-cloudflare:r1:008",
+      "record_kind": "resource",
+      "record_id": "inference-endpoint:cf-workers-ai-default",
+      "revision": 1,
+      "source": {
+        "schema": "narada.site.invokable-intelligence.catalog-source.v1",
+        "reference": "site-config:narada-cloudflare:invokable-intelligence:revision-1",
+        "revision": "1",
+        "digest": "sha256:f941224759b3b226c30d53b08571f394d0f84e07b4470c361a53c310aa958a1b"
+      },
+      "authority": {
+        "kind": "catalog-definition",
+        "locus": "target-site",
+        "site_id": "site:narada-cloudflare",
+        "authority_ref": "authority:site:narada-cloudflare:catalog"
+      },
+      "validation": {
+        "status": "accepted",
+        "validator": "narada-invokable-intelligence-management/1",
+        "validated_at": "2026-07-19T12:00:00.000Z",
+        "evidence": [
+          {
+            "kind": "site-configuration",
+            "ref": "site-config:narada-cloudflare:invokable-intelligence:revision-1"
+          }
+        ]
+      },
+      "document": {
+        "schema": "narada.invokable-intelligence.inference-endpoint.v1",
+        "id": "inference-endpoint:cf-workers-ai-default",
+        "inference_provider": {
+          "kind": "inference-provider",
+          "id": "inference-provider:cloudflare-workers-ai"
+        },
+        "adapter": {
+          "kind": "adapter",
+          "id": "adapter:workers-ai-binding"
+        },
+        "address": {
+          "kind": "workers-binding",
+          "binding": "AI"
+        },
+        "serves": [
+          {
+            "kind": "model",
+            "id": "model:kimi-k2-instruct"
+          }
+        ],
+        "credential": {
+          "kind": "credential-locator",
+          "id": "credential-locator:cloudflare-worker-binding"
+        }
+      }
+    },
+    {
+      "schema": "narada.invokable-intelligence.canonical-catalog-record.v1",
+      "id": "catalog-record:narada-cloudflare:r1:009",
+      "record_kind": "resource",
+      "record_id": "model-offering:kimi-via-workers-ai",
+      "revision": 1,
+      "source": {
+        "schema": "narada.site.invokable-intelligence.catalog-source.v1",
+        "reference": "site-config:narada-cloudflare:invokable-intelligence:revision-1",
+        "revision": "1",
+        "digest": "sha256:42729e2a159bbe800d8ec28db959f130fd5dfb028d26a5b7e1313dade954cc52"
+      },
+      "authority": {
+        "kind": "catalog-definition",
+        "locus": "target-site",
+        "site_id": "site:narada-cloudflare",
+        "authority_ref": "authority:site:narada-cloudflare:catalog"
+      },
+      "validation": {
+        "status": "accepted",
+        "validator": "narada-invokable-intelligence-management/1",
+        "validated_at": "2026-07-19T12:00:00.000Z",
+        "evidence": [
+          {
+            "kind": "site-configuration",
+            "ref": "site-config:narada-cloudflare:invokable-intelligence:revision-1"
+          }
+        ]
+      },
+      "document": {
+        "schema": "narada.invokable-intelligence.model-offering.v1",
+        "id": "model-offering:kimi-via-workers-ai",
+        "model": {
+          "kind": "model",
+          "id": "model:kimi-k2-instruct"
+        },
+        "model_provider": {
+          "kind": "model-provider",
+          "id": "model-provider:kimi"
+        },
+        "inference_provider": {
+          "kind": "inference-provider",
+          "id": "inference-provider:cloudflare-workers-ai"
+        },
+        "endpoint": {
+          "kind": "inference-endpoint",
+          "id": "inference-endpoint:cf-workers-ai-default"
+        },
+        "invocation_model_key": "@cf/moonshotai/kimi-k2-instruct",
+        "service_class": "workers-ai",
+        "region": "global"
+      }
+    },
+    {
+      "schema": "narada.invokable-intelligence.canonical-catalog-record.v1",
+      "id": "catalog-record:narada-cloudflare:r1:010",
+      "record_kind": "resource",
+      "record_id": "execution-locus:cloudflare-carrier",
+      "revision": 1,
+      "source": {
+        "schema": "narada.site.invokable-intelligence.catalog-source.v1",
+        "reference": "site-config:narada-cloudflare:invokable-intelligence:revision-1",
+        "revision": "1",
+        "digest": "sha256:666ef5a99dd16439ad39c10f964f796fa398f4d6f000dc607d244d421a8e6d5f"
+      },
+      "authority": {
+        "kind": "catalog-definition",
+        "locus": "target-site",
+        "site_id": "site:narada-cloudflare",
+        "authority_ref": "authority:site:narada-cloudflare:catalog"
+      },
+      "validation": {
+        "status": "accepted",
+        "validator": "narada-invokable-intelligence-management/1",
+        "validated_at": "2026-07-19T12:00:00.000Z",
+        "evidence": [
+          {
+            "kind": "site-configuration",
+            "ref": "site-config:narada-cloudflare:invokable-intelligence:revision-1"
+          }
+        ]
+      },
+      "document": {
+        "schema": "narada.invokable-intelligence.execution-locus.v1",
+        "id": "execution-locus:cloudflare-carrier",
+        "kind": "cloudflare"
+      }
+    },
+    {
+      "schema": "narada.invokable-intelligence.canonical-catalog-record.v1",
+      "id": "catalog-record:narada-cloudflare:r1:011",
+      "record_kind": "route",
+      "record_id": "route:kimi-workers-ai",
+      "revision": 1,
+      "source": {
+        "schema": "narada.site.invokable-intelligence.catalog-source.v1",
+        "reference": "site-config:narada-cloudflare:invokable-intelligence:revision-1",
+        "revision": "1",
+        "digest": "sha256:22243c80831a6e1d63abeaceaf60de82e587ebdc682917a679c0c01f56eb4618"
+      },
+      "authority": {
+        "kind": "catalog-definition",
+        "locus": "target-site",
+        "site_id": "site:narada-cloudflare",
+        "authority_ref": "authority:site:narada-cloudflare:catalog"
+      },
+      "validation": {
+        "status": "accepted",
+        "validator": "narada-invokable-intelligence-management/1",
+        "validated_at": "2026-07-19T12:00:00.000Z",
+        "evidence": [
+          {
+            "kind": "site-configuration",
+            "ref": "site-config:narada-cloudflare:invokable-intelligence:revision-1"
+          }
+        ]
+      },
+      "document": {
+        "schema": "narada.invokable-intelligence.invocation-route-candidate.v1",
+        "id": "route:kimi-workers-ai",
+        "offering": {
+          "kind": "model-offering",
+          "id": "model-offering:kimi-via-workers-ai"
+        },
+        "endpoint": {
+          "kind": "inference-endpoint",
+          "id": "inference-endpoint:cf-workers-ai-default"
+        },
+        "adapter": {
+          "kind": "adapter",
+          "id": "adapter:workers-ai-binding"
+        },
+        "topology": {
+          "schema": "narada.invokable-intelligence.execution-topology.v1",
+          "id": "topology:cloudflare-workers-ai",
+          "nodes": [
+            {
+              "id": "cf-client",
+              "kind": "client",
+              "locus": {
+                "kind": "client-device",
+                "site_id": "site:andrey-user"
+              },
+              "feasibility_authority": {
+                "site_id": "site:andrey-user",
+                "locus": "client-site",
+                "authority_ref": "site-governance:site:andrey-user:client-site"
+              },
+              "required_feasibility": [
+                "client-supported"
+              ]
+            },
+            {
+              "id": "cf-launcher",
+              "kind": "launcher",
+              "locus": {
+                "kind": "local-machine",
+                "site_id": "site:pc",
+                "execution_locus": {
+                  "kind": "execution-locus",
+                  "id": "execution-locus:operator-pc"
+                }
+              },
+              "feasibility_authority": {
+                "site_id": "site:pc",
+                "locus": "launcher-site",
+                "authority_ref": "site-governance:site:pc:launcher-site"
+              },
+              "required_feasibility": [
+                "launcher-available"
+              ]
+            },
+            {
+              "id": "cf-carrier",
+              "kind": "carrier",
+              "locus": {
+                "kind": "cloudflare-worker",
+                "site_id": "site:narada-cloudflare",
+                "execution_locus": {
+                  "kind": "execution-locus",
+                  "id": "execution-locus:cloudflare-carrier"
+                },
+                "deployment_ref": "worker:narada-cloudflare-carrier"
+              },
+              "feasibility_authority": {
+                "site_id": "site:narada-cloudflare",
+                "locus": "carrier-site",
+                "authority_ref": "site-governance:site:narada-cloudflare:carrier-site"
+              },
+              "required_feasibility": [
+                "carrier-deployed"
+              ]
+            },
+            {
+              "id": "cf-runtime",
+              "kind": "runtime",
+              "locus": {
+                "kind": "cloudflare-worker",
+                "site_id": "site:narada-cloudflare",
+                "execution_locus": {
+                  "kind": "execution-locus",
+                  "id": "execution-locus:cloudflare-carrier"
+                }
+              },
+              "feasibility_authority": {
+                "site_id": "site:narada-cloudflare",
+                "locus": "execution-site",
+                "authority_ref": "site-governance:site:narada-cloudflare:execution-site"
+              },
+              "required_feasibility": [
+                "runtime-available"
+              ]
+            },
+            {
+              "id": "cf-adapter",
+              "kind": "adapter",
+              "locus": {
+                "kind": "cloudflare-worker",
+                "site_id": "site:narada-cloudflare",
+                "execution_locus": {
+                  "kind": "execution-locus",
+                  "id": "execution-locus:cloudflare-carrier"
+                }
+              },
+              "resource": {
+                "kind": "adapter",
+                "id": "adapter:workers-ai-binding"
+              },
+              "feasibility_authority": {
+                "site_id": "site:narada-cloudflare",
+                "locus": "execution-site",
+                "authority_ref": "site-governance:site:narada-cloudflare:execution-site"
+              },
+              "required_feasibility": [
+                "adapter-supported"
+              ]
+            },
+            {
+              "id": "cf-service",
+              "kind": "inference-service",
+              "locus": {
+                "kind": "cloudflare-account",
+                "site_id": "site:narada-cloudflare",
+                "deployment_ref": "binding:AI"
+              },
+              "resource": {
+                "kind": "inference-provider",
+                "id": "inference-provider:cloudflare-workers-ai"
+              },
+              "feasibility_authority": {
+                "site_id": "site:narada-cloudflare",
+                "locus": "service-site",
+                "authority_ref": "site-governance:site:narada-cloudflare:service-site"
+              },
+              "required_feasibility": [
+                "service-available"
+              ]
+            },
+            {
+              "id": "cf-endpoint",
+              "kind": "endpoint",
+              "locus": {
+                "kind": "remote-service",
+                "site_id": "site:narada-cloudflare"
+              },
+              "resource": {
+                "kind": "inference-endpoint",
+                "id": "inference-endpoint:cf-workers-ai-default"
+              },
+              "feasibility_authority": {
+                "site_id": "site:narada-cloudflare",
+                "locus": "service-site",
+                "authority_ref": "site-governance:site:narada-cloudflare:service-site"
+              },
+              "required_feasibility": [
+                "endpoint-available"
+              ]
+            }
+          ],
+          "edges": [
+            {
+              "id": "c1",
+              "from": "cf-client",
+              "to": "cf-launcher",
+              "kind": "operator-handoff",
+              "boundary": {
+                "kinds": [
+                  "process"
+                ]
+              },
+              "feasibility_authority": {
+                "site_id": "site:andrey-user",
+                "locus": "client-site",
+                "authority_ref": "site-governance:site:andrey-user:client-site"
+              },
+              "required_feasibility": [
+                "boundary-admitted"
+              ]
+            },
+            {
+              "id": "c2",
+              "from": "cf-launcher",
+              "to": "cf-carrier",
+              "kind": "network-call",
+              "boundary": {
+                "kinds": [
+                  "network",
+                  "trust",
+                  "site",
+                  "account"
+                ],
+                "trust_policy_ref": "trust:cloudflare-operator-session",
+                "network_path_ref": "network:pc-to-cloudflare"
+              },
+              "feasibility_authority": {
+                "site_id": "site:pc",
+                "locus": "launcher-site",
+                "authority_ref": "site-governance:site:pc:launcher-site"
+              },
+              "required_feasibility": [
+                "network-reachable",
+                "boundary-admitted"
+              ]
+            },
+            {
+              "id": "c3",
+              "from": "cf-carrier",
+              "to": "cf-runtime",
+              "kind": "runtime-call",
+              "boundary": {
+                "kinds": [
+                  "process"
+                ]
+              },
+              "feasibility_authority": {
+                "site_id": "site:narada-cloudflare",
+                "locus": "carrier-site",
+                "authority_ref": "site-governance:site:narada-cloudflare:carrier-site"
+              },
+              "required_feasibility": [
+                "boundary-admitted"
+              ]
+            },
+            {
+              "id": "c4",
+              "from": "cf-runtime",
+              "to": "cf-adapter",
+              "kind": "runtime-call",
+              "boundary": {
+                "kinds": [
+                  "none"
+                ]
+              },
+              "feasibility_authority": {
+                "site_id": "site:narada-cloudflare",
+                "locus": "execution-site",
+                "authority_ref": "site-governance:site:narada-cloudflare:execution-site"
+              },
+              "required_feasibility": []
+            },
+            {
+              "id": "c5",
+              "from": "cf-adapter",
+              "to": "cf-service",
+              "kind": "binding-call",
+              "boundary": {
+                "kinds": [
+                  "account",
+                  "trust"
+                ]
+              },
+              "feasibility_authority": {
+                "site_id": "site:narada-cloudflare",
+                "locus": "execution-site",
+                "authority_ref": "site-governance:site:narada-cloudflare:execution-site"
+              },
+              "required_feasibility": [
+                "boundary-admitted"
+              ]
+            },
+            {
+              "id": "c6",
+              "from": "cf-service",
+              "to": "cf-endpoint",
+              "kind": "provider-call",
+              "boundary": {
+                "kinds": [
+                  "none"
+                ]
+              },
+              "feasibility_authority": {
+                "site_id": "site:narada-cloudflare",
+                "locus": "service-site",
+                "authority_ref": "site-governance:site:narada-cloudflare:service-site"
+              },
+              "required_feasibility": []
+            }
+          ],
+          "route": {
+            "node_ids": [
+              "cf-client",
+              "cf-launcher",
+              "cf-carrier",
+              "cf-runtime",
+              "cf-adapter",
+              "cf-service",
+              "cf-endpoint"
+            ],
+            "edge_ids": [
+              "c1",
+              "c2",
+              "c3",
+              "c4",
+              "c5",
+              "c6"
+            ]
+          }
+        },
+        "execution_loci": [
+          {
+            "kind": "execution-locus",
+            "id": "execution-locus:cloudflare-carrier"
+          }
+        ],
+        "access": {
+          "account_ref": "account:cloudflare-workers-ai",
+          "grant_refs": [
+            "grant:andrey-cloudflare-workers-ai"
+          ],
+          "credential": {
+            "kind": "credential-locator",
+            "id": "credential-locator:cloudflare-worker-binding"
+          }
+        },
+        "composition_digest": "sha256:6087fff8bcdc901025203e9dcc33f78e15305a35570ae4f1e737fe83279d0535"
+      }
+    },
+    {
+      "schema": "narada.invokable-intelligence.canonical-catalog-record.v1",
+      "id": "catalog-record:narada-cloudflare:r1:012",
+      "record_kind": "policy",
+      "record_id": "policy:andrey-cloudflare-preferences",
+      "revision": 1,
+      "source": {
+        "schema": "narada.site.invokable-intelligence.catalog-source.v1",
+        "reference": "site-config:narada-cloudflare:invokable-intelligence:revision-1",
+        "revision": "1",
+        "digest": "sha256:bec188a939cf93d26f98babee29ffa43cddd584c0bd561971e34703389775c47"
+      },
+      "authority": {
+        "kind": "user-preference",
+        "locus": "user-site",
+        "authority_ref": "authority:site:andrey-user",
+        "site_id": "site:andrey-user"
+      },
+      "validation": {
+        "status": "accepted",
+        "validator": "narada-invokable-intelligence-management/1",
+        "validated_at": "2026-07-19T12:00:00.000Z",
+        "evidence": [
+          {
+            "kind": "site-configuration",
+            "ref": "site-config:narada-cloudflare:invokable-intelligence:revision-1"
+          }
+        ]
+      },
+      "document": {
+        "schema": "narada.invokable-intelligence.policy.v1",
+        "id": "policy:andrey-cloudflare-preferences",
+        "locus": "user-site",
+        "site": {
+          "kind": "site",
+          "id": "site:andrey-user"
+        },
+        "kind": "preferences",
+        "rules": [
+          {
+            "type": "prefer-resource",
+            "resource": {
+              "kind": "model-offering",
+              "id": "model-offering:kimi-via-workers-ai"
+            },
+            "weight": 10,
+            "reason": "Current User Site preference among already eligible Cloudflare routes."
+          }
+        ],
+        "revision": 1
+      }
+    },
+    {
+      "schema": "narada.invokable-intelligence.canonical-catalog-record.v1",
+      "id": "catalog-record:narada-cloudflare:r1:013",
+      "record_kind": "policy",
+      "record_id": "policy:narada-cloudflare-defaults",
+      "revision": 1,
+      "source": {
+        "schema": "narada.site.invokable-intelligence.catalog-source.v1",
+        "reference": "site-config:narada-cloudflare:invokable-intelligence:revision-1",
+        "revision": "1",
+        "digest": "sha256:b9484451c1980525527cb885d3ef6209c46fafead3a594c6c8886ba7e0489f07"
+      },
+      "authority": {
+        "kind": "target-default",
+        "locus": "target-site",
+        "authority_ref": "authority:site:narada-cloudflare",
+        "site_id": "site:narada-cloudflare"
+      },
+      "validation": {
+        "status": "accepted",
+        "validator": "narada-invokable-intelligence-management/1",
+        "validated_at": "2026-07-19T12:00:00.000Z",
+        "evidence": [
+          {
+            "kind": "site-configuration",
+            "ref": "site-config:narada-cloudflare:invokable-intelligence:revision-1"
+          }
+        ]
+      },
+      "document": {
+        "schema": "narada.invokable-intelligence.policy.v1",
+        "id": "policy:narada-cloudflare-defaults",
+        "locus": "target-site",
+        "site": {
+          "kind": "site",
+          "id": "site:narada-cloudflare"
+        },
+        "kind": "defaults",
+        "rules": [
+          {
+            "type": "default-option",
+            "option": "model_offering",
+            "value": "model-offering:kimi-via-workers-ai",
+            "reason": "Narada Cloudflare Site default when the invocation does not request a model."
+          },
+          {
+            "type": "default-option",
+            "option": "timeout_ms",
+            "value": 15000,
+            "reason": "Narada Cloudflare Site provider-attempt deadline."
+          }
+        ],
+        "revision": 1
+      }
+    },
+    {
+      "schema": "narada.invokable-intelligence.canonical-catalog-record.v1",
+      "id": "catalog-record:narada-cloudflare:r1:014",
+      "record_kind": "policy",
+      "record_id": "policy:cloudflare-execution-eligibility",
+      "revision": 1,
+      "source": {
+        "schema": "narada.site.invokable-intelligence.catalog-source.v1",
+        "reference": "site-config:narada-cloudflare:invokable-intelligence:revision-1",
+        "revision": "1",
+        "digest": "sha256:f184a55aa858c2686b2a561bca6339c20a175f024b0a97fa12aaae88b3633bec"
+      },
+      "authority": {
+        "kind": "execution-feasibility",
+        "locus": "execution-site",
+        "authority_ref": "authority:site:narada-cloudflare",
+        "site_id": "site:narada-cloudflare"
+      },
+      "validation": {
+        "status": "accepted",
+        "validator": "narada-invokable-intelligence-management/1",
+        "validated_at": "2026-07-19T12:00:00.000Z",
+        "evidence": [
+          {
+            "kind": "site-configuration",
+            "ref": "site-config:narada-cloudflare:invokable-intelligence:revision-1"
+          }
+        ]
+      },
+      "document": {
+        "schema": "narada.invokable-intelligence.policy.v1",
+        "id": "policy:cloudflare-execution-eligibility",
+        "locus": "host-site",
+        "site": {
+          "kind": "site",
+          "id": "site:narada-cloudflare"
+        },
+        "kind": "eligibility",
+        "rules": [
+          {
+            "type": "allow-resource",
+            "resource": {
+              "kind": "adapter",
+              "id": "adapter:workers-ai-binding"
+            },
+            "reason": "The Cloudflare execution Site admits only its bound Workers AI adapter."
+          }
+        ],
+        "revision": 1
+      }
+    },
+    {
+      "schema": "narada.invokable-intelligence.canonical-catalog-record.v1",
+      "id": "catalog-record:narada-cloudflare:r1:015",
+      "record_kind": "access",
+      "record_id": "principal:admin",
+      "revision": 1,
+      "source": {
+        "schema": "narada.site.invokable-intelligence.catalog-source.v1",
+        "reference": "site-config:narada-cloudflare:invokable-intelligence:revision-1",
+        "revision": "1",
+        "digest": "sha256:300ba5f4ee14ddaed6a1db06e124c3e1ad08d9cdc14ffed4f243f6f9982d898a"
+      },
+      "authority": {
+        "kind": "account-definition",
+        "locus": "target-site",
+        "site_id": "site:narada-cloudflare",
+        "authority_ref": "authority:site:narada-cloudflare:catalog"
+      },
+      "validation": {
+        "status": "accepted",
+        "validator": "narada-invokable-intelligence-management/1",
+        "validated_at": "2026-07-19T12:00:00.000Z",
+        "evidence": [
+          {
+            "kind": "site-configuration",
+            "ref": "site-config:narada-cloudflare:invokable-intelligence:revision-1"
+          }
+        ]
+      },
+      "document": {
+        "schema": "narada.invokable-intelligence.principal.v1",
+        "id": "principal:admin",
+        "kind": "site",
+        "authority": {
+          "owner_kind": "principal",
+          "owner_id": "principal:admin",
+          "authority_ref": "authority:principal:admin"
+        },
+        "admission_bindings": [
+          {
+            "id": "principal-binding:narada-cloudflare-operators",
+            "kind": "site-membership",
+            "registry": "narada.cloudflare-site-registry.v1",
+            "site_id": "site_narada_cloudflare",
+            "roles": [
+              "owner",
+              "maintainer",
+              "operator"
+            ],
+            "auth_types": [
+              "microsoft_oidc",
+              "user"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "schema": "narada.invokable-intelligence.canonical-catalog-record.v1",
+      "id": "catalog-record:narada-cloudflare:r1:016",
+      "record_kind": "access",
+      "record_id": "account:cloudflare-workers-ai",
+      "revision": 1,
+      "source": {
+        "schema": "narada.site.invokable-intelligence.catalog-source.v1",
+        "reference": "site-config:narada-cloudflare:invokable-intelligence:revision-1",
+        "revision": "1",
+        "digest": "sha256:498401095298606e1db57c3fcc79f4944af4b6e42f5a4e8435cded3f732e29ff"
+      },
+      "authority": {
+        "kind": "account-definition",
+        "locus": "target-site",
+        "site_id": "site:narada-cloudflare",
+        "authority_ref": "authority:site:narada-cloudflare:catalog"
+      },
+      "validation": {
+        "status": "accepted",
+        "validator": "narada-invokable-intelligence-management/1",
+        "validated_at": "2026-07-19T12:00:00.000Z",
+        "evidence": [
+          {
+            "kind": "site-configuration",
+            "ref": "site-config:narada-cloudflare:invokable-intelligence:revision-1"
+          }
+        ]
+      },
+      "document": {
+        "schema": "narada.invokable-intelligence.service-account.v1",
+        "id": "account:cloudflare-workers-ai",
+        "tenant_id": "tenant:cloudflare-workers-ai",
+        "inference_provider": {
+          "kind": "inference-provider",
+          "id": "inference-provider:cloudflare-workers-ai"
+        },
+        "owner": {
+          "owner_kind": "account-owner",
+          "owner_id": "site:andrey-user",
+          "authority_ref": "authority:account-owner:site:andrey-user"
+        },
+        "region": "global",
+        "status": "active"
+      }
+    },
+    {
+      "schema": "narada.invokable-intelligence.canonical-catalog-record.v1",
+      "id": "catalog-record:narada-cloudflare:r1:017",
+      "record_kind": "access",
+      "record_id": "credential-binding:cloudflare-workers-ai",
+      "revision": 1,
+      "source": {
+        "schema": "narada.site.invokable-intelligence.catalog-source.v1",
+        "reference": "site-config:narada-cloudflare:invokable-intelligence:revision-1",
+        "revision": "1",
+        "digest": "sha256:6c67ff106a701cd04d53297f8321462835ae4c29d73115e725fa06024f09e043"
+      },
+      "authority": {
+        "kind": "account-definition",
+        "locus": "target-site",
+        "site_id": "site:narada-cloudflare",
+        "authority_ref": "authority:site:narada-cloudflare:catalog"
+      },
+      "validation": {
+        "status": "accepted",
+        "validator": "narada-invokable-intelligence-management/1",
+        "validated_at": "2026-07-19T12:00:00.000Z",
+        "evidence": [
+          {
+            "kind": "site-configuration",
+            "ref": "site-config:narada-cloudflare:invokable-intelligence:revision-1"
+          }
+        ]
+      },
+      "document": {
+        "schema": "narada.invokable-intelligence.credential-binding.v1",
+        "id": "credential-binding:cloudflare-workers-ai",
+        "account_id": "account:cloudflare-workers-ai",
+        "credential_locator": {
+          "kind": "credential-locator",
+          "id": "credential-locator:cloudflare-worker-binding"
+        },
+        "transport": {
+          "kind": "credential-handle",
+          "ref": "binding:AI",
+          "holder_site_id": "site:narada-cloudflare"
+        },
+        "presence": "present",
+        "usability": "usable",
+        "observed_at": "2026-07-19T12:00:00.000Z",
+        "valid_until": "2036-07-19T12:00:00.000Z",
+        "owner": {
+          "owner_kind": "execution-site",
+          "owner_id": "site:narada-cloudflare",
+          "authority_ref": "authority:execution-site:site:narada-cloudflare"
+        },
+        "evidence": [
+          {
+            "kind": "site-configuration",
+            "ref": "site-config:narada-cloudflare:invokable-intelligence:revision-1"
+          }
+        ]
+      }
+    },
+    {
+      "schema": "narada.invokable-intelligence.canonical-catalog-record.v1",
+      "id": "catalog-record:narada-cloudflare:r1:018",
+      "record_kind": "access",
+      "record_id": "grant:andrey-cloudflare-workers-ai",
+      "revision": 1,
+      "source": {
+        "schema": "narada.site.invokable-intelligence.catalog-source.v1",
+        "reference": "site-config:narada-cloudflare:invokable-intelligence:revision-1",
+        "revision": "1",
+        "digest": "sha256:11f79d9bb98124053deafc602bb96ec4858071f19063c74c136857e61b8c85eb"
+      },
+      "authority": {
+        "kind": "account-definition",
+        "locus": "target-site",
+        "site_id": "site:narada-cloudflare",
+        "authority_ref": "authority:site:narada-cloudflare:catalog"
+      },
+      "validation": {
+        "status": "accepted",
+        "validator": "narada-invokable-intelligence-management/1",
+        "validated_at": "2026-07-19T12:00:00.000Z",
+        "evidence": [
+          {
+            "kind": "site-configuration",
+            "ref": "site-config:narada-cloudflare:invokable-intelligence:revision-1"
+          }
+        ]
+      },
+      "document": {
+        "schema": "narada.invokable-intelligence.access-grant.v1",
+        "id": "grant:andrey-cloudflare-workers-ai",
+        "principal_id": "principal:admin",
+        "account_id": "account:cloudflare-workers-ai",
+        "actions": [
+          "invoke"
+        ],
+        "scope": {
+          "offering_ids": [
+            "model-offering:kimi-via-workers-ai"
+          ],
+          "route_ids": [
+            "route:kimi-workers-ai"
+          ],
+          "purposes": [
+            "operator-chat",
+            "carrier-turn"
+          ],
+          "target_site_ids": [
+            "site:narada-cloudflare"
+          ],
+          "topology_ids": [
+            "topology:cloudflare-workers-ai"
+          ]
+        },
+        "validity": {
+          "valid_from": "2026-07-19T00:00:00.000Z",
+          "valid_until": "2036-07-19T12:00:00.000Z"
+        },
+        "status": "active",
+        "granted_by": {
+          "owner_kind": "account-owner",
+          "owner_id": "site:andrey-user",
+          "authority_ref": "authority:account-owner:site:andrey-user"
+        },
+        "principal_consent_ref": "authority-statement:admin-cloudflare-consent",
+        "evidence": [
+          {
+            "kind": "site-configuration",
+            "ref": "site-config:narada-cloudflare:invokable-intelligence:revision-1"
+          }
+        ]
+      }
+    },
+    {
+      "schema": "narada.invokable-intelligence.canonical-catalog-record.v1",
+      "id": "catalog-record:narada-cloudflare:r1:019",
+      "record_kind": "access",
+      "record_id": "entitlement:cloudflare-workers-ai",
+      "revision": 1,
+      "source": {
+        "schema": "narada.site.invokable-intelligence.catalog-source.v1",
+        "reference": "site-config:narada-cloudflare:invokable-intelligence:revision-1",
+        "revision": "1",
+        "digest": "sha256:86f09693f70c35d83a5b667373a813145cc19c76ac64f23ad3420d0b1ac16820"
+      },
+      "authority": {
+        "kind": "account-definition",
+        "locus": "target-site",
+        "site_id": "site:narada-cloudflare",
+        "authority_ref": "authority:site:narada-cloudflare:catalog"
+      },
+      "validation": {
+        "status": "accepted",
+        "validator": "narada-invokable-intelligence-management/1",
+        "validated_at": "2026-07-19T12:00:00.000Z",
+        "evidence": [
+          {
+            "kind": "site-configuration",
+            "ref": "site-config:narada-cloudflare:invokable-intelligence:revision-1"
+          }
+        ]
+      },
+      "document": {
+        "schema": "narada.invokable-intelligence.service-entitlement.v1",
+        "id": "entitlement:cloudflare-workers-ai",
+        "account_id": "account:cloudflare-workers-ai",
+        "offering_id": "model-offering:kimi-via-workers-ai",
+        "service_class": "workers-ai",
+        "features": [
+          "invoke"
+        ],
+        "validity": {
+          "valid_from": "2026-07-19T00:00:00.000Z",
+          "valid_until": "2036-07-19T12:00:00.000Z"
+        },
+        "status": "active",
+        "owner": {
+          "owner_kind": "service-provider",
+          "owner_id": "inference-provider:cloudflare-workers-ai",
+          "authority_ref": "authority:service-provider:inference-provider:cloudflare-workers-ai"
+        },
+        "evidence": [
+          {
+            "kind": "site-configuration",
+            "ref": "site-config:narada-cloudflare:invokable-intelligence:revision-1"
+          }
+        ]
+      }
+    },
+    {
+      "schema": "narada.invokable-intelligence.canonical-catalog-record.v1",
+      "id": "catalog-record:narada-cloudflare:r1:020",
+      "record_kind": "access",
+      "record_id": "quota:cloudflare-workers-ai",
+      "revision": 1,
+      "source": {
+        "schema": "narada.site.invokable-intelligence.catalog-source.v1",
+        "reference": "site-config:narada-cloudflare:invokable-intelligence:revision-1",
+        "revision": "1",
+        "digest": "sha256:715dd43ad627b6cfb939e6f6bb8748e67b0315bc26f7a83f1579427b49632792"
+      },
+      "authority": {
+        "kind": "account-definition",
+        "locus": "target-site",
+        "site_id": "site:narada-cloudflare",
+        "authority_ref": "authority:site:narada-cloudflare:catalog"
+      },
+      "validation": {
+        "status": "accepted",
+        "validator": "narada-invokable-intelligence-management/1",
+        "validated_at": "2026-07-19T12:00:00.000Z",
+        "evidence": [
+          {
+            "kind": "site-configuration",
+            "ref": "site-config:narada-cloudflare:invokable-intelligence:revision-1"
+          }
+        ]
+      },
+      "document": {
+        "schema": "narada.invokable-intelligence.quota-observation.v1",
+        "id": "quota:cloudflare-workers-ai",
+        "account_id": "account:cloudflare-workers-ai",
+        "offering_id": "model-offering:kimi-via-workers-ai",
+        "unit": "requests",
+        "limit": 1000,
+        "consumed": 1,
+        "reserved": 0,
+        "period_start": "2026-07-19T00:00:00.000Z",
+        "period_end": "2036-07-19T12:00:00.000Z",
+        "observed_at": "2026-07-19T12:00:00.000Z",
+        "fresh_until": "2036-07-19T12:00:00.000Z",
+        "owner": {
+          "owner_kind": "service-provider",
+          "owner_id": "inference-provider:cloudflare-workers-ai",
+          "authority_ref": "authority:service-provider:inference-provider:cloudflare-workers-ai"
+        },
+        "evidence": [
+          {
+            "kind": "site-configuration",
+            "ref": "site-config:narada-cloudflare:invokable-intelligence:revision-1"
+          }
+        ]
+      }
+    },
+    {
+      "schema": "narada.invokable-intelligence.canonical-catalog-record.v1",
+      "id": "catalog-record:narada-cloudflare:r1:021",
+      "record_kind": "access",
+      "record_id": "budget:narada-cloudflare-workers-ai",
+      "revision": 1,
+      "source": {
+        "schema": "narada.site.invokable-intelligence.catalog-source.v1",
+        "reference": "site-config:narada-cloudflare:invokable-intelligence:revision-1",
+        "revision": "1",
+        "digest": "sha256:e6fda9170849a86c7f65b636be537ee8e7f9ed0d4f8246fb70a19331a936de0e"
+      },
+      "authority": {
+        "kind": "account-definition",
+        "locus": "target-site",
+        "site_id": "site:narada-cloudflare",
+        "authority_ref": "authority:site:narada-cloudflare:catalog"
+      },
+      "validation": {
+        "status": "accepted",
+        "validator": "narada-invokable-intelligence-management/1",
+        "validated_at": "2026-07-19T12:00:00.000Z",
+        "evidence": [
+          {
+            "kind": "site-configuration",
+            "ref": "site-config:narada-cloudflare:invokable-intelligence:revision-1"
+          }
+        ]
+      },
+      "document": {
+        "schema": "narada.invokable-intelligence.budget-authorization.v1",
+        "id": "budget:narada-cloudflare-workers-ai",
+        "principal_id": "principal:admin",
+        "account_id": "account:cloudflare-workers-ai",
+        "target_site_id": "site:narada-cloudflare",
+        "currency": "USD",
+        "limit": 100,
+        "committed": 1,
+        "reserved": 0,
+        "validity": {
+          "valid_from": "2026-07-19T00:00:00.000Z",
+          "valid_until": "2036-07-19T12:00:00.000Z"
+        },
+        "status": "authorized",
+        "owner": {
+          "owner_kind": "target-site",
+          "owner_id": "site:narada-cloudflare",
+          "authority_ref": "authority:target-site:site:narada-cloudflare"
+        },
+        "evidence": [
+          {
+            "kind": "site-configuration",
+            "ref": "site-config:narada-cloudflare:invokable-intelligence:revision-1"
+          }
+        ]
+      }
+    },
+    {
+      "schema": "narada.invokable-intelligence.canonical-catalog-record.v1",
+      "id": "catalog-record:narada-cloudflare:r1:022",
+      "record_kind": "access",
+      "record_id": "governance:narada-cloudflare-workers-ai",
+      "revision": 1,
+      "source": {
+        "schema": "narada.site.invokable-intelligence.catalog-source.v1",
+        "reference": "site-config:narada-cloudflare:invokable-intelligence:revision-1",
+        "revision": "1",
+        "digest": "sha256:2ec7e1171be4d3daf02b0430d0ef6d7e658ae925eee9280914aa3ba10bd7b288"
+      },
+      "authority": {
+        "kind": "account-definition",
+        "locus": "target-site",
+        "site_id": "site:narada-cloudflare",
+        "authority_ref": "authority:site:narada-cloudflare:catalog"
+      },
+      "validation": {
+        "status": "accepted",
+        "validator": "narada-invokable-intelligence-management/1",
+        "validated_at": "2026-07-19T12:00:00.000Z",
+        "evidence": [
+          {
+            "kind": "site-configuration",
+            "ref": "site-config:narada-cloudflare:invokable-intelligence:revision-1"
+          }
+        ]
+      },
+      "document": {
+        "schema": "narada.invokable-intelligence.data-governance-requirement.v1",
+        "id": "governance:narada-cloudflare-workers-ai",
+        "target_site_id": "site:narada-cloudflare",
+        "purposes": [
+          "operator-chat",
+          "carrier-turn"
+        ],
+        "data_classifications": [
+          "internal"
+        ],
+        "allowed_regions": [
+          "global"
+        ],
+        "maximum_retention_days": 30,
+        "provider_training": "prohibited",
+        "validity": {
+          "valid_from": "2026-07-19T00:00:00.000Z",
+          "valid_until": "2036-07-19T12:00:00.000Z"
+        },
+        "status": "active",
+        "owner": {
+          "owner_kind": "target-site",
+          "owner_id": "site:narada-cloudflare",
+          "authority_ref": "authority:target-site:site:narada-cloudflare"
+        },
+        "evidence": [
+          {
+            "kind": "site-configuration",
+            "ref": "site-config:narada-cloudflare:invokable-intelligence:revision-1"
+          }
+        ]
+      }
+    },
+    {
+      "schema": "narada.invokable-intelligence.canonical-catalog-record.v1",
+      "id": "catalog-record:narada-cloudflare:r1:023",
+      "record_kind": "authority-statement",
+      "record_id": "authority-statement:andrey-cloudflare-preferences",
+      "revision": 1,
+      "source": {
+        "schema": "narada.site.invokable-intelligence.catalog-source.v1",
+        "reference": "site-config:narada-cloudflare:invokable-intelligence:revision-1",
+        "revision": "1",
+        "digest": "sha256:2b79774acda53f34f86757344eb0eab4d85895f85d4d04d8ee1c820ee5e13db0"
+      },
+      "authority": {
+        "kind": "user-preference",
+        "locus": "user-site",
+        "authority_ref": "authority:site:andrey-user",
+        "site_id": "site:andrey-user"
+      },
+      "validation": {
+        "status": "accepted",
+        "validator": "narada-invokable-intelligence-management/1",
+        "validated_at": "2026-07-19T12:00:00.000Z",
+        "evidence": [
+          {
+            "kind": "site-configuration",
+            "ref": "site-config:narada-cloudflare:invokable-intelligence:revision-1"
+          }
+        ]
+      },
+      "document": {
+        "schema": "narada.invokable-intelligence.authority-statement.v1",
+        "id": "authority-statement:andrey-cloudflare-preferences",
+        "kind": "user-preference",
+        "origin": {
+          "locus": "user-site",
+          "site_id": "site:andrey-user",
+          "authority_ref": "authority:site:andrey-user"
+        },
+        "effect": "ranking",
+        "revision": 1,
+        "issued_at": "2026-07-19T12:00:00.000Z",
+        "payload_ref": "policy:andrey-cloudflare-preferences"
+      }
+    },
+    {
+      "schema": "narada.invokable-intelligence.canonical-catalog-record.v1",
+      "id": "catalog-record:narada-cloudflare:r1:024",
+      "record_kind": "authority-statement",
+      "record_id": "authority-statement:narada-cloudflare-defaults",
+      "revision": 1,
+      "source": {
+        "schema": "narada.site.invokable-intelligence.catalog-source.v1",
+        "reference": "site-config:narada-cloudflare:invokable-intelligence:revision-1",
+        "revision": "1",
+        "digest": "sha256:9119063fa9db6ad03fbdbcadedd1a89c51852fa076c216dce1008051af413d04"
+      },
+      "authority": {
+        "kind": "target-default",
+        "locus": "target-site",
+        "authority_ref": "authority:site:narada-cloudflare",
+        "site_id": "site:narada-cloudflare"
+      },
+      "validation": {
+        "status": "accepted",
+        "validator": "narada-invokable-intelligence-management/1",
+        "validated_at": "2026-07-19T12:00:00.000Z",
+        "evidence": [
+          {
+            "kind": "site-configuration",
+            "ref": "site-config:narada-cloudflare:invokable-intelligence:revision-1"
+          }
+        ]
+      },
+      "document": {
+        "schema": "narada.invokable-intelligence.authority-statement.v1",
+        "id": "authority-statement:narada-cloudflare-defaults",
+        "kind": "target-default",
+        "origin": {
+          "locus": "target-site",
+          "site_id": "site:narada-cloudflare",
+          "authority_ref": "authority:site:narada-cloudflare"
+        },
+        "effect": "fallback",
+        "revision": 1,
+        "issued_at": "2026-07-19T12:00:00.000Z",
+        "payload_ref": "policy:narada-cloudflare-defaults"
+      }
+    },
+    {
+      "schema": "narada.invokable-intelligence.canonical-catalog-record.v1",
+      "id": "catalog-record:narada-cloudflare:r1:025",
+      "record_kind": "authority-statement",
+      "record_id": "authority-statement:cloudflare-execution-eligibility",
+      "revision": 1,
+      "source": {
+        "schema": "narada.site.invokable-intelligence.catalog-source.v1",
+        "reference": "site-config:narada-cloudflare:invokable-intelligence:revision-1",
+        "revision": "1",
+        "digest": "sha256:e02f95f123a7f3d2829f8cd313c4a6c7962cbf2eb790b0d4713f99ad14a745f3"
+      },
+      "authority": {
+        "kind": "execution-feasibility",
+        "locus": "execution-site",
+        "authority_ref": "authority:site:narada-cloudflare",
+        "site_id": "site:narada-cloudflare"
+      },
+      "validation": {
+        "status": "accepted",
+        "validator": "narada-invokable-intelligence-management/1",
+        "validated_at": "2026-07-19T12:00:00.000Z",
+        "evidence": [
+          {
+            "kind": "site-configuration",
+            "ref": "site-config:narada-cloudflare:invokable-intelligence:revision-1"
+          }
+        ]
+      },
+      "document": {
+        "schema": "narada.invokable-intelligence.authority-statement.v1",
+        "id": "authority-statement:cloudflare-execution-eligibility",
+        "kind": "execution-feasibility",
+        "origin": {
+          "locus": "execution-site",
+          "site_id": "site:narada-cloudflare",
+          "authority_ref": "authority:site:narada-cloudflare"
+        },
+        "effect": "eligibility-constraint",
+        "revision": 1,
+        "issued_at": "2026-07-19T12:00:00.000Z",
+        "payload_ref": "policy:cloudflare-execution-eligibility"
+      }
+    },
+    {
+      "schema": "narada.invokable-intelligence.canonical-catalog-record.v1",
+      "id": "catalog-record:narada-cloudflare:r1:026",
+      "record_kind": "authority-statement",
+      "record_id": "authority-statement:admin-cloudflare-consent",
+      "revision": 1,
+      "source": {
+        "schema": "narada.site.invokable-intelligence.catalog-source.v1",
+        "reference": "site-config:narada-cloudflare:invokable-intelligence:revision-1",
+        "revision": "1",
+        "digest": "sha256:4939691d86751dbe5469c87af77659f0844db54f906017785f40639c75eda494"
+      },
+      "authority": {
+        "kind": "principal-consent",
+        "locus": "principal",
+        "authority_ref": "authority:principal:admin",
+        "site_id": "site:andrey-user",
+        "principal_id": "principal:admin"
+      },
+      "validation": {
+        "status": "accepted",
+        "validator": "narada-invokable-intelligence-management/1",
+        "validated_at": "2026-07-19T12:00:00.000Z",
+        "evidence": [
+          {
+            "kind": "site-configuration",
+            "ref": "site-config:narada-cloudflare:invokable-intelligence:revision-1"
+          }
+        ]
+      },
+      "document": {
+        "schema": "narada.invokable-intelligence.authority-statement.v1",
+        "id": "authority-statement:admin-cloudflare-consent",
+        "kind": "principal-consent",
+        "origin": {
+          "locus": "principal",
+          "site_id": "site:andrey-user",
+          "principal_id": "principal:admin",
+          "authority_ref": "authority:principal:admin"
+        },
+        "effect": "consent-gate",
+        "revision": 1,
+        "issued_at": "2026-07-19T12:00:00.000Z",
+        "payload_ref": "grant:andrey-cloudflare-workers-ai"
+      }
+    },
+    {
+      "schema": "narada.invokable-intelligence.canonical-catalog-record.v1",
+      "id": "catalog-record:narada-cloudflare:r1:027",
+      "record_kind": "temporal-input",
+      "record_id": "temporal-input:narada-cloudflare-catalog-revision-1",
+      "revision": 1,
+      "source": {
+        "schema": "narada.site.invokable-intelligence.catalog-source.v1",
+        "reference": "site-config:narada-cloudflare:invokable-intelligence:revision-1",
+        "revision": "1",
+        "digest": "sha256:17343fe73ee5f11a6bb6f9eca4528c7e907f0b6957777b524a44a17e4ed73a09"
+      },
+      "authority": {
+        "kind": "temporal-input",
+        "locus": "runtime-observer",
+        "authority_ref": "authority:runtime:narada-cloudflare"
+      },
+      "validation": {
+        "status": "accepted",
+        "validator": "narada-invokable-intelligence-management/1",
+        "validated_at": "2026-07-19T12:00:00.000Z",
+        "evidence": [
+          {
+            "kind": "site-configuration",
+            "ref": "site-config:narada-cloudflare:invokable-intelligence:revision-1"
+          }
+        ]
+      },
+      "document": {
+        "schema": "narada.invokable-intelligence.catalog-temporal-input.v1",
+        "id": "temporal-input:narada-cloudflare-catalog-revision-1",
+        "clock": {
+          "source": "site-configuration-clock",
+          "authority_ref": "authority:site:narada-cloudflare:configuration",
+          "instant": "2026-07-19T12:00:00.000Z",
+          "timezone": "UTC",
+          "local": {
+            "date": "2026-07-19",
+            "time": "12:00:00",
+            "weekday": 0
+          }
+        },
+        "valid_until": "2036-07-19T12:00:00.000Z"
+      }
+    }
+  ],
+  "residuals": []
+}

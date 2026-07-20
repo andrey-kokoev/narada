@@ -142,14 +142,6 @@
       "posture": "carrier_protocol_contracts"
     },
     {
-      "package": "@narada2/carrier-provider-contract",
-      "path": "packages/carrier-provider-contract",
-      "roles": [
-        "descriptor_contract"
-      ],
-      "posture": "carrier_provider_contracts"
-    },
-    {
       "package": "@narada2/carrier-provider-support",
       "path": "packages/carrier-provider-support",
       "roles": [

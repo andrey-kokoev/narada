@@ -65,7 +65,6 @@ export function registerLauncherCommands(program: Command): void {
     .option('--operator-surface <surface>', 'Override operator/client surface')
     .option('--runtime <runtime>', 'Override runtime implementation')
     .option('--authority <mode>', 'Runtime mutation authority posture: auto|read|write', 'auto')
-    .option('--intelligence-provider <provider>', 'NARS operator-surface intelligence provider')
     .option('--mcp-scope <scope>', 'Override MCP injection scope: all|host|user-site|local-site|none; otherwise use each registry entry')
     .option('--cloudflare-api-base-url <url>', 'Default Cloudflare NARS projection Worker URL for agent-web-ui publish controls')
     .option('--result-path <path>', 'Write the workspace plan JSON to a file')
@@ -97,7 +96,6 @@ export function registerLauncherCommands(program: Command): void {
         operatorSurface: opts.operatorSurface,
         runtime: opts.runtime,
         authority: opts.authority,
-        intelligenceProvider: opts.intelligenceProvider,
         mcpScope: opts.mcpScope,
         cloudflareApiBaseUrl: opts.cloudflareApiBaseUrl,
         resultPath: opts.resultPath,
@@ -123,7 +121,6 @@ export function registerLauncherCommands(program: Command): void {
     .option('--operator-surface <surface>', 'Override operator/client surface')
     .option('--runtime <runtime>', 'Override runtime implementation')
     .option('--authority <mode>', 'Runtime mutation authority posture: auto|read|write', 'auto')
-    .option('--intelligence-provider <provider>', 'NARS operator-surface intelligence provider')
     .option('--mcp-scope <scope>', 'Override MCP injection scope: all|host|user-site|local-site|none; otherwise use each registry entry')
     .option('--cloudflare-api-base-url <url>', 'Default Cloudflare NARS projection Worker URL for agent-web-ui publish controls')
     .option('--result-path <path>', 'Write the workspace plan JSON to a file')
@@ -155,7 +152,6 @@ export function registerLauncherCommands(program: Command): void {
         operatorSurface: opts.operatorSurface,
         runtime: opts.runtime,
         authority: opts.authority,
-        intelligenceProvider: opts.intelligenceProvider,
         mcpScope: opts.mcpScope,
         cloudflareApiBaseUrl: opts.cloudflareApiBaseUrl,
         resultPath: opts.resultPath,

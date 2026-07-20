@@ -20,14 +20,13 @@ interface SiteMetadata {
   site_id: string;
   display_name: string;
   site_kind: OperatorSiteKind | null;
-  metadata_unreadable?: boolean;
+  metadata_status?: 'available' | 'missing' | 'invalid' | 'unreadable';
 }
 
 interface RegistrySiteRow {
   site_id: string;
   site_root: string;
   observation_status: string;
-  authority_locus: string | null;
 }
 
 export interface SiteAgentOverviewReadModel {
@@ -50,10 +49,11 @@ function stringValue(value: unknown): string | null {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
 }
 
-function siteKind(value: unknown): OperatorSiteKind {
+function siteKind(value: unknown): OperatorSiteKind | null {
   if (value === 'user_site') return 'user_site';
   if (value === 'pc_site' || value === 'host_site' || value === 'host') return 'pc_site';
-  return 'site';
+  if (value === 'site') return 'site';
+  return null;
 }
 
 function siteDescriptorCandidates(siteRoot: string, workspaceRoot: string | null): string[] {
@@ -73,37 +73,44 @@ function siteDescriptorCandidates(siteRoot: string, workspaceRoot: string | null
 async function defaultReadSiteMetadata(
   record: Pick<WorkspaceLaunchRecord, 'site' | 'site_root' | 'workspace_root'>,
 ): Promise<SiteMetadata> {
-  let sawUnreadable = false;
+  let failureStatus: SiteMetadata['metadata_status'] = 'missing';
   for (const candidate of siteDescriptorCandidates(record.site_root, record.workspace_root)) {
     let raw: string;
     try {
       raw = await readFile(candidate, 'utf8');
-    } catch {
-      continue; // Missing candidate; try the next canonical Site descriptor locus.
+    } catch (error) {
+      if (isRecord(error) && error.code === 'ENOENT') continue;
+      failureStatus = 'unreadable';
+      continue;
     }
     let parsed: unknown;
     try {
       parsed = JSON.parse(raw);
     } catch {
-      sawUnreadable = true;
+      if (failureStatus !== 'unreadable') failureStatus = 'invalid';
       continue;
     }
     if (!isRecord(parsed)) {
-      sawUnreadable = true;
+      if (failureStatus !== 'unreadable') failureStatus = 'invalid';
       continue;
     }
     const site = isRecord(parsed.site) ? parsed.site : null;
     const staticConfig = isRecord(parsed.static_config) ? parsed.static_config : null;
     const kindValue = parsed.site_kind ?? site?.site_kind ?? staticConfig?.site_kind;
     const siteId = stringValue(parsed.site_id) ?? stringValue(site?.site_id) ?? stringValue(staticConfig?.site_id);
+    const kind = siteKind(kindValue);
+    if (!siteId || !kind) {
+      if (failureStatus !== 'unreadable') failureStatus = 'invalid';
+      continue;
+    }
     return {
-      site_id: siteId ?? record.site,
-      display_name: stringValue(parsed.display_name) ?? siteId ?? record.site,
-      site_kind: kindValue === undefined || kindValue === null ? null : siteKind(kindValue),
-      metadata_unreadable: sawUnreadable,
+      site_id: siteId,
+      display_name: stringValue(parsed.display_name) ?? siteId,
+      site_kind: kind,
+      metadata_status: 'available',
     };
   }
-  return { site_id: record.site, display_name: record.site, site_kind: null, metadata_unreadable: sawUnreadable };
+  return { site_id: record.site, display_name: record.site, site_kind: null, metadata_status: failureStatus };
 }
 
 async function defaultReadPrincipalStates(
@@ -131,30 +138,12 @@ function registrySiteRows(result: unknown): RegistrySiteRow[] {
     const siteId = stringValue(value.site_id);
     const siteRoot = stringValue(value.site_root);
     if (!siteId || !siteRoot) return [];
-    let authorityLocus: string | null = null;
-    if (typeof value.aim_json === 'string') {
-      try {
-        const aim: unknown = JSON.parse(value.aim_json);
-        if (isRecord(aim)) authorityLocus = stringValue(aim.authority_locus);
-      } catch {
-        authorityLocus = null;
-      }
-    }
     return [{
       site_id: siteId,
       site_root: siteRoot,
       observation_status: stringValue(value.observation_status) ?? 'unknown',
-      authority_locus: authorityLocus,
     }];
   });
-}
-
-function siteKindFromAuthorityLocus(locus: string | null): OperatorSiteKind | null {
-  if (!locus) return null;
-  const normalized = locus.toLowerCase();
-  if (normalized === 'user') return 'user_site';
-  if (normalized === 'pc' || normalized === 'host' || normalized === 'machine') return 'pc_site';
-  return null;
 }
 
 function canonicalAgentId(record: WorkspaceLaunchRecord): string {
@@ -200,13 +189,31 @@ function runtimeState(sessions: OperatorSessionWireRecord[]) {
   } as const;
 }
 
+function principalIdentityMatches(principal: PrincipalRuntimeSnapshot, record: WorkspaceLaunchRecord): boolean {
+  if (typeof principal.principal_id !== 'string') return false;
+  const candidate = principal.principal_id.toLowerCase();
+  return candidate === canonicalAgentId(record).toLowerCase()
+    || candidate === record.agent.toLowerCase()
+    || candidate === record.agent_identity_ref.local_agent_id.toLowerCase()
+    || candidate === record.agent_identity_ref.legacy_agent_id?.toLowerCase();
+}
+
+function principalScopeMatchesSite(principal: PrincipalRuntimeSnapshot, record: WorkspaceLaunchRecord): boolean {
+  if (typeof principal.scope_id !== 'string') return false;
+  const scope = principal.scope_id.toLowerCase();
+  const site = record.site.toLowerCase();
+  return scope === site || scope === `site:${site}`;
+}
+
 function matchingPrincipals(principals: PrincipalRuntimeSnapshot[], record: WorkspaceLaunchRecord): PrincipalRuntimeSnapshot[] {
+  const scoped = principals.filter((principal) =>
+    principalIdentityMatches(principal, record) && principalScopeMatchesSite(principal, record));
   // The canonical site-qualified identity always wins; bare and legacy ids may
   // bind only inside this Site's own principal registry and only when the
   // canonical identity matches nothing, so a bare id never outranks a
   // site-qualified principal and never binds across Sites.
   const canonical = canonicalAgentId(record).toLowerCase();
-  const canonicalMatches = principals.filter((principal) =>
+  const canonicalMatches = scoped.filter((principal) =>
     typeof principal.principal_id === 'string' && principal.principal_id.toLowerCase() === canonical);
   if (canonicalMatches.length > 0) return canonicalMatches;
   const bareIds = new Set([
@@ -214,16 +221,21 @@ function matchingPrincipals(principals: PrincipalRuntimeSnapshot[], record: Work
     record.agent_identity_ref.local_agent_id.toLowerCase(),
     record.agent_identity_ref.legacy_agent_id?.toLowerCase(),
   ].filter((value): value is string => Boolean(value)));
-  return principals.filter((principal) =>
+  return scoped.filter((principal) =>
     typeof principal.principal_id === 'string' && bareIds.has(principal.principal_id.toLowerCase()));
 }
 
 function workState(principals: PrincipalRuntimeSnapshot[], record: WorkspaceLaunchRecord) {
   const matches = matchingPrincipals(principals, record);
   if (matches.length !== 1) {
+    const identityMatches = principals.filter((principal) => principalIdentityMatches(principal, record));
     return {
       state: matches.length > 1 ? 'ambiguous' : 'unavailable',
-      detail: matches.length > 1 ? 'Multiple principal runtime records match this admitted agent.' : null,
+      detail: matches.length > 1
+        ? 'Multiple Site-scoped principal runtime records match this admitted agent.'
+        : identityMatches.length > 0
+          ? 'Principal runtime scope does not match the admitted Site.'
+          : null,
       source: 'unavailable' as const,
     };
   }
@@ -289,6 +301,24 @@ export function createSiteAgentOverviewReadModel(
           refusals: ['launch_registry_read_failed'],
         };
       }
+
+      const duplicateIdentities = [...launchLoad.records.reduce((counts, record) => {
+        const id = canonicalAgentId(record).toLowerCase();
+        counts.set(id, (counts.get(id) ?? 0) + 1);
+        return counts;
+      }, new Map<string, number>())]
+        .filter(([, count]) => count > 1)
+        .map(([id]) => id)
+        .sort();
+      if (duplicateIdentities.length > 0) {
+        return {
+          schema: 'narada.operator_console.site_agent_overview.v1',
+          status: 'refused',
+          generated_at: new Date().toISOString(),
+          groups: [],
+          refusals: duplicateIdentities.map((id) => `duplicate_agent_identity:${id}`),
+        };
+      }
       if (registryEnvelope.exitCode !== 0) refusals.push('site_registry_read_refused');
       if (!sessionEnvelope) refusals.push('agent_session_read_failed');
       else refusals.push(...sessionEnvelope.refusals);
@@ -306,39 +336,35 @@ export function createSiteAgentOverviewReadModel(
       for (const [key, records] of recordsBySite) {
         const first = records[0]!;
         const [metadata, principals] = await Promise.all([
-          readSiteMetadata(first).catch((): SiteMetadata => ({ site_id: first.site, display_name: first.site, site_kind: null })),
+          readSiteMetadata(first).catch((): SiteMetadata => ({
+            site_id: first.site,
+            display_name: first.site,
+            site_kind: null,
+            metadata_status: 'unreadable',
+          })),
           readPrincipalStates(first).catch(() => {
             refusals.push(`principal_runtime_read_failed:${first.site}`);
             return [];
           }),
         ]);
-        if (metadata.metadata_unreadable) refusals.push(`site_metadata_unreadable:${first.site}`);
+        if (!metadata.site_kind || metadata.metadata_status === 'missing' || metadata.metadata_status === 'invalid' || metadata.metadata_status === 'unreadable') {
+          refusals.push(`site_metadata_${metadata.metadata_status ?? 'invalid'}:${first.site}`);
+          continue;
+        }
+        if (metadata.site_id.toLowerCase() !== first.site.toLowerCase()) {
+          refusals.push(`site_metadata_identity_mismatch:${first.site}:${metadata.site_id}`);
+          continue;
+        }
         const registrySite = registryBySite.get(key);
-        const locusKind = siteKindFromAuthorityLocus(registrySite?.authority_locus ?? null);
-        const kind = metadata.site_kind ?? locusKind ?? 'site';
-        const classificationSource = metadata.site_kind
-          ? 'declared' as const
-          : locusKind
-            ? 'registry' as const
-            : 'fallback' as const;
-        const seenAgentIds = new Set<string>();
+        const kind = metadata.site_kind;
         const agents = records
           .map((record) => projectAgent(record, sessionEnvelope?.sessions ?? [], principals))
-          .sort((a, b) => a.agent_id.localeCompare(b.agent_id))
-          .filter((agent) => {
-            const agentKey = agent.agent_id.toLowerCase();
-            if (seenAgentIds.has(agentKey)) {
-              refusals.push(`duplicate_agent_identity:${first.site}:${agent.agent_id}`);
-              return false;
-            }
-            seenAgentIds.add(agentKey);
-            return true;
-          });
+          .sort((a, b) => a.agent_id.localeCompare(b.agent_id));
         sites.push({
           site_id: first.site,
           display_name: metadata.display_name,
           site_kind: kind,
-          classification_source: classificationSource,
+          classification_source: 'declared',
           group_id: groupId(kind),
           observation_status: registrySite?.observation_status ?? 'not_registered',
           agents,
@@ -347,10 +373,28 @@ export function createSiteAgentOverviewReadModel(
 
       for (const registrySite of registrySites) {
         if (recordsBySite.has(registrySite.site_id.toLowerCase())) continue;
-        const kind = siteKindFromAuthorityLocus(registrySite.authority_locus) ?? 'site';
-        sites.push({
+        const metadata = await readSiteMetadata({
+          site: registrySite.site_id,
+          site_root: registrySite.site_root,
+          workspace_root: registrySite.site_root,
+        }).catch((): SiteMetadata => ({
           site_id: registrySite.site_id,
           display_name: registrySite.site_id,
+          site_kind: null,
+          metadata_status: 'unreadable',
+        }));
+        if (!metadata.site_kind || metadata.metadata_status === 'missing' || metadata.metadata_status === 'invalid' || metadata.metadata_status === 'unreadable') {
+          refusals.push(`site_metadata_${metadata.metadata_status ?? 'invalid'}:${registrySite.site_id}`);
+          continue;
+        }
+        if (metadata.site_id.toLowerCase() !== registrySite.site_id.toLowerCase()) {
+          refusals.push(`site_metadata_identity_mismatch:${registrySite.site_id}:${metadata.site_id}`);
+          continue;
+        }
+        const kind = metadata.site_kind;
+        sites.push({
+          site_id: registrySite.site_id,
+          display_name: metadata.display_name,
           site_kind: kind,
           classification_source: 'registry_only',
           group_id: groupId(kind),
@@ -362,7 +406,7 @@ export function createSiteAgentOverviewReadModel(
       const ordered = sites.sort((a, b) => a.display_name.localeCompare(b.display_name));
       return {
         schema: 'narada.operator_console.site_agent_overview.v1',
-        status: 'success',
+        status: refusals.some((reason) => reason.startsWith('site_metadata_')) ? 'refused' : 'success',
         generated_at: new Date().toISOString(),
         groups: [
           {

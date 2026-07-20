@@ -17,6 +17,9 @@ import {
   containsForbiddenSecretMaterial,
   evaluateRouteAccess,
 } from "../src/access.js";
+import {
+  resolveInvocationPrincipalAdmission,
+} from "../src/access.js";
 import type { AccessAuthorityRef, InvocationPrincipal, RouteAccessFacts } from "../src/access.js";
 
 const authority = (owner_kind: AccessAuthorityRef["owner_kind"], owner_id: string): AccessAuthorityRef => ({ owner_kind, owner_id, authority_ref: `authority:${owner_kind}:${owner_id}` });
@@ -53,6 +56,60 @@ const facts = (): RouteAccessFacts => ({
   governance: [{ schema: DATA_GOVERNANCE_REQUIREMENT_SCHEMA, id: "governance:narada", target_site_id: "site:narada", purposes: ["operator-chat"], data_classifications: ["internal"], allowed_regions: ["global"], maximum_retention_days: 30, provider_training: "prohibited", validity: { valid_from: "2026-07-19T00:00:00Z", valid_until: "2026-07-20T00:00:00Z" }, status: "active", owner: authority("target-site", "site:narada"), evidence: [] }],
 });
 const context = (subject = principal("principal:andrey")) => ({ principal: subject, target_site_id: "site:narada", purpose: "operator-chat", action: "invoke" as const, now: "2026-07-19T12:00:00Z", requested_region: "global", data_classification: "internal" as const, requested_retention_days: 7, provider_training: "prohibited" as const, expected_usage: { amount: 1, unit: "requests" }, expected_cost: { amount: 1, currency: "USD" } });
+
+test("authenticated actors resolve through explicit principal bindings without name interpretation", () => {
+  const sitePrincipal: InvocationPrincipal = {
+    ...principal("principal:narada-cloudflare-operators"),
+    kind: "site",
+    admission_bindings: [{
+      id: "principal-binding:narada-cloudflare-operators",
+      kind: "site-membership",
+      registry: "narada.cloudflare-site-registry.v1",
+      site_id: "site_narada_cloudflare",
+      roles: ["owner", "admin"],
+      auth_types: ["microsoft_oidc"],
+    }],
+  };
+  const resolved = resolveInvocationPrincipalAdmission([sitePrincipal], {
+    actor: { principal_id: "microsoft:tenant:object", auth_type: "microsoft_oidc" },
+    memberships: [{
+      registry: "narada.cloudflare-site-registry.v1",
+      site_id: "site_narada_cloudflare",
+      role: "admin",
+      evidence_ref: "site-binding:request-1",
+    }],
+  });
+  assert.equal(resolved.ok, true);
+  if (!resolved.ok) return;
+  assert.equal(resolved.principal.id, "principal:narada-cloudflare-operators");
+  assert.equal(resolved.binding.id, "principal-binding:narada-cloudflare-operators");
+  assert.deepEqual(resolved.evidence_refs, ["site-binding:request-1"]);
+});
+
+test("principal admission fails closed when zero or multiple governed bindings match", () => {
+  const bound = (id: string): InvocationPrincipal => ({
+    ...principal(id),
+    admission_bindings: [{
+      id: `binding:${id}`,
+      kind: "authenticated-principal",
+      auth_type: "service",
+      principal_id: "transport:service",
+    }],
+  });
+  assert.equal(resolveInvocationPrincipalAdmission([bound("principal:one")], {
+    actor: { principal_id: "transport:other", auth_type: "service" },
+    memberships: [],
+  }).ok, false);
+  const ambiguous = resolveInvocationPrincipalAdmission([bound("principal:one"), bound("principal:two")], {
+    actor: { principal_id: "transport:service", auth_type: "service" },
+    memberships: [],
+  });
+  assert.deepEqual(ambiguous, {
+    ok: false,
+    code: "principal-binding-ambiguous",
+    candidate_principal_ids: ["principal:one", "principal:two"],
+  });
+});
 
 test("route is eligible only when credential, grant, entitlement, quota, budget, and governance all pass", () => {
   const result = evaluateRouteAccess(route, offering, context(), facts());

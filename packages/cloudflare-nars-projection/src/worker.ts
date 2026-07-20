@@ -4,17 +4,14 @@ import {
   createCloudflareNarsProjectionWorkerService,
   projectedEventMatchesView,
   validateProjectionCredential,
-  type CloudflareNarsAuthorityRuntimeExecutor,
   type CloudflareNarsAuthorityWorkerState,
+  type CloudflareNarsAuthorityRuntimeExecutor,
   type CloudflareNarsProjectionIntent,
   type CloudflareNarsRemoteAccessRecord,
   type CloudflareNarsProjectionWorkerState,
   type CloudflareNarsAuthorityEvent,
   type ProjectedEvent,
 } from './index.js';
-import { createCloudflareNarsProviderRuntimeExecutor, CLOUDFLARE_NARS_PROVIDER_SUPPORTED_ADAPTER_KIND } from './provider-executor.js';
-import providerRegistry from '@narada2/carrier-provider-contract/provider-registry';
-import { resolveProviderRuntimeBinding } from '@narada2/carrier-provider-contract/provider-runtime-binding-core';
 import {
   createCloudflareNarsWorkspaceDirectoryService,
   handleCloudflareNarsWorkspaceDirectoryRequest,
@@ -31,15 +28,10 @@ export interface CloudflareNarsProjectionWorkerEnv {
   ASSETS?: { fetch(request: Request): Promise<Response> | Response };
   NARS_PROJECTION_STATE?: DurableObjectNamespaceLike;
   NARS_WORKSPACE_DIRECTORY?: DurableObjectNamespaceLike;
-  // Provider binding reuses the canonical Narada provider vocabulary
-  // (@narada2/carrier-provider-contract / local NARS / pwsh SecretStore).
-  // The API key value mirrors the pwsh SecretStore entry
-  // `narada/provider/<provider>/api-key`, carried here as a Worker secret.
-  NARADA_AI_BASE_URL?: string;
-  NARADA_INTELLIGENCE_PROVIDER?: string;
-  NARADA_AI_MODEL?: string;
-  NARADA_AI_THINKING?: string;
-  NARADA_AI_API_KEY?: string;
+}
+
+export interface NarsProjectionStateOptions {
+  authority_runtime_executor?: CloudflareNarsAuthorityRuntimeExecutor;
 }
 
 function isWorkspaceRouteDirectory(value: unknown): value is OperatorWorkspaceRouteDirectory {
@@ -183,44 +175,11 @@ export interface CloudflareNarsProjectionWorkerOptions {
   now?: () => string;
 }
 
-export function authorityExecutorFromEnv(env: CloudflareNarsProjectionWorkerEnv | undefined): CloudflareNarsAuthorityRuntimeExecutor | undefined {
-  const provider = env?.NARADA_INTELLIGENCE_PROVIDER?.trim();
-  if (!provider) return undefined;
-  const metadata = (providerRegistry as { providers?: Record<string, Record<string, unknown>> }).providers ?? {};
-  let resolved;
-  try {
-    resolved = resolveProviderRuntimeBinding(provider, {
-      metadata,
-      env: env as Record<string, string | undefined>,
-    });
-  } catch (error) {
-    // Unresolvable binding (unknown provider, missing key/base/model) stays on
-    // the synthetic default adapter; the reason is logged, never secret-bearing.
-    console.warn(`cloudflare provider binding unresolved: ${error instanceof Error ? error.message : String(error)}`);
-    return undefined;
-  }
-  const adapterKind = typeof metadata[provider]?.adapter_kind === 'string' && String(metadata[provider].adapter_kind).trim()
-    ? String(metadata[provider].adapter_kind).trim()
-    : CLOUDFLARE_NARS_PROVIDER_SUPPORTED_ADAPTER_KIND;
-  return createCloudflareNarsProviderRuntimeExecutor({
-    binding: {
-      provider: resolved.provider_id,
-      adapter_kind: adapterKind,
-      model: resolved.model,
-      thinking: resolved.reasoning_effort,
-      api_base_url: resolved.base_url,
-      chat_path: resolved.chat_completions_path,
-      api_key: resolved.api_key,
-      credential_secret_ref: resolved.credential_secret_ref,
-    },
-  });
-}
-
 export function createCloudflareNarsProjectionWorker(options: CloudflareNarsProjectionWorkerOptions = {}) {
   const service = options.service ?? createCloudflareNarsProjectionWorkerService();
   let authorityService = options.authority_service ?? null;
   const resolveAuthorityService = (env: CloudflareNarsProjectionWorkerEnv) => {
-    if (!authorityService) authorityService = createCloudflareNarsAuthorityService({ runtime_executor: authorityExecutorFromEnv(env) });
+    if (!authorityService) authorityService = createCloudflareNarsAuthorityService();
     return authorityService;
   };
   const workspaceDirectory = options.workspace_directory_service ?? createCloudflareNarsWorkspaceDirectoryService();
@@ -235,7 +194,14 @@ export function createCloudflareNarsProjectionWorker(options: CloudflareNarsProj
         return serveAssetManifest(request, env);
       }
       if (request.method === 'GET' && path === 'api/nars/authority/health') {
-        return json({ schema: 'narada.cloudflare_nars_authority.service_health.v1', status: 'healthy', execution: resolveAuthorityService(env).execution_mode });
+        const authority = resolveAuthorityService(env);
+        return json({
+          schema: 'narada.cloudflare_nars_authority.service_health.v1',
+          status: authority.execution_availability === 'available' ? 'healthy' : 'degraded',
+          execution: authority.execution_mode,
+          execution_availability: authority.execution_availability,
+          code: authority.execution_unavailable_code,
+        });
       }
       const capabilityRoute = projectionRoute(request);
       if (request.method === 'POST' && capabilityRoute?.suffix === 'workspace-capability') {
@@ -413,7 +379,11 @@ export class NarsProjectionState {
   private readonly sockets = new Set<{ projectionId: string; view: string; socket: WorkerWebSocket }>();
   private readonly authoritySockets = new Set<{ sessionId: string; socket: WorkerWebSocket }>();
 
-  constructor(private readonly state?: DurableObjectStateLike, private readonly env?: CloudflareNarsProjectionWorkerEnv) {}
+  constructor(
+    private readonly state?: DurableObjectStateLike,
+    private readonly env?: CloudflareNarsProjectionWorkerEnv,
+    private readonly options: NarsProjectionStateOptions = {},
+  ) {}
 
   async fetch(request: Request): Promise<Response> {
     if (!this.state?.storage) {
@@ -422,7 +392,10 @@ export class NarsProjectionState {
     const stored = await this.state.storage.get<CloudflareNarsProjectionWorkerState>(NarsProjectionState.storageKey);
     const storedAuthority = await this.state.storage.get<CloudflareNarsAuthorityWorkerState>(NarsProjectionState.authorityStorageKey);
     const service = createCloudflareNarsProjectionWorkerService({ initial_state: stored ?? null });
-    const authorityService = createCloudflareNarsAuthorityService({ initial_state: storedAuthority ?? null, runtime_executor: authorityExecutorFromEnv(this.env) });
+    const authorityService = createCloudflareNarsAuthorityService({
+      initial_state: storedAuthority ?? null,
+      runtime_executor: this.options.authority_runtime_executor,
+    });
     const authority = authorityRoute(request);
     if (authority && request.method === 'GET' && authority.suffix === 'events/websocket') {
       return this.openAuthorityEventWebSocket({ request, sessionId: authority.sessionId, service: authorityService });

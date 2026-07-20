@@ -21,7 +21,8 @@ const statement = (
   kind,
   origin: {
     locus,
-    ...(locus === "principal" ? { principal_id: "principal:andrey" } : { site_id: `site:${locus}` }),
+    site_id: locus === "principal" ? "site:user" : `site:${locus}`,
+    ...(locus === "principal" ? { principal_id: "principal:andrey" } : {}),
     authority_ref: `authority:${id}`,
   },
   effect,
@@ -94,4 +95,10 @@ test("only the originating authority identity may supersede or revoke", () => {
     statement: consent,
   });
   assert.ok(diagnostics.some(({ code }) => code === "authority-identity-mismatch"));
+});
+
+test("every authority statement names its originating Site", () => {
+  const consent = statement("consent", "principal-consent", "principal", "consent-gate");
+  delete (consent.origin as { site_id?: string }).site_id;
+  assert.ok(validateIntelligenceAuthorityStatement(consent).some(({ code }) => code === "invalid-authority-statement"));
 });

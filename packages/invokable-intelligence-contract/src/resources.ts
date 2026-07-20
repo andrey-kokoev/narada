@@ -17,6 +17,12 @@ export const CREDENTIAL_LOCATOR_SCHEMA = "narada.invokable-intelligence.credenti
 export const EXECUTION_LOCUS_SCHEMA = "narada.invokable-intelligence.execution-locus.v1" as const;
 export const SITE_SCHEMA = "narada.invokable-intelligence.site.v1" as const;
 
+/** Exact identity assigned to the same Site by another governed registry. */
+export interface SiteRegistryIdentityBinding {
+  registry: string;
+  subject_id: string;
+}
+
 interface ResourceBase {
   id: ResourceId;
   display_name?: string;
@@ -115,6 +121,17 @@ export interface ExecutionLocus extends ResourceBase {
 /** A Site identity. The authority role it plays (target/user/host) is assigned per resolution, not here. */
 export interface Site extends ResourceBase {
   schema: typeof SITE_SCHEMA;
+  /** Explicit cross-registry identities. Site names and id prefixes carry no mapping semantics. */
+  registry_bindings?: SiteRegistryIdentityBinding[];
+}
+
+export function siteMatchesRegistryIdentity(
+  site: Site,
+  registry: string,
+  subjectId: string,
+): boolean {
+  return (site.registry_bindings ?? []).some((binding) =>
+    binding.registry === registry && binding.subject_id === subjectId);
 }
 
 export type Resource =

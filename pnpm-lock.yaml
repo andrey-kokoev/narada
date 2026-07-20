@@ -488,8 +488,6 @@ importers:
         specifier: workspace:*
         version: link:../carrier-protocol
 
-  packages/carrier-provider-contract: {}
-
   packages/carrier-provider-support:
     dependencies:
       '@narada2/process-launch-posture':
@@ -558,9 +556,6 @@ importers:
       '@narada2/carrier-protocol':
         specifier: workspace:*
         version: link:../carrier-protocol
-      '@narada2/carrier-provider-contract':
-        specifier: workspace:*
-        version: link:../carrier-provider-contract
       '@narada2/nars-client-projection-contract':
         specifier: workspace:*
         version: link:../nars-client-projection-contract
@@ -1129,9 +1124,6 @@ importers:
 
   packages/nars-provider-runtime:
     dependencies:
-      '@narada2/carrier-provider-contract':
-        specifier: workspace:*
-        version: link:../carrier-provider-contract
       '@narada2/carrier-provider-support':
         specifier: workspace:*
         version: link:../carrier-provider-support

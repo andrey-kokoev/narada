@@ -18,7 +18,7 @@ const LOCI: MigrationLoci = {
   hostSite: { kind: "site", id: "site:andrey-pc" },
 };
 const PLANNED_AT = "2026-07-19T00:00:00Z";
-const REAL_REGISTRY = new URL("../../carrier-provider-contract/contracts/provider-registry.json", import.meta.url);
+const REAL_REGISTRY = new URL("./provider-registry.legacy-fixture.json", import.meta.url);
 
 async function realLegacy() {
   return parseLegacyRegistry(JSON.parse(await readFile(REAL_REGISTRY, "utf8")));

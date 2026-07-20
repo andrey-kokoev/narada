@@ -875,6 +875,12 @@ assert.equal(smoke.worker_url, workerUrl);
 assert.equal(smoke.principal_id, 'service');
 assert.equal(smoke.provider_adapter_posture, 'cloudflare-workers-ai');
 assert.equal(smoke.tool_effect_posture, expectToolEffectPosture);
+assert.equal(smoke.intelligence_outcome_kind, 'success');
+assert.equal(smoke.intelligence_evidence_readback, true);
+assert.ok(smoke.intelligence_observation_count >= 3);
+assert.ok(smoke.intelligence_audit_evidence_count >= 4);
+assert.ok(smoke.intelligence_telemetry_count >= 1);
+assert.ok(smoke.intelligence_materialization_count >= 1);
 
 const projectionWriteSmoke = await runJsonCommand('task-lifecycle-projection-write-smoke:live', [
   'node',

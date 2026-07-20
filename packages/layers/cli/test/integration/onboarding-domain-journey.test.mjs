@@ -64,7 +64,7 @@ test('onboarding demo exposes a complete no-credential first-use path through th
   }
 });
 
-test('operator-surface launch exposes provider-selection refusal before runtime materialization', () => {
+test('operator-surface launch rejects removed launcher intelligence selection input before materialization', () => {
   const siteRoot = mkdtempSync(join(tmpdir(), 'narada-onboarding-refusal-e2e-'));
   try {
     const result = runCli([
@@ -81,11 +81,7 @@ test('operator-surface launch exposes provider-selection refusal before runtime 
     ], clearProviderEnvironment());
     assert.notEqual(result.status, 0, `expected launch refusal:\n${result.stdout}`);
     const output = `${result.stdout}\n${result.stderr}`;
-    assert.match(output, /provider_runtime_provider_unknown|intelligence_provider_unknown|unsupported|unknown/i);
-    const payload = parseJsonOutput(result.stdout, 'provider refusal');
-    assert.equal(payload.schema, 'narada.operator_surface.runtime_start_result.v1');
-    assert.equal(payload.status, 'failed');
-    assert.equal(payload.mutation_performed, false);
+    assert.match(output, /unknown option.*--intelligence-provider/i);
   } finally {
     rmSync(siteRoot, { recursive: true, force: true });
   }

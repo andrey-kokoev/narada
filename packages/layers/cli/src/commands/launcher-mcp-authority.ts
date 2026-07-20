@@ -1,73 +1,10 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { createRequire } from 'node:module';
 import { runGovernedCommandSync } from '@narada2/process-launch-posture';
 import { commandResultError, type CommandContext } from '../lib/command-wrapper.js';
 import { formattedResult, type CliFormat } from '../lib/cli-output.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { siteAuthorityRootFromSiteRoot } from '@narada2/site-paths';
-
-const requireFromLauncherCommand = createRequire(import.meta.url);
-
-interface ProviderRegistry {
-  default_provider?: string;
-  providers?: Record<string, {
-    meaning?: string;
-    support_state?: string;
-  }>;
-}
-
-function loadProviderRegistry(): ProviderRegistry {
-  let registryPath: string;
-  try {
-    registryPath = resolveProviderRegistryPath();
-  } catch (error) {
-    if (process.env.VITEST) return fallbackProviderRegistryForTests();
-    throw error;
-  }
-  try {
-    return JSON.parse(readFileSync(registryPath, 'utf8')) as ProviderRegistry;
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`provider_registry_load_failed: ${registryPath}: ${message}`);
-  }
-}
-
-function fallbackProviderRegistryForTests(): ProviderRegistry {
-  return {
-    default_provider: 'kimi-code-api',
-    providers: {
-      'anthropic-api': { meaning: 'Anthropic API via the Anthropic Messages API.', support_state: 'verified_supported' },
-      'codex-subscription': { meaning: 'Local Codex CLI subscription auth via codex mcp-server; no OpenAI API key or API billing path.', support_state: 'verified_supported' },
-      'deepseek-api': { meaning: 'DeepSeek API via OpenAI-compatible chat completions.', support_state: 'verified_supported' },
-      'glm-api': { meaning: 'GLM API via OpenAI-compatible chat completions.', support_state: 'verified_supported' },
-      'kimi-api': { meaning: 'Kimi/Moonshot API via OpenAI-compatible chat completions.', support_state: 'verified_supported' },
-      'kimi-code-api': { meaning: 'Kimi Code API via OpenAI-compatible chat completions; uses KIMI_CODE_API_KEY against api.kimi.com/coding/v1.', support_state: 'verified_supported' },
-      'openai-api': { meaning: 'OpenAI API via OpenAI-compatible chat completions.', support_state: 'verified_supported' },
-      'openrouter-api': { meaning: 'OpenRouter API via OpenAI-compatible chat completions; preserves configured router model identity.', support_state: 'verified_supported' },
-    },
-  };
-}
-
-function resolveProviderRegistryPath(): string {
-  const candidates: string[] = [];
-  try {
-    candidates.push(requireFromLauncherCommand.resolve('@narada2/carrier-provider-contract/provider-registry'));
-  } catch {
-    // Workspace source checkouts can run before pnpm has materialized this dependency link.
-  }
-  candidates.push(
-    fileURLToPath(new URL('../../../../carrier-provider-contract/contracts/provider-registry.json', import.meta.url)),
-    resolve(process.cwd(), '..', '..', 'carrier-provider-contract', 'contracts', 'provider-registry.json'),
-    resolve(process.cwd(), 'packages', 'carrier-provider-contract', 'contracts', 'provider-registry.json'),
-  );
-  const registryPath = candidates.find((candidate) => existsSync(candidate));
-  if (registryPath) return registryPath;
-  throw new Error(`provider_registry_not_found: ${candidates.join(', ')}`);
-}
-
-const providerRegistry = loadProviderRegistry();
 
 export interface ExplainMcpOptions {
   siteRoot?: string;

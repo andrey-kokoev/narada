@@ -140,7 +140,7 @@ Existing shared packages should remain the first home for their domains:
 New packages should be introduced only where the existing package boundary would become confused:
 
 1. `packages/operator-surface-runtime-contract`
-2. `packages/carrier-provider-contract`
+2. `packages/invokable-intelligence-contract`
 3. `packages/carrier-command-contract`
 
 The shared packages should expose JSON schemas, golden fixtures, and JS APIs. Rust consumers should use generated or fixture-verified bindings rather than local semantic copies.

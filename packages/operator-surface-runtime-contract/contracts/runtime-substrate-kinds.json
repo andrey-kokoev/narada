@@ -6,7 +6,6 @@
     "narada-agent-runtime-server",
     "pi",
     "claude-code",
-    "agent-tui",
     "opencode"
   ],
   "codex_context_isolation": {

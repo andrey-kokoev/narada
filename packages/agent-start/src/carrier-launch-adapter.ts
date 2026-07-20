@@ -3,7 +3,48 @@ import {
   operatorSurfaceLaunchMatrixRow,
   NARADA_AGENT_RUNTIME_SERVER_KIND,
   normalizeRuntimeAlias,
+  operatorSurfaceKindsForRuntimeHost,
 } from '@narada2/operator-surface-runtime-contract/operator-surface-runtime-selection';
+
+const NARS_OPERATOR_SURFACE_KINDS = new Set(operatorSurfaceKindsForRuntimeHost(NARADA_AGENT_RUNTIME_SERVER_KIND));
+const LEGACY_INTELLIGENCE_SELECTION_ENV_NAMES = Object.freeze([
+  'NARADA_INTELLIGENCE_PROVIDER',
+  'NARADA_INTELLIGENCE_PROVIDER_SOURCE_FIELD',
+  'NARADA_INTELLIGENCE_PROVIDER_SOURCE_PATH',
+  'NARADA_INTELLIGENCE_PROVIDER_METADATA_PATH',
+  'NARADA_AI_MODEL',
+  'NARADA_AI_BASE_URL',
+  'NARADA_AI_THINKING',
+  'NARADA_THINKING_LEVEL',
+  'CODEX_MODEL',
+  'NARADA_CODEX_MODEL',
+  'OPENAI_MODEL',
+  'OPENAI_BASE_URL',
+  'KIMI_MODEL',
+  'KIMI_API_BASE_URL',
+  'KIMI_CODE_MODEL',
+  'KIMI_CODE_API_BASE_URL',
+  'ANTHROPIC_MODEL',
+  'ANTHROPIC_BASE_URL',
+  'DEEPSEEK_MODEL',
+  'DEEPSEEK_API_BASE_URL',
+  'GLM_MODEL',
+  'GLM_API_BASE_URL',
+  'OPENROUTER_MODEL',
+  'OPENROUTER_BASE_URL',
+  'OPENROUTER_API_BASE_URL',
+  'CLOUDFLARE_CARRIER_AI_MODEL',
+]);
+
+export function stripLegacyIntelligenceSelectionEnvironment(env = {}) {
+  const scrubbed = { ...env };
+  for (const name of LEGACY_INTELLIGENCE_SELECTION_ENV_NAMES) delete scrubbed[name];
+  return scrubbed;
+}
+
+function isNarsOperatorSurface(carrierName) {
+  return NARS_OPERATOR_SURFACE_KINDS.has(carrierName);
+}
 
 function requireCarrierLaunchMatrixRow(launchSelectionKind) {
   const matrixRow = operatorSurfaceLaunchMatrixRow(launchSelectionKind);
@@ -285,8 +326,6 @@ export function buildCarrierEnvironmentProjection({
   carrierName,
   startResult,
   carrierEnvironment = {},
-  intelligenceProviderEnv = {},
-  mcpProviderCredentialEnv = {},
   agentTuiEnvironment = {},
   runtimeEnvironment = {},
   identity,
@@ -302,20 +341,17 @@ export function buildCarrierEnvironmentProjection({
   processRole = null,
   createdByPid = null,
 }) {
-  const shouldStripOpenAIEnvironment = intelligenceProviderEnv.NARADA_INTELLIGENCE_PROVIDER === 'codex-subscription';
-  const projectedCarrierEnvironment = shouldStripOpenAIEnvironment
-    ? stripCodexSubscriptionOpenAIEnvironment(carrierEnvironment)
+  const projectedCarrierEnvironment = isNarsOperatorSurface(carrierName)
+    ? stripLegacyIntelligenceSelectionEnvironment(carrierEnvironment)
     : carrierEnvironment;
-  const projectedStartRequiredEnvironment = shouldStripOpenAIEnvironment
-    ? stripCodexSubscriptionOpenAIEnvironment(startResult.required_environment ?? {})
+  const projectedStartRequiredEnvironment = isNarsOperatorSurface(carrierName)
+    ? stripLegacyIntelligenceSelectionEnvironment(startResult.required_environment ?? {})
     : (startResult.required_environment ?? {});
-  const projectedStartWouldSetEnvironment = shouldStripOpenAIEnvironment
-    ? stripCodexSubscriptionOpenAIEnvironment(startResult.would_set_environment ?? {})
+  const projectedStartWouldSetEnvironment = isNarsOperatorSurface(carrierName)
+    ? stripLegacyIntelligenceSelectionEnvironment(startResult.would_set_environment ?? {})
     : (startResult.would_set_environment ?? {});
   const commonEnvironment = {
     ...projectedCarrierEnvironment,
-    ...intelligenceProviderEnv,
-    ...mcpProviderCredentialEnv,
     ...agentTuiEnvironment,
     ...runtimeEnvironment,
     NARADA_AGENT_ID: identity,
@@ -352,8 +388,6 @@ export function buildCarrierSpawnEnvironmentDelta({
   carrierName,
   startResult,
   carrierEnvironment = {},
-  intelligenceProviderEnv = {},
-  mcpProviderCredentialEnv = {},
   agentTuiEnvironment = {},
   runtimeEnvironment = {},
   identity,
@@ -378,8 +412,6 @@ export function buildCarrierSpawnEnvironmentDelta({
 }) {
   const processEnvironment = buildCarrierProcessEnvironment({
     processEnvironment: {},
-    intelligenceProviderEnv,
-    mcpProviderCredentialEnv,
     runtimeEnvironment,
     agentTuiEnvironment,
     codexMcpScope,
@@ -403,9 +435,8 @@ export function buildCarrierSpawnEnvironmentDelta({
     runtimeProcessCreatorPid,
     runtimeProcessRole,
   });
-  const shouldStripOpenAIEnvironment = intelligenceProviderEnv.NARADA_INTELLIGENCE_PROVIDER === 'codex-subscription';
-  const startRequiredEnvironment = shouldStripOpenAIEnvironment
-    ? stripCodexSubscriptionOpenAIEnvironment(startResult.required_environment ?? {})
+  const startRequiredEnvironment = isNarsOperatorSurface(carrierName)
+    ? stripLegacyIntelligenceSelectionEnvironment(startResult.required_environment ?? {})
     : (startResult.required_environment ?? {});
   return {
     ...startRequiredEnvironment,
@@ -415,8 +446,6 @@ export function buildCarrierSpawnEnvironmentDelta({
 
 export function buildCarrierProcessEnvironment({
   processEnvironment = process.env,
-  intelligenceProviderEnv = {},
-  mcpProviderCredentialEnv = {},
   runtimeEnvironment = {},
   agentTuiEnvironment = {},
   codexMcpScope = null,
@@ -450,10 +479,11 @@ export function buildCarrierProcessEnvironment({
     ...(effectiveProcessRole ? { NARADA_PROCESS_ROLE: effectiveProcessRole } : {}),
     ...(effectiveCreatedByPid ? { NARADA_CREATED_BY_PID: effectiveCreatedByPid } : {}),
   };
+  const inheritedEnvironment = isNarsOperatorSurface(carrierName)
+    ? stripLegacyIntelligenceSelectionEnvironment(processEnvironment)
+    : processEnvironment;
   return {
-    ...processEnvironment,
-    ...intelligenceProviderEnv,
-    ...mcpProviderCredentialEnv,
+    ...inheritedEnvironment,
     ...(carrierName === 'pi' ? {} : runtimeEnvironment),
     NARADA_AGENT_ID: identity,
     ...(role ? { NARADA_AGENT_ROLE: role } : {}),
@@ -493,6 +523,7 @@ export function buildNarsLaunchPacket(carrierName, {
   carrierSessionRegistration,
   targetSiteId,
   sessionSiteRoot,
+  siteMcpFabricPath = null,
   siteCarrierControlPath,
   siteCarrierSessionPath,
 }) {
@@ -520,7 +551,7 @@ export function buildNarsLaunchPacket(carrierName, {
     session_dir: dirname(siteCarrierControlPath(sessionId)),
     control_path: siteCarrierControlPath(sessionId),
     session_path: siteCarrierSessionPath(sessionId),
-    site_mcp_fabric: join(sessionSiteRoot, '.ai', 'mcp'),
+    site_mcp_fabric: siteMcpFabricPath ?? join(sessionSiteRoot, '.ai', 'mcp'),
     reads_only_target_site_mcp_fabric: true,
     user_site_mcp_injected: false,
     native_shell_authority_admitted: false,

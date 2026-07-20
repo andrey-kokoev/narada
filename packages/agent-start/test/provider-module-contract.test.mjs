@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { dirname, join, normalize, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -8,87 +8,9 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const packageRoot = resolve(__dirname, '..');
 const naradaProperRoot = resolve(packageRoot, '..', '..');
-const providerRegistry = JSON.parse(readFileSync(resolve(naradaProperRoot, 'packages', 'carrier-provider-contract', 'contracts', 'provider-registry.json'), 'utf8'));
-const metadataByProvider = providerRegistry.providers;
-const admittedProviders = Object.keys(metadataByProvider);
 
-const providerResolution = await import(pathToFileURL(resolve(packageRoot, 'src', 'provider-resolution.ts')));
-const providerCredentials = await import(pathToFileURL(resolve(packageRoot, 'src', 'provider-credential-projection.ts')));
 const codexSupport = await import(pathToFileURL(resolve(packageRoot, 'src', 'codex-subscription-support.ts')));
 const aiProcessInvocation = await import('@narada2/carrier-provider-support/ai-process-invocation');
-
-test('provider resolution module preserves default provider source and output fields', () => {
-  const resolution = providerResolution.resolveIntelligenceProviderLaunch(null, 'agent-cli', { source_field: null }, {
-    metadataByProvider,
-    admittedProviders,
-    defaultProvider: providerRegistry.default_provider,
-    schema: providerResolution.INTELLIGENCE_PROVIDER_CONTRACT_SCHEMA,
-  });
-  assert.equal(resolution.intelligence_provider, 'kimi-code-api');
-  assert.equal(resolution.source_field, 'default_for_nars_operator_surface');
-  assert.equal(resolution.request_adapter, 'openai-compatible-chat-completions');
-  assert.equal(resolution.credential_requirement_kind, 'api_key_secret');
-  assert.equal(resolution.credential_requirement.secret_ref, 'narada/provider/kimi-code-api/api-key');
-  assert.equal(resolution.resolution_states.at(-1).state, 'launch_ready');
-});
-
-test('provider resolution module admits agent-web-ui as a NARS operator surface', () => {
-  const resolution = providerResolution.resolveIntelligenceProviderLaunch(null, 'agent-web-ui', { source_field: null }, {
-    metadataByProvider,
-    admittedProviders,
-    defaultProvider: providerRegistry.default_provider,
-    schema: providerResolution.INTELLIGENCE_PROVIDER_CONTRACT_SCHEMA,
-  });
-  assert.equal(resolution.intelligence_provider, 'kimi-code-api');
-  assert.equal(resolution.source_field, 'default_for_nars_operator_surface');
-  assert.equal(resolution.resolution_states.some((state) => state.state === 'carrier_supports_provider_selection' && state.carrier_kind === 'agent-web-ui'), true);
-});
-
-test('provider resolution module refuses provider selection for non-NARS carriers', () => {
-  const refusal = providerResolution.resolveIntelligenceProviderLaunch('codex-subscription', 'codex', { source_field: 'cli_argument' }, {
-    metadataByProvider,
-    admittedProviders,
-    defaultProvider: providerRegistry.default_provider,
-    schema: providerResolution.INTELLIGENCE_PROVIDER_CONTRACT_SCHEMA,
-  });
-  assert.equal(refusal.status, 'refused');
-  assert.equal(refusal.reason_code, 'intelligence_provider_runtime_unsupported');
-  assert.equal(refusal.carrier_kind, 'codex');
-  assert.match(refusal.reason, /NARS operator surfaces such as agent-cli or agent-web-ui/);
-  assert.doesNotMatch(refusal.reason, /-Carrier/);
-});
-
-test('credential projection redacts API secrets while projecting required env', () => {
-  const resolution = providerResolution.resolveIntelligenceProviderLaunch('kimi-api', 'agent-cli', { source_field: 'cli_argument' }, {
-    metadataByProvider,
-    admittedProviders,
-    defaultProvider: providerRegistry.default_provider,
-    schema: providerResolution.INTELLIGENCE_PROVIDER_CONTRACT_SCHEMA,
-  });
-  const projected = providerCredentials.intelligenceProviderEnvironmentProjection(resolution, {
-    metadataByProvider,
-    processEnv: {
-      NARADA_PROVIDER_SECRET_STORE: 'disabled',
-      NARADA_PROVIDER_ENV_FALLBACK: '1',
-      KIMI_API_KEY: 'module-secret-value',
-      OPENAI_API_KEY: 'unrelated-openai-decoy',
-      KIMI_CODE_API_KEY: 'unrelated-kimi-code-decoy',
-    },
-    codexSubscriptionPreflight: () => ({ ok: true, status: 'passed' }),
-  });
-  assert.equal(projected.env.KIMI_API_KEY, 'module-secret-value');
-  assert.equal(projected.env.NARADA_AI_API_KEY, 'module-secret-value');
-  assert.equal(projected.env.NARADA_INTELLIGENCE_PROVIDER, 'kimi-api');
-  assert.equal(projected.env.NARADA_AI_BASE_URL, 'https://api.moonshot.ai');
-  assert.equal(Object.hasOwn(projected.env, 'OPENAI_API_KEY'), false);
-  assert.equal(Object.hasOwn(projected.env, 'KIMI_CODE_API_KEY'), false);
-  assert.equal(projected.credential.credential_source, 'environment');
-  assert.equal(Object.hasOwn(projected.credential, 'value'), false);
-  assert.doesNotMatch(JSON.stringify(projected.credential), /module-secret-value/);
-  assert.equal(projected.runtime_binding.provider_id, 'kimi-api');
-  assert.match(projected.runtime_binding.credential_fingerprint, /^sha256:[a-f0-9]{12}$/);
-  assert.equal(Object.hasOwn(projected.runtime_binding, 'api_key'), false);
-});
 
 test('codex subscription support defers dry-run auth and scrubs OpenAI API env', () => {
   const processEnv = {
@@ -380,32 +302,3 @@ test('codex subscription support refuses cached readiness when auth home disappe
   }
 });
 
-test('codex subscription credential projection fails closed when launch preflight fails', () => {
-  const resolution = providerResolution.resolveIntelligenceProviderLaunch('codex-subscription', 'agent-cli', { source_field: 'cli_argument' }, {
-    metadataByProvider,
-    admittedProviders,
-    defaultProvider: providerRegistry.default_provider,
-    schema: providerResolution.INTELLIGENCE_PROVIDER_CONTRACT_SCHEMA,
-  });
-  const projected = providerCredentials.intelligenceProviderEnvironmentProjection(resolution, {
-    metadataByProvider,
-    processEnv: {},
-    codexSubscriptionPreflight: () => ({
-      schema: 'narada.codex_subscription.preflight.v1',
-      status: 'failed_unauthorized',
-      ok: false,
-      provider: 'codex-subscription',
-      command: 'codex exec --json',
-      unauthorized: true,
-    }),
-  });
-  assert.equal(projected.credential.credential_required, true);
-  assert.equal(projected.credential.credential_present, false);
-  assert.equal(projected.credential.credential_source, 'failed_unauthorized');
-  const refusal = providerCredentials.providerCredentialRefusal(resolution, projected.credential, {
-    schema: providerResolution.INTELLIGENCE_PROVIDER_CONTRACT_SCHEMA,
-    withResolutionStates: (packet, states) => ({ ...packet, resolution_states: states }),
-  });
-  assert.equal(refusal.reason_code, 'local_codex_subscription_auth_unavailable');
-  assert.match(refusal.required_next_step, /NARADA_CODEX_SUBSCRIPTION_PREFLIGHT=defer/);
-});

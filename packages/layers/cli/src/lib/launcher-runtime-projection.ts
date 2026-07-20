@@ -4,6 +4,7 @@ import { agentIdentityRefMatchesRequest } from '@narada2/agent-identity';
 import { evaluateAgentStartHandoff } from '@narada2/agent-start/launch-result-v0-contract';
 import type { AgentStartResultV0, AgentStartSessionRef } from '@narada2/agent-start/launch-result-v0-contract';
 import type { LaunchProcessOwnership } from '@narada2/launch-process-ownership';
+import type { IntelligenceSelectionAuthority } from '@narada2/invokable-intelligence-contract';
 import type {
   AgentStartExecutionResult,
   OperatorProjectionLaunchBinding,
@@ -20,7 +21,7 @@ export function writeOperatorProjectionLaunchBinding(path: string | undefined, a
   operatorSurfaceKind?: string;
   runtimeHostKind: string;
   authority?: string | null;
-  intelligenceProvider?: string | null;
+  intelligenceSelectionAuthority?: IntelligenceSelectionAuthority | null;
   agentStartResultFile?: string;
   narsSessionId?: string | null;
   runtimeSessionId?: string | null;
@@ -50,7 +51,7 @@ export function writeOperatorProjectionLaunchBinding(path: string | undefined, a
     operator_surface_kind: args.operatorSurfaceKind,
     runtime_host_kind: args.runtimeHostKind,
     authority: args.authority ?? null,
-    intelligence_provider: args.intelligenceProvider ?? null,
+    intelligence_selection_authority: args.intelligenceSelectionAuthority ?? null,
     agent_start_result_file: args.agentStartResultFile,
     nars_session_id: args.narsSessionId ?? null,
     runtime_session_id: args.runtimeSessionId ?? null,

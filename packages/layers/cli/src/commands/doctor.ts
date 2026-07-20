@@ -1,9 +1,7 @@
-import { createRequire } from 'node:module';
-import { execFile } from 'node:child_process';
 import { dirname, resolve, join } from 'node:path';
 import { access, readFile, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { promisify } from 'node:util';
+import { openLocalIntelligenceRegistry } from '@narada2/agent-runtime-server/local-intelligence-runtime';
 import type { CommandContext } from '../lib/command-wrapper.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
@@ -19,9 +17,6 @@ import {
   type WindowsUserSiteInstallProfile,
 } from '../lib/windows-user-site-install-contract.js';
 
-const packageRequire = createRequire(import.meta.url);
-const execFileAsync = promisify(execFile);
-
 export interface DoctorOptions {
   config?: string;
   verbose?: boolean;
@@ -34,34 +29,14 @@ export interface DoctorOptions {
   strict?: boolean;
 }
 
-interface ProviderReadiness {
-  provider: string;
+interface IntelligenceCatalogReadiness {
+  schema: 'narada.doctor.intelligence_catalog_readiness.v1';
   status: 'ready' | 'needs_setup' | 'check_required';
-  credential_kind: string;
+  catalog_locator: string;
+  catalog_record_count: number;
+  resource_count: number;
   evidence: string;
   next_action: string | null;
-}
-
-interface ProviderRegistryRequirement {
-  kind?: unknown;
-  env_names?: unknown;
-  secret_ref?: unknown;
-}
-
-interface ProviderRegistryMetadata {
-  credential_requirement?: ProviderRegistryRequirement;
-}
-
-function loadProviderRegistry(): Record<string, ProviderRegistryMetadata> | null {
-  try {
-    const loaded = packageRequire('@narada2/carrier-provider-contract/provider-registry') as {
-      providers?: Record<string, ProviderRegistryMetadata>;
-      default?: { providers?: Record<string, ProviderRegistryMetadata> };
-    };
-    return loaded.providers ?? loaded.default?.providers ?? null;
-  } catch {
-    return null;
-  }
 }
 
 async function managedAsset(path: string): Promise<boolean> {
@@ -80,116 +55,48 @@ async function readJsonRecord(path: string): Promise<Record<string, unknown> | n
   }
 }
 
-function providerAction(providerHelperPath: string, provider: string): string {
-  return `Run \`${providerHelperPath} -Provider ${provider}\`, or enable the explicit environment fallback.`;
-}
-
-async function inspectInstalledProviderReadiness(
-  providerHelperPath: string,
-  providerStatusHelperPath: string,
-): Promise<ProviderReadiness[]> {
-  const rows: ProviderReadiness[] = [{
-    provider: 'demo',
-    status: 'ready',
-    credential_kind: 'none',
-    evidence: 'Credential-free synthetic onboarding is available.',
-    next_action: null,
-  }];
-  const providers = loadProviderRegistry();
-  if (!providers) {
-    rows.push({
-      provider: 'registry',
+async function inspectIntelligenceCatalogReadiness(root: string): Promise<IntelligenceCatalogReadiness> {
+  const catalogLocator = join(root, '.ai', 'intelligence-registry.db');
+  if (!await pathExists(catalogLocator)) {
+    return {
+      schema: 'narada.doctor.intelligence_catalog_readiness.v1',
+      status: 'needs_setup',
+      catalog_locator: catalogLocator,
+      catalog_record_count: 0,
+      resource_count: 0,
+      evidence: 'The Site intelligence catalog has not been initialized.',
+      next_action: 'Initialize the Site catalog with narada intelligence migrate or canonical intelligence management commands.',
+    };
+  }
+  let store: Awaited<ReturnType<typeof openLocalIntelligenceRegistry>> | undefined;
+  try {
+    store = await openLocalIntelligenceRegistry({ siteRoot: root, registryDbPath: catalogLocator });
+    const [records, resources] = await Promise.all([store.listCatalogRecords(), store.listResources()]);
+    const ready = records.length > 0 && resources.length > 0;
+    return {
+      schema: 'narada.doctor.intelligence_catalog_readiness.v1',
+      status: ready ? 'ready' : 'needs_setup',
+      catalog_locator: catalogLocator,
+      catalog_record_count: records.length,
+      resource_count: resources.length,
+      evidence: ready
+        ? `Site catalog is readable with ${records.length} records and ${resources.length} resources.`
+        : 'The Site catalog exists but has no invokable intelligence resources.',
+      next_action: ready ? null : 'Populate and validate the Site intelligence catalog before launching NARS.',
+    };
+  } catch (error) {
+    return {
+      schema: 'narada.doctor.intelligence_catalog_readiness.v1',
       status: 'check_required',
-      credential_kind: 'unknown',
-      evidence: 'The installed provider registry could not be loaded.',
-      next_action: 'Reinstall @narada2/cli, then rerun `narada doctor --bootstrap`.',
-    });
-    return rows;
+      catalog_locator: catalogLocator,
+      catalog_record_count: 0,
+      resource_count: 0,
+      evidence: error instanceof Error ? error.message : String(error),
+      next_action: 'Repair or migrate the Site intelligence catalog, then rerun narada doctor --bootstrap.',
+    };
+  } finally {
+    await store?.close();
   }
-
-  const userRoot = process.env.USERPROFILE ?? process.env.HOME ?? homedir();
-  const codexAuthHome = process.env.NARADA_CODEX_AUTH_HOME ?? join(userRoot, '.codex');
-  const environmentFallbackEnabled = ['1', 'true', 'on', 'enabled']
-    .includes(String(process.env.NARADA_PROVIDER_ENV_FALLBACK ?? '').trim().toLowerCase());
-  const apiProviders = Object.entries(providers).filter(([, metadata]) => {
-    return String(metadata.credential_requirement?.kind ?? '') === 'api_key_secret';
-  });
-
-  const statusByProvider = new Map<string, { present: boolean; status: ProviderReadiness['status']; secretRef: string; evidence: string }>();
-  if (apiProviders.length > 0 && process.platform === 'win32' && await managedAsset(providerStatusHelperPath)) {
-    const providerNames = apiProviders.map(([provider]) => provider);
-    try {
-      const result = await execFileAsync('pwsh', [
-        '-NoProfile',
-        '-NonInteractive',
-        '-ExecutionPolicy',
-        'Bypass',
-        '-File',
-        providerStatusHelperPath,
-        '-Provider',
-        ...providerNames,
-      ], { timeout: 15_000, windowsHide: true, maxBuffer: 256 * 1024 });
-      const parsed = JSON.parse(result.stdout) as unknown;
-      const values = Array.isArray(parsed) ? parsed : [parsed];
-      for (const value of values) {
-        const row = asRecord(value);
-        if (!row || typeof row.provider !== 'string') continue;
-        const provider = row.provider;
-        statusByProvider.set(provider, {
-          present: row.present === true,
-          status: row.status === 'ready' || row.status === 'needs_setup' || row.status === 'check_required'
-            ? row.status
-            : row.present === true ? 'ready' : 'needs_setup',
-          secretRef: typeof row.secret_ref === 'string' ? row.secret_ref : `narada/provider/${provider}/api-key`,
-          evidence: typeof row.evidence === 'string' ? row.evidence : 'SecretStore status was returned without evidence.',
-        });
-      }
-    } catch {
-      // The readiness row below remains check_required and never exposes secret values.
-    }
-  }
-
-  for (const [provider, metadata] of Object.entries(providers)) {
-    const requirement = metadata.credential_requirement ?? {};
-    const kind = String(requirement.kind ?? 'none');
-    if (kind === 'local_codex_subscription') {
-      const authHomeReady = await pathExists(codexAuthHome);
-      rows.push({
-        provider,
-        status: authHomeReady ? 'ready' : 'needs_setup',
-        credential_kind: kind,
-        evidence: authHomeReady ? `Local Codex auth home exists: ${codexAuthHome}` : `Local Codex auth home is missing: ${codexAuthHome}`,
-        next_action: authHomeReady ? null : 'Run `codex login`, then rerun `narada doctor --bootstrap`.',
-      });
-      continue;
-    }
-    if (kind !== 'api_key_secret') continue;
-    const envNames = Array.isArray(requirement.env_names) ? requirement.env_names.map(String) : [];
-    const presentEnv = envNames.find((name) => Boolean(process.env[name]));
-    const configured = statusByProvider.get(provider);
-    const secretRef = configured?.secretRef ?? String(requirement.secret_ref ?? `narada/provider/${provider}/api-key`);
-    if (configured) {
-      rows.push({
-        provider,
-        status: configured.status,
-        credential_kind: kind,
-        evidence: configured.present ? `${configured.evidence} (${secretRef})` : `${configured.evidence} (${secretRef})`,
-        next_action: configured.status === 'ready' ? null : providerAction(providerHelperPath, provider),
-      });
-      continue;
-    }
-    const envReady = Boolean(presentEnv && environmentFallbackEnabled);
-    rows.push({
-      provider,
-      status: envReady ? 'ready' : 'check_required',
-      credential_kind: kind,
-      evidence: envReady
-        ? `Explicit environment fallback is enabled via ${presentEnv}.`
-        : `Credential is expected in SecretManagement/SecretStore: ${secretRef}`,
-      next_action: envReady ? null : providerAction(providerHelperPath, provider),
-    });
-  }
-  return rows;
 }
 
 async function doctorInstalledUserSite(
@@ -201,16 +108,12 @@ async function doctorInstalledUserSite(
   const cliEntry = process.argv[1] ? resolve(process.argv[1]) : null;
   const registryPath = join(root, 'config', 'launch', 'agents.psd1');
   const launcherPath = join(root, 'Start-NaradaWorkspace.ps1');
-  const providerHelperPath = join(root, 'tools', 'operator-secrets', 'Set-NaradaProviderSecret.ps1');
-  const providerStatusHelperPath = join(root, 'tools', 'operator-secrets', 'Test-NaradaProviderSecrets.ps1');
   const manifestPath = join(siteAuthorityRootForRoot(root), 'runtime', 'installation', 'user-site-install.json');
   const repairCommand = 'narada install windows-user-site --repair';
   const repairArgs = ['narada', 'install', 'windows-user-site', '--repair'];
   const rootReady = await pathExists(root);
   const registryReady = await pathExists(registryPath);
   const launcherReady = await managedAsset(launcherPath);
-  const providerHelperReady = await managedAsset(providerHelperPath);
-  const providerStatusHelperReady = await managedAsset(providerStatusHelperPath);
   const manifest = await readJsonRecord(manifestPath);
   const manifestPackage = asRecord(manifest?.package);
   const bundledComponents = asRecord(manifestPackage?.bundled_components);
@@ -277,35 +180,13 @@ async function doctorInstalledUserSite(
     remediation_command: launcherReady ? undefined : repairCommand,
     remediation_args: launcherReady ? undefined : repairArgs,
   });
+  const intelligenceCatalogReadiness = await inspectIntelligenceCatalogReadiness(root);
+  const catalogNeedsAttention = intelligenceCatalogReadiness.status !== 'ready';
   checks.push({
-    name: 'provider-secret-helper',
-    status: providerHelperReady ? 'pass' : 'fail',
-    detail: providerHelperReady
-      ? `Managed provider helper: ${providerHelperPath}`
-      : `Managed provider helper is missing or stale: ${providerHelperPath}`,
-    remediation: providerHelperReady ? undefined : `Run \`${repairCommand}\`.`,
-    remediation_command: providerHelperReady ? undefined : repairCommand,
-    remediation_args: providerHelperReady ? undefined : repairArgs,
-  });
-  checks.push({
-    name: 'provider-status-helper',
-    status: providerStatusHelperReady ? 'pass' : 'fail',
-    detail: providerStatusHelperReady
-      ? `Managed provider status helper: ${providerStatusHelperPath}`
-      : `Managed provider status helper is missing or stale: ${providerStatusHelperPath}`,
-    remediation: providerStatusHelperReady ? undefined : `Run \`${repairCommand}\`.`,
-    remediation_command: providerStatusHelperReady ? undefined : repairCommand,
-    remediation_args: providerStatusHelperReady ? undefined : repairArgs,
-  });
-  const providerReadiness = await inspectInstalledProviderReadiness(providerHelperPath, providerStatusHelperPath);
-  const providerNeedsAttention = providerReadiness.some((row) => row.status !== 'ready');
-  checks.push({
-    name: 'provider-readiness',
-    status: providerNeedsAttention ? 'warn' : 'pass',
-    detail: providerNeedsAttention
-      ? 'One or more providers require setup or a bounded readiness check; the credential-free demo path remains available.'
-      : 'Configured provider readiness checks passed; the credential-free demo path remains available.',
-    remediation: providerNeedsAttention ? 'Review provider_readiness in JSON output, then configure only the provider you intend to use.' : undefined,
+    name: 'intelligence-catalog-readiness',
+    status: catalogNeedsAttention ? 'warn' : 'pass',
+    detail: intelligenceCatalogReadiness.evidence,
+    remediation: intelligenceCatalogReadiness.next_action ?? undefined,
   });
 
   const pass = checks.filter((check) => check.status === 'pass').length;
@@ -321,7 +202,7 @@ async function doctorInstalledUserSite(
     user_site_root: root,
     installation_profile: manifestProfile,
     installation_manifest_path: manifestPath,
-    provider_readiness: providerReadiness,
+    intelligence_catalog_readiness: intelligenceCatalogReadiness,
     checks,
     repair_command: repairRequired ? repairCommand : null,
     repair_args: repairRequired ? repairArgs : [],
@@ -340,18 +221,16 @@ async function doctorInstalledUserSite(
     fmt.message(`${icon} ${check.name}: ${check.detail}`, fmtType);
     if (check.remediation) fmt.message(`  → ${check.remediation}`, 'info');
   }
-  for (const provider of providerReadiness) {
-    const icon = provider.status === 'ready' ? '✓' : provider.status === 'needs_setup' ? '⚠' : '?';
-    fmt.message(`${icon} provider ${provider.provider}: ${provider.status} — ${provider.evidence}`, provider.status === 'ready' ? 'success' : 'warning');
-    if (provider.next_action) fmt.message(`  → ${provider.next_action}`, 'info');
-  }
+  const catalogIcon = intelligenceCatalogReadiness.status === 'ready' ? '✓' : intelligenceCatalogReadiness.status === 'needs_setup' ? '⚠' : '?';
+  fmt.message(`${catalogIcon} intelligence catalog: ${intelligenceCatalogReadiness.status} — ${intelligenceCatalogReadiness.evidence}`, intelligenceCatalogReadiness.status === 'ready' ? 'success' : 'warning');
+  if (intelligenceCatalogReadiness.next_action) fmt.message(`  → ${intelligenceCatalogReadiness.next_action}`, 'info');
   if (repairRequired) fmt.message(`Repair: ${repairCommand}`, 'info');
   return { exitCode: status === 'healthy' ? ExitCode.SUCCESS : ExitCode.GENERAL_ERROR, result: report };
 }
 
 async function isNaradaSourceWorkspace(root: string): Promise<boolean> {
-  return await pathExists(join(root, 'packages', 'layers', 'cli', 'package.json'))
-    && await pathExists(join(root, 'pnpm-lock.yaml'));
+  return await pathExists(join(root, 'package.json'))
+    && await pathExists(join(root, 'packages', 'layers', 'cli', 'package.json'));
 }
 
 interface DoctorCheck {

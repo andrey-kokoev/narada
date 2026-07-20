@@ -317,3 +317,69 @@ test('site agent invariants catch identity form, duplicates, and group mismatch'
   assert.ok(violations.some((violation) => violation.invariant === 'group_kind_mismatch'));
   assert.equal(formatOperatorSiteAgentInvariantViolation(violations[0]!), `invariant_violation:${violations[0]!.invariant}:${violations[0]!.path}`);
 });
+
+test('site-agent parser rejects every semantic invariant class', () => {
+  const cases: Array<{ invariant: string; mutate: (overview: any) => void }> = [
+    {
+      invariant: 'duplicate_group_id',
+      mutate: (overview) => overview.groups.push(structuredClone(overview.groups[0])),
+    },
+    {
+      invariant: 'duplicate_site_id',
+      mutate: (overview) => overview.groups[0].sites.push({ ...structuredClone(overview.groups[0].sites[0]), agents: [] }),
+    },
+    {
+      invariant: 'duplicate_agent_id',
+      mutate: (overview) => overview.groups[0].sites[0].agents.push(structuredClone(overview.groups[0].sites[0].agents[0])),
+    },
+    {
+      invariant: 'group_kind_mismatch',
+      mutate: (overview) => { overview.groups[0].sites[0].site_kind = 'user_site'; },
+    },
+    {
+      invariant: 'agent_id_form',
+      mutate: (overview) => { overview.groups[0].sites[0].agents[0].agent_id = 'other.resident'; },
+    },
+    {
+      invariant: 'selected_not_healthy',
+      mutate: (overview) => { overview.groups[0].sites[0].agents[0].runtime.selected_session_id = 'session-other'; },
+    },
+    {
+      invariant: 'duplicate_healthy_session_id',
+      mutate: (overview) => { overview.groups[0].sites[0].agents[0].runtime.healthy_session_ids = ['session-1', 'session-1']; },
+    },
+    {
+      invariant: 'runtime_session_cardinality',
+      mutate: (overview) => { overview.groups[0].sites[0].agents[0].runtime.session_count = 0; },
+    },
+    {
+      invariant: 'runtime_running_shape',
+      mutate: (overview) => { overview.groups[0].sites[0].agents[0].runtime.selected_session_id = null; },
+    },
+    {
+      invariant: 'runtime_stopped_shape',
+      mutate: (overview) => { overview.groups[0].sites[0].agents[0].runtime.state = 'stopped'; },
+    },
+    {
+      invariant: 'runtime_ambiguous_shape',
+      mutate: (overview) => { overview.groups[0].sites[0].agents[0].runtime.state = 'ambiguous'; },
+    },
+    {
+      invariant: 'runtime_degraded_shape',
+      mutate: (overview) => { overview.groups[0].sites[0].agents[0].runtime.state = 'degraded'; },
+    },
+    {
+      invariant: 'action_state_mismatch',
+      mutate: (overview) => { overview.groups[0].sites[0].agents[0].actions.start = true; },
+    },
+  ];
+  for (const testCase of cases) {
+    const overview: any = structuredClone(validSiteAgentOverview());
+    testCase.mutate(overview);
+    assert.ok(
+      validateOperatorSiteAgentOverviewInvariants(overview).some((violation) => violation.invariant === testCase.invariant),
+      `${testCase.invariant} must be diagnosed`,
+    );
+    assert.equal(parseOperatorSiteAgentOverviewWireResponse(overview), null, `${testCase.invariant} must be rejected by parser`);
+  }
+});

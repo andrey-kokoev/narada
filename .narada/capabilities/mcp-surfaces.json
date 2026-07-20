@@ -3,7 +3,7 @@
   "artifact_role": "site_capability_surface_registry_not_mcp_client_config",
   "site_id": "narada-proper",
   "generated_by": "mcp-registrar",
-  "generated_at": "2026-07-13T19:54:34.367Z",
+  "generated_at": "2026-07-19T04:18:53.166Z",
   "generation_policy": {
     "source": ".ai/mcp + registrar surface catalog",
     "mode": "enabled_surface_tool_authority",
@@ -12,6 +12,11 @@
   "surfaces": [
     {
       "surface_id": "narada-proper.local",
+      "surface_projection": {
+        "surface_id": "agent-facing-mcp",
+        "projection_id": "unknown",
+        "runtime_requirements": []
+      },
       "surface_type": "mcp_surface",
       "display_name": "narada-proper",
       "server_name": "narada-proper",
@@ -88,6 +93,12 @@
     },
     {
       "surface_id": "narada-proper-agent-context.local",
+      "surface_projection": {
+        "surface_id": "agent-context",
+        "projection_id": "default",
+        "injection_scope": "local_site",
+        "runtime_requirements": []
+      },
       "surface_type": "mcp_surface",
       "display_name": "narada-proper-agent-context",
       "server_name": "narada-proper-agent-context",
@@ -127,6 +138,8 @@
           "agent_context_guidance",
           "agent_context_doctor",
           "agent_context_whoami",
+          "agent_context_continuation_export",
+          "agent_context_continuation_read",
           "agent_context_start_session",
           "agent_context_checkpoint",
           "agent_context_rehydrate",
@@ -141,6 +154,8 @@
           "agent_context_guidance",
           "agent_context_doctor",
           "agent_context_whoami",
+          "agent_context_continuation_export",
+          "agent_context_continuation_read",
           "agent_context_rehydrate",
           "agent_context_hydrate_current",
           "agent_context_startup_sequence",
@@ -157,6 +172,8 @@
         "agent_context_guidance",
         "agent_context_doctor",
         "agent_context_whoami",
+        "agent_context_continuation_export",
+        "agent_context_continuation_read",
         "agent_context_start_session",
         "agent_context_checkpoint",
         "agent_context_rehydrate",
@@ -174,6 +191,13 @@
     },
     {
       "surface_id": "narada-proper-artifacts.local",
+      "surface_projection": {
+        "surface_id": "artifacts",
+        "projection_id": "default",
+        "injection_scope": "local_site",
+        "default_injection": "all_site_bound_sessions",
+        "runtime_requirements": []
+      },
       "surface_type": "mcp_surface",
       "display_name": "narada-proper-artifacts",
       "server_name": "narada-proper-artifacts",
@@ -242,6 +266,12 @@
     },
     {
       "surface_id": "narada-proper-delegated-task.local",
+      "surface_projection": {
+        "surface_id": "delegated-task",
+        "projection_id": "default",
+        "injection_scope": "local_site",
+        "runtime_requirements": []
+      },
       "surface_type": "mcp_surface",
       "display_name": "narada-proper-delegated-task",
       "server_name": "narada-proper-delegated-task",
@@ -338,6 +368,12 @@
     },
     {
       "surface_id": "narada-proper-git.local",
+      "surface_projection": {
+        "surface_id": "git",
+        "projection_id": "default",
+        "injection_scope": "local_site",
+        "runtime_requirements": []
+      },
       "surface_type": "mcp_surface",
       "display_name": "narada-proper-git",
       "server_name": "narada-proper-git",
@@ -372,6 +408,7 @@
           "git_guidance",
           "git_policy_inspect",
           "git_status",
+          "git_branch_list",
           "git_output_show",
           "git_changed_summary",
           "git_repositories_summary",
@@ -382,7 +419,14 @@
           "git_add",
           "git_unstage",
           "git_commit",
-          "git_push"
+          "git_push",
+          "git_branch_create",
+          "git_branch_switch",
+          "git_branch_rename",
+          "git_branch_delete",
+          "git_branch_delete_remote",
+          "git_branch_set_upstream",
+          "git_branch_unset_upstream"
         ],
         "semantic_operations": [],
         "deprecated_aliases": {},
@@ -390,6 +434,7 @@
           "git_guidance",
           "git_policy_inspect",
           "git_status",
+          "git_branch_list",
           "git_output_show",
           "git_changed_summary",
           "git_repositories_summary",
@@ -402,7 +447,14 @@
           "git_add",
           "git_unstage",
           "git_commit",
-          "git_push"
+          "git_push",
+          "git_branch_create",
+          "git_branch_switch",
+          "git_branch_rename",
+          "git_branch_delete",
+          "git_branch_delete_remote",
+          "git_branch_set_upstream",
+          "git_branch_unset_upstream"
         ],
         "refused_tools": []
       },
@@ -410,6 +462,7 @@
         "git_guidance",
         "git_policy_inspect",
         "git_status",
+        "git_branch_list",
         "git_output_show",
         "git_changed_summary",
         "git_repositories_summary",
@@ -420,7 +473,14 @@
         "git_add",
         "git_unstage",
         "git_commit",
-        "git_push"
+        "git_push",
+        "git_branch_create",
+        "git_branch_switch",
+        "git_branch_rename",
+        "git_branch_delete",
+        "git_branch_delete_remote",
+        "git_branch_set_upstream",
+        "git_branch_unset_upstream"
       ],
       "catalog_surface_id": "git",
       "evidence": {
@@ -431,6 +491,12 @@
     },
     {
       "surface_id": "narada-proper-graph-mail.local",
+      "surface_projection": {
+        "surface_id": "graph-mail",
+        "projection_id": "default",
+        "injection_scope": "local_site",
+        "runtime_requirements": []
+      },
       "surface_type": "mcp_surface",
       "display_name": "narada-proper-graph-mail",
       "server_name": "narada-proper-graph-mail",
@@ -561,6 +627,12 @@
     },
     {
       "surface_id": "narada-proper-inbox.local",
+      "surface_projection": {
+        "surface_id": "site-inbox",
+        "projection_id": "default",
+        "injection_scope": "local_site",
+        "runtime_requirements": []
+      },
       "surface_type": "mcp_surface",
       "display_name": "narada-proper-inbox",
       "server_name": "narada-proper-inbox",
@@ -646,6 +718,12 @@
     },
     {
       "surface_id": "narada-proper-local-filesystem.local",
+      "surface_projection": {
+        "surface_id": "local-filesystem",
+        "projection_id": "default",
+        "injection_scope": "local_site",
+        "runtime_requirements": []
+      },
       "surface_type": "mcp_surface",
       "display_name": "narada-proper-local-filesystem",
       "server_name": "narada-proper-local-filesystem",
@@ -687,6 +765,8 @@
           "fs_stat",
           "fs_glob_search",
           "fs_grep_search",
+          "fs_repository_inventory",
+          "fs_file_metrics",
           "fs_doctor",
           "fs_patch_outcome_show",
           "fs_write_file",
@@ -707,6 +787,8 @@
           "fs_stat",
           "fs_glob_search",
           "fs_grep_search",
+          "fs_repository_inventory",
+          "fs_file_metrics",
           "fs_doctor",
           "fs_patch_outcome_show"
         ],
@@ -729,6 +811,8 @@
         "fs_stat",
         "fs_glob_search",
         "fs_grep_search",
+        "fs_repository_inventory",
+        "fs_file_metrics",
         "fs_doctor",
         "fs_patch_outcome_show",
         "fs_write_file",
@@ -749,6 +833,12 @@
     },
     {
       "surface_id": "narada-proper-mailbox.local",
+      "surface_projection": {
+        "surface_id": "mailbox",
+        "projection_id": "default",
+        "injection_scope": "local_site",
+        "runtime_requirements": []
+      },
       "surface_type": "mcp_surface",
       "display_name": "narada-proper-mailbox",
       "server_name": "narada-proper-mailbox",
@@ -821,6 +911,12 @@
     },
     {
       "surface_id": "narada-proper-scheduler.local",
+      "surface_projection": {
+        "surface_id": "scheduler",
+        "projection_id": "default",
+        "injection_scope": "local_site",
+        "runtime_requirements": []
+      },
       "surface_type": "mcp_surface",
       "display_name": "narada-proper-scheduler",
       "server_name": "narada-proper-scheduler",
@@ -898,6 +994,12 @@
     },
     {
       "surface_id": "narada-proper-sop.local",
+      "surface_projection": {
+        "surface_id": "sop",
+        "projection_id": "default",
+        "injection_scope": "local_site",
+        "runtime_requirements": []
+      },
       "surface_type": "mcp_surface",
       "display_name": "narada-proper-sop",
       "server_name": "narada-proper-sop",
@@ -1016,6 +1118,13 @@
     },
     {
       "surface_id": "narada-proper-speech.local",
+      "surface_projection": {
+        "surface_id": "speech",
+        "projection_id": "default",
+        "injection_scope": "host",
+        "default_injection": "all_carrier_sessions",
+        "runtime_requirements": []
+      },
       "surface_type": "mcp_surface",
       "display_name": "narada-proper-speech",
       "server_name": "narada-proper-speech",
@@ -1087,6 +1196,12 @@
     },
     {
       "surface_id": "narada-proper-structured-command.local",
+      "surface_projection": {
+        "surface_id": "structured-command",
+        "projection_id": "default",
+        "injection_scope": "local_site",
+        "runtime_requirements": []
+      },
       "surface_type": "mcp_surface",
       "display_name": "narada-proper-structured-command",
       "server_name": "narada-proper-structured-command",
@@ -1124,6 +1239,7 @@
         "exposed_tools": [
           "structured_command_execution_policy_inspect",
           "structured_command_powershell_parse_check",
+          "structured_command_output_show",
           "structured_command_execute",
           "structured_command_elevated_window_execute",
           "structured_command_input_create"
@@ -1132,7 +1248,8 @@
         "deprecated_aliases": {},
         "read_only_tools": [
           "structured_command_execution_policy_inspect",
-          "structured_command_powershell_parse_check"
+          "structured_command_powershell_parse_check",
+          "structured_command_output_show"
         ],
         "mutating_tools": [
           "structured_command_execute",
@@ -1144,6 +1261,7 @@
       "registered_live_tools": [
         "structured_command_execution_policy_inspect",
         "structured_command_powershell_parse_check",
+        "structured_command_output_show",
         "structured_command_execute",
         "structured_command_elevated_window_execute",
         "structured_command_input_create"
@@ -1157,6 +1275,12 @@
     },
     {
       "surface_id": "narada-proper-surface-feedback.local",
+      "surface_projection": {
+        "surface_id": "surface-feedback",
+        "projection_id": "default",
+        "injection_scope": "user_site",
+        "runtime_requirements": []
+      },
       "surface_type": "mcp_surface",
       "display_name": "narada-proper-surface-feedback",
       "server_name": "narada-proper-surface-feedback",
@@ -1193,6 +1317,8 @@
           "surface_feedback_update_status_batch",
           "surface_feedback_import",
           "surface_feedback_list",
+          "surface_feedback_actionable_queue",
+          "surface_feedback_convert_to_task",
           "surface_feedback_show",
           "surface_feedback_stats",
           "surface_feedback_live_proof_template"
@@ -1203,6 +1329,7 @@
           "surface_feedback_guidance",
           "surface_feedback_doctor",
           "surface_feedback_list",
+          "surface_feedback_actionable_queue",
           "surface_feedback_show",
           "surface_feedback_stats",
           "surface_feedback_live_proof_template"
@@ -1211,7 +1338,8 @@
           "surface_feedback_submit",
           "surface_feedback_update_status",
           "surface_feedback_update_status_batch",
-          "surface_feedback_import"
+          "surface_feedback_import",
+          "surface_feedback_convert_to_task"
         ],
         "refused_tools": []
       },
@@ -1223,6 +1351,8 @@
         "surface_feedback_update_status_batch",
         "surface_feedback_import",
         "surface_feedback_list",
+        "surface_feedback_actionable_queue",
+        "surface_feedback_convert_to_task",
         "surface_feedback_show",
         "surface_feedback_stats",
         "surface_feedback_live_proof_template"
@@ -1236,6 +1366,12 @@
     },
     {
       "surface_id": "narada-proper-task-lifecycle.local",
+      "surface_projection": {
+        "surface_id": "task-lifecycle",
+        "projection_id": "default",
+        "injection_scope": "local_site",
+        "runtime_requirements": []
+      },
       "surface_type": "mcp_surface",
       "display_name": "narada-proper-task-lifecycle",
       "server_name": "narada-proper-task-lifecycle",
@@ -1281,6 +1417,7 @@
           "task_lifecycle_inspect",
           "task_lifecycle_inspect_range",
           "task_lifecycle_admit_evidence",
+          "task_lifecycle_evidence_supersede",
           "task_lifecycle_prove_criteria",
           "task_lifecycle_disposition_closeout",
           "task_lifecycle_closeout",
@@ -1303,6 +1440,7 @@
           "task_lifecycle_create",
           "mcp_payload_create",
           "mcp_payload_show",
+          "mcp_output_show",
           "mcp_payload_derive",
           "mcp_payload_validate",
           "task_lifecycle_set_routing",
@@ -1344,6 +1482,7 @@
           "task_lifecycle_audit",
           "task_lifecycle_search",
           "task_lifecycle_related",
+          "mcp_output_show",
           "mcp_payload_show",
           "mcp_payload_validate",
           "task_lifecycle_recurring_list",
@@ -1358,6 +1497,7 @@
           "task_lifecycle_continue",
           "task_lifecycle_unclaim",
           "task_lifecycle_admit_evidence",
+          "task_lifecycle_evidence_supersede",
           "task_lifecycle_prove_criteria",
           "task_lifecycle_disposition_closeout",
           "task_lifecycle_closeout",
@@ -1411,6 +1551,7 @@
         "task_lifecycle_inspect",
         "task_lifecycle_inspect_range",
         "task_lifecycle_admit_evidence",
+        "task_lifecycle_evidence_supersede",
         "task_lifecycle_prove_criteria",
         "task_lifecycle_disposition_closeout",
         "task_lifecycle_closeout",
@@ -1433,6 +1574,7 @@
         "task_lifecycle_create",
         "mcp_payload_create",
         "mcp_payload_show",
+        "mcp_output_show",
         "mcp_payload_derive",
         "mcp_payload_validate",
         "task_lifecycle_set_routing",
@@ -1465,6 +1607,12 @@
     },
     {
       "surface_id": "narada-proper-worker-delegation.local",
+      "surface_projection": {
+        "surface_id": "worker-delegation",
+        "projection_id": "default",
+        "injection_scope": "local_site",
+        "runtime_requirements": []
+      },
       "surface_type": "mcp_surface",
       "display_name": "narada-proper-worker-delegation",
       "server_name": "narada-proper-worker-delegation",
@@ -1501,6 +1649,8 @@
           "worker_guidance",
           "worker_policy_inspect",
           "worker_config_resolve",
+          "worker_cognition_defaults_inspect",
+          "worker_cognition_defaults_update",
           "worker_run",
           "worker_edit",
           "worker_resume",
@@ -1521,6 +1671,7 @@
           "worker_guidance",
           "worker_policy_inspect",
           "worker_config_resolve",
+          "worker_cognition_defaults_inspect",
           "worker_run_status",
           "worker_runs_list",
           "worker_run_wait",
@@ -1531,6 +1682,7 @@
           "worker_operator_affordances"
         ],
         "mutating_tools": [
+          "worker_cognition_defaults_update",
           "worker_run",
           "worker_edit",
           "worker_resume",
@@ -1543,6 +1695,8 @@
         "worker_guidance",
         "worker_policy_inspect",
         "worker_config_resolve",
+        "worker_cognition_defaults_inspect",
+        "worker_cognition_defaults_update",
         "worker_run",
         "worker_edit",
         "worker_resume",

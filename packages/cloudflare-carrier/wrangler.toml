@@ -34,6 +34,11 @@ binding = "CLOUDFLARE_SITE_REGISTRY_DB"
 database_name = "narada-cloudflare-site-registry"
 database_id = "170ca715-9c9e-4c48-896f-0e8daba72217"
 
+[[d1_databases]]
+binding = "INTELLIGENCE_REGISTRY_DB"
+database_name = "narada-cloudflare-site-registry"
+database_id = "170ca715-9c9e-4c48-896f-0e8daba72217"
+
 [[durable_objects.bindings]]
 name = "CLOUDFLARE_CARRIER_SESSIONS"
 class_name = "CloudflareCarrierDurableObject"

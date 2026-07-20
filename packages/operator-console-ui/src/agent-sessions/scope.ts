@@ -1,6 +1,8 @@
 export interface AgentSessionsScope {
   site: string | null;
   agent: string | null;
+  status: 'unscoped' | 'valid' | 'invalid';
+  reason: string | null;
 }
 
 export interface AgentSessionScopeEntry {
@@ -11,22 +13,27 @@ export interface AgentSessionScopeEntry {
 
 export function parseAgentSessionsScope(search: string): AgentSessionsScope {
   const query = new URLSearchParams(search);
-  return {
-    site: query.get('site')?.trim() || null,
-    agent: query.get('agent')?.trim() || null,
-  };
+  const site = query.get('site')?.trim() || null;
+  const agent = query.get('agent')?.trim() || null;
+  if (!site && !agent) return { site: null, agent: null, status: 'unscoped', reason: null };
+  if (!site || !agent) return { site, agent, status: 'invalid', reason: 'site_and_agent_scope_required' };
+  const prefix = `${site.toLowerCase()}.`;
+  if (!agent.toLowerCase().startsWith(prefix) || agent.length <= prefix.length) {
+    return { site, agent, status: 'invalid', reason: 'canonical_agent_scope_mismatch' };
+  }
+  return { site, agent, status: 'valid', reason: null };
 }
 
 export function isAgentSessionsScopeActive(scope: AgentSessionsScope): boolean {
-  return Boolean(scope.site || scope.agent);
+  return scope.status !== 'unscoped';
 }
 
 export function agentSessionMatchesScope(session: AgentSessionScopeEntry, scope: AgentSessionsScope): boolean {
+  if (scope.status === 'invalid') return false;
   if (scope.site && (session.siteId ?? '').toLowerCase() !== scope.site.toLowerCase()) return false;
   if (scope.agent) {
     const agentId = (session.agentId ?? '').toLowerCase();
-    const wanted = scope.agent.toLowerCase();
-    if (agentId !== wanted && !agentId.endsWith(`.${wanted}`)) return false;
+    if (agentId !== scope.agent.toLowerCase()) return false;
   }
   return true;
 }

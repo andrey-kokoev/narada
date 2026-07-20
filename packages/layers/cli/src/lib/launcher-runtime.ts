@@ -19,6 +19,7 @@ import {
 import { readJsonFile, stringValue } from './launcher-runtime-results.js';
 import { tryParseAgentStartResultArtifact } from './agent-start-result-reader.js';
 import { resolveAgentStartSessionProjection } from '@narada2/agent-start/launch-result-v0-contract';
+import { resolveNaradaSitePaths } from '@narada2/site-paths';
 import {
   classifyAgentStartLaunchBindingStatus,
   getOperatorSurfaceRuntimeControlPath,
@@ -93,7 +94,7 @@ function failAgentStartBeforeExecution(args: {
     operatorSurfaceKind: args.options.carrier ?? args.options.runtime,
     runtimeHostKind: args.options.runtime,
     authority: args.options.authority ?? null,
-    intelligenceProvider: args.options.intelligenceProvider ?? null,
+    intelligenceSelectionAuthority: args.options.intelligenceSelectionAuthority ?? null,
     agentStartResultFile: args.resultPath,
     launchSessionId: args.launchSessionId,
     processOwnership: args.processOwnership,
@@ -117,12 +118,15 @@ function failAgentStartBeforeExecution(args: {
 
 export function runAgentStartCommand(options: AgentStartOptions): AgentStartCommandResult {
   const siteRoot = resolve(options.siteRoot);
-  const workspaceRoot = options.workspaceRoot ? resolve(options.workspaceRoot) : naradaProperRoot();
+  const workspaceRoot = resolveNaradaSitePaths({ siteRoot, workspaceRoot: options.workspaceRoot }).workspaceRoot;
+  const dependencyWorkspaceRoot = options.dependencyWorkspaceRoot
+    ? resolve(options.dependencyWorkspaceRoot)
+    : naradaProperRoot();
   const launchSessionId = options.launchSessionId ?? launchSessionIdFromToken(options.launchBindingPath?.split(/[\\/]/).pop());
   const processOwnership = launchSessionId
     ? buildLaunchProcessOwnership({ launchSessionId, siteRoot, workspaceRoot, processRole: 'runtime_start', createdByPid: process.pid })
     : null;
-  const resolvedAgentStart = resolveAgentStartEntrypoint(workspaceRoot);
+  const resolvedAgentStart = resolveAgentStartEntrypoint(dependencyWorkspaceRoot);
   const siteRootAgentStart = join(siteRoot, 'packages', 'agent-start', 'src', 'narada-agent-start.ts');
   const agentStart = existsSync(resolvedAgentStart) || !existsSync(siteRootAgentStart)
     ? resolvedAgentStart
@@ -139,6 +143,8 @@ export function runAgentStartCommand(options: AgentStartOptions): AgentStartComm
     siteRoot,
     '--site-root',
     siteRoot,
+    '--workspace-root',
+    workspaceRoot,
     '--operator-surface',
     options.carrier ?? options.runtime,
     '--runtime',
@@ -151,7 +157,6 @@ export function runAgentStartCommand(options: AgentStartOptions): AgentStartComm
   if (options.targetSiteId) args.push('--target-site-id', options.targetSiteId);
   if (!inheritedInteractiveExec) args.push('--json');
   if (options.authority) args.push('--authority', options.authority);
-  if (options.intelligenceProvider) args.push('--intelligence-provider', options.intelligenceProvider);
   if (options.mcpScope) args.push('--mcp-scope', options.mcpScope);
   if (options.preflightOnly) args.push('--preflight-only');
   if (options.dryRun) args.push('--dry-run');
@@ -159,7 +164,7 @@ export function runAgentStartCommand(options: AgentStartOptions): AgentStartComm
   if (options.wait) args.push('--wait');
   if (options.enableNativeShell) args.push('--enable-native-shell');
 
-  const dependencyPreflight = checkWorkspaceDependencyPreflight(workspaceRoot);
+  const dependencyPreflight = checkWorkspaceDependencyPreflight(dependencyWorkspaceRoot);
   if (dependencyPreflight.status !== 'ready') {
     return {
       schema: 'narada.agent_start.command_result.v0',
@@ -192,7 +197,7 @@ export function runAgentStartCommand(options: AgentStartOptions): AgentStartComm
 
   if (options.dryRun !== true && shouldDetachAgentStartProcess(options)) {
     const syntaxCheckArgs = ['--import', tsxImportPath(), '--check', agentStart];
-    const syntaxCheck = runProcess(process.execPath, syntaxCheckArgs, workspaceRoot);
+    const syntaxCheck = runProcess(process.execPath, syntaxCheckArgs, dependencyWorkspaceRoot);
     if (syntaxCheck.status !== 'success') {
       const detail = truncateText(
         syntaxCheck.stderr || syntaxCheck.stdout || syntaxCheck.error || 'agent-start syntax check failed',
@@ -228,17 +233,19 @@ export function runAgentStartCommand(options: AgentStartOptions): AgentStartComm
     operatorSurfaceKind: options.carrier ?? options.runtime,
     runtimeHostKind: options.runtime,
     authority: options.authority ?? null,
-    intelligenceProvider: options.intelligenceProvider ?? null,
+    intelligenceSelectionAuthority: options.intelligenceSelectionAuthority ?? null,
     agentStartResultFile: resultPath,
     launchSessionId,
     processOwnership,
   });
 
   const executionEnv = {
+    NARADA_PROPER_ROOT: dependencyWorkspaceRoot,
     NARADA_TARGET_SITE_ROOT: siteRoot,
     ...(options.targetSiteId ? { NARADA_TARGET_SITE_ID: options.targetSiteId } : {}),
     NARADA_LAUNCH_REGISTRY_SITE_ROOT: siteRoot,
     NARADA_LAUNCH_REGISTRY_WORKSPACE_ROOT: workspaceRoot,
+    NARADA_WORKSPACE_ROOT: workspaceRoot,
     ...(launchSessionId ? { NARADA_LAUNCH_SESSION_ID: launchSessionId } : {}),
     ...(processOwnership ? {
       NARADA_PROCESS_OWNERSHIP: processOwnership.ownership,
@@ -246,7 +253,6 @@ export function runAgentStartCommand(options: AgentStartOptions): AgentStartComm
       NARADA_CREATED_BY_PID: String(processOwnership.created_by_pid ?? process.pid),
     } : {}),
     NARADA_AGENT_ID: options.agent,
-    ...(options.intelligenceProvider ? { NARADA_INTELLIGENCE_PROVIDER: options.intelligenceProvider } : {}),
   };
   const execution = shouldDetachAgentStartProcess(options)
     ? runProcessDetachedUntilJson(process.execPath, args, workspaceRoot, resultPath, executionEnv)
@@ -269,7 +275,7 @@ export function runAgentStartCommand(options: AgentStartOptions): AgentStartComm
     agent: options.agent,
     operatorSurfaceKind: options.carrier ?? options.runtime,
     runtimeHostKind: options.runtime,
-    intelligenceProvider: options.intelligenceProvider ?? null,
+    intelligenceSelectionAuthority: options.intelligenceSelectionAuthority ?? null,
     agentStartResultFile: resultPath,
     narsSessionId: sessionProjection?.nars_session_id ?? null,
     runtimeSessionId: sessionProjection?.runtime_session_id ?? null,

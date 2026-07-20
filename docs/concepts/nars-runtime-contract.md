@@ -102,7 +102,7 @@ Required launch inputs:
 | `--identity` | Durable Narada agent id, for example `sonar.resident`. |
 | `--session` | Durable carrier/session id, for example `carrier_...`. |
 | `--site-root` | Site root whose MCP fabric and authority surfaces are mounted. |
-| provider/model env | Already resolved by `agent-start`; NARS consumes, not discovers, provider selection. |
+| intelligence context | Catalog locator, target/User/Host Site refs, principal, and request facts; no provider or model selection. |
 
 The runtime wrapper accepts the same identity/session/Site binding from `NARADA_AGENT_ID`, `NARADA_NARS_SESSION_ID`, `NARADA_RUNTIME_SESSION_ID`, `NARADA_CARRIER_SESSION_ID`, and `NARADA_SITE_ROOT` when launch materialization projects those values through the environment. `NARADA_NARS_SESSION_ID` is canonical, `NARADA_RUNTIME_SESSION_ID` is a compatibility fallback, and `NARADA_CARRIER_SESSION_ID` is legacy-only. All supplied session-id values, including argv, must agree.
 
@@ -117,8 +117,8 @@ Required runtime environment, when available:
 | `NARADA_CARRIER_SESSION_ID` | Legacy compatibility alias for the bound NARS session id. |
 | `NARADA_SITE_ROOT` | Site root for mounted authority surfaces. |
 | `NARADA_WORKSPACE_ROOT` | Workspace root for the session. |
-| `NARADA_INTELLIGENCE_PROVIDER` | Resolved provider id. |
-| `NARADA_AI_MODEL` | Resolved model id. |
+
+Provider, endpoint, model, capability, and route selection is performed per invocation from canonical catalog and policy state. Launch materialization never supplies those decisions.
 
 NARS must not silently substitute a different Site, identity, or MCP fabric from ambient user config. If binding data is absent or contradictory, the runtime should fail before accepting operator or automation turns.
 

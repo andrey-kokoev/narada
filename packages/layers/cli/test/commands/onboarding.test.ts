@@ -7,7 +7,6 @@ const narsSessionsMock = vi.hoisted(() => vi.fn());
 const sitesInitMock = vi.hoisted(() => vi.fn());
 
 vi.mock('../../src/commands/workspace-launch-application.js', () => ({
-  registryDefaultIntelligenceProvider: () => 'kimi-code-api',
   workspaceLaunchCommand: workspaceLaunchMock,
 }));
 
@@ -114,7 +113,15 @@ describe('User Site onboarding', () => {
       status: 'planned',
       mutation_performed: false,
       user_site: { resident_agent: 'user.resident' },
-      defaults: { assistant_label: 'General assistant', role: 'resident', operator_surface: 'agent-cli', intelligence_provider: 'kimi-code-api' },
+      defaults: {
+        assistant_label: 'General assistant',
+        role: 'resident',
+        operator_surface: 'agent-cli',
+        intelligence: {
+          resolution_phase: 'runtime-invocation',
+          authority: 'site-catalog-and-materialized-policy',
+        },
+      },
       role_expansion: {
         status: 'unavailable',
         recommended_roles: [],

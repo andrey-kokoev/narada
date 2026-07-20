@@ -11,7 +11,7 @@ export interface WorkspaceLaunchResolvedSelection {
 export function resolveWorkspaceLaunchSelection(
   requestedValue: string | undefined,
   registryValue: string | null | undefined,
-  field: 'operator_surface' | 'runtime' | 'intelligence_provider',
+  field: 'operator_surface' | 'runtime',
   implicitSource: 'registry_record' | 'registry_default' | 'command_default' = 'registry_record',
 ): WorkspaceLaunchResolvedSelection {
   if (requestedValue !== undefined) {

@@ -264,14 +264,22 @@ export function validateOperatorSiteAgentOverviewInvariants(
   const push = (invariant: string, path: string, detail: string) => {
     violations.push({ invariant, path, detail });
   };
+  const seenGroupIds = new Set<string>();
+  const seenSiteIds = new Set<string>();
+  const seenCanonicalAgentIds = new Set<string>();
   overview.groups.forEach((group, groupIndex) => {
+    const groupPath = `groups[${groupIndex}]`;
+    if (seenGroupIds.has(group.id)) push('duplicate_group_id', groupPath, `${group.id} appears more than once`);
+    seenGroupIds.add(group.id);
     group.sites.forEach((site, siteIndex) => {
       const sitePath = `groups[${groupIndex}].sites[${siteIndex}]`;
+      const siteKey = site.site_id.toLowerCase();
+      if (seenSiteIds.has(siteKey)) push('duplicate_site_id', sitePath, `${site.site_id} appears more than once`);
+      seenSiteIds.add(siteKey);
       const expectedGroup: OperatorSiteAgentGroupId = site.site_kind === 'site' ? 'sites' : 'personal-infrastructure';
       if (group.id !== expectedGroup || site.group_id !== expectedGroup) {
         push('group_kind_mismatch', sitePath, `${site.site_id}: kind ${site.site_kind} does not belong in group ${group.id}`);
       }
-      const seenAgentIds = new Set<string>();
       site.agents.forEach((agent, agentIndex) => {
         const agentPath = `${sitePath}.agents[${agentIndex}]`;
         const expectedAgentId = `${site.site_id}.${agent.local_agent_id}`;
@@ -279,9 +287,16 @@ export function validateOperatorSiteAgentOverviewInvariants(
           push('agent_id_form', agentPath, `${agent.agent_id} is not the canonical ${expectedAgentId}`);
         }
         const agentKey = agent.agent_id.toLowerCase();
-        if (seenAgentIds.has(agentKey)) push('duplicate_agent_id', agentPath, `${agent.agent_id} appears more than once in ${site.site_id}`);
-        seenAgentIds.add(agentKey);
+        if (seenCanonicalAgentIds.has(agentKey)) push('duplicate_agent_id', agentPath, `${agent.agent_id} appears more than once`);
+        seenCanonicalAgentIds.add(agentKey);
         const runtime = agent.runtime;
+        const healthySessionIds = new Set(runtime.healthy_session_ids);
+        if (healthySessionIds.size !== runtime.healthy_session_ids.length) {
+          push('duplicate_healthy_session_id', agentPath, 'healthy_session_ids must be unique');
+        }
+        if (runtime.session_count < runtime.healthy_session_ids.length) {
+          push('runtime_session_cardinality', agentPath, 'session_count cannot be less than healthy session count');
+        }
         if (runtime.selected_session_id !== null && !runtime.healthy_session_ids.includes(runtime.selected_session_id)) {
           push('selected_not_healthy', agentPath, `selected session ${runtime.selected_session_id} is not among the healthy sessions`);
         }
@@ -304,8 +319,10 @@ export function validateOperatorSiteAgentOverviewInvariants(
           if (runtime.healthy_session_ids.length < 2) push('runtime_ambiguous_shape', agentPath, 'ambiguous requires more than one healthy session');
           if (runtime.selected_session_id !== null) push('runtime_ambiguous_shape', agentPath, 'ambiguous forbids a selected session');
         }
-        if (runtime.state === 'degraded' && runtime.selected_session_id !== null) {
-          push('runtime_degraded_shape', agentPath, 'degraded forbids a selected session');
+        if (runtime.state === 'degraded') {
+          if (runtime.selected_session_id !== null || runtime.healthy_session_ids.length !== 0 || runtime.session_count < 1) {
+            push('runtime_degraded_shape', agentPath, 'degraded requires active sessions, no healthy sessions, and no selected session');
+          }
         }
         if ((runtime.state === 'ambiguous' || runtime.state === 'degraded') && (agent.actions.start || agent.actions.inspect)) {
           push('action_state_mismatch', agentPath, `${runtime.state} forbids start and inspect`);
@@ -399,7 +416,8 @@ export function parseOperatorSiteAgentOverviewWireResponse(value: unknown): Oper
     return { ...groupRow, sites: sites as OperatorSiteAgentSiteWireRecord[] } as unknown as OperatorSiteAgentGroupWireRecord;
   });
   if (groups.some((group) => group === null)) return null;
-  return { ...row, groups: groups as OperatorSiteAgentGroupWireRecord[] } as unknown as OperatorSiteAgentOverviewWireResponse;
+  const parsed = { ...row, groups: groups as OperatorSiteAgentGroupWireRecord[] } as unknown as OperatorSiteAgentOverviewWireResponse;
+  return validateOperatorSiteAgentOverviewInvariants(parsed).length === 0 ? parsed : null;
 }
 
 export interface OperatorSurfaceAvailabilityDetail {

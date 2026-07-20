@@ -606,6 +606,7 @@ export function createD1CloudflareSiteRegistry(db, { now = () => new Date().toIS
         operation_id: operationId,
         carrier_session_id: carrierSessionId,
         principal_id: principalId,
+        role: membership.role,
       },
     };
   }

@@ -29,7 +29,7 @@ import type {
   WorkspaceLaunchProcessLaunch,
 } from './workspace-launch-types.js';
 
-type WorkspaceLaunchFailureStage = 'planning' | 'provider_preflight' | 'runtime_spawn' | 'session_attachment' | 'projection_start' | 'terminal_handoff' | 'result_persistence';
+type WorkspaceLaunchFailureStage = 'planning' | 'catalog_preflight' | 'runtime_spawn' | 'session_attachment' | 'projection_start' | 'terminal_handoff' | 'result_persistence';
 
 export async function executeWorkspaceLaunchPlan(
   options: WorkspaceLaunchPlanOptions,
@@ -86,8 +86,8 @@ export async function executeWorkspaceLaunchPlan(
       );
     }
 
-    stage = 'provider_preflight';
-    runWorkspaceLaunchProviderPreflight(selectedAgents);
+    stage = 'catalog_preflight';
+    runWorkspaceLaunchCatalogPreflight(selectedAgents);
     transaction = advanceWorkspaceLaunchTransaction(transaction, 'preflighted');
 
     if (canUseHiddenRuntimeStart) {
@@ -160,20 +160,54 @@ export async function executeWorkspaceLaunchPlan(
             throw projectionError;
           }
         }
+        if (terminalTabs.length > 0) {
+          stage = 'terminal_handoff';
+          const effectiveWtArgs = process.env.WT_SESSION ? ['-w', '0', ...wtArgs] : wtArgs;
+          const terminalCaptureLog = process.env.NARADA_WORKSPACE_LAUNCH_TERMINAL_LOG;
+          let terminalLaunch: { status: number | null; error?: Error };
+          try {
+            terminalLaunch = terminalCaptureLog
+              ? await captureWorkspaceLaunchTerminalInvocation(terminalCaptureLog, effectiveWtArgs)
+              : startWorkspaceLaunchWindowsTerminal(effectiveWtArgs);
+          } catch (terminalError) {
+            terminalHandoff = {
+              status: 'failed',
+              wt_exit_code: null,
+              wt_args: redactWorkspaceLaunchArgv(effectiveWtArgs),
+            };
+            throw terminalError;
+          }
+          terminalHandoff = {
+            status: terminalLaunch.error || terminalLaunch.status !== 0 ? 'failed' : 'accepted',
+            wt_exit_code: terminalLaunch.status ?? null,
+            wt_args: redactWorkspaceLaunchArgv(effectiveWtArgs),
+          };
+          if (terminalLaunch.error) throw terminalLaunch.error;
+          if (terminalLaunch.status !== 0) {
+            throw new Error(`windows_terminal_launch_failed: wt exited ${terminalLaunch.status ?? 'unknown'}`);
+          }
+        }
       }
 
       stage = 'result_persistence';
       const launchResult = finalizeWorkspaceLaunchResult({ ...result, transaction }, {
-        windows_terminal_invoked: false,
+        windows_terminal_invoked: terminalHandoff.status === 'accepted',
         hidden_runtime_invoked: true,
         hidden_runtime_launches: hiddenLaunches,
         hidden_projection_launches: hiddenProjectionLaunches,
+        ...(terminalHandoff.status === 'accepted' && terminalHandoff.wt_exit_code !== null
+          ? { wt_exit_code: terminalHandoff.wt_exit_code }
+          : {}),
         attachment,
       });
       await writeWorkspacePlanResult(options.resultPath, launchResult);
       return {
         exitCode: ExitCode.SUCCESS,
-        result: formattedResult(launchResult, `launched ${result.count ?? 0} hidden runtime start(s)`, options.format ?? 'auto'),
+        result: formattedResult(
+          launchResult,
+          `launched ${result.count ?? 0} hidden runtime start(s)${terminalHandoff.status === 'accepted' ? ' and projection terminal(s)' : ''}`,
+          options.format ?? 'auto',
+        ),
       };
     }
 
@@ -374,8 +408,8 @@ function describeWorkspaceLaunchFailure(error: unknown, stage: WorkspaceLaunchFa
     ? error.requiredNextStep
     : stage === 'session_attachment'
       ? 'Inspect the launch artifact and retry after the exact runtime session becomes healthy.'
-      : stage === 'provider_preflight'
-        ? 'Resolve the provider readiness refusal shown in the launch artifact, then retry.'
+      : stage === 'catalog_preflight'
+        ? 'Resolve the Site intelligence catalog readiness refusal shown in the launch artifact, then retry.'
         : stage === 'projection_start'
           ? 'Inspect the launch artifact and retry after the Web UI projection startup boundary is healthy.'
         : 'Inspect the launch artifact and retry after correcting the reported launch boundary.';
@@ -402,6 +436,7 @@ function notCheckedAttachment(plans: WorkspaceLaunchAgentPlan[], reason: string)
       health_session_id: null,
       health_identity_match: false,
       site_root: plan.site_root,
+      event_endpoint: null,
       health_endpoint: null,
       health_status: 'not_checked' as const,
       attempts: 0,
@@ -423,6 +458,7 @@ function visibleHandoffAttachment(plans: WorkspaceLaunchAgentPlan[]): WorkspaceL
       health_session_id: null,
       health_identity_match: false,
       site_root: plan.site_root,
+      event_endpoint: null,
       health_endpoint: null,
       health_status: 'not_checked' as const,
       attempts: 0,
@@ -432,31 +468,29 @@ function visibleHandoffAttachment(plans: WorkspaceLaunchAgentPlan[]): WorkspaceL
   };
 }
 
-function runWorkspaceLaunchProviderPreflight(selectedAgents: WorkspaceLaunchPlanResult['selected_agents']): void {
+function runWorkspaceLaunchCatalogPreflight(selectedAgents: WorkspaceLaunchPlanResult['selected_agents']): void {
   for (const agent of selectedAgents) {
     if (agent.runtime_host_kind !== NARADA_AGENT_RUNTIME_SERVER_KIND) continue;
     const preflight = runAgentStartCommand({
       siteRoot: agent.site_root,
       targetSiteId: agent.site,
-      // runtime_start_cwd is the launched Site workspace; agent-start resolves
-      // its dependency root from Narada proper, so do not substitute the Site cwd.
+      workspaceRoot: agent.workspace_root ?? undefined,
       agent: agent.agent,
       carrier: agent.launch_operator_surface,
       runtime: agent.launch_runtime_host,
       authority: agent.authority ?? undefined,
-      intelligenceProvider: agent.intelligence_provider ?? undefined,
       mcpScope: agent.mcp_scope,
       preflightOnly: true,
-      launchSource: 'narada workspace-launch provider preflight',
+      launchSource: 'narada workspace-launch catalog preflight',
     });
     if (!isAgentStartAcceptedStatus(preflight.status)) {
-      throw new Error(`workspace_launch_provider_preflight_failed: ${agent.agent}: ${describeAgentStartPreflightFailure(preflight)}`);
+      throw new Error(`workspace_launch_catalog_preflight_failed: ${agent.agent}: ${describeAgentStartPreflightFailure(preflight)}`);
     }
     const result = preflight.parsed_result;
     if (!result || typeof result !== 'object' || Array.isArray(result)
-      || (result as { schema?: unknown }).schema !== 'narada.agent_start.provider_preflight.v1'
+      || (result as { schema?: unknown }).schema !== 'narada.agent_start.intelligence_catalog_preflight.v1'
       || (result as { status?: unknown }).status !== 'ready') {
-      throw new Error(`workspace_launch_provider_preflight_invalid: ${agent.agent}`);
+      throw new Error(`workspace_launch_catalog_preflight_invalid: ${agent.agent}`);
     }
   }
 }

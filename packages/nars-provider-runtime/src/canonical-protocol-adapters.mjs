@@ -6,7 +6,7 @@ import {
   buildOpenAiChatRequest as coreBuildOpenAiChatRequest,
   cleanOpenAiMessages as coreCleanOpenAiMessages,
   reasoningEffort,
-} from '@narada2/carrier-provider-contract/openai-compatible-chat';
+} from './openai-compatible-chat.mjs';
 function stripAnsi(value) {
   return String(value ?? '').replace(/\u001b\[[0-?]*[ -/]*[@-~]/g, '');
 }
@@ -532,11 +532,19 @@ function buildCodexSubprocessEnv(mcpServers, settings = {}) {
   delete env.OPENAI_BASE_URL;
   delete env.OPENAI_MODEL;
   delete env.NARADA_INTELLIGENCE_PROVIDER;
+  delete env.NARADA_AI_BASE_URL;
   delete env.CODEX_MODEL;
   delete env.NARADA_CODEX_MODEL;
   delete env.NARADA_AI_THINKING;
   delete env.NARADA_THINKING_LEVEL;
   delete env.CLOUDFLARE_CARRIER_AI_MODEL;
+  delete env.KIMI_API_BASE_URL;
+  delete env.KIMI_CODE_API_BASE_URL;
+  delete env.ANTHROPIC_BASE_URL;
+  delete env.DEEPSEEK_API_BASE_URL;
+  delete env.GLM_API_BASE_URL;
+  delete env.OPENROUTER_BASE_URL;
+  delete env.OPENROUTER_API_BASE_URL;
   return env;
 }
 

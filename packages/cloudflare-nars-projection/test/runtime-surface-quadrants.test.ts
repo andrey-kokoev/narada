@@ -6,13 +6,23 @@ import {
 import {
   buildCloudflareNarsAuthorityRuntimeSurfaceContract,
   classifyCloudflareInputRelay,
-  createCloudflareNarsAuthorityService,
+  createCloudflareNarsAuthorityService as createCloudflareNarsAuthorityServiceCore,
+  createCloudflareNarsTestRuntimeExecutor,
   createCloudflareNarsProjectionIntent,
   createCloudflareNarsRemoteAccessRecord,
   validateProjectionCredential,
 } from '../src/index.js';
 
 const now = '2026-07-18T00:00:00.000Z';
+
+function createCloudflareNarsAuthorityService(
+  options: Parameters<typeof createCloudflareNarsAuthorityServiceCore>[0] = {},
+) {
+  return createCloudflareNarsAuthorityServiceCore({
+    ...options,
+    runtime_executor: createCloudflareNarsTestRuntimeExecutor(),
+  });
+}
 
 describe('four-quadrant runtime/surface contract conformance', () => {
   test('local/local: canonical local authority contract validates without projection', () => {

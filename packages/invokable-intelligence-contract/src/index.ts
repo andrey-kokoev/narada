@@ -15,3 +15,4 @@ export * from "./access.js";
 export * from "./catalog.js";
 export * from "./canonical.js";
 export * from "./canonical-fixtures.js";
+export * from "./selection-authority.js";

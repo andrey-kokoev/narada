@@ -5,6 +5,8 @@ import { join } from "node:path";
 import test from "node:test";
 
 import {
+  CANONICAL_CATALOG_SEED_SCHEMA,
+  buildCanonicalCloudflareTestSeed,
   canonicalSha256,
   canonicalTestClock,
   MATERIALIZATION_ADMISSION_SCHEMA,
@@ -33,6 +35,11 @@ import {
 import type { ResolverContext } from "@narada2/invokable-intelligence-resolver";
 
 import { main } from "../src/cli.js";
+import {
+  MANAGEMENT_DEPLOYMENT_BUNDLE_SCHEMA,
+  MANAGEMENT_DEPLOYMENT_RESULT_SCHEMA,
+} from "../src/deployment.js";
+import type { ManagementDeploymentBundle } from "../src/deployment.js";
 import { parseLegacyRegistry } from "../src/legacy.js";
 import { createManagementTools } from "../src/mcp-tools.js";
 import { buildMigrationPlan } from "../src/migrate.js";
@@ -58,7 +65,7 @@ const ACTOR = "operator:destination-admission";
 const AUTHORITY_REF = "evidence:destination-management-authority";
 const CONSENT_REF = "evidence:principal-consent";
 const DECIDED_AT = "2026-07-19T00:00:01Z";
-const REAL_REGISTRY = new URL("../../carrier-provider-contract/contracts/provider-registry.json", import.meta.url);
+const REAL_REGISTRY = new URL("./provider-registry.legacy-fixture.json", import.meta.url);
 
 function resolverContext(instant = DECIDED_AT): ResolverContext {
   return {
@@ -77,6 +84,36 @@ function resolverContext(instant = DECIDED_AT): ResolverContext {
       expected_cost: { amount: 1, currency: "USD" },
     },
     topology_observations: [],
+  };
+}
+
+async function deploymentBundle(): Promise<ManagementDeploymentBundle> {
+  const catalog = buildCanonicalCloudflareTestSeed({
+    targetSiteId: TARGET.id,
+    principalId: PRINCIPAL,
+    now: DECIDED_AT,
+    validUntil: "2026-07-20T00:00:00Z",
+  });
+  catalog.id = "catalog-seed:management-deployment:r1";
+  catalog.records = catalog.records.filter(({ authority }) =>
+    authority.site_id === TARGET.id
+    || (authority.site_id === undefined && authority.locus === "runtime-observer"));
+  return {
+    schema: MANAGEMENT_DEPLOYMENT_BUNDLE_SCHEMA,
+    id: "deployment:management-test:r1",
+    owning_site: TARGET,
+    actor_id: ACTOR,
+    principal_id: PRINCIPAL,
+    consent_ref: CONSENT_REF,
+    destination_authority: {
+      site_id: TARGET.id,
+      locus: "target-site",
+      authority_ref: AUTHORITY_REF,
+    },
+    decided_at: DECIDED_AT,
+    evidence_refs: [CONSENT_REF, AUTHORITY_REF],
+    catalog: { ...catalog, schema: CANONICAL_CATALOG_SEED_SCHEMA, created_at: DECIDED_AT },
+    materializations: [],
   };
 }
 
@@ -353,6 +390,64 @@ test("library service governs list/show/validate/admit, paging, foreign writes, 
   }
 });
 
+test("atomic catalog-seed admission validates a complete graph before writing any record", async () => {
+  const canonical = buildCanonicalCloudflareTestSeed({
+    targetSiteId: TARGET.id,
+    principalId: PRINCIPAL,
+    now: DECIDED_AT,
+    validUntil: "2026-07-20T00:00:01Z",
+  });
+  const destinationRecords = canonical.records.filter((record) =>
+    record.authority.site_id === TARGET.id
+    || (record.authority.site_id === undefined && record.authority.locus === "runtime-observer")
+  );
+  const route = destinationRecords.find(({ record_kind }) => record_kind === "route");
+  assert.ok(route);
+  const records = [route, ...destinationRecords.filter(({ id }) => id !== route.id)];
+  const seed = { ...canonical, id: "catalog-seed:management-atomic", records, residuals: [] };
+  const record_contexts = Object.fromEntries(records.map((record) => [record.id, catalogContext(record)]));
+
+  const successful = await sqliteSession();
+  try {
+    const service = new IntelligenceManagementService(successful.session);
+    const admitted = asResult(await service.execute({
+      operation: "admit-catalog-seed",
+      seed,
+      record_contexts,
+      context: catalogContext(records[0]),
+    }));
+    assert.equal(admitted.operation, "admit-catalog-seed");
+    assert.equal((admitted.data as { record_receipts: unknown[] }).record_receipts.length, records.length);
+    assert.ok(await successful.session.store.getCatalogRecord(route.id));
+    assert.equal((await successful.session.store.listCatalogRecords()).length, records.length);
+  } finally {
+    await successful.close();
+  }
+
+  const refused = await sqliteSession();
+  try {
+    const service = new IntelligenceManagementService(refused.session);
+    const invalidSeed = structuredClone(seed);
+    const invalidRoute = invalidSeed.records.find(({ record_kind }) => record_kind === "route");
+    assert.ok(invalidRoute);
+    const routeDocument = invalidRoute.document as { topology: { nodes: Array<{ kind: string }> } };
+    routeDocument.topology.nodes = routeDocument.topology.nodes.filter(({ kind }) => kind !== "client");
+    invalidRoute.source.digest = canonicalSha256(invalidRoute.document);
+    await assert.rejects(
+      service.execute({
+        operation: "admit-catalog-seed",
+        seed: invalidSeed,
+        record_contexts,
+        context: catalogContext(records[0]),
+      }),
+      (error: unknown) => error instanceof Error && error.message.includes("client node"),
+    );
+    assert.equal((await refused.session.store.listCatalogRecords()).length, 0);
+  } finally {
+    await refused.close();
+  }
+});
+
 test("all materialization management operations preserve audit and idempotency", async () => {
   const { session, close } = await sqliteSession();
   try {
@@ -444,6 +539,7 @@ test("MCP projection uses immutable refs and exactly the canonical result/error 
     const first = envelope();
     const firstAdmission = admission(first);
     const firstRecords = materializationRecords(first);
+    const bundle = await deploymentBundle();
     const intent: InvocationIntent = {
       schema: "narada.invokable-intelligence.invocation-intent.v1",
       id: "intent:mcp-explain",
@@ -459,12 +555,18 @@ test("MCP projection uses immutable refs and exactly the canonical result/error 
       ["input:admission", firstAdmission],
       ["input:statement-record", firstRecords.statement_record],
       ["input:payload-record", firstRecords.payload_record],
+      ["input:deployment-bundle", bundle],
     ]);
     session.resolveInputRef = async (ref) => {
       if (!refs.has(ref)) throw new ManagementError("input-not-found", "Immutable input reference was not found.");
       return refs.get(ref);
     };
     const tools = new Map(createManagementTools(session).map((tool) => [tool.name, tool]));
+
+    const deployed = await tools.get("intelligence_management_deploy")!.handler({
+      bundle_ref: "input:deployment-bundle",
+    }) as { schema: string };
+    assert.equal(deployed.schema, MANAGEMENT_DEPLOYMENT_RESULT_SCHEMA, JSON.stringify(deployed, null, 2));
 
     const admitted = asResult(await tools.get("intelligence_management_admit_catalog_record")!.handler({
       record_ref: "input:record",
@@ -519,6 +621,8 @@ test("CLI is a file-reference projection of the same canonical service", async (
   const directory = await mkdtemp(join(tmpdir(), "narada-intelligence-management-"));
   try {
     const db = join(directory, "intelligence.db");
+
+
     const record = await catalogRecord();
     const recordPath = join(directory, "record.json");
     const contextPath = join(directory, "context.json");
@@ -590,6 +694,16 @@ test("CLI is a file-reference projection of the same canonical service", async (
 
     const validation = await runCli(["--db", db, "--owning-site", TARGET.id, "validate"]);
     assert.equal((validation.output as ManagementResult).operation, "validate");
+
+    const bundlePath = join(directory, "deployment-bundle.json");
+    const deploymentDb = join(directory, "deployment.db");
+    await writeFile(bundlePath, JSON.stringify(await deploymentBundle()));
+    const deployed = await runCli([
+      "--db", deploymentDb, "--owning-site", TARGET.id,
+      "deploy", "--bundle", bundlePath,
+    ]);
+    assert.equal(deployed.code, 0, JSON.stringify(deployed.output, null, 2));
+    assert.equal((deployed.output as { schema: string }).schema, MANAGEMENT_DEPLOYMENT_RESULT_SCHEMA);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

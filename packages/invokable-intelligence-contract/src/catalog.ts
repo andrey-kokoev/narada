@@ -143,6 +143,7 @@ export type CatalogDiagnosticCode =
   | "invalid-catalog-record"
   | "catalog-record-id-mismatch"
   | "catalog-record-kind-mismatch"
+  | "catalog-record-authority-mismatch"
   | "catalog-record-digest-mismatch"
   | "missing-catalog-provenance"
   | "missing-catalog-authority"
@@ -195,6 +196,20 @@ export function validateCanonicalCatalogRecord(record: CanonicalCatalogRecord): 
   }
   if (!record.authority.kind || !record.authority.locus || !record.authority.authority_ref) {
     diagnostics.push({ code: "missing-catalog-authority", record_id: record.record_id, message: "authority kind, locus, and authority_ref are required" });
+  }
+  if (record.document.schema === "narada.invokable-intelligence.authority-statement.v1") {
+    const origin = record.document.origin;
+    if (record.authority.kind !== record.document.kind
+      || record.authority.locus !== origin.locus
+      || record.authority.site_id !== origin.site_id
+      || record.authority.principal_id !== origin.principal_id
+      || record.authority.authority_ref !== origin.authority_ref) {
+      diagnostics.push({
+        code: "catalog-record-authority-mismatch",
+        record_id: record.record_id,
+        message: "authority-statement catalog authority must exactly match the statement origin",
+      });
+    }
   }
   if (record.validation.status !== "accepted" || !record.validation.validator || record.validation.evidence.length === 0) {
     diagnostics.push({ code: "missing-catalog-validation", record_id: record.record_id, message: "accepted validation with validator and evidence is required" });

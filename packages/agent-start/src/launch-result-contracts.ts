@@ -18,18 +18,6 @@ type McpScopeInput = {
     inherited_codex_home_allowed?: unknown;
   } | null;
 } | null | undefined;
-type IntelligenceProviderResolutionInput = {
-  status?: unknown;
-  credential_present?: unknown;
-  credential?: { preflight?: { status?: unknown } | null } | null;
-  preflight?: { status?: unknown } | null;
-  request_adapter?: unknown;
-  credential_requirement_kind?: unknown;
-  credential_requirement?: unknown;
-  credential_source?: unknown;
-  required_next_step?: unknown;
-} | null | undefined;
-
 type LauncherContractInput = AgentStartResultV0 & {
   launch_result_path?: unknown;
   exec?: unknown;
@@ -50,8 +38,7 @@ type LauncherContractInput = AgentStartResultV0 & {
   mcp_fabric?: OptionalRecord;
   runtime?: unknown;
   runtime_authority_selection?: OptionalRecord;
-  intelligence_provider?: unknown;
-  intelligence_provider_resolution?: IntelligenceProviderResolutionInput;
+  intelligence_selection_authority?: OptionalRecord;
   visible_runtime_terminal?: unknown;
   agent_start_execution_mode?: unknown;
   detach_decision?: unknown;
@@ -205,15 +192,6 @@ function buildLauncherContracts(result: AgentStartResultV0) {
   const carrierImplementationKind = input.carrier_implementation_kind ?? null;
   const launchResultArtifact = buildLaunchResultArtifact(input);
   const runtimeHealthPosture = buildRuntimeHealthPosture(result);
-  const intelligenceProviderPreflight = input.intelligence_provider_resolution?.credential?.preflight ?? input.intelligence_provider_resolution?.preflight ?? null;
-  const intelligenceProviderPreflightStatus = intelligenceProviderPreflight?.status ?? null;
-  const intelligenceProviderReadinessStatus = input.intelligence_provider_resolution ? (
-    input.intelligence_provider_resolution.status === 'refused' || input.intelligence_provider_resolution.credential_present === false
-      ? 'blocked'
-      : intelligenceProviderPreflightStatus === 'passed_cached'
-        ? 'ready_cached'
-        : 'ready_fresh'
-  ) : null;
   return {
     schema: 'narada.launcher_contract_bundle.v0',
     authority_runtime_host_selection: {
@@ -265,7 +243,7 @@ function buildLauncherContracts(result: AgentStartResultV0) {
       runtime: input.runtime ?? null,
       runtime_substrate_kind: input.runtime_substrate_kind ?? null,
       runtime_authority_selection: input.runtime_authority_selection ?? null,
-      intelligence_provider: input.intelligence_provider ?? null,
+      intelligence_selection_authority: input.intelligence_selection_authority ?? null,
       mcp_scope: input.mcp_scope?.requested ?? null,
       target_site_root: input.target_site_root ?? null,
       session_site_root: input.session_site_root ?? null,
@@ -280,19 +258,6 @@ function buildLauncherContracts(result: AgentStartResultV0) {
       open_request: input.operator_projection_open_request ?? null,
       launch_result_artifact_path: launchResultArtifact.artifact_path,
     },
-    intelligence_provider_readiness_check: input.intelligence_provider_resolution ? {
-      schema: 'narada.intelligence_provider_readiness_check.v0',
-      intelligence_provider: input.intelligence_provider ?? null,
-      status: intelligenceProviderReadinessStatus,
-      check_kind: intelligenceProviderPreflightStatus === 'passed_cached' ? 'cached' : intelligenceProviderPreflightStatus ? 'fresh' : null,
-      preflight_status: intelligenceProviderPreflightStatus,
-      request_adapter: input.intelligence_provider_resolution.request_adapter ?? null,
-      credential_requirement_kind: input.intelligence_provider_resolution.credential_requirement_kind ?? null,
-      credential_requirement: input.intelligence_provider_resolution.credential_requirement ?? null,
-      credential_present: input.intelligence_provider_resolution.credential_present ?? null,
-      credential_source: input.intelligence_provider_resolution.credential_source ?? null,
-      required_next_step: input.intelligence_provider_resolution.required_next_step ?? null,
-    } : null,
     operator_terminal_projection_plan: input.nars_launch ? {
       schema: 'narada.operator_terminal_projection_plan.v0',
       terminal_kind: input.nars_launch.launch_operator_surface_kind ?? input.carrier_kind ?? null,

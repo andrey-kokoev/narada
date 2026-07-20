@@ -69,29 +69,42 @@ a { color: #0b5bd3; }
 <main>
 <h1>Starting ${escapeHtml(options.agentId)}</h1>
 <p id="status" role="status">Waiting for its Agent Web UI route&hellip;</p>
+<p id="actions" hidden><button id="retry" type="button">Retry</button> <a id="sessions" href="${escapeHtml(sessionsPath)}">Open scoped sessions</a> <button id="cancel" type="button">Cancel wait</button></p>
 </main>
 <script>
 (function () {
   var pollUrl = ${scriptString(pollUrl)};
   var sessionsPath = ${scriptString(sessionsPath)};
   var deadline = Date.now() + ${String(budget)};
+  var timer = null;
+  var controller = null;
+  var stopped = false;
+  var status = document.getElementById('status');
+  var actions = document.getElementById('actions');
+  var retry = document.getElementById('retry');
+  var cancel = document.getElementById('cancel');
+  function setPhase(message) {
+    status.textContent = message;
+  }
+  function stop(message) {
+    stopped = true;
+    if (timer !== null) clearTimeout(timer);
+    if (controller) controller.abort();
+    setPhase(message);
+    actions.hidden = false;
+  }
   function schedule() {
+    if (stopped) return;
     if (Date.now() >= deadline) {
-      var status = document.getElementById('status');
-      status.textContent = 'The agent is taking longer than expected to publish its Web UI route. ';
-      var link = document.createElement('a');
-      link.href = sessionsPath;
-      link.textContent = 'Open Agent Sessions for this agent';
-      status.appendChild(link);
-      status.appendChild(document.createTextNode(' when it appears, or keep waiting here.'));
-      deadline = Date.now() + ${String(budget)};
-      setTimeout(poll, ${String(pollInterval)});
+      stop('The launch was accepted, but its Web UI route did not become ready within the wait budget.');
       return;
     }
-    setTimeout(poll, ${String(pollInterval)});
+    timer = setTimeout(poll, ${String(pollInterval)});
   }
   function poll() {
-    fetch(pollUrl, { headers: { Accept: 'application/json' } })
+    if (stopped) return;
+    controller = new AbortController();
+    fetch(pollUrl, { headers: { Accept: 'application/json' }, signal: controller.signal })
       .then(function (response) { return response.json(); })
       .then(function (payload) {
         if (payload && payload.status === 'ready' && payload.url) {
@@ -102,10 +115,34 @@ a { color: #0b5bd3; }
           window.location.replace(payload.sessions_path);
           return;
         }
+        if (payload && payload.status === 'refused') {
+          stop('Web UI handoff was refused: ' + (payload.reason || 'unknown reason') + '.');
+          return;
+        }
+        if (payload && payload.phase === 'waiting_for_route') {
+          setPhase('Runtime session registered. Waiting for its Agent Web UI route...');
+        } else {
+          setPhase('Launch accepted. Waiting for the runtime session to register...');
+        }
         schedule();
       })
-      .catch(function () { schedule(); });
+      .catch(function (error) { if (!stopped && error.name !== 'AbortError') schedule(); });
   }
+  retry.addEventListener('click', function () {
+    stopped = false;
+    actions.hidden = true;
+    deadline = Date.now() + ${String(budget)};
+    setPhase('Retrying the scoped Web UI handoff...');
+    poll();
+  });
+  cancel.addEventListener('click', function () {
+    stop('Web UI handoff wait cancelled. The runtime may continue starting.');
+  });
+  window.addEventListener('pagehide', function () {
+    stopped = true;
+    if (timer !== null) clearTimeout(timer);
+    if (controller) controller.abort();
+  });
   poll();
 })();
 </script>

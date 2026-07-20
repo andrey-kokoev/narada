@@ -24,9 +24,9 @@ import { buildCarrierConformanceMatrix } from '../../../tools/operator-surface-c
 
 test('launch slice contract identifies the admitted carrier runtime', () => {
   const contract = loadLaunchSliceContract();
-  assert.equal(contract.schema, 'narada.agent_tui.launch_slice_contract.v0');
-  assert.equal(contract.admitted_runtime_slice, 'terminal_interactive_loop');
-  assert.equal(contract.carrier_flag, '--interactive-loop');
+  assert.equal(contract.schema, 'narada.agent_tui.attach_projection_contract.v1');
+  assert.equal(contract.admitted_runtime_slice, 'nars_attach_projection');
+  assert.equal(contract.carrier_flag, '--attach');
   assert.equal(contract.terminal_mode, true);
 });
 
@@ -41,7 +41,7 @@ test('carrier conformance report derives every row from the launch matrix', () =
     contract.rows.map((row) => row.launch_selection_kind),
   );
   assert.equal(report.rows.find((row) => row.carrier === 'agent-web-ui').operator_surface_kind, 'agent-web-ui');
-  assert.equal(report.rows.find((row) => row.carrier === 'agent-tui').runtime_host_kind, 'agent-tui');
+  assert.equal(report.rows.find((row) => row.carrier === 'agent-tui').runtime_host_kind, 'narada-agent-runtime-server');
   assert.equal(report.rows.find((row) => row.carrier === 'kimi').evidence_level, 'unverified');
   assert.equal(report.rows.find((row) => row.carrier === 'opencode').evidence_level, 'documented_advisory');
   for (const row of contract.rows) {
@@ -84,17 +84,16 @@ test('carrier launch matrix is the complete admitted launch-selection authority'
   assert.deepEqual([...ADMITTED_LAUNCH_SELECTION_KINDS], contract.rows.map((row) => row.launch_selection_kind));
   assert.deepEqual([...ADMITTED_RUNTIME_SUBSTRATE_KINDS], loadRuntimeSubstrateKindsContract().admitted_runtime_substrate_kinds);
   assert.equal(contract.rows.every((row) => ADMITTED_RUNTIME_SUBSTRATE_KINDS.includes(row.runtime_host_kind)), true);
-  assert.deepEqual([...operatorSurfaceKindsForRuntimeHost('narada-agent-runtime-server')], ['agent-cli', 'agent-web-ui']);
+  assert.deepEqual([...operatorSurfaceKindsForRuntimeHost('narada-agent-runtime-server')], ['agent-cli', 'agent-web-ui', 'agent-tui']);
   assert.deepEqual([...operatorSurfaceKindsForProjectionCapability('nars_attach')], ['agent-cli', 'agent-web-ui', 'agent-tui']);
   assert.equal(contract.rows.every((row) => Array.isArray(row.projection_capabilities)), true);
   assert.equal(contract.rows.every((row) => row.conformance && Array.isArray(row.conformance.known_gaps)), true);
   assert.deepEqual(
     contract.rows.map((row) => row.conformance.evidence_level),
-    ['code_enforced', 'code_enforced', 'startup_enforced', 'config_enforced', 'unverified', 'config_enforced', 'config_enforced', 'documented_advisory'],
+    ['code_enforced', 'code_enforced', 'code_enforced', 'config_enforced', 'unverified', 'config_enforced', 'config_enforced', 'documented_advisory'],
   );
   assert.equal(contract.rows.find((row) => row.launch_selection_kind === 'opencode').conformance.evidence_level, 'documented_advisory');
   assert.deepEqual([...ADMITTED_RUNTIME_IMPLEMENTATION_KINDS].sort(), [
-    'agent-tui',
     'claude-code',
     'codex',
     'kimi',
@@ -108,7 +107,7 @@ test('carrier launch matrix is the complete admitted launch-selection authority'
   );
   assert.equal(contract.rows.find((row) => row.launch_selection_kind === 'agent-cli').carrier_implementation_kind, 'narada-agent-runtime-server');
   assert.equal(contract.rows.find((row) => row.launch_selection_kind === 'agent-web-ui').runtime_host_kind, 'narada-agent-runtime-server');
-  assert.equal(contract.rows.find((row) => row.launch_selection_kind === 'agent-tui').tool_fabric_adapter_kind, 'narada-agent-tui-terminal-interactive-loop');
+  assert.equal(contract.rows.find((row) => row.launch_selection_kind === 'agent-tui').tool_fabric_adapter_kind, 'narada-agent-runtime-server-mcp-client');
   assert.equal(contract.rows.find((row) => row.launch_selection_kind === 'codex').tool_fabric_adapter_kind, 'codex-native-mcp');
   assert.equal(contract.rows.find((row) => row.launch_selection_kind === 'kimi').tool_fabric_adapter_kind, 'ambient-carrier-tools');
   assert.equal(contract.rows.find((row) => row.launch_selection_kind === 'pi').tool_fabric_adapter_kind, 'pi-extension-mcp-bridge');
@@ -162,7 +161,7 @@ test('runtime substrate contract admits carrier substrates and codex isolation b
   assert.equal(contract.admitted_runtime_substrate_kinds.includes('codex'), true);
   assert.equal(contract.admitted_runtime_substrate_kinds.includes('agent-cli'), false);
   assert.equal(contract.admitted_runtime_substrate_kinds.includes('narada-agent-runtime-server'), true);
-  assert.equal(contract.admitted_runtime_substrate_kinds.includes('agent-tui'), true);
+  assert.equal(contract.admitted_runtime_substrate_kinds.includes('agent-tui'), false);
   assert.equal(contract.admitted_runtime_substrate_kinds.includes('kimi'), true);
   assert.equal(contract.admitted_runtime_substrate_kinds.includes('pi'), true);
   assert.equal(contract.admitted_runtime_substrate_kinds.includes('claude-code'), true);

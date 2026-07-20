@@ -30,11 +30,12 @@ Launch/materialization code must resolve `narada-agent-runtime-server` from
 `@narada2/agent-runtime-server`. The unqualified `agent-runtime-server` alias is
 not an admitted package bin.
 
-Provider metadata:
+Invokable-intelligence authority:
 
 ```text
-package: @narada2/carrier-provider-contract
-export:  ./provider-registry
+contract:   @narada2/invokable-intelligence-contract
+management: @narada2/invokable-intelligence-management
+persistence: node:sqlite locally, Cloudflare D1 remotely
 ```
 
 User sites and client sites may declare identities, roles, MCP fabric, policies,

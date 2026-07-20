@@ -14,7 +14,6 @@ export interface WorkspaceLaunchRuntimeCommandOptions {
   runtime: string;
   workspaceRoot?: string | null;
   authority: string;
-  intelligenceProvider?: string | null;
   mcpScope: string;
   enableNativeShell: boolean;
   launchBindingPath?: string | null;
@@ -39,7 +38,6 @@ export function workspaceLaunchRuntimeCommandSpec(
   if (options.workspaceRoot) args.push('--workspace-root', options.workspaceRoot);
   if (options.enableNativeShell) args.push('--enable-native-shell');
   args.push('--authority', options.authority);
-  if (options.intelligenceProvider) args.push('--intelligence-provider', options.intelligenceProvider);
   args.push('--mcp-scope', options.mcpScope);
   if (options.launchBindingPath) args.push('--launch-binding', options.launchBindingPath);
   if (!options.launchBindingPath) args.push('--launch-session-id', options.launchSessionId ?? '');

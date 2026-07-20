@@ -1,11 +1,10 @@
 <script setup lang="ts">
-import { nextTick, onMounted, onUnmounted, ref, type Component } from 'vue';
+import { ref, type Component } from 'vue';
 import type { OperatorSiteAgentWireRecord } from '@narada2/operator-console-contract';
 import {
   Bot,
   Compass,
   Hammer,
-  MoreVertical,
   RefreshCw,
   ScanSearch,
   UserRound,
@@ -16,21 +15,11 @@ import { useOperatorWorkspaceRouteDirectory } from '../console/route-directory';
 import { useSiteAgents } from '../site-agents/composables/useSiteAgents';
 import { decideAgentInspection, decideAgentPrimaryAction } from '../site-agents/interactions';
 import { buildPendingProjectionDocument, scopedAgentSessionsPath } from '../site-agents/projection-handoff';
-import { isAgentMenuKeyboardOpen, isAgentMenuNavigationKey, nextAgentMenuItemIndex } from '../site-agents/menu';
-
-interface AgentMenuState {
-  siteId: string;
-  agent: OperatorSiteAgentWireRecord;
-  x: number;
-  y: number;
-  invoker: HTMLElement | null;
-}
 
 const siteAgents = useSiteAgents();
 const routeDirectory = useOperatorWorkspaceRouteDirectory();
 const busyAgentId = ref<string | null>(null);
 const actionMessage = ref<string | null>(null);
-const menu = ref<AgentMenuState | null>(null);
 
 const roleIcons: Record<string, Component> = {
   resident: UserRound,
@@ -48,8 +37,12 @@ function sessionUrl(sessionId: string): string | null {
   return directory ? findOperatorRouteTarget(directory, { kind: 'session', id: sessionId }) : null;
 }
 
-function openSession(sessionId: string, target?: Window | null): boolean {
-  const url = sessionUrl(sessionId);
+async function openSession(sessionId: string, target?: Window | null): Promise<boolean> {
+  let url = sessionUrl(sessionId);
+  if (!url && routeDirectory) {
+    await routeDirectory.load();
+    url = sessionUrl(sessionId);
+  }
   if (!url) return false;
   if (target && !target.closed) target.location.replace(url);
   else window.open(url, '_blank', 'noopener,noreferrer');
@@ -82,7 +75,6 @@ function isStarting(siteId: string, agent: OperatorSiteAgentWireRecord): boolean
 
 async function startAgent(siteId: string, agent: OperatorSiteAgentWireRecord): Promise<void> {
   if (busyAgentId.value) return;
-  closeMenu();
   const decision = decideAgentPrimaryAction(agent);
   if (decision.kind === 'unavailable') {
     actionMessage.value = decision.reason;
@@ -98,7 +90,7 @@ async function startAgent(siteId: string, agent: OperatorSiteAgentWireRecord): P
       actionMessage.value = result.reason ?? `Could not start ${agent.agent_id}.`;
       return;
     }
-    if (result.status === 'reused' && result.session_id && openSession(result.session_id, target)) {
+    if (result.status === 'reused' && result.session_id && await openSession(result.session_id, target)) {
       actionMessage.value = `Opened ${agent.agent_id}.`;
       return;
     }
@@ -113,12 +105,15 @@ async function startAgent(siteId: string, agent: OperatorSiteAgentWireRecord): P
   }
 }
 
-function inspectAgent(siteId: string, agent: OperatorSiteAgentWireRecord): void {
-  closeMenu();
+async function inspectAgent(siteId: string, agent: OperatorSiteAgentWireRecord): Promise<void> {
   const decision = decideAgentInspection(agent);
-  if (decision.kind === 'open-session' && openSession(decision.sessionId)) {
-    actionMessage.value = `Opened ${agent.agent_id}.`;
-    return;
+  if (decision.kind === 'open-session') {
+    const target = pendingProjectionWindow(agent.agent_id);
+    if (await openSession(decision.sessionId, target)) {
+      actionMessage.value = `Opened ${agent.agent_id}.`;
+      return;
+    }
+    target?.close();
   }
   if (decision.kind === 'choose-session') {
     window.location.href = scopedAgentSessionsPath(siteId, agent.agent_id);
@@ -129,64 +124,17 @@ function inspectAgent(siteId: string, agent: OperatorSiteAgentWireRecord): void 
     : `The Web UI route for ${agent.agent_id} is not available.`;
 }
 
-function openMenu(event: MouseEvent, siteId: string, agent: OperatorSiteAgentWireRecord): void {
+function inspectFromPointer(event: MouseEvent, siteId: string, agent: OperatorSiteAgentWireRecord): void {
   event.preventDefault();
   event.stopPropagation();
-  menu.value = {
-    siteId,
-    agent,
-    x: Math.max(8, Math.min(event.clientX, window.innerWidth - 222)),
-    y: Math.max(8, Math.min(event.clientY, window.innerHeight - 160)),
-    invoker: event.currentTarget instanceof HTMLElement ? event.currentTarget : null,
-  };
-  void focusFirstMenuItem();
+  void inspectAgent(siteId, agent);
 }
 
-function openKeyboardMenu(event: KeyboardEvent, siteId: string, agent: OperatorSiteAgentWireRecord): void {
-  if (!isAgentMenuKeyboardOpen(event)) return;
+function inspectFromKeyboard(event: KeyboardEvent, siteId: string, agent: OperatorSiteAgentWireRecord): void {
+  if (event.key !== 'ContextMenu' && !(event.shiftKey && event.key === 'F10')) return;
   event.preventDefault();
-  const element = event.currentTarget as HTMLElement;
-  const bounds = element.getBoundingClientRect();
-  menu.value = { siteId, agent, x: bounds.left + 16, y: bounds.top + 32, invoker: element };
-  void focusFirstMenuItem();
+  void inspectAgent(siteId, agent);
 }
-
-async function focusFirstMenuItem(): Promise<void> {
-  await nextTick();
-  document.querySelector<HTMLElement>('.agent-menu [role="menuitem"]:not([disabled])')?.focus();
-}
-
-function enabledMenuItems(): HTMLElement[] {
-  return Array.from(document.querySelectorAll<HTMLElement>('.agent-menu [role="menuitem"]:not([disabled])'));
-}
-
-function onMenuKeydown(event: KeyboardEvent): void {
-  if (event.key === 'Escape') {
-    event.preventDefault();
-    event.stopPropagation();
-    closeMenu(true);
-    return;
-  }
-  if (!isAgentMenuNavigationKey(event.key)) return;
-  event.preventDefault();
-  const items = enabledMenuItems();
-  const next = nextAgentMenuItemIndex(items.length, items.indexOf(document.activeElement as HTMLElement), event.key);
-  if (next >= 0) items[next]?.focus();
-}
-
-function isMenuFor(siteId: string, agent: OperatorSiteAgentWireRecord): boolean {
-  return menu.value?.siteId === siteId && menu.value?.agent.agent_id === agent.agent_id;
-}
-
-function closeMenu(restoreFocus = false): void {
-  const invoker = menu.value?.invoker ?? null;
-  menu.value = null;
-  if (restoreFocus) invoker?.focus();
-}
-
-const closeMenuOnOutsideClick = () => closeMenu();
-onMounted(() => document.addEventListener('click', closeMenuOnOutsideClick));
-onUnmounted(() => document.removeEventListener('click', closeMenuOnOutsideClick));
 </script>
 
 <template>
@@ -234,17 +182,15 @@ onUnmounted(() => document.removeEventListener('click', closeMenuOnOutsideClick)
                 class="agent-cell"
                 :data-runtime="agent.runtime.state"
                 :data-work="agent.work.state"
-                @contextmenu="openMenu($event, site.site_id, agent)"
+                @contextmenu="inspectFromPointer($event, site.site_id, agent)"
               >
                 <button
                   type="button"
                   class="agent-button"
                   :disabled="busyAgentId !== null"
                   :aria-label="`${agent.agent_id}: ${agent.runtime.state}, work ${agent.work.state}`"
-                  aria-haspopup="menu"
-                  :aria-expanded="isMenuFor(site.site_id, agent)"
                   @click="startAgent(site.site_id, agent)"
-                  @keydown="openKeyboardMenu($event, site.site_id, agent)"
+                  @keydown="inspectFromKeyboard($event, site.site_id, agent)"
                 >
                   <span class="agent-icon" aria-hidden="true">
                     <component :is="roleIcon(agent.role)" :size="20" />
@@ -255,17 +201,6 @@ onUnmounted(() => document.removeEventListener('click', closeMenuOnOutsideClick)
                     <span>{{ isStarting(site.site_id, agent) ? 'starting' : agent.work.state }}</span>
                   </span>
                 </button>
-                <button
-                  type="button"
-                  class="agent-menu-button"
-                  :aria-label="`Inspect ${agent.agent_id}`"
-                  title="Agent actions"
-                  aria-haspopup="menu"
-                  :aria-expanded="isMenuFor(site.site_id, agent)"
-                  @click="openMenu($event, site.site_id, agent)"
-                >
-                  <MoreVertical :size="15" aria-hidden="true" />
-                </button>
               </div>
             </div>
           </article>
@@ -273,25 +208,6 @@ onUnmounted(() => document.removeEventListener('click', closeMenuOnOutsideClick)
       </section>
     </main>
 
-    <div
-      v-if="menu"
-      class="agent-menu"
-      role="menu"
-      tabindex="-1"
-      :aria-label="`${menu.agent.agent_id} actions`"
-      :style="{ left: `${menu.x}px`, top: `${menu.y}px` }"
-      @click.stop
-      @keydown="onMenuKeydown"
-    >
-      <div class="menu-heading" aria-hidden="true">{{ menu.agent.agent_id }}</div>
-      <button type="button" role="menuitem" :disabled="!menu.agent.actions.inspect && menu.agent.runtime.state !== 'ambiguous'" @click="inspectAgent(menu.siteId, menu.agent)">
-        Open Web UI
-      </button>
-      <button type="button" role="menuitem" :disabled="busyAgentId !== null || !menu.agent.actions.start" @click="startAgent(menu.siteId, menu.agent)">
-        Start agent
-      </button>
-      <div class="menu-detail">Runtime: {{ menu.agent.runtime.state }}<br>Work: {{ menu.agent.work.state }}</div>
-    </div>
   </OperatorConsoleShell>
 </template>
 
@@ -318,7 +234,7 @@ onUnmounted(() => document.removeEventListener('click', closeMenuOnOutsideClick)
 .agent-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(116px, 1fr)); gap: 3px 8px; padding-top: 10px; }
 .agent-cell { position: relative; min-width: 0; border-radius: var(--radius); }
 .agent-cell:hover { background: var(--surface-muted); }
-.agent-button { display: flex; width: 100%; min-height: 58px; align-items: center; gap: 9px; padding: 7px 28px 7px 7px; border: 0; border-radius: var(--radius); background: transparent; color: var(--text); text-align: left; cursor: pointer; }
+.agent-button { display: flex; width: 100%; min-height: 58px; align-items: center; gap: 9px; padding: 7px; border: 0; border-radius: var(--radius); background: transparent; color: var(--text); text-align: left; cursor: pointer; }
 .agent-button:disabled { cursor: default; opacity: .62; }
 .agent-icon { position: relative; display: inline-grid; width: 34px; height: 34px; place-items: center; flex: 0 0 34px; border: 1px solid var(--line); border-radius: 50%; background: var(--surface); }
 .state-dot { position: absolute; right: -1px; bottom: 1px; width: 9px; height: 9px; border: 2px solid var(--surface); border-radius: 50%; background: var(--muted); }
@@ -331,16 +247,7 @@ onUnmounted(() => document.removeEventListener('click', closeMenuOnOutsideClick)
 .agent-copy strong, .agent-copy span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .agent-copy strong { font-size: 12px; font-weight: 650; }
 .agent-copy span { color: var(--muted); font-size: 10px; }
-.agent-menu-button { position: absolute; top: 17px; right: 3px; display: inline-grid; width: 25px; height: 25px; place-items: center; border: 0; border-radius: var(--radius); background: transparent; color: var(--muted); cursor: pointer; }
-.agent-menu-button:hover { background: var(--control-bg); color: var(--text); }
 .empty.compact { margin: 12px 0 0; }
-.agent-menu { position: fixed; z-index: 50; width: 210px; padding: 5px; border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--surface); color: var(--text); box-shadow: 0 8px 24px rgb(0 0 0 / 18%); }
-.menu-heading, .menu-detail { padding: 7px 8px; overflow-wrap: anywhere; }
-.menu-heading { border-bottom: 1px solid var(--line); font: 11px/1.35 var(--mono); }
-.menu-detail { border-top: 1px solid var(--line); color: var(--muted); font-size: 10px; line-height: 1.45; }
-.agent-menu button { display: block; width: 100%; padding: 7px 8px; border: 0; border-radius: var(--radius); background: transparent; color: var(--text); font: inherit; font-size: 12px; text-align: left; cursor: pointer; }
-.agent-menu button:hover:not(:disabled) { background: var(--surface-muted); }
-.agent-menu button:disabled { color: var(--muted); cursor: default; opacity: .6; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 @media (max-width: 700px) { .workspace-main { padding: 18px 12px 28px; } .site-grid { grid-template-columns: 1fr; } }
 </style>

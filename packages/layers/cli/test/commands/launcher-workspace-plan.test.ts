@@ -20,7 +20,7 @@ const runAgentStartCommandMock = vi.hoisted(() => vi.fn(() => ({
   runtime: 'narada-agent-runtime-server',
   command: [],
   parsed_result: {
-    schema: 'narada.agent_start.provider_preflight.v1',
+    schema: 'narada.agent_start.intelligence_catalog_preflight.v1',
     status: 'ready',
   },
 })));
@@ -54,6 +54,18 @@ function createMockContext(): CommandContext {
 
 function titleValues(wtArgs: string[]): string[] {
   return wtArgs.flatMap((arg, index) => arg === '--title' && typeof wtArgs[index + 1] === 'string' ? [wtArgs[index + 1]] : []);
+}
+
+function expectedIntelligenceSelectionAuthority(siteId: string, siteRoot: string): Record<string, unknown> {
+  return {
+    schema: 'narada.invokable-intelligence.selection-authority.v1',
+    owner: '@narada2/invokable-intelligence-runtime',
+    resolution_phase: 'runtime-invocation',
+    authority_scope: { kind: 'site', site_id: siteId },
+    catalog: { store_kind: 'node:sqlite', locator: join(siteRoot, '.ai', 'intelligence-registry.db') },
+    launcher_selection: false,
+    authoritative_inputs: ['invocation-intent', 'catalog', 'materialized-policy', 'runtime-context'],
+  };
 }
 
 async function tempSiteWithDivergentMcpAuthority(): Promise<string> {
@@ -242,7 +254,6 @@ describe('launcher workspace planning', () => {
       role: ['resident'],
       operatorSurface: 'agent-cli',
       runtime: 'narada-agent-runtime-server',
-      intelligenceProvider: 'codex-subscription',
       dryRun: true,
       format: 'json',
     }, createMockContext());
@@ -258,7 +269,15 @@ describe('launcher workspace planning', () => {
         launch_operator_surface: string;
         launch_operator_surfaces: string[];
         launch_runtime: string;
-        intelligence_provider: string;
+        intelligence_selection_authority: {
+          schema: string;
+          owner: string;
+          resolution_phase: string;
+          authority_scope: { kind: string; site_id: string | null };
+          catalog: { store_kind: string; locator: string };
+          launcher_selection: boolean;
+          authoritative_inputs: string[];
+        };
         launch_session_id: string;
         process_ownership: Record<string, unknown>;
         wait_for_enter_before_exec: boolean;
@@ -284,7 +303,18 @@ describe('launcher workspace planning', () => {
     expect(result.selected_agents[0].launch_operator_surface).toBe('agent-cli');
     expect(result.selected_agents[0].launch_operator_surfaces).toEqual(['agent-cli']);
     expect(result.selected_agents[0].launch_runtime).toBe('narada-agent-runtime-server');
-    expect(result.selected_agents[0].intelligence_provider).toBe('codex-subscription');
+    expect(result.selected_agents[0].intelligence_selection_authority).toEqual({
+      schema: 'narada.invokable-intelligence.selection-authority.v1',
+      owner: '@narada2/invokable-intelligence-runtime',
+      resolution_phase: 'runtime-invocation',
+      authority_scope: { kind: 'site', site_id: 'sonar' },
+      catalog: {
+        store_kind: 'node:sqlite',
+        locator: join('D:/code/narada.sonar', '.ai', 'intelligence-registry.db'),
+      },
+      launcher_selection: false,
+      authoritative_inputs: ['invocation-intent', 'catalog', 'materialized-policy', 'runtime-context'],
+    });
     expect(result.selected_agents[0].launch_session_id).toMatch(/^launch_/);
     expect(result.selected_agents[0].process_ownership).toMatchObject({
       schema: 'narada.launch_process_ownership.v1',
@@ -322,12 +352,11 @@ describe('launcher workspace planning', () => {
       '--runtime',
       'narada-agent-runtime-server',
       '--workspace-root',
-      'D:\\code\\narada',
+      'D:/code/narada.sonar',
       '--launch-session-id',
       result.selected_agents[0].launch_session_id,
-      '--intelligence-provider',
-      'codex-subscription',
     ]));
+    expect(result.selected_agents[0].hidden_runtime_start_command).not.toContain('--intelligence-provider');
     expect(result.selected_agents[0].smoke_command).toEqual(expect.arrayContaining([
       'narada',
       'operator-surface',
@@ -472,11 +501,11 @@ describe('launcher workspace planning', () => {
       expect(result.hidden_runtime_launches[0]).toMatchObject({ posture: 'agent_runtime_server', windowsHide: true });
       expect(runAgentStartCommandMock).toHaveBeenCalledWith(expect.objectContaining({
         siteRoot: 'D:/code/narada.sonar',
+        workspaceRoot: 'D:/code/narada.sonar',
         agent: 'sonar.resident',
         runtime: 'narada-agent-runtime-server',
         preflightOnly: true,
       }));
-      expect(runAgentStartCommandMock.mock.calls[0]?.[0]).not.toHaveProperty('workspaceRoot');
       const hiddenLogText = await readFile(hiddenLog, 'utf8');
       expect(hiddenLogText).toContain('operator-surface');
       const writtenResult = JSON.parse(await readFile(resultPath, 'utf8')) as typeof result;
@@ -496,9 +525,9 @@ describe('launcher workspace planning', () => {
     }
   });
 
-  it('surfaces a provider preflight refusal before spawning a NARS runtime', async () => {
+  it('surfaces a Site intelligence catalog preflight refusal before spawning a NARS runtime', async () => {
     const registryPath = await tempRegistry();
-    const resultPath = join(tempDirs[0], 'provider-preflight-failure.json');
+    const resultPath = join(tempDirs[0], 'catalog-preflight-failure.json');
     runAgentStartCommandMock.mockReturnValueOnce({
       schema: 'narada.agent_start.command_result.v0',
       status: 'failed',
@@ -509,9 +538,10 @@ describe('launcher workspace planning', () => {
       runtime: 'narada-agent-runtime-server',
       command: [],
       parsed_result: {
-        schema: 'narada.provider.credential_refusal.v1',
-        reason_code: 'local_codex_subscription_auth_unavailable',
-        reason: 'Codex subscription auth is not available.',
+        schema: 'narada.agent_start.intelligence_catalog_preflight.v1',
+        status: 'failed',
+        reason_code: 'intelligence_catalog_not_ready',
+        reason: 'Site intelligence catalog is not initialized.',
       },
     });
 
@@ -524,7 +554,7 @@ describe('launcher workspace planning', () => {
       resultPath,
       format: 'json',
     }, createMockContext())).rejects.toThrow(
-      'workspace_launch_provider_preflight_failed: sonar.resident: local_codex_subscription_auth_unavailable: Codex subscription auth is not available.',
+      'workspace_launch_catalog_preflight_failed: sonar.resident: intelligence_catalog_not_ready: Site intelligence catalog is not initialized.',
     );
     const failure = JSON.parse(await readFile(resultPath, 'utf8')) as {
       schema: string;
@@ -540,8 +570,8 @@ describe('launcher workspace planning', () => {
       transaction: { state: 'failed', history: ['planned', 'failed'] },
       failure: {
         schema: 'narada.workspace_launch.failure_evidence.v1',
-        stage: 'provider_preflight',
-        reason_code: 'workspace_launch_provider_preflight_failed',
+        stage: 'catalog_preflight',
+        reason_code: 'workspace_launch_catalog_preflight_failed',
         artifact_status: 'written',
         rollback: { completed: true },
       },
@@ -947,7 +977,6 @@ describe('launcher workspace planning', () => {
       role: ['resident'],
       operatorSurface: 'agent-web-ui',
       runtime: 'narada-agent-runtime-server',
-      intelligenceProvider: 'codex-subscription',
       dryRun: true,
       format: 'json',
     }, createMockContext());
@@ -1013,40 +1042,40 @@ describe('launcher workspace planning', () => {
     }, createMockContext())).rejects.toThrow('workspace_launch_operator_surface_runtime_mismatch');
   });
 
-  it('applies selected intelligence providers only to NARS operator-surface launch plans', async () => {
+  it('materializes per-Site catalog authority without selecting offerings in launcher plans', async () => {
     const registryPath = await tempRegistry();
     const plan = await workspaceLaunchPlanCommand({
       registryPath,
       site: ['sonar', 'smart-scheduling'],
       role: ['resident'],
-      intelligenceProvider: 'codex-subscription',
       format: 'json',
     }, createMockContext());
 
     expect(plan.exitCode).toBe(ExitCode.SUCCESS);
-    const result = plan.result as { selected_agents: Array<{ agent: string; launch_operator_surface: string; launch_runtime: string; launch_runtime_host: string; intelligence_provider: string | null; selection_resolution: Record<string, unknown>; hidden_runtime_start_command: string[]; wt_args: string[]; smoke_command: string[] }> };
+    const result = plan.result as { selected_agents: Array<{ agent: string; launch_operator_surface: string; launch_runtime: string; launch_runtime_host: string; intelligence_selection_authority: Record<string, unknown>; selection_resolution: { intelligence: unknown }; hidden_runtime_start_command: string[]; wt_args: string[]; smoke_command: string[] }> };
     const sonar = result.selected_agents.find((agent) => agent.agent === 'sonar.resident');
     const smartScheduling = result.selected_agents.find((agent) => agent.agent === 'smart-scheduling.resident');
     expect(sonar?.launch_operator_surface).toBe('agent-cli');
     expect(sonar?.launch_runtime).toBe('narada-agent-runtime-server');
     expect(sonar?.launch_runtime_host).toBe('narada-agent-runtime-server');
-    expect(sonar?.intelligence_provider).toBe('codex-subscription');
-    expect(sonar?.selection_resolution).toMatchObject({
-      operator_surfaces: { requested: null, resolved: ['agent-cli'], source: 'registry_record' },
-      runtime: { requested: null, resolved: 'narada-agent-runtime-server', source: 'registry_record' },
-      intelligence_provider: { requested: 'codex-subscription', resolved: 'codex-subscription', source: 'explicit_selection' },
-    });
-    expect(sonar?.hidden_runtime_start_command.join(' ')).toContain('--intelligence-provider');
-    expect(sonar?.smoke_command).toContain('--intelligence-provider');
+    expect(sonar?.intelligence_selection_authority).toEqual(
+      expectedIntelligenceSelectionAuthority('sonar', 'D:/code/narada.sonar'),
+    );
+    expect(sonar?.selection_resolution.intelligence).toEqual(sonar?.intelligence_selection_authority);
+    expect(sonar?.hidden_runtime_start_command).not.toContain('--intelligence-provider');
+    expect(sonar?.smoke_command).not.toContain('--intelligence-provider');
     expect(smartScheduling?.launch_operator_surface).toBe('codex');
     expect(smartScheduling?.launch_runtime).toBe('codex');
     expect(smartScheduling?.launch_runtime_host).toBe('codex');
-    expect(smartScheduling?.intelligence_provider).toBeNull();
+    expect(smartScheduling?.intelligence_selection_authority).toEqual(
+      expectedIntelligenceSelectionAuthority('smart-scheduling', 'D:/code/smart-scheduling/.narada'),
+    );
+    expect(smartScheduling?.selection_resolution.intelligence).toEqual(smartScheduling?.intelligence_selection_authority);
     expect(smartScheduling?.wt_args.join(' ')).not.toContain('--intelligence-provider');
     expect(smartScheduling?.smoke_command).not.toContain('--intelligence-provider');
   });
 
-  it('materializes registry default intelligence provider for NARS operator-surface launch plans', async () => {
+  it('keeps catalog authority stable across NARS operator surfaces without offering projection', async () => {
     const registryPath = await tempRegistry();
     const plan = await workspaceLaunchPlanCommand({
       registryPath,
@@ -1057,30 +1086,35 @@ describe('launcher workspace planning', () => {
     }, createMockContext());
 
     expect(plan.exitCode).toBe(ExitCode.SUCCESS);
-    const result = plan.result as { selected_agents: Array<{ intelligence_provider: string | null; selection_resolution: Record<string, unknown>; runtime_start_command: string[]; smoke_command: string[] }> };
+    const result = plan.result as { selected_agents: Array<{ intelligence_selection_authority: Record<string, unknown>; selection_resolution: { intelligence: unknown }; runtime_start_command: string[]; smoke_command: string[] }> };
     const selected = result.selected_agents[0];
-    expect(selected.intelligence_provider).toBe('kimi-code-api');
-    expect(selected.selection_resolution).toMatchObject({
-      intelligence_provider: { requested: null, resolved: 'kimi-code-api', source: 'registry_default' },
-    });
-    expect(selected.runtime_start_command).toContain('--intelligence-provider');
-    expect(selected.runtime_start_command).toContain('kimi-code-api');
-    expect(selected.smoke_command).toContain('kimi-code-api');
+    expect(selected.intelligence_selection_authority).toEqual(
+      expectedIntelligenceSelectionAuthority('sonar', 'D:/code/narada.sonar'),
+    );
+    expect(selected.selection_resolution.intelligence).toEqual(selected.intelligence_selection_authority);
+    expect(selected).not.toHaveProperty('intelligence_provider');
+    expect(selected.intelligence_selection_authority).not.toHaveProperty('inference_provider');
+    expect(selected.intelligence_selection_authority).not.toHaveProperty('model');
+    expect(selected.runtime_start_command).not.toContain('--intelligence-provider');
+    expect(selected.smoke_command).not.toContain('--intelligence-provider');
   });
 
-  it('refuses launch planning when the NARS provider registry has no default', () => {
+  it('does not require a legacy provider registry to plan launches', () => {
     const record = {
       ...launchSelectionFixtureRecords()[0],
       agent_identity_ref: { canonical_agent_id: 'sonar.resident' },
     } as unknown as WorkspaceLaunchRecord;
     const context = {
-      admission: createWorkspaceLaunchAdmissionPolicy({ providerRegistry: { providers: {} } }),
+      admission: createWorkspaceLaunchAdmissionPolicy(),
     };
 
-    expect(() => buildAgentPlan(record, {
+    const plan = buildAgentPlan(record, {
       operatorSurface: 'agent-cli',
       runtime: 'narada-agent-runtime-server',
-    }, context)).toThrow('workspace_launch_intelligence_provider_registry_default_missing');
+    }, context);
+    expect(plan.intelligence_selection_authority).toEqual(
+      expectedIntelligenceSelectionAuthority('sonar', 'D:/code/narada.sonar'),
+    );
   });
 
   it('refuses launch planning when canonical identity is absent', () => {
@@ -1089,7 +1123,7 @@ describe('launcher workspace planning', () => {
       agent_identity_ref: undefined,
     } as unknown as WorkspaceLaunchRecord;
     const context = {
-      admission: createWorkspaceLaunchAdmissionPolicy({ providerRegistry: { default_provider: 'kimi-code-api' } }),
+      admission: createWorkspaceLaunchAdmissionPolicy(),
     };
 
     expect(() => buildAgentPlan(record, {
@@ -1160,7 +1194,6 @@ describe('launcher workspace planning', () => {
       agent: ['sonar.resident'],
       operatorSurface: 'agent-cli',
       runtime: 'narada-agent-runtime-server',
-      intelligenceProvider: 'codex-subscription',
       smoke: true,
       format: 'json',
     }, createMockContext());

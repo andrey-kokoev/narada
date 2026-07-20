@@ -56,27 +56,16 @@ import {
 import { createNaradaPackageResolver } from './narada-package-resolver.ts';
 import {
   codexContextIsolationStatus,
-  codexSubscriptionPreflight as runCodexSubscriptionPreflight,
   resolveCodexCliScriptPath,
 } from './codex-subscription-support.ts';
-import {
-  INTELLIGENCE_PROVIDER_CONTRACT_SCHEMA,
-  loadIntelligenceProviderRegistry,
-  loadSiteEnvFiles,
-  resolveIntelligenceProviderInputSource,
-  resolveIntelligenceProviderLaunch,
-  withResolutionStates,
-} from './provider-resolution.ts';
-import {
-  annotateIntelligenceProviderCredential,
-  intelligenceProviderEnvironmentProjection as projectIntelligenceProviderEnvironment,
-  mcpProviderCredentialEnvironment as projectMcpProviderCredentialEnvironment,
-  providerCredentialRefusal as buildProviderCredentialRefusal,
-} from './provider-credential-projection.ts';
+import { openLocalIntelligenceRegistry } from '@narada2/agent-runtime-server/local-intelligence-runtime';
+import { createIntelligenceSelectionAuthority } from '@narada2/invokable-intelligence-contract';
+import { resolveNaradaSitePaths } from '@narada2/site-paths';
 import { resolveAgentStartExecutionPosture, spawnCarrierProcessAndExit, waitForEnterBeforeCarrier } from './carrier-process-launch.ts';
 import { canonicalJson, identityToken, mcpScopeLoci, normalizeMcpScope, parseArgs } from './launcher-cli-contract.ts';
 import { buildLauncherContractsFromAgentStartResult, buildRuntimeHealthPosture, startupCommandFromSequence } from './launch-result-contracts.ts';
 import { AgentStartResultContractError, assertAgentStartResultV0 } from './launch-result-v0-contract.mjs';
+import { loadSiteEnvFiles } from './site-env-loader.ts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const packageRootDir = join(__dirname, '..');
@@ -91,7 +80,10 @@ function resolvePackagedModule(specifier: string): string | null {
   }
 }
 
-const SITE_ENV_BINDINGS = new Map();
+function localSiteMcpFabricPath() {
+  const localLocus = (mcpFabric?.locus_fabrics ?? []).find((entry) => entry.locus === 'local-site');
+  return localLocus?.mcp_dir ?? mcpFabric?.mcp_dir ?? join(workspaceRoot, '.ai', 'mcp');
+}
 
 const args = parseArgs(process.argv.slice(2));
 const identity = args.identity;
@@ -168,8 +160,12 @@ const showAdmission = args.show_admission ?? null;
 const targetSiteId = args.target_site_id ?? process.env.NARADA_TARGET_SITE_ID ?? null;
 const targetSiteRoot = args.target_site_root ?? process.env.NARADA_TARGET_SITE_ROOT ?? null;
 const sessionSiteRoot = targetSiteRoot ?? rootDir;
+const workspaceRoot = resolveNaradaSitePaths({
+  siteRoot: sessionSiteRoot,
+  workspaceRoot: args.workspace_root ?? process.env.NARADA_WORKSPACE_ROOT ?? undefined,
+}).workspaceRoot;
 const userSiteRoot = resolveUserSiteRoot();
-loadSiteEnvFiles(sessionSiteRoot, { siteNaradaRoot, processEnv: process.env, siteEnvBindings: SITE_ENV_BINDINGS });
+loadSiteEnvFiles(sessionSiteRoot, { siteNaradaRoot, processEnv: process.env });
 const dbPath = args.db ?? join(sessionSiteRoot, '.ai', 'state', 'agent-context.sqlite');
 const require = createRequire(import.meta.url);
 const naradaPackages = createNaradaPackageResolver({
@@ -201,11 +197,6 @@ function resolveNaradaPackageExport(packageName, exportName = '.') {
 function resolveNaradaPackageBin(packageName, binName) {
   return naradaPackages.resolvePackageBin(packageName, binName);
 }
-const INTELLIGENCE_PROVIDER_METADATA_PATH = process.env.NARADA_INTELLIGENCE_PROVIDER_METADATA_PATH ?? resolveNaradaPackageExport('@narada2/carrier-provider-contract', './provider-registry');
-const INTELLIGENCE_PROVIDER_REGISTRY = loadIntelligenceProviderRegistry(INTELLIGENCE_PROVIDER_METADATA_PATH);
-const INTELLIGENCE_PROVIDER_METADATA = INTELLIGENCE_PROVIDER_REGISTRY.metadata;
-const ADMITTED_INTELLIGENCE_PROVIDERS = INTELLIGENCE_PROVIDER_REGISTRY.admittedProviders;
-const DEFAULT_AGENT_CLI_INTELLIGENCE_PROVIDER = INTELLIGENCE_PROVIDER_REGISTRY.defaultProvider;
 const DEFAULT_PI_PROVIDER = 'openai-codex';
 const DEFAULT_PI_MODEL = 'gpt-5.5';
 const DEFAULT_CLAUDE_CODE_COMMAND = 'claude';
@@ -251,23 +242,14 @@ async function failToolFabricRefusal(error) {
   process.exit(1);
 }
 
-async function failIntelligenceProviderRefusal(refusal) {
+async function failLegacyIntelligenceSelection(refusal) {
   if (jsonOutput) {
     await writeStdout(`${JSON.stringify(refusal, null, 2)}\n`);
   } else {
-    console.error(`[FAIL] ${refusal.reason_code}: ${refusal.candidate_intelligence_provider ?? refusal.intelligence_provider}`);
+    console.error(`[FAIL] ${refusal.reason_code}: ${refusal.reason}`);
     if (refusal.reason) console.error(refusal.reason);
   }
   process.exit(1);
-}
-
-function normalizeIntelligenceProvider(value, carrierName, inputSource = { source_field: null }) {
-  return resolveIntelligenceProviderLaunch(value, carrierName, inputSource, {
-    metadataByProvider: INTELLIGENCE_PROVIDER_METADATA,
-    admittedProviders: ADMITTED_INTELLIGENCE_PROVIDERS,
-    defaultProvider: DEFAULT_AGENT_CLI_INTELLIGENCE_PROVIDER,
-    schema: INTELLIGENCE_PROVIDER_CONTRACT_SCHEMA,
-  });
 }
 
 function resolveRuntimeAuthority(value, carrierName) {
@@ -287,55 +269,6 @@ function resolveRuntimeAuthority(value, carrierName) {
     effective,
     source: value ? 'launch_argument' : process.env.NARADA_RUNTIME_AUTHORITY ? 'environment' : 'default',
   };
-}
-
-function codexSubscriptionPreflight(provider) {
-  return runCodexSubscriptionPreflight(provider, {
-    processEnv: process.env,
-    processPlatform: process.platform,
-    sessionSiteRoot,
-    siteId: targetSiteId,
-    runtimeSessionId: plannedCarrierSessionId,
-    agentIdentityRef: identity,
-    launchSessionId: null,
-    userSiteRoot,
-    dryRun,
-  });
-}
-
-function intelligenceProviderEnvironment(providerResolution) {
-  return projectIntelligenceProviderEnvironment(providerResolution, {
-    metadataByProvider: INTELLIGENCE_PROVIDER_METADATA,
-    processEnv: process.env,
-    codexSubscriptionPreflight,
-  }).env;
-}
-
-function intelligenceProviderEnvironmentProjection(providerResolution) {
-  return projectIntelligenceProviderEnvironment(providerResolution, {
-    metadataByProvider: INTELLIGENCE_PROVIDER_METADATA,
-    processEnv: process.env,
-    codexSubscriptionPreflight,
-  });
-}
-
-function mcpProviderCredentialEnvironment() {
-  return {
-    ...projectMcpProviderCredentialEnvironment({
-      carrier,
-      agentTuiCarrier: AGENT_TUI_CARRIER,
-      metadataByProvider: INTELLIGENCE_PROVIDER_METADATA,
-      processEnv: process.env,
-      codexSubscriptionPreflight,
-    }),
-  };
-}
-
-function providerCredentialRefusal(providerResolution, credential) {
-  return buildProviderCredentialRefusal(providerResolution, credential, {
-    schema: INTELLIGENCE_PROVIDER_CONTRACT_SCHEMA,
-    withResolutionStates,
-  });
 }
 
 function materializeAgentTuiMcpConfig() {
@@ -390,48 +323,72 @@ if (runtimeResolution.status === 'refused') {
 const runtime = runtimeResolution.runtime_substrate_kind;
 const carrier = runtimeResolution.carrier_kind;
 const runtimeAuthoritySelection = resolveRuntimeAuthority(args.authority, carrier);
-const intelligenceProviderArgInput = args.intelligence_provider ?? null;
-const intelligenceProviderEnvInput = carrier === AGENT_CLI_OPERATOR_SURFACE_KIND || carrier === 'agent-web-ui' ? process.env.NARADA_INTELLIGENCE_PROVIDER : null;
-const intelligenceProviderInput = intelligenceProviderArgInput ?? intelligenceProviderEnvInput ?? null;
-const intelligenceProviderInputSource = resolveIntelligenceProviderInputSource(intelligenceProviderArgInput, intelligenceProviderEnvInput, carrier, {
-  processEnv: process.env,
-  siteEnvBindings: SITE_ENV_BINDINGS,
-});
-const intelligenceProviderResolution = normalizeIntelligenceProvider(intelligenceProviderInput, carrier, intelligenceProviderInputSource);
-if (intelligenceProviderResolution?.status === 'refused') {
-  await failIntelligenceProviderRefusal(intelligenceProviderResolution);
+if (Object.hasOwn(args, 'intelligence_provider')) {
+  await failLegacyIntelligenceSelection({
+    schema: 'narada.agent_start.legacy_intelligence_selection_refusal.v1',
+    status: 'refused',
+    mutation_performed: false,
+    reason_code: 'launcher_intelligence_selection_removed',
+    reason: 'Agent launchers do not select an intelligence provider or model.',
+    required_next_step: 'Manage Site catalog resources and policy through invokable-intelligence management; runtime invocation intent and policy perform selection.',
+  });
 }
 
 if (!identity) {
-  console.error('Usage: node start-agent.mjs <identity> [--operator-surface <surface>] [--carrier <legacy-carrier>] [--runtime <runtime>] [--authority <auto|read|write>] [--db <path>] [--json] [--preflight-only] [--dry-run] [--exec] [--wait] [--visible-runtime-terminal] [--yolo] [--enable-native-shell] [--strict-mcp-registry] [--target-site-id <site-id>] [--target-site-root <path>]');
+  console.error('Usage: node start-agent.mjs <identity> [--operator-surface <surface>] [--carrier <legacy-carrier>] [--runtime <runtime>] [--authority <auto|read|write>] [--db <path>] [--json] [--preflight-only] [--dry-run] [--exec] [--wait] [--visible-runtime-terminal] [--yolo] [--enable-native-shell] [--strict-mcp-registry] [--target-site-id <site-id>] [--target-site-root <path>] [--workspace-root <path>]');
   process.exit(1);
 }
 
 const plannedCarrierSessionId = newCarrierSessionId();
-const intelligenceProviderProjection = intelligenceProviderEnvironmentProjection(intelligenceProviderResolution);
-const intelligenceProviderEnv = intelligenceProviderProjection.env;
-const intelligenceProviderCredential = intelligenceProviderProjection.credential;
-const intelligenceProviderOutputResolution = {
-  ...annotateIntelligenceProviderCredential(intelligenceProviderResolution, intelligenceProviderCredential),
-  ...(intelligenceProviderProjection.runtime_binding ? { runtime_binding: intelligenceProviderProjection.runtime_binding } : {}),
-};
-if (intelligenceProviderCredential?.credential_required && !intelligenceProviderCredential.credential_present) {
-  await failIntelligenceProviderRefusal(providerCredentialRefusal(intelligenceProviderOutputResolution, intelligenceProviderCredential));
-}
+const intelligenceRegistryDbPath = join(sessionSiteRoot, '.ai', 'intelligence-registry.db');
+const intelligenceSelectionAuthority = createIntelligenceSelectionAuthority({
+  siteId: targetSiteId,
+  storeKind: 'node:sqlite',
+  catalogLocator: intelligenceRegistryDbPath,
+});
 
 if (preflightOnly) {
-  await printResult({
-    schema: 'narada.agent_start.provider_preflight.v1',
-    status: intelligenceProviderResolution ? 'ready' : 'not_applicable',
-    mutation_performed: false,
-    site_root: sessionSiteRoot,
-    agent: identity,
-    operator_surface_kind: carrier,
-    runtime_host_kind: runtime,
-    intelligence_provider: intelligenceProviderResolution?.intelligence_provider ?? null,
-    provider_resolution: intelligenceProviderOutputResolution,
-  });
-  process.exit(0);
+  let store;
+  try {
+    store = await openLocalIntelligenceRegistry({
+      siteRoot: sessionSiteRoot,
+      registryDbPath: intelligenceRegistryDbPath,
+    });
+    const [catalogRecords, resources] = await Promise.all([
+      store.listCatalogRecords(),
+      store.listResources(),
+    ]);
+    await printResult({
+      schema: 'narada.agent_start.intelligence_catalog_preflight.v1',
+      status: 'ready',
+      mutation_performed: false,
+      site_root: sessionSiteRoot,
+      agent: identity,
+      operator_surface_kind: carrier,
+      runtime_host_kind: runtime,
+      intelligence_selection_authority: intelligenceSelectionAuthority,
+      catalog_record_count: catalogRecords.length,
+      resource_count: resources.length,
+    });
+    process.exit(0);
+  } catch (error) {
+    await printResult({
+      schema: 'narada.agent_start.intelligence_catalog_preflight.v1',
+      status: 'blocked',
+      mutation_performed: false,
+      reason_code: 'intelligence_catalog_not_ready',
+      reason: error instanceof Error ? error.message : String(error),
+      site_root: sessionSiteRoot,
+      agent: identity,
+      operator_surface_kind: carrier,
+      runtime_host_kind: runtime,
+      intelligence_selection_authority: intelligenceSelectionAuthority,
+      required_next_step: 'Initialize and validate the Site intelligence catalog before launching NARS.',
+    });
+    process.exit(1);
+  } finally {
+    await store?.close();
+  }
 }
 
 let startResult;
@@ -441,7 +398,7 @@ try {
     identity,
     runtime,
     dbPath,
-    cwd: process.cwd(),
+    cwd: workspaceRoot,
     dryRun,
   });
 } catch (error) {
@@ -471,7 +428,7 @@ try {
 }
 
 function kimiSessionDir(identity) {
-  const cwdHash = createHash('md5').update(process.cwd()).digest('hex');
+  const cwdHash = createHash('md5').update(workspaceRoot).digest('hex');
   return join(homedir(), '.kimi', 'sessions', cwdHash, identity);
 }
 
@@ -581,7 +538,7 @@ function materializeCarrierSessionRecord({ identity, carrier, runtime, startResu
     userSiteRoot,
     runtimeContractSchema: RUNTIME_CONTRACT_SCHEMA,
     launchSource,
-    workspace: process.cwd(),
+    workspace: workspaceRoot,
     processId: process.pid,
     writeJsonFile,
   });
@@ -603,7 +560,7 @@ function nativeShellExceptionStatus() {
     authority_basis: process.env.NARADA_NATIVE_SHELL_AUTHORITY_REF ?? null,
     scope: {
       identity,
-      workspace: process.cwd(),
+      workspace: workspaceRoot,
       duration: 'this launched session',
       destructive_operations: 'separately_prohibited',
     },
@@ -691,7 +648,7 @@ function mcpEnvironmentValues() {
     NARADA_CARRIER_SESSION_ID: carrierSessionRegistration.carrier_session_id,
     ...(targetSiteId ? { NARADA_SITE_ID: targetSiteId } : {}),
     NARADA_SITE_ROOT: sessionSiteRoot,
-    NARADA_WORKSPACE_ROOT: process.cwd(),
+    NARADA_WORKSPACE_ROOT: workspaceRoot,
     NARADA_AGENT_CONTEXT_DB: dbPath,
   }).filter(([, value]) => value !== null && value !== undefined && value !== ''));
 }
@@ -718,8 +675,10 @@ function mcpLocusRoot(locus) {
   return sessionSiteRoot;
 }
 
-function missingFabricDirectory(root) {
-  return !existsSync(join(root, '.ai', 'mcp')) && !existsSync(join(siteControlRoot(root), '.ai', 'mcp'));
+function missingFabricDirectory(root, projectionWorkspaceRoot = null) {
+  return !(projectionWorkspaceRoot && existsSync(join(projectionWorkspaceRoot, '.ai', 'mcp')))
+    && !existsSync(join(root, '.ai', 'mcp'))
+    && !existsSync(join(siteControlRoot(root), '.ai', 'mcp'));
 }
 
 function siteControlRoot(siteRoot) {
@@ -824,8 +783,9 @@ function loadScopedMcpFabric() {
   const missingLoci = [];
   for (const locus of loci) {
     const root = mcpLocusRoot(locus);
+    const projectionWorkspaceRoot = locus === 'local-site' ? workspaceRoot : null;
     const required = mcpScope !== 'all' || locus === 'local-site';
-    if (!required && missingFabricDirectory(root)) {
+    if (!required && missingFabricDirectory(root, projectionWorkspaceRoot)) {
       missingLoci.push({ locus, site_root: root, reason: 'mcp_fabric_missing_optional_for_all_scope' });
       continue;
     }
@@ -834,6 +794,7 @@ function loadScopedMcpFabric() {
       validateRegistry: strictMcpRegistry ? true : 'diagnostic',
       injectionScope: locus,
       runtime_kind: mcpRuntimeKind,
+      workspaceRoot: projectionWorkspaceRoot,
     });
     if (Object.keys(fabric.servers ?? {}).length === 0) {
       const runtimeFiltered = (fabric.skipped ?? []).filter((entry) => entry.reason === 'runtime_kind_not_requested');
@@ -967,7 +928,7 @@ function siteConfigProjection() {
     site_id: targetSiteId,
     site_root: sessionSiteRoot,
     narada_root: siteNaradaRoot(sessionSiteRoot),
-    workspace_root: process.cwd(),
+    workspace_root: workspaceRoot,
     pc_site_root: pcSiteRoot,
     mcp_scope: mcpScope,
     mcp_loci: mcpScopeResolution?.loaded_loci ?? [],
@@ -1079,7 +1040,7 @@ if (admitSessionFlag) {
       identity,
       runtime,
       dbPath,
-      cwd: process.cwd(),
+      cwd: workspaceRoot,
       dryRun,
       evidence: {
         requested_by: 'agent-start --admit-session',
@@ -1145,7 +1106,6 @@ const carrierEnvironment = {
   NARADA_RUNTIME_AUTHORITY: runtimeAuthoritySelection.effective,
 };
 const agentTuiEnvironment = agentTuiTerminalEnvironment();
-const mcpProviderCredentialEnv = mcpProviderCredentialEnvironment();
 const codexMcpScope = codexMcpScopeProjection();
 const carrierActions = {
   cleared_kimi_session: clearKimiSession(identity),
@@ -1156,7 +1116,6 @@ const carrierActions = {
 };
 const startingCarrierInput = resolveStartingCarrierInput();
 const environmentSiteRoot = sessionSiteRoot;
-const workspaceRoot = process.cwd();
 const runtimeEnvironment = carrierSpecificEnvironment(carrier, {
   processEnv: process.env,
   defaultPiProvider: DEFAULT_PI_PROVIDER,
@@ -1181,8 +1140,6 @@ const { requiredEnvironment, wouldSetEnvironment } = buildCarrierEnvironmentProj
   carrierName: carrier,
   startResult,
   carrierEnvironment,
-  intelligenceProviderEnv,
-  mcpProviderCredentialEnv,
   agentTuiEnvironment,
   runtimeEnvironment,
   identity,
@@ -1204,8 +1161,6 @@ const spawnEnvironmentDelta = buildCarrierSpawnEnvironmentDelta({
   carrierName: carrier,
   startResult,
   carrierEnvironment,
-  intelligenceProviderEnv,
-  mcpProviderCredentialEnv,
   agentTuiEnvironment,
   runtimeEnvironment,
   identity,
@@ -1233,6 +1188,7 @@ const narsLaunch = buildNarsLaunchPacket(carrier, {
   carrierSessionRegistration,
   targetSiteId,
   sessionSiteRoot,
+  siteMcpFabricPath: localSiteMcpFabricPath(),
   siteCarrierControlPath,
   siteCarrierSessionPath,
 });
@@ -1295,9 +1251,7 @@ const output = {
     enforcement: codexMcpScope,
   },
   runtime_authority_selection: runtimeAuthoritySelection,
-  intelligence_provider_contract_schema: INTELLIGENCE_PROVIDER_CONTRACT_SCHEMA,
-  intelligence_provider: intelligenceProviderOutputResolution?.intelligence_provider ?? null,
-  intelligence_provider_resolution: intelligenceProviderOutputResolution,
+  intelligence_selection_authority: intelligenceSelectionAuthority,
   display_environment: requiredEnvironment,
   required_environment: requiredEnvironment,
   would_set_environment: wouldSetEnvironment,
@@ -1403,8 +1357,6 @@ const spawnCommand = isOpencodeWin32 ? 'cmd.exe' : resolveCarrierExecutableComma
 const spawnCommandArgs = isOpencodeWin32 ? ['/c', resolveCarrierExecutableCommand(carrier), ...spawnArgs] : spawnArgs;
 const processEnvironment = buildCarrierProcessEnvironment({
   processEnvironment: process.env,
-  intelligenceProviderEnv,
-  mcpProviderCredentialEnv,
   runtimeEnvironment,
   agentTuiEnvironment,
   codexMcpScope,
@@ -1426,7 +1378,7 @@ const processEnvironment = buildCarrierProcessEnvironment({
   processRole: process.env.NARADA_PROCESS_ROLE ?? null,
   createdByPid: process.env.NARADA_CREATED_BY_PID ?? null,
 });
-const launchEnvironment = intelligenceProviderResolution?.intelligence_provider === 'codex-subscription'
+const launchEnvironment = carrier === 'codex'
   ? stripCodexSubscriptionOpenAIEnvironment(processEnvironment)
   : processEnvironment;
 const aiProcessInvocation = carrier === 'codex'
@@ -1454,7 +1406,7 @@ const aiProcessInvocation = carrier === 'codex'
 spawnCarrierProcessAndExit({
   command: spawnCommand,
   args: spawnCommandArgs,
-  cwd: process.cwd(),
+  cwd: workspaceRoot,
   env: launchEnvironment,
   spawnOptions: carrierSpawnOptions(carrier),
   aiProcessInvocation,

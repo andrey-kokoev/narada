@@ -63,3 +63,41 @@ test("catalog envelope identity and kind cannot diverge from its document", () =
   assert.ok(validateCanonicalCatalogRecord({ ...record, record_id: "model:other" }).some(({ code }) => code === "catalog-record-id-mismatch"));
   assert.ok(validateCanonicalCatalogRecord({ ...record, record_kind: "policy" }).some(({ code }) => code === "catalog-record-kind-mismatch"));
 });
+
+test("authority statements cannot be relabeled as destination-local by their catalog envelope", () => {
+  const document = {
+    schema: "narada.invokable-intelligence.authority-statement.v1" as const,
+    id: "authority-statement:foreign-preference",
+    kind: "user-preference" as const,
+    origin: {
+      locus: "user-site" as const,
+      site_id: "site:foreign",
+      authority_ref: "authority:site:foreign",
+    },
+    effect: "ranking" as const,
+    revision: 1,
+    issued_at: "2026-07-19T00:00:00Z",
+    payload_ref: "policy:foreign-preference",
+  };
+  const authorityRecord: CanonicalCatalogRecord = {
+    ...record,
+    id: "catalog-record:authority-statement:foreign-preference:r1",
+    record_kind: "authority-statement",
+    record_id: document.id,
+    source: { ...record.source, digest: canonicalSha256(document) },
+    authority: {
+      kind: document.kind,
+      locus: document.origin.locus,
+      site_id: document.origin.site_id,
+      authority_ref: document.origin.authority_ref,
+    },
+    document,
+  };
+
+  assert.deepEqual(validateCanonicalCatalogRecord(authorityRecord), []);
+  const relabeled = {
+    ...authorityRecord,
+    authority: { ...authorityRecord.authority, site_id: "site:target" },
+  };
+  assert.ok(validateCanonicalCatalogRecord(relabeled).some(({ code }) => code === "catalog-record-authority-mismatch"));
+});

@@ -188,8 +188,8 @@ export const INTELLIGENCE_AUTHORITY_MATRIX = {
 
 export interface IntelligenceAuthorityOrigin {
   locus: IntelligenceAuthorityLocus;
-  /** Required for Site-scoped loci; identifies the authority object, not merely a folder. */
-  site_id?: string;
+  /** Site whose authority registry originated the statement, including principal statements. */
+  site_id: string;
   /** Required for principal-originated consent and prohibition. */
   principal_id?: string;
   /** Durable authority or provenance record supporting the statement. */
@@ -262,14 +262,6 @@ export type IntelligenceAuthorityRefusalCode =
   | "principal-prohibited"
   | "authority-policy-conflict";
 
-const SITE_SCOPED_LOCI: readonly IntelligenceAuthorityLocus[] = [
-  "target-site",
-  "user-site",
-  "execution-site",
-  "resource-owner",
-  "runtime-observer",
-];
-
 export function validateIntelligenceAuthorityStatement(
   statement: IntelligenceAuthorityStatement,
 ): IntelligenceAuthorityDiagnostic[] {
@@ -312,12 +304,12 @@ export function validateIntelligenceAuthorityStatement(
       message: `${statement.kind} may only have the ${rule.resolution_effect} resolution effect.`,
     });
   }
-  if (SITE_SCOPED_LOCI.includes(statement.origin.locus) && !statement.origin.site_id) {
+  if (!statement.origin.site_id) {
     diagnostics.push({
       code: "invalid-authority-statement",
       statement_id: statement.id,
       statement_kind: statement.kind,
-      message: `${statement.origin.locus} statements require site_id.`,
+      message: `${statement.origin.locus} statements require their originating site_id.`,
     });
   }
   if (statement.origin.locus === "principal" && !statement.origin.principal_id) {

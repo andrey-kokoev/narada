@@ -3,6 +3,10 @@ import { silentCommandContext } from '../lib/command-wrapper.js';
 import { workspaceLaunchCommand } from './workspace-launch-application.js';
 import { readWorkspaceLaunchRecords } from './workspace-launch-registry.js';
 import type { SiteAgentOverviewReadModel } from './site-agent-overview-read-model.js';
+import {
+  createSiteAgentLaunchAdmission,
+  type SiteAgentLaunchAdmission,
+} from './site-agent-launch-admission.js';
 
 export interface SiteAgentLaunchRequest {
   siteId: string;
@@ -17,6 +21,7 @@ export interface SiteAgentLaunchGatewayDependencies {
   overview: SiteAgentOverviewReadModel;
   readLaunchRecords?: typeof readWorkspaceLaunchRecords;
   launchCommand?: typeof workspaceLaunchCommand;
+  launchAdmission?: SiteAgentLaunchAdmission;
 }
 
 function response(
@@ -53,18 +58,34 @@ export function createSiteAgentLaunchGateway(
 ): SiteAgentLaunchGateway {
   const readLaunchRecords = dependencies.readLaunchRecords ?? readWorkspaceLaunchRecords;
   const launchCommand = dependencies.launchCommand ?? workspaceLaunchCommand;
-  // Single-flight admission: one in-flight ensure-running per canonical agent.
-  // Concurrent callers join the same admission instead of racing a second
-  // read-then-launch, and the lease always releases on settle so failures can
-  // be retried and later callers re-validate against fresh session state.
-  const admissions = new Map<string, Promise<OperatorSiteAgentLaunchWireResponse>>();
+  const launchAdmission = dependencies.launchAdmission ?? createSiteAgentLaunchAdmission();
+
+  async function reuseHealthySession(request: SiteAgentLaunchRequest): Promise<OperatorSiteAgentLaunchWireResponse | null> {
+    const overview = await dependencies.overview.read().catch(() => null);
+    if (!overview || overview.status !== 'success') return null;
+    const matches = overview.groups
+      .flatMap((group) => group.sites)
+      .filter((site) => site.site_id === request.siteId)
+      .flatMap((site) => site.agents)
+      .filter((candidate) => candidate.agent_id === request.agentId);
+    const agent = matches.length === 1 ? matches[0] : null;
+    return agent?.runtime.state === 'running' && agent.runtime.selected_session_id
+      ? response('reused', request, agent.runtime.selected_session_id, null)
+      : null;
+  }
 
   async function launchAdmitted(request: SiteAgentLaunchRequest): Promise<OperatorSiteAgentLaunchWireResponse> {
     const overview = await dependencies.overview.read();
-    const agent = overview.groups
+    if (overview.status !== 'success') {
+      return response('refused', request, null, 'site_agent_overview_refused');
+    }
+    const matches = overview.groups
       .flatMap((group) => group.sites)
-      .find((site) => site.site_id === request.siteId)
-      ?.agents.find((candidate) => candidate.agent_id === request.agentId);
+      .filter((site) => site.site_id === request.siteId)
+      .flatMap((site) => site.agents)
+      .filter((candidate) => candidate.agent_id === request.agentId);
+    if (matches.length > 1) return response('refused', request, null, 'duplicate_agent_identity');
+    const agent = matches[0];
     if (!agent) return response('refused', request, null, 'agent_not_admitted_to_site');
     if (agent.runtime.state === 'running' && agent.runtime.selected_session_id) {
       return response('reused', request, agent.runtime.selected_session_id, null);
@@ -91,16 +112,11 @@ export function createSiteAgentLaunchGateway(
 
   return {
     async launch(request): Promise<OperatorSiteAgentLaunchWireResponse> {
+      const existing = await reuseHealthySession(request);
+      if (existing) return existing;
       const key = `${request.siteId.toLowerCase()}/${request.agentId.toLowerCase()}`;
-      const inFlight = admissions.get(key);
-      if (inFlight) return inFlight;
-      const admission = launchAdmitted(request);
-      admissions.set(key, admission);
-      try {
-        return await admission;
-      } finally {
-        if (admissions.get(key) === admission) admissions.delete(key);
-      }
+      return launchAdmission.run(key, () => launchAdmitted(request).catch(() =>
+        response('failed', request, null, 'workspace_launch_admission_failed')));
     },
   };
 }

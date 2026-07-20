@@ -1126,7 +1126,7 @@ describe('console server', () => {
     });
   });
   describe('site-agent overview invariant diagnostics', () => {
-    it('appends semantic invariant violations to the overview refusals', async () => {
+    it('refuses and suppresses an invariant-invalid overview at the producer boundary', async () => {
       const siteAgentOverview = {
         read: vi.fn(async () => ({
           schema: 'narada.operator_console.site_agent_overview.v1' as const,
@@ -1160,7 +1160,10 @@ describe('console server', () => {
       const url = await server.start();
       const overviewResponse = await httpGet(`${url}/console/agents/api/overview`);
       expect(overviewResponse.status).toBe(200);
-      const refusals = (overviewResponse.body as { refusals: string[] }).refusals;
+      const body = overviewResponse.body as { status: string; groups: unknown[]; refusals: string[] };
+      expect(body.status).toBe('refused');
+      expect(body.groups).toEqual([]);
+      const refusals = body.refusals;
       expect(refusals.some((entry) => entry.startsWith('invariant_violation:runtime_running_shape:'))).toBe(true);
       expect(refusals.some((entry) => entry.startsWith('invariant_violation:action_state_mismatch:'))).toBe(true);
       await server.stop();
@@ -1236,11 +1239,23 @@ describe('console server', () => {
       expect(launch.status).toBe(200);
       const pending = await httpGet(`${url}/console/agents/api/pending`);
       expect((pending.body as { pending: Array<{ agent_id: string; session_id: string | null }> }).pending)
-        .toEqual([{ site_id: 'sonar', agent_id: 'sonar.resident', session_id: 'session-new', started_at: expect.any(String) }]);
+        .toEqual([{
+          site_id: 'sonar',
+          agent_id: 'sonar.resident',
+          session_id: 'session-new',
+          started_at: expect.any(String),
+          updated_at: expect.any(String),
+          phase: 'launch_accepted',
+        }]);
 
       const pendingRoute = await httpGet(`${url}/console/agents/api/session-route?site_id=sonar&agent_id=sonar.resident`);
       expect(pendingRoute.status).toBe(200);
-      expect(pendingRoute.body).toMatchObject({ status: 'pending', sessions_path: '/console/sessions?site=sonar&agent=sonar.resident' });
+      expect(pendingRoute.body).toMatchObject({ status: 'pending', phase: 'waiting_for_session', sessions_path: '/console/sessions?site=sonar&agent=sonar.resident' });
+
+      selectedSession = 'session-old';
+      runtimeState = 'running';
+      const staleRoute = await httpGet(`${url}/console/agents/api/session-route?site_id=sonar&agent_id=sonar.resident&session_id=session-new`);
+      expect(staleRoute.body).toMatchObject({ status: 'pending', phase: 'waiting_for_session', session_id: 'session-new', url: null });
 
       runtimeState = 'running';
       selectedSession = 'session-new';

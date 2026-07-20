@@ -11,6 +11,11 @@ import { defaultRuntimeForOperatorSurface } from '@narada2/operator-surface-runt
 import { requireAgent, requireSiteRoot } from './operator-surface-runtime-support.js';
 import { resolveWorkspaceLaunchSelection } from './workspace-launch-resolution.js';
 import { normalizeExplicitWorkspaceLaunchMcpScope } from './workspace-launch-contracts.js';
+import { join } from 'node:path';
+import {
+  createIntelligenceSelectionAuthority,
+  type IntelligenceSelectionAuthority,
+} from '@narada2/invokable-intelligence-contract';
 
 /**
  * Canonical Operator Surface runtime-start boundary.
@@ -25,7 +30,6 @@ export interface OperatorSurfaceRuntimeStartOptions {
   carrier?: string;
   runtime?: string;
   authority?: string;
-  intelligenceProvider?: string;
   mcpScope?: string;
   timeout?: number;
   dryRun?: boolean;
@@ -42,7 +46,7 @@ export interface OperatorSurfaceRuntimeStartOptions {
 function buildDirectSelectionResolution(
   carrierSelection: { requested: string | null; value: string; source: string },
   runtimeSelection: { requested: string | null; value: string; source: string },
-  intelligenceProvider: string | undefined,
+  intelligenceSelectionAuthority: IntelligenceSelectionAuthority,
 ) {
   return {
     schema: 'narada.operator_surface_runtime.selection_resolution.v1',
@@ -56,11 +60,7 @@ function buildDirectSelectionResolution(
       resolved: runtimeSelection.value,
       source: runtimeSelection.source,
     },
-    intelligence_provider: {
-      requested: intelligenceProvider ?? null,
-      resolved: intelligenceProvider ?? null,
-      source: intelligenceProvider ? 'explicit_selection' : 'delegated_to_agent_start',
-    },
+    intelligence: intelligenceSelectionAuthority,
   };
 }
 
@@ -69,6 +69,11 @@ export async function operatorSurfaceRuntimeStartCommand(
   _context: CommandContext,
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
   const siteRoot = requireSiteRoot(options);
+  const intelligenceSelectionAuthority = createIntelligenceSelectionAuthority({
+    siteId: options.targetSiteId ?? null,
+    storeKind: 'node:sqlite',
+    catalogLocator: join(siteRoot, '.ai', 'intelligence-registry.db'),
+  });
   const carrierSelection = resolveWorkspaceLaunchSelection(options.carrier, 'agent-cli', 'operator_surface', 'command_default');
   const carrier = carrierSelection.value;
   const runtimeSelection = resolveWorkspaceLaunchSelection(
@@ -95,7 +100,7 @@ export async function operatorSurfaceRuntimeStartCommand(
       operatorSurfaceKind: carrier,
       runtimeHostKind: runtime,
       authority: options.authority ?? null,
-      intelligenceProvider: options.intelligenceProvider ?? null,
+      intelligenceSelectionAuthority,
       narsSessionId: existing.latest.nars_session_id ?? existing.latest.runtime_session_id ?? existing.latest.carrier_session_id ?? null,
       runtimeSessionId: existing.latest.runtime_session_id ?? null,
       carrierSessionId: existing.latest.carrier_session_id ?? null,
@@ -114,7 +119,7 @@ export async function operatorSurfaceRuntimeStartCommand(
       runtime,
       operator_surface_status: existing,
       carrier_status: existing,
-      selection_resolution: buildDirectSelectionResolution(carrierSelection, runtimeSelection, options.intelligenceProvider),
+      selection_resolution: buildDirectSelectionResolution(carrierSelection, runtimeSelection, intelligenceSelectionAuthority),
     };
     return {
       exitCode: ExitCode.SUCCESS,
@@ -129,7 +134,7 @@ export async function operatorSurfaceRuntimeStartCommand(
     carrier,
     runtime,
     authority: options.authority,
-    intelligenceProvider: options.intelligenceProvider,
+    intelligenceSelectionAuthority,
     mcpScope,
     dryRun: options.dryRun ?? (!options.materializeOnly && !options.exec),
     exec: options.exec,
@@ -160,14 +165,14 @@ export async function operatorSurfaceRuntimeStartCommand(
     carrier,
     runtime,
     authority: options.authority ?? null,
-    intelligence_provider: options.intelligenceProvider ?? null,
+    intelligence_selection_authority: intelligenceSelectionAuthority,
     mcp_scope: mcpScope,
     mode: options.exec ? 'exec' : options.materializeOnly ? 'materialize_only' : 'dry_run',
     agent_start: start,
     launcher_contracts: parsedAgentStart?.launcher_contracts ?? null,
     launch_result_artifact: parsedAgentStart?.launcher_contracts?.launch_result_artifact ?? null,
     operator_projection_open_request: parsedAgentStart?.launcher_contracts?.operator_projection_open_request ?? null,
-    selection_resolution: buildDirectSelectionResolution(carrierSelection, runtimeSelection, options.intelligenceProvider),
+    selection_resolution: buildDirectSelectionResolution(carrierSelection, runtimeSelection, intelligenceSelectionAuthority),
   };
   return {
     exitCode: isAgentStartAcceptedStatus(start.status) ? ExitCode.SUCCESS : ExitCode.GENERAL_ERROR,

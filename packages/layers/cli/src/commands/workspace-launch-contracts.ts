@@ -1,7 +1,6 @@
 import { resolve } from 'node:path';
 import {
   ADMITTED_RUNTIME_SUBSTRATE_KINDS,
-  NARADA_AGENT_RUNTIME_SERVER_KIND,
   resolveOperatorSurfaceRuntimeSelection,
 } from '@narada2/operator-surface-runtime-contract/operator-surface-runtime-selection';
 import type { WorkspaceLaunchRecord } from './workspace-launch-types.js';
@@ -90,14 +89,8 @@ export function normalizeWorkspaceLaunchAuthority(value: unknown): string {
 export interface WorkspaceLaunchCapabilityMatrixInput {
   operatorSurface: string;
   runtime: string;
-  intelligenceProvider: string | null;
   mcpScope: string;
   authority: string;
-  providerRegistry?: {
-    default_provider?: string;
-    providers?: Record<string, { support_state?: string }>;
-  };
-  admittedProviders?: readonly string[];
 }
 
 export function buildWorkspaceLaunchCapabilityAdmission(input: WorkspaceLaunchCapabilityMatrixInput): Record<string, unknown> {
@@ -116,50 +109,22 @@ export function buildWorkspaceLaunchCapabilityAdmission(input: WorkspaceLaunchCa
   }
   const mcpScope = normalizeExplicitWorkspaceLaunchMcpScope(input.mcpScope);
   const authority = normalizeWorkspaceLaunchAuthority(input.authority);
-  const provider = input.intelligenceProvider?.trim() || null;
-  const providerEntries = input.providerRegistry?.providers ?? {};
-  const allowedProviders = input.admittedProviders ? new Set(input.admittedProviders) : null;
-  const providerRequired = selection.runtime_host_kind === NARADA_AGENT_RUNTIME_SERVER_KIND;
-  if (providerRequired && !provider) {
-    throw new WorkspaceLaunchContractError(
-      'workspace_launch_intelligence_provider_missing',
-      'The selected runtime requires an explicit intelligence provider resolution.',
-      'Select a provider or configure the provider registry default at the selection boundary.',
-    );
-  }
-  if (!providerRequired && provider) {
-    throw new WorkspaceLaunchContractError(
-      'workspace_launch_provider_not_applicable',
-      `Provider ${provider} is not applicable to runtime ${selection.runtime_substrate_kind}.`,
-      'Leave the provider unset for this operator surface/runtime pair.',
-    );
-  }
-  if (provider) {
-    const metadata = providerEntries[provider];
-    if (!metadata || metadata.support_state !== 'verified_supported' || (allowedProviders && !allowedProviders.has(provider))) {
-      throw new WorkspaceLaunchContractError(
-        'workspace_launch_intelligence_provider_not_admitted',
-        `Provider ${provider} is not admitted for this launch.`,
-        'Choose a verified provider from the provider registry.',
-      );
-    }
-  }
   const matrix = {
     schema: WORKSPACE_LAUNCH_CAPABILITY_MATRIX_SCHEMA,
     generated_from: {
       launch_matrix_schema: 'narada.carrier_launch_matrix.v3',
       runtime_contract_schema: 'narada.runtime_substrate_kind.v1',
-      provider_registry_schema: 'narada.carrier.provider_registry.v1',
+      intelligence_contract_schema: 'narada.invokable-intelligence.selection-authority.v1',
     },
     dimensions: {
       operator_surface: selection.operator_surface_kind,
       runtime: selection.runtime_substrate_kind,
-      provider,
+      intelligence_resolution: 'runtime-invocation',
       mcp_scope: mcpScope,
       authority,
     },
     admission: 'admitted',
-    provider_source: provider ? 'provider_registry' : 'not_applicable',
+    intelligence_source: 'site_catalog_and_runtime_policy',
     mcp_scope_source: 'explicit_selection_or_site_record',
     authority_source: 'explicit_selection_or_site_record',
   };

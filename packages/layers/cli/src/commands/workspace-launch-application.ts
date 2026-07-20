@@ -3,7 +3,3 @@ import { workspaceLaunchApplicationContext } from './workspace-launch-applicatio
 
 export { explainMcpCommand };
 export * from './workspace-launch-application-execution.js';
-
-export function registryDefaultIntelligenceProvider(): string {
-  return workspaceLaunchApplicationContext().selectionContext.admission.providerRegistry.default_provider ?? 'registry default';
-}

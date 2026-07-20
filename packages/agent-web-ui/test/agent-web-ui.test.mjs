@@ -209,8 +209,11 @@ async function withRealNarsWebServer(fn) {
       mcpScope: 'all',
       sessionPath: join(sessionDir, 'session.jsonl'),
       eventsPath: join(sessionDir, 'events.jsonl'),
-      intelligenceProvider: 'codex-subscription',
-      providerSettings: { provider: 'codex-subscription', model: 'gpt-5.5', thinking: 'medium', stream: false },
+      intelligence: {
+        principal: 'principal:narada.fixture',
+        requestedModel: { kind: 'model', id: 'model:openai:gpt-5.5' },
+        requestedOptions: { thinking_level: 'medium', stream: false },
+      },
     };
     healthProjection = await startHealthProjection({
       childStdin: () => runtimeInput,
@@ -232,9 +235,23 @@ async function withRealNarsWebServer(fn) {
     };
     const service = createSessionCoreRuntimeService({
       runtimeContext,
-      callChatApiFn: async (messages, tools) => {
-        providerCalls.push({ messages, tools });
-        return { choices: [{ message: { role: 'assistant', content: 'Real NARS fixture response.' } }] };
+      intelligenceRuntime: {
+        snapshot: () => ({
+          schema: 'narada.nars.intelligence_runtime_snapshot.v1',
+          authority: 'invokable-intelligence-gateway',
+          principal: baseRuntimeContext.intelligence.principal,
+          requested_model: baseRuntimeContext.intelligence.requestedModel,
+          requested_options: baseRuntimeContext.intelligence.requestedOptions,
+          latest_plan: null,
+          latest_outcome: null,
+          latest_attempt_id: null,
+          latest_replayed: null,
+          reconfiguration: null,
+        }),
+        callIntelligence: async (messages, tools) => {
+          providerCalls.push({ messages, tools });
+          return { choices: [{ message: { role: 'assistant', content: 'Real NARS fixture response.' } }] };
+        },
       },
       toolGateway: {
         toolCatalog: async () => [{
@@ -1152,7 +1169,7 @@ test('package server injects operator-capable config and proxies health with GET
     assert.match(index, /"operatorInput":true/);
     assert.match(index, /"session.submit"/);
     assert.doesNotMatch(index, /"conversation.send"/);
-    assert.doesNotMatch(index, /"session.command.execute"/);
+    assert.match(index, /"session.command.execute"/);
     assert.doesNotMatch(index, /"carrier.command.execute"/);
 
     const faviconResponse = await fetch(new URL('/narada-favicon.svg', web.url));
@@ -1233,7 +1250,11 @@ test('served web UI config attaches to live NARS health and event projections', 
       assert.equal(health.schema, 'narada.nars.health.v1');
       assert.equal(health.status, 'healthy');
       assert.equal(health.session_id, 'session_web_ui_config_real_nars');
-      assert.equal(health.intelligence.model, 'gpt-5.5');
+      assert.equal(health.intelligence.schema, 'narada.nars.intelligence_runtime_snapshot.v1');
+      assert.equal(health.intelligence.authority, 'invokable-intelligence-gateway');
+      assert.deepEqual(health.intelligence.requested_model, { kind: 'model', id: 'model:openai:gpt-5.5' });
+      assert.deepEqual(health.intelligence.requested_options, { thinking_level: 'medium', stream: false });
+      assert.equal(health.intelligence.model, undefined);
       assert.equal(health.operational_posture, 'healthy');
       assert.equal(health.mcp_operational_state, 'healthy');
       assert.equal(health.mcp_tools, undefined);

@@ -45,6 +45,31 @@ const launchTimeoutMs = optionalPositiveIntegerArg('--launch-timeout-ms') ?? 300
 const jobs = optionalPositiveIntegerArg('--jobs') ?? 1;
 const retries = optionalNonnegativeIntegerArg('--retries', 1);
 const progressEnabled = process.argv.includes('--progress');
+const LEGACY_INTELLIGENCE_SELECTION_ENV_NAMES = Object.freeze([
+  'NARADA_INTELLIGENCE_PROVIDER',
+  'NARADA_AI_MODEL',
+  'NARADA_AI_BASE_URL',
+  'NARADA_AI_THINKING',
+  'NARADA_THINKING_LEVEL',
+  'CODEX_MODEL',
+  'NARADA_CODEX_MODEL',
+  'OPENAI_MODEL',
+  'OPENAI_BASE_URL',
+  'KIMI_MODEL',
+  'KIMI_API_BASE_URL',
+  'KIMI_CODE_MODEL',
+  'KIMI_CODE_API_BASE_URL',
+  'ANTHROPIC_MODEL',
+  'ANTHROPIC_BASE_URL',
+  'DEEPSEEK_MODEL',
+  'DEEPSEEK_API_BASE_URL',
+  'GLM_MODEL',
+  'GLM_API_BASE_URL',
+  'OPENROUTER_MODEL',
+  'OPENROUTER_BASE_URL',
+  'OPENROUTER_API_BASE_URL',
+  'CLOUDFLARE_CARRIER_AI_MODEL',
+]);
 
 function progress(message) {
   if (progressEnabled) process.stderr.write(`${message}\n`);
@@ -294,8 +319,14 @@ function validateLaunch(record, carrier, runtime, launch) {
     if (env.NARADA_AGENT_TUI_TERMINAL_MODE !== 'interactive_loop') failures.push({ reason: 'agent_tui_terminal_mode_env_mismatch', actual: env.NARADA_AGENT_TUI_TERMINAL_MODE });
     if (env.NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION !== 'true') failures.push({ reason: 'agent_tui_provider_execution_env_missing', actual: env.NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION });
     if (env.NARADA_AGENT_TUI_PROVIDER_ADAPTER_KIND !== 'codex_subscription_adapter') failures.push({ reason: 'agent_tui_provider_adapter_env_mismatch', actual: env.NARADA_AGENT_TUI_PROVIDER_ADAPTER_KIND });
-    if (!env.NARADA_INTELLIGENCE_PROVIDER) failures.push({ reason: 'agent_tui_intelligence_provider_env_missing' });
-    if (!env.KIMI_CODE_MODEL && !env.CODEX_MODEL) failures.push({ reason: 'agent_tui_model_env_missing' });
+    const leakedSelectionEnvironment = LEGACY_INTELLIGENCE_SELECTION_ENV_NAMES
+      .filter((name) => Object.hasOwn(env, name));
+    if (leakedSelectionEnvironment.length > 0) {
+      failures.push({
+        reason: 'legacy_intelligence_selection_env_present',
+        environment_names: leakedSelectionEnvironment,
+      });
+    }
   }
 
   return failures;

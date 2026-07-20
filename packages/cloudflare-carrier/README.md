@@ -93,35 +93,38 @@ Unsupported tools remain denied with `unsupported_tool_effect`; the requested to
 
 These fields are evidence of adapter posture. Capability records describe the effects an adapter may admit; they are not grants to arbitrary provider output.
 
-## Provider Boundary
+## Intelligence Execution Boundary
 
 Workers AI is available through `createCloudflareAiProviderAdapter` when the Worker environment provides `env.AI.run`.
 
-**Resolver-driven selection (invokable intelligence).** When the Worker
-environment provides all of the following, model and inference path are
-resolved per turn from the D1-backed invokable-intelligence ontology, and
-`CLOUDFLARE_CARRIER_AI_MODEL`, `AI_MODEL`, and the hardcoded default are
-NOT consulted:
+Model and inference path are resolved per turn from the D1-backed
+invokable-intelligence ontology. The Worker environment supplies only these
+infrastructure handles:
 
 - `INTELLIGENCE_REGISTRY_DB` — D1 binding holding the intelligence registry
-- `INTELLIGENCE_TARGET_SITE`, `INTELLIGENCE_USER_SITE`, `INTELLIGENCE_HOST_SITE` — explicit locus context
-- `INTELLIGENCE_WORKERS_AI_MODELS` (optional) — comma-separated catalog seed, default `@cf/meta/llama-3.1-8b-instruct`
+- `AI` — Workers AI runtime binding
+
+The D1 registry must already contain a management-admitted canonical catalog.
+Worker startup never seeds models, routes, defaults, grants, or Site authority.
+A session carries an explicit `intelligence_context` containing target,
+user, and execution Site refs, request access facts, and admitted topology
+observations. Those coordinates select no model; they tell the canonical
+resolver which Site authorities and observed route facts apply.
+
+`CLOUDFLARE_CARRIER_AI_MODEL` is retired and never read. `AI_MODEL`,
+`INTELLIGENCE_TARGET_SITE`, `INTELLIGENCE_USER_SITE`,
+`INTELLIGENCE_HOST_SITE`, and `INTELLIGENCE_WORKERS_AI_MODELS` have no
+intelligence authority and are not read.
 
 Each turn records the full Intent → Plan → Attempt → Evidence chain in D1.
 Resolution refusals throw `intelligence_resolution_refused:<reason_code>`
-before any provider call (distinct from operator-session/auth failures and
-from `cloudflare_workers_ai_provider_failed`). See
+before any inference call (distinct from operator-session/auth failures and
+from `cloudflare_workers_ai_provider_failed`). An empty D1 registry refuses
+with `intelligence_registry_not_initialized`. See
 `src/cloudflare-intelligence-resolution.mjs`.
 
-**Legacy env selection (until cutover #2186).** Without that configuration:
+Operational transport tuning remains non-authoritative:
 
-Default model:
-
-- `@cf/meta/llama-3.1-8b-instruct`
-
-Environment overrides:
-
-- `CLOUDFLARE_CARRIER_AI_MODEL` or `AI_MODEL`
 - `CLOUDFLARE_CARRIER_AI_TIMEOUT_MS`
 - `CLOUDFLARE_CARRIER_AI_MAX_RETRIES`
 

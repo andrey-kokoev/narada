@@ -120,7 +120,7 @@ There are three live smoke lineages and they prove different authority shapes:
 | --- | --- | --- | --- |
 | `pnpm --filter @narada2/cloudflare-nars-projection smoke:local-origin-live` | Local NARS session. | Remote projection store, hosted browser shell, event/artifact cache, and input relay. | A local authoritative NARS session can be projected to Cloudflare and consumed remotely without moving session authority. |
 | `pnpm --filter @narada2/cloudflare-nars-projection smoke:cloudflare-origin-live` | Cloudflare synthetic NARS authority runtime. | Session authority for a synthetic no-provider/no-tools runtime. | Cloudflare can own session identity, event replay, WebSocket live delivery, input admission, health, and revocation for a synthetic NARS authority slice. |
-| `pnpm --filter @narada2/cloudflare-nars-projection smoke:provider-capable-live` | Cloudflare provider-capable NARS authority runtime (`cloudflare_provider_http_adapter`). | Session authority with real provider dispatch from the Worker/DO lane. | A deployed Worker bound with the canonical `NARADA_AI_*` env/secret (`NARADA_AI_BASE_URL`, `NARADA_INTELLIGENCE_PROVIDER`, `NARADA_AI_API_KEY`, mirroring the pwsh SecretStore ref `narada/provider/<provider>/api-key`) admits operator input, executes a real provider turn, graduates `provider_execution` to `present` with executed evidence, and revokes with post-revoke refusals. Requires operator authorization recorded in Task 2120; planning mode performs no mutation. |
+| `pnpm --filter @narada2/cloudflare-nars-projection smoke:provider-capable-live` | Historical provider-capable projection slice. | Earlier real provider dispatch proof from the Worker/DO lane. | Historical Task 2120 evidence only. Current selection authority is the D1-backed canonical invokable-intelligence runtime in `@narada2/cloudflare-carrier`; provider/model environment bindings are retired. |
 
 The command names expose the authority-origin axis. Compatibility aliases currently remain: `smoke:live` maps to `smoke:local-origin-live`, and `smoke:authority-live` maps to `smoke:cloudflare-origin-live`. Passing one does not imply the others have passed.
 
@@ -252,21 +252,13 @@ pnpm --filter @narada2/cloudflare-nars-projection smoke:provider-capable-live
 
 Running without `--live` is a safe planning mode: no mutation, prints the required arguments.
 
-**Provider binding (canonical Narada provider vocabulary).** The Worker resolves the provider binding from the shared registry through `@narada2/carrier-provider-contract` — exactly like local NARS — and activates the provider adapter only when `NARADA_INTELLIGENCE_PROVIDER` resolves with a credential:
+**Current intelligence authority.** The historical provider-binding smoke is retained only as lineage. The current `@narada2/cloudflare-carrier` Worker receives an `INTELLIGENCE_REGISTRY_DB` D1 binding and an `AI` inference-runtime binding. Offering, route, endpoint, model, capability, access, temporal, and credential-locator decisions are canonical D1 resources resolved per invocation. Environment variables and Worker vars do not select intelligence.
 
-| Binding | Kind | Meaning |
-| --- | --- | --- |
-| `NARADA_INTELLIGENCE_PROVIDER` | `[vars]` in `wrangler.toml` | Provider id from the registry (e.g. `kimi-code-api`, `openai-api`). Activates the adapter. |
-| `NARADA_AI_API_KEY` | Worker secret (`wrangler secret put NARADA_AI_API_KEY`) | Bearer credential. Mirrors the pwsh SecretStore entry `narada/provider/<provider>/api-key`; the value never appears in events, health, or diagnostics. |
-| `NARADA_AI_BASE_URL` | `[vars]`, optional | Overrides the registry default provider base URL. |
-| `NARADA_AI_MODEL` | `[vars]`, optional | Overrides the registry default model. |
-| `NARADA_AI_THINKING` | `[vars]`, optional | Reasoning-effort label (`low`/`medium`/`high`). |
-
-Without a resolvable `NARADA_INTELLIGENCE_PROVIDER` binding the Worker stays on the synthetic default adapter (`cloudflare_runtime_tool_adapter`); health at `/api/nars/authority/health` reports which executor is bound. The provider turn uses the canonical OpenAI-compatible chat-completions shape from the shared core, so any OpenAI-compatible provider binds directly — providers with other registry adapter kinds refuse turns with typed `provider_adapter_unsupported_on_cloudflare` evidence.
+An empty or unauthorized catalog refuses before inference. A selected route is revalidated before dispatch, and readback links intent, plan, snapshot, revalidation, attempt, result, outcome, observation, evidence, telemetry, and materialization provenance.
 
 A live run creates a provider-capable session, verifies `provider_execution` capability graduates `declared → present` only on executed turn evidence, checks replay for `provider_request`/`provider_response`/`assistant_message`/`turn_complete`, revokes, and verifies post-revoke refusals. Evidence follows the same append-only + latest + index contract under `.narada/crew/nars-projections/`.
 
-**Current status (2026-07-19):** proven live (Task 2120). The deployed Worker `narada-nars-projection` (version `57997412`, current main including `db6c9664`) binds `deepseek-api` via `NARADA_INTELLIGENCE_PROVIDER` plus the Worker secret `NARADA_AI_API_KEY` (mirroring `narada/provider/deepseek-api/api-key`). The live smoke passed (session `cf_provider_live_1784485975919`, evidence `provider-capable-live-smoke-1784485975919.json`): a real `deepseek-v4-flash` turn completed, replay carries `provider_request`/`provider_response`/`assistant_message`/`turn_complete`, `provider_execution` graduated `declared → present` with the executed-turn evidence ref, and revoke plus post-revoke refusals verified. Note: `kimi-code-api` is not viable from a Cloudflare Worker — `api.kimi.com`'s edge refuses Cloudflare serverless egress with a WAF `403` HTML page (evidence `provider-capable-live-smoke-1784481151601.json`).
+**Historical status (2026-07-19):** Task 2120 proved the earlier binding-based slice live. That evidence remains valid for its deployed version but does not authorize or describe the current canonical selection path.
 
 ## Projection Instance
 

@@ -6,6 +6,7 @@ import {
   TOOL_EFFECT_ADMISSION_CASES_SCHEMA,
   validateSessionEvent,
 } from '@narada2/carrier-protocol';
+import { canonicalSha256 } from '@narada2/invokable-intelligence-contract';
 import {
   deployManagementBundle,
   MANAGEMENT_DEPLOYMENT_BUNDLE_SCHEMA,
@@ -58,10 +59,20 @@ const CLOUDFLARE_INTELLIGENCE_MATERIALIZATIONS = JSON.parse(readFileSync(
   'utf8',
 ));
 
-async function canonicalCloudflareIntelligenceD1() {
+async function canonicalCloudflareIntelligenceD1(registrySiteId = CLOUDFLARE_REGISTRY_SITE_ID) {
   const binding = createFakeD1(':memory:');
   const store = await D1RegistryStore.open(binding);
   const materialization = await D1MaterializationStore.open(binding);
+  const catalog = structuredClone(CLOUDFLARE_INTELLIGENCE_CATALOG);
+  if (registrySiteId !== CLOUDFLARE_REGISTRY_SITE_ID) {
+    const targetSite = catalog.records.find(({ record_id }) => record_id === CLOUDFLARE_INTELLIGENCE_SITE_ID);
+    const principal = catalog.records.find(({ record_id }) => record_id === CLOUDFLARE_INTELLIGENCE_PRINCIPAL_ID);
+    targetSite.document.registry_bindings[0].subject_id = registrySiteId;
+    principal.document.admission_bindings[0].site_id = registrySiteId;
+    for (const record of [targetSite, principal]) {
+      record.source.digest = canonicalSha256(record.document);
+    }
+  }
   try {
     const result = await deployManagementBundle({
       store,
@@ -85,7 +96,7 @@ async function canonicalCloudflareIntelligenceD1() {
         CLOUDFLARE_INTELLIGENCE_AUTHORITY_REF,
         'site-config:narada-cloudflare:invokable-intelligence:revision-1',
       ],
-      catalog: structuredClone(CLOUDFLARE_INTELLIGENCE_CATALOG),
+      catalog,
       materializations: structuredClone(CLOUDFLARE_INTELLIGENCE_MATERIALIZATIONS.materializations),
     });
     assert.equal(result.diagnostics.length, 0);
@@ -94,6 +105,37 @@ async function canonicalCloudflareIntelligenceD1() {
     await store.close();
   }
   return binding;
+}
+
+async function canonicalAiWorkerEnv(overrides = {}) {
+  const intelligenceDb = await canonicalCloudflareIntelligenceD1('site_fixture');
+  const siteDb = fakeD1SiteRegistryDatabase({
+    sites: [{
+      site_id: 'site_fixture',
+      site_ref: 'site://fixture',
+      display_name: 'Fixture Site',
+      status: 'active',
+      created_at: clock(),
+      updated_at: clock(),
+      created_by_principal_id: 'admin',
+    }],
+    memberships: [{
+      site_id: 'site_fixture',
+      principal_id: 'admin',
+      role: 'owner',
+      status: 'active',
+      created_at: clock(),
+      updated_at: clock(),
+    }],
+  });
+  const durableEnv = { ...overrides, INTELLIGENCE_REGISTRY_DB: intelligenceDb };
+  const namespace = fakeDurableObjectNamespace(durableEnv);
+  return {
+    durableEnv,
+    siteDb,
+    namespace,
+    env: authEnv(namespace, { ...durableEnv, CLOUDFLARE_SITE_REGISTRY_DB: siteDb }),
+  };
 }
 
 function clock() {
@@ -1301,7 +1343,7 @@ test('worker site.read composes site sessions tasks authority events and carrier
   assert.equal(body.site_product_status.continuity_state, 'no_packet_observed');
   assert.equal(body.site_product_status.continuity_loop_state, 'no_loop_report_observed');
   assert.equal(body.site_product_status.continuity_loop_report_count, 0);
-  assert.equal(body.site_product_status.next_action, 'continuity_packet');
+  assert.equal(body.site_product_status.next_action, 'focus_next_operation');
   assert.equal(body.focused_operation_lifecycle.schema, 'narada.cloudflare_focused_operation_lifecycle.v1');
   assert.equal(body.focused_operation_lifecycle.operation_id, 'operation_site_read');
   assert.equal(body.operation_lifecycle_status.operation_id, 'operation_site_read');
@@ -1318,7 +1360,7 @@ test('worker site.read composes site sessions tasks authority events and carrier
   assert.equal(body.cloudflare_product_surface_readiness.required_failure_count, 0);
   assert.equal(body.cloudflare_product_surface_readiness.required_checks.some((check) => check.key === 'local_cloud_continuity_bridge' && check.status === 'attention'), true);
   assert.equal(body.cloudflare_product_surface_readiness.next_check, 'site_product_status');
-  assert.equal(body.cloudflare_product_surface_readiness.next_action, 'continuity_packet');
+  assert.equal(body.cloudflare_product_surface_readiness.next_action, 'focus_next_operation');
 
   const packetPut = await worker.fetch(jsonRequest({
     operation: 'site.continuity.packet.put',
@@ -1424,8 +1466,8 @@ test('worker site.read composes site sessions tasks authority events and carrier
   const readAfterPacketOnlyBody = await readAfterPacketOnly.json();
   assert.equal(readAfterPacketOnlyBody.site_product_status.continuity_state, 'packet_observed');
   assert.equal(readAfterPacketOnlyBody.site_product_status.continuity_loop_state, 'no_loop_report_observed');
-  assert.deepEqual(readAfterPacketOnlyBody.site_product_status.attention, ['continuity_loop_report', 'open_tasks']);
-  assert.equal(readAfterPacketOnlyBody.site_product_status.next_action, 'continuity_loop_report');
+  assert.deepEqual(readAfterPacketOnlyBody.site_product_status.attention, ['operation_posture', 'continuity_loop_report', 'open_tasks']);
+  assert.equal(readAfterPacketOnlyBody.site_product_status.next_action, 'focus_next_operation');
   assert.equal(readAfterPacketOnlyBody.local_cloud_continuity_bridge.local_windows_site_ref, 'file:///D:/code/narada');
   assert.equal(readAfterPacketOnlyBody.local_cloud_continuity_bridge.cloudflare_site_ref, 'cloudflare://site_fixture');
   assert.equal(readAfterPacketOnlyBody.local_cloud_continuity_bridge.authority_map_ref, 'narada:site-authority-map:site_fixture');
@@ -1528,7 +1570,7 @@ test('worker site.read composes site sessions tasks authority events and carrier
   assert.equal(readAfterPacketPutBody.site_continuity_loop_status.latest_report_age_ms >= 0, true);
   assert.equal(readAfterPacketPutBody.site_product_status.schema, 'narada.cloudflare_site_product_status.v1');
   assert.deepEqual(readAfterPacketPutBody.site_product_status.missing, []);
-  assert.deepEqual(readAfterPacketPutBody.site_product_status.attention, ['open_tasks']);
+  assert.deepEqual(readAfterPacketPutBody.site_product_status.attention, ['operation_posture', 'open_tasks']);
   assert.equal(readAfterPacketPutBody.site_product_status.health, 'attention');
   assert.equal(readAfterPacketPutBody.site_product_status.carrier_evidence_read_status.state, 'loaded');
   assert.equal(readAfterPacketPutBody.site_product_status.continuity_state, 'packet_observed');
@@ -1540,7 +1582,7 @@ test('worker site.read composes site sessions tasks authority events and carrier
   assert.equal(readAfterPacketPutBody.site_product_status.site_continuity_reconciliation_execution_status.latest_status, 'completed');
   assert.equal(readAfterPacketPutBody.site_product_status.continuity_loop_freshness_state, 'fresh');
   assert.equal(readAfterPacketPutBody.site_product_status.site_continuity_loop_status.freshness_state, 'fresh');
-  assert.equal(readAfterPacketPutBody.site_product_status.next_action, 'open_tasks');
+  assert.equal(readAfterPacketPutBody.site_product_status.next_action, 'focus_next_operation');
 
   const failedReconciliationExecution = {
     ...reconciliationExecution,
@@ -1621,7 +1663,7 @@ test('worker site.read composes site sessions tasks authority events and carrier
   assert.equal(operationListAfterFailedReconciliationExecutionBody.operation_posture_overview.next_operation_id, 'operation_site_read');
   assert.equal(operationListAfterFailedReconciliationExecutionBody.operation_posture_overview.next_status, 'needs_attention');
   assert.equal(operationListAfterFailedReconciliationExecutionBody.operation_posture_overview.next_action, 'review_site_continuity_reconciliation_execution');
-  assert.equal(operationListAfterFailedReconciliationExecutionBody.operation_posture_overview.next_reason, 'operation_operator_focus_needs_review');
+  assert.equal(operationListAfterFailedReconciliationExecutionBody.operation_posture_overview.next_reason, 'operation_lifecycle_continuity_reconciliation_execution_attention');
   assert.equal(operationListAfterFailedReconciliationExecutionBody.operation_posture_overview.next_focus_kind, 'site_continuity_reconciliation_execution');
   assert.equal(operationListAfterFailedReconciliationExecutionBody.operation_posture_overview.next_focus_ref, failedReconciliationExecutionId);
 
@@ -2877,7 +2919,7 @@ test('worker site.read surfaces degraded carrier evidence replay when session ev
   assert.equal(body.site_product_status.carrier_evidence_read_status.state, 'degraded');
   assert.deepEqual(body.site_product_status.missing, ['carrier_evidence', 'continuity_packet']);
   assert.deepEqual(body.site_product_status.attention, ['operation_posture', 'carrier_evidence_read_degraded']);
-  assert.equal(body.site_product_status.next_action, 'carrier_evidence');
+  assert.equal(body.site_product_status.next_action, 'focus_next_operation');
 });
 
 test('worker site.read can replay carrier evidence from D1 index without durable object binding', async () => {
@@ -6166,6 +6208,7 @@ test('worker records task lifecycle shadow reads from Windows without admitting 
     params: {
       site_id: 'site_fixture',
       admission_id: 'task_lifecycle_create_admitted_1',
+      operation_id: 'operation_task_lifecycle',
       carrier_session_id: 'carrier_session_operation_fixture',
       title: 'cloudflare governed task lifecycle create',
       description: 'first task lifecycle create mutation admitted on Cloudflare',
@@ -6192,6 +6235,7 @@ test('worker records task lifecycle shadow reads from Windows without admitting 
   assert.equal(admittedCreateBody.cloudflare_write_admission, 'admitted');
   assert.equal(admittedCreateBody.write_effect, 'task_lifecycle_create');
   assert.equal(admittedCreateBody.task.status, 'opened');
+  assert.equal(admittedCreateBody.task.operation_id, 'operation_task_lifecycle');
   assert.equal(admittedCreateBody.task.carrier_session_id, 'carrier_session_operation_fixture');
   assert.equal(admittedCreateBody.task.cutover_point_ref, 'cutover:task-lifecycle-create:v1');
 
@@ -6838,7 +6882,7 @@ test('worker clears task lifecycle external effects after dependent Cloudflare e
     }],
     taskLifecycleTasks: [{
       site_id: 'site_fixture', task_id: 'cloudflare-task-complete-transfer', task_number: 1, title: 'complete transfer task', description: null, status: 'finished', source: 'cloudflare-carrier-task-lifecycle', authority_locus: 'cloudflare_carrier_site', mutation_authority: 'cloudflare_task_lifecycle_d1', cloudflare_write_admission: 'admitted', cutover_point_ref: 'cutover:task-create:complete-transfer', governed_write_contract_ref: 'contract:task-create:complete-transfer', confirmation_evidence_ref: 'evidence:task-create:complete-transfer', task_json: JSON.stringify({
-        claimed_by_agent_id: 'agent-cloudflare', assignment_authority_ref: 'assignment:complete-transfer', report_id: 'report-complete-transfer', finish_id: 'finish-complete-transfer', changed_file_evidence_records: [{ file_path: 'docs/architecture/cloudflare-carrier/target.md' }], task_lifecycle_projection_records: [{}], task_lifecycle_source_state_write_records: [{}], task_lifecycle_assignment_records: [{}], task_lifecycle_source_state_write_admission: 'admitted', canonical_source_state_authority: 'cloudflare_task_lifecycle_d1', task_lifecycle_assignment_write_admission: 'admitted', mailbox_mutation_admission: 'not_admitted', filesystem_mutation_admission: 'not_admitted', repository_publication_admission: 'not_admitted',
+        operation_id: 'operation_complete_transfer', claimed_by_agent_id: 'agent-cloudflare', assignment_authority_ref: 'assignment:complete-transfer', report_id: 'report-complete-transfer', finish_id: 'finish-complete-transfer', changed_file_evidence_records: [{ file_path: 'docs/architecture/cloudflare-carrier/target.md' }], task_lifecycle_projection_records: [{}], task_lifecycle_source_state_write_records: [{}], task_lifecycle_assignment_records: [{}], task_lifecycle_source_state_write_admission: 'admitted', canonical_source_state_authority: 'cloudflare_task_lifecycle_d1', task_lifecycle_assignment_write_admission: 'admitted', mailbox_mutation_admission: 'not_admitted', filesystem_mutation_admission: 'not_admitted', repository_publication_admission: 'not_admitted',
       }), created_by_principal_id: 'admin', created_at: now, updated_at: now,
     }],
   });
@@ -7728,12 +7772,10 @@ test('worker Microsoft cookie principal is denied without site membership', asyn
 });
 
 test('worker browser API alias starts resumes sends input and reads evidence events', async () => {
-  const durableEnv = {
+  const { durableEnv, env } = await canonicalAiWorkerEnv({
     AI: fakeAiBinding('Console provider response.'),
     CLOUDFLARE_CARRIER_ENABLE_RUNTIME_TOOL_READS: '1',
-  };
-  const namespace = fakeDurableObjectNamespace(durableEnv);
-  const env = authEnv(namespace, durableEnv);
+  });
   const start = await worker.fetch(jsonRequest(startRequest({ request_id: 'request_console_start' }), {
     token: 'test-admin-token',
     path: '/api/carrier',
@@ -7872,7 +7914,7 @@ test('configured Cloudflare task tools admit command-triggered task create updat
 });
 
 test('provider tool call can create a Cloudflare Narada task through admitted task effect', async () => {
-  const durableEnv = {
+  const { durableEnv, env } = await canonicalAiWorkerEnv({
     AI: fakeAiBinding([
       {
         response: 'Creating a task.',
@@ -7886,9 +7928,7 @@ test('provider tool call can create a Cloudflare Narada task through admitted ta
     ]),
     CLOUDFLARE_CARRIER_ENABLE_TASK_TOOLS: '1',
     CLOUDFLARE_CARRIER_TASK_DB: fakeD1TaskDatabase(),
-  };
-  const namespace = fakeDurableObjectNamespace(durableEnv);
-  const env = authEnv(namespace, durableEnv);
+  });
   await worker.fetch(jsonRequest(startRequest({ request_id: 'request_start_provider_task' }), { token: 'test-admin-token' }), env);
   const input = {
     ...inputPipelineCases.cases.find((entry) => entry.name === 'manual_operator_admitted').input,
@@ -7933,9 +7973,9 @@ test('provider tool call can create a Cloudflare Narada task through admitted ta
 });
 
 test('worker provider adapter completes turns through Cloudflare AI binding', async () => {
-  const durableEnv = { AI: fakeAiBinding('Cloudflare AI response from test.') };
-  const namespace = fakeDurableObjectNamespace(durableEnv);
-  const env = authEnv(namespace, durableEnv);
+  const { durableEnv, env } = await canonicalAiWorkerEnv({
+    AI: fakeAiBinding('Cloudflare AI response from test.'),
+  });
   await worker.fetch(jsonRequest(startRequest({ request_id: 'request_start_ai' }), { token: 'test-admin-token' }), env);
   const input = {
     ...inputPipelineCases.cases.find((entry) => entry.name === 'manual_operator_admitted').input,
@@ -7960,7 +8000,7 @@ test('worker provider adapter completes turns through Cloudflare AI binding', as
   assert.equal(providerRequest.payload.provider_adapter_kind, 'cloudflare-workers-ai');
   assert.equal(providerRequest.payload.provider_request_status, 'dispatched');
   assert.equal(durableEnv.AI.calls.length, 1);
-  assert.equal(durableEnv.AI.calls[0].model, '@cf/meta/llama-3.1-8b-instruct');
+  assert.equal(durableEnv.AI.calls[0].model, '@cf/moonshotai/kimi-k2-instruct');
   assert.deepEqual(durableEnv.AI.calls[0].request.tools, []);
   const output = body.events.find((event) => event.event_kind === 'provider_text_delta_recorded');
   assert.equal(output.payload.text_delta, 'Cloudflare AI response from test.');
@@ -7968,7 +8008,7 @@ test('worker provider adapter completes turns through Cloudflare AI binding', as
 });
 
 test('provider tool calls are denied when the Cloudflare effect adapter is not configured', async () => {
-  const durableEnv = { AI: fakeAiBinding([
+  const { durableEnv, env } = await canonicalAiWorkerEnv({ AI: fakeAiBinding([
     {
       response: 'Need a tool result.',
       tool_calls: [{
@@ -7978,9 +8018,7 @@ test('provider tool calls are denied when the Cloudflare effect adapter is not c
       }],
     },
     { response: 'The carrier denied that tool effect.' },
-  ]) };
-  const namespace = fakeDurableObjectNamespace(durableEnv);
-  const env = authEnv(namespace, durableEnv);
+  ]) });
   await worker.fetch(jsonRequest(startRequest({ request_id: 'request_start_tool_denied' }), { token: 'test-admin-token' }), env);
   const status = await worker.fetch(jsonRequest({
     operation: 'session.status',
@@ -8030,7 +8068,7 @@ test('provider tool calls are denied when the Cloudflare effect adapter is not c
 });
 
 test('configured Cloudflare tool adapter admits only runtime metadata read effects', async () => {
-  const durableEnv = {
+  const { durableEnv, env } = await canonicalAiWorkerEnv({
     AI: fakeAiBinding([
       {
         response: 'Reading runtime metadata.',
@@ -8043,9 +8081,7 @@ test('configured Cloudflare tool adapter admits only runtime metadata read effec
       { response: 'Runtime metadata read completed.' },
     ]),
     CLOUDFLARE_CARRIER_ENABLE_RUNTIME_TOOL_READS: '1',
-  };
-  const namespace = fakeDurableObjectNamespace(durableEnv);
-  const env = authEnv(namespace, durableEnv);
+  });
   await worker.fetch(jsonRequest(startRequest({ request_id: 'request_start_tool_ok' }), { token: 'test-admin-token' }), env);
   const status = await worker.fetch(jsonRequest({
     operation: 'session.status',
@@ -8093,7 +8129,7 @@ test('configured Cloudflare tool adapter admits only runtime metadata read effec
 });
 
 test('configured Cloudflare KV tool adapter admits read-only key gets', async () => {
-  const durableEnv = {
+  const { durableEnv, env } = await canonicalAiWorkerEnv({
     AI: fakeAiBinding([
       {
         response: 'Reading KV.',
@@ -8107,9 +8143,7 @@ test('configured Cloudflare KV tool adapter admits read-only key gets', async ()
     ]),
     CLOUDFLARE_CARRIER_ENABLE_KV_TOOL_READS: '1',
     CLOUDFLARE_CARRIER_KV: fakeKvBinding({ alpha: 'value-alpha' }),
-  };
-  const namespace = fakeDurableObjectNamespace(durableEnv);
-  const env = authEnv(namespace, durableEnv);
+  });
   await worker.fetch(jsonRequest(startRequest({ request_id: 'request_start_tool_kv' }), { token: 'test-admin-token' }), env);
   const status = await worker.fetch(jsonRequest({
     operation: 'session.status',
@@ -8154,7 +8188,7 @@ test('configured Cloudflare KV tool adapter admits read-only key gets', async ()
 
 test('configured Cloudflare KV write tool requires write flag and principal authority', async () => {
   const kv = fakeKvBinding({});
-  const durableEnv = {
+  const { durableEnv, env } = await canonicalAiWorkerEnv({
     AI: fakeAiBinding([
       {
         response: 'Writing KV.',
@@ -8168,9 +8202,7 @@ test('configured Cloudflare KV write tool requires write flag and principal auth
     ]),
     CLOUDFLARE_CARRIER_ENABLE_KV_TOOL_WRITES: '1',
     CLOUDFLARE_CARRIER_KV: kv,
-  };
-  const namespace = fakeDurableObjectNamespace(durableEnv);
-  const env = authEnv(namespace, durableEnv);
+  });
   await worker.fetch(jsonRequest(startRequest({ request_id: 'request_start_tool_kv_put' }), { token: 'test-admin-token' }), env);
   const status = await worker.fetch(jsonRequest({
     operation: 'session.status',
@@ -8210,7 +8242,7 @@ test('configured Cloudflare KV write tool requires write flag and principal auth
 
 test('configured Cloudflare KV write tool records admitted execution failure separately from denial', async () => {
   const kv = fakeKvBinding({});
-  const durableEnv = {
+  const { durableEnv, env } = await canonicalAiWorkerEnv({
     AI: fakeAiBinding([
       {
         response: 'Writing KV without a key.',
@@ -8224,9 +8256,7 @@ test('configured Cloudflare KV write tool records admitted execution failure sep
     ]),
     CLOUDFLARE_CARRIER_ENABLE_KV_TOOL_WRITES: '1',
     CLOUDFLARE_CARRIER_KV: kv,
-  };
-  const namespace = fakeDurableObjectNamespace(durableEnv);
-  const env = authEnv(namespace, durableEnv);
+  });
   await worker.fetch(jsonRequest(startRequest({ request_id: 'request_start_tool_kv_put_failed' }), { token: 'test-admin-token' }), env);
   const input = {
     ...inputPipelineCases.cases.find((entry) => entry.name === 'manual_operator_admitted').input,
@@ -8254,7 +8284,7 @@ test('configured Cloudflare KV write tool records admitted execution failure sep
 
 test('provider follow-up tool calls are processed in bounded batches', async () => {
   const kv = fakeKvBinding({ first: 'one', second: 'two' });
-  const durableEnv = {
+  const { durableEnv, env } = await canonicalAiWorkerEnv({
     AI: fakeAiBinding([
       {
         response: 'Reading first key.',
@@ -8276,9 +8306,7 @@ test('provider follow-up tool calls are processed in bounded batches', async () 
     ]),
     CLOUDFLARE_CARRIER_ENABLE_KV_TOOL_READS: '1',
     CLOUDFLARE_CARRIER_KV: kv,
-  };
-  const namespace = fakeDurableObjectNamespace(durableEnv);
-  const env = authEnv(namespace, durableEnv);
+  });
   await worker.fetch(jsonRequest(startRequest({ request_id: 'request_start_tool_kv_loop' }), { token: 'test-admin-token' }), env);
   const input = {
     ...inputPipelineCases.cases.find((entry) => entry.name === 'manual_operator_admitted').input,

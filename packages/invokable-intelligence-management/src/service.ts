@@ -11,6 +11,7 @@ import {
 } from "@narada2/invokable-intelligence-contract";
 import type {
   CanonicalCatalogRecord,
+  CanonicalCatalogSeed,
   CatalogDiagnostic,
   ContractError,
   IntelligenceAuthorityLocus,
@@ -62,6 +63,30 @@ export class ManagementError extends Error {
     this.name = "ManagementError";
     this.code = code;
     this.evidence_refs = [...evidenceRefs];
+  }
+}
+
+function requireCatalogRecordAdmission(
+  session: ManagementSession,
+  record: CanonicalCatalogRecord,
+  context: ManagementMutationContext,
+): void {
+  requireMutationContext(session, context);
+  if (
+    (record.authority.site_id !== undefined && record.authority.site_id !== session.owningSite.id)
+    || (record.authority.site_id === undefined && record.authority.locus !== "runtime-observer")
+    || record.authority.locus !== context.authority.locus
+    || record.authority.authority_ref !== context.authority.authority_ref
+  ) {
+    throw new ManagementError("foreign-locus-mutation", "Catalog mutation authority does not belong to this destination Site.", context.evidence_refs);
+  }
+  const admittedEvidence = record.validation.evidence.map(({ ref }) => ref);
+  if (!admittedEvidence.every((ref) => context.evidence_refs.includes(ref))) {
+    throw new ManagementError("mutation-evidence-mismatch", "Catalog validation evidence is not admitted by the mutation context.", context.evidence_refs);
+  }
+  const diagnostics = validateCanonicalCatalogRecord(record);
+  if (diagnostics.length) {
+    throw new ManagementError("invalid-catalog-record", "Catalog record failed canonical validation.", context.evidence_refs);
   }
 }
 
@@ -211,6 +236,12 @@ export type ManagementMutationRequest =
   | {
       operation: "admit-catalog-record";
       record: CanonicalCatalogRecord;
+      context: ManagementMutationContext;
+    }
+  | {
+      operation: "admit-catalog-seed";
+      seed: CanonicalCatalogSeed;
+      record_contexts: Record<string, ManagementMutationContext>;
       context: ManagementMutationContext;
     }
   | {
@@ -375,8 +406,9 @@ function receipt(
   request: ManagementMutationRequest,
   targetRef: string,
   auditEventRef?: string,
+  contextOverride?: ManagementMutationContext,
 ): ManagementMutationReceipt {
-  const { context } = request;
+  const context = contextOverride ?? request.context;
   return {
     schema: MANAGEMENT_MUTATION_RECEIPT_SCHEMA,
     id: `management-receipt:${request.operation}:${targetRef}:${context.decided_at}`,
@@ -628,26 +660,82 @@ export class IntelligenceManagementService {
     }
   }
 
-  private async mutate(request: ManagementMutationRequest): Promise<ManagementResult> {
+  /** Validate one mutation completely, including current-store preconditions, without writing. */
+  async preflightMutation(request: ManagementMutationRequest): Promise<void> {
     requireMutationContext(this.session, request.context);
     assertSecretFree(request);
+    if (request.operation === "admit-catalog-seed") {
+      const { seed, record_contexts: recordContexts } = request;
+      if (
+        seed.schema !== CANONICAL_CATALOG_SEED_SCHEMA
+        || typeof seed.id !== "string" || !seed.id
+        || typeof seed.created_at !== "string" || !Number.isFinite(Date.parse(seed.created_at))
+        || !Array.isArray(seed.records) || seed.records.length === 0
+        || !Array.isArray(seed.residuals) || seed.residuals.length !== 0
+        || !recordContexts || typeof recordContexts !== "object" || Array.isArray(recordContexts)
+      ) {
+        throw new ManagementError("invalid-catalog-seed-admission", "Atomic catalog admission requires a non-empty canonical seed, no ungoverned residuals, and one mutation context per record.", request.context.evidence_refs);
+      }
+      const recordIds = seed.records.map(({ id }) => id);
+      const contextIds = Object.keys(recordContexts);
+      if (
+        new Set(recordIds).size !== recordIds.length
+        || contextIds.length !== recordIds.length
+        || contextIds.some((id) => !recordIds.includes(id))
+      ) {
+        throw new ManagementError("catalog-seed-context-mismatch", "Atomic catalog admission requires exactly one context for every immutable record envelope.", request.context.evidence_refs);
+      }
+      for (const record of seed.records) requireCatalogRecordAdmission(this.session, record, recordContexts[record.id]);
+      return;
+    }
+    if (request.operation === "admit-catalog-record") {
+      requireCatalogRecordAdmission(this.session, request.record, request.context);
+      return;
+    }
+    if (request.operation === "revoke-materialization") {
+      const current = await this.materialization().getProjectionByEnvelope(request.revocation.envelope_id);
+      if (!current || current.envelope.destination.site_id !== request.context.destination_site_id) {
+        throw new ManagementError("not-found", "Revocation addresses no projection admitted by this destination Site.", request.context.evidence_refs);
+      }
+      if (!request.context.evidence_refs.includes(request.revocation.evidence_ref)) {
+        throw new ManagementError("mutation-evidence-mismatch", "Revocation evidence is not admitted by the mutation context.", request.context.evidence_refs);
+      }
+      return;
+    }
+
+    this.validateMaterializationContext(request.envelope, request.admission, request.context);
+    if (request.operation === "reject-materialization" && request.admission.decision === "admitted") {
+      throw new ManagementError("rejection-decision-required", "Reject operation requires a rejected or deferred destination admission.", request.context.evidence_refs);
+    }
+    if (request.operation !== "reject-materialization" && request.admission.decision !== "admitted") {
+      throw new ManagementError("admission-required", "Materialize and refresh require an admitted destination decision.", request.context.evidence_refs);
+    }
+    const current = await this.materialization().getProjection(materializationProjectionKey(request.envelope));
+    if (request.operation === "materialize" && current && current.envelope.id !== request.envelope.id) {
+      throw new ManagementError("refresh-required", "A current projection exists; use the explicit refresh operation.", request.context.evidence_refs);
+    }
+    if (request.operation === "refresh" && !current) {
+      throw new ManagementError("materialization-required", "No current projection exists; use the explicit materialize operation.", request.context.evidence_refs);
+    }
+    if (request.operation !== "reject-materialization") validateMaterializationRecords(request);
+  }
+
+  private async mutate(request: ManagementMutationRequest): Promise<ManagementResult> {
+    await this.preflightMutation(request);
+    if (request.operation === "admit-catalog-seed") {
+      const { seed, record_contexts: recordContexts } = request;
+      await this.session.store.loadCatalogSeed(seed);
+      const recordReceipts = seed.records.map((record) => receipt(
+        request,
+        record.id,
+        undefined,
+        recordContexts[record.id],
+      ));
+      const mutationReceipt = receipt(request, seed.id);
+      return result(request.operation, { seed, receipt: mutationReceipt, record_receipts: recordReceipts });
+    }
     if (request.operation === "admit-catalog-record") {
       const { record, context } = request;
-      if (
-        record.authority.site_id !== this.session.owningSite.id
-        || record.authority.locus !== context.authority.locus
-        || record.authority.authority_ref !== context.authority.authority_ref
-      ) {
-        throw new ManagementError("foreign-locus-mutation", "Catalog mutation authority does not belong to this destination Site.", context.evidence_refs);
-      }
-      const admittedEvidence = record.validation.evidence.map(({ ref }) => ref);
-      if (!admittedEvidence.every((ref) => context.evidence_refs.includes(ref))) {
-        throw new ManagementError("mutation-evidence-mismatch", "Catalog validation evidence is not admitted by the mutation context.", context.evidence_refs);
-      }
-      const diagnostics = validateCanonicalCatalogRecord(record);
-      if (diagnostics.length) {
-        throw new ManagementError("invalid-catalog-record", "Catalog record failed canonical validation.", context.evidence_refs);
-      }
       await this.session.store.loadCatalogSeed({
         schema: CANONICAL_CATALOG_SEED_SCHEMA,
         id: `management-seed:${record.id}:${record.revision}`,
@@ -661,34 +749,12 @@ export class IntelligenceManagementService {
 
     if (request.operation === "revoke-materialization") {
       const store = this.materialization();
-      const current = await store.getProjectionByEnvelope(request.revocation.envelope_id);
-      if (!current || current.envelope.destination.site_id !== request.context.destination_site_id) {
-        throw new ManagementError("not-found", "Revocation addresses no projection admitted by this destination Site.", request.context.evidence_refs);
-      }
-      if (!request.context.evidence_refs.includes(request.revocation.evidence_ref)) {
-        throw new ManagementError("mutation-evidence-mismatch", "Revocation evidence is not admitted by the mutation context.", request.context.evidence_refs);
-      }
       const stored = await store.revoke(request.revocation);
       return this.materializationMutationResult(request, request.revocation.envelope_id, stored);
     }
 
-    this.validateMaterializationContext(request.envelope, request.admission, request.context);
-    if (request.operation === "reject-materialization" && request.admission.decision === "admitted") {
-      throw new ManagementError("rejection-decision-required", "Reject operation requires a rejected or deferred destination admission.", request.context.evidence_refs);
-    }
-    if (request.operation !== "reject-materialization" && request.admission.decision !== "admitted") {
-      throw new ManagementError("admission-required", "Materialize and refresh require an admitted destination decision.", request.context.evidence_refs);
-    }
     const store = this.materialization();
-    const current = await store.getProjection(materializationProjectionKey(request.envelope));
-    if (request.operation === "materialize" && current && current.envelope.id !== request.envelope.id) {
-      throw new ManagementError("refresh-required", "A current projection exists; use the explicit refresh operation.", request.context.evidence_refs);
-    }
-    if (request.operation === "refresh" && !current) {
-      throw new ManagementError("materialization-required", "No current projection exists; use the explicit materialize operation.", request.context.evidence_refs);
-    }
     if (request.operation !== "reject-materialization") {
-      validateMaterializationRecords(request);
       await this.session.store.loadCatalogSeed({
         schema: CANONICAL_CATALOG_SEED_SCHEMA,
         id: `materialization-seed:${request.envelope.id}:${request.envelope.statement.source_revision}`,
@@ -720,10 +786,13 @@ export class IntelligenceManagementService {
       case "inspect-materialization":
       case "explain-materialization": return this.inspectMaterialization(request);
       case "admit-catalog-record":
+      case "admit-catalog-seed":
       case "materialize":
       case "refresh":
       case "reject-materialization":
       case "revoke-materialization": return this.mutate(request);
+      default:
+        throw new ManagementError("unsupported-operation", "The requested management operation is not part of the canonical service contract.");
     }
   }
 

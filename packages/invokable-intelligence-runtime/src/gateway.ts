@@ -11,6 +11,7 @@ import type {
   InvocationAuditEvidence,
   InvocationExecutionAttempt,
   InvocationExecutionTransition,
+  InvocationAuthorityBinding,
   InvocationIntent,
   InvocationObservation,
   InvocationOperationalTelemetry,
@@ -93,6 +94,7 @@ export interface InvokeRequest {
   operationId?: string;
   purpose: string;
   principal?: string;
+  authorityBinding?: InvocationAuthorityBinding;
   requiredCapabilities?: CapabilityKey[];
   requestedModel?: ResourceRef;
   requestedOptions?: Record<string, unknown>;
@@ -205,6 +207,7 @@ const modeTrigger: Partial<Record<PlanAttemptMode, PlanRevalidationTrigger>> = {
 function normalizedIntentShape(intent: InvocationIntent): unknown {
   return {
     principal: intent.principal ?? null,
+    authorityBinding: intent.authority_binding ?? null,
     purpose: intent.purpose,
     input_digest: intent.input_digest ?? null,
     required_capabilities: intent.required_capabilities ?? [],
@@ -563,6 +566,7 @@ export function createLocalInvocationGateway(options: LocalInvocationGatewayOpti
       const intentId = request.intentId ?? deterministicId("intent", {
         purpose: request.purpose,
         principal: request.principal ?? null,
+        authorityBinding: request.authorityBinding ?? null,
         inputDigest,
         requiredCapabilities,
         requestedModel: request.requestedModel ?? null,
@@ -573,6 +577,7 @@ export function createLocalInvocationGateway(options: LocalInvocationGatewayOpti
         id: intentId,
         created_at: startedClock.instant,
         ...(request.principal ? { principal: request.principal } : {}),
+        ...(request.authorityBinding ? { authority_binding: request.authorityBinding } : {}),
         purpose: request.purpose,
         input_digest: inputDigest,
         ...(requiredCapabilities.length ? { required_capabilities: requiredCapabilities } : {}),
@@ -882,46 +887,53 @@ export function createLocalInvocationGateway(options: LocalInvocationGatewayOpti
       const observations = [submittedObservation, acknowledgementObservation, ...(providerObservation ? [providerObservation] : [])];
       for (const observation of observations) await store.recordInvocationObservation(observation);
 
+      const executionSubjects: InvocationAuditEvidence["subjects"] = [
+        { kind: "intent", id: intent.id },
+        { kind: "plan", id: plan.id },
+        { kind: "attempt", id: attemptId },
+      ];
       const audit = [
         await auditEvidence(
           "execution-transition",
-          [{ kind: "attempt", id: attemptId }, { kind: "outcome", id: outcome.id }],
+          [...executionSubjects, { kind: "outcome", id: outcome.id }],
           terminalClock.instant,
           observations.map(({ id }) => id),
         ),
         await auditEvidence(
           "admission-decision",
-          [{ kind: "attempt", id: attemptId }, { kind: "outcome", id: outcome.id }],
+          [...executionSubjects, { kind: "outcome", id: outcome.id }],
           terminalClock.instant,
           [submittedObservation.id, acknowledgementObservation.id],
         ),
         ...(result ? [await auditEvidence(
           "result-integrity",
-          [{ kind: "attempt", id: attemptId }, { kind: "result", id: result.id }],
+          [...executionSubjects, { kind: "result", id: result.id }, { kind: "outcome", id: outcome.id }],
           terminalClock.instant,
           providerObservation ? [providerObservation.id] : [],
         )] : []),
         await auditEvidence(
           "terminal-outcome",
-          [{ kind: "attempt", id: attemptId }, { kind: "outcome", id: outcome.id }],
+          [...executionSubjects, { kind: "outcome", id: outcome.id }],
           terminalClock.instant,
           observations.map(({ id }) => id),
         ),
       ];
       for (const evidence of audit) await store.recordInvocationAuditEvidence(evidence);
 
-      const telemetry: InvocationOperationalTelemetry[] = adapterOutcome.usage || adapterOutcome.providerRequestRef ? [{
+      const measuredLatencyMs = Math.max(0, Date.parse(terminalClock.instant) - Date.parse(startedClock.instant));
+      const latencyMs = adapterOutcome.usage?.latency_ms ?? measuredLatencyMs;
+      const telemetry: InvocationOperationalTelemetry[] = [{
         schema: "narada.invokable-intelligence.telemetry.v1",
-        id: deterministicId("telemetry", { attemptId, at: terminalClock.instant, usage: adapterOutcome.usage ?? null }),
+        id: deterministicId("telemetry", { attemptId, at: terminalClock.instant, usage: adapterOutcome.usage ?? null, latencyMs }),
         attempt_id: attemptId,
         recorded_at: terminalClock.instant,
         ...(adapterOutcome.usage?.input_tokens !== undefined ? { input_tokens: adapterOutcome.usage.input_tokens } : {}),
         ...(adapterOutcome.usage?.output_tokens !== undefined ? { output_tokens: adapterOutcome.usage.output_tokens } : {}),
         ...(adapterOutcome.usage?.cached_tokens !== undefined ? { cached_tokens: adapterOutcome.usage.cached_tokens } : {}),
-        ...(adapterOutcome.usage?.latency_ms !== undefined ? { latency_ms: adapterOutcome.usage.latency_ms } : {}),
+        latency_ms: latencyMs,
         ...(adapterOutcome.usage?.queue_ms !== undefined ? { queue_ms: adapterOutcome.usage.queue_ms } : {}),
         ...(adapterOutcome.providerRequestRef ? { provider_request_ref: adapterOutcome.providerRequestRef } : {}),
-      }] : [];
+      }];
       for (const record of telemetry) await store.recordInvocationTelemetry(record);
 
       return {

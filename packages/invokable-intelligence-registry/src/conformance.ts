@@ -73,7 +73,7 @@ const TEST_PLAN: InvocationPlan = {
     resolved_at: "2026-07-19T00:00:01Z",
     clock: { source: "test-clock", authority_ref: "test:clock", instant: "2026-07-19T00:00:01Z", timezone: "UTC", local: { date: "2026-07-19", time: "00:00:01", weekday: 0 } },
     resolver_version: "conformance-resolver-0",
-    digests: { normalized_resolver_input: `sha256:${"a".repeat(64)}`, catalog: `sha256:${"b".repeat(64)}`, policy: `sha256:${"c".repeat(64)}`, assertions: `sha256:${"d".repeat(64)}`, topology: `sha256:${"e".repeat(64)}`, access: `sha256:${"f".repeat(64)}` },
+    digests: { normalized_resolver_input: `sha256:${"a".repeat(64)}`, catalog: `sha256:${"b".repeat(64)}`, policy: `sha256:${"c".repeat(64)}`, assertions: `sha256:${"d".repeat(64)}`, topology: `sha256:${"e".repeat(64)}`, access: `sha256:${"f".repeat(64)}`, materialization: `sha256:${"0".repeat(64)}` },
     snapshot_digest: `sha256:${"1".repeat(64)}`,
     valid_until: "2026-07-19T00:05:01Z",
     revalidation_triggers: ["before-retry"],
@@ -323,8 +323,6 @@ export function defineRegistryConformanceSuite(label: string, makeTarget: () => 
         assert.equal((await store.getRefusalByIntent("intent:unrelated-999"))?.reason_code, "no-candidates");
         assert.equal((await store.getRefusal("refusal:conformance-001"))?.intent_id, "intent:unrelated-999");
         assert.equal((await store.listRefusalsByIntent("intent:unrelated-999")).length, 1);
-        assert.equal((await store.listAttempts(TEST_PLAN.id)).length, 0);
-        assert.equal((await store.listEvidence(attempt.id)).length, 0);
       });
 
       await t.test("invalid writes are rejected with contract errors", async () => {

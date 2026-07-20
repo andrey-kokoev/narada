@@ -9,12 +9,24 @@ import {
   prepareTargetAuthority,
   sealSourceAuthority,
 } from '@narada2/nars-session-core/authority-transition-state';
-import { createCloudflareNarsAuthorityService } from '../src/index.js';
+import {
+  createCloudflareNarsAuthorityService as createCloudflareNarsAuthorityServiceCore,
+  createCloudflareNarsTestRuntimeExecutor,
+} from '../src/index.js';
 
 const now = '2026-07-19T00:00:00.000Z';
 const SOURCE_EPOCH = 1;
 const TARGET_EPOCH = 2;
 const SOURCE_LAST_SEQUENCE = 7;
+
+function createCloudflareNarsAuthorityService(
+  options: Parameters<typeof createCloudflareNarsAuthorityServiceCore>[0] = {},
+) {
+  return createCloudflareNarsAuthorityServiceCore({
+    ...options,
+    runtime_executor: createCloudflareNarsTestRuntimeExecutor(),
+  });
+}
 
 function driveLocalSourceToSealed(root: string) {
   const sessionPath = join(root, 'sessions', 'carrier_local_1', 'session.jsonl');

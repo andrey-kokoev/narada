@@ -384,6 +384,31 @@ export function normalizeCloudflareOperationPostureOverview(overview = null, rou
   };
 }
 
+function cloudflareSiteProductAttentionAction(attention = [], {
+  operationPostureOverview = null,
+  operationContinuityDirectionStatus = null,
+  continuityLoopStatus = null,
+  continuityReconciliationExecutionStatus = null,
+} = {}) {
+  if (attention.includes('operation_posture')) {
+    const postureAction = operationPostureOverview?.next_action ?? null;
+    if (['refresh_site_continuity_loop', 'review_site_continuity_reconciliation_execution'].includes(postureAction)) {
+      return postureAction;
+    }
+    return 'focus_next_operation';
+  }
+  if (attention.includes('continuity_loop_freshness')) {
+    return continuityLoopStatus?.next_action ?? 'refresh_site_continuity_loop';
+  }
+  if (attention.includes('continuity_reconciliation_execution')) {
+    return continuityReconciliationExecutionStatus?.next_action ?? 'review_site_continuity_reconciliation_execution';
+  }
+  if (attention[0] === 'continuity_direction') {
+    return operationContinuityDirectionStatus?.next_action ?? 'continuity_direction';
+  }
+  return attention[0] ?? 'monitor_site';
+}
+
 async function resolveCloudflareGithubRepositoryPublicationCredential(env = {}, fetchImpl = fetch) {
   const token = String(env.CLOUDFLARE_REPOSITORY_PUBLICATION_GITHUB_TOKEN ?? '').trim();
   if (token) return { ok: true, accessToken: token, mode: 'github_token' };
@@ -2095,7 +2120,7 @@ function summarizeCloudflareSiteProductOverview(siteProductStatuses = [], sitePr
     attention_counts: attentionCounts,
     next_site_id: firstActionable?.site_id ?? null,
     next_health: firstActionable?.health ?? 'ready',
-    next_action: firstActionable?.next_action ?? 'monitor_sites',
+    next_action: actionableOperationId ? 'focus_next_operation' : firstActionable?.next_action ?? 'monitor_sites',
     next_reason: nextReason,
     next_operation_id: actionableProjection?.focused_operation_lifecycle?.operation_id ?? null,
     next_operation_next_action: actionableWorkflowRoute?.next_action ?? null,
@@ -4034,17 +4059,12 @@ function summarizeCloudflareSiteProductStatus({
     continuity_loop_freshness_state: continuityLoopFreshnessState,
     continuity_loop_report_age_ms: continuityLoopStatus?.latest_report_age_ms ?? null,
     site_continuity_loop_status: continuityLoopStatus,
-    next_action: missing[0] ?? (
-      attention[0] === 'operation_posture'
-        ? 'focus_next_operation'
-        : attention[0] === 'continuity_direction'
-        ? operationContinuityDirectionStatus?.next_action ?? 'continuity_direction'
-        : attention[0] === 'continuity_loop_freshness'
-          ? continuityLoopStatus?.next_action ?? 'refresh_site_continuity_loop'
-          : attention[0] === 'continuity_reconciliation_execution'
-            ? continuityReconciliationExecutionStatus?.next_action ?? 'review_site_continuity_reconciliation_execution'
-          : attention[0]
-    ) ?? 'monitor_site',
+    next_action: missing[0] ?? cloudflareSiteProductAttentionAction(attention, {
+      operationPostureOverview,
+      operationContinuityDirectionStatus,
+      continuityLoopStatus,
+      continuityReconciliationExecutionStatus,
+    }),
     focused_operation_id: focusedOperationLifecycle?.operation_id ?? null,
   };
 }
@@ -4054,11 +4074,17 @@ function normalizeCloudflareSiteProductStatus(status = null, operationPostureOve
   if (operationPostureOverview?.next_status !== 'needs_attention') return status;
   const attention = Array.isArray(status.attention) ? status.attention : [];
   const operationReason = operationPostureOverview?.next_reason || focusedOperationLifecycle?.workflow_route?.reason || 'operation_posture';
+  const normalizedAttention = attention.includes('operation_posture') ? attention : ['operation_posture', ...attention];
   return {
     ...status,
     health: status.health === 'incomplete' ? 'incomplete' : 'attention',
-    attention: attention.includes('operation_posture') ? attention : ['operation_posture', ...attention],
-    next_action: 'focus_next_operation',
+    attention: normalizedAttention,
+    next_action: cloudflareSiteProductAttentionAction(normalizedAttention, {
+      operationPostureOverview,
+      operationContinuityDirectionStatus: status.operation_continuity_direction_status,
+      continuityLoopStatus: status.site_continuity_loop_status,
+      continuityReconciliationExecutionStatus: status.site_continuity_reconciliation_execution_status,
+    }),
     focused_operation_id: focusedOperationLifecycle?.operation_id ?? status.focused_operation_id ?? null,
     operation_posture_reason: operationReason,
   };
@@ -5852,7 +5878,19 @@ async function buildCloudflareOperationProductProjection(env, registry, principa
     stage = 'task_lifecycle_read';
     const taskLifecycleShadowReads = await listCloudflareTaskLifecycleShadowReads(env, siteId, params.task_lifecycle_shadow_limit ?? params.limit);
     const taskLifecycleWriteAdmissions = await listCloudflareTaskLifecycleWriteAdmissions(env, siteId, params.task_lifecycle_write_admission_limit ?? params.limit);
-    const taskLifecycleTasks = await listCloudflareTaskLifecycleTasks(env, siteId, params.task_lifecycle_task_limit ?? params.limit, params);
+    const siteTaskLifecycleTasks = await listCloudflareTaskLifecycleTasks(env, siteId, params.task_lifecycle_task_limit ?? params.limit, params);
+    const operationCarrierSessionIds = new Set(
+      sessions
+        .filter((session) => !operation?.operation_id || session.operation_id === operation.operation_id)
+        .map((session) => session.carrier_session_id)
+        .filter(Boolean),
+    );
+    const taskLifecycleTasks = operation?.operation_id
+      ? siteTaskLifecycleTasks.filter((task) => (
+          task.operation_id === operation.operation_id
+          || (task.carrier_session_id && operationCarrierSessionIds.has(task.carrier_session_id))
+        ))
+      : siteTaskLifecycleTasks;
     stage = 'resident_dispatch_read';
     const residentDispatchDecisions = await listCloudflareResidentDispatchDecisions(env, siteId, params.resident_dispatch_limit ?? params.limit);
     const residentDispatchWindowsFallbackRequests = await listCloudflareResidentDispatchWindowsFallbackRequests(
@@ -9651,6 +9689,7 @@ async function createCloudflareTaskLifecycleTask(env = {}, siteId, params = {}, 
     site_id: siteId,
     task_id: params.task_id ?? `cloudflare-task-lifecycle-${taskNumber}`,
     task_number: taskNumber,
+    operation_id: normalizeNullableWorkerString(params.operation_id ?? null),
     carrier_session_id: normalizeNullableWorkerString(params.carrier_session_id ?? null),
     title,
     description: params.description == null ? null : String(params.description),
@@ -9766,16 +9805,25 @@ async function listCloudflareTaskLifecycleTasks(env = {}, siteId, limit, params 
   if (!db || typeof db.prepare !== 'function' || !siteId) return [];
   await ensureCloudflareTaskLifecycleTaskSchema(db);
   const boundedLimit = clampInteger(limit, 0, 100, 25);
+  const carrierSessionId = normalizeNullableWorkerString(params.carrier_session_id ?? params.session_id ?? null);
   const rows = await db.prepare(`
     SELECT * FROM cloudflare_task_lifecycle_tasks
     WHERE site_id = ?
     ORDER BY task_number ASC
     LIMIT ?
-  `).bind(siteId, boundedLimit).all();
-  const tasks = (rows.results ?? []).map(formatCloudflareTaskLifecycleTask);
+  `).bind(siteId, carrierSessionId ? boundedLimit + 1 : boundedLimit).all();
+  let tasks = (rows.results ?? []).map(formatCloudflareTaskLifecycleTask);
+  const focusedTask = carrierSessionId
+    ? tasks.find((task) => task.carrier_session_id === carrierSessionId) ?? null
+    : null;
+  if (carrierSessionId) {
+    tasks = tasks
+      .filter((task) => task.carrier_session_id !== carrierSessionId)
+      .slice(0, boundedLimit);
+    if (focusedTask) tasks.push(focusedTask);
+  }
   const seenTaskIds = new Set(tasks.map((task) => task.task_id));
-  const carrierSessionId = normalizeNullableWorkerString(params.carrier_session_id ?? params.session_id ?? null);
-  if (carrierSessionId && !tasks.some((task) => task.carrier_session_id === carrierSessionId)) {
+  if (carrierSessionId && !focusedTask) {
     const focusedRows = await db.prepare(`
       SELECT * FROM cloudflare_task_lifecycle_tasks
       WHERE site_id = ?
@@ -9821,6 +9869,7 @@ function formatCloudflareTaskLifecycleTask(row) {
     cutover_point_ref: row.cutover_point_ref,
     governed_write_contract_ref: row.governed_write_contract_ref,
     confirmation_evidence_ref: row.confirmation_evidence_ref,
+    operation_id: taskJson.operation_id ?? null,
     carrier_session_id: taskJson.carrier_session_id ?? null,
     created_by_principal_id: row.created_by_principal_id,
     claimed_by_agent_id: taskJson.claimed_by_agent_id ?? null,
@@ -14395,11 +14444,17 @@ export function createCloudflareAiProviderAdapter(env = {}) {
       site_id = null,
       operation_id = null,
       carrier_context = null,
+      intelligence_invocation = null,
     }) {
       const { gateway } = await ensureGateway();
+      const invocationOperationId = intelligence_invocation?.operation_id
+        ?? `${carrier_session_id ?? 'unbound'}:${turn_id ?? input?.event_id ?? 'turn'}:${tool_results.length > 0 ? 'tool-results' : 'initial'}`;
       const result = await gateway.invoke({
         purpose: 'carrier-turn',
-        operationId: `${carrier_session_id ?? 'unbound'}:${turn_id ?? input?.event_id ?? 'turn'}:${tool_results.length > 0 ? 'tool-results' : 'initial'}`,
+        ...(intelligence_invocation?.intent_id ? { intentId: intelligence_invocation.intent_id } : {}),
+        operationId: invocationOperationId,
+        mode: intelligence_invocation?.mode ?? 'immediate',
+        allowReplan: intelligence_invocation?.allow_replan !== false,
         messages: { input, tool_results },
         turnId: turn_id ?? undefined,
         inputEventId: input?.event_id ?? undefined,
@@ -15009,7 +15064,7 @@ export function classifyCloudflareOperationCommandState(input = {}) {
 
 export function shouldPromoteOperationOperatorFocus(operation = null, next = {}) {
   const status = String(operation?.status ?? '').toLowerCase();
-  if (next?.action !== 'monitor_operation') return false;
+  if (!['monitor_operation', 'start_or_select_session'].includes(next?.action)) return false;
   return status !== 'closed';
 }
 

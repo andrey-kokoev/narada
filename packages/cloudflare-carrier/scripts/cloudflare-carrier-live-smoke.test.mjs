@@ -11,6 +11,7 @@ test('parseLiveSmokeArgs accepts bearer auth and text format', () => {
     '--url', 'https://carrier.example',
     '--format', 'text',
     '--site', 'site_example',
+    '--intelligence-site', 'site:example',
     '--operation', 'operation_example',
     '--goal', 'prove live carrier',
   ], {
@@ -20,6 +21,7 @@ test('parseLiveSmokeArgs accepts bearer auth and text format', () => {
   assert.equal(config.workerUrl, 'https://carrier.example');
   assert.equal(config.format, 'text');
   assert.equal(config.siteId, 'site_example');
+  assert.equal(config.intelligenceSiteId, 'site:example');
   assert.equal(config.operationId, 'operation_example');
   assert.equal(config.expectedGoal, 'prove live carrier');
   assert.equal(config.auth.kind, 'bearer');

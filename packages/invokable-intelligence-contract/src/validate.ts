@@ -9,8 +9,6 @@ import { CAPABILITY_ASSERTION_SCHEMA } from "./assertions.js";
 import { isResourceKind, parseResourceId } from "./ids.js";
 import type { ResourceId, ResourceKind, ResourceRef } from "./ids.js";
 import {
-  INVOCATION_ATTEMPT_SCHEMA,
-  INVOCATION_EVIDENCE_SCHEMA,
   INVOCATION_INTENT_SCHEMA,
   INVOCATION_PLAN_SCHEMA,
   INVOCATION_REFUSAL_SCHEMA,
@@ -450,39 +448,6 @@ export function validateInvocation(record: unknown): ContractError[] {
       }
       if (!isPlainObject(record.options)) err(errors, "$.options", "invalid-invocation", "options must be an object");
       checkProvenance(record.provenance, "$.provenance", errors);
-      return errors;
-    }
-    case INVOCATION_ATTEMPT_SCHEMA: {
-      if (!isNonEmptyString(record.id)) err(errors, "$.id", "invalid-invocation", "id is required");
-      if (!isNonEmptyString(record.plan_id)) err(errors, "$.plan_id", "invalid-invocation", "plan_id is required");
-      if (!["started", "succeeded", "failed", "cancelled"].includes(String(record.state))) {
-        err(errors, "$.state", "invalid-invocation", "unknown attempt state");
-      }
-      if (!isIsoTimestamp(record.started_at)) err(errors, "$.started_at", "invalid-invocation", "started_at must be ISO-8601");
-      if (record.ended_at !== undefined && !isIsoTimestamp(record.ended_at)) {
-        err(errors, "$.ended_at", "invalid-invocation", "ended_at must be ISO-8601");
-      }
-      return errors;
-    }
-    case INVOCATION_EVIDENCE_SCHEMA: {
-      if (!isNonEmptyString(record.id)) err(errors, "$.id", "invalid-invocation", "id is required");
-      if (!isNonEmptyString(record.attempt_id)) err(errors, "$.attempt_id", "invalid-invocation", "attempt_id is required");
-      if (!isIsoTimestamp(record.recorded_at)) {
-        err(errors, "$.recorded_at", "invalid-invocation", "recorded_at must be ISO-8601");
-      }
-      if (record.usage !== undefined) {
-        if (!isPlainObject(record.usage)) {
-          err(errors, "$.usage", "invalid-invocation", "usage must be an object");
-        } else {
-          for (const field of ["input_tokens", "output_tokens", "latency_ms"] as const) {
-            const v = (record.usage as Record<string, unknown>)[field];
-            if (v !== undefined && (typeof v !== "number" || v < 0)) {
-              err(errors, `$.usage.${field}`, "invalid-invocation", "usage fields must be non-negative numbers");
-            }
-          }
-        }
-      }
-      checkEvidenceRefs(record.evidence, "$.evidence", errors);
       return errors;
     }
     case INVOCATION_REFUSAL_SCHEMA: {

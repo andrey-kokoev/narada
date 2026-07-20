@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { basename, isAbsolute, join, normalize, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { loadMcpSurfaceRegistry, registrySurfaces, siteControlRoot } from '@narada2/carrier-action-admission/tool-metadata';
+import { loadMcpSurfaceRegistry, registryServerNames, registrySurfaces, siteControlRoot } from '@narada2/carrier-action-admission/tool-metadata';
 import { McpFabricError } from './mcp-fabric-errors.mjs';
 import { mcpFabricRepairPlan } from './mcp-fabric-repair-plans.mjs';
 import { createMcpFabricLifecycle, transitionMcpFabricLifecycle } from './mcp-fabric-state.mjs';
@@ -11,10 +11,12 @@ export function loadSiteMcpFabric(siteRoot, options = {}) {
   const validateRegistry = options.validateRegistry ?? 'diagnostic';
   const injectionScopeFilter = normalizeInjectionScopeFilter(options.injectionScope ?? options.injection_scope ?? null);
   const runtimeKindFilter = normalizeRuntimeKindFilter(options.runtimeKind ?? options.runtime_kind ?? null);
-  const fabricDirectory = resolveSiteMcpFabricDirectory(siteRoot);
+  const fabricDirectory = resolveSiteMcpFabricDirectory(siteRoot, options.workspaceRoot ?? options.workspace_root ?? null);
   const mcpDir = fabricDirectory.mcpDir;
   const lifecycle = transitionMcpFabricLifecycle(createMcpFabricLifecycle(), 'loaded');
-  if (!existsSync(mcpDir)) {
+  const surfaceRegistry = loadMcpSurfaceRegistry(siteRoot);
+  const registryProjectionEntries = registryRuntimeBindingEntries(surfaceRegistry);
+  if (!existsSync(mcpDir) && registryProjectionEntries.length === 0) {
     if (!required) {
       const empty = emptyFabric(siteRoot, mcpDir);
       empty.source = fabricDirectory.source;
@@ -31,20 +33,25 @@ export function loadSiteMcpFabric(siteRoot, options = {}) {
     });
   }
 
-  const candidateFiles = readdirSync(mcpDir, { withFileTypes: true })
-    .filter((entry) => entry.isFile() && entry.name.endsWith('.json'))
-    .map((entry) => entry.name)
-    .sort((a, b) => a.localeCompare(b));
+  const candidateFiles = existsSync(mcpDir)
+    ? readdirSync(mcpDir, { withFileTypes: true })
+      .filter((entry) => entry.isFile() && entry.name.endsWith('.json'))
+      .map((entry) => entry.name)
+      .sort((a, b) => a.localeCompare(b))
+    : [];
+  const projectionEntries = candidateFiles.length > 0
+    ? candidateFiles.map((file) => ({ file, packet: parseJsonFile(join(mcpDir, file)) }))
+    : registryProjectionEntries;
+  const materializationSource = candidateFiles.length > 0
+    ? 'client_config_projection'
+    : registryProjectionEntries.length > 0 ? 'surface_registry_runtime_binding' : 'empty';
   const servers = {};
   const sources = {};
   const skipped = [];
   const activeFiles = [];
   const canonicalSources = new Map();
-  const surfaceRegistry = loadMcpSurfaceRegistry(siteRoot);
 
-  for (const file of candidateFiles) {
-    const path = join(mcpDir, file);
-    const packet = parseJsonFile(path);
+  for (const { file, packet } of projectionEntries) {
     if (isRetiredEmptyMcpSidecar(packet)) {
       skipped.push({ file, reason: 'retired_empty_sidecar' });
       continue;
@@ -197,7 +204,11 @@ export function loadSiteMcpFabric(siteRoot, options = {}) {
   return {
     schema: 'narada.mcp.fabric.loaded.v1',
     site_root: siteRoot,
-    source: fabricDirectory.source,
+    source: materializationSource === 'surface_registry_runtime_binding'
+      ? 'surface-registry:runtime-binding'
+      : fabricDirectory.source,
+    materialization_source: materializationSource,
+    registry_path: surfaceRegistry.status === 'loaded' ? surfaceRegistry.path : null,
     mcp_dir: mcpDir,
     candidate_mcp_dirs: fabricDirectory.candidates,
     files: loadedSourceFiles(sources),
@@ -212,17 +223,61 @@ export function loadSiteMcpFabric(siteRoot, options = {}) {
   };
 }
 
-function resolveSiteMcpFabricDirectory(siteRoot) {
-  const primary = join(siteRoot, '.ai', 'mcp');
-  const contained = join(siteControlRoot(siteRoot), '.ai', 'mcp');
-  const candidates = [primary, contained];
-  if (existsSync(primary)) {
-    return { mcpDir: primary, source: '.ai/mcp', candidates };
-  }
-  if (existsSync(contained)) {
-    return { mcpDir: contained, source: '.narada/.ai/mcp', candidates };
-  }
-  return { mcpDir: primary, source: '.ai/mcp', candidates };
+function registryRuntimeBindingEntries(registry) {
+  if (registry?.status !== 'loaded') return [];
+  return registrySurfaces(registry).flatMap((surface) => {
+    const serverName = registryServerNames(surface)[0] ?? null;
+    const transport = surface?.runtime_binding?.transport;
+    if (!serverName || !transport || typeof transport !== 'object' || Array.isArray(transport)) return [];
+    const generatedPath = surface?.client_config?.generated_path;
+    const generatedFile = generatedPath ? basename(String(generatedPath)) : `${serverName}.registry.json`;
+    const projection = objectValue(surface?.surface_projection) ? { ...surface.surface_projection } : {};
+    const canonicalSurfaceId = surface?.catalog_surface_id ?? surface?.surface_id ?? null;
+    if (canonicalSurfaceId && !projection.surface_id) projection.surface_id = String(canonicalSurfaceId);
+    if (surface?.surface_id && !projection.projection_id) projection.projection_id = String(surface.surface_id);
+    if (!projection.injection_scope) projection.injection_scope = 'local_site';
+    if (!Array.isArray(projection.runtime_requirements)) projection.runtime_requirements = [];
+    const injectionScope = projection.injection_scope;
+    const tools = Array.isArray(surface?.tool_contract?.exposed_tools)
+      ? surface.tool_contract.exposed_tools
+      : surface?.registered_live_tools;
+    return [{
+      file: generatedFile,
+      packet: {
+        mcpServers: {
+          [serverName]: {
+            transport: transport.type ?? 'stdio',
+            command: transport.command,
+            args: Array.isArray(transport.args) ? transport.args : [],
+            ...(objectValue(transport.env) ? { env: transport.env } : {}),
+            ...(Array.isArray(transport.env_vars) ? { env_vars: transport.env_vars } : {}),
+            ...(surface?.surface_id ? { surface_id: String(surface.surface_id) } : {}),
+            surface_projection: projection,
+            injection_scope: injectionScope,
+            ...(Array.isArray(tools) ? { tools } : {}),
+            ...(surface?.authority_boundary?.posture ? { authority_posture: String(surface.authority_boundary.posture) } : {}),
+            ...(Array.isArray(surface?.operator_affordances) ? { operator_affordances: surface.operator_affordances } : {}),
+            ...(Number.isFinite(Number(surface?.runtime_binding?.startup_timeout_sec))
+              ? { startup_timeout_sec: Number(surface.runtime_binding.startup_timeout_sec) }
+              : {}),
+          },
+        },
+      },
+    }];
+  });
+}
+
+function resolveSiteMcpFabricDirectory(siteRoot, workspaceRoot = null) {
+  const candidateEntries = [
+    ...(workspaceRoot ? [{ path: join(resolve(workspaceRoot), '.ai', 'mcp'), source: 'workspace:.ai/mcp' }] : []),
+    { path: join(siteRoot, '.ai', 'mcp'), source: '.ai/mcp' },
+    { path: join(siteControlRoot(siteRoot), '.ai', 'mcp'), source: '.narada/.ai/mcp' },
+  ];
+  const uniqueEntries = candidateEntries.filter((entry, index, entries) =>
+    entries.findIndex((candidate) => normalize(candidate.path) === normalize(entry.path)) === index);
+  const candidates = uniqueEntries.map((entry) => entry.path);
+  const selected = uniqueEntries.find((entry) => existsSync(entry.path)) ?? uniqueEntries[0];
+  return { mcpDir: selected.path, source: selected.source, candidates };
 }
 
 

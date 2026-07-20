@@ -113,8 +113,8 @@ deletion preserves digest and audit tombstones.
   version, clock/validity data, and full decision
   provenance (applied constraints/preferences/defaults, rejected
   candidates with reasons).
-- `InvocationAttempt`, result envelope, and terminal outcome — distinct,
-  append-only execution states.
+- `InvocationExecutionAttempt`, execution transitions, result envelope, and
+  terminal outcome — distinct, append-only execution records.
 - Observation, admitted evidence, and telemetry — distinct truth,
   admission, and operational-reporting surfaces.
 - `InvocationRefusal` — typed no-plan outcome with a machine-readable

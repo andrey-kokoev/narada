@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   CANONICAL_LOCAL_TEST_IDS,
   buildCanonicalLocalTestSeed,
+  canonicalSha256,
   canonicalTestClock,
   feasibleTopologyObservations,
 } from "@narada2/invokable-intelligence-contract";
@@ -22,6 +23,15 @@ import type { ResolverContext } from "../src/index.js";
 
 const AT = "2026-07-19T12:00:00.000Z";
 const IDS = CANONICAL_LOCAL_TEST_IDS;
+const NO_MATERIALIZED_INPUTS: ResolverMaterializedInputs = {
+  admitted: [],
+  excluded: [],
+  acquisition_refs: [],
+};
+
+function refreshCatalogDigests(seed: CanonicalCatalogSeed): void {
+  for (const record of seed.records) record.source.digest = canonicalSha256(record.document);
+}
 
 function context(instant = AT): ResolverContext {
   return {
@@ -97,6 +107,7 @@ function materializedForeignConsent(seed: CanonicalCatalogSeed): ResolverMateria
     status: "active" as const,
     materialized_at: AT,
   };
+  refreshCatalogDigests(seed);
   return { admitted: [projection], excluded: [], acquisition_refs: [admission.id] };
 }
 
@@ -118,6 +129,7 @@ async function makeStore(
 ): Promise<IntelligenceRegistryStore> {
   const seed = buildCanonicalLocalTestSeed();
   mutate?.(seed);
+  refreshCatalogDigests(seed);
   const store = await SqliteRegistryStore.open(":memory:");
   await store.loadCatalogSeed(seed);
   return store;
@@ -136,11 +148,11 @@ function asRefusal(result: InvocationPlan | InvocationRefusal): InvocationRefusa
 test("identical canonical inputs produce byte-stable v2 plans and digests", async () => {
   const store = await makeStore();
   const input = intent();
-  const first = asPlan(await resolveInvocation(input, context(), { store }));
-  const second = asPlan(await resolveInvocation(input, context(), { store }));
+  const first = asPlan(await resolveInvocation(input, context(), { store, materializedInputs: NO_MATERIALIZED_INPUTS }));
+  const second = asPlan(await resolveInvocation(input, context(), { store, materializedInputs: NO_MATERIALIZED_INPUTS }));
   assert.equal(JSON.stringify(first), JSON.stringify(second));
   assert.deepEqual(
-    await computeResolverStateDigests(input, context(), { store }),
+    await computeResolverStateDigests(input, context(), { store, materializedInputs: NO_MATERIALIZED_INPUTS }),
     first.snapshot.digests,
   );
   await store.close();
@@ -153,7 +165,7 @@ test("foreign consent is inert until its exact materialization is admitted", asy
   await store.loadCatalogSeed(seed);
 
   assert.equal(
-    asRefusal(await resolveInvocation(intent(), context(), { store })).reason_code,
+    asRefusal(await resolveInvocation(intent(), context(), { store, materializedInputs: NO_MATERIALIZED_INPUTS })).reason_code,
     "principal-consent-required",
   );
   const plan = asPlan(await resolveInvocation(intent(), context(), { store, materializedInputs }));
@@ -171,7 +183,7 @@ test("foreign consent is inert until its exact materialization is admitted", asy
 
 test("plan names explicit offering, route, topology, access, authority, and bounded snapshot", async () => {
   const store = await makeStore();
-  const plan = asPlan(await resolveInvocation(intent(), context(), { store }));
+  const plan = asPlan(await resolveInvocation(intent(), context(), { store, materializedInputs: NO_MATERIALIZED_INPUTS }));
   assert.equal(plan.selected.model.id, IDS.model);
   assert.equal(plan.route.offering.id, IDS.offering);
   assert.equal(plan.route.route_id, IDS.route);
@@ -194,14 +206,14 @@ test("absence of explicit route refuses before ranking", async () => {
   const store = await makeStore((seed) => {
     seed.records = seed.records.filter(({ record_kind }) => record_kind !== "route");
   });
-  assert.equal(asRefusal(await resolveInvocation(intent(), context(), { store })).reason_code, "explicit-route-required");
+  assert.equal(asRefusal(await resolveInvocation(intent(), context(), { store, materializedInputs: NO_MATERIALIZED_INPUTS })).reason_code, "explicit-route-required");
   await store.close();
 });
 
 test("principal identity and explicit principal consent are independent gates", async () => {
   const missingPrincipal = await makeStore();
   assert.equal(
-    asRefusal(await resolveInvocation(intent({ principal: undefined }), context(), { store: missingPrincipal })).reason_code,
+    asRefusal(await resolveInvocation(intent({ principal: undefined }), context(), { store: missingPrincipal, materializedInputs: NO_MATERIALIZED_INPUTS })).reason_code,
     "principal-required",
   );
   await missingPrincipal.close();
@@ -210,7 +222,7 @@ test("principal identity and explicit principal consent are independent gates", 
     seed.records = seed.records.filter(({ record_id }) => record_id !== "authority-statement:andrey-local-consent");
   });
   assert.equal(
-    asRefusal(await resolveInvocation(intent(), context(), { store: missingConsent })).reason_code,
+    asRefusal(await resolveInvocation(intent(), context(), { store: missingConsent, materializedInputs: NO_MATERIALIZED_INPUTS })).reason_code,
     "principal-consent-required",
   );
   await missingConsent.close();
@@ -225,7 +237,7 @@ test("topology infeasibility and access denial reject before provider selection"
     reason_code: "test-unreachable",
   };
   assert.equal(
-    asRefusal(await resolveInvocation(intent(), topologyContext, { store: topologyStore })).reason_code,
+    asRefusal(await resolveInvocation(intent(), topologyContext, { store: topologyStore, materializedInputs: NO_MATERIALIZED_INPUTS })).reason_code,
     "topology-infeasible",
   );
   await topologyStore.close();
@@ -237,7 +249,7 @@ test("topology infeasibility and access denial reject before provider selection"
     }
   });
   assert.equal(
-    asRefusal(await resolveInvocation(intent(), context(), { store: accessStore })).reason_code,
+    asRefusal(await resolveInvocation(intent(), context(), { store: accessStore, materializedInputs: NO_MATERIALIZED_INPUTS })).reason_code,
     "access-denied",
   );
   await accessStore.close();
@@ -246,11 +258,11 @@ test("topology infeasibility and access denial reject before provider selection"
 test("unsupported route option and unknown model produce typed pre-provider refusals", async () => {
   const store = await makeStore();
   assert.equal(
-    asRefusal(await resolveInvocation(intent({ requested_options: { thinking: "extreme" } }), context(), { store })).reason_code,
+    asRefusal(await resolveInvocation(intent({ requested_options: { thinking: "extreme" } }), context(), { store, materializedInputs: NO_MATERIALIZED_INPUTS })).reason_code,
     "unsupported-options",
   );
   assert.equal(
-    asRefusal(await resolveInvocation(intent({ requested_model: { kind: "model", id: "model:does-not-exist" } }), context(), { store })).reason_code,
+    asRefusal(await resolveInvocation(intent({ requested_model: { kind: "model", id: "model:does-not-exist" } }), context(), { store, materializedInputs: NO_MATERIALIZED_INPUTS })).reason_code,
     "no-candidates",
   );
   await store.close();
@@ -258,11 +270,11 @@ test("unsupported route option and unknown model produce typed pre-provider refu
 
 test("the same intent may be explicitly replanned later without falsifying its creation time", async () => {
   const store = await makeStore();
-  const first = asPlan(await resolveInvocation(intent(), context(), { store }));
+  const first = asPlan(await resolveInvocation(intent(), context(), { store, materializedInputs: NO_MATERIALIZED_INPUTS }));
   const replacement = asPlan(await resolveInvocation(
     intent(),
     context("2026-07-19T12:01:00.000Z"),
-    { store, predecessorPlanId: first.id },
+    { store, materializedInputs: NO_MATERIALIZED_INPUTS, predecessorPlanId: first.id },
   ));
   assert.notEqual(replacement.id, first.id);
   assert.equal(replacement.snapshot.lineage.relation, "replan-of");

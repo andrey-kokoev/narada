@@ -33,13 +33,17 @@ test('agent-start dry-run emits coherent agent-cli/NARS launch JSON', () => {
     'agent-cli',
     '--runtime',
     'narada-agent-runtime-server',
-    '--intelligence-provider',
-    'codex-subscription',
     '--dry-run',
     '--json',
   ], {
     cwd: packageRoot,
     encoding: 'utf8',
+    env: {
+      ...process.env,
+      NARADA_INTELLIGENCE_PROVIDER: 'codex-subscription',
+      NARADA_AI_MODEL: 'decoy-model',
+      CLOUDFLARE_CARRIER_AI_MODEL: 'decoy-cloudflare-model',
+    },
     posture: 'test_child',
   });
 
@@ -51,4 +55,8 @@ test('agent-start dry-run emits coherent agent-cli/NARS launch JSON', () => {
   assert.equal(launch.runtime_substrate_kind, 'narada-agent-runtime-server');
   assert.equal(launch.tool_fabric_adapter_kind, 'narada-agent-runtime-server-mcp-client');
   assert.equal(launch.required_environment.NARADA_AGENT_ID, 'narada.architect');
+  assert.equal(launch.intelligence_selection_authority.launcher_selection, false);
+  assert.equal(launch.required_environment.NARADA_INTELLIGENCE_PROVIDER, undefined);
+  assert.equal(launch.required_environment.NARADA_AI_MODEL, undefined);
+  assert.equal(launch.required_environment.CLOUDFLARE_CARRIER_AI_MODEL, undefined);
 });

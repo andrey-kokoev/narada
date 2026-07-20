@@ -4,7 +4,7 @@
  * params only, no RETURNING, no engine-specific features.
  */
 
-export const REGISTRY_SCHEMA_VERSION = 4;
+export const REGISTRY_SCHEMA_VERSION = 5;
 
 export const MIGRATION_STATEMENTS: readonly string[] = [
   `CREATE TABLE IF NOT EXISTS resources (
@@ -66,21 +66,6 @@ export const MIGRATION_STATEMENTS: readonly string[] = [
      created_at TEXT NOT NULL,
      doc TEXT NOT NULL
    )`,
-  `CREATE TABLE IF NOT EXISTS invocation_attempts (
-     id TEXT PRIMARY KEY,
-     plan_id TEXT NOT NULL,
-     state TEXT NOT NULL,
-     started_at TEXT NOT NULL,
-     doc TEXT NOT NULL
-   )`,
-  `CREATE INDEX IF NOT EXISTS invocation_attempts_plan ON invocation_attempts(plan_id)`,
-  `CREATE TABLE IF NOT EXISTS invocation_evidence (
-     id TEXT PRIMARY KEY,
-     attempt_id TEXT NOT NULL,
-     recorded_at TEXT NOT NULL,
-     doc TEXT NOT NULL
-   )`,
-  `CREATE INDEX IF NOT EXISTS invocation_evidence_attempt ON invocation_evidence(attempt_id)`,
   `CREATE TABLE IF NOT EXISTS plan_decision_snapshots (
      plan_id TEXT PRIMARY KEY,
      intent_id TEXT NOT NULL,
@@ -181,4 +166,6 @@ export const MIGRATION_STATEMENTS: readonly string[] = [
      version INTEGER PRIMARY KEY,
      applied_at TEXT NOT NULL
    )`,
+  `DROP TABLE IF EXISTS invocation_evidence`,
+  `DROP TABLE IF EXISTS invocation_attempts`,
 ];

@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { join, resolve } from 'node:path';
 import { buildLaunchProcessOwnership, launchSessionIdFromToken } from '@narada2/launch-process-ownership';
 import { NARADA_AGENT_RUNTIME_SERVER_KIND } from '@narada2/operator-surface-runtime-contract/operator-surface-runtime-selection';
+import { createIntelligenceSelectionAuthority } from '@narada2/invokable-intelligence-contract';
 import type {
   WorkspaceLaunchAgentPlan,
   WorkspaceLaunchOperatorProjectionOpenRequest,
@@ -96,27 +97,16 @@ export function buildAgentPlan(record: WorkspaceLaunchRecord, options: Workspace
     && !launchOperatorSurfaces.includes('agent-cli')
     && !hasAgentTuiOperatorSurface;
   const waitForEnter = options.noWaitForEnterBeforeExec !== true && launchOperatorSurfaces[0] !== 'agent-web-ui' && !isNarsRuntimeHost;
-  const intelligenceProviderSelection = isNarsRuntimeHost
-    ? resolveWorkspaceLaunchSelection(
-      options.intelligenceProvider,
-      context.admission.providerRegistry.default_provider,
-      'intelligence_provider',
-      'registry_default',
-    )
-    : {
-        requested: nonEmpty(options.intelligenceProvider),
-        value: null,
-        source: 'not_applicable' as const,
-      };
-  const intelligenceProvider = intelligenceProviderSelection.value;
+  const intelligenceSelectionAuthority = createIntelligenceSelectionAuthority({
+    siteId: record.site,
+    storeKind: 'node:sqlite',
+    catalogLocator: join(record.site_root, '.ai', 'intelligence-registry.db'),
+  });
   const capabilityAdmission = buildWorkspaceLaunchCapabilityAdmission({
     operatorSurface: launchOperatorSurface,
     runtime: launchRuntime,
-    intelligenceProvider,
     mcpScope,
     authority,
-    providerRegistry: context.admission.providerRegistry,
-    admittedProviders: context.admission.admittedProviders,
   });
   const cloudflareApiBaseUrl = options.cloudflareApiBaseUrl?.trim()
     || process.env.NARADA_CLOUDFLARE_NARS_PROJECTION_URL
@@ -128,9 +118,7 @@ export function buildAgentPlan(record: WorkspaceLaunchRecord, options: Workspace
   const launchBindingPath = hasProjectionBearingOperatorSurface
     ? operatorProjectionLaunchBindingPath(record, launchSessionToken)
     : null;
-  const runtimeWorkspaceRoot = isNarsRuntimeHost
-    ? naradaProper
-    : (record.workspace_root ?? record.narada_root);
+  const runtimeWorkspaceRoot = record.workspace_root ?? record.narada_root;
   const processOwnership = launchSessionId
     ? buildLaunchProcessOwnership({
         launchSessionId,
@@ -149,7 +137,6 @@ export function buildAgentPlan(record: WorkspaceLaunchRecord, options: Workspace
     runtime: launchRuntime,
     workspaceRoot: runtimeWorkspaceRoot,
     authority,
-    intelligenceProvider,
     mcpScope,
     enableNativeShell,
     launchBindingPath,
@@ -173,11 +160,7 @@ export function buildAgentPlan(record: WorkspaceLaunchRecord, options: Workspace
       resolved: launchRuntime,
       source: runtimeSelectionInput.source,
     },
-    intelligence_provider: {
-      requested: intelligenceProviderSelection.requested,
-      resolved: intelligenceProvider,
-      source: intelligenceProviderSelection.source,
-    },
+    intelligence: intelligenceSelectionAuthority,
   };
   const runtimeStartExecutionMode: WorkspaceLaunchAgentPlan['runtime_start_execution_mode'] = isNarsRuntimeHost
     && options.visibleRuntimeTerminal !== true
@@ -233,7 +216,7 @@ export function buildAgentPlan(record: WorkspaceLaunchRecord, options: Workspace
     onboarding_mode: onboarding ? 'user-site' : null,
     launch_session_id: launchSessionId,
     process_ownership: processOwnership,
-    intelligence_provider: intelligenceProvider,
+    intelligence_selection_authority: intelligenceSelectionAuthority,
     capability_admission: capabilityAdmission,
     path_provenance: buildWorkspaceLaunchPathProvenance(record),
     selection_resolution: selectionResolution,

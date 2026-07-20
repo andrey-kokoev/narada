@@ -7,9 +7,21 @@ import test from "node:test";
 
 import {
   CANONICAL_LOCAL_TEST_IDS,
+  LOCAL_EXECUTION_TOPOLOGY,
+  MATERIALIZATION_ADMISSION_SCHEMA,
+  MATERIALIZATION_ENVELOPE_SCHEMA,
+  MATERIALIZATION_REVOCATION_SCHEMA,
+  acquireResolverMaterializedInputs,
+  applyMaterializedProjection,
   buildCanonicalLocalTestSeed,
+  canonicalSha256,
   canonicalTestClock,
   feasibleTopologyObservations,
+  revokeMaterializedProjection,
+} from "@narada2/invokable-intelligence-contract";
+import type {
+  MaterializationAdmission,
+  MaterializationEnvelope,
 } from "@narada2/invokable-intelligence-contract";
 import { SqliteRegistryStore } from "@narada2/invokable-intelligence-registry";
 import type { IntelligenceRegistryStore } from "@narada2/invokable-intelligence-registry";
@@ -110,6 +122,15 @@ const request = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
+function emitTask2217Evidence(caseId: string, evidence: Record<string, unknown>): void {
+  console.log(JSON.stringify({
+    schema: "narada.invokable-intelligence.task-2217-case-evidence.v1",
+    task: 2217,
+    case_id: caseId,
+    evidence,
+  }));
+}
+
 test("an incomplete durable attempt reconciles to unknown admission without redispatch", async () => {
   const store = await openCanonical();
   const time = { instant: AT };
@@ -159,6 +180,146 @@ test("an incomplete durable attempt reconciles to unknown admission without redi
   assert.equal(adapter.calls.length, 1, "the incomplete attempt is never dispatched a second time");
   assert.equal((await store.listExecutionTransitions(attemptId)).at(-1)?.state, "terminal");
   assert.ok(reconciled.auditEvidence.some(({ evidence_type }) => evidence_type === "reconciliation"));
+  await store.close();
+});
+
+test("revoked materialized consent invalidates retry and replay without provider dispatch", async () => {
+  const seed = buildCanonicalLocalTestSeed();
+  const consentRecord = seed.records.find(({ record_id }) => record_id === "authority-statement:andrey-local-consent");
+  const grantRecord = seed.records.find(({ record_id }) => record_id === IDS.grant);
+  assert.ok(consentRecord);
+  assert.ok(grantRecord);
+  if (!consentRecord
+    || consentRecord.document.schema !== "narada.invokable-intelligence.authority-statement.v1"
+    || !grantRecord) return;
+
+  const foreignConsent = {
+    ...consentRecord.document,
+    origin: { ...consentRecord.document.origin, site_id: IDS.userSite },
+  };
+  consentRecord.document = foreignConsent;
+  consentRecord.authority = {
+    kind: foreignConsent.kind,
+    locus: foreignConsent.origin.locus,
+    site_id: foreignConsent.origin.site_id,
+    principal_id: foreignConsent.origin.principal_id,
+    authority_ref: foreignConsent.origin.authority_ref,
+  };
+  consentRecord.source = { ...consentRecord.source, digest: canonicalSha256(foreignConsent) };
+
+  const envelope: MaterializationEnvelope = {
+    schema: MATERIALIZATION_ENVELOPE_SCHEMA,
+    id: "materialization:andrey-local-consent:r1",
+    mode: "durable-projection",
+    origin: {
+      site_id: foreignConsent.origin.site_id,
+      locus: foreignConsent.origin.locus,
+      authority_ref: foreignConsent.origin.authority_ref,
+    },
+    destination: { site_id: IDS.targetSite, resolver: "local", store: "sqlite" },
+    statement: {
+      id: foreignConsent.id,
+      kind: foreignConsent.kind,
+      effect: foreignConsent.effect,
+      source_revision: foreignConsent.revision,
+      payload_digest: grantRecord.source.digest,
+      payload_ref: foreignConsent.payload_ref,
+    },
+    allowed_scope: {
+      purposes: ["operator-chat"],
+      target_site_ids: [IDS.targetSite],
+      principal_ids: [IDS.principal],
+      topology_ids: [LOCAL_EXECUTION_TOPOLOGY.id],
+    },
+    issued_at: "2026-07-19T00:00:00.000Z",
+    expires_at: "2026-07-20T00:00:00.000Z",
+    provenance_refs: ["evidence:user-site-consent"],
+    authorization_ref: "grant:materialize-principal-consent",
+  };
+  const admission: MaterializationAdmission = {
+    schema: MATERIALIZATION_ADMISSION_SCHEMA,
+    id: "admission:andrey-local-consent:r1",
+    envelope_id: envelope.id,
+    destination_site_id: IDS.targetSite,
+    decision: "admitted",
+    decided_at: "2026-07-19T00:00:01.000Z",
+    decided_by: "site:narada:admission",
+    reason_codes: [],
+    evidence_refs: ["evidence:narada-admission"],
+    admitted_digest: envelope.statement.payload_digest,
+  };
+  const applied = applyMaterializedProjection(undefined, envelope, admission);
+  assert.equal(applied.status, "materialized");
+  assert.ok(applied.projection);
+  if (!applied.projection) return;
+  let projection = applied.projection;
+
+  const store = await SqliteRegistryStore.open(":memory:");
+  await store.loadCatalogSeed(seed);
+  const time = { instant: AT };
+  const adapter = fakeAdapter({ admission: "acknowledged", response: { text: "ok" } });
+  const options = gatewayOptions(store, adapter, time);
+  options.materializationFor = () => acquireResolverMaterializedInputs([projection], {
+    destination_site_id: IDS.targetSite,
+    resolver: "local",
+    target_site_id: IDS.targetSite,
+    purpose: "operator-chat",
+    principal_id: IDS.principal,
+    topology_id: LOCAL_EXECUTION_TOPOLOGY.id,
+    now: time.instant,
+  });
+  const gateway = createLocalInvocationGateway(options);
+  const initialRequest = request({
+    intentId: "intent:runtime-materialized-consent",
+    operationId: "operation:runtime-materialized-consent:initial",
+  });
+  const initial = await gateway.invoke(initialRequest);
+  assert.equal(initial.kind, "plan");
+  if (initial.kind !== "plan") return;
+  assert.equal(adapter.calls.length, 1);
+
+  const revoked = revokeMaterializedProjection(projection, {
+    schema: MATERIALIZATION_REVOCATION_SCHEMA,
+    id: "revocation:andrey-local-consent:r1",
+    envelope_id: envelope.id,
+    statement_id: envelope.statement.id,
+    source_revision: envelope.statement.source_revision,
+    origin: envelope.origin,
+    revoked_at: "2026-07-19T12:01:00.000Z",
+    reason_code: "principal-withdrew-consent",
+    evidence_ref: "evidence:user-site-revocation",
+  });
+  assert.equal(revoked.status, "refreshed");
+  assert.ok(revoked.projection);
+  if (!revoked.projection) return;
+  projection = revoked.projection;
+
+  time.instant = "2026-07-19T12:02:00.000Z";
+  const retry = await gateway.invoke(request({
+    intentId: initial.intent.id,
+    operationId: "operation:runtime-materialized-consent:retry",
+    mode: "retry",
+  }));
+  assert.equal(retry.kind, "refusal");
+  if (retry.kind !== "refusal") return;
+  assert.equal(retry.refusal.reason_code, "principal-consent-required");
+
+  time.instant = "2026-07-19T12:03:00.000Z";
+  const replay = await gateway.invoke(request({
+    intentId: initial.intent.id,
+    operationId: "operation:runtime-materialized-consent:replay",
+    mode: "immediate",
+  }));
+  assert.equal(replay.kind, "refusal");
+  if (replay.kind !== "refusal") return;
+  assert.equal(replay.refusal.reason_code, "principal-consent-required");
+  assert.equal(adapter.calls.length, 1, "revoked consent blocks both retry and replay before dispatch");
+
+  const revalidations = await store.listPlanRevalidations(initial.plan.id);
+  assert.equal(revalidations.length, 2);
+  assert.ok(revalidations.every(({ decision, reasons }) =>
+    decision === "replan-required" && reasons.includes("materialization-changed")
+  ));
   await store.close();
 });
 
@@ -260,8 +421,6 @@ test("success persists distinct v2 intent, plan, attempt, result, outcome, obser
   assert.equal((await store.listInvocationObservations(result.attempt.id)).length, 3);
   assert.equal((await store.listInvocationAuditEvidence(result.attempt.id)).length, 4);
   assert.equal((await store.listInvocationTelemetry(result.attempt.id)).length, 1);
-  assert.equal((await store.listAttempts(result.plan.id)).length, 0, "legacy attempt table is not an execution authority");
-  assert.equal((await store.listEvidence(result.attempt.id)).length, 0, "legacy evidence table is not written");
   await store.close();
 });
 
@@ -275,8 +434,8 @@ test("dispatch uses the immutable offering revision bound into the plan even whe
   revisedOffering.id = "catalog-record:runtime-race:offering:2";
   revisedOffering.revision = 2;
   revisedOffering.source.revision = "2";
-  revisedOffering.source.digest = `sha256:${"f".repeat(64)}`;
   revisedOffering.document.invocation_model_key = "newer-model-key-not-in-plan";
+  revisedOffering.source.digest = canonicalSha256(revisedOffering.document);
 
   const originalRecordPlanSnapshot = store.recordPlanSnapshot.bind(store);
   let revisionInjected = false;
@@ -332,8 +491,10 @@ test("typed refusal records a terminal pre-invocation outcome and never dispatch
   assert.equal(result.outcome.kind, "pre-invocation-refusal");
   assert.equal(result.outcome.attempt_id, undefined);
   assert.equal(adapter.calls.length, 0);
-  assert.equal((await store.listTerminalOutcomesByIntent(result.intent.id)).length, 1);
-  assert.equal((await store.listInvocationAuditEvidence(result.intent.id)).length, 1);
+  const terminalOutcomes = await store.listTerminalOutcomesByIntent(result.intent.id);
+  const refusalEvidence = await store.listInvocationAuditEvidence(result.intent.id);
+  assert.equal(terminalOutcomes.length, 1);
+  assert.equal(refusalEvidence.length, 1);
   time.instant = "2026-07-19T12:10:00.000Z";
   const repeated = await gateway.invoke(refusalRequest);
   assert.equal(repeated.kind, "refusal");
@@ -342,6 +503,17 @@ test("typed refusal records a terminal pre-invocation outcome and never dispatch
   assert.equal(repeated.outcome.id, result.outcome.id);
   assert.equal((await store.listRefusalsByIntent(result.intent.id)).length, 1);
   assert.equal((await store.listTerminalOutcomesByIntent(result.intent.id)).length, 1);
+  emitTask2217Evidence("principal-refusal-pre-attempt", {
+    intent_id: result.intent.id,
+    refusal_id: result.refusal.id,
+    outcome_id: result.outcome.id,
+    outcome_kind: result.outcome.kind,
+    attempt_id: null,
+    adapter_dispatch_count: adapter.calls.length,
+    durable_terminal_outcome_ids: terminalOutcomes.map(({ id }) => id),
+    admitted_evidence_ids: refusalEvidence.map(({ id }) => id),
+    repeated_invocation_reused_records: repeated.refusal.id === result.refusal.id && repeated.outcome.id === result.outcome.id,
+  });
   await store.close();
 });
 
@@ -374,9 +546,21 @@ test("one operation is idempotent while explicit retry and replay append lineage
   assert.equal(replay.kind, "plan");
   if (replay.kind !== "plan") return;
   assert.equal(replay.attempt.lineage.relation, "replay-of");
-  assert.equal((await store.listExecutionAttempts(first.plan.id)).length, 3);
-  assert.equal((await store.listPlanRevalidations(first.plan.id)).length, 2);
+  const attempts = await store.listExecutionAttempts(first.plan.id);
+  const revalidations = await store.listPlanRevalidations(first.plan.id);
+  assert.equal(attempts.length, 3);
+  assert.equal(revalidations.length, 2);
   assert.equal(adapter.calls.length, 3);
+  emitTask2217Evidence("idempotency-retry-replay", {
+    intent_id: first.intent.id,
+    plan_id: first.plan.id,
+    duplicate_attempt_id: duplicate.attempt.id,
+    duplicate_redispatched: duplicate.adapterOutcome !== null,
+    attempt_ids: attempts.map(({ id }) => id),
+    attempt_lineage: attempts.map(({ id, lineage }) => ({ id, lineage })),
+    revalidation_ids: revalidations.map(({ id }) => id),
+    adapter_dispatch_count: adapter.calls.length,
+  });
   await store.close();
 });
 
@@ -394,16 +578,17 @@ test("catalog mutation forces an immutable replacement plan before retry", async
   );
   assert.ok(prior);
   if (!prior || prior.document.schema !== "narada.invokable-intelligence.policy.v1") return;
+  const revisedDocument = {
+    ...prior.document,
+    revision: 2,
+    rules: [{ type: "default-option" as const, option: "thinking", value: "medium" }],
+  };
   const revised = {
     ...prior,
     id: `${prior.id}:r2`,
     revision: 2,
-    source: { ...prior.source, revision: "2", digest: `sha256:${"e".repeat(64)}` },
-    document: {
-      ...prior.document,
-      revision: 2,
-      rules: [{ type: "default-option" as const, option: "thinking", value: "medium" }],
-    },
+    source: { ...prior.source, revision: "2", digest: canonicalSha256(revisedDocument) },
+    document: revisedDocument,
   };
   await store.loadCatalogSeed({
     schema: "narada.invokable-intelligence.canonical-catalog-seed.v1",
@@ -420,8 +605,18 @@ test("catalog mutation forces an immutable replacement plan before retry", async
   assert.equal(retry.plan.snapshot.lineage.relation, "replan-of");
   assert.equal(retry.plan.snapshot.lineage.predecessor_plan_id, first.plan.id);
   assert.equal(retry.plan.options.thinking, "medium");
-  assert.equal((await store.listPlansByIntent(first.intent.id)).length, 2);
-  assert.equal((await store.listPlanRevalidations(first.plan.id))[0].replacement_plan_id, retry.plan.id);
+  const plans = await store.listPlansByIntent(first.intent.id);
+  const replacementRevalidations = await store.listPlanRevalidations(first.plan.id);
+  assert.equal(plans.length, 2);
+  assert.equal(replacementRevalidations[0].replacement_plan_id, retry.plan.id);
+  emitTask2217Evidence("catalog-change-replan", {
+    intent_id: first.intent.id,
+    predecessor_plan_id: first.plan.id,
+    replacement_plan_id: retry.plan.id,
+    replacement_lineage: retry.plan.snapshot.lineage,
+    durable_plan_ids: plans.map(({ id }) => id),
+    revalidation_ids: replacementRevalidations.map(({ id }) => id),
+  });
   await store.close();
 });
 
@@ -443,6 +638,15 @@ test("stale plan refuses before dispatch when the caller prohibits replanning", 
   if (refused.kind !== "refusal") return;
   assert.equal(refused.refusal.reason_code, "stale-plan");
   assert.equal(adapter.calls.length, 1);
+  emitTask2217Evidence("stale-plan-pre-dispatch-refusal", {
+    intent_id: first.intent.id,
+    plan_id: first.plan.id,
+    refusal_id: refused.refusal.id,
+    outcome_id: refused.outcome.id,
+    reason_code: refused.refusal.reason_code,
+    initial_dispatch_count: 1,
+    final_dispatch_count: adapter.calls.length,
+  });
   await store.close();
 });
 
@@ -474,6 +678,23 @@ test("acknowledgment uncertainty is a terminal outcome distinct from provider fa
   assert.equal(failed.outcome.kind, "provider-failure");
   assert.equal(failed.outcome.admission_acknowledged, true);
   assert.equal(failed.result, null);
+  emitTask2217Evidence("acknowledgment-vs-provider-failure", {
+    unknown_admission: {
+      intent_id: uncertain.intent.id,
+      attempt_id: uncertain.attempt.id,
+      outcome_id: uncertain.outcome.id,
+      outcome_kind: uncertain.outcome.kind,
+      admission_acknowledged: null,
+      observation_ids: uncertain.observations.map(({ id }) => id),
+    },
+    provider_failure: {
+      intent_id: failed.intent.id,
+      attempt_id: failed.attempt.id,
+      outcome_id: failed.outcome.id,
+      outcome_kind: failed.outcome.kind,
+      admission_acknowledged: failed.outcome.admission_acknowledged,
+    },
+  });
   await failedStore.close();
 });
 
@@ -506,14 +727,26 @@ test("restart preserves idempotent readback and a later retry appends a new atte
     if (retry.kind !== "plan") return;
     assert.equal(retry.attempt.lineage.predecessor_attempt_id, initial.attempt.id);
     assert.equal(afterAdapter.calls.length, 1);
-    assert.equal((await reopened.listExecutionAttempts(initial.plan.id)).length, 2);
+    const durableAttempts = await reopened.listExecutionAttempts(initial.plan.id);
+    assert.equal(durableAttempts.length, 2);
+    emitTask2217Evidence("restart-replay-retry", {
+      intent_id: initial.intent.id,
+      plan_id: initial.plan.id,
+      initial_attempt_id: initial.attempt.id,
+      restart_readback_attempt_id: readback.attempt.id,
+      restart_redispatch_count: 0,
+      retry_attempt_id: retry.attempt.id,
+      retry_lineage: retry.attempt.lineage,
+      post_restart_dispatch_count: afterAdapter.calls.length,
+      durable_attempt_ids: durableAttempts.map(({ id }) => id),
+    });
     await reopened.close();
   } finally {
     await rm(dbPath, { force: true });
   }
 });
 
-test("local live e2e dispatches through the planned adapter and reads canonical evidence back", async () => {
+test("local live e2e dispatches success, refuses pre-provider, and reads linked canonical evidence back", async () => {
   const requests: unknown[] = [];
   const server = createServer((req, res) => {
     let body = "";
@@ -563,8 +796,58 @@ test("local live e2e dispatches through the planned adapter and reads canonical 
       route: IDS.route,
       messages: [{ role: "user", content: "ping" }],
     });
-    assert.equal((await store.listInvocationAuditEvidence(result.attempt.id)).length, 4);
-    assert.equal((await store.listInvocationTelemetry(result.attempt.id))[0].input_tokens, 4);
+    const successEvidence = await store.listInvocationAuditEvidence(result.attempt.id);
+    assert.equal(successEvidence.length, 4);
+    const successSubjectIds = new Set(successEvidence.flatMap(({ subjects }) => subjects.map(({ id }) => id)));
+    for (const id of [result.intent.id, result.plan.id, result.attempt.id, result.result?.id, result.outcome.id]) {
+      assert.ok(id && successSubjectIds.has(id), `live success evidence must link ${id}`);
+    }
+    const successTelemetry = await store.listInvocationTelemetry(result.attempt.id);
+    assert.equal(successTelemetry[0].input_tokens, 4);
+
+    const refusal = await gateway.invoke(request({
+      intentId: "intent:local-live:refusal",
+      operationId: "operation:local-live:refusal",
+      principal: undefined,
+    }));
+    assert.equal(refusal.kind, "refusal");
+    if (refusal.kind !== "refusal") return;
+    assert.equal(refusal.refusal.reason_code, "principal-required");
+    assert.equal(refusal.outcome.kind, "pre-invocation-refusal");
+    assert.equal(refusal.outcome.attempt_id, undefined);
+    assert.equal(requests.length, 1, "typed refusal must occur before the HTTP provider boundary");
+    const refusalEvidence = await store.listInvocationAuditEvidence(refusal.intent.id);
+    assert.equal(refusalEvidence.length, 1);
+    const refusalSubjectIds = new Set(refusalEvidence.flatMap(({ subjects }) => subjects.map(({ id }) => id)));
+    assert.ok(refusalSubjectIds.has(refusal.intent.id));
+    assert.ok(refusalSubjectIds.has(refusal.outcome.id));
+    const refusalOutcomes = await store.listTerminalOutcomesByIntent(refusal.intent.id);
+    assert.equal(refusalOutcomes.length, 1);
+    emitTask2217Evidence("local-http-success-and-principal-refusal", {
+      provider_http_request_count: requests.length,
+      success: {
+        intent_id: result.intent.id,
+        plan_id: result.plan.id,
+        attempt_id: result.attempt.id,
+        result_id: result.result?.id,
+        outcome_id: result.outcome.id,
+        outcome_kind: result.outcome.kind,
+        admitted_evidence_ids: successEvidence.map(({ id }) => id),
+        linked_subject_ids: [...successSubjectIds].sort(),
+        telemetry_ids: successTelemetry.map(({ id }) => id),
+      },
+      refusal: {
+        intent_id: refusal.intent.id,
+        refusal_id: refusal.refusal.id,
+        outcome_id: refusal.outcome.id,
+        outcome_kind: refusal.outcome.kind,
+        attempt_id: null,
+        reason_code: refusal.refusal.reason_code,
+        admitted_evidence_ids: refusalEvidence.map(({ id }) => id),
+        linked_subject_ids: [...refusalSubjectIds].sort(),
+        durable_terminal_outcome_ids: refusalOutcomes.map(({ id }) => id),
+      },
+    });
     await store.close();
   } finally {
     server.close();

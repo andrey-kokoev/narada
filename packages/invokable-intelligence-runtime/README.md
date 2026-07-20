@@ -30,42 +30,41 @@ const result = await gateway.invoke({
   retries never duplicate. Plans are byte-stable for identical inputs,
   so restart resolution is idempotent.
 
-## Legacy binding bridge
+## Runtime plan boundary
 
-`planToLegacyBindingOverrides(plan, model)` maps a plan onto the existing
-`resolveProviderRuntimeBinding(provider, { env, overrides })` seam:
-the plan becomes binding *overrides* — which beat env at every field —
-so env carries only credential material, never selection.
+The gateway passes the selected offering, route, adapter coordinates, and
+credential locator from the immutable plan directly to the canonical protocol
+adapter. Environment variables may materialize credential secrets at the final
+adapter boundary, but they never select an inference provider, model provider,
+model, endpoint, thinking level, or route.
 
 ## agent-runtime-server wiring
 
-`server-wrapper.mjs` resolves plan-driven at session startup when
-configured:
+`server-wrapper.mjs` transports only catalog location, Site loci, and principal
+identity at session startup:
 
 ```
 NARADA_INTELLIGENCE_REGISTRY_DB   registry db path (node:sqlite store)
 NARADA_INTELLIGENCE_TARGET_SITE   e.g. site:thoughts-project
 NARADA_INTELLIGENCE_USER_SITE     e.g. site:andrey-user
 NARADA_INTELLIGENCE_HOST_SITE     e.g. site:andrey-pc
+NARADA_INTELLIGENCE_PRINCIPAL_ID  principal evaluated by access policy
 ```
 
-With all four set, the `agent-session` intent resolves through the
-ontology and the binding is plan-driven; a refusal fails startup with
-`intelligence_resolution_refused:<reason_code>:<explanation>` before any
-provider invocation. The resolution explanation rides in
-`providerSettings.resolution` for diagnostics. When unset, the legacy
-`NARADA_INTELLIGENCE_PROVIDER` env path applies unchanged — final env
-retirement is #2186 cutover.
+Each invocation supplies intent and requested capabilities, then resolves
+through the canonical SQLite catalog and policy immediately before dispatch.
+Missing Site/principal context or a policy refusal fails before provider
+invocation with structured evidence. There is no startup provider binding and
+no provider/model environment fallback.
 
 ## Verification
 
-9/9 package tests: context/bridge units; happy path with linked
+Package tests cover context and plan boundaries; happy paths with linked
 records; recorded refusals before dispatch; replay dedup; restart
 provenance over a reopened store; adapter failure states; and a local
 live e2e driving a real HTTP dispatch from a plan through an injected
-adapter. The server-wrapper seam is proven against the migrated real
-registry (plan → bridge → `resolveProviderRuntimeBinding` overrides),
-and the full agent-runtime-server suite stays green (91/91).
+adapter. The server-wrapper seam is proven against the canonical registry and
+plan-driven protocol adapter without a legacy binding projection.
 
 ## Scripts
 

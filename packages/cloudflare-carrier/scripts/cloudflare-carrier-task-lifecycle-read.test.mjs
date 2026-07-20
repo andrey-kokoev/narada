@@ -330,7 +330,7 @@ test('formatTaskLifecycleReadText reuses recorded agents for claimed and reporte
   assert.match(reportedText, /Finish Command: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:finish:text -- --url https:\/\/carrier\.example --site site_alpha --task-id task_reported --finalizer-agent agent\.reported --finish-verdict accepted --operator-session-file <operator-session-file>/);
 });
 
-test('formatTaskLifecycleReadText suppresses task commands when no concrete task id exists', () => {
+test('formatTaskLifecycleReadText preserves Site handoffs while suppressing task commands without a concrete task id', () => {
   const text = formatTaskLifecycleReadText({
     worker_url: 'https://carrier.example',
     auth_source: 'operator-session-file',
@@ -355,8 +355,8 @@ test('formatTaskLifecycleReadText suppresses task commands when no concrete task
   assert.doesNotMatch(text, /Claim Command:/);
   assert.doesNotMatch(text, /Report Command:/);
   assert.doesNotMatch(text, /Finish Command:/);
-  assert.doesNotMatch(text, /Site Read:/);
-  assert.doesNotMatch(text, /Site Next Workflow:/);
+  assert.match(text, /Site Read:.*--site site_alpha/);
+  assert.match(text, /Site Next Workflow:.*--site site_alpha/);
 });
 
 test('formatTaskLifecycleReadText suppresses task commands when no concrete site id exists', () => {

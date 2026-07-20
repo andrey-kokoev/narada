@@ -1,0 +1,144 @@
+{
+  "schema": "narada.task.chapters.v1",
+  "updated_at": "2026-07-19T18:14:47.515Z",
+  "chapters": {
+    "invokable-intelligence-ontology-remediation": {
+      "chapter_id": "invokable-intelligence-ontology-remediation",
+      "updated_at": "2026-07-19T18:14:47.515Z",
+      "memberships": [
+        {
+          "task_number": 2203,
+          "order_index": 1,
+          "note": "Narada-proper destination for User Site source task #2211.",
+          "added_by": "operator",
+          "added_at": "2026-07-19T17:06:04.473Z"
+        },
+        {
+          "task_number": 2204,
+          "order_index": 2,
+          "note": "Narada-proper destination for User Site source task #2212.",
+          "added_by": "operator",
+          "added_at": "2026-07-19T17:05:48.679Z"
+        },
+        {
+          "task_number": 2205,
+          "order_index": 3,
+          "note": "Narada-proper destination for User Site source task #2213.",
+          "added_by": "operator",
+          "added_at": "2026-07-19T17:05:48.815Z"
+        },
+        {
+          "task_number": 2206,
+          "order_index": 4,
+          "note": "Narada-proper destination for User Site source task #2214.",
+          "added_by": "operator",
+          "added_at": "2026-07-19T17:05:48.957Z"
+        },
+        {
+          "task_number": 2207,
+          "order_index": 5,
+          "note": "Narada-proper destination for User Site source task #2215.",
+          "added_by": "operator",
+          "added_at": "2026-07-19T17:05:49.101Z"
+        },
+        {
+          "task_number": 2208,
+          "order_index": 6,
+          "note": "Narada-proper destination for User Site source task #2216.",
+          "added_by": "operator",
+          "added_at": "2026-07-19T17:05:49.243Z"
+        },
+        {
+          "task_number": 2209,
+          "order_index": 7,
+          "note": "Narada-proper destination for User Site source task #2217.",
+          "added_by": "operator",
+          "added_at": "2026-07-19T17:05:49.392Z"
+        },
+        {
+          "task_number": 2210,
+          "order_index": 8,
+          "note": "Narada-proper destination for User Site source task #2218.",
+          "added_by": "operator",
+          "added_at": "2026-07-19T17:05:50.021Z"
+        },
+        {
+          "task_number": 2211,
+          "order_index": 9,
+          "note": "Narada-proper destination for User Site source task #2219.",
+          "added_by": "operator",
+          "added_at": "2026-07-19T17:05:50.167Z"
+        },
+        {
+          "task_number": 2221,
+          "order_index": 10,
+          "note": "10. Completion audit: make default verification and package documentation cover all remediated contract surfaces.",
+          "added_by": "operator",
+          "added_at": "2026-07-19T18:14:47.515Z"
+        }
+      ]
+    },
+    "invokable-intelligence-implementation-v2": {
+      "chapter_id": "invokable-intelligence-implementation-v2",
+      "updated_at": "2026-07-19T18:02:34.393Z",
+      "memberships": [
+        {
+          "task_number": 2212,
+          "order_index": 1,
+          "note": "1. Governed bridge: reconcile the active User Site prototype into repository authority.",
+          "added_by": "operator",
+          "added_at": "2026-07-19T18:02:32.896Z"
+        },
+        {
+          "task_number": 2213,
+          "order_index": 2,
+          "note": "2. Catalog migration and seed ownership.",
+          "added_by": "operator",
+          "added_at": "2026-07-19T18:02:33.115Z"
+        },
+        {
+          "task_number": 2214,
+          "order_index": 3,
+          "note": "3. Management API, CLI, and MCP surfaces.",
+          "added_by": "operator",
+          "added_at": "2026-07-19T18:02:33.307Z"
+        },
+        {
+          "task_number": 2215,
+          "order_index": 4,
+          "note": "4. Bounded legacy compatibility projection.",
+          "added_by": "operator",
+          "added_at": "2026-07-19T18:02:33.502Z"
+        },
+        {
+          "task_number": 2216,
+          "order_index": 5,
+          "note": "5. SQLite, D1, and request-scoped materialization adapters.",
+          "added_by": "operator",
+          "added_at": "2026-07-19T18:02:33.685Z"
+        },
+        {
+          "task_number": 2217,
+          "order_index": 6,
+          "note": "6. Local runtime integration branch.",
+          "added_by": "operator",
+          "added_at": "2026-07-19T18:02:33.865Z"
+        },
+        {
+          "task_number": 2218,
+          "order_index": 7,
+          "note": "7. Cloudflare carrier integration branch.",
+          "added_by": "operator",
+          "added_at": "2026-07-19T18:02:34.161Z"
+        },
+        {
+          "task_number": 2219,
+          "order_index": 8,
+          "note": "8. Aggregate cutover and end-to-end acceptance.",
+          "added_by": "operator",
+          "added_at": "2026-07-19T18:02:34.393Z"
+        }
+      ]
+    }
+  }
+}

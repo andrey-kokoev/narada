@@ -14,6 +14,8 @@ import { SqliteMaterializationStore } from "@narada2/invokable-intelligence-mate
 import { SqliteRegistryStore } from "@narada2/invokable-intelligence-registry";
 import type { ResolverContext } from "@narada2/invokable-intelligence-resolver";
 
+import { deployManagementBundle } from "./deployment.js";
+import type { ManagementDeploymentBundle } from "./deployment.js";
 import { parseLegacyRegistry } from "./legacy.js";
 import { applyMigration, buildMigrationPlan, dryRunMigration } from "./migrate.js";
 import {
@@ -238,6 +240,7 @@ Canonical commands (all JSON output):
   validate
   explain-resolution --resolver local|cloudflare --intent <file.json> --context <resolver-context.json>
   admit-catalog-record --record <file.json> --context <file.json>
+  deploy --bundle <deployment-bundle.json>
   materialize|refresh --envelope <file.json> --admission <file.json> --statement-record <file.json> --payload-record <file.json> --context <file.json>
   reject-materialization --envelope <file.json> --admission <file.json> --context <file.json>
   revoke-materialization --revocation <file.json> --context <file.json>
@@ -288,6 +291,15 @@ export async function main(argv: string[]): Promise<number> {
       const plan = buildMigrationPlan(legacy, loci, { reference: registryPath, plannedAt });
       const migration = flags.has("apply") ? await applyMigration(store, plan) : await dryRunMigration(store, plan);
       printResult({ applied: flags.has("apply"), planned_at: plannedAt, counts: migration.counts, diff: migration.diff });
+      return 0;
+    }
+
+    if (command === "deploy") {
+      const response = await deployManagementBundle(
+        session,
+        await jsonFlag<ManagementDeploymentBundle>(flags, "bundle"),
+      );
+      printResult(response);
       return 0;
     }
 

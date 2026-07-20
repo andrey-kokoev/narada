@@ -59,10 +59,14 @@ reports `stale-capability` wherever it is detected.
 import { resolveInvocation } from "@narada2/invokable-intelligence-resolver";
 
 const result = await resolveInvocation(intent, {
-  targetSite, userSite, hostSite, runtime: "workers", time: new Date().toISOString(),
-}, { store }); // any IntelligenceRegistryStore
+  targetSite, userSite, hostSite, runtime: "workers", clock, access, topology_observations,
+}, {
+  store,
+  // Required even when empty so cross-Site acquisition can never be skipped implicitly.
+  materializedInputs: { admitted: [], excluded: [], acquisition_refs: [] },
+});
 
-if (result.schema.endsWith("invocation-plan.v1")) { /* invoke result.selected */ }
+if (result.schema.endsWith("invocation-plan.v2")) { /* invoke result.selected */ }
 else { /* surface result.reason_code + result.rejected_candidates */ }
 ```
 

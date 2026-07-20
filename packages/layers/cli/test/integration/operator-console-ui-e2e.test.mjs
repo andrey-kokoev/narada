@@ -211,18 +211,51 @@ async function startFixtureServer({ agentSessions = [] } = {}) {
     try {
       const pathname = new URL(req.url || '/', 'http://127.0.0.1').pathname;
       if (req.method === 'GET' && pathname === '/console/routes') {
+        const sessionRoutes = agentSessions.map((session) => ({
+          id: `router-${session.session_id}`,
+          path: `/sessions/${session.session_id}`,
+          kind: 'page',
+          label: `Session ${session.session_id}`,
+          target: { kind: 'session', id: session.session_id },
+        }));
+        if (siteAgentLaunched) sessionRoutes.push({
+          id: `router-${launchedAgentSessionId}`,
+          path: `/sessions/${launchedAgentSessionId}`,
+          kind: 'page',
+          label: `Session ${launchedAgentSessionId}`,
+          target: { kind: 'session', id: launchedAgentSessionId },
+        });
         sendJson(res, 200, projectOperatorWorkspaceRouteDirectory({
           workspaceHost: { kind: 'local', id: 'fixture', origin: null },
-          additionalRoutes: siteAgentLaunched ? {
-            'agent-sessions': [{
-              id: `router-${launchedAgentSessionId}`,
-              path: `/sessions/${launchedAgentSessionId}`,
-              kind: 'page',
-              label: `Session ${launchedAgentSessionId}`,
-              target: { kind: 'session', id: launchedAgentSessionId },
-            }],
-          } : undefined,
+          additionalRoutes: sessionRoutes.length ? { 'agent-sessions': sessionRoutes } : undefined,
         }));
+        return;
+      }
+      if (req.method === 'GET' && pathname === '/console/agents/api/session-route') {
+        const requestUrl = new URL(req.url || '/', 'http://127.0.0.1');
+        const siteId = requestUrl.searchParams.get('site_id');
+        const agentId = requestUrl.searchParams.get('agent_id');
+        const sessionId = requestUrl.searchParams.get('session_id');
+        const scopedPath = `/console/sessions?site=${encodeURIComponent(siteId ?? '')}&agent=${encodeURIComponent(agentId ?? '')}`;
+        if (siteId !== 'site-a' || agentId !== 'site-a.resident' || (sessionId && sessionId !== launchedAgentSessionId)) {
+          sendJson(res, 409, {
+            schema: 'narada.operator_console.agent_session_route.v1',
+            status: 'refused', site_id: siteId, agent_id: agentId, session_id: sessionId,
+            url: null, sessions_path: scopedPath, reason: 'launch_session_mismatch', phase: 'refused',
+          });
+          return;
+        }
+        sendJson(res, 200, {
+          schema: 'narada.operator_console.agent_session_route.v1',
+          status: siteAgentLaunched ? 'ready' : 'pending',
+          site_id: siteId,
+          agent_id: agentId,
+          session_id: siteAgentLaunched ? launchedAgentSessionId : sessionId,
+          url: siteAgentLaunched ? `/sessions/${launchedAgentSessionId}` : null,
+          sessions_path: scopedPath,
+          reason: null,
+          phase: siteAgentLaunched ? 'ready' : 'waiting_for_session',
+        });
         return;
       }
       if (req.method === 'GET' && ['/console/agents', '/console/registry', '/console/registry/add', '/console/registry/manage', '/console/launch', '/console/onboarding', '/console/sessions'].includes(pathname)) {
@@ -448,7 +481,12 @@ test('Operator Console Vue registry projection works at desktop and mobile width
 });
 
 test('Operator Console Sites and Agents groups authority, launches admitted agents, and routes inspection', async () => {
-  const fixture = await startFixtureServer();
+  const fixture = await startFixtureServer({ agentSessions: [
+    { ...activeAgentSession, session_id: 'session-a', agent_id: 'site-a.architect' },
+    { ...activeAgentSession, session_id: 'session-b', agent_id: 'site-a.architect' },
+    { ...activeAgentSession, session_id: 'session-unrelated-site', site_id: 'site-b', agent_id: 'site-b.architect' },
+    { ...activeAgentSession, session_id: 'session-unrelated-agent', agent_id: 'site-a.resident' },
+  ] });
   const browser = await chromium.launch();
   try {
     await mkdir('test-results', { recursive: true });
@@ -468,20 +506,34 @@ test('Operator Console Sites and Agents groups authority, launches admitted agen
     const resident = page.getByRole('button', { name: 'site-a.resident: stopped, work available' });
     await resident.focus();
     await resident.press('Shift+F10');
-    await page.getByRole('menu').waitFor();
-    assert.ok((await page.getByRole('menu').textContent()).includes('Runtime: stopped'));
-    await page.keyboard.press('Escape');
-    await page.locator('body').click({ position: { x: 2, y: 2 } });
+    await page.getByText('No single healthy session is available.').waitFor();
+    assert.equal(await page.getByRole('menu').count(), 0);
+    assert.equal(await resident.evaluate((element) => element === document.activeElement), true);
 
     const architect = page.getByRole('button', { name: 'site-a.architect: ambiguous, work claiming' });
-    await architect.click({ button: 'right' });
-    await page.getByRole('menuitem', { name: 'Open Web UI' }).click();
-    await page.waitForURL('**/console/sessions');
+    await architect.focus();
+    await architect.press('Shift+F10');
+    await page.waitForURL('**/console/sessions?site=site-a&agent=site-a.architect');
+    assert.equal(new URL(page.url()).search, '?site=site-a&agent=site-a.architect');
+
+    await page.goto(fixture.url + '/console/agents');
+    const pointerArchitect = page.getByRole('button', { name: 'site-a.architect: ambiguous, work claiming' });
+    await pointerArchitect.click({ button: 'right' });
+    await page.waitForURL('**/console/sessions?site=site-a&agent=site-a.architect');
+    await page.getByText('session-a').waitFor();
+    assert.equal(await page.locator('tbody tr').count(), 2);
+    assert.equal(await page.getByText('session-unrelated-site').count(), 0);
+    assert.equal(await page.getByText('session-unrelated-agent').count(), 0);
+    const scopedLinks = await page.getByRole('link', { name: 'Open' }).evaluateAll((links) => links.map((link) => link.getAttribute('href')));
+    assert.deepEqual(scopedLinks.sort(), ['/sessions/session-a', '/sessions/session-b']);
 
     await page.goto(fixture.url + '/console/agents');
     await page.getByRole('button', { name: 'site-a.resident: stopped, work available' }).waitFor();
     const popupPromise = page.waitForEvent('popup');
-    await page.getByRole('button', { name: 'site-a.resident: stopped, work available' }).click();
+    await page.getByRole('button', { name: 'site-a.resident: stopped, work available' }).evaluate((button) => {
+      button.click();
+      button.click();
+    });
     const popup = await popupPromise;
     await popup.waitForURL(`**/sessions/${launchedAgentSessionId}`);
     await popup.getByRole('heading', { name: 'Agent Web UI' }).waitFor();
@@ -490,9 +542,16 @@ test('Operator Console Sites and Agents groups authority, launches admitted agen
       pathname: '/console/agents/api/launch',
       input: { site_id: 'site-a', agent_id: 'site-a.resident' },
     });
-    await page.getByText('site-a.resident is open.').waitFor();
+    assert.equal(fixture.requests.filter((request) => request.pathname === '/console/agents/api/launch').length, 1);
+    await page.getByText('site-a.resident started. Its Web UI opens when the route is ready.').waitFor();
     await page.getByRole('button', { name: 'site-a.resident: running, work executing' }).waitFor();
     await popup.close();
+
+    const inspectPopupPromise = page.waitForEvent('popup');
+    await page.getByRole('button', { name: 'site-a.resident: running, work executing' }).click({ button: 'right' });
+    const inspectPopup = await inspectPopupPromise;
+    await inspectPopup.waitForURL(`**/sessions/${launchedAgentSessionId}`);
+    await inspectPopup.close();
 
     await page.setViewportSize({ width: 390, height: 844 });
     await page.reload();

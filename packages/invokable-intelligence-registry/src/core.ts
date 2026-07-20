@@ -29,9 +29,7 @@ import type {
   CatalogTemporalInput,
   ContractError,
   FixtureBundle,
-  InvocationAttempt,
   InvocationAuditEvidence,
-  InvocationEvidence,
   InvocationExecutionAttempt,
   InvocationExecutionTransition,
   InvocationIntent,
@@ -631,42 +629,6 @@ export class RegistryStoreCore implements IntelligenceRegistryStore {
       intentId,
     );
     return rows.map((row) => JSON.parse(row.doc) as InvocationRefusal);
-  }
-
-  async recordAttempt(attempt: InvocationAttempt): Promise<void> {
-    this.validateInvocationRecord(attempt, `attempt '${attempt.id}'`);
-    await this.transact([
-      {
-        sql: "INSERT OR REPLACE INTO invocation_attempts (id, plan_id, state, started_at, doc) VALUES (?, ?, ?, ?, ?)",
-        params: [attempt.id, attempt.plan_id, attempt.state, attempt.started_at, JSON.stringify(attempt)],
-      },
-    ]);
-  }
-
-  async listAttempts(planId: string): Promise<InvocationAttempt[]> {
-    const rows = await this.executor.all<DocRow>(
-      "SELECT doc FROM invocation_attempts WHERE plan_id = ? ORDER BY id",
-      planId,
-    );
-    return rows.map((row) => JSON.parse(row.doc) as InvocationAttempt);
-  }
-
-  async recordEvidence(evidence: InvocationEvidence): Promise<void> {
-    this.validateInvocationRecord(evidence, `evidence '${evidence.id}'`);
-    await this.transact([
-      {
-        sql: "INSERT OR REPLACE INTO invocation_evidence (id, attempt_id, recorded_at, doc) VALUES (?, ?, ?, ?)",
-        params: [evidence.id, evidence.attempt_id, evidence.recorded_at, JSON.stringify(evidence)],
-      },
-    ]);
-  }
-
-  async listEvidence(attemptId: string): Promise<InvocationEvidence[]> {
-    const rows = await this.executor.all<DocRow>(
-      "SELECT doc FROM invocation_evidence WHERE attempt_id = ? ORDER BY id",
-      attemptId,
-    );
-    return rows.map((row) => JSON.parse(row.doc) as InvocationEvidence);
   }
 
   async recordExecutionAttempt(attempt: InvocationExecutionAttempt): Promise<void> {

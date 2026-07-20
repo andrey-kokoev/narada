@@ -8,7 +8,7 @@ import { readNarsEventLogTail } from '@narada2/nars-session-core/event-log';
 import { defaultLaunchRegistryPath } from '../lib/site-root-resolver.js';
 import { formattedResult, type CliFormat } from '../lib/cli-output.js';
 import { ExitCode } from '../lib/exit-codes.js';
-import { registryDefaultIntelligenceProvider, workspaceLaunchCommand } from './workspace-launch-application.js';
+import { workspaceLaunchCommand } from './workspace-launch-application.js';
 import type { WorkspaceLaunchPlanOptions, WorkspaceLaunchRecord } from './workspace-launch-types.js';
 import { readWorkspaceLaunchRecords, readLaunchRegistryRaw, rawLaunchRegistryAgents, type RawAgentRecord } from './workspace-launch-registry.js';
 import { narsSessionsCommand } from './nars.js';
@@ -171,7 +171,10 @@ interface OnboardingResult {
     role: 'resident';
     operator_surface: string | null;
     runtime_host: string | null;
-    intelligence_provider: string;
+    intelligence: {
+      resolution_phase: 'runtime-invocation';
+      authority: 'site-catalog-and-materialized-policy';
+    };
   };
   role_expansion: OnboardingRoleExpansionRecommendation;
   readiness: OnboardingReadiness;
@@ -246,10 +249,6 @@ function roleExpansionRecommendation(
         : 'Keep the current role roster; no default expansion is needed.',
     ...(cumulativeApprovedRoles.length > 0 ? { approved_roles: cumulativeApprovedRoles } : {}),
   };
-}
-
-function providerDefault(): string {
-  return registryDefaultIntelligenceProvider();
 }
 
 function onboardingStatePath(root: string): string {
@@ -1421,7 +1420,10 @@ function baseResult(
       role: 'resident',
       operator_surface: record?.operator_surface ?? null,
       runtime_host: record?.runtime ?? null,
-      intelligence_provider: providerDefault(),
+      intelligence: {
+        resolution_phase: 'runtime-invocation',
+        authority: 'site-catalog-and-materialized-policy',
+      },
     },
     role_expansion: roleExpansionRecommendation(records, root, record !== null),
     readiness: {
@@ -1442,7 +1444,7 @@ function renderHuman(result: OnboardingResult): string[] {
     `Assistant: ${result.defaults.assistant_label} (${result.defaults.role})`,
     `Surface: ${result.defaults.operator_surface ?? 'not configured'}`,
     `Runtime: ${result.defaults.runtime_host ?? 'not configured'}`,
-    `Intelligence: ${result.defaults.intelligence_provider}`,
+    `Intelligence: ${result.defaults.intelligence.resolution_phase} via ${result.defaults.intelligence.authority}`,
     `Readiness: ${result.readiness.status}`,
     `Role expansion: ${result.role_expansion.status}`,
     result.state_path ? `State: ${result.state_path}` : '',
@@ -1551,17 +1553,17 @@ export async function onboardingStartCommand(
     result.launch = launch.result;
     if (launch.exitCode !== ExitCode.SUCCESS) {
       const launchMessage = typeof launch.result === 'string' ? launch.result : JSON.stringify(launch.result);
-      const providerAuthFailure = /credential|api[_-]?key|provider[_-]?auth|codex[_-]?subscription/i.test(launchMessage);
+      const catalogReadinessFailure = /intelligence[_-]?catalog|catalog[_-]?(?:not[_-]?)?ready|catalog[_-]?preflight/i.test(launchMessage);
       result.status = 'blocked';
-      result.reason_code = providerAuthFailure ? 'provider_auth_required' : 'launch_refused';
+      result.reason_code = catalogReadinessFailure ? 'intelligence_catalog_setup_required' : 'launch_refused';
       result.readiness = {
         status: 'blocked',
         first_useful_interaction: 'pending',
         evidence: ['launch_refused'],
       };
-      result.message = providerAuthFailure ? 'The selected intelligence provider is not ready.' : 'The resident launch was refused.';
-      result.next_action = providerAuthFailure
-        ? 'Authenticate the selected provider, then rerun onboarding. Use --demo for a no-credential introduction.'
+      result.message = catalogReadinessFailure ? 'The Site intelligence catalog is not ready.' : 'The resident launch was refused.';
+      result.next_action = catalogReadinessFailure
+        ? 'Initialize the Site intelligence catalog and materialized policy, then rerun onboarding. Use --demo for a no-credential introduction.'
         : 'Resolve the launch refusal, then rerun onboarding.';
       return { exitCode: launch.exitCode, result: formattedResult(result, renderHuman(result), options.format ?? 'auto') };
     }

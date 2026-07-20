@@ -12,6 +12,8 @@ export interface SiteAgentsPendingEntry {
   agent_id: string;
   session_id: string | null;
   started_at: string;
+  updated_at: string;
+  phase: 'launch_accepted' | 'waiting_for_session' | 'waiting_for_route';
 }
 
 export interface SiteAgentsClient {
@@ -52,7 +54,9 @@ function parsePending(value: unknown): SiteAgentsPendingEntry[] | null {
       || typeof entry.site_id !== 'string'
       || typeof entry.agent_id !== 'string'
       || !(typeof entry.session_id === 'string' || entry.session_id === null)
-      || typeof entry.started_at !== 'string') return null;
+      || typeof entry.started_at !== 'string'
+      || typeof entry.updated_at !== 'string'
+      || !['launch_accepted', 'waiting_for_session', 'waiting_for_route'].includes(String(entry.phase))) return null;
     return entry as unknown as SiteAgentsPendingEntry;
   });
   if (entries.some((entry) => entry === null)) return null;

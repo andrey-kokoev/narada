@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { buildAgentIdentityRefV2 } from '@narada2/agent-identity';
+import { createSiteAgentLaunchAdmission } from '../../src/commands/site-agent-launch-admission.js';
 import { createSiteAgentLaunchGateway } from '../../src/commands/site-agent-launch-gateway.js';
 
 function overview(state: 'running' | 'stopped' | 'degraded', sessionId: string | null = null) {
@@ -61,12 +65,17 @@ const launchRecord = {
   config_path: 'C:/Users/test/Narada/config/launch/agents.json',
 };
 
+function testAdmission() {
+  return createSiteAgentLaunchAdmission({ root: mkdtempSync(join(tmpdir(), 'site-agent-gateway-')), pollMs: 1 });
+}
+
 describe('site-agent launch gateway', () => {
   it('reuses one healthy session without launching', async () => {
     const launchCommand = vi.fn();
     const gateway = createSiteAgentLaunchGateway({
       overview: overview('running', 'session-1'),
       launchCommand,
+      launchAdmission: testAdmission(),
     });
     expect(await gateway.launch({ siteId: 'sonar', agentId: 'sonar.resident' })).toMatchObject({
       status: 'reused',
@@ -84,6 +93,10 @@ describe('site-agent launch gateway', () => {
       overview: overview('stopped'),
       readLaunchRecords: async () => ({ records: [launchRecord], siteCatalog: [] }),
       launchCommand: launchCommand as never,
+      launchAdmission: testAdmission(),
+      launchAdmission: testAdmission(),
+      launchAdmission: testAdmission(),
+      launchAdmission: testAdmission(),
     });
     expect(await gateway.launch({ siteId: 'sonar', agentId: 'sonar.resident' })).toMatchObject({
       status: 'launched',
@@ -94,7 +107,7 @@ describe('site-agent launch gateway', () => {
 
   it('refuses degraded or unadmitted agents before mutation', async () => {
     const launchCommand = vi.fn();
-    const gateway = createSiteAgentLaunchGateway({ overview: overview('degraded'), launchCommand });
+    const gateway = createSiteAgentLaunchGateway({ overview: overview('degraded'), launchCommand, launchAdmission: testAdmission() });
     expect(await gateway.launch({ siteId: 'sonar', agentId: 'sonar.resident' })).toMatchObject({
       status: 'refused',
       reason: 'agent_runtime_degraded',

@@ -27,7 +27,7 @@ Existing packages:
 Likely new packages:
 
 1. `packages/operator-surface-runtime-contract`
-2. `packages/carrier-provider-contract`
+2. `packages/invokable-intelligence-contract`
 3. `packages/carrier-command-contract`
 
 ## Migration Order
@@ -35,7 +35,7 @@ Likely new packages:
 1. Stabilize shared fixtures for carrier protocol, session events, payload refs, and reader-tool behavior.
 2. Move or verify MCP fabric projection and tool visibility against shared fixtures.
 3. Centralize tool admission, action classification, argument summaries, and payload sensitivity rules.
-4. Extract provider/carrier admission metadata, env var names, model defaults, and thinking settings.
+4. Extract the provider-neutral intelligence ontology, Site policy, access, topology, temporal, and outcome contracts; runtime selection belongs in canonical catalog state rather than environment names or hardcoded defaults.
 5. Define the Codex/Narada tool-call envelope as a shared contract with parser fixtures.
 6. Extract runtime launch, heartbeat, session identity, and carrier path schemas.
 7. Extract command vocabulary and command effect schemas.

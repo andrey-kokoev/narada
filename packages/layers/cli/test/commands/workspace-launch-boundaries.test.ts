@@ -29,7 +29,12 @@ describe('workspace launch module boundaries', () => {
     for (const [entry, source] of commandFiles) {
       expect(source, entry).not.toContain('legacy_carrier_compatibility');
       expect(source, entry).not.toContain('legacy_terminal_plan');
+      expect(source, entry).not.toContain('intelligenceProvider');
+      expect(source, entry).not.toContain('intelligence_provider');
+      expect(source, entry).not.toContain('@narada2/carrier-provider-contract');
     }
+
+    expect(existsSync(resolve(commandsRoot, 'workspace-launch-provider-context.ts'))).toBe(false);
   });
 
   it('keeps the application composition boundary explicit', () => {
@@ -42,13 +47,13 @@ describe('workspace launch module boundaries', () => {
     const executor = readFileSync(resolve(commandsRoot, 'workspace-launch-executor.ts'), 'utf8');
     const result = readFileSync(resolve(commandsRoot, 'workspace-launch-result.ts'), 'utf8');
     const admission = readFileSync(resolve(commandsRoot, 'workspace-launch-admission.ts'), 'utf8');
-    const providerContext = readFileSync(resolve(commandsRoot, 'workspace-launch-provider-context.ts'), 'utf8');
 
     expect(application).toContain("from './workspace-launch-application-execution.js'");
     expect(applicationExecution).toContain("from './workspace-launch-command.js'");
     expect(applicationExecution).toContain("from './workspace-launch-application-context.js'");
     expect(command).toContain('registryContext: WorkspaceLaunchRegistryContext');
     expect(context).toContain('createWorkspaceLaunchContext');
+    expect(context).toContain('createWorkspaceLaunchAdmissionPolicy');
     expect(registry).toContain('readWorkspaceLaunchRecords');
     expect(registry).not.toContain('buildAgentPlan');
     expect(planBuilder).toContain('buildAgentPlan');
@@ -62,7 +67,5 @@ describe('workspace launch module boundaries', () => {
     expect(command).not.toContain('startOperatorTerminal');
     expect(command).not.toContain('prompts.');
     expect(admission).toContain('resolveCanonicalOperatorSurfaceRuntimeSelection');
-    expect(providerContext).toContain("from './workspace-launch-admission.js'");
-    expect(providerContext).not.toContain("from '@narada2/operator-surface-runtime-contract");
   });
 });

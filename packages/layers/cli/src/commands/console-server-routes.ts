@@ -131,7 +131,12 @@ function withInvariantDiagnostics(overview: OperatorSiteAgentOverviewWireRespons
   const violations = validateOperatorSiteAgentOverviewInvariants(overview);
   if (violations.length === 0) return overview;
   const diagnostics = violations.map(formatOperatorSiteAgentInvariantViolation);
-  return { ...overview, refusals: [...overview.refusals, ...diagnostics] };
+  return {
+    ...overview,
+    status: 'refused',
+    groups: [],
+    refusals: [...overview.refusals, ...diagnostics],
+  };
 }
 
 function sessionRoutePath(directory: OperatorWorkspaceRouteDirectory, sessionId: string): string | null {
@@ -178,11 +183,11 @@ function onboardingUiState(
   doctor: Record<string, unknown> | null,
   onboarding: Record<string, unknown> | null,
   start: Record<string, unknown> | null = null,
-): 'checking' | 'ready' | 'starting' | 'healthy' | 'needs-provider-setup' | 'blocked' | 'failed' {
+): 'checking' | 'ready' | 'starting' | 'healthy' | 'needs-intelligence-setup' | 'blocked' | 'failed' {
   const startStatus = optionalString(start?.status);
   const startReason = optionalString(start?.reason_code);
   if (startStatus === 'launched') return 'starting';
-  if (startReason === 'provider_auth_required') return 'needs-provider-setup';
+  if (startReason === 'intelligence_catalog_not_ready') return 'needs-intelligence-setup';
   if (startStatus === 'blocked') return 'blocked';
   if (startStatus === 'error') return 'failed';
 
@@ -192,8 +197,8 @@ function onboardingUiState(
   if (onboardingStatus === 'first_use_verified' || verification?.status === 'verified') return 'healthy';
   if (onboardingStatus === 'launch_requested') return 'starting';
 
-  const providerReadiness = Array.isArray(doctor?.provider_readiness) ? doctor.provider_readiness : [];
-  if (providerReadiness.some((row) => isRecord(row) && row.status === 'needs_setup')) return 'needs-provider-setup';
+  const catalogReadiness = isRecord(doctor?.intelligence_catalog_readiness) ? doctor.intelligence_catalog_readiness : null;
+  if (catalogReadiness?.status === 'needs_setup' || catalogReadiness?.status === 'check_required') return 'needs-intelligence-setup';
   if (doctor?.status === 'degraded' || onboardingStatus === 'blocked') return 'blocked';
   if (session?.health_status === 'healthy') return 'starting';
   return 'ready';
@@ -530,11 +535,14 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
         }
         const result = await ctx.siteAgentLaunch.launch({ siteId, agentId });
         if (result.status === 'launched') {
+          const now = new Date().toISOString();
           ctx.siteAgentPending?.record({
             site_id: siteId,
             agent_id: agentId,
             session_id: result.session_id,
-            started_at: new Date().toISOString(),
+            started_at: now,
+            updated_at: now,
+            phase: 'launch_accepted',
           });
         }
         const status = result.status === 'refused' ? 409 : result.status === 'failed' ? 500 : 200;
@@ -579,6 +587,7 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
           sessionId: string | null,
           url: string | null,
           reason: string | null,
+          phase: 'waiting_for_session' | 'waiting_for_route' | 'ready' | 'ambiguous' | 'refused',
         ) => ({
           schema: 'narada.operator_console.agent_session_route.v1',
           status,
@@ -588,9 +597,10 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
           url,
           sessions_path: scopedAgentSessionsPath(siteId, agentId),
           reason,
+          phase,
         });
         if (!ctx.siteAgentOverview) {
-          jsonResponse(res, 503, sessionRouteResponse('refused', null, null, 'site_agent_overview_unavailable'));
+          jsonResponse(res, 503, sessionRouteResponse('refused', null, null, 'site_agent_overview_unavailable', 'refused'));
           return;
         }
         const overview = await ctx.siteAgentOverview.read();
@@ -599,26 +609,42 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
           .find((site) => site.site_id === siteId)
           ?.agents.find((candidate) => candidate.agent_id === agentId);
         if (!agent) {
-          jsonResponse(res, 404, sessionRouteResponse('refused', null, null, 'agent_not_found'));
+          jsonResponse(res, 404, sessionRouteResponse('refused', null, null, 'agent_not_found', 'refused'));
           return;
         }
-        if (agent.runtime.state === 'ambiguous') {
-          jsonResponse(res, 200, sessionRouteResponse('ambiguous', null, null, 'multiple_healthy_sessions'));
+        const pending = ctx.siteAgentPending?.resolve(siteId, agentId) ?? null;
+        if (requestedSessionId && pending?.session_id && requestedSessionId !== pending.session_id) {
+          jsonResponse(res, 409, sessionRouteResponse('refused', requestedSessionId, null, 'launch_session_mismatch', 'refused'));
           return;
         }
-        const candidateSessionId = requestedSessionId ?? agent.runtime.selected_session_id;
+        const correlatedSessionId = requestedSessionId ?? pending?.session_id ?? null;
+        if (correlatedSessionId && !agent.runtime.healthy_session_ids.includes(correlatedSessionId)) {
+          const now = new Date().toISOString();
+          ctx.siteAgentPending?.update(siteId, agentId, { phase: 'waiting_for_session', updated_at: now });
+          jsonResponse(res, 200, sessionRouteResponse('pending', correlatedSessionId, null, null, 'waiting_for_session'));
+          return;
+        }
+        if (!correlatedSessionId && agent.runtime.state === 'ambiguous') {
+          jsonResponse(res, 200, sessionRouteResponse('ambiguous', null, null, 'multiple_healthy_sessions', 'ambiguous'));
+          return;
+        }
+        const candidateSessionId = correlatedSessionId ?? agent.runtime.selected_session_id;
         if (!candidateSessionId) {
-          jsonResponse(res, 200, sessionRouteResponse('pending', null, null, null));
+          const now = new Date().toISOString();
+          ctx.siteAgentPending?.update(siteId, agentId, { phase: 'waiting_for_session', updated_at: now });
+          jsonResponse(res, 200, sessionRouteResponse('pending', null, null, null, 'waiting_for_session'));
           return;
         }
         const directory = ctx.workspaceRouteDirectory ? await ctx.workspaceRouteDirectory() : null;
         const routePath = directory ? sessionRoutePath(directory, candidateSessionId) : null;
         if (!routePath) {
-          jsonResponse(res, 200, sessionRouteResponse('pending', candidateSessionId, null, null));
+          const now = new Date().toISOString();
+          ctx.siteAgentPending?.update(siteId, agentId, { phase: 'waiting_for_route', updated_at: now });
+          jsonResponse(res, 200, sessionRouteResponse('pending', candidateSessionId, null, null, 'waiting_for_route'));
           return;
         }
         ctx.siteAgentPending?.remove(siteId, agentId);
-        jsonResponse(res, 200, sessionRouteResponse('ready', candidateSessionId, routePath, null));
+        jsonResponse(res, 200, sessionRouteResponse('ready', candidateSessionId, routePath, null, 'ready'));
       },
     },
     {

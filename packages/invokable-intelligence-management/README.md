@@ -52,6 +52,22 @@ Use `narada-intelligence help` for the complete collection and operation list. E
 
 The package temporarily retains the dry-run-by-default provider-registry migration used for cutover. It factorizes legacy provider entries into canonical inference providers, model providers, models, offerings, adapters, credential locators, routes, access records, policies, and provenance-bearing catalog records. It does not grant legacy configuration runtime authority. The migration surface is removed after verified zero-consumer cutover.
 
+## Temporary compatibility read
+
+`readLegacyCompatibilityProjection` serves only the exact
+`carrier.provider_registry` key. It reconstructs the legacy
+`narada.carrier.provider_registry.v1` shape from the latest admitted canonical
+catalog records and never reads provider/model selection environment variables.
+Every read requires a call site, configuration key, migration owner, and a
+mandatory telemetry sink. The returned envelope is deeply frozen, deprecated,
+and read-only; unknown keys, writes, ambiguous state, and uninitialized
+registries are refused. Telemetry is bounded to 64 canonical record IDs and
+never includes credential locator references or secret values.
+
+The projection is removed only after task #2219 records an admitted
+repository-wide zero-consumer inventory and accepted local and Cloudflare
+cutover evidence.
+
 ## Verification
 
 ```sh

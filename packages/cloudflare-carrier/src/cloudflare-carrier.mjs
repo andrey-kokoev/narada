@@ -647,6 +647,8 @@ export class CloudflareCarrierSession {
         terminal_status: 'failed',
         provider_execution_enabled: true,
         error_summary: providerErrorSummary(error),
+        error_code: typeof error?.code === 'string' ? error.code : null,
+        intelligence: error?.intelligence ?? null,
       }));
       events.push(this.#appendEvent('input_completed', {
         input_event_id: input.event_id,

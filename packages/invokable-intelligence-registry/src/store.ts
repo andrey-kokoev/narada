@@ -14,9 +14,7 @@ import type {
   CapabilityAssertion,
   ContractError,
   FixtureBundle,
-  InvocationAttempt,
   InvocationAuditEvidence,
-  InvocationEvidence,
   InvocationExecutionAttempt,
   InvocationExecutionTransition,
   InvocationIntent,
@@ -139,12 +137,6 @@ export interface IntelligenceRegistryStore {
   getRefusal(id: string): Promise<InvocationRefusal | null>;
   getRefusalByIntent(intentId: string): Promise<InvocationRefusal | null>;
   listRefusalsByIntent(intentId: string): Promise<InvocationRefusal[]>;
-  /** Upsert by id: attempt state transitions rewrite the same row. */
-  recordAttempt(attempt: InvocationAttempt): Promise<void>;
-  listAttempts(planId: string): Promise<InvocationAttempt[]>;
-  recordEvidence(evidence: InvocationEvidence): Promise<void>;
-  listEvidence(attemptId: string): Promise<InvocationEvidence[]>;
-
   /** V2 execution history. These records are immutable and never conflate payload, outcome, evidence, or telemetry. */
   recordExecutionAttempt(attempt: InvocationExecutionAttempt): Promise<void>;
   getExecutionAttempt(id: string): Promise<InvocationExecutionAttempt | null>;

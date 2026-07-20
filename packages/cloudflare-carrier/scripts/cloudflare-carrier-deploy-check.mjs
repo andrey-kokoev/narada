@@ -1,6 +1,13 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import {
+  buildCanonicalCloudflareTestSeed,
+  CLOUDFLARE_EXECUTION_TOPOLOGY,
+  feasibleTopologyObservations,
+} from '@narada2/invokable-intelligence-contract';
+import { createFakeD1 } from '@narada2/invokable-intelligence-registry';
+import { D1RegistryStore } from '@narada2/invokable-intelligence-registry/d1';
 import { CloudflareCarrierSession } from '../src/cloudflare-carrier.mjs';
 import worker, { classifyCloudflareToolEffectAdmission, CloudflareCarrierDurableObject } from '../src/cloudflare-worker.mjs';
 
@@ -17,6 +24,39 @@ const migrationSources = [
 ].map((migrationPath) => readFileSync(new URL(migrationPath, import.meta.url), 'utf8'));
 const inputPipelineCases = JSON.parse(readFileSync(new URL('../../carrier-protocol/fixtures/carrier-input-pipeline-cases.json', import.meta.url), 'utf8'));
 const manualOperatorInput = inputPipelineCases.cases.find((entry) => entry.name === 'manual_operator_admitted').input;
+const intelligenceRegistryDb = createFakeD1(':memory:');
+const intelligenceValidUntil = '2099-01-01T00:00:00.000Z';
+const intelligenceDecisionTime = '2026-07-19T12:00:00.000Z';
+const intelligenceStore = await D1RegistryStore.open(intelligenceRegistryDb);
+await intelligenceStore.loadCatalogSeed(buildCanonicalCloudflareTestSeed({
+  now: intelligenceDecisionTime,
+  validUntil: intelligenceValidUntil,
+  principalId: 'principal:admin',
+  targetSiteId: 'site:deploy-check',
+}));
+await intelligenceStore.close();
+
+function deployCheckIntelligenceContext() {
+  return {
+    target_site: { kind: 'site', id: 'site:deploy-check' },
+    user_site: { kind: 'site', id: 'site:user' },
+    execution_site: { kind: 'site', id: 'site:cloudflare-account' },
+    access: {
+      action: 'invoke',
+      requested_region: 'global',
+      data_classification: 'internal',
+      requested_retention_days: 0,
+      provider_training: 'prohibited',
+      expected_usage: { amount: 1, unit: 'requests' },
+      expected_cost: { amount: 0.01, currency: 'USD' },
+    },
+    topology_observations: feasibleTopologyObservations(
+      CLOUDFLARE_EXECUTION_TOPOLOGY,
+      intelligenceDecisionTime,
+      intelligenceValidUntil,
+    ),
+  };
+}
 
 function d1TableNamesFromSql(sql) {
   return [...sql.matchAll(/CREATE TABLE IF NOT EXISTS\s+([a-z0-9_]+)/gi)].map((match) => match[1]).sort();
@@ -34,6 +74,9 @@ assert.match(configText, /^binding = "CLOUDFLARE_CARRIER_TASK_DB"$/m);
 assert.match(configText, /^database_name = "narada-cloudflare-carrier-tasks"$/m);
 assert.match(configText, /^binding = "CLOUDFLARE_SITE_REGISTRY_DB"$/m);
 assert.match(configText, /^database_name = "narada-cloudflare-site-registry"$/m);
+assert.match(configText, /^binding = "INTELLIGENCE_REGISTRY_DB"$/m);
+assert.equal((configText.match(/^database_name = "narada-cloudflare-site-registry"$/gm) ?? []).length, 2);
+assert.equal(/(?:^|\n)[A-Z0-9_]*(?:PROVIDER|MODEL)[A-Z0-9_]*\s*=/m.test(configText), false);
 assert.equal(configText.includes('account_id'), false);
 const workerRuntimeTables = new Set(d1TableNamesFromSql(workerSource));
 const migrationTables = new Set(migrationSources.flatMap((source) => d1TableNamesFromSql(source)));
@@ -43,7 +86,9 @@ assert.equal(classifyCloudflareToolEffectAdmission({ tool_name: 'cloudflare_carr
 assert.equal(classifyCloudflareToolEffectAdmission({ tool_name: 'cloudflare_carrier_runtime_metadata_read' }, { runtimeReadsEnabled: true }).action, 'admit');
 assert.equal(classifyCloudflareToolEffectAdmission({ tool_name: 'native_shell' }, { runtimeReadsEnabled: true }).reason, 'unsupported_tool_effect');
 
-const durableEnv = { AI: fakeAiBinding([
+const durableEnv = {
+  INTELLIGENCE_REGISTRY_DB: intelligenceRegistryDb,
+  AI: fakeAiBinding([
   {
     response: 'Deploy check Cloudflare AI response.',
     tool_calls: [{
@@ -53,7 +98,8 @@ const durableEnv = { AI: fakeAiBinding([
     }],
   },
   { response: 'Deploy check denied tool effect response.' },
-]) };
+  ]),
+};
 const namespace = fakeDurableObjectNamespace(durableEnv);
 const env = {
   CLOUDFLARE_CARRIER_SESSIONS: namespace,
@@ -311,6 +357,7 @@ const startResponse = await worker.fetch(jsonRequest({
     agent_id: 'narada.deploy.check',
     site_id: 'site_deploy_check',
     site_root: 'cloudflare://site_deploy_check',
+    intelligence_context: deployCheckIntelligenceContext(),
   },
 }), env);
 assert.equal(startResponse.status, 200);
@@ -380,6 +427,7 @@ assert.equal(durableEnv.AI.calls[1].request.tools, undefined);
 assert.match(durableEnv.AI.calls[1].request.messages.at(-1).content, /tool_effect_adapter_unconfigured/);
 
 const configuredDurableEnv = {
+  INTELLIGENCE_REGISTRY_DB: intelligenceRegistryDb,
   AI: fakeAiBinding([
     {
       response: 'Deploy check configured Cloudflare AI response.',
@@ -407,6 +455,7 @@ await worker.fetch(jsonRequest({
     agent_id: 'narada.deploy.check',
     site_id: 'site_deploy_check',
     site_root: 'cloudflare://site_deploy_check',
+    intelligence_context: deployCheckIntelligenceContext(),
   },
 }), configuredEnv);
 const configuredStatusResponse = await worker.fetch(jsonRequest({
@@ -454,6 +503,7 @@ assert.match(configuredDurableEnv.AI.calls[1].request.messages.at(-1).content, /
 assert.match(configuredDurableEnv.AI.calls[1].request.messages.at(-1).content, /principal:admin/);
 
 const kvDurableEnv = {
+  INTELLIGENCE_REGISTRY_DB: intelligenceRegistryDb,
   AI: fakeAiBinding([
     {
       response: 'Deploy check KV read response.',
@@ -482,6 +532,7 @@ await worker.fetch(jsonRequest({
     agent_id: 'narada.deploy.check',
     site_id: 'site_deploy_check',
     site_root: 'cloudflare://site_deploy_check',
+    intelligence_context: deployCheckIntelligenceContext(),
   },
 }), kvEnv);
 const kvStatusResponse = await worker.fetch(jsonRequest({
@@ -521,6 +572,7 @@ assert.deepEqual(kvDurableEnv.AI.calls[0].request.tools.map((tool) => tool.name)
 
 const kvWriteBinding = fakeKvBinding({});
 const kvWriteDurableEnv = {
+  INTELLIGENCE_REGISTRY_DB: intelligenceRegistryDb,
   AI: fakeAiBinding([
     {
       response: 'Deploy check KV write response.',
@@ -549,6 +601,7 @@ await worker.fetch(jsonRequest({
     agent_id: 'narada.deploy.check',
     site_id: 'site_deploy_check',
     site_root: 'cloudflare://site_deploy_check',
+    intelligence_context: deployCheckIntelligenceContext(),
   },
 }), kvWriteEnv);
 const kvWriteStatusResponse = await worker.fetch(jsonRequest({
@@ -589,6 +642,7 @@ assert.deepEqual(kvWriteDurableEnv.AI.calls[0].request.tools.map((tool) => tool.
 
 const kvWriteFailedBinding = fakeKvBinding({});
 const kvWriteFailedDurableEnv = {
+  INTELLIGENCE_REGISTRY_DB: intelligenceRegistryDb,
   AI: fakeAiBinding([
     {
       response: 'Deploy check KV write failed response.',
@@ -617,6 +671,7 @@ await worker.fetch(jsonRequest({
     agent_id: 'narada.deploy.check',
     site_id: 'site_deploy_check',
     site_root: 'cloudflare://site_deploy_check',
+    intelligence_context: deployCheckIntelligenceContext(),
   },
 }), kvWriteFailedEnv);
 const kvWriteFailedInputResponse = await worker.fetch(jsonRequest({

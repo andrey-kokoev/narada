@@ -1,5 +1,6 @@
 import type { AgentIdentityRefV2 } from '@narada2/agent-identity';
 import type { LaunchProcessOwnership } from '@narada2/launch-process-ownership';
+import type { IntelligenceSelectionAuthority } from '@narada2/invokable-intelligence-contract';
 import type { CliFormat } from '../lib/cli-output.js';
 import type { ExitCode } from '../lib/exit-codes.js';
 import type { ResolvedSiteRoot } from '../lib/site-root-resolver.js';
@@ -15,7 +16,6 @@ export interface WorkspaceLaunchPlanOptions {
   onboarding?: boolean;
   runtime?: string;
   authority?: string;
-  intelligenceProvider?: string;
   mcpScope?: string;
   cloudflareApiBaseUrl?: string;
   resultPath?: string;
@@ -47,11 +47,7 @@ export interface WorkspaceLaunchSelectionResolution {
     resolved: string;
     source: Exclude<WorkspaceLaunchSelectionResolutionSource, 'not_applicable'>;
   };
-  intelligence_provider: {
-    requested: string | null;
-    resolved: string | null;
-    source: WorkspaceLaunchSelectionResolutionSource;
-  };
+  intelligence: IntelligenceSelectionAuthority;
   hidden_projection_launches?: WorkspaceLaunchProcessLaunch[];
 }
 
@@ -129,7 +125,7 @@ export interface WorkspaceLaunchAgentPlan extends WorkspaceLaunchRecord {
   onboarding_mode: 'user-site' | null;
   launch_session_id: string | null;
   process_ownership: LaunchProcessOwnership | null;
-  intelligence_provider: string | null;
+  intelligence_selection_authority: IntelligenceSelectionAuthority;
   capability_admission: Record<string, unknown>;
   path_provenance: Record<string, unknown>;
   selection_resolution: WorkspaceLaunchSelectionResolution;
@@ -258,6 +254,7 @@ export interface WorkspaceLaunchAttachmentEvidence {
     health_site_id?: string | null;
     canonical_identity_match?: boolean;
     site_root: string | null;
+    event_endpoint: string | null;
     health_endpoint: string | null;
     health_status: 'healthy' | 'unavailable' | 'not_checked';
     attempts: number;

@@ -37,7 +37,6 @@
     "typecheck": "tsc --noEmit --allowJs --checkJs false src/index.mjs src/canonical-invocation-adapter.mjs src/canonical-protocol-adapters.mjs src/canonical-transports.mjs src/credential-locator.mjs src/provider-invocation-state.mjs src/owned-process-state.mjs src/runtime-tail-utils.mjs src/process-supervisor.mjs"
   },
   "dependencies": {
-    "@narada2/carrier-provider-contract": "workspace:*",
     "@narada2/carrier-provider-support": "workspace:*",
     "@narada2/mcp-fabric": "workspace:*",
     "@narada2/process-launch-posture": "workspace:*"

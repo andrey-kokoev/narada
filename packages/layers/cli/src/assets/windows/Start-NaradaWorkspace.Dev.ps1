@@ -94,10 +94,10 @@ function Format-NaradaWorkspaceLaunchSummary {
     if ($surfaces.Count -eq 0 -and $agent.launch_carrier) { $surfaces = @([string]$agent.launch_carrier) }
     if ($surfaces.Count -eq 0 -and $agent.operator_surface_kind) { $surfaces = @([string]$agent.operator_surface_kind) }
     $runtime = if ($agent.runtime_host_kind) { [string]$agent.runtime_host_kind } elseif ($agent.launch_runtime) { [string]$agent.launch_runtime } else { [string]$agent.runtime }
-    $provider = if ($agent.intelligence_provider) { [string]$agent.intelligence_provider } else { 'registry/default' }
+    $catalog = if ($agent.intelligence_selection_authority.catalog.locator) { [string]$agent.intelligence_selection_authority.catalog.locator } else { 'Site catalog' }
     $site = if ($agent.site) { [string]$agent.site } else { [string]$agent.site_root }
     $role = if ($agent.role) { [string]$agent.role } else { [string]$agent.agent }
-    $lines.Add("  - $site/${role}: operator surface(s) $($surfaces -join ', '); runtime $runtime; provider $provider")
+    $lines.Add("  - $site/${role}: operator surface(s) $($surfaces -join ', '); runtime $runtime; intelligence resolved at invocation from $catalog")
   }
   return $lines
 }

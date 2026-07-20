@@ -478,6 +478,7 @@ test('validates and records carrier session binding to registered site', async (
   assert.equal(admitted.action, 'bound');
   assert.equal(admitted.evidence.schema, CLOUDFLARE_SITE_REGISTRY_SCHEMA);
   assert.equal(admitted.evidence.action, 'admit');
+  assert.equal(admitted.evidence.role, 'owner');
   assert.equal(admitted.binding.site_id, 'site_bound');
   assert.equal(admitted.binding.operation_id, 'operation_bound');
 

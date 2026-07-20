@@ -353,7 +353,13 @@ test('PowerShell launcher executes a fresh NARS session and attaches the Web UI 
     assert.equal(savedResult.mutation_performed, true);
     assert.equal(savedResult.selected_agents?.[0]?.agent, 'launcher-e2e.resident');
     assert.equal(savedResult.selected_agents?.[0]?.launch_operator_surface, 'agent-web-ui');
-    assert.equal(savedResult.selected_agents?.[0]?.intelligence_provider, 'kimi-code-api');
+    assert.deepEqual(savedResult.selected_agents?.[0]?.intelligence_selection_authority?.authority_scope, {
+      kind: 'site',
+      site_id: 'launcher-e2e',
+    });
+    assert.equal(savedResult.selected_agents?.[0]?.intelligence_selection_authority?.catalog?.store_kind, 'node:sqlite');
+    assert.equal(savedResult.selected_agents?.[0]?.intelligence_selection_authority?.launcher_selection, false);
+    assert.equal(Object.hasOwn(savedResult.selected_agents?.[0] ?? {}, 'intelligence_provider'), false);
     assert.equal(savedResult.attachment?.status, 'attached');
     assert.equal(savedResult.attachment?.exact_session, true);
     assert.equal(savedResult.hidden_runtime_launches?.length, 1);

@@ -1,5 +1,6 @@
 import type { LaunchProcessOwnership } from '@narada2/launch-process-ownership';
 import type { AgentStartSessionRef } from '@narada2/agent-start/launch-result-v0-contract';
+import type { IntelligenceSelectionAuthority } from '@narada2/invokable-intelligence-contract';
 
 export type JsonRecord = Record<string, unknown>;
 
@@ -46,11 +47,12 @@ export interface AgentStartOptions {
   siteRoot: string;
   targetSiteId?: string;
   workspaceRoot?: string;
+  dependencyWorkspaceRoot?: string;
   agent: string;
   carrier?: string;
   runtime: string;
   authority?: string;
-  intelligenceProvider?: string;
+  intelligenceSelectionAuthority?: IntelligenceSelectionAuthority;
   mcpScope?: string;
   preflightOnly?: boolean;
   dryRun?: boolean;
@@ -73,7 +75,7 @@ export interface OperatorProjectionLaunchBinding {
   operator_surface_kind?: string;
   runtime_host_kind: string;
   authority?: string | null;
-  intelligence_provider?: string | null;
+  intelligence_selection_authority?: IntelligenceSelectionAuthority | null;
   agent_start_result_file?: string;
   nars_session_id?: string | null;
   runtime_session_id?: string | null;

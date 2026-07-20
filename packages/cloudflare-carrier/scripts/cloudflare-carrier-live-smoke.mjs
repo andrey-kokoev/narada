@@ -28,6 +28,7 @@ export function parseLiveSmokeArgs(argv = [], env = process.env) {
     carrierSessionId: option(args, '--session') ?? `carrier_session_live_smoke_${sessionSuffix}`,
     agentId: option(args, '--agent') ?? 'narada.live.smoke',
     siteId,
+    intelligenceSiteId: option(args, '--intelligence-site') ?? 'site:narada-cloudflare',
     siteRoot: option(args, '--site-root') ?? env.CLOUDFLARE_CARRIER_SITE_REF ?? `cloudflare://${siteId}`,
     operationId: option(args, '--operation') ?? env.CLOUDFLARE_CARRIER_OPERATION_ID ?? null,
     goalWords,
@@ -35,6 +36,25 @@ export function parseLiveSmokeArgs(argv = [], env = process.env) {
     expectedToolEffectPosture: option(args, '--expect-tool-effect-posture') ?? env.CLOUDFLARE_CARRIER_EXPECT_TOOL_EFFECT_POSTURE ?? null,
     sessionSuffix,
   };
+}
+
+async function postIntelligence(config, body, fetchImpl) {
+  const response = await fetchImpl(new URL('/api/intelligence', withTrailingSlash(config.workerUrl)), {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      ...authHeaders(config.auth),
+    },
+    body: JSON.stringify(body),
+  });
+  const text = await response.text();
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    parsed = { raw: text };
+  }
+  return { http_status: response.status, body: parsed };
 }
 
 export function formatLiveSmokeText(result) {
@@ -50,6 +70,7 @@ export function formatLiveSmokeText(result) {
     `Agent: ${result.agent_id}`,
     `Goal: ${result.goal?.text ?? 'unknown'} state=${result.goal?.state ?? 'unknown'}`,
     `Provider: posture=${result.provider_adapter_posture ?? 'unknown'} request=${result.provider_request_status ?? 'unknown'} execution=${String(result.provider_execution_enabled)}`,
+    `Intelligence: attempt=${result.intelligence_attempt_id ?? 'none'} outcome=${result.intelligence_outcome_kind ?? 'unknown'} evidence_readback=${String(result.intelligence_evidence_readback)}`,
     `Tool Effect: posture=${result.tool_effect_posture ?? 'unknown'} adapter=${result.tool_effect_adapter_kind ?? 'none'}`,
     `Task Mutation: create=${result.task_create_status ?? 'unknown'} update=${result.task_update_status ?? 'unknown'} persisted=${Array.isArray(result.persisted_tasks) ? result.persisted_tasks.length : 0}`,
   ];
@@ -145,6 +166,36 @@ export async function runLiveSmoke(config, { fetchImpl = fetch } = {}) {
   const turnCompleted = inputDelivery.body.events.find((event) => event.event_kind === 'turn_completed');
   assert.equal(turnCompleted.payload.provider_request_status, 'completed');
   assert.equal(turnCompleted.payload.terminal_status, 'completed');
+  const intelligence = turnCompleted.payload.intelligence;
+  assert.ok(intelligence && typeof intelligence === 'object');
+  assert.equal(typeof intelligence.intent_id, 'string');
+  assert.equal(typeof intelligence.plan_id, 'string');
+  assert.equal(typeof intelligence.attempt_id, 'string');
+  assert.equal(intelligence.outcome_kind, 'success');
+  const executionRead = await postIntelligence(config, {
+    schema: 'narada.cloudflare.invokable-intelligence.management-api-request.v1',
+    owning_site: { kind: 'site', id: config.intelligenceSiteId },
+    request: { operation: 'execution.read', attempt_id: intelligence.attempt_id },
+  }, fetchImpl);
+  assert.equal(executionRead.http_status, 200);
+  assert.equal(executionRead.body.ok, true);
+  assert.equal(executionRead.body.result.schema, 'narada.cloudflare.invokable-intelligence.execution-read.v1');
+  assert.equal(executionRead.body.result.data.intent.id, intelligence.intent_id);
+  assert.equal(executionRead.body.result.data.plan.id, intelligence.plan_id);
+  assert.equal(executionRead.body.result.data.attempt.id, intelligence.attempt_id);
+  assert.equal(executionRead.body.result.data.terminal_outcome.id, intelligence.outcome_id);
+  assert.equal(executionRead.body.result.data.terminal_outcome.kind, 'success');
+  assert.deepEqual(executionRead.body.result.data.transitions.map(({ state }) => state), [
+    'dispatching', 'provider-pending', 'terminal',
+  ]);
+  assert.ok(executionRead.body.result.data.results.length >= 1);
+  assert.ok(executionRead.body.result.data.observations.length >= 3);
+  assert.ok(executionRead.body.result.data.audit_evidence.length >= 4);
+  assert.ok(executionRead.body.result.data.telemetry.length >= 1);
+  assert.equal(executionRead.body.result.data.provenance.route_authority.site_id, config.intelligenceSiteId);
+  assert.ok(executionRead.body.result.data.provenance.materializations.length >= 1);
+  assert.ok(executionRead.body.result.data.provenance.materializations.every(({ destination }) =>
+    destination.site_id === config.intelligenceSiteId));
   const inputCompleted = inputDelivery.body.events.find((event) => event.event_kind === 'input_completed');
   assert.equal(inputCompleted.payload.input_event_id, providerRefusalInput.event_id);
   assert.equal(inputCompleted.payload.terminal_state, 'completed');
@@ -247,6 +298,16 @@ export async function runLiveSmoke(config, { fetchImpl = fetch } = {}) {
     input_terminal_state: inputDelivery.body.terminal_state,
     provider_request_status: providerRequest.payload.provider_request_status,
     provider_execution_enabled: providerRequest.payload.provider_execution_enabled,
+    intelligence_site_id: config.intelligenceSiteId,
+    intelligence_attempt_id: intelligence.attempt_id,
+    intelligence_outcome_id: intelligence.outcome_id,
+    intelligence_outcome_kind: intelligence.outcome_kind,
+    intelligence_evidence_readback: true,
+    intelligence_transition_states: executionRead.body.result.data.transitions.map(({ state }) => state),
+    intelligence_observation_count: executionRead.body.result.data.observations.length,
+    intelligence_audit_evidence_count: executionRead.body.result.data.audit_evidence.length,
+    intelligence_telemetry_count: executionRead.body.result.data.telemetry.length,
+    intelligence_materialization_count: executionRead.body.result.data.provenance.materializations.length,
     provider_text_preview: providerOutput.payload.text_delta.slice(0, 120),
     turn_terminal_status: turnCompleted.payload.terminal_status,
     task_create_status: taskCreateResult.payload.status,

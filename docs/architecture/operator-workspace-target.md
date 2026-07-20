@@ -193,17 +193,28 @@ healthy session. Degraded and ambiguous states refuse a second launch. A
 successful launch is recorded as server-side pending state, so the page keeps
 showing a visible "starting" state across reloads until the runtime appears.
 The pending projection window is self-driving: it polls the Console
-session-route endpoint on its own, redirects itself to the Agent Web UI route
-when it exists, and on sustained latency renders an explicit terminal state
-with a scoped Agent Sessions path instead of dying silently. Inspection opens
-Agent Web UI only through a concrete session route from the Workspace
-directory; ambiguity routes to the Agent Sessions view scoped by `?site=` and
-`?agent=`, which filters the index and offers clear-scope; no-session states
-remain unavailable. Right-click anywhere on the agent cell, the visible
-actions button, the ContextMenu key, and `Shift+F10` expose the same
-inspection menu; triggers carry `aria-haspopup`/`aria-expanded`, opening moves
-focus to the first enabled item, Escape closes and returns focus, and arrow
-keys with Home/End navigate enabled items.
+session-route endpoint on its own and redirects only when the launch-correlated
+session is both healthy for the canonical Site agent and present in the
+Workspace route directory. An unrelated historical session never satisfies
+that handoff. The projection distinguishes waiting for session registration
+from waiting for route publication. Its five-minute wait budget ends in an
+explicit state with **Retry**, **Open scoped sessions**, and **Cancel wait**
+actions; it does not silently extend the deadline.
+
+Inspection opens Agent Web UI only through a concrete session route from the
+Workspace directory. Ambiguity routes to Agent Sessions with `?site=` and
+`?agent=`. A scope is either absent or a complete canonical Site-agent pair;
+partial and cross-Site scopes explicitly refuse attachment. The chooser uses
+exact Site and canonical agent equality, preserves scope through refresh, and
+offers links only for matching sessions. Right-click, the ContextMenu key, and
+`Shift+F10` execute the same direct inspection decision. No menu is inserted
+because this projection never has two simultaneously valid secondary commands.
+
+The residual boundary is deliberate: pending state is owned by the running
+Console server and survives browser reload or component unmount, but not a
+Console server restart. The cross-process launch-admission ledger prevents a
+duplicate runtime independently; after a Console restart, the operator can use
+the canonical scoped session inventory to recover an already-started runtime.
 
 The Launcher Session Dashboard is a separate Vue/shadcn presentation package
 served by the CLI launcher. Its launch authority, dashboard records, and

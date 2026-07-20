@@ -228,7 +228,6 @@ function codexSubscriptionPreflightCacheKey({ provider, processEnv, command }) {
     command.source ?? '',
     ...(command.prefixArgs ?? []),
     codexAuthHome(processEnv) ?? '',
-    processEnv.CODEX_MODEL ?? '',
     codexSubscriptionCliVersion(processEnv) ?? '',
   ].join('\u0000');
 }

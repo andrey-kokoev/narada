@@ -111,6 +111,24 @@ describe('site-agent overview read model', () => {
     });
   });
 
+  it('does not project a matching principal identity from a different Site scope', async () => {
+    const mismatched = principalSnapshot('sonar.resident', 'executing', 'wrong-site-work');
+    mismatched.scope_id = 'other-site';
+    const model = createSiteAgentOverviewReadModel({
+      ...quietDependencies(),
+      readLaunchRecords: async () => ({ records: [launchRecord('sonar', 'resident')], siteCatalog: [] }),
+      readSiteMetadata: async (record) => ({ site_id: record.site, display_name: record.site, site_kind: 'site' }),
+      readPrincipalStates: async () => [mismatched],
+    });
+    const result = await model.read();
+    const agent = result.groups.flatMap((group) => group.sites)[0]?.agents[0];
+    expect(agent?.work).toEqual({
+      state: 'unavailable',
+      detail: 'Principal runtime scope does not match the admitted Site.',
+      source: 'unavailable',
+    });
+  });
+
   it('refuses when the admitted launch registry cannot be read', async () => {
     const model = createSiteAgentOverviewReadModel({
       registryReadModel: { list: async () => ({ exitCode: 0, result: { sites: [] } }) } as never,
@@ -130,7 +148,7 @@ function principalSnapshot(principalId: string, state: string, detail: string | 
     principal_id: principalId,
     principal_type: 'worker',
     state,
-    scope_id: 'scope',
+    scope_id: principalId.includes('.') ? principalId.split('.')[0] : 'andrey-user',
     attachment_mode: null,
     state_changed_at: '2026-07-18T00:00:00.000Z',
     last_heartbeat_at: null,
@@ -242,7 +260,7 @@ describe('site-agent overview authority and identity (findings 1, 3, 5)', () => 
     expect(site).toMatchObject({ site_kind: 'user_site', classification_source: 'declared', group_id: 'personal-infrastructure' });
   });
 
-  it('marks classification fallback when no descriptor exists and diagnoses unreadable descriptors', async () => {
+  it('refuses Sites whose canonical metadata is missing or invalid', async () => {
     const fallbackRoot = mkdtempSync(join(tmpdir(), 'site-agent-fallback-'));
     const unreadableRoot = mkdtempSync(join(tmpdir(), 'site-agent-unreadable-'));
     writeFileSync(join(unreadableRoot, 'config.json'), 'not json');
@@ -258,14 +276,13 @@ describe('site-agent overview authority and identity (findings 1, 3, 5)', () => 
       readPrincipalStates: async () => [],
     });
     const result = await model.read();
-    const sites = result.groups.flatMap((group) => group.sites);
-    expect(sites.find((site) => site.site_id === 'alpha')).toMatchObject({ site_kind: 'site', classification_source: 'fallback' });
-    expect(sites.find((site) => site.site_id === 'beta')).toMatchObject({ site_kind: 'site', classification_source: 'fallback' });
-    expect(result.refusals).toContain('site_metadata_unreadable:beta');
-    expect(result.refusals).not.toContain('site_metadata_unreadable:alpha');
+    expect(result.status).toBe('refused');
+    expect(result.groups.flatMap((group) => group.sites)).toEqual([]);
+    expect(result.refusals).toContain('site_metadata_missing:alpha');
+    expect(result.refusals).toContain('site_metadata_invalid:beta');
   });
 
-  it('classifies registry-only Sites from registry authority locus and marks registry_only', async () => {
+  it('classifies registry-only Sites from canonical Site metadata and marks registry_only', async () => {
     const model = createSiteAgentOverviewReadModel({
       registryReadModel: {
         list: async () => ({
@@ -282,10 +299,39 @@ describe('site-agent overview authority and identity (findings 1, 3, 5)', () => 
       } as never,
       agentSessions: { list: async () => ({ refusals: [], sessions: [] }) } as never,
       readLaunchRecords: async () => ({ records: [], siteCatalog: [] }),
+      readSiteMetadata: async (record) => ({
+        site_id: record.site,
+        display_name: 'Andrey User Site',
+        site_kind: 'user_site',
+        metadata_status: 'available',
+      }),
     });
     const result = await model.read();
     const site = result.groups.flatMap((group) => group.sites)[0];
     expect(site).toMatchObject({ site_kind: 'user_site', classification_source: 'registry_only', group_id: 'personal-infrastructure' });
+  });
+
+  it('refuses a registry-only Site when canonical metadata cannot be read', async () => {
+    const model = createSiteAgentOverviewReadModel({
+      registryReadModel: {
+        list: async () => ({
+          exitCode: 0,
+          result: { sites: [{ site_id: 'host-a', site_root: 'D:/missing/host-a', observation_status: 'present' }] },
+        }),
+      } as never,
+      agentSessions: { list: async () => ({ refusals: [], sessions: [] }) } as never,
+      readLaunchRecords: async () => ({ records: [], siteCatalog: [] }),
+      readSiteMetadata: async (record) => ({
+        site_id: record.site,
+        display_name: record.site,
+        site_kind: null,
+        metadata_status: 'unreadable',
+      }),
+    });
+    const result = await model.read();
+    expect(result.status).toBe('refused');
+    expect(result.groups.flatMap((group) => group.sites)).toEqual([]);
+    expect(result.refusals).toContain('site_metadata_unreadable:host-a');
   });
 
   it('diagnoses duplicate canonical agent identities instead of rendering them silently', async () => {
@@ -299,8 +345,8 @@ describe('site-agent overview authority and identity (findings 1, 3, 5)', () => 
       readPrincipalStates: async () => [],
     });
     const result = await model.read();
-    const site = result.groups.flatMap((group) => group.sites)[0];
-    expect(site?.agents).toHaveLength(1);
-    expect(result.refusals).toContain('duplicate_agent_identity:sonar:sonar.resident');
+    expect(result.status).toBe('refused');
+    expect(result.groups).toEqual([]);
+    expect(result.refusals).toContain('duplicate_agent_identity:sonar.resident');
   });
 });

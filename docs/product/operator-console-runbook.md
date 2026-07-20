@@ -37,17 +37,32 @@ work posture. Do not interpret color alone.
   session route appears.
 - Select a running agent to reuse its one healthy session; this does not start
   a duplicate runtime.
-- Right-click an agent, use its visible actions button, or press `Shift+F10`
-  to inspect it. A uniquely healthy session opens Agent Web UI.
-- Multiple healthy sessions are `ambiguous`; use Agent Sessions to choose one.
+- Right-click an agent or press `Shift+F10` to inspect it. A uniquely healthy
+  session opens Agent Web UI directly; there is no intermediate action menu.
+- Multiple healthy sessions are `ambiguous`; inspection opens Agent Sessions
+  with the exact canonical `site` and `agent` scope. Partial or cross-Site
+  scopes refuse attachment, and unrelated sessions are not listed.
 - A degraded runtime must be inspected or recovered before another launch.
-- A missing session route leaves the launch visible but refuses to guess an
-  Agent Web UI URL. Refresh the route directory after the runtime becomes
-  healthy.
+- A launch handoff first reports session registration, then route publication.
+  It waits for up to five minutes without depending on the original Console
+  component. At timeout, use **Retry**, **Open scoped sessions**, or **Cancel
+  wait**. A missing route never falls back to a historical session.
 
 Agent Web UI remains session-scoped. The overview never substitutes an agent
 id for a NARS session id, and it does not mutate Principal Runtime or the NARS
 session index directly.
+
+The authority chain is explicit: Site metadata and Principal Runtime own Site
+kind and work posture; the canonical NARS session index owns runtime/session
+posture; the User Site launch registry owns admitted launch records; the CLI
+gateway owns atomic ensure-running admission; and the Workspace route directory
+owns WebUI reachability. Missing or invalid authority data is rendered as a
+bounded refusal rather than inferred from paths, labels, or another Site.
+
+Pending handoff state survives browser reload and page teardown while the
+Console server remains alive. It does not survive a Console server restart;
+the runtime remains protected by cross-process launch admission and can be
+recovered through the canonical scoped Agent Sessions view.
 
 ## Route-directory States
 

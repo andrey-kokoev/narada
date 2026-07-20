@@ -33,8 +33,15 @@ test('pending projection document is self-driving and latency-tolerant', () => {
   assert.ok(document.includes('window.location.replace(payload.sessions_path)'));
   assert.ok(document.includes(String(PENDING_PROJECTION_BUDGET_MS)));
   assert.ok(document.includes(String(PENDING_PROJECTION_POLL_INTERVAL_MS)));
-  assert.ok(document.includes('taking longer than expected'));
-  assert.ok(document.includes('/console/sessions?site=sonar&amp;agent=sonar.resident') === false, 'script keeps the raw scoped path');
+  assert.ok(document.includes('did not become ready within the wait budget'));
+  assert.ok(document.includes('Launch accepted. Waiting for the runtime session to register'));
+  assert.ok(document.includes('Runtime session registered. Waiting for its Agent Web UI route'));
+  assert.ok(document.includes('id="retry"'));
+  assert.ok(document.includes('id="cancel"'));
+  assert.ok(document.includes("window.addEventListener('pagehide'"));
+  assert.ok(document.includes('controller.abort()'));
+  assert.ok(!document.includes('deadline = Date.now() + 300000;\n      setTimeout'), 'timeout does not silently extend itself');
+  assert.ok(document.includes('href="/console/sessions?site=sonar&amp;agent=sonar.resident"'), 'HTML link escapes its query separator');
   assert.ok(document.includes('/console/sessions?site=sonar&agent=sonar.resident'));
 });
 

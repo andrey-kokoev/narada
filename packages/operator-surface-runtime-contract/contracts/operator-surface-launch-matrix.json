@@ -50,25 +50,25 @@
     {
       "launch_selection_kind": "agent-tui",
       "operator_surface_kind": "agent-tui",
-      "carrier_implementation_kind": "agent-tui",
-      "runtime_host_kind": "agent-tui",
-      "runtime_substrate_kind": "agent-tui",
-      "tool_fabric_adapter_kind": "narada-agent-tui-terminal-interactive-loop",
-      "tool_fabric_source": "control_jsonl_session_jsonl",
-      "adapter_entrypoint": "package:@narada2/agent-tui#narada-agent-tui",
+      "carrier_implementation_kind": "narada-agent-runtime-server",
+      "runtime_host_kind": "narada-agent-runtime-server",
+      "runtime_substrate_kind": "narada-agent-runtime-server",
+      "tool_fabric_adapter_kind": "narada-agent-runtime-server-mcp-client",
+      "tool_fabric_source": ".ai/mcp",
+      "adapter_entrypoint": "package:@narada2/agent-runtime-server#narada-agent-runtime-server",
       "projection_capabilities": ["nars_attach"],
       "conformance": {
-        "evidence_level": "startup_enforced",
-        "default_intelligence_auth_path": "Provider selected by the agent-tui runtime configuration",
-        "mcp_fabric_source": "Generated session MCP config consumed by agent-tui",
-        "native_shell_posture": "The terminal runtime owns the interactive loop; Narada does not claim native shell mediation",
-        "mutating_call_handling": "MCP surface policy applies to projected MCP calls; carrier-native terminal actions remain outside this boundary",
-        "startup_sequence_availability": "MCP tool if present in the generated session MCP config",
-        "known_gaps": ["Live terminal-loop acceptance remains environment-dependent."]
+        "evidence_level": "code_enforced",
+        "default_intelligence_auth_path": "codex-subscription through local Codex MCP server unless another admitted provider is selected",
+        "mcp_fabric_source": "tools/mcp-fabric/loadSiteMcpFabric at runtime",
+        "native_shell_posture": "not exposed as native carrier shell in Agent Runtime Server mode; shell-like effects must be MCP tools and then admitted",
+        "mutating_call_handling": "code-mediated Carrier Action Admission; read-only executes, mutating/unknown/credential-bearing routes or refuses",
+        "startup_sequence_availability": "MCP tool if present in site fabric",
+        "known_gaps": ["The Rust TUI remains a projection client and must be attached to the runtime event endpoint after session startup."]
       },
       "expected_tools": ["agent_context_startup_sequence", "mcp_output_show", "task_lifecycle_next"],
       "expected_tools_scope": "sentinel",
-      "states": ["runtime_known", "adapter_selected", "terminal_loop_carrier", "launch_ready"]
+      "states": ["runtime_known", "adapter_selected", "source_declared", "launch_ready"]
     },
     {
       "launch_selection_kind": "codex",

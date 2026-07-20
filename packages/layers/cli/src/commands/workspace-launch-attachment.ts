@@ -77,6 +77,7 @@ export async function awaitWorkspaceLaunchSessionAttachments(
       health_session_id: null,
       health_identity_match: false,
       site_root: plan.site_root,
+      event_endpoint: null,
       health_endpoint: null,
       health_status: 'unavailable',
       attempts: 0,
@@ -111,6 +112,7 @@ export async function awaitWorkspaceLaunchSessionAttachments(
           health_session_id: null,
           health_identity_match: false,
           site_root: plan.site_root,
+          event_endpoint: null,
           health_endpoint: null,
           health_status: 'unavailable',
           attempts: attempt,
@@ -124,6 +126,7 @@ export async function awaitWorkspaceLaunchSessionAttachments(
       const expectedSiteId = typeof plan.site === 'string' && plan.site.trim() ? plan.site.trim() : null;
       const observedAgentId = candidateAgentId(candidate);
       const observedSiteId = candidateSiteId(candidate);
+      const eventEndpoint = candidate.event_endpoint ?? candidate.record?.event_endpoint ?? null;
       const healthEndpoint = candidate.health_endpoint ?? candidate.record?.health_endpoint ?? null;
       let health: WorkspaceLaunchHealthProbeResult = { status: 'unavailable', session_id: null, agent_id: null, site_id: null };
       if (healthEndpoint && now() <= deadline) {
@@ -156,6 +159,7 @@ export async function awaitWorkspaceLaunchSessionAttachments(
         health_site_id: health.site_id ?? null,
         canonical_identity_match: canonicalIdentityMatch,
         site_root: candidate.site_root ?? candidate.record?.site_root ?? plan.site_root,
+        event_endpoint: eventEndpoint,
         health_endpoint: healthEndpoint,
         health_status: health.status,
         attempts: attempt,

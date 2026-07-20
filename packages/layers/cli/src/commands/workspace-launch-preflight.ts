@@ -128,8 +128,8 @@ export function assertWorkspaceLaunchAgentPreflight(plan: WorkspaceLaunchAgentPl
     assertStructuredWorkspaceLaunchArgv(plan.operator_projection_start_command, 'operator_projection_start_command');
   }
 
-  if (plan.runtime_host_kind === NARADA_AGENT_RUNTIME_SERVER_KIND && !plan.intelligence_provider) {
-    throw new Error(`workspace_launch_intelligence_provider_missing: ${plan.agent}`);
+  if (plan.intelligence_selection_authority.launcher_selection !== false) {
+    throw new Error(`workspace_launch_intelligence_authority_invalid: ${plan.agent}`);
   }
 
   if (plan.launch_operator_surfaces.includes('agent-web-ui')) {

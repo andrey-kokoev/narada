@@ -79,6 +79,86 @@ try {
   rmSync(containedSite, { recursive: true, force: true });
 }
 
+const splitRootWorkspace = mkdtempSync(join(tmpdir(), 'narada-mcp-fabric-split-root-'));
+const splitRootSiteAuthority = join(splitRootWorkspace, '.narada');
+mkdirSync(join(splitRootWorkspace, '.ai', 'mcp'), { recursive: true });
+mkdirSync(join(splitRootSiteAuthority, '.ai', 'mcp'), { recursive: true });
+try {
+  writeFileSync(join(splitRootWorkspace, '.ai', 'mcp', 'workspace-mcp.json'), `${JSON.stringify({
+    mcpServers: {
+      'narada-workspace-projection': { command: 'node', args: ['workspace.mjs'] },
+    },
+  }, null, 2)}\n`, 'utf8');
+  writeFileSync(join(splitRootSiteAuthority, '.ai', 'mcp', 'authority-mcp.json'), `${JSON.stringify({
+    mcpServers: {
+      'narada-authority-state': { command: 'node', args: ['authority.mjs'] },
+    },
+  }, null, 2)}\n`, 'utf8');
+  const splitRootFabric = loadSiteMcpFabric(splitRootSiteAuthority, {
+    required: true,
+    workspaceRoot: splitRootWorkspace,
+  });
+  assert.equal(splitRootFabric.source, 'workspace:.ai/mcp');
+  assert.equal(splitRootFabric.mcp_dir, join(splitRootWorkspace, '.ai', 'mcp'));
+  assert.deepEqual(mcpServerNames(splitRootFabric), ['narada-workspace-projection']);
+} finally {
+  rmSync(splitRootWorkspace, { recursive: true, force: true });
+}
+
+const registryMaterializedWorkspace = mkdtempSync(join(tmpdir(), 'narada-mcp-fabric-registry-materialized-'));
+const registryMaterializedAuthority = join(registryMaterializedWorkspace, '.narada');
+mkdirSync(join(registryMaterializedWorkspace, '.ai', 'mcp'), { recursive: true });
+mkdirSync(join(registryMaterializedAuthority, 'capabilities'), { recursive: true });
+try {
+  writeFileSync(join(registryMaterializedWorkspace, '.ai', 'mcp', 'operational-helper.ps1'), 'exit 0\n', 'utf8');
+  writeFileSync(join(registryMaterializedAuthority, 'capabilities', 'mcp-surfaces.json'), `${JSON.stringify({
+    schema: 'narada.site.capabilities.mcp_surfaces.v1',
+    artifact_role: 'site_capability_surface_registry_not_mcp_client_config',
+    surfaces: [{
+      surface_id: 'narada-registry-materialized.local',
+      catalog_surface_id: 'registry-materialized',
+      server_name: 'narada-registry-materialized',
+      runtime_binding: {
+        transport: { type: 'stdio', command: 'node', args: ['registry-materialized.mjs'] },
+      },
+      authority_boundary: { posture: 'registrar_generated_runtime_surface_registry' },
+      client_config: {
+        generated_path: '.ai/mcp/narada-registry-materialized-mcp.json',
+        generated_file: 'narada-registry-materialized-mcp.json',
+      },
+      tool_contract: {
+        exposed_tools: ['registry_materialized_probe'],
+        read_only_tools: ['registry_materialized_probe'],
+        mutating_tools: [],
+        refused_tools: [],
+      },
+      registered_live_tools: ['registry_materialized_probe'],
+    }],
+  }, null, 2)}\n`, 'utf8');
+  const registryMaterializedFabric = loadSiteMcpFabric(registryMaterializedAuthority, {
+    required: true,
+    validateRegistry: true,
+    workspaceRoot: registryMaterializedWorkspace,
+  });
+  assert.equal(registryMaterializedFabric.source, 'surface-registry:runtime-binding');
+  assert.equal(registryMaterializedFabric.materialization_source, 'surface_registry_runtime_binding');
+  assert.equal(registryMaterializedFabric.mcp_dir, join(registryMaterializedWorkspace, '.ai', 'mcp'));
+  assert.deepEqual(registryMaterializedFabric.candidate_files, []);
+  assert.deepEqual(registryMaterializedFabric.files, ['narada-registry-materialized-mcp.json']);
+  assert.deepEqual(mcpServerNames(registryMaterializedFabric), ['narada-registry-materialized']);
+  assert.equal(registryMaterializedFabric.registry_validation.status, 'ok');
+  assert.equal(registryMaterializedFabric.servers['narada-registry-materialized'].registry_metadata_authoritative, true);
+  assert.deepEqual(registryMaterializedFabric.servers['narada-registry-materialized'].tools, ['registry_materialized_probe']);
+  assert.deepEqual(registryMaterializedFabric.servers['narada-registry-materialized'].surface_projection, {
+    surface_id: 'registry-materialized',
+    projection_id: 'narada-registry-materialized.local',
+    injection_scope: 'local_site',
+    runtime_requirements: [],
+  });
+} finally {
+  rmSync(registryMaterializedWorkspace, { recursive: true, force: true });
+}
+
 const affordanceSite = mkdtempSync(join(tmpdir(), 'narada-mcp-fabric-affordance-'));
 mkdirSync(join(affordanceSite, '.ai', 'mcp'), { recursive: true });
 try {

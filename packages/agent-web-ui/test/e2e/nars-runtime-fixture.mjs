@@ -129,7 +129,7 @@ export async function startSessionCoreRuntime({
     };
     const service = createSessionCoreRuntimeService({
       runtimeContext: runtimeWithEndpoints,
-      callChatApiFn: async (messages, tools) => {
+      invokeIntelligenceFn: async (messages, tools) => {
         providerCalls.push({ messages, tools });
         if (providerDelayMs > 0) await new Promise((resolve) => setTimeout(resolve, providerDelayMs));
         if (providerError) throw new Error(providerError);

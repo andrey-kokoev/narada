@@ -344,7 +344,7 @@ describe('carrier launcher CLI commands', () => {
     }, createMockContext())).rejects.toThrow(/agent_required/);
   });
 
-  it('passes workspace root and intelligence provider through canonical agent-start', async () => {
+  it('passes workspace root and canonical Site catalog authority through agent-start', async () => {
     const workspaceRoot = naradaProperRoot;
     const siteRoot = await tempSite();
     const agentStartPath = join(workspaceRoot, 'packages', 'agent-start', 'src', 'narada-agent-start.ts');
@@ -359,7 +359,6 @@ describe('carrier launcher CLI commands', () => {
         workspaceRoot,
         agent: 'narada.architect',
         carrier: 'agent-cli',
-        intelligenceProvider: 'codex-subscription',
         mcpScope: 'none',
         dryRun: true,
         format: 'json',
@@ -371,7 +370,15 @@ describe('carrier launcher CLI commands', () => {
 
     expect(start.exitCode, JSON.stringify(start.result)).toBe(ExitCode.SUCCESS);
     expect((start.result as { workspace_root: string }).workspace_root).toBe(workspaceRoot);
-    expect((start.result as { intelligence_provider: string }).intelligence_provider).toBe('codex-subscription');
+    expect((start.result as { intelligence_selection_authority: unknown }).intelligence_selection_authority).toEqual({
+      schema: 'narada.invokable-intelligence.selection-authority.v1',
+      owner: '@narada2/invokable-intelligence-runtime',
+      resolution_phase: 'runtime-invocation',
+      authority_scope: { kind: 'site', site_id: 'narada-proper' },
+      catalog: { store_kind: 'node:sqlite', locator: join(siteRoot, '.ai', 'intelligence-registry.db') },
+      launcher_selection: false,
+      authoritative_inputs: ['invocation-intent', 'catalog', 'materialized-policy', 'runtime-context'],
+    });
     expect((start.result as { operator_surface_kind: string }).operator_surface_kind).toBe('agent-cli');
     expect((start.result as { runtime_host_kind: string }).runtime_host_kind).toBe('narada-agent-runtime-server');
     expect((start.result as { target_site_id: string }).target_site_id).toBe('narada-proper');
@@ -382,18 +389,19 @@ describe('carrier launcher CLI commands', () => {
     expect(agentStart.command).toContain('--json-output-file');
     expect(agentStart.command).toContain('--target-site-id');
     expect(agentStart.command).toContain('narada-proper');
-    expect(agentStart.command).toContain('--intelligence-provider');
-    expect(agentStart.command).toContain('codex-subscription');
+    expect(agentStart.command).not.toContain('--intelligence-provider');
     expect(agentStart.result_handoff).toBe('json_output_file');
   });
 
   it('keeps machine JSON off inherited interactive carrier launches', async () => {
     const siteRoot = await tempSite();
-    const workspaceRoot = join(siteRoot, 'missing-narada-proper');
+    const workspaceRoot = siteRoot;
+    const dependencyWorkspaceRoot = join(siteRoot, 'missing-narada-proper');
 
     const interactive = runAgentStartCommand({
       siteRoot,
       workspaceRoot,
+      dependencyWorkspaceRoot,
       agent: 'sonar.resident',
       carrier: 'agent-cli',
       runtime: 'narada-agent-runtime-server',
@@ -411,6 +419,7 @@ describe('carrier launcher CLI commands', () => {
     const captured = runAgentStartCommand({
       siteRoot,
       workspaceRoot,
+      dependencyWorkspaceRoot,
       agent: 'sonar.resident',
       carrier: 'agent-cli',
       runtime: 'narada-agent-runtime-server',
